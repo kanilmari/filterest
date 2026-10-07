@@ -6,13 +6,14 @@ package auth
 
 import (
 	"bytes"
-	"database/sql"
 	backend "easelect/backend/core_components"
+	"easelect/backend/core_components/auth/credentials"
 	frontendassets "easelect/backend/core_components/frontend_assets"
 	"easelect/backend/core_components/httpresponse"
 	"easelect/backend/core_components/logging"
 	"easelect/backend/core_components/middlewares"
 	"easelect/backend/pipeline/admin_check"
+	"errors"
 	"html/template"
 	"net/http"
 	"net/url"
@@ -117,7 +118,8 @@ func handleRegisterPost(w http.ResponseWriter, r *http.Request) {
 		httpresponse.RespondWithError(w, http.StatusBadRequest, "form processing failed")
 		return
 	}
-	username := r.FormValue("username")
+	loginName := r.FormValue("username")
+	username := r.FormValue("display_name")
 	password := r.FormValue("password")
 	email := r.FormValue("email")
 	fullName := r.FormValue("full_name")
@@ -151,33 +153,11 @@ func handleRegisterPost(w http.ResponseWriter, r *http.Request) {
 	// The submitted name, address and full name stay out of the log.
 	logging.Infof("received registration data")
 
-	var existing int
-	err = backend.Db.QueryRow(`
-                       SELECT id FROM system_users WHERE username = $1
-               `, username).Scan(&existing)
-	switch {
-	case err != nil && err != sql.ErrNoRows:
-		logging.Errorf("error: username check failed: %s", err.Error())
-		httpresponse.RespondWithError(w, http.StatusInternalServerError, "registration failed (check)")
-		return
-	case err != sql.ErrNoRows:
-		showRegisterForm(w, r, registerErrors{Username: "username_exists"}, string(verificationMethod), http.StatusOK)
+	if validationErr := credentials.ValidateLoginName(loginName); validationErr != nil {
+		refusal := httpresponse.AccountNameRefusal(validationErr)
+		showRegisterForm(w, r, registerErrors{LoginName: refusal.LangKey}, string(verificationMethod), refusal.Status)
 		return
 	}
-
-	err = backend.DbConfidential.QueryRow(`
-                       SELECT id FROM restricted.users_restricted WHERE email = $1
-               `, email).Scan(&existing)
-	switch {
-	case err != nil && err != sql.ErrNoRows:
-		logging.Errorf("error: email check failed: %s", err.Error())
-		httpresponse.RespondWithError(w, http.StatusInternalServerError, "registration failed (check)")
-		return
-	case err != sql.ErrNoRows:
-		showRegisterForm(w, r, registerErrors{Email: "email_exists"}, string(verificationMethod), http.StatusOK)
-		return
-	}
-
 	hashed_password, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
 	if err != nil {
 		logging.Errorf("error: password hashing failed: %s", err.Error())
@@ -191,75 +171,40 @@ func handleRegisterPost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 1) Lisätään rivi system_users-tauluun (pääkäyttäjällä)
-	// A newly registered account is enabled automatically only for local
-	// development on this machine: explicit development mode AND a request that
-	// arrives from this machine itself. Previously any environment that was not
-	// literally "prod" auto-approved the account, so an unset, misspelled or
-	// staging value silently created usable accounts, and a development server
-	// reached over the network auto-approved strangers. Everywhere else a new
-	// account stays disabled until an administrator enables it.
 	enabled := isLocalDevelopmentLoginRequest(clientIP)
-
-	var newUserID int
-	err = backend.Db.QueryRow(`
-            INSERT INTO system_users (
-                username,
-                full_name,
-                created,
-                updated,
-                enabled,
-                privileged
-            )
-            VALUES ($1, $2, NOW(), NOW(), $3, false)
-            RETURNING id
-	`, username, fullName, enabled).Scan(&newUserID)
+	newUserID, err := createRegisteredAccount(r.Context(), loginName, username, fullName, email, string(hashed_password), fixedPINHash, verificationMethod, enabled)
 	if err != nil {
-		logging.Errorf("error: user insert failed: %s", err.Error())
-		httpresponse.RespondWithError(w, http.StatusInternalServerError, "registration failed (step 1)")
+		var refusal *httpresponse.Refusal
+		if errors.As(err, &refusal) {
+			errs := registerErrors{}
+			switch refusal.LangKey {
+			case "login_name_exists", "login_name_invalid", "login_name_reserved":
+				errs.LoginName = refusal.LangKey
+			case "username_exists", "username_empty":
+				errs.Username = refusal.LangKey
+			case "email_exists":
+				errs.Email = refusal.LangKey
+			default:
+				errs.General = refusal.LangKey
+			}
+			showRegisterForm(w, r, errs, string(verificationMethod), refusal.Status)
+		} else {
+			httpresponse.RespondWithError(w, 500, "registration_failed")
+		}
 		return
 	}
-
-	// 2) Lisätään salasanatieto restricted.users_restricted-tauluun (rajatulla yhteydellä)
-	_, err = backend.DbConfidential.Exec(`
-			INSERT INTO restricted.users_restricted (
-				id, password, email, login_verification_method, fixed_pin_hash
-			)
-			VALUES ($1, $2, $3, $4, NULLIF($5, ''))
-		`, newUserID, string(hashed_password), email, string(verificationMethod), fixedPINHash)
-	if err != nil {
-		logging.Errorf("error: restricted table insert failed: %s", err.Error())
-		httpresponse.RespondWithError(w, http.StatusInternalServerError, "registration failed (step 2)")
+	logging.Infof("registration committed for user id=%d", newUserID)
+	status := accountNoticeStatus(r.Context(), email, loginName, true)
+	if strings.Contains(r.Header.Get("Accept"), "application/json") {
+		httpresponse.RespondWithJSON(w, http.StatusOK, map[string]interface{}{"registered": true, "mail_status": status, "redirect": "/login"})
 		return
 	}
-
-	// 3) Lisätään käyttäjä oletuksena "users"-ryhmään
-	var usersGroupID int
-	err = backend.Db.QueryRow(`
-                       SELECT id FROM system_user_groups
-                       WHERE name = $1
-               `, "users").Scan(&usersGroupID)
-	if err != nil {
-		logging.Errorf("error: 'users' group not found: %s", err.Error())
-		httpresponse.RespondWithError(w, http.StatusInternalServerError, "registration failed (step 3)")
-		return
-	}
-
-	_, err = backend.Db.Exec(`
-			INSERT INTO system_user_group_memberships (user_id, group_id, created, updated)
-			VALUES ($1, $2, NOW(), NOW())
-		`, newUserID, usersGroupID)
-	if err != nil {
-		logging.Errorf("error: group membership insert failed: %s", err.Error())
-		httpresponse.RespondWithError(w, http.StatusInternalServerError, "registration failed (step 3)")
-		return
-	}
-
-	logging.Infof("registration successful, redirecting to login")
-	http.Redirect(w, r, "/login", http.StatusSeeOther)
+	showRegisterForm(w, r, registerErrors{Success: status}, string(verificationMethod), http.StatusOK)
 }
 
 type registerErrors struct {
+	LoginName    string
+	Success      string
 	Username     string
 	Email        string
 	Verification string
@@ -346,6 +291,8 @@ func showRegisterForm(w http.ResponseWriter, r *http.Request, errs registerError
 	emailVerificationAvailable := registrationEmailVerificationAvailable()
 	data := struct {
 		frontendassets.ShellPageData
+		LoginNameErr               string
+		Success                    string
 		UsernameErr                string
 		EmailErr                   string
 		VerificationErr            string
@@ -356,6 +303,8 @@ func showRegisterForm(w http.ResponseWriter, r *http.Request, errs registerError
 		EmailVerificationAvailable bool
 	}{
 		ShellPageData:              frontendassets.NewShellPageData(r),
+		LoginNameErr:               errs.LoginName,
+		Success:                    errs.Success,
 		UsernameErr:                errs.Username,
 		EmailErr:                   errs.Email,
 		VerificationErr:            errs.Verification,

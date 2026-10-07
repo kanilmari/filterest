@@ -119,22 +119,24 @@ func (connection *automationProvisionerMockConn) QueryContext(
 		return answerSignInLimit(), nil
 	case strings.Contains(normalized, "LEFT JOIN restricted.users_restricted credentials"):
 		return &automationProvisionerMockRows{
-			columns: []string{"id", "username", "enabled", "admin", "privileged", "creation_spec", "membership", "method", "generation", "api_only"},
+			columns: []string{"id", "username", "enabled", "admin", "privileged", "creation_spec", "membership", "method", "generation", "api_only", "login_matches"},
 			rows:    connection.state.statusRows,
 		}, nil
-	case strings.Contains(normalized, "SELECT id, username, COALESCE(creation_spec, '')"):
+	case strings.Contains(normalized, "SELECT u.id, COALESCE(ur.login_name,''), COALESCE(u.creation_spec, '')"):
 		return &automationProvisionerMockRows{
 			columns: []string{"id", "username", "creation_spec"},
 			rows:    connection.state.identityRows,
 		}, nil
-	case strings.Contains(normalized, "SELECT id FROM system_user_groups WHERE name = 'admins'"):
+	case strings.Contains(normalized, "SELECT id FROM system_user_groups WHERE id=1 AND name = 'admins'"):
 		return &automationProvisionerMockRows{columns: []string{"id"}, rows: [][]driver.Value{{int64(9)}}}, nil
+	case strings.Contains(normalized, "app_next_admin_display_name") || strings.Contains(normalized, "SELECT username FROM system_users"):
+		return &automationProvisionerMockRows{columns: []string{"username"}, rows: [][]driver.Value{{"auto_1"}}}, nil
 	case strings.Contains(normalized, "INSERT INTO system_users"):
 		connection.state.publicInsertCount++
 		return &automationProvisionerMockRows{columns: []string{"id"}, rows: [][]driver.Value{{int64(44)}}}, nil
 	case strings.Contains(normalized, "UPDATE system_users u SET enabled = FALSE"):
 		connection.state.disableCount++
-		return &automationProvisionerMockRows{columns: []string{"privileged", "admin", "membership"}, rows: [][]driver.Value{{false, true, true}}}, nil
+		return &automationProvisionerMockRows{columns: []string{"username", "privileged", "admin", "membership"}, rows: [][]driver.Value{{"auto_1", false, true, true}}}, nil
 	case strings.Contains(normalized, "SET api_only = TRUE, authentication_generation"):
 		connection.state.apiOnlyWritten = true
 		if !connection.state.hasCredentials {
@@ -180,7 +182,7 @@ func (connection *automationProvisionerMockConn) ExecContext(
 	switch {
 	case strings.Contains(normalized, "SELECT pg_advisory_xact_lock"):
 		return driver.RowsAffected(1), nil
-	case strings.Contains(normalized, "UPDATE system_users SET username"):
+	case strings.Contains(normalized, "UPDATE system_users SET full_name"):
 		connection.state.publicUpdateCount++
 		return driver.RowsAffected(1), nil
 	case strings.Contains(normalized, "DELETE FROM system_user_group_memberships"):
@@ -227,7 +229,7 @@ func TestAutomationAccountProvisionerCreatesAtomicReadyAdministrator(t *testing.
 	if err != nil {
 		t.Fatalf("Provision: %v", err)
 	}
-	if !record.Exists || !record.Ready || !record.APIOnly || !state.apiOnlyWritten || !record.Created || record.Username != AutomationAccountUsername {
+	if !record.Exists || !record.Ready || !record.APIOnly || !state.apiOnlyWritten || !record.Created || record.Username != "auto_1" || !record.FixedLoginName {
 		t.Fatalf("unexpected record: %#v", record)
 	}
 	if state.beginCount != 1 || state.commitCount != 1 || state.rollbackCount != 0 {
@@ -310,8 +312,8 @@ func TestAutomationAccountProvisionerRejectsInvalidPasswordBeforeTransaction(t *
 
 func TestAutomationAccountStatusReturnsNonSecretReadback(t *testing.T) {
 	state := &automationProvisionerMockState{statusRows: [][]driver.Value{{
-		int64(44), AutomationAccountUsername, true, true, false,
-		automationCreationSpec, true, "none", int64(3), true,
+		int64(44), "auto_1", true, true, false,
+		automationCreationSpec, true, "none", int64(3), true, true,
 	}}}
 	provisioner := NewAutomationAccountProvisioner(openAutomationProvisionerMockDB(t, state))
 	record, err := provisioner.Status(context.Background())
@@ -354,7 +356,7 @@ func TestAutomationRevokeRollsBackOnMissingCredentialsOrAudit(t *testing.T) {
 	}
 }
 func TestAutomationStatusRequiresProtectedAPIOnlyBit(t *testing.T) {
-	state := &automationProvisionerMockState{statusRows: [][]driver.Value{{int64(44), AutomationAccountUsername, true, true, false, automationCreationSpec, true, "none", int64(3), false}}}
+	state := &automationProvisionerMockState{statusRows: [][]driver.Value{{int64(44), "auto_1", true, true, false, automationCreationSpec, true, "none", int64(3), false, true}}}
 	record, err := NewAutomationAccountProvisioner(openAutomationProvisionerMockDB(t, state)).Status(context.Background())
 	if err != nil || !record.Exists || record.Ready || record.APIOnly {
 		t.Fatalf("record=%#v err=%v", record, err)

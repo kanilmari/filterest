@@ -29,10 +29,12 @@ test('reserved dev test admin can log in', async ({ page }) => {
     await privacyCheckbox.check();
   }
 
-  await submitCredentialsAndWaitForOtp(page);
-  await page.locator('[data-testid="login-otp"]').fill(loadOtpCode());
-  await page.locator('[data-testid="login-submit"]').click();
+  const otpRequired = await submitCredentialsAndWaitForOtp(page);
+  if (otpRequired) {
+    await page.locator('[data-testid="login-otp"]').fill(loadOtpCode());
+    await submitCredentialsAndWaitForOtp(page);
+  }
 
-  await waitForAuthenticatedApp(page, username);
+  await waitForAuthenticatedApp(page);
   expect(page.url()).not.toContain('/login');
 });

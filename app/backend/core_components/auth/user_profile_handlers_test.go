@@ -49,7 +49,7 @@ func attachSessionUserID(t *testing.T, userID int) *http.Cookie {
 		t.Fatalf("GetOrCreateSession() error = %v", err)
 	}
 	session.Values["user_id"] = userID
-	if err := session.Save(req, rr); err != nil {
+	if err := e_sessions.Save(rr, req, session); err != nil {
 		t.Fatalf("session.Save() error = %v", err)
 	}
 

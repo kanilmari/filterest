@@ -14,7 +14,6 @@ import (
 	"strings"
 	"time"
 
-	backend "easelect/backend/core_components"
 	"easelect/backend/core_components/auth_generation"
 	"easelect/backend/core_components/email"
 	"easelect/backend/core_components/httpresponse"
@@ -108,38 +107,26 @@ func handleLoginCredentials(w http.ResponseWriter, r *http.Request, session *ses
 		return
 	}
 
-	// Look up user
-	var userID int
-	err := backend.Db.QueryRow(
-		`SELECT id FROM system_users WHERE username = $1 AND enabled = true`,
-		req.Username,
-	).Scan(&userID)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			recordLoginFailure(getClientIP(r))
-			respondJSON(w, http.StatusUnauthorized, map[string]interface{}{"error": "wrong_credentials"})
-			return
-		}
-		logging.Errorf("[login-json] failed to load user credentials: %v", err)
+	// One confidential snapshot; public columns are limited to id and enabled.
+	userID, enabled, verification, err := lookupLoginCredentials(req.Username)
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		logging.Errorf("[login-json] credential lookup failed")
 		respondJSON(w, http.StatusInternalServerError, map[string]interface{}{"error": "internal_error"})
 		return
 	}
-
-	// Read password, factor, and authentication generation in one credential snapshot.
-	verification, err := loadLoginVerificationRecord(userID)
-	if err != nil {
-		logging.Errorf("[login-json] failed to load credential record for user %d: %v", userID, err)
+	hash := verification.PasswordHash
+	if errors.Is(err, sql.ErrNoRows) || !enabled {
+		hash = dummyLoginPasswordHash
+	}
+	compareErr := compareLoginPassword([]byte(hash), []byte(req.Password))
+	if err == nil && enabled && compareErr != nil && !errors.Is(compareErr, bcrypt.ErrMismatchedHashAndPassword) {
+		logging.Errorf("[login-json] stored password hash invalid for user id=%d", userID)
 		respondJSON(w, http.StatusInternalServerError, map[string]interface{}{"error": "internal_error"})
 		return
 	}
-	if err = bcrypt.CompareHashAndPassword([]byte(verification.PasswordHash), []byte(req.Password)); err != nil {
-		if errors.Is(err, bcrypt.ErrMismatchedHashAndPassword) {
-			recordLoginFailure(getClientIP(r))
-			respondJSON(w, http.StatusUnauthorized, map[string]interface{}{"error": "wrong_credentials"})
-			return
-		}
-		logging.Errorf("[login-json] stored password hash is invalid for user %d: %v", userID, err)
-		respondJSON(w, http.StatusInternalServerError, map[string]interface{}{"error": "internal_error"})
+	if err != nil || !enabled || compareErr != nil {
+		recordLoginFailure(getClientIP(r))
+		respondJSON(w, http.StatusUnauthorized, map[string]interface{}{"error": "wrong_credentials"})
 		return
 	}
 	if !enforceLoginAccess(w, r, session, userID) {
@@ -381,6 +368,7 @@ func completeLoginJSON(w http.ResponseWriter, r *http.Request, session *sessions
 	log.Printf("[login-json] user id=%d authenticated successfully 🎉", userID)
 	respondJSON(w, http.StatusOK, map[string]interface{}{
 		"authenticated": true,
+		"user_id":       userID,
 		"redirect":      "/",
 	})
 }

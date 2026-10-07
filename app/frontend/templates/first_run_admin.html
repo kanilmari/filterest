@@ -101,6 +101,22 @@
                     </fieldset>
 
                     <fieldset class="first-run-choice-group">
+                        <legend data-lang-key="display_name_may_equal_login_name"></legend>
+                        <p data-lang-key="display_name_may_equal_login_name_help"></p>
+                        <div class="first-run-choice-grid">
+                            <label class="first-run-choice-card">
+                                <input type="radio" name="display_name_may_equal_login_name" value="true" {{if eq .NamesMayEqual "true"}}checked{{end}} required>
+                                <span class="first-run-choice-title" data-lang-key="account_names_may_be_same"></span>
+                            </label>
+                            <label class="first-run-choice-card">
+                                <input type="radio" name="display_name_may_equal_login_name" value="false" {{if eq .NamesMayEqual "false"}}checked{{end}} required>
+                                <span class="first-run-choice-title" data-lang-key="account_names_must_differ"></span>
+                            </label>
+                        </div>
+                        {{if .NameChoiceErr}}<p class="error" data-lang-key="{{.NameChoiceErr}}"></p>{{end}}
+                    </fieldset>
+
+                    <fieldset class="first-run-choice-group">
                         <legend data-lang-key="first_run_verification_legend">Sign-in verification</legend>
                         <div class="first-run-choice-grid">
                             <label class="first-run-choice-card">
@@ -161,9 +177,13 @@
                     <input type="text" id="site_name" name="site_name" value="{{.FirstRunSiteName}}" maxlength="100" required autocomplete="organization" data-testid="first-run-site-name">
                     {{if .SiteNameErr}}<p class="error" data-lang-key="{{.SiteNameErr}}">{{.SiteNameErr}}</p>{{end}}
 
-                    <label for="username" data-lang-key="username">Username</label>
+                    <label for="username" data-lang-key="login_name"></label>
                     <input type="text" id="username" name="username" value="{{.Username}}" minlength="3" maxlength="64" pattern="[A-Za-z0-9][A-Za-z0-9_.\-]*" required autocomplete="username" data-testid="first-run-admin-username">
                     {{if .UsernameErr}}<p class="error" data-lang-key="{{.UsernameErr}}">{{.UsernameErr}}</p>{{end}}
+
+                    <label for="display_name" data-lang-key="display_name"></label>
+                    <input type="text" id="display_name" name="display_name" value="{{.DisplayName}}" maxlength="100" autocomplete="nickname" data-testid="first-run-admin-display-name">
+                    {{if .DisplayNameErr}}<p class="error" data-lang-key="{{.DisplayNameErr}}"></p>{{end}}
 
                     <label for="email" data-lang-key="email">Email</label>
                     <input type="email" id="email" name="email" value="{{.Email}}" maxlength="254" required autocomplete="email" data-testid="first-run-admin-email">

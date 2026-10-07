@@ -116,7 +116,7 @@ func TestDryRunPrintsIdentityAndEligibleAdministratorsWithoutSecretPrompts(t *te
 		"Database version: 9.7.15",
 		"Site: Filterest",
 		"Current project: filterest",
-		"admin_filterest (current verification: fixed_pin, authentication generation: 6)",
+		"admin_filterest (user id 42, email o***@filterest.com, current verification: fixed_pin, authentication generation: 6)",
 		"Dry run complete. No credential data was changed.",
 	} {
 		if !strings.Contains(terminal.output.String(), expected) {
@@ -146,7 +146,7 @@ func TestWorkflowPreservesCurrentTOTPWithoutRequestingPIN(t *testing.T) {
 		lines: []string{
 			"1",
 			"1",
-			"filterest.com/Filterest/filterest/filterest:admin_filterest",
+			"filterest.com/Filterest/filterest/filterest:user:42",
 		},
 		secrets: []string{"correct horse battery staple", "correct horse battery staple"},
 	}
@@ -174,7 +174,7 @@ func TestWorkflowPreservesCurrentTOTPWithoutRequestingPIN(t *testing.T) {
 	if strings.Contains(terminal.output.String(), "correct horse battery staple") {
 		t.Fatal("password leaked into terminal output")
 	}
-	if !strings.Contains(terminal.output.String(), "Final target confirmation: filterest.com/Filterest/filterest/filterest:admin_filterest") {
+	if !strings.Contains(terminal.output.String(), "Final target confirmation: filterest.com/Filterest/filterest/filterest:user:42") {
 		t.Fatalf("domain-qualified final target confirmation missing:\n%s", terminal.output.String())
 	}
 	if !strings.Contains(terminal.output.String(), "not a filesystem path or password") {
@@ -189,7 +189,7 @@ func TestWorkflowRequestsNewFixedPINTwiceOnlyWhenSelected(t *testing.T) {
 		lines: []string{
 			"1",
 			"2",
-			"filterest.com/Filterest/filterest/filterest:admin_filterest",
+			"filterest.com/Filterest/filterest/filterest:user:42",
 		},
 		secrets: []string{
 			"456789", "456789",
@@ -213,6 +213,81 @@ func TestWorkflowRequestsNewFixedPINTwiceOnlyWhenSelected(t *testing.T) {
 		if strings.Contains(terminal.output.String(), secret) {
 			t.Fatalf("secret %q leaked into terminal output", secret)
 		}
+	}
+}
+
+func TestWorkflowCanReplaceForgottenLoginNameWithoutPrintingIt(t *testing.T) {
+	operations := testWorkflowOperations(credentials.VerificationFixedPIN)
+	privateName := "replacement_private_login"
+	terminal := &fakeOperatorTerminal{
+		lines:   []string{"1", "1", "filterest.com/Filterest/filterest/filterest:user:42"},
+		secrets: []string{privateName, privateName, "correct horse battery staple", "correct horse battery staple"},
+	}
+	if err := executeRecoveryWorkflow(context.Background(), terminal, operations, "filterest.com", false, false, true); err != nil {
+		t.Fatal(err)
+	}
+	if operations.receivedInput == nil || operations.receivedInput.NewLoginName != privateName || !operations.receivedInput.PreserveCurrentVerification {
+		t.Fatal("new name did not reach the shared recovery transaction")
+	}
+	if strings.Contains(terminal.output.String(), privateName) || !strings.Contains(terminal.output.String(), "user id 42") {
+		t.Fatal("recovery output must identify the public account without its private name")
+	}
+	terminal = &fakeOperatorTerminal{lines: []string{"1", "1"}, secrets: []string{"admin_7", "admin_7"}}
+	operations.receivedInput = nil
+	if err := executeRecoveryWorkflow(context.Background(), terminal, operations, "filterest.com", false, false, true); err == nil || operations.receivedInput != nil {
+		t.Fatal("reserved replacement reached the recovery boundary")
+	}
+}
+
+func TestRecoverySelectionUsesIDMaskedEmailAndPrintsMailStatus(t *testing.T) {
+	operations := testWorkflowOperations(credentials.VerificationFixedPIN)
+	operations.administrators[0].Username = "admin_1"
+	operations.administrators = append(operations.administrators, credentials.Administrator{
+		ID: 99, Username: "admin_2", Email: "another@filterest.com", VerificationMethod: credentials.VerificationFixedPIN,
+	})
+	operations.result.MailStatus = "notice_email_failed"
+	terminal := &fakeOperatorTerminal{
+		lines:   []string{"2", "1", "filterest.com/Filterest/filterest/filterest:user:99"},
+		secrets: []string{"protected-password", "protected-password"},
+	}
+	if err := executeRecoveryWorkflow(context.Background(), terminal, operations, "filterest.com", false, false); err != nil {
+		t.Fatal(err)
+	}
+	if operations.receivedInput == nil || operations.receivedInput.UserID != 99 {
+		t.Fatal("wrong administrator selected")
+	}
+	for _, want := range []string{"user id 42, email o***@filterest.com", "user id 99, email a***@filterest.com", "Mail status: notice_email_failed"} {
+		if !strings.Contains(terminal.output.String(), want) {
+			t.Fatal("missing selection/delivery information", want)
+		}
+	}
+	if strings.Contains(terminal.output.String(), "another@") || strings.Contains(terminal.output.String(), "owner@") {
+		t.Fatal("full recipient address printed")
+	}
+}
+
+func TestRecoveryLoginNameMismatchStopsBeforeMutation(t *testing.T) {
+	operations := testWorkflowOperations(credentials.VerificationFixedPIN)
+	terminal := &fakeOperatorTerminal{lines: []string{"1", "1"}, secrets: []string{"private-first", "private-typo"}}
+	err := executeRecoveryWorkflow(context.Background(), terminal, operations, "filterest.com", false, false, true)
+	if err == nil || !strings.Contains(err.Error(), "login name entries do not match") || operations.receivedInput != nil {
+		t.Fatal("mismatched private name reached recovery", err)
+	}
+}
+
+func TestParseCommandConfigAllowsLoginNameRecoveryOnlyForExistingAccounts(t *testing.T) {
+	lookup := func(key string) string {
+		if key == "BASE_URL" {
+			return "https://filterest.com"
+		}
+		return ""
+	}
+	config, err := parseCommandConfig([]string{"--change-login-name"}, lookup)
+	if err != nil || !config.changeLoginName {
+		t.Fatal("login-name recovery flag", err)
+	}
+	if _, err = parseCommandConfig([]string{"--change-login-name", "--create-admin"}, lookup); err == nil {
+		t.Fatal("replacement flag accepted for account creation")
 	}
 }
 

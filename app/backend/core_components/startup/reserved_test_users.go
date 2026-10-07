@@ -1,11 +1,13 @@
 // reserved_test_users.go
 // Reconciles development-only reserved login fixtures during application startup.
-// Bridges public user/group rows and restricted credential rows across the two DB handles.
+// Bridges public user/group rows and restricted credential rows within one administrator transaction.
 // Exists to keep E2E credentials deterministic in dev while purging them from production-like runtimes.
 package startup
 
 import (
+	"context"
 	"database/sql"
+	"easelect/backend/core_components/auth/credentials"
 	"errors"
 	"fmt"
 	"log"
@@ -29,22 +31,9 @@ type reservedTestUserFixture struct {
 	preserveCredentials bool
 }
 
-type reservedTestUserExecutor interface {
-	QueryRow(query string, args ...interface{}) reservedTestUserRow
-	Exec(query string, args ...interface{}) (sql.Result, error)
-}
-
-type reservedTestUserRow interface {
-	Scan(dest ...interface{}) error
-}
-
-type reservedTestUserSQLExecutor struct {
-	db *sql.DB
-}
-
 var reservedTestUserFixtures = []reservedTestUserFixture{
 	{
-		username:           "test_user",
+		username:           credentials.TestUserLoginName,
 		fullName:           "Reserved Dev Test User",
 		email:              "test_user@dev.invalid",
 		groupName:          "users",
@@ -52,7 +41,7 @@ var reservedTestUserFixtures = []reservedTestUserFixture{
 		adminAccessAllowed: false,
 	},
 	{
-		username:           "test_admin",
+		username:           credentials.TestAdministratorLoginName,
 		fullName:           "Reserved Dev Test Admin",
 		email:              "test_admin@dev.invalid",
 		groupName:          "admins",
@@ -69,53 +58,64 @@ const (
 // ReconcileReservedTestUsers enforces the reserved test-user policy for the
 // current runtime. Explicit dev mode creates/repairs fixtures; every other mode
 // removes those reserved accounts before the app starts serving requests.
-func ReconcileReservedTestUsers(publicDB *sql.DB, confidentialDB *sql.DB, environmentType string) error {
-	if publicDB == nil {
-		return fmt.Errorf("public database handle is nil")
-	}
-	if confidentialDB == nil {
-		return fmt.Errorf("confidential database handle is nil")
-	}
-
-	publicStore := reservedTestUserSQLExecutor{db: publicDB}
-	confidentialStore := reservedTestUserSQLExecutor{db: confidentialDB}
-	return reconcileReservedTestUsers(publicStore, confidentialStore, environmentType)
-}
-
-func reconcileReservedTestUsers(publicStore, confidentialStore reservedTestUserExecutor, environmentType string) error {
+func ReconcileReservedTestUsers(adminDB *sql.DB, environmentType string) error {
 	if isReservedTestUserReconcileDisabled() {
 		log.Printf("[STARTUP] Reserved test user reconciliation disabled by RESERVED_TEST_USERS")
 		return nil
 	}
-
-	if isReservedTestUserDevMode(environmentType) {
-		fixtures, err := reservedTestUserFixturesForDevelopment()
+	if adminDB == nil {
+		return errors.New("administrator database handle is nil")
+	}
+	fixtures := reservedTestUserFixtures
+	dev := isReservedTestUserDevMode(environmentType)
+	if dev {
+		var err error
+		fixtures, err = reservedTestUserFixturesForDevelopment()
 		if err != nil {
 			return err
 		}
-		for _, fixture := range fixtures {
-			if err := ensureReservedTestUser(publicStore, confidentialStore, fixture); err != nil {
-				return fmt.Errorf("ensure reserved dev user %q: %w", fixture.username, err)
-			}
-		}
-		log.Printf("[STARTUP] Reserved dev test users reconciled: %s", reservedTestUsernamesForLog(fixtures))
-		return nil
-	}
-
-	// A named development administrator is intentionally a loopback-only
-	// convenience. Refuse to start rather than silently ignore copied local
-	// credentials in a production-like runtime.
-	if hasConfiguredDevAdminEnvironment() {
+	} else if hasConfiguredDevAdminEnvironment() {
 		return fmt.Errorf("%s and %s are permitted only when ENVIRONMENT_TYPE=dev", configuredDevAdminUsernameEnv, configuredDevAdminPasswordEnv)
 	}
+	tx, err := adminDB.BeginTx(context.Background(), nil)
+	if err != nil {
+		return errors.New("begin reserved account reconciliation failed")
+	}
+	defer tx.Rollback()
+	if _, err = tx.Exec(`SELECT pg_advisory_xact_lock(hashtextextended('reserved account reconciliation',0))`); err != nil {
+		return errors.New("lock reserved account reconciliation failed")
+	}
+	if err = reconcileReservedTestUsers(tx, fixtures, dev); err != nil {
+		var orphan *reservedAccountOrphan
+		if errors.As(err, &orphan) {
+			return err
+		}
+		return errors.New("reserved account reconciliation failed; no changes committed")
+	}
+	if err = tx.Commit(); err != nil {
+		return errors.New("commit reserved account reconciliation failed")
+	}
+	log.Printf("[STARTUP] Reserved test accounts reconciled: %s", reservedTestUsernamesForLog(fixtures))
+	return nil
+}
 
-	for _, fixture := range reservedTestUserFixtures {
-		if err := purgeReservedTestUser(publicStore, confidentialStore, fixture.username); err != nil {
-			return fmt.Errorf("purge reserved test user %q: %w", fixture.username, err)
+func reconcileReservedTestUsers(tx *sql.Tx, fixtures []reservedTestUserFixture, development bool) error {
+	for _, fixture := range fixtures {
+		if development {
+			if err := ensureReservedTestUser(tx, fixture); err != nil {
+				return err
+			}
+		} else if err := purgeReservedTestUser(tx, fixture.username); err != nil {
+			return err
 		}
 	}
-	log.Printf("[STARTUP] Reserved test users purged for production-like environment: %s", reservedTestUsernamesForLog(reservedTestUserFixtures))
 	return nil
+}
+
+type reservedAccountOrphan struct{ id int64 }
+
+func (err *reservedAccountOrphan) Error() string {
+	return fmt.Sprintf("reserved test account orphan: user id %d; repair through the account API before development start", err.id)
 }
 
 func hasConfiguredDevAdminEnvironment() bool {
@@ -137,7 +137,7 @@ func reservedTestUserFixturesForDevelopment() ([]reservedTestUserFixture, error)
 		return nil, fmt.Errorf("%s must be 3-64 characters and use only letters, digits, dot, dash, or underscore", configuredDevAdminUsernameEnv)
 	}
 	for _, fixture := range fixtures {
-		if fixture.username == username {
+		if strings.EqualFold(fixture.username, username) {
 			return nil, fmt.Errorf("%s must differ from the built-in reserved test users", configuredDevAdminUsernameEnv)
 		}
 	}
@@ -150,7 +150,7 @@ func reservedTestUserFixturesForDevelopment() ([]reservedTestUserFixture, error)
 	fixtures = append(fixtures, reservedTestUserFixture{
 		username:            username,
 		fullName:            "Configured Dev Administrator",
-		email:               username + "@dev.invalid",
+		email:               "configured_administrator@dev.invalid",
 		groupName:           "admins",
 		passwordEnv:         configuredDevAdminPasswordEnv,
 		adminAccessAllowed:  true,
@@ -176,25 +176,7 @@ func isLoopbackConfiguredDevAdminTarget(rawBaseURL string) bool {
 }
 
 func isValidConfiguredDevAdminUsername(value string) bool {
-	if len(value) < 3 || len(value) > 64 {
-		return false
-	}
-	for index, character := range value {
-		isLetter := character >= 'a' && character <= 'z' || character >= 'A' && character <= 'Z'
-		isDigit := character >= '0' && character <= '9'
-		if !isLetter && !isDigit && (index == 0 || character != '.' && character != '-' && character != '_') {
-			return false
-		}
-	}
-	return true
-}
-
-func (e reservedTestUserSQLExecutor) QueryRow(query string, args ...interface{}) reservedTestUserRow {
-	return e.db.QueryRow(query, args...)
-}
-
-func (e reservedTestUserSQLExecutor) Exec(query string, args ...interface{}) (sql.Result, error) {
-	return e.db.Exec(query, args...)
+	return credentials.ValidateReservedLoginName(value) == nil
 }
 
 func isReservedTestUserDevMode(environmentType string) bool {
@@ -207,178 +189,127 @@ func isReservedTestUserReconcileDisabled() bool {
 }
 
 func reservedTestUsernamesForLog(fixtures []reservedTestUserFixture) string {
-	names := make([]string, 0, len(fixtures))
-	for _, fixture := range fixtures {
-		names = append(names, fixture.username)
-	}
-	return strings.Join(names, ", ")
+	return fmt.Sprintf("%d accounts", len(fixtures))
 }
 
-func ensureReservedTestUser(publicStore, confidentialStore reservedTestUserExecutor, fixture reservedTestUserFixture) error {
-	groupID, err := lookupReservedTestUserGroupID(publicStore, fixture.groupName)
+func ensureReservedTestUser(tx *sql.Tx, fixture reservedTestUserFixture) error {
+	if err := credentials.ValidateReservedLoginName(fixture.username); err != nil {
+		return err
+	}
+	groupID, err := lookupReservedTestUserGroupID(tx, fixture.groupName)
 	if err != nil {
 		return err
 	}
-
-	userID, existed, err := ensureReservedTestUserPublicRow(publicStore, fixture)
+	userID, existed, err := ensureReservedTestUserPublicRow(tx, fixture)
 	if err != nil {
 		return err
 	}
-
-	if err := replaceReservedTestUserMembership(publicStore, userID, groupID); err != nil {
+	if err = replaceReservedTestUserMembership(tx, userID, groupID); err != nil {
 		return err
 	}
-
-	if err := ensureReservedTestUserCredentials(confidentialStore, userID, fixture, existed); err != nil {
-		return err
-	}
-
-	return nil
+	return ensureReservedTestUserCredentials(tx, userID, fixture, existed)
 }
 
-func lookupReservedTestUserGroupID(publicStore reservedTestUserExecutor, groupName string) (int64, error) {
-	var groupID int64
-	err := publicStore.QueryRow(
-		`SELECT id FROM system_user_groups WHERE name = $1`,
-		groupName,
-	).Scan(&groupID)
-	if err != nil {
-		return 0, fmt.Errorf("lookup group %q: %w", groupName, err)
+func lookupReservedTestUserGroupID(tx *sql.Tx, groupName string) (int64, error) {
+	var id int64
+	err := tx.QueryRow(`SELECT id FROM system_user_groups WHERE name=$1`, groupName).Scan(&id)
+	if err == nil && groupName == "admins" && id != 1 {
+		return 0, errors.New("canonical administrator group missing")
 	}
-	return groupID, nil
+	return id, err
 }
 
-func ensureReservedTestUserPublicRow(publicStore reservedTestUserExecutor, fixture reservedTestUserFixture) (int64, bool, error) {
+func ensureReservedTestUserPublicRow(tx *sql.Tx, fixture reservedTestUserFixture) (int64, bool, error) {
 	var userID int64
-	err := publicStore.QueryRow(
-		`SELECT id FROM system_users WHERE username = $1`,
-		fixture.username,
-	).Scan(&userID)
-	if err == nil {
-		_, err = publicStore.Exec(`
-			UPDATE system_users
-			SET full_name = $2,
-			    enabled = true,
-			    privileged = false,
-			    admin_access_allowed = $3,
-			    updated = NOW()
-			WHERE id = $1
-		`, userID, fixture.fullName, fixture.adminAccessAllowed)
+	var displayName string
+	err := tx.QueryRow(`SELECT u.id,u.username FROM system_users u
+        JOIN restricted.users_restricted ur ON ur.id=u.id
+        WHERE ur.login_name = $1 FOR UPDATE OF u,ur`, fixture.username).Scan(&userID, &displayName)
+	existed := err == nil
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		return 0, false, err
+	}
+	if !existed {
+		// A former public reserved name without credentials is ambiguous. Never adopt it.
+		var orphanID int64
+		orphanErr := tx.QueryRow(`SELECT u.id FROM system_users u WHERE lower(u.username)=lower($1)
+            AND NOT EXISTS(SELECT 1 FROM restricted.users_restricted ur WHERE ur.id=u.id)`, fixture.username).Scan(&orphanID)
+		if orphanErr == nil {
+			return 0, false, &reservedAccountOrphan{id: orphanID}
+		}
+		if !errors.Is(orphanErr, sql.ErrNoRows) {
+			return 0, false, orphanErr
+		}
+		displayName = fixture.username
+		var mayEqual bool
+		if err = tx.QueryRow(`SELECT coalesce((SELECT boolean_value FROM system_config WHERE key='display_name_may_equal_login_name'),true)`).Scan(&mayEqual); err != nil {
+			return 0, false, err
+		}
+		if fixture.adminAccessAllowed || !mayEqual {
+			prefix := "user"
+			if fixture.adminAccessAllowed {
+				prefix = "admin"
+			}
+			displayName, err = credentials.NextAccountDisplayName(context.Background(), tx, prefix, fixture.username)
+			if err != nil {
+				return 0, false, err
+			}
+		}
+		err = tx.QueryRow(`INSERT INTO system_users(username,full_name,created,updated,enabled,privileged,admin_access_allowed)
+            VALUES($1,$2,NOW(),NOW(),true,false,$3) RETURNING id`, displayName, fixture.fullName, fixture.adminAccessAllowed).Scan(&userID)
+		return userID, false, err
+	}
+	if fixture.adminAccessAllowed && strings.EqualFold(strings.TrimSpace(displayName), fixture.username) {
+		displayName, err = credentials.NextAccountDisplayName(context.Background(), tx, "admin", fixture.username)
 		if err != nil {
-			return 0, false, fmt.Errorf("update public user row: %w", err)
+			return 0, false, err
 		}
-		return userID, true, nil
 	}
-	if !errors.Is(err, sql.ErrNoRows) {
-		return 0, false, fmt.Errorf("lookup public user row: %w", err)
-	}
-
-	err = publicStore.QueryRow(`
-		INSERT INTO system_users (
-			username,
-			full_name,
-			created,
-			updated,
-			enabled,
-			privileged,
-			admin_access_allowed
-		)
-		VALUES ($1, $2, NOW(), NOW(), true, false, $3)
-		RETURNING id
-	`, fixture.username, fixture.fullName, fixture.adminAccessAllowed).Scan(&userID)
-	if err != nil {
-		return 0, false, fmt.Errorf("insert public user row: %w", err)
-	}
-	return userID, false, nil
+	// Existing ordinary fixtures keep both names even when the policy has tightened.
+	_, err = tx.Exec(`UPDATE system_users SET
+        full_name=CASE WHEN username IS DISTINCT FROM $2 AND lower(btrim(full_name))=lower(btrim(username)) THEN $2 ELSE full_name END,
+        search_vector_simple=CASE WHEN username IS DISTINCT FROM $2 THEN NULL ELSE search_vector_simple END,
+        username=$2, enabled=true,privileged=false,admin_access_allowed=$3,updated=NOW()
+        WHERE id=$1`, userID, displayName, fixture.adminAccessAllowed)
+	return userID, true, err
 }
 
-func replaceReservedTestUserMembership(publicStore reservedTestUserExecutor, userID int64, groupID int64) error {
-	if _, err := publicStore.Exec(
-		`DELETE FROM system_user_group_memberships WHERE user_id = $1 AND group_id <> $2`,
-		userID,
-		groupID,
-	); err != nil {
-		return fmt.Errorf("remove stale group memberships: %w", err)
+func replaceReservedTestUserMembership(tx *sql.Tx, userID, groupID int64) error {
+	if _, err := tx.Exec(`DELETE FROM system_user_group_memberships WHERE user_id=$1 AND group_id<>$2`, userID, groupID); err != nil {
+		return err
 	}
-
-	if _, err := publicStore.Exec(`
-		INSERT INTO system_user_group_memberships (user_id, group_id, created, updated)
-		SELECT $1, $2, NOW(), NOW()
-		WHERE NOT EXISTS (
-			SELECT 1
-			FROM system_user_group_memberships
-			WHERE user_id = $1 AND group_id = $2
-		)
-	`, userID, groupID); err != nil {
-		return fmt.Errorf("ensure group membership: %w", err)
-	}
-	return nil
+	_, err := tx.Exec(`INSERT INTO system_user_group_memberships(user_id,group_id,created,updated)
+        VALUES($1,$2,NOW(),NOW()) ON CONFLICT(user_id,group_id) DO NOTHING`, userID, groupID)
+	return err
 }
 
-func ensureReservedTestUserCredentials(confidentialStore reservedTestUserExecutor, userID int64, fixture reservedTestUserFixture, publicUserExisted bool) error {
-	if fixture.preserveCredentials && publicUserExisted {
-		var credentialUserID int64
-		err := confidentialStore.QueryRow(
-			`SELECT id FROM restricted.users_restricted WHERE id = $1`,
-			userID,
-		).Scan(&credentialUserID)
-		if err == nil {
-			return nil
-		}
-		if !errors.Is(err, sql.ErrNoRows) {
-			return fmt.Errorf("inspect existing restricted credentials: %w", err)
-		}
-	}
-	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(reservedTestPassword(fixture.passwordEnv)), bcrypt.DefaultCost)
-	if err != nil {
-		return fmt.Errorf("hash reserved test password: %w", err)
-	}
-	verificationMethod := "none"
-	fixedPINHash := ""
-	if fixedPIN := strings.TrimSpace(os.Getenv("LOGIN_OTP_CODE")); isReservedTestFixedPIN(fixedPIN) {
-		hashedPIN, hashErr := bcrypt.GenerateFromPassword([]byte(fixedPIN), bcrypt.DefaultCost)
-		if hashErr != nil {
-			return fmt.Errorf("hash reserved test fixed PIN: %w", hashErr)
-		}
-		verificationMethod = "fixed_pin"
-		fixedPINHash = string(hashedPIN)
-	}
-
-	result, err := confidentialStore.Exec(
-		`UPDATE restricted.users_restricted
-		 SET password = $1, email = $2, login_verification_method = $3,
-		     fixed_pin_hash = NULLIF($4, ''), totp_secret = NULL
-		 WHERE id = $5`,
-		string(hashedPassword),
-		fixture.email,
-		verificationMethod,
-		fixedPINHash,
-		userID,
-	)
-	if err != nil {
-		return fmt.Errorf("update restricted credentials: %w", err)
-	}
-	updatedRows, err := result.RowsAffected()
-	if err != nil {
-		return fmt.Errorf("read restricted credential update result: %w", err)
-	}
-	if updatedRows > 0 {
+func ensureReservedTestUserCredentials(tx *sql.Tx, userID int64, fixture reservedTestUserFixture, existed bool) error {
+	if fixture.preserveCredentials && existed {
 		return nil
 	}
-
-	if _, err := confidentialStore.Exec(
-		`INSERT INTO restricted.users_restricted (
-			id, password, email, login_verification_method, fixed_pin_hash
-		) VALUES ($1, $2, $3, $4, NULLIF($5, ''))`,
-		userID,
-		string(hashedPassword),
-		fixture.email,
-		verificationMethod,
-		fixedPINHash,
-	); err != nil {
-		return fmt.Errorf("insert restricted credentials: %w", err)
+	passwordHash, err := bcrypt.GenerateFromPassword([]byte(reservedTestPassword(fixture.passwordEnv)), bcrypt.DefaultCost)
+	if err != nil {
+		return err
 	}
-	return nil
+	method, pinHash := "none", ""
+	if pin := strings.TrimSpace(os.Getenv("LOGIN_OTP_CODE")); isReservedTestFixedPIN(pin) {
+		hashed, hashErr := bcrypt.GenerateFromPassword([]byte(pin), bcrypt.DefaultCost)
+		if hashErr != nil {
+			return hashErr
+		}
+		method, pinHash = "fixed_pin", string(hashed)
+	}
+	if existed {
+		_, err = tx.Exec(`UPDATE restricted.users_restricted SET password=$1,email=$2,login_verification_method=$3,
+            fixed_pin_hash=NULLIF($4,''),totp_secret=NULL WHERE id=$5`, string(passwordHash), fixture.email, method, pinHash, userID)
+	} else {
+		if err = credentials.ValidateReservedLoginName(fixture.username); err != nil {
+			return err
+		}
+		_, err = tx.Exec(`INSERT INTO restricted.users_restricted(id,password,email,login_verification_method,fixed_pin_hash,login_name)
+            VALUES($1,$2,$3,$4,NULLIF($5,''),$6)`, userID, string(passwordHash), fixture.email, method, pinHash, fixture.username)
+	}
+	return err
 }
 
 func isReservedTestFixedPIN(value string) bool {
@@ -396,50 +327,26 @@ func reservedTestPassword(envName string) string {
 	return reservedTestDefaultPassword
 }
 
-func purgeReservedTestUser(publicStore, confidentialStore reservedTestUserExecutor, username string) error {
+func purgeReservedTestUser(tx *sql.Tx, loginName string) error {
 	var userID int64
-	err := publicStore.QueryRow(
-		`SELECT id FROM system_users WHERE username = $1`,
-		username,
-	).Scan(&userID)
+	err := tx.QueryRow(`SELECT u.id FROM system_users u JOIN restricted.users_restricted ur ON ur.id=u.id
+        WHERE ur.login_name = $1 FOR UPDATE OF u,ur`, loginName).Scan(&userID)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil
 	}
 	if err != nil {
-		return fmt.Errorf("lookup public user row: %w", err)
+		return err
 	}
-
-	if _, err = publicStore.Exec(`
-		UPDATE system_users
-		SET enabled = false,
-		    privileged = false,
-		    admin_access_allowed = false,
-		    updated = NOW()
-		WHERE id = $1
-	`, userID); err != nil {
-		return fmt.Errorf("disable public user row before purge: %w", err)
+	for _, query := range []string{
+		`UPDATE system_users SET enabled=false,privileged=false,admin_access_allowed=false,updated=NOW() WHERE id=$1`,
+		`DELETE FROM system_user_group_memberships WHERE user_id=$1`,
+		`DELETE FROM restricted.verification_codes WHERE user_id=$1`,
+		`DELETE FROM restricted.users_restricted WHERE id=$1`,
+		`DELETE FROM system_users WHERE id=$1`,
+	} {
+		if _, err = tx.Exec(query, userID); err != nil {
+			return err
+		}
 	}
-
-	if _, err = publicStore.Exec(
-		`DELETE FROM system_user_group_memberships WHERE user_id = $1`,
-		userID,
-	); err != nil {
-		return fmt.Errorf("delete group memberships: %w", err)
-	}
-
-	if _, err = confidentialStore.Exec(
-		`DELETE FROM restricted.users_restricted WHERE id = $1`,
-		userID,
-	); err != nil {
-		return fmt.Errorf("delete restricted credentials: %w", err)
-	}
-
-	if _, err = publicStore.Exec(
-		`DELETE FROM system_users WHERE id = $1`,
-		userID,
-	); err != nil {
-		return fmt.Errorf("delete public user row: %w", err)
-	}
-
 	return nil
 }

@@ -78,9 +78,13 @@ func (r *bootstrapRows) Next(destination []driver.Value) error {
 
 func (c *bootstrapConn) QueryContext(_ context.Context, query string, _ []driver.NamedValue) (driver.Rows, error) {
 	switch {
-	case strings.Contains(query, "WHERE u.username = $1"):
+	case strings.Contains(query, "app_next_admin_display_name") || strings.Contains(query, "SELECT username FROM system_users"):
+		return &bootstrapRows{columns: []string{"username"}, values: [][]driver.Value{{"admin_1"}}}, nil
+	case strings.Contains(query, "WHERE lower(login_name)") || strings.Contains(query, "WHERE lower(username)") || strings.Contains(query, "WHERE lower(email)"):
+		return &bootstrapRows{columns: []string{"exists"}}, nil
+	case strings.Contains(query, "WHERE EXISTS (SELECT 1 FROM restricted.users_restricted ur"):
 		return &bootstrapRows{columns: []string{"username", "enabled", "admin_access_allowed", "admins_member", "restricted"}}, nil
-	case strings.Contains(query, "SELECT id FROM system_user_groups WHERE name = 'admins'"):
+	case strings.Contains(query, "SELECT id FROM system_user_groups WHERE id=1 AND name = 'admins'"):
 		return &bootstrapRows{columns: []string{"id"}, values: [][]driver.Value{{int64(1)}}}, nil
 	case strings.Contains(query, "INSERT INTO system_users"):
 		c.state.userInserted = true
@@ -106,6 +110,8 @@ func (c *bootstrapConn) QueryContext(_ context.Context, query string, _ []driver
 
 func (c *bootstrapConn) ExecContext(_ context.Context, query string, _ []driver.NamedValue) (driver.Result, error) {
 	switch {
+	case strings.Contains(query, "pg_advisory_xact_lock"):
+		return driver.RowsAffected(1), nil
 	case strings.Contains(query, "INSERT INTO system_user_group_memberships"):
 		c.state.membershipMade = true
 	case strings.Contains(query, "INSERT INTO restricted.users_restricted"):
@@ -141,7 +147,7 @@ func TestEnsureInitialAdminIgnoresTheAutomationAccount(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ensureInitialAdmin() beside the automation account error = %v", err)
 	}
-	if result.status != "created" || result.username != "admin_filterest" || result.password == "" {
+	if result.status != "created" || result.username != "admin_1" || result.loginName != "admin_filterest" || result.password == "" {
 		t.Fatalf("result status=%q username=%q password-present=%t, want a generated first administrator",
 			result.status, result.username, result.password != "")
 	}
@@ -174,7 +180,7 @@ func TestSanitizeSiteSlugDefaultsToFilterest(t *testing.T) {
 	}
 
 	for input, want := range tests {
-		if got := sanitizeSiteSlug(input); got != want {
+		if got := credentials.AdministratorSiteSlug(input); got != want {
 			t.Fatalf("sanitizeSiteSlug(%q) = %q, want %q", input, got, want)
 		}
 	}
@@ -182,17 +188,18 @@ func TestSanitizeSiteSlugDefaultsToFilterest(t *testing.T) {
 
 func TestBootstrapStatusKeepsLoginMaterialOutOfOutput(t *testing.T) {
 	result := initialAdminResult{
-		status:   "created",
-		username: "username-must-stay-private",
-		password: "password-must-stay-private",
-		email:    "email-must-stay-private.invalid",
+		status:    "created",
+		username:  "username-must-stay-private",
+		loginName: "login-name-must-stay-private",
+		password:  "password-must-stay-private",
+		email:     "email-must-stay-private.invalid",
 	}
 	var output bytes.Buffer
 
 	writeBootstrapStatus(&output, "/protected/initial_admin_credentials.txt", result)
 
 	text := output.String()
-	for _, secret := range []string{result.username, result.password, result.email} {
+	for _, secret := range []string{result.username, result.loginName, result.password, result.email} {
 		if strings.Contains(text, secret) {
 			t.Fatalf("bootstrap status exposed login material %q in %q", secret, text)
 		}
@@ -245,7 +252,8 @@ func TestWriteCredentialHandoffUses0600File(t *testing.T) {
 	tmp := t.TempDir()
 	handoffPath := filepath.Join(tmp, "data", "bootstrap", "initial_admin_credentials.txt")
 	result := initialAdminResult{
-		username:  "admin_filterest",
+		username:  "admin_1",
+		loginName: "admin_filterest", userID: 42,
 		password:  "secret-password",
 		email:     "admin@filterest.invalid",
 		createdAt: time.Date(2026, 7, 5, 4, 0, 0, 0, time.UTC),
@@ -269,7 +277,7 @@ func TestWriteCredentialHandoffUses0600File(t *testing.T) {
 	}
 	text := string(content)
 	for _, fragment := range []string{
-		"Username: admin_filterest",
+		"Login name: admin_filterest", "Display name: admin_1", "User id: 42",
 		"Password: secret-password",
 		"Delete this file after the first login and password rotation.",
 		"The public bootstrap seed does not contain reusable admin credentials.",
@@ -277,5 +285,28 @@ func TestWriteCredentialHandoffUses0600File(t *testing.T) {
 		if !strings.Contains(text, fragment) {
 			t.Fatalf("handoff content missing %q\n%s", fragment, text)
 		}
+	}
+}
+
+func TestBootstrapLoginNameChoiceUsesTheSharedProposalLT8(t *testing.T) {
+	t.Setenv("FILTEREST_DB_PASSWORD", "fixture")
+	t.Setenv("FILTEREST_SITE_SLUG", "Preferred Site")
+	t.Setenv("SITE_SLUG", "ignored")
+	cfg, err := parseConfig([]string{"--email", "admin@example.invalid"})
+	if err != nil || cfg.username() != credentials.SuggestedAdministratorLoginName() {
+		t.Fatal("default suggestion diverged", err)
+	}
+	cfg, err = parseConfig([]string{"--email", "admin@example.invalid", "--login-name", "operator_choice"})
+	if err != nil || cfg.username() != "operator_choice" {
+		t.Fatal("explicit name ignored", err)
+	}
+	for _, name := range []string{"", "admin_7", "test_admin", "has space"} {
+		if _, err = parseConfig([]string{"--email", "admin@example.invalid", "--login-name", name}); err == nil {
+			t.Fatal("invalid name accepted")
+		}
+	}
+	t.Setenv("FILTEREST_SITE_SLUG", "2026")
+	if _, err = parseConfig([]string{"--email", "admin@example.invalid"}); err == nil || !strings.Contains(err.Error(), "--login-name") {
+		t.Fatal("numeric slug not refused", err)
 	}
 }

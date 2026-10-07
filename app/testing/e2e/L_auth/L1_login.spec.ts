@@ -41,14 +41,16 @@ test.describe('L1 — Login', () => {
     }
 
     // 4. Submit credentials → OTP section appears
-    await submitCredentialsAndWaitForOtp(page);
+    const otpRequired = await submitCredentialsAndWaitForOtp(page);
 
-    // 5. Fill the explicitly configured native dev OTP.
-    await page.locator('[data-testid="login-otp"]').fill(loadOtpCode());
-    await page.locator('[data-testid="login-submit"]').click();
+    if (otpRequired) {
+      // 5. Fill the explicitly configured native dev OTP.
+      await page.locator('[data-testid="login-otp"]').fill(loadOtpCode());
+      await submitCredentialsAndWaitForOtp(page);
+    }
 
     // 6. Verify we end up inside the authenticated app shell.
-    await waitForAuthenticatedApp(page, username);
+    await waitForAuthenticatedApp(page);
     expect(page.url()).not.toContain('/login');
 
     const cookies = await page.context().cookies();

@@ -145,11 +145,11 @@ func (connection *adminAuthenticationMockConn) QueryContext(
 		}
 		connection.state.targetLockedInTx = connection.inTx
 		if connection.state.missingUser {
-			return &adminAuthenticationMockRows{columns: []string{"username", "api_only"}}, nil
+			return &adminAuthenticationMockRows{columns: []string{"username", "api_only", "names_equal"}}, nil
 		}
 		return &adminAuthenticationMockRows{
-			columns: []string{"username", "api_only"},
-			rows:    [][]driver.Value{{"ai_admin_7768", connection.state.apiOnlyTarget}},
+			columns: []string{"username", "api_only", "names_equal"},
+			rows:    [][]driver.Value{{"ai_admin_7768", connection.state.apiOnlyTarget, false}},
 		}, nil
 	case strings.Contains(normalized, "SELECT id FROM system_user_groups WHERE name = 'admins'"):
 		return &adminAuthenticationMockRows{

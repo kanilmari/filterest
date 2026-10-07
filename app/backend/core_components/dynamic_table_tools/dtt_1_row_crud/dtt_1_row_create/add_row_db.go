@@ -7,6 +7,7 @@ package dtt_1_row_create
 import (
 	"context"
 	"database/sql"
+	"easelect/backend/core_components/accountwrite"
 	"easelect/backend/core_components/dynamic_table_tools/dtt_1_row_crud/row_mutation_policy"
 	"encoding/json"
 	"errors"
@@ -36,6 +37,9 @@ func insertDataAccordingToPayload(
 	payload map[string]interface{},
 	tx *sql.Tx,
 ) (int64, []ChildInsertResult, error) {
+	if err := accountwrite.RequireAdministrator(w, r, tableName); err != nil {
+		return 0, nil, err
+	}
 
 	if err := system_config_checks.ValidateRow(tableName, payload); err != nil {
 		var refusal *httpresponse.Refusal
@@ -351,7 +355,11 @@ func insertDataAccordingToPayload(
 
 	mainRowID, err := insertMainRow(r.Context(), tx, tableName, filteredRow, columnTypeMap)
 	if err != nil {
-		fmt.Printf("\033[31m[add_row_db.go] [insertDataAccordingToPayload] error: %s\033[0m\n", err.Error())
+		if refusal := httpresponse.AccountNameRefusal(err); refusal != nil {
+			httpresponse.RespondWithRefusal(w, refusal)
+			return 0, nil, refusal
+		}
+		fmt.Printf("main row insert failed\n")
 		respondToSettingWriteError(w, err, "error inserting main row")
 		return 0, nil, err
 	}

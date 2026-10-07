@@ -3,6 +3,7 @@
 // Bridges profile API responses and form controls in the account settings UI.
 // Exists to provide one place for users to review and update their account details.
 
+import { appendProfileSecurity, appendPublicProfileFields } from './profile_security_printer.js';
 import { endpoint_router } from '../endpoints/endpoint_router.js';
 import {
     showErrorToast,
@@ -78,8 +79,8 @@ export async function generate_user_view(container) {
         profileFieldset.appendChild(profileLegend);
 
         const usernameField = createLabeledInput({
-            labelText: 'Username',
-            labelLangKey: 'username',
+            labelText: 'Display name',
+            labelLangKey: 'display_name',
             inputType: 'text',
             inputId: 'edit_username',
             inputName: 'username',
@@ -141,6 +142,8 @@ export async function generate_user_view(container) {
         emailOtpSection.appendChild(emailOtpField.input);
 
         profileFieldset.appendChild(emailOtpSection);
+        const publicFields = appendPublicProfileFields(profileFieldset);
+        let originalPublicFields = {};
 
         const profileSubmitButton = document.createElement('button');
         profileSubmitButton.type = 'submit';
@@ -255,6 +258,8 @@ export async function generate_user_view(container) {
         passwordForm.appendChild(passwordSubmitButton);
         container.appendChild(passwordForm);
 
+        appendProfileSecurity(container, requestCurrentPassword);
+
         let originalUsername = '';
         let originalEmail = '';
         let profileCurrentPassword = '';
@@ -263,6 +268,8 @@ export async function generate_user_view(container) {
             const profileData = await loadInitialData(usernameField.input, emailField.input, infoDiv);
             originalUsername = profileData.username;
             originalEmail = profileData.email;
+            for (const key of Object.keys(publicFields)) publicFields[key].value = profileData[key] || '';
+            originalPublicFields = { website: publicFields.website.value, bio_social_medias: publicFields.bio_social_medias.value };
             confirmEmailField.input.value = '';
             confirmEmailField.label.style.display = 'none';
             confirmEmailField.input.style.display = 'none';
@@ -380,6 +387,10 @@ export async function generate_user_view(container) {
                 emailOtp: emailOtpField.input.value,
                 currentPassword,
             });
+
+            for (const key of Object.keys(publicFields)) {
+                if (publicFields[key].value !== originalPublicFields[key]) body[key] = publicFields[key].value;
+            }
 
             if (Object.keys(body).length === 0) {
                 showInfoToast(translatedText('no_profile_changes_to_save', 'No changes to save.'));
@@ -528,7 +539,7 @@ async function loadInitialData(userInput, emailInput, infoDiv) {
         emailInput.value = email;
         renderLoggedInAs(infoDiv, username);
 
-        return { username, email };
+        return { username, email, website: data?.website || '', bio_social_medias: data?.bio_social_medias || '' };
     } catch (error) {
         console.warn('loadInitialData', error);
         renderLoggedInAs(infoDiv);
@@ -592,7 +603,8 @@ function extractErrorMessage(error) {
     const cleanedMessage = rawMessage.replace(/^Virhe pyynnössä \([^)]*\):\s*/, '').trim();
     const parsedMessage = extractMessageFromJson(cleanedMessage);
 
-    return parsedMessage || cleanedMessage || fallbackMessage;
+    const key = parsedMessage || cleanedMessage;
+    return getTranslationForKey(key, { fallback: key }) || key || fallbackMessage;
 }
 
 /**

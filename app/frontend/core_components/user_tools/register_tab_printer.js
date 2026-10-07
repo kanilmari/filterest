@@ -4,7 +4,6 @@
 // Exists to render a standalone registration form as a navigable tab in the user tools panel.
 // PIPELINE_EXCEPTION: Register fragments are pre-auth HTML form loads/submits, not JSON API calls.
 
-import { handleLoginShellEntry, navigateToLoginEntry } from "../auth/login_shell_entry.js";
 import { initializeRegistrationVerificationFields } from "../auth/register_page_builder.js";
 import { translatePage } from "../lang/translation_handler.js";
 import { getLanguageWithBrowserFallback } from "../state_stores/lang_preference_reader.js";
@@ -19,21 +18,6 @@ function parseRegisterForm(htmlText) {
         throw new Error("Register form not found in fragment response");
     }
     return form;
-}
-
-function isSuccessfulRegisterRedirect(response) {
-    if (!response?.redirected || !response.url) {
-        return false;
-    }
-
-    try {
-        const parsedUrl = new URL(response.url, window.location.origin);
-        return parsedUrl.origin === window.location.origin
-            && (parsedUrl.pathname === "/" || parsedUrl.pathname === "/login");
-    } catch (error) {
-        console.warn("isSuccessfulRegisterRedirect failed:", error);
-        return false;
-    }
 }
 
 async function mountRegisterForm(container, form) {
@@ -56,12 +40,6 @@ async function mountRegisterForm(container, form) {
                 },
             });
 
-            if (isSuccessfulRegisterRedirect(response)) {
-                navigateToLoginEntry();
-                await handleLoginShellEntry();
-                return;
-            }
-
             const nextHtml = await response.text();
             const nextForm = parseRegisterForm(nextHtml);
             await mountRegisterForm(container, nextForm);
@@ -74,7 +52,7 @@ async function mountRegisterForm(container, form) {
     });
 
     container.replaceChildren(form);
-    initializeRegistrationVerificationFields(form);
+    if (!form.querySelector("[data-registration-complete]")) initializeRegistrationVerificationFields(form);
     await translatePage(getLanguageWithBrowserFallback());
 }
 

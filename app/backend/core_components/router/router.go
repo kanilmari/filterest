@@ -175,6 +175,8 @@ func RegisterRoutes(frontendDir string, storagePath string) {
 	functionRegisterHandler("/api/register_ndYOyXV0INOK3F", auth.RegisterAPIHandler, "auth.RegisterAPIHandler", http.MethodPost)
 	functionRegisterHandler("/api/csrf-token", auth.CSRFTokenHandler, "auth.CSRFTokenHandler", http.MethodGet)
 	functionRegisterHandler("/api/user-profile", auth.UserProfileFetchHandler, "auth.UserProfileFetchHandler", http.MethodGet)
+	functionRegisterHandler("/api/sign-out-other-devices", auth.SignOutOtherDevicesHandler, "auth.SignOutOtherDevicesHandler", http.MethodPost)
+	functionRegisterHandler("/api/admin/user-login-name", auth.AdminUserLoginNameHandler, "auth.AdminUserLoginNameHandler", http.MethodPost)
 	functionRegisterHandler("/api/update-profile", auth.UserProfileUpdateHandler, "auth.UserProfileUpdateHandler", http.MethodPost)
 	functionRegisterHandler("/api/front-page", system_table_tools.GetFrontPageHandler, "system_table_tools.GetFrontPageHandler", http.MethodGet)
 	functionRegisterHandler("/api/admin/front-page", system_table_tools.AdminFrontPageHandler, "system_table_tools.AdminFrontPageHandler", http.MethodGet, http.MethodPost)

@@ -72,8 +72,8 @@ docker exec -it <app-container> /app/filterest-admin-recovery --dry-run
 ```
 
 The preflight prints the database, site, current project, eligible existing
-administrators, their current verification methods, and their authentication
-generations. The canonical domain is read from the container's protected
+administrators with their user ids and masked email addresses, their current
+verification methods, and their authentication generations. The canonical domain is read from the container's protected
 `BASE_URL`, printed separately, and used as the first part of the final target
 confirmation; it is never inferred from the site's display name. Recovery
 fails closed when that public-origin setting is missing or ambiguous. When
@@ -83,8 +83,8 @@ fixed PIN only through the protected terminal, lets the operator explicitly
 choose the post-recovery verification method, and requires the printed target
 identity to be typed back exactly. That identity is a safety phrase, not a
 filesystem path or password; for example,
-`filterest.com/Filterest/filterest/filterest:filterest_admin` names the domain,
-site, current project, database, and administrator account in that order.
+`filterest.com/Filterest/filterest/filterest:user:42` names the domain,
+site, current project, database, and administrator user id in that order.
 
 Recovery does not create users, grant administrator access, change group
 memberships, reset application tables, or remove media. A successful recovery
@@ -123,7 +123,7 @@ Run the same command without `--dry-run` to create the account. The command then
 2. Requires the phrase `CREATE ANOTHER ADMINISTRATOR` to be typed **if** the
    installation already has an eligible administrator, and names the restore path
    before asking. With no eligible administrator, it says so and continues.
-3. Asks for the new account name and email address in the visible terminal, and
+3. Asks for the new private login name twice without echo, and the email address in the visible terminal, and
    refuses a name or address that is malformed, or that any existing account
    already holds. The refusal is case-insensitive and changes nothing.
 4. Asks for the sign-in verification method: a fixed PIN, email verification when
@@ -135,10 +135,19 @@ Run the same command without `--dry-run` to create the account. The command then
    argument, an environment value or a file, and no secret is printed or logged.
 6. Restates the account it is about to create, then requires the same
    domain-qualified target confirmation to be typed back exactly, with the new
-   account name as its last part.
+   account email as its last part, rather than its private login name.
+
+To restore an existing administrator with a forgotten sign-in name, add
+`--change-login-name` to the recovery command (without `--create-admin`). The new
+private name is entered twice without echo in the protected terminal and validated
+before the transaction. Password and name changes commit together, invalidate
+old sessions once, and leave the public display name intact. The result names
+the account by id and display name; the new login name appears only in the
+account's own change-notice email when delivery is configured. The command prints
+the mail delivery status after the committed change.
 
 The account it creates is the same thing the first-run browser form creates: the
-same shared account definition writes the enabled, non-privileged public identity
+same shared account definition assigns an available `admin_<n>` display name and writes the enabled, non-privileged public identity
 with administrator access allowed, the `admins` group membership that carries
 administrator permissions, and the restricted credentials — in one transaction
 with a secret-free audit entry that records the target, the new account, the

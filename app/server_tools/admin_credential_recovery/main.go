@@ -33,6 +33,7 @@ type commandConfig struct {
 	siteDomain          string
 	dryRun              bool
 	createAdministrator bool
+	changeLoginName     bool
 }
 
 type commandDependencies struct {
@@ -122,7 +123,7 @@ func run(ctx context.Context, args []string, dependencies commandDependencies) e
 			operatorReference:       resolveOperatorReference(dependencies.lookupEnv),
 		})
 	}
-	return executeRecoveryWorkflow(ctx, terminal, editor, config.siteDomain, config.dryRun, emailDeliveryReady)
+	return executeRecoveryWorkflow(ctx, terminal, editor, config.siteDomain, config.dryRun, emailDeliveryReady, config.changeLoginName)
 }
 
 // resolveOperatorReference names the operating-system account and host that ran the command.
@@ -166,10 +167,14 @@ func parseCommandConfig(args []string, lookupEnv func(string) string) (commandCo
 	flags.StringVar(&config.dbName, "db-name", configuredValueOrDefault(lookupEnv, "DB_NAME", "filterest"), "PostgreSQL database")
 	flags.StringVar(&config.dbUser, "db-user", configuredValueOrDefault(lookupEnv, "DB_ADMIN_USER", "filterest_admin"), "privileged PostgreSQL role")
 	flags.StringVar(&config.sslMode, "sslmode", configuredValueOrDefault(lookupEnv, "DB_SSLMODE", "require"), "PostgreSQL SSL mode")
+	flags.BoolVar(&config.changeLoginName, "change-login-name", false, "also enter a new private login name in the protected terminal")
 	flags.BoolVar(&config.dryRun, "dry-run", false, "show target identity and eligible administrators without changing credentials")
 	flags.BoolVar(&config.createAdministrator, "create-admin", false, "create one NEW administrator account instead of restoring an existing one")
 	if err := flags.Parse(args); err != nil {
 		return config, err
+	}
+	if config.createAdministrator && config.changeLoginName {
+		return config, errors.New("--change-login-name applies only to restoring an existing administrator")
 	}
 	if flags.NArg() != 0 {
 		return config, errors.New("positional arguments are not accepted; passwords and PINs must be entered in the protected terminal")

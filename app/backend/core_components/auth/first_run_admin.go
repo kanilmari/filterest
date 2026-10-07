@@ -44,6 +44,8 @@ var (
 type firstRunAdminInput struct {
 	SiteName           string
 	Username           string
+	DisplayName        string
+	NamesMayEqual      string
 	Email              string
 	Password           string
 	ConfirmPassword    string
@@ -58,6 +60,8 @@ type firstRunAdminInput struct {
 type firstRunAdminErrors struct {
 	SiteName     string
 	Username     string
+	DisplayName  string
+	NameChoice   string
 	Email        string
 	Password     string
 	Environment  string
@@ -82,7 +86,16 @@ func FirstRunAdminHandler(w http.ResponseWriter, r *http.Request) {
 
 	switch r.Method {
 	case http.MethodGet:
-		showFirstRunAdminForm(w, r, firstRunAdminInput{}, firstRunAdminErrors{}, http.StatusOK)
+		input := firstRunAdminInput{Username: credentials.SuggestedAdministratorLoginName(), NamesMayEqual: "true"}
+		if backend.DbAdmin == nil {
+			respondAuthPageFailure(w, r, true)
+			return
+		}
+		if err := backend.DbAdmin.QueryRowContext(r.Context(), `SELECT public.app_next_admin_display_name('admin',ARRAY[$1]::text[])`, input.Username).Scan(&input.DisplayName); err != nil {
+			respondAuthPageFailure(w, r, true)
+			return
+		}
+		showFirstRunAdminForm(w, r, input, firstRunAdminErrors{}, http.StatusOK)
 	case http.MethodPost:
 		handleFirstRunAdminPost(w, r)
 
@@ -104,6 +117,8 @@ func handleFirstRunAdminPost(w http.ResponseWriter, r *http.Request) {
 	input := firstRunAdminInput{
 		SiteName:           strings.TrimSpace(r.FormValue("site_name")),
 		Username:           strings.TrimSpace(r.FormValue("username")),
+		DisplayName:        strings.TrimSpace(r.FormValue("display_name")),
+		NamesMayEqual:      r.FormValue("display_name_may_equal_login_name"),
 		Email:              strings.TrimSpace(r.FormValue("email")),
 		Password:           r.FormValue("password"),
 		ConfirmPassword:    r.FormValue("confirm_password"),
@@ -138,11 +153,19 @@ func handleFirstRunAdminPost(w http.ResponseWriter, r *http.Request) {
 		case errors.Is(err, errFirstRunClosed):
 			http.Redirect(w, r, "/login", http.StatusSeeOther)
 		case errors.Is(err, errFirstRunUsernameTaken):
-			showFirstRunAdminForm(w, r, input, firstRunAdminErrors{Username: "username_exists"}, http.StatusConflict)
+			showFirstRunAdminForm(w, r, input, firstRunAdminErrors{Username: "login_name_exists"}, http.StatusConflict)
 		case errors.Is(err, errFirstRunEmailTaken):
 			showFirstRunAdminForm(w, r, input, firstRunAdminErrors{Email: "email_exists"}, http.StatusConflict)
 		default:
-			logging.Errorf("[FirstRunAdminHandler] administrator creation failed: %v", err)
+			if refusal := httpresponse.AccountNameRefusal(err); refusal != nil {
+				errs := firstRunAdminErrors{DisplayName: refusal.LangKey}
+				if refusal.LangKey == "login_name_exists" || refusal.LangKey == "login_name_reserved" || refusal.LangKey == "login_name_invalid" {
+					errs = firstRunAdminErrors{Username: refusal.LangKey}
+				}
+				showFirstRunAdminForm(w, r, input, errs, refusal.Status)
+				return
+			}
+			logging.Errorf("[FirstRunAdminHandler] administrator creation failed")
 			showFirstRunAdminForm(w, r, input, firstRunAdminErrors{General: "first_run_admin_creation_failed"}, http.StatusInternalServerError)
 		}
 		return
@@ -159,6 +182,12 @@ func handleFirstRunAdminPost(w http.ResponseWriter, r *http.Request) {
 
 func validateFirstRunAdminInput(input firstRunAdminInput) firstRunAdminErrors {
 	var validation firstRunAdminErrors
+	if input.NamesMayEqual != "true" && input.NamesMayEqual != "false" {
+		validation.NameChoice = "first_run_name_choice_invalid"
+	}
+	if input.DisplayName != "" && strings.EqualFold(strings.TrimSpace(input.DisplayName), strings.TrimSpace(input.Username)) {
+		validation.DisplayName = "error_admin_display_name_equals_login_name"
+	}
 	if !isValidFirstRunSiteName(input.SiteName) {
 		validation.SiteName = "first_run_site_name_invalid"
 	}
@@ -322,8 +351,25 @@ func createFirstRunAdmin(ctx context.Context, db *sql.DB, input firstRunAdminInp
 		return errors.New("site name config is unavailable")
 	}
 
+	if input.NamesMayEqual != "true" && input.NamesMayEqual != "false" {
+		return errors.New("invalid account name choice")
+	}
+	result, err = tx.ExecContext(ctx, `UPDATE system_config
+        SET boolean_value=$1, json_value=jsonb_build_object('value',$1::boolean), updated=NOW()
+        WHERE key='display_name_may_equal_login_name'`, input.NamesMayEqual == "true")
+	if err != nil {
+		return err
+	}
+	if rows, rowsErr := result.RowsAffected(); rowsErr != nil || rows != 1 {
+		if rowsErr != nil {
+			return rowsErr
+		}
+		return errors.New("account name setting is unavailable")
+	}
+
 	if _, err = credentials.CreateAdministratorAccount(ctx, tx, credentials.AdministratorAccountInput{
-		Username:           input.Username,
+		LoginName:          input.Username,
+		DisplayName:        input.DisplayName,
 		Email:              input.Email,
 		Password:           input.Password,
 		VerificationMethod: credentials.VerificationMethod(method),
@@ -410,7 +456,7 @@ func showFirstRunAdminForm(w http.ResponseWriter, r *http.Request, input firstRu
 		input.VerificationMethod = string(verificationNone)
 	}
 	initialSection := "settings"
-	if errs.SiteName != "" || errs.Username != "" || errs.Email != "" || errs.Password != "" || errs.General != "" {
+	if errs.SiteName != "" || errs.DisplayName != "" || errs.Username != "" || errs.Email != "" || errs.Password != "" || errs.General != "" {
 		initialSection = "credentials"
 	}
 	faviconSiteName := input.SiteName
@@ -424,6 +470,10 @@ func showFirstRunAdminForm(w http.ResponseWriter, r *http.Request, input firstRu
 		frontendassets.ShellPageData
 		FirstRunSiteName   string
 		Username           string
+		DisplayName        string
+		NamesMayEqual      string
+		DisplayNameErr     string
+		NameChoiceErr      string
 		Email              string
 		Environment        string
 		VerificationMethod string
@@ -442,6 +492,7 @@ func showFirstRunAdminForm(w http.ResponseWriter, r *http.Request, input firstRu
 	}{
 		ShellPageData:    shellPage,
 		FirstRunSiteName: input.SiteName, Username: input.Username, Email: input.Email,
+		DisplayName: input.DisplayName, NamesMayEqual: input.NamesMayEqual, DisplayNameErr: errs.DisplayName, NameChoiceErr: errs.NameChoice,
 		Environment: input.Environment, VerificationMethod: input.VerificationMethod,
 		TOTPSecret: totpSecret, InitialSection: initialSection,
 		FaviconPath: frontendassets.SiteFaviconPath(frontend_dir, faviconSiteName, configuredFaviconReader(r.Context(), backend.Db)),

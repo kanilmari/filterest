@@ -5,6 +5,7 @@
 package dtt_1_row_create
 
 import (
+	"easelect/backend/core_components/accountwrite"
 	"easelect/backend/core_components/media_library"
 	"encoding/json"
 	"fmt"
@@ -63,6 +64,10 @@ func AddRowMultipartHandlerWrapper(w http.ResponseWriter, r *http.Request) {
 // Between: HTTP Request -> Database & Filesystem
 // Why: Main handler for adding a new row with potential child rows and file uploads.
 func AddRowMultipartHandler(w http.ResponseWriter, r *http.Request, tableName string) {
+	// Refuse before opening a policy transaction or examining the submitted fields.
+	if err := accountwrite.RequireAdministrator(w, r, tableName); err != nil {
+		return
+	}
 	if row_mutation_policy.RequiresDedicatedMutationAPI(tableName) {
 		httpresponse.RespondWithError(w, http.StatusForbidden, "dataset_requires_dedicated_mutation_api")
 		return

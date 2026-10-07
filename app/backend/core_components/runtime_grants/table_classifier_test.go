@@ -60,6 +60,25 @@ func TestBootstrapAndMigrationTablesAreClassified(t *testing.T) {
 	}
 }
 
+func TestPasswordResetDummyWorkIsConfidentialOnly(t *testing.T) {
+	snapshot := policyFixture()
+	object := snapshot.Objects[10]
+	object.Schema, object.Name = "restricted", "password_reset_dummy_work"
+	snapshot.Objects[10] = object
+	class, err := ClassifyTable(object)
+	if err != nil || class != Restricted {
+		t.Fatal(class, err)
+	}
+	grants := grantsFor(t, snapshot)
+	for _, role := range []string{"PUBLIC", "basic", "guest", "readonly", "confidential"} {
+		for _, privilege := range []string{"SELECT", "UPDATE"} {
+			if containsGrant(grants, role, 10, "", privilege) != (role == "confidential") {
+				t.Fatal("dummy work escaped the confidential pool", role, privilege)
+			}
+		}
+	}
+}
+
 func TestProductTriggerBodiesHaveReviewedFingerprints(t *testing.T) {
 	root := filepath.Join("..", "..", "..", "server_tools")
 	files, err := filepath.Glob(filepath.Join(root, "migrations", "*.sql"))

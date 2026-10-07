@@ -9,6 +9,7 @@ import (
 	"database/sql"
 	dtt_asset_linking "easelect/backend/core_components/dynamic_table_tools/dtt_asset_linking"
 	dtt_search_vectors "easelect/backend/core_components/dynamic_table_tools/search_vectors"
+	"easelect/backend/core_components/httpresponse"
 	"easelect/backend/core_components/system_config_checks"
 	"fmt"
 	"github.com/lib/pq"
@@ -64,6 +65,9 @@ func insertMainRow(ctx context.Context, tx *sql.Tx, tableName string, rowData ma
 	var mainRowID int64
 	err := tx.QueryRow(insertQuery, values...).Scan(&mainRowID)
 	if err != nil {
+		if refusal := httpresponse.AccountNameRefusal(err); refusal != nil {
+			return 0, refusal
+		}
 		fmt.Printf("\033[31m[add_row_db.go] [insertMainRow] error: %s\033[0m\n", err.Error())
 		return 0, err
 	}

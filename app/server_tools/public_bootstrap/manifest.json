@@ -139,6 +139,9 @@
     "20261005000004_add_row_actor_columns.sql",
     "20261005000005_seed_row_actor_language_keys.sql",
     "20261005000006_check_row_actor_trigger_definitions.sql",
+    "20261005000011_separate_login_names.sql",
+    "20261005000013_seed_login_name_keys.sql",
+    "20261005000014_add_password_reset_dummy_work.sql",
     "20261005000021_create_system_favorites.sql",
     "20261005000022_seed_favorites_language_keys.sql",
     "20261005000023_register_system_favorites.sql",
@@ -245,6 +248,7 @@
     "public.tiketit",
     "public.tiketit_assets",
     "restricted.otp_send_events",
+    "restricted.password_reset_dummy_work",
     "restricted.users_restricted",
     "restricted.verification_codes"
   ],
@@ -305,7 +309,7 @@
     "public.riskienhallinta_tiketit_relation": 1,
     "public.system_about": 1,
     "public.system_column_details": 45,
-    "public.system_config": 19,
+    "public.system_config": 20,
     "public.system_data_repair_records": 1,
     "public.system_db_tables": 73,
     "public.system_db_version": 1,
@@ -314,11 +318,11 @@
     "public.system_group_table_func_rights": 24,
     "public.system_lang_key_sources": 0,
     "public.system_lang_key_translations": 163,
-    "public.system_lang_keys": 1176,
+    "public.system_lang_keys": 1224,
     "public.system_languages": 5,
     "public.system_permission_actions": 7,
     "public.system_permission_categories": 4,
-    "public.system_schema_migrations": 154,
+    "public.system_schema_migrations": 157,
     "public.system_table_folders": 14,
     "public.system_table_views": 13,
     "public.system_user_group_memberships": 2,
@@ -330,18 +334,18 @@
   },
   "generated_files": {
     "server_tools/public_bootstrap/schema.sql": {
-      "sha256": "f1181ec444ca18850b192b43c2353f53b6190e2f81d6e559e1d1e5f4fea79821"
+      "sha256": "895e8102b54e5d899b040194605a18bf6bcfe6d2492d1eeeea05654bf1a57829"
     },
     "server_tools/public_bootstrap/seed_data.sql": {
-      "sha256": "fb5972d2ca0c7e3cc031dbe572c40c362241eb38de336450e9ade5df8c69c632"
+      "sha256": "5e29e2ed18126e60ac1335d6a149f353836dcccc0dc94de4e674c755d1619de6"
     }
   },
   "source_files": {
     "filterest/app/server_tools/public_bootstrap/source/base.schema.sql": {
-      "sha256": "6a47d79a9c9ee6aecbb85724a0a3832775b6776b368b0ae08721ceb42cb1c010"
+      "sha256": "5e76502fbcfd745ca040619ec483bfd488884ab4b2a75435469ea5caf0de3c06"
     },
     "filterest/app/server_tools/public_bootstrap/source/base.seed.sql": {
-      "sha256": "a9af982083ad7cb32115a839a2d10e51dec05c403c69f27e164ee8b00cd9c962"
+      "sha256": "7fe36e615bbf354f606abf87b32f57409b05cbca70e65df04b788593bbfb40dd"
     },
     "filterest/app/server_tools/public_bootstrap/source/field_settings.lang_keys.sql": {
       "sha256": "ef466c93cf569bb7f1ce3435df698e676bd4603a89fd9973ab35c5b59d58a968"
@@ -350,13 +354,13 @@
       "sha256": "235e4b887181e150bd436d035d2d268eb821d9e5d0b830b54eb444988f31d5d1"
     },
     "filterest/app/server_tools/public_bootstrap/generate_bootstrap.py": {
-      "sha256": "185c0492c1160ed8289019bdc4239b11daf22391a96093eab457fc5c2225197d"
+      "sha256": "f5a2f34410ecc6ae57bca5469bc4e0b388f73f8e5a1996fb32ed35bca13b23ad"
     },
     "filterest/app/server_tools/public_slice_export/audit_public_bootstrap.py": {
       "sha256": "cadab74b97ae8328417bbbcdefd7a9b770250c3a25ebe7272978622a10807e54"
     },
     "filterest/app/server_tools/public_slice_export/public_bootstrap_table_allowlists.py": {
-      "sha256": "03a47e61e3941954164690e5652296875344ca84c28c77d009c708567744a304"
+      "sha256": "369b07271e96fe1031abd9819f2a64b4176ff09668d5b894f80f886634147350"
     },
     "filterest/app/server_tools/public_slice_export/public_bootstrap_policy.py": {
       "sha256": "3ed55b711ac5e8cd735f22d36f8da280b7b99c71d0cc7d1cb32053daab4bc17e"
@@ -817,6 +821,15 @@
     "filterest/app/server_tools/migrations/20261005000006_check_row_actor_trigger_definitions.sql": {
       "sha256": "acc8401e9dfdb14ea303c947f5edaafcd826f00e1432becbec69dc875fdaae7e"
     },
+    "filterest/app/server_tools/migrations/20261005000011_separate_login_names.sql": {
+      "sha256": "720f8cdd9d295f5dafd64a384a452402b2a242acbb6931577b9bd2097836b3fa"
+    },
+    "filterest/app/server_tools/migrations/20261005000013_seed_login_name_keys.sql": {
+      "sha256": "9eb5c1a24ca2394996e7ebb2b95ef0843c26c02edd2fd371cb8fb7d0320271de"
+    },
+    "filterest/app/server_tools/migrations/20261005000014_add_password_reset_dummy_work.sql": {
+      "sha256": "680ac7471c4ec95aaeda5da61a834b74b41d0a7b9cfca9fde07c6c86c65f4ebc"
+    },
     "filterest/app/server_tools/migrations/20261005000021_create_system_favorites.sql": {
       "sha256": "a0af627e21af7dd0542a571206df0f19a71d2649441e23bf0cab925095be21f2"
     },
@@ -881,7 +894,7 @@
       "sha256": "ea90805dc12148fc66b3392058a72b99b86474c0aae8531b18f401bd54cf0f96"
     },
     "filterest/app/server_tools/migrations/20261005000099_record_database_release_9_10_0.sql": {
-      "sha256": "3635c5ef4dd28494225d97e92b73148ed3cb23279f8107774785b4a93e8f6e2c"
+      "sha256": "d387c92542fed41942a44cba5344d38bfb4cbc43069e1768794287e18d0ce71e"
     },
     "filterest/app/server_tools/public_bootstrap/source/fixtures/docs/first-dataset.png": {
       "sha256": "010bdb97d887959b6f83046d377ca8394478a812c8abfe79fd5ea2cf400e3975"

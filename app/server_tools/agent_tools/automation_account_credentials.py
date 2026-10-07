@@ -303,7 +303,7 @@ def _validate_ready_record(record: dict[str, object]) -> AutomationCredentialRes
     expected = (
         record.get("exists") is True
         and record.get("ready") is True
-        and record.get("username") == AUTOMATION_ACCOUNT_USERNAME
+        and record.get("fixed_login_name") is True
         and record.get("enabled") is True
         and record.get("api_only") is True
         and record.get("admin_group_member") is True
@@ -321,7 +321,7 @@ def _validate_ready_record(record: dict[str, object]) -> AutomationCredentialRes
     return AutomationCredentialResult(
         action="created" if record.get("created") is True else "rotated",
         base_url="",
-        username=AUTOMATION_ACCOUNT_USERNAME,
+        username=str(record.get("username") or ""),
         user_id=user_id,
         authentication_generation=generation,
     )
@@ -411,13 +411,13 @@ def _validate_revoked_record(record: dict[str, object]) -> AutomationCredentialR
     if (
         record.get("exists") is not True or record.get("ready") is not False
         or record.get("enabled") is not False or record.get("api_only") is not True
-        or record.get("username") != AUTOMATION_ACCOUNT_USERNAME
+        or record.get("fixed_login_name") is not True
         or type(user_id) is not int or user_id <= 1
         or type(generation) is not int or generation < 1
     ):
         raise AutomationCredentialError("automation account readback did not prove revocation")
     return AutomationCredentialResult(
-        action="revoked", base_url="", username=AUTOMATION_ACCOUNT_USERNAME,
+        action="revoked", base_url="", username=str(record.get("username") or ""),
         user_id=user_id, authentication_generation=generation,
     )
 
@@ -493,7 +493,7 @@ def main(argv: list[str] | None = None) -> int:
         return 1
     print(
         f"automation credentials {'revoked' if result.action == 'revoked' else 'ready'}: "
-        f"target={result.base_url} username={result.username} "
+        f"target={result.base_url} user_id={result.user_id} display_name={result.username} "
         f"action={result.action} generation={result.authentication_generation}"
     )
     return 0

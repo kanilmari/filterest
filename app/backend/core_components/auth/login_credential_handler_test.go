@@ -84,6 +84,19 @@ func (c *credentialMockConn) Query(query string, args []driver.Value) (driver.Ro
 
 func (c *credentialMockConn) QueryContext(_ context.Context, query string, args []driver.NamedValue) (driver.Rows, error) {
 	switch {
+	case strings.Contains(query, "WHERE lower(ur.login_name)=lower($1)"):
+		if !c.cfg.userLookupOK {
+			return &credentialMockRows{cols: []string{"id", "enabled", "password", "method", "pin", "totp", "email", "generation", "api_only"}, done: true}, nil
+		}
+		method := c.cfg.verificationMethod
+		if method == "" {
+			method = "none"
+		}
+		generation := c.cfg.authGeneration
+		if generation == 0 {
+			generation = 1
+		}
+		return &credentialMockRows{cols: []string{"id", "enabled", "password", "method", "pin", "totp", "email", "generation", "api_only"}, vals: []driver.Value{int64(c.cfg.userID), !c.cfg.disabled, c.cfg.hashedPassword, method, c.cfg.fixedPINHash, c.cfg.totpSecret, "", generation, c.cfg.apiOnly}}, nil
 	case isSignInLimitQuery(query):
 		if c.cfg.signInLimitError {
 			return nil, errors.New("the sign-in limit could not be read")
@@ -308,9 +321,10 @@ func TestHandleLoginCredentials_UsernameAndPasswordRequired(t *testing.T) {
 
 func TestHandleLoginCredentials_WrongCredentialsOnUserLookup(t *testing.T) {
 	resetLoginFailureLimiter()
-	origDB := backend.Db
+	origDB, origConf := backend.Db, backend.DbConfidential
 	backend.Db = openCredentialMockDB(t, credentialMockConfig{userLookupOK: false})
-	t.Cleanup(func() { backend.Db = origDB })
+	backend.DbConfidential = backend.Db
+	t.Cleanup(func() { backend.Db = origDB; backend.DbConfidential = origConf })
 
 	req := httptest.NewRequest(http.MethodPost, "/api/login", nil)
 	req.RemoteAddr = "10.20.0.1:1234"
@@ -601,6 +615,9 @@ func TestHandleLoginOTPVerify_CorrectFixedPINClearsFailures(t *testing.T) {
 	if rr.Code != http.StatusOK {
 		t.Fatalf("status: got %d, want %d; body=%s", rr.Code, http.StatusOK, rr.Body.String())
 	}
+	if !strings.Contains(rr.Body.String(), `"user_id":42`) {
+		t.Fatal("sign-in did not return its proven numeric identity", rr.Body.String())
+	}
 	if got := loginFailureCount(ip); got != 0 {
 		t.Fatalf("completed fixed-PIN login failure count = %d, want 0", got)
 	}
@@ -654,6 +671,9 @@ func TestHandleLoginCredentials_CompleteSuccessClearsFailures(t *testing.T) {
 
 	if rr.Code != http.StatusOK {
 		t.Fatalf("status: got %d, want %d; body=%s", rr.Code, http.StatusOK, rr.Body.String())
+	}
+	if !strings.Contains(rr.Body.String(), `"user_id":42`) {
+		t.Fatal("sign-in did not return its proven numeric identity", rr.Body.String())
 	}
 	if got := loginFailureCount(ip); got != 0 {
 		t.Fatalf("completed login failure count = %d, want 0", got)

@@ -535,7 +535,6 @@ ensure_generated_filterest_initial_admin() {
         return
     fi
 
-    local site_slug="${FILTEREST_SITE_SLUG:-${SITE_SLUG:-filterest}}"
     local handoff_file=""
     handoff_file="$(filterest_resolve_initial_admin_handoff_file \
         "$FILTEREST_SOURCE_ROOT" \
@@ -549,7 +548,6 @@ ensure_generated_filterest_initial_admin() {
         --db-name "$DB_NAME"
         --db-user "$DB_ADMIN_USER"
         --sslmode "${DB_SSLMODE:-disable}"
-        --site-slug "${site_slug:-filterest}"
         --email "${FILTEREST_INITIAL_ADMIN_EMAIL:-}"
         --handoff-file "$handoff_file"
     )
@@ -563,7 +561,9 @@ ensure_generated_filterest_initial_admin() {
     # The isolated preview admin hashes the configured local PIN. Keep the PIN
     # scoped to this child process just like the database password instead of
     # exporting either secret into the parent shell.
-    LOGIN_OTP_CODE="$LOGIN_OTP_CODE" \
+    FILTEREST_SITE_SLUG="${FILTEREST_SITE_SLUG:-}" \
+        SITE_SLUG="${SITE_SLUG:-}" \
+        LOGIN_OTP_CODE="$LOGIN_OTP_CODE" \
         FILTEREST_DB_PASSWORD="$DB_ADMIN_PASSWORD" \
         GOMODCACHE="$RUNTIME_ROOT/go/module-cache" \
         GOCACHE="$RUNTIME_ROOT/go/build-cache" \

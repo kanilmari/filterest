@@ -170,3 +170,10 @@ func TestRegFetchProfileRequiresItsOwnAdapter(t *testing.T) {
 		t.Fatalf("regfetch-specific limits missing: %#v", profile)
 	}
 }
+
+func TestLoginNameChangeHasThreeAttemptsPerFiveMinutes(t *testing.T) {
+	profile, ok := GetProfile(ProfileLoginNameChange)
+	if !ok || profile.UserSendLimit != 3 || profile.UserSendWindow != 5*time.Minute || profile.Purpose != "login_name_change" || !profile.CoreEnabled {
+		t.Fatalf("login-name policy=%+v", profile)
+	}
+}

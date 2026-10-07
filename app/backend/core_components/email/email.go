@@ -69,7 +69,7 @@ func firstConfiguredEnv(keys ...string) string {
 func SendOTPEmail(to, formattedCode, purpose string) error {
 	apiKey := firstConfiguredEnv("POSTMARK_API_KEY", "POSTMARK_SERVER_TOKEN")
 	if apiKey == "" && isExplicitDevEmailMode() {
-		log.Printf("\033[33m[email] DEV-MODE: OTP for %s → %s: %s\033[0m", purpose, to, formattedCode)
+		log.Printf("\033[33m[email] DEV-MODE: OTP for %s → %s: %s\033[0m", purpose, MaskRecipientAddress(to), formattedCode)
 		return nil
 	}
 	if apiKey == "" {
@@ -156,7 +156,7 @@ func SendOTPEmail(to, formattedCode, purpose string) error {
 		return fmt.Errorf("postmark response missing MessageID")
 	}
 
-	log.Printf("[email] OTP email sent to %s (purpose=%s, messageID=%s)", to, purpose, pmResp.MessageID)
+	log.Printf("[email] OTP email sent to %s (purpose=%s, messageID=%s)", MaskRecipientAddress(to), purpose, pmResp.MessageID)
 	return nil
 }
 

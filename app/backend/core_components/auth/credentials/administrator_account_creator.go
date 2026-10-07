@@ -7,6 +7,7 @@ package credentials
 import (
 	"context"
 	"database/sql"
+	"easelect/backend/core_components/httpresponse"
 	"errors"
 	"fmt"
 	"net/mail"
@@ -16,13 +17,8 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
-const (
-	minimumAdministratorUsernameLength = 3
-	maximumAdministratorUsernameLength = 64
-)
-
-// administratorUsernamePattern is the shared public account-name shape for administrators.
-// It stays ASCII and delimiter-free so an account name cannot be confused with a path or an address.
+// administratorUsernamePattern keeps trusted reserved system names within the shared ASCII shape.
+// Ordinary administrator login names use ValidateLoginName instead of a parallel policy.
 var administratorUsernamePattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_.-]*$`)
 
 var (
@@ -38,10 +34,11 @@ var (
 	ErrAdministratorGroupMissing = errors.New("the 'admins' user group is missing from this installation")
 )
 
-// AdministratorAccountInput carries one account's non-secret identity and its already-chosen secrets.
+// AdministratorAccountInput carries the private login name, public display name and its already-chosen secrets.
 // This boundary owns the account shape, the shared credential policy and the stored form of each factor.
 type AdministratorAccountInput struct {
-	Username           string
+	LoginName          string
+	DisplayName        string
 	FullName           string
 	Email              string
 	Password           string
@@ -51,12 +48,13 @@ type AdministratorAccountInput struct {
 	CreationSpec       string
 }
 
-// ValidateAdministratorUsername enforces the shared public account-name shape for administrators.
+// ValidateAdministratorUsername delegates to the shared private login-name policy for administrators.
 // Both the first-run browser form and the operator command reject a name this rejects.
 func ValidateAdministratorUsername(username string) error {
-	if len(username) < minimumAdministratorUsernameLength ||
-		len(username) > maximumAdministratorUsernameLength ||
-		!administratorUsernamePattern.MatchString(username) {
+	if err := ValidateLoginName(username); err != nil {
+		if IsReservedLoginName(username) {
+			return err
+		}
 		return ErrInvalidAdministratorUsername
 	}
 	return nil
@@ -79,9 +77,10 @@ func CreateAdministratorAccount(ctx context.Context, tx *sql.Tx, input Administr
 	if tx == nil {
 		return 0, errors.New("administrator creation requires an open transaction")
 	}
-	username := strings.TrimSpace(input.Username)
+	loginName := strings.TrimSpace(input.LoginName)
+	displayName := strings.TrimSpace(input.DisplayName)
 	email := strings.TrimSpace(input.Email)
-	if err := ValidateAdministratorUsername(username); err != nil {
+	if err := ValidateAdministratorUsername(loginName); err != nil {
 		return 0, err
 	}
 	if err := ValidateAdministratorEmail(email); err != nil {
@@ -101,20 +100,32 @@ func CreateAdministratorAccount(ctx context.Context, tx *sql.Tx, input Administr
 
 	fullName := strings.TrimSpace(input.FullName)
 	if fullName == "" {
-		fullName = username
+		fullName = displayName
 	}
 	creationSpec := strings.TrimSpace(input.CreationSpec)
 	if creationSpec == "" {
 		return 0, errors.New("administrator creation requires a creation specification")
 	}
 
-	if err = refuseExistingAdministratorIdentity(ctx, tx, username, email); err != nil {
+	if displayName == "" {
+		displayName, err = NextAccountDisplayName(ctx, tx, "admin", loginName)
+		if err != nil {
+			return 0, err
+		}
+	}
+	if strings.EqualFold(displayName, loginName) {
+		return 0, nameRefusal(409, "error_admin_display_name_equals_login_name")
+	}
+	if fullName == "" {
+		fullName = displayName
+	}
+	if err = refuseExistingAdministratorIdentity(ctx, tx, loginName, displayName, email); err != nil {
 		return 0, err
 	}
 
 	var adminGroupID int64
 	if err = tx.QueryRowContext(ctx,
-		`SELECT id FROM system_user_groups WHERE name = 'admins'`,
+		`SELECT id FROM system_user_groups WHERE id=1 AND name = 'admins'`,
 	).Scan(&adminGroupID); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return 0, ErrAdministratorGroupMissing
@@ -130,8 +141,11 @@ func CreateAdministratorAccount(ctx context.Context, tx *sql.Tx, input Administr
 		)
 		VALUES ($1, $2, NOW(), NOW(), TRUE, FALSE, $3, $4, TRUE)
 		RETURNING id
-	`, username, fullName, adminGroupID, creationSpec).Scan(&userID); err != nil {
-		return 0, fmt.Errorf("insert administrator identity: %w", err)
+	`, displayName, fullName, adminGroupID, creationSpec).Scan(&userID); err != nil {
+		if refusal := httpresponse.AccountNameRefusal(err); refusal != nil {
+			return 0, refusal
+		}
+		return 0, errors.New("insert administrator identity failed")
 	}
 
 	if _, err = tx.ExecContext(ctx, `
@@ -143,11 +157,14 @@ func CreateAdministratorAccount(ctx context.Context, tx *sql.Tx, input Administr
 
 	if _, err = tx.ExecContext(ctx, `
 		INSERT INTO restricted.users_restricted (
-			id, password, email, login_verification_method, fixed_pin_hash, totp_secret
+			id, password, email, login_verification_method, fixed_pin_hash, totp_secret, login_name
 		)
-		VALUES ($1, $2, $3, $4, NULLIF($5, ''), NULLIF($6, ''))
-	`, userID, string(passwordHash), email, string(method), fixedPINHash, totpSecret); err != nil {
-		return 0, fmt.Errorf("insert administrator credentials: %w", err)
+		VALUES ($1, $2, $3, $4, NULLIF($5, ''), NULLIF($6, ''), $7)
+	`, userID, string(passwordHash), email, string(method), fixedPINHash, totpSecret, loginName); err != nil {
+		if refusal := httpresponse.AccountNameRefusal(err); refusal != nil {
+			return 0, refusal
+		}
+		return 0, errors.New("insert administrator credentials failed")
 	}
 	return userID, nil
 }
@@ -185,25 +202,23 @@ func prepareAdministratorLoginFactor(input AdministratorAccountInput) (Verificat
 
 // refuseExistingAdministratorIdentity fails closed on a name or address another account already holds.
 // The comparison is case-insensitive so a near-duplicate cannot quietly shadow an existing operator.
-func refuseExistingAdministratorIdentity(ctx context.Context, tx *sql.Tx, username, email string) error {
-	var existing int
-	err := tx.QueryRowContext(ctx,
-		`SELECT 1 FROM system_users WHERE lower(username) = lower($1) LIMIT 1`, username,
-	).Scan(&existing)
-	if err == nil {
-		return ErrAdministratorUsernameTaken
-	}
-	if !errors.Is(err, sql.ErrNoRows) {
-		return fmt.Errorf("check the administrator username: %w", err)
-	}
-	err = tx.QueryRowContext(ctx,
-		`SELECT 1 FROM restricted.users_restricted WHERE lower(email) = lower($1) LIMIT 1`, email,
-	).Scan(&existing)
-	if err == nil {
-		return ErrAdministratorEmailTaken
-	}
-	if !errors.Is(err, sql.ErrNoRows) {
-		return fmt.Errorf("check the administrator email: %w", err)
+func refuseExistingAdministratorIdentity(ctx context.Context, tx *sql.Tx, loginName, displayName, email string) error {
+	for _, check := range []struct {
+		query, value string
+		refusal      error
+	}{
+		{`SELECT 1 FROM restricted.users_restricted WHERE lower(login_name)=lower($1) LIMIT 1`, loginName, ErrAdministratorUsernameTaken},
+		{`SELECT 1 FROM system_users WHERE lower(username)=lower($1) LIMIT 1`, displayName, nameRefusal(409, "username_exists")},
+		{`SELECT 1 FROM restricted.users_restricted WHERE lower(email)=lower($1) LIMIT 1`, email, ErrAdministratorEmailTaken},
+	} {
+		var existing int
+		err := tx.QueryRowContext(ctx, check.query, check.value).Scan(&existing)
+		if err == nil {
+			return check.refusal
+		}
+		if !errors.Is(err, sql.ErrNoRows) {
+			return fmt.Errorf("check administrator identity: %w", err)
+		}
 	}
 	return nil
 }

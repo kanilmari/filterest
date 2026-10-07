@@ -299,12 +299,20 @@ def persist_agent_credentials(env_file: Path, *, username: str, password: str, p
             temporary_path.unlink(missing_ok=True)
 
 
-def _verify_agent_admin(client, username: str) -> None:
+def _signed_in_user_id(client) -> int:
+    profile = client.request("GET", "/api/user-profile")
+    user_id = profile.get("user_id") if isinstance(profile, dict) else None
+    if type(user_id) is not int or user_id <= 1:
+        raise AgentCredentialConfigurationError("login did not establish a non-guest account id")
+    return user_id
+
+
+def _verify_agent_admin(client, user_id: int) -> None:
     payload = client.request("GET", "/api/admin/user-authentication")
     users = payload.get("users") if isinstance(payload, dict) else None
     if not isinstance(users, list):
         raise EaselectAPIError("administrator verification did not return an account list")
-    matches = [record for record in users if record.get("username") == username]
+    matches = [record for record in users if record.get("user_id") == user_id]
     if len(matches) != 1:
         raise AgentCredentialConfigurationError("verified account was not uniquely present")
     record = matches[0]
@@ -322,7 +330,7 @@ def _verify_agent_admin(client, username: str) -> None:
 
 def _activate_existing_agent_admin(
     *,
-    username: str,
+    user_id: int,
     pin: str,
     target: str,
     client_factory,
@@ -354,7 +362,7 @@ def _activate_existing_agent_admin(
     users = payload.get("users") if isinstance(payload, dict) else None
     if not isinstance(users, list):
         raise EaselectAPIError("administrator activation did not return an account list")
-    matches = [record for record in users if record.get("username") == username]
+    matches = [record for record in users if record.get("user_id") == user_id]
     if len(matches) != 1 or int(matches[0].get("user_id") or 0) <= 1:
         raise AgentCredentialConfigurationError("agent account was not uniquely available for activation")
     authorizer.request(
@@ -407,14 +415,15 @@ def configure_agent_credentials(
     client.login()
     if getattr(client, "last_verification_method", "fixed_pin") != "fixed_pin":
         raise AgentCredentialConfigurationError("account did not request the required fixed PIN")
+    user_id = _signed_in_user_id(client)
     try:
-        _verify_agent_admin(client, username)
+        _verify_agent_admin(client, user_id)
     except EaselectAPIError as error:
         if "HTTP 403" not in str(error):
             raise
         print("  Login succeeded; activating the existing account in the administrators group.")
         _activate_existing_agent_admin(
-            username=username,
+            user_id=user_id,
             pin=pin,
             target=target,
             client_factory=client_factory,
@@ -428,7 +437,9 @@ def configure_agent_credentials(
             otp_code=pin,
         )
         client.login()
-        _verify_agent_admin(client, username)
+        if _signed_in_user_id(client) != user_id:
+            raise AgentCredentialConfigurationError("activation changed the signed-in account id")
+        _verify_agent_admin(client, user_id)
 
     resolved_env_file = env_file
     if resolved_env_file is None:

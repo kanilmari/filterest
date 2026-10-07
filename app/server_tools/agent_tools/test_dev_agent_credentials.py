@@ -28,12 +28,14 @@ class VerifiedAdminClient:
         return {"authenticated": True}
 
     def request(self, method, path, *, data=None, csrf=False):
+        if path == "/api/user-profile":
+            return {"user_id": 42, "username": "admin_17"}
         if path == "/api/app/workline-observatory/board":
             return {"worklines": []}
         return {
             "users": [{
                 "user_id": 42,
-                "username": self.username,
+                "username": "admin_17",
                 "enabled": True,
                 "admin_group_member": True,
                 "admin_access_allowed": True,

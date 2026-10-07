@@ -7,15 +7,12 @@ package auth
 import (
 	"database/sql"
 	backend "easelect/backend/core_components"
-	"easelect/backend/core_components/auth/credentials"
-	"easelect/backend/core_components/auth_generation"
 	"easelect/backend/core_components/email"
 	"easelect/backend/core_components/httpresponse"
 	"easelect/backend/core_components/logging"
 	"easelect/backend/core_components/otp"
 	e_sessions "easelect/backend/core_components/sessions"
 	"encoding/json"
-	"errors"
 	"net/http"
 	"strings"
 
@@ -40,8 +37,8 @@ func UserProfileFetchHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var username string
-	err = backend.Db.QueryRow(`SELECT username FROM system_users WHERE id = $1`, userID).Scan(&username)
+	var username, website, bio string
+	err = backend.Db.QueryRow(`SELECT COALESCE(username,''),COALESCE(website,''),COALESCE(bio_social_medias,'') FROM system_users WHERE id = $1`, userID).Scan(&username, &website, &bio)
 	if err != nil {
 		logging.Errorf("[UserProfileFetchHandler] failed to fetch username for user %d: %v", userID, err)
 		httpresponse.RespondWithError(w, http.StatusInternalServerError, "db_error")
@@ -57,254 +54,11 @@ func UserProfileFetchHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	httpresponse.RespondWithJSON(w, http.StatusOK, map[string]interface{}{
-		"user_id":  userID,
-		"username": username,
-		"email":    email,
-	})
-}
-
-type profileUpdateRequest struct {
-	Username        string `json:"username"`
-	Email           string `json:"email"`
-	EmailOTP        string `json:"email_otp"`
-	CurrentPassword string `json:"current_password"`
-	NewPassword     string `json:"new_password"`
-	PasswordOTP     string `json:"password_otp"`
-}
-
-// UserProfileUpdateHandler updates the authenticated user's username, email, and/or password.
-func UserProfileUpdateHandler(w http.ResponseWriter, r *http.Request) {
-
-	session, err := e_sessions.GetOrCreateSession(w, r)
-	if err != nil {
-		logging.Errorf("[UserProfileUpdateHandler] session get failed: %v", err)
-		httpresponse.RespondWithError(w, http.StatusInternalServerError, "session_error")
-		return
-	}
-
-	userID, ok := session.Values["user_id"].(int)
-	if !ok || userID == 0 {
-		httpresponse.RespondWithError(w, http.StatusUnauthorized, "not_authenticated")
-		return
-	}
-
-	// CSRF validation
-	csrfHeader := r.Header.Get("X-CSRF-Token")
-	csrfSession, _ := session.Values["csrf_token"].(string)
-	if csrfHeader == "" || csrfSession == "" || csrfHeader != csrfSession {
-		httpresponse.RespondWithError(w, http.StatusForbidden, "csrf_token_invalid")
-		return
-	}
-
-	var req profileUpdateRequest
-	if err = json.NewDecoder(r.Body).Decode(&req); err != nil {
-		httpresponse.RespondWithError(w, http.StatusBadRequest, "invalid_request_body")
-		return
-	}
-
-	// Require current password for any account identifier changes (username, email)
-	if req.Username != "" || req.Email != "" {
-		if req.CurrentPassword == "" {
-			httpresponse.RespondWithError(w, http.StatusBadRequest, "current_password_required")
-			return
-		}
-
-		var hashedPassword string
-		err = backend.DbConfidential.QueryRow(
-			`SELECT password FROM restricted.users_restricted WHERE id = $1`, userID,
-		).Scan(&hashedPassword)
-		if err != nil {
-			logging.Errorf("[UserProfileUpdateHandler] failed to fetch password hash for verification: %v", err)
-			httpresponse.RespondWithError(w, http.StatusInternalServerError, "db_error")
-			return
-		}
-
-		if err = bcrypt.CompareHashAndPassword([]byte(hashedPassword), []byte(req.CurrentPassword)); err != nil {
-			httpresponse.RespondWithError(w, http.StatusBadRequest, "current_password_incorrect")
-			return
-		}
-	}
-
-	// Fetch current username for comparison
-	currentUsername, err := backend.UserDisplayName(r.Context(), backend.Db, userID)
-	if err != nil {
-		logging.Errorf("[UserProfileUpdateHandler] failed to fetch current username for user %d: %v", userID, err)
-		httpresponse.RespondWithError(w, http.StatusInternalServerError, "db_error")
-		return
-	}
-
-	// Update username if provided and changed
-	if req.Username != "" && req.Username != currentUsername {
-		if len(strings.TrimSpace(req.Username)) == 0 {
-			httpresponse.RespondWithError(w, http.StatusBadRequest, "username_empty")
-			return
-		}
-
-		var existingID int
-		err = backend.Db.QueryRow(`SELECT id FROM system_users WHERE username = $1 AND id != $2`, req.Username, userID).Scan(&existingID)
-		if err != nil && err != sql.ErrNoRows {
-			logging.Errorf("[UserProfileUpdateHandler] username uniqueness check failed: %v", err)
-			httpresponse.RespondWithError(w, http.StatusInternalServerError, "db_error")
-			return
-		}
-		if err == nil {
-			httpresponse.RespondWithError(w, http.StatusConflict, "username_exists")
-			return
-		}
-
-		_, err = backend.Db.Exec(`UPDATE system_users SET username = $1, updated = NOW() WHERE id = $2`, req.Username, userID)
-		if err != nil {
-			logging.Errorf("[UserProfileUpdateHandler] failed to update username for user %d: %v", userID, err)
-			httpresponse.RespondWithError(w, http.StatusInternalServerError, "db_error")
-			return
-		}
-
-		// The session holds no name, so there is nothing to update in it: the new name
-		// is read by id wherever it is shown or logged, in this browser and every other.
-		logging.Infof("[UserProfileUpdateHandler] username updated for user %d", userID)
-	}
-
-	// Fetch current email for comparison
-	var currentEmail string
-	err = backend.DbConfidential.QueryRow(`SELECT email FROM restricted.users_restricted WHERE id = $1`, userID).Scan(&currentEmail)
-	if err != nil {
-		logging.Errorf("[UserProfileUpdateHandler] failed to fetch current email for user %d: %v", userID, err)
-		httpresponse.RespondWithError(w, http.StatusInternalServerError, "db_error")
-		return
-	}
-
-	// Update email if provided and changed — requires OTP verification
-	if req.Email != "" && req.Email != currentEmail {
-		if !strings.Contains(req.Email, "@") || !strings.Contains(req.Email, ".") {
-			httpresponse.RespondWithError(w, http.StatusBadRequest, "email_invalid")
-			return
-		}
-
-		// Email ownership verification is required in every environment.
-		if req.EmailOTP == "" {
-			httpresponse.RespondWithError(w, http.StatusBadRequest, "email_otp_required")
-			return
-		}
-		verification, verifyErr := otp.VerifyOTPForTarget(userID, otp.ProfileEmailChange, req.Email, req.EmailOTP)
-		if verifyErr != nil {
-			logging.Errorf("[UserProfileUpdateHandler] email OTP verify error: %v", verifyErr)
-			httpresponse.RespondWithError(w, http.StatusInternalServerError, "otp_verify_error")
-			return
-		}
-		if !verification.IsVerified() {
-			httpresponse.RespondWithError(w, http.StatusUnauthorized, "email_otp_invalid")
-			return
-		}
-
-		var existingID int
-		err = backend.DbConfidential.QueryRow(`SELECT id FROM restricted.users_restricted WHERE email = $1 AND id != $2`, req.Email, userID).Scan(&existingID)
-		if err != nil && err != sql.ErrNoRows {
-			logging.Errorf("[UserProfileUpdateHandler] email uniqueness check failed: %v", err)
-			httpresponse.RespondWithError(w, http.StatusInternalServerError, "db_error")
-			return
-		}
-		if err == nil {
-			httpresponse.RespondWithError(w, http.StatusConflict, "email_exists")
-			return
-		}
-
-		var updatedMethod string
-		var updatedGeneration int64
-		err = backend.DbConfidential.QueryRow(`
-			UPDATE restricted.users_restricted
-			SET email = $1,
-			    authentication_generation = authentication_generation +
-			        CASE WHEN login_verification_method = 'email' THEN 1 ELSE 0 END
-			WHERE id = $2
-			RETURNING login_verification_method, authentication_generation
-		`, req.Email, userID).Scan(&updatedMethod, &updatedGeneration)
-		if err != nil {
-			logging.Errorf("[UserProfileUpdateHandler] failed to update email for user %d: %v", userID, err)
-			httpresponse.RespondWithError(w, http.StatusInternalServerError, "db_error")
-			return
-		}
-		if updatedMethod == string(verificationEmail) {
-			if setErr := auth_generation.Set(session, updatedGeneration); setErr != nil {
-				httpresponse.RespondWithError(w, http.StatusInternalServerError, "session_error")
-				return
-			}
-			if saveErr := e_sessions.Save(w, r, session); saveErr != nil {
-				httpresponse.RespondWithError(w, http.StatusInternalServerError, "session_error")
-				return
-			}
-		}
-		logging.Infof("[UserProfileUpdateHandler] email updated for user %d", userID)
-	}
-
-	// Update password if new password is provided — requires OTP verification
-	if req.NewPassword != "" {
-		if req.CurrentPassword == "" {
-			httpresponse.RespondWithError(w, http.StatusBadRequest, "current_password_required")
-			return
-		}
-
-		var hashedPassword string
-		err = backend.DbConfidential.QueryRow(`SELECT password FROM restricted.users_restricted WHERE id = $1`, userID).Scan(&hashedPassword)
-		if err != nil {
-			logging.Errorf("[UserProfileUpdateHandler] failed to fetch password hash for user %d: %v", userID, err)
-			httpresponse.RespondWithError(w, http.StatusInternalServerError, "db_error")
-			return
-		}
-
-		if err = bcrypt.CompareHashAndPassword([]byte(hashedPassword), []byte(req.CurrentPassword)); err != nil {
-			httpresponse.RespondWithError(w, http.StatusBadRequest, "current_password_incorrect")
-			return
-		}
-
-		// Password-change verification is required in every environment.
-		if req.PasswordOTP == "" {
-			httpresponse.RespondWithError(w, http.StatusBadRequest, "password_otp_required")
-			return
-		}
-		verification, verifyErr := otp.VerifyOTP(userID, otp.ProfilePasswordChange, req.PasswordOTP)
-		if verifyErr != nil {
-			logging.Errorf("[UserProfileUpdateHandler] password OTP verify error: %v", verifyErr)
-			httpresponse.RespondWithError(w, http.StatusInternalServerError, "otp_verify_error")
-			return
-		}
-		if !verification.IsVerified() {
-			httpresponse.RespondWithError(w, http.StatusUnauthorized, "password_otp_invalid")
-			return
-		}
-
-		expectedGeneration, generationOK := auth_generation.SessionValue(session)
-		if !generationOK {
-			httpresponse.RespondWithError(w, http.StatusUnauthorized, "credentials_changed")
-			return
-		}
-		newGeneration, err := credentials.ChangePassword(r.Context(), backend.DbConfidential, userID, req.NewPassword, expectedGeneration)
-		if err != nil {
-			logging.Errorf("[UserProfileUpdateHandler] failed to update password for user %d: %v", userID, err)
-			if errors.Is(err, credentials.ErrCredentialStateChanged) {
-				httpresponse.RespondWithError(w, http.StatusUnauthorized, "credentials_changed")
-				return
-			}
-			if errors.Is(err, credentials.ErrInvalidPassword) {
-				httpresponse.RespondWithError(w, http.StatusBadRequest, "new_password_invalid")
-				return
-			}
-			httpresponse.RespondWithError(w, http.StatusInternalServerError, "db_error")
-			return
-		}
-		if setErr := auth_generation.Set(session, newGeneration); setErr != nil {
-			httpresponse.RespondWithError(w, http.StatusInternalServerError, "session_error")
-			return
-		}
-		if saveErr := e_sessions.Save(w, r, session); saveErr != nil {
-			httpresponse.RespondWithError(w, http.StatusInternalServerError, "session_error")
-			return
-		}
-		logging.Infof("[UserProfileUpdateHandler] password updated for user %d", userID)
-	}
-
-	httpresponse.RespondWithJSON(w, http.StatusOK, map[string]interface{}{
-		"success": true,
-		"message": "profile_updated",
+		"user_id":           userID,
+		"username":          username,
+		"email":             email,
+		"website":           website,
+		"bio_social_medias": bio,
 	})
 }
 
@@ -324,7 +78,7 @@ func RequestEmailChangeOTPHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	userID, ok := session.Values["user_id"].(int)
-	if !ok || userID == 0 {
+	if !ok || userID <= 1 {
 		httpresponse.RespondWithError(w, http.StatusUnauthorized, "not_authenticated")
 		return
 	}
@@ -423,7 +177,7 @@ func RequestPasswordChangeOTPHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	userID, ok := session.Values["user_id"].(int)
-	if !ok || userID == 0 {
+	if !ok || userID <= 1 {
 		httpresponse.RespondWithError(w, http.StatusUnauthorized, "not_authenticated")
 		return
 	}

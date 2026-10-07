@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"easelect/backend/core_components/auth/credentials"
+	"easelect/backend/core_components/email"
 )
 
 // additionalAdministratorConfirmation is typed only when the installation already has an administrator.
@@ -79,7 +80,7 @@ func executeAdministratorCreationWorkflow(
 		input.AcknowledgedExistingAdministrators = true
 	}
 
-	if input.Username, err = readNewAdministratorUsername(terminal); err != nil {
+	if input.LoginName, err = readNewAdministratorUsername(terminal); err != nil {
 		return err
 	}
 	if input.Email, err = readNewAdministratorEmail(terminal); err != nil {
@@ -103,14 +104,13 @@ func executeAdministratorCreationWorkflow(
 	}
 
 	terminal.Printf(
-		"About to create administrator %s with email %s and login verification %s in database %s on %s.\n",
-		input.Username,
+		"About to create administrator with email %s and login verification %s in database %s on %s.\n",
 		input.Email,
 		input.VerificationMethod,
 		displayIdentityValue(identity.DatabaseName),
 		displayIdentityValue(settings.siteDomain),
 	)
-	confirmation := identityConfirmationToken(settings.siteDomain, identity) + ":" + input.Username
+	confirmation := identityConfirmationToken(settings.siteDomain, identity) + ":email:" + input.Email
 	terminal.Printf("Final target confirmation: %s\n", confirmation)
 	terminal.Printf("This is not a filesystem path or password; it identifies the exact domain, site, project, database, and the new administrator account being created.\n")
 	typedConfirmation, err := terminal.ReadLine("Type the final target confirmation exactly: ")
@@ -148,9 +148,11 @@ func printExistingAdministrators(terminal operatorTerminal, administrators []cre
 	terminal.Printf("This installation already has %d eligible active administrator(s):\n", len(administrators))
 	for index, administrator := range administrators {
 		terminal.Printf(
-			"  %d) %s (current verification: %s, authentication generation: %d)\n",
+			"  %d) %s (user id %d, email %s, current verification: %s, authentication generation: %d)\n",
 			index+1,
 			administrator.Username,
+			administrator.ID,
+			email.MaskRecipientAddress(administrator.Email),
 			administrator.VerificationMethod,
 			administrator.AuthenticationGeneration,
 		)
@@ -173,7 +175,7 @@ func confirmAdditionalAdministrator(terminal operatorTerminal) error {
 }
 
 func readNewAdministratorUsername(terminal operatorTerminal) (string, error) {
-	username, err := terminal.ReadLine("New administrator account name: ")
+	username, err := readConfirmedSecret(terminal, "New administrator private login name: ", "Repeat new administrator private login name: ", "login name entries do not match")
 	if err != nil {
 		return "", err
 	}

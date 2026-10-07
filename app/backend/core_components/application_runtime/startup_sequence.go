@@ -59,7 +59,7 @@ func requiredStartupSteps(productRoot string, options Options, environmentType s
 		{"anonymous browsing", func() error { return startup.EnsureAnonymousBrowseConsistency(backend.Db) }},
 		{"runtime grants", func() error { return backend.EnsureRuntimeRoleGrants(context.Background(), backend.DbAdmin) }},
 		{"reserved identities", func() error {
-			return startup.ReconcileReservedTestUsers(backend.Db, backend.DbConfidential, environmentType)
+			return startup.ReconcileReservedTestUsers(backend.DbAdmin, environmentType)
 		}},
 	}
 }

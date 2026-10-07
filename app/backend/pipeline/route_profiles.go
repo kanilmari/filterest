@@ -173,6 +173,8 @@ var RouteProfiles = map[string]RouteProfile{
 	"auth.CheckTableRightHandler":                   LoginOnlyProfile,
 	"auth.CheckTableRightsHandler":                  LoginOnlyProfile,
 	"auth.CheckTableRightsMultiHandler":             LoginOnlyProfile,
+	"auth.SignOutOtherDevicesHandler":               LoginOnlyProfile,
+	"auth.AdminUserLoginNameHandler":                AdminNoTxProfile,
 	"auth.UserProfileFetchHandler":                  LoginOnlyProfile,
 	"auth.UserProfileUpdateHandler":                 LoginOnlyProfile,
 	"auth.UserVisualPreferenceHandler":              LoginOnlyProfile,

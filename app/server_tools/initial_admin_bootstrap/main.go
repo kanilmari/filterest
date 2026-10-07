@@ -17,14 +17,12 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
-	"regexp"
 	"strings"
 	"time"
 
 	"easelect/backend/core_components/auth/credentials"
 
 	_ "github.com/lib/pq"
-	"golang.org/x/crypto/bcrypt"
 )
 
 const (
@@ -41,6 +39,7 @@ type initialAdminConfig struct {
 	dbPassword        string
 	sslMode           string
 	siteSlug          string
+	loginName         string
 	email             string
 	handoffFile       string
 	allowInvalidEmail bool
@@ -48,6 +47,7 @@ type initialAdminConfig struct {
 
 type existingAdminState struct {
 	username           string
+	userID             int64
 	loginReady         bool
 	hasRestrictedCreds bool
 	enabled            bool
@@ -127,7 +127,8 @@ func parseConfig(args []string) (initialAdminConfig, error) {
 	flags.StringVar(&cfg.dbName, "db-name", "filterest", "database name")
 	flags.StringVar(&cfg.dbUser, "db-user", "filterest_admin", "database user")
 	flags.StringVar(&cfg.sslMode, "sslmode", "disable", "PostgreSQL sslmode")
-	flags.StringVar(&cfg.siteSlug, "site-slug", defaultSiteSlug, "site slug for admin_<site_slug>")
+	flags.StringVar(&cfg.siteSlug, "site-slug", "", "explicit site slug (defaults to the setup environment)")
+	flags.StringVar(&cfg.loginName, "login-name", "", "private sign-in name instead of the site suggestion")
 	flags.StringVar(&cfg.email, "email", "", "initial admin email")
 	flags.StringVar(&cfg.handoffFile, "handoff-file", defaultHandoffFile, "one-time credential handoff file")
 	flags.BoolVar(&cfg.allowInvalidEmail, "allow-invalid-email", false, "allow a .invalid placeholder email only for explicit local dev OTP previews")
@@ -140,7 +141,23 @@ func parseConfig(args []string) (initialAdminConfig, error) {
 		return cfg, errors.New("FILTEREST_DB_PASSWORD or PGPASSWORD is required")
 	}
 
-	cfg.siteSlug = sanitizeSiteSlug(cfg.siteSlug)
+	cfg.siteSlug = credentials.AdministratorSiteSlug(cfg.siteSlug)
+	cfg.loginName = strings.TrimSpace(cfg.loginName)
+	explicitLoginName := false
+	flags.Visit(func(option *flag.Flag) {
+		if option.Name == "login-name" {
+			explicitLoginName = true
+		}
+	})
+	if explicitLoginName && cfg.loginName == "" {
+		return cfg, errors.New("--login-name must be nonempty")
+	}
+	if cfg.loginName == "" {
+		cfg.loginName = credentials.SuggestedAdministratorLoginName(cfg.siteSlug)
+	}
+	if credentials.ValidateLoginName(cfg.loginName) != nil {
+		return cfg, errors.New("invalid or reserved administrator login name; supply --login-name")
+	}
 	if cfg.siteSlug == "" {
 		cfg.siteSlug = defaultSiteSlug
 	}
@@ -173,24 +190,12 @@ func firstEnv(keys ...string) string {
 	return ""
 }
 
-var invalidSlugRunes = regexp.MustCompile(`[^a-z0-9]+`)
-
-// sanitizeSiteSlug normalizes a public site slug into the admin username suffix.
-// It exists so the generated username format stays deterministic and shell/URL safe.
-func sanitizeSiteSlug(value string) string {
-	clean := strings.ToLower(strings.TrimSpace(value))
-	clean = invalidSlugRunes.ReplaceAllString(clean, "_")
-	clean = strings.Trim(clean, "_")
-	if clean == "" {
-		return defaultSiteSlug
-	}
-	return clean
-}
-
-// username builds the public first-admin username from the sanitized site slug.
-// It implements the owner-selected admin_<site_slug> contract.
+// username is the private sign-in name selected by the operator, never a public name.
 func (cfg initialAdminConfig) username() string {
-	return "admin_" + sanitizeSiteSlug(cfg.siteSlug)
+	if cfg.loginName != "" {
+		return cfg.loginName
+	}
+	return credentials.SuggestedAdministratorLoginName(cfg.siteSlug)
 }
 
 // dsn renders a PostgreSQL connection URL from setup config without logging secrets.
@@ -211,6 +216,8 @@ func (cfg initialAdminConfig) dsn() string {
 type initialAdminResult struct {
 	status    string
 	username  string
+	loginName string
+	userID    int64
 	password  string
 	email     string
 	createdAt time.Time
@@ -219,6 +226,9 @@ type initialAdminResult struct {
 // ensureInitialAdmin creates the first login-ready admin only when none already exists.
 // It bridges public system user rows, restricted credentials, and admin-group membership.
 func ensureInitialAdmin(ctx context.Context, db *sql.DB, cfg initialAdminConfig) (initialAdminResult, error) {
+	if credentials.ValidateLoginName(cfg.username()) != nil {
+		return initialAdminResult{}, errors.New("invalid or reserved administrator login name; supply --login-name")
+	}
 	if state, found, err := findAnyLoginReadyAdmin(ctx, db); err != nil {
 		return initialAdminResult{}, err
 	} else if found {
@@ -230,8 +240,8 @@ func ensureInitialAdmin(ctx context.Context, db *sql.DB, cfg initialAdminConfig)
 		return initialAdminResult{}, err
 	} else if found {
 		return initialAdminResult{}, fmt.Errorf(
-			"target admin username %q exists but is not login-ready (enabled=%t admin_access_allowed=%t admin_group=%t restricted_credentials=%t)",
-			username,
+			"target account id %d exists but is not login-ready (enabled=%t admin_access_allowed=%t admin_group=%t restricted_credentials=%t)",
+			state.userID,
 			state.enabled,
 			state.adminAccessAllowed,
 			state.hasAdminGroup,
@@ -243,17 +253,9 @@ func ensureInitialAdmin(ctx context.Context, db *sql.DB, cfg initialAdminConfig)
 	if err != nil {
 		return initialAdminResult{}, err
 	}
-	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
-	if err != nil {
-		return initialAdminResult{}, fmt.Errorf("hash password: %w", err)
-	}
 	previewPIN := strings.TrimSpace(os.Getenv("LOGIN_OTP_CODE"))
-	if len(previewPIN) < 4 || len(previewPIN) > 8 || strings.Trim(previewPIN, "0123456789") != "" {
+	if credentials.ValidateFixedPIN(previewPIN) != nil {
 		return initialAdminResult{}, errors.New("automated preview LOGIN_OTP_CODE must contain 4-8 digits")
-	}
-	hashedPIN, err := bcrypt.GenerateFromPassword([]byte(previewPIN), bcrypt.DefaultCost)
-	if err != nil {
-		return initialAdminResult{}, fmt.Errorf("hash preview PIN: %w", err)
 	}
 
 	tx, err := db.BeginTx(ctx, nil)
@@ -262,51 +264,16 @@ func ensureInitialAdmin(ctx context.Context, db *sql.DB, cfg initialAdminConfig)
 	}
 	defer tx.Rollback()
 
-	groupID, err := lookupAdminGroupID(ctx, tx)
+	userID, err := credentials.CreateAdministratorAccount(ctx, tx, credentials.AdministratorAccountInput{
+		LoginName: username, Email: cfg.email, FullName: "Initial Filterest Admin", Password: password,
+		VerificationMethod: credentials.VerificationFixedPIN, FixedPIN: previewPIN, CreationSpec: creationSpec,
+	})
 	if err != nil {
+		return initialAdminResult{}, errors.New("initial administrator creation failed")
+	}
+	var displayName string
+	if err = tx.QueryRowContext(ctx, `SELECT username FROM system_users WHERE id=$1`, userID).Scan(&displayName); err != nil {
 		return initialAdminResult{}, err
-	}
-
-	var userID int64
-	err = tx.QueryRowContext(ctx, `
-		INSERT INTO system_users (
-			username,
-			full_name,
-			created,
-			updated,
-			enabled,
-			privileged,
-			main_group_id,
-			creation_spec,
-			admin_access_allowed
-		)
-		VALUES ($1, $2, NOW(), NOW(), TRUE, FALSE, $3, $4, TRUE)
-		RETURNING id
-	`, username, "Initial Filterest Admin", groupID, creationSpec).Scan(&userID)
-	if err != nil {
-		return initialAdminResult{}, fmt.Errorf("insert admin user: %w", err)
-	}
-
-	if _, err = tx.ExecContext(ctx, `
-		INSERT INTO system_user_group_memberships (
-			user_id,
-			group_id,
-			created,
-			updated,
-			creation_spec
-		)
-		VALUES ($1, $2, NOW(), NOW(), $3)
-	`, userID, groupID, creationSpec); err != nil {
-		return initialAdminResult{}, fmt.Errorf("insert admin group membership: %w", err)
-	}
-
-	if _, err = tx.ExecContext(ctx, `
-		INSERT INTO restricted.users_restricted (
-			id, password, email, login_verification_method, fixed_pin_hash
-		)
-		VALUES ($1, $2, $3, 'fixed_pin', $4)
-	`, userID, string(hashedPassword), cfg.email, string(hashedPIN)); err != nil {
-		return initialAdminResult{}, fmt.Errorf("insert restricted credentials: %w", err)
 	}
 
 	if _, err = tx.ExecContext(ctx, `
@@ -325,7 +292,8 @@ func ensureInitialAdmin(ctx context.Context, db *sql.DB, cfg initialAdminConfig)
 
 	return initialAdminResult{
 		status:    "created",
-		username:  username,
+		username:  displayName,
+		loginName: username, userID: userID,
 		password:  password,
 		email:     cfg.email,
 		createdAt: time.Now().UTC(),
@@ -358,7 +326,7 @@ func inspectAdminUsername(ctx context.Context, db *sql.DB, username string) (exi
 	var state existingAdminState
 	err := db.QueryRowContext(ctx, `
 		SELECT
-			u.username,
+			u.id, u.username,
 			COALESCE(u.enabled, FALSE),
 			COALESCE(u.admin_access_allowed, FALSE),
 			EXISTS (
@@ -374,9 +342,9 @@ func inspectAdminUsername(ctx context.Context, db *sql.DB, username string) (exi
 				WHERE ur.id = u.id
 			)
 		FROM system_users u
-		WHERE u.username = $1
+		WHERE EXISTS (SELECT 1 FROM restricted.users_restricted ur WHERE ur.id=u.id AND lower(ur.login_name)=lower($1))
 	`, username).Scan(
-		&state.username,
+		&state.userID, &state.username,
 		&state.enabled,
 		&state.adminAccessAllowed,
 		&state.hasAdminGroup,
@@ -390,17 +358,6 @@ func inspectAdminUsername(ctx context.Context, db *sql.DB, username string) (exi
 	}
 	state.loginReady = state.enabled && state.adminAccessAllowed && state.hasAdminGroup && state.hasRestrictedCreds
 	return state, true, nil
-}
-
-// lookupAdminGroupID resolves the canonical admins group inside the creation transaction.
-// It bridges the public group catalog and the new admin user's membership row.
-func lookupAdminGroupID(ctx context.Context, tx *sql.Tx) (int64, error) {
-	var groupID int64
-	err := tx.QueryRowContext(ctx, `SELECT id FROM system_user_groups WHERE name = 'admins'`).Scan(&groupID)
-	if err != nil {
-		return 0, fmt.Errorf("lookup admins group: %w", err)
-	}
-	return groupID, nil
 }
 
 // generatePassword creates the one-time initial admin password from cryptographic randomness.
@@ -426,14 +383,16 @@ func writeCredentialHandoff(path string, result initialAdminResult) error {
 These credentials are generated once during local setup.
 Delete this file after the first login and password rotation.
 
-Username: %s
+Login name: %s
+Display name: %s
+User id: %d
 Password: %s
 Email: %s
 Generated at: %s
 
 After logging in, rotate the password and confirm the admin email/OTP setup.
 The public bootstrap seed does not contain reusable admin credentials.
-`, result.username, result.password, result.email, result.createdAt.Format(time.RFC3339))
+`, result.loginName, result.username, result.userID, result.password, result.email, result.createdAt.Format(time.RFC3339))
 
 	if err := os.WriteFile(absolutePath, []byte(content), 0o600); err != nil {
 		return fmt.Errorf("write handoff file: %w", err)

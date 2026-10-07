@@ -31,7 +31,8 @@ var (
 // AdministratorCreationInput carries the reviewed target, the confirmed secrets and the operator's decisions.
 // It never carries an existing account identifier, because this workflow only ever adds an account.
 type AdministratorCreationInput struct {
-	Username                           string
+	LoginName                          string
+	DisplayName                        string
 	Email                              string
 	NewPassword                        string
 	VerificationMethod                 VerificationMethod
@@ -97,7 +98,8 @@ func (editor *RecoveryEditor) CreateAdministrator(
 	}
 
 	userID, err := CreateAdministratorAccount(ctx, tx, AdministratorAccountInput{
-		Username:           input.Username,
+		LoginName:          input.LoginName,
+		DisplayName:        input.DisplayName,
 		Email:              input.Email,
 		Password:           input.NewPassword,
 		VerificationMethod: method,
@@ -108,6 +110,10 @@ func (editor *RecoveryEditor) CreateAdministrator(
 		return result, err
 	}
 
+	var displayName string
+	if err = tx.QueryRowContext(ctx, `SELECT username FROM system_users WHERE id=$1`, userID).Scan(&displayName); err != nil {
+		return result, err
+	}
 	var authenticationGeneration int64
 	if err = tx.QueryRowContext(ctx, `
 		SELECT authentication_generation
@@ -127,7 +133,7 @@ func (editor *RecoveryEditor) CreateAdministrator(
 
 	result = AdministratorCreationResult{
 		UserID:                    userID,
-		Username:                  strings.TrimSpace(input.Username),
+		Username:                  displayName,
 		Email:                     strings.TrimSpace(input.Email),
 		VerificationMethod:        method,
 		AuthenticationGeneration:  authenticationGeneration,
@@ -158,7 +164,7 @@ func validateAdministratorCreationTarget(input AdministratorCreationInput) error
 	if strings.TrimSpace(input.OperatorReference) == "" {
 		return errors.New("an operator reference is required for administrator creation evidence")
 	}
-	if err := ValidateAdministratorUsername(strings.TrimSpace(input.Username)); err != nil {
+	if err := ValidateAdministratorUsername(strings.TrimSpace(input.LoginName)); err != nil {
 		return err
 	}
 	if err := ValidateAdministratorEmail(strings.TrimSpace(input.Email)); err != nil {

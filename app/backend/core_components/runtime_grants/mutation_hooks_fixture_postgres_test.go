@@ -49,6 +49,10 @@ func newMutationHooksFixture(t *testing.T) *mutationHooksFixture {
 		}
 		FixtureExec(t, owner, string(bytes))
 	}
+	// These routes run as a trusted administrator. The public example user is
+	// ordinary in the shipped seed; this fixture explicitly grants BOTH admin gates.
+	FixtureExec(t, owner, `UPDATE system_users SET admin_access_allowed=true WHERE id=2;
+        INSERT INTO system_user_group_memberships(user_id,group_id) VALUES(2,1)`)
 	// A bootstrap import precedes startup's route registration. These HTTP
 	// proofs need the add route too; otherwise right() inserts zero rows.
 	FixtureExec(t, owner, `INSERT INTO system_functions

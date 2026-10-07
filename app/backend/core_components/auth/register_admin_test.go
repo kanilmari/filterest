@@ -46,7 +46,7 @@ func (c *registerAdminConn) Prepare(string) (driver.Stmt, error) {
 }
 func (c *registerAdminConn) Close() error { return nil }
 func (c *registerAdminConn) Begin() (driver.Tx, error) {
-	return nil, fmt.Errorf("unexpected transaction")
+	return &credentialMockTx{}, nil
 }
 func (c *registerAdminConn) QueryContext(_ context.Context, q string, args []driver.NamedValue) (driver.Rows, error) {
 	s := c.state
@@ -54,6 +54,8 @@ func (c *registerAdminConn) QueryContext(_ context.Context, q string, args []dri
 		return nil, fmt.Errorf("configured read failure")
 	}
 	switch {
+	case strings.Contains(q, "SELECT EXISTS("):
+		return authModesBoolRow("exists", false), nil
 	case isSignInLimitQuery(q):
 		return answerSignInLimit(), nil
 	// The shared boundary asks first whether this sign-in has been signed out.
@@ -83,12 +85,12 @@ func (c *registerAdminConn) QueryContext(_ context.Context, q string, args []dri
 	case strings.Contains(q, "INSERT INTO system_users"):
 		s.inserts++
 		s.newEnabled = args[2].Value.(bool)
-		if !strings.Contains(q, "$3, false") {
+		if !strings.Contains(strings.ReplaceAll(q, " ", ""), "$3,false") {
 			return nil, fmt.Errorf("ordinary creation must force privileged false")
 		}
 		return &authModesMockRows{cols: []string{"id"}, vals: []driver.Value{int64(901)}}, nil
 	case strings.Contains(q, "SELECT id FROM system_user_groups"):
-		if args[0].Value != "users" {
+		if !strings.Contains(q, "name='users'") && (len(args) == 0 || args[0].Value != "users") {
 			return nil, fmt.Errorf("must select ordinary users group")
 		}
 		return &authModesMockRows{cols: []string{"id"}, vals: []driver.Value{int64(2)}}, nil
@@ -99,7 +101,7 @@ func (c *registerAdminConn) ExecContext(_ context.Context, q string, args []driv
 	switch {
 	case strings.Contains(q, "INSERT INTO restricted.users_restricted"):
 		c.state.passwordHash = args[1].Value.(string)
-		c.state.verification = args[3].Value.(string)
+		c.state.verification = args[4].Value.(string)
 	case strings.Contains(q, "INSERT INTO system_user_group_memberships"):
 		c.state.membershipUser = args[0].Value.(int64)
 		c.state.membershipGroup = args[1].Value.(int64)
@@ -124,9 +126,12 @@ func setupRegisterAdmin(t *testing.T) *registerAdminState {
 	if err != nil {
 		t.Fatal(err)
 	}
-	old, oldConf, oldGuest := backend.Db, backend.DbConfidential, backend.DbGuest
-	backend.Db, backend.DbConfidential, backend.DbGuest = db, db, db
-	t.Cleanup(func() { backend.Db, backend.DbConfidential, backend.DbGuest = old, oldConf, oldGuest; db.Close() })
+	old, oldConf, oldGuest, oldAdmin := backend.Db, backend.DbConfidential, backend.DbGuest, backend.DbAdmin
+	backend.Db, backend.DbConfidential, backend.DbGuest, backend.DbAdmin = db, db, db, db
+	t.Cleanup(func() {
+		backend.Db, backend.DbConfidential, backend.DbGuest, backend.DbAdmin = old, oldConf, oldGuest, oldAdmin
+		db.Close()
+	})
 	authRateLimiter.Lock()
 	oldAttempts := authRateLimiter.attempts
 	authRateLimiter.attempts = make(map[string]*loginAttempt)
@@ -138,7 +143,7 @@ func registerAdminRequest(t *testing.T, values map[interface{}]interface{}, csrf
 	t.Helper()
 	store := setupAuthModesTestStore(t)
 	req := buildAuthModesReq(t, store, "/api/register_ndYOyXV0INOK3F", values)
-	form := url.Values{"username": {"ordinary_fixture"}, "password": {"test-only-strong-password-987!"}, "email": {"fixture@example.invalid"}, "verification_method": {"none"}, "csrf_token": {csrf}}
+	form := url.Values{"display_name": {"new-ordinary-display"}, "username": {"ordinary_fixture"}, "password": {"test-only-strong-password-987!"}, "email": {"fixture@example.invalid"}, "verification_method": {"none"}, "csrf_token": {csrf}}
 	req.Method = http.MethodPost
 	req.Body = http.NoBody
 	req = withRegistrationFormBody(req, form.Encode())
@@ -163,7 +168,7 @@ func TestClosedRegistrationAllowsCurrentAdminWithoutReplacingSession(t *testing.
 	req := registerAdminRequest(t, adminSession, "test-csrf")
 	rr := httptest.NewRecorder()
 	RegisterAPIHandler(rr, req)
-	if rr.Code != http.StatusSeeOther || rr.Header().Get("Location") != "/login" {
+	if rr.Code != http.StatusOK {
 		t.Fatalf("registration status=%d, want303", rr.Code)
 	}
 	if state.inserts != 1 || state.newEnabled || state.membershipUser != 901 || state.membershipGroup != 2 {
@@ -271,7 +276,7 @@ func TestEnabledRegistrationStillAcceptsOrdinarySelfRegistration(t *testing.T) {
 	req := registerAdminRequest(t, map[interface{}]interface{}{"csrf_token": "test-csrf"}, "test-csrf")
 	rr := httptest.NewRecorder()
 	RegisterAPIHandler(rr, req)
-	if rr.Code != http.StatusSeeOther || state.inserts != 1 || state.membershipGroup != 2 || state.newEnabled {
+	if rr.Code != http.StatusOK || state.inserts != 1 || state.membershipGroup != 2 || state.newEnabled {
 		t.Fatalf("ordinary public signup changed: status=%d inserts=%d", rr.Code, state.inserts)
 	}
 	session, err := e_sessions.Store.Get(req, e_sessions.SessionName)
@@ -290,7 +295,7 @@ func TestClosedRegistrationIgnoresStaleBasicRoleWhenCurrentRoleIsAdmin(t *testin
 	req := registerAdminRequest(t, values, "test-csrf")
 	rr := httptest.NewRecorder()
 	RegisterAPIHandler(rr, req)
-	if rr.Code != http.StatusSeeOther || state.inserts != 1 {
+	if rr.Code != http.StatusOK || state.inserts != 1 {
 		t.Fatalf("current canonical role not used: status=%d", rr.Code)
 	}
 }
@@ -327,7 +332,7 @@ func TestNewAccountAutoEnableIsLocalDevelopmentOnly(t *testing.T) {
 
 			RegisterAPIHandler(rr, req)
 
-			if rr.Code != http.StatusSeeOther || state.inserts != 1 {
+			if rr.Code != http.StatusOK || state.inserts != 1 {
 				t.Fatalf("registration did not complete: status=%d inserts=%d", rr.Code, state.inserts)
 			}
 			if state.newEnabled != testCase.wantEnabled {

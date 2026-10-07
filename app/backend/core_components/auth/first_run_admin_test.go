@@ -80,6 +80,8 @@ func (c *firstRunTransactionConn) QueryContext(_ context.Context, query string, 
 	switch {
 	case isSignInLimitQuery(query):
 		return answerSignInLimit(), nil
+	case strings.Contains(query, "app_next_admin_display_name"):
+		return &firstRunTransactionRows{values: []driver.Value{"admin_1"}}, nil
 	case strings.Contains(query, "FOR UPDATE"):
 		return &firstRunTransactionRows{values: []driver.Value{true}}, nil
 	case strings.Contains(query, "JOIN restricted.users_restricted"):
@@ -102,6 +104,8 @@ func (c *firstRunTransactionConn) QueryContext(_ context.Context, query string, 
 		return &firstRunTransactionRows{}, nil
 	case strings.Contains(query, "lower(username)"):
 		return &firstRunTransactionRows{}, nil
+	case strings.Contains(query, "lower(login_name)"):
+		return &firstRunTransactionRows{}, nil
 	case strings.Contains(query, "lower(email)"):
 		return &firstRunTransactionRows{}, nil
 	case strings.Contains(query, "SELECT id FROM system_user_groups"):
@@ -115,6 +119,8 @@ func (c *firstRunTransactionConn) QueryContext(_ context.Context, query string, 
 
 func (c *firstRunTransactionConn) ExecContext(_ context.Context, query string, args []driver.NamedValue) (driver.Result, error) {
 	switch {
+	case strings.Contains(query, "pg_advisory_xact_lock"):
+		return driver.RowsAffected(1), nil
 	case strings.Contains(query, "system_user_group_memberships"):
 		return driver.RowsAffected(1), nil
 	case strings.Contains(query, "restricted.users_restricted"):
@@ -135,6 +141,8 @@ func (c *firstRunTransactionConn) ExecContext(_ context.Context, query string, a
 		default:
 			return nil, fmt.Errorf("unexpected configuration key: %v", args[1].Value)
 		}
+		return driver.RowsAffected(1), nil
+	case strings.Contains(query, "display_name_may_equal_login_name"):
 		return driver.RowsAffected(1), nil
 	case strings.Contains(query, "UPDATE system_config"):
 		c.state.configClosed = true
@@ -158,7 +166,7 @@ func openFirstRunTransactionDB(t *testing.T, state *firstRunTransactionState) *s
 
 func TestValidateFirstRunAdminInputAcceptsStrongForm(t *testing.T) {
 	errs := validateFirstRunAdminInput(firstRunAdminInput{
-		SiteName:           "Example Workspace",
+		NamesMayEqual: "true", SiteName: "Example Workspace",
 		Username:           "owner.admin",
 		Email:              "owner@example.com",
 		Password:           "correct horse battery staple",
@@ -173,7 +181,7 @@ func TestValidateFirstRunAdminInputAcceptsStrongForm(t *testing.T) {
 
 func TestValidateFirstRunAdminInputAcceptsQAEnvironment(t *testing.T) {
 	errs := validateFirstRunAdminInput(firstRunAdminInput{
-		SiteName:           "QA Workspace",
+		NamesMayEqual: "true", SiteName: "QA Workspace",
 		Username:           "owner.admin",
 		Email:              "owner@example.com",
 		Password:           "correct horse battery staple",
@@ -188,7 +196,7 @@ func TestValidateFirstRunAdminInputAcceptsQAEnvironment(t *testing.T) {
 
 func TestValidateFirstRunAdminInputRejectsUnsafeValues(t *testing.T) {
 	errs := validateFirstRunAdminInput(firstRunAdminInput{
-		SiteName:           "Unsafe Test",
+		NamesMayEqual: "true", SiteName: "Unsafe Test",
 		Username:           "x / admin",
 		Email:              "not-an-email",
 		Password:           "short",
@@ -206,7 +214,7 @@ func TestValidateFirstRunAdminInputRejectsUnsafeValues(t *testing.T) {
 // would silently refuse. The form previously counted bytes and let the refusal surface as a generic error.
 func TestValidateFirstRunAdminInputUsesTheSharedPasswordPolicy(t *testing.T) {
 	base := firstRunAdminInput{
-		SiteName: "Example Workspace", Username: "owner", Email: "owner@example.com",
+		NamesMayEqual: "true", SiteName: "Example Workspace", Username: "owner", Email: "owner@example.com",
 		Environment: "dev", VerificationMethod: "none",
 	}
 	for name, password := range map[string]string{
@@ -234,7 +242,7 @@ func TestValidateFirstRunAdminInputUsesTheSharedPasswordPolicy(t *testing.T) {
 
 func TestValidateFirstRunAdminInputRejectsPasswordMismatch(t *testing.T) {
 	errs := validateFirstRunAdminInput(firstRunAdminInput{
-		SiteName:           "Example Workspace",
+		NamesMayEqual: "true", SiteName: "Example Workspace",
 		Username:           "owner",
 		Email:              "owner@example.com",
 		Password:           "a sufficiently long password",
@@ -249,7 +257,7 @@ func TestValidateFirstRunAdminInputRejectsPasswordMismatch(t *testing.T) {
 
 func TestValidateFirstRunAdminInputRequiresAbsoluteFixedPINRules(t *testing.T) {
 	base := firstRunAdminInput{
-		SiteName: "Example Workspace",
+		NamesMayEqual: "true", SiteName: "Example Workspace",
 		Username: "owner", Email: "owner@example.com",
 		Password: "a sufficiently long password", ConfirmPassword: "a sufficiently long password",
 		Environment: "test", VerificationMethod: "fixed_pin",
@@ -275,7 +283,7 @@ func TestValidateFirstRunAdminInputConfirmsTOTPEnrollment(t *testing.T) {
 		t.Fatalf("build TOTP code: %v", err)
 	}
 	input := firstRunAdminInput{
-		SiteName: "Example Workspace",
+		NamesMayEqual: "true", SiteName: "Example Workspace",
 		Username: "owner", Email: "owner@example.com",
 		Password: "a sufficiently long password", ConfirmPassword: "a sufficiently long password",
 		Environment: "prod", VerificationMethod: "totp", TOTPSecret: secret, TOTPCode: code,
@@ -291,7 +299,7 @@ func TestValidateFirstRunAdminInputConfirmsTOTPEnrollment(t *testing.T) {
 
 func TestValidateFirstRunAdminInputRejectsMissingOrOversizedSiteName(t *testing.T) {
 	input := firstRunAdminInput{
-		Username: "owner", Email: "owner@example.com",
+		NamesMayEqual: "true", Username: "owner", Email: "owner@example.com",
 		Password: "a sufficiently long password", ConfirmPassword: "a sufficiently long password",
 		Environment: "prod", VerificationMethod: "none",
 	}
@@ -343,7 +351,7 @@ func TestCreateFirstRunAdminCommitsAccountAndFlagTogether(t *testing.T) {
 	state := &firstRunTransactionState{}
 	db := openFirstRunTransactionDB(t, state)
 	input := firstRunAdminInput{
-		SiteName: "Owner Workspace", Username: "owner", Email: "owner@example.com", Password: "correct horse battery staple",
+		NamesMayEqual: "true", SiteName: "Owner Workspace", Username: "owner", Email: "owner@example.com", Password: "correct horse battery staple",
 		Environment: "dev", VerificationMethod: "none",
 	}
 
@@ -359,7 +367,7 @@ func TestCreateFirstRunAdminRollsBackBeforeFlagClosureOnCredentialFailure(t *tes
 	state := &firstRunTransactionState{failCredential: true}
 	db := openFirstRunTransactionDB(t, state)
 	input := firstRunAdminInput{
-		SiteName: "Owner Workspace", Username: "owner", Email: "owner@example.com", Password: "correct horse battery staple",
+		NamesMayEqual: "true", SiteName: "Owner Workspace", Username: "owner", Email: "owner@example.com", Password: "correct horse battery staple",
 		Environment: "dev", VerificationMethod: "none",
 	}
 
@@ -398,7 +406,7 @@ func TestIsFirstRunAdminSetupPendingIgnoresTheAutomationAccount(t *testing.T) {
 
 func TestCreateFirstRunAdminIgnoresTheAutomationAccount(t *testing.T) {
 	input := firstRunAdminInput{
-		SiteName: "Owner Workspace", Username: "owner", Email: "owner@example.com", Password: "correct horse battery staple",
+		NamesMayEqual: "true", SiteName: "Owner Workspace", Username: "owner", Email: "owner@example.com", Password: "correct horse battery staple",
 		Environment: "dev", VerificationMethod: "none",
 	}
 
@@ -428,7 +436,7 @@ func TestFirstRunAdminTemplateRendersBothSections(t *testing.T) {
 	data := map[string]interface{}{
 		"FirstRunSiteName": "Example Workspace", "InitialSection": "settings",
 		"Environment": "test", "VerificationMethod": "totp", "TOTPSecret": "ABCDEF",
-		"Username": "", "Email": "", "CSRFToken": "csrf",
+		"DisplayName": "admin_1", "NamesMayEqual": "true", "DisplayNameErr": "", "NameChoiceErr": "", "Username": "", "Email": "", "CSRFToken": "csrf",
 		"SiteNameErr": "", "UsernameErr": "", "EmailErr": "", "PasswordErr": "", "GeneralErr": "",
 		"EnvironmentErr": "", "VerificationErr": "", "FactorErr": "",
 	}
@@ -440,6 +448,27 @@ func TestFirstRunAdminTemplateRendersBothSections(t *testing.T) {
 	for _, expected := range []string{"Welcome to Filterest!", "data-section-key=\"settings\"", "data-section-key=\"credentials\"", "name=\"site_name\" value=\"Example Workspace\"", "value=\"test\" checked", "value=\"totp\" checked"} {
 		if !strings.Contains(markup, expected) {
 			t.Fatalf("rendered template missing %q", expected)
+		}
+	}
+}
+
+func TestFirstRunNameChoiceAndAdministratorSeparationLT8(t *testing.T) {
+	input := firstRunAdminInput{SiteName: "Fixture", Username: "private_admin", DisplayName: "admin_1", Email: "owner@example.invalid", Password: loginFixturePassword, ConfirmPassword: loginFixturePassword, Environment: "prod", VerificationMethod: "none", NamesMayEqual: "true"}
+	for _, choice := range []string{"true", "false"} {
+		input.NamesMayEqual = choice
+		if errs := validateFirstRunAdminInput(input); errs != (firstRunAdminErrors{}) {
+			t.Fatal(errs)
+		}
+		input.DisplayName = " PRIVATE_ADMIN "
+		if errs := validateFirstRunAdminInput(input); errs.DisplayName != "error_admin_display_name_equals_login_name" {
+			t.Fatal("equal names accepted", errs)
+		}
+		input.DisplayName = "admin_1"
+	}
+	for _, choice := range []string{"", "TRUE", "1", "invalid"} {
+		input.NamesMayEqual = choice
+		if errs := validateFirstRunAdminInput(input); errs.NameChoice != "first_run_name_choice_invalid" {
+			t.Fatal("invalid choice accepted", choice)
 		}
 	}
 }

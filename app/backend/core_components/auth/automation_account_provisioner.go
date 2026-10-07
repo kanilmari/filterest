@@ -20,7 +20,7 @@ import (
 const (
 	// AutomationAccountUsername is deliberately fixed so the system-manager
 	// boundary cannot become a general-purpose public administrator creator.
-	AutomationAccountUsername = "filterest_agent"
+	AutomationAccountUsername = credentials.AutomationLoginName
 	automationAccountFullName = "Filterest API Automation Agent"
 	automationAccountEmail    = "filterest_agent@automation.invalid"
 	automationCreationSpec    = "System manager API automation account"
@@ -37,6 +37,7 @@ var (
 
 // AutomationAccountRecord is non-secret readback evidence for one provisioned account.
 type AutomationAccountRecord struct {
+	FixedLoginName           bool   `json:"fixed_login_name"`
 	Exists                   bool   `json:"exists"`
 	Ready                    bool   `json:"ready"`
 	Created                  bool   `json:"created,omitempty"`
@@ -64,7 +65,7 @@ func NewAutomationAccountProvisioner(db *sql.DB) *AutomationAccountProvisioner {
 
 // Status returns only non-secret readiness state for the fixed automation identity.
 func (provisioner *AutomationAccountProvisioner) Status(ctx context.Context) (AutomationAccountRecord, error) {
-	record := AutomationAccountRecord{Username: AutomationAccountUsername}
+	record := AutomationAccountRecord{FixedLoginName: true}
 	if provisioner == nil || provisioner.db == nil {
 		return record, ErrAutomationAccountUnavailable
 	}
@@ -81,14 +82,14 @@ func (provisioner *AutomationAccountProvisioner) Status(ctx context.Context) (Au
 		           FROM system_user_group_memberships membership
 		           JOIN system_user_groups user_group ON user_group.id = membership.group_id
 		           WHERE membership.user_id = u.id
-		             AND user_group.name = 'admins'
+		             AND user_group.id = 1
 		       ),
 		       COALESCE(credentials.login_verification_method, ''),
 		       COALESCE(credentials.authentication_generation, 0),
-		       COALESCE(credentials.api_only, FALSE)
+		       COALESCE(credentials.api_only, FALSE), COALESCE(lower(credentials.login_name)=lower($1),false)
 		FROM system_users u
 		LEFT JOIN restricted.users_restricted credentials ON credentials.id = u.id
-		WHERE lower(u.username) = lower($1)
+		WHERE lower(credentials.login_name) = lower($1)
 		   OR u.creation_spec = $2
 		   OR credentials.api_only IS TRUE
 		ORDER BY u.id
@@ -99,6 +100,7 @@ func (provisioner *AutomationAccountProvisioner) Status(ctx context.Context) (Au
 	defer rows.Close()
 
 	var creationSpec string
+	var loginMatches bool
 	matchCount := 0
 	for rows.Next() {
 		matchCount++
@@ -115,7 +117,7 @@ func (provisioner *AutomationAccountProvisioner) Status(ctx context.Context) (Au
 			&record.AdminGroupMember,
 			&record.VerificationMethod,
 			&record.AuthenticationGeneration,
-			&record.APIOnly,
+			&record.APIOnly, &loginMatches,
 		); err != nil {
 			return record, fmt.Errorf("scan automation account status: %w", err)
 		}
@@ -126,8 +128,8 @@ func (provisioner *AutomationAccountProvisioner) Status(ctx context.Context) (Au
 	if matchCount == 0 {
 		return record, nil
 	}
-	if creationSpec != automationCreationSpec || record.Username != AutomationAccountUsername {
-		return AutomationAccountRecord{Username: AutomationAccountUsername}, ErrAutomationAccountConflict
+	if creationSpec != automationCreationSpec || !loginMatches {
+		return AutomationAccountRecord{FixedLoginName: true}, ErrAutomationAccountConflict
 	}
 
 	record.Exists = true
@@ -141,9 +143,12 @@ func (provisioner *AutomationAccountProvisioner) Status(ctx context.Context) (Au
 // Password hashes, group membership, account flags, session generation, and audit evidence
 // commit together; callers receive only the resulting non-secret readiness record.
 func (provisioner *AutomationAccountProvisioner) Provision(ctx context.Context, password string) (AutomationAccountRecord, error) {
-	record := AutomationAccountRecord{Username: AutomationAccountUsername}
+	record := AutomationAccountRecord{FixedLoginName: true}
 	if provisioner == nil || provisioner.db == nil {
 		return record, ErrAutomationAccountUnavailable
+	}
+	if err := credentials.ValidateReservedLoginName(AutomationAccountUsername); err != nil {
+		return record, err
 	}
 	if err := credentials.ValidatePassword(password); err != nil {
 		return record, err
@@ -199,6 +204,11 @@ func (provisioner *AutomationAccountProvisioner) Provision(ctx context.Context, 
 	if err = writeAutomationAccountAudit(ctx, tx, userID, action, authenticationGeneration); err != nil {
 		return record, err
 	}
+	var displayName string
+	if err = tx.QueryRowContext(ctx, `SELECT username FROM system_users WHERE id=$1`, userID).Scan(&displayName); err != nil {
+		return record, err
+	}
+
 	if err = tx.Commit(); err != nil {
 		return record, fmt.Errorf("commit automation account transaction: %w", err)
 	}
@@ -209,7 +219,8 @@ func (provisioner *AutomationAccountProvisioner) Provision(ctx context.Context, 
 		Ready:                    true,
 		Created:                  !exists,
 		UserID:                   userID,
-		Username:                 AutomationAccountUsername,
+		Username:                 displayName,
+		FixedLoginName:           true,
 		Enabled:                  true,
 		APIOnly:                  true,
 		AdminGroupMember:         true,
@@ -223,7 +234,7 @@ func (provisioner *AutomationAccountProvisioner) Provision(ctx context.Context, 
 // Revoke disables the fixed identity and invalidates all its signed sessions.
 // Restricted credentials and OTP state change in the same transaction as the audit.
 func (provisioner *AutomationAccountProvisioner) Revoke(ctx context.Context) (AutomationAccountRecord, error) {
-	record := AutomationAccountRecord{Username: AutomationAccountUsername}
+	record := AutomationAccountRecord{FixedLoginName: true}
 	if provisioner == nil || provisioner.db == nil {
 		return record, ErrAutomationAccountUnavailable
 	}
@@ -242,11 +253,11 @@ func (provisioner *AutomationAccountProvisioner) Revoke(ctx context.Context) (Au
 	err = tx.QueryRowContext(ctx, `
         UPDATE system_users u SET enabled = FALSE, updated = NOW()
         WHERE u.id = $1
-        RETURNING COALESCE(u.privileged, FALSE), COALESCE(u.admin_access_allowed, FALSE),
+        RETURNING u.username, COALESCE(u.privileged, FALSE), COALESCE(u.admin_access_allowed, FALSE),
           EXISTS (SELECT 1 FROM system_user_group_memberships m
                   JOIN system_user_groups g ON g.id = m.group_id
-                  WHERE m.user_id = u.id AND g.name = 'admins')
-    `, userID).Scan(&record.Privileged, &record.AdminAccessAllowed, &record.AdminGroupMember)
+                  WHERE m.user_id = u.id AND g.id = 1)
+    `, userID).Scan(&record.Username, &record.Privileged, &record.AdminAccessAllowed, &record.AdminGroupMember)
 	if err != nil {
 		return record, fmt.Errorf("disable automation identity: %w", err)
 	}
@@ -280,13 +291,13 @@ func lockAutomationAccountIdentity(ctx context.Context, tx *sql.Tx) (int64, bool
 		return 0, false, fmt.Errorf("lock automation account namespace: %w", err)
 	}
 	rows, err := tx.QueryContext(ctx, `
-		SELECT id, username, COALESCE(creation_spec, '')
-		FROM system_users
-		WHERE lower(username) = lower($1)
-		   OR creation_spec = $2
-		   OR EXISTS (SELECT 1 FROM restricted.users_restricted ur WHERE ur.id = system_users.id AND ur.api_only IS TRUE)
-		ORDER BY id
-		FOR UPDATE
+		SELECT u.id, COALESCE(ur.login_name,''), COALESCE(u.creation_spec, '')
+        FROM system_users u LEFT JOIN restricted.users_restricted ur ON ur.id=u.id
+        WHERE lower(ur.login_name) = lower($1)
+		   OR u.creation_spec = $2
+		   OR EXISTS (SELECT 1 FROM restricted.users_restricted ur WHERE ur.id = u.id AND ur.api_only IS TRUE)
+		ORDER BY u.id
+		FOR UPDATE OF u
 	`, AutomationAccountUsername, automationCreationSpec)
 	if err != nil {
 		return 0, false, fmt.Errorf("lock automation account identity: %w", err)
@@ -305,7 +316,7 @@ func lockAutomationAccountIdentity(ctx context.Context, tx *sql.Tx) (int64, bool
 		if err = rows.Scan(&userID, &username, &creationSpec); err != nil {
 			return 0, false, fmt.Errorf("scan automation account identity: %w", err)
 		}
-		if username != AutomationAccountUsername || creationSpec != automationCreationSpec {
+		if !strings.EqualFold(username, AutomationAccountUsername) || creationSpec != automationCreationSpec {
 			return 0, false, ErrAutomationAccountConflict
 		}
 	}
@@ -317,22 +328,26 @@ func lockAutomationAccountIdentity(ctx context.Context, tx *sql.Tx) (int64, bool
 
 func lookupAutomationAdminGroup(ctx context.Context, tx *sql.Tx) (int64, error) {
 	var groupID int64
-	if err := tx.QueryRowContext(ctx, `SELECT id FROM system_user_groups WHERE name = 'admins'`).Scan(&groupID); err != nil {
+	if err := tx.QueryRowContext(ctx, `SELECT id FROM system_user_groups WHERE id=1 AND name = 'admins'`).Scan(&groupID); err != nil {
 		return 0, fmt.Errorf("lookup automation administrator group: %w", err)
 	}
 	return groupID, nil
 }
 
 func insertAutomationPublicIdentity(ctx context.Context, tx *sql.Tx, adminGroupID int64) (int64, error) {
+	displayName, err := credentials.NextAccountDisplayName(ctx, tx, "auto", AutomationAccountUsername)
+	if err != nil {
+		return 0, err
+	}
 	var userID int64
-	err := tx.QueryRowContext(ctx, `
+	err = tx.QueryRowContext(ctx, `
 		INSERT INTO system_users (
 			username, full_name, created, updated, enabled, privileged,
 			main_group_id, creation_spec, admin_access_allowed
 		)
 		VALUES ($1, $2, NOW(), NOW(), TRUE, FALSE, $3, $4, TRUE)
 		RETURNING id
-	`, AutomationAccountUsername, automationAccountFullName, adminGroupID, automationCreationSpec).Scan(&userID)
+	`, displayName, automationAccountFullName, adminGroupID, automationCreationSpec).Scan(&userID)
 	if err != nil {
 		return 0, fmt.Errorf("insert automation public identity: %w", err)
 	}
@@ -342,16 +357,15 @@ func insertAutomationPublicIdentity(ctx context.Context, tx *sql.Tx, adminGroupI
 func updateAutomationPublicIdentity(ctx context.Context, tx *sql.Tx, userID, adminGroupID int64) error {
 	result, err := tx.ExecContext(ctx, `
 		UPDATE system_users
-		SET username = $2,
-		    full_name = $3,
+		SET full_name = $2,
 		    enabled = TRUE,
 		    privileged = FALSE,
-		    main_group_id = $4,
+		    main_group_id = $3,
 		    admin_access_allowed = TRUE,
 		    updated = NOW()
 		WHERE id = $1
-		  AND creation_spec = $5
-	`, userID, AutomationAccountUsername, automationAccountFullName, adminGroupID, automationCreationSpec)
+		  AND creation_spec = $4
+	`, userID, automationAccountFullName, adminGroupID, automationCreationSpec)
 	if err != nil {
 		return fmt.Errorf("update automation public identity: %w", err)
 	}
@@ -386,6 +400,9 @@ func replaceAutomationAccountMembership(ctx context.Context, tx *sql.Tx, userID,
 }
 
 func replaceAutomationCredentials(ctx context.Context, tx *sql.Tx, userID int64, passwordHash string) (int64, error) {
+	if err := credentials.ValidateReservedLoginName(AutomationAccountUsername); err != nil {
+		return 0, err
+	}
 	var generation int64
 	err := tx.QueryRowContext(ctx, `
 		UPDATE restricted.users_restricted
@@ -408,11 +425,11 @@ func replaceAutomationCredentials(ctx context.Context, tx *sql.Tx, userID int64,
 	err = tx.QueryRowContext(ctx, `
 		INSERT INTO restricted.users_restricted (
 			id, password, email, login_verification_method,
-			fixed_pin_hash, totp_secret, authentication_generation, api_only
+			fixed_pin_hash, totp_secret, authentication_generation, api_only, login_name
 		)
-		VALUES ($1, $2, $3, $4, NULL, NULL, 1, TRUE)
+		VALUES ($1, $2, $3, $4, NULL, NULL, 1, TRUE, $5)
 		RETURNING authentication_generation
-	`, userID, passwordHash, automationAccountEmail, string(credentials.VerificationNone)).Scan(&generation)
+	`, userID, passwordHash, automationAccountEmail, string(credentials.VerificationNone), AutomationAccountUsername).Scan(&generation)
 	if err != nil {
 		return 0, fmt.Errorf("insert automation restricted credentials: %w", err)
 	}

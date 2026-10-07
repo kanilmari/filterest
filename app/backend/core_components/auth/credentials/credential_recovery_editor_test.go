@@ -426,7 +426,7 @@ func TestCreateAdministratorConfirmationGateCountsOnlyLoginReadyAdministrators(t
 	editor := NewRecoveryEditor(openRecoveryTestDatabase(t, state))
 
 	_, err := editor.CreateAdministrator(context.Background(), AdministratorCreationInput{
-		Username:                   "second_operator_admin",
+		LoginName:                  "second_operator_admin",
 		Email:                      "second.operator@example.com",
 		NewPassword:                "correct horse battery staple",
 		VerificationMethod:         VerificationFixedPIN,

@@ -40,12 +40,19 @@
     {{end}}
     <form {{if .StandalonePage}}data-shell-boot-content{{end}} method="POST" action="{{.FormAction}}" class="auth-form" data-testid="register-form">
         <h2 data-lang-key="register"></h2>
+        {{if .Success}}
+        <p role="status" data-lang-key="{{.Success}}" data-registration-complete="true"></p>
+        <a href="/login" data-lang-key="login"></a>
+        {{else}}
 
-        <label for="username" data-lang-key="username"></label>
-        <input type="text" id="username" name="username" required data-testid="register-username">
-        {{if .UsernameErr}}
-        <p class="error" data-lang-key="{{.UsernameErr}}"></p>
-        {{end}}
+        <label for="username" data-lang-key="login_name"></label>
+        <input type="text" id="username" name="username" autocomplete="username" required data-testid="register-username">
+        <p data-lang-key="login_name_help"></p>
+        {{if .LoginNameErr}}<p class="error" data-lang-key="{{.LoginNameErr}}"></p>{{end}}
+        <label for="display_name" data-lang-key="display_name"></label>
+        <input type="text" id="display_name" name="display_name" autocomplete="nickname" required data-testid="register-display-name">
+        <p data-lang-key="display_name_help"></p>
+        {{if .UsernameErr}}<p class="error" data-lang-key="{{.UsernameErr}}"></p>{{end}}
 
         <label for="password" data-lang-key="password"></label>
         <input type="password" id="password" name="password" required data-testid="register-password">
@@ -99,6 +106,7 @@
         </div>
         {{if .GeneralErr}}
         <p class="error" data-lang-key="{{.GeneralErr}}"></p>
+        {{end}}
         {{end}}
     </form>
     <script type="module" {{if .StandalonePage}}data-shell-boot-required{{end}} src="/frontend/core_components/auth/register_page_builder.js"></script>

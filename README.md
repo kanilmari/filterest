@@ -221,8 +221,10 @@ inputs continue to come from `app/`.
 
 On first browser access, Filterest opens a two-section form. First choose the
 visible development, testing, quality-assurance, or production purpose and the first
-administrator's sign-in verification method; then create the administrator
-username, email address, and password. Email verification uses Postmark and
+administrator's sign-in verification method; choose whether ordinary users may
+use the same sign-in and public name, then create the administrator login name,
+display name, email address, and password. Both name suggestions are editable;
+administrator names always differ. Email verification uses Postmark and
 requires a free external Postmark account. Password-only, fixed-PIN, and
 standard TOTP authenticator sign-in do not require an email provider.
 

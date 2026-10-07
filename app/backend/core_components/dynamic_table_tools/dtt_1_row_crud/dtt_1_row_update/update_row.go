@@ -7,6 +7,7 @@ package dtt_1_row_update
 
 import (
 	"database/sql"
+	"easelect/backend/core_components/accountwrite"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -128,6 +129,9 @@ func normalizeUpdateOperations(request updateRowRequest) ([]updateRowFieldUpdate
 
 // UpdateRowHandler hoitaa tietokantarivin päivityksen
 func UpdateRowHandler(response_writer http.ResponseWriter, request *http.Request, tableName string) {
+	if err := accountwrite.RequireAdministrator(response_writer, request, tableName); err != nil {
+		return
+	}
 	if row_mutation_policy.RequiresDedicatedMutationAPI(tableName) {
 		httpresponse.RespondWithError(response_writer, http.StatusForbidden, "dataset_requires_dedicated_mutation_api")
 		return
@@ -391,7 +395,11 @@ func UpdateRowHandler(response_writer http.ResponseWriter, request *http.Request
 		// Suoritetaan kysely oikeaa DB-yhteyttä vasten
 		result, err := tx.Exec(query, updateArgs...)
 		if err != nil {
-			log.Printf("\033[31merror: %s\033[0m\n", err.Error())
+			if refusal := httpresponse.AccountNameRefusal(err); refusal != nil {
+				httpresponse.RespondWithRefusal(response_writer, refusal)
+				return
+			}
+			log.Printf("row update failed")
 			httpresponse.RespondWithError(response_writer, http.StatusInternalServerError, "Error updating row")
 			return
 		}

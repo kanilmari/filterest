@@ -100,7 +100,7 @@ func newAdministratorCreationInput(t *testing.T, editor *RecoveryEditor, usernam
 		t.Fatalf("ReadInstanceIdentity() error = %v", err)
 	}
 	return AdministratorCreationInput{
-		Username:           username,
+		LoginName:          username,
 		Email:              email,
 		NewPassword:        createdAdministratorWord,
 		VerificationMethod: VerificationFixedPIN,
@@ -129,7 +129,7 @@ func insertAutomationAccount(t *testing.T, db *sql.DB) int64 {
 			username, full_name, created, updated, enabled, privileged,
 			main_group_id, creation_spec, admin_access_allowed
 		)
-		SELECT 'filterest_agent', 'Filterest API Automation Agent', NOW(), NOW(), TRUE, FALSE,
+		SELECT 'auto_1', 'Filterest API Automation Agent', NOW(), NOW(), TRUE, FALSE,
 		       id, 'System manager API automation account', TRUE
 		FROM system_user_groups WHERE name = 'admins'
 		RETURNING id
@@ -144,8 +144,8 @@ func insertAutomationAccount(t *testing.T, db *sql.DB) int64 {
 		t.Fatalf("add the automation account to the admins group: %v", err)
 	}
 	if _, err := db.Exec(`
-		INSERT INTO restricted.users_restricted (id, password, email, login_verification_method, api_only)
-		VALUES ($1, 'automation-password-hash', 'filterest_agent@automation.invalid', 'none', TRUE)
+		INSERT INTO restricted.users_restricted (id, password, email, login_verification_method, api_only, login_name)
+		VALUES ($1, 'automation-password-hash', 'filterest_agent@automation.invalid', 'none', TRUE, 'filterest_agent')
 	`, automationID); err != nil {
 		t.Fatalf("insert the automation account's credentials: %v", err)
 	}
@@ -192,7 +192,7 @@ func TestCreateAdministratorWritesTheSameAccountShapeAsFirstRunPostgres(t *testi
 	); err != nil {
 		t.Fatalf("read the created account: %v", err)
 	}
-	if username != createdAdministratorName || fullName != createdAdministratorName {
+	if username != "admin_1" || fullName != "admin_1" || result.Username != "admin_1" {
 		t.Fatalf("account name/full name = %q/%q", username, fullName)
 	}
 	if !enabled || privileged || !adminAccess || !adminGroupMember || mainGroupID != adminGroupID {
@@ -224,15 +224,15 @@ func TestCreatedAdministratorAuthenticatesAndHoldsAdministratorRightsPostgres(t 
 		t.Fatalf("CreateAdministrator() error = %v", err)
 	}
 
-	var passwordHash, pinHash, email, method string
+	var passwordHash, pinHash, email, method, loginName string
 	var generation int64
 	if err = db.QueryRow(`
-		SELECT password, COALESCE(fixed_pin_hash, ''), email, login_verification_method, authentication_generation
+		SELECT password, COALESCE(fixed_pin_hash, ''), email, login_verification_method, authentication_generation, login_name
 		FROM restricted.users_restricted WHERE id = $1
-	`, result.UserID).Scan(&passwordHash, &pinHash, &email, &method, &generation); err != nil {
+	`, result.UserID).Scan(&passwordHash, &pinHash, &email, &method, &generation, &loginName); err != nil {
 		t.Fatalf("read the created credentials: %v", err)
 	}
-	if method != string(VerificationFixedPIN) || email != createdAdministratorMail || generation != 1 {
+	if loginName != createdAdministratorName || method != string(VerificationFixedPIN) || email != createdAdministratorMail || generation != 1 {
 		t.Fatalf("stored credentials = method:%q email:%q generation:%d", method, email, generation)
 	}
 	if bcrypt.CompareHashAndPassword([]byte(passwordHash), []byte(createdAdministratorWord)) != nil {

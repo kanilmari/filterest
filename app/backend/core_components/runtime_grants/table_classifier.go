@@ -144,7 +144,7 @@ func ClassifyTable(object Object) (TableClass, error) {
 	}
 	if object.Schema == "restricted" {
 		switch name {
-		case "users_restricted", "verification_codes", "otp_send_events":
+		case "users_restricted", "verification_codes", "otp_send_events", "password_reset_dummy_work":
 			return Restricted, nil
 		}
 		return "", fmt.Errorf("unclassified restricted object %s", object.Identifier())

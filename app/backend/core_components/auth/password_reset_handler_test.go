@@ -20,8 +20,6 @@ import (
 
 	backend "easelect/backend/core_components"
 	e_sessions "easelect/backend/core_components/sessions"
-
-	"github.com/gorilla/sessions"
 )
 
 type passwordResetMockConfig struct {
@@ -48,8 +46,13 @@ func (c *passwordResetMockConn) Prepare(_ string) (driver.Stmt, error) {
 }
 func (c *passwordResetMockConn) Close() error { return nil }
 func (c *passwordResetMockConn) Begin() (driver.Tx, error) {
-	return nil, fmt.Errorf("transactions not supported")
+	return &passwordResetMockTx{}, nil
 }
+
+type passwordResetMockTx struct{}
+
+func (*passwordResetMockTx) Commit() error         { return nil }
+func (*passwordResetMockTx) Rollback() error       { return nil }
 func (r *passwordResetMockRows) Columns() []string { return r.cols }
 func (r *passwordResetMockRows) Close() error      { return nil }
 func (r *passwordResetMockRows) Next(dest []driver.Value) error {
@@ -63,11 +66,11 @@ func (r *passwordResetMockRows) Next(dest []driver.Value) error {
 
 func (c *passwordResetMockConn) QueryContext(_ context.Context, query string, _ []driver.NamedValue) (driver.Rows, error) {
 	switch {
-	case strings.Contains(query, "FROM system_users WHERE LOWER(username)"):
+	case strings.Contains(query, "WHERE lower(ur.login_name)=lower($1)"):
 		if !c.cfg.userLookupFound {
-			return &passwordResetMockRows{cols: []string{"id"}, done: true}, nil
+			return &passwordResetMockRows{cols: []string{"id", "email", "generation"}, done: true}, nil
 		}
-		return &passwordResetMockRows{cols: []string{"id"}, vals: []driver.Value{int64(c.cfg.userID)}}, nil
+		return &passwordResetMockRows{cols: []string{"id", "email", "generation"}, vals: []driver.Value{int64(c.cfg.userID), "reset@example.invalid", int64(1)}}, nil
 	default:
 		return &passwordResetMockRows{cols: []string{"value"}, done: true}, nil
 	}
@@ -111,21 +114,10 @@ func decodeAuthJSONBody(t *testing.T, rr *httptest.ResponseRecorder) map[string]
 	return payload
 }
 
-func initTestSessionStore() {
-	e_sessions.Store = sessions.NewCookieStore([]byte("0123456789abcdef0123456789abcdef"))
-	e_sessions.Store.Options = &sessions.Options{
-		Path:     "/",
-		MaxAge:   86400,
-		HttpOnly: true,
-		Secure:   false,
-		SameSite: http.SameSiteLaxMode,
-	}
-	e_sessions.SessionName = "session"
-}
-
+// seedSessionCookie uses the caller's store and signing secret without rotating
+// either: pending reset envelopes may already have been sealed with that secret.
 func seedSessionCookie(t *testing.T, values map[interface{}]interface{}) *http.Cookie {
 	t.Helper()
-	initTestSessionStore()
 	req := httptest.NewRequest(http.MethodGet, "/login", nil)
 	rr := httptest.NewRecorder()
 	session, err := e_sessions.GetOrCreateSession(rr, req)
@@ -145,7 +137,29 @@ func seedSessionCookie(t *testing.T, values map[interface{}]interface{}) *http.C
 	return result.Cookies()[0]
 }
 
+func TestSeedSessionCookiePreservesPasswordResetPending(t *testing.T) {
+	prepareLoginHandlerSessionStore(t)
+	t.Setenv("SESSION_KEY", "reset-fixture-stable-signing-key")
+	value, err := e_sessions.SealPasswordResetPending(77, 3)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cookie := seedSessionCookie(t, map[interface{}]interface{}{"password_reset_pending": value})
+	request := httptest.NewRequest(http.MethodGet, "/", nil)
+	request.AddCookie(cookie)
+	session, err := e_sessions.Load(request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	pending, _ := session.Values["password_reset_pending"].(string)
+	if id, generation := e_sessions.OpenPasswordResetPending(pending); id != 77 || generation != 3 {
+		t.Fatal("seeding the cookie invalidated the pending reset envelope")
+	}
+}
+
 func TestRequestPasswordResetOTPHandler_UnknownIdentifierStillReturnsGenericSuccess(t *testing.T) {
+	prepareLoginHandlerSessionStore(t)
+	t.Setenv("SESSION_KEY", "reset-test-signing-key-32-characters")
 	origDB := backend.Db
 	origConf := backend.DbConfidential
 	backend.Db = openPasswordResetMockDB(t, passwordResetMockConfig{userLookupFound: false})
@@ -173,6 +187,8 @@ func TestRequestPasswordResetOTPHandler_UnknownIdentifierStillReturnsGenericSucc
 }
 
 func TestResetPasswordWithOTPHandler_DoesNotAcceptLegacyStaticCode(t *testing.T) {
+	prepareLoginHandlerSessionStore(t)
+	t.Setenv("SESSION_KEY", "reset-test-signing-key-32-characters")
 	t.Setenv("ENVIRONMENT_TYPE", "dev")
 	t.Setenv("LOGIN_OTP_CODE", "334726")
 	t.Setenv("POSTMARK_API_KEY", "")

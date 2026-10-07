@@ -86,6 +86,7 @@ ALLOWED_SCHEMA_TABLES = {
     "public.system_user_visual_preferences",
     "public.system_users",
     "restricted.otp_send_events",
+    "restricted.password_reset_dummy_work",  # Account-free singleton write, never credential seed.
     "restricted.users_restricted",
     "restricted.verification_codes",
 }

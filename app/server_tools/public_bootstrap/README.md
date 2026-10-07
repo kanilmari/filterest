@@ -42,6 +42,18 @@ Acceptance requires both `wl103_row_group_classifications` and
 `wl103_row_group_classifications_registry`. Vocabulary and assignments belonging
 to a site are administrator-managed content, never public fixture data.
 
+WL132's account-name migration runs in the schema phase after row-actor support.
+It copies existing public names unchanged into confidential login names, assigns
+administrator display names, and creates serialized name protections in one
+atomic statement. The acceptance block requires its `k116_login_names` completion
+marker and an empty `app_check_login_name_protections()` result. The ordinary-account
+setting `display_name_may_equal_login_name` defaults to true; changing it to false
+preserves existing equal names until a name changes. The reviewed base seed and
+the migration both preserve a previously saved setting. Before an upgrade, run
+`app/server_tools/scripts/login_name_dry_run.sql` as a read-only query with a role
+that can read credentials; its results contain counts, account ids and trigger
+names without account names or credential values.
+
 The three reviewed walkthrough images and the user-approved service, risk, and
 ticket starter images remain immutable fixture inputs under `source/fixtures/`.
 The runtime-media manifest declares a monotonic materialization revision. On
@@ -83,6 +95,18 @@ The generated-credential helper remains available only to the isolated,
 disposable automated preview when
 `FILTEREST_AUTOMATED_PREVIEW_INITIAL_ADMIN=1` is set. It is not the normal
 installation flow and does not define production authentication behavior.
+
+First Run asks for both the private login name and public display name, with
+editable suggestions from the shared site-slug rule and display-name allocator.
+It also asks whether ordinary users may use equal names (preselected yes) and
+saves the choice with the account in one transaction. Missing setting rows refuse
+setup. Administrator names always differ.
+
+The isolated preview helper defaults to `admin_<site_slug>` for sign-in and
+allocates `admin_<n>` for display. `--login-name` overrides the sign-in suggestion;
+invalid/reserved names and numeric-only default slugs fail before any write.
+Its owner-only credential handoff contains both names and the account id; neither
+name is printed in bootstrap status output.
 
 An installation that has already completed setup but has lost every usable
 administrator — for example a restored or rebuilt site — is not returned to this

@@ -7,6 +7,7 @@ package credentials
 import (
 	"context"
 	"database/sql"
+	"easelect/backend/core_components/email"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -92,6 +93,7 @@ type InstanceIdentity struct {
 
 // RecoveryInput contains already-confirmed secrets and operator safety decisions.
 type RecoveryInput struct {
+	NewLoginName                     string
 	UserID                           int64
 	NewPassword                      string
 	VerificationMethod               VerificationMethod
@@ -106,6 +108,7 @@ type RecoveryInput struct {
 
 // RecoveryResult is non-secret evidence of the committed credential change.
 type RecoveryResult struct {
+	MailStatus               string
 	UserID                   int64
 	Username                 string
 	VerificationMethod       VerificationMethod
@@ -266,6 +269,11 @@ func (editor *RecoveryEditor) RecoverAdministrator(ctx context.Context, input Re
 		return result, err
 	}
 
+	if input.NewLoginName != "" {
+		if _, err = ChangeLoginName(tx, input.UserID, input.NewLoginName); err != nil {
+			return result, err
+		}
+	}
 	newAuthenticationGeneration, err := updateRestrictedCredentials(
 		ctx,
 		tx,
@@ -274,6 +282,7 @@ func (editor *RecoveryEditor) RecoverAdministrator(ctx context.Context, input Re
 		selectedMethod,
 		fixedPINHash,
 		input.PreserveCurrentVerification,
+		input.NewLoginName != "",
 	)
 	if err != nil {
 		return result, err
@@ -297,7 +306,12 @@ func (editor *RecoveryEditor) RecoverAdministrator(ctx context.Context, input Re
 	}
 	committed = true
 
+	mailStatus := ""
+	if input.NewLoginName != "" {
+		mailStatus = email.SendAccountNotice(ctx, editor.db, administrator.Email, input.NewLoginName, false)
+	}
 	return RecoveryResult{
+		MailStatus:               mailStatus,
 		UserID:                   administrator.ID,
 		Username:                 administrator.Username,
 		VerificationMethod:       selectedMethod,
@@ -462,14 +476,19 @@ func updateRestrictedCredentials(
 	method VerificationMethod,
 	fixedPINHash string,
 	preserveCurrentVerification bool,
+	generationAlreadyRotated bool,
 ) (int64, error) {
 	var newAuthenticationGeneration int64
 	var err error
+	generationIncrement := "1"
+	if generationAlreadyRotated {
+		generationIncrement = "0"
+	}
 	if preserveCurrentVerification {
 		err = tx.QueryRowContext(ctx, `
 			UPDATE restricted.users_restricted
 			SET password = $1,
-			    authentication_generation = authentication_generation + 1
+			    authentication_generation = authentication_generation + `+generationIncrement+`
 			WHERE id = $2
 			RETURNING authentication_generation
 		`, passwordHash, userID).Scan(&newAuthenticationGeneration)
@@ -484,7 +503,7 @@ func updateRestrictedCredentials(
 			    login_verification_method = $2,
 			    fixed_pin_hash = $3,
 			    totp_secret = NULL,
-			    authentication_generation = authentication_generation + 1
+			    authentication_generation = authentication_generation + `+generationIncrement+`
 			WHERE id = $4
 			RETURNING authentication_generation
 		`, passwordHash, string(method), fixedPINValue, userID).Scan(&newAuthenticationGeneration)

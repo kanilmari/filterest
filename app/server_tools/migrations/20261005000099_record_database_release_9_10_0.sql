@@ -2,7 +2,7 @@
 -- Records the database release 9.10.0: the creator and owner columns of every content
 -- dataset with the support they rest on (WL58 stage 2), and the steps of the same
 -- release that are added before it ships, including retirement of the unused
--- per-column wrapping choice (WL52, K234).
+-- per-column wrapping choice (WL52, K234) and separate confidential login names (WL132).
 -- Bridges the files of this release with the startup database compatibility check.
 -- Exists so an installation can prove the release was applied. It is the last file
 -- of the release, so a file that failed never leaves the version claimed; a file
@@ -12,7 +12,7 @@
 
 INSERT INTO public.system_db_version (version, description)
 SELECT '9.10.0',
-       'Added creator and owner columns to every content dataset, with the actor marks, repair record and guards they rest on; added account-owned favorites and administrator quick-list copy; added optional common and account-specific front pages with protected backgrounds; removed unused per-column field wrapping; required, protected dataset registry reference key; added multilingual row-group classification headings (WL103); dataset cover and background images can be hidden without deleting them (WL153)'
+       'Added creator and owner columns to every content dataset, with the actor marks, repair record and guards they rest on; separated confidential login names from public display names with serialized account-name protections and the ordinary-account name setting (WL132); added account-owned favorites and administrator quick-list copy; added optional common and account-specific front pages with protected backgrounds; removed unused per-column field wrapping; required, protected dataset registry reference key; added multilingual row-group classification headings (WL103); dataset cover and background images can be hidden without deleting them (WL153)'
 WHERE NOT EXISTS (
     SELECT 1 FROM public.system_db_version WHERE version = '9.10.0'
 );

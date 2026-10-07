@@ -5,11 +5,15 @@
 package auth
 
 import (
+	"context"
 	"database/sql"
 	backend "easelect/backend/core_components"
+	"easelect/backend/core_components/accountwrite"
+	"easelect/backend/core_components/auth/credentials"
 	"easelect/backend/core_components/dbutils"
 	"easelect/backend/core_components/httpresponse"
 	"easelect/backend/core_components/logging"
+	e_sessions "easelect/backend/core_components/sessions"
 	"encoding/json"
 	"errors"
 	"io"
@@ -143,6 +147,10 @@ func provisionAdminUserAuthentication(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err != nil {
+		if refusal := httpresponse.AccountNameRefusal(err); refusal != nil {
+			httpresponse.RespondWithRefusal(w, refusal)
+			return
+		}
 		logging.Errorf("[AdminUserAuthenticationHandler] provisioning failed for user %d: %v", request.UserID, err)
 		httpresponse.RespondWithError(w, http.StatusInternalServerError, "user_authentication_update_failed")
 		return
@@ -202,14 +210,14 @@ func applyAdminUserAuthenticationProvisioning(
 	record.UserID = userID
 	record.VerificationMethod = string(method)
 
-	var apiOnly bool
+	var apiOnly, namesEqual bool
 	if err := tx.QueryRow(`
-		SELECT u.username, ur.api_only
+		SELECT u.username, ur.api_only, lower(btrim(u.username))=lower(btrim(ur.login_name))
 		FROM system_users u
 		JOIN restricted.users_restricted ur ON ur.id = u.id
 		WHERE u.id = $1
 		FOR UPDATE OF u, ur
-	`, userID).Scan(&record.Username, &apiOnly); err != nil {
+	`, userID).Scan(&record.Username, &apiOnly, &namesEqual); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return record, errAdminAuthenticationUserNotFound
 		}
@@ -217,6 +225,18 @@ func applyAdminUserAuthenticationProvisioning(
 	}
 	if apiOnly {
 		return record, errAdminAuthenticationAutomationAccount
+	}
+
+	if namesEqual {
+		previousDisplay := record.Username
+		allocated, err := credentials.NextAccountDisplayName(context.Background(), tx, "admin", previousDisplay)
+		if err != nil {
+			return record, err
+		}
+		record.Username = allocated
+		if _, err = tx.Exec(`UPDATE system_users SET username=$1,full_name=CASE WHEN lower(full_name)=lower($2) THEN $1 ELSE full_name END, search_vector_simple=NULL WHERE id=$3`, record.Username, previousDisplay, userID); err != nil {
+			return record, err
+		}
 	}
 
 	var adminGroupID int64
@@ -284,4 +304,64 @@ func applyAdminUserAuthenticationProvisioning(
 	record.AdminGroupMember = true
 	record.AdminAccessAllowed = true
 	return record, nil
+}
+
+// AdminUserLoginNameHandler owns its transaction; no success or mail precedes commit.
+func AdminUserLoginNameHandler(w http.ResponseWriter, r *http.Request) {
+	session, err := e_sessions.Load(r)
+	if err != nil || session == nil {
+		profileFailure(w, 401, "not_authenticated")
+		return
+	}
+	token, _ := session.Values["csrf_token"].(string)
+	if token == "" || r.Header.Get("X-CSRF-Token") != token {
+		profileFailure(w, 403, "csrf_token_invalid")
+		return
+	}
+
+	if err := accountwrite.RequireAdministrator(w, r, "system_users"); err != nil {
+		return
+	}
+	var request struct {
+		UserID    int64  `json:"user_id"`
+		LoginName string `json:"login_name"`
+	}
+	decoder := json.NewDecoder(r.Body)
+	decoder.DisallowUnknownFields()
+	if decoder.Decode(&request) != nil || request.UserID <= 1 {
+		profileFailure(w, 400, "invalid_request_body")
+		return
+	}
+	if ownID, ok := session.Values["user_id"].(int); ok && request.UserID == int64(ownID) {
+		profileFailure(w, http.StatusBadRequest, "login_name_change_use_profile")
+		return
+	}
+	if backend.DbAdmin == nil {
+		profileFailure(w, 503, "database_unavailable")
+		return
+	}
+	tx, err := backend.DbAdmin.BeginTx(r.Context(), nil)
+	if err != nil {
+		profileFailure(w, 500, "db_error")
+		return
+	}
+	defer tx.Rollback()
+	_, err = credentials.ChangeLoginName(tx, request.UserID, request.LoginName)
+	var address string
+	if err == nil {
+		err = tx.QueryRowContext(r.Context(), `SELECT COALESCE(email,'') FROM restricted.users_restricted WHERE id=$1`, request.UserID).Scan(&address)
+	}
+	if err == nil {
+		err = tx.Commit()
+	}
+	if err != nil {
+		if refusal := httpresponse.AccountNameRefusal(err); refusal != nil {
+			httpresponse.RespondWithRefusal(w, refusal)
+		} else {
+			profileFailure(w, 500, "login_name_change_failed")
+		}
+		return
+	}
+	status := accountNoticeStatus(r.Context(), address, request.LoginName, false)
+	httpresponse.RespondWithJSON(w, 200, map[string]interface{}{"success": true, "user_id": request.UserID, "message": "login_name_changed", "mail_status": status})
 }

@@ -38,6 +38,7 @@ type otpVerifyMockState struct {
 	lastQuery    string
 	lastExec     string
 	execCount    int32
+	commitCount  int32
 }
 
 var otpVerifyState otpVerifyMockState
@@ -55,6 +56,7 @@ func (c *otpVerifyMockConn) BeginTx(context.Context, driver.TxOptions) (driver.T
 	return &otpVerifyMockTx{}, nil
 }
 func (tx *otpVerifyMockTx) Commit() error {
+	otpVerifyState.commitCount++
 	if otpVerifyState.commitError {
 		return fmt.Errorf("forced commit failure")
 	}
@@ -198,5 +200,15 @@ func TestVerifyOTPReturnsNotFoundWithoutMutation(t *testing.T) {
 	}
 	if result.Status != VerificationNotFound || otpVerifyState.execCount != 0 {
 		t.Fatalf("unexpected not-found result/state: %#v / %#v", result, otpVerifyState)
+	}
+}
+
+func TestUnknownPasswordResetConfirmationWritesAndCommits(t *testing.T) {
+	state := baseOTPVerifyState()
+	state.noRows = true
+	withOTPVerifyDB(t, state)
+	result, err := VerifyOTP(0, ProfilePasswordReset, "wrongcode")
+	if err != nil || result.Status != VerificationNotFound || otpVerifyState.execCount != 1 || otpVerifyState.commitCount != 1 || !strings.Contains(otpVerifyState.lastExec, "UPDATE restricted.password_reset_dummy_work") {
+		t.Fatal("unknown reset skipped equivalent write/commit", result, err, otpVerifyState)
 	}
 }

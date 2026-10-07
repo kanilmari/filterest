@@ -8,6 +8,7 @@ package dtt_1_row_delete
 import (
 	"context"
 	"database/sql"
+	"easelect/backend/core_components/accountwrite"
 	"errors"
 
 	"easelect/backend/core_components/dbutils"
@@ -65,6 +66,9 @@ func DeleteRowsHandlerWrapper(w http.ResponseWriter, r *http.Request) {
 }
 
 func DeleteRowsHandler(w http.ResponseWriter, r *http.Request, table_name string) {
+	if err := accountwrite.RequireAdministrator(w, r, table_name); err != nil {
+		return
+	}
 
 	if row_mutation_policy.RequiresDedicatedMutationAPI(table_name) {
 		httpresponse.RespondWithError(w, http.StatusForbidden, "dataset_requires_dedicated_mutation_api")

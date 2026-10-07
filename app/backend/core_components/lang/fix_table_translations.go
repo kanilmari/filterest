@@ -8,6 +8,7 @@ import (
 	"bytes"
 	"context"
 	"database/sql"
+	"easelect/backend/core_components/accountwrite"
 	"easelect/backend/core_components/dbutils"
 	"easelect/backend/core_components/httpresponse"
 	"easelect/backend/core_components/system_config_checks"
@@ -48,6 +49,9 @@ func FixTableTranslationsHandler(w http.ResponseWriter, r *http.Request) {
 	var req FixTranslationsRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		httpresponse.RespondWithError(w, http.StatusBadRequest, fmt.Sprintf("\033[31merror: %v\033[0m", err))
+		return
+	}
+	if err := accountwrite.RequireAdministrator(w, r, req.Table); err != nil {
 		return
 	}
 	if req.Table == "" || len(req.RowIDs) == 0 || len(req.Columns) == 0 {
@@ -145,6 +149,10 @@ func FixTableTranslationsHandler(w http.ResponseWriter, r *http.Request) {
 				writer = tx
 			}
 			if _, err := writer.Exec(updateQuery, updated, rowID); err != nil {
+				if refusal := httpresponse.AccountNameRefusal(err); refusal != nil {
+					httpresponse.RespondWithRefusal(w, refusal)
+					return
+				}
 				httpresponse.RespondWithError(w, http.StatusInternalServerError, fmt.Sprintf("\033[31merror: %v\033[0m", err))
 				return
 			}

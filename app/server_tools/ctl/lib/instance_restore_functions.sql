@@ -29,7 +29,29 @@ BEGIN
                       AND c.relname='systemview_role_table_privileges' AND c.relkind='v' AND c.relowner=p.proowner)
                     AND NOT EXISTS(SELECT 1 FROM pg_trigger t JOIN pg_class c ON c.oid=t.tgrelid JOIN pg_namespace n ON n.oid=c.relnamespace
                       WHERE t.tgfoid=p.oid AND (n.nspname<>'public' OR c.relname<>'systemview_role_table_privileges' OR c.relowner<>p.proowner)))
+                   OR (COALESCE((b.value->>'account_trigger')::boolean,false) AND p.prorettype='trigger'::regtype
+ AND p.lanname='plpgsql' AND p.provolatile='v' AND p.pronargs=0
+ AND p.proconfig=ARRAY['search_path=pg_catalog, pg_temp']::text[]
+ AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) acl
+   WHERE acl.grantee<>p.proowner OR acl.privilege_type<>'EXECUTE')
+ AND EXISTS(SELECT 1 FROM pg_trigger t WHERE t.tgfoid=p.oid AND NOT t.tgisinternal)
+ AND NOT EXISTS(SELECT 1 FROM pg_trigger t JOIN pg_class c ON c.oid=t.tgrelid JOIN pg_namespace ns ON ns.oid=c.relnamespace
+   WHERE t.tgfoid=p.oid AND (NOT pg_has_role(p.proowner,c.relowner,'MEMBER') OR NOT (
+     p.proname='app_enforce_administrator_names_differ' AND (
+       ns.nspname='public' AND c.relname='system_users' AND t.tgname='app_users_names_differ' AND t.tgtype=17
+       OR ns.nspname='public' AND c.relname='system_user_group_memberships' AND t.tgname='app_memberships_names_differ' AND t.tgtype=21
+       OR ns.nspname='restricted' AND c.relname='users_restricted' AND t.tgname='app_credentials_names_differ' AND t.tgtype=21)
+     OR p.proname='app_describe_account_name_setting' AND ns.nspname='public' AND c.relname='system_config'
+       AND t.tgname='app_account_name_setting_description' AND t.tgtype=19)))
+ AND EXISTS(SELECT 1 FROM pg_proc helper JOIN pg_namespace ns ON ns.oid=helper.pronamespace
+   JOIN pg_language helper_language ON helper_language.oid=helper.prolang
+   WHERE ns.nspname='public' AND helper.proname='app_is_administrator_account'
+   AND oidvectortypes(helper.proargtypes)='bigint' AND NOT helper.prosecdef
+   AND helper_language.lanname='sql' AND helper.provolatile='s' AND helper.prorettype='boolean'::regtype AND NOT helper.proretset
+   AND helper.proowner=p.proowner AND helper.proconfig=ARRAY['search_path=pg_catalog, public']::text[]
+   AND md5(helper.prosrc)='071d19378af50082c673808a48e86525'))
                    OR (NOT COALESCE((b.value->>'legacy_trigger')::boolean,false)
+                    AND NOT COALESCE((b.value->>'account_trigger')::boolean,false)
                     AND p.lanname='sql' AND p.provolatile IN ('s','i')
                     AND (SELECT array_agg(s) FROM unnest(p.proconfig) s WHERE s LIKE 'search_path=%')=ARRAY[b.value->>'search_path']))
             ) THEN RAISE EXCEPTION 'unmatched SECURITY DEFINER function %',p.identity;

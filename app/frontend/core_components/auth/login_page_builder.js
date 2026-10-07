@@ -337,10 +337,10 @@ document.addEventListener("DOMContentLoaded", () => {
         if (resetMessage) {
             applyLoginLangKey(
                 resetMessage,
-                'password_reset_code_sent',
-                getTranslationForKey('password_reset_code_sent', {
-                    fallback: 'If the account exists, a verification code was sent. Enter the code and your new password.',
-                }) || 'If the account exists, a verification code was sent. Enter the code and your new password.'
+                'password_reset_send_attempted',
+                getTranslationForKey('password_reset_send_attempted', {
+                    fallback: 'If the account exists, we will try to send a recovery code. You can request a new code.',
+                }) || 'If the account exists, we will try to send a recovery code. You can request a new code.'
             );
         }
         if (resendResetLink) resendResetLink.style.display = 'inline';

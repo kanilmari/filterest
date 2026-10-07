@@ -44,6 +44,12 @@ INSERT INTO public.system_config (id, key, json_value, created, updated, creatio
   (3011, 'view_admin_cover_image_test_palette', '{"value": true}'::jsonb, '2026-08-20 00:00:00', '2026-08-20 00:00:00', 'Temporary administrator-only dataset cover-image test palette switch.', TRUE, 'true', NULL, 2),
   (3012, 'favicon', '{"value": ""}'::jsonb, '2026-08-22 00:00:00', '2026-08-22 00:00:00', 'Optional favicon PNG filename from frontend/icons/site_favicons; empty uses site-name initials and then Filterest F.', NULL, '', NULL, 6);
 
+-- K205 preserves ordinary accounts' existing name policy on every fresh site.
+INSERT INTO public.system_config (key, boolean_value, json_value, text_value, value_type, creation_spec)
+VALUES ('display_name_may_equal_login_name', true, '{"value":true}', 'true', 2,
+    'Ordinary accounts may use the same display and login name; administrators must use different names.')
+ON CONFLICT (key) DO NOTHING;
+
 INSERT INTO public.system_functions (
   id, name, disabled, created, updated, "package", specific_table_related,
   creation_spec, rate_limit_amount, rate_limit_minutes, url_route_endpoint, ui_only

@@ -837,6 +837,41 @@
       ]
     },
     {
+      "path_pattern": "/api/admin/user-login-name",
+      "match_type": "exact",
+      "handler_name": "auth.AdminUserLoginNameHandler",
+      "methods": [
+        "POST"
+      ],
+      "method_source": "route_registration",
+      "scenarios": [
+        {
+          "name": "production",
+          "profile_name": "admin_no_tx",
+          "skip_stages": [
+            "transaction"
+          ],
+          "admin_only": true
+        },
+        {
+          "name": "development",
+          "profile_name": "admin_no_tx",
+          "skip_stages": [
+            "transaction"
+          ],
+          "admin_only": true
+        },
+        {
+          "name": "api_language",
+          "profile_name": "admin_no_tx",
+          "skip_stages": [
+            "transaction"
+          ],
+          "admin_only": true
+        }
+      ]
+    },
+    {
       "path_pattern": "/api/admin/version-info",
       "match_type": "exact",
       "handler_name": "router.adminVersionInfoHandler",
@@ -5071,6 +5106,44 @@
           "name": "api_language",
           "profile_name": "default",
           "skip_stages": [],
+          "admin_only": false
+        }
+      ]
+    },
+    {
+      "path_pattern": "/api/sign-out-other-devices",
+      "match_type": "exact",
+      "handler_name": "auth.SignOutOtherDevicesHandler",
+      "methods": [
+        "POST"
+      ],
+      "method_source": "route_registration",
+      "scenarios": [
+        {
+          "name": "production",
+          "profile_name": "login_only",
+          "skip_stages": [
+            "access_control",
+            "admin_check"
+          ],
+          "admin_only": false
+        },
+        {
+          "name": "development",
+          "profile_name": "login_only",
+          "skip_stages": [
+            "access_control",
+            "admin_check"
+          ],
+          "admin_only": false
+        },
+        {
+          "name": "api_language",
+          "profile_name": "login_only",
+          "skip_stages": [
+            "access_control",
+            "admin_check"
+          ],
           "admin_only": false
         }
       ]

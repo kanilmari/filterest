@@ -62,7 +62,7 @@ func testCreationOperations(administrators ...credentials.Administrator) *fakeAd
 		administrators: administrators,
 		result: credentials.AdministratorCreationResult{
 			UserID:                    10007,
-			Username:                  "recovery_operator_admin",
+			Username:                  "admin_2",
 			Email:                     "operator@example.com",
 			VerificationMethod:        credentials.VerificationFixedPIN,
 			AuthenticationGeneration:  1,
@@ -112,7 +112,7 @@ func TestCreationModeIsReachedOnlyByItsOwnFlag(t *testing.T) {
 	// The restore workflow is offered the creation boundary too, and must never reach it.
 	operations := testCreationOperations(existingAdministrator())
 	terminal := &fakeOperatorTerminal{
-		lines:   []string{"1", "1", testConfirmationToken + ":admin_filterest"},
+		lines:   []string{"1", "1", testConfirmationToken + ":user:42"},
 		secrets: []string{"correct horse battery staple", "correct horse battery staple"},
 	}
 	if err = executeRecoveryWorkflow(context.Background(), terminal, operations, "filterest.com", false, false); err != nil {
@@ -159,12 +159,11 @@ func TestCreationWithoutAnyAdministratorAsksNoExtraConfirmationAndKeepsSecretsHi
 	operations := testCreationOperations()
 	terminal := &fakeOperatorTerminal{
 		lines: []string{
-			"recovery_operator_admin",
 			"operator@example.com",
 			"1",
-			testConfirmationToken + ":recovery_operator_admin",
+			testConfirmationToken + ":email:operator@example.com",
 		},
-		secrets: []string{"246810", "246810", "correct horse battery staple", "correct horse battery staple"},
+		secrets: []string{"recovery_operator_admin", "recovery_operator_admin", "246810", "246810", "correct horse battery staple", "correct horse battery staple"},
 	}
 
 	if err := executeAdministratorCreationWorkflow(
@@ -176,8 +175,8 @@ func TestCreationWithoutAnyAdministratorAsksNoExtraConfirmationAndKeepsSecretsHi
 		t.Fatal("the workflow did not reach the creation boundary")
 	}
 	input := *operations.receivedInput
-	if input.Username != "recovery_operator_admin" || input.Email != "operator@example.com" {
-		t.Fatalf("creation identity = %q/%q", input.Username, input.Email)
+	if input.LoginName != "recovery_operator_admin" || input.Email != "operator@example.com" {
+		t.Fatalf("creation identity = %q/%q", input.LoginName, input.Email)
 	}
 	if input.VerificationMethod != credentials.VerificationFixedPIN || input.FixedPIN != "246810" {
 		t.Fatalf("creation factor = %q/%q", input.VerificationMethod, input.FixedPIN)
@@ -188,19 +187,19 @@ func TestCreationWithoutAnyAdministratorAsksNoExtraConfirmationAndKeepsSecretsHi
 	if input.OperatorReference != "root@app-container (pid 7)" || input.TargetIdentity != operations.identity {
 		t.Fatalf("creation evidence = %+v", input)
 	}
-	if len(terminal.secretPrompts) != 4 {
-		t.Fatalf("secret prompt count = %d, want PIN twice and password twice", len(terminal.secretPrompts))
+	if len(terminal.secretPrompts) != 6 {
+		t.Fatalf("secret prompt count = %d, want login name, PIN and password twice", len(terminal.secretPrompts))
 	}
-	for _, secret := range []string{"246810", "correct horse battery staple"} {
+	for _, secret := range []string{"246810", "correct horse battery staple", "recovery_operator_admin"} {
 		if strings.Contains(terminal.output.String(), secret) {
 			t.Fatalf("secret %q leaked into terminal output", secret)
 		}
 	}
 	for _, expected := range []string{
-		"About to create administrator recovery_operator_admin with email operator@example.com",
-		"Final target confirmation: " + testConfirmationToken + ":recovery_operator_admin",
+		"About to create administrator with email operator@example.com",
+		"Final target confirmation: " + testConfirmationToken + ":email:operator@example.com",
 		"not a filesystem path or password",
-		"Administrator created: recovery_operator_admin (user id 10007",
+		"Administrator created: admin_2 (user id 10007",
 		"The one-time first-run browser setup form was still open and is now closed.",
 	} {
 		if !strings.Contains(terminal.output.String(), expected) {
@@ -227,7 +226,7 @@ func TestCreationRefusesAnotherAdministratorWithoutTheTypedConfirmation(t *testi
 	}
 	for _, expected := range []string{
 		"This installation already has 1 eligible active administrator(s):",
-		"admin_filterest (current verification: fixed_pin, authentication generation: 6)",
+		"admin_filterest (user id 42, email o***@filterest.com, current verification: fixed_pin, authentication generation: 6)",
 		"restore one of these accounts by running this command without --create-admin",
 		"WARNING: creating another administrator",
 	} {
@@ -242,12 +241,11 @@ func TestCreationCarriesTheAcknowledgedSnapshotWhenAnAdministratorExists(t *test
 	terminal := &fakeOperatorTerminal{
 		lines: []string{
 			additionalAdministratorConfirmation,
-			"recovery_operator_admin",
 			"operator@example.com",
 			"1",
-			testConfirmationToken + ":recovery_operator_admin",
+			testConfirmationToken + ":email:operator@example.com",
 		},
-		secrets: []string{"246810", "246810", "correct horse battery staple", "correct horse battery staple"},
+		secrets: []string{"recovery_operator_admin", "recovery_operator_admin", "246810", "246810", "correct horse battery staple", "correct horse battery staple"},
 	}
 
 	if err := executeAdministratorCreationWorkflow(
@@ -262,9 +260,9 @@ func TestCreationCarriesTheAcknowledgedSnapshotWhenAnAdministratorExists(t *test
 	}
 }
 
-func TestCreationRefusesAnInvalidAccountNameBeforeAnySecretPrompt(t *testing.T) {
+func TestCreationRefusesAnInvalidAccountNameBeforePasswordPrompts(t *testing.T) {
 	operations := testCreationOperations()
-	terminal := &fakeOperatorTerminal{lines: []string{"-not a valid name"}}
+	terminal := &fakeOperatorTerminal{secrets: []string{"-not a valid name", "-not a valid name"}}
 
 	err := executeAdministratorCreationWorkflow(
 		context.Background(), terminal, operations, testCreationSettings(false, false),
@@ -272,7 +270,7 @@ func TestCreationRefusesAnInvalidAccountNameBeforeAnySecretPrompt(t *testing.T) 
 	if !errors.Is(err, credentials.ErrInvalidAdministratorUsername) {
 		t.Fatalf("executeAdministratorCreationWorkflow() error = %v, want an invalid account name", err)
 	}
-	if len(terminal.secretPrompts) != 0 || operations.receivedInput != nil {
+	if len(terminal.secretPrompts) != 2 || operations.receivedInput != nil {
 		t.Fatalf("an invalid account name reached secrets or creation: prompts=%#v input=%+v",
 			terminal.secretPrompts, operations.receivedInput)
 	}
@@ -281,7 +279,8 @@ func TestCreationRefusesAnInvalidAccountNameBeforeAnySecretPrompt(t *testing.T) 
 func TestCreationRefusesEmailVerificationThatCannotBeDelivered(t *testing.T) {
 	operations := testCreationOperations()
 	terminal := &fakeOperatorTerminal{
-		lines: []string{"recovery_operator_admin", "operator@example.com", "2"},
+		secrets: []string{"recovery_operator_admin", "recovery_operator_admin"},
+		lines:   []string{"operator@example.com", "2"},
 	}
 
 	err := executeAdministratorCreationWorkflow(
@@ -301,7 +300,8 @@ func TestCreationRefusesEmailVerificationThatCannotBeDelivered(t *testing.T) {
 func TestCreationRefusesPasswordOnlyWithoutItsOwnConfirmation(t *testing.T) {
 	operations := testCreationOperations()
 	terminal := &fakeOperatorTerminal{
-		lines: []string{"recovery_operator_admin", "operator@example.com", "3", "not confirmed"},
+		secrets: []string{"recovery_operator_admin", "recovery_operator_admin"},
+		lines:   []string{"operator@example.com", "3", "not confirmed"},
 	}
 
 	err := executeAdministratorCreationWorkflow(
@@ -322,12 +322,11 @@ func TestCreationStopsWhenTheFinalTargetConfirmationDoesNotMatch(t *testing.T) {
 	operations := testCreationOperations()
 	terminal := &fakeOperatorTerminal{
 		lines: []string{
-			"recovery_operator_admin",
 			"operator@example.com",
 			"1",
 			testConfirmationToken + ":a_different_admin",
 		},
-		secrets: []string{"246810", "246810", "correct horse battery staple", "correct horse battery staple"},
+		secrets: []string{"recovery_operator_admin", "recovery_operator_admin", "246810", "246810", "correct horse battery staple", "correct horse battery staple"},
 	}
 
 	err := executeAdministratorCreationWorkflow(
@@ -363,12 +362,11 @@ func TestCreationSurfacesADuplicateRefusalFromTheSharedBoundary(t *testing.T) {
 	operations.createError = credentials.ErrAdministratorUsernameTaken
 	terminal := &fakeOperatorTerminal{
 		lines: []string{
-			"recovery_operator_admin",
 			"operator@example.com",
 			"1",
-			testConfirmationToken + ":recovery_operator_admin",
+			testConfirmationToken + ":email:operator@example.com",
 		},
-		secrets: []string{"246810", "246810", "correct horse battery staple", "correct horse battery staple"},
+		secrets: []string{"recovery_operator_admin", "recovery_operator_admin", "246810", "246810", "correct horse battery staple", "correct horse battery staple"},
 	}
 
 	err := executeAdministratorCreationWorkflow(

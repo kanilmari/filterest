@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"easelect/backend/core_components/auth/credentials"
+	"easelect/backend/core_components/email"
 )
 
 const passwordOnlyConfirmation = "PASSWORD ONLY"
@@ -31,6 +32,7 @@ func executeRecoveryWorkflow(
 	siteDomain string,
 	dryRun bool,
 	emailDeliveryConfigured bool,
+	changeLoginName ...bool,
 ) error {
 	if strings.TrimSpace(siteDomain) == "" {
 		return errors.New("site domain is required for administrator recovery target confirmation")
@@ -56,9 +58,11 @@ func executeRecoveryWorkflow(
 	terminal.Printf("Eligible active administrators:\n")
 	for index, administrator := range administrators {
 		terminal.Printf(
-			"  %d) %s (current verification: %s, authentication generation: %d)\n",
+			"  %d) %s (user id %d, email %s, current verification: %s, authentication generation: %d)\n",
 			index+1,
 			administrator.Username,
+			administrator.ID,
+			email.MaskRecipientAddress(administrator.Email),
 			administrator.VerificationMethod,
 			administrator.AuthenticationGeneration,
 		)
@@ -72,7 +76,7 @@ func executeRecoveryWorkflow(
 	if err != nil {
 		return err
 	}
-	terminal.Printf("Selected administrator: %s\n", administrator.Username)
+	terminal.Printf("Selected administrator: %s (user id %d, email %s)\n", administrator.Username, administrator.ID, email.MaskRecipientAddress(administrator.Email))
 	terminal.Printf("Current login verification method: %s\n", administrator.VerificationMethod)
 
 	input, err := readRecoveryFactorChoice(terminal, administrator, emailDeliveryConfigured)
@@ -85,6 +89,15 @@ func executeRecoveryWorkflow(
 	input.ExpectedVerificationMethod = administrator.VerificationMethod
 	input.TargetIdentity = identity
 
+	if len(changeLoginName) > 0 && changeLoginName[0] {
+		input.NewLoginName, err = readConfirmedSecret(terminal, "New private login name: ", "Repeat new private login name: ", "login name entries do not match")
+		if err != nil {
+			return err
+		}
+		if err = credentials.ValidateLoginName(input.NewLoginName); err != nil {
+			return err
+		}
+	}
 	input.NewPassword, err = readConfirmedSecret(
 		terminal,
 		"New administrator password: ",
@@ -98,7 +111,7 @@ func executeRecoveryWorkflow(
 		return err
 	}
 
-	confirmation := identityConfirmationToken(siteDomain, identity) + ":" + administrator.Username
+	confirmation := identityConfirmationToken(siteDomain, identity) + ":user:" + strconv.FormatInt(administrator.ID, 10)
 	terminal.Printf("Final target confirmation: %s\n", confirmation)
 	terminal.Printf("This is not a filesystem path or password; it identifies the exact domain, site, project, database, and administrator account being recovered.\n")
 	typedConfirmation, err := terminal.ReadLine("Type the final target confirmation exactly: ")
@@ -114,11 +127,15 @@ func executeRecoveryWorkflow(
 		return err
 	}
 	terminal.Printf(
-		"Recovery committed for %s: verification=%s authentication_generation=%d. Existing sessions are invalid after generation enforcement.\n",
+		"Recovery committed for %s (user id %d): verification=%s authentication_generation=%d. Existing sessions are invalid after generation enforcement.\n",
 		result.Username,
+		result.UserID,
 		result.VerificationMethod,
 		result.AuthenticationGeneration,
 	)
+	if result.MailStatus != "" {
+		terminal.Printf("Mail status: %s\n", result.MailStatus)
+	}
 	return nil
 }
 

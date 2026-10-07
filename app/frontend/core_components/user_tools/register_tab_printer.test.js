@@ -1,14 +1,12 @@
 // register_tab_printer.test.js
 // Verifies the SPA register tab fetches the real server-rendered form fragment and handles submit outcomes in place.
-// Bridges register fragment fetches, validation rerenders, and post-success login handoff with lightweight mocks.
+// Bridges register fragment fetches, validation rerenders, and success status with lightweight mocks.
 // Exists to keep the guest-shell register entry stable without depending only on broad end-to-end coverage.
 // @vitest-environment jsdom
 
 import { beforeEach, describe, expect, test, vi } from "vitest";
 
 const translatePageMock = vi.fn().mockResolvedValue(undefined);
-const handleLoginShellEntryMock = vi.fn().mockResolvedValue(true);
-const navigateToLoginEntryMock = vi.fn();
 
 const baseFormHtml = `
 <!DOCTYPE html>
@@ -17,6 +15,7 @@ const baseFormHtml = `
     <form method="POST" action="/api/register_ndYOyXV0INOK3F?fragment=1" class="auth-form" data-testid="register-form">
       <h2 data-lang-key="register"></h2>
       <input type="text" name="username" data-testid="register-username" />
+      <input type="text" name="display_name" data-testid="register-display-name" />
       <input type="password" name="password" data-testid="register-password" />
       <input type="email" name="email" data-testid="register-email" />
       <label><input type="radio" name="verification_method" value="none" />None</label>
@@ -40,10 +39,6 @@ async function loadModule() {
     vi.doMock("../state_stores/lang_preference_reader.js", () => ({
         getLanguageWithBrowserFallback: () => "fi",
         getPreferredAvailableLanguage: () => "fi",
-    }));
-    vi.doMock("../auth/login_shell_entry.js", () => ({
-        handleLoginShellEntry: handleLoginShellEntryMock,
-        navigateToLoginEntry: navigateToLoginEntryMock,
     }));
     return import("./register_tab_printer.js");
 }
@@ -75,15 +70,15 @@ describe("generate_register_view", () => {
         expect(translatePageMock).toHaveBeenCalledWith("fi");
     });
 
-    test("successful submit hands off to the SPA login entry instead of hard navigation", async () => {
+    test("successful submit renders translated success status in place", async () => {
         global.fetch
             .mockResolvedValueOnce({
                 ok: true,
                 text: vi.fn().mockResolvedValue(baseFormHtml),
             })
             .mockResolvedValueOnce({
-                redirected: true,
-                url: `${window.location.origin}/?login-entry=1`,
+                redirected: false,
+                text: vi.fn().mockResolvedValue('<form data-testid="register-form"><p role="status" data-registration-complete data-lang-key="registration_email_not_configured"></p></form>'),
             });
         const mod = await loadModule();
         const container = document.getElementById("container");
@@ -91,6 +86,7 @@ describe("generate_register_view", () => {
         await mod.generate_register_view(container);
         const form = container.querySelector('[data-testid="register-form"]');
         form.querySelector('[data-testid="register-username"]').value = "demo";
+        form.querySelector('[data-testid="register-display-name"]').value = "Public Display";
         form.querySelector('[data-testid="register-password"]').value = "secret";
         form.querySelector('[data-testid="register-email"]').value = "demo@example.com";
         form.querySelector('[data-testid="register-full-name"]').value = "Demo User";
@@ -99,8 +95,12 @@ describe("generate_register_view", () => {
         await Promise.resolve();
         await Promise.resolve();
 
-        expect(navigateToLoginEntryMock).toHaveBeenCalledTimes(1);
-        expect(handleLoginShellEntryMock).toHaveBeenCalledTimes(1);
+        const submitted = global.fetch.mock.calls[1][1].body;
+        expect(submitted.get("username")).toBe("demo");
+        expect(submitted.get("display_name")).toBe("Public Display");
+        expect(container.querySelector('[data-registration-complete]')).not.toBeNull();
+        expect(container.querySelector('[data-testid="register-username"]')).toBeNull();
+        expect(translatePageMock).toHaveBeenCalledWith("fi");
     });
 
     test("validation rerender replaces the form in place", async () => {
@@ -128,6 +128,5 @@ describe("generate_register_view", () => {
         await Promise.resolve();
 
         expect(container.querySelector('.error[data-lang-key="username_exists"]')).not.toBeNull();
-        expect(navigateToLoginEntryMock).not.toHaveBeenCalled();
     });
 });

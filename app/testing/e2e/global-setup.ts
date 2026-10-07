@@ -7,6 +7,7 @@
  * failed-login limit (10 rejected credentials or factors / 15 min).
  */
 
+import { clearVerifiedTestIdentities, writeVerifiedTestIdentity, initializeTestIdentityKey } from './helpers/auth_identity';
 import { chromium, type Browser, type FullConfig } from '@playwright/test';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -42,6 +43,7 @@ const ARTIFACT_BASELINE_FILE = path.join(
 );
 
 async function globalSetup(_config: FullConfig) {
+  initializeTestIdentityKey();
   const baseURL =
     _config.projects[0]?.use?.baseURL && typeof _config.projects[0].use.baseURL === 'string'
       ? _config.projects[0].use.baseURL
@@ -65,6 +67,7 @@ async function globalSetup(_config: FullConfig) {
   const artifactRun = initializeArtifactRunRegistry();
   removeStorageStateFile(AUTH_FILE);
   fs.rmSync(ARTIFACT_BASELINE_FILE, { force: true });
+  clearVerifiedTestIdentities();
 
   let browser: Browser | null = null;
   try {
@@ -90,25 +93,25 @@ async function globalSetup(_config: FullConfig) {
       await privacy.check();
     }
 
-    const otpRequired = await submitCredentialsAndWaitForOtp(page, username);
+    const otpRequired = await submitCredentialsAndWaitForOtp(page);
     if (otpRequired) {
       await page.locator('[data-testid="login-otp"]').fill(loadOtpCode());
-      await page.locator('[data-testid="login-submit"]').click();
+      await submitCredentialsAndWaitForOtp(page);
     }
-    await waitForAuthenticatedApp(page, username);
+    const verifiedUserID = await waitForAuthenticatedApp(page);
     const sessionIdentity = await readSessionInfo(page);
     if (
       typeof sessionIdentity.user_id !== 'number' ||
       !Number.isSafeInteger(sessionIdentity.user_id) ||
       sessionIdentity.user_id <= 1 ||
-      sessionIdentity.username !== username
+      sessionIdentity.user_id !== verifiedUserID
     ) {
       throw new Error(
-        `Authenticated E2E identity mismatch during setup: expected ${username}, ` +
-        `got ${sessionIdentity.username ?? 'missing'} (${sessionIdentity.user_id ?? 'missing'}).`,
+        `Authenticated E2E identity mismatch during setup: expected id ${verifiedUserID}, got ${sessionIdentity.user_id ?? 'missing'}.`,
       );
     }
 
+    writeVerifiedTestIdentity({ username, password }, baseURL, verifiedUserID);
     writeOwnerOnlyJsonFile(AUTH_FILE, await context.storageState());
     await hydrateAuthenticatedTreeDataCache(page);
     writeOwnerOnlyJsonFile(AUTH_FILE, await context.storageState());
@@ -122,11 +125,12 @@ async function globalSetup(_config: FullConfig) {
         runId: artifactRun.runId,
         baseURL,
         userId: sessionIdentity.user_id!,
-        username,
+        username: sessionIdentity.username || String(verifiedUserID),
       },
     );
     writeOwnerOnlyJsonFile(ARTIFACT_BASELINE_FILE, artifactBaseline);
   } catch (error) {
+    clearVerifiedTestIdentities();
     removeStorageStateFile(AUTH_FILE);
     fs.rmSync(ARTIFACT_BASELINE_FILE, { force: true });
     try {

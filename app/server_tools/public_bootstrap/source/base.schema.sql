@@ -139,6 +139,7 @@ CREATE SCHEMA IF NOT EXISTS restricted;
 
 CREATE TABLE IF NOT EXISTS restricted.users_restricted (
     id integer NOT NULL,
+    login_name text NOT NULL,
     api_only boolean NOT NULL DEFAULT false,
     password text NOT NULL,
     email text NOT NULL,

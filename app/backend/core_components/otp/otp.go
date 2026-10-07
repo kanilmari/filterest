@@ -31,11 +31,12 @@ const (
 type ProfileName string
 
 const (
-	ProfileLogin          ProfileName = "login"
-	ProfilePasswordReset  ProfileName = "password_reset"
-	ProfileEmailChange    ProfileName = "email_change"
-	ProfilePasswordChange ProfileName = "password_change"
-	ProfileRegFetchLogin  ProfileName = "regfetch_login"
+	ProfileLoginNameChange ProfileName = "login_name_change"
+	ProfileLogin           ProfileName = "login"
+	ProfilePasswordReset   ProfileName = "password_reset"
+	ProfileEmailChange     ProfileName = "email_change"
+	ProfilePasswordChange  ProfileName = "password_change"
+	ProfileRegFetchLogin   ProfileName = "regfetch_login"
 )
 
 // Profile is the shared OTP contract for current and future application
@@ -55,6 +56,7 @@ type Profile struct {
 }
 
 var profiles = map[ProfileName]Profile{
+	ProfileLoginNameChange: {Name: ProfileLoginNameChange, Purpose: "login_name_change", TTL: 5 * time.Minute, MaxVerifyAttempts: 5, UserSendLimit: 3, UserSendWindow: 5 * time.Minute, CoreEnabled: true},
 	ProfileLogin: {
 		Name: ProfileLogin, Purpose: "login", TTL: 5 * time.Minute,
 		MaxVerifyAttempts: 5, UserSendLimit: 3, UserSendWindow: 5 * time.Minute, CoreEnabled: true,
@@ -253,6 +255,20 @@ func verifyOTPWithTarget(userID int, profileName ProfileName, code, targetEmail 
 		FOR UPDATE
 	`, userID, profile.Purpose).Scan(&id, &storedHash, &storedTarget, &attempts, &maxAttempts, &expired)
 	if err == sql.ErrNoRows {
+		if profileName == ProfilePasswordReset {
+			// The fixed private row makes this an actual write transaction too. It carries
+			// no account data and is provisioned by the release migration/bootstrap.
+			result, workErr := tx.Exec(`UPDATE restricted.password_reset_dummy_work SET work=NOT work WHERE id=true`)
+			if workErr != nil {
+				return VerificationResult{}, fmt.Errorf("dummy reset confirmation work: %w", workErr)
+			}
+			if workErr = requireOneRow(result, "dummy reset confirmation work"); workErr != nil {
+				return VerificationResult{}, workErr
+			}
+			if workErr = tx.Commit(); workErr != nil {
+				return VerificationResult{}, fmt.Errorf("commit dummy reset confirmation: %w", workErr)
+			}
+		}
 		return VerificationResult{Status: VerificationNotFound}, nil
 	}
 	if err != nil {

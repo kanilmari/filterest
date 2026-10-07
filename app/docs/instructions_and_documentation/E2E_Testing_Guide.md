@@ -58,6 +58,30 @@ Why this is the safest broad baseline:
 
 Local timing varies by machine and app state, but a full 6-project matrix run is on the order of tens of minutes, not hours. Plan overnight loops around multiple reruns rather than a single all-night pass.
 
+### Reserved development accounts and identity
+
+Development startup reconciles reserved accounts by their exact private login names,
+`test_admin` and `test_user`, in one administrator transaction. Their public
+names may differ: administrators receive `admin_<n>`, and a new ordinary fixture
+receives `user_<n>` when the site requires different names. Existing ordinary
+fixtures keep their names. Browser helpers compare the numeric account id
+returned by the successful credential/factor response and matched by the profile;
+a different signed-in session cannot establish that identity. The owner-only
+runtime identity file records ids and HMACs of credentials, never private login
+names. Global setup clears it each run and generates
+`FILTEREST_E2E_IDENTITY_HMAC_KEY` when absent; workers inherit this per-run key.
+
+An old public reserved-name row without credentials stops development startup
+with its numeric id. It is never adopted automatically. Use an existing
+administrator and the supported account row API to rename that public display
+name, or delete the orphan if it is unneeded (resolve its references first),
+then restart development. If the service cannot start, use a production-like
+runtime temporarily with reserved development-administrator environment values
+unset, restore administrator access with the operator recovery tool if needed,
+and perform the same API repair. Do not patch the database directly.
+Production-like startup purges credentialed reserved accounts atomically and
+leaves such ambiguous public orphans untouched.
+
 ### Leftover browsers and other sessions
 
 `./filterest test` (`app/server_tools/scripts/safe_test.sh`) finds Playwright in

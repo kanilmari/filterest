@@ -5,6 +5,7 @@
 
 import { expect, type Page } from '@playwright/test';
 import * as path from 'path';
+import { readVerifiedTestIdentity, writeVerifiedTestIdentity } from './auth_identity';
 import {
   loadBrowserTestCredentials,
   resolveBrowserTestCredentialFilePath,
@@ -52,19 +53,18 @@ export function writeTestCredentialsFile(
 /**
  * Validates that a session belongs to the exact non-guest test identity requested by the caller.
  * Bridges user-profile responses and E2E login reuse decisions.
- * Exists so a numeric user id cannot make a missing or swapped username look authenticated.
+ * Matches the id established by a fresh credential login; display names may change freely.
  */
 export function sessionMatchesExpectedIdentity(
   sessionInfo: SessionInfo,
-  expectedUsername: string,
+  expectedUserID: number,
 ): boolean {
-  const normalizedExpectedUsername = expectedUsername.trim();
   return (
     typeof sessionInfo.user_id === 'number'
     && Number.isSafeInteger(sessionInfo.user_id)
     && sessionInfo.user_id > 1
-    && normalizedExpectedUsername !== ''
-    && sessionInfo.username === normalizedExpectedUsername
+    && Number.isSafeInteger(expectedUserID)
+    && sessionInfo.user_id === expectedUserID
   );
 }
 
@@ -121,6 +121,17 @@ export async function openLoginEntry(
   await expect(page.locator('[data-testid="login-username"]')).toBeVisible({ timeout: 15000 });
 }
 
+// Set only from the successful response to this page's own credential/factor submission.
+const submittedLoginIdentities = new WeakMap<Page, number>();
+
+export function authenticatedLoginResponseID(data: unknown): number {
+  const result = data as { authenticated?: boolean; user_id?: number } | null;
+  if (result?.authenticated !== true || !Number.isSafeInteger(result.user_id) || result.user_id! <= 1) {
+    throw new Error('Sign-in did not prove an account id.');
+  }
+  return result.user_id!;
+}
+
 /**
  * Submits the credential phase and waits for either OTP or authentication. The SPA login modal
  * can be visible a moment before its fragment submit listener is attached, so a
@@ -128,54 +139,27 @@ export async function openLoginEntry(
  */
 export async function submitCredentialsAndWaitForOtp(
   page: Page,
-  expectedUsername = '',
 ): Promise<boolean> {
+  submittedLoginIdentities.delete(page);
   const submitButton = page.locator('[data-testid="login-submit"]');
-  const otpSection = page.locator('[data-testid="login-otp-section"]');
-  let lastError: unknown;
-
   for (let attempt = 1; attempt <= 3; attempt += 1) {
-    const responsePromise = page
-      .waitForResponse(
-        (response) =>
-          response.url().endsWith('/api/login') &&
-          response.request().method() === 'POST',
-        { timeout: attempt === 1 ? 2500 : 10000 },
-      )
-      .catch(() => null);
-
+    const responsePromise = page.waitForResponse(
+      response => new URL(response.url()).pathname === '/api/login' && response.request().method() === 'POST',
+      { timeout: attempt === 1 ? 2500 : 10000 },
+    ).catch(() => null);
     await submitButton.click();
-    await responsePromise;
-
-    try {
-      const timeout = attempt === 1 ? 2500 : 10000;
-      const nextStep = await Promise.race([
-        otpSection.waitFor({ state: 'visible', timeout }).then(() => 'otp'),
-        expectedUsername
-          ? page.waitForFunction(
-            async (username) => {
-              const response = await fetch('/api/user-profile', { credentials: 'include' });
-              if (!response.ok) {
-                return false;
-              }
-              const profile = await response.json();
-              return profile?.user_id > 1 && profile?.username === username;
-            },
-            expectedUsername,
-            { timeout },
-          ).then(() => 'authenticated')
-          : new Promise<string>(() => {}),
-      ]);
-      return nextStep === 'otp';
-    } catch (error) {
-      lastError = error;
-      if (attempt < 3) {
-        await page.waitForTimeout(250);
-      }
+    const response = await responsePromise;
+    if (!response) continue; // A fragment listener may not yet have been attached.
+    if (!response.ok()) throw new Error('Sign-in submission was refused.');
+    const result = await response.json();
+    if (result.otp_required === true) {
+      await page.locator('[data-testid="login-otp-section"]').waitFor({ state: 'visible', timeout: 10000 });
+      return true;
     }
+    submittedLoginIdentities.set(page, authenticatedLoginResponseID(result));
+    return false;
   }
-
-  throw lastError;
+  throw new Error('Sign-in submission returned no response.');
 }
 
 /**
@@ -184,15 +168,15 @@ export async function submitCredentialsAndWaitForOtp(
  */
 export async function waitForAuthenticatedApp(
   page: Page,
-  expectedUsername: string,
-): Promise<void> {
-  const normalizedExpectedUsername = expectedUsername.trim();
-  if (!normalizedExpectedUsername) {
-    throw new Error('waitForAuthenticatedApp requires a non-empty expected username.');
-  }
+  expectedUserID?: number,
+): Promise<number> {
 
+  const submittedID = submittedLoginIdentities.get(page);
+  if (submittedID === undefined || (expectedUserID !== undefined && expectedUserID !== submittedID)) {
+    throw new Error('Sign-in response did not match the expected account id.');
+  }
   await page.waitForFunction(
-    async (username) => {
+    async (userID) => {
       const response = await fetch('/api/user-profile', { credentials: 'include' });
       if (!response.ok) {
         return false;
@@ -208,14 +192,16 @@ export async function waitForAuthenticatedApp(
         return false;
       }
       const userId = typeof data.user_id === 'number' ? data.user_id : 0;
-      const sessionUsername = typeof data.username === 'string' ? data.username : '';
-      return userId > 1 && username.length > 0 && sessionUsername === username;
+      return Number.isSafeInteger(userId) && userId > 1 && userId === userID;
     },
-    normalizedExpectedUsername,
+    submittedID,
     { timeout: 15000 }
   );
 
   await page.waitForSelector('[data-testid^="tab-"]', { timeout: 15000 });
+  const identity = await readSessionInfo(page);
+  if (!identity.user_id || !sessionMatchesExpectedIdentity(identity, submittedID)) { throw new Error('Authenticated account id changed during login.'); }
+  return identity.user_id;
 }
 
 /**
@@ -276,12 +262,13 @@ export async function login(page: Page, credentials?: TestCredentials): Promise<
   await page.waitForTimeout(500);
 
   const sessionInfo = await readSessionInfo(page);
+  const expectedID = readVerifiedTestIdentity(creds, page.url());
 
   // login_to_browse=false can leave us on "/" with a guest session (user_id=1),
   // so URL and user id alone are not strong enough authentication signals for tests.
   if (
     !page.url().includes('/login') &&
-    sessionMatchesExpectedIdentity(sessionInfo, creds.username)
+    expectedID !== undefined && sessionMatchesExpectedIdentity(sessionInfo, expectedID)
   ) {
     return;
   }
@@ -298,20 +285,20 @@ export async function login(page: Page, credentials?: TestCredentials): Promise<
     await privacyCheckbox.check();
   }
 
-  const otpRequired = await submitCredentialsAndWaitForOtp(page, creds.username);
+  const otpRequired = await submitCredentialsAndWaitForOtp(page);
   if (otpRequired) {
     // Phase 2: use the same explicit OTP configuration as the native backend.
     await page.locator('[data-testid="login-otp"]').fill(loadOtpCode());
-    await page.locator('[data-testid="login-submit"]').click();
+    await submitCredentialsAndWaitForOtp(page);
   }
-  await waitForAuthenticatedApp(page, creds.username);
+  const authenticatedID = await waitForAuthenticatedApp(page, expectedID);
+  writeVerifiedTestIdentity(creds, page.url(), authenticatedID);
 
   const postLoginSessionInfo = await readSessionInfo(page);
   const postLoginUserId = typeof postLoginSessionInfo.user_id === 'number' ? postLoginSessionInfo.user_id : 0;
-  const postLoginUsername = typeof postLoginSessionInfo.username === 'string' ? postLoginSessionInfo.username : '';
 
   expect(postLoginUserId, 'Expected login() to establish an authenticated non-guest session.').toBeGreaterThan(1);
-  expect(postLoginUsername, 'Expected login() session username to match the requested test credentials.').toBe(creds.username);
+  expect(postLoginUserId, 'Expected login() to retain the verified account id.').toBe(authenticatedID);
 }
 
 /**

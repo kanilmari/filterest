@@ -43,7 +43,7 @@ func TestValidateAdministratorEmailAcceptsOneBareAddressOnly(t *testing.T) {
 
 func TestCreateAdministratorAccountRefusesWithoutAnOpenTransaction(t *testing.T) {
 	if _, err := CreateAdministratorAccount(t.Context(), nil, AdministratorAccountInput{
-		Username: "owner_admin", Email: "owner@example.com",
+		LoginName: "owner_admin", Email: "owner@example.com",
 		Password: "correct horse battery staple", VerificationMethod: VerificationNone,
 		CreationSpec: "test",
 	}); err == nil {

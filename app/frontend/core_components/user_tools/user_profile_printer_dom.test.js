@@ -161,3 +161,21 @@ describe('generate_user_view profile submit', () => {
         expect(showWarningToastMock).toHaveBeenCalledWith('Enter a new email address first.');
     });
 });
+
+// Public profile text needs no password prompt and sends only the changed allow-listed fields.
+test('website and biography are loaded and saved from the profile', async () => {
+    vi.clearAllMocks();
+    document.body.innerHTML = '';
+    endpointRouterMock.mockImplementation((route) => route === 'fetchUserProfile'
+        ? Promise.resolve({ username: 'alice', email: 'alice@example.com', website: 'https://old.invalid', bio_social_medias: 'Old biography' })
+        : Promise.resolve({ success: true }));
+    const root = document.createElement('div'); document.body.append(root);
+    await generate_user_view(root);
+    expect(root.querySelector('#edit_website').value).toBe('https://old.invalid');
+    expect(root.querySelector('#edit_bio_social_medias').value).toBe('Old biography');
+    root.querySelector('#edit_website').value = 'https://new.invalid';
+    root.querySelector('#edit_bio_social_medias').value = '';
+    root.querySelector('#user_profile_form').dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+    await flushPromises();
+    expect(endpointRouterMock).toHaveBeenCalledWith('updateUserProfile', { method: 'POST', body_data: { website: 'https://new.invalid', bio_social_medias: '' } });
+});

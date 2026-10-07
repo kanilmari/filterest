@@ -40,15 +40,16 @@ var reviewedTriggerBodies = map[string]bool{
 }
 
 type definerFunctionIdentity struct {
-	Schema        string `json:"schema"`
-	Name          string `json:"name"`
-	ArgumentTypes string `json:"argument_types"`
-	LegacyTrigger bool   `json:"legacy_trigger,omitempty"`
-	SearchPath    string `json:"search_path"` // Exact reviewed pg_proc.proconfig entry.
+	Schema         string `json:"schema"`
+	Name           string `json:"name"`
+	ArgumentTypes  string `json:"argument_types"`
+	AccountTrigger bool   `json:"account_trigger,omitempty"`
+	LegacyTrigger  bool   `json:"legacy_trigger,omitempty"`
+	SearchPath     string `json:"search_path"` // Exact reviewed pg_proc.proconfig entry.
 }
 
-// A reviewed SECURITY DEFINER body is fixed by a product migration, reads only,
-// and calls no function that could write. Identity and catalogue settings must
+// Reviewed SECURITY DEFINER paths are read-only SQL or owner-only trigger functions
+// on protected account tables. Exact bodies, identity and catalogue settings must
 // also match; a changed body or identity requires a fresh review.
 // The portable restore reads this same policy file. Keep one reviewed list.
 //
@@ -82,7 +83,8 @@ const reviewedDefinerFunctionsSQL = `SELECT p.oid
  WHERE p.prosecdef AND n.nspname=b.identity->>'schema' AND p.proname=b.identity->>'name'
  AND oidvectortypes(p.proargtypes)=b.identity->>'argument_types'
  AND ((COALESCE((b.identity->>'legacy_trigger')::boolean,false) AND ` + reviewedLegacyDefinerSQL + `)
- OR (NOT COALESCE((b.identity->>'legacy_trigger')::boolean,false) AND l.lanname='sql' AND p.provolatile IN ('s','i')
+ OR (COALESCE((b.identity->>'account_trigger')::boolean,false) AND ` + reviewedAccountTriggerSQL + `)
+ OR (NOT COALESCE((b.identity->>'legacy_trigger')::boolean,false) AND NOT COALESCE((b.identity->>'account_trigger')::boolean,false) AND l.lanname='sql' AND p.provolatile IN ('s','i')
  AND (SELECT array_agg(setting) FROM unnest(p.proconfig) setting WHERE setting LIKE 'search_path=%')
      = ARRAY[b.identity->>'search_path']))`
 
@@ -130,7 +132,14 @@ func readTriggerDependencies(ctx context.Context, tx *sql.Tx, snapshot *GrantSna
 				continue
 			}
 		}
-		accepted, err := readReviewedLegacyTrigger(ctx, tx, snapshot, oid, source, digest, definer)
+		accepted, err := readReviewedAccountTrigger(ctx, tx, snapshot, oid, digest)
+		if err != nil {
+			return err
+		}
+		if accepted {
+			continue
+		}
+		accepted, err = readReviewedLegacyTrigger(ctx, tx, snapshot, oid, source, digest, definer)
 		if err != nil {
 			return err
 		}

@@ -3,7 +3,7 @@ import { test, expect } from '@playwright/test';
 test.describe('L6 — Register', () => {
   test.use({ storageState: { cookies: [], origins: [] } });
 
-  test('register route respects environment toggle and hands off to login when enabled', async ({ page, request }) => {
+  test('register route respects environment toggle and shows success status when enabled', async ({ page, request }) => {
     const authModesResponse = await request.get('/api/auth-modes');
     const authModes = await authModesResponse.json();
 
@@ -24,6 +24,7 @@ test.describe('L6 — Register', () => {
     );
 
     await page.locator('[data-testid="register-username"]').fill(`spa_register_${uniqueSuffix}`);
+    await page.locator('[data-testid="register-display-name"]').fill(`Registration Display ${uniqueSuffix}`);
     await page.locator('[data-testid="register-password"]').fill('TestPassword123!');
     await page.locator('[data-testid="register-email"]').fill(`spa_register_${uniqueSuffix}@example.com`);
     await page.locator('[data-testid="register-full-name"]').fill('SPA Register Test');
@@ -35,8 +36,8 @@ test.describe('L6 — Register', () => {
 
     await page.locator('[data-testid="register-submit"]').click();
 
-    await page.locator('[data-testid="login-form"]').waitFor({ state: 'visible', timeout: 10000 });
-    expect(page.url()).not.toContain('/register_ndYOyXV0INOK3F');
-    await expect(page.locator('[data-testid="login-username"]')).toBeVisible();
+    await expect(page.locator('[data-registration-complete]')).toBeVisible({ timeout: 10000 });
+    await expect(page.locator('[data-registration-complete]')).toHaveAttribute('data-lang-key', /^registration_email_(sent|failed|not_configured)$/);
+    await expect(page.locator('[data-testid="register-username"]')).toHaveCount(0);
   });
 });

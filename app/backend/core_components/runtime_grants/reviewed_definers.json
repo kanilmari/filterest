@@ -1,4 +1,11 @@
 {
+  "5f737284ad638d3e1b1524394bce619e": {
+    "schema": "public",
+    "name": "app_enforce_administrator_names_differ",
+    "argument_types": "",
+    "account_trigger": true,
+    "search_path": "search_path=pg_catalog, pg_temp"
+  },
   "8c5a769a59dfaa06a4c1ce947ff562b9": {
     "schema": "public",
     "name": "resolve_effective_row_access",
@@ -11,5 +18,12 @@
     "argument_types": "",
     "legacy_trigger": true,
     "search_path": ""
+  },
+  "efa90e56ffc584be2e9b15bef03e2a6b": {
+    "schema": "public",
+    "name": "app_describe_account_name_setting",
+    "argument_types": "",
+    "account_trigger": true,
+    "search_path": "search_path=pg_catalog, pg_temp"
   }
 }
