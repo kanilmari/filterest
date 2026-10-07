@@ -9,6 +9,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"strings"
 	"syscall"
 	"testing"
 )
@@ -235,11 +236,17 @@ func TestMovePathToDeletedStorageDoesNotReplaceExistingArchive(t *testing.T) {
 		t.Fatalf("os.WriteFile destination: %v", err)
 	}
 
-	err := MovePathToDeletedStorage(sourceFile, destinationFile)
-	if err == nil {
-		t.Fatal("MovePathToDeletedStorage should refuse an existing archive destination")
+	if err := MovePathToDeletedStorage(sourceFile, destinationFile); err != nil {
+		t.Fatal(err)
 	}
-	sourceContents, _ := os.ReadFile(sourceFile)
+	if _, err := os.Lstat(sourceFile); !os.IsNotExist(err) {
+		t.Fatalf("incoming file remains live: %v", err)
+	}
+	clashes, err := filepath.Glob(filepath.Join(filepath.Dir(destinationFile), "photo.deleted-*.jpg"))
+	if err != nil || len(clashes) != 1 || !strings.HasSuffix(clashes[0], "-1.jpg") {
+		t.Fatalf("incoming archive names = %v, err = %v", clashes, err)
+	}
+	sourceContents, _ := os.ReadFile(clashes[0])
 	destinationContents, _ := os.ReadFile(destinationFile)
 	if string(sourceContents) != "new" || string(destinationContents) != "old archive" {
 		t.Fatalf(

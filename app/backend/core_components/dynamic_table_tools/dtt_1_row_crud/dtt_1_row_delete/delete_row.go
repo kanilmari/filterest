@@ -592,14 +592,16 @@ func moveRowStoragePlansToDeleted(moves []rowStorageMove) {
 		src := filepath.Join(paths.StorageRoot, move.tableUID, fmt.Sprintf("%d", move.rowID))
 		dst := filepath.Join(paths.StorageDeletedRoot, move.tableUID, fmt.Sprintf("%d", move.rowID))
 
-		if _, err := os.Stat(src); err == nil {
-			if err := os.MkdirAll(filepath.Dir(dst), 0755); err != nil {
-				log.Printf("error creating directory: %v", err)
-				continue
-			}
-			if err := storagecleanup.MovePathToDeletedStorage(src, dst); err != nil {
-				log.Printf("error moving directory %s -> %s: %v", src, dst, err)
-			}
+		if _, err := os.Lstat(src); os.IsNotExist(err) {
+			continue
+		} else if err != nil {
+			log.Printf("error inspecting directory %s: %v", src, err)
+			continue
+		}
+		// A previously deleted gallery picture may already have created this
+		// archive folder. The shared mover merges it and checks all path parts.
+		if err := storagecleanup.MovePathToDeletedStorage(src, dst); err != nil {
+			log.Printf("error moving directory %s -> %s: %v", src, dst, err)
 		}
 	}
 }
@@ -636,14 +638,16 @@ func moveSharedAssetFilesToDeleted(moves []dtt_asset_linking.SharedAssetFileMove
 				move.Filename,
 			)
 
-			if _, err := os.Stat(src); err == nil {
-				if err := os.MkdirAll(filepath.Dir(dst), 0755); err != nil {
-					log.Printf("error creating shared asset deleted directory: %v", err)
-					continue
-				}
-				if err := storagecleanup.MovePathToDeletedStorage(src, dst); err != nil {
-					log.Printf("error moving shared asset file %s -> %s: %v", src, dst, err)
-				}
+			if _, err := os.Lstat(src); os.IsNotExist(err) {
+				continue
+			} else if err != nil {
+				log.Printf("error inspecting shared asset file %s: %v", src, err)
+				continue
+			}
+			// The mover creates checked parents and retains both files if an
+			// earlier deletion already archived this filename.
+			if err := storagecleanup.MovePathToDeletedStorage(src, dst); err != nil {
+				log.Printf("error moving shared asset file %s -> %s: %v", src, dst, err)
 			}
 		}
 	}

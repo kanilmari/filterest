@@ -7,7 +7,6 @@ package storagecleanup
 import (
 	"context"
 	"easelect/backend/core_components/dbutils"
-	"fmt"
 	"log"
 	"os"
 	"path/filepath"
@@ -166,51 +165,6 @@ func ListArchivedStorageTableFolders() ([]ArchivedStorageFolderStatus, error) {
 	return archived, nil
 }
 
-func archiveStoragePathContents(srcDir, dstDir string) error {
-	entries, err := os.ReadDir(srcDir)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return nil
-		}
-		return err
-	}
-	if err := os.MkdirAll(dstDir, 0755); err != nil {
-		return err
-	}
-
-	for _, entry := range entries {
-		srcPath := filepath.Join(srcDir, entry.Name())
-		dstPath := filepath.Join(dstDir, entry.Name())
-
-		if _, err := os.Stat(dstPath); os.IsNotExist(err) {
-			if err := MovePathToDeletedStorage(srcPath, dstPath); err != nil {
-				return fmt.Errorf("move %s -> %s: %w", srcPath, dstPath, err)
-			}
-			continue
-		}
-
-		if entry.IsDir() {
-			if err := archiveStoragePathContents(srcPath, dstPath); err != nil {
-				return err
-			}
-			if err := os.Remove(srcPath); err != nil && !os.IsNotExist(err) {
-				return err
-			}
-			continue
-		}
-
-		renamedDstPath := dstPath + ".archived"
-		if err := MovePathToDeletedStorage(srcPath, renamedDstPath); err != nil {
-			return fmt.Errorf("move %s -> %s: %w", srcPath, renamedDstPath, err)
-		}
-	}
-
-	if err := os.Remove(srcDir); err != nil && !os.IsNotExist(err) {
-		return err
-	}
-	return nil
-}
-
 // ArchiveTableStorageFolder moves one active storage/<table_uid> tree under storage_deleted/<table_uid>.
 func ArchiveTableStorageFolder(tableUID string) error {
 	trimmedTableUID := strings.TrimSpace(tableUID)
@@ -219,13 +173,13 @@ func ArchiveTableStorageFolder(tableUID string) error {
 	}
 	roots := runtimepaths.Current()
 	srcDir := filepath.Join(roots.StorageRoot, trimmedTableUID)
-	if _, err := os.Stat(srcDir); os.IsNotExist(err) {
+	if _, err := os.Lstat(srcDir); os.IsNotExist(err) {
 		return nil
 	} else if err != nil {
 		return err
 	}
 	dstDir := filepath.Join(roots.StorageDeletedRoot, trimmedTableUID)
-	return archiveStoragePathContents(srcDir, dstDir)
+	return MovePathToDeletedStorage(srcDir, dstDir)
 }
 
 // QueueArchiveTableStorageAfterCommit archives one dataset storage root after the surrounding transaction commits.

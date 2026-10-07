@@ -339,6 +339,27 @@ Long-term rule:
 - image profile may additionally generate thumbnails
 - non-image profiles must not be forced through image-only thumbnail logic
 
+### Deleted media and retention
+
+Deleting a row merges its storage tree into the existing deleted-media archive,
+including variant folders an earlier gallery-picture deletion created. Matching
+directories are combined; other name clashes keep the incoming entry beside the
+older one with a `.deleted-<UTC timestamp>-<counter>` suffix before its file
+extension. Dataset removal and individual picture deletion use the same mover.
+Links and special files are refused before anything moves. A failed merge keeps
+already archived files and leaves the remaining live paths available for retry.
+
+The product has no age-based expiry for `storage_deleted`: neither file/folder
+modification times nor a database archive-date record determine retention.
+Archived files, including newly merged ones, remain until an administrator
+explicitly prunes the whole archived dataset folder. The prune endpoint permits
+only dataset UIDs absent from `system_db_tables`; a live dataset's archived rows
+are retained. Consequently an older folder cannot shorten a merged file's
+retention, and no timestamp reset is needed. Filesystem modification times are
+not archival dates. Any installation-owned external expiry job must be reviewed
+separately; a future timed policy must measure each file's own archival time
+and never infer it from an existing ancestor folder's age.
+
 ## 6. Shared Detail Surfaces
 
 Canonical shared-asset detail UX should now assume:

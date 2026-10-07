@@ -363,6 +363,55 @@ func TestMoveSharedAssetFilesToDeletedUsesParentStorageLayout(t *testing.T) {
 	}
 }
 
+func TestPictureThenRowStorageDeletionMergesExistingArchive(t *testing.T) {
+	paths := configureNestedRuntimePaths(t)
+	row := filepath.Join(paths.StorageRoot, "3926", "1")
+	archive := filepath.Join(paths.StorageDeletedRoot, "3926", "1")
+	for _, variant := range []string{"original", "300"} {
+		if err := os.MkdirAll(filepath.Join(row, variant), 0750); err != nil {
+			t.Fatal(err)
+		}
+		for _, file := range []string{"3926_1_1.jpg", "3926_1_2.jpg", "own.pdf"} {
+			if err := os.WriteFile(filepath.Join(row, variant, file), []byte(variant+"/"+file), 0640); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	moveSharedAssetFilesToDeleted([]dtt_asset_linking.SharedAssetFileMove{{
+		StorageTableUID: "3926", StorageRowID: 1, Filename: "3926_1_1.jpg",
+	}})
+	if _, err := os.Stat(filepath.Join(archive, "original", "3926_1_1.jpg")); err != nil {
+		t.Fatalf("picture deletion did not create row archive: %v", err)
+	}
+	// A reused filename in a later picture deletion must keep its old copy too.
+	if err := os.WriteFile(filepath.Join(row, "original", "3926_1_1.jpg"), []byte("reused filename"), 0640); err != nil {
+		t.Fatal(err)
+	}
+	moveSharedAssetFilesToDeleted([]dtt_asset_linking.SharedAssetFileMove{{
+		StorageTableUID: "3926", StorageRowID: 1, Filename: "3926_1_1.jpg",
+	}})
+	moveRowStoragePlansToDeleted([]rowStorageMove{{tableUID: "3926", rowID: 1}})
+	if _, err := os.Lstat(row); !os.IsNotExist(err) {
+		t.Fatalf("parent deletion left live row folder: %v", err)
+	}
+	for _, variant := range []string{"original", "300"} {
+		for _, file := range []string{"3926_1_1.jpg", "3926_1_2.jpg", "own.pdf"} {
+			contents, err := os.ReadFile(filepath.Join(archive, variant, file))
+			if err != nil || string(contents) != variant+"/"+file {
+				t.Fatalf("archive lost %s/%s: %q, %v", variant, file, contents, err)
+			}
+		}
+	}
+	clashes, err := filepath.Glob(filepath.Join(archive, "original", "3926_1_1.deleted-*.jpg"))
+	if err != nil || len(clashes) != 1 {
+		t.Fatalf("reused filename archive copies: %v, %v", clashes, err)
+	}
+	contents, err := os.ReadFile(clashes[0])
+	if err != nil || string(contents) != "reused filename" {
+		t.Fatalf("reused filename was lost: %q, %v", contents, err)
+	}
+}
+
 func configureNestedRuntimePaths(t *testing.T) runtimepaths.Paths {
 	t.Helper()
 	originalPaths := runtimepaths.Current()

@@ -1,7 +1,7 @@
 // storage_archive_path_mover.go
 // Moves media from active storage into the recoverable deleted-media archive.
 // Bridges ordinary same-filesystem renames and safe cross-filesystem copy fallback.
-// Exists so Docker bind mounts cannot turn a committed row deletion into lost media.
+// Exists so committed row and dataset deletions retain every recoverable file.
 package storagecleanup
 
 import (
@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 	"strings"
 	"syscall"
+	"time"
 
 	"easelect/backend/core_components/runtimepaths"
 )
@@ -22,7 +23,9 @@ var storageArchiveInstallRename = renameStoragePathNoReplace
 var storageRegularFileCopier = copyStorageRegularFile
 
 // MovePathToDeletedStorage moves one file or directory from storage/ to storage_deleted/.
-// It keeps the source untouched until a cross-filesystem copy is complete and durable.
+// Existing directories are merged; other name clashes keep both entries. Both
+// trees are checked before any move, and cross-filesystem copies are durable
+// before their sources are removed. A partial merge can safely be retried.
 func MovePathToDeletedStorage(sourcePath, destinationPath string) error {
 	roots := runtimepaths.Current()
 	sourceRelativePath, err := storageRelativePath(roots.StorageRoot, sourcePath, "source")
@@ -47,6 +50,9 @@ func MovePathToDeletedStorage(sourcePath, destinationPath string) error {
 	}
 	resolvedSourcePath := filepath.Join(sourceRoot, sourceRelativePath)
 	resolvedDestinationPath := filepath.Join(destinationRoot, destinationRelativePath)
+	if storagePathsOverlap(resolvedSourcePath, resolvedDestinationPath) {
+		return fmt.Errorf("storage source and destination overlap: %s -> %s", sourcePath, destinationPath)
+	}
 
 	if err := rejectStoragePathSymlinks(sourceRoot, resolvedSourcePath); err != nil {
 		return err
@@ -56,34 +62,139 @@ func MovePathToDeletedStorage(sourcePath, destinationPath string) error {
 	if err != nil {
 		return fmt.Errorf("inspect storage source %s: %w", sourcePath, err)
 	}
-	if sourceInfo.Mode()&os.ModeSymlink != 0 {
-		return fmt.Errorf("storage source must not be a symbolic link: %s", sourcePath)
+	// Check complete trees up front: finding an unsafe later sibling must not
+	// leave an otherwise ordinary delete partly archived.
+	if err := validateStorageArchiveTree(resolvedSourcePath); err != nil {
+		return err
+	}
+	if err := rejectStoragePathSymlinks(destinationRoot, resolvedDestinationPath); err != nil {
+		return err
+	}
+	if _, destinationErr := os.Lstat(resolvedDestinationPath); destinationErr == nil {
+		if err := validateStorageArchiveTree(resolvedDestinationPath); err != nil {
+			return err
+		}
+	} else if !os.IsNotExist(destinationErr) {
+		return fmt.Errorf("inspect deleted-storage destination %s: %w", destinationPath, destinationErr)
 	}
 
 	destinationParent := filepath.Dir(resolvedDestinationPath)
 	if err := ensureStorageDirectoryComponents(destinationRoot, destinationParent, 0755); err != nil {
 		return fmt.Errorf("create deleted-storage destination parent %s: %w", destinationParent, err)
 	}
-	if _, destinationErr := os.Lstat(resolvedDestinationPath); destinationErr == nil {
-		return fmt.Errorf("deleted-storage destination already exists: %s", destinationPath)
-	} else if !os.IsNotExist(destinationErr) {
-		return fmt.Errorf("inspect deleted-storage destination %s: %w", destinationPath, destinationErr)
-	}
-
-	if err := storagePathRename(resolvedSourcePath, resolvedDestinationPath); err == nil {
-		return nil
-	} else if !errors.Is(err, syscall.EXDEV) {
-		return fmt.Errorf("move %s -> %s: %w", sourcePath, destinationPath, err)
-	}
-
-	if err := copyStoragePathThenRemoveSource(
+	return moveStorageArchiveEntry(
 		resolvedSourcePath,
 		resolvedDestinationPath,
 		sourceInfo,
-	); err != nil {
+		time.Now().UTC(),
+	)
+}
+
+func storagePathsOverlap(sourcePath, destinationPath string) bool {
+	for _, pair := range [][2]string{{sourcePath, destinationPath}, {destinationPath, sourcePath}} {
+		relative, err := filepath.Rel(pair[0], pair[1])
+		if err == nil && relative != ".." && !strings.HasPrefix(relative, ".."+string(filepath.Separator)) {
+			return true
+		}
+	}
+	return false
+}
+
+// validateStorageArchiveTree refuses links and special files even on the
+// same-filesystem rename path, which otherwise never inspects descendants.
+func validateStorageArchiveTree(path string) error {
+	return filepath.WalkDir(path, func(entryPath string, entry fs.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return fmt.Errorf("inspect storage archive path %s: %w", entryPath, walkErr)
+		}
+		info, err := entry.Info()
+		if err != nil {
+			return fmt.Errorf("inspect storage archive entry %s: %w", entryPath, err)
+		}
+		if info.Mode()&os.ModeSymlink != 0 {
+			return fmt.Errorf("storage archive refuses symbolic link: %s", entryPath)
+		}
+		if !info.IsDir() && !info.Mode().IsRegular() {
+			return fmt.Errorf("storage archive refuses non-regular file: %s", entryPath)
+		}
+		return nil
+	})
+}
+
+func moveStorageArchiveEntry(sourcePath, destinationPath string, sourceInfo fs.FileInfo, archivedAt time.Time) error {
+	destinationInfo, err := os.Lstat(destinationPath)
+	if err == nil {
+		if err := validateStorageArchiveTree(destinationPath); err != nil {
+			return err
+		}
+		if sourceInfo.IsDir() && destinationInfo.IsDir() {
+			return mergeStorageArchiveDirectory(sourcePath, destinationPath, archivedAt)
+		}
+		destinationPath, err = storageArchiveClashPath(destinationPath, sourceInfo.IsDir(), archivedAt)
+		if err != nil {
+			return fmt.Errorf("choose archive name for remaining source %s: %w", sourcePath, err)
+		}
+	} else if !os.IsNotExist(err) {
+		return fmt.Errorf("inspect archive destination for remaining source %s: %w", sourcePath, err)
+	}
+
+	if err := storagePathRename(sourcePath, destinationPath); err == nil {
+		return nil
+	} else if !errors.Is(err, syscall.EXDEV) {
+		return fmt.Errorf("move remaining storage path %s -> %s: %w", sourcePath, destinationPath, err)
+	}
+	if err := copyStoragePathThenRemoveSource(sourcePath, destinationPath, sourceInfo); err != nil {
 		return fmt.Errorf("copy cross-filesystem storage path %s -> %s: %w", sourcePath, destinationPath, err)
 	}
 	return nil
+}
+
+// mergeStorageArchiveDirectory moves sorted entries independently. It never
+// removes a source directory recursively: only an empty one may be removed,
+// so a later failure leaves all unarchived content at the named source path.
+func mergeStorageArchiveDirectory(sourcePath, destinationPath string, archivedAt time.Time) error {
+	entries, err := os.ReadDir(sourcePath)
+	if err != nil {
+		return fmt.Errorf("read remaining storage directory %s: %w", sourcePath, err)
+	}
+	for _, entry := range entries {
+		sourceEntry := filepath.Join(sourcePath, entry.Name())
+		info, err := os.Lstat(sourceEntry)
+		if err != nil {
+			return fmt.Errorf("inspect remaining storage path %s: %w", sourceEntry, err)
+		}
+		if err := validateStorageArchiveTree(sourceEntry); err != nil {
+			return err
+		}
+		if err := moveStorageArchiveEntry(sourceEntry, filepath.Join(destinationPath, entry.Name()), info, archivedAt); err != nil {
+			return err
+		}
+	}
+	if err := os.Remove(sourcePath); err != nil {
+		return fmt.Errorf("remove emptied storage directory %s: %w", sourcePath, err)
+	}
+	return nil
+}
+
+// storageArchiveClashPath keeps file extensions and uses one UTC timestamp per
+// operation plus the first free counter. Installation still uses no-replace
+// rename, so a concurrent arrival cannot overwrite either recovery copy.
+func storageArchiveClashPath(destinationPath string, directory bool, archivedAt time.Time) (string, error) {
+	extension := ""
+	if !directory {
+		extension = filepath.Ext(destinationPath)
+	}
+	stem := strings.TrimSuffix(destinationPath, extension)
+	for counter := 1; ; counter++ {
+		candidate := fmt.Sprintf("%s.deleted-%s-%d%s", stem, archivedAt.UTC().Format("20060102T150405.000000000Z"), counter, extension)
+		if _, err := os.Lstat(candidate); os.IsNotExist(err) {
+			return candidate, nil
+		} else if err != nil {
+			return "", err
+		} else if err := validateStorageArchiveTree(candidate); err != nil {
+			return "", err
+		}
+	}
 }
 
 func storageRelativePath(rootPath, candidatePath, label string) (string, error) {
@@ -293,7 +404,7 @@ func copyStorageDirectoryContents(sourceDirectory, destinationDirectory string) 
 			return fmt.Errorf("storage archive copy refuses non-regular file: %s", sourcePath)
 		}
 		if err := storageRegularFileCopier(sourcePath, destinationPath, sourceInfo); err != nil {
-			return err
+			return fmt.Errorf("copy remaining storage file %s: %w", sourcePath, err)
 		}
 	}
 	return nil
@@ -320,6 +431,12 @@ func copyStorageRegularFile(sourcePath, destinationPath string, sourceInfo fs.Fi
 		sourceInfo.Mode().Perm(),
 	)
 	if err != nil {
+		return err
+	}
+	// CreateTemp starts at 0600; OpenFile's mode does not change an existing
+	// staging file. Preserve the incoming permissions before syncing it.
+	if err := destinationFile.Chmod(sourceInfo.Mode().Perm()); err != nil {
+		_ = destinationFile.Close()
 		return err
 	}
 	copiedBytes, copyErr := io.Copy(destinationFile, sourceFile)
