@@ -270,6 +270,12 @@
     {
       "component": "Google Material Icons and Symbols",
       "kind": "asset",
+      "path": "app/frontend/icons/general/star-filled-icon.svg",
+      "sha256": "22faf7a3335e8414e63fb8f2c8f29c927c2d79382935f44c1f72517b5ae0c123"
+    },
+    {
+      "component": "Google Material Icons and Symbols",
+      "kind": "asset",
       "path": "app/frontend/icons/general/trash-icon.svg",
       "sha256": "c8ca819a641d9fd741788008d4592ade0da689d64a536d2f2176e6ff0f992197"
     },
