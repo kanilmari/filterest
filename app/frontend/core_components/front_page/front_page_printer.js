@@ -83,10 +83,8 @@ function renderBlocks(container, data, visit) {
         group.render(block.data || [], block.columns || [], block.types || {});
         grid.append(group.element);
     }
-    if (data.show_blocks !== false) {
-        if (!grid.hasChildNodes()) grid.append(translatedElement('p', 'front_page_no_results'));
-        page.append(grid);
-    }
+    // A Home without boxes shows no box area at all; an empty box still says so inside itself.
+    if (grid.hasChildNodes()) page.append(grid);
     const scroller = document.createElement('div');
     scroller.className = 'front-page-scroller scrollable_content';
     scroller.append(page);

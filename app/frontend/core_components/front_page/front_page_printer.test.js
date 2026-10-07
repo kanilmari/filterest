@@ -155,10 +155,12 @@ test('shell teardown cleanup clears and aborts without needing a view-deactivati
     expect(page.hasAttribute('aria-busy')).toBe(false);
 });
 
-test('empty page has translated empty text', async () => {
+test('a Home without boxes shows its hero and no box area or empty-results line', async () => {
     mocks.request.mockResolvedValue({ viewer_id: 42, blocks: [] });
     const page = renderFrontPage();
-    await vi.waitFor(() => expect(page.textContent).toContain('Ei tuloksia'));
+    await vi.waitFor(() => expect(page.querySelector('h1')).not.toBeNull());
+    expect(page.querySelector('.front-page-blocks')).toBeNull();
+    expect(page.textContent).not.toContain('Ei tuloksia');
 });
 
 test('failure is announced with a retry that issues one new request', async () => {

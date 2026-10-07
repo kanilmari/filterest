@@ -119,7 +119,6 @@
 }
 
 .front-page-status,
-.front-page-blocks > p,
 .front-page-blocks .supplemental-dataset-group {
   padding: 1rem;
   background: var(--bg_color_2);
