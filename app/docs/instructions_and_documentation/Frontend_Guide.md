@@ -184,7 +184,10 @@ switch can show intentional empty values: the title falls back to the site name
 (or Home when no name exists), and an empty slogan stays hidden. The Home gear
 requires `/api/admin/front-page` and opens the existing editor in shared modal
 chrome. It reuses `lang_key_editor_builder.js`, extracted from the dataset hero
-editor, and saves both legacy language columns and served translations. Its
+editor, and saves both legacy language columns and served translations. The
+slogan uses the editor's `multiline` option: its Finnish and English fields are
+full-width textareas, and Home keeps their line breaks with `white-space:
+pre-line`; the title stays a single line. Its
 `front_page_hero` sources retain these fixed keys through catalog cleanup.
 Saving any section refreshes visible Home without changing navigation/history.
 

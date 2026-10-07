@@ -534,6 +534,19 @@ test('shows fi/en fixed hero keys, saves only hero copy and refreshes visible Ho
     expect(query('hero-save').disabled).toBe(true);
 });
 
+test('the slogan has full-width multi-line fields that save typed line breaks; the title stays one line', async () => {
+    await generate_front_page_settings_view(target);
+    for (const language of ['fi', 'en']) {
+        expect(query(`slogan-${language}Input`).tagName).toBe('TEXTAREA');
+        expect(query(`title-${language}Input`).tagName).toBe('INPUT');
+    }
+    expect(query('slogan-fiInput').closest('.dataset-header-config-translation-grid--multiline')).not.toBeNull();
+    expect(query('title-fiInput').closest('.dataset-header-config-translation-grid--multiline')).toBeNull();
+    input(query('slogan-fiInput'), 'Ensimmäinen rivi\ntoinen rivi');
+    await click('hero-save');
+    expect(writes()[0][1].body_data.hero.slogan.fi).toBe('Ensimmäinen rivi\ntoinen rivi');
+});
+
 test('boxes default on when absent, off disables and greys the list and settings save sends the switch', async () => {
     delete common.settings.front_page_show_blocks;
     await generate_front_page_settings_view(target);

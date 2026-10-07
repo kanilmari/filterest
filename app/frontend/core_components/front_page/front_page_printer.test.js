@@ -313,11 +313,11 @@ test('top row has the shared tabs/actions and favicon/name beside the single men
 
 test('hero title and slogan follow fi/en, with site-name and empty slogan fallback', async () => {
     mocks.request.mockResolvedValue({ ...response(), site_name: 'my site', hero: {
-        title: { fi: 'Oma otsikko', en: 'Our title' }, slogan: { fi: 'Oma iskulause', en: '' },
+        title: { fi: 'Oma otsikko', en: 'Our title' }, slogan: { fi: 'Oma iskulause\ntoisella rivillä', en: '' },
     } });
     const page = renderFrontPage();
     await vi.waitFor(() => expect(page.querySelector('h1')?.textContent).toBe('Oma otsikko'));
-    expect(page.querySelector('.morphing-subtitle').textContent).toBe('Oma iskulause');
+    expect(page.querySelector('.morphing-subtitle').textContent).toBe('Oma iskulause\ntoisella rivillä');
     await refreshLocalizedDatasetValues('en');
     expect(page.querySelector('h1').textContent).toBe('Our title');
     expect(page.querySelector('.morphing-subtitle').hidden).toBe(true);

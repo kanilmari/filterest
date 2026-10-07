@@ -55,3 +55,7 @@ test('Home keeps the 12px corner inset that the shared hero row class would canc
     expect(css).toMatch(/\.front-page > \.front-page-top-row\s*\{[^}]*margin-inline: 0;/);
     expect(css.match(/\.front-page-top-row\s*\{([^}]+)\}/)?.[1]).toContain('padding: 12px');
 });
+
+test('the slogan shows the line breaks typed in its multi-line settings fields', () => {
+    expect(css).toMatch(/\.front-page-hero \.morphing-subtitle\s*\{\s*white-space: pre-line;/);
+});

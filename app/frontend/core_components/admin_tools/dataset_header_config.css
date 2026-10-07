@@ -35,6 +35,11 @@
     gap: var(--fw-space-3);
 }
 
+/* Multi-line copy, such as Home's slogan, reads whole with one language per full-width row. */
+.dataset-header-config-translation-grid--multiline {
+    grid-template-columns: 1fr;
+}
+
 /* The translated language name keeps the caption's own colour. */
 .dataset-header-config-language-caption span {
     color: inherit;

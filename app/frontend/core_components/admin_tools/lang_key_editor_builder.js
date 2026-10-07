@@ -1,5 +1,5 @@
 // lang_key_editor_builder.js
-// Builds the shared hero language-key editor with optional legacy language fields.
+// Builds the shared hero language-key editor with optional legacy and multi-line language fields.
 // Connects dataset and Home settings to the same labelled translation controls.
 // Keeps reviewed copy and usage explanations editable without duplicating a form.
 
@@ -16,7 +16,9 @@ function setHeaderText(element, key) {
     return element;
 }
 
-export function createLangKeyEditor(titleKey, { includeChinese = true } = {}) {
+// With `multiline`, each language gets a full-width textarea (still named fiInput etc.) for copy that wraps or keeps
+// its own line breaks, such as Home's slogan.
+export function createLangKeyEditor(titleKey, { includeChinese = true, multiline = false } = {}) {
     const wrapper = document.createElement('section');
     wrapper.classList.add('dataset-header-config-text-card', 'fw-panel', 'fw-flex', 'fw-flex-col', 'fw-gap-3');
     wrapper.appendChild(setHeaderText(document.createElement('h4'), titleKey));
@@ -28,9 +30,11 @@ export function createLangKeyEditor(titleKey, { includeChinese = true } = {}) {
 
     const translationsGrid = document.createElement('div');
     translationsGrid.classList.add('dataset-header-config-translation-grid');
-    const fiInput = createTextInput();
-    const enInput = createTextInput();
-    const chInput = createTextInput();
+    translationsGrid.classList.toggle('dataset-header-config-translation-grid--multiline', multiline);
+    const createTranslationControl = multiline ? createTextArea : createTextInput;
+    const fiInput = createTranslationControl();
+    const enInput = createTranslationControl();
+    const chInput = createTranslationControl();
     translationsGrid.append(
         createLabeledField(createLanguageCaption('fi'), fiInput),
         createLabeledField(createLanguageCaption('en'), enInput),
@@ -38,9 +42,7 @@ export function createLangKeyEditor(titleKey, { includeChinese = true } = {}) {
     );
     wrapper.appendChild(translationsGrid);
 
-    const usageExplanationInput = document.createElement('textarea');
-    usageExplanationInput.classList.add('fw-form-control');
-    usageExplanationInput.rows = 3;
+    const usageExplanationInput = createTextArea();
     usageExplanationInput.placeholder = headerText('dataset_header_config_usage_placeholder');
     wrapper.appendChild(createLabeledField(
         setHeaderText(document.createElement('span'), 'usage_explanation'),
@@ -55,6 +57,13 @@ function createTextInput() {
     input.type = 'text';
     input.classList.add('fw-form-control');
     return input;
+}
+
+function createTextArea() {
+    const textarea = document.createElement('textarea');
+    textarea.classList.add('fw-form-control');
+    textarea.rows = 3;
+    return textarea;
 }
 
 /** A caption above its control, inside one label so the caption focuses the control. */

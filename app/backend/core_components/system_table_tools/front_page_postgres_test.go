@@ -450,12 +450,13 @@ func TestFrontPagePostgresHeroBoxSwitchAndRepeatMigrations(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	hero := frontPageHero{Title: &frontPageHeroText{Fi: "Oma otsikko", En: "Our title", UsageExplanation: "Reviewed Home copy"}, Slogan: &frontPageHeroText{Fi: "Oma iskulause", En: "Our slogan"}}
+	// The slogan's settings fields are multi-line; a typed line break is kept in both translation stores.
+	hero := frontPageHero{Title: &frontPageHeroText{Fi: "Oma otsikko", En: "Our title", UsageExplanation: "Reviewed Home copy"}, Slogan: &frontPageHeroText{Fi: "Oma iskulause\ntoisella rivillä", En: "Our slogan"}}
 	if _, err := frontPageTestSave(db, frontPageAdminRequest{Hero: &hero}); err != nil {
 		t.Fatal(err)
 	}
 	got, err := readFrontPageHeroForAdmin(db)
-	if err != nil || got.Title.Fi != hero.Title.Fi || got.Slogan.En != hero.Slogan.En || got.Title.UsageExplanation != hero.Title.UsageExplanation {
+	if err != nil || got.Title.Fi != hero.Title.Fi || got.Slogan.Fi != hero.Slogan.Fi || got.Slogan.En != hero.Slogan.En || got.Title.UsageExplanation != hero.Title.UsageExplanation {
 		t.Fatal(got, err)
 	}
 	if frontPageCount(t, db, `SELECT count(*) FROM public.system_lang_keys k JOIN public.system_lang_key_translations tr ON tr.lang_key_id=k.id

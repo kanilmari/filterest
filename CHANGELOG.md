@@ -22,6 +22,8 @@ Dates are the local (Europe/Helsinki) date on which the version was published.
 
 ## [Unreleased]
 
+- **A Home slogan on several lines** — Home settings edit the slogan's Finnish and English text in full-width multi-line fields instead of a narrow one-line box, and Home shows the line breaks typed there. The title stays a single line.
+
 ## [9.3.22] - 2026-10-07
 
 - **Database 9.10.0** — Version 9.3.22 pairs with database 9.10.0, which the update reaches from 9.9.2. Its migrations add the creator and owner support, the separate private login names, category headings, Home, favourites and the record of a sign-in that survives its own account change, all described below.

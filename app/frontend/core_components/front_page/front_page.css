@@ -111,6 +111,11 @@
   display: none;
 }
 
+/* The slogan keeps the line breaks typed in its multi-line Home settings fields. */
+.front-page-hero .morphing-subtitle {
+  white-space: pre-line;
+}
+
 .front-page-content,
 .front-page-status {
   max-width: 1200px;
