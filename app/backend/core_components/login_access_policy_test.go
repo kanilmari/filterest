@@ -27,6 +27,8 @@ type loginPolicyFixture struct {
 	enabled, flag, member bool
 	failure               bool
 	generation            int64
+	survivorID            driver.Value
+	survivorGeneration    driver.Value
 	// The sign-ins this site has recorded as signed out, by their own identity.
 	revokedSignIns map[string]bool
 }
@@ -75,7 +77,7 @@ func (c *loginPolicyConn) QueryContext(_ context.Context, query string, args []d
 		value, present := c.cfg.settings[args[0].Value.(string)]
 		return &loginPolicyRows{names: []string{"boolean_value"}, values: []driver.Value{value}, done: !present}, nil
 	case strings.Contains(query, "SELECT ur.authentication_generation"):
-		return &loginPolicyRows{names: []string{"authentication_generation"}, values: []driver.Value{c.cfg.generation}, done: !c.cfg.enabled}, nil
+		return &loginPolicyRows{names: []string{"authentication_generation", "surviving_sign_in_id", "surviving_sign_in_generation"}, values: []driver.Value{c.cfg.generation, c.cfg.survivorID, c.cfg.survivorGeneration}, done: !c.cfg.enabled}, nil
 	case strings.Contains(query, "admin_access_allowed IS TRUE"):
 		return &loginPolicyRows{names: []string{"enabled", "admin_access_allowed"}, values: []driver.Value{c.cfg.enabled, c.cfg.flag}}, nil
 	case strings.Contains(query, "system_user_group_memberships"):
@@ -243,5 +245,43 @@ func TestASignedOutSignInIsRefusedAtTheSharedSessionBoundary(t *testing.T) {
 	cfg.failure = true
 	if matches, err := AuthenticatedSessionMatches(context.Background(), db, signedInSession("the-desktops-sign-in"), 42); err == nil || matches {
 		t.Fatalf("an unreadable revoked sign-in store failed open: %v,%v", matches, err)
+	}
+}
+
+// Recovering a stale survivor cookie never bypasses the shared sign-out,
+// deadline, disabled-account or current-admission checks.
+func TestSurvivingSignInStillPassesEverySharedBoundaryCheck(t *testing.T) {
+	for _, test := range []struct {
+		name                                  string
+		revoked, expired, disabled, adminOnly bool
+		want                                  bool
+	}{
+		{"usable survivor", false, false, false, false, true},
+		{"revoked survivor", true, false, false, false, false},
+		{"expired survivor", false, true, false, false, false},
+		{"disabled survivor", false, false, true, false, false},
+		{"admission denied survivor", false, false, false, true, false},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			cfg := &loginPolicyFixture{
+				settings: map[string]driver.Value{"only_admin_can_login": test.adminOnly},
+				enabled:  !test.disabled, generation: 8,
+				survivorID: "acting", survivorGeneration: int64(8),
+				revokedSignIns: map[string]bool{"acting": test.revoked},
+			}
+			db := setupLoginPolicyFixture(t, cfg)
+			deadline := testFarFutureDeadline
+			if test.expired {
+				deadline = time.Now().Unix() - 1
+			}
+			session := &sessions.Session{Values: map[interface{}]interface{}{
+				"user_id": 42, "authentication_generation": int64(7),
+				sign_in_revocation.SessionKey: "acting", sign_in_deadline.SessionKey: deadline,
+			}}
+			matches, err := AuthenticatedSessionMatches(context.Background(), db, session, 42)
+			if err != nil || matches != test.want {
+				t.Fatalf("survivor accepted=%v want=%v error=%v", matches, test.want, err)
+			}
+		})
 	}
 }

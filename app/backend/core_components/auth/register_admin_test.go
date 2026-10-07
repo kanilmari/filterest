@@ -68,7 +68,7 @@ func (c *registerAdminConn) QueryContext(_ context.Context, q string, args []dri
 		if !s.enabled {
 			return authModesEmptyRow("authentication_generation"), nil
 		}
-		return &authModesMockRows{cols: []string{"authentication_generation"}, vals: []driver.Value{s.generation}}, nil
+		return &authModesMockRows{cols: []string{"authentication_generation", "surviving_sign_in_id", "surviving_sign_in_generation"}, vals: []driver.Value{s.generation, nil, nil}}, nil
 	case strings.Contains(q, "SELECT boolean_value FROM system_config"):
 		return authModesBoolRow("boolean_value", false), nil
 	case strings.Contains(q, "SELECT 1 FROM system_user_group_memberships"):

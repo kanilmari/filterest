@@ -90,6 +90,7 @@ repair_schema_migrations = (
     "20261005000030_create_front_page_revision_metadata.sql",
     "20261005000031_create_system_front_page_blocks.sql",
     "20261005000035_add_row_group_classifications.sql",
+    "20261005000040_add_surviving_sign_in.sql",
     "20261005000070_drop_column_label_value_layout.sql",
 )
 # Complete the physical actor columns after development tables and support functions,

@@ -25,31 +25,43 @@ type Querier interface {
 
 // Current returns the generation only for an enabled user with restricted credentials.
 func Current(ctx context.Context, db Querier, userID int) (int64, error) {
+	state, err := currentState(ctx, db, userID)
+	return state.generation, err
+}
+
+type generationState struct {
+	generation         int64
+	survivingSignInID  sql.NullString
+	survivorGeneration sql.NullInt64
+}
+
+// Read the generation and its survivor together: separate reads could mix two bumps.
+func currentState(ctx context.Context, db Querier, userID int) (generationState, error) {
+	var state generationState
 	if db == nil {
-		return 0, errors.New("authentication generation database unavailable")
+		return state, errors.New("authentication generation database unavailable")
 	}
 	if database, ok := db.(*sql.DB); ok && database == nil {
-		return 0, errors.New("authentication generation database unavailable")
+		return state, errors.New("authentication generation database unavailable")
 	}
 	if userID <= 1 {
-		return 0, fmt.Errorf("authentication generation is not defined for user %d", userID)
+		return state, fmt.Errorf("authentication generation is not defined for user %d", userID)
 	}
 
-	var generation int64
 	err := db.QueryRowContext(ctx, `
-		SELECT ur.authentication_generation
+		SELECT ur.authentication_generation, ur.surviving_sign_in_id, ur.surviving_sign_in_generation
 		FROM system_users u
 		JOIN restricted.users_restricted ur ON ur.id = u.id
 		WHERE u.id = $1
 		  AND u.enabled IS TRUE
-	`, userID).Scan(&generation)
+	`, userID).Scan(&state.generation, &state.survivingSignInID, &state.survivorGeneration)
 	if err != nil {
-		return 0, err
+		return generationState{}, err
 	}
-	if generation < 1 {
-		return 0, errors.New("invalid authentication generation")
+	if state.generation < 1 {
+		return generationState{}, errors.New("invalid authentication generation")
 	}
-	return generation, nil
+	return state, nil
 }
 
 // SessionValue reads the generation from a decoded Gorilla session.
@@ -69,19 +81,37 @@ func SessionValue(session *sessions.Session) (int64, bool) {
 
 // Matches reports whether the signed session still matches the enabled database identity.
 // Missing generations intentionally invalidate sessions created before this contract existed.
+// Only the sign-in kept by the latest bump may recover an older cookie written by
+// an in-flight request. The shared access boundary still checks revocation and expiry.
 func Matches(ctx context.Context, db Querier, session *sessions.Session, userID int) (bool, error) {
 	stored, ok := SessionValue(session)
 	if !ok {
 		return false, nil
 	}
-	current, err := Current(ctx, db, userID)
+	signInID, identified := sign_in_revocation.SessionValue(session)
+	if !identified {
+		return false, nil
+	}
+	current, err := currentState(ctx, db, userID)
 	if errors.Is(err, sql.ErrNoRows) {
 		return false, nil
 	}
 	if err != nil {
 		return false, err
 	}
-	return stored == current, nil
+	if stored == current.generation {
+		return true, nil
+	}
+	if stored < current.generation && current.survivingSignInID.Valid &&
+		current.survivingSignInID.String == signInID && current.survivorGeneration.Valid &&
+		current.survivorGeneration.Int64 == current.generation {
+		// The device stage saves this re-stamped session through normal renewal.
+		if err := Set(session, current.generation); err != nil {
+			return false, err
+		}
+		return true, nil
+	}
+	return false, nil
 }
 
 // Set records the generation in a session after credentials have been verified.

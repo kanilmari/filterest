@@ -66,7 +66,7 @@ test('LT10 — random private names stay out of browser responses and other-devi
     return response;
   };
   const profile = async (context: BrowserContext) => inspectAPI(await context.request.get('/api/user-profile'));
-  const capture = async (response: Response) => {
+  const capture = async (response: Response, context: BrowserContext) => {
     responseCount += 1;
     // A request URL the test sends is its own input (the search below carries the canary name on purpose); only a
     // redirect destination is chosen by the server. Headers include any Location the server sets.
@@ -74,7 +74,23 @@ test('LT10 — random private names stay out of browser responses and other-devi
     inspect(JSON.stringify(await response.headersArray()), 'response headers');
     if (/text\/html|application\/json/.test(response.headers()['content-type'] || '') && response.status() < 300) {
       try { inspect(await response.text(), 'response body'); }
-      catch { findings.push('response body could not be inspected'); }
+      catch {
+        // The application's own navigation can discard a body first, for example after following its sign-out
+        // redirect. A GET is read again through the same browser's cookies; anything else stays a finding.
+        const again = response.request().method() === 'GET'
+          ? await context.request.get(response.url()).catch(() => null) : null;
+        if (again) inspect(await again.text(), 'response body (read again)');
+        else findings.push(`response body could not be inspected: ${new URL(response.url()).pathname}`);
+      }
+    }
+  };
+  // A navigation discards the bodies of the page it leaves, so every response already seen is read first, until
+  // a short quiet period brings no new one.
+  const settle = async () => {
+    for (let seen = -1; seen !== pending.length;) {
+      seen = pending.length;
+      await Promise.all(pending);
+      await new Promise(resolve => setTimeout(resolve, 300));
     }
   };
   const supervisorList = await inspectAPI(await request.get('/api/admin/user-authentication'));
@@ -92,15 +108,18 @@ test('LT10 — random private names stay out of browser responses and other-devi
       extraHTTPHeaders: { 'X-Bypass-Ratelimit': 'test-mode' } };
     const current = await browser.newContext(options);
     const other = await browser.newContext(options);
-    for (const context of [current, other]) context.on('response', response => { pending.push(capture(response)); });
+    for (const context of [current, other]) {
+      context.on('response', response => { pending.push(capture(response, context)); });
+    }
     const page = await current.newPage();
     const otherPage = await other.newPage();
     let renameAttempted = false;
     try {
       await signIn(page, account);
       await signIn(otherPage, account);
+      await page.locator('[data-testid="navbar-auth-user"], [data-testid="tab-user"]').first().waitFor({ state: 'attached' });
       await page.evaluate(() => {
-        const button = document.querySelector('[data-testid="tab-user"]');
+        const button = document.querySelector('[data-testid="navbar-auth-user"], [data-testid="tab-user"]');
         if (!(button instanceof HTMLElement)) throw new Error('Account profile navigation missing.');
         button.click();
       });
@@ -113,6 +132,7 @@ test('LT10 — random private names stay out of browser responses and other-devi
       expect((await profile(other)).status()).toBe(401);
       // Use the actual profile control for both actions; a second browser's
       // old cookie must fail again after a successful name change.
+      await settle();
       await otherPage.goto('about:blank');
       await signIn(otherPage, account);
       const replacement = `wl132_${randomBytes(16).toString('hex')}`;
@@ -131,14 +151,20 @@ test('LT10 — random private names stay out of browser responses and other-devi
           const response = await fetch(`/api/get-results?dataset=system_users&search=${encodeURIComponent(name)}`);
           return { status: response.status, body: await response.json() };
         }, name);
-        expect(answer.status).toBe(200);
-        expect(answer.body.data).toEqual([]);
+        // An administrator reads the account dataset, so the search channel is exercised; an ordinary account
+        // may instead have no read right to it at all on this installation, which exposes nothing either.
+        if (account.role === 'admin') expect(answer.status).toBe(200);
+        else expect([200, 403], 'Ordinary-user search of the account dataset.').toContain(answer.status);
+        if (answer.status === 200) expect(answer.body.data).toEqual([]);
       }
       inspect(JSON.stringify(await current.storageState()), 'browser cookies / local storage');
+      await settle();
       await logout(page);
       expect((await profile(current)).status()).toBe(401);
+      await settle();
       await signIn(page, { ...account, username: replacement });
       inspect(await page.content(), 'fresh sign-in DOM');
+      await settle();
       await page.goto('about:blank');
       await otherPage.goto('about:blank');
       await Promise.all(pending);

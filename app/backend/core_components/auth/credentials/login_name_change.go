@@ -56,13 +56,19 @@ func ValidateLoginName(name string) error {
 }
 
 // EndOtherSignIns increments the generation in the caller's transaction.
-// The caller re-stamps its own session only after commit; every other cookie becomes stale.
-func EndOtherSignIns(tx *sql.Tx, userID int64) (int64, error) {
+// An empty survivor ends every sign-in. Otherwise that sign-in can recover an old
+// cookie written back by an in-flight request; the caller re-stamps after commit.
+func EndOtherSignIns(tx *sql.Tx, userID int64, survivingSignInID string) (int64, error) {
 	if tx == nil || userID <= 1 {
 		return 0, ErrCredentialStateChanged
 	}
 	var generation int64
-	err := tx.QueryRow(`UPDATE restricted.users_restricted SET authentication_generation=authentication_generation+1 WHERE id=$1 RETURNING authentication_generation`, userID).Scan(&generation)
+	err := tx.QueryRow(`UPDATE restricted.users_restricted
+		SET authentication_generation = authentication_generation + 1,
+		    surviving_sign_in_id = NULLIF($2, ''),
+		    surviving_sign_in_generation = CASE WHEN NULLIF($2, '') IS NOT NULL
+		        THEN authentication_generation + 1 ELSE NULL END
+		WHERE id = $1 RETURNING authentication_generation`, userID, survivingSignInID).Scan(&generation)
 	if errors.Is(err, sql.ErrNoRows) {
 		return 0, ErrCredentialStateChanged
 	}
@@ -76,7 +82,7 @@ func EndOtherSignIns(tx *sql.Tx, userID int64) (int64, error) {
 }
 
 // ChangeLoginName does not commit and returns only non-secret generation evidence.
-func ChangeLoginName(tx *sql.Tx, userID int64, newName string) (int64, error) {
+func ChangeLoginName(tx *sql.Tx, userID int64, newName, survivingSignInID string) (int64, error) {
 	if tx == nil || userID <= 1 {
 		return 0, ErrAdministratorNotFound
 	}
@@ -113,7 +119,7 @@ func ChangeLoginName(tx *sql.Tx, userID int64, newName string) (int64, error) {
 		}
 		return 0, errors.New("login-name update failed")
 	}
-	generation, err := EndOtherSignIns(tx, userID)
+	generation, err := EndOtherSignIns(tx, userID, survivingSignInID)
 	if err != nil {
 		return 0, err
 	}

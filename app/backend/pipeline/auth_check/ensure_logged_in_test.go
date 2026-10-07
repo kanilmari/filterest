@@ -237,7 +237,7 @@ func (c *mockConn) QueryContext(_ context.Context, query string, args []driver.N
 		if generation == 0 {
 			generation = 1
 		}
-		return &mockRows{cols: []string{"authentication_generation"}, vals: []driver.Value{generation}}, nil
+		return &mockRows{cols: []string{"authentication_generation", "surviving_sign_in_id", "surviving_sign_in_generation"}, vals: []driver.Value{generation, nil, nil}}, nil
 	}
 	return nil, fmt.Errorf("unexpected query: %s", query)
 }

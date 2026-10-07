@@ -85,6 +85,8 @@ CANONICAL_RUNTIME_SEED_COUNTS = {
 }
 
 REQUIRED_RUNTIME_SCHEMA_FRAGMENTS = {
+    "surviving sign-in identity": "ADD COLUMN IF NOT EXISTS surviving_sign_in_id text",
+    "surviving sign-in generation": "ADD COLUMN IF NOT EXISTS surviving_sign_in_generation bigint",
     "classification headings": "CREATE TABLE IF NOT EXISTS public.system_row_group_classifications",
     "classification reference": "ADD COLUMN IF NOT EXISTS classification_id bigint",
     "AI conversation table": "CREATE TABLE IF NOT EXISTS public.ai_chat_conversations",

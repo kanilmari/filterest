@@ -263,7 +263,9 @@ func (provisioner *AutomationAccountProvisioner) Revoke(ctx context.Context) (Au
 	}
 	err = tx.QueryRowContext(ctx, `
         UPDATE restricted.users_restricted
-        SET api_only = TRUE, authentication_generation = GREATEST(authentication_generation, 1) + 1
+        SET api_only = TRUE, authentication_generation = GREATEST(authentication_generation, 1) + 1,
+        surviving_sign_in_id = NULL,
+        surviving_sign_in_generation = NULL
         WHERE id = $1
         RETURNING authentication_generation, login_verification_method
     `, userID).Scan(&record.AuthenticationGeneration, &record.VerificationMethod)
@@ -412,7 +414,9 @@ func replaceAutomationCredentials(ctx context.Context, tx *sql.Tx, userID int64,
 		    api_only = TRUE,
 		    fixed_pin_hash = NULL,
 		    totp_secret = NULL,
-		    authentication_generation = GREATEST(authentication_generation, 1) + 1
+		    authentication_generation = GREATEST(authentication_generation, 1) + 1,
+		    surviving_sign_in_id = NULL,
+		    surviving_sign_in_generation = NULL
 		WHERE id = $1
 		RETURNING authentication_generation
 	`, userID, passwordHash, automationAccountEmail, string(credentials.VerificationNone)).Scan(&generation)

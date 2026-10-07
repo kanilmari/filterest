@@ -55,7 +55,7 @@ func TestLoginNamePublicSearchCanaryPostgres(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if _, err = credentials.ChangeLoginName(tx, id, names[index]); err != nil {
+		if _, err = credentials.ChangeLoginName(tx, id, names[index], ""); err != nil {
 			_ = tx.Rollback()
 			t.Fatal(err)
 		}

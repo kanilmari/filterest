@@ -139,8 +139,8 @@ func (c *credentialMockConn) QueryContext(_ context.Context, query string, args 
 			generation = 1
 		}
 		return &credentialMockRows{
-			cols: []string{"authentication_generation"},
-			vals: []driver.Value{generation},
+			cols: []string{"authentication_generation", "surviving_sign_in_id", "surviving_sign_in_generation"},
+			vals: []driver.Value{generation, nil, nil},
 		}, nil
 	case strings.Contains(query, "FROM system_user_group_memberships"):
 		if !c.cfg.adminGroupMember {

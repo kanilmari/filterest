@@ -102,8 +102,8 @@ func (c *signOutTestConn) QueryContext(_ context.Context, query string, args []d
 		// only_admin_can_login is not set on this site, so sign-in is unrestricted.
 		return &signOutTestRows{names: []string{"boolean_value"}, done: true}, nil
 	case strings.Contains(query, "SELECT ur.authentication_generation"):
-		return &signOutTestRows{names: []string{"authentication_generation"},
-			values: []driver.Value{c.site.authenticationGeneration}}, nil
+		return &signOutTestRows{names: []string{"authentication_generation", "surviving_sign_in_id", "surviving_sign_in_generation"},
+			values: []driver.Value{c.site.authenticationGeneration, nil, nil}}, nil
 	}
 	return nil, fmt.Errorf("unexpected query: %s", query)
 }

@@ -57,6 +57,10 @@ The profile's **Change login name** action also requires it, accepts at most
 three attempts in five minutes, and leaves the current sign-in valid while
 ending other sign-ins on their next request. **Sign out other devices** uses
 the same password confirmation and session effect without changing a name.
+The acting browser stays signed in even if a request it already had in flight
+finishes afterwards and writes back its earlier session cookie. A copy of that
+same sign-in is the same sign-in: to end it as well, sign out, which ends this
+sign-in everywhere.
 Fixed program/development login names cannot be changed through these actions.
 Only a current administrator may edit the five account/rights datasets through
 generic row tools, even if another group has been granted editor rights.

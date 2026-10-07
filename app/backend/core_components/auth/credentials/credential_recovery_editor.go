@@ -270,7 +270,7 @@ func (editor *RecoveryEditor) RecoverAdministrator(ctx context.Context, input Re
 	}
 
 	if input.NewLoginName != "" {
-		if _, err = ChangeLoginName(tx, input.UserID, input.NewLoginName); err != nil {
+		if _, err = ChangeLoginName(tx, input.UserID, input.NewLoginName, ""); err != nil {
 			return result, err
 		}
 	}
@@ -488,7 +488,9 @@ func updateRestrictedCredentials(
 		err = tx.QueryRowContext(ctx, `
 			UPDATE restricted.users_restricted
 			SET password = $1,
-			    authentication_generation = authentication_generation + `+generationIncrement+`
+			    authentication_generation = authentication_generation + `+generationIncrement+`,
+			    surviving_sign_in_id = NULL,
+			    surviving_sign_in_generation = NULL
 			WHERE id = $2
 			RETURNING authentication_generation
 		`, passwordHash, userID).Scan(&newAuthenticationGeneration)
@@ -503,7 +505,9 @@ func updateRestrictedCredentials(
 			    login_verification_method = $2,
 			    fixed_pin_hash = $3,
 			    totp_secret = NULL,
-			    authentication_generation = authentication_generation + `+generationIncrement+`
+			    authentication_generation = authentication_generation + `+generationIncrement+`,
+			    surviving_sign_in_id = NULL,
+			    surviving_sign_in_generation = NULL
 			WHERE id = $4
 			RETURNING authentication_generation
 		`, passwordHash, string(method), fixedPINValue, userID).Scan(&newAuthenticationGeneration)

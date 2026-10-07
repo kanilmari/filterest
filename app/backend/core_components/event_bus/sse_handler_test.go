@@ -187,8 +187,8 @@ func (c *sseSignInConn) QueryContext(_ context.Context, query string, args []dri
 		usable := (unlimited || c.fixture.now.Before(time.Unix(deadline, 0))) && !c.fixture.revoked
 		return &sseSignInRows{names: []string{"usable"}, values: []driver.Value{usable}}, nil
 	case strings.Contains(query, "SELECT ur.authentication_generation"):
-		return &sseSignInRows{names: []string{"authentication_generation"},
-			values: []driver.Value{c.fixture.generation}, done: !c.fixture.enabled}, nil
+		return &sseSignInRows{names: []string{"authentication_generation", "surviving_sign_in_id", "surviving_sign_in_generation"},
+			values: []driver.Value{c.fixture.generation, nil, nil}, done: !c.fixture.enabled}, nil
 	case strings.Contains(query, "FROM system_config") && args[0].Value == "only_admin_can_login":
 		return &sseSignInRows{names: []string{"boolean_value"}, values: []driver.Value{false}}, nil
 	default:

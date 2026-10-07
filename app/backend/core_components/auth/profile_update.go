@@ -12,6 +12,7 @@ import (
 	"easelect/backend/core_components/httpresponse"
 	"easelect/backend/core_components/otp"
 	sessions "easelect/backend/core_components/sessions"
+	"easelect/backend/core_components/sign_in_revocation"
 	"encoding/json"
 	"errors"
 	"golang.org/x/crypto/bcrypt"
@@ -76,7 +77,8 @@ func updateOwnProfile(w http.ResponseWriter, r *http.Request, signOut bool) {
 		}
 	}
 	expected, ok := auth_generation.SessionValue(session)
-	if !ok || backend.DbAdmin == nil {
+	survivor, identified := sign_in_revocation.SessionValue(session)
+	if !ok || !identified || backend.DbAdmin == nil {
 		profileFailure(w, 401, "credentials_changed")
 		return
 	}
@@ -199,9 +201,9 @@ func updateOwnProfile(w http.ResponseWriter, r *http.Request, signOut bool) {
 		}
 	}
 	if err == nil && req.LoginName != nil {
-		generation, err = credentials.ChangeLoginName(tx, int64(id), *req.LoginName)
+		generation, err = credentials.ChangeLoginName(tx, int64(id), *req.LoginName, survivor)
 	} else if err == nil && (rotate || req.SignOutOtherDevices) {
-		generation, err = credentials.EndOtherSignIns(tx, int64(id))
+		generation, err = credentials.EndOtherSignIns(tx, int64(id), survivor)
 	}
 	if err == nil && req.SignOutOtherDevices {
 		err = credentials.WriteAccountSecurityAudit(tx, int64(id), "sign_out_other_devices")

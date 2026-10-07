@@ -47,7 +47,9 @@ func ChangePassword(ctx context.Context, db *sql.DB, userID int, newPassword str
 	err = tx.QueryRowContext(ctx, `
 		UPDATE restricted.users_restricted
 		SET password = $1,
-		    authentication_generation = authentication_generation + 1
+		    authentication_generation = authentication_generation + 1,
+		    surviving_sign_in_id = NULL,
+		    surviving_sign_in_generation = NULL
 		WHERE id = $2
 		  AND authentication_generation = $3
 		RETURNING authentication_generation

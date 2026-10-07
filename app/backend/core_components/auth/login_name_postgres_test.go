@@ -115,7 +115,7 @@ func loginNameDisposableCluster(t *testing.T) *sql.DB {
 	if _, err = db.Exec(`INSERT INTO restricted.users_restricted(id,password,email,login_verification_method) SELECT id,$1,id||'@example.invalid','none' FROM system_users WHERE id BETWEEN 91001 AND 91004`, string(hash)); err != nil {
 		t.Fatal(err)
 	}
-	for _, name := range []string{"20261005000011_separate_login_names.sql", "20261005000013_seed_login_name_keys.sql", "20261005000014_add_password_reset_dummy_work.sql"} {
+	for _, name := range []string{"20261005000011_separate_login_names.sql", "20261005000013_seed_login_name_keys.sql", "20261005000014_add_password_reset_dummy_work.sql", "20261005000040_add_surviving_sign_in.sql"} {
 		body, err := os.ReadFile(filepath.Join(app, "server_tools/migrations", name))
 		if err != nil {
 			t.Fatal(err)
@@ -439,7 +439,7 @@ func TestLoginNamePostgresHandlers(t *testing.T) {
 			t.Fatal(err)
 		}
 		tx, _ := db.Begin()
-		_, err := credentials.ChangeLoginName(tx, 91004, "new_program_name")
+		_, err := credentials.ChangeLoginName(tx, 91004, "new_program_name", "")
 		if httpresponseAccountRefusal(err) != "login_name_fixed" {
 			t.Fatalf("fixed account=%v", err)
 		}

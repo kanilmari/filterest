@@ -281,7 +281,9 @@ func applyAdminUserAuthenticationProvisioning(
 		SET login_verification_method = $1,
 		    fixed_pin_hash = $2,
 		    totp_secret = NULL,
-		    authentication_generation = authentication_generation + 1
+		    authentication_generation = authentication_generation + 1,
+		    surviving_sign_in_id = NULL,
+		    surviving_sign_in_generation = NULL
 		WHERE id = $3
 	`, string(method), fixedPINValue, userID)
 	if err != nil {
@@ -346,7 +348,7 @@ func AdminUserLoginNameHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer tx.Rollback()
-	_, err = credentials.ChangeLoginName(tx, request.UserID, request.LoginName)
+	_, err = credentials.ChangeLoginName(tx, request.UserID, request.LoginName, "")
 	var address string
 	if err == nil {
 		err = tx.QueryRowContext(r.Context(), `SELECT COALESCE(email,'') FROM restricted.users_restricted WHERE id=$1`, request.UserID).Scan(&address)
