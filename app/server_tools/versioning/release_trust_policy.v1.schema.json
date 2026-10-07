@@ -1,0 +1,77 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://filterest.com/schemas/release_trust_policy.v1.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "policy_type", "policy_revision", "issued_at", "expires_at", "compositions"],
+  "properties": {
+    "schema_version": {"const": 1},
+    "policy_type": {"const": "filterest_release_trust"},
+    "policy_revision": {"type": "integer", "minimum": 1, "maximum": 18446744073709551615},
+    "issued_at": {
+      "type": "string",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$",
+      "format": "date-time",
+      "minLength": 20,
+      "maxLength": 20
+    },
+    "expires_at": {
+      "type": "string",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$",
+      "format": "date-time",
+      "minLength": 20,
+      "maxLength": 20
+    },
+    "compositions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "publisher", "keys"],
+        "properties": {
+          "id": {"type": "string", "pattern": "^[a-z][a-z0-9_-]{0,63}(?![\\s\\S])", "minLength": 1, "maxLength": 64},
+          "publisher": {"type": "string", "pattern": "^[a-z][a-z0-9_-]{0,63}(?![\\s\\S])", "minLength": 1, "maxLength": 64},
+          "keys": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["fingerprint", "public_key", "not_before", "not_after", "revoked"],
+              "properties": {
+                "fingerprint": {"type": "string", "pattern": "^[0-9a-f]{64}$", "minLength": 64, "maxLength": 64},
+                "public_key": {
+                  "type": "string",
+                  "pattern": "^[A-Za-z0-9+/]{42}[AEIMQUYcgkosw048]=$",
+                  "minLength": 44,
+                  "maxLength": 44
+                },
+                "not_before": {
+                  "type": "string",
+                  "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$",
+                  "format": "date-time",
+                  "minLength": 20,
+                  "maxLength": 20
+                },
+                "not_after": {
+                  "type": "string",
+                  "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$",
+                  "format": "date-time",
+                  "minLength": 20,
+                  "maxLength": 20
+                },
+                "revoked": {"type": "boolean"}
+              }
+            },
+            "minItems": 1,
+            "uniqueItems": true,
+            "maxItems": 32
+          }
+        }
+      },
+      "minItems": 1,
+      "uniqueItems": true
+    }
+  },
+  "description": "The Go parser is the authority for this contract. Independently provisioned operator policy, never bundle-supplied trust. Fingerprint is lowercase SHA-256 of raw Ed25519 public-key bytes. Go enforces key/fingerprint agreement, unique composition IDs and globally distinct fingerprints, ordered validity windows and the independently retained revision floor/current clock. Signed policy rotation needs existing authorization and replacement-key possession for each composition; enrolled keys must remain as revocation tombstones when retired; public test-only fixture keys are refused at provisioning and rotation. Emergency recovery is operator provisioning.",
+  "title": "Filterest release trust policy v1"
+}

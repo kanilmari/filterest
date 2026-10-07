@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://filterest.com/schemas/release_signatures.v1.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "signature_type", "domain", "signatures"],
+  "properties": {
+    "schema_version": {"const": 1},
+    "signature_type": {"const": "ed25519_detached"},
+    "domain": {"type": "string", "enum": ["filterest-release-manifest/v1", "filterest-release-trust-policy/v1"]},
+    "signatures": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["key_fingerprint", "signature"],
+        "properties": {
+          "key_fingerprint": {"type": "string", "pattern": "^[0-9a-f]{64}$", "minLength": 64, "maxLength": 64},
+          "signature": {"type": "string", "pattern": "^[A-Za-z0-9+/]{85}[AQgw]==$", "minLength": 88, "maxLength": 88}
+        }
+      },
+      "minItems": 1,
+      "uniqueItems": true,
+      "maxItems": 32
+    }
+  },
+  "description": "The Go parser is the authority for this contract. Ed25519 signatures authenticate domain UTF-8 bytes + NUL + exact document bytes, including final LF for canonical release-tooling output. No public keys are accepted in this envelope; key fingerprints must be unique.",
+  "title": "Filterest release signatures v1"
+}

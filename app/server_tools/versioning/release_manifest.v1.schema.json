@@ -1,0 +1,506 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://filterest.com/schemas/release_manifest.v1.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "manifest_type",
+    "publisher",
+    "release_id",
+    "created_at",
+    "product",
+    "version",
+    "release_tag",
+    "published_commit",
+    "minimum_trust_policy_revision",
+    "build_identity",
+    "composition",
+    "artifacts",
+    "database",
+    "protocol",
+    "platform",
+    "health",
+    "recovery",
+    "capacity"
+  ],
+  "properties": {
+    "schema_version": {"const": 1},
+    "manifest_type": {"const": "filterest_release"},
+    "publisher": {"type": "string", "pattern": "^[a-z][a-z0-9_-]{0,63}(?![\\s\\S])", "minLength": 1, "maxLength": 64},
+    "release_id": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}(?![\\s\\S])", "minLength": 1, "maxLength": 128},
+    "created_at": {
+      "type": "string",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$",
+      "format": "date-time",
+      "minLength": 20,
+      "maxLength": 20
+    },
+    "product": {"type": "string", "pattern": "^[a-z][a-z0-9_-]{0,63}(?![\\s\\S])", "minLength": 1, "maxLength": 64},
+    "version": {"type": "string", "pattern": "(?:^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*))$(?![\\s\\S])"},
+    "release_tag": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}(?![\\s\\S])", "minLength": 1, "maxLength": 128},
+    "published_commit": {"type": "string", "pattern": "^[0-9a-f]{40}$", "minLength": 40, "maxLength": 40},
+    "minimum_trust_policy_revision": {"type": "integer", "minimum": 1, "maximum": 18446744073709551615},
+    "build_identity": {
+      "allOf": [
+        {"$ref": "build_identity.v1.schema.json"},
+        {
+          "properties": {
+            "artifact_type": {"const": "runtime"},
+            "app_version": {"pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)(?![\\s\\S])"},
+            "channel": {"const": "stable"},
+            "maturity": {"const": "published"},
+            "ledger_record_sha256": {"minLength": 64, "maxLength": 64},
+            "source": {"properties": {"commit": {"minLength": 40, "maxLength": 40}}},
+            "created_at": {"minLength": 20, "maxLength": 20}
+          }
+        }
+      ]
+    },
+    "composition": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "revision", "components"],
+      "properties": {
+        "id": {"type": "string", "pattern": "^[a-z][a-z0-9_-]{0,63}(?![\\s\\S])", "minLength": 1, "maxLength": 64},
+        "revision": {"type": "integer", "minimum": 1, "maximum": 18446744073709551615},
+        "components": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["id", "version", "commit"],
+            "properties": {
+              "id": {"type": "string", "pattern": "^[a-z][a-z0-9_-]{0,63}(?![\\s\\S])", "minLength": 1, "maxLength": 64},
+              "version": {
+                "type": "string",
+                "pattern": "(?:^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*))$(?![\\s\\S])"
+              },
+              "commit": {"type": "string", "pattern": "^[0-9a-f]{40}$", "minLength": 40, "maxLength": 40}
+            }
+          },
+          "minItems": 1,
+          "uniqueItems": true,
+          "contains": {"properties": {"id": {"const": "filterest"}}, "required": ["id"]},
+          "minContains": 1,
+          "maxContains": 1
+        }
+      }
+    },
+    "artifacts": {"type": "array", "items": {"$ref": "#/$defs/artifact"}, "minItems": 1, "uniqueItems": true},
+    "database": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["min_version", "target_version", "supported_starts", "migrations"],
+      "properties": {
+        "min_version": {"type": "string", "pattern": "(?:^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*))$(?![\\s\\S])"},
+        "target_version": {"type": "string", "pattern": "(?:^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*))$(?![\\s\\S])"},
+        "supported_starts": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["app_version", "database_version", "composition_revision", "migration_ids"],
+            "properties": {
+              "app_version": {
+                "type": "string",
+                "pattern": "(?:^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*))$(?![\\s\\S])"
+              },
+              "database_version": {
+                "type": "string",
+                "pattern": "(?:^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*))$(?![\\s\\S])"
+              },
+              "composition_revision": {"type": "integer", "minimum": 1, "maximum": 18446744073709551615},
+              "migration_ids": {
+                "type": "array",
+                "items": {"type": "string", "pattern": "(?:^[0-9]{14}_[a-z0-9_]+\\.sql)$(?![\\s\\S])"},
+                "minItems": 0,
+                "uniqueItems": true
+              }
+            }
+          },
+          "minItems": 1,
+          "uniqueItems": true
+        },
+        "migrations": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "id",
+              "component",
+              "content_sha256",
+              "database_version",
+              "publishes_database_version",
+              "transaction_policy",
+              "error_policy"
+            ],
+            "properties": {
+              "id": {"type": "string", "pattern": "(?:^[0-9]{14}_[a-z0-9_]+\\.sql)$(?![\\s\\S])"},
+              "component": {"type": "string", "pattern": "^[a-z][a-z0-9_-]{0,63}(?![\\s\\S])", "minLength": 1, "maxLength": 64},
+              "content_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$", "minLength": 64, "maxLength": 64},
+              "database_version": {
+                "type": "string",
+                "pattern": "(?:^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*))$(?![\\s\\S])"
+              },
+              "publishes_database_version": {"type": "boolean"},
+              "transaction_policy": {"type": "string", "enum": ["runner", "self_managed"]},
+              "error_policy": {"type": "string", "enum": ["required", "optional"]}
+            },
+            "allOf": [
+              {
+                "if": {"properties": {"publishes_database_version": {"const": true}}},
+                "then": {"properties": {"error_policy": {"const": "required"}}}
+              }
+            ]
+          },
+          "minItems": 0,
+          "uniqueItems": true,
+          "allOf": [
+            {
+              "if": {"minItems": 1},
+              "then": {
+                "contains": {
+                  "properties": {"publishes_database_version": {"const": true}},
+                  "required": ["publishes_database_version"]
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    "protocol": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["version", "required_capabilities"],
+      "properties": {
+        "version": {"const": 1},
+        "required_capabilities": {
+          "type": "array",
+          "items": {"type": "string", "pattern": "^[a-z][a-z0-9_-]{0,63}(?![\\s\\S])", "minLength": 1, "maxLength": 64},
+          "minItems": 0,
+          "uniqueItems": true
+        }
+      }
+    },
+    "platform": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["targets", "postgresql"],
+      "properties": {
+        "targets": {"type": "array", "items": {"$ref": "#/$defs/native_platform"}, "minItems": 1, "uniqueItems": true},
+        "postgresql": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["min_major", "max_major", "extensions"],
+          "properties": {
+            "min_major": {"type": "integer", "minimum": 1, "maximum": 18446744073709551615},
+            "max_major": {"type": "integer", "minimum": 1, "maximum": 18446744073709551615},
+            "extensions": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["name", "min_version"],
+                "properties": {
+                  "name": {"type": "string", "pattern": "^[a-z][a-z0-9_-]{0,63}(?![\\s\\S])", "minLength": 1, "maxLength": 64},
+                  "min_version": {
+                    "type": "string",
+                    "pattern": "(?:^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*))$(?![\\s\\S])"
+                  }
+                }
+              },
+              "minItems": 0,
+              "uniqueItems": true
+            }
+          }
+        },
+        "docker": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["min_engine_version", "min_compose_version"],
+          "properties": {
+            "min_engine_version": {
+              "type": "string",
+              "pattern": "(?:^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*))$(?![\\s\\S])"
+            },
+            "min_compose_version": {
+              "type": "string",
+              "pattern": "(?:^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*))$(?![\\s\\S])"
+            }
+          }
+        }
+      }
+    },
+    "health": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "health_path",
+        "ready_path",
+        "grants_reconciled",
+        "exact_build_identity",
+        "exact_app_version",
+        "exact_database_version",
+        "exact_composition",
+        "exact_installation"
+      ],
+      "properties": {
+        "health_path": {"const": "/health"},
+        "ready_path": {"const": "/system/ready"},
+        "grants_reconciled": {"const": true},
+        "exact_build_identity": {"const": true},
+        "exact_app_version": {"const": true},
+        "exact_database_version": {"const": true},
+        "exact_composition": {"const": true},
+        "exact_installation": {"const": true}
+      }
+    },
+    "recovery": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["mode", "backup_scopes", "protected_backup", "off_host_copy", "restore_test_required"],
+      "properties": {
+        "mode": {"const": "restore_before_reopening"},
+        "backup_scopes": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": ["database", "database_roles", "media", "settings", "projects", "previous_release"]
+          },
+          "minItems": 6,
+          "uniqueItems": true,
+          "maxItems": 6
+        },
+        "protected_backup": {"const": true},
+        "off_host_copy": {"const": true},
+        "restore_test_required": {"const": true}
+      }
+    },
+    "capacity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["reserve_bytes", "reserve_percent", "require_inodes", "allocations"],
+      "properties": {
+        "reserve_bytes": {"type": "integer", "minimum": 1, "maximum": 18446744073709551615},
+        "reserve_percent": {"type": "integer", "minimum": 1, "maximum": 100},
+        "require_inodes": {"const": true},
+        "allocations": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["purpose", "bytes", "inodes"],
+            "properties": {
+              "purpose": {
+                "type": "string",
+                "enum": [
+                  "staging",
+                  "expanded_release",
+                  "retained_release",
+                  "database_backup",
+                  "media_backup",
+                  "settings_backup",
+                  "projects_backup",
+                  "docker_storage"
+                ]
+              },
+              "bytes": {"type": "integer", "minimum": 1, "maximum": 18446744073709551615},
+              "inodes": {"type": "integer", "minimum": 1, "maximum": 18446744073709551615}
+            }
+          },
+          "minItems": 7,
+          "uniqueItems": true,
+          "maxItems": 8,
+          "allOf": [
+            {
+              "contains": {"type": "object", "required": ["purpose"], "properties": {"purpose": {"const": "staging"}}},
+              "minContains": 1,
+              "maxContains": 1
+            },
+            {
+              "contains": {
+                "type": "object",
+                "required": ["purpose"],
+                "properties": {"purpose": {"const": "expanded_release"}}
+              },
+              "minContains": 1,
+              "maxContains": 1
+            },
+            {
+              "contains": {
+                "type": "object",
+                "required": ["purpose"],
+                "properties": {"purpose": {"const": "retained_release"}}
+              },
+              "minContains": 1,
+              "maxContains": 1
+            },
+            {
+              "contains": {
+                "type": "object",
+                "required": ["purpose"],
+                "properties": {"purpose": {"const": "database_backup"}}
+              },
+              "minContains": 1,
+              "maxContains": 1
+            },
+            {
+              "contains": {
+                "type": "object",
+                "required": ["purpose"],
+                "properties": {"purpose": {"const": "media_backup"}}
+              },
+              "minContains": 1,
+              "maxContains": 1
+            },
+            {
+              "contains": {
+                "type": "object",
+                "required": ["purpose"],
+                "properties": {"purpose": {"const": "settings_backup"}}
+              },
+              "minContains": 1,
+              "maxContains": 1
+            },
+            {
+              "contains": {
+                "type": "object",
+                "required": ["purpose"],
+                "properties": {"purpose": {"const": "projects_backup"}}
+              },
+              "minContains": 1,
+              "maxContains": 1
+            }
+          ]
+        }
+      }
+    }
+  },
+  "$defs": {
+    "portable_platform": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["os", "architecture", "cpu_features"],
+      "properties": {
+        "os": {"const": "any"},
+        "architecture": {"const": "any"},
+        "cpu_features": {
+          "type": "array",
+          "items": {"type": "string", "pattern": "^[a-z][a-z0-9_-]{0,63}(?![\\s\\S])", "minLength": 1, "maxLength": 64},
+          "minItems": 0,
+          "maxItems": 0
+        }
+      }
+    },
+    "native_platform": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["os", "architecture", "cpu_features"],
+      "properties": {
+        "os": {"const": "linux"},
+        "architecture": {"type": "string", "enum": ["amd64", "arm64"]},
+        "cpu_features": {
+          "type": "array",
+          "items": {"type": "string", "pattern": "^[a-z][a-z0-9_-]{0,63}(?![\\s\\S])", "minLength": 1, "maxLength": 64},
+          "minItems": 0,
+          "uniqueItems": true
+        },
+        "libc": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["family", "min_version"],
+          "properties": {
+            "family": {"type": "string", "enum": ["glibc", "musl"]},
+            "min_version": {
+              "type": "string",
+              "pattern": "(?:^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*))$(?![\\s\\S])"
+            }
+          }
+        }
+      }
+    },
+    "artifact_platform": {"oneOf": [{"$ref": "#/$defs/portable_platform"}, {"$ref": "#/$defs/native_platform"}]},
+    "artifact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "kind", "size_bytes", "expanded_size_bytes", "sha256", "platform"],
+      "properties": {
+        "name": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,254}(?![\\s\\S])", "minLength": 1, "maxLength": 255},
+        "kind": {
+          "type": "string",
+          "enum": ["binary", "verifier_binary", "source_archive", "oci_archive", "notice", "checksum"]
+        },
+        "size_bytes": {"type": "integer", "minimum": 1, "maximum": 18446744073709551615},
+        "expanded_size_bytes": {"type": "integer", "minimum": 1, "maximum": 18446744073709551615},
+        "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$", "minLength": 64, "maxLength": 64},
+        "platform": {"$ref": "#/$defs/artifact_platform"},
+        "oci": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["manifest_digest", "config_digest"],
+          "properties": {
+            "manifest_digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$", "minLength": 71, "maxLength": 71},
+            "config_digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$", "minLength": 71, "maxLength": 71}
+          }
+        }
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"kind": {"enum": ["source_archive", "notice", "checksum"]}}},
+          "then": {"properties": {"platform": {"$ref": "#/$defs/portable_platform"}}},
+          "else": {"properties": {"platform": {"$ref": "#/$defs/native_platform"}}}
+        },
+        {
+          "if": {"properties": {"kind": {"const": "oci_archive"}}},
+          "then": {"required": ["oci"]},
+          "else": {"not": {"required": ["oci"]}}
+        }
+      ],
+      "description": "Go additionally enforces expanded size >= size, exact binary size, unique names, target membership and Docker requirements for OCI."
+    }
+  },
+  "description": "The Go parser is the authority for this contract. V1 release requirements, not proof of installation eligibility. Build identity source.commit and published_commit bind different release stages. Go additionally validates cross-field equality, unique logical IDs, increasing composition/start revisions, global migration order, exact target-version ownership, runtime requirements and timestamp/version ranges. Parsers must reject duplicate keys, nulls and trailing content.",
+  "allOf": [
+    {
+      "if": {"properties": {"platform": {"required": ["docker"]}}},
+      "then": {
+        "properties": {
+          "capacity": {
+            "properties": {
+              "allocations": {
+                "minItems": 8,
+                "maxItems": 8,
+                "contains": {"properties": {"purpose": {"const": "docker_storage"}}},
+                "minContains": 1,
+                "maxContains": 1
+              }
+            }
+          }
+        }
+      },
+      "else": {
+        "properties": {
+          "capacity": {
+            "properties": {
+              "allocations": {
+                "minItems": 7,
+                "maxItems": 7,
+                "not": {"contains": {"properties": {"purpose": {"const": "docker_storage"}}}}
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {"properties": {"product": {"const": "filterest"}}},
+      "then": {
+        "properties": {"composition": {"properties": {"id": {"const": "filterest"}, "components": {"maxItems": 1}}}}
+      }
+    }
+  ],
+  "title": "Filterest release manifest v1"
+}
