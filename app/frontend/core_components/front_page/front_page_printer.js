@@ -4,6 +4,7 @@
 // Discards all content on deactivation; no account's blocks survive a hidden visit.
 
 import { createFrontPageTopRow } from './front_page_top_row_builder.js';
+import { mountBackgroundVideo } from './front_page_background_video.js';
 import { getOrCreateContainer } from '../../reusable_components/dom_container_builder.js';
 import { hasContentBesideLoadingIndicator } from '../../reusable_components/loading/loading_indicator_printer.js';
 import { VIEW_DEACTIVATE_EVENT } from '../../reusable_components/view_lifecycle_events.js';
@@ -35,29 +36,9 @@ function createBackground(background, visit) {
     layer.className = 'front-page-background';
     layer.setAttribute('aria-hidden', 'true');
     if (background.mime_type?.startsWith('video/')) {
-        const video = document.createElement('video');
-        video.src = `/storage/site_media/front_page/original/${encodeURIComponent(match[1])}`;
-        video.muted = true;
-        video.loop = true;
-        video.playsInline = true;
-        video.setAttribute('muted', '');
-        video.setAttribute('playsinline', '');
-        video.style.objectPosition = `${background.focal_x * 100}% ${background.focal_y * 100}%`;
-        const motion = window.matchMedia?.('(prefers-reduced-motion: reduce)');
-        const syncMotion = () => {
-            video.autoplay = !motion?.matches;
-            if (motion?.matches) video.pause();
-            else if (video.isConnected) void video.play()?.catch(() => {});
-        };
-        syncMotion();
-        motion?.addEventListener('change', syncMotion);
-        visit.backgroundCleanup = () => {
-            motion?.removeEventListener('change', syncMotion);
-            video.pause();
-            video.removeAttribute('src');
-            video.load();
-        };
-        layer.append(video);
+        visit.backgroundCleanup = mountBackgroundVideo(layer,
+            `/storage/site_media/front_page/original/${encodeURIComponent(match[1])}`,
+            `${background.focal_x * 100}% ${background.focal_y * 100}%`);
         return layer;
     }
     for (const variant of ['1000', '2160']) {

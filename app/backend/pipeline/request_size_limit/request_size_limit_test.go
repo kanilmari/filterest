@@ -190,3 +190,23 @@ func TestWithRequestSizeLimit_UploadHandlerUsesHigherLimit(t *testing.T) {
 		t.Errorf("upload handler: got status %d, want 413", rr2.Code)
 	}
 }
+
+// TestWithRequestSizeLimit_HomeBackgroundTakesAVideo verifies that a 15 MB Home background video
+// reaches its handler instead of the standard 10 MB refusal.
+func TestWithRequestSizeLimit_HomeBackgroundTakesAVideo(t *testing.T) {
+	setLimits(defaultRequestBodyLimitMB, defaultUploadBodyLimitMB)
+
+	called := false
+	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		called = true
+		w.WriteHeader(http.StatusOK)
+	})
+	req := httptest.NewRequest(http.MethodPost, "/api/admin/front-page/background", strings.NewReader("body"))
+	req.ContentLength = 15 << 20
+	rr := httptest.NewRecorder()
+	WithRequestSizeLimit("system_table_tools.FrontPageBackgroundHandler", next).ServeHTTP(rr, req)
+
+	if !called || rr.Code != http.StatusOK {
+		t.Fatalf("Home background upload: called=%v status=%d, want the handler to run", called, rr.Code)
+	}
+}

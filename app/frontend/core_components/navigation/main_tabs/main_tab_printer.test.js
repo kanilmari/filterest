@@ -276,6 +276,22 @@ describe("initTabs", () => {
         expect(dealsTab?.querySelector(".navtab_icon")?.dataset.symbolKey).toBe("payments");
     });
 
+    test("gives a dataset saved without an icon the table icon instead of an empty path", async () => {
+        const { initTabs } = await import("./main_tab_printer.js");
+        const preloadedContentTablesResponse = {
+            datasets: [
+                { dataset_name: "travel_deals", is_top_level_in_current_project: true },
+            ],
+            tab_order: null,
+        };
+
+        await initTabs({ preloadedContentTablesResponse });
+
+        const dealsTab = document.querySelector('.navtablinks[data-id="travel_deals"]');
+        expect(dealsTab?.querySelector(".navtab_icon")?.dataset.symbolKey).toBe("table");
+        expect(dealsTab?.querySelector('path[d="undefined"]')).toBeNull();
+    });
+
     test("renders system users once when it is also marked as the main table", async () => {
         const { initTabs } = await import("./main_tab_printer.js");
         const preloadedContentTablesResponse = {

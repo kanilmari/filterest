@@ -31,6 +31,8 @@ var (
 var uploadHeavyHandlers = map[string]bool{
 	"dtt_1_row_create.AddRowMultipartHandlerWrapper":    true,
 	"system_table_tools.SaveDatasetHeaderConfigHandler": true,
+	// Home's background takes videos up to 50 MB, and images near 10 MB need room for the form around them.
+	"system_table_tools.FrontPageBackgroundHandler": true,
 }
 
 // RegisterUploadHeavyHandler marks an optional handler as using the larger upload limit.

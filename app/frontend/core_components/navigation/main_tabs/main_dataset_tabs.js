@@ -132,7 +132,8 @@ export async function fetchProjectTabs({ suppressAuthRedirect = false, preloaded
                 id: table.dataset_name,
                 text: formatTableName(table.dataset_name),
                 langKey: getMainTabLangKey(table.dataset_name),
-                iconKey: getDatasetTabIconKey(table),
+                // A dataset saved without an icon gets the table icon, as Home's tab strip shows it.
+                iconKey: getDatasetTabIconKey(table) || 'table',
                 isProjectTable: true,
                 dataset: table.dataset_name,
                 route: '/api/get-results',

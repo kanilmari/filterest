@@ -75,9 +75,24 @@
 }
 
 .front-page-background video {
+  position: absolute;
+  inset: 0;
   width: 100%;
   height: 100%;
   object-fit: cover;
+  opacity: 0;
+  transition: opacity var(--front-page-video-fade, 2.5s) ease-in-out;
+}
+
+/* A copy fades in at the start and cross-fades back to the beginning (front_page_background_video.js). */
+.front-page-background video.front-page-background__video--visible {
+  opacity: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .front-page-background video {
+    transition: none;
+  }
 }
 
 .front-page-hero {
