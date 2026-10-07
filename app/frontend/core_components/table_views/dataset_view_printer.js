@@ -441,6 +441,11 @@ export async function generate_table(
         // starts with the same widths (prevents jarring layout shift)
         saveColumnWidths(dataset_name);
 
+        // Retain the shared controls through a full redraw. The category printer
+        // owns its disclosure/query state on this host, including during search.
+        const retainedTopControls = document.getElementById(`${dataset_name}_card_top_controls`);
+        const focusedTopControl = retainedTopControls?.contains(document.activeElement)
+            ? document.activeElement : null;
         for (const container of Object.values(viewContainers)) {
             if (current_view === "article_view"
                 && shouldPreserveCardReturnHost(dataset_name, preserveCardReturn, container)) continue;
@@ -523,7 +528,7 @@ export async function generate_table(
         // right after the hero and before the actual view element.
         // This ensures active filter tags (and results count) appear
         // between the hero bar and the table/card headers — not inside them.
-        let topControls = document.getElementById(
+        let topControls = retainedTopControls || document.getElementById(
             `${dataset_name}_card_top_controls`
         );
         if (!topControls) {
@@ -533,6 +538,9 @@ export async function generate_table(
         }
         // Always ensure it's at the right position: after hero, before view element
 		resultsSurface.insertBefore(topControls, currentViewElement);
+        if (focusedTopControl?.isConnected && document.activeElement === document.body) {
+            focusedTopControl.focus();
+        }
 
         let searchButton = topControls.querySelector(
             ".card_search_filter_button"
@@ -558,9 +566,10 @@ export async function generate_table(
         // Build count mirrors before filling them. The inline hero intentionally
         // has no primary count element, so filling first left the new mirror empty
         // until infinite scroll happened to update it later.
+        // Categories precede the shared selected tags and their result count.
+        renderRowGroupFacets(dataset_name, rowGroupFacets, rowGroupFacetContext);
         renderActiveFilters(dataset_name);
         setResultsCount(dataset_name, rowCount);
-        renderRowGroupFacets(dataset_name, rowGroupFacets, rowGroupFacetContext);
         rememberLoadedDatasetRows(scrollableContainer, dataset_name, {
             data, columns, types: data_types, row_count: rowCount, has_geo: hasGeo,
             table_meta: tableMeta, dataset_presentation: datasetPresentation,

@@ -173,10 +173,17 @@ function renderResultsCountIntoElement(el, count) {
     if (!el) return;
     if (isSearchBreakdownCount(count)) {
         renderSearchBreakdownIntoElement(el, count);
-        return;
+    } else {
+        renderLegacyResultsCountIntoElement(el, count);
     }
-
-    renderLegacyResultsCountIntoElement(el, count);
+    const total = isSearchBreakdownCount(count)
+        ? (count.textCount || 0) + (count.aiCount || 0) : count;
+    el.dataset.resultCount = typeof total === "number" ? String(total) : "";
+    el.setAttribute("aria-live", "polite");
+    el.setAttribute("aria-atomic", "true");
+    // Consumers such as empty-state guidance read this count instead of
+    // parsing localized text or making a second listing request.
+    el.dispatchEvent(new CustomEvent("results-count-updated", { bubbles: true }));
 }
 
 export function setResultsCount(tableName, count) {

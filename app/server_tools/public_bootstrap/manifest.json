@@ -154,6 +154,7 @@
     "20261005000036_seed_row_group_classification_language_keys.sql",
     "20261005000037_register_row_group_classifications.sql",
     "20261005000038_seed_row_group_window_language_keys.sql",
+    "20261005000039_seed_row_group_panel_language_keys.sql",
     "20261005000050_require_registry_reference_key.sql",
     "20261005000051_seed_relation_reference_language_key.sql",
     "20261005000055_seed_setting_check_language_keys.sql",
@@ -318,11 +319,11 @@
     "public.system_group_table_func_rights": 24,
     "public.system_lang_key_sources": 0,
     "public.system_lang_key_translations": 163,
-    "public.system_lang_keys": 1224,
+    "public.system_lang_keys": 1236,
     "public.system_languages": 5,
     "public.system_permission_actions": 7,
     "public.system_permission_categories": 4,
-    "public.system_schema_migrations": 157,
+    "public.system_schema_migrations": 158,
     "public.system_table_folders": 14,
     "public.system_table_views": 13,
     "public.system_user_group_memberships": 2,
@@ -337,7 +338,7 @@
       "sha256": "895e8102b54e5d899b040194605a18bf6bcfe6d2492d1eeeea05654bf1a57829"
     },
     "server_tools/public_bootstrap/seed_data.sql": {
-      "sha256": "5e29e2ed18126e60ac1335d6a149f353836dcccc0dc94de4e674c755d1619de6"
+      "sha256": "92c9630e38fa97af3ff7c1028586b9b71caec3f8fb5a72771fa348532a7fd741"
     }
   },
   "source_files": {
@@ -354,7 +355,7 @@
       "sha256": "235e4b887181e150bd436d035d2d268eb821d9e5d0b830b54eb444988f31d5d1"
     },
     "filterest/app/server_tools/public_bootstrap/generate_bootstrap.py": {
-      "sha256": "f5a2f34410ecc6ae57bca5469bc4e0b388f73f8e5a1996fb32ed35bca13b23ad"
+      "sha256": "b2b4dae9845a418b4efb7438a00dc941302658b7e82de714584a6a767a65a527"
     },
     "filterest/app/server_tools/public_slice_export/audit_public_bootstrap.py": {
       "sha256": "cadab74b97ae8328417bbbcdefd7a9b770250c3a25ebe7272978622a10807e54"
@@ -865,6 +866,9 @@
     },
     "filterest/app/server_tools/migrations/20261005000038_seed_row_group_window_language_keys.sql": {
       "sha256": "b94eaf542259dd006792836e9541808eccf6955dac52e5eb8e396ba06c64d6da"
+    },
+    "filterest/app/server_tools/migrations/20261005000039_seed_row_group_panel_language_keys.sql": {
+      "sha256": "5474bade767a3e5d5a60b914a225a15ec9c7d527b87955210981db6f8e784419"
     },
     "filterest/app/server_tools/migrations/20261005000050_require_registry_reference_key.sql": {
       "sha256": "a387680b59182dcbb992948d660c356ebd8f8808664575c2ff9cfa57b4138d65"

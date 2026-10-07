@@ -57,6 +57,7 @@ language_seed_migrations = (
     "20261005000033_seed_front_page_language_keys.sql",
     "20261005000036_seed_row_group_classification_language_keys.sql",
     "20261005000038_seed_row_group_window_language_keys.sql",
+    "20261005000039_seed_row_group_panel_language_keys.sql",
     "20261005000051_seed_relation_reference_language_key.sql",
     "20261005000055_seed_setting_check_language_keys.sql",
     "20261005000060_seed_shell_boot_recovery_language_keys.sql",

@@ -282,9 +282,33 @@ describe('generate_table', () => {
         );
 
         expect(renderRowGroupFacetsMock).toHaveBeenCalledWith('demo_dataset', facets, {});
-        expect(setResultsCountMock.mock.invocationCallOrder[0]).toBeLessThan(
-            renderRowGroupFacetsMock.mock.invocationCallOrder[0]
+        expect(renderRowGroupFacetsMock.mock.invocationCallOrder[0]).toBeLessThan(
+            renderActiveFiltersMock.mock.invocationCallOrder[0]
         );
+        expect(renderActiveFiltersMock.mock.invocationCallOrder[0]).toBeLessThan(
+            setResultsCountMock.mock.invocationCallOrder[0]
+        );
+    });
+
+    test('retains the category host and focused control across a full dataset redraw', async () => {
+        const { generate_table } = await import('./dataset_view_printer.js');
+        setChosenDatasetView('demo_dataset', 'table');
+        await generate_table('demo_dataset', ['id'], [{ id: 1 }], { id: 'INTEGER' }, 1, false, null);
+        const controls = document.getElementById('demo_dataset_card_top_controls');
+        const panel = document.createElement('div');
+        panel.id = 'demo_dataset_row_group_facets';
+        panel.rowGroupPanelState = { openHeading: '1', searches: new Map([['1', 'boat']]) };
+        const checkbox = document.createElement('input');
+        checkbox.type = 'checkbox';
+        panel.appendChild(checkbox);
+        controls.appendChild(panel);
+        checkbox.focus();
+        await generate_table('demo_dataset', ['id'], [{ id: 2 }], { id: 'INTEGER' }, 1, false, null);
+        expect(document.getElementById('demo_dataset_card_top_controls')).toBe(controls);
+        expect(document.getElementById('demo_dataset_row_group_facets')).toBe(panel);
+        expect(panel.rowGroupPanelState.openHeading).toBe('1');
+        expect(panel.rowGroupPanelState.searches.get('1')).toBe('boat');
+        expect(document.activeElement).toBe(checkbox);
     });
 
     test('falls back from map view when the dataset has no map-capable fields', async () => {

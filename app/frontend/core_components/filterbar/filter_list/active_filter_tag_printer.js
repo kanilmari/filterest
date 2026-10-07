@@ -22,6 +22,9 @@ import {
     formatRangeLabel,
 } from "./active_filter_tag_printer_helpers.js";
 
+import { getTranslationForKey } from "../../lang/translation_handler.js";
+import { bindDatasetLanguageRenderer } from "../../table_views/dataset_value_localizer.js";
+
 let bigCardFilterSyncListenerBound = false;
 
 function ensureActiveFiltersResultsCount(topControls, tableName) {
@@ -38,10 +41,14 @@ function ensureActiveFiltersResultsCount(topControls, tableName) {
 function syncResultsCountMirror(tableName, mirrorEl) {
     const primaryCountEl = document.getElementById(`${tableName}_results_count`);
     if (!mirrorEl || !primaryCountEl) return;
+    mirrorEl.dataset.resultCount = primaryCountEl.dataset.resultCount || "";
+    mirrorEl.setAttribute("aria-live", "polite");
+    mirrorEl.setAttribute("aria-atomic", "true");
     mirrorEl.replaceChildren();
     primaryCountEl.childNodes.forEach((node) => {
         mirrorEl.appendChild(node.cloneNode(true));
     });
+    mirrorEl.dispatchEvent(new CustomEvent("results-count-updated", { bubbles: true }));
 }
 
 function resolveSingleFilterDisplayValue(keys, rawValue) {
@@ -123,7 +130,7 @@ export function renderActiveFilters(tableName) {
         container.dataset.testid = "active-filters";
     }
     if (container.parentElement !== activeFiltersHost) {
-        activeFiltersHost.appendChild(container);
+        activeFiltersHost.insertBefore(container, activeFiltersHost.querySelector(".active_filters_results_count"));
     }
 
     container.dataset.testid = "active-filters";
@@ -167,9 +174,12 @@ export function renderActiveFilters(tableName) {
         nameSpan.textContent = "search";
         label.appendChild(nameSpan);
         label.append(`: ${params.search}`);
-        searchItem.appendChild(btn);
-        searchItem.appendChild(label);
+        searchItem.append(label, btn);
         container.appendChild(searchItem);
+        bindDatasetLanguageRenderer(searchItem, () => {
+            nameSpan.textContent = getTranslationForKey("search");
+            btn.setAttribute("aria-label", `${getTranslationForKey("remove")}: ${label.textContent}`);
+        });
     }
 
     const grouped = groupFilters(filters);
@@ -222,18 +232,45 @@ export function renderActiveFilters(tableName) {
             label.append(valSpan);
         }
 
-        item.appendChild(btn);
-        item.appendChild(label);
+        item.append(label, btn);
         container.appendChild(item);
+        bindDatasetLanguageRenderer(item, () => {
+            item.querySelectorAll("[data-lang-key]").forEach(span => {
+                span.textContent = getTranslationForKey(span.dataset.langKey);
+            });
+            btn.setAttribute("aria-label", `${getTranslationForKey("remove")}: ${label.textContent}`);
+        });
     });
 
-    container.style.display = container.childElementCount ? "" : "none";
+    const hasSelections = container.childElementCount > 0;
+    if (hasSelections) {
+        const lead = document.createElement("span");
+        lead.className = "active-filters-lead";
+        lead.dataset.langKey = "selected_filters";
+        const clear = document.createElement("button");
+        clear.type = "button";
+        clear.className = "active-filters-clear-all";
+        clear.dataset.testid = "active-filters-clear-all";
+        clear.dataset.langKey = "clear_all";
+        clear.addEventListener("click", async () => {
+            const { clearAllFilters } = await import("../top_row_buttons/top_row_builder.js");
+            clearAllFilters(tableName, document.getElementById(`${tableName}_filterBar_panel`));
+            renderActiveFilters(tableName);
+            const searchInputs = document.querySelectorAll(".dataset-search-input");
+            [...searchInputs].find(input => input.dataset.datasetSearchInput === tableName && input.getClientRects().length > 0)?.focus();
+        });
+        container.prepend(lead);
+        container.appendChild(clear);
+        bindDatasetLanguageRenderer(lead, () => { lead.textContent = getTranslationForKey("selected_filters"); });
+        bindDatasetLanguageRenderer(clear, () => { clear.textContent = getTranslationForKey("clear_all"); });
+    }
+    container.style.display = hasSelections ? "" : "none";
     if (resultsCountMirror) {
         resultsCountMirror.style.display = "";
         syncResultsCountMirror(tableName, resultsCountMirror);
     }
     if (sidebarFiltersHost) {
-        sidebarFiltersHost.style.display = container.childElementCount ? "" : "none";
+        sidebarFiltersHost.style.display = hasSelections ? "" : "none";
     }
     sidebarFiltersHosts.forEach((host) => {
         if (host !== sidebarFiltersHost) {
@@ -241,6 +278,9 @@ export function renderActiveFilters(tableName) {
         }
     });
     highlightActiveFilterSetChange(container, [...seenLabels]);
+    // Keep category checkboxes and badges current at the shared selection
+    // boundary, including tag removal and whole reset before a reply arrives.
+    topControls.dispatchEvent(new CustomEvent("active-filters-updated"));
 }
 
 async function removeFilter(tableName, keys) {

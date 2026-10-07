@@ -105,6 +105,7 @@ describe("authoritative row-group selections", () => {
         const host = renderRowGroupFacets("travel_info", [available], authoritative);
         await Promise.resolve();
         expect(selectedTags()).toEqual([]);
+        host.querySelector('[data-testid="row-group-facet-heading"]').click();
         expect(host.querySelector('[data-row-group-slug="available"]').disabled).toBe(false);
         expect(refreshMock).not.toHaveBeenCalled();
         expect(searchMock).not.toHaveBeenCalled();
@@ -122,10 +123,29 @@ describe("authoritative row-group selections", () => {
         expect(getParams("travel_info").row_group).toBe("zero");
         expect(new URLSearchParams(location.search).get("row_group")).toBe("zero");
         expect(selectedTags()).toEqual(["zero"]);
-        expect(host.querySelector('[data-row-group-slug="zero"]').getAttribute("aria-pressed")).toBe("true");
+        host.querySelector('[data-testid="row-group-facet-heading"]').click();
+        expect(host.querySelector('[data-row-group-slug="zero"]').checked).toBe(true);
         expect(document.querySelector('.row-group-filter-label').textContent).toBe("filters: Nolla");
         expect(refreshMock).not.toHaveBeenCalled();
         expect(searchMock).not.toHaveBeenCalled();
+    });
+
+    test("shared tag updates synchronize panel selections immediately without awaiting fresh metadata", async () => {
+        seedURL("zero");
+        const host = renderRowGroupFacets("travel_info", [{ id: 2, slug: "zero", title: { fi: "Nolla" }, row_count: 0, selected: true }], authoritative);
+        host.querySelector('[data-testid="row-group-facet-heading"]').click();
+        expect(host.querySelector('input[type="checkbox"]').checked).toBe(true);
+        const checkbox = host.querySelector('input[type="checkbox"]');
+        checkbox.focus();
+        setUnifiedTableState("travel_info", { filters: { status: "open" } });
+        const params = { ...getParams("travel_info") };
+        delete params.row_group;
+        setParams("travel_info", params);
+        renderActiveFilters("travel_info");
+        expect(host.querySelector('input[type="checkbox"]').checked).toBe(false);
+        expect(host.querySelector('.row-group-facet-heading__badge')).toBeNull();
+        expect(document.activeElement).toBe(host.querySelector('input[type="checkbox"]'));
+        expect(refreshMock).not.toHaveBeenCalled();
     });
 
     test("an authoritative empty array clears the selection even without a facet host", async () => {

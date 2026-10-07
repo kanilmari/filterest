@@ -6,6 +6,9 @@
 
 import { beforeEach, describe, expect, test, vi } from "vitest";
 
+const clearAllFiltersMock = vi.fn();
+const languageRenderers = new Map();
+let interfaceLanguage = "fi";
 const getUnifiedTableStateMock = vi.fn();
 const setUnifiedTableStateMock = vi.fn();
 const refreshTableUnifiedMock = vi.fn();
@@ -39,9 +42,16 @@ vi.mock("../../state_stores/table_state_store.js", () => ({
     setUnifiedTableState: setUnifiedTableStateMock,
 }));
 vi.mock("../text_search/dataset_search_executor.js", () => ({ do_intelligent_search: doIntelligentSearchMock }));
-vi.mock("../../lang/translation_handler.js", () => ({ getTranslationForKey: key => key }));
+vi.mock("../top_row_buttons/top_row_builder.js", () => ({ clearAllFilters: clearAllFiltersMock }));
+vi.mock("../../lang/translation_handler.js", () => ({ getTranslationForKey: key => ({
+    fi: { selected_filters: "Valitut:", clear_all: "Tyhjennä kaikki", search: "Haku", remove: "Poista" },
+    en: { selected_filters: "Selected:", clear_all: "Clear all", search: "Search", remove: "Remove" },
+})[interfaceLanguage][key] || key }));
 vi.mock("../../table_views/dataset_value_localizer.js", () => ({
-    bindDatasetLanguageRenderer: (_element, render) => render("fi"),
+    bindDatasetLanguageRenderer: (element, render) => {
+        languageRenderers.set(element, language => { interfaceLanguage = language; render(language); });
+        render(interfaceLanguage);
+    },
     resolveDatasetDisplayValue: (value, _metadata, language) => value?.[language] || "",
 }));
 
@@ -84,6 +94,9 @@ vi.mock("./active_filter_tag_printer_helpers.js", () => ({
 
 describe("renderActiveFilters", () => {
     beforeEach(() => {
+        interfaceLanguage = "fi";
+        languageRenderers.clear();
+        clearAllFiltersMock.mockReset();
         document.body.innerHTML = "";
         vi.clearAllMocks();
         clearCommittedDatasetSearchMock.mockReturnValue(true);
@@ -216,6 +229,51 @@ describe("renderActiveFilters", () => {
         expect(updateURLMock).toHaveBeenCalledWith("tasks", { row_group: "train" });
         await vi.waitFor(() => expect(document.querySelectorAll('.active-filter-item')).toHaveLength(1));
         expect(document.querySelector('.active-filter-item').dataset.rowGroupSlug).toBe("train");
+    });
+
+    test("adds the translated lead and whole-reset button, hides both without selections", async () => {
+        document.body.innerHTML = '<div id="tasks_card_top_controls"></div><div id="tasks_filterBar_panel"></div>';
+        const { renderActiveFilters } = await import("./active_filter_tag_printer.js");
+        renderActiveFilters("tasks");
+        const lead = document.querySelector(".active-filters-lead");
+        const clear = document.querySelector('[data-testid="active-filters-clear-all"]');
+        expect(lead.textContent).toBe("Valitut:");
+        expect(clear.textContent).toBe("Tyhjennä kaikki");
+        expect(document.querySelector(".active_filters").firstElementChild).toBe(lead);
+        expect(document.querySelector(".active_filters").lastElementChild).toBe(clear);
+        expect(document.querySelector(".active-filter-item").lastElementChild.className).toBe("remove-active-filter");
+        const searchTag = document.querySelector(".active-filter-item");
+        expect(searchTag.querySelector("button").getAttribute("aria-label")).toBe("Poista: Haku: urgent");
+        languageRenderers.get(searchTag)("en");
+        expect(searchTag.querySelector("button").getAttribute("aria-label")).toBe("Remove: Search: urgent");
+        languageRenderers.get(lead)("en");
+        languageRenderers.get(clear)("en");
+        expect(lead.textContent).toBe("Selected:");
+        expect(clear.textContent).toBe("Clear all");
+        clearAllFiltersMock.mockImplementation(() => {
+            getParamsMock.mockReturnValue({});
+            getUnifiedTableStateMock.mockReturnValue({ filters: {} });
+            groupFiltersMock.mockReturnValue({});
+        });
+        clear.click();
+        await vi.waitFor(() => expect(clearAllFiltersMock).toHaveBeenCalledExactlyOnceWith("tasks", document.getElementById("tasks_filterBar_panel")));
+        expect(document.querySelectorAll(".active-filter-item")).toHaveLength(0);
+        expect(document.querySelector(".active_filters").style.display).toBe("none");
+        expect(document.querySelector(".active-filters-lead")).toBeNull();
+        expect(document.querySelector(".active-filters-clear-all")).toBeNull();
+    });
+
+    test("keeps lead and clear-all in the article sidebar and restores tags before the result count", async () => {
+        document.body.innerHTML = '<div id="tasks_card_top_controls"></div><div id="tasks_results_count">4 results</div><div id="tasks_card_view_container"><div class="card_view_wrapper big-card-open"><div class="card_sidebar_active_filters"></div></div></div>';
+        const { renderActiveFilters } = await import("./active_filter_tag_printer.js");
+        renderActiveFilters("tasks");
+        expect(document.querySelector('.card_sidebar_active_filters .active-filters-lead').textContent).toBe("Valitut:");
+        expect(document.querySelector('.card_sidebar_active_filters .active-filters-clear-all')).not.toBeNull();
+        document.querySelector(".card_view_wrapper").classList.remove("big-card-open");
+        renderActiveFilters("tasks");
+        const tags = document.querySelector('#tasks_card_top_controls .active_filters');
+        expect(tags.nextElementSibling.className).toContain("active_filters_results_count");
+        expect(document.querySelectorAll('.active-filters-clear-all')).toHaveLength(1);
     });
 
 });

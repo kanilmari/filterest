@@ -51,7 +51,7 @@ export function clearAllFilters(tableName, filterBar) {
     setParams(tableName, params);
     updateURL(tableName, params);
     emitDatasetSortSelection(tableName, selection);
-    filterBar.querySelectorAll("input, select").forEach((el) => {
+    filterBar?.querySelectorAll("input, select").forEach((el) => {
         if (el.closest(".sort-dropdown-wrapper")) return;
         if (el.type === "checkbox" || el.type === "radio") {
             el.checked = false;

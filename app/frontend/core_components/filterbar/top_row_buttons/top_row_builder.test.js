@@ -227,3 +227,24 @@ test("reset preserves explicit sorting and its control while clearing only query
     expect(document.querySelector(".sort-dropdown-wrapper input").value).toBe("Name");
     expect(document.querySelector("#query").value).toBe("");
 });
+
+
+test("whole reset clears category, column and search state together, preserves view/sort and works without a mounted filter bar", async () => {
+    const { clearAllFilters } = await import("./top_row_builder.js");
+    const { getParams, setParams, updateURL } = await import("../../navigation/nav_engine/query_params.js");
+    const { getUnifiedTableState, setUnifiedTableState, refreshTableUnified } = await import("../../general_tables/gt_1_row_crud/gt_1_2_row_read/table_refresh_unified.js");
+    const { datasetSearchState, datasetSearchLocationState } = await import("../text_search/create_text_search_panel.js");
+    const { ongoingSearchResults } = await import("../text_search/dataset_search_executor.js");
+    vi.mocked(getParams).mockReturnValue({ search: "matka", row_group: "boat,train", status: "open", offset: "20", view: "card", sort_column: "name", sort_order: "ASC" });
+    vi.mocked(getUnifiedTableState).mockReturnValue({ sort: { column: "name", direction: "ASC" }, filters: { row_group: "boat,train", status: "open" }, offset: 20 });
+    ongoingSearchResults.orders = { stale: true };
+    clearAllFilters("orders", null);
+    expect(setUnifiedTableState).toHaveBeenLastCalledWith("orders", { sort: { column: "name", direction: "ASC" }, filters: {}, offset: 0 });
+    expect(setParams).toHaveBeenLastCalledWith("orders", { sort_column: "name", sort_order: "ASC", view: "card" });
+    expect(updateURL).toHaveBeenLastCalledWith("orders", { sort_column: "name", sort_order: "ASC", view: "card" });
+    expect(datasetSearchState.set).toHaveBeenLastCalledWith("orders", "", "clear-all-filters");
+    expect(datasetSearchLocationState.set).toHaveBeenLastCalledWith("orders", false, "clear-all-filters");
+    expect(ongoingSearchResults.orders).toBeNull();
+    expect(localStorage.getItem("int_search_draft_orders")).toBe("");
+    expect(refreshTableUnified).toHaveBeenLastCalledWith("orders", { skipUrlParams: true });
+});

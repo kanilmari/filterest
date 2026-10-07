@@ -1,7 +1,7 @@
 // row_group_facet_printer.js
 // Renders localized row-group facets and applies group selections as a normal dataset filter.
 // Bridges get-results facet metadata, unified table state, route params, and shared view refreshes.
-// Exists so every dataset view gets the same safe, centered group-filter controls.
+// Exists so every dataset view shares the same accessible category panel and selection boundary.
 
 import {
     bindDatasetLanguageRenderer,
@@ -24,7 +24,6 @@ import { adoptResolvedSearchRowGroupSelection, getSearchFilterContext } from "..
 import { rekeyLoadedDatasetRows } from "../../table_views/dataset_loaded_rows.js";
 
 export const ROW_GROUP_FILTER_KEY = "row_group";
-const VISIBLE_FACET_LIMIT = 12;
 const VISIBLE_HEADING_LIMIT = 3;
 const SELECTION_LIMIT = 20;
 const facetsByTable = new Map();
@@ -88,7 +87,9 @@ function getFacetFallbackTitle(slug) {
 }
 
 export function clearRowGroupFacets(tableName) {
-    document.getElementById(getFacetHostId(tableName))?.remove();
+    const host = document.getElementById(getFacetHostId(tableName));
+    host?.disposeRowGroupPanel?.();
+    host?.remove();
 }
 
 function getSelectedSlugs(tableName) {
@@ -224,7 +225,7 @@ export function renderRowGroupFilterTags(tableName, container) {
         });
         const label = document.createElement("span");
         label.classList.add("row-group-filter-label");
-        item.append(button, label);
+        item.append(label, button);
         container.appendChild(item);
         bindRowGroupTagLabel(item, tableName, slug);
     }
@@ -249,16 +250,15 @@ export function renderRowGroupFacets(
     // response must still match what it requested, as well as its generation.
     if (!isCurrent() || (requestFilters !== null
         && filterSignature(getUnifiedTableState(tableName).filters) !== filterSignature(requestFilters))) return previousHost;
-    let expanded = previousHost?.dataset.expanded === "true";
-    const focusedSlug = previousHost?.contains(document.activeElement)
-        ? document.activeElement?.dataset.rowGroupSlug : null;
+    const panelState = previousHost?.rowGroupPanelState
+        || { expanded: false, openHeading: null, searches: new Map() };
+    const previousFocus = capturePanelFocus(previousHost);
     clearRowGroupFacets(tableName);
     const facets = Array.isArray(rawFacets) ? rawFacets.map(normalizeFacet).filter(Boolean) : [];
     facetsByTable.set(tableName, facets);
     const selectionChanged = authoritative && Array.isArray(rawFacets)
         && reconcileResolvedRowGroupSelection(tableName, facets, isCurrent);
-    // Active tags are printed before facets by the shared view. Refresh their
-    // labels now, including tags in an open article's sidebar.
+    // Refresh existing tag labels too, including tags in an open article sidebar.
     if (selectionChanged) renderActiveFilters(tableName);
     else document.querySelectorAll("[data-row-group-table]").forEach(item => {
         if (item.dataset.rowGroupTable === tableName) bindRowGroupTagLabel(item, tableName, item.dataset.rowGroupSlug);
@@ -272,103 +272,264 @@ export function renderRowGroupFacets(
     host.dataset.testid = "row-group-facets";
     host.dataset.ariaLabelLangKey = "row_group_categories";
     host.setAttribute("role", "region");
-    topControls.appendChild(host);
+    // The shared view owns placement; searched refreshes reuse that same slot.
+    topControls.insertBefore(host, topControls.querySelector(".active_filters, .results_count"));
+    host.rowGroupPanelState = panelState;
+    const groups = groupFacetsByHeading(facets);
+    const headingKey = group => String(group.heading?.id ?? "legacy");
+    if (!groups.some(group => headingKey(group) === panelState.openHeading)) panelState.openHeading = null;
+    let chosenLanguage;
 
-    bindDatasetLanguageRenderer(host, (chosenLanguage) => {
-        const render = () => {
-            const activeSlugs = new Set(getSelectedSlugs(tableName));
-            host.setAttribute("aria-label", getTranslationForKey("row_group_categories"));
-            host.dataset.expanded = String(expanded);
-            host.replaceChildren();
-
-            const ribbonTitle = document.createElement("div");
-            ribbonTitle.classList.add("row-group-facets__title");
-            ribbonTitle.dataset.langKey = "row_group_categories";
-            ribbonTitle.textContent = getTranslationForKey("row_group_categories");
-            host.appendChild(ribbonTitle);
-            const groups = groupFacetsByHeading(facets);
-            const isSelected = facet => activeSlugs.has(facet.slug) || facet.selected;
-            // A selected heading or value remains reachable when collapsed.
-            groups.filter((group, index) => expanded || index < VISIBLE_HEADING_LIMIT || group.values.some(isSelected))
-                .forEach(({ heading, values }) => {
-                    const group = document.createElement("div");
-                    group.classList.add("row-group-facet-group");
-                    group.setAttribute("role", "group");
-                    group.dataset.headingId = String(heading?.id ?? "");
-                    const headingTitle = heading ? getFacetTitle(heading, chosenLanguage) : getTranslationForKey("filters");
-                    group.setAttribute("aria-label", headingTitle);
-                    if (heading) {
-                        const title = document.createElement("div");
-                        title.classList.add("row-group-facet-group__title");
-                        title.textContent = headingTitle;
-                        group.appendChild(title);
-                    }
-                    values.filter((facet, index) => expanded || index < VISIBLE_FACET_LIMIT || isSelected(facet))
-                        .forEach((facet) => {
-                            const title = getFacetTitle(facet, chosenLanguage);
-                            const button = document.createElement("button");
-                            button.type = "button";
-                            button.classList.add("row-group-facet-chip");
-                            button.classList.toggle("row-group-facet-chip--active", activeSlugs.has(facet.slug));
-                            button.dataset.rowGroupSlug = facet.slug;
-                            button.dataset.testid = "row-group-facet-chip";
-                            button.setAttribute("aria-pressed", String(activeSlugs.has(facet.slug)));
-                            button.setAttribute("aria-label", `${title}: ${facet.row_count}`);
-                            button.disabled = !activeSlugs.has(facet.slug) && activeSlugs.size >= SELECTION_LIMIT;
-
-                            const label = document.createElement("span");
-                            label.classList.add("row-group-facet-chip__label");
-                            label.textContent = title;
-                            const count = document.createElement("span");
-                            count.classList.add("row-group-facet-chip__count");
-                            count.textContent = String(facet.row_count);
-                            count.setAttribute("aria-hidden", "true");
-                            button.append(label, count);
-                            button.addEventListener("click", () => runSelection(() => onToggle(tableName, facet.slug)));
-                            group.appendChild(button);
-                        });
-                    host.appendChild(group);
-                });
-
-            if (groups.length > VISIBLE_HEADING_LIMIT || groups.some(group => group.values.length > VISIBLE_FACET_LIMIT)) {
-                const more = createActionButton(expanded ? "show_less" : "show_more");
-                more.setAttribute("aria-expanded", String(expanded));
-                more.addEventListener("click", () => {
-                    expanded = !expanded;
-                    render();
-                    host.querySelector('[aria-expanded]')?.focus();
-                });
-                host.appendChild(more);
-            }
-            if (activeSlugs.size) {
-                const clear = createActionButton("clear_selections");
-                clear.addEventListener("click", () => runSelection(() => onClear(tableName)));
-                host.appendChild(clear);
-            }
-        };
+    function closePanel() {
+        const wasOpen = panelState.openHeading;
+        // A later heading can be visible only because it is open. Keep its
+        // return-focus button available after the last selection is removed.
+        const closingIndex = groups.findIndex(group => headingKey(group) === wasOpen);
+        const selected = new Set(getSelectedSlugs(tableName));
+        if (closingIndex >= VISIBLE_HEADING_LIMIT
+            && !groups[closingIndex].values.some(facet => selected.has(facet.slug))) panelState.expanded = true;
+        panelState.openHeading = null;
         render();
-    });
-    if (focusedSlug) {
-        [...host.querySelectorAll("[data-row-group-slug]")].find(button => button.dataset.rowGroupSlug === focusedSlug)?.focus();
+        [...host.querySelectorAll("[data-heading-id]")]
+            .find(button => button.dataset.headingId === wasOpen)?.focus();
     }
 
+    function updateEmptyHint() {
+        const counter = topControls.querySelector(".results_count[data-result-count]")
+            || document.getElementById(`${tableName}_results_count`);
+        const count = counter?.dataset.resultCount;
+        const hint = host.querySelector(".row-group-facets__empty-hint");
+        if (hint) hint.hidden = count !== "0" || getSelectedSlugs(tableName).length === 0;
+    }
+    const primaryCount = document.getElementById(`${tableName}_results_count`);
+    topControls.addEventListener("results-count-updated", updateEmptyHint);
+    topControls.addEventListener("active-filters-updated", render);
+    primaryCount?.addEventListener("results-count-updated", updateEmptyHint);
+    host.disposeRowGroupPanel = () => {
+        topControls.removeEventListener("results-count-updated", updateEmptyHint);
+        topControls.removeEventListener("active-filters-updated", render);
+        primaryCount?.removeEventListener("results-count-updated", updateEmptyHint);
+    };
+    host.addEventListener("keydown", event => {
+        if (event.key === "Escape" && panelState.openHeading
+            && host.querySelector(".row-group-facet-panel")?.contains(event.target)) {
+            event.preventDefault();
+            closePanel();
+        }
+    });
+
+    function render() {
+        const focus = capturePanelFocus(host);
+        const activeSlugs = new Set(getSelectedSlugs(tableName));
+        host.setAttribute("aria-label", getTranslationForKey("row_group_categories"));
+        host.dataset.expanded = String(panelState.expanded);
+        host.replaceChildren();
+
+        const title = createPanelText("h2", "row_group_categories", "row-group-facets__title");
+        const guidance = createPanelText("p", "row_group_categories_hint", "row-group-facets__guidance");
+        host.append(title, guidance);
+        const headings = document.createElement("div");
+        headings.className = "row-group-facet-headings";
+        host.appendChild(headings);
+        groups.filter((group, index) => panelState.expanded || index < VISIBLE_HEADING_LIMIT
+            || group.values.some(facet => activeSlugs.has(facet.slug))
+            || headingKey(group) === panelState.openHeading).forEach(group => {
+            const key = headingKey(group);
+            const button = document.createElement("button");
+            button.type = "button";
+            button.className = "row-group-facet-heading";
+            button.id = `${host.id}_heading_${key}`;
+            button.dataset.headingId = key;
+            button.dataset.rowGroupFocus = `heading:${key}`;
+            button.dataset.testid = "row-group-facet-heading";
+            button.setAttribute("aria-expanded", String(panelState.openHeading === key));
+            button.setAttribute("aria-controls", `${host.id}_panel`);
+            const label = document.createElement("span");
+            label.textContent = group.heading ? getFacetTitle(group.heading, chosenLanguage) : getTranslationForKey("filters");
+            button.appendChild(label);
+            const selectedCount = group.values.filter(facet => activeSlugs.has(facet.slug)).length;
+            button.classList.toggle("has-selection", selectedCount > 0);
+            if (selectedCount) {
+                const badge = document.createElement("span");
+                badge.className = "row-group-facet-heading__badge";
+                badge.textContent = String(selectedCount);
+                badge.setAttribute("aria-label", `${selectedCount} ${getTranslationForKey("row_group_selected_count")}`);
+                button.appendChild(badge);
+            }
+            const caret = document.createElement("span");
+            caret.setAttribute("aria-hidden", "true");
+            caret.textContent = panelState.openHeading === key ? "▴" : "▾";
+            button.appendChild(caret);
+            button.addEventListener("click", () => {
+                panelState.openHeading = panelState.openHeading === key ? null : key;
+                render();
+                host.querySelector(`#${button.id}`)?.focus();
+            });
+            headings.appendChild(button);
+        });
+        if (groups.length > VISIBLE_HEADING_LIMIT) {
+            const more = createActionButton(panelState.expanded ? "show_less" : "show_more");
+            more.dataset.rowGroupFocus = "more";
+            more.setAttribute("aria-expanded", String(panelState.expanded));
+            more.addEventListener("click", () => {
+                panelState.expanded = !panelState.expanded;
+                render();
+                host.querySelector('[data-row-group-focus="more"]')?.focus();
+            });
+            headings.appendChild(more);
+        }
+
+        const panel = document.createElement("div");
+        panel.className = "row-group-facet-panel";
+        panel.id = `${host.id}_panel`;
+        panel.hidden = panelState.openHeading === null;
+        host.appendChild(panel);
+        const group = groups.find(value => headingKey(value) === panelState.openHeading);
+        if (group) {
+            const key = headingKey(group);
+            const panelHeading = document.createElement("div");
+            panelHeading.className = "row-group-facet-panel__head";
+            const heading = document.createElement("h3");
+            heading.id = `${panel.id}_title`;
+            heading.textContent = group.heading ? getFacetTitle(group.heading, chosenLanguage) : getTranslationForKey("filters");
+            // A cross like the selected-filter tags; the translated word stays its accessible name and tooltip.
+            const close = document.createElement("button");
+            close.type = "button";
+            close.className = "row-group-facet-action row-group-facet-panel__close";
+            close.dataset.ariaLabelLangKey = "close";
+            close.dataset.titleLangKey = "close";
+            close.setAttribute("aria-label", getTranslationForKey("close"));
+            close.title = getTranslationForKey("close");
+            close.textContent = "×";
+            close.dataset.rowGroupFocus = "close";
+            close.addEventListener("click", closePanel);
+            panelHeading.append(heading, close);
+            const hint = createPanelText("p", group.heading?.is_single ? "row_group_single_value_hint"
+                : "row_group_match_any_hint", "row-group-facet-panel__hint");
+            hint.id = `${panel.id}_hint`;
+            panel.setAttribute("role", "group");
+            panel.setAttribute("aria-labelledby", heading.id);
+            panel.setAttribute("aria-describedby", hint.id);
+            const search = document.createElement("input");
+            search.type = "search";
+            search.className = "row-group-facet-panel__search";
+            search.dataset.testid = "row-group-facet-search";
+            search.dataset.rowGroupFocus = `search:${key}`;
+            search.value = panelState.searches.get(key) || "";
+            search.placeholder = getTranslationForKey("search");
+            search.setAttribute("aria-label", `${heading.textContent}: ${getTranslationForKey("search")}`);
+            const list = document.createElement("ul");
+            list.className = "row-group-facet-values";
+            const empty = createPanelText("p", "row_group_no_name_matches", "row-group-facet-panel__hint");
+            empty.setAttribute("role", "status");
+            function renderValues() {
+                list.replaceChildren();
+                const query = search.value.trim().toLocaleLowerCase(chosenLanguage);
+                group.values.filter(facet => getFacetTitle(facet, chosenLanguage).toLocaleLowerCase(chosenLanguage).includes(query))
+                    .forEach(facet => {
+                        const item = document.createElement("li");
+                        const label = document.createElement("label");
+                        label.className = "row-group-facet-value";
+                        const checkbox = document.createElement("input");
+                        checkbox.type = "checkbox";
+                        checkbox.dataset.rowGroupSlug = facet.slug;
+                        checkbox.dataset.rowGroupFocus = `value:${facet.slug}`;
+                        checkbox.dataset.testid = "row-group-facet-checkbox";
+                        checkbox.checked = activeSlugs.has(facet.slug);
+                        checkbox.disabled = !checkbox.checked && activeSlugs.size >= SELECTION_LIMIT;
+                        checkbox.setAttribute("aria-describedby", hint.id);
+                        checkbox.setAttribute("aria-label", `${getFacetTitle(facet, chosenLanguage)}: ${facet.row_count}`);
+                        const name = document.createElement("span");
+                        name.className = "row-group-facet-value__name";
+                        name.textContent = getFacetTitle(facet, chosenLanguage);
+                        const count = document.createElement("span");
+                        count.className = "row-group-facet-value__count";
+                        count.textContent = String(facet.row_count);
+                        count.setAttribute("aria-hidden", "true");
+                        checkbox.addEventListener("change", () => runSelection(() => onToggle(tableName, facet.slug)));
+                        label.append(checkbox, name, count);
+                        item.appendChild(label);
+                        list.appendChild(item);
+                    });
+                empty.hidden = list.childElementCount > 0;
+            }
+            search.addEventListener("input", () => {
+                panelState.searches.set(key, search.value);
+                renderValues();
+            });
+            search.addEventListener("search", () => {
+                panelState.searches.set(key, search.value);
+                renderValues();
+            });
+            panel.append(panelHeading, hint, search, list, empty);
+            renderValues();
+        }
+        if (activeSlugs.size >= SELECTION_LIMIT) {
+            host.appendChild(createPanelText("p", "row_group_selection_limit", "row-group-facet-panel__hint"));
+        }
+        if (activeSlugs.size) {
+            const clear = createActionButton("clear_selections");
+            clear.dataset.rowGroupFocus = "clear-categories";
+            clear.addEventListener("click", () => runSelection(() => onClear(tableName)));
+            host.appendChild(clear);
+        }
+        const emptyHint = createPanelText("p", "row_group_no_results_hint", "row-group-facets__empty-hint");
+        emptyHint.setAttribute("role", "status");
+        host.appendChild(emptyHint);
+        updateEmptyHint();
+        restorePanelFocus(host, focus);
+    }
+
+    bindDatasetLanguageRenderer(host, language => {
+        chosenLanguage = language;
+        render();
+    });
+    restorePanelFocus(host, previousFocus);
+
     async function runSelection(action) {
-        if (host.getAttribute("aria-busy") === "true") return;
+        if (host.getAttribute("aria-busy") === "true") { render(); return; }
         host.setAttribute("aria-busy", "true");
         try {
             await action();
         } finally {
             host.removeAttribute("aria-busy");
+            if (host.isConnected) render();
         }
     }
     return host;
 }
 
+function createPanelText(tag, key, className) {
+    const element = document.createElement(tag);
+    element.className = className;
+    element.dataset.langKey = key;
+    element.textContent = getTranslationForKey(key);
+    return element;
+}
+
 function createActionButton(key) {
-    const button = document.createElement("button");
+    const button = createPanelText("button", key, "row-group-facet-action");
     button.type = "button";
-    button.classList.add("row-group-facet-chip");
-    button.dataset.langKey = key;
-    button.textContent = getTranslationForKey(key);
     return button;
+}
+
+// Rebuilds happen on language changes and first-page refreshes; retain the
+// disclosure, local query, caret, focused control and list scroll position.
+function capturePanelFocus(host) {
+    const active = document.activeElement;
+    return {
+        key: host?.contains(active) ? active.dataset.rowGroupFocus : null,
+        start: active?.selectionStart,
+        end: active?.selectionEnd,
+        scrollTop: host?.querySelector(".row-group-facet-values")?.scrollTop || 0,
+    };
+}
+
+function restorePanelFocus(host, focus) {
+    const list = host.querySelector(".row-group-facet-values");
+    if (list) list.scrollTop = focus?.scrollTop || 0;
+    const target = [...host.querySelectorAll("[data-row-group-focus]")]
+        .find(element => element.dataset.rowGroupFocus === focus?.key);
+    target?.focus();
+    if (target?.type === "search" && focus.start != null) target.setSelectionRange(focus.start, focus.end);
 }

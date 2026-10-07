@@ -1,110 +1,209 @@
 /* row_group_facets.css
- * Styles result-universe row-group filters across every dataset view.
- * Bridges compact facet controls with the active light or dark application theme.
- * Exists so group discovery stays centered, readable, and distinct from result cards.
+ * Presents the shared category card, heading disclosures and checkbox panel.
+ * Bridges returned facet metadata with Filterest's explicit application themes.
+ * Keeps its spacing local to the card while retaining accessible phone-sized controls.
  */
 
 .row-group-facets {
+    box-sizing: border-box;
+    width: 100%;
+    max-width: 550px;
+    min-width: 0;
+    margin: 0.25rem auto 0.75rem;
+    padding: 16px;
+    border: 1px solid var(--border-subtle);
+    border-radius: 10px;
+    background: var(--bg-surface);
+    color: var(--text-main);
+    font-family: system-ui, sans-serif;
+    font-size: 15px;
+    line-height: 1.5;
+    letter-spacing: normal;
+    text-align: left;
+}
+
+.row-group-facets__title {
+    margin: 0;
+    font-size: 18px;
+}
+
+.row-group-facets__guidance {
+    margin: 2px 0 12px;
+    color: var(--text-muted);
+    font-size: 14px;
+}
+
+.row-group-facet-headings {
     display: flex;
     flex-wrap: wrap;
-    justify-content: center;
-    gap: 0.5rem;
-    width: 100%;
-    max-width: 1450px;
-    margin: 0.25rem auto 0.75rem;
+    gap: 8px;
 }
 
-.row-group-facet-chip {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.5rem;
+.row-group-facets button,
+.row-group-facet-panel__search {
+    box-sizing: border-box;
     min-height: 44px;
     min-width: 44px;
-    padding: 0.35rem 0.65rem 0.35rem 0.8rem;
-    border: 1px solid var(--button_active_border_color);
-    border-radius: 999px;
-    background: color-mix(in srgb, var(--button_bg_color) 88%, transparent);
-    color: var(--button_text_color);
-    box-shadow: 0 1px 3px color-mix(in srgb, var(--text_color) 12%, transparent);
     font: inherit;
+    letter-spacing: normal;
+    color: var(--text-main);
+}
+
+.row-group-facet-heading {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    max-width: 100%;
+    padding: 6px 12px;
+    border: 1px solid var(--border-strong);
+    border-radius: 18px;
+    background: var(--bg-surface);
+    overflow-wrap: anywhere;
+    text-align: left;
     cursor: pointer;
-    transition: background-color 120ms ease, border-color 120ms ease;
 }
 
-.row-group-facet-chip:hover,
-.row-group-facet-chip:focus-visible {
+.row-group-facet-heading:hover,
+.row-group-facet-action:hover,
+.row-group-facet-value:hover {
+    background: var(--bg-surface-hover);
+}
+
+.row-group-facet-heading.has-selection,
+.row-group-facet-heading[aria-expanded="true"] {
     border-color: var(--primary_color);
-    background: var(--button_hover_bg_color);
 }
 
-.row-group-facet-chip:focus-visible {
-    outline: 2px solid color-mix(in srgb, var(--primary_color) 55%, transparent);
+.row-group-facet-heading[aria-expanded="true"] {
+    background: var(--fw-color-primary-soft);
+}
+
+.row-group-facet-heading__badge {
+    flex: none;
+    min-width: 22px;
+    padding-inline: 4px;
+    border-radius: 12px;
+    background: var(--primary_color);
+    color: var(--primary_text_color);
+    font-size: 13px;
+    font-weight: 700;
+    text-align: center;
+}
+
+.row-group-facet-action {
+    padding: 6px;
+    border: 1px solid transparent;
+    border-radius: 6px;
+    background: transparent;
+    text-decoration: underline;
+    cursor: pointer;
+}
+
+.row-group-facet-panel {
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px solid var(--border-subtle);
+}
+
+.row-group-facet-panel[hidden],
+.row-group-facets [hidden] {
+    display: none;
+}
+
+.row-group-facet-panel__head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.row-group-facet-panel__head h3 {
+    margin: 0;
+    font-size: 16px;
+    overflow-wrap: anywhere;
+}
+
+.row-group-facet-panel__close {
+    flex: none;
+    margin: -10px -6px 0 0;
+    font-size: 24px;
+    line-height: 1;
+    text-decoration: none;
+}
+
+.row-group-facet-panel__hint {
+    margin: 2px 0 6px;
+    color: var(--text-muted);
+    font-size: 13px;
+}
+
+.row-group-facet-panel__search {
+    width: 100%;
+    margin: 8px 0 4px;
+    padding: 7px 10px;
+    border: 1px solid var(--border-strong);
+    border-radius: 6px;
+    background: var(--bg-surface);
+}
+
+.row-group-facet-values {
+    max-height: 340px;
+    overflow: auto;
+    overscroll-behavior: contain;
+    margin: 6px 0 0;
+    padding: 0 4px 0 0;
+    list-style: none;
+}
+
+.row-group-facet-value {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    box-sizing: border-box;
+    min-height: 44px;
+    padding: 2px 4px;
+    border-radius: 6px;
+    cursor: pointer;
+}
+
+.row-group-facet-value input {
+    flex: none;
+    width: 18px;
+    height: 18px;
+    margin: 0;
+    accent-color: var(--primary_color);
+}
+
+.row-group-facet-value__name {
+    flex: 1;
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+
+.row-group-facet-value__count {
+    flex: none;
+    color: var(--text-muted);
+    font-size: 13px;
+    font-variant-numeric: tabular-nums;
+}
+
+.row-group-facet-value:has(input:disabled) {
+    color: var(--text-muted);
+    cursor: default;
+}
+
+.row-group-facets :is(button, input):focus-visible {
+    outline: 3px solid var(--primary_color);
     outline-offset: 2px;
 }
 
-.row-group-facet-chip--active {
-    border-color: var(--primary_color);
-    background: var(--primary_color);
-    color: var(--primary_text_color);
+.row-group-facets__empty-hint {
+    margin: 8px 0 0;
+    font-size: 14px;
 }
 
-/* Keep selected text and background paired during hover in both themes. */
-.row-group-facet-chip--active:hover,
-.row-group-facet-chip--active:focus-visible {
-    background: var(--primary_color);
-    color: var(--primary_text_color);
-}
-
-.row-group-facet-chip__label {
-    max-width: min(18rem, 60vw);
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-}
-
-.row-group-facet-chip__count {
-    display: inline-grid;
-    place-items: center;
-    min-width: 1.5rem;
-    min-height: 1.5rem;
-    padding-inline: 0.35rem;
-    border-radius: 999px;
-    background: color-mix(in srgb, currentcolor 12%, transparent);
-    font-size: 0.8rem;
-    font-weight: 700;
-    line-height: 1;
-}
-
-.row-group-facets[aria-busy="true"] .row-group-facet-chip {
-    pointer-events: none;
-    opacity: 0.65;
-}
-
-.active-filter-item[data-row-group-table] .remove-active-filter {
-    min-width: 44px;
-    min-height: 44px;
-}
-
-
-.row-group-facets__title {
-    width: 100%;
-    color: var(--text_color);
-    text-align: center;
-    font-weight: 700;
-}
-
-.row-group-facet-group {
-    display: flex;
-    flex-wrap: wrap;
-    justify-content: center;
-    gap: 0.5rem;
-    width: 100%;
-    min-width: 0;
-}
-
-.row-group-facet-group__title {
-    width: 100%;
-    color: var(--text_color);
-    text-align: center;
-    overflow-wrap: anywhere;
+@media (width <= 375px) {
+    .row-group-facets {
+        padding: 12px;
+    }
 }

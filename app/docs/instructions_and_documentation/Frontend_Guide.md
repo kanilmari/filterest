@@ -9,7 +9,7 @@ This document consolidates information regarding Filterest's frontend architectu
 
 For the future admin/media architecture behind image linking and broader asset support, see [Asset_Linking_Architecture.md](Asset_Linking_Architecture.md).
 
-The administrator’s Classes and categories window uses the existing row-group endpoints and captures the row selection when opened. Catalogue requests use `target` and membership writes carry `dataset` in the body, keeping the administrator pool. Saving sends only edited names and changed assignments, then calls the unified refresh so the first-page ribbon reconciliation and committed search caches retain their existing owners. Partial failures retain the remaining draft and report that earlier successful requests persist.
+The administrator’s Classes and categories window uses the existing row-group endpoints and captures the row selection when opened. Catalogue requests use `target` and membership writes carry `dataset` in the body, keeping the administrator pool. Saving sends only edited names and changed assignments, then calls the unified refresh so the first-page category reconciliation and committed search caches retain their existing owners. Partial failures retain the remaining draft and report that earlier successful requests persist.
 
 A class replacement uses one atomic membership POST, which removes peer values
 and assigns the chosen value in the backend transaction. The editor advances
@@ -37,6 +37,43 @@ ordinary filters, search identity, rows, projection and next offset, without
 another fetch. Ordinary view builds remember their rows after reconciliation;
 searched listing reloads rekey the prefix already remembered by infinite scroll.
 Omitted facets, failures, later pages and stale responses cannot resolve it.
+
+### Category panel and selected filters
+
+The existing row-group printer (`filterbar/filter_list/row_group_facet_printer.js`)
+shows a 550 px category card before selected tags and the shared result count;
+`dataset_view_printer.js` owns that placement. Heading buttons disclose one
+checkbox panel at a time. Heading badges count selections; row numbers count
+hits. The first three headings are shown initially, with selected headings
+always reachable and remaining headings available through Show more. The panel
+lists all returned values in server order, including selected zero-hit values.
+Its name search is local to that returned list, never a complete vocabulary
+query. Escape and the close cross return focus to the heading; refreshes and language
+switches retain the open panel, query, focus, caret and list scroll position.
+
+Selections retain the same unified filters, `row_group` URL parameter, 20-value
+limit, OR within a heading and AND between headings. Single-valued row
+classifications still permit multiple search selections. Clearing categories
+preserves text search and ordinary filters. The shared selected-tags row
+(`active_filter_tag_printer.js`) adds Selected: and Clear all; Clear all invokes
+`top_row_builder.js`'s existing whole reset, including text search, ordinary
+filters and paging, while preserving view and ordinary sorting. Tags continue
+to move into an open article's sidebar. The shared count publishes its numeric
+value so zero-result guidance never parses translated labels or requests new
+counts. Guidance is shown only for zero results with selected categories.
+
+Both application themes use `variables.css` tokens; fonts and spacing are
+scoped to the category card. Lists scroll at 340 px and labels/buttons offer
+44 px touch targets. The panel has no any/all match control, hierarchy,
+omitted zero-hit vocabulary, priorities or computed categories yet; each needs
+its own data contract first. Finnish/English copy is seeded by
+`20261005000039_seed_row_group_panel_language_keys.sql`; do not apply it
+through ad hoc SQL.
+
+The opt-in browser proof `E_search_filter/E13_row_group_category_panel.spec.ts`
+reads an existing categorized dataset named by
+`FILTEREST_E2E_CATEGORY_DATASET`; it needs one heading with two returned values
+that have hits and a second heading, and it never edits classifications.
 
 ### View Types
 -   **Card View**: Presents each record as a card. Suitable for rich media. Implemented in `filterest/app/frontend/core_components/table_views/card_view/card_view_printer.js`.

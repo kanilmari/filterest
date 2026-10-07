@@ -9,7 +9,8 @@
 .active_filters {
     display: flex;
     flex-wrap: wrap;
-    justify-content: center;
+    justify-content: flex-start;
+    align-items: center;
     gap: 0.5rem;
     margin: 0.5rem 0;
     width: 100%;
@@ -22,8 +23,13 @@
     background: var(--button_active_bg_color);
     color: var(--button_active_text_color);
     border: 1px solid var(--button_active_border_color);
-    border-radius: 4px;
-    padding: 2px 6px;
+    border-radius: 16px;
+    padding: 3px 4px 3px 12px;
+    min-width: 0;
+    max-width: 100%;
+    box-sizing: border-box;
+    overflow-wrap: anywhere;
+    font-size: 14px;
 }
 
 .active_filters .active-filter-item--exclude {
@@ -36,10 +42,41 @@
     background: transparent;
     border: none;
     cursor: pointer;
-    margin-right: 4px;
+    color: inherit;
+    min-width: 44px;
+    min-height: 44px;
+    margin-left: 4px;
+    border-radius: 12px;
 }
 
 .active_filters_results_count {
     margin: 0.25rem auto 0;
     text-align: center;
+}
+
+.active-filters-lead {
+    color: var(--text-muted);
+    font-size: 14px;
+}
+
+.active-filters-clear-all {
+    min-width: 44px;
+    min-height: 44px;
+    padding: 4px 6px;
+    border: 0;
+    background: transparent;
+    color: var(--text-main);
+    font: inherit;
+    font-size: 14px;
+    text-decoration: underline;
+    cursor: pointer;
+}
+
+.active_filters button:focus-visible {
+    outline: 3px solid var(--primary_color);
+    outline-offset: 2px;
+}
+
+.active_filters button:hover {
+    background: var(--bg-surface-hover);
 }
