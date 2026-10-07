@@ -76,14 +76,14 @@
       "component": "Lucide Icons",
       "kind": "embedded-icon-source",
       "path": "app/frontend/core_components/table_views/card_view/row_article_ui_handler.js",
-      "sha256": "a08ce2c1fb9262154e93fe2557503a53922e0a28e478638164fb94a45e78e580",
+      "sha256": "ed2c809464241d089e40c179a19a71c0af65983289fc168218413d2bfa9f5a05",
       "source_detail": "Embedded external-link geometry conservatively covered by the retained Lucide/Feather terms; no first-party authorship claim is made."
     },
     {
       "component": "Lucide Icons",
       "kind": "embedded-icon-source",
       "path": "app/frontend/reusable_components/key_value_container/kv_pair_builder.js",
-      "sha256": "896fb10ffe51892f54f26d00c45a252972db8b7921ef66a50da4acb0533cab21",
+      "sha256": "7e8d2f8bba6ae35179845bf5a561df1e2efa44f31b94fc95c085364987ab02a6",
       "source_detail": "Embedded external-link geometry conservatively covered by the retained Lucide/Feather terms; no first-party authorship claim is made."
     },
     {
@@ -781,7 +781,7 @@
       "component": "Google Material Icons and Symbols",
       "kind": "embedded-icon-source",
       "path": "app/frontend/templates/login.html",
-      "sha256": "5cf93c6e8b1191cea9f9af6076c74081860ae31802e298863b5488841a56716e"
+      "sha256": "c74332ad3e70f3aa9360ed04fcf8cc05a9f2680700c486b820f1e2d426da350c"
     },
     {
       "component": "Filterest demo placeholder images",
