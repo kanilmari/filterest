@@ -35,6 +35,10 @@
           "sha256": "42da75291c1aa4f010f218905a4a52288b0412f513dc4d7fac171299b8c7220c"
         },
         {
+          "path": "app/frontend/icons/general/star-filled-icon.svg",
+          "sha256": "22faf7a3335e8414e63fb8f2c8f29c927c2d79382935f44c1f72517b5ae0c123"
+        },
+        {
           "path": "app/frontend/icons/general/trash-icon.svg",
           "sha256": "c8ca819a641d9fd741788008d4592ade0da689d64a536d2f2176e6ff0f992197"
         },
@@ -315,7 +319,7 @@
         },
         {
           "path": "app/frontend/templates/login.html",
-          "sha256": "5cf93c6e8b1191cea9f9af6076c74081860ae31802e298863b5488841a56716e"
+          "sha256": "c74332ad3e70f3aa9360ed04fcf8cc05a9f2680700c486b820f1e2d426da350c"
         }
       ],
       "license": "Apache-2.0",
@@ -384,11 +388,11 @@
       "embedded_sources": [
         {
           "path": "app/frontend/core_components/table_views/card_view/row_article_ui_handler.js",
-          "sha256": "a08ce2c1fb9262154e93fe2557503a53922e0a28e478638164fb94a45e78e580"
+          "sha256": "ed2c809464241d089e40c179a19a71c0af65983289fc168218413d2bfa9f5a05"
         },
         {
           "path": "app/frontend/reusable_components/key_value_container/kv_pair_builder.js",
-          "sha256": "896fb10ffe51892f54f26d00c45a252972db8b7921ef66a50da4acb0533cab21"
+          "sha256": "7e8d2f8bba6ae35179845bf5a561df1e2efa44f31b94fc95c085364987ab02a6"
         },
         {
           "path": "app/frontend/reusable_components/vanilla_tree/van_tr_components/tree_icon_creator.js",
@@ -402,7 +406,7 @@
   ],
   "asset_provenance": {
     "path": "app/server_tools/licenses/asset_provenance.json",
-    "sha256": "5a794d9e85d3892cf3043cd4b7af7757fc8246b1f4eed424473e28dd471ceb1d"
+    "sha256": "2e9423d1153e49e3597721de2606aa02b15ca5fad1a869eb1ec18ea0dca2a6e1"
   },
   "browser_bundle_metadata_source": "app/server_tools/licenses/browser_bundle_provenance.json matched against app/package-lock.json and app/frontend/dist/*.js",
   "browser_bundle_provenance": {
@@ -410,7 +414,7 @@
     "sha256": "868e187c8724c69e945f54f9e25f213127f91acc3cda67da3392814a284c740f"
   },
   "combined_binary_license": "GPL-3.0-or-later",
-  "database_version": "9.9.2",
+  "database_version": "9.10.0",
   "dependencies": [
     {
       "binary_targets": [
@@ -743,6 +747,28 @@
     },
     {
       "binary_targets": [
+        "filterest"
+      ],
+      "documents": [
+        {
+          "path": "THIRD_PARTY_LICENSES/go-golang.org-x-text-v0.38.0-2f2a44571e46-1-LICENSE",
+          "sha256": "911f8f5782931320f5b8d1160a76365b83aea6447ee6c04fa6d5591467db9dad",
+          "source_file": "LICENSE"
+        },
+        {
+          "path": "THIRD_PARTY_LICENSES/go-golang.org-x-text-v0.38.0-2f2a44571e46-2-PATENTS",
+          "sha256": "96f408bfae65bf137fc2525d3ecb030271c50c1e90799f87abf8846d8dd505cc",
+          "source_file": "PATENTS"
+        }
+      ],
+      "ecosystem": "go",
+      "license": "BSD-3-Clause",
+      "name": "golang.org/x/text",
+      "scope": "release-binary",
+      "version": "v0.38.0"
+    },
+    {
+      "binary_targets": [
         "filterest",
         "filterest-admin-recovery"
       ],
@@ -837,7 +863,7 @@
       "version": "6.4.3"
     }
   ],
-  "filterest_app_version": "9.3.21",
+  "filterest_app_version": "9.3.22",
   "first_party_components": [
     {
       "assets": [

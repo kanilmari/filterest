@@ -1,91 +1,75 @@
-# Filterest 9.3.21
+# Filterest 9.3.22
 
-Signing in survives a browser update, each browser tab keeps its own view and open
-article, a card's picture is no longer lost or switched by itself, and a row's title
-no longer reaches the page before the row is read with the person's rights. The update
-signs everyone out once.
+Private login names are now separate from the names other people see, categories open
+from a compact card with heading buttons, Home can carry a title, a slogan and a moving
+background, and the limited database accounts lose write privileges they never needed.
+The database moves from 9.9.2 to 9.10.0. Administrators whose public name was their
+login name get a public name `admin_<n>` and sign in again once; their login name does
+not change.
 
-## Signing in survives a browser update
+## Before you update
 
-After a browser updated itself, signing in could stop at "Invalid CSRF token. Reload the
-page." on every site, and every site had signed the person out. A session that replaced
-one the server could not read was saved without the session cookie's settings, so the
-browser kept a second session cookie under a folder such as `/api` beside the site-wide
-one; the browser could also show a stored copy of the sign-in page whose token had gone
-stale; and the browser's fingerprint contained its version number, so an update looked
-like another browser.
+- **Database 9.10.0.** The update applies the 9.10.0 migrations at start where SQL
+  migrations are enabled, as on production sites. Take your installation's normal
+  backup first; the site update procedure does this for you.
+- **Administrators' public names.** An administrator whose public name equalled the
+  login name receives the next free `admin_<n>` (`auto_<n>` for the API-only automation
+  account) and is signed out once. Sign in with the unchanged login name. Names that
+  were public before stay as they were.
+- **Database privileges are tightened at every start.** The limited database accounts
+  lose direct write privileges on the account, membership and rights tables, their views
+  and sequences. If a configured writer, such as an automation, an upload cache or a
+  gallery, targets one of those tables, the start stops and names it. A runtime role
+  with the `BYPASSRLS` attribute, ownership or other elevated attributes also stops the
+  start and names the configured role; nothing is changed for you.
+- **Codex CLI 0.160.0.** The chat's coding agent, the site assistant's runner and the
+  worker CLI now require Codex CLI 0.160.0.
+- **Docker.** The application image builds again (since 9.3.21 its frontend stage
+  missed two files). Docker setup and start now need Docker Compose 2.20.0 or newer and
+  Python 3.
 
-A replacement session now gets the same cookie settings as every other session, and a
-second session cookie under such a folder is cleared while the site-wide one is kept.
-The sign-in page and the response that hands out its token now tell the browser not to
-store them. A sign-in,
-verification-code or password-reset request that meets a stale token fetches the
-session's current token and tries once more, keeping what the person typed. The
-fingerprint leaves version numbers out, and a signed-in session whose browser no longer
-matches ends in one clean sign-out instead of passing the person back and forth between
-the sign-in page and the application. Because the fingerprint changes, **the update
-signs everyone out once**.
+## Names and signing in
 
-## A row's title stays out of the page until the row is read with rights
+- **Private login names.** Sign-in and recovery use the private login name, without
+  case sensitivity; profiles, lists, search and mail show the public display name.
+  Registration and First Run ask for both. Ordinary accounts may keep equal names unless
+  an administrator turns that setting off; administrators' names always differ.
+- **Login-name change and signing out other devices.** The Account profile can change
+  the private login name or sign out the account's other devices, both confirmed with the
+  current password. The browser that does it stays signed in, even when one of its own
+  earlier requests finishes afterwards; other devices lose access at once.
+- **Program accounts** keep their fixed private names and show `auto_<n>`.
 
-The server writes the browser tab title and the link-preview title into a page before
-anything is authorised. At a row's address those titles could include the row's own
-title without checking whether the person may read that row. A row's address now
-carries the dataset's own title; the application still shows the row's title once it
-has read the row with the person's rights. On a site that requires signing in, a
-visitor who has not signed in is sent to the sign-in page first.
+## Categories
 
-## Views and open articles
+- **A compact category card.** Categories appear before the selected filters and the
+  result count. Heading buttons show how many values are selected and open one
+  searchable checkbox list with hit counts; Escape and the close cross return to the
+  heading. The selected-filter row offers "Selected:" and "Clear all", and a search with
+  no results suggests removing a category.
+- **Classes and categories window.** Administrators create, rename, order and disable
+  headings and values and assign them to selected rows.
 
-- **Each browser tab keeps its own view and open article.** With the same site open in
-  two tabs, opening a new tab or choosing a view in one could close the article that was
-  open in the other, or change its view. Each tab now remembers its own view and the row
-  it has open; sorting, filters and paging stay shared by all of the site's tabs.
-  Reloading an article's page brings back its related-rows tab, whether the related rows
-  were open, and the scroll position. A link straight to an article opens even when the
-  browser refuses a tab memory of its own.
-- **A dataset opens in the view its address names, otherwise in its default.** A dataset
-  whose default view was the card view sometimes opened as articles, because the browser
-  remembered the view and the open article from an earlier visit. A newly loaded page now
-  shows the view its address names, otherwise the dataset's default, and forgets the
-  articles left open on earlier visits, while sorting stays.
+## Home and appearance
 
-## A card's picture follows one rule and is no longer lost
+- **Optional Home page** with newest readable rows per dataset, a title and slogan in
+  Finnish and English, and image or MP4/WebM backgrounds of up to 50 MB that fade in
+  and loop smoothly. Dataset boxes can be switched off.
+- **Favourites** keep an administrator's frequently used tools under the dataset tabs.
+- Dataset covers start at the top of the window and fade into the content background;
+  a dataset image can be hidden without deleting it; every card field follows one
+  site-wide wrapping choice; image text is edited one language at a time.
 
-A card's picture could be the only reference to a picture file still on disk: uploading a
-new picture overwrote that reference, and deleting the new picture then emptied it, so
-the card lost its picture for good. An upload also made itself the card picture, while
-the next gallery change chose again by another rule, so a card's picture could switch
-back by itself.
+## Data and permissions
 
-Now one rule chooses the card picture everywhere: the picture marked as the main one,
-otherwise the gallery's first. A new picture goes to the end of the gallery, so it
-becomes the card picture only on a row that has none, and a card picture the gallery does
-not hold is kept rather than lost. The article opens on the picture the card shows.
-After the update, the application brings cards whose picture the old rule chose to the
-new rule when it starts, and finishes any it could not reach at later starts. Two
-changes to one gallery at once wait for each other, a CSV restore never writes over a
-picture the rule keeps, and deleting a gallery item no longer moves into deleted storage
-a file that the same row's other pictures or its card picture still use.
+- **Creator and owner columns.** New and existing content datasets get protected
+  `created_by` and `owner_id` columns; the upgrade fills them only from approved author
+  columns. A read-only report, `app/server_tools/scripts/row_owner_dry_run.sql`, shows a
+  site's planned changes first.
+- **Saved rights and database grants stay together.** Rights changes, dataset creation,
+  asset linking, automations and schema changes reconcile their database grants in the
+  same transaction, and a restored site settles its permissions before it opens.
+- **Live updates end with the sign-in**, deleted rows keep all their files in the
+  archive, and new rows keep the keys their relations reference.
 
-## Also
-
-- **A row counts as your own only when the dataset says who owns it.** An own-row
-  exception, such as "must be approved unless the row is your own", could identify the
-  wrong owner. A dataset now gives that exception only through a named owner column that
-  the database confirms links to the users table; the users table and the service
-  catalog keep their existing rules.
-- **Storage cleanup never touches the shared picture library.** The administrator routes
-  that archive and prune unknown storage folders now consider only folders named by a
-  dataset number, so they can no longer move the whole media library into deleted storage.
-- **The missing-media check samples a whole dataset.** By default it runs once after each
-  application or database update instead of at every start, and a check that was
-  switched off stays off. It samples a large dataset evenly by default, reads card
-  pictures and picture fields too, and its texts are language keys. Its report shows the
-  adjustable limits, notices when a limit cut a run short and per-dataset results, and it
-  lists a file as unused only after every gallery and picture field was read in full.
-
-## Database 9.9.2
-
-The update moves the database from 9.9.1 to 9.9.2. 9.9.2 changes no table: it adds the
-second version of the missing-media check's setting and its texts.
+The complete list of changes is in `CHANGELOG.md`.

@@ -9,22 +9,22 @@ Reviewed upstream legal and attribution document bytes are retained under
 
 ## Candidate
 
-- Filterest app version: `9.3.21`
-- Database version: `9.9.2`
+- Filterest app version: `9.3.22`
+- Database version: `9.10.0`
 - Project source license: `GPL-2.0-or-later`
 - Combined release-binary license: `GPL-3.0-or-later`
-- License bundle manifest SHA-256: `9dfdc9ee131feb25508d55cb99a606a88bbcb23376c4839e1c5f97be27e6ad10`
+- License bundle manifest SHA-256: `926f86fe1e8892a85e7cc3a5feab2bcdcfc12acb1f73c778eb97ab8e599bfade`
 - Go metadata source: `GOOS=linux GOARCH=amd64 CGO_ENABLED=1 go list -deps metadata for filterest[linux-release]:. tags=netgo osusergo; filterest[container]:.; filterest-admin-recovery[container]:./server_tools/admin_credential_recovery, plus compiled vendored components and Go toolchain`
 - npm metadata source: `package-lock.json production dependency graph`
 - browser bundle metadata source: `app/server_tools/licenses/browser_bundle_provenance.json matched against app/package-lock.json and app/frontend/dist/*.js`
-- compiled Go modules listed: `18`
+- compiled Go modules listed: `19`
 - compiled Go runtime or vendored components listed: `2`
 - runtime npm packages listed: `0`
 - browser bundle build components listed: `3`
-- third-party asset files listed: `80`
+- third-party asset files listed: `81`
 - source files containing third-party icon geometry: `6`
 - first-party asset files recorded: `48`
-- retained legal and attribution documents: `34`
+- retained legal and attribution documents: `36`
 - unresolved third-party rows: `0`
 
 Most development-only npm packages referenced by `app/package-lock.json` are not
@@ -37,7 +37,7 @@ Apache-2.0 components, the combined binaries are conveyed under GPL-3.0-or-later
 ## Dependency License Summary
 
 - `Apache-2.0`: 1
-- `BSD-3-Clause`: 10
+- `BSD-3-Clause`: 11
 - `MIT`: 12
 
 ## Compiled Go Modules Across Release Binaries
@@ -62,6 +62,7 @@ Apache-2.0 components, the combined binaries are conveyed under GPL-3.0-or-later
 | golang.org/x/image | v0.43.0 | BSD-3-Clause | release-binary | filterest | [`go-golang.org-x-image-v0.43.0-225f7a2ce8c1-1-LICENSE`](THIRD_PARTY_LICENSES/go-golang.org-x-image-v0.43.0-225f7a2ce8c1-1-LICENSE), [`go-golang.org-x-image-v0.43.0-225f7a2ce8c1-2-PATENTS`](THIRD_PARTY_LICENSES/go-golang.org-x-image-v0.43.0-225f7a2ce8c1-2-PATENTS) |
 | golang.org/x/sys | v0.34.0 | BSD-3-Clause | release-binary | filterest, filterest-admin-recovery | [`go-golang.org-x-sys-v0.34.0-8ab87b41b5af-1-LICENSE`](THIRD_PARTY_LICENSES/go-golang.org-x-sys-v0.34.0-8ab87b41b5af-1-LICENSE), [`go-golang.org-x-sys-v0.34.0-8ab87b41b5af-2-PATENTS`](THIRD_PARTY_LICENSES/go-golang.org-x-sys-v0.34.0-8ab87b41b5af-2-PATENTS) |
 | golang.org/x/term | v0.33.0 | BSD-3-Clause | release-binary | filterest-admin-recovery | [`go-golang.org-x-term-v0.33.0-8820e08dfc6e-1-LICENSE`](THIRD_PARTY_LICENSES/go-golang.org-x-term-v0.33.0-8820e08dfc6e-1-LICENSE), [`go-golang.org-x-term-v0.33.0-8820e08dfc6e-2-PATENTS`](THIRD_PARTY_LICENSES/go-golang.org-x-term-v0.33.0-8820e08dfc6e-2-PATENTS) |
+| golang.org/x/text | v0.38.0 | BSD-3-Clause | release-binary | filterest | [`go-golang.org-x-text-v0.38.0-2f2a44571e46-1-LICENSE`](THIRD_PARTY_LICENSES/go-golang.org-x-text-v0.38.0-2f2a44571e46-1-LICENSE), [`go-golang.org-x-text-v0.38.0-2f2a44571e46-2-PATENTS`](THIRD_PARTY_LICENSES/go-golang.org-x-text-v0.38.0-2f2a44571e46-2-PATENTS) |
 
 ## Go Runtime And Vendored Components
 
@@ -87,7 +88,7 @@ Apache-2.0 components, the combined binaries are conveyed under GPL-3.0-or-later
 
 | Component | Asset files | Embedded source files | License | Upstream | Retained documents |
 | --- | ---: | ---: | --- | --- | --- |
-| Google Material Icons and Symbols | 73 | 2 | Apache-2.0 | [source](https://github.com/google/material-design-icons) | [`asset-Google-Material-Icons-and-Symbols-eda288bd934a-1-material-symbols-Apache-2.0.txt`](THIRD_PARTY_LICENSES/asset-Google-Material-Icons-and-Symbols-eda288bd934a-1-material-symbols-Apache-2.0.txt), [`asset-Google-Material-Icons-and-Symbols-eda288bd934a-2-material-symbols-NOTICE.txt`](THIRD_PARTY_LICENSES/asset-Google-Material-Icons-and-Symbols-eda288bd934a-2-material-symbols-NOTICE.txt) |
+| Google Material Icons and Symbols | 74 | 2 | Apache-2.0 | [source](https://github.com/google/material-design-icons) | [`asset-Google-Material-Icons-and-Symbols-eda288bd934a-1-material-symbols-Apache-2.0.txt`](THIRD_PARTY_LICENSES/asset-Google-Material-Icons-and-Symbols-eda288bd934a-1-material-symbols-Apache-2.0.txt), [`asset-Google-Material-Icons-and-Symbols-eda288bd934a-2-material-symbols-NOTICE.txt`](THIRD_PARTY_LICENSES/asset-Google-Material-Icons-and-Symbols-eda288bd934a-2-material-symbols-NOTICE.txt) |
 | Heroicons / Tailwind Labs | 0 | 1 | MIT | [source](https://github.com/tailwindlabs/heroicons) | [`asset-Heroicons-Tailwind-Labs-dac4d65f3957-1-heroicons-LICENSE.txt`](THIRD_PARTY_LICENSES/asset-Heroicons-Tailwind-Labs-dac4d65f3957-1-heroicons-LICENSE.txt) |
 | Lucide Icons | 7 | 3 | ISC | [source](https://github.com/lucide-icons/lucide) | [`asset-Lucide-Icons-b785a75e951a-1-lucide-LICENSE.txt`](THIRD_PARTY_LICENSES/asset-Lucide-Icons-b785a75e951a-1-lucide-LICENSE.txt) |
 
