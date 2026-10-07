@@ -49,6 +49,12 @@
   min-width: 0;
 }
 
+/* The shared hero row class pulls a dataset hero's row 12px into its padded container. Home's row has no such
+   container, so it stays inside the page and keeps the shell's 12px corner inset for the menu, icon and gear. */
+.front-page > .front-page-top-row {
+  margin-inline: 0;
+}
+
 .front-page-top-row__identity {
   display: flex;
   align-items: center;

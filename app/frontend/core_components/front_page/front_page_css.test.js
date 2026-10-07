@@ -50,3 +50,8 @@ test('only Home content scrolls, with a fixed sibling background and no structur
     expect(css).toContain('image-rendering: auto');
     expect(css).not.toContain('padding-top: calc(12px + 44px');
 });
+
+test('Home keeps the 12px corner inset that the shared hero row class would cancel', () => {
+    expect(css).toMatch(/\.front-page > \.front-page-top-row\s*\{[^}]*margin-inline: 0;/);
+    expect(css.match(/\.front-page-top-row\s*\{([^}]+)\}/)?.[1]).toContain('padding: 12px');
+});
