@@ -161,7 +161,7 @@ INSERT INTO public.system_lang_keys (lang_key, fi, en, ch, yue, creation_spec) V
   ('riskienhallinta_dokumentaatio_relation', 'Riskien ja dokumenttien relaatiot', 'Risk and document relations', '风险与文档关系', '風險與文件關係', 'public fixture seed'),
   ('riskienhallinta_tiketit_relation', 'Riskien ja tikettien relaatiot', 'Risk and ticket relations', '风险与工单关系', '風險與工單關係', 'public fixture seed'),
   ('spatial_ref_sys', 'Koordinaattijärjestelmät', 'Spatial reference systems', '空间参考系统', '空間參考系統', 'public fixture seed'),
-  ('system_about', 'Järjestelmätiedot', 'System information', '系统信息', '系統資訊', 'public fixture seed'),
+  ('system_about', 'Tietoa', 'About', '关于', '關於', 'public fixture seed'),
   ('system_audit_log', 'Auditointiloki', 'Audit log', '审计日志', '稽核記錄', 'public fixture seed'),
   ('system_child_tab_config', 'Alivälilehtien asetukset', 'Child tab configuration', '子标签页配置', '子分頁設定', 'public fixture seed'),
   ('system_column_control', 'Sarakkeiden hallinta', 'Column control', '列控制', '欄位控制', 'public fixture seed'),

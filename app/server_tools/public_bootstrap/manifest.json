@@ -342,7 +342,7 @@
       "sha256": "ed360e40a0a39143178cd1d91add4c782926556ab04cfdcc41af213c2de4175f"
     },
     "server_tools/public_bootstrap/seed_data.sql": {
-      "sha256": "9c88e9e9b9750e5ef670753d13d638a81d26e08872d5fe1b4e2f6a7b2d370c66"
+      "sha256": "e957dd5631035709643d1ea6e850d9dbf7c8a102581429ac0039a1e095093068"
     }
   },
   "source_files": {
@@ -389,10 +389,10 @@
       "sha256": "412e27d5934946bb2fb513b3bf1f96fd87e750d6e724693209c0c5bc192b0698"
     },
     "filterest/app/server_tools/public_bootstrap/source/app_tables.seed.sql": {
-      "sha256": "92e77bddb4569b41c29a4cd4436ec47d3f00e8a9ca42d67d4ab4478d0f8e9c2a"
+      "sha256": "e93dc5f51e8b73a24771da1ca196b41b4be57f7a33c7938260e66d459b06ce96"
     },
     "filterest/app/server_tools/public_bootstrap/source/app_tables.lang_keys.sql": {
-      "sha256": "f6f0b52e54ba291d93a3f2036fdf19e5e8c83b2cd1a8dfa74bb4af7b11fc9247"
+      "sha256": "5dd36458b410f3f4a90ec2dd2aa12c16049daa2b3d050f0bc31ff436b3881dce"
     },
     "filterest/app/server_tools/public_bootstrap/source/article_view.seed.sql": {
       "sha256": "48c5d8df03bc513121b5314eeb82fd4779534bf0af5e4f1c56e8c0e56a6a1b8c"

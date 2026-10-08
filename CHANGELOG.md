@@ -22,6 +22,7 @@ Dates are the local (Europe/Helsinki) date on which the version was published.
 
 ## [Unreleased]
 
+- **New installations call the About dataset About** — A new installation's `system_about` dataset is named "About" in English and "Tietoa" in Finnish in its tab and as its dataset name, instead of "System information" / "Järjestelmätiedot". Existing sites keep their current texts, which administrators can change in the language and dataset settings.
 - **No access-denied notice from missing interface texts on development pages** — On a development installation, the background request that reports interface texts missing from a page no longer shows the “Access denied for action” notice, or any other failure notice, to a visitor without the right to add texts or to a browser test. Its outcome stays in the browser console with the other language-maintenance messages, and the page keeps its readable fallback text. Production pages never send this request.
 
 ## [9.3.23] - 2026-10-08
