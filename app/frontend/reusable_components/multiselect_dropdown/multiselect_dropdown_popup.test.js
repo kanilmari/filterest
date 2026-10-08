@@ -294,6 +294,16 @@ test('a preserved update reveals focus anywhere in the popup, such as search pus
     expect(document.activeElement).toBe(search); expect(popup.scrollTop).toBe(40);
 });
 
+test('cleanup after the window lost its methods, as in a torn-down test environment, does not throw', () => {
+    const { dropdown } = mount({ external: true });
+    dropdown.open();
+    // The test environment keeps the method as the global's own property, so put the original back afterwards.
+    const original = window.removeEventListener;
+    window.removeEventListener = undefined;
+    try { expect(() => dropdown.destroy()).not.toThrow(); } finally { window.removeEventListener = original; }
+    expect(typeof window.removeEventListener).toBe('function');
+});
+
 test('explicit owner preserves transient detached anchors and destroys closed or open instances on removal', async () => {
     const { dropdown, container, owner, trigger, popup } = mount({ external: true, preserveViewState: true });
     vi.spyOn(trigger, 'getBoundingClientRect').mockReturnValue({ left: 40, width: 100, top: 80, bottom: 124 });

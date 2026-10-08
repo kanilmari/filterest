@@ -91,13 +91,19 @@ export function createMultiselectPopupController({
         positionListWrapper();
     }
 
+    // Cleanup can run from a late owner observer after the window has been torn down (a test environment deletes its
+    // methods); it then has nothing left to detach.
+    function onView(method, ...args) {
+        if (typeof view[method] === 'function') view[method](...args);
+    }
+
     function stopPositionTracking() {
         tracking = false;
-        view.removeEventListener('resize', schedulePositionUpdate);
-        view.removeEventListener('scroll', schedulePositionUpdate, true);
-        view.visualViewport?.removeEventListener('resize', schedulePositionUpdate);
-        view.visualViewport?.removeEventListener('scroll', schedulePositionUpdate);
-        if (rafHandle) view.cancelAnimationFrame(rafHandle);
+        onView('removeEventListener', 'resize', schedulePositionUpdate);
+        onView('removeEventListener', 'scroll', schedulePositionUpdate, true);
+        view.visualViewport?.removeEventListener?.('resize', schedulePositionUpdate);
+        view.visualViewport?.removeEventListener?.('scroll', schedulePositionUpdate);
+        if (rafHandle) onView('cancelAnimationFrame', rafHandle);
         rafHandle = 0;
         if (!explicitOwner) stopOwnerConnectionTracking();
     }
