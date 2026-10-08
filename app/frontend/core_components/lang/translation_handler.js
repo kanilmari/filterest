@@ -532,6 +532,9 @@ function observeDomChanges() {
                             chosen_language: currentChosenLang,
                             sources: sourcesSnapshot,
                         },
+                        // Every failure, such as a guest's 403, goes to the console via
+                        // the .catch below instead of the pipeline's user notice.
+                        suppressErrorToast: true,
                     })
                     .then(aiTranslations => {
                         // Sulautetaan uudet avaimet nykyiseen käännössanakirjaan
