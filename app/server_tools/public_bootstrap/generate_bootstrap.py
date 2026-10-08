@@ -1,9 +1,8 @@
 #!/usr/bin/env python3
-"""Assemble Filterest's reviewed public schema, synthetic seed and hashes.
-
-Every input lives in this public checkout. The tool never reads a running
-database, deployment credentials, or a non-public source tree.
-"""
+"""generate_bootstrap.py
+Assembles Filterest's reviewed public schema, synthetic seeds and hashes.
+Connects public sources and migrations to reproducible fresh installations.
+Keeps live databases, credentials and non-public source trees outside generation."""
 from __future__ import annotations
 import argparse
 import re
@@ -64,6 +63,7 @@ language_seed_migrations = (
     "20261005000075_seed_runtime_grant_refusal_language_keys.sql",
     "20261005000086_seed_front_page_hero_language_keys.sql",
     "20261007000001_seed_row_group_match_mode_language_keys.sql",
+    "20261007000002_seed_multiselect_language_keys.sql",
 )
 # A setting an upgrade adds is added for a new installation by the same file, so
 # the default is written once and an upgraded site and a new one start with the

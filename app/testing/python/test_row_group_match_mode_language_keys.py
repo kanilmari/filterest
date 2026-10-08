@@ -1,8 +1,7 @@
-"""Verify mode copy is reproducible without overwriting reviewed translations.
-
-Connects the 9.10.1 copy migration to public bootstrap and its frontend consumers.
-Disposable migration/replay tests are opt-in; static packaging checks are offline.
-"""
+# test_row_group_match_mode_language_keys.py
+# Verifies reproducible mode copy without overwriting reviewed translations.
+# Connects the DB 9.10.1 seed to bootstrap and the extracted category card.
+# Keeps static packaging offline and disposable migration/replay tests opt-in.
 import json
 from pathlib import Path
 import re
@@ -25,7 +24,7 @@ def test_mode_copy_bootstrap_and_frontend_keys():
     assert set(keys) == {"row_group_match_mode", "row_group_match_any", "row_group_match_all",
                          "row_group_match_all_hint", "row_group_categories_modes_hint", "row_group_invalid_filters"}
     assert all(fi and en for fi, en in keys.values())
-    source = (APP / "frontend/core_components/filterbar/filter_list/row_group_facet_printer.js").read_text()
+    source = (APP / "frontend/core_components/filterbar/filter_list/row_group_facet_card_builder.js").read_text()
     assert all(key in source for key in keys if key not in {"row_group_invalid_filters", "row_group_match_any", "row_group_match_all"})
     assert "`row_group_match_${value}`" in source
     sql = MIGRATION.read_text()

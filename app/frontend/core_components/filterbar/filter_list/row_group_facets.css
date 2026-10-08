@@ -1,5 +1,5 @@
 /* row_group_facets.css
- * Presents the shared category card, heading disclosures and checkbox panel.
+ * Presents the shared category card, heading buttons and popup match controls.
  * Bridges returned facet metadata with Filterest's explicit application themes.
  * Keeps its spacing local to the card while retaining accessible phone-sized controls.
  */
@@ -39,8 +39,7 @@
     gap: 8px;
 }
 
-.row-group-facets button,
-.row-group-facet-panel__search {
+.row-group-facets button {
     box-sizing: border-box;
     min-height: 44px;
     min-width: 44px;
@@ -64,8 +63,7 @@
 }
 
 .row-group-facet-heading:hover,
-.row-group-facet-action:hover,
-.row-group-facet-value:hover {
+.row-group-facet-action:hover {
     background: var(--bg-surface-hover);
 }
 
@@ -90,6 +88,14 @@
     text-align: center;
 }
 
+.row-group-facet-heading__badge.is-empty { visibility: hidden; }
+
+.row-group-facet-heading__caret {
+    flex: none;
+    width: 1em;
+    text-align: center;
+}
+
 .row-group-facet-action {
     padding: 6px;
     border: 1px solid transparent;
@@ -99,103 +105,20 @@
     cursor: pointer;
 }
 
-.row-group-facet-panel {
-    margin-top: 12px;
-    padding-top: 12px;
-    border-top: 1px solid var(--border-subtle);
+.row-group-facets [hidden] { display: none; }
+
+.row-group-facets button:focus-visible {
+    outline: 3px solid var(--primary_color);
+    outline-offset: 2px;
 }
 
-.row-group-facet-panel[hidden],
-.row-group-facets [hidden] {
-    display: none;
-}
-
-.row-group-facet-panel__head {
-    display: flex;
-    align-items: flex-start;
-    justify-content: space-between;
-    gap: 12px;
-}
-
-.row-group-facet-panel__head h3 {
-    margin: 0;
-    font-size: 16px;
-    overflow-wrap: anywhere;
-}
-
-.row-group-facet-panel__close {
-    flex: none;
-    margin: -10px -6px 0 0;
-    font-size: 24px;
-    line-height: 1;
-    text-decoration: none;
-}
-
-.row-group-facet-panel__hint {
+.msd-dropdown-list--rich .row-group-facet-panel__hint {
     margin: 2px 0 6px;
     color: var(--text-muted);
     font-size: 13px;
 }
 
-.row-group-facet-panel__search {
-    width: 100%;
-    margin: 8px 0 4px;
-    padding: 7px 10px;
-    border: 1px solid var(--border-strong);
-    border-radius: 6px;
-    background: var(--bg-surface);
-}
-
-.row-group-facet-values {
-    max-height: 340px;
-    overflow: auto;
-    overscroll-behavior: contain;
-    margin: 6px 0 0;
-    padding: 0 4px 0 0;
-    list-style: none;
-}
-
-.row-group-facet-value {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    box-sizing: border-box;
-    min-height: 44px;
-    padding: 2px 4px;
-    border-radius: 6px;
-    cursor: pointer;
-}
-
-.row-group-facet-value input {
-    flex: none;
-    width: 18px;
-    height: 18px;
-    margin: 0;
-    accent-color: var(--primary_color);
-}
-
-.row-group-facet-value__name {
-    flex: 1;
-    min-width: 0;
-    overflow-wrap: anywhere;
-}
-
-.row-group-facet-value__count {
-    flex: none;
-    color: var(--text-muted);
-    font-size: 13px;
-    font-variant-numeric: tabular-nums;
-}
-
-.row-group-facet-value:has(input:disabled) {
-    color: var(--text-muted);
-    cursor: default;
-}
-
-.row-group-facets :is(button, input):focus-visible {
-    outline: 3px solid var(--primary_color);
-    outline-offset: 2px;
-}
+.msd-dropdown-list--rich .row-group-facet-popup-content { flex: none; }
 
 .row-group-facets__empty-hint {
     margin: 8px 0 0;
@@ -208,13 +131,7 @@
     }
 }
 
-/* A zero-hit value is readable vocabulary, so keep the checkbox and text contrast.
-   Theme-derived muted text dims names/counts without fading the entire control. */
-.row-group-facet-value.is-zero-hit :is(.row-group-facet-value__name, .row-group-facet-value__count) {
-    color: var(--text-muted);
-}
-
-.row-group-facet-mode {
+.msd-dropdown-list--rich .row-group-facet-mode {
     display: flex;
     flex-wrap: wrap;
     gap: 4px 16px;
@@ -224,12 +141,12 @@
     border: 0;
 }
 
-.row-group-facet-mode__legend {
+.msd-dropdown-list--rich .row-group-facet-mode__legend {
     padding: 0;
     font-size: 14px;
 }
 
-.row-group-facet-mode label {
+.msd-dropdown-list--rich .row-group-facet-mode label {
     display: inline-flex;
     align-items: center;
     gap: 8px;
@@ -238,7 +155,7 @@
     overflow-wrap: anywhere;
 }
 
-.row-group-facet-mode input {
+.msd-dropdown-list--rich .row-group-facet-mode input {
     flex: none;
     width: 18px;
     height: 18px;

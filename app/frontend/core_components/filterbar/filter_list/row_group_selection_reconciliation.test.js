@@ -9,7 +9,7 @@ import { getUnifiedTableState, setUnifiedTableState } from "../../state_stores/t
 import { setChosenDatasetView } from "../../state_stores/dataset_view_choice_saver.js";
 import { forgetPageDatasetParams, getParams, parseDatasetParamsFromSearch, setParams } from "../../navigation/nav_engine/query_params.js";
 import { renderActiveFilters } from "./active_filter_tag_printer.js";
-import { renderRowGroupFacets, toggleRowGroupFacet } from "./row_group_facet_printer.js";
+import { renderRowGroupFacets, toggleRowGroupFacet, clearRowGroupFacets } from "./row_group_facet_printer.js";
 
 const { endpointRouterMock, refreshMock, searchMock } = vi.hoisted(() => ({
     endpointRouterMock: vi.fn(), refreshMock: vi.fn(), searchMock: vi.fn(),
@@ -51,6 +51,11 @@ function seedURL(selection, { article = false, search = "matka" } = {}) {
     renderActiveFilters("travel_info");
 }
 
+function popupOption(host, slug) {
+    const heading = host.querySelector('[data-heading-id][aria-expanded="true"]');
+    return document.getElementById(heading.getAttribute("aria-controls")).querySelector(`[data-option-value="${slug}"]`);
+}
+
 function selectedTags() {
     return [...document.querySelectorAll("[data-row-group-table]")].map(item => item.dataset.rowGroupSlug);
 }
@@ -65,6 +70,7 @@ describe("authoritative row-group selections", () => {
     });
 
     afterEach(() => {
+        clearRowGroupFacets("travel_info");
         expect(endpointRouterMock).not.toHaveBeenCalled();
         vi.restoreAllMocks();
     });
@@ -107,7 +113,7 @@ describe("authoritative row-group selections", () => {
         await Promise.resolve();
         expect(selectedTags()).toEqual([]);
         host.querySelector('[data-testid="row-group-facet-heading"]').click();
-        expect(host.querySelector('[data-row-group-slug="available"]').disabled).toBe(false);
+        expect(popupOption(host, "available").getAttribute("aria-disabled") === "true").toBe(false);
         expect(refreshMock).not.toHaveBeenCalled();
         expect(searchMock).not.toHaveBeenCalled();
         expect(await toggleRowGroupFacet("travel_info", "available")).toBe(true);
@@ -125,7 +131,7 @@ describe("authoritative row-group selections", () => {
         expect(new URLSearchParams(location.search).get("row_group")).toBe("zero");
         expect(selectedTags()).toEqual(["zero"]);
         host.querySelector('[data-testid="row-group-facet-heading"]').click();
-        expect(host.querySelector('[data-row-group-slug="zero"]').checked).toBe(true);
+        expect(popupOption(host, "zero").getAttribute("aria-selected") === "true").toBe(true);
         expect(document.querySelector('.row-group-filter-label').textContent).toBe("filters: Nolla");
         expect(refreshMock).not.toHaveBeenCalled();
         expect(searchMock).not.toHaveBeenCalled();
@@ -135,17 +141,17 @@ describe("authoritative row-group selections", () => {
         seedURL("zero");
         const host = renderRowGroupFacets("travel_info", [{ id: 2, slug: "zero", title: { fi: "Nolla" }, row_count: 0, selected: true }], { ...authoritative, resolvedSelection: { slugs: ["zero"], modes: {} } });
         host.querySelector('[data-testid="row-group-facet-heading"]').click();
-        expect(host.querySelector('input[type="checkbox"]').checked).toBe(true);
-        const checkbox = host.querySelector('input[type="checkbox"]');
+        expect(popupOption(host, "zero").getAttribute("aria-selected") === "true").toBe(true);
+        const checkbox = popupOption(host, "zero");
         checkbox.focus();
         setUnifiedTableState("travel_info", { filters: { status: "open" } });
         const params = { ...getParams("travel_info") };
         delete params.row_group;
         setParams("travel_info", params);
         renderActiveFilters("travel_info");
-        expect(host.querySelector('input[type="checkbox"]').checked).toBe(false);
-        expect(host.querySelector('.row-group-facet-heading__badge')).toBeNull();
-        expect(document.activeElement).toBe(host.querySelector('input[type="checkbox"]'));
+        expect(popupOption(host, "zero").getAttribute("aria-selected") === "true").toBe(false);
+        expect(host.querySelector('.row-group-facet-heading__badge').getAttribute("aria-hidden")).toBe("true");
+        expect(document.activeElement).toBe(popupOption(host, "zero"));
         expect(refreshMock).not.toHaveBeenCalled();
     });
 

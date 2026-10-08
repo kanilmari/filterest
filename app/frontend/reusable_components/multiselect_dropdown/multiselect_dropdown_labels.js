@@ -4,7 +4,7 @@
 // Keeps language changes separate from selection, focus, search and popup lifecycle.
 
 export function createMultiselectLabelUpdater({
-    labels, input, searchInput, clearButton, optionsList, updateDisplay, isDestroyed,
+    labels, input, searchInput, clearButton, optionsList, emptyStatus, popupTitle, closeButton, updateDisplay, isDestroyed,
 }) {
     return (nextLabels = {}) => {
         if (isDestroyed() || !nextLabels || typeof nextLabels !== "object") return;
@@ -18,9 +18,12 @@ export function createMultiselectLabelUpdater({
         }
         clearButton.title = labels.clearLabel;
         clearButton.setAttribute("aria-label", labels.clearLabel);
-        optionsList.querySelectorAll(".msd-no-results").forEach((element) => {
-            element.textContent = labels.noResultsLabel;
-        });
+        emptyStatus.textContent = labels.noResultsLabel;
+        if (popupTitle) popupTitle.textContent = labels.popupTitle;
+        if (closeButton) {
+            closeButton.title = labels.closeLabel;
+            closeButton.setAttribute("aria-label", labels.closeLabel);
+        }
         optionsList.querySelectorAll(".msd-option-action").forEach((button) => {
             const reset = button.dataset.action === "reset";
             const label = reset ? labels.resetLabel : labels.excludeLabel;

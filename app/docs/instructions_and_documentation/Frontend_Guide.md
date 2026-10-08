@@ -43,13 +43,23 @@ Omitted selection metadata, failures, later pages and stale responses cannot res
 
 The existing row-group printer (`filterbar/filter_list/row_group_facet_printer.js`)
 shows a 550 px category card before selected tags and the shared result count;
-`dataset_view_printer.js` owns that placement. Heading buttons disclose one
-checkbox panel at a time. Heading badges count selections; row numbers count
+`dataset_view_printer.js` owns that placement. Heading buttons open one shared multiselect popup at a time over the results,
+without changing the card's height or the results' position. The persistent card
+controller (`row_group_facet_card_builder.js`) lazily creates one instance per
+heading, anchored to its stable button and owned by the connected dataset tab.
+This explicit owner keeps a popup alive while an asynchronous full redraw
+temporarily detaches the card. Heading badges count selections; row numbers count
 hits. The first three headings are shown initially, with selected headings
 always reachable and remaining headings available through Show more. The panel
 lists up to 200 readable values in server order, with selected values pinned before
 the cap. Zero-hit values stay visible, dimmed through theme text tokens, and selectable;
-only the 20-selection limit disables an unchecked value.
+only the 20-selection limit blocks an unchecked value, exposing `aria-disabled`
+without evicting a previous selection. Dimming never disables a value.
+The popup is a named nonmodal dialog containing a named multiselect listbox.
+Include-only options are single interaction targets with decorative checkbox
+marks and accessible names that include hit counts. Match radios, the changing
+hint and the limit notice sit above search inside the popup; category clear and
+zero-results recovery stay on the card.
 Its name search is local to that returned list, never a complete vocabulary
 query. Escape and the close cross return focus to the heading; refreshes and language
 switches retain the open panel, query, focus, caret and list scroll position.
@@ -71,24 +81,63 @@ value so zero-result guidance never parses translated labels or requests new
 counts. Guidance is shown only for zero results with selected categories.
 
 Both application themes use `variables.css` tokens; fonts and spacing are
-scoped to the category card. Lists scroll at 340 px and labels/buttons offer
-44 px touch targets. Facet counts omit the candidate heading in ANY; in ALL they
+scoped to the card and the opt-in class on the portalled popup. Options scroll
+at 340 px and controls offer 44 px touch targets. Category popups are at least
+360 px wide on desktop, bounded by the viewport; at 600 px and narrower they
+use the visual viewport minus 16 px on each side. They flip upward when needed.
+On short screens, with an on-screen keyboard and once the heading has left the
+view, the whole popup stays inside the visible area, at most 400 px high, and scrolls.
+Enter, Space and ArrowDown open from the heading and focus search without
+scrolling the page. Every focus move inside the popup (search on opening,
+options with arrows and Home/End, search when the focused option disappears)
+brings its target into view in the option area and, where the whole popup
+scrolls, in the popup, never scrolling the page; a preserved update that moves
+the focused element (reordered values, content above search) reveals it the same
+way and otherwise keeps both scroll positions; a fresh opening starts such a
+popup at its top. Repositioning on resize and scroll sets no scroll position,
+so a person's own scrolling inside the popup is never undone. Native radio keys
+retain their behavior. Tab exits to the page without a focus
+trap; Escape and header-close return focus, while outside click and view
+deactivation close without moving focus. Facet counts omit the candidate heading in ANY; in ALL they
 count rows satisfying the current selections plus the candidate value, with other
-headings applied in both modes. Search, listing, remembered rows, scrolling and row
-count caches include modes, ordinary filters and language in their signatures.
+headings applied in both modes. Listing freshness (`getDatasetListingSignature`) and search filter context
+include modes, ordinary filters and order where applicable, and leave page
+language out. Only the loaded-rows cache adds page language to the listing
+signature, so a late page-language initialization cannot make a current response stale.
 Obsolete AI streams are aborted. Hierarchy and server facet paging remain later slices.
 Finnish/English mode copy is seeded by
 `20261007000001_seed_row_group_match_mode_language_keys.sql` for DB 9.10.1.
 The reworded general hint uses `row_group_categories_modes_hint`, preserving reviewed
 copy under the previous key. Existing translations are never replaced. Apply copy
 through the migration lifecycle, never ad hoc SQL.
+The column filter also supplies shared search, selected/excluded count,
+empty-results and clear-action labels. Its extracted input builder retains raw
+option payloads and updates labels and localized options in place on language
+changes, preserving query, focus and include/exclude state. Missing shared copy
+is seeded by `20261007000002_seed_multiselect_language_keys.sql`, also under
+DB 9.10.1, for Finnish and English only. Existing dropdown callers keep their
+input row, search-reset (also when an opening key reaches an already open list)
+and oldest-selection replacement defaults; categories opt into preserved view
+state and a blocking global selection limit. Every caller gets five shared
+changes: Escape inside a list closes only the list and returns focus to its
+field, so a surrounding form or modal stays open (it used to close the form
+too); keys on an exclude action activate the action (Enter there used to toggle
+the value); keyboard focus brings the option into view without scrolling the
+page; positions follow the visual viewport, for example above an on-screen
+keyboard; and include-only lists keep their two-column rows in the portalled list.
 
 The opt-in browser proof `E_search_filter/E13_row_group_category_panel.spec.ts`
 reads an existing categorized dataset named by
 `FILTEREST_E2E_CATEGORY_DATASET`; it needs one heading with two returned values
 that have hits and a second heading. The mode proof also needs a multi-valued heading
 with two values whose readable support differs, so ANY/ALL counts can visibly change.
-It checks a selectable dimmed value when one is returned, and never edits classifications.
+It resolves the popup through the heading's ARIA reference and checks stable
+card/result geometry and scrolling, counts, both focus-return paths, match
+controls inside the popup, and state retained through refresh. It checks a
+selectable dimmed value when one is returned, and never edits classifications.
+The browser matrix covers 320, 375, 600, 601 px and desktop, short height, Finnish
+and English, and application light/OS light, application dark/OS light, and
+application light/OS dark.
 
 ### View Types
 -   **Card View**: Presents each record as a card. Suitable for rich media. Implemented in `filterest/app/frontend/core_components/table_views/card_view/card_view_printer.js`.

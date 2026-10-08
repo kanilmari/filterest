@@ -4,7 +4,7 @@
 // Exists to keep row-group filters consistent across every view without stale category controls.
 // @vitest-environment jsdom
 
-import { beforeEach, describe, expect, test, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 
 const {
     interfaceLanguage,
@@ -82,11 +82,16 @@ vi.mock("../text_search/dataset_search_executor.js", () => ({
 
 const heading = (id, sort_order = id, is_single = false) => ({ id, slug: `heading_${id}`, title: { fi: `Otsikko ${id}`, en: `Heading ${id}` }, sort_order, is_single });
 const value = (id, slug, group = null, extra = {}) => ({ id, slug, title: { fi: slug, en: slug }, row_count: id, heading: group, ...extra });
-const buttons = host => [...host.querySelectorAll('[data-testid="row-group-facet-heading"]')];
+const buttons = host => [...host.querySelectorAll('[data-testid="row-group-facet-heading"]')].filter(button => !button.hidden);
 const open = (host, index = 0) => buttons(host)[index].click();
-const checkboxes = host => [...host.querySelectorAll('input[type="checkbox"]')];
+const popup = host => document.getElementById(host.querySelector('[aria-expanded="true"][data-heading-id]')?.getAttribute('aria-controls'));
+const checkboxes = host => [...popup(host).querySelectorAll('[role="option"]')];
 
 describe("row group category panel", () => {
+    afterEach(async () => {
+        const { clearRowGroupFacets } = await import("./row_group_facet_printer.js");
+        clearRowGroupFacets("travel_info");
+    });
     beforeEach(() => {
         vi.clearAllMocks();
         setUnifiedTableStateMock.mockReset();
@@ -114,10 +119,10 @@ describe("row group category panel", () => {
         expect(host.querySelector("h2").textContent).toBe("Kategoriat");
         expect(host.querySelector(".row-group-facet-heading__badge").textContent).toBe("1");
         expect(host.querySelector(".row-group-facet-heading__badge").getAttribute("aria-label")).toBe("1 valittu");
-        expect(host.querySelector(".row-group-facet-panel").hidden).toBe(true);
+        expect(popup(host)).toBeNull();
         open(host);
         expect(checkboxes(host)).toHaveLength(2);
-        expect(checkboxes(host)[0].checked).toBe(true);
+        expect(checkboxes(host)[0].getAttribute("aria-selected") === "true").toBe(true);
         expect(checkboxes(host)[0].getAttribute("aria-label")).toBe("Turvallisuus: 5");
         checkboxes(host)[1].click();
         await vi.waitFor(() => expect(onToggle).toHaveBeenCalledWith("travel_info", "lappi"));
@@ -128,21 +133,41 @@ describe("row group category panel", () => {
         const host = renderRowGroupFacets("travel_info", [value(1, "boat", heading(1)), value(2, "train", heading(2))]);
         open(host);
         expect(buttons(host).map(button => button.getAttribute("aria-expanded"))).toEqual(["true", "false"]);
-        expect(host.querySelector('[role="group"]').getAttribute("aria-labelledby")).toBe(host.querySelector("h3").id);
-        expect(document.activeElement).toBe(buttons(host)[0]);
+        expect(popup(host).getAttribute("aria-labelledby")).toBe(popup(host).querySelector("h3").id);
+        expect(document.activeElement).toBe(popup(host).querySelector("input[type=search]"));
         open(host, 1);
         expect(buttons(host).map(button => button.getAttribute("aria-expanded"))).toEqual(["false", "true"]);
-        expect(checkboxes(host).map(input => input.dataset.rowGroupSlug)).toEqual(["train"]);
+        expect(checkboxes(host).map(input => input.dataset.optionValue)).toEqual(["train"]);
         checkboxes(host)[0].focus();
         checkboxes(host)[0].dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
-        expect(host.querySelector(".row-group-facet-panel").hidden).toBe(true);
+        expect(popup(host)).toBeNull();
         expect(document.activeElement).toBe(buttons(host)[1]);
         open(host);
-        host.querySelector('[data-aria-label-lang-key="close"]').click();
+        popup(host).querySelector(".msd-popup-close").click();
         expect(document.activeElement).toBe(buttons(host)[0]);
         open(host);
         open(host);
-        expect(host.querySelector(".row-group-facet-panel").hidden).toBe(true);
+        expect(popup(host)).toBeNull();
+    });
+
+    test("a redraw that moves the focused value earlier reveals it in a popup that scrolls as a whole", async () => {
+        const { renderRowGroupFacets } = await import("./row_group_facet_printer.js");
+        const host = renderRowGroupFacets("travel_info", [value(1, "boat"), value(2, "train"), value(3, "plane")]);
+        open(host);
+        const dialog = popup(host);
+        const listbox = dialog.querySelector('[role="listbox"]');
+        dialog.style.overflowY = "auto";
+        vi.spyOn(dialog, "getBoundingClientRect").mockReturnValue({ top: 16, bottom: 334 });
+        vi.spyOn(listbox, "getBoundingClientRect").mockReturnValue({ top: -150, bottom: 340 });
+        const plane = checkboxes(host)[2];
+        const box = vi.spyOn(plane, "getBoundingClientRect").mockReturnValue({ top: 290, bottom: 334 });
+        plane.focus(); dialog.scrollTop = 270; listbox.scrollTop = 100;
+        // An administrator moved the value first; the redraw puts it above the popup's visible top, and the popup's
+        // scroll moves it as in a browser (the card may render more than once per redraw).
+        box.mockImplementation(() => ({ top: -106 + 270 - dialog.scrollTop, bottom: -62 + 270 - dialog.scrollTop }));
+        renderRowGroupFacets("travel_info", [value(3, "plane"), value(1, "boat"), value(2, "train")]);
+        expect(checkboxes(host)[0]).toBe(plane); expect(document.activeElement).toBe(plane);
+        expect(listbox.scrollTop).toBe(100); expect(dialog.scrollTop).toBe(148);
     });
 
     test("lists all returned values in payload order and searches locally without changing selections or URL", async () => {
@@ -151,17 +176,17 @@ describe("row group category panel", () => {
         facets.push(value(20, "security", null, { row_count: 0, selected: true }));
         const host = renderRowGroupFacets("travel_info", facets);
         open(host);
-        expect(checkboxes(host).map(input => input.dataset.rowGroupSlug)).toEqual(facets.map(facet => facet.slug));
-        const search = host.querySelector('input[type="search"]');
+        expect(checkboxes(host).map(input => input.dataset.optionValue)).toEqual(facets.map(facet => facet.slug));
+        const search = popup(host).querySelector('input[type="search"]');
         search.focus();
         search.value = " SECURITY ";
         search.dispatchEvent(new Event("input"));
         expect(checkboxes(host)).toHaveLength(1);
-        expect(checkboxes(host)[0].checked).toBe(true);
+        expect(checkboxes(host)[0].getAttribute("aria-selected") === "true").toBe(true);
         expect(document.activeElement).toBe(search);
         search.value = "absent";
         search.dispatchEvent(new Event("input"));
-        expect(host.querySelector('[data-lang-key="row_group_no_name_matches"]').hidden).toBe(false);
+        expect(popup(host).querySelector(".msd-no-results").hidden).toBe(false);
         search.value = "";
         search.dispatchEvent(new Event("search"));
         expect(checkboxes(host)).toHaveLength(15);
@@ -173,25 +198,25 @@ describe("row group category panel", () => {
         const { renderRowGroupFacets } = await import("./row_group_facet_printer.js");
         const host = renderRowGroupFacets("travel_info", [value(1, "security", heading(1), { title: { fi: "Turvallisuus", en: "Security" }, row_count: 0, selected: true })]);
         open(host);
-        const search = host.querySelector('input[type="search"]');
+        const search = popup(host).querySelector('input[type="search"]');
         search.value = "i";
         search.dispatchEvent(new Event("input"));
         search.focus();
         search.setSelectionRange(1, 1);
-        host.querySelector("ul").scrollTop = 80;
+        popup(host).querySelector(".msd-dropdown-options").scrollTop = 80;
         languageRenderers.get(host)("en");
         expect(host.getAttribute("aria-label")).toBe("Categories");
-        expect(host.querySelector("h3").textContent).toBe("Heading 1");
-        const close = host.querySelector('[data-aria-label-lang-key="close"]');
+        expect(popup(host).querySelector("h3").textContent).toBe("Heading 1");
+        const close = popup(host).querySelector(".msd-popup-close");
         expect([close.textContent, close.getAttribute("aria-label"), close.title]).toEqual(["×", "Close", "Close"]);
-        expect(host.querySelector('[data-lang-key="row_group_match_any_hint"]').textContent).toBe("Any selected.");
-        expect(host.querySelector("legend").textContent).toBe("Match mode");
-        expect([...host.querySelectorAll("fieldset label span")].map(item => item.textContent)).toEqual(["At least one", "All selected"]);
+        expect(popup(host).querySelector('[data-lang-key="row_group_match_any_hint"]').textContent).toBe("Any selected.");
+        expect(popup(host).querySelector("legend").textContent).toBe("Match mode");
+        expect([...popup(host).querySelectorAll("fieldset label span")].map(item => item.textContent)).toEqual(["At least one", "All selected"]);
         expect(checkboxes(host)[0].getAttribute("aria-label")).toBe("Security: 0");
         expect(document.activeElement.type).toBe("search");
         expect(document.activeElement.value).toBe("i");
         expect(document.activeElement.selectionStart).toBe(1);
-        expect(host.querySelector("ul").scrollTop).toBe(80);
+        expect(popup(host).querySelector(".msd-dropdown-options").scrollTop).toBe(80);
     });
 
     test("keeps open heading, search, selections and focused value across first-page rebuilds", async () => {
@@ -199,15 +224,15 @@ describe("row group category panel", () => {
         const facets = [value(1, "security", heading(1), { row_count: 0, selected: true }), value(2, "boat", heading(2))];
         let host = renderRowGroupFacets("travel_info", facets);
         open(host);
-        const search = host.querySelector('input[type="search"]');
+        const search = popup(host).querySelector('input[type="search"]');
         search.value = "security";
         search.dispatchEvent(new Event("input"));
         checkboxes(host)[0].focus();
         host = renderRowGroupFacets("travel_info", facets);
         expect(buttons(host)[0].getAttribute("aria-expanded")).toBe("true");
-        expect(host.querySelector('input[type="search"]').value).toBe("security");
-        expect(document.activeElement.dataset.rowGroupSlug).toBe("security");
-        expect(document.activeElement.checked).toBe(true);
+        expect(popup(host).querySelector('input[type="search"]').value).toBe("security");
+        expect(document.activeElement.dataset.optionValue).toBe("security");
+        expect(document.activeElement.getAttribute("aria-selected") === "true").toBe(true);
     });
 
     test("sorts headings, preserves untitled values and displays text safely", async () => {
@@ -222,7 +247,7 @@ describe("row group category panel", () => {
         expect(buttons(host).map(button => button.firstChild.textContent)).toEqual(["Otsikko 1", "Suodattimet", "<img src=x>"]);
         expect(host.querySelector("img")).toBeNull();
         open(host);
-        expect(host.querySelector('[data-lang-key="row_group_single_value_hint"]')).not.toBeNull();
+        expect(popup(host).querySelector('[data-lang-key="row_group_single_value_hint"]')).not.toBeNull();
         expect(tags.querySelector(".row-group-filter-label").textContent).toBe("<img src=x>: security");
         languageRenderers.get(tags.firstChild)("en");
         expect(tags.querySelector("button").getAttribute("aria-label")).toBe("Remove: Theme: security");
@@ -238,7 +263,7 @@ describe("row group category panel", () => {
         expect(buttons(host)).toHaveLength(4);
         open(host, 3);
         expect(checkboxes(host)).toHaveLength(14);
-        expect(checkboxes(host).at(-1).checked).toBe(true);
+        expect(checkboxes(host).at(-1).getAttribute("aria-selected") === "true").toBe(true);
         host.querySelector('[data-lang-key="show_more"]').click();
         expect(buttons(host)).toHaveLength(5);
         host.querySelector('[data-lang-key="show_less"]').click();
@@ -253,20 +278,20 @@ describe("row group category panel", () => {
         open(host, 4);
         host.querySelector('[data-lang-key="show_less"]').click();
         expect(buttons(host)).toHaveLength(4);
-        host.querySelector('[data-aria-label-lang-key="close"]').click();
+        popup(host).querySelector(".msd-popup-close").click();
         expect(document.activeElement.dataset.headingId).toBe("5");
         expect(document.activeElement.getAttribute("aria-expanded")).toBe("false");
     });
 
-    test("disables a twenty-first checkbox but allows removal of selected values", async () => {
+    test("blocks a twenty-first value but allows removal of selected values", async () => {
         const { renderRowGroupFacets, toggleRowGroupFacet } = await import("./row_group_facet_printer.js");
         const selected = Array.from({ length: 20 }, (_, i) => `group_${i}`);
         getUnifiedTableStateMock.mockReturnValue({ filters: { row_group: selected.join(",") } });
         const host = renderRowGroupFacets("travel_info", [...selected.map((slug, i) => value(i + 1, slug)), value(30, "extra")]);
         open(host);
-        expect(checkboxes(host).at(-1).disabled).toBe(true);
-        expect(checkboxes(host)[0].disabled).toBe(false);
-        expect(host.querySelector('[data-lang-key="row_group_selection_limit"]')).not.toBeNull();
+        expect(checkboxes(host).at(-1).getAttribute("aria-disabled") === "true").toBe(true);
+        expect(checkboxes(host)[0].getAttribute("aria-disabled") === "true").toBe(false);
+        expect(popup(host).querySelector('[data-lang-key="row_group_selection_limit"]')).not.toBeNull();
         expect(await toggleRowGroupFacet("travel_info", "extra")).toBe(false);
         expect(await toggleRowGroupFacet("travel_info", "bad value")).toBe(false);
         expect(setUnifiedTableStateMock).not.toHaveBeenCalled();
@@ -280,7 +305,7 @@ describe("row group category panel", () => {
         checkboxes(host)[0].focus();
         expect(renderRowGroupFacets("travel_info", [], { authoritative: true, isCurrent: () => false })).toBe(host);
         expect(renderRowGroupFacets("travel_info", [], { authoritative: true, requestFilters: {} })).toBe(host);
-        expect(document.activeElement.checked).toBe(true);
+        expect(document.activeElement.getAttribute("aria-selected") === "true").toBe(true);
         expect(setUnifiedTableStateMock).not.toHaveBeenCalled();
     });
 
@@ -347,17 +372,17 @@ describe("row group category panel", () => {
         const { renderRowGroupFacets } = await import("./row_group_facet_printer.js");
         const host = renderRowGroupFacets("travel_info", [value(1, "boat", heading(1)), value(2, "train", heading(2, 2, true)), value(3, "legacy")]);
         open(host, 1);
-        const fieldset = host.querySelector("fieldset");
+        const fieldset = popup(host).querySelector("fieldset:not([hidden])");
         expect(fieldset.querySelector("legend").textContent).toBe("Hakutapa");
         expect([...fieldset.querySelectorAll("span")].map(item => item.textContent)).toEqual(["Vähintään yksi", "Kaikki valitut"]);
-        expect(fieldset.compareDocumentPosition(host.querySelector('input[type="search"]')) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+        expect(fieldset.compareDocumentPosition(popup(host).querySelector('input[type="search"]')) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
         expect(fieldset.querySelector('[value="any"]').checked).toBe(true);
-        expect(fieldset.getAttribute("aria-describedby")).toBe(host.querySelector(".row-group-facet-panel__hint").id);
+        expect(fieldset.getAttribute("aria-describedby")).toBe(popup(host).querySelector(".row-group-facet-panel__hint").id);
         open(host, 0);
-        expect(host.querySelector("fieldset")).not.toBeNull();
+        expect(popup(host).querySelector("fieldset:not([hidden])")).not.toBeNull();
         open(host, 2);
-        expect(host.querySelector("fieldset")).toBeNull();
-        expect(host.querySelector(".row-group-facet-panel__hint").textContent).toBe("Rivillä on tässä yksi arvo.");
+        expect(popup(host).querySelector("fieldset:not([hidden])")).toBeNull();
+        expect(popup(host).querySelector(".row-group-facet-panel__hint").textContent).toBe("Rivillä on tässä yksi arvo.");
     });
 
     test("ALL refresh preserves radio focus, query and scroll; hint and Escape follow the mode", async () => {
@@ -368,18 +393,18 @@ describe("row group category panel", () => {
         const onModeChange = vi.fn((_table, id, mode) => { state = { filters: { ...state.filters, row_group_mode: `${id}:${mode}` } }; });
         let host = renderRowGroupFacets("travel_info", facets, { onModeChange });
         open(host);
-        host.querySelector('input[type="search"]').value = "sec";
-        host.querySelector('input[type="search"]').dispatchEvent(new Event("input"));
-        host.querySelector("ul").scrollTop = 81;
-        const radio = host.querySelector('[value="all"]'); radio.focus(); radio.click();
+        popup(host).querySelector('input[type="search"]').value = "sec";
+        popup(host).querySelector('input[type="search"]').dispatchEvent(new Event("input"));
+        popup(host).querySelector(".msd-dropdown-options").scrollTop = 81;
+        const radio = popup(host).querySelector('[value="all"]'); radio.focus(); radio.click();
         await vi.waitFor(() => expect(host.getAttribute("aria-busy")).not.toBe("true"));
         expect(onModeChange).toHaveBeenCalledWith("travel_info", 1, "all");
         host = renderRowGroupFacets("travel_info", facets, { onModeChange });
-        expect(document.activeElement).toBe(host.querySelector('[value="all"]'));
-        expect(host.querySelector('[value="all"]').checked).toBe(true);
-        expect(host.querySelector('input[type="search"]').value).toBe("sec");
-        expect(host.querySelector("ul").scrollTop).toBe(81);
-        expect(host.querySelector(".row-group-facet-panel__hint").textContent).toBe("Kaikki valitut arvot.");
+        expect(document.activeElement).toBe(popup(host).querySelector('[value="all"]'));
+        expect(popup(host).querySelector('[value="all"]').checked).toBe(true);
+        expect(popup(host).querySelector('input[type="search"]').value).toBe("sec");
+        expect(popup(host).querySelector(".msd-dropdown-options").scrollTop).toBe(81);
+        expect(popup(host).querySelector(".row-group-facet-panel__hint").textContent).toBe("Kaikki valitut arvot.");
         document.activeElement.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
         expect(document.activeElement).toBe(buttons(host)[0]);
     });
@@ -389,9 +414,9 @@ describe("row group category panel", () => {
         const onToggle = vi.fn();
         const host = renderRowGroupFacets("travel_info", [value(1, "empty", heading(1), { row_count: 0, zero_hit: true })], { onToggle });
         open(host);
-        const checkbox = host.querySelector('input[type="checkbox"]');
-        expect(checkbox.disabled).toBe(false);
-        expect(checkbox.closest("label").classList.contains("is-zero-hit")).toBe(true);
+        const checkbox = checkboxes(host)[0];
+        expect(checkbox.getAttribute("aria-disabled") === "true").toBe(false);
+        expect(checkbox.classList.contains("msd-option--dimmed")).toBe(true);
         checkbox.focus(); expect(document.activeElement).toBe(checkbox);
         checkbox.click(); await vi.waitFor(() => expect(onToggle).toHaveBeenCalledWith("travel_info", "empty"));
     });
@@ -414,6 +439,56 @@ describe("row group category panel", () => {
         await clearRowGroupSelection("travel_info");
         expect(state.filters).toEqual({ status: "open" }); expect(params).toEqual({ status: "open" });
         expect(refreshTableUnifiedMock).toHaveBeenCalledTimes(4);
+    });
+
+    test("each heading preserves its own query and clear resets modes without closing the popup", async () => {
+        const { renderRowGroupFacets } = await import("./row_group_facet_printer.js");
+        let state = { filters: { row_group: "security", row_group_mode: "1:all" } };
+        getUnifiedTableStateMock.mockImplementation(() => state);
+        const onClear = vi.fn(() => { state = { filters: {} }; });
+        const host = renderRowGroupFacets("travel_info", [value(1, "security", heading(1)), value(2, "train", heading(2))], { onClear });
+        const firstHeading = buttons(host)[0];
+        open(host); const firstPopup = popup(host); const firstSearch = firstPopup.querySelector("input[type=search]");
+        firstSearch.value = "sec"; firstSearch.dispatchEvent(new Event("input"));
+        open(host, 1); popup(host).querySelector("input[type=search]").value = "train";
+        expect(firstPopup.style.display).toBe("none");
+        open(host); expect(popup(host)).toBe(firstPopup); expect(firstSearch.value).toBe("sec");
+        const radio = firstPopup.querySelector('[value="all"]'); radio.focus();
+        host.querySelector('[data-row-group-focus="clear-categories"]').click();
+        await vi.waitFor(() => expect(host.hasAttribute("aria-busy")).toBe(false));
+        expect(onClear).toHaveBeenCalledWith("travel_info"); expect(firstHeading.getAttribute("aria-expanded")).toBe("true");
+        expect(firstSearch.value).toBe("sec"); expect(firstPopup.querySelector('[value="any"]').checked).toBe(true);
+        expect(firstPopup.querySelector('[role="option"]').getAttribute("aria-selected")).toBe("false");
+    });
+
+    test("cross-heading limit and refused selection resynchronize options without replacing metadata", async () => {
+        const { renderRowGroupFacets } = await import("./row_group_facet_printer.js");
+        let state = { filters: { row_group: Array.from({ length: 20 }, (_, i) => `hidden_${i}`).join(",") } };
+        getUnifiedTableStateMock.mockImplementation(() => state);
+        const onToggle = vi.fn(() => false);
+        const facets = [value(1, "security", heading(1), { row_count: 0, zero_hit: true })];
+        const host = renderRowGroupFacets("travel_info", facets, { onToggle }); open(host);
+        checkboxes(host)[0].click(); expect(onToggle).not.toHaveBeenCalled();
+        expect(checkboxes(host)[0].getAttribute("aria-disabled")).toBe("true");
+        state = { filters: {} }; renderRowGroupFacets("travel_info", facets, { onToggle });
+        const row = checkboxes(host)[0]; row.focus(); row.click();
+        await vi.waitFor(() => expect(host.hasAttribute("aria-busy")).toBe(false));
+        expect(row.getAttribute("aria-selected")).toBe("false"); expect(checkboxes(host)[0]).toBe(row);
+        expect(document.activeElement).toBe(row);
+        const nextToggle = vi.fn();
+        renderRowGroupFacets("travel_info", [value(1, "security", heading(1), { row_count: 7 })], { onToggle: nextToggle });
+        expect(row.getAttribute("aria-label")).toBe("security: 7"); expect(row.classList.contains("msd-option--dimmed")).toBe(false);
+        row.click(); await vi.waitFor(() => expect(nextToggle).toHaveBeenCalledWith("travel_info", "security"));
+    });
+
+    test("removed headings and an explicitly cleared card dispose every popup", async () => {
+        const { renderRowGroupFacets, clearRowGroupFacets } = await import("./row_group_facet_printer.js");
+        const host = renderRowGroupFacets("travel_info", [value(1, "security", heading(1)), value(2, "train", heading(2))]);
+        open(host); const firstPopup = popup(host); open(host, 1); const secondPopup = popup(host);
+        renderRowGroupFacets("travel_info", [value(1, "security", heading(1))]);
+        expect(firstPopup.isConnected).toBe(true); expect(secondPopup.isConnected).toBe(false);
+        clearRowGroupFacets("travel_info"); expect(firstPopup.isConnected).toBe(false);
+        expect(host.hasAttribute("data-dataset-language-renderer")).toBe(false);
     });
 
 });

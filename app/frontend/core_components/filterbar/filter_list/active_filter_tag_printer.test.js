@@ -35,6 +35,7 @@ vi.mock("../../general_tables/gt_1_row_crud/gt_1_2_row_read/table_refresh_unifie
     getUnifiedTableState: getUnifiedTableStateMock,
     setUnifiedTableState: setUnifiedTableStateMock,
     refreshTableUnified: refreshTableUnifiedMock,
+    invalidateTableRefresh: vi.fn(),
 }));
 
 vi.mock("../../state_stores/table_state_store.js", () => ({
@@ -63,6 +64,8 @@ vi.mock("../../navigation/nav_engine/query_params.js", () => ({
 
 vi.mock("../../infinite_scroll/infinite_scroll_handler.js", () => ({
     appendDataToView: appendDataToViewMock,
+    resetOffset: vi.fn(),
+    disconnectInfiniteScroll: vi.fn(),
 }));
 
 vi.mock("../../../reusable_components/results_count/results_count_printer.js", () => ({

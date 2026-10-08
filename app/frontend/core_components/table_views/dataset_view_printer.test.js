@@ -298,17 +298,39 @@ describe('generate_table', () => {
         const panel = document.createElement('div');
         panel.id = 'demo_dataset_row_group_facets';
         panel.rowGroupPanelState = { openHeading: '1', searches: new Map([['1', 'boat']]) };
-        const checkbox = document.createElement('input');
-        checkbox.type = 'checkbox';
-        panel.appendChild(checkbox);
+        const trigger = document.createElement('button');
+        trigger.textContent = 'Heading';
+        panel.appendChild(trigger);
         controls.appendChild(panel);
-        checkbox.focus();
-        await generate_table('demo_dataset', ['id'], [{ id: 2 }], { id: 'INTEGER' }, 1, false, null);
+        const { createMultiselectDropdown } = await import('../../reusable_components/multiselect_dropdown/multiselect_dropdown_builder.js');
+        const dropdown = createMultiselectDropdown({
+            containerElement: panel, triggerElement: trigger,
+            ownerElement: controls.closest('#tabs_container > .content_div'),
+            options: [{ value: 'boat', label: 'Boat', count: 1 }],
+            popupHeader: { title: 'Heading', showCloseButton: true }, allowExclude: false, preserveViewState: true,
+        });
+        dropdown.open();
+        const popup = document.getElementById(trigger.getAttribute('aria-controls'));
+        const option = popup.querySelector('[role="option"]');
+        option.focus();
+        let finishRenderer;
+        createTableElementMock.mockImplementationOnce(() => new Promise(resolve => { finishRenderer = resolve; }));
+        const redraw = generate_table('demo_dataset', ['id'], [{ id: 2 }], { id: 'INTEGER' }, 1, false, null);
+        await vi.waitFor(() => expect(finishRenderer).toBeTypeOf('function'));
+        await new Promise(resolve => setTimeout(resolve, 25));
+        expect(controls.isConnected).toBe(false);
+        expect(popup.isConnected).toBe(true);
+        expect(popup.style.display).toBe('flex');
+        expect(document.activeElement).toBe(option);
+        finishRenderer(document.createElement('div'));
+        await redraw;
         expect(document.getElementById('demo_dataset_card_top_controls')).toBe(controls);
         expect(document.getElementById('demo_dataset_row_group_facets')).toBe(panel);
         expect(panel.rowGroupPanelState.openHeading).toBe('1');
         expect(panel.rowGroupPanelState.searches.get('1')).toBe('boat');
-        expect(document.activeElement).toBe(checkbox);
+        expect(document.activeElement).toBe(option);
+        expect(popup.isConnected).toBe(true);
+        dropdown.destroy();
     });
 
     test('falls back from map view when the dataset has no map-capable fields', async () => {
