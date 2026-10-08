@@ -50,6 +50,10 @@ describe('dataset cover presentation settings', () => {
         const options = createMountOptions();
         const mounted = await mountDatasetCoverTestPalette(createCoverHero(), 'demo', options);
         const get = id => mounted.panel.querySelector('[data-testid="' + id + '"]');
+        const removeSide = get('dataset-cover-test-palette-active-filter-remove-side');
+        expect(removeSide.value).toBe('start');
+        expect([...removeSide.options].map(option => option.value)).toEqual(['start', 'end']);
+        expect(removeSide.closest('.dataset-cover-test-palette__group').textContent).toContain('Dataset header');
         const select = get('dataset-cover-test-palette-article-image-caption-position');
         const section = get('site-article-image-palette-settings');
         expect(section.contains(select)).toBe(true);

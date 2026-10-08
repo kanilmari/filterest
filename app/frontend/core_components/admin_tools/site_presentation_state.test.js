@@ -8,6 +8,9 @@ import {
     FILTERBAR_CONTENT_TOP_SPACE, clampFilterbarContentTopSpace,
 } from './site_presentation_state.js';
 import { mountDatasetCoverTestPalette } from './dataset_cover_test_palette.js';
+import { ACTIVE_FILTER_REMOVE_SIDES } from '../filterbar/filter_list/active_filter_chip_builder.js';
+
+const removeSideContract = JSON.parse(readFileSync('testing/shared_contracts/active_filter_remove_side.json', 'utf8'));
 
 // Every toast's text: a request a test does not stub fails in Node and adds its
 // own notice, so a test looks for its toast among all of them.
@@ -498,5 +501,42 @@ describe('hero header top space', () => {
         expect(new Set(labels.values()).size).toBe(4);
         expect(labels.get('en')).toBe('Space above the header icon');
         expect(labels.get('fi')).toBe('Tyhjä tila otsikkokuvakkeen yläpuolella');
+    });
+});
+
+
+describe('selected-filter remove side', () => {
+    test.each(removeSideContract.invalid)('rejects an invalid explicit side %j', value => {
+        const payload = settings();
+        payload.dataset_cover_theme.shared.active_filter_remove_side = value;
+        expect(isValidThemeConfig(payload.dataset_cover_theme)).toBe(false);
+        expect(normalizePresentationSettings(payload).dataset_cover_theme.shared.active_filter_remove_side).toBe('start');
+    });
+    test('defaults old caches to start, applies refreshed end and keeps previews out of cache', async () => {
+        expect(ACTIVE_FILTER_REMOVE_SIDES).toEqual(removeSideContract.valid);
+        expect(DEFAULT_DATASET_COVER_THEME.shared.active_filter_remove_side).toBe(removeSideContract.default);
+        const legacy = settings();
+        delete legacy.dataset_cover_theme.shared.active_filter_remove_side;
+        putCache(legacy);
+        const refreshed = settings();
+        refreshed.dataset_cover_theme.shared.active_filter_remove_side = 'end';
+        const state = createSitePresentationState({ requestFn: async () => refreshed });
+        expect(state.savedSettings().dataset_cover_theme.shared.active_filter_remove_side).toBe('start');
+        expect(document.documentElement.dataset.activeFilterRemoveSide).toBe('start');
+        await state.loadSettings();
+        expect(document.documentElement.dataset.activeFilterRemoveSide).toBe('end');
+        const draft = state.savedSettings();
+        draft.dataset_cover_theme.shared.active_filter_remove_side = 'start';
+        const owner = {};
+        state.setPreview(owner, draft);
+        expect(document.documentElement.dataset.activeFilterRemoveSide).toBe('start');
+        expect(JSON.parse(localStorage.getItem(PUBLIC_PRESENTATION_CACHE_KEY)).settings.dataset_cover_theme.shared.active_filter_remove_side).toBe('end');
+        expect(state.releasePreview({})).toBe(false);
+        expect(document.documentElement.dataset.activeFilterRemoveSide).toBe('start');
+        state.releasePreview(owner);
+        expect(document.documentElement.dataset.activeFilterRemoveSide).toBe('end');
+        const cached = createSitePresentationState({ requestFn: async () => { throw Error('offline'); } });
+        expect(cached.savedSettings().dataset_cover_theme.shared.active_filter_remove_side).toBe('end');
+        expect(document.documentElement.dataset.activeFilterRemoveSide).toBe('end');
     });
 });

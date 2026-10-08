@@ -1,4 +1,9 @@
+// T14_dataset_cover_palette.spec.ts
+// Verifies the protected appearance palette and durable selected-chip side choice.
+// Connects shared previews and saved settings to real dataset chips and reloads.
+// Restores site defaults after the persistence proof on the supervisor's registry.
 import { expect, test } from '@playwright/test';
+import { fetchCsrfTokenForRequest } from '../helpers/temp-dataset';
 
 test('admin cover palette is protected, movable, resizable, themed, and live-only', async ({ page }) => {
   await page.goto('/app_autojen_vanteet', { waitUntil: 'domcontentloaded' });
@@ -216,4 +221,73 @@ test('admin cover palette is protected, movable, resizable, themed, and live-onl
   const resized = (await panel.boundingBox())!;
   expect(resized.width).toBeCloseTo(340, 0);
   expect(resized.height).toBeCloseTo(360, 0);
+});
+
+test('selected-chip side previews both DOM orders, resets, saves and survives reload', async ({ page }) => {
+  const response = await page.request.get('/api/admin/site-presentation-settings');
+  expect(response.ok()).toBe(true);
+  const original = await response.json();
+  const savedSide = original.dataset_cover_theme.shared.active_filter_remove_side || 'start';
+  const chosenSide = savedSide === 'start' ? 'end' : 'start';
+  try {
+    await page.goto('/app_autojen_vanteet?search=chip-proof', { waitUntil: 'domcontentloaded' });
+    const chip = page.locator('[data-testid="active-filter-item"]').filter({ hasText: 'chip-proof' }).first();
+    await expect(chip).toBeVisible();
+    await page.locator('[data-testid="dataset-cover-test-palette-button"]').click();
+    const panel = page.locator('[data-testid="dataset-cover-test-palette"]');
+    const select = panel.locator('[data-testid="dataset-cover-test-palette-active-filter-remove-side"]');
+    await select.evaluate(element => { element.closest('details')!.open = true; });
+    await expect(select).toHaveValue(savedSide);
+    // Keep object identities in the browser to catch filter rebuilds during previews.
+    await chip.evaluate(element => {
+      element.setAttribute('data-preview-identity', 'retained');
+      element.querySelector('button')!.setAttribute('data-preview-identity', 'retained-button');
+    });
+    const order = () => chip.evaluate(element => element.firstElementChild!.tagName);
+    let presentationPosts = 0;
+    page.on('request', request => {
+      if (request.method() === 'POST' && request.url().endsWith('/api/admin/site-presentation-settings')) presentationPosts += 1;
+    });
+    for (const side of ['start', 'end']) {
+      await chip.locator('button').focus();
+      await select.evaluate((element: HTMLSelectElement, value) => {
+        element.value = value;
+        element.dispatchEvent(new Event('change', { bubbles: true }));
+      }, side);
+      expect(await order()).toBe(side === 'start' ? 'BUTTON' : 'SPAN');
+      await expect(chip.locator('button')).toBeFocused();
+      await expect(chip).toHaveAttribute('data-preview-identity', 'retained');
+      await expect(chip.locator('button')).toHaveAttribute('data-preview-identity', 'retained-button');
+      await panel.locator('[data-testid="dataset-cover-test-palette-tab-dark"]').click();
+      await expect(select).toHaveValue(side);
+    }
+    expect(presentationPosts).toBe(0);
+    await chip.locator('button').focus();
+    await panel.locator('[data-testid="dataset-cover-test-palette-reset"]').evaluate((element: HTMLButtonElement) => element.click());
+    await expect(select).toHaveValue(savedSide);
+    await expect(chip.locator('button')).toBeFocused();
+    expect(await order()).toBe(savedSide === 'start' ? 'BUTTON' : 'SPAN');
+    await select.selectOption(chosenSide);
+    const saved = page.waitForResponse(response => response.url().endsWith('/api/admin/site-presentation-settings')
+      && response.request().method() === 'POST');
+    await panel.locator('[data-testid="dataset-cover-test-palette-save"]').click();
+    const savedResponse = await saved;
+    expect(savedResponse.ok()).toBe(true);
+    expect((await savedResponse.json()).dataset_cover_theme.shared.active_filter_remove_side).toBe(chosenSide);
+    await expect(panel.locator('[data-testid="dataset-cover-test-palette-save"]')).toBeEnabled();
+    // A fresh load by the raw dataset name. The page may have rewritten its address to the public alias, and
+    // reloading an alias within the alias registry's 60 s freshness window lands on Home (a separate, older issue).
+    await page.goto('/app_autojen_vanteet?search=chip-proof', { waitUntil: 'domcontentloaded' });
+    await expect(chip).toBeVisible();
+    await expect(chip).toHaveAttribute('data-remove-side', chosenSide);
+    expect(await order()).toBe(chosenSide === 'start' ? 'BUTTON' : 'SPAN');
+    await page.locator('[data-testid="dataset-cover-test-palette-button"]').click();
+    await expect(select).toHaveValue(chosenSide);
+  } finally {
+    const csrfToken = await fetchCsrfTokenForRequest(page.request);
+    const restored = await page.request.post('/api/admin/site-presentation-settings', {
+      data: original, headers: { 'X-CSRF-Token': csrfToken },
+    });
+    expect(restored.ok()).toBe(true);
+  }
 });

@@ -26,6 +26,7 @@ import { rekeyLoadedDatasetRows } from "../../table_views/dataset_loaded_rows.js
 import { ROW_GROUP_FILTER_KEY, ROW_GROUP_MODE_KEY, parseRowGroupModes, serializeRowGroupModes } from "./row_group_filter_contract.js";
 export { ROW_GROUP_FILTER_KEY, ROW_GROUP_MODE_KEY } from "./row_group_filter_contract.js";
 import { createRowGroupFacetCard } from "./row_group_facet_card_builder.js";
+import { buildActiveFilterChip } from "./active_filter_chip_builder.js";
 const SELECTION_LIMIT = 20;
 const facetsByTable = new Map();
 const SAFE_ROW_GROUP_SLUG = /^[a-z0-9][a-z0-9_-]{0,63}$/;
@@ -231,24 +232,11 @@ function bindRowGroupTagLabel(item, tableName, slug) {
 export function renderRowGroupFilterTags(tableName, container) {
     const slugs = getSelectedSlugs(tableName);
     for (const slug of slugs) {
-        const item = document.createElement("div");
-        item.classList.add("active-filter-item");
-        item.dataset.testid = "active-filter-item";
-        item.dataset.rowGroupTable = tableName;
-        item.dataset.rowGroupSlug = slug;
-        const button = document.createElement("button");
-        button.type = "button";
-        button.classList.add("remove-active-filter");
-        button.dataset.testid = "active-filter-remove";
-        button.textContent = "×";
-        button.addEventListener("click", (event) => {
-            event.preventDefault();
-            event.stopPropagation();
-            void toggleRowGroupFacet(tableName, slug);
-        });
         const label = document.createElement("span");
         label.classList.add("row-group-filter-label");
-        item.append(label, button);
+        const { item } = buildActiveFilterChip({ label, onRemove: () => toggleRowGroupFacet(tableName, slug) });
+        item.dataset.rowGroupTable = tableName;
+        item.dataset.rowGroupSlug = slug;
         container.appendChild(item);
         bindRowGroupTagLabel(item, tableName, slug);
     }

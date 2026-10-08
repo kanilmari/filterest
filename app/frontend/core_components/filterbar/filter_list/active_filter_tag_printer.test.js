@@ -6,6 +6,8 @@
 
 import { beforeEach, describe, expect, test, vi } from "vitest";
 
+import { applyActiveFilterRemoveSide } from "./active_filter_chip_builder.js";
+
 const clearAllFiltersMock = vi.fn();
 const languageRenderers = new Map();
 let interfaceLanguage = "fi";
@@ -97,6 +99,7 @@ vi.mock("./active_filter_tag_printer_helpers.js", () => ({
 
 describe("renderActiveFilters", () => {
     beforeEach(() => {
+        applyActiveFilterRemoveSide("start");
         interfaceLanguage = "fi";
         languageRenderers.clear();
         clearAllFiltersMock.mockReset();
@@ -234,6 +237,69 @@ describe("renderActiveFilters", () => {
         expect(document.querySelector('.active-filter-item').dataset.rowGroupSlug).toBe("train");
     });
 
+    test.each(["start", "end"])("all three chip types use %s order and keep translated labels during previews and sidebar moves", async side => {
+        document.body.innerHTML = '<div id="tasks_card_top_controls"></div><div id="tasks_card_view_container"><div class="card_view_wrapper"><div class="card_sidebar_active_filters"></div></div></div>';
+        getUnifiedTableStateMock.mockReturnValue({ filters: { status: "done", row_group: "boat" } });
+        groupFiltersMock.mockReturnValue({ status: { keys: ["status"], value: "done", type: "single" },
+            row_group: { keys: ["row_group"], value: "boat", type: "single" } });
+        const { renderActiveFilters } = await import("./active_filter_tag_printer.js");
+        applyActiveFilterRemoveSide(side);
+        renderActiveFilters("tasks");
+        const row = document.querySelector(".active_filters");
+        const chips = [...row.querySelectorAll(".active-filter-item")];
+        expect(chips).toHaveLength(3);
+        for (const chip of chips) {
+            const button = chip.querySelector("button");
+            const label = chip.querySelector(".active-filter-label");
+            expect([...chip.children]).toEqual(side === "start" ? [button, label] : [label, button]);
+            expect(button.getAttribute("aria-label")).toMatch(/^Poista: /);
+            languageRenderers.get(chip)("en");
+            expect(button.getAttribute("aria-label")).toMatch(/^Remove: /);
+        }
+        chips[1].querySelector("button").focus();
+        const state = getUnifiedTableStateMock();
+        applyActiveFilterRemoveSide(side === "start" ? "end" : "start");
+        expect(document.activeElement).toBe(chips[1].querySelector("button"));
+        expect([...row.querySelectorAll(".active-filter-item")]).toEqual(chips);
+        expect(getUnifiedTableStateMock()).toBe(state);
+        expect(refreshTableUnifiedMock).not.toHaveBeenCalled();
+        expect(doIntelligentSearchMock).not.toHaveBeenCalled();
+        document.querySelector(".card_view_wrapper").classList.add("big-card-open");
+        renderActiveFilters("tasks");
+        expect(document.querySelectorAll(".active_filters")).toHaveLength(1);
+        expect(row.parentElement.className).toBe("card_sidebar_active_filters");
+        document.querySelector(".card_view_wrapper").classList.remove("big-card-open");
+        renderActiveFilters("tasks");
+        expect(row.parentElement.id).toBe("tasks_card_top_controls");
+    });
+
+    test.each(["start", "end"])("%s exclusion and range removal preserve cached search and remove every owned key", async side => {
+        document.body.innerHTML = '<div id="tasks_card_top_controls"></div>';
+        applyActiveFilterRemoveSide(side);
+        const params = { search: "urgent", status_exclude: "done", price_min: "1", price_max: "9" };
+        getParamsMock.mockReturnValue(params);
+        const filters = { status_exclude: "done", price_min: "1", price_max: "9" };
+        getUnifiedTableStateMock.mockReturnValue({ filters });
+        groupFiltersMock.mockImplementation(current => ({
+            ...(current.status_exclude ? { status: { keys: ["status_exclude"], value: "done", exclude: true, type: "single" } } : {}),
+            ...(current.price_min ? { price: { keys: ["price_min", "price_max"], type: "range", values: ["1", "9"] } } : {}),
+        }));
+        ongoingSearchResultsMock.tasks = { filters: { ...filters } };
+        const { renderActiveFilters } = await import("./active_filter_tag_printer.js");
+        renderActiveFilters("tasks");
+        document.querySelector(".active-filter-item--exclude button").click();
+        await vi.waitFor(() => expect(getUnifiedTableStateMock().filters).toEqual({ price_min: "1", price_max: "9" }));
+        await vi.waitFor(() => expect(document.querySelectorAll(".active-filter-item")).toHaveLength(2));
+        document.querySelectorAll(".active-filter-item button")[1].click();
+        await vi.waitFor(() => expect(getUnifiedTableStateMock().filters).toEqual({}));
+        expect(params).toEqual({ search: "urgent" });
+        expect(rerenderCachedSearchResultsMock).toHaveBeenCalledTimes(2);
+        expect(doIntelligentSearchMock).not.toHaveBeenCalled();
+        expect(refreshTableUnifiedMock).not.toHaveBeenCalled();
+        document.querySelector(".active-filter-item button").click();
+        expect(clearCommittedDatasetSearchMock).toHaveBeenCalledExactlyOnceWith("tasks");
+    });
+
     test("adds the translated lead and whole-reset button, hides both without selections", async () => {
         document.body.innerHTML = '<div id="tasks_card_top_controls"></div><div id="tasks_filterBar_panel"></div>';
         const { renderActiveFilters } = await import("./active_filter_tag_printer.js");
@@ -244,7 +310,7 @@ describe("renderActiveFilters", () => {
         expect(clear.textContent).toBe("Tyhjennä kaikki");
         expect(document.querySelector(".active_filters").firstElementChild).toBe(lead);
         expect(document.querySelector(".active_filters").lastElementChild).toBe(clear);
-        expect(document.querySelector(".active-filter-item").lastElementChild.className).toBe("remove-active-filter");
+        expect(document.querySelector(".active-filter-item").firstElementChild.className).toBe("remove-active-filter");
         const searchTag = document.querySelector(".active-filter-item");
         expect(searchTag.querySelector("button").getAttribute("aria-label")).toBe("Poista: Haku: urgent");
         languageRenderers.get(searchTag)("en");

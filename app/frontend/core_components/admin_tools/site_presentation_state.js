@@ -12,6 +12,9 @@ import { CARD_STYLE_VARIANT_VALUES, DEFAULT_CARD_DETAIL_COLUMNS } from '../table
 import { normalizeLabelValueLayout, applySiteLabelValueLayoutSetting }
     from '../../reusable_components/key_value_container/label_value_layout.js';
 
+import { ACTIVE_FILTER_REMOVE_SIDES, applyActiveFilterRemoveSide }
+    from '../filterbar/filter_list/active_filter_chip_builder.js';
+
 export const PUBLIC_PRESENTATION_CACHE_KEY = 'filterest_public_presentation_v1';
 const clone = (value) => JSON.parse(JSON.stringify(value));
 
@@ -80,6 +83,7 @@ export const DEFAULT_DATASET_COVER_THEME = Object.freeze({
         active_tab_glow_width: 2,
         active_tab_glow_blur: 4,
         filterbar_content_top_space: FILTERBAR_CONTENT_TOP_SPACE.default,
+        active_filter_remove_side: 'start',
         brand_color: '#1a8fe6',
     }),
 });
@@ -94,10 +98,12 @@ export function isValidThemeConfig(config) {
         }
     }
     for (const key of Object.keys(DEFAULT_DATASET_COVER_THEME.shared)) {
-        if (['label_value_layout', 'brand_color', 'card_image_presentation', 'card_show_all_fields', 'card_style_variant', 'card_detail_columns', 'article_image_caption_position', 'image_blur'].includes(key)) continue;
+        if (['active_filter_remove_side', 'label_value_layout', 'brand_color', 'card_image_presentation', 'card_show_all_fields', 'card_style_variant', 'card_detail_columns', 'article_image_caption_position', 'image_blur'].includes(key)) continue;
         if (!Number.isFinite(config.shared[key])) return false;
     }
-    return (config.shared.card_detail_columns === undefined
+    return (config.shared.active_filter_remove_side === undefined
+        || ACTIVE_FILTER_REMOVE_SIDES.includes(config.shared.active_filter_remove_side))
+        && (config.shared.card_detail_columns === undefined
         || (Number.isInteger(config.shared.card_detail_columns)
             && config.shared.card_detail_columns >= 1 && config.shared.card_detail_columns <= 4))
         && (config.shared.card_show_all_fields === undefined || typeof config.shared.card_show_all_fields === 'boolean')
@@ -166,6 +172,7 @@ function applyArticleImageCaptionSetting(config) {
 export function applySitePresentationGlobals(config, { preserveKnownBrand = false } = {}) {
     if (typeof document === 'undefined' || !document.documentElement || !isValidThemeConfig(config)) return;
     const documentRoot = document.documentElement;
+    applyActiveFilterRemoveSide(config.shared.active_filter_remove_side);
     applyArticleImageCaptionSetting(config);
     applySiteLabelValueLayoutSetting(config.shared.label_value_layout);
     applyCardImagePresentationSetting(config.shared.card_image_presentation);
@@ -251,6 +258,7 @@ export function createSitePresentationState({ requestFn = fetchSitePresentationS
                 brand: brandColorComponents(saved.dataset_cover_theme.shared.brand_color),
             }));
         } catch { /* Private browsing or exhausted storage still allows live settings. */ }
+        applyActiveFilterRemoveSide(effectiveSettings().dataset_cover_theme.shared.active_filter_remove_side);
         applyArticleImageCaptionSetting(effectiveSettings().dataset_cover_theme);
         applySiteLabelValueLayoutSetting(effectiveSettings().dataset_cover_theme.shared.label_value_layout);
         applyCardFieldPresentationSetting(
@@ -296,6 +304,7 @@ export function createSitePresentationState({ requestFn = fetchSitePresentationS
         saveQueue = pending.catch(() => {});
         return pending;
     }
+    applyActiveFilterRemoveSide(effectiveSettings().dataset_cover_theme.shared.active_filter_remove_side);
     applyArticleImageCaptionSetting(effectiveSettings().dataset_cover_theme);
     applySiteLabelValueLayoutSetting(effectiveSettings().dataset_cover_theme.shared.label_value_layout);
     applyCardFieldPresentationSetting(

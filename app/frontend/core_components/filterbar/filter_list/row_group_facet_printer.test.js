@@ -6,6 +6,8 @@
 
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 
+import { applyActiveFilterRemoveSide } from "./active_filter_chip_builder.js";
+
 const {
     interfaceLanguage,
     languageRenderers,
@@ -235,7 +237,8 @@ describe("row group category panel", () => {
         expect(document.activeElement.getAttribute("aria-selected") === "true").toBe(true);
     });
 
-    test("sorts headings, preserves untitled values and displays text safely", async () => {
+    test.each(["start", "end"])("sorts headings, preserves untitled values and displays text safely with %s chip order", async side => {
+        applyActiveFilterRemoveSide(side);
         const { renderRowGroupFacets, renderRowGroupFilterTags } = await import("./row_group_facet_printer.js");
         const tags = document.createElement("div");
         document.body.appendChild(tags);
@@ -248,6 +251,9 @@ describe("row group category panel", () => {
         expect(host.querySelector("img")).toBeNull();
         open(host);
         expect(popup(host).querySelector('[data-lang-key="row_group_single_value_hint"]')).not.toBeNull();
+        const chip = tags.firstChild;
+        expect(chip.firstElementChild.classList.contains("remove-active-filter")).toBe(side === "start");
+        expect(tags.querySelector("button").getAttribute("aria-label")).toBe("Poista: <img src=x>: security");
         expect(tags.querySelector(".row-group-filter-label").textContent).toBe("<img src=x>: security");
         languageRenderers.get(tags.firstChild)("en");
         expect(tags.querySelector("button").getAttribute("aria-label")).toBe("Remove: Theme: security");

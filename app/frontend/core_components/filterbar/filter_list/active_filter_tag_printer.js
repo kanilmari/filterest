@@ -25,6 +25,8 @@ import {
 import { getTranslationForKey } from "../../lang/translation_handler.js";
 import { bindDatasetLanguageRenderer } from "../../table_views/dataset_value_localizer.js";
 
+import { buildActiveFilterChip } from "./active_filter_chip_builder.js";
+
 let bigCardFilterSyncListenerBound = false;
 
 function ensureActiveFiltersResultsCount(topControls, tableName) {
@@ -155,26 +157,13 @@ export function renderActiveFilters(tableName) {
 
     if (params.search) {
         seenLabels.add(`search::${params.search}`);
-        const searchItem = document.createElement("div");
-        searchItem.classList.add("active-filter-item");
-        searchItem.dataset.testid = "active-filter-item";
-        const btn = document.createElement("button");
-        btn.type = 'button';
-        btn.classList.add("remove-active-filter");
-        btn.dataset.testid = "active-filter-remove";
-        btn.textContent = "×";
-        btn.addEventListener('click', (e) => {
-            e.stopPropagation();
-            e.preventDefault();
-            removeSearch(tableName);
-        });
         const label = document.createElement("span");
         const nameSpan = document.createElement("span");
         nameSpan.dataset.langKey = "search";
         nameSpan.textContent = "search";
         label.appendChild(nameSpan);
         label.append(`: ${params.search}`);
-        searchItem.append(label, btn);
+        const { item: searchItem, button: btn } = buildActiveFilterChip({ label, onRemove: () => removeSearch(tableName) });
         container.appendChild(searchItem);
         bindDatasetLanguageRenderer(searchItem, () => {
             nameSpan.textContent = getTranslationForKey("search");
@@ -199,22 +188,6 @@ export function renderActiveFilters(tableName) {
         if (seenLabels.has(dedupeKey)) return;
         seenLabels.add(dedupeKey);
 
-        const item = document.createElement("div");
-        item.classList.add("active-filter-item");
-        if (data.exclude) {
-            item.classList.add("active-filter-item--exclude");
-        }
-        item.dataset.testid = "active-filter-item";
-        const btn = document.createElement("button");
-        btn.type = 'button';
-        btn.classList.add("remove-active-filter");
-        btn.dataset.testid = "active-filter-remove";
-        btn.textContent = "×";
-        btn.addEventListener('click', (e) => {
-            e.stopPropagation();
-            e.preventDefault();
-            void removeFilter(tableName, data.keys);
-        });
         const nameSpan = document.createElement("span");
         nameSpan.dataset.langKey = labelBase;
         nameSpan.textContent = labelBase;
@@ -233,7 +206,9 @@ export function renderActiveFilters(tableName) {
             label.append(valSpan);
         }
 
-        item.append(label, btn);
+        const { item, button: btn } = buildActiveFilterChip({
+            label, exclude: data.exclude, onRemove: () => removeFilter(tableName, data.keys),
+        });
         container.appendChild(item);
         bindDatasetLanguageRenderer(item, () => {
             item.querySelectorAll("[data-lang-key]").forEach(span => {

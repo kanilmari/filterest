@@ -56,6 +56,8 @@ function popupOption(host, slug) {
     return document.getElementById(heading.getAttribute("aria-controls")).querySelector(`[data-option-value="${slug}"]`);
 }
 
+import { applyActiveFilterRemoveSide } from "./active_filter_chip_builder.js";
+
 function selectedTags() {
     return [...document.querySelectorAll("[data-row-group-table]")].map(item => item.dataset.rowGroupSlug);
 }
@@ -207,7 +209,8 @@ describe("authoritative row-group selections", () => {
         expect(searchMock).not.toHaveBeenCalled();
     });
 
-    test("resolved state reconciles mode-only headings and selections outside capped facets atomically", async () => {
+    test.each(["start", "end"])("resolved state reconciles mode-only headings and selections outside capped facets atomically with %s chips", async side => {
+        applyActiveFilterRemoveSide(side);
         seedURL("available,off_page");
         setUnifiedTableState("travel_info", { filters: { row_group: "available,off_page", row_group_mode: "9:all,1:all", status: "open" } });
         setParams("travel_info", { ...getParams("travel_info"), row_group_mode: "9:all,1:all" });
@@ -219,6 +222,10 @@ describe("authoritative row-group selections", () => {
         expect(new URLSearchParams(location.search).get("row_group_mode")).toBe("9:all");
         expect(selectedTags()).toEqual(["available", "off_page"]);
         expect(document.querySelectorAll(".active-filter-item")).toHaveLength(4);
+        expect(document.querySelectorAll(".active_filters")).toHaveLength(1);
+        for (const chip of document.querySelectorAll(".active-filter-item")) {
+            expect(chip.firstElementChild.classList.contains("remove-active-filter")).toBe(side === "start");
+        }
         expect(searchMock).not.toHaveBeenCalled(); expect(refreshMock).not.toHaveBeenCalled();
     });
 

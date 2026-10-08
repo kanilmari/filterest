@@ -22,6 +22,7 @@ Dates are the local (Europe/Helsinki) date on which the version was published.
 
 ## [Unreleased]
 
+- **Selected filters are compact and centred again** — The row of selected filters, searches and category values under the search is centred again, and its chips have their former compact look on computers, with the remove button before the label as before. Phones and touch screens keep 44 px touch targets, and "Clear all" stays. The appearance palette's dataset header group chooses, for the whole site, whether the remove button sits before or after the label.
 - **New installations call the About dataset About** — A new installation's `system_about` dataset is named "About" in English and "Tietoa" in Finnish in its tab and as its dataset name, instead of "System information" / "Järjestelmätiedot". Existing sites keep their current texts, which administrators can change in the language and dataset settings.
 - **No access-denied notice from missing interface texts on development pages** — On a development installation, the background request that reports interface texts missing from a page no longer shows the “Access denied for action” notice, or any other failure notice, to a visitor without the right to add texts or to a browser test. Its outcome stays in the browser console with the other language-maintenance messages, and the page keeps its readable fallback text. Production pages never send this request.
 

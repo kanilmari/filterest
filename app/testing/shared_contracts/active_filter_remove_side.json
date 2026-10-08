@@ -1,0 +1,5 @@
+{
+  "default": "start",
+  "valid": ["start", "end"],
+  "invalid": [null, true, 24, {}, [], "", "left", "END"]
+}

@@ -60,7 +60,7 @@ const upsertDatasetCoverThemeSQL = `
 		'Admin-managed, theme-aware dataset cover presentation settings.'
 	)
 	ON CONFLICT (key) DO UPDATE
-	SET json_value = jsonb_set(jsonb_set(jsonb_set(jsonb_set(jsonb_set(jsonb_set(
+	SET json_value = jsonb_set(jsonb_set(jsonb_set(jsonb_set(jsonb_set(jsonb_set(jsonb_set(
 		EXCLUDED.json_value,
 		'{shared,card_show_all_fields}',
 		CASE
@@ -105,6 +105,13 @@ const upsertDatasetCoverThemeSQL = `
 				THEN public.system_config.json_value #> '{shared,label_value_layout}'
 			ELSE '"stacked"'::jsonb
 		END
+	), '{shared,active_filter_remove_side}',
+		CASE
+			WHEN NOT $10::boolean THEN EXCLUDED.json_value #> '{shared,active_filter_remove_side}'
+			WHEN public.system_config.json_value #>> '{shared,active_filter_remove_side}' IN ('start', 'end')
+				THEN public.system_config.json_value #> '{shared,active_filter_remove_side}'
+			ELSE '"start"'::jsonb
+		END
 	),
 	    creation_spec = COALESCE(NULLIF(public.system_config.creation_spec, ''), EXCLUDED.creation_spec),
 	    updated = NOW()
@@ -113,7 +120,8 @@ const upsertDatasetCoverThemeSQL = `
 	          (json_value #>> '{shared,card_detail_columns}')::int,
 	          json_value #>> '{shared,article_image_caption_position}',
 	          (json_value #>> '{shared,filterbar_content_top_space}')::float8,
-	          json_value #>> '{shared,label_value_layout}'`
+	          json_value #>> '{shared,label_value_layout}',
+	          json_value #>> '{shared,active_filter_remove_side}'`
 
 const upsertRowArticleTimestampDisplaySQL = `
 	INSERT INTO public.system_config (
@@ -153,8 +161,9 @@ type DatasetCoverThemeValues struct {
 
 // DatasetCoverSharedValues contains visual settings shared by light and dark themes.
 type DatasetCoverSharedValues struct {
-	HeroExtraHeight float64 `json:"hero_extra_height"`
-	HeroBottomFade  float64 `json:"hero_bottom_fade"`
+	ActiveFilterRemoveSide string  `json:"active_filter_remove_side"`
+	HeroExtraHeight        float64 `json:"hero_extra_height"`
+	HeroBottomFade         float64 `json:"hero_bottom_fade"`
 	// ImageBlur remains as a rollback-safe fallback for older application builds.
 	ImageBlur                   float64 `json:"image_blur"`
 	CardImageWidth              float64 `json:"card_image_width"`
@@ -193,6 +202,7 @@ type SitePresentationSettingsResponse struct {
 	preserveStoredCardDetailColumns           bool
 	preserveStoredArticleImageCaptionPosition bool
 	preserveStoredFilterbarContentTopSpace    bool
+	preserveStoredActiveFilterRemoveSide      bool
 }
 
 var readSitePresentationSettings = readSitePresentationSettingsFromDB
@@ -219,7 +229,8 @@ var persistSitePresentationSettings = func(r *http.Request, settings SitePresent
 		settings.preserveStoredFilterbarContentTopSpace,
 		settings.preserveStoredLabelValueLayout,
 		os.Getenv("ENVIRONMENT_TYPE") == "dev",
-	).Scan(&settings.DatasetCoverTheme.Shared.CardShowAllFields, &settings.DatasetCoverTheme.Shared.CardStyleVariant, &settings.DatasetCoverTheme.Shared.CardDetailColumns, &settings.DatasetCoverTheme.Shared.ArticleImageCaptionPosition, &settings.DatasetCoverTheme.Shared.FilterbarContentTopSpace, &settings.DatasetCoverTheme.Shared.LabelValueLayout)
+		settings.preserveStoredActiveFilterRemoveSide,
+	).Scan(&settings.DatasetCoverTheme.Shared.CardShowAllFields, &settings.DatasetCoverTheme.Shared.CardStyleVariant, &settings.DatasetCoverTheme.Shared.CardDetailColumns, &settings.DatasetCoverTheme.Shared.ArticleImageCaptionPosition, &settings.DatasetCoverTheme.Shared.FilterbarContentTopSpace, &settings.DatasetCoverTheme.Shared.LabelValueLayout, &settings.DatasetCoverTheme.Shared.ActiveFilterRemoveSide)
 	if err != nil {
 		return SitePresentationSettingsResponse{}, fmt.Errorf("save cover theme: %w", err)
 	}
@@ -397,6 +408,14 @@ func decodeSitePresentationSettings(reader io.Reader) (SitePresentationSettingsR
 		}
 		sharedKeys = append(sharedKeys, "filterbar_content_top_space")
 	}
+	removeSide, removeSideProvided := sharedParts["active_filter_remove_side"]
+	if removeSideProvided {
+		var value string
+		if json.Unmarshal(removeSide, &value) != nil || (value != "start" && value != "end") {
+			return SitePresentationSettingsResponse{}, errors.New("active_filter_remove_side must be start or end")
+		}
+		sharedKeys = append(sharedKeys, "active_filter_remove_side")
+	}
 	layout, layoutProvided := sharedParts["label_value_layout"]
 	if layoutProvided {
 		var value string
@@ -424,6 +443,8 @@ func decodeSitePresentationSettings(reader io.Reader) (SitePresentationSettingsR
 	settings.preserveStoredCardDetailColumns = !columnsProvided
 	settings.preserveStoredArticleImageCaptionPosition = !captionProvided
 	settings.preserveStoredFilterbarContentTopSpace = !topSpaceProvided
+	settings.DatasetCoverTheme.Shared.ActiveFilterRemoveSide = "start"
+	settings.preserveStoredActiveFilterRemoveSide = !removeSideProvided
 	if err := json.Unmarshal(raw, &settings); err != nil {
 		return SitePresentationSettingsResponse{}, err
 	}
@@ -477,6 +498,11 @@ func validateSitePresentationSettings(settings SitePresentationSettingsResponse)
 }
 
 func validateDatasetCoverTheme(config DatasetCoverThemeConfig) error {
+	// Browser twin: frontend/core_components/filterbar/filter_list/active_filter_chip_builder.js.
+	// Both sides verify testing/shared_contracts/active_filter_remove_side.json.
+	if config.Shared.ActiveFilterRemoveSide != "start" && config.Shared.ActiveFilterRemoveSide != "end" {
+		return errors.New("unsupported active filter remove side")
+	}
 	for name, theme := range map[string]DatasetCoverThemeValues{
 		"light": config.Light,
 		"dark":  config.Dark,
@@ -634,6 +660,7 @@ func defaultSitePresentationSettings() SitePresentationSettingsResponse {
 			Light: light,
 			Dark:  dark,
 			Shared: DatasetCoverSharedValues{
+				ActiveFilterRemoveSide:      "start",
 				HeroExtraHeight:             40,
 				HeroBottomFade:              48,
 				ImageBlur:                   1,

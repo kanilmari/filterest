@@ -16,6 +16,7 @@ import { DATASET_COVER_PALETTE_COPY as COPY } from './dataset_cover_palette_copy
 import { buildDatasetCardPaletteControl, buildCardStyleControl } from './dataset_card_palette_control.js';
 import { buildLabelValueLayoutControl } from './site_label_value_layout_control.js';
 import { buildCardImagePresentationControl } from './dataset_cover_card_image_control.js';
+import { buildActiveFilterRemoveSideControl } from './active_filter_remove_side_control.js';
 import { buildArticleImageCaptionControl } from './site_article_image_control.js';
 import {
     DEFAULT_DATASET_COVER_THEME, isValidThemeConfig, applySitePresentationGlobals,
@@ -360,6 +361,11 @@ function buildPaletteControl(hero, datasetName, initialSettings, saveRequestFn, 
         return [name, { fieldset, legend }];
     }));
     imageScopes.get('coverImage').fieldset.append(coverVisibilityLabel, maskLabel);
+    const removeSideControl = buildActiveFilterRemoveSideControl(copy, (value) => {
+        draftSettings.dataset_cover_theme.shared.active_filter_remove_side = value;
+        previewDraft();
+    });
+    toolboxByGroup.get('datasetHeader').controls.appendChild(removeSideControl.element);
     const articleImageControl = buildArticleImageCaptionControl(copy, (value) => {
         draftSettings.dataset_cover_theme.shared.article_image_caption_position = value;
         previewDraft();
@@ -506,6 +512,7 @@ function buildPaletteControl(hero, datasetName, initialSettings, saveRequestFn, 
                 control.input.setAttribute('aria-description', copy[control.hint]);
             }
         });
+        removeSideControl.setCopy(copy);
         articleImageControl.setCopy(copy);
         cardImageControl.setCopy(copy);
         cardFieldsControl.setCopy(copy);
@@ -537,6 +544,7 @@ function buildPaletteControl(hero, datasetName, initialSettings, saveRequestFn, 
             control.input.value = String(source[control.key]);
             control.output.value = renderControlValue(control.input.value, control.unit);
         });
+        removeSideControl.setValue(draftSettings.dataset_cover_theme.shared.active_filter_remove_side);
         articleImageControl.setValue(draftSettings.dataset_cover_theme.shared.article_image_caption_position);
         cardImageControl.setValue(draftSettings.dataset_cover_theme.shared.card_image_presentation);
         cardFieldsControl.setValue(draftSettings.dataset_cover_theme.shared.card_show_all_fields);

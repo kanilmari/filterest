@@ -75,8 +75,26 @@ Removing one selection tag retains its mode; there is no separate mode tag. Clea
 categories removes both category parameters and preserves search/ordinary filters. The shared selected-tags row
 (`active_filter_tag_printer.js`) adds Selected: and Clear all; Clear all invokes
 `top_row_builder.js`'s existing whole reset, including text search, ordinary
-filters, modes and paging, while preserving view and ordinary sorting. Tags continue
-to move into an open article's sidebar. The shared count publishes its numeric
+filters, modes and paging, while preserving view and ordinary sorting. All three selected chips (text search, ordinary filters and category values) use
+`active_filter_chip_builder.js`; their owners retain label formatting, translation
+and removal commands. `active_filter_tags.css` owns their geometry: Selected: first,
+chips in the middle and Clear all last, with each wrapped line centred. Chips have
+4 px corners, inherited font size and zero vertical padding; logical inline padding
+is 12 px on the label side and 4 px on the button side. At desktop widths the remove
+button is 24 × 24 px and Clear all has no 44 px minimum, giving a single-line chip
+26 px height at the standard 16 px font/1.5 line height. At widths up to 600 px or
+on any coarse pointer both controls keep real 44 × 44 px touch targets, giving
+46 px single-line chips. The K282 size values live together as custom properties
+in the row's stylesheet block; the media query only chooses the touch values.
+The palette's Dataset header group offers Remove button: Before the label / After
+the label. This site-wide, theme-independent choice is stored as
+`dataset_cover_theme.shared.active_filter_remove_side` (`start` / `end`, default
+`start`), with Finnish/English labels in the palette's own copy dictionary. It needs
+no language-key migration or database version change. Preview and reset reorder
+existing labels in real DOM order, preserving the remove button's focus and
+listeners without rebuilding filters or sending requests. Legacy saves omitting
+the field preserve the saved side under the upsert's row lock. Tags continue
+to move into an open article's sidebar, whose explicit left alignment stays. The shared count publishes its numeric
 value so zero-result guidance never parses translated labels or requests new
 counts. Guidance is shown only for zero results with selected categories.
 
