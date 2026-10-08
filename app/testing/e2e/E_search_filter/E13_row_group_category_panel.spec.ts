@@ -136,3 +136,116 @@ test('WL103: multi-heading categories, search, reload, removal and clear-all', a
   await expect.poll(() => new URL(page.url()).searchParams.has('row_group') || new URL(page.url()).searchParams.has('search')).toBe(false);
   await expect(datasetSearch).toHaveValue('');
 });
+
+async function categoryCounts(page: Page) {
+  return page.locator(`${PANEL} .row-group-facet-value`).evaluateAll(labels => Object.fromEntries(labels.map(label => [
+    (label.querySelector('input') as HTMLInputElement).dataset.rowGroupSlug!,
+    Number(label.querySelector('.row-group-facet-value__count')!.textContent),
+  ])));
+}
+
+// This second read-only proof needs a multi-valued heading whose two values have
+// different row support, so ANY and ALL can visibly distinguish their counts.
+test('WL103: ANY/ALL counts, mode restoration and selectable dimmed values', async ({ page }, testInfo) => {
+  test.setTimeout(120_000);
+  test.skip(!/^[a-z][a-z0-9_]{0,62}$/.test(DATASET), 'Set FILTEREST_E2E_CATEGORY_DATASET to an existing categorized dataset.');
+  test.skip(testInfo.project.metadata.cardView === 'big', 'This proof uses shared listing controls.');
+  await page.addInitScript(() => {
+    localStorage.setItem('chosen_language', 'fi');
+    localStorage.setItem('theme', 'light');
+  });
+  await page.emulateMedia({ colorScheme: 'dark' });
+  await page.goto(`/${DATASET}?view=card`);
+  await waitForCategories(page);
+  const more = page.locator(`${PANEL} [data-row-group-focus="more"]`);
+  if (await more.count() && await more.getAttribute('aria-expanded') === 'false') await more.click();
+  const headings = await page.locator(`${PANEL} [data-heading-id]`).evaluateAll(buttons =>
+    buttons.map(button => (button as HTMLElement).dataset.headingId!));
+  let chosenHeading = '';
+  let slugs: string[] = [];
+  let anyCounts: Record<string, number> = {};
+  let allCounts: Record<string, number> = {};
+  // Try readable values only. A taxonomy with identical co-occurrence cannot
+  // prove count changes; the fixture requirement is reported without editing it.
+  for (const heading of headings) {
+    await page.goto(`/${DATASET}?view=card`);
+    await waitForCategories(page);
+    const showMore = page.locator(`${PANEL} [data-row-group-focus="more"]`);
+    if (await showMore.count() && await showMore.getAttribute('aria-expanded') === 'false') await showMore.click();
+    await page.locator(`${PANEL} [data-heading-id="${heading}"]`).click();
+    if (!await page.locator(`${PANEL} input[type="radio"][value="all"]`).count()
+      || await positiveCheckboxes(page).count() < 2) continue;
+    await expect(page.locator(`${PANEL} input[type="radio"][value="any"]`)).toBeChecked();
+    const first = await selectValue(page, positiveCheckboxes(page).first());
+    const second = await selectValue(page, positiveCheckboxes(page).first());
+    anyCounts = await categoryCounts(page);
+    const listing = page.waitForResponse(response => {
+      const url = new URL(response.url());
+      return url.pathname === '/api/get-results' && url.searchParams.get('row_group_mode')?.includes(':all') === true;
+    });
+    await page.locator(`${PANEL} input[type="radio"][value="all"]`).check();
+    expect((await listing).status()).toBe(200);
+    await waitForCategories(page);
+    const headingID = heading === 'legacy' ? '0' : heading;
+    await expect.poll(() => new URL(page.url()).searchParams.get('row_group_mode')).toBe(`${headingID}:all`);
+    allCounts = await categoryCounts(page);
+    if (Object.keys(anyCounts).some(slug => allCounts[slug] < anyCounts[slug])) {
+      chosenHeading = heading; slugs = [first, second]; break;
+    }
+  }
+  expect(chosenHeading, 'Provide a multi-valued heading with two values whose readable row supports differ.').toBeTruthy();
+  for (const slug of Object.keys(anyCounts)) expect(allCounts[slug]).toBeLessThanOrEqual(anyCounts[slug]);
+  const headingID = chosenHeading === 'legacy' ? '0' : chosenHeading;
+  await expect(page.locator('.active-filter-item[data-row-group-slug]')).toHaveCount(2);
+  await expect(page.locator(`${PANEL} input[type="radio"][value="all"]`)).toBeFocused();
+  const hintID = await page.locator(`${PANEL} fieldset`).getAttribute('aria-describedby');
+  await expect(page.locator(`#${hintID}`)).toHaveAttribute('data-lang-key', 'row_group_match_all_hint');
+  await page.reload();
+  await waitForCategories(page);
+  await page.locator(`${PANEL} [data-heading-id="${chosenHeading}"]`).click();
+  await expect(page.locator(`${PANEL} input[type="radio"][value="all"]`)).toBeChecked();
+  expect(new URL(page.url()).searchParams.get('row_group')?.split(',').sort()).toEqual(slugs.sort());
+  expect(await categoryCounts(page)).toEqual(allCounts);
+
+  // A zero-hit value may live under another returned heading. Check the whole
+  // readable vocabulary offered by this page before recording fixture absence.
+  const showMore = page.locator(`${PANEL} [data-row-group-focus="more"]`);
+  if (await showMore.count() && await showMore.getAttribute('aria-expanded') === 'false') await showMore.click();
+  const zeroHeadings = await page.locator(`${PANEL} [data-heading-id]`).evaluateAll(buttons =>
+    buttons.map(button => (button as HTMLElement).dataset.headingId!));
+  let zero: Locator | null = null;
+  for (const heading of zeroHeadings) {
+    const button = page.locator(`${PANEL} [data-heading-id="${heading}"]`);
+    if (await button.getAttribute('aria-expanded') !== 'true') await button.click();
+    const candidate = page.locator(`${PANEL} label.is-zero-hit`).filter({ has: page.locator(`${CHECKBOXES}:not(:checked)`) }).locator(CHECKBOXES).first();
+    if (await candidate.count()) { zero = candidate; break; }
+  }
+  if (zero) {
+    await expect(zero).toBeEnabled();
+    const zeroSlug = await selectValue(page, zero);
+    await expect(page.locator(`${PANEL} label.is-zero-hit ${CHECKBOXES}[data-row-group-slug="${zeroSlug}"]`)).toBeChecked();
+    await page.locator(`.active-filter-item[data-row-group-slug="${zeroSlug}"] button`).click();
+    await waitForCategories(page);
+  } else {
+    testInfo.annotations.push({ type: 'fixture', description: 'No unselected zero-hit value in returned vocabulary; zero-hit interaction is covered by unit/PostgreSQL proofs.' });
+  }
+  const selectedHeading = page.locator(`${PANEL} [data-heading-id="${chosenHeading}"]`);
+  if (await selectedHeading.getAttribute('aria-expanded') !== 'true') await selectedHeading.click();
+  await page.locator(`.active-filter-item[data-row-group-slug="${slugs[0]}"] button`).click();
+  await waitForCategories(page);
+  expect(new URL(page.url()).searchParams.get('row_group_mode')).toBe(`${headingID}:all`);
+  await page.locator(`${PANEL} input[type="radio"][value="any"]`).check();
+  await waitForCategories(page);
+  await expect.poll(() => new URL(page.url()).searchParams.has('row_group_mode')).toBe(false);
+  await page.locator(`${PANEL} input[type="radio"][value="all"]`).check();
+  await waitForCategories(page);
+  await page.locator('[data-testid="active-filters-clear-all"]').click();
+  await waitForCategories(page);
+  // Clearing updates the address a moment after the click; the panel is not busy in between.
+  await expect.poll(() => new URL(page.url()).searchParams.has('row_group_mode')).toBe(false);
+  await expect.poll(() => new URL(page.url()).searchParams.has('row_group')).toBe(false);
+  // The open heading stays open through the clearing re-render; a click would close it.
+  const clearedHeading = page.locator(`${PANEL} [data-heading-id="${chosenHeading}"]`);
+  if (await clearedHeading.getAttribute('aria-expanded') !== 'true') await clearedHeading.click();
+  await expect(page.locator(`${PANEL} input[type="radio"][value="any"]`)).toBeChecked();
+});

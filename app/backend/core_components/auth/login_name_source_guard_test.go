@@ -57,6 +57,7 @@ func collectLoginNameSourceGuardFindings(appRoot string) ([]string, error) {
 		"server_tools/public_bootstrap/schema.sql":                                  "generated schema checked by bootstrap hash tests",
 		"server_tools/public_bootstrap/seed_data.sql":                               "generated labels and acceptance checked by bootstrap hash tests",
 		"server_tools/versioning/schema_snapshots/db-9.10.0.sql":                    "versioned generated schema checked by bootstrap tests",
+		"server_tools/versioning/schema_snapshots/db-9.10.1.sql":                    "versioned generated schema checked by bootstrap tests",
 	}
 	// Bind review to both file and function; a familiar function name in a
 	// different package must not authorize a new credential writer.

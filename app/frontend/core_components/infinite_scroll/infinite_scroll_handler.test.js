@@ -472,4 +472,27 @@ describe("initializeInfiniteScroll", () => {
         expect(setUnifiedTableStateMock).not.toHaveBeenCalled();
     });
 
+    test("mode changes reject old pages and never reuse another mode's cached count", async () => {
+        createCardView("mode_offers");
+        let state = { offset: 2, filters: { row_group: "boat,train" } };
+        getUnifiedTableStateMock.mockImplementation(() => state);
+        let resolveOld;
+        fetchDatasetDataMock.mockReturnValueOnce(new Promise(resolve => { resolveOld = resolve; }));
+        const scroll = await import("./infinite_scroll_handler.js");
+        scroll.seedInfiniteScrollRowCount("mode_offers", 50);
+        scroll.initializeInfiniteScroll("mode_offers");
+        intersectionObservers[0].callback([{ isIntersecting: true }]);
+        expect(fetchDatasetDataMock.mock.calls.at(-1)[0].row_count).toBe(50);
+        state = { ...state, filters: { ...state.filters, row_group_mode: "1:all" } };
+        resolveOld({ data: [{ id: 9 }], row_count: 50 });
+        await Promise.resolve(); await Promise.resolve();
+        expect(appendDataToCardViewMock).not.toHaveBeenCalled();
+        expect(setResultsCountMock).not.toHaveBeenCalled();
+        fetchDatasetDataMock.mockResolvedValueOnce({ data: [], row_count: 0 });
+        intersectionObservers[0].callback([{ isIntersecting: true }]);
+        expect(fetchDatasetDataMock.mock.calls.at(-1)[0]).toMatchObject({ filters: { row_group: "boat,train", row_group_mode: "1:all" }, row_count: null });
+        await Promise.resolve(); await Promise.resolve();
+        scroll.disconnectInfiniteScroll("mode_offers");
+    });
+
 });

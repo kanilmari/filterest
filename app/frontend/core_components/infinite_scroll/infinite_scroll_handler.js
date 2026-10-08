@@ -7,7 +7,7 @@
 
 import { appendLoadedDatasetRows, clearLoadedDatasetRows, filterLoadedDatasetDuplicates, getLoadedDatasetProjection, rememberLoadedDatasetRows } from "../table_views/dataset_loaded_rows.js";
 import { getDatasetViewContainerId, getDatasetViewScrollDirection } from "../table_views/dataset_view_registry.js";
-import { getDatasetListingFilters } from "./dataset_listing_filters.js";
+import { getDatasetListingFilters, getDatasetListingSignature } from "./dataset_listing_filters.js";
 import { getArticleStateKey } from "../table_views/card_view/first_listed_row.js";
 
 import { fetchDatasetData } from "../endpoints/endpoint_data_fetcher.js";
@@ -37,6 +37,7 @@ function getScrollState(tableName) {
             observer: null,
             sentinel: null,
             lastRowCount: null,
+            rowCountSignature: null,
             orientation: "vertical",
             fillScreenIntervalId: null,
             fillScreenTimeoutId: null,
@@ -130,6 +131,7 @@ export function resetOffset(tableName) {
     // Nollataan cachettu rivimäärä jotta seuraava erä tekee uuden COUNT(*)
     const scrollSt = getScrollState(tableName);
     scrollSt.lastRowCount = null;
+    scrollSt.rowCountSignature = null;
     scrollSt.generation += 1;
     scrollSt.isLoading = false;
 }
@@ -153,9 +155,12 @@ export function seedInfiniteScrollRowCount(tableName, rowCount) {
     const scrollSt = getScrollState(tableName);
     if (Number.isFinite(rowCount) && rowCount >= 0) {
         scrollSt.lastRowCount = rowCount;
+        const state = getUnifiedTableState(tableName);
+        scrollSt.rowCountSignature = getDatasetListingSignature(tableName, state.filters, state.sort);
         return;
     }
     scrollSt.lastRowCount = null;
+    scrollSt.rowCountSignature = null;
 }
 
 /**
@@ -310,7 +315,9 @@ async function fetchMoreData(tableName, { replace = false, isCurrent: callerIsCu
         const tableState = getUnifiedTableState(tableName);
         const currentView = getChosenDatasetView(tableName) || "table";
         const container = document.getElementById(getDatasetViewContainerId(currentView, tableName));
+        const scopeSignature = getDatasetListingSignature(tableName, tableState.filters, tableState.sort);
         const isCurrent = () => scrollSt.generation === generation
+            && getDatasetListingSignature(tableName, getUnifiedTableState(tableName).filters, getUnifiedTableState(tableName).sort) === scopeSignature
             && (getChosenDatasetView(tableName) || "table") === currentView
             && document.getElementById(getDatasetViewContainerId(currentView, tableName)) === container
             && container?.isConnected
@@ -328,13 +335,14 @@ async function fetchMoreData(tableName, { replace = false, isCurrent: callerIsCu
             sort_order,
             filters,
             callerName: `fetchMoreData (${replace ? "reload" : "infinite scroll"})`,
-            row_count: replace ? null : scrollSt.lastRowCount,
+            row_count: replace || scrollSt.rowCountSignature !== scopeSignature ? null : scrollSt.lastRowCount,
             include_card_support: ["card", "article_view"].includes(currentView),
             view_key: viewKey,
         });
         if (!isCurrent()) return null;
         setResultsCount(tableName, result.row_count);
         scrollSt.lastRowCount = result.row_count;
+        scrollSt.rowCountSignature = scopeSignature;
 
         if (!result.data || result.data.length === 0) {
             // A reload still has to empty the view: an answer with no rows is
@@ -456,12 +464,13 @@ export function appendDataToView(tableName, data, append = true, { isCurrent, da
 
 /** Retains only pagination context, never an observer or pending request. */
 export function captureInfiniteScrollState(tableName) {
-    const { lastRowCount, orientation, isLoading } = getScrollState(tableName);
-    return { lastRowCount, orientation, isLoading };
+    const { lastRowCount, rowCountSignature, orientation, isLoading } = getScrollState(tableName);
+    return { lastRowCount, rowCountSignature, orientation, isLoading };
 }
 
 export function resumeInfiniteScrollState(tableName, snapshot) {
     const state = getScrollState(tableName);
     state.lastRowCount = snapshot.lastRowCount;
+    state.rowCountSignature = snapshot.rowCountSignature || null;
     initializeInfiniteScroll(tableName, snapshot.orientation);
 }

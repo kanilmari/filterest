@@ -63,6 +63,7 @@ language_seed_migrations = (
     "20261005000060_seed_shell_boot_recovery_language_keys.sql",
     "20261005000075_seed_runtime_grant_refusal_language_keys.sql",
     "20261005000086_seed_front_page_hero_language_keys.sql",
+    "20261007000001_seed_row_group_match_mode_language_keys.sql",
 )
 # A setting an upgrade adds is added for a new installation by the same file, so
 # the default is written once and an upgraded site and a new one start with the
@@ -119,6 +120,7 @@ release_data_migrations = (
 # block below writes the version row of the version this bootstrap is built for.
 release_record_migrations = (
     "20261005000099_record_database_release_9_10_0.sql",
+    "20261007000099_record_database_release_9_10_1.sql",
 )
 # Every public migration whose sequence number comes after this one belongs to
 # exactly one list above, so no file is marked as run while missing from the

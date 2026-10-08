@@ -207,3 +207,41 @@
         padding: 12px;
     }
 }
+
+/* A zero-hit value is readable vocabulary, so keep the checkbox and text contrast.
+   Theme-derived muted text dims names/counts without fading the entire control. */
+.row-group-facet-value.is-zero-hit :is(.row-group-facet-value__name, .row-group-facet-value__count) {
+    color: var(--text-muted);
+}
+
+.row-group-facet-mode {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px 16px;
+    min-width: 0;
+    margin: 8px 0 4px;
+    padding: 0;
+    border: 0;
+}
+
+.row-group-facet-mode__legend {
+    padding: 0;
+    font-size: 14px;
+}
+
+.row-group-facet-mode label {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    min-height: 44px;
+    cursor: pointer;
+    overflow-wrap: anywhere;
+}
+
+.row-group-facet-mode input {
+    flex: none;
+    width: 18px;
+    height: 18px;
+    margin: 0;
+    accent-color: var(--primary_color);
+}

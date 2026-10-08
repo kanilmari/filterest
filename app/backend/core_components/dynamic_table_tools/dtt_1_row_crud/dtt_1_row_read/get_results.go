@@ -54,8 +54,9 @@ func GetResults(response_writer http.ResponseWriter, request *http.Request) {
 		httpresponse.RespondWithError(response_writer, http.StatusBadRequest, "table name is missing")
 		return
 	}
-	if _, err := parseRowGroupSelection(request.URL.Query().Get(rowGroupFilterQueryKey)); err != nil {
-		httpresponse.RespondWithError(response_writer, http.StatusBadRequest, err.Error())
+	rowGroupFilters, filterErr := parseRowGroupFilters(request.URL.Query())
+	if filterErr != nil {
+		httpresponse.RespondWithRefusal(response_writer, invalidRowGroupFilters())
 		return
 	}
 	viewKey := normalizeResultsViewKey(request.URL.Query().Get("view_key"))
@@ -301,6 +302,7 @@ func GetResults(response_writer http.ResponseWriter, request *http.Request) {
 	// 6. Build and Execute Query
 	ctx := QueryBuilderContext{
 		DB:              readQuerier,
+		RowGroupFilters: &rowGroupFilters,
 		TableName:       table_name,
 		ColumnsMap:      columnsMap,
 		VisibleColUIDs:  visibleColUids,
@@ -314,7 +316,7 @@ func GetResults(response_writer http.ResponseWriter, request *http.Request) {
 		ClientRowCount:  clientRowCount,
 	}
 
-	query, query_args, rowCount, rowGroupFacets, err := BuildSelectQuery(ctx)
+	query, query_args, rowCount, rowGroupFacets, rowGroupSelection, err := BuildSelectQuery(ctx)
 	if err != nil {
 		var refusal *httpresponse.Refusal
 		if errors.As(err, &refusal) {
@@ -399,6 +401,7 @@ func GetResults(response_writer http.ResponseWriter, request *http.Request) {
 	// batches omit the field so clients retain the authoritative first-page metadata.
 	if offset_value == 0 {
 		response_data["row_group_facets"] = rowGroupFacets
+		response_data["row_group_selection"] = rowGroupSelection
 	}
 
 	response_writer.Header().Set("Content-Type", "application/json; charset=utf-8")

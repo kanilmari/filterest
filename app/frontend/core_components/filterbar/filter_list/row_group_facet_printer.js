@@ -23,7 +23,8 @@ import { renderActiveFilters } from "./active_filter_tag_printer.js";
 import { adoptResolvedSearchRowGroupSelection, getSearchFilterContext } from "../text_search/dataset_search_runtime_state.js";
 import { rekeyLoadedDatasetRows } from "../../table_views/dataset_loaded_rows.js";
 
-export const ROW_GROUP_FILTER_KEY = "row_group";
+import { ROW_GROUP_FILTER_KEY, ROW_GROUP_MODE_KEY, parseRowGroupModes, serializeRowGroupModes } from "./row_group_filter_contract.js";
+export { ROW_GROUP_FILTER_KEY, ROW_GROUP_MODE_KEY } from "./row_group_filter_contract.js";
 const VISIBLE_HEADING_LIMIT = 3;
 const SELECTION_LIMIT = 20;
 const facetsByTable = new Map();
@@ -39,7 +40,6 @@ function normalizeFacet(facet) {
         || !SAFE_ROW_GROUP_SLUG.test(slug)
         || !Number.isSafeInteger(rowCount)
         || rowCount < 0
-        || (rowCount === 0 && facet?.selected !== true)
     ) {
         return null;
     }
@@ -49,6 +49,8 @@ function normalizeFacet(facet) {
         title: facet?.title ?? null,
         row_count: rowCount,
         selected: facet?.selected === true,
+        mode: facet?.mode === "all" ? "all" : "any",
+        zero_hit: facet?.zero_hit === true,
         heading: normalizeHeading(facet?.heading),
     };
 }
@@ -97,37 +99,49 @@ function getSelectedSlugs(tableName) {
     return [...new Set(String(value).split(",").map(slug => slug.trim()).filter(slug => SAFE_ROW_GROUP_SLUG.test(slug)))].sort();
 }
 
+function getSelectedModes(tableName) {
+    return parseRowGroupModes(String(getUnifiedTableState(tableName)?.filters?.[ROW_GROUP_MODE_KEY] || "")) || {};
+}
+
+/** Set a heading preference through the same apply boundary as checkbox changes. */
+export async function setRowGroupMatchMode(tableName, headingID, mode) {
+    const id = Number(headingID);
+    if (!Number.isSafeInteger(id) || id < 0 || !["any", "all"].includes(mode)) return false;
+    const facet = facetsByTable.get(tableName)?.find(value => (value.heading?.id ?? 0) === id);
+    if (!facet || (mode === "all" && facet.heading?.is_single)) return false;
+    const modes = { ...getSelectedModes(tableName) };
+    if (mode === "all") {
+        if (!modes[id] && Object.keys(modes).length >= 20) return false;
+        modes[id] = mode;
+    } else delete modes[id];
+    return applyRowGroupSelection(tableName, getSelectedSlugs(tableName), modes);
+}
+
 function filterSignature(filters) {
     return JSON.stringify(Object.entries(filters || {}).sort(([a], [b]) => a.localeCompare(b)));
 }
 
-// Only a current successful first page can resolve the selection. Selected
-// values (including zero counts) precede the server's cap, so none are lost.
-// This records the answer without resetting paging or starting another fetch.
-function reconcileResolvedRowGroupSelection(tableName, facets, isCurrent) {
-    const selection = [...new Set(facets.filter(facet => facet.selected).map(facet => facet.slug))].sort().join(",");
+// Only complete resolved first-page state owns reconciliation. Capped facets
+// cannot remove hidden selections or mode-only preferences. Adopt both controls
+// atomically into the current search/listing caches without fetching again.
+function reconcileResolvedRowGroupSelection(tableName, resolved, isCurrent) {
+    if (!Array.isArray(resolved?.slugs) || !resolved?.modes || typeof resolved.modes !== "object") return false;
+    const selection = [...new Set(resolved.slugs.filter(slug => SAFE_ROW_GROUP_SLUG.test(slug)))].sort().join(",");
+    const modes = serializeRowGroupModes(resolved.modes);
     const state = getUnifiedTableState(tableName);
     const params = getParams(tableName);
-    if ((state.filters?.[ROW_GROUP_FILTER_KEY] || "") === selection
-        && (params[ROW_GROUP_FILTER_KEY] || "") === selection) return false;
-
+    const controls = { [ROW_GROUP_FILTER_KEY]: selection, [ROW_GROUP_MODE_KEY]: modes };
+    if (Object.entries(controls).every(([key, value]) => (state.filters?.[key] || "") === value && (params[key] || "") === value)) return false;
     const previousSearchContext = getSearchFilterContext(tableName);
     const filters = { ...(state.filters || {}) };
-    if (selection) {
-        filters[ROW_GROUP_FILTER_KEY] = selection;
-        params[ROW_GROUP_FILTER_KEY] = selection;
-    } else {
-        delete filters[ROW_GROUP_FILTER_KEY];
-        delete params[ROW_GROUP_FILTER_KEY];
+    for (const [key, value] of Object.entries(controls)) {
+        if (value) { filters[key] = value; params[key] = value; }
+        else { delete filters[key]; delete params[key]; }
     }
     setUnifiedTableState(tableName, { filters });
     setParams(tableName, params);
-    // The answer describes the same search and rows under the server's resolved
-    // selection. Adopt it synchronously before either owner checks its signature.
     adoptResolvedSearchRowGroupSelection(tableName, previousSearchContext);
     rekeyLoadedDatasetRows(tableName, state.filters);
-    // The address owner replaces the settled entry and keeps article paths,
-    // hashes and navigation state. Its microtask also rejects a later departure.
     const committedFilters = filterSignature(filters);
     void updateDatasetAddress({ dataset: tableName, isCurrent: () => isCurrent()
         && filterSignature(getUnifiedTableState(tableName).filters) === committedFilters });
@@ -149,16 +163,19 @@ export async function toggleRowGroupFacet(tableName, requestedSlug) {
 
 // Clearing and individual toggles share the same state, URL and search refresh boundary.
 export async function clearRowGroupSelection(tableName) {
-    return applyRowGroupSelection(tableName, []);
+    return applyRowGroupSelection(tableName, [], {});
 }
 
-async function applyRowGroupSelection(tableName, selection) {
+async function applyRowGroupSelection(tableName, selection, modes = getSelectedModes(tableName)) {
+    const modeValue = serializeRowGroupModes(modes);
     const filters = { ...(getUnifiedTableState(tableName).filters || {}) };
     if (selection.length) {
         filters[ROW_GROUP_FILTER_KEY] = selection.join(",");
     } else {
         delete filters[ROW_GROUP_FILTER_KEY];
     }
+    if (modeValue) filters[ROW_GROUP_MODE_KEY] = modeValue;
+    else delete filters[ROW_GROUP_MODE_KEY];
     setUnifiedTableState(tableName, { filters, offset: 0 });
 
     const params = getParams(tableName);
@@ -168,15 +185,21 @@ async function applyRowGroupSelection(tableName, selection) {
     } else {
         delete params[ROW_GROUP_FILTER_KEY];
     }
+    if (modeValue) params[ROW_GROUP_MODE_KEY] = modeValue;
+    else delete params[ROW_GROUP_MODE_KEY];
     setParams(tableName, params);
     updateURL(tableName, params);
 
     // Search reloads replace rows only, so update tags at the selection boundary too.
     const { renderActiveFilters } = await import("./active_filter_tag_printer.js");
     renderActiveFilters(tableName);
-    const { refreshTableUnified } = await import(
+    const { refreshTableUnified, invalidateTableRefresh } = await import(
         "../../general_tables/gt_1_row_crud/gt_1_2_row_read/table_refresh_unified.js"
     );
+    invalidateTableRefresh(tableName);
+    const { resetOffset, disconnectInfiniteScroll } = await import("../../infinite_scroll/infinite_scroll_handler.js");
+    disconnectInfiniteScroll(tableName);
+    resetOffset(tableName);
     const committedSearchTerm = String(params.search || "").trim();
     if (committedSearchTerm) {
         const { do_intelligent_search } = await import(
@@ -234,7 +257,7 @@ export function renderRowGroupFilterTags(tableName, container) {
 
 /**
  * Render first-page counts in the existing host, also for a searched listing.
- * A selected value with no matches stays available for removal.
+ * Every readable value stays selectable when it has no matches.
  * Request owners opt into selection reconciliation only for a successful first
  * page and pass their freshness check and original filters. Cached renders
  * and omitted payloads cannot resolve or clear a selection.
@@ -242,8 +265,8 @@ export function renderRowGroupFilterTags(tableName, container) {
 export function renderRowGroupFacets(
     tableName,
     rawFacets,
-    { onToggle = toggleRowGroupFacet, onClear = clearRowGroupSelection,
-        authoritative = false, isCurrent = () => true, requestFilters = null } = {}
+    { onToggle = toggleRowGroupFacet, onClear = clearRowGroupSelection, onModeChange = setRowGroupMatchMode,
+        authoritative = false, isCurrent = () => true, requestFilters = null, resolvedSelection = null } = {}
 ) {
     const previousHost = document.getElementById(getFacetHostId(tableName));
     // A click can change filters before its asynchronous refresh starts. The
@@ -256,8 +279,8 @@ export function renderRowGroupFacets(
     clearRowGroupFacets(tableName);
     const facets = Array.isArray(rawFacets) ? rawFacets.map(normalizeFacet).filter(Boolean) : [];
     facetsByTable.set(tableName, facets);
-    const selectionChanged = authoritative && Array.isArray(rawFacets)
-        && reconcileResolvedRowGroupSelection(tableName, facets, isCurrent);
+    const selectionChanged = authoritative
+        && reconcileResolvedRowGroupSelection(tableName, resolvedSelection, isCurrent);
     // Refresh existing tag labels too, including tags in an open article sidebar.
     if (selectionChanged) renderActiveFilters(tableName);
     else document.querySelectorAll("[data-row-group-table]").forEach(item => {
@@ -321,12 +344,13 @@ export function renderRowGroupFacets(
     function render() {
         const focus = capturePanelFocus(host);
         const activeSlugs = new Set(getSelectedSlugs(tableName));
+        const activeModes = getSelectedModes(tableName);
         host.setAttribute("aria-label", getTranslationForKey("row_group_categories"));
         host.dataset.expanded = String(panelState.expanded);
         host.replaceChildren();
 
         const title = createPanelText("h2", "row_group_categories", "row-group-facets__title");
-        const guidance = createPanelText("p", "row_group_categories_hint", "row-group-facets__guidance");
+        const guidance = createPanelText("p", "row_group_categories_modes_hint", "row-group-facets__guidance");
         host.append(title, guidance);
         const headings = document.createElement("div");
         headings.className = "row-group-facet-headings";
@@ -404,12 +428,37 @@ export function renderRowGroupFacets(
             close.dataset.rowGroupFocus = "close";
             close.addEventListener("click", closePanel);
             panelHeading.append(heading, close);
+            const mode = activeModes[group.heading?.id ?? 0] || "any";
             const hint = createPanelText("p", group.heading?.is_single ? "row_group_single_value_hint"
-                : "row_group_match_any_hint", "row-group-facet-panel__hint");
+                : mode === "all" ? "row_group_match_all_hint" : "row_group_match_any_hint", "row-group-facet-panel__hint");
             hint.id = `${panel.id}_hint`;
             panel.setAttribute("role", "group");
             panel.setAttribute("aria-labelledby", heading.id);
             panel.setAttribute("aria-describedby", hint.id);
+            panel.appendChild(panelHeading);
+            if (!group.heading?.is_single) {
+                const fieldset = document.createElement("fieldset");
+                fieldset.className = "row-group-facet-mode";
+                fieldset.setAttribute("aria-describedby", hint.id);
+                fieldset.appendChild(createPanelText("legend", "row_group_match_mode", "row-group-facet-mode__legend"));
+                for (const value of ["any", "all"]) {
+                    const label = document.createElement("label");
+                    const radio = document.createElement("input");
+                    radio.type = "radio";
+                    radio.name = `${host.id}_mode_${key}`;
+                    radio.value = value;
+                    radio.checked = mode === value;
+                    radio.dataset.rowGroupFocus = `mode:${key}:${value}`;
+                    radio.dataset.testid = "row-group-match-mode";
+                    radio.setAttribute("aria-describedby", hint.id);
+                    radio.addEventListener("change", () => {
+                        if (radio.checked) runSelection(() => onModeChange(tableName, group.heading?.id ?? 0, value));
+                    });
+                    label.append(radio, createPanelText("span", `row_group_match_${value}`, ""));
+                    fieldset.appendChild(label);
+                }
+                panel.appendChild(fieldset);
+            }
             const search = document.createElement("input");
             search.type = "search";
             search.className = "row-group-facet-panel__search";
@@ -430,6 +479,7 @@ export function renderRowGroupFacets(
                         const item = document.createElement("li");
                         const label = document.createElement("label");
                         label.className = "row-group-facet-value";
+                        label.classList.toggle("is-zero-hit", facet.zero_hit);
                         const checkbox = document.createElement("input");
                         checkbox.type = "checkbox";
                         checkbox.dataset.rowGroupSlug = facet.slug;
@@ -461,13 +511,13 @@ export function renderRowGroupFacets(
                 panelState.searches.set(key, search.value);
                 renderValues();
             });
-            panel.append(panelHeading, hint, search, list, empty);
+            panel.append(hint, search, list, empty);
             renderValues();
         }
         if (activeSlugs.size >= SELECTION_LIMIT) {
             host.appendChild(createPanelText("p", "row_group_selection_limit", "row-group-facet-panel__hint"));
         }
-        if (activeSlugs.size) {
+        if (activeSlugs.size || Object.keys(activeModes).length) {
             const clear = createActionButton("clear_selections");
             clear.dataset.rowGroupFocus = "clear-categories";
             clear.addEventListener("click", () => runSelection(() => onClear(tableName)));

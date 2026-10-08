@@ -22,3 +22,16 @@ export function getDatasetListingFilters(tableName, filters = {}) {
         ...(committedSearch ? { search: committedSearch } : {}),
     };
 }
+
+/**
+ * Whether an answer, a page or a count still belongs to what is shown: the listing's conditions (the committed search
+ * among them) and its order. The page language is not part of it: the first load sets `<html lang>` while the first
+ * request is in flight, and comparing it left a guest's first view empty about three times in five (8.10.2026). A
+ * cache whose content depends on the language adds the language itself.
+ */
+export function getDatasetListingSignature(tableName, filters = {}, sort = {}) {
+    return JSON.stringify([
+        Object.entries(getDatasetListingFilters(tableName, filters)).sort(([a], [b]) => a.localeCompare(b)),
+        sort || {},
+    ]);
+}

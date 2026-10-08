@@ -22,6 +22,7 @@ Dates are the local (Europe/Helsinki) date on which the version was published.
 
 ## [Unreleased]
 
+- **Categories can require all selected values** — Multi-valued and untitled headings offer “At least one” (default) or “All selected”, restored through the URL. ALL counts show matches with the candidate value added. Readable values with no current hits stay dimmed and selectable; values used only by unreadable rows stay hidden. Removing a value keeps its heading mode, while clearing categories or all filters resets modes. Listing and search share validation and the same permission-scoped rule. On a large dataset the counts no longer slow down with each selected value: with 20 values selected on 100,000 rows a listing took about 49 seconds and now takes about 4. Finnish/English copy is registered in a repeatable DB 9.10.1 migration and the public bootstrap; reviewed translations remain untouched.
 - **A Home slogan on several lines** — Home settings edit the slogan's Finnish and English text in full-width multi-line fields instead of a narrow one-line box, and Home shows the line breaks typed there. The title stays a single line.
 
 ## [9.3.22] - 2026-10-07

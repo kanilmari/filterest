@@ -32,5 +32,6 @@ type QueryBuilderContext struct {
 	UserID          int
 	UserRole        string
 	ReadPolicy      ReadRowPolicy
-	ClientRowCount  int // -1 = execute COUNT(*), >= 0 = use this value
+	RowGroupFilters *RowGroupSelection // Parsed category contract; resolved only once in the builder.
+	ClientRowCount  int                // -1 = execute COUNT(*), >= 0 = use this value
 }

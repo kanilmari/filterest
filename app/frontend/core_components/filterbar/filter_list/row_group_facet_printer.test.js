@@ -42,11 +42,13 @@ vi.mock("../../table_views/dataset_value_localizer.js", () => ({
 vi.mock("../../lang/translation_handler.js", () => ({
     getTranslationForKey: key => ({
         fi: { row_group_categories: "Kategoriat", filters: "Suodattimet", show_more: "Näytä enemmän", show_less: "Näytä vähemmän", clear_selections: "Tyhjennä valinnat", remove: "Poista", close: "Sulje", search: "Haku",
-            row_group_categories_hint: "Saman otsikon valinnat laajentavat hakua.", row_group_match_any_hint: "Jokin valituista.",
+            row_group_categories_modes_hint: "Saman otsikon valinnat laajentavat hakua.", row_group_match_any_hint: "Jokin valituista.",
+            row_group_match_mode: "Hakutapa", row_group_match_any: "Vähintään yksi", row_group_match_all: "Kaikki valitut", row_group_match_all_hint: "Kaikki valitut arvot.",
             row_group_single_value_hint: "Rivillä on tässä yksi arvo.", row_group_selected_count: "valittu",
             row_group_no_name_matches: "Ei osumia.", row_group_selection_limit: "Enintään 20 arvoa.", row_group_no_results_hint: "Poista jokin valinta tai tyhjennä kaikki." },
         en: { row_group_categories: "Categories", filters: "Filters", show_more: "Show more", show_less: "Show less", clear_selections: "Clear selections", remove: "Remove", close: "Close", search: "Search",
-            row_group_categories_hint: "Choices under one heading widen the search.", row_group_match_any_hint: "Any selected.",
+            row_group_categories_modes_hint: "Choices under one heading widen the search.", row_group_match_any_hint: "Any selected.",
+            row_group_match_mode: "Match mode", row_group_match_any: "At least one", row_group_match_all: "All selected", row_group_match_all_hint: "All selected values.",
             row_group_single_value_hint: "A row has one value here.", row_group_selected_count: "selected",
             row_group_no_name_matches: "No matches.", row_group_selection_limit: "Up to 20 values.", row_group_no_results_hint: "Remove a filter or clear all." },
     })[interfaceLanguage.current][key],
@@ -69,7 +71,10 @@ vi.mock("../../navigation/nav_engine/query_params.js", () => ({
 
 vi.mock("../../general_tables/gt_1_row_crud/gt_1_2_row_read/table_refresh_unified.js", () => ({
     refreshTableUnified: refreshTableUnifiedMock,
+    invalidateTableRefresh: vi.fn(),
 }));
+
+vi.mock("../../infinite_scroll/infinite_scroll_handler.js", () => ({ resetOffset: vi.fn(), disconnectInfiniteScroll: vi.fn() }));
 
 vi.mock("../text_search/dataset_search_executor.js", () => ({
     do_intelligent_search: doIntelligentSearchMock,
@@ -84,6 +89,8 @@ const checkboxes = host => [...host.querySelectorAll('input[type="checkbox"]')];
 describe("row group category panel", () => {
     beforeEach(() => {
         vi.clearAllMocks();
+        setUnifiedTableStateMock.mockReset();
+        setParamsMock.mockReset();
         interfaceLanguage.current = "fi";
         languageRenderers.clear();
         document.body.innerHTML = `<div id="travel_info_card_top_controls"><div class="active_filters"></div><div class="results_count">8 results</div></div>`;
@@ -178,6 +185,8 @@ describe("row group category panel", () => {
         const close = host.querySelector('[data-aria-label-lang-key="close"]');
         expect([close.textContent, close.getAttribute("aria-label"), close.title]).toEqual(["×", "Close", "Close"]);
         expect(host.querySelector('[data-lang-key="row_group_match_any_hint"]').textContent).toBe("Any selected.");
+        expect(host.querySelector("legend").textContent).toBe("Match mode");
+        expect([...host.querySelectorAll("fieldset label span")].map(item => item.textContent)).toEqual(["At least one", "All selected"]);
         expect(checkboxes(host)[0].getAttribute("aria-label")).toBe("Security: 0");
         expect(document.activeElement.type).toBe("search");
         expect(document.activeElement.value).toBe("i");
@@ -333,4 +342,78 @@ describe("row group category panel", () => {
         expect(doIntelligentSearchMock).toHaveBeenCalledExactlyOnceWith("travel_info", "matka");
         expect(refreshTableUnifiedMock).not.toHaveBeenCalled();
     });
+
+    test("multi-valued and legacy headings expose translated radios before search; single headings keep their hint", async () => {
+        const { renderRowGroupFacets } = await import("./row_group_facet_printer.js");
+        const host = renderRowGroupFacets("travel_info", [value(1, "boat", heading(1)), value(2, "train", heading(2, 2, true)), value(3, "legacy")]);
+        open(host, 1);
+        const fieldset = host.querySelector("fieldset");
+        expect(fieldset.querySelector("legend").textContent).toBe("Hakutapa");
+        expect([...fieldset.querySelectorAll("span")].map(item => item.textContent)).toEqual(["Vähintään yksi", "Kaikki valitut"]);
+        expect(fieldset.compareDocumentPosition(host.querySelector('input[type="search"]')) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+        expect(fieldset.querySelector('[value="any"]').checked).toBe(true);
+        expect(fieldset.getAttribute("aria-describedby")).toBe(host.querySelector(".row-group-facet-panel__hint").id);
+        open(host, 0);
+        expect(host.querySelector("fieldset")).not.toBeNull();
+        open(host, 2);
+        expect(host.querySelector("fieldset")).toBeNull();
+        expect(host.querySelector(".row-group-facet-panel__hint").textContent).toBe("Rivillä on tässä yksi arvo.");
+    });
+
+    test("ALL refresh preserves radio focus, query and scroll; hint and Escape follow the mode", async () => {
+        const { renderRowGroupFacets } = await import("./row_group_facet_printer.js");
+        let state = { filters: { row_group: "security" } };
+        getUnifiedTableStateMock.mockImplementation(() => state);
+        const facets = [value(1, "security", heading(1)), value(2, "train", heading(1))];
+        const onModeChange = vi.fn((_table, id, mode) => { state = { filters: { ...state.filters, row_group_mode: `${id}:${mode}` } }; });
+        let host = renderRowGroupFacets("travel_info", facets, { onModeChange });
+        open(host);
+        host.querySelector('input[type="search"]').value = "sec";
+        host.querySelector('input[type="search"]').dispatchEvent(new Event("input"));
+        host.querySelector("ul").scrollTop = 81;
+        const radio = host.querySelector('[value="all"]'); radio.focus(); radio.click();
+        await vi.waitFor(() => expect(host.getAttribute("aria-busy")).not.toBe("true"));
+        expect(onModeChange).toHaveBeenCalledWith("travel_info", 1, "all");
+        host = renderRowGroupFacets("travel_info", facets, { onModeChange });
+        expect(document.activeElement).toBe(host.querySelector('[value="all"]'));
+        expect(host.querySelector('[value="all"]').checked).toBe(true);
+        expect(host.querySelector('input[type="search"]').value).toBe("sec");
+        expect(host.querySelector("ul").scrollTop).toBe(81);
+        expect(host.querySelector(".row-group-facet-panel__hint").textContent).toBe("Kaikki valitut arvot.");
+        document.activeElement.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+        expect(document.activeElement).toBe(buttons(host)[0]);
+    });
+
+    test("unselected zero hits remain dimmed, focusable and selectable", async () => {
+        const { renderRowGroupFacets } = await import("./row_group_facet_printer.js");
+        const onToggle = vi.fn();
+        const host = renderRowGroupFacets("travel_info", [value(1, "empty", heading(1), { row_count: 0, zero_hit: true })], { onToggle });
+        open(host);
+        const checkbox = host.querySelector('input[type="checkbox"]');
+        expect(checkbox.disabled).toBe(false);
+        expect(checkbox.closest("label").classList.contains("is-zero-hit")).toBe(true);
+        checkbox.focus(); expect(document.activeElement).toBe(checkbox);
+        checkbox.click(); await vi.waitFor(() => expect(onToggle).toHaveBeenCalledWith("travel_info", "empty"));
+    });
+
+    test("mode preference, tag removal and category clear share the state/URL refresh path", async () => {
+        const { renderRowGroupFacets, setRowGroupMatchMode, toggleRowGroupFacet, clearRowGroupSelection } = await import("./row_group_facet_printer.js");
+        let state = { filters: { status: "open" }, offset: 12 };
+        let params = { status: "open", offset: "12" };
+        getUnifiedTableStateMock.mockImplementation(() => state);
+        setUnifiedTableStateMock.mockImplementation((_table, next) => { state = { ...state, ...next }; });
+        getParamsMock.mockImplementation(() => ({ ...params }));
+        setParamsMock.mockImplementation((_table, next) => { params = next; });
+        renderRowGroupFacets("travel_info", [value(1, "boat", heading(10)), value(2, "train", heading(10))]);
+        expect(await setRowGroupMatchMode("travel_info", 10, "all")).toBe(true);
+        expect(state.filters).toEqual({ status: "open", row_group_mode: "10:all" });
+        expect(params).toEqual({ status: "open", row_group_mode: "10:all" });
+        expect(state.offset).toBe(0);
+        await toggleRowGroupFacet("travel_info", "boat"); await toggleRowGroupFacet("travel_info", "boat");
+        expect(state.filters).toEqual({ status: "open", row_group_mode: "10:all" });
+        await clearRowGroupSelection("travel_info");
+        expect(state.filters).toEqual({ status: "open" }); expect(params).toEqual({ status: "open" });
+        expect(refreshTableUnifiedMock).toHaveBeenCalledTimes(4);
+    });
+
 });

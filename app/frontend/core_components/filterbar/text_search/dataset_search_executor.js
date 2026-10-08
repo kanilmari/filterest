@@ -400,6 +400,7 @@ async function loadDatasetMatches(tableName, cache, isCurrent) {
         authoritative: !result.error && result.success !== false,
         isCurrent: () => isCurrent() && getSearchViewContainer(tableName) === requestHost,
         requestFilters,
+        resolvedSelection: result.row_group_selection,
     });
     const rows = Array.isArray(result?.data) ? result.data : [];
     if (Array.isArray(result?.columns) && result.columns.length) cache.columns = result.columns;
@@ -419,10 +420,12 @@ async function loadDatasetMatches(tableName, cache, isCurrent) {
 async function streamAiSearchResults(tableName, cache, context, opts, isCurrent) {
     const requestOptions = {
         ...opts,
+        signal: cache.abortController?.signal,
         filters: Object.fromEntries(
             Object.entries(context.clientFilters).map(([key, value]) => [key, String(value)])
         ),
         rowGroupSlug: context.rowGroupSlug,
+        rowGroupMode: context.rowGroupMode,
         view: getCurrentSearchView(tableName),
     };
 
@@ -540,6 +543,7 @@ export async function do_intelligent_search(tableName, userQuery, opts = {}) {
         && runningCache.executionPromise) {
         return runningCache.executionPromise;
     }
+    runningCache?.abortController?.abort();
     cleanupSearchArtifacts(tableName);
     // A different question starts from its first result; the same question
     // asked again, after a changed filter or sort, leaves the reader where
@@ -549,6 +553,7 @@ export async function do_intelligent_search(tableName, userQuery, opts = {}) {
     const cache = initSearchCache();
     Object.assign(cache, {
         query, filterSignature: context.signature, requestContext: context,
+        abortController: new AbortController(),
         // The selected filters reach the dataset's rows through the listing's
         // own query, so its rows are never filtered a second time here.
         filters: context.clientFilters, complete: false,
@@ -562,7 +567,8 @@ export async function do_intelligent_search(tableName, userQuery, opts = {}) {
     // datasets load independently and never get a chance to fill this count.
     syncSearchResultsCount(tableName, cache);
     if (isNewQuestion) awaitFirstSearchResultInArticleView(tableName);
-    const isCurrent = () => isCurrentSearchCache(tableName, cache);
+    const isCurrent = () => isCurrentSearchCache(tableName, cache)
+        && cache.filterSignature === getSearchFilterContext(tableName).signature;
     cache.supplemental = createSupplementalDatasetSearch(tableName, cache.query, {
         isCurrent, getContainer: () => getSearchResultsFlowContainer(tableName),
     });

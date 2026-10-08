@@ -19,7 +19,7 @@ type intelligentSearchAuthorization struct {
 	userID            int
 	readPolicy        ReadRowPolicy
 	tableUID          int64
-	rowGroupSelection []string
+	rowGroupSelection RowGroupSelection
 	userFilters       url.Values
 	filterColumns     map[string]dtt_models.ColumnInfo
 	filterTypes       map[string]interface{}
@@ -31,9 +31,9 @@ func resolveIntelligentSearchAuthorization(
 	tableName string,
 	userRole string,
 	userID int,
-	rawRowGroupSlug string,
+	categoryParams url.Values,
 ) (intelligentSearchAuthorization, error) {
-	selection, err := parseRowGroupSelection(rawRowGroupSlug)
+	selection, err := parseRowGroupFilters(categoryParams)
 	if err != nil {
 		return intelligentSearchAuthorization{}, err
 	}
@@ -48,7 +48,7 @@ func resolveIntelligentSearchAuthorization(
 		userID:     userID,
 		readPolicy: readPolicy,
 	}
-	if len(selection) == 0 {
+	if len(selection.Slugs) == 0 && len(selection.Modes) == 0 {
 		return authorization, nil
 	}
 

@@ -8,8 +8,6 @@ import (
 	"reflect"
 	"strings"
 	"testing"
-
-	"github.com/lib/pq"
 )
 
 func TestAppendIntelligentSearchAuthorizationConditionContinuesExistingPlaceholders(t *testing.T) {
@@ -22,7 +20,7 @@ func TestAppendIntelligentSearchAuthorizationConditionContinuesExistingPlacehold
 			OwnerColumn: "user_id",
 		},
 		tableUID:          104,
-		rowGroupSelection: []string{"security"},
+		rowGroupSelection: testRowGroupSelection("security"),
 	}
 	condition, args, err := appendIntelligentSearchAuthorizationCondition(
 		"travel_info",
@@ -38,13 +36,13 @@ func TestAppendIntelligentSearchAuthorizationConditionContinuesExistingPlacehold
 		`public.resolve_effective_row_access($3, "candidate"."id", $4, 'read'`,
 		`row_group_membership.table_uid = $5`,
 		`row_group_membership.row_id = "candidate"."id"`,
-		`row_group.slug = ANY($6::text[])`,
+		`jsonb_to_recordset($6::jsonb)`,
 	} {
 		if !strings.Contains(condition, fragment) {
 			t.Fatalf("authorization condition lacks %q: %s", fragment, condition)
 		}
 	}
-	wantArgs := []interface{}{"existing", 8, "travel_info", 8, int64(104), pq.Array([]string{"security"})}
+	wantArgs := []interface{}{"existing", 8, "travel_info", 8, int64(104), testRowGroupSelection("security").requirementsJSON()}
 	if !reflect.DeepEqual(args, wantArgs) {
 		t.Fatalf("args = %#v, want %#v", args, wantArgs)
 	}
@@ -60,7 +58,7 @@ func TestAppendIntelligentSearchAuthorizationConditionKeepsRLSPilotOnDatabasePol
 			OwnerColumn: "user_id",
 		},
 		tableUID:          42,
-		rowGroupSelection: []string{"security"},
+		rowGroupSelection: testRowGroupSelection("security"),
 	}
 	condition, args, err := appendIntelligentSearchAuthorizationCondition(
 		rlsPilotTableName,
@@ -74,7 +72,7 @@ func TestAppendIntelligentSearchAuthorizationConditionKeepsRLSPilotOnDatabasePol
 	if strings.Contains(condition, "approved") || !strings.Contains(condition, "row_group_membership") {
 		t.Fatalf("pilot condition mixed Go row policy with RLS or lost group filter: %s", condition)
 	}
-	wantArgs := []interface{}{rlsPilotTableName, 8, int64(42), pq.Array([]string{"security"})}
+	wantArgs := []interface{}{rlsPilotTableName, 8, int64(42), testRowGroupSelection("security").requirementsJSON()}
 	if !reflect.DeepEqual(args, wantArgs) {
 		t.Fatalf("args = %#v, want %#v", args, wantArgs)
 	}
@@ -83,7 +81,7 @@ func TestAppendIntelligentSearchAuthorizationConditionKeepsRLSPilotOnDatabasePol
 func TestAppendIntelligentSearchAuthorizationConditionContinuesLanguageVectorArguments(t *testing.T) {
 	authorization := intelligentSearchAuthorization{
 		tableUID:          104,
-		rowGroupSelection: []string{"security"},
+		rowGroupSelection: testRowGroupSelection("security"),
 	}
 	condition, args, err := appendIntelligentSearchAuthorizationCondition(
 		"travel_info",
@@ -97,13 +95,13 @@ func TestAppendIntelligentSearchAuthorizationConditionContinuesLanguageVectorArg
 	for _, fragment := range []string{
 		`public.resolve_effective_row_access($3, "travel_info"."id", $4, 'read'`,
 		`row_group_membership.table_uid = $5`,
-		`row_group.slug = ANY($6::text[])`,
+		`jsonb_to_recordset($6::jsonb)`,
 	} {
 		if !strings.Contains(condition, fragment) {
 			t.Fatalf("language-vector authorization lacks %q: %s", fragment, condition)
 		}
 	}
-	wantArgs := []interface{}{"vector", "fi", "travel_info", 1, int64(104), pq.Array([]string{"security"})}
+	wantArgs := []interface{}{"vector", "fi", "travel_info", 1, int64(104), testRowGroupSelection("security").requirementsJSON()}
 	if !reflect.DeepEqual(args, wantArgs) {
 		t.Fatalf("args = %#v, want %#v", args, wantArgs)
 	}

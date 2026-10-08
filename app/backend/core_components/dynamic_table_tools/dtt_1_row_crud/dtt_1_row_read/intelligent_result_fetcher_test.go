@@ -203,7 +203,7 @@ func TestFetchFullTextRowsAppliesRowPolicyAndGroupBeforeStoredVectorLimit(t *tes
 			OwnerColumn: "user_id",
 		},
 		tableUID:          104,
-		rowGroupSelection: []string{"security"},
+		rowGroupSelection: testRowGroupSelection("security"),
 	}
 	if _, err := fetchFullTextRows(db, "travel_info", "Firefox", authorization); err != nil {
 		t.Fatalf("fetchFullTextRows returned error: %v", err)
@@ -214,14 +214,14 @@ func TestFetchFullTextRowsAppliesRowPolicyAndGroupBeforeStoredVectorLimit(t *tes
 		`public.resolve_effective_row_access($3, "src"."id", $4, 'read'`,
 		`row_group_membership.table_uid = $5`,
 		`row_group_membership.row_id = "src"."id"`,
-		`row_group.slug = ANY($6::text[])`,
-		`row_group.enabled = TRUE`,
+		`jsonb_to_recordset($6::jsonb)`,
+		`COUNT(DISTINCT row_group_membership.group_id)`,
 	} {
 		if !strings.Contains(state.finalQuery, fragment) {
 			t.Fatalf("candidate query lacks %q: %s", fragment, state.finalQuery)
 		}
 	}
-	if strings.Index(state.finalQuery, "row_group.slug") > strings.Index(state.finalQuery, "LIMIT 10") {
+	if strings.Index(state.finalQuery, "jsonb_to_recordset") > strings.Index(state.finalQuery, "LIMIT 10") {
 		t.Fatalf("row-group predicate occurs after LIMIT: %s", state.finalQuery)
 	}
 	if len(state.finalArgs) != 6 ||
@@ -230,7 +230,7 @@ func TestFetchFullTextRowsAppliesRowPolicyAndGroupBeforeStoredVectorLimit(t *tes
 		state.finalArgs[2].Value != "travel_info" ||
 		fmt.Sprint(state.finalArgs[3].Value) != "8" ||
 		fmt.Sprint(state.finalArgs[4].Value) != "104" ||
-		state.finalArgs[5].Value != `{"security"}` {
+		state.finalArgs[5].Value != testRowGroupSelection("security").requirementsJSON() {
 		t.Fatalf("unexpected authorized candidate args: %#v", state.finalArgs)
 	}
 }
@@ -251,7 +251,7 @@ func TestFetchSimilarRowsAppliesAuthorizationBeforeVectorLimit(t *testing.T) {
 			FlagColumns: []string{"published"},
 		},
 		tableUID:          104,
-		rowGroupSelection: []string{"security"},
+		rowGroupSelection: testRowGroupSelection("security"),
 	}
 	if _, err := fetchSimilarRows(db, "travel_info", "", pgvector.NewVector([]float32{0.1}), authorization, semanticSources{General: true}, semanticResultLimit); err != nil {
 		t.Fatalf("fetchSimilarRows returned error: %v", err)
@@ -262,16 +262,16 @@ func TestFetchSimilarRowsAppliesAuthorizationBeforeVectorLimit(t *testing.T) {
 		`public.resolve_effective_row_access($2, "travel_info"."id", $3, 'read'`,
 		`row_group_membership.table_uid = $4`,
 		`row_group_membership.row_id = "travel_info"."id"`,
-		`row_group.slug = ANY($5::text[])`,
+		`jsonb_to_recordset($5::jsonb)`,
 	} {
 		if !strings.Contains(state.finalQuery, fragment) {
 			t.Fatalf("vector candidate query lacks %q: %s", fragment, state.finalQuery)
 		}
 	}
-	if strings.Index(state.finalQuery, "row_group.slug") > strings.Index(state.finalQuery, "LIMIT 10") {
+	if strings.Index(state.finalQuery, "jsonb_to_recordset") > strings.Index(state.finalQuery, "LIMIT 10") {
 		t.Fatalf("row-group predicate occurs after LIMIT: %s", state.finalQuery)
 	}
-	if len(state.finalArgs) != 5 || state.finalArgs[1].Value != "travel_info" || fmt.Sprint(state.finalArgs[2].Value) != "1" || fmt.Sprint(state.finalArgs[3].Value) != "104" || state.finalArgs[4].Value != `{"security"}` {
+	if len(state.finalArgs) != 5 || state.finalArgs[1].Value != "travel_info" || fmt.Sprint(state.finalArgs[2].Value) != "1" || fmt.Sprint(state.finalArgs[3].Value) != "104" || state.finalArgs[4].Value != testRowGroupSelection("security").requirementsJSON() {
 		t.Fatalf("unexpected vector candidate args: %#v", state.finalArgs)
 	}
 }

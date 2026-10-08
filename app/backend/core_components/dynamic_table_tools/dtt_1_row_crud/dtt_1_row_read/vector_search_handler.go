@@ -10,6 +10,7 @@ import (
 	"database/sql"
 	"easelect/backend/core_components/httpresponse"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
@@ -34,9 +35,9 @@ func GetResultsVector(response_writer http.ResponseWriter, request *http.Request
 		httpresponse.RespondWithError(response_writer, http.StatusBadRequest, "table name is missing")
 		return
 	}
-	rowGroupSelection, err := parseRowGroupSelection(request.URL.Query().Get(rowGroupFilterQueryKey))
+	rowGroupSelection, err := parseRowGroupFilters(request.URL.Query())
 	if err != nil {
-		httpresponse.RespondWithError(response_writer, http.StatusBadRequest, err.Error())
+		httpresponse.RespondWithRefusal(response_writer, invalidRowGroupFilters())
 		return
 	}
 
@@ -165,7 +166,7 @@ func GetResultsVector(response_writer http.ResponseWriter, request *http.Request
 		where_clause,
 		query_args,
 	)
-	if len(rowGroupSelection) > 0 {
+	if len(rowGroupSelection.Slugs) > 0 || len(rowGroupSelection.Modes) > 0 {
 		tableUIDText, uidErr := getTableUID(table_name, currentDb)
 		tableUID, parseErr := strconv.ParseInt(tableUIDText, 10, 64)
 		if uidErr != nil || parseErr != nil || tableUID <= 0 {
@@ -176,7 +177,12 @@ func GetResultsVector(response_writer http.ResponseWriter, request *http.Request
 		rowGroupSelection, err = resolveRowGroupSelection(readQuerier, table_name, tableUID, rowGroupSelection, userRole, userID, readPolicy)
 		if err != nil {
 			log.Printf("\033[31merror resolving row-group selection: %v\033[0m\n", err)
-			httpresponse.RespondWithError(response_writer, http.StatusInternalServerError, "error resolving row-group selection")
+			var refusal *httpresponse.Refusal
+			if errors.As(err, &refusal) {
+				httpresponse.RespondWithRefusal(response_writer, refusal)
+			} else {
+				httpresponse.RespondWithError(response_writer, http.StatusInternalServerError, "error resolving row-group selection")
+			}
 			return
 		}
 		where_clause, query_args, err = appendRowGroupFilterToWhereClause(

@@ -104,7 +104,7 @@ func rowGroupListingContext(t *testing.T, reader dbutils.Querier, table, role st
 
 func rowGroupListing(t *testing.T, ctx QueryBuilderContext) ([]int, int, []RowGroupFacet) {
 	t.Helper()
-	query, args, count, facets, err := BuildSelectQuery(ctx)
+	query, args, count, facets, _, err := BuildSelectQuery(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -158,6 +158,10 @@ func TestRowGroupSelectionCountsAndPaginationPostgres(t *testing.T) {
 			expected = append(expected, RowGroupFacet{ID: 3, Slug: "private", Title: map[string]string{"en": "Private"}, RowCount: 1})
 		}
 		expected = append(expected, RowGroupFacet{ID: 6, Slug: "zero", Title: map[string]string{"en": "Zero"}, RowCount: 0, Selected: true})
+		for i := range expected {
+			expected[i].Mode = "any"
+			expected[i].ZeroHit = expected[i].RowCount == 0
+		}
 		if !reflect.DeepEqual(facets, expected) {
 			t.Fatalf("%s facets=%#v want=%#v", actor.role, facets, expected)
 		}
@@ -236,11 +240,11 @@ func TestRowGroupUnreadableSlugsMatchUnknownAcrossReadPathsPostgres(t *testing.T
 				if !reflect.DeepEqual(ids, baselineIDs) || count != baselineCount || !reflect.DeepEqual(facets, baselineFacets) {
 					t.Fatalf("%s disclosed %s: ids=%v count=%d facets=%#v", table, slug, ids, count, facets)
 				}
-				authorization, err := resolveIntelligentSearchAuthorization(owner, tx, table, "guest", 1, slug)
+				authorization, err := resolveIntelligentSearchAuthorization(owner, tx, table, "guest", 1, url.Values{"row_group": {slug}})
 				if err != nil {
 					t.Fatal(err)
 				}
-				if len(authorization.rowGroupSelection) != 0 {
+				if len(authorization.rowGroupSelection.Slugs) != 0 {
 					t.Fatalf("%s resolved unreadable %s", table, slug)
 				}
 				// AI candidates and hydration use this same condition with different aliases.
@@ -255,7 +259,7 @@ func TestRowGroupUnreadableSlugsMatchUnknownAcrossReadPathsPostgres(t *testing.T
 					}
 				}
 				// The standalone vector endpoint uses these exact policy/resolver/builder calls.
-				selection, err := parseRowGroupSelection(slug)
+				selection, err := parseRowGroupFilters(url.Values{"row_group": {slug}})
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -300,7 +304,7 @@ ALTER TABLE wl103_rows ADD COLUMN embedding_vector vector(3) DEFAULT '[1,0,0]';`
 	for _, selection := range []string{"unknown", "hidden", "foreign", "disabled", "boat,train"} {
 		ctx.QueryParams.Set("row_group", selection)
 		want, _, _ := rowGroupListing(t, ctx)
-		authorization, err := resolveIntelligentSearchAuthorization(owner, reader, "wl103_rows", "guest", 1, selection)
+		authorization, err := resolveIntelligentSearchAuthorization(owner, reader, "wl103_rows", "guest", 1, url.Values{"row_group": {selection}})
 		if err != nil {
 			t.Fatal(err)
 		}

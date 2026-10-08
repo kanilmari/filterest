@@ -22,3 +22,16 @@ test("the listing's conditions are the selected filters plus a committed search"
     expect(getDatasetListingFilters("searched_orders", undefined)).toEqual({ search: "api" });
     expect(selected).toEqual({ status: "open" });
 });
+
+test("listing/page signatures include modes, ordinary filters and sort, but not the page language", async () => {
+    const { getDatasetListingSignature } = await import("./dataset_listing_filters.js");
+    document.documentElement.lang = "fi";
+    const filters = { row_group: "boat,train", row_group_mode: "1:all", status: "open" };
+    const signature = getDatasetListingSignature("offers", filters, { column: "id", direction: "ASC" });
+    expect(signature).toBe(getDatasetListingSignature("offers", { status: "open", row_group_mode: "1:all", row_group: "boat,train" }, { column: "id", direction: "ASC" }));
+    expect(signature).not.toBe(getDatasetListingSignature("offers", { ...filters, row_group_mode: "" }, { column: "id", direction: "ASC" }));
+    expect(signature).not.toBe(getDatasetListingSignature("offers", filters, { column: "id", direction: "DESC" }));
+    // The first load sets <html lang> while its first request is in flight; that answer still belongs to the view.
+    document.documentElement.lang = "en";
+    expect(signature).toBe(getDatasetListingSignature("offers", filters, { column: "id", direction: "ASC" }));
+});

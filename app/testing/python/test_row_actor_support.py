@@ -60,7 +60,9 @@ def test_the_support_file_is_schema_only_and_declares_its_release_and_marker():
     assert not re.search(r"^\s*BEGIN\s*;", sql, re.M)
     record = RELEASE_RECORD.read_text(encoding="utf-8")
     assert "-- VERSION_DB: 9.10.0" in record and "SELECT '9.10.0'" in record
-    assert (APP / "VERSION_DB").read_text(encoding="utf-8").strip() == "9.10.0"
+    # 9.10.0 is released or still open; a later open version keeps this file in 9.10.0.
+    current = (APP / "VERSION_DB").read_text(encoding="utf-8").strip()
+    assert tuple(int(part) for part in current.split(".")) >= (9, 10, 0)
 
 
 def test_the_conversion_is_schema_only_and_leaves_no_registry_id_form_behind():
@@ -88,7 +90,8 @@ def test_the_bootstrap_runs_the_support_and_leaves_the_release_record_to_its_acc
     assert ('"20261005000001_add_row_actor_support.sql",\n'
             '    "20261005000002_key_row_actor_marks_by_table_uid.sql",\n'
             '    "20261005000006_check_row_actor_trigger_definitions.sql",') in source
-    assert '"20261005000099_record_database_release_9_10_0.sql",\n)' in source
+    records = re.search(r"release_record_migrations = \((.*?)\n\)", source, re.S).group(1)
+    assert '"20261005000099_record_database_release_9_10_0.sql",' in records
     seed = (BOOTSTRAP / "seed_data.sql").read_text(encoding="utf-8")
     block = seed[seed.index("DO $filterest_acceptance$"):]
     acceptance_markers = re.search(r"FROM unnest\(ARRAY\[(.*?)\]::text\[\]\)", block).group(1)
@@ -159,7 +162,8 @@ def refused(run, sql, expected):
 
 
 def test_the_imported_bootstrap_is_accepted_whole(installed):
-    assert value(installed, "SELECT version FROM system_db_version") == "9.10.0"
+    assert value(installed, "SELECT version FROM system_db_version") == \
+        (APP / "VERSION_DB").read_text(encoding="utf-8").strip()
     ledger = int(value(installed, "SELECT count(*) FROM system_schema_migrations"))
     assert ledger == len(list(MIGRATIONS.glob("*.sql")))
     assert value(installed, "SELECT string_agg(migration || ':' || action, ' ' ORDER BY id) "

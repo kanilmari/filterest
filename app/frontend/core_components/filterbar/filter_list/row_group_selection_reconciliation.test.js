@@ -16,13 +16,14 @@ const { endpointRouterMock, refreshMock, searchMock } = vi.hoisted(() => ({
 }));
 
 vi.mock("../../general_tables/gt_1_row_crud/gt_1_2_row_read/table_refresh_unified.js", async () => ({
-    ...await import("../../state_stores/table_state_store.js"), refreshTableUnified: refreshMock,
+    ...await import("../../state_stores/table_state_store.js"), refreshTableUnified: refreshMock, invalidateTableRefresh: vi.fn(),
 }));
 vi.mock("../text_search/create_text_search_panel.js", () => ({
     ongoingSearchResults: {}, do_intelligent_search: searchMock, rerenderCachedSearchResults: vi.fn(),
 }));
 vi.mock("../text_search/dataset_search_executor.js", () => ({ do_intelligent_search: searchMock }));
 vi.mock("../text_search/dataset_search_clearer.js", () => ({ clearCommittedDatasetSearch: vi.fn() }));
+vi.mock("../../infinite_scroll/infinite_scroll_handler.js", () => ({ resetOffset: vi.fn(), disconnectInfiniteScroll: vi.fn() }));
 vi.mock("../../endpoints/endpoint_router.js", () => ({ endpoint_router: endpointRouterMock }));
 vi.mock("../../route_permission_checker.js", () => ({ hasRoutePermission: vi.fn(() => false) }));
 vi.mock("../../lang/translation_handler.js", () => ({ getTranslationForKey: key => key }));
@@ -32,7 +33,7 @@ vi.mock("../../table_views/dataset_value_localizer.js", () => ({
 }));
 
 const available = { id: 1, slug: "available", title: { fi: "Saatavilla" }, row_count: 4, selected: false };
-const authoritative = { authoritative: true };
+const authoritative = { authoritative: true, resolvedSelection: { slugs: [], modes: {} } };
 
 function seedURL(selection, { article = false, search = "matka" } = {}) {
     const params = new URLSearchParams({ row_group: selection, status: "open", search,
@@ -117,7 +118,7 @@ describe("authoritative row-group selections", () => {
     test("keeps a valid selected zero-count value while removing a disappeared value", async () => {
         seedURL("disappeared,zero");
         const zero = { id: 2, slug: "zero", title: { fi: "Nolla" }, row_count: 0, selected: true };
-        const host = renderRowGroupFacets("travel_info", [available, zero], authoritative);
+        const host = renderRowGroupFacets("travel_info", [available, zero], { ...authoritative, resolvedSelection: { slugs: ["zero"], modes: {} } });
         await Promise.resolve();
         expect(getUnifiedTableState("travel_info").filters).toEqual({ row_group: "zero", status: "open" });
         expect(getParams("travel_info").row_group).toBe("zero");
@@ -132,7 +133,7 @@ describe("authoritative row-group selections", () => {
 
     test("shared tag updates synchronize panel selections immediately without awaiting fresh metadata", async () => {
         seedURL("zero");
-        const host = renderRowGroupFacets("travel_info", [{ id: 2, slug: "zero", title: { fi: "Nolla" }, row_count: 0, selected: true }], authoritative);
+        const host = renderRowGroupFacets("travel_info", [{ id: 2, slug: "zero", title: { fi: "Nolla" }, row_count: 0, selected: true }], { ...authoritative, resolvedSelection: { slugs: ["zero"], modes: {} } });
         host.querySelector('[data-testid="row-group-facet-heading"]').click();
         expect(host.querySelector('input[type="checkbox"]').checked).toBe(true);
         const checkbox = host.querySelector('input[type="checkbox"]');
@@ -161,8 +162,8 @@ describe("authoritative row-group selections", () => {
     });
 
     test.each([
-        ["omitted", undefined, authoritative],
-        ["null", null, authoritative],
+        ["omitted", undefined, { authoritative: true }],
+        ["null", null, { authoritative: true }],
         ["later page", [], { authoritative: false }],
         ["failed request", [], { authoritative: false }],
         ["stale request", [], { authoritative: true, isCurrent: () => false }],
@@ -198,5 +199,27 @@ describe("authoritative row-group selections", () => {
         expect(selectedTags()).toEqual(["new_selection"]);
         expect(refreshMock).not.toHaveBeenCalled();
         expect(searchMock).not.toHaveBeenCalled();
+    });
+
+    test("resolved state reconciles mode-only headings and selections outside capped facets atomically", async () => {
+        seedURL("available,off_page");
+        setUnifiedTableState("travel_info", { filters: { row_group: "available,off_page", row_group_mode: "9:all,1:all", status: "open" } });
+        setParams("travel_info", { ...getParams("travel_info"), row_group_mode: "9:all,1:all" });
+        renderRowGroupFacets("travel_info", [available], { authoritative: true,
+            resolvedSelection: { slugs: ["off_page", "available"], modes: { 9: "all" } } });
+        await Promise.resolve();
+        expect(getUnifiedTableState("travel_info").filters).toEqual({ row_group: "available,off_page", row_group_mode: "9:all", status: "open" });
+        expect(getParams("travel_info").row_group_mode).toBe("9:all");
+        expect(new URLSearchParams(location.search).get("row_group_mode")).toBe("9:all");
+        expect(selectedTags()).toEqual(["available", "off_page"]);
+        expect(document.querySelectorAll(".active-filter-item")).toHaveLength(4);
+        expect(searchMock).not.toHaveBeenCalled(); expect(refreshMock).not.toHaveBeenCalled();
+    });
+
+    test("facets alone cannot reconcile selection or preferences", async () => {
+        seedURL("off_page");
+        setUnifiedTableState("travel_info", { filters: { row_group: "off_page", row_group_mode: "9:all" } });
+        renderRowGroupFacets("travel_info", [available], { authoritative: true });
+        expect(getUnifiedTableState("travel_info").filters).toEqual({ row_group: "off_page", row_group_mode: "9:all" });
     });
 });

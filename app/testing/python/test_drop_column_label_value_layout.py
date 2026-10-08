@@ -20,6 +20,13 @@ MIGRATIONS = APP / "server_tools/migrations"
 DROP = MIGRATIONS / "20261005000070_drop_column_label_value_layout.sql"
 SNAPSHOTS = APP / "server_tools/versioning/schema_snapshots"
 MARKER = "wl52_drop_column_label_value_layout"
+# The open database version: a fresh bootstrap records it, and a complete upgrade ends at it.
+CURRENT_DB = (APP / "VERSION_DB").read_text(encoding="utf-8").strip()
+
+
+def _declared_db_version(path):
+    match = re.search(r"^-- VERSION_DB: (\d+)\.(\d+)\.(\d+)$", path.read_text(), re.M)
+    return tuple(int(part) for part in match.groups()) if match else None
 
 
 def test_drop_is_schema_classified_and_public_artifacts_match():
@@ -97,7 +104,7 @@ def test_drop_preserves_visibility_and_site_choice_and_is_idempotent(cluster, in
         _assert_retired(cluster)
         assert cluster(visibility).stdout == before_visibility
         assert cluster(site).stdout == before_site
-    assert cluster("SELECT count(*) FROM system_db_version WHERE version='9.10.0'").stdout.strip() == ("1" if installation == "fresh" else "0")
+    assert cluster(f"SELECT count(*) FROM system_db_version WHERE version='{CURRENT_DB}'").stdout.strip() == ("1" if installation == "fresh" else "0")
 
 
 def test_complete_release_upgrade_preserves_visibility_and_site_choice_and_records_owner(upgrade, tmp_path):
@@ -141,7 +148,10 @@ def test_complete_release_upgrade_preserves_visibility_and_site_choice_and_recor
     before_ledger = json.loads(value(upgrade, ledger))
     migration_names = {path.name for path in MIGRATIONS.glob("*.sql")}
     release_names = {path.name for path in release}
-    assert migration_names - before_ledger.keys() == release_names
+    # The files pending on a 9.9.2 package are 9.10.0's and those of any later open version.
+    pending_names = {path.name for path in MIGRATIONS.glob("*.sql") if (_declared_db_version(path) or (0,)) >= (9, 10, 0)}
+    assert release_names <= pending_names
+    assert migration_names - before_ledger.keys() == pending_names
 
     # Invoke the real Go runner, including its per-file transaction and ledger
     # insert, instead of manufacturing a successful release ledger in the test.
@@ -182,14 +192,14 @@ func main() {
         _assert_retired(upgrade)
         assert value(upgrade, visibility) == before_visibility
         assert value(upgrade, site) == before_site
-        assert value(upgrade, "SELECT version FROM system_db_version ORDER BY id DESC LIMIT 1") == "9.10.0"
+        assert value(upgrade, "SELECT version FROM system_db_version ORDER BY id DESC LIMIT 1") == CURRENT_DB
         assert value(upgrade, "SELECT count(*) FROM system_db_version WHERE version='9.10.0'") == "1"
         assert "removed unused per-column field wrapping" in value(upgrade,
             "SELECT description FROM system_db_version WHERE version='9.10.0'")
         assert value(upgrade, "SELECT count(*) FROM app_check_row_actor_marks()") == "0"
         current_ledger = json.loads(value(upgrade, ledger))
         assert set(current_ledger) == migration_names
-        assert current_ledger.keys() - before_ledger.keys() == release_names
+        assert current_ledger.keys() - before_ledger.keys() == pending_names
         assert RELEASE_RECORD.name in current_ledger
         assert all(current_ledger[name] == entry for name, entry in before_ledger.items())
         current_versions = value(upgrade, versions)

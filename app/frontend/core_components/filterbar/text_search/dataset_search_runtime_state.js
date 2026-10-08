@@ -8,7 +8,7 @@ import { getUnifiedTableState } from "../../state_stores/table_state_store.js";
 import { getChosenDatasetView } from "../../state_stores/dataset_view_choice_saver.js";
 import { getDatasetViewContainerId, resolveDatasetViewSelectionTarget } from "../../table_views/dataset_view_registry.js";
 import { setResultsCount, setSearchAiResultsCount } from "../../../reusable_components/results_count/results_count_printer.js";
-import { ROW_GROUP_FILTER_KEY } from "../filter_list/row_group_facet_printer.js";
+import { ROW_GROUP_FILTER_KEY, ROW_GROUP_MODE_KEY } from "../filter_list/row_group_filter_contract.js";
 import { getActiveFiltersSnapshot, RESERVED_PARAM_KEYS } from "./dataset_search_state_reader.js";
 import {
     countVisibleRows,
@@ -28,13 +28,17 @@ export function getSearchFilterContext(tableName) {
     for (const key of Object.keys(activeFilters)) {
         if (RESERVED_PARAM_KEYS.has(key.toLowerCase())) delete activeFilters[key];
     }
+    const rowGroupMode = String(activeFilters[ROW_GROUP_MODE_KEY] ?? "").trim();
     const rowGroupSlug = String(activeFilters[ROW_GROUP_FILTER_KEY] ?? "").trim();
     // Row-group membership is server-side metadata, not a field carried by
     // streamed rows. The backend applies it before ranking/LIMIT; the cache
     // must therefore evaluate only ordinary row fields.
     delete activeFilters[ROW_GROUP_FILTER_KEY];
-    const signature = JSON.stringify(Object.entries({ ...activeFilters, rowGroupSlug }).sort(([a], [b]) => a.localeCompare(b)));
-    return { clientFilters: activeFilters, rowGroupSlug, signature };
+    delete activeFilters[ROW_GROUP_MODE_KEY];
+    // The page language stays out: the first load sets <html lang> while a linked search may already be running,
+    // and a changed signature makes that search's answer look stale (see getDatasetListingSignature).
+    const signature = JSON.stringify(Object.entries({ ...activeFilters, rowGroupSlug, rowGroupMode }).sort(([a], [b]) => a.localeCompare(b)));
+    return { clientFilters: activeFilters, rowGroupSlug, rowGroupMode, signature };
 }
 
 /** Adopt an authoritative selection without replacing this search or asking again. */

@@ -217,7 +217,9 @@ def test_actor_package_import_stops_on_the_first_error(cluster, tmp_path, path, 
     result, _ = import_actor_package(cluster, tmp_path, path, schema, seed)
     if fault is None:
         assert result.returncode == 0, result.stderr
-        assert cluster("SELECT version FROM system_db_version", "imported").stdout.strip() == "9.10.0"
+        # The acceptance block writes the version row of the open database version.
+        assert cluster("SELECT version FROM system_db_version", "imported").stdout.strip() == \
+            (APP / "VERSION_DB").read_text(encoding="utf-8").strip()
         assert cluster("SELECT count(*) FROM system_row_actor_columns", "imported").stdout.strip() == "32"
         assert cluster("SELECT count(*) FROM app_check_row_actor_marks()", "imported").stdout.strip() == "0"
         assert cluster("SELECT count(*) FROM system_data_repair_records WHERE migration='wl58_row_actor_columns' AND action IN ('column_added','fk_added','index_added','default_added','creator_trigger_added')", "imported").stdout.strip() == "0"

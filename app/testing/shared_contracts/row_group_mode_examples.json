@@ -1,0 +1,19 @@
+[
+  {"raw":"", "valid":true, "canonical":""},
+  {"raw":"  ", "valid":true, "canonical":""},
+  {"raw":"3:all, 1:any,0:all,2:all ", "valid":true, "canonical":"0:all,2:all,3:all"},
+  {"raw":"9007199254740991:all", "valid":true, "canonical":"9007199254740991:all"},
+  {"raw":"9007199254740992:all", "valid":false},
+  {"raw":"01:all", "valid":false},
+  {"raw":"-1:all", "valid":false},
+  {"raw":"+1:all", "valid":false},
+  {"raw":"1:ALL", "valid":false},
+  {"raw":"1:none", "valid":false},
+  {"raw":"1:any,1:all", "valid":false},
+  {"raw":"1:all,1:all", "valid":false},
+  {"raw":"1:all,", "valid":false},
+  {"raw":",1:all", "valid":false},
+  {"raw":"1:all,,2:all", "valid":false},
+  {"raw":"1 :all", "valid":false},
+  {"raw":"1: all", "valid":false}
+]

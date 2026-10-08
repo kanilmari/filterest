@@ -5,7 +5,7 @@
 
 import { endpoint_router } from "../../endpoints/endpoint_router.js";
 import { getLanguageWithBrowserFallback } from "../../state_stores/lang_preference_reader.js";
-import { ROW_GROUP_FILTER_KEY } from "../filter_list/row_group_facet_printer.js";
+import { ROW_GROUP_FILTER_KEY, ROW_GROUP_MODE_KEY } from "../filter_list/row_group_filter_contract.js";
 
 /**
  * Read one search through the usual permission, CSRF and session pipeline.
@@ -20,6 +20,7 @@ export async function* readDatasetSearchResponse(tableName, query, options, isCu
         url_params += "&filters=" + encodeURIComponent(JSON.stringify(options.filters));
     }
     if (options.rowGroupSlug) url_params += "&" + ROW_GROUP_FILTER_KEY + "=" + encodeURIComponent(options.rowGroupSlug);
+    if (options.rowGroupMode) url_params += "&" + ROW_GROUP_MODE_KEY + "=" + encodeURIComponent(options.rowGroupMode);
     if (["card", "article_view", "product_card"].includes(options.view)) url_params += "&include_card_support=1";
     if (options.useLocation && typeof options.gps?.lat === "number" && typeof options.gps?.lon === "number") {
         url_params += "&gps=" + encodeURIComponent(options.gps.lat + "," + options.gps.lon);

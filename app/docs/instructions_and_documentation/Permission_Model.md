@@ -211,6 +211,25 @@ completion markers through the administrator connection. The existing owner-role
 RLS policy hides repair-history rows from runtime pools. Neither table receives
 runtime writes or sequence privileges, and this step revokes no existing reads.
 
+### Category vocabulary and current counts
+
+Category vocabulary comes from enabled values/headings attached to rows the current
+reader may read in that dataset, before text, column or category narrowing. Both
+selection resolution and vocabulary queries use the request's limited read querier,
+including the RLS transaction. Privileged catalogue output cannot supply reader facets.
+Unknown, disabled, foreign-dataset, orphan and denied-only values disappear alike;
+mode-only headings also need readable vocabulary. Owner exceptions, exact-row denies
+and the RLS policy stay in force. Zero-hit values are readable vocabulary whose
+current count is zero, so displaying them discloses no denied-only classification.
+
+Counts use distinct row IDs under current text/column narrowing and other selected
+headings. ANY omits the candidate heading's selection; ALL requires its selected
+values plus the candidate. The same required-heading predicate is applied before
+listing/vector/intelligent ranking and again during intelligent hydration. ALL on a
+readable single-valued heading is a typed 400 (`row_group_invalid_filters`); an ALL
+preference without selections has no row-filter effect. First-page resolved selection
+state is separate from the 200-value display cap, with selected values pinned.
+
 ## 2. Target Permission Layers
 
 Filterest should use one vocabulary and one layered model for authorization. These layers are ordered from broadest to narrowest.

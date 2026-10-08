@@ -70,3 +70,14 @@ test("sends the interface language as the reader's language", async () => {
         localStorage.removeItem("chosen_language");
     }
 });
+
+test("transports modes beside category slugs and outside ordinary filters", async () => {
+    endpoint.mockResolvedValueOnce({ body: new ReadableStream({ start(controller) { controller.close(); } }) });
+    for await (const _packet of readDatasetSearchResponse("offers", "trip", {
+        rowGroupSlug: "boat,train", rowGroupMode: "0:all,12:all", filters: { status: "open" },
+    }, () => true)) { /* empty stream */ }
+    const params = new URLSearchParams(endpoint.mock.calls.at(-1)[1].url_params);
+    expect(params.get("row_group")).toBe("boat,train");
+    expect(params.get("row_group_mode")).toBe("0:all,12:all");
+    expect(JSON.parse(params.get("filters"))).toEqual({ status: "open" });
+});

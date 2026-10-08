@@ -51,11 +51,12 @@ test.each(["card", "table", "normal"])("reuses the entire committed %s prefix an
     expect(getUnifiedTableState("events").offset).toBe(4);
 });
 
-test.each(["filter", "sort", "language", "search", "access"])("rejects a captured prefix after %s changes", (change) => {
+test.each(["filter", "mode", "sort", "language", "search", "access"])("rejects a captured prefix after %s changes", (change) => {
     prepare();
     const token = captureLoadedDatasetRows("events");
     setChosenDatasetView("events", "article_view");
     if (change === "filter") setUnifiedTableState("events", { filters: { category: "news" } });
+    if (change === "mode") setUnifiedTableState("events", { filters: { category: "travel", row_group_mode: "1:all" } });
     if (change === "sort") setUnifiedTableState("events", { sort: { column: "id", direction: "DESC" } });
     if (change === "language") document.documentElement.lang = "en";
     if (change === "search") localStorage.setItem("test_params", JSON.stringify({ search: "query" }));

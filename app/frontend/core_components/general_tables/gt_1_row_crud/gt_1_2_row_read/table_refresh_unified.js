@@ -9,7 +9,7 @@ import { invalidateCardArticleReturn, getCardArticleReturnToken } from "../../..
 import { fetchDatasetData } from '../../../endpoints/endpoint_data_fetcher.js';
 import { generate_table } from '../../../table_views/dataset_view_printer.js';
 import { resetOffset, updateOffset, disconnectInfiniteScroll } from '../../../infinite_scroll/infinite_scroll_handler.js';
-import { getDatasetListingFilters } from '../../../infinite_scroll/dataset_listing_filters.js';
+import { getDatasetListingFilters, getDatasetListingSignature } from '../../../infinite_scroll/dataset_listing_filters.js';
 import { applyColumnVisibility } from '../../../filterbar/filter_list/column_visibility_handler.js';
 import { openRowArticleView } from '../../../table_views/card_view/row_article_opener.js';
 import { claimFirstListedRow, getArticleStateKey } from '../../../table_views/card_view/first_listed_row.js';
@@ -143,7 +143,14 @@ export async function refreshTableUnified(tableName, options = {}) {
         if (!isCurrent()) return;
         // Changing a filter during a search runs the search again, and that run
         // reloads the listing itself; a rebuild started before it must yield.
-        const isRenderCurrent = () => isCurrent() && searchGroups?.isCurrent() !== false;
+        const requestSignature = getDatasetListingSignature(tableName, currentState.filters, currentState.sort);
+        let resolvedSignature = null;
+        const isRenderCurrent = () => {
+            const state = getUnifiedTableState(tableName);
+            const signature = getDatasetListingSignature(tableName, state.filters, state.sort);
+            return isCurrent() && searchGroups?.isCurrent() !== false
+                && (signature === requestSignature || signature === resolvedSignature);
+        };
 
         // 7) Haetaan data fetchDatasetData-funktiolla (nyt varmasti offset=0, ellei override)
         const result = loadedRows?.result || await fetchDatasetData({
@@ -162,6 +169,17 @@ export async function refreshTableUnified(tableName, options = {}) {
             console.warn(`fetchDatasetData palautti tyhjän vastauksen taululle: ${tableName}`);
             return;
         }
+        if (!loadedRows && Number(currentState.offset) === 0 && !result.error && result.success !== false
+            && Array.isArray(result.row_group_selection?.slugs) && result.row_group_selection?.modes) {
+            const { serializeRowGroupModes } = await import("../../../filterbar/filter_list/row_group_filter_contract.js");
+            const resolvedFilters = { ...currentState.filters };
+            const selection = result.row_group_selection.slugs.join(",");
+            const modes = serializeRowGroupModes(result.row_group_selection.modes);
+            if (selection) resolvedFilters.row_group = selection; else delete resolvedFilters.row_group;
+            if (modes) resolvedFilters.row_group_mode = modes; else delete resolvedFilters.row_group_mode;
+            resolvedSignature = getDatasetListingSignature(tableName, resolvedFilters, currentState.sort);
+        }
+        if (!isRenderCurrent()) return;
         const data = result.data || [];
         const columns = result.columns || [];
         const data_types = result.types || {};
@@ -195,6 +213,7 @@ export async function refreshTableUnified(tableName, options = {}) {
                     && !result.error && result.success !== false,
                 isCurrent: isRenderCurrent,
                 requestFilters: { ...(currentState.filters || {}) },
+                resolvedSelection: result.row_group_selection,
             } }
         );
         if (!isRenderCurrent()) return;

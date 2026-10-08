@@ -126,7 +126,7 @@ const columns = ["id", "header", "status"];
 const types = { id: "integer", header: "text", status: "text" };
 const row = id => ({ id, header: `Trip ${id}`, status: "open" });
 const hotel = { id: 1, slug: "hotel", title: { en: "Hotel" }, selected: true, row_count: 10 };
-const answer = (data = [row(1), row(2), row(3)], facets = [hotel]) => ({ data, columns, types, row_count: 10, row_group_facets: facets });
+const answer = (data = [row(1), row(2), row(3)], facets = [hotel]) => ({ data, columns, types, row_count: 10, row_group_facets: facets, row_group_selection: Array.isArray(facets) ? { slugs: facets.filter(value => value.selected).map(value => value.slug), modes: {} } : undefined });
 
 function appendCards(host, rows) {
     for (const item of rows) {
@@ -148,11 +148,11 @@ function streamAnswer() {
         controller.enqueue(new TextEncoder().encode(`${JSON.stringify(packet)}\n`)); controller.close();
     } }) };
 }
-async function seedSearch(selection = "disabled,hotel") {
-    const params = new URLSearchParams({ row_group: selection, status: "open", search: "trip", view: "table", sort_column: "id", sort_order: "ASC" });
+async function seedSearch(selection = "disabled,hotel", modes = "") {
+    const params = new URLSearchParams({ row_group: selection, ...(modes ? { row_group_mode: modes } : {}), status: "open", search: "trip", view: "table", sort_column: "id", sort_order: "ASC" });
     history.replaceState({ dataset }, "", `/${dataset}?${params}`);
     setParams(dataset, parseDatasetParamsFromSearch(location.search)); setChosenDatasetView(dataset, "table");
-    setUnifiedTableState(dataset, { filters: { row_group: selection, status: "open" }, sort: { column: "id", direction: "ASC" }, offset: 0 });
+    setUnifiedTableState(dataset, { filters: { row_group: selection, ...(modes ? { row_group_mode: modes } : {}), status: "open" }, sort: { column: "id", direction: "ASC" }, offset: 0 });
     await generate_table(dataset, columns, [], types, 10);
     return do_intelligent_search(dataset, "trip", { useLocation: false });
 }
@@ -266,7 +266,7 @@ test.each([
     ["selected zero count", [{ ...hotel, row_count: 0 }], "hotel"], ["empty", [], undefined],
     ["omitted", undefined, "disabled,hotel"], ["null", null, "disabled,hotel"],
 ])("%s payload keeps the same committed search and its remembered scope", async (_label, facets, selection) => {
-    const result = answer(); result.row_group_facets = facets; fetchListing.mockResolvedValue(result);
+    const result = answer(); result.row_group_facets = facets; result.row_group_selection = Array.isArray(facets) ? { slugs: facets.filter(value => value.selected).map(value => value.slug), modes: {} } : undefined; fetchListing.mockResolvedValue(result);
     await seedSearch();
     const cache = ongoingSearchResults[dataset];
     expect(getParams(dataset).row_group).toBe(selection);
@@ -286,4 +286,38 @@ test("a stale filter edit cannot rekey either owner through an old response", as
     expect(getSearchGroupsForViewRebuild(dataset)).toBeNull(); expect(captureLoadedDatasetRows(dataset)).toBeNull();
     expect(getUnifiedTableState(dataset).filters).toEqual({ status: "closed", row_group: "new" });
     expect(fetchListing).toHaveBeenCalledTimes(1); expect(endpointRouter).toHaveBeenCalledTimes(1);
+});
+
+
+test("modes are server-only search context and change execution identity", async () => {
+    await seedSearch("hotel");
+    const previous = getSearchFilterContext(dataset);
+    setUnifiedTableState(dataset, { filters: { row_group: "hotel", row_group_mode: "0:all", status: "open" } });
+    setParams(dataset, { ...getParams(dataset), row_group_mode: "0:all" });
+    const current = getSearchFilterContext(dataset);
+    expect(current).toMatchObject({ rowGroupSlug: "hotel", rowGroupMode: "0:all", clientFilters: { status: "open" } });
+    expect(current.signature).not.toBe(previous.signature);
+    expect(getSearchGroupsForViewRebuild(dataset)).toBeNull();
+    expect(captureLoadedDatasetRows(dataset)).toBeNull();
+    fetchListing.mockResolvedValueOnce({ ...answer(), row_group_selection: { slugs: ["hotel"], modes: { 0: "all" } } });
+    await do_intelligent_search(dataset, "trip", { useLocation: false });
+    const request = new URLSearchParams(endpointRouter.mock.calls.at(-1)[1].url_params);
+    expect(request.get("row_group_mode")).toBe("0:all");
+    expect(JSON.parse(request.get("filters"))).toEqual({ status: "open" });
+    expect(ongoingSearchResults[dataset].filterSignature).toBe(getSearchFilterContext(dataset).signature);
+});
+
+test("resolved mode preferences adopt the existing AI request and remembered row scope", async () => {
+    let finishListing;
+    fetchListing.mockImplementationOnce(() => new Promise(resolve => { finishListing = resolve; }));
+    const search = seedSearch("hotel", "0:all,9:all");
+    await vi.waitFor(() => expect(finishListing).toBeTypeOf("function"));
+    // This test starts with canonical state; a preference outside the capped values
+    // is accepted from complete resolved metadata and rekeys both current owners.
+    finishListing({ ...answer(), row_group_selection: { slugs: ["hotel"], modes: { 0: "all" } } });
+    await search;
+    expect(ongoingSearchResults[dataset].requestContext.rowGroupMode).toBe("0:all");
+    expect(new URLSearchParams(endpointRouter.mock.calls.at(-1)[1].url_params).get("row_group_mode")).toBe("0:all");
+    expect(currentTransfer()).not.toBeNull();
+    expect(fetchListing).toHaveBeenCalledTimes(1);
 });

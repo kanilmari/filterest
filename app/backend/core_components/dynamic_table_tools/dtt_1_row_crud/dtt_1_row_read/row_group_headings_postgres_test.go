@@ -44,14 +44,14 @@ func TestRowGroupHeadingsANDORAndExceptOwnCountsPostgres(t *testing.T) {
 	for _, facet := range facets {
 		counts[facet.Slug] = facet.RowCount
 	}
-	if !reflect.DeepEqual(counts, map[string]int{"boat": 1, "train": 1, "hotel": 2, "camp": 2, "legacy": 1}) {
+	if !reflect.DeepEqual(counts, map[string]int{"boat": 1, "train": 1, "hotel": 2, "camp": 2, "legacy": 1, "zero": 0}) {
 		t.Fatalf("except-own-heading counts=%v", counts)
 	}
 	if facets[0].Slug != "train" || facets[1].Slug != "boat" || facets[0].Heading == nil || facets[0].Heading.SortOrder != -1 {
 		t.Fatalf("heading order=%#v", facets)
 	}
 	// Vector and AI candidate/hydration builders retain exactly the listing scope.
-	auth, err := resolveIntelligentSearchAuthorization(owner, reader, "wl103_rows", "guest", 1, "boat,train,hotel")
+	auth, err := resolveIntelligentSearchAuthorization(owner, reader, "wl103_rows", "guest", 1, url.Values{"row_group": {"boat,train,hotel"}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -100,7 +100,7 @@ func TestRowGroupHeadingsANDORAndExceptOwnCountsPostgres(t *testing.T) {
 	for _, facet := range facets {
 		counts[facet.Slug] = facet.RowCount
 	}
-	if !reflect.DeepEqual(counts, map[string]int{"boat": 0, "hotel": 0, "camp": 1}) {
+	if !reflect.DeepEqual(counts, map[string]int{"boat": 0, "train": 0, "hotel": 0, "camp": 1, "legacy": 0, "zero": 0}) {
 		t.Fatalf("zero facets=%#v", facets)
 	}
 }
@@ -135,11 +135,11 @@ func TestRowGroupDisabledHeadingHidesValuesAndDropsSelectionPostgres(t *testing.
 // so a disabled heading cannot silently survive in a different search path.
 func assertDisabledHeadingReadPaths(t *testing.T, owner, reader *sql.DB, raw string, want []int, wantSelection []string) {
 	t.Helper()
-	authorization, err := resolveIntelligentSearchAuthorization(owner, reader, "wl103_rows", "guest", 1, raw)
+	authorization, err := resolveIntelligentSearchAuthorization(owner, reader, "wl103_rows", "guest", 1, url.Values{"row_group": {raw}})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if strings.Join(authorization.rowGroupSelection, ",") != strings.Join(wantSelection, ",") {
+	if strings.Join(authorization.rowGroupSelection.Slugs, ",") != strings.Join(wantSelection, ",") {
 		t.Fatalf("disabled heading AI resolved %v want=%v", authorization.rowGroupSelection, wantSelection)
 	}
 	for _, alias := range []string{"src", "candidate"} {
@@ -153,7 +153,7 @@ func assertDisabledHeadingReadPaths(t *testing.T, owner, reader *sql.DB, raw str
 		}
 	}
 	ctx := rowGroupListingContext(t, reader, "wl103_rows", "guest", 1, url.Values{})
-	selection, err := parseRowGroupSelection(raw)
+	selection, err := parseRowGroupFilters(url.Values{"row_group": {raw}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -161,7 +161,7 @@ func assertDisabledHeadingReadPaths(t *testing.T, owner, reader *sql.DB, raw str
 	if err != nil {
 		t.Fatal(err)
 	}
-	if strings.Join(selection, ",") != strings.Join(wantSelection, ",") {
+	if strings.Join(selection.Slugs, ",") != strings.Join(wantSelection, ",") {
 		t.Fatalf("disabled heading vector resolved %v want=%v", selection, wantSelection)
 	}
 	where, args := appendReadPolicyToWhereClause("wl103_rows", "guest", 1, ctx.ReadPolicy, "", nil)

@@ -73,8 +73,8 @@ func GetIntelligentResultsHandlerWrapper(w http.ResponseWriter, r *http.Request)
 		httpresponse.RespondWithError(w, http.StatusBadRequest, "invalid search filters")
 		return
 	}
-	if _, err := parseRowGroupSelection(r.URL.Query().Get(rowGroupFilterQueryKey)); err != nil {
-		httpresponse.RespondWithError(w, http.StatusBadRequest, err.Error())
+	if _, err := parseRowGroupFilters(r.URL.Query()); err != nil {
+		httpresponse.RespondWithRefusal(w, invalidRowGroupFilters())
 		return
 	}
 
@@ -139,7 +139,7 @@ func queryIntelligentResultsStream(w http.ResponseWriter, r *http.Request) error
 		tableName,
 		userRole,
 		userID,
-		r.URL.Query().Get(rowGroupFilterQueryKey),
+		r.URL.Query(),
 	)
 	if err != nil {
 		return err
@@ -328,7 +328,7 @@ func queryIntelligentResults(w http.ResponseWriter, r *http.Request) error {
 		tableName,
 		userRole,
 		userID,
-		r.URL.Query().Get(rowGroupFilterQueryKey),
+		r.URL.Query(),
 	)
 	if err != nil {
 		return err
@@ -526,6 +526,11 @@ func writeEmptyResultJSON(w http.ResponseWriter) error {
 
 // Invalid optional filters are a request error, never an instruction to retry without them.
 func respondIntelligentSearchError(w http.ResponseWriter, err error) {
+	var refusal *httpresponse.Refusal
+	if errors.As(err, &refusal) {
+		httpresponse.RespondWithRefusal(w, refusal)
+		return
+	}
 	if errors.Is(err, errInvalidIntelligentSearchFilters) {
 		httpresponse.RespondWithError(w, http.StatusBadRequest, "invalid search filters")
 		return

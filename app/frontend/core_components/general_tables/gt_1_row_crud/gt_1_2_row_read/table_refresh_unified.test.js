@@ -45,7 +45,8 @@ async function loadModule() {
         updateOffset: updateOffsetMock,
         disconnectInfiniteScroll: disconnectInfiniteScrollMock,
     }));
-    vi.doMock("../../../infinite_scroll/dataset_listing_filters.js", () => ({
+    vi.doMock("../../../infinite_scroll/dataset_listing_filters.js", async importOriginal => ({
+        ...await importOriginal(),
         getDatasetListingFilters: getDatasetListingFiltersMock,
     }));
     vi.doMock("../../../filterbar/filter_list/column_visibility_handler.js", () => ({
@@ -484,6 +485,21 @@ describe("table_refresh_unified missing-dataset recovery", () => {
         expect(openRowArticleViewMock).not.toHaveBeenCalled();
     });
 
+    test("the first answer renders although the page language is set while it is in flight", async () => {
+        // A fresh visit sets <html lang> (translatePage) after the first listing request has left; the answer still
+        // describes the shown listing. Comparing the language left a guest's first view empty (8.10.2026).
+        let release;
+        document.documentElement.lang = "";
+        fetchDatasetDataMock.mockImplementationOnce(() => new Promise((resolve) => { release = resolve; }));
+        const mod = await loadModule();
+        const first = mod.refreshTableUnified("tasks", { skipUrlParams: true });
+        await vi.waitFor(() => expect(release).toBeTypeOf("function"));
+        document.documentElement.lang = "fi";
+        release({ columns: ["id"], data: [{ id: 404 }], types: {}, row_count: 1 });
+        await first;
+        expect(generateTableMock).toHaveBeenCalledOnce();
+    });
+
     test("a committed mounted return invalidates a refresh still awaiting its response", async () => {
         const mod = await loadModule();
         let resolve;
@@ -568,6 +584,19 @@ describe("table_refresh_unified missing-dataset recovery", () => {
             expect(fetchDatasetDataMock).toHaveBeenCalledOnce();
             expect(resetOffsetMock).toHaveBeenCalledWith("events");
         }
+    });
+
+    test("a delayed listing cannot render after only its category mode changes", async () => {
+        let release;
+        getUnifiedTableStateMock.mockReturnValue({ filters: { row_group: "boat,train" }, sort: { column: "id", direction: "ASC" }, offset: 0 });
+        fetchDatasetDataMock.mockReturnValue(new Promise(resolve => { release = resolve; }));
+        const mod = await loadModule();
+        const pending = mod.refreshTableUnified("offers", { skipUrlParams: true });
+        await vi.waitFor(() => expect(release).toBeTypeOf("function"));
+        getUnifiedTableStateMock.mockReturnValue({ filters: { row_group: "boat,train", row_group_mode: "1:all" }, sort: { column: "id", direction: "ASC" }, offset: 0 });
+        release({ columns: ["id"], data: [{ id: 1 }], types: {}, row_count: 1 });
+        await pending;
+        expect(generateTableMock).not.toHaveBeenCalled();
     });
 
 });

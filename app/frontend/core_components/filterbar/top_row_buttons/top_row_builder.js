@@ -37,6 +37,7 @@ export function clearAllFilters(tableName, filterBar) {
     const [column, direction] = selection.split(":");
     const params = { sort_column: column, sort_order: direction };
     if (oldParams.view) params.view = oldParams.view;
+    ongoingSearchResults[tableName]?.abortController?.abort();
     ongoingSearchResults[tableName] = null;
     setUnifiedTableState(tableName, {
         sort: { column, direction },

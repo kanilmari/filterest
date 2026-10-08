@@ -92,7 +92,7 @@ func buildWhereClause(
 	for param, values := range queryParams {
 		// Skip bare controls before stripping the dataset prefix; qualified
 		// keys still address real fields with the same name.
-		if param == "dataset" || param == "sort_column" || param == "sort_order" || param == "offset" || param == "view_key" || param == "lang" || param == rowGroupFilterQueryKey || param == datasetSearchQueryKey {
+		if param == "dataset" || param == "sort_column" || param == "sort_order" || param == "offset" || param == "view_key" || param == "lang" || param == rowGroupFilterQueryKey || param == rowGroupModeQueryKey || param == datasetSearchQueryKey {
 			continue
 		}
 		if len(values) == 0 {
@@ -518,14 +518,14 @@ func buildConditionForTokens(
 
 // BuildSelectQuery constructs the full SQL query including SELECT, JOIN, WHERE, ORDER BY, LIMIT, and OFFSET.
 // It also executes a count query to get the total number of rows matching the filters.
-func BuildSelectQuery(ctx QueryBuilderContext) (string, []interface{}, int, []RowGroupFacet, error) {
+func BuildSelectQuery(ctx QueryBuilderContext) (string, []interface{}, int, []RowGroupFacet, RowGroupSelection, error) {
 	joinMetadata, err := loadJoinMetadata(ctx.DB, ctx.TableName)
 	if err != nil {
-		return "", nil, 0, nil, fmt.Errorf("error loading dataset identity: %w", err)
+		return "", nil, 0, nil, RowGroupSelection{}, fmt.Errorf("error loading dataset identity: %w", err)
 	}
 	tableUID, err := strconv.ParseInt(joinMetadata.tableUID, 10, 64)
 	if err != nil || tableUID <= 0 {
-		return "", nil, 0, nil, fmt.Errorf("invalid registered dataset identity %q", joinMetadata.tableUID)
+		return "", nil, 0, nil, RowGroupSelection{}, fmt.Errorf("invalid registered dataset identity %q", joinMetadata.tableUID)
 	}
 
 	// 1. Build SELECT and JOIN parts
@@ -536,7 +536,7 @@ func BuildSelectQuery(ctx QueryBuilderContext) (string, []interface{}, int, []Ro
 		ctx.VisibleColUIDs,
 	)
 	if err != nil {
-		return "", nil, 0, nil, fmt.Errorf("error building joins: %w", err)
+		return "", nil, 0, nil, RowGroupSelection{}, fmt.Errorf("error building joins: %w", err)
 	}
 	columnsByName := buildColumnsByName(ctx.ColumnsMap)
 
@@ -549,7 +549,7 @@ func BuildSelectQuery(ctx QueryBuilderContext) (string, []interface{}, int, []Ro
 		ctx.ColumnDataTypes,
 	)
 	if err != nil {
-		return "", nil, 0, nil, fmt.Errorf("error building where clause: %w", err)
+		return "", nil, 0, nil, RowGroupSelection{}, fmt.Errorf("error building where clause: %w", err)
 	}
 	var relevance_order_by string
 	where_clause, query_args, relevance_order_by, err = appendDatasetTextSearchToWhereClause(
@@ -560,28 +560,35 @@ func BuildSelectQuery(ctx QueryBuilderContext) (string, []interface{}, int, []Ro
 		query_args,
 	)
 	if err != nil {
-		return "", nil, 0, nil, fmt.Errorf("error building text search: %w", err)
+		return "", nil, 0, nil, RowGroupSelection{}, fmt.Errorf("error building text search: %w", err)
 	}
 	// Resolve against readable rows before the column/text-filtered universe.
-	selection, err := parseRowGroupSelection(ctx.QueryParams.Get(rowGroupFilterQueryKey))
-	if err != nil {
-		return "", nil, 0, nil, err
+	var selection RowGroupSelection
+	if ctx.RowGroupFilters != nil {
+		selection = *ctx.RowGroupFilters
+	} else {
+		selection, err = parseRowGroupFilters(ctx.QueryParams)
+		if err != nil {
+			return "", nil, 0, nil, RowGroupSelection{}, err
+		}
 	}
 	selection, err = resolveRowGroupSelection(ctx.DB, ctx.TableName, tableUID, selection, ctx.UserRole, ctx.UserID, ctx.ReadPolicy)
 	if err != nil {
-		return "", nil, 0, nil, err
+		return "", nil, 0, nil, RowGroupSelection{}, err
 	}
 	where_clause, query_args = appendReadPolicyToWhereClause(
 		ctx.TableName, ctx.UserRole, ctx.UserID, ctx.ReadPolicy, where_clause, query_args,
 	)
-	// Facets omit their own heading's selection; S1 has exactly one heading.
+	// Keep authorization-only vocabulary apart from the text/column narrowing.
 	facetWhereClause := where_clause
 	facetArgs := append([]interface{}{}, query_args...)
+	readableWhere, readableArgs := appendReadPolicyToWhereClause(ctx.TableName, ctx.UserRole, ctx.UserID, ctx.ReadPolicy, "", append([]interface{}{}, facetArgs...))
+	readableScope := rowGroupReadScope{where: readableWhere, args: readableArgs[len(facetArgs):]}
 	where_clause, query_args, err = appendRowGroupFilterToWhereClause(
 		selection, ctx.TableName, tableUID, columnsByName, where_clause, query_args,
 	)
 	if err != nil {
-		return "", nil, 0, nil, err
+		return "", nil, 0, nil, RowGroupSelection{}, err
 	}
 
 	// 3. Build ORDER BY clause
@@ -592,7 +599,7 @@ func BuildSelectQuery(ctx QueryBuilderContext) (string, []interface{}, int, []Ro
 		columnExpressions,
 	)
 	if err != nil {
-		return "", nil, 0, nil, fmt.Errorf("error building order by clause: %w", err)
+		return "", nil, 0, nil, RowGroupSelection{}, fmt.Errorf("error building order by clause: %w", err)
 	}
 
 	// Relevance is what a search means when the person has not asked for
@@ -607,9 +614,13 @@ func BuildSelectQuery(ctx QueryBuilderContext) (string, []interface{}, int, []Ro
 	if ctx.ClientRowCount >= 0 {
 		rowCount = ctx.ClientRowCount
 	} else {
-		countQuery := fmt.Sprintf("SELECT COUNT(*) FROM %s %s%s", pq.QuoteIdentifier(ctx.TableName), joinClauses, where_clause)
+		countExpression := "COUNT(*)"
+		if _, hasIDColumn := columnsByName["id"]; hasIDColumn {
+			countExpression = fmt.Sprintf(`COUNT(DISTINCT %s."id")`, pq.QuoteIdentifier(ctx.TableName))
+		}
+		countQuery := fmt.Sprintf("SELECT %s FROM %s %s%s", countExpression, pq.QuoteIdentifier(ctx.TableName), joinClauses, where_clause)
 		if err := ctx.DB.QueryRow(countQuery, query_args...).Scan(&rowCount); err != nil {
-			return "", nil, 0, nil, fmt.Errorf("error counting rows: %w", err)
+			return "", nil, 0, nil, RowGroupSelection{}, fmt.Errorf("error counting rows: %w", err)
 		}
 	}
 
@@ -624,9 +635,10 @@ func BuildSelectQuery(ctx QueryBuilderContext) (string, []interface{}, int, []Ro
 			facetWhereClause,
 			facetArgs,
 			selection,
+			readableScope,
 		)
 		if err != nil {
-			return "", nil, 0, nil, err
+			return "", nil, 0, nil, RowGroupSelection{}, err
 		}
 	}
 
@@ -642,5 +654,5 @@ func BuildSelectQuery(ctx QueryBuilderContext) (string, []interface{}, int, []Ro
 		ctx.Offset,
 	)
 
-	return query, query_args, rowCount, rowGroupFacets, nil
+	return query, query_args, rowCount, rowGroupFacets, selection, nil
 }

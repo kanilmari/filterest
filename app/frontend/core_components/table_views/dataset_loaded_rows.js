@@ -4,7 +4,7 @@
 // Exists to transfer already loaded rows without replaying their page requests.
 import { getUnifiedTableState } from "../state_stores/table_state_store.js";
 import { getChosenDatasetView } from "../state_stores/dataset_view_choice_saver.js";
-import { getDatasetListingFilters } from "../infinite_scroll/dataset_listing_filters.js";
+import { getDatasetListingSignature } from "../infinite_scroll/dataset_listing_filters.js";
 import { subscribeDatasetAccessRegistry, hasDatasetAccessSnapshot, canReadDatasetFromRegistry } from "../navigation/nav_engine/dataset_access_registry.js";
 import { getDatasetViewContainerId } from "./dataset_view_registry.js";
 
@@ -25,12 +25,7 @@ subscribeDatasetAccessRegistry(() => {
 // conditions (the committed search among them), order and language.
 function signature(tableName, filters = getUnifiedTableState(tableName).filters) {
     const state = getUnifiedTableState(tableName);
-    return JSON.stringify([
-        Object.entries(getDatasetListingFilters(tableName, filters))
-            .sort(([a], [b]) => a.localeCompare(b)),
-        state.sort || {},
-        document.documentElement.lang,
-    ]);
+    return JSON.stringify([getDatasetListingSignature(tableName, filters, state.sort), document.documentElement.lang]);
 }
 
 function uniqueRows(rows, previous = []) {
