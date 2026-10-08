@@ -59,3 +59,16 @@ test('Home keeps the 12px corner inset that the shared hero row class would canc
 test('the slogan shows the line breaks typed in its multi-line settings fields', () => {
     expect(css).toMatch(/\.front-page-hero \.morphing-subtitle\s*\{\s*white-space: pre-line;/);
 });
+
+// The palette button takes the shared hero action shape, so it matches the gear as on dataset pages.
+test('Home gives its palette button no shape of its own', () => {
+    expect(css).not.toContain('home-palette-button');
+});
+
+test('positioned Home uses expanding flow, safe insets, theme copy and phone gutters', () => {
+    expect(css).toContain('container-type: size');
+    expect(css).toContain('min-height: 100cqh');
+    expect(css).toContain('padding-inline: min(var(--home-text-margin)');
+    expect(css).toContain('.front-page-hero .front-page-description .morphing-subtitle { margin-block: 0 1em; }');
+    expect(css).toMatch(/@media \(width <= 600px\)\s*\{\s*\.front-page-text-stage\[data-anchor\]\s*\{[^}]*padding: 16px;[^}]*align-items: start;/);
+});

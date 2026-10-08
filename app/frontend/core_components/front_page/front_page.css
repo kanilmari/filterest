@@ -252,3 +252,50 @@
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
+/* Legacy wrapper adds no box; absent presentation retains all existing spacing. */
+.front-page-content > div:not(.front-page-blocks, .front-page-text-stage) {
+  display: contents;
+}
+
+/* Size containment measures only the already-sized flex scroller below the top row.
+   The stage grows with its text, so bottom/centre anchors never hide long copy. */
+.front-page .front-page-scroller--positioned { container-type: size; }
+.front-page-content--positioned { max-width: none; padding: 0; margin: 0; }
+.front-page-text-stage {
+  display: grid;
+  box-sizing: border-box;
+  min-height: 100cqh;
+  padding-block: var(--home-text-margin);
+  /* Keep a usable text column when a large saved margin cannot fit a narrow desktop. */
+  padding-inline: min(var(--home-text-margin), max(0px, calc((100cqw - var(--home-text-min-width)) / 2)));
+  justify-items: start;
+  align-items: start;
+}
+.front-page-text-stage[data-anchor$="center"] { justify-items: center; padding-inline: 0; }
+.front-page-text-stage[data-anchor$="right"] { justify-items: end; }
+.front-page-text-stage[data-anchor^="center-"] { align-items: center; padding-block: 0; }
+.front-page-text-stage[data-anchor^="bottom-"] { align-items: end; }
+.front-page-text-stage .front-page-hero {
+  box-sizing: border-box;
+  min-width: 0;
+  width: min(var(--home-text-max-width), 100%);
+  padding: 0;
+  text-align: left;
+}
+.front-page-text-stage .front-page-hero[data-paragraph-layout="artistic"] { text-align: center; }
+.front-page-hero .front-page-description .morphing-subtitle { margin-block: 0 1em; }
+.front-page-hero .front-page-description .morphing-subtitle:last-child { margin-bottom: 0; }
+.front-page-content--positioned > .front-page-blocks {
+  max-width: 1200px;
+  padding: 1rem;
+  margin-inline: auto;
+}
+@media (width <= 600px) {
+  .front-page-text-stage[data-anchor] {
+    padding: 16px;
+    justify-items: stretch;
+    align-items: start;
+  }
+  .front-page-text-stage .front-page-hero { width: 100%; }
+}

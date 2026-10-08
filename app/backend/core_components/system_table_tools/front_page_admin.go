@@ -5,6 +5,7 @@
 package system_table_tools
 
 import (
+	presentation "easelect/frontend/shared/front_page_presentation"
 	"encoding/json"
 	"errors"
 	"io"
@@ -36,6 +37,7 @@ type frontPageAdminSettings struct {
 }
 
 type frontPageAdminRequest struct {
+	Presentation   json.RawMessage         `json:"presentation"`
 	Settings       *frontPageAdminSettings `json:"settings"`
 	Hero           *frontPageHero          `json:"hero"`
 	UserID         *int                    `json:"user_id"`
@@ -53,7 +55,8 @@ var frontPageAdminSaver = saveFrontPageAdminRequest
 // GET ?user_query=text returns at most 20 {user_id,display_name} accounts.
 // POST accepts {settings:{separate_front_page,front_page_button_shows_site_name,front_page_show_blocks}}
 // or {hero:{title:{fi,en,usage_explanation},slogan:{fi,en,usage_explanation}}}
-// or {user_id,version,blocks:[{dataset,result_limit,sort_order,enabled}]},
+// or {presentation:{schema_version,anchor,margin_px,paragraph_layout,max_width_px},version}
+// (independent presentation_version from GET), or {user_id,version,blocks:[{dataset,result_limit,sort_order,enabled}]},
 // {user_id,version,reset:true}, {user_id,version,copy_from_common:true}.
 // Omit user_id or use null for common. Version is opaque, initially "none";
 // successful scope writes return {version}, stale writes return 409. Older settings
@@ -99,6 +102,12 @@ func decodeFrontPageAdminRequest(body io.Reader) (frontPageAdminRequest, error) 
 		return request, errFrontPageInput
 	}
 	modes := 0
+	if request.Presentation != nil {
+		modes++
+		if _, err := presentation.Parse(request.Presentation); err != nil || request.UserID != nil {
+			return request, errFrontPageInput
+		}
+	}
 	if request.Settings != nil {
 		modes++
 	}
@@ -206,6 +215,11 @@ func getAdminFrontPage(w http.ResponseWriter, r *http.Request) {
 		httpresponse.RespondWithError(w, http.StatusInternalServerError, "front page settings unavailable")
 		return
 	}
+	layout, layoutVersion, err := frontPagePresentationReader(r.Context(), backend.Db)
+	if err != nil {
+		httpresponse.RespondWithError(w, http.StatusInternalServerError, "Home layout unavailable")
+		return
+	}
 	background, backgroundErr := frontPageBackgroundReader(r.Context(), backend.Db)
 	hero, err := readFrontPageHeroForAdmin(backend.Db)
 	if err != nil {
@@ -272,7 +286,7 @@ func getAdminFrontPage(w http.ResponseWriter, r *http.Request) {
 		backgroundError = "invalid front_page_background"
 		log.Printf("[AdminFrontPageHandler] %v", backgroundErr)
 	}
-	httpresponse.RespondWithJSON(w, http.StatusOK, map[string]any{"settings": settings, "hero": hero, "background": background,
+	httpresponse.RespondWithJSON(w, http.StatusOK, map[string]any{"settings": settings, "hero": hero, "background": background, "presentation": layout, "presentation_version": layoutVersion,
 		"background_error": backgroundError, "scope": map[string]any{"user_id": userID, "display_name": displayName},
 		"saved": saved, "inherits_common": scope > 1 && !saved, "source": source, "version": version,
 		"blocks": blocks, "datasets": datasets})

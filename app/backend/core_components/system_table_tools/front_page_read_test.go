@@ -17,6 +17,7 @@ import (
 	backend "easelect/backend/core_components"
 	"easelect/backend/core_components/dbutils"
 	e_sessions "easelect/backend/core_components/sessions"
+	presentation "easelect/frontend/shared/front_page_presentation"
 	"github.com/gorilla/sessions"
 )
 
@@ -44,6 +45,8 @@ func frontPageSessionRequest(t *testing.T, userID int, role, method, target stri
 
 func stubFrontPageRead(t *testing.T, blocks []frontPageBlock) {
 	t.Helper()
+	layoutReader := frontPagePresentationReader
+	frontPagePresentationReader = func(context.Context, *sql.DB) (*presentation.Value, string, error) { return nil, "none", nil }
 	heroReader := frontPageHeroReader
 	settings, background, resolver, canRead, handler, now := frontPageSettingsReader, frontPageBackgroundReader, frontPageBlocksResolver, frontPageCanRead, frontPageResultsHandler, frontPageNow
 	frontPageSettingsReader = func(context.Context, *sql.DB) (backend.FrontPageSettings, error) {
@@ -54,6 +57,7 @@ func stubFrontPageRead(t *testing.T, blocks []frontPageBlock) {
 	frontPageBlocksResolver = func(dbutils.Querier, int) ([]frontPageBlock, string, error) { return blocks, "common", nil }
 	frontPageCanRead = func(int, string) bool { return true }
 	t.Cleanup(func() {
+		frontPagePresentationReader = layoutReader
 		frontPageHeroReader = heroReader
 		frontPageSettingsReader, frontPageBackgroundReader, frontPageBlocksResolver, frontPageCanRead, frontPageResultsHandler, frontPageNow = settings, background, resolver, canRead, handler, now
 	})

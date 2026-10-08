@@ -681,3 +681,19 @@ describe('dataset cover presentation settings', () => {
         control.destroy();
     });
 });
+
+// The shared shell must keep dataset ownership when a save completes after further edits.
+test('shared shell retains a newer dataset draft during save and releases it on destruction', async () => {
+    let finish;
+    const options = createMountOptions({ saveRequestFn: vi.fn(request => new Promise(resolve => { finish = () => resolve(request); })) });
+    const mounted = await mountDatasetCoverTestPalette(createCoverHero(), 'demo', options);
+    const input = mounted.panel.querySelector('[data-testid="dataset-cover-test-palette-hero-height"]');
+    const save = mounted.panel.querySelector('[data-testid="dataset-cover-test-palette-save"]');
+    input.value = '100'; input.dispatchEvent(new Event('input')); save.click();
+    await vi.waitFor(() => expect(options.saveRequestFn).toHaveBeenCalledOnce());
+    input.value = '150'; input.dispatchEvent(new Event('input')); finish();
+    await vi.waitFor(() => expect(save.disabled).toBe(false));
+    expect(input.value).toBe('150');
+    mounted.resetPreview(); expect(input.value).toBe('100');
+    mounted.destroy(); expect(mounted.panel.isConnected).toBe(false);
+});

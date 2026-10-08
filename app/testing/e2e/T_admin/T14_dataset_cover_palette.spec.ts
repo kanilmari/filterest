@@ -57,8 +57,8 @@ test('admin cover palette is protected, movable, resizable, themed, and live-onl
   expect(box!.width).toBeLessThanOrEqual(440);
   expect(box!.height).toBeLessThanOrEqual(viewportHeight * 0.97 + 1);
   await expect(panel.locator('.dataset-cover-test-palette__heading')).toBeVisible();
-  await expect(panel.locator('.dataset-cover-test-palette__group-icon')).toHaveCount(6);
-  await expect(panel.locator('.dataset-cover-test-palette__group-chevron')).toHaveCount(6);
+  await expect(panel.locator('.dataset-cover-test-palette__group-icon')).toHaveCount(5);
+  await expect(panel.locator('.dataset-cover-test-palette__group-chevron')).toHaveCount(5);
 
   const coverVisible = panel.locator(
     '[data-testid="dataset-cover-test-palette-cover-visible"]'
@@ -290,4 +290,25 @@ test('selected-chip side previews both DOM orders, resets, saves and survives re
     });
     expect(restored.ok()).toBe(true);
   }
+});
+
+// The common shell must keep the dataset's unsaved preview when closed and release it on navigation.
+test('shared palette shell keeps dataset preview through close and restores saved values on teardown', async ({ page }) => {
+  const saved = await (await page.request.get('/api/site-presentation-settings')).json();
+  await page.goto('/app_autojen_vanteet', { waitUntil: 'domcontentloaded' });
+  const button = page.getByTestId('dataset-cover-test-palette-button');
+  await button.click();
+  const panel = page.getByTestId('dataset-cover-test-palette');
+  const input = panel.getByTestId('dataset-cover-test-palette-hero-height');
+  await input.evaluate((element: HTMLInputElement) => { element.value = '200'; element.dispatchEvent(new Event('input', { bubbles: true })); });
+  const hero = page.locator('.filterbar-inline-hero--has-cover');
+  const preview = () => hero.evaluate(el => getComputedStyle(el).getPropertyValue('--dataset-cover-hero-extra-height').trim());
+  await expect.poll(preview).toBe('200px');
+  await page.keyboard.press('Escape'); await expect(button).toBeFocused(); await expect(panel).toBeHidden();
+  await expect.poll(preview).toBe('200px');
+  await button.click(); await panel.getByTestId('dataset-cover-test-palette-reset').click();
+  await expect(input).toHaveValue(String(saved.dataset_cover_theme.shared.hero_extra_height));
+  await expect.poll(preview).toBe(`${saved.dataset_cover_theme.shared.hero_extra_height}px`);
+  await page.goto('/login', { waitUntil: 'domcontentloaded' });
+  await expect(panel).toHaveCount(0);
 });

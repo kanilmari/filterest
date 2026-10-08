@@ -18,6 +18,7 @@ import (
 	e_sessions "easelect/backend/core_components/sessions"
 )
 
+var frontPagePresentationReader = backend.ReadFrontPagePresentation
 var frontPageSettingsReader = backend.ReadFrontPageSettings
 var frontPageBackgroundReader = backend.ReadFrontPageBackground
 var frontPageHeroReader = readFrontPageHero
@@ -75,6 +76,11 @@ func GetFrontPageHandler(w http.ResponseWriter, r *http.Request) {
 		httpresponse.RespondWithError(w, http.StatusInternalServerError, "front page unavailable")
 		return
 	}
+	layout, layoutVersion, err := frontPagePresentationReader(r.Context(), backend.Db)
+	if err != nil {
+		httpresponse.RespondWithError(w, http.StatusInternalServerError, "Home layout unavailable")
+		return
+	}
 	background, err := frontPageBackgroundReader(r.Context(), backend.Db)
 	if err != nil {
 		log.Printf("[GetFrontPageHandler] background unavailable: %v", err)
@@ -108,7 +114,7 @@ func GetFrontPageHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Vary", "Cookie")
 	httpresponse.RespondWithJSON(w, http.StatusOK, map[string]any{
 		"viewer_id": userID, "site_name": backend.ConfiguredSiteName(r.Context(), backend.Db), "background": background,
-		"hero": hero, "show_blocks": settings.FrontPageShowBlocks, "blocks": results, "partial": partial,
+		"hero": hero, "presentation": layout, "presentation_version": layoutVersion, "show_blocks": settings.FrontPageShowBlocks, "blocks": results, "partial": partial,
 	})
 }
 

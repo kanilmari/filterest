@@ -53,6 +53,9 @@ func saveFrontPageAdminRequest(ctx context.Context, request frontPageAdminReques
 	if !ok {
 		return "", fmt.Errorf("request transaction unavailable")
 	}
+	if request.Presentation != nil {
+		return saveFrontPagePresentation(tx, request.Presentation, request.Version)
+	}
 	if request.Hero != nil {
 		return "", saveFrontPageHero(tx, *request.Hero)
 	}

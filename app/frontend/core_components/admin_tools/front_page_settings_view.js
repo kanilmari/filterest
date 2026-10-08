@@ -65,7 +65,7 @@ export async function generate_front_page_settings_view(container, { onSaved = r
 
     const heroSection = frontPageSection('front_page_hero');
     const titleEditor = createLangKeyEditor('title', { includeChinese: false });
-    const sloganEditor = createLangKeyEditor('dataset_header_config_slogan', { includeChinese: false, multiline: true });
+    const sloganEditor = createLangKeyEditor('description', { includeChinese: false, multiline: true });
     const heroHelp = frontPageLabel(document.createElement('p'), 'front_page_hero_help');
     const heroSave = frontPageButton('save', 'hero-save', true);
     heroSection.append(heroHelp, titleEditor.wrapper, sloganEditor.wrapper, heroSave);

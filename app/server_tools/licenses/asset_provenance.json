@@ -288,6 +288,12 @@
     {
       "component": "Filterest original interface SVGs",
       "kind": "asset",
+      "path": "app/frontend/icons/general/home-palette-icon.svg",
+      "sha256": "96b4a5fea3884d29ef1143ac623adb42f03475a090e0190290ebeea63c19336d"
+    },
+    {
+      "component": "Filterest original interface SVGs",
+      "kind": "asset",
       "path": "app/frontend/icons/general/view-palette-icon.svg",
       "sha256": "b5408c78237e806f953ee806db230f3f078593c2a3a19ee5cd67d231322ecde1"
     },

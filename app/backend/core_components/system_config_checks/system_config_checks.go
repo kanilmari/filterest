@@ -12,6 +12,7 @@ import (
 
 	"easelect/backend/core_components/httpresponse"
 	"easelect/backend/reusable_components/setting_duration"
+	presentation "easelect/frontend/shared/front_page_presentation"
 	"easelect/frontend/shared/setting_durations"
 	"github.com/lib/pq"
 )
@@ -44,6 +45,13 @@ func durationChecks() map[string]check {
 		}
 		return nil
 	}
+	registry["front_page_presentation"] = func(row map[string]interface{}) error {
+		if fmt.Sprint(row["value_type"]) != "5" {
+			return fmt.Errorf("Home layout requires JSON value type 5")
+		}
+		_, err := presentation.Parse(row["json_value"])
+		return err
+	}
 	return registry
 }
 
@@ -65,6 +73,9 @@ func ValidateRow(table string, row map[string]interface{}) error {
 	}
 	if err := validate(row); err != nil {
 		langKey := InvalidValueLangKey
+		if key == "front_page_presentation" {
+			langKey = "save_failed"
+		}
 		if key == "front_page_show_blocks" {
 			langKey = "error_setting_boolean_invalid"
 		}

@@ -3,6 +3,7 @@
 // Reuses the shared group renderer, translations and dataset-background treatment.
 // Discards all content on deactivation; no account's blocks survive a hidden visit.
 
+import { applyHomePresentation, renderHomeDescription } from './front_page_presentation_renderer.js';
 import { createFrontPageTopRow } from './front_page_top_row_builder.js';
 import { mountBackgroundVideo } from './front_page_background_video.js';
 import { getOrCreateContainer } from '../../reusable_components/dom_container_builder.js';
@@ -56,18 +57,23 @@ function renderBlocks(container, data, visit) {
     hero.className = 'front-page-hero morphing-header';
     const heading = document.createElement('h1');
     heading.className = 'morphing-title';
-    const slogan = document.createElement('p');
+    let slogan = document.createElement(data.presentation ? 'div' : 'p');
+    // Keep the legacy subtitle typography; positioned mode contains separate paragraphs.
     slogan.className = 'morphing-subtitle';
+    let presentation = data.presentation || null;
+    let descriptionText = '';
+    const stage = document.createElement('div');
     bindDatasetLanguageRenderer(hero, language => {
         const code = language === 'fi' ? 'fi' : 'en';
         heading.textContent = data.hero?.title?.[code]?.trim()
             || formatSiteNameForDisplay(data.site_name || getCurrentSiteName())
             || getTranslationForKey('front_page', { countUsage: false });
-        slogan.textContent = data.hero?.slogan?.[code]?.trim() || '';
-        slogan.hidden = !slogan.textContent;
+        descriptionText = data.hero?.slogan?.[code]?.trim() || '';
+        renderHomeDescription(slogan, descriptionText, Boolean(presentation));
     });
     hero.append(heading, slogan);
-    page.append(hero);
+    stage.append(hero);
+    page.append(stage);
     const grid = document.createElement('div');
     grid.className = 'front-page-blocks';
     for (const block of (data.show_blocks === false ? [] : data.blocks || [])) {
@@ -88,7 +94,22 @@ function renderBlocks(container, data, visit) {
     const scroller = document.createElement('div');
     scroller.className = 'front-page-scroller scrollable_content';
     scroller.append(page);
-    visit.topRow = createFrontPageTopRow(data.site_name, () => refreshFrontPage());
+    function renderPresentation(value) {
+        presentation = value;
+        const positioned = applyHomePresentation(page, scroller, stage, hero, value);
+        if (slogan.tagName !== (positioned ? 'DIV' : 'P')) {
+            const replacement = document.createElement(positioned ? 'div' : 'p');
+            slogan.replaceWith(replacement);
+            slogan = replacement;
+        }
+        slogan.classList.toggle('front-page-description', positioned);
+        slogan.classList.toggle('morphing-subtitle', !positioned);
+        renderHomeDescription(slogan, descriptionText, positioned);
+    }
+    renderPresentation(presentation);
+    visit.topRow = createFrontPageTopRow(data.site_name, () => refreshFrontPage(), {
+        snapshot: data, render: renderPresentation,
+    });
     const background = createBackground(data.background, visit);
     container.replaceChildren(...(background ? [background] : []), visit.topRow.element, scroller);
 }

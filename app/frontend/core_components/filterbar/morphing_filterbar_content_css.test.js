@@ -148,7 +148,7 @@ describe('morphing filterbar content CSS', () => {
 
     test('keeps the compact palette inside the visible area and scrollable', () => {
         const css = readFileSync(
-            resolve(CURRENT_DIR, '../admin_tools/dataset_cover_test_palette.css'),
+            resolve(CURRENT_DIR, '../admin_tools/presentation_palette.css'),
             'utf8'
         );
         const paletteRule = css.match(
@@ -170,6 +170,8 @@ describe('morphing filterbar content CSS', () => {
         )?.[1] || '';
         expect(bodyRule).toContain('overflow: auto');
         expect(headingRule).toContain('position: sticky');
+        // Home's short palette fits its controls; the shared maximum height still applies.
+        expect(css).toMatch(/\.dataset-cover-test-palette\[data-testid="home-palette"\]\s*\{\s*height: auto;\s*\}/);
     });
 
     test('loads the palette immediately after the canonical hero styles', () => {
@@ -179,7 +181,7 @@ describe('morphing filterbar content CSS', () => {
         );
         const heroIndex = imports.indexOf('morphing_filterbar_content.css');
         const themeIndex = imports.indexOf('dataset_cover_theme.css');
-        const paletteIndex = imports.indexOf('dataset_cover_test_palette.css');
+        const paletteIndex = imports.indexOf('presentation_palette.css');
 
         expect(heroIndex).toBeGreaterThan(-1);
         expect(themeIndex).toBeGreaterThan(heroIndex);
