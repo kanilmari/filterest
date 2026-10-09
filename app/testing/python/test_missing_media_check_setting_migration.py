@@ -15,6 +15,7 @@ import re
 
 import pytest
 
+from bootstrap_contract_assertions import assert_bootstrap_baseline
 from test_field_settings_language_seed import database  # noqa: F401  (disposable cluster fixture)
 
 APP = Path(__file__).resolve().parents[2]
@@ -99,7 +100,7 @@ def test_the_bootstrap_seeds_the_row_and_marks_the_file_applied():
     seed = (BOOTSTRAP / "seed_data.sql").read_text()
     assert MIGRATION.read_text() in seed
     for migration in (MIGRATION, RELEASE):
-        assert f"('{migration.name}')" in seed
+        assert_bootstrap_baseline(seed, migration)
 
 
 def test_a_new_installation_is_born_with_the_row_and_no_result(site):

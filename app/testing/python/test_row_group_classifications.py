@@ -23,11 +23,12 @@ KEYS = ("row_group_categories", "row_group_class_single", "row_group_category_mu
 
 
 def test_heading_bootstrap_classes_markers_and_snapshot():
+    current_db = (APP / "VERSION_DB").read_text(encoding="utf-8").strip()
     schema = (BOOTSTRAP / "schema.sql").read_bytes()
     seed = (BOOTSTRAP / "seed_data.sql").read_text()
     manifest = json.loads((BOOTSTRAP / "manifest.json").read_text())
     generator = (BOOTSTRAP / "generate_bootstrap.py").read_text()
-    assert schema == (APP / "server_tools/versioning/schema_snapshots/db-9.10.0.sql").read_bytes()
+    assert schema == (APP / f"server_tools/versioning/schema_snapshots/db-{current_db}.sql").read_bytes()
     assert A.read_bytes() in schema and B.read_text() in seed and C.read_text() in seed
     assert "public.system_row_group_classifications" in manifest["allowed_schema_tables"]
     assert "public.system_row_group_classifications" not in manifest["allowed_seed_tables"]

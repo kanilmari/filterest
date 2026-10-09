@@ -129,7 +129,16 @@ def test_current_allowlist_preserves_nullable_presentation_overrides(generator):
         ("CardVisibilityResponse", "card_detail_columns", False),
     ]
     output = generator.build_output(parsed)
-    assert "label_value_layout" not in output
+    contracts = {item.ts_name: item for item in parsed}
+    # WL52 retired the column override; the shared appearance setting remains.
+    columns = generator.build_output([contracts["CardVisibilityColumn"]])
+    assert "label_value_layout" not in columns
+    assert {"DatasetCoverThemeValues", "DatasetCoverSharedValues", "DatasetCoverThemeConfig",
+            "DatasetAppearanceResponse"} <= contracts.keys()
+    shared = generator.build_output([contracts["DatasetCoverSharedValues"]])
+    assert "    label_value_layout: string;" in shared
+    assert "    shared: DatasetCoverThemeConfig;" in output
+    assert "    effective: DatasetCoverThemeConfig;" in output
     assert "    card_style_variant: string | null;" in output
     assert "    show_key_on_card_override: boolean | null;" in output
     assert "    card_detail_columns: number | null;" in output

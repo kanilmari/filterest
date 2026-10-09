@@ -14,6 +14,8 @@ import tempfile
 
 import pytest
 
+from bootstrap_contract_assertions import assert_bootstrap_baseline
+
 APP = Path(__file__).resolve().parents[2]
 MIGRATIONS = APP / "server_tools/migrations"
 WITHDRAW = MIGRATIONS / "20260921000001_withdraw_public_table_creation.sql"
@@ -68,8 +70,8 @@ def test_bootstrap_runs_the_same_withdrawal_and_baselines_both_files():
     assert "20260921000001_withdraw_public_table_creation.sql" in GENERATOR.read_text()
     assert WITHDRAW.read_text() in (BOOTSTRAP / "schema.sql").read_text()
     seed = (BOOTSTRAP / "seed_data.sql").read_text()
-    assert f"('{WITHDRAW.name}')" in seed
-    assert f"('{RECORD.name}')" in seed
+    assert_bootstrap_baseline(seed, WITHDRAW)
+    assert_bootstrap_baseline(seed, RECORD)
 
 
 @pytest.fixture

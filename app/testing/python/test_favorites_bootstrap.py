@@ -19,9 +19,10 @@ KEYS = ("favorites_heading", "favorite_add", "favorite_remove", "favorite_save_f
 
 
 def test_favorites_bootstrap_sources_and_schema_snapshot():
+    current_db = (APP / "VERSION_DB").read_text(encoding="utf-8").strip()
     schema = (BOOTSTRAP / "schema.sql").read_bytes()
     seed = (BOOTSTRAP / "seed_data.sql").read_text()
-    assert schema == (APP / "server_tools/versioning/schema_snapshots/db-9.10.0.sql").read_bytes()
+    assert schema == (APP / f"server_tools/versioning/schema_snapshots/db-{current_db}.sql").read_bytes()
     assert A.read_bytes() in schema
     assert B.read_text() in seed and C.read_text() in seed
     assert seed.index(C.read_text()) > seed.index("INSERT INTO public.system_table_folders")

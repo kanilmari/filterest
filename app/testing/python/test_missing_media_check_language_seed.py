@@ -15,6 +15,7 @@ import re
 
 import pytest
 
+from bootstrap_contract_assertions import assert_bootstrap_baseline
 from test_field_settings_language_seed import database  # noqa: F401  (disposable cluster fixture)
 from test_interface_language_seed_981 import (
     STRING,
@@ -184,7 +185,7 @@ def test_bootstrap_runs_the_seed_in_upgrade_order_and_baselines_it():
     seed = (BOOTSTRAP / "seed_data.sql").read_text()
     assert SEED.read_text() in seed
     for migration in (SEED, RELEASE):
-        assert f"('{migration.name}')" in seed
+        assert_bootstrap_baseline(seed, migration)
 
 
 def test_new_installation_has_every_key_in_every_language(site):

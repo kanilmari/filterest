@@ -11,6 +11,7 @@ BOOTSTRAP = APP / "server_tools/public_bootstrap"
 
 
 def test_survivor_migration_and_bootstrap_contract():
+    current_db = (APP / "VERSION_DB").read_text(encoding="utf-8").strip()
     sql = SURVIVOR.read_text()
     assert "-- VERSION_DB: 9.10.0" in sql
     assert "-- VERSION_DB_OWNER: 20261005000099_record_database_release_9_10_0.sql" in sql
@@ -20,7 +21,7 @@ def test_survivor_migration_and_bootstrap_contract():
     assert "ADD COLUMN IF NOT EXISTS surviving_sign_in_generation bigint" in sql
     schema = (BOOTSTRAP / "schema.sql").read_bytes()
     assert SURVIVOR.read_bytes() in schema
-    assert schema == (APP / "server_tools/versioning/schema_snapshots/db-9.10.0.sql").read_bytes()
+    assert schema == (APP / f"server_tools/versioning/schema_snapshots/db-{current_db}.sql").read_bytes()
     seed = (BOOTSTRAP / "seed_data.sql").read_text()
     acceptance = seed[seed.index("DO $filterest_acceptance$"):]
     assert "'wl132_surviving_sign_in'" in acceptance

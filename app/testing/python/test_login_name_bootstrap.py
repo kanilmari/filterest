@@ -15,6 +15,7 @@ DRY_RUN = APP / 'server_tools/scripts/login_name_dry_run.sql'
 
 
 def test_k1_atomic_statement_and_bootstrap_class_marker_final_check():
+    current_db = (APP / "VERSION_DB").read_text(encoding="utf-8").strip()
     migration = K1.read_text()
     assert re.findall(r'^DO \$(\w+)\$', migration, re.M) == ['login_names']
     assert migration.rstrip().endswith('END $login_names$;')
@@ -25,7 +26,7 @@ def test_k1_atomic_statement_and_bootstrap_class_marker_final_check():
     schema = (BOOTSTRAP / 'schema.sql').read_bytes()
     seed = (BOOTSTRAP / 'seed_data.sql').read_text()
     assert K1.read_bytes() in schema and K3.read_text() in seed
-    assert schema == (APP / 'server_tools/versioning/schema_snapshots/db-9.10.0.sql').read_bytes()
+    assert schema == (APP / f'server_tools/versioning/schema_snapshots/db-{current_db}.sql').read_bytes()
     acceptance = seed[seed.index('DO $filterest_acceptance$'):]
     assert "'k116_login_names'" in acceptance
     assert "SELECT 'public.app_check_login_name_protections(): ' || result FROM public.app_check_login_name_protections() AS result" in acceptance

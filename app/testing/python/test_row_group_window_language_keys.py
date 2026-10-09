@@ -22,6 +22,7 @@ def authored_keys():
 
 
 def test_window_copy_in_bootstrap_and_every_editor_key_has_fi_en():
+    current_db = (APP / "VERSION_DB").read_text(encoding="utf-8").strip()
     keys = authored_keys()
     assert len(keys) == 18
     assert all(fi and en for fi, en in keys.values())
@@ -40,7 +41,7 @@ def test_window_copy_in_bootstrap_and_every_editor_key_has_fi_en():
     policy = (APP / "server_tools/public_slice_export/public_bootstrap_policy.py").read_text()
     assert '"classification window copy": "row_group_window_new_heading"' in policy
     assert '"classification window recoverable error": "row_group_window_save_failed"' in policy
-    assert (BOOTSTRAP / "schema.sql").read_bytes() == (APP / "server_tools/versioning/schema_snapshots/db-9.10.0.sql").read_bytes()
+    assert (BOOTSTRAP / "schema.sql").read_bytes() == (APP / f"server_tools/versioning/schema_snapshots/db-{current_db}.sql").read_bytes()
 
 
 def test_window_migration_twice_preserves_reviewed_copy(database):

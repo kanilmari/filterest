@@ -6,6 +6,7 @@ Protects authored wording, the Finnish/English-only contract and repeatability.
 from pathlib import Path
 import json
 import re
+from bootstrap_contract_assertions import assert_bootstrap_baseline
 from test_field_settings_language_seed import database  # noqa: F401
 
 APP = Path(__file__).resolve().parents[2]
@@ -20,6 +21,7 @@ def authored_rows():
 
 
 def test_bootstrap_and_emergency_copy_share_the_reviewed_seed():
+    current_db = (APP / "VERSION_DB").read_text(encoding="utf-8").strip()
     rows = authored_rows()
     assert len(rows) == 6
     source = READER.read_text()
@@ -28,9 +30,9 @@ def test_bootstrap_and_emergency_copy_share_the_reviewed_seed():
         assert match and match.groups() == copy
     seed = (BOOTSTRAP / 'seed_data.sql').read_text()
     assert MIGRATION.read_text() in seed
-    assert f"('{MIGRATION.name}')" in seed
+    assert_bootstrap_baseline(seed, MIGRATION)
     assert MIGRATION.name in (BOOTSTRAP / 'generate_bootstrap.py').read_text()
-    assert (APP / 'server_tools/versioning/schema_snapshots/db-9.10.0.sql').read_bytes() == (BOOTSTRAP / 'schema.sql').read_bytes()
+    assert (APP / f'server_tools/versioning/schema_snapshots/db-{current_db}.sql').read_bytes() == (BOOTSTRAP / 'schema.sql').read_bytes()
 
 
 def test_seed_fills_only_empty_values_and_is_idempotent(database):  # noqa: F811

@@ -41,7 +41,7 @@ def test_drop_is_schema_classified_and_public_artifacts_match():
     assert re.findall(r"INSERT INTO public\.(\w+)", sql) == ["system_data_repair_records"]
     assert "CASCADE;" not in sql
     schema = (BOOTSTRAP / "schema.sql").read_bytes()
-    assert schema == (SNAPSHOTS / "db-9.10.0.sql").read_bytes()
+    assert schema == (SNAPSHOTS / f"db-{CURRENT_DB}.sql").read_bytes()
     assert b"label_value_layout character varying" not in schema
     assert b"system_column_details_label_value_layout_check" not in schema
     assert b"COMMENT ON COLUMN public.system_column_details.label_value_layout" not in schema

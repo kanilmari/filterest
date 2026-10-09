@@ -16,6 +16,8 @@ import tempfile
 
 import pytest
 
+from bootstrap_contract_assertions import assert_bootstrap_baseline
+
 APP = Path(__file__).resolve().parents[2]
 MIGRATIONS = APP / "server_tools/migrations"
 RESTORE = MIGRATIONS / "20260926000001_restore_system_foreign_keys.sql"
@@ -140,8 +142,8 @@ def test_bootstrap_runs_the_same_restoration_and_baselines_both_files():
     assert "20260926000001_restore_system_foreign_keys.sql" in GENERATOR.read_text()
     assert RESTORE.read_text() in (BOOTSTRAP / "schema.sql").read_text()
     seed = (BOOTSTRAP / "seed_data.sql").read_text()
-    assert f"('{RESTORE.name}')" in seed
-    assert f"('{RECORD.name}')" in seed
+    assert_bootstrap_baseline(seed, RESTORE)
+    assert_bootstrap_baseline(seed, RECORD)
 
 
 def test_every_expected_relationship_is_named_in_the_migration():

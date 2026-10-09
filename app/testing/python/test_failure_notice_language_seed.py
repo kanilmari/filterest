@@ -14,6 +14,7 @@ import re
 
 import pytest
 
+from bootstrap_contract_assertions import assert_bootstrap_baseline
 from test_field_settings_language_seed import database  # noqa: F401  (disposable cluster fixture)
 
 APP = Path(__file__).resolve().parents[2]
@@ -124,7 +125,7 @@ def test_bootstrap_runs_this_same_file_and_baselines_it():
     assert MIGRATION.name in (BOOTSTRAP / "generate_bootstrap.py").read_text()
     seed = (BOOTSTRAP / "seed_data.sql").read_text()
     assert MIGRATION.read_text() in seed
-    assert f"('{MIGRATION.name}')" in seed
+    assert_bootstrap_baseline(seed, MIGRATION)
 
 
 def test_new_installation_has_every_key_in_every_language(site):

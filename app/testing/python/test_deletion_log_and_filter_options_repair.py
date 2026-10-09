@@ -13,6 +13,7 @@ from pathlib import Path
 
 import pytest
 
+from bootstrap_contract_assertions import assert_bootstrap_baseline
 from test_field_settings_language_seed import database  # noqa: F401  (disposable cluster fixture)
 
 APP = Path(__file__).resolve().parents[2]
@@ -79,10 +80,10 @@ def test_bootstrap_runs_the_log_repair_and_baselines_both_files():
     assert DELETION_LOG.name in (BOOTSTRAP / "generate_bootstrap.py").read_text()
     assert DELETION_LOG.read_text() in (BOOTSTRAP / "schema.sql").read_text()
     seed = (BOOTSTRAP / "seed_data.sql").read_text()
-    assert f"('{DELETION_LOG.name}')" in seed
+    assert_bootstrap_baseline(seed, DELETION_LOG)
     # A new installation already grants filter options with every reader
     # right, so the rights repair has nothing to do there: baselined only.
-    assert f"('{FILTER_OPTIONS.name}')" in seed
+    assert_bootstrap_baseline(seed, FILTER_OPTIONS)
 
 
 def test_fresh_installation_equals_an_upgraded_one(site):

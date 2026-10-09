@@ -15,6 +15,7 @@ import subprocess
 
 import pytest
 
+from bootstrap_contract_assertions import assert_bootstrap_baseline
 from test_field_settings_language_seed import database  # noqa: F401  (disposable cluster fixture)
 
 APP = Path(__file__).resolve().parents[2]
@@ -68,7 +69,7 @@ def site(database):  # noqa: F811  (the imported fixture is requested by name)
 
 def test_the_bootstrap_records_the_repair_as_embodied():
     seed = (BOOTSTRAP / "seed_data.sql").read_text()
-    assert f"('{MIGRATION.name}')" in seed
+    assert_bootstrap_baseline(seed, MIGRATION)
     # A new installation is born correct, so the bootstrap does not run the repair.
     assert MIGRATION.read_text() not in seed
     assert MIGRATION.read_text() not in (BOOTSTRAP / "schema.sql").read_text()

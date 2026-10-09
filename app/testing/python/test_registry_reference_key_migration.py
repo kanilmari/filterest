@@ -26,6 +26,7 @@ def registry_key_transaction():
 # WL144 uses the same bootstrap, 9.9.2 upgrade and already-recorded development
 # fixtures as the release data step; none of these addresses an installed site.
 def test_registry_reference_step_is_seeded_checked_and_snapshotted():
+    current_db = (APP / "VERSION_DB").read_text(encoding="utf-8").strip()
     sql = REGISTRY_KEY.read_text()
     for header in ('VERSION_DB: 9.10.0', 'VERSION_DB_OWNER: ' + RELEASE_RECORD.name,
                    'COMPLETION_MARKER: wl144_registry_reference_key',
@@ -42,7 +43,7 @@ def test_registry_reference_step_is_seeded_checked_and_snapshotted():
     acceptance = seed.split('DO $filterest_acceptance$', 1)[1]
     assert "'wl144_registry_reference_key'" in acceptance
     assert 'FROM public.app_check_registry_reference_key() AS result' in acceptance
-    assert (APP / 'server_tools/versioning/schema_snapshots/db-9.10.0.sql').read_bytes() == (BOOTSTRAP / 'schema.sql').read_bytes()
+    assert (APP / f'server_tools/versioning/schema_snapshots/db-{current_db}.sql').read_bytes() == (BOOTSTRAP / 'schema.sql').read_bytes()
 
 
 def registry_key_snapshot(run):
