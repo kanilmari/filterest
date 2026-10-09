@@ -1,7 +1,7 @@
 // definition.go
 // Defines and validates dataset appearance using the browser's embedded JSON rules.
-// Connects site-wide values and future per-dataset leaves with one policy.
-// Keeps UI steps advisory and the legacy shared blur outside the canonical inventory.
+// Connects version-one compatibility and version-two ownership with one policy.
+// Keeps theme independence separate from storage place and UI steps advisory.
 package dataset_appearance
 
 import (
@@ -17,8 +17,18 @@ import (
 //go:embed definition.json
 var source []byte
 
+// Place is storage ownership, independent of the light/dark/shared theme grouping.
+type Place string
+
+const (
+	TabOnly     Place = "tab_only"
+	SiteOnly    Place = "site_only"
+	SiteDefault Place = "site_default"
+)
+
 // Field describes one appearance value. Step is a UI hint, never a storage limit.
 type Field struct {
+	Place             Place    `json:"place"`
 	Type              string   `json:"type"`
 	Default           any      `json:"default"`
 	DarkDefault       any      `json:"dark_default"`
@@ -77,6 +87,8 @@ func (definition Definition) Field(path string) (Field, bool) {
 	if field.RuleFrom != "" {
 		resolved, ok := definition.Field(field.RuleFrom)
 		resolved.DerivedFrom, resolved.LegacyReadTargets = field.DerivedFrom, field.LegacyReadTargets
+		// Borrow validation bounds, not storage ownership, for derived legacy values.
+		resolved.Place = field.Place
 		return resolved, ok
 	}
 	return field, exists
@@ -114,8 +126,45 @@ func (definition Definition) CanonicalPaths() []string {
 	return paths
 }
 
+// PathsForPlace derives a sorted canonical inventory; aliases and derived blur
+// never add stored values. Its browser twin is DATASET_APPEARANCE_PATHS_BY_PLACE.
+func (definition Definition) PathsForPlace(place Place) []string {
+	paths := []string{}
+	for _, path := range definition.CanonicalPaths() {
+		field, _ := definition.Field(path)
+		if field.Place == place {
+			paths = append(paths, path)
+		}
+	}
+	return paths
+}
+
+// PlaceForPath exposes canonical ownership, including a UI alias's target.
+// Aliases remain invalid stored keys; derived blur has no independent place.
+// Its browser twin is validator.js:datasetAppearancePlace.
+func (definition Definition) PlaceForPath(path string) (Place, bool) {
+	owner, key, _ := strings.Cut(path, ".")
+	if alias, ok := definition.Aliases[key]; ok && slices.Contains(alias.Owners, owner) {
+		path = owner + "." + alias.Field
+	}
+	field, ok := definition.Field(path)
+	return field.Place, ok && field.DerivedFrom == "" &&
+		(field.Place == TabOnly || field.Place == SiteOnly || field.Place == SiteDefault)
+}
+
+// DefaultsForPlace returns independent flat canonical-path values for version two.
+// Its browser twin is validator.js:datasetAppearanceDefaultsForPlace.
+func (definition Definition) DefaultsForPlace(place Place) map[string]any {
+	defaults := map[string]any{}
+	for _, path := range definition.PathsForPlace(place) {
+		field, _ := definition.Field(path)
+		defaults[path] = field.Default
+	}
+	return defaults
+}
+
 // ValidateLeaf validates a stored path without enforcing a slider's step.
-// Future overrides must use CanonicalPaths to exclude derived compatibility leaves.
+// Version-two overrides additionally require the SiteDefault inventory.
 func (definition Definition) ValidateLeaf(path string, value any, development bool) error {
 	field, exists := definition.Field(path)
 	if !exists {
@@ -186,4 +235,80 @@ func Validate(raw any, development bool) error {
 		}
 	}
 	return nil
+}
+
+// ValidateTabValuesV2 requires all 28 tab-owned values and checks both themes'
+// masks within this tab alone. Its twin is validator.js:isValidDatasetAppearanceTabValuesV2.
+// Existing runtime readers/writers continue to use the version-one Validate.
+func ValidateTabValuesV2(raw any, development bool) error {
+	values, err := validatePlaceValuesV2(raw, TabOnly, true, development)
+	if err != nil {
+		return err
+	}
+	rules := Rules()
+	for _, owner := range rules.ThemeOwners {
+		for _, order := range rules.MaskOrder {
+			for index := 1; index < len(order); index++ {
+				if values[owner+"."+order[index-1]].(float64) > values[owner+"."+order[index]].(float64) {
+					return fmt.Errorf("%s tab mask values must be ascending: %v", owner, order)
+				}
+			}
+		}
+	}
+	return nil
+}
+
+// ValidateSiteValuesV2 requires exactly the seven site-only canonical paths.
+// Its browser twin is validator.js:isValidDatasetAppearanceSiteValuesV2.
+func ValidateSiteValuesV2(raw any, development bool) error {
+	_, err := validatePlaceValuesV2(raw, SiteOnly, true, development)
+	return err
+}
+
+// ValidateDefaultsV2 requires all nine defaults that a tab may override.
+// Its browser twin is validator.js:isValidDatasetAppearanceDefaultsV2.
+func ValidateDefaultsV2(raw any, development bool) error {
+	_, err := validatePlaceValuesV2(raw, SiteDefault, true, development)
+	return err
+}
+
+// ValidateOverridesV2 accepts only sparse default overrides; presence preserves
+// zero, false and equality. It never mutates or removes a supplied entry.
+// Its browser twin is validator.js:isValidDatasetAppearanceOverridesV2.
+func ValidateOverridesV2(raw any, development bool) error {
+	_, err := validatePlaceValuesV2(raw, SiteDefault, false, development)
+	return err
+}
+
+// Flat version-two maps use canonical paths, never nested theme groups, aliases
+// or derived values. JSON normalization accepts Go integer inputs like stored JSON.
+func validatePlaceValuesV2(raw any, place Place, complete, development bool) (map[string]any, error) {
+	data, err := json.Marshal(raw)
+	if bytes, ok := raw.(json.RawMessage); ok {
+		data, err = bytes, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	var values map[string]any
+	if err := json.Unmarshal(data, &values); err != nil {
+		return nil, err
+	}
+	if values == nil {
+		return nil, fmt.Errorf("appearance %s values require an object", place)
+	}
+	rules := Rules()
+	paths := rules.PathsForPlace(place)
+	if complete && len(values) != len(paths) {
+		return nil, fmt.Errorf("appearance %s requires %d values", place, len(paths))
+	}
+	for path, value := range values {
+		if !slices.Contains(paths, path) {
+			return nil, fmt.Errorf("appearance path %s is forbidden in %s values", path, place)
+		}
+		if err := rules.ValidateLeaf(path, value, development); err != nil {
+			return nil, err
+		}
+	}
+	return values, nil
 }

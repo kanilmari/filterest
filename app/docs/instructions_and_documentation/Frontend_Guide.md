@@ -214,14 +214,18 @@ supported. The backend API contract is unchanged.
 
 ### Dataset appearance definition
 
-Dataset appearance retains the existing `dataset_cover_theme_config` JSON shape:
-`light`, `dark` and `shared`. All three groups currently apply site-wide; `shared`
-means independent of theme. The browser imports and Go embeds the single policy
-in `frontend/shared/dataset_appearance/definition.json`. Its theme template expands
-to 13 leaves each in light/dark, plus 18 canonical shared leaves (44 total).
-Types, defaults, inclusive bounds, choices, development-only layout and ascending
-centre/mid/edge opacities and stops come from that definition. Palette slider steps
-are UI hints; valid off-step numbers remain accepted and are never rounded.
+Version-one runtime appearance retains the `dataset_cover_theme_config` shape:
+`light`, `dark` and `shared`; `shared` means theme-independent, never storage scope.
+The browser imports and Go embeds `frontend/shared/dataset_appearance/definition.json`.
+Each of its 44 canonical paths has one `place`: 28 `tab_only` cover/hero values,
+seven `site_only` brand/navigation/remove-side values, or nine `site_default`
+card/caption/header-spacing values that a tab may override. Inventories and flat
+defaults derive from that metadata. Separate `ValidateTabValuesV2`,
+`ValidateSiteValuesV2`, `ValidateDefaultsV2` and `ValidateOverridesV2` (Go) and
+`isValidDatasetAppearance*V2` (JavaScript) check complete groups or sparse overrides.
+Both themes' masks are checked within one complete tab map. Version-one consumers
+remain unchanged. Types, bounds and choices stay authoritative; slider steps are
+UI hints, so valid off-step numbers remain accepted without rounding.
 
 “Show cover photo” aliases the active theme's `image_opacity`; it stores no boolean.
 The compatibility-only `shared.image_blur` borrows the light blur rule and remains
@@ -229,7 +233,7 @@ copied from light blur by palette saves. Go stored reads inherit that legacy val
 only when a theme blur is absent; explicit zero wins. Browser snapshots retain
 their existing more permissive read guard and normalization. Strict complete and
 leaf validators in `dataset_appearance/validator.js` mirror the embedded Go policy.
-Shared examples live in `testing/shared_contracts/dataset_appearance_examples.json`.
+Paired examples live in `testing/shared_contracts/dataset_appearance{,_v2}_examples.json`.
 Site handlers, persistence, validation and the stored shape are separated into
 `site_presentation_settings.go`, `site_presentation_store.go`,
 `site_presentation_validator.go` and `dataset_cover_theme_config.go`.
@@ -270,16 +274,14 @@ creation, editing, renaming and deletion are refused in favour of the dedicated
 revision-protected administrator endpoint. Column visibility/media remain in
 their own stores. Full scoped rendering and scope palette controls are later slices.
 
-Pending owner decision K290, the shared writer validates only the shared value
-and never rewrites or clears overrides. Slice 3a permits every override writer
-to set/unset only `shared.card_style_variant` and `shared.card_detail_columns`;
-other leaves receive translated 400 refusals before transaction work. These card
-leaves cannot invalidate a merged mask after a valid shared save. Stored legacy
-leaves still resolve under the complete canonical read contract. Shared saves
-do not inspect retained non-card overrides; an invalid merged mask still refuses
-at resolution. Slice 5 widens the single write allowlist together with K290's
-policy for shared changes and merged masks; this slice chooses neither refusal
-nor automatic overrides.
+The version-one shared writer validates shared values without rewriting overrides.
+Its override writers still accept only `shared.card_style_variant` and
+`shared.card_detail_columns`; stored legacy paths resolve under the full canonical
+read contract, including merged masks. K289–K291/K298 settle future ownership:
+cover values belong to tabs, so site changes cannot invalidate another tab's masks.
+Slice 3b adds ownership metadata and validators only. Slice 5 activates the new
+storage/API contracts and permits overrides for exactly the nine site defaults;
+it refuses site-only and tab-only overrides, aliases and derived blur.
 
 ### Optional Home page
 
