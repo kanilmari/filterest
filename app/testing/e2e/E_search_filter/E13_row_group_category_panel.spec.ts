@@ -99,6 +99,51 @@ async function focusedInView(popup: Locator, selector: string) {
   }, selector);
 }
 
+// Read the real opening geometry before any search changes the per-opening option budget. The placement rule
+// budgets fixed controls plus three values (or the shorter list), rather than the full scrollable vocabulary.
+async function popupPlacementGeometry(popup: Locator) {
+  return popup.evaluate(element => {
+    const frame = element.getBoundingClientRect();
+    const trigger = document.querySelector(`[aria-controls="${element.id}"]`)!.getBoundingClientRect();
+    const list = element.querySelector<HTMLElement>('[role="listbox"]')!;
+    const rows = [...list.querySelectorAll('[role="option"]')].slice(0, 3);
+    const first = rows[0].getBoundingClientRect();
+    const last = rows.at(-1)!.getBoundingClientRect();
+    const style = getComputedStyle(element);
+    const pixels = (value: string) => Number.parseFloat(value) || 0;
+    let fixedHeight = pixels(style.borderTopWidth) + pixels(style.borderBottomWidth)
+      + pixels(style.paddingTop) + pixels(style.paddingBottom);
+    for (const child of element.children) {
+      const childStyle = getComputedStyle(child);
+      if (child === list || child.classList.contains('msd-no-results') || childStyle.display === 'none') continue;
+      fixedHeight += child.getBoundingClientRect().height + pixels(childStyle.marginTop) + pixels(childStyle.marginBottom);
+    }
+    const requiredHeight = Math.min(400, fixedHeight + last.bottom - list.getBoundingClientRect().top + list.scrollTop);
+    const viewport = window.visualViewport;
+    const left = viewport?.offsetLeft || 0;
+    const top = viewport?.offsetTop || 0;
+    const right = left + (viewport?.width || window.innerWidth);
+    const bottom = top + (viewport?.height || window.innerHeight);
+    const margin = right - left <= 600 ? 16 : 8;
+    const below = Math.max(0, bottom - trigger.bottom - margin - 4);
+    const above = Math.max(0, trigger.top - top - margin - 4);
+    const preferUpward = below < requiredHeight && above > below;
+    const shortScreen = Math.min(preferUpward ? above : below, bottom - top - 2 * margin) < 180
+      || trigger.bottom <= top || trigger.top >= bottom;
+    const stack = document.elementsFromPoint(frame.left + frame.width / 2, frame.top + frame.height / 2);
+    const listFrame = list.getBoundingClientRect();
+    return { above, below, fixedHeight, requiredHeight, popupTop: frame.top, popupBottom: frame.bottom,
+      firstValueTop: first.top, firstValueBottom: first.bottom, expectedUpward: preferUpward && !shortScreen,
+      actualUpward: element.classList.contains('msd-dropdown-list--open-upward'),
+      inViewport: frame.left >= left && frame.right <= right && frame.top >= top && frame.bottom <= bottom,
+      firstValueVisible: first.height >= 44 && first.top >= Math.max(frame.top, listFrame.top, top)
+        && first.bottom <= Math.min(frame.bottom, listFrame.bottom, bottom),
+      firstValueOnTop: rows[0].contains(document.elementFromPoint(first.left + first.width / 2, first.top + first.height / 2)),
+      popupOnTop: element.contains(stack[0]), contentBeneath: stack.some(layer => !element.contains(layer)),
+      aboveTrigger: frame.bottom <= trigger.top - 3 };
+  });
+}
+
 async function provePopupGeometryAndFocus(page: Page, headingID: string, width: number) {
   const heading = page.locator(`${PANEL} [data-heading-id="${headingID}"]`);
   if (await heading.getAttribute('aria-expanded') === 'true') await activate(heading);
@@ -122,16 +167,13 @@ async function provePopupGeometryAndFocus(page: Page, headingID: string, width: 
   else expect(geometry.width).toBeGreaterThanOrEqual(360);
   expect(geometry.shortestTarget).toBeGreaterThanOrEqual(44);
   expect(geometry.overflow).toBe('auto');
-  // The popup lies over the listing instead of in its flow: at its centre the topmost element is the popup's own, with
-  // the listing's controls or results beneath. (How far down it reaches depends on the card's height at each width.)
-  const layers = await popup.evaluate((element, dataset) => {
-    const box = element.getBoundingClientRect();
-    const stack = document.elementsFromPoint(box.left + box.width / 2, box.top + box.height / 2);
-    const listing = document.getElementById(`${dataset}_card_top_controls`)!.parentElement!;
-    return { popupOnTop: element.contains(stack[0]),
-      listingBeneath: stack.some(layer => !element.contains(layer) && listing.contains(layer)) };
-  }, DATASET);
-  expect(layers).toEqual({ popupOnTop: true, listingBeneath: true });
+  // Upward placement can cover the hero or page background. Prove the popup stays above that content, inside the
+  // viewport with its first value usable, while the unchanged listing geometry above proves it is out of flow.
+  const placement = await popupPlacementGeometry(popup);
+  await test.info().attach(`popup-placement-${width}`, { body: JSON.stringify(placement, null, 2), contentType: 'application/json' });
+  expect(placement.actualUpward, JSON.stringify(placement)).toBe(placement.expectedUpward);
+  expect(placement).toMatchObject({ inViewport: true, firstValueVisible: true, firstValueOnTop: true,
+    popupOnTop: true, contentBeneath: true });
   const counts = await popup.locator(OPTIONS).evaluateAll(options => options.map(option => ({
     label: option.getAttribute('aria-label'), count: option.querySelector('.msd-option-count')!.textContent,
   })));
@@ -160,6 +202,77 @@ async function findHeading(page: Page, minimumValues: number, exclude = '') {
 // The guest proof controls the explicit application choice and the OS preference independently.
 // This keeps saved account preferences from overriding the requested theme matrix.
 test.use({ storageState: { cookies: [], origins: [] } });
+
+for (const [language, theme, osTheme] of [['fi', 'light', 'dark'], ['en', 'dark', 'light']] as const) {
+  test(`WL103: category popup opens upward near viewport bottom (${language}, ${theme})`, async ({ page }, testInfo) => {
+    test.skip(!/^[a-z][a-z0-9_]{0,62}$/.test(DATASET), 'Set FILTEREST_E2E_CATEGORY_DATASET to an existing categorized dataset.');
+    test.skip(testInfo.project.metadata.cardView === 'big', 'This proof uses shared listing controls.');
+    await page.addInitScript(({ language, theme }) => {
+      localStorage.setItem('chosen_language', language);
+      localStorage.setItem('theme', theme);
+    }, { language, theme });
+    await page.emulateMedia({ colorScheme: osTheme });
+    await page.goto(`/${DATASET}?view=card`);
+    await waitForCategories(page);
+    await expect(page.locator('body')).toHaveClass(new RegExp(`\\b${theme}-mode\\b`));
+    const more = page.locator(`${PANEL} [data-row-group-focus="more"]`);
+    if (await more.isVisible() && await more.getAttribute('aria-expanded') === 'false') await more.click();
+    const ids = await page.locator(`${PANEL} [data-heading-id]`).evaluateAll(buttons =>
+      buttons.map(button => (button as HTMLElement).dataset.headingId!));
+    let chosenHeading = '';
+    for (const id of ids) {
+      await activate(page.locator(`${PANEL} [data-heading-id="${id}"]`));
+      const popup = await categoryPopup(page);
+      if (await popup.locator('fieldset:not([hidden])').count() && await popup.locator(OPTIONS).count() >= 3) {
+        chosenHeading = id;
+        break;
+      }
+    }
+    expect(chosenHeading, 'Needs a multi-valued heading with at least three returned values.').not.toBe('');
+    await closeCategoryPopup(page);
+    const heading = page.locator(`${PANEL} [data-heading-id="${chosenHeading}"]`);
+    const viewport = page.viewportSize()!;
+    const margin = viewport.width <= 600 ? 16 : 8;
+    const targetBelow = viewport.width <= 600 ? 220 : 300;
+    // Some datasets put every heading near the top. A temporary DOM spacer supplies scroll distance without
+    // changing the dataset or moving the heading out of its real owner. Use the actual listing's scroll container.
+    await page.locator(PANEL).evaluate(host => {
+      const spacer = document.createElement('div');
+      spacer.style.height = spacer.style.minHeight = `${window.innerHeight * 2}px`;
+      spacer.style.flex = 'none';
+      host.before(spacer);
+    });
+    await heading.evaluate(element => element.scrollIntoView({ block: 'end', inline: 'nearest' }));
+    await heading.evaluate((element, { targetBelow, margin }) => {
+      const scrollHost = element.closest('.scrollable_content') || document.scrollingElement!;
+      scrollHost.scrollTop += element.getBoundingClientRect().bottom - (window.innerHeight - targetBelow - margin - 4);
+    }, { targetBelow, margin });
+    const before = await settledGeometry(page);
+    await activate(heading);
+    const popup = await categoryPopup(page);
+    expect(await settledGeometry(page)).toEqual(before);
+    // Scrolling can clamp or settle at a different distance on the real page. Prove the decision for that geometry,
+    // not an exact scroll target: the content cannot fit below, the larger space is above, and the first value fits.
+    const placement = await popupPlacementGeometry(popup);
+    await testInfo.attach('upward-placement', { body: JSON.stringify(placement, null, 2), contentType: 'application/json' });
+    await expect(popup).toHaveClass(/\bmsd-dropdown-list--open-upward\b/);
+    expect(placement.below, JSON.stringify(placement)).toBeLessThan(placement.requiredHeight);
+    expect(placement.above).toBeGreaterThan(placement.below);
+    expect(placement).toMatchObject({ expectedUpward: true, actualUpward: true, aboveTrigger: true,
+      inViewport: true, firstValueVisible: true, firstValueOnTop: true, popupOnTop: true, contentBeneath: true });
+    await expect(popup.locator(OPTIONS).first()).toBeInViewport({ ratio: 1 });
+    const originalBottom = await popup.evaluate(element => element.getBoundingClientRect().bottom);
+    await popup.locator('input[type="search"]').fill('zzqqxx-local-name-no-match');
+    await expect(popup.locator('.msd-no-results')).toBeVisible();
+    await expect(popup).toHaveClass(/\bmsd-dropdown-list--open-upward\b/);
+    await expect.poll(async () => popup.evaluate(element => element.getBoundingClientRect().bottom)).toBeCloseTo(originalBottom, 0);
+    await popup.locator('input[type="search"]').fill('');
+    await expect(popup.locator(OPTIONS).first()).toBeInViewport({ ratio: 1 });
+    await page.screenshot({ path: testInfo.outputPath(`wl103-upward-${language}-${theme}.png`) });
+    await popup.locator('input[type="search"]').press('Escape');
+    await expect(heading).toBeFocused();
+  });
+}
 
 test('WL103: multi-heading categories, search, reload, removal and clear-all', async ({ page }, testInfo) => {
   test.setTimeout(180_000);

@@ -428,18 +428,22 @@ export function createMultiselectDropdown({
 	// that scrolls as a whole at its top.
 	function open() {
 		if (disabled || destroyed || !ownerElement.isConnected || !trigger.isConnected) return;
-		if (!isOpen) {
+		const opening = !isOpen;
+		if (opening) {
 			isOpen = true;
 			onOpen?.();
 			listWrapper.style.display = 'flex';
 			trigger.setAttribute('aria-expanded', 'true');
 			listWrapper.style.visibility = 'hidden';
-			popupController.startPositionTracking();
-			listWrapper.style.visibility = '';
 			listWrapper.scrollTop = 0;
 		}
 		if (searchInput && !preserveViewState) searchInput.value = "";
 		renderList(searchInput?.value?.trim() || "");
+		if (opening) {
+			// Sample this opening's option budget only after its reset or preserved search has rendered the rows.
+			popupController.startPositionTracking();
+			listWrapper.style.visibility = '';
+		}
 		optionPrinter.focusInView(searchInput || optionsList.querySelector('.msd-option'));
 		scheduleRemoteSearch(searchInput?.value?.trim() || "", { immediate: true });
 	}
