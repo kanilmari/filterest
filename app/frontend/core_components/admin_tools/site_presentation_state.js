@@ -4,16 +4,19 @@
 // One request and one saved revision serve cover, card and timestamp consumers.
 
 import { fetchSitePresentationSettings } from '../endpoints/stable_endpoint_router.js';
-import { CARD_IMAGE_PRESENTATIONS, normalizeCardImagePresentation, applyCardImagePresentationSetting }
+import { normalizeCardImagePresentation, applyCardImagePresentationSetting }
     from '../table_views/card_view/card_image_presentation.js';
 import { applyCardFieldPresentationSetting } from '../table_views/card_view/card_field_presentation.js';
-import { CARD_STYLE_VARIANT_VALUES, DEFAULT_CARD_DETAIL_COLUMNS } from '../table_views/card_view/card_detail_layout_options.js';
 
 import { normalizeLabelValueLayout, applySiteLabelValueLayoutSetting }
     from '../../reusable_components/key_value_container/label_value_layout.js';
 
-import { ACTIVE_FILTER_REMOVE_SIDES, applyActiveFilterRemoveSide }
+import { applyActiveFilterRemoveSide }
     from '../filterbar/filter_list/active_filter_chip_builder.js';
+
+import { DEFAULT_DATASET_APPEARANCE, datasetAppearanceField, isReadableDatasetAppearance }
+    from '../../shared/dataset_appearance/validator.js';
+export const DEFAULT_DATASET_COVER_THEME = DEFAULT_DATASET_APPEARANCE;
 
 export const PUBLIC_PRESENTATION_CACHE_KEY = 'filterest_public_presentation_v1';
 const clone = (value) => JSON.parse(JSON.stringify(value));
@@ -21,8 +24,9 @@ const clone = (value) => JSON.parse(JSON.stringify(value));
 /** Empty space above the hero header icon, in pixels. One definition serves the
  *  saved default, the palette slider's range and the guard that keeps a stale or
  *  hand-edited value from writing an unusable margin into the stylesheet. */
+const topSpaceRule = datasetAppearanceField('shared.filterbar_content_top_space');
 export const FILTERBAR_CONTENT_TOP_SPACE = Object.freeze({
-    default: 40, minimum: 0, maximum: 200, step: 2,
+    default: topSpaceRule.default, minimum: topSpaceRule.min, maximum: topSpaceRule.max, step: topSpaceRule.step,
 });
 
 export function clampFilterbarContentTopSpace(value) {
@@ -34,86 +38,9 @@ export function clampFilterbarContentTopSpace(value) {
     );
 }
 
-export const DEFAULT_DATASET_COVER_THEME = Object.freeze({
-    light: Object.freeze({
-        oval_enabled: true,
-        oval_width: 32,
-        oval_height: 67,
-        oval_position_y: 56,
-        center_opacity: 0.4,
-        mid_opacity: 0.7,
-        edge_opacity: 1,
-        center_stop: 39,
-        mid_stop: 55,
-        edge_stop: 80,
-        image_opacity: 1,
-        overlay_opacity: 0,
-        image_blur: 1,
-    }),
-    dark: Object.freeze({
-        oval_enabled: false,
-        oval_width: 32,
-        oval_height: 67,
-        oval_position_y: 56,
-        center_opacity: 0.4,
-        mid_opacity: 0.7,
-        edge_opacity: 1,
-        center_stop: 39,
-        mid_stop: 55,
-        edge_stop: 80,
-        image_opacity: 0.3,
-        overlay_opacity: 0,
-        image_blur: 1,
-    }),
-    shared: Object.freeze({
-        hero_extra_height: 40,
-        hero_bottom_fade: 48,
-        image_blur: 1,
-        card_image_width: 300,
-        card_image_presentation: 'contain',
-        article_image_caption_position: 'below',
-        card_show_all_fields: true,
-        label_value_layout: 'stacked',
-        card_style_variant: CARD_STYLE_VARIANT_VALUES.MODERN,
-        card_description_lines: 2,
-        card_detail_columns: DEFAULT_CARD_DETAIL_COLUMNS,
-        active_tab_fade: 25,
-        active_tab_max_opacity: 1,
-        active_tab_glow_intensity: 0.5,
-        active_tab_glow_width: 2,
-        active_tab_glow_blur: 4,
-        filterbar_content_top_space: FILTERBAR_CONTENT_TOP_SPACE.default,
-        active_filter_remove_side: 'start',
-        brand_color: '#1a8fe6',
-    }),
-});
-
-
+/** Retains the public snapshot/read contract; strict writes use the shared validator. */
 export function isValidThemeConfig(config) {
-    if (!config?.shared) return false;
-    for (const name of ['light', 'dark']) {
-        if (typeof config[name]?.oval_enabled !== 'boolean') return false;
-        for (const key of Object.keys(DEFAULT_DATASET_COVER_THEME[name])) {
-            if (key !== 'oval_enabled' && !Number.isFinite(config[name][key])) return false;
-        }
-    }
-    for (const key of Object.keys(DEFAULT_DATASET_COVER_THEME.shared)) {
-        if (['active_filter_remove_side', 'label_value_layout', 'brand_color', 'card_image_presentation', 'card_show_all_fields', 'card_style_variant', 'card_detail_columns', 'article_image_caption_position', 'image_blur'].includes(key)) continue;
-        if (!Number.isFinite(config.shared[key])) return false;
-    }
-    return (config.shared.active_filter_remove_side === undefined
-        || ACTIVE_FILTER_REMOVE_SIDES.includes(config.shared.active_filter_remove_side))
-        && (config.shared.card_detail_columns === undefined
-        || (Number.isInteger(config.shared.card_detail_columns)
-            && config.shared.card_detail_columns >= 1 && config.shared.card_detail_columns <= 4))
-        && (config.shared.card_show_all_fields === undefined || typeof config.shared.card_show_all_fields === 'boolean')
-        && (config.shared.card_style_variant === undefined
-        || Object.values(CARD_STYLE_VARIANT_VALUES).includes(config.shared.card_style_variant))
-        && (config.shared.card_image_presentation === undefined
-        || CARD_IMAGE_PRESENTATIONS.includes(config.shared.card_image_presentation))
-        && (config.shared.article_image_caption_position === undefined
-        || ['below', 'overlay'].includes(config.shared.article_image_caption_position))
-        && /^#[0-9a-f]{6}$/i.test(config.shared.brand_color || '');
+    return isReadableDatasetAppearance(config);
 }
 
 export function normalizePresentationSettings(payload) {

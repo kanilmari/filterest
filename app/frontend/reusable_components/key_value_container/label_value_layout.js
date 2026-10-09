@@ -5,7 +5,7 @@
 
 import { isExperimentalFreeLayoutAvailable } from "../../core_components/table_views/experimental_free_layout_card/experimental_free_layout_card_store.js";
 
-// Mirrors normalizeSiteLabelValueLayout in backend/core_components/system_table_tools/site_presentation_settings.go.
+// Mirrors normalizeSiteLabelValueLayout in backend/core_components/system_table_tools/site_presentation_validator.go.
 export function normalizeLabelValueLayout(value) {
     return value === "inline" || value === "stacked"
         || (value === "auto" && isExperimentalFreeLayoutAvailable()) ? value : "stacked";

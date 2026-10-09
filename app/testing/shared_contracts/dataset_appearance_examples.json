@@ -1,0 +1,309 @@
+{
+  "baseline_go_json": "{\"light\":{\"oval_enabled\":true,\"oval_width\":32,\"oval_height\":67,\"oval_position_y\":56,\"center_opacity\":0.4,\"mid_opacity\":0.7,\"edge_opacity\":1,\"center_stop\":39,\"mid_stop\":55,\"edge_stop\":80,\"image_opacity\":1,\"overlay_opacity\":0,\"image_blur\":1},\"dark\":{\"oval_enabled\":false,\"oval_width\":32,\"oval_height\":67,\"oval_position_y\":56,\"center_opacity\":0.4,\"mid_opacity\":0.7,\"edge_opacity\":1,\"center_stop\":39,\"mid_stop\":55,\"edge_stop\":80,\"image_opacity\":0.3,\"overlay_opacity\":0,\"image_blur\":1},\"shared\":{\"active_filter_remove_side\":\"start\",\"hero_extra_height\":40,\"hero_bottom_fade\":48,\"image_blur\":1,\"card_image_width\":300,\"card_image_presentation\":\"contain\",\"article_image_caption_position\":\"below\",\"card_detail_columns\":2,\"card_description_lines\":2,\"card_style_variant\":\"modern\",\"label_value_layout\":\"stacked\",\"card_show_all_fields\":true,\"active_tab_fade\":25,\"active_tab_max_opacity\":1,\"active_tab_glow_intensity\":0.5,\"active_tab_glow_width\":2,\"active_tab_glow_blur\":4,\"filterbar_content_top_space\":40,\"brand_color\":\"#1a8fe6\"}}",
+  "baseline_browser_json": "{\"light\":{\"oval_enabled\":true,\"oval_width\":32,\"oval_height\":67,\"oval_position_y\":56,\"center_opacity\":0.4,\"mid_opacity\":0.7,\"edge_opacity\":1,\"center_stop\":39,\"mid_stop\":55,\"edge_stop\":80,\"image_opacity\":1,\"overlay_opacity\":0,\"image_blur\":1},\"dark\":{\"oval_enabled\":false,\"oval_width\":32,\"oval_height\":67,\"oval_position_y\":56,\"center_opacity\":0.4,\"mid_opacity\":0.7,\"edge_opacity\":1,\"center_stop\":39,\"mid_stop\":55,\"edge_stop\":80,\"image_opacity\":0.3,\"overlay_opacity\":0,\"image_blur\":1},\"shared\":{\"hero_extra_height\":40,\"hero_bottom_fade\":48,\"image_blur\":1,\"card_image_width\":300,\"card_image_presentation\":\"contain\",\"article_image_caption_position\":\"below\",\"card_show_all_fields\":true,\"label_value_layout\":\"stacked\",\"card_style_variant\":\"modern\",\"card_description_lines\":2,\"card_detail_columns\":2,\"active_tab_fade\":25,\"active_tab_max_opacity\":1,\"active_tab_glow_intensity\":0.5,\"active_tab_glow_width\":2,\"active_tab_glow_blur\":4,\"filterbar_content_top_space\":40,\"active_filter_remove_side\":\"start\",\"brand_color\":\"#1a8fe6\"}}",
+  "cases": [
+    {
+      "name": "approved defaults",
+      "set": {},
+      "unset": [],
+      "valid": true
+    },
+    {
+      "name": "off-step values remain valid",
+      "set": {
+        "light.center_opacity": 0.413,
+        "dark.image_opacity": 0.317,
+        "light.oval_width": 32.125,
+        "shared.card_image_width": 301.25,
+        "shared.hero_extra_height": 41,
+        "shared.filterbar_content_top_space": 41.5,
+        "shared.active_tab_glow_width": 2.13
+      },
+      "unset": [],
+      "valid": true
+    },
+    {
+      "name": "explicit zero and false",
+      "set": {
+        "light.oval_enabled": false,
+        "shared.card_show_all_fields": false,
+        "light.image_opacity": 0,
+        "light.image_blur": 0
+      },
+      "unset": [],
+      "valid": true
+    },
+    {
+      "name": "independent themes",
+      "set": {
+        "dark.image_blur": 24,
+        "light.image_blur": 0,
+        "shared.image_blur": 0
+      },
+      "unset": [],
+      "valid": true
+    },
+    {
+      "name": "uppercase colour",
+      "set": {
+        "shared.brand_color": "#Aa00FF"
+      },
+      "unset": [],
+      "valid": true
+    },
+    {
+      "name": "equal mask values are ascending",
+      "set": {
+        "dark.center_stop": 55,
+        "dark.mid_stop": 55,
+        "dark.edge_stop": 55,
+        "dark.center_opacity": 0.7,
+        "dark.mid_opacity": 0.7,
+        "dark.edge_opacity": 0.7
+      },
+      "unset": [],
+      "valid": true
+    },
+    {
+      "name": "width above maximum",
+      "set": {
+        "light.oval_width": 141
+      },
+      "unset": [],
+      "valid": false
+    },
+    {
+      "name": "blur below minimum",
+      "set": {
+        "dark.image_blur": -1
+      },
+      "unset": [],
+      "valid": false
+    },
+    {
+      "name": "glow above maximum",
+      "set": {
+        "shared.active_tab_glow_blur": 12.1
+      },
+      "unset": [],
+      "valid": false
+    },
+    {
+      "name": "header space above maximum",
+      "set": {
+        "shared.filterbar_content_top_space": 201
+      },
+      "unset": [],
+      "valid": false
+    },
+    {
+      "name": "wrong numeric type",
+      "set": {
+        "light.image_opacity": "1"
+      },
+      "unset": [],
+      "valid": false
+    },
+    {
+      "name": "null number",
+      "set": {
+        "shared.card_image_width": null
+      },
+      "unset": [],
+      "valid": false
+    },
+    {
+      "name": "wrong boolean type",
+      "set": {
+        "light.oval_enabled": 1
+      },
+      "unset": [],
+      "valid": false
+    },
+    {
+      "name": "null optional boolean",
+      "set": {
+        "shared.card_show_all_fields": null
+      },
+      "unset": [],
+      "valid": false
+    },
+    {
+      "name": "fractional integer",
+      "set": {
+        "shared.card_detail_columns": 2.5
+      },
+      "unset": [],
+      "valid": false
+    },
+    {
+      "name": "fractional description lines",
+      "set": {
+        "shared.card_description_lines": 2.5
+      },
+      "unset": [],
+      "valid": false
+    },
+    {
+      "name": "wrong enum",
+      "set": {
+        "shared.card_image_presentation": "stretch"
+      },
+      "unset": [],
+      "valid": false
+    },
+    {
+      "name": "wrong style",
+      "set": {
+        "shared.card_style_variant": "Modern"
+      },
+      "unset": [],
+      "valid": false
+    },
+    {
+      "name": "wrong remove side",
+      "set": {
+        "shared.active_filter_remove_side": "left"
+      },
+      "unset": [],
+      "valid": false
+    },
+    {
+      "name": "wrong colour",
+      "set": {
+        "shared.brand_color": "red"
+      },
+      "unset": [],
+      "valid": false
+    },
+    {
+      "name": "unknown theme key",
+      "set": {
+        "light.unknown": 1
+      },
+      "unset": [],
+      "valid": false
+    },
+    {
+      "name": "unknown shared key",
+      "set": {
+        "shared.unknown": true
+      },
+      "unset": [],
+      "valid": false
+    },
+    {
+      "name": "unknown group",
+      "set": {
+        "other.image_opacity": 1
+      },
+      "unset": [],
+      "valid": false
+    },
+    {
+      "name": "opacity order violation",
+      "set": {
+        "light.center_opacity": 0.8
+      },
+      "unset": [],
+      "valid": false
+    },
+    {
+      "name": "stop order violation",
+      "set": {
+        "dark.mid_stop": 81
+      },
+      "unset": [],
+      "valid": false
+    },
+    {
+      "name": "missing required field",
+      "set": {},
+      "unset": [
+        "light.oval_height"
+      ],
+      "valid": false
+    },
+    {
+      "name": "legacy optional omissions",
+      "set": {},
+      "unset": [
+        "shared.card_show_all_fields",
+        "shared.card_style_variant",
+        "shared.card_detail_columns",
+        "shared.article_image_caption_position",
+        "shared.filterbar_content_top_space",
+        "shared.active_filter_remove_side",
+        "shared.label_value_layout"
+      ],
+      "valid": false,
+      "write_valid": true
+    },
+    {
+      "name": "development auto",
+      "set": {
+        "shared.label_value_layout": "auto"
+      },
+      "unset": [],
+      "valid": true,
+      "development": true
+    },
+    {
+      "name": "production auto",
+      "set": {
+        "shared.label_value_layout": "auto"
+      },
+      "unset": [],
+      "valid": false
+    },
+    {
+      "name": "legacy blur fills missing theme fields",
+      "set": {
+        "shared.image_blur": 4
+      },
+      "unset": [
+        "light.image_blur",
+        "dark.image_blur"
+      ],
+      "valid": false,
+      "legacy_blur": {
+        "light": 4,
+        "dark": 4
+      },
+      "stored_valid": true
+    },
+    {
+      "name": "explicit zero blur wins over fallback",
+      "set": {
+        "shared.image_blur": 4,
+        "light.image_blur": 0
+      },
+      "unset": [
+        "dark.image_blur"
+      ],
+      "valid": false,
+      "legacy_blur": {
+        "light": 0,
+        "dark": 4
+      },
+      "stored_valid": true
+    },
+    {
+      "name": "present null blur is not absent",
+      "set": {
+        "shared.image_blur": 4,
+        "light.image_blur": null
+      },
+      "unset": [
+        "dark.image_blur"
+      ],
+      "valid": false,
+      "legacy_blur": {
+        "light": null,
+        "dark": 4
+      },
+      "stored_valid": false,
+      "write_valid": false
+    }
+  ]
+}

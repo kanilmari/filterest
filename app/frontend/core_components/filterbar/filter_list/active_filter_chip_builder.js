@@ -3,7 +3,7 @@
 // Connects search, ordinary filters and categories with public presentation state.
 // Keeps markup and interaction identical while label and removal owners stay separate.
 
-// Server twin: backend/core_components/system_table_tools/site_presentation_settings.go.
+// Server twin: backend/core_components/system_table_tools/site_presentation_validator.go.
 // Both sides verify testing/shared_contracts/active_filter_remove_side.json.
 export const ACTIVE_FILTER_REMOVE_SIDES = Object.freeze(['start', 'end']);
 

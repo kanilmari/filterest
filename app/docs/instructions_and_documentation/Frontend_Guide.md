@@ -212,6 +212,29 @@ supported. The backend API contract is unchanged.
 -   `show_child_items_on_big_cards`: Show child items in the article view. The setting name still uses the internal `big_card` term.
 -   `always_show_empty_fields_on_cards`: Show empty fields on cards to maintain order.
 
+### Dataset appearance definition
+
+Dataset appearance retains the existing `dataset_cover_theme_config` JSON shape:
+`light`, `dark` and `shared`. All three groups currently apply site-wide; `shared`
+means independent of theme. The browser imports and Go embeds the single policy
+in `frontend/shared/dataset_appearance/definition.json`. Its theme template expands
+to 13 leaves each in light/dark, plus 18 canonical shared leaves (44 total).
+Types, defaults, inclusive bounds, choices, development-only layout and ascending
+centre/mid/edge opacities and stops come from that definition. Palette slider steps
+are UI hints; valid off-step numbers remain accepted and are never rounded.
+
+“Show cover photo” aliases the active theme's `image_opacity`; it stores no boolean.
+The compatibility-only `shared.image_blur` borrows the light blur rule and remains
+copied from light blur by palette saves. Go stored reads inherit that legacy value
+only when a theme blur is absent; explicit zero wins. Browser snapshots retain
+their existing more permissive read guard and normalization. Strict complete and
+leaf validators in `dataset_appearance/validator.js` mirror the embedded Go policy;
+future overrides must allow only canonical paths and validate the merged mask.
+Shared examples live in `testing/shared_contracts/dataset_appearance_examples.json`.
+Site handlers, persistence, validation and the stored shape are separated into
+`site_presentation_settings.go`, `site_presentation_store.go`,
+`site_presentation_validator.go` and `dataset_cover_theme_config.go`.
+
 ### Optional Home page
 
 The site-wide `separate_front_page` setting defaults to false, retaining the

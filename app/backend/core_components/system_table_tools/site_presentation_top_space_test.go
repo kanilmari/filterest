@@ -58,9 +58,9 @@ func TestFilterbarContentTopSpacePresenceAndValidation(t *testing.T) {
 }
 
 // The upsert repeats the default as an SQL literal, the way its neighbours do.
-// This keeps that literal and the Go constant from drifting apart unnoticed.
+// This keeps that literal and the shared definition's default from drifting apart unnoticed.
 func TestFilterbarContentTopSpaceUpsertFallbackMatchesTheConstant(t *testing.T) {
-	fallback := fmt.Sprintf("ELSE '%d'::jsonb", defaultFilterbarContentTopSpace)
+	fallback := fmt.Sprintf("ELSE '%g'::jsonb", defaultFilterbarContentTopSpace)
 	section := upsertDatasetCoverThemeSQL[strings.Index(
 		upsertDatasetCoverThemeSQL, "'{shared,filterbar_content_top_space}'"):]
 	if !strings.Contains(section, fallback) {

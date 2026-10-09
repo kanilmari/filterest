@@ -18,8 +18,9 @@ import { buildActiveFilterRemoveSideControl } from './active_filter_remove_side_
 import { buildArticleImageCaptionControl } from './site_article_image_control.js';
 import {
     DEFAULT_DATASET_COVER_THEME, isValidThemeConfig, applySitePresentationGlobals,
-    getSitePresentationState, FILTERBAR_CONTENT_TOP_SPACE,
+    getSitePresentationState,
 } from './site_presentation_state.js';
+import { datasetAppearanceField, deriveDatasetAppearanceCompatibilityValues } from '../../shared/dataset_appearance/validator.js';
 export { DEFAULT_DATASET_COVER_THEME } from './site_presentation_state.js';
 
 const DATASET_HEADER_CONFIG_PERMISSION = '/ui/admin/dataset_header_config';
@@ -35,30 +36,33 @@ const TOOLBOX_ICON_PATHS = Object.freeze({
 });
 
 const RANGE_CONTROLS = Object.freeze([
-    { id: 'oval-x', key: 'oval_width', label: 'ovalX', css: 'mask-oval-x', min: 20, max: 140, step: 1, unit: '%', group: 'coverImage' },
-    { id: 'oval-y', key: 'oval_height', label: 'ovalY', css: 'mask-oval-y', min: 20, max: 140, step: 1, unit: '%', group: 'coverImage' },
-    { id: 'oval-position-y', key: 'oval_position_y', label: 'ovalPositionY', css: 'mask-position-y', min: 0, max: 100, step: 1, unit: '%', group: 'coverImage' },
-    { id: 'center-opacity', key: 'center_opacity', label: 'centerOpacity', css: 'mask-center-opacity', min: 0, max: 1, step: 0.05, unit: '', group: 'coverImage' },
-    { id: 'mid-opacity', key: 'mid_opacity', label: 'midOpacity', css: 'mask-mid-opacity', min: 0, max: 1, step: 0.05, unit: '', group: 'coverImage' },
-    { id: 'edge-opacity', key: 'edge_opacity', label: 'edgeOpacity', css: 'mask-edge-opacity', min: 0, max: 1, step: 0.05, unit: '', group: 'coverImage' },
-    { id: 'center-stop', key: 'center_stop', label: 'centerStop', css: 'mask-center-stop', min: 0, max: 100, step: 1, unit: '%', group: 'coverImage' },
-    { id: 'mid-stop', key: 'mid_stop', label: 'midStop', css: 'mask-mid-stop', min: 0, max: 100, step: 1, unit: '%', group: 'coverImage' },
-    { id: 'edge-stop', key: 'edge_stop', label: 'edgeStop', css: 'mask-edge-stop', min: 0, max: 100, step: 1, unit: '%', group: 'coverImage' },
-    { id: 'image-opacity', key: 'image_opacity', label: 'imageOpacity', css: 'image-opacity', min: 0, max: 1, step: 0.05, unit: '', group: 'coverImage' },
-    { id: 'overlay-opacity', key: 'overlay_opacity', label: 'overlayOpacity', css: 'overlay-opacity', min: 0, max: 1, step: 0.01, unit: '', group: 'coverImage' },
-    { id: 'hero-height', key: 'hero_extra_height', label: 'heroHeight', css: 'hero-extra-height', min: 0, max: 240, step: 5, unit: 'px', shared: true, group: 'coverImage' },
-    { id: 'hero-bottom-fade', key: 'hero_bottom_fade', label: 'heroBottomFade', css: 'hero-bottom-fade', min: 0, max: 200, step: 2, unit: 'px', shared: true, group: 'coverImage' },
-    { id: 'image-blur', key: 'image_blur', label: 'imageBlur', css: 'image-blur', min: 0, max: 24, step: 1, unit: 'px', group: 'backgroundImage' },
-    { id: 'card-image-width', key: 'card_image_width', label: 'cardImageWidth', css: 'card-image-width', min: 30, max: 600, step: 5, unit: 'px', shared: true, group: 'cardLayout' },
-    { id: 'card-detail-columns', key: 'card_detail_columns', label: 'cardDetailColumns', hint: 'cardDetailColumnsHint', css: 'card-detail-columns', min: 1, max: 4, step: 1, unit: '', shared: true, group: 'cardLayout' },
-    { id: 'card-description-lines', key: 'card_description_lines', label: 'cardDescriptionLines', css: 'card-description-lines', min: 1, max: 12, step: 1, unit: '', shared: true, group: 'cardLayout' },
-    { id: 'filterbar-content-top-space', key: 'filterbar_content_top_space', label: 'filterbarContentTopSpace', hint: 'filterbarContentTopSpaceHint', css: 'filterbar-content-top-space', min: FILTERBAR_CONTENT_TOP_SPACE.minimum, max: FILTERBAR_CONTENT_TOP_SPACE.maximum, step: FILTERBAR_CONTENT_TOP_SPACE.step, unit: 'px', shared: true, group: 'datasetHeader' },
-    { id: 'active-tab-fade', key: 'active_tab_fade', label: 'activeTabFade', css: 'active-tab-fade', min: 0, max: 100, step: 1, unit: 'px', shared: true, group: 'navigation' },
-    { id: 'active-tab-max-opacity', key: 'active_tab_max_opacity', label: 'activeTabMaxOpacity', css: 'active-tab-max-opacity', min: 0, max: 1, step: 0.05, unit: '', shared: true, group: 'navigation' },
-    { id: 'active-tab-glow-intensity', key: 'active_tab_glow_intensity', label: 'activeTabGlowIntensity', css: 'active-tab-glow-intensity', min: 0, max: 1, step: 0.05, unit: '', shared: true, group: 'navigation' },
-    { id: 'active-tab-glow-width', key: 'active_tab_glow_width', label: 'activeTabGlowWidth', css: 'active-tab-glow-width', min: 0, max: 8, step: 0.25, unit: 'px', shared: true, group: 'navigation' },
-    { id: 'active-tab-glow-blur', key: 'active_tab_glow_blur', label: 'activeTabGlowBlur', css: 'active-tab-glow-blur', min: 0, max: 12, step: 0.5, unit: 'px', shared: true, group: 'navigation' },
-]);
+    { id: 'oval-x', key: 'oval_width', label: 'ovalX', css: 'mask-oval-x', unit: '%', group: 'coverImage' },
+    { id: 'oval-y', key: 'oval_height', label: 'ovalY', css: 'mask-oval-y', unit: '%', group: 'coverImage' },
+    { id: 'oval-position-y', key: 'oval_position_y', label: 'ovalPositionY', css: 'mask-position-y', unit: '%', group: 'coverImage' },
+    { id: 'center-opacity', key: 'center_opacity', label: 'centerOpacity', css: 'mask-center-opacity', unit: '', group: 'coverImage' },
+    { id: 'mid-opacity', key: 'mid_opacity', label: 'midOpacity', css: 'mask-mid-opacity', unit: '', group: 'coverImage' },
+    { id: 'edge-opacity', key: 'edge_opacity', label: 'edgeOpacity', css: 'mask-edge-opacity', unit: '', group: 'coverImage' },
+    { id: 'center-stop', key: 'center_stop', label: 'centerStop', css: 'mask-center-stop', unit: '%', group: 'coverImage' },
+    { id: 'mid-stop', key: 'mid_stop', label: 'midStop', css: 'mask-mid-stop', unit: '%', group: 'coverImage' },
+    { id: 'edge-stop', key: 'edge_stop', label: 'edgeStop', css: 'mask-edge-stop', unit: '%', group: 'coverImage' },
+    { id: 'image-opacity', key: 'image_opacity', label: 'imageOpacity', css: 'image-opacity', unit: '', group: 'coverImage' },
+    { id: 'overlay-opacity', key: 'overlay_opacity', label: 'overlayOpacity', css: 'overlay-opacity', unit: '', group: 'coverImage' },
+    { id: 'hero-height', key: 'hero_extra_height', label: 'heroHeight', css: 'hero-extra-height', unit: 'px', shared: true, group: 'coverImage' },
+    { id: 'hero-bottom-fade', key: 'hero_bottom_fade', label: 'heroBottomFade', css: 'hero-bottom-fade', unit: 'px', shared: true, group: 'coverImage' },
+    { id: 'image-blur', key: 'image_blur', label: 'imageBlur', css: 'image-blur', unit: 'px', group: 'backgroundImage' },
+    { id: 'card-image-width', key: 'card_image_width', label: 'cardImageWidth', css: 'card-image-width', unit: 'px', shared: true, group: 'cardLayout' },
+    { id: 'card-detail-columns', key: 'card_detail_columns', label: 'cardDetailColumns', hint: 'cardDetailColumnsHint', css: 'card-detail-columns', unit: '', shared: true, group: 'cardLayout' },
+    { id: 'card-description-lines', key: 'card_description_lines', label: 'cardDescriptionLines', css: 'card-description-lines', unit: '', shared: true, group: 'cardLayout' },
+    { id: 'filterbar-content-top-space', key: 'filterbar_content_top_space', label: 'filterbarContentTopSpace', hint: 'filterbarContentTopSpaceHint', css: 'filterbar-content-top-space', unit: 'px', shared: true, group: 'datasetHeader' },
+    { id: 'active-tab-fade', key: 'active_tab_fade', label: 'activeTabFade', css: 'active-tab-fade', unit: 'px', shared: true, group: 'navigation' },
+    { id: 'active-tab-max-opacity', key: 'active_tab_max_opacity', label: 'activeTabMaxOpacity', css: 'active-tab-max-opacity', unit: '', shared: true, group: 'navigation' },
+    { id: 'active-tab-glow-intensity', key: 'active_tab_glow_intensity', label: 'activeTabGlowIntensity', css: 'active-tab-glow-intensity', unit: '', shared: true, group: 'navigation' },
+    { id: 'active-tab-glow-width', key: 'active_tab_glow_width', label: 'activeTabGlowWidth', css: 'active-tab-glow-width', unit: 'px', shared: true, group: 'navigation' },
+    { id: 'active-tab-glow-blur', key: 'active_tab_glow_blur', label: 'activeTabGlowBlur', css: 'active-tab-glow-blur', unit: 'px', shared: true, group: 'navigation' },
+].map(control => {
+    const field = datasetAppearanceField(`${control.shared ? 'shared' : 'light'}.${control.key}`);
+    return Object.freeze({ ...control, min: field.min, max: field.max, step: field.step });
+}));
 
 
 
@@ -135,7 +139,7 @@ function buildPaletteControl(hero, datasetName, initialSettings, saveRequestFn, 
         setStatus: key => shell.setStatus(key), resetGeometry: () => shell.resetGeometry(), saveRequestFn,
         prepareSave: draft => {
             // Keep the rollback fallback equal to the light-theme blur.
-            draft.dataset_cover_theme.shared.image_blur = draft.dataset_cover_theme.light.image_blur;
+            deriveDatasetAppearanceCompatibilityValues(draft.dataset_cover_theme);
         },
     });
     function renderHero() {
