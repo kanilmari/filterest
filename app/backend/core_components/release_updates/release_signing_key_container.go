@@ -1,7 +1,7 @@
 // release_signing_key_container.go
 // Encrypts offline Ed25519 seeds with the owner's passphrase and exposes public identity.
 // Connects terminal-only CLI custody to Argon2id and XChaCha20-Poly1305 containers.
-// Keeps mounted USB keys unusable without owner participation, including on WSL drvfs.
+// Keeps workstation containers unusable without the owner, including on WSL drvfs.
 package release_updates
 
 import (

@@ -1,3 +1,7 @@
+<!-- SECURITY.md -->
+<!-- Defines disclosure, release-key custody and operator recovery boundaries. -->
+<!-- Connects independently provisioned trust with public product security guidance. -->
+<!-- Keeps real secrets and private incident details outside redistributable source. -->
 # Security
 
 Please do not report security vulnerabilities in public issues.
@@ -40,6 +44,41 @@ exists and the project owner has enabled that workflow.
 - Keep public seed data synthetic or intentionally public.
 - Treat the public repository as redistributable: every file should be safe to
   clone, fork, archive, and inspect.
+
+## Release Signing And Trust
+
+Release automation stops at unsigned output. The owner holds independent
+Filterest and Easelect Ed25519 keys in passphrase-protected encrypted containers
+on their control workstation, outside repositories, and retains separately
+protected offline recovery copies. Use owner-only directories/containers; the
+existing Argon2id/authenticated-encryption format is unchanged. The owner runs
+the signer directly in their own terminal, outside agent tools and session
+recordings. Passphrases come only from the non-echoing controlling terminal,
+never arguments, environment, stdin, files or logs. Agents never handle live keys.
+
+Public trust is independently authenticated operator configuration, selected by
+actual composition rather than domain or hosting ownership. Provision a protected
+regular operator/root-owned policy outside source/bundle directories; authenticate
+the full SHA-256 fingerprint of each raw public key, publisher, composition,
+validity window and revocation status. Actual owner fingerprints will be recorded
+during owner setup; none is claimed here. Bundled public keys and shipped test-only
+fixture keys cannot establish trust. Keep an increasing independent policy
+revision floor outside database restoration and release state.
+
+Normal rotation uses an increasing policy revision, authorization by existing
+live keys for every enrolled composition and possession proofs from replacement
+keys. Publish overlapping trust before changing the active signer; retain revoked
+key tombstones. Revocation/expiry is checked at verification time and cannot be
+bypassed by an older manifest timestamp. Lost/compromised-key recovery requires
+independently authenticated operator provisioning; compromised keys cannot safely
+authorize their own replacement. Do not use present migration hashes to invent
+historical execution evidence when auditing legacy installations.
+
+The [release publication guide](app/server_tools/release/PUBLISHING_RELEASES.md)
+owns signing commands and the [build guide](app/server_tools/release/BUILDING_LINUX_ASSETS.md)
+owns payload/OCI labels and exact inventory. Publication verifies independent
+signatures and payloads before remote mutation, then checks uploaded metadata and
+downloaded bytes. It does not install updates or grant runtime service privileges.
 
 ## Administrator Recovery
 

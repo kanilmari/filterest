@@ -1,6 +1,6 @@
 // main.go
 // Runs offline key generation, public-identity inspection and release signing.
-// Connects product-selected USB container paths to terminal-only owner passphrases.
+// Connects owner-workstation encrypted containers to terminal-only owner passphrases.
 // Enforces canonical documents, exclusive outputs and truthful failed-step reports.
 package main
 
@@ -26,11 +26,12 @@ Only passphrase-encrypted containers are supported. Passphrases are read without
 keygen requires at least 12 characters, confirms twice and writes public output first.
 Passphrases use Unicode NFC for key derivation; secret zeroing is best effort.
 fingerprint unlocks the container and prints identity derived from the decrypted seed.
-WSL USB example (Windows drive E:):
- sudo mount -t drvfs E: /mnt/release-key -o metadata,uid=$(id -u),gid=$(id -g),umask=077
+Keep separate product containers in an owner-only directory on the owner's control
+workstation, outside repositories, with separately protected offline recovery copies.
 Containers require owner-only permissions except on drvfs/9p, FAT and exFAT.
 All require a regular, bounded, operator/root-owned file without a final symlink.
-Keep the USB and backup with the owner.`
+Agents and build tools stop at unsigned output; the owner runs signing directly
+in their own terminal. Never pass a passphrase through agent tools or recordings.`
 
 func main() { os.Exit(run(os.Args[1:], os.Stderr)) }
 

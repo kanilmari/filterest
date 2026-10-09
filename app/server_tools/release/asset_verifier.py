@@ -1,4 +1,8 @@
 #!/usr/bin/env python3
+# asset_verifier.py
+# Verifies native release files against clean reviewed source and retained notices.
+# Connects candidate evidence and signed bundle publication to the same binary checks.
+# Refuses changed bytes, unsafe license archives and unsupported platform metadata.
 """Verify every local Linux release asset against one clean source commit.
 
 Shared by candidate promotion and publication: hashes, retained legal bytes,
@@ -141,8 +145,8 @@ def verify_binary(path, architecture, manifest, expected_commit):
     return {"go_version": go_version, "build_settings": settings, "glibc_max": ".".join(map(str, max(glibc)))}
 
 
-def verify_assets(root: Path, assets_dir: Path, expected_commit: str) -> dict:
-    """Verify exactly fourteen unchanged assets built from expected_commit."""
+def verify_assets(root: Path, assets_dir: Path, expected_commit: str, *, extra_names=()) -> dict:
+    """Verify native assets; bundle callers validate/authenticate their additional inventory."""
     root = root.resolve()
     if inspect_source(root, expected_commit):
         raise AssetVerificationError("asset verification requires clean reviewed source")
@@ -154,9 +158,11 @@ def verify_assets(root: Path, assets_dir: Path, expected_commit: str) -> dict:
     version = regular_path(root, "app/VERSION_APP").read_text().strip()
     database = regular_path(root, "app/VERSION_DB").read_text().strip()
     originals, expected = asset_names(version)
+    expected = sorted(set(expected) | set(extra_names))
     actual = list(assets_dir.iterdir())
     if {path.name for path in actual} != set(expected) or any(path.is_symlink() or not path.is_file() for path in actual):
-        raise AssetVerificationError("asset directory must contain exactly fourteen regular release files")
+        description = "the exact bundle inventory of" if extra_names else "exactly fourteen"
+        raise AssetVerificationError(f"asset directory must contain {description} regular release files")
     hashes = {name: sha256(assets_dir / name) for name in expected}
     for name in originals:
         checksum = (assets_dir / (name + ".sha256")).read_text()

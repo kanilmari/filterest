@@ -1,3 +1,7 @@
+<!-- PROMOTING_RELEASES.md -->
+<!-- Defines the verified candidate-to-published metadata transition. -->
+<!-- Connects reviewed source chronology, native evidence and final signed output. -->
+<!-- Preserves immutable history and requires rebuilding the final commit. -->
 # Promoting a verified candidate
 
 `./filterest release promote` turns verified candidate metadata into the metadata
@@ -90,6 +94,12 @@ final assets. The shared final-source checker requires that C-to-P changes are
 exactly the ledger append and derived identity; it rejects any added product or
 release-document changes. Additional source changes require a newly reviewed
 candidate rather than weakening this boundary.
+
+Candidate promotion retains its fourteen native deliverables. Final publication
+also requires the [source/image bundle](BUILDING_LINUX_ASSETS.md#final-unsigned-source-and-oci-bundle)
+and owner terminal signing with independently provisioned trust. The canonical
+manifest preserves C as the build identity's source while binding final P and
+every distributed byte; signing does not relax candidate or final rebuild checks.
 
 Candidate assets remain local verification evidence. Commit P, its final rebuilt
 assets and remote publication must each be verified explicitly. Promotion always

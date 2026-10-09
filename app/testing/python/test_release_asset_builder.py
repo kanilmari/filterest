@@ -1,3 +1,7 @@
+# test_release_asset_builder.py
+# Exercises native and managed bundle assembly with isolated reviewed Git fixtures.
+# Connects deterministic compiler evidence to source/OCI payload validation.
+# Proves tampering/path/platform refusals without real keys, Docker or remote access.
 """Exercise release assembly using miniature source and deterministic compiler fixtures.
 
 The real builder runs checksum, notice and module checks without cloning a source
@@ -10,6 +14,9 @@ import subprocess
 import pytest
 
 from server_tools.release.audit_public_root_files import read_manifest
+from release_bundle_fixture import (bundle_go_tools, local_contract_bridge, candidate, release_candidate,
+    unsigned_bundle, signed_bundle, write_oci, write_tar)
+from server_tools.release import build_bundle, bundle_verifier, bundle_contract, source_archive, oci_archive
 
 SOURCE_ROOT = Path(__file__).resolve().parents[2]
 BUILDER = SOURCE_ROOT / "server_tools/release/build_assets.sh"
@@ -210,3 +217,225 @@ def test_output_inspection_failure_is_not_treated_as_empty(release_fixture):
     assert "could not inspect output" in result.stderr
     assert not Path(environment["FIXTURE_EVENTS"]).exists()
     assert not list(output.iterdir())
+
+
+def test_managed_bundle_is_canonical_unsigned_and_bound_to_final_git_tree(unsigned_bundle):
+    root, directory, commit, _, _, report = unsigned_bundle
+    data = (directory / bundle_contract.MANIFEST_NAME).read_bytes()
+    manifest = json.loads(data)
+    from server_tools.versioning.release_contract_v1 import canonical_json_line
+    assert data == canonical_json_line(manifest)
+    assert not report["signed"] and not report["publication_ready"]
+    assert manifest["published_commit"] == commit
+    assert manifest["build_identity"]["source"]["commit"] != commit
+    assert len(report["assets"]) == 19
+    assert not (directory / bundle_contract.SIGNATURES_NAME).exists()
+    assert all(row["expanded_size_bytes"] >= row["size_bytes"] for row in manifest["artifacts"])
+    assert bundle_verifier.verify_unsigned_bundle(root, directory, commit)["assets"] == report["assets"]
+
+
+def test_locally_built_bundle_verifies_with_random_encrypted_fixture_key(signed_bundle):
+    root, directory, commit, policy, _ = signed_bundle
+    report = bundle_verifier.verify_signed_bundle(root, directory, commit, policy, 1)
+    assert len(report["assets"]) == 20
+    assert report["signature_verification"]["trust_policy_revision"] == 1
+    assert report["signature_verification"]["manifest_sha256"] == report["manifest_sha256"]
+    assert "passphrase" not in json.dumps(report)
+    assert "PRIVATE KEY" not in json.dumps(report)
+
+
+@pytest.mark.parametrize("change", ["extra", "missing", "symlink", "tamper"])
+def test_bundle_requires_exact_regular_unchanged_inventory(signed_bundle, tmp_path, change):
+    root, directory, commit, policy, _ = signed_bundle
+    path = directory / "filterest-1.2.4-source.tar.gz"
+    if change == "extra":
+        (directory / "unexpected-operator-secret").write_bytes(b"fixture")
+    elif change == "missing":
+        path.unlink()
+    elif change == "symlink":
+        path.rename(tmp_path / "source.tar.gz")
+        path.symlink_to(tmp_path / "source.tar.gz")
+    else:
+        path.write_bytes(path.read_bytes() + b"tamper")
+    with pytest.raises(bundle_contract.BundleError, match="inventory|hash or size"):
+        bundle_verifier.verify_signed_bundle(root, directory, commit, policy, 1)
+
+
+@pytest.mark.parametrize("change", ["missing", "extra", "traversal", "symlink", "hardlink", "device", "mode", "duplicate"])
+def test_source_archive_rejects_unsafe_missing_or_changed_members(unsigned_bundle, tmp_path, change):
+    import io
+    import tarfile
+    root, directory, commit, _, _, _ = unsigned_bundle
+    path = directory / "filterest-1.2.4-source.tar.gz"
+    with tarfile.open(path, "r:gz") as source:
+        members = [(member, source.extractfile(member).read() if member.isfile() else None) for member in source]
+    rewritten = tmp_path / "rewritten.tar.gz"
+    with tarfile.open(rewritten, "w:gz") as output:
+        removed = False
+        for member, data in members:
+            if member.isfile() and change == "missing" and not removed:
+                removed = True
+                continue
+            if member.isfile() and change == "mode" and not removed:
+                member.mode = 0o777
+                removed = True
+            output.addfile(member, io.BytesIO(data) if data is not None else None)
+        if change in {"extra", "traversal", "symlink", "hardlink", "device", "duplicate"}:
+            member = tarfile.TarInfo("../escape" if change == "traversal" else "extra-file")
+            if change in {"symlink", "hardlink", "device"}:
+                member.type = {"symlink": tarfile.SYMTYPE, "hardlink": tarfile.LNKTYPE, "device": tarfile.CHRTYPE}[change]
+                member.linkname = "/operator/state"
+            if change == "duplicate":
+                member = next(member for member, data in members if member.isfile())
+                data = next(data for item, data in members if item is member)
+                output.addfile(member, io.BytesIO(data))
+            else:
+                output.addfile(member)
+    with pytest.raises(bundle_contract.BundleError, match="archive"):
+        source_archive.verify_source_archive(root, commit, rewritten)
+    assert not (tmp_path / "escape").exists()
+
+
+def test_source_output_ignores_worktree_bytes_and_operator_state(unsigned_bundle, tmp_path):
+    root, _, commit, _, _, _ = unsigned_bundle
+    (root / "app/main.go").write_bytes(b"unreviewed working bytes")
+    (root / "keys").mkdir(exist_ok=True)
+    (root / "keys/fixture-secret").write_bytes(b"not source")
+    destination = tmp_path / "reviewed-source.tar.gz"
+    source_archive.package_source(root, commit, destination)
+    import tarfile
+    with tarfile.open(destination) as archive:
+        assert not any(member.name.startswith("keys/") for member in archive)
+        assert archive.extractfile("app/main.go").read() != b"unreviewed working bytes"
+
+
+@pytest.mark.parametrize("change", ["wrong_platform", "wrong_identity", "missing_blob", "extra_blob", "blob_substitution", "index_substitution"])
+def test_prebuilt_oci_refuses_platform_identity_and_blob_substitution(unsigned_bundle, tmp_path, change):
+    _, directory, _, _, _, _ = unsigned_bundle
+    manifest = json.loads((directory / bundle_contract.MANIFEST_NAME).read_bytes())
+    path = tmp_path / "substitute.tar"
+    files = write_oci(path, manifest, architecture="arm64" if change == "wrong_platform" else "amd64",
+                      label_updates={"com.filterest.composition": "easelect"} if change == "wrong_identity" else None)
+    blob = next(name for name in files if name.startswith("blobs/"))
+    if change == "missing_blob":
+        del files[blob]
+    elif change == "extra_blob":
+        files["blobs/sha256/" + "f" * 64] = b"unreferenced substitution"
+    elif change == "blob_substitution":
+        files[blob] = b"substituted image bytes"
+    elif change == "index_substitution":
+        index = json.loads(files["index.json"])
+        index["manifests"].append(index["manifests"][0])
+        files["index.json"] = json.dumps(index).encode()
+    write_tar(path, files)
+    with pytest.raises(bundle_contract.BundleError, match="OCI"):
+        oci_archive.verify_oci_archive(path, {"os": "linux", "architecture": "amd64", "cpu_features": []}, oci_archive.identity_labels(manifest))
+
+
+def test_migration_inventory_binds_reviewed_bytes_and_missing_paths(unsigned_bundle):
+    root, _, commit, _, _, _ = unsigned_bundle
+    with pytest.raises(bundle_contract.BundleError, match="missing Git member"):
+        source_archive.bind_migrations(root, commit, [{"component": "filterest", "id": "20261009000099_missing.sql"}])
+
+
+def test_bundle_build_options_refuse_incomplete_or_inside_source_output(release_fixture):
+    source, _, _ = release_fixture
+    result = run_builder(release_fixture, "--oci-archive", "amd64=/tmp/fixture.tar")
+    assert result.returncode and "require --bundle-spec" in result.stderr
+    inside = source / "must-not-be-created"
+    result = run_builder((source, inside, release_fixture[2]))
+    assert result.returncode and not inside.exists()
+
+
+@pytest.mark.parametrize("change", ["hash", "database_version", "error_policy", "owner"])
+def test_migration_specification_cannot_misstate_reviewed_bytes_or_directives(tmp_path, change):
+    from test_release_preparation import commit_fixture
+    root = tmp_path / "migration-source"
+    directory = root / "app/server_tools/migrations"
+    directory.mkdir(parents=True)
+    subprocess.run(["git", "init", "-q", str(root)], check=True, capture_output=True)
+    name = "20261009000099_record_database_release_9_10_2.sql"
+    data = b"-- VERSION_DB: 9.10.2\nSELECT 'fixture only';\n"
+    if change == "owner":
+        data = b"-- VERSION_DB_OWNER: 20261009000100_other.sql\n" + data
+    (directory / name).write_bytes(data)
+    commit = commit_fixture(root)
+    row = {"id": name, "component": "filterest", "database_version": "9.10.2",
+           "transaction_policy": "runner", "error_policy": "required", "publishes_database_version": True}
+    if change == "hash":
+        row["content_sha256"] = "f" * 64
+    elif change == "database_version":
+        row["database_version"] = "9.10.1"
+    elif change == "error_policy":
+        row["error_policy"] = "optional"
+    with pytest.raises(bundle_contract.BundleError, match="migration|publisher"):
+        source_archive.bind_migrations(root, commit, [row])
+
+
+def test_migration_hash_comes_from_git_and_archive_preserves_it(tmp_path):
+    from test_release_preparation import commit_fixture
+    import hashlib
+    root = tmp_path / "migration-source"
+    directory = root / "app/server_tools/migrations"
+    directory.mkdir(parents=True)
+    subprocess.run(["git", "init", "-q", str(root)], check=True, capture_output=True)
+    name = "20261009000099_record_database_release_9_10_2.sql"
+    data = b"-- VERSION_DB: 9.10.2\nSELECT 'fixture only';\n"
+    (directory / name).write_bytes(data)
+    commit = commit_fixture(root)
+    rows = source_archive.bind_migrations(root, commit, [{"id": name, "component": "filterest",
+        "database_version": "9.10.2", "transaction_policy": "runner", "error_policy": "required", "publishes_database_version": True}])
+    assert rows[0]["content_sha256"] == hashlib.sha256(data).hexdigest()
+    (directory / name).write_bytes(b"changed worktree cannot rewrite recorded hash")
+    path = tmp_path / "source.tar.gz"
+    source_archive.package_source(root, commit, path)
+    source_archive.verify_source_archive(root, commit, path, rows)
+
+
+@pytest.mark.parametrize("change", ["operator_home", "tracked_symlink", "export_ignore"])
+def test_reviewed_git_tree_cannot_include_operator_paths_or_silently_omit_source(tmp_path, change):
+    from test_release_preparation import commit_fixture
+    root = tmp_path / "unsafe-source"
+    root.mkdir()
+    subprocess.run(["git", "init", "-q", str(root)], check=True, capture_output=True)
+    (root / "README.md").write_bytes(b"reviewed fixture source")
+    if change == "operator_home":
+        (root / "keys").mkdir()
+        (root / "keys/fixture-secret").write_bytes(b"fixture")
+    elif change == "tracked_symlink":
+        (root / "link").symlink_to("README.md")
+    else:
+        (root / ".gitattributes").write_text("README.md export-ignore\n")
+    commit = commit_fixture(root)
+    with pytest.raises(bundle_contract.BundleError):
+        source_archive.package_source(root, commit, tmp_path / "source.tar.gz")
+
+
+def test_builder_forwards_unsigned_bundle_contract_after_native_build(release_fixture, tmp_path):
+    source, _, environment = release_fixture
+    binary_dir = Path(environment["PATH"].split(":")[0])
+    git = binary_dir / "git"
+    git.write_text('#!/bin/sh\ncase "$*" in\n*rev-parse*) printf "%s" "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" ;;\n*status*) printf "%s" "${FIXTURE_GIT_STATUS:-}" ;;\nesac\n')
+    python = binary_dir / "python3"
+    python.write_text('''#!/bin/sh
+case "$1" in
+*/build_bundle.py)
+    /usr/bin/python3 - "$@" <<'PY'
+import json, os, pathlib, sys
+pathlib.Path(os.environ["FIXTURE_EVENTS"] + ".bundle").write_text(json.dumps(sys.argv[1:]))
+PY
+    exit 0 ;;
+esac
+exec /usr/bin/python3 "$@"
+''')
+    python.chmod(0o755)
+    spec = tmp_path / "reviewed requirements.json"
+    spec.write_text("{}")
+    result = run_builder(release_fixture, "--bundle-spec", str(spec), "--published-commit", "a" * 40,
+                         "--oci-archive", "amd64=/outside/prebuilt fixture.tar")
+    assert result.returncode == 0, result.stderr
+    forwarded = json.loads(Path(environment["FIXTURE_EVENTS"] + ".bundle").read_text())
+    assert forwarded[1:] == ["--target", str(source), "--assets-dir", str(release_fixture[1]),
+        "--published-commit", "a" * 40, "--bundle-spec", str(spec), "--oci-archive", "amd64=/outside/prebuilt fixture.tar"]
+    assert len(list(release_fixture[1].iterdir())) == 14
+    assert len(Path(environment["FIXTURE_EVENTS"]).read_text().splitlines()) == 2

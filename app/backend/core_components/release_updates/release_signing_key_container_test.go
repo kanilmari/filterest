@@ -1,7 +1,7 @@
 // release_signing_key_container_test.go
 // Checks filesystem-specific permissions and Unicode passphrase contracts.
 // Connects opened-file metadata and normalized secrets to encrypted containers.
-// Guards local key custody without physical USB filesystems or real owner keys.
+// Guards workstation container custody using temporary files and throwaway test keys.
 package release_updates
 
 import (

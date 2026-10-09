@@ -1,4 +1,8 @@
 #!/usr/bin/env python3
+# publish_release.py
+# Publishes only independently authenticated, fully verified public release bundles.
+# Connects reviewed final Git history and owner signatures to exact GitHub readback.
+# Preserves existing tags/releases and reports partial remote operations truthfully.
 """Publish verified standalone Filterest assets through an explicit local command.
 
 Binds reviewed Git history, final binaries, account policy and GitHub readback.
@@ -69,9 +73,9 @@ def audit_actions(github):
                                 required_repositories={REPOSITORY})
 
 
-def inspect_local(root, expected_commit, expected_version, assets_dir):
+def inspect_local(root, expected_commit, expected_version, assets_dir, trust_policy=None, minimum_trust_policy_revision=None):
     """Bind final release history and every distributed byte before network work."""
-    from server_tools.release.asset_verifier import verify_assets
+    from server_tools.release.bundle_verifier import verify_signed_bundle
     from server_tools.release.promote_release import validate_published_source
 
     if not SHA.fullmatch(expected_commit):
@@ -97,7 +101,8 @@ def inspect_local(root, expected_commit, expected_version, assets_dir):
     version = (root / "app/VERSION_APP").read_text().strip()
     if version != expected_version:
         raise PublicationError("--expect-version does not match the final published source")
-    assets = verify_assets(root, assets_dir, expected_commit)
+    assets = verify_signed_bundle(root, assets_dir, expected_commit, trust_policy, minimum_trust_policy_revision,
+                                  composition="filterest")
     if assets.get("app_version") != version or assets.get("source_commit") != expected_commit:
         raise PublicationError("asset verification does not identify the final version and commit")
     notes = (root / "app/docs/publication/RELEASE_NOTES.md").read_text(encoding="utf-8")
@@ -172,16 +177,29 @@ def verify_release(github, release_id, local, *, draft):
         raise PublicationError("GitHub release notes differ from reviewed source")
     assets = github.pages(f"repos/{REPOSITORY}/releases/{release_id}/assets?per_page=100")
     actual = {}
+    remote_sizes = {}
+    expected = local["verified_assets"]["assets"]
+    sizes = local["verified_assets"]["sizes"]
     for asset in assets:
         if (not isinstance(asset, dict) or not isinstance(asset.get("name"), str)
                 or type(asset.get("id")) is not int or asset["id"] <= 0
-                or asset.get("state") != "uploaded" or asset["name"] in actual or asset["id"] in actual.values()):
+                or asset.get("state") != "uploaded" or asset["name"] in actual or asset["id"] in actual.values()
+                or type(asset.get("size")) is not int or asset["size"] <= 0):
             raise PublicationError("GitHub release asset inventory is incomplete or malformed")
         actual[asset["name"]] = asset["id"]
-    expected = local["verified_assets"]["assets"]
+        remote_sizes[asset["name"]] = asset["size"]
+        if asset.get("digest") is not None and asset["name"] in expected and asset["digest"] != "sha256:" + expected[asset["name"]]:
+            raise PublicationError("GitHub uploaded asset digest differs from the signed bundle")
     if set(actual) != set(expected):
         raise PublicationError("GitHub release asset names differ from the complete verified local set")
-    hashes = {name: hashlib.sha256(github.download(asset_id)).hexdigest() for name, asset_id in sorted(actual.items())}
+    if remote_sizes != sizes:
+        raise PublicationError("GitHub uploaded asset sizes differ from the verified signed bundle")
+    hashes = {}
+    for name, asset_id in sorted(actual.items()):
+        data = github.download(asset_id)
+        if len(data) != sizes[name]:
+            raise PublicationError("GitHub downloaded asset size differs from the signed bundle")
+        hashes[name] = hashlib.sha256(data).hexdigest()
     if hashes != expected:
         raise PublicationError("GitHub release asset bytes differ from the verified local build")
     return {"release_id": release_id, "url": release.get("html_url"), "asset_sha256": hashes}
@@ -191,7 +209,9 @@ def publish(args, github=None):
     """Plan by default, or publish once after repeating all local/remote guards."""
     github = github or GitHub()
     root, assets_dir = args.target.resolve(), args.assets_dir.resolve()
-    local = inspect_local(root, args.published_commit, args.expect_version, assets_dir)
+    policy = getattr(args, "trust_policy", None)
+    revision = getattr(args, "minimum_trust_policy_revision", None)
+    local = inspect_local(root, args.published_commit, args.expect_version, assets_dir, policy, revision)
     remote = inspect_remote(root, local, github)
     report = {key: value for key, value in local.items() if key != "release_notes"}
     report.update({"mode": "plan", "remote": remote, "publication_verified": False})
@@ -201,7 +221,7 @@ def publish(args, github=None):
     state = {"phase": "preflight", "repository": REPOSITORY, "tag": local["tag"],
              "published_commit": args.published_commit, "release_id": None}
     try:
-        refreshed = inspect_local(root, args.published_commit, args.expect_version, assets_dir)
+        refreshed = inspect_local(root, args.published_commit, args.expect_version, assets_dir, policy, revision)
         if refreshed != local:
             raise PublicationError("local publication inputs changed after planning")
         remote = inspect_remote(root, local, github)
@@ -233,7 +253,7 @@ def publish(args, github=None):
         verify_release(github, release_id, local, draft=True)
         verify_refs(root, local)
         # Recheck final bytes and source before making the verified draft public.
-        if inspect_local(root, args.published_commit, args.expect_version, assets_dir) != local:
+        if inspect_local(root, args.published_commit, args.expect_version, assets_dir, policy, revision) != local:
             raise PublicationError("local publication inputs changed during upload")
         audit_actions(github)
         state["phase"] = "publication_requested"
@@ -256,6 +276,10 @@ def parse_args(argv=None):
     parser.add_argument("--expect-version", required=True)
     parser.add_argument("--published-commit", required=True)
     parser.add_argument("--assets-dir", type=Path, required=True)
+    parser.add_argument("--trust-policy", type=Path, required=True,
+                        help="Protected independently provisioned policy outside source and bundle")
+    parser.add_argument("--minimum-trust-policy-revision", type=int, required=True,
+                        help="Independent operator revision floor retained outside release/restoration data")
     parser.add_argument("--apply", action="store_true", help="Publish the verified new release")
     parser.add_argument("--json", action="store_true")
     return parser.parse_args(argv)

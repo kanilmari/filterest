@@ -9,10 +9,14 @@ set -euo pipefail
 target=""
 output_dir=""
 check_only=0
+bundle_spec=""
+published_commit=""
+oci_options=()
 
 usage() {
     cat <<'EOF'
 Usage: ./filterest release build --output-dir PATH [--check-only] [--target PATH]
+       [--bundle-spec PATH --published-commit COMMIT [--oci-archive ARCH=PATH]...]
 
 Builds Linux amd64 and arm64 production binaries plus SHA-256 checksum files
 and a complete license/notice bundle entirely on the local maintainer machine.
@@ -21,6 +25,9 @@ be outside its Git checkout and empty before a real build. Both modes first run
 the release source checks (./filterest release verify). --check-only then checks
 required source files and command availability without creating output. It does
 not certify a clean release source, compiled binary metadata or host ABI.
+For final published bundles, supply reviewed requirements and prebuilt local OCI
+layout tars. Source comes from the exact published Git tree. Output is unsigned;
+the owner signs the canonical manifest in their own terminal afterwards.
 EOF
 }
 
@@ -177,6 +184,15 @@ while [[ "$#" -gt 0 ]]; do
             check_only=1
             shift
             ;;
+        --bundle-spec|--published-commit|--oci-archive)
+            [[ "$#" -ge 2 ]] || die "$1 requires a value"
+            case "$1" in
+                --bundle-spec) bundle_spec="$2" ;;
+                --published-commit) published_commit="$2" ;;
+                --oci-archive) oci_options+=(--oci-archive "$2") ;;
+            esac
+            shift 2
+            ;;
         -h|--help)
             usage
             exit 0
@@ -190,6 +206,12 @@ done
 script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
 target="${target:-$(cd "$script_dir/../../.." && pwd -P)}"
 [[ -n "$output_dir" ]] || die "--output-dir is required"
+if [[ -n "$bundle_spec" ]]; then
+    [[ -f "$bundle_spec" && ! -L "$bundle_spec" ]] || die "reviewed --bundle-spec file is missing or a symlink"
+    [[ "$published_commit" =~ ^[0-9a-f]{40}$ ]] || die "--bundle-spec requires a full --published-commit"
+elif [[ -n "$published_commit" || "${#oci_options[@]}" -gt 0 ]]; then
+    die "--published-commit and --oci-archive require --bundle-spec"
+fi
 [[ -d "$target" ]] || die "Filterest target directory missing: $target"
 [[ -f "$target/app/VERSION_APP" ]] || die "app/VERSION_APP missing from Filterest target"
 [[ -f "$target/app/go.mod" ]] || die "app/go.mod missing from Filterest target"
@@ -218,6 +240,14 @@ if [[ "$check_only" -eq 1 ]]; then
     exit 0
 fi
 
+# Resolve the output boundary before creating anything inside source.
+output_abs="$(python3 -c 'from pathlib import Path; import sys; print(Path(sys.argv[1]).resolve())' "$output_dir")"
+case "$output_abs" in
+    "$target_root_abs"|"$target_root_abs"/*)
+        die "release assets must be built outside the standalone Filterest checkout"
+        ;;
+esac
+[[ ! -L "$output_dir" ]] || die "output directory must not be a symlink"
 if [[ -e "$output_dir" ]]; then
     [[ -d "$output_dir" ]] || die "output path exists and is not a directory: $output_dir"
     output_contents="$(find "$output_dir" -mindepth 1 -print -quit)" || \
@@ -228,19 +258,24 @@ else
     mkdir -p "$output_dir"
 fi
 output_abs="$(resolve_existing_directory "$output_dir")"
-case "$output_abs" in
-    "$target_root_abs"|"$target_root_abs"/*)
-        die "release assets must be built outside the standalone Filterest checkout"
-        ;;
-esac
 
 source_status="$(git -C "$target_abs" status --porcelain)" || \
     die "could not inspect standalone Filterest Git source"
 [[ -z "$source_status" ]] || \
     die "standalone Filterest checkout must be clean before building release assets"
+if [[ -n "$bundle_spec" ]]; then
+    [[ "$(git -C "$target_abs" rev-parse HEAD)" == "$published_commit" ]] || \
+        die "reviewed published commit must match clean HEAD"
+fi
 
 build_architecture amd64 gcc 'ELF 64-bit.*x86-64'
 build_architecture arm64 aarch64-linux-gnu-gcc 'ELF 64-bit.*ARM aarch64'
 package_release_notices
+
+if [[ -n "$bundle_spec" ]]; then
+    python3 "$script_dir/build_bundle.py" --target "$target_root_abs" \
+        --assets-dir "$output_abs" --published-commit "$published_commit" \
+        --bundle-spec "$bundle_spec" "${oci_options[@]}"
+fi
 
 printf 'Local Filterest release assets are ready: %s\n' "$output_abs"

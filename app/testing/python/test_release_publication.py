@@ -1,3 +1,7 @@
+# test_release_publication.py
+# Exercises publication ordering, signed preflight and exact remote bundle readback.
+# Connects real local signature/payload checks to fake GitHub mutation boundaries.
+# Proves failed trust or inventory cannot push refs, upload assets or publish drafts.
 """Exercise release publication with a fake GitHub and Git mutation boundary.
 
 Shared history and binary verification have their own fixture tests. These
@@ -19,6 +23,9 @@ if str(APP_ROOT) not in sys.path:
     sys.path.insert(0, str(APP_ROOT))
 from server_tools.release import publish_release as release
 from server_tools.release import github_actions_policy as policy
+from server_tools.release import bundle_contract, bundle_verifier
+from release_bundle_fixture import (bundle_go_tools, local_contract_bridge, candidate, release_candidate,
+    unsigned_bundle, signed_bundle)
 
 P, C = "a" * 40, "b" * 40
 
@@ -70,10 +77,11 @@ class FakeGitHub:
             return [{"full_name": name, "owner": {"login": release.OWNER}, "archived": True}
                     for name in (release.REPOSITORY, release.OWNER + "/try_it_html", release.OWNER + "/private-archive")]
         if endpoint.endswith("/assets?per_page=100"):
-            assets = [{"name": name, "id": index, "state": "uploaded"}
+            assets = [{"name": name, "id": index, "state": "uploaded", "size": len(self.content[name]),
+                       "digest": "sha256:" + hashlib.sha256(self.content[name]).hexdigest()}
                       for index, name in enumerate(sorted(self.content), 1)]
             if self.extra_asset:
-                assets.append({"name": "unexpected-secret", "id": 99, "state": "uploaded"})
+                assets.append({"name": "unexpected-secret", "id": 99, "state": "uploaded", "size": 7})
             return assets
         if endpoint.endswith("/releases?per_page=100"):
             return [{"tag_name": "v1.2.4"}] if self.existing_release else []
@@ -101,6 +109,7 @@ def publication(tmp_path, monkeypatch):
              "version": "1.2.4", "tag": "v1.2.4", "release_notes": "# Reviewed release\n",
              "history": {"candidate_commit": C, "published_commit": P},
              "verified_assets": {"source_commit": P, "app_version": "1.2.4",
+                                 "sizes": {name: len(data) for name, data in content.items()},
                                  "assets": {name: hashlib.sha256(data).hexdigest() for name, data in content.items()}}}
     monkeypatch.setattr(release, "inspect_local", lambda *a: copy.deepcopy(local))
     operations = []
@@ -243,8 +252,8 @@ def local_source(tmp_path, monkeypatch):
     monkeypatch.setattr(release, "git", git)
     monkeypatch.setitem(sys.modules, "server_tools.release.promote_release",
                         SimpleNamespace(validate_published_source=lambda *a: {"published_commit": P}))
-    monkeypatch.setitem(sys.modules, "server_tools.release.asset_verifier",
-                        SimpleNamespace(verify_assets=lambda *a: {"app_version": "1.2.4", "source_commit": P, "assets": {}}))
+    monkeypatch.setattr(bundle_verifier, "verify_signed_bundle",
+                       lambda *a, **kw: {"app_version": "1.2.4", "source_commit": P, "assets": {}})
     return tmp_path, values
 
 
@@ -267,7 +276,8 @@ def test_local_version_mismatch_cannot_relabel_assets(local_source):
 
 
 def test_cli_defaults_to_plan_and_forbids_abbreviated_target():
-    args = ["--expect-version", "1.2.4", "--published-commit", P, "--assets-dir", "/tmp/assets"]
+    args = ["--expect-version", "1.2.4", "--published-commit", P, "--assets-dir", "/tmp/assets",
+            "--trust-policy", "/tmp/operator-policy", "--minimum-trust-policy-revision", "1"]
     assert not release.parse_args(args).apply
     with pytest.raises(SystemExit):
         release.parse_args(args + ["--tar", "/tmp/other"])
@@ -277,7 +287,8 @@ def test_main_reports_partial_state_without_claiming_success(monkeypatch, capsys
     def fail(*args):
         raise release.PublicationError("upload lost", {"phase": "asset_upload_requested", "release_id": 7})
     monkeypatch.setattr(release, "publish", fail)
-    result = release.main(["--expect-version", "1.2.4", "--published-commit", P, "--assets-dir", "/tmp/assets", "--apply"])
+    result = release.main(["--expect-version", "1.2.4", "--published-commit", P, "--assets-dir", "/tmp/assets", "--apply",
+                           "--trust-policy", "/tmp/operator-policy", "--minimum-trust-policy-revision", "1"])
     report = json.loads(capsys.readouterr().err)
     assert result == 1 and not report["publication_verified"]
     assert report["remote_state"]["release_id"] == 7
@@ -340,3 +351,122 @@ def test_repository_redirect_or_nonpublic_unwritable_target_blocks_mutation(publ
     with pytest.raises(release.PublicationError, match="approved public active"):
         release.publish(args, github)
     assert not any("push" in operation for operation in operations)
+
+
+@pytest.fixture
+def signed_publication(signed_bundle, monkeypatch):
+    """Keep all real local history/signature/payload checks; fake only remote transport."""
+    root, directory, commit, trust, _ = signed_bundle
+    github = FakeGitHub({path.name: path.read_bytes() for path in directory.iterdir()})
+    remote = {"main": json.loads((root / "app/BUILD_IDENTITY.json").read_bytes())["source"]["commit"], "tag": None}
+    operations = []
+    def git(target, *arguments):
+        operations.append(arguments)
+        if arguments[0] == "rev-parse":
+            return str(root)
+        if arguments[0] == "branch":
+            return "main"
+        if arguments[0] == "remote":
+            return "https://github.com/kanilmari/filterest.git"
+        if arguments[0] == "config":
+            return "false"
+        if arguments[0] in {"for-each-ref", "merge-base"}:
+            return ""
+        if arguments[0] == "ls-remote":
+            refs = remote["main"] + "\trefs/heads/main\n"
+            return refs + (remote["tag"] + "\trefs/tags/v1.2.4\n" if remote["tag"] else "")
+        if "push" in arguments:
+            remote.update(main=commit, tag=commit)
+            return ""
+        raise AssertionError(arguments)
+    monkeypatch.setattr(release, "git", git)
+    args = SimpleNamespace(target=root, assets_dir=directory, published_commit=commit,
+                           expect_version="1.2.4", trust_policy=trust,
+                           minimum_trust_policy_revision=1, apply=True)
+    return args, github, operations
+
+
+def test_signed_bundle_publication_end_to_end_reads_back_all_twenty_files(signed_publication):
+    args, github, operations = signed_publication
+    result = release.publish(args, github)
+    assert result["publication_verified"]
+    assert len(result["readback"]["asset_sha256"]) == 20
+    assert len([event for event in github.events if event[0] == "DOWNLOAD"]) == 40
+    assert result["verified_assets"]["signature_verification"]["trust_policy_revision"] == 1
+    assert any("push" in operation for operation in operations)
+    assert "passphrase" not in json.dumps(result)
+
+
+@pytest.mark.parametrize("failure", ["absent_trust", "revoked", "floor", "missing_signature", "bad_signature",
+                                      "tampered_manifest", "extra_payload", "missing_source", "wrong_image"])
+def test_signed_preflight_fails_before_remote_reads_or_mutation(signed_publication, failure):
+    args, github, operations = signed_publication
+    if failure == "absent_trust":
+        args.trust_policy = None
+    elif failure == "revoked":
+        document = json.loads(args.trust_policy.read_bytes())
+        document["compositions"][0]["keys"][0]["revoked"] = True
+        args.trust_policy.write_text(json.dumps(document))
+    elif failure == "floor":
+        args.minimum_trust_policy_revision = 2
+    elif failure == "missing_signature":
+        (args.assets_dir / bundle_contract.SIGNATURES_NAME).unlink()
+    elif failure == "bad_signature":
+        document = json.loads((args.assets_dir / bundle_contract.SIGNATURES_NAME).read_bytes())
+        document["signatures"][0]["signature"] = "A" * 86 + "=="
+        (args.assets_dir / bundle_contract.SIGNATURES_NAME).write_text(json.dumps(document))
+    elif failure == "tampered_manifest":
+        path = args.assets_dir / bundle_contract.MANIFEST_NAME
+        path.write_bytes(path.read_bytes().replace(b'"publisher":"filterest"', b'"publisher":"substitute"'))
+    elif failure == "extra_payload":
+        (args.assets_dir / "unexpected-extra").write_bytes(b"fixture")
+    elif failure == "missing_source":
+        (args.assets_dir / "filterest-1.2.4-source.tar.gz").unlink()
+    else:
+        (args.assets_dir / "filterest-1.2.4-oci-linux-amd64.tar").write_bytes(b"substitute image")
+    with pytest.raises((ValueError, OSError)):
+        release.publish(args, github)
+    assert not any("push" in operation for operation in operations)
+    assert github.events == []
+
+
+@pytest.mark.parametrize("location", ["bundle", "source", "symlink", "permissions"])
+def test_bundle_cannot_provision_its_own_trust_or_use_unprotected_policy(signed_publication, tmp_path, location):
+    args, github, operations = signed_publication
+    data = args.trust_policy.read_bytes()
+    if location in {"bundle", "source"}:
+        path = (args.assets_dir if location == "bundle" else args.target) / "trust-policy.json"
+        path.write_bytes(data)
+        args.trust_policy = path
+    elif location == "symlink":
+        path = tmp_path / "linked-policy"
+        path.symlink_to(args.trust_policy)
+        args.trust_policy = path
+    else:
+        args.trust_policy.chmod(0o666)
+    with pytest.raises(ValueError):
+        release.publish(args, github)
+    assert not any("push" in operation for operation in operations)
+    assert github.events == []
+
+
+@pytest.mark.parametrize("change", ["uploaded_size", "uploaded_digest", "downloaded_size"])
+def test_remote_size_and_digest_failures_keep_verified_release_private(publication, change):
+    args, github, _, _ = publication
+    args.apply = True
+    original = github.pages
+    def pages(endpoint):
+        rows = original(endpoint)
+        if endpoint.endswith("/assets?per_page=100"):
+            if change == "uploaded_size":
+                rows[0]["size"] += 1
+            elif change == "uploaded_digest":
+                rows[0]["digest"] = "sha256:" + "f" * 64
+        return rows
+    github.pages = pages
+    if change == "downloaded_size":
+        github.download = lambda asset_id: b"truncated"
+    with pytest.raises(release.PublicationError, match="asset"):
+        release.publish(args, github)
+    assert github.draft["draft"] is True
+    assert not any(event[0] == "PATCH" for event in github.events)

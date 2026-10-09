@@ -1,3 +1,7 @@
+<!-- PUBLISHING.md -->
+<!-- Defines the maintained public source and versioned release workflow. -->
+<!-- Connects ordinary development with canonical preparation/build/publication guides. -->
+<!-- Keeps generated payloads and operator state outside maintained source. -->
 # Publishing Filterest
 
 ## Maintained source
@@ -60,7 +64,9 @@ checks on this checkout: source boundary, repository-root files, release ledger,
 app/database compatibility, public bootstrap, demo media and the tracked browser
 bundle, which it rebuilds from this source and compares. The standalone
 `./filterest release build` command runs those checks first, then assembles
-Linux server binaries, notices and checksums from this repository. Its [build
+Linux server binaries, notices and checksums from this repository. Final builds
+can also package exact Git source and prebuilt OCI images into a canonical
+unsigned manifest; agents/build tools stop at that output. Its [build
 contract and commands](../../server_tools/release/BUILDING_LINUX_ASSETS.md)
 distinguish a read-only prerequisite check from an actual clean-source release build.
 
@@ -72,9 +78,14 @@ The standalone [promotion command](../../server_tools/release/PROMOTING_RELEASES
 verifies the clean candidate commit and its complete asset set before planning
 published metadata. Commit that metadata separately, then rebuild the final
 assets so their embedded Git identity matches the final release commit.
+Package the final source/image bundle, then have the owner sign it directly in
+their terminal using the workstation encrypted-container custody described in
+the [publication guide](../../server_tools/release/PUBLISHING_RELEASES.md).
 
 The standalone [publication command](../../server_tools/release/PUBLISHING_RELEASES.md)
-plans by default. Its explicit apply mode audits the account's GitHub Actions
+plans by default. Before remote mutation it requires independently provisioned
+composition trust, owner signatures and the exact complete bundle inventory.
+Its explicit apply mode audits the account's GitHub Actions
 settings, pushes the exact source and tag, uploads a draft, downloads and verifies
 every asset, and then publishes it. Existing releases and tags are preserved.
 These commands have isolated automated coverage; an actual publication still
@@ -90,7 +101,7 @@ old generator against the current authoritative checkout.
 
 The maintained [release checklist](PUBLICATION_CHECKLIST.md) and
 [release notes](RELEASE_NOTES.md) describe the current direct-source process.
-Follow the preparation, candidate build, promotion, final rebuild and publication
+Follow the preparation, candidate build, promotion, final rebuild, owner signing and publication
 sequence above. Build outputs must stay outside the maintained checkout and
 operator state. A local published identity does not establish remote success;
 retain the publication command's verified receipt. External orchestration must

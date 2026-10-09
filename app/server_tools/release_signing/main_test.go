@@ -493,3 +493,32 @@ func TestSigningTerminalRefusesPipedPassphrase(t *testing.T) {
 		t.Fatalf("terminal pipe refusal: %v %s", err, data)
 	}
 }
+
+func TestWorkstationCustodyAndGeneratedKeySecretFreeOutput(t *testing.T) {
+	dir := t.TempDir()
+	keyPath := filepath.Join(dir, "owner-workstation.container")
+	t.Setenv("FILTEREST_RELEASE_SIGNING_KEY_FILE", keyPath)
+	var output bytes.Buffer
+	if code := runTest([]string{"keygen", "--product", "filterest", "--public-key-file", filepath.Join(dir, "public")}, &output); code != 0 {
+		t.Fatalf("keygen: %d %s", code, output.String())
+	}
+	key, err := releaseupdates.ReadSigningKeyFile(keyPath, []byte("fixed TEST ONLY passphrase"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer clear(key)
+	input := filepath.Join(dir, "manifest")
+	if err := os.WriteFile(input, signingFixture(t, "public_manifest.json"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if code := runTest([]string{"sign", "--product", "filterest", "--input-file", input, "--output-file", filepath.Join(dir, "proof")}, &output); code != 0 {
+		t.Fatalf("sign: %d %s", code, output.String())
+	}
+	if strings.Contains(output.String(), "fixed TEST ONLY passphrase") || bytes.Contains(output.Bytes(), key) || strings.Contains(output.String(), base64.StdEncoding.EncodeToString(key.Seed())) {
+		t.Fatal("signing output exposed private material")
+	}
+	output.Reset()
+	if code := run([]string{"--help"}, &output); code != 0 || !strings.Contains(output.String(), "control\nworkstation") || !strings.Contains(output.String(), "offline recovery") || strings.Contains(output.String(), "Keep the USB") {
+		t.Fatalf("workstation custody help: %d %s", code, output.String())
+	}
+}

@@ -13,6 +13,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+import pytest
 
 APP = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(APP))
@@ -20,6 +21,9 @@ from server_tools.versioning.release_contract_v1 import (  # noqa: E402
     canonical_json_line,
     validate_build_identity,
 )
+from release_bundle_fixture import (bundle_go_tools, local_contract_bridge, candidate, release_candidate,
+    unsigned_bundle, signed_bundle, resign_document)
+from server_tools.release import bundle_contract, bundle_verifier
 
 SCHEMAS = APP / "server_tools/versioning"
 FIXTURES = APP / "backend/core_components/release_updates/testdata/test_only"
@@ -187,6 +191,63 @@ class ReleaseManifestContractTests(unittest.TestCase):
             with self.subTest(surface=surface):
                 self.assertIsNotNone(re.search(definition["pattern"], value))
                 self.assertIsNone(re.search(definition["pattern"], value + "\n"))
+
+
+@pytest.mark.parametrize("change", ["space", "crlf", "no_final_lf"])
+def test_generated_manifest_has_one_signing_byte_representation(signed_bundle, change):
+    root, directory, commit, policy, _ = signed_bundle
+    path = directory / bundle_contract.MANIFEST_NAME
+    data = path.read_bytes()
+    changed = b" " + data if change == "space" else data[:-1] + b"\r\n" if change == "crlf" else data[:-1]
+    with pytest.raises(bundle_contract.BundleError, match="canonical"):
+        bundle_contract.validate_manifest(changed)
+    path.write_bytes(changed)
+    with pytest.raises(bundle_contract.BundleError, match="authenticated"):
+        bundle_verifier.verify_signed_bundle(root, directory, commit, policy, 1)
+
+
+@pytest.mark.parametrize("change", ["composition", "platform", "published_commit", "migration_route"])
+def test_valid_signature_cannot_override_expected_composition_platform_or_source(signed_bundle, tmp_path, bundle_go_tools, change):
+    root, directory, commit, policy, _ = signed_bundle
+    path = directory / bundle_contract.MANIFEST_NAME
+    manifest = json.loads(path.read_bytes())
+    if change == "composition":
+        manifest["product"] = manifest["composition"]["id"] = "easelect"
+        manifest["composition"]["components"].append({"id": "easelect", "version": "1.0.0", "commit": commit})
+    elif change == "platform":
+        row = next(row for row in manifest["artifacts"] if row["kind"] == "oci_archive")
+        row["platform"]["architecture"] = "arm64"
+        manifest["platform"]["targets"].append(row["platform"])
+    elif change == "published_commit":
+        manifest["published_commit"] = "f" * 40
+        manifest["composition"]["components"][0]["commit"] = "f" * 40
+    else:
+        # A structurally valid migration route, signed by the fixture owner,
+        # still cannot claim files missing from its reviewed source archive.
+        row = {"id": "20261009000099_missing.sql", "component": "filterest", "content_sha256": "e" * 64,
+               "database_version": manifest["database"]["target_version"], "publishes_database_version": True,
+               "transaction_policy": "runner", "error_policy": "required"}
+        manifest["database"]["migrations"] = [row]
+        manifest["database"]["supported_starts"][0]["migration_ids"] = [row["id"]]
+    path.write_bytes(canonical_json_line(manifest))
+    resign_document(directory, policy, tmp_path, bundle_go_tools)
+    with pytest.raises(bundle_contract.BundleError):
+        bundle_verifier.verify_signed_bundle(root, directory, commit, policy, 1)
+
+
+def test_go_bridge_uses_only_offline_read_only_toolchain(monkeypatch):
+    calls = []
+    def run(arguments, **kwargs):
+        calls.append((arguments, kwargs))
+        return subprocess.CompletedProcess(arguments, 0, b'{"contract_valid":true}\n', b"")
+    monkeypatch.setattr(bundle_contract.subprocess, "run", run)
+    assert bundle_contract.contract_command(["validate"], b"fixture")["contract_valid"]
+    arguments, options = calls[0]
+    assert arguments == ["go", "run", "./server_tools/release/manifest_verification", "validate"]
+    assert options["env"]["GOWORK"] == "off"
+    assert options["env"]["GOPROXY"] == "off" and options["env"]["GOSUMDB"] == "off"
+    assert options["env"]["GOTOOLCHAIN"] == "local" and options["env"]["GOFLAGS"] == "-mod=readonly"
+    assert options["timeout"] == 300
 
 
 if __name__ == "__main__":
