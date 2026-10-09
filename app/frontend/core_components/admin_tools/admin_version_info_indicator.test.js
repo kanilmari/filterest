@@ -6,6 +6,10 @@
 
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 
+vi.mock("../lang/translation_handler.js", () => ({
+    getTranslationForKey: (_key, { fallback = "" } = {}) => fallback,
+}));
+
 const hasRoutePermissionMock = vi.fn();
 const fetchAdminVersionInfoMock = vi.fn();
 const checkAdminVersionInfoAgainMock = vi.fn();
@@ -98,9 +102,9 @@ describe("admin version info indicator", () => {
         expect(indicator.title).toContain("Paketin tyyppi Käyttöversio");
         expect(indicator.title).toContain("Julkaisuvaihe Julkaistu");
         expect(indicator.title).toContain("Tunnisteen varmistus Paikallinen julkaisusopimus varmennettu");
-        expect(indicator.title).toContain("Uusin vakaa versio v. 8.28.0 (päivitys saatavilla)");
+        expect(indicator.title).toContain("Uusin vakaa versio v. 8.28.0");
         expect(indicator.title).toContain("Tietokanta v. 8.0.55 (yhteensopiva)");
-        expect(indicator.title).toContain("Vaadittu tietokanta v. 8.0.55");
+        expect(indicator.title).toContain("Käynnissä olevan sovelluksen vaatima v. 8.0.55");
         expect(indicator.title).toContain("Ajotapa Docker");
         expect(indicator.title).not.toContain(":");
         expect(indicator.getAttribute("aria-expanded")).toBe("false");
@@ -136,9 +140,9 @@ describe("admin version info indicator", () => {
         expect(panel.querySelector('[data-version-info-value="identity-verification"]')?.textContent)
             .toBe("Paikallinen julkaisusopimus varmennettu");
         expect(panel.querySelector('[data-version-info-value="latest-stable"]')?.textContent)
-            .toBe("v. 8.28.0 (päivitys saatavilla)");
-        expect(panel.querySelector('[data-version-info-key="last-checked"]')?.textContent)
-            .toBe("Tarkistettu viimeksi");
+            .toBe("v. 8.28.0");
+        expect(panel.querySelector('[data-version-info-key="checked-successfully"]')?.textContent)
+            .toBe("Tarkistettu onnistuneesti");
         const releaseLink = panel.querySelector('[data-version-info-value="latest-stable"] a');
         expect(releaseLink?.getAttribute("href"))
             .toBe("https://github.com/kanilmari/filterest/releases/tag/v8.28.0");
@@ -148,35 +152,25 @@ describe("admin version info indicator", () => {
             .toBe("Ajotapa");
         expect(panel.querySelector('[data-version-info-value="runtime"]')?.textContent)
             .toBe("Docker");
-        const updateButton = panel.querySelector(
-            '[data-testid="filterbar-admin-update-preview-open"]'
-        );
         const checkAgainButton = panel.querySelector(
             '[data-testid="filterbar-admin-version-check-again"]'
         );
-        expect(checkAgainButton?.textContent).toBe("Tietojen päivitys");
-        expect(updateButton?.textContent).toBe("Sovelluksen päivitys…");
-        expect(updateButton?.getAttribute("aria-expanded")).toBe("false");
+        expect(checkAgainButton?.textContent).toBe("Tarkista julkaisut");
+        expect(panel.querySelectorAll("button")).toHaveLength(1);
+        expect(panel.querySelector('[data-testid="filterbar-admin-update-preview-open"]')).toBeNull();
+        expect(panel.querySelector('.filterbar-clock-bar__version-operator-guidance')?.textContent)
+            .toBe("Päivitykset tekee toistaiseksi sivuston ylläpitäjä palvelimella.");
         expect(panel.hidden).toBe(true);
 
         indicator.click();
         expect(indicator.getAttribute("aria-expanded")).toBe("true");
         expect(panel.hidden).toBe(false);
         await vi.waitFor(() => {
-            expect(panel.querySelector('[data-testid="filterbar-admin-update-preview-open"]'))
+            expect(panel.querySelector('[data-testid="filterbar-admin-version-check-again"]'))
                 .toBeTruthy();
         });
         expect(indicator.hasAttribute("title")).toBe(false);
         panel.click();
-        expect(panel.hidden).toBe(false);
-
-        const openUpdateButton = panel.querySelector(
-            '[data-testid="filterbar-admin-update-preview-open"]'
-        );
-        openUpdateButton.click();
-        expect(openUpdateButton.getAttribute("aria-expanded")).toBe("true");
-        expect(panel.querySelector('[data-testid="filterbar-admin-update-preview"]')?.textContent)
-            .toContain("Tästä näkymästä ei asenneta eikä muuteta mitään.");
         expect(panel.hidden).toBe(false);
 
         indicator.click();
@@ -234,7 +228,7 @@ describe("admin version info indicator", () => {
                 .toContain("8.40.8");
         });
         const oldCheckedAt = panel.querySelector(
-            '[data-version-info-value="last-checked"]'
+            '[data-version-info-value="checked-successfully"]'
         )?.textContent;
         const checkAgainButton = panel.querySelector(
             '[data-testid="filterbar-admin-version-check-again"]'
@@ -243,12 +237,12 @@ describe("admin version info indicator", () => {
 
         await vi.waitFor(() => {
             expect(panel.querySelector('[data-version-info-value="latest-stable"]')?.textContent)
-                .toBe("v. 8.41.0 (päivitys saatavilla)");
+                .toBe("v. 8.41.0");
         });
         expect(checkAdminVersionInfoAgainMock).toHaveBeenCalledWith({
             suppressAuthRedirect: true,
         });
-        expect(panel.querySelector('[data-version-info-value="last-checked"]')?.textContent)
+        expect(panel.querySelector('[data-version-info-value="checked-successfully"]')?.textContent)
             .not.toBe(oldCheckedAt);
         expect(indicator.classList.contains("filterbar-clock-bar__version-info--update-available"))
             .toBe(true);
@@ -305,8 +299,8 @@ describe("admin version info indicator", () => {
         await vi.advanceTimersByTimeAsync(1);
         expect(fetchAdminVersionInfoMock).toHaveBeenCalledTimes(2);
         expect(panel.querySelector('[data-version-info-value="latest-stable"]')?.textContent)
-            .toBe("v. 8.42.0 (päivitys saatavilla)");
-        expect(panel.querySelector('[data-version-info-value="last-checked"]')?.textContent)
+            .toBe("v. 8.42.0");
+        expect(panel.querySelector('[data-version-info-value="checked-successfully"]')?.textContent)
             .not.toBe("");
 
         indicator.click();
@@ -364,12 +358,12 @@ describe("admin version info indicator", () => {
     });
 
     test.each([
-        ["fi", "Tietojen päivitys"],
-        ["en", "Refresh information"],
-        ["ch", "Refresh information"],
-        ["zh-TW", "Refresh information"],
-        ["zh-HK", "Refresh information"],
-        ["yue", "Refresh information"],
+        ["fi", "Tarkista julkaisut"],
+        ["en", "Check releases"],
+        ["ch", "Check releases"],
+        ["zh-TW", "Check releases"],
+        ["zh-HK", "Check releases"],
+        ["yue", "Check releases"],
     ])("localizes the check-again action for %s", async (language, expectedLabel) => {
         hasRoutePermissionMock.mockReturnValue(true);
         getLanguageWithBrowserFallbackMock.mockReturnValue(language);
@@ -451,15 +445,15 @@ describe("admin version info indicator", () => {
         expect(panel.querySelector('[data-version-info-value="identity-verification"]')?.textContent)
             .toBe("Legacy marker, unverified");
         expect(panel.querySelector('[data-version-info-value="latest-stable"]')?.textContent)
-            .toBe("v. 8.27.98 (local version is newer)");
+            .toBe("v. 8.27.98");
         expect(panel.querySelector('[data-version-info-key="required-database"]')?.textContent)
-            .toBe("Required database");
+            .toBe("Required by the running application");
         expect(panel.querySelector('[data-version-info-key="runtime"]')?.textContent).toBe("Runtime");
         expect(indicator.hasAttribute("title")).toBe(false);
         expect(indicator.dataset.closedTooltip).toContain("Database v. 8.0.55 (compatible)");
         expect(indicator.dataset.closedTooltip).toContain("Runtime Native");
         expect(panel.querySelector('[data-testid="filterbar-admin-update-preview-open"]'))
-            .toBeTruthy();
+            .toBeNull();
 
         document.documentElement.setAttribute("lang", "zh-CN");
         await vi.waitFor(() => {

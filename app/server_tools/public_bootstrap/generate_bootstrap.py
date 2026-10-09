@@ -65,6 +65,7 @@ language_seed_migrations = (
     "20261007000001_seed_row_group_match_mode_language_keys.sql",
     "20261007000002_seed_multiselect_language_keys.sql",
     "20261009000001_seed_front_page_description_language_key.sql",
+    "20261009000002_seed_admin_version_info_language_keys.sql",
 )
 # A setting an upgrade adds is added for a new installation by the same file, so
 # the default is written once and an upgraded site and a new one start with the

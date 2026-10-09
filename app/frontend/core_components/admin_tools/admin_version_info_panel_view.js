@@ -105,6 +105,14 @@ export function appendAdminVersionRefreshControl(
 
     row.appendChild(cell);
     body.appendChild(row);
+
+    const guidanceRow = document.createElement("tr");
+    const guidance = document.createElement("td");
+    guidance.colSpan = 2;
+    guidance.classList.add("filterbar-clock-bar__version-operator-guidance");
+    guidance.textContent = labels.siteOperator;
+    guidanceRow.appendChild(guidance);
+    body.appendChild(guidanceRow);
 }
 
 function clampPanelCoordinate(value, minimum, maximum) {

@@ -1,9 +1,14 @@
 // admin_version_info_formatter.js
 // Formats localized administrator version facts and release-check evidence.
-// Bridges endpoint snapshots with the indicator and read-only update details.
+// Bridges endpoint snapshots with the indicator and its single information table.
 // Exists so cache age, failed attempts and last success share one presentation contract.
 
 import { formatSiteNameForDisplay } from "../state_stores/site_identity_reader.js";
+import { getTranslationForKey } from "../lang/translation_handler.js";
+import {
+    ADMIN_VERSION_INFO_COPY_KEYS,
+    ADMIN_VERSION_INFO_TRANSLATION_FALLBACKS,
+} from "./admin_version_info_translation_fallbacks.js";
 
 const VERSION_LABELS = Object.freeze({
     fi: {
@@ -17,7 +22,6 @@ const VERSION_LABELS = Object.freeze({
         identityVerification: "Tunnisteen varmistus",
         latestStable: "Uusin vakaa versio",
         database: "Tietokanta",
-        requiredDatabase: "Vaadittu tietokanta",
         runtime: "Ajotapa",
         runtimeDocker: "Docker",
         runtimeNative: "Tavallinen",
@@ -41,8 +45,6 @@ const VERSION_LABELS = Object.freeze({
         updateCurrent: "ajan tasalla",
         updateAhead: "paikallinen versio uudempi",
         updateUnavailable: "tarkistus ei saatavilla",
-        lastChecked: "Tarkistettu viimeksi",
-        checkAgain: "Tietojen päivitys",
         lastSuccess: "Viimeisin onnistunut tarkistus",
         checkResult: "Tarkistuksen tulos",
         checkState: "Tiedon tuoreus",
@@ -50,9 +52,6 @@ const VERSION_LABELS = Object.freeze({
         cachedCheck: "Välimuistin tulos",
         failedCheck: "Tarkistus epäonnistui; aiempi tulos on vanhentunut",
         unknownCheck: "Ei onnistunutta tarkistusta",
-        staleResult: "viimeisin onnistunut tulos, vanhentunut",
-        refreshAllowed: "Tietojen päivitys sallittu",
-        applicationUpdate: "Sovelluksen päivitys…",
         checkingAgain: "Tarkistetaan…",
         checkFailed: "Tarkistus epäonnistui",
         loading: "Ladataan…",
@@ -70,7 +69,6 @@ const VERSION_LABELS = Object.freeze({
         identityVerification: "Identity verification",
         latestStable: "Latest stable version",
         database: "Database",
-        requiredDatabase: "Required database",
         runtime: "Runtime",
         runtimeDocker: "Docker",
         runtimeNative: "Native",
@@ -94,8 +92,6 @@ const VERSION_LABELS = Object.freeze({
         updateCurrent: "up to date",
         updateAhead: "local version is newer",
         updateUnavailable: "check unavailable",
-        lastChecked: "Last checked",
-        checkAgain: "Refresh information",
         lastSuccess: "Last successful check",
         checkResult: "Check result",
         checkState: "Information freshness",
@@ -103,9 +99,6 @@ const VERSION_LABELS = Object.freeze({
         cachedCheck: "Cached result",
         failedCheck: "Check failed; previous result is stale",
         unknownCheck: "No successful check",
-        staleResult: "last successful result, stale",
-        refreshAllowed: "Refresh available at",
-        applicationUpdate: "Application update…",
         checkingAgain: "Checking…",
         checkFailed: "Check failed",
         loading: "Loading…",
@@ -123,7 +116,6 @@ const VERSION_LABELS = Object.freeze({
         identityVerification: "身份验证状态",
         latestStable: "最新稳定版",
         database: "数据库",
-        requiredDatabase: "所需数据库",
         runtime: "运行方式",
         runtimeDocker: "Docker",
         runtimeNative: "本机",
@@ -147,7 +139,6 @@ const VERSION_LABELS = Object.freeze({
         updateCurrent: "已是最新",
         updateAhead: "开发版较新",
         updateUnavailable: "无法检查",
-        lastChecked: "上次检查",
         checkingAgain: "正在检查…",
         checkFailed: "检查失败",
         loading: "正在加载…",
@@ -165,7 +156,6 @@ const VERSION_LABELS = Object.freeze({
         identityVerification: "身分驗證狀態",
         latestStable: "最新穩定版本",
         database: "資料庫",
-        requiredDatabase: "必要資料庫",
         runtime: "執行方式",
         runtimeDocker: "Docker",
         runtimeNative: "本機",
@@ -189,7 +179,6 @@ const VERSION_LABELS = Object.freeze({
         updateCurrent: "已是最新",
         updateAhead: "本機版本較新",
         updateUnavailable: "無法檢查",
-        lastChecked: "上次檢查",
         checkingAgain: "正在檢查…",
         checkFailed: "檢查失敗",
         loading: "載入中…",
@@ -207,7 +196,6 @@ const VERSION_LABELS = Object.freeze({
         identityVerification: "身份驗證狀態",
         latestStable: "最新穩定版本",
         database: "資料庫",
-        requiredDatabase: "所需資料庫",
         runtime: "執行方式",
         runtimeDocker: "Docker",
         runtimeNative: "原生",
@@ -231,7 +219,6 @@ const VERSION_LABELS = Object.freeze({
         updateCurrent: "已是最新",
         updateAhead: "本機版本較新",
         updateUnavailable: "無法檢查",
-        lastChecked: "上次檢查",
         checkingAgain: "正在檢查…",
         checkFailed: "檢查失敗",
         loading: "載入中…",
@@ -249,7 +236,6 @@ const VERSION_LABELS = Object.freeze({
         identityVerification: "身分驗證狀態",
         latestStable: "最新穩定版",
         database: "資料庫",
-        requiredDatabase: "所需資料庫",
         runtime: "執行方式",
         runtimeDocker: "Docker",
         runtimeNative: "原生",
@@ -273,7 +259,6 @@ const VERSION_LABELS = Object.freeze({
         updateCurrent: "已是最新",
         updateAhead: "開發版較新",
         updateUnavailable: "無法檢查",
-        lastChecked: "上次檢查",
         checkingAgain: "檢查緊…",
         checkFailed: "檢查失敗",
         loading: "載入緊…",
@@ -310,10 +295,17 @@ function resolveExistingVersionInfoLabels(language = "en") {
     return VERSION_LABELS[normalizedLanguage.split("-")[0]] || VERSION_LABELS.en;
 }
 
-/** Resolves inline component copy, with English defaults for newly added labels. */
+/** Reads changed copy through the shared catalog, preserving existing identity translations. */
 export function resolveVersionInfoLabels(language = "en") {
     const existing = resolveExistingVersionInfoLabels(language);
-    return { ...VERSION_LABELS.en, ...existing };
+    const fallbackLanguage = Object.keys(VERSION_LABELS)
+        .find((key) => VERSION_LABELS[key] === existing) || "en";
+    const labels = { ...VERSION_LABELS.en, ...existing };
+    for (const [label, key] of Object.entries(ADMIN_VERSION_INFO_COPY_KEYS)) {
+        const copy = ADMIN_VERSION_INFO_TRANSLATION_FALLBACKS[key];
+        labels[label] = getTranslationForKey(key, { fallback: copy[fallbackLanguage] || copy.en });
+    }
+    return labels;
 }
 
 export function getAdminSiteInfoTitle(language = "en") {
@@ -375,11 +367,8 @@ function formatUpdateStatus(versionInfo, labels) {
 }
 
 function formatLatestStableStatus(versionInfo, labels) {
-    const status = formatUpdateStatus(versionInfo, labels);
     const latestVersion = String(versionInfo?.latest_stable_version || "").trim();
-    const retained = versionInfo?.update_status === "unavailable" && latestVersion
-        ? `; ${labels.staleResult}` : "";
-    return latestVersion ? `v. ${latestVersion} (${status}${retained})` : status;
+    return latestVersion ? `v. ${latestVersion}` : labels.channelUnknown;
 }
 
 function resolveVersionInfoDateLocale(language = "en") {
@@ -478,7 +467,7 @@ export function formatAdminVersionInfoLabel(versionInfo, language = "en") {
         .join("\n");
 }
 
-/** Keeps attempt time, last success and cache age distinct in both information surfaces. */
+/** Shows check evidence once, combining attempt and success only for the same instant. */
 export function buildAdminUpdateCheckRows(versionInfo, language = "en") {
     const labels = resolveVersionInfoLabels(language);
     const successTime = versionInfo?.last_successful_check_at
@@ -502,12 +491,14 @@ export function buildAdminUpdateCheckRows(versionInfo, language = "en") {
             value: formatUpdateStatus(versionInfo, labels) },
         { id: "check-state", label: labels.checkState, value: state },
     ];
-    const checkedAt = formatUpdateCheckedAt(
-        versionInfo?.client_check_failed_at || versionInfo?.update_checked_at, language,
-    );
-    if (checkedAt) rows.push({ id: "last-checked", label: labels.lastChecked, value: checkedAt });
-    rows.push({ id: "last-success", label: labels.lastSuccess,
-        value: formatUpdateCheckedAt(successTime, language) || labels.unknownCheck });
+    const checkedAt = formatUpdateCheckedAt(attemptTime, language);
+    if (successful && checkedAt && Date.parse(attemptTime) === Date.parse(successTime)) {
+        rows.push({ id: "checked-successfully", label: labels.checkedSuccessfully, value: checkedAt });
+    } else {
+        if (checkedAt) rows.push({ id: "last-checked", label: labels.lastChecked, value: checkedAt });
+        rows.push({ id: "last-success", label: labels.lastSuccess,
+            value: formatUpdateCheckedAt(successTime, language) || labels.unknownCheck });
+    }
     return rows;
 }
 

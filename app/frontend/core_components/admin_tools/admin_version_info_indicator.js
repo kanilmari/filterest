@@ -14,7 +14,7 @@ import {
     getCurrentSiteName,
 } from "../state_stores/site_identity_reader.js";
 import { createSymbolMaskElement } from "../../reusable_components/symbol_asset_resolver.js";
-import { appendAdminUpdatePreview } from "./admin_update_preflight_view.js";
+import { bindDatasetLanguageRenderer } from "../table_views/dataset_value_localizer.js";
 import {
     appendAdminVersionRefreshControl,
     positionAdminVersionInfoPanel,
@@ -61,6 +61,7 @@ export function buildAdminVersionInfoIndicator() {
     panel.classList.add("filterbar-clock-bar__version-info-panel");
     panel.dataset.testid = "filterbar-admin-version-info-panel";
     panel.setAttribute("aria-live", "polite");
+    panel.tabIndex = -1;
     panel.hidden = true;
     indicator.setAttribute("aria-controls", panelId);
 
@@ -119,7 +120,6 @@ export function buildAdminVersionInfoIndicator() {
                 ? formatUpdateCheckedAt(currentVersionInfo.refresh_allowed_at, currentLanguage) : "",
             onCheckAgain: () => void loadVersionInfo(true),
         });
-        appendAdminUpdatePreview(panel, currentVersionInfo, currentLanguage, positionOpenPanel);
         indicator.classList.toggle(
             "filterbar-clock-bar__version-info--update-available",
             currentVersionInfo?.update_available === true
@@ -128,13 +128,15 @@ export function buildAdminVersionInfoIndicator() {
         );
         if (!panel.hidden && focusedControl) {
             const focusId = refreshFocusPending && !requestInFlight
+                && [panel.dataset.testid, "filterbar-admin-version-check-again"].includes(focusedControl)
                 ? "filterbar-admin-version-check-again" : focusedControl;
             const control = panel.querySelector(`[data-testid="${focusId}"]`);
             if (control?.disabled) {
-                panel.querySelector('[data-testid="filterbar-admin-update-preview-open"]')?.focus();
-            } else control?.focus();
+                // Keep focus inside the table while its only action is disabled.
+                panel.focus({ preventScroll: true });
+            } else control?.focus({ preventScroll: true });
         }
-        if (!requestInFlight) refreshFocusPending = false;
+        if (!requestInFlight && document.activeElement !== panel) refreshFocusPending = false;
         positionOpenPanel();
     };
 
@@ -304,6 +306,11 @@ export function buildAdminVersionInfoIndicator() {
     const initialTitle = getAdminSiteInfoTitle(currentLanguage);
     indicator.title = initialTitle;
     indicator.setAttribute("aria-label", initialTitle);
-    renderCurrentState();
+    // The shared language refresh runs after the new catalog is loaded; the
+    // attribute observer also supports immediate page-language changes.
+    bindDatasetLanguageRenderer(shell, (language) => {
+        currentLanguage = language;
+        renderCurrentState();
+    }, currentLanguage);
     return shell;
 }

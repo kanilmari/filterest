@@ -27,6 +27,8 @@ test.describe('E9 — Admin version info', () => {
       testInfo.project.metadata?.screenWidth !== 'desktop',
       'This placement proof drives its own viewport and only needs one project.',
     );
+    // The check action may wait up to 35 s for the server's cooldown below, longer than the default test budget.
+    test.setTimeout(90_000);
 
     await page.setViewportSize({ width: 1280, height: 768 });
     const identityResponse = await page.request.get('/api/product-identity');
@@ -180,14 +182,29 @@ test.describe('E9 — Admin version info', () => {
     await expect(panel.locator('[data-version-info-value="runtime"]'))
       .toHaveText(versionInfo.runtime_mode === 'docker' ? 'Docker' : 'Native');
     const checkAgainButton = panel.locator('[data-testid="filterbar-admin-version-check-again"]');
-    await expect(checkAgainButton).toHaveText('Refresh information');
-    if (versionInfo.update_checked_at) {
-      await expect(panel.locator('[data-version-info-key="last-checked"]'))
-        .toHaveText('Last checked');
+    await expect(checkAgainButton).toHaveText('Check releases');
+    await expect(panel.locator('button')).toHaveCount(1);
+    await expect(panel.locator('[data-testid="filterbar-admin-update-preview-open"]')).toHaveCount(0);
+    await expect(panel.locator('code, section, tfoot')).toHaveCount(0);
+    await expect(panel.locator('.filterbar-clock-bar__version-operator-guidance'))
+      .toHaveText('Updates are currently performed by the site operator.');
+    await expect(panel.locator('[data-version-info-key="required-database"]'))
+      .toHaveText('Required by the running application');
+    if (versionInfo.latest_stable_version) {
+      await expect(panel.locator('[data-version-info-value="latest-stable"]'))
+        .toHaveText(`v. ${versionInfo.latest_stable_version}`);
+    }
+    const successTime = versionInfo.last_successful_check_at
+      || (versionInfo.update_status !== 'unavailable' ? versionInfo.update_checked_at : '');
+    if (successTime && Date.parse(successTime) === Date.parse(versionInfo.update_checked_at)) {
+      await expect(panel.locator('[data-version-info-key="checked-successfully"]'))
+        .toHaveText('Checked successfully');
+      await expect(panel.locator('[data-version-info-key="last-checked"], [data-version-info-key="last-success"]'))
+        .toHaveCount(0);
+    } else if (versionInfo.update_checked_at) {
+      await expect(panel.locator('[data-version-info-key="last-checked"]')).toHaveText('Last check attempt');
     }
 
-    await expect(panel.locator('[data-testid="filterbar-admin-update-preview-open"]'))
-      .toHaveText('Application update…');
     // The preceding GET may have performed the upstream check: respect its cooldown.
     await expect(checkAgainButton).toBeEnabled({ timeout: 35_000 });
     const forcedCheckResponsePromise = page.waitForResponse((candidate) => {
@@ -200,7 +217,7 @@ test.describe('E9 — Admin version info', () => {
     expect(forcedCheckResponse.status()).toBe(200);
     const forcedVersionInfo = await forcedCheckResponse.json();
     expect(typeof forcedVersionInfo.upstream_check_performed).toBe('boolean');
-    await expect(checkAgainButton).toHaveText('Refresh information');
+    await expect(checkAgainButton).toHaveText('Check releases');
     await expect(panel).toBeVisible();
     await expect(panel.locator('[data-version-info-value="application"]'))
       .toHaveText(`v. ${versionInfo.app_version}`);
@@ -263,4 +280,122 @@ test.describe('E9 — Admin version info', () => {
     expect(placement.rightGap).toBeCloseTo(8, 0);
     expect(Math.abs(placement.verticalCenterDelta)).toBeLessThanOrEqual(1);
   });
+});
+
+// Native browser proofs use mocked release responses, so GitHub availability
+// cannot change the evidence under test. Other application APIs remain real.
+for (const [language, theme, osTheme] of [
+  ['fi', 'light', 'dark'], ['en', 'dark', 'light'],
+  ['fi', 'dark', 'light'], ['en', 'light', 'dark'],
+] as const) {
+  test(`release facts, retained failure and focus: ${language}, ${theme}, OS ${osTheme}`, async ({ page }, testInfo) => {
+    test.skip(testInfo.project.metadata?.screenWidth !== 'desktop', 'One project drives its own viewports.');
+    await login(page, loadCredentials());
+    await page.addInitScript(({ language }) => {
+      localStorage.setItem('chosen_language', language);
+    }, { language });
+    await page.emulateMedia({ colorScheme: osTheme });
+    const time = '2026-10-09T09:00:00Z';
+    const releaseURL = 'https://github.com/kanilmari/filterest/releases/tag/v99.0.1';
+    const initial = {
+      product_name: 'Filterest', app_version: '99.0.0', db_version: '9.10.2',
+      required_db_version: '9.10.2', db_compatible: true, runtime_mode: 'native',
+      latest_stable_version: '99.0.1', latest_release_url: releaseURL,
+      update_status: 'available', update_available: true, upstream_check_performed: true,
+      update_checked_at: time, last_successful_check_at: time, refresh_allowed_at: '',
+    };
+    let checks = 0;
+    await page.route('**/api/admin/version-info', async (route) => {
+      if (route.request().method() !== 'POST') return route.fulfill({ json: initial });
+      checks += 1;
+      if (checks === 1) return route.abort('failed');
+      return route.fulfill({ json: { ...initial, update_status: 'current', update_available: false,
+        update_checked_at: '2026-10-09T09:00:01Z', last_successful_check_at: '2026-10-09T09:00:01Z',
+        refresh_allowed_at: '2026-10-09T09:00:03Z' } });
+    });
+    await page.reload();
+    await navigateToDefaultDataset(page); await openActiveFilterbarIfCollapsed(page);
+    await expect(page.locator('html')).toHaveAttribute('lang', language);
+    // A signed-in account's theme replaces a stored one during start-up, so switch the explicit application theme only
+    // after the view exists (as E6 does), against the opposite OS preference emulated above.
+    await page.evaluate(selected => {
+      document.body.classList.toggle('light-mode', selected === 'light');
+      document.body.classList.toggle('dark-mode', selected === 'dark');
+    }, theme);
+    await expect(page.locator('body')).toHaveClass(new RegExp(`\\b${theme}-mode\\b`));
+    await page.clock.install({ time: new Date(time) });
+    const indicator = page.locator('.tab_parts_container:visible [data-testid="filterbar-admin-version-info"]').first();
+    await indicator.click();
+    const panel = page.locator('[data-testid="filterbar-admin-version-info-panel"]:visible');
+    const check = panel.locator('[data-testid="filterbar-admin-version-check-again"]');
+    const fact = (id: string) => panel.locator(`[data-version-info-value="${id}"]`);
+    await expect(check).toHaveText(language === 'fi' ? 'Tarkista julkaisut' : 'Check releases');
+    await expect(fact('latest-stable')).toHaveText('v. 99.0.1');
+    await expect(panel.locator('button')).toHaveCount(1);
+    await expect(panel.locator('[data-testid="filterbar-admin-update-preview-open"], section, code, tfoot')).toHaveCount(0);
+    await expect(panel.locator('.filterbar-clock-bar__version-operator-guidance')).toHaveText(language === 'fi'
+      ? 'Päivitykset tekee toistaiseksi sivuston ylläpitäjä palvelimella.'
+      : 'Updates are currently performed by the site operator.');
+    await expect(fact('checked-successfully')).toHaveCount(1);
+    await expect(fact('last-checked')).toHaveCount(0); await expect(fact('last-success')).toHaveCount(0);
+    expect(await panel.locator('[data-version-info-value]').evaluateAll(cells => {
+      const keys = cells.map(cell => (cell as HTMLElement).dataset.versionInfoValue);
+      return new Set(keys).size === keys.length;
+    })).toBe(true);
+    expect(await panel.textContent()).toMatch(language === 'fi' ? /päivitys saatavilla/ : /update available/);
+
+    await page.clock.fastForward(1000);
+    await check.focus(); await check.click();
+    await expect(fact('check-state')).toContainText(language === 'fi' ? 'vanhentunut' : 'stale');
+    await expect(fact('latest-stable')).toHaveText('v. 99.0.1');
+    await expect(fact('latest-stable').locator('a')).toHaveAttribute('href', releaseURL);
+    await expect(fact('last-success')).toHaveCount(1); await expect(fact('last-checked')).toHaveCount(1);
+    await expect(fact('checked-successfully')).toHaveCount(0); await expect(check).toBeFocused();
+    await expect(indicator).not.toHaveClass(/version-info--update-available/);
+    const staleCells = await panel.locator('[data-version-info-value]').evaluateAll(cells =>
+      cells.filter(cell => /stale|vanhentunut/.test(cell.textContent || '')).map(cell =>
+        (cell as HTMLElement).dataset.versionInfoValue));
+    expect(staleCells).toEqual(['check-state']);
+
+    await check.click();
+    await expect(fact('check-result')).toHaveText(language === 'fi' ? 'ajan tasalla' : 'up to date');
+    await expect(fact('checked-successfully')).toHaveCount(1);
+    await expect(check).toBeDisabled(); await expect(panel).toBeFocused();
+    expect(checks).toBe(2);
+    await page.clock.fastForward(2000);
+    await expect(check).toBeEnabled(); await expect(check).toBeFocused();
+
+    for (const viewport of [{ width: 1280, height: 768 }, { width: 320, height: 280 }]) {
+      await page.setViewportSize(viewport);
+      await expect.poll(() => panel.evaluate(element => {
+        const box = element.getBoundingClientRect();
+        return box.left >= 0 && box.top >= 0 && box.right <= innerWidth && box.bottom <= innerHeight;
+      })).toBe(true);
+      await testInfo.attach(`release-check-${language}-${theme}-os-${osTheme}-${viewport.width}`, {
+        body: await panel.screenshot(), contentType: 'image/png',
+      });
+    }
+    await page.keyboard.press('Escape'); await expect(indicator).toBeFocused();
+    await expect(panel).toHaveCount(0);
+  });
+}
+
+test('does not build the release panel when its route permission is absent', async ({ page }, testInfo) => {
+  test.skip(testInfo.project.metadata?.screenWidth !== 'desktop', 'Permission gating needs one project.');
+  await login(page, loadCredentials());
+  await page.route('**/api/user-permissions', async (route) => {
+    const response = await route.fetch();
+    const permissions = await response.json();
+    await route.fulfill({ json: { ...permissions,
+      endpoints: permissions.endpoints.filter((endpoint: string) => endpoint !== '/api/admin/version-info') } });
+  });
+  let versionRequests = 0;
+  await page.route('**/api/admin/version-info', async (route) => {
+    versionRequests += 1; await route.abort();
+  });
+  await page.evaluate(() => sessionStorage.removeItem('user_permissions'));
+  await page.reload(); await navigateToDefaultDataset(page); await openActiveFilterbarIfCollapsed(page);
+  await expect(page.locator('.tab_parts_container:visible [data-testid="filterbar-admin-version-info"]')).toHaveCount(0);
+  await expect(page.locator('[data-testid="filterbar-admin-version-info-panel"]')).toHaveCount(0);
+  expect(versionRequests).toBe(0);
 });

@@ -174,25 +174,28 @@ Each browser tab keeps its own view and open row, so one tab never changes or er
 
 ### Administrator Site information
 
-The clock-bar information disclosure has two persistent actions (K245,
-6 October 2026): **Refresh information** forces POST `/api/admin/version-info`,
-and **Application update…** opens read-only details for every version state.
-The refresh action stays disabled until the server's `refresh_allowed_at` time;
-`upstream_check_performed` distinguishes an actual lookup from a reused result.
-Both surfaces show cache age, latest attempt/result and last successful check.
-An upstream or API failure retains the last successful release as stale evidence
-and clears the update dot. The release checker's history is process-local.
+The administrator-only clock-bar disclosure shows each fact once in one table
+(K287, 9 October 2026): site, running application, release identity, latest stable
+version/link, check result, freshness, attempt/success times, running database
+compatibility and its required version, and runtime. Availability appears only
+in the check result, and stale evidence only in freshness. Matching attempt and
+success timestamps share one **Checked successfully** row; differing timestamps
+remain separate. **Required by the running application** describes the database
+requirement and makes no claim about a newer release's compatibility.
 
-The running database mark never proves a new release's database or migration
-compatibility: both target checks are explicitly **not checked**. The endpoint's
-`update_procedure` distinguishes `main_checkout` from `site_operator`. Native
-runtimes inspect their installation's Git branch with a bounded local command.
-The ordinary launcher passes the host branch into Docker through Compose
-(`FILTEREST_UPDATE_CHECKOUT_BRANCH`); detached/Gitless installations and direct
-Compose launches without that evidence use neutral operator guidance.
-A verified published runtime on main with a known available update may show
-`./filterest update --dry-run --version <shown version>`. This command does not
-rehearse the live database, migrations or recovery, and the box installs nothing.
+Its only action, **Check releases** / **Tarkista julkaisut**, forces POST
+`/api/admin/version-info`. It stays disabled until the server's
+`refresh_allowed_at` time; `upstream_check_performed` distinguishes an actual
+lookup from a reused result. An upstream or API failure retains the last
+successful release/link as stale evidence and clears the update dot. The release
+checker's history is process-local. Focus stays in the panel while checking or
+cooling down, returning to the action when enabled unless the user moved focus.
+
+The panel says **Updates are currently performed by the site operator.** There
+is no application-update action, second disclosure, target preflight or command
+suggestion. Changed Finnish/English copy uses seeded language keys and the shared
+translation system; both application themes and live language changes remain
+supported. The backend API contract is unchanged.
 
 
 `filterest/app/frontend/ui_config.js` collects flags that control the UI structure.
