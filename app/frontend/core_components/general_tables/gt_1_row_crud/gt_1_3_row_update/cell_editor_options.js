@@ -1,13 +1,11 @@
 // cell_editor_options.js
 // Resolves safe inline-edit option lists for known metadata enum columns.
 // Bridges metadata enum definitions and the existing inline cell editor.
-// Preserves nullable dataset style inheritance when the administrator uses a dropdown.
+// Retired appearance columns have dedicated revision-protected editors.
 
 import {
     CARD_DETAILS_LAYOUT_OPTIONS,
-    CARD_STYLE_VARIANT_OPTIONS,
     normalizeClientCardDetailsLayout,
-    normalizeClientCardStyleOverride,
 } from '../../../table_views/card_view/card_detail_layout_options.js';
 import { getLanguageWithBrowserFallback } from '../../../state_stores/lang_preference_reader.js';
 import {
@@ -18,7 +16,6 @@ import {
 
 const SYSTEM_DB_TABLES = 'system_db_tables';
 const CARD_DETAILS_LAYOUT_COLUMN = 'card_details_layout';
-const CARD_STYLE_VARIANT_COLUMN = 'card_style_variant';
 
 function normalizeIdentifier(value) {
     return String(value || '').trim();
@@ -28,13 +25,6 @@ function isCardDetailsLayoutColumn(tableName, columnName) {
     return (
         normalizeIdentifier(tableName) === SYSTEM_DB_TABLES
         && normalizeIdentifier(columnName) === CARD_DETAILS_LAYOUT_COLUMN
-    );
-}
-
-function isCardStyleVariantColumn(tableName, columnName) {
-    return (
-        normalizeIdentifier(tableName) === SYSTEM_DB_TABLES
-        && normalizeIdentifier(columnName) === CARD_STYLE_VARIANT_COLUMN
     );
 }
 
@@ -63,16 +53,6 @@ export function getInlineEditOptions({ tableName, columnName, translate } = {}) 
         }));
     }
 
-    if (isCardStyleVariantColumn(tableName, columnName)) {
-        const translated = translate?.('card_style_inherit');
-        const label = translated && translated !== 'card_style_inherit' ? translated
-            : getLanguageWithBrowserFallback() === 'fi' ? 'Sivuston oletus' : 'Site default';
-        return [{value: '', label}, ...CARD_STYLE_VARIANT_OPTIONS.map((option) => ({
-            value: option.value,
-            label: resolveOptionLabel(option, translate),
-        }))];
-    }
-
     return [];
 }
 
@@ -89,10 +69,6 @@ export function normalizeInlineEditOptionValue({
         return normalizeClientCardDetailsLayout(value);
     }
 
-    if (isCardStyleVariantColumn(tableName, columnName)) {
-        return normalizeClientCardStyleOverride(value);
-    }
-
     return value;
 }
 
@@ -103,7 +79,6 @@ export function getInlineEditCacheInvalidationKeys({
 } = {}) {
     if (
         !isCardDetailsLayoutColumn(tableName, columnName)
-        && !isCardStyleVariantColumn(tableName, columnName)
     ) {
         return [];
     }

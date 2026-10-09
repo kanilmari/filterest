@@ -335,6 +335,19 @@ When a spec needs destructive CRUD, seeded rows, or a true persistence round-tri
 
 This keeps destructive E2E flows isolated from built-in datasets and reduces coupling to hand-maintained fixtures.
 
+Appearance API writes must carry freshly loaded revisions. Reuse
+`helpers/appearance-revisions.ts`: the field-editor saver reads current metadata
+and both revisions immediately before posting; shared and dataset restore helpers
+reload before every attempt, retry once on 409, and throw if restoration fails.
+Dataset cleanup restores only the changed sparse leaves, using `unset` for a
+previously inherited value and checking the stable dataset identity. A settings
+object captured before the test supplies the original values, never the restore
+revision. T14 proves the dataset card palette's save through
+`/api/admin/dataset-appearance`, fresh page load and card-view readback. Run
+shared-fixture appearance proofs with `--workers=1` to avoid overlapping edits.
+Home's front-page presentation has its own revision contract; it does not use
+the dataset appearance revisions.
+
 ### 0.3 Keep Synthetic Test Lang Keys Out Of AI Translation Work
 
 The frontend translation layer can notice missing `data-lang-key` values during E2E runs. That is normal. The important rule is to keep synthetic test-only keys clearly synthetic.

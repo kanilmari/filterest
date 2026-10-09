@@ -7,7 +7,6 @@ package system_table_tools
 import (
 	"context"
 	"database/sql"
-	"encoding/json"
 	"errors"
 	"net/http/httptest"
 	"os"
@@ -17,6 +16,7 @@ import (
 	"testing"
 	"time"
 
+	store "easelect/backend/core_components/dataset_appearance_store"
 	"easelect/backend/core_components/dbutils"
 	"easelect/backend/core_components/httpresponse"
 )
@@ -40,7 +40,11 @@ func datasetAppearanceTestSave(db *sql.DB, uid int, patch DatasetAppearancePatch
 	if !ok {
 		return DatasetAppearanceSnapshot{}, errors.New("test transaction unavailable")
 	}
-	snapshot, err := SaveDatasetAppearance(tx, uid, patch, revision, false)
+	_, sharedVersion, err := store.ReadShared(tx, false)
+	if err != nil {
+		return DatasetAppearanceSnapshot{}, err
+	}
+	snapshot, err := SaveDatasetAppearance(tx, uid, patch, revision, sharedVersion, false)
 	if err == nil {
 		err = lazy.Commit()
 	}
@@ -61,24 +65,24 @@ func TestDatasetAppearancePostgresCreateReadPatchAndEmptyRetention(t *testing.T)
 	if err != nil || initial.Revision != "none" || len(initial.Overrides) != 0 || initial.SchemaVersion != 1 {
 		t.Fatal(initial, err)
 	}
-	set := map[string]any{"light.image_blur": 0, "light.oval_enabled": false, "shared.card_detail_columns": 2}
+	set := map[string]any{"shared.card_style_variant": "modern", "shared.card_detail_columns": 2}
 	created, err := datasetAppearanceTestSave(db, uid, DatasetAppearancePatch{Set: set}, initial.Revision)
-	if err != nil || created.Revision != "1" || len(created.Overrides) != 3 {
+	if err != nil || created.Revision != "1" || len(created.Overrides) != 2 {
 		t.Fatal(created, err)
 	}
-	set["light.image_blur"] = 5
+	set["shared.card_style_variant"] = "standard"
 	read, err := ReadDatasetAppearance(db, uid, false)
-	if err != nil || !reflect.DeepEqual(read, created) || read.Overrides["light.image_blur"] != float64(0) || read.Overrides["light.oval_enabled"] != false || read.Overrides["shared.card_detail_columns"] != float64(2) {
+	if err != nil || !reflect.DeepEqual(read, created) || read.Overrides["shared.card_style_variant"] != "modern" || read.Overrides["shared.card_detail_columns"] != float64(2) {
 		t.Fatal("round trip lost explicit presence", read, err)
 	}
-	updated, err := datasetAppearanceTestSave(db, uid, DatasetAppearancePatch{Set: map[string]any{"shared.card_detail_columns": 3}, Unset: []string{"light.oval_enabled"}}, created.Revision)
-	if err != nil || updated.Revision != "2" || len(updated.Overrides) != 2 || updated.Overrides["shared.card_detail_columns"] != float64(3) {
+	updated, err := datasetAppearanceTestSave(db, uid, DatasetAppearancePatch{Set: map[string]any{"shared.card_detail_columns": 3}, Unset: []string{"shared.card_style_variant"}}, created.Revision)
+	if err != nil || updated.Revision != "2" || len(updated.Overrides) != 1 || updated.Overrides["shared.card_detail_columns"] != float64(3) {
 		t.Fatal(updated, err)
 	}
 	if _, err := datasetAppearanceTestSave(db, uid, DatasetAppearancePatch{}, created.Revision); !errors.Is(err, ErrDatasetAppearanceConflict) {
 		t.Fatal("stale revision accepted", err)
 	}
-	empty, err := datasetAppearanceTestSave(db, uid, DatasetAppearancePatch{Unset: []string{"light.image_blur", "shared.card_detail_columns"}}, updated.Revision)
+	empty, err := datasetAppearanceTestSave(db, uid, DatasetAppearancePatch{Unset: []string{"shared.card_detail_columns"}}, updated.Revision)
 	if err != nil || empty.Revision != "3" || len(empty.Overrides) != 0 {
 		t.Fatal(empty, err)
 	}
@@ -113,8 +117,8 @@ func TestDatasetAppearancePostgresInvalidPatchesRollback(t *testing.T) {
 			t.Fatal("invalid initial save left a row")
 		}
 	}
-	// Removing one override can re-inherit a middle value that breaks the triple.
-	valid, err := datasetAppearanceTestSave(db, uid, DatasetAppearancePatch{Set: map[string]any{"light.center_opacity": .8, "light.mid_opacity": .9}}, "none")
+	// Even a mask unset is outside this slice and must preserve existing card choices.
+	valid, err := datasetAppearanceTestSave(db, uid, DatasetAppearancePatch{Set: map[string]any{"shared.card_style_variant": "standard", "shared.card_detail_columns": 2}}, "none")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -130,7 +134,11 @@ func TestDatasetAppearancePostgresInvalidPatchesRollback(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer tx.Rollback()
-	if _, err := SaveDatasetAppearance(tx, uid, DatasetAppearancePatch{Set: map[string]any{"dark.image_blur": 5}}, valid.Revision, false); err != nil {
+	_, sharedVersion, err := store.ReadShared(tx, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := SaveDatasetAppearance(tx, uid, DatasetAppearancePatch{Set: map[string]any{"shared.card_detail_columns": 4}}, valid.Revision, sharedVersion, false); err != nil {
 		t.Fatal(err)
 	}
 	if err := tx.Rollback(); err != nil {
@@ -144,11 +152,14 @@ func TestDatasetAppearancePostgresInvalidPatchesRollback(t *testing.T) {
 
 func TestDatasetAppearancePostgresSharedSavePreservesOverrides(t *testing.T) {
 	db, uid := datasetAppearanceFixture(t)
-	stored, err := datasetAppearanceTestSave(db, uid, DatasetAppearancePatch{Set: map[string]any{"light.image_blur": 0, "shared.card_detail_columns": 2}}, "none")
+	stored, err := datasetAppearanceTestSave(db, uid, DatasetAppearancePatch{Set: map[string]any{"shared.card_style_variant": "standard", "shared.card_detail_columns": 2}}, "none")
 	if err != nil {
 		t.Fatal(err)
 	}
-	settings := defaultSitePresentationSettings()
+	settings, err := readSitePresentationSettingsFromDB()
+	if err != nil {
+		t.Fatal(err)
+	}
 	settings.DatasetCoverTheme.Light.ImageBlur = 8
 	settings.DatasetCoverTheme.Dark.ImageBlur = 11
 	settings.DatasetCoverTheme.Shared.CardDetailColumns = 4
@@ -170,18 +181,16 @@ func TestDatasetAppearancePostgresSharedSavePreservesOverrides(t *testing.T) {
 		t.Fatal(err)
 	}
 	effective, err := ResolveDatasetAppearance(shared.DatasetCoverTheme, read.Overrides, false)
-	if err != nil || effective.Light.ImageBlur != 0 || effective.Dark.ImageBlur != 11 || effective.Shared.CardDetailColumns != 2 {
+	if err != nil || effective.Light.ImageBlur != 8 || effective.Dark.ImageBlur != 11 || effective.Shared.CardStyleVariant != "standard" || effective.Shared.CardDetailColumns != 2 {
 		t.Fatal("shared save froze inheritance or lost equal override", effective, err)
 	}
-	// Save validation reads the current persisted shared mask, not old defaults.
-	shared.DatasetCoverTheme.Light.CenterOpacity = .8
-	shared.DatasetCoverTheme.Light.MidOpacity = .9
-	raw, _ := json.Marshal(shared.DatasetCoverTheme)
-	if _, err := db.Exec(`UPDATE system_config SET json_value=$1::jsonb WHERE key=$2`, string(raw), datasetCoverThemeConfigKey); err != nil {
-		t.Fatal(err)
-	}
+	// Mask writes remain refused even after a shared save, without changing cards.
 	_, err = datasetAppearanceTestSave(db, uid, DatasetAppearancePatch{Set: map[string]any{"light.mid_opacity": .7}}, read.Revision)
 	assertDatasetAppearanceRefusal(t, err, 400)
+	read, err = ReadDatasetAppearance(db, uid, false)
+	if err != nil || !reflect.DeepEqual(read, stored) {
+		t.Fatal("refused mask save changed card overrides", read, err)
+	}
 }
 
 func TestDatasetAppearancePostgresConcurrentFirstWrites(t *testing.T) {
@@ -189,16 +198,16 @@ func TestDatasetAppearancePostgresConcurrentFirstWrites(t *testing.T) {
 	gate := make(chan struct{})
 	ready := make(chan error, 2)
 	result := make(chan error, 2)
-	for _, blur := range []int{0, 7} {
+	for _, columns := range []int{1, 4} {
 		go func(value int) {
 			loaded, err := ReadDatasetAppearance(db, uid, false)
 			ready <- err
 			<-gate
 			if err == nil {
-				_, err = datasetAppearanceTestSave(db, uid, DatasetAppearancePatch{Set: map[string]any{"light.image_blur": value}}, loaded.Revision)
+				_, err = datasetAppearanceTestSave(db, uid, DatasetAppearancePatch{Set: map[string]any{"shared.card_detail_columns": value}}, loaded.Revision)
 			}
 			result <- err
-		}(blur)
+		}(columns)
 	}
 	for i := 0; i < 2; i++ {
 		if err := <-ready; err != nil {
@@ -233,7 +242,7 @@ func TestDatasetAppearancePostgresConcurrentFirstWrites(t *testing.T) {
 
 func TestDatasetAppearancePostgresRenameDeleteAndOtherDataset(t *testing.T) {
 	db, uid := datasetAppearanceFixture(t)
-	stored, err := datasetAppearanceTestSave(db, uid, DatasetAppearancePatch{Set: map[string]any{"light.image_blur": 0}}, "none")
+	stored, err := datasetAppearanceTestSave(db, uid, DatasetAppearancePatch{Set: map[string]any{"shared.card_detail_columns": 1}}, "none")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -241,7 +250,7 @@ func TestDatasetAppearancePostgresRenameDeleteAndOtherDataset(t *testing.T) {
 	if err := db.QueryRow(`INSERT INTO system_db_tables(table_name,schema_name,folder_id) VALUES('wl160_other','public',1) RETURNING table_uid`).Scan(&otherUID); err != nil {
 		t.Fatal(err)
 	}
-	other, err := datasetAppearanceTestSave(db, otherUID, DatasetAppearancePatch{Set: map[string]any{"light.image_blur": 5}}, "none")
+	other, err := datasetAppearanceTestSave(db, otherUID, DatasetAppearancePatch{Set: map[string]any{"shared.card_detail_columns": 4}}, "none")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -269,7 +278,7 @@ func TestDatasetAppearancePostgresRenameDeleteAndOtherDataset(t *testing.T) {
 
 func TestDatasetAppearancePostgresMigrationReplayAndConstraints(t *testing.T) {
 	db, uid := datasetAppearanceFixture(t)
-	stored, err := datasetAppearanceTestSave(db, uid, DatasetAppearancePatch{Set: map[string]any{"light.image_blur": 0}}, "none")
+	stored, err := datasetAppearanceTestSave(db, uid, DatasetAppearancePatch{Set: map[string]any{"shared.card_detail_columns": 1}}, "none")
 	if err != nil {
 		t.Fatal(err)
 	}

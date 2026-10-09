@@ -57,6 +57,9 @@ import { createStableApiClient } from '../../generated/stable_api_client.js';
  * @property {string} table_name
  * @property {string} [card_details_layout]
  * @property {string|null} [card_style_variant]
+ * @property {number|null} [card_detail_columns]
+ * @property {string} [shared_version] Required when saving appearance fields.
+ * @property {string} [version] Required when saving appearance fields.
  * @property {CardVisibilityColumn[]} columns
  */
 /**
@@ -253,6 +256,11 @@ export async function saveDatasetCardPresentation(request) {
     return stable_candidate_endpoint_router('updateCardVisibility', {
         body_data: { ...request, scope: 'dataset_presentation' },
     });
+}
+
+/** Saves canonical per-dataset leaves with the two revisions loaded by results. */
+export async function saveDatasetAppearance(request) {
+    return stable_candidate_endpoint_router('adminDatasetAppearance', { method: 'POST', body_data: request });
 }
 
 /** Returns the safe filesystem symbol list and current dataset/field assignments. */

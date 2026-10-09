@@ -339,6 +339,7 @@ describe('card_visibility_view', () => {
         fetchCardVisibilityMock.mockResolvedValue({
             card_details_layout: 'conditional_multiline',
             card_style_variant: 'standard',
+            dataset_appearance: { dataset_uid: 11, version: '1', shared_version: 'shared-1' },
             columns: [buildColumn()],
         });
         saveCardVisibilityMock.mockResolvedValue({ status: 'ok', message: 'Style saved' });
@@ -372,7 +373,7 @@ describe('card_visibility_view', () => {
         expect(saveCardVisibilityMock).toHaveBeenCalledWith({
             table_name: 'orders',
             card_details_layout: 'conditional_multiline',
-            card_style_variant: 'modern',
+            card_style_variant: 'modern', version: '1', shared_version: 'shared-1',
             columns: [expect.objectContaining({ column_uid: 9 })],
         });
         expect(showSuccessToastMock).toHaveBeenCalledWith('Style saved');

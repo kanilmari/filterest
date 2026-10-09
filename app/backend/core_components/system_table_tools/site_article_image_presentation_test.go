@@ -1,6 +1,6 @@
 // site_article_image_presentation_test.go
 // Verifies article caption choices, old clients, and persisted readback.
-// Uses the disposable PostgreSQL fixture to exercise the actual upsert row lock.
+// Uses disposable PostgreSQL to prove shared revision conflicts and omission-safe retries.
 // Keeps site-wide captions independent of existing card and theme settings.
 package system_table_tools
 
@@ -87,6 +87,7 @@ func TestArticleCaptionPersistencePreservesLegacyWritesUnderLockPostgres(t *test
 	}
 	save := func(settings SitePresentationSettingsResponse) SitePresentationSettingsResponse {
 		t.Helper()
+		settings = sitePresentationTestInputWithLoadedRevision(t, settings)
 		tx := dbutils.NewLazyTx(db)
 		defer tx.Rollback()
 		saved, err := persist(tx, settings)
@@ -103,6 +104,8 @@ func TestArticleCaptionPersistencePreservesLegacyWritesUnderLockPostgres(t *test
 	}
 	explicit := defaultSitePresentationSettings()
 	explicit.DatasetCoverTheme.Shared.ArticleImageCaptionPosition = "overlay"
+	explicit = sitePresentationTestInputWithLoadedRevision(t, explicit)
+	legacy = sitePresentationTestInputWithLoadedRevision(t, legacy)
 	tx1 := dbutils.NewLazyTx(db)
 	defer tx1.Rollback()
 	if _, err := persist(tx1, explicit); err != nil {
@@ -122,12 +125,8 @@ func TestArticleCaptionPersistencePreservesLegacyWritesUnderLockPostgres(t *test
 		t.Fatal(err)
 	}
 	legacy.DatasetCoverTheme.Shared.CardDetailColumns = 4
-	type result struct {
-		settings SitePresentationSettingsResponse
-		err      error
-	}
-	finished := make(chan result, 1)
-	go func() { saved, err := persist(tx2, legacy); finished <- result{saved, err} }()
+	finished := make(chan error, 1)
+	go func() { _, err := persist(tx2, legacy); finished <- err }()
 	deadline := time.Now().Add(3 * time.Second)
 	for {
 		var wait sql.NullString
@@ -138,24 +137,35 @@ func TestArticleCaptionPersistencePreservesLegacyWritesUnderLockPostgres(t *test
 			break
 		}
 		if time.Now().After(deadline) {
-			t.Fatal("legacy caption writer did not reach the row lock")
+			t.Fatal("legacy caption writer did not reach the shared appearance lock")
 		}
 		time.Sleep(10 * time.Millisecond)
 	}
 	if err := tx1.Commit(); err != nil {
 		t.Fatal(err)
 	}
-	saved := <-finished
-	if saved.err != nil {
-		t.Fatal(saved.err)
-	}
-	if saved.settings.DatasetCoverTheme.Shared.ArticleImageCaptionPosition != "overlay" {
-		t.Fatal("legacy write did not return the concurrently saved caption")
+	select {
+	case err := <-finished:
+		assertDatasetAppearanceRefusal(t, err, http.StatusConflict)
+	case <-time.After(5 * time.Second):
+		t.Fatal("stale legacy caption writer did not settle")
 	}
 	if err := tx2.Commit(); err != nil {
 		t.Fatal(err)
 	}
 	readback, err := readSitePresentationSettingsFromDB()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if readback.DatasetCoverTheme.Shared.ArticleImageCaptionPosition != "overlay" || readback.DatasetCoverTheme.Shared.CardDetailColumns != 2 {
+		t.Fatal("stale legacy write changed the concurrent caption or card settings")
+	}
+	assertRevisionlessSitePresentationSaveRefused(t, db, legacy)
+	// Reload the revision and retry the older payload; its omitted caption still preserves storage.
+	if saved := save(legacy); saved.DatasetCoverTheme.Shared.ArticleImageCaptionPosition != "overlay" {
+		t.Fatal("legacy retry did not return the concurrently saved caption")
+	}
+	readback, err = readSitePresentationSettingsFromDB()
 	if err != nil {
 		t.Fatal(err)
 	}

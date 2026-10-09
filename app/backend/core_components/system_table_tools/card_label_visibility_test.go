@@ -70,7 +70,13 @@ func cardLabelVisibilityFixture(t *testing.T) *sql.DB {
 	db := sitePresentationDisposableDB(t)
 	_, err := db.Exec(`
  CREATE TABLE system_db_tables(table_uid integer PRIMARY KEY, table_name text, schema_name text DEFAULT 'public',
- row_policy_owner_column text, card_details_layout text);
+ row_policy_owner_column text, card_details_layout text, card_style_variant text, card_detail_columns integer);
+ CREATE TABLE system_data_repair_records(migration text, action text, detail jsonb);
+ CREATE TABLE system_languages(language_code text PRIMARY KEY);
+ CREATE TABLE system_lang_keys(id serial PRIMARY KEY, lang_key text UNIQUE, fi text, en text, ch text, yue text, creation_spec text);
+ CREATE TABLE system_lang_key_translations(lang_key_id integer, language_code text, translation text, source_kind text,
+ review_status text, UNIQUE(lang_key_id,language_code));
+ INSERT INTO system_languages VALUES('fi'),('en'),('ch'),('yue');
  CREATE TABLE system_table_views(id integer PRIMARY KEY, view_key text, name text, status text);
  CREATE TABLE system_column_details(
  column_uid integer PRIMARY KEY, table_uid integer, column_name text, co_number integer,
@@ -88,12 +94,20 @@ func cardLabelVisibilityFixture(t *testing.T) *sql.DB {
 	if err != nil {
 		t.Fatal(err)
 	}
-	migration, err := os.ReadFile(filepath.Join("..", "..", "..", "server_tools", "migrations", "20260914000005_inherit_card_field_labels.sql"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err = db.Exec(string(migration)); err != nil {
-		t.Fatalf("actual migration05: %v", err)
+	// The card reader requires the migrated schema, just as real installations do.
+	for _, name := range []string{
+		"20260914000005_inherit_card_field_labels.sql",
+		datasetAppearanceMigration,
+		"20261009000040_cut_over_dataset_card_appearance.sql",
+		"20261009000041_seed_dataset_appearance_refusal_keys.sql",
+	} {
+		migration, err := os.ReadFile(filepath.Join("..", "..", "..", "server_tools", "migrations", name))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err = db.Exec(string(migration)); err != nil {
+			t.Fatalf("actual migration %s: %v", name, err)
+		}
 	}
 	return db
 }
@@ -134,7 +148,12 @@ func TestCardLabelVisibilitySharedPolicyAndAPIPostgres(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("admin read %d: %s", rec.Code, rec.Body)
 	}
-	if strings.Contains(rec.Body.String(), "label_value_layout") {
+	// The per-dataset layout field is retired; the site-wide leaf inside dataset_appearance is current.
+	var topLevel map[string]json.RawMessage
+	if err := json.Unmarshal(rec.Body.Bytes(), &topLevel); err != nil {
+		t.Fatal(err)
+	}
+	if _, retired := topLevel["label_value_layout"]; retired {
 		t.Fatalf("retired response field: %s", rec.Body)
 	}
 	var response CardVisibilityResponse

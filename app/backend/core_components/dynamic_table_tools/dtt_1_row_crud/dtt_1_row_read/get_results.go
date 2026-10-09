@@ -6,6 +6,7 @@ package dtt_1_row_read
 
 import (
 	backend "easelect/backend/core_components"
+	store "easelect/backend/core_components/dataset_appearance_store"
 	"easelect/backend/core_components/dbutils"
 	"easelect/backend/core_components/httpresponse"
 	"encoding/json"
@@ -13,6 +14,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"os"
 	"regexp"
 	"strconv"
 	"strings"
@@ -328,6 +330,15 @@ func GetResults(response_writer http.ResponseWriter, request *http.Request) {
 		return
 	}
 
+	datasetUID := 0
+	if backend.Db != nil {
+		datasetUID, err = store.UIDForName(backend.Db, table_name)
+		if err != nil {
+			httpresponse.RespondWithError(response_writer, http.StatusInternalServerError, "error resolving dataset identity")
+			return
+		}
+	}
+
 	rows_result, err := readQuerier.Query(query, query_args...)
 	if err != nil {
 		log.Printf("\033[31merror: %s\033[0m\n", err.Error())
@@ -381,6 +392,18 @@ func GetResults(response_writer http.ResponseWriter, request *http.Request) {
 		}
 	}
 
+	var datasetAppearance store.AppearanceResponse
+	if backend.Db != nil {
+		var appearanceErr error
+		datasetAppearance, appearanceErr = store.ReadAppearanceForName(backend.Db, datasetUID, table_name, os.Getenv("ENVIRONMENT_TYPE") == "dev")
+		if appearanceErr != nil {
+			httpresponse.RespondWithError(response_writer, http.StatusInternalServerError, "error fetching dataset appearance")
+			return
+		}
+		// Appearance is mutable and must never be frozen by the schema cache.
+		tableMeta.CardStyleVariant, tableMeta.CardDetailColumns = store.CardProjections(datasetAppearance.Overrides)
+	}
+
 	FilterIndependentMediaRows(readQuerier, dbutils.NewRequestActorContext(userID, userRole), query_results)
 
 	// Kootaan vastaus
@@ -396,6 +419,7 @@ func GetResults(response_writer http.ResponseWriter, request *http.Request) {
 		"geom_columns":         geomCols,
 		"geom_sources":         geomSrcs,
 		"dataset_presentation": datasetPresentation,
+		"dataset_appearance":   datasetAppearance,
 	}
 	// Facets describe the complete first-page query universe. Later infinite-scroll
 	// batches omit the field so clients retain the authoritative first-page metadata.

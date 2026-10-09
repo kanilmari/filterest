@@ -2,7 +2,7 @@
 // Resolves sparse dataset overrides against the current shared appearance.
 // Connects per-dataset persistence with the canonical browser/server definition.
 // Preserves presence, including zero, false and explicit choices equal to shared values.
-package system_table_tools
+package dataset_appearance_store
 
 import (
 	"encoding/json"
@@ -16,31 +16,31 @@ import (
 // ResolveDatasetAppearance returns independent effective values, validating every
 // present canonical leaf and the complete merged mask ordering in both themes.
 // The caller supplies current shared values; inherited values are never persisted.
-func ResolveDatasetAppearance(shared DatasetCoverThemeConfig, overrides map[string]any, development bool) (DatasetCoverThemeConfig, error) {
+func ResolveDatasetAppearance(shared appearance.DatasetCoverThemeConfig, overrides map[string]any, development bool) (appearance.DatasetCoverThemeConfig, error) {
 	values, err := validatedDatasetAppearanceOverrides(overrides, development)
 	if err != nil {
-		return DatasetCoverThemeConfig{}, err
+		return appearance.DatasetCoverThemeConfig{}, err
 	}
 	data, err := json.Marshal(shared)
 	if err != nil {
-		return DatasetCoverThemeConfig{}, err
+		return appearance.DatasetCoverThemeConfig{}, err
 	}
 	var merged map[string]map[string]any
 	if err := json.Unmarshal(data, &merged); err != nil {
-		return DatasetCoverThemeConfig{}, err
+		return appearance.DatasetCoverThemeConfig{}, err
 	}
 	for path, value := range values {
 		owner, key, _ := strings.Cut(path, ".")
 		merged[owner][key] = value
 	}
 	if err := appearance.Validate(merged, development); err != nil {
-		return DatasetCoverThemeConfig{}, err
+		return appearance.DatasetCoverThemeConfig{}, err
 	}
 	data, err = json.Marshal(merged)
 	if err != nil {
-		return DatasetCoverThemeConfig{}, err
+		return appearance.DatasetCoverThemeConfig{}, err
 	}
-	var effective DatasetCoverThemeConfig
+	var effective appearance.DatasetCoverThemeConfig
 	err = json.Unmarshal(data, &effective)
 	return effective, err
 }

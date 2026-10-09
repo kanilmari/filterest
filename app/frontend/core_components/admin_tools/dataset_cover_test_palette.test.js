@@ -22,7 +22,6 @@ function createSettings() {
         row_article_timestamp_display_mode: 'date_only',
     };
 }
-
 function createCoverHero() {
     const hero = document.createElement('section');
     hero.classList.add('filterbar-inline-hero', 'filterbar-inline-hero--has-cover');
@@ -36,9 +35,9 @@ function createMountOptions(overrides = {}) {
         settingsRequestFn: vi.fn(async () => createSettings()),
         saveRequestFn: vi.fn(async (request) => request),
         datasetSettingsRequestFn: vi.fn(async table_name => ({
-            table_name, card_style_variant: null, card_detail_columns: null, columns: [{ column_uid: 1 }],
+            table_name, card_style_variant: null, card_detail_columns: null, dataset_appearance: { dataset_uid: 11, version: "1", shared_version: "shared-1" }, columns: [{ column_uid: 1 }],
         })),
-        datasetSaveRequestFn: vi.fn(async request => request),
+        datasetSaveRequestFn: vi.fn(async request => ({ dataset_uid: request.dataset_uid, shared_version: request.shared_version, version: "2", overrides: request.set })),
         permissionCheck: () => true,
         ...overrides,
     };
@@ -128,7 +127,8 @@ describe('dataset cover presentation settings', () => {
         get('dataset-card-palette-save').click();
         await vi.waitFor(() => expect(options.datasetSaveRequestFn).toHaveBeenCalledTimes(1));
         expect(options.datasetSaveRequestFn).toHaveBeenCalledWith({
-            table_name:'demo', card_style_variant:'standard', card_detail_columns:null,
+            dataset_uid: 11, version: '1', shared_version: 'shared-1',
+            set: { 'shared.card_style_variant': 'standard' }, unset: ['shared.card_detail_columns'],
         });
         mounted.destroy();
     });

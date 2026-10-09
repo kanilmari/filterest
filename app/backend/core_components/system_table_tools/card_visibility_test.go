@@ -421,12 +421,9 @@ func TestCardVisibilityHandlerAcceptsRetiredColumnLayout(t *testing.T) {
 	}
 }
 
-// Exercise the real handler through database/sql so nil must reach SQL as NULL,
-// while an absent member must produce no dataset-style UPDATE at all.
+// Exercise column visibility without accepting retired card appearance SQL.
 type cardStyleWriteState struct {
-	value                              driver.Value
-	styleWrites, columnWrites, commits int
-	missingColumn                      bool
+	columnWrites, commits int
 }
 type cardStyleWriteDriver struct{ state *cardStyleWriteState }
 type cardStyleWriteConn struct{ state *cardStyleWriteState }
@@ -451,7 +448,7 @@ func (c *cardStyleWriteConn) QueryContext(_ context.Context, query string, args 
 		return nil, fmt.Errorf("retired layout read: %s", query)
 	}
 	if strings.Contains(query, "SELECT EXISTS") {
-		return &cardStyleWriteRows{values: []driver.Value{!(c.state.missingColumn && args[1].Value == "card_style_variant")}}, nil
+		return &cardStyleWriteRows{values: []driver.Value{true}}, nil
 	}
 	if query == fieldViewColumnGuardQuery {
 		return &cardStyleWriteRows{values: []driver.Value{int64(1), "label", ""}}, nil
@@ -462,13 +459,7 @@ func (c *cardStyleWriteConn) ExecContext(_ context.Context, query string, args [
 	if strings.Contains(query, "label_value_layout") {
 		return nil, fmt.Errorf("retired layout write: %s", query)
 	}
-	if strings.Contains(query, "SET card_style_variant = $1") {
-		if args[1].Value != "style_fixture" {
-			return nil, fmt.Errorf("wrong dataset target")
-		}
-		c.state.value = args[0].Value
-		c.state.styleWrites++
-	} else if strings.Contains(query, "UPDATE system_column_details") {
+	if strings.Contains(query, "UPDATE system_column_details") {
 		c.state.columnWrites++
 	} else {
 		return nil, fmt.Errorf("unexpected exec: %s", query)
@@ -492,59 +483,23 @@ func (r *cardStyleWriteRows) Next(values []driver.Value) error {
 	return nil
 }
 func TestCardVisibilityHandlerPersistsExplicitNullAndPreservesOmittedStyle(t *testing.T) {
-	for _, test := range []struct {
-		name, raw string
-		want      driver.Value
-		writes    int
-		missing   bool
-		status    int
-	}{
-		{"omitted", "", "modern", 0, false, http.StatusOK},
-		{"inherit", "null", nil, 1, false, http.StatusOK},
-		{"standard", `"standard"`, "standard", 1, false, http.StatusOK},
-		{"modern", `"modern"`, "modern", 1, false, http.StatusOK},
-		{"missing migration", "null", "modern", 0, true, http.StatusConflict},
-	} {
-		t.Run(test.name, func(t *testing.T) {
-			state := &cardStyleWriteState{value: "modern", missingColumn: test.missing}
-			driverName := "card-style-save-" + t.Name()
-			sql.Register(driverName, &cardStyleWriteDriver{state})
-			db, err := sql.Open(driverName, "")
-			if err != nil {
-				t.Fatal(err)
-			}
-			defer db.Close()
-			previous := backend.Db
-			backend.Db = db
-			defer func() { backend.Db = previous }()
-			body := `{"table_name":"style_fixture","columns":[{"column_uid":1,"client_delivery_mode":"include","show_value_on_card":true}]`
-			if test.raw != "" {
-				body += `,"card_style_variant":` + test.raw
-			}
-			body += "}"
-			tx := dbutils.NewLazyTx(db)
-			defer tx.Rollback()
-			request := httptest.NewRequest(http.MethodPost, "/api/card-visibility/update", strings.NewReader(body))
-			request = request.WithContext(dbutils.SetLazyTx(request.Context(), tx))
-			response := httptest.NewRecorder()
-			UpdateCardVisibilityHandler(response, request)
-			if response.Code != test.status {
-				t.Fatalf("status=%d: %s", response.Code, response.Body.String())
-			}
-			if test.status == http.StatusOK {
-				if err := tx.Commit(); err != nil {
-					t.Fatal(err)
-				}
-				if state.columnWrites != 2 || state.commits != 1 {
-					t.Fatalf("normal column save/commit lost: %#v", state)
-				}
-			} else if state.columnWrites != 0 || state.commits != 0 {
-				t.Fatal("unsupported schema caused a partial write")
-			}
-			if state.styleWrites != test.writes || state.value != test.want {
-				t.Fatalf("style persistence=%#v, want value=%v writes=%d", state, test.want, test.writes)
-			}
-		})
+	// Unversioned older clients cannot bypass the canonical appearance saver.
+	for _, raw := range []string{"null", `"modern"`, `"standard"`} {
+		resetOrphanQueues()
+		db := newSystemTableToolsTestDB(t)
+		lazy := dbutils.NewLazyTx(db)
+		pushOrphanQuery(orphanQueuedQuery{cols: []string{"table_uid"}, rows: [][]driver.Value{{int64(42)}}})
+		body := `{"table_name":"style_fixture","columns":[{"column_uid":1}],"card_style_variant":` + raw + `}`
+		r := httptest.NewRequest("POST", "/api/card-visibility/update", strings.NewReader(body))
+		r = r.WithContext(dbutils.SetLazyTx(r.Context(), lazy))
+		w := httptest.NewRecorder()
+		UpdateCardVisibilityHandler(w, r)
+		lazy.Rollback()
+		db.Close()
+		resetOrphanQueues()
+		if w.Code != 409 {
+			t.Fatal(w.Code, w.Body.String())
+		}
 	}
 }
 

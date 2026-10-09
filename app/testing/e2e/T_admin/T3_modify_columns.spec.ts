@@ -1,12 +1,15 @@
 /**
  * T3_modify_columns.spec.ts
  *
- * Verifies that an admin user can open column management controls via stable toolbar anchors.
+ * Verifies column administration and a late-added link field through stable UI anchors.
+ * Connects throwaway datasets, revision-aware field roles and the real article editor.
+ * Keeps schema and presentation regressions visible without changing shared fixtures.
  */
 
 import { test, expect } from '@playwright/test';
 import { login, loadCredentials, type TestCredentials } from '../helpers/auth';
 import { navigateToDataset, waitForDataLoaded } from '../helpers/navigation';
+import { saveCardVisibilityWithFreshRevisions } from '../helpers/appearance-revisions';
 import {
   buildTempDatasetName,
   createTempDataset,
@@ -138,38 +141,30 @@ test.describe('T3 — Modify Columns', () => {
         `Admin could not add the late link field: ${addColumnResponse.body}`,
       ).toBe(true);
 
-      const visibilityResponse = await getJson(
-        page,
-        `/api/card-visibility/${encodeURIComponent(datasetName)}`,
+      const saveVisibilityResponse = await saveCardVisibilityWithFreshRevisions(
+        page.request, datasetName, visibility => {
+          const columns = visibility.columns;
+          const websiteColumn = columns.find(column => column.column_name === 'website');
+          expect(websiteColumn, 'The late link field must receive system column metadata.').toBeTruthy();
+          const websiteColumnUID = websiteColumn?.column_uid;
+          expect(
+            Number.isInteger(websiteColumnUID) && Number(websiteColumnUID) > 0,
+            'The late link field must receive a positive stable column_uid.',
+          ).toBe(true);
+          return {
+            card_details_layout: visibility.card_details_layout,
+            card_style_variant: visibility.card_style_variant,
+            columns: columns.map(column => (
+              column.column_name === 'website'
+                ? { ...column, card_element: 'details_link' }
+                : column
+            )),
+          };
+        },
       );
       expect(
-        visibilityResponse.ok,
-        `Could not load metadata for the late link field: ${visibilityResponse.body}`,
-      ).toBe(true);
-
-      const visibility = JSON.parse(visibilityResponse.body);
-      const columns = Array.isArray(visibility?.columns) ? visibility.columns : [];
-      const websiteColumn = columns.find((column: Record<string, unknown>) => column.column_name === 'website');
-      expect(websiteColumn, 'The late link field must receive system column metadata.').toBeTruthy();
-      const websiteColumnUID = websiteColumn?.column_uid;
-      expect(
-        Number.isInteger(websiteColumnUID) && Number(websiteColumnUID) > 0,
-        'The late link field must receive a positive stable column_uid.',
-      ).toBe(true);
-
-      const saveVisibilityResponse = await postJsonWithCsrf(page, '/api/card-visibility/update', {
-        table_name: datasetName,
-        card_details_layout: visibility.card_details_layout,
-        card_style_variant: visibility.card_style_variant,
-        columns: columns.map((column: Record<string, unknown>) => (
-          column.column_name === 'website'
-            ? { ...column, card_element: 'details_link' }
-            : column
-        )),
-      });
-      expect(
-        saveVisibilityResponse.ok,
-        `Admin could not assign the late link field's presentation role: ${saveVisibilityResponse.body}`,
+        saveVisibilityResponse.ok(),
+        `Admin could not assign the late link field's presentation role: ${await saveVisibilityResponse.text()}`,
       ).toBe(true);
 
       // Open the row's article from its card, as a person does.

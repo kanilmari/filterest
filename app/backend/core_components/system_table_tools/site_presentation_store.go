@@ -14,13 +14,16 @@ import (
 	"strings"
 
 	backend "easelect/backend/core_components"
+	store "easelect/backend/core_components/dataset_appearance_store"
 	"easelect/backend/core_components/dbutils"
+	"easelect/backend/core_components/httpresponse"
+	appearance "easelect/frontend/shared/dataset_appearance"
 )
 
 const readSitePresentationSettingsSQL = `
 	SELECT
 		COALESCE((
-			SELECT json_value::text
+			SELECT COALESCE(json_value::text,'null')
 			FROM public.system_config
 			WHERE key = $1
 		), ''),
@@ -28,18 +31,18 @@ const readSitePresentationSettingsSQL = `
 			SELECT COALESCE(NULLIF(text_value, ''), json_value ->> 'value')
 			FROM public.system_config
 			WHERE key = $2
-		), '')`
+		), ''), COALESCE((SELECT updated::text FROM public.system_config WHERE key=$1),'')`
 
 const upsertDatasetCoverThemeSQL = `
 	INSERT INTO public.system_config (
 		key,
 		json_value,
-		creation_spec
+		creation_spec, updated
 	)
 	VALUES (
 		$1,
 		$2::jsonb,
-		'Admin-managed, theme-aware dataset cover presentation settings.'
+		'Admin-managed, theme-aware dataset cover presentation settings.', clock_timestamp()
 	)
 	ON CONFLICT (key) DO UPDATE
 	SET json_value = jsonb_set(jsonb_set(jsonb_set(jsonb_set(jsonb_set(jsonb_set(jsonb_set(
@@ -96,7 +99,7 @@ const upsertDatasetCoverThemeSQL = `
 		END
 	),
 	    creation_spec = COALESCE(NULLIF(public.system_config.creation_spec, ''), EXCLUDED.creation_spec),
-	    updated = NOW()
+	    updated = clock_timestamp()
 	RETURNING (json_value #>> '{shared,card_show_all_fields}')::boolean,
 	          json_value #>> '{shared,card_style_variant}',
 	          (json_value #>> '{shared,card_detail_columns}')::int,
@@ -133,6 +136,16 @@ var persistSitePresentationSettings = func(r *http.Request, settings SitePresent
 	if !ok {
 		return SitePresentationSettingsResponse{}, errors.New("transaction unavailable")
 	}
+	if err := store.LockShared(tx, true); err != nil {
+		return SitePresentationSettingsResponse{}, err
+	}
+	_, currentVersion, err := store.ReadShared(tx, os.Getenv("ENVIRONMENT_TYPE") == "dev")
+	if err != nil {
+		return SitePresentationSettingsResponse{}, err
+	}
+	if settings.Version == "" || settings.Version != currentVersion {
+		return SitePresentationSettingsResponse{}, store.ErrDatasetAppearanceConflict
+	}
 	coverJSON, err := json.Marshal(settings.DatasetCoverTheme)
 	if err != nil {
 		return SitePresentationSettingsResponse{}, fmt.Errorf("encode cover theme: %w", err)
@@ -153,6 +166,11 @@ var persistSitePresentationSettings = func(r *http.Request, settings SitePresent
 	if err != nil {
 		return SitePresentationSettingsResponse{}, fmt.Errorf("save cover theme: %w", err)
 	}
+	// Omitted legacy fields preserve storage under the lock, so validate the
+	// actual shared result before commit. Retained dataset masks are outside K290.
+	if err := validateSitePresentationSettings(settings); err != nil {
+		return SitePresentationSettingsResponse{}, &httpresponse.Refusal{Status: 400, LangKey: "dataset_appearance_invalid", Message: "invalid persisted shared appearance"}
+	}
 	_, err = tx.Exec(
 		upsertRowArticleTimestampDisplaySQL,
 		rowArticleTimestampDisplayKey,
@@ -161,21 +179,24 @@ var persistSitePresentationSettings = func(r *http.Request, settings SitePresent
 	if err != nil {
 		return SitePresentationSettingsResponse{}, fmt.Errorf("save timestamp display mode: %w", err)
 	}
-	return settings, nil
+	_, settings.Version, err = store.ReadShared(tx, os.Getenv("ENVIRONMENT_TYPE") == "dev")
+	return settings, err
 }
 
 func readSitePresentationSettingsFromDB() (SitePresentationSettingsResponse, error) {
 	settings := defaultSitePresentationSettings()
 	var rawCover string
 	var rawTimestamp sql.NullString
+	var stamp string
 	if err := backend.Db.QueryRow(
 		readSitePresentationSettingsSQL,
 		datasetCoverThemeConfigKey,
 		rowArticleTimestampDisplayKey,
-	).Scan(&rawCover, &rawTimestamp); err != nil {
+	).Scan(&rawCover, &rawTimestamp, &stamp); err != nil {
 		return SitePresentationSettingsResponse{}, err
 	}
 
+	settings.Version = store.SharedRevision([]byte(rawCover), stamp)
 	if strings.TrimSpace(rawCover) != "" {
 		settings.DatasetCoverTheme = normalizedStoredDatasetCoverTheme(rawCover)
 	}
@@ -189,14 +210,5 @@ func readSitePresentationSettingsFromDB() (SitePresentationSettingsResponse, err
 // the site endpoint and internal override saves. Invalid stored config falls back
 // to defaults, while omitted legacy fields retain the existing read behavior.
 func normalizedStoredDatasetCoverTheme(raw string) DatasetCoverThemeConfig {
-	defaults := defaultSitePresentationSettings().DatasetCoverTheme
-	stored := defaults
-	if json.Unmarshal([]byte(raw), &stored) == nil {
-		inheritLegacyImageBlur(raw, &stored)
-		stored.Shared.LabelValueLayout = normalizeSiteLabelValueLayout(stored.Shared.LabelValueLayout)
-		if validateDatasetCoverTheme(stored) == nil {
-			return stored
-		}
-	}
-	return defaults
+	return appearance.NormalizeStoredConfig(raw, os.Getenv("ENVIRONMENT_TYPE") == "dev")
 }

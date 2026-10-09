@@ -92,6 +92,18 @@ func DeleteRowsHandler(w http.ResponseWriter, r *http.Request, table_name string
 		return
 	}
 
+	if table_name == "system_config" {
+		var protected bool
+		err := tx.QueryRow(`SELECT EXISTS(SELECT 1 FROM public.system_config WHERE id=ANY($1) AND key='dataset_cover_theme_config')`, pq.Array(request_data.IDs)).Scan(&protected)
+		if err != nil {
+			httpresponse.RespondWithError(w, 500, "error checking appearance settings")
+			return
+		}
+		if protected {
+			httpresponse.RespondWithRefusal(w, &httpresponse.Refusal{Status: 400, LangKey: "dataset_appearance_invalid", Message: "appearance settings require the revision-protected administrator API"})
+			return
+		}
+	}
 	if err := mutation.IncludeRows(r.Context(), table_name, intIDsToInt64(request_data.IDs)...); err != nil {
 		runtime_grant_mutations.RespondError(w, err)
 		return

@@ -67,6 +67,9 @@ func ValidateRow(table string, row map[string]interface{}) error {
 		return nil
 	}
 	key, _ := row["key"].(string)
+	if key == "dataset_cover_theme_config" {
+		return &httpresponse.Refusal{Status: 400, LangKey: "dataset_appearance_invalid", Message: "appearance settings require the revision-protected administrator API"}
+	}
 	validate, registered := checks[key]
 	if !registered {
 		return nil
@@ -107,6 +110,9 @@ func ValidateUpdate(q RowQuerier, table string, id int64, changes map[string]int
 	var row map[string]interface{}
 	if err := json.Unmarshal(raw, &row); err != nil {
 		return err
+	}
+	if row["key"] == "dataset_cover_theme_config" {
+		return ValidateRow(table, row)
 	}
 	for column, value := range changes {
 		row[column] = value
@@ -151,6 +157,9 @@ func ValidateMatchingUpdate(q interface {
 		var row map[string]interface{}
 		if err := json.Unmarshal(raw, &row); err != nil {
 			return err
+		}
+		if row["key"] == "dataset_cover_theme_config" {
+			return ValidateRow(table, row)
 		}
 		for column, value := range changes {
 			row[column] = value

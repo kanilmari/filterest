@@ -52,17 +52,8 @@ describe('cell_editor_options', () => {
         expect(options.map((option) => option.value)).toContain('in_progress');
     });
 
-    test('offers card style variants for system_db_tables.card_style_variant', () => {
-        const options = getInlineEditOptions({
-            tableName: 'system_db_tables',
-            columnName: 'card_style_variant',
-        });
-
-        expect(options.map((option) => option.value)).toEqual([
-            '',
-            'standard',
-            'modern',
-        ]);
+    test('retired card appearance columns have no unversioned inline dropdown', () => {
+        expect(getInlineEditOptions({ tableName: 'system_db_tables', columnName: 'card_style_variant' })).toEqual([]);
     });
 
     test('normalizes legacy multiline to conditional multiline', () => {
@@ -71,18 +62,6 @@ describe('cell_editor_options', () => {
             columnName: 'card_details_layout',
             value: 'multiline',
         })).toBe('conditional_multiline');
-    });
-
-    test('keeps empty and unknown dataset styles as inheritance', () => {
-        expect(normalizeInlineEditOptionValue({
-            tableName: 'system_db_tables',
-            columnName: 'card_style_variant',
-            value: 'floating',
-        })).toBeNull();
-        for (const value of [null, undefined, '']) {
-            expect(normalizeInlineEditOptionValue({tableName: 'system_db_tables', columnName: 'card_style_variant', value})).toBeNull();
-        }
-        expect(getInlineEditOptions({tableName: 'system_db_tables', columnName: 'card_style_variant'})[0]).toEqual({value: '', label: 'Site default'});
     });
 
     test('normalizes ticket status aliases to canonical DB status values', () => {
@@ -101,11 +80,11 @@ describe('cell_editor_options', () => {
         })).toEqual(['service_catalog_tableMeta']);
     });
 
-    test('invalidates the target table metadata cache after style edits', () => {
+    test('retired style editing leaves cache ownership to the appearance saver', () => {
         expect(getInlineEditCacheInvalidationKeys({
             tableName: 'system_db_tables',
             columnName: 'card_style_variant',
             rowData: { table_name: 'service_catalog' },
-        })).toEqual(['service_catalog_tableMeta']);
+        })).toEqual([]);
     });
 });

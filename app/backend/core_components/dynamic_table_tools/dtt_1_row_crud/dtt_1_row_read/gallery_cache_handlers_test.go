@@ -42,6 +42,8 @@ func (c *galleryHandlerConn) QueryContext(ctx context.Context, q string, args []
 		return &legacyImageMockRows{columns: columns, rows: values}
 	}
 	switch {
+	case strings.Contains(q, "a.schema_version,a.overrides,a.revision::text"):
+		return rows([]string{"shared", "stamp", "schema", "overrides", "revision"}, []driver.Value{nil, "", nil, nil, nil}), nil
 	case strings.Contains(q, "target_insert_specs"):
 		return rows([]string{"child", "parent", "fk", "specs"}, []driver.Value{"app_service_catalog_assets", "gallery_handler_parent", "app_service_catalog_id", []byte(`{"file_upload":{"filename_column":"filename","profiles":{"image":{}}}}`)}), nil
 	case strings.Contains(q, "type_column.atttypid"):

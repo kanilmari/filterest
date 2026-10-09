@@ -105,6 +105,7 @@ export const MANIFEST_BACKED_ENDPOINT_ROUTE_HANDLERS = Object.freeze({
     adminFrontPage: 'system_table_tools.AdminFrontPageHandler',
     adminFrontPageBackground: 'system_table_tools.FrontPageBackgroundHandler',
     adminSitePresentationSettings: 'system_table_tools.AdminSitePresentationSettingsHandler',
+    adminDatasetAppearance: 'system_table_tools.AdminDatasetAppearanceHandler',
     adminRowGroups: 'system_table_tools.AdminRowGroupsHandler',
     adminRowGroupMemberships: 'system_table_tools.AdminRowGroupMembershipsHandler',
     adminRowAccessRules: 'system_table_tools.AdminRowAccessRulesHandler',

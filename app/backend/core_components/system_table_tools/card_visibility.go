@@ -8,6 +8,7 @@ import (
 	"context"
 	"database/sql"
 	backend "easelect/backend/core_components"
+	store "easelect/backend/core_components/dataset_appearance_store"
 	"easelect/backend/core_components/dbutils"
 	dtt_1_row_read "easelect/backend/core_components/dynamic_table_tools/dtt_1_row_crud/dtt_1_row_read"
 	"easelect/backend/core_components/httpresponse"
@@ -49,11 +50,12 @@ type CardVisibilityColumn struct {
 
 // CardVisibilityResponse represents one table's card visibility settings.
 type CardVisibilityResponse struct {
-	TableName         string                 `json:"table_name"`
-	CardDetailsLayout string                 `json:"card_details_layout"`
-	CardStyleVariant  *string                `json:"card_style_variant"`
-	CardDetailColumns *int                   `json:"card_detail_columns"`
-	Columns           []CardVisibilityColumn `json:"columns"`
+	TableName         string                   `json:"table_name"`
+	CardDetailsLayout string                   `json:"card_details_layout"`
+	CardStyleVariant  *string                  `json:"card_style_variant"`
+	CardDetailColumns *int                     `json:"card_detail_columns"`
+	DatasetAppearance store.AppearanceResponse `json:"dataset_appearance"`
+	Columns           []CardVisibilityColumn   `json:"columns"`
 }
 
 type fieldViewColumnGuard struct {
@@ -331,19 +333,23 @@ func GetCardVisibilityHandler(w http.ResponseWriter, r *http.Request) {
 		CardDetailsLayout: normalizeCardDetailsLayout(cardDetailsLayout),
 		CardStyleVariant:  presentation.CardStyleVariant,
 		CardDetailColumns: presentation.CardDetailColumns,
+		DatasetAppearance: presentation.DatasetAppearance,
 		Columns:           columns,
 	})
 }
 
 // updateCardVisibilityRequest is the expected request body for UpdateCardVisibilityHandler.
 type updateCardVisibilityRequest struct {
+	SharedVersion     string          `json:"shared_version"`
+	Version           string          `json:"version"`
 	Scope             json.RawMessage `json:"scope"`
 	CardDetailColumns json.RawMessage `json:"card_detail_columns"`
 	fields            map[string]json.RawMessage
-	TableName         string                 `json:"table_name"`
-	CardDetailsLayout string                 `json:"card_details_layout"`
-	CardStyleVariant  json.RawMessage        `json:"card_style_variant"`
-	Columns           []CardVisibilityColumn `json:"columns"`
+	TableName         string                   `json:"table_name"`
+	CardDetailsLayout string                   `json:"card_details_layout"`
+	CardStyleVariant  json.RawMessage          `json:"card_style_variant"`
+	DatasetAppearance store.AppearanceResponse `json:"dataset_appearance"`
+	Columns           []CardVisibilityColumn   `json:"columns"`
 }
 
 // scheduleCardVisibilitySchemaCacheInvalidation clears cached card metadata only
@@ -383,14 +389,16 @@ func UpdateCardVisibilityHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	cardStyleVariant, err := decodeCardStyleVariantOverride(req.CardStyleVariant)
-	if err != nil {
-		httpresponse.RespondWithError(w, http.StatusBadRequest, err.Error())
+	if _, err := decodeCardStyleVariantOverride(req.CardStyleVariant); err != nil {
+		respondDatasetAppearanceError(w, &httpresponse.Refusal{Status: 400, LangKey: "dataset_appearance_invalid", Message: err.Error()})
 		return
 	}
-	cardDetailColumns, err := decodeCardDetailColumnsOverride(req.CardDetailColumns)
-	if err != nil {
-		httpresponse.RespondWithError(w, http.StatusBadRequest, err.Error())
+	if _, err := decodeCardDetailColumnsOverride(req.CardDetailColumns); err != nil {
+		respondDatasetAppearanceError(w, &httpresponse.Refusal{Status: 400, LangKey: "dataset_appearance_invalid", Message: err.Error()})
+		return
+	}
+	if (len(req.CardStyleVariant) > 0 || len(req.CardDetailColumns) > 0) && (req.Version == "" || req.SharedVersion == "") {
+		respondDatasetAppearanceError(w, store.ErrDatasetAppearanceConflict)
 		return
 	}
 	tx, ok := dbutils.RequireTx(r.Context())
@@ -400,6 +408,23 @@ func UpdateCardVisibilityHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	var presentation *DatasetCardPresentation
+	if len(req.CardStyleVariant) > 0 || len(req.CardDetailColumns) > 0 {
+		scoped := req
+		scoped.Scope = json.RawMessage(`"dataset_presentation"`)
+		scoped.fields = map[string]json.RawMessage{}
+		update, err := decodeDatasetCardPresentation(scoped)
+		if err != nil {
+			respondDatasetAppearanceError(w, &httpresponse.Refusal{Status: 400, LangKey: "dataset_appearance_invalid", Message: err.Error()})
+			return
+		}
+		result, err := persistDatasetCardPresentation(r.Context(), tx, update, dtt_1_row_read.InvalidateSchemaCache)
+		if err != nil {
+			respondDatasetAppearanceError(w, err)
+			return
+		}
+		presentation = &result
+	}
 	guards, err := loadFieldViewColumnGuards(tx, req.TableName)
 	if err != nil {
 		log.Printf("\033[31merror: [UpdateCardVisibilityHandler] field guard query failed: %v\033[0m", err)
@@ -419,12 +444,6 @@ func UpdateCardVisibilityHandler(w http.ResponseWriter, r *http.Request) {
 		httpresponse.RespondWithError(w, http.StatusInternalServerError, "error checking card detail icon metadata")
 		return
 	}
-	hasCardStyleVariant, err := publicTableColumnExists(backend.Db, "system_db_tables", "card_style_variant")
-	if err != nil {
-		log.Printf("\033[31merror: [UpdateCardVisibilityHandler] card_style_variant check failed: %v\033[0m", err)
-		httpresponse.RespondWithError(w, http.StatusInternalServerError, "error checking card style metadata")
-		return
-	}
 	hasCardDetailCapitalization, err := publicTableColumnExists(backend.Db, "system_column_details", "card_detail_capitalization")
 	if err != nil {
 		log.Printf("\033[31merror: [UpdateCardVisibilityHandler] card_detail_capitalization check failed: %v\033[0m", err)
@@ -432,15 +451,6 @@ func UpdateCardVisibilityHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if len(req.CardStyleVariant) > 0 && !hasCardStyleVariant {
-		httpresponse.RespondWithError(w, http.StatusConflict, "card style migration required")
-		return
-	}
-	if len(req.CardDetailColumns) > 0 {
-		if !writeLegacyCardDetailColumns(w, tx, req.TableName, cardDetailColumns) {
-			return
-		}
-	}
 	if strings.TrimSpace(req.CardDetailsLayout) != "" {
 		if _, err := tx.Exec(`
 			UPDATE system_db_tables
@@ -449,17 +459,6 @@ func UpdateCardVisibilityHandler(w http.ResponseWriter, r *http.Request) {
 		`, normalizeCardDetailsLayout(req.CardDetailsLayout), req.TableName); err != nil {
 			log.Printf("\033[31merror: [UpdateCardVisibilityHandler] layout update for table %q: %v\033[0m", req.TableName, err)
 			httpresponse.RespondWithError(w, http.StatusInternalServerError, "error updating card detail layout")
-			return
-		}
-	}
-	if len(req.CardStyleVariant) > 0 {
-		if _, err := tx.Exec(`
-			UPDATE system_db_tables
-			SET card_style_variant = $1
-			WHERE table_name = $2
-		`, cardStyleVariant, req.TableName); err != nil {
-			log.Printf("\033[31merror: [UpdateCardVisibilityHandler] style update for table %q: %v\033[0m", req.TableName, err)
-			httpresponse.RespondWithError(w, http.StatusInternalServerError, "error updating card style variant")
 			return
 		}
 	}
@@ -501,9 +500,10 @@ func UpdateCardVisibilityHandler(w http.ResponseWriter, r *http.Request) {
 		dtt_1_row_read.InvalidateSchemaCache,
 	)
 
-	httpresponse.RespondWithJSON(w, http.StatusOK, map[string]string{
-		"status":  "ok",
-		"message": "Card visibility settings saved",
+	httpresponse.RespondWithJSON(w, http.StatusOK, map[string]any{
+		"dataset_presentation": presentation,
+		"status":               "ok",
+		"message":              "Card visibility settings saved",
 	})
 }
 

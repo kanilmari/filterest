@@ -86,7 +86,7 @@ identifiers remain compatibility names unless a documented migration changes the
 -   **card_element** – Column in `system_column_details` defining how a value is rendered on card views (e.g., `header`, `image`, `description`).
 -   **card_detail_icon_key** – Column in `system_column_details` storing a named frontend icon registry key for a card-detail field.
 -   **card_detail_capitalization** – Column in `system_column_details`; when true, card detail values get a capitalized first visible letter in card detail renderers.
--   **card_style_variant** – Column in `system_db_tables` selecting the small-card visual variant, currently `standard` or `modern`.
+-   **card_style_variant** – Nullable compatibility field projecting the canonical `shared.card_style_variant` override in `system_dataset_appearance`; absence inherits the site style. Values are `standard` or `modern`. The former `system_db_tables` column is retired in database 9.10.2.
 -   **row_policy_owner_column** – Column in `system_db_tables` naming the owner column for generic row policies such as `all_flags_true_unless_owner`. It takes effect only when that column is a validated foreign key to `system_users(id)`; otherwise, or when it is empty, the dataset has no own-row exception. Nothing is inferred from column names. `system_users` (owned through `id`) and the `app_service_catalog` pilot (`user_id`) have owners fixed in code. See [Permission Model](Permission_Model.md#existing-row-visibility-rules).
 
 ## Interface terms

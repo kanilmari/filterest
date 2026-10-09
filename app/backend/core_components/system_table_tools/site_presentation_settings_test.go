@@ -16,7 +16,6 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
-	"time"
 
 	backend "easelect/backend/core_components"
 	"easelect/backend/core_components/dbutils"
@@ -156,7 +155,7 @@ func TestGetSitePresentationSettingsHandlerReturnsOnlyTypedAllowlist(t *testing.
 	if err := json.Unmarshal(response.Body.Bytes(), &payload); err != nil {
 		t.Fatalf("decode response: %v", err)
 	}
-	if len(payload) != 2 || payload["dataset_cover_theme"] == nil || payload["row_article_timestamp_display_mode"] == nil {
+	if len(payload) != 3 || payload["dataset_cover_theme"] == nil || payload["row_article_timestamp_display_mode"] == nil {
 		t.Fatalf("public payload keys = %#v", payload)
 	}
 }
@@ -166,6 +165,7 @@ func TestAdminSitePresentationSettingsHandlerPersistsValidatedWholeObject(t *tes
 	t.Cleanup(func() { persistSitePresentationSettings = originalPersist })
 
 	settings := defaultSitePresentationSettings()
+	settings.Version = "none"
 	settings.DatasetCoverTheme.Dark.OverlayOpacity = 0.25
 	settings.RowArticleTimestampDisplayMode = rowArticleTimestampDateOnly
 	var persisted SitePresentationSettingsResponse
@@ -288,7 +288,9 @@ func TestAdminSitePresentationSettingsHandlerReportsReadAndWriteFailures(t *test
 	persistSitePresentationSettings = func(_ *http.Request, _ SitePresentationSettingsResponse) (SitePresentationSettingsResponse, error) {
 		return SitePresentationSettingsResponse{}, errors.New("write failed")
 	}
-	body, _ := json.Marshal(defaultSitePresentationSettings())
+	settings := defaultSitePresentationSettings()
+	settings.Version = "none"
+	body, _ := json.Marshal(settings)
 	postResponse := httptest.NewRecorder()
 	AdminSitePresentationSettingsHandler(
 		postResponse,
@@ -302,7 +304,9 @@ func TestAdminSitePresentationSettingsHandlerReportsReadAndWriteFailures(t *test
 // Legacy payloads remain complete except for the one newly optional boolean.
 func sitePresentationCardFieldsBody(t *testing.T, value string) string {
 	t.Helper()
-	body, err := json.Marshal(defaultSitePresentationSettings())
+	settings := defaultSitePresentationSettings()
+	settings.Version = "none"
+	body, err := json.Marshal(settings)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -425,151 +429,49 @@ func sitePresentationDisposableDB(t *testing.T) *sql.DB {
 
 func TestSitePresentationPersistencePreservesCardFieldsAtomicallyPostgres(t *testing.T) {
 	db := sitePresentationDisposableDB(t)
-	previousDB := backend.Db
+	previous := backend.Db
 	backend.Db = db
-	t.Cleanup(func() { backend.Db = previousDB })
-	legacy, err := decodeSitePresentationSettings(strings.NewReader(strings.Replace(sitePresentationCardFieldsBody(t, "omitted"), `"card_style_variant":"modern",`, "", 1)))
-	if err != nil {
-		t.Fatal(err)
+	t.Cleanup(func() { backend.Db = previous })
+	save := func(input SitePresentationSettingsResponse) (SitePresentationSettingsResponse, error) {
+		lazy := dbutils.NewLazyTx(db)
+		defer lazy.Rollback()
+		r := httptest.NewRequest("POST", "/api/admin/site-presentation-settings", nil)
+		result, err := persistSitePresentationSettings(r.WithContext(dbutils.SetLazyTx(r.Context(), lazy)), input)
+		if err == nil {
+			err = lazy.Commit()
+		}
+		return result, err
 	}
+	initial, err := readSitePresentationSettingsFromDB()
+	if err != nil || initial.Version != "none" {
+		t.Fatal(initial, err)
+	}
+	first, err := save(initial)
+	if err != nil || first.Version == initial.Version {
+		t.Fatal(first, err)
+	}
+	if _, err = save(initial); err == nil {
+		t.Fatal("stale absent-row shared editor accepted")
+	}
+	legacy := first
+	legacy.preserveStoredCardStyleVariant = true
 	legacy.preserveStoredCardDetailColumns = true
-	persistInTx := func(tx *dbutils.LazyTx, input SitePresentationSettingsResponse) (SitePresentationSettingsResponse, error) {
-		request := httptest.NewRequest(http.MethodPost, "/api/admin/site-presentation-settings", nil)
-		return persistSitePresentationSettings(request.WithContext(dbutils.SetLazyTx(request.Context(), tx)), input)
-	}
-	save := func(input SitePresentationSettingsResponse) SitePresentationSettingsResponse {
-		t.Helper()
-		tx := dbutils.NewLazyTx(db)
-		defer tx.Rollback()
-		result, err := persistInTx(tx, input)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if err := tx.Commit(); err != nil {
-			t.Fatal(err)
-		}
-		return result
-	}
-	wantColumns := 2
-	wantStyle := "modern"
-	read := func(want bool) {
-		t.Helper()
-		settings, err := readSitePresentationSettingsFromDB()
-		if err != nil {
-			t.Fatal(err)
-		}
-		if settings.DatasetCoverTheme.Shared.CardDetailColumns != wantColumns {
-			t.Fatalf("detail columns = %d, want %d", settings.DatasetCoverTheme.Shared.CardDetailColumns, wantColumns)
-		}
-		if settings.DatasetCoverTheme.Shared.CardStyleVariant != wantStyle {
-			t.Fatalf("stored/default card style = %q, want %q", settings.DatasetCoverTheme.Shared.CardStyleVariant, wantStyle)
-		}
-		if settings.DatasetCoverTheme.Shared.CardShowAllFields != want {
-			t.Fatalf("stored/default card_show_all_fields = %v, want %v", settings.DatasetCoverTheme.Shared.CardShowAllFields, want)
-		}
-	}
-	read(true)
-	if !save(legacy).DatasetCoverTheme.Shared.CardShowAllFields {
-		t.Fatal("first legacy save must use true")
-	}
-	explicit := defaultSitePresentationSettings()
-	explicit.DatasetCoverTheme.Shared.CardShowAllFields = false
-	explicit.DatasetCoverTheme.Shared.CardStyleVariant = "standard"
-	explicit.DatasetCoverTheme.Shared.CardDetailColumns = 4
-	wantColumns = 4
-	wantStyle = "standard"
-	if save(explicit).DatasetCoverTheme.Shared.CardShowAllFields {
-		t.Fatal("explicit false was lost")
-	}
-	read(false)
-	legacy.DatasetCoverTheme.Shared.CardImageWidth = 411
-	if save(legacy).DatasetCoverTheme.Shared.CardShowAllFields {
-		t.Fatal("legacy save replaced stored false")
-	}
-	var width int
-	if err := db.QueryRow(`SELECT (json_value #>> '{shared,card_image_width}')::int FROM public.system_config WHERE key=$1`, datasetCoverThemeConfigKey).Scan(&width); err != nil {
-		t.Fatal(err)
-	}
-	if width != 411 {
-		t.Fatalf("other submitted fields were not saved: %d", width)
-	}
-	if _, err := db.Exec(`UPDATE public.system_config SET json_value = json_value #- '{shared,card_show_all_fields}' #- '{shared,card_style_variant}' #- '{shared,card_detail_columns}' WHERE key=$1`, datasetCoverThemeConfigKey); err != nil {
-		t.Fatal(err)
-	}
-	wantStyle = "modern"
-	wantColumns = 2
-	read(true)
-	if !save(legacy).DatasetCoverTheme.Shared.CardShowAllFields {
-		t.Fatal("old stored config must default to true")
-	}
-
-	// The old-client write starts while an explicit false update owns the row
-	// lock. It must preserve the newly committed false, not a pre-lock snapshot.
-	wantStyle = "standard"
-	wantColumns = 4
-	tx1 := dbutils.NewLazyTx(db)
-	defer tx1.Rollback()
-	if _, err := persistInTx(tx1, explicit); err != nil {
-		t.Fatal(err)
-	}
-	tx2 := dbutils.NewLazyTx(db)
-	defer tx2.Rollback()
-	sqlTx2, err := tx2.Begin()
+	legacy.DatasetCoverTheme.Shared.CardStyleVariant = "standard"
+	legacy.DatasetCoverTheme.Shared.CardDetailColumns = 4
+	second, err := save(legacy)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := sqlTx2.Exec("SET LOCAL lock_timeout = '5s'"); err != nil {
-		t.Fatal(err)
+	if second.DatasetCoverTheme.Shared.CardStyleVariant != "modern" || second.DatasetCoverTheme.Shared.CardDetailColumns != 2 {
+		t.Fatal("omitted choices not preserved", second)
 	}
-	var pid int
-	if err := sqlTx2.QueryRow("SELECT pg_backend_pid()").Scan(&pid); err != nil {
-		t.Fatal(err)
-	}
-	type savedResult struct {
-		settings SitePresentationSettingsResponse
-		err      error
-	}
-	finished := make(chan savedResult, 1)
-	go func() { settings, err := persistInTx(tx2, legacy); finished <- savedResult{settings, err} }()
-	deadline := time.Now().Add(3 * time.Second)
-	for {
-		var wait sql.NullString
-		if err := db.QueryRow("SELECT wait_event_type FROM pg_stat_activity WHERE pid=$1", pid).Scan(&wait); err != nil {
-			t.Fatal(err)
-		}
-		if wait.String == "Lock" {
-			break
-		}
-		if time.Now().After(deadline) {
-			t.Fatal("legacy writer did not reach the expected row lock")
-		}
-		time.Sleep(10 * time.Millisecond)
-	}
-	if err := tx1.Commit(); err != nil {
-		t.Fatal(err)
-	}
-	result := <-finished
-	if result.err != nil {
-		t.Fatal(result.err)
-	}
-	if result.settings.DatasetCoverTheme.Shared.CardDetailColumns != 4 {
-		t.Fatal("concurrent legacy write lost explicit detail columns")
-	}
-	if result.settings.DatasetCoverTheme.Shared.CardStyleVariant != "standard" {
-		t.Fatal("concurrent legacy write lost the explicit standard style")
-	}
-	if result.settings.DatasetCoverTheme.Shared.CardShowAllFields {
-		t.Fatal("concurrent legacy write lost the explicit false decision")
-	}
-	if err := tx2.Commit(); err != nil {
-		t.Fatal(err)
-	}
-	read(false)
 }
 
 func sitePresentationStyleBody(t *testing.T, value string) string {
 	t.Helper()
-	body, err := json.Marshal(defaultSitePresentationSettings())
+	settings := defaultSitePresentationSettings()
+	settings.Version = "none"
+	body, err := json.Marshal(settings)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -173,6 +173,8 @@
     "20261009000002_seed_admin_version_info_language_keys.sql",
     "20261009000003_create_system_dataset_appearance.sql",
     "20261009000020_add_migration_execution_evidence.sql",
+    "20261009000040_cut_over_dataset_card_appearance.sql",
+    "20261009000041_seed_dataset_appearance_refusal_keys.sql",
     "20261009000099_record_database_release_9_10_2.sql"
   ],
   "allowed_schema_tables": [
@@ -329,11 +331,11 @@
     "public.system_group_table_func_rights": 24,
     "public.system_lang_key_sources": 0,
     "public.system_lang_key_translations": 163,
-    "public.system_lang_keys": 1265,
+    "public.system_lang_keys": 1272,
     "public.system_languages": 5,
     "public.system_permission_actions": 7,
     "public.system_permission_categories": 4,
-    "public.system_schema_migrations": 167,
+    "public.system_schema_migrations": 169,
     "public.system_table_folders": 14,
     "public.system_table_views": 13,
     "public.system_user_group_memberships": 2,
@@ -345,10 +347,10 @@
   },
   "generated_files": {
     "server_tools/public_bootstrap/schema.sql": {
-      "sha256": "a0373cb362f07273f5eb55813861acde6e61cdf9f9b0502c421cd299f9bde5fa"
+      "sha256": "cd045921d6da8fa7571ebb4b796a425301c8cab1ea950567bcc04a7b00ae44e8"
     },
     "server_tools/public_bootstrap/seed_data.sql": {
-      "sha256": "afafbc7ffbb213711695d8cece5de2c7e0981923a14afec60e073f5804cfe2ca"
+      "sha256": "d967146ce40cf83b2136eced99f74edf04b88695cea19850519b528f6bdf2aa7"
     }
   },
   "source_files": {
@@ -365,7 +367,7 @@
       "sha256": "235e4b887181e150bd436d035d2d268eb821d9e5d0b830b54eb444988f31d5d1"
     },
     "filterest/app/server_tools/public_bootstrap/generate_bootstrap.py": {
-      "sha256": "be2e7fdf9b19e146dbb690ab9df2ef5ceb7c5342bb1d490448b79a80c09c7edf"
+      "sha256": "003f354bea13571e3870ece5c34e203f8807d606f3256eea63b5483a9cf34231"
     },
     "filterest/app/server_tools/public_slice_export/audit_public_bootstrap.py": {
       "sha256": "40b58999d07dfb3ebbc14c8df2a71f19c20c2ab7be88da6a1207b6361ef86f9f"
@@ -934,8 +936,14 @@
     "filterest/app/server_tools/migrations/20261009000020_add_migration_execution_evidence.sql": {
       "sha256": "a1916cb61a28da3fd9ed0ee8f2346bcc06ba7acad1bda0e6293e5c68b0ebde11"
     },
+    "filterest/app/server_tools/migrations/20261009000040_cut_over_dataset_card_appearance.sql": {
+      "sha256": "87cb3e9606bdbb2e0ec990bd71ba87a730e2576e8e91b96f2abb8098fce4e245"
+    },
+    "filterest/app/server_tools/migrations/20261009000041_seed_dataset_appearance_refusal_keys.sql": {
+      "sha256": "0b177361469267120fe5a5b2c9eee43bd7380dd62f9056e5b1ab2dd95af6d223"
+    },
     "filterest/app/server_tools/migrations/20261009000099_record_database_release_9_10_2.sql": {
-      "sha256": "5ff12747a4f3dcdd5fe44959dea23db07cb43030b492477606dc0fbfa3475b3e"
+      "sha256": "b782f9806f92fd3f4205f3889d6f0671bc9dd683e3be5bee4429e340f35a04c3"
     },
     "filterest/app/server_tools/public_bootstrap/source/fixtures/docs/first-dataset.png": {
       "sha256": "010bdb97d887959b6f83046d377ca8394478a812c8abfe79fd5ea2cf400e3975"

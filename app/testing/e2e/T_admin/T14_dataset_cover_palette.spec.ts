@@ -1,9 +1,14 @@
 // T14_dataset_cover_palette.spec.ts
-// Verifies the protected appearance palette and durable selected-chip side choice.
-// Connects shared previews and saved settings to real dataset chips and reloads.
-// Restores site defaults after the persistence proof on the supervisor's registry.
+// Verifies the protected palette and durable shared/dataset appearance choices.
+// Connects UI previews and revision-protected saves to real cards, chips and reloads.
+// Restores original values with fresh revisions after each persistence proof.
 import { expect, test } from '@playwright/test';
-import { fetchCsrfTokenForRequest } from '../helpers/temp-dataset';
+import {
+  loadDatasetCardVisibility,
+  loadSitePresentationSettings,
+  restoreDatasetAppearance,
+  restoreSitePresentationSettings,
+} from '../helpers/appearance-revisions';
 
 test('admin cover palette is protected, movable, resizable, themed, and live-only', async ({ page }) => {
   await page.goto('/app_autojen_vanteet', { waitUntil: 'domcontentloaded' });
@@ -224,9 +229,8 @@ test('admin cover palette is protected, movable, resizable, themed, and live-onl
 });
 
 test('selected-chip side previews both DOM orders, resets, saves and survives reload', async ({ page }) => {
-  const response = await page.request.get('/api/admin/site-presentation-settings');
-  expect(response.ok()).toBe(true);
-  const original = await response.json();
+  test.setTimeout(60_000);
+  const original = await loadSitePresentationSettings(page.request);
   const savedSide = original.dataset_cover_theme.shared.active_filter_remove_side || 'start';
   const chosenSide = savedSide === 'start' ? 'end' : 'start';
   try {
@@ -284,11 +288,79 @@ test('selected-chip side previews both DOM orders, resets, saves and survives re
     await page.locator('[data-testid="dataset-cover-test-palette-button"]').click();
     await expect(select).toHaveValue(chosenSide);
   } finally {
-    const csrfToken = await fetchCsrfTokenForRequest(page.request);
-    const restored = await page.request.post('/api/admin/site-presentation-settings', {
-      data: original, headers: { 'X-CSRF-Token': csrfToken },
+    await restoreSitePresentationSettings(page.request, original);
+  }
+});
+
+test('dataset card palette saves style and detail columns through the administrator appearance route and survives reload', async ({ page }) => {
+  test.setTimeout(60_000);
+  const datasetName = 'app_autojen_vanteet';
+  const original = (await loadDatasetCardVisibility(page.request, datasetName)).dataset_appearance;
+  const chosenStyle = original.effective.shared.card_style_variant === 'modern' ? 'standard' : 'modern';
+  const chosenColumns = original.effective.shared.card_detail_columns === 1 ? 2 : 1;
+  const paths = ['shared.card_style_variant', 'shared.card_detail_columns'];
+  const address = `/${datasetName}?view=card`;
+  const card = page.locator(`#${datasetName}_card_view_container .card[data-card-presentation-view="card"]`).first();
+  const panel = page.getByTestId('dataset-cover-test-palette');
+  const style = panel.getByTestId('dataset-card-palette-style');
+  const columns = panel.getByTestId('dataset-card-palette-columns');
+  const save = panel.getByTestId('dataset-card-palette-save');
+  const expectCardChoices = async () => {
+    await expect(card).toBeVisible();
+    await expect(card).toHaveAttribute('data-card-style-variant', chosenStyle);
+    await expect(card).toHaveAttribute('data-card-detail-columns', String(chosenColumns));
+    if (chosenStyle === 'modern') await expect(card).toHaveClass(/\bcard--modern\b/);
+    else await expect(card).not.toHaveClass(/\bcard--modern\b/);
+  };
+  try {
+    await page.goto(address, { waitUntil: 'domcontentloaded' });
+    await expect(card).toBeVisible();
+    await page.getByTestId('dataset-cover-test-palette-button').click();
+    await style.evaluate(element => { element.closest('details')!.open = true; });
+    await expect(style).toBeEnabled();
+    await expect(columns).toBeEnabled();
+    await expect(style).toHaveValue(String(original.overrides['shared.card_style_variant'] ?? 'inherit'));
+    await expect(columns).toHaveValue(String(original.overrides['shared.card_detail_columns'] ?? 'inherit'));
+    await style.selectOption(chosenStyle);
+    await columns.selectOption(String(chosenColumns));
+    await expectCardChoices();
+
+    const latest = (await loadDatasetCardVisibility(page.request, datasetName)).dataset_appearance;
+    const saved = page.waitForResponse(response => new URL(response.url()).pathname === '/api/admin/dataset-appearance'
+      && response.request().method() === 'POST');
+    await save.click();
+    const response = await saved;
+    expect(response.ok(), await response.text()).toBe(true);
+    expect(response.request().postDataJSON()).toEqual({
+      dataset_uid: original.dataset_uid, version: latest.version, shared_version: latest.shared_version,
+      set: { 'shared.card_style_variant': chosenStyle, 'shared.card_detail_columns': chosenColumns }, unset: [],
     });
-    expect(restored.ok()).toBe(true);
+    const persisted = await response.json();
+    expect(persisted.dataset_uid).toBe(original.dataset_uid);
+    expect(persisted.version).not.toBe(latest.version);
+    expect(persisted.overrides).toMatchObject({
+      'shared.card_style_variant': chosenStyle, 'shared.card_detail_columns': chosenColumns,
+    });
+    await expect(save).toBeEnabled();
+    await page.keyboard.press('Escape');
+    await expect(panel).toBeHidden();
+    await expectCardChoices();
+
+    // Load the raw dataset address again: reload of its rewritten alias can land on Home.
+    await page.goto(address, { waitUntil: 'domcontentloaded' });
+    await expectCardChoices();
+    await expect(card).toHaveAttribute('data-card-style-override', chosenStyle);
+    await expect(card).toHaveAttribute('data-card-columns-override', String(chosenColumns));
+    const reloaded = (await loadDatasetCardVisibility(page.request, datasetName)).dataset_appearance;
+    expect(reloaded.version).toBe(persisted.version);
+    expect(reloaded.effective.shared.card_style_variant).toBe(chosenStyle);
+    expect(reloaded.effective.shared.card_detail_columns).toBe(chosenColumns);
+    await page.getByTestId('dataset-cover-test-palette-button').click();
+    await style.evaluate(element => { element.closest('details')!.open = true; });
+    await expect(style).toHaveValue(chosenStyle);
+    await expect(columns).toHaveValue(String(chosenColumns));
+  } finally {
+    await restoreDatasetAppearance(page.request, datasetName, original, paths);
   }
 });
 

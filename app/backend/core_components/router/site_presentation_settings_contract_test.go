@@ -24,6 +24,9 @@ func TestSitePresentationSettingsRouteContract(t *testing.T) {
 		"system_table_tools.GetSitePresentationSettingsHandler": {
 			path: "/api/site-presentation-settings", profile: "public", methods: []string{http.MethodGet, http.MethodHead},
 		},
+		"system_table_tools.AdminDatasetAppearanceHandler": {
+			path: "/api/admin/dataset-appearance", profile: "admin", methods: []string{http.MethodPost},
+		},
 		"system_table_tools.AdminSitePresentationSettingsHandler": {
 			path: "/api/admin/site-presentation-settings", profile: "admin", methods: []string{http.MethodGet, http.MethodHead, http.MethodPost},
 		},

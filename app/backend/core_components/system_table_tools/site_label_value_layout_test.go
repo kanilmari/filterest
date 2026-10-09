@@ -73,6 +73,7 @@ func TestSiteWrappingSurvivesOtherSharedSettingsSavePostgres(t *testing.T) {
 	t.Cleanup(func() { backend.Db = previousDB })
 	save := func(settings SitePresentationSettingsResponse) SitePresentationSettingsResponse {
 		t.Helper()
+		settings = sitePresentationTestInputWithLoadedRevision(t, settings)
 		tx := dbutils.NewLazyTx(db)
 		defer tx.Rollback()
 		request := httptest.NewRequest(http.MethodPost, "/api/admin/site-presentation-settings", nil)
@@ -104,6 +105,7 @@ func TestSiteWrappingSurvivesOtherSharedSettingsSavePostgres(t *testing.T) {
 	settings.preserveStoredLabelValueLayout = true
 	settings.DatasetCoverTheme.Shared.LabelValueLayout = "stacked"
 	settings.DatasetCoverTheme.Shared.CardImageWidth = 411
+	assertRevisionlessSitePresentationSaveRefused(t, db, settings)
 	if got := save(settings).DatasetCoverTheme.Shared.LabelValueLayout; got != "auto" {
 		t.Fatalf("legacy save returned %q", got)
 	}

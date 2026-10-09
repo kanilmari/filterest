@@ -53,10 +53,12 @@ type updateRowFieldUpdate struct {
 }
 
 type updateRowRequest struct {
-	ID      int64                  `json:"id"`
-	Column  string                 `json:"column"`
-	Value   interface{}            `json:"value"`
-	Updates []updateRowFieldUpdate `json:"updates"`
+	Version       string                 `json:"version"`
+	SharedVersion string                 `json:"shared_version"`
+	ID            int64                  `json:"id"`
+	Column        string                 `json:"column"`
+	Value         interface{}            `json:"value"`
+	Updates       []updateRowFieldUpdate `json:"updates"`
 }
 
 // UnmarshalJSON distinguishes an explicit SQL NULL request from a missing value.
@@ -162,7 +164,13 @@ func UpdateRowHandler(response_writer http.ResponseWriter, request *http.Request
 
 	for _, update := range updates {
 		if err := validateCardStyleUpdate(tableName, update); err != nil {
-			httpresponse.RespondWithError(response_writer, http.StatusBadRequest, err.Error())
+			httpresponse.RespondWithRefusal(response_writer, &httpresponse.Refusal{Status: http.StatusBadRequest, LangKey: "dataset_appearance_invalid", Message: err.Error()})
+			return
+		}
+	}
+	for _, update := range updates {
+		if isDatasetCardMetadataField(tableName, update.Column) && userRole != "admin" {
+			httpresponse.RespondWithError(response_writer, 403, "administrator required for dataset appearance")
 			return
 		}
 	}
@@ -170,6 +178,26 @@ func UpdateRowHandler(response_writer http.ResponseWriter, request *http.Request
 	if err != nil {
 		runtime_grant_mutations.RespondError(response_writer, err)
 		return
+	}
+	appearanceResult, err := saveDatasetCardMetadata(tx, tableName, updateRequest, updates)
+	if err != nil {
+		var refusal *httpresponse.Refusal
+		if errors.As(err, &refusal) {
+			httpresponse.RespondWithRefusal(response_writer, refusal)
+		} else {
+			httpresponse.RespondWithError(response_writer, 500, "error saving dataset appearance")
+		}
+		return
+	}
+	if appearanceResult != nil {
+		var name string
+		if err := tx.QueryRow(`SELECT table_name FROM public.system_db_tables WHERE table_uid=$1`, appearanceResult.DatasetUID).Scan(&name); err != nil {
+			httpresponse.RespondWithError(response_writer, 500, "error reading dataset identity")
+			return
+		}
+		if !dbutils.RegisterAfterCommitHook(request.Context(), func() { dtt_1_row_read.InvalidateSchemaCache(name) }) {
+			dtt_1_row_read.InvalidateSchemaCache(name)
+		}
 	}
 	if err := validateRowActorUpdates(tx, tableName, updateRequest.ID, updates); err != nil {
 		var refusal *httpresponse.Refusal
@@ -230,6 +258,10 @@ func UpdateRowHandler(response_writer http.ResponseWriter, request *http.Request
 	cacheSyncPlanCollected := false
 	var releasedCardPicture *cardPictureRelease
 	for _, update := range updates {
+		if isDatasetCardMetadataField(tableName, update.Column) {
+			changedFields = append(changedFields, update.Column)
+			continue
+		}
 		// Tarkista, onko sarake sallittu muokattavaksi
 		editable, err := isColumnEditable(tableUID, update.Column, tx)
 		if err != nil {
@@ -413,7 +445,7 @@ func UpdateRowHandler(response_writer http.ResponseWriter, request *http.Request
 			httpresponse.RespondWithError(response_writer, http.StatusInternalServerError, "Error verifying row update")
 			return
 		}
-		if tableName == "system_db_tables" && (update.Column == "card_details_layout" || update.Column == "card_style_variant" || update.Column == "card_detail_columns") {
+		if tableName == "system_db_tables" && update.Column == "card_details_layout" {
 			var targetTableName string
 			if err := tx.QueryRow(
 				"SELECT table_name FROM system_db_tables WHERE id = $1",
@@ -496,8 +528,9 @@ func UpdateRowHandler(response_writer http.ResponseWriter, request *http.Request
 
 	// Palautetaan vastaus
 	response_writer.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(response_writer).Encode(map[string]string{
-		"message": "Row updated successfully",
+	_ = json.NewEncoder(response_writer).Encode(map[string]any{
+		"message":            "Row updated successfully",
+		"dataset_appearance": appearanceResult,
 	})
 }
 

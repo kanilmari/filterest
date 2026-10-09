@@ -29,27 +29,29 @@ dataset overrides.
 | Site style | `system_config.json_value`, key `dataset_cover_theme_config`, path `shared.card_style_variant` | `modern` (Glowy); `standard` means Plain |
 | Site card field wrapping | Same JSON row, path `shared.label_value_layout` | `stacked`; `inline`, or development-only `auto` |
 | Site columns | Same JSON row, path `shared.card_detail_columns` | 2; integer 1–4 |
-| Dataset style | `system_db_tables.card_style_variant` | NULL inherits the site |
-| Dataset columns | `system_db_tables.card_detail_columns` | NULL inherits the site |
+| Dataset style | `system_dataset_appearance.overrides`, key `shared.card_style_variant` | Absent key inherits the site |
+| Dataset columns | `system_dataset_appearance.overrides`, key `shared.card_detail_columns` | Absent key inherits the site |
 
 The public API exposes the site object as `dataset_cover_theme`. These site
 choices are shared by light and dark themes. Browser metadata is a projection
 of these server settings, not another authority. Unsaved preview values remain
 owned by the mounted palette and are not written to the database.
 
-Dataset saves use the existing protected `POST /api/card-visibility/update`
-with `scope: "dataset_presentation"`, `table_name`, and only the supplied
-`card_style_variant` / `card_detail_columns` overrides. One SQL update preserves
-omitted values under the row lock and returns the actual nullable stored values;
-it never replays a cached column-visibility payload. Explicit null restores
-inheritance. Invalid types, unknown fields and an empty patch are rejected.
-Schema caches are invalidated after commit. The ordinary Card visibility
-editor retains its existing complete-column save contract and optional style
-override; an omitted columns setting remains unchanged.
+The dataset palette saves through administrator `POST /api/admin/dataset-appearance`
+with `{dataset_uid,set,unset,shared_version,version}`. The existing card API
+continues to accept nullable style/count fields, but now requires both loaded
+revisions and projects nullable read fields from the override map. The complete
+card editor and generic metadata writes use the same revision-protected saver.
+Omitted fields are preserved; explicit null unsets a compatibility override.
+Missing/stale revisions receive translated 409 refusals and retain the draft.
+The physical style/count columns and their editable metadata are retired.
 
-Site settings retain their existing separate transaction. Old clients omitting
-style, count or field wrapping preserve the latest stored value. Null is valid only for dataset
-inheritance, not for a concrete site default.
+Site saves require their loaded `version`. Every shared and dataset writer uses
+one shared-before-dataset lock order, including the absent shared-row case.
+Legacy omitted shared fields still preserve stored choices. The public site
+endpoint stays shared-only; authorized results carry the complete appearance
+snapshot without another browser request. See [the appearance API contract](Frontend_Guide.md)
+for the pending K290 mask-order limitation and later scoped-rendering work.
 
 Each group previews immediately. Its reset returns to the latest saved settings;
 leaving the palette owner releases unsaved previews. Closing the panel preserves
@@ -57,12 +59,10 @@ the current unsaved preview, as with its other controls. Site and dataset Save
 failures are reported separately, so one button never implies both scopes were
 saved.
 
-The upgrade converts old `standard` metadata to inheritance and retains explicit
-`modern` values. The old schema did not record whether `standard` was selected by
-an administrator or supplied automatically. This one-time transition implements
-the approved glowy default for all previously plain datasets; administrators
-can subsequently choose an explicit Plain override. New datasets inherit without
-a database column default.
+Database 9.10.2 migrates every non-null legacy style/count as an explicit
+override, including values equal to the shared choice. Null remains inherited;
+replaying the migration never replaces an already migrated override. The older
+9.7.15 transition to the glowy default happened before this cutover.
 
 A style or count preview updates only normal cards. A dataset preview updates
 only that dataset; a site preview updates only the effective inherited settings. The connected outer card, media,

@@ -18,6 +18,7 @@ ROOT = APP.parent
 BOOTSTRAP = APP / "server_tools/public_bootstrap"
 MIGRATIONS = APP / "server_tools/migrations"
 MIGRATION = MIGRATIONS / "20261009000003_create_system_dataset_appearance.sql"
+CUTOVER = MIGRATIONS / "20261009000040_cut_over_dataset_card_appearance.sql"
 OWNER = MIGRATIONS / "20261009000099_record_database_release_9_10_2.sql"
 BASE = "e314e34"
 
@@ -88,6 +89,7 @@ def appearance_shape(run):
 
 def test_dataset_appearance_fresh_upgrade_and_twice_replay(installed, appearance_upgrade):
     appearance_upgrade(MIGRATION.read_text())
+    appearance_upgrade(CUTOVER.read_text())
     appearance_upgrade(OWNER.read_text())
     expected = appearance_shape(installed)
     assert expected == appearance_shape(appearance_upgrade)
@@ -96,18 +98,17 @@ def test_dataset_appearance_fresh_upgrade_and_twice_replay(installed, appearance
     assert shape["registry"] == shape["check"] == 0 and shape["markers"] == 1
     for run in (installed, appearance_upgrade):
         assert value(run, "SELECT count(*) FROM system_dataset_appearance") == "0"
-        # Leave explicit legacy settings in their original columns for slice 3.
-        run("UPDATE system_db_tables SET card_style_variant='modern',card_detail_columns=3 WHERE table_name='tiketit'")
         uid = value(run, "SELECT table_uid FROM system_db_tables WHERE table_name='tiketit'")
         run(f"INSERT INTO system_dataset_appearance(table_uid,overrides,revision) VALUES({uid},"
             "'{\"light.image_blur\":0,\"light.oval_enabled\":false,\"shared.card_detail_columns\":2}',7)")
         for _ in range(2):
             run(MIGRATION.read_text())
+            run(CUTOVER.read_text())
             run(OWNER.read_text())
             assert appearance_shape(run) == expected
             assert value(run, "SELECT revision||':'||overrides FROM system_dataset_appearance") == \
                 '7:{"light.image_blur": 0, "light.oval_enabled": false, "shared.card_detail_columns": 2}'
-            assert value(run, "SELECT card_style_variant||':'||card_detail_columns FROM system_db_tables WHERE table_name='tiketit'") == "modern:3"
+            assert value(run, "SELECT count(*) FROM app_check_dataset_card_appearance_cutover()") == "0"
             assert value(run, "SELECT count(*) FROM system_db_version WHERE version='9.10.2'") == "1"
         run("UPDATE system_dataset_appearance SET overrides='{}',revision=8")
         run(MIGRATION.read_text())

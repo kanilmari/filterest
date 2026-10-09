@@ -4,7 +4,7 @@
 // Exists so live visual tuning and durable saves share one validated configuration shape.
 
 import {
-    fetchAdminUIFeatureFlags, fetchCardVisibility, saveDatasetCardPresentation,
+    fetchAdminUIFeatureFlags, fetchCardVisibility, saveDatasetAppearance,
     fetchSitePresentationSettings,
     saveAdminSitePresentationSettings,
 } from '../endpoints/stable_endpoint_router.js';
@@ -405,7 +405,7 @@ export async function mountDatasetCoverTestPalette(hero, datasetName, {
     settingsRequestFn = fetchSitePresentationSettings,
     saveRequestFn = saveAdminSitePresentationSettings,
     datasetSettingsRequestFn = fetchCardVisibility,
-    datasetSaveRequestFn = saveDatasetCardPresentation,
+    datasetSaveRequestFn = saveDatasetAppearance,
     permissionCheck = hasRoutePermission,
     canCommit = () => true,
 } = {}) {

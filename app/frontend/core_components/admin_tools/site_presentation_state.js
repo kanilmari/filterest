@@ -55,6 +55,7 @@ export function normalizePresentationSettings(payload) {
     theme.shared.label_value_layout = normalizeLabelValueLayout(theme.shared.label_value_layout);
     theme.shared.card_image_presentation = normalizeCardImagePresentation(theme.shared.card_image_presentation);
     return {
+        version: typeof payload?.version === "string" ? payload.version : "",
         dataset_cover_theme: theme,
         row_article_timestamp_display_mode: ['date_time', 'date_only'].includes(payload?.row_article_timestamp_display_mode)
             ? payload.row_article_timestamp_display_mode : 'date_time',

@@ -306,8 +306,8 @@ describe('stable_endpoint_router', () => {
         });
     });
 
-    test('dataset palette posts a narrow presentation scope without replaying column metadata', async () => {
-        const payload = { table_name: 'orders', card_style_variant: null, card_detail_columns: 4 };
+    test('legacy compatibility wrapper posts a narrow presentation scope without replaying column metadata', async () => {
+        const payload = { table_name: 'orders', card_style_variant: null, card_detail_columns: 4, version: '1', shared_version: 'shared-1' };
         endpointRouterMock.mockResolvedValue(payload);
         const mod = await loadModule();
         await expect(mod.saveDatasetCardPresentation(payload)).resolves.toEqual(payload);
@@ -447,3 +447,11 @@ describe('stable_endpoint_router', () => {
     });
 
 });
+
+ test('dataset appearance wrapper carries canonical leaves and both loaded revisions', async () => {
+    const mod = await loadModule();
+    const request = { dataset_uid: 11, set: { 'shared.card_detail_columns': 2 }, unset: [], shared_version: 's1', version: 'none' };
+    endpointRouterMock.mockResolvedValue({ ...request, version: '1' });
+    await mod.saveDatasetAppearance(request);
+    expect(endpointRouterMock).toHaveBeenLastCalledWith('adminDatasetAppearance', { method: 'POST', body_data: request });
+ });

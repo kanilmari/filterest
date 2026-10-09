@@ -6,6 +6,7 @@ package dtt_1_row_read
 
 import (
 	"database/sql"
+	backend "easelect/backend/core_components"
 	"fmt"
 	"log"
 	"strings"
@@ -429,19 +430,11 @@ func fetchTableReadMeta(db *sql.DB, tableName string) (dtt_models.TableReadMeta,
 	if err != nil {
 		return meta, fmt.Errorf("fetchTableReadMeta: checking card_details_layout column failed: %v", err)
 	}
-	hasCardStyleVariant, err := columnExistsInTable(db, "system_db_tables", "card_style_variant")
-	if err != nil {
-		return meta, fmt.Errorf("fetchTableReadMeta: checking card_style_variant column failed: %v", err)
-	}
-	hasCardDetailColumns, err := columnExistsInTable(db, "system_db_tables", "card_detail_columns")
-	if err != nil {
-		return meta, fmt.Errorf("fetchTableReadMeta: checking card_detail_columns column failed: %v", err)
-	}
 	hasDefaultView, err := columnExistsInTable(db, "system_db_tables", "default_view_id")
 	if err != nil {
 		return meta, fmt.Errorf("fetchTableReadMeta: checking default_view_id column failed: %v", err)
 	}
-	if !hasCardDetailsLayout && !hasCardStyleVariant && !hasCardDetailColumns && !hasDefaultView {
+	if !hasCardDetailsLayout && !hasDefaultView {
 		return meta, nil
 	}
 
@@ -450,16 +443,8 @@ func fetchTableReadMeta(db *sql.DB, tableName string) (dtt_models.TableReadMeta,
 		cardDetailsLayoutExpr = `COALESCE(card_details_layout, 'conditional_multiline') AS card_details_layout`
 	}
 
-	cardStyleVariantExpr := `NULL::varchar AS card_style_variant`
-	if hasCardStyleVariant {
-		cardStyleVariantExpr = `card_style_variant`
-	}
-
-	cardDetailColumnsExpr := `NULL::integer AS card_detail_columns`
-	if hasCardDetailColumns {
-		cardDetailColumnsExpr = `card_detail_columns`
-	}
-
+	cardStyleVariantExpr := `(SELECT overrides->>'shared.card_style_variant' FROM public.system_dataset_appearance WHERE table_uid=system_db_tables.table_uid)`
+	cardDetailColumnsExpr := `(SELECT (overrides->>'shared.card_detail_columns')::integer FROM public.system_dataset_appearance WHERE table_uid=system_db_tables.table_uid)`
 	defaultViewExpr := `NULL::varchar AS default_view_name`
 	if hasDefaultView {
 		defaultViewExpr = `(SELECT name FROM system_table_views WHERE id = system_db_tables.default_view_id) AS default_view_name`
@@ -469,7 +454,11 @@ func fetchTableReadMeta(db *sql.DB, tableName string) (dtt_models.TableReadMeta,
 	var layout sql.NullString
 	var styleVariant *string
 	var detailColumns *int
-	err = db.QueryRow(fmt.Sprintf(`
+	metadataDB := db
+	if backend.Db != nil {
+		metadataDB = backend.Db
+	}
+	err = metadataDB.QueryRow(fmt.Sprintf(`
 		SELECT %s, %s, %s, %s
 		FROM system_db_tables
 		WHERE table_name = $1

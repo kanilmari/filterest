@@ -10,8 +10,19 @@ import { applyCardFieldPresentationSetting, mountCardFieldGroup } from '../table
 const mounted = [];
 const raw = (style = null, columns = null, table = 'example') => ({
     table_name: table, card_style_variant: style, card_detail_columns: columns,
+    dataset_appearance: { dataset_uid: 11, version: "1", shared_version: "shared-1" },
     columns: [{ column_uid: 7, hide_everywhere: true, show_key_on_card: false }],
 });
+function persisted(request) {
+    return { dataset_uid: request.dataset_uid, version: String(Number(request.version) + 1),
+        shared_version: request.shared_version, overrides: request.set };
+}
+function snapshot(style, columns) {
+    return { dataset_uid: 11, version: '2', shared_version: 'shared-1', overrides: {
+        ...(style === null ? {} : { 'shared.card_style_variant': style }),
+        ...(columns === null ? {} : { 'shared.card_detail_columns': columns }),
+    } };
+}
 function card(dataset, view = 'card') {
     const list = document.createElement('div'); list.className = 'card_container';
     const outer = document.createElement('div'); outer.className = 'card'; outer.dataset.datasetName = dataset;
@@ -24,7 +35,7 @@ function card(dataset, view = 'card') {
     return { outer, media, checkbox, render };
 }
 async function setup(options = {}) {
-    const saveRequestFn = options.saveRequestFn || vi.fn(async request => request);
+    const saveRequestFn = options.saveRequestFn || vi.fn(async request => persisted(request));
     const control = buildDatasetCardPaletteControl({
         datasetName: 'example', copy: COPY.en, requestFn: vi.fn(async () => raw('modern', 2)),
         saveRequestFn, ...options,
@@ -68,7 +79,8 @@ describe('dataset card palette', () => {
         panel.get('save').click();
         await vi.waitFor(() => expect(panel.get('save').disabled).toBe(false));
         expect(panel.saveRequestFn).toHaveBeenCalledExactlyOnceWith({
-            table_name: 'example', card_style_variant: null, card_detail_columns: null,
+            dataset_uid: 11, version: '1', shared_version: 'shared-1', set: {},
+            unset: ['shared.card_style_variant', 'shared.card_detail_columns'],
         });
         expect(JSON.parse(localStorage.getItem('example_tableMeta'))).toEqual({
             title: 'Keep', card_details_layout: 'inline', card_style_variant: null, card_detail_columns: null,
@@ -83,7 +95,7 @@ describe('dataset card palette', () => {
         panel.choose('style', 'standard'); panel.choose('columns', '1'); panel.get('save').click();
         panel.choose('style', 'modern'); panel.choose('columns', '4');
         await vi.waitFor(() => expect(saveRequestFn).toHaveBeenCalledOnce());
-        resolve({ table_name: 'example', card_style_variant: 'standard', card_detail_columns: 1 });
+        resolve(snapshot('standard', 1));
         await vi.waitFor(() => expect(panel.get('save').disabled).toBe(false));
         expect(own.outer.dataset.cardStyleVariant).toBe('modern'); expect(own.outer.dataset.cardDetailColumns).toBe('4');
         panel.get('reset').click();
@@ -116,10 +128,10 @@ describe('dataset card palette', () => {
         let server = raw('modern', 2);
         const own = card('example');
         const firstSave = vi.fn(request => {
-            server = { ...raw(), ...request };
-            return new Promise(resolve => { finishFirst = () => resolve(server); });
+            server = { ...raw(request.set['shared.card_style_variant'] ?? null, request.set['shared.card_detail_columns'] ?? null), dataset_appearance: persisted(request) };
+            return new Promise(resolve => { finishFirst = () => resolve(server.dataset_appearance); });
         });
-        const secondSave = vi.fn(async request => { server = { ...raw(), ...request }; return server; });
+        const secondSave = vi.fn(async request => { server = { ...raw(request.set['shared.card_style_variant'] ?? null, request.set['shared.card_detail_columns'] ?? null), dataset_appearance: persisted(request) }; return server.dataset_appearance; });
         const first = await setup({ saveRequestFn: firstSave });
         const second = await setup({ saveRequestFn: secondSave });
         first.choose('columns', '1'); first.get('save').click();
@@ -142,4 +154,16 @@ describe('dataset card palette', () => {
         expect(second.get('columns').value).toBe('4');
     });
 
+});
+
+test('a revision conflict retains the loaded tokens and the unsaved override', async () => {
+    const conflict = Object.assign(new Error('changed'), { status: 409 });
+    const onStatus = vi.fn();
+    const panel = await setup({ saveRequestFn: vi.fn(async () => { throw conflict; }), onStatus });
+    panel.choose('columns', '4'); panel.get('save').click();
+    await vi.waitFor(() => expect(panel.get('save').disabled).toBe(false));
+    expect(panel.get('columns').value).toBe('4');
+    expect(onStatus).toHaveBeenLastCalledWith('datasetSaveFailed');
+    expect(panel.saveRequestFn).toHaveBeenCalledWith({ dataset_uid: 11, version: '1', shared_version: 'shared-1',
+        set: { 'shared.card_style_variant': 'modern', 'shared.card_detail_columns': 4 }, unset: [] });
 });

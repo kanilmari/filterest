@@ -382,7 +382,7 @@ func TestTableMetadataPreservesNullableCardStyle(t *testing.T) {
 		value   driver.Value
 		want    string
 	}{
-		{"older schema", false, nil, "null"}, {"inherited", true, nil, "null"},
+		{"no override row", false, nil, "null"}, {"inherited", true, nil, "null"},
 		{"standard", true, "standard", `"standard"`}, {"modern", true, "modern", `"modern"`},
 	} {
 		t.Run(test.name, func(t *testing.T) {
@@ -408,7 +408,7 @@ func TestTableMetadataPreservesNullableCardStyle(t *testing.T) {
 			if strings.Contains(query, "COALESCE(card_style_variant") {
 				t.Fatal("query materialized an inherited style")
 			}
-			if !test.present && !strings.Contains(query, "NULL::varchar AS card_style_variant") {
+			if !strings.Contains(query, "overrides->>'shared.card_style_variant'") {
 				t.Fatalf("legacy schema fallback=%s", query)
 			}
 		})
@@ -423,7 +423,7 @@ func TestTableMetadataPreservesNullableCardDetailColumns(t *testing.T) {
 		value   driver.Value
 		want    string
 	}{
-		{"older schema", false, nil, "null"}, {"inherited", true, nil, "null"},
+		{"no override row", false, nil, "null"}, {"inherited", true, nil, "null"},
 		{"one", true, int64(1), "1"}, {"four", true, int64(4), "4"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
@@ -449,7 +449,7 @@ func TestTableMetadataPreservesNullableCardDetailColumns(t *testing.T) {
 			if strings.Contains(query, "COALESCE(card_detail_columns") {
 				t.Fatal("query materialized an inherited count")
 			}
-			if !test.present && !strings.Contains(query, "NULL::integer AS card_detail_columns") {
+			if !strings.Contains(query, "overrides->>'shared.card_detail_columns'") {
 				t.Fatalf("old schema query=%s", query)
 			}
 		})

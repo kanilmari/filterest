@@ -79,6 +79,10 @@ func TestActiveFilterRemoveSideSurvivesLegacySavePostgres(t *testing.T) {
 		input := defaultSitePresentationSettings()
 		input.DatasetCoverTheme.Shared.ActiveFilterRemoveSide = side
 		input.preserveStoredActiveFilterRemoveSide = omitted
+		input = sitePresentationTestInputWithLoadedRevision(t, input)
+		if omitted {
+			assertRevisionlessSitePresentationSaveRefused(t, db, input)
+		}
 		tx := dbutils.NewLazyTx(db)
 		defer tx.Rollback()
 		request := httptest.NewRequest(http.MethodPost, "/api/admin/site-presentation-settings", nil)

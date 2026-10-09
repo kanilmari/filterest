@@ -76,6 +76,7 @@ func TestFilterbarContentTopSpaceSurvivesLegacySavePostgres(t *testing.T) {
 
 	save := func(input SitePresentationSettingsResponse) SitePresentationSettingsResponse {
 		t.Helper()
+		input = sitePresentationTestInputWithLoadedRevision(t, input)
 		tx := dbutils.NewLazyTx(db)
 		defer tx.Rollback()
 		request := httptest.NewRequest(http.MethodPost, "/api/admin/site-presentation-settings", nil)
@@ -121,6 +122,7 @@ func TestFilterbarContentTopSpaceSurvivesLegacySavePostgres(t *testing.T) {
 		t.Fatalf("stored spacing = %v, want 96", stored)
 	}
 	legacy := strings.Replace(string(body), `"filterbar_content_top_space":40,`, "", 1)
+	assertRevisionlessSitePresentationSaveRefused(t, db, decode(legacy))
 	if saved := save(decode(legacy)).DatasetCoverTheme.Shared.FilterbarContentTopSpace; saved != 96 {
 		t.Fatalf("a request without the key reported %v instead of the stored 96", saved)
 	}

@@ -234,24 +234,52 @@ Site handlers, persistence, validation and the stored shape are separated into
 `site_presentation_settings.go`, `site_presentation_store.go`,
 `site_presentation_validator.go` and `dataset_cover_theme_config.go`.
 
-WL160 slice 2 adds internal storage only: `system_dataset_appearance` holds one
-sparse canonical-path map, schema version and durable revision per immutable
-dataset UID. Zero, false and a value equal to the shared choice remain overrides;
-null is refused and removing the last override retains the empty revision row.
-Renames preserve the row and dataset deletion cascades it. It is an unregistered
-internal table behind the dedicated-mutation policy, with no ordinary runtime
-read/write grants or appearance route. Operator readonly inspection follows the
-existing public-schema contract. No renderer reads these overrides yet.
+Dataset appearance is stored in `system_dataset_appearance`: one sparse canonical-path
+map, schema version and durable revision per immutable dataset UID. Zero, false
+and a value equal to the shared choice remain overrides; null is refused and
+removing the last override retains the empty revision row. Renames preserve it;
+dataset deletion cascades it. The unregistered internal table has no ordinary
+runtime grants and generic writes are refused.
 
-The internal reader/saver in `system_table_tools/dataset_appearance_saver.go`
-uses caller-owned transactions and refuses stale/competing initial saves with
-409. The resolver validates canonical leaves and the complete merged light/dark
-mask, without persisting inherited values. Shared saves do not rewrite overrides.
-Slice 3 must add authorized APIs and shared revisions with a common shared-first
-lock order, migrate non-null `system_db_tables.card_style_variant` and
-`card_detail_columns` as explicit overrides, route every compatibility writer
-through that revision boundary, and retire the old columns only after all
-readers use compatibility projections. Those columns remain unchanged in slice 2.
+Authorized `/api/get-results` responses include `dataset_appearance` with
+`dataset_uid`, `schema_version`, nested `shared` and `effective` values, sparse
+`overrides`, all 44 canonical-path `sources` (`shared` or `override`),
+`shared_version` and `version`. Both scopes and revisions are read in one SQL
+statement after existing dataset read checks, including empty results. Mutable
+appearance projections are refreshed outside the schema cache. The public site
+settings endpoint continues to return shared values only, now with `version`.
+
+Administrator POST `/api/admin/dataset-appearance` accepts
+`{dataset_uid,set,unset,shared_version,version}` and returns that persisted
+snapshot. Site presentation POST keeps its complete settings shape and requires
+`version`. The shared token hashes stored JSON plus its durable update stamp;
+`none` covers an absent shared row. Every shared writer takes the same exclusive
+advisory lock; every override/compatibility writer takes its shared form before
+the dataset advisory lock, registry key-share lock and override row lock.
+Missing/stale revisions receive translated 409 refusals; invalid leaves receive
+translated 400 refusals. Drafts retain their loaded tokens after refusal.
+
+Legacy nullable card style and detail-column choices were migrated as explicit
+overrides, including equality with the shared value. The physical registry
+columns and their editable metadata are retired. Results/card APIs keep nullable
+`card_style_variant`/`card_detail_columns` projections from this map. Both card
+editors use the new authority. Compatibility card writes and generic metadata
+card writes require loaded `shared_version` and `version`; omitted fields are
+preserved and null removes the corresponding override. Generic shared-setting
+creation, editing, renaming and deletion are refused in favour of the dedicated
+revision-protected administrator endpoint. Column visibility/media remain in
+their own stores. Full scoped rendering and scope palette controls are later slices.
+
+Pending owner decision K290, the shared writer validates only the shared value
+and never rewrites or clears overrides. Slice 3a permits every override writer
+to set/unset only `shared.card_style_variant` and `shared.card_detail_columns`;
+other leaves receive translated 400 refusals before transaction work. These card
+leaves cannot invalidate a merged mask after a valid shared save. Stored legacy
+leaves still resolve under the complete canonical read contract. Shared saves
+do not inspect retained non-card overrides; an invalid merged mask still refuses
+at resolution. Slice 5 widens the single write allowlist together with K290's
+policy for shared changes and merged masks; this slice chooses neither refusal
+nor automatic overrides.
 
 ### Optional Home page
 

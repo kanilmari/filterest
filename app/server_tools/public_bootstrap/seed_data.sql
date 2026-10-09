@@ -6655,6 +6655,34 @@ WITH authored_keys(lang_key, fi, en) AS (
     RETURNING lang_key_id
 )
 SELECT count(*) FROM inserted_translations;
+-- 20261009000041_seed_dataset_appearance_refusal_keys.sql
+-- Seeds actionable appearance save refusals in every bundled language.
+-- Connects administrator API reason keys with the canonical translation stores.
+-- Preserves reviewed translations on upgrades and replay.
+-- VERSION_DB: 9.10.2
+-- VERSION_DB_OWNER: 20261009000099_record_database_release_9_10_2.sql
+WITH authored(lang_key,fi,en,ch,yue) AS (VALUES
+ ('dataset_appearance_conflict','Ulkoasuasetukset ovat muuttuneet. Lataa asetukset uudelleen ja tarkista muutokset ennen tallentamista.','Appearance settings changed. Reload and review before saving.','外观设置已更改。请重新加载并检查后再保存。','外觀設定已更改。請重新載入並檢查後再儲存。'),
+ ('dataset_appearance_invalid','Ulkoasuasetus ei kelpaa. Tarkista arvot ja niiden järjestys.','An appearance setting is invalid. Check the values and their order.','外观设置无效。请检查数值及其顺序。','外觀設定無效。請檢查數值同次序。'),
+ ('dataset_appearance_not_found','Aineistoa ei enää ole.','The dataset no longer exists.','数据集已不存在。','資料集已不存在。')
+), written AS (
+ INSERT INTO public.system_lang_keys AS existing(lang_key,fi,en,ch,yue,creation_spec)
+ SELECT lang_key,fi,en,ch,yue,'Revision-protected dataset appearance API refusals.' FROM authored
+ ON CONFLICT(lang_key) DO UPDATE SET
+ fi=COALESCE(NULLIF(existing.fi,''),EXCLUDED.fi),en=COALESCE(NULLIF(existing.en,''),EXCLUDED.en),
+ ch=COALESCE(NULLIF(existing.ch,''),EXCLUDED.ch),yue=COALESCE(NULLIF(existing.yue,''),EXCLUDED.yue)
+ RETURNING id,lang_key,fi,en,ch,yue
+), served AS (
+ SELECT * FROM written UNION ALL
+ SELECT k.id,k.lang_key,k.fi,k.en,k.ch,k.yue FROM public.system_lang_keys k JOIN authored USING(lang_key)
+ WHERE k.lang_key NOT IN(SELECT lang_key FROM written)
+)
+INSERT INTO public.system_lang_key_translations AS existing(lang_key_id,language_code,translation,source_kind,review_status)
+SELECT s.id,c.language_code,c.translation,'manual','approved' FROM served s
+CROSS JOIN LATERAL(VALUES('fi',s.fi),('en',s.en),('ch',s.ch),('yue',s.yue)) c(language_code,translation)
+JOIN public.system_languages l ON l.language_code=c.language_code
+ON CONFLICT(lang_key_id,language_code) DO UPDATE SET translation=EXCLUDED.translation
+WHERE NULLIF(existing.translation,'') IS NULL;
 -- 20260927000001_add_absolute_sign_in_limit.sql
 -- Adds the setting that decides how long one sign-in may last at the very most.
 -- Bridges the administrator's settings view and the deadline stamped into every
@@ -7497,7 +7525,7 @@ DECLARE
     findings text;
 BEGIN
     SELECT string_agg(marker, ', ' ORDER BY marker) INTO missing_markers
-      FROM unnest(ARRAY['wl58_row_actor_support', 'wl58_row_actor_marks_by_table_uid', 'wl58_row_actor_trigger_definitions', 'k116_login_names', 'password_reset_dummy_work', 'system_favorites_table', 'system_front_page_revisions_table', 'system_front_page_blocks_table', 'wl103_row_group_classifications', 'wl132_surviving_sign_in', 'wl52_drop_column_label_value_layout', 'system_dataset_appearance_table', 'wl157_migration_execution_evidence', 'wl58_row_actor_columns', 'system_favorites_registry', 'system_front_page_blocks_registry', 'wl103_row_group_classifications_registry', 'wl144_registry_reference_key', 'dataset_media_hidden']::text[]) AS marker
+      FROM unnest(ARRAY['wl58_row_actor_support', 'wl58_row_actor_marks_by_table_uid', 'wl58_row_actor_trigger_definitions', 'k116_login_names', 'password_reset_dummy_work', 'system_favorites_table', 'system_front_page_revisions_table', 'system_front_page_blocks_table', 'wl103_row_group_classifications', 'wl132_surviving_sign_in', 'wl52_drop_column_label_value_layout', 'system_dataset_appearance_table', 'wl157_migration_execution_evidence', 'dataset_card_appearance_cutover', 'wl58_row_actor_columns', 'system_favorites_registry', 'system_front_page_blocks_registry', 'wl103_row_group_classifications_registry', 'wl144_registry_reference_key', 'dataset_media_hidden']::text[]) AS marker
      WHERE NOT EXISTS (SELECT 1 FROM public.system_data_repair_records AS record
                         WHERE record.migration = marker AND record.action = 'completed');
     IF missing_markers IS NOT NULL THEN
@@ -7509,6 +7537,8 @@ BEGIN
         SELECT 'public.app_check_login_name_protections(): ' || result FROM public.app_check_login_name_protections() AS result
         UNION ALL
         SELECT 'public.app_check_dataset_appearance_storage(): ' || result FROM public.app_check_dataset_appearance_storage() AS result
+        UNION ALL
+        SELECT 'public.app_check_dataset_card_appearance_cutover(): ' || result FROM public.app_check_dataset_card_appearance_cutover() AS result
         UNION ALL
         SELECT 'public.app_check_registry_reference_key(): ' || result FROM public.app_check_registry_reference_key() AS result
     ) AS checks (finding);
@@ -7682,7 +7712,9 @@ BEGIN
       ('20261009000002_seed_admin_version_info_language_keys.sql', '699a24ae22e7e8fc92370ae54dc513c6d4f4d282d7afe7aa18b02d821f835ac4', 'bootstrap_baseline', 'bootstrap'),
       ('20261009000003_create_system_dataset_appearance.sql', '1de8e9aaadfd9296c51713a2fb44b5ce7678af980b9d663188bb6b4a296ea0ba', 'bootstrap_baseline', 'bootstrap'),
       ('20261009000020_add_migration_execution_evidence.sql', 'a1916cb61a28da3fd9ed0ee8f2346bcc06ba7acad1bda0e6293e5c68b0ebde11', 'bootstrap_baseline', 'bootstrap'),
-      ('20261009000099_record_database_release_9_10_2.sql', '5ff12747a4f3dcdd5fe44959dea23db07cb43030b492477606dc0fbfa3475b3e', 'bootstrap_baseline', 'bootstrap')
+      ('20261009000040_cut_over_dataset_card_appearance.sql', '87cb3e9606bdbb2e0ec990bd71ba87a730e2576e8e91b96f2abb8098fce4e245', 'bootstrap_baseline', 'bootstrap'),
+      ('20261009000041_seed_dataset_appearance_refusal_keys.sql', '0b177361469267120fe5a5b2c9eee43bd7380dd62f9056e5b1ab2dd95af6d223', 'bootstrap_baseline', 'bootstrap'),
+      ('20261009000099_record_database_release_9_10_2.sql', 'b782f9806f92fd3f4205f3889d6f0671bc9dd683e3be5bee4429e340f35a04c3', 'bootstrap_baseline', 'bootstrap')
     ON CONFLICT (filename) DO NOTHING;
     INSERT INTO public.system_db_version (version, description)
     VALUES ('9.10.2', 'Filterest generated public bootstrap');

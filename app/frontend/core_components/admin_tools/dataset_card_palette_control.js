@@ -1,8 +1,8 @@
 // dataset_card_palette_control.js
 // Edits only the current dataset's nullable card presentation overrides.
-// Bridges the existing card-visibility API and transient card-only palette previews.
+// Reads through card visibility and saves canonical revision-protected appearance patches.
 // Keeps dataset saves separate from site defaults and never rewrites field metadata.
-import { fetchCardVisibility, saveDatasetCardPresentation } from '../endpoints/stable_endpoint_router.js';
+import { fetchCardVisibility, saveDatasetAppearance } from '../endpoints/stable_endpoint_router.js';
 import {
     setDatasetCardPresentationPreview, releaseDatasetCardPresentationPreview,
     applySavedDatasetCardPresentation,
@@ -35,11 +35,16 @@ function normalizedSettings(value, datasetName) {
     if (value.card_detail_columns !== null && normalizeCardDetailColumnOverride(value.card_detail_columns) === null) {
         throw new Error('Invalid dataset card columns');
     }
-    return { card_style_variant: value.card_style_variant, card_detail_columns: value.card_detail_columns };
+    const appearance = value.dataset_appearance;
+    if (!Number.isInteger(appearance?.dataset_uid) || !appearance?.version || !appearance?.shared_version) {
+        throw new Error('Dataset appearance revision missing');
+    }
+    return { card_style_variant: value.card_style_variant, card_detail_columns: value.card_detail_columns,
+        dataset_uid: appearance.dataset_uid, version: appearance.version, shared_version: appearance.shared_version };
 }
 
 export function buildDatasetCardPaletteControl({
-    datasetName, copy, requestFn = fetchCardVisibility, saveRequestFn = saveDatasetCardPresentation,
+    datasetName, copy, requestFn = fetchCardVisibility, saveRequestFn = saveDatasetAppearance,
     onStatus = () => {},
 }) {
     const owner = {};
@@ -116,13 +121,24 @@ export function buildDatasetCardPaletteControl({
         saving = true; syncControls(); onStatus('datasetSaving');
         try {
             await enqueueDatasetOperation(datasetName, async () => {
-            const response = await saveRequestFn({ table_name: datasetName, ...snapshot });
-            const actual = normalizedSettings(response, datasetName);
-            if (actual.card_style_variant !== snapshot.card_style_variant || actual.card_detail_columns !== snapshot.card_detail_columns) {
+            const set = {}, unset = [];
+            for (const key of ['card_style_variant', 'card_detail_columns']) {
+                if (snapshot[key] === null) unset.push('shared.' + key);
+                else set['shared.' + key] = snapshot[key];
+            }
+            const response = await saveRequestFn({ dataset_uid: snapshot.dataset_uid, set, unset,
+                version: snapshot.version, shared_version: snapshot.shared_version });
+            const actual = normalizedSettings({ table_name: datasetName,
+                card_style_variant: response?.overrides?.['shared.card_style_variant'] ?? null,
+                card_detail_columns: response?.overrides?.['shared.card_detail_columns'] ?? null,
+                dataset_appearance: response }, datasetName);
+            if (actual.dataset_uid !== snapshot.dataset_uid || actual.version === snapshot.version
+                || actual.card_style_variant !== snapshot.card_style_variant || actual.card_detail_columns !== snapshot.card_detail_columns) {
                 throw new Error('Dataset presentation save readback mismatch');
             }
             if (destroyed) return;
             saved = actual;
+            if (draft) Object.assign(draft, { dataset_uid: actual.dataset_uid, version: actual.version, shared_version: actual.shared_version });
             applySavedDatasetCardPresentation(datasetName, saved);
             if (revision === savingRevision || !previewActive) {
                 previewActive = false;
@@ -143,9 +159,9 @@ export function buildDatasetCardPaletteControl({
         if (destroyed) return;
         const response = await requestFn(datasetName);
         if (destroyed) return;
-        // Older servers may omit only the new nullable columns field; their saved style remains authoritative.
+        // Both revisions belong to the loaded draft; conflicts keep it for review.
         if (!Array.isArray(response?.columns) || response.columns.length === 0) throw new Error('No dataset fields');
-        saved = normalizedSettings({ card_detail_columns: null, ...response }, datasetName);
+        saved = normalizedSettings(response, datasetName);
         draft = clone(saved);
         applySavedDatasetCardPresentation(datasetName, saved);
         syncControls();

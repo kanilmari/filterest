@@ -255,6 +255,35 @@
       ]
     },
     {
+      "path_pattern": "/api/admin/dataset-appearance",
+      "match_type": "exact",
+      "handler_name": "system_table_tools.AdminDatasetAppearanceHandler",
+      "methods": [
+        "POST"
+      ],
+      "method_source": "route_registration",
+      "scenarios": [
+        {
+          "name": "production",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        },
+        {
+          "name": "development",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        },
+        {
+          "name": "api_language",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        }
+      ]
+    },
+    {
       "path_pattern": "/api/admin/dataset-sort-default",
       "match_type": "exact",
       "handler_name": "system_table_tools.SaveDatasetSortDefaultHandler",

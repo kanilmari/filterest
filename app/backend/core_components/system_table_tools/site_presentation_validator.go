@@ -25,15 +25,17 @@ func decodeSitePresentationSettings(reader io.Reader) (SitePresentationSettingsR
 	if err := rejectTrailingJSON(decoder); err != nil {
 		return SitePresentationSettingsResponse{}, err
 	}
-	if err := requireExactJSONKeys(raw, []string{
-		"dataset_cover_theme",
-		"row_article_timestamp_display_mode",
-	}); err != nil {
-		return SitePresentationSettingsResponse{}, err
-	}
-
 	var topLevel map[string]json.RawMessage
 	if err := json.Unmarshal(raw, &topLevel); err != nil {
+		return SitePresentationSettingsResponse{}, err
+	}
+	// An omitted revision is a conflict after the rest of the body validates.
+	// Unknown keys, missing settings and malformed values remain input refusals.
+	topLevelKeys := []string{"dataset_cover_theme", "row_article_timestamp_display_mode"}
+	if _, provided := topLevel["version"]; provided {
+		topLevelKeys = append(topLevelKeys, "version")
+	}
+	if err := requireExactJSONKeys(raw, topLevelKeys); err != nil {
 		return SitePresentationSettingsResponse{}, err
 	}
 	if err := requireExactJSONKeys(topLevel["dataset_cover_theme"], []string{

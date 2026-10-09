@@ -58,7 +58,7 @@ func TestSiteDatasetAppearanceSharedContract(t *testing.T) {
 				delete(config[owner], key)
 			}
 			body, err := json.Marshal(map[string]any{
-				"dataset_cover_theme": config, "row_article_timestamp_display_mode": "date_time",
+				"version": "none", "dataset_cover_theme": config, "row_article_timestamp_display_mode": "date_time",
 			})
 			if err != nil {
 				t.Fatal(err)

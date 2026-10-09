@@ -26,6 +26,11 @@ class StructSpec:
 
 
 ALLOWLIST = [
+    StructSpec("frontend/shared/dataset_appearance/config.go", "DatasetCoverThemeValues", "DatasetCoverThemeValues"),
+    StructSpec("frontend/shared/dataset_appearance/config.go", "DatasetCoverSharedValues", "DatasetCoverSharedValues"),
+    StructSpec("frontend/shared/dataset_appearance/config.go", "DatasetCoverThemeConfig", "DatasetCoverThemeConfig"),
+    StructSpec("backend/core_components/dataset_appearance_store/shared_appearance_revision.go", "AppearanceResponse", "DatasetAppearanceResponse"),
+
     StructSpec(
         go_file="backend/core_components/httpresponse/httpresponse.go",
         go_name="ErrorBody",

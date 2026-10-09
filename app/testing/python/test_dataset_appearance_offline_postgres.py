@@ -14,6 +14,7 @@ ROOT = APP.parent
 BOOTSTRAP = APP / "server_tools/public_bootstrap"
 MIGRATIONS = APP / "server_tools/migrations"
 MIGRATION = MIGRATIONS / "20261009000003_create_system_dataset_appearance.sql"
+CUTOVER = MIGRATIONS / "20261009000040_cut_over_dataset_card_appearance.sql"
 OWNER = MIGRATIONS / "20261009000099_record_database_release_9_10_2.sql"
 
 
@@ -53,12 +54,18 @@ def test_dataset_appearance_offline_fresh_upgrade_replay_and_lifecycle(offline_p
         if installation == "fresh":
             sql = (BOOTSTRAP / name).read_text()
         else:
-            sql = subprocess.run(["git", "show", f"e314e34:app/server_tools/public_bootstrap/{name}"],
+            sql = subprocess.run(["git", "show", f"dbda048:app/server_tools/public_bootstrap/{name}"],
                                  cwd=ROOT, capture_output=True, text=True, check=True).stdout
         run(sql)
     if installation == "upgrade":
         run(MIGRATION.read_text())
+        run("UPDATE system_db_tables SET card_style_variant='modern',card_detail_columns=2 WHERE table_name='tiketit';")
+        run(CUTOVER.read_text())
         run(OWNER.read_text())
+        run("DO $p$ BEGIN IF NOT EXISTS (SELECT 1 FROM system_dataset_appearance WHERE overrides='{" +
+            '\"shared.card_style_variant\":\"modern\",\"shared.card_detail_columns\":2' +
+            "}') THEN RAISE EXCEPTION 'legacy equality was lost'; END IF; END $p$;")
+        run("DELETE FROM system_dataset_appearance;")
     run("""DO $proof$
         BEGIN
             IF EXISTS (SELECT 1 FROM app_check_dataset_appearance_storage()) THEN
@@ -71,12 +78,12 @@ def test_dataset_appearance_offline_fresh_upgrade_replay_and_lifecycle(offline_p
                 RAISE EXCEPTION 'appearance constraints differ';
             END IF;
         END $proof$;
-        UPDATE system_db_tables SET card_style_variant='modern',card_detail_columns=3 WHERE table_name='tiketit';
         INSERT INTO system_dataset_appearance(table_uid,overrides,revision)
             SELECT table_uid,'{"light.image_blur":0,"light.oval_enabled":false,"shared.card_detail_columns":2}',7
             FROM system_db_tables WHERE table_name='tiketit';""")
     for _ in range(2):
         run(MIGRATION.read_text())
+        run(CUTOVER.read_text())
         run(OWNER.read_text())
         run("""DO $proof$
             BEGIN
@@ -90,9 +97,8 @@ def test_dataset_appearance_offline_fresh_upgrade_replay_and_lifecycle(offline_p
                     overrides='{"light.image_blur":0,"light.oval_enabled":false,"shared.card_detail_columns":2}') THEN
                     RAISE EXCEPTION 'migration changed explicit overrides';
                 END IF;
-                IF NOT EXISTS (SELECT 1 FROM system_db_tables WHERE table_name='tiketit'
-                    AND card_style_variant='modern' AND card_detail_columns=3) THEN
-                    RAISE EXCEPTION 'migration changed legacy card settings';
+                IF EXISTS (SELECT 1 FROM app_check_dataset_card_appearance_cutover()) THEN
+                    RAISE EXCEPTION 'legacy cutover proof failed';
                 END IF;
             END $proof$;""")
     run("UPDATE system_dataset_appearance SET overrides='{}',revision=8;")
@@ -130,3 +136,19 @@ def test_dataset_appearance_offline_fresh_upgrade_replay_and_lifecycle(offline_p
                 RAISE EXCEPTION 'dataset deletion retained appearance row';
             END IF;
         END $proof$;""")
+
+
+def test_dataset_appearance_invalid_legacy_value_refuses_retirement(offline_postgres):
+    run = offline_postgres
+    for name in ("schema.sql", "seed_data.sql"):
+        original = subprocess.run(["git", "show", f"dbda048:app/server_tools/public_bootstrap/{name}"],
+                                  cwd=ROOT, capture_output=True, text=True, check=True).stdout
+        run(original)
+    run("UPDATE system_db_tables SET card_style_variant='floating' WHERE table_name='tiketit';")
+    run(CUTOVER.read_text(), expected_error="invalid legacy card style; cutover refused")
+    run("""DO $proof$ BEGIN
+        IF NOT EXISTS (SELECT 1 FROM system_db_tables WHERE table_name='tiketit' AND card_style_variant='floating')
+           OR EXISTS (SELECT 1 FROM system_data_repair_records WHERE migration='dataset_card_appearance_cutover') THEN
+            RAISE EXCEPTION 'failed cutover retired data or marked completion';
+        END IF;
+    END $proof$;""")

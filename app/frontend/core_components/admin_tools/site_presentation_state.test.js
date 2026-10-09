@@ -19,6 +19,7 @@ const toastTexts = () => [...document.querySelectorAll('[data-testid="toast"] .t
 
 const clone = (v) => JSON.parse(JSON.stringify(v));
 const settings = (brand = '#e61aad') => ({
+    version: '',
     dataset_cover_theme: { ...clone(DEFAULT_DATASET_COVER_THEME),
         shared: { ...DEFAULT_DATASET_COVER_THEME.shared, brand_color: brand } },
     row_article_timestamp_display_mode: 'date_only',

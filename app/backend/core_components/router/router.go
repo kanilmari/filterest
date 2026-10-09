@@ -191,6 +191,7 @@ func RegisterRoutes(frontendDir string, storagePath string) {
 	functionRegisterHandler("/api/admin/ui-feature-flags", system_table_tools.GetAdminUIFeatureFlagsHandler, "system_table_tools.GetAdminUIFeatureFlagsHandler", http.MethodGet)
 	functionRegisterHandler("/api/site-presentation-settings", system_table_tools.GetSitePresentationSettingsHandler, "system_table_tools.GetSitePresentationSettingsHandler", http.MethodGet)
 	functionRegisterHandler("/api/admin/site-presentation-settings", system_table_tools.AdminSitePresentationSettingsHandler, "system_table_tools.AdminSitePresentationSettingsHandler", http.MethodGet, http.MethodPost)
+	functionRegisterHandler("/api/admin/dataset-appearance", system_table_tools.AdminDatasetAppearanceHandler, "system_table_tools.AdminDatasetAppearanceHandler", http.MethodPost)
 	functionRegisterHandler("/api/admin/row-groups", system_table_tools.AdminRowGroupsHandler, "system_table_tools.AdminRowGroupsHandler", http.MethodGet, http.MethodPost)
 	functionRegisterHandler("/api/admin/row-group-memberships", system_table_tools.AdminRowGroupMembershipsHandler, "system_table_tools.AdminRowGroupMembershipsHandler", http.MethodPost, http.MethodDelete)
 	functionRegisterHandler("/api/admin/row-access-rules", system_table_tools.AdminRowAccessRulesHandler, "system_table_tools.AdminRowAccessRulesHandler", http.MethodGet, http.MethodPost)

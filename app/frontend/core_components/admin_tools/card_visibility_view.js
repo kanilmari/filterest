@@ -233,6 +233,7 @@ export async function generate_card_visibility_form(container) {
     let originalData = [];
     let cardDetailsLayout = CARD_DETAILS_LAYOUT_VALUES.CONDITIONAL_MULTILINE;
     let originalCardDetailsLayout = CARD_DETAILS_LAYOUT_VALUES.CONDITIONAL_MULTILINE;
+    let appearanceSnapshot = null;
     let cardStyleVariant = null;
     let originalCardStyleVariant = null;
     let checkboxTable = null;
@@ -337,6 +338,8 @@ export async function generate_card_visibility_form(container) {
             card_details_layout: normalizedLayout,
             card_style_variant: normalizedStyleVariant,
             columns: nextRows,
+            version: appearanceSnapshot?.version,
+            shared_version: appearanceSnapshot?.shared_version,
         });
         const labelRows = nextRows.filter((row) => Object.hasOwn(row, 'show_key_on_card_override'));
         if (labelRows.length) {
@@ -350,6 +353,7 @@ export async function generate_card_visibility_form(container) {
             }
         }
         if (currentTableName !== targetDataset) return;
+        appearanceSnapshot = response?.dataset_presentation?.dataset_appearance || appearanceSnapshot;
         columnsData = cloneColumnsData(nextRows);
         originalData = cloneColumnsData(nextRows);
         cardDetailsLayout = normalizedLayout;
@@ -539,6 +543,7 @@ export async function generate_card_visibility_form(container) {
             if (requestSequence !== loadRequestSequence) {
                 return;
             }
+            appearanceSnapshot = response?.dataset_appearance || null;
             columnsData = cloneColumnsData(prepareCardLabelVisibilityRows(Array.isArray(response) ? response : (response.columns || [])));
             cardDetailsLayout = Array.isArray(response)
                 ? CARD_DETAILS_LAYOUT_VALUES.CONDITIONAL_MULTILINE
