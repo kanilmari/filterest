@@ -204,6 +204,12 @@ def mutate(seed: str, case: str) -> str:
             seed, "SELECT set_config(new_value => 'off', setting_name => 'standard_conforming_strings', is_local => false);"),
         "set_config_typed_setting": lambda: before_acceptance(
             seed, "SELECT set_config(TEXT 'client_encoding', 'LATIN1', false);"),
+        "set_config_nested_casts": lambda: before_acceptance(
+            seed, "SELECT set_config(CAST(CAST('standard_conforming_strings' AS text) AS text), 'off', false);"),
+        "set_config_function_cast": lambda: before_acceptance(
+            seed, "SELECT set_config(text('standard_conforming_strings'), 'off', false);"),
+        "set_config_subquery": lambda: before_acceptance(
+            seed, "SELECT set_config((SELECT name FROM (VALUES ('client_encoding')) AS settings(name)), 'LATIN1', false);"),
     }
     return cases[case]()
 
@@ -230,6 +236,7 @@ SHAPE_CASES = [
     "reset_lexing_setting", "reset_all_settings", "set_config_lexing_setting", "alter_lexing_setting",
     "lexing_setting_in_quoted_body",
     "set_config_grouped_setting", "set_config_reordered_setting", "set_config_typed_setting",
+    "set_config_nested_casts", "set_config_function_cast", "set_config_subquery",
 ]
 
 
@@ -287,8 +294,8 @@ def test_constants_are_decoded_and_read_as_lenient_code(constant: str, expected:
     "SELECT 1; -- \\gexec\n/* \\copy */ SELECT 2",
     r"SELECT $body$ \i file.sql $body$",
     "SELECT set_config('lock_timeout', '5s', true)",
-    "SELECT set_config('application_name', 'client_encoding', false)",
-    "SELECT set_config(new_value => 'client_encoding', setting_name => 'application_name', is_local => false)",
+    "SELECT set_config('application_name', 'bootstrap-test', false)",
+    "SELECT 'names'; -- standard_conforming_strings\n/* client_encoding */ SELECT 1",
     "SET LOCAL lock_timeout = '5s'; RESET lock_timeout",
     "ALTER ROLE readeronly SET lock_timeout = '5s'",
     "COPY public.example FROM '/tmp/input.csv'",
@@ -298,6 +305,27 @@ def test_allowed_values_comments_and_other_settings_still_pass(sql: str) -> None
     assert "system_schema_migrations" not in sql_identifiers(sql)
 
 
+@pytest.mark.parametrize("setting", ["standard_conforming_strings", "client_encoding"])
+@pytest.mark.parametrize("sql", [
+    "SELECT '{setting}'",
+    'SELECT "{setting}"',
+    "SELECT {setting}",
+    "SELECT 'prefix {setting} suffix'",
+    "SELECT '/* open {setting}'",
+    "SELECT $body$ 'open {setting} $body$",
+    "SELECT set_config(CAST(CAST('{setting}' AS text) AS text), 'off', false)",
+    "SELECT set_config(pg_catalog.text('{setting}'), 'off', false)",
+    "SELECT set_config((SELECT name FROM (VALUES ('{setting}')) AS settings(name)), 'off', false)",
+    "SELECT set_config('application_name', '{setting}', false)",
+    "SELECT set_config(new_value => '{setting}', setting_name => 'application_name', is_local => false)",
+    "SELECT concat('unrelated', '{setting}')",
+    "DO $body$ BEGIN PERFORM text('{setting}'); END; $body$",
+])
+def test_static_lexing_setting_mentions_are_refused_in_any_position(setting: str, sql: str) -> None:
+    with pytest.raises(AssertionError, match="parser setting"):
+        sql_identifiers(sql.format(setting=setting.upper()))
+
+
 @pytest.mark.parametrize("sql", [
     "SET /* a */ SESSION /* b */ standard_conforming_strings TO off",
     'SET LOCAL "CLIENT_ENCODING" = \'LATIN1\'',
@@ -305,6 +333,8 @@ def test_allowed_values_comments_and_other_settings_still_pass(sql: str) -> None
     "RESET client_encoding",
     "RESET ALL",
     "SET NAMES DEFAULT",
+    "RESET NAMES",
+    "ALTER ROLE readeronly SET NAMES 'LATIN1'",
     "ALTER DATABASE example SET client_encoding FROM CURRENT",
     "ALTER FUNCTION public.f() SET standard_conforming_strings = off",
     "ALTER SYSTEM RESET client_encoding",

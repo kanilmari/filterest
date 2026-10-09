@@ -57,7 +57,7 @@ ACCEPTANCE_BLOCK = re.compile(
     + r"\Z")
 DOLLAR_TAG = re.compile(r"\$(?:[A-Za-z_\x80-\U0010ffff][A-Za-z0-9_\x80-\U0010ffff]*)?\$")
 BARE_NAME = re.compile(r"[A-Za-z_\x80-\U0010ffff][A-Za-z0-9_$\x80-\U0010ffff]*")
-LEXING_SETTINGS = {"standard_conforming_strings", "client_encoding", "names"}
+LEXING_SETTINGS = {"standard_conforming_strings", "client_encoding"}
 SQL_SPACE = " \t\n\r\f\v"
 LINE_END = re.compile(r"[\r\n]")
 
@@ -246,62 +246,21 @@ def _dollar_constant(sql: str, tag: re.Match) -> tuple[str, int]:
     return sql[tag.end():close], close + len(tag.group())
 
 
-def _setting_argument(tokens: list[tuple[str, str]], start: int) -> str | None:
-    """Find set_config's positional or named setting name, allowing grouping and reordered named arguments."""
-    arguments, argument, depth = [], [], 0
-    for token in tokens[start:]:
-        if token == ("symbol", ")") and depth == 0:
-            arguments.append(argument)
-            break
-        if token == ("symbol", ",") and depth == 0:
-            arguments.append(argument)
-            argument = []
-            continue
-        argument.append(token)
-        if token == ("symbol", "("):
-            depth += 1
-        elif token == ("symbol", ")"):
-            depth -= 1
-    else:
-        arguments.append(argument)
-    for i, argument in enumerate(arguments):
-        named = len(argument) >= 3 and argument[1:3] in (
-            [("symbol", ":"), ("symbol", "=")], [("symbol", "="), ("symbol", ">")])
-        if named:
-            if argument[0][0] not in ("word", "identifier") or argument[0][1].lower() != "setting_name":
-                continue
-            argument = argument[3:]
-        elif i != 0:
-            continue
-        j = 0
-        while j < len(argument) and argument[j] == ("symbol", "("):
-            j += 1
-        if argument[j:j + 2] == [("word", "cast"), ("symbol", "(")]:
-            j += 2
-            while j < len(argument) and argument[j] == ("symbol", "("):
-                j += 1
-        # Type-prefixed constants (TEXT 'name', pg_catalog.text 'name') are static values too.
-        while j < len(argument) and (argument[j][0] in ("word", "identifier") or argument[j] == ("symbol", ".")):
-            j += 1
-        if j < len(argument) and argument[j][0] == "value":
-            return argument[j][1].lower()
-    return None
-
-
 def _refuse_parser_changes(tokens: list[tuple[str, str]]) -> None:
-    """Refuse static COPY input and setting changes before default SQL/psql lexing can diverge."""
+    """Refuse static lexing-setting mentions and COPY input before default SQL/psql lexing can diverge."""
     for i, (kind, value) in enumerate(tokens):
         word = value.lower()
+        # Check decoded constants themselves, even bare-name values or text past a lenient scan's early stop.
+        # No call/argument shape can hide a static name behind casts, grouping, a subquery or another wrapper.
+        assert not any(setting in word for setting in LEXING_SETTINGS), "the seed mentions a parser setting"
         if kind == "word" and word in ("set", "reset"):
             j = i + 1
             if j < len(tokens) and tokens[j] in (("word", "session"), ("word", "local")):
                 j += 1
             if j < len(tokens) and tokens[j][0] in ("word", "identifier"):
                 setting = tokens[j][1].lower()
-                assert setting not in LEXING_SETTINGS and not (word == "reset" and setting == "all"), (
+                assert setting != "names" and not (word == "reset" and setting == "all"), (
                     "the seed changes a parser setting")
-        if kind in ("word", "identifier") and word == "set_config" and tokens[i + 1:i + 2] == [("symbol", "(")]:
-            assert _setting_argument(tokens, i + 2) not in LEXING_SETTINGS, "the seed changes a parser setting"
         if kind == "word" and word == "copy":
             depth = 0
             for j in range(i + 1, len(tokens)):
@@ -374,7 +333,9 @@ def sql_identifiers(sql: str) -> list[str]:
     Unquoted names fold to lower case; quoted names retain case. Every decoded string constant ('', E'', U&'',
     with continuation/UESCAPE) and dollar-quoted body is also scanned as code, leniently: an unterminated construct
     ends that inner scan. The seed's top level is strict and refuses psql backslashes outside quoted constructs
-    and comments. Static COPY FROM STDIN and lexing-setting changes are refused in all code scans.
+    and comments. Static COPY FROM STDIN, SET/RESET NAMES and RESET ALL are refused in all code scans, including
+    ALTER ... SET/RESET. Any static mention of a lexing-setting name in decoded code or constants is refused,
+    regardless of wrappers or argument position; the current generated seed needs neither setting name.
 
     Run-time assembly from separate values (concatenation, format(), quote_ident, regclass casts, catalog updates
     through a value) stays out of scope; a constant whose whole decoded content is a single bare name is a value,
