@@ -1,5 +1,5 @@
 // front_page_hero.go
-// Reads and saves the Home title and slogan as fixed Finnish/English language keys.
+// Reads and saves the Home title, slogan and description as fixed Finnish/English language keys.
 // Connects the existing language-key editor to both canonical translation stores.
 // Keeps empty copy intentional and all administrator writes in the request transaction.
 package system_table_tools
@@ -14,6 +14,7 @@ import (
 
 const frontPageTitleKey = "site_front_page_title"
 const frontPageSloganKey = "site_front_page_slogan"
+const frontPageDescriptionKey = "site_front_page_description"
 
 type frontPageHeroText struct {
 	LangKey          string `json:"lang_key,omitempty"`
@@ -23,13 +24,14 @@ type frontPageHeroText struct {
 }
 
 type frontPageHero struct {
-	Title  *frontPageHeroText `json:"title"`
-	Slogan *frontPageHeroText `json:"slogan"`
+	Title       *frontPageHeroText `json:"title"`
+	Slogan      *frontPageHeroText `json:"slogan"`
+	Description *frontPageHeroText `json:"description"`
 }
 
 func readFrontPageHero(q dbutils.Querier) (frontPageHero, error) {
-	hero := frontPageHero{Title: &frontPageHeroText{LangKey: frontPageTitleKey}, Slogan: &frontPageHeroText{LangKey: frontPageSloganKey}}
-	for _, text := range []*frontPageHeroText{hero.Title, hero.Slogan} {
+	hero := frontPageHero{Title: &frontPageHeroText{LangKey: frontPageTitleKey}, Slogan: &frontPageHeroText{LangKey: frontPageSloganKey}, Description: &frontPageHeroText{LangKey: frontPageDescriptionKey}}
+	for _, text := range []*frontPageHeroText{hero.Title, hero.Slogan, hero.Description} {
 		err := q.QueryRow(`SELECT COALESCE(fi,''), COALESCE(en,'')
             FROM public.system_lang_keys WHERE lang_key=$1`, text.LangKey).Scan(&text.Fi, &text.En)
 		if err != nil && err != sql.ErrNoRows {
@@ -45,7 +47,7 @@ func readFrontPageHeroForAdmin(q dbutils.Querier) (frontPageHero, error) {
 	if err != nil {
 		return hero, err
 	}
-	for _, text := range []*frontPageHeroText{hero.Title, hero.Slogan} {
+	for _, text := range []*frontPageHeroText{hero.Title, hero.Slogan, hero.Description} {
 		err := q.QueryRow(`SELECT COALESCE(usage_explanation,'')
             FROM public.system_lang_key_sources WHERE source_type='front_page_hero' AND source_high=$1
             AND lang_key_id=(SELECT id FROM public.system_lang_keys WHERE lang_key=$1)
@@ -58,11 +60,11 @@ func readFrontPageHeroForAdmin(q dbutils.Querier) (frontPageHero, error) {
 }
 
 func validateFrontPageHero(hero frontPageHero) error {
-	for index, text := range []*frontPageHeroText{hero.Title, hero.Slogan} {
+	for index, text := range []*frontPageHeroText{hero.Title, hero.Slogan, hero.Description} {
 		if text == nil {
 			return errFrontPageInput
 		}
-		expected := []string{frontPageTitleKey, frontPageSloganKey}[index]
+		expected := []string{frontPageTitleKey, frontPageSloganKey, frontPageDescriptionKey}[index]
 		if text.LangKey != "" && text.LangKey != expected {
 			return errFrontPageInput
 		}
@@ -79,8 +81,8 @@ func saveFrontPageHero(tx *sql.Tx, hero frontPageHero) error {
 	if err := validateFrontPageHero(hero); err != nil {
 		return err
 	}
-	for index, text := range []*frontPageHeroText{hero.Title, hero.Slogan} {
-		key := []string{frontPageTitleKey, frontPageSloganKey}[index]
+	for index, text := range []*frontPageHeroText{hero.Title, hero.Slogan, hero.Description} {
+		key := []string{frontPageTitleKey, frontPageSloganKey, frontPageDescriptionKey}[index]
 		var id int64
 		err := tx.QueryRow(`INSERT INTO public.system_lang_keys(lang_key,fi,en,creation_spec)
    VALUES($1,$2,$3,'Site-wide Home hero copy.') ON CONFLICT(lang_key) DO UPDATE

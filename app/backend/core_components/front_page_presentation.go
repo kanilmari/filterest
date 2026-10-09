@@ -1,7 +1,7 @@
 // front_page_presentation.go
 // Reads Home's optional layout and opaque revision in one database snapshot.
 // Connects public/admin Home responses to the shared browser/server validation.
-// A missing row preserves legacy geometry; invalid saved layouts fail visibly.
+// A missing row supplies the centred default; malformed stored layouts fail visibly.
 package backend
 
 import (
@@ -28,7 +28,8 @@ func ReadFrontPagePresentation(ctx context.Context, db *sql.DB) (*presentation.V
 	var valueType int
 	err := db.QueryRowContext(ctx, `SELECT json_value, COALESCE(updated::text, ''), value_type FROM public.system_config WHERE key='front_page_presentation'`).Scan(&raw, &updated, &valueType)
 	if err == sql.ErrNoRows {
-		return nil, "none", nil
+		value := presentation.Rules().Default
+		return &value, "none", nil
 	}
 	if err != nil {
 		return nil, "", err
@@ -36,7 +37,7 @@ func ReadFrontPagePresentation(ctx context.Context, db *sql.DB) (*presentation.V
 	if valueType != 5 {
 		return nil, "", fmt.Errorf("Home layout requires JSON value type 5")
 	}
-	value, err := presentation.Parse(raw)
+	value, err := presentation.ParseStored(raw)
 	if err != nil {
 		return nil, "", err
 	}

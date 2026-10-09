@@ -288,6 +288,30 @@
     {
       "component": "Filterest original interface SVGs",
       "kind": "asset",
+      "path": "app/frontend/icons/general/home-align-center-icon.svg",
+      "sha256": "46f0244349be359f4fc20611457fbc25c63f045bdc58847e7c880061225abaa0"
+    },
+    {
+      "component": "Filterest original interface SVGs",
+      "kind": "asset",
+      "path": "app/frontend/icons/general/home-align-justify-icon.svg",
+      "sha256": "0943b0a756cafbdc3691feffdfd708a72a6333c245c58df58fdb89865897a263"
+    },
+    {
+      "component": "Filterest original interface SVGs",
+      "kind": "asset",
+      "path": "app/frontend/icons/general/home-align-left-icon.svg",
+      "sha256": "a6c52d9696cd544abb66111b63c01a29a2eb51d2cd4991e7f96d1b3394c23d0f"
+    },
+    {
+      "component": "Filterest original interface SVGs",
+      "kind": "asset",
+      "path": "app/frontend/icons/general/home-align-right-icon.svg",
+      "sha256": "39883e44b1391ac047bd7715ef010941517fdce30025ed0b91e347b9d3dfe839"
+    },
+    {
+      "component": "Filterest original interface SVGs",
+      "kind": "asset",
       "path": "app/frontend/icons/general/home-palette-icon.svg",
       "sha256": "96b4a5fea3884d29ef1143ac623adb42f03475a090e0190290ebeea63c19336d"
     },

@@ -19,13 +19,38 @@
   position: absolute;
   z-index: -1;
   inset: calc(0px - var(--dataset-background-image-blur, 0px));
+  clip-path: inset(var(--dataset-background-image-blur, 0));
+  filter: blur(var(--dataset-background-image-blur, 0));
+  pointer-events: none;
+}
+
+/* Wash is above media and has independent strength; video cross-fades keep their own opacity. */
+.front-page {
+  --home-media-opacity: var(--home-light-opacity);
+  --home-media-wash: var(--home-light-wash);
+  --home-wash-colour: var(--bg_color_extreme);
+}
+body.dark-mode .front-page {
+  --home-media-opacity: var(--home-dark-opacity);
+  --home-media-wash: var(--home-dark-wash);
+  --home-wash-colour: var(--bg_color);
+}
+.front-page-background::before,
+.front-page-background::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+}
+.front-page-background::before {
   background-image: var(--front-page-background-2160);
   background-repeat: no-repeat;
   background-size: cover;
-  clip-path: inset(var(--dataset-background-image-blur, 0));
-  filter: blur(var(--dataset-background-image-blur, 0));
-  opacity: 0.2;
-  pointer-events: none;
+  background-position: inherit;
+  opacity: var(--home-media-opacity);
+}
+.front-page-background::after {
+  background: var(--home-wash-colour);
+  opacity: var(--home-media-wash);
 }
 
 /* Only the inner content scrolls; the top row and background stay in place. */
@@ -92,7 +117,7 @@
 
 /* A copy fades in at the start and cross-fades back to the beginning (front_page_background_video.js). */
 .front-page-background video.front-page-background__video--visible {
-  opacity: 1;
+  opacity: var(--home-media-opacity);
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -102,8 +127,7 @@
 }
 
 .front-page-hero {
-  text-align: center;
-  padding-block: var(--filterbar-content-top-space, 40px) 2rem;
+  text-align: left;
   overflow-wrap: anywhere;
 }
 
@@ -111,10 +135,13 @@
   display: none;
 }
 
-/* The slogan keeps the line breaks typed in its multi-line Home settings fields. */
-.front-page-hero .morphing-subtitle {
-  white-space: pre-line;
-}
+/* The title, slogan and description share one flow; authored line breaks stay. */
+.front-page-hero .morphing-title { margin-top: 0; }
+/* Outrank the shared subtitle base, which is imported after Home's stylesheet. */
+.front-page-hero .front-page-slogan.morphing-subtitle { font-size: 1.25rem; margin-block: 0 1em; }
+.front-page-hero .front-page-description { font-size: 1rem; }
+.front-page-hero .home-text-paragraph { white-space: pre-line; margin-block: 0 1em; }
+.front-page-hero .home-text-paragraph:last-child { margin-bottom: 0; }
 
 .front-page-content,
 .front-page-status {
@@ -223,7 +250,7 @@
 }
 
 @media (width < 1000px) {
-  .front-page-background {
+  .front-page-background::before {
     background-image: var(--front-page-background-1000);
   }
 }
@@ -253,49 +280,50 @@
   }
 }
 
-/* Legacy wrapper adds no box; absent presentation retains all existing spacing. */
-.front-page-content > div:not(.front-page-blocks, .front-page-text-stage) {
-  display: contents;
-}
-
-/* Size containment measures only the already-sized flex scroller below the top row.
-   The stage grows with its text, so bottom/centre anchors never hide long copy. */
+/* Size containment measures the flex scroller below the stationary top row.
+   Equal insets on every anchor make long copy / narrow columns converge naturally. */
 .front-page .front-page-scroller--positioned { container-type: size; }
 .front-page-content--positioned { max-width: none; padding: 0; margin: 0; }
 .front-page-text-stage {
   display: grid;
+  /* One column exactly as wide as the stage: a max-content block can never widen it, so long text wraps at the
+     maximum width and right or centred anchors stay inside the page. */
+  grid-template-columns: minmax(0, 1fr);
   box-sizing: border-box;
   min-height: 100cqh;
-  padding-block: var(--home-text-margin);
-  /* Keep a usable text column when a large saved margin cannot fit a narrow desktop. */
-  padding-inline: min(var(--home-text-margin), max(0px, calc((100cqw - var(--home-text-min-width)) / 2)));
+  padding-block: var(--home-text-vertical-margin);
+  padding-inline: min(var(--home-text-horizontal-margin), max(0px, calc((100cqw - var(--home-text-min-width)) / 2)));
   justify-items: start;
   align-items: start;
 }
-.front-page-text-stage[data-anchor$="center"] { justify-items: center; padding-inline: 0; }
+.front-page-text-stage[data-anchor$="center"] { justify-items: center; }
 .front-page-text-stage[data-anchor$="right"] { justify-items: end; }
-.front-page-text-stage[data-anchor^="center-"] { align-items: center; padding-block: 0; }
+.front-page-text-stage[data-anchor^="center-"] { align-items: center; }
 .front-page-text-stage[data-anchor^="bottom-"] { align-items: end; }
 .front-page-text-stage .front-page-hero {
   box-sizing: border-box;
   min-width: 0;
-  width: min(var(--home-text-max-width), 100%);
+  width: max-content;
+  max-width: min(var(--home-text-max-width), 100%);
   padding: 0;
   text-align: left;
 }
-.front-page-text-stage .front-page-hero[data-paragraph-layout="artistic"] { text-align: center; }
-.front-page-hero .front-page-description .morphing-subtitle { margin-block: 0 1em; }
-.front-page-hero .front-page-description .morphing-subtitle:last-child { margin-bottom: 0; }
+.front-page-text-stage .front-page-hero[data-alignment="center"] { text-align: center; }
+.front-page-text-stage .front-page-hero[data-alignment="right"] { text-align: right; }
+.front-page-text-stage .front-page-hero[data-alignment="justify"] { text-align: justify; text-align-last: left; }
+.front-page-hero[data-alignment="justify"] .morphing-title { text-align: left; }
 .front-page-content--positioned > .front-page-blocks {
   max-width: 1200px;
   padding: 1rem;
   margin-inline: auto;
 }
+/* Phones keep 16 px insets and the vertical anchor: short text sits at the top, centre or bottom of the visible area,
+   and long text grows the stage, so every vertical anchor flows from the top and scrolls. */
 @media (width <= 600px) {
   .front-page-text-stage[data-anchor] {
     padding: 16px;
     justify-items: stretch;
-    align-items: start;
   }
-  .front-page-text-stage .front-page-hero { width: 100%; }
+  /* Phones give the block the whole width between the gutters, so short centred or right-aligned text still uses the line. */
+  .front-page-text-stage .front-page-hero { width: auto; max-width: none; }
 }

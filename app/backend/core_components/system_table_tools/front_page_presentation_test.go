@@ -20,7 +20,7 @@ import (
 func TestHomePresentationAdminRequestAndOmission(t *testing.T) {
 	value, _ := json.Marshal(presentation.Rules().Default)
 	layout := string(value)
-	for _, body := range []string{`{"presentation":` + layout + `,"version":"none"}`, `{"hero":{"title":{},"slogan":{}}}`, `{"settings":{"separate_front_page":true,"front_page_button_shows_site_name":false}}`} {
+	for _, body := range []string{`{"presentation":` + layout + `,"version":"none"}`, `{"hero":{"title":{},"slogan":{},"description":{}}}`, `{"settings":{"separate_front_page":true,"front_page_button_shows_site_name":false}}`} {
 		request, err := decodeFrontPageAdminRequest(strings.NewReader(body))
 		if err != nil {
 			t.Fatal(body, err)
@@ -31,7 +31,7 @@ func TestHomePresentationAdminRequestAndOmission(t *testing.T) {
 	}
 	for _, body := range []string{`{"presentation":` + layout + `}`, `{"presentation":null,"version":"none"}`,
 		`{"presentation":{},"version":"none"}`, `{"presentation":` + layout + `,"version":"none","user_id":42}`,
-		`{"presentation":` + layout + `,"version":"none","blocks":[]}`, `{"presentation":` + layout + `,"version":"none","hero":{"title":{},"slogan":{}}}`} {
+		`{"presentation":` + layout + `,"version":"none","blocks":[]}`, `{"presentation":` + layout + `,"version":"none","hero":{"title":{},"slogan":{},"description":{}}}`} {
 		if _, err := decodeFrontPageAdminRequest(strings.NewReader(body)); err == nil {
 			t.Fatal("accepted", body)
 		}
@@ -40,7 +40,7 @@ func TestHomePresentationAdminRequestAndOmission(t *testing.T) {
 func TestHomePresentationPostgresPersistenceConflictAndOmitted(t *testing.T) {
 	db := frontPageDisposableDB(t)
 	value, revision, err := backend.ReadFrontPagePresentation(context.Background(), db)
-	if err != nil || value != nil || revision != "none" {
+	if err != nil || value == nil || *value != presentation.Rules().Default || revision != "none" {
 		t.Fatal("missing layout", value, revision, err)
 	}
 	layout := presentation.Rules().Default
@@ -57,7 +57,7 @@ func TestHomePresentationPostgresPersistenceConflictAndOmitted(t *testing.T) {
 	if _, err := frontPageTestSave(db, frontPageAdminRequest{Settings: &frontPageAdminSettings{SeparateFrontPage: &on, FrontPageButtonShowsSiteName: &off}}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := frontPageTestSave(db, frontPageAdminRequest{Hero: &frontPageHero{Title: &frontPageHeroText{}, Slogan: &frontPageHeroText{}}}); err != nil {
+	if _, err := frontPageTestSave(db, frontPageAdminRequest{Hero: &frontPageHero{Title: &frontPageHeroText{}, Slogan: &frontPageHeroText{}, Description: &frontPageHeroText{}}}); err != nil {
 		t.Fatal(err)
 	}
 	_, same, err := backend.ReadFrontPagePresentation(context.Background(), db)
@@ -171,5 +171,40 @@ func TestFrontPageReadPresentationAndInvalidSaved(t *testing.T) {
 	GetFrontPageHandler(response, frontPageSessionRequest(t, 42, "basic", "GET", "/api/front-page"))
 	if response.Code != 500 {
 		t.Fatal(response.Code, response.Body.String())
+	}
+}
+
+func TestHomePresentationPostgresConversionPreservesRevisionAndWritesVersionTwo(t *testing.T) {
+	db := frontPageDisposableDB(t)
+	for _, layout := range []string{"normal", "artistic"} {
+		raw := `{"schema_version":1,"anchor":"bottom-left","margin_px":71,"paragraph_layout":"` + layout + `","max_width_px":700}`
+		if _, err := db.Exec(`INSERT INTO public.system_config(key,json_value,value_type,updated)
+            VALUES('front_page_presentation',$1::jsonb,5,NULL) ON CONFLICT(key) DO UPDATE SET json_value=EXCLUDED.json_value,updated=NULL`, raw); err != nil {
+			t.Fatal(err)
+		}
+		value, revision, err := backend.ReadFrontPagePresentation(context.Background(), db)
+		if err != nil || value.SchemaVersion != 2 || value.HorizontalMarginPx != 71 || value.VerticalMarginPx != 71 ||
+			value.Alignment != presentation.Rules().Legacy.Alignments[layout] {
+			t.Fatal(value, revision, err)
+		}
+		var storedRaw []byte
+		if err := db.QueryRow(`SELECT json_value FROM public.system_config WHERE key='front_page_presentation'`).Scan(&storedRaw); err != nil {
+			t.Fatal(err)
+		}
+		if revision != backend.FrontPagePresentationRevision(storedRaw, "") {
+			t.Fatal("conversion changed revision")
+		}
+		converted, _ := json.Marshal(value)
+		newer, err := frontPageTestSave(db, frontPageAdminRequest{Presentation: converted, Version: revision})
+		if err != nil || newer == revision {
+			t.Fatal(newer, err)
+		}
+		var storedVersion int
+		if err := db.QueryRow(`SELECT (json_value->>'schema_version')::int FROM public.system_config WHERE key='front_page_presentation'`).Scan(&storedVersion); err != nil || storedVersion != 2 {
+			t.Fatal(storedVersion, err)
+		}
+		if _, err := frontPageTestSave(db, frontPageAdminRequest{Presentation: json.RawMessage(raw), Version: newer}); !errors.Is(err, errFrontPageInput) {
+			t.Fatal("version-one write accepted", err)
+		}
 	}
 }

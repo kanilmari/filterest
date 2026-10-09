@@ -3,7 +3,7 @@
 // Reuses the shared group renderer, translations and dataset-background treatment.
 // Discards all content on deactivation; no account's blocks survive a hidden visit.
 
-import { applyHomePresentation, renderHomeDescription } from './front_page_presentation_renderer.js';
+import { applyHomePresentation, applyHomeMediaPresentation, renderHomeDescription } from './front_page_presentation_renderer.js';
 import { createFrontPageTopRow } from './front_page_top_row_builder.js';
 import { mountBackgroundVideo } from './front_page_background_video.js';
 import { getOrCreateContainer } from '../../reusable_components/dom_container_builder.js';
@@ -57,21 +57,20 @@ function renderBlocks(container, data, visit) {
     hero.className = 'front-page-hero morphing-header';
     const heading = document.createElement('h1');
     heading.className = 'morphing-title';
-    let slogan = document.createElement(data.presentation ? 'div' : 'p');
-    // Keep the legacy subtitle typography; positioned mode contains separate paragraphs.
-    slogan.className = 'morphing-subtitle';
-    let presentation = data.presentation || null;
-    let descriptionText = '';
+    const slogan = document.createElement('div');
+    slogan.className = 'front-page-slogan morphing-subtitle';
+    const description = document.createElement('div');
+    description.className = 'front-page-description';
     const stage = document.createElement('div');
     bindDatasetLanguageRenderer(hero, language => {
         const code = language === 'fi' ? 'fi' : 'en';
         heading.textContent = data.hero?.title?.[code]?.trim()
             || formatSiteNameForDisplay(data.site_name || getCurrentSiteName())
             || getTranslationForKey('front_page', { countUsage: false });
-        descriptionText = data.hero?.slogan?.[code]?.trim() || '';
-        renderHomeDescription(slogan, descriptionText, Boolean(presentation));
+        renderHomeDescription(slogan, data.hero?.slogan?.[code] || '');
+        renderHomeDescription(description, data.hero?.description?.[code] || '');
     });
-    hero.append(heading, slogan);
+    hero.append(heading, slogan, description);
     stage.append(hero);
     page.append(stage);
     const grid = document.createElement('div');
@@ -95,18 +94,10 @@ function renderBlocks(container, data, visit) {
     scroller.className = 'front-page-scroller scrollable_content';
     scroller.append(page);
     function renderPresentation(value) {
-        presentation = value;
-        const positioned = applyHomePresentation(page, scroller, stage, hero, value);
-        if (slogan.tagName !== (positioned ? 'DIV' : 'P')) {
-            const replacement = document.createElement(positioned ? 'div' : 'p');
-            slogan.replaceWith(replacement);
-            slogan = replacement;
-        }
-        slogan.classList.toggle('front-page-description', positioned);
-        slogan.classList.toggle('morphing-subtitle', !positioned);
-        renderHomeDescription(slogan, descriptionText, positioned);
+        applyHomePresentation(page, scroller, stage, hero, value);
+        applyHomeMediaPresentation(container, value);
     }
-    renderPresentation(presentation);
+    renderPresentation(data.presentation);
     visit.topRow = createFrontPageTopRow(data.site_name, () => refreshFrontPage(), {
         snapshot: data, render: renderPresentation,
     });

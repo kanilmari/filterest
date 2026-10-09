@@ -14,7 +14,7 @@ import (
 func TestFrontPageAdminRequestForms(t *testing.T) {
 	valid := []string{
 		`{"settings":{"separate_front_page":true,"front_page_button_shows_site_name":false,"front_page_show_blocks":false}}`,
-		`{"hero":{"title":{"fi":"Otsikko","en":"Title"},"slogan":{"fi":"","en":""}}}`,
+		`{"hero":{"title":{"fi":"Otsikko","en":"Title"},"slogan":{"fi":"","en":""},"description":{"fi":"Kuvaus","en":"Description"}}}`,
 		`{"settings":{"separate_front_page":true,"front_page_button_shows_site_name":false}}`,
 		`{"version":"none","blocks":[]}`,
 		`{"user_id":42,"version":"none","blocks":[{"dataset":"content","result_limit":5,"sort_order":1,"enabled":true}]}`,
@@ -63,5 +63,27 @@ func TestFrontPageAdminMethodValidationAndConflict(t *testing.T) {
 	}
 	if called != 1 {
 		t.Fatal("validation called saver", called)
+	}
+}
+
+func TestFrontPageHeroDescriptionValidation(t *testing.T) {
+	hero := frontPageHero{Title: &frontPageHeroText{}, Slogan: &frontPageHeroText{}, Description: &frontPageHeroText{}}
+	if err := validateFrontPageHero(hero); err != nil {
+		t.Fatal("empty copy refused", err)
+	}
+	for _, text := range []*frontPageHeroText{hero.Title, hero.Slogan, hero.Description} {
+		text.Fi = strings.Repeat("ä", 2001)
+		if err := validateFrontPageHero(hero); err == nil {
+			t.Fatal("oversized copy accepted")
+		}
+		text.Fi = "\x00"
+		if err := validateFrontPageHero(hero); err == nil {
+			t.Fatal("NUL copy accepted")
+		}
+		text.Fi = ""
+	}
+	hero.Description.LangKey = "site_front_page_slogan"
+	if err := validateFrontPageHero(hero); err == nil {
+		t.Fatal("wrong description key accepted")
 	}
 }

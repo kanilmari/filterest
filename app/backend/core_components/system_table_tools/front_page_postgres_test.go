@@ -28,6 +28,7 @@ var frontPageMigrations = []string{
 	"20261005000031_create_system_front_page_blocks.sql", "20261005000032_add_front_page_settings.sql",
 	"20261005000033_seed_front_page_language_keys.sql", "20261005000034_register_system_front_page_blocks.sql",
 	"20261005000085_add_front_page_show_blocks.sql", "20261005000086_seed_front_page_hero_language_keys.sql",
+	"20261009000001_seed_front_page_description_language_key.sql",
 }
 
 func frontPageDisposableDB(t *testing.T) *sql.DB {
@@ -451,16 +452,16 @@ func TestFrontPagePostgresHeroBoxSwitchAndRepeatMigrations(t *testing.T) {
 		t.Fatal(err)
 	}
 	// The slogan's settings fields are multi-line; a typed line break is kept in both translation stores.
-	hero := frontPageHero{Title: &frontPageHeroText{Fi: "Oma otsikko", En: "Our title", UsageExplanation: "Reviewed Home copy"}, Slogan: &frontPageHeroText{Fi: "Oma iskulause\ntoisella rivillä", En: "Our slogan"}}
+	hero := frontPageHero{Title: &frontPageHeroText{Fi: "Oma otsikko", En: "Our title", UsageExplanation: "Reviewed Home copy"}, Slogan: &frontPageHeroText{Fi: "Oma iskulause\ntoisella rivillä", En: "Our slogan"}, Description: &frontPageHeroText{Fi: "Kuvaus\nrivi\n\nKappale", En: "Description", UsageExplanation: "Reviewed description"}}
 	if _, err := frontPageTestSave(db, frontPageAdminRequest{Hero: &hero}); err != nil {
 		t.Fatal(err)
 	}
 	got, err := readFrontPageHeroForAdmin(db)
-	if err != nil || got.Title.Fi != hero.Title.Fi || got.Slogan.Fi != hero.Slogan.Fi || got.Slogan.En != hero.Slogan.En || got.Title.UsageExplanation != hero.Title.UsageExplanation {
+	if err != nil || got.Title.Fi != hero.Title.Fi || got.Slogan.Fi != hero.Slogan.Fi || got.Slogan.En != hero.Slogan.En || got.Description.Fi != hero.Description.Fi || got.Description.UsageExplanation != hero.Description.UsageExplanation || got.Title.UsageExplanation != hero.Title.UsageExplanation {
 		t.Fatal(got, err)
 	}
 	if frontPageCount(t, db, `SELECT count(*) FROM public.system_lang_keys k JOIN public.system_lang_key_translations tr ON tr.lang_key_id=k.id
-  WHERE k.lang_key IN ('site_front_page_title','site_front_page_slogan') AND tr.language_code IN ('fi','en') AND tr.translation=CASE tr.language_code WHEN 'fi' THEN k.fi ELSE k.en END`) != 4 {
+  WHERE k.lang_key IN ('site_front_page_title','site_front_page_slogan','site_front_page_description') AND tr.language_code IN ('fi','en') AND tr.translation=CASE tr.language_code WHEN 'fi' THEN k.fi ELSE k.en END`) != 6 {
 		t.Fatal("translation stores disagree")
 	}
 	for _, name := range frontPageMigrations[len(frontPageMigrations)-2:] {
@@ -494,11 +495,13 @@ func TestFrontPagePostgresHeroBoxSwitchAndRepeatMigrations(t *testing.T) {
 	hero.Title.En = ""
 	hero.Slogan.Fi = ""
 	hero.Slogan.En = ""
+	hero.Description.Fi = ""
+	hero.Description.En = ""
 	if _, err := frontPageTestSave(db, frontPageAdminRequest{Hero: &hero}); err != nil {
 		t.Fatal(err)
 	}
 	if frontPageCount(t, db, `SELECT count(*) FROM public.system_lang_key_translations tr JOIN public.system_lang_keys k ON k.id=tr.lang_key_id
-  WHERE k.lang_key IN ('site_front_page_title','site_front_page_slogan')`) != 0 {
+  WHERE k.lang_key IN ('site_front_page_title','site_front_page_slogan','site_front_page_description')`) != 0 {
 		t.Fatal("cleared copy stayed in served translations")
 	}
 }

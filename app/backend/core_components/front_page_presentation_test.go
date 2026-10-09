@@ -69,7 +69,7 @@ func TestReadHomePresentationMissingValidInvalidAndRevision(t *testing.T) {
 		if (err != nil) != tc.invalid {
 			t.Fatal(value, revision, err, tc)
 		}
-		if tc.missing && (value != nil || revision != "none") {
+		if tc.missing && (value == nil || *value != presentation.Rules().Default || revision != "none") {
 			t.Fatal(value, revision)
 		}
 		if !tc.invalid && !tc.missing && (*value != presentation.Rules().Default || revision != FrontPagePresentationRevision(raw, "revision-1")) {
@@ -81,5 +81,23 @@ func TestReadHomePresentationMissingValidInvalidAndRevision(t *testing.T) {
 	}
 	if FrontPagePresentationRevision(raw, "revision-1") == FrontPagePresentationRevision(raw, "revision-2") {
 		t.Fatal("revision did not advance")
+	}
+}
+
+func TestReadHomePresentationConvertsStoredVersionOneWithoutChangingRevision(t *testing.T) {
+	for _, layout := range []string{"normal", "artistic"} {
+		raw := []byte(fmt.Sprintf(`{"schema_version":1,"anchor":"bottom-left","margin_px":55,"paragraph_layout":%q,"max_width_px":700}`, layout))
+		name := fmt.Sprintf("home_layout_%d", homeLayoutDriverID.Add(1))
+		sql.Register(name, homeLayoutDriver{[]driver.Value{raw, "old-stamp", int64(5)}})
+		db, err := sql.Open(name, "")
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() { db.Close() })
+		value, revision, err := ReadFrontPagePresentation(context.Background(), db)
+		if err != nil || value == nil || value.SchemaVersion != 2 || value.Alignment != presentation.Rules().Legacy.Alignments[layout] ||
+			value.HorizontalMarginPx != 55 || value.VerticalMarginPx != 55 || revision != FrontPagePresentationRevision(raw, "old-stamp") {
+			t.Fatal(value, revision, err)
+		}
 	}
 }

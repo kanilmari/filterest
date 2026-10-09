@@ -1,65 +1,76 @@
 // front_page_presentation_renderer.test.js
-// Proves Home layout geometry, safe paragraph rendering and legacy reset.
-// Connects the nine-anchor CSS policy with its numerical review representation.
-// Ensures phones and oversized translations can flow without clipped text.
+// Proves shrink-wrapped anchor geometry, paragraphs, defaults and media preview.
+// Connects all four alignments to a single invariant text-block width.
+// Protects normal downward flow on narrow and short screens.
 import { expect, test } from 'vitest';
 import { DEFAULT_HOME_PRESENTATION as defaults, HOME_PRESENTATION_DEFINITION as rules } from '../../shared/front_page_presentation/validator.js';
-import { applyHomePresentation, renderHomeDescription, computeHomeTextGeometry } from './front_page_presentation_renderer.js';
+import { applyHomePresentation, applyHomeMediaPresentation, renderHomeDescription, computeHomeTextGeometry } from './front_page_presentation_renderer.js';
 
-test('nine desktop anchors place the whole block with independent paragraph layout', () => {
-    const xs = { left: 40, center: 80, right: 120 };
-    const ys = { top: 40, center: 280, bottom: 520 };
-    for (const anchor of rules.anchors) for (const paragraph_layout of rules.paragraph_layouts) {
-        const presentation = { ...defaults, anchor, paragraph_layout };
+test('nine anchors and every alignment preserve intrinsic block width and anchored edges', () => {
+    const xs = { left: 40, center: 490, right: 940 }, ys = { top: 40, center: 280, bottom: 520 };
+    for (const anchor of rules.anchors) for (const alignment of rules.alignments) {
+        const presentation = { ...defaults, anchor, alignment };
         const [vertical, horizontal] = anchor.split('-');
-        expect(computeHomeTextGeometry({ width: 1280, height: 760, textHeight: 200, presentation }))
-            .toEqual({ width: 1120, height: 200, stageHeight: 760, x: xs[horizontal], y: ys[vertical] });
+        expect(computeHomeTextGeometry({ width: 1280, height: 760, textHeight: 200, textWidth: 300, presentation }))
+            .toEqual({ width: 300, height: 200, stageHeight: 760, x: xs[horizontal], y: ys[vertical] });
         const [page, scroller, stage, hero] = Array.from({ length: 4 }, () => document.createElement('div'));
-        expect(applyHomePresentation(page, scroller, stage, hero, presentation)).toBe(true);
-        expect(stage.dataset.anchor).toBe(anchor);
-        expect(hero.dataset.paragraphLayout).toBe(paragraph_layout);
+        applyHomePresentation(page, scroller, stage, hero, presentation);
+        expect(stage.dataset.anchor).toBe(anchor); expect(hero.dataset.alignment).toBe(alignment);
         expect(hero.style.getPropertyValue('--home-text-max-width')).toBe('1120px');
-        expect(applyHomePresentation(page, scroller, stage, hero, null)).toBe(false);
-        expect(page.className).toBe('');
-        expect(stage.hasAttribute('style')).toBe(false);
-        expect(hero.dataset.paragraphLayout).toBeUndefined();
+        applyHomePresentation(page, scroller, stage, hero, null);
+        expect(stage.dataset.anchor).toBe('center-center'); expect(hero.dataset.alignment).toBe('left');
     }
 });
 
-test('375px phones use 16px gutters for every anchor and extreme margin', () => {
-    for (const anchor of rules.anchors) for (const margin_px of [0, 40, 320]) {
+test('375px phones keep 16px gutters; long text flows from the top with every saved anchor and margin', () => {
+    for (const anchor of rules.anchors) for (const margin of [0, 40, 320]) {
         expect(computeHomeTextGeometry({ width: 375, height: 600, textHeight: 900,
-            presentation: { ...defaults, anchor, margin_px } }))
+            presentation: { ...defaults, anchor, horizontal_margin_px: margin, vertical_margin_px: margin } }))
             .toEqual({ width: 343, height: 900, stageHeight: 932, x: 16, y: 16 });
     }
-});
-
-test('desktop margins bound width, while long centered/bottom text expands the stage', () => {
-    for (const anchor of ['bottom-left', 'bottom-right', 'center-left']) {
-        const geometry = computeHomeTextGeometry({ width: 1280, height: 760, textHeight: 1000,
-            presentation: { ...defaults, anchor, margin_px: 320 } });
-        expect(geometry.width).toBe(640);
-        expect(geometry.y).toBe(anchor.startsWith('center') ? 0 : 320);
-        expect(geometry.stageHeight).toBe(anchor.startsWith('center') ? 1000 : 1640);
+    // Short text and the narrowest maximum width still fill the phone line, so centre and right alignment show,
+    // and the default block is centred vertically in the visible area, as on wide screens.
+    for (const alignment of rules.alignments) {
+        expect(computeHomeTextGeometry({ width: 375, height: 600, textHeight: 80, textWidth: 120,
+            presentation: { ...defaults, alignment, max_width_px: rules.max_width_px.min } }))
+            .toEqual({ width: 343, height: 80, stageHeight: 600, x: 16, y: 260 });
     }
 });
 
-test('blank lines form safe paragraphs; legacy retains literal line breaks and empty description hides', () => {
-    const description = document.createElement('div');
-    const text = 'First\r\nline\r\n \r\n<b>Literal</b>\n\n\nLast';
-    renderHomeDescription(description, text, true);
-    expect([...description.children].map(p => p.textContent)).toEqual(['First\nline', '<b>Literal</b>', 'Last']);
-    expect(description.querySelector('b')).toBeNull();
-    renderHomeDescription(description, text, false);
-    expect(description.children.length).toBe(0);
-    expect(description.textContent).toBe(text);
-    renderHomeDescription(description, '', true);
-    expect(description.hidden).toBe(true);
+test('short text on a phone keeps its vertical anchor with 16px insets, whatever the saved margins', () => {
+    const ys = { top: 16, center: 260, bottom: 504 };
+    for (const anchor of rules.anchors) for (const margin of [0, 40, 320]) {
+        const vertical = anchor.split('-')[0];
+        expect(computeHomeTextGeometry({ width: 375, height: 600, textHeight: 80,
+            presentation: { ...defaults, anchor, horizontal_margin_px: margin, vertical_margin_px: margin } }))
+            .toEqual({ width: 343, height: 80, stageHeight: 600, x: 16, y: ys[vertical] });
+    }
 });
 
-test('large margins on a narrow desktop retain at least the minimum text width', () => {
-    const result = computeHomeTextGeometry({ width: 610, height: 760, textHeight: 200,
-        presentation: { ...defaults, margin_px: 320 } });
-    expect(result.width).toBe(320);
-    expect(result.x).toBe(145);
+test('long text converges vertically and full narrow text converges horizontally across anchors', () => {
+    for (const anchor of rules.anchors) {
+        const geometry = computeHomeTextGeometry({ width: 610, height: 300, textHeight: 1000,
+            presentation: { ...defaults, anchor, horizontal_margin_px: 320, vertical_margin_px: 65 } });
+        expect(geometry).toEqual({ width: 320, height: 1000, stageHeight: 1130, x: 145, y: 65 });
+    }
+    expect(computeHomeTextGeometry({ width: 1280, height: 760, textHeight: 200, presentation: null }))
+        .toMatchObject({ x: 80, y: 280, width: 1120 });
+});
+
+test('blank lines form safe paragraphs; single line breaks remain and blank text hides', () => {
+    const description = document.createElement('div');
+    renderHomeDescription(description, 'First\r\nline\r\n \r\n<b>Literal</b>\n\n\nLast');
+    expect([...description.children].map(p => p.textContent)).toEqual(['First\nline', '<b>Literal</b>', 'Last']);
+    expect(description.querySelector('b')).toBeNull();
+    renderHomeDescription(description, ' \n '); expect(description.hidden).toBe(true);
+});
+
+test('media preview writes both themes, and reset restores all four default values', () => {
+    const container = document.createElement('div');
+    applyHomeMediaPresentation(container, { ...defaults, light_wash: 87, light_opacity: 60, dark_wash: 31, dark_opacity: 44 });
+    expect(['light-wash', 'light-opacity', 'dark-wash', 'dark-opacity'].map(key => container.style.getPropertyValue(`--home-${key}`)))
+        .toEqual(['0.87', '0.6', '0.31', '0.44']);
+    applyHomeMediaPresentation(container, null);
+    expect(container.style.getPropertyValue('--home-dark-opacity')).toBe('0.2');
+    expect(container.style.getPropertyValue('--home-light-opacity')).toBe('0.75');
 });

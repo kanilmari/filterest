@@ -3,7 +3,7 @@
 // Adapts the Home GET snapshot and admin POST to the shared palette draft owner.
 // Keeps previews out of storage and rejects failed or malformed save responses.
 import { endpoint_router } from '../endpoints/endpoint_router.js';
-import { isValidHomePresentation, DEFAULT_HOME_PRESENTATION } from '../../shared/front_page_presentation/validator.js';
+import { isValidHomePresentation, DEFAULT_HOME_PRESENTATION, readHomePresentation } from '../../shared/front_page_presentation/validator.js';
 import { clonePaletteValue } from './presentation_palette_shell.js';
 
 export function saveHomePresentation(payload) {
@@ -12,8 +12,7 @@ export function saveHomePresentation(payload) {
 
 /** Each visit uses the revision from its content response, never a second layout GET. */
 export function createHomePaletteState({ presentation = null, presentation_version = 'none' } = {}) {
-    if (presentation !== null && !isValidHomePresentation(presentation)) throw new Error('Invalid Home layout');
-    let saved = clonePaletteValue(presentation);
+    let saved = readHomePresentation(presentation);
     let version = presentation_version;
     let preview = null;
     const savedSettings = () => clonePaletteValue(saved);

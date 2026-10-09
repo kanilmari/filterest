@@ -320,7 +320,7 @@ test('hero title and slogan follow fi/en, with site-name and empty slogan fallba
     expect(page.querySelector('.morphing-subtitle').textContent).toBe('Oma iskulause\ntoisella rivillä');
     await refreshLocalizedDatasetValues('en');
     expect(page.querySelector('h1').textContent).toBe('Our title');
-    expect(page.querySelector('.morphing-subtitle').hidden).toBe(true);
+    expect(page.querySelector('.front-page-slogan').hidden).toBe(true);
     mocks.request.mockResolvedValue({ ...response(), site_name: 'my site', hero: { title: { fi: '', en: '' }, slogan: {} } });
     await refreshFrontPage();
     expect(page.querySelector('h1').textContent).toBe('My site');
@@ -372,4 +372,24 @@ test('reduced motion prevents autoplay and reacts to changes without leaving a l
     motion.matches = true; listener(); expect(video.autoplay).toBe(false);
     page.dispatchEvent(new Event(VIEW_DEACTIVATE_EVENT));
     expect(motion.removeEventListener).toHaveBeenCalledWith('change', listener);
+});
+
+
+test('title, larger slogan and description form separate safe paragraphs and update languages independently', async () => {
+    mocks.request.mockResolvedValue({ ...response(), hero: {
+        title: { fi: 'Otsikko', en: '' }, slogan: { fi: 'Iskulause\nrivi\n\nToinen', en: '' },
+        description: { fi: 'Kuvaus\nrivi\n\nLopuksi', en: 'Only description' },
+    } });
+    const page = renderFrontPage();
+    await vi.waitFor(() => expect(page.querySelector('h1')?.textContent).toBe('Otsikko'));
+    const hero = page.querySelector('.front-page-hero');
+    expect([...hero.children].map(element => element.tagName)).toEqual(['H1', 'DIV', 'DIV']);
+    expect(hero.querySelector('.front-page-slogan').children).toHaveLength(2);
+    expect(hero.querySelector('.front-page-description').children).toHaveLength(2);
+    expect(hero.querySelector('.front-page-description p').textContent).toBe('Kuvaus\nrivi');
+    expect(page.querySelector('.front-page-text-stage').dataset.anchor).toBe('center-center');
+    expect(hero.dataset.alignment).toBe('left');
+    await refreshLocalizedDatasetValues('en');
+    expect(hero.querySelector('.front-page-slogan').hidden).toBe(true);
+    expect(hero.querySelector('.front-page-description').textContent).toBe('Only description');
 });

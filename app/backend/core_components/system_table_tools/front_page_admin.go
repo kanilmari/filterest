@@ -54,8 +54,8 @@ var frontPageAdminSaver = saveFrontPageAdminRequest
 // inherits_common, source, version, blocks and datasets (newest_capable, can_read).
 // GET ?user_query=text returns at most 20 {user_id,display_name} accounts.
 // POST accepts {settings:{separate_front_page,front_page_button_shows_site_name,front_page_show_blocks}}
-// or {hero:{title:{fi,en,usage_explanation},slogan:{fi,en,usage_explanation}}}
-// or {presentation:{schema_version,anchor,margin_px,paragraph_layout,max_width_px},version}
+// or {hero:{title:{fi,en,usage_explanation},slogan:{fi,en,usage_explanation},description:{fi,en,usage_explanation}}}
+// or {presentation:{schema_version,anchor,horizontal_margin_px,vertical_margin_px,alignment,max_width_px,light_wash,light_opacity,dark_wash,dark_opacity},version}
 // (independent presentation_version from GET), or {user_id,version,blocks:[{dataset,result_limit,sort_order,enabled}]},
 // {user_id,version,reset:true}, {user_id,version,copy_from_common:true}.
 // Omit user_id or use null for common. Version is opaque, initially "none";

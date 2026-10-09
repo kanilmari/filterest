@@ -1,0 +1,6 @@
+<!-- home-align-right-icon.svg: original Filterest text-alignment drawing.
+     Four horizontal lines represent word-processor alignment; created directly for Filterest.
+     Contains no third-party icon geometry; the shared mask supplies the theme colour. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" aria-hidden="true">
+  <path d="M3 5H21 M9 10H21 M3 15H21 M9 20H21" fill="none" stroke="currentColor" stroke-width="2"/>
+</svg>

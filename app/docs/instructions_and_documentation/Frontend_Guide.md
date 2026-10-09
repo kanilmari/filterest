@@ -260,17 +260,17 @@ on teardown, and destroys the tab subscription. Site identity uses the actual
 server-rendered favicon link at 32 px with smooth scaling and the article
 bar's title class. Home applies no bottom border or shadow to that row.
 
-Fixed language keys `site_front_page_title` and `site_front_page_slogan` store
-Finnish and English copy. The response carries both languages so a live language
-switch can show intentional empty values: the title falls back to the site name
-(or Home when no name exists), and an empty description stays hidden. The Home gear
-requires `/api/admin/front-page` and opens the existing editor in shared modal
-chrome. It reuses `lang_key_editor_builder.js`, extracted from the dataset hero
-editor, and saves both legacy language columns and served translations. The existing slogan key is labelled **Description** in Home settings. The
-description uses the editor's `multiline` option: its Finnish and English fields are
-full-width textareas, and Home keeps their line breaks with `white-space:
-pre-line`; the title stays a single line. Its
-`front_page_hero` sources retain these fixed keys through catalog cleanup.
+Fixed language keys `site_front_page_title`, `site_front_page_slogan` and
+`site_front_page_description` store three independent Finnish/English texts.
+The title falls back to the site name (or Home); empty slogan/description are
+hidden independently. The slogan appears first under the title at a larger size,
+and the description appears last at normal size. Both support multiple lines:
+blank lines separate plain-text paragraphs and single line breaks remain. Text
+never flows into columns. Home settings uses the shared language-key editor,
+with a single-line title and full-width slogan/description textareas, saving both
+legacy language columns and served translations. Fixed `front_page_hero` sources
+retain intentional empty keys through catalog cleanup. The description key and
+three-field guidance are seeded by DB 9.10.2's migration, also used by bootstrap.
 Saving settings sections refreshes visible Home without changing navigation/history.
 
 The administrator-only house-and-palette button beside the gear lazy-loads
@@ -279,34 +279,51 @@ permission. Both Home and dataset palettes use `presentation_palette_shell.js`
 and `presentation_palette.css`: dragging, native resizing, translated controls,
 close/Escape focus, status toasts and draft ownership have one implementation.
 Closing keeps preview; Reset restores saved values and panel geometry; leaving
-Home releases preview. Save preserves any edits made while its request is pending.
+Home releases preview. Save preserves edits made while its request is pending.
 
-Home's optional JSON setting `front_page_presentation` contains `schema_version`,
-`anchor`, `margin_px`, `paragraph_layout` and `max_width_px`. The single definition
+Home's JSON setting `front_page_presentation` uses schema version 2: `anchor`,
+`horizontal_margin_px`, `vertical_margin_px`, `alignment`, `max_width_px`,
+`light_wash`, `light_opacity`, `dark_wash` and `dark_opacity`. The single definition
 in `frontend/shared/front_page_presentation/definition.json` is imported by the
-browser and embedded by Go. Margin is 0–320 px (step 1, initial 40); maximum width
-is 320–1600 px (step 10, initial 1120). The nine anchors inset the selected edges;
-centred axes remain centred; narrow desktop insets shrink to keep a 320 px
-text column. Normal starts the title and paragraphs at the left;
-Artistic centres the title and each rendered paragraph line. Blank lines separate
-plain-text paragraphs; single newlines remain line breaks. No emphasis or timed
-reveal is applied. Palette FI/EN copy is source-owned, with English fallback.
+browser and embedded by Go. Both margins are 0–320 px (step 1, initial 40);
+maximum width is 320–1600 px (step 10, initial 1120). A graphical 3 × 3 button grid
+chooses the anchor; arrows select and focus adjacent cells, Home/End choose the
+first/last. Four original alignment glyph buttons choose left, centre, right or
+justify, with translated names and `aria-pressed`; Enter/Space activate buttons.
+Alignment changes only lines within the content-sized block up to its maximum
+width, preserving its anchored edge. Justify keeps the title and final paragraph
+lines at the left. Equal axis margins apply at all nine anchors; narrow desktop
+insets shrink to keep a usable text width. Long text expands downward, making
+vertical anchors equivalent when the text exceeds the available height; full
+narrow text similarly makes horizontal anchors equivalent. Phones use 16 px
+insets instead of the saved margins, and the block takes the whole width between
+the gutters, so alignment shows even for short text; the vertical anchor still
+applies (the default block is centred on phones too), and long text flows from the
+top and scrolls.
 
-A missing setting returns `presentation:null` and retains the existing layout,
-including dataset-header spacing. The public and administrator Home GETs return
-layout and `presentation_version` together. POST `{presentation,version}` updates
-only layout, under a separate lock/revision derived from the stored JSON and row
-update time; stale writes return 409. Hero, boxes and switch writes omit and
-preserve layout. Generic settings writes use the same validation. Invalid stored
-layout fails the Home read visibly instead of silently changing its geometry.
+A missing setting now returns the centred default with revision `none`: the
+block is centred on both axes while lines start at the left. This replaces the
+old centred-heading layout for every site without a saved presentation. Reads
+convert development version-one rows (normal → left, artistic → centre, one
+margin → both) and supply default media values. All writes require version 2.
+Public/admin GETs return presentation and its revision together; conversion hashes
+the original stored bytes and timestamp. POST `{presentation,version}` writes
+only presentation under the same separate advisory lock and row revision;
+stale or competing first writes return 409. Every successful save stamps its row.
+Hero, boxes and switch writes omit and preserve presentation. Generic settings
+writes use the same strict validation; malformed stored values fail visibly.
 
-`front_page_presentation_renderer.js` applies layout before mounting the content,
-so there is no separate layout-settings request or late layout shift. A grid stage
-fills the scroller below the stationary top row and grows for long text, with boxes
-following it. At widths up to 600 px, every anchor flows from the top with 16 px
-gutters and wrapping, retaining the saved desktop choices. Colours inherit the
-explicit application theme; operating-system colour preference does not select
-layout or surfaces.
+Light and dark sections each offer Theme wash and Media opacity (0–100%, step 1).
+Wash blends toward white in light mode and the dark background in dark mode;
+media opacity controls images and videos separately from that wash. The dark
+default retains 20% media opacity and no wash. Light mode uses 75% opacity and
+15% wash so media remains visible. Both pairs participate in preview, reset and
+save, and CSS follows the application's resolved theme class even when the OS
+preference differs. Video cross-fades and image focal points retain their behavior.
+`front_page_presentation_renderer.js` applies the whole presentation before the
+first content frame; no second settings request or late layout shift is needed.
+The single grid stage fills the scroller below the stationary top row and grows
+for long text, with dataset boxes following it.
 
 Background uploads retain PNG/JPEG/WebP with a 10 MiB file ceiling, plus
 MP4/WebM with a 50 MiB ceiling matching the media library. The request body

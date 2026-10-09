@@ -65,15 +65,16 @@ export async function generate_front_page_settings_view(container, { onSaved = r
 
     const heroSection = frontPageSection('front_page_hero');
     const titleEditor = createLangKeyEditor('title', { includeChinese: false });
-    const sloganEditor = createLangKeyEditor('description', { includeChinese: false, multiline: true });
+    const sloganEditor = createLangKeyEditor('slogan', { includeChinese: false, multiline: true });
+    const descriptionEditor = createLangKeyEditor('description', { includeChinese: false, multiline: true });
     const heroHelp = frontPageLabel(document.createElement('p'), 'front_page_hero_help');
     const heroSave = frontPageButton('save', 'hero-save', true);
-    heroSection.append(heroHelp, titleEditor.wrapper, sloganEditor.wrapper, heroSave);
+    heroSection.append(heroHelp, titleEditor.wrapper, sloganEditor.wrapper, descriptionEditor.wrapper, heroSave);
     let heroBaseline = '';
-    [titleEditor, sloganEditor].forEach((editor, index) => {
+    [titleEditor, sloganEditor, descriptionEditor].forEach((editor, index) => {
         ['keyInput', 'fiInput', 'enInput', 'usageExplanationInput'].forEach(name => {
             const control = editor[name];
-            control.id = `front-page-${index === 0 ? 'title' : 'slogan'}-${name}`;
+            control.id = `front-page-${['title', 'slogan', 'description'][index]}-${name}`;
             control.dataset.testid = control.id;
             control.closest('label').htmlFor = control.id;
             if (name !== 'keyInput') control.addEventListener('input', updateState);
@@ -141,7 +142,7 @@ export async function generate_front_page_settings_view(container, { onSaved = r
     function heroValue() {
         const value = editor => ({ fi: editor.fiInput.value.trim(), en: editor.enInput.value.trim(),
             usage_explanation: editor.usageExplanationInput.value.trim() });
-        return { title: value(titleEditor), slogan: value(sloganEditor) };
+        return { title: value(titleEditor), slogan: value(sloganEditor), description: value(descriptionEditor) };
     }
     function heroDirty() { return JSON.stringify(heroValue()) !== heroBaseline; }
     function blocksDirty() { return scopeSignature(blocks) !== blockBaseline; }
@@ -303,6 +304,7 @@ export async function generate_front_page_settings_view(container, { onSaved = r
             showBlocksInput.checked = data.settings.front_page_show_blocks !== false;
             applyLangKeyConfig(titleEditor, data.hero?.title || { lang_key: 'site_front_page_title' });
             applyLangKeyConfig(sloganEditor, data.hero?.slogan || { lang_key: 'site_front_page_slogan' });
+            applyLangKeyConfig(descriptionEditor, data.hero?.description || { lang_key: 'site_front_page_description' });
             heroBaseline = JSON.stringify(heroValue());
             settingsBaseline = JSON.stringify(settingsValue());
             background.setSnapshot(data.background, data.background_error);

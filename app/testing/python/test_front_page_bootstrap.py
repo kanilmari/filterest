@@ -172,3 +172,49 @@ def test_front_page_fresh_install_and_992_upgrade_match_and_repeat(installed, up
             run(migration.read_text())
         assert value(run, "SELECT boolean_value FROM system_config WHERE key='separate_front_page'") == "t"
         assert value(run, "SELECT fi FROM system_lang_keys WHERE lang_key='front_page'") == "Sivuston koti"
+
+
+DESCRIPTION = MIGRATIONS / "20261009000001_seed_front_page_description_language_key.sql"
+DESCRIPTION_OWNER = MIGRATIONS / "20261009000099_record_database_release_9_10_2.sql"
+
+
+def test_home_description_release_and_generated_bootstrap():
+    sql = DESCRIPTION.read_text()
+    assert "-- VERSION_DB: 9.10.2" in sql
+    assert f"-- VERSION_DB_OWNER: {DESCRIPTION_OWNER.name}" in sql
+    assert DESCRIPTION.name < DESCRIPTION_OWNER.name
+    assert "SELECT '9.10.2'" in DESCRIPTION_OWNER.read_text()
+    assert "site_front_page_description" in sql and "usage_explanation" in sql
+    assert sql in (BOOTSTRAP / "seed_data.sql").read_text()
+    assert (BOOTSTRAP / "schema.sql").read_bytes() == (APP / "server_tools/versioning/schema_snapshots/db-9.10.2.sql").read_bytes()
+    manifest = json.loads((BOOTSTRAP / "manifest.json").read_text())
+    assert manifest["db_version"] == "9.10.2"
+    assert DESCRIPTION.name in manifest["migration_ledger_baseline"]
+    assert DESCRIPTION_OWNER.name in manifest["migration_ledger_baseline"]
+    assert (APP / "VERSION_DB").read_text().strip() == "9.10.2"
+
+
+def test_home_description_fresh_upgrade_repeat_and_reviewed_copy(installed, upgrade):
+    for migration in sorted(MIGRATIONS.glob("202610050000*.sql")):
+        upgrade(migration.read_text())
+    upgrade(DESCRIPTION.read_text())
+    query = """SELECT jsonb_agg(jsonb_build_array(k.lang_key,k.fi,k.en,t.language_code,t.translation)
+        ORDER BY k.lang_key,t.language_code) FROM system_lang_keys k
+        LEFT JOIN system_lang_key_translations t ON t.lang_key_id=k.id
+        WHERE k.lang_key IN ('site_front_page_description','slogan','front_page_hero','front_page_hero_help')"""
+    expected = value(installed, query)
+    assert expected == value(upgrade, query)
+    for run in (installed, upgrade):
+        for _ in range(2):
+            run(DESCRIPTION.read_text())
+            assert value(run, query) == expected
+        assert value(run, "SELECT count(*) FROM system_lang_key_sources s JOIN system_lang_keys k ON k.id=s.lang_key_id WHERE k.lang_key='site_front_page_description' AND source_type='front_page_hero' AND length(usage_explanation)>40") == "1"
+        run("""UPDATE system_lang_keys SET fi='Oma kuvaus',en='Reviewed description' WHERE lang_key='site_front_page_description';
+            INSERT INTO system_lang_key_translations(lang_key_id,language_code,translation,source_kind,review_status)
+                SELECT id,'fi','Oma tarkistettu kuvaus','manual','approved' FROM system_lang_keys WHERE lang_key='site_front_page_description';
+            UPDATE system_lang_key_sources SET usage_explanation='Reviewed explanation' WHERE source_high='site_front_page_description';""")
+        for _ in range(2):
+            run(DESCRIPTION.read_text())
+        assert value(run, "SELECT fi||'|'||en FROM system_lang_keys WHERE lang_key='site_front_page_description'") == "Oma kuvaus|Reviewed description"
+        assert value(run, "SELECT translation FROM system_lang_key_translations t JOIN system_lang_keys k ON k.id=t.lang_key_id WHERE k.lang_key='site_front_page_description' AND language_code='fi'") == "Oma tarkistettu kuvaus"
+        assert value(run, "SELECT usage_explanation FROM system_lang_key_sources WHERE source_high='site_front_page_description'") == "Reviewed explanation"

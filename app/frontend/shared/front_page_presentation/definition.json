@@ -1,8 +1,14 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "anchors": ["top-left", "top-center", "top-right", "center-left", "center-center", "center-right", "bottom-left", "bottom-center", "bottom-right"],
-  "paragraph_layouts": ["normal", "artistic"],
-  "margin_px": {"min": 0, "max": 320, "step": 1},
+  "alignments": ["left", "center", "right", "justify"],
+  "horizontal_margin_px": {"min": 0, "max": 320, "step": 1},
+  "vertical_margin_px": {"min": 0, "max": 320, "step": 1},
   "max_width_px": {"min": 320, "max": 1600, "step": 10},
-  "default": {"schema_version": 1, "anchor": "top-left", "margin_px": 40, "paragraph_layout": "normal", "max_width_px": 1120}
+  "light_wash": {"min": 0, "max": 100, "step": 1},
+  "light_opacity": {"min": 0, "max": 100, "step": 1},
+  "dark_wash": {"min": 0, "max": 100, "step": 1},
+  "dark_opacity": {"min": 0, "max": 100, "step": 1},
+  "legacy": {"schema_version": 1, "alignments": {"normal": "left", "artistic": "center"}},
+  "default": {"schema_version": 2, "anchor": "center-center", "horizontal_margin_px": 40, "vertical_margin_px": 40, "alignment": "left", "max_width_px": 1120, "light_wash": 15, "light_opacity": 75, "dark_wash": 0, "dark_opacity": 20}
 }

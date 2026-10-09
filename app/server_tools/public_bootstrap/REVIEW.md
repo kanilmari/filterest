@@ -1,11 +1,11 @@
 # Filterest Public Bootstrap Audit
 
 - Target: `Filterest public bootstrap`
-- Schema tables: `60`
-- Seed tables: `34`
+- Schema tables: `85`
+- Seed tables: `38`
 - Example emails: `0`
 - Manifest format: `2`
-- Manifest source files: `122`
+- Manifest source files: `207`
 - Findings: `0`
 
 ## Verdict
@@ -15,6 +15,23 @@ PASS
 ## Schema Tables
 
 - `public.ai_chat_conversations`
+- `public.deletion_log`
+- `public.dev_agent_handover_report_items`
+- `public.dev_agent_handover_reports`
+- `public.dev_agent_release_goal_contracts`
+- `public.dev_agent_release_goals`
+- `public.dev_agent_task_group_relations`
+- `public.dev_agent_task_groups`
+- `public.dev_agent_task_queues`
+- `public.dev_agent_task_runs`
+- `public.dev_agent_task_statuses`
+- `public.dev_agent_task_todo_statuses`
+- `public.dev_agent_task_todos`
+- `public.dev_agent_tasks`
+- `public.dev_agent_tasks_assets`
+- `public.dev_agent_workline_reports`
+- `public.dev_agent_workline_tasks`
+- `public.dev_agent_worklines`
 - `public.dokumentaatio`
 - `public.dokumentaatio_assets`
 - `public.dokumentaatio_tiketit_relation`
@@ -36,14 +53,18 @@ PASS
 - `public.system_column_field_sets`
 - `public.system_comments`
 - `public.system_config`
+- `public.system_data_repair_records`
 - `public.system_dataset_media`
 - `public.system_dataset_sort_defaults`
 - `public.system_db_table_aliases`
 - `public.system_db_tables`
 - `public.system_db_version`
 - `public.system_embedding_refresh_jobs`
+- `public.system_favorites`
 - `public.system_foreign_key_relations_1_m`
 - `public.system_foreign_key_relations_m_m`
+- `public.system_front_page_blocks`
+- `public.system_front_page_revisions`
 - `public.system_functions`
 - `public.system_group_table_func_rights`
 - `public.system_lang_key_sources`
@@ -55,8 +76,11 @@ PASS
 - `public.system_media_assets`
 - `public.system_permission_actions`
 - `public.system_permission_categories`
+- `public.system_revoked_sign_ins`
 - `public.system_row_access_rule_events`
 - `public.system_row_access_rules`
+- `public.system_row_actor_columns`
+- `public.system_row_group_classifications`
 - `public.system_row_group_memberships`
 - `public.system_row_groups`
 - `public.system_schema_migrations`
@@ -72,11 +96,15 @@ PASS
 - `public.tiketit`
 - `public.tiketit_assets`
 - `restricted.otp_send_events`
+- `restricted.password_reset_dummy_work`
 - `restricted.users_restricted`
 - `restricted.verification_codes`
 
 ## Seed Tables
 
+- `public.dev_agent_task_groups`
+- `public.dev_agent_task_statuses`
+- `public.dev_agent_task_todo_statuses`
 - `public.dokumentaatio`
 - `public.dokumentaatio_tiketit_relation`
 - `public.palvelukatalogi`
@@ -91,6 +119,7 @@ PASS
 - `public.system_about`
 - `public.system_column_details`
 - `public.system_config`
+- `public.system_data_repair_records`
 - `public.system_db_tables`
 - `public.system_db_version`
 - `public.system_foreign_key_relations_1_m`
@@ -114,6 +143,9 @@ PASS
 
 ## Seed Row Counts
 
+- `public.dev_agent_task_groups`: 7
+- `public.dev_agent_task_statuses`: 12
+- `public.dev_agent_task_todo_statuses`: 5
 - `public.dokumentaatio`: 3
 - `public.dokumentaatio_tiketit_relation`: 1
 - `public.palvelukatalogi`: 1
@@ -126,20 +158,21 @@ PASS
 - `public.riskienhallinta_dokumentaatio_relation`: 1
 - `public.riskienhallinta_tiketit_relation`: 1
 - `public.system_about`: 1
-- `public.system_column_details`: 47
-- `public.system_config`: 15
-- `public.system_db_tables`: 57
+- `public.system_column_details`: 45
+- `public.system_config`: 20
+- `public.system_data_repair_records`: 1
+- `public.system_db_tables`: 73
 - `public.system_db_version`: 1
 - `public.system_foreign_key_relations_1_m`: 4
-- `public.system_functions`: 43
+- `public.system_functions`: 44
 - `public.system_group_table_func_rights`: 24
 - `public.system_lang_key_sources`: 0
-- `public.system_lang_key_translations`: 153
-- `public.system_lang_keys`: 552
+- `public.system_lang_key_translations`: 163
+- `public.system_lang_keys`: 1257
 - `public.system_languages`: 5
 - `public.system_permission_actions`: 7
 - `public.system_permission_categories`: 4
-- `public.system_schema_migrations`: 84
+- `public.system_schema_migrations`: 164
 - `public.system_table_folders`: 14
 - `public.system_table_views`: 13
 - `public.system_user_group_memberships`: 2
@@ -152,7 +185,7 @@ PASS
 ## Manifest Hash Coverage
 
 - Generated files with hashes: `2`
-- Source files with hashes: `122`
+- Source files with hashes: `207`
 
 ## Email Domains
 

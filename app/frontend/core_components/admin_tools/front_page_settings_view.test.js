@@ -522,13 +522,14 @@ test('shows fi/en fixed hero keys, saves only hero copy and refreshes visible Ho
     expect(query('title-keyInput').value).toBe('site_front_page_title');
     expect(query('slogan-keyInput').value).toBe('site_front_page_slogan');
     expect(query('title-keyInput').readOnly).toBe(true);
-    expect(target.querySelectorAll('.dataset-header-config-language-caption')).toHaveLength(4);
+    expect(target.querySelectorAll('.dataset-header-config-language-caption')).toHaveLength(6);
     input(query('title-fiInput'), 'Oma otsikko'); input(query('title-enInput'), 'Our title');
     input(query('slogan-fiInput'), 'Oma iskulause');
     await click('hero-save');
     expect(writes()[0][1].body_data).toEqual({ hero: {
         title: { fi: 'Oma otsikko', en: 'Our title', usage_explanation: '' },
         slogan: { fi: 'Oma iskulause', en: '', usage_explanation: '' },
+        description: { fi: '', en: '', usage_explanation: '' },
     } });
     expect(onSaved).toHaveBeenCalledOnce();
     expect(query('hero-save').disabled).toBe(true);
@@ -584,4 +585,19 @@ test('stored video previews request original and empty title/slogan can be saved
     input(query('title-fiInput'), '');
     await click('hero-save');
     expect(writes()[0][1].body_data.hero.title.fi).toBe('');
+});
+
+
+test('separate description fields are multi-line, keep paragraphs and save with slogan or alone', async () => {
+    await generate_front_page_settings_view(target);
+    expect(query('description-keyInput').value).toBe('site_front_page_description');
+    for (const language of ['fi', 'en']) expect(query(`description-${language}Input`).tagName).toBe('TEXTAREA');
+    input(query('description-fiInput'), 'Kuvaus\ntoinen rivi\n\nToinen kappale');
+    await click('hero-save');
+    expect(writes()[0][1].body_data.hero.description.fi).toBe('Kuvaus\ntoinen rivi\n\nToinen kappale');
+    expect(writes()[0][1].body_data.hero.slogan.fi).toBe('');
+    input(query('slogan-enInput'), 'First slogan\nsecond line');
+    await click('hero-save');
+    expect(writes()[1][1].body_data.hero.slogan.en).toBe('First slogan\nsecond line');
+    expect(writes()[1][1].body_data.hero.description.fi).toContain('Toinen kappale');
 });
