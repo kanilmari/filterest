@@ -19,7 +19,12 @@ installation therefore starts from the packaged schema state instead of
 replaying historical migrations. Existing installations do not import a new
 bootstrap during upgrades, so migrations added after their own baseline still
 run normally. The manifest binds this filename list to the exact migration-file
-hashes and the bootstrap audit rejects drift.
+hashes and the bootstrap audit rejects drift. The ledger stores those source
+hashes with `bootstrap_baseline` outcome and `bootstrap` provenance. This proves
+the packaged baseline, not that each historical SQL file was executed. Existing
+unverified rows are never filled by a new bootstrap. The
+[Developer Guide](../../docs/instructions_and_documentation/DEV_GUIDE.md#migration-execution-evidence)
+owns the execution-evidence vocabulary and legacy upgrade rules.
 
 The seed's last statement is one acceptance block, so an import is accepted whole
 or not at all. It requires the completion marker of every included file that

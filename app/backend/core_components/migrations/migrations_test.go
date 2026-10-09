@@ -1,6 +1,7 @@
 // migrations_test.go
 // Regression tests for startup migration execution.
-// Covers the shared helper between migration files on disk, database/sql transaction handling, and migration bookkeeping so startup refactors can keep the migration contract stable without running against a live PostgreSQL instance.
+// Connects disk migrations, database/sql transactions and ledger bookkeeping.
+// Keeps driver error and ordering regressions testable without live PostgreSQL.
 package migrations
 
 import (
@@ -11,10 +12,13 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
+
+	"github.com/lib/pq"
 )
 
 type migrationExecRule struct {
@@ -25,11 +29,15 @@ type migrationExecRule struct {
 }
 
 type migrationMockConfig struct {
-	existing  map[string]bool
-	beginErr  error
-	queryErr  error
-	commitErr error
-	execRules []migrationExecRule
+	evidenceAvailable  bool
+	existing           map[string]bool
+	beginErr           error
+	queryErr           error
+	commitErr          error
+	execRules          []migrationExecRule
+	unresolvedQueryErr error
+	unresolvedRows     [][]driver.Value
+	unresolvedRowsErr  error
 }
 
 type migrationMockDriver struct {
@@ -38,10 +46,11 @@ type migrationMockDriver struct {
 }
 
 type migrationMockConn struct {
-	cfg   migrationMockConfig
-	state *migrationMockState
-	mu    sync.Mutex
-	inTx  bool
+	cfg             migrationMockConfig
+	state           *migrationMockState
+	mu              sync.Mutex
+	inTx            bool
+	selfManagedOpen bool
 }
 
 type migrationMockTx struct {
@@ -52,6 +61,7 @@ type migrationMockRows struct {
 	columns []string
 	rows    [][]driver.Value
 	index   int
+	err     error
 }
 
 type migrationExecCall struct {
@@ -60,13 +70,16 @@ type migrationExecCall struct {
 }
 
 type migrationMockState struct {
-	mu              sync.Mutex
-	existing        map[string]bool
-	existsChecks    []string
-	directExecCalls []migrationExecCall
-	txExecCalls     []migrationExecCall
-	commitCount     int
-	rollbackCount   int
+	mu                sync.Mutex
+	existing          map[string]bool
+	existsChecks      []string
+	directExecCalls   []migrationExecCall
+	txExecCalls       []migrationExecCall
+	commitCount       int
+	rollbackCount     int
+	evidenceAvailable bool
+	outcomes          map[string]string
+	unresolvedChecks  int
 }
 
 var migrationMockCounter int64
@@ -142,7 +155,34 @@ func (c *migrationMockConn) ExecContext(_ context.Context, query string, args []
 	if strings.Contains(query, "INSERT INTO system_schema_migrations") && len(args) > 0 {
 		c.state.mu.Lock()
 		c.state.existing[fmt.Sprint(args[0].Value)] = true
+		if len(args) >= 3 {
+			c.state.outcomes[fmt.Sprint(args[0].Value)] = fmt.Sprint(args[2].Value)
+		}
 		c.state.mu.Unlock()
+	}
+	if strings.Contains(query, "UPDATE system_schema_migrations") {
+		c.state.mu.Lock()
+		c.state.outcomes[fmt.Sprint(args[0].Value)] = fmt.Sprint(args[2].Value)
+		c.state.mu.Unlock()
+	}
+	if strings.Contains(query, "ADD COLUMN IF NOT EXISTS content_sha256") {
+		c.state.mu.Lock()
+		c.state.evidenceAvailable = true
+		c.state.mu.Unlock()
+	}
+	if query == "SAVEPOINT filterest_migration_completion_probe" {
+		c.mu.Lock()
+		open := c.selfManagedOpen
+		c.mu.Unlock()
+		if open {
+			return driver.RowsAffected(1), nil
+		}
+		return nil, &pq.Error{Code: "25P01"}
+	}
+	if startsWithSelfManagedBegin(query) || query == "ROLLBACK" {
+		c.mu.Lock()
+		c.selfManagedOpen = query != "ROLLBACK" && !strings.Contains(strings.ToUpper(query), "COMMIT")
+		c.mu.Unlock()
 	}
 
 	return driver.RowsAffected(1), nil
@@ -159,6 +199,44 @@ func (c *migrationMockConn) Query(query string, args []driver.Value) (driver.Row
 func (c *migrationMockConn) QueryContext(_ context.Context, query string, args []driver.NamedValue) (driver.Rows, error) {
 	if c.cfg.queryErr != nil {
 		return nil, c.cfg.queryErr
+	}
+	if strings.Contains(query, "SELECT count(*) FROM pg_catalog.pg_attribute") {
+		c.state.mu.Lock()
+		count := int64(0)
+		if c.state.evidenceAvailable {
+			count = 3
+		}
+		c.state.mu.Unlock()
+		return &migrationMockRows{columns: []string{"count"}, rows: [][]driver.Value{{count}}}, nil
+	}
+	if strings.Contains(query, "SELECT filename, outcome") {
+		c.state.mu.Lock()
+		defer c.state.mu.Unlock()
+		c.state.unresolvedChecks++
+		if !c.state.evidenceAvailable {
+			return nil, fmt.Errorf("legacy ledger has no outcome column")
+		}
+		if c.cfg.unresolvedQueryErr != nil {
+			return nil, c.cfg.unresolvedQueryErr
+		}
+		if len(args) != 2 || args[0].Value != outcomeFailedSelfManaged || args[1].Value != outcomeInterruptedSelfManaged {
+			return nil, fmt.Errorf("unresolved query must select both outcomes")
+		}
+		names := []string{}
+		for filename, outcome := range c.state.outcomes {
+			if c.state.existing[filename] && (outcome == outcomeFailedSelfManaged || outcome == outcomeInterruptedSelfManaged) {
+				names = append(names, filename)
+			}
+		}
+		sort.Strings(names)
+		rows := [][]driver.Value{}
+		for _, filename := range names {
+			rows = append(rows, []driver.Value{filename, c.state.outcomes[filename]})
+		}
+		if c.cfg.unresolvedRows != nil {
+			rows = c.cfg.unresolvedRows
+		}
+		return &migrationMockRows{columns: []string{"filename", "outcome"}, rows: rows, err: c.cfg.unresolvedRowsErr}, nil
 	}
 	if !strings.Contains(query, "SELECT EXISTS") {
 		return nil, fmt.Errorf("unexpected query: %s", query)
@@ -211,6 +289,9 @@ func (r *migrationMockRows) Close() error { return nil }
 
 func (r *migrationMockRows) Next(dest []driver.Value) error {
 	if r.index >= len(r.rows) {
+		if r.err != nil {
+			return r.err
+		}
 		return io.EOF
 	}
 	copy(dest, r.rows[r.index])
@@ -222,7 +303,9 @@ func openMigrationMockDB(t *testing.T, cfg migrationMockConfig) (*sql.DB, *migra
 	t.Helper()
 
 	state := &migrationMockState{
-		existing: make(map[string]bool),
+		existing:          make(map[string]bool),
+		evidenceAvailable: cfg.evidenceAvailable,
+		outcomes:          make(map[string]string),
 	}
 	for k, v := range cfg.existing {
 		state.existing[k] = v
@@ -426,7 +509,7 @@ func TestRunMigrationsExecutesSelfManagedMigrationDirectly(t *testing.T) {
 		t.Fatalf("tx queries = %v, want none for self-managed migration", got)
 	}
 	gotDirect := directQueries(state)
-	if len(gotDirect) < 3 || gotDirect[1] != content {
+	if len(gotDirect) != 6 || gotDirect[1] != content || !strings.Contains(gotDirect[5], "INSERT INTO system_schema_migrations") {
 		t.Fatalf("direct queries = %v, want self-managed content via direct exec", gotDirect)
 	}
 }
@@ -456,7 +539,7 @@ func TestRunMigrationsSkipsOptionalTransactionalFailureAndRecordsMigration(t *te
 		t.Fatalf("rollback count = %d, want 1", rollbacks)
 	}
 	if !recorded {
-		t.Fatalf("migration %s was not recorded as applied after skip-on-error", filename)
+		t.Fatalf("migration %s was not recorded after skip-on-error", filename)
 	}
 }
 

@@ -1,10 +1,11 @@
 // migrations.go
-// Applies database migrations at server startup. Reads migration files from the migrations
-// directory and executes any that have not yet been applied to the database.
-// Exists as the explicitly gated fallback path for schema changes that cannot use APIs.
+// Applies pending database migrations at server startup in global filename order.
+// Connects public/private SQL sources to transactional execution and ledger evidence.
+// Keeps exact attempted bytes and outcomes distinct from unverified historical rows.
 package migrations
 
 import (
+	"crypto/sha256"
 	"database/sql"
 	"fmt"
 	"log"
@@ -42,7 +43,19 @@ func RunMigrationsFromDirectories(db *sql.DB, directories []string) error {
 		return err
 	}
 
+	evidenceAvailable, err := migrationEvidenceAvailable(db)
+	if err != nil {
+		return err
+	}
+	if evidenceAvailable {
+		if err := refuseUnresolvedSelfManagedMigrations(db); err != nil {
+			return err
+		}
+	}
 	allowedFiles := configuredMigrationFileAllowlist()
+	// Only evidence observed by this invocation can cross the old-ledger boundary.
+	// A restart deliberately cannot reconstruct it from today's source files.
+	var pendingEvidence []migrationEvidence
 
 	for _, migration := range files {
 		base := migration.filename
@@ -63,27 +76,20 @@ func RunMigrationsFromDirectories(db *sql.DB, directories []string) error {
 			return err
 		}
 		content := string(sqlBytes)
-		skipOnError := len(content) >= 16 && content[:16] == "-- skip-on-error"
+		skipOnError := strings.HasPrefix(content, "-- skip-on-error")
+		evidence := migrationEvidence{filename: base, hash: fmt.Sprintf("%x", sha256.Sum256(sqlBytes)), outcome: outcomeApplied}
 
-		// Detect self-managing migrations (contain their own BEGIN/COMMIT).
-		// Skip leading blank lines / SQL comments so BEGIN after a migration
-		// header is still recognized correctly.
+		// A leading explicit transaction runs outside the runner's transaction.
 		selfManaged := startsWithSelfManagedBegin(content)
 
 		if selfManaged {
-			// Run SQL directly — the migration manages its own transaction
-			if _, err := db.Exec(content); err != nil {
-				if skipOnError {
-					log.Printf("[MIGRATIONS] WARNING: optional migration %s failed (skipping): %v", base, err)
-				} else {
-					return fmt.Errorf("migration %s failed: %w", base, err)
-				}
+			if err := runSelfManagedMigration(db, content, skipOnError, evidenceAvailable, &evidence); err != nil {
+				return err
 			}
-			// Record as applied regardless of skip-on-error outcome
-			if _, err := db.Exec(`INSERT INTO system_schema_migrations (filename) VALUES ($1)`, base); err != nil {
-				return fmt.Errorf("migration %s tracking insert failed: %w", base, err)
+			if !evidenceAvailable {
+				pendingEvidence = append(pendingEvidence, evidence)
 			}
-			log.Printf("Applied migration %s", base)
+			log.Printf("Migration %s: %s", base, evidence.outcome)
 			continue
 		}
 
@@ -95,20 +101,48 @@ func RunMigrationsFromDirectories(db *sql.DB, directories []string) error {
 		if _, err := tx.Exec(content); err != nil {
 			tx.Rollback()
 			if skipOnError {
-				log.Printf("[MIGRATIONS] WARNING: optional migration %s failed (skipping): %v", base, err)
-				if _, err2 := db.Exec(`INSERT INTO system_schema_migrations (filename) VALUES ($1)`, base); err2 != nil {
-					log.Printf("[MIGRATIONS] WARNING: could not record skipped migration %s: %v", base, err2)
+				evidence.outcome = outcomeOptionalFailureSkipped
+				if err := insertMigrationEvidence(db, evidence, evidenceAvailable); err != nil {
+					return err
 				}
+				if !evidenceAvailable {
+					pendingEvidence = append(pendingEvidence, evidence)
+				}
+				log.Printf("[MIGRATIONS] WARNING: optional migration %s failed (skipping)", base)
 				continue
 			}
 			return fmt.Errorf("migration %s failed: %w", base, err)
 		}
-		if _, err := tx.Exec(`INSERT INTO system_schema_migrations (filename) VALUES ($1)`, base); err != nil {
+		// The extension is detected inside its own transaction; its execution,
+		// ledger row and this run's earlier evidence become durable together.
+		txEvidenceAvailable := evidenceAvailable
+		if !txEvidenceAvailable {
+			txEvidenceAvailable, err = migrationEvidenceAvailable(tx)
+			if err != nil {
+				tx.Rollback()
+				return err
+			}
+		}
+		if err := insertMigrationEvidence(tx, evidence, txEvidenceAvailable); err != nil {
 			tx.Rollback()
-			return fmt.Errorf("migration %s tracking insert failed: %w", base, err)
+			return err
+		}
+		if txEvidenceAvailable {
+			for _, earlier := range pendingEvidence {
+				if err := persistDeferredMigrationEvidence(tx, earlier); err != nil {
+					tx.Rollback()
+					return err
+				}
+			}
 		}
 		if err := tx.Commit(); err != nil {
 			return fmt.Errorf("migration %s commit failed: %w", base, err)
+		}
+		evidenceAvailable = txEvidenceAvailable
+		if evidenceAvailable {
+			pendingEvidence = nil
+		} else {
+			pendingEvidence = append(pendingEvidence, evidence)
 		}
 		log.Printf("Applied migration %s", base)
 	}
@@ -184,14 +218,55 @@ func configuredMigrationFileAllowlist() map[string]struct{} {
 	return configured
 }
 
-// startsWithSelfManagedBegin detects migrations that manage their own transaction.
+// startsWithSelfManagedBegin detects leading PostgreSQL transaction control.
+// Headers, SQL keyword case and START TRANSACTION must not hide self-managed SQL
+// inside a runner transaction, where its COMMIT could separate effects and evidence.
 func startsWithSelfManagedBegin(content string) bool {
-	for _, line := range strings.Split(content, "\n") {
-		trimmed := strings.TrimSpace(line)
-		if trimmed == "" || strings.HasPrefix(trimmed, "--") {
-			continue
-		}
-		return strings.HasPrefix(trimmed, "BEGIN")
+	content = trimMigrationSQLHeader(content)
+	word, rest := migrationSQLKeyword(content)
+	if word == "BEGIN" {
+		return true
 	}
-	return false
+	next, _ := migrationSQLKeyword(trimMigrationSQLHeader(rest))
+	return word == "START" && next == "TRANSACTION"
+}
+
+func migrationSQLKeyword(content string) (string, string) {
+	end := 0
+	for end < len(content) && (content[end] >= 'a' && content[end] <= 'z' || content[end] >= 'A' && content[end] <= 'Z' || content[end] == '_') {
+		end++
+	}
+	return strings.ToUpper(content[:end]), content[end:]
+}
+
+func trimMigrationSQLHeader(content string) string {
+	for {
+		content = strings.TrimSpace(content)
+		if strings.HasPrefix(content, "--") {
+			end := strings.IndexByte(content, '\n')
+			if end < 0 {
+				return ""
+			}
+			content = content[end+1:]
+		} else if strings.HasPrefix(content, "/*") {
+			depth, end := 1, 2
+			for depth > 0 && end < len(content) {
+				if strings.HasPrefix(content[end:], "/*") {
+					depth++
+					end += 2
+				} else if strings.HasPrefix(content[end:], "*/") {
+					depth--
+					end += 2
+				} else {
+					end++
+				}
+			}
+			if depth != 0 {
+				return ""
+			}
+			content = content[end:]
+		} else {
+			return content
+		}
+	}
 }

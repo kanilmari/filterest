@@ -28,6 +28,7 @@ from public_bootstrap_policy import (
     SYSTEM_CONFIG_SELECT_KEY_PATTERN,
     MIGRATION_LEDGER_INSERT_PATTERN,
     MIGRATION_LEDGER_FILENAME_PATTERN,
+    MIGRATION_LEDGER_EVIDENCE_PATTERN,
     CANONICAL_MOCK_ROW_COUNTS,
     CANONICAL_MOCK_RELATION_MINIMUMS,
     CANONICAL_IMAGE_ASSET_RELATIONS,
@@ -307,6 +308,11 @@ def audit_bootstrap(public_root: pathlib.Path) -> BootstrapAudit:
         findings.append(
             "public bootstrap migration-ledger baseline does not match shipped public migrations"
         )
+
+    baseline_evidence = MIGRATION_LEDGER_EVIDENCE_PATTERN.findall(ledger_match.group(1)) if ledger_match else []
+    expected_evidence = [(name, sha256_file(migration_dir / name)) for name in shipped_migrations]
+    if baseline_evidence != expected_evidence:
+        findings.append("bootstrap ledger must bind every folded-in source hash to bootstrap_baseline/bootstrap")
 
     for label, fragment in REQUIRED_RUNTIME_SCHEMA_FRAGMENTS.items():
         if fragment not in schema_sql:

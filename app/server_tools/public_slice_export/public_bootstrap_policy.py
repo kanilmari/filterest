@@ -46,11 +46,15 @@ SYSTEM_CONFIG_SELECT_KEY_PATTERN = re.compile(
     re.IGNORECASE,
 )
 MIGRATION_LEDGER_INSERT_PATTERN = re.compile(
-    r"\bINSERT\s+INTO\s+public\.system_schema_migrations\s*\(\s*filename\s*\)"
+    r"\bINSERT\s+INTO\s+public\.system_schema_migrations\s*"
+    r"\(\s*filename\s*,\s*content_sha256\s*,\s*outcome\s*,\s*provenance\s*\)"
     r"\s*VALUES\s*(.*?)\s*ON\s+CONFLICT\s*\(\s*filename\s*\)\s+DO\s+NOTHING\s*;",
     re.IGNORECASE | re.DOTALL,
 )
-MIGRATION_LEDGER_FILENAME_PATTERN = re.compile(r"\(\s*'([^']+\.sql)'\s*\)")
+MIGRATION_LEDGER_FILENAME_PATTERN = re.compile(r"\(\s*'([^']+\.sql)'\s*,")
+MIGRATION_LEDGER_EVIDENCE_PATTERN = re.compile(
+    r"\(\s*'([^']+\.sql)'\s*,\s*'([0-9a-f]{64})'\s*,\s*'bootstrap_baseline'\s*,\s*'bootstrap'\s*\)"
+)
 
 CANONICAL_MOCK_ROW_COUNTS = {
     "public.palvelukatalogi": 1,
@@ -169,5 +173,4 @@ REQUIRED_RUNTIME_SEED_FRAGMENTS = {
     "row-access translated copy": "('edit_row_permissions',",
     "view-field translated copy": "('view_field_assignments',",
 }
-
 

@@ -8,11 +8,15 @@ ALTER TABLE restricted.users_restricted
 
 -- A generated bootstrap is already at the schema state represented by the
 -- migration files shipped with it. The matching seed records that immutable
--- filename baseline so an unrestricted first startup executes only migrations
--- added after this bootstrap was generated.
+-- source-hashed bootstrap baseline so an unrestricted first startup executes
+-- only newly added migrations. Baseline hashes never claim SQL execution.
+-- The tracked evidence migration owns the outcome/provenance constraints.
 CREATE TABLE IF NOT EXISTS public.system_schema_migrations (
     filename text PRIMARY KEY,
-    applied_at timestamp with time zone DEFAULT now()
+    applied_at timestamp with time zone DEFAULT now(),
+    content_sha256 text,
+    outcome text,
+    provenance text
 );
 
 -- Account-owned appearance preferences are read during every authenticated

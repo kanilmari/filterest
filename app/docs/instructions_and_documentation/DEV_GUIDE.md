@@ -452,13 +452,20 @@ register additional sources, but standalone Filterest reads its public source;
 duplicate filenames must fail. Prefer `INSERT ... SELECT ... WHERE NOT EXISTS`
 over `ON CONFLICT`.
 
-Filterest owns `app/VERSION_APP` and `app/VERSION_DB`. Ordinary source commits
-do not independently advance a release number. At release preparation align
-the application/DB compatibility record, schema snapshot and matching bootstrap
-package with accepted migration source. Keep full recovery dumps separate from
-the public bootstrap. Follow [Publishing Filterest](../publication/PUBLISHING.md)
-for candidate preparation, build, promotion, final rebuild and publication.
-Do not create another release ledger or rewrite published tags.
+### Migration execution evidence
+
+The migration ledger (`system_schema_migrations`) retains filenames and timestamps, with nullable byte digest (`content_sha256`), completion result (`outcome`) and origin (`provenance`). All three null means unverified history. Never infer a historical execution hash from present migration files.
+
+The runner hashes the exact bytes submitted to PostgreSQL. Ordinary execution and its `applied`/`runner` row commit together. An optional failed attempt is `optional_failure_skipped`/`runner` after rollback; this does not prove intended effects exist. Losing the ledger write fails startup.
+
+With evidence columns, self-managed SQL commits an `interrupted_self_managed`/`runner` marker before execution. Confirmed success becomes `applied`; optional errors become `optional_failure_skipped`. A non-optional error becomes `failed_self_managed` only after confirmed rollback and transaction closure; otherwise interruption remains. Before any migration runs, check the whole ledger for both unresolved outcomes, regardless of files, sources or allowlists; refusal names every unresolved file. Earlier internal commits may remain. Clean the pinned connection before reuse. Follow [operator reconciliation](../../../README.md#reconcile-a-self-managed-migration): inspect effects, then retain the filename as unverified history when complete, or remove the marker for a corrected retry, using the guarded SQL. Archive original evidence and the decision first; neither choice fabricates a successful execution hash.
+
+On an old ledger, keep global filename order and execute self-managed SQL before recording a bare row. Success and optional failures are recorded; non-optional failures leave no row and retry next start, matching the legacy behavior even when internal commits partially applied work. Only hashes/outcomes observed in this invocation are buffered; they commit with the evidence extension and its own row. Interruption before that commit leaves accepted rows unverified. No later run fills such rows from disk.
+
+Fresh bootstrap uses `bootstrap_baseline`/`bootstrap`: hashes identify folded-in sources, including replaced version records, without claiming SQL execution. Bootstrap acceptance and audit enforce this distinction. Unknown history, optional failures, operator-accepted unverified rows and unresolved self-managed attempts need explicit review before a signed release can prove an upgrade route.
+
+Filterest owns `app/VERSION_APP` and `app/VERSION_DB`. Ordinary source commits do not independently advance a release number. At release preparation align the application/DB compatibility record, schema snapshot and matching bootstrap with accepted migration source.
+Keep full recovery dumps separate from the public bootstrap. Follow [Publishing Filterest](../publication/PUBLISHING.md) for candidate preparation, build, promotion, final rebuild and publication. Do not create another release ledger or rewrite published tags.
 
 Reuse the supported API client or [E2E helpers](E2E_Testing_Guide.md) for
 authentication. Fetch CSRF through `/api/csrf-token` and send `X-CSRF-Token`

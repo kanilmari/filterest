@@ -96,6 +96,7 @@ repair_schema_migrations = (
     "20261005000040_add_surviving_sign_in.sql",
     "20261005000070_drop_column_label_value_layout.sql",
     "20261009000003_create_system_dataset_appearance.sql",
+    "20261009000020_add_migration_execution_evidence.sql",
 )
 # Complete the physical actor columns after development tables and support functions,
 # before schema privileges. The data step later registers the same columns.
@@ -328,7 +329,7 @@ acceptance_lines = [
     "",
     "-- Generated migration-ledger baseline and version row, written by this acceptance block only after",
     "-- every completion marker is present and every final check comes back empty. These migrations are",
-    "-- already embodied by this bootstrap.",
+    "-- already embodied by this bootstrap. Hashes identify folded-in sources, not executed SQL.",
     "DO $filterest_acceptance$",
     "DECLARE",
     "    missing_markers text;",
@@ -357,8 +358,9 @@ if final_checks:
         "    END IF;",
     ]
 acceptance_lines += [
-    "    INSERT INTO public.system_schema_migrations (filename) VALUES",
-    ",\n".join(f"      ('{filename}')" for filename in migration_ledger_baseline),
+    "    INSERT INTO public.system_schema_migrations (filename, content_sha256, outcome, provenance) VALUES",
+    ",\n".join(f"      ('{filename}', '{sha256(public_migrations / filename)}', 'bootstrap_baseline', 'bootstrap')"
+                for filename in migration_ledger_baseline),
     "    ON CONFLICT (filename) DO NOTHING;",
     "    INSERT INTO public.system_db_version (version, description)",
     f"    VALUES ('{db_version}', 'Filterest generated public bootstrap');",

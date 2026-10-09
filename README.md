@@ -378,6 +378,37 @@ homes for projects, protected keys, and runtime data. Relative paths start at
 the outer installation root. The standard standalone contract keeps them in
 the five operator-owned sibling directories shown above.
 
+### Reconcile a self-managed migration
+
+Before running any migration, startup checks the whole evidence-aware ledger and names
+all failed or interrupted self-managed files. Removed/renamed files, source directories
+removed from configuration and filename allowlists cannot bypass this refusal.
+Stop every application process using this database and disable automatic restarts;
+back up the database, inspect the SQL's effects and confirm no migration is still running.
+Internal commits may have preserved part of the work even after a later rollback.
+
+1. Read and archive the marker's `filename`, `applied_at`, `content_sha256`, `outcome`
+   and `provenance` from `public.system_schema_migrations`, plus your inspection/decision.
+   Use `./db --local "SELECT * FROM public.system_schema_migrations WHERE filename='FILE.sql'"`.
+2. Choose `applied` only when every intended effect is complete: the command retains
+   the filename/timestamp and clears evidence to unverified history. Choose `retry`
+   after correcting the file and checking that reexecution is safe: it removes the marker.
+3. Run the guarded SQL below from the installation root with the database owner's
+   connection (replace the target placeholders; use protected libpq credentials or a password prompt).
+   Set the expected hash and outcome from the archived marker, never from today's file.
+
+```bash
+psql -X --host=YOUR_DB_HOST --port=YOUR_DB_PORT --username=YOUR_OWNER_ROLE --dbname=YOUR_DATABASE \
+  --set=filename=FILE.sql --set=expected_hash=MARKER_HASH \
+  --set=expected_outcome=failed_self_managed --set=decision=retry \
+  --file=app/server_tools/scripts/reconcile_self_managed_migration.sql
+```
+
+Use `interrupted_self_managed` for an interruption marker, and `decision=applied`
+for completed effects. The command locks and checks exactly one unresolved runner row;
+changed/missing evidence aborts. It never creates an execution hash. Verify the resulting
+ledger, then start Filterest normally. Successful retries record their actual new bytes.
+
 ## Updating A Git Checkout
 
 ```bash
