@@ -7497,7 +7497,7 @@ DECLARE
     findings text;
 BEGIN
     SELECT string_agg(marker, ', ' ORDER BY marker) INTO missing_markers
-      FROM unnest(ARRAY['wl58_row_actor_support', 'wl58_row_actor_marks_by_table_uid', 'wl58_row_actor_trigger_definitions', 'k116_login_names', 'password_reset_dummy_work', 'system_favorites_table', 'system_front_page_revisions_table', 'system_front_page_blocks_table', 'wl103_row_group_classifications', 'wl132_surviving_sign_in', 'wl52_drop_column_label_value_layout', 'wl58_row_actor_columns', 'system_favorites_registry', 'system_front_page_blocks_registry', 'wl103_row_group_classifications_registry', 'wl144_registry_reference_key', 'dataset_media_hidden']::text[]) AS marker
+      FROM unnest(ARRAY['wl58_row_actor_support', 'wl58_row_actor_marks_by_table_uid', 'wl58_row_actor_trigger_definitions', 'k116_login_names', 'password_reset_dummy_work', 'system_favorites_table', 'system_front_page_revisions_table', 'system_front_page_blocks_table', 'wl103_row_group_classifications', 'wl132_surviving_sign_in', 'wl52_drop_column_label_value_layout', 'system_dataset_appearance_table', 'wl58_row_actor_columns', 'system_favorites_registry', 'system_front_page_blocks_registry', 'wl103_row_group_classifications_registry', 'wl144_registry_reference_key', 'dataset_media_hidden']::text[]) AS marker
      WHERE NOT EXISTS (SELECT 1 FROM public.system_data_repair_records AS record
                         WHERE record.migration = marker AND record.action = 'completed');
     IF missing_markers IS NOT NULL THEN
@@ -7507,6 +7507,8 @@ BEGIN
         SELECT 'public.app_check_row_actor_marks(): ' || result FROM public.app_check_row_actor_marks() AS result
         UNION ALL
         SELECT 'public.app_check_login_name_protections(): ' || result FROM public.app_check_login_name_protections() AS result
+        UNION ALL
+        SELECT 'public.app_check_dataset_appearance_storage(): ' || result FROM public.app_check_dataset_appearance_storage() AS result
         UNION ALL
         SELECT 'public.app_check_registry_reference_key(): ' || result FROM public.app_check_registry_reference_key() AS result
     ) AS checks (finding);
@@ -7678,6 +7680,7 @@ BEGIN
       ('20261007000099_record_database_release_9_10_1.sql'),
       ('20261009000001_seed_front_page_description_language_key.sql'),
       ('20261009000002_seed_admin_version_info_language_keys.sql'),
+      ('20261009000003_create_system_dataset_appearance.sql'),
       ('20261009000099_record_database_release_9_10_2.sql')
     ON CONFLICT (filename) DO NOTHING;
     INSERT INTO public.system_db_version (version, description)

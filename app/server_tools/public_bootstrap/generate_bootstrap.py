@@ -95,6 +95,7 @@ repair_schema_migrations = (
     "20261005000035_add_row_group_classifications.sql",
     "20261005000040_add_surviving_sign_in.sql",
     "20261005000070_drop_column_label_value_layout.sql",
+    "20261009000003_create_system_dataset_appearance.sql",
 )
 # Complete the physical actor columns after development tables and support functions,
 # before schema privileges. The data step later registers the same columns.

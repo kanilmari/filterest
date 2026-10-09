@@ -228,12 +228,30 @@ The compatibility-only `shared.image_blur` borrows the light blur rule and remai
 copied from light blur by palette saves. Go stored reads inherit that legacy value
 only when a theme blur is absent; explicit zero wins. Browser snapshots retain
 their existing more permissive read guard and normalization. Strict complete and
-leaf validators in `dataset_appearance/validator.js` mirror the embedded Go policy;
-future overrides must allow only canonical paths and validate the merged mask.
+leaf validators in `dataset_appearance/validator.js` mirror the embedded Go policy.
 Shared examples live in `testing/shared_contracts/dataset_appearance_examples.json`.
 Site handlers, persistence, validation and the stored shape are separated into
 `site_presentation_settings.go`, `site_presentation_store.go`,
 `site_presentation_validator.go` and `dataset_cover_theme_config.go`.
+
+WL160 slice 2 adds internal storage only: `system_dataset_appearance` holds one
+sparse canonical-path map, schema version and durable revision per immutable
+dataset UID. Zero, false and a value equal to the shared choice remain overrides;
+null is refused and removing the last override retains the empty revision row.
+Renames preserve the row and dataset deletion cascades it. It is an unregistered
+internal table behind the dedicated-mutation policy, with no ordinary runtime
+read/write grants or appearance route. Operator readonly inspection follows the
+existing public-schema contract. No renderer reads these overrides yet.
+
+The internal reader/saver in `system_table_tools/dataset_appearance_saver.go`
+uses caller-owned transactions and refuses stale/competing initial saves with
+409. The resolver validates canonical leaves and the complete merged light/dark
+mask, without persisting inherited values. Shared saves do not rewrite overrides.
+Slice 3 must add authorized APIs and shared revisions with a common shared-first
+lock order, migrate non-null `system_db_tables.card_style_variant` and
+`card_detail_columns` as explicit overrides, route every compatibility writer
+through that revision boundary, and retire the old columns only after all
+readers use compatibility projections. Those columns remain unchanged in slice 2.
 
 ### Optional Home page
 

@@ -30,6 +30,7 @@ var dedicatedMutationAPITables = map[string]struct{}{
 	"system_row_access_rule_events":     {},
 	"system_front_page_blocks":          {},
 	"system_front_page_revisions":       {},
+	"system_dataset_appearance":         {},
 	"system_favorites":                  {},
 	"system_user_visual_preferences":    {},
 }

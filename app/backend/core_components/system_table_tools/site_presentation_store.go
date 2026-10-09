@@ -177,17 +177,26 @@ func readSitePresentationSettingsFromDB() (SitePresentationSettingsResponse, err
 	}
 
 	if strings.TrimSpace(rawCover) != "" {
-		stored := settings.DatasetCoverTheme
-		if json.Unmarshal([]byte(rawCover), &stored) == nil {
-			inheritLegacyImageBlur(rawCover, &stored)
-			stored.Shared.LabelValueLayout = normalizeSiteLabelValueLayout(stored.Shared.LabelValueLayout)
-			if validateDatasetCoverTheme(stored) == nil {
-				settings.DatasetCoverTheme = stored
-			}
-		}
+		settings.DatasetCoverTheme = normalizedStoredDatasetCoverTheme(rawCover)
 	}
 	if rawTimestamp.Valid && validateTimestampDisplayMode(rawTimestamp.String) == nil {
 		settings.RowArticleTimestampDisplayMode = rawTimestamp.String
 	}
 	return settings, nil
+}
+
+// normalizedStoredDatasetCoverTheme is the compatibility read boundary shared by
+// the site endpoint and internal override saves. Invalid stored config falls back
+// to defaults, while omitted legacy fields retain the existing read behavior.
+func normalizedStoredDatasetCoverTheme(raw string) DatasetCoverThemeConfig {
+	defaults := defaultSitePresentationSettings().DatasetCoverTheme
+	stored := defaults
+	if json.Unmarshal([]byte(raw), &stored) == nil {
+		inheritLegacyImageBlur(raw, &stored)
+		stored.Shared.LabelValueLayout = normalizeSiteLabelValueLayout(stored.Shared.LabelValueLayout)
+		if validateDatasetCoverTheme(stored) == nil {
+			return stored
+		}
+	}
+	return defaults
 }

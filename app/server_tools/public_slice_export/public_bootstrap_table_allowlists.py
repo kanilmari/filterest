@@ -52,6 +52,7 @@ ALLOWED_SCHEMA_TABLES = {
     "public.system_db_tables",
     "public.system_db_version",
     "public.system_dataset_media",
+    "public.system_dataset_appearance",
     "public.system_media_assets",
     "public.system_media_asset_usages",
     "public.system_dataset_sort_defaults",
@@ -134,4 +135,3 @@ ALLOWED_SEED_TABLES = {
     "public.system_user_groups",
     "public.system_users",
 }
-

@@ -61,6 +61,7 @@ var productTables = map[string]bool{
 	"system_config_value_data_types":    true, // Legacy config FK labels; private bootstrap lookup.
 	"system_database_identity":          true, // Private 20260426000001 migration; native setup/dev_status.
 	"system_data_repair_records":        true,
+	"system_dataset_appearance":         true,
 	"system_dataset_media":              true,
 	"system_dataset_sort_defaults":      true,
 	"system_dataset_view_settings":      true,

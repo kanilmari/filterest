@@ -11,6 +11,7 @@ var InternalRegistryTables = []string{
 	"system_media_asset_usages",
 	"system_row_actor_columns",
 	"system_front_page_revisions",
+	"system_dataset_appearance",
 }
 
 // IsInternalRegistryTable checks the same list supplied to registry queries.

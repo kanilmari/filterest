@@ -44,7 +44,9 @@ def cluster():
 def test_front_page_bootstrap_classes_and_exact_schema_snapshot():
     schema = (BOOTSTRAP / "schema.sql").read_bytes()
     seed = (BOOTSTRAP / "seed_data.sql").read_text()
-    assert schema == (APP / "server_tools/versioning/schema_snapshots/db-9.10.0.sql").read_bytes()
+    # The generated schema always equals the snapshot of the database version it targets (9.10.0 when WL143 shipped).
+    version = (APP / "VERSION_DB").read_text().strip()
+    assert schema == (APP / f"server_tools/versioning/schema_snapshots/db-{version}.sql").read_bytes()
     for migration in FILES[:2]:
         assert migration.read_bytes() in schema
     for migration in FILES[2:]:
