@@ -29,7 +29,8 @@ test.describe('L7 — Administrator user authentication', () => {
 
     const userSelect = page.locator('[data-testid="user-authentication-user"]');
     await expect(userSelect).toBeVisible({ timeout: 10_000 });
-    expect(await userSelect.locator('option').count()).toBeGreaterThan(1);
+    // The select appears with only its placeholder; the accounts are added when the list request answers.
+    await expect.poll(() => userSelect.locator('option').count(), { timeout: 10_000 }).toBeGreaterThan(1);
 
     await userSelect.selectOption({ index: 1 });
     await expect(page.locator('[data-testid="verification-method-none"]')).toBeVisible();

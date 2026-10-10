@@ -156,6 +156,13 @@ normal teardown and failures after this process has acquired the artifact run
 remove its auth state. A runner rejected as foreign does not remove another
 process's state.
 
+A test that signs out must sign in with its own session
+(`test.use({ storageState: { cookies: [], origins: [] } })`, as
+`L_auth/L2_logout.spec.ts` does). Signing out revokes that one sign-in on the
+server, so signing out of the shared session leaves every later test and the
+global teardown with a refused session, and the teardown then cannot release
+the run record.
+
 The same global setup/teardown path owns an exclusive artifact-run registry and a complete pre-run baseline:
 
 - setup never deletes a dataset or folder merely because its name looks synthetic

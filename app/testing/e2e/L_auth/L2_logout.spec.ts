@@ -2,7 +2,7 @@
  * L2_logout.spec.ts
  *
  * Tests logout functionality.
- * Logs in using the auth helper, then logs out and verifies the session is destroyed.
+ * Signs in afresh through the auth helper, then logs out and verifies the session is destroyed.
  */
 
 import { test, expect } from '@playwright/test';
@@ -10,6 +10,10 @@ import { login, loadCredentials, logout, readSessionInfo, type TestCredentials }
 import { ensureNavbarVisible } from '../helpers/navbar';
 
 test.describe('L2 — Logout', () => {
+  // Signing out revokes that one sign-in on the server. Logging out of the shared
+  // global-setup session would sign out every later test and the global teardown.
+  test.use({ storageState: { cookies: [], origins: [] } });
+
   let credentials: TestCredentials;
 
   test.beforeAll(() => {
@@ -94,6 +98,12 @@ test.describe('L2 — Logout', () => {
 
     const navbar = page.locator('#navbar');
     if (await navbar.count()) {
+      // The signed-out page starts with the navbar collapsed in its HTML and applies the stored
+      // visibility only once its scripts run. Deciding earlier waits for a menu button that the
+      // page never shows when the stored visibility opens the navbar.
+      await expect(
+        page.locator('#navbar:not(.collapsed), #showMenuButton.menu-toggle-visible').first(),
+      ).toBeAttached({ timeout: 15_000 });
       await ensureNavbarVisible(page);
       await expect(page.locator('[data-testid="navbar-auth-login"], [data-testid="tab-login"]').first()).toBeVisible();
       await page.evaluate(() => {
