@@ -388,13 +388,13 @@
       "sha256": "fd29b59186be027e1b0b5392cb4eab64a75b2903dba4ab661204c8931a64bbe5"
     },
     "filterest/app/server_tools/public_slice_export/audit_public_bootstrap.py": {
-      "sha256": "40b58999d07dfb3ebbc14c8df2a71f19c20c2ab7be88da6a1207b6361ef86f9f"
+      "sha256": "248d536fd4fb5021fd778dd1703afbf12a8de263d3af7c4fcd72cf714630a95f"
     },
     "filterest/app/server_tools/public_slice_export/public_bootstrap_table_allowlists.py": {
       "sha256": "803c08cbdcf1283c189a61e844330bf8ddc963e35aba234e3f73708a7b3008ba"
     },
     "filterest/app/server_tools/public_slice_export/public_bootstrap_policy.py": {
-      "sha256": "7481d1d0e33c83f06996d5dc2b81a41d1020bc6a3ff62e8ac7186ed6dbae94ee"
+      "sha256": "79a416bb6d32d70b66f54cba180095fbe14cdd41efdde3f706d0f8891657d014"
     },
     "filterest/app/server_tools/public_bootstrap/source/runtime.schema.sql": {
       "sha256": "1ba8ad8215db239afe52642d3641ecd5829aba8d6cac069fc8214485c5518369"

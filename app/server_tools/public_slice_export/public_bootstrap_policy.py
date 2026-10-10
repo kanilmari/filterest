@@ -4,6 +4,37 @@
 # Keeps policy separate from audit parsing; table allowlists live in public_bootstrap_table_allowlists.py.
 import re
 
+# PostgreSQL src/backend/parser/scan.l: Python's \s also admits characters the SQL scanner does not.
+SQL_SPACE_CHARACTERS = " \t\n\r\f\v"
+SQL_SPACE = r"[ \t\n\r\f\v]"
+SQL_NON_NEWLINE_SPACE = r"[ \t\f\v]"
+SQL_NEWLINE = r"[\n\r]"
+SQL_LINE_COMMENT = r"--[^\n\r]*"
+SQL_NEWLINE_PATTERN = re.compile(SQL_NEWLINE)
+SQL_BLOCK_COMMENT_BOUNDARY_PATTERN = re.compile(r"/\*|\*/")
+# scan.l's non_newline_whitespace, special_whitespace and quotecontinue. Line comments are permitted;
+# block comments are handled between tokens, but are not part of a quoted-string continuation.
+SQL_STRING_CONTINUATION = (
+    rf"'(?:{SQL_NON_NEWLINE_SPACE}|{SQL_LINE_COMMENT})*{SQL_NEWLINE}"
+    rf"(?:{SQL_SPACE}+|{SQL_LINE_COMMENT}{SQL_NEWLINE})*'"
+)
+
+
+def sql_comment_end(sql: str, start: int) -> int:
+    """Skip a line or nested block comment when outside a quoted SQL value or identifier."""
+    if sql.startswith("--", start):
+        newline = SQL_NEWLINE_PATTERN.search(sql, start + 2)
+        return len(sql) if newline is None else newline.start()
+    depth = 1
+    for boundary in SQL_BLOCK_COMMENT_BOUNDARY_PATTERN.finditer(sql, start + 2):
+        depth += 1 if boundary.group() == "/*" else -1
+        if depth == 0:
+            return boundary.end()
+    raise ValueError("unterminated SQL block comment")
+
+
+# These content checks inspect prose and credentials inside values, not SQL token spacing, so their
+# Unicode whitespace remains intentionally broader than the scanner classes used for SQL below.
 FORBIDDEN_CONTENT_PATTERNS = {
     "private table": re.compile(
         r"\b(dev_projects|dev_milestones|app_notes|"
@@ -32,28 +63,62 @@ FORBIDDEN_CONTENT_PATTERNS = {
 
 EMAIL_PATTERN = re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}")
 TABLE_PATTERN = re.compile(
-    r"\b(?:CREATE\s+TABLE(?:\s+IF\s+NOT\s+EXISTS)?|INSERT\s+INTO|COPY)\s+"
+    rf"\b(?:CREATE{SQL_SPACE}+TABLE(?:{SQL_SPACE}+IF{SQL_SPACE}+NOT{SQL_SPACE}+EXISTS)?|"
+    rf"INSERT{SQL_SPACE}+INTO|COPY){SQL_SPACE}+"
     r"((?:public|restricted)\.[A-Za-z0-9_]+)",
     re.IGNORECASE,
 )
-INSERT_TABLE_PATTERN = re.compile(r"\bINSERT\s+INTO\s+((?:public|restricted)\.[A-Za-z0-9_]+)", re.IGNORECASE)
+INSERT_TABLE_PATTERN = re.compile(
+    rf"\bINSERT{SQL_SPACE}+INTO{SQL_SPACE}+((?:public|restricted)\.[A-Za-z0-9_]+)", re.IGNORECASE)
 SYSTEM_CONFIG_KEY_PATTERN = re.compile(
-    r"\(\s*\d+\s*,\s*'((?:''|[^'])+)'\s*,",
+    rf"\({SQL_SPACE}*\d+{SQL_SPACE}*,{SQL_SPACE}*'((?:''|[^'])+)'{SQL_SPACE}*,",
     re.IGNORECASE,
 )
 SYSTEM_CONFIG_SELECT_KEY_PATTERN = re.compile(
-    r"\bSELECT\s*'((?:''|[^'])+)'\s*,",
+    rf"\bSELECT{SQL_SPACE}*'((?:''|[^'])+)'{SQL_SPACE}*,",
     re.IGNORECASE,
 )
+# The seed ends with the generator's acceptance block, and the one ledger insert in it, in exactly the
+# generated layout, is the only write the bootstrap may make to the migration ledger.
+ACCEPTANCE_BLOCK_TAG = "$filterest_acceptance$"
+ACCEPTANCE_BLOCK_OPEN = f"\nDO {ACCEPTANCE_BLOCK_TAG}\n"
+ACCEPTANCE_BLOCK_CLOSE = f"\nEND\n{ACCEPTANCE_BLOCK_TAG};\n"
 MIGRATION_LEDGER_INSERT_PATTERN = re.compile(
-    r"\bINSERT\s+INTO\s+public\.system_schema_migrations\s*"
-    r"\(\s*filename\s*,\s*content_sha256\s*,\s*outcome\s*,\s*provenance\s*\)"
-    r"\s*VALUES\s*(.*?)\s*ON\s+CONFLICT\s*\(\s*filename\s*\)\s+DO\s+NOTHING\s*;",
-    re.IGNORECASE | re.DOTALL,
+    r"^    INSERT INTO public\.(?P<ledger>system_schema_migrations) "
+    r"\(filename, content_sha256, outcome, provenance\) VALUES\n"
+    r"(?P<rows>(?:      \(.*\),\n)*      \(.*\)\n)"
+    r"    ON CONFLICT \(filename\) DO NOTHING;\n",
+    re.MULTILINE,
 )
-MIGRATION_LEDGER_FILENAME_PATTERN = re.compile(r"\(\s*'([^']+\.sql)'\s*,")
+MIGRATION_LEDGER_FILENAME_PATTERN = re.compile(rf"\({SQL_SPACE}*'([^']+\.sql)'{SQL_SPACE}*,")
 MIGRATION_LEDGER_EVIDENCE_PATTERN = re.compile(
-    r"\(\s*'([^']+\.sql)'\s*,\s*'([0-9a-f]{64})'\s*,\s*'bootstrap_baseline'\s*,\s*'bootstrap'\s*\)"
+    r"      \('([^'\n]+\.sql)', '([0-9a-f]{64})', 'bootstrap_baseline', 'bootstrap'\),?"
+)
+# Every mention of the ledger table, whatever its letter case, quoting, qualification and the spacing or
+# comments around it: a write can name it directly or through a view, a rule or a function body. A body
+# written as a quoted string may split the name with backslash escapes (E'sy\stem...') or string
+# continuations ('sy' and 'stem...' on consecutive lines), or put an escaped newline before it.
+_MIGRATION_LEDGER_NAME_GAP = rf"(?:\\|{SQL_STRING_CONTINUATION})*"
+MIGRATION_LEDGER_NAME_PATTERN = re.compile(
+    r"(?:(?<![A-Za-z0-9_$])|(?<=\\[bfnrt]))"
+    + _MIGRATION_LEDGER_NAME_GAP.join(re.escape(letter) for letter in "system_schema_migrations")
+    + r"(?![A-Za-z0-9_$])",
+    re.IGNORECASE,
+)
+# A quoted list value on one line, such as the dataset registry's table name: (..., 'system_schema_migrations', ...).
+MIGRATION_LEDGER_VALUE_BEFORE_PATTERN = re.compile(rf"[(,\[]{SQL_NON_NEWLINE_SPACE}*'\Z")
+MIGRATION_LEDGER_VALUE_AFTER_PATTERN = re.compile(rf"'{SQL_NON_NEWLINE_SPACE}*[,)\]]")
+# The lines of the ledger's reviewed definition, the only ones on which schema.sql may name it.
+SCHEMA_MIGRATION_LEDGER_LINE_PATTERN = re.compile(
+    rf"{SQL_NON_NEWLINE_SPACE}*(?:CREATE TABLE IF NOT EXISTS public\.system_schema_migrations \("
+    r"|ALTER TABLE public\.system_schema_migrations"
+    r"|WHERE conrelid = 'public\.system_schema_migrations'::regclass"
+    r"|COMMENT ON COLUMN public\.system_schema_migrations\.[a-z0-9_]+ IS)"
+)
+# Escapes that can spell any letter of the ledger's name without writing it: Unicode strings and identifiers
+# (U&'...', U&"..." with any UESCAPE character) and numeric backslash escapes (octal, \x, \u, \U).
+OPAQUE_ESCAPE_PATTERN = re.compile(
+    r"(?<![A-Za-z0-9_$])[Uu]&['\"]|\\(?:[0-7]|x[0-9A-Fa-f]|u[0-9A-Fa-f]{4}|U[0-9A-Fa-f]{8})"
 )
 
 CANONICAL_MOCK_ROW_COUNTS = {

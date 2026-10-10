@@ -20,15 +20,26 @@ from dataclasses import dataclass
 # reads them through this module's imports.
 from public_bootstrap_table_allowlists import ALLOWED_SCHEMA_TABLES, ALLOWED_SEED_TABLES
 from public_bootstrap_policy import (
+    SQL_SPACE_CHARACTERS,
+    SQL_SPACE,
+    sql_comment_end,
     FORBIDDEN_CONTENT_PATTERNS,
     EMAIL_PATTERN,
     TABLE_PATTERN,
     INSERT_TABLE_PATTERN,
     SYSTEM_CONFIG_KEY_PATTERN,
     SYSTEM_CONFIG_SELECT_KEY_PATTERN,
+    ACCEPTANCE_BLOCK_TAG,
+    ACCEPTANCE_BLOCK_OPEN,
+    ACCEPTANCE_BLOCK_CLOSE,
     MIGRATION_LEDGER_INSERT_PATTERN,
     MIGRATION_LEDGER_FILENAME_PATTERN,
     MIGRATION_LEDGER_EVIDENCE_PATTERN,
+    MIGRATION_LEDGER_NAME_PATTERN,
+    MIGRATION_LEDGER_VALUE_BEFORE_PATTERN,
+    MIGRATION_LEDGER_VALUE_AFTER_PATTERN,
+    SCHEMA_MIGRATION_LEDGER_LINE_PATTERN,
+    OPAQUE_ESCAPE_PATTERN,
     CANONICAL_MOCK_ROW_COUNTS,
     CANONICAL_MOCK_RELATION_MINIMUMS,
     CANONICAL_IMAGE_ASSET_RELATIONS,
@@ -98,46 +109,54 @@ def audit_source_file_hashes(
 
 
 def normalize_table_name(name: str) -> str:
-    return name.strip().lower()
+    return name.strip(SQL_SPACE_CHARACTERS).lower()
 
 
 def extract_tables(sql: str) -> list[str]:
-    return sorted({normalize_table_name(match.group(1)) for match in TABLE_PATTERN.finditer(sql)})
+    tokens = "".join(split_sql_statements(sql))
+    return sorted({normalize_table_name(match.group(1)) for match in TABLE_PATTERN.finditer(tokens)})
 
 
 def split_sql_statements(sql: str) -> list[str]:
+    """Split countable SQL fragments, treating scanner comments as whitespace outside quoted text.
+
+    Dollar-quoted function bodies remain visible to the bootstrap's static INSERT inventory.
+    This is an inventory helper, not an execution parser or a dynamic-SQL interpreter.
+    """
     statements: list[str] = []
     current: list[str] = []
-    in_single_quote = False
+    quote = None
     index = 0
     while index < len(sql):
-        # A line comment is not SQL: an apostrophe in it must not open a string.
-        if not in_single_quote and sql.startswith("--", index):
-            newline = sql.find("\n", index)
-            index = len(sql) if newline == -1 else newline
+        # Preserve token separation and CR/LF row boundaries. Apostrophes and semicolons in a comment
+        # cannot affect quoting or split a statement; /* */ comments nest in PostgreSQL.
+        if quote is None and (sql.startswith("--", index) or sql.startswith("/*", index)):
+            end = sql_comment_end(sql, index)
+            current.append(re.sub(r"[^\n\r]", " ", sql[index:end]))
+            index = end
             continue
         char = sql[index]
         current.append(char)
-        if char == "'":
-            if index + 1 < len(sql) and sql[index + 1] == "'":
+        if char in ("'", '"') and (quote is None or char == quote):
+            if quote is not None and index + 1 < len(sql) and sql[index + 1] == char:
                 current.append(sql[index + 1])
                 index += 2
                 continue
-            in_single_quote = not in_single_quote
-        elif char == ";" and not in_single_quote:
+            quote = char if quote is None else None
+        elif char == ";" and quote is None:
             statements.append("".join(current))
             current = []
         index += 1
-    if "".join(current).strip():
+    if "".join(current).strip(SQL_SPACE_CHARACTERS):
         statements.append("".join(current))
     return statements
 
 
 def count_insert_rows(seed_sql: str) -> Counter[str]:
     counts: Counter[str] = Counter()
-    tuple_pattern = re.compile(r"(?im)(?:^\s*|,\s*|\bVALUES\s*)\(")
+    tuple_pattern = re.compile(rf"(?im)(?:^{SQL_SPACE}*|,{SQL_SPACE}*|\bVALUES{SQL_SPACE}*)\(")
     insert_column_list_pattern = re.compile(
-        r"(\bINSERT\s+INTO\s+(?:public|restricted)\.[A-Za-z0-9_]+)\s*\([^)]*\)",
+        rf"(\bINSERT{SQL_SPACE}+INTO{SQL_SPACE}+(?:public|restricted)\.[A-Za-z0-9_]+){SQL_SPACE}*\([^)]*\)",
         re.IGNORECASE | re.DOTALL,
     )
     for statement in split_sql_statements(seed_sql):
@@ -170,12 +189,76 @@ def extract_system_config_keys(seed_sql: str) -> list[str]:
     return keys
 
 
+def find_acceptance_ledger_insert(seed_sql: str) -> re.Match[str] | None:
+    """Return the generated ledger insert if it lies in the seed's one acceptance block, its last statement."""
+    if seed_sql.count(ACCEPTANCE_BLOCK_TAG) != 2 or not seed_sql.endswith(ACCEPTANCE_BLOCK_CLOSE):
+        return None
+    block_start = seed_sql.find(ACCEPTANCE_BLOCK_OPEN)
+    if block_start < 0:
+        return None
+    inserts = list(MIGRATION_LEDGER_INSERT_PATTERN.finditer(seed_sql, block_start))
+    return inserts[0] if len(inserts) == 1 else None
+
+
 def extract_migration_ledger_baseline(seed_sql: str) -> list[str]:
     """Return the generated public-bootstrap migration filename snapshot."""
-    match = MIGRATION_LEDGER_INSERT_PATTERN.search(seed_sql)
+    match = find_acceptance_ledger_insert(seed_sql)
     if match is None:
         return []
-    return MIGRATION_LEDGER_FILENAME_PATTERN.findall(match.group(1))
+    return MIGRATION_LEDGER_FILENAME_PATTERN.findall(match.group("rows"))
+
+
+def line_numbers(sql: str, positions: list[int]) -> str:
+    """Name the distinct lines of `sql` holding `positions`, for a finding."""
+    lines = sorted({sql.count("\n", 0, position) + 1 for position in positions})
+    return ("line " if len(lines) == 1 else "lines ") + ", ".join(str(line) for line in lines)
+
+
+def migration_ledger_mention_findings(
+    schema_sql: str,
+    seed_sql: str,
+    ledger_insert: re.Match[str] | None,
+) -> list[str]:
+    """Refuse every write to the migration ledger except the acceptance block's generated insert.
+
+    Each mention of the ledger's table name counts, so a competing write cannot hide behind letter
+    case, spacing, a comment between its words, quoting, qualification, a target list, a view, a rule
+    or a function body, quoted bodies with backslash escapes or string continuations included.
+    Unicode and numeric escapes, which spell letters without writing them, are refused outright.
+    schema.sql may name the ledger only on the lines of its reviewed definition; the seed only in that
+    insert and as a quoted list value (the dataset registry's table name). SQL assembled at run time
+    (dynamic SQL, psql variables or included files) is beyond a text audit.
+    """
+    findings = []
+    for file_label, sql in (("schema.sql", schema_sql), ("seed_data.sql", seed_sql)):
+        escapes = [match.start() for match in OPAQUE_ESCAPE_PATTERN.finditer(sql)]
+        if escapes:
+            findings.append(f"{file_label} uses a Unicode or numeric escape, which could spell the migration "
+                            f"ledger's name unseen, on {line_numbers(sql, escapes)}")
+    schema_mentions = []
+    for match in MIGRATION_LEDGER_NAME_PATTERN.finditer(schema_sql):
+        line_start = schema_sql.rfind("\n", 0, match.start()) + 1
+        line_end = schema_sql.find("\n", match.start())
+        line_end = len(schema_sql) if line_end < 0 else line_end
+        if SCHEMA_MIGRATION_LEDGER_LINE_PATTERN.fullmatch(schema_sql, line_start, line_end) is None:
+            schema_mentions.append(match.start())
+    seed_mentions = []
+    for match in MIGRATION_LEDGER_NAME_PATTERN.finditer(seed_sql):
+        line_start = seed_sql.rfind("\n", 0, match.start()) + 1
+        generated_insert = ledger_insert is not None and match.start() == ledger_insert.start("ledger")
+        list_value = (
+            MIGRATION_LEDGER_VALUE_BEFORE_PATTERN.search(seed_sql, line_start, match.start()) is not None
+            and MIGRATION_LEDGER_VALUE_AFTER_PATTERN.match(seed_sql, match.end()) is not None
+        )
+        if not (generated_insert or list_value):
+            seed_mentions.append(match.start())
+    if schema_mentions:
+        findings.append("schema.sql names the migration ledger outside its reviewed definition on "
+                        + line_numbers(schema_sql, schema_mentions))
+    if seed_mentions:
+        findings.append("seed_data.sql names the migration ledger outside the acceptance block's generated "
+                        "insert on " + line_numbers(seed_sql, seed_mentions))
+    return findings
 
 
 def forbidden_content_match(sql: str, label: str, pattern: re.Pattern[str], public_root: pathlib.Path):
@@ -258,10 +341,11 @@ def audit_bootstrap(public_root: pathlib.Path) -> BootstrapAudit:
         findings.append("public bootstrap manifest format_version must be 2")
 
     schema_tables = extract_tables(schema_sql)
+    seed_tokens = "".join(split_sql_statements(seed_sql))
     seed_tables = sorted(
         {
             normalize_table_name(match.group(1))
-            for match in INSERT_TABLE_PATTERN.finditer(seed_sql)
+            for match in INSERT_TABLE_PATTERN.finditer(seed_tokens)
         }
     )
     row_counts = count_insert_rows(seed_sql)
@@ -295,11 +379,13 @@ def audit_bootstrap(public_root: pathlib.Path) -> BootstrapAudit:
 
     migration_dir = public_root / "app" / "server_tools" / "migrations"
     shipped_migrations = sorted(path.name for path in migration_dir.glob("*.sql"))
-    ledger_match = MIGRATION_LEDGER_INSERT_PATTERN.search(seed_sql)
+    ledger_match = find_acceptance_ledger_insert(seed_sql)
     seeded_migrations = extract_migration_ledger_baseline(seed_sql)
     manifest_migrations = manifest.get("migration_ledger_baseline")
     if ledger_match is None:
-        findings.append("public bootstrap seed must declare the migration-ledger baseline")
+        findings.append(
+            "public bootstrap seed must end with the acceptance block's generated migration-ledger baseline"
+        )
     elif len(seeded_migrations) != len(set(seeded_migrations)):
         findings.append("public bootstrap migration-ledger baseline contains duplicate filenames")
     if manifest_migrations != seeded_migrations:
@@ -309,7 +395,14 @@ def audit_bootstrap(public_root: pathlib.Path) -> BootstrapAudit:
             "public bootstrap migration-ledger baseline does not match shipped public migrations"
         )
 
-    baseline_evidence = MIGRATION_LEDGER_EVIDENCE_PATTERN.findall(ledger_match.group(1)) if ledger_match else []
+    findings.extend(migration_ledger_mention_findings(schema_sql, seed_sql, ledger_match))
+
+    # One generated tuple per row line; anything else on a line leaves that row unbound.
+    baseline_rows = ledger_match.group("rows").split("\n")[:-1] if ledger_match else []
+    baseline_evidence = [
+        evidence.groups() if evidence else None
+        for evidence in map(MIGRATION_LEDGER_EVIDENCE_PATTERN.fullmatch, baseline_rows)
+    ]
     expected_evidence = [(name, sha256_file(migration_dir / name)) for name in shipped_migrations]
     if baseline_evidence != expected_evidence:
         findings.append("bootstrap ledger must bind every folded-in source hash to bootstrap_baseline/bootstrap")
@@ -321,12 +414,13 @@ def audit_bootstrap(public_root: pathlib.Path) -> BootstrapAudit:
         if fragment not in seed_sql:
             findings.append(f"public bootstrap seed missing required runtime contract: {label}")
 
-    manifest_db_version = str(manifest.get("db_version", "")).strip()
+    manifest_db_version = str(manifest.get("db_version", "")).strip(SQL_SPACE_CHARACTERS)
     if not manifest_db_version:
         findings.append("public bootstrap manifest must declare db_version")
     elif re.search(
-        rf"INSERT\s+INTO\s+public\.system_db_version\s*\([^)]*version[^)]*\)\s*VALUES\s*\(\s*'{re.escape(manifest_db_version)}'",
-        seed_sql,
+        rf"INSERT{SQL_SPACE}+INTO{SQL_SPACE}+public\.system_db_version{SQL_SPACE}*\([^)]*version[^)]*\)"
+        rf"{SQL_SPACE}*VALUES{SQL_SPACE}*\({SQL_SPACE}*'{re.escape(manifest_db_version)}'",
+        seed_tokens,
         re.IGNORECASE | re.DOTALL,
     ) is None:
         findings.append("public bootstrap seed must record the manifest db_version")
@@ -356,11 +450,12 @@ def audit_bootstrap(public_root: pathlib.Path) -> BootstrapAudit:
                 f"{qualified_child_table}"
             )
         relation_pattern = re.compile(
-            rf"\(\s*'{re.escape(child_table)}'\s*,\s*'{re.escape(parent_table)}'\s*,"
-            rf"\s*'{re.escape(foreign_key_column)}'\s*,\s*{source_uid}\s*,\s*{target_uid}\s*\)",
+            rf"\({SQL_SPACE}*'{re.escape(child_table)}'{SQL_SPACE}*,{SQL_SPACE}*'{re.escape(parent_table)}'{SQL_SPACE}*,"
+            rf"{SQL_SPACE}*'{re.escape(foreign_key_column)}'{SQL_SPACE}*,{SQL_SPACE}*{source_uid}"
+            rf"{SQL_SPACE}*,{SQL_SPACE}*{target_uid}{SQL_SPACE}*\)",
             re.IGNORECASE,
         )
-        if relation_pattern.search(seed_sql) is None:
+        if relation_pattern.search(seed_tokens) is None:
             findings.append(
                 f"canonical image asset relation metadata missing for {parent_table}"
             )

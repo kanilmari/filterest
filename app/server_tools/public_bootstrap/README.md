@@ -31,7 +31,18 @@ or not at all. It requires the completion marker of every included file that
 declares one (`-- COMPLETION_MARKER: <name>`, a `completed` row in
 `system_data_repair_records`), runs every declared final check
 (`-- FINAL_CHECK: <schema>.<function>()`, each returned row is a contradiction),
-and only then writes the migration ledger and the version row. Every import path
+and only then writes the migration ledger and the version row. Its insert is the
+ledger's only write: the bootstrap audit refuses any other mention of
+`system_schema_migrations` in the seed, whatever its letter case, spacing,
+comments, quoting, qualification or escaping (only the dataset registry's rows may
+hold the name as a quoted value), and any mention in the schema outside the
+table's reviewed definition. Unicode and numeric escapes, which can spell a name
+without its letters, are refused in both files. Lexical whitespace follows
+PostgreSQL's scanner: space, tab, LF, CR, form feed and vertical tab. String
+continuations require a newline and may contain line comments; nested block
+comments count as whitespace between SQL tokens, outside those continuations.
+This promise concerns the ledger name in static spellings; dynamic SQL, psql
+variables and included files remain outside this text audit. Every import path
 runs both files with `ON_ERROR_STOP`, so a failed statement or check leaves no
 ledger and no version behind. The generator refuses to publish when a public
 migration numbered after 20260929000006 (the record of DB 9.9.2) is in no
