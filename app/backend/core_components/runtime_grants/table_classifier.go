@@ -147,6 +147,13 @@ func ClassifyTable(object Object) (TableClass, error) {
 		switch name {
 		case "users_restricted", "verification_codes", "otp_send_events", "password_reset_dummy_work":
 			return Restricted, nil
+		// Private admission state and authentication evidence use the existing
+		// confidential restricted-schema contract, never generic dataset grants.
+		case "system_application_update_control", "system_application_update_jobs",
+			"system_application_update_proofs", "system_application_update_decisions",
+			"system_application_update_admissions", "system_application_update_events",
+			"system_application_update_auth_attempts":
+			return Restricted, nil
 		}
 		return "", fmt.Errorf("unclassified restricted object %s", object.Identifier())
 	}

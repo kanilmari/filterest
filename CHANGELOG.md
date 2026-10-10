@@ -22,6 +22,7 @@ Dates are the local (Europe/Helsinki) date on which the version was published.
 
 ## [Unreleased]
 
+- **Private update records no longer block permission reconciliation** — The runtime catalogue recognizes application-update control, jobs, authentication proofs, administrator decisions, retry receipts, audit events and authentication-attempt limits under the existing restricted-schema contract. Runtime access remains confined to the confidential pool.
 - **Palette field editing works on phones** — The shared field editor stacks its dataset tree above the fields on narrow screens, keeping Edit and Save inside the dialog. Large dataset lists and wide field tables scroll separately; the palette's appearance draft survives editing and closing.
 - **Searched cards and palette field editing finish opening** — A linked search now rebuilds an unfinished card view through the normal guarded refresh, including when a saved sort arrives during opening, and uses that same first page. The palette's field editor selects the current dataset before its tree initializes; field saves keep both revisions and closing keeps the appearance draft.
 - **Late results keep dataset appearance private** — Chat, search streams, related records and retained rows keep their original request guard through rendering. Sign-out, deletion and name reassignment discard stale responses. Renamed and replacement datasets keep separate presentation on every mounted surface.

@@ -9,6 +9,7 @@ import (
 	"database/sql/driver"
 	"easelect/backend/core_components/dbutils"
 	"easelect/backend/core_components/runtime_grants/granttest"
+	"easelect/backend/core_components/update_capability"
 	"errors"
 	"net/http"
 	"net/http/httptest"
@@ -408,6 +409,8 @@ func TestRespondOKWritesJSON(t *testing.T) {
 func TestDeletingActorMetadataReturnsRefusalWithoutDDL(t *testing.T) {
 	for _, column := range []string{"created_by", "user_id"} {
 		_, tx, state := openDelRowTx(t, []queuedQuery{
+			// Capture must complete before the actor-column protection refuses deletion.
+			{cols: []string{"granted"}, rows: [][]driver.Value{{false}}},
 			{cols: []string{"table_uid"}, rows: [][]driver.Value{{int64(42)}}},
 			{cols: []string{"id"}, rows: [][]driver.Value{{int64(5)}}},
 			{cols: []string{"column_name", "table_uid"}, rows: [][]driver.Value{{column, int64(42)}}},
@@ -419,8 +422,12 @@ func TestDeletingActorMetadataReturnsRefusalWithoutDDL(t *testing.T) {
 		ctx = dbutils.SetRequestActorContext(ctx, dbutils.NewRequestActorContext(2, "admin"))
 		rec := httptest.NewRecorder()
 		DeleteRowsHandler(granttest.Recorder{ResponseRecorder: rec}, req.WithContext(ctx), "system_column_details")
-		if rec.Code != 400 || !strings.Contains(rec.Body.String(), `"error_lang_key":"error_owner_column_protected"`) || len(state.execCalls) != 0 {
+		if rec.Code != 400 || !strings.Contains(rec.Body.String(), `"error_lang_key":"error_owner_column_protected"`) || len(state.execCalls) != 0 || len(state.queries) != 0 {
 			t.Fatalf("%s: %d %s writes=%v", column, rec.Code, rec.Body, state.execCalls)
+		}
+		args := state.queryArgs[0]
+		if !strings.Contains(state.queryCalls[0], "f.name=$1") || len(args) != 3 || args[0].Value != update_capability.Name || args[1].Value != update_capability.Route || args[2].Value != int64(2) {
+			t.Fatal("update capability capture did not use the requesting actor", state.queryCalls[0], args)
 		}
 	}
 }

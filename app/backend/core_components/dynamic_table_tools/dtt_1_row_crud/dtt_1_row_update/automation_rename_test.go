@@ -20,6 +20,7 @@ import (
 	"easelect/backend/core_components/dbutils"
 	"easelect/backend/core_components/middlewares"
 	"easelect/backend/core_components/runtime_grants/granttest"
+	"easelect/backend/core_components/update_capability"
 )
 
 type automationRenameState struct {
@@ -47,6 +48,11 @@ func (c *automationRenameConn) BeginTx(context.Context, driver.TxOptions) (drive
 func (tx automationRenameTx) Commit() error   { tx.state.committed = true; return nil }
 func (tx automationRenameTx) Rollback() error { tx.state.rolledBack = true; return nil }
 func (c *automationRenameConn) QueryContext(ctx context.Context, query string, args []driver.NamedValue) (driver.Rows, error) {
+	if strings.Contains(query, "f.name=$1") {
+		if len(args) != 3 || args[0].Value != update_capability.Name || args[1].Value != update_capability.Route || args[2].Value != int64(2) {
+			return nil, errors.New("incorrect update capability capture")
+		}
+	}
 	if strings.Contains(query, "SELECT username FROM system_users") || strings.Contains(query, "SELECT id FROM system_functions WHERE url_route_endpoint") {
 		return &updRowRows{cols: []string{"value"}}, nil
 	}
@@ -79,6 +85,8 @@ func (c *automationRenameConn) ExecContext(_ context.Context, query string, args
 func TestGenericRenameRollsBackOnAutomationMetadataFailure(t *testing.T) {
 	granttest.ConfigureRoles(t)
 	state := &automationRenameState{row: updRowState{queries: []queuedQuery{
+		// The actor lacks the update capability; Capture reads this before row validation.
+		{cols: []string{"granted"}, rows: [][]driver.Value{{false}}},
 		{cols: []string{"table_uid"}, rows: [][]driver.Value{{int64(99)}}},
 		{cols: []string{"id"}, rows: [][]driver.Value{{int64(5)}}},
 		{cols: []string{"table_uid"}, rows: [][]driver.Value{{int64(99)}}},
@@ -102,7 +110,7 @@ func TestGenericRenameRollsBackOnAutomationMetadataFailure(t *testing.T) {
 	req = req.WithContext(dbutils.SetRequestActorContext(req.Context(), dbutils.NewRequestActorContext(2, "admin")))
 	rec := httptest.NewRecorder()
 	middlewares.WithLazyTransaction(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { UpdateRowHandler(w, r, "system_db_tables") })).ServeHTTP(rec, req)
-	if rec.Code != 500 || !state.physical || !state.automation || state.registry || state.committed || !state.rolledBack {
+	if rec.Code != 500 || !strings.Contains(rec.Body.String(), "Error renaming table") || !state.physical || !state.automation || state.registry || state.committed || !state.rolledBack || len(state.row.queries) != 0 {
 		t.Fatal("automation failure did not roll back rename", rec.Code, rec.Body, state)
 	}
 }
