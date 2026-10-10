@@ -1,0 +1,232 @@
+{
+  "name": "synthetic",
+  "networks": {
+    "default": {
+      "ipam": {},
+      "name": "synthetic_default"
+    }
+  },
+  "services": {
+    "app": {
+      "build": {
+        "args": {
+          "FILTEREST_APP_VERSION": "local",
+          "FILTEREST_DB_VERSION": "local",
+          "FILTEREST_GIT_COMMIT": "source-copy",
+          "FILTEREST_RUNTIME_GID": "1000",
+          "FILTEREST_RUNTIME_UID": "1000"
+        },
+        "context": "{INSTALLATION_SOURCE_ROOT}/app",
+        "dockerfile": "docker/Dockerfile"
+      },
+      "cap_drop": [
+        "ALL"
+      ],
+      "command": null,
+      "depends_on": {
+        "db": {
+          "condition": "service_healthy",
+          "required": true
+        }
+      },
+      "entrypoint": null,
+      "environment": {
+        "ANTHROPIC_API_KEY": "",
+        "APP_PORT": "8100",
+        "BASE_URL": "https://localhost:8100",
+        "DB_ADMIN_PASSWORD": "synthetic-conformance-secret",
+        "DB_ADMIN_USER": "filterest_admin",
+        "DB_BASIC_PASSWORD": "synthetic-conformance-secret",
+        "DB_BASIC_USER": "filterest_basic",
+        "DB_CONFIDENTIAL_PASSWORD": "synthetic-conformance-secret",
+        "DB_CONFIDENTIAL_USER": "filterest_confidential",
+        "DB_GUEST_PASSWORD": "synthetic-conformance-secret",
+        "DB_GUEST_USER": "filterest_guest",
+        "DB_HOST": "db",
+        "DB_NAME": "filterest",
+        "DB_PASSWORD": "synthetic-conformance-secret",
+        "DB_PORT": "5432",
+        "DB_READONLY_PASSWORD": "synthetic-conformance-secret",
+        "DB_READONLY_USER": "filterest_readonly",
+        "DB_SSLMODE": "disable",
+        "DB_USER": "filterest_admin",
+        "EASELECT_MIGRATION_FILE_ALLOWLIST": null,
+        "EASELECT_PORT": "8082",
+        "EASELECT_TRUSTED_PROXY_PEER_IPS": "",
+        "EMAIL_FROM_ADDRESS": "",
+        "ENABLE_API_LANGUAGE": "false",
+        "ENABLE_SQL_MIGRATIONS": "false",
+        "ENVIRONMENT_TYPE": "prod",
+        "FILTEREST_APPLICATION_ROOT": "/filterest/app",
+        "FILTEREST_LOCAL_TLS": "true",
+        "FILTEREST_ROOT": "/filterest",
+        "FILTEREST_UPDATE_CHECKOUT_BRANCH": "",
+        "HERE_API_KEY": "",
+        "INSTANCE_NAME": "filterest-local",
+        "OPENAI_API_MODEL": "",
+        "OPENAI_EMBEDDING_MODEL": "",
+        "PEXELS_API_KEY": "",
+        "PIXABAY_API_KEY": "",
+        "PORT": "8082",
+        "POSTMARK_API_KEY": "",
+        "SESSION_COOKIE_MODE": "isolated",
+        "SESSION_COOKIE_NAME": "",
+        "SESSION_KEY": "synthetic-conformance-secret",
+        "SESSION_SECRET_KEY": "synthetic-conformance-secret",
+        "SITE_NAME": "Filterest",
+        "SITE_SLUG": "filterest",
+        "TLS_CERT_FILE": "/filterest/keys/tls/localhost.crt",
+        "TLS_KEY_FILE": "/filterest/keys/tls/localhost.key",
+        "UNSPLASH_ACCESS_KEY": "",
+        "USE_ANTHROPIC": ""
+      },
+      "image": "filterest-app:local",
+      "networks": {
+        "default": null
+      },
+      "ports": [
+        {
+          "host_ip": "127.0.0.1",
+          "mode": "ingress",
+          "protocol": "tcp",
+          "published": "8100",
+          "target": 8082
+        }
+      ],
+      "read_only": true,
+      "restart": "unless-stopped",
+      "security_opt": [
+        "no-new-privileges:true"
+      ],
+      "tmpfs": [
+        "/tmp:mode=1777,size=64m"
+      ],
+      "volumes": [
+        {
+          "bind": {},
+          "read_only": true,
+          "source": "{INSTALLATION_SOURCE_ROOT}/config",
+          "target": "/filterest/config",
+          "type": "bind"
+        },
+        {
+          "bind": {},
+          "read_only": true,
+          "source": "{INSTALLATION_SOURCE_ROOT}/keys/tls",
+          "target": "/filterest/keys/tls",
+          "type": "bind"
+        },
+        {
+          "bind": {},
+          "source": "{INSTALLATION_SOURCE_ROOT}/keys/filterest_runtime",
+          "target": "/filterest/keys/filterest_runtime",
+          "type": "bind"
+        },
+        {
+          "bind": {},
+          "source": "{INSTALLATION_SOURCE_ROOT}/projects",
+          "target": "/filterest/projects",
+          "type": "bind"
+        },
+        {
+          "bind": {},
+          "source": "{INSTALLATION_SOURCE_ROOT}/data/storage",
+          "target": "/filterest/data/storage",
+          "type": "bind"
+        },
+        {
+          "bind": {},
+          "source": "{INSTALLATION_SOURCE_ROOT}/data/storage_deleted",
+          "target": "/filterest/data/storage_deleted",
+          "type": "bind"
+        },
+        {
+          "bind": {},
+          "source": "{INSTALLATION_SOURCE_ROOT}/data/bootstrap",
+          "target": "/filterest/data/bootstrap",
+          "type": "bind"
+        },
+        {
+          "bind": {},
+          "source": "{INSTALLATION_SOURCE_ROOT}/data/runtime",
+          "target": "/filterest/data/runtime",
+          "type": "bind"
+        },
+        {
+          "bind": {},
+          "read_only": true,
+          "source": "{INSTALLATION_SOURCE_ROOT}/backups",
+          "target": "/filterest/backups",
+          "type": "bind"
+        }
+      ]
+    },
+    "db": {
+      "build": {
+        "context": "{INSTALLATION_SOURCE_ROOT}/app",
+        "dockerfile": "docker/Dockerfile.db"
+      },
+      "command": null,
+      "entrypoint": null,
+      "environment": {
+        "DB_BASIC_PASSWORD": "synthetic-conformance-secret",
+        "DB_BASIC_USER": "filterest_basic",
+        "DB_CONFIDENTIAL_PASSWORD": "synthetic-conformance-secret",
+        "DB_CONFIDENTIAL_USER": "filterest_confidential",
+        "DB_GUEST_PASSWORD": "synthetic-conformance-secret",
+        "DB_GUEST_USER": "filterest_guest",
+        "DB_READONLY_PASSWORD": "synthetic-conformance-secret",
+        "DB_READONLY_USER": "filterest_readonly",
+        "POSTGRES_DB": "filterest",
+        "POSTGRES_PASSWORD": "synthetic-conformance-secret",
+        "POSTGRES_USER": "filterest_admin"
+      },
+      "healthcheck": {
+        "interval": "5s",
+        "retries": 12,
+        "start_period": "10s",
+        "test": [
+          "CMD-SHELL",
+          "pg_isready -h 127.0.0.1 -U filterest_admin -d filterest"
+        ],
+        "timeout": "3s"
+      },
+      "image": "filterest-postgres:pg16-postgis-pgvector",
+      "networks": {
+        "default": null
+      },
+      "ports": [
+        {
+          "host_ip": "127.0.0.1",
+          "mode": "ingress",
+          "protocol": "tcp",
+          "published": "5433",
+          "target": 5432
+        }
+      ],
+      "restart": "unless-stopped",
+      "volumes": [
+        {
+          "bind": {},
+          "source": "{INSTALLATION_SOURCE_ROOT}/data/postgres",
+          "target": "/var/lib/postgresql/data",
+          "type": "bind"
+        },
+        {
+          "bind": {},
+          "read_only": true,
+          "source": "{INSTALLATION_SOURCE_ROOT}/app/server_tools/db_init",
+          "target": "/docker-entrypoint-initdb.d",
+          "type": "bind"
+        },
+        {
+          "bind": {},
+          "read_only": true,
+          "source": "{INSTALLATION_SOURCE_ROOT}/app/server_tools/public_bootstrap",
+          "target": "/filterest-public-bootstrap",
+          "type": "bind"
+        }
+      ]
+    }
+  }
+}

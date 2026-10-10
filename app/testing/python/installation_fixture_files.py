@@ -37,6 +37,7 @@ LIFECYCLE_LIBRARY_FILES = (
     "server_tools/ctl/lib/instance_restore_acl.sql",
     "server_tools/ctl/lib/instance_restore_swap.sql",
     "server_tools/lib/docker_deployment_settings.sh",
+    "server_tools/lib/docker_compose_contract.py",
     "server_tools/lib/docker_network_validator.py",
     "server_tools/lib/installation_records.sh",
     "server_tools/lib/recovery_process_boundary.sh",

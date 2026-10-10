@@ -284,7 +284,7 @@ class DockerStorageDeletedMountTests(unittest.TestCase):
                 environment.pop(key)
         for key in ("DB_ADMIN_PASSWORD", "DB_READONLY_PASSWORD", "DB_CONFIDENTIAL_PASSWORD",
                     "DB_BASIC_PASSWORD", "DB_GUEST_PASSWORD", "SESSION_KEY", "SESSION_SECRET_KEY"):
-            environment[key] = "synthetic-compose-contract-secret"
+            environment[key] = "synthetic-conformance-secret"
         completed = subprocess.run(
             [
                 "docker",
@@ -303,6 +303,12 @@ class DockerStorageDeletedMountTests(unittest.TestCase):
             env=environment,
         )
         rendered = json.loads(completed.stdout)
+        # Offline conformance must render exactly this same public contract;
+        # only its later redacted comparison relocates the installation paths.
+        from server_tools.installation_conformance.compose_standard import render_standard, validate_parameters
+        parameters = validate_parameters({"installation_root": str(INSTALLATION_ROOT),
+                                          "COMPOSE_PROJECT_NAME": rendered["name"]})
+        self.assertEqual(render_standard(parameters), rendered)
         expected_context = str(PROJECT_ROOT.resolve())
 
         for service_name in ("app", "db"):

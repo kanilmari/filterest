@@ -69,7 +69,9 @@ if [[ "$FILTEREST_RECOVERY_OUTPUT" -eq 1 ]]; then
 else
     # shellcheck source=server_tools/lib/python_bytecode_cache.sh
     source "$CANONICAL_FILTEREST_ROOT/server_tools/lib/python_bytecode_cache.sh"
-    filterest_configure_python_bytecode_cache "$CANONICAL_FILTEREST_ROOT"
+    if [[ "${1:-}" != conform ]]; then
+        filterest_configure_python_bytecode_cache "$CANONICAL_FILTEREST_ROOT"
+    fi
 
     # Development commands use the same interpreter that setup populated. Merely
     # naming the venv does not activate it; an unrelated shell Python must not win.
@@ -102,6 +104,7 @@ Everyday commands:
   setup [options]               Install for browser administration or development
   update [options]              Back up and install a published stable release
   verify-update [options]       Inspect a signed update offline; emit one JSON verdict
+  conform [options]             Compare a saved installation snapshot offline; emit one JSON verdict
   start [arguments]             Start with the installed profile (prebuilt or development)
   status [arguments]            Show application and database compatibility
   manager-key generate          Create the protected maintenance control key
@@ -366,6 +369,12 @@ case "$command_name" in
         # This read-only command needs no installation profile, secret env or
         # source build. Its Go bridge is independently provisioned by the caller.
         exec "$FILTEREST_COMMAND_PYTHON" -B "$CANONICAL_FILTEREST_ROOT/server_tools/update_verification/verify_update.py" "$@"
+        ;;
+    conform)
+        # Saved evidence needs no profile discovery, operator settings or caches.
+        # Resolve relative evidence filenames from the public installation root.
+        cd "$CANONICAL_FILTEREST_ROOT/.."
+        exec "$FILTEREST_COMMAND_PYTHON" -I -B "$CANONICAL_FILTEREST_ROOT/server_tools/installation_conformance/check_installation.py" "$@"
         ;;
     start|ctl)
         profile="$(installed_profile)"

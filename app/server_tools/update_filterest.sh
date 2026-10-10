@@ -567,7 +567,6 @@ start_updated_docker_runtime() {
     local stop_status=0
     local outcome=""
     local ready_options=()
-
     RECOVERY_HINT=""
     if [[ -n "$READY_TIMEOUT" ]]; then
         ready_options=(--timeout "$READY_TIMEOUT")
@@ -585,7 +584,7 @@ start_updated_docker_runtime() {
         else
             outcome="and stopping its application container failed, so it may still be running; stop it with ./filterest docker stop-app"
         fi
-        die "Filterest $TARGET_VERSION did not start and report ready, $outcome. The checkout is at release commit $TARGET_COMMIT, the database keeps any migrations that completed, and the pre-update backup is in $BACKUP_DIR. README.md, section \"Updating A Git Checkout\", describes returning to the previous version."
+        die "Filterest $TARGET_VERSION did not start and report ready, $outcome. The checkout is at release commit $TARGET_COMMIT, the database keeps any migrations that completed, and the pre-update backup is in $BACKUP_DIR. app/docs/instructions_and_documentation/Installation_Update_And_Recovery.md, section \"Roll back a Docker update\", describes returning to the previous version."
     fi
     docker_runner status
 }

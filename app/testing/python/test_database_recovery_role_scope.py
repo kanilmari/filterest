@@ -19,7 +19,7 @@ import pytest
 from server_tools.lib import database_recovery as recovery
 from test_database_recovery import ROLE_SQL, calls, create_packet, packet, run_packet
 from test_native_lifecycle_roots import build_update_fixture, git_output, run_update, update_backups
-from test_database_recovery_update import whole_packet
+from test_database_recovery_update import whole_packet, documented_rollback_block
 
 
 UNRELATED_SQL = {
@@ -106,9 +106,7 @@ def test_temporary_diagnostics_are_removed_on_success_and_announced_only_on_fail
 
 
 def rollback_block():
-    readme = (Path(recovery.__file__).parents[3] / 'README.md').read_text()
-    start = readme.index('backup=backups/<update folder>')
-    return '(\nset -euo pipefail\n' + readme[start:readme.index('\n```', start)]
+    return documented_rollback_block()
 
 
 @pytest.mark.parametrize('record,manifest', [(False, True), (True, False), (False, False)])

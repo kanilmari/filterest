@@ -1,6 +1,6 @@
 """test_database_recovery_update.py: whole-packet rollback and archive boundaries.
 
-Connects real launchers and README ordering with disposable transport recorders.
+Connects real launchers and the README-linked recovery guide with disposable transports.
 Proves refusals before downtime, bounded extraction and signing-key confidentiality.
 """
 from __future__ import annotations
@@ -9,6 +9,7 @@ import io
 import json
 import os
 from pathlib import Path
+import re
 import shutil
 import stat
 import subprocess
@@ -109,14 +110,37 @@ def snapshot(root):
             for path in root.rglob('*')}
 
 
+def documented_rollback_block():
+    # Follow the operator's README link so documentation moves cannot strand tests.
+    readme = (SOURCE_ROOT.parent / 'README.md').read_text(encoding='utf-8')
+    [target] = re.findall(r'\[roll back a Docker update\]\(([^)]+)\)', readme)
+    guide_path, anchor = target.split('#', 1)
+    assert anchor == 'roll-back-a-docker-update'
+    guide = (SOURCE_ROOT.parent / guide_path).read_text(encoding='utf-8')
+    section = guide.split('#### Roll back a Docker update\n', 1)[1].split('\n#### ', 1)[0]
+    [block] = [part.split('```', 1)[0] for part in section.split('```bash\n')[1:]]
+    assert 'backup=backups/<update folder>' in block
+    return block
+
+
 def rollback_block(packet):
-    readme = (SOURCE_ROOT.parent / 'README.md').read_text()
-    block = next(block for block in readme.split('```bash\n') if 'backup=backups/<update folder>' in block).split('```')[0]
-    return block.replace('backups/<update folder>', str(packet['backup'].relative_to(packet['root'])))
+    return documented_rollback_block().replace('backups/<update folder>', str(packet['backup'].relative_to(packet['root'])))
 
 
 def run_rollback(packet):
     return subprocess.run(['bash', '-c', rollback_block(packet)], cwd=packet['root'], env=packet['environment'], capture_output=True, text=True)
+
+
+def test_failed_docker_update_points_to_the_documented_rollback_guide(tmp_path):
+    fixture = build_update_fixture(tmp_path, 'docker')
+    result = run_update(fixture, '--yes', '--ready-timeout', '1',
+                        extra_environment={'FILTEREST_TEST_UP_STATUS': '1'})
+    assert result.returncode and 'did not start and report ready' in result.stderr
+    readme = (SOURCE_ROOT.parent / 'README.md').read_text(encoding='utf-8')
+    [target] = re.findall(r'\[roll back a Docker update\]\(([^)]+)\)', readme)
+    assert target.split('#', 1)[0] in result.stderr
+    assert 'section "Roll back a Docker update"' in result.stderr
+    assert documented_rollback_block().startswith('(\nset -euo pipefail\n')
 
 
 def add_member(path, member):

@@ -1,0 +1,12 @@
+{
+  "APP_PORT": 18123,
+  "BASE_URL": "https://example.invalid",
+  "COMPOSE_PROJECT_NAME": "operator-site_1",
+  "DB_PORT": 55435,
+  "FILTEREST_EDGE": "host-proxy",
+  "FILTEREST_NETWORK_GATEWAY": "172.30.99.254",
+  "FILTEREST_NETWORK_SUBNET": "172.30.99.0/24",
+  "FILTEREST_PUBLISH_DB_PORT": false,
+  "INSTANCE_NAME": "Site_1.example",
+  "installation_root": "/srv/other-synthetic"
+}

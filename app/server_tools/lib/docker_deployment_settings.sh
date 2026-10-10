@@ -5,11 +5,8 @@
 # Keeps ordinary setup unchanged and refuses unsafe or conflicting operator inputs.
 
 docker_edge_scheme() {
-    case "$(compose_env_value FILTEREST_EDGE)" in
-        ""|local-tls) printf 'https' ;;
-        host-proxy) printf 'http' ;;
-        *) die "FILTEREST_EDGE must be local-tls or host-proxy" ;;
-    esac
+    python3 -I -B "$SCRIPT_APPLICATION_ROOT/server_tools/lib/docker_compose_contract.py" \
+        edge --edge="$(compose_env_value FILTEREST_EDGE)"
 }
 
 # Plans values in memory so a refusal cannot partially reconfigure an installation.
@@ -189,35 +186,21 @@ PYTHON
 # Between operator settings and Compose's include/extends configuration.
 # Empty/default settings add no keys, so generated defaults remain stable.
 prepare_docker_compose_options() {
-    local publish_db=""
-    local ports_file=docker-compose.db-published.yml
-    local network_file=docker-compose.network-auto.yml
-    local subnet=""
-    local gateway=""
-    publish_db="$(compose_env_value FILTEREST_PUBLISH_DB_PORT)"
-    subnet="$(compose_env_value FILTEREST_NETWORK_SUBNET)"
-    gateway="$(compose_env_value FILTEREST_NETWORK_GATEWAY)"
-
-    case "$publish_db" in
-        ""|true) ;;
-        false) ports_file=docker-compose.db-private.yml ;;
-        *) die "FILTEREST_PUBLISH_DB_PORT must be true or false" ;;
-    esac
-    if [[ -n "$publish_db" || -n "$(compose_env_value FILTEREST_DB_PORTS_FILE)" ]]; then
-        plan_docker_setting FILTEREST_DB_PORTS_FILE "$ports_file"
-    fi
-    if [[ -n "$subnet" ]]; then
+    local selection=""
+    local key=""
+    local value=""
+    if [[ -n "$(compose_env_value FILTEREST_NETWORK_SUBNET)" ]]; then
         command -v python3 >/dev/null 2>&1 || die "python3 is required to validate a pinned Docker network"
-        gateway="$(filterest_recovery_python "$PROJECT_ROOT" python3 "$SCRIPT_APPLICATION_ROOT/server_tools/lib/docker_network_validator.py" \
-            --recovery-root "$PROJECT_ROOT" --subnet "$subnet" --gateway "$gateway")"
-        plan_docker_setting FILTEREST_NETWORK_GATEWAY "$gateway"
-        network_file=docker-compose.network-pinned.yml
-    elif [[ -n "$gateway" ]]; then
-        die "FILTEREST_NETWORK_GATEWAY requires FILTEREST_NETWORK_SUBNET"
     fi
-    if [[ -n "$subnet" || -n "$(compose_env_value FILTEREST_NETWORK_FILE)" ]]; then
-        plan_docker_setting FILTEREST_NETWORK_FILE "$network_file"
-    fi
+    selection="$(python3 -I -B "$SCRIPT_APPLICATION_ROOT/server_tools/lib/docker_compose_contract.py" options \
+        --publish-db="$(compose_env_value FILTEREST_PUBLISH_DB_PORT)" \
+        --subnet="$(compose_env_value FILTEREST_NETWORK_SUBNET)" \
+        --gateway="$(compose_env_value FILTEREST_NETWORK_GATEWAY)" \
+        --previous-ports="$(compose_env_value FILTEREST_DB_PORTS_FILE)" \
+        --previous-network="$(compose_env_value FILTEREST_NETWORK_FILE)")" || return $?
+    while IFS='=' read -r key value; do
+        [[ -z "$key" ]] || plan_docker_setting "$key" "$value"
+    done <<< "$selection"
 }
 
 # Compose prefers exported shell values even when the protected file omits a key.

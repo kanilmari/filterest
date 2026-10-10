@@ -8,6 +8,8 @@ its source and development tools.
 - [The Constitution](constitution/constitution.md) defines the product principles.
 - [Developer Guide](instructions_and_documentation/DEV_GUIDE.md) is the shared
   handbook for coding, testing, source boundaries and local verification.
+- [Installation Update And Recovery](instructions_and_documentation/Installation_Update_And_Recovery.md)
+  owns update prerequisites, authenticated recovery packets and replacement restore.
 - [Filterest Dictionary](instructions_and_documentation/Dictionary.md) defines
   shared English product terms and interface components.
 - [Contribution guidance](../../CONTRIBUTING.md) explains how to propose changes.
