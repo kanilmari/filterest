@@ -35,9 +35,35 @@ fi
 set -euo pipefail
 
 # Determine the canonical source location and active runtime project root.
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-FILTEREST_SOURCE_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+# Backup/restore diagnostics need protection before environment helpers run.
+FILTEREST_RECOVERY_OUTPUT=0
+for argument in "$@"; do
+    case "$argument" in
+        --backup|--restore|--restore-db|backup-all) FILTEREST_RECOVERY_OUTPUT=1 ;;
+    esac
+done
+export FILTEREST_RECOVERY_OUTPUT
+# A sourced settings/helper file cannot turn off an active recovery boundary.
+if [[ "$FILTEREST_RECOVERY_OUTPUT" -eq 1 ]]; then readonly FILTEREST_RECOVERY_OUTPUT; fi
+if [[ "$FILTEREST_RECOVERY_OUTPUT" -eq 1 ]]; then
+    SCRIPT_SOURCE_DIRECTORY="$(dirname -- "${BASH_SOURCE[0]}" 2>/dev/null)" || { printf 'Recovery launcher location unavailable; sensitive details withheld.\n' >&2; exit 1; }
+    SCRIPT_DIR="$(cd -- "$SCRIPT_SOURCE_DIRECTORY" 2>/dev/null && pwd 2>/dev/null)" 2>/dev/null || { printf 'Recovery launcher location unavailable; sensitive details withheld.\n' >&2; exit 1; }
+    FILTEREST_SOURCE_ROOT="$(cd -- "$SCRIPT_DIR/../.." 2>/dev/null && pwd 2>/dev/null)" 2>/dev/null || { printf 'Recovery source location unavailable; sensitive details withheld.\n' >&2; exit 1; }
+else
+    SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    FILTEREST_SOURCE_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+fi
+# Capture implicit shell/interpreter diagnostics as well as explicit output.
+if [[ "$FILTEREST_RECOVERY_OUTPUT" -eq 1 && "${BASH_SOURCE[0]}" == "$0" ]]; then
+    source "$FILTEREST_SOURCE_ROOT/server_tools/lib/recovery_process_boundary.sh" >/dev/null 2>&1 || { printf 'Recovery process boundary unavailable; sensitive details withheld.\n' >&2; exit 1; }
+    filterest_recovery_process_entry "${BASH_SOURCE[0]}" "$FILTEREST_SOURCE_ROOT" "$@"
+fi
+
 PROJECT_ROOT="${FILTEREST_PROJECT_ROOT_OVERRIDE:-$FILTEREST_SOURCE_ROOT}"
+source "$FILTEREST_SOURCE_ROOT/server_tools/lib/installation_records.sh" 2>/dev/null || { printf 'Recovery diagnostic library unavailable; sensitive details withheld.\n' >&2; exit 1; }
+if [[ "$FILTEREST_RECOVERY_OUTPUT" -eq 1 ]]; then
+    PROJECT_ROOT="$(filterest_recovery_installation_root "$FILTEREST_SOURCE_ROOT")" || exit 1
+fi
 FILTEREST_BUILD_ROOT="${FILTEREST_BUILD_ROOT_OVERRIDE:-$PROJECT_ROOT}"
 FILTEREST_RUNTIME_ROOT="${FILTEREST_RUNTIME_ROOT_OVERRIDE:-$PROJECT_ROOT/runtime}"
 RESOLVE_ENV_LIB="${FILTEREST_RESOLVE_ENV_LIB:-$SCRIPT_DIR/lib/resolve_env.sh}"
@@ -46,27 +72,51 @@ export FILTEREST_SOURCE_ROOT
 export FILTEREST_BUILD_ROOT
 export FILTEREST_RUNTIME_ROOT
 
-# Resolve environment (PATH, cd to project root) — needed for su/root
-source "$RESOLVE_ENV_LIB"
+if [[ "$FILTEREST_RECOVERY_OUTPUT" -eq 1 ]]; then
+    # Resolve environment (PATH, cd to project root) — needed for su/root
+    filterest_recovery_source "$PROJECT_ROOT" "$RESOLVE_ENV_LIB" || exit
 
-# Source library modules
-source "$SCRIPT_DIR/lib/env_permissions.sh"
-source "$FILTEREST_SOURCE_ROOT/server_tools/lib/filterest_port_preflight.sh"
-source "$SCRIPT_DIR/lib/common.sh"
-source "$FILTEREST_SOURCE_ROOT/server_tools/lib/public_bootstrap.sh"
-if [[ -n "${FILTEREST_PRIVATE_BOOTSTRAP_LIB:-}" ]]; then
-    [[ -f "$FILTEREST_PRIVATE_BOOTSTRAP_LIB" ]] || {
-        echo "Private bootstrap helper not found: $FILTEREST_PRIVATE_BOOTSTRAP_LIB" >&2
-        exit 1
-    }
-    source "$FILTEREST_PRIVATE_BOOTSTRAP_LIB"
+    # Source library modules
+    filterest_recovery_source "$PROJECT_ROOT" "$SCRIPT_DIR/lib/env_permissions.sh" || exit
+    filterest_recovery_source "$PROJECT_ROOT" "$FILTEREST_SOURCE_ROOT/server_tools/lib/filterest_port_preflight.sh" || exit
+    filterest_recovery_source "$PROJECT_ROOT" "$SCRIPT_DIR/lib/common.sh" || exit
+    filterest_recovery_source "$PROJECT_ROOT" "$FILTEREST_SOURCE_ROOT/server_tools/lib/public_bootstrap.sh" || exit
+    if [[ -n "${FILTEREST_PRIVATE_BOOTSTRAP_LIB:-}" ]]; then
+        [[ -f "$FILTEREST_PRIVATE_BOOTSTRAP_LIB" ]] || {
+            filterest_recovery_diagnostic "$PROJECT_ROOT" 'Private bootstrap helper not found: %s\n' "$FILTEREST_PRIVATE_BOOTSTRAP_LIB" >&2
+            exit 1
+        }
+        filterest_recovery_source "$PROJECT_ROOT" "$FILTEREST_PRIVATE_BOOTSTRAP_LIB" || exit
+    fi
+    filterest_recovery_source "$PROJECT_ROOT" "$SCRIPT_DIR/lib/local.sh" || exit
+    filterest_recovery_source "$PROJECT_ROOT" "$SCRIPT_DIR/lib/coding_agent.sh" || exit
+    filterest_recovery_source "$PROJECT_ROOT" "$SCRIPT_DIR/lib/docker.sh" || exit
+    filterest_recovery_source "$PROJECT_ROOT" "$SCRIPT_DIR/lib/instance.sh" || exit
+    filterest_recovery_source "$PROJECT_ROOT" "$SCRIPT_DIR/lib/dev_targets.sh" || exit
+    filterest_recovery_source "$PROJECT_ROOT" "$SCRIPT_DIR/lib/traefik.sh" || exit
+else
+    # Resolve environment (PATH, cd to project root) — needed for su/root
+    source "$RESOLVE_ENV_LIB"
+
+    # Source library modules
+    source "$SCRIPT_DIR/lib/env_permissions.sh"
+    source "$FILTEREST_SOURCE_ROOT/server_tools/lib/filterest_port_preflight.sh"
+    source "$SCRIPT_DIR/lib/common.sh"
+    source "$FILTEREST_SOURCE_ROOT/server_tools/lib/public_bootstrap.sh"
+    if [[ -n "${FILTEREST_PRIVATE_BOOTSTRAP_LIB:-}" ]]; then
+        [[ -f "$FILTEREST_PRIVATE_BOOTSTRAP_LIB" ]] || {
+            echo "Private bootstrap helper not found: $FILTEREST_PRIVATE_BOOTSTRAP_LIB" >&2
+            exit 1
+        }
+        source "$FILTEREST_PRIVATE_BOOTSTRAP_LIB"
+    fi
+    source "$SCRIPT_DIR/lib/local.sh"
+    source "$SCRIPT_DIR/lib/coding_agent.sh"
+    source "$SCRIPT_DIR/lib/docker.sh"
+    source "$SCRIPT_DIR/lib/instance.sh"
+    source "$SCRIPT_DIR/lib/dev_targets.sh"
+    source "$SCRIPT_DIR/lib/traefik.sh"
 fi
-source "$SCRIPT_DIR/lib/local.sh"
-source "$SCRIPT_DIR/lib/coding_agent.sh"
-source "$SCRIPT_DIR/lib/docker.sh"
-source "$SCRIPT_DIR/lib/instance.sh"
-source "$SCRIPT_DIR/lib/dev_targets.sh"
-source "$SCRIPT_DIR/lib/traefik.sh"
 
 MODE="local"
 RESTORE_DB=false
@@ -263,10 +313,12 @@ while [[ $# -gt 0 ]]; do
             fi
             ;;
         --domain)
+            [[ "$#" -ge 2 && -n "${2:-}" && "${2:0:1}" != - ]] || { printf 'error: recovery option requires a value\n' >&2; exit 1; }
             INSTANCE_DOMAIN="$2"
             shift 2
             ;;
         --role|--instance-role)
+            [[ "$#" -ge 2 && -n "${2:-}" && "${2:0:1}" != - ]] || { printf 'error: recovery option requires a value\n' >&2; exit 1; }
             INSTANCE_ROLE="$2"
             shift 2
             ;;
@@ -295,6 +347,7 @@ while [[ $# -gt 0 ]]; do
             shift
             ;;
         --restore)
+            [[ "$#" -ge 2 && -n "${2:-}" && "${2:0:1}" != - ]] || { printf 'error: recovery option requires a value\n' >&2; exit 1; }
             INSTANCE_ACTION="restore"
             RESTORE_FILE="${2:-}"
             shift 2 2>/dev/null || shift
@@ -313,6 +366,7 @@ while [[ $# -gt 0 ]]; do
             shift
             ;;
         -p|--port)
+            [[ "$#" -ge 2 && -n "${2:-}" && "${2:0:1}" != - ]] || { printf 'error: recovery option requires a value\n' >&2; exit 1; }
             LOCAL_PORT="$2"
             shift 2
             ;;
@@ -344,7 +398,11 @@ while [[ $# -gt 0 ]]; do
             exit 0
             ;;
         *)
-            echo -e "${RED}Unknown option: $1${NC}"
+            if [[ "${FILTEREST_RECOVERY_OUTPUT:-1}" == 0 ]]; then
+                echo -e "${RED}Unknown option: $1${NC}"
+            else
+                echo -e "${RED}Unknown option; use --help for supported options.${NC}"
+            fi
             show_help
             exit 1
             ;;
@@ -354,6 +412,13 @@ done
 # ------------------------------------------------------------------------------
 # Main
 # ------------------------------------------------------------------------------
+if [[ "${FILTEREST_RECOVERY_OUTPUT:-0}" == 1 ]]; then
+    case "$MODE:$INSTANCE_ACTION:$RESTORE_DB" in
+        instance:backup:*|instance:restore:*|instance:backup-all:*|docker:*:true) ;;
+        *) printf 'Recovery selector does not select a supported recovery operation.\n' >&2; exit 1 ;;
+    esac
+    export FILTEREST_RECOVERY_CONTENT_ROOT="$PROJECT_ROOT"
+fi
 case $MODE in
     local)
         if [[ "$LOCAL_ACTION" == "logs" ]]; then
@@ -369,7 +434,11 @@ case $MODE in
         manage_coding_agent "$AGENT_ACTION"
         ;;
     docker)
-        start_docker
+        if [[ "$RESTORE_DB" == true ]]; then
+            filterest_recovery_output "$PROJECT_ROOT" start_docker
+        else
+            start_docker
+        fi
         ;;
     traefik)
         manage_traefik "$TRAEFIK_ACTION"

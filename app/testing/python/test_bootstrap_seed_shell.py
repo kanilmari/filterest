@@ -244,9 +244,11 @@ class BootstrapSeedShellTests(unittest.TestCase):
             PUBLIC_SOURCE_ROOT / "server_tools/setup_local_dev_environment.sh"
         ).read_text(encoding="utf-8")
 
-        self.assertIn(
-            'FILTEREST_SOURCE_ROOT="$(cd "$SCRIPT_DIR/.." && pwd -P)"',
+        # The source root is the physical parent of the script's own folder; the
+        # option terminator and silenced utility errors keep paths out of output.
+        self.assertRegex(
             setup_script,
+            r'FILTEREST_SOURCE_ROOT="\$\(cd (-- )?"\$SCRIPT_DIR/\.\."( 2>/dev/null)? && pwd -P( 2>/dev/null)?\)"',
         )
         self.assertNotIn('$PROJECT_ROOT/filterest/go.mod', setup_script)
         self.assertIn(

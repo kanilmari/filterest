@@ -6,21 +6,70 @@
 
 set -euo pipefail
 
-INSTALLATION_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
+# Decide before any startup helper; inherited declarations cannot bypass recovery.
+FILTEREST_RECOVERY_OUTPUT=0
+case "${1:-}" in
+    update|restore-database|verify-update-backup|extract-update-backup) FILTEREST_RECOVERY_OUTPUT=1 ;;
+    docker)
+        case "${2:-}" in
+            profile|update-preflight|app-image-id|stop-app|dump-database|restore-database|ready-check)
+                FILTEREST_RECOVERY_OUTPUT=1 ;;
+            start)
+                for argument in "$@"; do
+                    case "$argument" in --for-update|--backup|--restore|--restore-db) FILTEREST_RECOVERY_OUTPUT=1 ;; esac
+                done
+                ;;
+        esac
+        ;;
+    start|ctl)
+        for argument in "$@"; do
+            case "$argument" in --backup|--restore|--restore-db|backup-all) FILTEREST_RECOVERY_OUTPUT=1 ;; esac
+        done
+        ;;
+esac
+export FILTEREST_RECOVERY_OUTPUT
+# A sourced settings/helper file cannot turn off an active recovery boundary.
+if [[ "$FILTEREST_RECOVERY_OUTPUT" -eq 1 ]]; then readonly FILTEREST_RECOVERY_OUTPUT; fi
+if [[ "$FILTEREST_RECOVERY_OUTPUT" -eq 1 ]]; then
+    SCRIPT_SOURCE_DIRECTORY="$(dirname -- "${BASH_SOURCE[0]}" 2>/dev/null)" || { printf 'Recovery launcher location unavailable; sensitive details withheld.\n' >&2; exit 1; }
+    INSTALLATION_ROOT="$(cd -- "$SCRIPT_SOURCE_DIRECTORY" 2>/dev/null && pwd -P 2>/dev/null)" 2>/dev/null || { printf 'Recovery launcher location unavailable; sensitive details withheld.\n' >&2; exit 1; }
+else
+    INSTALLATION_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
+fi
 APPLICATION_ROOT="$INSTALLATION_ROOT/app"
 
-if [[ ! -x "$APPLICATION_ROOT/filterest" ]]; then
-    printf 'error: Filterest application launcher is missing or not executable: %s\n' \
-        "$APPLICATION_ROOT/filterest" >&2
-    exit 1
+# Capture implicit shell/interpreter diagnostics as well as explicit output.
+if [[ "$FILTEREST_RECOVERY_OUTPUT" -eq 1 && "${BASH_SOURCE[0]}" == "$0" ]]; then
+    source "$APPLICATION_ROOT/server_tools/lib/recovery_process_boundary.sh" >/dev/null 2>&1 || { printf 'Recovery process boundary unavailable; sensitive details withheld.\n' >&2; exit 1; }
+    filterest_recovery_process_entry "${BASH_SOURCE[0]}" "$APPLICATION_ROOT" "$@"
 fi
-for required_file in go.mod VERSION_APP; do
-    if [[ ! -f "$APPLICATION_ROOT/$required_file" ]]; then
-        printf 'error: Filterest application marker is missing: %s\n' \
-            "$APPLICATION_ROOT/$required_file" >&2
+
+
+if [[ "$FILTEREST_RECOVERY_OUTPUT" -eq 1 ]]; then
+    if [[ ! -x "$APPLICATION_ROOT/filterest" ]]; then
+        printf 'error: Filterest application launcher (app/filterest) is missing or not executable\n' >&2
         exit 1
     fi
-done
+    for required_file in go.mod VERSION_APP; do
+        if [[ ! -f "$APPLICATION_ROOT/$required_file" ]]; then
+            printf 'error: a required Filterest application marker (app/go.mod or app/VERSION_APP) is missing\n' >&2
+            exit 1
+        fi
+    done
+else
+    if [[ ! -x "$APPLICATION_ROOT/filterest" ]]; then
+        printf 'error: Filterest application launcher is missing or not executable: %s\n' \
+            "$APPLICATION_ROOT/filterest" >&2
+        exit 1
+    fi
+    for required_file in go.mod VERSION_APP; do
+        if [[ ! -f "$APPLICATION_ROOT/$required_file" ]]; then
+            printf 'error: Filterest application marker is missing: %s\n' \
+                "$APPLICATION_ROOT/$required_file" >&2
+            exit 1
+        fi
+    done
+fi
 
 # The public installation command must not inherit private embedding hooks.
 # Easelect invokes app/filterest through its own explicit bridge when private
@@ -51,4 +100,11 @@ export FILTEREST_TEST_CREDENTIAL_FILE="${FILTEREST_TEST_CREDENTIAL_FILE:-$INSTAL
 # Browser tools default to this installation's native port themselves
 # (local_filterest_target.cjs); an operator's FILTEREST_E2E_BASE_URL still wins.
 
-cd "$APPLICATION_ROOT" && exec "$APPLICATION_ROOT/filterest" "$@"
+if [[ "$FILTEREST_RECOVERY_OUTPUT" -eq 1 ]]; then
+    source "$APPLICATION_ROOT/server_tools/lib/installation_records.sh" 2>/dev/null || { printf 'Recovery diagnostic library unavailable; sensitive details withheld.\n' >&2; exit 1; }
+    filterest_recovery_launch() { cd "$APPLICATION_ROOT" && filterest_recovery_child "$APPLICATION_ROOT/filterest" "$@"; }
+    filterest_recovery_scan "$INSTALLATION_ROOT" stderr filterest_recovery_launch "$@"
+    exit $?
+else
+    cd "$APPLICATION_ROOT" && exec "$APPLICATION_ROOT/filterest" "$@"
+fi

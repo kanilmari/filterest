@@ -17,6 +17,9 @@ BLUE='\033[0;34m'
 NC='\033[0m'
 
 # Default values
+if ! declare -F filterest_recovery_diagnostic >/dev/null; then
+    source "${BASH_SOURCE[0]%/*}/../../lib/installation_records.sh"
+fi
 LOG_FILE="${FILTEREST_LOG_FILE_OVERRIDE:-server_output.log}"
 if ! declare -F filterest_native_default_port >/dev/null; then
     # shellcheck source=../../lib/filterest_port_preflight.sh
@@ -479,6 +482,10 @@ start_ngrok() {
 # Usage: INSTANCE_NAME=$(resolve_instance_name "serlog")
 # ------------------------------------------------------------------------------
 resolve_instance_name() {
+    filterest_recovery_scan "${PROJECT_ROOT:-.}" stderr _resolve_instance_name "$@"
+}
+
+_resolve_instance_name() {
     local query="$1"
     local query_lower=""
     
@@ -492,8 +499,9 @@ resolve_instance_name() {
     # Collect all matching instances
     local matches=()
     for dir in instances/*/; do
-        if [[ -d "$dir" ]] && [[ "$(basename "$dir")" != "template" ]]; then
-            local name=$(basename "$dir")
+        if [[ -d "$dir" ]] && [[ "${dir%/}" != "instances/template" ]]; then
+            local name="${dir%/}"
+            name="${name##*/}"
             local name_lower
             name_lower="$(ascii_lowercase "$name")"
             # Check if query matches (case-insensitive partial match)
@@ -506,9 +514,11 @@ resolve_instance_name() {
     # Exact match check first
     for dir in instances/*/; do
         if [[ -d "$dir" ]]; then
-            local name=$(basename "$dir")
+            local name="${dir%/}"
+            name="${name##*/}"
             if [[ "$name" == "$query" ]]; then
-                echo "$name"
+                filterest_recovery_require_safe_names "${PROJECT_ROOT:-.}" "$name" || return 1
+                printf '%s\n' "$name"
                 return 0
             fi
         fi
@@ -516,17 +526,30 @@ resolve_instance_name() {
     
     # Handle match results
     if [[ ${#matches[@]} -eq 0 ]]; then
-        echo -e "${RED}❌ No instance matching '${query}'${NC}" >&2
+        if [[ "${FILTEREST_RECOVERY_OUTPUT:-1}" == 0 ]]; then
+            echo -e "${RED}❌ No instance matching '${query}'${NC}" >&2
+        else
+            filterest_recovery_diagnostic "${PROJECT_ROOT:-.}" '❌ No instance matching: %s\n' "$query" >&2
+        fi
         echo "   Available instances:" >&2
-        ls -1 instances/ 2>/dev/null | grep -v template | grep -v ".env" | sed 's/^/     /' >&2
+        filterest_recovery_output "${PROJECT_ROOT:-.}" ls -1 -- instances/ 2>/dev/null | grep -v template | grep -v ".env" | sed 's/^/     /' >&2
         return 1
     elif [[ ${#matches[@]} -eq 1 ]]; then
-        echo "${matches[0]}"
+        filterest_recovery_require_safe_names "${PROJECT_ROOT:-.}" "${matches[0]}" || return 1
+        printf '%s\n' "${matches[0]}"
         return 0
     else
-        echo -e "${YELLOW}⚠️  Multiple instances match '${query}':${NC}" >&2
+        if [[ "${FILTEREST_RECOVERY_OUTPUT:-1}" == 0 ]]; then
+            echo -e "${YELLOW}⚠️  Multiple instances match '${query}':${NC}" >&2
+        else
+            filterest_recovery_diagnostic "${PROJECT_ROOT:-.}" '⚠️  Multiple instances match: %s\n' "$query" >&2
+        fi
         for m in "${matches[@]}"; do
-            echo "     $m" >&2
+            if [[ "${FILTEREST_RECOVERY_OUTPUT:-1}" == 0 ]]; then
+                echo "     $m" >&2
+            else
+                filterest_recovery_diagnostic "${PROJECT_ROOT:-.}" '     %s\n' "$m" >&2
+            fi
         done
         echo "   Please be more specific." >&2
         return 1

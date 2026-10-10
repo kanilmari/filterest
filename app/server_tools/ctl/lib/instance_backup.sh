@@ -1,10 +1,12 @@
 #!/bin/bash
-# ==============================================================================
-# instance_backup.sh: Instance database backup and restore
-#
-# Handles database backup (pg_dump) and restore operations for individual
-# Docker instances.
-# ==============================================================================
+# instance_backup.sh
+# Creates checked instance backups and restores through a verified replacement.
+# Connects operator confirmation, read-only prerequisites and Docker lifecycle.
+# Existing restore input refusals precede shutdown; live verification stays intact.
+
+if ! declare -F filterest_recovery_diagnostic >/dev/null; then
+    source "${BASH_SOURCE[0]%/*}/../../lib/installation_records.sh"
+fi
 
 if [[ -n "${FILTEREST_SOURCE_ROOT:-${PROJECT_ROOT:-}}" && -f "${FILTEREST_SOURCE_ROOT:-$PROJECT_ROOT}/server_tools/lib/sql_dump_policy.sh" ]]; then
     # shellcheck source=/dev/null
@@ -41,6 +43,10 @@ _validate_instance_backup_flags_array_name() {
 # instance backups when the DB already marks them as schema-only or excluded.
 # ------------------------------------------------------------------------------
 load_instance_backup_policy_flags() {
+    filterest_recovery_scan "${PROJECT_ROOT:-.}" stderr _load_instance_backup_policy_flags "$@"
+}
+
+_load_instance_backup_policy_flags() {
     local container_name="$1"
     local db_name="$2"
     local db_user="$3"
@@ -55,7 +61,7 @@ load_instance_backup_policy_flags() {
     fi
 
     if ! load_sql_dump_policy_flags_from_docker "$container_name" "$db_name" "$output_var_name" "$db_user"; then
-        echo -e "${YELLOW}⚠️  Could not read sql_dump_policy from ${container_name}; using full-table data dump${NC}" >&2
+        filterest_recovery_diagnostic "${PROJECT_ROOT:-.}" '⚠️  Could not read sql_dump_policy from %s; using full-table data dump\n' "$container_name" >&2
         eval "$output_var_name=()"
         return 0
     fi
@@ -101,6 +107,10 @@ append_default_instance_backup_exclusions() {
 # smaller on disk, and consistent with the shared sql_dump_policy contract.
 # ------------------------------------------------------------------------------
 write_instance_database_backup() {
+    filterest_recovery_scan "${PROJECT_ROOT:-.}" stderr _write_instance_database_backup "$@"
+}
+
+_write_instance_database_backup() {
     local instance="$1"
     local backup_file="$2"
     local db_user="${3:-admin_user}"
@@ -114,18 +124,14 @@ write_instance_database_backup() {
     if [[ "${#dump_policy_flags[@]}" -gt 0 ]]; then
         local policy_preview
         policy_preview="$(sql_dump_policy_flags_preview dump_policy_flags)"
-        echo -e "${BLUE}   SQL dump policy: ${policy_preview}${NC}"
+        filterest_recovery_diagnostic "${PROJECT_ROOT:-.}" '   SQL dump policy: %s\n' "$policy_preview"
     fi
 
-    (
-        umask 077
-        set -o pipefail
+    # Scan decoded SQL and compressed bytes before publication. The shared
+    # writer owns only its private partial file; refused runs preserve old files.
+    filterest_recovery_content_to_file "${PROJECT_ROOT:-.}" "$backup_file" --gzip --exclusive \
         docker exec "$container_name" \
-            pg_dump -U "$db_user" --no-owner --no-privileges "${dump_policy_flags[@]}" "$db_name" \
-            | gzip -9 > "$backup_file"
-    ) || return
-
-    chmod 600 "$backup_file"
+        pg_dump -U "$db_user" --no-owner --no-privileges "${dump_policy_flags[@]}" "$db_name"
 }
 
 # ------------------------------------------------------------------------------
@@ -136,7 +142,7 @@ backup_instance() {
     local requested_backup_file="${2:-}"
     
     if [[ -z "$instance" ]]; then
-        echo -e "${RED}❌ Instance name required${NC}"
+        echo -e "❌ Instance name required"
         exit 1
     fi
     
@@ -144,38 +150,39 @@ backup_instance() {
     local timestamp=$(date +%Y%m%d_%H%M%S)
     local backup_file="${requested_backup_file:-instances/${instance}/backups/backup_${timestamp}.sql.gz}"
     local backup_dir
-    backup_dir="$(dirname "$backup_file")"
+    backup_dir="$(filterest_recovery_utility "${PROJECT_ROOT:-.}" dirname -- "$backup_file")" || return
+    filterest_recovery_content_names "${PROJECT_ROOT:-.}" "$backup_file" "$backup_dir" || return 1
     
     if [[ ! -f "$env_file" ]]; then
-        echo -e "${RED}❌ Instance '${instance}' not found${NC}"
+        filterest_recovery_diagnostic "${PROJECT_ROOT:-.}" "❌ Instance '%s' not found\n" "$instance"
         exit 1
     fi
     
-    source "$env_file"
+    filterest_recovery_source "${PROJECT_ROOT:-.}" "$env_file" || return
     
-    echo -e "${BLUE}💾 Backing up instance '${instance}'...${NC}"
+    filterest_recovery_diagnostic "${PROJECT_ROOT:-.}" "💾 Backing up instance '%s'...\n" "$instance"
     
     # Check if container is running
-    if ! docker ps --format '{{.Names}}' | grep -q "easelect-${instance}-db"; then
-        echo -e "${RED}❌ Database container not running${NC}"
+    if ! filterest_recovery_utility "${PROJECT_ROOT:-.}" docker ps --format '{{.Names}}' | grep -Fq -- "easelect-${instance}-db"; then
+        echo -e "❌ Database container not running"
         exit 1
     fi
     
-    mkdir -p "$backup_dir"
-    chmod 700 "$backup_dir"
+    (umask 077; filterest_recovery_output "${PROJECT_ROOT:-.}" mkdir -p -- "$backup_dir") || return
+    filterest_recovery_output "${PROJECT_ROOT:-.}" chmod 700 -- "$backup_dir" || return
 
     if ! write_instance_database_backup "$instance" "$backup_file" "${DB_ADMIN_USER:-admin_user}" "${DB_NAME:-$(project_default_db_name)}"; then
-        rm -f "$backup_file"
-        echo -e "${RED}❌ Backup failed${NC}"
+        echo -e "❌ Backup failed"
         exit 1
     fi
     
-    local size=$(du -h "$backup_file" | cut -f1)
-    echo -e "${GREEN}✅ Backup created: ${backup_file} (${size})${NC}"
+    local size
+    size="$(filterest_recovery_utility "${PROJECT_ROOT:-.}" du -h -- "$backup_file" | cut -f1)" || return
+    filterest_recovery_diagnostic "${PROJECT_ROOT:-.}" '✅ Backup created: %s (%s)\n' "$backup_file" "$size"
 }
 
 # Import into a verified empty database; keep the populated original for recovery.
-source "$(dirname "${BASH_SOURCE[0]}")/instance_restore.sh"
+source "${BASH_SOURCE[0]%/*}/instance_restore.sh"
 
 # ------------------------------------------------------------------------------
 # Restore instance database
@@ -183,30 +190,42 @@ source "$(dirname "${BASH_SOURCE[0]}")/instance_restore.sh"
 restore_instance() {
     local instance="$1"
     local restore_file="$2"
+    local FILTEREST_INSTANCE_RESTORE_STAMP=""
+    filterest_recovery_require_safe_names "${PROJECT_ROOT:-.}" "$instance" "$restore_file" || return 1
     
     if [[ -z "$instance" ]] || [[ -z "$restore_file" ]]; then
-        echo -e "${RED}❌ Usage: ./ctl --instance <name> --restore <file>${NC}"
+        echo -e "❌ Usage: ./ctl --instance <name> --restore <file>"
         exit 1
     fi
     
     local env_file="instances/${instance}/.env"
     
     if [[ ! -f "$env_file" ]]; then
-        echo -e "${RED}❌ Instance '${instance}' not found${NC}"
+        filterest_recovery_diagnostic "${PROJECT_ROOT:-.}" "❌ Instance '%s' not found\n" "$instance"
         exit 1
     fi
     
     if [[ ! -f "$restore_file" ]]; then
-        echo -e "${RED}❌ Restore file not found: ${restore_file}${NC}"
+        filterest_recovery_diagnostic "${PROJECT_ROOT:-.}" '❌ Restore file not found: %s\n' "$restore_file"
         exit 1
     fi
     
-    source "$env_file"
+    filterest_recovery_source "${PROJECT_ROOT:-.}" "$env_file" || return
     
-    echo -e "${YELLOW}⚠️  This will overwrite the database for '${instance}'${NC}"
+    # Present scanned target context on original stdout before requesting input.
+    if [[ "${FILTEREST_RECOVERY_CONTEXT_FD:-}" == 7 ]] && { true >&7; } 2>/dev/null; then
+        filterest_recovery_diagnostic "${PROJECT_ROOT:-.}" "⚠️  This will overwrite the database for '%s'\n" "$instance" >&7
+    else
+    filterest_recovery_diagnostic "${PROJECT_ROOT:-.}" "⚠️  This will overwrite the database for '%s'\n" "$instance"
+    fi
     local confirm="${EASELECT_RESTORE_CONFIRM:-}"
     if [[ "$confirm" != "yes" ]]; then
-        read -p "   Continue? (yes/no): " confirm
+        if [[ "${FILTEREST_RECOVERY_PROMPT_FD:-}" == 8 ]] && { true >&8; } 2>/dev/null; then
+            [[ ! -t 0 ]] || printf '   Continue? (yes/no): ' >&8
+            read confirm
+        else
+            read -p "   Continue? (yes/no): " confirm
+        fi
     else
         echo "   Continue? (yes/no): yes (EASELECT_RESTORE_CONFIRM)"
     fi
@@ -215,12 +234,13 @@ restore_instance() {
         echo "   Cancelled."
         exit 0
     fi
+    preflight_instance_restore "$instance" "$restore_file" || return 1
     
     # SIGTERM drains HTTP requests and stops workers. The database stays up.
     # A failed import or reconciliation leaves the application stopped.
-    if ! docker stop --time 30 "easelect-${instance}-app" >/dev/null; then
+    if ! filterest_recovery_output "${PROJECT_ROOT:-.}" docker stop --time 30 "easelect-${instance}-app" >/dev/null; then
         echo "Restore refused: could not stop and drain the application." >&2
         return 1
     fi
-    restore_instance_database_replacement "$instance" "$restore_file"
+    restore_instance_database_replacement "$instance" "$restore_file" "$FILTEREST_INSTANCE_RESTORE_STAMP"
 }

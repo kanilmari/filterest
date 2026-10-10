@@ -27,7 +27,7 @@ docker() {
     printf '%s\n' "$*" >> commands
     if [[ "$1" == exec ]]; then
         cat > current.sql
-        if [[ "$*" == *"-d filterest_restore_"* ]] && grep -q '^SELECT 1;' current.sql; then
+        if [[ "$*" == *"-d fixture_restore_"* ]] && grep -q '^SELECT 1;' current.sql; then
             cp current.sql imported.sql
             return "$IMPORT_STATUS"
         fi
@@ -50,7 +50,7 @@ restore_instance proof "$DUMP_FILE"
             evidence = list((root / "instances/proof/backups").glob("restore_*.txt"))
             self.assertEqual(len(evidence), 1)
             evidence_text = evidence[0].read_text()
-            self.assertIn("recovery=filterest_recovery_", evidence_text)
+            self.assertIn("recovery=fixture_before_restore_", evidence_text)
             if import_status or ready_status or verify_status or swap_status or function_status or settings_status:
                 self.assertNotIn("phase=ready\n", evidence_text)
             else:
@@ -65,11 +65,13 @@ restore_instance proof "$DUMP_FILE"
         for compressed in (False, True):
             result, commands, imported = self.restore(compressed=compressed)
             self.assertEqual(result.returncode, 0, result.stderr)
-            self.assertLess(commands.index("stop --time 30"), commands.index("exec -i"))
-            self.assertLess(commands.index("exec -i"), commands.index("start easelect-proof-app"))
+            self.assertLess(commands.index("exec -i"), commands.index("stop --time 30"))
+            stop = commands.index("stop --time 30")
+            self.assertLess(stop, commands.index("exec -i", stop))
+            self.assertLess(commands.index("-d fixture_restore_"), commands.index("start easelect-proof-app"))
             self.assertLess(commands.index("start easelect-proof-app"), commands.index("readiness"))
             self.assertIn("-v ON_ERROR_STOP=1", commands)
-            self.assertIn("-d filterest_restore_", commands)
+            self.assertIn("-d fixture_restore_", commands)
             self.assertIn("CREATE DATABASE %I TEMPLATE template0", imported)
             self.assertIn("ALTER DATABASE %I ALLOW_CONNECTIONS false", imported)
             self.assertIn("ALTER DATABASE %I RENAME TO %I", imported)

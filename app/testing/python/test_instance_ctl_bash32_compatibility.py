@@ -7,6 +7,7 @@ Exists so portable instance management does not regress to Bash 4 or GNU-only sy
 from __future__ import annotations
 
 import os
+import gzip
 from pathlib import Path
 import re
 import subprocess
@@ -180,8 +181,6 @@ class InstanceCtlBash32CompatibilityTests(unittest.TestCase):
             backup_file = temp_root / "instances" / "example" / "backups" / "backup.sql.gz"
             docker_args_file = temp_root / "docker-args.txt"
             backup_file.parent.mkdir(parents=True)
-            backup_file.write_bytes(b"stale")
-            backup_file.chmod(0o664)
 
             run_system_bash(
                 'BLUE=""; YELLOW=""; NC=""\n'
@@ -189,12 +188,11 @@ class InstanceCtlBash32CompatibilityTests(unittest.TestCase):
                 'load_instance_backup_policy_flags() { eval "$4=()"; }\n'
                 'append_default_instance_backup_exclusions() { :; }\n'
                 f'docker() {{ printf "%s\\n" "$*" > "{docker_args_file}"; printf "private backup"; }}\n'
-                'gzip() { cat; }\n'
                 f'write_instance_database_backup example "{backup_file}" admin customer_database',
                 cwd=temp_root,
             )
 
-            self.assertEqual(backup_file.read_bytes(), b"private backup")
+            self.assertEqual(gzip.decompress(backup_file.read_bytes()), b"private backup")
             self.assertEqual(backup_file.stat().st_mode & 0o777, 0o600)
             self.assertIn("customer_database", docker_args_file.read_text(encoding="utf-8"))
 
@@ -218,7 +216,7 @@ class InstanceCtlBash32CompatibilityTests(unittest.TestCase):
         self.assertNotIn('$(compose_cmd "$instance") down -v', crud_source)
         self.assertNotIn('rm -rf "$instance_dir"', crud_source)
         self.assertIn('local requested_backup_file="${2:-}"', backup_source)
-        self.assertIn("chmod 700 \"$backup_dir\"", backup_source)
+        self.assertIn('chmod 700 -- "$backup_dir"', backup_source)
 
     def test_instance_retirement_preserves_active_and_deleted_media(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

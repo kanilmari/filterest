@@ -15,26 +15,41 @@
 #   - cd to PROJECT_ROOT
 #
 # Usage (from a wrapper script in project root):
-#   SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+#   SCRIPT_DIR="$(cd "$(dirname -- "${BASH_SOURCE[0]}" 2>/dev/null)" && pwd 2>/dev/null)"
 #   source "$SCRIPT_DIR/server_tools/ctl/lib/resolve_env.sh"
 #
 # Usage (from a script inside server_tools/ctl/):
-#   source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/resolve_env.sh"
+#   source "$(cd "$(dirname -- "${BASH_SOURCE[0]}" 2>/dev/null)" && pwd 2>/dev/null)/lib/resolve_env.sh"
 # ==============================================================================
 
 # If PROJECT_ROOT is already set by the calling script, use it.
 # Otherwise, try to resolve it from this file's location.
-if [[ -z "${PROJECT_ROOT:-}" ]]; then
-    _RESOLVE_ENV_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-    PROJECT_ROOT="$(cd "$_RESOLVE_ENV_DIR/../../.." && pwd)"
-    unset _RESOLVE_ENV_DIR
-fi
+if [[ "${FILTEREST_RECOVERY_OUTPUT:-1}" == 0 ]]; then
+    if [[ -z "${PROJECT_ROOT:-}" ]]; then
+        _RESOLVE_ENV_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+        PROJECT_ROOT="$(cd "$_RESOLVE_ENV_DIR/../../.." && pwd)"
+        unset _RESOLVE_ENV_DIR
+    fi
 
-# cd to project root so relative paths work
-cd "$PROJECT_ROOT" || {
-    echo -e "\033[0;31mError: Cannot cd to PROJECT_ROOT: $PROJECT_ROOT\033[0m" >&2
-    exit 1
-}
+    # cd to project root so relative paths work
+    cd "$PROJECT_ROOT" || {
+        echo -e "\033[0;31mError: Cannot cd to PROJECT_ROOT: $PROJECT_ROOT\033[0m" >&2
+        exit 1
+    }
+else
+    if [[ -z "${PROJECT_ROOT:-}" ]]; then
+        _RESOLVE_ENV_DIR="$(dirname -- "${BASH_SOURCE[0]}" 2>/dev/null)" || { printf 'Recovery resolver location unavailable; sensitive details withheld.\n' >&2; return 1; }
+        _RESOLVE_ENV_DIR="$(cd -- "$_RESOLVE_ENV_DIR" 2>/dev/null && pwd 2>/dev/null)" || { printf 'Recovery resolver location unavailable; sensitive details withheld.\n' >&2; return 1; }
+        PROJECT_ROOT="$(cd -- "$_RESOLVE_ENV_DIR/../../.." 2>/dev/null && pwd 2>/dev/null)" || { printf 'Recovery installation root unavailable; sensitive details withheld.\n' >&2; return 1; }
+        unset _RESOLVE_ENV_DIR
+    fi
+
+    # cd to project root so relative paths work
+    cd -- "$PROJECT_ROOT" 2>/dev/null || {
+        printf 'Recovery installation root unavailable; sensitive details withheld.\n' >&2
+        exit 1
+    }
+fi
 
 # --- PATH augmentation for root / su / sudo environments ---
 # These paths may be missing when running as root since root's default PATH
@@ -62,7 +77,15 @@ export PROJECT_ROOT
 
 # Resolve the path library from this canonical Filterest source tree even when
 # an embedding product overrides PROJECT_ROOT for its runtime composition.
-_RESOLVE_ENV_SOURCE_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
-source "$_RESOLVE_ENV_SOURCE_ROOT/server_tools/lib/easelect_private_paths.sh"
-easelect_resolve_private_paths "$PROJECT_ROOT" || return 1
-unset _RESOLVE_ENV_SOURCE_ROOT
+if [[ "${FILTEREST_RECOVERY_OUTPUT:-1}" == 0 ]]; then
+    _RESOLVE_ENV_SOURCE_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
+    source "$_RESOLVE_ENV_SOURCE_ROOT/server_tools/lib/easelect_private_paths.sh"
+    easelect_resolve_private_paths "$PROJECT_ROOT" || return 1
+    unset _RESOLVE_ENV_SOURCE_ROOT
+else
+    _RESOLVE_ENV_SOURCE_DIRECTORY="$(dirname -- "${BASH_SOURCE[0]}" 2>/dev/null)" || { printf 'Recovery resolver location unavailable; sensitive details withheld.\n' >&2; return 1; }
+    _RESOLVE_ENV_SOURCE_ROOT="$(cd -- "$_RESOLVE_ENV_SOURCE_DIRECTORY/../../.." 2>/dev/null && pwd 2>/dev/null)" 2>/dev/null || { printf 'Recovery resolver location unavailable; sensitive details withheld.\n' >&2; return 1; }
+    source "$_RESOLVE_ENV_SOURCE_ROOT/server_tools/lib/easelect_private_paths.sh"
+    easelect_resolve_private_paths "$PROJECT_ROOT" || return 1
+    unset _RESOLVE_ENV_SOURCE_ROOT _RESOLVE_ENV_SOURCE_DIRECTORY
+fi

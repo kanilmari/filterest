@@ -73,6 +73,20 @@ filterest_install_development_dependencies() (
     local completion_marker="$runtime_root/development-dependencies-complete"
     local browser_arguments=(install chromium)
 
+    if [[ -n "${FILTEREST_RECOVERY_CONTENT_ROOT:-}" ]]; then
+        # Package managers own opaque archive/cache writers. Recovery uses an
+        # already prepared installation or refuses before those writers run.
+        local signature="$(cd "$source_root" && sha256sum package.json package-lock.json)"
+        if [[ ! -f "$completion_marker" || ! -d "$runtime_root/node/node_modules" ||
+              ! -f "$runtime_root/node/.filterest-source-manifests.sha256" ||
+              "$(cat "$runtime_root/node/.filterest-source-manifests.sha256")" != "$signature" ]]; then
+            printf 'Recovery dependency refresh refused; run ordinary development setup first.\n' >&2
+            return 1
+        fi
+        printf 'Prepared development dependencies retained during recovery.\n'
+        return 0
+    fi
+
     mkdir -p "$runtime_root"
     rm -f -- "$completion_marker"
     filterest_install_node_dependencies "$source_root" "$runtime_root"

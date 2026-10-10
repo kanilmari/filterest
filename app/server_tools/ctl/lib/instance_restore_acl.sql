@@ -5,17 +5,19 @@
 CREATE FUNCTION pg_temp.restore_acl(kind text, identity text, wanted jsonb, owner_name text)
 RETURNS void LANGUAGE plpgsql AS $$
 DECLARE g record; item jsonb; remaining jsonb; next_remaining jsonb; changed boolean;
+        -- Database privilege lookups take raw names; only SQL text needs identifiers.
+        sql_identity text := CASE WHEN kind='DATABASE' THEN quote_ident(identity) ELSE identity END;
 BEGIN
     EXECUTE format('SET LOCAL ROLE %I', owner_name);
     -- Remove both default PUBLIC rights and replacement-specific default grants.
-    EXECUTE format('REVOKE ALL PRIVILEGES ON %s %s FROM PUBLIC CASCADE', kind, identity);
+    EXECUTE format('REVOKE ALL PRIVILEGES ON %s %s FROM PUBLIC CASCADE', kind, sql_identity);
     FOR g IN SELECT DISTINCT value->>'grantee' AS name FROM jsonb_array_elements(wanted)
              UNION SELECT DISTINCT r.rolname FROM pg_roles r
              WHERE CASE WHEN kind='DATABASE' THEN has_database_privilege(r.oid,identity,'CREATE,CONNECT,TEMPORARY')
                         ELSE has_function_privilege(r.oid,identity,'EXECUTE') END
     LOOP
         IF g.name IS NOT NULL AND g.name <> 'PUBLIC' THEN
-            EXECUTE format('REVOKE ALL PRIVILEGES ON %s %s FROM %I CASCADE',kind,identity,g.name);
+            EXECUTE format('REVOKE ALL PRIVILEGES ON %s %s FROM %I CASCADE',kind,sql_identity,g.name);
         END IF;
     END LOOP;
     RESET ROLE;
@@ -30,7 +32,7 @@ BEGIN
                THEN has_database_privilege(item->>'grantor',identity,(item->>'privilege')||' WITH GRANT OPTION')
                ELSE has_function_privilege(item->>'grantor',identity,'EXECUTE WITH GRANT OPTION') END) THEN
                 EXECUTE format('SET LOCAL ROLE %I',item->>'grantor');
-                EXECUTE format('GRANT %s ON %s %s TO %s%s',item->>'privilege',kind,identity,
+                EXECUTE format('GRANT %s ON %s %s TO %s%s',item->>'privilege',kind,sql_identity,
                     CASE WHEN item->>'grantee'='PUBLIC' THEN 'PUBLIC' ELSE quote_ident(item->>'grantee') END,
                     CASE WHEN (item->>'grantable')::boolean THEN ' WITH GRANT OPTION' ELSE '' END);
                 RESET ROLE;

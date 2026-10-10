@@ -20,7 +20,12 @@ _easelect_filterest_paths_resolver() {
     local resolver_dir=""
 
     if [[ ! -f "$resolver" ]]; then
-        resolver_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
+        if [[ "${FILTEREST_RECOVERY_OUTPUT:-1}" == 0 ]]; then
+            resolver_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
+        else
+            resolver_dir="$(dirname -- "${BASH_SOURCE[0]}" 2>/dev/null)" || { printf 'Path resolver location unavailable; sensitive details withheld.\n' >&2; return 1; }
+            resolver_dir="$(cd -- "$resolver_dir" 2>/dev/null && pwd -P 2>/dev/null)" 2>/dev/null || { printf 'Path resolver location unavailable; sensitive details withheld.\n' >&2; return 1; }
+        fi
         resolver="$resolver_dir/filterest_paths.py"
     fi
     [[ -f "$resolver" ]] || {
@@ -59,7 +64,11 @@ _easelect_resolve_filterest_homes() {
         printf 'error: python3 is required to resolve dynamic Filterest homes\n' >&2
         return 1
     }
-    output="$(python3 "$resolver" --project-root "$project_root" --format lines)" || return 1
+    if declare -F filterest_recovery_utility >/dev/null; then
+        output="$(filterest_recovery_utility "$project_root" python3 "$resolver" --project-root "$project_root" --format lines)" || return 1
+    else
+        output="$(python3 "$resolver" --project-root "$project_root" --format lines)" || return 1
+    fi
     FILTEREST_PROJECTS_HOME="$(printf '%s\n' "$output" | sed -n '1p')"
     FILTEREST_KEYS_HOME="$(printf '%s\n' "$output" | sed -n '2p')"
     FILTEREST_PROJECTS_HOME_CONFIGURED="$(printf '%s\n' "$output" | sed -n '3p')"

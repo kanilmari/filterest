@@ -25,6 +25,9 @@ cd "$INSTALLATION_ROOT"
 
 # shellcheck source=server_tools/lib/easelect_private_paths.sh
 source "$SOURCE_ROOT/server_tools/lib/easelect_private_paths.sh"
+if [[ -n "${FILTEREST_RECOVERY_CONTENT_ROOT:-}" ]]; then
+    source "$SOURCE_ROOT/server_tools/lib/installation_records.sh"
+fi
 
 # Prints this checkout's native development port, the one the installer writes
 # into BASE_URL and shows; native_development_ports.env holds the rule.
@@ -52,9 +55,12 @@ ASSUME_YES=0
 DRY_RUN=0
 NO_START=0
 DEPENDENCIES_ONLY=0
+UPDATE_PREFLIGHT=0
 BINARY_SOURCE="${FILTEREST_BINARY_SOURCE:-}"
 RELEASE_REPOSITORY="${FILTEREST_RELEASE_REPOSITORY:-kanilmari/filterest}"
-POSTGRESQL_MAJOR="${FILTEREST_POSTGRESQL_MAJOR:-16}"
+# Setup and update preflight read the same inert package contract.
+source "$SCRIPT_DIR/lib/native_host_package_reader.sh"
+POSTGRESQL_MAJOR="$(filterest_native_host_packages "$SCRIPT_DIR/lib/native_host_packages.list" admin "${FILTEREST_POSTGRESQL_MAJOR:-}" major)" || { printf 'error: invalid native host package requirements\n' >&2; exit 1; }
 LOCAL_BIN_DIR="$HOME/.local/bin"
 LOCAL_TOOLCHAIN_ROOT="$HOME/.local/share/filterest/toolchains"
 
@@ -122,6 +128,10 @@ parse_arguments() {
                 ;;
             --no-start)
                 NO_START=1
+                shift
+                ;;
+            --update-preflight)
+                UPDATE_PREFLIGHT=1
                 shift
                 ;;
             --dependencies-only)
@@ -216,24 +226,17 @@ apt_has_package() {
 }
 
 install_host_packages() {
-    local common_packages=(ca-certificates curl openssl python3-minimal python3-psycopg2 postgresql-common)
-    local database_packages=(
-        "postgresql-${POSTGRESQL_MAJOR}"
-        "postgresql-client-${POSTGRESQL_MAJOR}"
-        "postgresql-${POSTGRESQL_MAJOR}-postgis-3"
-        "postgresql-${POSTGRESQL_MAJOR}-postgis-3-scripts"
-        "postgresql-${POSTGRESQL_MAJOR}-pgvector"
-    )
-    local development_packages=(build-essential git xz-utils python3-venv)
-    local required_packages=("${common_packages[@]}" "${database_packages[@]}")
+    local database_packages=() required_packages=()
+    local package_list="" database_list=""
     local missing_packages=()
     local package=""
 
     [[ "$(uname -s)" == "Linux" ]] || die "automatic host setup currently supports Linux"
     command -v apt-get >/dev/null 2>&1 || die "automatic host setup currently supports Debian and Ubuntu based systems"
-    if [[ "$PROFILE" == "development" ]]; then
-        required_packages+=("${development_packages[@]}")
-    fi
+    package_list="$(filterest_native_host_packages "$SCRIPT_DIR/lib/native_host_packages.list" "$PROFILE" "$POSTGRESQL_MAJOR")" || die "invalid native host package requirements"
+    database_list="$(filterest_native_host_packages "$SCRIPT_DIR/lib/native_host_packages.list" "$PROFILE" "$POSTGRESQL_MAJOR" database)" || die "invalid native host package requirements"
+    while IFS= read -r package; do required_packages+=("$package"); done <<< "$package_list"
+    while IFS= read -r package; do database_packages+=("$package"); done <<< "$database_list"
 
     for package in "${required_packages[@]}"; do
         package_is_installed "$package" || missing_packages+=("$package")
@@ -241,6 +244,9 @@ install_host_packages() {
     if [[ "${#missing_packages[@]}" -eq 0 ]]; then
         printf '✓ Required host packages are already installed.\n'
         return
+    fi
+    if [[ -n "${FILTEREST_RECOVERY_CONTENT_ROOT:-}" ]]; then
+        die "Recovery update requires host packages already installed; run ordinary setup first"
     fi
 
     printf 'Installing missing host packages: %s\n' "${missing_packages[*]}"
@@ -302,6 +308,9 @@ install_go_toolchain_if_needed() {
         return
     fi
 
+    if [[ -n "${FILTEREST_RECOVERY_CONTENT_ROOT:-}" ]]; then
+        die "Recovery update requires its Go toolchain already installed; run ordinary development setup first"
+    fi
     arch="$(architecture_name)"
     temp_dir="$(mktemp -d)"
     archive="go${required_version}.linux-${arch}.tar.gz"
@@ -352,6 +361,9 @@ install_node_toolchain_if_needed() {
         return
     fi
 
+    if [[ -n "${FILTEREST_RECOVERY_CONTENT_ROOT:-}" ]]; then
+        die "Recovery update requires its Node toolchain already installed; run ordinary development setup first"
+    fi
     arch="$(architecture_name)"
     case "$arch" in
         amd64) node_arch="x64" ;;
@@ -394,6 +406,11 @@ set_env_value() {
 
     [[ ! -L "$file" ]] || die "protected settings path must not be a symbolic link: $file"
     [[ -f "$file" ]] || die "protected settings path is not a regular file: $file"
+    if [[ -n "${FILTEREST_RECOVERY_CONTENT_ROOT:-}" ]]; then
+        filterest_recovery_content_to_file "$INSTALLATION_ROOT" "$file" \
+            _installation_recovery_settings_content "$file" "$key" "$value"
+        return
+    fi
     temp_file="$(mktemp "${file}.tmp.XXXXXX")"
     {
         while IFS= read -r line || [[ -n "$line" ]]; do
@@ -414,6 +431,20 @@ set_env_value() {
     fi
     chmod 600 "$temp_file"
     mv "$temp_file" "$file"
+}
+
+_installation_recovery_settings_content() {
+    local file="$1" key="$2" value="$3" line="" found=0
+    while IFS= read -r line || [[ -n "$line" ]]; do
+        if [[ "$line" == "$key="* ]]; then
+            printf '%s=%s\n' "$key" "$value"
+            found=$((found + 1))
+        else
+            printf '%s\n' "$line"
+        fi
+    done < "$file"
+    [[ "$found" -ne 0 ]] || printf '%s=%s\n' "$key" "$value"
+    [[ "$found" -le 1 ]] || { printf 'Duplicate protected setting refused.\n' >&2; return 1; }
 }
 
 write_psql_secret_variable() {
@@ -460,6 +491,7 @@ PY
 # Error output names invalid keys but never prints their values.
 validate_filterest_core_environment_file() {
     local file="$1"
+    local value_reader="${6:-env_value}"
     local label="$2"
     local expected_environment_type="$3"
     local expected_local_tls="$4"
@@ -488,34 +520,34 @@ validate_filterest_core_environment_file() {
     fi
 
     for key in "${required_keys[@]}"; do
-        [[ -n "$(env_value "$file" "$key")" ]] || missing_keys+=("$key")
+        [[ -n "$("$value_reader" "$file" "$key")" ]] || missing_keys+=("$key")
     done
     for key in "${secret_keys[@]}"; do
-        value="$(env_value "$file" "$key")"
+        value="$("$value_reader" "$file" "$key")"
         if is_placeholder_secret "$value"; then
             placeholder_keys+=("$key")
         fi
     done
     for key in "${numeric_keys[@]}"; do
-        value="$(env_value "$file" "$key")"
+        value="$("$value_reader" "$file" "$key")"
         if [[ -n "$value" && ! "$value" =~ ^[1-9][0-9]{0,4}$ ]]; then
             invalid_keys+=("$key")
         fi
     done
 
-    [[ "$(env_value "$file" FILTEREST_INSTALL_PROFILE)" == "$PROFILE" ]] || invalid_keys+=("FILTEREST_INSTALL_PROFILE")
-    [[ "$(env_value "$file" ENVIRONMENT_TYPE)" == "$expected_environment_type" ]] || invalid_keys+=("ENVIRONMENT_TYPE")
-    [[ "$(env_value "$file" FILTEREST_LOCAL_TLS)" == "$expected_local_tls" ]] || invalid_keys+=("FILTEREST_LOCAL_TLS")
-    [[ "$(env_value "$file" BASE_URL)" == "$expected_base_url" ]] || invalid_keys+=("BASE_URL")
-    [[ "$(env_value "$file" PORT)" == "$(env_value "$file" EASELECT_PORT)" ]] || invalid_keys+=("EASELECT_PORT")
-    [[ "$(env_value "$file" PORT)" == "$(env_value "$file" APP_PORT)" ]] || invalid_keys+=("APP_PORT")
-    [[ "$(env_value "$file" SESSION_COOKIE_MODE)" == "isolated" ]] || invalid_keys+=("SESSION_COOKIE_MODE")
-    [[ -z "$(env_value "$file" SESSION_COOKIE_NAME)" ]] || invalid_keys+=("SESSION_COOKIE_NAME")
-    value="$(env_value "$file" EASELECT_TRUSTED_PROXY_PEER_IPS)"
+    [[ "$("$value_reader" "$file" FILTEREST_INSTALL_PROFILE)" == "$PROFILE" ]] || invalid_keys+=("FILTEREST_INSTALL_PROFILE")
+    [[ "$("$value_reader" "$file" ENVIRONMENT_TYPE)" == "$expected_environment_type" ]] || invalid_keys+=("ENVIRONMENT_TYPE")
+    [[ "$("$value_reader" "$file" FILTEREST_LOCAL_TLS)" == "$expected_local_tls" ]] || invalid_keys+=("FILTEREST_LOCAL_TLS")
+    [[ "$("$value_reader" "$file" BASE_URL)" == "$expected_base_url" ]] || invalid_keys+=("BASE_URL")
+    [[ "$("$value_reader" "$file" PORT)" == "$("$value_reader" "$file" EASELECT_PORT)" ]] || invalid_keys+=("EASELECT_PORT")
+    [[ "$("$value_reader" "$file" PORT)" == "$("$value_reader" "$file" APP_PORT)" ]] || invalid_keys+=("APP_PORT")
+    [[ "$("$value_reader" "$file" SESSION_COOKIE_MODE)" == "isolated" ]] || invalid_keys+=("SESSION_COOKIE_MODE")
+    [[ -z "$("$value_reader" "$file" SESSION_COOKIE_NAME)" ]] || invalid_keys+=("SESSION_COOKIE_NAME")
+    value="$("$value_reader" "$file" EASELECT_TRUSTED_PROXY_PEER_IPS)"
     validate_trusted_proxy_peer_ips "$value" || invalid_keys+=("EASELECT_TRUSTED_PROXY_PEER_IPS")
 
     for key in SESSION_SECRET_KEY SESSION_KEY; do
-        value="$(env_value "$file" "$key")"
+        value="$("$value_reader" "$file" "$key")"
         if [[ -n "$value" && ${#value} -lt 32 ]]; then
             invalid_keys+=("$key")
         fi
@@ -689,15 +721,19 @@ configure_installation_database_identity() {
     local installation_id=""
     local file=""
 
+    if [[ -n "${FILTEREST_RECOVERY_CONTENT_ROOT:-}" ]]; then
+        filterest_recovery_content_names "$INSTALLATION_ROOT" "$marker" || return 1
+    fi
     if [[ -f "$marker" ]]; then
         installation_id="$(tr -d '[:space:]' < "$marker")"
     elif verified_legacy_database_identity "$runtime_file"; then
         installation_id="legacy"
-        mkdir -p "$(dirname "$marker")"
+        (if [[ -n "${FILTEREST_RECOVERY_CONTENT_ROOT:-}" ]]; then umask 077; fi; mkdir -p "$(dirname "$marker")")
         (umask 077 && printf '%s\n' "$installation_id" > "$marker")
     else
         installation_id="$(openssl rand -hex 4)"
-        mkdir -p "$(dirname "$marker")"
+        [[ "$installation_id" =~ ^[a-f0-9]{8}$ ]] || die "invalid Filterest installation identity marker"
+        (if [[ -n "${FILTEREST_RECOVERY_CONTENT_ROOT:-}" ]]; then umask 077; fi; mkdir -p "$(dirname "$marker")")
         (umask 077 && printf '%s\n' "$installation_id" > "$marker")
     fi
 
@@ -747,10 +783,18 @@ ensure_admin_binary() {
     if [[ -n "$BINARY_SOURCE" ]]; then
         [[ "$DRY_RUN" -eq 1 || -f "$BINARY_SOURCE" ]] || die "binary source does not exist: $BINARY_SOURCE"
         run mkdir -p "$(dirname "$target")"
-        run cp -p "$BINARY_SOURCE" "$target"
+        if [[ -n "${FILTEREST_RECOVERY_CONTENT_ROOT:-}" && "$DRY_RUN" -eq 0 ]]; then
+            filterest_recovery_content_to_file "$INSTALLATION_ROOT" "$target" cat -- "$BINARY_SOURCE"
+        else
+            run cp -p "$BINARY_SOURCE" "$target"
+        fi
         run chmod 755 "$target"
         if [[ "$DRY_RUN" -eq 0 ]]; then
-            printf '%s\n' "$version" > "$version_marker"
+            if [[ -n "${FILTEREST_RECOVERY_CONTENT_ROOT:-}" ]]; then
+                filterest_recovery_content_to_file "$INSTALLATION_ROOT" "$version_marker" printf '%s\n' "$version"
+            else
+                printf '%s\n' "$version" > "$version_marker"
+            fi
         fi
         printf '✓ Installed the reviewed local Filterest binary.\n'
         return
@@ -763,15 +807,27 @@ ensure_admin_binary() {
         printf '  [dry-run] download %s/%s and verify its SHA-256 checksum\n' "$download_base" "$asset"
         return
     fi
-    temp_dir="$(mktemp -d)"
-    curl --fail --location --retry 3 -o "$temp_dir/$asset" "$download_base/$asset"
-    curl --fail --location --retry 3 -o "$temp_dir/$asset.sha256" "$download_base/$asset.sha256"
+    if [[ -n "${FILTEREST_RECOVERY_CONTENT_ROOT:-}" ]]; then
+        temp_dir="$(filterest_recovery_mktemp "$INSTALLATION_ROOT" -d)"
+        filterest_recovery_content_to_file "$INSTALLATION_ROOT" "$temp_dir/$asset" curl --fail --location --retry 3 "$download_base/$asset"
+        filterest_recovery_content_to_file "$INSTALLATION_ROOT" "$temp_dir/$asset.sha256" curl --fail --location --retry 3 "$download_base/$asset.sha256"
+    else
+        temp_dir="$(mktemp -d)"
+        curl --fail --location --retry 3 -o "$temp_dir/$asset" "$download_base/$asset"
+        curl --fail --location --retry 3 -o "$temp_dir/$asset.sha256" "$download_base/$asset.sha256"
+    fi
     expected="$(awk '{print $1; exit}' "$temp_dir/$asset.sha256")"
     actual="$(sha256sum "$temp_dir/$asset" | awk '{print $1}')"
     [[ -n "$expected" && "$actual" == "$expected" ]] || die "downloaded Filterest binary checksum does not match"
     mkdir -p "$(dirname "$target")"
-    install -m 755 "$temp_dir/$asset" "$target"
-    printf '%s\n' "$version" > "$version_marker"
+    if [[ -n "${FILTEREST_RECOVERY_CONTENT_ROOT:-}" ]]; then
+        filterest_recovery_content_to_file "$INSTALLATION_ROOT" "$target" cat -- "$temp_dir/$asset"
+        chmod 755 "$target"
+        filterest_recovery_content_to_file "$INSTALLATION_ROOT" "$version_marker" printf '%s\n' "$version"
+    else
+        install -m 755 "$temp_dir/$asset" "$target"
+        printf '%s\n' "$version" > "$version_marker"
+    fi
     rm -rf "$temp_dir"
     printf '✓ Downloaded and verified Filterest %s.\n' "$version"
 }
@@ -883,12 +939,16 @@ bootstrap_database_and_dependencies() {
         source "$SOURCE_ROOT/server_tools/lib/source_dependency_installer.sh"
         filterest_install_development_dependencies "$SOURCE_ROOT" "$RUNTIME_ROOT" 1
     fi
-    mkdir -p "$(dirname "$completion_marker")"
-    printf 'profile=%s\napp_version=%s\ndb_version=%s\n' \
+    (if [[ -n "${FILTEREST_RECOVERY_CONTENT_ROOT:-}" ]]; then umask 077; fi; mkdir -p "$(dirname "$completion_marker")")
+    _installation_completion_content() { printf 'profile=%s\napp_version=%s\ndb_version=%s\n' \
         "$PROFILE" \
         "$(tr -d '[:space:]' < "$APP_VERSION_FILE")" \
-        "$(tr -d '[:space:]' < "$DB_VERSION_FILE")" \
-        > "$completion_marker"
+        "$(tr -d '[:space:]' < "$DB_VERSION_FILE")"; }
+    if [[ -n "${FILTEREST_RECOVERY_CONTENT_ROOT:-}" ]]; then
+        filterest_recovery_content_to_file "$INSTALLATION_ROOT" "$completion_marker" _installation_completion_content
+    else
+        _installation_completion_content > "$completion_marker"
+    fi
 }
 
 start_installed_filterest() {
@@ -918,6 +978,12 @@ main() {
     local native_port=""
     parse_arguments "$@"
     choose_profile
+    if [[ "$UPDATE_PREFLIGHT" -eq 1 ]]; then
+        [[ -n "${FILTEREST_RECOVERY_CONTENT_ROOT:-}" ]] || die "native update preflight requires its recovery context"
+        source "$SCRIPT_DIR/lib/native_update_preflight.sh"
+        preflight_native_update
+        return
+    fi
     if [[ "$DEPENDENCIES_ONLY" -eq 1 && "$PROFILE" != "development" ]]; then
         die "--dependencies-only requires --profile development"
     fi

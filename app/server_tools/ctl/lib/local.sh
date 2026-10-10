@@ -259,6 +259,12 @@ _shared_dev_storage_release() {
 # Local mode
 # ------------------------------------------------------------------------------
 start_local() {
+    if [[ -n "${FILTEREST_RECOVERY_CONTENT_ROOT:-}" ]]; then
+        # Compiler/module caches and the workstation runner own opaque retained
+        # writers. A recovery route must refuse before handing them content.
+        echo 'Recovery native source build refused; use an already installed admin runtime.' >&2
+        return 1
+    fi
     local custom_port="${1:-}"
     local preserve_derivative_instances="${2:-false}"
     local shared_dev_storage_prepared=false

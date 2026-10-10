@@ -18,6 +18,8 @@ import tempfile
 import time
 import unittest
 
+from installation_fixture_files import RECOVERY_PSQL_FAKE
+
 
 SOURCE_ROOT = Path(__file__).resolve().parents[2]
 INSTALLATION_ROOT = SOURCE_ROOT.parent
@@ -40,6 +42,8 @@ class FilterestDockerRunnerTests(unittest.TestCase):
 
         self.fake_bin = self.root / "fake-bin"
         self.fake_bin.mkdir()
+        (self.fake_bin / "psql").write_text(RECOVERY_PSQL_FAKE)
+        (self.fake_bin / "psql").chmod(0o755)
         self.docker_log = self.root / "docker-arguments.log"
         fake_docker = self.fake_bin / "docker"
         fake_docker.write_text(
@@ -104,6 +108,12 @@ class FilterestDockerRunnerTests(unittest.TestCase):
             "            printf '%b' \"${FILTEREST_DOCKER_TEST_SERVICES-app\\\\ndb\\\\n}\" ;;\n"
             "        'images --quiet app')\n"
             "            printf '%s\\n' \"${FILTEREST_DOCKER_TEST_IMAGE_ID:-}\" ;;\n"
+            "        *'pg_dumpall --roles-only --no-role-passwords')\n"
+            "            printf '%s\\n' 'CREATE ROLE container_owner;' \
+                'ALTER ROLE container_owner WITH PASSWORD '\\''fake-role-verifier'\\'';' \
+                '-- PostgreSQL database cluster dump complete'\n"
+            "            exit \"${FILTEREST_DOCKER_TEST_ROLES_STATUS:-0}\" ;;\n"
+            "        *psql*) exec psql ;;\n"
             "        'exec -T db sh -c '*)\n"
             "            printf '%s' \"${FILTEREST_DOCKER_TEST_DUMP-PGDMP test dump}\"\n"
             "            if [ -n \"${FILTEREST_DOCKER_TEST_DUMP_HANG:-}\" ]; then sleep 30; fi\n"
@@ -170,7 +180,7 @@ class FilterestDockerRunnerTests(unittest.TestCase):
             "    printf '000'\n"
             "    exit 7\n"
             "fi\n"
-            "cat \"$responses/$number.body\" > \"$out\"\n"
+            "if [ -n \"$out\" ]; then cat \"$responses/$number.body\" > \"$out\"; else cat \"$responses/$number.body\"; printf '\\n'; fi\n"
             "printf '%s' \"$status\"\n",
             encoding="utf-8",
         )
@@ -730,13 +740,20 @@ class FilterestDockerRunnerTests(unittest.TestCase):
     def test_dump_database_writes_a_read_back_owner_only_file(self) -> None:
         self.run_runner("setup")
         settings = self.settings()
-        target = self.root / "backups/database.dump"
+        target = self.root / "backups/private/database.dump"
+        target.parent.mkdir(mode=0o700, exist_ok=True)
 
         completed = self.run_update_action("dump-database", "--output", str(target))
 
         self.assertEqual(target.read_text(encoding="utf-8"), "PGDMP test dump")
         self.assertEqual(stat.S_IMODE(target.stat().st_mode), 0o600)
-        self.assertEqual([path.name for path in target.parent.iterdir()], ["database.dump"])
+        self.assertEqual({path.name for path in target.parent.iterdir() if not path.name.startswith("database-tool-")}, {
+            "database.dump", "database.roles.sql", "database.settings.tar.gz",
+            "database.sha256", "database.backup.json", "database.properties.json",
+        })
+        for path in target.parent.iterdir():
+            self.assertEqual(stat.S_IMODE(path.stat().st_mode), 0o600)
+        self.assertNotIn("fake-role-verifier", completed.stdout + completed.stderr)
         docker_calls = self.docker_log.read_text(encoding="utf-8")
         self.assertIn("exec -T db sh -c", docker_calls)
         self.assertIn("exec -T db pg_restore --list", docker_calls)
@@ -769,7 +786,17 @@ class FilterestDockerRunnerTests(unittest.TestCase):
             encoding="utf-8",
         )
         container_pg_dump.chmod(0o755)
-        target = self.root / "backups/database.dump"
+        roles_tool = container_bin / "pg_dumpall"
+        roles_tool.write_text(
+            "#!/bin/sh\n"
+            "printf '%s\\n' 'CREATE ROLE container_owner;' "
+            "'-- PostgreSQL database cluster dump complete'\n", encoding="utf-8",
+        )
+        roles_tool.chmod(0o755)
+        (container_bin / "psql").write_text(RECOVERY_PSQL_FAKE)
+        (container_bin / "psql").chmod(0o755)
+        target = self.root / "backups/private/database.dump"
+        target.parent.mkdir(mode=0o700, exist_ok=True)
 
         self.run_update_action(
             "dump-database",
@@ -787,9 +814,8 @@ class FilterestDockerRunnerTests(unittest.TestCase):
             pg_dump_log.read_text(encoding="utf-8").splitlines(),
             [
                 "argument --format=custom",
-                "argument --no-owner",
                 "argument --username=container_owner",
-                "argument --dbname=container_database",
+                "argument --dbname=filterest",
                 "password set",
             ],
         )
@@ -800,12 +826,14 @@ class FilterestDockerRunnerTests(unittest.TestCase):
 
     def test_dump_database_leaves_nothing_when_the_dump_is_empty_or_unreadable(self) -> None:
         self.run_runner("setup")
-        target = self.root / "backups/database.dump"
+        target = self.root / "backups/private/database.dump"
+        target.parent.mkdir(mode=0o700, exist_ok=True)
 
         for failure in (
             {"FILTEREST_DOCKER_TEST_DUMP": ""},
             {"FILTEREST_DOCKER_TEST_DUMP_STATUS": "1"},
             {"FILTEREST_DOCKER_TEST_RESTORE_STATUS": "1"},
+            {"FILTEREST_DOCKER_TEST_ROLES_STATUS": "1"},
         ):
             with self.subTest(failure=failure):
                 failed = self.run_update_action(
@@ -817,7 +845,7 @@ class FilterestDockerRunnerTests(unittest.TestCase):
                 )
                 self.assertNotEqual(failed.returncode, 0)
                 self.assertIn("nothing was written", failed.stderr)
-                self.assertEqual(list(target.parent.iterdir()), [])
+                self.assertEqual([p for p in target.parent.iterdir() if not p.name.startswith("database-tool-")], [])
 
     def test_start_for_update_returns_without_the_health_wait(self) -> None:
         self.run_runner("setup")
@@ -947,7 +975,7 @@ class FilterestDockerRunnerTests(unittest.TestCase):
         elapsed = time.monotonic() - started
 
         self.assertNotEqual(failed.returncode, 0)
-        self.assertIn("curl: (28)", failed.stderr)
+        self.assertIn("no response from the readiness endpoint", failed.stderr)
         self.assertLess(elapsed, 6)
         [max_time] = (self.curl_responses / "max_times").read_text(encoding="utf-8").split()
         self.assertLessEqual(int(max_time), 2)
@@ -972,7 +1000,8 @@ class FilterestDockerRunnerTests(unittest.TestCase):
 
     def test_dump_database_removes_its_partial_file_when_interrupted(self) -> None:
         self.run_runner("setup")
-        backups = self.root / "backups"
+        backups = self.root / "backups/private"
+        backups.mkdir(mode=0o700)
         environment = self.environment()
         for key in self.settings():
             environment.pop(key, None)
@@ -987,7 +1016,7 @@ class FilterestDockerRunnerTests(unittest.TestCase):
         )
         try:
             deadline = time.monotonic() + 10
-            while not list(backups.glob("database.dump.partial.*")):
+            while not list(backups.glob(".database-backup.partial.*")):
                 self.assertLess(time.monotonic(), deadline, "the dump never started")
                 time.sleep(0.05)
             os.killpg(dump.pid, signal.SIGTERM)
@@ -998,20 +1027,20 @@ class FilterestDockerRunnerTests(unittest.TestCase):
                 dump.wait()
 
         self.assertNotEqual(returncode, 0)
-        self.assertEqual(list(backups.iterdir()), [])
+        self.assertEqual([p for p in backups.iterdir() if not p.name.startswith("database-tool-")], [])
 
     def test_ready_check_rejects_another_version_installation_or_answer(self) -> None:
         self.run_runner("setup")
 
         for status, body, expected_error in (
-            ("refused", "", "no response (curl: (7)"),
+            ("refused", "", "no response from the readiness endpoint"),
             ("503", self.ready_body(ready=False, reasons=["database_unavailable"]),
              "HTTP 503 (database_unavailable)"),
             ("200", "not json", "without a JSON readiness object"),
             ("200", self.ready_body(db_compatible=False), "not ready"),
-            ("200", self.ready_body(app_version="8.42.1"), "version '8.42.1' answered"),
+            ("200", self.ready_body(app_version="8.42.1"), "version 8.42.1 answered"),
             ("200", self.ready_body(instance_id="another-installation"),
-             "installation 'another-installation' answered"),
+             "installation another-installation answered"),
         ):
             with self.subTest(expected_error=expected_error):
                 for response in self.curl_responses.iterdir():

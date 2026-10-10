@@ -60,11 +60,17 @@ prepare_local_docker_storage() {
             return 1
         fi
     done
-    mkdir -p "$FILTEREST_PROJECTS_HOME"
+    if [[ -n "${FILTEREST_RECOVERY_CONTENT_ROOT:-}" ]]; then
+        filterest_recovery_content_names "$PROJECT_ROOT" "$FILTEREST_PROJECTS_HOME" || return 1
+    fi
+    (umask 077; mkdir -p "$FILTEREST_PROJECTS_HOME")
 
     for storage_name in storage storage_deleted db_backups; do
         storage_path="${PROJECT_ROOT}/${storage_name}"
-        mkdir -p "$storage_path"
+        if [[ -n "${FILTEREST_RECOVERY_CONTENT_ROOT:-}" ]]; then
+            filterest_recovery_content_names "$PROJECT_ROOT" "$storage_path" || return 1
+        fi
+        (umask 077; mkdir -p "$storage_path")
         chmod u+rwx,g+rwx,o-rwx "$storage_path"
         mismatched_path="$(find "$storage_path" \
             \( ! -uid "$EASELECT_RUNTIME_UID" -o ! -gid "$EASELECT_RUNTIME_GID" \) \
@@ -73,7 +79,9 @@ prepare_local_docker_storage() {
             echo "error: Docker bind-mount ownership does not match runtime ${EASELECT_RUNTIME_UID}:${EASELECT_RUNTIME_GID}: ${mismatched_path}" >&2
             return 1
         fi
-        if ! write_probe="$(mktemp "${storage_path}/.easelect-write-probe.XXXXXX")"; then
+        if [[ -n "${FILTEREST_RECOVERY_CONTENT_ROOT:-}" ]]; then
+            write_probe="$(filterest_recovery_mktemp "$PROJECT_ROOT" "${storage_path}/.easelect-write-probe.XXXXXX")" || return 1
+        elif ! write_probe="$(mktemp "${storage_path}/.easelect-write-probe.XXXXXX")"; then
             echo "error: Docker bind mount is not writable: ${storage_path}" >&2
             return 1
         fi
@@ -95,6 +103,8 @@ start_docker() {
         exec "$FILTEREST_SOURCE_ROOT/server_tools/run_filterest_docker.sh" start
     fi
 
+    local dump_file="" bootstrap_zip="" bootstrap_password="" bootstrap_tmp_dir=""
+    local config_count="" existing_public_tables=""
     docker_query_public_table_count() {
         docker exec easelect-db-dev psql -U admin_user -d easelect -tAc \
             "SELECT COUNT(*)
@@ -116,9 +126,9 @@ start_docker() {
         local sql_file="$2"
         local log_file=""
 
-        log_file="$(mktemp)"
+        log_file="$(filterest_recovery_mktemp "$PROJECT_ROOT")" || return 1
         if ! { printf "SELECT pg_advisory_lock(hashtext('filterest.runtime_startup_barrier'));\n"; stream_local_docker_restore_sql < "$sql_file"; } |
-            docker exec -i easelect-db-dev psql -v ON_ERROR_STOP=1 -U admin_user -d easelect >"$log_file" 2>&1; then
+            filterest_recovery_to_file "$PROJECT_ROOT" "$log_file" _embedded_docker_import_diagnostics; then
             echo -e "${RED}❌ ${import_label} failed.${NC}"
             echo "   First diagnostics:"
             grep -E "^(ERROR|psql:|NOTICE:)" "$log_file" | head -20 | sed 's/^/   /' || sed -n '1,20p' "$log_file" | sed 's/^/   /'
@@ -126,6 +136,10 @@ start_docker() {
             exit 1
         fi
         rm -f "$log_file"
+    }
+
+    _embedded_docker_import_diagnostics() {
+        docker exec -i easelect-db-dev psql -v ON_ERROR_STOP=1 -U admin_user -d easelect 2>&1
     }
 
     echo -e "${BLUE}🐳 Starting Easelect in Docker...${NC}"
@@ -145,6 +159,47 @@ start_docker() {
 
     prepare_local_docker_storage
     
+    # Existing restore inputs are selected and decoded before Compose shutdown.
+    # Post-start catalogue/import/readiness checks still verify live results.
+    if [[ "$RESTORE_DB" == true ]]; then
+        dump_file=$(ls -t data/db_backups/easelect_full_dump_*.sql data/db_backups/easelect_full_dump.sql easelect_full_dump_*.sql easelect_full_dump.sql 2>/dev/null | head -1 || true)
+        if [[ -n "$dump_file" ]]; then
+            filterest_recovery_content_stream "$PROJECT_ROOT" source-preflight "$dump_file" < /dev/null || return 1
+        else
+            bootstrap_zip="$(current_bootstrap_seed_zip_path 2>/dev/null || true)"
+            if [[ -n "$bootstrap_zip" ]]; then
+                command -v unzip >/dev/null 2>&1 || {
+                    echo -e "${RED}❌ unzip not found. Install unzip to restore from the committed bootstrap zip.${NC}"
+                    exit 1
+                }
+                bootstrap_password="$(read_bootstrap_seed_password || true)"
+                if [[ -z "$bootstrap_password" ]]; then
+                    echo -e "${RED}❌ Bootstrap zip password missing.${NC}"
+                    echo "Expected gitignored local file: $(bootstrap_seed_password_file_path)"
+                    exit 1
+                fi
+
+                bootstrap_tmp_dir="$(filterest_recovery_mktemp "$PROJECT_ROOT" -d)" || return 1
+                trap 'rm -rf "${bootstrap_tmp_dir:-}"' EXIT
+                if ! filterest_recovery_extract_zip "$PROJECT_ROOT" "$bootstrap_zip" "$bootstrap_tmp_dir" "$bootstrap_password"; then
+                    echo 'Recovery bootstrap zip refused before import.' >&2
+                    return 1
+                fi
+
+                [[ -f "${bootstrap_tmp_dir}/schema.sql" ]] || { echo -e "${RED}❌ bootstrap zip missing schema.sql${NC}"; exit 1; }
+                [[ -f "${bootstrap_tmp_dir}/seed_data.sql" ]] || { echo -e "${RED}❌ bootstrap zip missing seed_data.sql${NC}"; exit 1; }
+
+            else
+                echo 'No database dump or committed bootstrap zip found for --restore-db' >&2
+                return 1
+            fi
+        fi
+        if docker ps --format '{{.Names}}' | grep -qx easelect-db-dev; then
+            existing_public_tables="$(docker_query_public_table_count)"
+            [[ "$existing_public_tables" == 0 ]] || { echo 'Restore requires a fresh database; existing catalogue refused before shutdown.' >&2; return 1; }
+        fi
+    fi
+
     # Stop conflicting processes
     check_port_available
     
@@ -167,13 +222,6 @@ start_docker() {
     # Restore database if requested
     if [[ "$RESTORE_DB" == true ]]; then
         # Find most recent dump: check data/db_backups/ first, then project root (legacy)
-        local dump_file
-        local bootstrap_zip=""
-        local bootstrap_password=""
-        local bootstrap_tmp_dir=""
-        local config_count=""
-        local existing_public_tables=""
-        dump_file=$(ls -t data/db_backups/easelect_full_dump_*.sql data/db_backups/easelect_full_dump.sql easelect_full_dump_*.sql easelect_full_dump.sql 2>/dev/null | head -1 || true)
         existing_public_tables="$(docker_query_public_table_count)"
         if [[ -n "$existing_public_tables" && "$existing_public_tables" != "0" ]]; then
             echo -e "${RED}❌ Docker database already contains ${existing_public_tables} public tables.${NC}"
@@ -193,31 +241,7 @@ start_docker() {
             fi
             _local_docker_compose up -d app
         else
-            bootstrap_zip="$(current_bootstrap_seed_zip_path 2>/dev/null || true)"
             if [[ -n "$bootstrap_zip" ]]; then
-                command -v unzip >/dev/null 2>&1 || {
-                    echo -e "${RED}❌ unzip not found. Install unzip to restore from the committed bootstrap zip.${NC}"
-                    exit 1
-                }
-                bootstrap_password="$(read_bootstrap_seed_password || true)"
-                if [[ -z "$bootstrap_password" ]]; then
-                    echo -e "${RED}❌ Bootstrap zip password missing.${NC}"
-                    echo "Expected gitignored local file: $(bootstrap_seed_password_file_path)"
-                    exit 1
-                fi
-
-                bootstrap_tmp_dir="$(mktemp -d)"
-                trap 'rm -rf "${bootstrap_tmp_dir:-}"' EXIT
-
-                echo "📦 Restoring database from committed bootstrap zip ${bootstrap_zip}..."
-                if ! extract_bootstrap_seed_zip "$bootstrap_zip" "$bootstrap_tmp_dir" "$bootstrap_password"; then
-                    echo -e "${RED}❌ Failed to extract bootstrap zip. Check the password file.${NC}"
-                    exit 1
-                fi
-
-                [[ -f "${bootstrap_tmp_dir}/schema.sql" ]] || { echo -e "${RED}❌ bootstrap zip missing schema.sql${NC}"; exit 1; }
-                [[ -f "${bootstrap_tmp_dir}/seed_data.sql" ]] || { echo -e "${RED}❌ bootstrap zip missing seed_data.sql${NC}"; exit 1; }
-
                 if ! import_bootstrap_package "${bootstrap_tmp_dir}/schema.sql" "${bootstrap_tmp_dir}/seed_data.sql" 1 \
                     docker exec -i easelect-db-dev psql -U admin_user -d easelect; then
                     echo -e "${RED}❌ Docker bootstrap restore failed; the application was not started.${NC}"

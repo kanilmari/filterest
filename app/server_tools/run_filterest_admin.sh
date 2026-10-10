@@ -31,6 +31,9 @@ if [[ "$SOURCE_ROOT" == "$INSTALLATION_ROOT/app" ]]; then
 fi
 # shellcheck source=server_tools/lib/filterest_port_preflight.sh
 source "$SOURCE_ROOT/server_tools/lib/filterest_port_preflight.sh"
+if [[ -n "${FILTEREST_RECOVERY_CONTENT_ROOT:-}" ]]; then
+    source "$SOURCE_ROOT/server_tools/lib/installation_records.sh"
+fi
 
 BINARY="$RUNTIME_ROOT/bin/filterest-server"
 PID_FILE="$RUNTIME_ROOT/filterest-admin.pid"
@@ -125,6 +128,12 @@ start_runtime() {
     port="$(configured_port)"
     filterest_preflight_port "$port"
 
+    if [[ -n "${FILTEREST_RECOVERY_CONTENT_ROOT:-}" ]]; then
+        filterest_recovery_content_names "$INSTALLATION_ROOT" "$LOG_FILE" "$PID_FILE" || return 1
+        (umask 077; mkdir -p "$(dirname "$LOG_FILE")")
+        filterest_recovery_native_start "$INSTALLATION_ROOT" "$BINARY" "$LOG_FILE" "$PID_FILE" "$port"
+        return "$?"
+    fi
     mkdir -p "$(dirname "$LOG_FILE")"
     if command -v setsid >/dev/null 2>&1; then
         nohup setsid "$BINARY" >> "$LOG_FILE" 2>&1 < /dev/null &

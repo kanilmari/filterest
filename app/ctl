@@ -32,13 +32,42 @@ fi
 # The source root owns the portable command. Root launchers may bind an
 # explicit composition; a direct invocation derives the canonical nested root
 # so package scripts cannot write runtime files below immutable app/.
-FILTEREST_SOURCE_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# Backup/restore diagnostics need protection before environment helpers run.
+FILTEREST_RECOVERY_OUTPUT=0
+for argument in "$@"; do
+    case "$argument" in
+        --backup|--restore|--restore-db|backup-all) FILTEREST_RECOVERY_OUTPUT=1 ;;
+    esac
+done
+export FILTEREST_RECOVERY_OUTPUT
+# A sourced settings/helper file cannot turn off an active recovery boundary.
+if [[ "$FILTEREST_RECOVERY_OUTPUT" -eq 1 ]]; then readonly FILTEREST_RECOVERY_OUTPUT; fi
+if [[ "$FILTEREST_RECOVERY_OUTPUT" -eq 1 ]]; then
+    SCRIPT_SOURCE_DIRECTORY="$(dirname -- "${BASH_SOURCE[0]}" 2>/dev/null)" || { printf 'Recovery launcher location unavailable; sensitive details withheld.\n' >&2; exit 1; }
+    FILTEREST_SOURCE_ROOT="$(cd -- "$SCRIPT_SOURCE_DIRECTORY" 2>/dev/null && pwd 2>/dev/null)" 2>/dev/null || { printf 'Recovery launcher location unavailable; sensitive details withheld.\n' >&2; exit 1; }
+else
+    FILTEREST_SOURCE_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+fi
+# Capture implicit shell/interpreter diagnostics as well as explicit output.
+if [[ "$FILTEREST_RECOVERY_OUTPUT" -eq 1 && "${BASH_SOURCE[0]}" == "$0" ]]; then
+    source "$FILTEREST_SOURCE_ROOT/server_tools/lib/recovery_process_boundary.sh" >/dev/null 2>&1 || { printf 'Recovery process boundary unavailable; sensitive details withheld.\n' >&2; exit 1; }
+    filterest_recovery_process_entry "${BASH_SOURCE[0]}" "$FILTEREST_SOURCE_ROOT" "$@"
+fi
+
+if [[ "$FILTEREST_RECOVERY_OUTPUT" -eq 1 ]]; then
+    source "$FILTEREST_SOURCE_ROOT/server_tools/lib/installation_records.sh" 2>/dev/null || { printf 'Recovery diagnostic library unavailable; sensitive details withheld.\n' >&2; exit 1; }
+fi
 if [[ -z "${FILTEREST_PROJECT_ROOT_OVERRIDE:-}" ]] && \
-    [[ "$(basename "$FILTEREST_SOURCE_ROOT")" == "app" ]] && \
+    [[ "${FILTEREST_SOURCE_ROOT##*/}" == "app" ]] && \
     [[ -f "$FILTEREST_SOURCE_ROOT/go.mod" ]] && \
     [[ -f "$FILTEREST_SOURCE_ROOT/VERSION_APP" ]]; then
-    INSTALLATION_ROOT="$(cd "$FILTEREST_SOURCE_ROOT/.." && pwd -P)"
-    OUTER_ROOT="$(cd "$INSTALLATION_ROOT/.." && pwd -P)"
+    if [[ "$FILTEREST_RECOVERY_OUTPUT" -eq 1 ]]; then
+        INSTALLATION_ROOT="$(cd -- "$FILTEREST_SOURCE_ROOT/.." 2>/dev/null && pwd -P 2>/dev/null)" 2>/dev/null || { printf 'Recovery installation root unavailable; sensitive details withheld.\n' >&2; exit 1; }
+        OUTER_ROOT="$(cd -- "$INSTALLATION_ROOT/.." 2>/dev/null && pwd -P 2>/dev/null)" 2>/dev/null || { printf 'Recovery outer root unavailable; sensitive details withheld.\n' >&2; exit 1; }
+    else
+        INSTALLATION_ROOT="$(cd "$FILTEREST_SOURCE_ROOT/.." && pwd -P)"
+        OUTER_ROOT="$(cd "$INSTALLATION_ROOT/.." && pwd -P)"
+    fi
     if [[ -e "$OUTER_ROOT/.git" && -f "$OUTER_ROOT/VERSION_EASELECT" ]]; then
         # An embedded development checkout keeps its established outer roots.
         unset FILTEREST_ROOT FILTEREST_STANDALONE_ROOT_CTL
@@ -62,8 +91,13 @@ if [[ -z "${FILTEREST_PROJECT_ROOT_OVERRIDE:-}" ]] && \
         unset PORT APP_PORT EASELECT_PORT VITE_DEV_PORT VITE_HMR_PORT
         export GOWORK=off FILTEREST_STANDALONE_ROOT_CTL=1
         # shellcheck source=server_tools/lib/filterest_port_preflight.sh
-        source "$FILTEREST_SOURCE_ROOT/server_tools/lib/filterest_port_preflight.sh"
-        FILTEREST_STANDALONE_DEFAULT_PORT="$(filterest_native_default_port "$INSTALLATION_ROOT")" || exit 1
+        if [[ "$FILTEREST_RECOVERY_OUTPUT" -eq 1 ]]; then
+            filterest_recovery_source "$INSTALLATION_ROOT" "$FILTEREST_SOURCE_ROOT/server_tools/lib/filterest_port_preflight.sh" || exit
+            FILTEREST_STANDALONE_DEFAULT_PORT="$(filterest_recovery_utility "$INSTALLATION_ROOT" filterest_native_default_port "$INSTALLATION_ROOT")" || exit 1
+        else
+            source "$FILTEREST_SOURCE_ROOT/server_tools/lib/filterest_port_preflight.sh"
+            FILTEREST_STANDALONE_DEFAULT_PORT="$(filterest_native_default_port "$INSTALLATION_ROOT")" || exit 1
+        fi
         export FILTEREST_STANDALONE_DEFAULT_PORT
         export FILTEREST_STANDALONE_DEFAULT_VITE_PORT=9100
         export PORT="$FILTEREST_STANDALONE_DEFAULT_PORT"
@@ -83,12 +117,21 @@ if [[ -z "${FILTEREST_PROJECT_ROOT_OVERRIDE:-}" ]] && \
 fi
 PROJECT_ROOT="${FILTEREST_PROJECT_ROOT_OVERRIDE:-$FILTEREST_SOURCE_ROOT}"
 RESOLVE_ENV_LIB="${FILTEREST_RESOLVE_ENV_LIB:-$FILTEREST_SOURCE_ROOT/server_tools/ctl/lib/resolve_env.sh}"
-# shellcheck source=server_tools/lib/python_bytecode_cache.sh
-source "$FILTEREST_SOURCE_ROOT/server_tools/lib/python_bytecode_cache.sh"
-filterest_configure_python_bytecode_cache "$FILTEREST_SOURCE_ROOT"
+if [[ "$FILTEREST_RECOVERY_OUTPUT" -eq 1 ]]; then
+    # shellcheck source=server_tools/lib/python_bytecode_cache.sh
+    filterest_recovery_source "$PROJECT_ROOT" "$FILTEREST_SOURCE_ROOT/server_tools/lib/python_bytecode_cache.sh" || exit
+    filterest_recovery_utility "$PROJECT_ROOT" filterest_configure_python_bytecode_cache "$FILTEREST_SOURCE_ROOT" || exit
 
-# Resolve environment (PATH, cd to project root) — needed for su/root
-source "$RESOLVE_ENV_LIB"
+    # Resolve environment (PATH, cd to project root) — needed for su/root
+    filterest_recovery_source "$PROJECT_ROOT" "$RESOLVE_ENV_LIB" || exit
+else
+    # shellcheck source=server_tools/lib/python_bytecode_cache.sh
+    source "$FILTEREST_SOURCE_ROOT/server_tools/lib/python_bytecode_cache.sh"
+    filterest_configure_python_bytecode_cache "$FILTEREST_SOURCE_ROOT"
+
+    # Resolve environment (PATH, cd to project root) — needed for su/root
+    source "$RESOLVE_ENV_LIB"
+fi
 
 # Bash completion installer
 COMP_SCRIPT="$FILTEREST_SOURCE_ROOT/server_tools/ctl/ctl_completions.bash"
@@ -120,4 +163,13 @@ if [[ "${1:-}" == "--setup-completion" ]]; then
 fi
 
 # Call the main implementation with all arguments
-exec "$FILTEREST_SOURCE_ROOT/server_tools/ctl/ctl_main.sh" "$@"
+if [[ "$FILTEREST_RECOVERY_OUTPUT" -eq 1 ]]; then
+    if [[ "${FILTEREST_RECOVERY_PROMPT_FD:-}" != 8 ]] || ! { true >&8; } 2>/dev/null; then
+        exec 8>&2
+        export FILTEREST_RECOVERY_PROMPT_FD=8
+    fi
+    filterest_recovery_scan "$PROJECT_ROOT" stderr filterest_recovery_child "$FILTEREST_SOURCE_ROOT/server_tools/ctl/ctl_main.sh" "$@"
+    exit $?
+else
+    exec "$FILTEREST_SOURCE_ROOT/server_tools/ctl/ctl_main.sh" "$@"
+fi

@@ -208,8 +208,8 @@ prepare_docker_compose_options() {
     fi
     if [[ -n "$subnet" ]]; then
         command -v python3 >/dev/null 2>&1 || die "python3 is required to validate a pinned Docker network"
-        gateway="$(python3 "$SCRIPT_APPLICATION_ROOT/server_tools/lib/docker_network_validator.py" \
-            --subnet "$subnet" --gateway "$gateway")"
+        gateway="$(filterest_recovery_python "$PROJECT_ROOT" python3 "$SCRIPT_APPLICATION_ROOT/server_tools/lib/docker_network_validator.py" \
+            --recovery-root "$PROJECT_ROOT" --subnet "$subnet" --gateway "$gateway")"
         plan_docker_setting FILTEREST_NETWORK_GATEWAY "$gateway"
         network_file=docker-compose.network-pinned.yml
     elif [[ -n "$gateway" ]]; then
@@ -269,13 +269,13 @@ check_docker_network_collision() {
     [[ "${ACTION:-}" == start || -n "$subnet$previous_selection" ]] || return 0
     require_docker_compose
     command -v python3 >/dev/null 2>&1 || die "python3 is required to inspect Docker project ownership and networks"
-    inventory_directory="$(mktemp -d)"
+    inventory_directory="$(filterest_recovery_mktemp "$PROJECT_ROOT" -d -- "${TMPDIR:-/tmp}/filterest-docker-inventory.XXXXXX")" || return
     for resource in network container; do
         ids=()
         if [[ "$resource" == network ]]; then
-            resource_ids="$(docker network ls --quiet)" || status=$?
+            resource_ids="$(filterest_recovery_utility "$PROJECT_ROOT" docker network ls --quiet)" || status=$?
         else
-            resource_ids="$(docker ps --all --quiet --filter "label=com.docker.compose.project=$(docker_deployment_value COMPOSE_PROJECT_NAME)")" || status=$?
+            resource_ids="$(filterest_recovery_utility "$PROJECT_ROOT" docker ps --all --quiet --filter "label=com.docker.compose.project=$(docker_deployment_value COMPOSE_PROJECT_NAME)")" || status=$?
         fi
         [[ "$status" -eq 0 ]] || break
         while IFS= read -r resource_id; do
@@ -283,21 +283,21 @@ check_docker_network_collision() {
         done <<< "$resource_ids"
         if [[ "$resource" == network ]]; then network_count="${#ids[@]}"; else container_count="${#ids[@]}"; fi
         if [[ "${#ids[@]}" -gt 0 ]]; then
-            docker "$resource" inspect "${ids[@]}" > "$inventory_directory/$resource.json" || status=$?
+            filterest_recovery_to_file "$PROJECT_ROOT" "$inventory_directory/$resource.json" docker "$resource" inspect "${ids[@]}" || status=$?
         else
             printf '[]\n' > "$inventory_directory/$resource.json"
         fi
         [[ "$status" -eq 0 ]] || break
     done
     if [[ "$status" -eq 0 ]]; then
-        python3 "$SCRIPT_APPLICATION_ROOT/server_tools/lib/docker_network_validator.py" \
-            --subnet "$subnet" --gateway "$(docker_deployment_value FILTEREST_NETWORK_GATEWAY)" \
+        filterest_recovery_python "$PROJECT_ROOT" python3 "$SCRIPT_APPLICATION_ROOT/server_tools/lib/docker_network_validator.py" \
+            --recovery-root "$PROJECT_ROOT" --subnet "$subnet" --gateway "$(docker_deployment_value FILTEREST_NETWORK_GATEWAY)" \
             --project "$(docker_deployment_value COMPOSE_PROJECT_NAME)" --working-directory "$PROJECT_ROOT" \
             --previous-selection "${previous_selection:-docker-compose.network-auto.yml}" \
             --networks "$inventory_directory/network.json" --expected-networks "$network_count" \
             --containers "$inventory_directory/container.json" --expected-containers "$container_count" \
             > /dev/null || status=$?
     fi
-    rm -rf -- "$inventory_directory"
+    filterest_recovery_output "$PROJECT_ROOT" rm -rf -- "$inventory_directory" || return
     [[ "$status" -eq 0 ]] || die "Docker project ownership or network inspection was refused; no settings were written or containers started"
 }

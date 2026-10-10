@@ -37,10 +37,11 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-FILTEREST_SOURCE_ROOT="$(cd "$SCRIPT_DIR/.." && pwd -P)"
+SCRIPT_SOURCE_DIRECTORY="$(dirname -- "${BASH_SOURCE[0]}" 2>/dev/null)" || { printf 'Recovery launcher location unavailable; sensitive details withheld.\n' >&2; exit 1; }
+SCRIPT_DIR="$(cd -- "$SCRIPT_SOURCE_DIRECTORY" 2>/dev/null && pwd 2>/dev/null)" 2>/dev/null || { printf 'Recovery launcher location unavailable; sensitive details withheld.\n' >&2; exit 1; }
+FILTEREST_SOURCE_ROOT="$(cd -- "$SCRIPT_DIR/.." 2>/dev/null && pwd -P 2>/dev/null)" || { printf 'Recovery source location unavailable; sensitive details withheld.\n' >&2; exit 1; }
 INSTALLATION_ROOT="${FILTEREST_ROOT:-${FILTEREST_PROJECT_ROOT_OVERRIDE:-$FILTEREST_SOURCE_ROOT}}"
-INSTALLATION_ROOT="$(cd "$INSTALLATION_ROOT" && pwd -P)"
+INSTALLATION_ROOT="$(cd -- "$INSTALLATION_ROOT" 2>/dev/null && pwd -P 2>/dev/null)" 2>/dev/null || { printf 'Recovery installation root unavailable; sensitive details withheld.\n' >&2; exit 1; }
 PROJECT_ROOT="$INSTALLATION_ROOT"
 FILTEREST_BUILD_ROOT="${FILTEREST_BUILD_ROOT_OVERRIDE:-$FILTEREST_SOURCE_ROOT}"
 if [[ -f "$INSTALLATION_ROOT/VERSION_EASELECT" ]]; then
@@ -56,6 +57,7 @@ if [[ "$FILTEREST_SOURCE_ROOT" == "$INSTALLATION_ROOT/app" ]]; then
 fi
 cd "$INSTALLATION_ROOT"
 
+source "$SCRIPT_DIR/lib/installation_records.sh"
 source "$SCRIPT_DIR/lib/public_bootstrap.sh"
 source "$SCRIPT_DIR/lib/toolchain_version.sh"
 source "$SCRIPT_DIR/lib/easelect_private_paths.sh"
@@ -156,6 +158,7 @@ resolve_private_bootstrap_source() {
 }
 
 ensure_local_tls_files() {
+    local certificate_directory=""
     if [[ -f "$EASELECT_TLS_CERT_FILE" && -f "$EASELECT_TLS_KEY_FILE" ]]; then
         return
     fi
@@ -165,18 +168,26 @@ ensure_local_tls_files() {
     fi
 
     echo "  Generating local development TLS certificate..."
-    mkdir -p "$(dirname "$EASELECT_TLS_CERT_FILE")"
+    certificate_directory="$(filterest_recovery_utility "$INSTALLATION_ROOT" dirname -- "$EASELECT_TLS_CERT_FILE")" || return
+    (umask 077; filterest_recovery_output "$INSTALLATION_ROOT" mkdir -p -- "$certificate_directory") || return
     if easelect_is_private_source_checkout "$PROJECT_ROOT"; then
-        chmod 700 "$(dirname "$EASELECT_TLS_CERT_FILE")"
+        filterest_recovery_output "$INSTALLATION_ROOT" chmod 700 -- "$certificate_directory" || return
     fi
-    openssl req -x509 -newkey rsa:2048 -nodes \
+    if [[ -n "${FILTEREST_RECOVERY_CONTENT_ROOT:-}" ]]; then
+        filterest_recovery_tls_identity "$INSTALLATION_ROOT" "$EASELECT_TLS_CERT_FILE" "$EASELECT_TLS_KEY_FILE" \
+            -x509 -newkey rsa:2048 -nodes -days 365 -subj "/CN=localhost" \
+            -addext "subjectAltName=DNS:localhost,DNS:*.localhost,IP:127.0.0.1" || return
+        filterest_recovery_output "$INSTALLATION_ROOT" chmod 644 -- "$EASELECT_TLS_CERT_FILE" || return
+        return
+    fi
+    filterest_recovery_output "$INSTALLATION_ROOT" openssl req -x509 -newkey rsa:2048 -nodes \
         -keyout "$EASELECT_TLS_KEY_FILE" \
         -out "$EASELECT_TLS_CERT_FILE" \
         -days 365 \
         -subj "/CN=localhost" \
-        -addext "subjectAltName=DNS:localhost,DNS:*.localhost,IP:127.0.0.1" >/dev/null 2>&1
-    chmod 600 "$EASELECT_TLS_KEY_FILE"
-    chmod 644 "$EASELECT_TLS_CERT_FILE"
+        -addext "subjectAltName=DNS:localhost,DNS:*.localhost,IP:127.0.0.1" >/dev/null || return
+    filterest_recovery_output "$INSTALLATION_ROOT" chmod 600 -- "$EASELECT_TLS_KEY_FILE" || return
+    filterest_recovery_output "$INSTALLATION_ROOT" chmod 644 -- "$EASELECT_TLS_CERT_FILE" || return
 }
 
 show_setup_usage() {
@@ -290,6 +301,10 @@ command -v psql &>/dev/null || { echo -e "${RED}❌ psql not found. Install Post
 if [[ "$DUMP_SOURCE_KIND" == "bootstrap_zip" ]]; then
     command -v unzip &>/dev/null || { echo -e "${RED}❌ unzip not found. Install unzip to use the committed bootstrap zip.${NC}"; exit 1; }
 fi
+
+filterest_recovery_python "$INSTALLATION_ROOT" python3 "$SCRIPT_DIR/lib/database_recovery.py" setup-key \
+    --root "$INSTALLATION_ROOT" --profile native \
+    --settings "$EASELECT_DEV_ENV_FILE" --settings "$EASELECT_RUNTIME_ENV_FILE"
 
 echo -e "${GREEN}  ✓ All prerequisites found${NC}"
 case "$DUMP_SOURCE_KIND" in
@@ -492,16 +507,20 @@ run_local_db_psql_stdin() {
     shift
     local log_file=""
 
-    log_file="$(mktemp)"
-    if ! PGPASSWORD="$DB_ADMIN_PASSWORD" psql -v ON_ERROR_STOP=1 "$@" \
-        -h localhost -p "$PG16_PORT" -U "$DB_ADMIN_USER" -d "$DB_NAME" >"$log_file" 2>&1; then
+    log_file="$(filterest_recovery_mktemp "$INSTALLATION_ROOT" -- "${TMPDIR:-/tmp}/filterest-setup-log.XXXXXX")" || return
+    if ! PGPASSWORD="$DB_ADMIN_PASSWORD" filterest_recovery_to_file "$INSTALLATION_ROOT" "$log_file" \
+        _setup_psql_diagnostics "$@"; then
         echo -e "${RED}❌ ${operation_label} failed.${NC}"
         echo "   First diagnostics:"
         grep -E "^(ERROR|psql:|NOTICE:)" "$log_file" | head -20 | sed 's/^/   /' || sed -n '1,20p' "$log_file" | sed 's/^/   /'
-        rm -f "$log_file"
+        filterest_recovery_output "$INSTALLATION_ROOT" rm -f -- "$log_file" || return
         exit 1
     fi
-    rm -f "$log_file"
+    filterest_recovery_output "$INSTALLATION_ROOT" rm -f -- "$log_file" || return
+}
+
+_setup_psql_diagnostics() {
+    psql -v ON_ERROR_STOP=1 "$@" -h localhost -p "$PG16_PORT" -U "$DB_ADMIN_USER" -d "$DB_NAME" 2>&1
 }
 
 # Rewrites DB_PORT without relying on GNU sed's incompatible -i syntax.
@@ -513,13 +532,18 @@ update_db_port_setting() {
     local temp_file
     local write_target="$config_file"
 
-    temp_file="$(mktemp "${write_target}.tmp.XXXXXX")"
-    cp -p "$write_target" "$temp_file"
+    if [[ -n "${FILTEREST_RECOVERY_CONTENT_ROOT:-}" ]]; then
+        filterest_recovery_content_to_file "$INSTALLATION_ROOT" "$write_target" sed "s/^DB_PORT=.*/DB_PORT=$port/" "$write_target"
+        return
+    fi
+
+    temp_file="$(filterest_recovery_utility "$INSTALLATION_ROOT" mktemp -- "${write_target}.tmp.XXXXXX")" || return
+    filterest_recovery_output "$INSTALLATION_ROOT" cp -p -- "$write_target" "$temp_file" || return
     if ! sed "s/^DB_PORT=.*/DB_PORT=$port/" "$write_target" > "$temp_file"; then
-        rm -f "$temp_file"
+        filterest_recovery_output "$INSTALLATION_ROOT" rm -f -- "$temp_file" || return
         return 1
     fi
-    mv "$temp_file" "$write_target"
+    filterest_recovery_output "$INSTALLATION_ROOT" mv -- "$temp_file" "$write_target" || return
 }
 
 # Creates a generated admin only for the explicitly isolated automated preview.
@@ -533,6 +557,10 @@ ensure_generated_filterest_initial_admin() {
         echo ""
         echo -e "${BLUE}First administrator will be created in the browser on first access.${NC}"
         return
+    fi
+    if [[ -n "${FILTEREST_RECOVERY_CONTENT_ROOT:-}" ]]; then
+        printf 'Recovery refuses automated-preview credential file creation.\n' >&2
+        return 1
     fi
 
     local handoff_file=""
@@ -570,6 +598,14 @@ ensure_generated_filterest_initial_admin() {
         GOFLAGS=-mod=readonly \
         go -C "$FILTEREST_SOURCE_ROOT" run ./server_tools/initial_admin_bootstrap \
             "${initial_admin_args[@]}"
+}
+
+_setup_extract_bootstrap_zip() {
+    if [[ -n "${FILTEREST_RECOVERY_CONTENT_ROOT:-}" ]]; then
+        filterest_recovery_extract_zip "$INSTALLATION_ROOT" "$@"
+    else
+        extract_bootstrap_seed_zip "$@"
+    fi
 }
 
 create_role "$DB_ADMIN_USER" "$DB_ADMIN_PASSWORD" "SUPERUSER"
@@ -788,8 +824,8 @@ if [[ "${SKIP_IMPORT:-no}" != "yes" ]]; then
     fi
 
     if [[ "$DUMP_SOURCE_KIND" == "bootstrap_zip" ]]; then
-        local_bootstrap_dir="$(mktemp -d)"
-        trap 'rm -rf "${local_bootstrap_dir:-}"' EXIT
+        local_bootstrap_dir="$(filterest_recovery_mktemp "$INSTALLATION_ROOT" -d -- "${TMPDIR:-/tmp}/filterest-bootstrap.XXXXXX")" || return
+        trap 'filterest_recovery_output "$INSTALLATION_ROOT" rm -rf -- "${local_bootstrap_dir:-}" || true' EXIT
 
         BOOTSTRAP_PASSWORD="$(read_bootstrap_seed_password || true)"
         if [[ -z "${BOOTSTRAP_PASSWORD}" ]]; then
@@ -799,7 +835,7 @@ if [[ "${SKIP_IMPORT:-no}" != "yes" ]]; then
         fi
 
         echo "  Extracting committed bootstrap zip..."
-        if ! extract_bootstrap_seed_zip "$DUMP_FILE" "$local_bootstrap_dir" "$BOOTSTRAP_PASSWORD"; then
+        if ! _setup_extract_bootstrap_zip "$DUMP_FILE" "$local_bootstrap_dir" "$BOOTSTRAP_PASSWORD"; then
             echo -e "${RED}❌ Failed to extract bootstrap zip.${NC}"
             echo "   Check the password in: $(bootstrap_seed_password_file_path)"
             exit 1

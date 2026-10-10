@@ -1,0 +1,20 @@
+# native_host_packages.list
+# Declares native setup's host packages and default PostgreSQL major.
+# Read as data by the installed updater and this release's installer.
+# Target-release requirements must be checked before stopping the application.
+postgresql-major 16
+common ca-certificates
+common curl
+common openssl
+common python3-minimal
+common python3-psycopg2
+common postgresql-common
+database postgresql-@POSTGRESQL_MAJOR@
+database postgresql-client-@POSTGRESQL_MAJOR@
+database postgresql-@POSTGRESQL_MAJOR@-postgis-3
+database postgresql-@POSTGRESQL_MAJOR@-postgis-3-scripts
+database postgresql-@POSTGRESQL_MAJOR@-pgvector
+development build-essential
+development git
+development xz-utils
+development python3-venv

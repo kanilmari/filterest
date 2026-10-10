@@ -62,7 +62,11 @@ import_bootstrap_package() {
             return 1
         fi
     done
-    log_file="$(mktemp)" || return 1
+    if [[ -n "${FILTEREST_RECOVERY_CONTENT_ROOT:-}" ]]; then
+        log_file="$(filterest_recovery_mktemp "$FILTEREST_RECOVERY_CONTENT_ROOT")" || return 1
+    else
+        log_file="$(mktemp)" || return 1
+    fi
     # One session holds the exclusive barrier through both schema and seed.
     # Callers keep applications/workers stopped until this import and the next
     # start-up reconciliation succeed. A separate psql per file loses the lock.
@@ -72,7 +76,7 @@ import_bootstrap_package() {
             printf "SELECT pg_advisory_lock(hashtext('filterest.runtime_startup_barrier'));\n"
             stream_bootstrap_schema_sql "$schema_file" "$postgis_available" || exit 1
             sed -e '/^\\restrict/d' -e '/^\\unrestrict/d' "$seed_file" || exit 1
-        } | "$@" -v ON_ERROR_STOP=1 >"$log_file" 2>&1
+        } | _bootstrap_import_diagnostics "$log_file" "$@" -v ON_ERROR_STOP=1
     ); then
         echo "Bootstrap package import failed; first errors:" >&2
         bootstrap_import_first_errors "$log_file" >&2
@@ -81,3 +85,15 @@ import_bootstrap_package() {
     fi
     rm -f "$log_file"
 }
+
+_bootstrap_import_diagnostics() {
+    local log_file="$1"
+    shift
+    if [[ -n "${FILTEREST_RECOVERY_CONTENT_ROOT:-}" ]]; then
+        filterest_recovery_to_file "$FILTEREST_RECOVERY_CONTENT_ROOT" "$log_file" _bootstrap_merged_diagnostics "$@"
+    else
+        "$@" >"$log_file" 2>&1
+    fi
+}
+
+_bootstrap_merged_diagnostics() { "$@" 2>&1; }

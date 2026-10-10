@@ -28,6 +28,9 @@ SOURCE_ROOT="$(cd "$SCRIPT_DIR/.." && pwd -P)"
 INSTALLATION_ROOT="${FILTEREST_ROOT:-${FILTEREST_PROJECT_ROOT_OVERRIDE:-$SOURCE_ROOT}}"
 INSTALLATION_ROOT="$(cd "$INSTALLATION_ROOT" && pwd -P)"
 PROJECT_ROOT="$INSTALLATION_ROOT"
+if [[ -n "${FILTEREST_RECOVERY_CONTENT_ROOT:-}" ]]; then
+  source "$SCRIPT_DIR/lib/installation_records.sh"
+fi
 source "$SCRIPT_DIR/ctl/lib/env_permissions.sh"
 source "$SCRIPT_DIR/lib/easelect_private_paths.sh"
 easelect_resolve_private_paths "$PROJECT_ROOT"
@@ -172,13 +175,16 @@ cmd_setup() {
   info "Luodaan hakemistot..."
 
   easelect_prepare_local_path_boundaries "$PROJECT_ROOT"
+  if [[ -n "${FILTEREST_RECOVERY_CONTENT_ROOT:-}" ]]; then
+    filterest_recovery_content_names "$INSTALLATION_ROOT" "$FILTEREST_PROJECTS_HOME" || return 1
+  fi
   if [[ -e "$FILTEREST_PROJECTS_HOME" && ! -d "$FILTEREST_PROJECTS_HOME" ]]; then
     err "Projektijuuri on olemassa mutta ei ole hakemisto: $FILTEREST_PROJECTS_HOME"
     return 1
   elif [[ -d "$FILTEREST_PROJECTS_HOME" ]]; then
     skip "Projektijuuri jo olemassa: $FILTEREST_PROJECTS_HOME"
   else
-    mkdir -p "$FILTEREST_PROJECTS_HOME"
+    (if [[ -n "${FILTEREST_RECOVERY_CONTENT_ROOT:-}" ]]; then umask 077; fi; mkdir -p "$FILTEREST_PROJECTS_HOME")
     chmod 700 "$FILTEREST_PROJECTS_HOME"
     ok "Luotu projektijuuri: $FILTEREST_PROJECTS_HOME"
   fi
@@ -220,10 +226,13 @@ cmd_setup() {
   fi
 
   for dir in "${dirs[@]}"; do
+    if [[ -n "${FILTEREST_RECOVERY_CONTENT_ROOT:-}" ]]; then
+      filterest_recovery_content_names "$INSTALLATION_ROOT" "$dir" || return 1
+    fi
     if [[ -d "$dir" ]]; then
       skip "Hakemisto jo olemassa: $dir"
     else
-      mkdir -p "$dir"
+      (if [[ -n "${FILTEREST_RECOVERY_CONTENT_ROOT:-}" ]]; then umask 077; fi; mkdir -p "$dir")
       ok "Luotu: $dir"
     fi
   done
@@ -242,14 +251,18 @@ cmd_setup() {
     if [[ -f "$path_contract" ]]; then
       skip "Polkusopimus jo olemassa: $path_contract"
     else
-      (umask 077 && printf '%s\n' \
+      _scaffold_path_contract_content() { printf '%s\n' \
         'schema_version=1' \
         'projects_home=projects' \
         'keys_home=keys' \
         'runtime_data_home=data/runtime' \
         'maintainer_tools_home=data/maintainer_tools' \
-        'operations_home=data/operations' \
-        > "$path_contract")
+        'operations_home=data/operations'; }
+      if [[ -n "${FILTEREST_RECOVERY_CONTENT_ROOT:-}" ]]; then
+        filterest_recovery_content_to_file "$INSTALLATION_ROOT" "$path_contract" _scaffold_path_contract_content
+      else
+        (umask 077 && _scaffold_path_contract_content > "$path_contract")
+      fi
       ok "Luotu polkusopimus: $path_contract"
     fi
   fi
@@ -258,10 +271,13 @@ cmd_setup() {
   for inst in instances/*/; do
     if [[ -d "$inst" ]]; then
       local backup_dir="${inst}backups"
+      if [[ -n "${FILTEREST_RECOVERY_CONTENT_ROOT:-}" ]]; then
+        filterest_recovery_content_names "$INSTALLATION_ROOT" "$backup_dir" || return 1
+      fi
       if [[ -d "$backup_dir" ]]; then
         skip "Hakemisto jo olemassa: $backup_dir"
       else
-        mkdir -p "$backup_dir"
+        (if [[ -n "${FILTEREST_RECOVERY_CONTENT_ROOT:-}" ]]; then umask 077; fi; mkdir -p "$backup_dir")
         ok "Luotu: $backup_dir"
       fi
     fi
@@ -292,11 +308,15 @@ cmd_setup() {
       warn_secret_env_file_permissions "$env_file" "scaffold setup"
       (( env_skipped++ )) || true
     else
-      mkdir -p "$(dirname "$env_file")"
+      (if [[ -n "${FILTEREST_RECOVERY_CONTENT_ROOT:-}" ]]; then umask 077; fi; mkdir -p "$(dirname "$env_file")")
       if [[ "$env_file" == "$EASELECT_RUNTIME_ENV_FILE" || "$env_file" == "$EASELECT_DEV_ENV_FILE" ]]; then
         chmod 700 "$(dirname "$env_file")"
       fi
-      cp "$scaffold" "$env_file"
+      if [[ -n "${FILTEREST_RECOVERY_CONTENT_ROOT:-}" ]]; then
+        filterest_recovery_content_to_file "$INSTALLATION_ROOT" "$env_file" cat -- "$scaffold"
+      else
+        cp "$scaffold" "$env_file"
+      fi
       set_secret_env_file_permissions "$env_file"
       ok "Kopioitu scaffold → $env_file"
       (( env_created++ )) || true

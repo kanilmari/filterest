@@ -105,6 +105,12 @@ main start
         )
         # Validation and the launch path both enforce the version gate.
         actual["docker_calls"] = actual["docker_calls"].replace("compose version\ncompose version\n", "compose version\n")
+        # Authentication adds one protected random key; the previous deployment
+        # contract stays frozen, while this intentional new artifact is checked.
+        recovery_key = actual["files"].pop("keys/database_recovery.hmac.key")
+        self.assertEqual(recovery_key["mode"], "0o600")
+        self.assertRegex(recovery_key["content"], r"^[0-9a-f]{64}\n$")
+        self.assertNotIn(recovery_key["content"].strip(), completed.stdout + completed.stderr)
         self.assertEqual(actual, expected)
         self.assertIn("https://localhost:8100/first-run", completed.stdout)
 

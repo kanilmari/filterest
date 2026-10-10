@@ -17,7 +17,7 @@ import time
 
 import pytest
 
-from installation_fixture_files import LIFECYCLE_LIBRARY_FILES
+from installation_fixture_files import LIFECYCLE_LIBRARY_FILES, RECOVERY_PSQL_FAKE
 
 
 SOURCE_ROOT = Path(__file__).resolve().parents[2]
@@ -371,7 +371,7 @@ def test_nested_updater_dry_run_verifies_app_without_mutation(tmp_path: Path) ->
     fake_curl.write_text(
         "#!/usr/bin/env bash\n"
         "set -eu\n"
-        "out=\n"
+        "out=/dev/stdout\n"
         "while [ \"$#\" -gt 0 ]; do\n"
         "  if [ \"$1\" = --output ]; then out=$2; shift 2; else shift; fi\n"
         "done\n"
@@ -437,7 +437,7 @@ def test_nested_updater_dry_run_verifies_app_without_mutation(tmp_path: Path) ->
     fake_curl.write_text(
         "#!/usr/bin/env bash\n"
         "set -eu\n"
-        "out=\n"
+        "out=/dev/stdout\n"
         "while [ \"$#\" -gt 0 ]; do\n"
         "  if [ \"$1\" = --output ]; then out=$2; shift 2; else shift; fi\n"
         "done\n"
@@ -479,11 +479,12 @@ RECORD_CALL = (
 )
 
 FAKE_UPDATE_TOOLS = {
+    "dpkg-query": "#!/usr/bin/env bash\nprintf 'install ok installed'\n",
     # Release evidence for api.github.com, and readiness for /system/ready.
     "curl": (
         "#!/usr/bin/env bash\n"
         "set -eu\n"
-        "out=''\n"
+        "out=/dev/stdout\n"
         "url=''\n"
         "while [ \"$#\" -gt 0 ]; do\n"
         "    case \"$1\" in\n"
@@ -501,7 +502,7 @@ FAKE_UPDATE_TOOLS = {
         "    */system/ready)\n"
         "        printf '{\"ready\":true,\"db_compatible\":true,\"reasons\":[],"
         "\"app_version\":\"%s\",\"instance_id\":\"%s\"}\\n' "
-        "\"$FILTEREST_TEST_READY_VERSION\" \"$FILTEREST_TEST_INSTANCE\" > \"$out\"\n"
+        "\"$FILTEREST_TEST_READY_VERSION\" \"$FILTEREST_TEST_INSTANCE\"\n"
         "        printf '200' ;;\n"
         "esac\n"
     ),
@@ -523,6 +524,11 @@ FAKE_UPDATE_TOOLS = {
         "            exit 1\n"
         "        fi\n"
         "        exit \"${FILTEREST_TEST_STOP_STATUS:-0}\" ;;\n"
+        "    *'pg_dumpall --roles-only --no-role-passwords')\n"
+        "        printf '%s\\n' 'CREATE ROLE docker_owner;' 'ALTER ROLE docker_owner WITH PASSWORD '\\''fake-role-verifier'\\'';' \
+            '-- PostgreSQL database cluster dump complete'\n"
+        "        exit \"${FILTEREST_TEST_ROLES_STATUS:-0}\" ;;\n"
+        "    *psql*) exec psql ;;\n"
         "    'exec -T db sh -c '*)\n"
         "        printf 'PGDMP docker dump'\n"
         "        exit \"${FILTEREST_TEST_DUMP_STATUS:-0}\" ;;\n"
@@ -538,13 +544,26 @@ FAKE_UPDATE_TOOLS = {
         "        exit \"${FILTEREST_TEST_UP_STATUS:-0}\" ;;\n"
         "esac\n"
     ),
+    "psql": RECOVERY_PSQL_FAKE,
     "pg_dump": (
         "#!/usr/bin/env bash\n"
         "set -eu\n"
         "printf 'pg_dump %s\\n' \"$*\" >> \"$FILTEREST_TEST_LOG\"\n"
-        "while [ \"$#\" -gt 0 ]; do\n"
-        "    if [ \"$1\" = --file ]; then printf 'native dump' > \"$2\"; shift 2; else shift; fi\n"
-        "done\n"
+        "printf 'native dump'\n"
+        "exit \"${FILTEREST_TEST_DUMP_STATUS:-0}\"\n"
+    ),
+    "pg_dumpall": (
+        "#!/usr/bin/env bash\n"
+        "printf 'pg_dumpall %s\\n' \"$*\" >> \"$FILTEREST_TEST_LOG\"\n"
+        "printf '%s\\n' 'CREATE ROLE native_admin;' 'ALTER ROLE native_admin WITH PASSWORD '\\''fake-role-verifier'\\'';' \
+            '-- PostgreSQL database cluster dump complete'\n"
+        "exit \"${FILTEREST_TEST_ROLES_STATUS:-0}\"\n"
+    ),
+    "pg_restore": (
+        "#!/usr/bin/env bash\n"
+        "printf 'pg_restore %s\\n' \"$*\" >> \"$FILTEREST_TEST_LOG\"\n"
+        "cat > /dev/null\n"
+        "exit \"${FILTEREST_TEST_RESTORE_STATUS:-0}\"\n"
     ),
 }
 
@@ -555,7 +574,7 @@ def git_output(root: Path, *arguments: str) -> str:
     ).stdout.strip()
 
 
-def build_update_fixture(tmp_path: Path, profile: str) -> dict[str, object]:
+def build_update_fixture(tmp_path: Path, profile: str, *, real_native_installer=False, target_rename=False) -> dict[str, object]:
     """Create an installed 8.50.0 checkout whose origin publishes v8.51.0.
 
     The real updater and Docker runner run against it; Docker, curl, pg_dump,
@@ -593,7 +612,10 @@ def build_update_fixture(tmp_path: Path, profile: str) -> dict[str, object]:
         seed / "ctl",
         seed / "filterest",
     ):
-        recorder.write_text(RECORD_CALL, encoding="utf-8")
+        if real_native_installer and recorder.name == "install_filterest.sh":
+            shutil.copy2(INSTALLER, recorder)
+        else:
+            recorder.write_text(RECORD_CALL, encoding="utf-8")
         recorder.chmod(0o755)
     (app_root / "go.mod").write_text(
         "module example.invalid/filterest\n\ngo 1.26.5\n", encoding="utf-8"
@@ -619,9 +641,14 @@ def build_update_fixture(tmp_path: Path, profile: str) -> dict[str, object]:
         subprocess.run(["git", "commit", "-m", version], cwd=seed, check=True, capture_output=True)
         return git_output(seed, "rev-parse", "HEAD")
 
+    if target_rename:
+        (app_root / "OLD_RELEASE_NOTES.txt").write_text("release notes\n", encoding="utf-8")
     old_commit = commit_release("8.50.0")
     # A file new in the release, so an untracked copy can block the fast-forward.
-    (app_root / "RELEASE_NOTES.txt").write_text("8.51.0\n", encoding="utf-8")
+    if target_rename:
+        (app_root / "OLD_RELEASE_NOTES.txt").rename(app_root / "RELEASE_NOTES.txt")
+    else:
+        (app_root / "RELEASE_NOTES.txt").write_text("8.51.0\n", encoding="utf-8")
     target_commit = commit_release("8.51.0")
     subprocess.run(["git", "tag", "v8.51.0"], cwd=seed, check=True)
     subprocess.run(["git", "init", "--bare", str(remote)], check=True, capture_output=True)
@@ -785,6 +812,10 @@ def test_docker_updater_backs_up_fast_forwards_and_waits_for_ready(tmp_path: Pat
     assert (backup / "database.dump").read_text(encoding="utf-8") == "PGDMP docker dump"
     for name in (
         "database.dump",
+        "database.roles.sql",
+        "database.sha256",
+        "database.backup.json",
+        "database.settings.tar.gz",
         "storage.tar.gz",
         "bootstrap.tar.gz",
         "installation_settings.tar.gz",
@@ -826,7 +857,7 @@ def test_docker_updater_stops_the_new_app_when_it_does_not_become_ready(
 
     assert completed.returncode != 0
     [backup] = update_backups(fixture)
-    assert "version '8.50.0' answered, expected '8.51.0'" in completed.stderr
+    assert "version 8.50.0 answered, expected 8.51.0" in completed.stderr
     assert "application container was stopped" in completed.stderr
     assert str(backup) in completed.stderr
     calls = logged_calls(fixture)
@@ -850,7 +881,8 @@ def test_docker_updater_changes_nothing_when_the_dump_fails(tmp_path: Path) -> N
     assert "nothing was written" in completed.stderr
     assert "stopped before changing the installation" in completed.stderr
     [backup] = update_backups(fixture)
-    assert list(backup.iterdir()) == []
+    assert not (backup / "manifest.txt").exists()
+    assert all(p.name.startswith("database-tool-") for p in backup.iterdir())
     assert not [call for call in logged_calls(fixture) if call.startswith("docker up")]
     assert git_output(checkout, "rev-parse", "HEAD") == fixture["old_commit"]
 
@@ -960,8 +992,12 @@ def test_docker_updater_changes_nothing_when_the_app_does_not_stop(tmp_path: Pat
     assert completed.returncode != 0
     assert "stopped before changing the installation" in completed.stderr
     assert update_backups(fixture) == []
+    # Read-only role preflight runs before stopping; no snapshot or restart follows
+    # a failed stop, even though the earlier checks used docker exec.
+    assert any('pg_dumpall --roles-only' in call for call in logged_calls(fixture))
     assert not [
-        call for call in logged_calls(fixture) if call.startswith(("docker exec", "docker up"))
+        call for call in logged_calls(fixture)
+        if call.startswith("docker up") or "pg_dump " in call or "pg_restore " in call
     ]
     assert git_output(checkout, "rev-parse", "HEAD") == fixture["old_commit"]
 
@@ -982,9 +1018,9 @@ def test_docker_updater_changes_nothing_when_a_file_archive_fails(tmp_path: Path
         unreadable.chmod(0o600)
 
     assert completed.returncode != 0
-    assert "stopped before changing the installation" in completed.stderr
-    [backup] = update_backups(fixture)
-    assert not (backup / "manifest.txt").exists()
+    assert "before shutdown" in completed.stderr
+    assert update_backups(fixture) == []
+    assert not any('stop app' in call for call in logged_calls(fixture))
     assert not [call for call in logged_calls(fixture) if call.startswith("docker up")]
     assert git_output(checkout, "rev-parse", "HEAD") == fixture["old_commit"]
 
@@ -999,10 +1035,9 @@ def test_docker_updater_keeps_the_checkout_when_the_fast_forward_fails(tmp_path:
     completed = run_update(fixture, "--yes")
 
     assert completed.returncode != 0
-    [backup] = update_backups(fixture)
-    assert f"the backup in {backup} is complete" in completed.stderr
-    assert (backup / "manifest.txt").is_file()
-    assert not [call for call in logged_calls(fixture) if call.startswith("docker up")]
+    assert "Recovery checkout preflight refused" in completed.stderr
+    assert update_backups(fixture) == []
+    assert not [call for call in logged_calls(fixture) if call.startswith(("docker up", "docker stop"))]
     assert git_output(checkout, "rev-parse", "HEAD") == fixture["old_commit"]
     assert (checkout / "app/RELEASE_NOTES.txt").read_text(encoding="utf-8") == "operator copy\n"
 
@@ -1071,15 +1106,18 @@ def test_native_updater_applies_the_release_for_each_profile(
     assert isinstance(checkout, Path)
 
     completed = run_update(fixture, "--yes")
+    if profile == "development":
+        assert completed.returncode != 0
+        assert "Recovery native source build refused" in completed.stderr
+        assert update_backups(fixture) == []
+        assert git_output(checkout, "rev-parse", "HEAD") == fixture["old_commit"]
+        assert "go build" not in logged_calls(fixture)
+        return
 
     assert completed.returncode == 0, completed.stderr
     calls = logged_calls(fixture)
-    if profile == "admin":
-        stop_call = "run_filterest_admin.sh stop"
-        start_call = "run_filterest_admin.sh start"
-    else:
-        stop_call = "ctl --stop"
-        start_call = "ctl -p 58120"
+    stop_call = "run_filterest_admin.sh stop"
+    start_call = "run_filterest_admin.sh start"
     assert_calls_in_order(
         calls,
         [
@@ -1093,8 +1131,9 @@ def test_native_updater_applies_the_release_for_each_profile(
     )
     assert not [call for call in calls if call.startswith("docker")]
     # The backup keeps the restricted roles' grants: a restore needs them.
-    [dump_call] = [call.split() for call in calls if call.startswith("pg_dump")]
-    assert {"--format=custom", "--no-owner"} <= set(dump_call)
+    [dump_call] = [call.split() for call in calls if call.startswith("pg_dump ")]
+    assert "--format=custom" in dump_call
+    assert "--no-owner" not in dump_call
     assert "--no-privileges" not in dump_call
     assert git_output(checkout, "rev-parse", "HEAD") == fixture["target_commit"]
     assert (checkout / "data/runtime/filterest-setup-complete").read_text(
@@ -1102,13 +1141,14 @@ def test_native_updater_applies_the_release_for_each_profile(
     ) == f"profile={profile}\napp_version=8.51.0\ndb_version=9.0.0\n"
     [backup] = update_backups(fixture)
     assert (backup / "database.dump").read_text(encoding="utf-8") == "native dump"
-    assert sorted(path.name for path in backup.iterdir()) == [
-        "database.dump",
-        "manifest.txt",
-        "storage.tar.gz",
-    ]
+    assert {path.name for path in backup.iterdir() if not path.name.startswith("database-tool-")} == {
+        "database.dump", "database.roles.sql", "database.sha256", "database.backup.json", "database.properties.json",
+        "database.settings.tar.gz", "installation_settings.tar.gz", "manifest.txt", "storage.tar.gz", "update.backup.json",
+    }
+    assert all(stat.S_IMODE(path.stat().st_mode) == 0o600 for path in backup.iterdir())
     manifest = (backup / "manifest.txt").read_text(encoding="utf-8")
-    assert "profile=" not in manifest
+    assert f"profile={profile}\n" in manifest
+    assert f"source_commit={fixture['old_commit']}\n" in manifest
     assert "native-test-secret" not in completed.stdout + completed.stderr
 
 
@@ -1130,8 +1170,8 @@ def test_lifecycle_scripts_use_source_and_install_roots_by_responsibility() -> N
     assert 'RUNTIME_ROOT="$INSTALLATION_ROOT/data/runtime"' in admin_runner
     assert 'TLS_CERT_FILE="${TLS_CERT_FILE:-$EASELECT_TLS_CERT_FILE}"' in admin_runner
     assert 'BACKUP_ROOT="$INSTALLATION_ROOT/backups"' in updater
-    assert '"$backup_dir/bootstrap.tar.gz" bootstrap' in updater
-    assert '"$INSTALLATION_ROOT/data/storage"' in updater
+    assert 'database_recovery_update.py" archive' in updater
+    assert 'database_recovery_update.py" seal' in updater
     assert 'git -C "$INSTALLATION_ROOT" merge --ff-only "$TARGET_COMMIT"' in updater
     assert '${TARGET_COMMIT}:${GIT_SOURCE_PREFIX}go.mod' in updater
     assert 'NODE_DEPENDENCY_ROOT="$RUNTIME_ROOT/node"' in setup

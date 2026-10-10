@@ -7,11 +7,17 @@ Refuse ambiguous inspection before Compose can replace another installation's st
 
 from __future__ import annotations
 
-import argparse
 import ipaddress
 import json
 from pathlib import Path
 import sys
+
+if __package__:
+    from .database_recovery_cli import RecoveryArgumentParser
+    from .database_recovery_packet_io import prime_diagnostic_key, print_diagnostic
+else:
+    from database_recovery_cli import RecoveryArgumentParser
+    from database_recovery_packet_io import prime_diagnostic_key, print_diagnostic
 
 # Explicit IPv4 special-use blocks avoid Python-version-dependent is_private
 # classifications (which also classify documentation/benchmark ranges as private).
@@ -26,14 +32,20 @@ PRIVATE_NETWORKS = tuple(map(ipaddress.IPv4Network, (
 
 
 def pinned_network(subnet: str, gateway: str) -> tuple[ipaddress.IPv4Network, ipaddress.IPv4Address]:
-    network = ipaddress.IPv4Network(subnet, strict=True)
+    try:
+        network = ipaddress.IPv4Network(subnet, strict=True)
+    except ValueError:
+        raise ValueError("FILTEREST_NETWORK_SUBNET must use canonical IPv4 CIDR notation") from None
     if network.prefixlen > 29:
         raise ValueError("FILTEREST_NETWORK_SUBNET must leave addresses for the gateway and both containers (at least /29)")
     if str(network) != subnet:
         raise ValueError("FILTEREST_NETWORK_SUBNET must use canonical IPv4 CIDR notation")
     if any(network.overlaps(reserved) for reserved in RESERVED_NETWORKS):
         raise ValueError("FILTEREST_NETWORK_SUBNET overlaps a reserved/special-use IPv4 range")
-    address = ipaddress.IPv4Address(gateway) if gateway else network.network_address + 1
+    try:
+        address = ipaddress.IPv4Address(gateway) if gateway else network.network_address + 1
+    except ValueError:
+        raise ValueError("FILTEREST_NETWORK_GATEWAY must be a usable IPv4 address inside FILTEREST_NETWORK_SUBNET") from None
     if address not in network or address in (network.network_address, network.broadcast_address):
         raise ValueError("FILTEREST_NETWORK_GATEWAY must be a usable address inside FILTEREST_NETWORK_SUBNET")
     return network, address
@@ -67,9 +79,9 @@ def check_project_ownership(project: str, working_directory: str,
         if directory is None and not container:
             continue
         if not isinstance(directory, str) or not directory or not Path(directory).is_absolute():
-            raise ValueError(f"Compose project {project!r} has no usable working-directory label; cannot verify folder ownership")
+            raise ValueError(f"Compose project {project} has no usable working-directory label; cannot verify folder ownership")
         if Path(directory).resolve() != Path(working_directory).resolve():
-            raise ValueError(f"Compose project {project!r} belongs to a different installation folder ({directory}); "
+            raise ValueError(f"Compose project {project} belongs to a different installation folder ({directory}); "
                              "if this installation moved, run ./filterest docker stop in that folder first, "
                              "otherwise choose a different project name")
     for item in containers:
@@ -102,12 +114,15 @@ def check_collisions(network: ipaddress.IPv4Network | None, gateway: ipaddress.I
             subnet = configuration.get("Subnet")
             if not subnet:
                 continue
-            existing = ipaddress.ip_network(subnet, strict=True)
+            try:
+                existing = ipaddress.ip_network(subnet, strict=True)
+            except ValueError:
+                raise ValueError("Docker network inventory contains an invalid network") from None
             if existing.version != 4:
                 continue
             ipv4_configurations.append(configuration)
             if network and existing.overlaps(network) and not own_network:
-                raise ValueError(f"Pinned subnet {network} overlaps Docker network {item.get('Name')!r} ({existing})")
+                raise ValueError(f"Pinned subnet {network} overlaps Docker network {item.get('Name')} ({existing})")
         if network and own_network and (len(ipv4_configurations) != 1
                                        or ipv4_configurations[0].get("Subnet") != str(network)
                                        or ipv4_configurations[0].get("Gateway") != str(gateway)):
@@ -115,7 +130,8 @@ def check_collisions(network: ipaddress.IPv4Network | None, gateway: ipaddress.I
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description=__doc__)
+    parser = RecoveryArgumentParser(description=__doc__)
+    parser.add_argument("--recovery-root", default="", help="installation key location for safe diagnostics")
     parser.add_argument("--subnet", default="")
     parser.add_argument("--gateway", default="")
     parser.add_argument("--project", default="")
@@ -126,6 +142,8 @@ def main() -> int:
     parser.add_argument("--containers", type=Path)
     parser.add_argument("--expected-containers", type=int, default=0)
     arguments = parser.parse_args()
+    if arguments.recovery_root:
+        prime_diagnostic_key(arguments.recovery_root)
     try:
         network, gateway = pinned_network(arguments.subnet, arguments.gateway) if arguments.subnet else (None, None)
         if arguments.networks:
@@ -134,9 +152,10 @@ def main() -> int:
             check_project_ownership(arguments.project, arguments.working_directory, networks, containers)
             check_collisions(network, gateway, arguments.project, networks, arguments.previous_selection)
         elif network and not any(network.subnet_of(private) for private in PRIVATE_NETWORKS):
-            print("warning: Pinned Docker subnet is outside private RFC 1918 ranges; it can shadow public routes.", file=sys.stderr)
+            print_diagnostic("warning: Pinned Docker subnet is outside private RFC 1918 ranges; it can shadow public routes.", file=sys.stderr)
     except (OSError, ValueError, KeyError, TypeError, AttributeError) as error:
-        print(f"error: Invalid or conflicting Docker project/network: {error}", file=sys.stderr)
+        detail = f"{error.filename}: recovery inventory could not be read" if isinstance(error, OSError) else str(error)
+        print_diagnostic(f"error: Invalid or conflicting Docker project/network: {detail}", file=sys.stderr)
         return 1
     print(gateway or "")
     return 0

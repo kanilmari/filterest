@@ -6,8 +6,47 @@
 
 set -euo pipefail
 
-CANONICAL_FILTEREST_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
+# Decide before any startup helper; inherited declarations cannot bypass recovery.
+FILTEREST_RECOVERY_OUTPUT=0
+case "${1:-}" in
+    update|restore-database|verify-update-backup|extract-update-backup) FILTEREST_RECOVERY_OUTPUT=1 ;;
+    docker)
+        case "${2:-}" in
+            profile|update-preflight|app-image-id|stop-app|dump-database|restore-database|ready-check)
+                FILTEREST_RECOVERY_OUTPUT=1 ;;
+            start)
+                for argument in "$@"; do
+                    case "$argument" in --for-update|--backup|--restore|--restore-db) FILTEREST_RECOVERY_OUTPUT=1 ;; esac
+                done
+                ;;
+        esac
+        ;;
+    start|ctl)
+        for argument in "$@"; do
+            case "$argument" in --backup|--restore|--restore-db|backup-all) FILTEREST_RECOVERY_OUTPUT=1 ;; esac
+        done
+        ;;
+esac
+export FILTEREST_RECOVERY_OUTPUT
+# A sourced settings/helper file cannot turn off an active recovery boundary.
+if [[ "$FILTEREST_RECOVERY_OUTPUT" -eq 1 ]]; then readonly FILTEREST_RECOVERY_OUTPUT; fi
+if [[ "$FILTEREST_RECOVERY_OUTPUT" -eq 1 ]]; then
+    SCRIPT_SOURCE_DIRECTORY="$(dirname -- "${BASH_SOURCE[0]}" 2>/dev/null)" || { printf 'Recovery launcher location unavailable; sensitive details withheld.\n' >&2; exit 1; }
+    CANONICAL_FILTEREST_ROOT="$(cd -- "$SCRIPT_SOURCE_DIRECTORY" 2>/dev/null && pwd -P 2>/dev/null)" 2>/dev/null || { printf 'Recovery launcher location unavailable; sensitive details withheld.\n' >&2; exit 1; }
+else
+    CANONICAL_FILTEREST_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
+fi
+# Capture implicit shell/interpreter diagnostics as well as explicit output.
+if [[ "$FILTEREST_RECOVERY_OUTPUT" -eq 1 && "${BASH_SOURCE[0]}" == "$0" ]]; then
+    source "$CANONICAL_FILTEREST_ROOT/server_tools/lib/recovery_process_boundary.sh" >/dev/null 2>&1 || { printf 'Recovery process boundary unavailable; sensitive details withheld.\n' >&2; exit 1; }
+    filterest_recovery_process_entry "${BASH_SOURCE[0]}" "$CANONICAL_FILTEREST_ROOT" "$@"
+fi
+
 PROJECT_ROOT="${FILTEREST_PROJECT_ROOT_OVERRIDE:-$CANONICAL_FILTEREST_ROOT}"
+if [[ "$FILTEREST_RECOVERY_OUTPUT" -eq 1 ]]; then
+    source "$CANONICAL_FILTEREST_ROOT/server_tools/lib/installation_records.sh" 2>/dev/null || { printf 'Recovery diagnostic library unavailable; sensitive details withheld.\n' >&2; exit 1; }
+    PROJECT_ROOT="$(filterest_recovery_installation_root "$CANONICAL_FILTEREST_ROOT")" || exit 1
+fi
 # Docker cannot inspect the host checkout. Supply only its current branch, never
 # an inherited declaration; detached releases and Gitless copies stay neutral.
 export FILTEREST_UPDATE_CHECKOUT_BRANCH="$(git -C "$PROJECT_ROOT" symbolic-ref --quiet --short HEAD 2>/dev/null || true)"
@@ -16,23 +55,40 @@ RUNTIME_ROOT="$PROJECT_ROOT/runtime"
 if [[ -n "${FILTEREST_ROOT:-}" ]]; then
     RUNTIME_ROOT="$FILTEREST_ROOT/data/runtime"
 fi
-# shellcheck source=server_tools/lib/python_bytecode_cache.sh
-source "$CANONICAL_FILTEREST_ROOT/server_tools/lib/python_bytecode_cache.sh"
-filterest_configure_python_bytecode_cache "$CANONICAL_FILTEREST_ROOT"
+if [[ "$FILTEREST_RECOVERY_OUTPUT" -eq 1 ]]; then
+    # Load the scan before environment/cache helpers can diagnose operator values.
+    # shellcheck source=server_tools/lib/python_bytecode_cache.sh
+    filterest_recovery_source "$PROJECT_ROOT" "$CANONICAL_FILTEREST_ROOT/server_tools/lib/python_bytecode_cache.sh"
+    filterest_recovery_utility "$PROJECT_ROOT" filterest_configure_python_bytecode_cache "$CANONICAL_FILTEREST_ROOT"
 
-# Development commands use the same interpreter that setup populated. Merely
-# naming the venv does not activate it; an unrelated shell Python must not win.
-# Admin-only installs retain their host Python and distro-provided dependencies.
-# shellcheck source=server_tools/lib/project_python_venv.sh
-source "$CANONICAL_FILTEREST_ROOT/server_tools/lib/project_python_venv.sh"
-# shellcheck source=server_tools/lib/installation_records.sh
-source "$CANONICAL_FILTEREST_ROOT/server_tools/lib/installation_records.sh"
+    # Development commands use the same interpreter that setup populated. Merely
+    # naming the venv does not activate it; an unrelated shell Python must not win.
+    # Admin-only installs retain their host Python and distro-provided dependencies.
+    # shellcheck source=server_tools/lib/project_python_venv.sh
+    filterest_recovery_source "$PROJECT_ROOT" "$CANONICAL_FILTEREST_ROOT/server_tools/lib/project_python_venv.sh"
+else
+    # shellcheck source=server_tools/lib/python_bytecode_cache.sh
+    source "$CANONICAL_FILTEREST_ROOT/server_tools/lib/python_bytecode_cache.sh"
+    filterest_configure_python_bytecode_cache "$CANONICAL_FILTEREST_ROOT"
+
+    # Development commands use the same interpreter that setup populated. Merely
+    # naming the venv does not activate it; an unrelated shell Python must not win.
+    # Admin-only installs retain their host Python and distro-provided dependencies.
+    # shellcheck source=server_tools/lib/project_python_venv.sh
+    source "$CANONICAL_FILTEREST_ROOT/server_tools/lib/project_python_venv.sh"
+    # shellcheck source=server_tools/lib/installation_records.sh
+    source "$CANONICAL_FILTEREST_ROOT/server_tools/lib/installation_records.sh"
+fi
 FILTEREST_COMMAND_PYTHON=python3
 if [[ -x "$FILTEREST_PROJECT_PYTHON" ]]; then
     FILTEREST_COMMAND_PYTHON="$FILTEREST_PROJECT_PYTHON"
 fi
 
-cd "$CANONICAL_FILTEREST_ROOT"
+if [[ "$FILTEREST_RECOVERY_OUTPUT" -eq 1 ]]; then
+    cd -- "$CANONICAL_FILTEREST_ROOT" 2>/dev/null || { filterest_recovery_diagnostic "$PROJECT_ROOT" 'Could not enter recovery application: %s\n' "$CANONICAL_FILTEREST_ROOT" >&2; exit 1; }
+else
+    cd "$CANONICAL_FILTEREST_ROOT"
+fi
 
 usage() {
     cat <<'USAGE'
@@ -80,17 +136,16 @@ USAGE
 }
 
 resolve_environment() {
-	if [[ -f "$CANONICAL_FILTEREST_ROOT/server_tools/ctl/lib/resolve_env.sh" ]]; then
-		# shellcheck source=server_tools/ctl/lib/resolve_env.sh
-		source "$CANONICAL_FILTEREST_ROOT/server_tools/ctl/lib/resolve_env.sh"
-		return
+    if [[ -f "$CANONICAL_FILTEREST_ROOT/server_tools/ctl/lib/resolve_env.sh" ]]; then
+        # Keep assignments in this shell; recovery source diagnostics use stderr.
+        filterest_recovery_source "$PROJECT_ROOT" "$CANONICAL_FILTEREST_ROOT/server_tools/ctl/lib/resolve_env.sh"
+        return
     fi
 
     # A portable canonical source folder does not need the private Easelect ctl
     # tree merely to discover its installed profile or protected env files.
-	# shellcheck source=server_tools/lib/easelect_private_paths.sh
-	source "$CANONICAL_FILTEREST_ROOT/server_tools/lib/easelect_private_paths.sh"
-	easelect_resolve_private_paths "$PROJECT_ROOT"
+    filterest_recovery_source "$PROJECT_ROOT" "$CANONICAL_FILTEREST_ROOT/server_tools/lib/easelect_private_paths.sh"
+    filterest_recovery_utility "$PROJECT_ROOT" easelect_resolve_private_paths "$PROJECT_ROOT"
 }
 
 # Prints the install profile this folder records: "docker" from keys/docker.env,
@@ -102,17 +157,26 @@ installed_profile() {
     local candidate_file=""
     local profile=""
     local docker_profile=""
-    local record=""
+    local record="" records=""
     local native_records=()
 
     resolve_environment || return
     docker_profile="$(filterest_docker_install_profile \
         "$CANONICAL_FILTEREST_ROOT/server_tools/run_filterest_docker.sh" "$PROJECT_ROOT")" || return
     if [[ "$docker_profile" == "docker" ]]; then
-        while IFS= read -r record; do
-            native_records+=("$record")
-        done < <(filterest_native_setup_records "$RUNTIME_ROOT/filterest-setup-complete" \
-            "${EASELECT_DEV_ENV_FILE:-}" "${EASELECT_RUNTIME_ENV_FILE:-}")
+        if [[ "$FILTEREST_RECOVERY_OUTPUT" -eq 1 ]]; then
+            records="$(filterest_native_setup_records "$RUNTIME_ROOT/filterest-setup-complete" \
+                "${EASELECT_DEV_ENV_FILE:-}" "${EASELECT_RUNTIME_ENV_FILE:-}")" || return
+            while IFS= read -r record; do
+                [[ -n "$record" ]] || continue
+                native_records+=("$record")
+            done <<< "$records"
+        else
+            while IFS= read -r record; do
+                native_records+=("$record")
+            done < <(filterest_native_setup_records "$RUNTIME_ROOT/filterest-setup-complete" \
+                "${EASELECT_DEV_ENV_FILE:-}" "${EASELECT_RUNTIME_ENV_FILE:-}")
+        fi
         filterest_refuse_mixed_installation "$docker_profile" \
             ${native_records[@]+"${native_records[@]}"} || return
         printf 'docker'
@@ -205,9 +269,9 @@ run_setup_before_first_start() {
     printf 'Welcome to Filterest!\n'
     printf "Let's complete the guided setup, then start the application.\n\n"
     if [[ -n "$profile" ]]; then
-		exec "$CANONICAL_FILTEREST_ROOT/server_tools/install_filterest.sh" --profile "$profile"
+		filterest_dispatch_child "$CANONICAL_FILTEREST_ROOT/server_tools/install_filterest.sh" --profile "$profile"
 	fi
-	exec "$CANONICAL_FILTEREST_ROOT/server_tools/install_filterest.sh"
+	filterest_dispatch_child "$CANONICAL_FILTEREST_ROOT/server_tools/install_filterest.sh"
 }
 
 # Checks the development profile's configured application port before ctl can
@@ -217,10 +281,10 @@ preflight_development_start_port() {
     local default_port=""
     resolve_environment
     # shellcheck source=server_tools/lib/filterest_port_preflight.sh
-	source "$CANONICAL_FILTEREST_ROOT/server_tools/lib/filterest_port_preflight.sh"
-    default_port="$(filterest_native_default_port "$PROJECT_ROOT")"
-    port="$(filterest_configured_port "$default_port" "$EASELECT_DEV_ENV_FILE" "$EASELECT_RUNTIME_ENV_FILE")"
-    filterest_preflight_port "$port"
+	filterest_recovery_source "$PROJECT_ROOT" "$CANONICAL_FILTEREST_ROOT/server_tools/lib/filterest_port_preflight.sh"
+    default_port="$(filterest_recovery_utility "$PROJECT_ROOT" filterest_native_default_port "$PROJECT_ROOT")"
+    port="$(filterest_recovery_utility "$PROJECT_ROOT" filterest_configured_port "$default_port" "$EASELECT_DEV_ENV_FILE" "$EASELECT_RUNTIME_ENV_FILE")"
+    filterest_recovery_utility "$PROJECT_ROOT" filterest_preflight_port "$port"
 }
 
 # Distinguishes application startup from compatibility actions such as --stop or --help.
@@ -230,12 +294,32 @@ start_action_was_requested() {
     [[ "$#" -eq 0 || "${1:-}" == "start" ]]
 }
 
+# Direct app/ invocation owns child-startup errors too. Keep the shell until
+# scanned stderr is drained; ordinary dispatch retains its original exec path.
+filterest_dispatch_child() {
+    if [[ "$FILTEREST_RECOVERY_OUTPUT" -eq 1 ]]; then
+        if [[ "${FILTEREST_RECOVERY_PROMPT_FD:-}" != 8 ]] || ! { true >&8; } 2>/dev/null; then
+            # A root launcher's stderr may already be buffered. Only the fixed
+            # confirmation prompt uses its validated original destination.
+            if filterest_recovery_scan_matches 2; then
+                exec 8>&"$FILTEREST_RECOVERY_STDERR_DESTINATION"
+            else
+                exec 8>&2
+            fi
+            export FILTEREST_RECOVERY_PROMPT_FD=8
+        fi
+        filterest_recovery_scan "$PROJECT_ROOT" stderr filterest_recovery_child "$@"
+        exit $?
+    fi
+    exec "$@"
+}
+
 command_name="${1:-help}"
 [[ "$#" -eq 0 ]] || shift
 
 case "$command_name" in
     docker)
-        exec "$CANONICAL_FILTEREST_ROOT/server_tools/run_filterest_docker.sh" "$@"
+        filterest_dispatch_child "$CANONICAL_FILTEREST_ROOT/server_tools/run_filterest_docker.sh" "$@"
         ;;
     setup)
         profile="$(installed_profile)"
@@ -248,7 +332,34 @@ case "$command_name" in
         exec "$CANONICAL_FILTEREST_ROOT/server_tools/install_filterest.sh" "$@"
         ;;
     update)
-        exec "$CANONICAL_FILTEREST_ROOT/server_tools/update_filterest.sh" "$@"
+        filterest_dispatch_child "$CANONICAL_FILTEREST_ROOT/server_tools/update_filterest.sh" "$@"
+        ;;
+    restore-database)
+        profile="$(installed_profile)"
+        if [[ "$profile" == "docker" ]]; then
+            filterest_dispatch_child "$CANONICAL_FILTEREST_ROOT/server_tools/run_filterest_docker.sh" restore-database "$@"
+        fi
+        resolve_environment
+        filterest_recovery_python "$PROJECT_ROOT" "$FILTEREST_COMMAND_PYTHON" "$CANONICAL_FILTEREST_ROOT/server_tools/lib/database_recovery.py" restore \
+            --root "$PROJECT_ROOT" --profile native \
+            --settings "$EASELECT_DEV_ENV_FILE" --settings "$EASELECT_RUNTIME_ENV_FILE" "$@"
+        ;;
+    verify-update-backup|extract-update-backup)
+        # Read-only verification must not create Python caches or call Docker.
+        export PYTHONDONTWRITEBYTECODE=1
+        profile="$(installed_profile)"
+        action=verify
+        [[ "$command_name" != extract-update-backup ]] || action=extract
+        cd -- "$PROJECT_ROOT" 2>/dev/null || { filterest_recovery_diagnostic "$PROJECT_ROOT" 'Could not enter recovery installation: %s\n' "$PROJECT_ROOT" >&2; exit 1; }
+        if [[ "$profile" == docker ]]; then
+            filterest_recovery_python "$PROJECT_ROOT" "$FILTEREST_COMMAND_PYTHON" "$CANONICAL_FILTEREST_ROOT/server_tools/lib/database_recovery_update.py" "$action" \
+                --root "$PROJECT_ROOT" --profile docker "$@"
+            exit $?
+        fi
+        resolve_environment
+        filterest_recovery_python "$PROJECT_ROOT" "$FILTEREST_COMMAND_PYTHON" "$CANONICAL_FILTEREST_ROOT/server_tools/lib/database_recovery_update.py" "$action" \
+            --root "$PROJECT_ROOT" --profile native \
+            --settings "$EASELECT_DEV_ENV_FILE" --settings "$EASELECT_RUNTIME_ENV_FILE" "$@"
         ;;
     start|ctl)
         profile="$(installed_profile)"
@@ -257,7 +368,7 @@ case "$command_name" in
                 printf 'error: this installation runs in Docker; stop it with ./filterest docker stop\n' >&2
                 exit 2
             fi
-            exec "$CANONICAL_FILTEREST_ROOT/server_tools/run_filterest_docker.sh" start "$@"
+            filterest_dispatch_child "$CANONICAL_FILTEREST_ROOT/server_tools/run_filterest_docker.sh" start "$@"
         fi
         if start_action_was_requested "$@" && filterest_setup_is_required "$profile"; then
             run_setup_before_first_start "$profile"
@@ -266,12 +377,12 @@ case "$command_name" in
             enable_local_public_schema_repairs
         fi
         if [[ "$profile" == "admin" ]]; then
-			exec "$CANONICAL_FILTEREST_ROOT/server_tools/run_filterest_admin.sh" "$@"
+			filterest_dispatch_child "$CANONICAL_FILTEREST_ROOT/server_tools/run_filterest_admin.sh" "$@"
         fi
         if start_action_was_requested "$@"; then
             preflight_development_start_port
         fi
-		exec "$CANONICAL_FILTEREST_ROOT/ctl" "$@"
+		filterest_dispatch_child "$CANONICAL_FILTEREST_ROOT/ctl" "$@"
         ;;
     status)
         profile="$(installed_profile)"
@@ -421,7 +532,7 @@ case "$command_name" in
         usage
         ;;
     *)
-        printf 'error: unknown Filterest command: %s\n\n' "$command_name" >&2
+        filterest_recovery_diagnostic "$PROJECT_ROOT" 'error: unknown Filterest command: %s\n\n' "$command_name" >&2
         usage >&2
         exit 2
         ;;

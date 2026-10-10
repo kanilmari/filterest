@@ -482,6 +482,24 @@ def audit_path_boundaries(homes: FilterestHomes) -> None:
         )
 
 
+def _check_recovery_boundary(output: Path, content: str) -> None:
+    """Retained build/Git boundary text uses the packet scanner during recovery."""
+    root = os.environ.get("FILTEREST_RECOVERY_CONTENT_ROOT")
+    if not root:
+        return
+    if __package__:
+        from .database_recovery_packet_io import prime_diagnostic_key, _diagnostic_key
+        from .recovery_key_safety import KeyScanner, reject_key_name
+    else:
+        from database_recovery_packet_io import prime_diagnostic_key, _diagnostic_key
+        from recovery_key_safety import KeyScanner, reject_key_name
+    prime_diagnostic_key(root)
+    key = _diagnostic_key.get()
+    for path in (output, output.absolute(), output.resolve()):
+        reject_key_name(path, key)
+    KeyScanner(key).check(content.encode("utf-8"))
+
+
 def render_dockerignore_files(homes: FilterestHomes) -> list[Path]:
     base_path = homes.project_root / ".dockerignore"
     base_text = base_path.read_text(encoding="utf-8") if base_path.is_file() else ""
@@ -500,6 +518,7 @@ def render_dockerignore_files(homes: FilterestHomes) -> list[Path]:
         if not dockerfile.is_file() or dockerfile.name.endswith(".dockerignore"):
             continue
         output = dockerfile.with_name(f"{dockerfile.name}.dockerignore")
+        _check_recovery_boundary(output, rendered)
         output.write_text(rendered, encoding="utf-8")
         outputs.append(output)
     return outputs
@@ -532,6 +551,7 @@ def render_git_exclude(homes: FilterestHomes) -> Path | None:
         dynamic_lines.extend((f"/{relative}", f"/{relative}/**"))
     dynamic_lines.append(GIT_EXCLUDE_END)
     rendered = "\n".join(filter(None, (retained, "\n".join(dynamic_lines)))) + "\n"
+    _check_recovery_boundary(exclude_path, rendered)
     try:
         exclude_path.parent.mkdir(parents=True, exist_ok=True)
         exclude_path.write_text(rendered, encoding="utf-8")

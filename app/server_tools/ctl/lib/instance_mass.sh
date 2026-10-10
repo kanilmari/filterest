@@ -337,7 +337,11 @@ status_all_instances() {
 # Creates pg_dump backups for all running instances
 # ------------------------------------------------------------------------------
 backup_all_instances() {
-    echo -e "${BLUE}💾 Backing up all instances...${NC}"
+    filterest_recovery_scan "${PROJECT_ROOT:-.}" stderr _backup_all_instances "$@"
+}
+
+_backup_all_instances() {
+    echo -e "💾 Backing up all instances..."
     echo ""
     
     local success_count=0
@@ -346,56 +350,60 @@ backup_all_instances() {
     local backups=()
     
     for dir in instances/*/; do
-        if [[ -d "$dir" ]] && [[ "$(basename "$dir")" != "template" ]]; then
-            local name=$(basename "$dir")
+        if [[ -d "$dir" ]] && [[ "${dir%/}" != "instances/template" ]]; then
+            local name="${dir%/}"
+            name="${name##*/}"
             local env_file="${dir}.env"
             
             if [[ ! -f "$env_file" ]]; then
-                echo -e "${YELLOW}⚠️  Skipping '${name}' (no .env file)${NC}"
+                filterest_recovery_diagnostic "${PROJECT_ROOT:-.}" "⚠️  Skipping '%s' (no .env file)\n" "$name"
                 ((skip_count++)) || true
                 continue
             fi
             
             # Check if DB is running
             if ! docker ps --format '{{.Names}}' 2>/dev/null | grep -q "easelect-${name}-db"; then
-                echo -e "${YELLOW}⚠️  Skipping '${name}' (database not running)${NC}"
+                filterest_recovery_diagnostic "${PROJECT_ROOT:-.}" "⚠️  Skipping '%s' (database not running)\n" "$name"
                 ((skip_count++)) || true
                 continue
             fi
             
-            source "$env_file"
+            filterest_recovery_source "${PROJECT_ROOT:-.}" "$env_file" || return
             
             local backup_dir="instances/${name}/backups"
             local timestamp=$(date +%Y%m%d_%H%M%S)
             local backup_file="${backup_dir}/backup_${timestamp}.sql.gz"
+
+            filterest_recovery_content_names "${PROJECT_ROOT:-.}" "$backup_dir" "$backup_file" || return 1
             
-            mkdir -p "$backup_dir"
+            (umask 077; filterest_recovery_output "${PROJECT_ROOT:-.}" mkdir -p -- "$backup_dir") || return
             
-            echo -n "   Backing up '${name}'... "
+            filterest_recovery_diagnostic "${PROJECT_ROOT:-.}" "   Backing up '%s'... " "$name"
             
             if write_instance_database_backup "$name" "$backup_file" "${DB_ADMIN_USER:-admin_user}" "${DB_NAME:-$(project_default_db_name)}" >/dev/null 2>&1; then
-                local size=$(du -h "$backup_file" | cut -f1)
-                echo -e "${GREEN}✅ ${size}${NC}"
+                local size
+                size="$(filterest_recovery_utility "${PROJECT_ROOT:-.}" du -h -- "$backup_file" | cut -f1)" || return
+                filterest_recovery_diagnostic "${PROJECT_ROOT:-.}" '✅ %s\n' "$size"
                 backups+=("${backup_file}")
                 ((success_count++)) || true
             else
-                echo -e "${RED}❌ failed${NC}"
-                rm -f "$backup_file"
+                echo -e "❌ failed"
                 ((fail_count++)) || true
             fi
         fi
     done
     
     echo ""
-    echo -e "${BLUE}════════════════════════════════════════════════════════════════${NC}"
-    echo -e "${GREEN}✅ Backup complete: ${success_count} succeeded, ${skip_count} skipped, ${fail_count} failed${NC}"
-    echo -e "${BLUE}════════════════════════════════════════════════════════════════${NC}"
+    echo -e "════════════════════════════════════════════════════════════════"
+    filterest_recovery_diagnostic "${PROJECT_ROOT:-.}" '✅ Backup complete: %s succeeded, %s skipped, %s failed\n' "$success_count" "$skip_count" "$fail_count"
+    echo -e "════════════════════════════════════════════════════════════════"
     
     if [[ ${#backups[@]} -gt 0 ]]; then
         echo ""
         echo "Backup files created:"
         for backup in "${backups[@]}"; do
-            echo "   ${backup}"
+            filterest_recovery_diagnostic "${PROJECT_ROOT:-.}" '   %s\n' "$backup"
         done
     fi
+    [[ "$fail_count" -eq 0 ]]
 }
