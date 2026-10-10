@@ -217,7 +217,13 @@ func datasetExists(name string) bool {
 }
 
 func guestCanReadDataset(name string, guestUserID int) bool {
-	rawName := resolveRawDatasetName(name)
+	return guestCanReadRawDataset(resolveRawDatasetName(name), guestUserID)
+}
+
+// guestCanReadRawDataset is guestCanReadDataset for a name that is already the raw table
+// name, such as one read from system_db_tables. The sitemap asks it about every dataset it
+// considers, so it skips the alias lookup that a visitor's address needs.
+func guestCanReadRawDataset(rawName string, guestUserID int) bool {
 	if rawName == "" || guestUserID <= 0 {
 		return false
 	}

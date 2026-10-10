@@ -546,35 +546,16 @@ func sitemapHandler(w http.ResponseWriter, r *http.Request) {
 		},
 	}
 
-	// Fetch all public dataset names
-	if backend.Db != nil {
-		rows, err := backend.Db.Query(`
-			SELECT t.table_name, t.updated
-			FROM system_db_tables t
-			WHERE t.schema_name = 'public' AND NOT t.ui_hidden
-			ORDER BY t.table_name
-		`)
-		if err != nil {
-			log.Printf("\033[31m[sitemapHandler] query error: %v\033[0m", err)
-		} else {
-			defer rows.Close()
-			for rows.Next() {
-				var name string
-				var updated sql.NullTime
-				if err := rows.Scan(&name, &updated); err != nil {
-					continue
-				}
-				entry := urlEntry{
-					Loc:        baseURL + "/" + resolvePublicDatasetName(name),
-					ChangeFreq: "weekly",
-					Priority:   "0.8",
-				}
-				if updated.Valid {
-					entry.LastMod = updated.Time.Format(time.RFC3339)
-				}
-				urls = append(urls, entry)
-			}
+	for _, dataset := range readSitemapDatasets() {
+		entry := urlEntry{
+			Loc:        baseURL + "/" + resolvePublicDatasetName(dataset.name),
+			ChangeFreq: "weekly",
+			Priority:   "0.8",
 		}
+		if dataset.updated.Valid {
+			entry.LastMod = dataset.updated.Time.Format(time.RFC3339)
+		}
+		urls = append(urls, entry)
 	}
 
 	smap := urlSet{
@@ -592,4 +573,63 @@ func sitemapHandler(w http.ResponseWriter, r *http.Request) {
 	if err := enc.Encode(smap); err != nil {
 		log.Printf("\033[31m[sitemapHandler] encode error: %v\033[0m", err)
 	}
+}
+
+// sitemapVisitorUserID is the identity a signed-out visitor browses as: on a site that can be
+// browsed without signing in, rootHandler gives a visitor's session the user id 1, the number
+// isGuestUserID recognises.
+const sitemapVisitorUserID = 1
+
+// sitemapDataset is one dataset whose address the sitemap announces.
+type sitemapDataset struct {
+	name    string
+	updated sql.NullTime
+}
+
+// readSitemapDatasets answers which datasets the sitemap announces: only those a signed-out
+// visitor can open. The sitemap is public and search engines follow it, so every name in it is
+// published. It once listed every dataset not hidden from the interface, which published the
+// names of datasets a visitor cannot read and sent search engines to the login page.
+// The rule is the one rootHandler applies when a visitor opens a dataset address: the dataset
+// is shown (not ui_hidden, and not a cloud management dataset this instance hides), and the
+// visitor identity holds the read right on it.
+func readSitemapDatasets() []sitemapDataset {
+	if backend.Db == nil {
+		return nil
+	}
+	rows, err := backend.Db.Query(`
+		SELECT t.table_name, t.updated
+		FROM system_db_tables t
+		WHERE t.schema_name = 'public' AND NOT t.ui_hidden
+		ORDER BY t.table_name
+	`)
+	if err != nil {
+		log.Printf("\033[31m[sitemapHandler] query error: %v\033[0m", err)
+		return nil
+	}
+	var shown []sitemapDataset
+	for rows.Next() {
+		var dataset sitemapDataset
+		if err := rows.Scan(&dataset.name, &dataset.updated); err != nil {
+			continue
+		}
+		shown = append(shown, dataset)
+	}
+	iterationErr := rows.Err()
+	// Closed before the read rights are checked, so the checks never wait for a second
+	// connection while this list still holds the first.
+	rows.Close()
+	if iterationErr != nil {
+		log.Printf("\033[31m[sitemapHandler] query error: %v\033[0m", iterationErr)
+		return nil
+	}
+
+	readable := make([]sitemapDataset, 0, len(shown))
+	for _, dataset := range shown {
+		if backend.ShouldExposeCloudManagementDatasetName(dataset.name) &&
+			guestCanReadRawDataset(dataset.name, sitemapVisitorUserID) {
+			readable = append(readable, dataset)
+		}
+	}
+	return readable
 }
