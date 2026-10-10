@@ -1,4 +1,8 @@
-"""Single-source Python test categorization shared by composed source trees."""
+"""python_category_support.py
+Assign Python ownership categories and installation/recovery execution tiers.
+Connect suite conftests, pytest selection and terminal collection summaries.
+Keep composed suites compatible while allowing short ordinary batch checks.
+"""
 
 from __future__ import annotations
 
@@ -7,11 +11,18 @@ from pathlib import Path
 
 import pytest
 
+from python_test_tiers import tier_for_path
+
 
 CATEGORY_MARKERS = {
     "release-artifact": "python_release_artifact",
     "agent-workflow": "python_agent_workflow",
     "platform-tooling": "python_platform_tooling",
+}
+
+TIER_MARKERS = {
+    "ordinary": "python_ordinary",
+    "heavy-installation": "python_heavy_installation",
 }
 
 RELEASE_ARTIFACT_TOKENS = (
@@ -35,20 +46,22 @@ def register_category_option(parser: pytest.Parser) -> None:
 
     try:
         parser.addoption(
+            "--category",
             "--python-category",
+            dest="python_category",
             action="store",
-            choices=tuple(CATEGORY_MARKERS),
-            help="Run one Filterest Python category instead of the whole collection.",
+            choices=(*CATEGORY_MARKERS, *TIER_MARKERS),
+            help="Run one Filterest Python ownership category or execution tier.",
         )
     except ValueError as exc:
-        if "--python-category" not in str(exc):
+        if "--python-category" not in str(exc) and "--category" not in str(exc):
             raise
 
 
 def configure_categories(config: pytest.Config) -> None:
     if getattr(config, "_filterest_python_categories_configured", False):
         return
-    for category, marker in CATEGORY_MARKERS.items():
+    for category, marker in (CATEGORY_MARKERS | TIER_MARKERS).items():
         config.addinivalue_line(
             "markers",
             f"{marker}: automatically assigned Filterest Python category {category}",
@@ -81,8 +94,9 @@ def modify_category_items(
 ) -> None:
     """Classify only one suite so sibling conftests never double-process items."""
 
-    selected_category = config.getoption("--python-category", default=None)
+    selected_category = config.getoption("python_category", default=None)
     counts: Counter[str] = Counter()
+    tier_counts: Counter[str] = Counter()
     deselected: list[pytest.Item] = []
     selected: list[pytest.Item] = []
 
@@ -93,10 +107,14 @@ def modify_category_items(
             continue
 
         category = category_for_path(path)
+        tier = tier_for_path(path)
         counts[category] += 1
+        tier_counts[tier] += 1
         item.add_marker(getattr(pytest.mark, CATEGORY_MARKERS[category]))
+        item.add_marker(getattr(pytest.mark, TIER_MARKERS[tier]))
         item.user_properties.append(("python_category", category))
-        if selected_category and category != selected_category:
+        item.user_properties.append(("python_tier", tier))
+        if selected_category and selected_category not in (category, tier):
             deselected.append(item)
         else:
             selected.append(item)
@@ -112,6 +130,9 @@ def modify_category_items(
     )
     aggregate.update(counts)
     config._filterest_python_category_counts = aggregate  # type: ignore[attr-defined]
+    aggregate_tiers: Counter[str] = getattr(config, "_filterest_python_tier_counts", Counter())
+    aggregate_tiers.update(tier_counts)
+    config._filterest_python_tier_counts = aggregate_tiers  # type: ignore[attr-defined]
     config._filterest_python_selected_category = selected_category  # type: ignore[attr-defined]
 
 
@@ -134,3 +155,9 @@ def write_category_summary(
     for category in CATEGORY_MARKERS:
         suffix = " (selected)" if category == selected_category else ""
         terminalreporter.write_line(f"{category}: {counts[category]} collected{suffix}")
+
+    tier_counts: Counter[str] = getattr(config, "_filterest_python_tier_counts", Counter())
+    terminalreporter.section("Filterest Python test tiers")
+    for tier in TIER_MARKERS:
+        suffix = " (selected)" if tier == selected_category else ""
+        terminalreporter.write_line(f"{tier}: {tier_counts[tier]} collected{suffix}")

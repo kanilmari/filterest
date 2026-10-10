@@ -110,7 +110,7 @@ Do not create component-local environments without an actual isolation need.
 (cd app && go build ./...)                # Go compilation only
 ./filterest test-unit                     # Frontend unit tests
 (cd app && go test ./backend/... -count=1)
-data/runtime/python/venv/bin/python -m pytest app/testing/python
+data/runtime/python/venv/bin/python -m pytest app/testing/python --category ordinary
 ```
 
 Standalone native defaults are `https://localhost:8100` and Vite/HMR port `9100`.
@@ -516,7 +516,7 @@ app/ (`frontend/core_components/...`) or to the repository root
 (`app/frontend/...`), with or without a leading `--`. A target that matches no
 test file fails with "No test files found" rather than running the whole
 suite. The [Python test guide](../../testing/python/README.md)
-defines categories and isolation limits; use the declared shared environment.
+defines tiers, full/nightly checks and path selection; use the shared environment.
 
 [Playwright config](../../playwright.config.ts) and the
 [E2E guide](E2E_Testing_Guide.md) own the current matrix, credentials, storage

@@ -1,24 +1,90 @@
-# Python Test Categories
+<!-- README.md: Python suite execution and coverage policy. -->
+<!-- Connects the project interpreter, pytest categories and changed-path planning. -->
+<!-- Keeps ordinary batches small while retaining nightly lifecycle coverage. -->
+<!-- Classification reasons and path patterns live in python_test_tiers.py. -->
 
-`python -m pytest app/testing/python` collects automated tests only. The category
-summary printed at the end explains what those tests belong to:
+# Python Test Tiers and Categories
+
+Run these commands from the repository root with the project's Python
+environment. The two execution tiers partition every collected test:
+
+- `ordinary`: application features, feature-specific migrations and language
+  seeds, release assembly/publication, API helpers, agent workflows and remaining
+  platform tooling.
+- `heavy-installation`: installation, setup, update verification and execution,
+  rollback, backup, restore/recovery, public launchers, native/Docker lifecycle,
+  installation paths/dependencies and whole-bootstrap migration evidence.
+
+```bash
+data/runtime/python/venv/bin/python -m pytest app/testing/python --category ordinary
+data/runtime/python/venv/bin/python -m pytest app/testing/python --category heavy-installation
+data/runtime/python/venv/bin/python -m pytest app/testing/python
+```
+
+Ordinary publication batches run `ordinary`. Run `heavy-installation` once per
+night. Before every batch that changes installation or recovery areas, the
+supervisor runs the **full suite**, using the third command. No category option
+continues to mean the full suite; add `--collect-only -q` to each command to
+inspect its selected test IDs without executing tests. The ordinary and heavy
+sets are disjoint and their union is the full collection. Tests keep their
+existing assertions and PostgreSQL opt-ins in both tiers.
+
+The reviewed heavy-file list and each file's exercised behavior are defined in
+[`HEAVY_INSTALLATION_FILES`](python_test_tiers.py). Every other file is ordinary.
+Review new test files there by what they exercise: a login password recovery or
+article-state restore test remains ordinary, while a cold database restore or
+launcher interpreter-selection test needs the heavy tier. A feature migration
+test remains ordinary even when it imports a bootstrap fixture.
+
+For changed-path planning, use the side-effect-free selector:
+
+```bash
+data/runtime/python/venv/bin/python app/testing/python/python_test_tiers.py app/frontend/main.js
+# ordinary
+data/runtime/python/venv/bin/python app/testing/python/python_test_tiers.py app/server_tools/update_filterest.sh
+# heavy-installation
+```
+
+It prints one tier and exits successfully; `heavy-installation` means the batch
+needs the full pre-publication check above. Pass repository-relative changed
+paths, including deleted files and both paths of renames. It accepts `./` and
+Windows separators, normalizes internal `..`, and rejects absolute or escaping
+paths with exit status 2. No paths means an empty batch and prints `ordinary`.
+
+The single pattern list, [`HEAVY_PATH_PATTERNS`](python_test_tiers.py), covers
+installation/setup/update, backup/recovery, launchers, Docker/Compose,
+bootstrap, migration runners and contracts, and the tier tooling/fixtures.
+Shared lifecycle shell libraries are deliberately conservative triggers.
+Changing an ordinary file that supplies a heavy suite's cluster fixture also
+requires heavy coverage. Matchers use repository-relative, case-sensitive
+`fnmatch` globs, where `*` includes nested directories; they inspect names,
+not filesystem existence. Keep representative paths and classification
+boundaries covered by [selector tests](test_python_test_tiers.py).
+
+The existing ownership categories remain available alongside the tiers. The
+summary reports both ownership and tier counts **before category deselection**;
+the selected choice is labelled. `--python-category` is retained as an alias of
+`--category`, and either spelling accepts ownership categories or tiers.
+
+The ownership categories explain which product area owns the tests:
 
 - `release-artifact`: Filterest generation/publication, public bootstrap, and
   release-evidence contracts.
-- `agent-workflow`: an extension category for downstream maintainer suites; a
-  plain Filterest checkout may collect zero tests in this category.
+- `agent-workflow`: developer task and worker-agent tools; downstream maintainer
+  suites can use the same category support.
 - `platform-tooling`: the remaining local platform, migration,
   shell-compatibility, and validation helpers.
 
 Run one category with:
 
 ```bash
-python -m pytest app/testing/python --python-category release-artifact
-python -m pytest app/testing/python --python-category agent-workflow
-python -m pytest app/testing/python --python-category platform-tooling
+data/runtime/python/venv/bin/python -m pytest app/testing/python --category release-artifact
+data/runtime/python/venv/bin/python -m pytest app/testing/python --category agent-workflow
+data/runtime/python/venv/bin/python -m pytest app/testing/python --category platform-tooling
 ```
 
-These are ownership/reporting categories, not claims about process isolation.
+Ownership categories can include heavy tests; use `ordinary` for ordinary batch
+coverage. Neither categories nor tiers claim process isolation.
 Some automated tests use temporary subprocesses, Git repositories, or files,
 but the default collection does not start the real Filterest backend, frontend,
 or database. Opt-in PostgreSQL tests start disposable local clusters only.
