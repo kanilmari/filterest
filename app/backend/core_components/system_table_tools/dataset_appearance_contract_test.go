@@ -5,7 +5,6 @@
 package system_table_tools
 
 import (
-	"bytes"
 	"encoding/json"
 	"os"
 	"strings"
@@ -34,7 +33,7 @@ func TestSiteDatasetAppearanceSharedContract(t *testing.T) {
 	if err := json.Unmarshal(data, &contract); err != nil {
 		t.Fatal(err)
 	}
-	defaults, err := json.Marshal(defaultSitePresentationSettings().DatasetCoverTheme)
+	defaults, err := json.Marshal(appearance.DefaultConfig())
 	if err != nil || string(defaults) != contract.BaselineGoJSON {
 		t.Fatal("default serialized appearance changed", err)
 	}
@@ -57,43 +56,21 @@ func TestSiteDatasetAppearanceSharedContract(t *testing.T) {
 				owner, key, _ := strings.Cut(path, ".")
 				delete(config[owner], key)
 			}
-			body, err := json.Marshal(map[string]any{
-				"version": "none", "dataset_cover_theme": config, "row_article_timestamp_display_mode": "date_time",
-			})
-			if err != nil {
-				t.Fatal(err)
-			}
-			wantWrite := example.Valid
-			if example.WriteValid != nil {
-				wantWrite = *example.WriteValid
-			}
-			decoded, err := decodeSitePresentationSettings(bytes.NewReader(body))
-			if (err == nil) != wantWrite {
-				t.Fatalf("write valid=%v, error=%v", wantWrite, err)
-			}
-			if err == nil && example.Valid {
-				encoded, _ := json.Marshal(decoded.DatasetCoverTheme)
-				var persisted map[string]map[string]any
-				if err := json.Unmarshal(encoded, &persisted); err != nil {
-					t.Fatal(err)
-				}
-				for owner, fields := range config {
-					for key, value := range fields {
-						actual, _ := json.Marshal(persisted[owner][key])
-						want, _ := json.Marshal(value)
-						if !bytes.Equal(actual, want) {
-							t.Fatalf("changed %s.%s", owner, key)
-						}
-					}
-				}
+			// Version-one write contracts are now refused. Their raw values
+			// remain the normalization oracle for the migration, not a live writer.
+			body, _ := json.Marshal(config)
+			var configValue any
+			_ = json.Unmarshal(body, &configValue)
+			if (appearance.Validate(configValue, example.Development) == nil) != example.Valid {
+				t.Fatal("legacy normalization rule changed")
 			}
 			if example.LegacyBlur != nil {
-				stored := defaultSitePresentationSettings().DatasetCoverTheme
+				stored := appearance.DefaultConfig()
 				raw, _ := json.Marshal(config)
 				if err := json.Unmarshal(raw, &stored); err != nil {
 					t.Fatal(err)
 				}
-				inheritLegacyImageBlur(string(raw), &stored)
+				appearance.InheritLegacyImageBlur(string(raw), &stored)
 				for owner, value := range example.LegacyBlur {
 					// encoding/json retains the prefilled default for an explicit null.
 					if value == nil {

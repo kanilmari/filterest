@@ -120,17 +120,19 @@ export function createPaletteToolbox(title, {
 
 /** Own one editor's draft; hiding keeps preview, reset/destroy release only its owner. */
 export function createPaletteDraftOwner({ state, render, syncControls, setStatus, resetGeometry,
-    saveRequestFn, prepareSave = () => {} }) {
+    saveRequestFn, prepareSave = () => {}, errorStatus = () => 'saveFailed' }) {
     const previewOwner = {};
     let draft = state.savedSettings();
     let draftRevision = 0;
     // True while the draft holds edits that Reset has not discarded.
     let edited = false;
     let destroyed = false;
+    let active = true;
+    let saving = false;
     function previewDraft() {
         draftRevision += 1;
         edited = true;
-        state.setPreview(previewOwner, draft);
+        if (active) state.setPreview(previewOwner, draft);
         render();
     }
     function resetPreview() {
@@ -144,11 +146,13 @@ export function createPaletteDraftOwner({ state, render, syncControls, setStatus
         resetGeometry();
     }
     async function saveSettings() {
+        if (saving || destroyed) return;
+        saving = true;
         setStatus('saving');
         const savingRevision = draftRevision;
         try {
             prepareSave(draft);
-            const saved = await state.saveSettings(draft, saveRequestFn);
+            const saved = await state.saveSettings(clonePaletteValue(draft), saveRequestFn);
             if (destroyed) return;
             // Edits made during the request stay as the newer draft; after a Reset during it, the page and controls
             // show what the request just stored, as a Reset after the save would.
@@ -158,14 +162,24 @@ export function createPaletteDraftOwner({ state, render, syncControls, setStatus
                 edited = false;
                 render();
                 syncControls();
+            } else {
+                // New edits keep their values but follow the successfully saved revision.
+                for (const key of ['version', 'shared_version', 'dataset_uid']) {
+                    if (Object.hasOwn(saved, key)) draft[key] = saved[key];
+                }
+                if (active) state.setPreview(previewOwner, draft);
             }
             setStatus('saved');
-        } catch (_error) {
-            if (!destroyed) setStatus('saveFailed');
+        } catch (error) {
+            if (!destroyed) setStatus(errorStatus(error));
+        } finally {
+            saving = false;
         }
     }
-    return { get draft() { return draft; }, previewDraft, resetPreview, saveSettings,
+    return { get draft() { return draft; }, get saving() { return saving; }, previewDraft, resetPreview, saveSettings,
         replaceDraft(value) { draft = clonePaletteValue(value); previewDraft(); },
+        activate() { active = true; if (edited) state.setPreview(previewOwner, draft); render(); },
+        deactivate() { active = false; state.releasePreview(previewOwner); render(); },
         destroy() { destroyed = true; state.releasePreview(previewOwner); } };
 }
 
@@ -221,7 +235,8 @@ export function createPaletteSelectControl({ id, label, choices }, copy, { prefi
 }
 
 /** Construct common panel chrome around an existing or newly created trigger. */
-export function createPresentationPaletteShell({ button, prefix, getCopy, onCopy = () => {}, onReset, onSave }) {
+export function createPresentationPaletteShell({ button, prefix, getCopy, onCopy = () => {}, onReset, onSave,
+    onOpen = () => {}, canSave = () => true }) {
     let statusKey = '';
     let statusToast = null;
     let statusMessage = null;
@@ -253,13 +268,13 @@ export function createPresentationPaletteShell({ button, prefix, getCopy, onCopy
         control.dataset.testid = `${prefix}-${action}`;
     }
     actions.append(resetButton, saveButton);
-    body.append(notice, actions);
-    panel.append(headingRow, body);
+    body.append(notice);
+    panel.append(headingRow, body, actions);
     const dragging = setupPanelDragging(panel, headingRow);
     function closePanel() { panel.hidden = true; button.setAttribute('aria-expanded', 'false'); }
     // Close and Escape return keyboard focus to the trigger; an outside click leaves focus where the user put it.
     function closePanelAndRefocus() { closePanel(); button.focus(); }
-    function openPanel() { panel.hidden = false; button.setAttribute('aria-expanded', 'true'); }
+    function openPanel() { onOpen(); panel.hidden = false; button.setAttribute('aria-expanded', 'true'); }
     function togglePanel(event) {
         event.preventDefault(); event.stopPropagation();
         if (panel.hidden) openPanel(); else closePanel();
@@ -278,8 +293,8 @@ export function createPresentationPaletteShell({ button, prefix, getCopy, onCopy
         statusMessage = document.createElement('span');
         statusMessage.textContent = getCopy()[key];
         statusToast = showToast({ content: statusMessage,
-            level: ['saved', 'datasetSaved'].includes(key) ? 'success' : ['saveFailed', 'datasetSaveFailed', 'conflict'].includes(key) ? 'error' : 'info',
-            autoClose: !['saving', 'datasetSaving'].includes(key) });
+            level: key === 'saved' ? 'success' : ['saveFailed', 'conflict', 'reload'].includes(key) ? 'error' : 'info',
+            autoClose: key !== 'saving' });
     }
     function syncCopy() {
         const copy = getCopy();
@@ -295,9 +310,10 @@ export function createPresentationPaletteShell({ button, prefix, getCopy, onCopy
         onCopy(copy);
     }
     async function saveSettings() {
+        if (!canSave()) return;
         saveButton.disabled = true;
         try { await onSave(); }
-        finally { if (!destroyed) saveButton.disabled = false; }
+        finally { if (!destroyed) saveButton.disabled = !canSave(); }
     }
     button.setAttribute('aria-expanded', 'false');
     button.addEventListener('click', togglePanel);
@@ -311,7 +327,7 @@ export function createPresentationPaletteShell({ button, prefix, getCopy, onCopy
     const languageObserver = new MutationObserver(syncCopy);
     languageObserver.observe(document.documentElement, { attributes: true, attributeFilter: ['lang'] });
     // Initial copy is applied after the adapter has built its own controls.
-    return { button, panel, body, actions, syncCopy, setStatus, openPanel, closePanel,
+    return { button, panel, body, actions, saveButton, resetButton, syncCopy, setStatus, openPanel, closePanel,
         resetGeometry: dragging.resetGeometry,
         destroy() {
             destroyed = true;

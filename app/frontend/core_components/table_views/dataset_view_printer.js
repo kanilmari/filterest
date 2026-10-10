@@ -3,6 +3,7 @@
 // Bridges filter and search controls, view selection, and dataset rendering components.
 // Exists to keep dataset screen assembly in one place while delegating each concrete view to its own module.
 
+import { datasetAppearanceState } from './dataset_appearance_state.js';
 import { appendLoadedDatasetRows, clearLoadedDatasetRows, rememberLoadedDatasetRows } from "./dataset_loaded_rows.js";
 import { encodeCssUrlValue, resolveDatasetMediaDisplayPath } from "./storage_media_urls.js";
 import { resolveVisibleDatasetMediaPath } from "./dataset_media_visibility_resolver.js";
@@ -106,7 +107,7 @@ function toggleDatasetSearchAndFilter(tableName) {
 }
 
 const DATASET_VIEW_RENDERERS = {
-    article_view: { create: (tableName, columns, data) => create_article_view(columns, data, tableName) },
+    article_view: { create: (tableName, columns, data, _types, options) => create_article_view(columns, data, tableName, options) },
     table: {
         create: (table_name, columns, data, data_types) => {
             const tableElement = create_table_element(
@@ -120,9 +121,9 @@ const DATASET_VIEW_RENDERERS = {
         },
     },
     card: {
-        create: async (table_name, columns, data) => {
+        create: async (table_name, columns, data, _types, options) => {
             //   console.log('view_dataset.js: card create kutsuu create_card_view');
-            return await create_card_view(columns, data, table_name);
+            return await create_card_view(columns, data, table_name, options);
             // Note: create_card_view does not (yet) accept a data_types argument;
             // it reads data types from localStorage.
         },
@@ -210,13 +211,13 @@ const DATASET_VIEW_RENDERERS = {
     },
 };
 
-function createDatasetViewElement(viewDefinition, tableName, columns, data, dataTypes) {
+function createDatasetViewElement(viewDefinition, tableName, columns, data, dataTypes, options) {
     const renderer = DATASET_VIEW_RENDERERS[viewDefinition?.rendererKey];
     if (!renderer?.create) {
         console.warn(`Unknown view: ${viewDefinition?.viewKey}`);
         return null;
     }
-    return renderer.create(tableName, columns, data, dataTypes);
+    return renderer.create(tableName, columns, data, dataTypes, options);
 }
 
 function resolveFallbackViewForUnavailableView(datasetName, tableSpecs, globalDefault, unavailableView) {
@@ -317,8 +318,15 @@ export async function generate_table(
     tableMeta = null,
     datasetPresentation = null,
     rowGroupFacets = null,
-    { preserveCardReturn = null, loadedRows = null, rowGroupFacetContext = {} } = {}
+    { preserveCardReturn = null, loadedRows = null, rowGroupFacetContext = {},
+        datasetAppearance = null, appearanceToken = null, isCurrent = () => true } = {}
 ) {
+    const token = appearanceToken || loadedRows?.appearanceToken || datasetAppearanceState.capture(dataset_name);
+    const canCommit = () => isCurrent() && datasetAppearanceState.isCurrent(token);
+    if (!canCommit()) return null;
+    // Retained rows carry old projections; the UID owner's current snapshot wins.
+    if (!loadedRows && datasetAppearance != null
+        && !datasetAppearanceState.accept(dataset_name, datasetAppearance, { token, isCurrent: canCommit })) return null;
     try {
         const tableSpecs = getAllSpecs();
         // Read metadata belongs to every dataset reader. The admin navigation
@@ -330,7 +338,7 @@ export async function generate_table(
             };
         }
         const datasetName = dataset_name;
-        const table_uid = tableSpecs[dataset_name]?.table_uid || dataset_name;
+        const table_uid = datasetAppearance?.dataset_uid || tableSpecs[dataset_name]?.table_uid || dataset_name;
         const globalDefault = getDefaultViewSync();
         const datasetDefault = resolveDatasetDefaultView(datasetName, { tableMeta, tableSpecs, globalDefault });
         const defaultView = resolveRenderableView(
@@ -357,6 +365,12 @@ export async function generate_table(
         let main_table_container = document.getElementById(
             main_table_container_id
         );
+        // A reused name starts a new surface; the old node's UID cannot change.
+        if (main_table_container?.dataset.datasetAppearanceUid
+            && main_table_container.dataset.datasetAppearanceUid !== String(table_uid)) {
+            main_table_container.remove();
+            main_table_container = null;
+        }
         if (!main_table_container) {
             main_table_container = document.createElement("div");
             main_table_container.id = main_table_container_id;
@@ -365,6 +379,8 @@ export async function generate_table(
                 .getElementById("tabs_container")
                 .appendChild(main_table_container);
         }
+
+        datasetAppearanceState.bind(main_table_container, dataset_name, Number.isInteger(Number(table_uid)) ? table_uid : null);
 
         let tab_parts_container = document.getElementById(
             `${dataset_name}_tab_parts_container`
@@ -462,7 +478,8 @@ export async function generate_table(
                 dataset_name,
                 columns,
                 data,
-                data_types
+                data_types,
+                { isCurrent: canCommit }
             ));
         } else {
             console.warn(`Unknown view: ${current_view}`);
@@ -520,6 +537,8 @@ export async function generate_table(
 		scrollableContainer.appendChild(resultsSurface);
         if (currentViewElementPromise) {
             currentViewElement = await currentViewElementPromise;
+            if (!canCommit()) return null;
+            datasetAppearanceState.paint(dataset_name);
             resultsSurface.appendChild(currentViewElement);
             viewContainers[current_view].style.display = "block";
         }
@@ -570,11 +589,13 @@ export async function generate_table(
         renderRowGroupFacets(dataset_name, rowGroupFacets, rowGroupFacetContext);
         renderActiveFilters(dataset_name);
         setResultsCount(dataset_name, rowCount);
+        datasetAppearanceState.paint(dataset_name);
         rememberLoadedDatasetRows(scrollableContainer, dataset_name, {
             data, columns, types: data_types, row_count: rowCount, has_geo: hasGeo,
             table_meta: tableMeta, dataset_presentation: datasetPresentation,
+            dataset_appearance: datasetAppearance,
             row_group_facets: rowGroupFacets,
-        }, loadedRows?.projectionView || current_view);
+        }, loadedRows?.projectionView || current_view, token);
         if (loadedRows) {
             appendLoadedDatasetRows(scrollableContainer, dataset_name, [], loadedRows.offset);
         }

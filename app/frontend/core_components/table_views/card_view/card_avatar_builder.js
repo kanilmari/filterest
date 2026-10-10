@@ -3,6 +3,7 @@
 // Bridges card view call sites and pure avatar/image helpers with the final DOM nodes.
 // Exists to keep card media rendering and accessibility defaults in one reusable place.
 
+import { datasetAppearanceState } from '../dataset_appearance_state.js';
 import {
     buildImageAltContext,
     computeAvatarConfig,
@@ -117,6 +118,7 @@ export function createImageElement(
     } = {}
 ) {
     const wrapper = document.createElement('div');
+    if (tableName) datasetAppearanceState.bind(wrapper, tableName);
     const altContext = buildImageAltContext(tableName, rowLabel);
     const serviceCatalogLogoPlan = resolveServiceCatalogLogoPlan({
         imageTypeId,

@@ -2,6 +2,7 @@
 // Handles the core logic for refreshing table data and updating the UI.
 // Bridges data fetching, view generation, infinite scroll, and column visibility into one entry point.
 // Exists to provide a single unified refresh function consumed by navigation, filters, and CRUD operations.
+import { datasetAppearanceState } from '../../../table_views/dataset_appearance_state.js';
 import { captureLoadedDatasetRows, resolveLoadedDatasetRows } from "../../../table_views/dataset_loaded_rows.js";
 import { getDatasetViewContainerId, resolveDatasetViewSelectionTarget } from "../../../table_views/dataset_view_registry.js";
 
@@ -71,6 +72,8 @@ async function getSearchGroupsForViewRebuild(tableName, query) {
  *   - offsetOverride: (number) jos halutaan aloittaa jostain muusta offsetista
  *   - newSortColumn, newSortDirection: jos halutaan ylikirjoittaa localStoragen sorttia
  *   - newFilters: jos halutaan ylikirjoittaa localStoragen filtterejä
+ *   - isCurrent: caller's lifetime guard for a requested view rebuild
+ * Returns the listing answer only after its view has committed; otherwise null/undefined.
  */
 // refresh_table_unified.js
 
@@ -89,7 +92,10 @@ export async function refreshTableUnified(tableName, options = {}) {
     const loadedRowsToken = options.loadedRows || (preserveCardReturn
         ? captureLoadedDatasetRows(tableName, { retainedCardReturn: true }) : null);
     const loadedRows = resolveLoadedDatasetRows(tableName, loadedRowsToken);
-    const isCurrent = () => refreshGenerations.get(tableName) === generation
+    const appearanceToken = loadedRows?.appearanceToken || datasetAppearanceState.capture(tableName);
+    const isCurrent = () => datasetAppearanceState.isCurrent(appearanceToken)
+        && refreshGenerations.get(tableName) === generation
+        && (!options.isCurrent || options.isCurrent())
         && String(getParams(tableName)?.search || "").trim() === query
         && (!loadedRows || resolveLoadedDatasetRows(tableName, loadedRowsToken) === loadedRows);
     // console.log('refreshTableUnified tableName and options: ', tableName, options);
@@ -207,7 +213,8 @@ export async function refreshTableUnified(tableName, options = {}) {
 			result.dataset_presentation,
             // Counts belong to this listing, including its committed text search.
             result.row_group_facets,
-            { preserveCardReturn, loadedRows, rowGroupFacetContext: {
+            { preserveCardReturn, loadedRows, datasetAppearance: result.dataset_appearance,
+                appearanceToken, isCurrent: isRenderCurrent, rowGroupFacetContext: {
                 // Remembered prefixes and later pages cannot resolve a fresh selection.
                 authoritative: !loadedRows && Number(currentState.offset) === 0
                     && !result.error && result.success !== false,
@@ -279,12 +286,16 @@ export async function refreshTableUnified(tableName, options = {}) {
         if (!articleOpenStarted && isRenderCurrent()) {
             await updateDatasetAddress({ dataset: tableName, isCurrent: isRenderCurrent });
         }
+        // A search repairing an unfinished card host consumes this same first
+        // page only after the guarded view build has committed it.
+        return _activeContainer && isRenderCurrent() ? result : null;
     } catch (err) {
         if (!isCurrent()) return;
         /* virhe-tulostus ohjeittesi mukaisena */
         console.warn('Error refreshing table:', err);
         const lowerMessage = String(err?.message || err || '').toLowerCase();
         if (lowerMessage.includes('dataset') && lowerMessage.includes('not found')) {
+            datasetAppearanceState.forget(tableName);
             setRedirectNotice({ datasetName: tableName, reason: 'missing' });
             clearDatasetSelectionState();
             try {

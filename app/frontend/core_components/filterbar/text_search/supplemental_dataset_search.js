@@ -8,6 +8,7 @@ import { readDatasetSearchResponse } from "./dataset_search_response_reader.js";
 import { createSupplementalDatasetGroup, getSupplementalSearchCopy } from "../../table_views/compact_dataset_group.js";
 import { bindDatasetLanguageRenderer } from "../../table_views/dataset_value_localizer.js";
 import { VIEW_DEACTIVATE_EVENT } from "../../../reusable_components/view_lifecycle_events.js";
+import { datasetAppearanceState } from '../../table_views/dataset_appearance_state.js';
 
 // Shared across generations: replacement searches wait until aborted requests settle.
 const queue = [];
@@ -31,6 +32,9 @@ function schedule(run, signal) {
 }
 
 export function createSupplementalDatasetSearch(tableName, query, { isCurrent, getContainer }) {
+    const parentToken = datasetAppearanceState.capture(tableName);
+    const callerIsCurrent = isCurrent;
+    isCurrent = () => callerIsCurrent() && datasetAppearanceState.isCurrent(parentToken);
     query = String(query).trim();
     const host = document.createElement("section");
     host.className = "supplemental-dataset-results";
@@ -65,14 +69,16 @@ export function createSupplementalDatasetSearch(tableName, query, { isCurrent, g
         }
     }
     async function searchEntry(entry, expectedGeneration) {
+        const appearanceToken = entry.appearanceToken;
         const controller = new AbortController();
         entry.controller = controller;
-        const current = () => searchActive() && generation === expectedGeneration && !controller.signal.aborted;
+        const current = () => searchActive() && generation === expectedGeneration && !controller.signal.aborted
+            && datasetAppearanceState.isCurrent(appearanceToken);
         try {
             await schedule(async () => {
                 if (!current()) return;
                 for await (const packet of readDatasetSearchResponse(entry.tab.dataset, query, {
-                    signal: controller.signal, suppressAuthRedirect: true, suppressErrorToast: true,
+                    appearanceToken, signal: controller.signal, suppressAuthRedirect: true, suppressErrorToast: true,
                 }, current)) {
                     if (!current()) return;
                     if (packet.columns?.length) entry.columns = packet.columns;
@@ -90,7 +96,7 @@ export function createSupplementalDatasetSearch(tableName, query, { isCurrent, g
                 }
                 if (current()) entry.complete = true;
             }, controller.signal);
-        } catch (error) {
+        } catch (_error) {
             // Optional background results never replace/redirect the current page.
             if (current()) entry.complete = true;
         } finally {
@@ -112,7 +118,8 @@ export function createSupplementalDatasetSearch(tableName, query, { isCurrent, g
         entries = tabs.filter(tab => tab.dataset !== tableName).map(tab => {
             const group = createSupplementalDatasetGroup(tab, query);
             groups.append(group.element);
-            return { tab, group, rows: [], ids: new Set(), columns: [], types: {}, complete: false, controller: null };
+            return { tab, group, rows: [], ids: new Set(), columns: [], types: {}, complete: false, controller: null,
+                appearanceToken: datasetAppearanceState.capture(tab.dataset) };
         });
         host.hidden = true;
         resume();

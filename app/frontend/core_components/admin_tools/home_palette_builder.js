@@ -74,7 +74,7 @@ export function mountHomePalette(button, { snapshot, render, saveRequestFn = sav
         const value = draftOwner.draft || DEFAULT_HOME_PRESENTATION;
         controls.forEach(control => control.setValue(value[control.key]));
     }
-    shell.body.insertBefore(container, shell.actions);
+    shell.body.append(container);
     syncControls();
     shell.syncCopy();
     return { ...shell, resetPreview: draftOwner.resetPreview,

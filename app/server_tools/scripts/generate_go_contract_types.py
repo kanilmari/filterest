@@ -37,10 +37,14 @@ ALLOWLIST = [
     StructSpec("backend/core_components/application_updates/update_contracts.go", "Job", "ApplicationUpdateJob"),
     StructSpec("backend/core_components/application_updates/update_contracts.go", "StatusResponse", "ApplicationUpdateStatusResponse"),
     StructSpec("backend/core_components/application_updates/update_contracts.go", "ErrorResponse", "ApplicationUpdateErrorResponse"),
+    StructSpec("backend/core_components/system_table_tools/dataset_appearance_handler.go", "datasetAppearanceRequest", "DatasetAppearanceRequest"),
+    StructSpec("backend/core_components/system_table_tools/site_presentation_settings.go", "SitePresentationSettingsResponse", "SitePresentationSettingsResponse"),
+    StructSpec("backend/core_components/system_table_tools/site_presentation_validator.go", "SitePresentationSettingsPatch", "SitePresentationSettingsPatch"),
     StructSpec("frontend/shared/dataset_appearance/config.go", "DatasetCoverThemeValues", "DatasetCoverThemeValues"),
     StructSpec("frontend/shared/dataset_appearance/config.go", "DatasetCoverSharedValues", "DatasetCoverSharedValues"),
     StructSpec("frontend/shared/dataset_appearance/config.go", "DatasetCoverThemeConfig", "DatasetCoverThemeConfig"),
     StructSpec("backend/core_components/dataset_appearance_store/shared_appearance_revision.go", "AppearanceResponse", "DatasetAppearanceResponse"),
+    StructSpec("backend/core_components/dynamic_table_tools/dtt_1_row_crud/dtt_1_row_read/get_child_items.go", "RelatedTableResult", "RelatedTableResult"),
 
     StructSpec(
         go_file="backend/core_components/httpresponse/httpresponse.go",

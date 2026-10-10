@@ -9,6 +9,9 @@ import { getUnifiedTableState, setUnifiedTableState } from "../state_stores/tabl
 import { setChosenDatasetView } from "../state_stores/dataset_view_choice_saver.js";
 import { clearDatasetAccessRegistry, primeDatasetAccessRegistry } from "../navigation/nav_engine/dataset_access_registry.js";
 import { getDatasetViewContainerId } from "./dataset_view_registry.js";
+import { datasetAppearanceState } from './dataset_appearance_state.js';
+import { setAllSpecs } from '../state_stores/table_specs_reader.js';
+import { invalidateSessionGeneration } from '../auth/session_generation_store.js';
 import {
     rememberLoadedDatasetRows, appendLoadedDatasetRows, captureLoadedDatasetRows,
     resolveLoadedDatasetRows, filterLoadedDatasetDuplicates, clearLoadedDatasetRows,
@@ -29,11 +32,24 @@ function prepare(view = "card") {
     return host;
 }
 beforeEach(() => {
+    datasetAppearanceState.clear(); setAllSpecs({});
     localStorage.clear();
     sessionStorage.clear();
     document.body.replaceChildren();
     document.documentElement.lang = "fi";
     clearDatasetAccessRegistry();
+});
+
+test.each(['sign-out', 'deletion', 'ownership'])('retained rows cannot acquire a new appearance guard after %s', reason => {
+    setAllSpecs({ events: { table_uid: 11 } });
+    prepare();
+    const token = captureLoadedDatasetRows('events');
+    expect(token).not.toBeNull();
+    setChosenDatasetView('events', 'article_view');
+    if (reason === 'sign-out') invalidateSessionGeneration({ reason: 'logout' });
+    else if (reason === 'deletion') datasetAppearanceState.forget('events');
+    else setAllSpecs({ events: { table_uid: 22 }, renamed: { table_uid: 11 } });
+    expect(resolveLoadedDatasetRows('events', token)).toBeNull();
 });
 
 test.each(["card", "table", "normal"])("reuses the entire committed %s prefix and keeps raw next offset across duplicate pages", (view) => {

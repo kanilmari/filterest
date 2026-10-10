@@ -42,8 +42,8 @@ func (c *galleryHandlerConn) QueryContext(ctx context.Context, q string, args []
 		return &legacyImageMockRows{columns: columns, rows: values}
 	}
 	switch {
-	case strings.Contains(q, "a.schema_version,a.overrides,a.revision::text"):
-		return rows([]string{"shared", "stamp", "schema", "overrides", "revision"}, []driver.Value{nil, "", nil, nil, nil}), nil
+	case strings.Contains(q, "a.schema_version,a.tab_values,a.overrides,a.revision::text"):
+		return rows([]string{"shared", "stamp", "schema", "tab_values", "overrides", "revision"}, []driver.Value{nil, "", nil, nil, nil, nil}), nil
 	case strings.Contains(q, "target_insert_specs"):
 		return rows([]string{"child", "parent", "fk", "specs"}, []driver.Value{"app_service_catalog_assets", "gallery_handler_parent", "app_service_catalog_id", []byte(`{"file_upload":{"filename_column":"filename","profiles":{"image":{}}}}`)}), nil
 	case strings.Contains(q, "type_column.atttypid"):
@@ -212,14 +212,25 @@ func TestGalleryCacheAuthorizationAtResponseHandlers(t *testing.T) {
 						t.Fatal(rec.Code, rec.Body)
 					}
 					var packet struct {
-						Stage string
-						Data  []map[string]interface{}
+						Stage      string
+						Data       []map[string]interface{}
+						Appearance struct {
+							SchemaVersion int            `json:"schema_version"`
+							TabValues     map[string]any `json:"tab_values"`
+							SiteValues    map[string]any `json:"site_values"`
+							Defaults      map[string]any `json:"defaults"`
+						} `json:"dataset_appearance"`
 					}
 					if err := json.NewDecoder(rec.Body).Decode(&packet); err != nil {
 						t.Fatal(err)
 					}
 					if len(packet.Data) != 1 || mode == "stream" && (!rec.Flushed || packet.Stage != "text") {
 						t.Fatal(packet, rec.Flushed)
+					}
+					// Ordinary results own the appearance contract; semantic packets
+					// retain the dataset state established by the ordinary response.
+					if mode == "ordinary" && (packet.Appearance.SchemaVersion != 2 || len(packet.Appearance.TabValues) != 28 || len(packet.Appearance.SiteValues) != 7 || len(packet.Appearance.Defaults) != 9) {
+						t.Fatal("results lost their owned appearance snapshot", packet.Appearance)
 					}
 					row := packet.Data[0]
 					if tc.kept {

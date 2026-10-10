@@ -20,6 +20,13 @@ APP_ROOT = Path(__file__).resolve().parents[2]
 SCRIPT = APP_ROOT / "server_tools/scripts/generate_go_contract_types.py"
 
 
+def test_related_results_use_the_same_authorized_appearance_type(generator):
+    output = generator.build_output([generator.parse_struct(spec) for spec in generator.ALLOWLIST])
+    assert "export interface RelatedTableResult {" in output
+    assert "    dataset_uid?: number;" in output
+    assert "    dataset_appearance?: DatasetAppearanceResponse;" in output
+
+
 @pytest.fixture
 def generator():
     name = "filterest_contract_generator_test"
@@ -126,6 +133,8 @@ def test_current_allowlist_preserves_nullable_presentation_overrides(generator):
     assert pointers == [
         ("ApplicationUpdateStatusResponse", "offer", False),
         ("ApplicationUpdateStatusResponse", "latest_job", False),
+        ("SitePresentationSettingsPatch", "row_article_timestamp_display_mode", True),
+        ("RelatedTableResult", "dataset_appearance", True),
         ("CardVisibilityColumn", "show_key_on_card_override", False),
         ("CardVisibilityResponse", "card_style_variant", False),
         ("CardVisibilityResponse", "card_detail_columns", False),
@@ -139,7 +148,11 @@ def test_current_allowlist_preserves_nullable_presentation_overrides(generator):
             "DatasetAppearanceResponse"} <= contracts.keys()
     shared = generator.build_output([contracts["DatasetCoverSharedValues"]])
     assert "    label_value_layout: string;" in shared
-    assert "    shared: DatasetCoverThemeConfig;" in output
+    response = output.split("export interface DatasetAppearanceResponse {", 1)[1].split("\n}", 1)[0]
+    assert "    shared:" not in response
+    for name in ("tab_values", "site_values", "defaults", "overrides"):
+        assert f"    {name}: Record<string, unknown>;" in response
+    assert {"DatasetAppearanceRequest", "SitePresentationSettingsPatch", "SitePresentationSettingsResponse"} <= contracts.keys()
     assert "    effective: DatasetCoverThemeConfig;" in output
     assert "    card_style_variant: string | null;" in output
     assert "    show_key_on_card_override: boolean | null;" in output

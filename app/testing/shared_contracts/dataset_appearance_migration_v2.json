@@ -1,0 +1,176 @@
+{
+  "cases": [
+    {
+      "name": "absent",
+      "raw": null,
+      "normalized": {}
+    },
+    {
+      "name": "empty",
+      "raw": {},
+      "normalized": {}
+    },
+    {
+      "name": "custom",
+      "raw": {
+        "light": {
+          "image_blur": 0,
+          "oval_enabled": false,
+          "image_opacity": 0.73
+        },
+        "dark": {
+          "image_blur": 9.25
+        },
+        "shared": {
+          "hero_extra_height": 81.5,
+          "hero_bottom_fade": 0,
+          "card_image_width": 413,
+          "card_show_all_fields": false,
+          "brand_color": "#aBcD09"
+        }
+      },
+      "normalized": {
+        "light.image_blur": 0,
+        "light.oval_enabled": false,
+        "light.image_opacity": 0.73,
+        "dark.image_blur": 9.25,
+        "shared.hero_extra_height": 81.5,
+        "shared.hero_bottom_fade": 0,
+        "shared.card_image_width": 413,
+        "shared.card_show_all_fields": false,
+        "shared.brand_color": "#aBcD09"
+      }
+    },
+    {
+      "name": "legacy blur",
+      "raw": {
+        "shared": {
+          "image_blur": 7.5
+        }
+      },
+      "normalized": {
+        "light.image_blur": 7.5,
+        "dark.image_blur": 7.5
+      }
+    },
+    {
+      "name": "explicit blur wins",
+      "raw": {
+        "light": {
+          "image_blur": 0
+        },
+        "dark": {
+          "image_blur": null
+        },
+        "shared": {
+          "image_blur": 7.5
+        }
+      },
+      "normalized": {
+        "light.image_blur": 0
+      }
+    },
+    {
+      "name": "label fallback",
+      "raw": {
+        "light": {
+          "image_blur": 4
+        },
+        "shared": {
+          "label_value_layout": "unknown"
+        }
+      },
+      "normalized": {
+        "light.image_blur": 4
+      }
+    },
+    {
+      "name": "invalid label type",
+      "raw": {
+        "light": {
+          "image_blur": 4
+        },
+        "shared": {
+          "label_value_layout": 2
+        }
+      },
+      "normalized": {}
+    },
+    {
+      "name": "invalid mask",
+      "raw": {
+        "light": {
+          "center_opacity": 0.9
+        },
+        "shared": {
+          "hero_extra_height": 81
+        }
+      },
+      "normalized": {}
+    },
+    {
+      "name": "invalid leaf",
+      "raw": {
+        "light": {
+          "image_blur": "7"
+        },
+        "shared": {
+          "brand_color": "#abcdef"
+        }
+      },
+      "normalized": {}
+    },
+    {
+      "name": "null fields",
+      "raw": {
+        "light": {
+          "image_blur": null,
+          "oval_enabled": null
+        },
+        "shared": {
+          "hero_extra_height": null,
+          "image_blur": null
+        }
+      },
+      "normalized": {}
+    },
+    {
+      "name": "scalar",
+      "raw": false,
+      "normalized": {}
+    },
+    {
+      "name": "invalid group",
+      "raw": {
+        "light": false
+      },
+      "normalized": {}
+    },
+    {
+      "name": "development layout",
+      "development": true,
+      "raw": {
+        "shared": {
+          "label_value_layout": "auto"
+        },
+        "light": {
+          "image_blur": 4
+        }
+      },
+      "normalized": {
+        "shared.label_value_layout": "auto",
+        "light.image_blur": 4
+      }
+    },
+    {
+      "name": "decimal legacy integer",
+      "raw": {
+        "shared": {
+          "card_detail_columns": 2.0,
+          "hero_extra_height": 81
+        }
+      },
+      "normalized": {}
+    }
+  ]
+}

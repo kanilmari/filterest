@@ -13,7 +13,8 @@ test("builds a distinct article shell with its own state contract", async () => 
     setUnifiedTableState("demo", { cardView: { expandedId: 99, collapsed: false } });
     const rows = [{ id: 1, title: "Article" }];
     const wrapper = await create_article_view(["title"], rows, "demo");
-    expect(render).toHaveBeenCalledWith(["title"], rows, "demo", { viewKey: "article_view", stateKey: "articleView" });
+    expect(render).toHaveBeenCalledWith(["title"], rows, "demo",
+        { viewKey: "article_view", stateKey: "articleView", isCurrent: expect.any(Function) });
     expect(wrapper.classList.contains("article_view_wrapper")).toBe(true);
     expect(getUnifiedTableState("demo").cardView).toEqual({ expandedId: 99, collapsed: false });
     expect(getUnifiedTableState("demo").articleView.pendingAutoOpenFirstRenderedResult).toBe(true);

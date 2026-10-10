@@ -19,6 +19,8 @@ BOOTSTRAP = APP / "server_tools/public_bootstrap"
 MIGRATIONS = APP / "server_tools/migrations"
 MIGRATION = MIGRATIONS / "20261009000003_create_system_dataset_appearance.sql"
 CUTOVER = MIGRATIONS / "20261009000040_cut_over_dataset_card_appearance.sql"
+SCHEMA = MIGRATIONS / "20261009000060_extend_dataset_appearance_three_places.sql"
+BACKFILL = MIGRATIONS / "20261009000061_backfill_dataset_appearance_three_places.sql"
 OWNER = MIGRATIONS / "20261009000099_record_database_release_9_10_2.sql"
 BASE = "e314e34"
 
@@ -38,7 +40,7 @@ def test_dataset_appearance_migration_version_and_generated_artifacts():
     manifest = json.loads((BOOTSTRAP / "manifest.json").read_text())
     assert manifest["db_version"] == "9.10.2"
     assert "public.system_dataset_appearance" in manifest["allowed_schema_tables"]
-    assert "public.system_dataset_appearance" not in manifest["allowed_seed_tables"]
+    assert "public.system_dataset_appearance" in manifest["allowed_seed_tables"]
     assert MIGRATION.name in manifest["migration_ledger_baseline"]
     acceptance = (BOOTSTRAP / "seed_data.sql").read_text().split("DO $filterest_acceptance$", 1)[1]
     assert "'system_dataset_appearance_table'" in acceptance
@@ -90,29 +92,24 @@ def appearance_shape(run):
 def test_dataset_appearance_fresh_upgrade_and_twice_replay(installed, appearance_upgrade):
     appearance_upgrade(MIGRATION.read_text())
     appearance_upgrade(CUTOVER.read_text())
+    appearance_upgrade(SCHEMA.read_text())
+    appearance_upgrade(BACKFILL.read_text())
     appearance_upgrade(OWNER.read_text())
     expected = appearance_shape(installed)
     assert expected == appearance_shape(appearance_upgrade)
     shape = json.loads(expected)
-    assert len(shape["columns"]) == 4 and len(shape["constraints"]) == 6
+    assert len(shape["columns"]) == 5 and len(shape["constraints"]) == 8
     assert shape["registry"] == shape["check"] == 0 and shape["markers"] == 1
     for run in (installed, appearance_upgrade):
-        assert value(run, "SELECT count(*) FROM system_dataset_appearance") == "0"
+        assert value(run, "SELECT count(*) FROM app_check_dataset_appearance_three_places()") == "0"
         uid = value(run, "SELECT table_uid FROM system_db_tables WHERE table_name='tiketit'")
-        run(f"INSERT INTO system_dataset_appearance(table_uid,overrides,revision) VALUES({uid},"
-            "'{\"light.image_blur\":0,\"light.oval_enabled\":false,\"shared.card_detail_columns\":2}',7)")
+        run(f"UPDATE system_dataset_appearance SET overrides='{{\"shared.card_detail_columns\":2}}',revision=7 WHERE table_uid={uid}")
+        before = value(run, "SELECT jsonb_agg(to_jsonb(a) ORDER BY table_uid) FROM system_dataset_appearance a")
         for _ in range(2):
-            run(MIGRATION.read_text())
-            run(CUTOVER.read_text())
-            run(OWNER.read_text())
+            run(SCHEMA.read_text())
+            run(BACKFILL.read_text())
             assert appearance_shape(run) == expected
-            assert value(run, "SELECT revision||':'||overrides FROM system_dataset_appearance") == \
-                '7:{"light.image_blur": 0, "light.oval_enabled": false, "shared.card_detail_columns": 2}'
-            assert value(run, "SELECT count(*) FROM app_check_dataset_card_appearance_cutover()") == "0"
-            assert value(run, "SELECT count(*) FROM system_db_version WHERE version='9.10.2'") == "1"
-        run("UPDATE system_dataset_appearance SET overrides='{}',revision=8")
-        run(MIGRATION.read_text())
-        assert value(run, "SELECT revision||':'||overrides FROM system_dataset_appearance") == "8:{}"
+            assert value(run, "SELECT jsonb_agg(to_jsonb(a) ORDER BY table_uid) FROM system_dataset_appearance a") == before
 
 
 def test_dataset_appearance_upgrade_refuses_malformed_existing_table(appearance_upgrade):
@@ -149,3 +146,31 @@ def test_dataset_appearance_bootstrap_refuses_missing_proof(cluster, fault):
             else "bootstrap import failed its final checks") in result.stderr
     assert cluster("SELECT count(*) FROM system_schema_migrations", "appearance_broken").stdout.strip() == "0"
     assert cluster("SELECT count(*) FROM system_db_version", "appearance_broken").stdout.strip() == "0"
+
+
+def test_three_place_migration_sources_and_definition_snapshot():
+    import re
+    schema = SCHEMA.read_text()
+    backfill = BACKFILL.read_text()
+    definition = json.loads((APP / "frontend/shared/dataset_appearance/definition.json").read_text())
+    rules = json.loads(re.search(r"SELECT '\n(.*?)\n'::jsonb;", schema, re.S).group(1))
+    expected = {}
+    for group in ("light", "dark", "shared"):
+        fields = definition["shared_fields" if group == "shared" else "theme_fields"]
+        for key, field in fields.items():
+            if "derived_from" in field:
+                continue
+            value = dict(field)
+            if group == "dark":
+                value["default"] = value.get("dark_default", value["default"])
+            expected[f"{group}.{key}"] = value
+    assert rules == expected
+    for migration in (SCHEMA, BACKFILL):
+        source = migration.read_text()
+        assert migration.name < OWNER.name and "-- VERSION_DB: 9.10.2" in source
+        assert f"-- VERSION_DB_OWNER: {OWNER.name}" in source
+        assert "-- COMPLETION_MARKER:" in source and "-- FINAL_CHECK:" in source
+        assert "INSERT INTO public.system_db_version" not in source
+    assert schema in (BOOTSTRAP / "schema.sql").read_text()
+    assert backfill in (BOOTSTRAP / "seed_data.sql").read_text()
+    assert "preflight refused" in backfill and "effective appearance or one-time revision preservation failed" in backfill

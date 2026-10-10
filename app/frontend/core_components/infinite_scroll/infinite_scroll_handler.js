@@ -10,6 +10,7 @@ import { getDatasetViewContainerId, getDatasetViewScrollDirection } from "../tab
 import { getDatasetListingFilters, getDatasetListingSignature } from "./dataset_listing_filters.js";
 import { getArticleStateKey } from "../table_views/card_view/first_listed_row.js";
 
+import { datasetAppearanceState } from '../table_views/dataset_appearance_state.js';
 import { fetchDatasetData } from "../endpoints/endpoint_data_fetcher.js";
 import { appendDataToTable } from "../table_views/table_view/table_row_printer.js";
 import { appendDataToCardView } from "../table_views/card_view/card_view_printer.js";
@@ -288,12 +289,25 @@ export function initializeInfiniteScroll(tableName, orientation = "vertical") {
  * @returns {Promise<Object|null>} the listing's answer, or null if it was abandoned.
  */
 export async function reloadDatasetRowsFromListing(tableName, { isCurrent } = {}) {
+    const currentView = getChosenDatasetView(tableName) || "table";
+    const container = document.getElementById(getDatasetViewContainerId(currentView, tableName));
+    if (["card", "article_view"].includes(currentView) && !container?.querySelector('.card_container')) {
+        // URL search can commit before the first card host is assembled. A
+        // late saved sort also invalidates that build. Rebuild through the same
+        // guarded refresh path and use its first page, rather than append to an
+        // unfinished host or fetch that page a second time.
+        const token = datasetAppearanceState.capture(tableName);
+        const canBuild = () => datasetAppearanceState.isCurrent(token)
+            && (getChosenDatasetView(tableName) || "table") === currentView && (!isCurrent || isCurrent());
+        const { refreshTableUnified } = await import('../general_tables/gt_1_row_crud/gt_1_2_row_read/table_refresh_unified.js');
+        if (!canBuild()) return null;
+        return refreshTableUnified(tableName, { skipUrlParams: true, isCurrent: canBuild });
+    }
     disconnectInfiniteScroll(tableName);
     resetOffset(tableName);
     const result = await fetchMoreData(tableName, { replace: true, isCurrent });
     if (isCurrent && !isCurrent()) return result;
-    const currentView = getChosenDatasetView(tableName) || "table";
-    initializeInfiniteScroll(tableName, getDatasetViewScrollDirection(currentView));
+    initializeInfiniteScroll(tableName, getDatasetViewScrollDirection(getChosenDatasetView(tableName) || "table"));
     return result;
 }
 
@@ -316,7 +330,10 @@ async function fetchMoreData(tableName, { replace = false, isCurrent: callerIsCu
         const currentView = getChosenDatasetView(tableName) || "table";
         const container = document.getElementById(getDatasetViewContainerId(currentView, tableName));
         const scopeSignature = getDatasetListingSignature(tableName, tableState.filters, tableState.sort);
-        const isCurrent = () => scrollSt.generation === generation
+        const appearanceToken = datasetAppearanceState.capture(tableName);
+        const isCurrent = () => datasetAppearanceState.isCurrent(appearanceToken)
+            && datasetAppearanceState.ownsSurface(container, appearanceToken.uid)
+            && scrollSt.generation === generation
             && getDatasetListingSignature(tableName, getUnifiedTableState(tableName).filters, getUnifiedTableState(tableName).sort) === scopeSignature
             && (getChosenDatasetView(tableName) || "table") === currentView
             && document.getElementById(getDatasetViewContainerId(currentView, tableName)) === container
@@ -340,6 +357,8 @@ async function fetchMoreData(tableName, { replace = false, isCurrent: callerIsCu
             view_key: viewKey,
         });
         if (!isCurrent()) return null;
+        if (result.dataset_appearance != null
+            && !datasetAppearanceState.accept(tableName, result.dataset_appearance, { token: appearanceToken, isCurrent })) return null;
         setResultsCount(tableName, result.row_count);
         scrollSt.lastRowCount = result.row_count;
         scrollSt.rowCountSignature = scopeSignature;
@@ -372,7 +391,7 @@ async function fetchMoreData(tableName, { replace = false, isCurrent: callerIsCu
             // A replaced list starts a new remembered prefix: exactly the rows
             // now on screen, so an article opened from them carries them over
             // and the article navigation never inherits rows that are gone.
-            rememberLoadedDatasetRows(container, tableName, result, viewKey);
+            rememberLoadedDatasetRows(container, tableName, result, viewKey, appearanceToken);
         } else {
             appendLoadedDatasetRows(container, tableName, rows, getUnifiedTableState(tableName).offset);
         }

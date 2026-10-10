@@ -111,6 +111,25 @@ describe("table_refresh_unified missing-dataset recovery", () => {
         fetchDatasetDataMock.mockRejectedValue(new Error("Dataset not found"));
     });
 
+    test('forwards the appearance snapshot on empty results and prevents late refreshes after teardown', async () => {
+        const mod = await loadModule();
+        const { datasetAppearanceState } = await import('../../../table_views/dataset_appearance_state.js');
+        const appearance = { dataset_uid: 11, version: '1' };
+        fetchDatasetDataMock.mockResolvedValue({ data: [], columns: [], types: {}, row_count: 0, dataset_appearance: appearance });
+        await mod.refreshTableUnified('empty', { skipUrlParams: true });
+        expect(generateTableMock.mock.calls[0][9].datasetAppearance).toBe(appearance);
+        expect(generateTableMock.mock.calls[0][9].isCurrent()).toBe(true);
+        generateTableMock.mockClear();
+        let resolve;
+        fetchDatasetDataMock.mockImplementationOnce(() => new Promise(done => { resolve = done; }));
+        const pending = mod.refreshTableUnified('empty', { skipUrlParams: true });
+        await vi.waitFor(() => expect(resolve).toBeTypeOf('function'));
+        datasetAppearanceState.clear();
+        resolve({ data: [], columns: [], dataset_appearance: appearance });
+        await pending;
+        expect(generateTableMock).not.toHaveBeenCalled();
+    });
+
     test("dispatches only an explicitly registered surface before SQL fetch and permissions", async () => {
         const { refreshTableUnified } = await loadModule();
         const { registerDatasetQueryAdapter } = await import('../../../filterbar/dataset_surface_provider/dataset_query_adapter_registry.js');

@@ -1,5 +1,7 @@
 // T16_home_palette.spec.ts
 // Proves Home's desktop/phone geometry, themes, live palette and durable save/reload.
+// Follows admin_tools/home_palette_builder.js and presentation_palette_shell.js.
+// Home retains its own API; shared actions remain outside the scrolling controls.
 // Connects the real Home API and administrator session; cleanup restores original settings.
 // Run serially on the supervisor's native test instance, never a production instance.
 import { expect, test, type Page } from '@playwright/test';
@@ -64,6 +66,9 @@ test('Home preview, saved reset and reload at 1280 and 375 pixels in both explic
       await expect(trigger).toHaveCSS('border-radius', await gear.evaluate(el => getComputedStyle(el).borderRadius));
       await trigger.click();
       const panel = page.getByTestId('home-palette');
+      await expect(panel.getByTestId('dataset-cover-test-palette-scope')).toHaveCount(0);
+      expect(await panel.getByTestId('home-palette-save').evaluate(el =>
+        el.closest('.dataset-cover-test-palette__actions')!.parentElement === el.closest('section'))).toBe(true);
       await expect(panel).toBeVisible();
       await panel.getByTestId('home-palette-anchor-top-left').click();
       await panel.getByTestId('home-palette-alignment-left').click();

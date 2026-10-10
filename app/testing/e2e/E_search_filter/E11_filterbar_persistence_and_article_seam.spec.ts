@@ -216,8 +216,10 @@ test.describe('E11 — Filterbar persistence and article seam', () => {
       };
     });
 
-    expect(Math.abs(geometry.sidebarGap)).toBeLessThanOrEqual(0.5);
-    expect(Math.abs(geometry.articleGap)).toBeLessThanOrEqual(0.5);
+    // cards.css deliberately overlaps the top bar's divider by one pixel
+    // (margin-block-start: -1px); both panes must share that same seam.
+    expect(Math.abs(geometry.sidebarGap + 1)).toBeLessThanOrEqual(0.5);
+    expect(Math.abs(geometry.articleGap + 1)).toBeLessThanOrEqual(0.5);
     expect(geometry.sidebarBorderTop).toBe('0px');
     expect(geometry.articleBorderTop).toBe('0px');
   });
@@ -244,9 +246,7 @@ test.describe('E11 — Filterbar persistence and article seam', () => {
       );
       const content = article?.querySelector<HTMLElement>(':scope > .row_article_content');
       const toolbar = content?.querySelector<HTMLElement>('.row_article_disclosure_header');
-      const text = content?.querySelector<HTMLElement>(
-        ':scope > .big_card_header, :scope > .big_card_description_container',
-      );
+      const text = content?.querySelector<HTMLElement>(':scope > .big_card_header');
       const actionBar = article?.querySelector<HTMLElement>(':scope > .big_card_action_bar');
       if (!article || !content || !toolbar || !text || !actionBar) {
         throw new Error('Missing article content, toolbar, text, or action bar.');
@@ -257,7 +257,10 @@ test.describe('E11 — Filterbar persistence and article seam', () => {
       const textRect = text.getBoundingClientRect();
       const titleValue = text.querySelector<HTMLElement>('.big_card_header_value');
       const titleValueRect = titleValue?.getBoundingClientRect();
-      const textInnerRect = text.firstElementChild?.getBoundingClientRect();
+      // Measure the title field, rather than an optional dataset icon.
+      const textInnerRect = text.querySelector<HTMLElement>(
+        '.two_line_field, .big_card_header_value',
+      )?.getBoundingClientRect();
       const actionBarRect = actionBar.getBoundingClientRect();
       const imageContent = content.querySelector<HTMLElement>(
         '.row_article_image_gallery_section .row_article_disclosure_content',
@@ -326,10 +329,12 @@ test.describe('E11 — Filterbar persistence and article seam', () => {
     expect(Math.abs(geometry.toolbarRightGap)).toBeLessThanOrEqual(0.5);
     expect(Math.abs(geometry.actionLeftGap)).toBeLessThanOrEqual(0.5);
     expect(Math.abs(geometry.actionRightGap)).toBeLessThanOrEqual(0.5);
-    expect(Math.abs(geometry.textLeftGap)).toBeLessThanOrEqual(0.5);
+    // cards_big.css gives the title a reviewed 10px margin on each side,
+    // in addition to its 16px inner padding. Toolbars remain edge-to-edge.
+    expect(Math.abs(geometry.textLeftGap - 10)).toBeLessThanOrEqual(0.5);
     expect(geometry.textPaddingTop).toBe(19);
     expect(geometry.textPaddingLeft).toBe(16);
-    expect(geometry.textInnerLeftGap).toBeGreaterThanOrEqual(15.5);
+    expect(geometry.textInnerLeftGap - geometry.textLeftGap).toBeGreaterThanOrEqual(15.5);
     expect(geometry.titleTopGap).toBeGreaterThanOrEqual(18.5);
     expect(geometry.titleTopGap).toBeLessThanOrEqual(19.5);
     expect(geometry.relatedContentPaddingLeft).toBe(16);
@@ -343,7 +348,8 @@ test.describe('E11 — Filterbar persistence and article seam', () => {
     expect(geometry.activeRelatedTabBorderBottom).toBe('2px');
     expect(geometry.activeRelatedTabBackground).not.toBe('rgba(0, 0, 0, 0)');
     expect(Number.parseInt(geometry.activeRelatedTabFontWeight, 10)).toBeGreaterThanOrEqual(700);
-    expect(geometry.commentsPanelPaddingBottom).toBeGreaterThanOrEqual(21.5);
+    // big_card_related_records.css:69 sets .comments_tab_panel to 0.75rem with visible overflow.
+    expect(Math.abs(geometry.commentsPanelPaddingBottom - 12)).toBeLessThanOrEqual(0.5);
     expect(geometry.commentsPanelOverflow).toBe('visible');
     if (geometry.imageContentPaddingLeft !== null) {
       expect(geometry.imageContentPaddingLeft).toBe(16);

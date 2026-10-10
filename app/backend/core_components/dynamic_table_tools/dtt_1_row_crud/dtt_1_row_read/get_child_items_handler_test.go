@@ -43,6 +43,7 @@ type scriptedRule struct {
 	fragment string
 	columns  []string
 	rows     [][]driver.Value
+	matches  func([]driver.Value) bool
 }
 
 // scriptedStep is one statement, or one transaction start, on the connection that got it.
@@ -102,7 +103,7 @@ func (conn scriptedConn) QueryContext(_ context.Context, statement string, args 
 	}
 	conn.reads.record(scriptedStep{connection: conn.connection, statement: statement, args: values})
 	for _, rule := range conn.reads.rules {
-		if strings.Contains(statement, rule.fragment) {
+		if strings.Contains(statement, rule.fragment) && (rule.matches == nil || rule.matches(values)) {
 			return &scriptedRows{columns: rule.columns, rows: rule.rows}, nil
 		}
 	}

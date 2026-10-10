@@ -15,11 +15,11 @@ import {
 
 function appearance(version = '1', sharedVersion = 'shared-1', datasetUID = 7) {
   return { dataset_uid: datasetUID, version, shared_version: sharedVersion, overrides: {},
-    shared: {}, effective: {}, sources: {}, schema_version: 1 } as DatasetAppearanceResponse;
+    tab_values: { 'light.image_opacity': 1 }, site_values: {}, defaults: { 'shared.card_style_variant': 'modern', 'shared.card_detail_columns': 2 }, effective: {}, sources: {}, schema_version: 2 } as DatasetAppearanceResponse;
 }
 
 function settings(version = 'shared-original') {
-  return { version, dataset_cover_theme: { light: {}, dark: {}, shared: { card_style_variant: 'modern' } },
+  return { schema_version: 2, version, site_values: { 'shared.brand_color': '#1a8fe6' }, defaults: { 'shared.card_style_variant': 'modern' },
     row_article_timestamp_display_mode: 'date_time' } as SitePresentationSettings;
 }
 
@@ -85,9 +85,9 @@ describe('appearance API revisions', () => {
   });
 
   it('restores explicit values and inheritance, reloads both revisions on 409 and preserves unrelated leaves', async () => {
-    const original = { ...appearance(), overrides: { 'shared.card_style_variant': 'standard', 'light.image_opacity': 0.4 } };
+    const original = { ...appearance(), overrides: { 'shared.card_style_variant': 'standard' } };
     const restored = { ...appearance('4', 'shared-3'), overrides: {
-      'shared.card_style_variant': 'standard', 'light.image_opacity': 0.8,
+      'shared.card_style_variant': 'standard',
     } };
     const { request, post, events } = fixture([appearance('2', 'shared-2'), appearance('3', 'shared-3')], [
       apiResponse(409, { error: 'dataset appearance changed' }), apiResponse(200, restored),
@@ -95,7 +95,7 @@ describe('appearance API revisions', () => {
     await restoreDatasetAppearance(request, 'fixture', original, ['shared.card_style_variant', 'shared.card_detail_columns']);
     const first = post.mock.calls[0][1] as { data: Record<string, unknown> };
     const second = post.mock.calls[1][1] as { data: Record<string, unknown> };
-    expect(first.data).toEqual({ dataset_uid: 7, version: '2', shared_version: 'shared-2',
+    expect(first.data).toEqual({ schema_version: 2, dataset_uid: 7, tab_set: {}, version: '2', shared_version: 'shared-2',
       set: { 'shared.card_style_variant': 'standard' }, unset: ['shared.card_detail_columns'] });
     expect(second.data).toEqual({ ...first.data, version: '3', shared_version: 'shared-3' });
     expect(events).toEqual(['GET /api/csrf-token', 'GET /api/card-visibility/fixture', 'POST /api/admin/dataset-appearance',
@@ -136,16 +136,33 @@ describe('appearance API revisions', () => {
     const original = settings();
     const { request, post, events } = fixture([], [apiResponse(409, {}), apiResponse(200, { ...original, version: 'saved' })],
       [settings('fresh-1'), settings('fresh-2')]);
-    await restoreSitePresentationSettings(request, original);
-    expect(post.mock.calls[0][1]).toEqual({ data: { ...original, version: 'fresh-1' }, headers: { 'X-CSRF-Token': 'test-token' } });
-    expect(post.mock.calls[1][1]).toEqual({ data: { ...original, version: 'fresh-2' }, headers: { 'X-CSRF-Token': 'test-token' } });
+    await restoreSitePresentationSettings(request, original, ['shared.card_style_variant']);
+    expect(post.mock.calls[0][1]).toEqual({ data: { schema_version: 2, version: 'fresh-1', set: { 'shared.card_style_variant': 'modern' } }, headers: { 'X-CSRF-Token': 'test-token' } });
+    expect(post.mock.calls[1][1]).toEqual({ data: { schema_version: 2, version: 'fresh-2', set: { 'shared.card_style_variant': 'modern' } }, headers: { 'X-CSRF-Token': 'test-token' } });
     expect(events).toEqual(['GET /api/csrf-token', 'GET /api/admin/site-presentation-settings', 'POST /api/admin/site-presentation-settings',
       'GET /api/admin/site-presentation-settings', 'POST /api/admin/site-presentation-settings']);
   });
 
   it('stops shared restoration loudly after a repeated conflict', async () => {
     const { request, post } = fixture([], [apiResponse(409, { error: 'reload before saving' })]);
-    await expect(restoreSitePresentationSettings(request, settings())).rejects.toThrow(/restore.*2 attempt.*409.*reload before saving/);
+    await expect(restoreSitePresentationSettings(request, settings(), ['shared.card_style_variant'])).rejects.toThrow(/restore.*2 attempt.*409.*reload before saving/);
     expect(post).toHaveBeenCalledTimes(2);
   });
+});
+
+it('restores tab-owned cover values through tab_set without override inheritance', async () => {
+  const original = appearance();
+  const { request, post } = fixture([appearance('2')], [apiResponse(200, appearance('3'))]);
+  await restoreDatasetAppearance(request, 'fixture', original, ['light.image_opacity']);
+  expect((post.mock.calls[0][1] as { data: object }).data).toMatchObject({ schema_version: 2,
+    tab_set: { 'light.image_opacity': 1 }, set: {}, unset: [] });
+});
+
+it('site cleanup preserves unrelated values that changed concurrently', async () => {
+  const original = settings();
+  const response = { ...settings('saved'), site_values: { 'shared.brand_color': '#cc3366' } };
+  const { request, post } = fixture([], [apiResponse(200, response)]);
+  await restoreSitePresentationSettings(request, original, ['shared.card_style_variant']);
+  expect((post.mock.calls[0][1] as { data: object }).data).toEqual({ schema_version: 2,
+    version: 'shared-original', set: { 'shared.card_style_variant': 'modern' } });
 });

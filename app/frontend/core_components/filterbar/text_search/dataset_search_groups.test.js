@@ -174,7 +174,7 @@ describe("dataset search groups", () => {
             await do_intelligent_search(tableName, 'kanto');
             expect(appendDataToCardViewMock).toHaveBeenCalled();
             for (const call of appendDataToCardViewMock.mock.calls) {
-                expect(call[4]).toEqual({ viewKey, dataTypes: types });
+                expect(call[4]).toEqual({ viewKey, dataTypes: types, isCurrent: expect.any(Function) });
             }
         }
     });

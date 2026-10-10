@@ -88,7 +88,7 @@ func TestDatasetAppearancePostgresAdminAndGenericCompatibilityWriters(t *testing
 	if err != nil {
 		t.Fatal(err)
 	}
-	body, _ := json.Marshal(map[string]any{"dataset_uid": uid, "set": map[string]any{"shared.card_detail_columns": 2}, "unset": []string{}, "shared_version": initial.SharedVersion, "version": initial.Version})
+	body, _ := json.Marshal(map[string]any{"schema_version": 2, "dataset_uid": uid, "set": map[string]any{"shared.card_detail_columns": 2}, "unset": []string{}, "shared_version": initial.SharedVersion, "version": initial.Version})
 	lazy := dbutils.NewLazyTx(db)
 	r := httptest.NewRequest("POST", "/api/admin/dataset-appearance", strings.NewReader(string(body)))
 	r = r.WithContext(dbutils.SetLazyTx(r.Context(), lazy))
@@ -159,7 +159,7 @@ func TestDatasetAppearancePostgresAdminAndGenericCompatibilityWriters(t *testing
 		t.Fatal(err)
 	}
 	current, err = store.ReadAppearance(db, uid, false)
-	if err != nil || current.Sources["shared.card_style_variant"] != "shared" {
+	if err != nil || current.Sources["shared.card_style_variant"] != "default" {
 		t.Fatal(current, err)
 	}
 }
@@ -194,8 +194,8 @@ func TestDatasetAppearancePostgresSharedAndOverrideLockOrders(t *testing.T) {
 			request := httptest.NewRequest("POST", "/api/admin/site-presentation-settings", nil)
 			result := make(chan error, 1)
 			if sharedFirst {
-				settings.DatasetCoverTheme.Light.ImageBlur = 8
-				_, err = persistSitePresentationSettings(request.WithContext(dbutils.SetLazyTx(request.Context(), first)), settings)
+				settings.Defaults["shared.card_image_width"] = 408
+				_, err = persistSitePresentationSettings(request.WithContext(dbutils.SetLazyTx(request.Context(), first)), sitePresentationPatchFromSettings(settings))
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -209,7 +209,7 @@ func TestDatasetAppearancePostgresSharedAndOverrideLockOrders(t *testing.T) {
 					t.Fatal(err)
 				}
 				go func() {
-					_, err := persistSitePresentationSettings(request.WithContext(dbutils.SetLazyTx(request.Context(), second)), settings)
+					_, err := persistSitePresentationSettings(request.WithContext(dbutils.SetLazyTx(request.Context(), second)), sitePresentationPatchFromSettings(settings))
 					result <- err
 				}()
 			}
@@ -265,6 +265,7 @@ func (*appearanceTestResponseBuffer) EnableCommitBuffer() error { return nil }
 
 func TestDatasetAppearancePostgresConcurrentSharedFirstWrites(t *testing.T) {
 	db, _ := datasetAppearanceFixture(t)
+	frontPageExec(t, db, `DELETE FROM system_config WHERE key='dataset_cover_theme_config'`)
 	initial, err := readSitePresentationSettingsFromDB()
 	if err != nil || initial.Version != "none" {
 		t.Fatal(initial, err)
@@ -278,8 +279,8 @@ func TestDatasetAppearancePostgresConcurrentSharedFirstWrites(t *testing.T) {
 			defer lazy.Rollback()
 			r := httptest.NewRequest("POST", "/api/admin/site-presentation-settings", nil)
 			input := initial
-			input.DatasetCoverTheme.Light.ImageBlur = blur
-			_, err := persistSitePresentationSettings(r.WithContext(dbutils.SetLazyTx(r.Context(), lazy)), input)
+			input.Defaults["shared.card_image_width"] = 300 + blur
+			_, err := persistSitePresentationSettings(r.WithContext(dbutils.SetLazyTx(r.Context(), lazy)), sitePresentationPatchFromSettings(input))
 			if err == nil {
 				err = lazy.Commit()
 			}
@@ -330,12 +331,12 @@ func TestDatasetAppearancePostgresSnapshotConsistencyDuringWrites(t *testing.T) 
 				finished <- err
 				return
 			}
-			input.DatasetCoverTheme.Light.ImageBlur = float64(blur)
-			input.DatasetCoverTheme.Shared.CardDetailColumns = 1 + blur%4
+			input.Defaults["shared.card_image_width"] = float64(300 + blur)
+			input.Defaults["shared.card_detail_columns"] = 1 + blur%4
 			r := httptest.NewRequest("POST", "/api/admin/site-presentation-settings", nil)
-			shared, err := persistSitePresentationSettings(r.WithContext(dbutils.SetLazyTx(r.Context(), lazy)), input)
+			shared, err := persistSitePresentationSettings(r.WithContext(dbutils.SetLazyTx(r.Context(), lazy)), sitePresentationPatchFromSettings(input))
 			if err == nil {
-				_, err = store.SaveAppearance(tx, uid, DatasetAppearancePatch{Set: map[string]any{"shared.card_detail_columns": input.DatasetCoverTheme.Shared.CardDetailColumns}}, shared.Version, before.Revision, false)
+				_, err = store.SaveAppearance(tx, uid, DatasetAppearancePatch{Set: map[string]any{"shared.card_detail_columns": input.Defaults["shared.card_detail_columns"]}}, shared.Version, before.Revision, false)
 			}
 			if err == nil {
 				err = lazy.Commit()
@@ -350,7 +351,7 @@ func TestDatasetAppearancePostgresSnapshotConsistencyDuringWrites(t *testing.T) 
 	}()
 	for {
 		snapshot, err := store.ReadAppearance(db, uid, false)
-		if err != nil || snapshot.Shared.Shared.CardDetailColumns != snapshot.Effective.Shared.CardDetailColumns || snapshot.Shared.Light.ImageBlur != snapshot.Effective.Light.ImageBlur {
+		if err != nil || snapshot.Defaults["shared.card_detail_columns"] != float64(snapshot.Effective.Shared.CardDetailColumns) || snapshot.TabValues["light.image_blur"] != snapshot.Effective.Light.ImageBlur {
 			t.Fatal("torn snapshot", snapshot, err)
 		}
 		select {

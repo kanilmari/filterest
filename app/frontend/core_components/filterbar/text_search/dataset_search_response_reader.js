@@ -6,6 +6,7 @@
 import { endpoint_router } from "../../endpoints/endpoint_router.js";
 import { getLanguageWithBrowserFallback } from "../../state_stores/lang_preference_reader.js";
 import { ROW_GROUP_FILTER_KEY, ROW_GROUP_MODE_KEY } from "../filter_list/row_group_filter_contract.js";
+import { datasetAppearanceState } from '../../table_views/dataset_appearance_state.js';
 
 /**
  * Read one search through the usual permission, CSRF and session pipeline.
@@ -13,6 +14,9 @@ import { ROW_GROUP_FILTER_KEY, ROW_GROUP_MODE_KEY } from "../filter_list/row_gro
  * every content language regardless and only ranks matches in this one first.
  */
 export async function* readDatasetSearchResponse(tableName, query, options, isCurrent) {
+    const appearanceToken = options.appearanceToken || datasetAppearanceState.capture(tableName);
+    const callerIsCurrent = isCurrent;
+    isCurrent = () => callerIsCurrent() && datasetAppearanceState.isCurrent(appearanceToken);
     let url_params = "&dataset=" + encodeURIComponent(tableName) + "&query=" + encodeURIComponent(query);
     const readerLanguage = getLanguageWithBrowserFallback();
     if (readerLanguage) url_params += "&lang=" + encodeURIComponent(readerLanguage);
@@ -57,6 +61,8 @@ export async function* readDatasetSearchResponse(tableName, query, options, isCu
                 let packet;
                 try { packet = JSON.parse(line); }
                 catch { console.warn("[dataset_search] skipping malformed search packet"); continue; }
+                if (packet.dataset_appearance != null && !datasetAppearanceState.accept(tableName,
+                    packet.dataset_appearance, { token: appearanceToken, isCurrent })) return;
                 yield packet;
             }
             if (done) { finished = true; return; }

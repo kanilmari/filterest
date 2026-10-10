@@ -1,24 +1,21 @@
 // site_presentation_state.js
 // Shared public presentation snapshot, browser cache and transient palette previews.
 // The cache contains only public site settings; authorization flags are never retained.
-// One request and one saved revision serve cover, card and timestamp consumers.
+// One public request and revision serve site defaults, globals and timestamps.
 
 import { fetchSitePresentationSettings } from '../endpoints/stable_endpoint_router.js';
-import { normalizeCardImagePresentation, applyCardImagePresentationSetting }
-    from '../table_views/card_view/card_image_presentation.js';
-import { applyCardFieldPresentationSetting } from '../table_views/card_view/card_field_presentation.js';
-
-import { normalizeLabelValueLayout, applySiteLabelValueLayoutSetting }
-    from '../../reusable_components/key_value_container/label_value_layout.js';
-
+import { normalizeCardImagePresentation } from '../table_views/card_view/card_image_presentation.js';
+import { normalizeLabelValueLayout } from '../../reusable_components/key_value_container/label_value_layout.js';
+import { datasetAppearanceState } from '../table_views/dataset_appearance_state.js';
 import { applyActiveFilterRemoveSide }
     from '../filterbar/filter_list/active_filter_chip_builder.js';
 
 import { DEFAULT_DATASET_APPEARANCE, datasetAppearanceField, isReadableDatasetAppearance }
     from '../../shared/dataset_appearance/validator.js';
+import { readSiteAppearance, appearanceValuesForPlace } from '../../shared/dataset_appearance/snapshot.js';
 export const DEFAULT_DATASET_COVER_THEME = DEFAULT_DATASET_APPEARANCE;
 
-export const PUBLIC_PRESENTATION_CACHE_KEY = 'filterest_public_presentation_v1';
+export const PUBLIC_PRESENTATION_CACHE_KEY = 'filterest_public_presentation_v2';
 const clone = (value) => JSON.parse(JSON.stringify(value));
 
 /** Empty space above the hero header icon, in pixels. One definition serves the
@@ -44,8 +41,10 @@ export function isValidThemeConfig(config) {
 }
 
 export function normalizePresentationSettings(payload) {
-    const source = isValidThemeConfig(payload?.dataset_cover_theme)
-        ? payload.dataset_cover_theme : DEFAULT_DATASET_COVER_THEME;
+    // Site drafts retain the nested control projection; saves serialize a strict
+    // patch of the two public owned maps, excluding every tab cover value.
+    const source = isValidThemeConfig(payload?.dataset_cover_theme) ? payload.dataset_cover_theme
+        : readSiteAppearance(payload) || DEFAULT_DATASET_COVER_THEME;
     // Cache only the public protocol's known fields, never arbitrary response extras.
     const theme = Object.fromEntries(Object.entries(DEFAULT_DATASET_COVER_THEME).map(([group, defaults]) => [
         group, Object.fromEntries(Object.entries(defaults).map(([key, fallback]) => [
@@ -55,6 +54,9 @@ export function normalizePresentationSettings(payload) {
     theme.shared.label_value_layout = normalizeLabelValueLayout(theme.shared.label_value_layout);
     theme.shared.card_image_presentation = normalizeCardImagePresentation(theme.shared.card_image_presentation);
     return {
+        schema_version: 2,
+        site_values: appearanceValuesForPlace(theme, 'site_only'),
+        defaults: appearanceValuesForPlace(theme, 'site_default'),
         version: typeof payload?.version === "string" ? payload.version : "",
         dataset_cover_theme: theme,
         row_article_timestamp_display_mode: ['date_time', 'date_only'].includes(payload?.row_article_timestamp_display_mode)
@@ -91,35 +93,10 @@ export function brandColorComponents(hexColor) {
     };
 }
 
-function applyArticleImageCaptionSetting(config) {
-    if (typeof document === 'undefined' || !document.documentElement) return;
-    document.documentElement.dataset.articleImageCaptionPosition =
-        config.shared.article_image_caption_position ?? 'below';
-}
-
-export function applySitePresentationGlobals(config, { preserveKnownBrand = false } = {}) {
+export function applySitePresentationGlobals(config, { preserveKnownBrand = false, version = '', preview = false, changed = false } = {}) {
     if (typeof document === 'undefined' || !document.documentElement || !isValidThemeConfig(config)) return;
     const documentRoot = document.documentElement;
     applyActiveFilterRemoveSide(config.shared.active_filter_remove_side);
-    applyArticleImageCaptionSetting(config);
-    applySiteLabelValueLayoutSetting(config.shared.label_value_layout);
-    applyCardImagePresentationSetting(config.shared.card_image_presentation);
-    applyCardFieldPresentationSetting(
-        config.shared.card_show_all_fields, config.shared.card_style_variant, config.shared.card_detail_columns
-    );
-    documentRoot.style.setProperty(
-        '--dataset-background-light-image-blur',
-        `${config.light.image_blur}px`
-    );
-    documentRoot.style.setProperty(
-        '--dataset-background-dark-image-blur',
-        `${config.dark.image_blur}px`
-    );
-    documentRoot.style.setProperty('--card_image_large_width', `${config.shared.card_image_width}px`);
-    documentRoot.style.setProperty(
-        '--card-description-lines',
-        String(config.shared.card_description_lines)
-    );
     documentRoot.style.setProperty('--navtab-active-fade-width', `${config.shared.active_tab_fade}px`);
     documentRoot.style.setProperty(
         '--navtab-active-max-opacity',
@@ -137,17 +114,20 @@ export function applySitePresentationGlobals(config, { preserveKnownBrand = fals
         '--navtab-active-glow-blur',
         `${config.shared.active_tab_glow_blur}px`
     );
-    documentRoot.style.setProperty(
-        '--filterbar-content-top-space',
-        `${clampFilterbarContentTopSpace(config.shared.filterbar_content_top_space)}px`
-    );
     if (!preserveKnownBrand || !documentRoot.style.getPropertyValue('--brand-hue')) {
         const brand = brandColorComponents(config.shared.brand_color);
         documentRoot.style.setProperty('--brand-hue', String(brand.hue));
         documentRoot.style.setProperty('--brand-sat', `${brand.saturation}%`);
         documentRoot.style.setProperty('--brand-light', `${brand.lightness}%`);
     }
+    datasetAppearanceState.updateSite(config, { version, preview, changed });
     window.dispatchEvent(new Event('dataset-cover-presentation-changed'));
+}
+
+// Cache only the public 7/9 contract; the nested renderer projection stays in memory.
+function publicSettings(settings) {
+    const { schema_version, version, site_values, defaults, row_article_timestamp_display_mode } = settings;
+    return { schema_version, version, site_values, defaults, row_article_timestamp_display_mode };
 }
 
 function browserStorage() {
@@ -164,7 +144,7 @@ export function createSitePresentationState({ requestFn = fetchSitePresentationS
     let saveQueue = Promise.resolve();
     try {
         const cached = JSON.parse(storage?.getItem(PUBLIC_PRESENTATION_CACHE_KEY) || 'null');
-        if (cached?.schema_version === 1 && isValidThemeConfig(cached.settings?.dataset_cover_theme)) {
+        if (cached?.schema_version === 2 && readSiteAppearance(cached.settings)) {
             saved = normalizePresentationSettings(cached.settings);
         }
     } catch { /* A blocked or corrupt cache must never block page startup. */ }
@@ -172,28 +152,26 @@ export function createSitePresentationState({ requestFn = fetchSitePresentationS
     const savedSettings = () => clone(saved || normalizePresentationSettings(null));
     const effectiveSettings = () => clone(preview?.settings || saved || normalizePresentationSettings(null));
     function paint() {
-        applySitePresentationGlobals(effectiveSettings().dataset_cover_theme, { preserveKnownBrand: !saved && !preview });
+        applySitePresentationGlobals(effectiveSettings().dataset_cover_theme, {
+            preserveKnownBrand: !saved && !preview, version: saved?.version || '', preview: Boolean(preview),
+        });
     }
-    function accept(payload) {
-        if (!isValidThemeConfig(payload?.dataset_cover_theme)) throw new Error('Invalid public presentation settings');
+    function accept(payload, { siteChanged = false } = {}) {
+        if (!readSiteAppearance(payload)) throw new Error('Invalid public presentation settings');
         saved = normalizePresentationSettings(payload);
         loaded = true;
         revision += 1;
         try {
             storage?.setItem(PUBLIC_PRESENTATION_CACHE_KEY, JSON.stringify({
-                schema_version: 1,
-                settings: saved,
+                schema_version: 2,
+                settings: publicSettings(saved),
                 brand: brandColorComponents(saved.dataset_cover_theme.shared.brand_color),
             }));
         } catch { /* Private browsing or exhausted storage still allows live settings. */ }
         applyActiveFilterRemoveSide(effectiveSettings().dataset_cover_theme.shared.active_filter_remove_side);
-        applyArticleImageCaptionSetting(effectiveSettings().dataset_cover_theme);
-        applySiteLabelValueLayoutSetting(effectiveSettings().dataset_cover_theme.shared.label_value_layout);
-        applyCardFieldPresentationSetting(
-            effectiveSettings().dataset_cover_theme.shared.card_show_all_fields,
-            effectiveSettings().dataset_cover_theme.shared.card_style_variant,
-            effectiveSettings().dataset_cover_theme.shared.card_detail_columns,
-        );
+        datasetAppearanceState.updateSite(effectiveSettings().dataset_cover_theme, {
+            version: saved.version, preview: Boolean(preview), changed: siteChanged,
+        });
         return savedSettings();
     }
     async function loadSettings() {
@@ -219,13 +197,28 @@ export function createSitePresentationState({ requestFn = fetchSitePresentationS
         return true;
     }
     function saveSettings(settings, saveRequestFn) {
-        const payload = normalizePresentationSettings(settings);
+        const normalized = normalizePresentationSettings(settings);
+        const baseline = savedSettings();
+        const values = { ...normalized.defaults, ...normalized.site_values };
+        const previous = { ...baseline.defaults, ...baseline.site_values };
+        const payload = { schema_version: 2, version: normalized.version,
+            set: Object.fromEntries(Object.entries(values).filter(([path, value]) => value !== previous[path])) };
+        if (normalized.row_article_timestamp_display_mode !== baseline.row_article_timestamp_display_mode) {
+            payload.row_article_timestamp_display_mode = normalized.row_article_timestamp_display_mode;
+        }
         // Invalidate an older GET immediately. Serial POSTs preserve user intent
         // even if two still-mounted palette controls attempt to save together.
         revision += 1;
         const pending = saveQueue.then(async () => {
             const response = await saveRequestFn(clone(payload));
-            const result = accept(response);
+            if (!readSiteAppearance(response)
+                || Object.entries(payload.set).some(([path, value]) => (
+                    response.site_values?.[path] ?? response.defaults?.[path]) !== value)
+                || (payload.row_article_timestamp_display_mode !== undefined
+                    && response.row_article_timestamp_display_mode !== payload.row_article_timestamp_display_mode)) {
+                throw new Error('Site appearance save readback mismatch');
+            }
+            const result = accept(response, { siteChanged: true });
             paint();
             return result;
         });
@@ -233,13 +226,7 @@ export function createSitePresentationState({ requestFn = fetchSitePresentationS
         return pending;
     }
     applyActiveFilterRemoveSide(effectiveSettings().dataset_cover_theme.shared.active_filter_remove_side);
-    applyArticleImageCaptionSetting(effectiveSettings().dataset_cover_theme);
-    applySiteLabelValueLayoutSetting(effectiveSettings().dataset_cover_theme.shared.label_value_layout);
-    applyCardFieldPresentationSetting(
-            effectiveSettings().dataset_cover_theme.shared.card_show_all_fields,
-            effectiveSettings().dataset_cover_theme.shared.card_style_variant,
-            effectiveSettings().dataset_cover_theme.shared.card_detail_columns,
-        );
+    datasetAppearanceState.updateSite(effectiveSettings().dataset_cover_theme, { version: saved?.version || '', changed: false });
     return { loadSettings, savedSettings, effectiveSettings, paint, setPreview, releasePreview, saveSettings };
 }
 
@@ -250,4 +237,5 @@ export function getSitePresentationState(requestFn = fetchSitePresentationSettin
 }
 export function resetSitePresentationStatesForTests() {
     states = new WeakMap();
+    datasetAppearanceState.clear();
 }

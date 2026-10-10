@@ -1,3 +1,4 @@
+import { paletteMountOptions } from './dataset_appearance_palette_test_fixtures.js';
 // dataset_appearance_palette_bounds.test.js
 // Verifies every palette slider consumes the authoritative appearance bounds.
 // Connects mounted light/dark controls with the Go-embedded JSON definition.
@@ -20,7 +21,7 @@ test.each(['en', 'fi'])('all mounted sliders use the definition in both themes (
     document.documentElement.lang = language;
     const hero = document.body.appendChild(document.createElement('section'));
     const control = await mountDatasetCoverTestPalette(hero, 'fixture', {
-        permissionCheck: () => true,
+        ...paletteMountOptions(), permissionCheck: () => true,
         requestFn: async () => ({ view_admin_cover_image_test_palette: true }),
         settingsRequestFn: async () => ({ dataset_cover_theme: JSON.parse(JSON.stringify(DEFAULT_DATASET_APPEARANCE)),
             row_article_timestamp_display_mode: 'date_time' }),

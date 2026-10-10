@@ -10,6 +10,7 @@
 // are placed after the dataset's own rows in that order.
 
 import { reloadDatasetRowsFromListing } from "../../infinite_scroll/infinite_scroll_handler.js";
+import { datasetAppearanceState } from '../../table_views/dataset_appearance_state.js';
 import { appendDataToTable } from "../../table_views/table_view/table_row_printer.js";
 import { appendDataToCardView } from "../../table_views/card_view/card_view_printer.js";
 import { getUnifiedTableState, setUnifiedTableState } from "../../state_stores/table_state_store.js";
@@ -83,7 +84,8 @@ async function renderRowsIntoTarget(
         targetHost.classList?.contains("card_container") ||
         targetHost.classList?.contains("search-ai-results-card-container")
     ) {
-        const renderOptions = { viewKey: getCurrentSearchView(tableName), dataTypes };
+        const renderOptions = { viewKey: getCurrentSearchView(tableName), dataTypes,
+            isCurrent: () => isCurrentSearchCache(tableName, expectedCache) };
         // Card construction awaits metadata and image work. Build into a
         // detached host so a replaced search cannot append its old rows after
         // the newer search has already cleared and repopulated the live view.
@@ -420,6 +422,7 @@ async function loadDatasetMatches(tableName, cache, isCurrent) {
 async function streamAiSearchResults(tableName, cache, context, opts, isCurrent) {
     const requestOptions = {
         ...opts,
+        appearanceToken: cache.appearanceToken,
         signal: cache.abortController?.signal,
         filters: Object.fromEntries(
             Object.entries(context.clientFilters).map(([key, value]) => [key, String(value)])
@@ -445,14 +448,14 @@ async function streamAiSearchResults(tableName, cache, context, opts, isCurrent)
  */
 export async function rerenderCachedSearchResults(tableName, expectedCache = null) {
     const cache = _ongoingSearchResults[tableName];
-    if (!cache?.query || !isCurrentSearchCache(tableName, expectedCache)) return;
+    if (!cache?.query || !isCurrentSearchCache(tableName, expectedCache || cache)) return;
     await do_intelligent_search(tableName, cache.query, cache.searchOptions || {});
 }
 
 /** The search that still answers this query under the filters now selected. */
 function getCommittedSearchCache(tableName, query = null) {
     const cache = _ongoingSearchResults[tableName];
-    if (!cache || (query !== null && cache.query !== String(query).trim())
+    if (!cache || !isCurrentSearchCache(tableName, cache) || (query !== null && cache.query !== String(query).trim())
         || getSearchFilterContext(tableName).signature !== cache.filterSignature) {
         return null;
     }
@@ -485,7 +488,8 @@ export function getSearchGroupsForViewRebuild(tableName, { query = null } = {}) 
 
 /** Whether a search currently owns what this dataset is showing. */
 export function hasCachedSearchResults(tableName) {
-    return Boolean(_ongoingSearchResults[tableName]?.query);
+    const cache = _ongoingSearchResults[tableName];
+    return Boolean(cache?.query && isCurrentSearchCache(tableName, cache));
 }
 
 export async function sortCachedSearchResults(
@@ -539,6 +543,7 @@ export async function do_intelligent_search(tableName, userQuery, opts = {}) {
     // let the first request own the result list instead of racing identical
     // reloads against one another.
     if (runningCache?.query === query
+        && isCurrentSearchCache(tableName, runningCache)
         && runningCache.executionSignature === executionSignature
         && runningCache.executionPromise) {
         return runningCache.executionPromise;
@@ -552,6 +557,7 @@ export async function do_intelligent_search(tableName, userQuery, opts = {}) {
     _ongoingSearchResults[tableName]?.supplemental?.destroy();
     const cache = initSearchCache();
     Object.assign(cache, {
+        appearanceToken: datasetAppearanceState.capture(tableName),
         query, filterSignature: context.signature, requestContext: context,
         abortController: new AbortController(),
         // The selected filters reach the dataset's rows through the listing's

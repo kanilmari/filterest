@@ -51,7 +51,7 @@
     gap: 8px;
 }
 
-:root[data-article-image-caption-position="overlay"] .row_article_inline_image_caption {
+.row_article_inline_image_caption[data-article-image-caption-position="overlay"] {
     position: absolute;
     z-index: 3;
     inset-block-end: 14px;
@@ -62,8 +62,7 @@
 }
 
 /* Caption rises by 3px; the following prose starts 5px lower in the below mode. */
-:root:not([data-article-image-caption-position="overlay"])
-    .row_article_content:has(.row_article_inline_image_caption:not([hidden]))
+.row_article_content:not([data-article-image-caption-position="overlay"]):has(.row_article_inline_image_caption:not([hidden]))
     > .big_card_description_container {
     padding-block-start: 28px;
 }

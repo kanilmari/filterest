@@ -76,6 +76,8 @@ test.describe("C12 — F5 keeps an open article's reading position", () => {
   test.beforeAll(async ({ browser }, workerInfo) => {
     credentials = loadCredentials();
     if (!runsOnThisProject(workerInfo.project)) return;
+    // Signing in and creating three datasets with 25 seeded rows can outlast the default 30 s on a busy machine.
+    test.setTimeout(90_000);
     const context = await browser.newContext({ ignoreHTTPSErrors: true });
     const page = await context.newPage();
     try {

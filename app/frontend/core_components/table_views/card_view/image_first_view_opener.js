@@ -3,6 +3,7 @@
 // Bridges the existing image modal, row content builder, and already-visible result cards.
 // Exists so every real content image can lead into a full-height media view by default.
 
+import { datasetAppearanceState } from '../dataset_appearance_state.js';
 import { loadRowArticleSectionDefaults } from "./row_article_section_defaults.js";
 
 import { buildDatasetPath } from "../../navigation/nav_engine/dataset_aliases.js";
@@ -207,6 +208,9 @@ export async function openImageFirstView({
         return null;
     }
 
+    const appearanceToken = datasetAppearanceState.capture(tableName);
+    const callerIsCurrent = isCurrent;
+    isCurrent = () => callerIsCurrent() && datasetAppearanceState.isCurrent(appearanceToken);
     const intent = beginImageFirstViewOpen({
         tableName, rowId: rowItem.id, listPath: buildDatasetPath(tableName, DATASET_PREFIX || "/"),
         restoring: restoringHistory, isCurrent,
@@ -223,6 +227,8 @@ export async function openImageFirstView({
         if (!intent.isCurrent()) return null;
         rowItem = response?.data?.find(row => String(row.id) === String(rowItem.id));
         if (!rowItem) return null;
+        if (response.dataset_appearance != null
+            && !datasetAppearanceState.accept(tableName, response.dataset_appearance, { token: appearanceToken, isCurrent })) return null;
         dataTypes = response.types || {};
         selectedCard = Array.from(document.getElementById(tableName + "_container")
             ?.querySelectorAll(".card[data-id]") || [])
@@ -303,6 +309,7 @@ export async function openImageFirstView({
 
     const shell = document.createElement("div");
     shell.classList.add("image_first_view");
+    datasetAppearanceState.bind(shell, tableName);
     shell.dataset.testid = "image-first-view";
     // The centered article leaves real background beside its text, outside the
     // image stage. Close only on that shell, never through article controls or

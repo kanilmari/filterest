@@ -68,7 +68,7 @@
 }
 
 .row_article_image_first_caption,
-:root[data-article-image-caption-position="overlay"] .row_article_inline_image_caption {
+.row_article_inline_image_caption[data-article-image-caption-position="overlay"] {
     margin: 0;
     padding: calc(0.7rem - 2px) calc(1rem - 2px);
     border: 1px solid color-mix(in srgb, var(--border_color) 72%, transparent);

@@ -7,6 +7,7 @@ import { getChosenDatasetView } from "../state_stores/dataset_view_choice_saver.
 import { getDatasetListingSignature } from "../infinite_scroll/dataset_listing_filters.js";
 import { subscribeDatasetAccessRegistry, hasDatasetAccessSnapshot, canReadDatasetFromRegistry } from "../navigation/nav_engine/dataset_access_registry.js";
 import { getDatasetViewContainerId } from "./dataset_view_registry.js";
+import { datasetAppearanceState } from './dataset_appearance_state.js';
 
 let lists = new WeakMap();
 let transfers = new WeakMap();
@@ -49,18 +50,20 @@ export function clearLoadedDatasetRows(container) {
  * signature, so a searched list is remembered like any other and never
  * crosses to a different search.
  */
-export function rememberLoadedDatasetRows(container, tableName, result, projectionView) {
+export function rememberLoadedDatasetRows(container, tableName, result, projectionView,
+    appearanceToken = datasetAppearanceState.capture(tableName)) {
     if (!container) return;
     const data = uniqueRows(result.data || []);
     lists.set(container, {
-        tableName, signature: signature(tableName), projectionView,
+        tableName, signature: signature(tableName), projectionView, appearanceToken,
         result: { ...result, data }, offset: result.data?.length || 0,
     });
 }
 
 function currentList(container, tableName) {
     const entry = lists.get(container);
-    return entry?.tableName === tableName && entry.signature === signature(tableName) ? entry : null;
+    return entry?.tableName === tableName && entry.signature === signature(tableName)
+        && datasetAppearanceState.isCurrent(entry.appearanceToken) ? entry : null;
 }
 
 /** Keep the current prefix when its first page resolves only row-group selection. */
@@ -69,7 +72,8 @@ export function rekeyLoadedDatasetRows(tableName, previousFilters) {
     const entry = lists.get(container);
     // A stale prefix must never become current through reconciliation. Keep its
     // rows, projection and raw offset untouched only when the old scope matches.
-    if (entry?.tableName === tableName && entry.signature === signature(tableName, previousFilters)) {
+    if (entry?.tableName === tableName && entry.signature === signature(tableName, previousFilters)
+        && datasetAppearanceState.isCurrent(entry.appearanceToken)) {
         entry.signature = signature(tableName);
     }
 }
@@ -111,6 +115,7 @@ export function resolveLoadedDatasetRows(tableName, token) {
     const entry = token && transfers.get(token);
     if (canReadDatasetFromRegistry(tableName) !== true
         || !entry || entry.tableName !== tableName || entry.signature !== signature(tableName)
+        || !datasetAppearanceState.isCurrent(entry.appearanceToken)
         || getChosenDatasetView(tableName) !== "article_view") return null;
     return entry;
 }

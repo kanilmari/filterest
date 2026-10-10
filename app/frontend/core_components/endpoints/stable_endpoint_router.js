@@ -288,7 +288,10 @@ export async function saveDatasetCardPresentation(request) {
     });
 }
 
-/** Saves canonical per-dataset leaves with the two revisions loaded by results. */
+/** Saves tab-owned values and sparse default overrides with both loaded revisions.
+ * @param {import('../../generated/go_contract_types').DatasetAppearanceRequest} request
+ * @returns {Promise<import('../../generated/go_contract_types').DatasetAppearanceResponse>}
+ */
 export async function saveDatasetAppearance(request) {
     return stable_candidate_endpoint_router('adminDatasetAppearance', { method: 'POST', body_data: request });
 }
@@ -315,7 +318,9 @@ export async function fetchAdminUIFeatureFlags() {
     return stable_candidate_endpoint_router('adminUiFeatureFlags');
 }
 
-/** Returns the public-safe dataset-cover and article timestamp presentation settings. */
+/** Returns seven public site values, nine defaults and the article timestamp setting.
+ * @returns {Promise<import('../../generated/go_contract_types').SitePresentationSettingsResponse>}
+ */
 export async function fetchSitePresentationSettings() {
     return stable_candidate_endpoint_router('sitePresentationSettings');
 }
@@ -327,7 +332,10 @@ export async function fetchAdminSitePresentationSettings() {
     });
 }
 
-/** Atomically replaces the typed site presentation settings object. */
+/** Patches site-owned appearance with a loaded revision; omitted timestamp is retained.
+ * @param {import('../../generated/go_contract_types').SitePresentationSettingsPatch} request
+ * @returns {Promise<import('../../generated/go_contract_types').SitePresentationSettingsResponse>}
+ */
 export async function saveAdminSitePresentationSettings(request) {
     return stable_candidate_endpoint_router('adminSitePresentationSettings', {
         method: 'POST',

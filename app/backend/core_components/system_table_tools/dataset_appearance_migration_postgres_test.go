@@ -37,12 +37,19 @@ func TestDatasetAppearancePostgresLegacyMigrationFreshUpgradeAndReplay(t *testin
 	}
 	frontPageExec(t, upgraded, `UPDATE system_db_tables SET card_style_variant='modern',card_detail_columns=2 WHERE table_name='tiketit';
  INSERT INTO system_dataset_appearance(table_uid,overrides,revision)
- SELECT table_uid,'{"light.image_blur":0}',7 FROM system_db_tables WHERE table_name='tiketit';`)
+ SELECT table_uid,'{}',7 FROM system_db_tables WHERE table_name='tiketit';`)
 	migration, err := os.ReadFile(filepath.Join("..", "..", "..", "server_tools", "migrations", "20261009000040_cut_over_dataset_card_appearance.sql"))
 	if err != nil {
 		t.Fatal(err)
 	}
 	frontPageExec(t, upgraded, string(migration))
+	for _, name := range []string{"20261009000060_extend_dataset_appearance_three_places.sql", "20261009000061_backfill_dataset_appearance_three_places.sql"} {
+		raw, err := os.ReadFile(filepath.Join("..", "..", "..", "server_tools", "migrations", name))
+		if err != nil {
+			t.Fatal(err)
+		}
+		frontPageExec(t, upgraded, string(raw))
+	}
 	for _, db := range []*sql.DB{current, upgraded} {
 		uid, err := store.UIDForName(db, "tiketit")
 		if err != nil {
@@ -53,7 +60,7 @@ func TestDatasetAppearancePostgresLegacyMigrationFreshUpgradeAndReplay(t *testin
 			t.Fatal(err)
 		}
 		if db == upgraded {
-			if before.Version != "8" || before.Overrides["light.image_blur"] != float64(0) || before.Sources["shared.card_style_variant"] != "override" || before.Sources["shared.card_detail_columns"] != "override" || before.Effective.Light.ImageBlur != 0 || before.Effective.Shared.CardStyleVariant != "modern" || before.Effective.Shared.CardDetailColumns != 2 {
+			if before.Version != "9" || len(before.TabValues) != 28 || before.Sources["shared.card_style_variant"] != "override" || before.Sources["shared.card_detail_columns"] != "override" || before.Effective.Light.ImageBlur != 1 || before.Effective.Shared.CardStyleVariant != "modern" || before.Effective.Shared.CardDetailColumns != 2 {
 				t.Fatal("legacy equality or extra leaves lost", before)
 			}
 			_, card, err := loadCardVisibilityTableSettings(db, "tiketit")

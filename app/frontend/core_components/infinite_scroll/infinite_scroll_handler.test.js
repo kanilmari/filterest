@@ -113,6 +113,42 @@ function createCardView(tableName, { collapsed = false } = {}) {
 }
 
 describe("initializeInfiniteScroll", () => {
+    test('listing reload never appends replacement rows into a surface owned by the renamed UID', async () => {
+        const { datasetAppearanceState } = await import('../table_views/dataset_appearance_state.js');
+        const { setAllSpecs } = await import('../state_stores/table_specs_reader.js');
+        const { DEFAULT_DATASET_APPEARANCE } = await import('../../shared/dataset_appearance/validator.js');
+        const { reloadDatasetRowsFromListing, disconnectInfiniteScroll } = await import('./infinite_scroll_handler.js');
+        const { container } = createWideTableView('former_orders', { container: 480, table: 900 });
+        setAllSpecs({ former_orders: { table_uid: 22 }, renamed: { table_uid: 11 } });
+        datasetAppearanceState.bind(container, 'renamed', 11);
+        fetchDatasetDataMock.mockResolvedValue({ data: [{ id: 1 }], row_count: 1, types: {}, dataset_appearance:
+            { dataset_uid: 22, schema_version: 1, version: '1', overrides: {}, effective: DEFAULT_DATASET_APPEARANCE } });
+        expect(await reloadDatasetRowsFromListing('former_orders')).toBeNull();
+        expect(appendDataToTableMock).not.toHaveBeenCalled();
+        expect(container.dataset.datasetAppearanceUid).toBe('11');
+        expect(datasetAppearanceState.savedSnapshot('former_orders')).toBeNull();
+        disconnectInfiniteScroll('former_orders');
+    });
+    test.each(['ownership', 'mismatched snapshot'])('listing reload and infinite scroll discard a late %s snapshot', async reason => {
+        const { datasetAppearanceState } = await import('../table_views/dataset_appearance_state.js');
+        const { setAllSpecs } = await import('../state_stores/table_specs_reader.js');
+        const { DEFAULT_DATASET_APPEARANCE } = await import('../../shared/dataset_appearance/validator.js');
+        const { reloadDatasetRowsFromListing, disconnectInfiniteScroll } = await import('./infinite_scroll_handler.js');
+        createWideTableView('private_orders', { container: 480, table: 900 });
+        const snapshot = { dataset_uid: 11, schema_version: 1, version: '1', overrides: {}, effective: DEFAULT_DATASET_APPEARANCE };
+        setAllSpecs({ private_orders: { table_uid: 11 } });
+        datasetAppearanceState.accept('private_orders', snapshot);
+        let complete;
+        fetchDatasetDataMock.mockImplementationOnce(() => new Promise(resolve => { complete = resolve; }));
+        const pending = reloadDatasetRowsFromListing('private_orders');
+        await vi.waitFor(() => expect(complete).toBeTypeOf('function'));
+        if (reason === 'ownership') setAllSpecs({ private_orders: { table_uid: 22 }, renamed: { table_uid: 11 } });
+        complete({ data: [{ id: 1 }], row_count: 1, types: {}, dataset_appearance:
+            { ...snapshot, dataset_uid: reason === 'ownership' ? 11 : 22 } });
+        expect(await pending).toBeNull();
+        expect(appendDataToTableMock).not.toHaveBeenCalled();
+        disconnectInfiniteScroll('private_orders');
+    });
     beforeEach(() => {
         vi.resetModules();
         vi.clearAllMocks();

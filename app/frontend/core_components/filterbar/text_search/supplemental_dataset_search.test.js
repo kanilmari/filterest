@@ -16,6 +16,9 @@ vi.mock("../../table_views/compact_dataset_group.js", () => ({
     },
 }));
 import { createSupplementalDatasetSearch } from "./supplemental_dataset_search.js";
+import { datasetAppearanceState } from '../../table_views/dataset_appearance_state.js';
+import { setAllSpecs } from '../../state_stores/table_specs_reader.js';
+import { invalidateSessionGeneration } from '../../auth/session_generation_store.js';
 let controls = [];
 const tick = () => new Promise(resolve => setTimeout(resolve, 0));
 function mount(query = "shared", current = () => true) {
@@ -26,10 +29,31 @@ function mount(query = "shared", current = () => true) {
     return control;
 }
 beforeEach(() => {
+    datasetAppearanceState.clear(); setAllSpecs({});
     document.body.innerHTML = '<main id="tabs"><div id="current_container"><div id="stage"><div id="text">Primary text</div></div></div></main>';
     state.tabs = [{ dataset: "current" }, { dataset: "alpha" }, { dataset: "beta" }, { dataset: "gamma" }];
     state.reader.mockReset(); state.listener = null;
 });
+test.each(['sign-out', 'parent deletion', 'target deletion', 'ownership'])(
+    'a late supplemental batch is discarded after %s', async reason => {
+        state.tabs = [{ dataset: 'current' }, { dataset: 'alpha' }];
+        setAllSpecs({ current: { table_uid: 11 }, alpha: { table_uid: 22 } });
+        let complete;
+        state.reader.mockImplementation(async function* () {
+            await new Promise(resolve => { complete = resolve; });
+            yield { columns: ['id'], data: [{ id: 42 }] };
+        });
+        const control = mount();
+        await vi.waitFor(() => expect(complete).toBeTypeOf('function'));
+        if (reason === 'sign-out') invalidateSessionGeneration({ reason: 'logout' });
+        else if (reason === 'parent deletion') datasetAppearanceState.forget('current');
+        else if (reason === 'target deletion') datasetAppearanceState.forget('alpha');
+        else setAllSpecs({ current: { table_uid: 11 }, alpha: { table_uid: 33 }, renamed: { table_uid: 22 } });
+        complete(); await tick();
+        expect(control.element.querySelector('section').textContent).toBe('');
+        expect(control.element.hidden).toBe(true);
+    },
+);
 afterEach(async () => {
     controls.forEach(control => control.destroy()); controls = [];
     await tick(); await tick();

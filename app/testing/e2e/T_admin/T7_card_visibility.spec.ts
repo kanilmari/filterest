@@ -1,6 +1,8 @@
 /**
  * T7_card_visibility.spec.ts
  *
+ * Follows admin_tools/card_visibility_view.js and dataset_palette_editors.js.
+ * Field saves keep their metadata protocol; the palette uses the v2 tab scope.
  * E2E test for the Card Visibility admin view.
  * Full flow: navigate → select table → edit flags → save → reload → verify persistence.
  *
@@ -22,7 +24,7 @@ import { waitForAppReady } from '../helpers/navigation';
 import {
   buildTempDatasetName,
   createTempDataset,
-  dropTempDataset,
+  dropTempDataset, openTempDataset,
 } from '../helpers/temp-dataset';
 
 type E2EPage = import('@playwright/test').Page;
@@ -345,7 +347,7 @@ test.describe('T7 — Card Visibility Admin View', () => {
   // -----------------------------------------------------------------------
   test('selecting a table loads the visibility matrix', async ({ page }) => {
     await navigateToCardVisibility(page);
-    const selectedTableName = await selectFirstTable(page);
+    await selectFirstTable(page);
 
     const matrix = page.locator('#cv_matrix_container');
 
@@ -451,5 +453,47 @@ test.describe('T7 — Card Visibility Admin View', () => {
         await dropTempDataset(page, datasetName);
       }
     }
+  });
+  test('This tab opens the existing field editor with this dataset and preserves the appearance draft', async ({ page }) => {
+    const datasetName = buildTempDatasetName('e2e_palette_fields');
+    // This proves the field editor and retained draft on a rendered card; the
+    // separate cover-palette spec owns the intentionally empty-dataset proof.
+    await createTempDataset(page, { datasetName, columns: { id: 'SERIAL', palette_field: 'TEXT' },
+      seedRows: [{ palette_field: 'Palette field editor fixture' }] });
+    try {
+      await openTempDataset(page, datasetName, 'card');
+      await page.getByTestId('dataset-cover-test-palette-button').click();
+      const panel = page.getByTestId('dataset-cover-test-palette');
+      await expect(panel.getByTestId('dataset-cover-test-palette-scope-tab')).toBeChecked();
+      await panel.getByTestId('dataset-cover-test-palette-hero-height').evaluate((el: HTMLInputElement) => {
+        el.value = '100'; el.dispatchEvent(new Event('input', { bubbles: true }));
+      });
+      await panel.getByTestId('dataset-cover-test-palette-fieldEditor').click();
+      await expect(page.locator('#cv_matrix_container')).toContainText('palette_field');
+      await expect(panel).toBeHidden();
+      const edit = page.getByTestId('card-visibility-edit-button');
+      await expect(edit).toBeEnabled();
+      // Check before clicking (edit mode replaces the Edit button): on a phone the modal scrolls vertically, so the
+      // button must become fully visible once scrolled to, which fails if the layout clips it sideways.
+      await edit.scrollIntoViewIfNeeded();
+      await expect(edit).toBeInViewport({ ratio: 1 });
+      // Native pointer clicks catch clipped controls that scripted admin clicks miss.
+      await edit.click();
+      await expect.poll(() => page.locator('#custom_modal_body').evaluate(el =>
+        el.scrollWidth - el.clientWidth)).toBeLessThanOrEqual(1);
+      const checkbox = page.locator('#cv_matrix_container .vct-input-checkbox:enabled').first();
+      await checkbox.setChecked(!(await checkbox.isChecked()));
+      const response = page.waitForResponse(res => res.url().endsWith('/api/card-visibility/update')
+        && res.request().method() === 'POST');
+      await page.getByTestId('card-visibility-save-button').click();
+      const saved = await response;
+      expect(saved.ok(), await saved.text()).toBe(true);
+      expect(saved.request().postDataJSON()).toMatchObject({ table_name: datasetName });
+      expect(saved.request().postDataJSON().version).toBeTruthy();
+      expect(saved.request().postDataJSON().shared_version).toBeTruthy();
+      await page.keyboard.press('Escape');
+      await page.getByTestId('dataset-cover-test-palette-button').click();
+      await expect(panel.getByTestId('dataset-cover-test-palette-hero-height')).toHaveValue('100');
+    } finally { await dropTempDataset(page, datasetName); }
   });
 });

@@ -1,699 +1,276 @@
 // @vitest-environment jsdom
 // dataset_cover_test_palette.test.js
-// Verifies public appearance settings and the protected light/dark palette editor.
-// Connects optional cover images, shared card controls and persisted site settings.
-// Preserves authorization while datasets without images gain the same editor.
+// Proves the three-place palette through its real controls and rendering owners.
+// Connects v2 API patches, authorization and independent draft/save lifecycles.
+// Guards sparse presence, language focus, scope switches and request races.
+import { afterEach, beforeEach, expect, test, vi } from 'vitest';
+import { mountDatasetCoverTestPalette, applyDatasetCoverThemeConfig } from './dataset_cover_test_palette.js';
+import { resetSitePresentationStatesForTests, DEFAULT_DATASET_COVER_THEME } from './site_presentation_state.js';
+import { datasetAppearanceState } from '../table_views/dataset_appearance_state.js';
+import { DATASET_APPEARANCE_PATHS_BY_PLACE } from '../../shared/dataset_appearance/validator.js';
+import { paletteMountOptions, paletteSnapshot, applyTabPatch, applySitePatch } from './dataset_appearance_palette_test_fixtures.js';
 
-import { resetSitePresentationStatesForTests } from './site_presentation_state.js';
-import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
-import {
-    DEFAULT_DATASET_COVER_THEME,
-    applyDatasetCoverThemeConfig,
-    mountDatasetCoverTestPalette,
-} from './dataset_cover_test_palette.js';
-
-function clone(value) {
-    return JSON.parse(JSON.stringify(value));
-}
-
-function createSettings() {
-    return {
-        dataset_cover_theme: clone(DEFAULT_DATASET_COVER_THEME),
-        row_article_timestamp_display_mode: 'date_only',
+const mounted = [];
+beforeEach(() => {
+    document.body.replaceChildren(); localStorage.clear(); document.documentElement.lang = 'en';
+    resetSitePresentationStatesForTests();
+});
+afterEach(() => { mounted.splice(0).forEach(control => control.destroy()); vi.restoreAllMocks(); });
+async function setup(overrides = {}, snapshot = paletteSnapshot(), name = 'demo') {
+    const hero = document.body.appendChild(document.createElement('section'));
+    datasetAppearanceState.accept(name, snapshot);
+    const options = paletteMountOptions(overrides, snapshot);
+    const control = await mountDatasetCoverTestPalette(hero, name, options);
+    if (control) mounted.push(control);
+    const get = id => control.panel.querySelector(`[data-testid="dataset-cover-test-palette-${id}"]`);
+    const row = path => control.panel.querySelector(`[data-appearance-path="${path}"]`);
+    const change = (id, value) => {
+        const input = get(id); input.value = String(value);
+        input.dispatchEvent(new Event(input.type === 'range' || input.type === 'color' ? 'input' : 'change'));
     };
+    const save = async () => { get('save').click(); await vi.waitFor(() => expect(get('save').disabled).toBe(false)); };
+    return { control, hero, options, get, row, change, save };
 }
-function createCoverHero() {
-    const hero = document.createElement('section');
-    hero.classList.add('filterbar-inline-hero', 'filterbar-inline-hero--has-cover');
-    document.body.appendChild(hero);
-    return hero;
-}
+const status = () => document.querySelector('[data-testid="toast"] .toast-notification-content')?.textContent;
 
-function createMountOptions(overrides = {}) {
-    return {
-        requestFn: vi.fn(async () => ({ view_admin_cover_image_test_palette: true })),
-        settingsRequestFn: vi.fn(async () => createSettings()),
-        saveRequestFn: vi.fn(async (request) => request),
-        datasetSettingsRequestFn: vi.fn(async table_name => ({
-            table_name, card_style_variant: null, card_detail_columns: null, dataset_appearance: { dataset_uid: 11, version: "1", shared_version: "shared-1" }, columns: [{ column_uid: 1 }],
-        })),
-        datasetSaveRequestFn: vi.fn(async request => ({ dataset_uid: request.dataset_uid, shared_version: request.shared_version, version: "2", overrides: request.set })),
-        permissionCheck: () => true,
-        ...overrides,
-    };
-}
+test('opens This tab first every time with native scope radios, ordered places and no extra appearance read', async () => {
+    const { control, get, options } = await setup();
+    control.button.click();
+    const radios = [...get('scope').querySelectorAll('input')];
+    expect(radios.map(input => [input.type, input.value, input.checked])).toEqual([
+        ['radio', 'tab', true], ['radio', 'site', false],
+    ]);
+    expect(radios[0].name).toBe(radios[1].name);
+    expect([...control.panel.querySelectorAll('[data-place]')].map(row => row.dataset.place))
+        .toEqual([...Array(15).fill('tab_only'), ...Array(9).fill('site_default'), ...Array(7).fill('site_only')]);
+    expect(get('scope').parentElement).toBe(control.panel);
+    expect(get('save').closest('.dataset-cover-test-palette__actions').parentElement).toBe(control.panel);
+    expect(options.datasetSettingsRequestFn).not.toHaveBeenCalled();
+    get('scope-site').click(); expect(get('scope-site').checked).toBe(true);
+    expect(get('image-opacity').closest('details').hidden).toBe(true);
+    expect(get('tab-light').parentElement.hidden).toBe(true);
+    expect(get('save').textContent).toBe('Save all datasets');
+    get('close').click(); control.button.click();
+    expect(get('scope-tab').checked).toBe(true); expect(get('save').textContent).toBe('Save this tab');
+});
 
-describe('dataset cover presentation settings', () => {
-    test('edits captions in a separate site-wide section with shared FI/EN choices and saved reset', async () => {
-        document.documentElement.lang = 'en';
-        const options = createMountOptions();
-        const mounted = await mountDatasetCoverTestPalette(createCoverHero(), 'demo', options);
-        const get = id => mounted.panel.querySelector('[data-testid="' + id + '"]');
-        const removeSide = get('dataset-cover-test-palette-active-filter-remove-side');
-        expect(removeSide.value).toBe('start');
-        expect([...removeSide.options].map(option => option.value)).toEqual(['start', 'end']);
-        expect(removeSide.closest('.dataset-cover-test-palette__group').textContent).toContain('Dataset header');
-        const select = get('dataset-cover-test-palette-article-image-caption-position');
-        const section = get('site-article-image-palette-settings');
-        expect(section.contains(select)).toBe(true);
-        expect(get('site-card-palette-settings').contains(select)).toBe(false);
-        expect(section.textContent).toContain('Article images');
-        expect(select.getAttribute('aria-description')).toBe('Site-wide setting for article images.');
-        expect([...select.options].map(option => option.value)).toEqual(['below', 'overlay']);
-        expect(select.value).toBe('below');
-        select.value = 'overlay'; select.dispatchEvent(new Event('change'));
-        expect(document.documentElement.dataset.articleImageCaptionPosition).toBe('overlay');
-        expect(options.saveRequestFn).not.toHaveBeenCalled();
-        get('dataset-cover-test-palette-tab-dark').click();
-        expect(select.value).toBe('overlay');
-        document.documentElement.lang = 'fi';
-        await vi.waitFor(() => expect(select.getAttribute('aria-label')).toBe('Kuvatekstin sijainti'));
-        expect(section.textContent).toContain('Artikkelikuvat');
-        expect(select.getAttribute('aria-description')).toBe('Sivuston yhteinen asetus artikkelien kuville.');
-        expect([...select.options].map(option => option.textContent)).toEqual(['Kuvan alla', 'Kuvan päällä']);
-        get('dataset-cover-test-palette-tab-light').click();
-        expect(select.value).toBe('overlay');
-        get('dataset-cover-test-palette-reset').click();
-        expect(select.value).toBe('below');
-        select.value = 'overlay'; select.dispatchEvent(new Event('change'));
-        get('dataset-cover-test-palette-save').click();
-        await vi.waitFor(() => expect(get('dataset-cover-test-palette-save').disabled).toBe(false));
-        expect(options.saveRequestFn).toHaveBeenCalledOnce();
-        expect(options.saveRequestFn.mock.calls[0][0].dataset_cover_theme.shared.article_image_caption_position).toBe('overlay');
-        expect(options.datasetSaveRequestFn).not.toHaveBeenCalled();
-        select.value = 'below'; select.dispatchEvent(new Event('change')); mounted.destroy();
-        expect(document.documentElement.dataset.articleImageCaptionPosition).toBe('overlay');
-    });
-
-    test('previews, translates, resets and saves the bounded detail column count', async () => {
-        document.documentElement.lang = 'en';
-        const options = createMountOptions();
-        const mounted = await mountDatasetCoverTestPalette(createCoverHero(), 'demo', options);
-        const input = mounted.panel.querySelector('[data-testid="dataset-cover-test-palette-card-detail-columns"]');
-        expect([input.min, input.max, input.step, input.value]).toEqual(['1', '4', '1', '2']);
-        expect(input.getAttribute('aria-label')).toBe('Detail columns');
-        input.value = '4'; input.dispatchEvent(new Event('input'));
-        expect(document.documentElement.dataset.cardDetailColumns).toBe('4');
-        expect(options.saveRequestFn).not.toHaveBeenCalled();
-        document.documentElement.lang = 'fi';
-        await vi.waitFor(() => expect(input.getAttribute('aria-label')).toBe('Detailien sarakkeet'));
-        expect(input.getAttribute('aria-description')).toContain('Kortin detailisarakkeiden');
-        expect(input.value).toBe('4');
-        mounted.panel.querySelector('[data-testid="dataset-cover-test-palette-reset"]').click();
-        expect(input.value).toBe('2');
-        input.value = '3'; input.dispatchEvent(new Event('input'));
-        mounted.panel.querySelector('[data-testid="dataset-cover-test-palette-save"]').click();
-        await vi.waitFor(() => expect(options.saveRequestFn).toHaveBeenCalledTimes(1));
-        expect(options.saveRequestFn.mock.calls[0][0].dataset_cover_theme.shared.card_detail_columns).toBe(3);
-        await vi.waitFor(() => expect(mounted.panel.querySelector('[data-testid="dataset-cover-test-palette-save"]').disabled).toBe(false));
-        input.value = '1'; input.dispatchEvent(new Event('input')); mounted.destroy();
-        expect(document.documentElement.dataset.cardDetailColumns).toBe('3');
-    });
-
-    test('separates dataset overrides and site defaults, preserving dataset draft when the site is saved', async () => {
-        const options = createMountOptions();
-        const mounted = await mountDatasetCoverTestPalette(createCoverHero(), 'demo', options);
-        const get = id => mounted.panel.querySelector('[data-testid="' + id + '"]');
-        const datasetStyle = get('dataset-card-palette-style');
-        await vi.waitFor(() => expect(datasetStyle.disabled).toBe(false));
-        expect(get('dataset-card-palette-settings').querySelector('legend').textContent).toBe('This dataset');
-        expect(get('site-card-palette-settings').querySelector('legend').textContent).toBe('Site defaults');
-        expect([...datasetStyle.options].map(option => option.value)).toEqual(['inherit','modern','standard']);
-        datasetStyle.value = 'standard'; datasetStyle.dispatchEvent(new Event('change'));
-        get('dataset-cover-test-palette-save').click();
-        await vi.waitFor(() => expect(options.saveRequestFn).toHaveBeenCalledTimes(1));
-        expect(options.datasetSaveRequestFn).not.toHaveBeenCalled();
-        expect(datasetStyle.value).toBe('standard');
-        get('dataset-card-palette-save').click();
-        await vi.waitFor(() => expect(options.datasetSaveRequestFn).toHaveBeenCalledTimes(1));
-        expect(options.datasetSaveRequestFn).toHaveBeenCalledWith({
-            dataset_uid: 11, version: '1', shared_version: 'shared-1',
-            set: { 'shared.card_style_variant': 'standard' }, unset: ['shared.card_detail_columns'],
-        });
-        mounted.destroy();
-    });
-
-    test('previews card field radios, keeps exact localized guidance and restores or saves the boolean', async () => {
-        document.documentElement.lang='en';
-        const options=createMountOptions();
-        const mounted=await mountDatasetCoverTestPalette(createCoverHero(),'demo',options);
-        const all=mounted.panel.querySelector('[data-testid="dataset-cover-test-palette-card-fields-all"]');
-        const values=mounted.panel.querySelector('[data-testid="dataset-cover-test-palette-card-fields-values"]');
-        const group=mounted.panel.querySelector('[data-testid="dataset-cover-test-palette-card-fields"]');
-        expect(all.checked).toBe(true); expect(values.checked).toBe(false);
-        expect([...group.querySelectorAll('input[type=radio]')].map(input => input.value)).toEqual(['false', 'true']);
-        expect(group.textContent).toContain('Show all fields (Recommended)');
-        expect(group.textContent).toContain('Saves space and looks cleaner, but field positions may vary and labels need to be checked more carefully.');
-        expect(group.textContent).toContain('Uses more space, but keeps fields in consistent positions, making cards easier to scan and compare. (Recommended)');
-        values.click();
-        expect(document.documentElement.dataset.cardShowAllFields).toBe('false');
-        expect(options.saveRequestFn).not.toHaveBeenCalled();
-        document.documentElement.lang='fi';
-        await vi.waitFor(() => expect(group.getAttribute('aria-label')).toBe('Kortin kentät'));
-        expect(values.checked).toBe(true);
-        expect(group.textContent).toContain('Näytä vain kentät, joilla on arvo');
-        expect(group.textContent).toContain('Säästää tilaa ja selkeyttää näkymää, mutta kenttien paikat voivat vaihdella ja kenttänimiä on luettava tarkemmin.');
-        mounted.panel.querySelector('[data-testid="dataset-cover-test-palette-reset"]').click();
-        expect(all.checked).toBe(true); expect(document.documentElement.dataset.cardShowAllFields).toBe('true');
-        values.click(); mounted.panel.querySelector('[data-testid="dataset-cover-test-palette-save"]').click();
-        await vi.waitFor(() => expect(options.saveRequestFn).toHaveBeenCalledTimes(1));
-        expect(options.saveRequestFn.mock.calls[0][0].dataset_cover_theme.shared.card_show_all_fields).toBe(false);
-        await vi.waitFor(() => expect(mounted.panel.querySelector('[data-testid="dataset-cover-test-palette-save"]').disabled).toBe(false));
-        all.click(); mounted.destroy();
-        expect(document.documentElement.dataset.cardShowAllFields).toBe('false');
-    });
-
-    test('previews one shared style, localizes FI/EN and saves or restores it with the existing settings call', async () => {
-        document.documentElement.lang = 'en';
-        const options = createMountOptions();
-        const mounted = await mountDatasetCoverTestPalette(createCoverHero(), 'demo', options);
-        const select = mounted.panel.querySelector('[data-testid="dataset-cover-test-palette-card-style"]');
-        expect([...select.options].map(option => option.value)).toEqual(['modern', 'standard']);
-        expect(select.value).toBe('modern'); expect(select.getAttribute('aria-label')).toBe('Card style');
-        select.value = 'standard'; select.dispatchEvent(new Event('change'));
-        expect(document.documentElement.dataset.cardStyleVariant).toBe('standard');
-        expect(options.saveRequestFn).not.toHaveBeenCalled();
-        document.documentElement.lang = 'fi';
-        await vi.waitFor(() => expect(select.getAttribute('aria-label')).toBe('Kortin tyyli'));
-        expect(select.options[1].textContent).toBe('Tavallinen'); expect(select.value).toBe('standard');
-        mounted.panel.querySelector('[data-testid="dataset-cover-test-palette-reset"]').click();
-        expect(select.value).toBe('modern'); expect(document.documentElement.dataset.cardStyleVariant).toBe('modern');
-        select.value = 'standard'; select.dispatchEvent(new Event('change'));
-        mounted.panel.querySelector('[data-testid="dataset-cover-test-palette-save"]').click();
-        await vi.waitFor(() => expect(options.saveRequestFn).toHaveBeenCalledTimes(1));
-        expect(options.saveRequestFn.mock.calls[0][0].dataset_cover_theme.shared.card_style_variant).toBe('standard');
-        await vi.waitFor(() => expect(mounted.panel.querySelector('[data-testid="dataset-cover-test-palette-save"]').disabled).toBe(false));
-        select.value = 'modern'; select.dispatchEvent(new Event('change')); mounted.destroy();
-        expect(document.documentElement.dataset.cardStyleVariant).toBe('standard');
-    });
-
-    beforeEach(() => {
-        localStorage.clear();
-        resetSitePresentationStatesForTests();
-        document.body.innerHTML = '';
-        document.documentElement.removeAttribute('lang');
-        history.replaceState({}, '', '/demo?view=card');
-    });
-
-    afterEach(() => {
-        document.documentElement.removeAttribute('style');
-        document.documentElement.removeAttribute('lang');
-        vi.restoreAllMocks();
-    });
-
-    test('applies persisted light, dark, and shared values to every public cover hero', async () => {
-        const hero = createCoverHero();
-        const settings = createSettings();
-        settings.dataset_cover_theme.light.oval_width = 36;
-        settings.dataset_cover_theme.dark.image_opacity = 0.35;
-        settings.dataset_cover_theme.light.image_blur = 2;
-        settings.dataset_cover_theme.dark.image_blur = 0;
-        settings.dataset_cover_theme.shared.card_image_width = 360;
-        settings.dataset_cover_theme.shared.card_description_lines = 4;
-        settings.dataset_cover_theme.shared.active_tab_fade = 32;
-        settings.dataset_cover_theme.shared.active_tab_max_opacity = 0.85;
-        settings.dataset_cover_theme.shared.active_tab_glow_intensity = 0.2;
-        settings.dataset_cover_theme.shared.active_tab_glow_width = 1;
-        settings.dataset_cover_theme.shared.active_tab_glow_blur = 1.5;
-        settings.dataset_cover_theme.shared.brand_color = '#cc3366';
-        const flagRequest = vi.fn();
-
-        await expect(mountDatasetCoverTestPalette(hero, 'demo', createMountOptions({
-            requestFn: flagRequest,
-            settingsRequestFn: vi.fn(async () => settings),
-            permissionCheck: () => false,
-        }))).resolves.toBeNull();
-
-        expect(flagRequest).not.toHaveBeenCalled();
-        expect(hero.style.getPropertyValue('--dataset-cover-light-mask-oval-x')).toBe('36%');
-        expect(hero.style.getPropertyValue('--dataset-cover-light-mask-image')).toBe('initial');
-        expect(hero.style.getPropertyValue('--dataset-cover-dark-mask-image')).toBe('none');
-        expect(hero.style.getPropertyValue('--dataset-cover-dark-image-opacity')).toBe('0.35');
-        expect(hero.style.getPropertyValue('--dataset-cover-light-image-blur')).toBe('2px');
-        expect(hero.style.getPropertyValue('--dataset-cover-dark-image-blur')).toBe('0px');
-        expect(document.documentElement.style.getPropertyValue('--dataset-background-light-image-blur')).toBe('2px');
-        expect(document.documentElement.style.getPropertyValue('--dataset-background-dark-image-blur')).toBe('0px');
-        expect(document.documentElement.style.getPropertyValue('--card_image_large_width')).toBe('360px');
-        expect(document.documentElement.style.getPropertyValue('--card-description-lines')).toBe('4');
-        expect(document.documentElement.style.getPropertyValue('--navtab-active-fade-width')).toBe('32px');
-        expect(document.documentElement.style.getPropertyValue('--navtab-active-max-opacity')).toBe('0.85');
-        expect(document.documentElement.style.getPropertyValue('--navtab-active-glow-intensity')).toBe('0.2');
-        expect(document.documentElement.style.getPropertyValue('--navtab-active-glow-width')).toBe('1px');
-        expect(document.documentElement.style.getPropertyValue('--navtab-active-glow-blur')).toBe('1.5px');
-        expect(document.documentElement.style.getPropertyValue('--brand-hue')).toBe('340');
-        expect(document.documentElement.style.getPropertyValue('--brand-sat')).toBe('60%');
-        expect(document.documentElement.style.getPropertyValue('--brand-light')).toBe('50%');
-        expect(hero.querySelector('[data-testid="dataset-cover-test-palette-button"]')).toBeNull();
-    });
-
-    test('falls back to approved source defaults if the public settings read fails', async () => {
-        const hero = createCoverHero();
-        await mountDatasetCoverTestPalette(hero, 'demo', createMountOptions({
-            settingsRequestFn: vi.fn(async () => { throw new Error('unavailable'); }),
-            permissionCheck: () => false,
-        }));
-
-        expect(hero.style.getPropertyValue('--dataset-cover-light-mask-oval-x')).toBe('32%');
-        expect(hero.style.getPropertyValue('--dataset-cover-light-mask-position-y')).toBe('56%');
-        expect(hero.style.getPropertyValue('--dataset-cover-dark-image-opacity')).toBe('0.3');
-        expect(hero.style.getPropertyValue('--dataset-cover-hero-extra-height')).toBe('40px');
-        expect(hero.style.getPropertyValue('--dataset-cover-light-image-blur')).toBe('1px');
-        expect(hero.style.getPropertyValue('--dataset-cover-dark-image-blur')).toBe('1px');
-    });
-
-    test('opens shared appearance controls without a cover and preserves settings on save', async () => {
-        const hero = document.createElement('section');
-        hero.classList.add('filterbar-inline-hero');
-        document.body.appendChild(hero);
-        const settings = createSettings();
-        settings.dataset_cover_theme.light.image_blur = 5;
-        settings.dataset_cover_theme.dark.image_blur = 0;
-        const options = createMountOptions({ settingsRequestFn: vi.fn(async () => settings) });
-        const control = await mountDatasetCoverTestPalette(hero, 'demo', options);
-
-        expect(document.documentElement.style.getPropertyValue('--dataset-background-light-image-blur')).toBe('5px');
-        expect(document.documentElement.style.getPropertyValue('--dataset-background-dark-image-blur')).toBe('0px');
-        expect(options.requestFn).toHaveBeenCalledOnce();
-        expect(control).not.toBeNull();
-        expect(hero.classList.contains('filterbar-inline-hero--has-cover')).toBe(false);
-        control.button.click();
-        expect(control.panel.hidden).toBe(false);
-        const cardWidth = control.panel.querySelector('[data-testid="dataset-cover-test-palette-card-image-width"]');
-        const cardLines = control.panel.querySelector('[data-testid="dataset-cover-test-palette-card-description-lines"]');
-        const brandColor = control.panel.querySelector('input[type="color"]');
-        expect(cardWidth).not.toBeNull();
-        expect(cardLines).not.toBeNull();
-        expect(brandColor.value).toBe(settings.dataset_cover_theme.shared.brand_color);
-        cardWidth.value = '365';
-        cardWidth.dispatchEvent(new Event('input', { bubbles: true }));
-        control.panel.querySelector('[data-testid="dataset-cover-test-palette-save"]').click();
-        await Promise.resolve();
-        await Promise.resolve();
-        const saved = options.saveRequestFn.mock.calls[0][0];
-        expect(saved.dataset_cover_theme.shared.card_image_width).toBe(365);
-        expect(saved.dataset_cover_theme.light.image_blur).toBe(5);
-        expect(saved.dataset_cover_theme.dark.image_blur).toBe(0);
-        expect(saved.row_article_timestamp_display_mode).toBe('date_only');
-        expect(hero.classList.contains('filterbar-inline-hero--has-cover')).toBe(false);
-        control.destroy();
-    });
-
-    test.each([true, false])('keeps permission and feature-flag guards with cover=%s', async (cover) => {
-        const hero = createCoverHero();
-        hero.classList.toggle('filterbar-inline-hero--has-cover', cover);
-        const denied = createMountOptions({ permissionCheck: vi.fn(() => false) });
-        await expect(mountDatasetCoverTestPalette(hero, 'demo', denied)).resolves.toBeNull();
-        expect(denied.permissionCheck).toHaveBeenCalledWith('/ui/admin/dataset_header_config');
-        expect(denied.requestFn).not.toHaveBeenCalled();
-        for (const requestFn of [
-            vi.fn(async () => ({})),
-            vi.fn(async () => ({ view_admin_cover_image_test_palette: false })),
-            vi.fn(async () => ({ view_admin_cover_image_test_palette: 'true' })),
-            vi.fn(async () => { throw new Error('unavailable'); }),
-        ]) {
-            await expect(mountDatasetCoverTestPalette(hero, 'demo', createMountOptions({ requestFn }))).resolves.toBeNull();
-        }
-        expect(hero.querySelector('[data-testid="dataset-cover-test-palette-button"]')).toBeNull();
-    });
-
-    test.each([
-        ['fi', 'Avaa ulkoasun paletti', 'Ulkoasun asetukset'],
-        ['en', 'Open appearance palette', 'Appearance settings'],
-    ])('names the shared controls in %s and avoids duplicate palettes', async (language, label, title) => {
-        const priorLanguage = localStorage.getItem('chosen_language');
-        localStorage.setItem('chosen_language', language);
-        const hero = document.createElement('section');
-        hero.className = 'filterbar-inline-hero';
-        document.body.append(hero);
-        const control = await mountDatasetCoverTestPalette(hero, 'demo', createMountOptions());
-        expect(control.button.getAttribute('aria-label')).toBe(label);
-        expect(control.panel.textContent).toContain(title);
-        await expect(mountDatasetCoverTestPalette(hero, 'demo', createMountOptions())).resolves.toBeNull();
-        expect(hero.querySelectorAll('[data-testid="dataset-cover-test-palette-button"]')).toHaveLength(1);
-        control.destroy();
-        if (priorLanguage === null) localStorage.removeItem('chosen_language');
-        else localStorage.setItem('chosen_language', priorLanguage);
-    });
-
-    test('updates mounted copy with the document language without changing the open draft', async () => {
-        localStorage.setItem('chosen_language', 'en');
-        document.documentElement.lang = 'fi-FI';
-        const hero = createCoverHero();
-        const options = createMountOptions();
-        const control = await mountDatasetCoverTestPalette(hero, 'demo', options);
-        control.button.click();
-        const { panel } = control;
-        const field = (name) => panel.querySelector(`[data-testid="dataset-cover-test-palette-${name}"]`);
-        expect(control.button.title).toBe('Avaa ulkoasun paletti');
-        field('tab-dark').click();
-        field('image-opacity').value = '0.65';
-        field('image-opacity').dispatchEvent(new Event('input', { bubbles: true }));
-        field('mask-enabled').checked = true;
-        field('mask-enabled').dispatchEvent(new Event('change', { bubbles: true }));
-        field('brand-color').value = '#00aa77';
-        field('brand-color').dispatchEvent(new Event('input', { bubbles: true }));
-        field('card-image-width').value = '425';
-        field('card-image-width').dispatchEvent(new Event('input', { bubbles: true }));
-        const toolboxes = [...panel.querySelectorAll('details')];
-        toolboxes.forEach((toolbox, index) => { toolbox.open = index % 2 === 0; });
-        panel.style.cssText = 'left: 42px; top: 73px; right: auto; width: 490px; height: 680px;';
-        const geometry = panel.style.cssText;
-        const heroStyle = hero.style.cssText;
-        const rootStyle = document.documentElement.style.cssText;
-        const controls = [...panel.querySelectorAll('input')];
-        const values = controls.map((input) => [input.value, input.checked]);
-        const expanded = toolboxes.map((toolbox) => toolbox.open);
-
-        for (const [language, openLabel, opacityLabel, title] of [
-            ['en', 'Open appearance palette', 'Whole image opacity', 'Appearance settings'],
-            ['fi', 'Avaa ulkoasun paletti', 'Koko kuvan peittävyys', 'Ulkoasun asetukset'],
-        ]) {
-            document.documentElement.lang = language;
-            await Promise.resolve();
-            expect(control.button.title).toBe(openLabel);
-            expect(control.button.getAttribute('aria-label')).toBe(openLabel);
-            expect(panel.querySelector('strong').textContent).toBe(title);
-            expect(field('image-opacity').getAttribute('aria-label')).toBe(opacityLabel);
-            expect(field('image-opacity').parentElement.querySelector('span').textContent).toBe(opacityLabel);
-            expect(field('close').title).toBe(language === 'fi' ? 'Sulje ulkoasun asetukset' : 'Close appearance settings');
-            expect(field('close').getAttribute('aria-label')).toBe(field('close').title);
-            expect(field('save').textContent).toBe(language === 'fi' ? 'Tallenna sivuston oletukset' : 'Save site defaults');
-            expect(field('reset').textContent).toBe(language === 'fi' ? 'Palauta tallennetut arvot' : 'Reset to saved values');
-            expect(panel.hidden).toBe(false);
-            expect(control.button.getAttribute('aria-expanded')).toBe('true');
-            expect(field('tab-dark').getAttribute('aria-selected')).toBe('true');
-            expect([...panel.querySelectorAll('input')]).toEqual(controls);
-            expect(controls.map((input) => [input.value, input.checked])).toEqual(values);
-            expect(toolboxes.map((toolbox) => toolbox.open)).toEqual(expanded);
-            expect(panel.style.cssText).toBe(geometry);
-            expect(hero.style.cssText).toBe(heroStyle);
-            expect(document.documentElement.style.cssText).toBe(rootStyle);
-        }
-        expect(panel.textContent).toContain('Aineistovälilehdet');
-        expect(panel.textContent).toContain('Tausta- ja kansikuva');
-        expect(panel.textContent).toContain('Liukuvärin keskustan kohta');
-        expect(panel.textContent).toContain('Tummennuskerroksen peittävyys');
-        expect(panel.textContent).toContain('Kansi- ja taustakuvan sumennus');
-        expect(panel.textContent).not.toMatch(/opacity|stop-piste|overlay|blur|hero|dataset/i);
-        expect(options.saveRequestFn).not.toHaveBeenCalled();
-        expect(options.settingsRequestFn).toHaveBeenCalledOnce();
-        expect(options.requestFn).toHaveBeenCalledOnce();
-        control.destroy();
-        localStorage.removeItem('chosen_language');
-    });
-
-    test.each([true, false])('keeps pending and completed save status translated, success=%s', async (succeeds) => {
-        document.documentElement.lang = 'fi';
-        let finishSave;
-        let failSave;
-        const options = createMountOptions({
-            saveRequestFn: vi.fn(() => new Promise((resolve, reject) => {
-                finishSave = resolve;
-                failSave = reject;
-            })),
-        });
-        const control = await mountDatasetCoverTestPalette(createCoverHero(), 'demo', options);
-        control.button.click();
-        const save = control.panel.querySelector('[data-testid="dataset-cover-test-palette-save"]');
-        const status = () => document.querySelector('[data-testid="toast"] .toast-notification-content');
-        save.click();
-        expect(control.panel.querySelector('[role="status"]')).toBeNull();
-        expect(status().textContent).toBe('Tallennetaan…');
-        document.documentElement.lang = 'en';
-        await Promise.resolve();
-        expect(status().textContent).toBe('Saving…');
-        expect(save.disabled).toBe(true);
-        if (succeeds) finishSave(options.saveRequestFn.mock.calls[0][0]);
-        else failSave(new Error('Save unavailable'));
-        await vi.waitFor(() => expect(save.disabled).toBe(false));
-        expect(status().textContent).toBe(succeeds ? 'Settings saved.' : 'Saving failed.');
-        document.documentElement.lang = 'fi';
-        await Promise.resolve();
-        expect(status().textContent).toBe(succeeds ? 'Asetukset tallennettu.' : 'Tallennus epäonnistui.');
-        expect(options.saveRequestFn).toHaveBeenCalledOnce();
-        expect(document.querySelector('[data-testid="toast"]').dataset.toastLevel).toBe(succeeds ? 'success' : 'error');
-        control.destroy();
-        expect(document.querySelector('[data-testid="toast"]')).toBeNull();
-    });
-
-    test('remembers actual section choices across palette remounts without storing initial or programmatic openings', async () => {
-        const options = createMountOptions();
-        let control = await mountDatasetCoverTestPalette(createCoverHero(), 'demo', options);
-        const groups = [...control.panel.querySelectorAll('details')];
-        expect(groups.every(group => !group.open)).toBe(true);
-        groups[0].open = true;
-        await new Promise(resolve => setTimeout(resolve, 0));
-        expect(localStorage.getItem('dataset_cover_palette_section_backgroundCover')).toBeNull();
-        groups[0].open = false;
-        groups[1].querySelector('summary').click();
-        await vi.waitFor(() => expect(localStorage.getItem('dataset_cover_palette_section_cardLayout')).toBe('true'));
-        control.button.click(); control.button.click();
-        control.panel.querySelector('[data-testid="dataset-cover-test-palette-tab-dark"]').click();
-        document.documentElement.lang = 'fi';
-        await Promise.resolve();
-        expect(groups[1].open).toBe(true);
-        control.destroy();
-        control = await mountDatasetCoverTestPalette(createCoverHero(), 'another_dataset', options);
-        const restored = [...control.panel.querySelectorAll('details')];
-        expect(restored.map(group => group.open)).toEqual([false, true, false, false, false]);
-        restored[1].querySelector('summary').click();
-        await vi.waitFor(() => expect(localStorage.getItem('dataset_cover_palette_section_cardLayout')).toBe('false'));
-        expect(options.saveRequestFn).not.toHaveBeenCalled();
-        control.destroy();
-        control = await mountDatasetCoverTestPalette(createCoverHero(), 'demo', options);
-        expect([...control.panel.querySelectorAll('details')].every(group => !group.open)).toBe(true);
-        control.destroy();
-    });
-
-    test('disconnects language observation when the palette is destroyed', async () => {
-        document.documentElement.lang = 'fi';
-        const options = createMountOptions();
-        const control = await mountDatasetCoverTestPalette(createCoverHero(), 'demo', options);
-        const disconnect = vi.spyOn(MutationObserver.prototype, 'disconnect');
-        const heading = control.panel.querySelector('strong');
-        control.destroy();
-        expect(disconnect).toHaveBeenCalledOnce();
-        document.documentElement.lang = 'en';
-        await Promise.resolve();
-        expect(heading.textContent).toBe('Ulkoasun asetukset');
-        expect(control.button.getAttribute('aria-label')).toBe('Avaa ulkoasun paletti');
-        expect(control.panel.isConnected).toBe(false);
-        expect(options.saveRequestFn).not.toHaveBeenCalled();
-    });
-
-    test('keeps the palette admin-only and fails closed when its protected flag is absent', async () => {
-        const hero = createCoverHero();
-        await expect(mountDatasetCoverTestPalette(hero, 'demo', createMountOptions({
-            requestFn: vi.fn(async () => ({ view_admin_cover_image_test_palette: false })),
-        }))).resolves.toBeNull();
-        await expect(mountDatasetCoverTestPalette(hero, 'demo', createMountOptions({
-            requestFn: vi.fn(async () => { throw new Error('unavailable'); }),
-        }))).resolves.toBeNull();
-        expect(hero.querySelector('[data-testid="dataset-cover-test-palette-button"]')).toBeNull();
-    });
-
-    test('groups background and cover controls together and saves both themes atomically', async () => {
-        const hero = createCoverHero();
-        const saveRequestFn = vi.fn(async (request) => request);
-        const control = await mountDatasetCoverTestPalette(
-            hero,
-            'demo',
-            createMountOptions({ saveRequestFn })
-        );
-        control.button.click();
-        const { panel } = control;
-
-        expect(panel.querySelectorAll(
-            '[data-testid="dataset-cover-test-palette-theme-controls"] input[type="range"]'
-        )).toHaveLength(14);
-        expect(panel.querySelectorAll(
-            '[data-testid="dataset-cover-test-palette-shared-controls"] input[type="range"]'
-        )).toHaveLength(9);
-        const background = panel.querySelector('[data-testid="dataset-cover-test-palette-backgroundImage"]');
-        const cover = panel.querySelector('[data-testid="dataset-cover-test-palette-coverImage"]');
-        expect(background.querySelectorAll('input[type="range"]')).toHaveLength(1);
-        expect(cover.querySelectorAll('input[type="range"]')).toHaveLength(13);
-        expect(background.closest('details')).toBe(cover.closest('details'));
-        expect(cover.querySelector('[data-testid="dataset-cover-test-palette-cover-visible"]')).not.toBeNull();
-        expect(cover.querySelector('[data-testid="dataset-cover-test-palette-mask-enabled"]')).not.toBeNull();
-        expect([background, cover].map(section => section.querySelector('legend').textContent))
-            .toEqual(['Background image', 'Cover image']);
-        document.documentElement.lang = 'fi';
-        await Promise.resolve();
-        expect([background, cover].map(section => section.querySelector('legend').textContent))
-            .toEqual(['Taustakuva', 'Kansikuva']);
-        expect(cover.closest('details').querySelector('summary').textContent).toBe('Tausta- ja kansikuva');
-        document.documentElement.lang = 'en';
-        await Promise.resolve();
-        const toolboxes = panel.querySelectorAll('details.dataset-cover-test-palette__group');
-        expect(toolboxes).toHaveLength(5);
-        expect(panel.querySelectorAll('.dataset-cover-test-palette__group-icon')).toHaveLength(5);
-        expect(panel.querySelectorAll('.dataset-cover-test-palette__group-chevron')).toHaveLength(5);
-        expect([...toolboxes].every(toolbox => !toolbox.open)).toBe(true);
-        expect(toolboxes[2].open).toBe(false);
-        toolboxes[2].querySelector('summary').click();
-        expect(toolboxes[2].open).toBe(true);
-        expect(panel.querySelector('[data-testid="dataset-cover-test-palette-mask-enabled"]')
-            .closest('.dataset-cover-test-palette__group')).not.toBeNull();
-
-        panel.querySelector('[data-testid="dataset-cover-test-palette-tab-dark"]').click();
-        expect(panel.querySelector('[data-testid="dataset-cover-test-palette-image-opacity"]').value)
-            .toBe('0.3');
-        const darkOpacity = panel.querySelector(
-            '[data-testid="dataset-cover-test-palette-image-opacity"]'
-        );
-        darkOpacity.value = '0.5';
-        darkOpacity.dispatchEvent(new Event('input', { bubbles: true }));
-        expect(hero.style.getPropertyValue('--dataset-cover-dark-image-opacity')).toBe('0.5');
-        expect(hero.style.getPropertyValue('--dataset-cover-light-image-opacity')).toBe('1');
-
-        const blur = panel.querySelector('[data-testid="dataset-cover-test-palette-image-blur"]');
-        blur.value = '3';
-        blur.dispatchEvent(new Event('input', { bubbles: true }));
-        expect(hero.style.getPropertyValue('--dataset-cover-dark-image-blur')).toBe('3px');
-        expect(hero.style.getPropertyValue('--dataset-cover-light-image-blur')).toBe('1px');
-        const cardWidth = panel.querySelector('[data-testid="dataset-cover-test-palette-card-image-width"]');
-        cardWidth.value = '420';
-        cardWidth.dispatchEvent(new Event('input', { bubbles: true }));
-        const descriptionLines = panel.querySelector(
-            '[data-testid="dataset-cover-test-palette-card-description-lines"]'
-        );
-        descriptionLines.value = '1';
-        descriptionLines.dispatchEvent(new Event('input', { bubbles: true }));
-        const glowIntensity = panel.querySelector(
-            '[data-testid="dataset-cover-test-palette-active-tab-glow-intensity"]'
-        );
-        glowIntensity.value = '0.15';
-        glowIntensity.dispatchEvent(new Event('input', { bubbles: true }));
-        const maximumOpacity = panel.querySelector(
-            '[data-testid="dataset-cover-test-palette-active-tab-max-opacity"]'
-        );
-        maximumOpacity.value = '0.9';
-        maximumOpacity.dispatchEvent(new Event('input', { bubbles: true }));
-        const brandColor = panel.querySelector('[data-testid="dataset-cover-test-palette-brand-color"]');
-        brandColor.value = '#00aa77';
-        brandColor.dispatchEvent(new Event('input', { bubbles: true }));
-        expect(document.documentElement.style.getPropertyValue('--card_image_large_width')).toBe('420px');
-        expect(document.documentElement.style.getPropertyValue('--card-description-lines')).toBe('1');
-        expect(document.documentElement.style.getPropertyValue('--navtab-active-glow-intensity')).toBe('0.15');
-        expect(document.documentElement.style.getPropertyValue('--navtab-active-max-opacity')).toBe('0.9');
-        expect(document.documentElement.style.getPropertyValue('--brand-hue')).toBe('162');
-        expect(document.documentElement.style.getPropertyValue('--brand-sat')).toBe('100%');
-        expect(document.documentElement.style.getPropertyValue('--brand-light')).toBe('33.33%');
-
-        panel.querySelector('[data-testid="dataset-cover-test-palette-save"]').click();
-        await vi.waitFor(() => expect(saveRequestFn).toHaveBeenCalledOnce());
-        const payload = saveRequestFn.mock.calls[0][0];
-        expect(payload.row_article_timestamp_display_mode).toBe('date_only');
-        expect(payload.dataset_cover_theme.light.image_opacity).toBe(1);
-        expect(payload.dataset_cover_theme.dark.image_opacity).toBe(0.5);
-        expect(payload.dataset_cover_theme.light.image_blur).toBe(1);
-        expect(payload.dataset_cover_theme.dark.image_blur).toBe(3);
-        expect(payload.dataset_cover_theme.shared.image_blur).toBe(1);
-        expect(payload.dataset_cover_theme.shared.card_image_width).toBe(420);
-        expect(payload.dataset_cover_theme.shared.card_description_lines).toBe(1);
-        expect(payload.dataset_cover_theme.shared.active_tab_glow_intensity).toBe(0.15);
-        expect(payload.dataset_cover_theme.shared.active_tab_max_opacity).toBe(0.9);
-        expect(payload.dataset_cover_theme.shared.brand_color).toBe('#00aa77');
-        await vi.waitFor(() => expect(document.querySelector('[data-testid="toast"] .toast-notification-content').textContent).toMatch(/saved|tallennettu/i));
-
-        darkOpacity.value = '0.8';
-        darkOpacity.dispatchEvent(new Event('input', { bubbles: true }));
-        panel.querySelector('[data-testid="dataset-cover-test-palette-reset"]').click();
-        expect(darkOpacity.value).toBe('0.5');
-        expect(hero.style.getPropertyValue('--dataset-cover-dark-image-opacity')).toBe('0.5');
-        control.destroy();
-    });
-
-    test('keeps an unsuccessful save visible and leaves the current preview intact', async () => {
-        const hero = createCoverHero();
-        const control = await mountDatasetCoverTestPalette(hero, 'demo', createMountOptions({
-            saveRequestFn: vi.fn(async () => { throw new Error('save failed'); }),
-        }));
-        control.button.click();
-        const opacity = control.panel.querySelector(
-            '[data-testid="dataset-cover-test-palette-image-opacity"]'
-        );
-        opacity.value = '0.8';
-        opacity.dispatchEvent(new Event('input', { bubbles: true }));
-        control.panel.querySelector('[data-testid="dataset-cover-test-palette-save"]').click();
-
-        await vi.waitFor(() => expect(document.querySelector('[data-testid="toast"] .toast-notification-content').textContent).toMatch(/failed|epäonnistui/i));
-        expect(hero.style.getPropertyValue('--dataset-cover-light-image-opacity')).toBe('0.8');
-        control.destroy();
-    });
-
-    test('lets an admin hide a theme cover by persisting zero opacity and restore the preview', async () => {
-        const hero = createCoverHero();
-        const saveRequestFn = vi.fn(async (request) => request);
-        const control = await mountDatasetCoverTestPalette(
-            hero,
-            'demo',
-            createMountOptions({ saveRequestFn })
-        );
-        control.button.click();
-        const { panel } = control;
-        panel.querySelector('[data-testid="dataset-cover-test-palette-tab-dark"]').click();
-
-        const opacity = panel.querySelector(
-            '[data-testid="dataset-cover-test-palette-image-opacity"]'
-        );
-        const visible = panel.querySelector(
-            '[data-testid="dataset-cover-test-palette-cover-visible"]'
-        );
-        opacity.value = '0.55';
-        opacity.dispatchEvent(new Event('input', { bubbles: true }));
-        expect(visible.checked).toBe(true);
-
-        visible.checked = false;
-        visible.dispatchEvent(new Event('change', { bubbles: true }));
-        expect(opacity.value).toBe('0');
-        expect(hero.style.getPropertyValue('--dataset-cover-dark-image-opacity')).toBe('0');
-
-        visible.checked = true;
-        visible.dispatchEvent(new Event('change', { bubbles: true }));
-        expect(opacity.value).toBe('0.55');
-
-        visible.checked = false;
-        visible.dispatchEvent(new Event('change', { bubbles: true }));
-        panel.querySelector('[data-testid="dataset-cover-test-palette-save"]').click();
-        await vi.waitFor(() => expect(saveRequestFn).toHaveBeenCalledOnce());
-        expect(saveRequestFn.mock.calls[0][0].dataset_cover_theme.dark.image_opacity).toBe(0);
-        control.destroy();
-    });
-
-    test('closes with Escape, outside pointer, or close button and remains draggable', async () => {
-        const hero = createCoverHero();
-        const control = await mountDatasetCoverTestPalette(hero, 'demo', createMountOptions());
-        control.button.click();
-        document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
-        expect(control.panel.hidden).toBe(true);
-
-        control.button.click();
-        document.body.dispatchEvent(new Event('pointerdown', { bubbles: true }));
-        expect(control.panel.hidden).toBe(true);
-
-        control.button.click();
-        control.panel.querySelector('[data-testid="dataset-cover-test-palette-close"]').click();
-        expect(control.panel.hidden).toBe(true);
-
-        expect(applyDatasetCoverThemeConfig(hero, createSettings().dataset_cover_theme)).toBe(true);
-        control.destroy();
+test('all nine defaults preserve equality, zero and false as overrides; removal is staged until Save', async () => {
+    const initial = paletteSnapshot(11, { 'shared.card_show_all_fields': false, 'shared.filterbar_content_top_space': 0,
+        'shared.card_image_width': 300 });
+    const { row, change, get, options, save } = await setup({}, initial);
+    for (const path of DATASET_APPEARANCE_PATHS_BY_PLACE.site_default) {
+        expect(row(path).querySelector(':scope > small').textContent)
+            .toBe(Object.hasOwn(initial.overrides, path) ? 'Override' : 'Site default');
+        expect(row(path).querySelector('button').textContent).toBe('Use site default');
+    }
+    expect(row('light.image_opacity').querySelector('button')).toBeNull();
+    expect(row('shared.brand_color').querySelector('button').textContent).toBe('Edit in All datasets');
+    change('card-style', 'modern'); // Equality remains explicit.
+    row('shared.card_show_all_fields').querySelector('button').click();
+    expect(get('card-fields-all').checked).toBe(true);
+    expect(datasetAppearanceState.savedSnapshot('demo').overrides['shared.card_show_all_fields']).toBe(false);
+    expect(options.datasetSaveRequestFn).not.toHaveBeenCalled();
+    await save();
+    expect(options.datasetSaveRequestFn.mock.calls[0][0]).toEqual({ schema_version: 2, dataset_uid: 11,
+        tab_set: {}, set: { 'shared.card_style_variant': 'modern' }, unset: ['shared.card_show_all_fields'],
+        version: '1', shared_version: 'site-1' });
+    expect(datasetAppearanceState.savedSnapshot('demo').overrides).toEqual({
+        'shared.card_style_variant': 'modern', 'shared.filterbar_content_top_space': 0, 'shared.card_image_width': 300,
     });
 });
 
-// The shared shell must keep dataset ownership when a save completes after further edits.
-test('shared shell retains a newer dataset draft during save and releases it on destruction', async () => {
+test('tab cover alias and opacity share a value and both themes save atomically with card/article/header overrides', async () => {
+    const { get, change, hero, options, save } = await setup();
+    change('hero-height', 80); change('image-opacity', 0.8);
+    get('tab-dark').click(); change('image-opacity', 0.55); change('image-blur', 3);
+    get('cover-visible').click(); expect(get('image-opacity').value).toBe('0');
+    get('cover-visible').click(); expect(get('image-opacity').value).toBe('0.55');
+    get('cover-visible').click();
+    change('card-image-width', 420); change('article-image-caption-position', 'overlay');
+    change('filterbar-content-top-space', 0); get('card-fields-values').click();
+    expect(hero.style.getPropertyValue('--dataset-cover-dark-image-opacity')).toBe('0');
+    await save();
+    expect(options.datasetSaveRequestFn.mock.calls[0][0]).toMatchObject({ schema_version: 2,
+        tab_set: { 'shared.hero_extra_height': 80, 'light.image_opacity': 0.8, 'dark.image_opacity': 0, 'dark.image_blur': 3 },
+        set: { 'shared.card_image_width': 420, 'shared.article_image_caption_position': 'overlay',
+            'shared.filterbar_content_top_space': 0, 'shared.card_show_all_fields': false }, unset: [] });
+    expect(options.saveRequestFn).not.toHaveBeenCalled();
+});
+
+test('scope switches keep independent drafts, preview only the selected scope and update known local site tokens', async () => {
+    const { control, get, change, hero, options, save } = await setup();
+    const other = document.body.appendChild(document.createElement('section'));
+    datasetAppearanceState.accept('other', paletteSnapshot(22)); datasetAppearanceState.bind(other, 'other');
+    change('hero-height', 100); change('card-style', 'standard');
+    expect(hero.dataset.cardStyleVariant).toBe('standard'); expect(other.dataset.cardStyleVariant).toBe('modern');
+    get('scope-site').click(); change('brand-color', '#cc3366'); change('card-detail-columns', 4);
+    expect(hero.style.getPropertyValue('--dataset-cover-hero-extra-height')).toBe('40px');
+    expect(hero.dataset.cardStyleVariant).toBe('modern'); expect(other.dataset.cardDetailColumns).toBe('4');
+    get('scope-tab').click();
+    expect(hero.style.getPropertyValue('--dataset-cover-hero-extra-height')).toBe('100px');
+    expect(hero.dataset.cardStyleVariant).toBe('standard'); expect(other.dataset.cardDetailColumns).toBe('2');
+    expect(get('brand-color').value).toBe('#1a8fe6'); // Saved site value in the read-only tab row.
+    get('scope-site').click(); expect(get('brand-color').value).toBe('#cc3366');
+    await save();
+    expect(options.saveRequestFn.mock.calls[0][0]).toEqual({ schema_version: 2, version: 'site-1',
+        set: { 'shared.brand_color': '#cc3366', 'shared.card_detail_columns': 4 } });
+    get('scope-tab').click(); expect(get('hero-height').value).toBe('100'); await save();
+    expect(options.datasetSaveRequestFn.mock.calls[0][0].shared_version).toBe('site-1-next');
+    change('hero-height', 150); get('close').click();
+    expect(hero.style.getPropertyValue('--dataset-cover-hero-extra-height')).toBe('150px');
+    control.destroy(); expect(hero.style.getPropertyValue('--dataset-cover-hero-extra-height')).toBe('100px');
+    expect(other.dataset.cardDetailColumns).toBe('4');
+});
+
+test.each(['tab', 'site'])('%s newer edits survive saving, adopt its revision, and Reset restores the committed scope', async scope => {
     let finish;
-    const options = createMountOptions({ saveRequestFn: vi.fn(request => new Promise(resolve => { finish = () => resolve(request); })) });
-    const mounted = await mountDatasetCoverTestPalette(createCoverHero(), 'demo', options);
-    const input = mounted.panel.querySelector('[data-testid="dataset-cover-test-palette-hero-height"]');
-    const save = mounted.panel.querySelector('[data-testid="dataset-cover-test-palette-save"]');
-    input.value = '100'; input.dispatchEvent(new Event('input')); save.click();
-    await vi.waitFor(() => expect(options.saveRequestFn).toHaveBeenCalledOnce());
-    input.value = '150'; input.dispatchEvent(new Event('input')); finish();
-    await vi.waitFor(() => expect(save.disabled).toBe(false));
-    expect(input.value).toBe('150');
-    mounted.resetPreview(); expect(input.value).toBe('100');
-    mounted.destroy(); expect(mounted.panel.isConnected).toBe(false);
+    const request = vi.fn(patch => new Promise(resolve => { finish = () => resolve(scope === 'tab'
+        ? applyTabPatch(paletteSnapshot(), patch) : applySitePatch(null, patch)); }));
+    const { get, change, save, control } = await setup({ [scope === 'tab' ? 'datasetSaveRequestFn' : 'saveRequestFn']: request });
+    if (scope === 'site') get('scope-site').click();
+    const id = scope === 'tab' ? 'hero-height' : 'active-tab-fade';
+    change(id, 60); const pending = save(); await vi.waitFor(() => expect(request).toHaveBeenCalledOnce());
+    change(id, 80); get(id).closest('details').open = true; control.button.click();
+    if (scope === 'site') get('scope-site').click();
+    get(id).focus(); finish(); await pending;
+    expect(get(id).value).toBe('80'); expect(document.activeElement).toBe(get(id));
+    const second = save(); await vi.waitFor(() => expect(request).toHaveBeenCalledTimes(2));
+    expect(request.mock.calls[1][0].version).toBe(scope === 'tab' ? '2' : 'site-1-next');
+    finish(); await second; get('reset').click(); expect(get(id).value).toBe('80');
+});
+
+test.each(['tab', 'site'])('%s Reset while saving follows the eventual saved result; inactive requests never restore preview', async scope => {
+    let finish;
+    const request = vi.fn(patch => new Promise(resolve => { finish = () => resolve(scope === 'tab'
+        ? applyTabPatch(paletteSnapshot(), patch) : applySitePatch(null, patch)); }));
+    const { get, change, save, hero } = await setup({ [scope === 'tab' ? 'datasetSaveRequestFn' : 'saveRequestFn']: request });
+    if (scope === 'site') get('scope-site').click();
+    const id = scope === 'tab' ? 'hero-height' : 'active-tab-fade';
+    change(id, 60); const pending = save(); await vi.waitFor(() => expect(request).toHaveBeenCalledOnce());
+    get('reset').click(); get(scope === 'tab' ? 'scope-site' : 'scope-tab').click(); finish(); await pending;
+    get(`scope-${scope}`).click(); expect(get(id).value).toBe('60');
+    expect(hero.style.getPropertyValue('--dataset-cover-hero-extra-height')).toBe(scope === 'tab' ? '60px' : '40px');
+});
+
+test.each(['tab', 'site'])('%s conflict retains draft, loaded tokens and translated refusal', async scope => {
+    const request = vi.fn(async () => { throw Object.assign(Error('changed'), { status: 409 }); });
+    const { get, change, save } = await setup({ [scope === 'tab' ? 'datasetSaveRequestFn' : 'saveRequestFn']: request });
+    if (scope === 'site') get('scope-site').click();
+    const id = scope === 'tab' ? 'hero-height' : 'active-tab-fade';
+    change(id, 60); await save(); expect(status()).toContain('draft is kept'); expect(get(id).value).toBe('60');
+    document.documentElement.lang = 'fi'; await vi.waitFor(() => expect(status()).toContain('Luonnoksesi säilyy'));
+    await save(); expect(request.mock.calls[1][0].version).toBe(scope === 'tab' ? '1' : 'site-1');
+    if (scope === 'tab') expect(request.mock.calls[1][0].shared_version).toBe('site-1');
+});
+
+test('independent tab/site rights retain readable rows and disabled Save; card rights still gate card editing', async () => {
+    const { get, row, options } = await setup({ permissionCheck: route => ![
+        '/api/admin/site-presentation-settings', '/ui/admin/card_visibility',
+    ].includes(route) });
+    expect(get('hero-height').disabled).toBe(false); expect(get('save').disabled).toBe(false);
+    expect(get('card-style').disabled).toBe(true); expect(get('article-image-caption-position').disabled).toBe(false);
+    expect(get('brand-color').value).toBe('#1a8fe6'); expect(get('brand-color').disabled).toBe(true);
+    expect(row('shared.brand_color').textContent).toContain('Site-wide');
+    expect(row('shared.brand_color').querySelector('button').disabled).toBe(true);
+    expect(get('access').textContent).toContain('do not have permission');
+    get('scope-site').click(); expect(get('save').disabled).toBe(true); get('save').click();
+    expect(options.saveRequestFn).not.toHaveBeenCalled();
+    const second = await setup({ permissionCheck: route => route !== '/api/admin/dataset-appearance' }, paletteSnapshot(33), 'read-tab');
+    expect(second.get('save').disabled).toBe(true); expect(second.get('hero-height').disabled).toBe(true);
+    expect(second.get('mediaEditor').disabled).toBe(false); // Existing media rights are independent of appearance writes.
+    second.row('shared.brand_color').querySelector('button').click();
+    expect(second.get('scope-site').checked).toBe(true); expect(second.get('brand-color').disabled).toBe(false);
+});
+
+test('FI/EN and fallback changes retain focus, both drafts and scope without a request', async () => {
+    const { control, get, change, options } = await setup();
+    control.button.click(); change('hero-height', 100); get('scope-site').click(); change('active-tab-fade', 42);
+    get('active-tab-fade').closest('details').open = true; get('active-tab-fade').focus();
+    for (const language of ['fi', 'en', 'unknown', 'fi-FI']) {
+        document.documentElement.lang = language;
+        await vi.waitFor(() => expect(get('scope-tab').parentElement.textContent).toBe(language.startsWith('fi') ? 'Tämä välilehti' : 'This tab'));
+        expect(document.activeElement).toBe(get('active-tab-fade')); expect(get('active-tab-fade').value).toBe('42');
+        expect(get('scope-site').checked).toBe(true);
+    }
+    get('scope-tab').click(); expect(get('hero-height').value).toBe('100');
+    expect(options.saveRequestFn).not.toHaveBeenCalled(); expect(options.datasetSaveRequestFn).not.toHaveBeenCalled();
+});
+
+test('late save after teardown cannot reclaim preview or paint a deleted dataset', async () => {
+    let finish;
+    const { control, get, change, options } = await setup({ datasetSaveRequestFn: vi.fn(patch => new Promise(resolve => {
+        finish = () => resolve(applyTabPatch(paletteSnapshot(), patch));
+    })) });
+    change('hero-height', 100); get('save').click(); await vi.waitFor(() => expect(options.datasetSaveRequestFn).toHaveBeenCalledOnce());
+    control.destroy(); datasetAppearanceState.forget('demo'); finish(); await Promise.resolve(); await Promise.resolve();
+    expect(datasetAppearanceState.savedSnapshot('demo')).toBeNull(); expect(control.panel.isConnected).toBe(false);
+});
+
+test('flag and route gating fail closed while public theme rendering remains available', async () => {
+    const { control } = await setup({ requestFn: async () => ({ view_admin_cover_image_test_palette: false }) });
+    expect(control).toBeNull();
+    const hero = document.createElement('section');
+    expect(applyDatasetCoverThemeConfig(hero, DEFAULT_DATASET_COVER_THEME)).toBe(true);
+    expect(hero.style.getPropertyValue('--dataset-cover-light-mask-oval-x')).toBe('32%');
+});
+
+test('tab actions open the existing media/field editors with this dataset and keep the draft', async () => {
+    const openMediaEditor = vi.fn(), openFieldEditor = vi.fn();
+    const { control, get, change } = await setup({ openMediaEditor, openFieldEditor });
+    control.button.click(); change('hero-height', 100); get('mediaEditor').click();
+    expect(openMediaEditor).toHaveBeenCalledWith('demo'); expect(control.panel.hidden).toBe(true);
+    control.button.click(); expect(get('hero-height').value).toBe('100'); get('fieldEditor').click();
+    expect(openFieldEditor.mock.calls[0][0]).toBe('demo');
+    control.button.click(); get('scope-site').click(); expect(get('fieldEditor').parentElement.hidden).toBe(true);
+});
+
+test('all nine tab controls save explicit values together, then stage removal without losing owned cover values', async () => {
+    const { change, get, row, options, save } = await setup();
+    change('card-image-width', 380); change('card-image-presentation', 'contain_blur');
+    change('article-image-caption-position', 'overlay'); get('card-fields-values').click();
+    change('label-value-layout', 'inline'); change('card-style', 'standard');
+    change('card-description-lines', 5); change('card-detail-columns', 4); change('filterbar-content-top-space', 0);
+    await save();
+    expect(Object.keys(options.datasetSaveRequestFn.mock.calls[0][0].set).sort())
+        .toEqual([...DATASET_APPEARANCE_PATHS_BY_PLACE.site_default].sort());
+    for (const path of DATASET_APPEARANCE_PATHS_BY_PLACE.site_default) row(path).querySelector('button').click();
+    expect(Object.keys(datasetAppearanceState.savedSnapshot('demo').overrides)).toHaveLength(9);
+    await save();
+    expect(options.datasetSaveRequestFn.mock.calls[1][0].unset.sort())
+        .toEqual([...DATASET_APPEARANCE_PATHS_BY_PLACE.site_default].sort());
+    expect(datasetAppearanceState.savedSnapshot('demo').overrides).toEqual({});
+    expect(Object.keys(datasetAppearanceState.savedSnapshot('demo').tab_values)).toHaveLength(28);
+});
+
+test.each(['tab', 'site'])('%s refuses a successful response with a mismatched value and retains its draft', async scope => {
+    const wrongResponse = scope === 'tab' ? paletteSnapshot() : applySitePatch(null, { set: {} });
+    const { get, change, save } = await setup({ [scope === 'tab' ? 'datasetSaveRequestFn' : 'saveRequestFn']: async () => wrongResponse });
+    if (scope === 'site') get('scope-site').click();
+    const id = scope === 'tab' ? 'hero-height' : 'active-tab-fade';
+    change(id, 60); await save(); expect(status()).toBe('Saving failed.'); expect(get(id).value).toBe('60');
+    get('reset').click(); expect(get(id).value).toBe(scope === 'tab' ? '40' : '25');
+});
+
+test('scope switching during a request keeps drafts and disables Save without a false permission explanation', async () => {
+    let finish;
+    const { get, change, options } = await setup({ datasetSaveRequestFn: vi.fn(patch => new Promise(resolve => {
+        finish = () => resolve(applyTabPatch(paletteSnapshot(), patch));
+    })) });
+    change('hero-height', 60); get('save').click(); await vi.waitFor(() => expect(options.datasetSaveRequestFn).toHaveBeenCalledOnce());
+    get('scope-site').click(); change('active-tab-fade', 42);
+    expect(get('save').disabled).toBe(true); expect(get('access').hidden).toBe(true);
+    get('save').click(); expect(options.saveRequestFn).not.toHaveBeenCalled();
+    finish(); await vi.waitFor(() => expect(get('save').disabled).toBe(false));
+    expect(get('active-tab-fade').value).toBe('42');
+    get('scope-tab').click(); expect(get('hero-height').value).toBe('60');
+});
+
+test('reload refusal keeps the draft and follows the existing FI/EN fallback copy', async () => {
+    const { change, get, save } = await setup({ datasetSaveRequestFn: async () => {
+        throw Object.assign(Error('reload'), { failureNotice: { langKey: 'dataset_appearance_reload' } });
+    } });
+    change('hero-height', 100); await save(); expect(status()).toContain('save format changed');
+    expect(document.querySelector('[data-testid="toast"]').dataset.toastLevel).toBe('error');
+    document.documentElement.lang = 'fi'; await vi.waitFor(() => expect(status()).toContain('tallennustapa on muuttunut'));
+    expect(get('hero-height').value).toBe('100');
 });

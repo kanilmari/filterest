@@ -6,6 +6,9 @@ package system_table_tools
 
 import (
 	"database/sql"
+	store "easelect/backend/core_components/dataset_appearance_store"
+	appearance "easelect/frontend/shared/dataset_appearance"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -13,7 +16,7 @@ import (
 	"easelect/backend/core_components/dbutils"
 )
 
-func sitePresentationTestInputWithLoadedRevision(t *testing.T, input SitePresentationSettingsResponse) SitePresentationSettingsResponse {
+func sitePresentationTestInputWithLoadedRevision(t *testing.T, input SitePresentationSettingsPatch) SitePresentationSettingsPatch {
 	t.Helper()
 	stored, err := readSitePresentationSettingsFromDB()
 	if err != nil {
@@ -23,7 +26,7 @@ func sitePresentationTestInputWithLoadedRevision(t *testing.T, input SitePresent
 	return input
 }
 
-func assertRevisionlessSitePresentationSaveRefused(t *testing.T, db *sql.DB, input SitePresentationSettingsResponse) {
+func assertRevisionlessSitePresentationSaveRefused(t *testing.T, db *sql.DB, input SitePresentationSettingsPatch) {
 	t.Helper()
 	readStorage := func() string {
 		t.Helper()
@@ -48,4 +51,31 @@ func assertRevisionlessSitePresentationSaveRefused(t *testing.T, db *sql.DB, inp
 	if after := readStorage(); after != before {
 		t.Fatalf("revisionless save changed stored configuration: before=%s after=%s", before, after)
 	}
+}
+
+// Explicit test adapter for revision-based patch tests; production never accepts
+// the old whole-object request contract.
+func sitePresentationPatchFromSettings(settings SitePresentationSettingsResponse) SitePresentationSettingsPatch {
+	set := map[string]any{}
+	for path, value := range settings.SiteValues {
+		set[path] = value
+	}
+	for path, value := range settings.Defaults {
+		set[path] = value
+	}
+	return SitePresentationSettingsPatch{SchemaVersion: 2, Version: settings.Version, Set: set}
+}
+func siteConfigForTest(t *testing.T, settings SitePresentationSettingsResponse) appearance.DatasetCoverThemeConfig {
+	t.Helper()
+	raw, _ := json.Marshal(settings)
+	var value map[string]any
+	_ = json.Unmarshal(raw, &value)
+	delete(value, "version")
+	delete(value, "row_article_timestamp_display_mode")
+	raw, _ = json.Marshal(value)
+	config, err := store.DecodeSiteAppearance(raw, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return config
 }

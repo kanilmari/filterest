@@ -5,6 +5,7 @@
 // @vitest-environment jsdom
 
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
+import { DEFAULT_DATASET_APPEARANCE } from '../../shared/dataset_appearance/validator.js';
 
 const mountedForms = [];
 const fetchCardVisibilityMock = vi.fn();
@@ -71,14 +72,33 @@ async function loadModule() {
     }));
     const module = await import('./card_visibility_view.js');
     return {
-        async generate_card_visibility_form(container) {
+        async generate_card_visibility_form(container, options) {
             mountedForms.push(container);
-            return module.generate_card_visibility_form(container);
+            return module.generate_card_visibility_form(container, options);
         },
     };
 }
 
 describe('card_visibility_view', () => {
+    test.each(['ownership', 'mismatched snapshot'])('a late field-editor %s cannot install another dataset style', async reason => {
+        const { generate_card_visibility_form } = await loadModule();
+        const { datasetAppearanceState } = await import('../table_views/dataset_appearance_state.js');
+        const { setAllSpecs } = await import('../state_stores/table_specs_reader.js');
+        setAllSpecs({ orders: { table_uid: 11 } });
+        const snapshot = { dataset_uid: 11, schema_version: 1, version: '1', shared_version: 'shared-1',
+            overrides: {}, effective: DEFAULT_DATASET_APPEARANCE };
+        datasetAppearanceState.accept('orders', snapshot);
+        let complete;
+        fetchCardVisibilityMock.mockImplementationOnce(() => new Promise(resolve => { complete = resolve; }));
+        const container = document.createElement('div');
+        const pending = generate_card_visibility_form(container, { initialDatasetName: 'orders' });
+        await vi.waitFor(() => expect(complete).toBeTypeOf('function'));
+        if (reason === 'ownership') setAllSpecs({ orders: { table_uid: 22 }, renamed: { table_uid: 11 } });
+        complete({ columns: [buildColumn()], card_style_variant: 'standard', dataset_appearance:
+            { ...snapshot, dataset_uid: reason === 'ownership' ? 11 : 22 } });
+        await pending;
+        expect(container.querySelector('[data-testid="card-style-variant-select"]')).toBeNull();
+    });
     afterEach(() => {
         mountedForms.splice(0).forEach(container => container.__cleanupListeners?.());
     });
@@ -112,6 +132,18 @@ describe('card_visibility_view', () => {
         expect(container.textContent).toContain('Korttien näkyvyysasetukset');
         expect(container.textContent).toContain('Valitse datasetti');
         expect(container.textContent).toContain('Muuta sarakkeiden näkyvyysasetuksia editorissa.');
+    });
+
+    test('palette field editor starts with its dataset and cancels a late initial read on close', async () => {
+        let finish;
+        fetchCardVisibilityMock.mockImplementation(() => new Promise(resolve => { finish = resolve; }));
+        const { generate_card_visibility_form } = await loadModule();
+        const container = document.createElement('div');
+        const loading = generate_card_visibility_form(container, { initialDatasetName: 'orders' });
+        await vi.waitFor(() => expect(fetchCardVisibilityMock).toHaveBeenCalledWith('orders'));
+        container.__cleanupListeners();
+        finish({ columns: [buildColumn()] }); await loading;
+        expect(container.querySelector('.vct-row')).toBeNull();
     });
 
     test('loads one table through the card visibility candidate wrapper', async () => {
@@ -339,7 +371,8 @@ describe('card_visibility_view', () => {
         fetchCardVisibilityMock.mockResolvedValue({
             card_details_layout: 'conditional_multiline',
             card_style_variant: 'standard',
-            dataset_appearance: { dataset_uid: 11, version: '1', shared_version: 'shared-1' },
+            dataset_appearance: { dataset_uid: 11, schema_version: 1, version: '1', shared_version: 'shared-1',
+                overrides: {}, effective: DEFAULT_DATASET_APPEARANCE },
             columns: [buildColumn()],
         });
         saveCardVisibilityMock.mockResolvedValue({ status: 'ok', message: 'Style saved' });

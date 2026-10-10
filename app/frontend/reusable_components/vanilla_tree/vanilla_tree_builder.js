@@ -398,7 +398,9 @@ export async function render_tree(data, config = {}) {
 
     /* renderöi! */
     if (global_config.selection_mode === 'single') {
-        single_selection_state = loadSingleSelection();
+        // An editor opened for a specific dataset must restore that selection
+        // before the delayed initial event, rather than replay an older tool visit.
+        single_selection_state = config.initial_selected_node_id || loadSingleSelection();
     } else {
         checkbox_states = loadCheckboxStates();
     }

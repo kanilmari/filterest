@@ -6,7 +6,7 @@ import { create_card_view } from "../card_view/card_view_printer.js";
 import { getUnifiedTableState, setUnifiedTableState } from "../../state_stores/table_state_store.js";
 
 /** Builds article result navigation while preserving the card presentation state. */
-export async function create_article_view(columns, data, tableName) {
+export async function create_article_view(columns, data, tableName, { isCurrent = () => true } = {}) {
     const state = getUnifiedTableState(tableName).articleView || {};
     if (!state.collapsed && state.expandedId == null) {
         setUnifiedTableState(tableName, {
@@ -16,6 +16,7 @@ export async function create_article_view(columns, data, tableName) {
     const wrapper = await create_card_view(columns, data, tableName, {
         viewKey: "article_view",
         stateKey: "articleView",
+        isCurrent,
     });
     wrapper.classList.add("article_view_wrapper");
     return wrapper;

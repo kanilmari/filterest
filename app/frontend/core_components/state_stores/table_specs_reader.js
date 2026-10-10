@@ -7,6 +7,21 @@ const STORAGE_KEY = 'table_specs';
 
 /** @type {Object|null} In-memory cache. null = not loaded yet. */
 let _cache = null;
+const ownershipVersions = new Map();
+let ownership = new Map();
+let registryOwnershipVersion = 0;
+
+// Keep ownership history even across rename/reuse/revert before a response arrives.
+function recordOwnership(specs) {
+    const next = new Map(Object.entries(specs).map(([name, spec]) => [name, String(spec?.table_uid || '')]));
+    for (const name of new Set([...ownership.keys(), ...next.keys()])) {
+        if ((ownership.get(name) || '') !== (next.get(name) || '')) {
+            registryOwnershipVersion += 1;
+            ownershipVersions.set(name, (ownershipVersions.get(name) || 0) + 1);
+        }
+    }
+    ownership = next;
+}
 
 /**
  * Loads and caches the parsed table_specs from localStorage.
@@ -21,7 +36,15 @@ function _ensureLoaded() {
         console.warn('table_specs_store: parse error, resetting cache', err);
         _cache = {};
     }
+    recordOwnership(_cache);
     return _cache;
+}
+
+/** A name's ownership revision invalidates requests even if its UID changes back. */
+export function getTableSpecOwnershipVersion(tableName) {
+    _ensureLoaded();
+    if (tableName === undefined) return registryOwnershipVersion;
+    return ownershipVersions.get(tableName) || 0;
 }
 
 /**
@@ -48,6 +71,8 @@ export function getAllSpecs() {
  * @param {Object} specsMap
  */
 export function setAllSpecs(specsMap) {
+    _ensureLoaded();
+    recordOwnership(specsMap);
     _cache = specsMap;
     try {
         localStorage.setItem(STORAGE_KEY, JSON.stringify(specsMap));

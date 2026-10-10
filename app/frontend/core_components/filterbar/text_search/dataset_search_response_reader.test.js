@@ -8,6 +8,27 @@ const endpoint = vi.hoisted(() => vi.fn());
 vi.mock("../../endpoints/endpoint_router.js", () => ({ endpoint_router: endpoint }));
 vi.mock("../filter_list/row_group_facet_printer.js", () => ({ ROW_GROUP_FILTER_KEY: "row_group" }));
 import { readDatasetSearchResponse } from "./dataset_search_response_reader.js";
+import { datasetAppearanceState } from '../../table_views/dataset_appearance_state.js';
+import { setAllSpecs } from '../../state_stores/table_specs_reader.js';
+import { invalidateSessionGeneration } from '../../auth/session_generation_store.js';
+
+test.each(['sign-out', 'deletion', 'ownership'])('late stream headers and packets are discarded after %s', async reason => {
+    datasetAppearanceState.clear(); setAllSpecs({ tasks: { table_uid: 11 } });
+    let complete;
+    endpoint.mockImplementationOnce(() => new Promise(resolve => { complete = resolve; }));
+    const iterator = readDatasetSearchResponse('tasks', 'private', {}, () => true);
+    const pending = iterator.next();
+    if (reason === 'sign-out') invalidateSessionGeneration({ reason: 'logout' });
+    else if (reason === 'deletion') datasetAppearanceState.forget('tasks');
+    else setAllSpecs({ tasks: { table_uid: 22 }, renamed: { table_uid: 11 } });
+    const cancel = vi.fn();
+    complete({ body: new ReadableStream({ start(controller) {
+        controller.enqueue(new TextEncoder().encode('{"stage":"ai","data":[{"id":1}]}\n'));
+    }, cancel }) });
+    expect(await pending).toMatchObject({ done: true });
+    expect(cancel).toHaveBeenCalledOnce();
+    setAllSpecs({});
+});
 
 test("decodes split UTF-8 and the final packet without a newline", async () => {
     const bytes = new TextEncoder().encode('{"stage":"text","data":[{"title":"Hyvää"}]}');

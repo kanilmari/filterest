@@ -1,42 +1,39 @@
 // dataset_appearance_resolver.go
-// Resolves sparse dataset overrides against the current shared appearance.
-// Connects per-dataset persistence with the canonical browser/server definition.
-// Preserves presence, including zero, false and explicit choices equal to shared values.
+// Resolves the three owned places into the nested renderer projection.
+// Connects complete tab storage and public site defaults with sparse overrides.
+// Preserves explicit zero, false and equality and validates masks within each tab.
 package dataset_appearance_store
 
 import (
 	"encoding/json"
-	"fmt"
-	"slices"
 	"strings"
 
 	appearance "easelect/frontend/shared/dataset_appearance"
 )
 
-// ResolveDatasetAppearance returns independent effective values, validating every
-// present canonical leaf and the complete merged mask ordering in both themes.
-// The caller supplies current shared values; inherited values are never persisted.
-func ResolveDatasetAppearance(shared appearance.DatasetCoverThemeConfig, overrides map[string]any, development bool) (appearance.DatasetCoverThemeConfig, error) {
+// ResolveDatasetAppearance has no shared cover inheritance: tab values are complete.
+// The nested config is only a renderer projection, never another storage authority.
+func ResolveDatasetAppearance(site appearance.DatasetCoverThemeConfig, tabValues, overrides map[string]any, development bool) (appearance.DatasetCoverThemeConfig, error) {
+	if err := appearance.ValidateTabValuesV2(tabValues, development); err != nil {
+		return appearance.DatasetCoverThemeConfig{}, err
+	}
 	values, err := validatedDatasetAppearanceOverrides(overrides, development)
 	if err != nil {
 		return appearance.DatasetCoverThemeConfig{}, err
 	}
-	data, err := json.Marshal(shared)
-	if err != nil {
-		return appearance.DatasetCoverThemeConfig{}, err
+	merged := appearance.Rules().Defaults()
+	for _, group := range []map[string]any{ValuesForPlace(site, appearance.SiteOnly), ValuesForPlace(site, appearance.SiteDefault), tabValues, values} {
+		for path, value := range group {
+			owner, key, _ := strings.Cut(path, ".")
+			merged[owner][key] = value
+		}
 	}
-	var merged map[string]map[string]any
-	if err := json.Unmarshal(data, &merged); err != nil {
-		return appearance.DatasetCoverThemeConfig{}, err
-	}
-	for path, value := range values {
-		owner, key, _ := strings.Cut(path, ".")
-		merged[owner][key] = value
-	}
+	// Legacy shared blur is derived from the owning tab's light theme.
+	merged["shared"]["image_blur"] = merged["light"]["image_blur"]
 	if err := appearance.Validate(merged, development); err != nil {
 		return appearance.DatasetCoverThemeConfig{}, err
 	}
-	data, err = json.Marshal(merged)
+	data, err := json.Marshal(merged)
 	if err != nil {
 		return appearance.DatasetCoverThemeConfig{}, err
 	}
@@ -45,28 +42,38 @@ func ResolveDatasetAppearance(shared appearance.DatasetCoverThemeConfig, overrid
 	return effective, err
 }
 
-// JSON normalization gives integer Go inputs the same number representation as
-// stored JSON and rejects non-finite numbers before they can reach PostgreSQL.
-func validatedDatasetAppearanceOverrides(overrides map[string]any, development bool) (map[string]any, error) {
+// ValuesForPlace projects canonical flat maps using the shared definition inventory.
+func ValuesForPlace(config appearance.DatasetCoverThemeConfig, place appearance.Place) map[string]any {
+	data, _ := json.Marshal(config)
+	var nested map[string]map[string]any
+	_ = json.Unmarshal(data, &nested)
 	values := map[string]any{}
-	if overrides != nil {
-		data, err := json.Marshal(overrides)
-		if err != nil {
-			return nil, err
-		}
-		if err := json.Unmarshal(data, &values); err != nil {
-			return nil, err
-		}
+	for _, path := range appearance.Rules().PathsForPlace(place) {
+		owner, key, _ := strings.Cut(path, ".")
+		values[path] = nested[owner][key]
 	}
-	rules := appearance.Rules()
-	paths := rules.CanonicalPaths()
-	for path, value := range values {
-		if !slices.Contains(paths, path) {
-			return nil, fmt.Errorf("unknown canonical appearance path %s", path)
-		}
-		if err := rules.ValidateLeaf(path, value, development); err != nil {
-			return nil, err
-		}
+	return values
+}
+
+func normalizedValues(values map[string]any) (map[string]any, error) {
+	data, err := json.Marshal(values)
+	if err != nil {
+		return nil, err
+	}
+	result := map[string]any{}
+	if values != nil {
+		err = json.Unmarshal(data, &result)
+	}
+	return result, err
+}
+
+func validatedDatasetAppearanceOverrides(overrides map[string]any, development bool) (map[string]any, error) {
+	values, err := normalizedValues(overrides)
+	if err != nil {
+		return nil, err
+	}
+	if err := appearance.ValidateOverridesV2(values, development); err != nil {
+		return nil, err
 	}
 	return values, nil
 }

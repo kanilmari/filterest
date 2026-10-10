@@ -379,6 +379,11 @@ func UpdateCardVisibilityHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if err := validateCardAppearanceAdapterFields(req.fields); err != nil {
+		respondDatasetAppearanceError(w, err)
+		return
+	}
+
 	if len(req.Scope) > 0 {
 		updateDatasetCardPresentation(w, r, req)
 		return

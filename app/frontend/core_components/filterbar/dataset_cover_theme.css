@@ -1,6 +1,7 @@
 /* dataset_cover_theme.css
  * Maps persisted light/dark dataset-cover settings to the active hero surface.
- * Keeps public rendering independent from the administrator-only palette UI.
+ * Connects UID-scoped projections with the existing cover/background geometry.
+ * Keeps rendering independent from the administrator-only palette UI.
  */
 :root {
 	--navtab-active-fade-width: 25px;
@@ -8,6 +9,9 @@
 	--navtab-active-glow-intensity: 0.5;
 	--navtab-active-glow-width: 2px;
 	--navtab-active-glow-blur: 4px;
+}
+
+[data-dataset-appearance-scope] {
 	--dataset-background-light-image-blur: 1px;
 	--dataset-background-dark-image-blur: 1px;
 }
@@ -19,7 +23,7 @@ body.dark-mode .tab-content-area--has-dataset-background {
 	--dataset-background-image-blur: var(--dataset-background-dark-image-blur);
 }
 
-.filterbar-inline-hero--has-cover {
+.filterbar-inline-hero--has-cover:not([data-dataset-appearance-scope]):not([data-dataset-appearance-scope] *) {
 	--dataset-cover-light-mask-image: initial;
 	--dataset-cover-light-mask-oval-x: 32%;
 	--dataset-cover-light-mask-oval-y: 67%;
@@ -48,6 +52,9 @@ body.dark-mode .tab-content-area--has-dataset-background {
 	--dataset-cover-dark-image-blur: 1px;
 	--dataset-cover-hero-extra-height: 40px;
 	--dataset-cover-hero-bottom-fade: 48px;
+}
+
+.filterbar-inline-hero--has-cover {
 	padding-bottom: calc(18px + var(--dataset-cover-hero-extra-height));
 }
 body:not(.dark-mode) .filterbar-inline-hero--has-cover {

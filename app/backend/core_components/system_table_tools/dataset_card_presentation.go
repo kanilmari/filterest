@@ -16,6 +16,7 @@ import (
 	"easelect/backend/core_components/dbutils"
 	dtt_1_row_read "easelect/backend/core_components/dynamic_table_tools/dtt_1_row_crud/dtt_1_row_read"
 	"easelect/backend/core_components/httpresponse"
+	appearance "easelect/frontend/shared/dataset_appearance"
 	"os"
 )
 
@@ -168,4 +169,23 @@ func loadCardVisibilityTableSettings(db *sql.DB, tableName string) (string, Data
 	var layout string
 	err = db.QueryRow(`SELECT COALESCE(card_details_layout,$2) FROM public.system_db_tables WHERE table_uid=$1`, uid, defaultCardDetailsLayout).Scan(&layout)
 	return layout, projectDatasetCardPresentation(tableName, snapshot), err
+}
+
+// Full and scoped card adapters refuse attempts to write any site-only path,
+// including canonical names hidden among otherwise valid column metadata.
+func validateCardAppearanceAdapterFields(fields map[string]json.RawMessage) error {
+	for _, path := range appearance.Rules().PathsForPlace(appearance.SiteOnly) {
+		_, key, _ := strings.Cut(path, ".")
+		for _, alias := range []string{path, key} {
+			if _, provided := fields[alias]; provided {
+				return &httpresponse.Refusal{Status: 400, LangKey: "dataset_appearance_invalid", Message: "site-only appearance requires the site API"}
+			}
+		}
+	}
+	for _, key := range []string{"tab_set", "set", "unset", "site_values", "defaults", "dataset_cover_theme"} {
+		if _, provided := fields[key]; provided {
+			return &httpresponse.Refusal{Status: 400, LangKey: "dataset_appearance_invalid", Message: "appearance maps require the dedicated appearance API"}
+		}
+	}
+	return nil
 }

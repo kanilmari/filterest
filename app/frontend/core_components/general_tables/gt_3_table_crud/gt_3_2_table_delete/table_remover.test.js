@@ -1,5 +1,7 @@
 // table_remover.test.js
 // Verifies reversible defaults, exact-name deletion and stateful localized dialogs.
+// Connects deletion confirmation with private UID appearance teardown.
+// Keeps hidden datasets intact while deletion invalidates pending appearance responses.
 // @vitest-environment jsdom
 import { beforeEach, afterEach, describe, expect, test, vi } from 'vitest';
 
@@ -79,6 +81,13 @@ describe('dataset removal', () => {
 
     test('permanent deletion needs the exact real name and sends its separate confirmation', async () => {
         const { drop_table } = await load();
+        const { datasetAppearanceState } = await import('../../../table_views/dataset_appearance_state.js');
+        const { DEFAULT_DATASET_APPEARANCE } = await import('../../../../shared/dataset_appearance/validator.js');
+        const snapshot = { dataset_uid: 11, schema_version: 1, effective: DEFAULT_DATASET_APPEARANCE, overrides: {}, version: '1' };
+        datasetAppearanceState.accept('real_table', snapshot);
+        const surface = document.body.appendChild(document.createElement('section'));
+        datasetAppearanceState.bind(surface, 'real_table');
+        const pending = datasetAppearanceState.capture('real_table');
         drop_table('real_table');
         byId('dataset-removal-mode-permanent').click();
         const input = byId('dataset-removal-confirm-name');
@@ -102,6 +111,8 @@ describe('dataset removal', () => {
             body_data: { dataset_name: 'real_table', confirm_dataset_name: 'real_table' },
         }));
         expect(notice).toHaveBeenCalledWith({ datasetName: 'real_table', reason: 'deleted', messageLangKey: 'manage_table_deleted_success' });
+        expect(surface.dataset.datasetAppearanceUid).toBeUndefined();
+        expect(datasetAppearanceState.accept('real_table', snapshot, { token: pending })).toBe(false);
     });
 
     test('language changes preserve confirmation draft, mode, focus and caret without writes', async () => {

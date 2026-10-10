@@ -1,5 +1,5 @@
 /* card_image_presentation.css
- * Renders the site's raster-card choice without changing card geometry or article media.
+ * Renders each dataset's raster-card choice on its own photo wrapper.
  * Uses the application's active theme colour for the decorative blurred-image scrim.
  */
 .card_photo_presentation {
@@ -7,7 +7,7 @@
     isolation: isolate;
 }
 
-[data-card-image-presentation="cover"] .card_photo_presentation {
+.card_photo_presentation[data-card-image-presentation="cover"] {
     --card-photo-object-fit: cover;
 }
 
@@ -29,7 +29,7 @@
     pointer-events: none;
 }
 
-[data-card-image-presentation="contain_blur"] .card_photo_presentation::before {
+.card_photo_presentation[data-card-image-presentation="contain_blur"]::before {
     display: block;
 }
 

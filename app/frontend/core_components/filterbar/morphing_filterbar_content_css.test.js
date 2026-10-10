@@ -15,7 +15,7 @@ describe('morphing filterbar content CSS', () => {
     test('keeps the light oval defaults and gives dark mode an unmasked 30 percent cover', () => {
         const css = readFileSync(resolve(CURRENT_DIR, 'dataset_cover_theme.css'), 'utf8');
         const defaultsRule = css.match(
-            /\.filterbar-inline-hero--has-cover\s*\{([\s\S]*?)\n\}/,
+            /\.filterbar-inline-hero--has-cover:not\([^\n]+\)\s*\{([\s\S]*?)\n\}/,
         )?.[1] || '';
         const coverRule = css.match(
             /\.filterbar-inline-hero--has-cover::before\s*\{([\s\S]*?)\n\}/,
@@ -43,7 +43,7 @@ describe('morphing filterbar content CSS', () => {
         expect(defaultsRule).toContain('--dataset-cover-hero-bottom-fade: 48px');
         expect(defaultsRule).toContain('--dataset-cover-light-image-blur: 1px');
         expect(defaultsRule).toContain('--dataset-cover-dark-image-blur: 1px');
-        expect(defaultsRule).toContain(
+        expect(css.match(/\.filterbar-inline-hero--has-cover\s*\{([\s\S]*?)\n\}/)?.[1]).toContain(
             'padding-bottom: calc(18px + var(--dataset-cover-hero-extra-height))'
         );
         expect(defaultsRule).toContain('--dataset-cover-light-overlay-opacity: 0');

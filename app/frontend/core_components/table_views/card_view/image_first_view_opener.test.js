@@ -68,6 +68,30 @@ vi.mock("../../../ui_config.js", () => ({
 import { openImageFirstView } from "./image_first_view_opener.js";
 import { loadRowArticleSectionDefaults } from "./row_article_section_defaults.js";
 import { resolveRowArticleDataTypes } from "./row_article_data_types_resolver.js";
+import { datasetAppearanceState } from '../dataset_appearance_state.js';
+import { DEFAULT_DATASET_APPEARANCE } from '../../../shared/dataset_appearance/validator.js';
+import { setAllSpecs } from '../../state_stores/table_specs_reader.js';
+
+test.each(['ownership', 'mismatched snapshot'])('image-first history restore discards a late %s response', async reason => {
+    const { fetchDatasetData } = await import('../../endpoints/endpoint_data_fetcher.js');
+    datasetAppearanceState.clear(); setAllSpecs({ examples: { table_uid: 11 } });
+    const snapshot = { dataset_uid: 11, schema_version: 1, version: '1', overrides: {}, effective: DEFAULT_DATASET_APPEARANCE };
+    datasetAppearanceState.accept('examples', snapshot);
+    openImageModalContentMock.mockClear(); transitionImageFirstModalContentMock.mockClear();
+    history.replaceState({ imageFirstView: { dataset: 'examples', rowId: '3' } }, '', '/examples/3?view=image_first_view');
+    let complete;
+    fetchDatasetData.mockImplementationOnce(() => new Promise(resolve => { complete = resolve; }));
+    const pending = openImageFirstView({ tableName: 'examples', rowItem: { id: 3 }, restoringHistory: true,
+        imageRows: [{ filename: 'first.png' }] });
+    await vi.waitFor(() => expect(complete).toBeTypeOf('function'));
+    if (reason === 'ownership') setAllSpecs({ examples: { table_uid: 22 }, renamed: { table_uid: 11 } });
+    complete({ data: [{ id: 3, title: 'Private' }], types: {}, dataset_appearance:
+        { ...snapshot, dataset_uid: reason === 'ownership' ? 11 : 22 } });
+    expect(await pending).toBeNull();
+    expect(openImageModalContentMock).not.toHaveBeenCalled();
+    expect(transitionImageFirstModalContentMock).not.toHaveBeenCalled();
+    setAllSpecs({}); datasetAppearanceState.clear();
+});
 
 /** Reads every stage image from the active one onwards through the stage's own Next control. */
 function readStageImageSources() {

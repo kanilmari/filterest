@@ -463,10 +463,11 @@ async function waitForDatasetViewReady(
   page: Page,
   datasetName: string,
   viewMode: TempDatasetViewMode,
+  expectEmpty = false,
 ): Promise<void> {
   if (viewMode === 'card') {
     await page.waitForFunction(
-      ({ datasetName }) => {
+      ({ datasetName, expectEmpty }) => {
         const wrapper = document.querySelector(
           `#${datasetName}_card_view_container .card_view_wrapper`,
         );
@@ -474,9 +475,21 @@ async function waitForDatasetViewReady(
           return false;
         }
         const rect = wrapper.getBoundingClientRect();
+        if (expectEmpty) {
+          // Empty card lists can have no height. Require the completed, visible
+          // dataset surface and its authoritative zero count instead of a row.
+          const surface = wrapper.closest('.scrollable_content');
+          const count = surface?.querySelector(
+            `#${datasetName}_card_top_controls [data-results-count-for="${datasetName}"][data-result-count="0"]`,
+          );
+          return surface instanceof HTMLElement && getComputedStyle(surface).display !== 'none'
+            && surface.getBoundingClientRect().width > 0 && Boolean(count)
+            && getComputedStyle(wrapper).display !== 'none'
+            && wrapper.querySelectorAll('.card').length === 0;
+        }
         return getComputedStyle(wrapper).display !== 'none' && rect.width > 0 && rect.height > 0;
       },
-      { datasetName },
+      { datasetName, expectEmpty },
       { timeout: TEMP_DATASET_LOAD_TIMEOUT_MS },
     );
     return;
@@ -559,6 +572,7 @@ export async function openTempDataset(
   page: Page,
   datasetName: string,
   viewMode: TempDatasetViewMode = 'table',
+  { expectEmpty = false }: { expectEmpty?: boolean } = {},
 ): Promise<void> {
   await page.goto('/', { waitUntil: 'domcontentloaded' });
   await waitForAppReady(page);
@@ -623,7 +637,7 @@ export async function openTempDataset(
     state: 'attached',
     timeout: TEMP_DATASET_LOAD_TIMEOUT_MS,
   });
-  await waitForDatasetViewReady(page, datasetName, viewMode);
+  await waitForDatasetViewReady(page, datasetName, viewMode, expectEmpty);
   await waitForDataLoaded(page, datasetName);
 }
 

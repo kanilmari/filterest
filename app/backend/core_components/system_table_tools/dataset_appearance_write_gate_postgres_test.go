@@ -34,7 +34,7 @@ func readAppearanceWriteStorage(t *testing.T, db *sql.DB) string {
 
 func sharedAppearanceHTTPInput(t *testing.T, settings SitePresentationSettingsResponse) appearanceHTTPRefusalRequest {
 	t.Helper()
-	raw, err := json.Marshal(settings)
+	raw, err := json.Marshal(sitePresentationPatchFromSettings(settings))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -56,6 +56,14 @@ func commitAppearanceHTTP(t *testing.T, db *sql.DB, input appearanceHTTPRefusalR
 	}
 }
 
+func setAppearanceResultsTestDefaults(settings SitePresentationSettingsResponse, index int) {
+	// These maps are compared with JSON-decoded responses, whose numbers are
+	// float64. Go int values would falsely report stale results after a valid save.
+	settings.Defaults["shared.card_image_width"] = float64(300 + index)
+	settings.Defaults["shared.card_detail_columns"] = float64(1 + index%4)
+	settings.Defaults["shared.card_style_variant"] = []string{"standard", "modern"}[index%2]
+}
+
 func TestDatasetAppearancePostgresMaskHTTPRefusalLeavesStorageUnchanged(t *testing.T) {
 	db, uid := datasetAppearanceFixture(t)
 	for _, existing := range []bool{false, true} {
@@ -74,7 +82,7 @@ func TestDatasetAppearancePostgresMaskHTTPRefusalLeavesStorageUnchanged(t *testi
 		} {
 			before := readAppearanceWriteStorage(t, db)
 			input := appearanceHTTPRefusalRequest{path: "/api/admin/dataset-appearance", handler: AdminDatasetAppearanceHandler, body: map[string]any{
-				"dataset_uid": uid, "set": patch.Set, "unset": patch.Unset,
+				"schema_version": 2, "dataset_uid": uid, "set": patch.Set, "unset": patch.Unset,
 				"shared_version": current.SharedVersion, "version": current.Version,
 			}}
 			w, lazy := invokeAppearanceHandler(t, db, input)
@@ -105,7 +113,7 @@ func TestDatasetAppearancePostgresHTTPMissingAndEmptyRevisionsLeaveStorageUnchan
 			if err != nil {
 				t.Fatal(err)
 			}
-			settings.DatasetCoverTheme.Light.ImageBlur = 8
+			settings.Defaults["shared.card_image_width"] = 408
 			commitAppearanceHTTP(t, db, sharedAppearanceHTTPInput(t, settings))
 			if _, err := datasetAppearanceTestSave(db, uid, DatasetAppearancePatch{Set: map[string]any{"shared.card_style_variant": "standard", "shared.card_detail_columns": 2}}, "none"); err != nil {
 				t.Fatal(err)
@@ -162,29 +170,25 @@ func TestDatasetAppearancePostgresCardOverridesKeepResultsReadableAfterValidShar
 			}
 		}
 		commitAppearanceHTTP(t, db, appearanceHTTPRefusalRequest{path: "/api/admin/dataset-appearance", handler: AdminDatasetAppearanceHandler, body: map[string]any{
-			"dataset_uid": uid, "set": overrides, "unset": unset, "version": current.Version, "shared_version": current.SharedVersion,
+			"schema_version": 2, "dataset_uid": uid, "set": overrides, "unset": unset, "version": current.Version, "shared_version": current.SharedVersion,
 		}})
 		stored, err := ReadDatasetAppearance(db, uid, false)
 		if err != nil {
 			t.Fatal(err)
 		}
-		// Cover the gate's .7 -> .5 middle-opacity change, equal boundaries,
-		// and simultaneous changes in both mask orders and both themes.
-		for index, mask := range [][3]float64{{.4, .7, 1}, {.4, .5, 1}, {0, 0, 0}, {1, 1, 1}, {.8, .9, 1}} {
+		// Site changes update inherited defaults while owned tab masks stay fixed.
+		for index := 0; index < 5; index++ {
 			settings, err := readSitePresentationSettingsFromDB()
 			if err != nil {
 				t.Fatal(err)
 			}
-			for _, theme := range []*DatasetCoverThemeValues{&settings.DatasetCoverTheme.Light, &settings.DatasetCoverTheme.Dark} {
-				theme.CenterOpacity, theme.MidOpacity, theme.EdgeOpacity = mask[0], mask[1], mask[2]
-				theme.CenterStop, theme.MidStop, theme.EdgeStop = mask[0]*100, mask[1]*100, mask[2]*100
-			}
-			settings.DatasetCoverTheme.Shared.CardDetailColumns = 1 + index%4
-			settings.DatasetCoverTheme.Shared.CardStyleVariant = []string{"standard", "modern"}[index%2]
-			if err := validateSitePresentationSettings(settings); err != nil {
-				t.Fatal("invalid shared regression fixture", err)
-			}
+			setAppearanceResultsTestDefaults(settings, index)
+
 			commitAppearanceHTTP(t, db, sharedAppearanceHTTPInput(t, settings))
+			savedSettings, err := readSitePresentationSettingsFromDB()
+			if err != nil || savedSettings.Version == settings.Version || !reflect.DeepEqual(savedSettings.SiteValues, settings.SiteValues) || !reflect.DeepEqual(savedSettings.Defaults, settings.Defaults) {
+				t.Fatal("shared save did not persist requested settings and a new revision", savedSettings, err)
+			}
 			after, err := ReadDatasetAppearance(db, uid, false)
 			if err != nil || !reflect.DeepEqual(after, stored) {
 				t.Fatal("shared save changed overrides or revision", after, err)
@@ -193,16 +197,19 @@ func TestDatasetAppearancePostgresCardOverridesKeepResultsReadableAfterValidShar
 				w := httptest.NewRecorder()
 				read.GetResults(w, frontPageSessionRequest(t, 42, role, "GET", "/api/get-results?dataset=wl143_content"))
 				if w.Code != http.StatusOK {
-					t.Fatalf("valid shared save made dataset unreadable: role=%s overrides=%v mask=%v status=%d body=%s", role, overrides, mask, w.Code, w.Body.String())
+					t.Fatalf("valid shared save made dataset unreadable: role=%s overrides=%v status=%d body=%s", role, overrides, w.Code, w.Body.String())
 				}
 				var response struct {
 					Appearance store.AppearanceResponse `json:"dataset_appearance"`
 				}
-				if err := json.Unmarshal(w.Body.Bytes(), &response); err != nil || !reflect.DeepEqual(response.Appearance.Overrides, stored.Overrides) || response.Appearance.Effective.Light.CenterOpacity != mask[0] || response.Appearance.Effective.Dark.MidOpacity != mask[1] {
+				if err := json.Unmarshal(w.Body.Bytes(), &response); err != nil || !reflect.DeepEqual(response.Appearance.Overrides, stored.Overrides) || response.Appearance.Effective.Light.CenterOpacity != .4 || response.Appearance.Effective.Dark.MidOpacity != .7 {
 					t.Fatal("results lost overrides or shared mask", response, err)
 				}
-				if response.Appearance.Shared != settings.DatasetCoverTheme || response.Appearance.Version != stored.Revision {
+				if !reflect.DeepEqual(response.Appearance.SiteValues, settings.SiteValues) || !reflect.DeepEqual(response.Appearance.Defaults, settings.Defaults) || response.Appearance.Version != stored.Revision {
 					t.Fatal("results returned stale shared settings or dataset revision", response)
+				}
+				if response.Appearance.SharedVersion != savedSettings.Version {
+					t.Fatal("results returned stale shared revision", response.Appearance.SharedVersion, savedSettings.Version)
 				}
 				for path, value := range stored.Overrides {
 					if response.Appearance.Sources[path] != "override" ||

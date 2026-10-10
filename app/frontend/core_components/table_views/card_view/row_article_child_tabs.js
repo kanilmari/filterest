@@ -3,6 +3,9 @@
 // Bridges referring-row datasets and comments with a configurable, ordered tab UI.
 // Exists to surface related rows from linked tables in a single panel beneath any article view.
 
+import { datasetAppearanceState } from '../dataset_appearance_state.js';
+import { bindRelatedDatasetAppearance } from './related_dataset_appearance_revalidation.js';
+import { createRowArticleLoadSession } from './row_article_load_session.js';
 import { endpoint_router } from '../../endpoints/endpoint_router.js';
 import { createRelatedRecordCard, getRelatedRecordDisplayName } from './child_card_formatter.js';
 import { format_column_name } from './card_field_formatter.js';
@@ -63,6 +66,9 @@ export async function buildRowArticleRelatedTabs(
     preferred_active_tab_key = null,
     options = {}
 ) {
+    const appearanceTokens = new Map([[table_name, datasetAppearanceState.capture(table_name)],
+        ...related_tables.map(table => [table.dataset, table.appearanceToken || datasetAppearanceState.capture(table.dataset)])]);
+    const appearanceIsCurrent = (name = table_name) => [table_name, name].every(key => datasetAppearanceState.isCurrent(appearanceTokens.get(key)));
     const renderableRelatedTables = related_tables.filter((relatedTable) => !isBridgeRelationTable(relatedTable));
     let tabsWithRows = renderableRelatedTables.filter((relatedTable) => getRelatedTableRowCount(relatedTable) > 0);
     const has_comments = !!current_user_id;
@@ -137,6 +143,7 @@ export async function buildRowArticleRelatedTabs(
             ]))
         )
     );
+    if (!appearanceIsCurrent()) return null;
 
     const container = document.createElement('div');
     container.classList.add('related_tabs_container', 'child_tabs_container');
@@ -147,6 +154,7 @@ export async function buildRowArticleRelatedTabs(
     const tab_content = document.createElement('div');
     tab_content.classList.add('related_tabs_content', 'child_tabs_content');
 
+    const fallbackSession = createRowArticleLoadSession({ tableName: table_name, rowId: row_id });
     const fetchDynamicChildren = ({
         childTable = "",
         forceRefresh = false,
@@ -155,15 +163,7 @@ export async function buildRowArticleRelatedTabs(
             return options.fetchDynamicChildren({ childTable, forceRefresh });
         }
 
-        return endpoint_router('fetchDynamicChildren', {
-            method: 'POST',
-            url_params: `?dataset=${table_name}`,
-            body_data: {
-                parent_dataset: table_name,
-                parent_pk_value: String(row_id),
-                ...(childTable ? { child_table: childTable } : {}),
-            },
-        });
+        return fallbackSession.fetchDynamicChildren({ childTable, forceRefresh });
     };
 
     const reloadRelatedTabs = async (nextActiveTabKey = null) => {
@@ -171,6 +171,7 @@ export async function buildRowArticleRelatedTabs(
             const fresh = await fetchDynamicChildren({
                 forceRefresh: true,
             });
+            if (![...appearanceTokens.values()].every(token => datasetAppearanceState.isCurrent(token))) return;
             const nextTabs = await buildRowArticleRelatedTabs(
                 fresh?.child_tables || [],
                 table_name,
@@ -179,6 +180,7 @@ export async function buildRowArticleRelatedTabs(
                 nextActiveTabKey,
                 options
             );
+            if (![...appearanceTokens.values()].every(token => datasetAppearanceState.isCurrent(token))) return;
             if (nextTabs) {
                 container.replaceWith(nextTabs);
             } else {
@@ -202,6 +204,7 @@ export async function buildRowArticleRelatedTabs(
 
     // ── Related table tabs ──────────────────────────
     for (const relatedTable of tabsWithRows) {
+        if (!appearanceIsCurrent(relatedTable.dataset)) continue;
         const tab_key = buildRelatedTabKey(relatedTable);
         const initialRows = Array.isArray(relatedTable.rows) ? relatedTable.rows : [];
         const initialRowCount = getRelatedTableRowCount(relatedTable);
@@ -230,6 +233,8 @@ export async function buildRowArticleRelatedTabs(
         const panel = document.createElement('div');
         panel.classList.add('related_tab_panel', 'child_tab_panel');
         panel.dataset.tabKey = tab_key;
+        bindRelatedDatasetAppearance(panel, relatedTable, appearanceTokens.get(relatedTable.dataset));
+        let rowAppearanceAccepted = relatedTable.appearanceAccepted === true;
 
         const relatedDatasetParams = buildRelatedDatasetParams(
             relatedTable.column,
@@ -275,6 +280,7 @@ export async function buildRowArticleRelatedTabs(
             })
             : null;
         const renderRelatedRows = (rowsToRender = [], totalRowCount = initialRowCount) => {
+            if (!appearanceIsCurrent(relatedTable.dataset)) return;
             row_list.replaceChildren();
 
             if (isTaskTodoChildDataset(relatedTable.dataset)) {
@@ -305,6 +311,8 @@ export async function buildRowArticleRelatedTabs(
             }
 
             rowsToRender.forEach((relatedRow) => row_list.appendChild(createRelatedRecordCard(relatedRow, {
+                datasetName: relatedTable.dataset, datasetUID: relatedTable.dataset_uid || relatedTable.table_uid,
+                snapshotAllowed: rowAppearanceAccepted,
                 dataTypes: relatedDataTypes,
                 onOpen: relatedRowOpenHandler(relatedRow),
                 onDelete: relatedRowDeleteHandler(relatedRow),
@@ -349,6 +357,7 @@ export async function buildRowArticleRelatedTabs(
             relatedRowsLoadPromise = fetchDynamicChildren({
                 childTable: relatedTable.dataset,
             }).then((fresh) => {
+                if (!appearanceIsCurrent(relatedTable.dataset)) return;
                 const freshChild = findMatchingRelatedTableEntry(
                     fresh?.child_tables || [],
                     relatedTable.dataset,
@@ -357,11 +366,14 @@ export async function buildRowArticleRelatedTabs(
                 ) || relatedTable;
                 const nextRows = Array.isArray(freshChild?.rows) ? freshChild.rows : [];
                 const nextCount = getRelatedTableRowCount(freshChild);
+                bindRelatedDatasetAppearance(panel, freshChild);
+                rowAppearanceAccepted = freshChild.appearanceAccepted === true;
                 relatedDataTypes = getRelatedTableDataTypes(freshChild, relatedDataTypes);
                 renderRelatedRows(nextRows, nextCount);
                 syncLimitNotice(nextCount, nextRows.length);
                 relatedRowsLoaded = true;
             }).catch((err) => {
+                if (!appearanceIsCurrent(relatedTable.dataset) || err.name === 'AbortError') return;
                 console.warn('related tab lazy-load error:', err.message);
                 row_list.replaceChildren();
                 const failed = document.createElement('div');

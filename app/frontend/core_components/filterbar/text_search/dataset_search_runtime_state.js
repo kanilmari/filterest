@@ -4,6 +4,7 @@
 // Exists so search-generation safety stays cohesive without overloading the stream parser.
 
 import { getParams } from "../../navigation/nav_engine/query_params.js";
+import { datasetAppearanceState } from '../../table_views/dataset_appearance_state.js';
 import { getUnifiedTableState } from "../../state_stores/table_state_store.js";
 import { getChosenDatasetView } from "../../state_stores/dataset_view_choice_saver.js";
 import { getDatasetViewContainerId, resolveDatasetViewSelectionTarget } from "../../table_views/dataset_view_registry.js";
@@ -20,7 +21,8 @@ import {
 export const ongoingSearchResultsStore = {};
 
 export function isCurrentSearchCache(tableName, expectedCache) {
-    return !expectedCache || ongoingSearchResultsStore[tableName] === expectedCache;
+    return !expectedCache || (ongoingSearchResultsStore[tableName] === expectedCache
+        && datasetAppearanceState.isCurrent(expectedCache.appearanceToken));
 }
 
 export function getSearchFilterContext(tableName) {

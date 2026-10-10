@@ -1,7 +1,8 @@
 // T14_dataset_cover_palette.spec.ts
 // Verifies the protected palette and durable shared/dataset appearance choices.
 // Connects UI previews and revision-protected saves to real cards, chips and reloads.
-// Restores original values with fresh revisions after each persistence proof.
+// Follows admin_tools/dataset_cover_test_palette.js, dataset_appearance_palette_state.js
+// and site_presentation_state.js; restores only the paths this test changes.
 import { expect, test } from '@playwright/test';
 import {
   loadDatasetCardVisibility,
@@ -9,6 +10,8 @@ import {
   restoreDatasetAppearance,
   restoreSitePresentationSettings,
 } from '../helpers/appearance-revisions';
+import { buildTempDatasetName, createTempDataset, dropTempDataset, openTempDataset } from '../helpers/temp-dataset';
+import { waitForAppReady } from '../helpers/navigation';
 
 test('admin cover palette is protected, movable, resizable, themed, and live-only', async ({ page }) => {
   await page.goto('/app_autojen_vanteet', { waitUntil: 'domcontentloaded' });
@@ -17,7 +20,7 @@ test('admin cover palette is protected, movable, resizable, themed, and live-onl
   expect(await response.json()).toEqual({ view_admin_cover_image_test_palette: true });
   const presentationResponse = await page.request.get('/api/site-presentation-settings');
   expect(presentationResponse.ok()).toBe(true);
-  const presentation = await presentationResponse.json();
+  const presentation = (await loadDatasetCardVisibility(page.request, 'app_autojen_vanteet')).dataset_appearance;
 
   const hero = page.locator('.filterbar-inline-hero--has-cover');
   await page.evaluate(() => {
@@ -26,29 +29,20 @@ test('admin cover palette is protected, movable, resizable, themed, and live-onl
   });
   await expect.poll(async () => hero.evaluate((element) => (
     getComputedStyle(element, '::before').opacity
-  ))).toBe(String(presentation.dataset_cover_theme.dark.image_opacity));
-  if (presentation.dataset_cover_theme.dark.oval_enabled) {
-    await expect.poll(async () => hero.evaluate((element) => (
-      getComputedStyle(element, '::before').maskImage
-    ))).not.toBe('none');
-  } else {
-    await expect.poll(async () => hero.evaluate((element) => (
-      getComputedStyle(element, '::before').maskImage
-    ))).toBe('none');
-  }
+  ))).toBe(String(presentation.tab_values['dark.image_opacity']));
+  // The cover always retains its bottom fade, even with the oval disabled.
+  // A results-owned legacy mask can differ from the public site's mask; exercise
+  // the actual palette toggle below rather than assuming its initial ownership.
+  await expect.poll(async () => hero.evaluate((element) => (
+    getComputedStyle(element, '::before').maskImage
+  ))).toContain('linear-gradient');
   await page.evaluate(() => {
     document.body.classList.remove('dark-mode');
     document.body.classList.add('light-mode');
   });
-  if (presentation.dataset_cover_theme.light.oval_enabled) {
-    await expect.poll(async () => hero.evaluate((element) => (
-      getComputedStyle(element, '::before').maskImage
-    ))).not.toBe('none');
-  } else {
-    await expect.poll(async () => hero.evaluate((element) => (
-      getComputedStyle(element, '::before').maskImage
-    ))).toBe('none');
-  }
+  await expect.poll(async () => hero.evaluate((element) => (
+    getComputedStyle(element, '::before').maskImage
+  ))).toContain('linear-gradient');
 
   const button = page.locator('[data-testid="dataset-cover-test-palette-button"]');
   await expect(button).toBeVisible({ timeout: 10_000 });
@@ -56,6 +50,26 @@ test('admin cover palette is protected, movable, resizable, themed, and live-onl
 
   const panel = page.locator('[data-testid="dataset-cover-test-palette"]');
   await expect(panel).toBeVisible();
+  await expect(panel.getByTestId('dataset-cover-test-palette-scope-tab')).toBeChecked();
+  const ovalEnabled = panel.locator('[data-testid="dataset-cover-test-palette-mask-enabled"]');
+  // The background/cover toolbox remembers its native disclosure state.
+  // Open the toolbox that owns the oval before interacting with its control.
+  const coverDisclosure = panel.locator('details').filter({
+    has: page.getByTestId('dataset-cover-test-palette-mask-enabled'),
+  });
+  if (!(await coverDisclosure.evaluate((element: HTMLDetailsElement) => element.open))) {
+    await coverDisclosure.locator(':scope > summary').click();
+  }
+  await expect(ovalEnabled).toBeVisible();
+  await expect(ovalEnabled).toBeEnabled();
+  await ovalEnabled.uncheck();
+  await expect.poll(async () => hero.evaluate((element) => (
+    getComputedStyle(element, '::before').maskImage.includes('radial-gradient')
+  ))).toBe(false);
+  await ovalEnabled.check();
+  await expect.poll(async () => hero.evaluate((element) => (
+    getComputedStyle(element, '::before').maskImage
+  ))).toContain('radial-gradient');
   const box = await panel.boundingBox();
   const viewportHeight = page.viewportSize()!.height;
   expect(box).not.toBeNull();
@@ -104,8 +118,8 @@ test('admin cover palette is protected, movable, resizable, themed, and live-onl
   await expect.poll(async () => hero.evaluate((element) => (
     getComputedStyle(element, '::before').filter
   ))).toBe('blur(0px)');
-  await expect.poll(async () => page.evaluate(() => (
-    getComputedStyle(document.documentElement)
+  await expect.poll(async () => hero.evaluate((element) => (
+    getComputedStyle(element)
       .getPropertyValue('--dataset-background-dark-image-blur').trim()
   ))).toBe('0px');
 
@@ -122,7 +136,7 @@ test('admin cover palette is protected, movable, resizable, themed, and live-onl
     input.dispatchEvent(new Event('input', { bubbles: true }));
   });
   const zeroExtraHeight = (await hero.boundingBox())!.height;
-  expect(defaultHeight - zeroExtraHeight).toBeCloseTo(40, 0);
+  expect(defaultHeight - zeroExtraHeight).toBeCloseTo(Number(presentation.tab_values['shared.hero_extra_height']), 0);
 
   const ovalPosition = page.locator(
     '[data-testid="dataset-cover-test-palette-oval-position-y"]'
@@ -143,7 +157,7 @@ test('admin cover palette is protected, movable, resizable, themed, and live-onl
   await expect.poll(async () => hero.evaluate((element) => ({
     configuredOpacity: getComputedStyle(element)
       .getPropertyValue('--dataset-cover-light-overlay-opacity').trim(),
-    background: getComputedStyle(element, '::after').backgroundImage,
+    background: getComputedStyle(element, '::after').backgroundColor,
   }))).toMatchObject({ configuredOpacity: '0.35' });
 
   const bottomFade = page.locator('[data-testid="dataset-cover-test-palette-hero-bottom-fade"]');
@@ -152,7 +166,7 @@ test('admin cover palette is protected, movable, resizable, themed, and live-onl
     input.dispatchEvent(new Event('input', { bubbles: true }));
   });
   await expect.poll(async () => hero.evaluate((element) => (
-    getComputedStyle(element, '::after').backgroundImage
+    getComputedStyle(element, '::after').maskImage
   ))).toContain('80px');
 
   const cardImageWidth = page.locator('[data-testid="dataset-cover-test-palette-card-image-width"]');
@@ -160,10 +174,13 @@ test('admin cover palette is protected, movable, resizable, themed, and live-onl
     input.value = '360';
     input.dispatchEvent(new Event('input', { bubbles: true }));
   });
-  await expect.poll(async () => page.evaluate(() => (
-    getComputedStyle(document.documentElement).getPropertyValue('--card_image_large_width').trim()
+  await expect.poll(async () => hero.evaluate((element) => (
+    getComputedStyle(element).getPropertyValue('--card_image_large_width').trim()
   ))).toBe('360px');
 
+  await panel.getByTestId('dataset-cover-test-palette-scope-site').check();
+  await expect(panel.getByTestId('dataset-cover-test-palette-theme-controls')).toHaveCount(0);
+  await expect(ovalEnabled).toBeHidden();
   const activeTabFade = page.locator('[data-testid="dataset-cover-test-palette-active-tab-fade"]');
   await activeTabFade.evaluate((input: HTMLInputElement) => {
     input.value = '42';
@@ -175,7 +192,7 @@ test('admin cover palette is protected, movable, resizable, themed, and live-onl
   const activeTabMaximumOpacity = page.locator(
     '[data-testid="dataset-cover-test-palette-active-tab-max-opacity"]'
   );
-  await expect(activeTabMaximumOpacity).toHaveValue('1');
+  await expect(activeTabMaximumOpacity).toHaveValue(String(presentation.site_values['shared.active_tab_max_opacity']));
   await activeTabMaximumOpacity.evaluate((input: HTMLInputElement) => {
     input.value = '0.2';
     input.dispatchEvent(new Event('input', { bubbles: true }));
@@ -231,7 +248,7 @@ test('admin cover palette is protected, movable, resizable, themed, and live-onl
 test('selected-chip side previews both DOM orders, resets, saves and survives reload', async ({ page }) => {
   test.setTimeout(60_000);
   const original = await loadSitePresentationSettings(page.request);
-  const savedSide = original.dataset_cover_theme.shared.active_filter_remove_side || 'start';
+  const savedSide = original.site_values['shared.active_filter_remove_side'] || 'start';
   const chosenSide = savedSide === 'start' ? 'end' : 'start';
   try {
     await page.goto('/app_autojen_vanteet?search=chip-proof', { waitUntil: 'domcontentloaded' });
@@ -239,6 +256,7 @@ test('selected-chip side previews both DOM orders, resets, saves and survives re
     await expect(chip).toBeVisible();
     await page.locator('[data-testid="dataset-cover-test-palette-button"]').click();
     const panel = page.locator('[data-testid="dataset-cover-test-palette"]');
+    await panel.getByTestId('dataset-cover-test-palette-scope-site').check();
     const select = panel.locator('[data-testid="dataset-cover-test-palette-active-filter-remove-side"]');
     await select.evaluate(element => { element.closest('details')!.open = true; });
     await expect(select).toHaveValue(savedSide);
@@ -262,7 +280,7 @@ test('selected-chip side previews both DOM orders, resets, saves and survives re
       await expect(chip.locator('button')).toBeFocused();
       await expect(chip).toHaveAttribute('data-preview-identity', 'retained');
       await expect(chip.locator('button')).toHaveAttribute('data-preview-identity', 'retained-button');
-      await panel.locator('[data-testid="dataset-cover-test-palette-tab-dark"]').click();
+      await page.evaluate(() => { document.body.classList.toggle('dark-mode'); document.body.classList.toggle('light-mode'); });
       await expect(select).toHaveValue(side);
     }
     expect(presentationPosts).toBe(0);
@@ -277,7 +295,7 @@ test('selected-chip side previews both DOM orders, resets, saves and survives re
     await panel.locator('[data-testid="dataset-cover-test-palette-save"]').click();
     const savedResponse = await saved;
     expect(savedResponse.ok()).toBe(true);
-    expect((await savedResponse.json()).dataset_cover_theme.shared.active_filter_remove_side).toBe(chosenSide);
+    expect((await savedResponse.json()).site_values['shared.active_filter_remove_side']).toBe(chosenSide);
     await expect(panel.locator('[data-testid="dataset-cover-test-palette-save"]')).toBeEnabled();
     // A fresh load by the raw dataset name. The page may have rewritten its address to the public alias, and
     // reloading an alias within the alias registry's 60 s freshness window lands on Home (a separate, older issue).
@@ -286,9 +304,11 @@ test('selected-chip side previews both DOM orders, resets, saves and survives re
     await expect(chip).toHaveAttribute('data-remove-side', chosenSide);
     expect(await order()).toBe(chosenSide === 'start' ? 'BUTTON' : 'SPAN');
     await page.locator('[data-testid="dataset-cover-test-palette-button"]').click();
+    await expect(panel.getByTestId('dataset-cover-test-palette-scope-tab')).toBeChecked();
+    await panel.getByTestId('dataset-cover-test-palette-scope-site').check();
     await expect(select).toHaveValue(chosenSide);
   } finally {
-    await restoreSitePresentationSettings(page.request, original);
+    await restoreSitePresentationSettings(page.request, original, ['shared.active_filter_remove_side']);
   }
 });
 
@@ -302,9 +322,9 @@ test('dataset card palette saves style and detail columns through the administra
   const address = `/${datasetName}?view=card`;
   const card = page.locator(`#${datasetName}_card_view_container .card[data-card-presentation-view="card"]`).first();
   const panel = page.getByTestId('dataset-cover-test-palette');
-  const style = panel.getByTestId('dataset-card-palette-style');
-  const columns = panel.getByTestId('dataset-card-palette-columns');
-  const save = panel.getByTestId('dataset-card-palette-save');
+  const style = panel.getByTestId('dataset-cover-test-palette-card-style');
+  const columns = panel.getByTestId('dataset-cover-test-palette-card-detail-columns');
+  const save = panel.getByTestId('dataset-cover-test-palette-save');
   const expectCardChoices = async () => {
     await expect(card).toBeVisible();
     await expect(card).toHaveAttribute('data-card-style-variant', chosenStyle);
@@ -319,10 +339,10 @@ test('dataset card palette saves style and detail columns through the administra
     await style.evaluate(element => { element.closest('details')!.open = true; });
     await expect(style).toBeEnabled();
     await expect(columns).toBeEnabled();
-    await expect(style).toHaveValue(String(original.overrides['shared.card_style_variant'] ?? 'inherit'));
-    await expect(columns).toHaveValue(String(original.overrides['shared.card_detail_columns'] ?? 'inherit'));
+    await expect(style).toHaveValue(String(original.effective.shared.card_style_variant));
+    await expect(columns).toHaveValue(String(original.effective.shared.card_detail_columns));
     await style.selectOption(chosenStyle);
-    await columns.selectOption(String(chosenColumns));
+    await columns.evaluate((element: HTMLInputElement, value) => { element.value = String(value); element.dispatchEvent(new Event('input', { bubbles: true })); }, chosenColumns);
     await expectCardChoices();
 
     const latest = (await loadDatasetCardVisibility(page.request, datasetName)).dataset_appearance;
@@ -332,7 +352,7 @@ test('dataset card palette saves style and detail columns through the administra
     const response = await saved;
     expect(response.ok(), await response.text()).toBe(true);
     expect(response.request().postDataJSON()).toEqual({
-      dataset_uid: original.dataset_uid, version: latest.version, shared_version: latest.shared_version,
+      schema_version: 2, tab_set: {}, dataset_uid: original.dataset_uid, version: latest.version, shared_version: latest.shared_version,
       set: { 'shared.card_style_variant': chosenStyle, 'shared.card_detail_columns': chosenColumns }, unset: [],
     });
     const persisted = await response.json();
@@ -366,7 +386,7 @@ test('dataset card palette saves style and detail columns through the administra
 
 // The common shell must keep the dataset's unsaved preview when closed and release it on navigation.
 test('shared palette shell keeps dataset preview through close and restores saved values on teardown', async ({ page }) => {
-  const saved = await (await page.request.get('/api/site-presentation-settings')).json();
+  const saved = (await loadDatasetCardVisibility(page.request, 'app_autojen_vanteet')).dataset_appearance;
   await page.goto('/app_autojen_vanteet', { waitUntil: 'domcontentloaded' });
   const button = page.getByTestId('dataset-cover-test-palette-button');
   await button.click();
@@ -379,8 +399,112 @@ test('shared palette shell keeps dataset preview through close and restores save
   await page.keyboard.press('Escape'); await expect(button).toBeFocused(); await expect(panel).toBeHidden();
   await expect.poll(preview).toBe('200px');
   await button.click(); await panel.getByTestId('dataset-cover-test-palette-reset').click();
-  await expect(input).toHaveValue(String(saved.dataset_cover_theme.shared.hero_extra_height));
-  await expect.poll(preview).toBe(`${saved.dataset_cover_theme.shared.hero_extra_height}px`);
+  await expect(input).toHaveValue(String(saved.tab_values['shared.hero_extra_height']));
+  await expect.poll(preview).toBe(`${saved.tab_values['shared.hero_extra_height']}px`);
   await page.goto('/login', { waitUntil: 'domcontentloaded' });
   await expect(panel).toHaveCount(0);
+});
+
+// Follows dataset_appearance_state.js and the definition's 28/9/7 ownership.
+// The site patch and cleanup touch only one default; covers never enter site writes.
+test('two empty datasets keep separate covers, inherit site defaults and retain explicit equality overrides', async ({ page }) => {
+  test.setTimeout(90_000);
+  // The page-based CRUD helper needs the authenticated application's origin.
+  await page.goto('/', { waitUntil: 'domcontentloaded' });
+  await waitForAppReady(page);
+  const names = [buildTempDatasetName('palette_a'), buildTempDatasetName('palette_b')];
+  const original = await loadSitePresentationSettings(page.request);
+  const path = 'shared.card_image_width';
+  const initialWidth = Number(original.defaults[path]);
+  const chosenWidth = initialWidth === 420 ? 360 : 420;
+  const created: string[] = [];
+  let siteChanged = false;
+  try {
+    for (const name of names) {
+      await createTempDataset(page, { datasetName: name, columns: { id: 'SERIAL', title: 'TEXT' } });
+      created.push(name);
+      await openTempDataset(page, name, 'card', { expectEmpty: true });
+      await page.getByTestId('dataset-cover-test-palette-button').click();
+      const panel = page.getByTestId('dataset-cover-test-palette');
+      await expect(panel.getByTestId('dataset-cover-test-palette-scope-tab')).toBeChecked();
+      await panel.getByTestId('dataset-cover-test-palette-hero-height').evaluate((el: HTMLInputElement, value) => {
+        el.value = String(value); el.dispatchEvent(new Event('input', { bubbles: true }));
+      }, name === names[0] ? 80 : 120);
+      if (name === names[1]) {
+        // Inputting the existing value still creates an override by presence.
+        await panel.getByTestId('dataset-cover-test-palette-card-image-width').evaluate((el: HTMLInputElement, value) => {
+          el.value = String(value); el.dispatchEvent(new Event('input', { bubbles: true }));
+        }, initialWidth);
+        await expect(panel.locator(`[data-appearance-path="${path}"] > small`)).toContainText(/Override|Oma asetus/);
+      }
+      const response = page.waitForResponse(res => res.url().endsWith('/api/admin/dataset-appearance')
+        && res.request().method() === 'POST');
+      await panel.getByTestId('dataset-cover-test-palette-save').click();
+      const saved = await response; expect(saved.ok(), await saved.text()).toBe(true);
+      expect(saved.request().postDataJSON()).toMatchObject({ schema_version: 2, tab_set: {
+        'shared.hero_extra_height': name === names[0] ? 80 : 120,
+      } });
+    }
+    const panel = page.getByTestId('dataset-cover-test-palette');
+    await panel.getByTestId('dataset-cover-test-palette-scope-site').check();
+    await expect(panel.getByTestId('dataset-cover-test-palette-image-opacity')).toBeHidden();
+    await panel.getByTestId('dataset-cover-test-palette-card-image-width').evaluate((el: HTMLInputElement, value) => {
+      el.value = String(value); el.dispatchEvent(new Event('input', { bubbles: true }));
+    }, chosenWidth);
+    const siteResponse = page.waitForResponse(res => res.url().endsWith('/api/admin/site-presentation-settings')
+      && res.request().method() === 'POST');
+    await panel.getByTestId('dataset-cover-test-palette-save').click();
+    const siteSaved = await siteResponse; expect(siteSaved.ok(), await siteSaved.text()).toBe(true); siteChanged = true;
+    expect(siteSaved.request().postDataJSON()).toEqual({ schema_version: 2, version: original.version, set: { [path]: chosenWidth } });
+    for (const name of names) {
+      await openTempDataset(page, name, 'card', { expectEmpty: true });
+      const appearance = (await loadDatasetCardVisibility(page.request, name)).dataset_appearance;
+      expect(appearance.tab_values['shared.hero_extra_height']).toBe(name === names[0] ? 80 : 120);
+      expect(appearance.effective.shared.card_image_width).toBe(name === names[0] ? chosenWidth : initialWidth);
+      expect(appearance.sources[path]).toBe(name === names[0] ? 'default' : 'override');
+    }
+    await page.getByTestId('dataset-cover-test-palette-button').click();
+    await panel.locator(`[data-appearance-path="${path}"] button`).evaluate((el: HTMLButtonElement) => el.click());
+    expect((await loadDatasetCardVisibility(page.request, names[1])).dataset_appearance.overrides[path]).toBe(initialWidth);
+    const removal = page.waitForResponse(res => res.url().endsWith('/api/admin/dataset-appearance') && res.request().method() === 'POST');
+    await panel.getByTestId('dataset-cover-test-palette-save').click(); expect((await removal).ok()).toBe(true);
+    expect((await loadDatasetCardVisibility(page.request, names[1])).dataset_appearance.overrides[path]).toBeUndefined();
+  } finally {
+    try { if (siteChanged) await restoreSitePresentationSettings(page.request, original, [path]); }
+    finally { for (const name of created.reverse()) await dropTempDataset(page, name); }
+  }
+});
+
+test('phone palette keeps native scope keyboard focus and actions reachable in FI/EN over opposite OS themes', async ({ page }) => {
+  test.setTimeout(60_000);
+  await page.setViewportSize({ width: 375, height: 740 });
+  for (const theme of ['light', 'dark']) {
+    await page.emulateMedia({ colorScheme: theme === 'light' ? 'dark' : 'light' });
+    await page.goto('/app_autojen_vanteet', { waitUntil: 'domcontentloaded' });
+    await page.evaluate(value => { document.body.classList.remove('light-mode', 'dark-mode'); document.body.classList.add(`${value}-mode`); }, theme);
+    await page.getByTestId('dataset-cover-test-palette-button').click();
+    const panel = page.getByTestId('dataset-cover-test-palette');
+    const tab = panel.getByTestId('dataset-cover-test-palette-scope-tab');
+    const site = panel.getByTestId('dataset-cover-test-palette-scope-site');
+    await tab.focus(); await page.keyboard.press('ArrowRight'); await expect(site).toBeChecked(); await expect(site).toBeFocused();
+    for (const language of ['fi', 'en']) {
+      await page.evaluate(value => { document.documentElement.lang = value; }, language);
+      await expect(site).toBeFocused();
+      await expect(site.locator('..')).toContainText(language === 'fi' ? 'Kaikki aineistot' : 'All datasets');
+    }
+    await page.keyboard.press('ArrowLeft'); await expect(tab).toBeChecked();
+    await panel.locator('details').evaluateAll(elements => elements.forEach(el => { (el as HTMLDetailsElement).open = true; }));
+    await panel.locator('.dataset-cover-test-palette__body').evaluate(el => { el.scrollTop = el.scrollHeight; });
+    for (const id of ['scope', 'save', 'reset', 'close']) {
+      const control = panel.getByTestId(`dataset-cover-test-palette-${id}`);
+      await expect(control).toBeVisible(); const rect = (await control.boundingBox())!;
+      expect(rect.y).toBeGreaterThanOrEqual(0); expect(rect.y + rect.height).toBeLessThanOrEqual(740);
+      expect(rect.height).toBeGreaterThanOrEqual(44);
+    }
+    const grids = await panel.locator('.dataset-cover-test-palette__controls').evaluateAll(elements => elements
+      .filter(el => el.getBoundingClientRect().height > 0).map(el => getComputedStyle(el).gridTemplateColumns.split(' ').length));
+    expect(grids.every(columns => columns === 1)).toBe(true);
+    await panel.getByTestId('dataset-cover-test-palette-close').click();
+    await page.getByTestId('dataset-cover-test-palette-button').click(); await expect(tab).toBeChecked();
+  }
 });

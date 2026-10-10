@@ -217,8 +217,51 @@
 }
 
 .dataset-cover-test-palette__actions {
-	margin-top: 14px;
+	flex: 0 0 auto;
+	margin: 0;
+	padding: 10px 14px;
+	background: var(--bg_color_2);
+	border-top: 1px solid var(--filter_panel_border);
 }
+
+/* Scope and actions sit outside the scrolling body in both explicit themes. */
+.dataset-cover-test-palette__scope {
+    display: flex;
+    flex: 0 0 auto;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin: 0;
+    padding: 8px 14px;
+    border: 0;
+    border-bottom: 1px solid var(--filter_panel_border);
+    background: var(--bg_color_2);
+}
+.dataset-cover-test-palette__scope label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-height: 44px;
+    cursor: pointer;
+}
+.dataset-cover-test-palette__setting {
+    display: grid;
+    grid-column: 1 / -1;
+    gap: 6px;
+    min-width: 0;
+}
+.dataset-cover-test-palette__setting small { color: var(--text_color_muted, var(--text_color)); }
+.dataset-cover-test-palette__setting button { justify-self: start; }
+.dataset-cover-test-palette button,
+.dataset-cover-test-palette input[type="range"],
+.dataset-cover-test-palette select,
+.dataset-cover-test-palette__toggle,
+.dataset-cover-test-palette__group-title {
+    min-height: 44px;
+}
+.dataset-cover-test-palette__close { min-width: 44px; }
+.dataset-cover-test-palette__color input { height: 44px; }
+.dataset-cover-test-palette button:disabled { cursor: default; opacity: 0.65; }
+.dataset-cover-test-palette [hidden] { display: none; }
 
 @media (width <= 600px) {
 	.dataset-cover-test-palette {

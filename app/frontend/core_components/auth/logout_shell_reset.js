@@ -3,6 +3,7 @@
 // Bridges the logout endpoint, client-side auth caches, and rendered SPA shell reset.
 // Exists to clear local auth state before loading the backend-selected destination.
 
+import { datasetAppearanceState } from '../table_views/dataset_appearance_state.js';
 import { endpoint_router } from "../endpoints/endpoint_router.js";
 import { ensureCsrfToken } from "../pipeline/api_pipeline.js";
 import { clearPermissionCache } from "../route_permission_checker.js";
@@ -21,7 +22,8 @@ const LOGOUT_SAFE_LOCAL_STORAGE_KEYS = Object.freeze([
     "chosen_language",
     "navVisibleWide",
     "navVisibleNarrow",
-    "filterest_public_presentation_v1", // Public site appearance only; no user or authorization state.
+    "filterest_public_presentation_v1", // Old public cache may survive a cutover.
+    "filterest_public_presentation_v2", // Public site appearance only; no user or authorization state.
 ]);
 
 export function resolvePostLogoutPath(responseUrl, currentOrigin = window.location.origin) {
@@ -78,6 +80,7 @@ function teardownRenderedShell() {
 }
 
 export async function clearClientAuthArtifacts() {
+    datasetAppearanceState.clear();
     stopAdminUpdateNoticeSubscriber();
     // What this page holds in memory belongs to the signed-out session as well:
     // each dataset's address parameters, the view kept only in memory included,

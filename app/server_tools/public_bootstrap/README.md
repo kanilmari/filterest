@@ -89,6 +89,30 @@ If you need to change the public bootstrap schema or seed rows, change the
 reviewed inputs and regenerate the derived artifacts. Do not treat ad-hoc edits
 in a local Filterest database as durable source changes.
 
+## Dataset appearance cutover (unreleased DB 9.10.2)
+
+Migration `20261009000060` extends the private appearance table before seeds;
+`20261009000061` then backfills every seeded or existing registry UID from the
+normalized legacy cover. Existing card overrides preserve explicit equality.
+Unexpected legacy overrides refuse the upgrade before any conversion. Each
+existing row advances once; new rows start at revision 1. Completion requires
+complete owned values, valid masks, permitted overrides, unchanged effective
+appearance and the removal of cover values from active site storage.
+
+The public site contract contains seven site values, nine overridable defaults
+and the separate article timestamp setting. Dataset snapshots additionally
+carry all 28 owned tab values, sparse overrides, sources and both revisions.
+New datasets can read definition defaults without creating a row; their first
+successful save materializes the complete tab map. A backfill replay preserves
+version-two values and revisions. The final bootstrap acceptance runs both the
+storage and three-place data checks before recording its baseline or version.
+
+Take and verify a recovery backup before cutover. A failed migration transaction
+records no completion and rolls back its own writes. After independent covers
+have been edited, version one cannot represent them. A completed downgrade
+requires restoring matching pre-upgrade application and database state; never
+silently collapse edited covers into one shared cover.
+
 ## Credential Boundary
 
 The public bootstrap seed creates only the technical guest identity needed for

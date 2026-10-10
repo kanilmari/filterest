@@ -120,6 +120,31 @@ export interface ApplicationUpdateErrorResponse {
     error_lang_key: string;
 }
 
+export interface DatasetAppearanceRequest {
+    schema_version: number;
+    tab_set: Record<string, unknown>;
+    dataset_uid: number;
+    set: Record<string, unknown>;
+    unset: string[];
+    shared_version: string;
+    version: string;
+}
+
+export interface SitePresentationSettingsResponse {
+    schema_version: number;
+    version: string;
+    site_values: Record<string, unknown>;
+    defaults: Record<string, unknown>;
+    row_article_timestamp_display_mode: string;
+}
+
+export interface SitePresentationSettingsPatch {
+    schema_version: number;
+    version: string;
+    set: Record<string, unknown>;
+    row_article_timestamp_display_mode?: string;
+}
+
 export interface DatasetCoverThemeValues {
     oval_enabled: boolean;
     oval_width: number;
@@ -167,12 +192,27 @@ export interface DatasetCoverThemeConfig {
 export interface DatasetAppearanceResponse {
     dataset_uid: number;
     schema_version: number;
-    shared: DatasetCoverThemeConfig;
+    tab_values: Record<string, unknown>;
+    site_values: Record<string, unknown>;
+    defaults: Record<string, unknown>;
     overrides: Record<string, unknown>;
     effective: DatasetCoverThemeConfig;
     sources: Record<string, string>;
     shared_version: string;
     version: string;
+}
+
+export interface RelatedTableResult {
+    dataset: string;
+    dataset_uid?: number;
+    dataset_appearance?: DatasetAppearanceResponse;
+    column: string;
+    relation_kind?: string;
+    reference_direction?: string;
+    filter_value?: number;
+    row_count?: number;
+    types?: Record<string, unknown>;
+    rows: Record<string, unknown>[];
 }
 
 export interface ErrorBody {

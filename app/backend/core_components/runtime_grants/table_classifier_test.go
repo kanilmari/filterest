@@ -26,15 +26,14 @@ func TestBootstrapAndMigrationTablesAreClassified(t *testing.T) {
 	for _, name := range []string{"palvelukatalogi", "riskienhallinta", "dokumentaatio", "tiketit", "palvelukatalogi_assets", "riskienhallinta_assets", "dokumentaatio_assets", "tiketit_assets", "palvelukatalogi_riskienhallinta_relation", "palvelukatalogi_dokumentaatio_relation", "palvelukatalogi_tiketit_relation", "riskienhallinta_dokumentaatio_relation", "riskienhallinta_tiketit_relation", "dokumentaatio_tiketit_relation"} {
 		content[name] = true
 	}
-	pattern := regexp.MustCompile(`(?i)\bCREATE\s+(?:OR\s+REPLACE\s+)?(?:UNLOGGED\s+|MATERIALIZED\s+)?(?:TABLE|VIEW)\s+(?:IF\s+NOT\s+EXISTS\s+)?((?:"?[a-z_][a-z_0-9]*"?\.)?"?[a-z_][a-z_0-9]*"?)`)
 	count := 0
 	for _, file := range files {
 		data, err := os.ReadFile(file)
 		if err != nil {
 			t.Fatal(err)
 		}
-		for _, match := range pattern.FindAllStringSubmatch(string(data), -1) {
-			name := strings.ReplaceAll(match[1], `"`, "")
+		for _, literalName := range literalCreatedTables(string(data)) {
+			name := strings.ReplaceAll(literalName, `"`, "")
 			schema := "public"
 			if parts := strings.Split(name, "."); len(parts) == 2 {
 				schema, name = parts[0], parts[1]

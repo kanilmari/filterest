@@ -23,7 +23,7 @@ vi.mock("../../route_permission_checker.js", () => ({
 vi.mock("../../config_fetcher.js", () => ({
     getDefaultViewSync: () => "table", getDefaultDatasetSortSync: () => ({ column: "id", direction: "ASC" }),
 }));
-vi.mock("../../state_stores/table_specs_reader.js", () => ({ getAllSpecs: () => ({}) }));
+vi.mock("../../state_stores/table_specs_reader.js", async original => ({ ...await original(), getAllSpecs: () => ({}) }));
 vi.mock("../filter_bar_builder.js", () => ({ create_filter_bar: vi.fn() }));
 vi.mock("../text_search/create_text_search_panel.js", () => ({
     ongoingSearchResults: {}, do_intelligent_search: vi.fn(), rerenderCachedSearchResults: vi.fn(),

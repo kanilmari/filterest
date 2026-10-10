@@ -1,12 +1,14 @@
 // @vitest-environment jsdom
 // Exercises durable public settings, cross-consumer races and the pre-stylesheet cache reader.
+import { datasetAppearanceState } from '../table_views/dataset_appearance_state.js';
 import { readFileSync } from 'node:fs';
 import { beforeEach, describe, expect, test, vi } from 'vitest';
 import {
     DEFAULT_DATASET_COVER_THEME, PUBLIC_PRESENTATION_CACHE_KEY, brandColorComponents,
     createSitePresentationState, resetSitePresentationStatesForTests, isValidThemeConfig, normalizePresentationSettings,
-    FILTERBAR_CONTENT_TOP_SPACE, clampFilterbarContentTopSpace,
+    FILTERBAR_CONTENT_TOP_SPACE, clampFilterbarContentTopSpace, getSitePresentationState,
 } from './site_presentation_state.js';
+import { paletteMountOptions, applySitePatch } from './dataset_appearance_palette_test_fixtures.js';
 import { mountDatasetCoverTestPalette } from './dataset_cover_test_palette.js';
 import { ACTIVE_FILTER_REMOVE_SIDES } from '../filterbar/filter_list/active_filter_chip_builder.js';
 
@@ -18,12 +20,16 @@ const toastTexts = () => [...document.querySelectorAll('[data-testid="toast"] .t
     .map((node) => node.textContent).join(' ');
 
 const clone = (v) => JSON.parse(JSON.stringify(v));
-const settings = (brand = '#e61aad') => ({
+const settings = (brand = '#e61aad') => normalizePresentationSettings({
     version: '',
     dataset_cover_theme: { ...clone(DEFAULT_DATASET_COVER_THEME),
         shared: { ...DEFAULT_DATASET_COVER_THEME.shared, brand_color: brand } },
     row_article_timestamp_display_mode: 'date_only',
 });
+const publicSettings = payload => {
+    const result = normalizePresentationSettings(payload);
+    delete result.dataset_cover_theme; return result;
+};
 const deferred = () => {
     let resolve, reject;
     const promise = new Promise((yes, no) => { resolve = yes; reject = no; });
@@ -34,7 +40,7 @@ const bootstrap = readFileSync('frontend/index.html', 'utf8')
     .match(/<script id="site-presentation-bootstrap"[^>]*>([\s\S]*?)<\/script>/)[1];
 const boot = () => window.eval(bootstrap);
 const putCache = (snapshot) => localStorage.setItem(PUBLIC_PRESENTATION_CACHE_KEY, JSON.stringify({
-    schema_version: 1, settings: snapshot, brand: brandColorComponents(snapshot.dataset_cover_theme.shared.brand_color),
+    schema_version: 2, settings: publicSettings(snapshot), brand: brandColorComponents(snapshot.dataset_cover_theme.shared.brand_color),
 }));
 
 beforeEach(() => {
@@ -43,6 +49,7 @@ beforeEach(() => {
     document.documentElement.removeAttribute('style');
     document.documentElement.removeAttribute('lang');
     resetSitePresentationStatesForTests();
+    datasetAppearanceState.bind(document.body.appendChild(document.createElement('section')), 'public-default-test');
 });
 
 describe('public presentation state', () => {
@@ -64,14 +71,15 @@ describe('public presentation state', () => {
         Object.assign(draft.dataset_cover_theme.shared, {
             active_tab_glow_intensity: 0.5, active_tab_glow_width: 2, active_tab_glow_blur: 4,
         });
-        const save = vi.fn(async payload => payload);
+        const save = vi.fn(async () => publicSettings(draft));
         await state.saveSettings(draft, save);
-        expect(save.mock.calls[0][0]).toEqual(draft);
-        expect(state.savedSettings()).toEqual(draft);
-        expect(JSON.parse(localStorage.getItem(PUBLIC_PRESENTATION_CACHE_KEY)).settings).toEqual(draft);
-        for (const key of keys) delete draft.dataset_cover_theme.shared[key];
-        for (const key of keys) delete legacy.dataset_cover_theme.shared[key];
-        expect(draft).toEqual(legacy);
+        expect(save.mock.calls[0][0]).toEqual({ schema_version: 2, version: draft.version, set: {
+            'shared.active_tab_glow_intensity': 0.5, 'shared.active_tab_glow_width': 2, 'shared.active_tab_glow_blur': 4 } });
+        expect(state.savedSettings()).toEqual(normalizePresentationSettings(draft));
+        expect(JSON.parse(localStorage.getItem(PUBLIC_PRESENTATION_CACHE_KEY)).settings).toEqual(publicSettings(draft));
+        for (const key of keys) { delete draft.dataset_cover_theme.shared[key]; delete draft.site_values[`shared.${key}`]; }
+        for (const key of keys) { delete legacy.dataset_cover_theme.shared[key]; delete legacy.site_values[`shared.${key}`]; }
+        expect(draft.dataset_cover_theme).toEqual(legacy.dataset_cover_theme);
         const css = document.documentElement.style;
         expect(['--navtab-active-fade-width', '--navtab-active-max-opacity', '--navtab-active-glow-intensity',
             '--navtab-active-glow-width', '--navtab-active-glow-blur'].map(key => css.getPropertyValue(key)))
@@ -86,22 +94,22 @@ describe('public presentation state', () => {
         const refreshed = settings();
         refreshed.dataset_cover_theme.shared.article_image_caption_position = 'overlay';
         const state = createSitePresentationState({ requestFn: async () => refreshed });
-        expect(document.documentElement.dataset.articleImageCaptionPosition).toBe('below');
+        expect(document.querySelector('[data-dataset-appearance-scope]').dataset.articleImageCaptionPosition).toBe('below');
         expect(state.savedSettings().dataset_cover_theme.shared.card_detail_columns).toBe(4);
         await state.loadSettings();
-        expect(document.documentElement.dataset.articleImageCaptionPosition).toBe('overlay');
+        expect(document.querySelector('[data-dataset-appearance-scope]').dataset.articleImageCaptionPosition).toBe('overlay');
         const cached = createSitePresentationState({ requestFn: async () => { throw Error('offline'); } });
-        expect(document.documentElement.dataset.articleImageCaptionPosition).toBe('overlay');
+        expect(document.querySelector('[data-dataset-appearance-scope]').dataset.articleImageCaptionPosition).toBe('overlay');
         expect((await cached.loadSettings()).dataset_cover_theme.shared.article_image_caption_position).toBe('overlay');
         const owner = {}, draft = cached.savedSettings();
         draft.dataset_cover_theme.shared.article_image_caption_position = 'below';
-        const onChange = vi.fn(() => expect(document.documentElement.dataset.articleImageCaptionPosition).toBe('below'));
+        const onChange = vi.fn(() => expect(document.querySelector('[data-dataset-appearance-scope]').dataset.articleImageCaptionPosition).toBe('below'));
         window.addEventListener('dataset-cover-presentation-changed', onChange, { once: true });
         cached.setPreview(owner, draft);
         expect(onChange).toHaveBeenCalledOnce();
-        expect(JSON.parse(localStorage.getItem(PUBLIC_PRESENTATION_CACHE_KEY)).settings.dataset_cover_theme.shared.article_image_caption_position).toBe('overlay');
+        expect(JSON.parse(localStorage.getItem(PUBLIC_PRESENTATION_CACHE_KEY)).settings.defaults['shared.article_image_caption_position']).toBe('overlay');
         cached.releasePreview(owner);
-        expect(document.documentElement.dataset.articleImageCaptionPosition).toBe('overlay');
+        expect(document.querySelector('[data-dataset-appearance-scope]').dataset.articleImageCaptionPosition).toBe('overlay');
     });
     test.each([null, true, 0, {}, [], '', 'unknown'])('rejects invalid article caption position %j', value => {
         const input = settings(); input.dataset_cover_theme.shared.article_image_caption_position = value;
@@ -112,10 +120,10 @@ describe('public presentation state', () => {
         const state = createSitePresentationState({ requestFn: async () => stored });
         await state.loadSettings();
         const draft = state.savedSettings(); draft.dataset_cover_theme.shared.card_style_variant = 'standard';
-        const save = vi.fn(async payload => payload);
+        const save = vi.fn(async () => publicSettings(draft));
         await state.saveSettings(draft, save);
-        expect(save.mock.calls[0][0].dataset_cover_theme.shared.article_image_caption_position).toBe('overlay');
-        expect(document.documentElement.dataset.articleImageCaptionPosition).toBe('overlay');
+        expect(save.mock.calls[0][0].set).toEqual({ 'shared.card_style_variant': 'standard' });
+        expect(document.querySelector('[data-dataset-appearance-scope]').dataset.articleImageCaptionPosition).toBe('overlay');
         expect(state.savedSettings().dataset_cover_theme.shared.card_style_variant).toBe('standard');
     });
 
@@ -127,15 +135,15 @@ describe('public presentation state', () => {
         putCache(old);
         const stored = settings(); stored.dataset_cover_theme.shared.card_detail_columns = 3;
         const state = createSitePresentationState({ requestFn: async () => stored });
-        expect(document.documentElement.dataset.cardDetailColumns).toBe('2');
+        expect(document.querySelector('[data-dataset-appearance-scope]').dataset.cardDetailColumns).toBe('2');
         await state.loadSettings();
-        expect(document.documentElement.dataset.cardDetailColumns).toBe('3');
+        expect(document.querySelector('[data-dataset-appearance-scope]').dataset.cardDetailColumns).toBe('3');
         const owner = {}, preview = state.savedSettings(); preview.dataset_cover_theme.shared.card_detail_columns = 4;
         state.setPreview(owner, preview);
-        expect(document.documentElement.dataset.cardDetailColumns).toBe('4');
-        expect(JSON.parse(localStorage.getItem(PUBLIC_PRESENTATION_CACHE_KEY)).settings.dataset_cover_theme.shared.card_detail_columns).toBe(3);
+        expect(document.querySelector('[data-dataset-appearance-scope]').dataset.cardDetailColumns).toBe('4');
+        expect(JSON.parse(localStorage.getItem(PUBLIC_PRESENTATION_CACHE_KEY)).settings.defaults['shared.card_detail_columns']).toBe(3);
         state.releasePreview(owner);
-        expect(document.documentElement.dataset.cardDetailColumns).toBe('3');
+        expect(document.querySelector('[data-dataset-appearance-scope]').dataset.cardDetailColumns).toBe('3');
     });
     test.each([null, '3', false, {}, 0, 5, 2.5])('rejects invalid detail columns %j', value => {
         const input = settings(); input.dataset_cover_theme.shared.card_detail_columns = value;
@@ -147,15 +155,15 @@ describe('public presentation state', () => {
         const stored = settings(); stored.dataset_cover_theme.shared.card_style_variant = 'standard';
         const state = createSitePresentationState({ requestFn: async () => stored });
         expect(state.savedSettings().dataset_cover_theme.shared.card_style_variant).toBe('modern');
-        expect(document.documentElement.dataset.cardStyleVariant).toBe('modern');
+        expect(document.querySelector('[data-dataset-appearance-scope]').dataset.cardStyleVariant).toBe('modern');
         await state.loadSettings();
-        expect(document.documentElement.dataset.cardStyleVariant).toBe('standard');
+        expect(document.querySelector('[data-dataset-appearance-scope]').dataset.cardStyleVariant).toBe('standard');
         const owner = {}, preview = state.savedSettings(); preview.dataset_cover_theme.shared.card_style_variant = 'modern';
         state.setPreview(owner, preview);
-        expect(document.documentElement.dataset.cardStyleVariant).toBe('modern');
-        expect(JSON.parse(localStorage.getItem(PUBLIC_PRESENTATION_CACHE_KEY)).settings.dataset_cover_theme.shared.card_style_variant).toBe('standard');
+        expect(document.querySelector('[data-dataset-appearance-scope]').dataset.cardStyleVariant).toBe('modern');
+        expect(JSON.parse(localStorage.getItem(PUBLIC_PRESENTATION_CACHE_KEY)).settings.defaults['shared.card_style_variant']).toBe('standard');
         state.releasePreview(owner);
-        expect(document.documentElement.dataset.cardStyleVariant).toBe('standard');
+        expect(document.querySelector('[data-dataset-appearance-scope]').dataset.cardStyleVariant).toBe('standard');
     });
     test.each([null, true, 0, {}, 'unknown'])('rejects an invalid site card style %j', value => {
         const input = settings(); input.dataset_cover_theme.shared.card_style_variant = value;
@@ -168,13 +176,13 @@ describe('public presentation state', () => {
         const state = createSitePresentationState({ requestFn: async () => stored });
         expect(state.savedSettings().dataset_cover_theme.shared.card_show_all_fields).toBe(true);
         await state.loadSettings();
-        expect(document.documentElement.dataset.cardShowAllFields).toBe('false');
+        expect(document.querySelector('[data-dataset-appearance-scope]').dataset.cardShowAllFields).toBe('false');
         const owner={}; const preview=state.savedSettings(); preview.dataset_cover_theme.shared.card_show_all_fields=true;
         state.setPreview(owner,preview);
-        expect(document.documentElement.dataset.cardShowAllFields).toBe('true');
-        expect(JSON.parse(localStorage.getItem(PUBLIC_PRESENTATION_CACHE_KEY)).settings.dataset_cover_theme.shared.card_show_all_fields).toBe(false);
+        expect(document.querySelector('[data-dataset-appearance-scope]').dataset.cardShowAllFields).toBe('true');
+        expect(JSON.parse(localStorage.getItem(PUBLIC_PRESENTATION_CACHE_KEY)).settings.defaults['shared.card_show_all_fields']).toBe(false);
         state.releasePreview(owner);
-        expect(document.documentElement.dataset.cardShowAllFields).toBe('false');
+        expect(document.querySelector('[data-dataset-appearance-scope]').dataset.cardShowAllFields).toBe('false');
         expect(normalizePresentationSettings(old).dataset_cover_theme.shared.card_show_all_fields).toBe(true);
     });
 
@@ -194,7 +202,7 @@ describe('public presentation state', () => {
         expect(await first).toEqual(await second);
         await state.loadSettings();
         expect(requestFn).toHaveBeenCalledTimes(1);
-        expect(JSON.parse(localStorage.getItem(PUBLIC_PRESENTATION_CACHE_KEY)).settings).toEqual(settings());
+        expect(JSON.parse(localStorage.getItem(PUBLIC_PRESENTATION_CACHE_KEY)).settings).toEqual(publicSettings(settings()));
     });
 
     test('uses the known snapshot on a failed revalidation without persisting defaults', async () => {
@@ -221,18 +229,18 @@ describe('public presentation state', () => {
         const get = deferred();
         const state = createSitePresentationState({ requestFn: () => get.promise });
         const oldGet = state.loadSettings();
-        await state.saveSettings(settings(), async (payload) => payload);
+        await state.saveSettings(settings(), async () => publicSettings(settings()));
         get.resolve(settings('#1a8fe6'));
         await oldGet;
         state.paint();
         expect(state.savedSettings()).toEqual(settings());
         expect(hue()).toBe('316.76');
-        expect(JSON.parse(localStorage.getItem(PUBLIC_PRESENTATION_CACHE_KEY)).settings).toEqual(settings());
+        expect(JSON.parse(localStorage.getItem(PUBLIC_PRESENTATION_CACHE_KEY)).settings).toEqual(publicSettings(settings()));
     });
 
     test('serializes saves so a slower previous response cannot overtake a later user save', async () => {
         const first = deferred();
-        const saveFn = vi.fn().mockImplementationOnce(() => first.promise).mockImplementationOnce(async (payload) => payload);
+        const saveFn = vi.fn().mockImplementationOnce(() => first.promise).mockImplementationOnce(async () => publicSettings(settings()));
         const state = createSitePresentationState();
         const a = state.saveSettings(settings('#cc3366'), saveFn);
         const b = state.saveSettings(settings(), saveFn);
@@ -281,7 +289,7 @@ describe('public presentation state', () => {
 
     test('keeps an already bootstrapped hue when full snapshot validation or GET fails', async () => {
         localStorage.setItem(PUBLIC_PRESENTATION_CACHE_KEY, JSON.stringify({
-            schema_version: 1, settings: {}, brand: { hue: 316.76, saturation: 80.31, lightness: 50.2 },
+            schema_version: 2, settings: {}, brand: { hue: 316.76, saturation: 80.31, lightness: 50.2 },
         }));
         boot();
         const state = createSitePresentationState({ requestFn: async () => { throw Error('offline'); } });
@@ -314,9 +322,9 @@ describe('early public-brand paint', () => {
 
     test.each([
         'invalid-json',
-        JSON.stringify({ schema_version: 2, brand: { hue: 3, saturation: 3, lightness: 3 } }),
-        JSON.stringify({ schema_version: 1, brand: { hue: '3; color:red', saturation: 3, lightness: 3 } }),
-        JSON.stringify({ schema_version: 1, brand: { hue: 361, saturation: 3, lightness: 3 } }),
+        JSON.stringify({ schema_version: 3, brand: { hue: 3, saturation: 3, lightness: 3 } }),
+        JSON.stringify({ schema_version: 2, brand: { hue: '3; color:red', saturation: 3, lightness: 3 } }),
+        JSON.stringify({ schema_version: 2, brand: { hue: 361, saturation: 3, lightness: 3 } }),
     ])('ignores an unsafe or unsupported cache: %s', (value) => {
         localStorage.setItem(PUBLIC_PRESENTATION_CACHE_KEY, value);
         boot();
@@ -327,10 +335,11 @@ describe('early public-brand paint', () => {
 describe('palette lifecycle', () => {
     const hero = () => document.body.appendChild(document.createElement('section'));
     const options = (settingsRequestFn) => ({
-        settingsRequestFn, requestFn: async () => ({ view_admin_cover_image_test_palette: true }),
-        saveRequestFn: async (payload) => payload, permissionCheck: () => true,
+        ...paletteMountOptions(), settingsRequestFn,
+        saveRequestFn: async patch => applySitePatch(getSitePresentationState(settingsRequestFn).savedSettings(), patch),
     });
     const inputBrand = (control, color) => {
+        control.panel.querySelector('[data-testid="dataset-cover-test-palette-scope-site"]').click();
         const input = control.panel.querySelector('[data-testid="dataset-cover-test-palette-brand-color"]');
         input.value = color;
         input.dispatchEvent(new Event('input', { bubbles: true }));
@@ -384,6 +393,7 @@ describe('palette lifecycle', () => {
         control.panel.querySelector('[data-testid="dataset-cover-test-palette-save"]').click();
         inputBrand(control, '#6699cc');
         control.button.click();
+        control.panel.querySelector('[data-testid="dataset-cover-test-palette-scope-site"]').click();
         const focusedInput = control.panel.querySelector('[data-testid="dataset-cover-test-palette-brand-color"]');
         focusedInput.closest('details').open = true;
         focusedInput.focus();
@@ -402,12 +412,14 @@ describe('palette lifecycle', () => {
 // writes it, --filterbar-content-top-space carries it, and the filterbar
 // stylesheet is its only consumer.
 describe('hero header top space', () => {
-    const topSpace = () => document.documentElement.style.getPropertyValue('--filterbar-content-top-space');
+    const topSpace = () => document.querySelector('[data-dataset-appearance-scope]').style.getPropertyValue('--filterbar-content-top-space');
     const hero = () => document.body.appendChild(document.createElement('section'));
-    const paletteOptions = (settingsRequestFn, saveRequestFn = async (payload) => payload) => ({
-        settingsRequestFn, saveRequestFn,
-        requestFn: async () => ({ view_admin_cover_image_test_palette: true }),
-        permissionCheck: () => true,
+    const paletteOptions = (settingsRequestFn, saveRequestFn) => ({
+        ...paletteMountOptions(), settingsRequestFn,
+        saveRequestFn: async patch => {
+            saveRequestFn?.(patch);
+            return applySitePatch(getSitePresentationState(settingsRequestFn).savedSettings(), patch);
+        },
     });
     const withTopSpace = (value) => {
         const snapshot = settings();
@@ -452,6 +464,7 @@ describe('hero header top space', () => {
             async () => withTopSpace(24),
             async (payload) => { saved.push(payload); return payload; },
         ));
+        control.panel.querySelector('[data-testid="dataset-cover-test-palette-scope-site"]').click();
         const slider = control.panel.querySelector('[data-testid="dataset-cover-test-palette-filterbar-content-top-space"]');
         const output = control.panel.querySelector('[data-testid="dataset-cover-test-palette-filterbar-content-top-space-value"]');
         expect(slider.min).toBe(String(FILTERBAR_CONTENT_TOP_SPACE.minimum));
@@ -467,7 +480,7 @@ describe('hero header top space', () => {
 
         control.panel.querySelector('[data-testid="dataset-cover-test-palette-save"]').click();
         await vi.waitFor(() => expect(toastTexts()).toMatch(/saved/i));
-        expect(saved.at(-1).dataset_cover_theme.shared.filterbar_content_top_space).toBe(88);
+        expect(saved.at(-1).set['shared.filterbar_content_top_space']).toBe(88);
         expect(topSpace()).toBe('88px');
 
         control.resetPreview();
@@ -531,7 +544,7 @@ describe('selected-filter remove side', () => {
         const owner = {};
         state.setPreview(owner, draft);
         expect(document.documentElement.dataset.activeFilterRemoveSide).toBe('start');
-        expect(JSON.parse(localStorage.getItem(PUBLIC_PRESENTATION_CACHE_KEY)).settings.dataset_cover_theme.shared.active_filter_remove_side).toBe('end');
+        expect(JSON.parse(localStorage.getItem(PUBLIC_PRESENTATION_CACHE_KEY)).settings.site_values['shared.active_filter_remove_side']).toBe('end');
         expect(state.releasePreview({})).toBe(false);
         expect(document.documentElement.dataset.activeFilterRemoveSide).toBe('start');
         state.releasePreview(owner);

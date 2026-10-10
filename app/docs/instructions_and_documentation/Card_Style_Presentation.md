@@ -9,36 +9,48 @@ Filterest has one ordinary card view with two presentation styles: **Glowy**
 and **Plain**. The service catalog uses this same renderer, selection and article
 opening path. Its moderation controls do not define another card view.
 
-Open the appearance palette from a dataset hero. The **Card layout** block
-contains two explicitly separate groups:
+Open the appearance palette from a dataset hero. Every opening selects
+**This tab** (Tämä välilehti) first in the native scope radio group:
 
-- **This dataset**: choose **Site default**, **Glowy**, or **Plain**, and a
-  nullable maximum of one to four detail columns. **Save dataset settings**
-  saves only those two overrides.
-- **Site defaults**: select the style and maximum detail columns inherited by
-  datasets. **Save site defaults** saves these with the other site appearance
-  settings, including both themes. It does not save an unsaved dataset draft.
+- **This tab** shows the tab's cover/background first, then the nine card,
+  article and header settings that may override site defaults. Their badges
+  distinguish **Site default** from **Override**. **Use site default** stages
+  removal until **Save this tab**; equality, zero and false remain explicit.
+  The seven site-wide rows appear last, with readable saved values and an
+  authorized action to switch to **All datasets**.
+- **All datasets** edits the nine defaults and the seven site-wide settings.
+  It has no cover controls. **Save all datasets** patches this scope alone.
+  Existing card-control rights remain required; a missing site right leaves
+  values readable, explains the limitation and disables editing/Save.
 
-The same controls and renderer apply to every ordinary dataset. A dataset with
-an explicit style or count keeps that choice until an administrator changes it
-or selects **Site default**. Changing the site default never silently clears
-dataset overrides.
+The same controls and renderer apply to every ordinary dataset. Changing the
+site default never silently clears dataset overrides. Tab media/header and
+card-field actions reuse the existing editors and their separate save flows.
+The field editor preselects this dataset in its existing tree before the tree's
+delayed selection notification. Its save keeps both revision checks, and closing
+the editor leaves the palette's appearance draft in place.
+On phones, both editor entry points stack the dataset tree above the fields.
+The tree has its own bounded scroll area; the modal sheet scrolls vertically
+and wide field tables scroll horizontally without moving Edit or Save off-screen.
 
 | Scope | Authoritative storage | Default / inheritance |
 | --- | --- | --- |
-| Site style | `system_config.json_value`, key `dataset_cover_theme_config`, path `shared.card_style_variant` | `modern` (Glowy); `standard` means Plain |
-| Site card field wrapping | Same JSON row, path `shared.label_value_layout` | `stacked`; `inline`, or development-only `auto` |
-| Site columns | Same JSON row, path `shared.card_detail_columns` | 2; integer 1–4 |
+| Site style | `system_config.json_value`, key `dataset_cover_theme_config`, map `defaults`, key `shared.card_style_variant` | `modern` (Glowy); `standard` means Plain |
+| Site card field wrapping | Same JSON row, map `defaults`, key `shared.label_value_layout` | `stacked`; `inline`, or development-only `auto` |
+| Site columns | Same JSON row, map `defaults`, key `shared.card_detail_columns` | 2; integer 1–4 |
 | Dataset style | `system_dataset_appearance.overrides`, key `shared.card_style_variant` | Absent key inherits the site |
 | Dataset columns | `system_dataset_appearance.overrides`, key `shared.card_detail_columns` | Absent key inherits the site |
 
-The public API exposes the site object as `dataset_cover_theme`. These site
+The version-two public API exposes seven `site_values` and nine `defaults`;
+cover values belong to each dataset and are excluded. These site
 choices are shared by light and dark themes. Browser metadata is a projection
 of these server settings, not another authority. Unsaved preview values remain
 owned by the mounted palette and are not written to the database.
 
 The dataset palette saves through administrator `POST /api/admin/dataset-appearance`
-with `{dataset_uid,set,unset,shared_version,version}`. The existing card API
+with `{schema_version:2,dataset_uid,tab_set,set,unset,shared_version,version}`.
+The complete 28-value cover belongs to `tab_values`; `tab_set` patches it
+without inheritance. `set` and `unset` support only the nine default overrides. The existing card API
 continues to accept nullable style/count fields, but now requires both loaded
 revisions and projects nullable read fields from the override map. The complete
 card editor and generic metadata writes use the same revision-protected saver.
@@ -48,16 +60,45 @@ The physical style/count columns and their editable metadata are retired.
 
 Site saves require their loaded `version`. Every shared and dataset writer uses
 one shared-before-dataset lock order, including the absent shared-row case.
-Legacy omitted shared fields still preserve stored choices. The public site
-endpoint stays shared-only; authorized results carry the complete appearance
-snapshot without another browser request. See [the appearance API contract](Frontend_Guide.md)
-for the pending K290 mask-order limitation and later scoped-rendering work.
+A site save patches only the sixteen site-owned values and preserves omitted
+settings, including article timestamps. Authorized results carry the complete
+version-two appearance snapshot without another browser request. Each tab
+validates both themes' mask ordering before saving; site saves cannot change
+a cover or invalidate another tab's masks.
 
-Each group previews immediately. Its reset returns to the latest saved settings;
-leaving the palette owner releases unsaved previews. Closing the panel preserves
-the current unsaved preview, as with its other controls. Site and dataset Save
-failures are reported separately, so one button never implies both scopes were
-saved.
+Every response that can carry or apply appearance keeps the guard captured
+before its request, including chat jobs, search streams, related-row loads and
+retained-row transfers. Sign-out, deletion or registry ownership changes discard
+stale work. The first tree discovery may confirm an already authorized result's
+UID during assembly without cancelling it; a different UID or intervening
+registry change still discards that work. Current registry metadata resolves
+names; mounted surfaces keep their own immutable UID across rename and
+former-name reuse. A rejected
+snapshot stops rendering before it can bind another dataset's settings.
+Related rows retain their separate read permission: an omitted appearance
+snapshot means failed authorization revalidation, so the dataset's saved
+snapshot and draft are forgotten across the page. Connected and detached
+surfaces clear private adapter projections before repainting with site defaults.
+An omitted or rejected response binds its panel and rows to public defaults
+without a name or UID fallback, including lazy loads and forced reloads.
+The original request guard still protects row assembly. Dispatch order prevents
+an older response from restoring revoked appearance or erasing a newer success;
+a later successful revalidation can install the snapshot and authorize its
+surface again.
+If a URL search starts before its card host is assembled, its listing reload
+uses the guarded view refresh and consumes that refresh's first page. This also
+handles a saved sort arriving during assembly, without missing result controls
+or fetching the rebuilt first page again.
+Pagination cannot append replacement rows to a surface owned by the renamed
+dataset, and palette teardown releases the draft's original UID after name reuse.
+
+Tab and site drafts are independent. Switching scope preserves both and
+previews only the selected draft. Reset restores that scope's saved values;
+Close keeps the selected preview, and teardown releases only its owner.
+Pending saves preserve newer edits and adopt their successfully saved revision.
+A known local site save updates a matching tab token; conflicts keep drafts and
+loaded tokens for review. Scope, Close and Save/Reset remain outside the
+scrolling controls, including on phones. FI/EN changes retain focus and drafts.
 
 Database 9.10.2 migrates every non-null legacy style/count as an explicit
 override, including values equal to the shared choice. Null remains inherited;
@@ -108,13 +149,15 @@ the selected contain/cover behavior and image dimensions. This frame is separate
 from the article's outer container, whose side borders remain while its top and
 bottom borders are removed. Gallery selection borders retain their own meaning.
 
-## One card field wrapping choice for the whole site
+## Card field wrapping defaults and dataset choices
 
-The **Site defaults** part of **Card layout** offers **Stacked** (Allekkain)
+The **Card layout** block in either scope offers **Stacked** (Allekkain)
 and **Side by side** (Rinnakkain). Stacked is the default for missing or unknown
 values. **Automatic** (Automaattinen) is available only when the server runs
 in development mode, using the same boundary as the experimental card.
 Production rejects saving Automatic and reads an older stored Automatic as Stacked.
+This is one of the nine overridable defaults: a dataset can retain an explicit
+wrapping choice through its appearance endpoint, or remove it to inherit.
 
 Every ordinary label/value pair follows this choice in Glowy and Plain result
 cards, every Plain detail layout, and the experimental free-layout card.

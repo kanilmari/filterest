@@ -3,6 +3,7 @@
 // Bridges row data, column roles, and permission state with the article UI shell.
 // Exists to be the single orchestration point for launching, populating, and managing the row article view.
 
+import { datasetAppearanceState } from '../dataset_appearance_state.js';
 import { captureLoadedDatasetRows } from "../dataset_loaded_rows.js";
 
 import { loadRowArticleSectionDefaults } from "./row_article_section_defaults.js";
@@ -80,12 +81,21 @@ function resolveVisibleResultCard(tableName, rowId) {
 const articleOpenGenerations = new Map();
 
 export async function openRowArticleView(row_item, table_name, selectedCard = null, { isCurrent = () => true } = {}) {
+    const appearanceToken = datasetAppearanceState.capture(table_name);
+    const callerIsCurrent = isCurrent;
+    let committed = false;
+    let callerInvalidatedByAddress = false;
+    // A listing guard owns the response until commit. The settled article owns
+    // its address and subsequent hydration; that address may invalidate the
+    // originating listing guard. Keep dataset lifecycle invalidation throughout.
+    isCurrent = () => (callerInvalidatedByAddress || callerIsCurrent()) && datasetAppearanceState.isCurrent(appearanceToken);
     if (!isCurrent()) return;
     const generation = (articleOpenGenerations.get(table_name) || 0) + 1;
     articleOpenGenerations.set(table_name, generation);
     const canCommit = () => isCurrent()
         && articleOpenGenerations.get(table_name) === generation
-        && getChosenDatasetView(table_name) === "article_view";
+        && getChosenDatasetView(table_name) === "article_view"
+        && (!committed || !document.getElementById(`${table_name}_container`)?.classList.contains('hidden'));
     // Keep the legacy counter key stable until analytics naming is migrated separately.
     count_this_function("open_big_card_view"); // 🔢
 
@@ -134,13 +144,17 @@ export async function openRowArticleView(row_item, table_name, selectedCard = nu
         /* -------------------------------------------------- *
          * 1. METADATA & PERUSSETUP
          * -------------------------------------------------- */
-        row_item = await fetchPermittedRowArticleData({ tableName: table_name, rowItem: row_item });
+        row_item = await fetchPermittedRowArticleData({ tableName: table_name, rowItem: row_item, isCurrent: canCommit });
         if (!canCommit()) return;
         // Direct article URLs and non-card entry points may not pass the
         // selected card explicitly. Resolve it before composing article media
         // so image-first receives the same bounded result-set context as a
         // thumbnail opened directly from card view.
-        selectedCard = selectedCard instanceof HTMLElement
+        const articleContainer = document.getElementById(`${table_name}_article_view_container`);
+        // A retained card list is deliberately hidden. A retry or language
+        // refresh may still pass its card, but the article belongs to its own
+        // visible result shell and must never mount under that hidden wrapper.
+        selectedCard = selectedCard instanceof HTMLElement && articleContainer?.contains(selectedCard)
             ? selectedCard
             : resolveVisibleResultCard(table_name, row_item.id);
         const data_types = row_item.__articleTypes ?? resolveRowArticleDataTypes(table_name, selectedCard);
@@ -160,6 +174,7 @@ export async function openRowArticleView(row_item, table_name, selectedCard = nu
             "active_row_article",
         );
         rowArticleElement.dataset.testid = 'big-card-container';
+        datasetAppearanceState.bind(rowArticleElement, table_name);
         // Store data for dynamic language refresh
         rowArticleElement._row = row_item;
         rowArticleElement._table_name = table_name;
@@ -474,6 +489,7 @@ export async function openRowArticleView(row_item, table_name, selectedCard = nu
         rowArticleElement.appendChild(actionBar);
 
         if (!canCommit() || !wrapper.isConnected) return;
+        committed = true;
         wrapper.classList.add("big-card-open");
         saveScrollBeforeRowArticle();
 
@@ -529,6 +545,10 @@ export async function openRowArticleView(row_item, table_name, selectedCard = nu
                 writeHistoryEntry(cardUrl, historyState);
             }
         }
+        // Consume only invalidation caused synchronously by our own address.
+        // A caller that was still current after this write keeps guarding later
+        // responses, including explicit cancellation while children are loading.
+        callerInvalidatedByAddress = !callerIsCurrent();
         dispatchCardArticleToggle(table_name, true);
         Array.from(card_container.children).forEach((c) => {
             if (c !== rowArticleElement && !c.classList.contains("results_count")) {
@@ -585,6 +605,7 @@ export async function openRowArticleView(row_item, table_name, selectedCard = nu
                     sectionDefaults,
                 });
                 await hydrateRelatedSections();
+                if (canCommit() && rowArticleElement.isConnected) datasetAppearanceState.paint(table_name);
             })();
         });
     } catch (err) {

@@ -2,6 +2,8 @@
 // Builds the existing standard data card from row and column metadata.
 // Bridges existing card assembly with shared selection and presentation contracts.
 // Exists to keep one card implementation within the source size limit.
+import { datasetAppearanceState } from '../dataset_appearance_state.js';
+import { readAppearanceAttribute } from '../../../reusable_components/appearance_scope_reader.js';
 import { update_card_selection } from "../table_view/row_selection_handler.js";
 import { create_seeded_avatar } from "./card_avatar_builder.js";
 import { openRowArticleView } from "./row_article_opener.js";
@@ -34,6 +36,7 @@ export async function createSingleCard(
     viewKey = "card"
 ) {
 count_this_function("createSingleCard");
+    const appearanceToken = datasetAppearanceState.capture(table_name);
     const chosenLang = chosenLanguage || getLanguageWithBrowserFallback();
     const collectEmptyFields = viewKey === "card" || always_show_empty_fields_on_cards;
     const hideFieldsOnCardsString =
@@ -63,10 +66,12 @@ count_this_function("createSingleCard");
         hasFallbackCardImageColumn(columns) ||
         Boolean(fallbackImageValue);
     const card = document.createElement("div");
+    if (!datasetAppearanceState.isCurrent(appearanceToken)) return card;
     card.classList.add("card", "saturate_on_hover");
     card.dataset.testid = 'card-item';
     card.dataset.cardPresentationView = viewKey;
     card.dataset.datasetName = table_name;
+    if (datasetAppearanceState.isCurrent(appearanceToken)) datasetAppearanceState.bind(card, table_name);
     setFieldHideAttribute(card);
     if (row_item.id != null) card.dataset.id = row_item.id;
     const styleOverride = getMetadataCardStyleVariant(table_name);
@@ -74,7 +79,7 @@ count_this_function("createSingleCard");
     if (columnOverride !== null) card.dataset.cardColumnsOverride = String(columnOverride);
     if (styleOverride !== null) card.dataset.cardStyleOverride = styleOverride;
     const cardStyleVariant = resolveClientCardStyleVariant(styleOverride,
-        viewKey === 'card' ? document.documentElement.dataset.cardStyleVariant : CARD_STYLE_VARIANT_VALUES.STANDARD);
+        viewKey === 'card' ? readAppearanceAttribute(card, 'cardStyleVariant') : CARD_STYLE_VARIANT_VALUES.STANDARD);
     const isModernCardStyle = cardStyleVariant === CARD_STYLE_VARIANT_VALUES.MODERN;
     card.dataset.cardStyleVariant = cardStyleVariant;
     if (isModernCardStyle) {
@@ -184,7 +189,8 @@ let usernameElement = null;
     let statusBadgeValue = "";
     let todoStatusChip = null;
     let todoStatusChipValue = "";
-for (const column of columns) {
+    for (const column of columns) {
+        if (!datasetAppearanceState.isCurrent(appearanceToken)) return card;
         const raw_val = row_item[column];
         const {
             rawValue: storedRawValue,
@@ -597,6 +603,6 @@ card_text_content.appendChild(footer_div);
     card._data_types = data_types;
     card._hasLocalizedRowData = hasLocalizedRowData;
 
+    if (datasetAppearanceState.isCurrent(appearanceToken)) datasetAppearanceState.bind(card, table_name);
     return card;
 }
-

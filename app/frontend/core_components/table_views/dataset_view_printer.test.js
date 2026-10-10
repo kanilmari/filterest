@@ -112,7 +112,8 @@ vi.mock('../../ui_config.js', () => ({
     show_search_and_filter_button: false,
 }));
 
-vi.mock('../state_stores/table_specs_reader.js', () => ({
+vi.mock('../state_stores/table_specs_reader.js', async original => ({
+    ...await original(),
     getAllSpecs: getAllSpecsMock,
 }));
 
@@ -131,6 +132,25 @@ describe('generate_table', () => {
         hasRoutePermissionMock.mockReturnValue(true);
         getAllSpecsMock.mockReturnValue({});
         getDefaultViewSyncMock.mockReturnValue('card');
+    });
+
+    test('uses an empty results snapshot to scope the content before rendering and retains current appearance on row reuse', async () => {
+        const { DEFAULT_DATASET_APPEARANCE } = await import('../../shared/dataset_appearance/validator.js');
+        const { datasetAppearanceState } = await import('./dataset_appearance_state.js');
+        const { generate_table } = await import('./dataset_view_printer.js');
+        const effective = JSON.parse(JSON.stringify(DEFAULT_DATASET_APPEARANCE));
+        effective.light.image_blur = 8;
+        const appearance = { dataset_uid: 71, schema_version: 1, version: '1', shared_version: 'site-1',
+            overrides: { 'light.image_blur': 8 }, effective };
+        await generate_table('empty', ['id'], [], {}, 0, false, null, null, null, { datasetAppearance: appearance });
+        expect(document.getElementById('empty_container').dataset.datasetAppearanceUid).toBe('71');
+        expect(document.getElementById('empty_container').style.getPropertyValue('--dataset-background-light-image-blur')).toBe('8px');
+        effective.light.image_blur = 12;
+        datasetAppearanceState.accept('empty', { ...appearance, version: '2', overrides: { 'light.image_blur': 12 }, effective });
+        await generate_table('empty', ['id'], [], {}, 0, false, null, null, null,
+            { datasetAppearance: appearance, loadedRows: { offset: 0 } });
+        expect(document.getElementById('empty_container').style.getPropertyValue('--dataset-background-light-image-blur')).toBe('12px');
+        expect(document.documentElement.style.getPropertyValue('--dataset-background-light-image-blur')).toBe('');
     });
 
 	test('uses presentation media returned with dataset results without admin tree metadata', async () => {
@@ -352,7 +372,8 @@ describe('generate_table', () => {
         expect(createCardViewMock).toHaveBeenCalledWith(
             ['id', 'title'],
             [{ id: 1, title: 'Brave' }],
-            'demo_dataset'
+            'demo_dataset',
+            { isCurrent: expect.any(Function) }
         );
         expect(sessionStorage.getItem('demo_dataset_view')).toBe('card');
         expect(activeContainer.id).toBe('demo_dataset_card_view_container');
@@ -481,7 +502,7 @@ describe('generate_table', () => {
             ['id', 'title'],
             [{ id: 1, title: 'Brave' }],
             'demo_dataset',
-            { viewKey: 'article_view', stateKey: 'articleView' }
+            { viewKey: 'article_view', stateKey: 'articleView', isCurrent: expect.any(Function) }
         );
         expect(sessionStorage.getItem('demo_dataset_view')).toBe('article_view');
         expect(activeContainer.id).toBe('demo_dataset_article_view_container');
@@ -504,7 +525,8 @@ describe('generate_table', () => {
         expect(createCardViewMock).toHaveBeenCalledWith(
             ['id', 'title'],
             [{ id: 1, title: 'Brave' }],
-            'demo_dataset'
+            'demo_dataset',
+            { isCurrent: expect.any(Function) }
         );
         expect(sessionStorage.getItem('demo_dataset_view')).toBe('card');
         expect(activeContainer.id).toBe('demo_dataset_card_view_container');
@@ -554,7 +576,7 @@ describe('generate_table', () => {
     // chosen in this visit. The drawn view is this tab's own (K143), so it never
     // reaches the storage every tab shares.
     test('opens a cloud-management dataset in its default when nothing was chosen this visit', async () => {
-        getAllSpecsMock.mockReturnValueOnce({
+        getAllSpecsMock.mockReturnValue({
             app_cloud_services: {
                 table_uid: 3148,
                 default_view_name: 'cloud_management',

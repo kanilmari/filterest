@@ -1,6 +1,8 @@
 // table_remover.js
 // Defaults to reversible interface removal and requires exact-name permanent deletion.
-// Uses the existing request pipeline; the server enforces administrator authorization.
+// Connects the removal dialog, request pipeline and private appearance teardown.
+// The server enforces administrator authorization before deletion clears client state.
+import { datasetAppearanceState } from '../../../table_views/dataset_appearance_state.js';
 import { endpoint_router } from '../../../endpoints/endpoint_router.js';
 import { setRedirectNotice, clearDatasetSelectionState } from '../../../state_stores/dataset_selection_saver.js';
 import { hideModal } from '../../../../reusable_components/modal/modal_builder.js';
@@ -26,6 +28,7 @@ export function drop_table(table_name) {
             }
         },
         onConfirmed: async mode => {
+            if (mode === 'permanent') datasetAppearanceState.forget(table_name);
             hideModal();
             setRedirectNotice({
                 datasetName: table_name,

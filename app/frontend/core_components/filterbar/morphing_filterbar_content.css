@@ -70,7 +70,7 @@
   gap: 15px;
   /* --filterbar-content-top-space is the single named value for the empty space
      above the hero header icon; variables.css holds its 40px default and the
-     appearance palette overwrites it on :root. */
+     dataset appearance renderer projects it onto the owning surface. */
   margin: var(--filterbar-content-top-space, 40px) var(--filterbar-panel-inline-space, 24px) 0;
   box-sizing: border-box;
   transition:

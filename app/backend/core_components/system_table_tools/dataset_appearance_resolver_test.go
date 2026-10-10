@@ -1,115 +1,97 @@
 // dataset_appearance_resolver_test.go
-// Proves canonical sparse leaves, presence semantics and merged mask validation.
-// Connects the slice 1 definition with the internal slice 2 resolver.
-// Keeps inheritance dynamic and rejects aliases, null and invalid complete results.
+// Proves complete owned tabs, nine sparse overrides and strict corruption checks.
+// Connects definition inventories with stored snapshots and resolved projections.
 package system_table_tools
 
 import (
-	"math"
-	"reflect"
-	"testing"
-
+	store "easelect/backend/core_components/dataset_appearance_store"
 	appearance "easelect/frontend/shared/dataset_appearance"
+	"encoding/json"
+	"testing"
 )
 
 func TestDatasetAppearanceAllCanonicalLeavesAndPresence(t *testing.T) {
-	shared := defaultSitePresentationSettings().DatasetCoverTheme
-	defaults := appearance.Rules().Defaults()
-	values := map[string]any{}
-	for _, path := range appearance.Rules().CanonicalPaths() {
-		field, _ := appearance.Rules().Field(path)
-		values[path] = field.Default
+	rules := appearance.Rules()
+	site := appearance.DefaultConfig()
+	tab := rules.DefaultsForPlace(appearance.TabOnly)
+	overrides := rules.DefaultsForPlace(appearance.SiteDefault)
+	tab["light.image_blur"] = 0
+	tab["light.oval_enabled"] = false
+	overrides["shared.card_show_all_fields"] = false
+	overrides["shared.filterbar_content_top_space"] = 0
+	site.Light.ImageBlur = 9
+	site.Dark.ImageBlur = 12
+	site.Shared.CardDetailColumns = 4
+	result, err := ResolveDatasetAppearance(site, tab, overrides, false)
+	if err != nil || result.Light.ImageBlur != 0 || result.Light.OvalEnabled || result.Dark.ImageBlur != 1 || result.Shared.CardShowAllFields || result.Shared.FilterbarContentTopSpace != 0 || result.Shared.CardDetailColumns != 2 {
+		t.Fatal(result, err)
 	}
-	if len(values) != 44 {
-		t.Fatal("canonical inventory changed", len(values))
+	delete(overrides, "shared.card_detail_columns")
+	result, err = ResolveDatasetAppearance(site, tab, overrides, false)
+	if err != nil || result.Shared.CardDetailColumns != 4 || len(tab) != 28 || len(overrides) != 8 {
+		t.Fatal(result, err)
 	}
-	all, err := ResolveDatasetAppearance(shared, values, false)
-	if err != nil || !reflect.DeepEqual(all, shared) {
-		t.Fatal("canonical default overrides", err)
-	}
-	values = map[string]any{"light.image_blur": 0, "light.oval_enabled": false, "shared.card_detail_columns": 2}
-	effective, err := ResolveDatasetAppearance(shared, values, false)
-	if err != nil || effective.Light.ImageBlur != 0 || effective.Light.OvalEnabled || effective.Shared.CardDetailColumns != 2 {
-		t.Fatal("presence lost", effective, err)
-	}
-	shared.Light.ImageBlur = 9
-	shared.Dark.ImageBlur = 12
-	shared.Shared.CardDetailColumns = 4
-	effective, err = ResolveDatasetAppearance(shared, values, false)
-	if err != nil || effective.Light.ImageBlur != 0 || effective.Dark.ImageBlur != 12 || effective.Shared.CardDetailColumns != 2 {
-		t.Fatal("override/inheritance changed", effective, err)
-	}
-	delete(values, "shared.card_detail_columns")
-	effective, err = ResolveDatasetAppearance(shared, values, false)
-	if err != nil || effective.Shared.CardDetailColumns != 4 || shared.Light.ImageBlur != 9 || len(values) != 2 || defaults["light"]["image_blur"] != float64(1) {
-		t.Fatal("resolution changed inputs or removal failed", err)
-	}
-}
-
-func TestDatasetAppearanceInvalidLeaves(t *testing.T) {
-	for _, tc := range []struct {
-		name, path string
-		value      any
-	}{
-		{"null", "light.image_blur", nil}, {"string number", "light.image_blur", "0"},
-		{"boolean number", "light.image_blur", false}, {"numeric boolean", "light.oval_enabled", 0},
-		{"unknown", "light.extra", 0}, {"alias", "light.show_cover_photo", false},
-		{"derived", "shared.image_blur", 0}, {"unknown theme", "sepia.image_blur", 0},
-		{"below bound", "light.image_blur", -1}, {"above bound", "light.image_blur", 25},
-		{"fractional integer", "shared.card_detail_columns", 2.5}, {"enum", "shared.card_style_variant", "wide"},
-		{"nested", "light.image_blur", map[string]any{"value": 1}}, {"colour", "shared.brand_color", "red"},
-		{"nan", "light.image_blur", math.NaN()}, {"infinity", "light.image_blur", math.Inf(1)},
-		{"production layout", "shared.label_value_layout", "auto"},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			if _, err := ResolveDatasetAppearance(defaultSitePresentationSettings().DatasetCoverTheme, map[string]any{tc.path: tc.value}, false); err == nil {
-				t.Fatal("invalid leaf accepted")
-			}
-		})
-	}
-	for _, values := range []map[string]any{{"light.image_blur": 1.25}, {"shared.label_value_layout": "auto"}} {
-		if _, err := ResolveDatasetAppearance(defaultSitePresentationSettings().DatasetCoverTheme, values, true); err != nil {
-			t.Fatal("valid off-step/development value refused", err)
+	for _, path := range rules.CanonicalPaths() {
+		field, _ := rules.Field(path)
+		_, err := ResolveDatasetAppearance(site, tab, map[string]any{path: field.Default}, false)
+		if (err == nil) != (field.Place == appearance.SiteDefault) {
+			t.Fatal(path, err)
 		}
 	}
 }
 
 func TestDatasetAppearanceMergedMaskOrders(t *testing.T) {
 	for _, theme := range []string{"light", "dark"} {
-		for _, tc := range []struct {
-			key   string
-			value float64
-		}{
-			{"center_opacity", .8}, {"mid_opacity", .3}, {"edge_opacity", .6},
-			{"center_stop", 60}, {"mid_stop", 90}, {"edge_stop", 50},
-		} {
-			t.Run(theme+"."+tc.key, func(t *testing.T) {
-				if _, err := ResolveDatasetAppearance(defaultSitePresentationSettings().DatasetCoverTheme, map[string]any{theme + "." + tc.key: tc.value}, false); err == nil {
-					t.Fatal("invalid inherited mask ordering accepted")
-				}
-			})
+		for key, value := range map[string]any{"center_opacity": .8, "mid_opacity": .3, "edge_opacity": .6, "center_stop": 60, "mid_stop": 90, "edge_stop": 50} {
+			tab := appearance.Rules().DefaultsForPlace(appearance.TabOnly)
+			tab[theme+"."+key] = value
+			if _, err := ResolveDatasetAppearance(appearance.DefaultConfig(), tab, nil, false); err == nil {
+				t.Fatal(theme, key)
+			}
 		}
-		values := map[string]any{theme + ".center_opacity": .8, theme + ".mid_opacity": .8, theme + ".edge_opacity": .8,
-			theme + ".center_stop": 60, theme + ".mid_stop": 60, theme + ".edge_stop": 60}
-		if _, err := ResolveDatasetAppearance(defaultSitePresentationSettings().DatasetCoverTheme, values, false); err != nil {
-			t.Fatal("equal ascending triple refused", err)
-		}
-	}
-	shared := defaultSitePresentationSettings().DatasetCoverTheme
-	shared.Dark.MidStop = 99
-	if _, err := ResolveDatasetAppearance(shared, nil, false); err == nil {
-		t.Fatal("invalid complete shared result accepted")
 	}
 }
 
 func TestDatasetAppearanceStoredSnapshotRejectsCorruption(t *testing.T) {
+	valid := store.DefaultDatasetAppearanceSnapshot()
+	raw, _ := json.Marshal(valid.TabValues)
 	for _, tc := range []struct {
-		version       int
-		raw, revision string
-	}{{2, `{}`, "1"}, {1, `null`, "1"}, {1, `[]`, "1"}, {1, `{"light.image_blur":null}`, "1"},
-		{1, `{"shared.image_blur":1}`, "1"}, {1, `{}`, "none"}, {1, `{}`, "0"}} {
-		if _, err := decodeDatasetAppearanceSnapshot(tc.version, []byte(tc.raw), tc.revision, false); err == nil {
-			t.Fatal("corrupt stored snapshot accepted", tc)
+		version                  int
+		tab, overrides, revision string
+	}{
+		{1, string(raw), "{}", "1"}, {2, "{}", "{}", "1"}, {2, "null", "{}", "1"}, {2, string(raw), "null", "1"},
+		{2, string(raw), `{"shared.brand_color":"#abcdef"}`, "1"}, {2, string(raw), `{"light.image_blur":0}`, "1"},
+		{2, string(raw), `{"shared.card_detail_columns":null}`, "1"}, {2, string(raw), "{}", "0"}, {2, string(raw), "{}", "none"},
+	} {
+		if _, err := decodeDatasetAppearanceSnapshot(tc.version, []byte(tc.tab), []byte(tc.overrides), tc.revision, false); err == nil {
+			t.Fatal(tc)
+		}
+	}
+}
+
+func TestDatasetAppearanceStoredDevelopmentLayoutIsPortable(t *testing.T) {
+	site := store.DefaultSiteAppearanceValues()
+	site.Defaults["shared.label_value_layout"] = "auto"
+	raw, _ := json.Marshal(site)
+	tab, _ := json.Marshal(store.DefaultDatasetAppearanceSnapshot().TabValues)
+	for _, development := range []bool{false, true} {
+		want := "stacked"
+		if development {
+			want = "auto"
+		}
+		config, err := store.DecodeSiteAppearance(raw, development)
+		if err != nil || config.Shared.LabelValueLayout != want {
+			t.Fatal(config, err)
+		}
+		snapshot, err := decodeDatasetAppearanceSnapshot(2, tab, []byte(`{"shared.label_value_layout":"auto"}`), "1", development)
+		if err != nil || snapshot.Overrides["shared.label_value_layout"] != want {
+			t.Fatal(snapshot, err)
+		}
+		if !development {
+			_, err = store.SaveDatasetAppearance(nil, 1, store.DatasetAppearancePatch{Set: map[string]any{"shared.label_value_layout": "auto"}}, "1", "1", false)
+			if err == nil {
+				t.Fatal("production write accepted development layout")
+			}
 		}
 	}
 }

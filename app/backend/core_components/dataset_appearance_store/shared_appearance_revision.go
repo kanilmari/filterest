@@ -45,15 +45,18 @@ func ReadShared(q dbutils.Querier, development bool) (appearance.DatasetCoverThe
 	if err != nil && !errors.Is(err, sql.ErrNoRows) {
 		return appearance.DatasetCoverThemeConfig{}, "", err
 	}
-	return appearance.NormalizeStoredConfig(string(raw), development), SharedRevision(raw, stamp), nil
+	site, err := DecodeSiteAppearance(raw, development)
+	return site, SharedRevision(raw, stamp), err
 }
 
 // AppearanceResponse is the dataset-authorized appearance snapshot; Sources
-// inventories all canonical leaves. Shared/effective retain the light/dark/shared shape.
+// inventories all canonical leaves. Effective is a derived light/dark/shared projection.
 type AppearanceResponse struct {
 	DatasetUID    int                                `json:"dataset_uid"`
 	SchemaVersion int                                `json:"schema_version"`
-	Shared        appearance.DatasetCoverThemeConfig `json:"shared"`
+	TabValues     map[string]any                     `json:"tab_values"`
+	SiteValues    map[string]any                     `json:"site_values"`
+	Defaults      map[string]any                     `json:"defaults"`
 	Overrides     map[string]any                     `json:"overrides"`
 	Effective     appearance.DatasetCoverThemeConfig `json:"effective"`
 	Sources       map[string]string                  `json:"sources"`
@@ -71,44 +74,50 @@ func ReadAppearance(q dbutils.Querier, uid int, development bool) (AppearanceRes
 // a rename/name-reuse race instead of reading the replacement dataset's appearance.
 func ReadAppearanceForName(q dbutils.Querier, uid int, name string, development bool) (AppearanceResponse, error) {
 
-	var sharedRaw, raw []byte
+	var sharedRaw, tabRaw, raw []byte
 	var stamp string
 	var version sql.NullInt64
 	var revision sql.NullString
 	err := q.QueryRow(`SELECT CASE WHEN shared.key IS NULL THEN NULL ELSE COALESCE(shared.json_value::text,'null') END,COALESCE(shared.updated::text,''),
- a.schema_version,a.overrides,a.revision::text FROM public.system_db_tables d
+ a.schema_version,a.tab_values,a.overrides,a.revision::text FROM public.system_db_tables d
  LEFT JOIN public.system_config shared ON shared.key=$2
- LEFT JOIN public.system_dataset_appearance a USING(table_uid) WHERE d.table_uid=$1 AND ($3='' OR d.table_name=$3)`, uid, SharedConfigKey, name).Scan(&sharedRaw, &stamp, &version, &raw, &revision)
+ LEFT JOIN public.system_dataset_appearance a USING(table_uid) WHERE d.table_uid=$1 AND ($3='' OR d.table_name=$3)`, uid, SharedConfigKey, name).Scan(&sharedRaw, &stamp, &version, &tabRaw, &raw, &revision)
 	if errors.Is(err, sql.ErrNoRows) {
 		return AppearanceResponse{}, ErrDatasetAppearanceNotFound
 	}
 	if err != nil {
 		return AppearanceResponse{}, err
 	}
-	snapshot := DatasetAppearanceSnapshot{datasetAppearanceSchemaVersion, map[string]any{}, "none"}
+	snapshot := DefaultDatasetAppearanceSnapshot()
 	if version.Valid {
-		snapshot, err = DecodeDatasetAppearanceSnapshot(int(version.Int64), raw, revision.String, development)
+		snapshot, err = DecodeDatasetAppearanceSnapshot(int(version.Int64), tabRaw, raw, revision.String, development)
 	}
 	if err != nil {
 		return AppearanceResponse{}, err
 	}
-	shared := appearance.NormalizeStoredConfig(string(sharedRaw), development)
+	shared, err := DecodeSiteAppearance(sharedRaw, development)
+	if err != nil {
+		return AppearanceResponse{}, err
+	}
 	return responseFor(uid, shared, SharedRevision(sharedRaw, stamp), snapshot, development)
 }
 
 func responseFor(uid int, shared appearance.DatasetCoverThemeConfig, sharedVersion string, snapshot DatasetAppearanceSnapshot, development bool) (AppearanceResponse, error) {
-	effective, err := ResolveDatasetAppearance(shared, snapshot.Overrides, development)
+	effective, err := ResolveDatasetAppearance(shared, snapshot.TabValues, snapshot.Overrides, development)
 	if err != nil {
 		return AppearanceResponse{}, err
 	}
 	sources := map[string]string{}
 	for _, path := range appearance.Rules().CanonicalPaths() {
-		sources[path] = "shared"
+		place, _ := appearance.Rules().PlaceForPath(path)
+		sources[path] = map[appearance.Place]string{appearance.TabOnly: "tab", appearance.SiteOnly: "site", appearance.SiteDefault: "default"}[place]
 		if _, exists := snapshot.Overrides[path]; exists {
 			sources[path] = "override"
 		}
 	}
-	return AppearanceResponse{uid, snapshot.SchemaVersion, shared, snapshot.Overrides, effective, sources, sharedVersion, snapshot.Revision}, nil
+	return AppearanceResponse{DatasetUID: uid, SchemaVersion: snapshot.SchemaVersion, TabValues: snapshot.TabValues,
+		SiteValues: ValuesForPlace(shared, appearance.SiteOnly), Defaults: ValuesForPlace(shared, appearance.SiteDefault),
+		Overrides: snapshot.Overrides, Effective: effective, Sources: sources, SharedVersion: sharedVersion, Version: snapshot.Revision}, nil
 }
 
 // UIDForName resolves the existing compatibility name without locking; the saver

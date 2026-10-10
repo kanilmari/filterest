@@ -3,69 +3,26 @@
 // Bridges the public palette projection with existing card renderers without app imports.
 // Preserves outer card nodes, selection and retained history while fields are re-rendered.
 
+import { readAppearanceAttribute, appearanceScopeElements } from '../../../reusable_components/appearance_scope_reader.js';
+import { projectAppearanceAttribute, projectAppearanceClass } from '../../../reusable_components/appearance_projection_writer.js';
+
 import { CARD_STYLE_VARIANT_VALUES, resolveClientCardStyleVariant, normalizeCardDetailColumns, normalizeClientCardStyleOverride,
     normalizeCardDetailColumnOverride, resolveCardDetailColumns }
     from './card_detail_layout_options.js';
 
-// Owners retain only transient configuration, never DOM nodes or saved credentials.
-const datasetPreviews = new Map();
-
-function datasetCards(datasetName) {
-    return [...document.querySelectorAll('.card[data-card-presentation-view="card"]')]
-        .filter(card => card.dataset.datasetName === datasetName || card._table_name === datasetName);
-}
-
-function refreshDatasetCards(datasetName) {
-    datasetCards(datasetName).forEach(card => card._refreshFieldPresentation?.forEach(refresh => refresh()));
-}
-
+// Legacy cards without a resolved snapshot still read their nullable projections.
 function effectiveDatasetOverrides(card) {
-    const datasetName = card.dataset.datasetName || card._table_name;
-    const preview = [...datasetPreviews.values()].findLast(entry => entry.datasetName === datasetName);
-    return preview?.settings || {
+    return card.dataset.datasetAppearanceResolved === 'true' ? {
+        card_style_variant: null, card_detail_columns: null,
+    } : {
         card_style_variant: normalizeClientCardStyleOverride(card.dataset.cardStyleOverride),
         card_detail_columns: normalizeCardDetailColumnOverride(Number(card.dataset.cardColumnsOverride)),
     };
 }
 
-export function setDatasetCardPresentationPreview(owner, datasetName, settings) {
-    datasetPreviews.delete(owner);
-    datasetPreviews.set(owner, { datasetName, settings: {
-        card_style_variant: normalizeClientCardStyleOverride(settings.card_style_variant),
-        card_detail_columns: normalizeCardDetailColumnOverride(settings.card_detail_columns),
-    } });
-    refreshDatasetCards(datasetName);
-}
-
-export function releaseDatasetCardPresentationPreview(owner) {
-    const entry = datasetPreviews.get(owner);
-    datasetPreviews.delete(owner);
-    if (entry) refreshDatasetCards(entry.datasetName);
-}
-
-/** Project a verified API response into the existing metadata cache and connected cards. */
-export function applySavedDatasetCardPresentation(datasetName, settings) {
-    const raw = {
-        card_style_variant: normalizeClientCardStyleOverride(settings.card_style_variant),
-        card_detail_columns: normalizeCardDetailColumnOverride(settings.card_detail_columns),
-    };
-    try {
-        const key = datasetName + '_tableMeta';
-        const previous = JSON.parse(localStorage.getItem(key) || '{}');
-        localStorage.setItem(key, JSON.stringify({ ...previous, ...raw }));
-    } catch { /* Existing cards still update if browser storage is unavailable. */ }
-    datasetCards(datasetName).forEach(card => {
-        for (const [attribute, value] of [['cardStyleOverride', raw.card_style_variant], ['cardColumnsOverride', raw.card_detail_columns]]) {
-            if (value === null) delete card.dataset[attribute];
-            else card.dataset[attribute] = String(value);
-        }
-    });
-    refreshDatasetCards(datasetName);
-}
-
-export function cardShowsAllFields(viewKey = 'card', legacyShowAll = true) {
+export function cardShowsAllFields(viewKey = 'card', legacyShowAll = true, card = null) {
     return viewKey === 'card'
-        ? document.documentElement.dataset.cardShowAllFields !== 'false'
+        ? readAppearanceAttribute(card, 'cardShowAllFields') !== 'false'
         : legacyShowAll;
 }
 
@@ -99,25 +56,28 @@ export function mountCardFieldGroup(card, parent, viewKey, render, legacyShowAll
     let applied;
     let cleanup;
     const refresh = () => {
-        const showAll = cardShowsAllFields(viewKey, legacyShowAll);
+        const showAll = cardShowsAllFields(viewKey, legacyShowAll, card);
         const overrides = effectiveDatasetOverrides(card);
         const style = viewKey === 'card'
-            ? resolveClientCardStyleVariant(overrides.card_style_variant, document.documentElement.dataset.cardStyleVariant)
+            ? resolveClientCardStyleVariant(overrides.card_style_variant, readAppearanceAttribute(card, 'cardStyleVariant'))
             : card.dataset.cardStyleVariant;
         const columns = viewKey === 'card'
-            ? resolveCardDetailColumns(overrides.card_detail_columns, Number(document.documentElement.dataset.cardDetailColumns))
+            ? resolveCardDetailColumns(overrides.card_detail_columns, Number(readAppearanceAttribute(card, 'cardDetailColumns')))
             : undefined;
         if (viewKey === 'card') {
-            card.dataset.cardDetailColumns = String(columns);
+            projectAppearanceAttribute(card, 'cardDetailColumns', String(columns));
             const list = card.parentElement?.closest('.card_container');
-            if (list) list.dataset.cardDetailColumns = String(columns);
+            const listUID = list?.closest('[data-dataset-appearance-scope]')?.dataset.datasetAppearanceUid;
+            if (list && (!listUID || listUID === card.dataset.datasetAppearanceUid)) {
+                projectAppearanceAttribute(list, 'cardDetailColumns', String(columns));
+            }
         }
         const presentation = `${showAll}:${style}:${columns}`;
-        if (presentation === applied) return;
         if (viewKey === 'card') {
-            card.dataset.cardStyleVariant = style;
-            card.classList.toggle('card--modern', style === CARD_STYLE_VARIANT_VALUES.MODERN);
+            projectAppearanceAttribute(card, 'cardStyleVariant', style);
+            projectAppearanceClass(card, 'card--modern', style === CARD_STYLE_VARIANT_VALUES.MODERN);
         }
+        if (presentation === applied) return;
         cleanup?.();
         nodes.forEach((node) => node.remove());
         const previous = new Set(parent.childNodes);
@@ -131,17 +91,17 @@ export function mountCardFieldGroup(card, parent, viewKey, render, legacyShowAll
     refresh();
 }
 
-/** The root attribute is a projection of effective site settings, never a stored override. */
-export function applyCardFieldPresentationSetting(showAll, styleVariant, detailColumns) {
+/** Project resolved settings only onto fields belonging to this surface. */
+export function applyCardFieldPresentationSetting(showAll, styleVariant, detailColumns, scope = document.documentElement) {
     if (typeof document === 'undefined') return;
-    document.documentElement.dataset.cardShowAllFields = String(showAll !== false);
+    projectAppearanceAttribute(scope, 'cardShowAllFields', String(showAll !== false));
     if (styleVariant !== undefined) {
-        document.documentElement.dataset.cardStyleVariant = resolveClientCardStyleVariant(null, styleVariant);
+        projectAppearanceAttribute(scope, 'cardStyleVariant', resolveClientCardStyleVariant(null, styleVariant));
     }
     if (detailColumns !== undefined) {
-        document.documentElement.dataset.cardDetailColumns = String(normalizeCardDetailColumns(detailColumns));
+        projectAppearanceAttribute(scope, 'cardDetailColumns', String(normalizeCardDetailColumns(detailColumns)));
     }
-    document.querySelectorAll('.card[data-card-presentation-view="card"]').forEach((card) => {
+    appearanceScopeElements(scope, '.card[data-card-presentation-view="card"]').forEach((card) => {
         card._refreshFieldPresentation?.forEach((refresh) => refresh());
     });
 }

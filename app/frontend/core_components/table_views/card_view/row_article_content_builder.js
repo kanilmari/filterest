@@ -3,6 +3,7 @@
 // Bridges row values, column metadata, and card formatting helpers into the final detail DOM.
 // Exists to keep article-view content composition separate from the article UI state layer.
 
+import { datasetAppearanceState } from '../dataset_appearance_state.js';
 import { resolveRowArticleSectionStartOpen } from "./row_article_section_defaults.js";
 
 import {
@@ -112,8 +113,10 @@ export async function buildRowArticleContent(
     current_user_id = null,
     { selectedCard = null, sectionDefaults = {} } = {},
 ) {
+    const appearanceToken = datasetAppearanceState.capture(table_name);
     const rowArticleContentElement = document.createElement("div");
     rowArticleContentElement.classList.add("big_card_content", "row_article_content");
+    if (datasetAppearanceState.isCurrent(appearanceToken)) datasetAppearanceState.bind(rowArticleContentElement, table_name);
 
     const description_entries = [];
     const details_entries = [];
@@ -127,6 +130,7 @@ export async function buildRowArticleContent(
     const rowArticleHeaderValues = new Set();
     const chosenLang = getLanguageWithBrowserFallback();
     const timestampDisplayOptions = await resolveRowArticleTimestampDisplayOptions(chosenLang);
+    if (!datasetAppearanceState.isCurrent(appearanceToken)) return rowArticleContentElement;
 
     for (const column of sorted_columns) {
         if (isGeneratedForeignDisplayColumn(column, data_types)) {
@@ -618,6 +622,7 @@ export async function buildRowArticleContent(
         );
     }
 
+    if (datasetAppearanceState.isCurrent(appearanceToken)) datasetAppearanceState.bind(rowArticleContentElement, table_name);
     return {
         rowArticleContentElement,
         rowArticleHeaderText,

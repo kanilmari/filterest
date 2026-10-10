@@ -16,6 +16,8 @@ import (
 )
 
 type datasetAppearanceRequest struct {
+	SchemaVersion int            `json:"schema_version"`
+	TabSet        map[string]any `json:"tab_set"`
 	DatasetUID    int            `json:"dataset_uid"`
 	Set           map[string]any `json:"set"`
 	Unset         []string       `json:"unset"`
@@ -25,7 +27,8 @@ type datasetAppearanceRequest struct {
 
 // AdminDatasetAppearanceHandler patches only the selected dataset.
 // POST /api/admin/dataset-appearance
-// Request: {dataset_uid,set,unset,shared_version,version}. All leaves are canonical.
+// Request: {schema_version:2,dataset_uid,tab_set,set,unset,shared_version,version}.
+// TabSet patches tab-only values; Set/Unset affect only nine default overrides.
 func AdminDatasetAppearanceHandler(w http.ResponseWriter, r *http.Request) {
 	var input datasetAppearanceRequest
 	decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 128<<10))
@@ -34,7 +37,11 @@ func AdminDatasetAppearanceHandler(w http.ResponseWriter, r *http.Request) {
 		respondDatasetAppearanceError(w, &httpresponse.Refusal{Status: 400, LangKey: "dataset_appearance_invalid", Message: "invalid dataset appearance request"})
 		return
 	}
-	patch := store.DatasetAppearancePatch{Set: input.Set, Unset: input.Unset}
+	if input.SchemaVersion != 2 {
+		respondDatasetAppearanceError(w, store.ErrDatasetAppearanceReload)
+		return
+	}
+	patch := store.DatasetAppearancePatch{TabSet: input.TabSet, Set: input.Set, Unset: input.Unset}
 	if err := store.ValidateDatasetAppearancePatch(patch); err != nil {
 		respondDatasetAppearanceError(w, err)
 		return

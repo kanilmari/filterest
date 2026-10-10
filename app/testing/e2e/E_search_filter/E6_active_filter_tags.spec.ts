@@ -53,7 +53,8 @@ test.describe('E6 — Active Filter Tags', () => {
         await page.route('**/api/site-presentation-settings', async route => {
           const response = await route.fetch();
           const settings = await response.json();
-          settings.dataset_cover_theme.shared.active_filter_remove_side = side;
+          // Follows site_presentation_state.js: chip side belongs to the public site-only map.
+          settings.site_values['shared.active_filter_remove_side'] = side;
           await route.fulfill({ response, json: settings });
         });
         await page.goto('/app_service_catalog?search=chip-proof', { waitUntil: 'domcontentloaded' });

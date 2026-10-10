@@ -2,6 +2,7 @@
 // Fetches one freshly authorized row for the expanded article presentation.
 // Bridges a small-card row preview and the independent article field projection.
 // Exists so card field choices never remove permitted article fields such as description.
+import { datasetAppearanceState } from '../dataset_appearance_state.js';
 import { fetchDatasetData } from "../../endpoints/endpoint_data_fetcher.js";
 
 export const ROW_ARTICLE_VIEW_KEY = "article_view";
@@ -16,6 +17,7 @@ export async function fetchPermittedRowArticleData({
     tableName,
     rowItem,
     requestRows = fetchDatasetData,
+    isCurrent = () => true,
 } = {}) {
     const normalizedTableName = String(tableName || "").trim();
     if (!normalizedTableName) {
@@ -29,12 +31,20 @@ export async function fetchPermittedRowArticleData({
         return rowItem;
     }
 
+    const appearanceToken = datasetAppearanceState.capture(normalizedTableName);
     const response = await requestRows({
         dataset_name: normalizedTableName,
         filters: { id: rowID },
         view_key: ROW_ARTICLE_VIEW_KEY,
         callerName: "openRowArticleView",
     });
+    if (!isCurrent() || !datasetAppearanceState.isCurrent(appearanceToken)) {
+        throw new DOMException('Article request superseded', 'AbortError');
+    }
+    if (response?.dataset_appearance != null && !datasetAppearanceState.accept(normalizedTableName,
+        response.dataset_appearance, { token: appearanceToken, isCurrent })) {
+        throw new DOMException('Article appearance rejected', 'AbortError');
+    }
     const rows = Array.isArray(response?.data) ? response.data : [];
     const authorizedRow = rows.find((candidate) => String(candidate?.id) === String(rowID));
     if (!authorizedRow) {

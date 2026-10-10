@@ -22,6 +22,8 @@ async function loadModule() {
     }));
     vi.doMock("./auth_broadcast.js", () => ({
         publishAuthLogout: publishAuthLogoutMock,
+        subscribeToAuthBroadcast: vi.fn(() => () => {}),
+        publishAuthInvalidation: vi.fn(),
     }));
     vi.doMock("../admin_tools/admin_update_notice_subscriber.js", () => ({
         stopAdminUpdateNoticeSubscriber: stopAdminUpdateNoticeSubscriberMock,
@@ -75,6 +77,23 @@ describe("performSpaLogoutReset", () => {
             keys: vi.fn().mockResolvedValue(["a", "b"]),
             delete: vi.fn().mockResolvedValue(true),
         };
+    });
+
+    test('clears UID appearance before browser-storage failure and rejects the pending private response', async () => {
+        const { clearClientAuthArtifacts } = await loadModule();
+        const { datasetAppearanceState } = await import('../table_views/dataset_appearance_state.js');
+        const { DEFAULT_DATASET_APPEARANCE } = await import('../../shared/dataset_appearance/validator.js');
+        const snapshot = { dataset_uid: 77, schema_version: 1, effective: DEFAULT_DATASET_APPEARANCE,
+            overrides: {}, version: '1', shared_version: 'site-1' };
+        datasetAppearanceState.accept('private', snapshot);
+        const surface = document.createElement('section');
+        datasetAppearanceState.bind(surface, 'private');
+        const pending = datasetAppearanceState.capture('private');
+        const storageRead = vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => { throw new Error('blocked'); });
+        try { await expect(clearClientAuthArtifacts()).rejects.toThrow('blocked'); }
+        finally { storageRead.mockRestore(); }
+        expect(surface.dataset.datasetAppearanceUid).toBeUndefined();
+        expect(datasetAppearanceState.accept('private', snapshot, { token: pending })).toBe(false);
     });
 
     test("follows the server /login post-logout redirect when login-to-browse is enabled", async () => {

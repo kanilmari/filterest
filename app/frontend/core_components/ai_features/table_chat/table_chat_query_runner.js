@@ -4,6 +4,7 @@
 // Exists to keep the non-legacy chat transport out of the legacy SSE UI printer.
 
 import { getCodingAgentCopy } from "./table_chat_coding_agent_copy.js";
+import { datasetAppearanceState } from '../../table_views/dataset_appearance_state.js';
 import { generate_table } from "../../table_views/dataset_view_printer.js";
 import { endpoint_router } from "../../endpoints/endpoint_router.js";
 import {
@@ -93,7 +94,16 @@ export function buildChatResultDataTypes(table_name, columns, providedTypes = nu
     return mergedTypes;
 }
 
-async function renderChatQueryResult(table_name, result = {}) {
+// Mounted chats use the existing translated notice; the technical cause stays in logs.
+function supersededChatRequest(message = 'Chat request superseded') {
+    const error = new DOMException(message, 'AbortError');
+    error.failureNotice = { langKey: 'request_failed_notice' };
+    return error;
+}
+
+async function renderChatQueryResult(table_name, result = {}, appearanceToken) {
+    const isCurrent = () => datasetAppearanceState.isCurrent(appearanceToken);
+    if (!isCurrent()) throw supersededChatRequest();
     const columns = Array.isArray(result.columns) ? result.columns : [];
     const rows = Array.isArray(result.data) ? result.data : [];
     const dataTypes = buildChatResultDataTypes(table_name, columns, result.types);
@@ -102,15 +112,19 @@ async function renderChatQueryResult(table_name, result = {}) {
     disconnectInfiniteScroll(table_name);
     resetOffset(table_name);
     updateOffset(table_name, rows.length);
-    await generate_table(
+    const renderedView = await generate_table(
         table_name,
         columns,
         rows,
         dataTypes,
         Number.isFinite(result.row_count) ? result.row_count : rows.length,
         Boolean(result.has_geo),
-        result.table_meta || storedTableMeta
+        result.table_meta || storedTableMeta,
+        result.dataset_presentation,
+        result.row_group_facets,
+        { datasetAppearance: result.dataset_appearance, appearanceToken, isCurrent }
     );
+    if (renderedView === null || !isCurrent()) throw supersededChatRequest('Chat rendering superseded');
 }
 
 async function applyChatSortPlan(table_name, plan = {}) {
@@ -200,6 +214,7 @@ function applyChatFilterPlan(table_name, plan = {}) {
 }
 
 export async function runApiToolsChatQuery(table_name, user_message, conversationMessages = []) {
+    const appearanceToken = datasetAppearanceState.capture(table_name);
     const payload = {
         dataset: table_name,
         query: user_message,
@@ -216,6 +231,7 @@ export async function runApiToolsChatQuery(table_name, user_message, conversatio
         method: "POST",
         body_data: payload,
     });
+    if (!datasetAppearanceState.isCurrent(appearanceToken)) throw supersededChatRequest();
 
     if (response?.configuration_required?.code === "openai_api_key_missing") {
         const configurationError = new Error("Chat configuration is required.");
@@ -232,7 +248,7 @@ export async function runApiToolsChatQuery(table_name, user_message, conversatio
     if (!appliedSort) {
         const appliedFilters = applyChatFilterPlan(table_name, responsePlan);
         if (shouldRenderChatResult(response?.result)) {
-            await renderChatQueryResult(table_name, response.result);
+            await renderChatQueryResult(table_name, response.result, appearanceToken);
             resultActionTaken = true;
         } else if (appliedFilters) {
             await refreshTableUnified(table_name, { skipUrlParams: true });
@@ -262,6 +278,7 @@ export async function runCodingAgentChatQuery(
     conversationMessages = [],
     { mode = "", imageTokens = [] } = {}
 ) {
+    const appearanceToken = datasetAppearanceState.capture(table_name);
     const payload = {
         dataset: table_name,
         query: user_message,
@@ -285,7 +302,7 @@ export async function runCodingAgentChatQuery(
     let response;
     const existing = readPendingCodingAgentJob(table_name);
     if (existing) {
-        response = await pollCodingAgentJob(table_name, existing.job_id);
+        response = await pollCodingAgentJob(table_name, existing.job_id, appearanceToken);
     } else {
         payload.request_id = crypto.randomUUID();
         localStorage.setItem(codingAgentJobKey(table_name), JSON.stringify({ job_id: payload.request_id, mode }));
@@ -298,8 +315,9 @@ export async function runCodingAgentChatQuery(
             if ([400, 403, 404, 409, 413, 429].includes(error?.status)) localStorage.removeItem(codingAgentJobKey(table_name));
             throw error;
         }
-        response = await pollCodingAgentJob(table_name, response?.job_id || payload.request_id);
+        response = await pollCodingAgentJob(table_name, response?.job_id || payload.request_id, appearanceToken);
     }
+    if (!datasetAppearanceState.isCurrent(appearanceToken)) throw supersededChatRequest();
 
     let resultActionTaken = false;
     const responsePlan = response?.plan || {};
@@ -310,7 +328,7 @@ export async function runCodingAgentChatQuery(
     if (!appliedSort) {
         const appliedFilters = applyChatFilterPlan(table_name, responsePlan);
         if (shouldRenderChatResult(response?.result)) {
-            await renderChatQueryResult(table_name, response.result);
+            await renderChatQueryResult(table_name, response.result, appearanceToken);
             resultActionTaken = true;
         } else if (appliedFilters) {
             await refreshTableUnified(table_name, { skipUrlParams: true });
@@ -349,18 +367,20 @@ export function cancelCodingAgentPolling(dataset) {
 }
 
 /** Polling reads durable job state; losing the page never cancels its writer. */
-async function pollCodingAgentJob(dataset, jobID) {
+async function pollCodingAgentJob(dataset, jobID, appearanceToken) {
     cancelCodingAgentPolling(dataset);
     const controller = new AbortController();
     codingAgentPolls.set(dataset, controller);
     const aborted = () => new DOMException(getCodingAgentCopy().pending, "AbortError");
     try {
         for (;;) {
+            if (!datasetAppearanceState.isCurrent(appearanceToken)) throw supersededChatRequest();
             if (controller.signal.aborted) throw aborted();
             const response = await endpoint_router("aiChatCodexQuery", {
                 method: "GET", url_params: `?${new URLSearchParams({ dataset, job_id: jobID }).toString()}`,
                 suppressErrorToast: true, signal: controller.signal,
             });
+            if (!datasetAppearanceState.isCurrent(appearanceToken)) throw supersededChatRequest();
             if (controller.signal.aborted) throw aborted();
             if (["completed", "awaiting_approval", "applied", "apply_failed"].includes(response?.status)) {
                 localStorage.removeItem(codingAgentJobKey(dataset));

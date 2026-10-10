@@ -3,6 +3,7 @@
 // Bridges related-row data, table metadata, and the row article related tabs.
 // Exists to keep related-record formatting isolated from the main card element builder.
 
+import { datasetAppearanceState } from '../dataset_appearance_state.js';
 import { count_this_function } from '../../dev_tools/function_counter.js';
 import { extractLangValue } from '../../../reusable_components/lang_value_reader.js';
 import { getLanguageWithBrowserFallback } from '../../state_stores/lang_preference_reader.js';
@@ -41,6 +42,8 @@ export function createRelatedRecordCard(jsonObj, options = {}) {
     }));
 
     const wrapper = document.createElement('div');
+    if (options.datasetName) datasetAppearanceState.bind(wrapper, options.datasetName, options.datasetUID,
+        { snapshotAllowed: options.snapshotAllowed, related: true });
     wrapper.classList.add(
         'related_pretty_card',
         'child_pretty_card',

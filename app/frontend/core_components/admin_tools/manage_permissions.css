@@ -36,6 +36,19 @@
     padding: 10px;
 }
 
+/* The shared card-field editor must fit the modal sheet as well as a page.
+   Keep wide field tables scrolling inside their own wrapper, not the dialog. */
+.mp-main-wrapper.cv-main-wrapper {
+    grid-template-columns: 300px minmax(0, 1fr);
+    min-width: 0;
+}
+
+.cv-main-wrapper > .mp-left-container,
+.cv-main-wrapper > .mp-permission-form {
+    box-sizing: border-box;
+    min-width: 0;
+}
+
 .mp-left-container {
     display: flex;
     flex-direction: column;
@@ -312,6 +325,19 @@
 @media (width <= 900px) {
     .cv-layout-panel {
         grid-template-columns: 1fr;
+    }
+}
+
+/* A fixed 300px tree beside the fields would put Edit outside a phone dialog.
+   Bound the tree separately so a large catalogue leaves the fields reachable. */
+@media (width <= 600px) {
+    .mp-main-wrapper.cv-main-wrapper {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .cv-main-wrapper .mp-table-selector-tree-container {
+        max-height: min(240px, 30dvh);
+        overflow: auto;
     }
 }
 

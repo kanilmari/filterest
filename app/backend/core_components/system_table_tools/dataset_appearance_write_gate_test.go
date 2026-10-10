@@ -26,15 +26,7 @@ type appearanceHTTPRefusalRequest struct {
 
 func appearanceRevisionRefusalRequests(t *testing.T, uid, columnUID int, sharedVersion, version string) []appearanceHTTPRefusalRequest {
 	t.Helper()
-	sharedRaw, err := json.Marshal(defaultSitePresentationSettings())
-	if err != nil {
-		t.Fatal(err)
-	}
-	var sharedBody map[string]any
-	if err := json.Unmarshal(sharedRaw, &sharedBody); err != nil {
-		t.Fatal(err)
-	}
-	sharedBody["version"] = sharedVersion
+	sharedBody := map[string]any{"schema_version": 2, "version": sharedVersion, "set": map[string]any{}}
 	requests := []appearanceHTTPRefusalRequest{}
 	for _, endpoint := range []struct {
 		name    string
@@ -45,7 +37,7 @@ func appearanceRevisionRefusalRequests(t *testing.T, uid, columnUID int, sharedV
 	}{
 		{"shared", "/api/admin/site-presentation-settings", sharedBody, []string{"version"}, AdminSitePresentationSettingsHandler},
 		{"administrator", "/api/admin/dataset-appearance", map[string]any{
-			"dataset_uid": uid, "set": map[string]any{"shared.card_detail_columns": 3},
+			"schema_version": 2, "dataset_uid": uid, "set": map[string]any{"shared.card_detail_columns": 3},
 			"shared_version": sharedVersion, "version": version,
 		}, []string{"shared_version", "version"}, AdminDatasetAppearanceHandler},
 		{"scoped compatibility", "/api/card-visibility/update", map[string]any{
@@ -124,7 +116,7 @@ func TestDatasetAppearanceHandlerAndAllWritersRefuseUnmigratedLeavesBeforeTransa
 	defer db.Close()
 	rules := appearance.Rules()
 	for _, path := range rules.CanonicalPaths() {
-		if path == "shared.card_style_variant" || path == "shared.card_detail_columns" {
+		if place, _ := rules.PlaceForPath(path); place == appearance.SiteDefault {
 			continue
 		}
 		owner, key, _ := strings.Cut(path, ".")
@@ -141,7 +133,7 @@ func TestDatasetAppearanceHandlerAndAllWritersRefuseUnmigratedLeavesBeforeTransa
 		} {
 			t.Run(path+map[bool]string{true: "/set", false: "/unset"}[patch.Set != nil], func(t *testing.T) {
 				input := appearanceHTTPRefusalRequest{path: "/api/admin/dataset-appearance", handler: AdminDatasetAppearanceHandler, body: map[string]any{
-					"dataset_uid": 42, "set": patch.Set, "unset": patch.Unset, "shared_version": "none", "version": "none",
+					"schema_version": 2, "dataset_uid": 42, "set": patch.Set, "unset": patch.Unset, "shared_version": "none", "version": "none",
 				}}
 				response, lazy := invokeAppearanceHandler(t, db, input)
 				assertAppearanceHTTPRefusal(t, response, http.StatusBadRequest, "dataset_appearance_invalid")
@@ -157,19 +149,33 @@ func TestDatasetAppearanceHandlerAndAllWritersRefuseUnmigratedLeavesBeforeTransa
 }
 
 func TestSharedAppearanceHandlerMalformedBodiesRemainBadRequests(t *testing.T) {
-	raw, err := json.Marshal(defaultSitePresentationSettings())
-	if err != nil {
-		t.Fatal(err)
-	}
-	validWithoutRevision := strings.Replace(string(raw), `"version":"",`, "", 1)
-	for _, body := range []string{
-		`null`, `{}`, `[]`, validWithoutRevision + ` {}`,
-		strings.Replace(validWithoutRevision, `"dataset_cover_theme":`, `"unexpected":true,"dataset_cover_theme":`, 1),
-		strings.Replace(validWithoutRevision, `"center_opacity":0.4`, `"center_opacity":0.9`, 1),
-		strings.Replace(string(raw), `"version":""`, `"version":42`, 1),
-	} {
+	for _, body := range []string{`null`, `{}`, `[]`, `{"schema_version":2,"set":{}} {}`, `{"schema_version":2,"set":{"light.center_opacity":0.9}}`, `{"dataset_cover_theme":{}}`} {
 		w := httptest.NewRecorder()
 		AdminSitePresentationSettingsHandler(w, httptest.NewRequest(http.MethodPost, "/api/admin/site-presentation-settings", strings.NewReader(body)))
-		assertAppearanceHTTPRefusal(t, w, http.StatusBadRequest, "dataset_appearance_invalid")
+		key := "dataset_appearance_invalid"
+		if body == `{}` || body == `{"dataset_cover_theme":{}}` {
+			key = "dataset_appearance_reload"
+		}
+		assertAppearanceHTTPRefusal(t, w, http.StatusBadRequest, key)
+	}
+}
+
+func TestCardAdaptersRefuseSiteOnlyPathsBeforeTransaction(t *testing.T) {
+	for _, path := range appearance.Rules().PathsForPlace(appearance.SiteOnly) {
+		_, key, _ := strings.Cut(path, ".")
+		field, _ := appearance.Rules().Field(path)
+		for _, name := range []string{path, key} {
+			for _, scope := range []bool{false, true} {
+				body := map[string]any{"table_name": "fixture", "columns": []map[string]any{{"column_uid": 1}}, "card_style_variant": "modern", "shared_version": "loaded", "version": "1", name: field.Default}
+				if scope {
+					body["scope"] = "dataset_presentation"
+					delete(body, "columns")
+				}
+				raw, _ := json.Marshal(body)
+				w := httptest.NewRecorder()
+				UpdateCardVisibilityHandler(w, httptest.NewRequest(http.MethodPost, "/api/card-visibility/update", strings.NewReader(string(raw))))
+				assertAppearanceHTTPRefusal(t, w, 400, "dataset_appearance_invalid")
+			}
+		}
 	}
 }

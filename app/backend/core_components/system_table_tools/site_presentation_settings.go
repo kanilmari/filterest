@@ -21,17 +21,11 @@ const (
 
 // SitePresentationSettingsResponse is the public, typed presentation allowlist.
 type SitePresentationSettingsResponse struct {
-	Version                        string                  `json:"version"`
-	DatasetCoverTheme              DatasetCoverThemeConfig `json:"dataset_cover_theme"`
-	RowArticleTimestampDisplayMode string                  `json:"row_article_timestamp_display_mode"`
-	// Request-only omission metadata never enters JSON responses or stored config.
-	preserveStoredCardShowAllFields           bool
-	preserveStoredCardStyleVariant            bool
-	preserveStoredLabelValueLayout            bool
-	preserveStoredCardDetailColumns           bool
-	preserveStoredArticleImageCaptionPosition bool
-	preserveStoredFilterbarContentTopSpace    bool
-	preserveStoredActiveFilterRemoveSide      bool
+	SchemaVersion                  int            `json:"schema_version"`
+	Version                        string         `json:"version"`
+	SiteValues                     map[string]any `json:"site_values"`
+	Defaults                       map[string]any `json:"defaults"`
+	RowArticleTimestampDisplayMode string         `json:"row_article_timestamp_display_mode"`
 }
 
 // GetSitePresentationSettingsHandler returns only public-safe presentation values.
@@ -41,23 +35,28 @@ func GetSitePresentationSettingsHandler(w http.ResponseWriter, r *http.Request) 
 	respondWithSitePresentationSettings(w)
 }
 
-// AdminSitePresentationSettingsHandler reads or atomically replaces the typed settings.
+// AdminSitePresentationSettingsHandler reads or atomically patches the typed settings.
 // GET|POST /api/admin/site-presentation-settings
 func AdminSitePresentationSettingsHandler(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodGet:
 		respondWithSitePresentationSettings(w)
 	case http.MethodPost:
-		settings, err := decodeSitePresentationSettings(r.Body)
+		settings, err := decodeSitePresentationSettings(http.MaxBytesReader(w, r.Body, 128<<10))
 		if err != nil {
-			httpresponse.RespondWithRefusal(w, &httpresponse.Refusal{Status: 400, LangKey: "dataset_appearance_invalid", Message: "invalid site presentation settings"})
+			var refusal *httpresponse.Refusal
+			if errors.As(err, &refusal) {
+				httpresponse.RespondWithRefusal(w, refusal)
+			} else {
+				httpresponse.RespondWithRefusal(w, &httpresponse.Refusal{Status: 400, LangKey: "dataset_appearance_invalid", Message: "invalid site presentation settings"})
+			}
 			return
 		}
 		if settings.Version == "" {
 			respondDatasetAppearanceError(w, ErrDatasetAppearanceConflict)
 			return
 		}
-		settings, err = persistSitePresentationSettings(r, settings)
+		result, err := persistSitePresentationSettings(r, settings)
 		if err != nil {
 			var refusal *httpresponse.Refusal
 			if errors.As(err, &refusal) {
@@ -68,7 +67,7 @@ func AdminSitePresentationSettingsHandler(w http.ResponseWriter, r *http.Request
 			httpresponse.RespondWithError(w, http.StatusInternalServerError, "site presentation settings save failed")
 			return
 		}
-		httpresponse.RespondWithJSON(w, http.StatusOK, settings)
+		httpresponse.RespondWithJSON(w, http.StatusOK, result)
 
 	}
 }

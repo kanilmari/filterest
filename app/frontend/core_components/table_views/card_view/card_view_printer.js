@@ -109,10 +109,12 @@ export async function appendDataToCardView(
 
     // Batch-fetch comment counts for all rows
     const counts = await fetchCommentCountsForRows(table_name, data);
+    if (!isCurrent()) return;
 
     const frag = document.createDocumentFragment();
     const createdCards = [];
     for (const [index, item] of data.entries()) {
+        if (!isCurrent()) return;
         const card = useExperimentalStyle
             ? await createExperimentalFreeLayoutCard({
                 rowItem: item,
@@ -132,6 +134,7 @@ export async function appendDataToCardView(
                 null,
                 renderView || "card"
             );
+        if (!isCurrent()) return;
         if (collapsed) {
             card.classList.add("small-card");
             if (!useExperimentalStyle) {
@@ -157,7 +160,8 @@ export async function appendDataToCardView(
 
 /* ----------------------------------------------------------- */
 
-export async function create_card_view(columns, data, table_name, { viewKey = "card", stateKey = "cardView" } = {}) {
+export async function create_card_view(columns, data, table_name,
+    { viewKey = "card", stateKey = "cardView", isCurrent = () => true } = {}) {
     const wrapper = document.createElement("div");
     wrapper.classList.add("card_view_wrapper");
     wrapper.dataset.tableName = table_name;
@@ -203,10 +207,12 @@ export async function create_card_view(columns, data, table_name, { viewKey = "c
 
     // Batch-fetch comment counts for all rows
     const counts = await fetchCommentCountsForRows(table_name, data);
+    if (!isCurrent()) return wrapper;
 
     const frag = document.createDocumentFragment();
     const createdCards = [];
     for (const [index, row_item] of data.entries()) {
+        if (!isCurrent()) return wrapper;
         const card = useExperimentalStyle
             ? await createExperimentalFreeLayoutCard({
                 rowItem: row_item,
@@ -226,6 +232,7 @@ export async function create_card_view(columns, data, table_name, { viewKey = "c
                 null,
                 viewKey
             );
+        if (!isCurrent()) return wrapper;
         if (collapsed) {
             card.classList.add("small-card");
             if (!useExperimentalStyle) {

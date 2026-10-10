@@ -1,3 +1,4 @@
+import { paletteMountOptions, applySitePatch } from './dataset_appearance_palette_test_fixtures.js';
 // @vitest-environment jsdom
 // active_filter_remove_side_control.test.js
 // Verifies the chip-side palette control through shared preview, save and reset.
@@ -31,12 +32,14 @@ test('previews both sides, resets without rebuilding and saves/reloads with FI/E
     const remove = vi.fn();
     const { item, button } = buildActiveFilterChip({ label, onRemove: remove });
     row.append(item);
-    const options = { settingsRequestFn: request, saveRequestFn: save,
+    const options = { ...paletteMountOptions(), settingsRequestFn: request,
+        saveRequestFn: async patch => { save(patch); return applySitePatch(snapshot, patch); },
         requestFn: async () => ({ view_admin_cover_image_test_palette: true }),
-        permissionCheck: permission => permission === '/ui/admin/dataset_header_config' };
+        permissionCheck: () => true };
     control = await mountDatasetCoverTestPalette(hero, 'demo', options);
+    control.panel.querySelector('[data-testid="dataset-cover-test-palette-scope-site"]').click();
     const select = control.panel.querySelector('[data-testid="dataset-cover-test-palette-active-filter-remove-side"]');
-    expect(select.closest('.dataset-cover-test-palette__group').textContent).toContain('Dataset header');
+    expect(select.closest('.dataset-cover-test-palette__group').textContent).toContain('Dataset tabs');
     expect([...select.options].map(option => option.textContent)).toEqual(['Before the label', 'After the label']);
     const change = side => { select.value = side; select.dispatchEvent(new Event('change')); };
     button.focus();
@@ -59,7 +62,7 @@ test('previews both sides, resets without rebuilding and saves/reloads with FI/E
     control.panel.querySelector('[data-testid="dataset-cover-test-palette-save"]').click();
     await vi.waitFor(() => expect(save).toHaveBeenCalledOnce());
     await vi.waitFor(() => expect(control.panel.querySelector('[data-testid="dataset-cover-test-palette-save"]').disabled).toBe(false));
-    expect(save.mock.calls[0][0].dataset_cover_theme.shared.active_filter_remove_side).toBe('end');
+    expect(save.mock.calls[0][0].set['shared.active_filter_remove_side']).toBe('end');
     change('start');
     control.resetPreview();
     expect(select.value).toBe('end');

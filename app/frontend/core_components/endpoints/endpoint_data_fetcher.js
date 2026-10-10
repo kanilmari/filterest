@@ -6,6 +6,7 @@
 import { endpoint_router } from './endpoint_router.js';
 import { getLanguageWithBrowserFallback } from '../state_stores/lang_preference_reader.js';
 import { buildDatasetQueryParams } from './endpoint_data_fetcher_helpers.js';
+import { datasetAppearanceState } from '../table_views/dataset_appearance_state.js';
 
 /**
  * fetchFilterOptions — loads distinct label/value pairs for one dataset column.
@@ -85,6 +86,7 @@ export async function fetchDatasetData({
     include_map_support = false,
     view_key = null,
 }) {
+    const appearanceToken = datasetAppearanceState.capture(dataset_name);
     const chosenLang = getLanguageWithBrowserFallback();
     const url_params = buildDatasetQueryParams({
         dataset_name,
@@ -98,5 +100,9 @@ export async function fetchDatasetData({
         include_map_support,
         view_key,
     });
-    return await endpoint_router('getResults', { url_params });
+    const response = await endpoint_router('getResults', { url_params });
+    if (!datasetAppearanceState.isCurrent(appearanceToken)) {
+        throw new DOMException('Dataset results request superseded', 'AbortError');
+    }
+    return response;
 }

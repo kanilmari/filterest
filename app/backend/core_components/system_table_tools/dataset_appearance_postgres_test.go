@@ -19,9 +19,11 @@ import (
 	store "easelect/backend/core_components/dataset_appearance_store"
 	"easelect/backend/core_components/dbutils"
 	"easelect/backend/core_components/httpresponse"
+	appearance "easelect/frontend/shared/dataset_appearance"
 )
 
 const datasetAppearanceMigration = "20261009000003_create_system_dataset_appearance.sql"
+const datasetAppearanceSchemaMigration = "20261009000060_extend_dataset_appearance_three_places.sql"
 
 func datasetAppearanceFixture(t *testing.T) (*sql.DB, int) {
 	t.Helper()
@@ -62,7 +64,7 @@ func assertDatasetAppearanceRefusal(t *testing.T, err error, status int) {
 func TestDatasetAppearancePostgresCreateReadPatchAndEmptyRetention(t *testing.T) {
 	db, uid := datasetAppearanceFixture(t)
 	initial, err := ReadDatasetAppearance(db, uid, false)
-	if err != nil || initial.Revision != "none" || len(initial.Overrides) != 0 || initial.SchemaVersion != 1 {
+	if err != nil || initial.Revision != "none" || len(initial.Overrides) != 0 || initial.SchemaVersion != 2 || len(initial.TabValues) != 28 {
 		t.Fatal(initial, err)
 	}
 	set := map[string]any{"shared.card_style_variant": "modern", "shared.card_detail_columns": 2}
@@ -87,7 +89,7 @@ func TestDatasetAppearancePostgresCreateReadPatchAndEmptyRetention(t *testing.T)
 		t.Fatal(empty, err)
 	}
 	read, err = ReadDatasetAppearance(db, uid, false)
-	if err != nil || !reflect.DeepEqual(read, empty) || frontPageCount(t, db, `SELECT count(*) FROM system_dataset_appearance`) != 1 {
+	if err != nil || !reflect.DeepEqual(read, empty) || frontPageCount(t, db, `SELECT count(*) FROM system_dataset_appearance WHERE table_uid=`+fmtUID(uid)) != 1 {
 		t.Fatal("reset removed revision row", read, err)
 	}
 	for _, stale := range []string{"none", created.Revision, updated.Revision} {
@@ -113,7 +115,7 @@ func TestDatasetAppearancePostgresInvalidPatchesRollback(t *testing.T) {
 	} {
 		_, err := datasetAppearanceTestSave(db, uid, patch, "none")
 		assertDatasetAppearanceRefusal(t, err, 400)
-		if frontPageCount(t, db, `SELECT count(*) FROM system_dataset_appearance`) != 0 {
+		if frontPageCount(t, db, `SELECT count(*) FROM system_dataset_appearance WHERE table_uid=`+fmtUID(uid)) != 0 {
 			t.Fatal("invalid initial save left a row")
 		}
 	}
@@ -160,13 +162,13 @@ func TestDatasetAppearancePostgresSharedSavePreservesOverrides(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	settings.DatasetCoverTheme.Light.ImageBlur = 8
-	settings.DatasetCoverTheme.Dark.ImageBlur = 11
-	settings.DatasetCoverTheme.Shared.CardDetailColumns = 4
+	settings.Defaults["shared.card_image_width"] = 408
+	settings.SiteValues["shared.brand_color"] = "#abcdef"
+	settings.Defaults["shared.card_detail_columns"] = 4
 	lazy := dbutils.NewLazyTx(db)
 	defer lazy.Rollback()
 	r := httptest.NewRequest("POST", "/api/admin/site-presentation-settings", nil)
-	if _, err := persistSitePresentationSettings(r.WithContext(dbutils.SetLazyTx(r.Context(), lazy)), settings); err != nil {
+	if _, err := persistSitePresentationSettings(r.WithContext(dbutils.SetLazyTx(r.Context(), lazy)), sitePresentationPatchFromSettings(settings)); err != nil {
 		t.Fatal(err)
 	}
 	if err := lazy.Commit(); err != nil {
@@ -180,8 +182,8 @@ func TestDatasetAppearancePostgresSharedSavePreservesOverrides(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	effective, err := ResolveDatasetAppearance(shared.DatasetCoverTheme, read.Overrides, false)
-	if err != nil || effective.Light.ImageBlur != 8 || effective.Dark.ImageBlur != 11 || effective.Shared.CardStyleVariant != "standard" || effective.Shared.CardDetailColumns != 2 {
+	effective, err := ResolveDatasetAppearance(siteConfigForTest(t, shared), read.TabValues, read.Overrides, false)
+	if err != nil || effective.Light.ImageBlur != 1 || effective.Dark.ImageBlur != 1 || effective.Shared.CardImageWidth != 408 || effective.Shared.CardStyleVariant != "standard" || effective.Shared.CardDetailColumns != 2 {
 		t.Fatal("shared save froze inheritance or lost equal override", effective, err)
 	}
 	// Mask writes remain refused even after a shared save, without changing cards.
@@ -262,7 +264,7 @@ func TestDatasetAppearancePostgresRenameDeleteAndOtherDataset(t *testing.T) {
 		t.Fatal("rename lost overrides", read, err)
 	}
 	frontPageExec(t, db, `DROP TABLE wl160_renamed; DELETE FROM system_db_tables WHERE table_name='wl160_renamed'`)
-	if frontPageCount(t, db, `SELECT count(*) FROM system_dataset_appearance`) != 1 {
+	if frontPageCount(t, db, `SELECT count(*) FROM system_dataset_appearance WHERE table_uid=`+fmtUID(uid)) != 0 {
 		t.Fatal("dataset delete did not cascade exactly its override row")
 	}
 	if _, err := ReadDatasetAppearance(db, uid, false); !errors.Is(err, ErrDatasetAppearanceNotFound) {
@@ -282,7 +284,7 @@ func TestDatasetAppearancePostgresMigrationReplayAndConstraints(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	content, err := os.ReadFile(filepath.Join("..", "..", "..", "server_tools", "migrations", datasetAppearanceMigration))
+	content, err := os.ReadFile(filepath.Join("..", "..", "..", "server_tools", "migrations", datasetAppearanceSchemaMigration))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -293,7 +295,7 @@ func TestDatasetAppearancePostgresMigrationReplayAndConstraints(t *testing.T) {
 			t.Fatal("migration replay changed stored overrides", read, err)
 		}
 		if frontPageCount(t, db, `SELECT count(*) FROM app_check_dataset_appearance_storage()`) != 0 ||
-			frontPageCount(t, db, `SELECT count(*) FROM system_data_repair_records WHERE migration='system_dataset_appearance_table' AND action='completed'`) != 1 {
+			frontPageCount(t, db, `SELECT count(*) FROM system_data_repair_records WHERE migration='dataset_appearance_three_place_schema' AND action='completed'`) != 1 {
 			t.Fatal("migration completion/final check failed")
 		}
 	}
@@ -302,7 +304,7 @@ func TestDatasetAppearancePostgresMigrationReplayAndConstraints(t *testing.T) {
 			t.Fatal("storage accepted invalid object/null", raw)
 		}
 	}
-	for _, statement := range []string{`UPDATE system_dataset_appearance SET revision=0`, `UPDATE system_dataset_appearance SET schema_version=2`,
+	for _, statement := range []string{`UPDATE system_dataset_appearance SET revision=0`, `UPDATE system_dataset_appearance SET schema_version=1`,
 		`INSERT INTO system_dataset_appearance(table_uid) VALUES(2147483647)`} {
 		if _, err := db.Exec(statement); err == nil {
 			t.Fatal("storage constraint accepted", statement)
@@ -314,13 +316,13 @@ func TestDatasetAppearancePostgresMigrationReplayAndConstraints(t *testing.T) {
 // one before recording completion; a same-named permissive check must not pass for the null refusal.
 func TestDatasetAppearancePostgresMigrationRefusesMalformedExistingTable(t *testing.T) {
 	db, _ := datasetAppearanceFixture(t)
-	content, err := os.ReadFile(filepath.Join("..", "..", "..", "server_tools", "migrations", datasetAppearanceMigration))
+	content, err := os.ReadFile(filepath.Join("..", "..", "..", "server_tools", "migrations", datasetAppearanceSchemaMigration))
 	if err != nil {
 		t.Fatal(err)
 	}
 	frontPageExec(t, db, `ALTER TABLE system_dataset_appearance DROP CONSTRAINT ck_system_dataset_appearance_no_null;
 		ALTER TABLE system_dataset_appearance ADD CONSTRAINT ck_system_dataset_appearance_no_null CHECK (true);
-		DELETE FROM system_data_repair_records WHERE migration='system_dataset_appearance_table'`)
+		DELETE FROM system_data_repair_records WHERE migration='dataset_appearance_three_place_schema'`)
 	// The runner executes an ordinary migration and its ledger insert in one transaction.
 	tx, err := db.Begin()
 	if err != nil {
@@ -331,7 +333,46 @@ func TestDatasetAppearancePostgresMigrationRefusesMalformedExistingTable(t *test
 	if err == nil || !strings.Contains(err.Error(), "dataset appearance storage final check refused") {
 		t.Fatal("migration accepted a malformed existing table", err)
 	}
-	if frontPageCount(t, db, `SELECT count(*) FROM system_data_repair_records WHERE migration='system_dataset_appearance_table'`) != 0 {
+	if frontPageCount(t, db, `SELECT count(*) FROM system_data_repair_records WHERE migration='dataset_appearance_three_place_schema'`) != 0 {
 		t.Fatal("refused migration recorded completion")
+	}
+}
+
+func TestDatasetAppearancePostgresCompleteTabFirstSaveAndNineOverrides(t *testing.T) {
+	db, uid := datasetAppearanceFixture(t)
+	initial, err := store.ReadAppearance(db, uid, false)
+	if err != nil || initial.Version != "none" {
+		t.Fatal(initial, err)
+	}
+	if len(initial.TabValues) != 28 || len(initial.SiteValues) != 7 || len(initial.Defaults) != 9 {
+		t.Fatal(initial)
+	}
+	set := appearance.Rules().DefaultsForPlace(appearance.SiteDefault)
+	set["shared.card_show_all_fields"] = false
+	set["shared.filterbar_content_top_space"] = 0
+	saved, err := datasetAppearanceTestSave(db, uid, DatasetAppearancePatch{TabSet: map[string]any{"light.image_blur": 0, "dark.oval_enabled": false, "shared.hero_extra_height": 83.5}, Set: set}, "none")
+	if err != nil || len(saved.TabValues) != 28 || len(saved.Overrides) != 9 || saved.TabValues["light.image_blur"] != float64(0) {
+		t.Fatal(saved, err)
+	}
+	snapshot, err := store.ReadAppearance(db, uid, false)
+	if err != nil || snapshot.Effective.Light.ImageBlur != 0 || snapshot.Effective.Shared.CardShowAllFields || snapshot.Effective.Shared.FilterbarContentTopSpace != 0 || snapshot.Effective.Shared.HeroExtraHeight != 83.5 {
+		t.Fatal(snapshot, err)
+	}
+	for _, path := range appearance.Rules().PathsForPlace(appearance.SiteDefault) {
+		if snapshot.Sources[path] != "override" {
+			t.Fatal(path)
+		}
+	}
+	for _, theme := range []string{"light", "dark"} {
+		_, err := datasetAppearanceTestSave(db, uid, DatasetAppearancePatch{TabSet: map[string]any{theme + ".center_opacity": .9}}, saved.Revision)
+		assertDatasetAppearanceRefusal(t, err, 400)
+		after, err := ReadDatasetAppearance(db, uid, false)
+		if err != nil || !reflect.DeepEqual(after, saved) {
+			t.Fatal(after, err)
+		}
+	}
+	cleared, err := datasetAppearanceTestSave(db, uid, DatasetAppearancePatch{Unset: appearance.Rules().PathsForPlace(appearance.SiteDefault)}, saved.Revision)
+	if err != nil || len(cleared.Overrides) != 0 || !reflect.DeepEqual(cleared.TabValues, saved.TabValues) || cleared.Revision == saved.Revision {
+		t.Fatal(cleared, err)
 	}
 }

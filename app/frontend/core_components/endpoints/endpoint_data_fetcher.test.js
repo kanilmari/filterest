@@ -1,3 +1,7 @@
+// endpoint_data_fetcher.test.js
+// Verifies request construction and privacy invalidation at the results transport.
+// Connects routed responses with the real appearance and registry owners.
+// Rejects delayed success before ordinary results or helper readers can reuse it.
 import { beforeEach, describe, expect, test, vi } from 'vitest';
 
 const endpointRouter = vi.fn();
@@ -19,6 +23,22 @@ async function loadModule() {
 }
 
 describe('endpoint_data_fetcher', () => {
+    test.each(['sign-out', 'deletion', 'ownership'])('a successful results response is discarded after %s', async reason => {
+        const mod = await loadModule();
+        const { datasetAppearanceState } = await import('../table_views/dataset_appearance_state.js');
+        const { setAllSpecs } = await import('../state_stores/table_specs_reader.js');
+        const { invalidateSessionGeneration } = await import('../auth/session_generation_store.js');
+        setAllSpecs({ private_results: { table_uid: 11 } });
+        let complete;
+        endpointRouter.mockImplementationOnce(() => new Promise(resolve => { complete = resolve; }));
+        const pending = mod.fetchDatasetData({ dataset_name: 'private_results' });
+        const rejected = expect(pending).rejects.toMatchObject({ name: 'AbortError' });
+        if (reason === 'sign-out') invalidateSessionGeneration({ reason: 'logout' });
+        else if (reason === 'deletion') datasetAppearanceState.forget('private_results');
+        else setAllSpecs({ private_results: { table_uid: 22 }, renamed: { table_uid: 11 } });
+        complete({ columns: ['id'], data: [{ id: 1 }], dataset_appearance: { dataset_uid: 11 } });
+        await rejected;
+    });
     beforeEach(() => {
         endpointRouter.mockReset();
         languageFallback.mockReset();

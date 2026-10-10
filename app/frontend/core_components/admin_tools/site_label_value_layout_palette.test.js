@@ -1,3 +1,4 @@
+import { paletteMountOptions, applySitePatch } from './dataset_appearance_palette_test_fixtures.js';
 // site_label_value_layout_palette.test.js
 // Verifies the site selector's language keys, development-only option and preview/save/reset.
 // Connects the real palette owner and shared state with cards while leaving articles alone.
@@ -20,11 +21,12 @@ async function mountWrappingPalette(overrides = {}) {
     const settings = { dataset_cover_theme: JSON.parse(JSON.stringify(DEFAULT_DATASET_COVER_THEME)), row_article_timestamp_display_mode: 'date_time' };
     const hero = document.createElement('section'); document.body.append(hero);
     const options = {
-        settingsRequestFn: vi.fn(async () => settings), saveRequestFn: vi.fn(async request => request),
+        ...paletteMountOptions(), settingsRequestFn: vi.fn(async () => settings), saveRequestFn: vi.fn(async patch => applySitePatch(settings, patch)),
         requestFn: vi.fn(async () => ({ view_admin_cover_image_test_palette: true })),
-        permissionCheck: route => route === '/ui/admin/dataset_header_config', ...overrides,
+        permissionCheck: () => true, ...overrides,
     };
     const mounted = await mountDatasetCoverTestPalette(hero, 'demo', options);
+    mounted.panel.querySelector('[data-testid="dataset-cover-test-palette-scope-site"]').click();
     const select = mounted.panel.querySelector('[data-testid="dataset-cover-test-palette-label-value-layout"]');
     const button = name => mounted.panel.querySelector('[data-testid="dataset-cover-test-palette-' + name + '"]');
     return { mounted, select, button, options };
@@ -68,7 +70,7 @@ test.each(['stacked', 'inline', 'auto'])('previews, saves, resets and restores t
     expect(article.outerHTML).toBe(articleMarkup);
     select.value = choice; select.dispatchEvent(new Event('change')); button('save').click();
     await vi.waitFor(() => expect(button('save').disabled).toBe(false));
-    expect(options.saveRequestFn.mock.calls[0][0].dataset_cover_theme.shared.label_value_layout).toBe(choice);
+    expect(options.saveRequestFn.mock.calls[0][0].set['shared.label_value_layout']).toBe(choice === 'stacked' ? undefined : choice);
     select.value = 'stacked'; select.dispatchEvent(new Event('change')); mounted.destroy();
     expect(pair.dataset.labelValueLayout).toBe(choice); expect([...pair.children]).toEqual(nodes);
     expect(article.outerHTML).toBe(articleMarkup);
@@ -83,8 +85,8 @@ test('a failed save keeps the wrapping preview and reset returns to the saved de
     select.value = 'inline'; select.dispatchEvent(new Event('change')); button('save').click();
     await vi.waitFor(() => expect(button('save').disabled).toBe(false));
     expect(document.querySelector('[data-testid="toast"]').dataset.toastLevel).toBe('error');
-    expect(document.documentElement.dataset.labelValueLayout).toBe('inline');
+    expect(document.querySelector('[data-dataset-appearance-scope]').dataset.labelValueLayout).toBe('inline');
     button('reset').click(); expect(select.value).toBe('stacked');
-    expect(document.documentElement.dataset.labelValueLayout).toBe('stacked');
+    expect(document.querySelector('[data-dataset-appearance-scope]').dataset.labelValueLayout).toBe('stacked');
     mounted.destroy();
 });

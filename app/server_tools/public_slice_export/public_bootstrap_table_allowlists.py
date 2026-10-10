@@ -100,6 +100,7 @@ ALLOWED_SCHEMA_TABLES = {
 }
 
 ALLOWED_SEED_TABLES = {
+    "public.system_dataset_appearance",  # Complete tab values backfilled after registry seeds.
     # WL58 data migrations write identifier-only repair history and completion marks.
     "public.system_data_repair_records",
     # Common registration marks the sixteen package content datasets during 000004.

@@ -3,6 +3,7 @@
 // Bridges visibility configuration endpoints, tree selection, and the reusable checkbox-table editor.
 // Exists to give admins a dedicated place to control what fields appear in card views.
 
+import { datasetAppearanceState } from '../table_views/dataset_appearance_state.js';
 import { fetchCardVisibility, saveCardVisibility } from '../endpoints/stable_endpoint_router.js';
 import { showSuccessToast } from '../../reusable_components/notifications/toast_notification_printer.js';
 import { showConfirmModal } from '../../reusable_components/modal/confirm_modal_builder.js';
@@ -222,7 +223,7 @@ function addCardVisibilityTestIds(matrixContainer) {
     }
 }
 
-export async function generate_card_visibility_form(container) {
+export async function generate_card_visibility_form(container, { initialDatasetName = '' } = {}) {
     if (!container) return;
     container.replaceChildren();
 
@@ -247,8 +248,8 @@ export async function generate_card_visibility_form(container) {
     containerWithModeButtons.classList.add('mp-container-with-mode-buttons');
 
     const mainWrapper = document.createElement('div');
-    mainWrapper.classList.add('mp-main-wrapper');
-    mainWrapper.style.gridTemplateColumns = '300px 1fr';
+    // One responsive layout serves both the management page and the palette modal.
+    mainWrapper.classList.add('mp-main-wrapper', 'cv-main-wrapper');
     containerWithModeButtons.appendChild(mainWrapper);
 
     const leftContainer = document.createElement('div');
@@ -332,6 +333,7 @@ export async function generate_card_visibility_form(container) {
         const normalizedLayout = normalizeClientCardDetailsLayout(nextLayout);
         const normalizedStyleVariant = normalizeClientCardStyleOverride(nextStyleVariant);
         const targetDataset = currentTableName;
+        const appearanceToken = datasetAppearanceState.capture(targetDataset);
         nextRows = cloneColumnsData(nextRows);
         const response = await saveCardVisibility({
             table_name: targetDataset,
@@ -352,8 +354,10 @@ export async function generate_card_visibility_form(container) {
                     'Tallennus epäonnistui.', 'Save failed.'));
             }
         }
-        if (currentTableName !== targetDataset) return;
+        if (currentTableName !== targetDataset || !datasetAppearanceState.isCurrent(appearanceToken)) return;
         appearanceSnapshot = response?.dataset_presentation?.dataset_appearance || appearanceSnapshot;
+        if (appearanceSnapshot != null
+            && !datasetAppearanceState.accept(targetDataset, appearanceSnapshot, { token: appearanceToken })) return;
         columnsData = cloneColumnsData(nextRows);
         originalData = cloneColumnsData(nextRows);
         cardDetailsLayout = normalizedLayout;
@@ -529,6 +533,7 @@ export async function generate_card_visibility_form(container) {
 
     async function loadColumnsForTable(tableName) {
         const requestSequence = ++loadRequestSequence;
+        const appearanceToken = datasetAppearanceState.capture(tableName);
         currentTableName = tableName;
         columnsData = [];
         originalData = [];
@@ -540,10 +545,12 @@ export async function generate_card_visibility_form(container) {
 
         try {
             const response = /** @type {CardVisibilityResponse | CardVisibilityColumn[]} */ (await fetchCardVisibility(tableName));
-            if (requestSequence !== loadRequestSequence) {
+            if (requestSequence !== loadRequestSequence || !datasetAppearanceState.isCurrent(appearanceToken)) {
                 return;
             }
             appearanceSnapshot = response?.dataset_appearance || null;
+            if (appearanceSnapshot != null
+                && !datasetAppearanceState.accept(tableName, appearanceSnapshot, { token: appearanceToken })) return;
             columnsData = cloneColumnsData(prepareCardLabelVisibilityRows(Array.isArray(response) ? response : (response.columns || [])));
             cardDetailsLayout = Array.isArray(response)
                 ? CARD_DETAILS_LAYOUT_VALUES.CONDITIONAL_MULTILINE
@@ -555,7 +562,7 @@ export async function generate_card_visibility_form(container) {
             originalCardStyleVariant = cardStyleVariant;
             originalData = cloneColumnsData(columnsData);
         } catch (err) {
-            if (requestSequence !== loadRequestSequence) {
+            if (requestSequence !== loadRequestSequence || !datasetAppearanceState.isCurrent(appearanceToken)) {
                 return;
             }
             console.warn('card_visibility_view: failed to load columns', err);
@@ -580,11 +587,13 @@ export async function generate_card_visibility_form(container) {
         try {
             const treeData = JSON.parse(rawTreeData);
             if (treeData && treeData.nodes) {
+                const initialNode = treeData.nodes.find(node => node.table_uid && node.name === initialDatasetName);
                 await render_tree(treeData.nodes, {
                     container_id: 'cv_table_selector_tree',
                     id_suffix: '_cv_tree',
                     render_mode: 'checkbox',
                     selection_mode: 'single',
+                    initial_selected_node_id: initialNode ? `tree_node_${initialNode.id}_cv_tree` : '',
                     checkbox_mode: 'leaf',
                     use_icons: false,
                     populate_checkbox_selection: false,
@@ -605,6 +614,7 @@ export async function generate_card_visibility_form(container) {
     const languageObserver = new MutationObserver(() => checkboxTable?.setColumns(buildEditorColumns()));
     languageObserver.observe(document.documentElement, { attributes: true, attributeFilter: ['lang'] });
     container.__cleanupListeners = () => {
+        loadRequestSequence += 1;
         listenerController.abort();
         languageObserver.disconnect();
         unmountCheckboxTable();
@@ -645,5 +655,6 @@ export async function generate_card_visibility_form(container) {
         await loadColumnsForTable(tableName);
     }, { signal: listenerController.signal });
 
-    renderInstructions(matrixContainer);
+    if (initialDatasetName) await loadColumnsForTable(initialDatasetName);
+    else renderInstructions(matrixContainer);
 }

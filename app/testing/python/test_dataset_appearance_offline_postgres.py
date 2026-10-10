@@ -1,9 +1,9 @@
-"""test_dataset_appearance_offline_postgres.py
-Checks fresh/upgrade migration SQL using native PostgreSQL without sockets.
-Connects the reviewed bootstrap to disposable single-user PostgreSQL clusters.
-Supplements, without replacing, the Go transaction and concurrency fixtures.
+"""Proves three-place upgrades and bootstrap in disposable single-user PostgreSQL.
+No sockets, credentials or installation database are used. Go owns live races.
+The shared migration fixture is also checked by Go's legacy normalizer.
 """
 from pathlib import Path
+import json
 import os
 import subprocess
 
@@ -13,9 +13,8 @@ APP = Path(__file__).resolve().parents[2]
 ROOT = APP.parent
 BOOTSTRAP = APP / "server_tools/public_bootstrap"
 MIGRATIONS = APP / "server_tools/migrations"
-MIGRATION = MIGRATIONS / "20261009000003_create_system_dataset_appearance.sql"
-CUTOVER = MIGRATIONS / "20261009000040_cut_over_dataset_card_appearance.sql"
-OWNER = MIGRATIONS / "20261009000099_record_database_release_9_10_2.sql"
+SCHEMA = MIGRATIONS / "20261009000060_extend_dataset_appearance_three_places.sql"
+BACKFILL = MIGRATIONS / "20261009000061_backfill_dataset_appearance_three_places.sql"
 
 
 @pytest.fixture
@@ -31,124 +30,114 @@ def offline_postgres(tmp_path):
     assert initialized.returncode == 0, initialized.stderr
 
     def run(sql, expected_error=None):
-        # Single-user -j treats semicolon + two newlines as a command delimiter
-        # even inside dollar quotes. Insert insignificant SQL whitespace so one
-        # input is one transaction; EOF terminates it. No server or socket opens.
         source = sql.replace(";\n\n", ";\n \n")
         result = subprocess.run([str(binary / "postgres"), "--single", "-j", "-D", str(data),
                                  "-c", "exit_on_error=true", "postgres"],
                                 input=source, text=True, capture_output=True)
+        diagnostic = result.stderr.split("STATEMENT:", 1)[0]
         if expected_error:
-            assert result.returncode != 0 and expected_error in result.stderr, result.stderr
+            assert result.returncode != 0 and expected_error in diagnostic, diagnostic
         else:
-            assert result.returncode == 0, result.stderr
+            assert result.returncode == 0, diagnostic
         return result
 
     return run
 
 
-@pytest.mark.parametrize("installation", ["fresh", "upgrade"])
-def test_dataset_appearance_offline_fresh_upgrade_replay_and_lifecycle(offline_postgres, installation):
-    run = offline_postgres
+def source_before_cutover(name):
+    return subprocess.run(["git", "show", f"3b7c160:app/server_tools/public_bootstrap/{name}"],
+                          cwd=ROOT, capture_output=True, text=True, check=True).stdout
+
+
+def install(run, upgrade=False):
     for name in ("schema.sql", "seed_data.sql"):
-        if installation == "fresh":
-            sql = (BOOTSTRAP / name).read_text()
-        else:
-            sql = subprocess.run(["git", "show", f"dbda048:app/server_tools/public_bootstrap/{name}"],
-                                 cwd=ROOT, capture_output=True, text=True, check=True).stdout
-        run(sql)
-    if installation == "upgrade":
-        run(MIGRATION.read_text())
-        run("UPDATE system_db_tables SET card_style_variant='modern',card_detail_columns=2 WHERE table_name='tiketit';")
-        run(CUTOVER.read_text())
-        run(OWNER.read_text())
-        run("DO $p$ BEGIN IF NOT EXISTS (SELECT 1 FROM system_dataset_appearance WHERE overrides='{" +
-            '\"shared.card_style_variant\":\"modern\",\"shared.card_detail_columns\":2' +
-            "}') THEN RAISE EXCEPTION 'legacy equality was lost'; END IF; END $p$;")
-        run("DELETE FROM system_dataset_appearance;")
-    run("""DO $proof$
-        BEGIN
-            IF EXISTS (SELECT 1 FROM app_check_dataset_appearance_storage()) THEN
-                RAISE EXCEPTION 'appearance final check failed';
-            END IF;
-            IF EXISTS (SELECT 1 FROM system_dataset_appearance) THEN
-                RAISE EXCEPTION 'appearance bootstrap must be empty';
-            END IF;
-            IF (SELECT count(*) FROM pg_constraint WHERE conrelid='system_dataset_appearance'::regclass) <> 6 THEN
-                RAISE EXCEPTION 'appearance constraints differ';
-            END IF;
-        END $proof$;
-        INSERT INTO system_dataset_appearance(table_uid,overrides,revision)
-            SELECT table_uid,'{"light.image_blur":0,"light.oval_enabled":false,"shared.card_detail_columns":2}',7
-            FROM system_db_tables WHERE table_name='tiketit';""")
+        run(source_before_cutover(name) if upgrade else (BOOTSTRAP / name).read_text())
+
+
+def literal(value):
+    return "'" + json.dumps(value).replace("'", "''") + "'::jsonb"
+
+
+def assert_sql(run, condition, message="assertion failed"):
+    run(f"DO $p$ BEGIN IF NOT ({condition}) THEN RAISE EXCEPTION '{message}'; END IF; END $p$;")
+
+
+def test_three_places_fresh_bootstrap_and_lifecycle(offline_postgres):
+    run = offline_postgres
+    install(run)
+    assert_sql(run, "NOT EXISTS (SELECT 1 FROM app_check_dataset_appearance_storage()) AND "
+               "NOT EXISTS (SELECT 1 FROM app_check_dataset_appearance_three_places())")
+    assert_sql(run, "(SELECT count(*) FROM system_dataset_appearance)=(SELECT count(*) FROM system_db_tables)")
+    # Temp tables do not survive single-user sessions: durable synthetic proof copy.
+    run("CREATE TABLE fixture_before AS SELECT * FROM system_dataset_appearance;")
     for _ in range(2):
-        run(MIGRATION.read_text())
-        run(CUTOVER.read_text())
-        run(OWNER.read_text())
-        run("""DO $proof$
-            BEGIN
-                IF EXISTS (SELECT 1 FROM app_check_dataset_appearance_storage())
-                   OR (SELECT count(*) FROM system_data_repair_records
-                       WHERE migration='system_dataset_appearance_table' AND action='completed') <> 1
-                   OR (SELECT count(*) FROM system_db_version WHERE version='9.10.2') <> 1 THEN
-                    RAISE EXCEPTION 'appearance migration replay proof failed';
-                END IF;
-                IF NOT EXISTS (SELECT 1 FROM system_dataset_appearance WHERE revision=7 AND
-                    overrides='{"light.image_blur":0,"light.oval_enabled":false,"shared.card_detail_columns":2}') THEN
-                    RAISE EXCEPTION 'migration changed explicit overrides';
-                END IF;
-                IF EXISTS (SELECT 1 FROM app_check_dataset_card_appearance_cutover()) THEN
-                    RAISE EXCEPTION 'legacy cutover proof failed';
-                END IF;
-            END $proof$;""")
-    run("UPDATE system_dataset_appearance SET overrides='{}',revision=8;")
-    run(MIGRATION.read_text())
-    run("""DO $proof$
-        BEGIN
-            IF NOT EXISTS (SELECT 1 FROM system_dataset_appearance WHERE overrides='{}' AND revision=8) THEN
-                RAISE EXCEPTION 'empty override row not retained';
-            END IF;
-        END $proof$;
-        ALTER TABLE public.tiketit RENAME TO wl160_renamed;
-        UPDATE system_db_tables SET table_name='wl160_renamed' WHERE table_name='tiketit';
-        DO $proof$
-        BEGIN
-            IF NOT EXISTS (SELECT 1 FROM system_dataset_appearance a JOIN system_db_tables d USING(table_uid)
-                WHERE d.table_name='wl160_renamed' AND a.revision=8 AND a.overrides='{}') THEN
-                RAISE EXCEPTION 'rename lost appearance identity';
-            END IF;
-        END $proof$;""")
-    for statement, message in (
-        ("UPDATE system_dataset_appearance SET overrides='null'", "ck_system_dataset_appearance_object"),
-        ("UPDATE system_dataset_appearance SET overrides='[]'", "ck_system_dataset_appearance_object"),
-        ("UPDATE system_dataset_appearance SET overrides='{\"light.image_blur\":null}'", "ck_system_dataset_appearance_no_null"),
-        ("UPDATE system_dataset_appearance SET revision=0", "ck_system_dataset_appearance_revision"),
-        ("UPDATE system_dataset_appearance SET schema_version=2", "ck_system_dataset_appearance_schema_version"),
-        ("INSERT INTO system_dataset_appearance(table_uid) VALUES(2147483647)", "system_dataset_appearance_table_uid_fkey"),
-    ):
-        run(statement + ";", expected_error=message)
-    # Real dataset deletion has other metadata references; cascade those fixture
-    # dependencies too, then confirm that the appearance FK cascades its row.
-    run("""DROP TABLE wl160_renamed CASCADE;
-        DELETE FROM system_db_tables WHERE table_name='wl160_renamed';
-        DO $proof$ BEGIN
-            IF EXISTS (SELECT 1 FROM system_dataset_appearance) THEN
-                RAISE EXCEPTION 'dataset deletion retained appearance row';
-            END IF;
-        END $proof$;""")
+        run(SCHEMA.read_text())
+        run(BACKFILL.read_text())
+        assert_sql(run, "NOT EXISTS ((SELECT * FROM fixture_before EXCEPT SELECT * FROM system_dataset_appearance) "
+                   "UNION ALL (SELECT * FROM system_dataset_appearance EXCEPT SELECT * FROM fixture_before))", "replay changed revisions")
+    run("UPDATE system_db_tables SET table_name='renamed_fixture' WHERE table_name='tiketit';")
+    assert_sql(run, "EXISTS(SELECT 1 FROM system_dataset_appearance a JOIN system_db_tables d USING(table_uid) WHERE d.table_name='renamed_fixture')")
+    run("DELETE FROM system_db_tables WHERE table_name='renamed_fixture';")
+    assert_sql(run, "NOT EXISTS(SELECT 1 FROM system_dataset_appearance a LEFT JOIN system_db_tables d USING(table_uid) WHERE d.table_uid IS NULL)")
 
 
-def test_dataset_appearance_invalid_legacy_value_refuses_retirement(offline_postgres):
+CASES = json.loads((APP / "testing/shared_contracts/dataset_appearance_migration_v2.json").read_text())["cases"]
+
+
+@pytest.mark.parametrize("case", CASES, ids=lambda case: case["name"])
+def test_three_places_upgrade_normalization_preservation_revisions_and_replay(offline_postgres, case):
     run = offline_postgres
-    for name in ("schema.sql", "seed_data.sql"):
-        original = subprocess.run(["git", "show", f"dbda048:app/server_tools/public_bootstrap/{name}"],
-                                  cwd=ROOT, capture_output=True, text=True, check=True).stdout
-        run(original)
-    run("UPDATE system_db_tables SET card_style_variant='floating' WHERE table_name='tiketit';")
-    run(CUTOVER.read_text(), expected_error="invalid legacy card style; cutover refused")
-    run("""DO $proof$ BEGIN
-        IF NOT EXISTS (SELECT 1 FROM system_db_tables WHERE table_name='tiketit' AND card_style_variant='floating')
-           OR EXISTS (SELECT 1 FROM system_data_repair_records WHERE migration='dataset_card_appearance_cutover') THEN
-            RAISE EXCEPTION 'failed cutover retired data or marked completion';
-        END IF;
-    END $proof$;""")
+    install(run, upgrade=True)
+    if case["raw"] is not None:
+        run("INSERT INTO system_config(key,json_value,updated) VALUES('dataset_cover_theme_config'," + literal(case["raw"]) + ",'2020-01-01');")
+    run("INSERT INTO system_dataset_appearance(table_uid,overrides,revision) SELECT table_uid,"
+        "'{\"shared.card_style_variant\":\"modern\",\"shared.card_detail_columns\":2}',7 FROM system_db_tables WHERE table_name='tiketit';")
+    run(SCHEMA.read_text())
+    run(BACKFILL.read_text())
+    defaults = "(SELECT jsonb_object_agg(key,value->'default') FROM jsonb_each(app_dataset_appearance_v2_rules()))"
+    expected = f"({defaults} || {literal(case['normalized'])})"
+    assert_sql(run, "NOT EXISTS(SELECT 1 FROM system_dataset_appearance a JOIN system_config c ON c.key='dataset_cover_theme_config' "
+               f"WHERE a.tab_values||(c.json_value->'site_values')||(c.json_value->'defaults')||a.overrides IS DISTINCT FROM {expected}||a.overrides)", "visual value changed")
+    assert_sql(run, "EXISTS(SELECT 1 FROM system_dataset_appearance a JOIN system_db_tables d USING(table_uid) "
+               "WHERE d.table_name='tiketit' AND revision=8 AND overrides='{\"shared.card_style_variant\":\"modern\",\"shared.card_detail_columns\":2}')")
+    assert_sql(run, "NOT EXISTS(SELECT 1 FROM system_dataset_appearance a JOIN system_db_tables d USING(table_uid) WHERE d.table_name<>'tiketit' AND revision<>1)")
+    assert_sql(run, "(SELECT updated>'2020-01-01' FROM system_config WHERE key='dataset_cover_theme_config') AND "
+               "NOT EXISTS(SELECT 1 FROM app_check_dataset_appearance_three_places())")
+    run("CREATE TABLE fixture_before AS SELECT * FROM system_dataset_appearance; CREATE TABLE site_before AS SELECT * FROM system_config WHERE key='dataset_cover_theme_config';")
+    for _ in range(2):
+        run(SCHEMA.read_text())
+        run(BACKFILL.read_text())
+    assert_sql(run, "NOT EXISTS(SELECT * FROM fixture_before EXCEPT SELECT * FROM system_dataset_appearance) AND "
+               "NOT EXISTS(SELECT * FROM site_before EXCEPT SELECT * FROM system_config WHERE key='dataset_cover_theme_config')", "replay changed values or revisions")
+
+
+def test_three_places_upgrade_preflight_rollback(offline_postgres):
+    run = offline_postgres
+    install(run, upgrade=True)
+    run("INSERT INTO system_dataset_appearance(table_uid,overrides,revision) SELECT table_uid,'{\"light.image_blur\":0}',7 FROM system_db_tables WHERE table_name='tiketit';")
+    run(SCHEMA.read_text())
+    run(BACKFILL.read_text(), "preflight refused")
+    assert_sql(run, "EXISTS(SELECT 1 FROM system_dataset_appearance WHERE schema_version=1 AND revision=7 AND overrides='{\"light.image_blur\":0}') AND "
+               "NOT EXISTS(SELECT 1 FROM system_data_repair_records WHERE migration='dataset_appearance_three_place_backfill')", "failed migration changed data")
+    assert_sql(run, "NOT EXISTS(SELECT 1 FROM system_config WHERE key='dataset_cover_theme_config')")
+
+
+@pytest.mark.parametrize("fault", ["marker", "tab", "constraint", "site"])
+def test_three_places_bootstrap_final_checks_refuse_corruption(offline_postgres, fault):
+    run = offline_postgres
+    run((BOOTSTRAP / "schema.sql").read_text())
+    if fault == "marker":
+        run("DELETE FROM system_data_repair_records WHERE migration='dataset_appearance_three_place_schema';")
+    elif fault == "tab":
+        run("ALTER TABLE system_dataset_appearance DROP CONSTRAINT ck_system_dataset_appearance_tab_values; ALTER TABLE system_dataset_appearance DROP COLUMN tab_values;")
+    elif fault == "constraint":
+        run("ALTER TABLE system_dataset_appearance DROP CONSTRAINT ck_system_dataset_appearance_no_null;")
+    else:
+        # Invalid site JSON is converted using the same legacy normalization on fresh bootstrap.
+        # Corrupt after the backfill and before its acceptance block instead.
+        sql = (BOOTSTRAP / "seed_data.sql").read_text()
+        sql = sql.replace("DO $filterest_acceptance$", "UPDATE system_config SET json_value=json_value||'{\"cover\":true}' WHERE key='dataset_cover_theme_config';\nDO $filterest_acceptance$")
+        run(sql, "bootstrap import failed its final checks")
+        return
+    run((BOOTSTRAP / "seed_data.sql").read_text(), "missing completion markers" if fault == "marker" else "appearance")
+    assert_sql(run, "NOT EXISTS(SELECT 1 FROM system_schema_migrations) AND NOT EXISTS(SELECT 1 FROM system_db_version)")
