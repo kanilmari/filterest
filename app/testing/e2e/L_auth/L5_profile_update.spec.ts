@@ -3,10 +3,14 @@
  *
  * Tests that the profile UI is accessible after login and shows non-empty identity fields.
  * Does NOT submit the form — only verifies the UI renders correctly.
+ * A missing account control or profile field fails the test instead of skipping it.
  */
 
 import { test, expect } from '@playwright/test';
 import { login, loadCredentials, type TestCredentials } from '../helpers/auth';
+
+// The navbar prints the signed-in account control; older layouts printed it as a main tab.
+const ACCOUNT_CONTROL = '[data-testid="navbar-auth-user"], [data-testid="tab-user"]';
 
 test.describe('L5 — Profile Update UI', () => {
   let credentials: TestCredentials;
@@ -20,58 +24,34 @@ test.describe('L5 — Profile Update UI', () => {
   });
 
   test('profile UI opens and shows non-empty identity fields', async ({ page }) => {
-    // 1. Try to open the profile view via common entry points
-    const profileTrigger = page.locator('[data-testid="tab-user"]');
+    // 1. The signed-in account's identity, as the profile form loads it.
+    const profileResponse = await page.request.get('/api/user-profile');
+    expect(profileResponse.status()).toBe(200);
+    const profile = await profileResponse.json();
+    expect(profile.username, 'Display name of the signed-in account').toMatch(/\S/);
 
-    const triggerVisible = await profileTrigger.first().isVisible().catch(() => false);
+    // 2. Open the profile through the account control. The navbar renders after
+    //    sign-in, and Playwright reports the button outside the viewport, so it is
+    //    clicked in-page.
+    await page.locator(ACCOUNT_CONTROL).first().waitFor({ state: 'attached', timeout: 15_000 });
+    await page.evaluate((selector) => {
+      const button = document.querySelector(selector);
+      if (!(button instanceof HTMLElement)) throw new Error('Account profile control missing.');
+      button.click();
+    }, ACCOUNT_CONTROL);
 
-    if (!triggerVisible) {
-      // Try clicking the user tab via page.evaluate (may be outside viewport)
-      const clicked = await page.evaluate(() => {
-        const btn = document.querySelector('[data-testid="tab-user"]') as HTMLElement | null;
-        if (btn) { btn.click(); return true; }
-        return false;
-      });
-      if (!clicked) {
-        test.skip(true, 'Profile UI not found — skipping');
-        return;
-      }
-    } else {
-      // Use page.evaluate to click — button may be outside viewport
-      await page.evaluate(() => {
-        const btn = document.querySelector('[data-testid="tab-user"]') as HTMLElement | null;
-        if (btn) btn.click();
-      });
-    }
+    // 3. The public display name (#edit_username since WL132) and the email show the stored values.
+    const displayName = page.locator('#edit_username');
+    await expect(displayName).toBeVisible();
+    await expect(displayName).toHaveValue(profile.username);
 
-    // 2. Wait briefly for any modal/drawer to render
-    await page.waitForTimeout(500);
+    const email = page.locator('#edit_email');
+    await expect(email).toBeVisible();
+    await expect(email).toHaveValue(profile.email);
 
-    // 3. Locate an identity field (username or email input/display)
-    const usernameField = page.locator(
-      'input[name="username"], input[id="username"], [data-field="username"]',
-    );
-    const emailField = page.locator(
-      'input[name="email"], input[id="email"], [data-field="email"]',
-    );
-
-    const usernameVisible = await usernameField.first().isVisible().catch(() => false);
-    const emailVisible = await emailField.first().isVisible().catch(() => false);
-
-    if (!usernameVisible && !emailVisible) {
-      test.skip(true, 'Profile form fields not found — skipping');
-      return;
-    }
-
-    // 4. Verify at least one identity field has a non-empty value
-    if (usernameVisible) {
-      const usernameValue = await usernameField.first().inputValue();
-      expect(usernameValue.trim().length).toBeGreaterThan(0);
-    }
-
-    if (emailVisible) {
-      const emailValue = await emailField.first().inputValue();
-      expect(emailValue.trim().length).toBeGreaterThan(0);
-    }
+    // 4. The private login name has its own change field, which is never prefilled.
+    const loginName = page.locator('#new_login_name');
+    await expect(loginName).toBeVisible();
+    await expect(loginName).toHaveValue('');
   });
 });
