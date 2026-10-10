@@ -101,6 +101,7 @@ Everyday commands:
   docker logs                   Follow application and database logs
   setup [options]               Install for browser administration or development
   update [options]              Back up and install a published stable release
+  verify-update [options]       Inspect a signed update offline; emit one JSON verdict
   start [arguments]             Start with the installed profile (prebuilt or development)
   status [arguments]            Show application and database compatibility
   manager-key generate          Create the protected maintenance control key
@@ -360,6 +361,11 @@ case "$command_name" in
         filterest_recovery_python "$PROJECT_ROOT" "$FILTEREST_COMMAND_PYTHON" "$CANONICAL_FILTEREST_ROOT/server_tools/lib/database_recovery_update.py" "$action" \
             --root "$PROJECT_ROOT" --profile native \
             --settings "$EASELECT_DEV_ENV_FILE" --settings "$EASELECT_RUNTIME_ENV_FILE" "$@"
+        ;;
+    verify-update)
+        # This read-only command needs no installation profile, secret env or
+        # source build. Its Go bridge is independently provisioned by the caller.
+        exec "$FILTEREST_COMMAND_PYTHON" -B "$CANONICAL_FILTEREST_ROOT/server_tools/update_verification/verify_update.py" "$@"
         ;;
     start|ctl)
         profile="$(installed_profile)"

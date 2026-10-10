@@ -13,9 +13,11 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 from pathlib import Path, PurePosixPath
 import re
 import subprocess
+import stat
 import tarfile
 
 from server_tools.public_slice_export.third_party_notice_renderer import render_notice_from_manifest
@@ -27,11 +29,22 @@ class AssetVerificationError(ValueError):
     """A distributed file does not match its reviewed source and build contract."""
 
 
-def sha256(path):
+def sha256(path, *, expected_size=None):
+    """Hash one regular descriptor without symlink/FIFO races or unbounded append reads."""
     digest = hashlib.sha256()
-    with path.open("rb") as source:
-        for chunk in iter(lambda: source.read(1024 * 1024), b""):
+    descriptor = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK | os.O_CLOEXEC)
+    with os.fdopen(descriptor, "rb") as source:
+        metadata = os.fstat(source.fileno())
+        if not stat.S_ISREG(metadata.st_mode) or (expected_size is not None and metadata.st_size != expected_size):
+            raise AssetVerificationError("artifact is not a regular file of the declared size")
+        remaining = metadata.st_size
+        while chunk := source.read(min(1024 * 1024, remaining + 1)):
+            remaining -= len(chunk)
+            if remaining < 0:
+                raise AssetVerificationError("artifact grew during hashing")
             digest.update(chunk)
+        if remaining != 0 or os.fstat(source.fileno()).st_mtime_ns != metadata.st_mtime_ns:
+            raise AssetVerificationError("artifact changed during hashing")
     return digest.hexdigest()
 
 

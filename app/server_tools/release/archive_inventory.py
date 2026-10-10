@@ -6,8 +6,11 @@
 from __future__ import annotations
 
 import hashlib
+from contextlib import contextmanager
+import os
 from pathlib import PurePosixPath
 import tarfile
+import stat
 
 from server_tools.release.bundle_contract import BundleError
 
@@ -22,10 +25,14 @@ def safe_member_name(name):
     return str(relative)
 
 
-def archive_members(archive):
+def archive_members(archive, *, maximum_bytes=None, maximum_members=200000):
     """Index safe regular members and exact parents, retaining the open tar descriptor."""
     files, directories, seen = {}, set(), set()
+    total_bytes = 0
     for member in archive:
+        total_bytes += member.size
+        if len(seen) >= maximum_members or (maximum_bytes is not None and total_bytes > maximum_bytes):
+            raise BundleError("archive inventory exceeds its declared expansion or member limit")
         name = safe_member_name(member.name)
         if name in seen:
             raise BundleError("archive duplicates a member: " + name)
@@ -64,9 +71,15 @@ def member_digest(archive, member, algorithm="sha256", prefix=b""):
     return digest.hexdigest()
 
 
+@contextmanager
 def open_archive(path, mode="r:*"):
     """Normalize malformed/truncated tar failures to the release refusal boundary."""
     try:
-        return tarfile.open(path, mode)
-    except (tarfile.TarError, EOFError) as error:
+        descriptor = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK | os.O_CLOEXEC)
+        with os.fdopen(descriptor, "rb") as stream:
+            if not stat.S_ISREG(os.fstat(stream.fileno()).st_mode):
+                raise BundleError("release archive must be a regular file")
+            with tarfile.open(fileobj=stream, mode=mode) as archive:
+                yield archive
+    except (tarfile.TarError, EOFError, OSError) as error:
         raise BundleError("cannot read release archive") from error

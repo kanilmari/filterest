@@ -1,10 +1,11 @@
 // main.go
-// Exposes the authoritative release parser and signature verifier to local packaging.
-// Connects Python release tools to independently provisioned composition trust.
+// Exposes authoritative release authentication and migration-source inspection.
+// Connects release and installation tools to independent trust and runner policies.
 // Reads public evidence only; it cannot unlock keys, mutate trust or install releases.
 package main
 
 import (
+	"crypto/sha256"
 	"encoding/json"
 	"errors"
 	"flag"
@@ -13,6 +14,7 @@ import (
 	"os"
 	"time"
 
+	"easelect/backend/core_components/migrations"
 	release "easelect/backend/core_components/release_updates"
 )
 
@@ -28,6 +30,21 @@ func run(arguments []string, input io.Reader, output, diagnostics io.Writer) int
 }
 
 func inspect(arguments []string, input io.Reader, output io.Writer) error {
+	if len(arguments) == 1 && arguments[0] == "inspect-migrations" {
+		data, err := io.ReadAll(io.LimitReader(input, (64<<20)+1))
+		if err != nil || len(data) > 64<<20 {
+			return errors.New("migration inspection input exceeds limit")
+		}
+		var sources map[string][]byte
+		if err := json.Unmarshal(data, &sources); err != nil {
+			return err
+		}
+		contracts := map[string]migrations.SourceContract{}
+		for name, source := range sources {
+			contracts[name] = migrations.DescribeMigrationSource(source)
+		}
+		return json.NewEncoder(output).Encode(contracts)
+	}
 	if len(arguments) == 1 && arguments[0] == "validate" {
 		data, err := io.ReadAll(io.LimitReader(input, release.MaxManifestBytes+1))
 		if err != nil {
@@ -42,7 +59,7 @@ func inspect(arguments []string, input io.Reader, output io.Writer) error {
 		return json.NewEncoder(output).Encode(map[string]bool{"contract_valid": true})
 	}
 	if len(arguments) == 0 || arguments[0] != "verify" {
-		return errors.New("select validate or verify")
+		return errors.New("select validate, verify or inspect-migrations")
 	}
 	flags := flag.NewFlagSet("verify", flag.ContinueOnError)
 	flags.SetOutput(io.Discard)
@@ -77,6 +94,7 @@ func inspect(arguments []string, input io.Reader, output io.Writer) error {
 	}
 	return json.NewEncoder(output).Encode(map[string]any{
 		"manifest_sha256": verified.ManifestSHA256, "trust_policy_revision": verified.TrustPolicyRevision,
-		"key_fingerprints": verified.KeyFingerprints,
+		"signatures_sha256": fmt.Sprintf("%x", sha256.Sum256(proofs)),
+		"key_fingerprints":  verified.KeyFingerprints,
 	})
 }

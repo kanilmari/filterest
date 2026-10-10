@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 import hashlib
+import gzip
 import io
 import json
 import os
@@ -26,6 +27,7 @@ APP = Path(__file__).resolve().parents[2]
 SIGNER = r'''
 package main
 import (
+    "crypto/ed25519"
     "encoding/base64"
     "encoding/json"
     "os"
@@ -41,8 +43,17 @@ func main() {
     public, err := release.GenerateSigningKeyFile(os.Args[4], os.Args[4]+".public", passphrase); must(err)
     key, err := release.ReadSigningKeyFile(os.Args[4], passphrase); must(err); defer clear(key)
     data, err := os.ReadFile(os.Args[1]); must(err)
-    manifest, err := release.ParseManifest(data); must(err)
-    proofs, err := release.SignManifest(data, key); must(err)
+    manifest, err := release.ParseManifest(data)
+    unchecked := len(os.Args) == 6 && os.Args[5] == "invalid-contract-fixture"
+    if unchecked { manifest = &release.ManifestV1{}; must(json.Unmarshal(data, manifest)) } else { must(err) }
+    var proofs *release.SignatureEnvelopeV1
+    if unchecked {
+        // Test-only bypass proves a valid signature cannot authorize an invalid route.
+        message := append([]byte(release.ManifestSignatureDomain+"\x00"), data...)
+        proofs = &release.SignatureEnvelopeV1{SchemaVersion:1, SignatureType:"ed25519_detached",
+          Domain:release.ManifestSignatureDomain, Signatures:[]release.DetachedSignatureV1{
+            {KeyFingerprint:release.KeyFingerprint(public), Signature:base64.StdEncoding.EncodeToString(ed25519.Sign(key, message))}}}
+    } else { proofs, err = release.SignManifest(data, key); must(err) }
     encoded, err := json.Marshal(proofs); must(err)
     must(os.WriteFile(os.Args[3], append(encoded, '\n'), 0600))
     created, err := time.Parse("2006-01-02T15:04:05Z", manifest.CreatedAt); must(err)
@@ -79,7 +90,8 @@ def bundle_go_tools(tmp_path_factory):
 @pytest.fixture
 def local_contract_bridge(bundle_go_tools, monkeypatch):
     verifier, _ = bundle_go_tools
-    def command(arguments, data=None):
+    def command(arguments, data=None, *, bridge=None):
+        assert bridge is None or bridge == verifier
         result = subprocess.run([str(verifier), *arguments], input=data, capture_output=True, timeout=20)
         if result.returncode:
             raise bundle_contract.BundleError(result.stderr.decode().strip())
@@ -98,17 +110,19 @@ def write_tar(path, content):
             archive.addfile(item, io.BytesIO(data))
 
 
-def write_oci(path, manifest, *, architecture="amd64", label_updates=None):
+def write_oci(path, manifest, *, architecture="amd64", label_updates=None, layers=None, compressed=False):
     labels = {**identity_labels(manifest), **(label_updates or {})}
-    layer = io.BytesIO()
-    with tarfile.open(fileobj=layer, mode="w") as archive:
-        data = b"synthetic application image bytes\n"
-        item = tarfile.TarInfo("filterest/app/fixture")
-        item.size = len(data)
-        archive.addfile(item, io.BytesIO(data))
-    layer = layer.getvalue()
+    if layers is None:
+        layer = io.BytesIO()
+        with tarfile.open(fileobj=layer, mode="w") as archive:
+            data = b"synthetic application image bytes\n"
+            item = tarfile.TarInfo("filterest/app/fixture")
+            item.size = len(data)
+            archive.addfile(item, io.BytesIO(data))
+        layers = [layer.getvalue()]
     config = canonical_json_line({"os": "linux", "architecture": architecture,
-        "config": {"Labels": labels}, "rootfs": {"type": "layers", "diff_ids": ["sha256:" + hashlib.sha256(layer).hexdigest()]}})
+        "config": {"Labels": labels}, "rootfs": {"type": "layers",
+        "diff_ids": ["sha256:" + hashlib.sha256(layer).hexdigest() for layer in layers]}})
     files = {"oci-layout": b'{"imageLayoutVersion":"1.0.0"}\n'}
     def descriptor(data, media_type):
         digest = hashlib.sha256(data).hexdigest()
@@ -116,7 +130,8 @@ def write_oci(path, manifest, *, architecture="amd64", label_updates=None):
         return {"mediaType": media_type, "digest": "sha256:" + digest, "size": len(data)}
     image = canonical_json_line({"schemaVersion": 2, "mediaType": "application/vnd.oci.image.manifest.v1+json",
         "config": descriptor(config, "application/vnd.oci.image.config.v1+json"),
-        "layers": [descriptor(layer, "application/vnd.oci.image.layer.v1.tar")]})
+        "layers": [descriptor(gzip.compress(layer, mtime=0) if compressed else layer,
+            "application/vnd.oci.image.layer.v1.tar" + ("+gzip" if compressed else "")) for layer in layers]})
     image_descriptor = descriptor(image, "application/vnd.oci.image.manifest.v1+json")
     image_descriptor["platform"] = {"os": "linux", "architecture": architecture}
     files["index.json"] = canonical_json_line({"schemaVersion": 2, "manifests": [image_descriptor]})

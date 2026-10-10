@@ -5,7 +5,6 @@
 package migrations
 
 import (
-	"crypto/sha256"
 	"database/sql"
 	"fmt"
 	"log"
@@ -76,11 +75,12 @@ func RunMigrationsFromDirectories(db *sql.DB, directories []string) error {
 			return err
 		}
 		content := string(sqlBytes)
-		skipOnError := strings.HasPrefix(content, "-- skip-on-error")
-		evidence := migrationEvidence{filename: base, hash: fmt.Sprintf("%x", sha256.Sum256(sqlBytes)), outcome: outcomeApplied}
+		sourceContract := DescribeMigrationSource(sqlBytes)
+		skipOnError := sourceContract.ErrorPolicy == "optional"
+		evidence := migrationEvidence{filename: base, hash: sourceContract.ContentSHA256, outcome: outcomeApplied}
 
 		// A leading explicit transaction runs outside the runner's transaction.
-		selfManaged := startsWithSelfManagedBegin(content)
+		selfManaged := sourceContract.TransactionPolicy == "self_managed"
 
 		if selfManaged {
 			if err := runSelfManagedMigration(db, content, skipOnError, evidenceAvailable, &evidence); err != nil {

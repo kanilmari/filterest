@@ -60,6 +60,134 @@ outside release and database-restoration state. Bundled policies and public
 test-only fixture keys cannot establish trust. See [SECURITY.md](../../../SECURITY.md#release-signing-and-trust)
 for rotation, revocation and recovery.
 
+## Installation-host verification and executor contract
+
+The public `./filterest verify-update` command checks signed managed OCI updates
+offline, from trusted installed tools. It emits exactly one JSON verdict (exit 0
+for `accepted`, 1 for `refused`) with numbered check results and reasons. It reads
+archives without extracting them, runs only the independently provisioned Go
+authentication bridge, and performs no network, database, Docker, service or
+installation mutations. A program inside the bundle is never a verifier.
+
+Build the existing bridge once from reviewed trusted source, independently of any
+incoming bundle, and provision it as an operator/root-owned executable that other
+users cannot write:
+
+```bash
+go build -o /protected/filterest-manifest-verification ./server_tools/release/manifest_verification
+```
+
+This build runs from `app/`; installation verification itself needs Python's
+standard library and the prebuilt bridge, without Go, Git or package downloads.
+The bridge is mandatory for the command, Python library and execution-lock
+recheck. Missing, unprotected or bundle/source-provided executables refuse;
+verification never falls back to compilation. Release packaging tools retain
+their separate local Go build behavior.
+The Python implementation is under `server_tools/update_verification/`. It reuses
+the S1.3 authentication/archive/OCI contracts, including the migration runner's
+own transaction/error classification through the bridge's `inspect-migrations`
+operation. Publisher authentication binds a complete source archive to its
+reviewed commit; the host checks the signed archive digest, Git-archive commit
+marker, embedded Filterest build/version/ledger identity and migration bytes.
+The publisher's exact Git-tree comparison remains a publication responsibility.
+
+Independently provision the trust policy, retained revision floor, selected
+composition, accepted offer's manifest SHA-256 and installation baseline. Keep
+the baseline, prior verdict and trust floor outside the database/restoration
+scope. Trust, baseline, observations, prior verdicts, image identity and the
+bridge must be outside source/bundle directories, regular, operator/root-owned,
+not group/world-writable and reached without symlinks. The host evidence is an
+operator assertion, not a new bundle-selected trust policy or automatic audit.
+
+The version-1 baseline has exactly these fields:
+
+- `schema_version: 1`, `baseline_type: "filterest_update_baseline"`,
+  `installation_id`, `composition_id`, `approval_reference` (the external audit).
+- `installed`: `app_version`, `database_version`, `composition_revision`.
+- `ledger`: rows sorted by filename, each with `id` (exported `filename`),
+  `applied_at` (consistently formatted timestamp or null), `content_sha256`,
+  `outcome`, `provenance`. Preserve missing evidence columns as null values.
+- `ledger_sha256`: SHA-256 of the ledger's canonical sorted-key compact JSON,
+  UTF-8, final LF (`canonical_json_line`); include timestamps and nulls.
+- `legacy_exceptions`: a filename-to-review-reason object naming exactly every
+  all-null evidence row and `optional_failure_skipped` row. Bootstrap evidence
+  stays `bootstrap_baseline`/`bootstrap`; it does not claim SQL execution.
+  Unresolved self-managed failures/interruptions always refuse, even if reviewed.
+- `migration_prefixes`: independently approved component-to-source-directory
+  paths; Filterest uses `app/server_tools/migrations`. The later Easelect adapter
+  supplies its private component prefix and includes every component source.
+
+The fresh observation has exactly `schema_version: 1`,
+`observation_type: "filterest_update_observation"`, the same installation and
+composition IDs, `installed`, `ledger`, plus:
+
+- `observed_at`: UTC `YYYY-MM-DDTHH:MM:SSZ`, at most five minutes old.
+- `capabilities`: the trusted executor's supported protocol capability names.
+- `platform`: `os`, `architecture`, `cpu_features`, `postgresql_major`,
+  `extensions` (name-to-version object), `docker_engine_version`,
+  `docker_compose_version`. Normalize service versions to `major.minor.patch`.
+  The verifier also checks the actual local OS/CPU architecture.
+- `capacity_paths`: each signed allocation purpose mapped to an existing
+  absolute directory on its actual filesystem; include Docker storage and all
+  recovery scopes. `capacity_minimums`: each purpose mapped to positive `bytes`
+  and `inodes`, conservatively measured by the trusted caller for this site.
+  Cover database/roles, media, settings, projects and retained old release/image,
+  including temporary restoration/rehearsal copies that coexist during execution.
+
+Capacity uses the greater of each signed allocation, host minimum and inspected
+payload footprint. Allocations sharing a device are added together, then one
+fixed-byte reserve plus the signed percentage of total device capacity is kept.
+Available bytes and inodes are sampled with `statvfs`; a separate purpose cannot
+spend the same free space twice. Unknown mounts or missing evidence refuse.
+The Docker inode floor includes the OCI wrapper and every entry in every layer,
+including whiteouts, links and empty directories, with a parent-directory
+allowance for each entry. Repeated paths/layers are counted again; overlay merges
+and deduplication never reduce the required capacity.
+The signed route must equal every archived, unapplied SQL filename in global
+order; an executor must not suppress work with its migration allowlist.
+
+```bash
+./filterest verify-update --bundle /protected/staged-bundle \
+  --authentication-bridge /protected/filterest-manifest-verification \
+  --trust-policy /protected/release-trust.json --minimum-trust-policy-revision 1 \
+  --composition filterest --expected-manifest-sha256 <accepted-offer-sha256> \
+  --baseline /protected/installation-baseline.json \
+  --observation /protected/fresh-installation-observation.json
+```
+
+**Easelect adapter, separate private implementation:** call the trusted public
+launcher, persist its accepted verdict in the protected host journal, acquire
+the existing site execution lock and retain it through mutation/handoff. Capture
+current installed identity, complete ledger, platform/service facts and capacity
+minimums under that lock, then call `recheck_under_execution_lock` with a fresh
+`observe()` callback. The CLI equivalent adds `--recheck-verdict /protected/prior.json`
+and `--image-identity /protected/loaded-image.json` while the caller holds its lock.
+Recheck reauthenticates current trust and rereads the baseline, all payload bytes
+and capacity. Its trust floor is the greater of the supplied floor and the prior
+accepted policy revision; a lower revision refuses. The authentication report
+(policy revision, signing fingerprints and signature-envelope digest) must also
+match the prior verdict. Changed approved identities, ledger, bundle, trust/signature
+evidence or image require a new preflight. The function contract does not acquire
+or prove the caller's lock.
+
+The image identity object contains exactly `manifest_digest`, `config_digest`,
+`archive_sha256`, inspected independently by the adapter. Persist those pins,
+load the pinned archive only, verify the loaded image's configuration digest
+(Docker image ID), and use immutable digest references for rehearsal and run.
+Call `require_verified_image` before rehearsal and activation; it refuses tags,
+replacement digests and any rebuild (`rebuilt=True`). Rebuilding from verified
+source cannot substitute for running the verified image. If source staging is
+needed, the trusted `extract_verified_sources` library helper copies only pinned
+regular archives into a new private directory; it never executes source and is
+not invoked by the read-only command. Do not use a bundle-provided extractor.
+
+`accepted` establishes release verification and installation compatibility.
+`execution_ready` remains false, including after lock recheck: the adapter still
+owns draining/quiescence, complete matched backup and off-host receipt, exact-image
+restoration rehearsal, K292 restore-before-reopening, grants/readiness checks and
+K293 administrator acceptance. Preflight evidence alone cannot authorize those
+transitions. The verifier stores no signing secrets; K294 owner custody applies.
+
 ## Plan and apply
 
 From the Filterest installation root, run `./filterest release publish` with

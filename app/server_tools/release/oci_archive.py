@@ -8,7 +8,9 @@ from __future__ import annotations
 import gzip
 import hashlib
 import json
+from pathlib import PurePosixPath
 import re
+import tarfile
 
 from server_tools.release.archive_inventory import archive_members, member_bytes, member_digest, open_archive
 from server_tools.release.bundle_contract import BundleError
@@ -35,10 +37,55 @@ def json_member(archive, member):
         raise BundleError("OCI metadata is not unambiguous JSON") from error
 
 
-def verify_oci_archive(path, platform, labels):
+def verify_oci_archive(path, platform, labels, *, maximum_expanded=None):
     """Verify every referenced blob and layer diff ID, plus caller-selected identity labels."""
+    descriptors, expanded, _ = inspect_oci_archive(path, platform, labels,
+        maximum_expanded=maximum_expanded, count_inodes=False)
+    return descriptors, expanded
+
+
+class LayerReader:
+    """Hash and bound decoded reads used by both tar inspection and trailing-byte checks."""
+    def __init__(self, stream, maximum_bytes):
+        self.stream, self.maximum_bytes = stream, maximum_bytes
+        self.bytes_read, self.digest = 0, hashlib.sha256()
+
+    def read(self, size=1024 * 1024):
+        data = self.stream.read(min(size, 1024 * 1024) if size >= 0 else 1024 * 1024)
+        self.bytes_read += len(data)
+        if self.maximum_bytes is not None and self.bytes_read > self.maximum_bytes:
+            raise BundleError("OCI layers exceed the declared expansion limit")
+        self.digest.update(data)
+        return data
+
+
+def layer_inode_floor(stream):
+    """Count every entry (including whiteouts/links) and all of its parent directories.
+
+    Repeat the directory allowance for every entry and the root for every layer:
+    neither overlay merging nor hardlink/path deduplication may reduce this floor.
+    No layer member is extracted or executed.
+    """
+    inodes = 1
+    try:
+        with tarfile.open(fileobj=stream, mode="r|") as archive:
+            while (member := archive.next()) is not None:
+                inodes += max(1, len(PurePosixPath(member.name).parts))
+                # Streaming inspection needs no retained member index.
+                archive.members.clear()
+    except tarfile.TarError as error:
+        raise BundleError("OCI layer tar is malformed") from error
+    return inodes
+
+
+def inspect_oci_archive(path, platform, labels, *, maximum_expanded=None, count_inodes=True):
+    """Reuse OCI authentication with optional layer inode accounting for host preflight.
+
+    The release build/verification wrapper retains its digest-only behavior and
+    two-value result. Installation verification also inspects each layer's tar.
+    """
     with open_archive(path, "r:") as archive:
-        files = archive_members(archive)
+        files = archive_members(archive, maximum_bytes=maximum_expanded)
         if not {"oci-layout", "index.json"} <= files.keys():
             raise BundleError("OCI archive is missing layout/index members")
         if json_member(archive, files["oci-layout"]) != {"imageLayoutVersion": "1.0.0"}:
@@ -90,26 +137,34 @@ def verify_oci_archive(path, platform, labels):
                 or not isinstance(rootfs.get("diff_ids"), list) or len(rootfs["diff_ids"]) != len(manifest["layers"])):
             raise BundleError("OCI config must bind every uncompressed layer")
         expanded_layers = 0
+        stored_bytes = sum(member.size for member in files.values())
+        parents = {str(parent) for name in files for parent in PurePosixPath(name).parents if str(parent) != "."}
+        inodes = len(files) + len(parents) if count_inodes else 0
         for layer, diff_id in zip(manifest["layers"], rootfs["diff_ids"]):
             member = descriptor(layer, LAYER_TYPES)
-            digest = hashlib.sha256()
             with archive.extractfile(member) as stream:
                 decoded = gzip.GzipFile(fileobj=stream) if layer["mediaType"].endswith("+gzip") else stream
+                remaining = None if maximum_expanded is None else maximum_expanded - stored_bytes - expanded_layers
+                reader = LayerReader(decoded, remaining)
                 try:
-                    for chunk in iter(lambda: decoded.read(1024 * 1024), b""):
-                        expanded_layers += len(chunk)
-                        digest.update(chunk)
+                    if count_inodes:
+                        inodes += layer_inode_floor(reader)
+                    # Tar stops at its end marker; digest/limit checks include
+                    # all remaining padding and the gzip trailer too.
+                    for _ in iter(lambda: reader.read(1024 * 1024), b""):
+                        pass
+                    expanded_layers += reader.bytes_read
                 except (OSError, EOFError) as error:
                     raise BundleError("OCI compressed layer is malformed") from error
                 finally:
                     if decoded is not stream:
                         decoded.close()
-            if diff_id != "sha256:" + digest.hexdigest():
+            if diff_id != "sha256:" + reader.digest.hexdigest():
                 raise BundleError("OCI layer differs from the config diff ID")
         if set(files) != referenced:
             raise BundleError("OCI archive has unreferenced or unexpected members")
         return {"manifest_digest": image["digest"], "config_digest": manifest["config"]["digest"]}, max(
-            path.stat().st_size, sum(member.size for member in files.values()) + expanded_layers)
+            path.stat().st_size, stored_bytes + expanded_layers), inodes
 
 
 def identity_labels(manifest):
