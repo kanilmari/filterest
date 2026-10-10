@@ -90,6 +90,13 @@ ALLOWED_SCHEMA_TABLES = {
     "restricted.password_reset_dummy_work",  # Account-free singleton write, never credential seed.
     "restricted.users_restricted",
     "restricted.verification_codes",
+    "restricted.system_application_update_control",
+    "restricted.system_application_update_jobs",
+    "restricted.system_application_update_proofs",
+    "restricted.system_application_update_decisions",
+    "restricted.system_application_update_admissions",
+    "restricted.system_application_update_events",
+    "restricted.system_application_update_auth_attempts",
 }
 
 ALLOWED_SEED_TABLES = {

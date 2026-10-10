@@ -31,6 +31,7 @@ func TestLoginNameSourceGuard(t *testing.T) {
 func collectLoginNameSourceGuardFindings(appRoot string) ([]string, error) {
 	var findings []string
 	allowed := map[string]string{
+		"server_tools/versioning/schema_snapshots/db-9.10.2.sql":                    "reviewed generated unreleased bootstrap schema; matches public_bootstrap/schema.sql",
 		"backend/core_components/startup/reserved_test_users.go":                    "exact reserved fixture reconciliation",
 		"backend/core_components/auth/register.go":                                  "registration refusal language keys",
 		"backend/core_components/auth/registration_account.go":                      "validated registration writer and duplicate check",

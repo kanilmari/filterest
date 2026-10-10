@@ -464,7 +464,7 @@ On an old ledger, keep global filename order and execute self-managed SQL before
 
 Fresh bootstrap uses `bootstrap_baseline`/`bootstrap`: hashes identify folded-in sources, including replaced version records, without claiming SQL execution. Bootstrap acceptance and audit enforce this distinction. Unknown history, optional failures, operator-accepted unverified rows and unresolved self-managed attempts need explicit review before a signed release can prove an upgrade route.
 
-Filterest owns `app/VERSION_APP` and `app/VERSION_DB`. Ordinary source commits do not independently advance a release number. At release preparation align the application/DB compatibility record, schema snapshot and matching bootstrap with accepted migration source.
+For update admission, use the [versioned contract and security rules](../../backend/core_components/application_updates/README.md). Filterest owns `app/VERSION_APP` and `app/VERSION_DB`. Ordinary source commits do not independently advance a release number. At release preparation align the application/DB compatibility record, schema snapshot and matching bootstrap with accepted migration source.
 Keep full recovery dumps separate from the public bootstrap. Follow [Publishing Filterest](../publication/PUBLISHING.md) for candidate preparation, build, promotion, final rebuild and publication. Do not create another release ledger or rewrite published tags.
 
 Reuse the supported API client or [E2E helpers](E2E_Testing_Guide.md) for

@@ -19,6 +19,16 @@ import {
     resolveFailureNotice,
 } from './api_pipeline_helpers.js';
 
+test('job path identities cannot inject another path or query', () => {
+    const routes = { job: '/api/admin/application-update/jobs/{id}', decision: '/api/admin/application-update/jobs/{id}/decisions' };
+    expect(resolveEndpointUrl('job', { id: 'job-1' }, routes)).toBe('/api/admin/application-update/jobs/job-1');
+    expect(resolveEndpointUrl('decision', { id: 'job-1' }, routes)).toBe('/api/admin/application-update/jobs/job-1/decisions');
+    for (const id of ['../requests', 'a/b', '?x=1', '.', '..', '%2f', '']) {
+        expect(() => resolveEndpointUrl('job', { id }, routes)).toThrow('invalid path identity');
+    }
+    expect(() => resolveEndpointUrl('job', '?id=job-1', routes)).toThrow('missing path identity');
+});
+
 describe('service-unavailable errors', () => {
     test('creates and recognizes the stable retryable 503 contract', () => {
         const error = createServiceUnavailableError('updateRow');

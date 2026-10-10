@@ -9,6 +9,7 @@ import re
 import sys
 import tempfile
 from pathlib import Path
+from sql_identifier_validator import validate_sql_identifiers
 
 public_root = Path(__file__).resolve().parents[3]
 parser = argparse.ArgumentParser(description=__doc__)
@@ -67,6 +68,7 @@ language_seed_migrations = (
     "20261009000001_seed_front_page_description_language_key.sql",
     "20261009000002_seed_admin_version_info_language_keys.sql",
     "20261009000041_seed_dataset_appearance_refusal_keys.sql",
+    "20261009000052_seed_application_update_refusal_keys.sql",
 )
 # A setting an upgrade adds is added for a new installation by the same file, so
 # the default is written once and an upgraded site and a new one start with the
@@ -99,6 +101,7 @@ repair_schema_migrations = (
     "20261009000003_create_system_dataset_appearance.sql",
     "20261009000020_add_migration_execution_evidence.sql",
     "20261009000040_cut_over_dataset_card_appearance.sql",
+    "20261009000050_create_application_update_admission.sql",
 )
 # Complete the physical actor columns after development tables and support functions,
 # before schema privileges. The data step later registers the same columns.
@@ -121,6 +124,7 @@ release_data_migrations = (
     "20261005000037_register_row_group_classifications.sql",
     "20261005000050_require_registry_reference_key.sql",
     "20261005000080_add_dataset_media_hidden.sql",
+    "20261009000051_register_application_update_capability.sql",
 )
 # The record of each database release is not run by the bootstrap: the acceptance
 # block below writes the version row of the version this bootstrap is built for.
@@ -189,6 +193,11 @@ for path in sorted(public_migrations.glob("*.sql")):
         parser.error(f"public migration filename is not safe for the bootstrap ledger: {path.name}")
     if path.name[:14] > classified_after_sequence and path.name not in classified:
         parser.error(f"Migration is in no bootstrap class: {path.name}")
+    if path.name[:14] > classified_after_sequence:
+        try:
+            validate_sql_identifiers(path.read_text(encoding="utf-8"), path.name)
+        except ValueError as error:
+            parser.error(str(error))
 completion_markers: list[str] = []
 final_checks: list[str] = []
 for name in included_migrations:
@@ -217,6 +226,11 @@ for name in included_migrations:
             final_checks.append(check)
 
 # Enforce the same explicit content boundary used by the public release audit.
+for label, sql in (("schema", schema_sql), ("seed", seed_sql)):
+    try:
+        validate_sql_identifiers(sql, f"bootstrap {label}")
+    except ValueError as error:
+        parser.error(str(error))
 sys.path.insert(0, str(public_root / "app/server_tools/public_slice_export"))
 from audit_public_bootstrap import ALLOWED_SCHEMA_TABLES, ALLOWED_SEED_TABLES, FORBIDDEN_CONTENT_PATTERNS, forbidden_content_match, TABLE_PATTERN, INSERT_TABLE_PATTERN, EMAIL_PATTERN
 for label, sql, pattern, allowed in (
@@ -381,6 +395,7 @@ source_files = [
     public_bootstrap_sources / "field_settings.lang_keys.sql",
     public_bootstrap_sources / "label_value_layout.lang_keys.sql",
     Path(__file__).resolve(),
+    Path(__file__).resolve().with_name("sql_identifier_validator.py"),
     public_root / "app/server_tools/public_slice_export/audit_public_bootstrap.py",
     public_root / "app/server_tools/public_slice_export/public_bootstrap_table_allowlists.py",
     public_root / "app/server_tools/public_slice_export/public_bootstrap_policy.py",

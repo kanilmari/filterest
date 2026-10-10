@@ -197,12 +197,17 @@ var RouteProfiles = map[string]RouteProfile{
 	"system_table_tools.FrontPageBackgroundHandler": AdminProfile,
 
 	// Tab ordering
-	"system_table_tools.UpdateTabOrderHandler": AdminProfile,
-	"router.adminVersionInfoHandler":           AdminProfile,
-	"router.siteAssistantAPICatalogHandler":    AdminProfile,
-	"router.adminUpdateNoticeStreamHandler":    AdminNoTxProfile,
-	"router.saveOpenAIAPIKeyHandler":           AdminProfile,
-	"router.saveProviderAPIKeyHandler":         AdminProfile,
+	"system_table_tools.UpdateTabOrderHandler":    AdminProfile,
+	"router.adminVersionInfoHandler":              AdminProfile,
+	"application_updates.StatusHandler":           AdminProfile,
+	"application_updates.RequestHandler":          AdminProfile,
+	"application_updates.JobHandler":              AdminProfile,
+	"application_updates.DecisionHandler":         AdminProfile,
+	"application_updates.ReauthenticationHandler": AdminProfile,
+	"router.siteAssistantAPICatalogHandler":       AdminProfile,
+	"router.adminUpdateNoticeStreamHandler":       AdminNoTxProfile,
+	"router.saveOpenAIAPIKeyHandler":              AdminProfile,
+	"router.saveProviderAPIKeyHandler":            AdminProfile,
 
 	// DEV-only local AI tooling
 	"dtt_1_row_read.FilterbarAICodexQueryHandler": AdminProfile,

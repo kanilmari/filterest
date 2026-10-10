@@ -11,6 +11,7 @@ import (
 	"log"
 
 	"easelect/backend/core_components/dbutils"
+	"easelect/backend/core_components/update_capability"
 )
 
 type rowQueryer interface {
@@ -84,7 +85,9 @@ func insertPermission(q dbutils.Querier, p Permission) (bool, error) {
 }
 
 // EnsureAdminPermissions grants admin group (user_group_id=1, schema='public')
-// access to every non-table-specific (tableless) function that they do not
+// access to non-table-specific functions except the explicit-only update capability.
+// Administrators receive ordinary route visibility, never automatic update authority.
+// It grants functions that they do not
 // already have. This is an idempotent startup hook ensuring that newly
 // registered routes are immediately accessible to admins without manual
 // permission grants through the UI.
@@ -98,6 +101,7 @@ func EnsureAdminPermissions(db *sql.DB) error {
 		  FROM system_functions sf
 		 WHERE sf.disabled = false
 		   AND sf.specific_table_related = false
+		   AND sf.name <> $2
 		   AND NOT EXISTS (
 		       SELECT 1
 		         FROM system_group_table_func_rights gf
@@ -106,7 +110,7 @@ func EnsureAdminPermissions(db *sql.DB) error {
 		          AND gf.target_schema_name = 'public'
 		          AND gf.target_table_uid IS NULL
 		   )
-	`, adminGroupID)
+	`, adminGroupID, update_capability.Name)
 	if err != nil {
 		return fmt.Errorf("EnsureAdminPermissions: %w", err)
 	}
@@ -134,6 +138,7 @@ func EnsureAdminTablePermissions(db *sql.DB) error {
 		  JOIN system_db_tables sdt ON true
 		 WHERE sf.disabled = false
 		   AND COALESCE(sf.specific_table_related, true) = true
+		   AND sf.name <> $2
 		   AND NOT EXISTS (
 		       SELECT 1
 		         FROM system_group_table_func_rights gf
@@ -142,7 +147,7 @@ func EnsureAdminTablePermissions(db *sql.DB) error {
 		          AND COALESCE(gf.target_schema_name, 'public') = COALESCE(sdt.schema_name, 'public')
 		          AND gf.target_table_uid = sdt.table_uid
 		   )
-	`, adminGroupID)
+	`, adminGroupID, update_capability.Name)
 	if err != nil {
 		return fmt.Errorf("EnsureAdminTablePermissions: %w", err)
 	}

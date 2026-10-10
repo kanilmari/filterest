@@ -7,6 +7,36 @@ import { endpoint_router } from './endpoint_router.js';
 import { getStableCandidateRouteDescriptor, getTypedStableRouteDescriptor } from './stable_api_inventory.js';
 import { createStableApiClient } from '../../generated/stable_api_client.js';
 
+/** @returns {Promise<import('../../generated/go_contract_types').ApplicationUpdateStatusResponse>} */
+export function fetchApplicationUpdateStatus() {
+    return endpoint_router('applicationUpdateStatus');
+}
+
+/** @param {import('../../generated/go_contract_types').ApplicationUpdateRequest} body
+ * @returns {Promise<import('../../generated/go_contract_types').ApplicationUpdateJob>} */
+export function requestApplicationUpdate(body) {
+    return endpoint_router('applicationUpdateRequest', { method: 'POST', body_data: body });
+}
+
+/** @param {string} id
+ * @returns {Promise<import('../../generated/go_contract_types').ApplicationUpdateJob>} */
+export function fetchApplicationUpdateJob(id) {
+    return endpoint_router('applicationUpdateJob', { url_params: { id } });
+}
+
+/** @param {string} id
+ * @param {import('../../generated/go_contract_types').ApplicationUpdateDecisionRequest} body
+ * @returns {Promise<import('../../generated/go_contract_types').ApplicationUpdateDecisionReceipt>} */
+export function decideApplicationUpdate(id, body) {
+    return endpoint_router('applicationUpdateDecision', { method: 'POST', url_params: { id }, body_data: body });
+}
+
+/** @param {import('../../generated/go_contract_types').ApplicationUpdateReauthenticationRequest} body
+ * @returns {Promise<import('../../generated/go_contract_types').ApplicationUpdateReauthenticationResponse>} */
+export function reauthenticateApplicationUpdate(body) {
+    return endpoint_router('applicationUpdateReauthentication', { method: 'POST', body_data: body });
+}
+
 /** @typedef {import('../../generated/go_contract_types').AuthModesResponse} AuthModesResponse */
 /** @typedef {import('../../generated/go_contract_types').UserPermissionsResponse} UserPermissionsResponse */
 /** @typedef {import('../../generated/go_contract_types').FKCacheTriggersResponse} FKCacheTriggersResponse */

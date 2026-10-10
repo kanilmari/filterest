@@ -31,12 +31,13 @@ const (
 type ProfileName string
 
 const (
-	ProfileLoginNameChange ProfileName = "login_name_change"
-	ProfileLogin           ProfileName = "login"
-	ProfilePasswordReset   ProfileName = "password_reset"
-	ProfileEmailChange     ProfileName = "email_change"
-	ProfilePasswordChange  ProfileName = "password_change"
-	ProfileRegFetchLogin   ProfileName = "regfetch_login"
+	ProfileLoginNameChange   ProfileName = "login_name_change"
+	ProfileLogin             ProfileName = "login"
+	ProfileApplicationUpdate ProfileName = "application_update"
+	ProfilePasswordReset     ProfileName = "password_reset"
+	ProfileEmailChange       ProfileName = "email_change"
+	ProfilePasswordChange    ProfileName = "password_change"
+	ProfileRegFetchLogin     ProfileName = "regfetch_login"
 )
 
 // Profile is the shared OTP contract for current and future application
@@ -56,7 +57,8 @@ type Profile struct {
 }
 
 var profiles = map[ProfileName]Profile{
-	ProfileLoginNameChange: {Name: ProfileLoginNameChange, Purpose: "login_name_change", TTL: 5 * time.Minute, MaxVerifyAttempts: 5, UserSendLimit: 3, UserSendWindow: 5 * time.Minute, CoreEnabled: true},
+	ProfileApplicationUpdate: {Name: ProfileApplicationUpdate, Purpose: "application_update", TTL: 5 * time.Minute, MaxVerifyAttempts: 5, UserSendLimit: 3, UserSendWindow: 5 * time.Minute, CoreEnabled: true},
+	ProfileLoginNameChange:   {Name: ProfileLoginNameChange, Purpose: "login_name_change", TTL: 5 * time.Minute, MaxVerifyAttempts: 5, UserSendLimit: 3, UserSendWindow: 5 * time.Minute, CoreEnabled: true},
 	ProfileLogin: {
 		Name: ProfileLogin, Purpose: "login", TTL: 5 * time.Minute,
 		MaxVerifyAttempts: 5, UserSendLimit: 3, UserSendWindow: 5 * time.Minute, CoreEnabled: true,
@@ -162,6 +164,22 @@ func normalizeTargetEmail(email string) string {
 // CreateOTP atomically creates or replaces the only active challenge for a
 // user and profile. The database clock owns expiry calculation.
 func CreateOTP(userID int, profileName ProfileName, email string) (string, error) {
+	return createOTP(userID, profileName, email, nil)
+}
+
+// CreateOTPWithDelivery replaces the old challenge with an expired hash before
+// delivery, then activates only that hash after acceptance. Delivery failure deletes it;
+// even failed cleanup leaves no usable code. A delayed response cannot activate
+// or delete a newer resend. Legacy sign-in issuance remains unchanged.
+func CreateOTPWithDelivery(userID int, profileName ProfileName, email string, deliver func(string) error) error {
+	if deliver == nil {
+		return fmt.Errorf("OTP delivery is required")
+	}
+	_, err := createOTP(userID, profileName, email, deliver)
+	return err
+}
+
+func createOTP(userID int, profileName ProfileName, email string, deliver func(string) error) (string, error) {
 	profile, err := coreProfile(profileName)
 	if err != nil {
 		return "", err
@@ -179,10 +197,17 @@ func CreateOTP(userID int, profileName ProfileName, email string) (string, error
 		return "", fmt.Errorf("OTP target email is required")
 	}
 
+	lifetime := int(profile.TTL / time.Second)
+	if deliver != nil {
+		// PostgreSQL NOW() is fixed at transaction start. Use negative infinity
+		// so even a verifier whose transaction started earlier sees expiry.
+		lifetime = 0
+	}
 	_, err = backend.DbConfidential.Exec(`
 		INSERT INTO restricted.verification_codes
 			(user_id, purpose, code_hash, target_email, attempts, max_attempts, created_at, expires_at)
-		VALUES ($1, $2, $3, $4, 0, $5, NOW(), NOW() + ($6 * INTERVAL '1 second'))
+		VALUES ($1, $2, $3, $4, 0, $5, NOW(),
+			CASE WHEN $6 = 0 THEN '-infinity'::timestamptz ELSE NOW() + ($6 * INTERVAL '1 second') END)
 		ON CONFLICT (user_id, purpose) DO UPDATE
 		SET code_hash = EXCLUDED.code_hash,
 			target_email = EXCLUDED.target_email,
@@ -190,9 +215,28 @@ func CreateOTP(userID int, profileName ProfileName, email string) (string, error
 			max_attempts = EXCLUDED.max_attempts,
 			created_at = NOW(),
 			expires_at = EXCLUDED.expires_at
-	`, userID, profile.Purpose, HashCode(code), target, profile.MaxVerifyAttempts, int(profile.TTL/time.Second))
+	`, userID, profile.Purpose, HashCode(code), target, profile.MaxVerifyAttempts, lifetime)
 	if err != nil {
 		return "", fmt.Errorf("failed to create OTP: %w", err)
+	}
+	if deliver != nil {
+		if err = deliver(code); err != nil {
+			if revokeErr := RevokeOTP(userID, profileName, code); revokeErr != nil {
+				return "", fmt.Errorf("failed to remove undelivered OTP")
+			}
+			return "", err
+		}
+		result, activateErr := backend.DbConfidential.Exec(`
+			UPDATE restricted.verification_codes
+			SET created_at = NOW(), expires_at = NOW() + ($4 * INTERVAL '1 second')
+			WHERE user_id = $1 AND purpose = $2 AND code_hash = $3 AND expires_at <= NOW()
+		`, userID, profile.Purpose, HashCode(code), int(profile.TTL/time.Second))
+		if activateErr != nil {
+			return "", fmt.Errorf("failed to activate delivered OTP")
+		}
+		if err = requireOneRow(result, "activate delivered OTP"); err != nil {
+			return "", err
+		}
 	}
 
 	logging.Infof("[otp] created OTP for user %d, profile=%s", userID, profile.Name)

@@ -124,6 +124,8 @@ def test_current_allowlist_preserves_nullable_presentation_overrides(generator):
         for item in parsed for field in item.fields if field.go_type.startswith("*")
     ]
     assert pointers == [
+        ("ApplicationUpdateStatusResponse", "offer", False),
+        ("ApplicationUpdateStatusResponse", "latest_job", False),
         ("CardVisibilityColumn", "show_key_on_card_override", False),
         ("CardVisibilityResponse", "card_style_variant", False),
         ("CardVisibilityResponse", "card_detail_columns", False),

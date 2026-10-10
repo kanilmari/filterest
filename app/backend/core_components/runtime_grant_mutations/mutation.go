@@ -15,6 +15,7 @@ import (
 	"easelect/backend/core_components/dbutils"
 	"easelect/backend/core_components/httpresponse"
 	"easelect/backend/core_components/runtime_grants"
+	"easelect/backend/core_components/update_capability"
 )
 
 type Mutation struct {
@@ -23,6 +24,7 @@ type Mutation struct {
 	roles             runtime_grants.RoleConfiguration
 	targets           []int64
 	refuseNewBlockers bool
+	updateGuard       *update_capability.WriteGuard
 }
 
 // ReadsPolicyMetadata identifies the registries read by LoadGrantSnapshot and
@@ -61,7 +63,11 @@ func BeginTx(ctx context.Context, tx *sql.Tx) (*Mutation, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Mutation{Tx: tx, before: before, roles: roles}, nil
+	guard, err := update_capability.Capture(ctx, tx)
+	if err != nil {
+		return nil, err
+	}
+	return &Mutation{Tx: tx, before: before, roles: roles, updateGuard: guard}, nil
 }
 
 // BeginGeneric opens the ordinary tx too, but selects the grant boundary only
@@ -95,6 +101,10 @@ func BeginGeneric(ctx context.Context, w http.ResponseWriter, table string) (*sq
 func (m *Mutation) Finish(ctx context.Context, datasetUIDs ...int64) error {
 	if m == nil {
 		return nil
+	}
+	if err := m.updateGuard.Check(ctx, m.Tx); err != nil {
+		_ = m.Tx.Rollback()
+		return err
 	}
 	datasetUIDs = append(datasetUIDs, m.targets...)
 	scope := make([]int64, 0, len(datasetUIDs))
@@ -134,6 +144,11 @@ func (m *Mutation) Finish(ctx context.Context, datasetUIDs ...int64) error {
 }
 
 func RespondError(w http.ResponseWriter, err error) {
+	var refusal *httpresponse.Refusal
+	if errors.As(err, &refusal) {
+		httpresponse.RespondWithRefusal(w, refusal)
+		return
+	}
 	var blocked *runtime_grants.ScopeBlocker
 	if errors.As(err, &blocked) {
 		httpresponse.RespondWithRefusal(w, &httpresponse.Refusal{Status: http.StatusConflict, LangKey: "error_runtime_grant_policy_blocked", Message: "Permissions could not be saved because a dataset or its dependencies need a permission-policy review."})

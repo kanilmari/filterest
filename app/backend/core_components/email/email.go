@@ -8,6 +8,7 @@ package email
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -45,12 +46,19 @@ var postmarkURL = "https://api.postmarkapp.com/email"
 // postmarkHTTPClient is package-scoped so tests can inject transport behavior.
 var postmarkHTTPClient = &http.Client{Timeout: 15 * time.Second}
 
+// ErrSecureDeliveryUnavailable omits provider-controlled text, which may echo
+// the request body, credentials or verification code into a caller's log.
+var ErrSecureDeliveryUnavailable = errors.New("secure email delivery unavailable")
+
+const applicationUpdatePurpose = "application_update"
+
 // purposeSubjects maps OTP purpose to email subject line.
 var purposeSubjects = map[string]string{
-	"login":           "Kirjautumisen vahvistuskoodi",
-	"email_change":    "Sähköpostiosoitteen vaihdon vahvistus",
-	"password_change": "Salasanan vaihdon vahvistus",
-	"password_reset":  "Salasanan palautuksen vahvistuskoodi",
+	applicationUpdatePurpose: "Sovelluspäivityksen vahvistuskoodi",
+	"login":                  "Kirjautumisen vahvistuskoodi",
+	"email_change":           "Sähköpostiosoitteen vaihdon vahvistus",
+	"password_change":        "Salasanan vaihdon vahvistus",
+	"password_reset":         "Salasanan palautuksen vahvistuskoodi",
 }
 
 // firstConfiguredEnv resolves the first non-empty env value from a migration-safe key list.
@@ -64,11 +72,26 @@ func firstConfiguredEnv(keys ...string) string {
 	return ""
 }
 
+// SendApplicationUpdateOTPEmail requires provider acceptance in every mode.
+// Update codes never use the sign-in console fallback or provider diagnostics.
+func SendApplicationUpdateOTPEmail(to, formattedCode string) error {
+	return SendOTPEmail(to, formattedCode, applicationUpdatePurpose)
+}
+
 // SendOTPEmail sends a verification code email for the given purpose.
-// In dev-mode (POSTMARK_API_KEY empty), the code is logged to console.
-func SendOTPEmail(to, formattedCode, purpose string) error {
+// The legacy console fallback is forbidden for the application-update purpose.
+func SendOTPEmail(to, formattedCode, purpose string) (deliveryErr error) {
+	secureOnly := purpose == applicationUpdatePurpose
+	defer func() {
+		if secureOnly && deliveryErr != nil {
+			deliveryErr = ErrSecureDeliveryUnavailable
+		}
+	}()
 	apiKey := firstConfiguredEnv("POSTMARK_API_KEY", "POSTMARK_SERVER_TOKEN")
 	if apiKey == "" && isExplicitDevEmailMode() {
+		if secureOnly {
+			return ErrSecureDeliveryUnavailable
+		}
 		log.Printf("\033[33m[email] DEV-MODE: OTP for %s → %s: %s\033[0m", purpose, MaskRecipientAddress(to), formattedCode)
 		return nil
 	}
@@ -156,7 +179,12 @@ func SendOTPEmail(to, formattedCode, purpose string) error {
 		return fmt.Errorf("postmark response missing MessageID")
 	}
 
-	log.Printf("[email] OTP email sent to %s (purpose=%s, messageID=%s)", MaskRecipientAddress(to), purpose, pmResp.MessageID)
+	if secureOnly {
+		// Do not log recipient, provider message ID or any other echoed value.
+		log.Print("[email] application-update OTP email accepted")
+	} else {
+		log.Printf("[email] OTP email sent to %s (purpose=%s, messageID=%s)", MaskRecipientAddress(to), purpose, pmResp.MessageID)
+	}
 	return nil
 }
 

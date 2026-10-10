@@ -67,6 +67,13 @@ const TYPED_STABLE_ROUTE_SPECS = Object.freeze({
 });
 
 const STABLE_CANDIDATE_ROUTE_SPECS = Object.freeze({
+	applicationUpdates: Object.freeze([
+		{ routeName: 'applicationUpdateStatus', handlerName: 'application_updates.StatusHandler' },
+		{ routeName: 'applicationUpdateRequest', handlerName: 'application_updates.RequestHandler' },
+		{ routeName: 'applicationUpdateJob', handlerName: 'application_updates.JobHandler' },
+		{ routeName: 'applicationUpdateDecision', handlerName: 'application_updates.DecisionHandler' },
+		{ routeName: 'applicationUpdateReauthentication', handlerName: 'application_updates.ReauthenticationHandler' },
+	]),
     sitePresentation: Object.freeze([
         { routeName: 'sitePresentationSettings', handlerName: 'system_table_tools.GetSitePresentationSettingsHandler' },
         { routeName: 'adminDatasetAppearance', handlerName: 'system_table_tools.AdminDatasetAppearanceHandler' },

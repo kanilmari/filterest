@@ -21,6 +21,7 @@ import (
 	"easelect/backend/core_components/permissions"
 	"easelect/backend/core_components/session_expiry"
 	e_sessions "easelect/backend/core_components/sessions"
+	"easelect/backend/core_components/update_capability"
 
 	"github.com/google/uuid"
 	"github.com/gorilla/sessions"
@@ -241,7 +242,7 @@ func routeTablePermissionDecision(userID int, urlRoute, tableName, tableUID stri
 	} else if tableUID == "" && tableName == "" {
 		return false, false, tableName, tableUID, fmt.Errorf("specific_table_related true but table info missing for urlRoute='%s'", urlRoute)
 	}
-	recovery := adminPermissionRecoveryModeEnabled() && userIsAdmin(userID)
+	recovery := !update_capability.RequiresExplicitGrant(urlRoute) && adminPermissionRecoveryModeEnabled() && userIsAdmin(userID)
 	allowed, err := permissions.CheckRouteTablePermission(backend.Db, urlRoute, userID,
 		permissions.RouteTableScope{TableName: tableName, TableUID: tableUID}, permissions.AccessControlRouteTableOptions(false))
 	if err != nil {

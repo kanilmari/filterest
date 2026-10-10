@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"easelect/backend/core_components/dbutils"
+	"easelect/backend/core_components/update_capability"
 
 	"github.com/lib/pq"
 )
@@ -179,7 +180,7 @@ func CheckRouteTablePermission(queryer dbutils.Querier, route string, userID int
 	var dummy int
 	if err := queryer.QueryRow(query, args...).Scan(&dummy); err != nil {
 		if err == sql.ErrNoRows {
-			return options.AllowMissingPermission, nil
+			return options.AllowMissingPermission && !update_capability.RequiresExplicitGrant(route), nil
 		}
 		return false, err
 	}

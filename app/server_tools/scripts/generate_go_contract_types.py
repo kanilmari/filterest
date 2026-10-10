@@ -26,6 +26,17 @@ class StructSpec:
 
 
 ALLOWLIST = [
+    StructSpec("backend/core_components/application_updates/update_contracts.go", "Target", "ApplicationUpdateTarget"),
+    StructSpec("backend/core_components/application_updates/update_contracts.go", "Offer", "ApplicationUpdateOffer"),
+    StructSpec("backend/core_components/application_updates/update_contracts.go", "Request", "ApplicationUpdateRequest"),
+    StructSpec("backend/core_components/application_updates/update_contracts.go", "DecisionRequest", "ApplicationUpdateDecisionRequest"),
+    StructSpec("backend/core_components/application_updates/update_contracts.go", "ReauthenticationRequest", "ApplicationUpdateReauthenticationRequest"),
+    StructSpec("backend/core_components/application_updates/update_contracts.go", "ReauthenticationResponse", "ApplicationUpdateReauthenticationResponse"),
+    StructSpec("backend/core_components/application_updates/update_contracts.go", "Event", "ApplicationUpdateEvent"),
+    StructSpec("backend/core_components/application_updates/update_contracts.go", "DecisionReceipt", "ApplicationUpdateDecisionReceipt"),
+    StructSpec("backend/core_components/application_updates/update_contracts.go", "Job", "ApplicationUpdateJob"),
+    StructSpec("backend/core_components/application_updates/update_contracts.go", "StatusResponse", "ApplicationUpdateStatusResponse"),
+    StructSpec("backend/core_components/application_updates/update_contracts.go", "ErrorResponse", "ApplicationUpdateErrorResponse"),
     StructSpec("frontend/shared/dataset_appearance/config.go", "DatasetCoverThemeValues", "DatasetCoverThemeValues"),
     StructSpec("frontend/shared/dataset_appearance/config.go", "DatasetCoverSharedValues", "DatasetCoverSharedValues"),
     StructSpec("frontend/shared/dataset_appearance/config.go", "DatasetCoverThemeConfig", "DatasetCoverThemeConfig"),

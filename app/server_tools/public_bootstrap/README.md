@@ -37,7 +37,12 @@ ledger and no version behind. The generator refuses to publish when a public
 migration numbered after 20260929000006 (the record of DB 9.9.2) is in no
 bootstrap list, when a schema-phase or data file lacks a completion marker, or
 when a final check names a function the bootstrap does not create; the previous
-artifacts then stay as they were. Release records (`*_record_database_release_*`)
+artifacts then stay as they were. Before publishing, the generator also checks
+static table/column/constraint, index and function declaration names in recent
+migrations and assembled SQL against PostgreSQL 16's reserved and type/function
+keywords. Prefer renaming a conflicting name; existing quoted names remain legal.
+This offline check skips SQL bodies and does not replace disposable-PostgreSQL
+installation and replay checks. Release records (`*_record_database_release_*`)
 are not run here: the block writes the version row of the version it is built for.
 
 Classification headings are empty in the public seed, as are the existing values

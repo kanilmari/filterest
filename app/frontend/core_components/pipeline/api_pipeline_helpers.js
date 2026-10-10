@@ -50,7 +50,7 @@ export function normalizeEndpointUrlParams(urlParams) {
  * stays readable for permission checks.
  *
  * @param {string} routeName - Logical route name from endpoint_map
- * @param {string} urlParams - URL suffix to append (e.g. '?id=1')
+ * @param {string | Record<string, string>} urlParams - URL suffix or named path identities
  * @param {Object} endpointMap - Map of route names to base URLs
  * @returns {string} Full resolved URL
  */
@@ -59,6 +59,20 @@ export function resolveEndpointUrl(routeName, urlParams, endpointMap) {
     if (!baseUrl) {
         throw new Error(`api_pipeline: unknown route "${routeName}"`);
     }
+	// Versioned job routes carry named path identities. A value is one encoded
+	// segment; it cannot add a query, a slash or escape to another endpoint.
+	if (baseUrl.includes('{')) {
+		if (!urlParams || typeof urlParams !== 'object' || Array.isArray(urlParams)) {
+			throw new Error(`api_pipeline: missing path identity for "${routeName}"`);
+		}
+		return baseUrl.replace(/\{([A-Za-z][A-Za-z0-9_]*)\}/g, (_, key) => {
+			const value = urlParams[key];
+			if (typeof value !== 'string' || !/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(value) || value === '.' || value === '..') {
+				throw new Error(`api_pipeline: invalid path identity "${key}"`);
+			}
+			return encodeURIComponent(value);
+		});
+	}
     const suffix = normalizeEndpointUrlParams(urlParams);
     if (suffix.startsWith('?') && baseUrl.includes('?')) {
         return `${baseUrl}&${suffix.slice(1)}`;

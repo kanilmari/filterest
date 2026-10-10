@@ -15,6 +15,7 @@ import (
 	"strings"
 
 	backend "easelect/backend/core_components"
+	"easelect/backend/core_components/application_updates"
 	"easelect/backend/core_components/auth"
 	db_admin "easelect/backend/core_components/db_admin"
 	devtools "easelect/backend/core_components/dev_tools"
@@ -96,6 +97,12 @@ const (
 )
 
 func defaultRateLimitForHandler(handlerName string) (int, int) {
+	if strings.HasPrefix(handlerName, "application_updates.") {
+		if handlerName == "application_updates.StatusHandler" || handlerName == "application_updates.JobHandler" {
+			return 60, 5
+		}
+		return 10, 5
+	}
 	if handlerName == "router.ServeStorage" {
 		return storageRateLimitAmount, storageRateLimitMinutes
 	}
@@ -146,6 +153,11 @@ func RegisterRoutes(frontendDir string, storagePath string) {
 	functionRegisterHandler("/system/automation-account", systemAutomationAccountHandler, "router.systemAutomationAccountHandler", http.MethodGet, http.MethodPost)
 	functionRegisterHandler("/system/update-notice", systemUpdateNoticeHandler, "router.systemUpdateNoticeHandler", http.MethodPost)
 	functionRegisterHandler("/api/admin/version-info", adminVersionInfoHandler, "router.adminVersionInfoHandler", http.MethodGet, http.MethodPost)
+	functionRegisterHandler("/api/admin/application-update", application_updates.StatusHandler, "application_updates.StatusHandler", http.MethodGet)
+	functionRegisterHandler("/api/admin/application-update/requests", application_updates.RequestHandler, "application_updates.RequestHandler", http.MethodPost)
+	functionRegisterHandler("/api/admin/application-update/jobs/{id}", application_updates.JobHandler, "application_updates.JobHandler", http.MethodGet)
+	functionRegisterHandler("/api/admin/application-update/jobs/{id}/decisions", application_updates.DecisionHandler, "application_updates.DecisionHandler", http.MethodPost)
+	functionRegisterHandler("/api/admin/application-update/reauthentication", application_updates.ReauthenticationHandler, "application_updates.ReauthenticationHandler", http.MethodPost)
 	functionRegisterHandler("/api/admin/site-assistant/api-catalog", siteAssistantAPICatalogHandler, "router.siteAssistantAPICatalogHandler", http.MethodGet)
 	functionRegisterHandler("/api/site-assistant/delegation/exchange", auth.SiteAssistantDelegationExchangeHandler, "auth.SiteAssistantDelegationExchangeHandler", http.MethodPost)
 	functionRegisterHandler("/api/admin/update-notice/stream", adminUpdateNoticeStreamHandler, "router.adminUpdateNoticeStreamHandler", http.MethodGet)

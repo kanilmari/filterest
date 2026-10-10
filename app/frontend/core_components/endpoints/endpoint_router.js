@@ -24,7 +24,7 @@ export function get_endpoint_url(routeName) {
  * @param {Object} [options]
  * @param {string} [options.method]         - HTTP method (default: 'GET')
  * @param {any}    [options.body_data]      - Request payload (object or FormData)
- * @param {string} [options.url_params]     - URL query string appended to endpoint
+ * @param {string | Record<string, string>} [options.url_params] - Query suffix or named path identities
  * @param {Object} [options.headers]        - Additional request headers
  * @param {boolean}[options.stream]         - Return raw Response (for SSE streams)
  * @param {boolean}[options.returnResponse] - Return raw Response object

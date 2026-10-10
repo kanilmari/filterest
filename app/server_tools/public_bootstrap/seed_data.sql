@@ -6683,6 +6683,70 @@ CROSS JOIN LATERAL(VALUES('fi',s.fi),('en',s.en),('ch',s.ch),('yue',s.yue)) c(la
 JOIN public.system_languages l ON l.language_code=c.language_code
 ON CONFLICT(lang_key_id,language_code) DO UPDATE SET translation=EXCLUDED.translation
 WHERE NULLIF(existing.translation,'') IS NULL;
+-- 20261009000052_seed_application_update_refusal_keys.sql
+-- Seeds guarded update admission and decision refusals in all bundled languages.
+-- Connects API reason keys to the existing multilingual translation services.
+-- Preserves operator-authored translations when upgrading or replaying.
+-- VERSION_DB: 9.10.2
+-- VERSION_DB_OWNER: 20261009000099_record_database_release_9_10_2.sql
+-- COMPLETION_MARKER: wl157_application_update_refusal_keys
+-- FINAL_CHECK: public.app_check_application_update_refusal_keys()
+WITH authored(lang_key,fi,en,ch,yue) AS (VALUES
+ ('error_application_update_invalid_request','Päivityspyyntö ei kelpaa.','The update request is invalid.','更新请求无效。','更新請求無效。'),
+ ('error_application_update_executor_unavailable','Päivitysten suorittaja ei ole käytettävissä.','The update executor is unavailable.','更新执行器不可用。','更新執行器無法使用。'),
+ ('error_application_update_preflight_refused','Päivityksen ennakkotarkistus ei hyväksynyt julkaisua.','Update preflight refused this release.','更新预检拒绝此版本。','更新預檢拒絕此版本。'),
+ ('error_application_update_offer_conflict','Tarjottu julkaisu on muuttunut. Tarkista tiedot uudelleen.','The offered release changed. Review it again.','提供的版本已更改，请重新检查。','提供嘅版本已更改，請重新檢查。'),
+ ('error_application_update_active_job_conflict','Toinen päivitys on jo käynnissä.','Another update job is already active.','另一个更新任务正在进行。','另一個更新工作已經進行緊。'),
+ ('error_application_update_idempotency_conflict','Samaa pyyntötunnistetta käytettiin eri tiedoilla.','This request key was already used with different details.','此请求标识已用于不同的内容。','此請求識別碼已用於唔同內容。'),
+ ('error_application_update_proof_replayed','Vahvistus ei kelpaa tälle toiminnolle tai se on jo käytetty.','The proof is invalid for this action or has already been used.','验证凭证不适用于此操作或已被使用。','驗證憑證唔適用於此操作或已經用過。'),
+ ('error_application_update_proof_expired','Vahvistus on vanhentunut. Vahvista henkilöllisyytesi uudelleen.','The proof expired. Authenticate again.','验证凭证已过期，请重新验证身份。','驗證憑證已過期，請重新驗證身份。'),
+ ('error_application_update_authorization_revoked','Päivitysoikeus tai kirjautuminen ei enää ole voimassa.','Update permission or sign-in is no longer valid.','更新权限或登录已失效。','更新權限或登入已失效。'),
+ ('error_application_update_reauthentication_refused','Salasanan ja määritetyn lisävahvistuksen tarkistus epäonnistui.','Password and configured factor verification failed.','密码和配置的第二因素验证失败。','密碼同設定嘅第二因素驗證失敗。'),
+ ('error_application_update_rate_limited','Liian monta vahvistusyritystä. Yritä myöhemmin uudelleen.','Too many authentication attempts. Try again later.','验证尝试过多，请稍后再试。','驗證嘗試過多，請稍後再試。'),
+ ('error_application_update_stale_decision','Päivityksen hyväksymistiedot ovat muuttuneet tai vanhentuneet.','Update decision evidence changed or expired.','更新决定的证据已更改或过期。','更新決定嘅證據已更改或過期。'),
+ ('error_application_update_decision_conflict','Tälle päivityksen tarkistukselle on jo odottava päätös.','A decision is already queued for this update evidence.','此更新证据已有排队的决定。','此更新證據已經有排隊嘅決定。'),
+ ('error_application_update_queue_expired','Odottava pyyntö on vanhentunut. Vahvista uudelleen.','The queued request expired. Authenticate again.','排队的请求已过期，请重新验证身份。','排隊嘅請求已過期，請重新驗證身份。'),
+ ('error_application_update_decision_replayed','Tämä päätös on jo käsitelty.','This decision was already consumed.','此决定已被处理。','此決定已經處理過。'),
+ ('error_application_update_job_not_found','Päivitystyötä ei löytynyt.','The update job was not found.','未找到更新任务。','搵唔到更新工作。'),
+ ('error_application_update_decision_not_found','Päivityspäätöstä ei löytynyt.','The update decision was not found.','未找到更新决定。','搵唔到更新決定。'),
+ ('error_application_update_admission_unavailable','Päivityspyyntöä ei voitu tallentaa. Yritä myöhemmin uudelleen.','The update request could not be saved. Try again later.','无法保存更新请求，请稍后再试。','無法儲存更新請求，請稍後再試。'),
+ ('error_application_update_self_grant','Et voi myöntää itsellesi sovelluksen päivitysoikeutta.','You cannot grant yourself application-update permission.','您不能为自己授予应用更新权限。','你唔可以畀自己應用更新權限。')), written AS (
+ INSERT INTO public.system_lang_keys AS existing(lang_key,fi,en,ch,yue,creation_spec)
+ SELECT lang_key,fi,en,ch,yue,'Guarded application-update admission refusals.' FROM authored
+ ON CONFLICT(lang_key) DO UPDATE SET
+ fi=COALESCE(NULLIF(existing.fi,''),EXCLUDED.fi),en=COALESCE(NULLIF(existing.en,''),EXCLUDED.en),
+ ch=COALESCE(NULLIF(existing.ch,''),EXCLUDED.ch),yue=COALESCE(NULLIF(existing.yue,''),EXCLUDED.yue)
+ RETURNING id,lang_key,fi,en,ch,yue
+), served AS (
+ SELECT * FROM written UNION ALL
+ SELECT k.id,k.lang_key,k.fi,k.en,k.ch,k.yue FROM public.system_lang_keys k JOIN authored USING(lang_key)
+ WHERE k.lang_key NOT IN(SELECT lang_key FROM written)
+)
+INSERT INTO public.system_lang_key_translations AS existing(lang_key_id,language_code,translation,source_kind,review_status)
+SELECT s.id,c.language_code,c.translation,'manual','approved' FROM served s
+CROSS JOIN LATERAL(VALUES('fi',s.fi),('en',s.en),('ch',s.ch),('yue',s.yue)) c(language_code,translation)
+JOIN public.system_languages l ON l.language_code=c.language_code
+ON CONFLICT(lang_key_id,language_code) DO UPDATE SET translation=EXCLUDED.translation
+WHERE NULLIF(existing.translation,'') IS NULL;
+
+CREATE OR REPLACE FUNCTION public.app_check_application_update_refusal_keys()
+RETURNS SETOF text LANGUAGE sql STABLE SET search_path=pg_catalog,public AS $check$
+    SELECT 'application-update refusal translation is missing: ' || expected.key || ':' || language.language_code
+    FROM unnest(ARRAY['error_application_update_invalid_request','error_application_update_executor_unavailable','error_application_update_preflight_refused','error_application_update_offer_conflict','error_application_update_active_job_conflict','error_application_update_idempotency_conflict','error_application_update_proof_replayed','error_application_update_proof_expired','error_application_update_authorization_revoked','error_application_update_reauthentication_refused','error_application_update_rate_limited','error_application_update_stale_decision','error_application_update_decision_conflict','error_application_update_queue_expired','error_application_update_decision_replayed','error_application_update_job_not_found','error_application_update_decision_not_found','error_application_update_admission_unavailable','error_application_update_self_grant']) AS expected(key)
+    CROSS JOIN public.system_languages language
+    WHERE language.language_code IN ('fi','en','ch','yue')
+    AND NOT EXISTS (SELECT 1 FROM public.system_lang_keys k JOIN public.system_lang_key_translations t ON t.lang_key_id=k.id
+        WHERE k.lang_key=expected.key AND t.language_code=language.language_code AND NULLIF(t.translation,'') IS NOT NULL);
+$check$;
+DO $acceptance$
+DECLARE findings text;
+BEGIN
+    SELECT string_agg(finding,'; ') INTO findings FROM public.app_check_application_update_refusal_keys() AS finding;
+    IF findings IS NOT NULL THEN RAISE EXCEPTION 'application-update translation final check refused: %', findings; END IF;
+    INSERT INTO public.system_data_repair_records(migration,action)
+    SELECT 'wl157_application_update_refusal_keys','completed'
+    WHERE NOT EXISTS (SELECT 1 FROM public.system_data_repair_records WHERE migration='wl157_application_update_refusal_keys' AND action='completed');
+END $acceptance$;
 -- 20260927000001_add_absolute_sign_in_limit.sql
 -- Adds the setting that decides how long one sign-in may last at the very most.
 -- Bridges the administrator's settings view and the deadline stamped into every
@@ -7515,6 +7579,55 @@ SELECT 'dataset_media_hidden', 'completed',
        jsonb_build_object('file', '20261005000080_add_dataset_media_hidden.sql')
 WHERE NOT EXISTS (SELECT 1 FROM public.system_data_repair_records
     WHERE migration = 'dataset_media_hidden' AND action = 'completed');
+-- 20261009000051_register_application_update_capability.sql
+-- Registers the explicit-only update capability and the guarded administrator APIs.
+-- Connects existing group permission editing to durable admission and decisions.
+-- Never grants the sensitive capability, including to the initial administrator.
+-- VERSION_DB: 9.10.2
+-- VERSION_DB_OWNER: 20261009000099_record_database_release_9_10_2.sql
+-- COMPLETION_MARKER: wl157_application_update_capability
+-- FINAL_CHECK: public.app_check_application_update_capability()
+
+INSERT INTO public.system_functions (name,"package",disabled,specific_table_related,url_route_endpoint,ui_only,rate_limit_amount,rate_limit_minutes,creation_spec)
+VALUES ('capability.application_update','capability',FALSE,FALSE,'/capabilities/application-update',TRUE,5,5,
+        'Explicit application-update right: excluded from every automatic grant and protected against self-granting.')
+ON CONFLICT(name) DO NOTHING;
+
+WITH desired(name,endpoint,amount) AS (VALUES
+    ('application_updates.StatusHandler','/api/admin/application-update',60),
+    ('application_updates.RequestHandler','/api/admin/application-update/requests',10),
+    ('application_updates.JobHandler','/api/admin/application-update/jobs/{id}',60),
+    ('application_updates.DecisionHandler','/api/admin/application-update/jobs/{id}/decisions',10),
+    ('application_updates.ReauthenticationHandler','/api/admin/application-update/reauthentication',10)
+)
+INSERT INTO public.system_functions(name,"package",disabled,specific_table_related,url_route_endpoint,ui_only,rate_limit_amount,rate_limit_minutes,creation_spec)
+SELECT name,'application_updates',FALSE,FALSE,endpoint,FALSE,amount,5,'Administrator update admission; mutations additionally require the separate explicit capability.' FROM desired
+ON CONFLICT(name) DO NOTHING;
+
+-- Ordinary API visibility is shared with all administrators; mutation handlers
+-- additionally check the capability in their locked transaction.
+INSERT INTO public.system_group_table_func_rights(user_group_id,function_id,target_schema_name,target_table_uid)
+SELECT g.id,f.id,'public',NULL FROM public.system_user_groups g CROSS JOIN public.system_functions f
+WHERE g.name='admins' AND f.name IN ('application_updates.StatusHandler','application_updates.RequestHandler',
+    'application_updates.JobHandler','application_updates.DecisionHandler','application_updates.ReauthenticationHandler')
+AND NOT EXISTS (SELECT 1 FROM public.system_group_table_func_rights r WHERE r.user_group_id=g.id AND r.function_id=f.id AND r.target_table_uid IS NULL AND r.target_schema_name='public');
+
+CREATE OR REPLACE FUNCTION public.app_check_application_update_capability()
+RETURNS SETOF text LANGUAGE sql STABLE SET search_path=pg_catalog,public AS $check$
+    SELECT 'application-update capability identity or scope is invalid'
+    WHERE (SELECT count(*) FROM public.system_functions WHERE name='capability.application_update'
+        AND url_route_endpoint='/capabilities/application-update' AND ui_only IS TRUE
+        AND disabled IS FALSE AND specific_table_related IS FALSE) <> 1;
+$check$;
+DO $acceptance$
+DECLARE findings text;
+BEGIN
+    SELECT string_agg(finding,'; ') INTO findings FROM public.app_check_application_update_capability() AS finding;
+    IF findings IS NOT NULL THEN RAISE EXCEPTION 'application-update capability final check refused: %', findings; END IF;
+    INSERT INTO public.system_data_repair_records(migration,action)
+    SELECT 'wl157_application_update_capability','completed'
+    WHERE NOT EXISTS (SELECT 1 FROM public.system_data_repair_records WHERE migration='wl157_application_update_capability' AND action='completed');
+END $acceptance$;
 
 -- Generated migration-ledger baseline and version row, written by this acceptance block only after
 -- every completion marker is present and every final check comes back empty. These migrations are
@@ -7525,7 +7638,7 @@ DECLARE
     findings text;
 BEGIN
     SELECT string_agg(marker, ', ' ORDER BY marker) INTO missing_markers
-      FROM unnest(ARRAY['wl58_row_actor_support', 'wl58_row_actor_marks_by_table_uid', 'wl58_row_actor_trigger_definitions', 'k116_login_names', 'password_reset_dummy_work', 'system_favorites_table', 'system_front_page_revisions_table', 'system_front_page_blocks_table', 'wl103_row_group_classifications', 'wl132_surviving_sign_in', 'wl52_drop_column_label_value_layout', 'system_dataset_appearance_table', 'wl157_migration_execution_evidence', 'dataset_card_appearance_cutover', 'wl58_row_actor_columns', 'system_favorites_registry', 'system_front_page_blocks_registry', 'wl103_row_group_classifications_registry', 'wl144_registry_reference_key', 'dataset_media_hidden']::text[]) AS marker
+      FROM unnest(ARRAY['wl58_row_actor_support', 'wl58_row_actor_marks_by_table_uid', 'wl58_row_actor_trigger_definitions', 'k116_login_names', 'password_reset_dummy_work', 'system_favorites_table', 'system_front_page_revisions_table', 'system_front_page_blocks_table', 'wl103_row_group_classifications', 'wl132_surviving_sign_in', 'wl52_drop_column_label_value_layout', 'system_dataset_appearance_table', 'wl157_migration_execution_evidence', 'dataset_card_appearance_cutover', 'wl157_application_update_admission', 'wl157_application_update_refusal_keys', 'wl58_row_actor_columns', 'system_favorites_registry', 'system_front_page_blocks_registry', 'wl103_row_group_classifications_registry', 'wl144_registry_reference_key', 'dataset_media_hidden', 'wl157_application_update_capability']::text[]) AS marker
      WHERE NOT EXISTS (SELECT 1 FROM public.system_data_repair_records AS record
                         WHERE record.migration = marker AND record.action = 'completed');
     IF missing_markers IS NOT NULL THEN
@@ -7540,7 +7653,13 @@ BEGIN
         UNION ALL
         SELECT 'public.app_check_dataset_card_appearance_cutover(): ' || result FROM public.app_check_dataset_card_appearance_cutover() AS result
         UNION ALL
+        SELECT 'public.app_check_application_update_admission(): ' || result FROM public.app_check_application_update_admission() AS result
+        UNION ALL
+        SELECT 'public.app_check_application_update_refusal_keys(): ' || result FROM public.app_check_application_update_refusal_keys() AS result
+        UNION ALL
         SELECT 'public.app_check_registry_reference_key(): ' || result FROM public.app_check_registry_reference_key() AS result
+        UNION ALL
+        SELECT 'public.app_check_application_update_capability(): ' || result FROM public.app_check_application_update_capability() AS result
     ) AS checks (finding);
     IF findings IS NOT NULL THEN
         RAISE EXCEPTION 'bootstrap import failed its final checks: %', findings;
@@ -7714,7 +7833,10 @@ BEGIN
       ('20261009000020_add_migration_execution_evidence.sql', 'a1916cb61a28da3fd9ed0ee8f2346bcc06ba7acad1bda0e6293e5c68b0ebde11', 'bootstrap_baseline', 'bootstrap'),
       ('20261009000040_cut_over_dataset_card_appearance.sql', '87cb3e9606bdbb2e0ec990bd71ba87a730e2576e8e91b96f2abb8098fce4e245', 'bootstrap_baseline', 'bootstrap'),
       ('20261009000041_seed_dataset_appearance_refusal_keys.sql', '0b177361469267120fe5a5b2c9eee43bd7380dd62f9056e5b1ab2dd95af6d223', 'bootstrap_baseline', 'bootstrap'),
-      ('20261009000099_record_database_release_9_10_2.sql', 'b782f9806f92fd3f4205f3889d6f0671bc9dd683e3be5bee4429e340f35a04c3', 'bootstrap_baseline', 'bootstrap')
+      ('20261009000050_create_application_update_admission.sql', 'f91035f4bdb22acdc6cf975971c389d0070ed7a256c0da530324cefd6a76c077', 'bootstrap_baseline', 'bootstrap'),
+      ('20261009000051_register_application_update_capability.sql', '4a2c1bb41d287908d29d49801c4f6746a3b499d8b050a7759e31ff4c32bffd76', 'bootstrap_baseline', 'bootstrap'),
+      ('20261009000052_seed_application_update_refusal_keys.sql', 'aa7a0b277f31fe8464364b96ecbc99fbea2e3b1d3fb5443b8d4514284c8f9e52', 'bootstrap_baseline', 'bootstrap'),
+      ('20261009000099_record_database_release_9_10_2.sql', '190f66df60bd062997ebd80b2392eff7fdd843c9c8a709a4a1c30f136e6bbd97', 'bootstrap_baseline', 'bootstrap')
     ON CONFLICT (filename) DO NOTHING;
     INSERT INTO public.system_db_version (version, description)
     VALUES ('9.10.2', 'Filterest generated public bootstrap');

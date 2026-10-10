@@ -12,6 +12,10 @@ import (
 // FinishRepair permits correcting a dangling row instead of refusing its former
 // invalid state. Unresolved blockers in the repaired targets still refuse it.
 func (m *Mutation) FinishRepair(ctx context.Context) error {
+	if err := m.updateGuard.Check(ctx, m.Tx); err != nil {
+		_ = m.Tx.Rollback()
+		return err
+	}
 	after, err := runtime_grants.LoadMutationSnapshot(ctx, m.Tx, m.roles)
 	if err != nil {
 		_ = m.Tx.Rollback()
