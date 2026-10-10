@@ -80,6 +80,45 @@ export async function openActiveFilterbarSection(
 }
 
 /**
+ * Expands one named section inside the active dataset filterbar for this page only.
+ * Bridges helpers that need a control inside a disclosure group with the admin-saved
+ * section layout, which a header click rewrites for every user of the installation.
+ * Exists so shared helpers reach their controls without changing that configuration.
+ */
+export async function revealActiveFilterbarSection(
+  page: Page,
+  sectionKey: string,
+): Promise<Locator> {
+  await openActiveFilterbarIfCollapsed(page);
+
+  const section = getActiveTableParts(page)
+    .locator(`[data-filterbar-section-key="${buildFilterTestIdSegment(sectionKey)}"]`)
+    .first();
+  await expect(section).toBeVisible({ timeout: 5000 });
+  await section.evaluate(async (element) => {
+    const disclosure = element as HTMLElement & {
+      expand?: (options?: { animate?: boolean }) => Promise<unknown>;
+    };
+    if (disclosure.classList.contains('is-expanded') || typeof disclosure.expand !== 'function') {
+      return;
+    }
+    // The product's temporary-reveal marker keeps this expansion out of the saved layout.
+    disclosure.dataset.filterbarTemporaryDisclosureOperation = 'true';
+    try {
+      await disclosure.expand({ animate: false });
+    } finally {
+      delete disclosure.dataset.filterbarTemporaryDisclosureOperation;
+    }
+  });
+  await expect(section.locator(':scope > .animated-disclosure-header').first())
+    .toHaveAttribute('aria-expanded', 'true', { timeout: 5000 });
+  await expect(
+    section.locator(':scope > .animated-disclosure-content-shell').first(),
+  ).toBeVisible({ timeout: 5000 });
+  return section;
+}
+
+/**
  * Closes the active dataset filterbar through its visible in-panel control.
  * Bridges temporary helper-opened panels and the responsive state expected by surface interactions.
  * Exists so shared navigation can restore a previously collapsed mobile panel without changing desktop state.

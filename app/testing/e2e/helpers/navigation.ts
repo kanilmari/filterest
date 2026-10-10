@@ -11,7 +11,7 @@
  */
 
 import { type Locator, type Page } from '@playwright/test';
-import { openActiveFilterbarIfCollapsed } from './filterbar';
+import { revealActiveFilterbarSection } from './filterbar';
 
 export type NavigateToDatasetOptions = {
   allowFallback?: boolean;
@@ -116,9 +116,11 @@ export async function setFirstVisibleCheckbox(
 
 /**
  * Opens the add-row form through the DOM click path used by fixed toolbar controls.
+ * The button lives in the collapsible "Add & manage content" (tools) section, whose
+ * open state is shared saved layout, so the helper reveals it without saving.
  */
 export async function openAddRowForm(page: Page): Promise<void> {
-  await openActiveFilterbarIfCollapsed(page);
+  await revealActiveFilterbarSection(page, 'tools');
   await clickFirstVisibleByTestId(page, 'btn-add-row');
   await firstVisibleByTestId(page, 'modal-container').waitFor({ state: 'visible', timeout: 10000 });
 }

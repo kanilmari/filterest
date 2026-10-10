@@ -7,6 +7,28 @@ import { expandAdminTreeFolder, openAdminTreeButton } from '../helpers/admin-nav
 import { loadCredentials, login } from '../helpers/auth';
 import { waitForAppReady } from '../helpers/navigation';
 
+const isAccountThemeRequest = (url: URL): boolean => url.pathname === '/api/user-visual-preference';
+
+/**
+ * Serves the signed-in account's theme for the next page loads without saving it.
+ * A signed-in user follows the account preference, which replaces the device's
+ * localStorage theme after load, so an explicit theme must come from both sources.
+ */
+async function serveAccountTheme(page: Page, theme: 'light' | 'dark'): Promise<void> {
+  await page.unroute(isAccountThemeRequest);
+  await page.route(isAccountThemeRequest, async (route) => {
+    if (route.request().method() !== 'GET') {
+      await route.continue();
+      return;
+    }
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      json: { theme_mode: theme, revision: 1, configured: true },
+    });
+  });
+}
+
 async function ensureNavbarVisible(page: Page): Promise<void> {
   await page.evaluate(() => {
     const navbar = document.getElementById('navbar');
@@ -17,10 +39,11 @@ async function ensureNavbarVisible(page: Page): Promise<void> {
   await page.waitForFunction(() => !document.getElementById('navbar')?.classList.contains('collapsed'));
 }
 
-async function openViewFieldAssignments(page: Page): Promise<void> {
+// The menu entry is view_field_settings; view_field_assignments stays only as a hidden bookmark alias.
+async function openViewFieldSettings(page: Page): Promise<void> {
   await ensureNavbarVisible(page);
   await expandAdminTreeFolder(page, 'table_tools');
-  await openAdminTreeButton(page, 'view_field_assignments');
+  await openAdminTreeButton(page, 'view_field_settings');
   await expect(page.locator('[data-testid="view-field-assignments"]')).toBeVisible();
 }
 
@@ -81,17 +104,18 @@ test('field-assignment administrator loads in Finnish and English across explici
 
   const renderedBackgrounds: string[] = [];
   for (const preferences of [
-    { language: 'fi', theme: 'light', systemTheme: 'dark' as const, title: /Näkymien kenttäkohdistukset/ },
-    { language: 'en', theme: 'dark', systemTheme: 'light' as const, title: /View field assignments/ },
+    { language: 'fi', theme: 'light' as const, systemTheme: 'dark' as const, title: /Näkymien kenttäasetukset/ },
+    { language: 'en', theme: 'dark' as const, systemTheme: 'light' as const, title: /View field settings/ },
   ]) {
     await page.emulateMedia({ colorScheme: preferences.systemTheme });
     await page.evaluate(({ language, theme }) => {
       localStorage.setItem('chosen_language', language);
       localStorage.setItem('theme', theme);
     }, preferences);
+    await serveAccountTheme(page, preferences.theme);
     await page.reload({ waitUntil: 'domcontentloaded' });
     await waitForAppReady(page);
-    await openViewFieldAssignments(page);
+    await openViewFieldSettings(page);
     await selectFirstDataset(page);
 
     await expect(page.locator('.view-field-assignments__title')).toHaveText(preferences.title);
@@ -164,7 +188,7 @@ test('keeps an exact group target across view changes and closes its portal on n
   });
   await page.reload({ waitUntil: 'domcontentloaded' });
   await waitForAppReady(page);
-  await openViewFieldAssignments(page);
+  await openViewFieldSettings(page);
   const selectedCatalog = await page.evaluate(() => {
     const label = document.querySelector(
       '#view_field_assignments_dataset_tree [data-lang-key="app_service_catalog"]'
@@ -232,7 +256,7 @@ test('keeps an exact group target across view changes and closes its portal on n
   await expect(page.locator('#permissions_container')).toBeVisible();
   await expect(page.locator(`#${openedListID}`)).toBeHidden();
 
-  await openViewFieldAssignments(page);
+  await openViewFieldSettings(page);
   await expect(page.locator('[data-testid="view-field-assignments-field-list"] > li').first())
     .toBeVisible({ timeout: 15000 });
   await expect(page.locator('#view_field_assignments_group_picker .msd-dropdown-input'))
@@ -250,7 +274,7 @@ test('shows and cycles a deterministic mixed group field without saving', async 
   });
   await page.reload({ waitUntil: 'domcontentloaded' });
   await waitForAppReady(page);
-  await openViewFieldAssignments(page);
+  await openViewFieldSettings(page);
   await mockMixedGroupAssignments(page);
   const selectedCatalog = await page.evaluate(() => {
     const label = document.querySelector(
@@ -349,14 +373,18 @@ test('shows and cycles a deterministic mixed group field without saving', async 
   await expect(checkbox).toHaveAttribute('aria-checked', 'mixed');
 });
 
-test('frames the complete application shell only when an ultra-wide viewport leaves spare space', async ({ page }, testInfo) => {
+test('frames the application shell sides only when an ultra-wide viewport leaves spare space', async ({ page }, testInfo) => {
   test.skip(testInfo.project.name !== 'desktop-card', 'Ultra-wide application-shell proof.');
+  // The frame is the side edges only; its top and bottom stay open (base.css border-inline).
+  const sideEdgesOnly = ['0px', '1px', '0px', '1px'];
   await page.setViewportSize({ width: 2800, height: 1000 });
   await login(page, loadCredentials());
   await page.emulateMedia({ colorScheme: 'light' });
   await page.evaluate(() => localStorage.setItem('theme', 'dark'));
+  await serveAccountTheme(page, 'dark');
   await page.reload({ waitUntil: 'domcontentloaded' });
   await waitForAppReady(page);
+  await expect(page.locator('body')).toHaveClass(/dark-mode/);
 
   const readShellStyles = () => page.evaluate(() => {
     const wrapper = document.querySelector('.body_wrapper');
@@ -376,7 +404,10 @@ test('frames the complete application shell only when an ultra-wide viewport lea
         getComputedStyle(shell).borderBottomWidth,
         getComputedStyle(shell).borderLeftWidth,
       ],
-      borderColor: getComputedStyle(shell).borderTopColor,
+      sideBorderColors: [
+        getComputedStyle(shell).borderRightColor,
+        getComputedStyle(shell).borderLeftColor,
+      ],
       expectedBorderColor: getComputedStyle(probe).borderTopColor,
     };
     probe.remove();
@@ -386,28 +417,31 @@ test('frames the complete application shell only when an ultra-wide viewport lea
   expect(await readShellStyles()).toEqual({
     wrapperBackground: expect.any(String),
     expectedBackground: expect.any(String),
-    borderWidths: ['1px', '1px', '1px', '1px'],
-    borderColor: expect.any(String),
+    borderWidths: sideEdgesOnly,
+    sideBorderColors: [expect.any(String), expect.any(String)],
     expectedBorderColor: expect.any(String),
   });
   const wideStyles = await readShellStyles();
   expect(wideStyles?.wrapperBackground).toBe(wideStyles?.expectedBackground);
-  expect(wideStyles?.borderColor).toBe(wideStyles?.expectedBorderColor);
+  expect(wideStyles?.sideBorderColors)
+    .toEqual([wideStyles?.expectedBorderColor, wideStyles?.expectedBorderColor]);
 
   await ensureNavbarVisible(page);
   await page.locator('#hideMenuButton').click();
   await page.waitForFunction(() => document.getElementById('navbar')?.classList.contains('collapsed'));
-  expect((await readShellStyles())?.borderWidths).toEqual(['1px', '1px', '1px', '1px']);
+  expect((await readShellStyles())?.borderWidths).toEqual(sideEdgesOnly);
 
   await page.emulateMedia({ colorScheme: 'dark' });
   await page.evaluate(() => localStorage.setItem('theme', 'light'));
+  await serveAccountTheme(page, 'light');
   await page.reload({ waitUntil: 'domcontentloaded' });
   await waitForAppReady(page);
   await expect(page.locator('body')).toHaveClass(/light-mode/);
   const lightStyles = await readShellStyles();
   expect(lightStyles?.wrapperBackground).toBe(lightStyles?.expectedBackground);
-  expect(lightStyles?.borderWidths).toEqual(['1px', '1px', '1px', '1px']);
-  expect(lightStyles?.borderColor).toBe(lightStyles?.expectedBorderColor);
+  expect(lightStyles?.borderWidths).toEqual(sideEdgesOnly);
+  expect(lightStyles?.sideBorderColors)
+    .toEqual([lightStyles?.expectedBorderColor, lightStyles?.expectedBorderColor]);
 
   await page.setViewportSize({ width: 2400, height: 1000 });
   expect((await readShellStyles())?.borderWidths).toEqual(['0px', '0px', '0px', '0px']);
