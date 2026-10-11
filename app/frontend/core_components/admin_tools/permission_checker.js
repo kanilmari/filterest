@@ -21,6 +21,7 @@ export async function fetch_all_functions() {
     while (hasMore) {
         const result = await fetchDatasetData({
             dataset_name: "system_functions",
+            view_key: "table",
             offset: offset,
             filters: {
                 disabled: false,
@@ -60,6 +61,7 @@ export async function fetch_user_groups() {
         while (hasMore) {
             const result = await fetchDatasetData({
                 dataset_name: "system_user_groups",
+                view_key: "table",
                 offset: offset,
             });
 

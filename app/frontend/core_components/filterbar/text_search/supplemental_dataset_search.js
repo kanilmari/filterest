@@ -78,6 +78,8 @@ export function createSupplementalDatasetSearch(tableName, query, { isCurrent, g
             await schedule(async () => {
                 if (!current()) return;
                 for await (const packet of readDatasetSearchResponse(entry.tab.dataset, query, {
+                    // Compact text results use the existing table field projection.
+                    view: "table",
                     appearanceToken, signal: controller.signal, suppressAuthRedirect: true, suppressErrorToast: true,
                 }, current)) {
                     if (!current()) return;

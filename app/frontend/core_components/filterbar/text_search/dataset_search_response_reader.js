@@ -25,7 +25,8 @@ export async function* readDatasetSearchResponse(tableName, query, options, isCu
     }
     if (options.rowGroupSlug) url_params += "&" + ROW_GROUP_FILTER_KEY + "=" + encodeURIComponent(options.rowGroupSlug);
     if (options.rowGroupMode) url_params += "&" + ROW_GROUP_MODE_KEY + "=" + encodeURIComponent(options.rowGroupMode);
-    if (["card", "article_view", "product_card"].includes(options.view)) url_params += "&include_card_support=1";
+    // Transport the field projection; the server owns its support requirements.
+    url_params += "&view_key=" + encodeURIComponent(options.view || "table");
     if (options.useLocation && typeof options.gps?.lat === "number" && typeof options.gps?.lon === "number") {
         url_params += "&gps=" + encodeURIComponent(options.gps.lat + "," + options.gps.lon);
     }

@@ -72,7 +72,7 @@ export async function generate_translation_helper_view(container) {
             return;
         }
 
-        const data = await fetchDatasetData({ dataset_name: datasetName });
+        const data = await fetchDatasetData({ dataset_name: datasetName, view_key: "table" });
         const rows = Array.isArray(data?.data) ? data.data : [];
 
         const tbl = document.createElement("table");

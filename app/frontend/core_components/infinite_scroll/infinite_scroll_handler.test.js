@@ -382,7 +382,7 @@ describe("initializeInfiniteScroll", () => {
         scroll.disconnectInfiniteScroll("return_cards");
     });
 
-    test("continues paging the open article's actual small-card scroll host", async () => {
+    test.each(["article_view", "card", "table"])("article pages retain the list's %s projection and selected row", async projection => {
         document.body.innerHTML = '<div id="paged_article_view_container"><div class="card_view_wrapper big-card-open"><div class="card_container"><div class="card small-card active_card" data-id="3"></div></div></div></div>';
         setChosenDatasetView("paged", "article_view");
         localStorage.setItem("paged_columns", '["id","title"]');
@@ -392,16 +392,69 @@ describe("initializeInfiniteScroll", () => {
         });
         fetchDatasetDataMock.mockResolvedValue({ data: [{ id: 41, title: "Next" }], row_count: 80 });
         const scroll = await import("./infinite_scroll_handler.js");
+        const loaded = await import("../table_views/dataset_loaded_rows.js");
+        loaded.rememberLoadedDatasetRows(document.getElementById("paged_article_view_container"), "paged", {
+            data: Array.from({ length: 40 }, (_, index) => ({ id: index + 1 })), columns: ["id", "title"], types: {},
+        }, projection);
         scroll.initializeInfiniteScroll("paged");
         const selected = document.querySelector(".active_card");
         const observer = intersectionObservers.at(-1);
         expect(observer.options.root).toBe(document.querySelector(".card_container"));
         observer.callback([{ isIntersecting: true }]);
         await vi.waitFor(() => expect(fetchDatasetDataMock).toHaveBeenCalledTimes(1));
-        expect(fetchDatasetDataMock).toHaveBeenCalledWith(expect.objectContaining({ offset: 40, view_key: "article_view" }));
+        expect(fetchDatasetDataMock).toHaveBeenCalledWith({ dataset_name: "paged", offset: 40,
+            sort_column: "id", sort_order: "ASC", filters: { category: "one" }, row_count: null,
+            callerName: "fetchMoreData (infinite scroll)", view_key: projection });
         await vi.waitFor(() => expect(appendDataToCardViewMock).toHaveBeenCalled());
         expect(document.querySelector(".active_card")).toBe(selected);
         scroll.disconnectInfiniteScroll("paged");
+    });
+
+    test.each(["table", "card", "article_view", "product_card", "map"].flatMap(view => [[view, true], [view, false]]))(
+        "%s listing transports its projection for replacement=%s", async (viewKey, replace) => {
+            const tableName = "projection_rows";
+            commitSearch(tableName, "api");
+            createWideTableView(tableName, { container: 480, table: 900 });
+            const container = document.querySelector("div");
+            container.id = tableName + "_" + (viewKey === "article_view" ? "article" : viewKey) + "_view_container";
+            if (["card", "article_view"].includes(viewKey)) container.innerHTML = '<div class="card_container"></div>';
+            setChosenDatasetView(tableName, viewKey);
+            getUnifiedTableStateMock.mockReturnValue({ offset: 20, filters: { status: "open", row_group: "boat" },
+                sort: { column: "title", direction: "DESC" } });
+            fetchDatasetDataMock.mockResolvedValue({ data: [], row_count: 251 });
+            const scroll = await import("./infinite_scroll_handler.js");
+            scroll.seedInfiniteScrollRowCount(tableName, 251);
+            if (replace) await scroll.reloadDatasetRowsFromListing(tableName);
+            else {
+                scroll.initializeInfiniteScroll(tableName);
+                intersectionObservers.at(-1).callback([{ isIntersecting: true }]);
+                await vi.waitFor(() => expect(fetchDatasetDataMock).toHaveBeenCalledOnce());
+            }
+            expect(fetchDatasetDataMock).toHaveBeenCalledWith({ dataset_name: tableName, offset: replace ? 0 : 20,
+                sort_column: "title", sort_order: "DESC", filters: { status: "open", row_group: "boat", search: "api" },
+                row_count: replace ? null : 251, view_key: viewKey,
+                callerName: `fetchMoreData (${replace ? "reload" : "infinite scroll"})` });
+            scroll.disconnectInfiniteScroll(tableName);
+        },
+    );
+
+    test.each(["table", "card"])("article reload retains the %s navigation projection", async projection => {
+        const tableName = "retained";
+        createCardView(tableName);
+        const container = document.querySelector("div");
+        container.id = "retained_article_view_container";
+        setChosenDatasetView(tableName, "article_view");
+        getUnifiedTableStateMock.mockReturnValue({ offset: 20, filters: {}, sort: {} });
+        const loaded = await import("../table_views/dataset_loaded_rows.js");
+        loaded.rememberLoadedDatasetRows(container, tableName, { data: [{ id: 1 }] }, projection);
+        fetchDatasetDataMock.mockResolvedValue({ data: [{ id: 2 }], columns: ["id"], row_count: 80 });
+        const scroll = await import("./infinite_scroll_handler.js");
+        await scroll.reloadDatasetRowsFromListing(tableName);
+        expect(fetchDatasetDataMock.mock.calls[0][0]).toMatchObject({ offset: 0, view_key: projection });
+        expect(fetchDatasetDataMock.mock.calls[0][0]).not.toHaveProperty("include_card_support");
+        expect(fetchDatasetDataMock.mock.calls[0][0]).not.toHaveProperty("include_map_support");
+        expect(loaded.getLoadedDatasetProjection(container, tableName)).toBe(projection);
+        scroll.disconnectInfiniteScroll(tableName);
     });
 
     test("does not release page loading or advance the offset before async cards commit", async () => {

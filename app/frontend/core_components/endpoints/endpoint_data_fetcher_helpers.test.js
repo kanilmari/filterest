@@ -1,3 +1,7 @@
+// endpoint_data_fetcher_helpers.test.js
+// Verifies projection transport beside listing conditions and pagination.
+// Connects pure query serialization to the server-owned support contract.
+// Prevents the browser from adding legacy picture or geometry support flags.
 import { describe, test, expect } from 'vitest';
 import {
     validateSortOrder,
@@ -140,30 +144,22 @@ describe('buildDatasetQueryParams', () => {
         expect(qs).not.toContain('row_count');
     });
 
-    test('includes card support flag only when explicitly requested', () => {
-        const withSupport = buildDatasetQueryParams({
+    test.each(['table', 'card', 'article_view', 'product_card', 'map'])('serializes the %s projection without support flags', viewKey => {
+        const params = new URLSearchParams(buildDatasetQueryParams({
             dataset_name: 'users',
-            include_card_support: true,
-        });
-        const withoutSupport = buildDatasetQueryParams({
-            dataset_name: 'users',
-        });
-
-        expect(withSupport).toContain('include_card_support=1');
-        expect(withoutSupport).not.toContain('include_card_support');
+            view_key: viewKey,
+        }));
+        expect([...params]).toEqual([['dataset', 'users'], ['offset', '0'], ['view_key', viewKey]]);
     });
 
-    test('includes map support flag only when explicitly requested', () => {
-        const withSupport = buildDatasetQueryParams({
+    test('legacy flags belong to API clients rather than the browser serializer', () => {
+        const params = new URLSearchParams(buildDatasetQueryParams({
             dataset_name: 'places',
-            include_map_support: true,
-        });
-        const withoutSupport = buildDatasetQueryParams({
-            dataset_name: 'places',
-        });
-
-        expect(withSupport).toContain('include_map_support=1');
-        expect(withoutSupport).not.toContain('include_map_support');
+            view_key: 'map', include_card_support: true, include_map_support: true,
+        }));
+        expect(params.get('view_key')).toBe('map');
+        expect(params.has('include_card_support')).toBe(false);
+        expect(params.has('include_map_support')).toBe(false);
     });
 
     test('full params build in correct order', () => {

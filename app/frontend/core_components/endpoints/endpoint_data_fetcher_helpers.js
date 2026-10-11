@@ -1,6 +1,7 @@
 // endpoint_data_fetcher_helpers.js
-// Pure helper functions extracted from endpoint_data_fetcher.js for testability.
-// Zero DOM access — all functions are pure input→output.
+// Serializes listing conditions, pagination and the caller's row projection.
+// Connects dataset readers to the results endpoint without DOM or view policy.
+// Keeps support requirements with the server rather than translating views into flags.
 
 /**
  * Validate and normalize a sort order string.
@@ -40,8 +41,7 @@ export function shouldIncludeRowCount(rowCount, offset) {
  * @param {string|null} [options.sort_order=null] - 'ASC' or 'DESC'
  * @param {Object} [options.filters={}] - Additional filter key-value pairs
  * @param {number|null} [options.row_count=null] - Cached row count from previous response
- * @param {boolean} [options.include_card_support=false] - Include hidden card support fields
- * @param {boolean} [options.include_map_support=false] - Include hidden map geometry fields
+ * @param {string|null} [options.view_key=null] - Explicit row projection, transported without support decisions
  * @returns {string} Query string including leading '?'
  */
 export function buildDatasetQueryParams({
@@ -52,8 +52,6 @@ export function buildDatasetQueryParams({
     sort_order = null,
     filters = {},
     row_count = null,
-    include_card_support = false,
-    include_map_support = false,
     view_key = null,
 }) {
     const params = new URLSearchParams();
@@ -81,14 +79,6 @@ export function buildDatasetQueryParams({
 
     if (shouldIncludeRowCount(row_count, offset)) {
         params.append('row_count', row_count);
-    }
-
-    if (include_card_support === true) {
-        params.append('include_card_support', '1');
-    }
-
-    if (include_map_support === true) {
-        params.append('include_map_support', '1');
     }
 
     return '?' + params.toString();

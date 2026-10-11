@@ -5,6 +5,7 @@
 import { datasetAppearanceState } from '../dataset_appearance_state.js';
 import { DEFAULT_DATASET_APPEARANCE } from '../../../shared/dataset_appearance/validator.js';
 import { setAllSpecs } from '../../state_stores/table_specs_reader.js';
+import { setChosenDatasetView } from '../../state_stores/dataset_view_choice_saver.js';
 
 test.each(['ownership', 'mismatched snapshot'])('article row fetch discards %s before building another owner', async reason => {
     datasetAppearanceState.clear(); setAllSpecs({ private_article: { table_uid: 91 } });
@@ -26,7 +27,8 @@ import {
     ROW_ARTICLE_VIEW_KEY,
 } from "./row_article_data_fetcher.js";
 
-test("fetches the requested row through the independent article projection", async () => {
+test.each(["table", "card", "product_card", "map"])("fetches the independent article projection from a %s list", async sourceView => {
+    setChosenDatasetView("travel_info", sourceView);
     const requestRows = vi.fn(async () => ({
         data: [{ id: 7, title: "Trip", description: "Full article description" }],
     }));

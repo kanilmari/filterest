@@ -166,8 +166,6 @@ export async function refreshTableUnified(tableName, options = {}) {
             sort_order: currentState.sort.direction,
             filters: getDatasetListingFilters(tableName, currentState.filters),
             callerName: 'refreshTableUnified',
-            include_card_support: ["card", "article_view", "product_card"].includes(currentView),
-            include_map_support: currentView === "map",
             view_key: currentView,
         });
         if (!isRenderCurrent()) return;
@@ -257,7 +255,6 @@ export async function refreshTableUnified(tableName, options = {}) {
                         dataset_name: tableName,
                         filters: { id: expandedId },
                         callerName: 'deep_link_big_card',
-                        include_card_support: ["card", "article_view", "product_card"].includes(currentView),
                         view_key: currentView,
                     });
                     const singleData = singleResult?.data || singleResult?.rows || [];

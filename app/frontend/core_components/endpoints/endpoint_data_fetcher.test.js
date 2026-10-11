@@ -93,37 +93,24 @@ describe('endpoint_data_fetcher', () => {
         expect(endpointRouter).toHaveBeenCalledWith('getResults', { url_params: '?dataset=test&offset=0&lang=fi' });
     });
 
-    test('fetchDatasetData forwards card support requests into query building', async () => {
+    test.each(['table', 'card', 'article_view', 'product_card', 'map'])('fetchDatasetData transports only the %s projection into query building', async viewKey => {
         endpointRouter.mockResolvedValue({ rows: [] });
         languageFallback.mockReturnValue('fi');
-        buildQueryParams.mockReturnValue('?dataset=test&offset=0&lang=fi&include_card_support=1');
+        const query = '?dataset=test&offset=20&lang=fi&view_key=' + viewKey;
+        buildQueryParams.mockReturnValue(query);
 
         const mod = await loadModule();
         await mod.fetchDatasetData({
             dataset_name: 'test',
-            include_card_support: true,
+            offset: 20, sort_column: 'title', sort_order: 'DESC',
+            filters: { status: 'open' }, row_count: 80, view_key: viewKey,
         });
 
-        expect(buildQueryParams).toHaveBeenCalledWith(expect.objectContaining({
+        expect(buildQueryParams).toHaveBeenCalledWith({
             dataset_name: 'test',
-            include_card_support: true,
-        }));
-    });
-
-    test('fetchDatasetData forwards map support requests into query building', async () => {
-        endpointRouter.mockResolvedValue({ rows: [] });
-        languageFallback.mockReturnValue('fi');
-        buildQueryParams.mockReturnValue('?dataset=places&offset=0&lang=fi&include_map_support=1');
-
-        const mod = await loadModule();
-        await mod.fetchDatasetData({
-            dataset_name: 'places',
-            include_map_support: true,
+            offset: 20, lang: 'fi', sort_column: 'title', sort_order: 'DESC',
+            filters: { status: 'open' }, row_count: 80, view_key: viewKey,
         });
-
-        expect(buildQueryParams).toHaveBeenCalledWith(expect.objectContaining({
-            dataset_name: 'places',
-            include_map_support: true,
-        }));
+        expect(endpointRouter).toHaveBeenCalledWith('getResults', { url_params: query });
     });
 });

@@ -102,3 +102,20 @@ test("transports modes beside category slugs and outside ordinary filters", asyn
     expect(params.get("row_group_mode")).toBe("0:all,12:all");
     expect(JSON.parse(params.get("filters"))).toEqual({ status: "open" });
 });
+
+test.each(["table", "card", "article_view", "product_card", "map", undefined])("transports projection %s beside search context without support flags", async view => {
+    endpoint.mockResolvedValueOnce({ body: new ReadableStream({ start(controller) { controller.close(); } }) });
+    for await (const _packet of readDatasetSearchResponse("offers", "trip & boat", {
+        view, filters: { status: "open" }, rowGroupSlug: "boat,train", rowGroupMode: "0:all",
+        useLocation: true, gps: { lat: 60, lon: 25 },
+    }, () => true)) { /* empty stream */ }
+    const params = new URLSearchParams(endpoint.mock.calls.at(-1)[1].url_params);
+    expect(params.get("view_key")).toBe(view || "table");
+    expect(params.get("query")).toBe("trip & boat");
+    expect(JSON.parse(params.get("filters"))).toEqual({ status: "open" });
+    expect(params.get("row_group")).toBe("boat,train");
+    expect(params.get("row_group_mode")).toBe("0:all");
+    expect(params.get("gps")).toBe("60,25");
+    expect(params.has("include_card_support")).toBe(false);
+    expect(params.has("include_map_support")).toBe(false);
+});

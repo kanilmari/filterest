@@ -51,8 +51,7 @@ export async function fetchFilterOptions({
  * @param {Object} [options.filters={}] - muut filtteröintiparametrit (avain-arvo)
  * @param {string} [options.callerName=''] - (valinnainen) kutsujafunktion nimi lokitusta varten
  * @param {number|null} [options.row_count=null] - edellisestä vastauksesta saatu rivimäärä (ohittaa COUNT(*) backendissä)
- * @param {boolean} [options.include_card_support=false] - lisää piilotetut korttikentät vastaukseen
- * @param {boolean} [options.include_map_support=false] - lisää piilotetut karttageometriat vastaukseen
+ * @param {string|null} [options.view_key=null] - Row field projection; the server decides its picture/geometry support.
  *
  * @returns {Promise<Object>} Palauttaa JSON-vastauksen, muotoa:
  *   {
@@ -82,8 +81,6 @@ export async function fetchDatasetData({
     filters = {},
     callerName: _callerName = '',
     row_count = null,
-    include_card_support = false,
-    include_map_support = false,
     view_key = null,
 }) {
     const appearanceToken = datasetAppearanceState.capture(dataset_name);
@@ -96,8 +93,6 @@ export async function fetchDatasetData({
         sort_order,
         filters,
         row_count,
-        include_card_support,
-        include_map_support,
         view_key,
     });
     const response = await endpoint_router('getResults', { url_params });

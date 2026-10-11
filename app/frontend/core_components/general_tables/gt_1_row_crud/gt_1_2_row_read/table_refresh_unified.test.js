@@ -1,7 +1,7 @@
 // table_refresh_unified.test.js
-// Verifies the missing-dataset recovery branch in refreshTableUnified without booting the full table UI stack.
-// Bridges mocked fetch/state dependencies and the shared SPA root redirect helper.
-// Exists to keep the no-F5 missing-dataset redirect path covered after the v6.18.31 change.
+// Verifies refresh projections, retained rows, state guards and missing-dataset recovery.
+// Bridges mocked listing requests and rendering with the real projection/appearance owners.
+// Keeps refresh independent of support policy without losing fallback or article navigation behavior.
 // @vitest-environment jsdom
 
 import { beforeEach, describe, expect, test, vi } from "vitest";
@@ -190,8 +190,10 @@ describe("table_refresh_unified missing-dataset recovery", () => {
         await mod.refreshTableUnified("dev_agent_tasks", { skipUrlParams: true });
 
         expect(fetchDatasetDataMock).toHaveBeenCalledWith(expect.objectContaining({
-            include_card_support: true,
+            view_key: "card",
         }));
+        expect(fetchDatasetDataMock.mock.calls[0][0]).not.toHaveProperty("include_card_support");
+        expect(fetchDatasetDataMock.mock.calls[0][0]).not.toHaveProperty("include_map_support");
         expect(primeDatasetPermissionsMock).toHaveBeenCalledWith("dev_agent_tasks", [
             '/api/add-row-multipart',
             '/api/comment-counts',
@@ -224,8 +226,8 @@ describe("table_refresh_unified missing-dataset recovery", () => {
         );
     });
 
-    test("requests map support geometry only for map view", async () => {
-        setChosenDatasetView("app_service_locations", "map");
+    test.each(["table", "card", "article_view", "product_card", "map"])("refresh transports the %s projection without deciding support", async viewKey => {
+        setChosenDatasetView("app_service_locations", viewKey);
         fetchDatasetDataMock.mockResolvedValue({
             columns: ["id", "title"],
             data: [{ id: 188, title: "Espoo" }],
@@ -240,9 +242,11 @@ describe("table_refresh_unified missing-dataset recovery", () => {
         await mod.refreshTableUnified("app_service_locations", { skipUrlParams: true });
 
         expect(fetchDatasetDataMock).toHaveBeenCalledWith(expect.objectContaining({
-            include_map_support: true,
-            include_card_support: false,
+            view_key: viewKey,
         }));
+        expect(fetchDatasetDataMock.mock.calls[0][0]).not.toHaveProperty("include_card_support");
+        expect(fetchDatasetDataMock.mock.calls[0][0]).not.toHaveProperty("include_map_support");
+        expect(generateTableMock.mock.calls[0].slice(1, 4)).toEqual([["id", "title"], [{ id: 188, title: "Espoo" }], {}]);
     });
 
     test("a view switch during a search browses the searched listing and keeps endless scrolling", async () => {
@@ -436,7 +440,7 @@ describe("table_refresh_unified missing-dataset recovery", () => {
         );
     });
 
-    test("refetches with card support when rendering falls back from unsupported map view", async () => {
+    test("refetches the card projection when rendering falls back from unsupported map view", async () => {
         setChosenDatasetView("app_service_catalog", "map");
         fetchDatasetDataMock.mockResolvedValue({
             columns: ["id", "title"],
@@ -458,15 +462,32 @@ describe("table_refresh_unified missing-dataset recovery", () => {
 
         expect(fetchDatasetDataMock).toHaveBeenCalledTimes(2);
         expect(fetchDatasetDataMock).toHaveBeenNthCalledWith(1, expect.objectContaining({
-            include_map_support: true,
-            include_card_support: false,
+            view_key: "map",
         }));
         expect(fetchDatasetDataMock).toHaveBeenNthCalledWith(2, expect.objectContaining({
-            include_map_support: false,
-            include_card_support: true,
+            view_key: "card",
         }));
+        for (const [request] of fetchDatasetDataMock.mock.calls) {
+            expect(request).not.toHaveProperty("include_card_support");
+            expect(request).not.toHaveProperty("include_map_support");
+        }
         expect(generateTableMock).toHaveBeenCalledTimes(2);
         expect(applyColumnVisibilityMock).toHaveBeenCalledTimes(1);
+    });
+
+    test.each(["card", "article_view"])("deep-linked row keeps the %s projection before the independent article read", async viewKey => {
+        setChosenDatasetView("linked", viewKey);
+        getUnifiedTableStateMock.mockReturnValue({ offset: 0, filters: { status: "open" }, sort: {},
+            [viewKey === "card" ? "cardView" : "articleView"]: { collapsed: true, expandedId: 99 } });
+        fetchDatasetDataMock.mockResolvedValueOnce({ data: [{ id: 1 }], columns: ["id"], types: {}, row_count: 100 })
+            .mockResolvedValueOnce({ data: [{ id: 99, title: "Linked" }] });
+        generateTableMock.mockResolvedValue(document.createElement("div"));
+        const mod = await loadModule();
+        await mod.refreshTableUnified("linked", { skipUrlParams: true });
+        expect(fetchDatasetDataMock).toHaveBeenNthCalledWith(2, {
+            dataset_name: "linked", filters: { id: 99 }, callerName: "deep_link_big_card", view_key: viewKey,
+        });
+        expect(openRowArticleViewMock).toHaveBeenCalledWith({ id: 99, title: "Linked" }, "linked", null, expect.any(Object));
     });
     test("an article waiting for the first search match opens the searched listing's first row", async () => {
         setChosenDatasetView("tasks", "article_view");

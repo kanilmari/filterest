@@ -127,8 +127,12 @@ describe("dataset search groups", () => {
         expect(setResultsCountMock).toHaveBeenCalledWith("dev_agent_tasks", 0);
     });
 
-    test("requests card support fields for the AI group in card view", async () => {
-        createCardViewDom("app_service_catalog");
+    test.each(["table", "card", "article_view", "product_card", "map"])("streams the explicit %s projection without support flags", async viewKey => {
+        if (["card", "article_view"].includes(viewKey)) createCardViewDom("app_service_catalog", viewKey);
+        else {
+            document.body.innerHTML = '<div id="app_service_catalog_' + viewKey + '_view_container"></div>';
+            setChosenDatasetView("app_service_catalog", viewKey);
+        }
         reloadDatasetRowsFromListingMock.mockResolvedValue(listingAnswer({
             data: [{ header: "Wikipedia", id: 394 }], row_count: 1, columns: ["header", "id"],
         }));
@@ -139,9 +143,12 @@ describe("dataset search groups", () => {
         expect(endpointRouterMock).toHaveBeenCalledWith(
             "getIntelligentResultsStream",
             expect.objectContaining({
-                url_params: expect.stringContaining("include_card_support=1"),
+                url_params: expect.stringContaining("view_key=" + viewKey),
             })
         );
+        const params = new URLSearchParams(endpointRouterMock.mock.calls.at(-1)[1].url_params);
+        expect(params.has("include_card_support")).toBe(false);
+        expect(params.has("include_map_support")).toBe(false);
     });
 
     test('preserves the renderer and stream metadata for the AI group in article and card view', async () => {

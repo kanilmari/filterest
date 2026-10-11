@@ -548,7 +548,8 @@ test("Forward fetches the row and metadata again and restores the selected image
     history.replaceState({ imageFirstView: { dataset: "examples", rowId: "3" } }, "", "/examples/3?view=image_first_view#image=second.png");
     await openImageFirstView({ tableName: "examples", rowItem: { id: 3 },
         restoringHistory: true, imageRows: [{ filename: "first.png" }, { filename: "second.png" }] });
-    expect(fetchDatasetData).toHaveBeenCalledWith(expect.objectContaining({ filters: { id: 3 }, view_key: "article_view" }));
+    expect(fetchDatasetData).toHaveBeenCalledWith({ dataset_name: "examples", filters: { id: 3 },
+        view_key: "article_view", callerName: "openImageFirstView" });
     expect(buildContentMock).toHaveBeenLastCalledWith(expect.objectContaining({ title: "Fresh" }), "examples",
         { title: { card_element: "header", is_multilingual: true } }, expect.anything(), expect.anything(),
         expect.anything(), expect.anything(), expect.anything(), { sectionDefaults: {} });

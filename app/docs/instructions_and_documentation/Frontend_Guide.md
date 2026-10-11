@@ -22,6 +22,8 @@ uses DELETE, and category checkboxes keep independent membership changes.
 
 Row support for listings and streamed/blocking search is owned by the server ([row_response_support.go](../../backend/core_components/dynamic_table_tools/dtt_1_row_crud/dtt_1_row_read/row_response_support.go)): `view_key=card|article_view|product_card` requires picture support, `view_key=map` requires permitted geometry. Article aliases are normalized. Legacy `include_card_support=1` / `include_map_support=1` add support; zero never disables a projection's requirements. Missing/other views request no rich support unless flagged. Picture and geometry support is intersected with the caller's readable columns before projection or enrichment, including Home's card delegate. A denied optional support read preserves authorized rows and omits that value; parent picture values are never retried through the owner connection. Support leaves presented columns unchanged and cached gallery pictures remain authorized even without enrichment.
 
+Browser row callers send only the explicit projection (`view_key`), never support flags; legacy flags remain a server API compatibility contract. Refresh and deep-linked row previews send their current normalized view. Listing reloads and later pages retain the committed list's projection when available, otherwise use the current view. Main intelligent-search streams send their request's view; compact supplemental searches, permission-editor reads and translation repair explicitly use `table`, preserving their existing fields without requesting rich support. Expanded articles and Image First Article View history restoration independently request `article_view`. Home continues to delegate with `card`. A retained navigation list is not authorized article content: transferring it preserves its projection, rows and raw offset, while opening a selected article still fetches that row independently.
+
 ### Overview
 1.  **Search**: The user submits a search query. `do_intelligent_search()` sends a request to `/api/get-intelligent-results` and streams results.
 2.  **Backend**: `GetIntelligentResultsHandlerWrapper` returns matching records in two stages (text and AI). The request carries the interface language as `lang`, the reader's language: the AI stage searches every stored embedding, general and per language, and only ranks a match in the reader's language slightly ahead.
@@ -32,8 +34,7 @@ Row support for listings and streamed/blocking search is owned by the server ([r
 A successful, current full first-page response resolves category selections and modes
 from `row_group_selection: {slugs, modes}` (never from the capped facets)
 through `row_group_facet_printer.js`. Removing unavailable values also updates
-the same search's filter/execution signatures and its AI request context, and
-rekeys a matching remembered row prefix in `dataset_loaded_rows.js`. It keeps
+the same search's filter/execution signatures and its AI request context, and rekeys a matching remembered row prefix in `dataset_loaded_rows.js`. It keeps
 ordinary filters, search identity, rows, projection and next offset, without
 another fetch. Ordinary view builds remember their rows after reconciliation;
 searched listing reloads rekey the prefix already remembered by infinite scroll.

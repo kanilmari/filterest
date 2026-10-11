@@ -372,7 +372,6 @@ async function fetchMoreData(tableName, { replace = false, isCurrent: callerIsCu
             filters,
             callerName: `fetchMoreData (${replace ? "reload" : "infinite scroll"})`,
             row_count: replace || scrollSt.rowCountSignature !== scopeSignature ? null : scrollSt.lastRowCount,
-            include_card_support: ["card", "article_view"].includes(currentView),
             view_key: viewKey,
         });
         if (!isCurrent()) return null;
