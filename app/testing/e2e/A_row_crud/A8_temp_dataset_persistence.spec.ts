@@ -8,7 +8,8 @@
 
 import { test, expect } from '@playwright/test';
 import { login, loadCredentials, type TestCredentials } from '../helpers/auth';
-import { clickFirstVisibleByTestId, openAddRowForm, setFirstVisibleCheckbox } from '../helpers/navigation';
+import { openAddRowForm, setFirstVisibleCheckbox } from '../helpers/navigation';
+import { revealActiveFilterbarSection } from '../helpers/filterbar';
 import {
   buildTempDatasetName,
   createTempDataset,
@@ -74,19 +75,12 @@ test.describe('A8 — Temporary Dataset Row Persistence', () => {
         page,
         `#${datasetName}_container [data-testid="row-select-checkbox"], #${datasetName}_table_view_container [data-testid="row-select-checkbox"]`,
       );
-      const deleteButton = page.locator(
-        `#${datasetName}_container [data-testid="btn-delete-row"], #${datasetName}_table_view_container [data-testid="btn-delete-row"]`,
-      ).first();
-      const deleteButtonVisible = await deleteButton.isVisible({ timeout: 2000 }).catch(() => false);
-      if (!deleteButtonVisible) {
-        const toggle = page.locator('[data-testid="filterbar-toggle"]').first();
-        if (await toggle.isVisible({ timeout: 2000 }).catch(() => false)) {
-          await clickFirstVisibleByTestId(page, 'filterbar-toggle');
-          await page.waitForTimeout(800);
-        }
-      }
+      // Reopening the dataset restores the saved collapsed tools section.
+      // Reveal it as for row creation, without changing the shared layout.
+      const toolsSection = await revealActiveFilterbarSection(page, 'tools');
+      const deleteButton = toolsSection.getByTestId('btn-delete-row');
       await expect(deleteButton).toBeVisible({ timeout: 5000 });
-      await clickFirstVisibleByTestId(page, 'btn-delete-row');
+      await deleteButton.click();
 
       const confirmModal = page.locator('[data-testid="modal-container"]').first();
       await expect(confirmModal).toBeVisible({ timeout: 5000 });

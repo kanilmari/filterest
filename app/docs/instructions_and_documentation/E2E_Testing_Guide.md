@@ -220,6 +220,19 @@ test.beforeEach(async ({ page }) => { await login(page, credentials); });
 
 ## Critical Patterns
 
+### Controls inside the filter bar's tools section
+
+Add row, Delete, column management, field presentation and row permissions live
+inside the **Add & manage content** (`tools`) disclosure, collapsed by default
+on every viewport. Opening the outer panel alone does not expose them. Before
+locating these controls, use `revealActiveFilterbarSection(page, 'tools')` from
+`helpers/filterbar.ts` and scope the control to its returned section. The helper
+waits for shell and saved-layout readiness and reveals the section for this page
+without saving the expansion. `openAddRowForm()` already uses it. Assert the
+expected control and modal rather than skipping when a collapsed control is
+hidden; clicking a disclosure heading with `openActiveFilterbarSection()` is
+appropriate only when the test intentionally changes saved layout.
+
 ### Account-Name Privacy Proof (WL132 LT10/LT11)
 
 Use distinct random login names for an administrator and an ordinary user.

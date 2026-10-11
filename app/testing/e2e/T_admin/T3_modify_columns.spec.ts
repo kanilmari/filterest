@@ -9,6 +9,7 @@
 import { test, expect } from '@playwright/test';
 import { login, loadCredentials, type TestCredentials } from '../helpers/auth';
 import { navigateToDataset, waitForDataLoaded } from '../helpers/navigation';
+import { revealActiveFilterbarSection } from '../helpers/filterbar';
 import { saveCardVisibilityWithFreshRevisions } from '../helpers/appearance-revisions';
 import {
   buildTempDatasetName,
@@ -96,19 +97,16 @@ test.describe('T3 — Modify Columns', () => {
     await navigateToDataset(page, 'app_service_catalog');
     await waitForDataLoaded(page, 'app_service_catalog');
 
-    const adminBtn = page.locator('[data-testid="btn-edit-table"]');
+    // Column management shares Delete's default-collapsed tools disclosure.
+    const toolsSection = await revealActiveFilterbarSection(page, 'tools');
+    const adminBtn = toolsSection.getByTestId('btn-edit-table');
+    await expect(adminBtn).toBeVisible({ timeout: 5000 });
+    await adminBtn.click();
 
-    if (await adminBtn.first().isVisible({ timeout: 5000 }).catch(() => false)) {
-      await adminBtn.first().click();
-
-      const adminPanel = page.locator('[data-testid="modal-container"]');
-      if (await adminPanel.first().isVisible({ timeout: 10000 }).catch(() => false)) {
-        await expect(adminPanel.first()).toBeVisible();
-        await page.locator('[data-testid="modal-close-button"]').click();
-      }
-    } else {
-      test.skip();
-    }
+    const adminPanel = page.getByTestId('modal-container');
+    await expect(adminPanel).toBeVisible({ timeout: 10000 });
+    await adminPanel.getByTestId('modal-close-button').click();
+    await expect(adminPanel).toBeHidden({ timeout: 5000 });
   });
 
   test('a link field added after table creation is editable and clickable in article view', async ({ page }) => {
