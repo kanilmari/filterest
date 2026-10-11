@@ -306,6 +306,49 @@ describe('workline observatory view', () => {
         expect(container.querySelector('.workline-observatory__selection-count').textContent).toBe('2 selected');
     });
 
+    test.each(['mouseenter', 'focus'])('keeps a bottom-edge row menu inside the viewport after longer help text on %s', async (eventName) => {
+        languageMock.mockReturnValue('fi');
+        const originalBounds = HTMLElement.prototype.getBoundingClientRect;
+        // jsdom has no layout: model wrapped help growing after the guidance changes.
+        const boundsMock = vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function () {
+            if (!this.classList.contains('workline-observatory__context-menu')) return originalBounds.call(this);
+            const guidance = this.querySelector('.workline-observatory__context-guidance').textContent;
+            const height = guidance.length > 60 ? 240 : 140;
+            return new DOMRect(Number.parseFloat(this.style.left) || 0, Number.parseFloat(this.style.top) || 0, 280, height);
+        });
+        const container = document.getElementById('view');
+        const view = renderWorklineObservatory(container, {
+            worklines: [{ id: 28, title: 'Työlinja', status: 'active', current_phase: 2 }],
+        }, {
+            alreadyTargetOne: 'Jo aktiivinen.',
+            moveOne: 'Siirrä työlinja “{title}” tilaan {state}, jotta työn seuraava vaihe voidaan aloittaa.',
+        });
+        try {
+            container.querySelector('[data-workline-id="28"]').dispatchEvent(new MouseEvent('contextmenu', {
+                bubbles: true, clientX: 300, clientY: window.innerHeight - 12,
+            }));
+            await Promise.resolve();
+            const menu = document.querySelector('.workline-observatory__context-menu');
+            const guidance = menu.querySelector('.workline-observatory__context-guidance');
+            expect(guidance.textContent).toBe('Jo aktiivinen.');
+            const initialBounds = menu.getBoundingClientRect();
+            expect(initialBounds.bottom).toBeLessThanOrEqual(window.innerHeight - 8);
+
+            const pause = menu.querySelector('[data-status-action="paused"]');
+            if (eventName === 'focus') pause.focus();
+            else pause.dispatchEvent(new MouseEvent('mouseenter'));
+
+            expect(guidance.textContent).toBe(pause.title);
+            const updatedBounds = menu.getBoundingClientRect();
+            expect(updatedBounds.height).toBeGreaterThan(initialBounds.height);
+            expect(updatedBounds.bottom).toBeLessThanOrEqual(window.innerHeight - 8);
+            expect(updatedBounds.top).toBeLessThan(initialBounds.top);
+        } finally {
+            view.destroy();
+            boundsMock.mockRestore();
+        }
+    });
+
     test('restores selected worklines after a fresh render', () => {
         const snapshot = { worklines: [
             { id: 1, title: 'One', status: 'active', current_phase: 4 },

@@ -1,6 +1,6 @@
 /**
  * table-csv-artifact.ts
- * Tracks one reported U2 CSV export and removes it only while its identity matches.
+ * Tracks one reported U1/U2 CSV export and removes it only while its identity matches.
  * Bridges the server's export reply, local runtime roots, and spec teardown.
  * Exists so reads and cleanup use the reported file's identity, never another run's file.
  */
@@ -67,8 +67,8 @@ export async function withTableCSVArtifact<T>(
   ) => Promise<T>,
   options: FilterestTestRuntimeOptions = {},
 ): Promise<T> {
-  if (!/^e2e_import_csv_[a-z0-9_]+$/.test(datasetName)) {
-    throw new Error('CSV artifact cleanup requires a U2-generated dataset name.');
+  if (!/^e2e_(?:import|export)_csv_[a-z0-9_]+$/.test(datasetName)) {
+    throw new Error('CSV artifact cleanup requires a U1/U2-generated dataset name.');
   }
   const { projectBoundary } = resolveFilterestStorageRuntimePaths(options);
   // These are the layouts in backend/core_components/dev_tools/table_csv_runtime_paths.go.

@@ -1,4 +1,8 @@
 // @vitest-environment jsdom
+// viewport_context_menu_positioner.test.js
+// Verifies viewport clamping and focus preservation when menus are repositioned.
+// Bridges the shared menu positioner with a browser-like DOM.
+// Exists to keep portalled menus reachable by pointer and keyboard.
 
 import { describe, expect, test } from 'vitest';
 import { showViewportContextMenu } from './viewport_context_menu_positioner.js';
@@ -33,5 +37,23 @@ describe('showViewportContextMenu', () => {
         expect(position).toEqual({ x: 572, y: 432 });
         expect(menu.style.left).toBe('572px');
         expect(menu.style.top).toBe('432px');
+    });
+
+    test('keeps keyboard focus when re-clamping an already mounted menu', () => {
+        document.body.innerHTML = '<main><div id="menu"><button>Action</button></div></main>';
+        const menu = document.getElementById('menu');
+        const button = menu.querySelector('button');
+        let menuHeight = 120;
+        menu.getBoundingClientRect = () => ({ width: 220, height: menuHeight });
+        const pointer = { x: window.innerWidth - 12, y: window.innerHeight - 12 };
+        showViewportContextMenu(menu, pointer);
+        button.focus();
+
+        menuHeight = 200;
+        const position = showViewportContextMenu(menu, pointer);
+
+        expect(position.y + menuHeight).toBe(window.innerHeight - 8);
+        expect(menu.parentElement).toBe(document.body);
+        expect(document.activeElement).toBe(button);
     });
 });

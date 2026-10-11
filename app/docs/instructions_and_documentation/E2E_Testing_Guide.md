@@ -125,7 +125,7 @@ directory, never inside immutable `app/`. Set `FILTEREST_TEST_RUNTIME_ROOT` only
 when a separate mutable test-runtime location is needed; the selected path must
 remain outside `app/`.
 
-U2 tests the development CSV endpoints, which write and re-read a file on the
+U1 and U2 test the development CSV endpoints, which write and re-read a file on the
 native server rather than download it in the browser. The export reply identifies
 the actual file: standalone installations use `data/runtime/tables_data/`, while
 legacy native layouts use `tables_data/` under the server's installation root.
@@ -136,7 +136,7 @@ open and verify that identity before reading bytes. Before dataset teardown,
 cleanup removes only the reported file with that same identity, including after
 assertion failures. Replacements are left untouched and reported as cleanup
 failures; files without a valid export reply, including partial exports, and the
-unused candidate remain untouched. U2 must run against the local native instance
+unused candidate remain untouched. U1 and U2 must run against the local native instance
 whose filesystem the test process can read; a separate test-output directory does
 not relocate CSVs.
 

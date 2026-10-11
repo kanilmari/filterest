@@ -265,12 +265,14 @@ export function renderWorklineObservatory(container, initialState, copy = resolv
         const hasAffectedWorkline = selected.some((workline) => workline.status !== action.status);
         button.disabled = actionController.busy;
         button.setAttribute('aria-disabled', String(selected.length === 0 || !hasAffectedWorkline));
-        button.addEventListener('mouseenter', () => {
-            if (guidance) guidance.textContent = actionGuidance;
-        });
-        button.addEventListener('focus', () => {
-            if (guidance) guidance.textContent = actionGuidance;
-        });
+        const updateActionGuidance = () => {
+            if (!guidance) return;
+            guidance.textContent = actionGuidance;
+            // Translated help can wrap and grow a menu that was already clamped on opening.
+            if (context && contextMenu) showViewportContextMenu(guidance.parentElement, contextMenu);
+        };
+        button.addEventListener('mouseenter', updateActionGuidance);
+        button.addEventListener('focus', updateActionGuidance);
         button.addEventListener('click', () => void actionController.status(action, rowIds));
         return button;
     };

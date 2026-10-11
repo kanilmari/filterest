@@ -4,6 +4,7 @@
 // Exists so search-bar visual regressions are visible across desktop and tablet states.
 
 import { expect, test } from '@playwright/test';
+import { revealActiveFilterbarSection } from '../e2e/helpers/filterbar';
 
 import {
   loadVisualGuardianApp,
@@ -173,9 +174,9 @@ async function verifyRowAccessEditor(
   await expect(rowSelector).toBeVisible();
   await rowSelector.check();
 
-  const editButton = page.locator(
-    '[data-testid="btn-edit-row-permissions"]:visible'
-  ).first();
+  // Row permissions shares the default-collapsed tools section with Delete.
+  const toolsSection = await revealActiveFilterbarSection(page, 'tools');
+  const editButton = toolsSection.getByTestId('btn-edit-row-permissions');
   await expect(editButton).toBeVisible();
   await expect(editButton).toContainText(translatedButtonLabel);
   await editButton.click();

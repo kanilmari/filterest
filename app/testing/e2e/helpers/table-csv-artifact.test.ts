@@ -1,7 +1,7 @@
 // @vitest-environment node
 // table-csv-artifact.test.ts
 // Verifies CSV path discovery and ownership-limited cleanup without a server.
-// Bridges synthetic native installations and the U2 artifact lifecycle.
+// Bridges synthetic native installations and the U1/U2 artifact lifecycle.
 // Exists to catch wrong-root leaks and unsafe deletion on success or failure.
 
 import * as fs from 'node:fs';
@@ -13,7 +13,7 @@ import { withTableCSVArtifact } from './table-csv-artifact';
 const datasetName = 'e2e_import_csv_owned';
 const temporaryRoots: string[] = [];
 
-function fixture(layout = 'standalone') {
+function fixture(layout = 'standalone', artifactDatasetName = datasetName) {
   const root = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), 'u2-csv-')));
   temporaryRoots.push(root);
   const applicationRoot = layout === 'embedded'
@@ -28,7 +28,7 @@ function fixture(layout = 'standalone') {
   }
   const csvPath = path.join(
     root, ...(layout === 'standalone' ? ['data', 'runtime'] : []),
-    'tables_data', `${datasetName}.csv`,
+    'tables_data', `${artifactDatasetName}.csv`,
   );
   return { root, csvPath, options: { applicationRoot, environment: {} } };
 }
@@ -44,7 +44,26 @@ afterEach(() => {
   }
 });
 
-describe('U2 server CSV artifacts', () => {
+describe('U1/U2 server CSV artifacts', () => {
+  test.each(['standalone', 'embedded', 'legacy'])(
+    'supports U1 exports and finally cleanup after an assertion failure in %s',
+    async (layout) => {
+      const exportDatasetName = 'e2e_export_csv_owned';
+      const { csvPath, options } = fixture(layout, exportDatasetName);
+      const foreignPath = path.join(path.dirname(csvPath), 'e2e_export_csv_other_run.csv');
+      writeCSV(foreignPath);
+      const assertionError = new Error('export assertion failed');
+      await expect(withTableCSVArtifact(exportDatasetName, async (resolveExportPath, readExportCSV) => {
+        writeCSV(csvPath);
+        expect(resolveExportPath(`exported ${exportDatasetName} to ${csvPath}`)).toBe(csvPath);
+        expect(readExportCSV().toString('utf8')).toContain('Import me again');
+        throw assertionError;
+      }, options)).rejects.toBe(assertionError);
+      expect(fs.existsSync(csvPath)).toBe(false);
+      expect(fs.readFileSync(foreignPath, 'utf8')).toContain('Import me again');
+    },
+  );
+
   test('preserves a foreign file created at the unused candidate after preflight', async () => {
     const { root, csvPath, options } = fixture();
     const unusedPath = path.join(root, 'tables_data', `${datasetName}.csv`);
@@ -58,8 +77,8 @@ describe('U2 server CSV artifacts', () => {
     expect(fs.readFileSync(unusedPath, 'utf8')).toContain('Import me again');
   });
 
-  test('preserves and reports an exported file replaced by a new inode', async () => {
-    const { csvPath, options } = fixture();
+  test.each(['e2e_import_csv_owned', 'e2e_export_csv_owned'])('preserves and reports a %s file replaced by a new inode', async (datasetName) => {
+    const { csvPath, options } = fixture('standalone', datasetName);
     const replacementPath = `${csvPath}.replacement`;
     const error = await withTableCSVArtifact(datasetName, async (resolveExportPath) => {
       writeCSV(csvPath);
@@ -179,8 +198,8 @@ describe('U2 server CSV artifacts', () => {
     expect(fs.existsSync(csvPath)).toBe(false);
   });
 
-  test('refuses a pre-existing CSV before calling export and preserves it', async () => {
-    const { csvPath, options } = fixture();
+  test.each(['e2e_import_csv_owned', 'e2e_export_csv_owned'])('refuses a pre-existing %s CSV before calling export and preserves it', async (datasetName) => {
+    const { csvPath, options } = fixture('standalone', datasetName);
     writeCSV(csvPath);
     let called = false;
     await expect(withTableCSVArtifact(datasetName, async () => {
@@ -313,9 +332,9 @@ describe('U2 server CSV artifacts', () => {
     expect(fs.existsSync(outside.csvPath)).toBe(true);
   });
 
-  test('rejects dataset names outside U2 before claiming any files', async () => {
+  test.each(['../unowned', 'e2e_export_csv_', 'e2e_export_csv_owned.csv', 'e2e_import_csv_other/run', 'e2e_other_csv_owned'])('rejects unowned dataset name %s before claiming any files', async (datasetName) => {
     const { options } = fixture();
-    await expect(withTableCSVArtifact('../unowned', async () => {}, options))
-      .rejects.toThrow('U2-generated dataset name');
+    await expect(withTableCSVArtifact(datasetName, async () => {}, options))
+      .rejects.toThrow('U1/U2-generated dataset name');
   });
 });

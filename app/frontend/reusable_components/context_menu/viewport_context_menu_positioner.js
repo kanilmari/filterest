@@ -24,7 +24,8 @@ export function showViewportContextMenu(menu, pointer = {}, { margin = 8 } = {})
     menu.style.position = 'fixed';
     menu.style.left = `${Math.max(margin, requestedX)}px`;
     menu.style.top = `${Math.max(margin, requestedY)}px`;
-    documentRef.body.append(menu);
+    // Re-clamping must preserve focus inside an already mounted menu.
+    if (menu.parentElement !== documentRef.body) documentRef.body.append(menu);
 
     const bounds = menu.getBoundingClientRect();
     const viewportWidth = windowRef.innerWidth || documentRef.documentElement?.clientWidth || 0;
