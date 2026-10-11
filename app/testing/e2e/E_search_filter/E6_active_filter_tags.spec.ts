@@ -71,7 +71,9 @@ test.describe('E6 — Active Filter Tags', () => {
         await expect(chip).toHaveAttribute('data-remove-side', side);
         expect(await chip.evaluate(element => element.firstElementChild!.tagName)).toBe(side === 'start' ? 'BUTTON' : 'SPAN');
         await expect(row).toHaveCSS('justify-content', 'center');
-        expect((await chip.boundingBox())!.height).toBeCloseTo(26, 0);
+        // Owner 11.10.2026: desktop chips are 33 px tall (7 px above the button-driven 26 px) with 6 px corners.
+        expect((await chip.boundingBox())!.height).toBeCloseTo(33, 0);
+        await expect(chip).toHaveCSS('border-top-left-radius', '6px');
         const remove = chip.locator('[data-testid="active-filter-remove"]');
         expect((await remove.boundingBox())!.width).toBeCloseTo(24, 0);
         expect((await remove.boundingBox())!.height).toBeCloseTo(24, 0);
@@ -114,7 +116,7 @@ test.describe('E6 — Active Filter Tags', () => {
         await checkLines();
         await page.setViewportSize({ width: 701, height: 812 });
         await expect(remove).toHaveCSS('width', '24px');
-        await expect.poll(async () => (await chip.boundingBox())!.height).toBeCloseTo(26, 0);
+        await expect.poll(async () => (await chip.boundingBox())!.height).toBeCloseTo(33, 0);
         await expect(page.locator('[data-testid="active-filters"]:visible')).toHaveCount(1);
         await checkLines();
       });

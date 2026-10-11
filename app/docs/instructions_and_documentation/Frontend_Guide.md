@@ -79,10 +79,10 @@ filters, modes and paging, while preserving view and ordinary sorting. Tag redra
 `active_filter_chip_builder.js`; their owners retain label formatting, translation and removal commands.
 `active_filter_tags.css` owns their geometry: Selected: first,
 chips in the middle and Clear all last, with each wrapped line centred. The row and category card share the search column's `--filterbar-hero-content-max-width` and auto inline margins, wrapping within the available width on phones and tablets. The phone top bar does not move this row; only an opened article uses its sidebar. Chips have
-4 px corners, inherited font size and zero vertical padding; logical inline padding
+6 px corners, inherited font size, zero vertical padding and a 33 px minimum height; logical inline padding
 is 12 px on the label side and 4 px on the button side. At desktop widths the remove
-button is 24 × 24 px and Clear all has no 44 px minimum, giving a single-line chip
-26 px height at the standard 16 px font/1.5 line height. At widths up to 700 px or
+button is 24 × 24 px and Clear all has no 44 px minimum, so a single-line chip is
+33 px tall (the owner's 11.10.2026 choice, 7 px above the former 26 px chip). At widths up to 700 px or
 on any coarse pointer both controls keep real 44 × 44 px touch targets, giving
 46 px single-line chips. The K282 size values live together as custom properties
 in the row's stylesheet block; the media query only chooses the touch values.
