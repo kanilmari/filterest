@@ -1,3 +1,7 @@
+// P2_select_range.spec.ts
+// Verifies mouse ranges and the phone press-and-hold copy interaction.
+// Connects list cells to a visible, viewport-positioned copy menu and clipboard.
+// Preserves the wide pointer path while phones use their collapsed navigation layout.
 import { test, expect } from '@playwright/test';
 import { login, loadCredentials, type TestCredentials } from '../helpers/auth';
 import { navigateToDataset, waitForDataLoaded } from '../helpers/navigation';
@@ -36,7 +40,7 @@ test.describe('P2 — Select Range', () => {
     }
   });
 
-  test('list copy menu opens at the pointer while the navigation sidebar is visible', async ({ page }) => {
+  test('list copy menu opens at the pointer while the navigation sidebar is visible', async ({ page }, info) => {
     await navigateToDataset(page, 'app_service_catalog');
     await waitForDataLoaded(page, 'app_service_catalog');
     await switchToView(page, 'normal');
@@ -45,6 +49,57 @@ test.describe('P2 — Select Range', () => {
     const cells = firstDataRow.locator('.cell');
     await expect(cells.first()).toBeVisible({ timeout: 10000 });
     expect(await cells.count()).toBeGreaterThan(1);
+
+    if (info.project.metadata.screenWidth === 'mobile') {
+      await expect(page.locator('#navbar')).toHaveClass(/\bcollapsed\b/);
+      const cell = cells.first();
+      await cell.scrollIntoViewIfNeeded();
+      await expect(cell).toBeInViewport();
+      const box = await cell.boundingBox();
+      const viewport = page.viewportSize();
+      if (!box || !viewport) throw new Error('Phone copy cell has no viewport bounds.');
+      // Use the on-screen portion: wide list columns need not fit a phone.
+      const pointer = {
+        x: (Math.max(0, box.x) + Math.min(viewport.width, box.x + box.width)) / 2,
+        y: (Math.max(0, box.y) + Math.min(viewport.height, box.y + box.height)) / 2,
+      };
+      expect(await cell.evaluate((element, point) =>
+        element.contains(document.elementFromPoint(point.x, point.y)), pointer)).toBe(true);
+      const copiedText = (await cell.locator('.cell-content').textContent() || '').trim();
+      expect(copiedText).not.toBe('');
+      await page.context().grantPermissions(['clipboard-read', 'clipboard-write']);
+      // The matrix defines phone width without hasTouch. Enable touch only on
+      // this phone page and send browser input, rather than DOM-dispatching a menu.
+      const touch = await page.context().newCDPSession(page);
+      const menu = page.locator('.selection-menu:visible');
+      try {
+        await touch.send('Emulation.setTouchEmulationEnabled', { enabled: true });
+        await touch.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [pointer] });
+        await expect(menu).toBeVisible();
+      } finally {
+        await touch.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+        await touch.detach();
+      }
+      await expect(cell).toHaveClass(/\bselected\b/);
+      await expect(menu).toBeVisible();
+      await expect(menu).toHaveCSS('position', 'fixed');
+      expect(await menu.evaluate(element => getComputedStyle(element).backgroundColor))
+        .not.toBe('rgba(0, 0, 0, 0)');
+      const menuBox = await menu.boundingBox();
+      if (!menuBox) throw new Error('Phone copy menu has no visible bounds.');
+      expect(menuBox.x).toBeGreaterThanOrEqual(0);
+      expect(menuBox.y).toBeGreaterThanOrEqual(0);
+      expect(menuBox.x + menuBox.width).toBeLessThanOrEqual(viewport.width);
+      expect(menuBox.y + menuBox.height).toBeLessThanOrEqual(viewport.height);
+      await expect(menu.locator('[data-action="copy-headers"]')).toBeVisible();
+      const copyCells = menu.locator('[data-action="copy-no-headers"]');
+      await expect(copyCells).toBeVisible();
+      await expect(copyCells).toBeEnabled();
+      await copyCells.click();
+      await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(copiedText);
+      await expect(page.locator('.selection-menu:visible')).toHaveCount(0);
+      return;
+    }
 
     const firstBox = await cells.nth(0).boundingBox();
     const secondBox = await cells.nth(1).boundingBox();

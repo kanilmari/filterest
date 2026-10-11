@@ -4,6 +4,7 @@
 // Keeps a body-mounted selection menu from retaining a removed component.
 
 import { registerCardResource } from './card_view/card_resource_lifecycle.js';
+import { initializeTableComponentTouchCopy } from './table_component_touch_copy_controller.js';
 
 /**
  * Bind component interactions to the existing dataset subtree disposal lifecycle.
@@ -19,6 +20,7 @@ export function initializeTableComponentTeardown(component) {
     const { rootElement, selectionMenu } = component;
     const listeners = [];
     let disposed = false;
+    listeners.push(initializeTableComponentTouchCopy(component));
 
     const addListener = (element, eventName, listener) => {
         element.addEventListener(eventName, listener);

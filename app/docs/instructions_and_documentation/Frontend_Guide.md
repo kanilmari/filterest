@@ -162,6 +162,24 @@ application light/OS dark.
 -   **Tree View**: Organizes results hierarchically. Helps explore nested relationships. For ordinary datasets it uses row-level `id` + `parent_*` data; for the database catalog datasets (`system_table_folders`, `system_db_tables`) it reuses `/api/tree_data` so folders include their table leaves. Implemented in `filterest/app/frontend/core_components/table_views/tree_view/tree_view_printer.js`.
 -   **Other Views**: Register view keys, labels, container suffixes, selector groups, and UI permission routes in `filterest/app/frontend/core_components/table_views/dataset_view_registry.js`; keep concrete renderer imports and row-commit policies together in `filterest/app/frontend/core_components/table_views/dataset_view_renderer.js`. The dataset view printer assembles the page around that dispatch. Listing reloads and pages use `commitDatasetViewRows` through the scroll loader's `appendDataToView` delegate: replacement clears old rows even when empty; append retains the loaded prefix, and empty append is inert. The boundary guards the chosen view and exact connected host across asynchronous work. Missing or abandoned surfaces cannot advance offsets or retained rows. Table bodies and normal/transposed/ticket components use their existing set/append paths; card/article replacements build off screen and swap once, retaining controls and disposing abandoned resources (WL103). Row trees retain expansion/search/focus across row and language rebuilds: initial opening applies only to new branches, retained descendants keep their own expansion under collapsed parents, and clearing search restores the pre-search expansion plus new branches' opening defaults. Expansion and folder counts finish inside the awaited tree commit, before an accepted reload reconnects scrolling or a final page stops it; only the selection notification is deferred. Calendar retains mode/date and language sources, chart append retains zoom, and settings append retains edited inputs and their save owner. Catalog trees/cloud operations use independent endpoints. Product-card/map policies retain current initial output until WL162 batches 4/5. Pagination owns string-ID deduplication, raw server-row offsets and remembered projections in `dataset_loaded_rows.js`; retained article navigation keeps its original projection and articles fetch their own permitted content.
 
+List and comparison views use the same `TableComponent` selection and copy
+menu. Mouse users select a range and right-click a selected cell. Touch users
+hold a data cell to select it and open that menu; holding an already selected
+cell preserves its range. Movement, touch cancellation and component disposal
+cancel pending holds. `table_component_touch_copy_controller.js` owns the
+gesture and joins the existing component teardown; menu labels, clipboard
+payloads, themes and viewport clamping keep their shared implementations. The
+controller records the native Touch identifier separately from the pointer id
+and cancels only that completed hold's `touchend` in a non-passive listener.
+This stops compatibility mouse presses and clicks at their source, including
+clicks that would hit the menu after it moves into the page body. Other releases
+remain uncancelled. As a fallback, suppression after release requires the held
+touch's pointer identity or an explicit
+browser touch-origin marker, matching position and a short release window;
+each compatibility event is consumed once. Completion, expiry, a new press or
+disposal retires that state, so keyboard requests, mouse right-clicks and later
+taps can use the same cell again.
+
 ### Where a Dataset's View State Lives
 Each browser tab keeps its own view and open row, so one tab never changes or erases another's (owner decision K143, 3.10.2026):
 -   **This tab only** (`sessionStorage`): the view a dataset shows, read and written only through `filterest/app/frontend/core_components/state_stores/dataset_view_choice_saver.js`, and the row the article or card view holds open, the `articleView` and `cardView` parts of `getUnifiedTableState`/`setUnifiedTableState` in `filterest/app/frontend/core_components/state_stores/table_state_store.js`. The view in a dataset's cached address parameters stays in the page's memory (`query_params.js`).
@@ -286,6 +304,11 @@ it refuses site-only and tab-only overrides, aliases and derived blur.
 ### Dataset toolbar and appearance controls
 
 `navigation_fit_controller.js` measures complete hero destinations, gaps and available width on row resize, translated label updates and font loading. It restores inline styles through CSSOM so the page's content security policy cannot leave buttons invisible. It hides trailing buttons; all destinations remain in the menu. Phones (up to 700 px) hide that row and retain menu, site icon/name, search toggle and filter toggle. The toggle opens the existing field in an overlay below the toolbar without shifting buttons or listing, focuses it, and closes on Escape or another press while retaining the draft. Scrolling never opens search or replaces identity. Tablet/desktop keep their ordinary search. The initially collapsed `style` section reuses theme/language builders and the permission-checked gear/palette; order and collapse state follow the existing filter-panel mechanism. Temporary browser reveals wait for shell startup and the panel's saved-layout promise (`__sectionLayoutReady`) before expanding, so a late response cannot collapse the newly revealed controls. `20261009000074_seed_filterbar_style_language_key.sql` seeds these labels in all five UI languages and joins bootstrap and unreleased DB 9.10.2; `20261009000099_record_database_release_9_10_2.sql` records that release last. Browser locale checks read the served dictionary: disabled Chinese locales receive English with HTTP 200 even when `document.lang` still names Chinese. Rich category popup fixtures use the caller's 360 px minimum width; plain dropdowns follow their input row. Home keeps its own gear/palette because it has no dataset filter panel.
+
+The phone toolbar deliberately hides the article close control. An article
+opened from a result card pushes a history entry; browser Back dismisses it and
+restores the listing. Tablet and desktop retain the shared toolbar close button.
+`C3_close_big_card.spec.ts` verifies these two paths in the same test.
 
 ### Optional Home page
 
