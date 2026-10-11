@@ -98,12 +98,19 @@ func BeginGeneric(ctx context.Context, w http.ResponseWriter, table string) (*sq
 
 // Finish must precede every success response. Explicit dataset UIDs cover a
 // no-op or empty replacement too; changed metadata includes removed targets.
-func (m *Mutation) Finish(ctx context.Context, datasetUIDs ...int64) error {
+func (m *Mutation) Finish(ctx context.Context, datasetUIDs ...int64) (err error) {
 	if m == nil {
 		return nil
 	}
+	// Scope resolution can fail before reconciliation, including after DDL
+	// when the request is canceled. Every error must make the transaction
+	// uncommittable, even for a caller that ignores the completion error.
+	defer func() {
+		if err != nil {
+			_ = m.Tx.Rollback()
+		}
+	}()
 	if err := m.updateGuard.Check(ctx, m.Tx); err != nil {
-		_ = m.Tx.Rollback()
 		return err
 	}
 	datasetUIDs = append(datasetUIDs, m.targets...)
@@ -135,11 +142,6 @@ func (m *Mutation) Finish(ctx context.Context, datasetUIDs ...int64) error {
 	}
 	result, err := reconcile(ctx, m.Tx, m.roles, &m.before, scope)
 	logMutationFindings(result)
-	if err != nil {
-		// A transaction-only caller must also be unable to commit a partially
-		// applied policy after accidentally ignoring the returned error.
-		_ = m.Tx.Rollback()
-	}
 	return err
 }
 

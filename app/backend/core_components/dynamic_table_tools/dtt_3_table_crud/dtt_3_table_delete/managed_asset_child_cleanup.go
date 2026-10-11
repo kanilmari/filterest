@@ -6,7 +6,6 @@ package dtt_3_table_delete
 
 import (
 	"easelect/backend/core_components/dbutils"
-	"easelect/backend/core_components/dynamic_table_tools/dtt_1_row_crud/dtt_1_row_read"
 	"easelect/backend/core_components/security"
 	"fmt"
 )
@@ -62,8 +61,7 @@ func dropManagedAssetChildTable(q dbutils.Querier, child managedAssetChildTable)
 		return fmt.Errorf("drop managed asset child table %s: %w", sanitizedChildName, err)
 	}
 
-	dtt_1_row_read.InvalidateSchemaCache(sanitizedChildName)
-	dtt_1_row_read.InvalidateDatasetExistsCache(sanitizedChildName)
+	// The drop handler invalidates parent and child caches after commit.
 	if err := CleanupTableMetadata(q, child.tableUID, child.schemaName); err != nil {
 		return fmt.Errorf("clean managed asset child metadata %s: %w", sanitizedChildName, err)
 	}

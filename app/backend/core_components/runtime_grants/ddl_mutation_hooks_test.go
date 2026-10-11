@@ -30,6 +30,8 @@ type ddlBoundaryState struct {
 	t                                           *testing.T
 	locked, fail                                bool
 	pending, committed, rolledBack, comparisons int
+	aclFailure                                  bool
+	cancelAfterDrop                             context.CancelFunc
 }
 type ddlBoundaryDriver struct{ state *ddlBoundaryState }
 type ddlBoundaryConn struct{ state *ddlBoundaryState }
@@ -68,6 +70,12 @@ func (r *ddlBoundaryRows) Next(dest []driver.Value) error {
 	return nil
 }
 func (c *ddlBoundaryConn) QueryContext(_ context.Context, query string, args []driver.NamedValue) (driver.Rows, error) {
+	if strings.Contains(query, "JOIN public.system_group_table_func_rights r ON r.function_id=f.id") {
+		return &ddlBoundaryRows{1, [][]driver.Value{{false}}}, nil // no update self-grant
+	}
+	if c.state.aclFailure && c.state.pending > 0 && strings.Contains(query, "CROSS JOIN LATERAL aclexplode") {
+		return nil, errors.New("injected ACL inspection failure")
+	}
 	if strings.HasPrefix(query, "SELECT EXISTS(SELECT 1 FROM public.system_db_tables") {
 		return &ddlBoundaryRows{1, [][]driver.Value{{true}}}, nil
 	}
@@ -87,6 +95,10 @@ func (c *ddlBoundaryConn) QueryContext(_ context.Context, query string, args []d
 		return &ddlBoundaryRows{columns, values}
 	}
 	switch {
+	case strings.Contains(query, "transaction_console_logs"):
+		return rows(1, []driver.Value{false}), nil
+	case strings.HasPrefix(query, "SELECT id FROM system_functions WHERE url_route_endpoint"):
+		return rows(1), nil // no separately persisted route in the unit catalogue
 	case strings.Contains(query, "SELECT EXISTS (") && strings.Contains(query, "information_schema."):
 		// The existing FK add handler has read-only existence preflights.
 		return rows(1, []driver.Value{true}), nil
@@ -113,6 +125,9 @@ func (c *ddlBoundaryConn) QueryContext(_ context.Context, query string, args []d
 	}
 }
 func (c *ddlBoundaryConn) ExecContext(_ context.Context, query string, _ []driver.NamedValue) (driver.Result, error) {
+	if strings.HasPrefix(query, "INSERT INTO system_transaction_log") {
+		return driver.RowsAffected(1), nil // middleware audit is outside the work tx
+	}
 	if granttest.IsPolicyLock(query) {
 		if strings.Contains(query, "pg_advisory_xact_lock") {
 			c.state.locked = true
@@ -123,6 +138,9 @@ func (c *ddlBoundaryConn) ExecContext(_ context.Context, query string, _ []drive
 		c.state.t.Fatal("mutation write preceded policy lock")
 	}
 	c.state.pending++
+	if c.state.cancelAfterDrop != nil && strings.HasPrefix(query, "DROP TABLE") {
+		c.state.cancelAfterDrop()
+	}
 	return driver.RowsAffected(1), nil
 }
 

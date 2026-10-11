@@ -1,7 +1,7 @@
 // drop_table_handler.go
-// HTTP handler for dropping PostgreSQL tables and cleaning up their system
-// metadata. Prevents deletion of default or non-removable tables and cascades
-// metadata cleanup via CleanupTableMetadata.
+// Drops PostgreSQL datasets, metadata and runtime grants in one request transaction.
+// Connects the administrator route to shared metadata and permission completion.
+// Reports deletion and invalidates caches only after the transaction commits.
 
 package dtt_3_table_delete
 
@@ -55,6 +55,7 @@ func DropTableHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	tx := mutation.Tx
+	q := dbutils.BindQueryContext(r.Context(), tx)
 	mutation.IncludeTables(sanitizedTableName)
 
 	// --- SAFETY CHECK START ---
@@ -67,7 +68,7 @@ func DropTableHandler(w http.ResponseWriter, r *http.Request) {
 	var isRemovable bool
 	// We use COALESCE(is_removable, true) to treat NULL as true (removable) just in case.
 	checkQuery := `SELECT is_default, COALESCE(is_removable, true) FROM system_db_tables WHERE table_name = $1`
-	err = tx.QueryRow(checkQuery, sanitizedTableName).Scan(&isDefault, &isRemovable)
+	err = q.QueryRow(checkQuery, sanitizedTableName).Scan(&isDefault, &isRemovable)
 
 	if err != nil {
 		if err != sql.ErrNoRows {
@@ -91,7 +92,7 @@ func DropTableHandler(w http.ResponseWriter, r *http.Request) {
 	var tableUID sql.NullInt64
 	var schemaName sql.NullString
 	uidQuery := `SELECT table_uid, schema_name FROM system_db_tables WHERE table_name = $1`
-	scanErr := tx.QueryRow(uidQuery, sanitizedTableName).Scan(&tableUID, &schemaName)
+	scanErr := q.QueryRow(uidQuery, sanitizedTableName).Scan(&tableUID, &schemaName)
 	if (scanErr != nil && scanErr != sql.ErrNoRows) || (scanErr == nil && !tableUID.Valid) {
 		httpresponse.RespondWithError(w, http.StatusInternalServerError, "metadata cleanup failed; the dataset was not deleted")
 		return
@@ -99,14 +100,14 @@ func DropTableHandler(w http.ResponseWriter, r *http.Request) {
 
 	var managedAssetChildren []managedAssetChildTable
 	if tableUID.Valid {
-		managedAssetChildren, err = findManagedAssetChildTables(tx, tableUID.Int64, sanitizedTableName)
+		managedAssetChildren, err = findManagedAssetChildTables(q, tableUID.Int64, sanitizedTableName)
 		if err != nil {
 			httpresponse.RespondWithError(w, http.StatusInternalServerError, err.Error())
 			return
 		}
 	}
 	for _, child := range managedAssetChildren {
-		if err := dropManagedAssetChildTable(tx, child); err != nil {
+		if err := dropManagedAssetChildTable(q, child); err != nil {
 			httpresponse.RespondWithError(w, http.StatusInternalServerError, err.Error())
 			return
 		}
@@ -114,20 +115,15 @@ func DropTableHandler(w http.ResponseWriter, r *http.Request) {
 
 	// Poistetaan taulu PostgreSQL:stä
 	dropStmt := fmt.Sprintf("DROP TABLE %s CASCADE", sanitizedTableName)
-	_, err = tx.Exec(dropStmt)
+	_, err = q.Exec(dropStmt)
 	if err != nil {
 		httpresponse.RespondWithError(w, http.StatusInternalServerError, fmt.Errorf("error dropping table: %w", err).Error())
 		return
 	}
-	log.Printf("[DropTableHandler] PostgreSQL table %s dropped (DROP TABLE CASCADE)", sanitizedTableName)
-
-	// Invalidate metadata caches for the dropped table.
-	dtt_1_row_read.InvalidateSchemaCache(sanitizedTableName)
-	dtt_1_row_read.InvalidateDatasetExistsCache(sanitizedTableName)
 
 	// Poistetaan liittyvät metatiedot system-tauluista (käytetään jaettua CleanupTableMetadata-funktiota)
 	if tableUID.Valid {
-		if cleanupErr := CleanupTableMetadata(tx, tableUID.Int64, schemaName.String); cleanupErr != nil {
+		if cleanupErr := CleanupTableMetadata(q, tableUID.Int64, schemaName.String); cleanupErr != nil {
 			log.Printf("\033[31merror: [DropTableHandler] metadata cleanup failed for table %s: %v\033[0m", sanitizedTableName, cleanupErr)
 			httpresponse.RespondWithError(w, http.StatusInternalServerError, "metadata cleanup failed; the dataset was not deleted")
 			return
@@ -139,6 +135,17 @@ func DropTableHandler(w http.ResponseWriter, r *http.Request) {
 		runtime_grant_mutations.RespondError(w, err)
 		return
 	}
+	// PostgreSQL DROP is transactional. The handler has only staged removal;
+	// the middleware owns commit and releases the buffered HTTP success.
+	dbutils.RegisterAfterCommitHook(r.Context(), func() {
+		dtt_1_row_read.InvalidateSchemaCache(sanitizedTableName)
+		dtt_1_row_read.InvalidateDatasetExistsCache(sanitizedTableName)
+		for _, child := range managedAssetChildren {
+			dtt_1_row_read.InvalidateSchemaCache(child.tableName)
+			dtt_1_row_read.InvalidateDatasetExistsCache(child.tableName)
+		}
+		log.Printf("[DropTableHandler] PostgreSQL table %s dropped (DROP TABLE CASCADE)", sanitizedTableName)
+	})
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]string{"message": fmt.Sprintf("Taulu %s poistettu", sanitizedTableName)})
