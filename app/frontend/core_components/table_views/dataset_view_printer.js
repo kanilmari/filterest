@@ -305,7 +305,6 @@ export async function generate_table(
         //     current_view
         // );
 
-        tab_parts_container.setAttribute("data-view", current_view);
         localStorage.setItem(`${dataset_name}_columns`, JSON.stringify(columns));
         localStorage.setItem(
             `${dataset_name}_dataTypes`,
@@ -378,7 +377,7 @@ export async function generate_table(
         //     contentTopBanner
         // );
 
-        create_filter_bar(
+        const filterBar = create_filter_bar(
             dataset_name,
             table_uid,
             columns,
@@ -429,6 +428,12 @@ export async function generate_table(
         if (!canCommit()) return null;
         const focusedTopControl = retainedTopControls?.contains(document.activeElement)
             ? document.activeElement : null;
+        // A retained dataset tab/article return keeps its mounted host. A fresh
+        // dataset or view surface starts at the origin; refreshing the same
+        // surface keeps its viewport. Decide from the last populated commit,
+        // not the chosen view of a pending (possibly abandoned) build.
+        const startsNewSurface = tab_parts_container.dataset.view !== current_view
+            || !scrollableContainer.querySelector(':scope > .dataset-results-surface');
         for (const container of Object.values(viewContainers)) {
             if (container === scrollableContainer || (current_view === "article_view"
                 && shouldPreserveCardReturnHost(dataset_name, preserveCardReturn, container))) continue;
@@ -439,6 +444,7 @@ export async function generate_table(
         clearLoadedDatasetRows(scrollableContainer);
         disposeCardResources(scrollableContainer);
         scrollableContainer.replaceChildren(resultsSurface);
+        tab_parts_container.setAttribute("data-view", current_view);
         pendingView = null;
         // syncDatasetSearchVisibility(dataset_name); // REMOVED: No longer needed as we have a single filter bar
         // Place topControls inside the scrollable_content container,
@@ -454,11 +460,8 @@ export async function generate_table(
             topControls.classList.add("card_top_controls");
         }
         // Always ensure it's at the right position: after hero, before view element
-		resultsSurface.insertBefore(topControls, currentViewElement);
+        resultsSurface.insertBefore(topControls, currentViewElement);
         notifyCardsMounted(resultsSurface);
-        if (focusedTopControl?.isConnected && document.activeElement === document.body) {
-            focusedTopControl.focus();
-        }
 
         let searchButton = topControls.querySelector(
             ".card_search_filter_button"
@@ -489,6 +492,18 @@ export async function generate_table(
         renderActiveFilters(dataset_name);
         setResultsCount(dataset_name, rowCount);
         datasetAppearanceState.paint(dataset_name);
+        // The persistent filterbar owns the scrolling hero and sentinel. Restore
+        // them now, rather than on its observer's next frame: a phone's fresh
+        // load must reset the complete layout, not an interim hero-less surface.
+        filterBar?.__syncActiveView?.();
+        if (startsNewSurface) {
+            // The single populated swap no longer collapses the old scroll range.
+            scrollableContainer.scrollTop = 0;
+            scrollableContainer.scrollLeft = 0;
+        }
+        if (focusedTopControl?.isConnected && document.activeElement === document.body) {
+            focusedTopControl.focus({ preventScroll: true });
+        }
         rememberLoadedDatasetRows(scrollableContainer, dataset_name, {
             data, columns, types: data_types, row_count: rowCount, has_geo: hasGeo,
             table_meta: tableMeta, dataset_presentation: datasetPresentation,

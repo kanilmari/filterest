@@ -209,6 +209,19 @@ test('detached card construction never announces mounting', async () => {
     expect(mounts).toEqual([]);
 });
 
+test('a real category refresh and subsequent page append keep the listing viewport', async () => {
+    await refresh(); finishCardAnimations();
+    const host = document.getElementById(`${dataset}_card_view_container`);
+    host.scrollTop = 13000; host.scrollLeft = 45;
+    fetchRows.mockResolvedValue({ columns, types, data: [row(2)], row_count: 2 });
+    await toggleRowGroupFacet(dataset, 'boat');
+    expect(document.querySelector('.card')?.dataset.id).toBe('2');
+    expect(host.scrollTop).toBe(13000); expect(host.scrollLeft).toBe(45);
+    await appendDataToView(dataset, [row(3)], true, { dataTypes: types });
+    expect(host.querySelectorAll('.card')).toHaveLength(2);
+    expect(host.scrollTop).toBe(13000); expect(host.scrollLeft).toBe(45);
+});
+
 test('a live keyword section releases its shared observer when its whole card is replaced', async () => {
     await refresh(); finishCardAnimations();
     const card = document.querySelector('.card');

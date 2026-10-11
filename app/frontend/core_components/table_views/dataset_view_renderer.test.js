@@ -81,6 +81,21 @@ test.each(['card', 'article_view'])('%s empty replacement swaps once and retains
     expect(swaps).toHaveBeenCalledOnce();
 });
 
+test.each(['replace', 'append'])('card row %s preserves the listing viewport', async mode => {
+    const cards = document.createElement('div'); cards.className = 'card_container';
+    cards.textContent = 'Existing rows';
+    const { container } = mount('card', cards);
+    container.scrollTop = 13000; container.scrollLeft = 45;
+    appendCards.mockImplementationOnce(async host => {
+        const card = document.createElement('div'); card.className = 'card';
+        host.append(card);
+    });
+    expect(await commitDatasetViewRows(dataset, [{ id: 2 }], { mode })).toBe('committed');
+    expect(cards.querySelector('.card')).not.toBeNull();
+    expect(container.scrollTop).toBe(13000);
+    expect(container.scrollLeft).toBe(45);
+});
+
 test('an abandoned card replacement leaves current rows and controls intact', async () => {
     const root = document.createElement('div'); root.className = 'card_container'; root.textContent = 'Current';
     mount('card', root);

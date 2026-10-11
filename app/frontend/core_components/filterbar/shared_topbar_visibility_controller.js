@@ -73,7 +73,10 @@ export function createSharedTopbarVisibilityController({ tableName, currentView,
         setSharedTopBarAccessibility(false);
         sharedTopBar.classList.remove("dataset-shared-topbar--visible");
 
-        if (sharedTopBar.hidden) {
+        // Popup/focus mutations can resync this same hidden state every frame.
+        // Keep the original deadline so the collapsed 2px border cannot linger
+        // and disappear later, after a category popup has measured its anchor.
+        if (sharedTopBar.hidden || sharedTopBarHideTimer !== null) {
             return;
         }
 
