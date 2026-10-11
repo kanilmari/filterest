@@ -44,7 +44,7 @@ def site(cluster, tmp_path, request):
     keys = root / ('keys' if profile == 'docker' else 'keys/filterest_runtime')
     keys.mkdir(parents=True, mode=0o700)
     settings = keys / ('docker.env' if profile == 'docker' else 'runtime_environment.env')
-    settings.write_text(f'DB_HOST={captured["socket"]}\nDB_PORT=15483\nDB_NAME=site\n'
+    settings.write_text(f'DB_HOST={captured["socket"]}\nDB_PORT={captured["port"]}\nDB_NAME=site\n'
                         'DB_ADMIN_USER=site_admin\nDB_ADMIN_PASSWORD=test-admin-password\n'
                         'DB_READONLY_USER=site_reader\nDB_BASIC_USER=site_writer\n')
     settings.chmod(0o600)
@@ -86,7 +86,7 @@ else:
 ''')
         shim.chmod(0o700)
         environment.update(PATH=str(tools) + ':' + environment['PATH'], PGHOST=str(captured['socket']),
-                           PGPORT='15483', POSTGRES_USER='site_admin', POSTGRES_PASSWORD='test-admin-password',
+                           PGPORT=captured['port'], POSTGRES_USER='site_admin', POSTGRES_PASSWORD='test-admin-password',
                            RECOVERY_STOP_LOG=str(root / 'stop.log'))
     def run(action, *arguments):
         return subprocess.run([sys.executable, recovery.__file__, action, '--root', str(root), '--profile', profile,
@@ -96,7 +96,7 @@ else:
         assert result.returncode == 0, result.stdout + result.stderr
     def reader_connection(database):
         return subprocess.run([str(captured['pg_bin'] / 'psql'), '-X', '-h', str(captured['socket']),
-            '-p', '15483', '-U', 'site_reader', '-d', database, '-c', 'SELECT 1'], text=True, capture_output=True)
+            '-p', captured['port'], '-U', 'site_reader', '-d', database, '-c', 'SELECT 1'], text=True, capture_output=True)
     return dict(root=root, folder=folder, settings=settings, cluster=cluster, run=run, backup=backup,
                 profile=profile, reader_connection=reader_connection)
 

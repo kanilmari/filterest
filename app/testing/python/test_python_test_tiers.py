@@ -51,6 +51,8 @@ from python_test_tiers import HEAVY_INSTALLATION_FILES, needs_heavy_installation
     "app/testing/python/conftest.py", "app/testing/python/python_category_support.py",
     "app/testing/python/python_test_tiers.py", "app/testing/python/test_python_category_support.py",
     "app/testing/python/test_python_test_tiers.py", "app/testing/python/test_database_recovery.py",
+    "app/testing/python/disposable_postgres.py", "app/testing/python/test_disposable_postgres.py",
+    "app/testing/python/requirements.txt",
     "app/testing/python/test_filterest_launcher_install_profile.py",
     "app/testing/python/test_native_lifecycle_roots.py", "app/testing/python/test_runtime_grant_restore_barrier.py",
     "app/testing/python/installation_fixture_files.py", "app/testing/python/recovery_operator_input_probes.py",

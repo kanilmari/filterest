@@ -21,6 +21,8 @@ from python_category_support import (
     configure_categories,
     modify_category_items,
     register_category_option,
+    receive_worker_category_counts,
+    save_worker_category_counts,
     write_category_summary,
 )
 
@@ -32,10 +34,12 @@ SUPPORT_ROOT = Path(__file__).resolve().parent
 def mini_suite(tmp_path: Path) -> Path:
     conftest = f'''
 import sys
+import pytest
 from pathlib import Path
 sys.path.insert(0, {str(SUPPORT_ROOT)!r})
 from python_category_support import (
     register_category_option, configure_categories, modify_category_items, write_category_summary,
+    save_worker_category_counts, receive_worker_category_counts,
 )
 def pytest_addoption(parser):
     register_category_option(parser)
@@ -45,6 +49,11 @@ def pytest_configure(config):
     configure_categories(config)
 def pytest_collection_modifyitems(config, items):
     modify_category_items(config, items, scope_root=Path(__file__).parent)
+def pytest_sessionfinish(session, exitstatus):
+    save_worker_category_counts(session.config)
+@pytest.hookimpl(optionalhook=True)
+def pytest_testnodedown(node, error):
+    receive_worker_category_counts(node)
 def pytest_terminal_summary(terminalreporter, exitstatus, config):
     write_category_summary(terminalreporter, config)
     write_category_summary(terminalreporter, config)
@@ -153,3 +162,36 @@ def test_marker_configuration_and_empty_summary_are_idempotent():
     assert len(sections) == 2
     assert "ordinary: 0 collected" in lines
     assert "heavy-installation: 0 collected" in lines
+
+
+def test_worker_counts_are_copied_once_without_multiplication():
+    worker = SimpleNamespace(
+        workeroutput={},
+        _filterest_python_category_counts=Counter({"platform-tooling": 4}),
+        _filterest_python_tier_counts=Counter({"ordinary": 3, "heavy-installation": 1}),
+    )
+    save_worker_category_counts(worker)
+    controller = SimpleNamespace(getoption=lambda *args, **kwargs: "ordinary")
+    node = SimpleNamespace(config=controller, workeroutput=worker.workeroutput)
+    receive_worker_category_counts(node)
+    receive_worker_category_counts(node)
+    assert controller._filterest_python_tier_counts == worker._filterest_python_tier_counts
+    assert controller._filterest_python_selected_category == "ordinary"
+    # A crashed worker may not have any output; it must not wipe the summary.
+    receive_worker_category_counts(SimpleNamespace(config=controller, workeroutput={}))
+    save_worker_category_counts(controller)
+    assert controller._filterest_python_category_counts == worker._filterest_python_category_counts
+
+
+def test_real_parallel_run_preserves_tier_counts_on_controller(mini_suite):
+    environment = {**os.environ, "PYTHONDONTWRITEBYTECODE": "1", "PYTEST_DISABLE_PLUGIN_AUTOLOAD": "1"}
+    environment.pop("PYTEST_ADDOPTS", None)
+    result = subprocess.run(
+        [sys.executable, "-B", "-m", "pytest", "-p", "xdist.plugin", "-n", "2",
+         "--dist", "loadgroup", "--category", "ordinary", "-q"],
+        cwd=mini_suite, env=environment, capture_output=True, text=True, timeout=30,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "3 passed" in result.stdout
+    assert "ordinary: 3 collected (selected)" in result.stdout
+    assert "heavy-installation: 1 collected" in result.stdout

@@ -14,9 +14,10 @@ import os
 from pathlib import Path
 import re
 import subprocess
-import tempfile
 
 import pytest
+
+from disposable_postgres import disposable_postgres
 
 APP = Path(__file__).resolve().parents[2]
 MIGRATION = APP / "server_tools/migrations/20260926000003_create_revoked_sign_in_store.sql"
@@ -107,27 +108,16 @@ def database():
     pg_bin = Path(os.environ.get("PG_TEST_BIN", "/usr/lib/postgresql/16/bin"))
     if not (pg_bin / "initdb").exists():
         pytest.skip("PostgreSQL test binaries unavailable")
-    with tempfile.TemporaryDirectory(prefix="revoked-sign-in-test-") as directory:
-        base = Path(directory)
-        data = base / "pgdata"
-        socket = base / "socket"
-        socket.mkdir(mode=0o700)
-        subprocess.run([str(pg_bin / "initdb"), "-D", str(data), "-A", "trust", "-U", "test_owner",
-                        "--no-locale", "--encoding=UTF8"], check=True, capture_output=True)
-        subprocess.run([str(pg_bin / "pg_ctl"), "-D", str(data), "-l", str(base / "postgres.log"),
-                        "-o", f"-h '' -k '{socket}' -p 15461", "-w", "start"],
-                       check=True, capture_output=True)
-        try:
-            def execute(sql):
-                return subprocess.run(
-                    [str(pg_bin / "psql"), "-X", "-q", "-A", "-t", "-v", "ON_ERROR_STOP=1",
-                     "-h", str(socket), "-p", "15461", "-U", "test_owner", "-d", "postgres"],
-                    input=sql, text=True, check=True, capture_output=True,
-                ).stdout.strip()
-            yield execute
-        finally:
-            subprocess.run([str(pg_bin / "pg_ctl"), "-D", str(data), "-m", "fast", "-w", "stop"],
-                           check=True, capture_output=True)
+    with disposable_postgres(pg_bin, prefix="revoked-sign-in-test-", port=15461, user="test_owner") as resources:
+        socket, port = resources.socket, resources.port
+
+        def execute(sql):
+            return subprocess.run(
+                [str(pg_bin / "psql"), "-X", "-q", "-A", "-t", "-v", "ON_ERROR_STOP=1",
+                 "-h", str(socket), "-p", port, "-U", "test_owner", "-d", "postgres"],
+                input=sql, text=True, check=True, capture_output=True,
+            ).stdout.strip()
+        yield execute
 
 
 def _installed(database):

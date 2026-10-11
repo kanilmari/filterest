@@ -136,6 +136,26 @@ def modify_category_items(
     config._filterest_python_selected_category = selected_category  # type: ignore[attr-defined]
 
 
+def save_worker_category_counts(config: pytest.Config) -> None:
+    """Send collection metadata through xdist rather than a shared report file."""
+    if hasattr(config, "workeroutput"):
+        config.workeroutput["filterest_python_counts"] = {
+            "categories": dict(getattr(config, "_filterest_python_category_counts", {})),
+            "tiers": dict(getattr(config, "_filterest_python_tier_counts", {})),
+        }
+
+
+def receive_worker_category_counts(node) -> None:
+    """Every worker collects the full suite; copy one result, never sum workers."""
+    counts = node.workeroutput.get("filterest_python_counts")
+    config = node.config
+    if counts is None or hasattr(config, "_filterest_python_category_counts"):
+        return
+    config._filterest_python_category_counts = Counter(counts["categories"])
+    config._filterest_python_tier_counts = Counter(counts["tiers"])
+    config._filterest_python_selected_category = config.getoption("python_category", default=None)
+
+
 def write_category_summary(
     terminalreporter: pytest.TerminalReporter,
     config: pytest.Config,

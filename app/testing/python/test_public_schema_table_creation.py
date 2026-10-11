@@ -10,9 +10,10 @@ from __future__ import annotations
 import os
 from pathlib import Path
 import subprocess
-import tempfile
 
 import pytest
+
+from disposable_postgres import disposable_postgres
 
 from bootstrap_contract_assertions import assert_bootstrap_baseline
 
@@ -82,35 +83,23 @@ def cluster():
     pg_bin = Path(os.environ.get("PG_TEST_BIN", "/usr/lib/postgresql/16/bin"))
     if not (pg_bin / "initdb").exists():
         pytest.skip("PostgreSQL test binaries unavailable")
-    with tempfile.TemporaryDirectory(prefix="public-create-test-") as directory:
-        base = Path(directory)
-        data = base / "pgdata"
-        socket = base / "socket"
-        socket.mkdir(mode=0o700)
-        # The bootstrap superuser is called postgres, as in the databases the
-        # legacy permissions come from.
-        subprocess.run([str(pg_bin / "initdb"), "-D", str(data), "-A", "trust", "-U", "postgres",
-                        "--no-locale", "--encoding=UTF8"], check=True, capture_output=True)
-        subprocess.run([str(pg_bin / "pg_ctl"), "-D", str(data), "-l", str(base / "postgres.log"),
-                        "-o", f"-h '' -k '{socket}' -p 15471", "-w", "start"],
-                       check=True, capture_output=True)
-        try:
-            def run(sql, *, database="postgres", role="postgres", check=True):
-                result = subprocess.run(
-                    [str(pg_bin / "psql"), "-X", "-q", "-A", "-t", "-v", "ON_ERROR_STOP=1",
-                     "-h", str(socket), "-p", "15471", "-U", role, "-d", database],
-                    input=sql, text=True, capture_output=True,
-                )
-                if check and result.returncode != 0:
-                    raise AssertionError(f"{role}@{database} failed: {result.stderr}")
-                return result
+    # The bootstrap superuser retains the legacy permissions identity, postgres.
+    with disposable_postgres(pg_bin, prefix="public-create-test-", port=15471, user="postgres") as resources:
+        socket, port = resources.socket, resources.port
 
-            run("CREATE ROLE admin_user LOGIN SUPERUSER;"
-                + "".join(f"CREATE ROLE {role} LOGIN;" for role in RUNTIME_ROLES))
-            yield run
-        finally:
-            subprocess.run([str(pg_bin / "pg_ctl"), "-D", str(data), "-m", "fast", "-w", "stop"],
-                           check=True, capture_output=True)
+        def run(sql, *, database="postgres", role="postgres", check=True):
+            result = subprocess.run(
+                [str(pg_bin / "psql"), "-X", "-q", "-A", "-t", "-v", "ON_ERROR_STOP=1",
+                 "-h", str(socket), "-p", port, "-U", role, "-d", database],
+                input=sql, text=True, capture_output=True,
+            )
+            if check and result.returncode != 0:
+                raise AssertionError(f"{role}@{database} failed: {result.stderr}")
+            return result
+
+        run("CREATE ROLE admin_user LOGIN SUPERUSER;"
+            + "".join(f"CREATE ROLE {role} LOGIN;" for role in RUNTIME_ROLES))
+        yield run
 
 
 def _legacy_database(run, name):

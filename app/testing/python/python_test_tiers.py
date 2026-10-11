@@ -100,6 +100,8 @@ HEAVY_PATH_PATTERNS = (
     "app/testing/python/conftest.py", "app/testing/python/python_category_support.py",
     "app/testing/python/python_test_tiers.py", "app/testing/python/test_python_category_support.py",
     "app/testing/python/test_python_test_tiers.py",
+    "app/testing/python/disposable_postgres.py", "app/testing/python/test_disposable_postgres.py",
+    "app/testing/python/requirements.txt",
     "app/testing/python/installation_fixture_files.py",
     "app/testing/python/recovery_*_probes.py", "app/testing/python/update_verification_fixture.py",
     "app/testing/python/release_bundle_fixture.py", "app/testing/python/bootstrap_contract_assertions.py",

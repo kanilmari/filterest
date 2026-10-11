@@ -21,6 +21,54 @@ data/runtime/python/venv/bin/python -m pytest app/testing/python --category heav
 data/runtime/python/venv/bin/python -m pytest app/testing/python
 ```
 
+Use pytest-xdist to distribute either tier across the development machine:
+
+```bash
+data/runtime/python/venv/bin/python -m pytest -n auto --dist loadgroup --category ordinary app/testing/python
+FILTEREST_TEST_DISPOSABLE_POSTGRES=1 data/runtime/python/venv/bin/python -m pytest -n auto --dist loadgroup --category heavy-installation app/testing/python
+```
+
+The test requirements pin pytest-xdist to 3.8.0. `auto` detects the worker count;
+set `PYTEST_XDIST_AUTO_NUM_WORKERS=12` before either command to use all twelve
+threads on the owner's development host (some environments detect physical
+cores instead). The serial commands above retain their original behavior.
+`--dist loadgroup` keeps the six `ReleaseManifestContractTests` together in
+the named `release-manifest-parser` group, preserving one class-owned Go parser
+build. Other tests distribute individually; grouping never skips tests or
+prevents unrelated groups from running at the same time. This is fixture reuse,
+not a requirement to serialize the installation tier.
+
+Disposable socket-server fixtures share [disposable_postgres.py](disposable_postgres.py).
+Worker `gwN` leases ports from `20000 + N * 256` through `20255 + N * 256`,
+checking local availability and avoiding nested-cluster leases in that process.
+Each cluster has a unique temporary folder with its worker name, containing
+private data, socket and log paths. Concurrent test runs also have distinct
+random folder names. PostgreSQL remains Unix-socket-only; recovery transports
+use the assigned port. Serial fixtures keep ports 15458/15461/15471/15476/15483
+and their original folder prefixes. Before removing any paths, cleanup confirms
+the owned postmaster's exit, including after a partially failed start. Bounded
+fast (SIGINT), immediate (SIGQUIT) and last-resort (SIGKILL) signals all use the
+captured Linux process handle, each followed by a bounded exit wait through that
+same handle. Shutdown never rereads the PID file or invokes `pg_ctl stop`.
+An unavailable handle or already exited process receives no signal; without a
+handle, only exit observed during capture permits removal. If identity or exit cannot
+be confirmed, all data/socket/log folders remain and a cleanup error names the
+kept path and PID (or an unknown PID). The process-local port lease is released
+in all cases. Missing PID files alone never prove exit. The single-user
+PostgreSQL fixture already uses worker-isolated pytest temporary paths and needs
+no socket port. No shared PostgreSQL suite lock is required.
+
+Tests patch environment/caches inside their own worker process and restore the
+patches; mutable installation, release and process fixtures use unique temporary
+roots. The test harness exposes only this checkout's `app/` on the import path,
+so a neighbouring checkout named `filterest` cannot redirect tool imports.
+Go's own concurrency-safe module/build caches can remain shared. Category
+summaries copy one worker's complete collection counts to the controller,
+so parallel execution does not multiply counts or report zero.
+`--collect-only -n auto` remains a collection check: xdist 3.8.0 disables worker
+execution in collect-only mode. Allocator and cleanup tests run without any
+PostgreSQL binary or socket access in [test_disposable_postgres.py](test_disposable_postgres.py).
+
 Ordinary publication batches run `ordinary`. Run `heavy-installation` once per
 night. Before every batch that changes installation or recovery areas, the
 supervisor runs the **full suite**, using the third command. No category option
@@ -131,11 +179,12 @@ default to `/usr/lib/postgresql/16/bin` (`PG_TEST_BIN` overrides this). From
 `app/testing/python`, run the install check with one command:
 
 ```bash
-FILTEREST_TEST_DISPOSABLE_POSTGRES=1 flock /tmp/filterest_pg_suites.lock ../../../data/runtime/python/venv/bin/python -m pytest test_bootstrap_ledger_postgres.py
+FILTEREST_TEST_DISPOSABLE_POSTGRES=1 ../../../data/runtime/python/venv/bin/python -m pytest -n auto --dist loadgroup test_bootstrap_ledger_postgres.py
 ```
 
-Keep disposable PostgreSQL suites under that lock: their harnesses use fixed
-ports and must run one at a time. Without the opt-in or test binaries, they skip.
+Disposable clusters have isolated ports and paths; do not wrap these commands
+in the old `/tmp/filterest_pg_suites.lock` suite lock. Without the opt-in or test
+binaries, PostgreSQL checks keep their existing skip behavior.
 
 After changing bootstrap generation, its ledger or a generated contract's
 allowlist, run the whole `app/testing/python` suite above, in addition to focused

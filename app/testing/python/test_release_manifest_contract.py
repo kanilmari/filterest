@@ -53,6 +53,9 @@ func main() {
 '''
 
 
+# Keep the six users of one class-owned Go parser together so xdist does not
+# rebuild the parser in several workers. All other release tests distribute freely.
+@pytest.mark.xdist_group(name="release-manifest-parser")
 class ReleaseManifestContractTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):

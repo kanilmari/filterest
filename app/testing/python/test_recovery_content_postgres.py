@@ -48,7 +48,7 @@ else:
 ''')
     shim.chmod(0o700)
     environment = dict(os.environ, PATH=f'{tools}:{captured["pg_bin"]}:{os.environ["PATH"]}',
-                       PGHOST=str(captured["socket"]), PGPORT="15483", PGPASSWORD="test-admin-password",
+                       PGHOST=str(captured["socket"]), PGPORT=captured["port"], PGPASSWORD="test-admin-password",
                        FILTEREST_PROJECT_ROOT_OVERRIDE=str(root), PYTHONDONTWRITEBYTECODE="1")
     def run(route, **extra):
         arguments = ["--instance", "proof", "--backup"] if route == "single" else ["--instance", "backup-all"]

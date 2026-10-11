@@ -6,12 +6,13 @@ import os
 from pathlib import Path
 import sys
 
+import pytest
 
 _APP_ROOT = Path(__file__).resolve().parents[2]
-_PRODUCT_PARENT = _APP_ROOT.parent.parent
-for _IMPORT_ROOT in (_APP_ROOT, _PRODUCT_PARENT):
-    if str(_IMPORT_ROOT) not in sys.path:
-        sys.path.insert(0, str(_IMPORT_ROOT))
+# Import this checkout only. Adding its parent exposes a sibling named filterest;
+# legacy package imports can then load that sibling and redirect later imports.
+if str(_APP_ROOT) not in sys.path:
+    sys.path.insert(0, str(_APP_ROOT))
 
 # Go commands started by tests use this installation's own caches, the same
 # data/runtime/go folders the root ./filterest launcher exports. Why: running
@@ -25,6 +26,8 @@ from python_category_support import (
     configure_categories,
     modify_category_items,
     register_category_option,
+    receive_worker_category_counts,
+    save_worker_category_counts,
     write_category_summary,
 )
 
@@ -42,6 +45,17 @@ def pytest_configure(config) -> None:
 
 def pytest_collection_modifyitems(config, items) -> None:
     modify_category_items(config, items, scope_root=_SCOPE_ROOT)
+
+
+def pytest_sessionfinish(session, exitstatus) -> None:
+    del exitstatus
+    save_worker_category_counts(session.config)
+
+
+@pytest.hookimpl(optionalhook=True)
+def pytest_testnodedown(node, error) -> None:
+    del error
+    receive_worker_category_counts(node)
 
 
 def pytest_terminal_summary(terminalreporter, exitstatus, config) -> None:

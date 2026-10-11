@@ -9,9 +9,10 @@ import os
 from pathlib import Path
 import re
 import subprocess
-import tempfile
 
 import pytest
+
+from disposable_postgres import disposable_postgres
 
 APP = Path(__file__).resolve().parents[2]
 MIGRATIONS = APP / "server_tools/migrations"
@@ -20,7 +21,7 @@ CONVERSION = MIGRATIONS / "20261005000002_key_row_actor_marks_by_table_uid.sql"
 RELEASE_RECORD = MIGRATIONS / "20261005000099_record_database_release_9_10_0.sql"
 BOOTSTRAP = APP / "server_tools/public_bootstrap"
 GENERATOR = BOOTSTRAP / "generate_bootstrap.py"
-PORT = "15483"
+PORT = "15483"  # Serial default, also re-exported by test_row_actor_support.
 DATA_STEP = MIGRATIONS / "20261005000004_add_row_actor_columns.sql"
 LANGUAGE_SEED = MIGRATIONS / "20261005000005_seed_row_actor_language_keys.sql"
 TRIGGER_CHECK = MIGRATIONS / "20261005000006_check_row_actor_trigger_definitions.sql"
@@ -101,30 +102,19 @@ def cluster():
     pg_bin = Path(os.environ.get("PG_TEST_BIN", "/usr/lib/postgresql/16/bin"))
     if not (pg_bin / "initdb").exists():
         pytest.skip("PostgreSQL test binaries unavailable")
-    with tempfile.TemporaryDirectory(prefix="row-actor-support-test-") as directory:
-        base = Path(directory)
-        socket = base / "socket"
-        socket.mkdir(mode=0o700)
-        subprocess.run([str(pg_bin / "initdb"), "-D", str(base / "pgdata"), "-A", "trust", "-U", "test_owner",
-                        "--no-locale", "--encoding=UTF8"], check=True, capture_output=True)
-        started = subprocess.run([str(pg_bin / "pg_ctl"), "-D", str(base / "pgdata"), "-l", str(base / "postgres.log"),
-                                  "-o", f"-h '' -k '{socket}' -p {PORT}", "-w", "start"], capture_output=True)
-        if started.returncode:
-            pytest.fail((base / "postgres.log").read_text())
-        try:
-            def psql(sql, database="postgres", check=True):
-                result = subprocess.run(
-                    [str(pg_bin / "psql"), "-X", "-q", "-A", "-t", "-v", "ON_ERROR_STOP=1",
-                     "-h", str(socket), "-p", PORT, "-U", "test_owner", "-d", database],
-                    input=sql, text=True, capture_output=True,
-                )
-                if check and result.returncode != 0:
-                    raise AssertionError(result.stderr)
-                return result
-            yield psql
-        finally:
-            subprocess.run([str(pg_bin / "pg_ctl"), "-D", str(base / "pgdata"), "-m", "fast", "-w", "stop"],
-                           check=True, capture_output=True)
+    with disposable_postgres(pg_bin, prefix="row-actor-support-test-", port=int(PORT), user="test_owner") as resources:
+        socket, port = resources.socket, resources.port
+
+        def psql(sql, database="postgres", check=True):
+            result = subprocess.run(
+                [str(pg_bin / "psql"), "-X", "-q", "-A", "-t", "-v", "ON_ERROR_STOP=1",
+                 "-h", str(socket), "-p", port, "-U", "test_owner", "-d", database],
+                input=sql, text=True, capture_output=True,
+            )
+            if check and result.returncode != 0:
+                raise AssertionError(result.stderr)
+            return result
+        yield psql
 
 
 @pytest.fixture
