@@ -3,17 +3,16 @@
 // Bridges filter and search controls, view selection, and dataset rendering components.
 // Exists to keep dataset screen assembly in one place while delegating each concrete view to its own module.
 
+import { createDatasetViewElement } from './dataset_view_renderer.js';
 import { datasetAppearanceState } from './dataset_appearance_state.js';
 import { appendLoadedDatasetRows, clearLoadedDatasetRows, rememberLoadedDatasetRows } from "./dataset_loaded_rows.js";
 import { encodeCssUrlValue, resolveDatasetMediaDisplayPath } from "./storage_media_urls.js";
 import { resolveVisibleDatasetMediaPath } from "./dataset_media_visibility_resolver.js";
 
 import { shouldPreserveCardReturnHost } from "../navigation/nav_engine/card_article_return_state.js";
-import { create_table_element, saveColumnWidths } from "./table_view/table_structure_builder.js";
-import { create_card_view } from "./card_view/card_view_printer.js";
+import { saveColumnWidths } from "./table_view/table_structure_builder.js";
 import { disposeCardResources, notifyCardsMounted } from './card_view/card_resource_lifecycle.js';
 import { showDatasetResultBuildFailure } from './dataset_result_build_failure.js';
-import { create_article_view } from "./article_view/article_view_printer.js";
 // import { applySavedColumnVisibility } from '../general_tables/gt_toolbar/column_visibility_dropdown.js';
 import {
     initializeInfiniteScroll,
@@ -27,15 +26,8 @@ import {
 import { setResultsCount } from "../../reusable_components/results_count/results_count_printer.js";
 import { renderActiveFilters } from "../filterbar/filter_list/active_filter_tag_printer.js";
 import { renderRowGroupFacets } from "../filterbar/filter_list/row_group_facet_printer.js";
-import { create_tree_view } from "./tree_view/tree_view_printer.js";
-import { TableComponent } from "./table_component_builder.js";
 import { applyViewStyling } from "./view_selector_printer.js";
-import { create_settings_view } from "./settings_view/settings_view_printer.js";
-import { create_product_card_view } from "./product_card_view/product_card_view_printer.js";
-import { create_calendar_view } from "./calendar_view/calendar_view_printer.js";
-import { create_map_view, dataset_supports_map_view } from "./map_view/map_view_printer.js";
-import { create_price_chart_view } from "./price_chart_view/price_chart_view_printer.js";
-import { create_cloud_management_view } from "./cloud_management_view/cloud_management_view_printer.js";
+import { dataset_supports_map_view } from "./map_view/map_view_printer.js";
 import { hasRoutePermission } from "../route_permission_checker.js";
 import { getDefaultViewSync } from "../config_fetcher.js";
 import { resolveDatasetDefaultView } from "./dataset_default_view.js";
@@ -107,120 +99,6 @@ function toggleDatasetSearchAndFilter(tableName) {
     if (!isHidden && legacyHideButton instanceof HTMLElement) {
         legacyHideButton.click();
     }
-}
-
-const DATASET_VIEW_RENDERERS = {
-    article_view: { create: (tableName, columns, data, _types, options) => create_article_view(columns, data, tableName, options) },
-    table: {
-        create: (table_name, columns, data, data_types) => {
-            const tableElement = create_table_element(
-                columns,
-                data,
-                table_name,
-                data_types
-            );
-            // applySavedColumnVisibility(tableElement);
-            return tableElement;
-        },
-    },
-    card: {
-        create: async (table_name, columns, data, _types, options) => {
-            //   console.log('view_dataset.js: card create kutsuu create_card_view');
-            return await create_card_view(columns, data, table_name, options);
-            // Note: create_card_view does not (yet) accept a data_types argument;
-            // it reads data types from localStorage.
-        },
-    },
-    product_card: {
-        create: (table_name, columns, data, data_types) => {
-            return create_product_card_view(table_name, columns, data, data_types);
-        },
-    },
-    calendar: {
-        create: (table_name, columns, data, data_types) => {
-            return create_calendar_view(table_name, columns, data, data_types);
-        },
-    },
-    map: {
-        create: (table_name, columns, data, data_types) => {
-            return create_map_view(table_name, columns, data, data_types);
-        },
-    },
-    price_chart: {
-        create: (table_name, columns, data, data_types) => {
-            return create_price_chart_view(table_name, columns, data, data_types);
-        },
-    },
-    tree: {
-        create: async (table_name, columns, data, data_types) => {
-            //   console.log('view_dataset.js: tree create kutsuu create_tree_view');
-            return await create_tree_view(table_name, columns, data, data_types);
-        },
-    },
-    normal: {
-        create: (table_name, columns, data, data_types) => {
-            const headers = columns.map((c) => ({ label: c, key: c }));
-            const tableComp = new TableComponent({
-                data,
-                headers,
-                table_name: table_name, // ★ passed to component
-                initialView: "normal",
-                dataTypes: data_types,
-            });
-            return tableComp.getElement();
-        },
-    },
-
-    /* ---------- TRANSPOSED VIEW --------------------------------- */
-    transposed: {
-        create: (table_name, columns, data, data_types) => {
-            const headers = columns.map((c) => ({ label: c, key: c }));
-            const tableComp = new TableComponent({
-                data,
-                headers,
-                table_name: table_name, // ★
-                initialView: "transposed",
-                dataTypes: data_types,
-            });
-            return tableComp.getElement();
-        },
-    },
-
-    /* ---------- TICKET VIEW ------------------------------------- */
-    ticket: {
-        create: (table_name, columns, data, data_types) => {
-            const headers = columns.map((c) => ({ label: c, key: c }));
-            const tableComp = new TableComponent({
-                data,
-                headers,
-                table_name: table_name, // ★
-                initialView: "ticket",
-                dataTypes: data_types,
-            });
-            return tableComp.getElement();
-        },
-    },
-
-    /* ---------- SETTINGS-VIEW ----------------------------------- */
-    settings: {
-        create: (table_name, columns, data, data_types) => {
-            return create_settings_view(table_name, columns, data, data_types);
-        },
-    },
-    cloud_management: {
-        create: (table_name, columns, data, data_types) => {
-            return create_cloud_management_view(table_name, columns, data, data_types);
-        },
-    },
-};
-
-function createDatasetViewElement(viewDefinition, tableName, columns, data, dataTypes, options) {
-    const renderer = DATASET_VIEW_RENDERERS[viewDefinition?.rendererKey];
-    if (!renderer?.create) {
-        console.warn(`Unknown view: ${viewDefinition?.viewKey}`);
-        return null;
-    }
-    return renderer.create(tableName, columns, data, dataTypes, options);
 }
 
 function resolveFallbackViewForUnavailableView(datasetName, tableSpecs, globalDefault, unavailableView) {

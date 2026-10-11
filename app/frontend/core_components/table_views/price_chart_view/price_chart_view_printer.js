@@ -308,11 +308,22 @@ function attachWheelZoom(plotHost, state, render) {
  * Exists as the integration point for the reusable dataset view registry.
  */
 export function create_price_chart_view(table_name, columns, data, data_types = {}) {
-    const extraction = extract_price_chart_points(columns, data, data_types);
+    let extraction = extract_price_chart_points(columns, data, data_types);
+    let currentRows = data;
     const root = document.createElement("section");
     root.classList.add("price-chart-view");
     root.dataset.datasetName = table_name;
     root.dataset.testid = "price-chart-view";
+    root.dataset.datasetRowCommitter = 'price-chart';
+    // A notice can become a chart after rows arrive. Keep the owning root.
+    root.commitDatasetRows = function (rows, { append, isCurrent }) {
+        if (!isCurrent()) return false;
+        const nextRows = append ? [...currentRows, ...rows] : rows;
+        const replacement = create_price_chart_view(table_name, columns, nextRows, data_types);
+        this.replaceChildren(...replacement.childNodes);
+        this.commitDatasetRows = replacement.commitDatasetRows;
+        return true;
+    };
 
     if (!extraction.timeColumn || !extraction.priceColumn) {
         root.appendChild(createNoticeElement(
@@ -388,6 +399,28 @@ export function create_price_chart_view(table_name, columns, data, data_types = 
     plotHost.title = "Alt+scroll zooms the time range";
 
     root.append(toolbar, status, plotHost);
+    root.commitDatasetRows = (rows, { append, isCurrent }) => {
+        if (!isCurrent()) return false;
+        currentRows = append ? [...currentRows, ...rows] : rows;
+        extraction = extract_price_chart_points(columns, currentRows, data_types);
+        if (extraction.points.length) {
+            const followedDomain = state.visibleStartTime === state.domainStartTime
+                && state.visibleEndTime === state.domainEndTime;
+            state.domainStartTime = extraction.points[0].time;
+            state.domainEndTime = extraction.points.at(-1).time;
+            if (!append || followedDomain) {
+                state.visibleStartTime = state.domainStartTime;
+                state.visibleEndTime = state.domainEndTime;
+            } else {
+                Object.assign(state, {
+                    visibleStartTime: Math.max(state.domainStartTime, state.visibleStartTime),
+                    visibleEndTime: Math.min(state.domainEndTime, state.visibleEndTime),
+                });
+            }
+        }
+        render();
+        return true;
+    };
     attachWheelZoom(plotHost, state, render);
     render();
     return root;

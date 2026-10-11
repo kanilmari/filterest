@@ -14,6 +14,9 @@ import { createCollapsibleHeightController } from '../collapsible_height/collaps
 import { wait_until_appears } from '../dom_element_checker.js';
 
 const IS_DEV_MODE = document.querySelector('meta[name="app-env"]')?.content === 'dev';
+// Render-local state follows a mounted tree through a rebuild, without turning
+// temporary search expansion into the reader's saved expansion preference.
+const TREE_RENDER_STATES = new WeakMap();
 
 /* ------------ pienehköt top-level-apu-funktiot (entiset) ------------- */
 
@@ -55,6 +58,15 @@ function collectSelectedLeafNodesWithFolders(container) {
 /* =======================  UUSI RENDER_TREE  ========================= */
 /* ==================================================================== */
 
+/**
+ * Builds a tree and restores its saved selections and expanded nodes.
+ * Rebuilding callers can preserve expansion so only new branches receive
+ * initial opening defaults, and preserve search with its focus and restore state.
+ * @param {Object|Object[]} data
+ * @param {Object} config
+ * @param {boolean} [config.preserveExpansion=false]
+ * @param {boolean} [config.preserveSearch=false]
+ */
 export async function render_tree(data, config = {}) {
 
     /* ---------- vakiot & asetukset ---------- */
@@ -83,7 +95,7 @@ export async function render_tree(data, config = {}) {
     const nodes_to_open = [];
     let checkbox_states = {};
     let single_selection_state = '';
-    let prev_expanded = null;
+    const renderState = { expandedBeforeSearch: null };
 
     /* ---------- LocalStorage-apuja ---------- */
     const lsKey = () => 'expanded_nodes' + id_suffix;
@@ -297,7 +309,7 @@ export async function render_tree(data, config = {}) {
         const tc = getTreeContainer();
         if (!tc) return;
         tc.querySelectorAll('.node').forEach((n) => n.classList.remove('hidden'));
-        const expanded = prev_expanded || [];
+        const expanded = renderState.expandedBeforeSearch || [];
         saveExpanded(expanded);
         tc.querySelectorAll('.node').forEach((n) => {
             const cc = n.querySelector('.children');
@@ -308,14 +320,28 @@ export async function render_tree(data, config = {}) {
                 closeChildren(n, { animate: false });
             }
         });
-        prev_expanded = null;
+        renderState.expandedBeforeSearch = null;
         restoreCheckboxStates();
         updateFolderCounts();
     };
 
     /* ---------- VARSINAINEN RENDER ---------- */
     async function doRender(treeData) {
+        const expectedContainer = getContainer();
         await wait_until_appears('#' + container_id);
+        // A listing/page can be superseded while this asynchronous renderer
+        // waits. Never clear a newer tree or a reused container with the same ID.
+        if ((config.isCurrent && !config.isCurrent())
+            || (expectedContainer && getContainer() !== expectedContainer)) return false;
+        const previousSearchInput = config.preserveSearch ? getSearchInput() : null;
+        const searchTerm = previousSearchInput?.value || '';
+        const hadSearchFocus = previousSearchInput && document.activeElement === previousSearchInput;
+        const previousTreeContainer = getTreeContainer();
+        const previousRenderState = TREE_RENDER_STATES.get(previousTreeContainer);
+        const previousNodeIds = new Set(config.preserveExpansion
+            ? Array.from(previousTreeContainer?.querySelectorAll('.node') || [], node => node.id)
+            : []);
+        if (searchTerm) renderState.expandedBeforeSearch = previousRenderState?.expandedBeforeSearch ?? null;
 
         const { treeContainer } = createStructure() || {};
         if (!treeContainer) return;
@@ -349,27 +375,40 @@ export async function render_tree(data, config = {}) {
         }
 
         roots.forEach((rootNode) => treeContainer.appendChild(createTreeNode(rootNode, 0, ctx)));
+        const initialNodes = nodes_to_open.filter(node => !previousNodeIds.has(node.id));
+        TREE_RENDER_STATES.set(treeContainer, renderState);
 
         restoreCheckboxStates();
 
-        /* LS & initial open */
+        // Expansion is part of this awaited commit. Accepting a reload or the
+        // final page retires its pagination request; that must not cancel state
+        // restoration after the rows and offset have already been accepted.
+        initialNodes.forEach((n) => {
+            openChildren(n, { animate: false });
+            if (config.preserveExpansion && renderState.expandedBeforeSearch !== null
+                && !renderState.expandedBeforeSearch.includes(n.id)) {
+                renderState.expandedBeforeSearch.push(n.id);
+            }
+        });
+
+        loadExpanded().forEach((id) => {
+            const n = document.getElementById(id);
+            if (!n) return;
+            let anc = n.parentElement?.closest('.node');
+            while (anc) {
+                // A retained open child can sit inside a collapsed parent.
+                if (!config.preserveExpansion && !loadExpanded().includes(anc.id)) return;
+                anc = anc.parentElement?.closest('.node');
+            }
+            openChildren(n, { animate: false });
+        });
+        updateFolderCounts();
+
+        // Selection notification stays deferred to avoid reentering callers
+        // during their row commit. It never applies expansion or saved state.
         setTimeout(() => {
-            nodes_to_open.forEach((n) => {
-                openChildren(n, { animate: false });
-            });
-
-            loadExpanded().forEach((id) => {
-                const n = document.getElementById(id);
-                if (!n) return;
-                let anc = n.parentElement?.closest('.node');
-                while (anc) {
-                    if (!loadExpanded().includes(anc.id)) return;
-                    anc = anc.parentElement?.closest('.node');
-                }
-                openChildren(n, { animate: false });
-            });
-
-            updateFolderCounts();
+            if ((config.isCurrent && !config.isCurrent())
+                || getTreeContainer() !== treeContainer) return;
             const sel = collectSelectedNodeIds(treeContainer);
             document.dispatchEvent(
                 new CustomEvent('checkboxSelectionChanged', {
@@ -383,7 +422,7 @@ export async function render_tree(data, config = {}) {
             updateCheckboxStates();
             const term = this.value;
             if (term) {
-                if (prev_expanded === null) prev_expanded = loadExpanded();
+                if (renderState.expandedBeforeSearch === null) renderState.expandedBeforeSearch = loadExpanded();
                 filterTreeNodes(term);
             } else {
                 restoreTreeState();
@@ -394,6 +433,11 @@ export async function render_tree(data, config = {}) {
             );
             if (term) updateFolderCounts();
         });
+        if (searchTerm) {
+            getSearchInput().value = searchTerm;
+            getSearchInput().dispatchEvent(new Event('input'));
+        }
+        if (hadSearchFocus) getSearchInput()?.focus();
     }
 
     /* renderöi! */
@@ -404,7 +448,7 @@ export async function render_tree(data, config = {}) {
     } else {
         checkbox_states = loadCheckboxStates();
     }
-    await doRender(data);
+    return await doRender(data);
 }
 
 /* ---------- flat → hierarkia ---------- */

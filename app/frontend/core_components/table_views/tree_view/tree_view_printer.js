@@ -125,6 +125,9 @@ async function handleDatabaseCatalogTreeButtonClick(nodeData) {
 
 async function renderDatabaseCatalogTree(tableName, treeViewContainer) {
     const treeRenderHost = createTreeRenderHost(treeViewContainer, tableName, 'database_catalog');
+    // The catalog tree has its own complete endpoint, not listing-row inputs.
+    treeRenderHost.dataset.datasetRowCommitter = 'catalog-tree';
+    treeRenderHost.commitDatasetRows = () => true;
 
     try {
         const treeData = await loadDatabaseCatalogTreeData();
@@ -162,6 +165,8 @@ export async function create_tree_view(table_name, columns, data, data_types = {
     }
 
     const treeRenderHost = createTreeRenderHost(tree_view_div, table_name, 'dataset_row');
+    treeRenderHost.dataset.datasetRowCommitter = 'tree';
+    treeRenderHost.commitDatasetRows = () => true;
 
     const treeStructure = resolveDatasetTreeStructure(
         table_name,
@@ -212,22 +217,34 @@ export async function create_tree_view(table_name, columns, data, data_types = {
         initial_open_level: 2,
         show_node_count: true,
         show_search: true,
+        preserveSearch: true,
+        // Rebuilding a page or its translated labels must keep reader choices.
+        preserveExpansion: true,
         use_data_lang_key: false,
         // button_action_function: (nodeData) => {
         //     // console.log("Klikkasit solmua:", nodeData);
         // }
     };
     treeRenderHost.classList.add('dataset-row-tree-language-refreshable');
-    const renderChosenLanguage = (chosenLanguage) => {
+    let currentRows = data;
+    const renderChosenLanguage = (chosenLanguage, rows = currentRows, isCurrent) => {
         return render_tree(
             buildLocalizedDatasetTreeData(
-                data,
+                rows,
                 columnSelection,
                 data_types,
                 chosenLanguage
             ),
-            renderConfig
+            { ...renderConfig, isCurrent }
         );
+    };
+    treeRenderHost.commitDatasetRows = async (rows, { append, isCurrent }) => {
+        if (!isCurrent()) return false;
+        const nextRows = append ? [...currentRows, ...rows] : rows;
+        const rendered = await renderChosenLanguage(getLanguageWithBrowserFallback(), nextRows, isCurrent);
+        if (rendered === false || !isCurrent()) return false;
+        currentRows = nextRows;
+        return true;
     };
     DATASET_TREE_LANGUAGE_RENDERERS.set(treeRenderHost, renderChosenLanguage);
     await bindDatasetLanguageRenderer(treeRenderHost, renderChosenLanguage);

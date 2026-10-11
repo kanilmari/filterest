@@ -139,4 +139,44 @@ describe("render_tree", () => {
         expect(children.hidden).toBe(false);
         expect(children.style.height).toBe("auto");
     });
+
+    test("search then clear restores the reader's expansion without a row commit (HEAD contract)", async () => {
+        vi.useFakeTimers();
+        await render_tree([
+            { id: 'folder', name: 'Folder', parent_id: null },
+            { id: 'inner', name: 'Inner', parent_id: 'folder' },
+            { id: 'leaf', name: 'Needle', parent_id: 'inner', table_uid: 12 },
+            { id: 'other', name: 'Other', parent_id: null },
+            { id: 'other_leaf', name: 'Other leaf', parent_id: 'other', table_uid: 13 },
+        ], { container_id: 'tree_host', id_suffix: '_search', initial_open_level: 2,
+            render_mode: 'button', use_data_lang_key: false });
+        await vi.runAllTimersAsync();
+        for (const id of ['folder', 'other']) {
+            document.getElementById(`tree_node_${id}_search`).querySelector(':scope > .node-row > .toggle').click();
+        }
+        const saved = () => JSON.parse(localStorage.getItem('expanded_nodes_search')).sort();
+        const beforeSearch = saved();
+        const search = document.getElementById('tree_search_search');
+        search.value = 'Needle'; search.dispatchEvent(new Event('input'));
+        expect(document.getElementById('tree_node_folder_search').dataset.expanded).toBe('true');
+        search.value = ''; search.dispatchEvent(new Event('input'));
+        expect(saved()).toEqual(beforeSearch);
+        expect(document.getElementById('tree_node_folder_search').dataset.expanded).toBe('false');
+        expect(document.getElementById('tree_node_inner_search').dataset.expanded).toBe('true');
+        expect(document.getElementById('tree_node_other_search').dataset.expanded).toBe('false');
+        expect(document.querySelectorAll('.node.hidden')).toHaveLength(0);
+    });
+
+    test('keeps initial opening on every render for callers that do not preserve expansion', async () => {
+        vi.useFakeTimers();
+        const rows = [{ id: 'folder', name: 'Folder', parent_id: null },
+            { id: 'leaf', name: 'Leaf', parent_id: 'folder', table_uid: 12 }];
+        const config = { container_id: 'tree_host', id_suffix: '_defaults', initial_open_level: 1 };
+        await render_tree(rows, config);
+        await vi.runAllTimersAsync();
+        document.getElementById('tree_node_folder_defaults').querySelector(':scope > .node-row > .toggle').click();
+        await render_tree(rows, config);
+        await vi.runAllTimersAsync();
+        expect(document.getElementById('tree_node_folder_defaults').dataset.expanded).toBe('true');
+    });
 });

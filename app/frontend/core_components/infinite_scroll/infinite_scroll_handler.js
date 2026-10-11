@@ -5,6 +5,7 @@
 // A committed text search travels with every page as an ordinary condition of
 // the listing, so searching a dataset stays a way of browsing it.
 
+import { commitDatasetViewRows } from "../table_views/dataset_view_renderer.js";
 import { appendLoadedDatasetRows, clearLoadedDatasetRows, filterLoadedDatasetDuplicates, getLoadedDatasetProjection, rememberLoadedDatasetRows } from "../table_views/dataset_loaded_rows.js";
 import { getDatasetViewContainerId, getDatasetViewScrollDirection } from "../table_views/dataset_view_registry.js";
 import { getDatasetListingFilters, getDatasetListingSignature } from "./dataset_listing_filters.js";
@@ -12,10 +13,6 @@ import { getArticleStateKey } from "../table_views/card_view/first_listed_row.js
 
 import { datasetAppearanceState } from '../table_views/dataset_appearance_state.js';
 import { fetchDatasetData } from "../endpoints/endpoint_data_fetcher.js";
-import { appendDataToTable } from "../table_views/table_view/table_row_printer.js";
-import { appendDataToCardView } from "../table_views/card_view/card_view_printer.js";
-import { disposeCardResources, notifyCardsMounted } from '../table_views/card_view/card_resource_lifecycle.js';
-import { showDatasetResultBuildFailure } from '../table_views/dataset_result_build_failure.js';
 import { setResultsCount } from "../../reusable_components/results_count/results_count_printer.js";
 
 // Tuodaan unified-tila suoraan state storesta (vältetään kehäriippuvuus table_refresh_unified ↔ infinite_scroll)
@@ -385,7 +382,8 @@ async function fetchMoreData(tableName, { replace = false, isCurrent: callerIsCu
             // A reload still has to empty the view: an answer with no rows is
             // the result, not a reason to leave the previous rows on screen.
             if (replace) {
-                await appendDataToView(tableName, [], false, { isCurrent, dataTypes: result.types });
+                const outcome = await appendDataToView(tableName, [], false, { isCurrent, dataTypes: result.types });
+                if (!outcome || !isCurrent()) return null;
                 if (isCurrent()) clearLoadedDatasetRows(container);
             }
             // Kaikki rivit ladattu — pysäytetään infinite scroll kokonaan.
@@ -402,8 +400,8 @@ async function fetchMoreData(tableName, { replace = false, isCurrent: callerIsCu
         const rows = replace
             ? result.data
             : filterLoadedDatasetDuplicates(container, tableName, result.data);
-        await appendDataToView(tableName, rows, !replace, { isCurrent, dataTypes: result.types });
-        if (!isCurrent()) return result;
+        const outcome = await appendDataToView(tableName, rows, !replace, { isCurrent, dataTypes: result.types });
+        if (!outcome || !isCurrent()) return null;
         updateOffset(tableName, result.data.length);
         if (replace) {
             // A replaced list starts a new remembered prefix: exactly the rows
@@ -426,89 +424,16 @@ async function fetchMoreData(tableName, { replace = false, isCurrent: callerIsCu
     }
 }
 
-export function appendDataToView(tableName, data, append = true, { isCurrent, dataTypes } = {}) {
-    const datasetName = tableName;
-    const currentView = getChosenDatasetView(datasetName) || "table";
-
-    if (currentView === "table") {
-        const table = document.querySelector(
-            `#${tableName}_table_view_container table`
-        );
-        if (!table) {
-            console.warn(
-                `Tauluelementti puuttuu: #${tableName}_table_view_container table`
-            );
-            return;
-        }
-        const columns = JSON.parse(table.dataset.columns);
-        const dataTypes = JSON.parse(table.dataset.dataTypes);
-
-        if (!append) {
-            const tbody = table.querySelector('tbody');
-            if (tbody) {
-                tbody.innerHTML = '';
-            } else {
-                table.appendChild(document.createElement('tbody'));
-            }
-        }
-        appendDataToTable(table, data, columns, dataTypes, tableName);
-        syncTableInfiniteScrollSentinelWidth(tableName);
-    } else if (["card", "article_view"].includes(currentView)) {
-        const cardContainer = document.querySelector(
-            `#${tableName}_${currentView === "article_view" ? "article" : "card"}_view_container .card_container`
-        );
-        if (!cardContainer) {
-            console.warn(
-                `Korttinäkymän kontainer puuttuu: #${tableName}_${currentView === "article_view" ? "article" : "card"}_view_container .card_container`
-            );
-            return;
-        }
-        const columns =
-            JSON.parse(localStorage.getItem(`${tableName}_columns`)) || [];
-
-        if (!append) {
-            // Render searched/category replacements off screen so asynchronous
-            // card work cannot expose an empty list or commit an obsolete batch.
-            const replacement = document.createElement('div');
-            replacement.className = 'card_container';
-            return Promise.resolve().then(() => appendDataToCardView(replacement, columns, data, tableName,
-                ...(isCurrent || dataTypes ? [{ isCurrent, dataTypes }] : []))).then(() => {
-                if ((isCurrent && !isCurrent()) || !cardContainer.isConnected) return;
-                const controls = [...cardContainer.children].filter(child => child.classList.contains('card_top_controls'));
-                [...cardContainer.children].filter(child => !controls.includes(child)).forEach(disposeCardResources);
-                cardContainer.replaceChildren(...controls, ...replacement.childNodes);
-                notifyCardsMounted(cardContainer);
-            }).catch(error => {
-                if ((isCurrent && !isCurrent()) || !cardContainer.isConnected) return;
-                disconnectInfiniteScroll(tableName);
-                showDatasetResultBuildFailure(tableName, cardContainer.closest('.scrollable_content'), error);
-                throw error;
-            }).finally(() => disposeCardResources(replacement));
-        }
-        return appendDataToCardView(cardContainer, columns, data, tableName,
-            ...(isCurrent || dataTypes ? [{ isCurrent, dataTypes }] : []));
-    } else if (["normal", "transposed", "ticket"].includes(currentView)) {
-        const containerId = `${tableName}_${currentView === "article_view" ? "article" : currentView}_view_container`;
-        const container = document.getElementById(containerId);
-        if (!container) {
-            console.warn(`Kontainer puuttuu: #${containerId}`);
-            return;
-        }
-        const tableComponentRoot = container.querySelector(
-            ".table-component-root"
-        );
-        if (tableComponentRoot && tableComponentRoot.tableComponentInstance) {
-            if (append) {
-                tableComponentRoot.tableComponentInstance.appendData(data);
-            } else {
-                tableComponentRoot.tableComponentInstance.setData(data); // Korvaa data
-            }
-        } else {
-            console.warn(
-                `TableComponent ei löydy (tableName: ${tableName}, view: ${currentView}).`
-            );
-        }
-    }
+/** Compatibility entry point; renderer policies live beside initial dispatch. */
+export function appendDataToView(tableName, data, append = true, options = {}) {
+    const committed = commitDatasetViewRows(tableName, data, {
+        ...options, mode: append ? 'append' : 'replace',
+        onBuildFailure: () => disconnectInfiniteScroll(tableName),
+    });
+    return Promise.resolve(committed).then(outcome => {
+        if (outcome === 'committed') syncTableInfiniteScrollSentinelWidth(tableName);
+        return outcome;
+    });
 }
 
 /** Retains only pagination context, never an observer or pending request. */

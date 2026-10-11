@@ -116,6 +116,8 @@ export function create_settings_view(datasetName, columns, data, _dataTypes) {
     const container = document.createElement('div');
     container.classList.add('settings-view');
     container.dataset.datasetName = datasetName;
+    container.dataset.datasetRowCommitter = 'settings';
+    container.commitDatasetRows = () => true;
 
     const toolbar = document.createElement('div');
     toolbar.classList.add('settings-toolbar');
@@ -145,7 +147,8 @@ export function create_settings_view(datasetName, columns, data, _dataTypes) {
         return container;
     }
 
-    data.forEach(row => {
+    // Inputs keep this live form as their owner, including later-page inputs.
+    const appendSettingsRows = rows => rows.forEach(row => {
         const rowDiv = document.createElement('div');
         rowDiv.classList.add('settings-row');
         rowDiv.dataset.settingKey = String(row[keyColumn] || '');
@@ -243,6 +246,14 @@ export function create_settings_view(datasetName, columns, data, _dataTypes) {
 
         container.appendChild(rowDiv);
     });
+    appendSettingsRows(data);
+    container.commitDatasetRows = (rows, { append, isCurrent }) => {
+        if (!isCurrent()) return false;
+        if (!append) container.querySelectorAll('.settings-row').forEach(row => row.remove());
+        appendSettingsRows(rows);
+        updateSaveUi(container);
+        return true;
+    };
 
     saveButton.addEventListener('click', async () => {
         const dirtyInputs = getDirtyInputs(container);

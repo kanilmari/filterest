@@ -55,6 +55,9 @@ export function create_calendar_view(table_name, columns, data, data_types = {})
     root.classList.add("calendar-view");
     root.dataset.datasetName = table_name;
     root.dataset.testid = "calendar-view";
+    root.dataset.datasetRowCommitter = 'calendar';
+    // Even an unsupported calendar accepts rows without changing its notice.
+    root.commitDatasetRows = () => true;
 
     if (!calendarColumns.dateColumn) {
         root.appendChild(createNoticeElement(
@@ -84,6 +87,15 @@ export function create_calendar_view(table_name, columns, data, data_types = {})
     };
 
     const render = () => renderCalendarRoot(root, state, render);
+    root.commitDatasetRows = (rows, { append, isCurrent }) => {
+        if (!isCurrent()) return false;
+        state.rows = append ? [...state.rows, ...rows] : rows;
+        state.groupedEvents = groupCalendarRowsByDate(state.rows, state.calendarColumns,
+            state.columns, getLanguageWithBrowserFallback(), state.dataTypes);
+        // Keep the reader's chosen date and month/week/day/agenda mode.
+        render();
+        return true;
+    };
     bindDatasetLanguageRenderer(root, (chosenLanguage) => {
         state.groupedEvents = groupCalendarRowsByDate(
             state.rows,

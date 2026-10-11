@@ -257,7 +257,7 @@ describe("initializeInfiniteScroll", () => {
         expect(sentinel.style.width).toBe("900px");
 
         widths.table = 2200;
-        appendDataToView("wide_orders", [{ id: 2 }]);
+        await appendDataToView("wide_orders", [{ id: 2 }]);
 
         expect(appendDataToTableMock).toHaveBeenCalled();
         expect(sentinel.style.width).toBe("2200px");
@@ -338,8 +338,9 @@ describe("initializeInfiniteScroll", () => {
         initializeInfiniteScroll("articles");
         const list = document.querySelector(".card_container");
         expect(intersectionObservers[0].options.root).toBe(list);
-        appendDataToView("articles", [{ id: 1, title: "One" }]);
-        expect(appendDataToCardViewMock).toHaveBeenCalledWith(list, ["title"], [{ id: 1, title: "One" }], "articles");
+        await appendDataToView("articles", [{ id: 1, title: "One" }]);
+        expect(appendDataToCardViewMock).toHaveBeenCalledWith(list, ["title"], [{ id: 1, title: "One" }], "articles",
+            expect.objectContaining({ isCurrent: expect.any(Function) }));
         disconnectInfiniteScroll("articles");
     });
 
@@ -552,7 +553,7 @@ describe("initializeInfiniteScroll", () => {
         getUnifiedTableStateMock.mockReturnValue({ offset: 2, filters: {}, sort: {} });
         fetchDatasetDataMock
             .mockResolvedValueOnce({ data: [{ id: 1 }, { id: 2 }], row_count: 251, types: {} })
-            .mockResolvedValueOnce({ data: [{ id: 2 }, { id: 3 }], row_count: 251, types: {} });
+            .mockResolvedValueOnce({ data: [{ id: "2" }, { id: 3 }, { id: "3" }], row_count: 251, types: {} });
 
         const { disconnectInfiniteScroll, reloadDatasetRowsFromListing } = await import(
             "./infinite_scroll_handler.js"
@@ -566,6 +567,9 @@ describe("initializeInfiniteScroll", () => {
             offset: 2, filters: { search: "api" },
         }));
         expect(appendDataToTableMock.mock.calls[0][1]).toEqual([{ id: 3 }]);
+        // Offset counts all server rows, including repeated IDs within a page.
+        await vi.waitFor(() => expect(setUnifiedTableStateMock).toHaveBeenLastCalledWith(
+            "remembered_orders", expect.objectContaining({ offset: 5 })));
 
         disconnectInfiniteScroll("remembered_orders");
     });
@@ -590,6 +594,7 @@ describe("initializeInfiniteScroll", () => {
         // The rows that were on screen are gone, so they are no longer remembered.
         expect(loaded.filterLoadedDatasetDuplicates(container, "empty_orders", [{ id: 9 }])).toEqual([{ id: 9 }]);
         expect(setResultsCountMock).toHaveBeenCalledWith("empty_orders", 0);
+        expect(getUnifiedTableStateMock().offset).toBe(0);
 
         disconnectInfiniteScroll("empty_orders");
     });
@@ -611,8 +616,9 @@ describe("initializeInfiniteScroll", () => {
         scroll.disconnectInfiniteScroll("pending");
         expect(guard()).toBe(false);
         release();
-        await Promise.resolve();
-        await Promise.resolve();
+        // Flush the entire commit chain, including its facade and loader await.
+        // Two microtasks can assert too early after an interface adds an await.
+        await vi.advanceTimersByTimeAsync(0);
         expect(setUnifiedTableStateMock).not.toHaveBeenCalled();
     });
 
@@ -637,6 +643,29 @@ describe("initializeInfiniteScroll", () => {
         expect(fetchDatasetDataMock.mock.calls.at(-1)[0]).toMatchObject({ filters: { row_group: "boat,train", row_group_mode: "1:all" }, row_count: null });
         await Promise.resolve(); await Promise.resolve();
         scroll.disconnectInfiniteScroll("mode_offers");
+    });
+
+    test("the row-commit boundary rejects a stale direct table append or replacement", async () => {
+        createWideTableView("guarded", { container: 400, table: 800 });
+        document.querySelector('tbody').innerHTML = '<tr><td>Current row</td></tr>';
+        const scroll = await import('./infinite_scroll_handler.js');
+        for (const append of [true, false]) {
+            await scroll.appendDataToView('guarded', [{ id: 9 }], append, { isCurrent: () => false });
+            expect(appendDataToTableMock).not.toHaveBeenCalled();
+            expect(document.querySelector('tbody').textContent).toBe('Current row');
+        }
+    });
+
+    test("a missing renderer cannot advance offsets or remember an unshown replacement", async () => {
+        createWideTableView('missing', { container: 400, table: 800 });
+        document.querySelector('table').remove();
+        fetchDatasetDataMock.mockResolvedValue({ data: [{ id: 1 }], row_count: 20 });
+        const scroll = await import('./infinite_scroll_handler.js');
+        expect(await scroll.reloadDatasetRowsFromListing('missing')).toBeNull();
+        expect(setUnifiedTableStateMock.mock.calls.every(([, state]) => state.offset === 0)).toBe(true);
+        const loaded = await import('../table_views/dataset_loaded_rows.js');
+        expect(loaded.getLoadedDatasetProjection(document.getElementById('missing_table_view_container'), 'missing')).toBeNull();
+        scroll.disconnectInfiniteScroll('missing');
     });
 
 });
