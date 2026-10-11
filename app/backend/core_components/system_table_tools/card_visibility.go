@@ -364,9 +364,8 @@ func scheduleCardVisibilitySchemaCacheInvalidation(
 	hook := func() {
 		invalidate(tableName)
 	}
-	if !dbutils.RegisterAfterCommitHook(ctx, hook) {
-		hook()
-	}
+	// Direct transaction callers must clear after their own successful commit.
+	dbutils.RegisterAfterCommitHook(ctx, hook)
 }
 
 // UpdateCardVisibilityHandler batch-updates card visibility flags for a table.

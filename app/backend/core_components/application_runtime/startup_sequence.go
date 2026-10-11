@@ -9,6 +9,7 @@ import (
 	"fmt"
 
 	backend "easelect/backend/core_components"
+	"easelect/backend/core_components/dataset_kinds"
 	"easelect/backend/core_components/dynamic_table_tools/dtt_2_column_crud/dtt_2_column_update"
 	workflows "easelect/backend/core_components/dynamic_table_tools/dtt_crud_workflows"
 	foreignkeys "easelect/backend/core_components/dynamic_table_tools/dtt_foreign_keys"
@@ -61,5 +62,8 @@ func requiredStartupSteps(productRoot string, options Options, environmentType s
 		{"reserved identities", func() error {
 			return startup.ReconcileReservedTestUsers(backend.DbAdmin, environmentType)
 		}},
+		// Recovery stops/restarts the server. Also clear explicitly after all
+		// committed migrations and metadata discovery before opening readiness.
+		{"dataset evidence cache", func() error { dataset_kinds.InvalidateAll(); return nil }},
 	}
 }

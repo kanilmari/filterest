@@ -407,6 +407,9 @@ func GetResults(response_writer http.ResponseWriter, request *http.Request) {
 	}
 
 	response_writer.Header().Set("Content-Type", "application/json; charset=utf-8")
+	// Kind evidence is refreshed even on a schema-cache hit, after row access
+	// succeeds; capabilities follow schema metadata TTL and commit invalidation.
+	addDatasetKindCapabilities(request.Context(), table_name, response_data)
 	if err := json.NewEncoder(response_writer).Encode(response_data); err != nil {
 		log.Printf("\033[31merror: %s\033[0m\n", err.Error())
 		httpresponse.RespondWithError(response_writer, http.StatusInternalServerError, "error encoding response")

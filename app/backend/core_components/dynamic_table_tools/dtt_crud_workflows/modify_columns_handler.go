@@ -202,9 +202,7 @@ func ModifyColumnsHandler(w http.ResponseWriter, r *http.Request) {
 		dtt_1_row_read.InvalidateUserColumnSettingsCache(sanitizedTableName, "")
 		dtt_1_row_read.InvalidatePermissionsCache(sanitizedTableName)
 	}
-	if !dbutils.RegisterAfterCommitHook(r.Context(), invalidate) {
-		invalidate()
-	}
+	dbutils.RegisterAfterCommitHook(r.Context(), invalidate)
 
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(map[string]string{"message": "Muutokset tallennettu onnistuneesti"})

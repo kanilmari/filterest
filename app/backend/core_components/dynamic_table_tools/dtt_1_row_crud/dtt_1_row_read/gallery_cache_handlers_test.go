@@ -1,7 +1,7 @@
 // gallery_cache_handlers_test.go
 // Exercises ordinary and intelligent responses with views and legacy support flags.
-// Shares real sessions, permission/policy builders and filename-only classification.
-// Denied/hidden pictures disappear; K121 kept classes and their metadata survive.
+// Shares real sessions, permission/policy builders and offline text/AI packets.
+// Denied pictures disappear; failed kind evidence stays absent from every packet.
 package dtt_1_row_read
 
 import (
@@ -9,14 +9,17 @@ import (
 	"database/sql"
 	"database/sql/driver"
 	backend "easelect/backend/core_components"
+	"easelect/backend/core_components/dataset_kinds"
 	"easelect/backend/core_components/dbutils"
 	dtt_models "easelect/backend/core_components/dynamic_table_tools/dtt_models"
 	esessions "easelect/backend/core_components/sessions"
 	"encoding/json"
 	"fmt"
 	"github.com/gorilla/sessions"
+	"io"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -27,6 +30,8 @@ type galleryHandlerState struct {
 	t                       *testing.T
 	cached                  string
 	allowed, visible, empty bool
+	kindFailure             string
+	streamAI                bool
 }
 type galleryHandlerDriver struct{ state *galleryHandlerState }
 type galleryHandlerConn struct {
@@ -42,6 +47,22 @@ func (c *galleryHandlerConn) QueryContext(ctx context.Context, q string, args []
 		return &legacyImageMockRows{columns: columns, rows: values}
 	}
 	switch {
+	case c.state.streamAI && strings.Contains(q, "column_name = 'embedding_vector'"):
+		return rows([]string{"exists"}, []driver.Value{int64(1)}), nil
+	case c.state.streamAI && strings.Contains(q, "semantic.distance,"):
+		return rows([]string{"id", "name", "distance", "language"}, []driver.Value{int64(162), "AI row", float64(0.1), ""}), nil
+	case c.state.streamAI && strings.HasPrefix(q, `SELECT "gallery_handler_parent"."id" FROM`):
+		return rows([]string{"id"}), nil // Keep the AI row outside the text listing.
+	case c.state.streamAI && strings.Contains(q, "FROM wanted") && len(args) > 0 && args[0].Value == "{162}":
+		return rows([]string{"id", "cached_image", "cached_image_title"}, []driver.Value{int64(162), c.state.cached, "kept metadata"}), nil
+	case strings.Contains(q, "WITH registrations AS ("):
+		if c.state.kindFailure == "query" {
+			return nil, fmt.Errorf("kind evidence unavailable")
+		}
+		if c.state.kindFailure == "decode" {
+			return rows([]string{"snapshot"}, []driver.Value{[]byte(`false`)}), nil
+		}
+		return rows([]string{"snapshot"}, []driver.Value{[]byte(`{"registrations":[{"table_uid":161,"name":"public.gallery_handler_parent","table_kind":"ordinary","kind_version":0,"kind_config":{}}],"shapes":[{"name":"public.gallery_handler_parent","columns":[]}]}`)}), nil
 	case strings.Contains(q, "a.schema_version,a.tab_values,a.overrides,a.revision::text"):
 		return rows([]string{"shared", "stamp", "schema", "tab_values", "overrides", "revision"}, []driver.Value{nil, "", nil, nil, nil, nil}), nil
 	case strings.Contains(q, "target_insert_specs"):
@@ -59,7 +80,7 @@ func (c *galleryHandlerConn) QueryContext(ctx context.Context, q string, args []
 		return rows([]string{"allowed"}, []driver.Value{int64(1)}), nil
 	case strings.Contains(q, `FROM "app_service_catalog_assets"`):
 		if strings.HasPrefix(q, `SELECT "app_service_catalog_id","filename"`) {
-			if len(args) != 1 || args[0].Value != int64(161) {
+			if len(args) != 1 || args[0].Value != int64(161) && (!c.state.streamAI || args[0].Value != int64(162)) {
 				c.state.t.Fatal("classification not parent-bound", q, args)
 			}
 			if c.state.empty {
@@ -157,9 +178,27 @@ func TestGalleryCacheAuthorizationAtResponseHandlers(t *testing.T) {
 				{"unadopted own empty gallery", "/storage/161/161/300/unchecked.png", true, false, true, true},
 				{"unchecked visible gallery", "unchecked-value", true, true, false, true},
 				{"unchecked denied gallery", "unchecked-value", false, true, false, true},
+				{"kind query failure", "unchecked-value", false, false, true, true},
+				{"kind decode failure", "unchecked-value", false, false, true, true},
 			} {
 				t.Run(fmt.Sprintf("%s/%s/%s", mode, support.params, tc.name), func(t *testing.T) {
-					state := &galleryHandlerState{t, tc.cached, tc.allowed, tc.visible, tc.empty}
+					state := &galleryHandlerState{t: t, cached: tc.cached, allowed: tc.allowed, visible: tc.visible, empty: tc.empty}
+					if tc.name == "kind query failure" {
+						state.kindFailure = "query"
+					}
+					if tc.name == "kind decode failure" {
+						state.kindFailure = "decode"
+					}
+					// Exercise both stream stages for successful and failed evidence,
+					// using the existing in-memory embedding transport (no network).
+					state.streamAI = mode == "stream" && (state.kindFailure != "" || tc.name == "unchecked")
+					if state.streamAI {
+						oldTransport := http.DefaultTransport
+						http.DefaultTransport = &supportEmbeddingTransport{}
+						t.Setenv("OPENAI_API_KEY", "offline-fixture")
+						t.Setenv("EMBEDDING_PROVIDER", "openai")
+						t.Cleanup(func() { http.DefaultTransport = oldTransport })
+					}
 					name := fmt.Sprintf("gallery_handler_%d", atomic.AddInt64(&legacyImageMockCounter, 1))
 					sql.Register(name, galleryHandlerDriver{state})
 					db, err := sql.Open(name, "")
@@ -223,42 +262,85 @@ func TestGalleryCacheAuthorizationAtResponseHandlers(t *testing.T) {
 					if rec.Code != http.StatusOK {
 						t.Fatal(rec.Code, rec.Body)
 					}
-					var packet struct {
-						Stage      string
-						Data       []map[string]interface{}
-						Appearance struct {
-							SchemaVersion int            `json:"schema_version"`
-							TabValues     map[string]any `json:"tab_values"`
-							SiteValues    map[string]any `json:"site_values"`
-							Defaults      map[string]any `json:"defaults"`
-						} `json:"dataset_appearance"`
+					wantContentType := "application/json; charset=utf-8"
+					if mode == "stream" {
+						wantContentType = "application/x-ndjson; charset=utf-8"
 					}
-					if err := json.NewDecoder(rec.Body).Decode(&packet); err != nil {
-						t.Fatal(err)
+					if got := rec.Result().Header; !reflect.DeepEqual(got, http.Header{"Content-Type": {wantContentType}}) {
+						t.Fatal("classification changed response headers", got)
 					}
-					if len(packet.Data) != 1 || mode == "stream" && (!rec.Flushed || packet.Stage != "text") {
-						t.Fatal(packet, rec.Flushed)
-					}
-					// Ordinary results own the appearance contract; semantic packets
-					// retain the dataset state established by the ordinary response.
-					if mode == "ordinary" && (packet.Appearance.SchemaVersion != 2 || len(packet.Appearance.TabValues) != 28 || len(packet.Appearance.SiteValues) != 7 || len(packet.Appearance.Defaults) != 9) {
-						t.Fatal("results lost their owned appearance snapshot", packet.Appearance)
-					}
-					row := packet.Data[0]
-					if tc.kept {
-						wantTitle := "kept metadata"
-						if include && (tc.name == "visible" || tc.name == "fragment visible") {
-							wantTitle = "gallery title"
+					decoder := json.NewDecoder(rec.Body)
+					stages := []string{""}
+					if mode == "stream" {
+						stages = []string{"text"}
+						if state.streamAI {
+							stages = append(stages, "ai")
 						}
-						if row["cached_image"] != tc.cached || row["cached_image_title"] != wantTitle {
-							t.Fatal("kept picture changed", row)
+					}
+					for _, stage := range stages {
+						// Raw keys distinguish omission from null in every packet.
+						var raw map[string]json.RawMessage
+						if err := decoder.Decode(&raw); err != nil {
+							t.Fatalf("stage %q: %v", stage, err)
 						}
-					} else {
-						for key := range row {
-							if key == "cached_image" || strings.HasPrefix(key, "cached_image_") {
-								t.Fatal("gallery cache escaped", row)
+						var packet struct {
+							KindCapabilities *dataset_kinds.Capabilities `json:"kind_capabilities"`
+							Stage            string
+							Data             []map[string]interface{}
+							Appearance       struct {
+								SchemaVersion int            `json:"schema_version"`
+								TabValues     map[string]any `json:"tab_values"`
+								SiteValues    map[string]any `json:"site_values"`
+								Defaults      map[string]any `json:"defaults"`
+							} `json:"dataset_appearance"`
+						}
+						encoded, err := json.Marshal(raw)
+						if err != nil {
+							t.Fatal(err)
+						}
+						if err := json.Unmarshal(encoded, &packet); err != nil {
+							t.Fatal(err)
+						}
+						wantID := float64(161)
+						if stage == "ai" {
+							wantID = 162
+						}
+						if len(packet.Data) != 1 || packet.Data[0]["id"] != wantID || packet.Stage != stage || mode == "stream" && !rec.Flushed {
+							t.Fatal(packet, rec.Flushed)
+						}
+						value, present := raw["kind_capabilities"]
+						if state.kindFailure != "" {
+							if present {
+								t.Errorf("stage %q: failed %s evidence emitted kind_capabilities=%s; want absent field", stage, state.kindFailure, value)
+							}
+						} else if !present || packet.KindCapabilities == nil || packet.KindCapabilities.TableUID != 161 || !packet.KindCapabilities.Conforming || packet.KindCapabilities.Chat {
+							t.Fatalf("stage %q: dataset response lost its kind contract: %+v", stage, packet.KindCapabilities)
+						}
+						// Ordinary results own the appearance contract; semantic packets
+						// retain the dataset state established by the ordinary response.
+						if mode == "ordinary" && (packet.Appearance.SchemaVersion != 2 || len(packet.Appearance.TabValues) != 28 || len(packet.Appearance.SiteValues) != 7 || len(packet.Appearance.Defaults) != 9) {
+							t.Fatal("results lost their owned appearance snapshot", packet.Appearance)
+						}
+						row := packet.Data[0]
+						if tc.kept {
+							wantTitle := "kept metadata"
+							if include && (tc.name == "visible" || tc.name == "fragment visible") {
+								wantTitle = "gallery title"
+							}
+							if row["cached_image"] != tc.cached || row["cached_image_title"] != wantTitle {
+								t.Fatal("kept picture changed", row)
+							}
+						} else {
+							for key := range row {
+								if key == "cached_image" || strings.HasPrefix(key, "cached_image_") {
+									t.Fatal("gallery cache escaped", row)
+								}
 							}
 						}
+					}
+					var extra map[string]json.RawMessage
+					if err := decoder.Decode(&extra); err != io.EOF {
+						t.Fatal("unexpected response packet", extra, err)
 					}
 				})
 			}

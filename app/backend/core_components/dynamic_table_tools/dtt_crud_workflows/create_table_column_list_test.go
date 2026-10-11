@@ -188,7 +188,7 @@ func TestCreatedDatasetCachesAreDroppedOnlyAfterTheCommit(t *testing.T) {
 	var invalidated []string
 	scheduleCreatedDatasetCacheInvalidation(context.Background(), "services",
 		func(tableName string) { invalidated = append(invalidated, tableName) })
-	if !reflect.DeepEqual(invalidated, []string{"services"}) {
-		t.Fatalf("without a request transaction the caches are dropped at once, got %v", invalidated)
+	if len(invalidated) != 0 {
+		t.Fatalf("without a commit hook no commit is proved; invalidated %v", invalidated)
 	}
 }

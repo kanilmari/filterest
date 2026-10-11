@@ -10,6 +10,7 @@ import (
 	"fmt"
 
 	backend "easelect/backend/core_components"
+	"easelect/backend/core_components/dataset_kinds"
 	"easelect/backend/core_components/runtime_grant_mutations"
 	"github.com/lib/pq"
 )
@@ -36,7 +37,7 @@ func EnsureLangEmbeddingTables() error {
 	if err = mutation.Finish(ctx); err != nil {
 		return err
 	}
-	return tx.Commit()
+	return commitEmbeddingTables(tx)
 }
 
 // EnsureStartupLangEmbeddingTables runs only under the exclusive startup
@@ -50,7 +51,17 @@ func EnsureStartupLangEmbeddingTables(ctx context.Context, db *sql.DB) error {
 	if err = createLangEmbeddingTables(ctx, tx); err != nil {
 		return err
 	}
-	return tx.Commit()
+	return commitEmbeddingTables(tx)
+}
+
+func commitEmbeddingTables(tx *sql.Tx) error {
+	if err := tx.Commit(); err != nil {
+		return err
+	}
+	// Also used by the live helper creator, where the process already has warm
+	// evidence for hosts and the child did not exist when it was cached.
+	dataset_kinds.InvalidateAll()
+	return nil
 }
 
 func createLangEmbeddingTables(ctx context.Context, tx *sql.Tx) error {

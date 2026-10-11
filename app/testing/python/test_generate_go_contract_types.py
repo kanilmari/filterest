@@ -1,5 +1,5 @@
-"""Check the allowlisted Go JSON mirror against nil and omission semantics.
-
+"""test_generate_go_contract_types.py
+Check the allowlisted Go JSON mirror against nil and omission semantics.
 Connect real encoding/json output to the frontend's property/type contract.
 Keep generated artifacts owned by the normal generator, not by these tests.
 """
@@ -25,6 +25,68 @@ def test_related_results_use_the_same_authorized_appearance_type(generator):
     assert "export interface RelatedTableResult {" in output
     assert "    dataset_uid?: number;" in output
     assert "    dataset_appearance?: DatasetAppearanceResponse;" in output
+
+
+def test_kind_capabilities_match_real_navigation_json(generator, tmp_path):
+    parsed = [generator.parse_struct(spec) for spec in generator.ALLOWLIST]
+    output = generator.build_output(parsed)
+    capability_fields = {
+        "table_uid": "number", "table_kind": "string", "kind_version": "number",
+        "conforming": "boolean", "issues": "string[]", "supported_views": "string[]",
+        "map": "boolean", "tree": "boolean", "inline_embeddings": "boolean",
+        "child_embeddings": "boolean", "semantic_search": "boolean", "chat": "boolean",
+        "admin_only": "boolean", "participant_only": "boolean",
+    }
+    capability_body = output.split("export interface DatasetKindCapabilities {\n", 1)[1].split("\n}", 1)[0]
+    assert set(capability_body.splitlines()) == {
+        f"    {name}: {ts_type};" for name, ts_type in capability_fields.items()
+    }
+    for response_name in ("DatasetTable", "RelatedTableResult"):
+        response_body = output.split(f"export interface {response_name} {{\n", 1)[1].split("\n}", 1)[0]
+        assert "    kind_capabilities?: DatasetKindCapabilities;" in response_body
+
+    go_file = tmp_path / "main.go"
+    go_file.write_text(r'''
+package main
+import (
+    "encoding/json"
+    "os"
+    "easelect/backend/core_components/dataset_kinds"
+    "easelect/backend/core_components/dynamic_table_tools/dtt_models"
+)
+func main() {
+    capabilities := dataset_kinds.Resolve(dataset_kinds.Snapshot{}, 163)
+    values := []dtt_models.Table{{}, {KindCapabilities: &capabilities}}
+    if err := json.NewEncoder(os.Stdout).Encode(values); err != nil { panic(err) }
+}
+''', encoding="utf-8")
+    result = subprocess.run(
+        ["go", "run", str(go_file)], cwd=APP_ROOT, check=True,
+        text=True, capture_output=True, timeout=60,
+        env={**os.environ, "GOWORK": "off"},
+    )
+    omitted, populated = json.loads(result.stdout)
+    assert "kind_capabilities" not in omitted
+    capabilities = populated["kind_capabilities"]
+    assert capabilities.keys() == capability_fields.keys()
+    assert capabilities["table_uid"] == 163
+    assert capabilities["table_kind"] == "ordinary"
+    assert capabilities["kind_version"] == 0
+    assert capabilities["issues"] == ["unregistered"]
+    assert capabilities["supported_views"]
+    assert all(isinstance(value, str) for value in capabilities["supported_views"])
+    boolean_fields = [name for name, ts_type in capability_fields.items() if ts_type == "boolean"]
+    assert all(capabilities[name] is False for name in boolean_fields)
+
+
+@pytest.mark.parametrize("go_type", [
+    "UnknownContract", "dataset_kinds.UnknownContract", "*UnknownContract",
+    "[]UnknownContract", "map[string]UnknownContract",
+])
+def test_unknown_contract_types_still_fail(generator, go_type):
+    names = {spec.go_name: spec.ts_name for spec in generator.ALLOWLIST}
+    with pytest.raises(ValueError, match="Unsupported Go type in allowlisted contract set"):
+        generator.map_go_type(go_type, names)
 
 
 @pytest.fixture
@@ -131,6 +193,7 @@ def test_current_allowlist_preserves_nullable_presentation_overrides(generator):
         for item in parsed for field in item.fields if field.go_type.startswith("*")
     ]
     assert pointers == [
+        ("DatasetCatalogueEntry", "kind_capabilities", True),
         ("DatasetCatalogueEntry", "is_main_table", True),
         ("DatasetCatalogueEntry", "is_about_table", True),
         ("DatasetCatalogueEntry", "folder_id", True),
@@ -138,6 +201,12 @@ def test_current_allowlist_preserves_nullable_presentation_overrides(generator):
         ("ApplicationUpdateStatusResponse", "offer", False),
         ("ApplicationUpdateStatusResponse", "latest_job", False),
         ("SitePresentationSettingsPatch", "row_article_timestamp_display_mode", True),
+        ("DatasetTable", "kind_capabilities", True),
+        ("DatasetTable", "is_main_table", True),
+        ("DatasetTable", "is_about_table", True),
+        ("DatasetTable", "folder_id", True),
+        ("DatasetTable", "icon_key", True),
+        ("RelatedTableResult", "kind_capabilities", True),
         ("RelatedTableResult", "dataset_appearance", True),
         ("CardVisibilityColumn", "show_key_on_card_override", False),
         ("CardVisibilityResponse", "card_style_variant", False),

@@ -45,6 +45,9 @@ ALLOWLIST = [
     StructSpec("frontend/shared/dataset_appearance/config.go", "DatasetCoverSharedValues", "DatasetCoverSharedValues"),
     StructSpec("frontend/shared/dataset_appearance/config.go", "DatasetCoverThemeConfig", "DatasetCoverThemeConfig"),
     StructSpec("backend/core_components/dataset_appearance_store/shared_appearance_revision.go", "AppearanceResponse", "DatasetAppearanceResponse"),
+    # Navigation and related rows share fixed structural support metadata.
+    StructSpec("backend/core_components/dataset_kinds/kind_contract_reader.go", "Capabilities", "DatasetKindCapabilities"),
+    StructSpec("backend/core_components/dynamic_table_tools/dtt_models/models.go", "Table", "DatasetTable"),
     StructSpec("backend/core_components/dynamic_table_tools/dtt_1_row_crud/dtt_1_row_read/get_child_items.go", "RelatedTableResult", "RelatedTableResult"),
 
     StructSpec(

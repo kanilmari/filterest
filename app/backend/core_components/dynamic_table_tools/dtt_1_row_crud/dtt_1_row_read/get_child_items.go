@@ -10,6 +10,7 @@ import (
 	backend "easelect/backend/core_components"
 	auth "easelect/backend/core_components/auth"
 	store "easelect/backend/core_components/dataset_appearance_store"
+	"easelect/backend/core_components/dataset_kinds"
 	"easelect/backend/core_components/dbutils"
 	"easelect/backend/core_components/dynamic_table_tools/dtt_1_row_crud/row_mutation_policy"
 	"easelect/backend/core_components/dynamic_table_tools/dtt_card_picture"
@@ -44,16 +45,17 @@ type FKInfo struct {
 }
 
 type RelatedTableResult struct {
-	Table_name         string                    `json:"dataset"`
-	DatasetUID         int                       `json:"dataset_uid,omitempty"`
-	DatasetAppearance  *store.AppearanceResponse `json:"dataset_appearance,omitempty"`
-	Column_name        string                    `json:"column"`
-	RelationKind       string                    `json:"relation_kind,omitempty"`
-	ReferenceDirection string                    `json:"reference_direction,omitempty"`
-	FilterValue        int                       `json:"filter_value,omitempty"`
-	RowCount           int                       `json:"row_count,omitempty"`
-	Types              map[string]interface{}    `json:"types,omitempty"`
-	Rows               []map[string]interface{}  `json:"rows"`
+	KindCapabilities   *dataset_kinds.Capabilities `json:"kind_capabilities,omitempty"`
+	Table_name         string                      `json:"dataset"`
+	DatasetUID         int                         `json:"dataset_uid,omitempty"`
+	DatasetAppearance  *store.AppearanceResponse   `json:"dataset_appearance,omitempty"`
+	Column_name        string                      `json:"column"`
+	RelationKind       string                      `json:"relation_kind,omitempty"`
+	ReferenceDirection string                      `json:"reference_direction,omitempty"`
+	FilterValue        int                         `json:"filter_value,omitempty"`
+	RowCount           int                         `json:"row_count,omitempty"`
+	Types              map[string]interface{}      `json:"types,omitempty"`
+	Rows               []map[string]interface{}    `json:"rows"`
 }
 
 type relatedDatasetPermissionChecker func(tableName string) (bool, error)
@@ -241,6 +243,7 @@ func GetDynamicRelatedItemsHandler(response_writer http.ResponseWriter, request 
 			httpresponse.RespondWithError(response_writer, http.StatusInternalServerError, "error fetching related dataset appearance")
 			return
 		}
+		populateRelatedKindCapabilities(request.Context(), candidates)
 		response_writer.Header().Set("Content-Type", "application/json")
 		if err := json.NewEncoder(response_writer).Encode(map[string]interface{}{
 			"child_tables": candidates,
@@ -445,6 +448,7 @@ func GetDynamicRelatedItemsHandler(response_writer http.ResponseWriter, request 
 		httpresponse.RespondWithError(response_writer, http.StatusInternalServerError, "error fetching related dataset appearance")
 		return
 	}
+	populateRelatedKindCapabilities(request.Context(), relatedTablesList)
 
 	resp := map[string]interface{}{
 		"child_tables": relatedTablesList,

@@ -12,6 +12,7 @@ import (
 	"sync"
 	"time"
 
+	"easelect/backend/core_components/dataset_kinds"
 	dtt_models "easelect/backend/core_components/dynamic_table_tools/dtt_models"
 )
 
@@ -56,7 +57,7 @@ type existsCacheEntry struct {
 var (
 	schemaCache   = make(map[string]*schemaCacheEntry)
 	schemaCacheMu sync.RWMutex
-	schemaTTL     = 5 * time.Minute
+	schemaTTL     = dataset_kinds.SchemaMetadataTTL
 
 	permCache   = make(map[string]*permCacheEntry)
 	permCacheMu sync.RWMutex
@@ -97,9 +98,11 @@ func setCachedSchemaMetadata(tableName string, entry *schemaCacheEntry) {
 	schemaCacheMu.Unlock()
 }
 
-// InvalidateSchemaCache removes cached schema metadata for a table.
-// Called from ModifyColumnsHandler, DropTableHandler, etc.
+// InvalidateSchemaCache removes a table's column metadata and all scoped kind
+// evidence, since a child/foreign-key change can affect another dataset's support.
+// Mutation callers invoke this after successful commit, never during rollback.
 func InvalidateSchemaCache(tableName string) {
+	dataset_kinds.InvalidateAll()
 	key := "schema|" + tableName
 	schemaCacheMu.Lock()
 	delete(schemaCache, key)

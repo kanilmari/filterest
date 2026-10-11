@@ -186,6 +186,7 @@ func queryIntelligentResultsStream(w http.ResponseWriter, r *http.Request) error
 		"data":            textRows,
 		"types":           types,
 	}
+	addDatasetKindCapabilities(r.Context(), tableName, first)
 	if err := json.NewEncoder(w).Encode(first); err != nil {
 		return err
 	}
@@ -248,6 +249,9 @@ func queryIntelligentResultsStream(w http.ResponseWriter, r *http.Request) error
 							"columns":         cols,
 							"data":            aiRows,
 							"types":           types,
+						}
+						if capabilities, present := first["kind_capabilities"]; present {
+							aiPacket["kind_capabilities"] = capabilities
 						}
 						if err := json.NewEncoder(w).Encode(aiPacket); err != nil {
 							return err
@@ -411,7 +415,7 @@ func queryIntelligentResults(w http.ResponseWriter, r *http.Request) error {
 	logSearchDiagnostics(userQuery, textHits, semanticHits, embeddingsPresent)
 
 	if len(candidates) == 0 {
-		return writeEmptyResultJSON(w)
+		return writeEmptyResultJSON(w, r, tableName)
 	}
 
 	//------------------------------------------------
@@ -478,6 +482,7 @@ func queryIntelligentResults(w http.ResponseWriter, r *http.Request) error {
 		"types":          columnDataTypes,
 		"resultsPerLoad": resultsPerLoad,
 	}
+	addDatasetKindCapabilities(r.Context(), tableName, respJSON)
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	return json.NewEncoder(w).Encode(respJSON)
 }
@@ -517,7 +522,7 @@ func logSearchDiagnostics(userQuery string, textHits []rowTextRank, semHits []ro
  *  JSON-apuri tyhjille tuloksille
  * =========================================================*/
 
-func writeEmptyResultJSON(w http.ResponseWriter) error {
+func writeEmptyResultJSON(w http.ResponseWriter, r *http.Request, tableName string) error {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	empty := map[string]interface{}{
 		"columns":        []string{},
@@ -525,6 +530,7 @@ func writeEmptyResultJSON(w http.ResponseWriter) error {
 		"types":          map[string]interface{}{},
 		"resultsPerLoad": 0,
 	}
+	addDatasetKindCapabilities(r.Context(), tableName, empty)
 	return json.NewEncoder(w).Encode(empty)
 }
 

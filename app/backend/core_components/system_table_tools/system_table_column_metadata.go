@@ -7,11 +7,14 @@ package system_table_tools
 
 import (
 	backend "easelect/backend/core_components"
+	"easelect/backend/core_components/dataset_kinds"
 	"easelect/backend/core_components/dataset_routes"
+	"easelect/backend/core_components/dataset_visibility"
 	"easelect/backend/core_components/dynamic_table_tools/dtt_2_column_crud/dtt_2_column_update"
 	"easelect/backend/core_components/dynamic_table_tools/dtt_crud_workflows"
 	"easelect/backend/core_components/dynamic_table_tools/dtt_models"
 	"easelect/backend/core_components/httpresponse"
+	"easelect/backend/core_components/permissions"
 	"easelect/backend/core_components/runtime_grant_mutations"
 	e_sessions "easelect/backend/core_components/sessions"
 	"easelect/backend/pipeline/access_control"
@@ -19,6 +22,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"strconv"
 )
 
 func buildGroupedTablesQuery(iconKeyExpr string) string {
@@ -154,6 +158,45 @@ func GetGroupedTables(response_writer http.ResponseWriter, http_request *http.Re
 		log.Printf("\033[31merror: processing table rows: %v\033[0m", err)
 		httpresponse.RespondWithError(response_writer, http.StatusInternalServerError, "error processing table rows")
 		return
+	}
+
+	query_rows.Close()
+	// Catalogue entries already passed readable-list and UID-bound name checks.
+	// Recheck ordinary row read and visibility before adding optional structural metadata.
+	readableUIDs := []int64{}
+	readable := make(map[int64]bool)
+	for i := range tables_list {
+		uid := int64(tables_list[i].TableUID)
+		allowed, err := permissions.CheckRouteTablePermission(backend.Db, "/api/get-results", userID,
+			permissions.RouteTableScope{TableUID: strconv.FormatInt(uid, 10)}, permissions.AccessControlRouteTableOptions(false))
+		if err != nil {
+			log.Printf("\033[31merror: optional navigation metadata permission: %v\033[0m", err)
+			continue
+		}
+		if !allowed {
+			continue
+		}
+		hidden, err := dataset_visibility.HiddenForUser(backend.Db, tables_list[i].TableName, userID)
+		if err != nil {
+			log.Printf("\033[31merror: optional navigation metadata visibility: %v\033[0m", err)
+			continue
+		}
+		if !hidden {
+			readable[uid] = true
+			readableUIDs = append(readableUIDs, uid)
+		}
+	}
+	snapshot, kindErr := dataset_kinds.ReadSnapshot(http_request.Context(), backend.Db, readableUIDs...)
+	if kindErr != nil {
+		log.Printf("\033[31merror: optional navigation dataset kind evidence: %v\033[0m", kindErr)
+	} else {
+		for i := range tables_list {
+			uid := int64(tables_list[i].TableUID)
+			if readable[uid] {
+				capabilities := dataset_kinds.ResolveCached(snapshot, uid)
+				tables_list[i].KindCapabilities = &capabilities
+			}
+		}
 	}
 
 	response_map := map[string]interface{}{

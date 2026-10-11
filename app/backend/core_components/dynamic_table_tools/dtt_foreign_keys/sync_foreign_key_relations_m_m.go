@@ -7,6 +7,7 @@ package dtt_foreign_keys
 
 import (
 	"database/sql"
+	"easelect/backend/core_components/dataset_kinds"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -253,6 +254,8 @@ func SyncManyToManyFKConstraints(db *sql.DB, preserveLegacy ...bool) error {
 			return fmt.Errorf("insert failed for bridging table %s (colA=%s, colB=%s): %w",
 				mm.BridgingTable, mm.ColA, mm.ColB, err)
 		}
+		// Each pool Exec has committed; clear even if a later sync step fails.
+		dataset_kinds.InvalidateAll()
 		log.Printf("[INFO] Inserted new M–M bridging row for table '%s' -> tables '%s'/'%s'.",
 			mm.BridgingTable, mm.TableA, mm.TableB)
 	}
@@ -263,6 +266,7 @@ func SyncManyToManyFKConstraints(db *sql.DB, preserveLegacy ...bool) error {
 		if err != nil {
 			return fmt.Errorf("delete failed for id=%d in system_foreign_key_relations_m_m: %w", id, err)
 		}
+		dataset_kinds.InvalidateAll()
 		log.Printf("[INFO] Deleted obsolete M–M bridging row with id=%d.", id)
 	}
 

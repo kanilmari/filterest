@@ -73,6 +73,7 @@ language_seed_migrations = (
     "20261009000071_seed_publication_language_keys.sql",
     "20261009000073_repair_publication_translations.sql",
     "20261009000074_seed_filterbar_style_language_key.sql",
+    "20261009000076_seed_dataset_kind_language_keys.sql",
 )
 # A setting an upgrade adds is added for a new installation by the same file, so
 # the default is written once and an upgraded site and a new one start with the
@@ -109,6 +110,7 @@ repair_schema_migrations = (
     "20261009000050_create_application_update_admission.sql",
     "20261009000060_extend_dataset_appearance_three_places.sql",
     "20261009000070_add_publication_fields_to_release_goals.sql",
+    "20261009000075_add_dataset_kind_contracts.sql",
 )
 # Complete the physical actor columns after development tables and support functions,
 # before schema privileges. The data step later registers the same columns.

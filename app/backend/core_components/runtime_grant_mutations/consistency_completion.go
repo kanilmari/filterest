@@ -28,6 +28,8 @@ func (m *Mutation) FinishRepair(ctx context.Context) error {
 	_, err = runtime_grants.ReconcileRuntimeGrantsScoped(ctx, m.Tx, m.roles, nil, scope)
 	if err != nil {
 		_ = m.Tx.Rollback()
+	} else {
+		scheduleKindEvidenceInvalidation(ctx)
 	}
 	return err
 }

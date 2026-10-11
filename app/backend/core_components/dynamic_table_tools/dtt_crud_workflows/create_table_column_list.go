@@ -233,9 +233,8 @@ func applyCreateColumnSettings(q dbutils.Querier, tableName string, list []Creat
 // Why: The same order ModifyColumnsHandler keeps for its schema changes.
 func scheduleCreatedDatasetCacheInvalidation(ctx context.Context, tableName string, invalidate func(string)) {
 	hook := func() { invalidate(tableName) }
-	if !dbutils.RegisterAfterCommitHook(ctx, hook) {
-		hook()
-	}
+	// A transaction-only caller owns its eventual commit and cache clearing.
+	dbutils.RegisterAfterCommitHook(ctx, hook)
 }
 
 // invalidateDatasetReadCaches drops every cached read of one dataset: its

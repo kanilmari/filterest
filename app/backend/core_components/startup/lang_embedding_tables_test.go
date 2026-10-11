@@ -8,6 +8,7 @@ import (
 	"context"
 	"database/sql"
 	"database/sql/driver"
+	"easelect/backend/core_components/dataset_kinds/kindtest"
 	"errors"
 	"fmt"
 	"io"
@@ -50,6 +51,8 @@ var (
 func TestStartupEmbeddingCreationUsesSchemaAndPropagatesDDLFailure(t *testing.T) {
 	for _, fail := range []int{-1, 0, 1, 2, 3} {
 		t.Run(fmt.Sprint(fail), func(t *testing.T) {
+			read := kindtest.WarmProbe(t)
+			read(1)
 			db := newLangEmbeddingTestDB(t)
 			defer db.Close()
 			pushLangEmbeddingQuery(langEmbeddingQuery{columns: []string{"schema_name", "table_name"}, rows: [][]driver.Value{{"schema quoted", "host quoted"}}})
@@ -74,6 +77,11 @@ func TestStartupEmbeddingCreationUsesSchemaAndPropagatesDDLFailure(t *testing.T)
 			if fail >= 0 && len(calls) != fail+2 {
 				t.Fatalf("continued after required DDL failure: %v", calls)
 			}
+			want := int64(1)
+			if fail < 0 {
+				want = 2
+			}
+			read(want) // A failed discovery/DDL rolls back without clearing evidence.
 		})
 	}
 }

@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"os"
 
+	"easelect/backend/core_components/dataset_kinds"
 	"easelect/backend/core_components/dbutils"
 	"easelect/backend/core_components/httpresponse"
 	"easelect/backend/core_components/runtime_grants"
@@ -142,7 +143,18 @@ func (m *Mutation) Finish(ctx context.Context, datasetUIDs ...int64) (err error)
 	}
 	result, err := reconcile(ctx, m.Tx, m.roles, &m.before, scope)
 	logMutationFindings(result)
+	if err == nil {
+		scheduleKindEvidenceInvalidation(ctx)
+	}
 	return err
+}
+
+// Schema/registry mutations share this completion boundary, including foreign
+// keys, child creation, generic metadata writes, rename, drop and CSV import.
+// Never invalidate before commit or on rollback. Transaction-only callers must
+// call dataset_kinds.InvalidateAll themselves after their own successful commit.
+func scheduleKindEvidenceInvalidation(ctx context.Context) {
+	dbutils.RegisterAfterCommitHook(ctx, dataset_kinds.InvalidateAll)
 }
 
 func RespondError(w http.ResponseWriter, err error) {

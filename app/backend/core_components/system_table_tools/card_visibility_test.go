@@ -35,7 +35,7 @@ func TestScheduleCardVisibilitySchemaCacheInvalidationDefersToCommitHook(t *test
 	}
 }
 
-func TestScheduleCardVisibilitySchemaCacheInvalidationFallsBackWithoutLazyTx(t *testing.T) {
+func TestScheduleCardVisibilitySchemaCacheInvalidationRequiresCommitHook(t *testing.T) {
 	calledWith := ""
 	scheduleCardVisibilitySchemaCacheInvalidation(
 		context.Background(),
@@ -43,8 +43,8 @@ func TestScheduleCardVisibilitySchemaCacheInvalidationFallsBackWithoutLazyTx(t *
 		func(tableName string) { calledWith = tableName },
 	)
 
-	if calledWith != "travel_deals" {
-		t.Fatalf("fallback invalidation table = %q, want travel_deals", calledWith)
+	if calledWith != "" {
+		t.Fatalf("without a commit hook no commit is proved; invalidated %q", calledWith)
 	}
 }
 

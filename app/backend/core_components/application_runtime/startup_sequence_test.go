@@ -1,9 +1,11 @@
 // startup_sequence_test.go
 // Proves error propagation prevents workers/readiness after any failed required step.
 // Checks the actual production sequence, including policy consumers and legacy preservation.
+// Keeps restored metadata cache clearing before readers become ready.
 package application_runtime
 
 import (
+	"easelect/backend/core_components/dataset_kinds/kindtest"
 	"errors"
 	"reflect"
 	"testing"
@@ -15,10 +17,23 @@ func TestRequiredStartupOrdersInputsBeforeGrantsAndConsumers(t *testing.T) {
 	for _, step := range steps {
 		names = append(names, step.name)
 	}
-	want := []string{"role identities", "migrations", "dataset identities", "column metadata", "one-to-many discovery", "many-to-many discovery", "embedding tables", "route registration", "function synchronization", "UI routes", "approved rights cleanup", "administrator route rights", "administrator dataset rights", "anonymous browsing", "runtime grants", "reserved identities"}
+	want := []string{"role identities", "migrations", "dataset identities", "column metadata", "one-to-many discovery", "many-to-many discovery", "embedding tables", "route registration", "function synchronization", "UI routes", "approved rights cleanup", "administrator route rights", "administrator dataset rights", "anonymous browsing", "runtime grants", "reserved identities", "dataset evidence cache"}
 	if !reflect.DeepEqual(names, want) {
 		t.Fatalf("readiness ordering changed: %v", names)
 	}
+}
+
+func TestRequiredStartupClearsRestoredKindEvidenceBeforeReadiness(t *testing.T) {
+	read := kindtest.WarmProbe(t)
+	read(1)
+	steps := requiredStartupSteps("product", Options{}, "test")
+	for i := 0; i < len(steps)-1; i++ {
+		steps[i].run = func() error { return nil }
+	}
+	if err := runRequiredStartup(steps); err != nil {
+		t.Fatal(err)
+	}
+	read(2)
 }
 
 func TestRequiredStartupPropagatesEveryFailureBeforeReadiness(t *testing.T) {

@@ -1,6 +1,9 @@
 # Table Creation Protocol
 
-To ensure the stability and consistency of the Filterest platform, all database tables must adhere to the following strict protocol. "Under the table" creation (creating tables without proper registration and triggers) is strictly forbidden as it breaks UI tools, synchronization, and AI features.
+New datasets follow a versioned kind contract and intentional registration.
+Historical datasets use explicit compatibility contracts; a missing historical
+timestamp is not permission to invent one or bulk-convert a working table.
+Unregistered physical helpers must be owned by a registered host/factory.
 
 ## 1. Naming Conventions
 
@@ -12,7 +15,9 @@ Every table must belong to one of the following categories and use the correspon
 
 ## 2. Required Schema Structure
 
-All tables must include the following standard columns:
+Canonical new kinds use an automatically generated primary key and maintained
+timestamps. Ordinary content and locations use the following base (an equivalent
+integer identity key is also valid):
 
 ```sql
 id SERIAL PRIMARY KEY
@@ -23,9 +28,84 @@ updated TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
 *   **`created`**: Timestamp of row creation. Never null.
 *   **`updated`**: Timestamp of last modification. Never null. Must be updated via trigger.
 
+The authority is the embedded
+[kind catalogue](../../backend/core_components/dataset_kinds/kind_contract_catalogue.json)
+and its [validator](../../backend/core_components/dataset_kinds/kind_contract_validator.go).
+Registration stores `table_kind`, `kind_version` and `kind_config` against the
+stable dataset key (`table_uid`). Relationship configuration refers to another
+dataset's key and real typed foreign-key columns, never a table-name convention.
+
+| Kind | Canonical version 1 | Version 0 compatibility |
+| --- | --- | --- |
+| Ordinary | Generated integer identity, timestamps, protected creator/owner references for content | Unknown/custom shapes retain generic browsing; existing inline `embedding_vector` and flag-backed, structurally verified embedding children remain discoverable |
+| Embeddings | Base identity/timestamps, typed `host_row_id` with cascade, required language, vector/hash, unique host/language, declared vector model/dimensions | Existing child factory may omit ID, creation time and uniqueness, use nullable host/language and a timestamp without timezone; a real typed host FK is still required |
+| Locations | Ordinary content base, nullable `postgis.geometry(Point,4326)` position, title/address | Point locations without timestamps and typed historical coordinate pairs; existing typed location children keep host Map support, even when empty |
+| Chat messages | BIGINT identity/timestamps, conversation/sequence, participant and sender-name snapshot, text/question/answer payload fields, client request ID, reply/answer/supersession references and sequencing/idempotency uniqueness | None: names or chat-like columns never grant Chat |
+| Chat settings | BIGINT identity/timestamps, title, message-dataset UID, mode, creator, archive/revision/configuration | None |
+
+Slice 1 supplies the catalogue and structural resolver. The current general
+creation route and embedding factory still use their existing compatibility
+schemas. Fixed kind selection/creation is the next slice; declaring version 1
+requires validating the complete contract rather than changing a label.
+Question payload validation and same-conversation reference checks belong to
+the chat writer, not schema inference.
+
+The resolver reads schema evidence without reading records. It validates types,
+nullability, generated keys, uniqueness, typed FKs, update maintenance, geometry
+subtype/SRID and declared vector dimensions. Canonical hosts need explicit
+relationships for semantic/Map support. Legacy discovery preserves working
+shapes and does not change rights, default views or provider consent. Drift
+disables the affected specialized capability; generic browsing remains available.
+
+Authorized navigation, row/count, related, vector and intelligent-search responses
+may carry `kind_capabilities`. Navigation requires the enabled ordinary row-read
+grant before attaching them; hidden non-administrator count responses omit them.
+An evidence-query or decoding failure logs the problem and preserves the previous
+response without capabilities, including related responses. Capabilities describe
+structural support, not permission, and do not replace the existing view registry
+or enable a renderer.
+
+Scoped evidence covers requested datasets, configured or incoming storage children,
+and referenced key shapes needed by their contracts. Evidence snapshots and their
+once-computed fingerprints share the row reader's schema metadata cache contract:
+a five-minute TTL and explicit invalidation after committed application changes
+through `InvalidateSchemaCache` or `dataset_kinds.InvalidateAll`. Rollbacks retain
+warm evidence. External DDL appears within the same TTL as column metadata.
+The evidence cache retains at most 256 dataset entries and 256 name aliases;
+replacement and expiry retire previous aliases. Database queries and fingerprint
+computation run outside the cache mutex. Cold callers share in-flight reads per
+key and generation; related datasets share one deduplicated query for cold entries
+per request. First-time name/UID discovery may wait for the opposite identity
+form before retrying the lookup. Missing or expired aliases leave names unresolved;
+their flights use the schema-qualified name, while UID flights use the UID.
+Readers validate each discovered root against the requested UID or qualified name
+before accepting evidence. A mismatch retries the correctly keyed lookup; shared
+results are published only under their own discovered identity. Warm reads do not
+repeat the catalogue query or fingerprint computation. Invalidation briefly clears
+maps and advances the generation without waiting for in-flight queries. New requests cannot join old
+generations, and old queries cannot publish into the current cache. Database
+recovery stops the process; startup clears evidence after migrations and metadata
+discovery before readiness.
+HTTP writers register after-commit hooks. Transaction-only helpers cannot prove a
+commit; their caller must clear evidence after its own successful commit. Missing
+hook contexts never fall back to clearing caches inside an uncommitted transaction.
+
+Chat is planned for conforming message datasets and authenticated administrators
+in the first version. Settings datasets never receive the message Chat view.
+Several conversations share one provisioned message dataset; conversation
+membership is the privacy boundary, and administrator oversight must be a
+separate visible action. Messages and attachments remain until separately
+authorized deletion, with no automatic expiry or cascading history deletion.
+Later ordinary users may start conversations in administrator-prepared message
+datasets. Classification grants none of these rights; creation and API slices
+must enforce them independently.
+
 ## 3. Automation & Triggers
 
-Every table must have an automatic update trigger to ensure `updated` is always accurate, regardless of whether the change comes from the API, a SQL script, or a direct DB edit.
+Every canonical version-one table must have an enabled, unconditional, row-level
+BEFORE UPDATE trigger that maintains `updated` on all updates. Version-zero
+compatibility does not add missing historical columns or triggers. Application
+writes use supported APIs; shared schema changes use versioned migrations.
 
 ### Naming Standard
 *   **Function**: `set_<table_name>_updated_timestamp()`
@@ -52,7 +132,9 @@ EXECUTE FUNCTION set_my_table_updated_timestamp();
 A table is not considered "valid" until it is registered in the platform's metadata.
 
 1.  **`system_table_folders`**: The table must belong to a logical folder.
-2.  **`system_db_tables`**: The table must have a row in this table linking it to a folder.
+2.  **`system_db_tables`**: The dataset must have a row linking it to a folder,
+    with kind intent/version and validated relationship configuration. Existing
+    rows default to ordinary/version 0 without rewriting historical structures.
 3.  **`system_column_details`**: (Optional but recommended) Metadata about columns for UI rendering.
 
 ### Runtime Safety Nets
@@ -111,10 +193,12 @@ Use this for core system tables or permanent dev tools.
 
 ## Checklist for Manual Creation
 - [ ] Table has `dev_`, `app_`, or `system_` prefix.
-- [ ] Table has `created` and `updated` (NOT NULL).
+- [ ] Selected canonical kind/version and verified the whole contract (or documented an explicit existing compatibility shape).
+- [ ] Canonical table has generated ID and `created`/`updated` (NOT NULL).
 - [ ] Trigger function created (`set_...`).
 - [ ] Trigger assigned (`update_...`).
 - [ ] Inserted row into `system_db_tables`.
 - [ ] Added or verified `system_column_details` rows for the table.
 - [ ] Chosen intentional `card_element` values where `'details'` is not good enough.
 - [ ] Verified admin group can see/use the table without manual permission repair.
+- [ ] Verified specialized capabilities after creation, and unchanged saved defaults/rights on upgrades.

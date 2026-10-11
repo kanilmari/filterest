@@ -225,6 +225,7 @@ func GetResultsVector(response_writer http.ResponseWriter, request *http.Request
 				log.Printf("\033[31merror resolving embedding sources: %s\033[0m\n", sourcesErr.Error())
 			}
 			response_data := map[string]interface{}{"columns": []string{}, "data": []map[string]interface{}{}, "types": map[string]interface{}{}, "resultsPerLoad": 0}
+			addDatasetKindCapabilities(request.Context(), table_name, response_data)
 			json.NewEncoder(response_writer).Encode(response_data)
 			return
 		}
@@ -331,6 +332,7 @@ func GetResultsVector(response_writer http.ResponseWriter, request *http.Request
 	}
 
 	response_writer.Header().Set("Content-Type", "application/json; charset=utf-8")
+	addDatasetKindCapabilities(request.Context(), table_name, response_data)
 	if err := json.NewEncoder(response_writer).Encode(response_data); err != nil {
 		log.Printf("\033[31merror encoding response: %s\033[0m\n", err.Error())
 		httpresponse.RespondWithError(response_writer, http.StatusInternalServerError, "error encoding response")

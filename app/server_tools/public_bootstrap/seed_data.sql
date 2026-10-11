@@ -6942,6 +6942,44 @@ AND NOT EXISTS (
 )
 ON CONFLICT (lang_key_id, language_code) DO UPDATE SET translation = EXCLUDED.translation
 WHERE NULLIF(btrim(existing.translation, E' \t\n\r\f' || chr(11)), '') IS NULL;
+-- 20261009000076_seed_dataset_kind_language_keys.sql
+-- Labels kind metadata and evidence-read errors in every bundled language.
+-- Connects registry inspection and API refusals to the existing translation stores.
+-- Preserves authored site translations on upgrades and replay.
+-- VERSION_DB: 9.10.2
+-- VERSION_DB_OWNER: 20261009000099_record_database_release_9_10_2.sql
+WITH authored(lang_key,fi,en,ch,yue) AS (VALUES
+ ('table_kind','Tietoaineiston laji','Dataset kind','数据集类型','資料集類型'),
+ ('kind_version','Lajisopimuksen versio','Kind contract version','类型契约版本','類型契約版本'),
+ ('kind_config','Lajin suhteet ja asetukset','Kind relationships and settings','类型关系与设置','類型關係與設定'),
+ ('dataset_kind_evidence_unavailable','Tietoaineiston rakennetta ei voitu tarkistaa. Yritä uudelleen.','The dataset structure could not be checked. Try again.','无法检查数据集结构。请重试。','無法檢查資料集結構。請再試。')
+), inserted AS (
+ INSERT INTO public.system_lang_keys(lang_key,fi,en,ch,yue,creation_spec)
+ SELECT lang_key,fi,en,ch,yue,'WL163 dataset kind contracts.' FROM authored
+ WHERE NOT EXISTS (SELECT 1 FROM public.system_lang_keys k WHERE k.lang_key=authored.lang_key)
+ RETURNING id,lang_key,fi,en,ch,yue
+), served AS (
+ SELECT * FROM inserted UNION ALL
+ SELECT k.id,k.lang_key,k.fi,k.en,k.ch,k.yue
+ FROM public.system_lang_keys k JOIN authored a USING(lang_key)
+ WHERE k.lang_key NOT IN (SELECT lang_key FROM inserted)
+)
+INSERT INTO public.system_lang_key_translations(lang_key_id,language_code,translation,source_kind,review_status)
+SELECT s.id,c.language_code,c.translation,'manual',c.review_status FROM served s
+JOIN authored a USING(lang_key)
+-- Like migration 74, trim only for blank detection; keep nonblank authored bytes.
+-- Canonical Chinese candidates follow migrations 71/73's review states.
+CROSS JOIN LATERAL(VALUES
+ ('fi',CASE WHEN NULLIF(btrim(s.fi,E' \t\n\r\f' || chr(11)),'') IS NULL THEN a.fi ELSE s.fi END,'approved'),
+ ('en',CASE WHEN NULLIF(btrim(s.en,E' \t\n\r\f' || chr(11)),'') IS NULL THEN a.en ELSE s.en END,'approved'),
+ ('zh-CN',CASE WHEN NULLIF(btrim(s.ch,E' \t\n\r\f' || chr(11)),'') IS NULL THEN a.ch ELSE s.ch END,'needs_review'),
+ ('zh-TW',CASE WHEN NULLIF(btrim(s.yue,E' \t\n\r\f' || chr(11)),'') IS NULL THEN a.yue ELSE s.yue END,'needs_review'),
+ ('zh-HK',CASE WHEN NULLIF(btrim(s.yue,E' \t\n\r\f' || chr(11)),'') IS NULL THEN a.yue ELSE s.yue END,'needs_review')
+) c(language_code,translation,review_status)
+JOIN public.system_languages l ON l.language_code=c.language_code
+WHERE NULLIF(btrim(c.translation,E' \t\n\r\f' || chr(11)),'') IS NOT NULL
+AND NOT EXISTS (SELECT 1 FROM public.system_lang_key_translations t
+                  WHERE t.lang_key_id=s.id AND t.language_code=c.language_code);
 -- 20260927000001_add_absolute_sign_in_limit.sql
 -- Adds the setting that decides how long one sign-in may last at the very most.
 -- Bridges the administrator's settings view and the deadline stamped into every
@@ -8003,7 +8041,7 @@ DECLARE
     findings text;
 BEGIN
     SELECT string_agg(marker, ', ' ORDER BY marker) INTO missing_markers
-      FROM unnest(ARRAY['wl58_row_actor_support', 'wl58_row_actor_marks_by_table_uid', 'wl58_row_actor_trigger_definitions', 'k116_login_names', 'password_reset_dummy_work', 'system_favorites_table', 'system_front_page_revisions_table', 'system_front_page_blocks_table', 'wl103_row_group_classifications', 'wl132_surviving_sign_in', 'wl52_drop_column_label_value_layout', 'system_dataset_appearance_table', 'wl157_migration_execution_evidence', 'dataset_card_appearance_cutover', 'wl157_application_update_admission', 'dataset_appearance_three_place_schema', 'wl164_publication_fields', 'wl157_application_update_refusal_keys', 'wl58_row_actor_columns', 'system_favorites_registry', 'system_front_page_blocks_registry', 'wl103_row_group_classifications_registry', 'wl144_registry_reference_key', 'dataset_media_hidden', 'wl157_application_update_capability', 'dataset_appearance_three_place_backfill', 'wl164_publication_column_metadata']::text[]) AS marker
+      FROM unnest(ARRAY['wl58_row_actor_support', 'wl58_row_actor_marks_by_table_uid', 'wl58_row_actor_trigger_definitions', 'k116_login_names', 'password_reset_dummy_work', 'system_favorites_table', 'system_front_page_revisions_table', 'system_front_page_blocks_table', 'wl103_row_group_classifications', 'wl132_surviving_sign_in', 'wl52_drop_column_label_value_layout', 'system_dataset_appearance_table', 'wl157_migration_execution_evidence', 'dataset_card_appearance_cutover', 'wl157_application_update_admission', 'dataset_appearance_three_place_schema', 'wl164_publication_fields', 'wl163_dataset_kind_contracts', 'wl157_application_update_refusal_keys', 'wl58_row_actor_columns', 'system_favorites_registry', 'system_front_page_blocks_registry', 'wl103_row_group_classifications_registry', 'wl144_registry_reference_key', 'dataset_media_hidden', 'wl157_application_update_capability', 'dataset_appearance_three_place_backfill', 'wl164_publication_column_metadata']::text[]) AS marker
      WHERE NOT EXISTS (SELECT 1 FROM public.system_data_repair_records AS record
                         WHERE record.migration = marker AND record.action = 'completed');
     IF missing_markers IS NOT NULL THEN
@@ -8213,6 +8251,8 @@ BEGIN
       ('20261009000072_register_publication_columns.sql', 'c41e01edd09a747af7a11b20e8ddd440913f245d1f3783c4bac7d72e4861d3f8', 'bootstrap_baseline', 'bootstrap'),
       ('20261009000073_repair_publication_translations.sql', '8086ea742c9a040c6e4535a35504e8e00300a270a2cc6cac72117d05ae8450c2', 'bootstrap_baseline', 'bootstrap'),
       ('20261009000074_seed_filterbar_style_language_key.sql', 'df22114d09d6c6fe9410ad14392710aaba3134a88d74e9474c7092f2b4c4716d', 'bootstrap_baseline', 'bootstrap'),
+      ('20261009000075_add_dataset_kind_contracts.sql', '485a8204e2ce7c98fe5e7a6016774569eba5e58182c06400055114e8d85f1c81', 'bootstrap_baseline', 'bootstrap'),
+      ('20261009000076_seed_dataset_kind_language_keys.sql', 'ef3ad5ec03814d753f955ef3ea262ed19e574b318de7fd63e2f5f9c292eb93c4', 'bootstrap_baseline', 'bootstrap'),
       ('20261009000077_retire_global_dataset_alias_catalogue.sql', 'c5ade168ebaf022b72616c90dfeb13bb0e137c9bb0476eef03d048c619071dfa', 'bootstrap_baseline', 'bootstrap'),
       ('20261009000099_record_database_release_9_10_2.sql', '190f66df60bd062997ebd80b2392eff7fdd843c9c8a709a4a1c30f136e6bbd97', 'bootstrap_baseline', 'bootstrap')
     ON CONFLICT (filename) DO NOTHING;

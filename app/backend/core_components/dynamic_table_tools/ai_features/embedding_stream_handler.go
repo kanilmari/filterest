@@ -8,6 +8,7 @@ import (
 	"context"
 	"database/sql"
 	backend "easelect/backend/core_components"
+	"easelect/backend/core_components/dataset_kinds"
 	"easelect/backend/core_components/httpresponse"
 	"easelect/backend/core_components/security"
 	e_sessions "easelect/backend/core_components/sessions"
@@ -78,6 +79,8 @@ func EmbeddingStreamHandler(w http.ResponseWriter, r *http.Request) {
 			sendSSE("error", escape_for_sse(fmt.Sprintf("could not add embedding_vector column: %v", alterErr)))
 			return
 		}
+		// This pool write has committed before Exec returns successfully.
+		dataset_kinds.InvalidateAll()
 	} else if err != nil {
 		log.Printf("\033[31merror: checking embedding_vector column: %v\033[0m", err)
 		sendSSE("error", escape_for_sse(fmt.Sprintf("column check error: %v", err)))

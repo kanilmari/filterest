@@ -51,6 +51,11 @@ func TestDatasetCatalogueSameNamesAcrossSchemasKeepPublicIdentity(t *testing.T) 
 				pushOrphanQuery(orphanQueuedQuery{cols: []string{"id", "uid", "name", "default", "filterbar", "main", "about", "folder", "project", "top", "icon", "media"},
 					rows: [][]driver.Value{{int64(900), int64(11), "app_orders", false, false, false, false, nil, false, false, nil, false},
 						{int64(901), int64(12), "app_orders", false, false, false, false, nil, false, false, nil, false}}})
+				// Only the UID-bound public entry reaches the merged optional-kind
+				// read/visibility checks and evidence query, ahead of the order check.
+				pushOrphanQuery(orphanQueuedQuery{cols: []string{"allowed"}, rows: [][]driver.Value{{int64(1)}}})
+				pushOrphanQuery(orphanQueuedQuery{cols: []string{"hidden"}, rows: [][]driver.Value{{false}}})
+				pushOrphanQuery(orphanQueuedQuery{cols: []string{"snapshot"}, rows: [][]driver.Value{{[]byte(`{"registrations":[{"table_uid":11,"name":"public.app_orders","table_kind":"ordinary"}],"shapes":[{"name":"public.app_orders"}]}`)}}})
 				pushOrphanQuery(orphanQueuedQuery{cols: []string{"exists"}, rows: [][]driver.Value{{false}}})
 				response := httptest.NewRecorder()
 				GetGroupedTables(response, catalogueRequest(t, user))

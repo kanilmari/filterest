@@ -5,6 +5,7 @@
 package dtt_crud_workflows
 
 import (
+	"easelect/backend/core_components/dynamic_table_tools/dtt_1_row_crud/dtt_1_row_read"
 	"easelect/backend/core_components/httpresponse"
 	"encoding/json"
 	"fmt"
@@ -200,6 +201,8 @@ func CreateIndexesHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
+		// Pool Exec committed this index, including uniqueness used by kind contracts.
+		dtt_1_row_read.InvalidateSchemaCache(tableName)
 		results = append(results, fmt.Sprintf("Index %s created on %s(%s)", indexName, tableName, strings.Join(idx.Columns, ", ")))
 		log.Printf("[CreateIndexesHandler] Created index %s on %s(%s)", indexName, tableName, strings.Join(idx.Columns, ", "))
 	}

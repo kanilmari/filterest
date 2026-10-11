@@ -13,6 +13,7 @@ import (
 	"net/http"
 	"strings"
 
+	"easelect/backend/core_components/dataset_kinds"
 	"easelect/backend/core_components/dbutils"
 	e_sessions "easelect/backend/core_components/sessions"
 
@@ -51,6 +52,7 @@ func RebuildSearchVectorHandler(w http.ResponseWriter, r *http.Request) {
 		httpresponse.RespondWithError(w, http.StatusInternalServerError, "search vector rebuild failed")
 		return
 	}
+	dbutils.RegisterAfterCommitHook(r.Context(), dataset_kinds.InvalidateAll)
 	w.Header().Set("Content-Type", "application/json")
 	w.Write([]byte(`{"status":"ok"}`))
 }

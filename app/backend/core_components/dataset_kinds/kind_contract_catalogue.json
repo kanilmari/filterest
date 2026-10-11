@@ -1,0 +1,259 @@
+{
+  "ordinary": {
+    "0": {
+      "columns": {},
+      "views": [
+        "table",
+        "card",
+        "normal",
+        "article_view",
+        "transposed"
+      ]
+    },
+    "1": {
+      "standard": true,
+      "actors": true,
+      "columns": {},
+      "views": [
+        "table",
+        "card",
+        "normal",
+        "article_view",
+        "transposed"
+      ]
+    }
+  },
+  "embeddings": {
+    "0": {
+      "columns": {
+        "host_row_id": [
+          "int2",
+          "int4",
+          "int8",
+          "text",
+          "uuid"
+        ],
+        "language_code": [
+          "text",
+          "varchar"
+        ],
+        "embedding": [
+          "vector"
+        ],
+        "updated": [
+          "timestamp",
+          "timestamptz"
+        ],
+        "content_md5": [
+          "text",
+          "varchar"
+        ]
+      },
+      "views": [
+        "table"
+      ]
+    },
+    "1": {
+      "standard": true,
+      "columns": {
+        "host_row_id": [
+          "int2",
+          "int4",
+          "int8",
+          "text",
+          "uuid"
+        ],
+        "language_code": [
+          "text",
+          "varchar"
+        ],
+        "embedding": [
+          "vector"
+        ],
+        "content_md5": [
+          "text",
+          "varchar"
+        ]
+      },
+      "required": [
+        "host_row_id",
+        "language_code"
+      ],
+      "unique": [
+        [
+          "host_row_id",
+          "language_code"
+        ]
+      ],
+      "views": [
+        "table"
+      ]
+    }
+  },
+  "locations": {
+    "0": {
+      "columns": {},
+      "views": [
+        "table",
+        "card",
+        "normal",
+        "article_view",
+        "transposed",
+        "map"
+      ]
+    },
+    "1": {
+      "standard": true,
+      "actors": true,
+      "columns": {
+        "position": [
+          "geometry"
+        ],
+        "title": [
+          "text",
+          "varchar",
+          "jsonb"
+        ],
+        "address": [
+          "text",
+          "varchar",
+          "jsonb"
+        ]
+      },
+      "views": [
+        "table",
+        "card",
+        "normal",
+        "article_view",
+        "transposed",
+        "map"
+      ]
+    }
+  },
+  "chat_messages": {
+    "1": {
+      "standard": true,
+      "big_identity": true,
+      "columns": {
+        "chat_id": [
+          "int8"
+        ],
+        "sequence": [
+          "int8"
+        ],
+        "sender_participant_id": [
+          "int8"
+        ],
+        "sender_name": [
+          "text"
+        ],
+        "kind": [
+          "text"
+        ],
+        "body": [
+          "text"
+        ],
+        "payload": [
+          "jsonb"
+        ],
+        "payload_version": [
+          "int4"
+        ],
+        "client_request_id": [
+          "uuid"
+        ],
+        "reply_to_id": [
+          "int8"
+        ],
+        "answer_to_id": [
+          "int8"
+        ],
+        "supersedes_id": [
+          "int8"
+        ]
+      },
+      "required": [
+        "chat_id",
+        "sequence",
+        "sender_participant_id",
+        "sender_name",
+        "kind",
+        "body",
+        "payload",
+        "payload_version",
+        "client_request_id"
+      ],
+      "unique": [
+        [
+          "chat_id",
+          "sequence"
+        ],
+        [
+          "chat_id",
+          "sender_participant_id",
+          "client_request_id"
+        ]
+      ],
+      "views": [
+        "chat",
+        "table"
+      ],
+      "admin_only": true,
+      "participant_only": true,
+      "references": {
+        "chat_id": "chat_settings",
+        "sender_participant_id": "public.system_chat_participants",
+        "reply_to_id": "self",
+        "answer_to_id": "self",
+        "supersedes_id": "self"
+      }
+    }
+  },
+  "chat_settings": {
+    "1": {
+      "standard": true,
+      "big_identity": true,
+      "columns": {
+        "title": [
+          "text"
+        ],
+        "message_table_uid": [
+          "int4"
+        ],
+        "mode": [
+          "text"
+        ],
+        "created_by": [
+          "int4",
+          "int8"
+        ],
+        "archived": [
+          "bool"
+        ],
+        "revision": [
+          "int8"
+        ],
+        "configuration": [
+          "jsonb"
+        ]
+      },
+      "required": [
+        "title",
+        "message_table_uid",
+        "mode",
+        "created_by",
+        "archived",
+        "revision",
+        "configuration"
+      ],
+      "views": [
+        "table"
+      ],
+      "admin_only": true,
+      "references": {
+        "message_table_uid": "public.system_db_tables",
+        "created_by": "public.system_users"
+      }
+    }
+  }
+}

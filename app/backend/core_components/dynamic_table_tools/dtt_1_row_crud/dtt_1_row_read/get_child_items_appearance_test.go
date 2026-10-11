@@ -38,6 +38,7 @@ func appearanceHandlerRules(mode string) []scriptedRule {
 	}
 	tab, _ := json.Marshal(appearance.Rules().DefaultsForPlace(appearance.TabOnly))
 	rules = append(rules,
+		scriptedRule{fragment: "WITH registrations AS (", columns: []string{"snapshot"}, rows: [][]driver.Value{{[]byte(`{"registrations":[{"table_uid":22,"name":"public.parent_rows_notes","table_kind":"ordinary","kind_version":0,"kind_config":{}}],"shapes":[{"name":"public.parent_rows_notes","columns":[]}]}`)}}},
 		scriptedRule{fragment: "SELECT src.table_name, fk.source_column_name", columns: []string{"table_name", "source_column_name"}},
 		scriptedRule{fragment: "AND column_name = $2", columns: []string{"exists"}, rows: [][]driver.Value{{false}}},
 		scriptedRule{fragment: "SELECT table_uid FROM public.system_db_tables", columns: []string{"table_uid"}, rows: [][]driver.Value{{int64(22)}}},
@@ -88,10 +89,13 @@ func TestRelatedAppearanceHandlerContract(t *testing.T) {
 			}
 			for _, child := range body.Children {
 				if mode == "denied" || mode == "hidden" {
-					if child["dataset_appearance"] != nil || child["dataset_uid"] != nil {
+					if child["dataset_appearance"] != nil || child["dataset_uid"] != nil || child["kind_capabilities"] != nil {
 						t.Fatalf("unreadable appearance exposed: %s", response.Body.String())
 					}
 					continue
+				}
+				if child["kind_capabilities"] == nil {
+					t.Fatalf("related result lost kind capabilities: %s", response.Body.String())
 				}
 				if string(child["dataset_uid"]) != "22" {
 					t.Fatalf("missing related UID: %s", response.Body.String())

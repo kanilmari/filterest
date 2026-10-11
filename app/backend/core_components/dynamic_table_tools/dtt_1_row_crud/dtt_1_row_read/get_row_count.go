@@ -7,6 +7,9 @@ package dtt_1_row_read
 
 import (
 	"database/sql"
+	backend "easelect/backend/core_components"
+	"easelect/backend/core_components/dataset_kinds"
+	"easelect/backend/core_components/dataset_visibility"
 	"easelect/backend/core_components/httpresponse"
 	"encoding/json"
 	"fmt"
@@ -29,10 +32,11 @@ var geoUDTNames = []string{"geometry", "geography", "point"}
  *  JSON-vastausrakenne
  * ----------------------------------------------------------------*/
 type tableMetaResponse struct {
-	RowCount    int      `json:"row_count"`
-	HasGeo      bool     `json:"has_geo"`
-	GeomColumns []string `json:"geom_columns"`
-	GeomSources []string `json:"geom_sources"`
+	KindCapabilities *dataset_kinds.Capabilities `json:"kind_capabilities,omitempty"`
+	RowCount         int                         `json:"row_count"`
+	HasGeo           bool                        `json:"has_geo"`
+	GeomColumns      []string                    `json:"geom_columns"`
+	GeomSources      []string                    `json:"geom_sources"`
 }
 
 /* -----------------------------------------------------------------
@@ -94,12 +98,22 @@ func GetRowCountHandlerWrapper(w http.ResponseWriter, r *http.Request) {
 	hasGeo := len(geomCols) > 0 || len(geomSrcs) > 0
 
 	/* ---------- 4. JSON-vastaus ---------- */
+	var capabilities *dataset_kinds.Capabilities
+	// Count grants survive UI hiding. Optional metadata follows the listing's
+	// visibility policy while the established count response stays available.
+	hidden, visibilityErr := dataset_visibility.HiddenForUser(backend.Db, tableName, userID)
+	if visibilityErr != nil {
+		log.Printf("\033[31merror: optional count metadata visibility: %v\033[0m", visibilityErr)
+	} else if !hidden {
+		capabilities = readDatasetKindCapabilities(r.Context(), tableName)
+	}
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	json.NewEncoder(w).Encode(tableMetaResponse{
-		RowCount:    rowCount,
-		HasGeo:      hasGeo,
-		GeomColumns: geomCols,
-		GeomSources: geomSrcs,
+		KindCapabilities: capabilities,
+		RowCount:         rowCount,
+		HasGeo:           hasGeo,
+		GeomColumns:      geomCols,
+		GeomSources:      geomSrcs,
 	})
 }
 

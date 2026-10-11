@@ -195,9 +195,7 @@ func UpdateRowHandler(response_writer http.ResponseWriter, request *http.Request
 			httpresponse.RespondWithError(response_writer, 500, "error reading dataset identity")
 			return
 		}
-		if !dbutils.RegisterAfterCommitHook(request.Context(), func() { dtt_1_row_read.InvalidateSchemaCache(name) }) {
-			dtt_1_row_read.InvalidateSchemaCache(name)
-		}
+		dbutils.RegisterAfterCommitHook(request.Context(), func() { dtt_1_row_read.InvalidateSchemaCache(name) })
 	}
 	if err := validateRowActorUpdates(tx, tableName, updateRequest.ID, updates); err != nil {
 		var refusal *httpresponse.Refusal
@@ -454,9 +452,7 @@ func UpdateRowHandler(response_writer http.ResponseWriter, request *http.Request
 				log.Printf("[UpdateRow] warning: card_details_layout cache invalidation lookup failed for row id %d: %v", updateRequest.ID, err)
 			} else if strings.TrimSpace(targetTableName) != "" {
 				invalidate := func() { dtt_1_row_read.InvalidateSchemaCache(targetTableName) }
-				if !dbutils.RegisterAfterCommitHook(request.Context(), invalidate) {
-					invalidate()
-				}
+				dbutils.RegisterAfterCommitHook(request.Context(), invalidate)
 			}
 		}
 		changedFields = append(changedFields, update.Column)

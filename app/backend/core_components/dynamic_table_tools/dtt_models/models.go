@@ -4,24 +4,28 @@
 // Exists to keep dynamic-table JSON and metadata shapes consistent across packages.
 package dtt_models
 
-import "database/sql"
+import (
+	"database/sql"
+	"easelect/backend/core_components/dataset_kinds"
+)
 
 type Table struct {
-	ID                         int      `json:"id"`
-	TableUID                   int      `json:"table_uid"`
-	TableName                  string   `json:"dataset_name"`
-	Names                      []string `json:"names"`
-	PreferredName              string   `json:"preferred_name"`
-	CanReadRows                bool     `json:"can_read_rows"`
-	IsDefault                  bool     `json:"is_default"`
-	FilterbarVisibleByDefault  bool     `json:"filterbar_visible_by_default"`
-	IsMainTable                *bool    `json:"is_main_table,omitempty"`
-	IsAboutTable               *bool    `json:"is_about_table,omitempty"`
-	FolderID                   *int     `json:"folder_id,omitempty"`
-	IsInCurrentProject         bool     `json:"is_in_current_project"`
-	IsTopLevelInCurrentProject bool     `json:"is_top_level_in_current_project"`
-	IconKey                    *string  `json:"icon_key,omitempty"`
-	HasPresentationMedia       bool     `json:"has_presentation_media"`
+	KindCapabilities           *dataset_kinds.Capabilities `json:"kind_capabilities,omitempty"`
+	ID                         int                         `json:"id"`
+	TableUID                   int                         `json:"table_uid"`
+	TableName                  string                      `json:"dataset_name"`
+	Names                      []string                    `json:"names"`
+	PreferredName              string                      `json:"preferred_name"`
+	CanReadRows                bool                        `json:"can_read_rows"`
+	IsDefault                  bool                        `json:"is_default"`
+	FilterbarVisibleByDefault  bool                        `json:"filterbar_visible_by_default"`
+	IsMainTable                *bool                       `json:"is_main_table,omitempty"`
+	IsAboutTable               *bool                       `json:"is_about_table,omitempty"`
+	FolderID                   *int                        `json:"folder_id,omitempty"`
+	IsInCurrentProject         bool                        `json:"is_in_current_project"`
+	IsTopLevelInCurrentProject bool                        `json:"is_top_level_in_current_project"`
+	IconKey                    *string                     `json:"icon_key,omitempty"`
+	HasPresentationMedia       bool                        `json:"has_presentation_media"`
 }
 
 type GroupedTables struct {

@@ -7,6 +7,7 @@ package dtt_foreign_keys
 
 import (
 	"database/sql"
+	"easelect/backend/core_components/dataset_kinds"
 	"fmt"
 	"log"
 )
@@ -189,6 +190,8 @@ func SyncOneToManyFKConstraints(db *sql.DB, preserveLegacy ...bool) error {
 				err,
 			)
 		}
+		// Each pool Exec has committed; clear even if a later sync step fails.
+		dataset_kinds.InvalidateAll()
 		log.Printf("[INFO] Inserted new 1->m constraint: %s.%s -> %s.%s",
 			c.SourceTable, c.SourceColumn,
 			c.TargetTable, c.TargetColumn)
@@ -200,6 +203,7 @@ func SyncOneToManyFKConstraints(db *sql.DB, preserveLegacy ...bool) error {
 		if err != nil {
 			return fmt.Errorf("cannot delete obsolete FK row (id=%d): %w", rowID, err)
 		}
+		dataset_kinds.InvalidateAll()
 		log.Printf("[INFO] Deleted obsolete 1->m constraint with id=%d", rowID)
 	}
 
