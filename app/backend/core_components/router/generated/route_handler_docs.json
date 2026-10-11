@@ -70,7 +70,7 @@
   "dtt_1_row_update.UpdateRowHandlerWrapper": "UpdateRowHandlerWrapper vain lukee ?dataset= -parametrin ja kutsuu varsinaista käsittelijää",
   "dtt_2_column_crud.GetTableColumnsHandler": "",
   "dtt_3_table_delete.DropTableHandler": "",
-  "dtt_3_table_read.GetTableViewHandlerWrapper": "GetMetadataHandlerWrapper huolehtii table-parametrin lukemisesta ja kutsuu GetMetadata-funktiota.",
+  "dtt_3_table_read.GetTableViewHandlerWrapper": "GetTableViewHandlerWrapper reads the dataset parameter and returns registry metadata and its default view name in the columns/data JSON envelope.",
   "dtt_asset_linking.DisableAttachmentLinkingHandler": "DisableAttachmentLinkingHandler hides attachment upload UI by setting file_upload.enabled to false.",
   "dtt_asset_linking.DisableImageAssetLinkingHandler": "DisableImageAssetLinkingHandler hides the upload UI by setting the image profile enabled flag to false.",
   "dtt_asset_linking.EnableAttachmentLinkingHandler": "EnableAttachmentLinkingHandler creates or re-enables the shared attachment asset table for one parent table.",

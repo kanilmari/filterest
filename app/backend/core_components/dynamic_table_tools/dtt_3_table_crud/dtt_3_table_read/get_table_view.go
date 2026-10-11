@@ -14,7 +14,8 @@ import (
 	"net/http"
 )
 
-// GetMetadataHandlerWrapper huolehtii table-parametrin lukemisesta ja kutsuu GetMetadata-funktiota.
+// GetTableViewHandlerWrapper reads the dataset parameter and returns registry
+// metadata and its default view name in the columns/data JSON envelope.
 func GetTableViewHandlerWrapper(response_writer http.ResponseWriter, request *http.Request) {
 	table_name := request.URL.Query().Get("dataset")
 	if table_name == "" {
@@ -26,9 +27,9 @@ func GetTableViewHandlerWrapper(response_writer http.ResponseWriter, request *ht
 	GetMetadata(response_writer, request)
 }
 
-// GetMetadata hakee system_db_tables-taulusta yhden rivin (name = annettu table_name)
-// ja liittää sen system_table_views-tauluun (id = default_table_view) saadakseen oletusnäkymän nimen.
-// Palauttaa JSON-muodossa sarakenimet ja data-rakenteen, saman tyyppisesti kuin GetResults.
+// GetMetadata looks up system_db_tables.table_name and joins default_view_id
+// to system_table_views.id. It preserves every registry column and adds
+// default_view_name in the same columns/data envelope as the row readers.
 func GetMetadata(response_writer http.ResponseWriter, request *http.Request) {
 	table_name := request.URL.Query().Get("dataset")
 	if table_name == "" {
@@ -41,8 +42,8 @@ func GetMetadata(response_writer http.ResponseWriter, request *http.Request) {
 			st.*,
 			tv.name AS default_view_name
 		FROM system_db_tables st
-		LEFT JOIN system_table_views tv ON st.default_table_view = tv.id
-		WHERE st.name = $1
+		LEFT JOIN system_table_views tv ON st.default_view_id = tv.id
+		WHERE st.table_name = $1
 	`
 
 	// log.Printf("suoritetaan kysely: %s", query) // säilytetään kommentoituna

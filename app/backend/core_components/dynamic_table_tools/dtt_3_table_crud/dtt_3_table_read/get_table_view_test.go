@@ -17,7 +17,7 @@ import (
 // helper: build GET request with optional dataset query param.
 func newReq(t *testing.T, dataset string) *http.Request {
 	t.Helper()
-	url := "/get-table-view"
+	url := "/api/get-metadata"
 	if dataset != "" {
 		url += "?dataset=" + dataset
 	}
@@ -51,7 +51,7 @@ func TestWrapper_DelegatesToGetMetadata(t *testing.T) {
 	t.Cleanup(func() { backend.Db = saved })
 
 	pushQuery(queuedQuery{
-		cols: []string{"name", "default_view_name"},
+		cols: []string{"table_name", "default_view_name"},
 		rows: [][]driver.Value{
 			{"test_table", "default_view"},
 		},
@@ -119,7 +119,7 @@ func TestGetMetadata_HappyPath_JSONEnvelope(t *testing.T) {
 	t.Cleanup(func() { backend.Db = saved })
 
 	pushQuery(queuedQuery{
-		cols: []string{"id", "name", "default_view_name"},
+		cols: []string{"id", "table_name", "default_view_name"},
 		rows: [][]driver.Value{
 			{int64(1), "users", "grid_view"},
 		},
@@ -157,8 +157,8 @@ func TestGetMetadata_HappyPath_JSONEnvelope(t *testing.T) {
 	}
 
 	row := data[0].(map[string]interface{})
-	if row["name"] != "users" {
-		t.Fatalf("expected name=users, got %v", row["name"])
+	if row["table_name"] != "users" {
+		t.Fatalf("expected table_name=users, got %v", row["table_name"])
 	}
 }
 
@@ -202,7 +202,7 @@ func TestGetMetadata_EmptyResult(t *testing.T) {
 	t.Cleanup(func() { backend.Db = saved })
 
 	pushQuery(queuedQuery{
-		cols: []string{"id", "name"},
+		cols: []string{"id", "table_name"},
 		rows: [][]driver.Value{}, // no rows
 	})
 
