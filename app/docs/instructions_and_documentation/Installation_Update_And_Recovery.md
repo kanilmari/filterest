@@ -5,6 +5,183 @@
 
 # Installation Update And Recovery
 
+## Read-only installation schema checks
+
+Before reconciling an installation or admitting an upgrade, compare its physical
+schema with a trusted fresh installation made from the **same recorded database
+version**. The offline [schema drift reporter](../../server_tools/installation_conformance/schema_drift.py)
+is separate from the application's metadata consistency check (which also maintains
+language keys), the Compose conformance check and bootstrap source-hash audits.
+Equal version numbers or hashes never replace the physical comparison.
+
+### Capture a native installation
+
+Use the existing read-only database command to produce a schema-only catalogue
+JSON export. It reads PostgreSQL catalogues and dataset identifiers, not dataset
+content or credentials. Its single SELECT runs in the command's read-only
+transaction, which is always rolled back. No new database grants are needed; a
+role that cannot read the existing registry/version/alias/relation metadata gets
+an export error, and comparison returns “could not compare”. Never grant extra
+access or switch to a writing role just to obtain a verdict.
+
+From the installation root:
+
+```bash
+mkdir -p data/runtime/schema_checks
+./db --local "$(cat app/server_tools/installation_conformance/schema_drift_export.sql)" \
+  > data/runtime/schema_checks/installation.json
+```
+
+The exporter uses the newest recorded version row and exports columns in their
+physical order; types, nullability, defaults, identity/generated definitions;
+sequence definitions and ownership; keys and delete rules; index definitions and
+validity; trigger definitions and enabled states; function bodies/owners/grants;
+RLS flags/policies; table/column/schema/default privileges. PostgreSQL generates
+the definitions with one session-local search path. The query never reads live
+sequence counters. Extension memberships come from the PostgreSQL dependency
+catalogue, rather than guessed object-name prefixes.
+
+### Prepare the matching fresh reference
+
+Use an isolated disposable installation, with the matching checkout and its
+actual bootstrap. **For ownership and privilege comparison, the reference must
+complete the supported installation and application startup, with its runtime
+roles configured.** The currently eligible supported path is
+`./filterest docker start` on a new isolated installation, until readiness
+succeeds. Its initial roles/grants come from
+[03_create_roles.sh](../../server_tools/db_init/03_create_roles.sh) and
+[the application runtime grant step](../../backend/core_components/application_runtime/startup_sequence.go).
+Map differently named principals explicitly as described below; profile-specific
+grants still need review when comparing a native installation to a Docker reference.
+
+Native development installation uses
+`./filterest setup --profile development --yes`, followed by `./filterest start`.
+It creates roles and applies initial pool/default grants through
+[setup_database_grants.sh](../../server_tools/lib/setup_database_grants.sh);
+the same application startup completes dataset and operational grants. However,
+native setup also creates `public.system_database_identity`, which the current
+bootstrap does not include. The reporter's exact reference-inventory check
+therefore refuses that fully installed native fixture. Before a native reference
+can be admitted, reconcile the installer-owned identity definition with the
+versioned bootstrap contract. Do not remove the fixture's table or weaken the
+inventory check to obtain a pass. This is a source-level conflict; a fully started
+reference was not executed as part of the offline reporter's verification.
+
+**Importing only `schema.sql` and `seed_data.sql` is a structural reference.**
+An import by one superuser does not create runtime roles or the grants supplied
+by setup/startup. Its ownership/privilege differences cannot establish an
+installation permission defect or permission conformance. The reporter still
+reports those differences and keeps the overall verdict strict; it does not
+discard grants merely because a reference lacks runtime roles. Extra historical
+or site-specific grants on a fully started installation still require review.
+
+Regenerate
+and audit that checkout's package using the commands in the
+[bootstrap guide](../../server_tools/public_bootstrap/README.md#rebuild-from-the-public-checkout)
+before creating the fresh fixture. Do not import a bootstrap into an established
+installation. Export the fresh fixture with the **same catalogue query** above
+(use the current query even when the reference checkout is older), through that
+fixture's own `./db --local`, and retain its JSON as `fresh.json`.
+
+The reference root passed to the reporter must contain the matching
+`app/VERSION_DB`, bootstrap schema, seed and manifest, and all recorded source
+inputs. The reporter checks their bytes, table inventory and the fresh fixture's
+exact migration baseline. Current ledgers must identify the manifest's source
+hashes as `bootstrap_baseline`/`bootstrap`; older bootstraps without those ledger
+columns report `legacy_filename_baseline` provenance, without inventing historical
+execution hashes. The trusted fixture must actually have been freshly installed;
+these source/ledger checks do not authenticate an arbitrary supplied file.
+
+The curated files under `versioning/schema_snapshots/` explicitly omit full
+constraints, triggers and privileges. They are **not** drift references. Nor can
+procedural bootstrap source SQL be compared as though it were the resulting
+catalogue. To check an older installation, select the checkout/bootstrap that
+really produces that older version; changing the current generator's version
+label does not reconstruct historical schema.
+
+### Compare exported files
+
+```bash
+python3 app/server_tools/installation_conformance/schema_drift.py \
+  --installation data/runtime/schema_checks/installation.json \
+  --reference data/runtime/schema_checks/fresh.json \
+  --reference-root /absolute/path/to/matching-checkout \
+  --json-output data/runtime/schema_checks/report.json \
+  --summary-output data/runtime/schema_checks/report.md
+```
+
+The current checkout is the default reference root. For differently named
+installation roles, repeat `--installation-role actual=logical` and
+`--reference-role actual=logical` for the corresponding owner and configured
+runtime roles, for example `--installation-role site_readonly=readonly
+--reference-role fixture_readonly=readonly`. Preserve distinct principals;
+`PUBLIC` cannot be mapped. Role mappings change privilege/owner/policy identities,
+never SQL literals or function bodies. Database names, OIDs, current sequence
+values, extension type/collation schema identifiers and gaps left by dropped
+column slots are environmental; an owned
+sequence is compared by table/column identity, while its start, increment,
+limits, cache, cycle, type and grants still count.
+
+The reporter only reads files and writes the requested reports. Without output
+paths it sends JSON to stdout and the readable summary to stderr. Exit statuses
+are **0** (`no_managed_drift`), **1** (`managed_drift`) and **2**
+(`could_not_compare`, including unreadable/incomplete exports or a mismatched
+reference). Each managed table receives `matched`, `drift` or
+`could_not_compare`; each difference has `path`, `expected` and `observed`.
+Unattached functions/sequences and schema/default privileges also have managed
+object findings, so a table-only match cannot hide a global difference.
+Shared schema and function definitions, and sequence definitions, are compared
+once under `managed_objects`; their differences are never copied into a table.
+A table's verdict covers its own structure, owner and table/column grants.
+Its `related_drift` lists related differing schemas/functions/sequences by name.
+The separate `structural_verdict` and `structural_state` show whether that table's
+definition matches or is changed, extra or missing, even when access differs.
+
+The readable report starts with structural table counts and findings, followed
+by **Schemas**, **Functions**, **Sequences**, **Ownership**, and **Privileges**.
+Owner and ACL paths appear only in the latter two sections; default ACLs are
+privilege findings. `category_counts` gives differing object, table and difference
+entry counts for `structural`, `ownership` and `privileges`; an object can occur
+in several categories. `structural_table_counts` separates matched, changed,
+extra and missing tables. These counts do not weaken the strict overall verdict.
+
+Dataset ownership comes from the installation's exported dataset registry
+(`system_db_tables`): a registered table absent from the reference seed registry
+and physical inventory is site-owned whatever its name. Its attached functions/
+sequences and registry/column/alias/relation identifiers appear under `site_owned`,
+never as drift. Bundled tables and reference seed registrations remain managed.
+Functions present in the reference also stay managed when a site adds its own
+attachment; attachment lists do not change the function's own definition.
+With registry entries present, unregistered extra tables count as managed drift,
+including names starting with `app_`. The `public.app_` naming rule is only a
+fallback when the export has no registry entries; `site_owned.classification`
+records `dataset_registry` or `app_prefix_fallback` for each exempted table.
+Invalid registry evidence cannot trigger the fallback and is refused.
+Mutable metadata rows in shared platform tables are
+application data, while those tables' physical definitions remain managed.
+Extension packages and all member objects appear separately under `extensions`;
+their versions/counts do not change the managed verdict. Schema grants are
+compared conservatively, including extra grants; differences need review rather
+than automatic repair. A report never migrates, reseeds or repairs anything.
+
+The JSON report has `format_version: 1`, `report_type: filterest_schema_drift`,
+`verdict`, `db_version`, `reference` provenance, canonical export hashes (`inputs`),
+numbered verification `steps`, `tables`, `managed_objects`, `site_owned`,
+`extensions`, `counts`, `category_counts`, `structural_table_counts` and `errors`.
+Every difference adds its category. A short finding looks like:
+
+```json
+{"name":"public.system_column_control","verdict":"drift","structural_verdict":"drift","differences":[
+  {"path":"columns.sort_order","expected":{"name":"sort_order"},"observed":null,"category":"structural"}
+]}
+```
+
+This example abbreviates the column definition. Full reports retain every
+compared value. Save installation-before and its matching baseline, then compare
+installation-after and populated upgrade fixtures to the target fresh reference.
+Use the actual findings for per-table migrations; owner-reported counts alone
+are not evidence. Keep exports and reports in operator-owned storage.
+
 ## Updating A Git Checkout
 
 ```bash
