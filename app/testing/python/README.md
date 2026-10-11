@@ -93,6 +93,10 @@ live APIs have separate dependencies and do not belong to this collection.
 
 Bootstrap tests compare generated schema bytes with the snapshot selected by
 `app/VERSION_DB`; fixed older snapshots belong to historical upgrade checks.
+`test_row_actor_support.py` remains the collecting entry point for its support
+checks and exports the fixtures used by other suites. Their implementations in
+`row_actor_support_contracts.py` are imported there, preserving test addresses
+without duplicate collection. Its schema-byte comparison runs without PostgreSQL.
 Use `bootstrap_contract_assertions.assert_bootstrap_baseline` to check a folded-in
 migration's filename, exact source hash, `bootstrap_baseline` outcome and
 `bootstrap` provenance in the acceptance ledger. A baseline is not proof that

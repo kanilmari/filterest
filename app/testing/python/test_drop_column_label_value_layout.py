@@ -144,7 +144,8 @@ def test_complete_release_upgrade_preserves_visibility_and_site_choice_and_recor
         FROM system_schema_migrations AS entry"""
     versions = "SELECT jsonb_agg(to_jsonb(entry) ORDER BY id) FROM system_db_version AS entry"
     before_visibility, before_site = value(upgrade, visibility), value(upgrade, site)
-    assert json.loads(before_site)["shared"]["label_value_layout"] == "inline"
+    site_choice = json.loads(before_site)["shared"]["label_value_layout"]
+    assert site_choice == "inline"
     before_ledger = json.loads(value(upgrade, ledger))
     migration_names = {path.name for path in MIGRATIONS.glob("*.sql")}
     release_names = {path.name for path in release}
@@ -184,14 +185,20 @@ func main() {
     environment.update(PGHOST=connection["host"], PGPORT=connection["port"],
                        PGUSER=connection["user"], PGDATABASE=connection["database"],
                        GOTOOLCHAIN="local", EASELECT_MIGRATION_FILE_ALLOWLIST="")
-    previous_ledger, previous_versions = None, None
+    previous_ledger, previous_versions, previous_site = None, None, None
     for _ in range(2):
         result = subprocess.run(["go", "run", str(runner), str(MIGRATIONS)], cwd=APP,
                                 env=environment, capture_output=True, text=True)
         assert result.returncode == 0, result.stdout + result.stderr
         _assert_retired(upgrade)
         assert value(upgrade, visibility) == before_visibility
-        assert value(upgrade, site) == before_site
+        # WL160 moves this legacy choice into version-two site defaults. The
+        # full release must preserve its meaning, then keep that storage stable.
+        current_site = json.loads(value(upgrade, site))
+        assert set(current_site) == {"schema_version", "site_values", "defaults"}
+        assert current_site["schema_version"] == 2
+        assert current_site["defaults"]["shared.label_value_layout"] == site_choice
+        assert value(upgrade, "SELECT count(*) FROM app_check_dataset_appearance_three_places()") == "0"
         assert value(upgrade, "SELECT version FROM system_db_version ORDER BY id DESC LIMIT 1") == CURRENT_DB
         assert value(upgrade, "SELECT count(*) FROM system_db_version WHERE version='9.10.0'") == "1"
         assert "removed unused per-column field wrapping" in value(upgrade,
@@ -201,9 +208,18 @@ func main() {
         assert set(current_ledger) == migration_names
         assert current_ledger.keys() - before_ledger.keys() == pending_names
         assert RELEASE_RECORD.name in current_ledger
-        assert all(current_ledger[name] == entry for name, entry in before_ledger.items())
+        # WL157 extends the ledger: preserve every original field, including
+        # filename and applied_at, without treating added columns as rewrites.
+        for name, entry in before_ledger.items():
+            current_entry = current_ledger[name]
+            assert {field: current_entry[field] for field in entry} == entry, name
+            # Historical rows remain unverified; only this run's new rows gain evidence.
+            for field in ("content_sha256", "outcome", "provenance"):
+                assert current_entry[field] is None, (name, field)
         current_versions = value(upgrade, versions)
         if previous_ledger is not None:
+            # Both completed runs have the extended schema; require full-row stability.
             assert current_ledger == previous_ledger
             assert current_versions == previous_versions
-        previous_ledger, previous_versions = current_ledger, current_versions
+            assert current_site == previous_site
+        previous_ledger, previous_versions, previous_site = current_ledger, current_versions, current_site

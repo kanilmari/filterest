@@ -107,6 +107,7 @@ HEAVY_PATH_PATTERNS = (
     # Ordinary feature suites also supply disposable-cluster fixtures to heavy tests.
     "app/testing/python/test_field_settings_language_seed.py",
     "app/testing/python/test_row_actor_support.py",
+    "app/testing/python/row_actor_support_contracts.py",
 )
 
 
