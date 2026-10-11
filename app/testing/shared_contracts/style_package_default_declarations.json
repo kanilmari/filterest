@@ -1,0 +1,314 @@
+[
+  {
+    "name": "font.body / * / font-family",
+    "file": "frontend/styles/base.css",
+    "selector": "*",
+    "property": "font-family",
+    "token": "font.body",
+    "before": "Arial, sans-serif"
+  },
+  {
+    "name": "body.letter-spacing / * / letter-spacing",
+    "file": "frontend/styles/base.css",
+    "selector": "*",
+    "property": "letter-spacing",
+    "token": "body.letter-spacing",
+    "before": "0.5px"
+  },
+  {
+    "name": "body.line-height / body / line-height",
+    "file": "frontend/styles/base.css",
+    "selector": "body",
+    "property": "line-height",
+    "token": "body.line-height",
+    "before": "1.5"
+  },
+  {
+    "name": "font.display / .filterbar-panel--wide .morphing-title,\n.filterbar-inline-hero .morphing-title,\n.front-page-hero .morphing-title / font-family",
+    "file": "frontend/core_components/filterbar/morphing_filterbar_content.css",
+    "selector": ".filterbar-panel--wide .morphing-title,\n.filterbar-inline-hero .morphing-title,\n.front-page-hero .morphing-title",
+    "property": "font-family",
+    "token": "font.display",
+    "before": "'Space Grotesk', -apple-system, BlinkMacSystemFont, sans-serif"
+  },
+  {
+    "name": "heading.size / .filterbar-panel--wide .morphing-title,\n.filterbar-inline-hero .morphing-title,\n.front-page-hero .morphing-title / font-size",
+    "file": "frontend/core_components/filterbar/morphing_filterbar_content.css",
+    "selector": ".filterbar-panel--wide .morphing-title,\n.filterbar-inline-hero .morphing-title,\n.front-page-hero .morphing-title",
+    "property": "font-size",
+    "token": "heading.size",
+    "before": "clamp(1.5rem, 3vw, 2.2rem)"
+  },
+  {
+    "name": "heading.weight / .filterbar-panel--wide .morphing-title,\n.filterbar-inline-hero .morphing-title,\n.front-page-hero .morphing-title / font-weight",
+    "file": "frontend/core_components/filterbar/morphing_filterbar_content.css",
+    "selector": ".filterbar-panel--wide .morphing-title,\n.filterbar-inline-hero .morphing-title,\n.front-page-hero .morphing-title",
+    "property": "font-weight",
+    "token": "heading.weight",
+    "before": "700"
+  },
+  {
+    "name": "heading.color / .filterbar-panel--wide .morphing-title,\n.filterbar-inline-hero .morphing-title,\n.front-page-hero .morphing-title / color",
+    "file": "frontend/core_components/filterbar/morphing_filterbar_content.css",
+    "selector": ".filterbar-panel--wide .morphing-title,\n.filterbar-inline-hero .morphing-title,\n.front-page-hero .morphing-title",
+    "property": "color",
+    "token": "heading.color",
+    "before": "var(--text_color)"
+  },
+  {
+    "name": "heading.gap / .filterbar-panel--wide .morphing-title,\n.filterbar-inline-hero .morphing-title,\n.front-page-hero .morphing-title / margin-bottom",
+    "file": "frontend/core_components/filterbar/morphing_filterbar_content.css",
+    "selector": ".filterbar-panel--wide .morphing-title,\n.filterbar-inline-hero .morphing-title,\n.front-page-hero .morphing-title",
+    "property": "margin-bottom",
+    "token": "heading.gap",
+    "before": "8px"
+  },
+  {
+    "name": "heading.letter-spacing / .filterbar-panel--wide .morphing-title,\n.filterbar-inline-hero .morphing-title,\n.front-page-hero .morphing-title / letter-spacing",
+    "file": "frontend/core_components/filterbar/morphing_filterbar_content.css",
+    "selector": ".filterbar-panel--wide .morphing-title,\n.filterbar-inline-hero .morphing-title,\n.front-page-hero .morphing-title",
+    "property": "letter-spacing",
+    "token": "heading.letter-spacing",
+    "before": "-0.03em"
+  },
+  {
+    "name": "font.display / .filterbar-panel--compact .morphing-title / font-family",
+    "file": "frontend/core_components/filterbar/morphing_filterbar_content.css",
+    "selector": ".filterbar-panel--compact .morphing-title",
+    "property": "font-family",
+    "token": "font.display",
+    "before": "'Space Grotesk', -apple-system, BlinkMacSystemFont, sans-serif"
+  },
+  {
+    "name": "home.slogan-size / .front-page-hero .front-page-slogan.morphing-subtitle / font-size",
+    "file": "frontend/core_components/front_page/front_page.css",
+    "selector": ".front-page-hero .front-page-slogan.morphing-subtitle",
+    "property": "font-size",
+    "token": "home.slogan-size",
+    "before": "1.25rem"
+  },
+  {
+    "name": "home.description-size / .front-page-hero .front-page-description / font-size",
+    "file": "frontend/core_components/front_page/front_page.css",
+    "selector": ".front-page-hero .front-page-description",
+    "property": "font-size",
+    "token": "home.description-size",
+    "before": "1rem"
+  },
+  {
+    "name": "home.block-gap / .front-page-blocks / gap",
+    "file": "frontend/core_components/front_page/front_page.css",
+    "selector": ".front-page-blocks",
+    "property": "gap",
+    "token": "home.block-gap",
+    "before": "1rem"
+  },
+  {
+    "name": "home.block-padding / .front-page-status,\n.front-page-blocks .supplemental-dataset-group / padding",
+    "file": "frontend/core_components/front_page/front_page.css",
+    "selector": ".front-page-status,\n.front-page-blocks .supplemental-dataset-group",
+    "property": "padding",
+    "token": "home.block-padding",
+    "before": "1rem"
+  },
+  {
+    "name": "home.block-background / .front-page-status,\n.front-page-blocks .supplemental-dataset-group / background",
+    "file": "frontend/core_components/front_page/front_page.css",
+    "selector": ".front-page-status,\n.front-page-blocks .supplemental-dataset-group",
+    "property": "background",
+    "token": "home.block-background",
+    "before": "var(--bg_color_2)"
+  },
+  {
+    "name": "home.block-radius / .front-page-status,\n.front-page-blocks .supplemental-dataset-group / border-radius",
+    "file": "frontend/core_components/front_page/front_page.css",
+    "selector": ".front-page-status,\n.front-page-blocks .supplemental-dataset-group",
+    "property": "border-radius",
+    "token": "home.block-radius",
+    "before": "var(--fw-radius-md, 8px)"
+  },
+  {
+    "name": "navigation.gap / .hero-dataset-tabs / gap",
+    "file": "frontend/core_components/navigation/main_tabs/hero_dataset_tabs.css",
+    "selector": ".hero-dataset-tabs",
+    "property": "gap",
+    "token": "navigation.gap",
+    "before": "8px"
+  },
+  {
+    "name": "navigation.radius / .hero-dataset-tabs__button,\n.filterbar-inline-hero__actions > button / border-radius",
+    "file": "frontend/core_components/navigation/main_tabs/hero_dataset_tabs.css",
+    "selector": ".hero-dataset-tabs__button,\n.filterbar-inline-hero__actions > button",
+    "property": "border-radius",
+    "token": "navigation.radius",
+    "before": "8px"
+  },
+  {
+    "name": "navigation.background / .hero-dataset-tabs__button,\n.filterbar-inline-hero__actions > button / background",
+    "file": "frontend/core_components/navigation/main_tabs/hero_dataset_tabs.css",
+    "selector": ".hero-dataset-tabs__button,\n.filterbar-inline-hero__actions > button",
+    "property": "background",
+    "token": "navigation.background",
+    "before": "var(--button_bg_color)"
+  },
+  {
+    "name": "navigation.text / .hero-dataset-tabs__button,\n.filterbar-inline-hero__actions > button / color",
+    "file": "frontend/core_components/navigation/main_tabs/hero_dataset_tabs.css",
+    "selector": ".hero-dataset-tabs__button,\n.filterbar-inline-hero__actions > button",
+    "property": "color",
+    "token": "navigation.text",
+    "before": "var(--button_text_color)"
+  },
+  {
+    "name": "navigation.size / .hero-dataset-tabs__button,\n.filterbar-inline-hero__actions > button / font-size",
+    "file": "frontend/core_components/navigation/main_tabs/hero_dataset_tabs.css",
+    "selector": ".hero-dataset-tabs__button,\n.filterbar-inline-hero__actions > button",
+    "property": "font-size",
+    "token": "navigation.size",
+    "before": "0.85rem"
+  },
+  {
+    "name": "navigation.line-height / .hero-dataset-tabs__button,\n.filterbar-inline-hero__actions > button / line-height",
+    "file": "frontend/core_components/navigation/main_tabs/hero_dataset_tabs.css",
+    "selector": ".hero-dataset-tabs__button,\n.filterbar-inline-hero__actions > button",
+    "property": "line-height",
+    "token": "navigation.line-height",
+    "before": "1.3"
+  },
+  {
+    "name": "button.radius / .fw-btn / border-radius",
+    "file": "frontend/styles/framework.css",
+    "selector": ".fw-btn",
+    "property": "border-radius",
+    "token": "button.radius",
+    "before": "var(--border_radius)"
+  },
+  {
+    "name": "button.size / .fw-btn / font-size",
+    "file": "frontend/styles/framework.css",
+    "selector": ".fw-btn",
+    "property": "font-size",
+    "token": "button.size",
+    "before": "0.875rem"
+  },
+  {
+    "name": "button.shadow / .fw-btn / box-shadow",
+    "file": "frontend/styles/framework.css",
+    "selector": ".fw-btn",
+    "property": "box-shadow",
+    "token": "button.shadow",
+    "before": "var(--interaction-control-shadow-rest, none)"
+  },
+  {
+    "name": "button.background / .fw-btn--primary / background",
+    "file": "frontend/styles/framework.css",
+    "selector": ".fw-btn--primary",
+    "property": "background",
+    "token": "button.background",
+    "before": "var(--fw-color-primary)"
+  },
+  {
+    "name": "button.text / .fw-btn--primary / color",
+    "file": "frontend/styles/framework.css",
+    "selector": ".fw-btn--primary",
+    "property": "color",
+    "token": "button.text",
+    "before": "var(--primary_text_color)"
+  },
+  {
+    "name": "card.radius / .fw-card / border-radius",
+    "file": "frontend/styles/framework.css",
+    "selector": ".fw-card",
+    "property": "border-radius",
+    "token": "card.radius",
+    "before": "var(--fw-radius-lg)"
+  },
+  {
+    "name": "card.padding / .fw-card / padding",
+    "file": "frontend/styles/framework.css",
+    "selector": ".fw-card",
+    "property": "padding",
+    "token": "card.padding",
+    "before": "var(--fw-space-4)"
+  },
+  {
+    "name": "card.background / .fw-card / background",
+    "file": "frontend/styles/framework.css",
+    "selector": ".fw-card",
+    "property": "background",
+    "token": "card.background",
+    "before": "var(--fw-color-surface)"
+  },
+  {
+    "name": "card.shadow / .fw-card / box-shadow",
+    "file": "frontend/styles/framework.css",
+    "selector": ".fw-card",
+    "property": "box-shadow",
+    "token": "card.shadow",
+    "before": "var(--fw-shadow-soft)"
+  },
+  {
+    "name": "card.radius / .product-card-view-card / border-radius",
+    "file": "frontend/core_components/table_views/product_card_view/product_card_view.css",
+    "selector": ".product-card-view-card",
+    "property": "border-radius",
+    "token": "card.radius",
+    "before": "8px"
+  },
+  {
+    "name": "card.background / .product-card-view-card / background",
+    "file": "frontend/core_components/table_views/product_card_view/product_card_view.css",
+    "selector": ".product-card-view-card",
+    "property": "background",
+    "token": "card.background",
+    "before": "var(--bg_color_card_frame)"
+  },
+  {
+    "name": "card.padding / .product-card-view-body / padding",
+    "file": "frontend/core_components/table_views/product_card_view/product_card_view.css",
+    "selector": ".product-card-view-body",
+    "property": "padding",
+    "token": "card.padding",
+    "before": "12px"
+  },
+  {
+    "name": "card.gap / .product-card-view-body / gap",
+    "file": "frontend/core_components/table_views/product_card_view/product_card_view.css",
+    "selector": ".product-card-view-body",
+    "property": "gap",
+    "token": "card.gap",
+    "before": "10px"
+  },
+  {
+    "name": "navigation.padding-block,navigation.padding-inline / .hero-dataset-tabs__button,\n.filterbar-inline-hero__actions > button / padding",
+    "file": "frontend/core_components/navigation/main_tabs/hero_dataset_tabs.css",
+    "selector": ".hero-dataset-tabs__button,\n.filterbar-inline-hero__actions > button",
+    "property": "padding",
+    "tokens": [
+      "navigation.padding-block",
+      "navigation.padding-inline"
+    ],
+    "before": "6px 12px"
+  },
+  {
+    "name": "button.padding-block,button.padding-inline / .fw-btn / padding",
+    "file": "frontend/styles/framework.css",
+    "selector": ".fw-btn",
+    "property": "padding",
+    "tokens": [
+      "button.padding-block",
+      "button.padding-inline"
+    ],
+    "before": "0.75rem 1.25rem"
+  },
+  {
+    "name": "home.paragraph-gap / .front-page-hero .home-text-paragraph / margin-block",
+    "file": "frontend/core_components/front_page/front_page.css",
+    "selector": ".front-page-hero .home-text-paragraph",
+    "property": "margin-block",
+    "tokens": [
+      "home.paragraph-gap"
+    ],
+    "before": "0 1em"
+  }
+]

@@ -71,7 +71,7 @@ test('positioned Home uses expanding flow, safe insets, theme copy and phone gut
     expect(css).toContain('container-type: size');
     expect(css).toContain('min-height: 100cqh');
     expect(css).toContain('padding-inline: min(var(--home-text-horizontal-margin)');
-    expect(css).toContain('.front-page-hero .home-text-paragraph { white-space: pre-line; margin-block: 0 1em; }');
+    expect(css).toContain('.front-page-hero .home-text-paragraph { white-space: pre-line; margin-block: 0 var(--home-paragraph-gap, 1em); }');
     const phoneStage = css.match(/@media \(width <= 600px\)\s*\{\s*\.front-page-text-stage\[data-anchor\]\s*\{([^}]*)\}/);
     expect(phoneStage?.[1]).toMatch(/padding: 16px;[^}]*justify-items: stretch;/);
     // Phones keep the saved vertical anchor (K285: the default block is centred both ways); only long text starts at the top.
@@ -88,13 +88,14 @@ test('alignment leaves intrinsic sizing intact, justify starts title and last li
     expect(css).toMatch(/\.front-page-text-stage \{[^}]*grid-template-columns: minmax\(0, 1fr\);/);
     expect(css).toContain('text-align: justify; text-align-last: left;');
     expect(css).toContain('.front-page-hero[data-alignment="justify"] .morphing-title { text-align: left; }');
-    expect(css).toContain('font-size: 1.25rem'); expect(css).toContain('font-size: 1rem');
+    expect(css).toContain('font-size: var(--home-slogan-size, 1.25rem)');
+    expect(css).toContain('font-size: var(--home-description-size, 1rem)');
     expect(css).not.toMatch(/column-count|column-width/);
 });
 
 
 test('larger slogan outranks the later shared subtitle rule, and alignment masks paint in theme text colour', () => {
-    expect(css).toMatch(/\.front-page-hero \.front-page-slogan\.morphing-subtitle\s*\{[^}]*font-size: 1.25rem;/);
+    expect(css).toMatch(/\.front-page-hero \.front-page-slogan\.morphing-subtitle\s*\{[^}]*font-size: var\(--home-slogan-size, 1\.25rem\);/);
     const palette = readFileSync(resolve(currentDirectory, '../admin_tools/presentation_palette.css'), 'utf8');
     expect(palette).toMatch(/\.home-palette-alignment-icon\s*\{[^}]*background-color: currentColor;/);
 });

@@ -28,8 +28,8 @@
     min-height: 270px;
     overflow: hidden;
     border: 1px solid var(--card_border_color);
-    border-radius: 8px;
-    background: var(--bg_color_card_frame);
+    border-radius: var(--style-card-radius, 8px);
+    background: var(--style-card-background, var(--bg_color_card_frame));
     color: var(--text_color);
     cursor: pointer;
     transition:
@@ -92,8 +92,8 @@
     display: flex;
     flex-direction: column;
     min-width: 0;
-    gap: 10px;
-    padding: 12px;
+    gap: var(--style-card-gap, 10px);
+    padding: var(--style-card-padding, 12px);
 }
 
 .product-card-view-title {

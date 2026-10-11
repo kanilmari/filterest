@@ -24,15 +24,15 @@ It is stored as a `.md` file to prevent inclusion in the build, but the code blo
    ========================================= */
 .golden-sample-container {
     /* Define local variables mapped to global theme variables */
-    --container-bg: var(--bg-primary);
-    --container-text: var(--text-primary);
+    --container-bg: var(--bg-surface);
+    --container-text: var(--text-main);
     --container-border: var(--border-subtle);
     
     /* 
      * CRITICAL: Do not hardcode blue hues. 
-     * Use the global variable for the primary brand color (HSL 207).
+     * Use the configured global brand colour, recomputed in the active theme.
      */
-    --accent-color: var(--brand-blue-500); 
+    --accent-color: var(--color-brand);
 }
 
 /* =========================================
@@ -49,7 +49,7 @@ It is stored as a `.md` file to prevent inclusion in the build, but the code blo
 
 .golden-sample-button {
     background-color: var(--accent-color);
-    color: white;
+    color: var(--color-brand-text);
     padding: 0.5rem 1rem;
     border: none;
     cursor: pointer;
@@ -60,9 +60,16 @@ It is stored as a `.md` file to prevent inclusion in the build, but the code blo
    ========================================= */
 /* 
  * Ideally, variables handle this. But if specific overrides are needed:
- * Use [data-theme="dark"] selector.
+ * Use the application's body.dark-mode selector. System mode also resolves
+ * to an explicit body class; data-theme is not the application theme owner.
  */
-[data-theme="dark"] .golden-sample-container {
+body.dark-mode .golden-sample-container {
     box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
 }
 ```
+
+The source-owned [style-package contract](../../frontend/shared/style_package/README.md)
+defines approved scope/token mappings. Keep fallbacks at their consumers so
+theme-derived defaults resolve on the consuming element. Package authors supply
+typed values, never selectors or CSS strings. Focus, visibility and interaction
+geometry remain application-owned.

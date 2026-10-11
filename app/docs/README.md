@@ -29,6 +29,9 @@ Architecture and behaviour guides in
   fixed automation login names, public display names and the API credential lifecycle.
 - [Frontend_Guide.md](instructions_and_documentation/Frontend_Guide.md) —
   frontend architecture, interface components, configuration and accessibility.
+- [Style-package token contract](../frontend/shared/style_package/README.md) —
+  shared Go/browser validation, existing-setting ownership and unchanged CSS defaults;
+  package storage and publication remain later implementation slices.
 - [Asset_Linking_Architecture.md](instructions_and_documentation/Asset_Linking_Architecture.md) —
   per-dataset image and attachment support, cache fields, storage and media profiles.
 - [Missing_Media_Check.md](instructions_and_documentation/Missing_Media_Check.md) —

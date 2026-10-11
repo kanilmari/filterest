@@ -1,4 +1,7 @@
 /* frontend/styles/framework.css: shared UI primitives anchored to variables.css tokens */
+/* Connects shared controls and cards to existing themes and style-package tokens. */
+/* Declaration fallbacks preserve the shipped spacing, colours and interactions. */
+/* Package policy lives in frontend/shared/style_package/definition.json. */
 /* 
  * Visual Documentation:
  * - instructions_and_documentation/visual_documentation/color_system_and_theming.md
@@ -89,11 +92,11 @@
 
 /* Surface components */
 .fw-card {
-    background: var(--fw-color-surface);
+    background: var(--style-card-background, var(--fw-color-surface));
     border: 1px solid var(--fw-color-border);
-    border-radius: var(--fw-radius-lg);
-    padding: var(--fw-space-4);
-    box-shadow: var(--fw-shadow-soft);
+    border-radius: var(--style-card-radius, var(--fw-radius-lg));
+    padding: var(--style-card-padding, var(--fw-space-4));
+    box-shadow: var(--style-card-shadow, var(--fw-shadow-soft));
 }
 
 .fw-panel {
@@ -109,16 +112,16 @@
     align-items: center;
     justify-content: center;
     gap: var(--fw-space-2);
-    padding: 0.75rem 1.25rem;
+    padding: var(--primary-button-padding-block, 0.75rem) var(--primary-button-padding-inline, 1.25rem);
     min-height: 44px;
-    border-radius: var(--border_radius);
+    border-radius: var(--primary-button-radius, var(--border_radius));
     border: 1px solid var(--border_color);
     background: var(--interaction-control-bg-rest, var(--fw-color-surface-muted));
     color: var(--fw-color-text);
-    font-size: 0.875rem;
+    font-size: var(--primary-button-size, 0.875rem);
     font-weight: 500;
     cursor: pointer;
-    box-shadow: var(--interaction-control-shadow-rest, none);
+    box-shadow: var(--primary-button-shadow, var(--interaction-control-shadow-rest, none));
     transition:
         background-color var(--interaction-duration-fast, 140ms) ease,
         color var(--interaction-duration-fast, 140ms) ease,
@@ -151,8 +154,8 @@
 }
 
 .fw-btn--primary {
-    background: var(--fw-color-primary);
-    color: var(--primary_text_color);
+    background: var(--primary-button-background, var(--fw-color-primary));
+    color: var(--primary-button-text, var(--primary_text_color));
 }
 
 .fw-btn--primary:hover:not(:disabled) {

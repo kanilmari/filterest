@@ -139,9 +139,9 @@ body.dark-mode .front-page {
 /* The title, slogan and description share one flow; authored line breaks stay. */
 .front-page-hero .morphing-title { margin-top: 0; }
 /* Outrank the shared subtitle base, which is imported after Home's stylesheet. */
-.front-page-hero .front-page-slogan.morphing-subtitle { font-size: 1.25rem; margin-block: 0 1em; }
-.front-page-hero .front-page-description { font-size: 1rem; }
-.front-page-hero .home-text-paragraph { white-space: pre-line; margin-block: 0 1em; }
+.front-page-hero .front-page-slogan.morphing-subtitle { font-size: var(--home-slogan-size, 1.25rem); margin-block: 0 1em; }
+.front-page-hero .front-page-description { font-size: var(--home-description-size, 1rem); }
+.front-page-hero .home-text-paragraph { white-space: pre-line; margin-block: 0 var(--home-paragraph-gap, 1em); }
 .front-page-hero .home-text-paragraph:last-child { margin-bottom: 0; }
 
 .front-page-content,
@@ -153,17 +153,17 @@ body.dark-mode .front-page {
 
 .front-page-status,
 .front-page-blocks .supplemental-dataset-group {
-  padding: 1rem;
-  background: var(--bg_color_2);
+  padding: var(--home-block-padding, 1rem);
+  background: var(--home-block-background, var(--bg_color_2));
   border: 1px solid var(--border_color);
-  border-radius: var(--fw-radius-md, 8px);
+  border-radius: var(--home-block-radius, var(--fw-radius-md, 8px));
   overflow-wrap: anywhere;
 }
 
 .front-page-blocks {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 1rem;
+  gap: var(--home-block-gap, 1rem);
 }
 
 .front-page-blocks .supplemental-dataset-group {
