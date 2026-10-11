@@ -55,7 +55,7 @@ INSERT INTO public.system_functions (
   creation_spec, rate_limit_amount, rate_limit_minutes, url_route_endpoint, ui_only
 ) VALUES
   (4001, 'system_table_tools.GetGroupedTables', FALSE, '2026-05-21 00:00:00', '2026-05-21 00:00:00', 'system_table_tools', FALSE, 'public fixture seed', 200, 20, '/api/datasets', FALSE),
-  (4002, 'router.GetDatasetAliasesHandler', FALSE, '2026-05-21 00:00:00', '2026-05-21 00:00:00', 'router', FALSE, 'public fixture seed', 200, 20, '/api/dataset-aliases', FALSE),
+  (4002, 'router.GetDatasetAliasesHandler', TRUE, '2026-05-21 00:00:00', '2026-05-21 00:00:00', 'router', FALSE, 'public fixture seed', 200, 20, '/api/dataset-aliases', FALSE),
   (4003, 'system_table_tools.GetFilterbarSectionLayoutHandler', FALSE, '2026-05-21 00:00:00', '2026-05-21 00:00:00', 'system_table_tools', FALSE, 'public fixture seed', 200, 20, '/api/filterbar-section-layout', FALSE),
   (4010, 'dtt_1_row_read.GetResultsHandlerWrapper', FALSE, '2026-05-21 00:00:00', '2026-05-21 00:00:00', 'dtt_1_row_read', TRUE, 'public fixture seed', 200, 20, '/api/get-results', FALSE),
   (4011, 'dtt_1_row_read.GetRowCountHandlerWrapper', FALSE, '2026-05-21 00:00:00', '2026-05-21 00:00:00', 'dtt_1_row_read', TRUE, 'public fixture seed', 200, 20, '/api/get-row-count', FALSE),
@@ -84,7 +84,6 @@ FROM (VALUES (1), (2), (3)) AS group_ids(user_group_id)
 JOIN public.system_functions functions
   ON functions.name IN (
     'system_table_tools.GetGroupedTables',
-    'router.GetDatasetAliasesHandler',
     'system_table_tools.GetFilterbarSectionLayoutHandler'
   );
 
@@ -7082,6 +7081,24 @@ INSERT INTO public.system_config(key,boolean_value,json_value,text_value,value_t
 SELECT 'front_page_show_blocks',true,'{"value":true}'::jsonb,'true',2,
        'Show Home dataset boxes; missing configuration also means enabled.'
 WHERE NOT EXISTS (SELECT 1 FROM public.system_config WHERE key='front_page_show_blocks');
+-- 20261009000077_retire_global_dataset_alias_catalogue.sql
+-- Retires the global alias catalogue now that navigation uses readable name pools.
+-- Connects removed HTTP registration and public bootstrap with stored capability grants.
+-- Keeps the separate administrator alias editor while revoking the retired read surface.
+-- VERSION_DB: 9.10.2
+-- VERSION_DB_OWNER: 20261009000099_record_database_release_9_10_2.sql
+
+DELETE FROM public.system_group_table_func_rights
+WHERE function_id IN (
+    SELECT id FROM public.system_functions
+    WHERE url_route_endpoint = '/api/dataset-aliases'
+       OR name = 'router.GetDatasetAliasesHandler'
+);
+
+UPDATE public.system_functions
+SET disabled = true
+WHERE url_route_endpoint = '/api/dataset-aliases'
+   OR name = 'router.GetDatasetAliasesHandler';
 -- 20261005000004_add_row_actor_columns.sql
 -- Gives registered content datasets their creator and owner, keeping a site's proven
 -- owner column and filling old rows only from the approved creator sources.
@@ -8196,6 +8213,7 @@ BEGIN
       ('20261009000072_register_publication_columns.sql', 'c41e01edd09a747af7a11b20e8ddd440913f245d1f3783c4bac7d72e4861d3f8', 'bootstrap_baseline', 'bootstrap'),
       ('20261009000073_repair_publication_translations.sql', '8086ea742c9a040c6e4535a35504e8e00300a270a2cc6cac72117d05ae8450c2', 'bootstrap_baseline', 'bootstrap'),
       ('20261009000074_seed_filterbar_style_language_key.sql', 'df22114d09d6c6fe9410ad14392710aaba3134a88d74e9474c7092f2b4c4716d', 'bootstrap_baseline', 'bootstrap'),
+      ('20261009000077_retire_global_dataset_alias_catalogue.sql', 'c5ade168ebaf022b72616c90dfeb13bb0e137c9bb0476eef03d048c619071dfa', 'bootstrap_baseline', 'bootstrap'),
       ('20261009000099_record_database_release_9_10_2.sql', '190f66df60bd062997ebd80b2392eff7fdd843c9c8a709a4a1c30f136e6bbd97', 'bootstrap_baseline', 'bootstrap')
     ON CONFLICT (filename) DO NOTHING;
     INSERT INTO public.system_db_version (version, description)

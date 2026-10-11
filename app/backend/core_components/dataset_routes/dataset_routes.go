@@ -74,39 +74,65 @@ func ResolveRawDatasetNameWithQuerier(q dbutils.Querier, datasetName string) str
 	if datasetName == "" {
 		return ""
 	}
-	registry, err := LoadAliasRegistry(q)
-	if err != nil && len(registry.RawToPublic) == 0 {
-		registry = fallbackAliasRegistry()
+	if !isNilQuerier(q) {
+		// Catalogue and document routes use the same global ownership rules,
+		// including secondary aliases and canonical/ambiguous-name conflicts.
+		pools, err := LoadDatasetNamePools(q)
+		if err == nil {
+			for _, pool := range pools {
+				if pool.SchemaName != "public" {
+					continue
+				}
+				for _, name := range pool.Names {
+					if name == datasetName {
+						return pool.DatasetName
+					}
+				}
+			}
+			return datasetName
+		}
+		// A failed naming read must not reinstate aliases rejected by ownership.
+		return datasetName
 	}
+	registry := fallbackAliasRegistry()
 	if rawName, ok := registry.PublicToRaw[datasetName]; ok {
 		return rawName
 	}
 	return datasetName
 }
 
-// ResolvePublicDatasetName maps a raw dataset name to its public alias when one exists.
+// ResolvePublicDatasetName returns the accepted pool's preferred address name.
 func ResolvePublicDatasetName(datasetName string) string {
 	return ResolvePublicDatasetNameWithQuerier(backend.Db, datasetName)
 }
 
-// ResolvePublicDatasetNameWithQuerier maps a raw dataset name to its public alias when one exists.
+// ResolvePublicDatasetNameWithQuerier uses the same accepted pool as incoming
+// document resolution and the catalogue, so canonical links and sitemaps agree.
 func ResolvePublicDatasetNameWithQuerier(q dbutils.Querier, datasetName string) string {
 	if datasetName == "" {
 		return ""
 	}
-	registry, err := LoadAliasRegistry(q)
-	if err != nil && len(registry.RawToPublic) == 0 {
-		registry = fallbackAliasRegistry()
+	if !isNilQuerier(q) {
+		pools, err := LoadDatasetNamePools(q)
+		if err == nil {
+			for _, pool := range pools {
+				if pool.SchemaName == "public" && pool.DatasetName == datasetName {
+					return pool.PreferredName
+				}
+			}
+		}
+		return datasetName
 	}
+	registry := fallbackAliasRegistry()
 	if publicName, ok := registry.RawToPublic[datasetName]; ok {
 		return publicName
 	}
 	return datasetName
 }
 
-// LoadAliasRegistry returns the active dataset alias registry from the DB-backed source when available.
-// It merges explicit DB aliases, historical code fallbacks, and automatic app_ aliases derived
-// from system_db_tables so the router and frontend share one policy source.
+// LoadAliasRegistry supplies the legacy primary-name projection for editor and
+// create/rename validation. It merges stored aliases, historical fallbacks and
+// automatic app_ candidates; published names and addresses use accepted UID pools.
 func LoadAliasRegistry(q dbutils.Querier) (AliasRegistry, error) {
 	if isNilQuerier(q) {
 		return fallbackAliasRegistry(), nil

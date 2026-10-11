@@ -1,4 +1,10 @@
-import { describe, test, expect } from 'vitest';
+// history_navigation_handler_helpers.test.js
+// Verifies dataset and row paths against the readable catalogue's names.
+// Bridges history parsing with the same registry snapshot used at startup.
+// Keeps alias resolution covered without inferring names absent from the server.
+
+import { afterEach, beforeEach, describe, test, expect } from 'vitest';
+import { clearDatasetAccessRegistry, primeDatasetAccessRegistry } from './dataset_access_registry.js';
 import {
     getPrefixFromPathname,
     parseDeepLink,
@@ -8,6 +14,12 @@ import {
 } from './history_navigation_handler_helpers.js';
 
 const DATASET_PREFIX = '/';
+
+beforeEach(() => {
+    primeDatasetAccessRegistry({ datasets: [{ table_uid: 7, dataset_name: 'app_service_catalog',
+        names: ['app_service_catalog', 'service_catalog'], preferred_name: 'service_catalog', can_read_rows: true }] });
+});
+afterEach(clearDatasetAccessRegistry);
 
 // ---------------------------------------------------------------------------
 // getPrefixFromPathname

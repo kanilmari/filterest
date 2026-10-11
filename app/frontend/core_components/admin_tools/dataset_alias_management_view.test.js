@@ -13,7 +13,7 @@ const showInfoToastMock = vi.fn();
 const showSuccessToastMock = vi.fn();
 const showWarningToastMock = vi.fn();
 const getDatasetRouteUniquenessHintMock = vi.fn();
-const refreshDatasetAliasRegistryMock = vi.fn();
+const refreshDatasetCatalogueMock = vi.fn();
 
 function buildEntry(overrides = {}) {
     return {
@@ -61,7 +61,9 @@ async function loadModule() {
     }));
     vi.doMock('../navigation/nav_engine/dataset_aliases.js', () => ({
         getDatasetRouteUniquenessHint: getDatasetRouteUniquenessHintMock,
-        refreshDatasetAliasRegistry: refreshDatasetAliasRegistryMock,
+    }));
+    vi.doMock('../navigation/nav_engine/dataset_access_registry.js', () => ({
+        refreshDatasetCatalogue: refreshDatasetCatalogueMock,
     }));
     return import('./dataset_alias_management_view.js');
 }
@@ -77,9 +79,9 @@ describe('dataset_alias_management_view', () => {
         showSuccessToastMock.mockReset();
         showWarningToastMock.mockReset();
         getDatasetRouteUniquenessHintMock.mockReset();
-        refreshDatasetAliasRegistryMock.mockReset();
+        refreshDatasetCatalogueMock.mockReset();
         getDatasetRouteUniquenessHintMock.mockReturnValue('Dataset names also reserve their URL routes.');
-        refreshDatasetAliasRegistryMock.mockResolvedValue(undefined);
+        refreshDatasetCatalogueMock.mockResolvedValue(undefined);
         createVanillaDropdownMock.mockImplementation(() => ({
             setValue: vi.fn(),
         }));
@@ -171,7 +173,8 @@ describe('dataset_alias_management_view', () => {
             dataset_name: 'app_orders',
             alias_slug: 'shop-orders',
         });
-        expect(refreshDatasetAliasRegistryMock).toHaveBeenCalledTimes(1);
+        // Forced: a registry loaded moments ago would otherwise keep the old alias.
+        expect(refreshDatasetCatalogueMock).toHaveBeenCalledExactlyOnceWith({ force: true });
         expect(showSuccessToastMock).toHaveBeenCalledWith('Alias saved');
         expect(aliasInput.value).toBe('shop-orders');
         expect(container.textContent).toContain('/shop-orders');

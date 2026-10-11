@@ -24,6 +24,23 @@ func TestGroupedTableJSONExposesPresentationMediaAsTypedBoolean(t *testing.T) {
 	}
 }
 
+func TestGroupedTableJSONKeepsRegistryIDSeparateFromDatasetUIDAndNames(t *testing.T) {
+	pool := dtt_models.Table{ID: 900, TableUID: 11, TableName: "app_orders", CanReadRows: true,
+		Names: []string{"app_orders", "shop-orders"}, PreferredName: "shop-orders"}
+	payload, err := json.Marshal(pool)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var entry map[string]interface{}
+	if err := json.Unmarshal(payload, &entry); err != nil {
+		t.Fatal(err)
+	}
+	if entry["id"] != float64(900) || entry["table_uid"] != float64(11) || entry["preferred_name"] != "shop-orders" ||
+		!reflect.DeepEqual(entry["names"], []interface{}{"app_orders", "shop-orders"}) {
+		t.Fatalf("catalogue entry = %s", payload)
+	}
+}
+
 func TestDeduplicateTabOrderEntriesKeepsFirstOccurrence(t *testing.T) {
 	entries := []map[string]interface{}{
 		{"tab_id": "travel_info", "sort_order": 1},

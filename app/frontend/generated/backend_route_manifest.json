@@ -2648,36 +2648,6 @@
       ]
     },
     {
-      "path_pattern": "/api/dataset-aliases",
-      "match_type": "exact",
-      "handler_name": "router.GetDatasetAliasesHandler",
-      "methods": [
-        "GET",
-        "HEAD"
-      ],
-      "method_source": "route_registration",
-      "scenarios": [
-        {
-          "name": "production",
-          "profile_name": "default",
-          "skip_stages": [],
-          "admin_only": false
-        },
-        {
-          "name": "development",
-          "profile_name": "default",
-          "skip_stages": [],
-          "admin_only": false
-        },
-        {
-          "name": "api_language",
-          "profile_name": "default",
-          "skip_stages": [],
-          "admin_only": false
-        }
-      ]
-    },
-    {
       "path_pattern": "/api/dataset-columns/",
       "match_type": "prefix",
       "handler_name": "dtt_2_column_crud.GetTableColumnsHandler",

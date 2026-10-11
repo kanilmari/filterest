@@ -7,9 +7,6 @@ package router
 import (
 	backend "easelect/backend/core_components"
 	"easelect/backend/core_components/dataset_routes"
-	"encoding/json"
-	"log"
-	"net/http"
 )
 
 // resolveRawDatasetName maps a public alias or raw dataset name to the raw table name.
@@ -22,19 +19,26 @@ func resolvePublicDatasetName(datasetName string) string {
 	return dataset_routes.ResolvePublicDatasetNameWithQuerier(backend.Db, datasetName)
 }
 
-// GetDatasetAliasesHandler serves the dedicated dataset alias registry read surface.
-func GetDatasetAliasesHandler(w http.ResponseWriter, r *http.Request) {
-
-	registry, err := dataset_routes.LoadAliasRegistry(backend.Db)
+// resolveDocumentDataset keeps the accepted public-schema pool, including its UID,
+// through document metadata and authorization. A raw-name fallback cannot establish
+// an identity when the registry read failed or only an unsupported schema owns it.
+func resolveDocumentDataset(name string) (dataset_routes.DatasetNamePool, bool) {
+	if name == "" || backend.Db == nil {
+		return dataset_routes.DatasetNamePool{}, false
+	}
+	pools, err := dataset_routes.LoadDatasetNamePools(backend.Db)
 	if err != nil {
-		log.Printf("\033[33mwarning: dataset alias registry fallback in GetDatasetAliasesHandler: %v\033[0m", err)
+		return dataset_routes.DatasetNamePool{}, false
 	}
-
-	w.Header().Set("Content-Type", "application/json")
-	if encodeErr := json.NewEncoder(w).Encode(map[string]any{
-		"raw_to_public": registry.RawToPublic,
-		"public_to_raw": registry.PublicToRaw,
-	}); encodeErr != nil {
-		log.Printf("\033[31merror: encode dataset alias registry: %v\033[0m", encodeErr)
+	for _, pool := range pools {
+		if pool.SchemaName != "public" || pool.TableUID <= 0 {
+			continue
+		}
+		for _, accepted := range pool.Names {
+			if accepted == name && backend.ShouldExposeCloudManagementDatasetName(pool.DatasetName) {
+				return pool, true
+			}
+		}
 	}
+	return dataset_routes.DatasetNamePool{}, false
 }

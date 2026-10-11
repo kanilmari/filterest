@@ -1,217 +1,166 @@
 // @vitest-environment jsdom
 // dataset_aliases.test.js
-// Verifies dataset alias resolution uses the dedicated alias registry when possible.
-// Bridges the navigation helpers, dedicated alias endpoint, and raw-name fallback behavior.
-// Exists to keep the alias read-surface cutover API-first without breaking old raw dataset paths.
-
+// Verifies compatibility helpers delegate to the readable catalogue for every viewer.
+// Bridges reload/save timing regressions and the single name/uid registry.
+// Keeps obsolete storage timestamps and response order from changing name ownership.
 import { beforeEach, describe, expect, test, vi } from 'vitest';
 
 const endpointRouterMock = vi.fn();
-const hasRoutePermissionMock = vi.fn();
+const catalogue = (preferred = 'orders') => ({ datasets: [{
+    id: 900, table_uid: 11, dataset_name: 'app_orders',
+    names: ['app_orders', preferred], preferred_name: preferred, can_read_rows: true,
+}] });
 
 async function loadModule() {
     vi.resetModules();
-    vi.doMock('../../endpoints/endpoint_router.js', () => ({
-        endpoint_router: endpointRouterMock,
-    }));
-    vi.doMock('../../route_permission_checker.js', () => ({
-        hasRoutePermission: hasRoutePermissionMock,
-    }));
+    vi.doMock('../../endpoints/endpoint_router.js', () => ({ endpoint_router: endpointRouterMock }));
     return import('./dataset_aliases.js');
 }
 
-describe('dataset_aliases', () => {
-    beforeEach(() => {
-        localStorage.clear();
-        endpointRouterMock.mockReset();
-        hasRoutePermissionMock.mockReset();
-        hasRoutePermissionMock.mockReturnValue(true);
-    });
+const readStorage = () => Object.fromEntries(Array.from({ length: localStorage.length }, (_, index) => {
+    const key = localStorage.key(index);
+    return [key, localStorage.getItem(key)];
+}));
 
-    test('uses the dedicated dataset alias endpoint as the normal source', async () => {
-        localStorage.setItem('button_state', 'logout');
-        endpointRouterMock.mockResolvedValue({
-            raw_to_public: {
-                app_service_catalog: 'service_directory',
-            },
-            public_to_raw: {
-                service_directory: 'app_service_catalog',
-            },
-        });
+beforeEach(() => {
+    localStorage.clear();
+    sessionStorage.clear();
+    endpointRouterMock.mockReset();
+});
 
-        const {
-            refreshDatasetAliasRegistry,
-            getPublicDatasetName,
-            getInternalDatasetName,
-            buildDatasetPath,
-        } = await loadModule();
-
-        await refreshDatasetAliasRegistry();
-
-        expect(getPublicDatasetName('app_service_catalog')).toBe('service_directory');
-        expect(getInternalDatasetName('service_directory')).toBe('app_service_catalog');
-        expect(buildDatasetPath('app_service_catalog')).toBe('/service_directory');
-        expect(getPublicDatasetName('system_users')).toBe('system_users');
-        expect(endpointRouterMock).toHaveBeenCalledWith('datasetAliases', {
-            suppressAuthRedirect: true,
-            suppressErrorToast: true,
+describe('catalogue-backed dataset aliases', () => {
+    test.each(['login', 'logout'])('loads readable names without alias-endpoint rights, shell=%s', async shell => {
+        localStorage.setItem('button_state', shell);
+        endpointRouterMock.mockResolvedValue(catalogue('shop-orders'));
+        const aliases = await loadModule();
+        await aliases.refreshDatasetAliasRegistry();
+        expect(aliases.getInternalDatasetName('shop-orders')).toBe('app_orders');
+        expect(aliases.getPublicDatasetName('app_orders')).toBe('shop-orders');
+        expect(aliases.buildDatasetPath('app_orders', '/admin/')).toBe('/admin/shop-orders');
+        expect(endpointRouterMock).toHaveBeenCalledExactlyOnceWith('fetchContentTables', {
+            suppressAuthRedirect: true, suppressErrorToast: true,
         });
     });
 
-    test('falls back to datasetNames-derived aliases when the dedicated endpoint is unavailable', async () => {
+    test('resolution has no network or prefix/fallback side effects before bootstrap', async () => {
         localStorage.setItem('button_state', 'logout');
-        endpointRouterMock
-            .mockRejectedValueOnce(new Error('dedicated endpoint down'))
-            .mockResolvedValueOnce([
-            'app_orders',
-            'app_customers',
-            'customers',
-            'system_users',
-        ]);
-
-        const {
-            refreshDatasetAliasRegistry,
-            getPublicDatasetName,
-            getInternalDatasetName,
-            buildDatasetPath,
-        } = await loadModule();
-
-        await refreshDatasetAliasRegistry();
-
-        expect(getPublicDatasetName('app_orders')).toBe('orders');
-        expect(getInternalDatasetName('orders')).toBe('app_orders');
-        expect(buildDatasetPath('app_orders')).toBe('/orders');
-        expect(getPublicDatasetName('app_customers')).toBe('app_customers');
-        expect(getInternalDatasetName('customers')).toBe('customers');
-        expect(endpointRouterMock).toHaveBeenNthCalledWith(1, 'datasetAliases', {
-            suppressAuthRedirect: true,
-            suppressErrorToast: true,
-        });
-        expect(endpointRouterMock).toHaveBeenNthCalledWith(2, 'datasetNames', {
-            url_params: '?with_aliases=1',
-            suppressAuthRedirect: true,
-            suppressErrorToast: true,
-        });
-    });
-
-    test('falls back to the hardcoded alias map when both alias endpoints are unavailable', async () => {
-        localStorage.setItem('button_state', 'logout');
-        endpointRouterMock.mockRejectedValue(new Error('boom'));
-
-        const {
-            refreshDatasetAliasRegistry,
-            getPublicDatasetName,
-            getInternalDatasetName,
-            buildDatasetPath,
-        } = await loadModule();
-
-        await refreshDatasetAliasRegistry();
-
-        expect(getPublicDatasetName('app_service_catalog')).toBe('service_catalog');
-        expect(getInternalDatasetName('service_catalog')).toBe('app_service_catalog');
-        expect(buildDatasetPath('app_service_catalog')).toBe('/service_catalog');
-    });
-
-    test('keeps unknown raw names unchanged', async () => {
-        localStorage.setItem('button_state', 'logout');
-        endpointRouterMock.mockResolvedValue({
-            raw_to_public: {
-                app_service_catalog: 'service_catalog',
-            },
-        });
-
-        const { refreshDatasetAliasRegistry, getPublicDatasetName, getInternalDatasetName } = await loadModule();
-
-        await refreshDatasetAliasRegistry();
-
-        expect(getPublicDatasetName('system_users')).toBe('system_users');
-        expect(getInternalDatasetName('system_users')).toBe('system_users');
-    });
-
-    test('describes automatic app aliases and opt-in system aliases in the route hint', async () => {
-        const { getDatasetRouteUniquenessHint } = await loadModule();
-
-        expect(getDatasetRouteUniquenessHint()).toContain('app_ datasets auto-reserve');
-        expect(getDatasetRouteUniquenessHint()).toContain('system_ stripped aliases stay opt-in only');
-    });
-
-    test('does not hit alias endpoints when the shell is already known guest mode', async () => {
-        localStorage.setItem('button_state', 'login');
-        const {
-            refreshDatasetAliasRegistry,
-            getPublicDatasetName,
-            getInternalDatasetName,
-            buildDatasetPath,
-        } = await loadModule();
-
-        expect(getPublicDatasetName('app_service_catalog')).toBe('service_catalog');
-        expect(getInternalDatasetName('service_catalog')).toBe('app_service_catalog');
-        expect(buildDatasetPath('app_service_catalog')).toBe('/service_catalog');
-
-        await refreshDatasetAliasRegistry();
-
-        expect(endpointRouterMock).not.toHaveBeenCalled();
-    });
-
-    test('does not hit alias endpoints before auth state is known', async () => {
-        const { refreshDatasetAliasRegistry } = await loadModule();
-
-        await refreshDatasetAliasRegistry();
-
-        expect(endpointRouterMock).not.toHaveBeenCalled();
-    });
-
-    test('does not hit alias endpoints for logged-in users without alias-route permissions', async () => {
-        localStorage.setItem('button_state', 'logout');
-        hasRoutePermissionMock.mockReturnValue(false);
-
-        const {
-            refreshDatasetAliasRegistry,
-            getPublicDatasetName,
-        } = await loadModule();
-
-        await refreshDatasetAliasRegistry();
-
-        expect(endpointRouterMock).not.toHaveBeenCalled();
-        expect(getPublicDatasetName('app_service_catalog')).toBe('service_catalog');
-    });
-
-    test('reuses a fresh alias registry instead of refetching immediately', async () => {
-        localStorage.setItem('button_state', 'logout');
-        endpointRouterMock.mockResolvedValue({
-            raw_to_public: {
-                app_service_catalog: 'service_directory',
-            },
-        });
-
-        const { refreshDatasetAliasRegistry } = await loadModule();
-
-        await refreshDatasetAliasRegistry();
-        await refreshDatasetAliasRegistry();
-
-        expect(endpointRouterMock).toHaveBeenCalledTimes(1);
-    });
-    test('does not trust persisted login and permission hints while resolving initial routes', async () => {
-        localStorage.setItem('button_state', 'logout');
-        hasRoutePermissionMock.mockReturnValue(true);
-        const { getPublicDatasetName, getInternalDatasetName, buildDatasetPath } = await loadModule();
-        expect(getPublicDatasetName('app_service_catalog')).toBe('service_catalog');
-        expect(getInternalDatasetName('service_catalog')).toBe('app_service_catalog');
-        expect(buildDatasetPath('app_service_catalog')).toBe('/service_catalog');
+        const aliases = await loadModule();
+        expect(aliases.getInternalDatasetName('service_catalog')).toBe('service_catalog');
+        expect(aliases.getPublicDatasetName('app_orders')).toBe('app_orders');
+        expect(aliases.buildDatasetPath('app_orders')).toBe('/app_orders');
         await Promise.resolve();
         expect(endpointRouterMock).not.toHaveBeenCalled();
     });
 
-    test('retains usable aliases if permissions change after auth bootstrap', async () => {
-        localStorage.setItem('button_state', 'logout');
-        endpointRouterMock.mockRejectedValue(Object.assign(new Error('Forbidden'), { status: 403 }));
-        const { refreshDatasetAliasRegistry, getInternalDatasetName } = await loadModule();
-        await refreshDatasetAliasRegistry();
-        expect(getInternalDatasetName('service_catalog')).toBe('app_service_catalog');
-        expect(endpointRouterMock).toHaveBeenCalledTimes(2);
-        for (const [, options] of endpointRouterMock.mock.calls) {
-            expect(options).toMatchObject({ suppressAuthRedirect: true, suppressErrorToast: true });
-        }
+    test('reuses only a successful catalogue held by this page', async () => {
+        endpointRouterMock.mockResolvedValue(catalogue());
+        const aliases = await loadModule();
+        await aliases.refreshDatasetAliasRegistry();
+        await aliases.refreshDatasetAliasRegistry();
+        expect(endpointRouterMock).toHaveBeenCalledTimes(1);
     });
 
+    test('loads names again on a page reloaded within a minute', async () => {
+        endpointRouterMock.mockResolvedValue(catalogue());
+        const stored = readStorage();
+        const first = await loadModule();
+        await first.refreshDatasetAliasRegistry();
+        expect(first.buildDatasetPath('app_orders')).toBe('/orders');
+        expect(readStorage()).toEqual(stored);
+        const reloaded = await loadModule();
+        expect(reloaded.getInternalDatasetName('orders')).toBe('orders');
+        await reloaded.refreshDatasetAliasRegistry();
+        expect(reloaded.getInternalDatasetName('orders')).toBe('app_orders');
+        expect(endpointRouterMock).toHaveBeenCalledTimes(2);
+    });
+
+    test('ignores obsolete stored freshness timestamps', async () => {
+        localStorage.setItem('easelect_dataset_alias_refresh_at', String(Date.now()));
+        endpointRouterMock.mockResolvedValue(catalogue());
+        const aliases = await loadModule();
+        await aliases.refreshDatasetAliasRegistry();
+        expect(aliases.getInternalDatasetName('orders')).toBe('app_orders');
+        expect(endpointRouterMock).toHaveBeenCalledTimes(1);
+    });
+
+    test.each([null, {}, { datasets: null }])('retries malformed responses %j', async payload => {
+        endpointRouterMock.mockResolvedValueOnce(payload).mockResolvedValueOnce(catalogue());
+        const aliases = await loadModule();
+        await aliases.refreshDatasetAliasRegistry();
+        await aliases.refreshDatasetAliasRegistry();
+        expect(aliases.getInternalDatasetName('orders')).toBe('app_orders');
+        expect(endpointRouterMock).toHaveBeenCalledTimes(2);
+    });
+
+    test('retries failure immediately, retaining the last snapshot until a successful replacement', async () => {
+        const warning = vi.spyOn(console, 'warn').mockImplementation(() => {});
+        endpointRouterMock.mockRejectedValueOnce(new Error('unavailable')).mockResolvedValueOnce(catalogue())
+            .mockRejectedValueOnce(new Error('unavailable')).mockResolvedValueOnce(catalogue('shop-orders'));
+        try {
+            const aliases = await loadModule();
+            await aliases.refreshDatasetAliasRegistry();
+            expect(aliases.getInternalDatasetName('orders')).toBe('orders');
+            await aliases.refreshDatasetAliasRegistry();
+            await aliases.refreshDatasetAliasRegistry({ force: true });
+            expect(aliases.getInternalDatasetName('orders')).toBe('app_orders');
+            await aliases.refreshDatasetAliasRegistry();
+            expect(aliases.buildDatasetPath('app_orders')).toBe('/shop-orders');
+            expect(endpointRouterMock).toHaveBeenCalledTimes(4);
+        } finally { warning.mockRestore(); }
+    });
+
+    test('force refresh bypasses a fresh catalogue after an alias save', async () => {
+        endpointRouterMock.mockResolvedValueOnce(catalogue()).mockResolvedValueOnce(catalogue('shop-orders'));
+        const aliases = await loadModule();
+        await aliases.refreshDatasetAliasRegistry();
+        await aliases.refreshDatasetAliasRegistry();
+        await aliases.refreshDatasetAliasRegistry({ force: true });
+        expect(aliases.buildDatasetPath('app_orders')).toBe('/shop-orders');
+        expect(endpointRouterMock).toHaveBeenCalledTimes(2);
+    });
+
+    test.each([true, false])('only the newest response applies; old response first=%s', async oldFirst => {
+        let oldAnswer, newAnswer;
+        endpointRouterMock.mockImplementationOnce(() => new Promise(resolve => { oldAnswer = resolve; }))
+            .mockImplementationOnce(() => new Promise(resolve => { newAnswer = resolve; }));
+        const aliases = await loadModule();
+        const oldLoad = aliases.refreshDatasetAliasRegistry();
+        const newLoad = aliases.refreshDatasetAliasRegistry({ force: true });
+        if (oldFirst) { oldAnswer(catalogue()); await oldLoad; }
+        newAnswer(catalogue('shop-orders'));
+        await newLoad;
+        if (!oldFirst) { oldAnswer(catalogue()); await oldLoad; }
+        expect(aliases.buildDatasetPath('app_orders')).toBe('/shop-orders');
+    });
+
+    test('empty successful catalogue removes earlier aliases and stays fresh', async () => {
+        endpointRouterMock.mockResolvedValueOnce(catalogue()).mockResolvedValueOnce({ datasets: [] });
+        const aliases = await loadModule();
+        await aliases.refreshDatasetAliasRegistry();
+        await aliases.refreshDatasetAliasRegistry({ force: true });
+        await aliases.refreshDatasetAliasRegistry();
+        expect(aliases.getInternalDatasetName('orders')).toBe('orders');
+        expect(aliases.buildDatasetPath('app_orders')).toBe('/app_orders');
+        expect(endpointRouterMock).toHaveBeenCalledTimes(2);
+    });
+
+    test('describes the existing automatic/opt-in policy in the editor hint', async () => {
+        const aliases = await loadModule();
+        expect(aliases.getDatasetRouteUniquenessHint()).toContain('app_ datasets auto-reserve');
+        expect(aliases.getDatasetRouteUniquenessHint()).toContain('system_ stripped aliases stay opt-in only');
+    });
+});
+
+
+test('compatibility refresh returns immutable name maps on success and failure', async () => {
+    endpointRouterMock.mockResolvedValueOnce(catalogue()).mockRejectedValueOnce(new Error('offline'));
+    const aliases = await loadModule();
+    const warning = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+        const expected = { rawToPublic: { app_orders: 'orders' }, publicToRaw: { orders: 'app_orders' } };
+        const result = await aliases.refreshDatasetAliasRegistry();
+        expect(result).toEqual(expected);
+        expect(Object.isFrozen(result.rawToPublic)).toBe(true);
+        expect(await aliases.refreshDatasetAliasRegistry({ force: true })).toEqual(expected);
+    } finally { warning.mockRestore(); }
 });

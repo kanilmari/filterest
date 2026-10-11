@@ -5,7 +5,7 @@ import { beforeEach, expect, test, vi } from "vitest";
 const endpoint = vi.hoisted(() => vi.fn());
 vi.mock("../../endpoints/endpoint_router.js", () => ({ endpoint_router: endpoint }));
 import { fetchProjectTabs, acceptMainDatasetTabs, getMainDatasetTabs, subscribeMainDatasetTabs } from "./main_dataset_tabs.js";
-import { clearDatasetAccessRegistry, canReadDatasetFromRegistry } from "../nav_engine/dataset_access_registry.js";
+import { clearDatasetAccessRegistry, canReadDatasetFromRegistry, refreshDatasetCatalogue } from "../nav_engine/dataset_access_registry.js";
 beforeEach(() => { clearDatasetAccessRegistry(); endpoint.mockReset(); });
 const response = {
     datasets: [
@@ -26,6 +26,23 @@ test("uses the original order, Users and About exceptions, and readable metadata
     expect(Object.isFrozen(tabs)).toBe(true);
     expect(tabs.every(Object.isFrozen)).toBe(true);
     expect(canReadDatasetFromRegistry("denied")).toBe(false);
+});
+
+test('catalogue refresh after alias save rebuilds the existing tab projection without a third request', async () => {
+    endpoint.mockResolvedValueOnce(response).mockResolvedValueOnce({ datasets: [{
+        dataset_name: 'new', table_uid: 22, names: ['new', 'new-alias'], preferred_name: 'new-alias',
+        is_top_level_in_current_project: true, can_read_rows: true,
+    }] });
+    acceptMainDatasetTabs(await fetchProjectTabs(), true);
+    await refreshDatasetCatalogue({ force: true });
+    await Promise.resolve();
+    expect(getMainDatasetTabs().map(tab => tab.dataset)).toEqual(['new']);
+    expect(canReadDatasetFromRegistry('new-alias')).toBe(true);
+    expect(endpoint).toHaveBeenCalledTimes(2);
+    endpoint.mockResolvedValueOnce({ datasets: [] });
+    await refreshDatasetCatalogue({ force: true });
+    await Promise.resolve();
+    expect(getMainDatasetTabs()).toEqual([]);
 });
 test("guest snapshot excludes user-only dataset tabs; failed fetch adds no static targets", async () => {
     endpoint.mockResolvedValueOnce(response).mockRejectedValueOnce(new Error("403"));
@@ -50,4 +67,19 @@ test("latest response and logout guard both the projection and access registry",
     expect(getMainDatasetTabs()).toEqual([]);
     expect(listener).toHaveBeenLastCalledWith([]);
     unsubscribe();
+});
+
+
+test('failed page-return refresh retains accepted tabs and readable names', async () => {
+    endpoint.mockResolvedValueOnce(response).mockRejectedValueOnce(new Error('offline'));
+    acceptMainDatasetTabs(await fetchProjectTabs(), true);
+    const accepted = getMainDatasetTabs();
+    const warning = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+        await refreshDatasetCatalogue({ force: true });
+        expect(canReadDatasetFromRegistry('alpha')).toBe(true);
+        expect(getMainDatasetTabs()).toBe(accepted);
+        clearDatasetAccessRegistry();
+        expect(getMainDatasetTabs()).toEqual([]);
+    } finally { warning.mockRestore(); }
 });

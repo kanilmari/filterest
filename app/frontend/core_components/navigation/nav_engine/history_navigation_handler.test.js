@@ -123,6 +123,11 @@ vi.mock("./history_navigation_handler_helpers.js", () => ({
     },
 }));
 
+vi.mock('./dataset_access_registry.js', () => ({
+    hasDatasetAccessSnapshot: () => true,
+    subscribeDatasetAccessRegistry: () => () => {},
+}));
+
 await import("./history_navigation_handler.js");
 
 describe("history_navigation_handler", () => {

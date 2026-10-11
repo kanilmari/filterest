@@ -199,20 +199,8 @@ func ensureTablePermissions(q dbutils.Querier, tableName string, grantUsersRead,
 		return id, err
 	}
 
-	adminGroupID, err := getGroupID("admins")
-	if err != nil {
+	if err := EnsureDatasetAdministratorPermissions(q, tableUID, "public"); err != nil {
 		return err
-	}
-
-	// Lisää Admin-oikeudet: kaikki käytössä olevat taulukohtaiset funktiot.
-	adminFuncIDs, err := tableSpecificFunctionIDs(q)
-	if err != nil {
-		return fmt.Errorf("reading table-specific functions: %w", err)
-	}
-	for _, fid := range adminFuncIDs {
-		if err := insertPerm(q, adminGroupID, fid, tableUID); err != nil {
-			return fmt.Errorf("inserting admin permission for function %d: %w", fid, err)
-		}
 	}
 
 	// Lisää Users-oikeudet
@@ -295,6 +283,36 @@ func ensureRegisteredTableUID(q dbutils.Querier, tableName string) (int, error) 
 	}
 
 	return tableUID, nil
+}
+
+// EnsureDatasetAdministratorPermissions gives runtime-registered datasets the
+// same enabled dataset capabilities as ordinary creation, in the caller's
+// transaction. Registration must not wait for a restart to repair navigation.
+func EnsureDatasetAdministratorPermissions(q dbutils.Querier, tableUID int, schemaName string) error {
+	var adminGroupID int
+	if err := q.QueryRow("SELECT id FROM system_user_groups WHERE name = $1", "admins").Scan(&adminGroupID); err != nil {
+		return fmt.Errorf("reading administrator group: %w", err)
+	}
+	functionIDs, err := tableSpecificFunctionIDs(q)
+	if err != nil {
+		return fmt.Errorf("reading table-specific functions: %w", err)
+	}
+	for _, functionID := range functionIDs {
+		if schemaName == "public" {
+			err = insertPerm(q, adminGroupID, functionID, tableUID)
+		} else {
+			_, err = q.Exec(`INSERT INTO system_group_table_func_rights
+                (user_group_id, function_id, target_table_uid, target_schema_name)
+                SELECT $1, $2, $3, $4 WHERE NOT EXISTS (
+                    SELECT 1 FROM system_group_table_func_rights
+                    WHERE user_group_id = $1 AND function_id = $2 AND target_table_uid = $3
+                )`, adminGroupID, functionID, tableUID, schemaName)
+		}
+		if err != nil {
+			return fmt.Errorf("inserting admin permission for function %d: %w", functionID, err)
+		}
+	}
+	return nil
 }
 
 // tableSpecificFunctionIDs lists every enabled function that acts on a single

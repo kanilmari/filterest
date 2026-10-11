@@ -8,6 +8,7 @@ import (
 	backend "easelect/backend/core_components"
 	"easelect/backend/core_components/auth"
 	"easelect/backend/core_components/auth_generation"
+	"easelect/backend/core_components/dataset_routes"
 	dataset_visibility "easelect/backend/core_components/dataset_visibility"
 	frontendassets "easelect/backend/core_components/frontend_assets"
 	"easelect/backend/core_components/httpresponse"
@@ -213,10 +214,13 @@ func rootHandler(w http.ResponseWriter, r *http.Request) {
 		fsPath := filepath.Join(localFrontendDir, strings.TrimPrefix(r.URL.Path, "/"))
 		_, statErr := os.Stat(fsPath)
 		firstSeg := strings.Split(strings.TrimPrefix(r.URL.Path, "/"), "/")[0]
-		firstSegIsDataset := datasetExists(firstSeg)
-		if firstSegIsDataset {
+		dataset, firstSegIsDataset := resolveDocumentDataset(firstSeg)
+		var authorizedDataset *dataset_routes.DatasetNamePool
+		// A sign-in entry may open the generic shell before it has a principal;
+		// it must not include the addressed dataset's metadata at that point.
+		if firstSegIsDataset && !(authShellEntry && !onkoKayttaja) {
 			userID, _ := userIDVal.(int)
-			hidden, visibilityErr := dataset_visibility.HiddenForUser(backend.Db, resolveRawDatasetName(firstSeg), userID)
+			hidden, visibilityErr := dataset_visibility.HiddenForUser(backend.Db, dataset.DatasetName, userID)
 			if visibilityErr != nil {
 				httpresponse.RespondWithError(w, http.StatusServiceUnavailable, "dataset visibility unavailable")
 				return
@@ -226,16 +230,28 @@ func rootHandler(w http.ResponseWriter, r *http.Request) {
 				httpresponse.RespondWithError(w, http.StatusNotFound, "not found")
 				return
 			}
+			// Signed-in document requests need the same dataset read right as guests;
+			// a valid session alone must not publish an unreadable dataset's metadata.
+			if !canReadDocumentDataset(dataset, userID) {
+				if isGuestUserID(userIDVal) {
+					redirectProtectedDatasetRequestToLogin(w, r)
+				} else {
+					w.Header().Set("Cache-Control", "no-store")
+					httpresponse.RespondWithError(w, http.StatusForbidden, "permission denied")
+				}
+				return
+			}
+			authorizedDataset = &dataset
 		}
-		if !loginToBrowse && isGuestUserID(userIDVal) {
+		if !firstSegIsDataset && !loginToBrowse && isGuestUserID(userIDVal) {
 			guestUserID, _ := userIDVal.(int)
-			if shouldRedirectGuestDeepLinkToLogin(r, firstSeg, statErr, firstSegIsDataset, guestUserID) {
+			if shouldRedirectGuestDeepLinkToLogin(r, statErr, guestUserID) {
 				redirectProtectedDatasetRequestToLogin(w, r)
 				return
 			}
 		}
 		if (os.IsNotExist(statErr) && isSpaDeepLinkPath(r.URL.Path)) || firstSegIsDataset {
-			tablesHandler(w, r, loginToBrowse)
+			tablesHandler(w, r, loginToBrowse, authorizedDataset)
 			return
 		}
 	}

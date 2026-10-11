@@ -29,7 +29,7 @@ func TestShellBootIndexRenderersUseDevelopmentAndNoStore(t *testing.T) {
 				previous := localFrontendDir
 				localFrontendDir = filepath.Join("..", "..", "..", "frontend")
 				t.Cleanup(func() { localFrontendDir = previous })
-				handlers := []http.HandlerFunc{rootHandler, func(w http.ResponseWriter, r *http.Request) { tablesHandler(w, r, loginRequired) }, adminHandler}
+				handlers := []http.HandlerFunc{rootHandler, func(w http.ResponseWriter, r *http.Request) { tablesHandler(w, r, loginRequired, nil) }, adminHandler}
 				for _, handler := range handlers {
 					request := httptest.NewRequest(http.MethodGet, "https://localhost/?login-entry=1&lang=fi", nil)
 					response := httptest.NewRecorder()
@@ -65,7 +65,7 @@ func TestShellBootIndexLanguageDoesNotChangeOrdinaryMetadata(t *testing.T) {
 		{"", "fi;q=0.1,en;q=1", "fi", "Loading the page…"},
 		{"&lang=yue", "fi", "yue", "Sivua ladataan…"},
 	} {
-		for _, handler := range []http.HandlerFunc{rootHandler, func(w http.ResponseWriter, r *http.Request) { tablesHandler(w, r, false) }, adminHandler} {
+		for _, handler := range []http.HandlerFunc{rootHandler, func(w http.ResponseWriter, r *http.Request) { tablesHandler(w, r, false, nil) }, adminHandler} {
 			request := httptest.NewRequest(http.MethodGet, "https://localhost/?login-entry=1"+tc.query, nil)
 			request.Header.Set("Accept-Language", tc.header)
 			response := httptest.NewRecorder()

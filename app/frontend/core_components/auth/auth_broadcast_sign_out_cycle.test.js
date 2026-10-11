@@ -33,9 +33,6 @@ vi.mock("./session_access_prompt.js", () => ({ requestSessionAccessPrompt: vi.fn
 vi.mock("../../reusable_components/modal/modal_builder.js", () => ({ hideModal: vi.fn() }));
 vi.mock("../config_fetcher.js", () => ({ isCrossTabLoginSyncEnabled: vi.fn(async () => false) }));
 vi.mock("../pipeline/api_pipeline.js", () => ({ ensureCsrfToken: vi.fn() }));
-vi.mock("../route_permission_checker.js", () => ({
-    clearPermissionCache: vi.fn(), hasRoutePermission: () => false, primeDatasetPermissions: vi.fn(),
-}));
 vi.mock("../ai_features/table_chat/table_chat_printer.js", () => ({ destroy_chat: vi.fn() }));
 vi.mock("../admin_tools/admin_update_notice_subscriber.js", () => ({
     stopAdminUpdateNoticeSubscriber: vi.fn(), syncAdminUpdateNoticeSubscriber: vi.fn(),
@@ -56,13 +53,13 @@ vi.mock("../navigation/admin_and_user_tools/custom_view_reader.js", () => ({
     custom_views: [], ensure_private_custom_views_loaded: vi.fn(async () => {}),
 }));
 vi.mock("../dev_tools/function_counter.js", () => ({ count_this_function: vi.fn() }));
-vi.mock("../navigation/nav_engine/dataset_access_registry.js", () => ({
-    primeDatasetAccessRegistry: () => true, beginDatasetAccessRefresh: () => 1, isCurrentDatasetAccessRefresh: () => true,
-}));
 vi.mock("../general_tables/gt_1_row_crud/gt_1_2_row_read/table_refresh_unified.js", async () => {
     const store = await import("../state_stores/table_state_store.js");
     return { setUnifiedTableState: store.setUnifiedTableState };
 });
+
+const catalogue = { datasets: [{ table_uid: 19, dataset_name: "travel_deals",
+    names: ["travel_deals", "journeys"], preferred_name: "journeys", can_read_rows: true }], tab_order: [] };
 
 /** A session storage that still reads but refuses every write, as a full one does. */
 function createWriteRefusingSessionStore() {
@@ -85,7 +82,7 @@ beforeEach(() => {
     vi.spyOn(console, "warn").mockImplementation(() => {});
     document.body.innerHTML = '<div id="navbar"></div><div id="tabs_container"></div>';
     cycle.endpointRouter.mockImplementation(async (route) => (route === "fetchContentTables"
-        ? { datasets: [{ dataset_name: "travel_deals" }], tab_order: [] }
+        ? catalogue
         : {}));
     cycle.openNavTab.mockImplementation(async () => ({}));
 });
@@ -100,13 +97,14 @@ test.each([
     ["refuses writes to", () => vi.stubGlobal("sessionStorage", createWriteRefusingSessionStore())],
 ])("after another tab signs out and the person signs in here, the next navigation starts from the address (the browser %s session storage)", async (_label, prepareBrowser) => {
     prepareBrowser();
-    history.replaceState({}, "", "/travel_deals");
+    history.replaceState({}, "", "/journeys");
     const loader = await import("../admin_tools/main/table_loader_handler.js");
     const sync = await import("./auth_broadcast_sync.js");
     const bootstrap = await import("./post_auth_bootstrap.js");
     const query = await import("../navigation/nav_engine/query_params.js");
     const views = await import("../state_stores/dataset_view_choice_saver.js");
     const state = await import("../state_stores/table_state_store.js");
+    const registry = await import("../navigation/nav_engine/dataset_access_registry.js");
 
     // This page's visit: an article open, with its view in the address.
     await loader.load_tables();
@@ -116,9 +114,11 @@ test.each([
 
     // Another tab signs out; on a public site this page resets in place.
     await sync.handleAuthBroadcastEvent({ type: "logout", detail: { reason: "logout", postLogoutPath: "/" } });
+    expect(registry.resolveDataset({ name: "journeys" })).toEqual({ status: "not_ready" });
 
     // The person signs in again on the dataset's address and the page navigates there.
-    history.replaceState({}, "", "/travel_deals");
+    history.replaceState({}, "", "/journeys");
+    cycle.openNavTab.mockClear();
     let shown = null;
     cycle.openNavTab.mockImplementation(async (datasetName) => {
         shown = {
@@ -128,7 +128,16 @@ test.each([
         };
         return {};
     });
-    await bootstrap.runPostAuthBootstrap();
+    // The new principal's catalogue must settle before the alias is read.
+    let finishCatalogue;
+    cycle.endpointRouter.mockImplementation(async (route) => route === "fetchContentTables"
+        ? new Promise(resolve => { finishCatalogue = resolve; }) : {});
+    const signingIn = bootstrap.runPostAuthBootstrap();
+    await vi.waitFor(() => expect(finishCatalogue).toBeTypeOf("function"));
+    expect(cycle.openNavTab).not.toHaveBeenCalled();
+    expect(registry.resolveDataset({ name: "journeys" })).toEqual({ status: "not_ready" });
+    finishCatalogue(catalogue);
+    await signingIn;
 
     expect(cycle.openNavTab).toHaveBeenLastCalledWith("travel_deals", expect.any(Object));
     expect(shown).toEqual({ view: null, openArticle: { collapsed: false, expandedId: null }, params: {} });

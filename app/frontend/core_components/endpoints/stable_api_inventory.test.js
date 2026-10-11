@@ -40,7 +40,6 @@ describe('stable_api_inventory', () => {
         expect(DYNAMIC_ROUTE_NAMES).toEqual(expect.arrayContaining([
             'getResults',
             'fetchDynamicChildren',
-            'datasetAliases',
             'datasetColumns',
             'updateRow',
             'createDataset',

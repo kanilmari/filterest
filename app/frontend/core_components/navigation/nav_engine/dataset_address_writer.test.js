@@ -34,6 +34,7 @@ import { getUnifiedTableState, setUnifiedTableState } from "../../state_stores/t
 import { setChosenDatasetView } from "../../state_stores/dataset_view_choice_saver.js";
 import { getParams, setParams, updateURL, useUrlParams } from "./query_params.js";
 import { updateDatasetAddress, resetDatasetAddressOwnershipForTests } from "./dataset_address_writer.js";
+import { primeDatasetAccessRegistry } from './dataset_access_registry.js';
 
 const DATASET = "travel_deals";
 const ROW_PATH = "/travel_deals/12-sunset-in-lapland";
@@ -103,6 +104,7 @@ describe("dataset address ownership", () => {
         refreshTableUnifiedMock.mockReset();
         resetDatasetAddressOwnershipForTests();
         window.history.replaceState({}, "", "/");
+        primeDatasetAccessRegistry({ datasets: [{ table_uid: 11, dataset_name: DATASET, names: [DATASET], preferred_name: DATASET }] });
         useUrlParams();
     });
 

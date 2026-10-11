@@ -3,6 +3,7 @@
 // Bridges the History API with the navigation engine (handle_all_navigation, setUnifiedTableState).
 // Exists to decouple history restoration logic from the main navigation entry point.
 
+import { hasDatasetAccessSnapshot, subscribeDatasetAccessRegistry } from './dataset_access_registry.js';
 import { handleImageFirstViewHistory } from "./image_first_view_history.js";
 import { HISTORY_ENTRY_ID, getHistoryDatasetView } from "./history_entry_state.js";
 import { canRestoreCardArticleReturn, restoreCardArticleReturn, getCardArticleReturnToken, refreshCardArticleReturnViewport } from "./card_article_return_state.js";
@@ -250,11 +251,26 @@ async function restoreHistoryEntryState() {
     });
 }
 
-window.addEventListener('popstate', async () => {
+// A pending catalogue cannot canonicalize aliases. Resume from the address the
+// person is still on when hydration succeeds, including repeated Back/Forward.
+let pendingHistoryRestoration = false;
+subscribeDatasetAccessRegistry(response => {
+    if (!response || !pendingHistoryRestoration) return;
+    pendingHistoryRestoration = false;
+    void handleHistoryNavigation();
+});
+
+async function handleHistoryNavigation() {
+    if (!hasDatasetAccessSnapshot()) {
+        pendingHistoryRestoration = true;
+        return;
+    }
     // An entry the person has already left again is not ours to rewrite, so the
     // address owner below only speaks for the entry this restoration started on.
     const landedEntryId = history.state?.[HISTORY_ENTRY_ID] ?? null;
-    const isLandedEntry = () => (history.state?.[HISTORY_ENTRY_ID] ?? null) === landedEntryId;
+    const landedURL = window.location.href;
+    const isLandedEntry = () => window.location.href === landedURL
+        && (history.state?.[HISTORY_ENTRY_ID] ?? null) === landedEntryId;
     try {
         await restoreHistoryEntryState();
     } finally {
@@ -266,4 +282,6 @@ window.addEventListener('popstate', async () => {
         await updateDatasetAddress({ isCurrent: isLandedEntry });
         await updateBrowserTabTitle();
     }
-});
+}
+
+window.addEventListener('popstate', handleHistoryNavigation);

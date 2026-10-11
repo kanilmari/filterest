@@ -88,7 +88,7 @@ describe("runPostAuthBootstrap", () => {
         expect(updateOidsMock).toHaveBeenCalledTimes(2);
         expect(initializeTreeCallAdminMock).toHaveBeenCalledTimes(2);
         expect(loadTablesMock).toHaveBeenCalledTimes(2);
-        expect(refreshDatasetAliasRegistryMock).toHaveBeenCalledTimes(2);
+        expect(refreshDatasetAliasRegistryMock).not.toHaveBeenCalled();
         expect(clearPermissionCacheMock).toHaveBeenCalledTimes(2);
         expect(syncAdminUpdateNoticeSubscriberMock).toHaveBeenCalledTimes(2);
         expect(initTabsMock).toHaveBeenNthCalledWith(1, { dataAlreadyLoaded: true });
@@ -148,7 +148,7 @@ describe("runPostAuthBootstrap", () => {
         expect(initTabsMock).toHaveBeenCalledWith({ dataAlreadyLoaded: false });
     });
 
-    test("awaits alias hydration before loading authenticated datasets", async () => {
+    test("uses the dataset loader for catalogue hydration without a second alias request", async () => {
         const callOrder = [];
         refreshDatasetAliasRegistryMock.mockImplementation(async () => {
             callOrder.push("refreshAliases");
@@ -163,11 +163,12 @@ describe("runPostAuthBootstrap", () => {
 
         await mod.runPostAuthBootstrap();
 
-        expect(callOrder).toEqual(["refreshAliases", "initializeTree", "loadTables"]);
+        expect(callOrder).toEqual(["loadTables", "initializeTree"]);
+        expect(refreshDatasetAliasRegistryMock).not.toHaveBeenCalled();
         expect(loadTablesMock).toHaveBeenCalledWith({ forceReload: true });
     });
 
-    test("starts nav tree bootstrap without waiting for dataset loading to finish", async () => {
+    test("starts catalogue-backed tree rendering without making tab initialization wait for it", async () => {
         const callOrder = [];
         let resolveTreeInit;
         const treeInitPromise = new Promise((resolve) => {
@@ -188,7 +189,7 @@ describe("runPostAuthBootstrap", () => {
         const mod = await loadModule();
         await mod.runPostAuthBootstrap();
 
-        expect(callOrder).toEqual(["initializeTree", "loadTables", "initTabs"]);
+        expect(callOrder).toEqual(["loadTables", "initializeTree", "initTabs"]);
         resolveTreeInit();
     });
 

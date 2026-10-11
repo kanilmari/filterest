@@ -8,11 +8,8 @@ import (
 	"context"
 	"database/sql"
 	"database/sql/driver"
-	"encoding/json"
 	"fmt"
 	"io"
-	"net/http"
-	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
@@ -56,48 +53,9 @@ func TestResolveDatasetNameReadsDBBackedAliasRegistryWhenAvailable(t *testing.T)
 }
 
 func TestBuildCanonicalDatasetPathPrefersPublicAlias(t *testing.T) {
-	got := buildCanonicalDatasetPath("app_service_catalog", []string{"service_catalog", "42-sample-title"})
+	got := buildCanonicalDatasetPath("service_catalog", []string{"service_catalog", "42-sample-title"})
 	if got != "/service_catalog/42-sample-title" {
 		t.Fatalf("buildCanonicalDatasetPath() = %q, want /service_catalog/42-sample-title", got)
-	}
-}
-
-func TestGetDatasetAliasesHandlerReturnsRegistryPayload(t *testing.T) {
-	db := openRouterAliasTestDB(t)
-	orig := backend.Db
-	backend.Db = db
-	t.Cleanup(func() {
-		backend.Db = orig
-		_ = db.Close()
-	})
-
-	req := httptest.NewRequest(http.MethodGet, "/api/dataset-aliases", nil)
-	rec := httptest.NewRecorder()
-
-	GetDatasetAliasesHandler(rec, req)
-
-	if rec.Code != http.StatusOK {
-		t.Fatalf("status = %d, want 200", rec.Code)
-	}
-
-	var payload struct {
-		RawToPublic map[string]string `json:"raw_to_public"`
-		PublicToRaw map[string]string `json:"public_to_raw"`
-	}
-	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
-		t.Fatalf("json.Unmarshal() error = %v", err)
-	}
-	if got := payload.RawToPublic["app_service_catalog"]; got != "service_directory" {
-		t.Fatalf("raw_to_public[app_service_catalog] = %q, want service_directory", got)
-	}
-	if got := payload.PublicToRaw["service_directory"]; got != "app_service_catalog" {
-		t.Fatalf("public_to_raw[service_directory] = %q, want app_service_catalog", got)
-	}
-	if got := payload.RawToPublic["app_orders"]; got != "orders" {
-		t.Fatalf("raw_to_public[app_orders] = %q, want orders", got)
-	}
-	if got := payload.PublicToRaw["orders"]; got != "app_orders" {
-		t.Fatalf("public_to_raw[orders] = %q, want app_orders", got)
 	}
 }
 
@@ -155,11 +113,19 @@ func (s *routerAliasStmt) Query(_ []driver.Value) (driver.Rows, error) {
 func buildRouterAliasRows(query string) (driver.Rows, error) {
 	switch {
 	case containsRouterAliasTableQuery(query):
+		if strings.Contains(query, "SELECT table_uid, alias_slug") {
+			return &routerAliasRows{cols: []string{"table_uid", "alias_slug", "is_primary"}, data: [][]driver.Value{{int64(1), "service_directory", true}}}, nil
+		}
 		return &routerAliasRows{
 			cols: []string{"table_name", "alias_slug"},
 			data: [][]driver.Value{{"app_service_catalog", "service_directory"}},
 		}, nil
 	case strings.Contains(query, "SELECT table_uid, table_name") && strings.Contains(query, "FROM system_db_tables"):
+		if strings.Contains(query, "schema_name") {
+			return &routerAliasRows{cols: []string{"table_uid", "table_name", "schema_name"}, data: [][]driver.Value{
+				{int64(1), "app_service_catalog", "public"}, {int64(2), "app_orders", "public"},
+			}}, nil
+		}
 		return &routerAliasRows{
 			cols: []string{"table_uid", "table_name"},
 			data: [][]driver.Value{

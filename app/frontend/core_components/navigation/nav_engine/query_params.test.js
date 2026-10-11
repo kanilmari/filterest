@@ -2,7 +2,8 @@
 // Verifies dataset query-parameter parsing, address writing and the cached parameters' storage.
 // Bridges the URLSearchParams helpers, the dataset address writer and localStorage under jsdom.
 // Exists to keep the shared search, filter and sort parameters apart from this page's own view.
-import { describe, test, expect, vi } from 'vitest';
+import { beforeEach, describe, test, expect, vi } from 'vitest';
+import { clearDatasetAccessRegistry, primeDatasetAccessRegistry } from './dataset_access_registry.js';
 import { setChosenDatasetView } from '../../state_stores/dataset_view_choice_saver.js';
 // query_params.js has import-time side effects (window.location, localStorage, popstate).
 // We import the module dynamically after ensuring jsdom globals are ready.
@@ -11,6 +12,11 @@ let parseDatasetParamsFromSearch, parseTableQueryString, buildTableQueryString, 
 
 // Dynamic import to let jsdom setup complete before side effects fire
 const mod = await import('./query_params.js');
+beforeEach(() => {
+  history.replaceState({}, '', '/');
+  primeDatasetAccessRegistry({ datasets: [{ dataset_name: 'app_service_catalog', table_uid: 7,
+    names: ['app_service_catalog', 'service_catalog'], preferred_name: 'service_catalog', can_read_rows: true }] });
+});
 parseTableQueryString = mod.parseTableQueryString;
 parseDatasetParamsFromSearch = mod.parseDatasetParamsFromSearch;
 buildTableQueryString = mod.buildTableQueryString;
@@ -268,4 +274,18 @@ test.each(["card", "table"])("records the actual no-view %s origin before a sele
     expect(origin).toMatchObject({ __filterestEntryId: "origin", otherOwner: 4, __filterestDatasetView: { dataset: "app_service_catalog", path: "/service_catalog", view } });
     expect(history.state.__filterestDatasetView).toBeUndefined();
   } finally { push.mockRestore(); document.body.innerHTML = ""; }
+});
+
+
+test('waits for catalogue hydration before attaching alias URL filters to canonical state', () => {
+  clearDatasetAccessRegistry();
+  localStorage.clear();
+  mod.forgetPageDatasetParams();
+  history.replaceState({}, '', '/orders?search=ferry&view=card');
+  mod.useUrlParams();
+  expect(localStorage.getItem('dataset_query_params')).toBeNull();
+  primeDatasetAccessRegistry({ datasets: [{ table_uid: 11, dataset_name: 'app_orders',
+    names: ['app_orders', 'orders'], preferred_name: 'orders', can_read_rows: true }] });
+  expect(mod.getParams('app_orders')).toEqual({ search: 'ferry', view: 'card' });
+  expect(JSON.parse(localStorage.getItem('dataset_query_params'))).toEqual({ app_orders: { search: 'ferry' } });
 });

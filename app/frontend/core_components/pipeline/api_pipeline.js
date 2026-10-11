@@ -88,7 +88,6 @@ export const MANIFEST_BACKED_ENDPOINT_ROUTE_HANDLERS = Object.freeze({
     geocodeAddress: 'dtt_1_row_create.GeocodeAddressHandler',
     deleteRows: 'dtt_1_row_delete.DeleteRowsHandlerWrapper',
     createDataset: 'dtt_crud_workflows.CreateTableHandler',
-    datasetAliases: 'router.GetDatasetAliasesHandler',
     getDatasetAliasManagement: 'router.GetDatasetAliasManagementHandler',
     saveDatasetAliasManagement: 'router.SaveDatasetAliasManagementHandler',
     datasetNames: 'dtt_foreign_keys.GetTableNamesHandler',

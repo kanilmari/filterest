@@ -44,14 +44,6 @@ vi.mock("../navigation/nav_engine/card_article_return_state.js", () => ({
     getCardArticleReturnToken: () => null,
     invalidateCardArticleReturn: vi.fn(),
 }));
-vi.mock("../navigation/nav_engine/dataset_access_registry.js", () => ({
-    primeDatasetAccessRegistry: () => true,
-    beginDatasetAccessRefresh: () => 1,
-    isCurrentDatasetAccessRefresh: () => true,
-    subscribeDatasetAccessRegistry: () => () => {},
-    hasDatasetAccessSnapshot: () => true,
-    canReadDatasetFromRegistry: () => true,
-}));
 vi.mock("../infinite_scroll/infinite_scroll_handler.js", () => ({
     resetOffset: vi.fn(), updateOffset: vi.fn(), disconnectInfiniteScroll: vi.fn(),
 }));
@@ -78,6 +70,7 @@ async function loadPage(address) {
     history.replaceState({}, "", address);
     const page = {
         tab: await import("./tab_session_storage.js"),
+        registry: await import("../navigation/nav_engine/dataset_access_registry.js"),
         views: await import("./dataset_view_choice_saver.js"),
         loader: await import("../admin_tools/main/table_loader_handler.js"),
         refresh: await import("../general_tables/gt_1_row_crud/gt_1_2_row_read/table_refresh_unified.js"),
@@ -157,8 +150,9 @@ describe("tab_session_storage", () => {
 describe("in a browser that refuses session storage, through the real stores and refresh", () => {
     test("a deep link opens the article of its row", async () => {
         refuseSessionStorage();
-        const page = await loadPage("/dev_agent_tasks/853-component-inventory?view=article_view");
-        flow.endpointRouter.mockResolvedValue({ datasets: [{ dataset_name: "dev_agent_tasks" }], tab_order: [] });
+        const page = await loadPage("/tasks/853-component-inventory?view=article_view");
+        flow.endpointRouter.mockResolvedValue({ datasets: [{ table_uid: 23, dataset_name: "dev_agent_tasks",
+            names: ["dev_agent_tasks", "tasks"], preferred_name: "tasks", can_read_rows: true }], tab_order: [] });
 
         await page.loader.load_tables();
 
@@ -174,6 +168,9 @@ describe("in a browser that refuses session storage, through the real stores and
     test("a chosen view reaches its redraw and the next one", async () => {
         refuseSessionStorage();
         const page = await loadPage("/travel_deals");
+        // A view selection happens after startup has hydrated the catalogue.
+        page.registry.primeDatasetAccessRegistry({ datasets: [{ table_uid: 19, dataset_name: "travel_deals",
+            names: ["travel_deals"], preferred_name: "travel_deals", can_read_rows: true }] });
 
         page.selector.selectDatasetView("travel_deals", "card", "table");
         await vi.waitFor(() => expect(flow.generateTable).toHaveBeenCalledTimes(1));

@@ -1,3 +1,7 @@
+// dataset_routes_test.go
+// Verifies routing policy, accepted name pools and alias availability.
+// Connects incoming and generated dataset names with scripted database replies.
+// Protects stable identity and route ownership without accessing a database.
 package dataset_routes
 
 import (
@@ -7,6 +11,7 @@ import (
 	backend "easelect/backend/core_components"
 	"fmt"
 	"io"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -50,6 +55,51 @@ type datasetRouteRows struct {
 }
 
 type datasetRouteTx struct{}
+
+func TestDatasetNamePoolsShareServerPolicyAndStableUID(t *testing.T) {
+	db := openDatasetRouteTestDBWithOptions(t, datasetRouteTestOptions{
+		tables:  []datasetAliasTableMetadata{{11, "app_orders"}, {12, "system_users"}, {13, "system_help"}},
+		aliases: map[string]string{"app_orders": "shop-orders", "system_help": "help"},
+	})
+	defer db.Close()
+	pools, err := LoadDatasetNamePools(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := DatasetNamePool{TableUID: 11, DatasetName: "app_orders", SchemaName: "public", Names: []string{"app_orders", "shop-orders"}, PreferredName: "shop-orders"}
+	if !reflect.DeepEqual(pools[11], want) {
+		t.Fatalf("pool = %#v, want %#v", pools[11], want)
+	}
+	if got := pools[12]; !reflect.DeepEqual(got.Names, []string{"system_users"}) || got.PreferredName != "system_users" {
+		t.Fatalf("system names must stay opt-in: %#v", got)
+	}
+	if pools[13].PreferredName != "help" {
+		t.Fatal("explicit system alias missing")
+	}
+}
+
+func TestDatasetNamePoolsKeepCanonicalOwnershipAndActiveSecondaryNames(t *testing.T) {
+	tables := []datasetNamePoolTable{{11, "app_orders", "public"}, {12, "orders", "public"}, {13, "hidden_real", "public"}}
+	aliases := map[int][]datasetNamePoolAlias{11: {{"hidden_real", true}, {"old-orders", false}, {"orders", false}, {"api", false}}}
+	pools := buildDatasetNamePools(tables, aliases)
+	if !reflect.DeepEqual(pools[11].Names, []string{"app_orders", "old-orders"}) {
+		t.Fatalf("global ownership failed: %#v", pools)
+	}
+	if pools[11].PreferredName != "app_orders" || pools[12].PreferredName != "orders" {
+		t.Fatalf("canonical owner changed: %#v", pools)
+	}
+	if got := buildDatasetNamePools(nil, aliases); len(got) != 0 {
+		t.Fatalf("empty catalogue = %#v", got)
+	}
+}
+
+func TestDatasetNamePoolsFailClosedOnAliasReadFailure(t *testing.T) {
+	db := openDatasetRouteTestDBWithOptions(t, datasetRouteTestOptions{aliasQueryError: fmt.Errorf("unavailable")})
+	defer db.Close()
+	if _, err := LoadDatasetNamePools(db); err == nil {
+		t.Fatal("failed alias read must not publish an incomplete pool")
+	}
+}
 
 func TestResolveRawDatasetNameMapsPublicAlias(t *testing.T) {
 	if got := ResolveRawDatasetName("service_catalog"); got != "app_service_catalog" {
@@ -284,6 +334,14 @@ func openDatasetRouteTestDB(t *testing.T, rows map[string]datasetRouteRow, alias
 func openDatasetRouteTestDBWithOptions(t *testing.T, options datasetRouteTestOptions) *sql.DB {
 	t.Helper()
 
+	// Stored aliases reference registered datasets; model that identity even
+	// when a test supplies only the alias map to this convenience fixture.
+	if options.tables == nil {
+		for name := range options.aliases {
+			options.tables = append(options.tables, datasetAliasTableMetadata{TableUID: len(options.tables) + 1, DatasetName: name})
+		}
+	}
+
 	driverName := fmt.Sprintf("dataset_route_test_%d", time.Now().UnixNano())
 	sql.Register(driverName, &datasetRouteDriver{
 		rows:            options.rows,
@@ -378,6 +436,14 @@ func buildDatasetRouteRows(
 	}
 	if queryContainsAliasTable(query) {
 		data := make([][]driver.Value, 0, len(aliases))
+		if strings.Contains(query, "SELECT table_uid, alias_slug") {
+			for _, table := range tables {
+				if alias, ok := aliases[table.DatasetName]; ok {
+					data = append(data, []driver.Value{int64(table.TableUID), alias, true})
+				}
+			}
+			return &datasetRouteRows{cols: []string{"table_uid", "alias_slug", "is_primary"}, data: data}, nil
+		}
 		for rawName, publicName := range aliases {
 			data = append(data, []driver.Value{rawName, publicName})
 		}
@@ -386,7 +452,14 @@ func buildDatasetRouteRows(
 	if strings.Contains(query, "SELECT table_uid, table_name") && strings.Contains(query, "FROM system_db_tables") {
 		data := make([][]driver.Value, 0, len(tables))
 		for _, table := range tables {
-			data = append(data, []driver.Value{int64(table.TableUID), table.DatasetName})
+			row := []driver.Value{int64(table.TableUID), table.DatasetName}
+			if strings.Contains(query, "schema_name") {
+				row = append(row, "public")
+			}
+			data = append(data, row)
+		}
+		if strings.Contains(query, "schema_name") {
+			return &datasetRouteRows{cols: []string{"table_uid", "table_name", "schema_name"}, data: data}, nil
 		}
 		return &datasetRouteRows{cols: []string{"table_uid", "table_name"}, data: data}, nil
 	}

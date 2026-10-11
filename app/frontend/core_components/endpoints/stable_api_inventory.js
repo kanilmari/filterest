@@ -219,7 +219,6 @@ export const DYNAMIC_ROUTE_GROUPS = Object.freeze({
         'fetchEmptyRows',
         'fetchTreeData',
         'fetchViewData',
-        'datasetAliases',
         'datasetPermissions',
         'datasetNames',
         'getResults',

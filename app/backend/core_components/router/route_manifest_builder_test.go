@@ -286,13 +286,6 @@ func TestBuildDefaultRouteManifestCoversScenarioMatrix(t *testing.T) {
 		t.Fatalf("expected event_bus.SSESubscribeHandler production profile to be access_control_no_tx")
 	}
 
-	datasetAliases := mustFindManifestRoute(t, manifest, "router.GetDatasetAliasesHandler")
-	assertScenarioNames(t, datasetAliases, []string{"production", "development", "api_language"})
-	assertRouteMethods(t, datasetAliases, []string{"GET", "HEAD"}, router.RouteMethodSourceExplicitStableContract)
-	if mustFindScenarioProfile(t, datasetAliases, "production").ProfileName != "default" {
-		t.Fatalf("expected router.GetDatasetAliasesHandler production profile to be default")
-	}
-
 	datasetAliasManagementGet := mustFindManifestRoute(t, manifest, "router.GetDatasetAliasManagementHandler")
 	assertScenarioNames(t, datasetAliasManagementGet, []string{"production", "development", "api_language"})
 	assertRouteMethods(t, datasetAliasManagementGet, []string{"GET", "HEAD"}, router.RouteMethodSourceExplicitStableContract)
@@ -423,5 +416,21 @@ func assertRouteMethods(t *testing.T, route router.RouteManifestEntry, want []st
 	}
 	if route.MethodSource != wantSource {
 		t.Fatalf("expected method source for %s to be %q, got %q", route.HandlerName, wantSource, route.MethodSource)
+	}
+}
+
+func TestGlobalDatasetAliasesRouteIsRetired(t *testing.T) {
+	manifest, err := router.BuildDefaultRouteManifest()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, route := range manifest.Routes {
+		if route.PathPattern == "/api/dataset-aliases" {
+			t.Fatal("global dataset alias leak remains routable")
+		}
+	}
+	editor := mustFindManifestRoute(t, manifest, "router.GetDatasetAliasManagementHandler")
+	if !mustFindScenarioProfile(t, editor, "production").AdminOnly {
+		t.Fatal("alias editor must remain administrator-only")
 	}
 }

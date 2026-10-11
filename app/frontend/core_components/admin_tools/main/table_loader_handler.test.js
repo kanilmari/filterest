@@ -55,11 +55,17 @@ vi.mock("../../endpoints/endpoint_router.js", () => ({
     endpoint_router: mocks.endpointRouter,
 }));
 
-vi.mock("../../navigation/nav_engine/dataset_access_registry.js", () => ({
-    primeDatasetAccessRegistry: mocks.primeDatasetAccessRegistry,
-    beginDatasetAccessRefresh: mocks.beginDatasetAccessRefresh,
-    isCurrentDatasetAccessRefresh: mocks.isCurrentDatasetAccessRefresh,
-}));
+vi.mock("../../navigation/nav_engine/dataset_access_registry.js", async importOriginal => {
+    const registry = await importOriginal();
+    return {
+        ...registry,
+        primeDatasetAccessRegistry: (response, generation) => mocks.primeDatasetAccessRegistry(response, generation)
+            && registry.primeDatasetAccessRegistry(response, generation),
+        beginDatasetAccessRefresh: () => { mocks.beginDatasetAccessRefresh(); return registry.beginDatasetAccessRefresh(); },
+        isCurrentDatasetAccessRefresh: generation => mocks.isCurrentDatasetAccessRefresh(generation)
+            && registry.isCurrentDatasetAccessRefresh(generation),
+    };
+});
 
 vi.mock("../../general_tables/gt_1_row_crud/gt_1_2_row_read/table_refresh_unified.js", () => ({
     setUnifiedTableState: mocks.setUnifiedTableState,
@@ -471,6 +477,7 @@ describe("two tabs, each with its own session storage and page", () => {
 
     async function openTab(store, address) {
         vi.stubGlobal("sessionStorage", store);
+        vi.doUnmock("../../navigation/nav_engine/dataset_access_registry.js");
         vi.resetModules();
         history.replaceState({}, "", address);
         const tab = {
@@ -556,5 +563,38 @@ describe("two tabs, each with its own session storage and page", () => {
         tabA.reading.persistRowArticleViewRestoreState("dev_agent_tasks", "853", { scrollTop: 40 });
         expect(readingIn(tabB)).toEqual({ ...reading, relatedTabKey: "__comments", scrollTop: 900 });
         expect(readingIn(tabA)).toEqual({ ...reading, scrollTop: 40 });
+    });
+});
+
+// A page writes a dataset's address with its public alias (/orders for
+// app_orders). The sign-in bootstrap loads the aliases before the tables
+// (post_auth_bootstrap.js); a page reloaded within a minute once skipped that
+// load, refused the address as a missing dataset, replaced it with Home and
+// queued the "view not found" notice.
+describe("a reload of a dataset's alias address", () => {
+    async function openPage(address) {
+        vi.resetModules();
+        history.replaceState({}, "", address);
+        const aliases = await import("../../navigation/nav_engine/dataset_aliases.js");
+        const loader = await import("./table_loader_handler.js");
+        await loader.load_tables();
+        return aliases;
+    }
+
+    test("opens the dataset again without a not-found notice", async () => {
+        resetLoaderMocks(["app_orders"]);
+        localStorage.setItem("button_state", "logout");
+        sessionStorage.setItem("user_permissions", JSON.stringify(["/api/dataset-aliases"]));
+        mocks.endpointRouter.mockResolvedValue({ datasets: [{ table_uid: 11, dataset_name: 'app_orders',
+            names: ['app_orders', 'orders'], preferred_name: 'orders', can_read_rows: true }], tab_order: [] });
+
+        const firstPage = await openPage("/app_orders");
+        expect(firstPage.buildDatasetPath("app_orders")).toBe("/orders");
+
+        await openPage("/orders");
+
+        expect(mocks.setRedirectNotice).not.toHaveBeenCalled();
+        expect(location.pathname).toBe("/orders");
+        expect(mocks.openNavTab).toHaveBeenLastCalledWith("app_orders", { skipUrlUpdate: false, forceReload: false });
     });
 });

@@ -131,6 +131,10 @@ def test_current_allowlist_preserves_nullable_presentation_overrides(generator):
         for item in parsed for field in item.fields if field.go_type.startswith("*")
     ]
     assert pointers == [
+        ("DatasetCatalogueEntry", "is_main_table", True),
+        ("DatasetCatalogueEntry", "is_about_table", True),
+        ("DatasetCatalogueEntry", "folder_id", True),
+        ("DatasetCatalogueEntry", "icon_key", True),
         ("ApplicationUpdateStatusResponse", "offer", False),
         ("ApplicationUpdateStatusResponse", "latest_job", False),
         ("SitePresentationSettingsPatch", "row_article_timestamp_display_mode", True),

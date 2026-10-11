@@ -233,7 +233,6 @@ func RegisterRoutes(frontendDir string, storagePath string) {
 	functionRegisterHandler("/api/delete_foreign_key", dtt_foreign_keys.DeleteForeignKeyHandler, "dtt_foreign_keys.DeleteForeignKeyHandler", http.MethodPost)
 	functionRegisterHandler("/api/foreign_keys", dtt_foreign_keys.GetForeignKeys, "dtt_foreign_keys.GetForeignKeys", http.MethodGet)
 	functionRegisterHandler("/api/dataset-names", dtt_foreign_keys.GetTableNamesHandler, "dtt_foreign_keys.GetTableNamesHandler", http.MethodGet)
-	functionRegisterHandler("/api/dataset-aliases", GetDatasetAliasesHandler, "router.GetDatasetAliasesHandler", http.MethodGet)
 	functionRegisterHandler("/api/dataset-alias-management", GetDatasetAliasManagementHandler, "router.GetDatasetAliasManagementHandler", http.MethodGet)
 	functionRegisterHandler("/api/dataset-alias-management/save", SaveDatasetAliasManagementHandler, "router.SaveDatasetAliasManagementHandler", http.MethodPost)
 	functionRegisterHandler("/api/asset-linking/images/enable", dtt_asset_linking.EnableImageAssetLinkingHandler, "dtt_asset_linking.EnableImageAssetLinkingHandler", http.MethodPost)

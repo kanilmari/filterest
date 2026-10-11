@@ -83,6 +83,7 @@ setting_seed_migrations = (
     "20260929000004_add_missing_media_check_setting.sql",
     "20261005000032_add_front_page_settings.sql",
     "20261005000085_add_front_page_show_blocks.sql",
+    "20261009000077_retire_global_dataset_alias_catalogue.sql",
 )
 # What an upgrade adds where a site lacks it — a table, or a relationship between
 # two tables — is added for a new installation by the same file, so an upgraded

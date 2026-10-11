@@ -186,6 +186,7 @@
     "20261009000072_register_publication_columns.sql",
     "20261009000073_repair_publication_translations.sql",
     "20261009000074_seed_filterbar_style_language_key.sql",
+    "20261009000077_retire_global_dataset_alias_catalogue.sql",
     "20261009000099_record_database_release_9_10_2.sql"
   ],
   "allowed_schema_tables": [
@@ -355,7 +356,7 @@
     "public.system_languages": 5,
     "public.system_permission_actions": 7,
     "public.system_permission_categories": 4,
-    "public.system_schema_migrations": 180,
+    "public.system_schema_migrations": 181,
     "public.system_table_folders": 14,
     "public.system_table_views": 13,
     "public.system_user_group_memberships": 2,
@@ -370,7 +371,7 @@
       "sha256": "91c559964868148222b42c49f888e1a09c9f6cf0794c9574c687b850e23f5e01"
     },
     "server_tools/public_bootstrap/seed_data.sql": {
-      "sha256": "66fa2388e573e953dace59ec49e43c7d3dc0281c3fdb72b584eff50573933676"
+      "sha256": "2e35aca938a31c069fa6e96768825c19449b6e36fb56b65a1bc75a74fbf46c09"
     }
   },
   "source_files": {
@@ -378,7 +379,7 @@
       "sha256": "5e76502fbcfd745ca040619ec483bfd488884ab4b2a75435469ea5caf0de3c06"
     },
     "filterest/app/server_tools/public_bootstrap/source/base.seed.sql": {
-      "sha256": "7fe36e615bbf354f606abf87b32f57409b05cbca70e65df04b788593bbfb40dd"
+      "sha256": "2708ec306b6714514635a2bbcc903b50711b8b95fc5d83b72f91771fd47198d4"
     },
     "filterest/app/server_tools/public_bootstrap/source/field_settings.lang_keys.sql": {
       "sha256": "ef466c93cf569bb7f1ce3435df698e676bd4603a89fd9973ab35c5b59d58a968"
@@ -387,7 +388,7 @@
       "sha256": "235e4b887181e150bd436d035d2d268eb821d9e5d0b830b54eb444988f31d5d1"
     },
     "filterest/app/server_tools/public_bootstrap/generate_bootstrap.py": {
-      "sha256": "1a38215e5dc23edf9b58fac19cb686fef4dab1e3eb55f872b1908f3e923c0bbf"
+      "sha256": "89ccf23614c0033cb7416405fc17f1064e683316642060cbc3ef37125e6685dc"
     },
     "filterest/app/server_tools/public_bootstrap/sql_identifier_validator.py": {
       "sha256": "fd29b59186be027e1b0b5392cb4eab64a75b2903dba4ab661204c8931a64bbe5"
@@ -997,6 +998,9 @@
     },
     "filterest/app/server_tools/migrations/20261009000074_seed_filterbar_style_language_key.sql": {
       "sha256": "df22114d09d6c6fe9410ad14392710aaba3134a88d74e9474c7092f2b4c4716d"
+    },
+    "filterest/app/server_tools/migrations/20261009000077_retire_global_dataset_alias_catalogue.sql": {
+      "sha256": "c5ade168ebaf022b72616c90dfeb13bb0e137c9bb0476eef03d048c619071dfa"
     },
     "filterest/app/server_tools/migrations/20261009000099_record_database_release_9_10_2.sql": {
       "sha256": "190f66df60bd062997ebd80b2392eff7fdd843c9c8a709a4a1c30f136e6bbd97"

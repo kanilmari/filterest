@@ -1,4 +1,10 @@
-import { describe, test, expect } from 'vitest';
+// row_article_opener_helpers.test.js
+// Verifies row identity, presentation order and preferred public article URLs.
+// Bridges article URL construction and the hydrated readable catalogue.
+// Keeps public aliases covered without a built-in dataset-name exception.
+
+import { afterEach, beforeEach, describe, test, expect } from 'vitest';
+import { clearDatasetAccessRegistry, primeDatasetAccessRegistry } from '../../navigation/nav_engine/dataset_access_registry.js';
 import {
     buildSlug,
     buildCreationSeed,
@@ -6,6 +12,12 @@ import {
     sortColumnsByRole,
     buildCardUrl,
 } from './row_article_opener_helpers.js';
+
+beforeEach(() => {
+    primeDatasetAccessRegistry({ datasets: [{ table_uid: 7, dataset_name: 'app_service_catalog',
+        names: ['app_service_catalog', 'service_catalog'], preferred_name: 'service_catalog', can_read_rows: true }] });
+});
+afterEach(clearDatasetAccessRegistry);
 
 // ---------------------------------------------------------------------------
 // buildSlug

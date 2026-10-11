@@ -242,14 +242,14 @@ describe('api_pipeline', () => {
         expect(localStorage.getItem('button_state')).toBe(buttonState);
     });
 
-    test.each(['login', 'logout'])('keeps optional alias denials silent in the %s shell', async (buttonState) => {
+    test.each(['login', 'logout'])('keeps optional catalogue denials silent in the %s shell', async (buttonState) => {
         localStorage.setItem('button_state', buttonState);
         vi.stubGlobal('fetch', vi.fn().mockResolvedValue(buildResponse(
             { error: '403 - Forbidden (function-level)', code: 403 },
             { ok: false, status: 403 }
         )));
         const mod = await loadModule();
-        await expect(mod.runApiPipeline({ routeName: 'datasetAliases', suppressAuthRedirect: true, suppressErrorToast: true }))
+        await expect(mod.runApiPipeline({ routeName: 'fetchContentTables', suppressAuthRedirect: true, suppressErrorToast: true }))
             .rejects.toMatchObject({ status: 403 });
         expect(requestSessionAccessPromptMock).not.toHaveBeenCalled();
         expect(requestLoginRedirectMock).not.toHaveBeenCalled();
@@ -277,7 +277,7 @@ describe('api_pipeline', () => {
     ])('leaves optional HTTP %s auth failure recovery to its caller', async (status, body) => {
         vi.stubGlobal('fetch', vi.fn().mockResolvedValue(buildResponse(body, { ok: false, status })));
         const mod = await loadModule();
-        const result = await mod.runApiPipeline({ routeName: 'datasetAliases', suppressAuthRedirect: true, suppressErrorToast: true });
+        const result = await mod.runApiPipeline({ routeName: 'fetchContentTables', suppressAuthRedirect: true, suppressErrorToast: true });
         expect(result).toMatchObject({ abort: true, reason: 'auth_redirect', error: { status } });
         expect(requestLoginRedirectMock).not.toHaveBeenCalled();
         expect(requestSessionAccessPromptMock).not.toHaveBeenCalled();

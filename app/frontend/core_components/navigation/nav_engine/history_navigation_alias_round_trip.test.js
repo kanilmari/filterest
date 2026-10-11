@@ -10,6 +10,7 @@ import { expect, test, vi } from "vitest";
 
 const shell = vi.hoisted(() => ({
     navigate: vi.fn(async () => ({})),
+    endpoint: vi.fn(),
     // The real close takes the open article down; that is all Forward depends on.
     closeArticle: vi.fn((wrapper) => wrapper.classList.remove("big-card-open")),
 }));
@@ -37,9 +38,8 @@ vi.mock("./image_first_view_history.js", () => ({
 }));
 vi.mock("./browser_tab_title_writer.js", () => ({ updateBrowserTabTitle: async () => true }));
 vi.mock("../admin_and_user_tools/custom_view_reader.js", () => ({ custom_views: [] }));
-// The registry's built-in alias names app_service_catalog "service_catalog"; no
-// alias request runs, so its network and permission modules stay inert.
-vi.mock("../../endpoints/endpoint_router.js", () => ({ endpoint_router: vi.fn() }));
+// The server catalogue supplies the alias; drawing tests need no name-list request.
+vi.mock("../../endpoints/endpoint_router.js", () => ({ endpoint_router: shell.endpoint }));
 vi.mock("../../route_permission_checker.js", () => ({ hasRoutePermission: () => false }));
 
 const DATASET = "app_service_catalog";
@@ -52,6 +52,9 @@ const sharedParams = () => JSON.parse(localStorage.getItem("dataset_query_params
 
 test("an alias row link, Back and Forward keep the internal dataset's state under the alias address", async () => {
     history.replaceState({}, "", LIST_ADDRESS);
+    const registry = await import('./dataset_access_registry.js');
+    registry.primeDatasetAccessRegistry({ datasets: [{ table_uid: 7, dataset_name: DATASET,
+        names: [DATASET, 'service_catalog'], preferred_name: 'service_catalog', can_read_rows: true }] });
     const query = await import("./query_params.js");
     const store = await import("../../state_stores/table_state_store.js");
     const views = await import("../../state_stores/dataset_view_choice_saver.js");
@@ -105,4 +108,43 @@ test("an alias row link, Back and Forward keep the internal dataset's state unde
         expect(sessionStorage.getItem(key)).toBeNull();
     }
     expect(localStorage.getItem(`${DATASET}_open_row`)).toBeNull();
+});
+
+
+test('Back and Forward wait for the pending catalogue and restore only the current alias entry', async () => {
+    document.body.innerHTML = '';
+    localStorage.clear();
+    sessionStorage.clear();
+    shell.navigate.mockClear();
+    const registry = await import('./dataset_access_registry.js');
+    registry.clearDatasetAccessRegistry();
+    const { writeHistoryEntry } = await import('./history_entry_state.js');
+    await import('./history_navigation_handler.js');
+    let answer;
+    shell.endpoint.mockImplementationOnce(() => new Promise(resolve => { answer = resolve; }));
+    const pending = registry.refreshDatasetCatalogue();
+    writeHistoryEntry(LIST_ADDRESS, {});
+    writeHistoryEntry(ROW_ADDRESS, {});
+    history.back();
+    await vi.waitFor(() => expect(address()).toBe(LIST_ADDRESS));
+    await settle();
+    expect(shell.navigate).not.toHaveBeenCalled();
+    expect(sharedParams()).toBeNull();
+    history.forward();
+    await vi.waitFor(() => expect(address()).toBe(ROW_ADDRESS));
+    await settle();
+    expect(shell.navigate).not.toHaveBeenCalled();
+    answer({ datasets: [{ table_uid: 7, dataset_name: DATASET,
+        names: [DATASET, 'service_catalog'], preferred_name: 'service_catalog', can_read_rows: true }] });
+    await pending;
+    await vi.waitFor(() => expect(shell.navigate).toHaveBeenCalledTimes(1));
+    await settle();
+    expect(shell.navigate).toHaveBeenLastCalledWith(DATASET, [], expect.anything());
+    expect(sharedParams()).toEqual({ [DATASET]: { search: 'ferry' } });
+    expect(sessionStorage.getItem('service_catalog_view')).toBeNull();
+    expect(sessionStorage.getItem('service_catalog_open_row')).toBeNull();
+    history.back();
+    await vi.waitFor(() => expect(shell.navigate).toHaveBeenCalledTimes(2));
+    expect(address()).toBe(LIST_ADDRESS);
+    expect(sharedParams()).toEqual({ [DATASET]: { search: 'ferry' } });
 });

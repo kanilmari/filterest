@@ -52,15 +52,6 @@ var sitemapTestDatasets = []sitemapTestDataset{
 	{name: "deletion_log", visitorCanRead: true, rightCheckFails: true},
 }
 
-func findSitemapTestDataset(name string) (sitemapTestDataset, bool) {
-	for _, dataset := range sitemapTestDatasets {
-		if dataset.name == name {
-			return dataset, true
-		}
-	}
-	return sitemapTestDataset{}, false
-}
-
 // sitemapMockConn answers the dataset list, dataset existence and read-right questions for
 // the datasets above, and leaves every other question to the root-page fixture.
 type sitemapMockDriver struct{}
@@ -95,17 +86,26 @@ func (r *sitemapMockRows) Next(dest []driver.Value) error {
 
 func (c sitemapMockConn) QueryContext(ctx context.Context, query string, args []driver.NamedValue) (driver.Rows, error) {
 	switch {
-	case strings.Contains(query, "NOT t.ui_hidden"):
-		rows := &sitemapMockRows{cols: []string{"table_name", "updated"}}
-		for _, dataset := range sitemapTestDatasets {
-			rows.vals = append(rows.vals, []driver.Value{dataset.name, sitemapTestUpdated})
+	case strings.Contains(query, "SELECT table_uid, table_name"):
+		rows := &sitemapMockRows{cols: []string{"table_uid", "table_name", "schema_name"}}
+		for i, dataset := range sitemapTestDatasets {
+			rows.vals = append(rows.vals, []driver.Value{int64(i + 7), dataset.name, "public"})
 		}
 		return rows, nil
-	case strings.Contains(query, "SELECT EXISTS (SELECT 1 FROM system_db_tables WHERE table_name = $1)") && len(args) > 0:
-		_, known := findSitemapTestDataset(fmt.Sprint(args[0].Value))
-		return &rootHandlerMockRows{cols: []string{"exists"}, vals: []driver.Value{known}}, nil
+	case strings.Contains(query, "NOT t.ui_hidden"):
+		rows := &sitemapMockRows{cols: []string{"table_uid", "table_name", "updated"}}
+		for i, dataset := range sitemapTestDatasets {
+			rows.vals = append(rows.vals, []driver.Value{int64(i + 7), dataset.name, sitemapTestUpdated})
+		}
+		return rows, nil
 	case strings.Contains(query, "FROM system_group_table_func_rights") && len(args) > 2:
-		dataset, known := findSitemapTestDataset(fmt.Sprint(args[2].Value))
+		var dataset sitemapTestDataset
+		known := false
+		for i, candidate := range sitemapTestDatasets {
+			if fmt.Sprint(args[2].Value) == fmt.Sprint(i+7) {
+				dataset, known = candidate, true
+			}
+		}
 		if known && dataset.rightCheckFails {
 			return nil, fmt.Errorf("rights unavailable")
 		}

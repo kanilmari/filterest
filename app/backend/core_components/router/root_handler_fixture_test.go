@@ -62,6 +62,7 @@ type rootHandlerMockConfig struct {
 	firstRun           bool
 	datasetDescription string
 	rowTitle           string
+	secondaryAlias     string
 }
 
 type rootHandlerMockDriver struct {
@@ -115,6 +116,22 @@ func (c *rootHandlerMockConn) Query(query string, args []driver.Value) (driver.R
 
 func (c *rootHandlerMockConn) QueryContext(_ context.Context, query string, args []driver.NamedValue) (driver.Rows, error) {
 	switch {
+	case strings.Contains(query, "FROM system_db_table_aliases"):
+		if strings.Contains(query, "SELECT table_uid, alias_slug") {
+			return &rootHandlerMockRows{cols: []string{"table_uid", "alias_slug", "is_primary"},
+				vals: []driver.Value{int64(7), c.config.secondaryAlias, false}, empty: c.config.secondaryAlias == ""}, nil
+		}
+		if strings.Contains(query, "a.is_primary IS TRUE") || c.config.secondaryAlias == "" {
+			return &rootHandlerMockRows{cols: []string{"table_name", "alias_slug"}, empty: true}, nil
+		}
+		return &rootHandlerMockRows{cols: []string{"table_name", "alias_slug"}, vals: []driver.Value{"app_service_catalog", c.config.secondaryAlias}}, nil
+	case strings.Contains(query, "SELECT table_uid, table_name"):
+		if strings.Contains(query, "schema_name") {
+			return &sitemapMockRows{cols: []string{"table_uid", "table_name", "schema_name"}, vals: [][]driver.Value{
+				{int64(7), "app_service_catalog", "public"}, {int64(8), "app_cloud_services", "public"},
+			}}, nil
+		}
+		return &rootHandlerMockRows{cols: []string{"table_uid", "table_name"}, vals: []driver.Value{int64(7), "app_service_catalog"}}, nil
 	case strings.Contains(query, "WHERE key = $1") &&
 		len(args) > 0 &&
 		args[0].Value == "first_run":
@@ -142,17 +159,12 @@ func (c *rootHandlerMockConn) QueryContext(_ context.Context, query string, args
 		}, nil
 	case strings.Contains(query, "dataset.ui_hidden"):
 		return &rootHandlerMockRows{cols: []string{"hidden"}, vals: []driver.Value{false}}, nil
-	case strings.Contains(query, "SELECT EXISTS (SELECT 1 FROM system_db_tables WHERE table_name = $1)"):
-		exists := len(args) > 0 && (args[0].Value == "app_service_catalog" || args[0].Value == "app_cloud_services")
-		return &rootHandlerMockRows{
-			cols: []string{"exists"},
-			vals: []driver.Value{exists},
-		}, nil
+	case strings.Contains(query, "SELECT COALESCE(specific_table_related, true)"):
+		return &rootHandlerMockRows{cols: []string{"specific_table_related"}, vals: []driver.Value{true}}, nil
 	case strings.Contains(query, "FROM system_group_table_func_rights"):
 		allowed := len(args) > 2 &&
 			fmt.Sprint(args[0].Value) == "/api/get-results" &&
-			fmt.Sprint(args[1].Value) == "1" &&
-			fmt.Sprint(args[2].Value) == "app_service_catalog"
+			fmt.Sprint(args[2].Value) == "7"
 		return &rootHandlerMockRows{
 			cols:  []string{"exists"},
 			vals:  []driver.Value{1},
@@ -160,7 +172,7 @@ func (c *rootHandlerMockConn) QueryContext(_ context.Context, query string, args
 		}, nil
 	case strings.Contains(query, "FROM system_lang_keys"):
 		return &rootHandlerMockRows{cols: []string{"en"}, empty: true}, nil
-	case strings.Contains(query, "SELECT description FROM system_db_tables WHERE table_name = $1"):
+	case strings.Contains(query, "SELECT description FROM system_db_tables WHERE table_uid = $1"):
 		return &rootHandlerMockRows{
 			cols:  []string{"description"},
 			vals:  []driver.Value{c.config.datasetDescription},
@@ -277,13 +289,15 @@ func setupRootHandlerFrontend(t *testing.T) {
 	frontendDir := t.TempDir()
 	t.Setenv("SITE_NAME", "Test Product")
 
-	// The head carries the same four fields the real app/frontend/index.html
+	// The head carries the same metadata the real app/frontend/index.html
 	// fills from the server, because those are what a page returned to the wrong
 	// browser would have disclosed. The rest of that file is irrelevant here.
 	indexHTML := `<!DOCTYPE html><html><head>` +
 		`<title>{{.PageTitle}}</title>` +
+		`<link rel="canonical" href="{{.CanonicalURL}}">` +
 		`<meta name="description" content="{{.MetaDescription}}">` +
 		`<meta property="og:title" content="{{.OGTitle}}">` +
+		`<meta property="og:url" content="{{.OGURL}}">` +
 		`<meta property="og:description" content="{{.OGDescription}}">` +
 		`</head><body>root-shell {{.SiteName}} product {{.ProductName}}</body></html>`
 	if err := os.WriteFile(filepath.Join(frontendDir, "index.html"), []byte(indexHTML), 0o644); err != nil {

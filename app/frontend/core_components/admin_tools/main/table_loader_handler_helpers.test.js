@@ -1,9 +1,17 @@
-import { describe, test, expect } from 'vitest';
+// table_loader_handler_helpers.test.js
+// Verifies dataset and custom-view deep links against server-owned name pools.
+// Bridges bootstrap catalogue hydration and the pure startup routing helpers.
+// Keeps alias reloads and default selection independent of naming fallbacks.
+import { afterEach, beforeEach, describe, test, expect, vi } from 'vitest';
 import {
     extractRowId,
     parseDeepLink,
     resolveTableName,
 } from './table_loader_handler_helpers.js';
+
+import { primeDatasetAccessRegistry } from '../../navigation/nav_engine/dataset_access_registry.js';
+beforeEach(() => primeDatasetAccessRegistry({ datasets: [{ dataset_name: 'app_service_catalog', table_uid: 7,
+    names: ['app_service_catalog', 'service_catalog'], preferred_name: 'service_catalog', can_read_rows: true }] }));
 
 // ---------------------------------------------------------------------------
 // extractRowId
@@ -304,5 +312,56 @@ describe('optional Home resolution', () => {
     test('hidden Home never becomes the setting-off custom-view fallback', () => {
         expect(resolveTableName({ ...options, availableNames: new Set(['account']), tables: [],
             customViews: [{ name: 'front_page' }, { name: 'account' }] }).resolvedName).toBe('account');
+    });
+});
+
+// ---------------------------------------------------------------------------
+// An alias address after a reload
+// ---------------------------------------------------------------------------
+// A page writes a dataset's address with its public alias (/orders for
+// app_orders). Reloading it starts a new page, whose sign-in bootstrap loads the
+// aliases before the tables open (post_auth_bootstrap.js). Within a minute of the
+// previous page that load was once skipped, and the address was refused as a
+// missing dataset: Home opened with a "view not found" notice.
+describe('an alias address after a reload', () => {
+    afterEach(() => {
+        vi.doUnmock('../../endpoints/endpoint_router.js');
+        localStorage.clear();
+        sessionStorage.clear();
+    });
+
+    async function openPage() {
+        vi.resetModules();
+        vi.doMock('../../endpoints/endpoint_router.js', () => ({
+            endpoint_router: async () => ({ datasets: [{ table_uid: 11, dataset_name: 'app_orders',
+                names: ['app_orders', 'orders'], preferred_name: 'orders', can_read_rows: true }] }),
+        }));
+        return {
+            aliases: await import('../../navigation/nav_engine/dataset_aliases.js'),
+            helpers: await import('./table_loader_handler_helpers.js'),
+        };
+    }
+
+    test('resolves to its dataset on a page reloaded within a minute', async () => {
+        // A signed-in person whose verified routes include the alias list.
+        localStorage.setItem('button_state', 'logout');
+        sessionStorage.setItem('user_permissions', JSON.stringify(['/api/dataset-aliases']));
+        const firstPage = await openPage();
+        await firstPage.aliases.refreshDatasetAliasRegistry();
+        expect(firstPage.aliases.buildDatasetPath('app_orders')).toBe('/orders');
+
+        const reloadedPage = await openPage();
+        await reloadedPage.aliases.refreshDatasetAliasRegistry();
+        const deepLink = reloadedPage.helpers.parseDeepLink('/orders', '/');
+
+        expect(deepLink).toEqual({ tableName: 'app_orders', rowId: null });
+        expect(reloadedPage.helpers.resolveTableName({
+            deepLinkedName: deepLink.tableName,
+            storedName: null,
+            availableNames: new Set(['app_orders']),
+            tables: [{ dataset_name: 'app_orders' }],
+            customViews: [],
+            isLandingOnFrontpage: false,
+        })).toEqual({ resolvedName: 'app_orders', deepLinkInvalid: false });
     });
 });

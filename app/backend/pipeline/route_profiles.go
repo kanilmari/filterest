@@ -303,7 +303,6 @@ var RouteProfiles = map[string]RouteProfile{
 	"dtt_foreign_keys.DeleteForeignKeyHandler": AdminProfile,
 	"dtt_foreign_keys.GetForeignKeys":          DefaultProfile,
 	"dtt_foreign_keys.GetTableNamesHandler":    DefaultProfile,
-	"router.GetDatasetAliasesHandler":          DefaultProfile,
 
 	// AI / embedding features
 	"ai_features.GetEmbeddingDatasetsHandler":          AdminProfile,

@@ -1,6 +1,6 @@
 // dataset_alias_management_view.js
 // Renders the admin editor for primary dataset URL aliases and route previews.
-// Bridges stable alias-management endpoints, nav-engine alias cache refresh, and admin form layout.
+// Bridges stable alias-management endpoints, readable catalogue refresh, and admin form layout.
 // Exists to give admins a dedicated alias write surface without relying on read-only dataset routes.
 
 import {
@@ -16,8 +16,8 @@ import {
 } from '../../reusable_components/notifications/toast_notification_printer.js';
 import {
     getDatasetRouteUniquenessHint,
-    refreshDatasetAliasRegistry,
 } from '../navigation/nav_engine/dataset_aliases.js';
+import { refreshDatasetCatalogue } from '../navigation/nav_engine/dataset_access_registry.js';
 
 /**
  * @typedef {object} DatasetAliasManagementEntry
@@ -376,7 +376,9 @@ export async function generate_dataset_alias_management_view(container) {
                 || '';
             policyText.textContent = snapshot.system_alias_policy_recommendation || policyText.textContent;
             applySelectedDataset();
-            await refreshDatasetAliasRegistry();
+            // The page's registry may have loaded moments ago and still name the
+            // old alias, so the saved one is fetched now rather than in a minute.
+            await refreshDatasetCatalogue({ force: true });
             showSuccessToast(response?.message || 'Dataset alias saved');
         } catch (error) {
             console.warn('dataset_alias_management_view: save failed', error);

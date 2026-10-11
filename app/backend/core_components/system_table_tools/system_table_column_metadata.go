@@ -7,6 +7,7 @@ package system_table_tools
 
 import (
 	backend "easelect/backend/core_components"
+	"easelect/backend/core_components/dataset_routes"
 	"easelect/backend/core_components/dynamic_table_tools/dtt_2_column_crud/dtt_2_column_update"
 	"easelect/backend/core_components/dynamic_table_tools/dtt_crud_workflows"
 	"easelect/backend/core_components/dynamic_table_tools/dtt_models"
@@ -60,17 +61,26 @@ func buildGroupedTablesQuery(iconKeyExpr string) string {
 		ORDER BY t.table_name`, iconKeyExpr)
 }
 
+// GetGroupedTables returns the viewer's readable catalogue, including stable
+// identities and server-owned name pools. Admin tools use their separate inventory.
 func GetGroupedTables(response_writer http.ResponseWriter, http_request *http.Request) {
+	response_writer.Header().Set("Cache-Control", "private, no-store")
 	userID, sessionError := e_sessions.GetUserIDFromSession(http_request)
 	if sessionError != nil || userID <= 0 {
 		httpresponse.RespondWithError(response_writer, http.StatusUnauthorized, "unauthorized")
 		return
 	}
 
-	visibleTableUIDs, visibilityError := access_control.GetTablesVisibleToUser(backend.Db, userID)
+	visibleTableUIDs, visibilityError := access_control.GetTablesReadableByUser(backend.Db, userID)
 	if visibilityError != nil {
 		log.Printf("\033[31merror: fetching table permissions: %v\033[0m", visibilityError)
 		httpresponse.RespondWithError(response_writer, http.StatusInternalServerError, "failed to fetch table permissions")
+		return
+	}
+	namePools, err := dataset_routes.LoadDatasetNamePools(backend.Db)
+	if err != nil {
+		log.Printf("[GetGroupedTables] dataset names: %v", err)
+		httpresponse.RespondWithError(response_writer, http.StatusInternalServerError, "failed to fetch dataset names")
 		return
 	}
 
@@ -99,14 +109,13 @@ func GetGroupedTables(response_writer http.ResponseWriter, http_request *http.Re
 	}
 	defer query_rows.Close()
 
-	var tables_list []dtt_models.Table
+	tables_list := make([]dtt_models.Table, 0)
 	for query_rows.Next() {
-		var tableUID int
 		var single_table dtt_models.Table
 
 		scan_error := query_rows.Scan(
 			&single_table.ID,
-			&tableUID,
+			&single_table.TableUID,
 			&single_table.TableName,
 			&single_table.IsDefault,
 			&single_table.FilterbarVisibleByDefault,
@@ -123,12 +132,20 @@ func GetGroupedTables(response_writer http.ResponseWriter, http_request *http.Re
 			httpresponse.RespondWithError(response_writer, http.StatusInternalServerError, "error processing table rows")
 			return
 		}
-		if visibleTableUIDs != nil && !visibleTableUIDs[tableUID] {
+		if !visibleTableUIDs[single_table.TableUID] {
 			continue
 		}
 		if !backend.ShouldExposeCloudManagementDatasetName(single_table.TableName) {
 			continue
 		}
+		// Names belong to the stable UID, even when other schemas reuse the
+		// physical table name. Document routes currently support public only.
+		pool, exists := namePools[single_table.TableUID]
+		if !exists || pool.SchemaName != "public" || pool.DatasetName != single_table.TableName {
+			continue
+		}
+		single_table.Names = pool.Names
+		single_table.PreferredName = pool.PreferredName
 		single_table.CanReadRows = true
 
 		tables_list = append(tables_list, single_table)
@@ -164,11 +181,7 @@ func GetGroupedTables(response_writer http.ResponseWriter, http_request *http.Re
 			log.Printf("[GetSystemTableColumnMetadata] warning: could not fetch tab_order_json: %v", scanErr)
 		}
 		if tabOrderRaw != nil {
-			// Parse raw JSON string into interface{} so it serialises as JSON array, not escaped string
-			var tabOrderParsed interface{}
-			if json.Unmarshal([]byte(*tabOrderRaw), &tabOrderParsed) == nil {
-				response_map["tab_order"] = tabOrderParsed
-			}
+			response_map["tab_order"] = readableTabOrder(*tabOrderRaw, tables_list)
 		}
 	}
 

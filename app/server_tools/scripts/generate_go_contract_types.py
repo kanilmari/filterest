@@ -26,6 +26,7 @@ class StructSpec:
 
 
 ALLOWLIST = [
+    StructSpec("backend/core_components/dynamic_table_tools/dtt_models/models.go", "Table", "DatasetCatalogueEntry"),
     StructSpec("backend/core_components/application_updates/update_contracts.go", "Target", "ApplicationUpdateTarget"),
     StructSpec("backend/core_components/application_updates/update_contracts.go", "Offer", "ApplicationUpdateOffer"),
     StructSpec("backend/core_components/application_updates/update_contracts.go", "Request", "ApplicationUpdateRequest"),

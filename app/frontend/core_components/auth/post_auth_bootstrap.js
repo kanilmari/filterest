@@ -13,7 +13,6 @@ import { load_tables } from "../admin_tools/main/table_loader_handler.js";
 import { initTabs } from "../navigation/main_tabs/main_tab_printer.js";
 import { enableTabDragAndDrop } from "../navigation/main_tabs/tab_reorder_handler.js";
 import { initializeTreeCallAdmin } from "../vanilla_tree/van_tr_components/admin_tree_builder.js";
-import { refreshDatasetAliasRegistry } from "../navigation/nav_engine/dataset_aliases.js";
 import { clearPermissionCache } from "../route_permission_checker.js";
 import {
     NAVBAR_ADMIN_TOOLS_SECTION_ID,
@@ -132,19 +131,15 @@ export async function runPostAuthBootstrap({ refreshAuthModes = true } = {}) {
 
     if (isLoggedIn) {
         clearPermissionCache();
-        try {
-            await refreshDatasetAliasRegistry();
-        } catch (error) {
-            console.warn("Post-auth alias refresh failed", error);
-        }
-
         destroyMountedFilterbars();
+        contentTablesResponse = await load_tables({ forceReload: true });
+        dataLoaded = true;
+        // Tree-generated dataset addresses use the catalogue hydrated by the
+        // loader too. Its rendering may continue while the tabs initialize.
         if (hasRoutePermission("/ui/nav_tree")) {
             treeInitStarted = true;
             treeInitPromise = initializeTreeCallAdmin();
         }
-        contentTablesResponse = await load_tables({ forceReload: true });
-        dataLoaded = true;
     } else if (shouldLoadPublicBrowseData) {
         destroyMountedFilterbars();
         contentTablesResponse = await load_tables({ forceReload: true });

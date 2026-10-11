@@ -167,7 +167,7 @@ func stubDatasetTitleSources(t *testing.T, translations map[string]string, displ
 	originalTranslationReader := datasetTitleTranslationReader
 	originalDisplayNameReader := datasetDisplayNameReader
 	datasetTitleTranslationReader = func(langKey string, _ string) string { return translations[langKey] }
-	datasetDisplayNameReader = func(string) string { return displayName }
+	datasetDisplayNameReader = func(int) string { return displayName }
 	t.Cleanup(func() {
 		datasetTitleTranslationReader = originalTranslationReader
 		datasetDisplayNameReader = originalDisplayNameReader
@@ -180,7 +180,7 @@ func TestResolveDatasetTabTitlePrefersTheApplicationTabsOwnLabel(t *testing.T) {
 		"app_service_catalog_front_page": "Serlog.com – Service catalog",
 	}, "Catalog")
 
-	if got := resolveDatasetTabTitle("app_service_catalog", "en"); got != "Service catalog" {
+	if got := resolveDatasetTabTitle("app_service_catalog", 7, "en"); got != "Service catalog" {
 		t.Fatalf("resolveDatasetTabTitle() = %q, want %q", got, "Service catalog")
 	}
 }
@@ -189,17 +189,17 @@ func TestResolveDatasetTabTitleFallsBackInTheFrontendsOrder(t *testing.T) {
 	stubDatasetTitleSources(t, map[string]string{
 		"app_service_catalog_front_page": "Serlog.com – Service catalog",
 	}, "Catalog")
-	if got := resolveDatasetTabTitle("app_service_catalog", "en"); got != "Serlog.com – Service catalog" {
+	if got := resolveDatasetTabTitle("app_service_catalog", 7, "en"); got != "Serlog.com – Service catalog" {
 		t.Fatalf("front-page fallback = %q, want %q", got, "Serlog.com – Service catalog")
 	}
 
 	stubDatasetTitleSources(t, map[string]string{}, "Catalog")
-	if got := resolveDatasetTabTitle("app_service_catalog", "en"); got != "Catalog" {
+	if got := resolveDatasetTabTitle("app_service_catalog", 7, "en"); got != "Catalog" {
 		t.Fatalf("display-name fallback = %q, want %q", got, "Catalog")
 	}
 
 	stubDatasetTitleSources(t, map[string]string{}, "")
-	if got := resolveDatasetTabTitle("travel_deals", "en"); got != "Travel Deals" {
+	if got := resolveDatasetTabTitle("travel_deals", 8, "en"); got != "Travel Deals" {
 		t.Fatalf("readable-name fallback = %q, want %q", got, "Travel Deals")
 	}
 }
@@ -220,7 +220,7 @@ func TestResolveDatasetTabTitleUsesTheKeyThePeopleTabPrints(t *testing.T) {
 		"system_users": "Never shown on the tab",
 	}, "")
 
-	if got := resolveDatasetTabTitle("system_users", "en"); got != "Users" {
+	if got := resolveDatasetTabTitle("system_users", 9, "en"); got != "Users" {
 		t.Fatalf("resolveDatasetTabTitle() = %q, want %q", got, "Users")
 	}
 }

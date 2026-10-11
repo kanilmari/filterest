@@ -32,6 +32,8 @@ export type TempDatasetConfig = {
   foreignKeys?: TempDatasetForeignKey[];
   seedRows?: Array<Record<string, unknown>>;
   preventDeletion?: boolean;
+  grantUsersRead?: boolean;
+  grantGuestsRead?: boolean;
 };
 
 export type TempDatasetViewMode = 'table' | 'card' | 'tree' | 'transposed' | 'ticket';
@@ -283,8 +285,8 @@ export async function createTempDataset(
         column_list: Object.entries(config.columns)
           .map(([name, data_type]) => ({ name, data_type })),
         foreign_keys: config.foreignKeys ?? [],
-        grant_users_read: false,
-        grant_guests_read: false,
+        grant_users_read: config.grantUsersRead ?? false,
+        grant_guests_read: config.grantGuestsRead ?? false,
         prevent_deletion: config.preventDeletion ?? false,
         folder_id: currentProjectFolderId,
       });

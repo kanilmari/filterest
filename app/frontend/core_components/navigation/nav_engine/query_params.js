@@ -6,6 +6,7 @@
 
 import { writeDatasetAddress } from "./dataset_address_writer.js";
 import { getInternalDatasetName } from './dataset_aliases.js';
+import { hasDatasetAccessSnapshot, subscribeDatasetAccessRegistry } from './dataset_access_registry.js';
 
 const STORAGE_KEY = 'dataset_query_params';
 export const DATASET_PREFIX = '/';
@@ -126,7 +127,10 @@ function parseCurrentSearch() {
     const paramsObj = parseDatasetParamsFromSearch(window.location.search);
     if (currentDataset) {
         datasetParams[currentDataset] = paramsObj;
-        saveToStorage();
+        // Avoid adding meaningless empty entries on a plain dataset address.
+        if (Object.keys(paramsObj).length || localStorage.getItem(STORAGE_KEY)?.includes(`"${currentDataset}"`)) {
+            saveToStorage();
+        }
         window.dispatchEvent(
             new CustomEvent('dataset-query-params-changed', {
                 detail: {
@@ -144,10 +148,15 @@ export function useStorageParams() {
 
 export function useUrlParams() {
     loadFromStorage();
-    parseCurrentSearch();
+    // A fresh page cannot attach an alias's query to a dataset until the
+    // readable catalogue has established its canonical identity.
+    if (hasDatasetAccessSnapshot()) parseCurrentSearch();
 }
 
 useUrlParams();
+subscribeDatasetAccessRegistry(() => {
+    if (hasDatasetAccessSnapshot()) useUrlParams();
+});
 let popstateRegistered = false;
 if (!popstateRegistered) {
     window.addEventListener('popstate', () => {

@@ -333,7 +333,7 @@ func TestDatasetExistsHidesCloudDatasetsOnApplicationRole(t *testing.T) {
 	setupRootHandlerMockDB(t, false)
 
 	t.Setenv("CLOUD_MANAGEMENT_UI_ENABLED", "1")
-	if datasetExists("app_cloud_services") {
+	if _, exists := resolveDocumentDataset("app_cloud_services"); exists {
 		t.Fatal("app_cloud_services should be hidden on application instances")
 	}
 }
@@ -342,7 +342,7 @@ func TestDatasetExistsShowsCloudDatasetsOnManagementRole(t *testing.T) {
 	setupRootHandlerMockDBWithRole(t, false, backend.EaselectInstanceRoleManagement)
 
 	t.Setenv("CLOUD_MANAGEMENT_UI_ENABLED", "1")
-	if !datasetExists("app_cloud_services") {
+	if _, exists := resolveDocumentDataset("app_cloud_services"); !exists {
 		t.Fatal("app_cloud_services should exist when cloud-management role is enabled")
 	}
 }

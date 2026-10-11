@@ -8,7 +8,7 @@ import { getTabIconPath } from "./tab_icon_library.js";
 import { getMainTabLangKey } from "./main_tab_lang_keys.js";
 import {
     beginDatasetAccessRefresh, getDatasetAccessResponseGeneration,
-    isCurrentDatasetAccessRefresh, primeDatasetAccessRegistry,
+    isCurrentDatasetAccessRefresh, isAcceptedDatasetAccessSnapshot, primeDatasetAccessRegistry,
     subscribeDatasetAccessRegistry,
 } from "../nav_engine/dataset_access_registry.js";
 
@@ -303,20 +303,29 @@ function formatTableName(tableName) {
 const EMPTY_TABS = Object.freeze([]);
 let acceptedTabs = EMPTY_TABS;
 let acceptedGeneration = null;
+let acceptedIsLoggedIn = null;
 const subscribers = new Set();
 
 function publish() {
     for (const subscriber of subscribers) subscriber(getMainDatasetTabs());
 }
 
-subscribeDatasetAccessRegistry(() => {
+subscribeDatasetAccessRegistry(response => {
+    const isLoggedIn = acceptedIsLoggedIn;
     acceptedTabs = EMPTY_TABS;
     acceptedGeneration = null;
+    if (!response) acceptedIsLoggedIn = null;
     publish();
+    // Alias saves/page return replace the catalogue outside initTabs. Rebuild
+    // this existing projection from that response, without another fetch.
+    if (response && isLoggedIn !== null) {
+        void fetchProjectTabs({ preloadedContentTablesResponse: response })
+            .then(result => acceptMainDatasetTabs(result, isLoggedIn));
+    }
 });
 
 export function getMainDatasetTabs() {
-    return isCurrentDatasetAccessRefresh(acceptedGeneration) ? acceptedTabs : EMPTY_TABS;
+    return isAcceptedDatasetAccessSnapshot(acceptedGeneration) ? acceptedTabs : EMPTY_TABS;
 }
 
 export function subscribeMainDatasetTabs(listener) {
@@ -328,7 +337,8 @@ export function subscribeMainDatasetTabs(listener) {
 export function acceptMainDatasetTabs(result, isLoggedIn) {
     if (!isCurrentDatasetAccessRefresh(result.generation)) return false;
     if (result.contentTablesResponse) {
-        if (!primeDatasetAccessRegistry(result.contentTablesResponse, result.generation)) return false;
+        if (getDatasetAccessResponseGeneration(result.contentTablesResponse) !== result.generation
+            && !primeDatasetAccessRegistry(result.contentTablesResponse, result.generation)) return false;
     }
     const readable = new Set((result.contentTablesResponse?.datasets || [])
         .filter(entry => entry.can_read_rows !== false).map(entry => entry.dataset_name));
@@ -341,6 +351,7 @@ export function acceptMainDatasetTabs(result, isLoggedIn) {
         return true;
     }).map(tab => Object.freeze({ ...tab, dataset: tab.dataset || tab.id })));
     acceptedGeneration = result.generation;
+    acceptedIsLoggedIn = isLoggedIn;
     publish();
     return true;
 }

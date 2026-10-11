@@ -18,6 +18,7 @@ import (
 	"unicode"
 
 	backend "easelect/backend/core_components"
+	"easelect/backend/core_components/dataset_routes"
 )
 
 // pageMeta holds all SEO-relevant fields that are injected into the
@@ -75,6 +76,18 @@ func isIndexingAllowed() bool {
 // It tries to match the first URL segment to a dataset name and fetch
 // translated titles/descriptions from system_lang_keys.
 func resolvePageMeta(r *http.Request) pageMeta {
+	segment := strings.SplitN(strings.TrimPrefix(r.URL.Path, "/"), "/", 2)[0]
+	dataset, exists := resolveDocumentDataset(segment)
+	if !exists || segment == "admin" {
+		return resolvePageMetaForDataset(r, nil)
+	}
+	return resolvePageMetaForDataset(r, &dataset)
+}
+
+// resolvePageMetaForDataset uses the exact pool rootHandler already authorized.
+// Re-resolving its name here could select a different UID after an alias change.
+// A generic or sign-in shell supplies nil and publishes only site metadata.
+func resolvePageMetaForDataset(r *http.Request, dataset *dataset_routes.DatasetNamePool) pageMeta {
 	siteName := resolvePageSiteName(r)
 	lang := resolveLanguage(r)
 	locale := langToLocale(lang)
@@ -95,35 +108,28 @@ func resolvePageMeta(r *http.Request) pageMeta {
 		LangCode:        lang,
 	}
 
-	// Extract dataset name from first URL segment
+	if dataset == nil {
+		return meta
+	}
+
 	path := strings.TrimPrefix(r.URL.Path, "/")
 	if path == "" {
 		return meta
 	}
 	segments := strings.SplitN(path, "/", 3)
-	datasetSegment := segments[0]
-	datasetName := resolveRawDatasetName(datasetSegment)
-
-	if datasetSegment == "" || datasetSegment == "admin" || datasetName == "" {
-		return meta
-	}
-
-	// Check if dataset exists
-	if !datasetExists(datasetName) {
-		return meta
-	}
-	canonicalPath = buildCanonicalDatasetPath(datasetName, segments)
+	datasetName := dataset.DatasetName
+	canonicalPath = buildCanonicalDatasetPath(dataset.PreferredName, segments)
 	meta.CanonicalURL = baseURL + canonicalPath
 	meta.OGURL = meta.CanonicalURL
 
-	title := resolveDatasetTabTitle(datasetName, lang)
+	title := resolveDatasetTabTitle(datasetName, dataset.TableUID, lang)
 
 	// Fetch description / search slogan
 	sloganKey := "search_slogan_" + datasetName
 	description := fetchTranslation(sloganKey, lang)
 	if description == "" {
 		// Fallback: use table description from system_db_tables
-		description = fetchDatasetDescription(datasetName)
+		description = fetchDatasetDescription(dataset.TableUID)
 	}
 	if description == "" {
 		description = title
@@ -136,7 +142,7 @@ func resolvePageMeta(r *http.Request) pageMeta {
 	meta.OGType = "website"
 
 	// A row address (/{dataset}/{id}-{slug}) keeps the dataset's own title. This page
-	// is composed before any request is authorised, so it must not read a row: an
+	// checks dataset access but does not evaluate row policies, so it must not read a row: an
 	// earlier version printed the row's header column here with no rights or row rule,
 	// for any dataset not marked hidden (WL140). A row's title may return here only
 	// when it is read through the normal read authorisation.
@@ -157,14 +163,14 @@ const browserTabTitleSeparator = " — "
 // installation that has not translated that label, in the same order as
 // resolveTabTitleForBrowserTab in
 // app/frontend/core_components/navigation/nav_engine/browser_tab_title_writer.js.
-func resolveDatasetTabTitle(datasetName string, lang string) string {
+func resolveDatasetTabTitle(datasetName string, tableUID int, lang string) string {
 	if title := datasetTitleTranslationReader(mainTabLangKey(datasetName), lang); title != "" {
 		return title
 	}
 	if title := datasetTitleTranslationReader(datasetName+"_front_page", lang); title != "" {
 		return title
 	}
-	if title := datasetDisplayNameReader(datasetName); title != "" {
+	if title := datasetDisplayNameReader(tableUID); title != "" {
 		return title
 	}
 	return humanizeDatasetNameForTitle(datasetName)
@@ -310,13 +316,13 @@ func normalizePageDisplayHost(rawHost string) string {
 	return strings.ToLower(strings.TrimSpace(host))
 }
 
-// buildCanonicalDatasetPath returns the preferred public path for a dataset request.
-func buildCanonicalDatasetPath(datasetName string, segments []string) string {
-	if datasetName == "" {
+// buildCanonicalDatasetPath preserves the accepted pool's preferred name and row suffix.
+func buildCanonicalDatasetPath(publicName string, segments []string) string {
+	if publicName == "" {
 		return "/"
 	}
 
-	path := "/" + resolvePublicDatasetName(datasetName)
+	path := "/" + publicName
 	if len(segments) >= 2 && segments[1] != "" {
 		path += "/" + segments[1]
 	}
@@ -476,12 +482,12 @@ func fetchTranslation(langKey string, lang string) string {
 
 // fetchDatasetDisplayName retrieves the administrator-given display name from
 // system_db_tables, the same value the frontend reads from its table_specs cache.
-func fetchDatasetDisplayName(tableName string) string {
-	if backend.Db == nil {
+func fetchDatasetDisplayName(tableUID int) string {
+	if backend.Db == nil || tableUID <= 0 {
 		return ""
 	}
 	var displayName sql.NullString
-	err := backend.Db.QueryRow(`SELECT display_name FROM system_db_tables WHERE table_name = $1`, tableName).Scan(&displayName)
+	err := backend.Db.QueryRow(`SELECT display_name FROM system_db_tables WHERE table_uid = $1`, tableUID).Scan(&displayName)
 	if err != nil || !displayName.Valid {
 		return ""
 	}
@@ -489,12 +495,12 @@ func fetchDatasetDisplayName(tableName string) string {
 }
 
 // fetchDatasetDescription retrieves the description column from system_db_tables.
-func fetchDatasetDescription(tableName string) string {
-	if backend.Db == nil {
+func fetchDatasetDescription(tableUID int) string {
+	if backend.Db == nil || tableUID <= 0 {
 		return ""
 	}
 	var desc sql.NullString
-	err := backend.Db.QueryRow(`SELECT description FROM system_db_tables WHERE table_name = $1`, tableName).Scan(&desc)
+	err := backend.Db.QueryRow(`SELECT description FROM system_db_tables WHERE table_uid = $1`, tableUID).Scan(&desc)
 	if err != nil {
 		return ""
 	}
@@ -548,7 +554,7 @@ func sitemapHandler(w http.ResponseWriter, r *http.Request) {
 
 	for _, dataset := range readSitemapDatasets() {
 		entry := urlEntry{
-			Loc:        baseURL + "/" + resolvePublicDatasetName(dataset.name),
+			Loc:        baseURL + "/" + dataset.preferredName,
 			ChangeFreq: "weekly",
 			Priority:   "0.8",
 		}
@@ -582,8 +588,10 @@ const sitemapVisitorUserID = 1
 
 // sitemapDataset is one dataset whose address the sitemap announces.
 type sitemapDataset struct {
-	name    string
-	updated sql.NullTime
+	tableUID      int
+	name          string
+	preferredName string
+	updated       sql.NullTime
 }
 
 // readSitemapDatasets answers which datasets the sitemap announces: only those a signed-out
@@ -597,10 +605,15 @@ func readSitemapDatasets() []sitemapDataset {
 	if backend.Db == nil {
 		return nil
 	}
+	pools, err := dataset_routes.LoadDatasetNamePools(backend.Db)
+	if err != nil {
+		log.Printf("\033[31m[sitemapHandler] name pools unavailable: %v\033[0m", err)
+		return nil
+	}
 	rows, err := backend.Db.Query(`
-		SELECT t.table_name, t.updated
+		SELECT t.table_uid, t.table_name, t.updated
 		FROM system_db_tables t
-		WHERE t.schema_name = 'public' AND NOT t.ui_hidden
+		WHERE COALESCE(NULLIF(t.schema_name, ''), 'public') = 'public' AND NOT t.ui_hidden
 		ORDER BY t.table_name
 	`)
 	if err != nil {
@@ -610,7 +623,7 @@ func readSitemapDatasets() []sitemapDataset {
 	var shown []sitemapDataset
 	for rows.Next() {
 		var dataset sitemapDataset
-		if err := rows.Scan(&dataset.name, &dataset.updated); err != nil {
+		if err := rows.Scan(&dataset.tableUID, &dataset.name, &dataset.updated); err != nil {
 			continue
 		}
 		shown = append(shown, dataset)
@@ -626,8 +639,11 @@ func readSitemapDatasets() []sitemapDataset {
 
 	readable := make([]sitemapDataset, 0, len(shown))
 	for _, dataset := range shown {
-		if backend.ShouldExposeCloudManagementDatasetName(dataset.name) &&
-			guestCanReadRawDataset(dataset.name, sitemapVisitorUserID) {
+		pool, accepted := pools[dataset.tableUID]
+		if accepted && pool.SchemaName == "public" && pool.DatasetName == dataset.name &&
+			backend.ShouldExposeCloudManagementDatasetName(dataset.name) &&
+			canReadDocumentDataset(pool, sitemapVisitorUserID) {
+			dataset.preferredName = pool.PreferredName
 			readable = append(readable, dataset)
 		}
 	}

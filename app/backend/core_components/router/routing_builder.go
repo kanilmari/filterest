@@ -16,14 +16,15 @@ import (
 	"strings"
 
 	backend "easelect/backend/core_components"
+	"easelect/backend/core_components/dataset_routes"
 	frontendassets "easelect/backend/core_components/frontend_assets"
 	"easelect/backend/core_components/httpresponse"
 	"easelect/backend/core_components/lang"
 	"easelect/backend/core_components/middlewares"
-	"easelect/backend/core_components/permissions"
 	productidentity "easelect/backend/core_components/product_identity"
 	"easelect/backend/core_components/session_expiry"
 	"easelect/backend/pipeline"
+	"easelect/backend/pipeline/access_control"
 )
 
 var (
@@ -104,7 +105,7 @@ func resolveInstallationEnvironment(storedEnvironment, runtimeEnvironment string
 	return "prod"
 }
 
-func tablesHandler(w http.ResponseWriter, r *http.Request, loginToBrowse bool) {
+func tablesHandler(w http.ResponseWriter, r *http.Request, loginToBrowse bool, dataset *dataset_routes.DatasetNamePool) {
 	log.Printf("tablesHandler: user requested URL: %s", r.URL.String())
 	setAuthShellNoStoreHeaders(w, loginToBrowse)
 
@@ -128,7 +129,7 @@ func tablesHandler(w http.ResponseWriter, r *http.Request, loginToBrowse bool) {
 
 	// 3) Ajetaan templaatti ja syötetään nonce + SEO-metatiedot
 	isDev := os.Getenv("ENVIRONMENT_TYPE") == "dev"
-	meta := resolvePageMeta(r)
+	meta := resolvePageMetaForDataset(r, dataset)
 	siteName := meta.SiteName
 	noIndex := !isIndexingAllowed()
 	assetPaths := frontendassets.Resolve(localFrontendDir, useMinified)
@@ -202,44 +203,16 @@ func datasetsRedirectHandler(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, newPath, http.StatusMovedPermanently)
 }
 
-func datasetExists(name string) bool {
-	rawName := resolveRawDatasetName(name)
-	if rawName == "" || !backend.ShouldExposeCloudManagementDatasetName(rawName) {
+// canReadDocumentDataset checks the accepted UID, never another schema's namesake.
+// It shares row-read authorization, including explicit administrator recovery,
+// with the readable catalogue. The sitemap always supplies the guest principal.
+func canReadDocumentDataset(dataset dataset_routes.DatasetNamePool, userID int) bool {
+	if dataset.TableUID <= 0 || dataset.SchemaName != "public" || userID <= 0 {
 		return false
 	}
-	var exists bool
-	err := backend.Db.QueryRow(`SELECT EXISTS (SELECT 1 FROM system_db_tables WHERE table_name = $1)`, rawName).Scan(&exists)
-	if err != nil {
-		log.Printf("\033[31merror: %v\033[0m", err)
-		return false
-	}
-	return exists
-}
-
-func guestCanReadDataset(name string, guestUserID int) bool {
-	return guestCanReadRawDataset(resolveRawDatasetName(name), guestUserID)
-}
-
-// guestCanReadRawDataset is guestCanReadDataset for a name that is already the raw table
-// name, such as one read from system_db_tables. The sitemap asks it about every dataset it
-// considers, so it skips the alias lookup that a visitor's address needs.
-func guestCanReadRawDataset(rawName string, guestUserID int) bool {
-	if rawName == "" || guestUserID <= 0 {
-		return false
-	}
-
-	allowed, err := permissions.CheckRouteTablePermission(
-		backend.Db,
-		"/api/get-results",
-		guestUserID,
-		permissions.RouteTableScope{TableName: rawName},
-		permissions.AccessControlRouteTableOptions(false),
+	return access_control.UserHasFunctionPermissionOnTableQuiet(
+		userID, "/api/get-results", dataset.DatasetName, fmt.Sprint(dataset.TableUID),
 	)
-	if err != nil {
-		log.Printf("\033[31merror: guest dataset permission check failed for %s: %v\033[0m", rawName, err)
-		return false
-	}
-	return allowed
 }
 
 // redirectProtectedDatasetRequestToLogin sends a page navigation to the login
@@ -255,13 +228,9 @@ func redirectProtectedDatasetRequestToLogin(w http.ResponseWriter, r *http.Reque
 	http.Redirect(w, r, session_expiry.LoginPathWithSessionEndedNotice(redirectTarget), http.StatusSeeOther)
 }
 
-func shouldRedirectGuestDeepLinkToLogin(r *http.Request, firstSeg string, statErr error, firstSegIsDataset bool, guestUserID int) bool {
+func shouldRedirectGuestDeepLinkToLogin(r *http.Request, statErr error, guestUserID int) bool {
 	if r == nil || guestUserID <= 0 || isAuthShellEntryRequest(r) {
 		return false
-	}
-
-	if firstSegIsDataset {
-		return !guestCanReadDataset(firstSeg, guestUserID)
 	}
 
 	return os.IsNotExist(statErr) && isSpaDeepLinkPath(r.URL.Path)

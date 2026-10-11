@@ -7,6 +7,7 @@ package system_table_tools
 import (
 	"easelect/backend/core_components/dbutils"
 	"easelect/backend/core_components/dynamic_table_tools/dtt_1_row_crud/row_mutation_policy"
+	"easelect/backend/core_components/dynamic_table_tools/dtt_crud_workflows"
 	dtt_system_table_folders "easelect/backend/core_components/dynamic_table_tools/dtt_table_folders"
 	"easelect/backend/core_components/httpresponse"
 	"easelect/backend/core_components/runtime_grant_mutations"
@@ -251,7 +252,7 @@ func fixIssue(q dbutils.Querier, id string, fixActions map[string]string) error 
 				return fmt.Errorf("failed to resolve default folder for table %s: %v", identifier, folderErr)
 			}
 
-			var tableUID int64
+			var tableUID int
 			insertTableErr := q.QueryRow(`
 				INSERT INTO system_db_tables (table_name, schema_name, is_default, is_removable, folder_id)
 				VALUES ($1, $2, false, true, $3)
@@ -271,6 +272,10 @@ func fixIssue(q dbutils.Querier, id string, fixActions map[string]string) error 
 			`, tableUID, schemaName, identifier)
 			if insertColsErr != nil {
 				return fmt.Errorf("column registration failed (%s.%s): %v", schemaName, identifier, insertColsErr)
+			}
+
+			if err := dtt_crud_workflows.EnsureDatasetAdministratorPermissions(q, tableUID, schemaName); err != nil {
+				return fmt.Errorf("administrator permissions failed (%s.%s): %w", schemaName, identifier, err)
 			}
 
 			log.Printf("[FixDatabaseConsistency] registered table %s.%s in system tables", schemaName, identifier)
