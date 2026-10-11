@@ -22,7 +22,7 @@ import pytest
 from server_tools.lib import database_recovery as recovery
 from installation_fixture_files import LIFECYCLE_LIBRARY_FILES
 import test_filterest_docker_runner as docker_fakes
-from test_native_lifecycle_roots import build_update_fixture, run_update, update_backups
+from native_lifecycle_fixture import build_update_fixture, run_update, update_backups
 
 
 HELPER = Path(recovery.__file__)

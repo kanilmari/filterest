@@ -15,7 +15,7 @@ import sys
 
 import pytest
 
-import test_native_lifecycle_roots as lifecycle
+import native_lifecycle_fixture as lifecycle
 from test_recovery_log_before_update import ask_application
 from test_update_prerequisites_before_downtime import installation_snapshot, assert_untouched
 

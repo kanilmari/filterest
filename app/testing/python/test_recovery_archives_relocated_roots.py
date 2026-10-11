@@ -26,7 +26,7 @@ from server_tools.lib import recovery_key_safety as key_safety
 from test_database_recovery import run_packet, calls, create_packet
 from test_database_recovery_update import (whole_packet, run_update_packet,
                                           snapshot, packet)
-from test_native_lifecycle_roots import (build_update_fixture, run_update,
+from native_lifecycle_fixture import (build_update_fixture, run_update,
                                         update_backups, logged_calls)
 
 ALL_ROOTS = tuple(name for roots in archives.ARCHIVE_ROOTS.values() for name in roots)

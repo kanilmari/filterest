@@ -12,7 +12,7 @@ import subprocess
 
 import pytest
 
-from test_native_lifecycle_roots import (
+from native_lifecycle_fixture import (
     SOURCE_ROOT, assert_calls_in_order, build_update_fixture, clean_filterest_environment,
     git_output, logged_calls, run_update, update_backups,
 )

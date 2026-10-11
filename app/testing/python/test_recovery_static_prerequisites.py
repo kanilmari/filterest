@@ -14,7 +14,7 @@ import subprocess
 
 import pytest
 
-from test_native_lifecycle_roots import SOURCE_ROOT, build_update_fixture, run_update
+from native_lifecycle_fixture import SOURCE_ROOT, build_update_fixture, run_update
 from test_update_prerequisites_before_downtime import installation_snapshot, assert_untouched, package_probe
 from test_recovery_content_sinks import KEY
 from test_database_recovery import packet, create_packet, run_packet, calls

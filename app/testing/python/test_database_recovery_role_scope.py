@@ -18,7 +18,7 @@ import pytest
 
 from server_tools.lib import database_recovery as recovery
 from test_database_recovery import ROLE_SQL, calls, create_packet, packet, run_packet
-from test_native_lifecycle_roots import build_update_fixture, git_output, run_update, update_backups
+from native_lifecycle_fixture import build_update_fixture, git_output, run_update, update_backups
 from test_database_recovery_update import whole_packet, documented_rollback_block
 
 

@@ -16,7 +16,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from test_native_lifecycle_roots import build_update_fixture, run_update
+from native_lifecycle_fixture import build_update_fixture, run_update
 from test_update_prerequisites_before_downtime import installation_snapshot, assert_untouched, package_probe
 from test_recovery_content_sinks import KEY, FORMS
 
@@ -55,7 +55,7 @@ def test_actual_updater_refuses_existing_key_log_while_original_keeps_serving(tm
                                    ' sys.stdout.buffer.write(b"original application response\\n");sys.stdout.buffer.flush()'],
                                   stdin=subprocess.PIPE, stdout=subprocess.PIPE)
     try:
-        import test_native_lifecycle_roots as lifecycle
+        import native_lifecycle_fixture as lifecycle
         # Reaching the updater's real stop step would terminate this application.
         # This makes continuing to serve an observable lifecycle property.
         stop = '\nif [[ "$(basename "$0") $1" == "run_filterest_admin.sh stop" ]]; then kill -TERM "$FILTEREST_TEST_ORIGINAL_PID"; fi\n'
@@ -123,7 +123,7 @@ def destination_snapshot(root):
 
 
 def assert_no_shutdown(fixture):
-    from test_native_lifecycle_roots import logged_calls, update_backups, git_output
+    from native_lifecycle_fixture import logged_calls, update_backups, git_output
     assert update_backups(fixture) == []
     assert git_output(fixture["checkout"], "rev-parse", "HEAD") == fixture["old_commit"]
     assert not (fixture["checkout"] / "data/runtime/filterest-update.lock").exists()

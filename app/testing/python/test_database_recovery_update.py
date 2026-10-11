@@ -23,7 +23,7 @@ from server_tools.lib import database_recovery_update as update
 from server_tools.lib import recovery_archives as archives
 from test_database_recovery import packet, run_packet, create_packet, calls
 from test_filterest_launcher_install_profile import COPIED_APP_FILES, SOURCE_ROOT
-from test_native_lifecycle_roots import build_update_fixture, run_update, update_backups, logged_calls
+from native_lifecycle_fixture import build_update_fixture, run_update, update_backups, logged_calls
 
 
 def run_update_packet(packet, action, *arguments):
