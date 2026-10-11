@@ -152,8 +152,7 @@ func TestEnsureRegisteredTableUID_ReturnsHelpfulErrorWhenStillMissing(t *testing
 func TestCreateTableHandlerRejectsDatasetRouteConflictBeforeFolderResolution(t *testing.T) {
 	db := newWorkflowQueueTestDB(t)
 	defer db.Close()
-	pushWorkflowQuery(queuedWorkflowQuery{err: &pq.Error{Code: "42P01"}})
-	pushWorkflowQuery(queuedWorkflowQuery{cols: []string{"table_uid", "table_name"}, rows: [][]driver.Value{}})
+	pushWorkflowExec(queuedWorkflowExec{err: &pq.Error{Code: "P0001", Message: "dataset_namespace_conflict"}})
 
 	req := httptest.NewRequest(http.MethodPost, "/api/create_dataset", strings.NewReader(`{
 		"dataset_name":"service_catalog",
@@ -167,7 +166,7 @@ func TestCreateTableHandlerRejectsDatasetRouteConflictBeforeFolderResolution(t *
 	if rec.Code != http.StatusConflict {
 		t.Fatalf("status = %d, want 409", rec.Code)
 	}
-	if !strings.Contains(rec.Body.String(), `dataset route segment \"service_catalog\" is already in use`) {
+	if !strings.Contains(rec.Body.String(), `"error_lang_key":"dataset_namespace_conflict"`) {
 		t.Fatalf("body = %q, want route-conflict message", rec.Body.String())
 	}
 }
@@ -261,7 +260,7 @@ func (c *workflowQueueConn) QueryContext(_ context.Context, query string, args [
 }
 
 func (c *workflowQueueConn) ExecContext(_ context.Context, query string, _ []driver.NamedValue) (driver.Result, error) {
-	if granttest.IsPolicyLock(query) {
+	if granttest.IsPolicyLock(query) || strings.Contains(query, "app_lock_dataset_namespace()") {
 		return driver.RowsAffected(0), nil
 	}
 	e, ok := popWorkflowExec()

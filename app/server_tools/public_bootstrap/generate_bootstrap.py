@@ -17,7 +17,8 @@ parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument("--target", type=Path, default=public_root, help="Filterest root receiving app/server_tools/public_bootstrap.")
 parser.add_argument("--app-version")
 parser.add_argument("--db-version")
-parser.add_argument("--check", action="store_true", help="Verify generated files without replacing them.")
+parser.add_argument("--check", action="store_true", help="Compare generated bootstrap artifacts without writing them.")
+parser.add_argument("--snapshot", action="store_true", help="Also generate/check the selected DB schema snapshot.")
 args = parser.parse_args()
 app_version = args.app_version or (public_root / "app/VERSION_APP").read_text().strip()
 db_version = args.db_version or (public_root / "app/VERSION_DB").read_text().strip()
@@ -114,6 +115,7 @@ repair_schema_migrations = (
     "20261009000060_extend_dataset_appearance_three_places.sql",
     "20261009000070_add_publication_fields_to_release_goals.sql",
     "20261009000075_add_dataset_kind_contracts.sql",
+    "20261009000078_enforce_dataset_name_namespace.sql",
     "20261009000079_reconcile_system_database_identity_schema.sql",
     "20261009000080_zone_platform_managed_timestamps.sql",
 )
@@ -171,10 +173,22 @@ def reviewed_public_migration(name: str) -> str:
         parser.error(f"Reviewed public migration missing or not regular: {name}")
     return path.read_text(encoding="utf-8")
 
+# A namespace upgrade owns schema and refusal copy together. Its schema must be
+# present before the registry seeds; translations need the seeded language rows.
+# The exact full file still owns the baseline hash and completion marker.
+language_phase_marker = "-- BOOTSTRAP_LANGUAGE_SEED\n"
+
+def schema_migration_parts(name: str) -> tuple[str, str]:
+    text = reviewed_public_migration(name)
+    if text.count(language_phase_marker) > 1:
+        parser.error(f"Migration repeats its language phase marker: {name}")
+    before, separator, after = text.partition(language_phase_marker)
+    return before, after if separator else ""
+
 schema_sql = (
     "".join(reviewed_source(name) for name in schema_sources)
     + "".join(reviewed_public_migration(name) for name in developer_workflow_schema_migrations)
-    + "".join(reviewed_public_migration(name) for name in repair_schema_migrations)
+    + "".join(schema_migration_parts(name)[0] for name in repair_schema_migrations)
     + "".join(reviewed_source(name) for name in schema_completion_sources)
     + "".join(reviewed_public_migration(name) for name in schema_privilege_migrations)
 )
@@ -183,6 +197,7 @@ seed_sql = (
     + "".join(reviewed_public_migration(name) for name in developer_workflow_seed_migrations)
     + "".join(reviewed_source(name) for name in seed_completion_sources)
     + "".join(reviewed_public_migration(name) for name in language_seed_migrations)
+    + "".join(schema_migration_parts(name)[1] for name in repair_schema_migrations)
     + "".join(reviewed_public_migration(name) for name in setting_seed_migrations)
     + "".join(reviewed_public_migration(name) for name in release_data_migrations)
 )
@@ -469,16 +484,19 @@ manifest = {
 (bootstrap_dir / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
 # Publish only after every input, ledger entry and generated hash was validated.
 # A failed rebuild therefore leaves the previously usable package untouched.
+outputs = [(bootstrap_dir / filename, output_bootstrap_dir / filename)
+           for filename in ("schema.sql", "seed_data.sql", "manifest.json")]
+if args.snapshot:
+    outputs.append((schema_file, args.target.resolve() / "app/server_tools/versioning/schema_snapshots" / f"db-{db_version}.sql"))
 if args.check:
-    stale = [name for name in ("schema.sql", "seed_data.sql", "manifest.json")
-             if not (output_bootstrap_dir / name).is_file()
-             or (bootstrap_dir / name).read_bytes() != (output_bootstrap_dir / name).read_bytes()]
-    staging.cleanup()
-    if stale:
-        parser.error("Bootstrap files are stale: " + ", ".join(stale))
-    print("Public Filterest bootstrap is current")
-    sys.exit(0)
-for filename in ("schema.sql", "seed_data.sql", "manifest.json"):
-    (bootstrap_dir / filename).replace(output_bootstrap_dir / filename)
+    differences = [str(target) for source, target in outputs
+                   if not target.is_file() or source.read_bytes() != target.read_bytes()]
+    if differences:
+        parser.error("Generated artifacts differ: " + ", ".join(differences))
+else:
+    # Copy, because the schema can also be the snapshot's source.
+    for source, target in outputs:
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes(source.read_bytes())
 staging.cleanup()
-print(f"Generated public Filterest bootstrap: {output_bootstrap_dir}")
+print(f"{'Checked' if args.check else 'Generated'} public Filterest bootstrap: {output_bootstrap_dir}")

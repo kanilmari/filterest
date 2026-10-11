@@ -7040,6 +7040,35 @@ WHERE NULLIF(btrim(c.translation), '') IS NOT NULL AND NOT EXISTS (
     SELECT 1 FROM public.system_lang_key_translations t
     WHERE t.lang_key_id=s.id AND t.language_code=c.language_code
 );
+-- Schema above is imported before registry seeds. This copy follows the
+-- language seeds; upgrades run the complete migration in one transaction.
+WITH authored(lang_key,fi,en,ch,yue) AS (VALUES
+ ('dataset_namespace_conflict', 'Nimi kuuluu jo toiselle aineistolle tai varatulle osoitteelle. Valitse toinen nimi.', 'This name already belongs to another dataset or a reserved route. Choose another name.', '此名称已属于其他数据集或保留网址。请选择其他名称。', '呢個名稱已屬於另一個資料集或保留網址。請揀另一個名稱。'),
+ ('dataset_namespace_invalid', 'Valitse kelvollinen aineiston nimi tai alias.', 'Choose a valid dataset name or alias.', '请选择有效的数据集名称或别名。', '請揀有效嘅資料集名稱或別名。'),
+ ('dataset_namespace_retry', 'Aineistojen nimet muuttuivat toiminnon aikana. Yritä uudelleen.', 'Dataset names changed during this operation. Please retry.', '操作期间数据集名称发生了变化。请重试。', '操作期間資料集名稱有變。請再試。'),
+ ('dataset_namespace_real_name_conflict', 'Alias on poistettu käytöstä, koska nimi kuuluu varsinaiselle aineistolle. Aliastiedot on säilytetty.', 'This alias was disabled because a real dataset owns the name. The alias record was preserved.', '此别名因名称属于真实数据集而被停用。别名记录已保留。', '呢個別名因名稱屬於真實資料集而停用。別名記錄已保留。'),
+ ('dataset_namespace_automatic_conflict', 'Alias on poistettu käytöstä, koska nimi kuuluu toisen aineiston automaattiselle aliakselle. Aliastiedot on säilytetty.', 'This alias was disabled because another dataset reserves the automatic name. The alias record was preserved.', '此别名因名称被另一数据集自动保留而被停用。记录已保留。', '呢個別名因名稱被另一資料集自動保留而停用。記錄已保留。'),
+ ('dataset_namespace_alias_conflict', 'Alias on poistettu käytöstä, koska useampi aliastieto käyttää samaa nimeä. Aliastiedot on säilytetty.', 'This alias was disabled because several alias records use the same name. The records were preserved.', '此别名因多条别名记录使用同一名称而被停用。记录已保留。', '呢個別名因多條別名記錄用同一名稱而停用。記錄已保留。'),
+ ('dataset_alias_saved', 'Aineiston alias tallennettu.', 'Dataset alias saved', '数据集别名已保存。', '資料集別名已儲存。'),
+ ('dataset_alias_cleared', 'Aineiston alias poistettu.', 'Dataset alias cleared', '数据集别名已清除。', '資料集別名已清除。')
+), written AS (
+ INSERT INTO public.system_lang_keys AS existing(lang_key,fi,en,ch,yue,creation_spec)
+ SELECT lang_key,fi,en,ch,yue,'Dataset namespace refusals and preserved collision-audit notices.' FROM authored
+ ON CONFLICT(lang_key) DO UPDATE SET
+ fi=COALESCE(NULLIF(existing.fi,''),EXCLUDED.fi),en=COALESCE(NULLIF(existing.en,''),EXCLUDED.en),
+ ch=COALESCE(NULLIF(existing.ch,''),EXCLUDED.ch),yue=COALESCE(NULLIF(existing.yue,''),EXCLUDED.yue)
+ RETURNING id,lang_key,fi,en,ch,yue
+), served AS (
+ SELECT * FROM written UNION ALL
+ SELECT k.id,k.lang_key,k.fi,k.en,k.ch,k.yue FROM public.system_lang_keys k JOIN authored USING(lang_key)
+ WHERE k.lang_key NOT IN(SELECT lang_key FROM written)
+)
+INSERT INTO public.system_lang_key_translations AS existing(lang_key_id,language_code,translation,source_kind,review_status)
+SELECT s.id,c.language_code,c.translation,'manual','approved' FROM served s
+CROSS JOIN LATERAL(VALUES('fi',s.fi),('en',s.en),('ch',s.ch),('yue',s.yue)) c(language_code,translation)
+JOIN public.system_languages l ON l.language_code=c.language_code
+ON CONFLICT(lang_key_id,language_code) DO UPDATE SET
+ translation=COALESCE(NULLIF(existing.translation,''),EXCLUDED.translation);
 -- 20260927000001_add_absolute_sign_in_limit.sql
 -- Adds the setting that decides how long one sign-in may last at the very most.
 -- Bridges the administrator's settings view and the deadline stamped into every
@@ -8141,7 +8170,7 @@ DECLARE
     findings text;
 BEGIN
     SELECT string_agg(marker, ', ' ORDER BY marker) INTO missing_markers
-      FROM unnest(ARRAY['wl58_row_actor_support', 'wl58_row_actor_marks_by_table_uid', 'wl58_row_actor_trigger_definitions', 'k116_login_names', 'password_reset_dummy_work', 'system_favorites_table', 'system_front_page_revisions_table', 'system_front_page_blocks_table', 'wl103_row_group_classifications', 'wl132_surviving_sign_in', 'wl52_drop_column_label_value_layout', 'system_dataset_appearance_table', 'wl157_migration_execution_evidence', 'dataset_card_appearance_cutover', 'wl157_application_update_admission', 'dataset_appearance_three_place_schema', 'wl164_publication_fields', 'wl163_dataset_kind_contracts', 'wl167_database_identity_schema', 'wl167_managed_timestamp_zones', 'wl157_application_update_refusal_keys', 'wl58_row_actor_columns', 'system_favorites_registry', 'system_front_page_blocks_registry', 'wl103_row_group_classifications_registry', 'wl144_registry_reference_key', 'dataset_media_hidden', 'wl157_application_update_capability', 'dataset_appearance_three_place_backfill', 'wl164_publication_column_metadata', 't919_registered_column_metadata']::text[]) AS marker
+      FROM unnest(ARRAY['wl58_row_actor_support', 'wl58_row_actor_marks_by_table_uid', 'wl58_row_actor_trigger_definitions', 'k116_login_names', 'password_reset_dummy_work', 'system_favorites_table', 'system_front_page_revisions_table', 'system_front_page_blocks_table', 'wl103_row_group_classifications', 'wl132_surviving_sign_in', 'wl52_drop_column_label_value_layout', 'system_dataset_appearance_table', 'wl157_migration_execution_evidence', 'dataset_card_appearance_cutover', 'wl157_application_update_admission', 'dataset_appearance_three_place_schema', 'wl164_publication_fields', 'wl163_dataset_kind_contracts', 'wl159_dataset_namespace', 'wl167_database_identity_schema', 'wl167_managed_timestamp_zones', 'wl157_application_update_refusal_keys', 'wl58_row_actor_columns', 'system_favorites_registry', 'system_front_page_blocks_registry', 'wl103_row_group_classifications_registry', 'wl144_registry_reference_key', 'dataset_media_hidden', 'wl157_application_update_capability', 'dataset_appearance_three_place_backfill', 'wl164_publication_column_metadata', 't919_registered_column_metadata']::text[]) AS marker
      WHERE NOT EXISTS (SELECT 1 FROM public.system_data_repair_records AS record
                         WHERE record.migration = marker AND record.action = 'completed');
     IF missing_markers IS NOT NULL THEN
@@ -8358,6 +8387,7 @@ BEGIN
       ('20261009000075_add_dataset_kind_contracts.sql', '485a8204e2ce7c98fe5e7a6016774569eba5e58182c06400055114e8d85f1c81', 'bootstrap_baseline', 'bootstrap'),
       ('20261009000076_seed_dataset_kind_language_keys.sql', 'ef3ad5ec03814d753f955ef3ea262ed19e574b318de7fd63e2f5f9c292eb93c4', 'bootstrap_baseline', 'bootstrap'),
       ('20261009000077_retire_global_dataset_alias_catalogue.sql', 'c5ade168ebaf022b72616c90dfeb13bb0e137c9bb0476eef03d048c619071dfa', 'bootstrap_baseline', 'bootstrap'),
+      ('20261009000078_enforce_dataset_name_namespace.sql', '0b63269eb20dec354caa6a2caa9f7d273754715db78022fde7256c2830a6282b', 'bootstrap_baseline', 'bootstrap'),
       ('20261009000079_reconcile_system_database_identity_schema.sql', '0b0684e5afae66ec807439da51db4eca4e482da3e919e98aaa14ee8df24999e1', 'bootstrap_baseline', 'bootstrap'),
       ('20261009000080_zone_platform_managed_timestamps.sql', '826830f53f102b127c2c31d9cd6eda6b65e5bfd467fae30342bbaa381cdc49bc', 'bootstrap_baseline', 'bootstrap'),
       ('20261009000081_seed_runtime_grant_policy_wait_language_key.sql', '9fd1da7b15c1fa55ba2060748fef6d9d72be28709b330ab952219c048b52a211', 'bootstrap_baseline', 'bootstrap'),

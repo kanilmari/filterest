@@ -568,7 +568,7 @@ func TestHandlerRejectsDatasetRouteConflictForSystemTableRename(t *testing.T) {
 		{cols: []string{"editable_in_ui"}, rows: [][]driver.Value{{true}}},
 		{cols: []string{"data_type"}, rows: [][]driver.Value{{"text"}}},
 		{cols: []string{"table_name"}, rows: [][]driver.Value{{"app_demo"}}},
-		{cols: []string{"table_uid", "table_name"}, rows: [][]driver.Value{{int64(99), "app_demo"}}},
+		{cols: []string{"namespace_refusal"}, err: &pq.Error{Code: "P0001", Message: "dataset_namespace_conflict"}},
 	})
 
 	req := buildUpdateRowSessionRequest(
@@ -585,7 +585,7 @@ func TestHandlerRejectsDatasetRouteConflictForSystemTableRename(t *testing.T) {
 	if rec.Code != http.StatusConflict {
 		t.Fatalf("status = %d, want 409", rec.Code)
 	}
-	if !strings.Contains(rec.Body.String(), `dataset route segment \"service_catalog\" is already in use`) {
+	if !strings.Contains(rec.Body.String(), `"error_lang_key":"dataset_namespace_conflict"`) {
 		t.Fatalf("body = %q, want route-conflict message", rec.Body.String())
 	}
 }
@@ -677,7 +677,15 @@ func TestUpdateRequestKeepsFalseZeroAndEmptyString(t *testing.T) {
 }
 
 func (c *updRowConn) ExecContext(_ context.Context, query string, _ []driver.NamedValue) (driver.Result, error) {
-	if granttest.IsPolicyLock(query) {
+	if granttest.IsPolicyLock(query) || strings.Contains(query, "app_lock_dataset_namespace()") {
+		return driver.RowsAffected(0), nil
+	}
+	if strings.Contains(query, "app_validate_dataset_name(") {
+		if len(c.state.queries) > 0 && len(c.state.queries[0].cols) > 0 && c.state.queries[0].cols[0] == "namespace_refusal" {
+			err := c.state.queries[0].err
+			c.state.queries = c.state.queries[1:]
+			return driver.RowsAffected(0), err
+		}
 		return driver.RowsAffected(0), nil
 	}
 	return nil, fmt.Errorf("unexpected exec: %s", query)

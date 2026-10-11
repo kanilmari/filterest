@@ -13,7 +13,6 @@ import (
 	"easelect/backend/core_components/runtime_grant_mutations"
 	"easelect/backend/core_components/security"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"log"
 	"net/http"
@@ -58,6 +57,15 @@ func HandleRenameTreeNode(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	tx := mutation.Tx
+	if strings.EqualFold(req.ItemType, "table") {
+		if err := dataset_routes.LockDatasetNamespace(tx); err != nil {
+			if dataset_routes.RespondNamespaceRefusal(w, err) {
+				return
+			}
+			httpresponse.RespondWithError(w, 500, "error locking dataset namespace")
+			return
+		}
+	}
 
 	switch strings.ToLower(req.ItemType) {
 	case "folder":
@@ -73,9 +81,7 @@ func HandleRenameTreeNode(w http.ResponseWriter, r *http.Request) {
 		}
 		if err := renameTable(tx, req); err != nil {
 			log.Printf("\033[31m[HandleRenameTreeNode] table error: %v\033[0m\n", err)
-			var conflictErr *dataset_routes.RouteConflictError
-			if errors.As(err, &conflictErr) {
-				httpresponse.RespondWithError(w, http.StatusConflict, conflictErr.Error())
+			if dataset_routes.RespondNamespaceRefusal(w, err) {
 				return
 			}
 			httpresponse.RespondWithError(w, http.StatusInternalServerError, fmt.Sprintf("error renaming table: %v", err))

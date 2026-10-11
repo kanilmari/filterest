@@ -222,7 +222,7 @@ describe('stable_endpoint_router', () => {
         await expect(mod.fetchDatasetAliasManagement()).resolves.toEqual({
             datasets: [{ dataset_name: 'orders' }],
         });
-        expect(endpointRouterMock).toHaveBeenCalledWith('getDatasetAliasManagement', { method: 'GET' });
+        expect(endpointRouterMock).toHaveBeenCalledWith('getDatasetAliasManagement', { method: 'GET', suppressErrorToast: true });
     });
 
     test('saveDatasetAliasManagement posts the candidate alias payload through the manifest-backed POST default', async () => {
@@ -238,6 +238,7 @@ describe('stable_endpoint_router', () => {
         });
         expect(endpointRouterMock).toHaveBeenCalledWith('saveDatasetAliasManagement', {
             method: 'POST',
+            suppressErrorToast: true,
             body_data: {
                 dataset_name: 'orders',
                 alias_slug: 'shop-orders',

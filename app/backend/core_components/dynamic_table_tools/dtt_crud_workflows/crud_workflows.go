@@ -285,9 +285,7 @@ func CreateTableHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := dataset_routes.ValidateDatasetRouteAvailability(tx, tableName, 0); err != nil {
-		var conflictErr *dataset_routes.RouteConflictError
-		if errors.As(err, &conflictErr) {
-			httpresponse.RespondWithError(w, http.StatusConflict, conflictErr.Error())
+		if dataset_routes.RespondNamespaceRefusal(w, err) {
 			return
 		}
 		httpresponse.RespondWithError(w, http.StatusInternalServerError, fmt.Sprintf("error validating dataset route availability: %v", err))
@@ -303,7 +301,7 @@ func CreateTableHandler(w http.ResponseWriter, r *http.Request) {
 	err = dtt_3_table_create.CreateNewTableInDatabase(tx, tableName, tableColumnsOf(columnList), sanitizedForeignKeys)
 	if err != nil {
 		_ = tx.Rollback()
-		if writeCreateTableLangKeyError(w, err) {
+		if dataset_routes.RespondNamespaceRefusal(w, err) || writeCreateTableLangKeyError(w, err) {
 			return
 		}
 		httpresponse.RespondWithError(w, http.StatusInternalServerError, fmt.Errorf("error creating table: %w", err).Error())

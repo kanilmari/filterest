@@ -61,6 +61,7 @@ var productTables = map[string]bool{
 	"system_config_value_data_types":    true, // Legacy config FK labels; private bootstrap lookup.
 	"system_database_identity":          true, // Public 20261009000079 migration; native setup/dev_status.
 	"system_data_repair_records":        true,
+	"system_dataset_namespace_lock":     true,
 	"system_dataset_appearance":         true,
 	"system_dataset_media":              true,
 	"system_dataset_sort_defaults":      true,
@@ -179,6 +180,9 @@ func ClassifyTable(object Object) (TableClass, error) {
 }
 
 var operationalPrivileges = map[string][]string{
+	// The namespace witness has no business data; callers may advance it, but
+	// cannot delete it. Generic mutation and dataset registration stay denied.
+	"system_dataset_namespace_lock":     {"SELECT", "UPDATE"},
 	"system_column_field_sets":          {"SELECT", "INSERT", "UPDATE", "DELETE"},
 	"system_column_field_set_members":   {"SELECT", "INSERT", "DELETE"},
 	"system_view_field_set_assignments": {"SELECT", "INSERT", "UPDATE", "DELETE"},
@@ -196,6 +200,7 @@ var operationalPrivileges = map[string][]string{
 // runtime-role acceptance reads both actor-support tables in all four pools;
 // repair-history rows remain owner-only through their existing RLS policy.
 var operationalReadRoles = map[string][]string{
+	"system_db_table_aliases": {"basic"}, // Namespace guards read active ownership, never grant alias writes.
 	// Dataset results/card/article/filter/search read these through the caller's
 	// pool. Home/tree and saved-view resolution share the same metadata.
 	"system_db_tables":                  {"basic", "guest"},

@@ -12,6 +12,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -107,7 +108,7 @@ func (c *delRowConn) QueryContext(_ context.Context, query string, args []driver
 }
 
 func (c *delRowConn) ExecContext(_ context.Context, query string, _ []driver.NamedValue) (driver.Result, error) {
-	if granttest.IsPolicyLock(query) {
+	if granttest.IsPolicyLock(query) || strings.Contains(query, "app_lock_dataset_namespace()") {
 		return driver.RowsAffected(0), nil
 	}
 	c.state.mu.Lock()

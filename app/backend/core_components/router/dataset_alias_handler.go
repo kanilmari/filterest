@@ -53,17 +53,11 @@ func SaveDatasetAliasManagementHandler(w http.ResponseWriter, r *http.Request) {
 
 	entry, err := dataset_routes.SavePrimaryAlias(tx, req.DatasetName, req.AliasSlug)
 	if err != nil {
-		var routeConflict *dataset_routes.RouteConflictError
-		var validationErr *dataset_routes.AliasValidationError
 		switch {
 		case errors.Is(err, sql.ErrNoRows):
 			httpresponse.RespondWithError(w, http.StatusNotFound, "dataset not found")
 			return
-		case errors.As(err, &routeConflict):
-			httpresponse.RespondWithError(w, http.StatusConflict, routeConflict.Error())
-			return
-		case errors.As(err, &validationErr):
-			httpresponse.RespondWithError(w, http.StatusBadRequest, validationErr.Error())
+		case dataset_routes.RespondNamespaceRefusal(w, err):
 			return
 		default:
 			log.Printf("\033[31merror: [SaveDatasetAliasManagementHandler] save failed for %q: %v\033[0m", req.DatasetName, err)
@@ -73,13 +67,16 @@ func SaveDatasetAliasManagementHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	message := "Dataset alias saved"
+	messageKey := "dataset_alias_saved"
 	if strings.TrimSpace(req.AliasSlug) == "" {
 		message = "Dataset alias cleared"
+		messageKey = "dataset_alias_cleared"
 	}
 
 	httpresponse.RespondWithJSON(w, http.StatusOK, map[string]interface{}{
 		"status":                             "ok",
 		"message":                            message,
+		"message_lang_key":                   messageKey,
 		"dataset":                            entry,
 		"system_alias_policy_recommendation": dataset_routes.SystemAliasPolicyRecommendation(),
 	})

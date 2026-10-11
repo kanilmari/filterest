@@ -215,10 +215,16 @@ func TestGetTableNamesHandlerHandlesQueryErrorAndSuccess(t *testing.T) {
 				cols:  []string{"table_name"},
 				rows:  [][]driver.Value{{"app_service_catalog"}, {"system_users"}},
 			},
+			// The alias registry reads the shared name pools: catalogue identities first, then active aliases by uid.
+			{
+				match: "FROM system_db_tables ORDER BY table_name",
+				cols:  []string{"table_uid", "table_name", "schema_name"},
+				rows:  [][]driver.Value{{int64(3), "app_service_catalog", "public"}, {int64(4), "system_users", "public"}},
+			},
 			{
 				match: "FROM system_db_table_aliases",
-				cols:  []string{"table_name", "alias_slug"},
-				rows:  [][]driver.Value{{"app_service_catalog", "service_directory"}},
+				cols:  []string{"table_uid", "alias_slug", "is_primary"},
+				rows:  [][]driver.Value{{int64(3), "service_directory", true}},
 			},
 		}, nil)
 		withForeignKeyDB(t, db)

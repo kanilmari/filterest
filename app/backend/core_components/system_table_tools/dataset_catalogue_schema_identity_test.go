@@ -94,3 +94,65 @@ func assertPublicOrdersPool(t *testing.T, response *httptest.ResponseRecorder) {
 		t.Fatalf("private schema alias disclosed: %s", response.Body.String())
 	}
 }
+
+func TestDatasetCatalogueCaseVariantsKeepGlobalAmbiguityBeforePermissions(t *testing.T) {
+	for _, reverse := range []bool{false, true} {
+		for _, permitted := range [][]int{{81, 82}, {81}, {82}} {
+			t.Run(fmt.Sprintf("reverse_%t/permitted_%v", reverse, permitted), func(t *testing.T) {
+				resetOrphanQueues()
+				t.Cleanup(resetOrphanQueues)
+				db := newSystemTableToolsTestDB(t)
+				t.Cleanup(func() { db.Close() })
+				previous := backend.Db
+				backend.Db = db
+				oldStore, oldName := esessions.Store, esessions.SessionName
+				esessions.Store, esessions.SessionName = sessions.NewCookieStore([]byte("wl159-catalogue-test-cookie-key32")), "wl159-test"
+				t.Cleanup(func() { backend.Db = previous; esessions.Store, esessions.SessionName = oldStore, oldName })
+				readable := [][]driver.Value{}
+				for _, uid := range permitted {
+					readable = append(readable, []driver.Value{int64(uid)})
+				}
+				pushOrphanQuery(orphanQueuedQuery{cols: []string{"uid"}, rows: readable})
+				tables := [][]driver.Value{{int64(81), "Reports", "public"}, {int64(82), "reports", "public"}}
+				if reverse {
+					tables[0], tables[1] = tables[1], tables[0]
+				}
+				pushOrphanQuery(orphanQueuedQuery{cols: []string{"uid", "name", "schema"}, rows: tables})
+				pushOrphanQuery(orphanQueuedQuery{cols: []string{"uid", "alias", "primary"}})
+				pushOrphanQuery(orphanQueuedQuery{cols: []string{"exists"}, rows: [][]driver.Value{{false}}})
+				catalogue := [][]driver.Value{{int64(900), int64(81), "Reports", false, false, false, false, nil, false, false, nil, false},
+					{int64(901), int64(82), "reports", false, false, false, false, nil, false, false, nil, false}}
+				if reverse {
+					catalogue[0], catalogue[1] = catalogue[1], catalogue[0]
+				}
+				pushOrphanQuery(orphanQueuedQuery{cols: []string{"id", "uid", "name", "default", "filterbar", "main", "about", "folder", "project", "top", "icon", "media"}, rows: catalogue})
+				pushOrphanQuery(orphanQueuedQuery{cols: []string{"exists"}, rows: [][]driver.Value{{false}}})
+				response := httptest.NewRecorder()
+				GetGroupedTables(response, catalogueRequest(t, 42))
+				var body struct {
+					Datasets []struct {
+						UID       int      `json:"table_uid"`
+						Name      string   `json:"dataset_name"`
+						Names     []string `json:"names"`
+						ExactOnly bool     `json:"canonical_name_exact_only"`
+					} `json:"datasets"`
+				}
+				if err := json.Unmarshal(response.Body.Bytes(), &body); err != nil {
+					t.Fatal(err)
+				}
+				if response.Code != 200 || len(body.Datasets) != len(permitted) {
+					t.Fatalf("catalogue failed: %s", response.Body.String())
+				}
+				for _, entry := range body.Datasets {
+					want := "Reports"
+					if entry.UID == 82 {
+						want = "reports"
+					}
+					if entry.Name != want || !entry.ExactOnly || !reflect.DeepEqual(entry.Names, []string{want}) {
+						t.Errorf("permission filtering lost canonical ownership or global ambiguity: %+v", entry)
+					}
+				}
+			})
+		}
+	}
+}

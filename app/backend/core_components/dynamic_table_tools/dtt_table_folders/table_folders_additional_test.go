@@ -375,7 +375,7 @@ func TestHandleRenameTreeNodeRejectsDatasetRouteConflictBeforeAlterTable(t *test
 			cols:  []string{"table_name"},
 			rows:  [][]driver.Value{{"app_demo"}},
 		},
-	}, nil)
+	}, []folderExecResponse{{match: "app_validate_dataset_name(", err: &pq.Error{Code: "P0001", Message: "dataset_namespace_conflict"}}})
 	req := httptest.NewRequest(http.MethodPost, "/api/rename-tree-node", strings.NewReader(`{"item_id":5,"item_type":"table","new_name":"service_catalog"}`))
 	req = withFolderTx(req, db)
 	rec := httptest.NewRecorder()
@@ -385,7 +385,7 @@ func TestHandleRenameTreeNodeRejectsDatasetRouteConflictBeforeAlterTable(t *test
 	if rec.Code != http.StatusConflict {
 		t.Fatalf("status = %d, want 409", rec.Code)
 	}
-	if !strings.Contains(rec.Body.String(), `dataset route segment \"service_catalog\" is already in use`) {
+	if !strings.Contains(rec.Body.String(), `"error_lang_key":"dataset_namespace_conflict"`) {
 		t.Fatalf("body = %q, want route-conflict message", rec.Body.String())
 	}
 	if len(state.calls) != 0 {

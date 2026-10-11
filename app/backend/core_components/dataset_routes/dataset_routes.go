@@ -5,7 +5,6 @@
 package dataset_routes
 
 import (
-	"database/sql"
 	backend "easelect/backend/core_components"
 	"easelect/backend/core_components/dbutils"
 	"errors"
@@ -79,15 +78,12 @@ func ResolveRawDatasetNameWithQuerier(q dbutils.Querier, datasetName string) str
 		// including secondary aliases and canonical/ambiguous-name conflicts.
 		pools, err := LoadDatasetNamePools(q)
 		if err == nil {
-			for _, pool := range pools {
-				if pool.SchemaName != "public" {
-					continue
-				}
-				for _, name := range pool.Names {
-					if name == datasetName {
-						return pool.DatasetName
-					}
-				}
+			pool, resolutionError := ResolveDatasetNamePool(pools, datasetName)
+			if resolutionError == nil {
+				return pool.DatasetName
+			}
+			if errors.Is(resolutionError, ErrDatasetNameAmbiguous) {
+				return ""
 			}
 			return datasetName
 		}
@@ -130,47 +126,40 @@ func ResolvePublicDatasetNameWithQuerier(q dbutils.Querier, datasetName string) 
 	return datasetName
 }
 
-// LoadAliasRegistry supplies the legacy primary-name projection for editor and
-// create/rename validation. It merges stored aliases, historical fallbacks and
-// automatic app_ candidates; published names and addresses use accepted UID pools.
+// LoadAliasRegistry is the legacy preferred-name projection of accepted UID pools.
+// Naming ownership is decided only by LoadDatasetNamePools.
 func LoadAliasRegistry(q dbutils.Querier) (AliasRegistry, error) {
 	if isNilQuerier(q) {
 		return fallbackAliasRegistry(), nil
 	}
-
-	rawToPublic := make(map[string]string, len(fallbackRawToPublicDatasetAlias))
-	for rawName, publicName := range fallbackRawToPublicDatasetAlias {
-		rawToPublic[rawName] = publicName
+	pools, err := LoadDatasetNamePools(q)
+	if err != nil {
+		return AliasRegistry{}, err
 	}
-
-	storedAliases, aliasErr := loadStoredPrimaryAliasMap(q)
-	if aliasErr != nil {
-		aliasErr = fmt.Errorf("load dataset alias registry: %w", aliasErr)
-	}
-	for rawName, publicName := range storedAliases {
-		rawToPublic[rawName] = publicName
-	}
-
-	tableMetadata, tableErr := loadDatasetAliasTableMetadata(q)
-	if tableErr != nil {
-		registry := buildAliasRegistry(rawToPublic)
-		if aliasErr != nil {
-			return registry, errors.Join(aliasErr, fmt.Errorf("load dataset alias table metadata: %w", tableErr))
+	aliases := make(map[string]string)
+	for _, pool := range pools {
+		if pool.SchemaName == "public" && pool.PreferredName != pool.DatasetName {
+			aliases[pool.DatasetName] = pool.PreferredName
 		}
-		return registry, fmt.Errorf("load dataset alias table metadata: %w", tableErr)
 	}
+	return buildAliasRegistry(aliases), nil
+}
 
-	appendAutomaticAppAliases(rawToPublic, tableMetadata)
-	registry := buildAliasRegistry(rawToPublic)
-	if aliasErr != nil {
-		return registry, aliasErr
-	}
-	return registry, nil
+// DatasetNameKey matches app_dataset_name_key and the browser catalogue index.
+// Authored identifiers are ASCII; preserve non-ASCII legacy characters exactly.
+func DatasetNameKey(name string) string {
+	return strings.Map(func(c rune) rune {
+		if c >= 'A' && c <= 'Z' {
+			return c + ('a' - 'A')
+		}
+		return c
+	}, strings.TrimSpace(name))
 }
 
 // DefaultPublicDatasetAliasCandidate returns the default stripped alias candidate for prefixed tables.
 // The first enforcement slice only auto-protects naked aliases for app_ tables.
 func DefaultPublicDatasetAliasCandidate(tableName string) (string, bool) {
+	tableName = DatasetNameKey(tableName)
 	for _, prefix := range []string{"app_", "system_"} {
 		if strings.HasPrefix(tableName, prefix) {
 			candidate := strings.TrimPrefix(tableName, prefix)
@@ -188,7 +177,7 @@ func DefaultPublicDatasetAliasCandidate(tableName string) (string, bool) {
 // the admin alias editor so internal/operator datasets do not silently consume
 // short public routes like "/users" or "/logs".
 func EnforcesAutomaticPublicAlias(tableName string) bool {
-	return strings.HasPrefix(tableName, "app_")
+	return strings.HasPrefix(DatasetNameKey(tableName), "app_")
 }
 
 // ValidateDatasetRouteAvailability rejects raw dataset names and default public aliases
@@ -198,105 +187,11 @@ func ValidateDatasetRouteAvailability(q dbutils.Querier, tableName string, exclu
 		return nil
 	}
 
-	registry, err := LoadAliasRegistry(q)
-	if err != nil {
+	if err := LockDatasetNamespace(q); err != nil {
 		return err
 	}
-
-	if err := ensureRouteSegmentAvailable(q, registry, tableName, tableName, excludeMetadataID, "dataset name"); err != nil {
-		return err
-	}
-
-	defaultAlias, ok := DefaultPublicDatasetAliasCandidate(tableName)
-	if !ok || !EnforcesAutomaticPublicAlias(tableName) || defaultAlias == tableName {
-		return nil
-	}
-
-	return ensureRouteSegmentAvailable(q, registry, tableName, defaultAlias, excludeMetadataID, "default public alias")
-}
-
-func appendAutomaticAppAliases(rawToPublic map[string]string, tables []datasetAliasTableMetadata) {
-	rawNames := make(map[string]struct{}, len(tables))
-	for _, table := range tables {
-		rawNames[table.DatasetName] = struct{}{}
-	}
-
-	publicOwners := make(map[string]string, len(rawToPublic))
-	for rawName, publicName := range rawToPublic {
-		publicOwners[publicName] = rawName
-	}
-
-	for _, table := range tables {
-		if _, alreadyMapped := rawToPublic[table.DatasetName]; alreadyMapped {
-			continue
-		}
-		if !EnforcesAutomaticPublicAlias(table.DatasetName) {
-			continue
-		}
-
-		candidate, ok := DefaultPublicDatasetAliasCandidate(table.DatasetName)
-		if !ok || candidate == "" || candidate == table.DatasetName {
-			continue
-		}
-		if _, reserved := reservedDatasetRouteSegments[candidate]; reserved {
-			continue
-		}
-		if _, rawNameConflict := rawNames[candidate]; rawNameConflict {
-			continue
-		}
-		if owner, segmentTaken := publicOwners[candidate]; segmentTaken && owner != table.DatasetName {
-			continue
-		}
-
-		rawToPublic[table.DatasetName] = candidate
-		publicOwners[candidate] = table.DatasetName
-	}
-}
-
-func ensureRouteSegmentAvailable(
-	q dbutils.Querier,
-	registry AliasRegistry,
-	ownerTableName,
-	segment string,
-	excludeMetadataID int,
-	segmentType string,
-) error {
-	if _, reserved := reservedDatasetRouteSegments[segment]; reserved {
-		return &RouteConflictError{
-			Segment: segment,
-			Reason:  fmt.Sprintf("%s conflicts with a reserved top-level route", segmentType),
-		}
-	}
-
-	if rawName, ok := registry.PublicToRaw[segment]; ok && rawName != ownerTableName {
-		return &RouteConflictError{
-			Segment: segment,
-			Reason:  fmt.Sprintf("%s conflicts with the public alias for %q", segmentType, rawName),
-		}
-	}
-
-	var conflictID int
-	var conflictTableName string
-	err := q.QueryRow(
-		`SELECT id, table_name
-		   FROM system_db_tables
-		  WHERE table_name = $1
-		    AND ($2 <= 0 OR id <> $2)
-		  LIMIT 1`,
-		segment,
-		excludeMetadataID,
-	).Scan(&conflictID, &conflictTableName)
-	if err == nil {
-		return &RouteConflictError{
-			Segment: segment,
-			Reason:  fmt.Sprintf("%s conflicts with existing dataset %q", segmentType, conflictTableName),
-		}
-	}
-	if errors.Is(err, sql.ErrNoRows) {
-		return nil
-	}
-
-	return fmt.Errorf("check dataset route segment %q: %w", segment, err)
+	_, err := q.Exec(`SELECT public.app_validate_dataset_name($1, $2)`, tableName, excludeMetadataID)
+	return NamespaceError(err)
 }
 
 func isMissingAliasTableError(err error) bool {

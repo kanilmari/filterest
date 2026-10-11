@@ -179,6 +179,15 @@ func UpdateRowHandler(response_writer http.ResponseWriter, request *http.Request
 		runtime_grant_mutations.RespondError(response_writer, err)
 		return
 	}
+	if tableName == "system_db_tables" {
+		if err := dataset_routes.LockDatasetNamespace(tx); err != nil {
+			if dataset_routes.RespondNamespaceRefusal(response_writer, err) {
+				return
+			}
+			httpresponse.RespondWithError(response_writer, 500, "error locking dataset namespace")
+			return
+		}
+	}
 	appearanceResult, err := saveDatasetCardMetadata(tx, tableName, updateRequest, updates)
 	if err != nil {
 		var refusal *httpresponse.Refusal
@@ -344,9 +353,7 @@ func UpdateRowHandler(response_writer http.ResponseWriter, request *http.Request
 						return
 					}
 					if err := dataset_routes.ValidateDatasetRouteAvailability(tx, sanitized, int(updateRequest.ID)); err != nil {
-						var conflictErr *dataset_routes.RouteConflictError
-						if errors.As(err, &conflictErr) {
-							httpresponse.RespondWithError(response_writer, http.StatusConflict, conflictErr.Error())
+						if dataset_routes.RespondNamespaceRefusal(response_writer, err) {
 							return
 						}
 						log.Printf("\033[31merror: dataset route availability check: %v\033[0m", err)
@@ -359,6 +366,9 @@ func UpdateRowHandler(response_writer http.ResponseWriter, request *http.Request
 						pq.QuoteIdentifier(sanitized),
 					)
 					if _, err := tx.Exec(renameQuery); err != nil {
+						if dataset_routes.RespondNamespaceRefusal(response_writer, err) {
+							return
+						}
 						log.Printf("\033[31merror: renaming table %s to %s: %v\033[0m", oldName, sanitized, err)
 						httpresponse.RespondWithError(response_writer, http.StatusInternalServerError, "Error renaming table")
 						return
@@ -425,6 +435,9 @@ func UpdateRowHandler(response_writer http.ResponseWriter, request *http.Request
 		// Suoritetaan kysely oikeaa DB-yhteyttä vasten
 		result, err := tx.Exec(query, updateArgs...)
 		if err != nil {
+			if dataset_routes.RespondNamespaceRefusal(response_writer, err) {
+				return
+			}
 			if refusal := httpresponse.AccountNameRefusal(err); refusal != nil {
 				httpresponse.RespondWithRefusal(response_writer, refusal)
 				return

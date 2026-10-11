@@ -26,6 +26,9 @@ class StructSpec:
 
 
 ALLOWLIST = [
+    StructSpec("backend/core_components/dataset_routes/dataset_alias_editor.go", "AliasManagementEntry", "AliasManagementEntry"),
+    StructSpec("backend/core_components/dataset_routes/dataset_alias_editor.go", "AliasManagementSnapshot", "AliasManagementSnapshot"),
+    StructSpec("backend/core_components/dataset_routes/dataset_namespace_audit_reader.go", "DisabledDatasetAlias", "DisabledDatasetAlias"),
     StructSpec("backend/core_components/dynamic_table_tools/dtt_models/models.go", "Table", "DatasetCatalogueEntry"),
     StructSpec("backend/core_components/application_updates/update_contracts.go", "Target", "ApplicationUpdateTarget"),
     StructSpec("backend/core_components/application_updates/update_contracts.go", "Offer", "ApplicationUpdateOffer"),

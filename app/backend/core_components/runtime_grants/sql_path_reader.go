@@ -15,8 +15,14 @@ import (
 // These invoker bodies come from the public bootstrap/migrations, runtime dataset
 // timestamp builder, or the cited legacy Easelect catalogue. Changed bodies need
 // fresh review; legacy additions below change only their own row's timestamps.
+// Namespace entry points also require every nested invoker helper's review;
+// their only writes advance the internal witness or update the current row.
 // SECURITY DEFINER paths remain subject to the audit's separate blocker pass.
 var reviewedTriggerBodies = map[string]bool{
+	"2fb260bf1bca73592266b0dc868d1d88": true, // public.app_lock_dataset_namespace_statement; WL159 namespace, invoker only.
+	"79a8d4589a4cd7588989353296079211": true, // public.app_guard_dataset_name; WL159 namespace, invoker only.
+	"036425309af5f5a87d3ad803c3a88bc6": true, // public.app_guard_dataset_alias; WL159 namespace, invoker only.
+	"d0f029ee82498d06b60d4440816e1507": true, // public.set_system_db_table_aliases_updated_timestamp; WL159 namespace, invoker only.
 	"409928f3255bf170b5ba71aea250a293": true, // public.set_dev_agent_publication_revision; NEW revision and timestamp only.
 	"044a14f89b990b7028633526552b3b96": true, // public.protect_dev_agent_workline_report_history
 	"06bcf30ac3d0a7f279a54cbf228a7bec": true, // Easelect db-7.0.21:3974, set_transaction_log_updated_at_timestamp; NEW.updated_at only.

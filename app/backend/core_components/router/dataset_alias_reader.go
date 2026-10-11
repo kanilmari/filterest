@@ -30,15 +30,9 @@ func resolveDocumentDataset(name string) (dataset_routes.DatasetNamePool, bool) 
 	if err != nil {
 		return dataset_routes.DatasetNamePool{}, false
 	}
-	for _, pool := range pools {
-		if pool.SchemaName != "public" || pool.TableUID <= 0 {
-			continue
-		}
-		for _, accepted := range pool.Names {
-			if accepted == name && backend.ShouldExposeCloudManagementDatasetName(pool.DatasetName) {
-				return pool, true
-			}
-		}
+	pool, err := dataset_routes.ResolveDatasetNamePool(pools, name)
+	if err == nil && backend.ShouldExposeCloudManagementDatasetName(pool.DatasetName) {
+		return pool, true
 	}
 	return dataset_routes.DatasetNamePool{}, false
 }

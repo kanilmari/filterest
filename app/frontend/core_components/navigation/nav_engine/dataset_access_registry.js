@@ -10,6 +10,7 @@ import { subscribeToSessionGeneration } from '../../auth/session_generation_stor
 
 const REFRESH_TTL_MS = 60 * 1000;
 let datasetsByName = new Map();
+let datasetsByCanonicalName = new Map();
 let datasetsByUID = new Map();
 let hasSnapshot = false;
 let refreshGeneration = 0;
@@ -55,6 +56,7 @@ export function subscribeDatasetAccessRegistry(listener) {
 /** Invalidates all names and in-flight work when identity or permissions change. */
 export function clearDatasetAccessRegistry() {
     datasetsByName = new Map();
+    datasetsByCanonicalName = new Map();
     datasetsByUID = new Map();
     hasSnapshot = false;
     loadedAt = null;
@@ -74,10 +76,11 @@ export function primeDatasetAccessRegistry(response = null, generation = null) {
     if (!Array.isArray(response?.datasets)) return false;
     if (generation === null) clearDatasetAccessRegistry();
     const byName = new Map();
+    const byCanonicalName = new Map();
     const byUID = new Map();
     for (const entry of response.datasets) {
-        const canonicalName = String(entry?.dataset_name || '').trim();
-        if (!canonicalName || entry.can_read_rows === false) continue;
+        const canonicalName = String(entry?.dataset_name || '');
+        if (!canonicalName.trim()) continue;
         const offeredNames = Array.isArray(entry.names) ? entry.names.filter(name => typeof name === 'string' && name) : [];
         const names = Object.freeze([...new Set([canonicalName, ...offeredNames])]);
         // Older metadata may omit the uid; its registry-row id never substitutes for it.
@@ -85,10 +88,21 @@ export function primeDatasetAccessRegistry(response = null, generation = null) {
         const dataset = Object.freeze({ ...entry, dataset_name: canonicalName,
             table_uid: Number.isSafeInteger(uid) && uid > 0 ? uid : null,
             names, preferred_name: names.includes(entry.preferred_name) ? entry.preferred_name : canonicalName });
-        for (const name of names) byName.set(name, dataset);
-        if (dataset.table_uid !== null) byUID.set(dataset.table_uid, dataset);
+        // Exact canonical ownership precedes folding. The server computes this
+        // flag before permissions, so a subset cannot reinstate a folded name.
+        // Twin: dataset_routes/dataset_name_pools.go; tests share name examples.
+        byCanonicalName.set(canonicalName, byCanonicalName.has(canonicalName) ? null : dataset);
+        for (const name of names) {
+            const key = datasetNameKey(name);
+            const previous = byName.get(key);
+            if ((name === canonicalName && entry.canonical_name_exact_only) ||
+                (byName.has(key) && previous !== dataset)) byName.set(key, null);
+            else byName.set(key, dataset);
+        }
+        if (dataset.table_uid !== null && entry.can_read_rows !== false) byUID.set(dataset.table_uid, dataset);
     }
     datasetsByName = byName;
+    datasetsByCanonicalName = byCanonicalName;
     datasetsByUID = byUID;
     hasSnapshot = true;
     loadedAt = Date.now();
@@ -117,10 +131,11 @@ export function hasDatasetAccessSnapshot() {
 /** Resolves only server-offered readable names/identities; never infers prefixes. */
 export function resolveDataset({ name, uid } = {}) {
     if (!hasSnapshot) return { status: 'not_ready' };
-    const byName = name === undefined ? null : datasetsByName.get(String(name).trim());
+    const byName = name === undefined ? null : datasetsByCanonicalName.has(String(name))
+        ? datasetsByCanonicalName.get(String(name)) : datasetsByName.get(datasetNameKey(name));
     const byUID = uid === undefined ? null : datasetsByUID.get(Number(uid));
     const dataset = name === undefined ? byUID : byName;
-    if (!dataset || (uid !== undefined && dataset !== byUID)) return { status: 'unknown' };
+    if (!dataset || dataset.can_read_rows === false || (uid !== undefined && dataset !== byUID)) return { status: 'unknown' };
     return { status: 'found', dataset };
 }
 
@@ -161,3 +176,8 @@ export async function refreshDatasetCatalogue({ force = false } = {}) {
 subscribeToSessionGeneration(reason => {
     if (!['blur', 'focus', 'suspend', 'resume', 'restore'].includes(reason)) clearDatasetAccessRegistry();
 });
+
+// Matches app_dataset_name_key and DatasetNameKey: authored names are ASCII.
+function datasetNameKey(name) {
+    return String(name).trim().replace(/[A-Z]/g, letter => letter.toLowerCase());
+}

@@ -5,6 +5,7 @@
 package dataset_routes
 
 import (
+	"errors"
 	"fmt"
 	"reflect"
 	"testing"
@@ -63,5 +64,43 @@ func TestDatasetAddressResolversFailClosedOnPoolReadFailure(t *testing.T) {
 	}
 	if got := ResolveRawDatasetNameWithQuerier(db, "service_catalog"); got != "service_catalog" {
 		t.Fatalf("failed pool read reinstated a fallback owner: %s", got)
+	}
+}
+
+func TestDatasetNamePoolResolverKeepsUIDAndAmbiguityInPermissionSubsets(t *testing.T) {
+	for _, reverse := range []bool{false, true} {
+		tables := []datasetNamePoolTable{{81, "Reports", "public"}, {82, "reports", "public"}}
+		if reverse {
+			tables[0], tables[1] = tables[1], tables[0]
+		}
+		global := buildDatasetNamePools(tables, nil)
+		for _, allowed := range [][]int{{81, 82}, {81}, {82}} {
+			t.Run(fmt.Sprintf("reverse_%t/allowed_%v", reverse, allowed), func(t *testing.T) {
+				subset := make(map[int]DatasetNamePool)
+				for _, uid := range allowed {
+					subset[uid] = global[uid]
+				}
+				for _, name := range []string{"Reports", "reports", "REPORTS", " Reports "} {
+					pool, err := ResolveDatasetNamePool(subset, name)
+					if name == "REPORTS" || name == " Reports " {
+						if !errors.Is(err, ErrDatasetNameAmbiguous) {
+							t.Fatalf("subset accepted ambiguous %q: %+v %v", name, pool, err)
+						}
+						continue
+					}
+					uid := 81
+					if name == "reports" {
+						uid = 82
+					}
+					if _, present := subset[uid]; present {
+						if err != nil || pool.TableUID != uid {
+							t.Fatalf("exact name %q changed UID: %+v %v", name, pool, err)
+						}
+					} else if !errors.Is(err, ErrDatasetNameAmbiguous) {
+						t.Fatalf("hidden exact name %q rebound: %+v %v", name, pool, err)
+					}
+				}
+			})
+		}
 	}
 }

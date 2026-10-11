@@ -53,6 +53,7 @@ ALLOWED_SCHEMA_TABLES = {
     "public.system_db_tables",
     "public.system_db_version",
     "public.system_dataset_media",
+    "public.system_dataset_namespace_lock",
     "public.system_dataset_appearance",
     "public.system_media_assets",
     "public.system_media_asset_usages",
@@ -101,6 +102,7 @@ ALLOWED_SCHEMA_TABLES = {
 }
 
 ALLOWED_SEED_TABLES = {
+    "public.system_dataset_namespace_lock",
     "public.system_dataset_appearance",  # Complete tab values backfilled after registry seeds.
     # WL58 data migrations write identifier-only repair history and completion marks.
     "public.system_data_repair_records",

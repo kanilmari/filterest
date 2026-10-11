@@ -150,6 +150,7 @@ func GetGroupedTables(response_writer http.ResponseWriter, http_request *http.Re
 		}
 		single_table.Names = pool.Names
 		single_table.PreferredName = pool.PreferredName
+		single_table.CanonicalNameExactOnly = pool.CanonicalNameExactOnly
 		single_table.CanReadRows = true
 
 		tables_list = append(tables_list, single_table)

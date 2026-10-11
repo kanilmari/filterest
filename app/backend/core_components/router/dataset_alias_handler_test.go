@@ -10,6 +10,7 @@ import (
 	"database/sql/driver"
 	"encoding/json"
 	"fmt"
+	"github.com/lib/pq"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -293,13 +294,33 @@ func (c *datasetAliasHandlerMockConn) QueryContext(_ context.Context, query stri
 	defer c.state.mu.Unlock()
 
 	switch {
-	case strings.Contains(query, "SELECT t.table_name, a.alias_slug") && strings.Contains(query, "FROM system_db_table_aliases a"):
+	case strings.Contains(query, "SELECT table_uid, alias_slug, disabled_reason"):
+		return &datasetAliasHandlerMockRows{cols: []string{"table_uid", "alias_slug", "disabled_reason"}}, nil
+	case strings.Contains(query, "SELECT table_uid, alias_slug, COALESCE"):
+		rows := [][]driver.Value{}
+		for name, alias := range c.state.aliases {
+			rows = append(rows, []driver.Value{int64(c.state.tables[name]), alias, true})
+		}
+		return &datasetAliasHandlerMockRows{cols: []string{"table_uid", "alias_slug", "is_primary"}, rows: rows}, nil
+	case strings.Contains(query, "SELECT t.table_uid, a.alias_slug") && strings.Contains(query, "FROM system_db_table_aliases a"):
 		return buildDatasetAliasHandlerAliasRows(c.state), nil
 	case strings.Contains(query, "SELECT table_uid, table_name") && strings.Contains(query, "FROM system_db_tables"):
-		return buildDatasetAliasHandlerTableRows(c.state), nil
+		rows := [][]driver.Value{}
+		for name, uid := range c.state.tables {
+			row := []driver.Value{int64(uid), name}
+			if strings.Contains(query, "schema_name") {
+				row = append(row, "public")
+			}
+			rows = append(rows, row)
+		}
+		cols := []string{"table_uid", "table_name"}
+		if strings.Contains(query, "schema_name") {
+			cols = append(cols, "schema_name")
+		}
+		return &datasetAliasHandlerMockRows{cols: cols, rows: rows}, nil
 	case strings.Contains(query, "SELECT table_uid") && strings.Contains(query, "FROM system_db_tables"):
 		return buildDatasetAliasHandlerTableUIDRows(c.state, namedStringArg(args, 0)), nil
-	case strings.Contains(query, "SELECT t.table_name") && strings.Contains(query, "WHERE a.alias_slug = $1"):
+	case strings.Contains(query, "SELECT t.table_name") && strings.Contains(query, "a.alias_slug = $1"):
 		return buildDatasetAliasHandlerAliasOwnerRows(c.state, namedStringArg(args, 0)), nil
 	case strings.Contains(query, "SELECT table_name") && strings.Contains(query, "FROM system_db_tables") && strings.Contains(query, "LIMIT 1"):
 		return buildDatasetAliasHandlerAutomaticOwnerRows(c.state, namedStringArg(args, 0)), nil
@@ -323,6 +344,21 @@ func (c *datasetAliasHandlerMockConn) ExecContext(_ context.Context, query strin
 	defer c.state.mu.Unlock()
 
 	switch {
+	case strings.Contains(query, "app_lock_dataset_namespace()"):
+		return driver.RowsAffected(1), nil
+	case strings.Contains(query, "app_validate_dataset_alias("):
+		owner, alias := namedStringArg(args, 0), namedStringArg(args, 1)
+		for name := range c.state.tables {
+			if name != owner && (strings.EqualFold(name, alias) || strings.EqualFold(name, "app_"+alias)) {
+				return nil, &pq.Error{Code: "P0001", Message: "dataset_namespace_conflict", Detail: alias}
+			}
+		}
+		for name, existing := range c.state.aliases {
+			if name != owner && strings.EqualFold(existing, alias) {
+				return nil, &pq.Error{Code: "P0001", Message: "dataset_namespace_conflict", Detail: alias}
+			}
+		}
+		return driver.RowsAffected(0), nil
 	case strings.Contains(query, "DELETE FROM system_db_table_aliases") && strings.Contains(query, "alias_slug <> $2"):
 		tableUID := namedIntArg(args, 0)
 		aliasSlug := namedStringArg(args, 1)
@@ -359,10 +395,10 @@ func (c *datasetAliasHandlerMockConn) ExecContext(_ context.Context, query strin
 func buildDatasetAliasHandlerAliasRows(state *datasetAliasHandlerMockState) driver.Rows {
 	rows := make([][]driver.Value, 0, len(state.aliases))
 	for datasetName, aliasSlug := range state.aliases {
-		rows = append(rows, []driver.Value{datasetName, aliasSlug})
+		rows = append(rows, []driver.Value{int64(state.tables[datasetName]), aliasSlug})
 	}
 	return &datasetAliasHandlerMockRows{
-		cols: []string{"table_name", "alias_slug"},
+		cols: []string{"table_uid", "alias_slug"},
 		rows: rows,
 	}
 }

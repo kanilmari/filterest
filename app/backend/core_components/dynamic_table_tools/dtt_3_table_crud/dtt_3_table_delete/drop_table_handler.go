@@ -7,6 +7,7 @@ package dtt_3_table_delete
 
 import (
 	"database/sql"
+	"easelect/backend/core_components/dataset_routes"
 	"easelect/backend/core_components/dbutils"
 	"easelect/backend/core_components/dynamic_table_tools/dtt_1_row_crud/dtt_1_row_read"
 	"easelect/backend/core_components/dynamic_table_tools/dtt_1_row_crud/row_mutation_policy"
@@ -55,6 +56,13 @@ func DropTableHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	tx := mutation.Tx
+	if err := dataset_routes.LockDatasetNamespace(tx); err != nil {
+		if dataset_routes.RespondNamespaceRefusal(w, err) {
+			return
+		}
+		httpresponse.RespondWithError(w, 500, "error locking dataset namespace")
+		return
+	}
 	q := dbutils.BindQueryContext(r.Context(), tx)
 	mutation.IncludeTables(sanitizedTableName)
 

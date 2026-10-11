@@ -24,16 +24,17 @@ var datasetAliasSlugPattern = regexp.MustCompile(`^[a-z0-9][a-z0-9_-]*$`)
 
 // AliasManagementEntry describes one dataset's current alias state for the admin editor.
 type AliasManagementEntry struct {
-	DatasetName                 string `json:"dataset_name"`
-	TableUID                    int    `json:"table_uid"`
-	StoredPrimaryAlias          string `json:"stored_primary_alias"`
-	EffectivePublicAlias        string `json:"effective_public_alias"`
-	AliasSource                 string `json:"alias_source"`
-	RawDatasetPath              string `json:"raw_dataset_path"`
-	CanonicalDatasetPath        string `json:"canonical_dataset_path"`
-	PublicDatasetPath           string `json:"public_dataset_path"`
-	DefaultPublicAliasCandidate string `json:"default_public_alias_candidate"`
-	DefaultAliasAutoReserved    bool   `json:"default_alias_auto_reserved"`
+	DatasetName                 string                 `json:"dataset_name"`
+	TableUID                    int                    `json:"table_uid"`
+	StoredPrimaryAlias          string                 `json:"stored_primary_alias"`
+	EffectivePublicAlias        string                 `json:"effective_public_alias"`
+	AliasSource                 string                 `json:"alias_source"`
+	RawDatasetPath              string                 `json:"raw_dataset_path"`
+	CanonicalDatasetPath        string                 `json:"canonical_dataset_path"`
+	PublicDatasetPath           string                 `json:"public_dataset_path"`
+	DefaultPublicAliasCandidate string                 `json:"default_public_alias_candidate"`
+	DefaultAliasAutoReserved    bool                   `json:"default_alias_auto_reserved"`
+	DisabledAliases             []DisabledDatasetAlias `json:"disabled_aliases"`
 }
 
 // AliasManagementSnapshot is the admin read-model for the alias editor surface.
@@ -72,7 +73,14 @@ func LoadDatasetAliasManagementSnapshot(q dbutils.Querier) (AliasManagementSnaps
 		return AliasManagementSnapshot{}, fmt.Errorf("dataset alias management requires a database querier")
 	}
 
-	registry, _ := LoadAliasRegistry(q)
+	pools, err := LoadDatasetNamePools(q)
+	if err != nil {
+		return AliasManagementSnapshot{}, err
+	}
+	disabled, err := loadDisabledDatasetAliases(q)
+	if err != nil {
+		return AliasManagementSnapshot{}, err
+	}
 
 	storedAliases, err := loadStoredPrimaryAliasMap(q)
 	if err != nil {
@@ -86,9 +94,14 @@ func LoadDatasetAliasManagementSnapshot(q dbutils.Querier) (AliasManagementSnaps
 
 	entries := make([]AliasManagementEntry, 0, len(tableMetadata))
 	for _, table := range tableMetadata {
-		effectiveAlias := strings.TrimSpace(registry.RawToPublic[table.DatasetName])
-		storedAlias := strings.TrimSpace(storedAliases[table.DatasetName])
-		entries = append(entries, buildAliasManagementEntry(table, storedAlias, effectiveAlias))
+		effectiveAlias := strings.TrimSpace(pools[table.TableUID].PreferredName)
+		storedAlias := strings.TrimSpace(storedAliases[table.TableUID])
+		entry := buildAliasManagementEntry(table, storedAlias, effectiveAlias)
+		entry.DisabledAliases = disabled[table.TableUID]
+		if entry.DisabledAliases == nil {
+			entry.DisabledAliases = []DisabledDatasetAlias{}
+		}
+		entries = append(entries, entry)
 	}
 
 	return AliasManagementSnapshot{
@@ -103,11 +116,27 @@ func SavePrimaryAlias(q dbutils.Querier, datasetName string, aliasSlug string) (
 		return AliasManagementEntry{}, fmt.Errorf("dataset alias save requires a database querier")
 	}
 
+	// A sql.DB caller also gets the complete atomic lock/validate/write contract.
+	if db, ok := q.(*sql.DB); ok {
+		tx, err := db.Begin()
+		if err != nil {
+			return AliasManagementEntry{}, err
+		}
+		defer tx.Rollback()
+		entry, err := SavePrimaryAlias(tx, datasetName, aliasSlug)
+		if err != nil {
+			return AliasManagementEntry{}, err
+		}
+		return entry, tx.Commit()
+	}
 	datasetName = strings.TrimSpace(datasetName)
 	if datasetName == "" {
 		return AliasManagementEntry{}, &AliasValidationError{Message: "dataset_name is required"}
 	}
 
+	if err := LockDatasetNamespace(q); err != nil {
+		return AliasManagementEntry{}, err
+	}
 	normalizedAlias := normalizeAliasSlug(aliasSlug)
 	tableUID, err := loadDatasetAliasTableUID(q, datasetName)
 	if err != nil {
@@ -132,7 +161,12 @@ func SavePrimaryAlias(q dbutils.Querier, datasetName string, aliasSlug string) (
 		return AliasManagementEntry{}, err
 	}
 
-	return findAliasManagementEntry(snapshot, datasetName)
+	for _, entry := range snapshot.Datasets {
+		if entry.TableUID == tableUID {
+			return entry, nil
+		}
+	}
+	return AliasManagementEntry{}, sql.ErrNoRows
 }
 
 // ValidateExplicitDatasetAliasAvailability rejects invalid or conflicting alias slugs.
@@ -146,33 +180,15 @@ func ValidateExplicitDatasetAliasAvailability(q dbutils.Querier, ownerTableName 
 	if ownerTableName == "" {
 		return &AliasValidationError{Message: "dataset_name is required"}
 	}
-	if aliasSlug == ownerTableName {
+	if aliasSlug == DatasetNameKey(ownerTableName) {
 		return &AliasValidationError{Message: "alias_slug matches the raw dataset route; leave it empty to keep the raw URL"}
 	}
 	if !datasetAliasSlugPattern.MatchString(aliasSlug) {
 		return &AliasValidationError{Message: "alias_slug must use lowercase letters, numbers, underscores, or hyphens"}
 	}
 
-	registry, err := LoadAliasRegistry(q)
-	if err != nil {
-		return err
-	}
-	if err := ensureRouteSegmentAvailable(q, registry, ownerTableName, aliasSlug, 0, "dataset alias"); err != nil {
-		return err
-	}
-
-	automaticAppOwner, err := findAutomaticAppAliasOwner(q, aliasSlug)
-	if err != nil {
-		return err
-	}
-	if automaticAppOwner != "" && automaticAppOwner != ownerTableName {
-		return &RouteConflictError{
-			Segment: aliasSlug,
-			Reason:  fmt.Sprintf("dataset alias conflicts with the default public alias for %q", automaticAppOwner),
-		}
-	}
-
-	return nil
+	_, err := q.Exec(`SELECT public.app_validate_dataset_alias($1, $2)`, ownerTableName, aliasSlug)
+	return NamespaceError(err)
 }
 
 func buildAliasManagementEntry(
@@ -232,9 +248,9 @@ func findAliasManagementEntry(snapshot AliasManagementSnapshot, datasetName stri
 	return AliasManagementEntry{}, sql.ErrNoRows
 }
 
-func loadStoredPrimaryAliasMap(q dbutils.Querier) (map[string]string, error) {
+func loadStoredPrimaryAliasMap(q dbutils.Querier) (map[int]string, error) {
 	rows, err := q.Query(
-		`SELECT t.table_name, a.alias_slug
+		`SELECT t.table_uid, a.alias_slug
 		   FROM system_db_table_aliases a
 		   JOIN system_db_tables t ON t.table_uid = a.table_uid
 		  WHERE a.is_active IS TRUE
@@ -242,20 +258,20 @@ func loadStoredPrimaryAliasMap(q dbutils.Querier) (map[string]string, error) {
 	)
 	if err != nil {
 		if isMissingAliasTableError(err) {
-			return map[string]string{}, nil
+			return map[int]string{}, nil
 		}
 		return nil, fmt.Errorf("load stored dataset aliases: %w", err)
 	}
 	defer rows.Close()
 
-	storedAliases := make(map[string]string)
+	storedAliases := make(map[int]string)
 	for rows.Next() {
-		var datasetName string
+		var tableUID int
 		var aliasSlug string
-		if err := rows.Scan(&datasetName, &aliasSlug); err != nil {
+		if err := rows.Scan(&tableUID, &aliasSlug); err != nil {
 			return nil, fmt.Errorf("scan stored dataset aliases: %w", err)
 		}
-		storedAliases[datasetName] = aliasSlug
+		storedAliases[tableUID] = aliasSlug
 	}
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("iterate stored dataset aliases: %w", err)
@@ -295,7 +311,7 @@ func loadDatasetAliasTableUID(q dbutils.Querier, datasetName string) (int, error
 	if err := q.QueryRow(
 		`SELECT table_uid
 		   FROM system_db_tables
-		  WHERE table_name = $1`,
+		  WHERE table_name = $1 AND COALESCE(NULLIF(schema_name, ''), 'public') = 'public'`,
 		datasetName,
 	).Scan(&tableUID); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -310,7 +326,8 @@ func deletePrimaryAliasRowsForTable(q dbutils.Querier, tableUID int) error {
 	if _, err := q.Exec(
 		`DELETE FROM system_db_table_aliases
 		  WHERE table_uid = $1
-		    AND is_primary IS TRUE`,
+		    AND is_primary IS TRUE
+            AND disabled_reason IS NULL`,
 		tableUID,
 	); err != nil {
 		return wrapAliasPersistenceError("clear dataset alias", err)
@@ -323,7 +340,8 @@ func upsertPrimaryAliasRow(q dbutils.Querier, tableUID int, datasetName string, 
 		`DELETE FROM system_db_table_aliases
 		  WHERE table_uid = $1
 		    AND is_primary IS TRUE
-		    AND alias_slug <> $2`,
+		    AND alias_slug <> $2
+            AND disabled_reason IS NULL`,
 		tableUID,
 		aliasSlug,
 	); err != nil {
@@ -331,12 +349,15 @@ func upsertPrimaryAliasRow(q dbutils.Querier, tableUID int, datasetName string, 
 	}
 
 	var existingDatasetName string
+	// Reuse only the requested normalized spelling. Invalid audited rows keep
+	// their spelling and history; folding here would reactivate an invalid slug.
 	err := q.QueryRow(
 		`SELECT t.table_name
 		   FROM system_db_table_aliases a
 		   JOIN system_db_tables t ON t.table_uid = a.table_uid
-		  WHERE a.alias_slug = $1`,
-		aliasSlug,
+		  WHERE a.table_uid = $2 AND a.alias_slug = $1
+          ORDER BY a.is_active DESC, a.id LIMIT 1`,
+		aliasSlug, tableUID,
 	).Scan(&existingDatasetName)
 	switch {
 	case errors.Is(err, sql.ErrNoRows):
@@ -370,8 +391,10 @@ func upsertPrimaryAliasRow(q dbutils.Querier, tableUID int, datasetName string, 
 		    SET is_primary = TRUE,
 		        is_active = TRUE,
 		        updated = NOW()
-		  WHERE alias_slug = $1`,
-		aliasSlug,
+		  WHERE id = (SELECT id FROM system_db_table_aliases
+			  WHERE table_uid = $2 AND alias_slug = $1
+              ORDER BY is_active DESC, id LIMIT 1)`,
+		aliasSlug, tableUID,
 	); err != nil {
 		return wrapAliasPersistenceError("activate dataset alias", err)
 	}
@@ -386,29 +409,7 @@ func wrapAliasPersistenceError(action string, err error) error {
 	if isMissingAliasTableError(err) {
 		return fmt.Errorf("%s: system_db_table_aliases is not available", action)
 	}
-	return fmt.Errorf("%s: %w", action, err)
-}
-
-func findAutomaticAppAliasOwner(q dbutils.Querier, aliasSlug string) (string, error) {
-	if aliasSlug == "" {
-		return "", nil
-	}
-
-	var datasetName string
-	err := q.QueryRow(
-		`SELECT table_name
-		   FROM system_db_tables
-		  WHERE table_name = $1
-		  LIMIT 1`,
-		"app_"+aliasSlug,
-	).Scan(&datasetName)
-	if errors.Is(err, sql.ErrNoRows) {
-		return "", nil
-	}
-	if err != nil {
-		return "", fmt.Errorf("check automatic app alias owner for %q: %w", aliasSlug, err)
-	}
-	return datasetName, nil
+	return NamespaceError(fmt.Errorf("%s: %w", action, err))
 }
 
 func normalizeAliasSlug(aliasSlug string) string {

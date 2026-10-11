@@ -5,7 +5,8 @@
 
 import { createMaskIconSpan } from '../../icons/icon_mask_builder.js';
 
-function sanitizeTestIdPart(value) {
+/** Stable option suffix shared with browser specs; underscores become hyphens. */
+export function sanitizeTestIdPart(value) {
 	const normalized = String(value ?? '')
 		.trim()
 		.toLowerCase()
@@ -119,6 +120,7 @@ export function createVanillaDropdown({
 	  getValue,
 	  setValue,
 	  setOptions,
+	  setPlaceholders,
 	  setDisabled,
 	  open,
 	  close,
@@ -402,6 +404,12 @@ export function createVanillaDropdown({
 	  currentOptions = attachStableOptionTestIds(newOptions || [], baseTestId);
 	  setValue(null, false);
 	  renderList("");
+	}
+
+	// Refresh translated copy without rebuilding the portalled list or its drafts.
+	function setPlaceholders({ placeholder, searchPlaceholder }) {
+	  if (placeholder !== undefined) inputEl.placeholder = placeholder;
+	  if (searchInput && searchPlaceholder !== undefined) searchInput.placeholder = searchPlaceholder;
 	}
 
 	// A dropdown that must not be used yet, because what it would offer or what

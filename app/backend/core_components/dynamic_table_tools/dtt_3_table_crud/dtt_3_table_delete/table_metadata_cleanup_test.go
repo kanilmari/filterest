@@ -119,7 +119,7 @@ func (c *deleteTableConn) Exec(query string, args []driver.Value) (driver.Result
 }
 
 func (c *deleteTableConn) ExecContext(_ context.Context, query string, _ []driver.NamedValue) (driver.Result, error) {
-	if granttest.IsPolicyLock(query) {
+	if granttest.IsPolicyLock(query) || strings.Contains(query, "app_lock_dataset_namespace()") {
 		return driver.RowsAffected(0), nil
 	}
 	c.state.mu.Lock()

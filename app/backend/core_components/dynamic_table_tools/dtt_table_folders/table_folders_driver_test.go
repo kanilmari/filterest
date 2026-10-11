@@ -154,11 +154,19 @@ func (c *folderMockConn) Exec(query string, args []driver.Value) (driver.Result,
 }
 
 func (c *folderMockConn) ExecContext(_ context.Context, query string, args []driver.NamedValue) (driver.Result, error) {
-	if granttest.IsPolicyLock(query) {
+	if granttest.IsPolicyLock(query) || strings.Contains(query, "app_lock_dataset_namespace()") {
 		return driver.RowsAffected(0), nil
 	}
 	c.state.mu.Lock()
 	defer c.state.mu.Unlock()
+	if strings.Contains(query, "app_validate_dataset_name(") {
+		for _, resp := range c.state.execs {
+			if strings.Contains(query, resp.match) {
+				return driver.RowsAffected(0), resp.err
+			}
+		}
+		return driver.RowsAffected(0), nil
+	}
 
 	c.state.calls = append(c.state.calls, folderExecCall{
 		query: query,

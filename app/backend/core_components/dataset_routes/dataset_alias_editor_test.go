@@ -10,7 +10,9 @@ import (
 	"database/sql/driver"
 	"errors"
 	"fmt"
+	"github.com/lib/pq"
 	"io"
+	"reflect"
 	"sort"
 	"strings"
 	"sync"
@@ -19,9 +21,12 @@ import (
 )
 
 type datasetAliasEditorMockState struct {
-	mu      sync.Mutex
-	tables  map[string]int
-	aliases map[string]string
+	mu        sync.Mutex
+	tables    map[string]int
+	aliases   map[string]string
+	secondary map[int][]string
+	disabled  map[int][]DisabledDatasetAlias
+	calls     []string
 }
 
 type datasetAliasEditorMockDriver struct{ state *datasetAliasEditorMockState }
@@ -210,6 +215,11 @@ func openDatasetAliasEditorTestDB(t *testing.T, tables map[string]int, aliases m
 		state.aliases[datasetName] = aliasSlug
 	}
 
+	return openDatasetAliasEditorStateDB(t, state)
+}
+
+func openDatasetAliasEditorStateDB(t *testing.T, state *datasetAliasEditorMockState) *sql.DB {
+	t.Helper()
 	driverName := fmt.Sprintf("dataset_alias_editor_%d", atomic.AddInt64(&datasetAliasEditorDriverCounter, 1))
 	sql.Register(driverName, &datasetAliasEditorMockDriver{state: state})
 
@@ -251,16 +261,68 @@ func (c *datasetAliasEditorMockConn) Query(query string, args []driver.Value) (d
 func (c *datasetAliasEditorMockConn) QueryContext(_ context.Context, query string, args []driver.NamedValue) (driver.Rows, error) {
 	c.state.mu.Lock()
 	defer c.state.mu.Unlock()
+	c.state.calls = append(c.state.calls, query)
 
 	switch {
-	case strings.Contains(query, "SELECT t.table_name, a.alias_slug") && strings.Contains(query, "FROM system_db_table_aliases a"):
+	case strings.Contains(query, "SELECT table_uid, alias_slug, disabled_reason"):
+		rows := [][]driver.Value{}
+		for uid, aliases := range c.state.disabled {
+			for _, alias := range aliases {
+				rows = append(rows, []driver.Value{int64(uid), alias.AliasSlug, alias.ReasonKey})
+			}
+		}
+		return &datasetAliasEditorMockRows{cols: []string{"table_uid", "alias_slug", "disabled_reason"}, rows: rows}, nil
+	case strings.Contains(query, "SELECT table_uid, alias_slug, COALESCE"):
+		rows := [][]driver.Value{}
+		for name, alias := range c.state.aliases {
+			rows = append(rows, []driver.Value{int64(c.state.tables[name]), alias, true})
+		}
+		for uid, aliases := range c.state.secondary {
+			for _, alias := range aliases {
+				rows = append(rows, []driver.Value{int64(uid), alias, false})
+			}
+		}
+		return &datasetAliasEditorMockRows{cols: []string{"table_uid", "alias_slug", "is_primary"}, rows: rows}, nil
+	case strings.Contains(query, "SELECT t.table_uid, a.alias_slug") && strings.Contains(query, "FROM system_db_table_aliases a"):
 		return buildDatasetAliasEditorAliasRows(c.state), nil
 	case strings.Contains(query, "SELECT table_uid, table_name") && strings.Contains(query, "FROM system_db_tables"):
-		return buildDatasetAliasEditorTableRows(c.state), nil
+		rows := [][]driver.Value{}
+		for name, uid := range c.state.tables {
+			row := []driver.Value{int64(uid), name}
+			if strings.Contains(query, "schema_name") {
+				row = append(row, "public")
+			}
+			rows = append(rows, row)
+		}
+		cols := []string{"table_uid", "table_name"}
+		if strings.Contains(query, "schema_name") {
+			cols = append(cols, "schema_name")
+		}
+		return &datasetAliasEditorMockRows{cols: cols, rows: rows}, nil
 	case strings.Contains(query, "SELECT table_uid") && strings.Contains(query, "FROM system_db_tables"):
 		return buildDatasetAliasEditorTableUIDRows(c.state, namedStringArg(args, 0)), nil
-	case strings.Contains(query, "SELECT t.table_name") && strings.Contains(query, "WHERE a.alias_slug = $1"):
-		return buildDatasetAliasEditorAliasOwnerRows(c.state, namedStringArg(args, 0)), nil
+	case strings.Contains(query, "SELECT t.table_name") && strings.Contains(query, "FROM system_db_table_aliases a"):
+		requested := namedStringArg(args, 0)
+		matches := func(stored string) bool {
+			if strings.Contains(query, "a.alias_slug = $1") {
+				return stored == requested
+			}
+			return DatasetNameKey(stored) == requested
+		}
+		uid := namedIntArg(args, 1)
+		for name, stored := range c.state.aliases {
+			if matches(stored) && (uid == 0 || c.state.tables[name] == uid) {
+				return &datasetAliasEditorMockRows{cols: []string{"table_name"}, rows: [][]driver.Value{{name}}}, nil
+			}
+		}
+		for owner, disabled := range c.state.disabled {
+			for _, row := range disabled {
+				if owner == uid && matches(row.AliasSlug) {
+					return &datasetAliasEditorMockRows{cols: []string{"table_name"}, rows: [][]driver.Value{{datasetAliasEditorDatasetNameByUID(c.state, uid)}}}, nil
+				}
+			}
+		}
+		return &datasetAliasEditorMockRows{cols: []string{"table_name"}}, nil
 	case strings.Contains(query, "SELECT table_name") && strings.Contains(query, "FROM system_db_tables") && strings.Contains(query, "LIMIT 1"):
 		return buildDatasetAliasEditorAutomaticOwnerRows(c.state, namedStringArg(args, 0)), nil
 	case strings.Contains(query, "SELECT id, table_name") && strings.Contains(query, "FROM system_db_tables"):
@@ -281,8 +343,31 @@ func (c *datasetAliasEditorMockConn) Exec(query string, args []driver.Value) (dr
 func (c *datasetAliasEditorMockConn) ExecContext(_ context.Context, query string, args []driver.NamedValue) (driver.Result, error) {
 	c.state.mu.Lock()
 	defer c.state.mu.Unlock()
+	c.state.calls = append(c.state.calls, query)
 
 	switch {
+	case strings.Contains(query, "app_lock_dataset_namespace()"):
+		return driver.RowsAffected(1), nil
+	case strings.Contains(query, "app_validate_dataset_alias("):
+		owner, alias := namedStringArg(args, 0), namedStringArg(args, 1)
+		for uid, aliases := range c.state.secondary {
+			for _, name := range aliases {
+				if uid != c.state.tables[owner] && strings.EqualFold(name, alias) {
+					return nil, &pq.Error{Code: "P0001", Message: NamespaceConflictKey, Detail: alias}
+				}
+			}
+		}
+		for name := range c.state.tables {
+			if name != owner && (strings.EqualFold(name, alias) || strings.EqualFold(name, "app_"+alias)) {
+				return nil, &pq.Error{Code: "P0001", Message: "dataset_namespace_conflict", Detail: alias}
+			}
+		}
+		for name, existing := range c.state.aliases {
+			if name != owner && strings.EqualFold(existing, alias) {
+				return nil, &pq.Error{Code: "P0001", Message: "dataset_namespace_conflict", Detail: alias}
+			}
+		}
+		return driver.RowsAffected(0), nil
 	case strings.Contains(query, "DELETE FROM system_db_table_aliases") && strings.Contains(query, "alias_slug <> $2"):
 		tableUID := namedIntArg(args, 0)
 		aliasSlug := namedStringArg(args, 1)
@@ -311,9 +396,24 @@ func (c *datasetAliasEditorMockConn) ExecContext(_ context.Context, query string
 		return driver.RowsAffected(1), nil
 	case strings.Contains(query, "UPDATE system_db_table_aliases"):
 		aliasSlug := namedStringArg(args, 0)
+		// Model the active-row guard on audited legacy spellings, including spaces.
+		for _, row := range c.state.disabled[namedIntArg(args, 1)] {
+			if DatasetNameKey(row.AliasSlug) == aliasSlug && row.AliasSlug != aliasSlug &&
+				!strings.Contains(query, "AND alias_slug = $1") {
+				return nil, &pq.Error{Code: "P0001", Message: NamespaceInvalidKey}
+			}
+		}
 		for datasetName := range c.state.aliases {
 			if c.state.aliases[datasetName] == aliasSlug {
 				c.state.aliases[datasetName] = aliasSlug
+				return driver.RowsAffected(1), nil
+			}
+		}
+		uid := namedIntArg(args, 1)
+		for index, row := range c.state.disabled[uid] {
+			if row.AliasSlug == aliasSlug {
+				c.state.aliases[datasetAliasEditorDatasetNameByUID(c.state, uid)] = aliasSlug
+				c.state.disabled[uid] = append(c.state.disabled[uid][:index], c.state.disabled[uid][index+1:]...)
 				return driver.RowsAffected(1), nil
 			}
 		}
@@ -332,11 +432,11 @@ func buildDatasetAliasEditorAliasRows(state *datasetAliasEditorMockState) driver
 
 	rows := make([][]driver.Value, 0, len(datasetNames))
 	for _, datasetName := range datasetNames {
-		rows = append(rows, []driver.Value{datasetName, state.aliases[datasetName]})
+		rows = append(rows, []driver.Value{int64(state.tables[datasetName]), state.aliases[datasetName]})
 	}
 
 	return &datasetAliasEditorMockRows{
-		cols: []string{"table_name", "alias_slug"},
+		cols: []string{"table_uid", "alias_slug"},
 		rows: rows,
 	}
 }
@@ -368,18 +468,6 @@ func buildDatasetAliasEditorTableUIDRows(state *datasetAliasEditorMockState, dat
 		cols: []string{"table_uid"},
 		rows: [][]driver.Value{{int64(tableUID)}},
 	}
-}
-
-func buildDatasetAliasEditorAliasOwnerRows(state *datasetAliasEditorMockState, aliasSlug string) driver.Rows {
-	for datasetName, existingAlias := range state.aliases {
-		if existingAlias == aliasSlug {
-			return &datasetAliasEditorMockRows{
-				cols: []string{"table_name"},
-				rows: [][]driver.Value{{datasetName}},
-			}
-		}
-	}
-	return &datasetAliasEditorMockRows{cols: []string{"table_name"}}
 }
 
 func buildDatasetAliasEditorAutomaticOwnerRows(state *datasetAliasEditorMockState, datasetName string) driver.Rows {
@@ -454,4 +542,78 @@ func (r *datasetAliasEditorMockRows) Next(dest []driver.Value) error {
 	copy(dest, r.rows[r.idx])
 	r.idx++
 	return nil
+}
+
+func TestSavePrimaryAliasRefusesRealAndSecondaryNamesWithoutMutation(t *testing.T) {
+	for _, name := range []string{"REPORTS", "old-orders"} {
+		t.Run(name, func(t *testing.T) {
+			state := &datasetAliasEditorMockState{tables: map[string]int{"Reports": 11, "system_owner": 12},
+				aliases: map[string]string{"system_owner": "current-owner"}, secondary: map[int][]string{11: {"old-orders"}}}
+			db := openDatasetAliasEditorStateDB(t, state)
+			_, err := SavePrimaryAlias(db, "system_owner", name)
+			var conflict *RouteConflictError
+			if !errors.As(err, &conflict) || state.aliases["system_owner"] != "current-owner" {
+				t.Fatalf("refusal changed current alias: %v %+v", err, state.aliases)
+			}
+			if len(state.calls) < 3 || !strings.Contains(state.calls[0], "app_lock_dataset_namespace()") || !strings.Contains(state.calls[1], "SELECT table_uid") || !strings.Contains(state.calls[2], "app_validate_dataset_alias(") {
+				t.Fatalf("alias writer read before locking: %v", state.calls)
+			}
+			for _, call := range state.calls {
+				if strings.Contains(call, "DELETE FROM") || strings.Contains(call, "INSERT INTO") {
+					t.Fatal("refusal mutated persistence", call)
+				}
+			}
+		})
+	}
+}
+
+func TestAliasManagementPreservesAndReportsDisabledRowsOnClear(t *testing.T) {
+	state := &datasetAliasEditorMockState{tables: map[string]int{"system_owner": 12}, aliases: map[string]string{"system_owner": "current-owner"},
+		disabled: map[int][]DisabledDatasetAlias{12: {{"reports", "dataset_namespace_real_name_conflict"}}}}
+	db := openDatasetAliasEditorStateDB(t, state)
+	entry, err := SavePrimaryAlias(db, "system_owner", "")
+	if err != nil || entry.StoredPrimaryAlias != "" || len(entry.DisabledAliases) != 1 || entry.DisabledAliases[0].AliasSlug != "reports" {
+		t.Fatalf("clear lost audit: %+v %v", entry, err)
+	}
+	if !strings.Contains(state.calls[0], "app_lock_dataset_namespace()") {
+		t.Fatal("clear did not lock namespace", state.calls)
+	}
+}
+
+func TestSavePrimaryAliasKeepsInvalidAuditedSpellingAndInsertsNormalizedAlias(t *testing.T) {
+	for _, spelling := range []string{"FREE-OWNER", " free-owner "} {
+		t.Run(spelling, func(t *testing.T) {
+			preserved := []DisabledDatasetAlias{{spelling, NamespaceInvalidKey}}
+			state := &datasetAliasEditorMockState{tables: map[string]int{"system_owner": 12}, aliases: map[string]string{},
+				disabled: map[int][]DisabledDatasetAlias{12: append([]DisabledDatasetAlias(nil), preserved...)}}
+			entry, err := SavePrimaryAlias(openDatasetAliasEditorStateDB(t, state), "system_owner", "free-owner")
+			if err != nil {
+				t.Fatalf("normalized alias save refused by legacy audited spelling %q: %v", spelling, err)
+			}
+			if entry.StoredPrimaryAlias != "free-owner" || state.aliases["system_owner"] != "free-owner" ||
+				!reflect.DeepEqual(entry.DisabledAliases, preserved) || !reflect.DeepEqual(state.disabled[12], preserved) {
+				t.Fatalf("normalized save changed audited row: entry=%+v disabled=%+v", entry, state.disabled)
+			}
+			for _, call := range state.calls {
+				if strings.Contains(call, "UPDATE system_db_table_aliases") {
+					t.Fatal("invalid audited row must not be reactivated", call)
+				}
+			}
+		})
+	}
+}
+
+func TestSavePrimaryAliasReactivatesExactRowBesideInvalidAuditedSpelling(t *testing.T) {
+	invalid := DisabledDatasetAlias{"FREE-OWNER", NamespaceInvalidKey}
+	state := &datasetAliasEditorMockState{tables: map[string]int{"system_owner": 12}, aliases: map[string]string{},
+		disabled: map[int][]DisabledDatasetAlias{12: {invalid, {"free-owner", "dataset_namespace_real_name_conflict"}}}}
+	entry, err := SavePrimaryAlias(openDatasetAliasEditorStateDB(t, state), "system_owner", "FREE-OWNER")
+	if err != nil || entry.StoredPrimaryAlias != "free-owner" || !reflect.DeepEqual(entry.DisabledAliases, []DisabledDatasetAlias{invalid}) {
+		t.Fatalf("exact row was not reactivated independently: %+v %v", entry, err)
+	}
+	for _, call := range state.calls {
+		if strings.Contains(call, "INSERT INTO system_db_table_aliases") {
+			t.Fatal("valid exact row should be reactivated", call)
+		}
+	}
 }

@@ -222,8 +222,8 @@ against the publication checklist.
 
 From a standalone Filterest root, run:
 
-    python3 app/server_tools/public_bootstrap/generate_bootstrap.py
-    python3 app/server_tools/public_bootstrap/generate_bootstrap.py --check
+    python3 app/server_tools/public_bootstrap/generate_bootstrap.py --snapshot
+    python3 app/server_tools/public_bootstrap/generate_bootstrap.py --snapshot --check
     python3 app/server_tools/public_slice_export/audit_public_bootstrap.py --target .
 
 The command reads app/VERSION_APP and app/VERSION_DB by default. For release
@@ -243,6 +243,8 @@ The identity table (`system_database_identity`) is schema owned by migration
 Native setup invokes the migration before inserting the first row when empty.
 Keeping that row in setup preserves its installation-specific versions and note;
 upgrades and bare bootstrap imports must not invent a competing identity.
+
+The namespace migration owns schema and refusal copy in one file. Its `-- BOOTSTRAP_LANGUAGE_SEED` marker lets the generator include schema before the registry seeds and language copy after the language catalogue exists. The full migration still owns its baseline digest and upgrade transaction. `--check` compares all three artifacts without replacing them; `--snapshot` includes the selected DB snapshot in generation and checking.
 
 Maintain base.schema.sql and base.seed.sql alongside the smaller companion SQL
 sources. A new migration may be recorded in the bootstrap baseline only after

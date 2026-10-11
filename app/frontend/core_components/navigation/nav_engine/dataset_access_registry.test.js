@@ -8,6 +8,7 @@ import {
     resolveDataset, refreshDatasetCatalogue,
 } from "./dataset_access_registry.js";
 import { invalidateSessionGeneration } from '../../auth/session_generation_store.js';
+import nameExamples from '../../../../testing/shared_contracts/dataset_name_resolution_examples.json';
 const endpoint = vi.hoisted(() => vi.fn());
 vi.mock('../../endpoints/endpoint_router.js', () => ({ endpoint_router: endpoint }));
 beforeEach(clearDatasetAccessRegistry);
@@ -92,4 +93,35 @@ test('page return refreshes a live catalogue but cold startup makes no request',
     await vi.waitFor(() => expect(resolveDataset({ uid: 22 }).status).toBe('found'));
     expect(resolveDataset({ uid: 11 })).toEqual({ status: 'unknown' });
     expect(endpoint).toHaveBeenCalledTimes(1);
+});
+
+
+test('canonical and secondary name lookup uses the same ASCII fold as namespace enforcement', () => {
+    primeDatasetAccessRegistry({ datasets: [{ dataset_name: 'Reports', table_uid: 81, names: ['Reports', 'old-reports'], preferred_name: 'Reports' }] });
+    expect(resolveDataset({ name: 'REPORTS' }).dataset?.table_uid).toBe(81);
+    expect(resolveDataset({ name: 'Old-Reports' }).dataset?.table_uid).toBe(81);
+});
+
+// dataset_routes_test.go consumes these same ownership and ambiguity examples.
+test.each([false, true].flatMap(reverse => [[81, 82], [81], [82]].map(readable => [reverse, readable])))(
+    'legacy exact names survive catalogue order %s and permission subset %s', (reverse, readable) => {
+        const ordered = reverse ? [...nameExamples.datasets].reverse() : nameExamples.datasets;
+        primeDatasetAccessRegistry({ datasets: ordered.filter(entry => readable.includes(entry.table_uid)) });
+        for (const { name, uid } of nameExamples.lookups) {
+            const expectedUID = readable.includes(uid) ? uid : 0;
+            expect(resolveDataset({ name }).dataset?.table_uid || 0, `lookup ${name}; readable ${readable}`).toBe(expectedUID);
+            expect(canReadDatasetFromRegistry(name)).toBe(expectedUID !== 0);
+        }
+        expect(resolveDataset({ name: 'REPORTS', uid: readable[0] })).toEqual({ status: 'unknown' });
+    }
+);
+
+test.each([false, true])('older complete catalogues detect collisions before permission filtering, order %s', reverse => {
+    const entries = nameExamples.datasets.map(({ canonical_name_exact_only: _flag, ...entry }) => ({
+        ...entry, can_read_rows: entry.table_uid === 82,
+    }));
+    primeDatasetAccessRegistry({ datasets: reverse ? entries.reverse() : entries });
+    expect(resolveDataset({ name: 'reports' }).dataset?.table_uid).toBe(82);
+    expect(resolveDataset({ name: 'Reports' })).toEqual({ status: 'unknown' });
+    expect(resolveDataset({ name: 'REPORTS' })).toEqual({ status: 'unknown' });
 });

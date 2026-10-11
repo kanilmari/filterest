@@ -52,6 +52,9 @@ func readReviewedInvokerTrigger(ctx context.Context, tx *sql.Tx, snapshot *Grant
  (SELECT role_oid FROM jsonb_to_recordset($3::jsonb) AS r(role_oid oid))
  SELECT 1 FROM pg_trigger t JOIN pg_proc p ON p.oid=t.tgfoid
  WHERE t.oid=$1 AND md5(p.prosrc)=$2 AND `+reviewedInvokerSafetySQL+`)`, oid, digest, string(roleJSON(snapshot.Roles))).Scan(&accepted)
+	if err == nil && accepted && isNamespaceTriggerDigest(digest) {
+		return readNamespaceFunctionSafety(ctx, tx, snapshot)
+	}
 	return accepted, err
 }
 

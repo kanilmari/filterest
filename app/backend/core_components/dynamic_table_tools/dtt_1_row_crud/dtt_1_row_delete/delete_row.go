@@ -9,6 +9,7 @@ import (
 	"context"
 	"database/sql"
 	"easelect/backend/core_components/accountwrite"
+	"easelect/backend/core_components/dataset_routes"
 	"errors"
 
 	"easelect/backend/core_components/dbutils"
@@ -91,6 +92,15 @@ func DeleteRowsHandler(w http.ResponseWriter, r *http.Request, table_name string
 		runtime_grant_mutations.RespondError(w, err)
 		return
 	}
+	if table_name == "system_db_tables" {
+		if err := dataset_routes.LockDatasetNamespace(tx); err != nil {
+			if dataset_routes.RespondNamespaceRefusal(w, err) {
+				return
+			}
+			httpresponse.RespondWithError(w, 500, "error locking dataset namespace")
+			return
+		}
+	}
 
 	if table_name == "system_config" {
 		var protected bool
@@ -128,6 +138,9 @@ func DeleteRowsHandler(w http.ResponseWriter, r *http.Request, table_name string
 	case "system_db_tables":
 		if err := deleteSystemTables(r.Context(), tx, request_data.IDs); err != nil {
 			log.Printf("error: %v", err)
+			if dataset_routes.RespondNamespaceRefusal(w, err) {
+				return
+			}
 			httpresponse.RespondWithError(w, http.StatusInternalServerError, err.Error())
 			return
 		}
@@ -322,6 +335,9 @@ func intIDsToInt64(ids []int) []int64 {
 
 // deleteSystemTables drops PostgreSQL tables and cleans up metadata.
 func deleteSystemTables(ctx context.Context, tx *sql.Tx, ids []int) error {
+	if err := dataset_routes.LockDatasetNamespace(tx); err != nil {
+		return err
+	}
 	for _, oneID := range ids {
 		var foundTableName string
 		var tableUID sql.NullInt64

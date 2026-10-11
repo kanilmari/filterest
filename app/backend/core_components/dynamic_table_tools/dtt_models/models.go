@@ -16,6 +16,7 @@ type Table struct {
 	TableName                  string                      `json:"dataset_name"`
 	Names                      []string                    `json:"names"`
 	PreferredName              string                      `json:"preferred_name"`
+	CanonicalNameExactOnly     bool                        `json:"canonical_name_exact_only,omitempty"`
 	CanReadRows                bool                        `json:"can_read_rows"`
 	IsDefault                  bool                        `json:"is_default"`
 	FilterbarVisibleByDefault  bool                        `json:"filterbar_visible_by_default"`

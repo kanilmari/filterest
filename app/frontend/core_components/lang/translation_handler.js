@@ -3,6 +3,15 @@
 // Bridges the lang endpoint and browser-tab retry cache with the page's data-lang-key elements.
 // Exists to centralise all frontend localisation so every component can call translatePage without owning fetch logic.
 import { endpoint_router } from '../endpoints/endpoint_router.js';
+import { getTranslationForKey, loadTranslationsForLanguage } from './component_language_dictionary.js';
+// Compatibility exports keep existing callers on the same loader and lookup.
+export { getTranslationForKey, loadTranslationsForLanguage };
+// Live bindings are read only when dictionary functions run, after module setup.
+export {
+    currentTranslations, currentChosenLang, defaultTranslations,
+    globalMissingKeys, globalMissingKeySources,
+    fetchTranslationsForLanguage, getTranslation,
+};
 import { renderAllowedHtml } from '../../reusable_components/dom_container_builder.js';
 import { refreshLocalizedDatasetValues } from '../table_views/dataset_value_localizer.js';
 import { initDevLangKeyEditor } from './dev_lang_key_editor.js';
@@ -352,7 +361,7 @@ export async function translatePage(chosen_language) {
         // Jos valittu kieli ei ole englanti, haetaan englanninkieliset käännökset fallbackia varten.
         if (chosen_language !== 'en') {
             try {
-                nextDefaultTranslations = await fetchTranslationsForLanguage('en');
+                nextDefaultTranslations = await loadTranslationsForLanguage('en');
                 if (!requestIsCurrent()) return;
                 safeDefaultTranslations = nextDefaultTranslations;
                 if (IS_DEV_MODE && debug) console.log('Default English translations loaded', nextDefaultTranslations);
@@ -366,7 +375,7 @@ export async function translatePage(chosen_language) {
         // Haetaan varsinaiset käännökset valitulla kielellä
         let nextTranslations;
         try {
-            nextTranslations = await fetchTranslationsForLanguage(chosen_language);
+            nextTranslations = await loadTranslationsForLanguage(chosen_language);
             if (!requestIsCurrent()) return;
         } catch (errResponse) {
             if (!requestIsCurrent()) return;
@@ -848,41 +857,6 @@ function getTranslation(translationKey, translation_data, chosen_language, missi
     }
 
     return applyTranslationVariable(resolved, translationVariable);
-}
-
-export function getTranslationForKey(
-    key,
-    { fallback = "", countUsage = true } = {}
-) {
-    if (!key) {
-        return fallback;
-    }
-
-    const translatedValue =
-        currentTranslations[key] ?? defaultTranslations[key];
-
-    if (
-        (translatedValue === undefined || translatedValue === null || translatedValue === "") &&
-        countUsage
-    ) {
-        if (!globalMissingKeys.includes(key)) {
-            globalMissingKeys.push(key);
-        }
-        // Koodista kutsuttu avain: lähde on 'code'
-        if (!globalMissingKeySources[key]) {
-            globalMissingKeySources[key] = 'code::getTranslationForKey';
-        }
-    }
-
-    if (typeof translatedValue === "string" && translatedValue.trim() !== "") {
-        return translatedValue;
-    }
-
-    if (fallback) {
-        return fallback;
-    }
-
-    return getTranslation(key, currentTranslations, currentChosenLang);
 }
 
 /**

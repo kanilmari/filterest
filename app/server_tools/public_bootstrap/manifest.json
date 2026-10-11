@@ -189,6 +189,7 @@
     "20261009000075_add_dataset_kind_contracts.sql",
     "20261009000076_seed_dataset_kind_language_keys.sql",
     "20261009000077_retire_global_dataset_alias_catalogue.sql",
+    "20261009000078_enforce_dataset_name_namespace.sql",
     "20261009000079_reconcile_system_database_identity_schema.sql",
     "20261009000080_zone_platform_managed_timestamps.sql",
     "20261009000081_seed_runtime_grant_policy_wait_language_key.sql",
@@ -239,6 +240,7 @@
     "public.system_database_identity",
     "public.system_dataset_appearance",
     "public.system_dataset_media",
+    "public.system_dataset_namespace_lock",
     "public.system_dataset_sort_defaults",
     "public.system_db_table_aliases",
     "public.system_db_tables",
@@ -359,11 +361,11 @@
     "public.system_group_table_func_rights": 24,
     "public.system_lang_key_sources": 0,
     "public.system_lang_key_translations": 163,
-    "public.system_lang_keys": 1389,
+    "public.system_lang_keys": 1401,
     "public.system_languages": 5,
     "public.system_permission_actions": 7,
     "public.system_permission_categories": 4,
-    "public.system_schema_migrations": 187,
+    "public.system_schema_migrations": 188,
     "public.system_table_folders": 14,
     "public.system_table_views": 13,
     "public.system_user_group_memberships": 2,
@@ -375,10 +377,10 @@
   },
   "generated_files": {
     "server_tools/public_bootstrap/schema.sql": {
-      "sha256": "f1ef73f1e88d52e173cfdf90fdf8176609400029ede6a0568e3d0b38e089aa8f"
+      "sha256": "910206025fd37caa9970039930aede1fe25d679b9d3d756ae9c6956d5b22c3bc"
     },
     "server_tools/public_bootstrap/seed_data.sql": {
-      "sha256": "db96e9207343d8c28edc10086ad99a62a55370859bae10e3f15101ab86def21d"
+      "sha256": "2f18f544fbd723e27a2e800b42f0659b2a08ef33ece5aeffb6f30f9565edd150"
     }
   },
   "source_files": {
@@ -395,7 +397,7 @@
       "sha256": "235e4b887181e150bd436d035d2d268eb821d9e5d0b830b54eb444988f31d5d1"
     },
     "filterest/app/server_tools/public_bootstrap/generate_bootstrap.py": {
-      "sha256": "722ae9a29b84ac6784d6e231eb3cb20d97749821dad404ce9497fe247f9c984b"
+      "sha256": "c4152f36528546c95376f79c222f778c6423b919a8c755339fe85883cb64f888"
     },
     "filterest/app/server_tools/public_bootstrap/sql_identifier_validator.py": {
       "sha256": "748245fac4328a3608740c1b0fe948e6a09d6489d587143bd3b4c67064bea732"
@@ -407,7 +409,7 @@
       "sha256": "248d536fd4fb5021fd778dd1703afbf12a8de263d3af7c4fcd72cf714630a95f"
     },
     "filterest/app/server_tools/public_slice_export/public_bootstrap_table_allowlists.py": {
-      "sha256": "43192687314324abe0d181355d67bfd9ef8b03508acd9c62a988f1d51a0fd1e6"
+      "sha256": "e7288de46bd371001613aeda27d39660455682f4a9962b18991a33b2a0c241fc"
     },
     "filterest/app/server_tools/public_slice_export/public_bootstrap_policy.py": {
       "sha256": "79a416bb6d32d70b66f54cba180095fbe14cdd41efdde3f706d0f8891657d014"
@@ -1017,6 +1019,9 @@
     },
     "filterest/app/server_tools/migrations/20261009000077_retire_global_dataset_alias_catalogue.sql": {
       "sha256": "c5ade168ebaf022b72616c90dfeb13bb0e137c9bb0476eef03d048c619071dfa"
+    },
+    "filterest/app/server_tools/migrations/20261009000078_enforce_dataset_name_namespace.sql": {
+      "sha256": "0b63269eb20dec354caa6a2caa9f7d273754715db78022fde7256c2830a6282b"
     },
     "filterest/app/server_tools/migrations/20261009000079_reconcile_system_database_identity_schema.sql": {
       "sha256": "0b0684e5afae66ec807439da51db4eca4e482da3e919e98aaa14ee8df24999e1"

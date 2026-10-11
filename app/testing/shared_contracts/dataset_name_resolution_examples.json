@@ -1,0 +1,15 @@
+{
+  "datasets": [
+    { "table_uid": 81, "dataset_name": "Reports", "names": ["Reports", "upper-reports"], "canonical_name_exact_only": true },
+    { "table_uid": 82, "dataset_name": "reports", "names": ["reports", "lower-reports"], "canonical_name_exact_only": true }
+  ],
+  "lookups": [
+    { "name": "Reports", "uid": 81 },
+    { "name": "reports", "uid": 82 },
+    { "name": "REPORTS", "uid": 0 },
+    { "name": "RePoRtS", "uid": 0 },
+    { "name": " Reports ", "uid": 0 },
+    { "name": "Upper-Reports", "uid": 81 },
+    { "name": "Lower-Reports", "uid": 82 }
+  ]
+}

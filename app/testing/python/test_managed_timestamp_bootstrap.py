@@ -56,7 +56,15 @@ def test_conversion_scope_covers_public_platform_sources_and_excludes_site_datas
     scope = set(re.findall(r"'((?:public|restricted)\.[a-z_0-9]+)'", MIGRATION.read_text().split("$scope$")[1]))
     # Bootstrap reserves the migration ledger's definition. Its clocks have
     # always been zoned, and the whole-schema guard above covers them directly.
-    assert public_tables - {"public.system_schema_migrations"} <= scope
+    # The dataset namespace lock is a one-row revision counter without clocks,
+    # so the conversion has nothing there; prove its definition has none.
+    clockless = {"public.system_dataset_namespace_lock"}
+    for name in clockless:
+        bodies = [match.group(1) for source in (APP / "server_tools/migrations").glob("*.sql")
+                  for match in re.finditer(rf"CREATE TABLE (?:IF NOT EXISTS )?{re.escape(name)}\s*\((.*?)\);",
+                                           source.read_text(), re.S | re.I)]
+        assert bodies and not any(re.search(r"\btime(stamp)?\b", body, re.I) for body in bodies), name
+    assert public_tables - {"public.system_schema_migrations"} - clockless <= scope
     assert {"public." + name for name in MANAGED_COLUMNS} <= scope
     assert not scope & {"public.system_file_structure", "public.system_styles", "public.system_triggers",
                         "public.dev_todo", "public.app_dating_profiles", "public.palvelukatalogi"}

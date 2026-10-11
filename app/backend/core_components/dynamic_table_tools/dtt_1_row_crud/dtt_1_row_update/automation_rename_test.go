@@ -63,7 +63,7 @@ func (c *automationRenameConn) QueryContext(ctx context.Context, query string, a
 }
 func (c *automationRenameConn) ExecContext(_ context.Context, query string, args []driver.NamedValue) (driver.Result, error) {
 	switch {
-	case granttest.IsPolicyLock(query), strings.Contains(query, "set_config('app.user_id'"):
+	case strings.Contains(query, "app_lock_dataset_namespace()"), strings.Contains(query, "app_validate_dataset_name("), granttest.IsPolicyLock(query), strings.Contains(query, "set_config('app.user_id'"):
 		return driver.RowsAffected(0), nil
 	case strings.HasPrefix(query, "INSERT INTO system_transaction_log"):
 		return driver.RowsAffected(1), nil
@@ -93,8 +93,6 @@ func TestGenericRenameRollsBackOnAutomationMetadataFailure(t *testing.T) {
 		{cols: []string{"editable_in_ui"}, rows: [][]driver.Value{{true}}},
 		{cols: []string{"data_type"}, rows: [][]driver.Value{{"text"}}},
 		{cols: []string{"table_name"}, rows: [][]driver.Value{{"automation_before"}}},
-		{cols: []string{"table_uid", "table_name"}},
-		{cols: []string{"id", "table_name"}},
 	}}}
 	name := fmt.Sprintf("generic_automation_rename_%d", automationRenameCounter.Add(1))
 	sql.Register(name, automationRenameDriver{state})

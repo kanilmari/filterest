@@ -9,8 +9,11 @@ import (
 	"database/sql"
 	"database/sql/driver"
 	backend "easelect/backend/core_components"
+	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
+	"os"
 	"reflect"
 	"strings"
 	"testing"
@@ -30,6 +33,8 @@ type datasetRouteDriver struct {
 	tables          []datasetAliasTableMetadata
 	missingAliasDB  bool
 	aliasQueryError error
+	namespaceError  error
+	execCalls       *[]string
 }
 
 type datasetRouteConn struct {
@@ -38,6 +43,8 @@ type datasetRouteConn struct {
 	tables          []datasetAliasTableMetadata
 	missingAliasDB  bool
 	aliasQueryError error
+	namespaceError  error
+	execCalls       *[]string
 }
 
 type datasetRouteStmt struct {
@@ -46,6 +53,8 @@ type datasetRouteStmt struct {
 	tables          []datasetAliasTableMetadata
 	missingAliasDB  bool
 	aliasQueryError error
+	namespaceError  error
+	execCalls       *[]string
 }
 
 type datasetRouteRows struct {
@@ -251,68 +260,81 @@ func TestDefaultPublicDatasetAliasCandidateStripsKnownPrefixes(t *testing.T) {
 	}
 }
 
-func TestValidateDatasetRouteAvailabilityRejectsReservedTopLevelSegment(t *testing.T) {
+func TestValidateDatasetRouteAvailabilityUsesLockedDatabaseNamespace(t *testing.T) {
+	for _, name := range []string{"login", "service_catalog", "App_Other_Table", "secondary-orders"} {
+		t.Run(name, func(t *testing.T) {
+			calls := []string{}
+			db := openDatasetRouteTestDBWithOptions(t, datasetRouteTestOptions{
+				namespaceError: &pq.Error{Code: "P0001", Message: NamespaceConflictKey, Detail: name}, execCalls: &calls,
+			})
+			defer db.Close()
+			err := ValidateDatasetRouteAvailability(db, name, 41)
+			var conflict *RouteConflictError
+			if !errors.As(err, &conflict) || conflict.Segment != name {
+				t.Fatalf("expected database namespace refusal, got %v", err)
+			}
+			if len(calls) != 2 || !strings.Contains(calls[0], "app_lock_dataset_namespace()") ||
+				!strings.Contains(calls[1], "app_validate_dataset_name($1, $2)") {
+				t.Fatalf("namespace validation did not lock first: %v", calls)
+			}
+		})
+	}
+}
+
+func TestValidateDatasetRouteAvailabilityAcceptsDatabaseApproval(t *testing.T) {
 	db := openDatasetRouteTestDB(t, nil, nil)
 	defer db.Close()
-
-	err := ValidateDatasetRouteAvailability(db, "login", 0)
-	if err == nil {
-		t.Fatal("expected conflict error")
-	}
-	if got := err.Error(); got != `dataset route segment "login" is already in use: dataset name conflicts with a reserved top-level route` {
-		t.Fatalf("error = %q", got)
-	}
-}
-
-func TestValidateDatasetRouteAvailabilityRejectsExplicitAliasCollision(t *testing.T) {
-	db := openDatasetRouteTestDBWithOptions(t, datasetRouteTestOptions{
-		missingAliasDB: true,
-	})
-	defer db.Close()
-
-	err := ValidateDatasetRouteAvailability(db, "service_catalog", 0)
-	if err == nil {
-		t.Fatal("expected explicit alias conflict")
-	}
-	if got := err.Error(); got != `dataset route segment "service_catalog" is already in use: dataset name conflicts with the public alias for "app_service_catalog"` {
-		t.Fatalf("error = %q", got)
-	}
-}
-
-func TestValidateDatasetRouteAvailabilityRejectsAutomaticAppAliasCollision(t *testing.T) {
-	db := openDatasetRouteTestDB(t, map[string]datasetRouteRow{
-		"other_table": {id: 14, tableName: "other_table"},
-	}, nil)
-	defer db.Close()
-
-	err := ValidateDatasetRouteAvailability(db, "app_other_table", 0)
-	if err == nil {
-		t.Fatal("expected default alias conflict")
-	}
-	if got := err.Error(); got != `dataset route segment "other_table" is already in use: default public alias conflicts with existing dataset "other_table"` {
-		t.Fatalf("error = %q", got)
-	}
-}
-
-func TestValidateDatasetRouteAvailabilityAllowsExplicitAliasOwner(t *testing.T) {
-	db := openDatasetRouteTestDB(t, map[string]datasetRouteRow{
-		"app_service_catalog": {id: 7, tableName: "app_service_catalog"},
-	}, nil)
-	defer db.Close()
-
-	if err := ValidateDatasetRouteAvailability(db, "app_service_catalog", 7); err != nil {
-		t.Fatalf("expected explicit alias owner to pass, got %v", err)
-	}
-}
-
-func TestValidateDatasetRouteAvailabilityDoesNotAutoEnforceSystemPrefixAlias(t *testing.T) {
-	db := openDatasetRouteTestDB(t, map[string]datasetRouteRow{
-		"service_catalog": {id: 8, tableName: "service_catalog"},
-	}, nil)
-	defer db.Close()
-
 	if err := ValidateDatasetRouteAvailability(db, "system_service_catalog", 0); err != nil {
-		t.Fatalf("expected system_ alias candidate to remain non-blocking in first slice, got %v", err)
+		t.Fatal(err)
+	}
+}
+
+func TestDatasetNamePoolsFoldRealAndSecondaryNames(t *testing.T) {
+	pools := buildDatasetNamePools([]datasetNamePoolTable{{11, "Reports", "public"}, {12, "app_orders", "public"}},
+		map[int][]datasetNamePoolAlias{12: {{"reports", false}, {"old-orders", false}, {"shop-orders", true}}})
+	if !reflect.DeepEqual(pools[12].Names, []string{"app_orders", "old-orders", "shop-orders"}) || pools[11].PreferredName != "Reports" {
+		t.Fatalf("case-folded real name was not protected: %+v", pools)
+	}
+}
+
+// The browser registry reads the same cases; exact legacy names precede folding.
+func TestDatasetResolversPreserveExactLegacyCaseNames(t *testing.T) {
+	data, err := os.ReadFile("../../../testing/shared_contracts/dataset_name_resolution_examples.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var examples struct {
+		Lookups []struct {
+			Name string
+			UID  int
+		}
+	}
+	if err := json.Unmarshal(data, &examples); err != nil {
+		t.Fatal(err)
+	}
+	for _, reverse := range []bool{false, true} {
+		t.Run(fmt.Sprintf("reverse_%t", reverse), func(t *testing.T) {
+			tables := []datasetAliasTableMetadata{{81, "Reports"}, {82, "reports"}}
+			if reverse {
+				tables[0], tables[1] = tables[1], tables[0]
+			}
+			db := openDatasetRouteTestDBWithOptions(t, datasetRouteTestOptions{tables: tables,
+				aliases: map[string]string{"Reports": "upper-reports", "reports": "lower-reports"}})
+			defer db.Close()
+			for _, example := range examples.Lookups {
+				got := ResolveRawDatasetNameWithQuerier(db, example.Name)
+				want := ""
+				if example.UID == 81 {
+					want = "Reports"
+				}
+				if example.UID == 82 {
+					want = "reports"
+				}
+				if got != want {
+					t.Errorf("lookup %q = %q, want %q (ambiguous names must be refused)", example.Name, got, want)
+				}
+			}
+		})
 	}
 }
 
@@ -322,6 +344,8 @@ type datasetRouteTestOptions struct {
 	tables          []datasetAliasTableMetadata
 	missingAliasDB  bool
 	aliasQueryError error
+	namespaceError  error
+	execCalls       *[]string
 }
 
 func openDatasetRouteTestDB(t *testing.T, rows map[string]datasetRouteRow, aliases map[string]string) *sql.DB {
@@ -349,6 +373,7 @@ func openDatasetRouteTestDBWithOptions(t *testing.T, options datasetRouteTestOpt
 		tables:          append([]datasetAliasTableMetadata(nil), options.tables...),
 		missingAliasDB:  options.missingAliasDB,
 		aliasQueryError: options.aliasQueryError,
+		namespaceError:  options.namespaceError, execCalls: options.execCalls,
 	})
 
 	db, err := sql.Open(driverName, "")
@@ -376,6 +401,7 @@ func (d *datasetRouteDriver) Open(string) (driver.Conn, error) {
 		tables:          copiedTables,
 		missingAliasDB:  d.missingAliasDB,
 		aliasQueryError: d.aliasQueryError,
+		namespaceError:  d.namespaceError, execCalls: d.execCalls,
 	}, nil
 }
 
@@ -402,6 +428,19 @@ func (*datasetRouteTx) Rollback() error { return nil }
 
 func (c *datasetRouteConn) QueryContext(_ context.Context, query string, args []driver.NamedValue) (driver.Rows, error) {
 	return buildDatasetRouteRows(c.rows, c.aliases, c.tables, c.missingAliasDB, c.aliasQueryError, query, args)
+}
+
+func (c *datasetRouteConn) ExecContext(_ context.Context, query string, _ []driver.NamedValue) (driver.Result, error) {
+	if c.execCalls != nil {
+		*c.execCalls = append(*c.execCalls, query)
+	}
+	if strings.Contains(query, "app_lock_dataset_namespace()") {
+		return driver.RowsAffected(1), nil
+	}
+	if strings.Contains(query, "app_validate_dataset_name(") {
+		return driver.RowsAffected(0), c.namespaceError
+	}
+	return nil, fmt.Errorf("unexpected exec: %s", query)
 }
 
 func (s *datasetRouteStmt) Close() error  { return nil }

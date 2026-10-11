@@ -15,6 +15,22 @@ describe("createVanillaDropdown", () => {
         document.body.innerHTML = "";
     });
 
+    test('the alias fixture selector uses the same underscore-to-hyphen option suffix as the builder', async () => {
+        const { createVanillaDropdown, sanitizeTestIdPart } = await import('./vanilla_dropdown_builder.js');
+        const container = document.createElement('div');
+        container.dataset.testid = 'dataset-alias-management-dataset';
+        document.body.append(container);
+        const datasetName = 'app_e2e_ns_owner_159';
+        const dropdown = createVanillaDropdown({ containerElement: container,
+            options: [{ value: datasetName, label: datasetName }] });
+        dropdown.open();
+        const actual = document.querySelector('.vdw-option').dataset.testid;
+        expect(actual).toBe(`dataset-alias-management-dataset-option-${sanitizeTestIdPart(datasetName)}`);
+        expect(actual).toBe('dataset-alias-management-dataset-option-app-e2e-ns-owner-159');
+        expect(document.querySelector(`[data-testid="dataset-alias-management-dataset-option-${datasetName}"]`)).toBeNull();
+        dropdown.destroy();
+    });
+
     test("renders the trigger chevron without inline svg markup", async () => {
         const { createVanillaDropdown } = await import("./vanilla_dropdown_builder.js");
         const container = document.createElement("div");

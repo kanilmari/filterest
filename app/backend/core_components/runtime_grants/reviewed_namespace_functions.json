@@ -1,0 +1,74 @@
+[
+  {
+    "name": "app_dataset_name_key",
+    "argument_types": "text",
+    "body_md5": "07f5e354a53257cad4fa0e2806f550a5",
+    "language": "sql",
+    "volatility": "i",
+    "returns": "text"
+  },
+  {
+    "name": "app_lock_dataset_namespace",
+    "argument_types": "",
+    "body_md5": "32d544be94f2d39a4bc1e20b4f0f0ffa",
+    "language": "plpgsql",
+    "volatility": "v",
+    "returns": "void"
+  },
+  {
+    "name": "app_lock_dataset_namespace_statement",
+    "argument_types": "",
+    "body_md5": "2fb260bf1bca73592266b0dc868d1d88",
+    "language": "plpgsql",
+    "volatility": "v",
+    "returns": "trigger"
+  },
+  {
+    "name": "app_assert_dataset_namespace_available",
+    "argument_types": "text, integer",
+    "body_md5": "04279e90df4236b365d15353ec97c233",
+    "language": "plpgsql",
+    "volatility": "v",
+    "returns": "void"
+  },
+  {
+    "name": "app_validate_dataset_name",
+    "argument_types": "text, integer",
+    "body_md5": "813dcd2cddf989ea4a7f648faed4e8e0",
+    "language": "plpgsql",
+    "volatility": "v",
+    "returns": "void"
+  },
+  {
+    "name": "app_validate_dataset_alias",
+    "argument_types": "text, text",
+    "body_md5": "2654066ae02e66df93b960d28fec5d81",
+    "language": "plpgsql",
+    "volatility": "v",
+    "returns": "void"
+  },
+  {
+    "name": "app_guard_dataset_name",
+    "argument_types": "",
+    "body_md5": "79a8d4589a4cd7588989353296079211",
+    "language": "plpgsql",
+    "volatility": "v",
+    "returns": "trigger"
+  },
+  {
+    "name": "app_guard_dataset_alias",
+    "argument_types": "",
+    "body_md5": "036425309af5f5a87d3ad803c3a88bc6",
+    "language": "plpgsql",
+    "volatility": "v",
+    "returns": "trigger"
+  },
+  {
+    "name": "set_system_db_table_aliases_updated_timestamp",
+    "argument_types": "",
+    "body_md5": "d0f029ee82498d06b60d4440816e1507",
+    "language": "plpgsql",
+    "volatility": "v",
+    "returns": "trigger"
+  }
+]

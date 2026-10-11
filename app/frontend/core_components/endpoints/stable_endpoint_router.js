@@ -46,24 +46,8 @@ export function reauthenticateApplicationUpdate(body) {
 /** @typedef {import('../../generated/go_contract_types').CardVisibilityColumn} CardVisibilityColumn */
 /** @typedef {import('../../generated/go_contract_types').CardVisibilityResponse} CardVisibilityResponse */
 /** @typedef {import('../../generated/go_contract_types').ChildTabConfigRow} ChildTabConfigRow */
-/**
- * @typedef {object} DatasetAliasManagementEntry
- * @property {string} dataset_name
- * @property {number} table_uid
- * @property {string} stored_primary_alias
- * @property {string} effective_public_alias
- * @property {string} alias_source
- * @property {string} raw_dataset_path
- * @property {string} canonical_dataset_path
- * @property {string} public_dataset_path
- * @property {string} default_public_alias_candidate
- * @property {boolean} default_alias_auto_reserved
- */
-/**
- * @typedef {object} DatasetAliasManagementSnapshot
- * @property {DatasetAliasManagementEntry[]} [datasets]
- * @property {string} [system_alias_policy_recommendation]
- */
+/** @typedef {import('../../generated/go_contract_types').AliasManagementEntry} DatasetAliasManagementEntry */
+/** @typedef {import('../../generated/go_contract_types').AliasManagementSnapshot} DatasetAliasManagementSnapshot */
 /**
  * @typedef {object} SaveDatasetAliasManagementRequest
  * @property {string} dataset_name
@@ -216,7 +200,7 @@ export async function refreshFKCacheTrigger(request) {
  * @returns {Promise<DatasetAliasManagementSnapshot>}
  */
 export async function fetchDatasetAliasManagement() {
-    return stable_candidate_endpoint_router('getDatasetAliasManagement');
+    return stable_candidate_endpoint_router('getDatasetAliasManagement', { suppressErrorToast: true });
 }
 
 /**
@@ -228,6 +212,7 @@ export async function fetchDatasetAliasManagement() {
 export async function saveDatasetAliasManagement(request) {
     return stable_candidate_endpoint_router('saveDatasetAliasManagement', {
         body_data: request,
+        suppressErrorToast: true,
     });
 }
 
