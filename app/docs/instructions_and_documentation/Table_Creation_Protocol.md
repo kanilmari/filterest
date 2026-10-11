@@ -135,7 +135,30 @@ A table is not considered "valid" until it is registered in the platform's metad
 2.  **`system_db_tables`**: The dataset must have a row linking it to a folder,
     with kind intent/version and validated relationship configuration. Existing
     rows default to ordinary/version 0 without rewriting historical structures.
-3.  **`system_column_details`**: (Optional but recommended) Metadata about columns for UI rendering.
+3.  **`system_column_details`**: Column metadata is required by generic column-permission checks as well as UI rendering. Every physical column needs a row; intentionally protected columns retain their permission flags.
+
+The runtime creation handler registers the single physical relation it just created,
+including its OID and chosen folder, and refreshes only that dataset’s columns.
+It keeps DDL, metadata, requested rights and grant reconciliation in the same
+policy-locked transaction. Whole-catalogue discovery, orphan cleanup and column
+refresh belong to startup or explicit maintenance; creation does not repair
+unrelated datasets.
+
+Fresh bootstrap and upgrades complete missing column rows for registered physical
+relations through `20261009000082_complete_registered_column_metadata.sql`.
+Existing metadata and permission flags are preserved, and the registry reference
+key remains uneditable. Creation must not be used to initialize another dataset's
+permission metadata. An automatic refresh's no-op proof requires a current
+catalogue: a dangling legacy registry row is drift, and explicit maintenance can
+still refuse when its changed scope reaches that row's old policy blocker.
+
+The shared creation/editing form reads folders through the existing navigation
+tree request (`GET /api/tree_data`), which never takes the policy lock. While
+that request is pending it shows translated loading text and hides the choice;
+a settled success exposes the folders. A refusal, malformed/empty answer or
+ten-second request timeout leaves a disabled choice with translated failure
+text. A cached tree cannot conceal a refusal. The shared form copy owns these
+messages and follows the application’s language and theme.
 
 ### Runtime Safety Nets
 

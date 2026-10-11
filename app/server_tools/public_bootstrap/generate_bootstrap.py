@@ -75,6 +75,7 @@ language_seed_migrations = (
     "20261009000073_repair_publication_translations.sql",
     "20261009000074_seed_filterbar_style_language_key.sql",
     "20261009000076_seed_dataset_kind_language_keys.sql",
+    "20261009000081_seed_runtime_grant_policy_wait_language_key.sql",
 )
 # A setting an upgrade adds is added for a new installation by the same file, so
 # the default is written once and an upgraded site and a new one start with the
@@ -138,6 +139,7 @@ release_data_migrations = (
     "20261009000051_register_application_update_capability.sql",
     "20261009000061_backfill_dataset_appearance_three_places.sql",
     "20261009000072_register_publication_columns.sql",
+    "20261009000082_complete_registered_column_metadata.sql",
 )
 # The record of each database release is not run by the bootstrap: the acceptance
 # block below writes the version row of the version this bootstrap is built for.

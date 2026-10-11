@@ -12,22 +12,18 @@ import { resolveFolderSelectionDefaults } from "./dataset_folder_options.js";
 
 let pickerSequence = 0;
 
-/** The tree the navigation itself draws, preferring the server's current answer. */
+const FOLDER_REQUEST_TIMEOUT_MS = 10000;
+
+/** Read the current navigation tree; a refusal must reach the form's status. */
 export async function readNavigationTreeNodes() {
+	const controller = new AbortController();
+	const timeout = setTimeout(() => controller.abort(), FOLDER_REQUEST_TIMEOUT_MS);
     try {
-        const treeData = await endpoint_router("fetchTreeData", { suppressErrorToast: true });
-        const nodes = Array.isArray(treeData?.nodes) ? treeData.nodes : [];
-        if (nodes.length > 0) return nodes;
-    } catch (error) {
-        // A cached tree still names the folders, which is better than offering none.
-        void error;
-    }
-    try {
-        const cached = JSON.parse(localStorage.getItem("full_tree_data") || "null");
-        return Array.isArray(cached?.nodes) ? cached.nodes : [];
-    } catch (error) {
-        void error;
-        return [];
+        const treeData = await endpoint_router("fetchTreeData", { suppressErrorToast: true, signal: controller.signal });
+        if (!Array.isArray(treeData?.nodes)) throw new Error("folder tree response has no nodes");
+        return treeData.nodes;
+    } finally {
+        clearTimeout(timeout);
     }
 }
 
@@ -103,6 +99,9 @@ export function createDatasetFolderPicker({ allowNewFolder = false, choices }) {
     select.name = "dataset_folder_id";
     select.dataset.testid = "dataset-folder-select";
     select.disabled = true;
+    // Visibility means a settled answer, so callers cannot mistake a pending
+    // response for a folder list with no choices (including the T1 browser flow).
+    select.hidden = true;
     choiceLabel.appendChild(select);
 
     const status = createDatasetFormStatus("dataset-folder-status");
@@ -206,6 +205,8 @@ export function createDatasetFolderPicker({ allowNewFolder = false, choices }) {
     function show(loaded) {
         loadedOptions = Array.isArray(loaded?.options) ? loaded.options : [];
         fillFolderOptions(select, loadedOptions);
+        select.hidden = false;
+        if (newFolder) newFolder.toggle.disabled = loadedOptions.length === 0;
         if (newFolder) fillFolderOptions(newFolder.parent, loadedOptions, { rootKey: "root_folder" });
         const selected = String(loaded?.selected ?? "");
         if (loadedOptions.length === 0 || (!allowNewFolder && !selected)) {
@@ -221,8 +222,15 @@ export function createDatasetFolderPicker({ allowNewFolder = false, choices }) {
     }
 
     function load(pending) {
+        select.disabled = true;
+        select.hidden = true;
+        if (newFolder) newFolder.toggle.disabled = true;
+        status.show("dataset_folder_loading");
         return Promise.resolve(pending).then(show, (error) => {
+            loadedOptions = [];
+            select.replaceChildren();
             select.disabled = true;
+            select.hidden = false;
             status.show("dataset_folder_unavailable");
             void error;
         });

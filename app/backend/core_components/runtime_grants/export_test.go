@@ -7,6 +7,7 @@ import (
 	"easelect/backend/core_components/runtimepaths"
 	"path/filepath"
 	"testing"
+	"time"
 )
 
 var ReviewPostgresFixture = reviewPostgresFixture
@@ -18,6 +19,18 @@ var GrantDisposableDB = grantDisposableDB
 var ACLFingerprint = aclFingerprint
 
 var ConfigureReviewRuntimePaths = configureReviewRuntimePaths
+
+// SetPolicyLockWaitForTest bridges external handler proofs to a package-only
+// override. It is absent from production builds; these fixtures are sequential.
+func SetPolicyLockWaitForTest(t *testing.T, limit time.Duration) {
+	t.Helper()
+	if limit < time.Millisecond {
+		t.Fatal("policy lock test wait must be at least one millisecond")
+	}
+	previous := policyLockWaitLimit
+	policyLockWaitLimit = limit
+	t.Cleanup(func() { policyLockWaitLimit = previous })
+}
 
 // Normalize the relative legacy defaults to an equivalent validated baseline
 // before changing global paths. Cleanup must restore it and report any failure.

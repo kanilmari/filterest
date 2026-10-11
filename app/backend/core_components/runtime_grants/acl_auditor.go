@@ -75,7 +75,7 @@ func auditACLs(ctx context.Context, tx *sql.Tx, snapshot GrantSnapshot, checks [
 		}
 		return nil
 	}); err != nil {
-		return fmt.Errorf("direct ACL inspection failed")
+		return fmt.Errorf("direct ACL inspection failed: %w", err)
 	}
 	if err := readRows(ctx, tx, defaultACLsSQL, nil, func(rows *sql.Rows) error {
 		var oid, creator, grantee, grantor int64

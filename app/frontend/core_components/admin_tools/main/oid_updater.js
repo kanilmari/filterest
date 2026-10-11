@@ -3,8 +3,8 @@
 // Bridges the OID update endpoint with lightweight frontend action handling.
 // Exists to keep this maintenance action isolated from larger admin view builders.
 // PIPELINE_EXCEPTION: /api/update-oids is a best-effort maintenance refresh that
-// needs a local AbortController timeout so slow catalog syncs do not prolong
-// reloads or pagehide churn. It is sent as POST because it rewrites stored
+// cancels on pagehide. Bootstrap first reads for drift and skips a current
+// catalogue; changed/forced refreshes wait for policy mutations and reconcile. It is sent as POST because it rewrites stored
 // catalog metadata; it borrows the pipeline's own token cache rather than
 // keeping a second one.
 
@@ -14,7 +14,6 @@ import { ensureCsrfToken } from '../../pipeline/api_pipeline.js';
 const OID_REFRESH_CACHE_KEY = 'easelect_oid_refresh_started_at';
 const OID_REFRESH_TAB_SESSION_KEY = 'easelect_oid_refresh_started_this_tab_session';
 const OID_REFRESH_MIN_INTERVAL_MS = 10 * 60 * 1000;
-const OID_REFRESH_TIMEOUT_MS = 8000;
 
 function readLastOidRefreshStartedAt() {
     try {
@@ -56,30 +55,28 @@ function isAbortLikeMaintenanceFailure(error) {
     return /AbortError|NS_BINDING_ABORTED|NetworkError when attempting to fetch resource|Failed to fetch|Load failed/i.test(message);
 }
 
-function createOidRefreshAbortContext(timeoutMs = OID_REFRESH_TIMEOUT_MS) {
+function createOidRefreshAbortContext() {
     const abortController = new AbortController();
     const abortOnPageHide = () => {
         abortController.abort();
     };
-
-    const timeoutId = window.setTimeout(() => {
-        abortController.abort();
-    }, timeoutMs);
-
     window.addEventListener('pagehide', abortOnPageHide, { once: true });
 
     return {
         signal: abortController.signal,
         cleanup() {
-            window.clearTimeout(timeoutId);
             window.removeEventListener('pagehide', abortOnPageHide);
         },
     };
 }
 
-async function fetchOidRefresh({ signal } = {}) {
+async function fetchOidRefresh({ signal, onlyIfChanged = false } = {}) {
     const csrfToken = await ensureCsrfToken();
-    const response = await fetch(get_endpoint_url('updateOids'), {
+    const endpoint = get_endpoint_url('updateOids');
+    // Ordinary bootstrap reads for drift before entering a policy mutation.
+    // A forced maintenance refresh retains the complete reconciliation path.
+    const url = onlyIfChanged ? `${endpoint}${endpoint.includes('?') ? '&' : '?'}only_if_changed=true` : endpoint;
+    const response = await fetch(url, {
         method: 'POST',
         credentials: 'include',
         headers: {
@@ -118,7 +115,7 @@ export async function update_oids_and_table_names({ force = false } = {}) {
     const abortContext = createOidRefreshAbortContext();
 
     try {
-        await fetchOidRefresh({ signal: abortContext.signal });
+        await fetchOidRefresh({ signal: abortContext.signal, onlyIfChanged: !force });
     } catch (error) {
         if (isAbortLikeMaintenanceFailure(error)) {
             return;

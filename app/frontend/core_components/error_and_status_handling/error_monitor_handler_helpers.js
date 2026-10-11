@@ -13,6 +13,8 @@
  * 20260922000001_seed_failure_notice_and_dataset_form_language_keys.sql and
  * 20260922000004_seed_pending_interface_language_keys.sql seed the same
  * wording, and Python tests keep the two in step.
+ * The policy-wait refusal follows migration 20261009000081, including each
+ * canonical Chinese locale and the legacy Cantonese copy.
  */
 export const FAILURE_NOTICE_TRANSLATION_FALLBACKS = Object.freeze({
     server_error_notice: {
@@ -44,6 +46,15 @@ export const FAILURE_NOTICE_TRANSLATION_FALLBACKS = Object.freeze({
         en: "The service is temporarily under maintenance. Please retry shortly.",
         ch: "服务正在临时维护。请稍后重试。",
         yue: "服務暫時維護緊。請稍後再試。",
+    },
+    error_runtime_grant_policy_busy: {
+        fi: "Toista oikeusmuutosta tallennetaan vielä. Yritä hetken kuluttua uudelleen.",
+        en: "Another permission change is still being saved. Try again in a moment.",
+        ch: "另一个权限更改仍在保存中。请稍后再试。",
+        yue: "另一項權限更改仲儲存緊。請稍後再試。",
+        "zh-cn": "另一个权限更改仍在保存中。请稍后再试。",
+        "zh-tw": "另一項權限變更仍在儲存中。請稍後再試。",
+        "zh-hk": "另一項權限更改仍在儲存中。請稍後再試。",
     },
 });
 

@@ -35,8 +35,12 @@ func beginAdmission(w http.ResponseWriter, r *http.Request, requireGrant bool) (
 	if err != nil {
 		return nil, actor, err
 	}
-	if err = runtime_grants.LockRuntimeGrantPolicy(r.Context(), tx); err != nil {
-		return nil, actor, err
+	// Only admission writers serialize with permission changes. Status and job
+	// reads use committed metadata and must not queue behind a dataset's DDL.
+	if requireGrant {
+		if err = runtime_grants.LockRuntimeGrantPolicy(r.Context(), tx); err != nil {
+			return nil, actor, err
+		}
 	}
 	session, err := e_sessions.Load(r)
 	if err != nil || session == nil || session.Values["authenticated"] != true {
@@ -87,12 +91,8 @@ func StatusHandler(w http.ResponseWriter, r *http.Request) {
 		respondFailure(w, err)
 		return
 	}
-	state, err := loadControl(r.Context(), tx)
+	state, err := readControl(r.Context(), tx, false)
 	if err != nil {
-		respondFailure(w, err)
-		return
-	}
-	if err = expireQueued(r.Context(), tx, time.Now()); err != nil {
 		respondFailure(w, err)
 		return
 	}
@@ -107,6 +107,9 @@ func StatusHandler(w http.ResponseWriter, r *http.Request) {
 	if err == nil {
 		response.LatestJob = &Job{}
 		err = json.Unmarshal(raw, response.LatestJob)
+		if err == nil {
+			*response.LatestJob = jobForDisplay(*response.LatestJob, time.Now())
+		}
 	}
 	if err != nil && err != sql.ErrNoRows {
 		respondFailure(w, err)
@@ -147,16 +150,22 @@ func JobHandler(w http.ResponseWriter, r *http.Request) {
 		respondFailure(w, refuse("invalid_request", http.StatusBadRequest))
 		return
 	}
-	if err = expireQueued(r.Context(), tx, time.Now()); err != nil {
-		respondFailure(w, err)
-		return
-	}
-	job, err := loadJob(r.Context(), tx, id)
+	job, err := readJob(r.Context(), tx, id, false)
 	if err != nil {
 		respondFailure(w, err)
 		return
 	}
-	httpresponse.RespondWithJSON(w, http.StatusOK, job)
+	httpresponse.RespondWithJSON(w, http.StatusOK, jobForDisplay(job, time.Now()))
+}
+
+// jobForDisplay reports an expired queue without writing from a GET. The next
+// admission persists expiry and its audit event under the existing writer lock.
+func jobForDisplay(job Job, now time.Time) Job {
+	expires, err := time.Parse(time.RFC3339Nano, job.ExpiresAt)
+	if err == nil && job.Phase == "queued" && !expires.After(now) {
+		job.Phase, job.TerminalResult = "expired", "nothing_changed"
+	}
+	return job
 }
 
 // DecisionHandler admits acceptance/refusal intent against the exact reopened evidence.

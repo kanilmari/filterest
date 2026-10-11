@@ -241,6 +241,20 @@ func HandleUpdateOidsAndTableNames(w http.ResponseWriter, r *http.Request) {
 	// method is also how the site assistant reaches a route without asking
 	// anyone to approve the change, because approval is only required of
 	// writes.
+	// Bootstrap asks for discovery only when the catalogue changed. This SELECT
+	// stays outside the writer boundary; explicit maintenance still reconciles
+	// unconditionally. Concurrent uncommitted DDL is owned by its own mutation.
+	if r.URL.Query().Get("only_if_changed") == "true" {
+		changed, err := catalogueRefreshRequired(r.Context(), backend.Db)
+		if err != nil {
+			httpresponse.RespondWithError(w, http.StatusInternalServerError, "could not inspect catalogue metadata")
+			return
+		}
+		if !changed {
+			fmt.Fprint(w, "Catalogue metadata is current.")
+			return
+		}
+	}
 
 	mutation, err := runtime_grant_mutations.Begin(r.Context(), w)
 	if err != nil {

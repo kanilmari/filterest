@@ -8,11 +8,26 @@ import (
 	"context"
 	"database/sql"
 	"database/sql/driver"
+	"errors"
 	"fmt"
+	"log"
 	"time"
+
+	"github.com/lib/pq"
 )
 
 const lifecycleLock = "filterest.runtime_startup_barrier"
+
+// Ten seconds still admits the six-second overlap proof, while leaving twenty
+// seconds of a thirty-second client budget for work, rollback and delivery.
+const policyLockWaitTimeout = 10 * time.Second
+
+// Package tests may shorten this wait; no runtime configuration changes it.
+var policyLockWaitLimit = policyLockWaitTimeout
+
+// ErrPolicyLockWaitTimeout identifies only an expired policy-lock acquisition.
+// HTTP mutation callers translate it; other lock failures keep their own errors.
+var ErrPolicyLockWaitTimeout = errors.New("runtime grant policy lock wait timed out")
 
 // WithStartupBarrier serializes entire boots, not just their last ACL step.
 // Pass the dedicated lifecycle pool; work uses separate role pools.
@@ -70,9 +85,27 @@ func lockRuntimeGrantPolicyOnly(ctx context.Context, tx *sql.Tx) error {
 	if tx == nil {
 		return fmt.Errorf("runtime grant transaction is required")
 	}
-	if _, err := tx.ExecContext(ctx, `SET LOCAL lock_timeout = '5s'`); err != nil {
+	// This lock queues complete policy mutations, including catalogue-wide
+	// inspection and the caller's eventual commit. Allow overlapping mutations
+	// time to finish, but bound queued transactions and pooled connections.
+	// Keep the request context: a client leaving still cancels and rolls back.
+	if _, err := tx.ExecContext(ctx, fmt.Sprintf(`SET LOCAL lock_timeout = '%dms'`, policyLockWaitLimit.Milliseconds())); err != nil {
 		return err
 	}
-	_, err := tx.ExecContext(ctx, `SELECT pg_advisory_xact_lock(hashtext('filterest.runtime_role_write_revocations'))`)
+	started := time.Now()
+	_, acquireErr := tx.ExecContext(ctx, `SELECT pg_advisory_xact_lock(hashtext('filterest.runtime_role_write_revocations'))`)
+	if elapsed := time.Since(started); elapsed >= time.Second {
+		log.Printf("[RUNTIME GRANTS] policy_lock_wait=%s acquired=%t", elapsed.Round(time.Millisecond), acquireErr == nil)
+	}
+	if err := acquireErr; err != nil {
+		var postgresError *pq.Error
+		if errors.As(err, &postgresError) && postgresError.Code == "55P03" {
+			return fmt.Errorf("%w: %w", ErrPolicyLockWaitTimeout, err)
+		}
+		return err
+	}
+	// Restore the existing limit before metadata reads or row/reference/DDL
+	// locks. Neither their timeout nor the lifecycle-before-policy order changes.
+	_, err := tx.ExecContext(ctx, `SET LOCAL lock_timeout = '5s'`)
 	return err
 }

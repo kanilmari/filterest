@@ -1,3 +1,7 @@
+// error_monitor_handler_helpers.test.js
+// Checks multilingual notice copy and monitor helpers without network access.
+// Connects bootstrap fallback keys to shared failure-notice contracts.
+// Keeps every bundled locale readable before runtime translations load.
 import { describe, test, expect } from 'vitest';
 import {
     FAILURE_NOTICE_TRANSLATION_FALLBACKS,
@@ -13,11 +17,15 @@ import {
 describe('failure notices', () => {
     test('every notice key has bootstrap copy in each installed language', () => {
         expect(Object.keys(FAILURE_NOTICE_TRANSLATION_FALLBACKS).sort()).toEqual([
+            'error_runtime_grant_policy_busy',
             'network_error_notice', 'rate_limit_notice', 'request_failed_notice',
             'server_error_notice', 'service_unavailable_notice',
         ]);
-        for (const copy of Object.values(FAILURE_NOTICE_TRANSLATION_FALLBACKS)) {
-            expect(Object.keys(copy).sort()).toEqual(['ch', 'en', 'fi', 'yue']);
+        for (const [key, copy] of Object.entries(FAILURE_NOTICE_TRANSLATION_FALLBACKS)) {
+            const languages = key === 'error_runtime_grant_policy_busy'
+                ? ['ch', 'en', 'fi', 'yue', 'zh-cn', 'zh-hk', 'zh-tw']
+                : ['ch', 'en', 'fi', 'yue'];
+            expect(Object.keys(copy).sort()).toEqual(languages);
             for (const text of Object.values(copy)) {
                 expect(text.trim()).not.toBe('');
                 expect(text).not.toMatch(/https?:|\/api\//);

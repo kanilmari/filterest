@@ -183,9 +183,9 @@ describe('dataset folder routes', () => {
         expect(describeFolderConflict(new Error('Virhe pyynnössä (updateTableFolder): Move it?'))).toBe('Move it?');
     });
 
-    test('a cached tree still names the folders when the server cannot answer', async () => {
+    test('a refusal reaches the form even when a stale tree is cached', async () => {
         localStorage.setItem('full_tree_data', JSON.stringify({ nodes: [{ id: 'f_4' }] }));
         endpointRouterMock.mockRejectedValueOnce(new Error('network'));
-        expect(await readNavigationTreeNodes()).toEqual([{ id: 'f_4' }]);
+        await expect(readNavigationTreeNodes()).rejects.toThrow('network');
     });
 });

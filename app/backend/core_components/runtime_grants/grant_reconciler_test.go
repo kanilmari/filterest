@@ -10,10 +10,14 @@ import (
 	"database/sql/driver"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"reflect"
 	"strings"
 	"testing"
+	"time"
 
 	"easelect/backend/core_components/runtime_grants/granttest"
+	"github.com/lib/pq"
 )
 
 func TestGrantStatementsQuoteEveryIdentifier(t *testing.T) {
@@ -87,11 +91,14 @@ func TestMutationBlockersStayWithOwnDependencyClosure(t *testing.T) {
 }
 
 type applierDriver struct {
-	snapshot     GrantSnapshot
-	present      map[string]bool
-	statements   []string
-	ignoreWrites bool
-	unsafeRole   string
+	snapshot       GrantSnapshot
+	present        map[string]bool
+	statements     []string
+	ignoreWrites   bool
+	unsafeRole     string
+	directACLErr   error
+	execErrorQuery string
+	execError      error
 }
 type applierConn struct{ state *applierDriver }
 type applierTx struct{}
@@ -136,6 +143,9 @@ func (c *applierConn) QueryContext(_ context.Context, query string, args []drive
 		result.columns = 1
 		result.rows = [][]driver.Value{{"outside ACLs"}}
 	case query == directACLsSQL:
+		if c.state.directACLErr != nil {
+			return nil, c.state.directACLErr
+		}
 		result.columns = 10
 	case query == defaultACLsSQL:
 		result.columns = 8
@@ -183,6 +193,9 @@ func (c *applierConn) QueryContext(_ context.Context, query string, args []drive
 }
 func (c *applierConn) ExecContext(_ context.Context, query string, _ []driver.NamedValue) (driver.Result, error) {
 	c.state.statements = append(c.state.statements, query)
+	if query == c.state.execErrorQuery {
+		return nil, c.state.execError
+	}
 	if !c.state.ignoreWrites {
 		for _, role := range c.state.snapshot.Roles {
 			for _, object := range c.state.snapshot.Objects {
@@ -253,7 +266,7 @@ func TestApplierRevokesThenRestoresColumnsAndPostchecks(t *testing.T) {
 	}
 }
 
-func TestPolicyLockTimeoutPrecedesBarrierAndObservesCancellation(t *testing.T) {
+func TestPolicyLockQueuesBeforeRowTimeoutAndObservesCancellation(t *testing.T) {
 	state := &applierDriver{snapshot: GrantSnapshot{}, present: map[string]bool{}}
 	db := sql.OpenDB(state)
 	defer db.Close()
@@ -265,7 +278,14 @@ func TestPolicyLockTimeoutPrecedesBarrierAndObservesCancellation(t *testing.T) {
 	if err := LockRuntimeGrantPolicy(context.Background(), tx); err != nil {
 		t.Fatal(err)
 	}
-	if len(state.statements) != 4 || !strings.Contains(state.statements[1], "pg_advisory_xact_lock_shared") || !strings.Contains(state.statements[3], "filterest.runtime_role_write_revocations") || state.statements[0] != `SET LOCAL lock_timeout = '5s'` || !strings.Contains(state.statements[1], "pg_advisory_xact_lock") {
+	want := []string{
+		`SET LOCAL lock_timeout = '5s'`,
+		`SELECT pg_advisory_xact_lock_shared(hashtext($1))`,
+		`SET LOCAL lock_timeout = '10000ms'`,
+		`SELECT pg_advisory_xact_lock(hashtext('filterest.runtime_role_write_revocations'))`,
+		`SET LOCAL lock_timeout = '5s'`,
+	}
+	if !reflect.DeepEqual(state.statements, want) {
 		t.Fatal(state.statements)
 	}
 	ctx, cancel := context.WithCancel(context.Background())
@@ -273,6 +293,45 @@ func TestPolicyLockTimeoutPrecedesBarrierAndObservesCancellation(t *testing.T) {
 	if err := LockRuntimeGrantPolicy(ctx, tx); !errors.Is(err, context.Canceled) {
 		t.Fatal("cancelled request entered barrier", err)
 	}
+}
+
+func TestPolicyLockTimeoutOnlyTagsAcquisitionTimeout(t *testing.T) {
+	const acquire = `SELECT pg_advisory_xact_lock(hashtext('filterest.runtime_role_write_revocations'))`
+	for _, test := range []struct {
+		name, query string
+		cause       error
+		wantTimeout bool
+	}{
+		{"policy_timeout", acquire, &pq.Error{Code: "55P03", Message: "canceling statement due to lock timeout"}, true},
+		{"wrapped_policy_timeout", acquire, fmt.Errorf("driver: %w", &pq.Error{Code: "55P03"}), true},
+		{"statement_timeout", acquire, &pq.Error{Code: "57014"}, false},
+		{"deadlock", acquire, &pq.Error{Code: "40P01"}, false},
+		{"cancellation", acquire, context.Canceled, false},
+		{"lifecycle_timeout", `SELECT pg_advisory_xact_lock_shared(hashtext($1))`, &pq.Error{Code: "55P03"}, false},
+		{"setting_failure", `SET LOCAL lock_timeout = '10000ms'`, &pq.Error{Code: "55P03"}, false},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			state := &applierDriver{execErrorQuery: test.query, execError: test.cause}
+			db := sql.OpenDB(state)
+			defer db.Close()
+			tx, err := db.Begin()
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer tx.Rollback()
+			err = LockRuntimeGrantPolicy(context.Background(), tx)
+			if errors.Is(err, ErrPolicyLockWaitTimeout) != test.wantTimeout || !errors.Is(err, test.cause) {
+				t.Fatalf("policy timeout=%v want=%v; lost cause: %v", errors.Is(err, ErrPolicyLockWaitTimeout), test.wantTimeout, err)
+			}
+		})
+	}
+}
+
+func TestPolicyLockWaitLeavesClientResponseBudget(t *testing.T) {
+	if policyLockWaitLimit != 10*time.Second || policyLockWaitLimit > 15*time.Second {
+		t.Fatalf("policy wait %s must leave at least half the 30s client budget", policyLockWaitLimit)
+	}
+	t.Logf("policy wait=%s; client budget=30s; remaining work/delivery budget=%s", policyLockWaitLimit, 30*time.Second-policyLockWaitLimit)
 }
 
 func TestApplierReportsRetainedOperationalReads(t *testing.T) {

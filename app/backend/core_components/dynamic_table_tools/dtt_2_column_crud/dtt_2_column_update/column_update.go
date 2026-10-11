@@ -21,6 +21,19 @@ import (
 // Accepts a Querier (either *sql.DB or *sql.Tx) for transaction safety.
 func UpdateColumnMetadata(q dbutils.Querier, preserveLegacy ...bool) error {
 	preserve := len(preserveLegacy) > 0 && preserveLegacy[0]
+	return updateColumnMetadata(q, preserve, "")
+}
+
+// UpdateDatasetColumnMetadata synchronizes only the dataset just created or
+// changed. Global orphan cleanup belongs to maintenance, not its policy lock.
+func UpdateDatasetColumnMetadata(q dbutils.Querier, tableName string) error {
+	if strings.TrimSpace(tableName) == "" {
+		return fmt.Errorf("dataset name is required for scoped column refresh")
+	}
+	return updateColumnMetadata(q, false, tableName)
+}
+
+func updateColumnMetadata(q dbutils.Querier, preserve bool, tableName string) error {
 	// Poista rivit system_column_details-taulusta, joiden table_uid ei enää ole olemassa
 	cleanupQuery := `
         DELETE FROM system_column_details
@@ -28,9 +41,10 @@ func UpdateColumnMetadata(q dbutils.Querier, preserveLegacy ...bool) error {
             SELECT table_uid FROM system_db_tables
         )
     `
-	_, err := q.Exec(cleanupQuery)
-	if err != nil {
-		return fmt.Errorf("error cleaning up obsolete entries: %w", err)
+	if tableName == "" {
+		if _, err := q.Exec(cleanupQuery); err != nil {
+			return fmt.Errorf("error cleaning up obsolete entries: %w", err)
+		}
 	}
 
 	// Hae kaikki taulut system_db_tables-taulusta
@@ -38,10 +52,14 @@ func UpdateColumnMetadata(q dbutils.Querier, preserveLegacy ...bool) error {
         SELECT table_name, table_uid
         FROM system_db_tables
     `
-	if preserve {
+	var args []any
+	if tableName != "" {
+		tablesQuery += ` WHERE table_name = $1 AND COALESCE(NULLIF(schema_name,''),'public') = 'public'`
+		args = append(args, tableName)
+	} else if preserve {
 		tablesQuery += ` WHERE table_uid IS NOT NULL AND table_name IS NOT NULL`
 	}
-	rows, err := q.Query(tablesQuery)
+	rows, err := q.Query(tablesQuery, args...)
 	if err != nil {
 		return fmt.Errorf("error fetching tables: %w", err)
 	}

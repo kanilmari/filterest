@@ -29,8 +29,10 @@ func (e *ScopeBlocker) Error() string {
 }
 
 // LockRuntimeGrantPolicy must run immediately after opening the request
-// transaction, before any row/reference/DDL locks. SET LOCAL bounds waiting;
-// ExecContext also observes request cancellation. Startup uses the same barrier.
+// transaction, before any row/reference/DDL locks. Policy writers queue until
+// the preceding transaction ends, the policy wait expires or the request is
+// cancelled; subsequent locks retain their five-second limit. Startup uses the
+// same barrier and lock order.
 func LockRuntimeGrantPolicy(ctx context.Context, tx *sql.Tx) error {
 	if err := LockRuntimeRequestBarrier(ctx, tx); err != nil {
 		return err

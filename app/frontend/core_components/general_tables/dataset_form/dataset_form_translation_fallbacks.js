@@ -56,6 +56,12 @@ const COPY = {
         ch: "请为新文件夹命名，或选择不新建文件夹。",
         yue: "請為新資料夾命名，或者揀唔新增資料夾。",
     },
+    dataset_folder_loading: {
+        fi: "Luetaan kansioita…",
+        en: "Reading the folders…",
+        ch: "正在读取文件夹…",
+        yue: "正在讀取資料夾…",
+    },
     dataset_folder_unavailable: {
         fi: "Kansioita ei voitu lukea.",
         en: "The folders could not be read.",

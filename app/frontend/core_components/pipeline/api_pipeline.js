@@ -531,7 +531,7 @@ async function rateLimitHandlerStage(ctx) {
 }
 
 /**
- * serviceUnavailableHandlerStage — converts maintenance/drain responses into one
+ * serviceUnavailableHandlerStage — converts temporary refusals into one
  * typed retryable error and a bounded, translated, non-technical warning.
  * It is the only notice a 503 gets: the server-error notice is for other 5xx.
  */
@@ -541,6 +541,7 @@ const _SERVICE_UNAVAILABLE_TOAST_WINDOW_MS = 5000;
 async function serviceUnavailableHandlerStage(ctx) {
     if (ctx.response.status !== 503) return;
 
+    const notice = resolveFailureNotice(503, await ctx.response.text().catch(() => ''));
     const now = Date.now();
     if (!ctx.suppressErrorToast && shouldThrottleRateLimitToast(
         _serviceUnavailableLastToastTime,
@@ -548,11 +549,13 @@ async function serviceUnavailableHandlerStage(ctx) {
         now
     )) {
         _serviceUnavailableLastToastTime = now;
-        showRequestFailureNotice('service_unavailable_notice', { level: 'warning', duration: 7000 });
+        showRequestFailureNotice(notice.langKey, { level: 'warning', duration: 7000 });
     }
     console.warn(`[api_pipeline] ${ctx.routeName}: service unavailable (503)`);
 
-    throw createServiceUnavailableError(ctx.routeName);
+    const error = createServiceUnavailableError(ctx.routeName);
+    error.failureNotice = notice;
+    throw error;
 }
 
 /**

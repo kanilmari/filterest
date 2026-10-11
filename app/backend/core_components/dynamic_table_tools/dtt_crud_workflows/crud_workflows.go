@@ -310,15 +310,16 @@ func CreateTableHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Päivitetään OID-arvot
-	err = UpdateOidsAndTableNamesWithBridge(tx)
+	// Register only the relation this request created. A catalogue-wide repair
+	// would scan and potentially change unrelated datasets under the policy lock.
+	err = registerCreatedDataset(tx, tableName, targetFolderID)
 	if err != nil {
 		_ = tx.Rollback()
 		httpresponse.RespondWithError(w, http.StatusInternalServerError, fmt.Sprintf("error updating OID values and table names: %v", err))
 		return
 	}
 
-	if metaErr := dtt_2_column_update.UpdateColumnMetadata(tx); metaErr != nil {
+	if metaErr := dtt_2_column_update.UpdateDatasetColumnMetadata(tx, tableName); metaErr != nil {
 		_ = tx.Rollback()
 		log.Printf("\033[31merror: [CreateTableHandler] metadata refresh failed for %s: %v\033[0m", tableName, metaErr)
 		httpresponse.RespondWithError(w, http.StatusInternalServerError, fmt.Sprintf("table created but metadata refresh failed: %v", metaErr))

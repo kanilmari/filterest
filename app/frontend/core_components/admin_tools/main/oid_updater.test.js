@@ -54,7 +54,7 @@ describe('update_oids_and_table_names', () => {
     await mod.update_oids_and_table_names();
 
     expect(getEndpointUrlMock).toHaveBeenCalledWith('updateOids');
-    expect(fetchMock).toHaveBeenCalledWith('/api/update-oids', expectedRequest);
+    expect(fetchMock).toHaveBeenCalledWith('/api/update-oids?only_if_changed=true', expectedRequest);
     expect(logSpy).not.toHaveBeenCalled();
   });
 
@@ -67,6 +67,13 @@ describe('update_oids_and_table_names', () => {
     await mod.update_oids_and_table_names();
 
     expect(warnSpy).toHaveBeenCalledWith('error updating OID values and table names:', error);
+  });
+
+  test('a forced refresh retains unconditional maintenance', async () => {
+    fetchMock.mockResolvedValue({ ok: true });
+    const mod = await loadModule();
+    await mod.update_oids_and_table_names({ force: true });
+    expect(fetchMock).toHaveBeenCalledWith('/api/update-oids', expectedRequest);
   });
 
   test('skips duplicate refresh calls inside the cooldown window', async () => {
@@ -102,9 +109,11 @@ describe('update_oids_and_table_names', () => {
     expect(warnSpy).not.toHaveBeenCalled();
   });
 
-  test('aborts long-running refresh requests after the safety timeout', async () => {
+  test('lets a queued policy refresh finish beyond the former eight-second timeout', async () => {
     vi.useFakeTimers();
-    fetchMock.mockImplementation((_url, options = {}) => new Promise((_resolve, reject) => {
+    let finishRefresh;
+    fetchMock.mockImplementation((_url, options = {}) => new Promise((resolve, reject) => {
+      finishRefresh = resolve;
       options.signal?.addEventListener('abort', () => {
         const error = new Error('aborted');
         error.name = 'AbortError';
@@ -114,10 +123,30 @@ describe('update_oids_and_table_names', () => {
     const mod = await loadModule();
 
     const refreshPromise = mod.update_oids_and_table_names({ force: true });
-    await vi.advanceTimersByTimeAsync(8000);
+    await vi.advanceTimersByTimeAsync(30000);
+    const signal = fetchMock.mock.calls[0][1].signal;
+    expect(signal.aborted).toBe(false);
+    finishRefresh({ ok: true });
     await refreshPromise;
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
+    // Successful requests remove the page-lifetime listener as well.
+    window.dispatchEvent(new Event('pagehide'));
+    expect(signal.aborted).toBe(false);
+  });
+
+  test('still cancels an unfinished refresh when the page is left', async () => {
+    vi.useFakeTimers();
+    fetchMock.mockImplementation((_url, options) => new Promise((_resolve, reject) => {
+      options.signal.addEventListener('abort', () => reject(new DOMException('Page left', 'AbortError')), { once: true });
+    }));
+    const mod = await loadModule();
+    const refreshPromise = mod.update_oids_and_table_names({ force: true });
+    await vi.advanceTimersByTimeAsync(0);
+
+    window.dispatchEvent(new Event('pagehide'));
+    await refreshPromise;
+
     expect(fetchMock.mock.calls[0][1].signal.aborted).toBe(true);
   });
 });

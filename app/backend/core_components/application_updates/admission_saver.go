@@ -21,11 +21,19 @@ type control struct {
 }
 
 func loadControl(ctx context.Context, tx *sql.Tx) (control, error) {
+	return readControl(ctx, tx, true)
+}
+
+func readControl(ctx context.Context, tx *sql.Tx, forUpdate bool) (control, error) {
 	var state control
 	var raw []byte
-	err := tx.QueryRowContext(ctx, `SELECT installation_id, executor_available AND executor_enabled
+	query := `SELECT installation_id, executor_available AND executor_enabled
 		AND executor_checked_at > clock_timestamp()-interval '1 minute' AND executor_checked_at <= clock_timestamp(), offer
-		FROM restricted.system_application_update_control WHERE singleton IS TRUE FOR UPDATE`).Scan(&state.installationID, &state.available, &raw)
+		FROM restricted.system_application_update_control WHERE singleton IS TRUE`
+	if forUpdate {
+		query += ` FOR UPDATE`
+	}
+	err := tx.QueryRowContext(ctx, query).Scan(&state.installationID, &state.available, &raw)
 	if errors.Is(err, sql.ErrNoRows) {
 		return state, nil
 	}
@@ -37,9 +45,17 @@ func loadControl(ctx context.Context, tx *sql.Tx) (control, error) {
 }
 
 func loadJob(ctx context.Context, tx *sql.Tx, id string) (Job, error) {
+	return readJob(ctx, tx, id, true)
+}
+
+func readJob(ctx context.Context, tx *sql.Tx, id string, forUpdate bool) (Job, error) {
 	var job Job
 	var raw []byte
-	err := tx.QueryRowContext(ctx, `SELECT payload FROM restricted.system_application_update_jobs WHERE id=$1 FOR UPDATE`, id).Scan(&raw)
+	query := `SELECT payload FROM restricted.system_application_update_jobs WHERE id=$1`
+	if forUpdate {
+		query += ` FOR UPDATE`
+	}
+	err := tx.QueryRowContext(ctx, query, id).Scan(&raw)
 	if errors.Is(err, sql.ErrNoRows) {
 		return job, refuse("job_not_found", http.StatusNotFound)
 	}

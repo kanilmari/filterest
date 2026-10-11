@@ -308,6 +308,14 @@ describe('stripAnsiCodes', () => {
 // resolveFailureNotice
 // ---------------------------------------------------------------------------
 describe('resolveFailureNotice', () => {
+    test('a temporary refusal shows its named reason and other 503 responses keep the maintenance notice', () => {
+        expect(resolveFailureNotice(503, JSON.stringify({ error_lang_key: 'error_runtime_grant_policy_busy' })))
+            .toEqual({ langKey: 'error_runtime_grant_policy_busy' });
+        for (const body of ['upstream unavailable', '<html>Maintenance</html>', JSON.stringify({ error_lang_key: '<img src=x>' })]) {
+            expect(resolveFailureNotice(503, body)).toEqual({ langKey: 'service_unavailable_notice' });
+        }
+    });
+
     test('a server error gets the server-error sentence and its status code', () => {
         expect(resolveFailureNotice(500, 'internal server error')).toEqual({ langKey: 'server_error_notice', status: 500 });
         expect(resolveFailureNotice(502, '<html>Bad gateway</html>')).toEqual({ langKey: 'server_error_notice', status: 502 });

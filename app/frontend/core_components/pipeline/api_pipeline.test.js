@@ -307,6 +307,41 @@ describe('api_pipeline', () => {
         expect(showErrorToastMock).not.toHaveBeenCalled();
         expect(showWarningToastMock).not.toHaveBeenCalled();
     });
+    test.each([
+        ['en', 'Another permission change is still being saved. Try again in a moment.'],
+        ['fi', 'Toista oikeusmuutosta tallennetaan vielä. Yritä hetken kuluttua uudelleen.'],
+        ['zh-CN', '另一个权限更改仍在保存中。请稍后再试。'],
+        ['zh-TW', '另一項權限變更仍在儲存中。請稍後再試。'],
+        ['zh-HK', '另一項權限更改仍在儲存中。請稍後再試。'],
+        ['ch', '另一个权限更改仍在保存中。请稍后再试。'],
+        ['yue', '另一項權限更改仲儲存緊。請稍後再試。'],
+    ])('a policy wait refusal shows translated copy and keeps its key in %s', async (language, text) => {
+        document.documentElement.lang = language;
+        vi.stubGlobal('fetch', vi.fn(async () => buildResponse({
+            error_lang_key: 'error_runtime_grant_policy_busy',
+            error: 'Another permission change is still being saved. Try again in a moment.',
+        }, { ok: false, status: 503 })));
+        const mod = await loadModule();
+        await expect(mod.runApiPipeline({ routeName: 'datasetNames' })).rejects.toMatchObject({
+            status: 503, isRetryable: true,
+            failureNotice: { langKey: 'error_runtime_grant_policy_busy' },
+        });
+        expect(shownNotices()).toMatchObject([{ langKey: 'error_runtime_grant_policy_busy', text, level: 'warning', duration: 7000 }]);
+        expect(shownNotices()).toHaveLength(1);
+        expect(showErrorToastMock).not.toHaveBeenCalled();
+    });
+
+    test('a quiet policy wait refusal carries its reason without a toast', async () => {
+        vi.stubGlobal('fetch', vi.fn(async () => buildResponse({
+            error_lang_key: 'error_runtime_grant_policy_busy',
+        }, { ok: false, status: 503 })));
+        const mod = await loadModule();
+        await expect(mod.runApiPipeline({ routeName: 'datasetNames', suppressErrorToast: true })).rejects.toMatchObject({
+            status: 503, failureNotice: { langKey: 'error_runtime_grant_policy_busy' },
+        });
+        expect(shownNotices()).toEqual([]);
+    });
+
     test.each([400, 403, 429, 503])('quiet requests still fail for HTTP %s without error or warning toasts', async (status) => {
         localStorage.setItem('button_state', 'logout');
         vi.stubGlobal('fetch', vi.fn(async () => buildResponse({ error: 'Provider unavailable' }, { ok: false, status })));

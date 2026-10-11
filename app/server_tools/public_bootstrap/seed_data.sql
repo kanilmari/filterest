@@ -6980,6 +6980,66 @@ JOIN public.system_languages l ON l.language_code=c.language_code
 WHERE NULLIF(btrim(c.translation,E' \t\n\r\f' || chr(11)),'') IS NOT NULL
 AND NOT EXISTS (SELECT 1 FROM public.system_lang_key_translations t
                   WHERE t.lang_key_id=s.id AND t.language_code=c.language_code);
+-- 20261009000081_seed_runtime_grant_policy_wait_language_key.sql
+-- Seeds the bounded policy-lock wait refusal in every bundled language.
+-- Connects permission mutation refusals to legacy and normalized copy.
+-- Preserves site-authored wording on upgrades and replay.
+-- VERSION_DB: 9.10.2
+-- VERSION_DB_OWNER: 20261009000099_record_database_release_9_10_2.sql
+
+WITH authored(lang_key, fi, en, ch, yue, zh_tw, zh_hk) AS (VALUES
+    ('error_runtime_grant_policy_busy',
+     'Toista oikeusmuutosta tallennetaan vielä. Yritä hetken kuluttua uudelleen.',
+     'Another permission change is still being saved. Try again in a moment.',
+     '另一个权限更改仍在保存中。请稍后再试。',
+     '另一項權限更改仲儲存緊。請稍後再試。',
+     '另一項權限變更仍在儲存中。請稍後再試。',
+     '另一項權限更改仍在儲存中。請稍後再試。')
+), written AS (
+    INSERT INTO public.system_lang_keys AS existing(lang_key, fi, en, ch, yue, creation_spec)
+    SELECT lang_key, fi, en, ch, yue, 'Ticket 919 bounded permission-policy wait refusal.' FROM authored
+    ON CONFLICT (lang_key) DO UPDATE SET
+        -- Legacy columns win in the language reader. Fill their gaps from the
+        -- same locale's normalized wording before considering shipped defaults.
+        fi = CASE WHEN NULLIF(btrim(existing.fi), '') IS NULL THEN COALESCE((
+            SELECT t.translation FROM public.system_lang_key_translations t
+            WHERE t.lang_key_id = existing.id AND t.language_code = 'fi'
+        ), EXCLUDED.fi) ELSE existing.fi END,
+        en = CASE WHEN NULLIF(btrim(existing.en), '') IS NULL THEN COALESCE((
+            SELECT t.translation FROM public.system_lang_key_translations t
+            WHERE t.lang_key_id = existing.id AND t.language_code = 'en'
+        ), EXCLUDED.en) ELSE existing.en END,
+        ch = CASE WHEN NULLIF(btrim(existing.ch), '') IS NULL THEN COALESCE((
+            SELECT t.translation FROM public.system_lang_key_translations t
+            WHERE t.lang_key_id = existing.id AND t.language_code = 'ch'
+        ), EXCLUDED.ch) ELSE existing.ch END,
+        yue = CASE WHEN NULLIF(btrim(existing.yue), '') IS NULL THEN COALESCE((
+            SELECT t.translation FROM public.system_lang_key_translations t
+            WHERE t.lang_key_id = existing.id AND t.language_code = 'yue'
+        ), EXCLUDED.yue) ELSE existing.yue END
+    WHERE NULLIF(btrim(existing.fi), '') IS NULL OR NULLIF(btrim(existing.en), '') IS NULL
+       OR NULLIF(btrim(existing.ch), '') IS NULL OR NULLIF(btrim(existing.yue), '') IS NULL
+    RETURNING existing.id, existing.lang_key, existing.fi, existing.en, existing.ch, existing.yue
+), served AS (
+    SELECT * FROM written UNION ALL
+    SELECT k.id, k.lang_key, k.fi, k.en, k.ch, k.yue FROM public.system_lang_keys k
+    JOIN authored USING(lang_key) WHERE k.lang_key NOT IN (SELECT lang_key FROM written)
+)
+INSERT INTO public.system_lang_key_translations(lang_key_id, language_code, translation, source_kind, review_status)
+SELECT s.id, c.language_code, c.translation, 'manual', c.review_status FROM served s
+JOIN authored a USING(lang_key)
+-- Chinese locales have their own copy; Cantonese remains the legacy yue copy.
+-- Keep the catalogue's existing review policy without enabling new selectors.
+CROSS JOIN LATERAL (VALUES
+    ('fi', s.fi, 'approved'), ('en', s.en, 'approved'),
+    ('zh-CN', s.ch, 'needs_review'), ('zh-TW', a.zh_tw, 'needs_review'), ('zh-HK', a.zh_hk, 'needs_review'),
+    ('ch', s.ch, 'needs_review'), ('yue', s.yue, 'needs_review')
+) c(language_code, translation, review_status)
+JOIN public.system_languages l ON l.language_code=c.language_code
+WHERE NULLIF(btrim(c.translation), '') IS NOT NULL AND NOT EXISTS (
+    SELECT 1 FROM public.system_lang_key_translations t
+    WHERE t.lang_key_id=s.id AND t.language_code=c.language_code
+);
 -- 20260927000001_add_absolute_sign_in_limit.sql
 -- Adds the setting that decides how long one sign-in may last at the very most.
 -- Bridges the administrator's settings view and the deadline stamped into every
@@ -8031,6 +8091,46 @@ BEGIN
     WHERE NOT EXISTS (SELECT 1 FROM public.system_data_repair_records
                       WHERE migration='wl164_publication_column_metadata' AND action='completed');
 END $publication_metadata$;
+-- 20261009000082_complete_registered_column_metadata.sql
+-- Completes column metadata before a registered dataset reaches a generic editor.
+-- Connects fresh bootstrap and upgraded registries to the same structural defaults.
+-- Keeps creation scoped to its own relation without depending on incidental global repair.
+-- VERSION_DB: 9.10.2
+-- VERSION_DB_OWNER: 20261009000099_record_database_release_9_10_2.sql
+-- COMPLETION_MARKER: t919_registered_column_metadata
+
+DO $registered_columns$
+BEGIN
+    -- These are the defaults of UpdateColumnMetadata, with the registry's
+    -- immutable reference key protected even when its metadata was absent.
+    -- Existing permission flags, presentation choices and diagnostics stay intact.
+    INSERT INTO public.system_column_details
+        (table_uid, column_name, data_type, co_number, card_element, show_key_on_card, editable_in_ui)
+    SELECT registry.table_uid, attribute.attname,
+           pg_catalog.format_type(attribute.atttypid, attribute.atttypmod),
+           attribute.attnum, 'details', NULL,
+           NOT (COALESCE(NULLIF(registry.schema_name, ''), 'public') = 'public'
+                AND registry.table_name = 'system_db_tables' AND attribute.attname = 'table_uid')
+      FROM public.system_db_tables AS registry
+      JOIN pg_catalog.pg_attribute AS attribute
+        ON attribute.attrelid = CASE WHEN NULLIF(registry.table_name, '') IS NOT NULL
+             THEN to_regclass(format('%I.%I',
+                 COALESCE(NULLIF(registry.schema_name, ''), 'public'), registry.table_name)) END
+     WHERE registry.table_uid IS NOT NULL
+       AND attribute.attnum > 0 AND NOT attribute.attisdropped
+       AND NOT EXISTS (
+           SELECT 1 FROM public.system_column_details AS existing
+            WHERE existing.table_uid = registry.table_uid
+              AND existing.column_name = attribute.attname
+       )
+     ORDER BY registry.table_uid, attribute.attnum;
+
+    INSERT INTO public.system_data_repair_records (migration, action, detail)
+    SELECT 't919_registered_column_metadata', 'completed',
+           '{"file":"20261009000082_complete_registered_column_metadata.sql"}'::jsonb
+     WHERE NOT EXISTS (SELECT 1 FROM public.system_data_repair_records
+                        WHERE migration = 't919_registered_column_metadata' AND action = 'completed');
+END $registered_columns$;
 
 -- Generated migration-ledger baseline and version row, written by this acceptance block only after
 -- every completion marker is present and every final check comes back empty. These migrations are
@@ -8041,7 +8141,7 @@ DECLARE
     findings text;
 BEGIN
     SELECT string_agg(marker, ', ' ORDER BY marker) INTO missing_markers
-      FROM unnest(ARRAY['wl58_row_actor_support', 'wl58_row_actor_marks_by_table_uid', 'wl58_row_actor_trigger_definitions', 'k116_login_names', 'password_reset_dummy_work', 'system_favorites_table', 'system_front_page_revisions_table', 'system_front_page_blocks_table', 'wl103_row_group_classifications', 'wl132_surviving_sign_in', 'wl52_drop_column_label_value_layout', 'system_dataset_appearance_table', 'wl157_migration_execution_evidence', 'dataset_card_appearance_cutover', 'wl157_application_update_admission', 'dataset_appearance_three_place_schema', 'wl164_publication_fields', 'wl163_dataset_kind_contracts', 'wl167_database_identity_schema', 'wl157_application_update_refusal_keys', 'wl58_row_actor_columns', 'system_favorites_registry', 'system_front_page_blocks_registry', 'wl103_row_group_classifications_registry', 'wl144_registry_reference_key', 'dataset_media_hidden', 'wl157_application_update_capability', 'dataset_appearance_three_place_backfill', 'wl164_publication_column_metadata']::text[]) AS marker
+      FROM unnest(ARRAY['wl58_row_actor_support', 'wl58_row_actor_marks_by_table_uid', 'wl58_row_actor_trigger_definitions', 'k116_login_names', 'password_reset_dummy_work', 'system_favorites_table', 'system_front_page_revisions_table', 'system_front_page_blocks_table', 'wl103_row_group_classifications', 'wl132_surviving_sign_in', 'wl52_drop_column_label_value_layout', 'system_dataset_appearance_table', 'wl157_migration_execution_evidence', 'dataset_card_appearance_cutover', 'wl157_application_update_admission', 'dataset_appearance_three_place_schema', 'wl164_publication_fields', 'wl163_dataset_kind_contracts', 'wl167_database_identity_schema', 'wl157_application_update_refusal_keys', 'wl58_row_actor_columns', 'system_favorites_registry', 'system_front_page_blocks_registry', 'wl103_row_group_classifications_registry', 'wl144_registry_reference_key', 'dataset_media_hidden', 'wl157_application_update_capability', 'dataset_appearance_three_place_backfill', 'wl164_publication_column_metadata', 't919_registered_column_metadata']::text[]) AS marker
      WHERE NOT EXISTS (SELECT 1 FROM public.system_data_repair_records AS record
                         WHERE record.migration = marker AND record.action = 'completed');
     IF missing_markers IS NOT NULL THEN
@@ -8257,6 +8357,8 @@ BEGIN
       ('20261009000076_seed_dataset_kind_language_keys.sql', 'ef3ad5ec03814d753f955ef3ea262ed19e574b318de7fd63e2f5f9c292eb93c4', 'bootstrap_baseline', 'bootstrap'),
       ('20261009000077_retire_global_dataset_alias_catalogue.sql', 'c5ade168ebaf022b72616c90dfeb13bb0e137c9bb0476eef03d048c619071dfa', 'bootstrap_baseline', 'bootstrap'),
       ('20261009000079_reconcile_system_database_identity_schema.sql', '0b0684e5afae66ec807439da51db4eca4e482da3e919e98aaa14ee8df24999e1', 'bootstrap_baseline', 'bootstrap'),
+      ('20261009000081_seed_runtime_grant_policy_wait_language_key.sql', '9fd1da7b15c1fa55ba2060748fef6d9d72be28709b330ab952219c048b52a211', 'bootstrap_baseline', 'bootstrap'),
+      ('20261009000082_complete_registered_column_metadata.sql', '14890e0b5385434fa2b6b5eced126f263c292c785cf1aa2e058b709af57b3583', 'bootstrap_baseline', 'bootstrap'),
       ('20261009000099_record_database_release_9_10_2.sql', '190f66df60bd062997ebd80b2392eff7fdd843c9c8a709a4a1c30f136e6bbd97', 'bootstrap_baseline', 'bootstrap')
     ON CONFLICT (filename) DO NOTHING;
     INSERT INTO public.system_db_version (version, description)

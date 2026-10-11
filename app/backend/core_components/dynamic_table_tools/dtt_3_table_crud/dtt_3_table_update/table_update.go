@@ -185,6 +185,8 @@ func UpdateOidsAndTableNames(
 	}
 
 	// Vaihe 2: Päivitetään cached_oid taulun ja skeeman perusteella, jos OID on muuttunut
+	// tai puuttuu (bootstrap tuo rivit ilman OID:ia; NULL-turvallinen vertailu, jotta
+	// ylläpito täyttää ne ja catalogue_refresh_reader.go näkee luettelon ajan tasalla).
 	updateOidQuery := `
                 WITH table_oids AS (
                         SELECT
@@ -207,7 +209,7 @@ func UpdateOidsAndTableNames(
 		WHERE
 			system_db_tables.table_name  = table_oids.table_name
 			AND system_db_tables.schema_name = table_oids.schema_name
-			AND system_db_tables.cached_oid  != table_oids.oid;
+			AND system_db_tables.cached_oid IS DISTINCT FROM table_oids.oid;
 	`
 	_, err = q.Exec(updateOidQuery)
 	if err != nil {

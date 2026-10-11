@@ -259,7 +259,7 @@ const SERVER_REASON_LANG_KEY = /^[a-z][a-z0-9_]{0,127}$/;
 
 /**
  * Picks the translated notice for a failed response the earlier stages left:
- * the server-error sentence for a 5xx, the reason a 4xx names by language key
+ * the server-error sentence for other 5xx, the reason a 4xx or 503 names by language key
  * (JSON error_lang_key, as table creation sends), and otherwise the general
  * failure sentence. The status code follows each sentence except a named
  * reason, which is already specific. The server's free text is never shown:
@@ -270,7 +270,7 @@ const SERVER_REASON_LANG_KEY = /^[a-z][a-z0-9_]{0,127}$/;
  * @returns {{ langKey: string, status?: number }}
  */
 export function resolveFailureNotice(status, bodyText) {
-    if (status >= 500) {
+    if (status >= 500 && status !== 503) {
         return { langKey: 'server_error_notice', status };
     }
     try {
@@ -281,7 +281,9 @@ export function resolveFailureNotice(status, bodyText) {
     } catch {
         // Not JSON: no named reason.
     }
-    return { langKey: 'request_failed_notice', status };
+    return status === 503
+        ? { langKey: 'service_unavailable_notice' }
+        : { langKey: 'request_failed_notice', status };
 }
 
 /**

@@ -11,6 +11,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"time"
 
 	"easelect/backend/core_components/dataset_kinds"
 	"easelect/backend/core_components/dbutils"
@@ -59,6 +60,12 @@ func BeginTx(ctx context.Context, tx *sql.Tx) (*Mutation, error) {
 	if err := runtime_grants.LockRuntimeGrantPolicy(ctx, tx); err != nil {
 		return nil, err
 	}
+	// Observe the full hold through middleware commit/rollback, not just Finish.
+	// Only slow phases emit timings; identifiers and application rows stay out.
+	heldSince := time.Now()
+	dbutils.RegisterAfterCommitHook(ctx, func() { logSlowPolicyPhase("held_until_commit", heldSince) })
+	dbutils.RegisterAfterRollbackHook(ctx, func() { logSlowPolicyPhase("held_until_rollback", heldSince) })
+	defer logSlowPolicyPhase("preflight", heldSince)
 	roles := runtime_grants.ConfiguredRoles(os.Getenv)
 	before, err := runtime_grants.LoadMutationSnapshot(ctx, tx, roles)
 	if err != nil {
@@ -103,6 +110,7 @@ func (m *Mutation) Finish(ctx context.Context, datasetUIDs ...int64) (err error)
 	if m == nil {
 		return nil
 	}
+	defer logSlowPolicyPhase("completion", time.Now())
 	// Scope resolution can fail before reconciliation, including after DDL
 	// when the request is canceled. Every error must make the transaction
 	// uncommittable, even for a caller that ignores the completion error.
@@ -149,6 +157,12 @@ func (m *Mutation) Finish(ctx context.Context, datasetUIDs ...int64) (err error)
 	return err
 }
 
+func logSlowPolicyPhase(phase string, started time.Time) {
+	if elapsed := time.Since(started); elapsed >= time.Second {
+		log.Printf("[RUNTIME GRANTS] policy_phase=%s elapsed=%s", phase, elapsed.Round(time.Millisecond))
+	}
+}
+
 // Schema/registry mutations share this completion boundary, including foreign
 // keys, child creation, generic metadata writes, rename, drop and CSV import.
 // Never invalidate before commit or on rollback. Transaction-only callers must
@@ -158,6 +172,9 @@ func scheduleKindEvidenceInvalidation(ctx context.Context) {
 }
 
 func RespondError(w http.ResponseWriter, err error) {
+	if errors.Is(err, runtime_grants.ErrPolicyLockWaitTimeout) {
+		err = &httpresponse.Refusal{Status: http.StatusServiceUnavailable, LangKey: "error_runtime_grant_policy_busy", Message: "Another permission change is still being saved. Try again in a moment."}
+	}
 	var refusal *httpresponse.Refusal
 	if errors.As(err, &refusal) {
 		httpresponse.RespondWithRefusal(w, refusal)

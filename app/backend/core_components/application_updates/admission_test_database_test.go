@@ -26,12 +26,14 @@ type executedStatement struct {
 	args  []driver.NamedValue
 }
 type scriptedDatabase struct {
-	t             *testing.T
-	answers       []queryAnswer
-	executed      []executedStatement
-	commits       int
-	commitFailure bool
-	recorder      *httptest.ResponseRecorder
+	t                *testing.T
+	answers          []queryAnswer
+	executed         []executedStatement
+	queried          []string
+	refusePolicyLock bool
+	commits          int
+	commitFailure    bool
+	recorder         *httptest.ResponseRecorder
 }
 type scriptedConnection struct{ state *scriptedDatabase }
 type scriptedTransaction struct{ state *scriptedDatabase }
@@ -52,9 +54,13 @@ func (*scriptedConnection) Close() error                { return nil }
 func (c *scriptedConnection) Begin() (driver.Tx, error) { return &scriptedTransaction{c.state}, nil }
 func (c *scriptedConnection) ExecContext(_ context.Context, query string, args []driver.NamedValue) (driver.Result, error) {
 	c.state.executed = append(c.state.executed, executedStatement{query, append([]driver.NamedValue{}, args...)})
+	if c.state.refusePolicyLock && strings.Contains(query, "filterest.runtime_role_write_revocations") {
+		return nil, errors.New("read attempted to acquire held policy lock")
+	}
 	return driver.RowsAffected(1), nil
 }
 func (c *scriptedConnection) QueryContext(_ context.Context, query string, _ []driver.NamedValue) (driver.Rows, error) {
+	c.state.queried = append(c.state.queried, query)
 	if strings.Contains(query, "transaction_console_logs") {
 		return &scriptedRows{columns: 1}, nil
 	}
