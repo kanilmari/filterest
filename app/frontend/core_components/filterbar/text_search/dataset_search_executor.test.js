@@ -109,23 +109,17 @@ describe("do_intelligent_search browses the dataset", () => {
         expect(setResultsCountMock).toHaveBeenLastCalledWith("dev_agent_tasks", 1);
     });
 
-    test("retries once when the route's first article build invalidates the listing reload", async () => {
-        reloadDatasetRowsFromListingMock
-            .mockResolvedValueOnce(null)
-            .mockResolvedValueOnce(listingAnswer({
-                data: [{ id: 1, header: "Claude.ai Max 5x monthly" }],
-                row_count: 1,
-                columns: ["id", "header"],
-            }));
+    test("does not retry an abandoned or failed listing reload", async () => {
+        reloadDatasetRowsFromListingMock.mockResolvedValue(null);
 
         const { do_intelligent_search, ongoingSearchResults } = await import("./dataset_search_executor.js");
         await do_intelligent_search("dev_agent_tasks", "claude");
 
-        expect(reloadDatasetRowsFromListingMock).toHaveBeenCalledTimes(2);
-        expect(ongoingSearchResults.dev_agent_tasks.data).toEqual([
-            { id: 1, header: "Claude.ai Max 5x monthly" },
-        ]);
-        expect(setResultsCountMock).toHaveBeenLastCalledWith("dev_agent_tasks", 1);
+        expect(reloadDatasetRowsFromListingMock).toHaveBeenCalledTimes(1);
+        expect(ongoingSearchResults.dev_agent_tasks.data).toEqual([]);
+        expect(ongoingSearchResults.dev_agent_tasks.complete).toBe(false);
+        expect(endpointRouterMock).not.toHaveBeenCalled();
+        expect(setResultsCountMock).not.toHaveBeenCalledWith("dev_agent_tasks", 1);
     });
 
     test("a search with selected filters answers only about rows that match both", async () => {

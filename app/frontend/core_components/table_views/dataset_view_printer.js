@@ -11,11 +11,14 @@ import { resolveVisibleDatasetMediaPath } from "./dataset_media_visibility_resol
 import { shouldPreserveCardReturnHost } from "../navigation/nav_engine/card_article_return_state.js";
 import { create_table_element, saveColumnWidths } from "./table_view/table_structure_builder.js";
 import { create_card_view } from "./card_view/card_view_printer.js";
+import { disposeCardResources, notifyCardsMounted } from './card_view/card_resource_lifecycle.js';
+import { showDatasetResultBuildFailure } from './dataset_result_build_failure.js';
 import { create_article_view } from "./article_view/article_view_printer.js";
 // import { applySavedColumnVisibility } from '../general_tables/gt_toolbar/column_visibility_dropdown.js';
 import {
     initializeInfiniteScroll,
     seedInfiniteScrollRowCount,
+    disconnectInfiniteScroll,
 } from "../infinite_scroll/infinite_scroll_handler.js";
 import {
     create_filter_bar,
@@ -327,6 +330,9 @@ export async function generate_table(
     // Retained rows carry old projections; the UID owner's current snapshot wins.
     if (!loadedRows && datasetAppearance != null
         && !datasetAppearanceState.accept(dataset_name, datasetAppearance, { token, isCurrent: canCommit })) return null;
+    let pendingView = null;
+    let pendingBuild = null;
+    let replacementContainer = null;
     try {
         const tableSpecs = getAllSpecs();
         // Read metadata belongs to every dataset reader. The admin navigation
@@ -368,6 +374,7 @@ export async function generate_table(
         // A reused name starts a new surface; the old node's UID cannot change.
         if (main_table_container?.dataset.datasetAppearanceUid
             && main_table_container.dataset.datasetAppearanceUid !== String(table_uid)) {
+            disposeCardResources(main_table_container);
             main_table_container.remove();
             main_table_container = null;
         }
@@ -460,18 +467,11 @@ export async function generate_table(
         // Retain the shared controls through a full redraw. The category printer
         // owns its disclosure/query state on this host, including during search.
         const retainedTopControls = document.getElementById(`${dataset_name}_card_top_controls`);
-        const focusedTopControl = retainedTopControls?.contains(document.activeElement)
-            ? document.activeElement : null;
-        for (const container of Object.values(viewContainers)) {
-            if (current_view === "article_view"
-                && shouldPreserveCardReturnHost(dataset_name, preserveCardReturn, container)) continue;
-            clearLoadedDatasetRows(container);
-            container.replaceChildren();
-        }
 
         let currentViewElement;
         let currentViewElementPromise = null;
         const currentViewDefinition = getDatasetViewDefinition(current_view);
+        replacementContainer = viewContainers[current_view];
         if (currentViewDefinition?.rendererKey) {
             currentViewElementPromise = Promise.resolve(createDatasetViewElement(
                 currentViewDefinition,
@@ -481,6 +481,7 @@ export async function generate_table(
                 data_types,
                 { isCurrent: canCommit }
             ));
+            pendingBuild = currentViewElementPromise;
         } else {
             console.warn(`Unknown view: ${current_view}`);
         }
@@ -509,6 +510,7 @@ export async function generate_table(
             current_view
         );
 		const scrollableContainer = viewContainers[current_view];
+        replacementContainer = scrollableContainer;
 		const resultsSurface = document.createElement("div");
 		resultsSurface.classList.add("dataset-results-surface");
 		const datasetSpec = getAllSpecs()[dataset_name] || {};
@@ -534,14 +536,32 @@ export async function generate_table(
 		} else {
 			contentArea.style.removeProperty("--dataset-background-image");
 		}
-		scrollableContainer.appendChild(resultsSurface);
         if (currentViewElementPromise) {
             currentViewElement = await currentViewElementPromise;
+            pendingBuild = null;
+            pendingView = currentViewElement;
             if (!canCommit()) return null;
             datasetAppearanceState.paint(dataset_name);
             resultsSurface.appendChild(currentViewElement);
             viewContainers[current_view].style.display = "block";
         }
+        // Card builders await metadata and per-row content. Keep the committed
+        // listing (and its category controls) visible until the replacement is
+        // complete and current, then swap once without an empty intermediate frame.
+        if (!canCommit()) return null;
+        const focusedTopControl = retainedTopControls?.contains(document.activeElement)
+            ? document.activeElement : null;
+        for (const container of Object.values(viewContainers)) {
+            if (container === scrollableContainer || (current_view === "article_view"
+                && shouldPreserveCardReturnHost(dataset_name, preserveCardReturn, container))) continue;
+            clearLoadedDatasetRows(container);
+            disposeCardResources(container);
+            container.replaceChildren();
+        }
+        clearLoadedDatasetRows(scrollableContainer);
+        disposeCardResources(scrollableContainer);
+        scrollableContainer.replaceChildren(resultsSurface);
+        pendingView = null;
         // syncDatasetSearchVisibility(dataset_name); // REMOVED: No longer needed as we have a single filter bar
         // Place topControls inside the scrollable_content container,
         // right after the hero and before the actual view element.
@@ -557,6 +577,7 @@ export async function generate_table(
         }
         // Always ensure it's at the right position: after hero, before view element
 		resultsSurface.insertBefore(topControls, currentViewElement);
+        notifyCardsMounted(resultsSurface);
         if (focusedTopControl?.isConnected && document.activeElement === document.body) {
             focusedTopControl.focus();
         }
@@ -611,6 +632,15 @@ export async function generate_table(
         // Return the active view container
         return viewContainers[current_view];
     } catch (error) {
+        if (!canCommit()) return null;
         console.warn(`Error creating table ${dataset_name}:`, error);
+        disconnectInfiniteScroll(dataset_name);
+        showDatasetResultBuildFailure(dataset_name, replacementContainer, error);
+        return null;
+    } finally {
+        if (pendingView) disposeCardResources(pendingView);
+        // Assembly of another part of the view can fail while cards are still
+        // awaiting metadata. The eventual detached result remains ours to release.
+        if (pendingBuild) disposeCardResources(await pendingBuild.catch(() => null));
     }
 }

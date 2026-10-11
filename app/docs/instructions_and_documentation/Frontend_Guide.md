@@ -47,8 +47,7 @@ shows a 550 px category card before selected tags and the shared result count;
 without changing the card's height or the results' position. The persistent card
 controller (`row_group_facet_card_builder.js`) lazily creates one instance per
 heading, anchored to its stable button and owned by the connected dataset tab.
-This explicit owner keeps a popup alive while an asynchronous full redraw
-temporarily detaches the card. Heading badges count selections; row numbers count
+This explicit owner keeps a popup alive across a full redraw: the old results and category card remain mounted while the next view builds off screen, then a current completed view replaces the result surface once. Heading badges count selections; row numbers count
 hits. The first three headings are shown initially, with selected headings
 always reachable and remaining headings available through Show more. The panel
 lists up to 200 readable values in server order, with selected values pinned before
@@ -75,14 +74,14 @@ Removing one selection tag retains its mode; there is no separate mode tag. Clea
 categories removes both category parameters and preserves search/ordinary filters. The shared selected-tags row
 (`active_filter_tag_printer.js`) adds Selected: and Clear all; Clear all invokes
 `top_row_builder.js`'s existing whole reset, including text search, ordinary
-filters, modes and paging, while preserving view and ordinary sorting. All three selected chips (text search, ordinary filters and category values) use
-`active_filter_chip_builder.js`; their owners retain label formatting, translation
-and removal commands. `active_filter_tags.css` owns their geometry: Selected: first,
-chips in the middle and Clear all last, with each wrapped line centred. Chips have
+filters, modes and paging, while preserving view and ordinary sorting. Tag redraws keep Clear all connected and reuse its listener, preserving keyboard focus when a chip-removal build settles before the next Enter. All three selected chips (text search, ordinary filters and category values) use
+`active_filter_chip_builder.js`; their owners retain label formatting, translation and removal commands.
+`active_filter_tags.css` owns their geometry: Selected: first,
+chips in the middle and Clear all last, with each wrapped line centred. The row and category card share the search column's `--filterbar-hero-content-max-width` and auto inline margins, wrapping within the available width on phones and tablets. The phone top bar does not move this row; only an opened article uses its sidebar. Chips have
 4 px corners, inherited font size and zero vertical padding; logical inline padding
 is 12 px on the label side and 4 px on the button side. At desktop widths the remove
 button is 24 × 24 px and Clear all has no 44 px minimum, giving a single-line chip
-26 px height at the standard 16 px font/1.5 line height. At widths up to 600 px or
+26 px height at the standard 16 px font/1.5 line height. At widths up to 700 px or
 on any coarse pointer both controls keep real 44 × 44 px touch targets, giving
 46 px single-line chips. The K282 size values live together as custom properties
 in the row's stylesheet block; the media query only chooses the touch values.
@@ -97,6 +96,8 @@ the field preserve the saved side under the upsert's row lock. Tags continue
 to move into an open article's sidebar, whose explicit left alignment stays. The shared count publishes its numeric
 value so zero-result guidance never parses translated labels or requests new
 counts. Guidance is shown only for zero results with selected categories.
+
+Category toggles, tag removal, match-mode changes and category clear each use one first-page listing refresh. Busy state announces work without discarding subsequent choices; listing/search generations reject older replies and card builds. During a committed search, its listing owns row replacement: the search does not empty rows first, and replacement cards build off screen before one guarded swap. Later-page requests still belong to endless scrolling, which stops before observing or fetching when the current search/filter/sort count is already loaded. Card fields have their card ancestor during construction but wait for the accepted, connected swap before receiving `easelect:card-mounted`. `card_resource_lifecycle.js` releases keyword/detail observers, timers and card listeners on replacement or abandonment; reordering a keyword inside its parent keeps it alive. The search-owned AI “See also” group uses this same connected mount notification and disposal on replacement, explicit search clearing and cancelled staging builds. A current build failure clears stale rows and counts, keeps the selected filters and shows the existing keyed failure notice as a toast and persistent result alert. Cancelled work leaves the committed surface alone; the next selection can replace the alert. Search never retries a null listing reload: missing initial card hosts already use the listing owner's guarded rebuild and its same first page, while failed or abandoned work ends that action.
 
 Both application themes use `variables.css` tokens; fonts and spacing are scoped to the card and the opt-in class on
 the portalled popup. Only the option list scrolls within a popup capped at 400 px; search, match-mode controls and header remain visible. Controls offer 44 px touch targets. Category popups are at least
@@ -120,7 +121,7 @@ headings applied in both modes. Listing freshness (`getDatasetListingSignature`)
 include modes, ordinary filters and order where applicable, and leave page
 language out. Only the loaded-rows cache adds page language to the listing
 signature, so a late page-language initialization cannot make a current response stale.
-Obsolete AI streams are aborted. Hierarchy and server facet paging remain later slices.
+Search execution identity also includes sorting: a late saved sort starts a fresh listing instead of joining the obsolete request that its change cancels. Identical synchronized controls still share one execution. Obsolete AI streams are aborted. Hierarchy and server facet paging remain later slices.
 Finnish/English mode copy is seeded by
 `20261007000001_seed_row_group_match_mode_language_keys.sql` for DB 9.10.1.
 The reworded general hint uses `row_group_categories_modes_hint`, preserving reviewed
@@ -142,11 +143,10 @@ the value); keyboard focus brings the option into view without scrolling the
 page; positions follow the visual viewport, for example above an on-screen
 keyboard; and include-only lists keep their two-column rows in the portalled list.
 
-The opt-in browser proof `E_search_filter/E13_row_group_category_panel.spec.ts`
-reads an existing categorized dataset named by
-`FILTEREST_E2E_CATEGORY_DATASET`; it needs one heading with two returned values
-that have hits and a second heading. The mode proof also needs a multi-valued heading
-with two values whose readable support differs, so ANY/ALL counts can visibly change.
+The additional `E_search_filter/E14_selected_category_refresh.spec.ts` checks centred wrapping, K282 target sizes, keyboard removal/clear (including a delayed removal build settling while Clear all is focused), one populated commit, and rapid changes with reversed response delivery. It uses the same native dataset fixture, Finnish/English and both explicit themes over the opposite OS preference. Set `FILTEREST_E2E_CATEGORY_LANGUAGES` to a comma-separated list to exercise other installed languages. Run mobile-card, tablet-card and desktop-card. `E_search_filter/E17_card_refresh_lifecycle.spec.ts` uses the same fixture and matrix for ordinary and searched replacements: intercepted read-only responses supply synthetic keyword rows, and a rejected real avatar build verifies connected mounting, observer cleanup, translated failure and recovery. It counts outgoing first-page requests and accepted swaps separately (card-host replacements remove previous cards; later-page additions are not swaps) for four category clicks, the rejected build and recovery (one request and one swap each), waits for action/reply completion and observer ticks, then removes routes with `unrouteAll({ behavior: 'ignoreErrors' })` after the counts. Its keyword widths use an adopted constructed stylesheet through CSSOM, keeping the constraints on replacement cards without CSP-refused inline style elements.
+
+The opt-in browser proof `E_search_filter/E13_row_group_category_panel.spec.ts` reads an existing categorized dataset named by `FILTEREST_E2E_CATEGORY_DATASET`; it needs one heading with two returned values that have hits and a second heading.
+The mode proof also needs a multi-valued heading with two values whose readable support differs, so ANY/ALL counts can visibly change.
 It resolves the popup through the heading's ARIA reference and checks stable
 card/result geometry and scrolling, counts, both focus-return paths, match
 controls inside the popup, and state retained through refresh. It checks a
@@ -194,7 +194,6 @@ is no application-update action, second disclosure, target preflight or command
 suggestion. Changed Finnish/English copy uses seeded language keys and the shared
 translation system; both application themes and live language changes remain
 supported. The backend API contract is unchanged.
-
 
 `filterest/app/frontend/ui_config.js` collects flags that control the UI structure.
 

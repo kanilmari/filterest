@@ -3,6 +3,7 @@
 // Bridges card view call sites and pure avatar/image helpers with the final DOM nodes.
 // Exists to keep card media rendering and accessibility defaults in one reusable place.
 
+import { addCardResourceListener } from './card_resource_lifecycle.js';
 import { datasetAppearanceState } from '../dataset_appearance_state.js';
 import {
     buildImageAltContext,
@@ -185,7 +186,7 @@ export function createImageElement(
     if (altContext) {
         foregroundImg.dataset.langAltContext = altContext;
     }
-    foregroundImg.addEventListener('error', () => {
+    addCardResourceListener(foregroundImg, 'error', () => {
         foregroundImg.alt = altContext ? `Picture missing: ${altContext}` : 'Picture missing';
         foregroundImg.dataset.langKey = 'picture_missing';
     });

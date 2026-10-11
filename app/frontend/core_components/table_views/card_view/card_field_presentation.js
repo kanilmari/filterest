@@ -5,6 +5,7 @@
 
 import { readAppearanceAttribute, appearanceScopeElements } from '../../../reusable_components/appearance_scope_reader.js';
 import { projectAppearanceAttribute, projectAppearanceClass } from '../../../reusable_components/appearance_projection_writer.js';
+import { disposeCardResources, registerCardResource } from './card_resource_lifecycle.js';
 
 import { CARD_STYLE_VARIANT_VALUES, resolveClientCardStyleVariant, normalizeCardDetailColumns, normalizeClientCardStyleOverride,
     normalizeCardDetailColumnOverride, resolveCardDetailColumns }
@@ -79,7 +80,7 @@ export function mountCardFieldGroup(card, parent, viewKey, render, legacyShowAll
         }
         if (presentation === applied) return;
         cleanup?.();
-        nodes.forEach((node) => node.remove());
+        nodes.forEach((node) => { disposeCardResources(node); node.remove(); });
         const previous = new Set(parent.childNodes);
         cleanup = render(parent, showAll, style, columns);
         nodes = [...parent.childNodes].filter((node) => !previous.has(node));
@@ -88,6 +89,10 @@ export function mountCardFieldGroup(card, parent, viewKey, render, legacyShowAll
     };
     card.dataset.cardPresentationView = viewKey;
     (card._refreshFieldPresentation ||= []).push(refresh);
+    registerCardResource(card, () => {
+        cleanup?.();
+        card._refreshFieldPresentation = card._refreshFieldPresentation.filter(callback => callback !== refresh);
+    });
     refresh();
 }
 

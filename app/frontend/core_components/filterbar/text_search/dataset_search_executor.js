@@ -13,6 +13,7 @@ import { reloadDatasetRowsFromListing } from "../../infinite_scroll/infinite_scr
 import { datasetAppearanceState } from '../../table_views/dataset_appearance_state.js';
 import { appendDataToTable } from "../../table_views/table_view/table_row_printer.js";
 import { appendDataToCardView } from "../../table_views/card_view/card_view_printer.js";
+import { disposeCardResources, notifyCardsMounted } from '../../table_views/card_view/card_resource_lifecycle.js';
 import { getUnifiedTableState, setUnifiedTableState } from "../../state_stores/table_state_store.js";
 import { getChosenDatasetView } from "../../state_stores/dataset_view_choice_saver.js";
 import { createSupplementalDatasetSearch } from "./supplemental_dataset_search.js";
@@ -30,6 +31,7 @@ import {
     getPrimaryCardContainer,
     getSearchAiHostId,
     getSearchFilterContext,
+    getSearchExecutionSignature,
     getSearchPresentationRows,
     getSearchResultsFlowContainer,
     getSearchStageContainer,
@@ -91,18 +93,25 @@ async function renderRowsIntoTarget(
         // the newer search has already cleared and repopulated the live view.
         const stagingHost = document.createElement("div");
         stagingHost.className = targetHost.className;
-        await appendDataToCardView(stagingHost, columns, rows, tableName, renderOptions);
-        if (!isCurrentSearchCache(tableName, expectedCache)) {
-            return false;
-        }
+        try {
+            await appendDataToCardView(stagingHost, columns, rows, tableName, renderOptions);
+            if (!isCurrentSearchCache(tableName, expectedCache) || !targetHost.isConnected) {
+                return false;
+            }
 
-        const fragment = document.createDocumentFragment();
-        fragment.append(...Array.from(stagingHost.childNodes));
-        const sentinel = targetHost.querySelector(
-            `#${tableName}_infinite_scroll_sentinel`
-        );
-        targetHost.insertBefore(fragment, sentinel || null);
-        return true;
+            const fragment = document.createDocumentFragment();
+            fragment.append(...Array.from(stagingHost.childNodes));
+            const sentinel = targetHost.querySelector(
+                `#${tableName}_infinite_scroll_sentinel`
+            );
+            targetHost.insertBefore(fragment, sentinel || null);
+            notifyCardsMounted(targetHost);
+            return true;
+        } finally {
+            // Accepted cards have moved out; abandoned cards still own waiting
+            // mount/animation listeners and must use the listing's cleanup path.
+            disposeCardResources(stagingHost);
+        }
     }
 
     appendDataToTable(targetHost, rows, columns, dataTypes, tableName);
@@ -314,7 +323,9 @@ function createSecondSearchResultsHost(tableName) {
 function removeSearchGroups(tableName, currentView = getCurrentSearchView(tableName)) {
     const stageContainer = getSearchStageContainer(tableName, currentView);
     if (!stageContainer) return;
-    stageContainer.querySelector(`#${getSearchAiHostId(tableName, currentView)}`)?.remove();
+    const aiHost = stageContainer.querySelector(`#${getSearchAiHostId(tableName, currentView)}`);
+    disposeCardResources(aiHost);
+    aiHost?.remove();
     stageContainer.querySelectorAll(".search-stage-notice").forEach((el) => el.remove());
 }
 
@@ -348,54 +359,17 @@ async function placeSearchGroups(tableName, cache) {
 }
 
 /**
- * Clears a previous search's groups and the dataset's rows before a new one.
- */
-function cleanupSearchArtifacts(tableName) {
-    const currentView = getCurrentSearchView(tableName);
-    removeSearchGroups(tableName, currentView);
-
-    if (currentView === "table") {
-        const container = getSearchViewContainer(tableName, currentView);
-        const primaryTable = container?.querySelector("table");
-        if (primaryTable) {
-            const tbody = primaryTable.querySelector("tbody");
-            if (tbody) tbody.replaceChildren();
-        }
-    }
-
-    // Clear card view container
-    if (["card", "article_view"].includes(currentView)) {
-        const cardContainer = getPrimaryCardContainer(tableName);
-        if (cardContainer) {
-            // Remove cards but keep the sentinel
-            const sentinel = cardContainer.querySelector(
-                `#${tableName}_infinite_scroll_sentinel`
-            );
-            cardContainer.replaceChildren();
-            if (sentinel) cardContainer.appendChild(sentinel);
-        }
-    }
-}
-
-/**
  * Load the dataset's own matches from its ordinary listing and show them.
  * The listing answers with the true number of matches and stays connected to
  * endless scrolling, so the reader can browse every match instead of a top few.
  */
 async function loadDatasetMatches(tableName, cache, isCurrent) {
-    let requestFilters = { ...(getUnifiedTableState(tableName).filters || {}) };
-    let requestHost = getSearchViewContainer(tableName);
-    let result = await reloadDatasetRowsFromListing(tableName, { isCurrent });
-    if (!isCurrent()) return false;
-    // A URL-seeded search can begin while the route's first ordinary view
-    // build is still replacing its container. That invalidates the listing
-    // reload even though its server answer was correct. Once the build has
-    // settled, one fresh reload attaches the same answer to the live panel.
-    if (!result) {
-        requestFilters = { ...(getUnifiedTableState(tableName).filters || {}) };
-        requestHost = getSearchViewContainer(tableName);
-        result = await reloadDatasetRowsFromListing(tableName, { isCurrent });
-    }
+    const requestFilters = { ...(getUnifiedTableState(tableName).filters || {}) };
+    const requestHost = getSearchViewContainer(tableName);
+    // Missing initial card hosts are rebuilt by the listing owner, consuming
+    // that rebuild's first page. A null reload means abandoned or failed work:
+    // retrying here fetched twice and silently replaced the failure surface.
+    const result = await reloadDatasetRowsFromListing(tableName, { isCurrent });
     if (!isCurrent() || !result) return false;
 
     renderRowGroupFacets(tableName, result.row_group_facets, {
@@ -536,7 +510,7 @@ export async function do_intelligent_search(tableName, userQuery, opts = {}) {
     const query = userQuery.trim();
     if (!query) return;
     const context = getSearchFilterContext(tableName);
-    const executionSignature = `${context.signature}\n${JSON.stringify(opts)}`;
+    const executionSignature = getSearchExecutionSignature(tableName, context, opts);
     const runningCache = _ongoingSearchResults[tableName];
     // The filter bar, shared top bar and article hero can all initialize from
     // the same URL. They are synchronized controls, not three search engines:
@@ -549,7 +523,9 @@ export async function do_intelligent_search(tableName, userQuery, opts = {}) {
         return runningCache.executionPromise;
     }
     runningCache?.abortController?.abort();
-    cleanupSearchArtifacts(tableName);
+    // The listing owns row replacement. Clearing here first made a category
+    // change during search flash empty before the refreshed rows arrived.
+    removeSearchGroups(tableName);
     // A different question starts from its first result; the same question
     // asked again, after a changed filter or sort, leaves the reader where
     // they already are.

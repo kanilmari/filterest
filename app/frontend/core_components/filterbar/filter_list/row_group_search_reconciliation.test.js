@@ -6,8 +6,8 @@
 
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 
-const { fetchListing, endpointRouter, articleData, observers } = vi.hoisted(() => ({
-    fetchListing: vi.fn(), endpointRouter: vi.fn(), articleData: vi.fn(), observers: [],
+const { fetchListing, endpointRouter, articleData, buildCards, appendCardRows, observers } = vi.hoisted(() => ({
+    fetchListing: vi.fn(), endpointRouter: vi.fn(), articleData: vi.fn(), buildCards: vi.fn(), appendCardRows: vi.fn(), observers: [],
 }));
 vi.mock("../../endpoints/endpoint_data_fetcher.js", () => ({ fetchDatasetData: fetchListing }));
 vi.mock("../../endpoints/endpoint_router.js", () => ({ endpoint_router: endpointRouter }));
@@ -61,8 +61,8 @@ vi.mock("../../table_views/table_view/table_structure_builder.js", async () => {
     };
 });
 vi.mock("../../table_views/card_view/card_view_printer.js", () => ({
-    create_card_view: (columns, rows) => createCards(columns, rows),
-    appendDataToCardView: async (host, _columns, rows) => appendCards(host, rows),
+    create_card_view: (columns, rows) => buildCards(columns, rows),
+    appendDataToCardView: (...args) => appendCardRows(...args),
 }));
 vi.mock("../../table_views/article_view/article_view_printer.js", () => ({
     create_article_view: (columns, rows) => createCards(columns, rows),
@@ -119,7 +119,7 @@ import { openRowArticleView } from "../../table_views/card_view/row_article_open
 import { disconnectInfiniteScroll } from "../../infinite_scroll/infinite_scroll_handler.js";
 import { do_intelligent_search, ongoingSearchResults, getSearchGroupsForViewRebuild } from "../text_search/dataset_search_executor.js";
 import { getSearchFilterContext } from "../text_search/dataset_search_runtime_state.js";
-import { renderRowGroupFacets } from "./row_group_facet_printer.js";
+import { renderRowGroupFacets, toggleRowGroupFacet, clearRowGroupSelection, setRowGroupMatchMode } from "./row_group_facet_printer.js";
 
 const dataset = "travel_info";
 const columns = ["id", "header", "status"];
@@ -175,11 +175,130 @@ beforeEach(() => {
     document.documentElement.lang = "en"; document.body.innerHTML = '<div id="tabs_container"></div>';
     primeDatasetAccessRegistry({ datasets: [{ dataset_name: dataset }] }); delete ongoingSearchResults[dataset];
     fetchListing.mockReset().mockResolvedValue(answer());
+    buildCards.mockReset().mockImplementation(createCards);
+    appendCardRows.mockReset().mockImplementation(async (host, _fields, rows) => appendCards(host, rows));
     endpointRouter.mockReset().mockImplementation(name => {
         if (name !== "getIntelligentResultsStream") throw new Error(`Unexpected endpoint ${name}`);
         return Promise.resolve(streamAnswer());
     });
     articleData.mockReset().mockImplementation(async ({ rowItem }) => rowItem);
+});
+
+async function seedCategoryListing() {
+    history.replaceState({ dataset }, "", `/${dataset}?view=card`);
+    setParams(dataset, { view: "card" }); setChosenDatasetView(dataset, "card");
+    setUnifiedTableState(dataset, { filters: {}, sort: { column: "id", direction: "ASC" }, offset: 0 });
+    const facets = [hotel, { id: 2, slug: "train", title: { en: "Train" }, row_count: 10 }]
+        .map(facet => ({ ...facet, selected: false, heading: { id: 1, slug: "type", title: { en: "Type" } } }));
+    await generate_table(dataset, columns, [row(1)], types, 1, false, null, null, facets);
+    fetchListing.mockImplementation(async request => ({ ...answer([row(2)], facets), row_count: 1,
+        row_group_selection: { slugs: (request.filters.row_group || "").split(",").filter(Boolean),
+            modes: request.filters.row_group_mode ? { 1: "all" } : {} } }));
+    buildCards.mockClear();
+    const container = document.getElementById(`${dataset}_card_view_container`);
+    // This proof measures selection refreshes; an unscrollable jsdom viewport
+    // would otherwise ask for a later page through the real fill-screen timer.
+    Object.defineProperty(container, "scrollHeight", { configurable: true, value: 2000 });
+    return container;
+}
+
+test("each category toggle, mode and clear makes one listing request and one populated result commit", async () => {
+    const container = await seedCategoryListing();
+    const commits = [];
+    const observer = new MutationObserver(records => records.forEach(record => {
+        if (record.target === container && record.type === "childList") {
+            commits.push(container.querySelector(".card")?.dataset.id);
+        }
+    }));
+    observer.observe(container, { childList: true });
+    try {
+        for (const change of [() => toggleRowGroupFacet(dataset, "hotel"),
+            () => setRowGroupMatchMode(dataset, 1, "all"), () => clearRowGroupSelection(dataset)]) {
+            fetchListing.mockClear(); buildCards.mockClear(); commits.length = 0;
+            const previous = container.firstElementChild;
+            let finishBuild;
+            buildCards.mockImplementationOnce((fields, rows) => new Promise(resolve => {
+                finishBuild = () => resolve(createCards(fields, rows));
+            }));
+            const pending = change();
+            await vi.waitFor(() => expect(finishBuild).toBeTypeOf("function"));
+            expect(fetchListing).toHaveBeenCalledOnce(); expect(buildCards).toHaveBeenCalledOnce();
+            expect(previous.isConnected).toBe(true); expect(container.firstElementChild).toBe(previous);
+            expect(commits).toEqual([]);
+            finishBuild(); await pending;
+            expect(commits).toEqual(["2"]);
+        }
+    } finally { observer.disconnect(); }
+});
+
+test.each(["", "trip"])("rapid popup changes each request once and only the latest response renders (search: %s)", async search => {
+    const container = await seedCategoryListing();
+    if (search) setParams(dataset, { ...getParams(dataset), search });
+    const replies = [];
+    fetchListing.mockImplementation(request => new Promise(resolve => replies.push({ request, resolve })));
+    document.querySelector('[data-testid="row-group-facet-heading"]').click();
+    const option = slug => document.querySelector(`[role="option"][data-option-value="${slug}"]`);
+    option("hotel").click();
+    await vi.waitFor(() => expect(replies).toHaveLength(1));
+    option("train").click();
+    await vi.waitFor(() => expect(replies).toHaveLength(2));
+    expect(replies.map(reply => reply.request.filters.row_group)).toEqual(["hotel", "hotel,train"]);
+    replies[1].resolve({ ...answer([row(3)]), row_count: 1, row_group_selection: { slugs: ["hotel", "train"], modes: {} } });
+    await vi.waitFor(() => expect(container.querySelector(".card")?.dataset.id).toBe("3"));
+    replies[0].resolve({ ...answer([row(2)]), row_group_selection: { slugs: ["hotel"], modes: {} } });
+    await vi.waitFor(() => expect(document.querySelector('[data-testid="row-group-facets"]').hasAttribute("aria-busy")).toBe(false));
+    expect(fetchListing).toHaveBeenCalledTimes(2);
+    expect(fetchListing.mock.calls.map(([request]) => request.offset)).toEqual([0, 0]);
+    if (search) expect(appendCardRows.mock.calls.filter(([host]) => host.className === "card_container")).toHaveLength(1);
+    else expect(buildCards).toHaveBeenCalledOnce();
+    expect(container.querySelector(".card").dataset.id).toBe("3");
+    expect(getUnifiedTableState(dataset).filters.row_group).toBe("hotel,train");
+});
+
+test("a superseded asynchronous card build never clears or replaces the latest results", async () => {
+    const container = await seedCategoryListing();
+    let finishOldBuild;
+    buildCards.mockImplementationOnce((fields, rows) => new Promise(resolve => {
+        finishOldBuild = () => resolve(createCards(fields, rows));
+    }));
+    const old = toggleRowGroupFacet(dataset, "hotel");
+    await vi.waitFor(() => expect(finishOldBuild).toBeTypeOf("function"));
+    expect(container.querySelector(".card")?.dataset.id).toBe("1");
+    await toggleRowGroupFacet(dataset, "train");
+    const latest = container.firstElementChild;
+    finishOldBuild(); await old;
+    expect(container.firstElementChild).toBe(latest);
+    expect(fetchListing).toHaveBeenCalledTimes(2);
+    expect(getUnifiedTableState(dataset).filters.row_group).toBe("hotel,train");
+});
+
+test("a category change during search retains rows until one current replacement commits", async () => {
+    const container = await seedCategoryListing();
+    setParams(dataset, { ...getParams(dataset), search: "trip" });
+    const cards = container.querySelector(".card_container");
+    const previous = cards.firstElementChild;
+    let finishBuild;
+    appendCardRows.mockImplementationOnce((host, _fields, rows) => new Promise(resolve => {
+        finishBuild = () => { appendCards(host, rows); resolve(); };
+    }));
+    const commits = [];
+    const observer = new MutationObserver(records => records.forEach(record => {
+        if (record.target === cards && record.type === "childList"
+            && [...record.addedNodes, ...record.removedNodes].some(node => node.classList?.contains("card"))) {
+            commits.push(cards.querySelector(".card")?.dataset.id);
+        }
+    }));
+    observer.observe(cards, { childList: true });
+    try {
+        const pending = toggleRowGroupFacet(dataset, "hotel");
+        await vi.waitFor(() => expect(finishBuild).toBeTypeOf("function"));
+        expect(fetchListing).toHaveBeenCalledOnce(); expect(previous.isConnected).toBe(true);
+        expect(commits).toEqual([]);
+        finishBuild(); await pending;
+        expect(commits).toEqual(["2"]);
+        expect(fetchListing).toHaveBeenCalledOnce();
+        expect(appendCardRows.mock.calls.filter(([host]) => host.className === "card_container")).toHaveLength(1);
+    } finally { observer.disconnect(); }
 });
 afterEach(() => {
     disconnectInfiniteScroll(dataset); invalidateCardArticleReturn(dataset);
@@ -193,7 +312,7 @@ test.each(["disabled", "disappeared"])("%s URL value resolves without losing com
     expect(document.querySelector(`#${dataset}_search_ai_table`).textContent).toContain("Trip 99");
     expect(document.querySelector('[data-lang-key="see_also"]')).not.toBeNull();
     expect(cache.filterSignature).toBe(getSearchFilterContext(dataset).signature);
-    expect(cache.executionSignature).toBe(`${cache.filterSignature}\n${JSON.stringify({ useLocation: false })}`);
+    expect(cache.executionSignature).toBe(`${cache.filterSignature}\n${JSON.stringify(getUnifiedTableState(dataset).sort)}\n${JSON.stringify({ useLocation: false })}`);
     expect(cache.requestContext).toMatchObject({ rowGroupSlug: "hotel", clientFilters: { status: "open" } });
     const request = new URLSearchParams(endpointRouter.mock.calls[0][1].url_params);
     expect(request.get("row_group")).toBe("hotel"); expect(JSON.parse(request.get("filters"))).toEqual({ status: "open" });

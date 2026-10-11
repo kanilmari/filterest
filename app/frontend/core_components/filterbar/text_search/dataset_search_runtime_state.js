@@ -43,13 +43,18 @@ export function getSearchFilterContext(tableName) {
     return { clientFilters: activeFilters, rowGroupSlug, rowGroupMode, signature };
 }
 
+/** A changed sort needs a fresh listing even while the same question is running. */
+export function getSearchExecutionSignature(tableName, context, options = {}) {
+    return `${context.signature}\n${JSON.stringify(getUnifiedTableState(tableName).sort || {})}\n${JSON.stringify(options)}`;
+}
+
 /** Adopt an authoritative selection without replacing this search or asking again. */
 export function adoptResolvedSearchRowGroupSelection(tableName, previousContext) {
     const cache = ongoingSearchResultsStore[tableName];
     if (!cache || cache.filterSignature !== previousContext.signature) return;
     const context = getSearchFilterContext(tableName);
     cache.filterSignature = context.signature;
-    cache.executionSignature = `${context.signature}\n${JSON.stringify(cache.searchOptions || {})}`;
+    cache.executionSignature = getSearchExecutionSignature(tableName, context, cache.searchOptions);
     // The executor holds this same object while awaiting the listing. Updating
     // it makes the subsequent AI request use the resolved selection as well.
     if (cache.requestContext) Object.assign(cache.requestContext, context);

@@ -20,6 +20,7 @@ export function createRowGroupFacetCard({ host, topControls, tableName, getSelec
     let callbacks = {};
     let chosenLanguage;
     let disposed = false;
+    let pendingSelections = 0;
     const ownerElement = topControls.closest('#tabs_container > .content_div')
         || topControls.closest('.content_div') || topControls.parentElement;
     const title = createPanelText('h2', 'row_group_categories', 'row-group-facets__title');
@@ -231,11 +232,18 @@ export function createRowGroupFacetCard({ host, topControls, tableName, getSelec
     }
 
     async function runSelection(action) {
-        if (disposed || host.getAttribute('aria-busy') === 'true') { render(); return; }
+        if (disposed) return;
+        // Busy describes outstanding work; it must not discard the next choice.
+        // The listing/search owners reject superseded responses before rendering.
+        pendingSelections += 1;
         host.setAttribute('aria-busy', 'true');
         try { await action(); }
         catch (error) { console.warn('Category selection failed:', error); }
-        finally { host.removeAttribute('aria-busy'); render(); }
+        finally {
+            pendingSelections -= 1;
+            if (!pendingSelections) host.removeAttribute('aria-busy');
+            if (!disposed) render();
+        }
     }
 
     return { update(nextGroups, nextCallbacks) { groups = nextGroups; callbacks = nextCallbacks; render(); } };

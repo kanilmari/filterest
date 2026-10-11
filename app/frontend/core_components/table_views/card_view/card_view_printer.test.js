@@ -166,6 +166,7 @@ vi.mock('./row_article_presentation_settings.js', () => ({
 }));
 
 import { appendDataToCardView, create_card_view, refreshCardLanguages } from './card_view_printer.js';
+import { notifyCardsMounted } from './card_resource_lifecycle.js';
 import { addKeywordsSection } from './card_keyword_builder.js';
 import { datasetAppearanceState } from '../dataset_appearance_state.js';
 import { DEFAULT_DATASET_APPEARANCE } from '../../../shared/dataset_appearance/validator.js';
@@ -241,6 +242,7 @@ describe('card language refresh', () => {
         applySiteCardDefaults(true, 'modern', 4);
         const view = await create_card_view(['detail'], [{id:7,detail:'Value'}], table);
         document.body.append(view);
+        notifyCardsMounted(view);
         const card = view.querySelector('.card');
         expect(card.dataset.datasetName).toBe(table);
         expect(card.dataset.cardStyleVariant).toBe('modern');

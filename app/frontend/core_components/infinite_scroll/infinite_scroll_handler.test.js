@@ -113,6 +113,61 @@ function createCardView(tableName, { collapsed = false } = {}) {
 }
 
 describe("initializeInfiniteScroll", () => {
+    test.each([0, 2])("does not page an already complete initial listing with %s rows", async rowCount => {
+        createCardView("complete_cards");
+        getUnifiedTableStateMock.mockReturnValue({ offset: rowCount, filters: {} });
+        const scroll = await import("./infinite_scroll_handler.js");
+        scroll.seedInfiniteScrollRowCount("complete_cards", rowCount);
+        scroll.initializeInfiniteScroll("complete_cards");
+        intersectionObservers.at(-1)?.callback([{ isIntersecting: true }]);
+        await Promise.resolve();
+        scroll.disconnectInfiniteScroll("complete_cards");
+        expect(fetchDatasetDataMock).not.toHaveBeenCalled();
+        expect(document.getElementById("complete_cards_infinite_scroll_sentinel")).toBeNull();
+    });
+
+    test("a queued observer notification cannot page past the total just loaded", async () => {
+        createCardView("last_cards");
+        let state = { offset: 1, filters: {} };
+        getUnifiedTableStateMock.mockImplementation(() => state);
+        setUnifiedTableStateMock.mockImplementation((_name, next) => { state = next; });
+        fetchDatasetDataMock.mockResolvedValue({ data: [{ id: 2 }], row_count: 2 });
+        const scroll = await import("./infinite_scroll_handler.js");
+        scroll.seedInfiniteScrollRowCount("last_cards", 2);
+        scroll.initializeInfiniteScroll("last_cards");
+        const observer = intersectionObservers.at(-1);
+        observer.callback([{ isIntersecting: true }]);
+        await vi.waitFor(() => expect(state.offset).toBe(2));
+        observer.callback([{ isIntersecting: true }]);
+        await Promise.resolve();
+        scroll.disconnectInfiniteScroll("last_cards");
+        expect(fetchDatasetDataMock).toHaveBeenCalledTimes(1);
+    });
+
+    test.each(["search", "filter", "mode", "sort"])("an old completed count cannot close a changed %s listing", async change => {
+        createCardView("changed_cards");
+        const state = { offset: 2, filters: { row_group: "boat" }, sort: { column: "id", direction: "ASC" } };
+        getUnifiedTableStateMock.mockReturnValue(state);
+        const scroll = await import("./infinite_scroll_handler.js");
+        scroll.seedInfiniteScrollRowCount("changed_cards", 2);
+        if (change === "search") {
+            const { setParams } = await import("../navigation/nav_engine/query_params.js");
+            setParams("changed_cards", { search: "new question" });
+        }
+        else if (change === "filter") state.filters.row_group = "train";
+        else if (change === "mode") state.filters.row_group_mode = "1:all";
+        else state.sort.direction = "DESC";
+        fetchDatasetDataMock.mockResolvedValue({ data: [], row_count: 0 });
+        scroll.initializeInfiniteScroll("changed_cards");
+        const observer = intersectionObservers.at(-1);
+        expect(observer).toBeDefined();
+        observer.callback([{ isIntersecting: true }]);
+        await Promise.resolve();
+        scroll.disconnectInfiniteScroll("changed_cards");
+        expect(fetchDatasetDataMock).toHaveBeenCalledOnce();
+        expect(fetchDatasetDataMock).toHaveBeenCalledWith(expect.objectContaining({ row_count: null }));
+    });
+
     test('listing reload never appends replacement rows into a surface owned by the renamed UID', async () => {
         const { datasetAppearanceState } = await import('../table_views/dataset_appearance_state.js');
         const { setAllSpecs } = await import('../state_stores/table_specs_reader.js');

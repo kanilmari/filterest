@@ -148,7 +148,7 @@ export function renderActiveFilters(tableName) {
         resultsCountMirror = ensureActiveFiltersResultsCount(topControls, tableName);
     }
 
-    container.innerHTML = "";
+    const content = document.createDocumentFragment();
 
     const params = getParams(tableName);
     const { filters = {} } = getUnifiedTableState(tableName);
@@ -164,7 +164,7 @@ export function renderActiveFilters(tableName) {
         label.appendChild(nameSpan);
         label.append(`: ${params.search}`);
         const { item: searchItem, button: btn } = buildActiveFilterChip({ label, onRemove: () => removeSearch(tableName) });
-        container.appendChild(searchItem);
+        content.appendChild(searchItem);
         bindDatasetLanguageRenderer(searchItem, () => {
             nameSpan.textContent = getTranslationForKey("search");
             btn.setAttribute("aria-label", `${getTranslationForKey("remove")}: ${label.textContent}`);
@@ -176,7 +176,7 @@ export function renderActiveFilters(tableName) {
     Object.entries(grouped).forEach(([base, data]) => {
         if (base === ROW_GROUP_MODE_KEY) return;
         if (base === ROW_GROUP_FILTER_KEY) {
-            renderRowGroupFilterTags(tableName, container).forEach(slug => seenLabels.add(`${ROW_GROUP_FILTER_KEY}::${slug}`));
+            renderRowGroupFilterTags(tableName, content).forEach(slug => seenLabels.add(`${ROW_GROUP_FILTER_KEY}::${slug}`));
             return;
         }
         // Duplikaattiesto: sama näyttönimi + arvo ohitetaan
@@ -209,7 +209,7 @@ export function renderActiveFilters(tableName) {
         const { item, button: btn } = buildActiveFilterChip({
             label, exclude: data.exclude, onRemove: () => removeFilter(tableName, data.keys),
         });
-        container.appendChild(item);
+        content.appendChild(item);
         bindDatasetLanguageRenderer(item, () => {
             item.querySelectorAll("[data-lang-key]").forEach(span => {
                 span.textContent = getTranslationForKey(span.dataset.langKey);
@@ -218,28 +218,39 @@ export function renderActiveFilters(tableName) {
         });
     });
 
-    const hasSelections = container.childElementCount > 0;
+    const hasSelections = content.childElementCount > 0;
+    let clear = container.querySelector(".active-filters-clear-all");
     if (hasSelections) {
         const lead = document.createElement("span");
         lead.className = "active-filters-lead";
         lead.dataset.langKey = "selected_filters";
-        const clear = document.createElement("button");
-        clear.type = "button";
-        clear.className = "active-filters-clear-all";
-        clear.dataset.testid = "active-filters-clear-all";
-        clear.dataset.langKey = "clear_all";
-        clear.addEventListener("click", async () => {
-            const { clearAllFilters } = await import("../top_row_buttons/top_row_builder.js");
-            clearAllFilters(tableName, document.getElementById(`${tableName}_filterBar_panel`));
-            renderActiveFilters(tableName);
-            const searchInputs = document.querySelectorAll(".dataset-search-input");
-            [...searchInputs].find(input => input.dataset.datasetSearchInput === tableName && input.getClientRects().length > 0)?.focus();
-        });
-        container.prepend(lead);
-        container.appendChild(clear);
+        if (!clear) {
+            clear = document.createElement("button");
+            clear.type = "button";
+            clear.className = "active-filters-clear-all";
+            clear.dataset.testid = "active-filters-clear-all";
+            clear.dataset.langKey = "clear_all";
+            clear.addEventListener("click", async () => {
+                const { clearAllFilters } = await import("../top_row_buttons/top_row_builder.js");
+                clearAllFilters(tableName, document.getElementById(`${tableName}_filterBar_panel`));
+                renderActiveFilters(tableName);
+                const searchInputs = document.querySelectorAll(".dataset-search-input");
+                [...searchInputs].find(input => input.dataset.datasetSearchInput === tableName && input.getClientRects().length > 0)?.focus();
+            });
+            container.appendChild(clear);
+        }
+        content.prepend(lead);
         bindDatasetLanguageRenderer(lead, () => { lead.textContent = getTranslationForKey("selected_filters"); });
         bindDatasetLanguageRenderer(clear, () => { clear.textContent = getTranslationForKey("clear_all"); });
+    } else {
+        clear?.remove();
+        clear = null;
     }
+    // A chip-removal refresh can settle between focusing Clear all and pressing
+    // Enter. Keep that button connected, focused and bound exactly once while
+    // replacing its preceding tags; recreating it silently loses the next key.
+    [...container.childNodes].filter(child => child !== clear).forEach(child => child.remove());
+    container.insertBefore(content, clear);
     container.style.display = hasSelections ? "" : "none";
     if (resultsCountMirror) {
         resultsCountMirror.style.display = "";

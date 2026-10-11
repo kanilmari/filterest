@@ -3,6 +3,7 @@
 // Bridges raw row objects and the card DOM structure, including avatars, maps, and modals.
 // Exists to centralise card element construction so card layout logic stays out of the view printer.
 
+import { addCardResourceListener } from './card_resource_lifecycle.js';
 import { createImageElement, create_seeded_avatar } from "./card_avatar_builder.js";
 import { openRowArticleView } from "./row_article_opener.js";
 import { bindImageFirstViewActivation } from "./image_first_view_activation.js";
@@ -65,7 +66,7 @@ function addHeaderElement(
     headerDiv.title = val_str;
 
     // --- klikillä isompi kortti ----------------
-    headerDiv.addEventListener("click", (e) => {
+    addCardResourceListener(headerDiv, "click", (e) => {
         e.preventDefault();
         openRowArticleView(row_item, table_name, headerDiv.closest(".card"));
     });
@@ -153,7 +154,7 @@ async function addImageOrAvatar(
         );
 
         // Lisätään silti klikkauskuuntelija, jos halutaan avata avatar isompana (valinnainen)
-        // avatar.addEventListener("click", () => {
+        // addCardResourceListener(avatar, "click", () => {
         //     openImageModal(someAvatarSrcIfWanted);
         // });
 
@@ -238,7 +239,7 @@ function addDescriptionSection(
     setFieldHideAttribute(desc_container);
 
     // Koko description-container klikattava -> avaa ison kortin
-    desc_container.addEventListener("click", () => {
+    addCardResourceListener(desc_container, "click", () => {
         openRowArticleView(row_item, table_name, container.closest(".card"));
     });
 
@@ -285,7 +286,7 @@ function addDescriptionSection(
             }
             valueDiv.style.whiteSpace = "pre-wrap";
             // Estetään klikkauksen kupliminen, jotta tekstin valinta toimii
-            valueDiv.addEventListener("click", (e) => e.stopPropagation());
+            addCardResourceListener(valueDiv, "click", (e) => e.stopPropagation());
             if (show_more_button_on_cards) {
                 valueDiv.appendChild(document.createTextNode(" "));
                 const showMoreLink = createShowMoreLink(row_item, table_name);
@@ -321,7 +322,7 @@ function createShowMoreLink(row_item, table_name) {
     link.href = "#";
     link.classList.add("show_more_link");
     link.dataset.langKey = "show_more";
-    link.addEventListener("click", (e) => {
+    addCardResourceListener(link, "click", (e) => {
         e.preventDefault();
         openRowArticleView(row_item, table_name, link.closest(".card"));
     });

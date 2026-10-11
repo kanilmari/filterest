@@ -7,7 +7,7 @@
 .row-group-facets {
     box-sizing: border-box;
     width: 100%;
-    max-width: 550px;
+    max-width: var(--filterbar-hero-content-max-width, 550px);
     min-width: 0;
     margin: 0.25rem auto 0.75rem;
     padding: 16px;

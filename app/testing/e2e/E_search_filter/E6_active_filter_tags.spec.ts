@@ -106,6 +106,17 @@ test.describe('E6 — Active Filter Tags', () => {
         expect(clear.width).toBeGreaterThanOrEqual(44);
         expect(clear.height).toBeGreaterThanOrEqual(44);
         await checkLines();
+        // Batch 66's phone bar continues through 700 px, including fine-pointer emulation.
+        await page.setViewportSize({ width: 700, height: 812 });
+        await expect(remove).toHaveCSS('width', '44px');
+        await expect(row.locator('[data-testid="active-filters-clear-all"]')).toHaveCSS('min-height', '44px');
+        await expect(page.locator('[data-testid="active-filters"]:visible')).toHaveCount(1);
+        await checkLines();
+        await page.setViewportSize({ width: 701, height: 812 });
+        await expect(remove).toHaveCSS('width', '24px');
+        await expect.poll(async () => (await chip.boundingBox())!.height).toBeCloseTo(26, 0);
+        await expect(page.locator('[data-testid="active-filters"]:visible')).toHaveCount(1);
+        await checkLines();
       });
     }
   }

@@ -8,6 +8,7 @@ import { update_card_selection } from "../table_view/row_selection_handler.js";
 import { create_seeded_avatar } from "./card_avatar_builder.js";
 import { openRowArticleView } from "./row_article_opener.js";
 import { addKeywordsSection } from "./card_keyword_builder.js";
+import { addCardResourceListener, disposeCardResources } from './card_resource_lifecycle.js';
 import { generateGoogleMapsEmbedSrcFromRow, addHeaderElement, addUsernameElement, addImageOrAvatar, addDescriptionSection } from "./card_element_builder.js";
 import { parseRoleString, createKeyValueElement, format_column_name, createTicketStatusBadge } from "./card_field_formatter.js";
 import { isTicketStatusField, resolveCardFieldDisplayValue } from "./card_field_formatter_helpers.js";
@@ -66,6 +67,7 @@ count_this_function("createSingleCard");
         hasFallbackCardImageColumn(columns) ||
         Boolean(fallbackImageValue);
     const card = document.createElement("div");
+    try {
     if (!datasetAppearanceState.isCurrent(appearanceToken)) return card;
     card.classList.add("card", "saturate_on_hover");
     card.dataset.testid = 'card-item';
@@ -104,7 +106,7 @@ count_this_function("createSingleCard");
             row_item.id == null ? "Select row" : `Select row: ${row_item.id}`
         );
 
-        cb.addEventListener("change", () => {
+        addCardResourceListener(cb, "change", () => {
             update_card_selection(card);
             updateMassDeleteBar();
         });
@@ -129,6 +131,11 @@ count_this_function("createSingleCard");
     const card_text_content = document.createElement("div");
     card_text_content.classList.add("card_text_content");
     setFieldHideAttribute(card_text_content);
+    // Field builders must find their card host while still detached, so they
+    // wait for the accepted mount rather than measuring an unattached field.
+    card_body_div.append(card_image_content, card_text_content);
+    card_content_div.appendChild(card_body_div);
+    card.appendChild(card_content_div);
     const description_entries = [];
     const details_entries = [];
     const keywords_list = [];
@@ -507,7 +514,7 @@ for (const role of baseRoles) {
             selectCardFieldEntries(description_entries, showAll, data_types),
             row_item, table_name, cardInfoSectionContainer
         );
-        addKeywordsSection(
+        const disposeKeywords = addKeywordsSection(
             selectCardFieldEntries(keywords_list, showAll, data_types),
             row_item, table_name, cardInfoSectionContainer, { deferResponsiveLayoutMs }
         );
@@ -539,13 +546,8 @@ for (const role of baseRoles) {
             cardInfoSectionContainer.remove();
         }
         return () => {
+            disposeKeywords?.();
             if (typeof disposeDetails === "function") disposeDetails();
-            // Removing the keyword child first lets its existing observer release
-            // timers/listeners even when the whole modern panel is then replaced.
-            if (isModernCardStyle) {
-                cardInfoSectionContainer.querySelectorAll('.card_keywords_container')
-                    .forEach((element) => element.remove());
-            }
         };
     }, always_show_empty_fields_on_cards);
     const footer_div = document.createElement("div");
@@ -581,7 +583,7 @@ for (const role of baseRoles) {
     if (show_more_button_on_cards) {
         const moreBtn = document.createElement("button");
         moreBtn.dataset.langKey = "show_more";
-        moreBtn.addEventListener("click", (e) => {
+        addCardResourceListener(moreBtn, "click", (e) => {
             e.preventDefault();
             openRowArticleView(row_item, table_name, card);
         });
@@ -605,4 +607,8 @@ card_text_content.appendChild(footer_div);
 
     if (datasetAppearanceState.isCurrent(appearanceToken)) datasetAppearanceState.bind(card, table_name);
     return card;
+    } catch (error) {
+        disposeCardResources(card);
+        throw error;
+    }
 }

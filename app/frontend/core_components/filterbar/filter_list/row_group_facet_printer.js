@@ -20,6 +20,8 @@ import {
 import { getTranslationForKey } from "../../lang/translation_handler.js";
 import { updateDatasetAddress } from "../../navigation/nav_engine/dataset_address_writer.js";
 import { renderActiveFilters } from "./active_filter_tag_printer.js";
+import { refreshTableUnified, invalidateTableRefresh } from "../../general_tables/gt_1_row_crud/gt_1_2_row_read/table_refresh_unified.js";
+import { resetOffset, disconnectInfiniteScroll } from "../../infinite_scroll/infinite_scroll_handler.js";
 import { adoptResolvedSearchRowGroupSelection, getSearchFilterContext } from "../text_search/dataset_search_runtime_state.js";
 import { rekeyLoadedDatasetRows } from "../../table_views/dataset_loaded_rows.js";
 
@@ -191,21 +193,19 @@ async function applyRowGroupSelection(tableName, selection, modes = getSelectedM
     setParams(tableName, params);
     updateURL(tableName, params);
 
-    // Search reloads replace rows only, so update tags at the selection boundary too.
-    const { renderActiveFilters } = await import("./active_filter_tag_printer.js");
+    // Commit tags and invalidate earlier work before any asynchronous module
+    // loading, so a rapid next choice cannot revive an earlier selection.
     renderActiveFilters(tableName);
-    const { refreshTableUnified, invalidateTableRefresh } = await import(
-        "../../general_tables/gt_1_row_crud/gt_1_2_row_read/table_refresh_unified.js"
-    );
     invalidateTableRefresh(tableName);
-    const { resetOffset, disconnectInfiniteScroll } = await import("../../infinite_scroll/infinite_scroll_handler.js");
-    disconnectInfiniteScroll(tableName);
-    resetOffset(tableName);
     const committedSearchTerm = String(params.search || "").trim();
     if (committedSearchTerm) {
+        disconnectInfiniteScroll(tableName);
+        resetOffset(tableName);
         const { do_intelligent_search } = await import(
             "../text_search/dataset_search_executor.js"
         );
+        if (filterSignature(getUnifiedTableState(tableName).filters) !== filterSignature(filters)
+            || String(getParams(tableName).search || "").trim() !== committedSearchTerm) return false;
         await do_intelligent_search(tableName, committedSearchTerm);
         return true;
     }

@@ -223,7 +223,9 @@ export async function refreshTableUnified(tableName, options = {}) {
                 resolvedSelection: result.row_group_selection,
             } }
         );
-        if (!isRenderCurrent()) return;
+        // A renderer failure has already shown its translated failure surface.
+        // No article opening, search-group placement or settled address follows it.
+        if (!_activeContainer || !isRenderCurrent()) return null;
         const renderedView = resolveDatasetViewSelectionTarget(getChosenDatasetView(tableName) || currentView);
         if (renderedView !== currentView) {
             await refreshTableUnified(tableName, { skipUrlParams: true });

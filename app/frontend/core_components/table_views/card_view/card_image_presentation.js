@@ -3,6 +3,7 @@
 // Connects the shared appearance setting with existing card image wrappers.
 // Keeps article images, SVG logos, avatars and thumbnails on their own rendering paths.
 
+import { addCardResourceListener } from './card_resource_lifecycle.js';
 import { readAppearanceAttribute, appearanceScopeElements } from '../../../reusable_components/appearance_scope_reader.js';
 import { projectAppearanceAttribute, projectAppearanceStyle } from '../../../reusable_components/appearance_projection_writer.js';
 
@@ -48,13 +49,13 @@ export function prepareCardImagePresentation(wrapper, image) {
     };
     wrapper._refreshImagePresentation = updateBackdrop;
     updateBackdrop();
-    image.addEventListener('load', () => {
+    addCardResourceListener(image, 'load', () => {
         hasLoaded = true;
         // Lifecycle cleanup revoked this wrapper's projection. A late image
         // event cannot recreate it; an explicit adapter paint enables it again.
         if (wrapper.dataset.cardImagePresentation) updateBackdrop();
     });
-    image.addEventListener('error', () => {
+    addCardResourceListener(image, 'error', () => {
         hasLoaded = false;
         projectAppearanceStyle(wrapper, '--card-photo-source', null);
     });

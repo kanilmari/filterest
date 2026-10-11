@@ -39,6 +39,7 @@ vi.mock('./card_view/card_view_printer.js', () => ({
 }));
 
 vi.mock('../infinite_scroll/infinite_scroll_handler.js', () => ({
+    disconnectInfiniteScroll: vi.fn(),
     initializeInfiniteScroll: initializeInfiniteScrollMock,
     seedInfiniteScrollRowCount: seedInfiniteScrollRowCountMock,
 }));
@@ -338,7 +339,7 @@ describe('generate_table', () => {
         const redraw = generate_table('demo_dataset', ['id'], [{ id: 2 }], { id: 'INTEGER' }, 1, false, null);
         await vi.waitFor(() => expect(finishRenderer).toBeTypeOf('function'));
         await new Promise(resolve => setTimeout(resolve, 25));
-        expect(controls.isConnected).toBe(false);
+        expect(controls.isConnected).toBe(true);
         expect(popup.isConnected).toBe(true);
         expect(popup.style.display).toBe('flex');
         expect(document.activeElement).toBe(option);

@@ -16,6 +16,7 @@ import { datasetSearchState } from "./dataset_search_state_reader.js";
 import { ongoingSearchResults } from "./dataset_search_executor.js";
 import { clearSearchResultsCount, getSearchAiHostId, showsSearchAiGroup } from "./dataset_search_runtime_state.js";
 import { getDatasetViewContainerId, RENDERABLE_DATASET_VIEW_DEFINITIONS } from "../../table_views/dataset_view_registry.js";
+import { disposeCardResources } from '../../table_views/card_view/card_resource_lifecycle.js';
 
 import { resolveSortSelection } from "../top_row_buttons/sort_sync_state_helpers.js";
 
@@ -41,7 +42,10 @@ function removeDatasetSearchArtifacts(tableName) {
         if (!viewContainer) continue;
         viewContainer
             .querySelectorAll(`#${getSearchAiHostId(tableName, viewKey)}, .search-stage-notice`)
-            .forEach((element) => element.remove());
+            .forEach((element) => {
+                disposeCardResources(element);
+                element.remove();
+            });
     }
 }
 

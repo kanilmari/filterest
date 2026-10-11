@@ -8,6 +8,7 @@ import { createShowMoreLink } from "./card_element_builder.js";
 import { count_this_function } from "../../dev_tools/function_counter.js";
 import { show_more_button_on_cards } from "../../../ui_config.js";
 import { splitKeywordRoleValue } from "./card_keyword_value_helpers.js";
+import { registerCardResource } from './card_resource_lifecycle.js';
 
 const keywordResizeCallbacks = new Map();
 let sharedKeywordResizeObserver = null;
@@ -220,27 +221,31 @@ function addKeywordsSection(keywords_list, row_item, table_name, container, user
         }
     }
 
+    let disposed = false;
+    const dispose = () => {
+        if (disposed) return;
+        disposed = true;
+        cleanupMountWait();
+        cleanupObserverActivationWait();
+        cleanupResizeObserver();
+        mutationObserver.disconnect();
+        if (deferredObserverTimer !== null) clearTimeout(deferredObserverTimer);
+        if (_kwDebounce !== null) clearTimeout(_kwDebounce);
+    };
     const mutationObserver = new MutationObserver((muts) => {
         muts.forEach((mut) => {
             mut.removedNodes.forEach((node) => {
-                if (node === keywordsOuterContainer) {
-                    cleanupMountWait();
-                    cleanupObserverActivationWait();
-                    cleanupResizeObserver();
-                    mutationObserver.disconnect();
-                    if (deferredObserverTimer !== null) {
-                        clearTimeout(deferredObserverTimer);
-                        deferredObserverTimer = null;
-                    }
-                    if (_kwDebounce !== null) {
-                        clearTimeout(_kwDebounce);
-                        _kwDebounce = null;
-                    }
+                // Field groups reorder nodes within this same parent. That move
+                // must not cancel the mount subscription of a still-owned field.
+                if (node === keywordsOuterContainer && !container.contains(node)) {
+                    dispose();
                 }
             });
         });
     });
     mutationObserver.observe(container, { childList: true });
+    registerCardResource(keywordsOuterContainer, dispose);
+    return dispose;
 }
 
 export { addKeywordsSection };

@@ -14,6 +14,8 @@ import { datasetAppearanceState } from '../table_views/dataset_appearance_state.
 import { fetchDatasetData } from "../endpoints/endpoint_data_fetcher.js";
 import { appendDataToTable } from "../table_views/table_view/table_row_printer.js";
 import { appendDataToCardView } from "../table_views/card_view/card_view_printer.js";
+import { disposeCardResources, notifyCardsMounted } from '../table_views/card_view/card_resource_lifecycle.js';
+import { showDatasetResultBuildFailure } from '../table_views/dataset_result_build_failure.js';
 import { setResultsCount } from "../../reusable_components/results_count/results_count_printer.js";
 
 // Tuodaan unified-tila suoraan state storesta (vältetään kehäriippuvuus table_refresh_unified ↔ infinite_scroll)
@@ -164,6 +166,17 @@ export function seedInfiniteScrollRowCount(tableName, rowCount) {
     scrollSt.rowCountSignature = null;
 }
 
+// Only the count for these exact filters, search and sort can close pagination.
+// Check before observing and before fetching: layout changes can expose a
+// sentinel after the first page already loaded every row, or queue a late tick.
+function hasLoadedEntireListing(tableName) {
+    const scrollSt = getScrollState(tableName);
+    const state = getUnifiedTableState(tableName);
+    return Number.isFinite(scrollSt.lastRowCount)
+        && scrollSt.rowCountSignature === getDatasetListingSignature(tableName, state.filters, state.sort)
+        && Number(state.offset || 0) >= scrollSt.lastRowCount;
+}
+
 /**
  * Alustaa infinite scroll -toiminnon taululle `tableName`.
  * Käyttää IntersectionObserveria. Kun containerin lopussa oleva
@@ -187,6 +200,7 @@ export function initializeInfiniteScroll(tableName, orientation = "vertical") {
     disconnectInfiniteScroll(tableName);
     const state = getScrollState(tableName);
     state.orientation = orientation;
+    if (hasLoadedEntireListing(tableName)) return;
     clearFillScreenTimers(tableName);
 
     // Jos observer on olemassa, tuhotaan se ensin (estää tuplahavainnoinnin)
@@ -306,6 +320,7 @@ export async function reloadDatasetRowsFromListing(tableName, { isCurrent } = {}
     disconnectInfiniteScroll(tableName);
     resetOffset(tableName);
     const result = await fetchMoreData(tableName, { replace: true, isCurrent });
+    if (!result) return null;
     if (isCurrent && !isCurrent()) return result;
     initializeInfiniteScroll(tableName, getDatasetViewScrollDirection(getChosenDatasetView(tableName) || "table"));
     return result;
@@ -315,6 +330,10 @@ export async function reloadDatasetRowsFromListing(tableName, { isCurrent } = {}
 //  * replace=true aloittaa listauksen alusta ja korvaa näkyvät rivit;
 //  * muuten haetaan seuraava sivu nykyisen offsetin jälkeen.
 async function fetchMoreData(tableName, { replace = false, isCurrent: callerIsCurrent = null } = {}) {
+    if (!replace && hasLoadedEntireListing(tableName)) {
+        disconnectInfiniteScroll(tableName);
+        return null;
+    }
     // BUG FIX: renamed to scrollSt/tableState to avoid variable shadowing.
     // Previously both were called "state", causing the observer disconnect
     // (line ~183) to reference the wrong object — unifiedTableState instead
@@ -449,11 +468,23 @@ export function appendDataToView(tableName, data, append = true, { isCurrent, da
             JSON.parse(localStorage.getItem(`${tableName}_columns`)) || [];
 
         if (!append) {
-            Array.from(cardContainer.children).forEach((child) => {
-                if (!child.classList.contains("card_top_controls")) {
-                    child.remove();
-                }
-            });
+            // Render searched/category replacements off screen so asynchronous
+            // card work cannot expose an empty list or commit an obsolete batch.
+            const replacement = document.createElement('div');
+            replacement.className = 'card_container';
+            return Promise.resolve().then(() => appendDataToCardView(replacement, columns, data, tableName,
+                ...(isCurrent || dataTypes ? [{ isCurrent, dataTypes }] : []))).then(() => {
+                if ((isCurrent && !isCurrent()) || !cardContainer.isConnected) return;
+                const controls = [...cardContainer.children].filter(child => child.classList.contains('card_top_controls'));
+                [...cardContainer.children].filter(child => !controls.includes(child)).forEach(disposeCardResources);
+                cardContainer.replaceChildren(...controls, ...replacement.childNodes);
+                notifyCardsMounted(cardContainer);
+            }).catch(error => {
+                if ((isCurrent && !isCurrent()) || !cardContainer.isConnected) return;
+                disconnectInfiniteScroll(tableName);
+                showDatasetResultBuildFailure(tableName, cardContainer.closest('.scrollable_content'), error);
+                throw error;
+            }).finally(() => disposeCardResources(replacement));
         }
         return appendDataToCardView(cardContainer, columns, data, tableName,
             ...(isCurrent || dataTypes ? [{ isCurrent, dataTypes }] : []));

@@ -13,6 +13,7 @@ import { endpoint_router } from "../../endpoints/endpoint_router.js";
 import { createExperimentalFreeLayoutCard, createExperimentalFreeLayoutToolbar, rebuildExperimentalFreeLayoutCard } from "../experimental_free_layout_card/experimental_free_layout_card_view.js";
 import { EXPERIMENTAL_FREE_LAYOUT_CARD_STYLE_VARIANT, getEffectiveCardStyleVariant } from "../experimental_free_layout_card/experimental_free_layout_card_store.js";
 import { createSingleCard } from './card_row_builder.js';
+import { disposeCardResources, notifyCardsMounted, registerCardResource } from './card_resource_lifecycle.js';
 import { CARD_ENTRANCE_ANIMATION_MS, CARD_ENTRANCE_STAGGER_MS } from './card_row_presentation.js';
 import { resolveCardRenderContext, updateMassDeleteBar, createCardSelectionActionBar } from './card_selection_action_bar.js';
 export { updateMassDeleteBar };
@@ -45,25 +46,29 @@ function applyCardEntranceAnimation(card, index = 0) {
 
     card.classList.add("card--entering");
     card.style.setProperty("--card-enter-delay", `${index * CARD_ENTRANCE_STAGGER_MS}ms`);
-    card.addEventListener("animationend", () => {
+    const onAnimationEnd = () => {
         card.classList.remove("card--entering");
         card.style.removeProperty("--card-enter-delay");
-    }, { once: true });
+    };
+    card.addEventListener("animationend", onAnimationEnd, { once: true });
+    registerCardResource(card, () => card.removeEventListener("animationend", onAnimationEnd));
+    registerCardMountImageUpdates(card);
 }
 
-function notifyCardMounted(card) {
-    if (!(card instanceof HTMLElement)) {
-        return;
-    }
-    // A palette preview may have changed while this card was built off-DOM.
-    card._refreshFieldPresentation?.forEach((refresh) => refresh());
-    card.dispatchEvent(new CustomEvent(CARD_MOUNT_EVENT));
-    if (typeof requestAnimationFrame === "function") {
-        requestAnimationFrame(updateCardImageSources);
-    } else {
-        setTimeout(updateCardImageSources, 0);
-    }
-    setTimeout(updateCardImageSources, CARD_ENTRANCE_ANIMATION_MS + 50);
+function registerCardMountImageUpdates(card) {
+    let imageTimer, imageFrame;
+    const onMounted = () => {
+        if (typeof requestAnimationFrame === "function") {
+            imageFrame = requestAnimationFrame(updateCardImageSources);
+        }
+        imageTimer = setTimeout(updateCardImageSources, CARD_ENTRANCE_ANIMATION_MS + 50);
+    };
+    card.addEventListener(CARD_MOUNT_EVENT, onMounted, { once: true });
+    registerCardResource(card, () => {
+        card.removeEventListener(CARD_MOUNT_EVENT, onMounted);
+        clearTimeout(imageTimer);
+        if (imageFrame != null) cancelAnimationFrame(imageFrame);
+    });
 }
 
 function ensureSmallSummaryMedia(card) {
@@ -113,49 +118,55 @@ export async function appendDataToCardView(
 
     const frag = document.createDocumentFragment();
     const createdCards = [];
-    for (const [index, item] of data.entries()) {
-        if (!isCurrent()) return;
-        const card = useExperimentalStyle
-            ? await createExperimentalFreeLayoutCard({
-                rowItem: item,
-                columns,
-                tableName: table_name,
-                dataTypes: data_types,
-                renderContext,
-                onSelectionChange: updateMassDeleteBar,
-            })
-            : await createSingleCard(
-                item,
-                columns,
-                table_name,
-                data_types,
-                renderContext,
-                index,
-                null,
-                renderView || "card"
-            );
-        if (!isCurrent()) return;
-        if (collapsed) {
-            card.classList.add("small-card");
-            if (!useExperimentalStyle) {
-                ensureSmallSummaryMedia(card);
+    let accepted = false;
+    try {
+        for (const [index, item] of data.entries()) {
+            if (!isCurrent()) return;
+            const card = useExperimentalStyle
+                ? await createExperimentalFreeLayoutCard({
+                    rowItem: item,
+                    columns,
+                    tableName: table_name,
+                    dataTypes: data_types,
+                    renderContext,
+                    onSelectionChange: updateMassDeleteBar,
+                })
+                : await createSingleCard(
+                    item,
+                    columns,
+                    table_name,
+                    data_types,
+                    renderContext,
+                    index,
+                    null,
+                    renderView || "card"
+                );
+            createdCards.push(card);
+            if (!isCurrent()) return;
+            if (collapsed) {
+                card.classList.add("small-card");
+                if (!useExperimentalStyle) {
+                    ensureSmallSummaryMedia(card);
+                }
             }
+            applyCardEntranceAnimation(card, index);
+            addCommentBadge(card, counts[String(item.id)] || 0);
+            frag.appendChild(card);
         }
-        applyCardEntranceAnimation(card, index);
-        addCommentBadge(card, counts[String(item.id)] || 0);
-        frag.appendChild(card);
-        createdCards.push(card);
+        if (!isCurrent()) return;
+        const sentinel = card_container.querySelector(
+            `#${table_name}_infinite_scroll_sentinel`
+        );
+        if (sentinel) {
+            card_container.insertBefore(frag, sentinel);
+        } else {
+            card_container.appendChild(frag);
+        }
+        accepted = true;
+        notifyCardsMounted(card_container);
+    } finally {
+        if (!accepted) createdCards.forEach(disposeCardResources);
     }
-    if (!isCurrent()) return;
-    const sentinel = card_container.querySelector(
-        `#${table_name}_infinite_scroll_sentinel`
-    );
-    if (sentinel) {
-        card_container.insertBefore(frag, sentinel);
-    } else {
-        card_container.appendChild(frag);
-    }
-    createdCards.forEach(notifyCardMounted);
 }
 
 /* ----------------------------------------------------------- */
@@ -163,110 +174,118 @@ export async function appendDataToCardView(
 export async function create_card_view(columns, data, table_name,
     { viewKey = "card", stateKey = "cardView", isCurrent = () => true } = {}) {
     const wrapper = document.createElement("div");
-    wrapper.classList.add("card_view_wrapper");
-    wrapper.dataset.tableName = table_name;
-    wrapper.dataset.viewKey = viewKey;
-    const useExperimentalStyle = isExperimentalFreeLayoutStyleActive(table_name);
-
-    const card_sidebar_panel = document.createElement("div");
-    card_sidebar_panel.classList.add("card_sidebar_panel");
-
-    const card_sidebar_header = document.createElement("div");
-    card_sidebar_header.classList.add("card_sidebar_header");
-
-    const sidebarResultsCount = document.createElement("div");
-    sidebarResultsCount.classList.add("results_count", "card_sidebar_results_count");
-    sidebarResultsCount.dataset.resultsCountFor = table_name;
-    card_sidebar_header.appendChild(sidebarResultsCount);
-
-    const primaryResultsCount = document.getElementById(`${table_name}_results_count`);
-    if (primaryResultsCount) {
-        primaryResultsCount.childNodes.forEach((node) => {
-            sidebarResultsCount.appendChild(node.cloneNode(true));
-        });
-    }
-
-    const sidebarActiveFilters = document.createElement("div");
-    sidebarActiveFilters.classList.add("card_sidebar_active_filters");
-
-    const card_container = document.createElement("div");
-    card_container.classList.add("card_container");
-
-    const rowArticlePlaceholder = document.createElement("div");
-    rowArticlePlaceholder.classList.add("big_card_placeholder", "row_article_placeholder");
-
-    let data_types =
-        JSON.parse(localStorage.getItem(`${table_name}_dataTypes`)) || {};
-
-    const collapsed = getUnifiedTableState(table_name)?.[stateKey]?.collapsed;
-    const renderContext = await resolveCardRenderContext(
-        table_name,
-        columns,
-        data_types
-    );
-
-    // Batch-fetch comment counts for all rows
-    const counts = await fetchCommentCountsForRows(table_name, data);
-    if (!isCurrent()) return wrapper;
-
-    const frag = document.createDocumentFragment();
     const createdCards = [];
-    for (const [index, row_item] of data.entries()) {
-        if (!isCurrent()) return wrapper;
-        const card = useExperimentalStyle
-            ? await createExperimentalFreeLayoutCard({
-                rowItem: row_item,
-                columns,
-                tableName: table_name,
-                dataTypes: data_types,
-                renderContext,
-                onSelectionChange: updateMassDeleteBar,
-            })
-            : await createSingleCard(
-                row_item,
-                columns,
-                table_name,
-                data_types,
-                renderContext,
-                index,
-                null,
-                viewKey
-            );
-        if (!isCurrent()) return wrapper;
-        if (collapsed) {
-            card.classList.add("small-card");
-            if (!useExperimentalStyle) {
-                ensureSmallSummaryMedia(card);
-            }
+    let accepted = false;
+    try {
+        wrapper.classList.add("card_view_wrapper");
+        wrapper.dataset.tableName = table_name;
+        wrapper.dataset.viewKey = viewKey;
+        const useExperimentalStyle = isExperimentalFreeLayoutStyleActive(table_name);
+
+        const card_sidebar_panel = document.createElement("div");
+        card_sidebar_panel.classList.add("card_sidebar_panel");
+
+        const card_sidebar_header = document.createElement("div");
+        card_sidebar_header.classList.add("card_sidebar_header");
+
+        const sidebarResultsCount = document.createElement("div");
+        sidebarResultsCount.classList.add("results_count", "card_sidebar_results_count");
+        sidebarResultsCount.dataset.resultsCountFor = table_name;
+        card_sidebar_header.appendChild(sidebarResultsCount);
+
+        const primaryResultsCount = document.getElementById(`${table_name}_results_count`);
+        if (primaryResultsCount) {
+            primaryResultsCount.childNodes.forEach((node) => {
+                sidebarResultsCount.appendChild(node.cloneNode(true));
+            });
         }
-        applyCardEntranceAnimation(card, index);
-        addCommentBadge(card, counts[String(row_item.id)] || 0);
-        frag.appendChild(card);
-        createdCards.push(card);
-    }
-    card_container.appendChild(frag);
-    createdCards.forEach(notifyCardMounted);
 
-    card_sidebar_panel.appendChild(card_sidebar_header);
-    card_sidebar_panel.appendChild(sidebarActiveFilters);
-    if (useExperimentalStyle) {
-        card_sidebar_panel.appendChild(
-            createExperimentalFreeLayoutToolbar(table_name)
+        const sidebarActiveFilters = document.createElement("div");
+        sidebarActiveFilters.classList.add("card_sidebar_active_filters");
+
+        const card_container = document.createElement("div");
+        card_container.classList.add("card_container");
+
+        const rowArticlePlaceholder = document.createElement("div");
+        rowArticlePlaceholder.classList.add("big_card_placeholder", "row_article_placeholder");
+
+        let data_types =
+            JSON.parse(localStorage.getItem(`${table_name}_dataTypes`)) || {};
+
+        const collapsed = getUnifiedTableState(table_name)?.[stateKey]?.collapsed;
+        const renderContext = await resolveCardRenderContext(
+            table_name,
+            columns,
+            data_types
         );
+
+        // Batch-fetch comment counts for all rows
+        const counts = await fetchCommentCountsForRows(table_name, data);
+        if (!isCurrent()) return wrapper;
+
+        const frag = document.createDocumentFragment();
+        for (const [index, row_item] of data.entries()) {
+            if (!isCurrent()) return wrapper;
+            const card = useExperimentalStyle
+                ? await createExperimentalFreeLayoutCard({
+                    rowItem: row_item,
+                    columns,
+                    tableName: table_name,
+                    dataTypes: data_types,
+                    renderContext,
+                    onSelectionChange: updateMassDeleteBar,
+                })
+                : await createSingleCard(
+                    row_item,
+                    columns,
+                    table_name,
+                    data_types,
+                    renderContext,
+                    index,
+                    null,
+                    viewKey
+                );
+            createdCards.push(card);
+            if (!isCurrent()) return wrapper;
+            if (collapsed) {
+                card.classList.add("small-card");
+                if (!useExperimentalStyle) {
+                    ensureSmallSummaryMedia(card);
+                }
+            }
+            applyCardEntranceAnimation(card, index);
+            addCommentBadge(card, counts[String(row_item.id)] || 0);
+            frag.appendChild(card);
+        }
+        card_container.appendChild(frag);
+
+        card_sidebar_panel.appendChild(card_sidebar_header);
+        card_sidebar_panel.appendChild(sidebarActiveFilters);
+        if (useExperimentalStyle) {
+            card_sidebar_panel.appendChild(
+                createExperimentalFreeLayoutToolbar(table_name)
+            );
+        }
+        card_sidebar_panel.appendChild(card_container);
+
+        wrapper.appendChild(card_sidebar_panel);
+        wrapper.appendChild(rowArticlePlaceholder);
+
+        const actionBar = createCardSelectionActionBar(table_name, renderContext);
+        if (actionBar) { wrapper.prepend(actionBar); setTimeout(updateMassDeleteBar, 0); }
+
+        if (collapsed) {
+            wrapper.classList.add("big-card-open");
+        }
+
+        accepted = true;
+        return wrapper;
+    } finally {
+        if (!accepted) {
+            createdCards.forEach(disposeCardResources);
+            disposeCardResources(wrapper);
+        }
     }
-    card_sidebar_panel.appendChild(card_container);
-
-    wrapper.appendChild(card_sidebar_panel);
-    wrapper.appendChild(rowArticlePlaceholder);
-
-    const actionBar = createCardSelectionActionBar(table_name, renderContext);
-    if (actionBar) { wrapper.prepend(actionBar); setTimeout(updateMassDeleteBar, 0); }
-
-    if (collapsed) {
-        wrapper.classList.add("big-card-open");
-    }
-
-    return wrapper;
 }
 
 export async function refreshCardLanguages(chosenLanguage = null) {
@@ -277,7 +296,11 @@ export async function refreshCardLanguages(chosenLanguage = null) {
                 card,
                 updateMassDeleteBar
             );
+            if (!card.isConnected) { disposeCardResources(newExperimentalCard); continue; }
+            registerCardMountImageUpdates(newExperimentalCard);
+            disposeCardResources(card);
             card.replaceWith(newExperimentalCard);
+            notifyCardsMounted(newExperimentalCard);
             continue;
         }
 
@@ -307,8 +330,11 @@ export async function refreshCardLanguages(chosenLanguage = null) {
         newCard._table_name = tableName;
         newCard._data_types = dataTypes;
         newCard._hasLocalizedRowData = true;
+        if (!card.isConnected) { disposeCardResources(newCard); continue; }
+        registerCardMountImageUpdates(newCard);
+        disposeCardResources(card);
         card.replaceWith(newCard);
-        notifyCardMounted(newCard);
+        notifyCardsMounted(newCard);
     }
 
     const big = document.querySelector('.active_row_article, .active_big_card');

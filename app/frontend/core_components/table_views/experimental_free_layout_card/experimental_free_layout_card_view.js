@@ -3,6 +3,7 @@
 // Bridges card role metadata, localStorage layout templates, and pointer-based drag/resize interactions.
 // Exists to test a low-coupling card designer before committing to backend persistence or broader UI adoption.
 
+import { addCardResourceListener } from '../card_view/card_resource_lifecycle.js';
 import { create_seeded_avatar, createImageElement } from "../card_view/card_avatar_builder.js";
 import { resolveImagePaths } from "../card_view/card_element_builder_helpers.js";
 import {
@@ -278,7 +279,7 @@ async function createBlockElement({
         actionButton.classList.add("experimental-free-layout-card__action-button");
         actionButton.dataset.langKey = "show_more";
         actionButton.textContent = "Show more";
-        actionButton.addEventListener("click", (event) => {
+        addCardResourceListener(actionButton, "click", (event) => {
             event.preventDefault();
             event.stopPropagation();
             if (designModeEnabled) {
@@ -394,18 +395,18 @@ function attachLayoutPointerInteraction({
             blockElement.removeEventListener("pointercancel", handlePointerUp);
         };
 
-        blockElement.addEventListener("pointermove", handlePointerMove);
-        blockElement.addEventListener("pointerup", handlePointerUp);
-        blockElement.addEventListener("pointercancel", handlePointerUp);
+        addCardResourceListener(blockElement, "pointermove", handlePointerMove);
+        addCardResourceListener(blockElement, "pointerup", handlePointerUp);
+        addCardResourceListener(blockElement, "pointercancel", handlePointerUp);
     };
 
     if (resizeHandle instanceof HTMLElement) {
-        resizeHandle.addEventListener("pointerdown", (event) => {
+        addCardResourceListener(resizeHandle, "pointerdown", (event) => {
             startInteraction("resize", event);
         });
     }
 
-    blockElement.addEventListener("pointerdown", (event) => {
+    addCardResourceListener(blockElement, "pointerdown", (event) => {
         if (!isExperimentalDesignModeEnabled(tableName)) {
             return;
         }
@@ -460,7 +461,6 @@ function buildSmallSummary(summary) {
     summaryWrapper.appendChild(textWrap);
     return summaryWrapper;
 }
-
 /**
  * Creates one experimental free-layout card while preserving existing card shell classes and data hooks.
  *
@@ -514,7 +514,7 @@ export async function createExperimentalFreeLayoutCard({
             "aria-label",
             rowItem.id == null ? "Select row" : `Select row: ${rowItem.id}`
         );
-        checkbox.addEventListener("change", () => {
+        addCardResourceListener(checkbox, "change", () => {
             update_card_selection(card);
             onSelectionChange?.();
         });
@@ -568,7 +568,7 @@ export async function createExperimentalFreeLayoutCard({
     card.appendChild(cardContent);
 
     const summaryElement = buildSmallSummary(model.summary);
-    summaryElement.addEventListener("click", (event) => {
+    addCardResourceListener(summaryElement, "click", (event) => {
         event.preventDefault();
         if (isExperimentalDesignModeEnabled(tableName)) {
             return;
@@ -577,7 +577,7 @@ export async function createExperimentalFreeLayoutCard({
     });
     card.appendChild(summaryElement);
 
-    card.addEventListener("click", (event) => {
+    addCardResourceListener(card, "click", (event) => {
         if (isExperimentalDesignModeEnabled(tableName)) {
             return;
         }
@@ -598,7 +598,6 @@ export async function createExperimentalFreeLayoutCard({
 
     return card;
 }
-
 /**
  * Builds the small prototype toolbar shown above the experimental cards.
  *
@@ -624,7 +623,7 @@ export function createExperimentalFreeLayoutToolbar(tableName) {
     toggleButton.textContent = designModeEnabled
         ? "Exit designer"
         : "Designer mode";
-    toggleButton.addEventListener("click", async () => {
+    addCardResourceListener(toggleButton, "click", async () => {
         setExperimentalDesignModeEnabled(tableName, !designModeEnabled);
         const { refreshTableUnified } = await import(
             "../../general_tables/gt_1_row_crud/gt_1_2_row_read/table_refresh_unified.js"
@@ -637,7 +636,7 @@ export function createExperimentalFreeLayoutToolbar(tableName) {
     resetButton.type = "button";
     resetButton.classList.add("fw-btn");
     resetButton.textContent = "Reset layout";
-    resetButton.addEventListener("click", async () => {
+    addCardResourceListener(resetButton, "click", async () => {
         clearExperimentalLayoutTemplate(tableName);
         workingTemplatesByTable.delete(tableName);
         const { refreshTableUnified } = await import(
@@ -649,7 +648,6 @@ export function createExperimentalFreeLayoutToolbar(tableName) {
 
     return toolbar;
 }
-
 /**
  * Rebuilds one existing experimental card after language or data refresh events.
  *

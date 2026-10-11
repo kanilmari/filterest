@@ -364,6 +364,7 @@ describe("row group category panel", () => {
     test("clears only categories and reruns committed search, preserving ordinary filters", async () => {
         const { clearRowGroupSelection } = await import("./row_group_facet_printer.js");
         getUnifiedTableStateMock.mockReturnValue({ filters: { row_group: "boat,train", published: "true" } });
+        setUnifiedTableStateMock.mockImplementation((_table, state) => getUnifiedTableStateMock.mockReturnValue(state));
         getParamsMock.mockReturnValue({ row_group: "boat,train", published: "true", search: "matka", offset: "20" });
         await clearRowGroupSelection("travel_info");
         expect(setUnifiedTableStateMock).toHaveBeenCalledWith("travel_info", { filters: { published: "true" }, offset: 0 });
