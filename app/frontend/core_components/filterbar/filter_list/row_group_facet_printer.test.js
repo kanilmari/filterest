@@ -152,24 +152,22 @@ describe("row group category panel", () => {
         expect(popup(host)).toBeNull();
     });
 
-    test("a redraw that moves the focused value earlier reveals it in a popup that scrolls as a whole", async () => {
+    test("a redraw reveals a reordered focused value by scrolling only the option list", async () => {
         const { renderRowGroupFacets } = await import("./row_group_facet_printer.js");
         const host = renderRowGroupFacets("travel_info", [value(1, "boat"), value(2, "train"), value(3, "plane")]);
         open(host);
         const dialog = popup(host);
         const listbox = dialog.querySelector('[role="listbox"]');
-        dialog.style.overflowY = "auto";
         vi.spyOn(dialog, "getBoundingClientRect").mockReturnValue({ top: 16, bottom: 334 });
-        vi.spyOn(listbox, "getBoundingClientRect").mockReturnValue({ top: -150, bottom: 340 });
+        vi.spyOn(listbox, "getBoundingClientRect").mockReturnValue({ top: 150, bottom: 334 });
         const plane = checkboxes(host)[2];
         const box = vi.spyOn(plane, "getBoundingClientRect").mockReturnValue({ top: 290, bottom: 334 });
-        plane.focus(); dialog.scrollTop = 270; listbox.scrollTop = 100;
-        // An administrator moved the value first; the redraw puts it above the popup's visible top, and the popup's
-        // scroll moves it as in a browser (the card may render more than once per redraw).
-        box.mockImplementation(() => ({ top: -106 + 270 - dialog.scrollTop, bottom: -62 + 270 - dialog.scrollTop }));
+        plane.focus(); dialog.scrollTop = 0; listbox.scrollTop = 100;
+        // Reordering moves the value above the fixed controls. Only its option viewport follows focus.
+        box.mockImplementation(() => ({ top: 50 + 100 - listbox.scrollTop, bottom: 94 + 100 - listbox.scrollTop }));
         renderRowGroupFacets("travel_info", [value(3, "plane"), value(1, "boat"), value(2, "train")]);
         expect(checkboxes(host)[0]).toBe(plane); expect(document.activeElement).toBe(plane);
-        expect(listbox.scrollTop).toBe(100); expect(dialog.scrollTop).toBe(148);
+        expect(listbox.scrollTop).toBe(0); expect(dialog.scrollTop).toBe(0);
     });
 
     test("lists all returned values in payload order and searches locally without changing selections or URL", async () => {

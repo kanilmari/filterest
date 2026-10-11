@@ -37,6 +37,7 @@ var defaultFilterbarSectionOrder = []string{
 	"tools",
 	"views",
 	"field_sets",
+	"style",
 	"chat",
 }
 
@@ -47,6 +48,7 @@ var allowedFilterbarSectionKeys = map[string]bool{
 	"tools":           true,
 	"views":           true,
 	"field_sets":      true,
+	"style":           true,
 	"chat":            true,
 }
 

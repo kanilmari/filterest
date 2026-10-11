@@ -4,6 +4,7 @@
 // Follows admin_tools/dataset_cover_test_palette.js, dataset_appearance_palette_state.js
 // and site_presentation_state.js; restores only the paths this test changes.
 import { expect, test } from '@playwright/test';
+import { revealActiveFilterbarSection } from '../helpers/filterbar';
 import {
   loadDatasetCardVisibility,
   loadSitePresentationSettings,
@@ -44,6 +45,7 @@ test('admin cover palette is protected, movable, resizable, themed, and live-onl
     getComputedStyle(element, '::before').maskImage
   ))).toContain('linear-gradient');
 
+  await revealActiveFilterbarSection(page, 'style');
   const button = page.locator('[data-testid="dataset-cover-test-palette-button"]');
   await expect(button).toBeVisible({ timeout: 10_000 });
   await button.click();
@@ -254,6 +256,7 @@ test('selected-chip side previews both DOM orders, resets, saves and survives re
     await page.goto('/app_autojen_vanteet?search=chip-proof', { waitUntil: 'domcontentloaded' });
     const chip = page.locator('[data-testid="active-filter-item"]').filter({ hasText: 'chip-proof' }).first();
     await expect(chip).toBeVisible();
+    await revealActiveFilterbarSection(page, 'style');
     await page.locator('[data-testid="dataset-cover-test-palette-button"]').click();
     const panel = page.locator('[data-testid="dataset-cover-test-palette"]');
     await panel.getByTestId('dataset-cover-test-palette-scope-site').check();
@@ -303,6 +306,7 @@ test('selected-chip side previews both DOM orders, resets, saves and survives re
     await expect(chip).toBeVisible();
     await expect(chip).toHaveAttribute('data-remove-side', chosenSide);
     expect(await order()).toBe(chosenSide === 'start' ? 'BUTTON' : 'SPAN');
+    await revealActiveFilterbarSection(page, 'style');
     await page.locator('[data-testid="dataset-cover-test-palette-button"]').click();
     await expect(panel.getByTestId('dataset-cover-test-palette-scope-tab')).toBeChecked();
     await panel.getByTestId('dataset-cover-test-palette-scope-site').check();
@@ -335,6 +339,7 @@ test('dataset card palette saves style and detail columns through the administra
   try {
     await page.goto(address, { waitUntil: 'domcontentloaded' });
     await expect(card).toBeVisible();
+    await revealActiveFilterbarSection(page, 'style');
     await page.getByTestId('dataset-cover-test-palette-button').click();
     await style.evaluate(element => { element.closest('details')!.open = true; });
     await expect(style).toBeEnabled();
@@ -375,6 +380,7 @@ test('dataset card palette saves style and detail columns through the administra
     expect(reloaded.version).toBe(persisted.version);
     expect(reloaded.effective.shared.card_style_variant).toBe(chosenStyle);
     expect(reloaded.effective.shared.card_detail_columns).toBe(chosenColumns);
+    await revealActiveFilterbarSection(page, 'style');
     await page.getByTestId('dataset-cover-test-palette-button').click();
     await style.evaluate(element => { element.closest('details')!.open = true; });
     await expect(style).toHaveValue(chosenStyle);
@@ -388,7 +394,8 @@ test('dataset card palette saves style and detail columns through the administra
 test('shared palette shell keeps dataset preview through close and restores saved values on teardown', async ({ page }) => {
   const saved = (await loadDatasetCardVisibility(page.request, 'app_autojen_vanteet')).dataset_appearance;
   await page.goto('/app_autojen_vanteet', { waitUntil: 'domcontentloaded' });
-  const button = page.getByTestId('dataset-cover-test-palette-button');
+  const styleSection = await revealActiveFilterbarSection(page, 'style');
+  const button = styleSection.getByTestId('dataset-cover-test-palette-button');
   await button.click();
   const panel = page.getByTestId('dataset-cover-test-palette');
   const input = panel.getByTestId('dataset-cover-test-palette-hero-height');
@@ -424,6 +431,7 @@ test('two empty datasets keep separate covers, inherit site defaults and retain 
       await createTempDataset(page, { datasetName: name, columns: { id: 'SERIAL', title: 'TEXT' } });
       created.push(name);
       await openTempDataset(page, name, 'card', { expectEmpty: true });
+      await revealActiveFilterbarSection(page, 'style');
       await page.getByTestId('dataset-cover-test-palette-button').click();
       const panel = page.getByTestId('dataset-cover-test-palette');
       await expect(panel.getByTestId('dataset-cover-test-palette-scope-tab')).toBeChecked();
@@ -463,7 +471,8 @@ test('two empty datasets keep separate covers, inherit site defaults and retain 
       expect(appearance.effective.shared.card_image_width).toBe(name === names[0] ? chosenWidth : initialWidth);
       expect(appearance.sources[path]).toBe(name === names[0] ? 'default' : 'override');
     }
-    await page.getByTestId('dataset-cover-test-palette-button').click();
+    const styleSection = await revealActiveFilterbarSection(page, 'style');
+    await styleSection.getByTestId('dataset-cover-test-palette-button').click();
     await panel.locator(`[data-appearance-path="${path}"] button`).evaluate((el: HTMLButtonElement) => el.click());
     expect((await loadDatasetCardVisibility(page.request, names[1])).dataset_appearance.overrides[path]).toBe(initialWidth);
     const removal = page.waitForResponse(res => res.url().endsWith('/api/admin/dataset-appearance') && res.request().method() === 'POST');
@@ -482,7 +491,8 @@ test('phone palette keeps native scope keyboard focus and actions reachable in F
     await page.emulateMedia({ colorScheme: theme === 'light' ? 'dark' : 'light' });
     await page.goto('/app_autojen_vanteet', { waitUntil: 'domcontentloaded' });
     await page.evaluate(value => { document.body.classList.remove('light-mode', 'dark-mode'); document.body.classList.add(`${value}-mode`); }, theme);
-    await page.getByTestId('dataset-cover-test-palette-button').click();
+    const styleSection = await revealActiveFilterbarSection(page, 'style');
+    await styleSection.getByTestId('dataset-cover-test-palette-button').click();
     const panel = page.getByTestId('dataset-cover-test-palette');
     const tab = panel.getByTestId('dataset-cover-test-palette-scope-tab');
     const site = panel.getByTestId('dataset-cover-test-palette-scope-site');
@@ -505,6 +515,7 @@ test('phone palette keeps native scope keyboard focus and actions reachable in F
       .filter(el => el.getBoundingClientRect().height > 0).map(el => getComputedStyle(el).gridTemplateColumns.split(' ').length));
     expect(grids.every(columns => columns === 1)).toBe(true);
     await panel.getByTestId('dataset-cover-test-palette-close').click();
+    await revealActiveFilterbarSection(page, 'style');
     await page.getByTestId('dataset-cover-test-palette-button').click(); await expect(tab).toBeChecked();
   }
 });

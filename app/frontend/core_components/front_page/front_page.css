@@ -65,6 +65,7 @@ body.dark-mode .front-page {
 }
 
 .front-page-top-row {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 2fr) auto;
   flex: 0 0 auto;
   margin: 0;
   padding: 12px;

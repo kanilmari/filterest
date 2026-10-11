@@ -92,9 +92,9 @@
 /* The invisible header scrolls with its hero; equal side columns keep the
    dataset navigation centered independently of the administrator actions. */
 .filterbar-inline-hero__top-row {
-    --hero-action-space: 88px;
+    --hero-action-space: 52px;
     display: grid;
-    grid-template-columns: minmax(var(--hero-action-space), 1fr) minmax(0, max-content) minmax(var(--hero-action-space), 1fr);
+    grid-template-columns: var(--hero-action-space) minmax(0, 1fr) var(--hero-action-space);
     align-items: start;
     gap: 8px;
     margin-inline: -12px;

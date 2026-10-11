@@ -1,3 +1,4 @@
+import { revealActiveFilterbarSection } from '../helpers/filterbar';
 /**
  * T7_card_visibility.spec.ts
  *
@@ -462,6 +463,7 @@ test.describe('T7 — Card Visibility Admin View', () => {
       seedRows: [{ palette_field: 'Palette field editor fixture' }] });
     try {
       await openTempDataset(page, datasetName, 'card');
+      await revealActiveFilterbarSection(page, 'style');
       await page.getByTestId('dataset-cover-test-palette-button').click();
       const panel = page.getByTestId('dataset-cover-test-palette');
       await expect(panel.getByTestId('dataset-cover-test-palette-scope-tab')).toBeChecked();
@@ -492,6 +494,7 @@ test.describe('T7 — Card Visibility Admin View', () => {
       expect(saved.request().postDataJSON().version).toBeTruthy();
       expect(saved.request().postDataJSON().shared_version).toBeTruthy();
       await page.keyboard.press('Escape');
+      await revealActiveFilterbarSection(page, 'style');
       await page.getByTestId('dataset-cover-test-palette-button').click();
       await expect(panel.getByTestId('dataset-cover-test-palette-hero-height')).toHaveValue('100');
     } finally { await dropTempDataset(page, datasetName); }

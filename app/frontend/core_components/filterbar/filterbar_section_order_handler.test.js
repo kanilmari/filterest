@@ -30,6 +30,7 @@ describe("normalizeFilterbarSectionOrder", () => {
             "search_controls",
             "views",
             "field_sets",
+            "style",
         ]);
     });
 
@@ -58,6 +59,7 @@ describe("normalizeFilterbarSectionOrder", () => {
             "filters",
             "chat",
             "search_overview",
+            "style",
         ].forEach((key) => {
             const section = document.createElement("section");
             section.dataset.filterbarSectionKey = key;

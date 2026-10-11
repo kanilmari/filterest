@@ -71,6 +71,7 @@
 }
 
 .msd-dropdown-search {
+  flex: none;
   padding: 0.25rem;
   border-bottom: 1px solid var(--border_color);
 }
@@ -86,6 +87,7 @@
 
 .msd-dropdown-options {
   flex: 1 1 auto;
+  min-height: 0;
   max-height: none;
   overflow-y: auto;
 }
@@ -270,7 +272,7 @@
 /* Rich presentation is opt-in on the portalled popup, independent of its card ancestry. */
 .msd-dropdown-list--rich {
   box-sizing: border-box;
-  overflow-y: auto;
+  overflow: hidden;
   overscroll-behavior: contain;
   padding: 12px;
   background: var(--bg-surface);
@@ -328,11 +330,15 @@
 }
 
 .msd-dropdown-list--rich .msd-dropdown-options {
-  flex: 0 0 auto;
-  max-height: 340px;
+  flex: 1 1 auto;
+  min-height: 0;
+  max-height: none;
   overflow-y: auto;
   overscroll-behavior: contain;
 }
+
+/* Caller-owned match controls keep their space; only the options consume the remainder. */
+.msd-dropdown-list > :not(.msd-dropdown-options) { flex-shrink: 0; }
 
 .msd-dropdown-list--rich .msd-option {
   grid-template-columns: auto minmax(0, 1fr) auto;

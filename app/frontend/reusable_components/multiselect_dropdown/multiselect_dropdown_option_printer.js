@@ -23,14 +23,11 @@ export function createMultiselectOptionPrinter({
         else if (box.bottom > viewport.bottom) container.scrollTop += box.bottom - viewport.bottom;
     }
 
-    // Every focus move inside the popup goes through here: the page never scrolls, and the element comes into view in
-    // the option list (for an option) and in the popup, which scrolls as a whole on short screens.
+    // Focus scrolls only the option list. Search and match controls stay in the fixed shell.
     function focusInView(element) {
         if (!element) return;
         element.focus({ preventScroll: true });
         if (optionsList.contains(element)) revealWithin(optionsList, element);
-        const popup = optionsList.closest('.msd-dropdown-list');
-        if (popup && /^(auto|scroll)$/.test(getComputedStyle(popup).overflowY)) revealWithin(popup, element);
     }
 
     function focusOptionAt(index) { focusInView(getRenderedOptions()[index]); }

@@ -76,8 +76,8 @@
 .dataset-shared-topbar__inner {
   display: grid;
   grid-template-columns:
-    minmax(12rem, 1fr)
-    minmax(16rem, var(--filterbar-search-only-max-width, 600px))
+    minmax(0, 1fr)
+    minmax(0, 2fr)
     auto;
   align-items: center;
   gap: 18px;
@@ -200,6 +200,7 @@
 .dataset-shared-topbar__center {
   min-width: 0;
   width: 100%;
+  max-width: var(--filterbar-search-only-max-width, 600px);
   justify-self: end;
 }
 
@@ -207,6 +208,51 @@
   width: 100%;
   max-width: var(--filterbar-search-only-max-width, 600px);
   margin: 0;
+}
+
+.dataset-shared-topbar__site-identity { display: none; }
+.dataset-shared-topbar__search-toggle[hidden] { display: none; }
+.dataset-shared-topbar__search-toggle {
+  flex: 0 0 44px;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border_color);
+  border-radius: 8px;
+  background: var(--button_bg_color);
+  color: var(--button_text_color);
+  cursor: pointer;
+}
+.dataset-shared-topbar__search-toggle:hover,
+.dataset-shared-topbar__search-toggle[aria-pressed="true"] {
+  background: color-mix(in srgb, var(--color-brand) 12%, var(--button_bg_color));
+}
+.dataset-shared-topbar__search-toggle:focus-visible {
+  outline: 2px solid var(--color-brand);
+  outline-offset: 2px;
+}
+.dataset-shared-topbar__center > [hidden] { display: none !important; }
+
+/* Settings are ordinary filter-panel content, with the language choices in flow. */
+.filterbar-style-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-start;
+  gap: 8px;
+  width: 100%;
+}
+.filterbar-style-actions > button,
+.filterbar-style-actions .language-button {
+  min-width: 44px;
+  min-height: 44px;
+}
+.filterbar-style-actions .floating-language-panel {
+  position: static;
+  min-width: 0 !important;
+  max-width: 100%;
 }
 
 .dataset-shared-topbar__article-close {
@@ -255,21 +301,64 @@
 }
 
 @media (width <= 700px) {
+  /* The menu overlays phone content; opening it must not squeeze a four-control bar. */
+  #tabs_container:has(.dataset-shared-topbar--visible) {
+    width: 100%;
+    transform: translateX(0);
+  }
+  .dataset-shared-topbar {
+    transition: none;
+    transform: none;
+  }
+  .dataset-shared-topbar--visible { overflow: visible; }
   .dataset-shared-topbar__inner {
-    grid-template-columns: minmax(0, 1fr) auto;
-    grid-template-rows: auto auto;
+    grid-template-columns: 44px minmax(0, 1fr) 96px;
+    grid-template-rows: 44px;
     gap: 8px;
   }
 
   .dataset-shared-topbar__center {
-    grid-column: 1 / -1;
-    grid-row: 2;
+    grid-column: 2;
+    grid-row: 1;
     justify-self: stretch;
+    height: 44px;
   }
 
   .dataset-shared-topbar__dataset-title {
-    font-size: 1.7rem;
+    display: none;
   }
+  .dataset-shared-topbar__site-identity {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    height: 44px;
+    min-width: 0;
+    color: var(--text_color);
+  }
+  .dataset-shared-topbar__site-identity img { flex: none; image-rendering: pixelated; }
+  .dataset-shared-topbar__site-identity span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .dataset-shared-topbar__menu-slot--visible { flex-basis: 44px; width: 44px; max-width: 44px; transition: none; }
+  .dataset-shared-topbar__center .dataset-search-panel { --dataset-search-control-height: 44px; }
+  /* An overlay row preserves the bar and listing geometry beneath the finger. */
+  .dataset-shared-topbar__center > .dataset-search-panel {
+    position: absolute;
+    top: 100%;
+    left: var(--dataset-shared-topbar-padding-inline);
+    right: var(--dataset-shared-topbar-padding-inline);
+    width: auto;
+    max-width: none;
+    box-sizing: border-box;
+    padding: 8px !important;
+    border: 1px solid var(--border_color) !important;
+    border-radius: 8px;
+    background: var(--filter_panel_bg) !important;
+    box-shadow: var(--fw-shadow-soft);
+  }
+  .dataset-shared-topbar__center .dataset-search-fields { min-width: 0; }
+  .filterbar-inline-hero > .filterbar-inline-hero__top-row { display: none; }
+  .filterbar-inline-hero > .filter-content-inner > .dataset-search-panel { display: none; }
+  .dataset-corner-controls-topbar-end > .filterbar-fixed-toggle--hosted { right: auto; }
+  .dataset-shared-topbar__menu-slot > .dataset-shared-topbar__menu-button { left: auto; }
 }
 
 @media (width <= 480px) {

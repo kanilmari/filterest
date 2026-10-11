@@ -109,7 +109,7 @@ describe('create_filter_bar inline hero mounting', () => {
         expect(document.querySelectorAll('[data-testid="filterbar-toggle"]')).toHaveLength(1);
     });
 
-    test('mounts the dataset header settings action in an authorized admin hero', async () => {
+    test('mounts the dataset settings action in the authorized style section', async () => {
         sessionStorage.setItem(
             'user_permissions',
             JSON.stringify(['/ui/admin/dataset_header_config'])
@@ -118,13 +118,13 @@ describe('create_filter_bar inline hero mounting', () => {
         create_filter_bar('demo', 'demo_uid', ['id'], { id: 'INTEGER' }, 1, false, 'card');
 
         const heroButton = document.querySelector(
-            '[data-filterbar-inline-hero-for="demo"] [data-testid="dataset-header-config-hero-button"]'
+            '.filterbar-style-section [data-testid="dataset-header-config-hero-button"]'
         );
 
         expect(heroButton).toBeTruthy();
     });
 
-    test('keeps authorized settings and delayed palette beside tabs in the first hero row', async () => {
+    test('keeps authorized settings and delayed palette together in the style section', async () => {
         sessionStorage.setItem('user_permissions', JSON.stringify(['/ui/admin/dataset_header_config']));
         const { mountDatasetCoverTestPalette } = await import('../admin_tools/dataset_cover_test_palette.js');
         let resolvePalette;
@@ -137,18 +137,21 @@ describe('create_filter_bar inline hero mounting', () => {
         });
         const { create_filter_bar } = await import('./filter_bar_builder.js');
         const panel = create_filter_bar('demo', 'demo_uid', ['id'], { id: 'integer' }, 1, false, 'card');
+        // The browser helper and temporary section consumers share this same load boundary.
+        expect(panel.__sectionLayoutReady).toBeInstanceOf(Promise);
+        await panel.__sectionLayoutReady;
         const hero = document.querySelector('.filterbar-inline-hero');
         const row = hero.querySelector('.filterbar-inline-hero__top-row');
-        const actions = row?.querySelector('.filterbar-inline-hero__actions');
+        const actions = panel.querySelector('.filterbar-style-actions');
         expect(hero.firstElementChild).toBe(row);
         expect(row?.querySelector('nav')).toBeTruthy();
         expect(actions?.querySelector('[data-testid="dataset-header-config-hero-button"]')).toBeTruthy();
+        expect(row.querySelector('[data-testid="dataset-header-config-hero-button"]')).toBeNull();
         expect(row?.nextElementSibling?.classList.contains('filter-content-inner')).toBe(true);
         resolvePalette();
         await vi.waitFor(() => expect(button.parentElement).toBe(actions));
         expect(hero.querySelectorAll('.filterbar-inline-hero__top-row')).toHaveLength(1);
-        panel.__destroy?.();
-        hero.destroy();
+        panel.destroy();
         expect(destroy).toHaveBeenCalled();
     });
 
@@ -479,8 +482,8 @@ describe('create_filter_bar inline hero mounting', () => {
         const sharedCenter = document.querySelector(
             '.dataset-shared-topbar__center'
         );
-        expect(sharedCenter?.children).toHaveLength(1);
-        expect(sharedCenter?.firstElementChild?.classList).toContain(
+        expect(sharedCenter?.children).toHaveLength(2);
+        expect(sharedCenter?.querySelector('.dataset-search-panel')?.classList).toContain(
             'dataset-search-panel'
         );
         expect(sharedCenter?.querySelector('select')).toBeNull();

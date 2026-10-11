@@ -72,6 +72,7 @@ language_seed_migrations = (
     "20261009000062_seed_three_place_appearance_reload.sql",
     "20261009000071_seed_publication_language_keys.sql",
     "20261009000073_repair_publication_translations.sql",
+    "20261009000074_seed_filterbar_style_language_key.sql",
 )
 # A setting an upgrade adds is added for a new installation by the same file, so
 # the default is written once and an upgraded site and a new one start with the

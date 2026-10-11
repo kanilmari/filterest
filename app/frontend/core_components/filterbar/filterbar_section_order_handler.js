@@ -13,6 +13,7 @@ export const DEFAULT_FILTERBAR_SECTION_ORDER = Object.freeze([
     "tools",
     "views",
     "field_sets",
+    "style",
     "chat",
 ]);
 

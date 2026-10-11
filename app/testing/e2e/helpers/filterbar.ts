@@ -18,6 +18,24 @@ function getActiveTableParts(page: Page): Locator {
   return page.locator('.tab_parts_container:visible').first();
 }
 
+/** Wait for the live shell and saved section layout before any temporary reveal. */
+export async function waitForActiveFilterbarLayout(page: Page): Promise<void> {
+  // Visible DOM is exposed before main.js finishes its post-authentication startup.
+  await page.waitForFunction(() => {
+    const boot = (window as Window & {
+      __filterestShellBoot?: { status: () => { ready: boolean } };
+    }).__filterestShellBoot;
+    return boot ? boot.status().ready : !document.body.classList.contains('loading');
+  }, null, { timeout: 15000 });
+  const panel = getActiveTableParts(page).locator('.filterbar-panel').first();
+  await expect(panel).toBeAttached({ timeout: 10000 });
+  await panel.evaluate(async element => {
+    const ready = (element as HTMLElement & { __sectionLayoutReady?: Promise<unknown> }).__sectionLayoutReady;
+    if (!ready) throw new Error('The active filterbar must expose its saved-layout readiness promise.');
+    await ready;
+  });
+}
+
 /**
  * Opens the active dataset's collapsed filterbar and waits for its panel to become available.
  * Bridges responsive panel state and E2E helpers that need toolbar or view controls.
@@ -60,6 +78,7 @@ export async function openActiveFilterbarSection(
   page: Page,
   sectionKey: string,
 ): Promise<Locator> {
+  await waitForActiveFilterbarLayout(page);
   await openActiveFilterbarIfCollapsed(page);
 
   const section = getActiveTableParts(page)
@@ -89,12 +108,14 @@ export async function revealActiveFilterbarSection(
   page: Page,
   sectionKey: string,
 ): Promise<Locator> {
+  await waitForActiveFilterbarLayout(page);
   await openActiveFilterbarIfCollapsed(page);
 
   const section = getActiveTableParts(page)
     .locator(`[data-filterbar-section-key="${buildFilterTestIdSegment(sectionKey)}"]`)
     .first();
   await expect(section).toBeVisible({ timeout: 5000 });
+  await section.locator(':scope > .animated-disclosure-header').first().scrollIntoViewIfNeeded();
   await section.evaluate(async (element) => {
     const disclosure = element as HTMLElement & {
       expand?: (options?: { animate?: boolean }) => Promise<unknown>;

@@ -128,7 +128,7 @@ async function popupPlacementGeometry(popup: Locator) {
     const below = Math.max(0, bottom - trigger.bottom - margin - 4);
     const above = Math.max(0, trigger.top - top - margin - 4);
     const preferUpward = below < requiredHeight && above > below;
-    const shortScreen = Math.min(preferUpward ? above : below, bottom - top - 2 * margin) < 180
+    const shortScreen = Math.min(preferUpward ? above : below, bottom - top - 2 * margin) < Math.min(requiredHeight, fixedHeight + 44)
       || trigger.bottom <= top || trigger.top >= bottom;
     const stack = document.elementsFromPoint(frame.left + frame.width / 2, frame.top + frame.height / 2);
     const listFrame = list.getBoundingClientRect();
@@ -341,8 +341,9 @@ test('WL103: multi-heading categories, search, reload, removal and clear-all', a
       const popup = await categoryPopup(page);
       await expect.poll(async () => popup.evaluate(element => element.getBoundingClientRect().height)).toBeLessThanOrEqual(334);
       await expect(popup.locator('.msd-popup-close')).toBeVisible();
-      // Here the popup scrolls as a whole; every keyboard focus move must stay inside it and the view: End on the
-      // options, then search after Escape and reopening, and search through an opening key while the popup is open.
+      // Only the options scroll, including on short screens. Search and match-mode controls remain in the shell.
+      expect(await popup.evaluate(element => getComputedStyle(element).overflowY)).toBe('hidden');
+      const searchTop = (await popup.locator('input[type="search"]').boundingBox())!.y;
       const heading = page.locator(`${PANEL} [data-heading-id="${secondHeading}"]`);
       const search = popup.locator('input[type="search"]');
       const toLastOption = async () => {
@@ -352,6 +353,8 @@ test('WL103: multi-heading categories, search, reload, removal and clear-all', a
       };
       await search.focus();
       await toLastOption();
+      expect((await search.boundingBox())!.y).toBe(searchTop);
+      expect(await popup.evaluate(element => element.scrollTop)).toBe(0);
       await page.keyboard.press('Escape');
       await expect(heading).toBeFocused();
       await heading.press('ArrowDown');

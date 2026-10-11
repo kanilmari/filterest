@@ -10,6 +10,9 @@ const mockUiConfig = vi.hoisted(() => ({
 }));
 const mockMountDatasetCoverTestPalette = vi.hoisted(() => vi.fn(async () => null));
 
+vi.mock('../theme.js', () => ({ initializeThemeToggle: vi.fn() }));
+vi.mock('../lang/lang_panel_printer.js', () => ({ initializeLanguageSelector: vi.fn() }));
+
 vi.mock('../navigation/main_tabs/hero_dataset_tabs.js', () => ({
     createHeroDatasetTabs: vi.fn(() => ({ element: document.createElement('nav'), destroy: vi.fn() })),
 }));

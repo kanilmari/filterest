@@ -222,76 +222,42 @@ test('keys on an exclude action reach the action instead of toggling the value',
     action.click(); expect(dropdown.getState()).toEqual({ includeValues: [], excludeValues: ['a'] });
 });
 
-test('keyboard focus reveals an option inside a popup that scrolls as a whole on a short screen', () => {
+test('End scrolls only the option list on a short screen, leaving search fixed', () => {
     const { dropdown, popup, rows, search } = mount({ external: true, preserveViewState: true });
     const listbox = popup.querySelector('[role="listbox"]');
     dropdown.open();
-    popup.style.overflowY = 'auto';
-    vi.spyOn(popup, 'getBoundingClientRect').mockReturnValue({ top: 16, bottom: 334 });
-    vi.spyOn(listbox, 'getBoundingClientRect').mockReturnValue({ top: 200, bottom: 600 });
-    vi.spyOn(rows()[0], 'getBoundingClientRect').mockReturnValue({ top: 220, bottom: 264 });
+    vi.spyOn(listbox, 'getBoundingClientRect').mockReturnValue({ top: 200, bottom: 320 });
+    vi.spyOn(rows()[0], 'getBoundingClientRect').mockReturnValue({ top: 200, bottom: 244 });
     vi.spyOn(rows()[1], 'getBoundingClientRect').mockReturnValue({ top: 556, bottom: 600 });
     search.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
-    expect(popup.scrollTop).toBe(0);
     rows()[0].dispatchEvent(new KeyboardEvent('keydown', { key: 'End', bubbles: true }));
     expect(document.activeElement).toBe(rows()[1]);
-    expect(listbox.scrollTop).toBe(0); expect(popup.scrollTop).toBe(266);
+    expect(listbox.scrollTop).toBe(280); expect(popup.scrollTop).toBe(0);
 });
 
-test('focus returning to search is revealed inside a popup that scrolls as a whole', () => {
+test('opening keys and removal of a focused option return to fixed search without scrolling the shell', () => {
     const { dropdown, trigger, popup, rows, search } = mount({ external: true, preserveViewState: true });
-    popup.style.overflowY = 'auto';
-    vi.spyOn(popup, 'getBoundingClientRect').mockReturnValue({ top: 16, bottom: 334 });
-    const searchBox = vi.spyOn(search, 'getBoundingClientRect').mockReturnValue({ top: 100, bottom: 144 });
-    popup.scrollTop = 256;
-    dropdown.open();
-    expect(popup.scrollTop).toBe(0); expect(document.activeElement).toBe(search);
-    // After End scrolled the popup, search sits above its visible top: an opening key on the open trigger reveals it.
-    popup.scrollTop = 256; searchBox.mockReturnValue({ top: -53, bottom: -9 });
+    dropdown.open(); rows()[1].focus();
+    dropdown.setOptions([{ value: 'zero', label: 'Zero', count: 0 }]);
+    expect(document.activeElement).toBe(search); expect(popup.scrollTop).toBe(0);
     trigger.focus(); trigger.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
-    expect(document.activeElement).toBe(search); expect(popup.scrollTop).toBe(187);
-    // So does the fallback when the focused option disappears in a preserved update.
-    popup.scrollTop = 256; rows()[1].focus();
-    dropdown.setOptions([{ value: 'zero', label: '<Zero>', count: 0 }]);
-    expect(document.activeElement).toBe(search); expect(popup.scrollTop).toBe(187);
+    expect(document.activeElement).toBe(search); expect(popup.scrollTop).toBe(0);
 });
 
-test('a preserved update that moves the focused option reveals it, and one that does not keeps both scrolls', () => {
+test('preserved updates reveal a moved focused option only within the option list', () => {
     const { dropdown, popup, rows } = mount({ external: true, preserveViewState: true });
     const listbox = popup.querySelector('[role="listbox"]');
     dropdown.open();
-    popup.style.overflowY = 'auto';
-    vi.spyOn(popup, 'getBoundingClientRect').mockReturnValue({ top: 16, bottom: 334 });
-    vi.spyOn(listbox, 'getBoundingClientRect').mockReturnValue({ top: -150, bottom: 340 });
+    vi.spyOn(listbox, 'getBoundingClientRect').mockReturnValue({ top: 200, bottom: 334 });
     const hit = rows()[1];
     const hitBox = vi.spyOn(hit, 'getBoundingClientRect').mockReturnValue({ top: 290, bottom: 334 });
-    // As after End: the last option at the popup's bottom, both containers scrolled.
-    hit.focus(); popup.scrollTop = 270; listbox.scrollTop = 100;
-    dropdown.setOptions([{ value: 'zero', label: '<Zero>', count: 1 }, { value: 'hit', label: 'Hit', count: 3 }]);
-    expect(document.activeElement).toBe(hit); expect(popup.scrollTop).toBe(270); expect(listbox.scrollTop).toBe(100);
-    // A reordering update moves it above the popup's visible top.
-    hitBox.mockReturnValue({ top: -106, bottom: -62 });
-    dropdown.setOptions([{ value: 'hit', label: 'Hit', count: 3 }, { value: 'zero', label: '<Zero>', count: 1 }]);
+    hit.focus(); listbox.scrollTop = 300;
+    dropdown.setOptions([{ value: 'zero', label: 'Zero', count: 1 }, { value: 'hit', label: 'Hit', count: 3 }]);
+    expect(listbox.scrollTop).toBe(300); expect(popup.scrollTop).toBe(0);
+    hitBox.mockReturnValue({ top: 150, bottom: 194 });
+    dropdown.setOptions([{ value: 'hit', label: 'Hit', count: 3 }, { value: 'zero', label: 'Zero', count: 1 }]);
     expect(rows()[0]).toBe(hit); expect(document.activeElement).toBe(hit);
-    expect(listbox.scrollTop).toBe(100); expect(popup.scrollTop).toBe(148);
-});
-
-test('a preserved update reveals focus anywhere in the popup, such as search pushed down by caller content', () => {
-    const notice = document.createElement('p');
-    const { dropdown, popup, search } = mount({ external: true, preserveViewState: true, beforeSearchElement: notice });
-    dropdown.open();
-    popup.style.overflowY = 'auto';
-    vi.spyOn(popup, 'getBoundingClientRect').mockReturnValue({ top: 16, bottom: 334 });
-    let shift = 0;
-    vi.spyOn(search, 'getBoundingClientRect').mockImplementation(() => ({
-        top: 290 + shift - popup.scrollTop, bottom: 334 + shift - popup.scrollTop }));
-    search.focus();
-    dropdown.setOptions([{ value: 'hit', label: 'Hit', count: 4 }]);
-    expect(popup.scrollTop).toBe(0);
-    // A caller notice above search appears (for example the selection limit) and pushes search below the bottom.
-    shift = 40;
-    dropdown.setOptions([{ value: 'hit', label: 'Hit', count: 5 }]);
-    expect(document.activeElement).toBe(search); expect(popup.scrollTop).toBe(40);
+    expect(listbox.scrollTop).toBe(250); expect(popup.scrollTop).toBe(0);
 });
 
 test('cleanup after the window lost its methods, as in a torn-down test environment, does not throw', () => {
@@ -342,7 +308,20 @@ test('rich geometry bounds desktop and phone widths and short visual viewports',
     dropdown.open(); expect(popup.style.width).toBe('288px'); expect(popup.style.left).toBe('16px'); dropdown.close();
     Object.defineProperty(window, 'visualViewport', { configurable: true, value: { width: 375, height: 180, offsetTop: 0,
         addEventListener: vi.fn(), removeEventListener: vi.fn() } });
+    vi.spyOn(popup.querySelector('.msd-popup-header'), 'getBoundingClientRect').mockReturnValue({ height: 120 });
     dropdown.open(); expect(popup.style.width).toBe('343px'); expect(popup.style.top).toBe('16px'); expect(popup.style.maxHeight).toBe('148px');
+    delete window.visualViewport;
+});
+
+test('plain column dropdown also keeps its fixed search visible when the keyboard hides its anchor', () => {
+    const { dropdown, container, popup } = mount();
+    vi.spyOn(container.querySelector('.msd-dropdown-input-row'), 'getBoundingClientRect')
+        .mockReturnValue({ left: 20, width: 200, top: 500, bottom: 544 });
+    Object.defineProperty(window, 'visualViewport', { configurable: true, value: { width: 375, height: 260, offsetTop: 0,
+        addEventListener: vi.fn(), removeEventListener: vi.fn() } });
+    dropdown.open();
+    expect(popup.style.top).toBe('8px'); expect(popup.style.bottom).toBe('');
+    expect(popup.style.maxHeight).toBe('244px');
     delete window.visualViewport;
 });
 

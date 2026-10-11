@@ -99,22 +99,18 @@ value so zero-result guidance never parses translated labels or requests new
 counts. Guidance is shown only for zero results with selected categories.
 
 Both application themes use `variables.css` tokens; fonts and spacing are scoped to the card and the opt-in class on
-the portalled popup. Options scroll at 340 px and controls offer 44 px touch targets. Category popups are at least
+the portalled popup. Only the option list scrolls within a popup capped at 400 px; search, match-mode controls and header remain visible. Controls offer 44 px touch targets. Category popups are at least
 360 px wide on desktop, bounded by the viewport; at 600 px and narrower they use the visual viewport minus 16 px on
 each side. The shared popup controller measures fixed controls at that width and budgets three option rows (the
 whole list if shorter), capped at its maximum height; plain dropdowns also retain their existing minimum opening
 space. It opens below when that fits, otherwise on the larger side. The option budget is sampled after the opening's
 reset or preserved query renders its rows, including zero matches, then retained until close so search cannot change
 sides; fixed controls are remeasured on repositioning and content-size changes (ResizeObserver). On short screens, with
-an on-screen keyboard and once the heading has left the view, the whole popup stays visible, at most 400 px high, and scrolls.
-Enter, Space and ArrowDown open from the heading and focus search without
-scrolling the page. Every focus move inside the popup (search on opening,
-options with arrows and Home/End, search when the focused option disappears)
-brings its target into view in the option area and, where the whole popup
-scrolls, in the popup, never scrolling the page; a preserved update that moves
-the focused element (reordered values, content above search) reveals it the same
-way and otherwise keeps both scroll positions; a fresh opening starts such a
-popup at its top. Repositioning on resize and scroll sets no scroll position,
+an on-screen keyboard and once the heading has left the view, the popup stays within the visual viewport, at most 400 px high. Its fixed shell never scrolls; the options use the remaining height. This applies to plain column dropdowns as well as category popups.
+Enter, Space and ArrowDown open from the heading and focus search without scrolling the page.
+Focus changes and preserved updates reveal their target only inside the option list, keeping
+fixed controls and the page stationary. Unmoved targets retain the option scroll position;
+a fresh opening starts at the top. Repositioning on resize and scroll sets no scroll position,
 so a person's own scrolling inside the popup is never undone. Native radio keys
 retain their behavior. Tab exits to the page without a focus
 trap; Escape and header-close return focus, while outside click and view
@@ -284,6 +280,10 @@ cover values belong to tabs, so site changes cannot invalidate another tab's mas
 Slice 3b adds ownership metadata and validators only. Slice 5 activates the new
 storage/API contracts and permits overrides for exactly the nine site defaults;
 it refuses site-only and tab-only overrides, aliases and derived blur.
+
+### Dataset toolbar and appearance controls
+
+`navigation_fit_controller.js` measures complete hero destinations, gaps and available width on row resize, translated label updates and font loading. It restores inline styles through CSSOM so the page's content security policy cannot leave buttons invisible. It hides trailing buttons; all destinations remain in the menu. Phones (up to 700 px) hide that row and retain menu, site icon/name, search toggle and filter toggle. The toggle opens the existing field in an overlay below the toolbar without shifting buttons or listing, focuses it, and closes on Escape or another press while retaining the draft. Scrolling never opens search or replaces identity. Tablet/desktop keep their ordinary search. The initially collapsed `style` section reuses theme/language builders and the permission-checked gear/palette; order and collapse state follow the existing filter-panel mechanism. Temporary browser reveals wait for shell startup and the panel's saved-layout promise (`__sectionLayoutReady`) before expanding, so a late response cannot collapse the newly revealed controls. `20261009000074_seed_filterbar_style_language_key.sql` seeds these labels in all five UI languages and joins bootstrap and unreleased DB 9.10.2; `20261009000099_record_database_release_9_10_2.sql` records that release last. Browser locale checks read the served dictionary: disabled Chinese locales receive English with HTTP 200 even when `document.lang` still names Chinese. Rich category popup fixtures use the caller's 360 px minimum width; plain dropdowns follow their input row. Home keeps its own gear/palette because it has no dataset filter panel.
 
 ### Optional Home page
 

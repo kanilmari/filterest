@@ -34,6 +34,7 @@ func TestNormalizeFilterbarSectionOrderKeepsKnownUniqueKeys(t *testing.T) {
 		"search_controls",
 		"views",
 		"field_sets",
+		"style",
 	}
 
 	if !reflect.DeepEqual(got, want) {
@@ -81,5 +82,14 @@ func TestNormalizeFilterbarSectionCollapsedPreservesExplicitBooleans(t *testing.
 func TestNormalizeFilterbarSectionCollapsedKeepsMissingLegacyEntriesMissing(t *testing.T) {
 	if got := normalizeFilterbarSectionCollapsed(nil); len(got) != 0 {
 		t.Fatalf("normalizeFilterbarSectionCollapsed(nil) = %#v, want empty map", got)
+	}
+}
+
+func TestFilterbarStyleSectionPersistsOrderAndCollapsedState(t *testing.T) {
+	if got := normalizeFilterbarSectionOrder([]string{"style"}); len(got) == 0 || got[0] != "style" {
+		t.Fatalf("style section lost its explicit position: %v", got)
+	}
+	if got := normalizeFilterbarSectionCollapsed(map[string]bool{"style": true}); !got["style"] {
+		t.Fatal("style section lost its collapsed state")
 	}
 }

@@ -148,10 +148,11 @@ export function applyTheme(theme) {
     } else if (theme === 'dark' || theme === 'locked-dark' || theme === 'lockedDark') {
         body.classList.add('dark-mode');
     } else if (theme === 'system') {
-        const prefersDarkScheme = window.matchMedia("(prefers-color-scheme: dark)");
+        // Environments without matchMedia (test DOMs) fall back to the light reading without a listener.
+        const prefersDarkScheme = window.matchMedia?.("(prefers-color-scheme: dark)") ?? null;
         body.classList.add('system-mode');
-        applyResolvedThemeClass(body, prefersDarkScheme.matches);
-        attachSystemThemeListener(body, prefersDarkScheme);
+        applyResolvedThemeClass(body, prefersDarkScheme?.matches === true);
+        if (prefersDarkScheme) attachSystemThemeListener(body, prefersDarkScheme);
     }
 }
 

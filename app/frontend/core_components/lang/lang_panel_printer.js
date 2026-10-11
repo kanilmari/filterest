@@ -141,7 +141,7 @@ function setDefaultMenuLanguage(languageSelector, languageOptions) {
  */
 export function initializeLanguageSelector(
     languageSelector,
-    { languages = getUiLanguageOptions("application") } = {}
+    { languages = getUiLanguageOptions("application"), signal, translateOnInitialize = true } = {}
 ) {
     if (!(languageSelector instanceof HTMLElement) || initializedSelectors.has(languageSelector)) {
         return null;
@@ -167,7 +167,7 @@ export function initializeLanguageSelector(
 
     const initialLanguage = setDefaultMenuLanguage(languageSelector, languages);
     syncMenuLanguageButton(languageButton, initialLanguage, languages);
-    void translatePage(initialLanguage);
+    if (translateOnInitialize) void translatePage(initialLanguage);
 
     languageButton.addEventListener("click", (event) => {
         event.stopPropagation();
@@ -190,7 +190,7 @@ export function initializeLanguageSelector(
         if (!languageSelector.contains(event.target)) {
             setLanguagePanelOpen(languageButton, floatingPanel, false);
         }
-    });
+    }, { signal });
 
     languageSelector.addEventListener("keydown", (event) => {
         if (event.key !== "Escape" || floatingPanel.classList.contains("hidden")) return;

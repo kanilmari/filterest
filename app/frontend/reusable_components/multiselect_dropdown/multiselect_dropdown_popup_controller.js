@@ -56,7 +56,7 @@ export function createMultiselectPopupController({
                 - optionsList.getBoundingClientRect().top + optionsList.scrollTop) : 0;
         }
         return { requiredHeight: Math.min(MAX_POPUP_HEIGHT, Math.max(richPopup ? 0 : PLAIN_MIN_POPUP_HEIGHT,
-            fixedHeight + minimumOptionsHeight)), borders, borderBox: style.boxSizing === 'border-box' };
+            fixedHeight + minimumOptionsHeight)), fixedHeight, borders, borderBox: style.boxSizing === 'border-box' };
     }
 
     function positionListWrapper() {
@@ -78,7 +78,7 @@ export function createMultiselectPopupController({
             offsetLeft + viewportWidth - width - margin);
         listWrapper.style.left = `${left}px`;
         listWrapper.style.width = `${width}px`;
-        const { requiredHeight, borders, borderBox } = measureMinimumPopupHeight();
+        const { requiredHeight, fixedHeight, borders, borderBox } = measureMinimumPopupHeight();
         const visibleHeight = Math.max(0, viewportHeight - margin * 2);
         const anchorVisible = anchorRect.bottom > offsetTop && anchorRect.top < offsetTop + viewportHeight;
         const below = Math.max(0, offsetTop + viewportHeight - anchorRect.bottom - margin - gap);
@@ -86,9 +86,9 @@ export function createMultiselectPopupController({
         const upward = below < requiredHeight && above > below;
         // The space beside an anchor that has left the view (an on-screen keyboard, a smaller window) can exceed the view.
         const available = Math.min(upward ? above : below, visibleHeight);
-        // On a short screen, or with the anchor out of view, the whole rich popup sits inside the visual viewport and
-        // scrolls, including its header and caller controls.
-        const shortScreen = richPopup && (available < 180 || !anchorVisible);
+        // With a keyboard or a low anchor, use the viewport before fixed controls would
+        // crowd out every option. The shell never scrolls: controls stay visible.
+        const shortScreen = available < Math.min(requiredHeight, fixedHeight + 44) || !anchorVisible;
         const maxHeight = Math.min(MAX_POPUP_HEIGHT, shortScreen ? visibleHeight : available);
         listWrapper.classList.toggle('msd-dropdown-list--open-upward', upward && !shortScreen);
         listWrapper.style.maxHeight = `${Math.max(0, maxHeight - (borderBox ? 0 : borders))}px`;

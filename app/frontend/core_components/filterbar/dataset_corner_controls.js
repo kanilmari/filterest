@@ -9,6 +9,9 @@ const LABELS = {
     en: { menu: "Show main menu", show: "Show filter toolbar", hide: "Hide filter toolbar" },
     ch: { menu: "显示主菜单", show: "显示筛选工具栏", hide: "隐藏筛选工具栏" },
     yue: { menu: "顯示主選單", show: "顯示篩選工具列", hide: "隱藏篩選工具列" },
+    'zh-CN': { menu: "显示主菜单", show: "显示筛选工具栏", hide: "隐藏筛选工具栏" },
+    'zh-TW': { menu: "顯示主選單", show: "顯示篩選工具列", hide: "隱藏篩選工具列" },
+    'zh-HK': { menu: "顯示主選單", show: "顯示篩選工具列", hide: "隱藏篩選工具列" },
 };
 
 export function selectDatasetCornerOwner({ active, heroControlsVisible, topbarVisible }) {
@@ -71,25 +74,27 @@ export function createDatasetCornerControls({
     hideFilterButton.type = "button";
     hideFilterButton.setAttribute("aria-controls", panel.id);
     let destroyed = false;
+    let filterbarIsVisible = false;
 
     function refreshLabels() {
         const language = getLanguageWithBrowserFallback();
         const labels = LABELS[language] || LABELS.en;
         setLabel(heroMenuButton, labels.menu);
         setLabel(topbarMenuButton, labels.menu);
-        setLabel(filterButton, labels.show);
+        setLabel(filterButton, filterbarIsVisible ? labels.hide : labels.show);
         setLabel(hideFilterButton, labels.hide);
     }
     refreshLabels();
     const languageObserver = new MutationObserver(refreshLabels);
     languageObserver.observe(document.documentElement, { attributes: true, attributeFilter: ["lang"] });
 
-    function sync({ active, heroControlsVisible, topbarVisible, navbarVisible, filterbarVisible }) {
+    function sync({ active, heroControlsVisible, topbarVisible, navbarVisible, filterbarVisible, phone = false }) {
         if (destroyed) return "none";
-        const owner = selectDatasetCornerOwner({ active, heroControlsVisible, topbarVisible });
-        const showFilter = active && !filterbarVisible;
+        filterbarIsVisible = filterbarVisible;
+        const owner = selectDatasetCornerOwner({ active, heroControlsVisible: !phone && heroControlsVisible, topbarVisible });
+        const showFilter = active && (phone || !filterbarVisible);
         const heroMenuVisible = owner === "hero" && !navbarVisible;
-        const topbarMenuVisible = owner === "topbar" && !navbarVisible;
+        const topbarMenuVisible = owner === "topbar" && (phone || !navbarVisible);
         start.hidden = !heroMenuVisible;
         end.hidden = !(owner === "hero" && showFilter);
         setButtonVisibility(heroMenuButton, heroMenuVisible);
@@ -115,6 +120,8 @@ export function createDatasetCornerControls({
         filterButton.classList.toggle("filterbar-fixed-toggle--exposed", showFilter);
         setButtonVisibility(filterButton, showFilter);
         filterButton.setAttribute("aria-expanded", String(filterbarVisible));
+        const labels = LABELS[getLanguageWithBrowserFallback()] || LABELS.en;
+        setLabel(filterButton, filterbarVisible ? labels.hide : labels.show);
         hideFilterButton.setAttribute("aria-expanded", String(filterbarVisible));
         setButtonVisibility(hideFilterButton, active && filterbarVisible);
         syncNavbarAccessibility();

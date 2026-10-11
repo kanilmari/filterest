@@ -1,3 +1,4 @@
+// hero_dataset_tabs.js
 // Shows the accepted main dataset tabs inside the scrolling dataset hero.
 // Reads the shared main-tab model; it owns no permission, ordering or URL state.
 // Uses ordinary navigation buttons so navbar-only SVG geometry remains isolated.
@@ -7,6 +8,7 @@ import { openNavTab } from './main_tab_printer.js';
 import { getTranslationForKey } from '../../lang/translation_handler.js';
 import { getLanguageWithBrowserFallback } from '../../state_stores/lang_preference_reader.js';
 import { createSymbolMaskElement } from '../../../reusable_components/symbol_asset_resolver.js';
+import { createNavigationFitController } from './navigation_fit_controller.js';
 
 const NAV_LABELS = Object.freeze({
     fi: 'Aineistot',
@@ -30,6 +32,7 @@ export function createHeroDatasetTabs(activeDataset) {
     const entries = new Map();
     let destroyed = false;
     let navigating = false;
+    const fit = createNavigationFitController(element);
 
     function updateCopy() {
         if (destroyed) return;
@@ -40,6 +43,7 @@ export function createHeroDatasetTabs(activeDataset) {
             label.textContent = text;
             button.title = text;
         }
+        fit.sync();
     }
 
     function render(snapshot) {
@@ -121,6 +125,7 @@ export function createHeroDatasetTabs(activeDataset) {
             destroyed = true;
             unsubscribe();
             languageObserver.disconnect();
+            fit.destroy();
             element.removeEventListener('click', navigate);
             entries.clear();
             element.remove();

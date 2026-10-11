@@ -1,14 +1,19 @@
-/* Dataset navigation and administrator actions share the scrolling hero row. */
+/* hero_dataset_tabs.css
+ * Presents complete dataset destinations in the available hero row.
+ * Connects measured navigation visibility to theme-derived button surfaces.
+ * Hidden destinations remain in the existing menu model. */
 .hero-dataset-tabs {
     display: flex;
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
     align-items: stretch;
     justify-content: center;
     gap: 8px;
     min-width: 0;
     margin: 0;
+    overflow: hidden;
 }
 .hero-dataset-tabs[hidden] { display: none; }
+.hero-dataset-tabs__button[hidden] { display: none; }
 
 .hero-dataset-tabs__button,
 .filterbar-inline-hero__actions > button {
@@ -30,7 +35,7 @@
     font-weight: 600;
     line-height: 1.3;
     text-align: center;
-    white-space: normal;
+    white-space: nowrap;
     cursor: pointer;
     appearance: none;
     transition: background-color 120ms ease, border-color 120ms ease;
@@ -44,8 +49,8 @@
 }
 .hero-dataset-tabs__label {
     min-width: 0;
-    overflow-wrap: anywhere;
 }
+.hero-dataset-tabs__button { flex: none; width: max-content; }
 .hero-dataset-tabs__icon {
     width: 18px;
     height: 18px;
@@ -67,9 +72,7 @@
 }
 @media (width <= 700px) {
     .hero-dataset-tabs {
-        flex-wrap: nowrap;
-        justify-content: safe center;
-        overflow-x: auto;
+        display: none;
     }
     .hero-dataset-tabs__button {
         min-height: 44px;

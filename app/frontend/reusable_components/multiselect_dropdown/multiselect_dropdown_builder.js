@@ -424,8 +424,7 @@ export function createMultiselectDropdown({
 	}
 
 	// An opening key on an open popup returns to search as it always has (with a fresh query unless the caller
-	// preserves view state); only a closed-to-open transition runs the position start and onOpen, and starts a popup
-	// that scrolls as a whole at its top.
+	// preserves view state); only a closed-to-open transition runs position tracking and onOpen.
 	function open() {
 		if (disabled || destroyed || !ownerElement.isConnected || !trigger.isConnected) return;
 		const opening = !isOpen;
@@ -435,7 +434,6 @@ export function createMultiselectDropdown({
 			listWrapper.style.display = 'flex';
 			trigger.setAttribute('aria-expanded', 'true');
 			listWrapper.style.visibility = 'hidden';
-			listWrapper.scrollTop = 0;
 		}
 		if (searchInput && !preserveViewState) searchInput.value = "";
 		renderList(searchInput?.value?.trim() || "");

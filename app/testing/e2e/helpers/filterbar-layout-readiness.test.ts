@@ -1,0 +1,62 @@
+// filterbar-layout-readiness.test.ts
+// Verifies that temporary E2E disclosure reveals follow the saved layout load.
+// Runs the helper with real disclosure DOM and a delayed layout promise in jsdom.
+// Prevents setup from collapsing the controls immediately after a test reveals them.
+import { afterEach, expect, test, vi } from 'vitest';
+import type { Page } from '@playwright/test';
+import { createAnimatedDisclosureSection } from '../../../frontend/reusable_components/animated_disclosure/animated_disclosure_builder.js';
+import { revealActiveFilterbarSection } from './filterbar';
+
+vi.mock('@playwright/test', () => ({
+  expect: (locator: DomLocator) => ({
+    toBeAttached: async () => expect(locator.element.isConnected).toBe(true),
+    toBeVisible: async () => expect(locator.element.hidden).toBe(false),
+    toHaveAttribute: async (name: string, value: string) => expect(locator.element.getAttribute(name)).toBe(value),
+  }),
+}));
+
+class DomLocator {
+  constructor(readonly element: HTMLElement) {}
+  locator(selector: string) {
+    return new DomLocator(this.element.querySelector(selector.replaceAll(':visible', ''))!);
+  }
+  first() { return this; }
+  async count() { return 1; }
+  async getAttribute(name: string) { return this.element.getAttribute(name); }
+  async evaluate<T>(operation: (element: HTMLElement) => T) { return operation(this.element); }
+  async scrollIntoViewIfNeeded() {}
+}
+
+afterEach(() => { document.body.replaceChildren(); vi.restoreAllMocks(); });
+
+test('waits for saved collapse state before revealing style, without persisting the reveal', async () => {
+  const parts = document.createElement('div'); parts.className = 'tab_parts_container';
+  const panel = document.createElement('div') as HTMLElement & { __sectionLayoutReady: Promise<void> };
+  panel.className = 'filterbar-panel';
+  const content = document.createElement('div'); content.innerHTML = '<button>Palette</button>';
+  const section = createAnimatedDisclosureSection({ titleText: 'Style', contentElement: content, startOpen: false });
+  section.dataset.filterbarSectionKey = 'style';
+  panel.append(section); parts.append(panel); document.body.append(parts);
+  let finishLayout!: () => void;
+  panel.__sectionLayoutReady = new Promise(resolve => { finishLayout = resolve; });
+  const waitForShellReady = vi.fn(async (operation: () => boolean) => expect(operation()).toBe(true));
+  const page = { locator: () => new DomLocator(parts),
+    waitForFunction: waitForShellReady,
+  } as unknown as Page;
+  const persisted = vi.fn();
+  section.addEventListener('animated-disclosure-toggle', () => {
+    if (section.dataset.filterbarTemporaryDisclosureOperation !== 'true') persisted();
+  });
+  const reveal = revealActiveFilterbarSection(page, 'style');
+  await Promise.resolve(); await Promise.resolve();
+  expect(waitForShellReady).toHaveBeenCalledOnce();
+  expect(section.classList.contains('is-collapsed')).toBe(true);
+  // The delayed response retains the saved collapsed state, then unlocks the helper.
+  await section.collapse({ animate: false }); persisted.mockClear(); finishLayout();
+  await reveal;
+  expect(section.classList.contains('is-expanded')).toBe(true);
+  expect(section.querySelector<HTMLElement>('.animated-disclosure-content-shell')!.hidden).toBe(false);
+  expect(section.dataset.filterbarTemporaryDisclosureOperation).toBeUndefined();
+  expect(persisted).not.toHaveBeenCalled();
+  section.destroy();
+});
