@@ -61,3 +61,5 @@ Update incoming documentation links when text moves or a document is deleted.
   follow the lives of different kinds of named things in Filterest.
 - [Row view counts](Row_View_Counts.md) describes distinct viewers of each row,
   shared card totals and the privacy choice for anonymous viewer identity.
+- [Row policies](Row_Policies.md) describes named dataset rules, optional
+  database enforcement and administrator explanations of access refusals.

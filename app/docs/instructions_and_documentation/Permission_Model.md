@@ -166,7 +166,7 @@ There are two row-visibility mechanisms today:
 (flag_column = TRUE OR owner_column = current_user_id)
 ```
 
-The owner column must be proven, never inferred. It is the column named in `system_db_tables.row_policy_owner_column` when the system catalog (`pg_constraint`, not `information_schema`, which hides foreign keys from roles that do not own the table) shows it as a validated single-column foreign key to `system_users(id)`. Two owners are fixed in code instead: `system_users` owns itself through `id`, the only table allowed to, and the `app_service_catalog` pilot keeps `user_id`, which its database policies and write rule enforce although the column has no foreign key yet. Any other dataset has no own-row exception: its flags must be true for every non-admin, and the server log warns once per dataset and setting. The former `created_by`, then `user_id`, then `id` inference was removed because guessing `id` turned the rule into "flag OR row id = my user id". When multiple flagged columns exist, all of them must pass. This behavior is implemented as Go-side SQL fragments in result queries, row counts, filter options, intelligent/vector row hydration, and related-row reads. Generic update/delete requests evaluate the policy for the complete ID set before side effects. Updates lock the admitted row; deletes repeat the predicate in the DML and roll back their savepoint on an exact-count mismatch.
+The owner column must be proven, never inferred. It is the column named in `system_db_tables.row_policy_owner_column` when the system catalog (`pg_constraint`, not `information_schema`, which hides foreign keys from roles that do not own the table) shows it as a validated single-column foreign key to `system_users(id)`. Two owners are fixed in code instead: `system_users` owns itself through `id`, the only table allowed to, and the `app_service_catalog` pilot keeps `user_id`, which its database policies and write rule enforce. Any other dataset without a named, proven owner has no own-row exception: its flags must be true for every non-admin, and the server log warns once per dataset and setting. The former `created_by`, then `user_id`, then `id` inference was removed because guessing `id` turned the rule into "flag OR row id = my user id". When multiple flagged columns exist, all of them must pass. This mandatory condition stays outside the exact-row allowance resolver and is ANDed with its decision, so a row allowance cannot bypass a mandatory flag. This behavior is implemented as Go-side SQL fragments in result queries, row counts, filter options, intelligent/vector row hydration, and related-row reads. Generic update/delete requests evaluate the policy for the complete ID set before side effects. Updates lock the admitted row; deletes repeat the predicate in the DML and roll back their savepoint on an exact-count mismatch.
 
 Results responses mark the proven owner column with `is_row_owner` in its column description. The article view uses that mark only to hide `hide_on_bg_crd_if_not_own` fields from anyone but the owner, and hides them when no column is marked. That is presentation, not a security boundary: the values are already in the response.
 
@@ -598,36 +598,7 @@ Before a dataset moves from `legacy` to `shadow` or `enforced`, the permission e
 
 ## 5. How to Merge the Current Legacy and Pilot Paths
 
-The current `must_be_true_unless_own` behavior should become a named row-policy primitive, not a permanent special column flag with custom query code.
-
-Suggested policy primitive:
-
-```text
-all_flags_true_unless_owner(flags, owner_column)
-```
-
-That exactly captures the current behavior:
-
-```text
-(flag_a = TRUE OR owner_column = current_user_id)
-AND (flag_b = TRUE OR owner_column = current_user_id)
-```
-
-The `app_service_catalog` RLS pilot should then be represented as a dataset row policy using the same primitives:
-
-- owner is `user_id`
-- public/moderation flags are `published`, `enabled`, `admin_reviewed`, and `admin_approved`
-- admin bypass is allowed through the request actor
-- owner write is allowed only for owner-safe fields
-
-Once both mechanisms are expressed as metadata, the implementation can compile the same policy into:
-
-- Go-side SQL predicates for immediate consistency across generic read paths
-- optional PostgreSQL RLS policy SQL for defense-in-depth
-
-That avoids the current split where one table uses DB-native RLS and every other dataset uses Go-side legacy fragments.
-
-The app-specific PostgreSQL policy SQL should also stop repeating raw `current_setting('app.user_id', true)` parsing everywhere. A later migration can introduce stable SQL helper functions such as `app_current_user_id()` and `app_is_admin()` so generated or templated policies stay readable and consistent.
+See [Row policies](../future_documentation/Row_Policies.md) for named metadata rules shared by application and database enforcement.
 
 ## 6. Implementation Slices
 
@@ -639,7 +610,7 @@ Output:
 
 - [public permission glossary](Dictionary.md#permissions-and-authorization)
 - this architecture document
-- updated ticket #7 context for the legacy `must_be_true_unless_own` work
+- [Row policies](../future_documentation/Row_Policies.md) for the remaining metadata and database-enforcement capability
 
 ### Slice 2: Central Read Policy Compiler
 
@@ -662,7 +633,7 @@ Initial consumers:
 
 This slice should preserve current behavior before adding new concepts.
 
-The current implementation has a first shadow/parity slice: `all_flags_true_unless_owner` carries the active owner column plus the legacy fallback owner column, and tests prove the shadow owner does not change the SQL predicate. Future work should add parity tests for every current read surface. Do not document vector/semantic paths as policy-complete until the code path has an explicit policy call or a test proving equivalent filtering.
+The current `all_flags_true_unless_owner` policy carries only the proven owner column: for ordinary datasets, the named column must be a validated single-column foreign key to `system_users(id)`; an absent or unproven owner disables the own-row exception. The two fixed owners are described under Existing Row Visibility Rules. No fallback or shadow owner is carried. Future work should add parity tests for every current read surface. Do not document vector/semantic paths as policy-complete until the code path has an explicit policy call or a test proving equivalent filtering.
 
 ### Slice 3: Scope Definitions and Scope Grants
 
@@ -684,9 +655,7 @@ The admin UI can then add a scope-rights panel near existing dataset permissions
 
 ### Slice 4: Row Policies Beyond Legacy Flags
 
-Add typed row-policy primitives for owner, explicit user/group allowlists, organization/tenant boundaries, and public flags.
-
-This is the point where the model becomes a general row-level authorization system for any dataset.
+See [Row policies](../future_documentation/Row_Policies.md#concepts-and-rule-composition) for named, typed conditions and their composition.
 
 ### Slice 5: Field Permissions, Write Policies, and Presets
 
@@ -696,31 +665,7 @@ This slice should cover both generic CRUD and special handlers that write datase
 
 ### Slice 6: Optional RLS Backend
 
-Once the metadata model and read/write compiler are stable, add optional PostgreSQL RLS generation for datasets that are ready for DB-level enforcement.
-
-Rules:
-
-- Do not hand-write one-off table policies as the normal path.
-- Generate or template RLS from the same metadata used by the application layer.
-- Fail closed when request-scoped actor settings are required but unavailable.
-- Route row-data queries through a policy-aware runtime pool so privileged admin or local-dev pools do not silently bypass RLS.
-- Keep operator/read-only inspection requirements explicit.
-- Model helper-table and sequence grants together with the main row policy so create/update paths do not fail after the main table policy succeeds.
-
-Rollout should happen dataset by dataset:
-
-1. `legacy`: current Go-side predicate is the source of truth.
-2. `shadow`: generated/templated policy is compared against legacy behavior in tests and diagnostics.
-3. `enforced`: RLS or another backend enforces row access, and duplicated Go-side predicates are removed for that dataset.
-
-The optional global configuration should be named for the backend mechanism,
-for example `postgresql_rls_backend_enabled`; it must never mean that row
-authorization is disabled when false. Application-layer policies remain
-mandatory. When enabled, only datasets already in `enforced` rollout mode may
-depend on RLS, and readiness must fail closed if policies, actor context,
-least-privilege runtime roles, helper-table privileges, or required sequences
-are incomplete. PostgreSQL's own `ENABLE/DISABLE ROW LEVEL SECURITY` state is a
-migration concern, not a request-time feature switch.
+See [Row policies](../future_documentation/Row_Policies.md#optional-database-enforcement) for generated database enforcement, comparison and readiness requirements.
 
 ### Slice 7: SSO and External Group Mapping
 
@@ -736,12 +681,10 @@ Recommended flow:
 
 ## 7. Ticket Mapping
 
-Existing relevant tickets:
+Related feature descriptions and tickets:
 
-- `#7 Fix must_be_true_unless_own` is directly related to the legacy row-visibility primitive and should be updated whenever work moves from documentation into implementation.
+- [Row policies](../future_documentation/Row_Policies.md) owns the remaining named-policy and optional database-enforcement description.
 - `#777 Req: Permission Integration` is related to AI/tool execution boundaries. It should consume the permission engine, but it is not the core permission-model implementation ticket.
-
-If implementation begins, the work should probably become an epic or a small set of tickets rather than being squeezed entirely into ticket #7. Ticket #7 can remain the legacy compatibility/migration slice.
 
 ## 8. Known Risks and Non-Goals
 
