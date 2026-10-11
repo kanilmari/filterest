@@ -341,6 +341,7 @@ This prevents false-green tests that accidentally exercised the wrong dataset or
 When a spec needs destructive CRUD, seeded rows, or a true persistence round-trip, prefer creating a throwaway dataset through the app APIs instead of mutating long-lived shared fixtures.
 
 - Use `app/testing/e2e/helpers/temp-dataset.ts` to create, seed, open, and drop the dataset inside the test.
+- The helper confirms the exact name and stable identity from the successful creation response before its follow-up lookup, seeding, or cache refresh. If setup then fails, it compensates only after re-reading the same identity; failed cleanup retains confirmed ownership for teardown and reports both errors.
 - Keep the dataset unique per run, register its planned/confirmed identity through `temp-dataset.ts`, and clean it up in `finally`, even when assertions fail.
 - For admin-flow tests that create datasets through the visible UI instead of the temp-dataset helper, add a request-scoped `afterEach` cleanup path so the dataset is still dropped if the page flow breaks before the in-test delete step.
 - Use this pattern for create/delete persistence checks, dataset-specific view assertions, and any flow where a shared dataset could hide flaky state leakage.

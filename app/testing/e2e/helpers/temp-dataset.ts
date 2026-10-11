@@ -290,14 +290,24 @@ export async function createTempDataset(
       });
 
       if (response.status === 201) {
-        const tableUID = await readDatasetTableUIDFromPage(page, config.datasetName);
-        if (tableUID === null) {
+        const created = JSON.parse(response.body) as { dataset_name?: unknown; table_uid?: unknown };
+        if (created?.dataset_name !== config.datasetName || typeof created?.table_uid !== 'number'
+          || !Number.isSafeInteger(created.table_uid) || created.table_uid <= 0) {
           throw new Error(
-            `Created temp dataset "${config.datasetName}" is missing its stable table_uid identity.`,
+            `Created temp dataset "${config.datasetName}" has no matching stable identity in its creation response.`,
           );
         }
-        confirmTestArtifact('dataset', config.datasetName, tableUID);
+        // The committed creation response proves ownership before another
+        // request can fail. Compensation still re-reads and matches this UID.
+        confirmTestArtifact('dataset', config.datasetName, created.table_uid);
         confirmed = true;
+        const tableUID = await readDatasetTableUIDFromPage(page, config.datasetName);
+        if (tableUID !== created.table_uid) {
+          throw new Error(
+            `Created temp dataset "${config.datasetName}" has a different stable table_uid identity: `
+            + `created table_uid=${created.table_uid}, current table_uid=${tableUID}.`,
+          );
+        }
         break;
       }
 

@@ -1,7 +1,8 @@
 /**
  * temp-dataset.test.ts
  * Verifies registry lifecycle and compensation after post-create helper failures.
- * Exists so seed/cache failures cannot silently leak confirmed E2E datasets.
+ * Bridges the shared helper with mocked creation, identity reads, and deletion.
+ * Exists so identity/seed/cache failures cannot silently leak E2E datasets.
  */
 
 // @vitest-environment node
@@ -26,23 +27,30 @@ vi.mock('./navigation', () => ({
 }));
 
 import {
+  buildTempDatasetName,
   cleanupDatasetViaRequest,
   createTempDataset,
   dropTempDataset,
 } from './temp-dataset';
+import { readDatasetTableUIDFromPage } from './test-artifact-dataset-identity-reader';
 
 type FakePageOptions = {
   createStatus?: number;
   seedStatus?: number;
   dropStatus?: number;
   treeTableUID?: number | null;
+  createBody?: unknown;
+  identityReadFailures?: Error[];
 };
 
 function createFakePage(options: FakePageOptions = {}): Page {
   let currentDatasetName = '';
+  const identityReadFailures = [...(options.identityReadFailures ?? [])];
   const evaluate = vi.fn(async (callback: (...args: never[]) => unknown, argument?: unknown) => {
     const source = callback.toString();
     if (source.includes('/api/tree_data')) {
+      const failure = identityReadFailures.shift();
+      if (failure) throw failure;
       const tableUID = options.treeTableUID === undefined ? 73 : options.treeTableUID;
       return {
         status: 200,
@@ -80,12 +88,16 @@ function createFakePage(options: FakePageOptions = {}): Page {
         status,
         ok: status >= 200 && status < 300,
         body: status === 201
-          ? JSON.stringify({ status: 'success' })
+          ? JSON.stringify(options.createBody ?? {
+            dataset_name: currentDatasetName,
+            table_uid: options.treeTableUID ?? 73,
+          })
           : 'table created but metadata refresh failed',
       };
     }
     if (payload?.url === '/api/drop-dataset') {
       const status = options.dropStatus ?? 200;
+      if (status < 300) currentDatasetName = '';
       return { status, ok: status < 300, body: status < 300 ? 'success' : 'drop failed' };
     }
     if (payload?.datasetName) {
@@ -134,6 +146,30 @@ describe('createTempDataset request', () => {
 });
 
 describe('createTempDataset compensation', () => {
+  it.each(['identity lookup failed', 'identity lookup timed out'])(
+    'removes the created dataset before rethrowing when %s', async (message) => {
+      const failure = new Error(message);
+      const page = createFakePage({ identityReadFailures: [failure] });
+      const datasetName = buildTempDatasetName('e2e_failed_identity');
+
+      await expect(createTempDataset(page, {
+        datasetName,
+        columns: { title: 'TEXT' },
+      })).rejects.toBe(failure);
+
+      expect(registryMocks.confirmTestArtifact).toHaveBeenCalledWith('dataset', datasetName, 73);
+      const destructiveCalls = vi.mocked(page.evaluate).mock.calls.filter(([, argument]) =>
+        (argument as { url?: string } | undefined)?.url === '/api/drop-dataset');
+      expect(destructiveCalls).toHaveLength(1);
+      expect(destructiveCalls[0][1]).toMatchObject({
+        payload: { dataset_name: datasetName, confirm_dataset_name: datasetName },
+      });
+      expect(registryMocks.unregisterTestArtifact).toHaveBeenCalledWith('dataset', datasetName);
+      expect(hydrateAuthenticatedTreeDataCache).not.toHaveBeenCalled();
+      await expect(readDatasetTableUIDFromPage(page, datasetName)).resolves.toBeNull();
+    },
+  );
+
   it('confirms a successful create and cleans it when seeding fails', async () => {
     const page = createFakePage({ seedStatus: 500 });
 
@@ -193,6 +229,70 @@ describe('createTempDataset compensation', () => {
       73,
     );
     expect(registryMocks.unregisterTestArtifact).not.toHaveBeenCalled();
+  });
+
+  it('retains confirmed ownership and both errors when the cleanup identity lookup also fails', async () => {
+    const primaryError = new Error('identity lookup timed out');
+    const cleanupError = new Error('cleanup identity lookup timed out');
+    const page = createFakePage({ identityReadFailures: [primaryError, cleanupError] });
+
+    const failure = await createTempDataset(page, {
+      datasetName: 'e2e_failed_identity_cleanup',
+      columns: { title: 'TEXT' },
+    }).catch(error => error);
+
+    expect(failure).toBeInstanceOf(AggregateError);
+    expect(failure.errors).toEqual([primaryError, cleanupError]);
+    expect(registryMocks.confirmTestArtifact).toHaveBeenCalledWith(
+      'dataset', 'e2e_failed_identity_cleanup', 73,
+    );
+    expect(registryMocks.unregisterTestArtifact).not.toHaveBeenCalled();
+    expect(vi.mocked(page.evaluate).mock.calls.filter(([, argument]) =>
+      (argument as { url?: string } | undefined)?.url === '/api/drop-dataset')).toHaveLength(0);
+  });
+
+  it.each([
+    { dataset_name: 'another_dataset', table_uid: 73 },
+    { dataset_name: 'e2e_invalid_creation_identity' },
+    { dataset_name: 'e2e_invalid_creation_identity', table_uid: 0 },
+    { dataset_name: 'e2e_invalid_creation_identity', table_uid: -1 },
+    { dataset_name: 'e2e_invalid_creation_identity', table_uid: 1.5 },
+    { dataset_name: 'e2e_invalid_creation_identity', table_uid: Number.MAX_SAFE_INTEGER + 1 },
+    { dataset_name: 'e2e_invalid_creation_identity', table_uid: '73' },
+  ])('never confirms or deletes a successful response with an invalid identity: %j', async (createBody) => {
+    const page = createFakePage({ createBody });
+
+    await expect(createTempDataset(page, {
+      datasetName: 'e2e_invalid_creation_identity',
+      columns: { title: 'TEXT' },
+    })).rejects.toThrow('no matching stable identity in its creation response');
+
+    expect(registryMocks.confirmTestArtifact).not.toHaveBeenCalled();
+    expect(registryMocks.requireConfirmedTestArtifact).not.toHaveBeenCalled();
+    expect(registryMocks.unregisterTestArtifact).not.toHaveBeenCalled();
+    expect(vi.mocked(page.evaluate).mock.calls.filter(([, argument]) =>
+      (argument as { url?: string } | undefined)?.url === '/api/drop-dataset')).toHaveLength(0);
+  });
+
+  it('refuses compensation when the live identity differs from the successful creation response', async () => {
+    const datasetName = 'e2e_replaced_after_creation';
+    const page = createFakePage({
+      createBody: { dataset_name: datasetName, table_uid: 73 },
+      treeTableUID: 74,
+    });
+
+    const failure = await createTempDataset(page, {
+      datasetName,
+      columns: { title: 'TEXT' },
+    }).catch(error => error);
+
+    expect(failure).toBeInstanceOf(AggregateError);
+    expect(failure.errors[0].message).toContain('created table_uid=73, current table_uid=74');
+    expect(failure.errors[1].message).toContain('registered table_uid=73, current table_uid=74');
+    expect(registryMocks.confirmTestArtifact).toHaveBeenCalledWith('dataset', datasetName, 73);
+    expect(registryMocks.unregisterTestArtifact).not.toHaveBeenCalled();
+    expect(vi.mocked(page.evaluate).mock.calls.filter(([, argument]) =>
+      (argument as { url?: string } | undefined)?.url === '/api/drop-dataset')).toHaveLength(0);
   });
 
   it('never uses a planned record to compensate an ambiguous create', async () => {

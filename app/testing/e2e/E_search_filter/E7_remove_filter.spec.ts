@@ -1,58 +1,84 @@
 /**
  * E7_remove_filter.spec.ts
  *
- * Tests removing an active filter via filter tag remove button.
- * Verifies interaction does not crash UI and remove control disappears.
+ * Verifies removing a column filter restores all rows in a temporary dataset.
+ * Connects the filter tag's remove control with an API-seeded dataset lifecycle.
+ * Keeps the remove-filter proof independent of shared database content.
  */
 
 import { test, expect } from '@playwright/test';
 import { login, loadCredentials, type TestCredentials } from '../helpers/auth';
 import {
-  navigateToDataset,
-  waitForDataLoaded,
-} from '../helpers/navigation';
-import {
   closeActiveFilterbarIfOpen,
   openColumnFilterAccordion,
 } from '../helpers/filterbar';
-import { switchToView } from '../helpers/view-switch';
+import {
+  buildTempDatasetName,
+  cleanupDatasetViaRequest,
+  createTempDataset,
+  openTempDataset,
+} from '../helpers/temp-dataset';
 
 test.describe('E7 — Remove Filter', () => {
   let credentials: TestCredentials;
+  let datasetToCleanup: string | undefined;
 
   test.beforeAll(() => {
     credentials = loadCredentials();
   });
 
   test.beforeEach(async ({ page }) => {
+    datasetToCleanup = undefined;
     await login(page, credentials);
   });
 
+  test.afterEach(async ({ request }) => {
+    // Request cleanup also runs after assertion failures, timeouts or a closed page.
+    if (datasetToCleanup) {
+      await cleanupDatasetViaRequest(request, datasetToCleanup);
+      datasetToCleanup = undefined;
+    }
+  });
+
   test('clicking filter tag X removes the filter', async ({ page }) => {
-    await navigateToDataset(page, 'app_service_catalog');
-    await waitForDataLoaded(page, 'app_service_catalog');
-    await switchToView(page, 'table');
+    test.setTimeout(60_000);
+    const datasetName = buildTempDatasetName('e2e_e7_remove_filter');
+    const filterValue = 'Identity and access service';
+    const seedRows = [
+      { header: filterValue },
+      { header: 'Unrelated service' },
+    ];
+
+    // The helper compensates creation/seeding failures; the hook owns later cleanup.
+    await createTempDataset(page, {
+      datasetName,
+      columns: { id: 'SERIAL', header: 'TEXT' },
+      seedRows,
+    });
+    datasetToCleanup = datasetName;
+    await openTempDataset(page, datasetName, 'table');
 
     const rows = page.locator(
-      '#app_service_catalog_table_view_container [data-testid="dataset-view-table"] tbody tr',
+      `#${datasetName}_table_view_container [data-testid="dataset-view-table"] tbody tr`,
     );
+    await expect(rows).toHaveCount(seedRows.length, { timeout: 10000 });
     const initialCount = await rows.count();
     expect(initialCount).toBeGreaterThan(1);
 
     const headerFilterRow = await openColumnFilterAccordion(
       page,
-      'app_service_catalog',
+      datasetName,
       'header',
     );
-    const filterInput = headerFilterRow.locator('#app_service_catalog_header');
+    const filterInput = headerFilterRow.locator(`#${datasetName}_header`);
     await expect(filterInput).toBeVisible({ timeout: 5000 });
     await expect(filterInput).toHaveValue('');
 
-    const filterValue = 'Identity and access service';
     await filterInput.fill(filterValue);
     await filterInput.press('Enter');
 
     await expect(rows).toHaveCount(1, { timeout: 10000 });
+    await expect(rows).toContainText(filterValue);
     const exactActiveFilter = page
       .locator('[data-testid="active-filter-item"]:visible')
       .filter({ hasText: filterValue });
