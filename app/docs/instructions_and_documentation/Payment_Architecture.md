@@ -20,7 +20,7 @@ The payment gateway lives in `filterest/app/backend/core_components/payment_gate
 | `POST` | `/api/payments/webhook` | `WebhookHandler` | `PublicProfile` — timestamped Revolut v1 HMAC-SHA256 verification |
 | `GET` | `/api/payments/{token}/status` | `GetPaymentStatusHandler` | `PublicProfile` — opaque UUID token is the credential |
 
-All three routes use `PublicProfile` in `filterest/app/backend/pipeline/route_profiles.go` (lines 101–104), meaning Filterest's session/CSRF middleware is not applied. Each endpoint enforces its own authentication mechanism.
+All three routes use `PublicProfile` in the `RouteProfiles` map's **External webhooks** section of [route_profiles.go](../../backend/pipeline/route_profiles.go), meaning Filterest's session/CSRF middleware is not applied. Each endpoint enforces its own authentication mechanism.
 
 ---
 
@@ -115,7 +115,7 @@ CREATE TABLE IF NOT EXISTS payments (
 
 Indexes: `idx_payments_token` (payment_token), `idx_payments_revolut_order_id`, `idx_payments_app_name`.
 
-The table is created idempotently at startup via `ensurePaymentsTable()` (payments_handlers.go:95).
+The table is created idempotently at startup by `ensurePaymentsTable()`, called from `Init()` in [payments_handlers.go](../../backend/core_components/payment_gateway/payments_handlers.go).
 
 ### `metadata` JSONB field
 
@@ -204,4 +204,4 @@ Set `SANDBOX_MODE=true` in `revolut.env` to use `https://sandbox-merchant.revolu
 | `filterest/app/backend/core_components/payment_gateway/payments_handlers.go` | HTTP handlers, DB logic, webhook verification |
 | `filterest/app/backend/core_components/payment_gateway/revolut_client.go` | Revolut API client (CreateOrder, GetOrder) |
 | `filterest/app/backend/core_components/router/router_for_apps.go` | Route registration |
-| `filterest/app/backend/pipeline/route_profiles.go:101–104` | Pipeline profile declarations |
+| [route_profiles.go](../../backend/pipeline/route_profiles.go) | Pipeline profile declarations (`RouteProfiles` → External webhooks) |
