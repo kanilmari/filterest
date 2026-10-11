@@ -100,6 +100,40 @@ If you need to change the public bootstrap schema or seed rows, change the
 reviewed inputs and regenerate the derived artifacts. Do not treat ad-hoc edits
 in a local Filterest database as durable source changes.
 
+## Platform timestamp conversion (unreleased DB 9.10.2)
+
+Migration `20261009000080` zones every naive column in its explicit platform
+table scope, including restricted-schema tables and embedding children of managed
+hosts. Fresh sources declare zoned timestamps directly. The fast early refusal in
+[`timestamp_schema_validator.py`](timestamp_schema_validator.py) checks the static
+spellings it knows before generation replaces artifacts, including Unicode-quoted
+identifiers, precision, qualified types, SETOF and RETURNS TABLE outputs. Quoted
+column and table names remain legal. This text check skips SQL bodies and cannot
+prove every SQL spelling. The authoritative check is the disposable PostgreSQL
+catalog proof in
+[`test_managed_timestamp_catalog_postgres.py`](../../testing/python/test_managed_timestamp_catalog_postgres.py):
+it regenerates and loads the public bootstrap, then follows resolved type OIDs
+through arrays, recursive domains and composite fields in every application
+schema. It checks table, view, materialized-view and composite columns, domains,
+and the arguments and results of functions, procedures, aggregates and window
+functions, including SETOF and TABLE outputs.
+Only the 11 explicitly named site-owned columns deferred to batch 3b may remain;
+the current public bootstrap contains none. Its injected-source positive control
+proves the same finder detects declarations outside the text guard's scope.
+Run it with `FILTEREST_TEST_DISPOSABLE_POSTGRES=1` under the shared PostgreSQL
+suite lock (`/tmp/filterest_pg_suites.lock`). The acceptance block
+requires `wl167_managed_timestamp_zones` and the empty timestamp final check.
+Site-owned datasets, showcases, assets and their embedding children are excluded.
+The migration ledger has always been zoned and retains its reserved bootstrap
+definition; the catalog proof covers it without a conversion.
+Dependent ordinary views retain their INSTEAD OF triggers and rules in the
+default origin state. PostgreSQL 16 supports enabled-state changes only on
+tables; nondefault table trigger states are restored, while an unrestorable
+captured rule or trigger state refuses the migration before any object removal.
+Dependent materialized views are refused before conversion rather than rebuilt.
+The [Table Creation Protocol](../../docs/instructions_and_documentation/Table_Creation_Protocol.md)
+owns timestamp interpretation and consumer formats.
+
 ## Dataset appearance cutover (unreleased DB 9.10.2)
 
 Migration `20261009000060` extends the private appearance table before seeds;

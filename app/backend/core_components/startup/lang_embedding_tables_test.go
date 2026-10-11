@@ -1,6 +1,7 @@
 // lang_embedding_tables_test.go
 // Regression tests for startup-managed language embedding helper tables.
-// Verifies the startup ensure flow mirrors runtime role grants onto <table>_lang_embeddings.
+// Bridges startup DDL and the runtime helpers used by multilingual datasets.
+// Keeps timestamp types zoned and required creation failures visible.
 
 package startup
 
@@ -69,6 +70,7 @@ func TestStartupEmbeddingCreationUsesSchemaAndPropagatesDDLFailure(t *testing.T)
 			}
 			calls := snapshotLangEmbeddingCalls()
 			assertCallContains(t, calls, `CREATE TABLE IF NOT EXISTS "schema quoted"."host quoted_lang_embeddings"`)
+			assertCallContains(t, calls, `updated TIMESTAMPTZ NOT NULL DEFAULT NOW()`)
 			for _, call := range calls {
 				if strings.Contains(call, "GRANT ") || strings.Contains(call, "has_table_privilege") || strings.Contains(call, "hnsw") {
 					t.Fatalf("historical grant mirror remains: %s", call)

@@ -50,6 +50,22 @@ def test_nested_expressions_comments_and_quoted_history_are_allowed():
         "public", "items", "authorization", "payload", "id", "items_pk", "public", "check_items"]
 
 
+def test_unicode_identifiers_decode_and_keep_their_source_lines():
+    source = r'''CREATE TABLE U&"t\0061ble" (
+        U&"sel!0065ct" /* nested /* comment */ */ UESCAPE /* character */ '!' text,
+        U&"smile\D83D\DE00" text,
+        U&"slash\\name" text,
+        U&"quote""name" text,
+        U&"six\+000061" text
+    );'''
+    identifiers = declared_identifiers(source)
+    assert [(item.name, item.quoted, item.line) for item in identifiers] == [
+        ("table", True, 1), ("select", True, 2), ("smile😀", True, 3),
+        ("slash\\name", True, 4), ('quote"name', True, 5), ("sixa", True, 6),
+    ]
+    validate_sql_identifiers(source, "migration.sql")
+
+
 @pytest.mark.parametrize("source", ["/* unfinished", "SELECT $body$unfinished", "SELECT 'unfinished"])
 def test_unterminated_constructs_refuse_the_guard(source):
     with pytest.raises(ValueError, match="unterminated"):

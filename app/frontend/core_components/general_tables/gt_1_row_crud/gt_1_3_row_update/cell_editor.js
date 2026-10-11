@@ -28,6 +28,7 @@ import {
     serializeTemporalInputValue,
 } from '../../../table_views/temporal_value_formatter.js';
 import { getLanguageWithBrowserFallback } from '../../../state_stores/lang_preference_reader.js';
+import { formatTimestampDisplayParts } from '../../../table_views/timestamp_display_formatter.js';
 import {
     reconstructMultilingualValue,
     resolveMultilingualValue,
@@ -410,7 +411,7 @@ async function handleRegularEditing(cell, columns, data, dataTypes, table_name, 
         const id = rowData['id'];
 
         let serializedValue = temporalKind
-            ? serializeTemporalInputValue(newValue, dataType)
+            ? serializeTemporalInputValue(newValue, dataType, originalValue)
             : newValue;
         if (temporalKind && serializedValue === null) {
             setCellDisplayText(cell, originalContent);
@@ -449,7 +450,14 @@ async function handleRegularEditing(cell, columns, data, dataTypes, table_name, 
             if (multilingualValue) {
                 setLocalizedTableCellDisplay(cell, serializedValue, dataTypeInfo);
             } else {
-                setCellDisplayText(cell, input.type === 'checkbox' ? String(newValue) : newValue);
+                // Show the saved clock immediately, including forward-normalized
+                // spring-gap input, through the same formatter used on reload.
+                const temporalDisplay = temporalKind
+                    ? formatTimestampDisplayParts(serializedValue, dataType)
+                    : null;
+                setCellDisplayText(cell, temporalDisplay?.displayText
+                    ?? (input.type === 'checkbox' ? String(newValue) : newValue));
+                if (temporalDisplay) cell.title = temporalDisplay.titleText;
             }
             cell.classList.remove('editing');
         } catch (error) {

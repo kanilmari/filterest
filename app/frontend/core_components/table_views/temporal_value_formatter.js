@@ -154,13 +154,17 @@ export function formatTemporalValueForInput(value, columnMeta) {
 
 /**
  * Serializes an editor value for the matching PostgreSQL temporal type.
- * Returns null for invalid or ambiguous values so callers cannot submit a shifted fallback.
+ * Within the starting instant's overlap hour, retain its UTC offset when that
+ * occurrence still exists. Other overlaps select the earlier occurrence; spring
+ * gaps normalize forward by the gap, following JavaScript's local Date policy.
+ * Returns null for invalid values.
  *
  * @param {*} editorValue
  * @param {string|object} columnMeta
+ * @param {*} originalValue The backend instant the user started editing.
  * @returns {string|null}
  */
-export function serializeTemporalInputValue(editorValue, columnMeta) {
+export function serializeTemporalInputValue(editorValue, columnMeta, originalValue = null) {
     const temporalKind = getTemporalValueKind(columnMeta);
     const value = String(editorValue ?? '').trim();
 
@@ -183,7 +187,23 @@ export function serializeTemporalInputValue(editorValue, columnMeta) {
 
     if (temporalKind === TEMPORAL_KIND_TIMESTAMPTZ) {
         const instant = new Date(value);
-        return Number.isNaN(instant.getTime()) ? null : instant.toISOString();
+        if (Number.isNaN(instant.getTime())) {
+            return null;
+        }
+        const original = new Date(originalValue ?? NaN);
+        const parsedLocal = parseNaiveTimestamp(value);
+        if (parsedLocal && !Number.isNaN(original.getTime())
+            && formatTemporalValueForInput(original, columnMeta).slice(0, 13) === value.slice(0, 13)) {
+            const offsetDifference = original.getTimezoneOffset() - instant.getTimezoneOffset();
+            const sameOccurrence = new Date(instant.getTime() + offsetDifference * 60_000);
+            // Verify the candidate still names this wall clock; an offset from
+            // outside the overlap must never move an edit to a different hour.
+            if (sameOccurrence.getTimezoneOffset() === original.getTimezoneOffset()
+                && formatTemporalValueForInput(sameOccurrence, columnMeta) === `${parsedLocal.dateText}T${parsedLocal.hours}:${parsedLocal.minutes}`) {
+                return sameOccurrence.toISOString();
+            }
+        }
+        return instant.toISOString();
     }
 
     return null;

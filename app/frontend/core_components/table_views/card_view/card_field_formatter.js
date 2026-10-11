@@ -196,7 +196,7 @@ export function disableEditing(container) {
         const inputValue = newValue;
         let temporalSerializationValid = true;
         if (temporalKind) {
-            newValue = serializeTemporalInputValue(inputValue, temporalDataType);
+            newValue = serializeTemporalInputValue(inputValue, temporalDataType, originalRawValue);
             if (newValue === null) {
                 temporalSerializationValid = false;
                 newValue = originalRawValue ?? '';

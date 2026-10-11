@@ -28,7 +28,8 @@ _TOKEN = re.compile(
     r"(?P<space>\s+)|(?P<comment>--[^\r\n]*|/\*)|"
     r"(?P<dollar>\$(?:[A-Za-z_][A-Za-z_0-9]*)?\$)|"
     r"(?P<literal>[Ee]'(?:\\.|''|[^'\\])*'|'(?:''|[^'])*')|"
-    r'(?P<quoted>"(?:""|[^"])*")|(?P<word>[A-Za-z_][A-Za-z_0-9$]*)|(?P<symbol>.)',
+    r'(?P<unicode>[Uu]&"(?:""|[^"])*")|(?P<quoted>"(?:""|[^"])*")|'
+    r'(?P<word>[A-Za-z_][A-Za-z_0-9$]*)|(?P<symbol>.)',
     re.DOTALL,
 )
 
@@ -39,6 +40,69 @@ class Identifier(NamedTuple):
     line: int
 
 
+def _block_comment_end(sql, end, line):
+    depth = 1
+    while depth:
+        delimiter = re.search(r"/\*|\*/", sql[end:])
+        if delimiter is None:
+            raise ValueError(f"line {line}: unterminated block comment")
+        depth += 1 if delimiter.group() == "/*" else -1
+        end += delimiter.end()
+    return end
+
+
+def _skip_space_and_comments(sql, following, line):
+    while following < len(sql):
+        gap = _TOKEN.match(sql, following)
+        if gap.lastgroup not in {"space", "comment"}:
+            break
+        following = (_block_comment_end(sql, gap.end(), line)
+                     if gap.group() == "/*" else gap.end())
+    return following
+
+
+def _unicode_identifier(sql, value, end, line):
+    """Decode PostgreSQL U& names, consuming their optional scanner-level UESCAPE.
+
+    Reuse this lexer for declaration names and timestamp types so an escaped
+    identifier is one quoted token, with its original case and source line.
+    """
+    following = _skip_space_and_comments(sql, end, line)
+    escape = "\\"
+    clause = re.match(r"uescape\b", sql[following:], re.I)
+    if clause:
+        literal_start = _skip_space_and_comments(sql, following + clause.end(), line)
+        literal = re.match(r"'((?:''|[^'])*)'", sql[literal_start:])
+        if literal is None:
+            raise ValueError(f"line {line}: missing Unicode identifier escape character")
+        escape = literal.group(1).replace("''", "'")
+        if len(escape) != 1 or escape in "0123456789abcdefABCDEF+'\"" or escape.isspace():
+            raise ValueError(f"line {line}: invalid Unicode identifier escape character")
+        end = literal_start + literal.end()
+    raw = value[3:-1].replace('""', '"')
+    pattern = re.compile(re.escape(escape) + r"(\+[0-9A-Fa-f]{6}|[0-9A-Fa-f]{4}|" + re.escape(escape) + r"|.)", re.S)
+
+    def decode(match):
+        code = match.group(1)
+        if code == escape:
+            return escape
+        digits = code.removeprefix("+")
+        if len(digits) not in {4, 6} or not all(char in "0123456789abcdefABCDEF" for char in digits):
+            raise ValueError(f"line {line}: invalid Unicode identifier escape")
+        point = int(digits, 16)
+        if point == 0 or point > 0x10FFFF:
+            raise ValueError(f"line {line}: invalid Unicode identifier code point")
+        return chr(point)
+
+    decoded = pattern.sub(decode, raw)
+    # PostgreSQL also accepts a pair of four-digit surrogate escapes.
+    try:
+        decoded = decoded.encode("utf-16-le", "surrogatepass").decode("utf-16-le")
+    except UnicodeError as error:
+        raise ValueError(f"line {line}: invalid Unicode identifier surrogate") from error
+    return decoded, end
+
+
 def _tokens(sql: str) -> list[Identifier]:
     """Skip comments and inert quoted bodies, retaining declaration token positions."""
     tokens, pos, line = [], 0, 1
@@ -46,13 +110,7 @@ def _tokens(sql: str) -> list[Identifier]:
         match = _TOKEN.match(sql, pos)
         kind, value, end = match.lastgroup, match.group(), match.end()
         if value == "/*":
-            depth = 1
-            while depth:
-                delimiter = re.search(r"/\*|\*/", sql[end:])
-                if delimiter is None:
-                    raise ValueError(f"line {line}: unterminated block comment")
-                depth += 1 if delimiter.group() == "/*" else -1
-                end += delimiter.end()
+            end = _block_comment_end(sql, end, line)
         elif kind == "dollar":
             close = sql.find(value, end)
             if close < 0:
@@ -60,6 +118,9 @@ def _tokens(sql: str) -> list[Identifier]:
             end = close + len(value)
         elif kind == "symbol" and value in ("'", '"'):
             raise ValueError(f"line {line}: unterminated quote")
+        elif kind == "unicode":
+            name, end = _unicode_identifier(sql, value, end, line)
+            tokens.append(Identifier(name, True, line))
         elif kind not in ("space", "comment", "literal"):
             quoted = kind == "quoted"
             tokens.append(Identifier(value[1:-1].replace('""', '"') if quoted else value.lower(), quoted, line))

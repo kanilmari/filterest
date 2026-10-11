@@ -71,4 +71,60 @@ describe('temporal_value_formatter', () => {
         )).toBeNull();
         expect(formatTemporalValueForInput('not-a-time', 'timestamp with time zone')).toBe('');
     });
+
+    test('keeps migrated Helsinki clocks in editors and supplies a zoned write value', () => {
+        process.env.TZ = 'Europe/Helsinki';
+        try {
+            for (const [wallClock, instant] of [
+                ['2026-01-15 09:30:00', '2026-01-15T07:30:00Z'],
+                ['2026-06-14 09:30:00', '2026-06-14T06:30:00Z'],
+                ['2026-03-29 04:30:00', '2026-03-29T01:30:00Z'],
+            ]) {
+                const editorValue = formatTemporalValueForInput(instant, 'timestamptz');
+                expect(editorValue).toBe(formatTemporalValueForInput(wallClock, 'timestamp'));
+                expect(serializeTemporalInputValue(editorValue, 'timestamptz'))
+                    .toBe(instant.replace('Z', '.000Z'));
+            }
+        } finally {
+            process.env.TZ = 'Asia/Hong_Kong';
+        }
+    });
+
+    test.each([
+        ['summer occurrence', '2026-10-25T00:30:00Z', '2026-10-25T00:31:00.000Z'],
+        ['standard occurrence', '2026-10-25T01:30:00Z', '2026-10-25T01:31:00.000Z'],
+    ])('keeps the Helsinki autumn overlap %s when editing 03:30 to 03:31', (_label, original, edited) => {
+        process.env.TZ = 'Europe/Helsinki';
+        try {
+            expect(formatTemporalValueForInput(original, 'timestamptz')).toBe('2026-10-25T03:30');
+            expect(serializeTemporalInputValue('2026-10-25T03:31', 'timestamptz', original)).toBe(edited);
+            expect(new Date(edited).getTime() - new Date(original).getTime()).toBe(60_000);
+        } finally {
+            process.env.TZ = 'Asia/Hong_Kong';
+        }
+    });
+
+    test('resolves other Helsinki overlaps earlier and edits outside the starting overlap normally', () => {
+        process.env.TZ = 'Europe/Helsinki';
+        try {
+            expect(serializeTemporalInputValue('2026-10-25T03:31', 'timestamptz'))
+                .toBe('2026-10-25T00:31:00.000Z');
+            expect(serializeTemporalInputValue('2026-10-25T04:31', 'timestamptz', '2026-10-25T00:30:00Z'))
+                .toBe('2026-10-25T02:31:00.000Z');
+        } finally {
+            process.env.TZ = 'Asia/Hong_Kong';
+        }
+    });
+
+    test('normalizes the true Helsinki spring gap 03:30 forward to 04:30 for zoned edits', () => {
+        process.env.TZ = 'Europe/Helsinki';
+        try {
+            const serialized = serializeTemporalInputValue('2026-03-29T03:30', 'timestamptz', '2026-03-29T00:30:00Z');
+            expect(serialized).toBe('2026-03-29T01:30:00.000Z');
+            expect(formatTemporalValueForInput(serialized, 'timestamptz')).toBe('2026-03-29T04:30');
+            expect(serializeTemporalInputValue('2026-03-29T03:30', 'timestamp')).toBe('2026-03-29 03:30:00');
+        } finally {
+            process.env.TZ = 'Asia/Hong_Kong';
+        }
+    });
 });

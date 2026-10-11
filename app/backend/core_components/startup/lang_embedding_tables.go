@@ -92,7 +92,7 @@ func createLangEmbeddingTables(ctx context.Context, tx *sql.Tx) error {
 		embedding := pq.QuoteIdentifier(t.schema) + "." + pq.QuoteIdentifier(t.name+"_lang_embeddings")
 		statements := []string{
 			fmt.Sprintf(`CREATE TABLE IF NOT EXISTS %s (host_row_id INTEGER REFERENCES %s(id) ON DELETE CASCADE,
- language_code TEXT, embedding VECTOR, updated TIMESTAMP NOT NULL DEFAULT NOW(), content_md5 TEXT)`, embedding, host),
+ language_code TEXT, embedding VECTOR, updated TIMESTAMPTZ NOT NULL DEFAULT NOW(), content_md5 TEXT)`, embedding, host),
 			"ALTER TABLE " + embedding + " ADD COLUMN IF NOT EXISTS content_md5 TEXT",
 		}
 		// The unconstrained vector column accepts different model dimensions.

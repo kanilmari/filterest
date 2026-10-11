@@ -28,6 +28,54 @@ updated TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
 *   **`created`**: Timestamp of row creation. Never null.
 *   **`updated`**: Timestamp of last modification. Never null. Must be updated via trigger.
 
+Platform-managed tables store instants as `timestamptz`. WL167 migration
+`20261009000080` interprets historical naive values with `AT TIME ZONE
+'Europe/Helsinki'`, independent of the upgrade session's timezone. Its explicit
+scope follows public source ownership, including restricted tables and managed
+hosts' language embedding children. A `system_` prefix alone does not establish
+ownership. Site-created datasets and showcases are the separate batch 3b.
+PostgreSQL chooses the standard-time occurrence for an ambiguous autumn clock;
+nonexistent spring clocks normalize forward. The migration preserves nulls and
+already zoned columns. Ordinary dependent views retain owners, effective grants,
+options, comments, column defaults, rules and triggers. Materialized views,
+security labels, delegated grant chains, inheritance and other uncaptured
+dependencies refuse the transaction; they must be reviewed before retrying.
+
+Fresh-bootstrap prevention has two checks. The generator's
+[`timestamp_schema_validator.py`](../../server_tools/public_bootstrap/timestamp_schema_validator.py)
+is a fast early refusal for the static spellings it knows, including Unicode
+escapes in quoted identifiers and types after SETOF or inside RETURNS TABLE.
+It skips SQL bodies. The authoritative check for every spelling is
+[`test_managed_timestamp_catalog_postgres.py`](../../testing/python/test_managed_timestamp_catalog_postgres.py),
+run with `FILTEREST_TEST_DISPOSABLE_POSTGRES=1` under the shared PostgreSQL suite
+lock. It loads a freshly generated bootstrap into a disposable cluster and
+checks resolved catalog types in all application schemas: table, view,
+materialized-view and composite columns; recursive domains and arrays; the
+arguments and results of functions, procedures, aggregates and window functions,
+including SETOF and TABLE outputs. Its only
+exclusions name the 11 deferred site-owned columns explicitly. An injected-source
+positive control proves detection beyond the static validator's parsing scope.
+
+Listing and search JSON retain the existing row/column response shape. Zoned
+values use UTC RFC3339 strings; the shared display and editor formatters use the
+browser's local zone, so valid Helsinki wall clocks keep their displayed time.
+DATE remains a calendar value. Updates to zoned fields require an explicit
+RFC3339 offset; the editor supplies it. CSV keeps its existing headers and
+RFC3339Nano cells and PostgreSQL honors their offsets on import. Older CSV
+exports of naive timestamps may contain a synthetic `Z` from the driver's
+wall-clock representation: a file alone cannot distinguish that from a real
+instant. Such archives need their original column types to interpret them as
+Helsinki clocks before restoration; do not silently reinterpret all `Z` values.
+
+When an existing zoned value is edited within the same autumn overlap hour,
+table and article editors retain its starting occurrence. With no starting
+occurrence in that hour, ambiguous local input selects the earlier occurrence.
+Nonexistent spring input normalizes forward by the gap: Helsinki
+`2026-03-29 03:30` saves as `01:30 UTC` and immediately displays `04:30`.
+Naive timestamp fields continue to keep the entered wall clock. Metadata type
+repair suspends metadata triggers even when its own clocks are already zoned,
+then restores their definitions, comments and original enabled states.
+
 The authority is the embedded
 [kind catalogue](../../backend/core_components/dataset_kinds/kind_contract_catalogue.json)
 and its [validator](../../backend/core_components/dataset_kinds/kind_contract_validator.go).
@@ -38,7 +86,7 @@ dataset's key and real typed foreign-key columns, never a table-name convention.
 | Kind | Canonical version 1 | Version 0 compatibility |
 | --- | --- | --- |
 | Ordinary | Generated integer identity, timestamps, protected creator/owner references for content | Unknown/custom shapes retain generic browsing; existing inline `embedding_vector` and flag-backed, structurally verified embedding children remain discoverable |
-| Embeddings | Base identity/timestamps, typed `host_row_id` with cascade, required language, vector/hash, unique host/language, declared vector model/dimensions | Existing child factory may omit ID, creation time and uniqueness, use nullable host/language and a timestamp without timezone; a real typed host FK is still required |
+| Embeddings | Base identity/timestamps, typed `host_row_id` with cascade, required language, vector/hash, unique host/language, declared vector model/dimensions | Historical children may omit ID, creation time and uniqueness, use nullable host/language and a naive timestamp; new factory timestamps are zoned, and a real typed host FK is still required |
 | Locations | Ordinary content base, nullable `postgis.geometry(Point,4326)` position, title/address | Point locations without timestamps and typed historical coordinate pairs; existing typed location children keep host Map support, even when empty |
 | Chat messages | BIGINT identity/timestamps, conversation/sequence, participant and sender-name snapshot, text/question/answer payload fields, client request ID, reply/answer/supersession references and sequencing/idempotency uniqueness | None: names or chat-like columns never grant Chat |
 | Chat settings | BIGINT identity/timestamps, title, message-dataset UID, mode, creator, archive/revision/configuration | None |

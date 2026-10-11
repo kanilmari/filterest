@@ -10,6 +10,7 @@ import sys
 import tempfile
 from pathlib import Path
 from sql_identifier_validator import validate_sql_identifiers
+from timestamp_schema_validator import validate_zoned_timestamp_schema
 
 public_root = Path(__file__).resolve().parents[3]
 parser = argparse.ArgumentParser(description=__doc__)
@@ -114,6 +115,7 @@ repair_schema_migrations = (
     "20261009000070_add_publication_fields_to_release_goals.sql",
     "20261009000075_add_dataset_kind_contracts.sql",
     "20261009000079_reconcile_system_database_identity_schema.sql",
+    "20261009000080_zone_platform_managed_timestamps.sql",
 )
 # Complete the physical actor columns after development tables and support functions,
 # before schema privileges. The data step later registers the same columns.
@@ -244,6 +246,8 @@ for name in included_migrations:
 for label, sql in (("schema", schema_sql), ("seed", seed_sql)):
     try:
         validate_sql_identifiers(sql, f"bootstrap {label}")
+        if label == "schema":
+            validate_zoned_timestamp_schema(sql, "bootstrap schema")
     except ValueError as error:
         parser.error(str(error))
 sys.path.insert(0, str(public_root / "app/server_tools/public_slice_export"))
@@ -411,6 +415,7 @@ source_files = [
     public_bootstrap_sources / "label_value_layout.lang_keys.sql",
     Path(__file__).resolve(),
     Path(__file__).resolve().with_name("sql_identifier_validator.py"),
+    Path(__file__).resolve().with_name("timestamp_schema_validator.py"),
     public_root / "app/server_tools/public_slice_export/audit_public_bootstrap.py",
     public_root / "app/server_tools/public_slice_export/public_bootstrap_table_allowlists.py",
     public_root / "app/server_tools/public_slice_export/public_bootstrap_policy.py",

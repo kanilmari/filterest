@@ -128,4 +128,56 @@ describe("timestamp_display_formatter", () => {
         expect(isTimestampColumn("timestamp with time zone")).toBe(true);
         expect(isTimestampColumn({ data_type: "text" })).toBe(false);
     });
+
+    test("keeps Helsinki wall clocks after the managed timestamp migration, including DST", () => {
+        process.env.TZ = "Europe/Helsinki";
+        try {
+            for (const [wallClock, instant] of [
+                ["2026-01-15 09:30:00", "2026-01-15T07:30:00Z"],
+                ["2026-06-14 09:30:00", "2026-06-14T06:30:00Z"],
+                ["2026-03-29 04:30:00", "2026-03-29T01:30:00Z"],
+                ["2026-10-25 03:30:00", "2026-10-25T01:30:00Z"],
+            ]) {
+                for (const options of [{}, { displayMode: "date_time", locale: "fi" }]) {
+                    expect(formatTimestampDisplayParts(instant, "timestamptz", options))
+                        .toEqual(formatTimestampDisplayParts(wallClock, "timestamp", options));
+                }
+            }
+        } finally {
+            process.env.TZ = "Asia/Hong_Kong";
+        }
+    });
+
+    test('displays both Helsinki autumn overlap occurrences at 03:30', () => {
+        process.env.TZ = 'Europe/Helsinki';
+        try {
+            for (const instant of ['2026-10-25T00:30:00Z', '2026-10-25T01:30:00Z']) {
+                expect(formatTimestampDisplayParts(instant, 'timestamptz')).toEqual({
+                    displayText: displayDateTime('2026-10-25', '03:30'),
+                    titleText: '2026-10-25 03:30:00',
+                });
+            }
+        } finally {
+            process.env.TZ = 'Asia/Hong_Kong';
+        }
+    });
+
+    test('displays the true Helsinki spring gap 03:30 as 04:30 after zoned normalization', () => {
+        process.env.TZ = 'Europe/Helsinki';
+        try {
+            // This is the explicit instant produced when PostgreSQL converts
+            // the nonexistent naive 03:30 with AT TIME ZONE Europe/Helsinki.
+            const normalized = '2026-03-29T03:30:00+02:00';
+            expect(formatTimestampDisplayParts(normalized, 'timestamptz')).toEqual({
+                displayText: displayDateTime('2026-03-29', '04:30'),
+                titleText: '2026-03-29 04:30:00',
+            });
+            expect(formatTimestampDisplayParts(normalized, 'timestamptz', { displayMode: 'date_time', locale: 'fi' }).displayText)
+                .toContain('4.30');
+            expect(formatTimestampDisplayParts('2026-03-29 03:30:00', 'timestamp').titleText)
+                .toBe('2026-03-29 03:30:00');
+        } finally {
+            process.env.TZ = 'Asia/Hong_Kong';
+        }
+    });
 });

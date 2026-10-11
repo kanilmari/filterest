@@ -28,6 +28,12 @@ func formatTemporalColumnValue(value time.Time, databaseTypeName string) string 
 
 // FormatRowsToMaps iterates over the database rows and formats them into a list of maps.
 func FormatRowsToMaps(sqlRows *sql.Rows) ([]string, []map[string]interface{}, error) {
+	return formatRowsToMaps(sqlRows, true)
+}
+
+// formatRowsToMaps shares temporal semantics with search while retaining its
+// complete vector payload. Ordinary listing keeps its existing shortened vectors.
+func formatRowsToMaps(sqlRows *sql.Rows, shortenEmbeddingVectors bool) ([]string, []map[string]interface{}, error) {
 	columnNames, err := sqlRows.Columns()
 	if err != nil {
 		log.Printf("\033[31merror: %s\033[0m\n", err.Error())
@@ -63,13 +69,13 @@ func FormatRowsToMaps(sqlRows *sql.Rows) ([]string, []map[string]interface{}, er
 				currentRow[colName] = formatTemporalColumnValue(typedVal, databaseTypeName)
 			case []byte:
 				s := string(typedVal)
-				if colName == "embedding_vector" && len(s) > 500 {
+				if shortenEmbeddingVectors && colName == "embedding_vector" && len(s) > 500 {
 					s = s[:500] + "..."
 				}
 				currentRow[colName] = s
 			case string:
 				s := typedVal
-				if colName == "embedding_vector" && len(s) > 500 {
+				if shortenEmbeddingVectors && colName == "embedding_vector" && len(s) > 500 {
 					s = s[:500] + "..."
 				}
 				currentRow[colName] = s

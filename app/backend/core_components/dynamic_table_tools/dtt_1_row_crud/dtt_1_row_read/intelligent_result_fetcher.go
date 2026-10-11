@@ -10,7 +10,6 @@ import (
 	"fmt"
 	"sort"
 	"strings"
-	"time"
 
 	dbutils "easelect/backend/core_components/dbutils"
 	"easelect/backend/core_components/dynamic_table_tools/dtt_2_column_crud/dtt_2_column_read"
@@ -160,36 +159,16 @@ func fetchRowsInOrder(db dbutils.Querier, table string, rowIDs []int, authorizat
 	}
 	defer rows.Close()
 
-	cols, err := rows.Columns()
+	// Use the listing serializer so zoned platform clocks remain explicit
+	// instants in search results, including joins and CSV-restored rows.
+	cols, data, err := formatRowsToMaps(rows, false)
 	if err != nil {
 		return nil, nil, err
 	}
-
-	var data []map[string]interface{}
-	for rows.Next() {
-		vals := make([]interface{}, len(cols))
-		ptrs := make([]interface{}, len(cols))
-		for i := range vals {
-			ptrs[i] = &vals[i]
-		}
-		if err := rows.Scan(ptrs...); err != nil {
-			return nil, nil, err
-		}
-		rowObj := make(map[string]interface{})
-		for i, c := range cols {
-			switch v := vals[i].(type) {
-			case time.Time:
-				rowObj[c] = v.Format("2006-01-02 15:04:05")
-			case []byte:
-				rowObj[c] = string(v)
-			default:
-				rowObj[c] = v
-			}
-		}
-		data = append(data, rowObj)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, nil, err
+	// Ordered search historically emits data:null when requested IDs yield no
+	// readable rows. Listings and vector search retain their empty-array shape.
+	if len(data) == 0 {
+		data = nil
 	}
 	if err := enrichServiceCatalogModerationRows(db, table, data, authorization.userRole, authorization.userID); err != nil {
 		return nil, nil, err

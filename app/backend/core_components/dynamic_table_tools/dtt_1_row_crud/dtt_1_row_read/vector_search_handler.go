@@ -279,44 +279,9 @@ func GetResultsVector(response_writer http.ResponseWriter, request *http.Request
 
 	// ------------------------------------------------
 	// 9. Luetaan tulokset ja muotoillaan JSON
-	result_columns, err := rows_result.Columns()
+	result_columns, query_results, err := formatRowsToMaps(rows_result, false)
 	if err != nil {
-		log.Printf("\033[31merror fetching columns from result: %s\033[0m\n", err.Error())
-		httpresponse.RespondWithError(response_writer, http.StatusInternalServerError, "error fetching columns")
-		return
-	}
-
-	query_results := make([]map[string]interface{}, 0)
-	for rows_result.Next() {
-		row_values := make([]interface{}, len(result_columns))
-		row_pointers := make([]interface{}, len(result_columns))
-		for i := range row_values {
-			row_pointers[i] = &row_values[i]
-		}
-
-		if err := rows_result.Scan(row_pointers...); err != nil {
-			log.Printf("\033[31merror processing rows: %s\033[0m\n", err.Error())
-			httpresponse.RespondWithError(response_writer, http.StatusInternalServerError, "error processing rows")
-			return
-		}
-
-		current_row_result := make(map[string]interface{})
-		for i, column_name := range result_columns {
-			val := row_values[i]
-			switch typed_val := val.(type) {
-			case time.Time:
-				current_row_result[column_name] = typed_val.Format("2006-01-02 15:04:05")
-			case []byte:
-				current_row_result[column_name] = string(typed_val)
-			default:
-				current_row_result[column_name] = typed_val
-			}
-		}
-		query_results = append(query_results, current_row_result)
-	}
-
-	if err := rows_result.Err(); err != nil {
-		log.Printf("\033[31merror processing rows (rows_result err): %s\033[0m\n", err.Error())
+		log.Printf("\033[31merror formatting vector results: %s\033[0m\n", err.Error())
 		httpresponse.RespondWithError(response_writer, http.StatusInternalServerError, "error processing rows")
 		return
 	}

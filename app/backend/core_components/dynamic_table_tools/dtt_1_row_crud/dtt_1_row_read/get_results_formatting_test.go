@@ -9,6 +9,7 @@ import (
 	"database/sql"
 	"database/sql/driver"
 	"io"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -47,7 +48,7 @@ func (*temporalFormattingConnection) QueryContext(context.Context, string, []dri
 }
 
 func (*temporalFormattingRows) Columns() []string {
-	return []string{"due_date", "scheduled_at", "published_at"}
+	return []string{"due_date", "scheduled_at", "published_at", "embedding_vector"}
 }
 
 func (*temporalFormattingRows) Close() error {
@@ -63,11 +64,12 @@ func (rows *temporalFormattingRows) Next(destination []driver.Value) error {
 	destination[0] = time.Date(2026, time.January, 15, 0, 0, 0, 0, hongKong)
 	destination[1] = time.Date(2026, time.June, 14, 9, 30, 45, 123000000, hongKong)
 	destination[2] = time.Date(2026, time.June, 14, 9, 30, 0, 0, hongKong)
+	destination[3] = strings.Repeat("1", 600)
 	return nil
 }
 
 func (*temporalFormattingRows) ColumnTypeDatabaseTypeName(index int) string {
-	return []string{"DATE", "TIMESTAMP", "TIMESTAMPTZ"}[index]
+	return []string{"DATE", "TIMESTAMP", "TIMESTAMPTZ", "VECTOR"}[index]
 }
 
 func TestFormatRowsToMapsPreservesTemporalTypeSemantics(t *testing.T) {
@@ -103,5 +105,51 @@ func TestFormatRowsToMapsPreservesTemporalTypeSemantics(t *testing.T) {
 	}
 	if formatted["published_at"] != "2026-06-14T01:30:00Z" {
 		t.Fatalf("published_at = %v, want explicit UTC instant", formatted["published_at"])
+	}
+	if len(formatted["embedding_vector"].(string)) != 503 {
+		t.Fatal("listing must retain its existing vector abbreviation")
+	}
+}
+
+func TestSearchSerializationKeepsInstantsAndCompleteVectors(t *testing.T) {
+	registerTemporalFormattingDriverOnce.Do(func() {
+		sql.Register(temporalFormattingDriverName, temporalFormattingDriver{})
+	})
+	database, err := sql.Open(temporalFormattingDriverName, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer database.Close()
+	rows, err := database.QueryContext(context.Background(), "search-values")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rows.Close()
+	_, formatted, err := formatRowsToMaps(rows, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if formatted[0]["published_at"] != "2026-06-14T01:30:00Z" ||
+		formatted[0]["embedding_vector"] != strings.Repeat("1", 600) {
+		t.Fatalf("search changed the instant or full vector: %v", formatted[0])
+	}
+}
+
+func TestManagedHelsinkiTimestampsRemainExplicitInstants(t *testing.T) {
+	zone, err := time.LoadLocation("Europe/Helsinki")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, expected := range []string{
+		"2026-01-15T07:30:00Z", "2026-06-14T06:30:00Z",
+		"2026-03-29T01:30:00Z", "2026-10-25T01:30:00Z",
+	} {
+		instant, err := time.Parse(time.RFC3339, expected)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if actual := formatTemporalColumnValue(instant.In(zone), "TIMESTAMPTZ"); actual != expected {
+			t.Fatalf("Helsinki instant %s formatted as %s", expected, actual)
+		}
 	}
 }

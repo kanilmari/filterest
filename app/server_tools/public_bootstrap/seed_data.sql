@@ -8141,7 +8141,7 @@ DECLARE
     findings text;
 BEGIN
     SELECT string_agg(marker, ', ' ORDER BY marker) INTO missing_markers
-      FROM unnest(ARRAY['wl58_row_actor_support', 'wl58_row_actor_marks_by_table_uid', 'wl58_row_actor_trigger_definitions', 'k116_login_names', 'password_reset_dummy_work', 'system_favorites_table', 'system_front_page_revisions_table', 'system_front_page_blocks_table', 'wl103_row_group_classifications', 'wl132_surviving_sign_in', 'wl52_drop_column_label_value_layout', 'system_dataset_appearance_table', 'wl157_migration_execution_evidence', 'dataset_card_appearance_cutover', 'wl157_application_update_admission', 'dataset_appearance_three_place_schema', 'wl164_publication_fields', 'wl163_dataset_kind_contracts', 'wl167_database_identity_schema', 'wl157_application_update_refusal_keys', 'wl58_row_actor_columns', 'system_favorites_registry', 'system_front_page_blocks_registry', 'wl103_row_group_classifications_registry', 'wl144_registry_reference_key', 'dataset_media_hidden', 'wl157_application_update_capability', 'dataset_appearance_three_place_backfill', 'wl164_publication_column_metadata', 't919_registered_column_metadata']::text[]) AS marker
+      FROM unnest(ARRAY['wl58_row_actor_support', 'wl58_row_actor_marks_by_table_uid', 'wl58_row_actor_trigger_definitions', 'k116_login_names', 'password_reset_dummy_work', 'system_favorites_table', 'system_front_page_revisions_table', 'system_front_page_blocks_table', 'wl103_row_group_classifications', 'wl132_surviving_sign_in', 'wl52_drop_column_label_value_layout', 'system_dataset_appearance_table', 'wl157_migration_execution_evidence', 'dataset_card_appearance_cutover', 'wl157_application_update_admission', 'dataset_appearance_three_place_schema', 'wl164_publication_fields', 'wl163_dataset_kind_contracts', 'wl167_database_identity_schema', 'wl167_managed_timestamp_zones', 'wl157_application_update_refusal_keys', 'wl58_row_actor_columns', 'system_favorites_registry', 'system_front_page_blocks_registry', 'wl103_row_group_classifications_registry', 'wl144_registry_reference_key', 'dataset_media_hidden', 'wl157_application_update_capability', 'dataset_appearance_three_place_backfill', 'wl164_publication_column_metadata', 't919_registered_column_metadata']::text[]) AS marker
      WHERE NOT EXISTS (SELECT 1 FROM public.system_data_repair_records AS record
                         WHERE record.migration = marker AND record.action = 'completed');
     IF missing_markers IS NOT NULL THEN
@@ -8161,6 +8161,8 @@ BEGIN
         SELECT 'public.app_check_publications(): ' || result FROM public.app_check_publications() AS result
         UNION ALL
         SELECT 'public.app_check_database_identity_schema(): ' || result FROM public.app_check_database_identity_schema() AS result
+        UNION ALL
+        SELECT 'public.app_check_managed_timestamp_zones(): ' || result FROM public.app_check_managed_timestamp_zones() AS result
         UNION ALL
         SELECT 'public.app_check_application_update_refusal_keys(): ' || result FROM public.app_check_application_update_refusal_keys() AS result
         UNION ALL
@@ -8357,6 +8359,7 @@ BEGIN
       ('20261009000076_seed_dataset_kind_language_keys.sql', 'ef3ad5ec03814d753f955ef3ea262ed19e574b318de7fd63e2f5f9c292eb93c4', 'bootstrap_baseline', 'bootstrap'),
       ('20261009000077_retire_global_dataset_alias_catalogue.sql', 'c5ade168ebaf022b72616c90dfeb13bb0e137c9bb0476eef03d048c619071dfa', 'bootstrap_baseline', 'bootstrap'),
       ('20261009000079_reconcile_system_database_identity_schema.sql', '0b0684e5afae66ec807439da51db4eca4e482da3e919e98aaa14ee8df24999e1', 'bootstrap_baseline', 'bootstrap'),
+      ('20261009000080_zone_platform_managed_timestamps.sql', '826830f53f102b127c2c31d9cd6eda6b65e5bfd467fae30342bbaa381cdc49bc', 'bootstrap_baseline', 'bootstrap'),
       ('20261009000081_seed_runtime_grant_policy_wait_language_key.sql', '9fd1da7b15c1fa55ba2060748fef6d9d72be28709b330ab952219c048b52a211', 'bootstrap_baseline', 'bootstrap'),
       ('20261009000082_complete_registered_column_metadata.sql', '14890e0b5385434fa2b6b5eced126f263c292c785cf1aa2e058b709af57b3583', 'bootstrap_baseline', 'bootstrap'),
       ('20261009000099_record_database_release_9_10_2.sql', '190f66df60bd062997ebd80b2392eff7fdd843c9c8a709a4a1c30f136e6bbd97', 'bootstrap_baseline', 'bootstrap')

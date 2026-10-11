@@ -1,5 +1,7 @@
--- Generated from schema_info.csv by filterest/app/testing/essential/generate_dummy_test_database.py
--- This is a curated boot-focused schema skeleton, not a full production dump.
+-- base.schema.sql
+-- Defines the reviewed platform schema for fresh public installations.
+-- Connects synthetic bootstrap seeds to the same temporal contract as upgrades.
+-- Keeps platform timestamps zoned without carrying installation data.
 
 CREATE EXTENSION IF NOT EXISTS vector;
 
@@ -30,8 +32,8 @@ CREATE TABLE public.system_users (
 CREATE TABLE public.system_user_group_memberships (
     user_id integer,
     group_id integer,
-    created timestamp without time zone,
-    updated timestamp without time zone,
+    created timestamp with time zone,
+    updated timestamp with time zone,
     id bigint,
     creation_spec text,
     search_vector_simple tsvector
@@ -57,8 +59,8 @@ CREATE TABLE public.system_db_tables (
     table_uid integer NOT NULL,
     cached_oid integer,
     folder_id integer,
-    created timestamp without time zone,
-    updated timestamp without time zone,
+    created timestamp with time zone,
+    updated timestamp with time zone,
     creation_spec text,
     default_view_id integer,
     schema_name character varying,
@@ -88,8 +90,8 @@ CREATE TABLE public.system_functions (
     id bigint,
     name character varying,
     disabled boolean,
-    created timestamp without time zone,
-    updated timestamp without time zone,
+    created timestamp with time zone,
+    updated timestamp with time zone,
     package character varying,
     specific_table_related boolean,
     creation_spec text,
@@ -104,8 +106,8 @@ CREATE TABLE public.system_config (
     id bigint,
     key character varying,
     json_value jsonb,
-    created timestamp without time zone,
-    updated timestamp without time zone,
+    created timestamp with time zone,
+    updated timestamp with time zone,
     creation_spec text,
     boolean_value boolean,
     text_value text,
@@ -231,8 +233,8 @@ CREATE TABLE IF NOT EXISTS public.system_lang_keys (
     fi text,
     en text,
     lang_key text UNIQUE,
-    created timestamp without time zone DEFAULT now() NOT NULL,
-    updated timestamp without time zone DEFAULT now() NOT NULL,
+    created timestamp with time zone DEFAULT now() NOT NULL,
+    updated timestamp with time zone DEFAULT now() NOT NULL,
     creation_spec text,
     ch text,
     yue text,
@@ -249,8 +251,8 @@ CREATE TABLE IF NOT EXISTS public.system_lang_keys_archive (
     yue text,
     lang_key_type integer,
     creation_spec text,
-    original_created timestamp,
-    original_updated timestamp,
+    original_created timestamptz,
+    original_updated timestamptz,
     archived_at timestamp with time zone DEFAULT now(),
     orphan_since date
 );
@@ -289,8 +291,8 @@ CREATE TABLE IF NOT EXISTS public.system_column_details (
     table_uid integer NOT NULL CONSTRAINT fk_system_column_details_table_uid REFERENCES public.system_db_tables(table_uid) ON DELETE CASCADE,
     column_label text,
     editable_in_ui boolean DEFAULT true,
-    created timestamp without time zone DEFAULT now() NOT NULL,
-    updated timestamp without time zone DEFAULT now() NOT NULL,
+    created timestamp with time zone DEFAULT now() NOT NULL,
+    updated timestamp with time zone DEFAULT now() NOT NULL,
     data_type character varying(255),
     card_element character varying(255) DEFAULT 'details',
     creation_spec text,
@@ -327,8 +329,8 @@ CREATE TABLE IF NOT EXISTS public.system_column_control (
     column_uid integer,
     visible boolean DEFAULT true,
     sort_order integer,
-    created timestamp without time zone DEFAULT now(),
-    updated timestamp without time zone DEFAULT now(),
+    created timestamp with time zone DEFAULT now(),
+    updated timestamp with time zone DEFAULT now(),
     search_vector_simple tsvector
 );
 
@@ -363,8 +365,8 @@ CREATE TABLE IF NOT EXISTS public.system_foreign_key_relations_m_m (
     table_a_uid integer,
     table_b_uid integer,
     bridging_table_uid integer,
-    created timestamp without time zone DEFAULT now(),
-    updated timestamp without time zone DEFAULT now()
+    created timestamp with time zone DEFAULT now(),
+    updated timestamp with time zone DEFAULT now()
 );
 CREATE UNIQUE INDEX IF NOT EXISTS uq_fk_mm_relation
     ON public.system_foreign_key_relations_m_m (table_a_uid, table_b_uid, bridging_table_uid);
