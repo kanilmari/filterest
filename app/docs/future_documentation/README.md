@@ -59,3 +59,5 @@ Update incoming documentation links when text moves or a document is deleted.
 
 - [Lifecycle management](Lifecycle_Management.md) describes a shared way to
   follow the lives of different kinds of named things in Filterest.
+- [Row view counts](Row_View_Counts.md) describes distinct viewers of each row,
+  shared card totals and the privacy choice for anonymous viewer identity.
