@@ -201,8 +201,8 @@ transaction's database defaults. Ordinary row editing is not an ownership
 transfer mechanism.
 
 During WL58 group A, generated actor-name labels are NULL for every viewer and
-have no user-table join. Other user references keep their existing labels;
-public display-name policy belongs to group B.
+have no user-table join. Other user references keep their existing labels.
+Public display-name policy is described in [Browse restrictions](../future_documentation/Browse_Restrictions.md).
 
 The operational read contract gives all four runtime pools SELECT on the public
 actor-marks and repair-history tables, independent of dataset rights, so WL58's

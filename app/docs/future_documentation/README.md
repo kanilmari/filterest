@@ -63,3 +63,5 @@ Update incoming documentation links when text moves or a document is deleted.
   shared card totals and the privacy choice for anonymous viewer identity.
 - [Row policies](Row_Policies.md) describes named dataset rules, optional
   database enforcement and administrator explanations of access refusals.
+- [Browse restrictions](Browse_Restrictions.md) describes restricted direct browsing
+  while groups with read rights can still read selected values through references.
