@@ -48,6 +48,7 @@ ALLOWED_SCHEMA_TABLES = {
     "public.system_column_field_sets",
     "public.system_column_details",
     "public.system_config",
+    "public.system_database_identity",  # Schema only; native setup owns installation identity values.
     "public.system_db_table_aliases",
     "public.system_db_tables",
     "public.system_db_version",

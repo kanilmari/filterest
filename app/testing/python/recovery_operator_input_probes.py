@@ -20,7 +20,8 @@ KEY = b'\xfb\xff' + b'A' * 30
 FORMS = ('raw', 'hex', 'base64', 'urlsafe', 'embedded-base64', 'utf16le-hex', 'utf16be-hex')
 SHELL_FILES = (
     'server_tools/run_filterest_docker.sh', 'server_tools/update_filterest.sh',
-    'server_tools/setup_local_dev_environment.sh', 'server_tools/lib/docker_deployment_settings.sh',
+    'server_tools/setup_local_dev_environment.sh', 'server_tools/lib/setup_native_database.sh',
+    'server_tools/lib/docker_deployment_settings.sh',
     'server_tools/lib/easelect_private_paths.sh', 'server_tools/ctl/lib/instance_restore.sh',
     'server_tools/ctl/lib/instance_restore_security.sh', 'server_tools/ctl/lib/instance_backup.sh',
 )
@@ -85,7 +86,9 @@ def utility_sites():
 
 
 UTILITY_SITES = utility_sites()
-EXPECTED_SITE_COUNTS = (34, 44, 17, 5, 1, 24, 14, 7)
+# Setup's original 17 sites remain covered: 12 in the entrypoint and 5 in the
+# sourced database steps, with the same commands, input forms and assertions.
+EXPECTED_SITE_COUNTS = (34, 44, 12, 5, 5, 1, 24, 14, 7)
 assert tuple(sum(row[0] == name for row in UTILITY_SITES) for name in SHELL_FILES) == EXPECTED_SITE_COUNTS, "A recovery utility site lost its regression boundary"
 
 

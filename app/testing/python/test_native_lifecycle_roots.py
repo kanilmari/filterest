@@ -1157,6 +1157,10 @@ def test_lifecycle_scripts_use_source_and_install_roots_by_responsibility() -> N
     updater = UPDATER.read_text(encoding="utf-8")
     admin_runner = ADMIN_RUNNER.read_text(encoding="utf-8")
     setup = SETUP.read_text(encoding="utf-8")
+    assert 'source "$SCRIPT_DIR/lib/setup_native_database.sh"' in setup
+    setup += (
+        SOURCE_ROOT / "server_tools/lib/setup_native_database.sh"
+    ).read_text(encoding="utf-8")
     dependency_installer = SOURCE_DEPENDENCY_INSTALLER.read_text(encoding="utf-8")
     scaffold = SCAFFOLD.read_text(encoding="utf-8")
 

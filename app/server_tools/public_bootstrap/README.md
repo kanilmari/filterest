@@ -189,6 +189,7 @@ against the publication checklist.
 From a standalone Filterest root, run:
 
     python3 app/server_tools/public_bootstrap/generate_bootstrap.py
+    python3 app/server_tools/public_bootstrap/generate_bootstrap.py --check
     python3 app/server_tools/public_slice_export/audit_public_bootstrap.py --target .
 
 The command reads app/VERSION_APP and app/VERSION_DB by default. For release
@@ -198,6 +199,16 @@ it does not initialize or modify a database. Every recorded source-file hash
 resolves to a file shipped in the same public checkout. The historical
 filterest/ prefix in manifest evidence keys identifies canonical source
 ownership; remove that prefix when locating a file in a standalone checkout.
+The `--check` mode rebuilds into temporary staging and compares all three output
+files byte-for-byte, refusing stale files without replacing them. The current
+compatibility schema snapshot must be copied from generated `schema.sql` and
+checked for byte equality; the contract-type generator has its own `--check`.
+
+The identity table (`system_database_identity`) is schema owned by migration
+`20261009000079`; its rows are installation state and never public seed data.
+Native setup invokes the migration before inserting the first row when empty.
+Keeping that row in setup preserves its installation-specific versions and note;
+upgrades and bare bootstrap imports must not invent a competing identity.
 
 Maintain base.schema.sql and base.seed.sql alongside the smaller companion SQL
 sources. A new migration may be recorded in the bootstrap baseline only after

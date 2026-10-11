@@ -46,6 +46,7 @@ PORT_DECISION_FILES = (
     "server_tools/update_filterest.sh",
     "server_tools/run_filterest_admin.sh",
     "server_tools/setup_local_dev_environment.sh",
+    "server_tools/lib/setup_native_database.sh",
     "server_tools/agent_tools/worker_agent/worker_agent_core.sh",
     "server_tools/agent_tools/worker_agent/worker_agent_prompt_builder.sh",
     "server_tools/ctl/lib/common.sh",

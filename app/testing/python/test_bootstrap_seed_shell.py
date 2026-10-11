@@ -49,6 +49,18 @@ def stream_schema(schema_file: Path, postgis_available: bool) -> str:
 
 
 class BootstrapSeedShellTests(unittest.TestCase):
+    def _setup_script(self) -> str:
+        """Inspect setup in execution order, including the sourced database steps."""
+        setup_script = (
+            PUBLIC_SOURCE_ROOT / "server_tools/setup_local_dev_environment.sh"
+        ).read_text(encoding="utf-8")
+        database_source = 'source "$SCRIPT_DIR/lib/setup_native_database.sh"'
+        self.assertIn(database_source, setup_script)
+        database_steps = (
+            PUBLIC_SOURCE_ROOT / "server_tools/lib/setup_native_database.sh"
+        ).read_text(encoding="utf-8")
+        return setup_script.replace(database_source, database_steps)
+
     def test_stream_bootstrap_schema_keeps_postgis_when_available(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             schema_file = Path(temp_dir) / "schema.sql"
@@ -94,9 +106,7 @@ class BootstrapSeedShellTests(unittest.TestCase):
         self.assertIn("CREATE TABLE locations (position text);", rendered)
 
     def test_all_no_postgis_setup_imports_use_the_shared_filter(self) -> None:
-        setup_script = (
-            PUBLIC_SOURCE_ROOT / "server_tools/setup_local_dev_environment.sh"
-        ).read_text(encoding="utf-8")
+        setup_script = self._setup_script()
 
         # Both package branches import through the shared stop-at-first-error import,
         # which streams the schema through the shared filter; the full-dump fallback
@@ -194,9 +204,7 @@ class BootstrapSeedShellTests(unittest.TestCase):
         self.assertIn("seed_data.sql is missing", missing.stderr)
 
     def test_setup_grants_public_schema_create_to_configured_admin(self) -> None:
-        setup_script = (
-            PUBLIC_SOURCE_ROOT / "server_tools/setup_local_dev_environment.sh"
-        ).read_text(encoding="utf-8")
+        setup_script = self._setup_script()
         self.assertIn('source "$SCRIPT_DIR/lib/setup_database_grants.sh"', setup_script)
         self.assertIn("grant_local_database_permissions", setup_script)
         setup_script += (
@@ -210,9 +218,7 @@ class BootstrapSeedShellTests(unittest.TestCase):
         )
 
     def test_setup_installs_node_dependencies_without_mutating_lockfile(self) -> None:
-        setup_script = (
-            PUBLIC_SOURCE_ROOT / "server_tools/setup_local_dev_environment.sh"
-        ).read_text(encoding="utf-8")
+        setup_script = self._setup_script()
 
         dependency_installer = (
             PUBLIC_SOURCE_ROOT / "server_tools/lib/source_dependency_installer.sh"
@@ -222,9 +228,7 @@ class BootstrapSeedShellTests(unittest.TestCase):
         self.assertNotIn("npm install --silent", setup_script + dependency_installer)
 
     def test_normal_setup_leaves_first_admin_to_guarded_browser_form(self) -> None:
-        setup_script = (
-            PUBLIC_SOURCE_ROOT / "server_tools/setup_local_dev_environment.sh"
-        ).read_text(encoding="utf-8")
+        setup_script = self._setup_script()
 
         self.assertIn(
             '${FILTEREST_AUTOMATED_PREVIEW_INITIAL_ADMIN:-}" != "1"',
@@ -240,9 +244,7 @@ class BootstrapSeedShellTests(unittest.TestCase):
         )
 
     def test_initial_admin_bootstrap_uses_the_canonical_public_source_root(self) -> None:
-        setup_script = (
-            PUBLIC_SOURCE_ROOT / "server_tools/setup_local_dev_environment.sh"
-        ).read_text(encoding="utf-8")
+        setup_script = self._setup_script()
 
         # The source root is the physical parent of the script's own folder; the
         # option terminator and silenced utility errors keep paths out of output.
@@ -273,8 +275,9 @@ class BootstrapSeedShellTests(unittest.TestCase):
             "update_filterest.sh",
         )
         for script_name in lifecycle_scripts:
-            source = (PUBLIC_SOURCE_ROOT / "server_tools" / script_name).read_text(
-                encoding="utf-8"
+            source = (
+                self._setup_script() if script_name == "setup_local_dev_environment.sh"
+                else (PUBLIC_SOURCE_ROOT / "server_tools" / script_name).read_text(encoding="utf-8")
             )
             self.assertIn(
                 'protected_runtime_root="$FILTEREST_KEYS_HOME/filterest_runtime"',
@@ -288,17 +291,13 @@ class BootstrapSeedShellTests(unittest.TestCase):
             )
 
     def test_public_setup_exposes_private_bootstrap_only_as_generic_optional_hook(self) -> None:
-        setup_script = (
-            PUBLIC_SOURCE_ROOT / "server_tools/setup_local_dev_environment.sh"
-        ).read_text(encoding="utf-8")
+        setup_script = self._setup_script()
 
         self.assertIn("FILTEREST_PRIVATE_BOOTSTRAP_LIB", setup_script)
         self.assertNotIn("filterest_private/", setup_script)
 
     def test_local_database_setup_never_requests_sudo_or_installs_os_packages(self) -> None:
-        setup_script = (
-            PUBLIC_SOURCE_ROOT / "server_tools/setup_local_dev_environment.sh"
-        ).read_text(encoding="utf-8")
+        setup_script = self._setup_script()
 
         self.assertNotIn("sudo -n", setup_script)
         self.assertNotIn("apt-get install", setup_script)

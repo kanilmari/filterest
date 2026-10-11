@@ -463,7 +463,7 @@ def test_reference_provenance_is_required_even_when_every_table_matches(tmp_path
     assert "bootstrap" in " ".join(report["errors"]).lower()
 
 
-def test_native_installer_extra_identity_is_refused_until_the_bootstrap_includes_it(tmp_path):
+def test_reference_from_bootstrap_without_identity_still_refuses_an_extra_table(tmp_path):
     reference = snapshot()
     root = bootstrap_package(tmp_path, reference)
     reference["tables"].append(table("public.system_database_identity"))

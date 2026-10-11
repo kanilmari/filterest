@@ -46,7 +46,7 @@ catalogue, rather than guessed object-name prefixes.
 Use an isolated disposable installation, with the matching checkout and its
 actual bootstrap. **For ownership and privilege comparison, the reference must
 complete the supported installation and application startup, with its runtime
-roles configured.** The currently eligible supported path is
+roles configured.** A supported path is
 `./filterest docker start` on a new isolated installation, until readiness
 succeeds. Its initial roles/grants come from
 [03_create_roles.sh](../../server_tools/db_init/03_create_roles.sh) and
@@ -58,14 +58,19 @@ Native development installation uses
 `./filterest setup --profile development --yes`, followed by `./filterest start`.
 It creates roles and applies initial pool/default grants through
 [setup_database_grants.sh](../../server_tools/lib/setup_database_grants.sh);
-the same application startup completes dataset and operational grants. However,
-native setup also creates `public.system_database_identity`, which the current
-bootstrap does not include. The reporter's exact reference-inventory check
-therefore refuses that fully installed native fixture. Before a native reference
-can be admitted, reconcile the installer-owned identity definition with the
-versioned bootstrap contract. Do not remove the fixture's table or weaken the
-inventory check to obtain a pass. This is a source-level conflict; a fully started
-reference was not executed as part of the offline reporter's verification.
+the same application startup completes dataset and operational grants. Migration
+`20261009000079_reconcile_system_database_identity_schema.sql` owns the identity
+table, updater function and trigger, and includes them in the bootstrap. Native
+setup invokes that same migration before initializing an absent identity row,
+so older imported databases also work. Setup alone owns the first row because
+its source versions, refresh time and initialization note describe that native
+installation; migrations and bootstrap never seed an installation identity.
+Existing rows, values and grants survive reconciliation. The configured read-only
+role receives SELECT through the existing setup/runtime grant mechanism.
+This matching native fixture is eligible for the reporter's strict inventory
+check, without removing its identity table or exempting it as site-owned.
+Retain readiness evidence for the started fixture; offline inventory tests alone
+do not prove setup/startup or permission conformance.
 
 **Importing only `schema.sql` and `seed_data.sql` is a structural reference.**
 An import by one superuser does not create runtime roles or the grants supplied
