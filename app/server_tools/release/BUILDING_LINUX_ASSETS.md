@@ -90,7 +90,7 @@ python3 app/server_tools/release/verify_binary_manifest.py \
 
 Keep built payloads outside source. Receipts may be retained in the installation's
 ignored `data/release/<version>/` area; publication requires an outside bundle directory.
-Uploading is a separate operation bound to the reviewed commit and signed inventory.
+Uploading is a separate operation bound to the reviewed commit and exact inventory.
 Candidate metadata is prepared by [`./filterest release prepare`](PREPARING_RELEASES.md).
 Continue with [candidate promotion](PROMOTING_RELEASES.md), rebuild final assets
 from the committed published identity, then inspect the
@@ -164,10 +164,12 @@ at least the archive size; installation capacity still needs a separate prefligh
 One-image public output has **19 unsigned files**: the fourteen native files,
 `filterest-<version>-source.tar.gz` and its checksum, one
 `filterest-<version>-oci-linux-<architecture>.tar` and its checksum, and
-`release_manifest.v1.json`. The canonical manifest signs every payload and checksum;
+`release_manifest.v1.json`. The canonical manifest binds every payload and checksum;
 detached signatures are separate to avoid a circular inventory. A native-only
-bundle has 17 unsigned files. Agents/build tools stop here. Follow the owner's
-[terminal signing and publication handoff](PUBLISHING_RELEASES.md).
+bundle has 17 unsigned files. Build output alone is not publication approval.
+Follow [worker review, owner chat approval and publication](PUBLISHING_RELEASES.md).
+Optional owner terminal signing adds the signature envelope; signed managed
+updates still require signing/trust setup before installation-host verification.
 
 ## Contract for an embedding composition builder
 

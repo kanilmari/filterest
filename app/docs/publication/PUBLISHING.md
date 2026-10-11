@@ -78,13 +78,16 @@ The standalone [promotion command](../../server_tools/release/PROMOTING_RELEASES
 verifies the clean candidate commit and its complete asset set before planning
 published metadata. Commit that metadata separately, then rebuild the final
 assets so their embedded Git identity matches the final release commit.
-Package the final source/image bundle, then have the owner sign it directly in
-their terminal using the workstation encrypted-container custody described in
+Package the final source/image bundle, have workers review and gates approve it,
+then record the owner's "ok" in chat using the exact record described in
 the [publication guide](../../server_tools/release/PUBLISHING_RELEASES.md).
+Publication may be unsigned; optional owner signing retains its existing custody
+and verification rules.
 
 The standalone [publication command](../../server_tools/release/PUBLISHING_RELEASES.md)
-plans by default. Before remote mutation it requires independently provisioned
-composition trust, owner signatures and the exact complete bundle inventory.
+plans by default. Before remote mutation it requires the bound owner chat approval
+for unsigned output, or independently provisioned composition trust and owner
+signatures for signed output, plus the exact complete bundle inventory.
 Its explicit apply mode audits the account's GitHub Actions
 settings, pushes the exact source and tag, uploads a draft, downloads and verifies
 every asset, and then publishes it. Existing releases and tags are preserved.
@@ -101,11 +104,15 @@ old generator against the current authoritative checkout.
 
 The maintained [release checklist](PUBLICATION_CHECKLIST.md) and
 [release notes](RELEASE_NOTES.md) describe the current direct-source process.
-Follow the preparation, candidate build, promotion, final rebuild, owner signing and publication
+Follow the preparation, candidate build, promotion, final rebuild, worker review,
+owner chat approval and publication
 sequence above. Build outputs must stay outside the maintained checkout and
 operator state. A local published identity does not establish remote success;
 retain the publication command's verified receipt. External orchestration must
 read this source directly and preserve the same boundaries.
+Then rehearse each site with the owner's approval. Unsigned 9.4.0 is deployed like
+9.3.23, site by site over SSH; `verify-update` refuses unsigned managed OCI updates
+and one-click signed updates need signing/trust setup first.
 
 ## Binary and dependency compatibility
 

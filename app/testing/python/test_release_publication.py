@@ -1,7 +1,7 @@
 # test_release_publication.py
-# Exercises publication ordering, signed preflight and exact remote bundle readback.
-# Connects real local signature/payload checks to fake GitHub mutation boundaries.
-# Proves failed trust or inventory cannot push refs, upload assets or publish drafts.
+# Exercises publication ordering, owner authorization and exact remote bundle readback.
+# Connects real signed/unsigned payload checks to fake GitHub mutation boundaries.
+# Proves missing approval, failed trust or inventory cannot mutate remote state.
 """Exercise release publication with a fake GitHub and Git mutation boundary.
 
 Shared history and binary verification have their own fixture tests. These
@@ -353,10 +353,8 @@ def test_repository_redirect_or_nonpublic_unwritable_target_blocks_mutation(publ
     assert not any("push" in operation for operation in operations)
 
 
-@pytest.fixture
-def signed_publication(signed_bundle, monkeypatch):
-    """Keep all real local history/signature/payload checks; fake only remote transport."""
-    root, directory, commit, trust, _ = signed_bundle
+def fake_publication_transport(root, directory, commit, monkeypatch):
+    """Keep real local history/payload checks; fake only remote transport."""
     github = FakeGitHub({path.name: path.read_bytes() for path in directory.iterdir()})
     remote = {"main": json.loads((root / "app/BUILD_IDENTITY.json").read_bytes())["source"]["commit"], "tag": None}
     operations = []
@@ -381,9 +379,150 @@ def signed_publication(signed_bundle, monkeypatch):
         raise AssertionError(arguments)
     monkeypatch.setattr(release, "git", git)
     args = SimpleNamespace(target=root, assets_dir=directory, published_commit=commit,
-                           expect_version="1.2.4", trust_policy=trust,
-                           minimum_trust_policy_revision=1, apply=True)
+                           expect_version="1.2.4", apply=True)
     return args, github, operations
+
+
+@pytest.fixture
+def signed_publication(signed_bundle, monkeypatch):
+    root, directory, commit, trust, _ = signed_bundle
+    args, github, operations = fake_publication_transport(root, directory, commit, monkeypatch)
+    args.trust_policy, args.minimum_trust_policy_revision = trust, 1
+    return args, github, operations
+
+
+@pytest.fixture
+def unsigned_publication(unsigned_bundle, tmp_path, monkeypatch):
+    root, directory, commit, _, _, _ = unsigned_bundle
+    args, github, operations = fake_publication_transport(root, directory, commit, monkeypatch)
+    approval = {"schema_version": 1, "approval_type": "owner_chat_approval", "owner": release.OWNER,
+                "approved_at": "2026-09-11T02:00:00Z", "wording": "ok, publish this reviewed release",
+                "published_commit": commit,
+                "manifest_sha256": hashlib.sha256((directory / bundle_contract.MANIFEST_NAME).read_bytes()).hexdigest()}
+    args.owner_approval = tmp_path / "owner-approval.json"
+    args.owner_approval.write_text(json.dumps(approval))
+    return args, github, operations
+
+
+def test_unsigned_publication_records_chat_approval_and_reads_back_nineteen_files(unsigned_publication):
+    args, github, operations = unsigned_publication
+    approval = json.loads(args.owner_approval.read_bytes())
+    ledger = (args.target / "app/server_tools/versioning/release_ledger.v1.jsonl").read_bytes()
+    result = release.publish(args, github)
+    assert result["publication_verified"] and result["signing_status"] == "unsigned"
+    assert result["owner_approval"] == approval
+    assert "signature_verification" not in result["verified_assets"]
+    assert len(result["readback"]["asset_sha256"]) == 19
+    assert bundle_contract.SIGNATURES_NAME not in result["readback"]["asset_sha256"]
+    assert len([event for event in github.events if event[0] == "DOWNLOAD"]) == 38
+    assert any("push" in operation for operation in operations)
+    assert (args.target / "app/server_tools/versioning/release_ledger.v1.jsonl").read_bytes() == ledger
+
+
+@pytest.mark.parametrize("failure", ["absent", "missing_file", "blank", "wrong_owner", "wrong_commit", "wrong_manifest",
+                                    "bad_time", "early", "future", "duplicate", "inside_bundle", "symlink"])
+def test_unsigned_approval_refusals_precede_remote_reads(unsigned_publication, failure, tmp_path):
+    args, github, operations = unsigned_publication
+    path = args.owner_approval
+    approval = json.loads(path.read_bytes())
+    changes = {"blank": ("wording", "  "), "wrong_owner": ("owner", "other"),
+               "wrong_commit": ("published_commit", "f" * 40), "wrong_manifest": ("manifest_sha256", "0" * 64),
+               "bad_time": ("approved_at", "today"), "early": ("approved_at", "2000-01-01T00:00:00Z"),
+               "future": ("approved_at", "2999-01-01T00:00:00Z")}
+    if failure in changes:
+        key, value = changes[failure]
+        approval[key] = value
+        path.write_text(json.dumps(approval))
+    elif failure == "absent":
+        args.owner_approval = None
+    elif failure == "missing_file":
+        path.unlink()
+    elif failure == "duplicate":
+        path.write_text(json.dumps(approval)[:-1] + ', "wording": "different"}')
+    elif failure == "inside_bundle":
+        args.owner_approval = args.assets_dir / path.name
+        args.owner_approval.write_bytes(path.read_bytes())
+    else:
+        args.owner_approval = tmp_path / "linked-approval.json"
+        args.owner_approval.symlink_to(path)
+    with pytest.raises((ValueError, OSError)):
+        release.publish(args, github)
+    assert not any("push" in operation for operation in operations)
+    assert github.events == []
+
+
+@pytest.mark.parametrize("failure", ["extra", "source", "image", "checksum", "manifest", "dirty", "wrong_head"])
+def test_unsigned_publication_retains_payload_and_clean_source_guards(unsigned_publication, failure):
+    args, github, operations = unsigned_publication
+    if failure == "extra":
+        (args.assets_dir / "unexpected").write_bytes(b"extra")
+    elif failure in {"source", "image", "checksum", "manifest"}:
+        names = {"source": "filterest-1.2.4-source.tar.gz", "image": "filterest-1.2.4-oci-linux-amd64.tar",
+                 "checksum": "filterest-linux-amd64.sha256", "manifest": bundle_contract.MANIFEST_NAME}
+        (args.assets_dir / names[failure]).write_bytes(b"changed")
+    elif failure == "dirty":
+        (args.target / "app/VERSION_APP").write_text("1.2.5\n")
+    else:
+        args.published_commit = "f" * 40
+    with pytest.raises((ValueError, OSError, subprocess.CalledProcessError)):
+        release.publish(args, github)
+    assert not any("push" in operation for operation in operations)
+    assert github.events == []
+
+
+def test_unsigned_changed_approval_during_upload_keeps_draft_private(unsigned_publication):
+    args, github, _ = unsigned_publication
+    upload = github.upload
+    def change_approval(*arguments):
+        upload(*arguments)
+        approval = json.loads(args.owner_approval.read_bytes())
+        approval["wording"] += " changed"
+        args.owner_approval.write_text(json.dumps(approval))
+    github.upload = change_approval
+    with pytest.raises(release.PublicationError, match="inputs changed during upload"):
+        release.publish(args, github)
+    assert github.draft["draft"] is True
+    assert not any(event[0] == "PATCH" for event in github.events)
+
+
+def test_unsigned_cli_accepts_approval_without_trust():
+    args = release.parse_args(["--expect-version", "1.2.4", "--published-commit", P,
+                               "--assets-dir", "/tmp/assets", "--owner-approval", "/tmp/approval.json"])
+    assert args.owner_approval == Path("/tmp/approval.json")
+    assert args.trust_policy is None and args.minimum_trust_policy_revision is None
+
+
+def test_unsigned_plan_records_approval_without_mutation(unsigned_publication):
+    args, github, operations = unsigned_publication
+    args.apply = False
+    result = release.publish(args, github)
+    assert not result["publication_verified"] and result["signing_status"] == "unsigned"
+    assert result["owner_approval"] == json.loads(args.owner_approval.read_bytes())
+    assert not any("push" in operation for operation in operations)
+    assert all(event[0] in {"GET", "PAGES"} for event in github.events)
+
+
+@pytest.mark.parametrize("failure", ["signature_entry", "explicit_trust"])
+def test_chat_approval_cannot_bypass_selected_signed_verification(unsigned_publication, failure):
+    args, github, operations = unsigned_publication
+    if failure == "signature_entry":
+        (args.assets_dir / bundle_contract.SIGNATURES_NAME).write_bytes(b"invalid signature")
+    else:
+        args.minimum_trust_policy_revision = 1
+    with pytest.raises(ValueError, match="trust-policy"):
+        release.publish(args, github)
+    assert not any("push" in operation for operation in operations)
+    assert github.events == []
+
+
+@pytest.mark.parametrize("failure", ["extra_asset", "corrupt_asset"])
+def test_unsigned_remote_inventory_and_bytes_keep_bad_draft_private(unsigned_publication, failure):
+    args, github, _ = unsigned_publication
+    setattr(github, failure, True)
+    with pytest.raises(release.PublicationError, match="asset"):
+        release.publish(args, github)
+    assert github.draft["draft"] is True
+    assert not any(event[0] == "PATCH" for event in github.events)
 
 
 def test_signed_bundle_publication_end_to_end_reads_back_all_twenty_files(signed_publication):

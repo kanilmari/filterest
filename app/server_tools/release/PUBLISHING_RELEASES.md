@@ -1,5 +1,5 @@
 <!-- PUBLISHING_RELEASES.md -->
-<!-- Defines owner terminal signing and independently authenticated publication. -->
+<!-- Defines chat-authorized publication and optional owner terminal signing. -->
 <!-- Connects reviewed source/payload contracts with exact remote readback. -->
 <!-- Preserves existing release history and keeps signing custody with the owner. -->
 # Publishing a verified standalone release
@@ -15,10 +15,57 @@ metadata commit **C**, then published identity commit **P**. Promotion changes
 only the release ledger and build identity between C and P. Rebuild the final
 assets from P before publication, because candidate binaries embed C.
 
-## Owner signing and independently provisioned trust
+## Review and owner approval in chat
 
-Final publication requires the [unsigned bundle contract](BUILDING_LINUX_ASSETS.md#final-unsigned-source-and-oci-bundle),
-including source and any managed OCI images. The owner runs the existing
+The ordinary flow is **build → worker reviews → the owner's "ok" in chat →
+publication → site rehearsals with the owner's approval**. Worker review and
+the applicable release gates must approve the exact P commit and final bytes
+before asking for publication approval. K343 (11 October 2026) removes mandatory
+owner terminal signing from publication; it does not waive any release gate.
+Final publication still requires the complete
+[unsigned bundle contract](BUILDING_LINUX_ASSETS.md#final-unsigned-source-and-oci-bundle),
+including source and any managed OCI images. Checksums, source chronology,
+clean main and exact remote readback remain mandatory.
+
+For unsigned publication, the agent transcribes the owner's actual chat approval
+into a separate JSON file outside the bundle (for example, ignored
+`data/release/9.4.0/owner-approval.json`). Use exactly these fields:
+
+```json
+{
+  "schema_version": 1,
+  "approval_type": "owner_chat_approval",
+  "owner": "kanilmari",
+  "approved_at": "<actual UTC YYYY-MM-DDTHH:MM:SSZ>",
+  "wording": "<owner's exact approval wording>",
+  "published_commit": "<full reviewed P commit>",
+  "manifest_sha256": "<SHA-256 of exact release_manifest.v1.json bytes>"
+}
+```
+
+Copy the chat timestamp and wording, preserving the original language. Bind them
+to the reviewed P and canonical manifest digest; never invent approval or reuse
+approval for different bytes. Approval must follow the published identity's
+creation and cannot be in the future. Missing, malformed, empty, mismatched or
+symlinked records refuse before remote reads. The command checks the record again
+before pushing and publishing. It records `signing_status: "unsigned"` and the
+complete `owner_approval` object in its plan and publication receipt. This is an
+agent-recorded authorization, not a signature or installation trust evidence.
+Retain the worker review/gate evidence with the approval and final readback receipt.
+Do not edit the immutable source ledger to insert a later chat approval.
+
+Release **9.4.0**, database **9.11.0** (K337), follows this unsigned path after the
+owner's main freeze on **14 October 2026** (K338). Like 9.3.23, deploy it site by
+site over SSH, with the owner's approval for each target and its rehearsal,
+backup and recovery checks. Publication approval does not authorize site changes.
+The 9.3.23 ledger's candidate and published build identities describe source
+chronology; its checksums and readback receipt establish publication, without
+owner signatures. Preserve that history as recorded.
+
+## Optional owner signing and independently provisioned trust
+
+Signing remains available for future releases and required for signed managed
+updates. For the signed path, the owner runs the existing
 `release_signing` command directly in their own terminal, outside agent tools and
 session recordings. K294 custody is a passphrase-protected encrypted container
 on the owner's control workstation, outside repositories, with separately
@@ -34,7 +81,7 @@ with `--product filterest --public-key-file /protected/public-key.txt` for initi
 setup, and `fingerprint --product filterest` to authenticate the unlocked public
 identity. Passphrases are entered only through the non-echoing controlling
 terminal; flags, environment, stdin, files and agent messages cannot supply them.
-No controlling terminal means refusal. Agents/build tools stop at unsigned output.
+No controlling terminal means refusal. Agents/build tools never handle live keys.
 
 The owner signs the exact canonical UTF-8 manifest with final LF using:
 
@@ -48,7 +95,9 @@ The signer validates composition/canonical bytes before unlocking and never
 overwrites an output. Signing is domain-separated Ed25519 over the exact bytes,
 including LF. One-image public output now has twenty files. Do not edit the
 manifest or payloads after signing. Only the signed artifacts and public trust
-policy are needed for subsequent verification/publication.
+policy are needed for subsequent verification/publication. Supplied signatures
+retain the existing authentication path and owner authorization by signature;
+the unsigned chat-approval alternative cannot bypass failed authentication.
 
 Provision public trust through an independently authenticated operator channel,
 outside both source and bundle directories. Verify the full SHA-256 fingerprint
@@ -61,6 +110,12 @@ test-only fixture keys cannot establish trust. See [SECURITY.md](../../../SECURI
 for rotation, revocation and recovery.
 
 ## Installation-host verification and executor contract
+
+`./filterest verify-update` continues to refuse unsigned managed OCI updates.
+Chat authorization for publication cannot authenticate an installation update.
+One-click signed updates need owner signing and independently provisioned trust
+to be set up first, plus the executor's existing site approval and recovery gates.
+Unsigned 9.4.0 uses the site-by-site SSH procedure above, as 9.3.23 did.
 
 The public `./filterest verify-update` command checks signed managed OCI updates
 offline, from trusted installed tools. It emits exactly one JSON verdict (exit 0
@@ -193,9 +248,12 @@ transitions. The verifier stores no signing secrets; K294 owner custody applies.
 From the Filterest installation root, run `./filterest release publish` with
 `--expect-version <version>`, `--published-commit <full-commit>`,
 `--assets-dir /absolute/path/to/final-assets`,
-`--trust-policy /protected/operator-trust.json`,
-`--minimum-trust-policy-revision <retained-floor>`, and `--json`. Read
+`--owner-approval /absolute/path/to/owner-approval.json`, and `--json`. Read
 `app/VERSION_APP` and use the exact reviewed published identity commit.
+For signed publication, supply `--trust-policy /protected/operator-trust.json`
+and `--minimum-trust-policy-revision <retained-floor>` instead of the approval
+file. A signature entry or either trust option selects signed verification;
+missing or invalid signatures/trust refuse rather than falling back to unsigned.
 
 Planning performs local verification and GitHub/Git remote reads. It does not
 push, create a local tag, create a release, upload, change Actions settings, or
@@ -215,11 +273,12 @@ Before writing, publication verifies:
   repository.
 - The candidate/published history, current compatibility record, bootstrap,
   release ledger, build identity and expected version agree.
-- Independent live composition trust authenticates the exact canonical manifest
+- Unsigned publication requires the bound owner chat-approval record. Signed
+  publication uses independent live composition trust to authenticate the exact canonical manifest
   before its instructions are interpreted. Missing, revoked, expired, rolled-back
   or wrong-composition trust stops publication before any remote mutation.
-- The complete directory equals the signed artifact inventory plus manifest and
-  detached signature envelope. Native assets retain the [Linux asset contract](BUILDING_LINUX_ASSETS.md);
+- The complete directory equals the manifest artifact inventory plus manifest
+  and, when signed, detached signature envelope. Native assets retain the [Linux asset contract](BUILDING_LINUX_ASSETS.md);
   checksums, notices, complete source/archive membership, migration hashes,
   Go dependencies, binary Git identity, platform/ABI and OCI manifest/config/layer
   digests and identity labels are checked again. Public publication refuses
@@ -243,7 +302,7 @@ It reads the remote refs back, creates a draft release using reviewed source
 release notes, and uploads the exact verified files without overwrite flags.
 Every uploaded asset's name, size and available server digest are checked, then
 every downloaded byte is checked for exact size and SHA-256. Complete filename
-equality includes manifest and detached signatures. Source, signature trust,
+equality includes manifest and any supplied detached signatures. Source, owner authorization,
 payloads and account policy are checked again before publishing the
 draft. A final readback verifies public release state, tag, branch and all asset
 hashes.
@@ -251,7 +310,8 @@ hashes.
 Only that complete readback reports `publication_verified: true`. Keep the
 successful JSON output as an ignored local receipt, for example under
 `data/release/<version>/`. It contains the source-history bindings, final binary
-metadata, signature fingerprints/trust revision, composition, complete local
+metadata, `signing_status`, owner chat approval (unsigned) or signature
+fingerprints/trust revision (signed), composition, complete local
 inventory, account-policy inventory and remote asset hashes. A local ledger's
 published identity alone does not prove that GitHub publication succeeded.
 

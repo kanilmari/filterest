@@ -1,6 +1,6 @@
 <!-- PUBLICATION_CHECKLIST.md -->
 <!-- Lists the evidence required for reviewed public release publication. -->
-<!-- Connects source, signed payloads and trust with local and remote verification. -->
+<!-- Connects source, owner authorization and payloads with local/remote verification. -->
 <!-- Keeps release claims truthful without replacing historical records. -->
 # Filterest release checklist
 
@@ -49,15 +49,19 @@ new source mirror, a disposable clone, or a private parent repository.
   commit. Rebuild final assets from that clean commit so both binaries identify it.
 - Review the [bundle requirements and image labels](../../server_tools/release/BUILDING_LINUX_ASSETS.md#final-unsigned-source-and-oci-bundle).
   Package the exact source tree, migration inventory and prebuilt OCI image with
-  signed sizes/hashes and manifest/config digests. Do not rebuild a signed image.
-- Stop agent/build automation at the canonical unsigned manifest. The owner signs
-  it directly in their own terminal using their workstation encrypted container;
+  exact sizes/hashes and manifest/config digests. Do not substitute reviewed bytes.
+- Have workers review and release gates approve final P and the complete bundle.
+  For unsigned publication, record the owner's "ok" in chat with its actual UTC
+  timestamp and wording, bound to P and the manifest digest, as required by the
+  [publication guide](../../server_tools/release/PUBLISHING_RELEASES.md).
+- Optional signing uses the owner's terminal and workstation encrypted container;
   retain separately protected offline recovery copies. Never put a passphrase in
   agent tools, arguments, environment, stdin, files, logs or session recordings.
-- Independently provision composition-specific public trust and authenticate full
+- When signing, independently provision composition-specific public trust and authenticate full
   public-key fingerprints. Keep trust outside source/bundles and its increasing
   revision floor outside restoration state. Verify live keys and the exact signed
-  inventory before publication; private composition payloads stay private.
+  inventory before publication. Failed signing never falls back to unsigned;
+  private composition payloads stay private in either path.
 
 ## Publish and verify remotely
 
@@ -70,9 +74,13 @@ new source mirror, a disposable clone, or a private parent repository.
   uploads and verifies a draft, then makes it public. Never force an existing tag
   or overwrite different assets.
 - Read back the remote commit, tag, release version, uploaded sizes/digests and
-  every downloaded asset's size/hash, including source/image/manifest/signatures.
-  Keep a local receipt of the final commit, source commit and uploaded bytes.
+  every downloaded asset's size/hash, including source/image/manifest and any signatures.
+  Keep a local receipt of the final/source commits, uploaded bytes, signing status
+  and unsigned publication's owner chat approval.
   A local ledger entry by itself does not prove publication succeeded.
 
 A product release does not itself deploy customer sites. Site updates retain
 separate target selection, backup, compatibility and recovery procedures.
+After publication, rehearse each site with the owner's approval. Unsigned 9.4.0
+uses site-by-site SSH deployment as 9.3.23 did; managed one-click signed updates
+need signing/trust setup first and `verify-update` still refuses unsigned bundles.

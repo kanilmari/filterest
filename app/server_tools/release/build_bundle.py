@@ -140,7 +140,7 @@ def main(argv=None):
     except Exception as error:
         print(f"NOT completed: {succeeded}/2 steps; failed step ({step}): {error}", file=sys.stderr)
         return 1
-    print("Completed: 2/2 steps; unsigned bundle verified. Owner terminal signing is still required.", file=sys.stderr)
+    print("Completed: 2/2 steps; unsigned bundle verified. Publication still requires owner authorization.", file=sys.stderr)
     print(json.dumps(report, indent=2))
     return 0
 

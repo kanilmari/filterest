@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # publish_release.py
-# Publishes only independently authenticated, fully verified public release bundles.
-# Connects reviewed final Git history and owner signatures to exact GitHub readback.
+# Publishes fully verified public bundles authorized by chat approval or signatures.
+# Connects reviewed final Git history and owner authorization to exact GitHub readback.
 # Preserves existing tags/releases and reports partial remote operations truthfully.
 """Publish verified standalone Filterest assets through an explicit local command.
 
@@ -12,6 +12,7 @@ reports partial remote progress without deleting or overwriting remote state.
 from __future__ import annotations
 
 import argparse
+import datetime as dt
 import hashlib
 import json
 import os
@@ -73,9 +74,51 @@ def audit_actions(github):
                                 required_repositories={REPOSITORY})
 
 
-def inspect_local(root, expected_commit, expected_version, assets_dir, trust_policy=None, minimum_trust_policy_revision=None):
+def read_owner_approval(path, commit, manifest_sha256, created_at):
+    """Record the agent's transcription of chat approval, bound to the reviewed bytes.
+
+    This is authorization evidence, not cryptographic publisher authentication.
+    Keep it outside the bundle so payloads cannot supply their own authorization.
+    """
+    from server_tools.release.bundle_contract import bounded_input_bytes
+
+    if path is None:
+        raise PublicationError("unsigned publication requires --owner-approval with the owner's chat approval")
+    path = Path(path).absolute()
+    if any(parent.is_symlink() for parent in (path, *path.parents)):
+        raise PublicationError("owner approval path must not contain a symlink")
+
+    def unique_fields(pairs):
+        result = {}
+        for key, value in pairs:
+            if key in result:
+                raise PublicationError("owner approval contains duplicate fields")
+            result[key] = value
+        return result
+
+    approval = json.loads(bounded_input_bytes(path, 64 << 10), object_pairs_hook=unique_fields)
+    fields = {"schema_version", "approval_type", "owner", "approved_at", "wording",
+              "published_commit", "manifest_sha256"}
+    if (not isinstance(approval, dict) or set(approval) != fields
+            or type(approval["schema_version"]) is not int or approval["schema_version"] != 1
+            or approval["approval_type"] != "owner_chat_approval" or approval["owner"] != OWNER
+            or approval["published_commit"] != commit or approval["manifest_sha256"] != manifest_sha256
+            or not isinstance(approval["wording"], str) or not approval["wording"].strip()):
+        raise PublicationError("owner approval must record the owner's chat wording and exact reviewed commit/manifest")
+    timestamp = approval["approved_at"]
+    if not isinstance(timestamp, str) or not re.fullmatch(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z", timestamp):
+        raise PublicationError("owner approval timestamp must be UTC YYYY-MM-DDTHH:MM:SSZ")
+    approved = dt.datetime.strptime(timestamp, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=dt.timezone.utc)
+    if timestamp < created_at or approved > dt.datetime.now(dt.timezone.utc):
+        raise PublicationError("owner approval must follow the published identity and cannot be in the future")
+    return approval
+
+
+def inspect_local(root, expected_commit, expected_version, assets_dir, trust_policy=None,
+                  minimum_trust_policy_revision=None, owner_approval=None):
     """Bind final release history and every distributed byte before network work."""
-    from server_tools.release.bundle_verifier import verify_signed_bundle
+    from server_tools.release.bundle_contract import SIGNATURES_NAME
+    from server_tools.release.bundle_verifier import verify_signed_bundle, verify_unsigned_bundle
     from server_tools.release.promote_release import validate_published_source
 
     if not SHA.fullmatch(expected_commit):
@@ -101,8 +144,25 @@ def inspect_local(root, expected_commit, expected_version, assets_dir, trust_pol
     version = (root / "app/VERSION_APP").read_text().strip()
     if version != expected_version:
         raise PublicationError("--expect-version does not match the final published source")
-    assets = verify_signed_bundle(root, assets_dir, expected_commit, trust_policy, minimum_trust_policy_revision,
-                                  composition="filterest")
+    # Any signature entry (including a broken symlink) or explicit trust input
+    # selects the existing signed path. Failed signing must never fall back.
+    signatures = assets_dir / SIGNATURES_NAME
+    signed = signatures.exists() or signatures.is_symlink() or trust_policy is not None or minimum_trust_policy_revision is not None
+    approval = None
+    if signed:
+        assets = verify_signed_bundle(root, assets_dir, expected_commit, trust_policy, minimum_trust_policy_revision,
+                                      composition="filterest")
+    else:
+        if owner_approval is None:
+            raise PublicationError("unsigned publication requires --owner-approval with the owner's chat approval")
+        approval_path = Path(owner_approval).resolve()
+        if approval_path == assets_dir or assets_dir in approval_path.parents:
+            raise PublicationError("owner approval must be outside the bundle directory")
+        assets = verify_unsigned_bundle(root, assets_dir, expected_commit)
+        if assets["composition"]["id"] != "filterest":
+            raise PublicationError("public publication requires the Filterest-only composition")
+        approval = read_owner_approval(owner_approval, expected_commit, assets["manifest_sha256"],
+                                       history["published_identity"]["created_at"])
     if assets.get("app_version") != version or assets.get("source_commit") != expected_commit:
         raise PublicationError("asset verification does not identify the final version and commit")
     notes = (root / "app/docs/publication/RELEASE_NOTES.md").read_text(encoding="utf-8")
@@ -110,7 +170,8 @@ def inspect_local(root, expected_commit, expected_version, assets_dir, trust_pol
         raise PublicationError("reviewed release notes must not be empty")
     return {"repository": REPOSITORY, "branch": BRANCH, "published_commit": expected_commit,
             "version": version, "tag": "v" + version, "history": history, "verified_assets": assets,
-            "release_notes": notes}
+            "release_notes": notes, "signing_status": "signed" if signed else "unsigned",
+            **({"owner_approval": approval} if approval is not None else {})}
 
 
 def read_remote_refs(root, tag):
@@ -189,16 +250,16 @@ def verify_release(github, release_id, local, *, draft):
         actual[asset["name"]] = asset["id"]
         remote_sizes[asset["name"]] = asset["size"]
         if asset.get("digest") is not None and asset["name"] in expected and asset["digest"] != "sha256:" + expected[asset["name"]]:
-            raise PublicationError("GitHub uploaded asset digest differs from the signed bundle")
+            raise PublicationError("GitHub uploaded asset digest differs from the verified bundle")
     if set(actual) != set(expected):
         raise PublicationError("GitHub release asset names differ from the complete verified local set")
     if remote_sizes != sizes:
-        raise PublicationError("GitHub uploaded asset sizes differ from the verified signed bundle")
+        raise PublicationError("GitHub uploaded asset sizes differ from the verified bundle")
     hashes = {}
     for name, asset_id in sorted(actual.items()):
         data = github.download(asset_id)
         if len(data) != sizes[name]:
-            raise PublicationError("GitHub downloaded asset size differs from the signed bundle")
+            raise PublicationError("GitHub downloaded asset size differs from the verified bundle")
         hashes[name] = hashlib.sha256(data).hexdigest()
     if hashes != expected:
         raise PublicationError("GitHub release asset bytes differ from the verified local build")
@@ -211,7 +272,8 @@ def publish(args, github=None):
     root, assets_dir = args.target.resolve(), args.assets_dir.resolve()
     policy = getattr(args, "trust_policy", None)
     revision = getattr(args, "minimum_trust_policy_revision", None)
-    local = inspect_local(root, args.published_commit, args.expect_version, assets_dir, policy, revision)
+    approval = getattr(args, "owner_approval", None)
+    local = inspect_local(root, args.published_commit, args.expect_version, assets_dir, policy, revision, approval)
     remote = inspect_remote(root, local, github)
     report = {key: value for key, value in local.items() if key != "release_notes"}
     report.update({"mode": "plan", "remote": remote, "publication_verified": False})
@@ -221,7 +283,7 @@ def publish(args, github=None):
     state = {"phase": "preflight", "repository": REPOSITORY, "tag": local["tag"],
              "published_commit": args.published_commit, "release_id": None}
     try:
-        refreshed = inspect_local(root, args.published_commit, args.expect_version, assets_dir, policy, revision)
+        refreshed = inspect_local(root, args.published_commit, args.expect_version, assets_dir, policy, revision, approval)
         if refreshed != local:
             raise PublicationError("local publication inputs changed after planning")
         remote = inspect_remote(root, local, github)
@@ -253,7 +315,7 @@ def publish(args, github=None):
         verify_release(github, release_id, local, draft=True)
         verify_refs(root, local)
         # Recheck final bytes and source before making the verified draft public.
-        if inspect_local(root, args.published_commit, args.expect_version, assets_dir, policy, revision) != local:
+        if inspect_local(root, args.published_commit, args.expect_version, assets_dir, policy, revision, approval) != local:
             raise PublicationError("local publication inputs changed during upload")
         audit_actions(github)
         state["phase"] = "publication_requested"
@@ -276,9 +338,11 @@ def parse_args(argv=None):
     parser.add_argument("--expect-version", required=True)
     parser.add_argument("--published-commit", required=True)
     parser.add_argument("--assets-dir", type=Path, required=True)
-    parser.add_argument("--trust-policy", type=Path, required=True,
+    parser.add_argument("--owner-approval", type=Path,
+                        help="Agent-recorded owner chat approval JSON for unsigned publication, outside the bundle")
+    parser.add_argument("--trust-policy", type=Path,
                         help="Protected independently provisioned policy outside source and bundle")
-    parser.add_argument("--minimum-trust-policy-revision", type=int, required=True,
+    parser.add_argument("--minimum-trust-policy-revision", type=int,
                         help="Independent operator revision floor retained outside release/restoration data")
     parser.add_argument("--apply", action="store_true", help="Publish the verified new release")
     parser.add_argument("--json", action="store_true")

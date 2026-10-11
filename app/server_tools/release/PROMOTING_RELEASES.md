@@ -1,6 +1,6 @@
 <!-- PROMOTING_RELEASES.md -->
 <!-- Defines the verified candidate-to-published metadata transition. -->
-<!-- Connects reviewed source chronology, native evidence and final signed output. -->
+<!-- Connects reviewed source chronology, native evidence and authorized publication. -->
 <!-- Preserves immutable history and requires rebuilding the final commit. -->
 # Promoting a verified candidate
 
@@ -97,9 +97,19 @@ candidate rather than weakening this boundary.
 
 Candidate promotion retains its fourteen native deliverables. Final publication
 also requires the [source/image bundle](BUILDING_LINUX_ASSETS.md#final-unsigned-source-and-oci-bundle)
-and owner terminal signing with independently provisioned trust. The canonical
+and worker review/gate approval of final P and its bytes, followed by the owner's
+"ok" in chat recorded as described in [publication](PUBLISHING_RELEASES.md).
+K343 permits publication recorded as `unsigned`, with no owner terminal signing.
+The canonical
 manifest preserves C as the build identity's source while binding final P and
-every distributed byte; signing does not relax candidate or final rebuild checks.
+every distributed byte; neither chat authorization nor optional signing relaxes
+candidate or final rebuild checks. Supplied signatures retain independent trust
+verification and cannot fall back to unsigned publication.
+
+The flow is build → worker reviews → owner's "ok" in chat → publication → site
+rehearsals with the owner's approval. Unsigned 9.4.0 (database 9.11.0) is deployed
+like 9.3.23, site by site over SSH. `./filterest verify-update` still refuses
+unsigned managed OCI updates; one-click signed updates need signing/trust setup first.
 
 Candidate assets remain local verification evidence. Commit P, its final rebuilt
 assets and remote publication must each be verified explicitly. Promotion always

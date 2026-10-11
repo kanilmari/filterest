@@ -47,7 +47,23 @@ exists and the project owner has enabled that workflow.
 
 ## Release Signing And Trust
 
-Release automation stops at unsigned output. The owner holds independent
+Release publication may use worker-reviewed, gate-approved final output and
+the owner's approval in chat (K343), recorded with its timestamp, exact wording,
+published commit and manifest digest in the publication receipt. This path is
+marked `unsigned`; checksums and exact remote readback establish byte integrity,
+not cryptographic publisher authentication. See the
+[publication guide](app/server_tools/release/PUBLISHING_RELEASES.md) for the
+required record and unchanged clean-main/source-chronology safeguards.
+Unsigned 9.4.0 (database 9.11.0) is deployed like 9.3.23, site by site over SSH
+with the owner's approval and each site's rehearsal/recovery checks.
+
+Installation-host managed update verification (`./filterest verify-update`)
+still refuses unsigned updates. One-click signed updates require signing and
+independently provisioned trust to be set up first. When signatures are supplied,
+publication retains full authentication and never falls back after failure.
+The signing tools and signed-update verification contracts remain unchanged.
+
+For signed releases, the owner holds independent
 Filterest and Easelect Ed25519 keys in passphrase-protected encrypted containers
 on their control workstation, outside repositories, and retains separately
 protected offline recovery copies. Use owner-only directories/containers; the
@@ -76,8 +92,9 @@ historical execution evidence when auditing legacy installations.
 
 The [release publication guide](app/server_tools/release/PUBLISHING_RELEASES.md)
 owns signing commands and the [build guide](app/server_tools/release/BUILDING_LINUX_ASSETS.md)
-owns payload/OCI labels and exact inventory. Publication verifies independent
-signatures and payloads before remote mutation, then checks uploaded metadata and
+owns payload/OCI labels and exact inventory. Publication verifies owner
+authorization (chat record for unsigned output, independent signatures/trust for
+signed output) and payloads before remote mutation, then checks uploaded metadata and
 downloaded bytes. It does not install updates or grant runtime service privileges.
 
 ## Administrator Recovery

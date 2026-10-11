@@ -27,7 +27,7 @@ required source files and command availability without creating output. It does
 not certify a clean release source, compiled binary metadata or host ABI.
 For final published bundles, supply reviewed requirements and prebuilt local OCI
 layout tars. Source comes from the exact published Git tree. Output is unsigned;
-the owner signs the canonical manifest in their own terminal afterwards.
+Publication requires worker review and owner authorization; terminal signing is optional.
 EOF
 }
 
