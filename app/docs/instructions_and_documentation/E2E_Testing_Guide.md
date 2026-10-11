@@ -317,6 +317,13 @@ When a navigation or interaction pattern repeats across E2E files:
 
 This keeps long-lived Playwright knowledge in helper modules and docs instead of scattering fragile ad hoc patterns across tickets.
 
+For dataset text search, use `openActiveDatasetSearch()` from
+`helpers/dataset-search.ts` (E1 and E15). It waits for the active dataset's
+layout, selects a visible input rather than the first hidden copy, and opens
+the phone search button by click or tap when needed. The phone button applies
+through 700 px; tablets retain the hero or shared-bar field. Missing both the
+field and button fails the test; the filter-panel button is a separate control.
+
 ### 0.1 Required Dataset/View Helpers Should Fail Loudly
 
 `navigateToDataset()` and `switchToView()` are for tests that require a specific dataset or view. They now fail loudly by default if the requested tab or view control is missing, instead of silently falling back to something else.

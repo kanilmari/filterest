@@ -4,6 +4,7 @@
 // Requires FILTEREST_E2E_TOPBAR_DATASET; preserves shared layout with temporary reveals.
 import { expect, test, type Page } from '@playwright/test';
 import { revealActiveFilterbarSection, waitForActiveFilterbarLayout } from '../helpers/filterbar';
+import { openActiveDatasetSearch } from '../helpers/dataset-search';
 
 const DATASET = process.env.FILTEREST_E2E_TOPBAR_DATASET || '';
 const COPY = {
@@ -73,7 +74,7 @@ test.describe('guest phone toolbar and style controls', () => {
       const before = await geometry(page);
       expect(before.search.x + before.search.width).toBeLessThanOrEqual(before.filter.x);
       expect(before.filter.x - before.search.x - before.search.width).toBeLessThanOrEqual(9);
-      await toggle.tap(); await expect(input).toBeFocused();
+      await openActiveDatasetSearch(page, 'tap'); await expect(input).toBeFocused();
       await expect(toggle).toHaveAccessibleName(labels[1]);
       await expect(toggle).toHaveAttribute('data-aria-label-lang-key', 'filterbar_hide_search');
       await expect(toggle).toHaveAttribute('aria-pressed', 'true');
