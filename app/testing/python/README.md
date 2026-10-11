@@ -69,9 +69,10 @@ so parallel execution does not multiply counts or report zero.
 execution in collect-only mode. Allocator and cleanup tests run without any
 PostgreSQL binary or socket access in [test_disposable_postgres.py](test_disposable_postgres.py).
 
-Ordinary publication batches run `ordinary`. Run `heavy-installation` once per
-night. Before every batch that changes installation or recovery areas, the
-supervisor runs the **full suite**, using the third command. No category option
+The relevant-check planner below selects `ordinary` as conservative fast Python
+coverage and adds `heavy-installation` for installation or recovery changes.
+Run whole tiers for integration and nightly confirmation; their schedule never
+defers relevant checks required by the Constitution. No category option
 continues to mean the full suite; add `--collect-only -q` to each command to
 inspect its selected test IDs without executing tests. The ordinary and heavy
 sets are disjoint and their union is the full collection. Tests keep their
@@ -94,7 +95,7 @@ data/runtime/python/venv/bin/python app/testing/python/python_test_tiers.py app/
 ```
 
 It prints one tier and exits successfully; `heavy-installation` means the batch
-needs the full pre-publication check above. Pass repository-relative changed
+needs installation/recovery coverage as well as ordinary coverage. Pass repository-relative changed
 paths, including deleted files and both paths of renames. It accepts `./` and
 Windows separators, normalizes internal `..`, and rejects absolute or escaping
 paths with exit status 2. No paths means an empty batch and prints `ordinary`.
@@ -185,6 +186,76 @@ FILTEREST_TEST_DISPOSABLE_POSTGRES=1 ../../../data/runtime/python/venv/bin/pytho
 Disposable clusters have isolated ports and paths; do not wrap these commands
 in the old `/tmp/filterest_pg_suites.lock` suite lock. Without the opt-in or test
 binaries, PostgreSQL checks keep their existing skip behavior.
+
+## Relevant check planning
+
+The [Constitution](../../docs/constitution/constitution.md#3-make-changes-traceable-and-verify-the-actual-result)
+owns check timing, sandbox responsibility and map lifecycle. The offline planner
+prints commands; it never runs checks, starts services or accesses a database:
+
+```bash
+python3 app/testing/python/relevant_checks.py app/frontend/core_components/infinite_scroll/infinite_scroll_handler.js
+python3 app/testing/python/relevant_checks.py --range HEAD~1..HEAD
+python3 app/testing/python/relevant_checks.py --json --range main...HEAD
+```
+
+Paths are relative to the repository root. Include deletions and both rename
+names; Git ranges include them automatically. Explicit paths and a range can
+be combined. An empty batch prints empty groups. Invalid paths or a stale map
+fail with exit status 2. `--json` includes every file and discovered Go test
+name. `--python /path/to/python` changes the interpreter in printed pytest
+commands when a worktree uses an existing local test environment. Empty and
+option-like interpreter values are refused; commands quote the interpreter and
+end `env` option parsing before it.
+
+**Fast:** the map guards, existing file-length guard in its normal warning-only
+mode, Go unit tests in
+touched packages and direct local importers (plus the backend-wide session
+guards), frontend Vitest tests and paired tests reached through literal imports,
+re-exports, dynamic imports and CSS imports, and ESLint for existing touched
+JavaScript files. Deleted modules still select their surviving importers.
+Embedded package assets also select Go consumers. Python files use the tier
+selector's partition: all ordinary files stay in fast coverage because that
+selector supplies no safer file-level application mapping. PostgreSQL opt-in is
+removed from fast Go/Python commands so proofs belong to the heavy group.
+Strict whole-repository length enforcement is a separate maintenance check;
+unrelated over-limit files cannot fail a change's fast group.
+
+**Heavy:** Go tests whose declared names contain `Postgres`, discovered directly
+from each affected package's source; installation Python files selected by the
+existing tier policy; migration-specific Go packages and Python test files found
+by literal migration filenames and imported fixtures; and the bootstrap ledger
+proof for migration/bootstrap changes. Bootstrap-generator changes select every
+referenced migration proof. Changed Python PostgreSQL tests and tests importing
+changed fixtures/helpers also receive opt-in commands, even without a migration
+change. Discovery reads literal PostgreSQL opt-ins in executable Python code and
+follows fixture/helper imports through re-exports; filenames and quoted examples
+alone do not declare a PostgreSQL requirement. Opt-in commands keep the shared
+PostgreSQL lock, which the Go PostgreSQL tests still use; the Python harness
+above no longer requires it.
+Curated browser areas supply specs and explicit projects to the existing
+noninteractive launcher, including phone/tablet/desktop card projects.
+
+The only reviewed policy is [relevant_check_map.json](relevant_check_map.json):
+grouped component paths with browser proofs or explicit `none` reasons, the
+backend session guard, the bootstrap ledger proof and the existing length guard.
+Exact paths are checked, without wildcard entries that survive file moves.
+The [guard tests](test_relevant_checks.py) require every component area to have
+an entry and every mapped path, spec and project to exist. Update the map with
+the source move/removal; new PostgreSQL declarations require no map edit.
+
+Discovery does not evaluate computed import names or assembled migration
+filenames. Keep their coverage in the owning browser area or add a literal
+reference in the proof; whole-tier integration remains confirmation. The map
+does not claim that an explicit `none` area has browser coverage.
+
+Step 1 needs no worktree-instance tool. A capable supervisor must use this
+worktree's source and a verified matching native test target for printed browser
+commands; set `FILTEREST_E2E_BASE_URL` explicitly when needed. The planner neither
+provisions that target nor proves its identity. When a worker cannot bind sockets,
+record the heavy commands as pending and have the supervisor run them before
+review. Never count a PostgreSQL opt-in skip or an unavailable browser fixture
+as a pass; full integration/nightly commands remain available above.
 
 After changing bootstrap generation, its ledger or a generated contract's
 allowlist, run the whole `app/testing/python` suite above, in addition to focused

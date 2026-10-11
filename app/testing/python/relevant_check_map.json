@@ -1,0 +1,442 @@
+{
+  "version": 1,
+  "browser_areas": [
+    {
+      "area": "Dataset listing and scroll",
+      "paths": [
+        "app/frontend/core_components/infinite_scroll",
+        "app/frontend/core_components/state_stores",
+        "app/frontend/core_components/infinite_scroll/infinite_scroll_handler.js"
+      ],
+      "specs": [
+        "app/testing/e2e/Q_scroll/Q1_infinite_scroll.spec.ts",
+        "app/testing/e2e/Q_scroll/Q2_offset_reset.spec.ts",
+        "app/testing/e2e/G_navigation/G7_dataset_scroll_retention.spec.ts",
+        "app/testing/e2e/C_card_view/C3_close_big_card.spec.ts",
+        "app/testing/e2e/E_search_filter/E13_row_group_category_panel.spec.ts",
+        "app/testing/e2e/P_copy/P2_select_range.spec.ts"
+      ],
+      "projects": [
+        "mobile-card",
+        "tablet-card",
+        "desktop-card"
+      ]
+    },
+    {
+      "area": "Dataset views",
+      "paths": [
+        "app/frontend/core_components/table_views",
+        "app/frontend/shared/card_roles",
+        "app/frontend/shared/dataset_appearance"
+      ],
+      "specs": [
+        "app/testing/e2e/C_card_view/C1_card_render.spec.ts",
+        "app/testing/e2e/C_card_view/C3_close_big_card.spec.ts",
+        "app/testing/e2e/Q_scroll/Q2_offset_reset.spec.ts",
+        "app/testing/e2e/P_copy/P2_select_range.spec.ts",
+        "app/testing/e2e/E_search_filter/E17_card_refresh_lifecycle.spec.ts",
+        "app/testing/e2e/C_card_view/C12_article_reload_reading_position.spec.ts"
+      ],
+      "projects": [
+        "mobile-card",
+        "tablet-card",
+        "desktop-card"
+      ]
+    },
+    {
+      "area": "Filtering and categories",
+      "paths": [
+        "app/frontend/core_components/filterbar",
+        "app/frontend/reusable_components/multiselect_dropdown",
+        "app/frontend/reusable_components/results_count"
+      ],
+      "specs": [
+        "app/testing/e2e/E_search_filter/E13_row_group_category_panel.spec.ts",
+        "app/testing/e2e/E_search_filter/E16_multiselect_scroll.spec.ts",
+        "app/testing/e2e/E_search_filter/E17_card_refresh_lifecycle.spec.ts",
+        "app/testing/e2e/Q_scroll/Q2_offset_reset.spec.ts"
+      ],
+      "projects": [
+        "mobile-card",
+        "tablet-card",
+        "desktop-card"
+      ]
+    },
+    {
+      "area": "Dataset writes and cell selection",
+      "paths": [
+        "app/frontend/core_components/general_tables",
+        "app/frontend/reusable_components/vanilla_checkbox_table",
+        "app/frontend/reusable_components/key_value_container"
+      ],
+      "specs": [
+        "app/testing/e2e/A_row_crud/A1_add_row.spec.ts",
+        "app/testing/e2e/A_row_crud/A2_edit_cell.spec.ts",
+        "app/testing/e2e/P_copy/P2_select_range.spec.ts",
+        "app/testing/e2e/Q_scroll/Q2_offset_reset.spec.ts"
+      ],
+      "projects": [
+        "mobile-card",
+        "tablet-card",
+        "desktop-card"
+      ]
+    },
+    {
+      "area": "Navigation and shared requests",
+      "paths": [
+        "app/frontend/core_components/navigation",
+        "app/frontend/core_components/endpoints",
+        "app/frontend/core_components/pipeline",
+        "app/frontend/core_components/error_and_status_handling",
+        "app/frontend/core_components/vanilla_tree",
+        "app/backend/core_components/dataset_routes",
+        "app/backend/core_components/dataset_visibility",
+        "app/backend/core_components/router",
+        "app/backend/core_components/frontend_assets",
+        "app/backend/reusable_components/vanilla_tree",
+        "app/frontend/reusable_components/vanilla_tree",
+        "app/frontend/main.js",
+        "app/frontend/index.html"
+      ],
+      "specs": [
+        "app/testing/e2e/G_navigation/G10_dataset_name_pool_access.spec.ts",
+        "app/testing/e2e/G_navigation/G9_dataset_alias_reload.spec.ts",
+        "app/testing/e2e/G_navigation/G7_dataset_scroll_retention.spec.ts",
+        "app/testing/e2e/Q_scroll/Q2_offset_reset.spec.ts",
+        "app/testing/e2e/C_card_view/C3_close_big_card.spec.ts"
+      ],
+      "projects": [
+        "mobile-card",
+        "tablet-card",
+        "desktop-card"
+      ]
+    },
+    {
+      "area": "Dataset metadata and row services",
+      "paths": [
+        "app/backend/core_components/dataset_kinds",
+        "app/backend/core_components/system_table_tools",
+        "app/backend/core_components/dynamic_table_tools",
+        "app/backend/core_components/fk_display",
+        "app/backend/core_components/favorites",
+        "app/backend/core_components/dataset_appearance_store",
+        "app/backend/core_components/dataset_kinds/kind_contract_validator.go"
+      ],
+      "specs": [
+        "app/testing/e2e/G_navigation/G10_dataset_name_pool_access.spec.ts",
+        "app/testing/e2e/E_search_filter/E13_row_group_category_panel.spec.ts",
+        "app/testing/e2e/Q_scroll/Q2_offset_reset.spec.ts",
+        "app/testing/e2e/C_card_view/C3_close_big_card.spec.ts",
+        "app/testing/e2e/P_copy/P2_select_range.spec.ts"
+      ],
+      "projects": [
+        "mobile-card",
+        "tablet-card",
+        "desktop-card"
+      ]
+    },
+    {
+      "area": "Sign-in and accounts",
+      "paths": [
+        "app/frontend/core_components/auth",
+        "app/frontend/core_components/user_tools",
+        "app/backend/core_components/accountwrite",
+        "app/backend/core_components/auth",
+        "app/backend/core_components/auth_generation",
+        "app/backend/core_components/otp",
+        "app/backend/core_components/sessions",
+        "app/backend/core_components/session_expiry",
+        "app/backend/core_components/sign_in_deadline",
+        "app/backend/core_components/sign_in_revocation",
+        "app/backend/core_components/security",
+        "app/backend/pipeline/auth_check",
+        "app/backend/pipeline/device_id_check",
+        "app/backend/pipeline/fingerprint_check",
+        "app/backend/pipeline/csrf_check",
+        "app/backend/pipeline/automation_check"
+      ],
+      "specs": [
+        "app/testing/e2e/L_auth/L1_login.spec.ts",
+        "app/testing/e2e/L_auth/L2_logout.spec.ts",
+        "app/testing/e2e/L_auth/L7_admin_user_authentication.spec.ts",
+        "app/testing/e2e/L_auth/L8_login_name_canary.spec.ts"
+      ],
+      "projects": [
+        "mobile-card",
+        "tablet-card",
+        "desktop-card"
+      ]
+    },
+    {
+      "area": "Permissions",
+      "paths": [
+        "app/backend/core_components/permissions",
+        "app/backend/core_components/runtime_grants",
+        "app/backend/core_components/runtime_grant_mutations",
+        "app/backend/core_components/middlewares",
+        "app/backend/pipeline/access_control",
+        "app/backend/pipeline/admin_check",
+        "app/backend/pipeline/site_assistant_guard"
+      ],
+      "specs": [
+        "app/testing/e2e/S_permissions/S1_permission_disable.spec.ts",
+        "app/testing/e2e/S_permissions/S2_permission_check_action.spec.ts",
+        "app/testing/e2e/G_navigation/G10_dataset_name_pool_access.spec.ts"
+      ],
+      "projects": [
+        "mobile-card",
+        "tablet-card",
+        "desktop-card"
+      ]
+    },
+    {
+      "area": "Startup and upgrades",
+      "paths": [
+        "app/backend/core_components/application_runtime",
+        "app/backend/core_components/application_updates",
+        "app/backend/core_components/migrations",
+        "app/backend/core_components/startup",
+        "app/backend/core_components/update_capability",
+        "app/backend/core_components/release_updates"
+      ],
+      "specs": [
+        "app/testing/e2e/smoke.spec.ts",
+        "app/testing/e2e/G_navigation/G10_dataset_name_pool_access.spec.ts",
+        "app/testing/e2e/E_search_filter/E9_admin_version_info.spec.ts"
+      ],
+      "projects": [
+        "mobile-card",
+        "tablet-card",
+        "desktop-card"
+      ]
+    },
+    {
+      "area": "Administration",
+      "paths": [
+        "app/frontend/core_components/admin_tools",
+        "app/backend/core_components/db_admin",
+        "app/backend/core_components/system_config_checks",
+        "app/frontend/reusable_components/setting_duration",
+        "app/frontend/shared/setting_durations",
+        "app/backend/reusable_components/setting_duration"
+      ],
+      "specs": [
+        "app/testing/e2e/T_admin/T1_create_table.spec.ts",
+        "app/testing/e2e/T_admin/T7_card_visibility.spec.ts",
+        "app/testing/e2e/T_admin/T15_view_field_assignments.spec.ts"
+      ],
+      "projects": [
+        "mobile-card",
+        "tablet-card",
+        "desktop-card"
+      ]
+    },
+    {
+      "area": "Media",
+      "paths": [
+        "app/backend/core_components/media_library",
+        "app/backend/core_components/media_utils",
+        "app/backend/core_components/missing_media_check",
+        "app/backend/core_components/storagecleanup",
+        "app/backend/core_components/filevalidation",
+        "app/backend/core_components/symbol_registry",
+        "app/frontend/reusable_components/media_library_picker",
+        "app/frontend/reusable_components/image_source_picker",
+        "app/backend/reusable_components/image_source_picker"
+      ],
+      "specs": [
+        "app/testing/e2e/C_card_view/C11_network_media_variants.spec.ts",
+        "app/testing/e2e/T_admin/T10_asset_linking_admin.spec.ts",
+        "app/testing/e2e/C_card_view/C9_big_card_image_metadata_editor.spec.ts"
+      ],
+      "projects": [
+        "mobile-card",
+        "tablet-card",
+        "desktop-card"
+      ]
+    },
+    {
+      "area": "Translations",
+      "paths": [
+        "app/frontend/core_components/lang",
+        "app/backend/core_components/lang",
+        "app/backend/core_components/lang_key_naming"
+      ],
+      "specs": [
+        "app/testing/e2e/M_language/M1_language_switch.spec.ts",
+        "app/testing/e2e/M_language/M3_card_language_refresh.spec.ts"
+      ],
+      "projects": [
+        "mobile-card",
+        "tablet-card",
+        "desktop-card"
+      ]
+    },
+    {
+      "area": "Front page",
+      "paths": [
+        "app/frontend/core_components/front_page",
+        "app/frontend/core_components/service_catalog",
+        "app/frontend/shared/front_page_presentation"
+      ],
+      "specs": [
+        "app/testing/e2e/T_admin/T16_home_palette.spec.ts",
+        "app/testing/e2e/E_search_filter/E10_site_identity_and_menu_contract.spec.ts"
+      ],
+      "projects": [
+        "mobile-card",
+        "tablet-card",
+        "desktop-card"
+      ]
+    },
+    {
+      "area": "Workline observatory",
+      "paths": [
+        "app/frontend/core_components/workline_observatory",
+        "app/backend/core_components/workline_observatory"
+      ],
+      "specs": [
+        "app/testing/e2e/T_admin/T13_workline_observatory.spec.ts"
+      ],
+      "projects": [
+        "mobile-card",
+        "tablet-card",
+        "desktop-card"
+      ]
+    },
+    {
+      "area": "Shared controls",
+      "paths": [
+        "app/frontend/reusable_components/animated_disclosure",
+        "app/frontend/reusable_components/collapsible_height",
+        "app/frontend/reusable_components/collapsible_section",
+        "app/frontend/reusable_components/context_menu",
+        "app/frontend/reusable_components/dark_overlay",
+        "app/frontend/reusable_components/form_section_navigator",
+        "app/frontend/reusable_components/modal",
+        "app/frontend/reusable_components/vanilla_dropdown",
+        "app/frontend/reusable_components/windows",
+        "app/frontend/reusable_components/loading",
+        "app/frontend/reusable_components/notifications"
+      ],
+      "specs": [
+        "app/testing/e2e/J_modals/J1_modal_open.spec.ts",
+        "app/testing/e2e/J_modals/J2_modal_close.spec.ts",
+        "app/testing/e2e/R_dropdown/R1_dropdown_open_search_select.spec.ts",
+        "app/testing/e2e/E_search_filter/E13_row_group_category_panel.spec.ts",
+        "app/testing/e2e/C_card_view/C3_close_big_card.spec.ts"
+      ],
+      "projects": [
+        "mobile-card",
+        "tablet-card",
+        "desktop-card"
+      ]
+    },
+    {
+      "area": "Themes and shells",
+      "paths": [
+        "app/frontend/styles",
+        "app/frontend/shared/style_package",
+        "app/frontend/templates",
+        "app/frontend/ui_config.js"
+      ],
+      "specs": [
+        "app/testing/e2e/D_view_switch/D0_theme_and_mobile_menu.spec.ts",
+        "app/testing/e2e/E_search_filter/E15_responsive_topbar.spec.ts",
+        "app/testing/e2e/C_card_view/C3_close_big_card.spec.ts",
+        "app/testing/e2e/P_copy/P2_select_range.spec.ts",
+        "app/testing/e2e/E_search_filter/E13_row_group_category_panel.spec.ts"
+      ],
+      "projects": [
+        "mobile-card",
+        "tablet-card",
+        "desktop-card"
+      ]
+    },
+    {
+      "area": "Developer tooling",
+      "paths": [
+        "app/frontend/core_components/dev_tools",
+        "app/backend/core_components/agent_tools",
+        "app/backend/core_components/dev_tools",
+        "app/backend/core_components/maintainer_tools"
+      ],
+      "specs": [],
+      "none": "Operator/agent tools have Python and Go proofs; no maintained browser flow covers their process execution."
+    },
+    {
+      "area": "Internal backend foundations",
+      "paths": [
+        "app/backend/core_components/app_registry",
+        "app/backend/core_components/context_keys",
+        "app/backend/core_components/dbutils",
+        "app/backend/core_components/dynamic_function_engine",
+        "app/backend/core_components/email",
+        "app/backend/core_components/event_bus",
+        "app/backend/core_components/httpresponse",
+        "app/backend/core_components/logging",
+        "app/backend/core_components/product_identity",
+        "app/backend/core_components/runtimepaths",
+        "app/backend/pipeline/audit",
+        "app/backend/pipeline/error_handling",
+        "app/backend/pipeline/lazy_transaction",
+        "app/backend/pipeline/rate_limiting",
+        "app/backend/pipeline/request_logging",
+        "app/backend/pipeline/request_size_limit",
+        "app/backend/pipeline/txlog"
+      ],
+      "specs": [],
+      "none": "Internal libraries and transport policy use Go tests and consumer proofs; no isolated browser surface."
+    },
+    {
+      "area": "Assistant",
+      "paths": [
+        "app/frontend/core_components/ai_features",
+        "app/frontend/reusable_components/ai_features",
+        "app/backend/core_components/site_assistant"
+      ],
+      "specs": [],
+      "none": "Assistant boundaries have Go and Vitest proofs; no maintained chat browser spec exists. E2_vector_search tests dataset search, not the assistant."
+    },
+    {
+      "area": "Payment provider",
+      "paths": [
+        "app/backend/core_components/payment_gateway"
+      ],
+      "specs": [],
+      "none": "Provider integration needs an external account; payment setup specs are fixtures, not a browser proof."
+    },
+    {
+      "area": "Static and generated assets",
+      "paths": [
+        "app/frontend/icons",
+        "app/frontend/generated",
+        "app/frontend/dist"
+      ],
+      "specs": [],
+      "none": "Static icons and generated bundles/contracts use source/build checks; consumer specs follow their source area."
+    },
+    {
+      "area": "Extension examples and cloud helpers",
+      "paths": [
+        "app/frontend/custom_views",
+        "app/backend/cloud"
+      ],
+      "specs": [],
+      "none": "Extension examples and cloud helpers have no maintained isolated browser specification."
+    }
+  ],
+  "source_guards": [
+    {
+      "paths": [
+        "app/backend"
+      ],
+      "package": "app/backend/core_components/sessions",
+      "anchor": "app/backend/core_components/sessions/session_store_access_guard_test.go"
+    }
+  ],
+  "bootstrap_proofs": [
+    "app/testing/python/test_bootstrap_ledger_postgres.py"
+  ],
+  "file_length_guard": "app/server_tools/scripts/check_file_length.sh"
+}

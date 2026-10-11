@@ -30,6 +30,10 @@ Make meaningful changes traceable to the problem they solve. Record decisions th
 
 Match verification to the changed behavior and its real risk. Test security and data boundaries, verify behavior in the intended running application, and distinguish observed results from assumptions. Do not claim completion or compatibility without evidence.
 
+When an agent finishes editing a file, it runs that file's fast checks from the versioned [relevant-check map](../../testing/python/relevant_checks.py) immediately, before continuing to another edit. The map's heavy checks, including scoped PostgreSQL proofs and browser specifications, run in the worker's worktree at the latest immediately after the worker's report and before review. The worker runs them when capable; if its sandbox cannot, the supervising agent runs them there using a capable local runner and a test target serving that worktree's code. The supervisor records actual results before review; a missing runner, unavailable target, skipped check or worker report is not a pass. Whole tiers remain integration and nightly confirmation, never a reason to defer relevant checks.
+
+Maintain the map in the same change as the files and areas it describes. Remove a check together with the behavior or implementation it tests, updating its mapping and documentation in that change. Quarantine a flaky or slow check only with a ticket recording the reason, responsible owner and condition for restoring it; report that quarantine explicitly and never skip a check silently.
+
 ## 4. Keep documentation and releases truthful
 
 Give each lasting rule or topic one canonical home. Explain purpose and constraints in documentation and refer to the source that owns changing values. Update the relevant guide when behavior changes.

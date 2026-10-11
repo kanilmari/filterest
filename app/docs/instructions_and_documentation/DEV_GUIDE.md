@@ -494,11 +494,9 @@ naming helpers, so readers and writers stay on one family per listen port.
 
 ## 5. Verification
 
-Use the lightest checks that prove the changed behavior. Small mechanical CSS
-or wording changes may use diff review, narrow lint/import checks and direct
-inspection. Avoid permanent tests that merely freeze an incidental pixel value.
-Logic, permissions, persistence, localization and lifecycle boundaries need
-meaningful regressions; record the reason for intentional test omissions.
+Use checks that prove the changed behavior and risk. Avoid tests that freeze
+incidental pixel values. Logic, permissions, persistence, localization and
+lifecycle boundaries need regressions; explain intentional test omissions.
 
 | Changed surface | First check | Further evidence when affected |
 |---|---|---|
@@ -517,6 +515,8 @@ app/ (`frontend/core_components/...`) or to the repository root
 test file fails with "No test files found" rather than running the whole
 suite. The [Python test guide](../../testing/python/README.md)
 defines tiers, full/nightly checks and path selection; use the shared environment.
+The [Constitution's verification rule](../constitution/constitution.md#3-make-changes-traceable-and-verify-the-actual-result) sets immediate fast checks, heavy-check handoff before review and map lifecycle.
+Use the [relevant-check planner](../../testing/python/README.md#relevant-check-planning) for commands from changed paths or a Git range, including sandbox handoffs.
 
 [Playwright config](../../playwright.config.ts) and the
 [E2E guide](E2E_Testing_Guide.md) own the current matrix, credentials, storage
