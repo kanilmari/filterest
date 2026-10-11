@@ -39,7 +39,7 @@ type frontPageResultBlock struct {
 // GET /api/front-page. Disabled sites return 404. LoginOnlyProfile establishes the
 // viewer; each block separately requires /api/get-results rights and delegates
 // with __newest DESC and row_count=0, preserving the request actor. These text
-// summaries never opt into the separate image/card enrichment path. Boxes off
+// summaries request card support under the caller's column and gallery rights. Boxes off
 // skips resolution and delegates entirely, returning an empty blocks array.
 func GetFrontPageHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {

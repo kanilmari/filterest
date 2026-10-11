@@ -16,7 +16,7 @@ import (
 )
 
 // fetchUserSelectableColumns hakee sarakkeet, joihin CURRENT_USER:lla on SELECT-oikeus.
-func fetchUserSelectableColumns(db *sql.DB, tableName string) ([]string, error) {
+func fetchUserSelectableColumns(db dbutils.Querier, tableName string) ([]string, error) {
 	query := `
 		SELECT column_name
 		FROM information_schema.column_privileges

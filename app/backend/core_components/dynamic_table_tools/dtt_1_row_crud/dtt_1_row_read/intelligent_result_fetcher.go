@@ -85,11 +85,20 @@ func fetchRowsInOrder(db dbutils.Querier, table string, rowIDs []int, authorizat
 		extraCond = " AND " + authorizationCond
 	}
 
+	// Owner metadata may advertise denied optional fields. Filter before building
+	// either projection, so PostgreSQL never rejects an otherwise readable row.
+	allowed, err := fetchUserSelectableColumns(db, table)
+	if err != nil {
+		return nil, nil, err
+	}
+	allowedColumns := selectableColumnSet(allowed)
+
 	// --- Build SELECT + JOINs using the same FK-display logic as normal results ---
 	selectList := ""
 	joinClauses := ""
 
 	columnsMap, err := dtt_2_column_read.GetColumnsMapForTable(table)
+	columnsMap = filterReadableColumnMetadata(columnsMap, allowedColumns)
 	if err == nil && len(columnsMap) > 0 {
 		// Collect column UIDs in co_number order for deterministic output.
 		type uidOrder struct {
@@ -118,6 +127,11 @@ func fetchRowsInOrder(db dbutils.Querier, table string, rowIDs []int, authorizat
 		visibleCols, vcErr := getVisibleColumnNames(db, table)
 		if vcErr != nil {
 			return nil, nil, vcErr
+		}
+		visibleCols = filterAllowedSupportColumns(visibleCols, allowedColumns)
+		// buildSelectColumns expands an empty list to *, which must not bypass grants.
+		if len(visibleCols) == 0 {
+			return nil, nil, fmt.Errorf("no readable result columns for %s", table)
 		}
 		selectList = buildSelectColumns(table, visibleCols)
 	}

@@ -154,6 +154,8 @@ func (*canonicalAssetMockConn) QueryContext(_ context.Context, query string, arg
 		return &legacyImageMockRows{columns: []string{"column_name"}}, nil
 	}
 	switch {
+	case strings.Contains(query, "column_privileges"):
+		return &legacyImageMockRows{columns: []string{"column_name"}, rows: [][]driver.Value{{"id"}, {"header"}, {"cached_image"}, {"cached_image_title"}}}, nil
 	case strings.Contains(query, "target_insert_specs"):
 		return &legacyImageMockRows{
 			columns: []string{"child_table", "parent_table", "source_column_name", "target_insert_specs"},

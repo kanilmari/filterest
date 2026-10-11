@@ -1,7 +1,7 @@
 // map_support_enrichment.go
-// Enriches get-results rows with hidden geometry fields only when map view asks for them.
-// Bridges the normal visible-column query and the map renderer without changing default table payloads.
-// Exists so location tables can stay compact while map view still receives coordinates.
+// Enriches authorized rows with hidden geometry when the row-support owner requires it.
+// Bridges listing/search projections and map rendering without changing presented columns.
+// Keeps ordinary payloads compact and reads coordinates only through the caller.
 package dtt_1_row_read
 
 import (
@@ -14,22 +14,9 @@ import (
 	"github.com/lib/pq"
 )
 
+// Geometry and picture support share the same permission intersection.
 func filterAllowedGeometryColumns(geometryColumns []string, allowedColumns map[string]bool) []string {
-	if len(geometryColumns) == 0 || len(allowedColumns) == 0 {
-		return nil
-	}
-
-	filteredColumns := make([]string, 0, len(geometryColumns))
-	seen := make(map[string]bool, len(geometryColumns))
-	for _, columnName := range geometryColumns {
-		trimmedColumn := strings.TrimSpace(columnName)
-		if trimmedColumn == "" || seen[trimmedColumn] || !allowedColumns[trimmedColumn] {
-			continue
-		}
-		seen[trimmedColumn] = true
-		filteredColumns = append(filteredColumns, trimmedColumn)
-	}
-	return filteredColumns
+	return filterAllowedSupportColumns(geometryColumns, allowedColumns)
 }
 
 func logMapSupportEnrichmentWarning(tableName string, err error) {

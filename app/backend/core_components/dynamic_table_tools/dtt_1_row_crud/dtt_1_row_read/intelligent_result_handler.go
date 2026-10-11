@@ -121,6 +121,7 @@ func queryIntelligentResultsStream(w http.ResponseWriter, r *http.Request) error
 		return fmt.Errorf("table or query parameter missing")
 	}
 	numericID, hasNumericID := dtt_search_vectors.NumericIDSearch(strings.TrimSpace(userQuery))
+	support := resolveRowSupportRequest(r.URL.Query())
 
 	session, _ := e_sessions.GetOrCreateSession(nil, r)
 	userRole, _ := session.Values["user_role"].(string)
@@ -148,6 +149,7 @@ func queryIntelligentResultsStream(w http.ResponseWriter, r *http.Request) error
 	if err != nil {
 		return err
 	}
+	permittedGeometry := resolveSearchMapSupportColumns(currentDb, tableName, support)
 
 	textHits, err := fetchFullTextRows(readQuerier, tableName, userQuery, authorization)
 	if err != nil {
@@ -162,8 +164,8 @@ func queryIntelligentResultsStream(w http.ResponseWriter, r *http.Request) error
 	if err != nil {
 		return fmt.Errorf("fetchRowsInOrder(text): %w", err)
 	}
-	if err := prepareRowsForCardResponse(readQuerier, tableName, textRows, nil, textCols,
-		dbutils.NewRequestActorContext(userID, userRole), r.URL.Query().Get("include_card_support") == "1"); err != nil {
+	if err := prepareRowsForResponse(readQuerier, tableName, textRows, nil, textCols,
+		dbutils.NewRequestActorContext(userID, userRole), support, permittedGeometry); err != nil {
 		return fmt.Errorf("authorize card pictures: %w", err)
 	}
 	types, err := getColumnDataTypesWithFK(tableName, currentDb)
@@ -231,8 +233,8 @@ func queryIntelligentResultsStream(w http.ResponseWriter, r *http.Request) error
 					if aErr != nil {
 						fmt.Printf("\033[31mfetchRowsInOrder(ai): %s\033[0m\n", aErr.Error())
 					} else {
-						if err := prepareRowsForCardResponse(readQuerier, tableName, aiRows, nil, aiCols,
-							dbutils.NewRequestActorContext(userID, userRole), r.URL.Query().Get("include_card_support") == "1"); err != nil {
+						if err := prepareRowsForResponse(readQuerier, tableName, aiRows, nil, aiCols,
+							dbutils.NewRequestActorContext(userID, userRole), support, permittedGeometry); err != nil {
 							return fmt.Errorf("authorize card pictures: %w", err)
 						}
 						cols := aiCols
@@ -310,6 +312,7 @@ func queryIntelligentResults(w http.ResponseWriter, r *http.Request) error {
 		return fmt.Errorf("table or query parameter missing")
 	}
 	numericID, hasNumericID := dtt_search_vectors.NumericIDSearch(userQuery)
+	support := resolveRowSupportRequest(r.URL.Query())
 
 	session, _ := e_sessions.GetOrCreateSession(nil, r)
 	userRole, _ := session.Values["user_role"].(string)
@@ -337,6 +340,7 @@ func queryIntelligentResults(w http.ResponseWriter, r *http.Request) error {
 	if err != nil {
 		return err
 	}
+	permittedGeometry := resolveSearchMapSupportColumns(currentDb, tableName, support)
 
 	//------------------------------------------------
 	// 2. Which embeddings the dataset stores
@@ -446,8 +450,8 @@ func queryIntelligentResults(w http.ResponseWriter, r *http.Request) error {
 	if err != nil {
 		return fmt.Errorf("fetchRowsInOrder: %w", err)
 	}
-	if err := prepareRowsForCardResponse(readQuerier, tableName, rowsJSON, nil, resultColumns,
-		dbutils.NewRequestActorContext(userID, userRole), r.URL.Query().Get("include_card_support") == "1"); err != nil {
+	if err := prepareRowsForResponse(readQuerier, tableName, rowsJSON, nil, resultColumns,
+		dbutils.NewRequestActorContext(userID, userRole), support, permittedGeometry); err != nil {
 		return fmt.Errorf("authorize card pictures: %w", err)
 	}
 

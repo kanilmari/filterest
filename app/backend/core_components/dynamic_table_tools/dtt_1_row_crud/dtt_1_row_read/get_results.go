@@ -15,9 +15,7 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"regexp"
 	"strconv"
-	"strings"
 	"time"
 
 	auth "easelect/backend/core_components/auth"
@@ -25,20 +23,6 @@ import (
 	dtt_models "easelect/backend/core_components/dynamic_table_tools/dtt_models"
 	e_sessions "easelect/backend/core_components/sessions"
 )
-
-var resultsViewKeyPattern = regexp.MustCompile(`^[a-z][a-z0-9_]{0,63}$`)
-
-func normalizeResultsViewKey(raw string) string {
-	viewKey := strings.ToLower(strings.TrimSpace(raw))
-	switch viewKey {
-	case "article", "big_card", "row_article":
-		viewKey = "article_view"
-	}
-	if resultsViewKeyPattern.MatchString(viewKey) {
-		return viewKey
-	}
-	return "table"
-}
 
 // GetResultsHandlerWrapper ...
 func GetResultsHandlerWrapper(w http.ResponseWriter, r *http.Request) {
@@ -61,7 +45,8 @@ func GetResults(response_writer http.ResponseWriter, request *http.Request) {
 		httpresponse.RespondWithRefusal(response_writer, invalidRowGroupFilters())
 		return
 	}
-	viewKey := normalizeResultsViewKey(request.URL.Query().Get("view_key"))
+	support := resolveRowSupportRequest(request.URL.Query())
+	viewKey := support.viewKey
 
 	// 1. Hae user_id sessiosta
 	userID, err := e_sessions.GetUserIDFromSession(request)
@@ -293,9 +278,9 @@ func GetResults(response_writer http.ResponseWriter, request *http.Request) {
 	visibleColUids = appendRequiredClientTransportColumnUIDs(columnsMap, visibleColUids)
 
 	cardSupportColumnsLoadedWithMainQuery := []string(nil)
-	if request.URL.Query().Get("include_card_support") == "1" {
+	if support.includeCardSupport {
 		visibleColUids, cardSupportColumnsLoadedWithMainQuery = appendHiddenCardSupportColumnUIDs(
-			columnsMap,
+			filterReadableColumnMetadata(columnsMap, allowedColumnsMap),
 			visibleColumnNames,
 			visibleColUids,
 		)
@@ -362,17 +347,10 @@ func GetResults(response_writer http.ResponseWriter, request *http.Request) {
 	}
 	result_columns = appendServiceCatalogModerationColumns(table_name, result_columns, query_results, userRole)
 
-	if err := prepareRowsForCardResponse(readQuerier, table_name, query_results, columnsMap, result_columns,
-		dbutils.NewRequestActorContext(userID, userRole), request.URL.Query().Get("include_card_support") == "1"); err != nil {
+	if err := prepareRowsForResponse(readQuerier, table_name, query_results, columnsMap, result_columns,
+		dbutils.NewRequestActorContext(userID, userRole), support, filterAllowedGeometryColumns(geomCols, allowedColumnsMap)); err != nil {
 		httpresponse.RespondWithError(response_writer, http.StatusInternalServerError, "error authorizing card pictures")
 		return
-	}
-	if request.URL.Query().Get("include_map_support") == "1" {
-		mapSupportColumns := filterAllowedGeometryColumns(geomCols, allowedColumnsMap)
-		logMapSupportEnrichmentWarning(
-			table_name,
-			enrichRowsWithMapSupportColumns(readQuerier, table_name, query_results, mapSupportColumns),
-		)
 	}
 	result_columns = filterCardSupportColumnsFromResultColumns(result_columns, cardSupportColumnsLoadedWithMainQuery)
 	result_columns = filterTransportOnlyColumnsFromPresentation(result_columns, visibleColumnNames)

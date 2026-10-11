@@ -1,7 +1,7 @@
 // card_support_gallery_postgres_test.go
 // Proves gallery rights, mandatory flags and exact-row denials on PostgreSQL.
 // Extends the existing opt-in owner-resolver fixture with a real gallery.
-// The owning metadata/parent retry cannot rescue denied gallery content.
+// Owner metadata never grants parent-picture or gallery content access.
 package dtt_1_row_read
 
 import (
@@ -9,6 +9,7 @@ import (
 	"easelect/backend/core_components/dbutils"
 	dtt_models "easelect/backend/core_components/dynamic_table_tools/dtt_models"
 	"fmt"
+	"net/url"
 	"testing"
 )
 
@@ -87,7 +88,11 @@ func TestCardSupportGalleryAuthorizationPostgres(t *testing.T) {
 		} else {
 			exec(`DELETE FROM system_group_table_func_rights`)
 		}
-		for _, include := range []bool{false, true} {
+		for _, params := range []url.Values{
+			{}, {"include_card_support": {"1"}}, {"view_key": {"card"}},
+			{"view_key": {"article_view"}}, {"view_key": {"product_card"}, "include_card_support": {"0"}},
+			{"view_key": {"map"}},
+		} {
 			for _, test := range []struct {
 				name, cached string
 				parentID     int64
@@ -100,9 +105,9 @@ func TestCardSupportGalleryAuthorizationPostgres(t *testing.T) {
 				{"library same basename", "/storage/media/174668a1-2efa-45a6-aa6c-d8a4ee8ec069/300/hidden.png", 1, true},
 				{"other row same basename", "/storage/100/888/300/hidden.png#preview", 1, true},
 			} {
-				t.Run(fmt.Sprintf("right=%t/include=%t/%s", allowed, include, test.name), func(t *testing.T) {
+				t.Run(fmt.Sprintf("right=%t/%s/%s", allowed, params.Encode(), test.name), func(t *testing.T) {
 					rows := []map[string]interface{}{{"id": test.parentID, "cached_image": test.cached, "cached_image_title": "original title"}}
-					if err := prepareRowsForCardResponse(reader, "card_guard_parent", rows, columns, nil, actor, include); err != nil {
+					if err := prepareRowsForResponse(reader, "card_guard_parent", rows, columns, nil, actor, resolveRowSupportRequest(params), nil); err != nil {
 						t.Fatal(err)
 					}
 					if test.kept {

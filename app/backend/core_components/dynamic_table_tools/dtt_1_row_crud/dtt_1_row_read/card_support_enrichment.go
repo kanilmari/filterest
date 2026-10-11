@@ -182,11 +182,22 @@ func enrichRowsWithCardSupportColumns(
 		}
 	}
 
+	// Owner metadata describes roles, never the caller's read permission. This
+	// intersection also covers metadata discovered outside the main projection.
+	if len(supportColumns) == 0 {
+		return nil
+	}
+	allowed, err := fetchUserSelectableColumns(readQuerier, tableName)
+	if err != nil {
+		return err
+	}
+	supportColumns = filterAllowedSupportColumns(supportColumns, selectableColumnSet(allowed))
+	if len(supportColumns) == 0 {
+		return nil
+	}
+
 	if !rowsAlreadyContainCardSupportColumns(rows, supportColumns) {
 		formattedSupportRows, err := fetchCardSupportRows(readQuerier, tableName, supportColumns, rowIDs)
-		if err != nil && backend.Db != nil {
-			formattedSupportRows, err = fetchCardSupportRows(backend.Db, tableName, supportColumns, rowIDs)
-		}
 		if err != nil {
 			return err
 		}

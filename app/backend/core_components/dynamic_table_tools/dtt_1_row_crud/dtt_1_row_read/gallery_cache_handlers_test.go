@@ -1,5 +1,5 @@
 // gallery_cache_handlers_test.go
-// Exercises ordinary and intelligent response handlers with both parameter forms.
+// Exercises ordinary and intelligent responses with views and legacy support flags.
 // Shares real sessions, permission/policy builders and filename-only classification.
 // Denied/hidden pictures disappear; K121 kept classes and their metadata survive.
 package dtt_1_row_read
@@ -106,7 +106,17 @@ func (c *galleryHandlerConn) QueryContext(ctx context.Context, q string, args []
 
 func TestGalleryCacheAuthorizationAtResponseHandlers(t *testing.T) {
 	for _, mode := range []string{"ordinary", "intelligent", "stream"} {
-		for _, include := range []bool{false, true} {
+		for _, support := range []struct {
+			params  string
+			include bool
+		}{
+			{"", false},
+			{"include_card_support=1", true},
+			{"view_key=card", true},
+			{"view_key=article_view", true},
+			{"view_key=product_card&include_card_support=0", true},
+		} {
+			include := support.include
 			for _, tc := range []struct {
 				name, cached                  string
 				allowed, visible, empty, kept bool
@@ -148,7 +158,7 @@ func TestGalleryCacheAuthorizationAtResponseHandlers(t *testing.T) {
 				{"unchecked visible gallery", "unchecked-value", true, true, false, true},
 				{"unchecked denied gallery", "unchecked-value", false, true, false, true},
 			} {
-				t.Run(fmt.Sprintf("%s/include=%t/%s", mode, include, tc.name), func(t *testing.T) {
+				t.Run(fmt.Sprintf("%s/%s/%s", mode, support.params, tc.name), func(t *testing.T) {
 					state := &galleryHandlerState{t, tc.cached, tc.allowed, tc.visible, tc.empty}
 					name := fmt.Sprintf("gallery_handler_%d", atomic.AddInt64(&legacyImageMockCounter, 1))
 					sql.Register(name, galleryHandlerDriver{state})
@@ -179,11 +189,13 @@ func TestGalleryCacheAuthorizationAtResponseHandlers(t *testing.T) {
 					setCachedConfig("results_load_amount", &configCacheEntry{resultsPerLoad: 10, cachedAt: now})
 					setCachedPermissions("basic", "gallery_handler_parent", &permCacheEntry{columns: []string{"id", "cached_image", "cached_image_title"}, cachedAt: now})
 					setCachedSchemaMetadata("gallery_handler_parent", &schemaCacheEntry{columnsMap: columns, cachedAt: now})
-					setCachedUserColumnSettings(4, "gallery_handler_parent", "table", &ucsCacheEntry{settings: []UserColumnSetting{{ColumnName: "id"}, {ColumnName: "cached_image"}, {ColumnName: "cached_image_title"}}, cachedAt: now})
+					for _, view := range []string{"table", "card", "article_view", "product_card"} {
+						setCachedUserColumnSettings(4, "gallery_handler_parent", view, &ucsCacheEntry{settings: []UserColumnSetting{{ColumnName: "id"}, {ColumnName: "cached_image"}, {ColumnName: "cached_image_title"}}, cachedAt: now})
+					}
 					setCachedJoinMetadata("gallery_handler_parent", joinMetadataCacheEntry{tableUID: "161"})
 					url := "/api/get-results?dataset=gallery_handler_parent&offset=1&row_count=1&query=word"
-					if include {
-						url += "&include_card_support=1"
+					if support.params != "" {
+						url += "&" + support.params
 					}
 					if mode == "stream" {
 						url += "&stream=1"
