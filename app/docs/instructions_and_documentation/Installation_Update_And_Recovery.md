@@ -133,23 +133,69 @@ object findings, so a table-only match cannot hide a global difference.
 Shared schema and function definitions, and sequence definitions, are compared
 once under `managed_objects`; their differences are never copied into a table.
 A table's verdict covers its own structure, owner and table/column grants.
+Physical column order, identical-definition renames and the reviewed expression
+equivalences below are informational; they do not affect that verdict.
 Its `related_drift` lists related differing schemas/functions/sequences by name.
 The separate `structural_verdict` and `structural_state` show whether that table's
 definition matches or is changed, extra or missing, even when access differs.
 
 The readable report starts with structural table counts and findings, followed
-by **Schemas**, **Functions**, **Sequences**, **Ownership**, and **Privileges**.
+by **Schemas**, **Functions**, **Sequences**, **Ownership**, and **Privileges**,
+then **Renamed (same definition)**, **Reviewed equivalences**, **Physical column
+order (informational)** and **Sequence scope conflicts**.
 Owner and ACL paths appear only in the latter two sections; default ACLs are
 privilege findings. `category_counts` gives differing object, table and difference
 entry counts for `structural`, `ownership` and `privileges`; an object can occur
 in several categories. `structural_table_counts` separates matched, changed,
-extra and missing tables. These counts do not weaken the strict overall verdict.
+extra and missing tables. Informational findings appear outside these drift
+counts. Sequence scope conflicts, including unresolved managed sequence
+references, independently force `managed_drift`, even when definitions match.
+
+Constraints and indexes with different names are paired only when their complete
+definitions and flags agree. The rename section records both names; they no
+longer appear as one missing and one extra object. For indexes, the comparison
+removes only the declaration's verified index-name token; names inside expressions,
+predicates and literals remain exact. No general SQL-text normalization is applied.
+The [reviewed equivalence allow-list](../../server_tools/installation_conformance/schema_drift_equivalence.py)
+contains five exact reference/installation CHECK text pairs at their particular
+table and constraint identities, accepted in the WL167 batch 2 plan. Different
+validation flags still count as drift. The list also covers the exact table-views
+standalone unique index versus UNIQUE constraint/backing-index pair used by
+`ON CONFLICT(view_key)`, including all validation and index flags. An unlisted
+expression, name, table or index state cannot inherit that exemption.
+
+Physical column order compares the live column-name lists in ordinal order and
+reports both lists separately, including lists affected by missing/extra columns.
+Column definitions are compared by name without their ordinal positions: an
+order-only table is structurally matched, while a type, default, nullability,
+missing-column or other substantive difference still changes it. This reports
+physical placement, not proof of equivalent presentation; effective metadata
+ordering and order-dependent consumers need separate review. No table rebuild
+is implied.
 
 Dataset ownership comes from the installation's exported dataset registry
 (`system_db_tables`): a registered table absent from the reference seed registry
-and physical inventory is site-owned whatever its name. Its attached functions/
-sequences and registry/column/alias/relation identifiers appear under `site_owned`,
-never as drift. Bundled tables and reference seed registrations remain managed.
+and physical inventory is site-owned whatever its name. Its attached functions
+and registry/column/alias/relation identifiers appear under `site_owned`.
+Sequence scope includes ownership (also identity columns with no default) and
+resolved sequence calls in exported column defaults. Recognized targets include
+`nextval('public.x'::regclass)` and `nextval(('public.x'::text)::regclass)`, with
+quoted/schema-qualified identifiers, doubled identifier quotes and escaped SQL
+apostrophes. Discovery precedes owned-sequence identity normalization. The same
+target forms are recognized for `currval`, `setval` and `pg_sequence_last_value`.
+A sequence whose discovered users are all site-owned tables appears under
+`site_owned.sequences` only when neither export has an unresolved managed
+sequence reference. Any managed user keeps it managed; users in both scopes
+produce a conflict listing both table sets. An unused unowned sequence remains
+managed. If a managed default calls a sequence function with a computed,
+unqualified, absent or otherwise unresolved target (including targetless
+`lastval()`), the report records an **unresolved sequence reference** with its
+catalogue, table and column. It affects the verdict like a shared-scope conflict
+and keeps all non-extension sequences managed in both exports: a partial set of
+discovered users never proves exclusive site ownership. No search path or
+computed target is guessed. Sequence `tables` lists known users and also supplies
+table-level `related_drift` links. Bundled tables and reference seed registrations
+remain managed.
 Functions present in the reference also stay managed when a site adds its own
 attachment; attachment lists do not change the function's own definition.
 With registry entries present, unregistered extra tables count as managed drift,
@@ -164,11 +210,30 @@ their versions/counts do not change the managed verdict. Schema grants are
 compared conservatively, including extra grants; differences need review rather
 than automatic repair. A report never migrates, reseeds or repairs anything.
 
-The JSON report has `format_version: 1`, `report_type: filterest_schema_drift`,
+The JSON report has `format_version: 2`, `report_type: filterest_schema_drift`,
 `verdict`, `db_version`, `reference` provenance, canonical export hashes (`inputs`),
 numbered verification `steps`, `tables`, `managed_objects`, `site_owned`,
 `extensions`, `counts`, `category_counts`, `structural_table_counts` and `errors`.
-Every difference adds its category. A short finding looks like:
+Report format 2 adds four top-level arrays; catalogue export format remains 1:
+
+- `renamed`: `table`, `object_type` (`constraints` or `indexes`), `expected_name`,
+  `observed_name`, and full `expected`/`observed` records.
+- `equivalences`: `table`, `object_type`, `rule` (`reviewed_check` or
+  `table_views_unique_index_constraint`), and exact `expected`/`observed` records.
+- `column_order`: `table`, `expected` and `observed` column-name lists.
+- `scope_conflicts`: `catalogue` (`installation` or `reference`), `category`
+  (`sequences`), `name`, `managed_tables` and `site_owned_tables` for shared users;
+  unresolved references instead have `reason: "unresolved sequence reference"`,
+  `table` and `column`, without an assumed sequence name or user sets.
+
+The first three arrays are informational. Their lengths give entry counts;
+they are excluded from table drift and `category_counts`. Shared-sequence and
+unresolved-reference conflicts affect the overall verdict without copying
+differences into tables.
+Version 2 also adds sequence-user `tables` arrays and removes order/rename/reviewed
+equivalence entries from structural `differences`; consumers must check the report
+version instead of treating its JSON as format 1. Each remaining difference adds
+its category. A short finding looks like:
 
 ```json
 {"name":"public.system_column_control","verdict":"drift","structural_verdict":"drift","differences":[

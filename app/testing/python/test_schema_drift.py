@@ -74,7 +74,6 @@ def test_identical_schema_requires_physical_comparison():
     (lambda t: t["columns"][0].update(identity="a"), "columns.id.identity"),
     (lambda t: t["columns"][1].update(generated="s"), "columns.title.generated"),
     (lambda t: t["columns"][1].update(collation="public.custom"), "columns.title.collation"),
-    (lambda t: t["columns"][0].update(position=3), "column_order"),
     (lambda t: t["constraints"].append({"name": "pk", "definition": "PRIMARY KEY (id)",
                                        "validated": True}), "constraints.pk"),
     (lambda t: t["indexes"].append({"name": "public.title_idx", "definition": "CREATE INDEX title_idx ON public.system_example USING btree (title)",

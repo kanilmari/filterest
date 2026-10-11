@@ -19,12 +19,20 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from server_tools.installation_conformance.schema_drift_catalogue import (
     CatalogueError, canonical, normalize_catalogue, read_catalogue, validate_catalogue, verify_reference,
 )
+from server_tools.installation_conformance.schema_drift_equivalence import (
+    named_definition_findings, table_views_unique_equivalence,
+)
+
+SQL_TOKEN = re.compile(r"""'(?:''|[^'])*'|"(?:""|[^"])*"|(?:[^\W\d]|_)[\w$]*|::|[^\s]""")
+SQL_IDENTIFIER = re.compile(r'"(?:""|[^"])+"|(?:[^\W\d]|_)[\w$]*')
+SEQUENCE_FUNCTIONS = {"nextval", "currval", "setval", "lastval", "pg_sequence_last_value"}
 
 
 def new_report():
-    return {"format_version": 1, "report_type": "filterest_schema_drift", "verdict": "could_not_compare",
+    return {"format_version": 2, "report_type": "filterest_schema_drift", "verdict": "could_not_compare",
             "db_version": None, "reference": None, "inputs": None, "tables": [], "managed_objects": [],
             "site_owned": {}, "extensions": {}, "errors": [],
+            "renamed": [], "equivalences": [], "column_order": [], "scope_conflicts": [],
             "counts": {"matched": 0, "drift": 0, "could_not_compare": 0},
             "category_counts": {label: {"objects": 0, "differences": 0, "tables": 0}
                                 for label in ("structural", "ownership", "privileges")},
@@ -65,7 +73,96 @@ def site_dataset_classification(name, managed, registry, reference_registry):
     return None
 
 
-def partition_catalogue(catalogue, managed, reference_registry, managed_functions):
+def unparenthesized(tokens):
+    while tokens and tokens[0] == "(" and tokens[-1] == ")":
+        depth = 0
+        for position, token in enumerate(tokens):
+            depth += (token == "(") - (token == ")")
+            if depth == 0:
+                break
+        if position != len(tokens) - 1:
+            break
+        tokens = tokens[1:-1]
+    return tokens
+
+
+def before_cast(tokens, cast):
+    tokens = unparenthesized(tokens)
+    for suffix in (["::", cast], ["::", "pg_catalog", ".", cast]):
+        if tokens[-len(suffix):] == suffix:
+            return unparenthesized(tokens[:-len(suffix)])
+    return None
+
+
+def sequence_targets(default):
+    """Read only literal regclass/text-to-regclass targets; mark other calls unknown.
+
+    Token boundaries keep SQL string contents out of function discovery. Inspect
+    the complete first argument, so a regclass literal inside a computation can
+    never be mistaken for its result. This is deliberately not a SQL evaluator.
+    """
+    tokens = SQL_TOKEN.findall(default or "")
+    for position, token in enumerate(tokens[:-1]):
+        function = token[1:-1] if token.startswith('"') else token.lower()
+        if function not in SEQUENCE_FUNCTIONS or tokens[position + 1] != "(":
+            continue
+        start, end, depth = position + 2, position + 2, 0
+        while end < len(tokens):
+            current = tokens[end]
+            if depth == 0 and current in {",", ")"}:
+                break
+            depth += (current == "(") - (current == ")")
+            end += 1
+        target = before_cast(tokens[start:end], "regclass")
+        if target is not None:
+            text_target = before_cast(target, "text")
+            if text_target is not None:
+                target = text_target
+        yield (target[0][1:-1].replace("''", "'") if target and len(target) == 1
+               and target[0].startswith("'") else None)
+
+
+def sequence_identifier(name):
+    """Compare qualified SQL identifiers by meaning without guessing a search path."""
+    tokens = SQL_TOKEN.findall(name)
+    if len(tokens) != 3 or tokens[1] != "." or any(
+            not SQL_IDENTIFIER.fullmatch(token) for token in (tokens[0], tokens[2])):
+        return None
+    return tuple(token[1:-1].replace('""', '"') if token.startswith('"') else token.lower()
+                 for token in (tokens[0], tokens[2]))
+
+
+def sequence_tables(catalogue, managed, reference_registry):
+    """Discover complete users or uncertainty before owned identities are normalized.
+
+    Ownership includes identity sequences with no column default. Discovery uses
+    physical names, then keys users by the same logical identities as the catalogue
+    normalizer. No SQL rewrite or sequence-name ownership heuristic is involved.
+    """
+    users, identities, unresolved = {}, {}, []
+    for row in catalogue["sequences"]:
+        name = f"sequence:{row['table']}.{row['column']}" if row["table"] and row["column"] else row["name"]
+        users[name] = {row["table"]} if row["table"] else set()
+        if (identity := sequence_identifier(row["name"])) is not None:
+            identities[identity] = name
+    registry = {row["name"] for row in catalogue["metadata"]["datasets"]}
+    for row in catalogue["tables"]:
+        for col in row["columns"]:
+            unknown = False
+            for target in sequence_targets(col["default"]):
+                name = identities.get(sequence_identifier(target)) if target is not None else None
+                if name is not None:
+                    users[name].add(row["name"])
+                else:
+                    unknown = True
+            if unknown and not row["extension"] and site_dataset_classification(
+                    row["name"], managed, registry, reference_registry) is None:
+                unresolved.append({"category": "sequences", "reason": "unresolved sequence reference",
+                                   "table": row["name"], "column": col["name"]})
+    return users, unresolved
+
+
+def partition_catalogue(catalogue, managed, reference_registry, managed_functions, sequence_scope, scope_uncertain):
     """Retain the complete site-owned inventory and its identifier-only metadata.
 
     The installation's registry identifies additional datasets regardless of name.
@@ -89,14 +186,22 @@ def partition_catalogue(catalogue, managed, reference_registry, managed_function
                 "table_uid", "source_table_uid", "target_table_uid", "table_a_uid", "table_b_uid", "bridging_table_uid"))]
     # Do not serialize unrelated site metadata (nor its content) into drift evidence.
     tables = [row for row in catalogue["tables"] if row["name"] not in excluded]
-    sequences, functions = [], []
+    sequence_users, unresolved = sequence_scope
+    sequences, functions, conflicts = [], [], list(unresolved)
     for row in catalogue["sequences"]:
-        if row["extension"] or row["table"] in extension_tables:
+        users = sequence_users[row["name"]]
+        if row["extension"] or (not scope_uncertain and users and users.issubset(extension_tables)):
             continue
-        if row["table"] in runtime:
+        row = {**row, "tables": sorted(users)}
+        # A partial discovered user set never proves exclusive site ownership.
+        # Uncertainty in either export keeps every non-extension sequence managed.
+        if not scope_uncertain and users and users.issubset(runtime):
             site["sequences"].append(row)
         else:
             sequences.append(row)
+            if users & runtime and users - runtime:
+                conflicts.append({"category": "sequences", "name": row["name"],
+                                  "managed_tables": sorted(users - runtime), "site_owned_tables": sorted(users & runtime)})
     for row in catalogue["functions"]:
         if row["extension"]:
             continue
@@ -110,25 +215,36 @@ def partition_catalogue(catalogue, managed, reference_registry, managed_function
     managed_schemas = {name.split(".", 1)[0] for name in managed}
     schemas = [row for row in catalogue["schemas"] if row["name"] not in extension_schemas or row["name"] in managed_schemas]
     return {"tables": tables, "sequences": sequences, "functions": functions, "schemas": schemas,
-            "default_privileges": catalogue["default_privileges"]}, site
+            "default_privileges": catalogue["default_privileges"]}, site, conflicts
 
 
-def table_differences(wanted, actual):
+def table_differences(wanted, actual, annotations):
     if wanted is None or actual is None:
         return [{"path": "table", "expected": wanted, "observed": actual}]
     result = []
-    wanted_order = [col["name"] for col in wanted["columns"]]
-    actual_order = [col["name"] for col in actual["columns"]]
-    result.extend(differences(wanted_order, actual_order, "column_order"))
+    wanted, actual = deepcopy(wanted), deepcopy(actual)
+    # Physical order is captured separately; compare column definitions by name.
+    # Removing only position preserves type/default/nullability/etc. changes.
+    for row in (wanted, actual):
+        for col in row["columns"]:
+            col.pop("position")
+    equivalent = table_views_unique_equivalence(wanted, actual)
+    if equivalent:
+        annotations["equivalences"].append(equivalent)
     for key in sorted(set(wanted) | set(actual)):
-        if key in {"columns", "constraints", "indexes", "triggers", "policies"}:
+        if key in {"constraints", "indexes"}:
+            changes, renames, equivalents = named_definition_findings(wanted["name"], key, wanted[key], actual[key], differences)
+            result.extend(changes)
+            annotations["renamed"].extend(renames)
+            annotations["equivalences"].extend(equivalents)
+        elif key in {"columns", "triggers", "policies"}:
             result.extend(named_differences(wanted[key], actual[key], key))
         else:
             result.extend(differences(wanted.get(key), actual.get(key), key))
     return result
 
 
-def object_differences(wanted, actual, path="", *, table=False):
+def object_differences(wanted, actual, path="", *, table=False, annotations=None):
     """Compare structure, owners and ACLs independently, including missing objects.
 
     Removing a column/table is structural; its nonempty grants are also access
@@ -141,7 +257,9 @@ def object_differences(wanted, actual, path="", *, table=False):
         if isinstance(value, list):
             return [structure(item) for item in value]
         return value
-    structural = (table_differences(structure(wanted), structure(actual)) if table else
+    if annotations is None:
+        annotations = {"renamed": [], "equivalences": []}
+    structural = (table_differences(structure(wanted), structure(actual), annotations) if table else
                   differences(structure(wanted), structure(actual), path))
     changes = [{**change, "category": "structural"} for change in structural]
     prefix = path + "." if path else ""
@@ -212,8 +330,15 @@ def compare_catalogues(installation, reference, *, installation_roles=None, refe
         managed = {row["name"] for row in wanted["tables"] if not row["extension"]}
         reference_registry = {row["name"] for row in wanted["metadata"]["datasets"]}
         managed_functions = {row["name"] for row in wanted["functions"] if not row["extension"]}
-        wanted, _ = partition_catalogue(wanted, managed, reference_registry, managed_functions)
-        actual, report["site_owned"] = partition_catalogue(actual, managed, reference_registry, managed_functions)
+        wanted_scope = sequence_tables(reference, managed, reference_registry)
+        actual_scope = sequence_tables(installation, managed, reference_registry)
+        scope_uncertain = bool(wanted_scope[1] or actual_scope[1])
+        wanted, _, conflicts = partition_catalogue(wanted, managed, reference_registry, managed_functions,
+                                                  wanted_scope, scope_uncertain)
+        report["scope_conflicts"] += [{"catalogue": "reference", **row} for row in conflicts]
+        actual, report["site_owned"], conflicts = partition_catalogue(actual, managed, reference_registry, managed_functions,
+                                                                     actual_scope, scope_uncertain)
+        report["scope_conflicts"] += [{"catalogue": "installation", **row} for row in conflicts]
         report["extensions"] = {
             "installation": {"packages": deepcopy(installation["extensions"]), "objects": deepcopy(installation["extension_objects"])},
             "reference": {"packages": deepcopy(reference["extensions"]), "objects": deepcopy(reference["extension_objects"])}}
@@ -222,7 +347,11 @@ def compare_catalogues(installation, reference, *, installation_roles=None, refe
         verdicts = {}
         for name in sorted(set(wanted_tables) | set(actual_tables)):
             expected, observed = wanted_tables.get(name), actual_tables.get(name)
-            changes = object_differences(expected, observed, table=True)
+            if expected and observed:
+                order = differences([col["name"] for col in expected["columns"]],
+                                    [col["name"] for col in observed["columns"]], "column_order")
+                report["column_order"] += [{"table": name, "expected": row["expected"], "observed": row["observed"]} for row in order]
+            changes = object_differences(expected, observed, table=True, annotations=report)
             state = structural_state(expected, observed, changes)
             verdicts[name] = {"name": name, "verdict": "drift" if changes else "matched", "differences": changes,
                               "structural_state": state, "structural_verdict": "matched" if state == "matched" else "drift",
@@ -239,9 +368,7 @@ def compare_catalogues(installation, reference, *, installation_roles=None, refe
                 attached = set()
                 for obj in (expected, observed):
                     if obj:
-                        if category == "sequences" and obj.get("table"):
-                            attached.add(obj["table"])
-                        elif category == "functions":
+                        if category in {"sequences", "functions"}:
                             attached.update(obj["tables"])
                         elif category == "schemas":
                             attached.update(t for t in verdicts if t.split(".", 1)[0] == name)
@@ -257,7 +384,7 @@ def compare_catalogues(installation, reference, *, installation_roles=None, refe
         count_categories(report)
         report["counts"] = {"matched": sum(row["verdict"] == "matched" for row in report["tables"]),
                             "drift": sum(row["verdict"] == "drift" for row in report["tables"]), "could_not_compare": 0}
-        drift_found = bool(report["counts"]["drift"] or report["managed_objects"])
+        drift_found = bool(report["counts"]["drift"] or report["managed_objects"] or report["scope_conflicts"])
         report["verdict"] = "managed_drift" if drift_found else "no_managed_drift"
         return report, int(drift_found)
     except (CatalogueError, KeyError, TypeError, ValueError) as error:
@@ -297,6 +424,9 @@ def render_summary(report):
         lines.append("Counts below measure differing objects and difference entries; categories can overlap.")
         for label, counts in report["category_counts"].items():
             lines.append(f"{label.capitalize()}: {counts['objects']} objects ({counts['tables']} tables), {counts['differences']} differences.")
+        lines.append(f"Information: {len(report['renamed'])} renamed (same definition), "
+                     f"{len(report['equivalences'])} reviewed equivalences, {len(report['column_order'])} column-order differences.")
+        lines.append(f"Sequence scope conflicts: {len(report['scope_conflicts'])} (affect the overall verdict).")
     else:
         lines.append("Structural, ownership and privilege counts unavailable: comparison did not finish.")
     lines.append(f"Managed tables (all categories): {report['counts']['matched']} matched, {report['counts']['drift']} drift, "
@@ -335,6 +465,31 @@ def render_summary(report):
                 show_changes(row["differences"], category)
         if not found:
             lines.append("No differences." if compared else "Not compared.")
+    lines += ["", "## Renamed (same definition)", ""]
+    for row in report["renamed"]:
+        lines.append(f"- {row['table']} {row['object_type']}: expected {row['expected_name']}; observed {row['observed_name']}")
+    if not report["renamed"]:
+        lines.append("No renames." if compared else "Not compared.")
+    lines += ["", "## Reviewed equivalences", ""]
+    for row in report["equivalences"]:
+        lines.append(f"- {row['table']} {row['object_type']}: {row['rule']}")
+        lines.append(f"  - Expected {short_value(row['expected'])}; observed {short_value(row['observed'])}")
+    if not report["equivalences"]:
+        lines.append("No reviewed equivalences." if compared else "Not compared.")
+    lines += ["", "## Physical column order (informational)", ""]
+    for row in report["column_order"]:
+        lines.append(f"- {row['table']}: expected {canonical(row['expected'])}; observed {canonical(row['observed'])}")
+    if not report["column_order"]:
+        lines.append("No order differences." if compared else "Not compared.")
+    lines += ["", "## Sequence scope conflicts", ""]
+    for row in report["scope_conflicts"]:
+        if row.get("reason") == "unresolved sequence reference":
+            lines.append(f"- {row['catalogue']} unresolved sequence reference: {row['table']}.{row['column']}")
+        else:
+            lines.append(f"- {row['catalogue']} {row['name']}: managed tables {', '.join(row['managed_tables'])}; "
+                         f"site-owned tables {', '.join(row['site_owned_tables'])}")
+    if not report["scope_conflicts"]:
+        lines.append("No conflicts." if compared else "Not compared.")
     site = report["site_owned"]
     lines += ["", "## Site-owned datasets", ""]
     lines.append(f"Site-owned datasets: {len(site.get('tables', []))} (excluded from drift)")

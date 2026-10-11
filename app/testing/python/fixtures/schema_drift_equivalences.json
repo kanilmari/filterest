@@ -1,0 +1,103 @@
+{
+  "checks": [
+    {
+      "table": "public.dev_agent_workline_reports",
+      "reference": {
+        "name": "ck_dev_agent_workline_reports_git_scope",
+        "validated": true,
+        "definition": "CHECK (((git_has_other_changes IS NULL) OR ((git_worktree_state = 'clean'::text) AND (git_has_other_changes = false) AND (cardinality(git_workline_changed_paths) = 0)) OR ((git_worktree_state = 'dirty'::text) AND ((git_has_other_changes = true) OR (cardinality(git_workline_changed_paths) > 0)))))"
+      },
+      "installation": {
+        "name": "ck_dev_agent_workline_reports_git_scope",
+        "validated": true,
+        "definition": "CHECK (((git_has_other_changes IS NULL) OR (((git_worktree_state = 'clean'::text) AND (git_has_other_changes = false) AND (cardinality(git_workline_changed_paths) = 0)) OR ((git_worktree_state = 'dirty'::text) AND ((git_has_other_changes = true) OR (cardinality(git_workline_changed_paths) > 0))))))"
+      }
+    },
+    {
+      "table": "public.system_column_details",
+      "reference": {
+        "name": "ck_system_column_details_client_delivery_mode",
+        "validated": true,
+        "definition": "CHECK (((client_delivery_mode)::text = ANY ((ARRAY['include'::character varying, 'server_only'::character varying])::text[])))"
+      },
+      "installation": {
+        "name": "ck_system_column_details_client_delivery_mode",
+        "validated": true,
+        "definition": "CHECK (((client_delivery_mode)::text = ANY (ARRAY[('include'::character varying)::text, ('server_only'::character varying)::text])))"
+      }
+    },
+    {
+      "table": "public.system_permission_actions",
+      "reference": {
+        "name": "ck_system_permission_actions_scope",
+        "validated": true,
+        "definition": "CHECK (((scope_type)::text = ANY ((ARRAY['dataset'::character varying, 'row'::character varying, 'system'::character varying])::text[])))"
+      },
+      "installation": {
+        "name": "ck_system_permission_actions_scope",
+        "validated": true,
+        "definition": "CHECK (((scope_type)::text = ANY (ARRAY[('dataset'::character varying)::text, ('row'::character varying)::text, ('system'::character varying)::text])))"
+      }
+    },
+    {
+      "table": "public.system_row_access_rule_events",
+      "reference": {
+        "name": "ck_system_row_access_rule_events_principal",
+        "validated": true,
+        "definition": "CHECK ((((principal_type)::text = ANY ((ARRAY['user'::character varying, 'group'::character varying])::text[])) AND (principal_id > 0)))"
+      },
+      "installation": {
+        "name": "ck_system_row_access_rule_events_principal",
+        "validated": true,
+        "definition": "CHECK ((((principal_type)::text = ANY (ARRAY[('user'::character varying)::text, ('group'::character varying)::text])) AND (principal_id > 0)))"
+      }
+    },
+    {
+      "table": "public.system_row_access_rules",
+      "reference": {
+        "name": "ck_system_row_access_rules_effect",
+        "validated": true,
+        "definition": "CHECK (((effect)::text = ANY ((ARRAY['allow'::character varying, 'deny'::character varying])::text[])))"
+      },
+      "installation": {
+        "name": "ck_system_row_access_rules_effect",
+        "validated": true,
+        "definition": "CHECK (((effect)::text = ANY (ARRAY[('allow'::character varying)::text, ('deny'::character varying)::text])))"
+      }
+    }
+  ],
+  "table_views": {
+    "reference": {
+      "constraints": [
+        {
+          "name": "system_table_views_view_key_key",
+          "validated": true,
+          "definition": "UNIQUE (view_key)"
+        }
+      ],
+      "indexes": [
+        {
+          "name": "public.system_table_views_view_key_key",
+          "ready": true,
+          "valid": true,
+          "clustered": false,
+          "definition": "CREATE UNIQUE INDEX system_table_views_view_key_key ON public.system_table_views USING btree (view_key)",
+          "replica_identity": false
+        }
+      ]
+    },
+    "installation": {
+      "constraints": [],
+      "indexes": [
+        {
+          "name": "public.uq_system_table_views_view_key",
+          "ready": true,
+          "valid": true,
+          "clustered": false,
+          "definition": "CREATE UNIQUE INDEX uq_system_table_views_view_key ON public.system_table_views USING btree (view_key)",
+          "replica_identity": false
+        }
+      ]
+    }
+  }
+}
