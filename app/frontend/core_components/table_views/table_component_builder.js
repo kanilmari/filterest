@@ -42,6 +42,7 @@ import {
 } from './grid_interactions/range_selection_builder.js';
 import { setLocalizedDatasetText } from './dataset_value_localizer.js';
 import { showViewportContextMenu } from '../../reusable_components/context_menu/viewport_context_menu_positioner.js';
+import { initializeTableComponentTeardown } from './table_component_teardown.js';
 
 export class TableComponent {
     /**
@@ -103,24 +104,9 @@ export class TableComponent {
         this.selectionMenu.appendChild(copyNoHeadersBtn);
         this.rootElement.appendChild(this.selectionMenu);
     
-        /* --- valikkonappien kuuntelijat ------------------------------ */
-        this.selectionMenu.addEventListener('click', (e) => {
-            const action = e.target.dataset.action;
-            if (action === 'copy-headers')     this.copySelected(true);
-            else if (action === 'copy-no-headers') this.copySelected(false);
-            this.hideSelectionMenu();
-        });
-    
         /* --- ensimmäinen renderointi + event-kuuntelut --------------- */
         this.render();
-    
-        this.rootElement.addEventListener('mousedown', (e) => this.onMouseDown(e));
-        this.rootElement.addEventListener('mousemove', (e) => this.onMouseMove(e));
-        this.rootElement.addEventListener('mouseup',   (e) => this.onMouseUp(e));
-        this.rootElement.addEventListener('click', (e) => this.onCellClick(e));
-        this.rootElement.addEventListener('contextmenu',(e) => this.onContextMenu(e));
-        this.rootElement.addEventListener('dblclick', (e) => this.onCellDoubleClick(e));
-        this.rootElement.addEventListener('keydown', (e) => this.onCellKeyDown(e));
+        this.disposeResources = initializeTableComponentTeardown(this);
     }
 
     /**
@@ -1201,12 +1187,11 @@ export class TableComponent {
     }
 
     /**
-     * Poistaa komponentin DOM:ista.
+     * Releases the component's menu and listeners before removing its root.
      * @public
      */
     destroy() {
-        if (this.rootElement && this.rootElement.parentNode) {
-            this.rootElement.parentNode.removeChild(this.rootElement);
-        }
+        this.disposeResources();
+        this.rootElement.remove();
     }
 }
