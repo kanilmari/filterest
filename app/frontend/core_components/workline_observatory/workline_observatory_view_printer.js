@@ -315,7 +315,7 @@ export function renderWorklineObservatory(container, initialState, copy = resolv
         target.className = 'workline-observatory__targets-heading';
         target.addEventListener('click', () => detailModal.open());
         target.textContent = state.releaseGoal
-            ? `${copy.releaseTarget}: ${state.releaseGoal.title}`
+            ? `${copy.releaseTarget}: ${state.releaseGoal.title}${state.releaseGoal.is_current_publication ? ` · ${copy.currentPublication}` : ''}`
             : copy.releaseTarget;
         const priority = document.createElement('strong');
         priority.textContent = copy.priority;

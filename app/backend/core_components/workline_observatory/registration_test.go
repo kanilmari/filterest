@@ -14,8 +14,10 @@ import (
 
 func TestWorklineObservatoryRequiresActivationAndAdminPipeline(t *testing.T) {
 	routes := map[string]string{}
+	allowedMethods := map[string][]string{}
 	appregistry.RegisterRoutes(func(pattern string, _ http.HandlerFunc, handlerName string, methods ...string) {
 		routes[pattern] = handlerName
+		allowedMethods[pattern] = methods
 	})
 	if len(routes) != 0 {
 		t.Fatalf("observatory registered routes before explicit activation: %#v", routes)
@@ -24,7 +26,11 @@ func TestWorklineObservatoryRequiresActivationAndAdminPipeline(t *testing.T) {
 	Register()
 	appregistry.RegisterRoutes(func(pattern string, _ http.HandlerFunc, handlerName string, methods ...string) {
 		routes[pattern] = handlerName
+		allowedMethods[pattern] = methods
 	})
+	if methods := allowedMethods["/api/app/workline-observatory/release-goals"]; len(methods) != 3 || methods[0] != http.MethodGet || methods[1] != http.MethodPost || methods[2] != http.MethodPatch {
+		t.Fatalf("publication methods = %v", methods)
+	}
 	want := map[string]string{
 		"/api/app/workline-observatory/priority-actions": "workline_observatory.WorklinePriorityActionsHandler",
 		"/api/app/workline-observatory/board":            "workline_observatory.BoardHandler",

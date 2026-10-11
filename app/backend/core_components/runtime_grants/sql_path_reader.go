@@ -17,6 +17,7 @@ import (
 // fresh review; legacy additions below change only their own row's timestamps.
 // SECURITY DEFINER paths remain subject to the audit's separate blocker pass.
 var reviewedTriggerBodies = map[string]bool{
+	"409928f3255bf170b5ba71aea250a293": true, // public.set_dev_agent_publication_revision; NEW revision and timestamp only.
 	"044a14f89b990b7028633526552b3b96": true, // public.protect_dev_agent_workline_report_history
 	"06bcf30ac3d0a7f279a54cbf228a7bec": true, // Easelect db-7.0.21:3974, set_transaction_log_updated_at_timestamp; NEW.updated_at only.
 	"0d84d8457df6fe58001e6cdbe8f803ff": true, // public.protect_dev_agent_release_goal_contracts

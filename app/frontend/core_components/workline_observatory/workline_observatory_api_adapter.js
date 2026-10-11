@@ -76,3 +76,14 @@ export function saveWorklineReleaseContract(contract) {
         method: 'PUT', body_data: contract, suppressAuthRedirect: true,
     });
 }
+
+// Saves only publication metadata; the integer contract revision stays unchanged.
+export function saveWorklinePublication(id, expectedRevision, details) {
+    return endpoint_router(ROUTES.goals, {
+        method: 'PATCH', body_data: { ...details, id, action: 'update', expected_revision: expectedRevision }, suppressAuthRedirect: true,
+    });
+}
+
+export function fetchWorklinePublications() {
+    return endpoint_router(ROUTES.goals, { suppressAuthRedirect: true });
+}

@@ -453,19 +453,58 @@
     border-radius: .6rem;
 }
 
-.workline-observatory__goal-creator {
+.workline-observatory__goal-creator,
+.workline-observatory__publication-editor {
     display: grid;
     gap: .5rem;
     margin-top: 1rem;
 }
 
-.workline-observatory__goal-creator label {
+.workline-observatory__goal label {
     display: grid;
     gap: .2rem;
 }
 
-.workline-observatory__goal-creator input {
+.workline-observatory__goal input,
+.workline-observatory__goal textarea,
+.workline-observatory__goal select {
+    box-sizing: border-box;
     width: 100%;
+    min-width: 0;
+    color: var(--text_color);
+    background: var(--bg_color_extreme);
+    border: 1px solid var(--border_color);
+    color-scheme: light;
+}
+
+body.dark-mode .workline-observatory__goal input,
+body.dark-mode .workline-observatory__goal textarea,
+body.dark-mode .workline-observatory__goal select {
+    color-scheme: dark;
+}
+
+.workline-observatory__goal input[type="checkbox"] {
+    width: auto;
+    justify-self: start;
+}
+
+.workline-observatory__goal textarea {
+    min-height: 5rem;
+    resize: vertical;
+}
+
+.workline-observatory__goal p,
+.workline-observatory__goal strong {
+    overflow-wrap: anywhere;
+    white-space: pre-wrap;
+}
+
+.workline-observatory__publication-current {
+    padding: .5rem;
+    border: 2px solid var(--accent-color, var(--primary_color));
+    border-radius: .5rem;
+    background: var(--bg_color_2);
+    color: var(--text_color);
 }
 
 .workline-observatory__detail-line {

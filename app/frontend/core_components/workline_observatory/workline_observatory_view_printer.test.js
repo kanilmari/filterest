@@ -6,7 +6,9 @@
 
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 
-const { createGoalMock, fetchBoardMock, fetchHistoryMock, goalActionMock, languageMock, priorityActionMock, saveContractMock, statusActionMock } = vi.hoisted(() => ({
+const { translationMock, savePublicationMock, createGoalMock, fetchBoardMock, fetchHistoryMock, goalActionMock, languageMock, priorityActionMock, saveContractMock, statusActionMock } = vi.hoisted(() => ({
+    translationMock: vi.fn(),
+    savePublicationMock: vi.fn(),
     createGoalMock: vi.fn(),
     fetchBoardMock: vi.fn(),
     fetchHistoryMock: vi.fn(),
@@ -16,6 +18,8 @@ const { createGoalMock, fetchBoardMock, fetchHistoryMock, goalActionMock, langua
     saveContractMock: vi.fn(),
     statusActionMock: vi.fn(),
 }));
+
+vi.mock('../lang/translation_handler.js', () => ({ getTranslationForKey: translationMock }));
 
 vi.mock('../../icons/icon_loader.js', () => ({ setElementSvgContent: vi.fn() }));
 
@@ -27,6 +31,7 @@ vi.mock('./workline_observatory_api_adapter.js', () => ({
     applyWorklinePriorityAction: priorityActionMock,
     applyWorklineReleaseGoalAction: goalActionMock,
     createWorklineReleaseGoal: createGoalMock,
+    saveWorklinePublication: savePublicationMock,
     fetchWorklineObservatoryBoard: fetchBoardMock,
     fetchWorklineObservatoryReportHistory: fetchHistoryMock,
     saveWorklineReleaseContract: saveContractMock,
@@ -40,6 +45,7 @@ beforeEach(() => {
     window.localStorage.clear();
     vi.clearAllMocks();
     languageMock.mockReturnValue('en');
+    translationMock.mockImplementation((key, options) => options?.fallback ?? (key === 'request_failed_notice' ? 'The request could not be completed.' : undefined));
     fetchHistoryMock.mockResolvedValue([]);
     window.confirm = vi.fn(() => true);
 });
@@ -101,9 +107,9 @@ describe('workline observatory view', () => {
         renderWorklineObservatory(container, buildWorklineObservatoryState({ worklines: [] }));
 
         container.querySelector('[data-release-goal-details]').click();
-        expect(document.querySelector('#custom_modal').textContent).toContain('No release goal selected');
+        expect(document.querySelector('#custom_modal').textContent).toContain('No publications yet');
         expect(document.querySelector('#custom_modal .workline-observatory__goal-creator')).not.toBeNull();
-        expect(container.querySelector('.workline-observatory__targets-heading').textContent).toBe('Release target');
+        expect(container.querySelector('.workline-observatory__targets-heading').textContent).toBe('Publications');
     });
 
     test('renders representative Finnish and Chinese interface copy', async () => {
@@ -459,13 +465,13 @@ describe('workline observatory view', () => {
         renderWorklineObservatory(container, { worklines: [] }, undefined, { onRefresh });
         container.querySelector('[data-release-goal-details]').click();
         const form = document.querySelector('#custom_modal .workline-observatory__goal-creator');
-        const values = ['release-demo', '1', 'Demo', 'Visible goal'];
-        [...form.querySelectorAll('input')].forEach((input, index) => { input.value = values[index]; });
+        const values = { identity_key: 'release-demo', version: '1', title: 'Demo', outcome: 'Visible goal', publication_version: '9.4.0' };
+        Object.entries(values).forEach(([name, value]) => { form.querySelector(`[name="${name}"]`).value = value; });
         form.dispatchEvent(new Event('submit', { cancelable: true }));
         await vi.waitFor(() => expect(onRefresh).toHaveBeenCalledOnce());
-        expect(createGoalMock).toHaveBeenCalledWith({ identity_key: 'release-demo', version: 1, title: 'Demo', outcome: 'Visible goal', selected: true });
-        await vi.waitFor(() => expect(document.querySelector('#custom_modal').textContent).toContain('Lock release goal'));
-        [...document.querySelectorAll('#custom_modal button')].find((button) => button.textContent === 'Lock release goal').click();
+        expect(createGoalMock).toHaveBeenCalledWith({ identity_key: 'release-demo', version: 1, title: 'Demo', outcome: 'Visible goal', publication_version: '9.4.0', target_date: null, reader_description: '', published: false, published_at: null, selected: true });
+        await vi.waitFor(() => expect(document.querySelector('#custom_modal').textContent).toContain('Lock publication contract'));
+        [...document.querySelectorAll('#custom_modal button')].find((button) => button.textContent === 'Lock publication contract').click();
         await vi.waitFor(() => expect(goalActionMock).toHaveBeenCalledWith(7, 'lock'));
         expect(fetchBoardMock).not.toHaveBeenCalled();
     });
@@ -485,7 +491,7 @@ describe('workline observatory view', () => {
         expect(saveContractMock).toHaveBeenCalledWith({ release_goal_id: 7, workline_id: 9, completion_rule: 'must_be_in_phase', target_phase: 3 });
         expect(document.querySelector('#custom_modal .workline-observatory__report').querySelector('input,textarea')).toBeNull();
     });
-    test('preserves a release-goal draft and exposes an API error inside its modal', async () => {
+    test('preserves a release-goal draft and shows a translated failure inside its modal', async () => {
         const container = document.getElementById('view');
         renderWorklineObservatory(container, { worklines: [] });
         container.querySelector('[data-release-goal-details]').click();
@@ -493,10 +499,131 @@ describe('workline observatory view', () => {
         form.querySelectorAll('input')[2].value = 'Keep this draft';
         createGoalMock.mockRejectedValueOnce(new Error('Goal could not be saved'));
         form.dispatchEvent(new Event('submit', { cancelable: true }));
-        await vi.waitFor(() => expect(document.querySelector('#custom_modal .workline-observatory__modal-guidance').textContent).toBe('Goal could not be saved'));
+        await vi.waitFor(() => expect(document.querySelector('#custom_modal .workline-observatory__modal-guidance').textContent).toBe('The request could not be completed.'));
         expect(document.querySelector('#custom_modal .workline-observatory__goal-creator input:nth-of-type(1)')).not.toBeNull();
         expect(form.querySelectorAll('input')[2].value).toBe('Keep this draft');
         expect(form.isConnected).toBe(true);
         expect(form.querySelector('button').disabled).toBe(false);
     });
+    test('opens Publications and highlights the newest unpublished plan with Finnish reader details', () => {
+        languageMock.mockReturnValue('fi');
+        const container = document.getElementById('view');
+        const plan = { id: 7, title: 'Yhdistetty sivusto', decision_state: 'locked', publication_version: '9.4.0', target_date: '2026-12-01', reader_description: 'Desktop ja mobiili yhdessä.', published: false, publication_revision: 2, is_current_publication: true };
+        renderWorklineObservatory(container, { worklines: [], release_goal: plan, publications: [plan] });
+        container.querySelector('[data-release-goal-details]').click();
+        expect(document.querySelector('#custom_modal').textContent).toContain('Julkaisut');
+        expect(document.querySelector('[data-publication-current="true"]').textContent).toContain('Uusin julkaisematon');
+        expect(document.querySelector('[name="target_date"]').value).toBe('2026-12-01');
+        expect(document.querySelector('[name="reader_description"]').value).toBe('Desktop ja mobiili yhdessä.');
+    });
+
+    test('saves publication metadata after contract locking with its own revision and UTC time', async () => {
+        const container = document.getElementById('view');
+        const goal = { id: 7, title: 'Locked scope', decision_state: 'locked', publication_version: '9.4.0', publication_revision: 3, published: false };
+        const snapshot = { worklines: [], release_goal: goal, publications: [goal] };
+        const onRefresh = vi.fn().mockResolvedValue(snapshot);
+        renderWorklineObservatory(container, snapshot, undefined, { onRefresh });
+        container.querySelector('[data-release-goal-details]').click();
+        const form = document.querySelector('.workline-observatory__publication-editor');
+        form.querySelector('[name="target_date"]').value = '2027-01-14';
+        form.querySelector('[name="reader_description"]').value = 'One public desktop and mobile site.';
+        const flag = form.querySelector('[name="published"]');
+        const time = form.querySelector('[name="published_at"]');
+        expect(time.disabled).toBe(true);
+        flag.checked = true; flag.dispatchEvent(new Event('change'));
+        expect(time.disabled).toBe(false);
+        time.value = '2027-01-14T13:30';
+        form.dispatchEvent(new Event('submit', { cancelable: true }));
+        await vi.waitFor(() => expect(savePublicationMock).toHaveBeenCalledWith(7, 3, {
+            publication_version: '9.4.0', target_date: '2027-01-14', reader_description: 'One public desktop and mobile site.',
+            published: true, published_at: new Date('2027-01-14T13:30').toISOString(),
+        }));
+        await vi.waitFor(() => expect(onRefresh).toHaveBeenCalledOnce());
+        expect(goalActionMock).not.toHaveBeenCalled();
+    });
+
+    test('browses older publications and clears the time when correcting published state', async () => {
+        const current = { id: 8, title: 'Next plan', publication_revision: 0, published: false, is_current_publication: true };
+        const old = { id: 7, title: 'Earlier release', publication_version: '9.3.0', publication_revision: 4, published: true, published_at: '2026-09-01T10:00:00Z' };
+        const snapshot = { worklines: [], release_goal: current, publications: [current, old] };
+        const onRefresh = vi.fn().mockResolvedValue(snapshot);
+        const container = document.getElementById('view');
+        renderWorklineObservatory(container, snapshot, undefined, { onRefresh });
+        container.querySelector('[data-release-goal-details]').click();
+        const picker = document.querySelector('[name="publication_id"]');
+        expect(picker.value).toBe('8');
+        picker.value = '7'; picker.dispatchEvent(new Event('change'));
+        expect(document.querySelector('[data-publication-current]')).toBeNull();
+        const form = document.querySelector('.workline-observatory__publication-editor');
+        expect(form.querySelector('[name="published_at"]').value).not.toBe('');
+        const flag = form.querySelector('[name="published"]');
+        flag.checked = false; flag.dispatchEvent(new Event('change'));
+        form.dispatchEvent(new Event('submit', { cancelable: true }));
+        await vi.waitFor(() => expect(savePublicationMock).toHaveBeenCalledWith(7, 4, {
+            publication_version: '9.3.0', target_date: null, reader_description: '', published: false, published_at: null,
+        }));
+    });
+
+    test('refreshes a stale publication edit and displays publication-specific conflict guidance', async () => {
+        const goal = { id: 7, title: 'Plan', publication_version: '9.4.0', publication_revision: 1, published: false };
+        const snapshot = { worklines: [], release_goal: goal, publications: [goal] };
+        const onRefresh = vi.fn().mockResolvedValue({ ...snapshot, publications: [{ ...goal, publication_revision: 2 }] });
+        savePublicationMock.mockRejectedValueOnce(Object.assign(new Error('publication_revision_conflict'), { status: 409 }));
+        const container = document.getElementById('view');
+        renderWorklineObservatory(container, snapshot, undefined, { onRefresh });
+        container.querySelector('[data-release-goal-details]').click();
+        document.querySelector('.workline-observatory__publication-editor').dispatchEvent(new Event('submit', { cancelable: true }));
+        await vi.waitFor(() => expect(onRefresh).toHaveBeenCalledOnce());
+        expect(document.querySelector('.workline-observatory__modal-guidance').textContent).toBe('This publication changed. Review the refreshed state and try again.');
+    });
+
+    test('preserves the exact published instant when its browser time control is unchanged', async () => {
+        const goal = { id: 7, title: 'Published', publication_version: '9.4.0', publication_revision: 1, published: true, published_at: '2026-10-10T12:34:56.123456Z' };
+        const snapshot = { worklines: [], release_goal: goal, publications: [goal] };
+        const container = document.getElementById('view');
+        renderWorklineObservatory(container, snapshot, undefined, { onRefresh: vi.fn().mockResolvedValue(snapshot) });
+        container.querySelector('[data-release-goal-details]').click();
+        document.querySelector('.workline-observatory__publication-editor').dispatchEvent(new Event('submit', { cancelable: true }));
+        await vi.waitFor(() => expect(savePublicationMock).toHaveBeenCalledWith(7, 1, expect.objectContaining({ published_at: goal.published_at })));
+    });
+
+    test.each([
+        ['fi', 'Tarkista julkaisun versio ja kuvauksen pituus.', 'Pyyntöä ei voitu suorittaa.'],
+        ['en', 'Check the publication version and description length.', 'The request could not be completed.'],
+        ['ch', '请检查发布版本和说明长度。', '无法完成请求。'],
+        ['yue', '請檢查發佈版本同說明長度。', '完成唔到呢個請求。'],
+    ])('shows translated 400 publication failures and fallback in %s', async (language, reason, fallback) => {
+        languageMock.mockReturnValue(language);
+        translationMock.mockImplementation((key, options) => {
+            if (key === 'invalid_publication_details') return reason;
+            if (key === 'request_failed_notice') return fallback;
+            return options?.fallback;
+        });
+        const goal = { id: 7, title: 'Plan', publication_version: '9.4.0', publication_revision: 1, published: false };
+        const snapshot = { worklines: [], release_goal: goal, publications: [goal] };
+        const onRefresh = vi.fn().mockResolvedValue(snapshot);
+        const technical = 'Virhe pyynnössä (saveWorklinePublication): raw response and route';
+        const error = Object.assign(new Error(technical), {
+            status: 400, failureNotice: { langKey: 'invalid_publication_details', status: 400 },
+        });
+        savePublicationMock.mockRejectedValue(error);
+        const container = document.getElementById('view');
+        renderWorklineObservatory(container, snapshot, undefined, { onRefresh });
+        container.querySelector('[data-release-goal-details]').click();
+        const form = document.querySelector('.workline-observatory__publication-editor');
+        form.dispatchEvent(new Event('submit', { cancelable: true }));
+        const guidance = document.querySelector('.workline-observatory__modal-guidance');
+        await vi.waitFor(() => expect(guidance.textContent).toBe(reason));
+        expect(translationMock).toHaveBeenCalledWith('invalid_publication_details', expect.objectContaining({ fallback }));
+        expect(document.querySelector('#custom_modal').textContent).not.toContain(technical);
+        expect(onRefresh).not.toHaveBeenCalled();
+        // A failure without a notice (or with an unknown key) still uses translated fallback.
+        for (const notice of [undefined, { langKey: 'unknown_publication_reason' }]) {
+            savePublicationMock.mockRejectedValue(Object.assign(new Error(technical), { status: 400, failureNotice: notice }));
+            form.dispatchEvent(new Event('submit', { cancelable: true }));
+            await vi.waitFor(() => expect(guidance.textContent).toBe(fallback));
+            expect(guidance.textContent).not.toContain(technical);
+        }
+    });
+
 });

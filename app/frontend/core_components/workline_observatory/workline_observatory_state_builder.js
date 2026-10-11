@@ -58,6 +58,7 @@ export function buildWorklineObservatoryState(snapshot = {}) {
             workline.status === 'active' || workline.status === 'paused'
         ).length,
         releaseGoal: snapshot.release_goal ?? snapshot.releaseGoal ?? null,
+        publications: Array.isArray(snapshot.publications) ? snapshot.publications : [],
         totalCount: snapshot.total_count ?? snapshot.totalCount ?? worklines.length,
         filteredCount: snapshot.filtered_count ?? snapshot.filteredCount ?? worklines.length,
         selectedWorklineId: worklines[0]?.id ?? null,

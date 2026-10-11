@@ -13,7 +13,7 @@ const { endpointRouterMock, registerEndpointRouteMock } = vi.hoisted(() => ({
 vi.mock('../endpoints/endpoint_router.js', () => ({ endpoint_router: endpointRouterMock }));
 vi.mock('../pipeline/api_pipeline.js', () => ({ registerEndpointRoute: registerEndpointRouteMock }));
 
-import { applyWorklinePriorityAction, fetchWorklineObservatoryBoard, fetchWorklineObservatoryReportHistory } from './workline_observatory_api_adapter.js';
+import { createWorklineReleaseGoal, fetchWorklinePublications, saveWorklinePublication, applyWorklinePriorityAction, fetchWorklineObservatoryBoard, fetchWorklineObservatoryReportHistory } from './workline_observatory_api_adapter.js';
 
 beforeEach(() => vi.clearAllMocks());
 
@@ -47,4 +47,19 @@ describe('workline observatory API adapter', () => {
             method: 'POST', body_data: { worklines: [{ id: 9, expected_revision: 2 }], target_priority: 'critical' }, suppressAuthRedirect: true,
         });
     });
+});
+
+
+test('keeps publication text and its independent revision on the existing dedicated route', () => {
+    const details = { publication_version: '9.4.0', target_date: '2026-12-01', reader_description: 'Desktop and mobile.', published: false, published_at: null };
+    saveWorklinePublication(7, 3, details);
+    expect(endpointRouterMock).toHaveBeenCalledWith('worklineObservatoryReleaseGoals', {
+        method: 'PATCH', body_data: { ...details, id: 7, action: 'update', expected_revision: 3 }, suppressAuthRedirect: true,
+    });
+    createWorklineReleaseGoal({ ...details, version: 1 });
+    expect(endpointRouterMock).toHaveBeenLastCalledWith('worklineObservatoryReleaseGoals', {
+        method: 'POST', body_data: { ...details, version: 1 }, suppressAuthRedirect: true,
+    });
+    fetchWorklinePublications();
+    expect(endpointRouterMock).toHaveBeenLastCalledWith('worklineObservatoryReleaseGoals', { suppressAuthRedirect: true });
 });

@@ -1,11 +1,11 @@
 /**
  * T13_workline_observatory.spec.ts
  *
- * Verifies the private V1 board against the canonical native application.
- * Bridges authenticated navigation with aligned workline, phase, and release-target rows.
+ * Verifies the shared board in standalone and composed native applications.
+ * Bridges authenticated navigation with aligned workline, phase, and publication-target rows.
  */
 
-import { test, expect } from '@playwright/test';
+import { test, expect, type Page } from '@playwright/test';
 import { login, loadCredentials, type TestCredentials } from '../helpers/auth';
 
 test.describe('T13 — Workline observatory', () => {
@@ -43,7 +43,10 @@ test.describe('T13 — Workline observatory', () => {
     await expect(nowHeading).toHaveText(`NOW (${openWorklineCount})`);
     await expect(tracks).toHaveCount(worklineCount);
     await expect(targets).toHaveCount(worklineCount);
-    await expect(page.locator('.workline-observatory__detail')).toBeVisible();
+    await expect(page.locator('[data-release-goal-details]')).toContainText('Publications');
+    await page.locator('[data-release-goal-details]').click();
+    await expect(page.locator('#custom_modal .workline-observatory__goal')).toBeVisible();
+    await page.keyboard.press('Escape');
     for (let index = 0; index < worklineCount; index += 1) {
       const phaseNodes = tracks.nth(index).locator('.workline-observatory__phase-node');
       const phaseLabels = await phaseNodes.allTextContents();
@@ -253,7 +256,7 @@ test.describe('T13 — Workline observatory', () => {
     expect((beforeNowBox?.x ?? 0) + (beforeNowBox?.width ?? 0)).toBeLessThan(nowCenter);
     expect(afterNowBox?.x ?? 0).toBeGreaterThan(nowCenter);
 
-    await page.locator('.workline-observatory__detail').scrollIntoViewIfNeeded();
+    await page.locator('.workline-observatory__workline-row').last().scrollIntoViewIfNeeded();
     await expect(toolbar).toHaveAttribute('data-compact', 'true');
     await page.waitForTimeout(220);
     await expect(page.locator('.workline-observatory__selection-count')).toHaveCSS('visibility', 'hidden');
@@ -269,7 +272,95 @@ test.describe('T13 — Workline observatory', () => {
     const restoredHeight = await toolbar.evaluate((element) => element.getBoundingClientRect().height);
     expect(Math.abs(restoredHeight - expandedHeight)).toBeLessThan(1);
   });
+  test('Publications keeps reader fields, focus and explicit themes usable on desktop and mobile', async ({ page }, testInfo) => {
+    const plan = { id: 164, identity_key: 'public-desktop-mobile', version: 1, title: 'Filterestin yhdistetty julkinen desktop- ja mobiilisivusto', outcome: 'Complete the required features.', decision_state: 'locked', publication_version: '9.4.0', target_date: '2026-12-01', reader_description: 'Desktop ja mobiili yhdessä.', published: false, published_at: null, publication_revision: 3, is_current_publication: true };
+    const history = { ...plan, id: 163, title: 'Earlier publication', publication_version: '9.3.0', published: true, published_at: '2026-09-01T10:00:00Z', is_current_publication: false };
+    // Browser fixtures exercise the real renderer without editing installation
+    // records. Disposable PostgreSQL tests prove the real API and persistence.
+    await page.route('**/api/app/workline-observatory/board*', (route) => route.fulfill({
+      json: { dataset_surface_provider_key: 'workline-observatory', dataset_surface_capability_keys: ['workline-board-query'], worklines: [], release_goal: plan, publications: [plan, history], total_count: 0, filtered_count: 0 },
+    }));
+    let saved: Record<string, unknown> | null = null;
+    await page.route('**/api/app/workline-observatory/release-goals', async (route) => {
+      saved = route.request().postDataJSON();
+      await route.fulfill({ json: { id: 164, publication_revision: 4 } });
+    });
+    for (const language of ['en', 'fi']) {
+      for (const theme of ['light', 'dark'] as const) {
+        await serveAccountTheme(page, theme);
+        await page.emulateMedia({ colorScheme: theme === 'light' ? 'dark' : 'light' });
+        await page.evaluate(({ language, theme }) => {
+          window.localStorage.setItem('chosen_language', language);
+          window.localStorage.setItem('theme', theme);
+        }, { language, theme });
+        const accountThemeLoaded = page.waitForResponse((response) =>
+          isAccountThemeRequest(new URL(response.url())) && response.request().method() === 'GET' && response.ok());
+        await page.goto('/admin/workline_observatory', { waitUntil: 'domcontentloaded' });
+        await accountThemeLoaded;
+        await expect(page.locator('body')).toHaveClass(new RegExp(`\\b${theme}-mode\\b`));
+        await expect(page.locator('body')).not.toHaveClass(/\bsystem-mode\b/);
+        const opener = page.locator('[data-release-goal-details]');
+        await opener.click();
+        const modal = page.locator('#custom_modal');
+        await expect(modal).toContainText(language === 'fi' ? 'Julkaisut' : 'Publications');
+        await expect(modal.locator('[data-publication-current="true"]')).toHaveText(language === 'fi' ? 'Uusin julkaisematon' : 'Newest unpublished');
+        const form = modal.locator('.workline-observatory__publication-editor');
+        await expect(form.locator('[name="publication_version"]')).toHaveValue('9.4.0');
+        await expect(form.locator('[name="target_date"]')).toHaveValue('2026-12-01');
+        await expect(form.locator('[name="reader_description"]')).toHaveValue('Desktop ja mobiili yhdessä.');
+        await expect(form.locator('[name="published"]')).not.toBeChecked();
+        await expect(form.locator('[name="published_at"]')).toHaveValue('');
+        await expect(form.locator('[name="published_at"]')).toBeDisabled();
+        const date = form.locator('[name="target_date"]');
+        await expect(date).toHaveCSS('color-scheme', theme);
+        // Colour-scheme changes immediately; inherited colours may still be transitioning.
+        await expect.poll(async () => {
+          const colours = await date.evaluate(readButtonLuminance);
+          return theme === 'light'
+            ? colours.background > 0.9 && colours.text < 0.25
+            : colours.background < 0.3 && colours.text > 0.8;
+        }).toBe(true);
+        await form.locator('[name="publication_version"]').focus();
+        await page.keyboard.press('Tab');
+        await expect(date).toBeFocused();
+        await form.locator('[name="reader_description"]').focus();
+        await expect(form.locator('[name="reader_description"]')).toBeFocused();
+        await page.keyboard.press('Tab');
+        await expect(form.locator('[name="published"]')).toBeFocused();
+        const overflow = await form.evaluate((element) => [...element.querySelectorAll('input,textarea,button')].some((field) => {
+          const bounds = field.getBoundingClientRect();
+          return bounds.left < 0 || bounds.right > window.innerWidth + 1;
+        }));
+        expect(overflow).toBe(false);
+        await modal.screenshot({ path: testInfo.outputPath(`publications-${language}-${theme}.png`) });
+        await page.keyboard.press('Escape');
+        await expect(modal).toBeHidden();
+        await expect(opener).toBeFocused();
+      }
+    }
+    await page.locator('[data-release-goal-details]').click();
+    const form = page.locator('.workline-observatory__publication-editor');
+    await form.locator('[name="target_date"]').fill('2026-12-02');
+    await form.locator('button[type="submit"]').click();
+    await expect.poll(() => saved).toMatchObject({ id: 164, action: 'update', expected_revision: 3, publication_version: '9.4.0', target_date: '2026-12-02', reader_description: 'Desktop ja mobiili yhdessä.', published: false, published_at: null });
+  });
+
 });
+
+/** Clicks empty label padding, with a hit test proving it cannot activate a neighbouring control. */
+const isAccountThemeRequest = (url: URL): boolean => url.pathname === '/api/user-visual-preference';
+
+/** Supplies the account-owned theme on page loads, as T15 does, without saving preferences. */
+async function serveAccountTheme(page: Page, theme: 'light' | 'dark'): Promise<void> {
+  await page.unroute(isAccountThemeRequest);
+  await page.route(isAccountThemeRequest, async (route) => {
+    if (route.request().method() !== 'GET') {
+      await route.continue();
+      return;
+    }
+    await route.fulfill({ json: { theme_mode: theme, revision: 1, configured: true } });
+  });
+}
 
 function readButtonLuminance(element: Element) {
   const style = getComputedStyle(element);

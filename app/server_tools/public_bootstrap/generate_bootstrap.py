@@ -70,6 +70,8 @@ language_seed_migrations = (
     "20261009000041_seed_dataset_appearance_refusal_keys.sql",
     "20261009000052_seed_application_update_refusal_keys.sql",
     "20261009000062_seed_three_place_appearance_reload.sql",
+    "20261009000071_seed_publication_language_keys.sql",
+    "20261009000073_repair_publication_translations.sql",
 )
 # A setting an upgrade adds is added for a new installation by the same file, so
 # the default is written once and an upgraded site and a new one start with the
@@ -104,6 +106,7 @@ repair_schema_migrations = (
     "20261009000040_cut_over_dataset_card_appearance.sql",
     "20261009000050_create_application_update_admission.sql",
     "20261009000060_extend_dataset_appearance_three_places.sql",
+    "20261009000070_add_publication_fields_to_release_goals.sql",
 )
 # Complete the physical actor columns after development tables and support functions,
 # before schema privileges. The data step later registers the same columns.
@@ -128,6 +131,7 @@ release_data_migrations = (
     "20261005000080_add_dataset_media_hidden.sql",
     "20261009000051_register_application_update_capability.sql",
     "20261009000061_backfill_dataset_appearance_three_places.sql",
+    "20261009000072_register_publication_columns.sql",
 )
 # The record of each database release is not run by the bootstrap: the acceptance
 # block below writes the version row of the version this bootstrap is built for.

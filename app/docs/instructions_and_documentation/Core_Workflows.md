@@ -118,3 +118,65 @@ use compatible runtime defaults; malformed configured values or a failed
 policy read do not silently bypass a sign-in restriction. Temporary development
 access restrictions are operator state and should not rewrite public About
 content describing the intended service.
+
+
+## Publications in the Workline Observatory
+
+The release decisions panel is **Julkaisut / Publications**. Significant
+publications reuse `dev_agent_release_goals` and their existing workline
+requirements (`dev_agent_release_goal_contracts`); there is no parallel
+publication or versions table. A future publication records the target date,
+required features, the plan towards them (outcome), and what readers gain on
+desktop and mobile (reader description).
+
+The integer `version` remains the accepted contract revision for an identity.
+The separate `publication_version` is software version **text**, such as
+`9.4.0`. Published Git tags remain authoritative: saving this record creates
+neither a Git tag nor a release artifact. Existing rows retain their identity,
+contract revision, lock and contracts; their new fields start empty or null,
+with `published=false` and `publication_revision=0`.
+
+The dedicated administrator endpoint remains
+`/api/app/workline-observatory/release-goals`. Its GET returns up to 100
+publications ordered unpublished first, then by creation time and id descending.
+The board response includes the same `publications` list and exposes its first
+row as `release_goal`. **Newest** means newest-created, rather than latest
+edited or furthest target date. The newest unpublished row is marked
+`is_current_publication=true`; when all are published the newest published row
+opens without that highlight. The stored legacy selection flag and select
+action remain compatible, but do not override this focus rule. The panel's
+picker browses older publications without changing the board's workline scope.
+
+POST accepts the existing identity, integer contract version, title, outcome
+and selected flag, plus `publication_version`, nullable `target_date`
+(`YYYY-MM-DD`), `reader_description` (up to 6000 characters), `published`
+(default false), and nullable `published_at` (RFC3339 with timezone).
+PATCH with `action="update"` and `id` replaces these five publication fields
+as a group and requires the observed `expected_revision`. A missing revision
+returns 400, a stale revision 409, and a missing publication 404. The separate
+publication revision advances only when these fields actually change.
+
+Publishing requires nonempty version text. The server records the time at first
+publication when none is supplied; later edits that omit it or resend the saved
+instant preserve it, while an administrator may correct it with the current
+publication revision (a stale correction returns 409). Unpublishing clears the
+time; publishing again without a supplied time records a new server time.
+The browser edits time in the person's local zone and sends a timezone-qualified
+instant, retaining the exact saved instant when the control was not changed.
+A save refreshes the panel and current plan.
+
+The existing administrator permission profile, session, CSRF and transaction
+pipeline still govern every call. All active worklines must have a completion
+classification before locking. A lock continues to freeze title, outcome,
+identity, integer version and requirements. Scheduling, software version text,
+reader information and publication state remain editable after locking, guarded
+by their separate revision. Contract editing remains on the existing contracts
+endpoint; starting a new scope revision creates another release-goal row.
+
+Migrations `20261009000070`–`20261009000073` belong to unreleased DB 9.10.2:
+they add checked storage, language keys and column metadata; migration 73 repairs
+missing canonical translations on development instances that applied old 71.
+The schema migration's final check verifies column shapes, constraint validation, the
+revision trigger and ordering index before writing its completion marker.
+Bootstrap generation includes all four and accepts them only after completion
+markers and the final check pass; baseline evidence does not claim execution.

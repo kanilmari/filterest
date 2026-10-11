@@ -3,6 +3,8 @@
 // Connects shared row/bulk action definitions with the authenticated atomic API adapters.
 // Prevents row menus from inheriting bulk selection and keeps immutable reports untouched.
 
+import { getTranslationForKey } from '../lang/translation_handler.js';
+
 import { applyWorklineStatusAction, applyWorklinePriorityAction } from './workline_observatory_api_adapter.js';
 
 export function formatCopy(template, values) {
@@ -86,14 +88,18 @@ export function describeStatusChange(change, copy) {
 export function createWorklineObservatoryActions({ getState, copy, refresh, redraw, setMessage }) {
     let busy = false;
     let destroyed = false;
-    const errorMessage = async (error) => {
+    const errorMessage = async (error, conflictCopy = copy.conflict) => {
         if (Number(error?.status || error?.statusCode || error?.response?.status) === 409) {
             try { await refresh(); } catch (_refreshError) { /* Keep actionable conflict guidance. */ }
-            return copy.conflict;
+            return conflictCopy;
         }
-        return error?.message || String(error);
+        // The pipeline's notice owns readable copy; its Error message is technical.
+        const fallback = getTranslationForKey('request_failed_notice');
+        return error?.failureNotice?.langKey
+            ? getTranslationForKey(error.failureNotice.langKey, { fallback, countUsage: false })
+            : fallback;
     };
-    const run = async (operation, success) => {
+    const run = async (operation, success, conflictCopy) => {
         if (busy || destroyed) return;
         busy = true;
         setMessage('');
@@ -105,7 +111,7 @@ export function createWorklineObservatoryActions({ getState, copy, refresh, redr
             if (!destroyed) setMessage(success(result));
         } catch (error) {
             if (destroyed) return;
-            const message = await errorMessage(error);
+            const message = await errorMessage(error, conflictCopy);
             if (!destroyed) setMessage(message);
         } finally {
             busy = false;
@@ -114,7 +120,7 @@ export function createWorklineObservatoryActions({ getState, copy, refresh, redr
     };
     return {
         get busy() { return busy; },
-        async mutate(operation) { await run(operation, () => ''); },
+        async mutate(operation, conflictCopy) { await run(operation, () => '', conflictCopy); },
         destroy() { destroyed = true; },
         async status(action, rowIds = null) {
             if (busy || destroyed) return;

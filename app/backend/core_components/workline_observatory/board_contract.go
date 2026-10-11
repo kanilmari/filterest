@@ -7,13 +7,14 @@ package workline_observatory
 import "time"
 
 type BoardSnapshot struct {
-	DatasetSurfaceProviderKey    string            `json:"dataset_surface_provider_key"`
-	DatasetSurfaceCapabilityKeys []string          `json:"dataset_surface_capability_keys"`
-	TotalCount                   int               `json:"total_count"`
-	FilteredCount                int               `json:"filtered_count"`
-	GeneratedAt                  time.Time         `json:"generated_at"`
-	Worklines                    []BoardWorkline   `json:"worklines"`
-	ReleaseGoal                  *BoardReleaseGoal `json:"release_goal"`
+	DatasetSurfaceProviderKey    string             `json:"dataset_surface_provider_key"`
+	DatasetSurfaceCapabilityKeys []string           `json:"dataset_surface_capability_keys"`
+	TotalCount                   int                `json:"total_count"`
+	FilteredCount                int                `json:"filtered_count"`
+	GeneratedAt                  time.Time          `json:"generated_at"`
+	Worklines                    []BoardWorkline    `json:"worklines"`
+	ReleaseGoal                  *BoardReleaseGoal  `json:"release_goal"`
+	Publications                 []BoardReleaseGoal `json:"publications"`
 }
 
 type BoardWorkline struct {
@@ -66,13 +67,21 @@ type BoardWorklineReportHistory struct {
 }
 
 type BoardReleaseGoal struct {
-	ID            int64                  `json:"id"`
-	IdentityKey   string                 `json:"identity_key"`
-	Version       int                    `json:"version"`
-	Title         string                 `json:"title"`
-	Outcome       string                 `json:"outcome"`
-	DecisionState string                 `json:"decision_state"`
-	Contracts     []BoardReleaseContract `json:"contracts"`
+	PublicationVersion   string                 `json:"publication_version"`
+	TargetDate           *string                `json:"target_date"`
+	ReaderDescription    string                 `json:"reader_description"`
+	Published            bool                   `json:"published"`
+	PublishedAt          *time.Time             `json:"published_at"`
+	PublicationRevision  int64                  `json:"publication_revision"`
+	IsCurrentPublication bool                   `json:"is_current_publication"`
+	IsSelected           bool                   `json:"is_selected"`
+	ID                   int64                  `json:"id"`
+	IdentityKey          string                 `json:"identity_key"`
+	Version              int                    `json:"version"`
+	Title                string                 `json:"title"`
+	Outcome              string                 `json:"outcome"`
+	DecisionState        string                 `json:"decision_state"`
+	Contracts            []BoardReleaseContract `json:"contracts"`
 }
 
 type BoardReleaseContract struct {

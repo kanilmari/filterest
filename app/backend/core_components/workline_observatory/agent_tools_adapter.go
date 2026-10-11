@@ -154,12 +154,17 @@ func loadBoardSnapshot(ctx context.Context, database boardReader) (BoardSnapshot
 		return snapshot, fmt.Errorf("iterate worklines: %w", err)
 	}
 
-	goal, err := loadSelectedReleaseGoal(ctx, database)
+	publications, err := loadPublications(ctx, database)
 	if err != nil {
 		return snapshot, err
 	}
-	snapshot.ReleaseGoal = goal
-	if goal != nil {
+	snapshot.Publications = publications
+	if len(publications) > 0 {
+		goal := &snapshot.Publications[0]
+		if err := loadReleaseGoalContracts(ctx, database, goal); err != nil {
+			return snapshot, err
+		}
+		snapshot.ReleaseGoal = goal
 		contractsByWorkline := make(map[int64]BoardReleaseContract, len(goal.Contracts))
 		for _, contract := range goal.Contracts {
 			contractsByWorkline[contract.WorklineID] = contract
@@ -245,48 +250,4 @@ func loadBoardWorklineReportHistory(ctx context.Context, database *sql.DB, workl
 		return history, fmt.Errorf("iterate workline report history: %w", err)
 	}
 	return history, nil
-}
-
-func loadSelectedReleaseGoal(ctx context.Context, database boardReader) (*BoardReleaseGoal, error) {
-	var goal BoardReleaseGoal
-	err := database.QueryRowContext(ctx, `
-        SELECT id, identity_key, version, title, outcome, decision_state
-        FROM dev_agent_release_goals
-        WHERE is_selected = TRUE
-        LIMIT 1`).Scan(
-		&goal.ID, &goal.IdentityKey, &goal.Version, &goal.Title, &goal.Outcome, &goal.DecisionState,
-	)
-	if err == sql.ErrNoRows {
-		return nil, nil
-	}
-	if err != nil {
-		return nil, fmt.Errorf("query selected release goal: %w", err)
-	}
-
-	goal.Contracts = []BoardReleaseContract{}
-	rows, err := database.QueryContext(ctx, `
-        SELECT id, workline_id, completion_rule, target_phase
-        FROM dev_agent_release_goal_contracts
-        WHERE release_goal_id = $1
-        ORDER BY workline_id`, goal.ID)
-	if err != nil {
-		return nil, fmt.Errorf("query release contracts: %w", err)
-	}
-	defer rows.Close()
-	for rows.Next() {
-		var contract BoardReleaseContract
-		var targetPhase sql.NullInt64
-		if err := rows.Scan(&contract.ID, &contract.WorklineID, &contract.CompletionRule, &targetPhase); err != nil {
-			return nil, fmt.Errorf("scan release contract: %w", err)
-		}
-		if targetPhase.Valid {
-			value := int(targetPhase.Int64)
-			contract.TargetPhase = &value
-		}
-		goal.Contracts = append(goal.Contracts, contract)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("iterate release contracts: %w", err)
-	}
-	return &goal, nil
 }

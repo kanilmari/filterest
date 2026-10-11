@@ -4,7 +4,8 @@
 // Keeps lifecycle status separate from the latest reported phase and rejects stale history loads.
 
 import { createModal, showModal, hideModal } from '../../reusable_components/modal/modal_builder.js';
-import { applyWorklineReleaseGoalAction, createWorklineReleaseGoal, fetchWorklineObservatoryReportHistory, saveWorklineReleaseContract } from './workline_observatory_api_adapter.js';
+import { fetchWorklineObservatoryReportHistory, saveWorklineReleaseContract } from './workline_observatory_api_adapter.js';
+import { buildPublicationPanel, setPublicationAvailability } from './publication_panel_builder.js';
 import { buildWorklinePriorityEditor, describeWorklineStatus, describeStatusChange } from './workline_observatory_actions.js';
 
 // The shared modal owns focus trapping, Escape, overlay close and focus restoration.
@@ -49,7 +50,7 @@ export function createWorklineObservatoryDetailModal({ getState, copy, actions, 
         guidance.className = 'workline-observatory__modal-guidance';
         guidance.setAttribute('aria-live', 'polite');
         guidance.textContent = getMessage();
-        const goalPanel = buildGoalPanel();
+        const goalPanel = buildPublicationPanel(state, copy, actions);
         detail.append(guidance);
         const workline = state.worklines.find((candidate) => candidate.id === activeWorklineId);
         if (!workline) { detail.append(goalPanel); return detail; }
@@ -116,68 +117,6 @@ export function createWorklineObservatoryDetailModal({ getState, copy, actions, 
         return wrapper;
     };
 
-    const buildGoalPanel = () => {
-        const panel = document.createElement('section'); panel.className = 'workline-observatory__goal';
-        const title = document.createElement('h3'); title.textContent = copy.goal; panel.append(title);
-        const goal = state.releaseGoal;
-        if (!goal) {
-            const empty = document.createElement('p'); empty.textContent = copy.noGoal;
-            panel.append(empty, buildGoalCreator());
-            return panel;
-        }
-        panel.append(
-            detailLine(`${goal.identity_key} v${goal.version}`, `${goal.title} · ${goal.decision_state === 'locked' ? copy.locked : copy.draft}`),
-            detailLine('', goal.outcome),
-        );
-        if (goal.decision_state === 'draft') panel.append(buildGoalLockButton(goal));
-        if (goal.decision_state === 'locked') panel.append(buildGoalCreator());
-        return panel;
-    };
-
-    const buildGoalLockButton = (goal) => {
-        const wrapper = document.createElement('div');
-        const status = document.createElement('p'); status.className = 'fw-text-muted';
-        const button = document.createElement('button');
-        button.type = 'button'; button.className = 'button'; button.textContent = copy.lockGoal; button.disabled = actions.busy;
-        button.addEventListener('click', async () => {
-            button.disabled = true;
-            try {
-                await actions.mutate(() => applyWorklineReleaseGoalAction(goal.id, 'lock'));
-                button.disabled = false;
-            } catch (error) {
-                status.textContent = error?.message || String(error);
-                button.disabled = false;
-            }
-        });
-        wrapper.append(button, status);
-        return wrapper;
-    };
-
-    const buildGoalCreator = () => {
-        const form = document.createElement('form');
-        form.className = 'workline-observatory__goal-creator';
-        const heading = document.createElement('h4'); heading.textContent = copy.newGoal;
-        const identity = labeledInput(copy.goalKey, 'text', 'release-');
-        const version = labeledInput(copy.goalRevision, 'number', '1'); version.input.min = '1';
-        const title = labeledInput(copy.goalTitle, 'text', '');
-        const outcome = labeledInput(copy.goalOutcome, 'text', '');
-        const status = document.createElement('p'); status.className = 'fw-text-muted';
-        const submit = document.createElement('button');
-        submit.type = 'submit'; submit.className = 'button'; submit.textContent = copy.createGoal; submit.disabled = actions.busy;
-        form.append(heading, identity.wrapper, version.wrapper, title.wrapper, outcome.wrapper, submit, status);
-        form.addEventListener('submit', async (event) => {
-            event.preventDefault(); submit.disabled = true;
-            try {
-                await actions.mutate(() => createWorklineReleaseGoal({ identity_key: identity.input.value, version: Number(version.input.value), title: title.input.value, outcome: outcome.input.value, selected: true }));
-                submit.disabled = false;
-            } catch (error) {
-                status.textContent = error?.message || String(error);
-                submit.disabled = false;
-            }
-        });
-        return form;
-    };
-
     const buildContractEditor = (workline) => {
         const panel = document.createElement('section'); panel.className = 'workline-observatory__contract';
         const heading = document.createElement('h4'); heading.textContent = copy.contract; panel.append(heading);
@@ -233,7 +172,8 @@ export function createWorklineObservatoryDetailModal({ getState, copy, actions, 
         if (workline) renderReport(workline);
     };
     const synchronizeEditorAvailability = () => {
-        modalContent.querySelectorAll('.workline-observatory__goal button, .workline-observatory__goal input, .workline-observatory__priority-editor')
+        setPublicationAvailability(modalContent.querySelector('.workline-observatory__goal'), actions.busy);
+        modalContent.querySelectorAll('.workline-observatory__priority-editor')
             .forEach((element) => { element.disabled = actions.busy; });
         modalContent.querySelectorAll('.workline-observatory__contract button, .workline-observatory__contract input, .workline-observatory__contract select')
             .forEach((element) => { element.disabled = actions.busy || state.releaseGoal?.decision_state === 'locked'; });
@@ -328,13 +268,4 @@ export function describeReleaseContract(contract, copy) {
     return contract.target_phase === null || contract.target_phase === undefined
         ? label
         : `${label} · ${copy.phase} ${contract.target_phase}`;
-}
-
-function labeledInput(labelText, type, value) {
-    const wrapper = document.createElement('label');
-    const label = document.createElement('span'); label.textContent = labelText;
-    const input = document.createElement('input');
-    input.type = type; input.value = value; input.required = true;
-    wrapper.append(label, input);
-    return { wrapper, input };
 }

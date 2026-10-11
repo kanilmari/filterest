@@ -1,5 +1,5 @@
 // release_goal_handlers.go
-// Creates, selects, locks, and classifies release goals through bounded admin APIs.
+// Creates and edits Publications, retaining bounded release selection and locking.
 // Bridges human release decisions with database-enforced draft and locked contracts.
 // Exists so neither the UI nor an AI can silently rewrite an accepted release boundary.
 package workline_observatory
@@ -26,6 +26,7 @@ var allowedCompletionRules = map[string]struct{}{
 }
 
 type releaseGoalCreateRequest struct {
+	publicationDetails
 	IdentityKey string `json:"identity_key"`
 	Version     int    `json:"version"`
 	Title       string `json:"title"`
@@ -34,8 +35,10 @@ type releaseGoalCreateRequest struct {
 }
 
 type releaseGoalActionRequest struct {
-	ID     int64  `json:"id"`
-	Action string `json:"action"`
+	ID               int64  `json:"id"`
+	Action           string `json:"action"`
+	ExpectedRevision *int64 `json:"expected_revision"`
+	publicationDetails
 }
 
 type releaseContractRequest struct {
@@ -45,7 +48,7 @@ type releaseContractRequest struct {
 	TargetPhase    *int   `json:"target_phase"`
 }
 
-// ReleaseGoalsHandler creates drafts and performs explicit select or lock actions.
+// ReleaseGoalsHandler lists Publications, creates drafts, edits metadata and selects or locks scope.
 func ReleaseGoalsHandler(w http.ResponseWriter, r *http.Request) {
 	userID, err := e_sessions.GetUserIDFromSession(r)
 	if err != nil || userID <= 1 {
@@ -53,6 +56,8 @@ func ReleaseGoalsHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	switch r.Method {
+	case http.MethodGet, http.MethodHead:
+		listPublications(w, r)
 	case http.MethodPost:
 		createReleaseGoal(w, r, userID)
 	case http.MethodPatch:
@@ -67,6 +72,10 @@ func createReleaseGoal(w http.ResponseWriter, r *http.Request, userID int) {
 		httpresponse.RespondWithError(w, http.StatusBadRequest, "invalid_json")
 		return
 	}
+	if publicationTextContainsNUL(input.IdentityKey, input.Title, input.Outcome) || publicationDetailsContainNUL(input.publicationDetails) {
+		respondPublicationRefusal(w, http.StatusBadRequest, "invalid_publication_text")
+		return
+	}
 	input.IdentityKey = strings.ToLower(strings.TrimSpace(input.IdentityKey))
 	input.Title = strings.TrimSpace(input.Title)
 	input.Outcome = strings.TrimSpace(input.Outcome)
@@ -76,6 +85,11 @@ func createReleaseGoal(w http.ResponseWriter, r *http.Request, userID int) {
 		return
 	}
 
+	details, err := normalizePublicationDetails(input.publicationDetails)
+	if err != nil {
+		respondPublicationRefusal(w, http.StatusBadRequest, err.Error())
+		return
+	}
 	tx, ok := dbutils.RequireTx(r.Context())
 	if !ok {
 		httpresponse.RespondWithError(w, http.StatusInternalServerError, "transaction_unavailable")
@@ -88,18 +102,21 @@ func createReleaseGoal(w http.ResponseWriter, r *http.Request, userID int) {
 		}
 	}
 	var id int64
-	err := tx.QueryRowContext(r.Context(), `
+	err = tx.QueryRowContext(r.Context(), `
         INSERT INTO dev_agent_release_goals (
-            identity_key, version, title, outcome, is_selected, created_by, owner_id
-        ) VALUES ($1, $2, $3, $4, $5, CASE WHEN $6 > 1 THEN $6 END, CASE WHEN $6 > 1 THEN $6 END)
+            identity_key, version, title, outcome, is_selected, created_by, owner_id,
+            publication_version, target_date, reader_description, published, published_at
+        ) VALUES ($1, $2, $3, $4, $5, CASE WHEN $6 > 1 THEN $6 END, CASE WHEN $6 > 1 THEN $6 END,
+            $7, $8::date, $9, $10, CASE WHEN $10 THEN COALESCE($11::timestamptz, now()) END)
         RETURNING id`,
 		input.IdentityKey, input.Version, input.Title, input.Outcome, input.Selected, userID,
+		details.PublicationVersion, details.TargetDate, details.ReaderDescription, details.Published, details.PublishedAt,
 	).Scan(&id)
 	if err != nil {
 		respondReleaseGoalDatabaseError(w, err)
 		return
 	}
-	httpresponse.RespondWithJSON(w, http.StatusCreated, map[string]any{"id": id, "decision_state": "draft"})
+	httpresponse.RespondWithJSON(w, http.StatusCreated, map[string]any{"id": id, "decision_state": "draft", "publication_revision": 0})
 }
 
 func applyReleaseGoalAction(w http.ResponseWriter, r *http.Request, userID int) {
@@ -108,7 +125,15 @@ func applyReleaseGoalAction(w http.ResponseWriter, r *http.Request, userID int) 
 		httpresponse.RespondWithError(w, http.StatusBadRequest, "invalid_release_goal_action")
 		return
 	}
+	if publicationTextContainsNUL(input.Action) || publicationDetailsContainNUL(input.publicationDetails) {
+		respondPublicationRefusal(w, http.StatusBadRequest, "invalid_publication_text")
+		return
+	}
 	input.Action = strings.ToLower(strings.TrimSpace(input.Action))
+	if input.Action == "update" {
+		updatePublication(w, r, input)
+		return
+	}
 	tx, ok := dbutils.RequireTx(r.Context())
 	if !ok {
 		httpresponse.RespondWithError(w, http.StatusInternalServerError, "transaction_unavailable")
@@ -188,6 +213,10 @@ func ReleaseContractsHandler(w http.ResponseWriter, r *http.Request) {
 	var input releaseContractRequest
 	if json.NewDecoder(r.Body).Decode(&input) != nil || input.ReleaseGoalID <= 0 || input.WorklineID <= 0 {
 		httpresponse.RespondWithError(w, http.StatusBadRequest, "invalid_release_contract")
+		return
+	}
+	if publicationTextContainsNUL(input.CompletionRule) {
+		respondPublicationRefusal(w, http.StatusBadRequest, "invalid_publication_text")
 		return
 	}
 	input.CompletionRule = strings.ToLower(strings.TrimSpace(input.CompletionRule))

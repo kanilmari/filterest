@@ -77,7 +77,11 @@ func boardSearchDB(t *testing.T) *sql.DB {
         CREATE TABLE system_users(id bigint PRIMARY KEY, username text);
         CREATE TABLE dev_agent_workline_tasks(workline_id bigint, task_id bigint);
         CREATE TABLE dev_agent_release_goals(id bigint PRIMARY KEY, identity_key text, version text,
-            title text, outcome text, decision_state text, is_selected boolean);
+            title text, outcome text, decision_state text, is_selected boolean,
+            publication_version text NOT NULL DEFAULT '', target_date date,
+            reader_description text NOT NULL DEFAULT '', published boolean NOT NULL DEFAULT false,
+            published_at timestamptz, publication_revision bigint NOT NULL DEFAULT 0,
+            created timestamptz NOT NULL DEFAULT now());
         CREATE TABLE dev_agent_release_goal_contracts(id bigint PRIMARY KEY, release_goal_id bigint,
             workline_id bigint, completion_rule text, target_phase integer);
         CREATE TABLE dev_agent_workline_reports(

@@ -181,6 +181,10 @@
     "20261009000060_extend_dataset_appearance_three_places.sql",
     "20261009000061_backfill_dataset_appearance_three_places.sql",
     "20261009000062_seed_three_place_appearance_reload.sql",
+    "20261009000070_add_publication_fields_to_release_goals.sql",
+    "20261009000071_seed_publication_language_keys.sql",
+    "20261009000072_register_publication_columns.sql",
+    "20261009000073_repair_publication_translations.sql",
     "20261009000099_record_database_release_9_10_2.sql"
   ],
   "allowed_schema_tables": [
@@ -346,11 +350,11 @@
     "public.system_group_table_func_rights": 24,
     "public.system_lang_key_sources": 0,
     "public.system_lang_key_translations": 163,
-    "public.system_lang_keys": 1300,
+    "public.system_lang_keys": 1361,
     "public.system_languages": 5,
     "public.system_permission_actions": 7,
     "public.system_permission_categories": 4,
-    "public.system_schema_migrations": 175,
+    "public.system_schema_migrations": 179,
     "public.system_table_folders": 14,
     "public.system_table_views": 13,
     "public.system_user_group_memberships": 2,
@@ -362,10 +366,10 @@
   },
   "generated_files": {
     "server_tools/public_bootstrap/schema.sql": {
-      "sha256": "25e96c8c67dee8dca8d545e92647b895be100760b3a2537f8f3c55d13a05af53"
+      "sha256": "91c559964868148222b42c49f888e1a09c9f6cf0794c9574c687b850e23f5e01"
     },
     "server_tools/public_bootstrap/seed_data.sql": {
-      "sha256": "3ef3bad606b9f1292320277ed940b598526f8f30ef1cd3cb2897f604eb630b9d"
+      "sha256": "61e9aa2955d71af1b57f4b73710bd9a91d42dcbfe4f66fb110db0d5a8d9e7e55"
     }
   },
   "source_files": {
@@ -382,7 +386,7 @@
       "sha256": "235e4b887181e150bd436d035d2d268eb821d9e5d0b830b54eb444988f31d5d1"
     },
     "filterest/app/server_tools/public_bootstrap/generate_bootstrap.py": {
-      "sha256": "c90627d8d32d33f2a99fb08ca339f2ecd55eeceb1525bbaa0fe9940fd63a958e"
+      "sha256": "db3e44192f996b31bc02f7bf2d4a6ee0b83268bf5dd8d9388eb3a4bc4bc2e226"
     },
     "filterest/app/server_tools/public_bootstrap/sql_identifier_validator.py": {
       "sha256": "fd29b59186be027e1b0b5392cb4eab64a75b2903dba4ab661204c8931a64bbe5"
@@ -977,6 +981,18 @@
     },
     "filterest/app/server_tools/migrations/20261009000062_seed_three_place_appearance_reload.sql": {
       "sha256": "1fae49ca462f0fcd5b7854c2811b24c8bbf909408d0a22e29c25bca3ee9eaec8"
+    },
+    "filterest/app/server_tools/migrations/20261009000070_add_publication_fields_to_release_goals.sql": {
+      "sha256": "867a4d98b8415662e4d9c1a141d1e9cf5ae9d512c8342c6d49d0efda43b09e1d"
+    },
+    "filterest/app/server_tools/migrations/20261009000071_seed_publication_language_keys.sql": {
+      "sha256": "0659962fa39992880d95ac9641d4f0f115e56621f8a0de6df27497dc58c6277f"
+    },
+    "filterest/app/server_tools/migrations/20261009000072_register_publication_columns.sql": {
+      "sha256": "c41e01edd09a747af7a11b20e8ddd440913f245d1f3783c4bac7d72e4861d3f8"
+    },
+    "filterest/app/server_tools/migrations/20261009000073_repair_publication_translations.sql": {
+      "sha256": "8086ea742c9a040c6e4535a35504e8e00300a270a2cc6cac72117d05ae8450c2"
     },
     "filterest/app/server_tools/migrations/20261009000099_record_database_release_9_10_2.sql": {
       "sha256": "190f66df60bd062997ebd80b2392eff7fdd843c9c8a709a4a1c30f136e6bbd97"

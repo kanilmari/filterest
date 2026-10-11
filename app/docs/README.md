@@ -52,7 +52,7 @@ and validation are recorded; reading a design document does not make a feature
 available or authorize migrating existing data.
 
 Database-backed development tasks and the Workline Observatory ship as
-Filterest capabilities. Their records and local worker output belong to the
+Filterest capabilities. The existing release decisions are [Publications](instructions_and_documentation/Core_Workflows.md#publications-in-the-workline-observatory), with plans, dates and publication state. Their records and local worker output belong to the
 installation's ignored database and runtime storage. Optional worker commands
 also need a separately installed and authenticated AI command-line client.
 Project-specific applications, credentials, private data, and operational

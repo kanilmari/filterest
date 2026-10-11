@@ -26,7 +26,7 @@ func Register() {
 			{"/api/app/workline-observatory/board", "workline_observatory.BoardHandler", BoardHandler, []string{http.MethodGet}},
 			{"/api/app/workline-observatory/priority-actions", "workline_observatory.WorklinePriorityActionsHandler", WorklinePriorityActionsHandler, []string{http.MethodPost}},
 			{"/api/app/workline-observatory/status-actions", "workline_observatory.WorklineStatusActionsHandler", WorklineStatusActionsHandler, []string{http.MethodPost}},
-			{"/api/app/workline-observatory/release-goals", "workline_observatory.ReleaseGoalsHandler", ReleaseGoalsHandler, []string{http.MethodPost, http.MethodPatch}},
+			{"/api/app/workline-observatory/release-goals", "workline_observatory.ReleaseGoalsHandler", ReleaseGoalsHandler, []string{http.MethodGet, http.MethodPost, http.MethodPatch}},
 			{"/api/app/workline-observatory/contracts", "workline_observatory.ReleaseContractsHandler", ReleaseContractsHandler, []string{http.MethodPut}},
 		}
 		for _, route := range routes {
