@@ -1,46 +1,36 @@
-// nav_history_buttons.spec.ts
-// E2E tests for the back/forward navigation buttons in the top bar.
-// Verifies button states, navigation flow, and edge cases.
-// Uses /frontend/... paths so the app's history_navigation.js ignores
-// them (it returns early for /frontend/ paths), keeping the DOM stable.
+// G4_history_back.spec.ts
+// Verifies the visible back/forward controls at each project's actual width.
+// Connects completed app startup, the real navbar opener and browser history.
+// Synthetic /frontend/ entries isolate button history from dataset rendering.
 
-import { test, expect, type Locator } from '@playwright/test';
+import { test, expect, type Locator, type Page } from '@playwright/test';
+import { ensureNavbarVisible } from '../helpers/navbar';
 
-async function clickNavButton(button: Locator): Promise<void> {
-  await button.evaluate((element) => {
-    if (element instanceof HTMLButtonElement) {
-      element.click();
-    }
-  });
-}
-
-async function waitForUrlToStabilize(page: import('@playwright/test').Page): Promise<void> {
-  let previousUrl = page.url();
-  let stableForMs = 0;
-
-  while (stableForMs < 300) {
-    await page.waitForTimeout(100);
-    const currentUrl = page.url();
-    if (currentUrl === previousUrl) {
-      stableForMs += 100;
-      continue;
-    }
-    previousUrl = currentUrl;
-    stableForMs = 0;
-  }
+async function clickNavButton(page: Page, button: Locator, destination: string | RegExp): Promise<void> {
+  await expect(button).toBeEnabled();
+  await button.click();
+  // Button states update optimistically. The address proves the browser has
+  // actually traversed before another click or pushState can change history.
+  await expect(page).toHaveURL(destination);
 }
 
 test.describe('Back/Forward Navigation Buttons', () => {
 
   test.beforeEach(async ({ page }) => {
-    // Use wide viewport so navbar is expanded (threshold ~1850px)
-    await page.setViewportSize({ width: 1920, height: 1080 });
+    await page.addInitScript(() => {
+      localStorage.setItem('navVisibleWide', 'true');
+      localStorage.setItem('navVisibleNarrow', 'false');
+    });
     await page.goto('/');
-    // Wait for navbar to be visible (not collapsed)
-    await expect(page.locator('#navbar')).not.toHaveClass(/collapsed/);
+    // A visible navbar and 300ms without a URL change do not mean startup
+    // finished. The default dataset can still write history after that gap.
+    await page.waitForFunction(() => (window as Window & {
+      __filterestShellBoot?: { status: () => { ready: boolean } };
+    }).__filterestShellBoot?.status().ready === true);
+    await expect(page.locator('#tabs_container .content_div:visible').first()).toBeVisible();
+    await ensureNavbarVisible(page);
     await expect(page.locator('#navBackBtn')).toBeVisible();
     await expect(page.locator('#navForwardBtn')).toBeVisible();
-    await waitForUrlToStabilize(page);
   });
 
   test('Both buttons are disabled on initial page load', async ({ page }) => {
@@ -85,10 +75,7 @@ test.describe('Back/Forward Navigation Buttons', () => {
     await expect(forwardBtn).toBeDisabled();
 
     // Click back
-    await clickNavButton(backBtn);
-
-    // Wait for popstate processing
-    await page.waitForTimeout(500);
+    await clickNavButton(page, backBtn, /\/frontend\/test-page-1$/);
 
     // Forward should now be enabled
     await expect(forwardBtn).toBeEnabled();
@@ -108,8 +95,7 @@ test.describe('Back/Forward Navigation Buttons', () => {
     await expect(backBtn).toBeEnabled();
 
     // Go back
-    await clickNavButton(backBtn);
-    await expect(page).toHaveURL(/\/frontend\/test-page-1$/, { timeout: 5000 });
+    await clickNavButton(page, backBtn, /\/frontend\/test-page-1$/);
 
     // Forward should be enabled
     await expect(forwardBtn).toBeEnabled();
@@ -143,12 +129,9 @@ test.describe('Back/Forward Navigation Buttons', () => {
 
     // Go back 3 times and verify each history step explicitly instead of
     // assuming the landing page has no earlier browser-history entry.
-    await clickNavButton(backBtn);
-    await expect(page).toHaveURL(/\/frontend\/page-b$/, { timeout: 5000 });
-    await clickNavButton(backBtn);
-    await expect(page).toHaveURL(/\/frontend\/page-a$/, { timeout: 5000 });
-    await clickNavButton(backBtn);
-    await expect(page).toHaveURL(startingUrl, { timeout: 5000 });
+    await clickNavButton(page, backBtn, /\/frontend\/page-b$/);
+    await clickNavButton(page, backBtn, /\/frontend\/page-a$/);
+    await clickNavButton(page, backBtn, startingUrl);
 
     // At the starting page the exact back-button state depends on whether the
     // app boot path itself pushed one extra browser-history entry.  The
@@ -157,10 +140,8 @@ test.describe('Back/Forward Navigation Buttons', () => {
     await expect(forwardBtn).toBeEnabled();
 
     // Go forward twice
-    await clickNavButton(forwardBtn);
-    await expect(page).toHaveURL(/\/frontend\/page-a$/, { timeout: 5000 });
-    await clickNavButton(forwardBtn);
-    await expect(page).toHaveURL(/\/frontend\/page-b$/, { timeout: 5000 });
+    await clickNavButton(page, forwardBtn, /\/frontend\/page-a$/);
+    await clickNavButton(page, forwardBtn, /\/frontend\/page-b$/);
 
     // At page-b: both enabled
     await expect(backBtn).toBeEnabled();
@@ -173,25 +154,21 @@ test.describe('Back/Forward Navigation Buttons', () => {
 
     const urlBefore = page.url();
 
-    // Disabled native buttons should ignore DOM click() without changing history.
-    await backBtn.evaluate((button) => {
-      if (button instanceof HTMLButtonElement) {
-        button.click();
-      }
-    });
-    await page.waitForTimeout(300);
-
-    // URL should not change
-    expect(page.url()).toBe(urlBefore);
-
-    await forwardBtn.evaluate((button) => {
-      if (button instanceof HTMLButtonElement) {
-        button.click();
-      }
-    });
-    await page.waitForTimeout(300);
-
-    expect(page.url()).toBe(urlBefore);
+    for (const button of [backBtn, forwardBtn]) {
+      await expect(button).toBeDisabled();
+      // Native disabled controls dispatch no click, so their history handler
+      // cannot run. Prove this synchronously instead of sleeping for a no-op.
+      const clickCount = await button.evaluate((element: HTMLButtonElement) => {
+        let count = 0;
+        const recordClick = () => { count += 1; };
+        element.addEventListener('click', recordClick);
+        element.click();
+        element.removeEventListener('click', recordClick);
+        return count;
+      });
+      expect(clickCount).toBe(0);
+      await expect(page).toHaveURL(urlBefore);
+    }
   });
 
 });
