@@ -67,3 +67,7 @@ Update incoming documentation links when text moves or a document is deleted.
   while groups with read rights can still read selected values through references.
 - [Live schema workbench](Live_Schema_Workbench.md) describes a living administrator
   overview of table structure, activity, masked samples and reference-schema differences.
+- [Protected fields](Protected_Fields.md) describes encrypted secrets, routine masking,
+  deliberate reveal and copy records, key replacement and random value generation.
+- [Location filters](Location_Filters.md) describes distance and map-area queries,
+  shared dataset filters and nearest-first results over readable row locations.
