@@ -46,6 +46,21 @@ To execute the full suite (Tests + Analysis):
 
 The Visual Guardian Playwright config reuses the authenticated E2E storage state from `app/testing/e2e/global-setup.ts`, so captures default to a logged-in, app-ready browser context instead of relying on anonymous `/` loads.
 
+`capture_search_bar.spec.ts` checks the same search surface in the content hero
+and the flat shared toolbar at desktop and tablet widths. The shared input row
+owns the continuous outer border; the text input and overlaid clear button are
+borderless, and Submit has one inset separator. The proof checks the enclosing
+frame, control geometry, text padding, stable pressed clear control and cleared
+input. Both surfaces clear a submitted search, since drafts have no clear
+action. The query is submitted through the hero before exposing the flat bar,
+and the flat-bar screenshot captures the checked frame with its clear control
+visible, before clearing can restore the ordinary listing's scroll position.
+Both cases capture translated copy and explicit application themes opposite
+the operating-system preference. Run this entire spec with
+`app/playwright.visual.config.ts`, first with `--project=chromium --workers=1`.
+The `firefox` project needs its installed Playwright browser; an unavailable
+browser is missing coverage, not a passing or skipped visual proof.
+
 ## Directory Structure
 -   `analyze_ui.py`: Main analysis script.
 -   `*.spec.ts`: Playwright test files for capturing screenshots.

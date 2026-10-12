@@ -3,7 +3,7 @@
 // Bridges responsive Playwright viewports and the screenshot artifact helper.
 // Exists so search-bar visual regressions are visible across desktop and tablet states.
 
-import { expect, test } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
 import { revealActiveFilterbarSection } from '../e2e/helpers/filterbar';
 
 import {
@@ -47,52 +47,92 @@ async function verifyQuickFilterActionLayout(page) {
   expect(Math.abs(filtersBox!.width - resetBox!.width)).toBeLessThanOrEqual(2);
 }
 
-async function verifyInFieldClearControl(page) {
-  const input = page.locator('[data-testid="dataset-search-input-content-hero"]');
-  const clearButton = page.locator('[data-testid="dataset-search-clear-content-hero"]');
-  const submitButton = page.locator('[data-testid="dataset-search-submit-content-hero"]');
+async function commitHeroSearch(page: Page) {
+  const activeDataset = page.locator('.tab_parts_container:visible');
+  await activeDataset.getByTestId('dataset-search-input-content-hero').fill('service');
+  await activeDataset.getByTestId('dataset-search-submit-content-hero').click();
+  await expect(page).toHaveURL(url => url.searchParams.get('search') === 'service');
+}
 
-  await input.fill('service');
-  await submitButton.click();
+async function verifyInFieldClearControl(
+  page: Page,
+  variant: 'content-hero' | 'search-only',
+  capture?: () => Promise<void>,
+) {
+  const activeDataset = page.locator('.tab_parts_container:visible');
+  const input = activeDataset.getByTestId(`dataset-search-input-${variant}`);
+  const clearButton = activeDataset.getByTestId(`dataset-search-clear-${variant}`);
+  const submitButton = activeDataset.getByTestId(`dataset-search-submit-${variant}`);
+  // `has` is evaluated inside each candidate row, so the inner locator must not carry the outer scope again.
+  const row = activeDataset.locator('.dataset-search-input-row').filter({ has: page.getByTestId(`dataset-search-input-${variant}`) });
+
+  await expect(input).toBeVisible();
+  // The clear action belongs to committed searches, never unsubmitted drafts.
+  await expect(input).toHaveValue('service');
   await expect(clearButton).toBeVisible();
 
-  const [inputBox, clearBox, submitBox, clearStyle, inputStyle] = await Promise.all([
+  const [inputBox, clearBox, submitBox, rowBox, styles] = await Promise.all([
     input.boundingBox(),
     clearButton.boundingBox(),
     submitButton.boundingBox(),
-    clearButton.evaluate((element) => {
-      const style = getComputedStyle(element);
+    row.boundingBox(),
+    row.evaluate((element) => {
+      const input = element.querySelector<HTMLInputElement>('.dataset-search-input')!;
+      const clear = element.querySelector<HTMLElement>('.dataset-search-clear-button')!;
+      const submit = element.querySelector<HTMLElement>('.dataset-search-submit-button')!;
+      const frame = getComputedStyle(element);
+      const inputStyle = getComputedStyle(input);
+      const clearStyle = getComputedStyle(clear);
+      const submitStyle = getComputedStyle(submit);
+      const sides = ['Top', 'Right', 'Bottom', 'Left'] as const;
       return {
-        borderTopWidth: style.borderTopWidth,
-        borderRightWidth: style.borderRightWidth,
-        borderBottomWidth: style.borderBottomWidth,
-        borderLeftWidth: style.borderLeftWidth,
-        position: style.position,
+        frameWidths: sides.map(side => frame[`border${side}Width`]),
+        frameStyles: sides.map(side => frame[`border${side}Style`]),
+        frameColors: sides.map(side => frame[`border${side}Color`]),
+        inputWidths: sides.map(side => inputStyle[`border${side}Width`]),
+        inputPaddingRight: Number.parseFloat(inputStyle.paddingRight),
+        clearWidths: sides.map(side => clearStyle[`border${side}Width`]),
+        clearPosition: clearStyle.position,
+        submitSeparatorWidth: submitStyle.borderInlineStartWidth,
+        submitSeparatorStyle: submitStyle.borderInlineStartStyle,
+        submitOuterWidths: [submitStyle.borderTopWidth, submitStyle.borderInlineEndWidth, submitStyle.borderBottomWidth],
       };
     }),
-    input.evaluate((element) => ({
-      borderRightWidth: getComputedStyle(element).borderRightWidth,
-    })),
   ]);
 
   expect(inputBox).not.toBeNull();
   expect(clearBox).not.toBeNull();
   expect(submitBox).not.toBeNull();
+  expect(rowBox).not.toBeNull();
+  // One uninterrupted frame encloses both controls. The input and clear
+  // button are borderless; only Submit has an inset separator at the join.
+  expect(styles.frameWidths).toEqual(['1px', '1px', '1px', '1px']);
+  expect(styles.frameStyles).toEqual(['solid', 'solid', 'solid', 'solid']);
+  for (const color of styles.frameColors) {
+    expect(color).not.toBe('transparent');
+    expect(color).not.toBe('rgba(0, 0, 0, 0)');
+  }
+  expect(styles.inputWidths).toEqual(['0px', '0px', '0px', '0px']);
+  expect(styles.clearWidths).toEqual(['0px', '0px', '0px', '0px']);
+  expect(styles.clearPosition).toBe('absolute');
+  expect(styles.submitSeparatorWidth).toBe('1px');
+  expect(styles.submitSeparatorStyle).toBe('solid');
+  expect(styles.submitOuterWidths).toEqual(['0px', '0px', '0px']);
+  expect(Math.abs(inputBox!.x - rowBox!.x - 1)).toBeLessThanOrEqual(0.5);
+  expect(Math.abs(submitBox!.x + submitBox!.width - rowBox!.x - rowBox!.width + 1)).toBeLessThanOrEqual(0.5);
+  expect(rowBox!.height - inputBox!.height).toBeCloseTo(2, 1);
+  expect(rowBox!.height - submitBox!.height).toBeCloseTo(2, 1);
   expect(clearBox!.height).toBeLessThan(inputBox!.height);
   expect(Math.abs(
     (clearBox!.y + clearBox!.height / 2) - (inputBox!.y + inputBox!.height / 2)
   )).toBeLessThanOrEqual(2);
   expect(clearBox!.x).toBeGreaterThan(inputBox!.x);
   expect(clearBox!.x + clearBox!.width).toBeLessThan(inputBox!.x + inputBox!.width);
-  expect(submitBox!.x).toBeGreaterThanOrEqual(inputBox!.x + inputBox!.width - 2);
-  expect(clearStyle).toEqual({
-    borderTopWidth: '0px',
-    borderRightWidth: '0px',
-    borderBottomWidth: '0px',
-    borderLeftWidth: '0px',
-    position: 'absolute',
-  });
-  expect(inputStyle.borderRightWidth).not.toBe('0px');
+  expect(clearBox!.x).toBeGreaterThanOrEqual(inputBox!.x + inputBox!.width - styles.inputPaddingRight);
+  expect(Math.abs(submitBox!.x - inputBox!.x - inputBox!.width)).toBeLessThanOrEqual(0.5);
+  // Capture the flat bar's verified clear control before clearing can restore
+  // the ordinary listing and its hero/scroll position.
+  await capture?.();
 
   const beforePress = await clearButton.boundingBox();
   await clearButton.hover();
@@ -104,6 +144,7 @@ async function verifyInFieldClearControl(page) {
   for (const property of ['x', 'y', 'width', 'height'] as const) {
     expect(Math.abs(beforePress![property] - duringPress![property])).toBeLessThanOrEqual(0.1);
   }
+  await expect(input).toHaveValue('');
   await expect(clearButton).toBeHidden();
 }
 
@@ -113,7 +154,13 @@ async function verifyFlatTopbarContainsOnlySearch(page) {
 
   await expect(topbar).toBeVisible();
   await expect(center.locator(':scope > .dataset-search-panel')).toHaveCount(1);
-  await expect(center.locator(':scope > :not(.dataset-search-panel)')).toHaveCount(0);
+  await expect(center.locator(':scope > .dataset-search-panel')).toBeVisible();
+  // The persistent shell also contains the phone identity. At these desktop
+  // and tablet widths it is hidden; search is the only visible center content.
+  const phoneIdentity = center.locator(':scope > [data-testid="mobile-site-identity"]');
+  await expect(phoneIdentity).toHaveCount(1);
+  await expect(phoneIdentity).toBeHidden();
+  await expect(center.locator(':scope > :not(.dataset-search-panel):not([data-testid="mobile-site-identity"])')).toHaveCount(0);
   await expect(center.locator('select')).toHaveCount(0);
   await expect(center.locator('[data-temporary-filters-toggle-for]')).toHaveCount(0);
   await expect(center.locator('[data-testid^="btn-reset-search-"]')).toHaveCount(0);
@@ -225,22 +272,17 @@ test.describe('Visual Guardian - Search Bar Focus', () => {
       'desktop_row_access_multiselect_light_fi'
     );
     await verifyQuickFilterActionLayout(page);
-    await verifyInFieldClearControl(page);
+    await commitHeroSearch(page);
+    await verifyInFieldClearControl(page, 'content-hero');
     
     const filterPanel = getVisibleFilterPanel(page);
-    const panelVisible = await filterPanel.isVisible().catch(() => false);
-    if (!panelVisible) {
-      try {
-        await filterPanel.waitFor({ state: 'visible', timeout: 5000 });
-      } catch {
-        test.skip(true, 'Filter panel not visible for the loaded dataset.');
-        return;
-      }
-    }
+    await expect(filterPanel).toBeVisible();
 
+    await commitHeroSearch(page);
     await exposeFlatTopbar(page);
     await verifyFlatTopbarContainsOnlySearch(page);
-    await takeGuardianScreenshot(page, testInfo, 'desktop_flat_mode_search_bar');
+    await verifyInFieldClearControl(page, 'search-only', () =>
+      takeGuardianScreenshot(page, testInfo, 'desktop_flat_mode_search_bar'));
   });
 
   test('Tablet (iPad Landscape 1024x768) - Flat Mode Search Bar', async ({ page }, testInfo) => {
@@ -259,23 +301,31 @@ test.describe('Visual Guardian - Search Bar Focus', () => {
       'tablet_row_access_multiselect_dark_en'
     );
     await verifyQuickFilterActionLayout(page);
-    await verifyInFieldClearControl(page);
+    await commitHeroSearch(page);
+    await verifyInFieldClearControl(page, 'content-hero');
     
     const filterPanel = getVisibleFilterPanel(page);
-    const panelVisible = await filterPanel.isVisible().catch(() => false);
-    if (!panelVisible) {
-      try {
-        await filterPanel.waitFor({ state: 'visible', timeout: 5000 });
-      } catch {
-        test.skip(true, 'Filter panel not visible for the loaded dataset.');
-        return;
-      }
-    }
+    await expect(filterPanel).toBeVisible();
 
+    await commitHeroSearch(page);
     await exposeFlatTopbar(page);
+    // At 1024px the hero owns search until it scrolls out of view; the phone
+    // search toggle only applies at <=700px. A pending result swap can bring
+    // the hero back after the first scroll, so keep scrolling as a user would.
+    const activeDataset = page.locator('.tab_parts_container:visible');
+    const contentScroller = activeDataset.locator('.scrollable_content').filter({
+      has: page.getByTestId('dataset-search-input-content-hero'),
+    });
+    await expect(contentScroller).toBeVisible();
+    await expect.poll(async () => {
+      await contentScroller.hover();
+      await page.mouse.wheel(0, await contentScroller.evaluate(element => element.scrollHeight));
+      await waitForVisualGuardianIdle(page);
+      return activeDataset.getByTestId('dataset-search-input-search-only').isVisible();
+    }).toBe(true);
     await verifyFlatTopbarContainsOnlySearch(page);
-
-    await takeGuardianScreenshot(page, testInfo, 'tablet_flat_mode_search_bar');
+    await verifyInFieldClearControl(page, 'search-only', () =>
+      takeGuardianScreenshot(page, testInfo, 'tablet_flat_mode_search_bar'));
     await selectAccountTheme(page, 'system');
   });
 });
