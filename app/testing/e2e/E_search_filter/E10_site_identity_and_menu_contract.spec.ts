@@ -7,10 +7,21 @@
  * dataset pages or making hidden menu controls reachable.
  */
 
-import { test, expect } from '@playwright/test';
+import { test, expect, type Page } from '@playwright/test';
 import { login, loadCredentials, type TestCredentials } from '../helpers/auth';
 import { navigateToDefaultDataset } from '../helpers/navigation';
 import { switchToView, openBigCard } from '../helpers/view-switch';
+import { waitForActiveFilterbarLayout } from '../helpers/filterbar';
+
+async function navigateToReadyDefaultDataset(page: Page): Promise<void> {
+  // Root may show the optional Home page, which has no dataset filterbar.
+  // Finish that startup before selecting a dataset and awaiting its layout.
+  await page.waitForFunction(() => (window as Window & {
+    __filterestShellBoot?: { status: () => { ready: boolean } };
+  }).__filterestShellBoot?.status().ready === true);
+  await navigateToDefaultDataset(page);
+  await waitForActiveFilterbarLayout(page);
+}
 
 test.describe('E10 — Site identity and menu contract', () => {
   let credentials: TestCredentials;
@@ -35,7 +46,7 @@ test.describe('E10 — Site identity and menu contract', () => {
       localStorage.setItem('chosen_language', 'en');
     });
     await page.reload({ waitUntil: 'domcontentloaded' });
-    await navigateToDefaultDataset(page);
+    await navigateToReadyDefaultDataset(page);
 
     const siteName = String(
       await page.locator('meta[property="og:site_name"]').getAttribute('content') || '',
@@ -115,11 +126,11 @@ test.describe('E10 — Site identity and menu contract', () => {
     await page.setViewportSize({ width: 1920, height: 1080 });
     await page.evaluate(() => localStorage.setItem('navVisibleWide', 'true'));
     await page.reload({ waitUntil: 'domcontentloaded' });
-    await navigateToDefaultDataset(page);
+    await navigateToReadyDefaultDataset(page);
     await switchToView(page, 'card');
     expect(await openBigCard(page)).toBe(true);
 
-    const wideTopbar = page.locator('.dataset-shared-topbar--visible').first();
+    const wideTopbar = page.locator('.tab_parts_container:visible .dataset-shared-topbar').first();
     const floatingMenuButton = page.locator('#showMenuButton');
     const navbarMenuButton = page.locator('#hideMenuButton');
     const wideTopbarMenuButton = wideTopbar.locator(
@@ -234,11 +245,11 @@ test.describe('E10 — Site identity and menu contract', () => {
     await page.setViewportSize({ width: 375, height: 812 });
     await page.evaluate(() => localStorage.setItem('navVisibleNarrow', 'false'));
     await page.reload({ waitUntil: 'domcontentloaded' });
-    await navigateToDefaultDataset(page);
+    await navigateToReadyDefaultDataset(page);
     await switchToView(page, 'card');
     expect(await openBigCard(page)).toBe(true);
 
-    const narrowTopbar = page.locator('.dataset-shared-topbar--visible').first();
+    const narrowTopbar = page.locator('.tab_parts_container:visible .dataset-shared-topbar').first();
     const narrowTopbarMenuButton = narrowTopbar.locator(
       '[data-testid="shared-topbar-menu-button"]',
     );
@@ -285,8 +296,22 @@ test.describe('E10 — Site identity and menu contract', () => {
 
     await narrowTopbarMenuButton.click();
     await expect(page.locator('#navbar')).not.toHaveClass(/collapsed/);
+    await expect(page.locator('#navbar')).toBeInViewport({ ratio: 0.95 });
     await expect(navbarMenuButton).toBeVisible();
-    await expect(narrowTopbarMenuButton).toBeHidden();
+    // Phone chrome stays in place underneath the open drawer. Its expanded
+    // state follows the drawer; the drawer's own menu button closes the overlay.
+    await expect(narrowTopbarMenuButton).toBeVisible();
+    await expect(narrowTopbarMenuButton).toHaveAttribute('aria-expanded', 'true');
+    await expect(narrowTopbarMenuButton).toHaveAttribute('aria-hidden', 'false');
+    await expect(narrowTopbarMenuButton).toHaveAttribute('tabindex', '0');
+    await expect(floatingMenuButton).toBeHidden();
+    await expect(floatingMenuButton).toHaveAttribute('tabindex', '-1');
+    await navbarMenuButton.click();
+    await expect(page.locator('#navbar')).toHaveClass(/collapsed/);
+    await expect(narrowTopbarMenuButton).toHaveAttribute('aria-expanded', 'false');
+    await expect(narrowTopbarMenuButton).toBeVisible();
+    await expect(navbarMenuButton).toHaveAttribute('aria-hidden', 'true');
+    await expect(navbarMenuButton).toHaveAttribute('tabindex', '-1');
   });
 
   test('keeps the same physical menu-click contract in the card dataset view', async ({ page }, testInfo) => {
@@ -299,15 +324,33 @@ test.describe('E10 — Site identity and menu contract', () => {
 
     await page.evaluate(() => localStorage.setItem('navVisibleNarrow', 'false'));
     await page.reload({ waitUntil: 'domcontentloaded' });
-    await navigateToDefaultDataset(page);
+    await navigateToReadyDefaultDataset(page);
     await switchToView(page, 'card');
 
     const floatingMenuButton = page.locator('#showMenuButton');
+    const heroMenuButton = page.locator('.tab_parts_container:visible [data-testid="hero-menu-button"]');
     await expect(page.locator('.dataset-shared-topbar--visible')).toHaveCount(0);
-    await expect(floatingMenuButton).toBeVisible();
-    await floatingMenuButton.click();
+    // The visible hero owns the menu opener even when the shared bar is absent.
+    await expect(heroMenuButton).toBeVisible();
+    await expect(heroMenuButton).toHaveAttribute('aria-expanded', 'false');
+    await expect(heroMenuButton).toHaveAttribute('aria-hidden', 'false');
+    await expect(heroMenuButton).toHaveAttribute('tabindex', '0');
+    await expect(floatingMenuButton).toBeHidden();
+    await expect(floatingMenuButton).toHaveClass(/shared-topbar-menu-source-hidden/);
+    await expect(floatingMenuButton).toHaveAttribute('aria-hidden', 'true');
+    await expect(floatingMenuButton).toHaveAttribute('tabindex', '-1');
+    await heroMenuButton.click();
     await expect(page.locator('#navbar')).not.toHaveClass(/collapsed/);
+    await expect(page.locator('#navbar')).toBeInViewport({ ratio: 0.95 });
     await expect(page.locator('#hideMenuButton')).toBeVisible();
+    await expect(heroMenuButton).toBeHidden();
+    await expect(heroMenuButton).toHaveAttribute('aria-hidden', 'true');
+    await expect(heroMenuButton).toHaveAttribute('tabindex', '-1');
+    await expect(floatingMenuButton).toBeHidden();
+    await page.locator('#hideMenuButton').click();
+    await expect(page.locator('#navbar')).toHaveClass(/collapsed/);
+    await expect(heroMenuButton).toBeVisible();
+    await expect(heroMenuButton).toHaveAttribute('aria-expanded', 'false');
     await expect(floatingMenuButton).toBeHidden();
   });
 });

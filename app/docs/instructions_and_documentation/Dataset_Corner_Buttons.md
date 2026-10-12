@@ -14,6 +14,15 @@ The filter toolbar and main menu keep their existing open/close behavior. Only t
 | Hero corner already scrolled away, or no eligible local host | Original fixed fallback | Original fixed fallback |
 | Hidden dataset | Hidden and excluded from tab order | Local copies hidden and excluded from tab order |
 
+On phones (up to 700px), the shared toolbar stays present in both card and
+article views. Its menu button remains in its slot beneath the open navbar
+overlay, with `aria-expanded` following the navbar state. Close the overlay
+through the navbar's own hide button; the local opener is then reachable again.
+The floating fallback stays hidden while this local button owns the menu.
+On larger screens, opening the navbar hides the local opener. A visible card
+hero owns its opener even when no shared toolbar is visible; absence of that
+toolbar alone does not imply that the floating fallback should appear.
+
 The hero sidebar opener keeps the canonical 12px viewport top/right inset, mirroring the main-menu opener at 12px top/left. The hero-local CSS compensates the existing 1px scroll sentinel immediately before the hero; fixed positions remain unchanged. Narrow shared toolbars keep their existing content padding; only the buttons compensate its difference from the canonical 12px inset. While the sidebar opener is present, the settings gear moves one control slot to its left and the cover palette stays centered below the gear. When that opener is absent, the gear and palette return to their original hero positions. These slots add no permanent toolbar or reserved vertical space. When the sidebar is open, its existing hide control remains in the sidebar dock. When the navbar is open, its existing hide control remains in the navbar.
 
 `dataset_corner_controls.js` chooses the active host and moves the same sidebar button, preserving its existing listener. Local main-menu buttons call the existing `toggleNavbarVisibility`. The original global `showMenuButton` remains in its DOM home and is hidden only while an active local menu button owns its place. Dataset teardown releases only its own ownership; it cannot clear another dataset's owner.
@@ -27,5 +36,10 @@ Image-first, image preview and reusable modal dialogs keep their existing contro
 ## Verification
 
 Focused unit coverage checks host choice, partially scrolled hero corners, original button action/focus preservation, hidden datasets, ownership release, FI/EN accessible labels, teardown and canonical builder toggles. Existing responsive visibility and temporary filter shortcut tests remain applicable.
+
+`E10_site_identity_and_menu_contract.spec.ts` verifies real clicks on the wide
+article opener, the persistent phone article opener and navbar closer, and the
+card hero opener. It checks the hidden fallback's accessibility state as well
+as the active controls, after startup and saved filterbar layout have settled.
 
 The native regression checklist includes desktop/mobile, Finnish/English, and explicit light/dark themes opposite the OS theme: hide/show both panels, scroll between hero and shared toolbar, switch active dataset/view, open/cancel settings and image dialogs, and verify that gear, palette and close actions remain reachable. Verify pointer/touch activation, keyboard activation and focus visibility without changing application content. Each verification receipt must distinguish the views actually exercised from source review or unit coverage; this checklist is not a claim that every view was exercised in a particular run.
