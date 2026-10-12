@@ -64,6 +64,21 @@ describe('user_authentication_view', () => {
         endpointRouterMock.mockResolvedValue({ users: usersFixture.map((user) => ({ ...user })) });
     });
 
+    test.each(['user-authentication-fixed-pin', 'user-authentication-fixed-pin-confirmation'])(
+        '%s stays masked and numeric without a password hint', async (id) => {
+            const { generate_user_authentication_view } = await import('./user_authentication_view.js');
+            await generate_user_authentication_view(document.getElementById('target'));
+            selectUser(7);
+            const input = document.getElementById(id);
+            expect(input.autocomplete).toBe('one-time-code');
+            expect(input.type).toBe('password');
+            expect(input.inputMode).toBe('numeric');
+            expect(input.pattern).toBe('[0-9]{4,8}');
+            expect(input.minLength).toBe(4);
+            expect(input.maxLength).toBe(8);
+        },
+    );
+
     test('loads users without exposing a fixed PIN and shows authoritative status after selection', async () => {
         const { generate_user_authentication_view } = await import('./user_authentication_view.js');
         await generate_user_authentication_view(document.getElementById('target'));

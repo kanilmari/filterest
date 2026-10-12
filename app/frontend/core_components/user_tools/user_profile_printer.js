@@ -190,7 +190,7 @@ export async function generate_user_view(container) {
             inputType: 'password',
             inputId: 'current_password',
             inputName: 'current_password',
-            autocomplete: 'off',
+            autocomplete: 'current-password',
         });
         passwordFieldset.appendChild(currentPasswordField.label);
         passwordFieldset.appendChild(currentPasswordField.input);
@@ -201,7 +201,7 @@ export async function generate_user_view(container) {
             inputType: 'password',
             inputId: 'new_password',
             inputName: 'new_password',
-            autocomplete: 'off',
+            autocomplete: 'new-password',
         });
         passwordFieldset.appendChild(newPasswordField.label);
         passwordFieldset.appendChild(newPasswordField.input);
@@ -212,7 +212,7 @@ export async function generate_user_view(container) {
             inputType: 'password',
             inputId: 'confirm_password',
             inputName: 'confirm_password',
-            autocomplete: 'off',
+            autocomplete: 'new-password',
         });
         passwordFieldset.appendChild(confirmPasswordField.label);
         passwordFieldset.appendChild(confirmPasswordField.input);

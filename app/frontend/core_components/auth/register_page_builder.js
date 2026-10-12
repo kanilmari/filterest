@@ -46,7 +46,7 @@ export function initializeRegistrationVerificationFields(root = document) {
 
 const standaloneForm = initializeRegistrationVerificationFields(document);
 if (standaloneForm) {
-    const chosenLanguage = getPreferredAvailableLanguage(["en", "fi"]);
+    const chosenLanguage = getPreferredAvailableLanguage(["en", "fi", "ch", "yue"]);
     void translatePage(chosenLanguage).then(() => {
         if (document.documentElement.dataset.shellBootProbe === "--filterest-auth-css-applied") {
             window.__filterestShellBoot?.ready();

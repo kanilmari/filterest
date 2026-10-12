@@ -55,7 +55,7 @@
         {{if .UsernameErr}}<p class="error" data-lang-key="{{.UsernameErr}}"></p>{{end}}
 
         <label for="password" data-lang-key="password"></label>
-        <input type="password" id="password" name="password" required data-testid="register-password">
+        <input type="password" id="password" name="password" autocomplete="new-password" required data-testid="register-password">
 
         <label for="email" data-lang-key="email"></label>
         <input type="email" id="email" name="email" required data-testid="register-email">
@@ -88,9 +88,9 @@
 
         <div class="first-run-method-fields" data-register-verification-fields="fixed_pin" hidden>
             <label for="fixed_pin" data-lang-key="fixed_pin">Fixed PIN</label>
-            <input type="password" inputmode="numeric" id="fixed_pin" name="fixed_pin" minlength="4" maxlength="8" pattern="[0-9]{4,8}" autocomplete="new-password" data-testid="register-fixed-pin">
+            <input type="password" inputmode="numeric" id="fixed_pin" name="fixed_pin" minlength="4" maxlength="8" pattern="[0-9]{4,8}" autocomplete="one-time-code" data-testid="register-fixed-pin">
             <label for="confirm_fixed_pin" data-lang-key="confirm_fixed_pin">Confirm fixed PIN</label>
-            <input type="password" inputmode="numeric" id="confirm_fixed_pin" name="confirm_fixed_pin" minlength="4" maxlength="8" pattern="[0-9]{4,8}" autocomplete="new-password" data-testid="register-fixed-pin-confirmation">
+            <input type="password" inputmode="numeric" id="confirm_fixed_pin" name="confirm_fixed_pin" minlength="4" maxlength="8" pattern="[0-9]{4,8}" autocomplete="one-time-code" data-testid="register-fixed-pin-confirmation">
         </div>
         {{if .VerificationErr}}
         <p class="error" data-lang-key="{{.VerificationErr}}"></p>

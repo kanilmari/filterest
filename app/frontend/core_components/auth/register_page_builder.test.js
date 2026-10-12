@@ -46,8 +46,14 @@ describe("initializeRegistrationVerificationFields", () => {
         expect(fields.hidden).toBe(false);
         expect(document.getElementById("fixed-pin").required).toBe(true);
         expect(document.getElementById("fixed-pin-confirmation").disabled).toBe(false);
-        expect(preferredLanguageMock).toHaveBeenCalledWith(["en", "fi"]);
+        expect(preferredLanguageMock).toHaveBeenCalledWith(["en", "fi", "ch", "yue"]);
         expect(translatePageMock).toHaveBeenCalledWith("fi");
+    });
+
+    test.each(["fi", "en", "ch", "yue"])("translates standalone registration in %s", async (language) => {
+        preferredLanguageMock.mockReturnValueOnce(language);
+        await loadModule();
+        expect(translatePageMock).toHaveBeenCalledWith(language);
     });
 
     test("password-only selection disables and hides PIN inputs", async () => {

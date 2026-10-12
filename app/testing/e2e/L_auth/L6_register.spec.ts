@@ -1,3 +1,7 @@
+// L6_register.spec.ts
+// Verifies registration availability, credential hints and the neutral completion notice.
+// Connects the SPA registration form with the existing account creation endpoint.
+// Keeps browser credentials separate from PIN verification and welcome-email delivery.
 import { test, expect } from '@playwright/test';
 
 test.describe('L6 — Register', () => {
@@ -23,6 +27,13 @@ test.describe('L6 — Register', () => {
       { timeout: 10000 }
     );
 
+    await expect(page.locator('[data-testid="register-username"]')).toHaveAttribute('autocomplete', 'username');
+    await expect(page.locator('[data-testid="register-password"]')).toHaveAttribute('autocomplete', 'new-password');
+    for (const id of ['register-fixed-pin', 'register-fixed-pin-confirmation']) {
+      await expect(page.getByTestId(id)).toHaveAttribute('autocomplete', 'one-time-code');
+      await expect(page.getByTestId(id)).toHaveAttribute('type', 'password');
+      await expect(page.getByTestId(id)).toHaveAttribute('inputmode', 'numeric');
+    }
     await page.locator('[data-testid="register-username"]').fill(`spa_register_${uniqueSuffix}`);
     await page.locator('[data-testid="register-display-name"]').fill(`Registration Display ${uniqueSuffix}`);
     await page.locator('[data-testid="register-password"]').fill('TestPassword123!');
@@ -37,7 +48,9 @@ test.describe('L6 — Register', () => {
     await page.locator('[data-testid="register-submit"]').click();
 
     await expect(page.locator('[data-registration-complete]')).toBeVisible({ timeout: 10000 });
-    await expect(page.locator('[data-registration-complete]')).toHaveAttribute('data-lang-key', /^registration_email_(sent|failed|not_configured)$/);
+    await expect(page.locator('[data-registration-complete]')).toHaveAttribute('data-lang-key', 'registration_account_created');
+    await expect(page.locator('[data-registration-complete]')).toHaveText(/^(Tili on luotu\.|Your account has been created\.|您的账户已创建。|你嘅帳戶已經建立咗。)$/);
+    await expect(page.locator('[data-testid="register-form"] a[data-lang-key="login"]')).toHaveAttribute('href', '/login');
     await expect(page.locator('[data-testid="register-username"]')).toHaveCount(0);
   });
 });

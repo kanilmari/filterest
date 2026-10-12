@@ -180,7 +180,7 @@ export async function generate_user_authentication_view(container) {
     pinInput.id = 'user-authentication-fixed-pin';
     pinInput.type = 'password';
     pinInput.inputMode = 'numeric';
-    pinInput.autocomplete = 'new-password';
+    pinInput.autocomplete = 'one-time-code';
     pinInput.minLength = 4;
     pinInput.maxLength = 8;
     pinInput.pattern = '[0-9]{4,8}';

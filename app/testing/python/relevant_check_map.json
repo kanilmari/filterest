@@ -158,6 +158,7 @@
       "specs": [
         "app/testing/e2e/L_auth/L1_login.spec.ts",
         "app/testing/e2e/L_auth/L2_logout.spec.ts",
+        "app/testing/e2e/L_auth/L6_register.spec.ts",
         "app/testing/e2e/L_auth/L7_admin_user_authentication.spec.ts",
         "app/testing/e2e/L_auth/L8_login_name_canary.spec.ts"
       ],

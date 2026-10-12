@@ -195,11 +195,21 @@ func handleRegisterPost(w http.ResponseWriter, r *http.Request) {
 	}
 	logging.Infof("registration committed for user id=%d", newUserID)
 	status := accountNoticeStatus(r.Context(), email, loginName, true)
+	respondRegistrationSuccess(w, r, status, string(verificationMethod))
+}
+
+// respondRegistrationSuccess separates completed account creation from mail delivery.
+// Keep delivery diagnostics in the existing server log and JSON account API;
+// the registration page shows only the translated completion notice and sign-in link.
+func respondRegistrationSuccess(w http.ResponseWriter, r *http.Request, mailStatus, verificationMethod string) {
+	if mailStatus != "registration_email_sent" {
+		logging.Warnf("registration welcome email status=%s", mailStatus)
+	}
 	if strings.Contains(r.Header.Get("Accept"), "application/json") {
-		httpresponse.RespondWithJSON(w, http.StatusOK, map[string]interface{}{"registered": true, "mail_status": status, "redirect": "/login"})
+		httpresponse.RespondWithJSON(w, http.StatusOK, map[string]interface{}{"registered": true, "mail_status": mailStatus, "redirect": "/login"})
 		return
 	}
-	showRegisterForm(w, r, registerErrors{Success: status}, string(verificationMethod), http.StatusOK)
+	showRegisterForm(w, r, registerErrors{Success: "registration_account_created"}, verificationMethod, http.StatusOK)
 }
 
 type registerErrors struct {

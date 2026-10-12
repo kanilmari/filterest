@@ -149,6 +149,23 @@ describe('translatePage', () => {
         expect(heading.textContent).toBe('\u8996\u5716\u8207\u5c55\u793a\u65b9\u5f0f');
     });
 
+    test('shows neutral registration success in all four languages without email status', async () => {
+        document.body.innerHTML = '<p role="status" data-registration-complete data-lang-key="registration_account_created"></p><a href="/login" data-lang-key="login"></a>';
+        window.translationPromises.ch = Promise.resolve({});
+        const { translatePage } = await import('./translation_handler.js');
+        for (const [language, copy] of [
+            ['fi', 'Tili on luotu.'],
+            ['en', 'Your account has been created.'],
+            ['ch', '您的账户已创建。'],
+            ['yue', '你嘅帳戶已經建立咗。'],
+        ]) {
+            await translatePage(language);
+            expect(document.querySelector('[data-registration-complete]').textContent).toBe(copy);
+            expect(document.querySelector('a').getAttribute('href')).toBe('/login');
+        }
+        expect(endpoint_router).not.toHaveBeenCalled();
+    });
+
     test('keeps deletion confirmation readable through live language changes without runtime keys', async () => {
         const keys = ['delete_confirm_title', 'delete_confirm_single', 'delete_confirm_multiple'];
         const labels = keys.map((key) => {

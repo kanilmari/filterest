@@ -1,5 +1,5 @@
 // auth_session_notice_copy.js
-// Bootstrap copy for the sentences that explain why the login page appeared.
+// Bootstrap copy for account creation and the sentences explaining why login appeared.
 // Bridges the login page and an installation whose reviewed translations for
 // these keys do not exist yet; the site's own translations always win.
 // Exists because this sentence has to be readable the moment the login page
@@ -8,6 +8,14 @@
 
 // Each entry reads [Finnish, English, Chinese, Cantonese].
 const COPY = {
+    // The shared translator already consumes this authentication dictionary.
+    // Account creation succeeds independently of the welcome email's delivery.
+    registration_account_created: [
+        "Tili on luotu.",
+        "Your account has been created.",
+        "您的账户已创建。",
+        "你嘅帳戶已經建立咗。",
+    ],
     session_ended_sign_in_again: [
         "Istuntosi on päättynyt tai et ole enää kirjautuneena sisään. Kirjaudu uudelleen jatkaaksesi.",
         "Your session has ended or you are no longer signed in. Sign in again to continue.",

@@ -31,6 +31,16 @@ test.describe('L1 — Login', () => {
     // 2. Read credentials from the protected mutable credential scope.
     const { username, password } = loadCredentials();
 
+    for (const [id, hint] of [
+      ['login-username', 'username'],
+      ['login-password', 'current-password'],
+      ['login-otp', 'off'],
+      ['login-password-reset-otp', 'off'],
+      ['login-password-reset-new-password', 'new-password'],
+    ]) {
+      await expect(page.getByTestId(id)).toHaveAttribute('autocomplete', hint);
+    }
+
     // 3. Fill credentials (Phase 1)
     await page.locator('[data-testid="login-username"]').fill(username);
     await page.locator('[data-testid="login-password"]').fill(password);

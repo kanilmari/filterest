@@ -78,7 +78,7 @@ describe("generate_register_view", () => {
             })
             .mockResolvedValueOnce({
                 redirected: false,
-                text: vi.fn().mockResolvedValue('<form data-testid="register-form"><p role="status" data-registration-complete data-lang-key="registration_email_not_configured"></p></form>'),
+                text: vi.fn().mockResolvedValue('<form data-testid="register-form"><p role="status" data-registration-complete data-lang-key="registration_account_created"></p><a href="/login" data-lang-key="login"></a></form>'),
             });
         const mod = await loadModule();
         const container = document.getElementById("container");
