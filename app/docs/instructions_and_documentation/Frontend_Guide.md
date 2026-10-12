@@ -21,11 +21,12 @@ The guide is divided into focused guides in this folder. Add new frontend text t
 | [Dataset appearance](Frontend_Dataset_Appearance.md) | The dataset appearance definition, its storage and revisions, the results and administrator APIs, and which values a dataset may override. |
 | [Home page](Frontend_Home_Page.md) | The optional Home page: its navigation and lifecycle, texts, the Home palette and presentation, background media and the Home settings editor. |
 | [Coding conventions](Frontend_Coding_Conventions.md) | Accessibility expectations, the `[subject]_[role].js` file naming convention, import validation with `check_js_imports.js`, and translated interface text. |
-| [Document startup and recovery](Frontend_Document_Startup_And_Recovery.md) | How the application document and the standalone login, registration and First Run pages reveal their shell, recover from failed loading and keep development diagnostics. |
+| [Document startup and recovery](Frontend_Document_Startup_And_Recovery.md) | The SPA navigation contract, login/register entry and post-login transitions, intentional hard navigation and the open session-end redirect decision; how application and authentication documents reveal their shell, recover from failed loading and keep development diagnostics. |
 
-## Former sections
+<a name="former-sections"></a>
+## Section navigation
 
-Every section of the former single-file guide keeps its anchor in this list, so an older link such as `Frontend_Guide.md#view-types` still arrives here, next to a link to the section's new place. The focused guides keep the same headings and section numbers.
+Every section of the former single-file guide keeps its anchor in this list, so an older link such as `Frontend_Guide.md#view-types` still arrives here, next to a link to the section's new place. The focused guides keep the same headings and section numbers. New sections link to their focused guide here too.
 
 - <a name="1-showing-results-in-different-views"></a>[1. Showing Results in Different Views](Frontend_Results_Cards_And_Articles.md#1-showing-results-in-different-views)
   - <a name="overview"></a>[Overview](Frontend_Results_Cards_And_Articles.md#overview)
@@ -59,4 +60,5 @@ Every section of the former single-file guide keeps its anchor in this list, so 
 - <a name="7-languages-and-translations-ui"></a>[7. Languages and Translations (UI)](Frontend_Coding_Conventions.md#7-languages-and-translations-ui)
   - <a name="menu-strings-with-data-lang-key"></a>[Menu strings with `data-lang-key`](Frontend_Coding_Conventions.md#menu-strings-with-data-lang-key)
   - <a name="ui-literal-localization-sweep"></a>[UI literal localization sweep](Frontend_Coding_Conventions.md#ui-literal-localization-sweep)
+- <a name="spa-navigation-contract"></a>[SPA Navigation Contract](Frontend_Document_Startup_And_Recovery.md#spa-navigation-contract)
 - <a name="document-startup-and-recovery"></a>[Document startup and recovery](Frontend_Document_Startup_And_Recovery.md#document-startup-and-recovery)
