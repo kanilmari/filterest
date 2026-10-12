@@ -185,8 +185,89 @@ The same global setup/teardown path owns an exclusive artifact-run registry and 
 - teardown deletes only exact current-run `confirmed` identities after re-reading server inventories; missing baselines, mismatched targets/users, corrupt registries, and ambiguous `planned` entries fail closed before cleanup
 - the full language-key set must return exactly to the setup baseline, and drift reports the exact added or removed keys. The key set is shared with every session using the same database, so an added key that a migration file seeds as an exact SQL literal (`app/server_tools/migrations/`, plus folders listed in `FILTEREST_E2E_EXTRA_MIGRATION_DIRS`) is reported as added by that migration instead of failing the run; any other added key, and every removed key, still fails it
 - once the run's own artifacts are verified gone, teardown releases the run record and baseline **before** the language-key comparison, so a language-key finding never leaves a stale run that blocks the next one
-- separate Playwright commands must not run concurrently against the shared `.auth` registry; an active, stale, or corrupt foreign run is rejected for inspection rather than guessed away
+- separate Playwright commands must not run concurrently against the shared `.auth` registry; a live owner or recording worker, corrupt state, and unfinished registry files still refuse startup
 - teardown mutates the registry, artifacts, and shared auth state only when the recorded PID and per-process nonce match its own process identity; this prevents PID reuse from claiming ownership, and a runner whose setup was rejected as foreign performs no teardown cleanup
+
+Before initializing a new run, setup automatically recovers a dead run's recorded
+datasets. An exclusive startup lock covers inspection, fresh test-administrator
+login, recovery and initialization, so another Playwright command cannot start
+during recovery. The current pointer and descriptor must agree on PID, nonce,
+run id, start time and target identity; the owner and every recorded worker PID must be dead.
+An abandoned startup lock is reclaimed only after its exact PID/nonce owner is
+proved dead. A corrupt or unfinished lock still refuses.
+
+At run start, setup logs in once and captures the normalized base URL and the
+persistent `database_id` of the singleton `system_database_identity` row through
+`/api/get-results`. The existing administrator-only `/api/admin/version-info`
+route verifies administrator access; software versions are not installation
+identities. Both run descriptor and current pointer retain this target before
+the run is published. Recovery checks it before inspecting datasets, immediately
+before each drop and before releasing evidence. A changed URL or database id,
+missing/partial identity, or legacy descriptor without target evidence refuses
+recovery and keeps the registry, old auth state and baseline for inspection.
+
+Recovery establishes absence from the authenticated administrator's
+`/api/datasets` listing and `/api/tree_data` registry inventory together.
+Both must succeed and agree on absence; a metadata 403 alone proves nothing.
+For a `confirmed` artifact, neither its exact recorded name **nor its recorded
+server id** may appear in either inventory. Recovery scans all dataset identities,
+including numeric-string ids; incomplete or malformed ids cannot prove absence.
+The tree is a mixed navigation structure: the server emits registered datasets
+as `t_` nodes, including registered SQL views. Only those nodes supply dataset
+identities. Folder nodes (`f_`), the synthetic Views root (`views_root`) and
+lightweight view nodes (`v_`, marked `is_view`) are structural, even when a view
+node carries a UID. Their names and folder ids are never dataset evidence.
+Unknown node kinds refuse reading; a dataset node with a missing or invalid UID
+still refuses confirmed-id absence. The shared fake tree retains folders, nested
+datasets, Views and raw views from `testing/shared_contracts/e2e_dataset_tree_response.json`.
+The Go `TestE2EDatasetTreeResponseFixture` test compares that fixture with the
+authenticated `GetTreeDataHandler` response using scripted SQL rows and no sockets;
+regenerate intentionally from `app/` with `UPDATE_E2E_TREE_FIXTURE=1 go test
+./backend/reusable_components/vanilla_tree -run TestE2EDatasetTreeResponseFixture`,
+then run the dataset identity and stale-run recovery regressions.
+If the recorded id survives under another name, recovery refuses, reports both
+names and the id, drops nothing during preflight, and keeps every old record.
+Only a present dataset requires `/api/get-metadata` to cross-check its exact
+public name and stable `table_uid`. A `confirmed` dataset is dropped only when
+its current id matches the recorded server id; a dataset absent by name and id counts
+as recovered, including after a previous successful drop removed its metadata
+permissions. Inconsistent inventories or refused metadata for a present dataset
+preserve evidence and refuse recovery.
+
+A `planned` dataset is dropped only when its exact registered name exists,
+matches `buildTempDatasetName`'s normalized prefix, base36 process timestamp and
+six-character random suffix (at most 63 characters), and its embedded timestamp
+is **not before** the dead run's start. Registration precedes the create request.
+Names outside this format, truncated names without a complete suffix, and names
+with an earlier embedded time are skipped and reported; their datasets remain.
+The database registry's `created` value is never read for ownership: its
+timezone-less column cannot establish ordering, even when serialized with `Z`.
+No prefix, language key or unrecorded name authorizes a drop.
+Planned artifacts have no confirmed server id: their absence rule remains the
+exact recorded name in both inventories, without claiming ownership of other ids.
+
+Every drop uses `/api/drop-dataset` with the fresh administrator session and its
+CSRF token, rechecks identity immediately before deletion, and verifies absence
+by both name and recorded id afterward for confirmed artifacts. A rename during
+CSRF acquisition or a successful drop that leaves that id under another name
+also refuses and keeps the records. Output has one `[E2E recovery]` line per artifact with its name, server
+id (or `unknown` for an absent planned name), and dropped/already absent/skipped
+outcome. Once all outcomes are safe, setup removes the dead run directory and
+pointer, initializes the new run, and captures a fresh baseline. A mismatched id,
+unknown or unsupported kind (including folders), corrupt or unfinished record,
+failed API read or drop preserves the dead run and refuses startup with the
+artifact and reason; an undecodable record is identified by its exact file path.
+After a partial recovery failure, successful earlier drops are already absent on
+the next attempt, so recovery can resume without losing ownership evidence.
+
+Recovery API failures report only the operation, recorded artifact name/id when
+applicable, HTTP status when available, and a fixed reason. This covers profile,
+administrator/installation identity, inventory, metadata, CSRF and drop requests,
+invalid JSON and transport/body-read failures. Shared request helpers use the
+same boundary. Raw error messages, original causes/stacks, headers, cookies, CSRF
+tokens and response bodies are never retained or printed. Registry parse failures
+keep the affected file path but discard the parser error and its input. Refused
+recovery preserves the old registry, auth state and baseline for inspection.
 
 Native full-matrix runs default to two Playwright workers so simultaneous
 browsers do not saturate the local app/database and produce unrelated timeout

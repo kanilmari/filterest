@@ -41,6 +41,20 @@ afterEach(() => {
 });
 
 describe('test artifact run registry', () => {
+  test('stores the original target identically in the descriptor and current pointer', () => {
+    const target = { baseURL: 'https://original.invalid/', databaseId: 'a'.repeat(32) };
+    const run = initializeArtifactRunRegistry({ rootDirectory: registryRoot, target });
+    expect(run.target).toEqual({ ...target, baseURL: 'https://original.invalid' });
+    const pointer = JSON.parse(fs.readFileSync(currentPointerPath(), 'utf8'));
+    const descriptor = JSON.parse(fs.readFileSync(path.join(runDirectory(run.runId), 'run.json'), 'utf8'));
+    expect(pointer.target).toEqual(run.target);
+    expect(descriptor.target).toEqual(run.target);
+    descriptor.target.databaseId = 'b'.repeat(32);
+    fs.writeFileSync(path.join(runDirectory(run.runId), 'run.json'), JSON.stringify(descriptor));
+    expect(() => getCurrentArtifactRun()).toThrow(/pointer does not match run descriptor/);
+    expect(fs.existsSync(currentPointerPath())).toBe(true);
+  });
+
   test('records exact dataset and folder entries and finishes only after unregistering', () => {
     const run = initializeArtifactRunRegistry({
       rootDirectory: registryRoot,

@@ -1,0 +1,57 @@
+{
+  "column_details": null,
+  "nodes": [
+    {
+      "id": "f_15",
+      "name": "database",
+      "parent_id": "null",
+      "db_id": 15
+    },
+    {
+      "id": "f_150",
+      "name": "other_tables",
+      "parent_id": "f_15",
+      "db_id": 150
+    },
+    {
+      "id": "f_919",
+      "name": "nested_folder",
+      "parent_id": "f_150",
+      "db_id": 919
+    },
+    {
+      "id": "t_e2e_recorded",
+      "name": "e2e_recorded",
+      "parent_id": "f_919",
+      "db_id": 31,
+      "table_uid": "919"
+    },
+    {
+      "id": "t_nested_dataset",
+      "name": "nested_dataset",
+      "parent_id": "f_919",
+      "db_id": 32,
+      "table_uid": "921"
+    },
+    {
+      "id": "t_registered_view",
+      "name": "registered_view",
+      "parent_id": "f_150",
+      "db_id": 33,
+      "table_uid": "920"
+    },
+    {
+      "id": "views_root",
+      "name": "views",
+      "parent_id": "null",
+      "db_id": -1
+    },
+    {
+      "id": "v_unregistered_view",
+      "name": "unregistered_view",
+      "parent_id": "views_root",
+      "db_id": -1,
+      "is_view": true
+    }
+  ]
+}

@@ -8,7 +8,7 @@
  */
 
 import { clearVerifiedTestIdentities, writeVerifiedTestIdentity, initializeTestIdentityKey } from './helpers/auth_identity';
-import { chromium, type Browser, type FullConfig } from '@playwright/test';
+import { chromium, type Browser, type FullConfig, type Page, type BrowserContext } from '@playwright/test';
 import * as fs from 'fs';
 import * as path from 'path';
 import {
@@ -18,14 +18,19 @@ import {
   readSessionInfo,
   submitCredentialsAndWaitForOtp,
   waitForAuthenticatedApp,
+  type SessionInfo,
 } from './helpers/auth';
 import {
   readSyntheticArtifactBaselineWithStorageState,
 } from './helpers/test-artifact-cleanup';
 import {
   finishArtifactRunRegistry,
-  initializeArtifactRunRegistry,
+  type CurrentArtifactRun,
 } from './helpers/test-artifact-run-registry';
+import {
+  initializeArtifactRunRegistryWithRecovery,
+  recoverStaleRunDatasets,
+} from './helpers/test-artifact-stale-run-recovery';
 import {
   ensureOwnerOnlyStorageStateDirectory,
   removeStorageStateFile,
@@ -34,6 +39,8 @@ import {
 import { hydrateAuthenticatedTreeDataCache } from './helpers/tree-data-cache';
 import { resolveFilterestTestRuntimePaths } from './helpers/test-runtime-paths';
 import { resolveLocalFilterestBaseUrl } from '../../server_tools/scripts/local_filterest_target.cjs';
+import { readArtifactRunTarget } from './helpers/test-artifact-run-target';
+import { safeTestArtifactFailure } from './helpers/test-artifact-diagnostics';
 
 const testRuntimePaths = resolveFilterestTestRuntimePaths();
 const AUTH_FILE = testRuntimePaths.authStorageState;
@@ -43,7 +50,6 @@ const ARTIFACT_BASELINE_FILE = path.join(
 );
 
 async function globalSetup(_config: FullConfig) {
-  initializeTestIdentityKey();
   const baseURL =
     _config.projects[0]?.use?.baseURL && typeof _config.projects[0].use.baseURL === 'string'
       ? _config.projects[0].use.baseURL
@@ -62,17 +68,16 @@ async function globalSetup(_config: FullConfig) {
     );
   }
 
-  // The exclusive registry lock must exist before shared auth/baseline files
-  // are touched. Active, stale, and corrupt foreign runs fail closed here.
-  const artifactRun = initializeArtifactRunRegistry();
-  removeStorageStateFile(AUTH_FILE);
-  fs.rmSync(ARTIFACT_BASELINE_FILE, { force: true });
-  clearVerifiedTestIdentities();
-
-  let browser: Browser | null = null;
-  try {
-    browser = await chromium.launch();
+  let artifactRun: CurrentArtifactRun | null = null;
+  let closeFailure: Error | null = null;
+  const browserLifetime: { browser: Browser | null } = { browser: null };
+  let authenticated: { page: Page; context: BrowserContext; sessionIdentity: SessionInfo; verifiedUserID: number } | null = null;
+  const authenticate = async () => {
+    if (authenticated) return authenticated;
+    const browser = await chromium.launch();
+    browserLifetime.browser = browser;
     const context = await browser.newContext({
+      baseURL,
       ignoreHTTPSErrors: true,
       extraHTTPHeaders: {
         'X-Bypass-Ratelimit': 'test-mode',
@@ -111,13 +116,34 @@ async function globalSetup(_config: FullConfig) {
       );
     }
 
+    authenticated = { page, context, sessionIdentity, verifiedUserID };
+    return authenticated;
+  };
+
+  try {
+    // Hold startup ownership across dead-run inspection and fresh login. Shared
+    // auth/baseline files remain intact until recovery publishes the new run.
+    artifactRun = await initializeArtifactRunRegistryWithRecovery({}, async (run, artifacts, assertStillDead) => {
+      const { context, sessionIdentity, verifiedUserID } = await authenticate();
+      await recoverStaleRunDatasets(context.request, {
+        userId: verifiedUserID,
+        username: sessionIdentity.username || String(verifiedUserID),
+        baseURL,
+      }, run, artifacts, assertStillDead);
+    }, async () => readArtifactRunTarget((await authenticate()).context.request, baseURL));
+    initializeTestIdentityKey();
+    removeStorageStateFile(AUTH_FILE);
+    fs.rmSync(ARTIFACT_BASELINE_FILE, { force: true });
+    clearVerifiedTestIdentities();
+    const { context, page, sessionIdentity, verifiedUserID } = await authenticate();
+
     writeVerifiedTestIdentity({ username, password }, baseURL, verifiedUserID);
     writeOwnerOnlyJsonFile(AUTH_FILE, await context.storageState());
     await hydrateAuthenticatedTreeDataCache(page);
     writeOwnerOnlyJsonFile(AUTH_FILE, await context.storageState());
 
     // Capture every pre-existing dataset, folder id/name pair, and lang key.
-    // Setup never deletes stale-looking names.
+    // Recovery has finished; baseline reads never infer ownership from names.
     const artifactBaseline = await readSyntheticArtifactBaselineWithStorageState(
       baseURL,
       AUTH_FILE,
@@ -130,6 +156,7 @@ async function globalSetup(_config: FullConfig) {
     );
     writeOwnerOnlyJsonFile(ARTIFACT_BASELINE_FILE, artifactBaseline);
   } catch (error) {
+    if (!artifactRun) throw error;
     clearVerifiedTestIdentities();
     removeStorageStateFile(AUTH_FILE);
     fs.rmSync(ARTIFACT_BASELINE_FILE, { force: true });
@@ -143,8 +170,14 @@ async function globalSetup(_config: FullConfig) {
     }
     throw error;
   } finally {
-    await browser?.close();
+    try {
+      await browserLifetime.browser?.close();
+    } catch (error) {
+      closeFailure = safeTestArtifactFailure(error, 'close E2E setup browser');
+    }
   }
+  // A secondary close failure must not replace the original recovery refusal.
+  if (closeFailure) throw closeFailure;
 }
 
 export default globalSetup;

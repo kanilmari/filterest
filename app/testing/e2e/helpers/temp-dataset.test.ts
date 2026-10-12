@@ -33,6 +33,7 @@ import {
   dropTempDataset,
 } from './temp-dataset';
 import { readDatasetTableUIDFromPage } from './test-artifact-dataset-identity-reader';
+import { datasetTreeNode, treeResponseWithDatasetNodes } from './test-artifact-tree-fixture';
 
 type FakePageOptions = {
   createStatus?: number;
@@ -55,11 +56,11 @@ function createFakePage(options: FakePageOptions = {}): Page {
       return {
         status: 200,
         ok: true,
-        body: JSON.stringify({
-          nodes: tableUID === null || !currentDatasetName
+        body: JSON.stringify(treeResponseWithDatasetNodes(
+          tableUID === null || !currentDatasetName
             ? []
-            : [{ name: currentDatasetName, table_uid: tableUID }],
-        }),
+            : [datasetTreeNode(currentDatasetName, tableUID)],
+        )),
       };
     }
     if (source.includes('/api/datasets')) {
@@ -67,7 +68,7 @@ function createFakePage(options: FakePageOptions = {}): Page {
         status: 200,
         ok: true,
         body: JSON.stringify({
-          datasets: [{ folder_id: 17, is_top_level_in_current_project: true }],
+          datasets: [{ dataset_name: 'fixture_current_project', folder_id: 17, is_top_level_in_current_project: true }],
         }),
       };
     }
@@ -358,9 +359,9 @@ describe('createTempDataset compensation', () => {
       get: vi.fn().mockResolvedValue({
         ok: () => true,
         status: () => 200,
-        text: () => Promise.resolve(JSON.stringify({
-          nodes: [{ name: 'e2e_request_identity_mismatch', table_uid: 74 }],
-        })),
+        text: () => Promise.resolve(JSON.stringify(treeResponseWithDatasetNodes([
+          datasetTreeNode('e2e_request_identity_mismatch', 74),
+        ]))),
       }),
       post: vi.fn(),
     };

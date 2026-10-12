@@ -1,11 +1,23 @@
-/** Exact, atomic E2E artifact ownership shared by setup, workers, and teardown. */
+/**
+ * test-artifact-run-registry.ts
+ * Stores exact, atomic E2E ownership for setup, workers and teardown.
+ * Connects PID/nonce descriptors with planned and confirmed server artifacts.
+ * Keeps corrupt, foreign and unfinished state from authorizing cleanup.
+ */
 import * as crypto from 'node:crypto';
+import { safeTestArtifactError } from './test-artifact-diagnostics';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { resolveFilterestTestRuntimePaths } from './test-runtime-paths';
+import {
+  ARTIFACT_REGISTRY_PROCESS_NONCE as PROCESS_NONCE,
+  isArtifactRegistryProcessActive as isProcessActive,
+  withSynchronousArtifactRunStartupLock,
+} from './test-artifact-startup-lock';
+import { validateArtifactRunTarget, type ArtifactRunTarget } from './test-artifact-run-target';
 export type TestArtifactKind = 'dataset' | 'folder';
 export type TestArtifactStatus = 'planned' | 'confirmed';
-type StoredArtifactRun = { version: 1; runId: string; pid: number; processNonce: string; startedAt: string };
+type StoredArtifactRun = { version: 1; runId: string; pid: number; processNonce: string; startedAt: string; target?: ArtifactRunTarget };
 type StoredTestArtifact = {
   version: 1;
   runId: string;
@@ -24,6 +36,7 @@ export type InitializeArtifactRunRegistryOptions = {
   runId?: string;
   pid?: number;
   now?: Date;
+  target?: ArtifactRunTarget;
 };
 const CURRENT_RUN_FILE_NAME = 'current-run.json';
 const RUN_DESCRIPTOR_FILE_NAME = 'run.json';
@@ -32,10 +45,8 @@ const RUN_ID_PATTERN = /^[a-zA-Z0-9][a-zA-Z0-9_-]{5,127}$/;
 const ARTIFACT_KINDS: TestArtifactKind[] = ['dataset', 'folder'];
 const MAX_ARTIFACT_NAME_LENGTH = 512;
 const PROCESS_NONCE_PATTERN = /^[a-f0-9]{64}$/;
-const PROCESS_NONCE = crypto.randomBytes(32).toString('hex');
 let configuredRootDirectory: string | null = null;
-
-function resolveRegistryRoot(rootDirectory?: string): string {
+export function resolveArtifactRegistryRoot(rootDirectory?: string): string {
   if (rootDirectory) {
     configuredRootDirectory = path.resolve(rootDirectory);
   }
@@ -71,19 +82,16 @@ function artifactEntryFilePath(
   const digest = crypto.createHash('sha256').update(`${kind}\0${name}`, 'utf8').digest('hex');
   return path.join(artifactDirectoryPath(registryRoot, runId, kind), `${digest}.json`);
 }
-
 function assertValidRunId(runId: string): void {
   if (!RUN_ID_PATTERN.test(String(runId ?? ''))) {
-    throw new Error(`Invalid E2E artifact run id: ${JSON.stringify(runId)}`);
+    throw safeTestArtifactError(`Invalid E2E artifact run id: ${JSON.stringify(runId)}`);
   }
 }
-
 function assertValidArtifactKind(kind: TestArtifactKind): void {
   if (!ARTIFACT_KINDS.includes(kind)) {
-    throw new Error(`Invalid E2E artifact kind: ${JSON.stringify(kind)}`);
+    throw safeTestArtifactError(`Invalid E2E artifact kind: ${JSON.stringify(kind)}`);
   }
 }
-
 function assertValidArtifactName(name: string): void {
   if (
     typeof name !== 'string'
@@ -91,7 +99,7 @@ function assertValidArtifactName(name: string): void {
     || name.length > MAX_ARTIFACT_NAME_LENGTH
     || name.includes('\0')
   ) {
-    throw new Error(`Invalid E2E artifact name: ${JSON.stringify(name)}`);
+    throw safeTestArtifactError(`Invalid E2E artifact name: ${JSON.stringify(name)}`);
   }
 }
 
@@ -99,14 +107,14 @@ function readJsonFileFailClosed(filePath: string, description: string): unknown 
   let raw: string;
   try {
     raw = fs.readFileSync(filePath, 'utf8');
-  } catch (error) {
-    throw new Error(`Failed to read ${description} at ${filePath}`, { cause: error });
+  } catch {
+    throw safeTestArtifactError(`Failed to read ${description} at ${filePath}`);
   }
 
   try {
     return JSON.parse(raw);
-  } catch (error) {
-    throw new Error(`Corrupt ${description} at ${filePath}`, { cause: error });
+  } catch {
+    throw safeTestArtifactError(`Corrupt ${description} at ${filePath}`);
   }
 }
 
@@ -123,9 +131,10 @@ function validateStoredRun(value: unknown, description: string): StoredArtifactR
     || typeof candidate.startedAt !== 'string'
     || !Number.isFinite(Date.parse(candidate.startedAt))
   ) {
-    throw new Error(`Invalid ${description}`);
+    throw safeTestArtifactError(`Invalid ${description}`);
   }
   assertValidRunId(candidate.runId);
+  if (candidate.target !== undefined) validateArtifactRunTarget(candidate.target);
   return candidate as StoredArtifactRun;
 }
 
@@ -136,6 +145,7 @@ function validateStoredArtifact(
   description: string,
 ): StoredTestArtifact {
   const candidate = value as Partial<StoredTestArtifact> | null;
+  if (typeof candidate?.name === 'string') description += ` (artifact ${JSON.stringify(candidate.name)})`;
   if (
     !candidate
     || candidate.version !== 1
@@ -164,17 +174,17 @@ function validateStoredArtifact(
       )
     )
   ) {
-    throw new Error(`Invalid ${description}`);
+    throw safeTestArtifactError(`Invalid ${description}`);
   }
   assertValidArtifactName(candidate.name);
   if (candidate.status === 'planned' && (candidate.serverId !== null || candidate.confirmedAt !== null)) {
-    throw new Error(`Invalid planned ${description}`);
+    throw safeTestArtifactError(`Invalid planned ${description}`);
   }
   if (candidate.status === 'confirmed' && candidate.confirmedAt === null) {
-    throw new Error(`Invalid confirmed ${description}`);
+    throw safeTestArtifactError(`Invalid confirmed ${description}`);
   }
   if (candidate.status === 'confirmed' && candidate.serverId === null) {
-    throw new Error(`Confirmed artifact is missing serverId in ${description}`);
+    throw safeTestArtifactError(`Confirmed artifact is missing serverId in ${description}`);
   }
   return candidate as StoredTestArtifact;
 }
@@ -186,29 +196,11 @@ function readRunDescriptor(registryRoot: string, runId: string): StoredArtifactR
     `E2E artifact run descriptor at ${descriptorPath}`,
   );
   if (run.runId !== runId) {
-    throw new Error(
+    throw safeTestArtifactError(
       `E2E artifact run descriptor mismatch: directory=${runId}, descriptor=${run.runId}`,
     );
   }
   return run;
-}
-
-function isProcessActive(pid: number): boolean {
-  try {
-    process.kill(pid, 0);
-    return true;
-  } catch (error) {
-    const code = (error as NodeJS.ErrnoException)?.code;
-    if (code === 'EPERM') {
-      return true;
-    }
-    if (code === 'ESRCH') {
-      return false;
-    }
-    throw new Error(`Could not determine whether E2E artifact registry PID ${pid} is active`, {
-      cause: error,
-    });
-  }
 }
 
 function assertCurrentPointerMatchesDescriptor(
@@ -220,8 +212,9 @@ function assertCurrentPointerMatchesDescriptor(
     || pointer.pid !== descriptor.pid
     || pointer.processNonce !== descriptor.processNonce
     || pointer.startedAt !== descriptor.startedAt
+    || JSON.stringify(pointer.target) !== JSON.stringify(descriptor.target)
   ) {
-    throw new Error(
+    throw safeTestArtifactError(
       `E2E artifact current-run pointer does not match run descriptor for ${pointer.runId}`,
     );
   }
@@ -270,9 +263,7 @@ function withExclusiveArtifactEntryLock<T>(entryPath: string, action: () => T): 
     return action();
   } catch (error) {
     if (!lockCreated && (error as NodeJS.ErrnoException)?.code === 'EEXIST') {
-      throw new Error(`Concurrent E2E artifact registry transition is already in progress: ${entryPath}`, {
-        cause: error,
-      });
+      throw safeTestArtifactError(`Concurrent E2E artifact registry transition is already in progress: ${entryPath}`);
     }
     throw error;
   } finally {
@@ -282,7 +273,7 @@ function withExclusiveArtifactEntryLock<T>(entryPath: string, action: () => T): 
   }
 }
 
-function listRunDirectoryIds(registryRoot: string): string[] {
+export function listArtifactRunDirectoryIds(registryRoot: string): string[] {
   if (!fs.existsSync(registryRoot)) {
     return [];
   }
@@ -291,15 +282,15 @@ function listRunDirectoryIds(registryRoot: string): string[] {
   for (const entry of fs.readdirSync(registryRoot, { withFileTypes: true })) {
     if (entry.name === CURRENT_RUN_FILE_NAME) {
       if (!entry.isFile()) {
-        throw new Error(`E2E artifact current-run pointer is not a file: ${entry.name}`);
+        throw safeTestArtifactError(`E2E artifact current-run pointer is not a file: ${entry.name}`);
       }
       continue;
     }
     if (entry.name.startsWith('.tmp-')) {
-      throw new Error(`Unfinished atomic E2E artifact registry file found: ${entry.name}`);
+      throw safeTestArtifactError(`Unfinished atomic E2E artifact registry file found: ${entry.name}`);
     }
     if (!entry.isDirectory()) {
-      throw new Error(`Unexpected E2E artifact registry entry: ${entry.name}`);
+      throw safeTestArtifactError(`Unexpected E2E artifact registry entry: ${entry.name}`);
     }
     assertValidRunId(entry.name);
     runIds.push(entry.name);
@@ -314,7 +305,7 @@ function resolveRunId(registryRoot: string, runId?: string): string {
   }
   const currentRun = getCurrentArtifactRun({ rootDirectory: registryRoot });
   if (!currentRun) {
-    throw new Error('E2E artifact run registry is not initialized');
+    throw safeTestArtifactError('E2E artifact run registry is not initialized');
   }
   return currentRun.runId;
 }
@@ -327,13 +318,13 @@ function ensureRunDirectoryContainsOnlyRegistryFiles(
   const allowed = new Set([RUN_DESCRIPTOR_FILE_NAME, ARTIFACT_DIRECTORY_NAME]);
   for (const entry of fs.readdirSync(runDirectory, { withFileTypes: true })) {
     if (!allowed.has(entry.name)) {
-      throw new Error(`Unexpected entry in E2E artifact run ${runId}: ${entry.name}`);
+      throw safeTestArtifactError(`Unexpected entry in E2E artifact run ${runId}: ${entry.name}`);
     }
     if (entry.name === RUN_DESCRIPTOR_FILE_NAME && !entry.isFile()) {
-      throw new Error(`E2E artifact run descriptor is not a file for ${runId}`);
+      throw safeTestArtifactError(`E2E artifact run descriptor is not a file for ${runId}`);
     }
     if (entry.name === ARTIFACT_DIRECTORY_NAME && !entry.isDirectory()) {
-      throw new Error(`E2E artifact directory is not a directory for ${runId}`);
+      throw safeTestArtifactError(`E2E artifact directory is not a directory for ${runId}`);
     }
   }
 }
@@ -349,7 +340,7 @@ function ensureArtifactRootContainsOnlyKindDirectories(
 
   for (const entry of fs.readdirSync(artifactRoot, { withFileTypes: true })) {
     if (!ARTIFACT_KINDS.includes(entry.name as TestArtifactKind) || !entry.isDirectory()) {
-      throw new Error(
+      throw safeTestArtifactError(
         `Unexpected artifact kind entry in E2E run ${runId}: ${entry.name}`,
       );
     }
@@ -363,10 +354,17 @@ function ensureArtifactRootContainsOnlyKindDirectories(
 export function initializeArtifactRunRegistry(
   options: InitializeArtifactRunRegistryOptions = {},
 ): CurrentArtifactRun {
-  const registryRoot = resolveRegistryRoot(options.rootDirectory);
+  const registryRoot = resolveArtifactRegistryRoot(options.rootDirectory);
+  return withSynchronousArtifactRunStartupLock(registryRoot,
+    () => initializeExclusiveArtifactRun(options, registryRoot));
+}
+
+function initializeExclusiveArtifactRun(
+  options: InitializeArtifactRunRegistryOptions, registryRoot: string,
+): CurrentArtifactRun {
   const callerPid = options.pid ?? process.pid;
   if (!Number.isSafeInteger(callerPid) || callerPid <= 0) {
-    throw new Error(`Invalid E2E artifact registry PID: ${callerPid}`);
+    throw safeTestArtifactError(`Invalid E2E artifact registry PID: ${callerPid}`);
   }
   fs.mkdirSync(registryRoot, { recursive: true, mode: 0o700 });
 
@@ -375,7 +373,7 @@ export function initializeArtifactRunRegistry(
     if (existingRun.isPidActive && existingRun.pid === callerPid
       && existingRun.processNonce === PROCESS_NONCE) {
       if (options.runId && options.runId !== existingRun.runId) {
-        throw new Error(
+        throw safeTestArtifactError(
           `E2E artifact run ${existingRun.runId} is already active in this PID; `
           + `refusing requested replacement ${options.runId}`,
         );
@@ -383,21 +381,21 @@ export function initializeArtifactRunRegistry(
       return existingRun;
     }
     if (existingRun.isPidActive) {
-      throw new Error(
+      throw safeTestArtifactError(
         `E2E artifact run ${existingRun.runId} belongs to another active process identity `
         + `(PID ${existingRun.pid}); `
         + 'parallel Playwright runs are not allowed',
       );
     }
-    throw new Error(
+    throw safeTestArtifactError(
       `Stale E2E artifact run ${existingRun.runId} from dead PID ${existingRun.pid} `
       + 'must be inspected and finished explicitly before starting another run',
     );
   }
 
-  const unfinishedRunIds = listRunDirectoryIds(registryRoot);
+  const unfinishedRunIds = listArtifactRunDirectoryIds(registryRoot);
   if (unfinishedRunIds.length > 0) {
-    throw new Error(
+    throw safeTestArtifactError(
       `Unfinished E2E artifact run directories require explicit inspection: `
       + unfinishedRunIds.join(', '),
     );
@@ -409,6 +407,7 @@ export function initializeArtifactRunRegistry(
     pid: callerPid,
     processNonce: PROCESS_NONCE,
     startedAt: (options.now ?? new Date()).toISOString(),
+    ...(options.target ? { target: validateArtifactRunTarget(options.target) } : {}),
   };
   assertValidRunId(run.runId);
 
@@ -417,11 +416,9 @@ export function initializeArtifactRunRegistry(
   try {
     writeJsonFileExclusively(runDescriptorFilePath(registryRoot, run.runId), run);
     publishJsonFileAtomically(currentRunFilePath(registryRoot), run);
-  } catch (error) {
+  } catch {
     fs.rmSync(runDirectory, { recursive: true, force: true });
-    throw new Error('Failed to initialize exclusive E2E artifact run registry', {
-      cause: error,
-    });
+    throw safeTestArtifactError('Failed to initialize exclusive E2E artifact run registry');
   }
 
   return { ...run, isPidActive: isProcessActive(run.pid) };
@@ -431,7 +428,7 @@ export function initializeArtifactRunRegistry(
 export function getCurrentArtifactRun(
   options: Pick<InitializeArtifactRunRegistryOptions, 'rootDirectory'> = {},
 ): CurrentArtifactRun | null {
-  const registryRoot = resolveRegistryRoot(options.rootDirectory);
+  const registryRoot = resolveArtifactRegistryRoot(options.rootDirectory);
   const pointerPath = currentRunFilePath(registryRoot);
   if (!fs.existsSync(pointerPath)) {
     return null;
@@ -455,10 +452,10 @@ export function getArtifactRegistryProcessIdentity(): Pick<StoredArtifactRun, 'p
 export function registerTestArtifact(kind: TestArtifactKind, name: string): void {
   assertValidArtifactKind(kind);
   assertValidArtifactName(name);
-  const registryRoot = resolveRegistryRoot();
+  const registryRoot = resolveArtifactRegistryRoot();
   const currentRun = getCurrentArtifactRun({ rootDirectory: registryRoot });
   if (!currentRun) {
-    throw new Error('Cannot register E2E artifact before artifact run initialization');
+    throw safeTestArtifactError('Cannot register E2E artifact before artifact run initialization');
   }
 
   const entry: StoredTestArtifact = {
@@ -480,9 +477,7 @@ export function registerTestArtifact(kind: TestArtifactKind, name: string): void
     publishJsonFileAtomically(entryPath, entry);
   } catch (error) {
     if ((error as NodeJS.ErrnoException)?.code !== 'EEXIST') {
-      throw new Error(`Failed to register E2E ${kind} ${JSON.stringify(name)}`, {
-        cause: error,
-      });
+      throw safeTestArtifactError(`Failed to register E2E ${kind} ${JSON.stringify(name)}`);
     }
     const existing = validateStoredArtifact(
       readJsonFileFailClosed(entryPath, `registered E2E ${kind}`),
@@ -491,7 +486,7 @@ export function registerTestArtifact(kind: TestArtifactKind, name: string): void
       `registered E2E ${kind} at ${entryPath}`,
     );
     if (existing.name !== name) {
-      throw new Error(`E2E artifact registry hash collision for ${JSON.stringify(name)}`);
+      throw safeTestArtifactError(`E2E artifact registry hash collision for ${JSON.stringify(name)}`);
     }
   }
 }
@@ -505,17 +500,17 @@ export function confirmTestArtifact(
   assertValidArtifactKind(kind);
   assertValidArtifactName(name);
   if (!Number.isSafeInteger(serverId) || serverId <= 0) {
-    throw new Error(`Invalid E2E ${kind} serverId: ${JSON.stringify(serverId)}`);
+    throw safeTestArtifactError(`Invalid E2E ${kind} serverId: ${JSON.stringify(serverId)}`);
   }
 
-  const registryRoot = resolveRegistryRoot();
+  const registryRoot = resolveArtifactRegistryRoot();
   const currentRun = getCurrentArtifactRun({ rootDirectory: registryRoot });
   if (!currentRun) {
-    throw new Error('Cannot confirm E2E artifact before artifact run initialization');
+    throw safeTestArtifactError('Cannot confirm E2E artifact before artifact run initialization');
   }
   const entryPath = artifactEntryFilePath(registryRoot, currentRun.runId, kind, name);
   if (!fs.existsSync(entryPath)) {
-    throw new Error(`Cannot confirm unregistered E2E ${kind} ${JSON.stringify(name)}`);
+    throw safeTestArtifactError(`Cannot confirm unregistered E2E ${kind} ${JSON.stringify(name)}`);
   }
 
   withExclusiveArtifactEntryLock(entryPath, () => {
@@ -526,12 +521,12 @@ export function confirmTestArtifact(
       `registered E2E ${kind} at ${entryPath}`,
     );
     if (existing.name !== name) {
-      throw new Error(`Refusing to confirm mismatched E2E ${kind} ${JSON.stringify(name)}`);
+      throw safeTestArtifactError(`Refusing to confirm mismatched E2E ${kind} ${JSON.stringify(name)}`);
     }
 
     if (existing.status === 'confirmed') {
       if (existing.serverId !== null && existing.serverId !== serverId) {
-        throw new Error(
+        throw safeTestArtifactError(
           `E2E ${kind} ${JSON.stringify(name)} is already confirmed with serverId `
           + `${existing.serverId}; refusing conflicting ${serverId}`,
         );
@@ -558,29 +553,29 @@ export function requireConfirmedTestArtifact(
   assertValidArtifactKind(kind);
   assertValidArtifactName(name);
   if (expectedServerId !== undefined && (!Number.isSafeInteger(expectedServerId) || expectedServerId <= 0)) {
-    throw new Error(`Invalid expected E2E ${kind} serverId: ${JSON.stringify(expectedServerId)}`);
+    throw safeTestArtifactError(`Invalid expected E2E ${kind} serverId: ${JSON.stringify(expectedServerId)}`);
   }
 
-  const registryRoot = resolveRegistryRoot();
+  const registryRoot = resolveArtifactRegistryRoot();
   const currentRun = getCurrentArtifactRun({ rootDirectory: registryRoot });
-  if (!currentRun) throw new Error('Cannot authorize E2E artifact cleanup without an active artifact run');
+  if (!currentRun) throw safeTestArtifactError('Cannot authorize E2E artifact cleanup without an active artifact run');
 
   const entryPath = artifactEntryFilePath(registryRoot, currentRun.runId, kind, name);
-  if (!fs.existsSync(entryPath)) throw new Error(`Cannot clean unregistered E2E ${kind} ${JSON.stringify(name)}`);
+  if (!fs.existsSync(entryPath)) throw safeTestArtifactError(`Cannot clean unregistered E2E ${kind} ${JSON.stringify(name)}`);
   const artifact = validateStoredArtifact(
     readJsonFileFailClosed(entryPath, `registered E2E ${kind}`),
     currentRun.runId,
     kind,
     `registered E2E ${kind} at ${entryPath}`,
   );
-  if (artifact.name !== name) throw new Error(`Refusing cleanup for mismatched E2E ${kind} ${JSON.stringify(name)}`);
+  if (artifact.name !== name) throw safeTestArtifactError(`Refusing cleanup for mismatched E2E ${kind} ${JSON.stringify(name)}`);
   if (artifact.status !== 'confirmed' || artifact.serverId === null) {
-    throw new Error(
+    throw safeTestArtifactError(
       `Cannot clean planned E2E ${kind} ${JSON.stringify(name)} without confirmed server identity`,
     );
   }
   if (expectedServerId !== undefined && artifact.serverId !== expectedServerId) {
-    throw new Error(
+    throw safeTestArtifactError(
       `E2E ${kind} ${JSON.stringify(name)} server identity mismatch: `
       + `registered=${artifact.serverId}, current=${expectedServerId}`,
     );
@@ -596,7 +591,7 @@ export function unregisterTestArtifact(
 ): void {
   assertValidArtifactKind(kind);
   assertValidArtifactName(name);
-  const registryRoot = resolveRegistryRoot();
+  const registryRoot = resolveArtifactRegistryRoot();
   const resolvedRunId = resolveRunId(registryRoot, runId);
   readRunDescriptor(registryRoot, resolvedRunId);
   const entryPath = artifactEntryFilePath(registryRoot, resolvedRunId, kind, name);
@@ -611,14 +606,14 @@ export function unregisterTestArtifact(
     `registered E2E ${kind} at ${entryPath}`,
   );
   if (existing.name !== name) {
-    throw new Error(`Refusing to unregister mismatched E2E ${kind} ${JSON.stringify(name)}`);
+    throw safeTestArtifactError(`Refusing to unregister mismatched E2E ${kind} ${JSON.stringify(name)}`);
   }
   fs.unlinkSync(entryPath);
 }
 
 /** Lists exact owned artifacts for the current or an explicitly named stale run. */
 export function listRegisteredTestArtifacts(runId?: string): RegisteredTestArtifact[] {
-  const registryRoot = resolveRegistryRoot();
+  const registryRoot = resolveArtifactRegistryRoot();
   const resolvedRunId = resolveRunId(registryRoot, runId);
   readRunDescriptor(registryRoot, resolvedRunId);
   ensureRunDirectoryContainsOnlyRegistryFiles(registryRoot, resolvedRunId);
@@ -632,7 +627,7 @@ export function listRegisteredTestArtifacts(runId?: string): RegisteredTestArtif
     }
     for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
       if (!entry.isFile() || !entry.name.endsWith('.json')) {
-        throw new Error(
+        throw safeTestArtifactError(
           `Unexpected entry in E2E ${kind} registry for ${resolvedRunId}: ${entry.name}`,
         );
       }
@@ -650,7 +645,7 @@ export function listRegisteredTestArtifacts(runId?: string): RegisteredTestArtif
         artifact.name,
       );
       if (entryPath !== expectedPath) {
-        throw new Error(`E2E artifact registry filename mismatch at ${entryPath}`);
+        throw safeTestArtifactError(`E2E artifact registry filename mismatch at ${entryPath}`);
       }
       artifacts.push(artifact);
     }
@@ -671,10 +666,10 @@ export function listRegisteredTestArtifacts(runId?: string): RegisteredTestArtif
  */
 export function finishArtifactRunRegistry(runId: string): void {
   assertValidRunId(runId);
-  const registryRoot = resolveRegistryRoot();
+  const registryRoot = resolveArtifactRegistryRoot();
   const registeredArtifacts = listRegisteredTestArtifacts(runId);
   if (registeredArtifacts.length > 0) {
-    throw new Error(
+    throw safeTestArtifactError(
       `Cannot finish E2E artifact run ${runId}; ${registeredArtifacts.length} artifact(s) remain`,
     );
   }

@@ -19,6 +19,8 @@ import {
   readDatasetTableUIDFromRequest,
 } from './test-artifact-dataset-identity-reader';
 import { hydrateAuthenticatedTreeDataCache } from './tree-data-cache';
+import { fetchCsrfTokenForRequest } from './test-artifact-csrf-reader';
+export { fetchCsrfTokenForRequest } from './test-artifact-csrf-reader';
 
 type TempDatasetForeignKey = {
   referencing_column: string;
@@ -92,28 +94,6 @@ async function fetchCsrfToken(page: Page): Promise<string> {
   const csrfToken = csrfData?.csrf_token;
   if (typeof csrfToken !== 'string' || csrfToken.trim() === '') {
     throw new Error('Missing csrf_token in /api/csrf-token response for temp dataset helper.');
-  }
-
-  return csrfToken;
-}
-
-/**
- * Reads the current session's CSRF token through Playwright's request fixture.
- * Bridges request-scoped E2E cleanup helpers and the app's authenticated API.
- * Exists so dataset cleanup can still work after browser-side failures.
- */
-export async function fetchCsrfTokenForRequest(request: APIRequestContext): Promise<string> {
-  const csrfResponse = await request.get('/api/csrf-token');
-  const csrfBody = await csrfResponse.text();
-  expect(
-    csrfResponse.ok(),
-    `Failed to fetch CSRF token for request-scoped temp dataset cleanup: ${csrfBody}`,
-  ).toBe(true);
-
-  const csrfData = JSON.parse(csrfBody);
-  const csrfToken = csrfData?.csrf_token;
-  if (typeof csrfToken !== 'string' || csrfToken.trim() === '') {
-    throw new Error('Missing csrf_token in /api/csrf-token response for request-scoped temp dataset cleanup.');
   }
 
   return csrfToken;

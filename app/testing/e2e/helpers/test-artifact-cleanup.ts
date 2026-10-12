@@ -12,6 +12,11 @@ import {
 } from '@playwright/test';
 import type { RegisteredTestArtifact } from './test-artifact-run-registry';
 import { fetchCsrfTokenForRequest } from './temp-dataset';
+import { normalizeE2EBaseURL } from './test-artifact-run-target';
+import {
+  requestTestArtifactResponse, readTestArtifactText, parseTestArtifactJson, testArtifactFailure,
+} from './test-artifact-diagnostics';
+export { normalizeE2EBaseURL } from './test-artifact-run-target';
 
 type DatasetListResponse = {
   datasets: Array<{
@@ -88,17 +93,6 @@ const MAX_FOLDER_DELETE_PASSES = 6;
 
 function uniqueSorted(values: string[]): string[] {
   return Array.from(new Set(values)).sort();
-}
-
-export function normalizeE2EBaseURL(value: string): string {
-  const parsed = new URL(value);
-  if (!['http:', 'https:'].includes(parsed.protocol) || parsed.username || parsed.password) {
-    throw new Error('E2E baseURL must be an HTTP(S) origin without embedded credentials.');
-  }
-  parsed.hash = '';
-  parsed.search = '';
-  parsed.pathname = parsed.pathname.replace(/\/+$/, '') || '/';
-  return parsed.toString().replace(/\/$/, '');
 }
 
 function isFolderNode(node: TreeNode): node is TreeNode & {
@@ -284,16 +278,10 @@ function normalizeTranslationsPayload(payload: unknown): Record<string, string> 
 }
 
 async function readJsonResponse<T>(request: APIRequestContext, url: string): Promise<T> {
-  const response = await request.get(url);
-  const body = await response.text();
-  if (!response.ok()) {
-    throw new Error(`Failed GET ${url}: ${response.status()} ${body}`);
-  }
-  try {
-    return JSON.parse(body) as T;
-  } catch (error) {
-    throw new Error(`Failed to parse JSON from GET ${url}`, { cause: error });
-  }
+  const operation = `GET ${url}`;
+  const response = await requestTestArtifactResponse(operation, () => request.get(url));
+  const body = await readTestArtifactText(response, operation);
+  return parseTestArtifactJson<T>(body, operation, {}, response.status());
 }
 
 async function postJsonWithCsrf(
@@ -327,14 +315,10 @@ export async function assertAuthenticatedCleanupIdentity(
     typeof profile?.username !== 'string' ||
     profile.username.trim() === ''
   ) {
-    throw new Error('Malformed authenticated user profile. No E2E cleanup request was sent.');
+    throw testArtifactFailure('GET /api/user-profile', 'Malformed authenticated user profile. No E2E cleanup request was sent.');
   }
   if (profile.user_id !== baseline.userId || profile.username !== baseline.username) {
-    throw new Error(
-      `Authenticated cleanup identity mismatch: expected ${baseline.username} ` +
-      `(${baseline.userId}), got ${profile.username} (${profile.user_id}). ` +
-      'No E2E cleanup request was sent.',
-    );
+    throw testArtifactFailure('GET /api/user-profile', 'Authenticated cleanup identity mismatch. No E2E cleanup request was sent.');
   }
 }
 
