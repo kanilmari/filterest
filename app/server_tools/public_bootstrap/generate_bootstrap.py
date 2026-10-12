@@ -144,6 +144,7 @@ release_data_migrations = (
     "20261009000061_backfill_dataset_appearance_three_places.sql",
     "20261009000072_register_publication_columns.sql",
     "20261009000082_complete_registered_column_metadata.sql",
+    "20261009000083_add_automatic_log_retention.sql",
 )
 # The record of each database release is not run by the bootstrap: the acceptance
 # block below writes the version row of the version this bootstrap is built for.

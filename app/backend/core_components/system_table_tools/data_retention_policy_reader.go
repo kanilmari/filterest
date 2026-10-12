@@ -12,12 +12,14 @@ import (
 	"time"
 
 	"easelect/backend/core_components/dbutils"
+	"easelect/backend/reusable_components/setting_duration"
 )
 
 const (
 	dataRetentionPoliciesConfigKey         = "data_retention_policies"
 	automaticDataRetentionEnabledConfigKey = "automatic_data_retention_enabled"
 	dataRetentionModeRollingYears          = "rolling_years"
+	dataRetentionModeRollingDays           = "rolling_days"
 	dataRetentionModeCalendarYearsCurrent  = "calendar_years_plus_current"
 )
 
@@ -30,6 +32,7 @@ type dataRetentionPolicyConfig struct {
 	FilterValue     json.RawMessage `json:"filter_value,omitempty"`
 	Mode            string          `json:"mode"`
 	KeepYears       int             `json:"keep_years"`
+	KeepDays        int             `json:"keep_days,omitempty"`
 	Description     string          `json:"description,omitempty"`
 }
 
@@ -43,6 +46,7 @@ type dataRetentionPolicy struct {
 	FilterValueLabel string
 	Mode             string
 	KeepYears        int
+	KeepDays         int
 	Description      string
 }
 
@@ -53,42 +57,68 @@ type dataRetentionTableSpec struct {
 	DeleteStrategy          string
 }
 
-var dataRetentionTableSpecs = map[string]dataRetentionTableSpec{
-	"regfetch_conversations": {
-		TableName: "regfetch_conversations",
-		AllowedTimestampColumns: map[string]bool{
-			"created_at": true,
-			"updated_at": true,
-		},
-		AllowedFilterColumns: map[string]string{
-			"email_hash": "text",
-			"session_id": "text",
-		},
-		DeleteStrategy: "generic",
+var dataRetentionTableSpecs = buildDataRetentionTableSpecs()
+
+// The policy array retains its legacy fields; its durations use the shared
+// parser instead of pretending the whole array is one number/unit setting.
+var dataRetentionDurationDefinition = setting_duration.Definition{
+	AmountField: "amount", UnitField: "unit",
+	Bounds: map[string]setting_duration.Bounds{
+		"days": {Min: 1, Max: 106751}, "years": {Min: 1, Max: 10000},
 	},
-	"ai_chat_conversations": {
-		TableName: "ai_chat_conversations",
-		AllowedTimestampColumns: map[string]bool{
-			"created_at": true,
-			"updated_at": true,
+}
+
+func buildDataRetentionTableSpecs() map[string]dataRetentionTableSpec {
+	specs := map[string]dataRetentionTableSpec{
+		"regfetch_conversations": {
+			TableName: "regfetch_conversations",
+			AllowedTimestampColumns: map[string]bool{
+				"created_at": true,
+				"updated_at": true,
+			},
+			AllowedFilterColumns: map[string]string{
+				"email_hash": "text",
+				"session_id": "text",
+			},
+			DeleteStrategy: "generic",
 		},
-		AllowedFilterColumns: map[string]string{
-			"dataset": "text",
-			"user_id": "int",
+		"ai_chat_conversations": {
+			TableName: "ai_chat_conversations",
+			AllowedTimestampColumns: map[string]bool{
+				"created_at": true,
+				"updated_at": true,
+			},
+			AllowedFilterColumns: map[string]string{
+				"dataset": "text",
+				"user_id": "int",
+			},
+			DeleteStrategy: "generic",
 		},
-		DeleteStrategy: "generic",
-	},
-	"dev_agent_tasks": {
-		TableName: "dev_agent_tasks",
-		AllowedTimestampColumns: map[string]bool{
-			"created": true,
-			"updated": true,
+		"dev_agent_tasks": {
+			TableName: "dev_agent_tasks",
+			AllowedTimestampColumns: map[string]bool{
+				"created": true,
+				"updated": true,
+			},
+			AllowedFilterColumns: map[string]string{
+				"queue_id": "int",
+			},
+			DeleteStrategy: "ticket_with_related_comments",
 		},
-		AllowedFilterColumns: map[string]string{
-			"queue_id": "int",
-		},
-		DeleteStrategy: "ticket_with_related_comments",
-	},
+	}
+	// Reuse the manual registry's names and clocks. Deletion tombstones prevent
+	// old exports restoring deleted content, so they have no automatic expiry.
+	for name, logSpec := range logRetentionTableSpecs {
+		if name == "deletion_log" {
+			continue
+		}
+		specs[name] = dataRetentionTableSpec{
+			TableName:               name,
+			AllowedTimestampColumns: map[string]bool{logSpec.TimestampColumn: true},
+			DeleteStrategy:          dataRetentionDeleteStrategyLogBatch,
+		}
+	}
+	return specs
 }
 
 // loadDataRetentionPolicies reads and validates the configured retention policies.
@@ -138,20 +168,35 @@ func parseDataRetentionPolicies(rawConfig []byte) ([]dataRetentionPolicy, error)
 
 	policies := make([]dataRetentionPolicy, 0, len(configs))
 	seenNames := make(map[string]bool, len(configs))
+	seenTables := make(map[string]bool, len(configs))
 	for index, cfg := range configs {
 		policy, err := normalizeDataRetentionPolicy(cfg)
 		if err != nil {
 			return nil, fmt.Errorf("policy #%d invalid: %w", index+1, err)
 		}
-		normalizedName := strings.ToLower(policy.Name)
+		normalizedName := normalizeDataRetentionIdentity(policy.Name)
 		if seenNames[normalizedName] {
 			return nil, fmt.Errorf("duplicate policy name %q", policy.Name)
 		}
+		// Two policies must never compete over an opt-out, clock or duration.
+		// Refuse the configuration before any policy can delete rows.
+		if seenTables[policy.TableName] {
+			return nil, fmt.Errorf("duplicate policy table %q", policy.TableName)
+		}
+		seenTables[policy.TableName] = true
 		seenNames[normalizedName] = true
 		policies = append(policies, policy)
 	}
 
 	return policies, nil
+}
+
+// normalizeDataRetentionIdentity defines table identity and case-insensitive
+// policy-name equality. The migration uses the same rule for ASCII identities;
+// data_retention_identity_test.go proves parity across all Unicode whitespace
+// and every rune Go lowercases to ASCII.
+func normalizeDataRetentionIdentity(value string) string {
+	return strings.ToLower(strings.TrimSpace(value))
 }
 
 func normalizeDataRetentionPolicy(cfg dataRetentionPolicyConfig) (dataRetentionPolicy, error) {
@@ -160,7 +205,7 @@ func normalizeDataRetentionPolicy(cfg dataRetentionPolicyConfig) (dataRetentionP
 		return dataRetentionPolicy{}, fmt.Errorf("name is required")
 	}
 
-	tableName := strings.ToLower(strings.TrimSpace(cfg.TableName))
+	tableName := normalizeDataRetentionIdentity(cfg.TableName)
 	spec, ok := dataRetentionTableSpecs[tableName]
 	if !ok {
 		return dataRetentionPolicy{}, fmt.Errorf("table_name %q is not allowlisted", cfg.TableName)
@@ -175,16 +220,22 @@ func normalizeDataRetentionPolicy(cfg dataRetentionPolicyConfig) (dataRetentionP
 	}
 
 	mode := strings.ToLower(strings.TrimSpace(cfg.Mode))
-	if mode != dataRetentionModeRollingYears && mode != dataRetentionModeCalendarYearsCurrent {
-		return dataRetentionPolicy{}, fmt.Errorf(
-			"mode %q must be %q or %q",
-			cfg.Mode,
-			dataRetentionModeRollingYears,
-			dataRetentionModeCalendarYearsCurrent,
-		)
+	amount, unit := cfg.KeepYears, "years"
+	switch mode {
+	case dataRetentionModeRollingDays:
+		amount, unit = cfg.KeepDays, "days"
+		if cfg.KeepYears != 0 {
+			return dataRetentionPolicy{}, fmt.Errorf("rolling_days cannot have keep_years")
+		}
+	case dataRetentionModeRollingYears, dataRetentionModeCalendarYearsCurrent:
+		if cfg.KeepDays != 0 {
+			return dataRetentionPolicy{}, fmt.Errorf("year modes cannot have keep_days")
+		}
+	default:
+		return dataRetentionPolicy{}, fmt.Errorf("unknown retention mode %q", cfg.Mode)
 	}
-	if cfg.KeepYears <= 0 {
-		return dataRetentionPolicy{}, fmt.Errorf("keep_years must be a positive integer")
+	if _, err := setting_duration.Parse(map[string]any{"amount": amount, "unit": unit}, dataRetentionDurationDefinition); err != nil {
+		return dataRetentionPolicy{}, fmt.Errorf("invalid retention duration: %w", err)
 	}
 
 	filterColumn := strings.ToLower(strings.TrimSpace(cfg.FilterColumn))
@@ -223,6 +274,7 @@ func normalizeDataRetentionPolicy(cfg dataRetentionPolicyConfig) (dataRetentionP
 		FilterValueLabel: filterValueLabel,
 		Mode:             mode,
 		KeepYears:        cfg.KeepYears,
+		KeepDays:         cfg.KeepDays,
 		Description:      strings.TrimSpace(cfg.Description),
 	}, nil
 }
@@ -283,12 +335,16 @@ func resolveDataRetentionPolicyCutoff(policy dataRetentionPolicy, now time.Time)
 	localNow := now.In(time.Local)
 
 	switch policy.Mode {
+	case dataRetentionModeRollingDays:
+		cutoff, _ := (setting_duration.Value{Amount: policy.KeepDays, Unit: "days"}).SubtractFrom(now)
+		return cutoff
 	case dataRetentionModeCalendarYearsCurrent:
 		return time.Date(localNow.Year()-policy.KeepYears, time.January, 1, 0, 0, 0, 0, time.Local)
 	case dataRetentionModeRollingYears:
 		fallthrough
 	default:
-		return localNow.AddDate(-policy.KeepYears, 0, 0)
+		cutoff, _ := (setting_duration.Value{Amount: policy.KeepYears, Unit: "years"}).SubtractFrom(localNow)
+		return cutoff
 	}
 }
 

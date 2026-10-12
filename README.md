@@ -512,6 +512,9 @@ replacement restore and legacy recovery. Keep the authentication key separately 
 Read the [Developer Guide](app/docs/instructions_and_documentation/DEV_GUIDE.md)
 for shared coding conventions, QA and verification.
 
+The public [maintenance guide](app/docs/instructions_and_documentation/runtime_contract.md#log-maintenance-and-automatic-retention)
+describes automatic 90-day log retention and how administrators change it.
+
 ```bash
 ./filterest setup --profile development  # one-time toolchain and database setup
 ./filterest start     # build and run the local application

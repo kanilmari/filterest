@@ -143,3 +143,21 @@ func (value Value) AddTo(start time.Time) (time.Time, error) {
 	}
 	return start.Add(time.Duration(value.Amount) * unit), nil
 }
+
+// SubtractFrom applies the same elapsed/calendar rule when retaining past data.
+// Calendar subtraction uses AddDate directly so leap-day normalization matches
+// existing year-based retention rather than reversing a future calendar span.
+func (value Value) SubtractFrom(start time.Time) (time.Time, error) {
+	end, err := value.AddTo(start)
+	if err != nil {
+		return time.Time{}, err
+	}
+	switch NormalizeUnit(value.Unit) {
+	case "months":
+		return start.AddDate(0, -value.Amount, 0), nil
+	case "years":
+		return start.AddDate(-value.Amount, 0, 0), nil
+	default:
+		return start.Add(-end.Sub(start)), nil
+	}
+}

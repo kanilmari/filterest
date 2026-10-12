@@ -10,6 +10,8 @@ its source and development tools.
   handbook for coding, testing, source boundaries and local verification.
 - [Installation Update And Recovery](instructions_and_documentation/Installation_Update_And_Recovery.md)
   owns update prerequisites, authenticated recovery packets and replacement restore.
+- [Log maintenance and retention](instructions_and_documentation/runtime_contract.md#log-maintenance-and-automatic-retention)
+  explains the daily 90-day defaults, settings and explicit pruning commands.
 - [Filterest Dictionary](instructions_and_documentation/Dictionary.md) defines
   shared English product terms and interface components.
 - [Contribution guidance](../../CONTRIBUTING.md) explains how to propose changes.

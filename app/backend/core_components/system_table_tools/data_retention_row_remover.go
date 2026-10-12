@@ -22,11 +22,12 @@ import (
 )
 
 const (
-	dataRetentionDeleteStrategyGeneric       = "generic"
-	dataRetentionDeleteStrategyTickets       = "ticket_with_related_comments"
-	dataRetentionAutomaticInterval           = 24 * time.Hour
-	dataRetentionAutomaticInitialDelay       = 90 * time.Second
-	dataRetentionAdvisoryLockKey       int64 = 80428021
+	dataRetentionDeleteStrategyGeneric        = "generic"
+	dataRetentionDeleteStrategyTickets        = "ticket_with_related_comments"
+	dataRetentionDeleteStrategyLogBatch       = "log_batch"
+	dataRetentionAutomaticInterval            = 24 * time.Hour
+	dataRetentionAutomaticInitialDelay        = 90 * time.Second
+	dataRetentionAdvisoryLockKey        int64 = 80428021
 )
 
 var automaticDataRetentionLoopOnce sync.Once
@@ -39,6 +40,7 @@ type DataRetentionPolicyResult struct {
 	FilterValue     string `json:"filter_value,omitempty"`
 	Mode            string `json:"mode"`
 	KeepYears       int    `json:"keep_years"`
+	KeepDays        int    `json:"keep_days,omitempty"`
 	Cutoff          string `json:"cutoff"`
 	Present         bool   `json:"present"`
 	Enabled         bool   `json:"enabled"`
@@ -88,6 +90,10 @@ func runAutomaticDataRetentionPass(db *sql.DB) {
 }
 
 func runDrainedDataRetentionPass(ctx context.Context, db *sql.DB) error {
+	return runDrainedDataRetentionPassAt(ctx, db, time.Now())
+}
+
+func runDrainedDataRetentionPassAt(ctx context.Context, db *sql.DB, now time.Time) error {
 	conn, err := db.Conn(ctx)
 	if err != nil {
 		return err
@@ -127,26 +133,28 @@ func runDrainedDataRetentionPass(ctx context.Context, db *sql.DB) error {
 		return err
 	}
 	var totalDeleted int64
-	now := time.Now()
 	for _, policy := range policies {
-		err = runtime_grants.WithRequestBarrier(ctx, backend.DbLifecycle, func(ctx context.Context) error {
-			tx, err := conn.BeginTx(ctx, nil)
+		if !policy.Enabled {
+			continue
+		}
+		batchLimit := 1
+		if dataRetentionTableSpecs[policy.TableName].DeleteStrategy == dataRetentionDeleteStrategyLogBatch {
+			batchLimit = dataRetentionLogBatchesPerPass
+		}
+		for batch := 0; batch < batchLimit; batch++ {
+			deleted, err := runAutomaticDataRetentionBatch(ctx, conn, policy, now)
 			if err != nil {
-				return err
+				if ctx.Err() != nil {
+					return ctx.Err()
+				}
+				// A busy optional log must not prevent other policies making progress.
+				log.Printf("[data-retention] policy %s batch failed: %v", policy.Name, err)
+				break
 			}
-			defer tx.Rollback()
-			response, err := runDataRetentionAt(dbutils.BindQueryContext(ctx, tx), []dataRetentionPolicy{policy}, false, now)
-			if err != nil {
-				return err
+			totalDeleted += deleted
+			if deleted < dataRetentionLogBatchSize {
+				break
 			}
-			if err = tx.Commit(); err != nil {
-				return err
-			}
-			totalDeleted += response.TotalDeleted
-			return nil
-		})
-		if err != nil {
-			return err
 		}
 	}
 	if totalDeleted > 0 {
@@ -179,6 +187,9 @@ func runDataRetentionAt(q dbutils.Querier, policies []dataRetentionPolicy, dryRu
 	}
 
 	for _, policy := range policies {
+		if err := validateDataRetentionExecutionPolicy(policy); err != nil {
+			return response, err
+		}
 		spec := dataRetentionTableSpecs[policy.TableName]
 		result := DataRetentionPolicyResult{
 			PolicyName:      policy.Name,
@@ -188,6 +199,7 @@ func runDataRetentionAt(q dbutils.Querier, policies []dataRetentionPolicy, dryRu
 			FilterValue:     policy.FilterValueLabel,
 			Mode:            policy.Mode,
 			KeepYears:       policy.KeepYears,
+			KeepDays:        policy.KeepDays,
 			Cutoff:          resolveDataRetentionPolicyCutoff(policy, now).Format(time.RFC3339),
 			Enabled:         policy.Enabled,
 			PolicyNote:      policy.Description,
@@ -246,6 +258,8 @@ func countRowsForDataRetentionPolicy(q dbutils.Querier, policy dataRetentionPoli
 func deleteRowsForDataRetentionPolicy(q dbutils.Querier, policy dataRetentionPolicy, cutoff time.Time) (int64, error) {
 	spec := dataRetentionTableSpecs[policy.TableName]
 	switch spec.DeleteStrategy {
+	case dataRetentionDeleteStrategyLogBatch:
+		return deleteLogRowsForDataRetentionBatch(q, policy, cutoff)
 	case dataRetentionDeleteStrategyTickets:
 		return deleteTicketRowsForDataRetention(q, policy, cutoff)
 	default:
@@ -282,6 +296,10 @@ func deleteGenericRowsForDataRetention(q dbutils.Querier, policy dataRetentionPo
 func buildGenericDataRetentionWhereClause(policy dataRetentionPolicy, cutoff time.Time) (string, []any) {
 	clauses := []string{fmt.Sprintf(`"%s" < $1`, policy.TimestampColumn)}
 	args := []any{cutoff}
+	if policy.TableName == "dev_agent_task_runs" {
+		// Active runs and pending reviews are work, not disposable history.
+		clauses = append(clauses, `status IN ('succeeded', 'failed', 'canceled') AND finished_at < $1`)
+	}
 
 	if policy.FilterColumn != "" {
 		clauses = append(clauses, fmt.Sprintf(`"%s" = $%d`, policy.FilterColumn, len(args)+1))

@@ -213,6 +213,11 @@ func flushBatch(batch []AuditEvent) {
 
 // InferOperationType derives a semantic operation type from the handler name.
 func InferOperationType(handlerName string) string {
+	// This administrator stream only reads the notice. Its name must not turn
+	// routine reconnects into administrative mutations in the audit classifier.
+	if handlerName == "router.adminUpdateNoticeStreamHandler" {
+		return "read"
+	}
 	h := strings.ToLower(handlerName)
 
 	switch {
@@ -278,6 +283,28 @@ var lowSignalSuccessfulAuditHandlers = map[string]struct{}{
 	"system_table_tools.GetGroupedTables": {},
 }
 
+// Each new skip binds a handler to its registered route. The symbol route is
+// the sole asset subtree; no administrator symbol assignment is covered.
+var routineSuccessfulAuditRoutes = map[string]string{
+	"symbol_registry.AssetHandler":          "/symbol-assets/",
+	"auth.CSRFTokenHandler":                 "/api/csrf-token",
+	"lang.GetPublicUILanguagesHandler":      "/api/ui-languages",
+	"product_identity.Handler":              "/api/product-identity",
+	"router.adminUpdateNoticeStreamHandler": "/api/admin/update-notice/stream",
+}
+
+func matchesRoutineSuccessfulAuditRoute(handlerName, path string) bool {
+	route, found := routineSuccessfulAuditRoutes[handlerName]
+	if !found {
+		return false
+	}
+	if handlerName == "symbol_registry.AssetHandler" {
+		asset := strings.TrimPrefix(path, route)
+		return asset != path && asset != "" && !strings.Contains(asset, "/") && strings.HasSuffix(asset, ".svg")
+	}
+	return path == route
+}
+
 // RegisterLowSignalSuccessfulAuditHandler adds an optional success-read audit skip.
 // Between: private app activation packages -> audit filtering stage.
 // Why: Public Filterest builds can omit private app handler names from core code.
@@ -292,7 +319,7 @@ func RegisterLowSignalSuccessfulAuditHandler(handlerName string) {
 // shouldEnqueueAuditEvent keeps failed, mutating, and admin-visible events while
 // dropping known high-volume, low-signal success paths such as public shell and
 // startup/read introspection routes.
-func shouldEnqueueAuditEvent(handlerName, operationType, method string, statusCode int) bool {
+func shouldEnqueueAuditEvent(handlerName, operationType, method string, statusCode int, path string) bool {
 	success := statusCode >= 200 && statusCode < 400
 	if !success {
 		return true
@@ -307,6 +334,9 @@ func shouldEnqueueAuditEvent(handlerName, operationType, method string, statusCo
 	switch operationType {
 	case "create", "update", "delete", "admin":
 		return true
+	}
+	if (method == http.MethodGet || method == http.MethodHead) && matchesRoutineSuccessfulAuditRoute(handlerName, path) {
+		return false
 	}
 
 	_, skip := lowSignalSuccessfulAuditHandlers[handlerName]
@@ -406,13 +436,16 @@ func WithAudit(handlerName string, next http.HandlerFunc) http.HandlerFunc {
 		// Wrap writer to capture status code
 		capture := &statusCapture{ResponseWriter: w, code: http.StatusOK}
 
-		// Call the actual handler
+		// HTTP cannot change status after a stream starts. Keep its semantic
+		// failure outcome alongside the status, on this request alone.
+		outcome := &requestOutcome{}
+		r = r.WithContext(context.WithValue(r.Context(), requestOutcomeKey{}, outcome))
 		next(capture, r)
 
 		// Build audit event (non-blocking — runs after handler returns)
 		duration := time.Since(start)
 		operationType := InferOperationType(handlerName)
-		if !shouldEnqueueAuditEvent(handlerName, operationType, r.Method, capture.code) {
+		if !outcome.failed.Load() && !shouldEnqueueAuditEvent(handlerName, operationType, r.Method, capture.code, r.URL.Path) {
 			return
 		}
 
@@ -434,7 +467,7 @@ func WithAudit(handlerName string, next http.HandlerFunc) http.HandlerFunc {
 			URLPath:       r.URL.Path,
 			TableName:     extractTableName(r),
 			OperationType: operationType,
-			Success:       capture.code >= 200 && capture.code < 400,
+			Success:       !outcome.failed.Load() && capture.code >= 200 && capture.code < 400,
 			IPAddress:     extractIP(r),
 			DurationMS:    int(duration.Milliseconds()),
 		}

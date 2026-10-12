@@ -194,6 +194,7 @@
     "20261009000080_zone_platform_managed_timestamps.sql",
     "20261009000081_seed_runtime_grant_policy_wait_language_key.sql",
     "20261009000082_complete_registered_column_metadata.sql",
+    "20261009000083_add_automatic_log_retention.sql",
     "20261009000099_record_database_release_9_10_2.sql"
   ],
   "allowed_schema_tables": [
@@ -365,7 +366,7 @@
     "public.system_languages": 5,
     "public.system_permission_actions": 7,
     "public.system_permission_categories": 4,
-    "public.system_schema_migrations": 188,
+    "public.system_schema_migrations": 189,
     "public.system_table_folders": 14,
     "public.system_table_views": 13,
     "public.system_user_group_memberships": 2,
@@ -380,7 +381,7 @@
       "sha256": "910206025fd37caa9970039930aede1fe25d679b9d3d756ae9c6956d5b22c3bc"
     },
     "server_tools/public_bootstrap/seed_data.sql": {
-      "sha256": "2f18f544fbd723e27a2e800b42f0659b2a08ef33ece5aeffb6f30f9565edd150"
+      "sha256": "b2549cc84d40a7aa11f42b14dc93cc23e37f675fcfe51fbe621254b4c707e30c"
     }
   },
   "source_files": {
@@ -397,7 +398,7 @@
       "sha256": "235e4b887181e150bd436d035d2d268eb821d9e5d0b830b54eb444988f31d5d1"
     },
     "filterest/app/server_tools/public_bootstrap/generate_bootstrap.py": {
-      "sha256": "c4152f36528546c95376f79c222f778c6423b919a8c755339fe85883cb64f888"
+      "sha256": "746cfb895447f76d382158b4298570795b6b16beb24ba9e5debc472afb8a5f8d"
     },
     "filterest/app/server_tools/public_bootstrap/sql_identifier_validator.py": {
       "sha256": "748245fac4328a3608740c1b0fe948e6a09d6489d587143bd3b4c67064bea732"
@@ -1034,6 +1035,9 @@
     },
     "filterest/app/server_tools/migrations/20261009000082_complete_registered_column_metadata.sql": {
       "sha256": "14890e0b5385434fa2b6b5eced126f263c292c785cf1aa2e058b709af57b3583"
+    },
+    "filterest/app/server_tools/migrations/20261009000083_add_automatic_log_retention.sql": {
+      "sha256": "e38a347d9511302d0c7333765f7e2fa7d8cf9b2d5996954b209a521c90a51b5e"
     },
     "filterest/app/server_tools/migrations/20261009000099_record_database_release_9_10_2.sql": {
       "sha256": "190f66df60bd062997ebd80b2392eff7fdd843c9c8a709a4a1c30f136e6bbd97"

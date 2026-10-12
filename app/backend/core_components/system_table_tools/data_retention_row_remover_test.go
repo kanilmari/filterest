@@ -137,6 +137,16 @@ func (c *dataRetentionMockConn) ExecContext(_ context.Context, query string, arg
 		query: query,
 		args:  append([]driver.NamedValue(nil), args...),
 	})
+	for table := range logRetentionTableSpecs {
+		if strings.Contains(query, fmt.Sprintf(`DELETE FROM public."%s"`, table)) {
+			deleted := c.state.counts[table]
+			if deleted > dataRetentionLogBatchSize {
+				deleted = dataRetentionLogBatchSize
+			}
+			c.state.counts[table] -= deleted
+			return driver.RowsAffected(deleted), nil
+		}
+	}
 
 	switch {
 	case strings.Contains(query, `DELETE FROM "regfetch_conversations"`):

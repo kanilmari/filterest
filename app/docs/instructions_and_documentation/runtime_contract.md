@@ -127,6 +127,128 @@ Implementation anchors:
 [runtime roots](../../backend/core_components/runtimepaths/runtime_paths.go),
 [health/readiness](../../backend/core_components/router/health_handler.go).
 
+## Log maintenance and automatic retention
+
+Fresh installations enable automatic retention. Public migration
+`20261009000083_add_automatic_log_retention.sql` adds missing configuration on
+upgrades, including installations previously configured by a private migration.
+It preserves existing settings, including an explicit automatic opt-out, and
+adds a default only when the policy array is canonical and the log table has no
+policy already. Table identity ignores case and surrounding Unicode whitespace,
+just as the policy reader does; disabled policies and custom durations are
+preserved. Generated policy names gain an unused numeric suffix when an existing
+name is taken. The reader
+refuses multiple policies for the same normalized table before deleting any rows.
+
+**When defaults are not added:** the stored setting must be a JSON array of
+objects using only these exact canonical member names: `name`, `enabled`,
+`table_name`, `timestamp_column`, `filter_column`, `filter_value`, `mode`,
+`keep_years`, `keep_days`, `description`. Alternate spellings such as `Name`
+or `TABLE_NAME` (which the reader still accepts), extra members, a non-array
+value (including JSON or SQL null), or a non-object array entry cause the entire
+stored setting to remain byte-for-byte untouched. The migration emits a NOTICE
+containing “default log policies were not added”; existing retention continues
+for any configuration the reader already accepted. This is a member/shape
+check, not full policy validation; invalid canonical policies still need repair
+through Settings. Replaying the migration preserves these rules.
+
+To add the skipped defaults by hand, open the retention policy setting
+(`data_retention_policies`) in **Settings** using the normal interface or
+permission-checked application API. Preserve every existing policy and append
+the example below with `keep_days` set to **90** once for each missing table
+in this list; replace its `table_name` and `timestamp_column` accordingly:
+
+| Log table | Timestamp column |
+| --- | --- |
+| `system_audit_log` | `created_at` |
+| `system_transaction_log` | `created_at` |
+| `system_log` | `created` |
+| `dev_agent_task_runs` | `started_at` |
+| `ai_usage_logs` | `created_at` |
+| `mcp_query_log` | `created_at` |
+
+Run `./filterest maintenance data preview` first to see the existing normalized
+table and policy names. The reader accepts case-insensitive member spellings
+and normalizes case/Unicode whitespace in table values. Keep disabled and custom
+policies; add only tables absent from that preview. Give each addition a unique
+`name` (`log-retention-<table>` with an unused numeric suffix if needed), ignoring name
+case and surrounding whitespace when checking uniqueness. Repair a non-array
+or invalid policy setting through Settings first, retaining its intended rules;
+then preview with the command below before enabling automatic deletion. No
+server restart is required.
+
+The default is **90 elapsed days** for `system_audit_log`,
+`system_transaction_log`, `system_log`, `dev_agent_task_runs`, `ai_usage_logs`
+and `mcp_query_log`. Missing optional tables are skipped. Only finished agent
+runs with status `succeeded`, `failed` or `canceled` expire, and both their start
+and finish must precede the cutoff; queued, running and awaiting-review work is
+retained. Deletion records (`deletion_log`) remain outside automatic retention:
+they prevent old exports from restoring intentionally deleted content.
+
+The background round starts 90 seconds after server startup and repeats every
+24 hours. It deletes only rows whose configured timestamp is **strictly before**
+the cutoff; rows exactly at the cutoff, newer rows and null clocks survive.
+Each log transaction removes at most 1,000 rows and commits before another
+batch begins. A round attempts at most 100 batches per log policy (100,000 rows)
+within a shared 20-second budget. Automatic batches skip locked rows; table-lock waits are
+limited to 100 milliseconds, statements to 750 milliseconds and each batch to
+one second. A busy table or backlog can therefore take later rounds to clear.
+The existing allowlist limits deletion to configured tables and permitted clocks.
+
+Administrators change retention in the **Settings** dataset (`system_config`),
+using the normal permission-checked interface or application API. The boolean
+setting `automatic_data_retention_enabled` switches the daily round on or off.
+The JSON setting `data_retention_policies` is an array; edit the relevant entry
+while preserving the others. For example, this entry keeps audit history for
+180 days:
+
+```json
+{
+  "name": "log-retention-system_audit_log",
+  "enabled": true,
+  "table_name": "system_audit_log",
+  "timestamp_column": "created_at",
+  "mode": "rolling_days",
+  "keep_days": 180
+}
+```
+
+Days must be positive whole numbers (at most 106,751); each day means 24 hours,
+including across daylight-saving changes. Set an entry's `enabled` to `false`
+to retain that table's history indefinitely. The existing `rolling_years` and
+`calendar_years_plus_current` modes still use positive whole `keep_years`:
+the former subtracts calendar years, the latter retains the current local year
+plus the specified full years. Do not mix `keep_days` and `keep_years`.
+Shortening a policy makes older rows eligible at the next round; lengthening it
+cannot recover rows already deleted. Changing a setting needs no server restart.
+
+Preview policies and explicitly request a log batch through the public CLI:
+
+```bash
+./filterest maintenance data preview
+./filterest maintenance data prune --policies log-retention-system_audit_log --yes
+```
+
+Preview counts every matching row without deleting it; an explicit policy prune
+deletes at most one log batch per policy, so repeat if needed. The separate
+`./filterest maintenance logs` command remains available for explicit cutoff
+pruning, including deletion records; it does not configure automatic retention.
+
+Successful GET/HEAD reads of symbol assets (`/symbol-assets/<key>.svg`), the CSRF token
+(`/api/csrf-token`), public languages (`/api/ui-languages`), product identity
+(`/api/product-identity`) and the administrator notice stream
+(`/api/admin/update-notice/stream`) no longer add routine audit rows. Matching
+requires the exact registered handler and route; the symbol route covers only
+one SVG asset key. For the notice stream, normal lifetime expiry is routine. An
+initial snapshot/admission failure returns HTTP 503 before streaming; a later
+snapshot or account-check error, a write error the server observes and an access
+revocation keep the request's audit event with `success=false`, even when its
+HTTP response has already started with 200. Two edge cases are not yet exact
+(ticket #943): a client that disconnects while the server reads the snapshot or
+the account can be recorded as unsuccessful, and a failure that appears only
+while flushing buffered output is not detected.
+Writes, administrative changes and authentication security events remain audited.
+
 ## Future portability work
 
 A resource contract can make a later Apple container, Podman or Kubernetes

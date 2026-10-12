@@ -1,3 +1,7 @@
+// with_audit_test.go
+// Verifies audit classification, trusted actor data and response capture.
+// Connects routed outcomes to the queue's selective success-read filtering.
+// Keeps mutations and security failures visible while excluding routine reads.
 package audit
 
 import (
@@ -181,7 +185,7 @@ func TestShouldEnqueueAuditEvent(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := shouldEnqueueAuditEvent(tt.handlerName, tt.operationType, tt.method, tt.statusCode); got != tt.want {
+			if got := shouldEnqueueAuditEvent(tt.handlerName, tt.operationType, tt.method, tt.statusCode, ""); got != tt.want {
 				t.Fatalf("shouldEnqueueAuditEvent(%q, %q, %q, %d) = %v, want %v", tt.handlerName, tt.operationType, tt.method, tt.statusCode, got, tt.want)
 			}
 		})

@@ -23,6 +23,7 @@ import (
 	"easelect/backend/core_components/event_bus"
 	"easelect/backend/core_components/httpresponse"
 	"easelect/backend/core_components/runtime_grants"
+	"easelect/backend/pipeline/audit"
 )
 
 const (
@@ -358,6 +359,8 @@ func adminUpdateNoticeStreamHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := runtime_grants.ReleaseRequestBarrier(r.Context()); err != nil {
+		w.WriteHeader(http.StatusServiceUnavailable)
+		audit.MarkRequestFailed(r.Context())
 		return
 	}
 	wakeEvents, unsubscribe := event_bus.Bus.Subscribe(event_bus.InternalUpdateNoticeTopic)
@@ -367,6 +370,24 @@ func adminUpdateNoticeStreamHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Connection", "keep-alive")
 	w.Header().Set("X-Accel-Buffering", "no")
 
+	streamStarted := false
+	streamFailed := func(err error) {
+		log.Printf("\033[31merror: production update notice stream: %v\033[0m", err)
+		audit.MarkRequestFailed(r.Context())
+		if !streamStarted {
+			w.Header().Del("Content-Type")
+			w.WriteHeader(http.StatusServiceUnavailable)
+		}
+	}
+	writeEvent := func(event, payload string) bool {
+		streamStarted = true
+		if _, err := fmt.Fprintf(w, "event: %s\ndata: %s\n\n", event, payload); err != nil {
+			streamFailed(err)
+			return false
+		}
+		flusher.Flush()
+		return true
+	}
 	writeSnapshot := func() bool {
 		var snapshot productionUpdateNoticeSnapshot
 		err := runtime_grants.WithRequestBarrier(r.Context(), backend.DbLifecycle, func(ctx context.Context) error {
@@ -375,16 +396,15 @@ func adminUpdateNoticeStreamHandler(w http.ResponseWriter, r *http.Request) {
 			return err
 		})
 		if err != nil {
-			log.Printf("\033[31merror: read production update notice snapshot: %v\033[0m", err)
+			streamFailed(err)
 			return false
 		}
 		payload, err := json.Marshal(snapshot)
 		if err != nil {
+			streamFailed(err)
 			return false
 		}
-		fmt.Fprintf(w, "event: %s\ndata: %s\n\n", productionUpdateNoticeEventName, payload)
-		flusher.Flush()
-		return true
+		return writeEvent(productionUpdateNoticeEventName, string(payload))
 	}
 	if !writeSnapshot() {
 		return
@@ -406,7 +426,10 @@ func adminUpdateNoticeStreamHandler(w http.ResponseWriter, r *http.Request) {
 		case <-lifetime.C:
 			return
 		case <-heartbeat.C:
-			fmt.Fprint(w, ": keepalive\n\n")
+			if _, err := fmt.Fprint(w, ": keepalive\n\n"); err != nil {
+				streamFailed(err)
+				return
+			}
 			flusher.Flush()
 		case <-snapshotTicker.C:
 			if !writeSnapshot() {
@@ -424,8 +447,11 @@ func adminUpdateNoticeStreamHandler(w http.ResponseWriter, r *http.Request) {
 				return err
 			})
 			if err != nil || !allowed {
-				fmt.Fprintf(w, "event: %s\ndata: {}\n\n", productionUpdateNoticeRevokedEvent)
-				flusher.Flush()
+				audit.MarkRequestFailed(r.Context())
+				if err != nil {
+					streamFailed(err)
+				}
+				writeEvent(productionUpdateNoticeRevokedEvent, "{}")
 				return
 			}
 		}
