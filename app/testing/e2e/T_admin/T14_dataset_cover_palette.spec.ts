@@ -3,7 +3,7 @@
 // Connects UI previews and revision-protected saves to real cards, chips and reloads.
 // Follows admin_tools/dataset_cover_test_palette.js, dataset_appearance_palette_state.js
 // and site_presentation_state.js; restores only the paths this test changes.
-import { expect, test } from '@playwright/test';
+import { expect, test as base, type Page } from '@playwright/test';
 import { revealActiveFilterbarSection } from '../helpers/filterbar';
 import {
   loadDatasetCardVisibility,
@@ -11,23 +11,94 @@ import {
   restoreDatasetAppearance,
   restoreSitePresentationSettings,
 } from '../helpers/appearance-revisions';
-import { buildTempDatasetName, createTempDataset, dropTempDataset, openTempDataset } from '../helpers/temp-dataset';
+import { buildTempDatasetName, createTempDataset, dropTempDataset, fetchCsrfTokenForRequest, openTempDataset } from '../helpers/temp-dataset';
 import { waitForAppReady } from '../helpers/navigation';
 
-test('admin cover palette is protected, movable, resizable, themed, and live-only', async ({ page }) => {
-  await page.goto('/app_autojen_vanteet', { waitUntil: 'domcontentloaded' });
+// A shared dataset may have no cover, or have it hidden. Give cover assertions
+// their own real uploaded image; never manufacture the cover class in the DOM.
+const test = base.extend<{ coverDataset: string; selectTheme: (theme: 'light' | 'dark') => Promise<void> }>({
+  coverDataset: async ({ page }, use) => {
+    await page.goto('/', { waitUntil: 'domcontentloaded' });
+    await waitForAppReady(page);
+    const name = buildTempDatasetName('palette_cover');
+    await createTempDataset(page, { datasetName: name, columns: { id: 'SERIAL', title: 'TEXT' } });
+    try {
+      await openTempDataset(page, name, 'card', { expectEmpty: true });
+      const style = await revealActiveFilterbarSection(page, 'style');
+      const headerButton = style.getByTestId('dataset-header-config-hero-button');
+      await headerButton.click();
+      // Loading saved settings clears picked files. The opener is re-enabled
+      // only after the modal finishes loading, so choose the cover afterwards.
+      await expect(headerButton).toBeEnabled();
+      const modal = page.getByTestId('dataset-header-config-modal');
+      await modal.locator('input[name="cover_image"]').setInputFiles({
+        name: 'palette-cover.png', mimeType: 'image/png',
+        // An opaque 80-by-40 PNG, decoded in memory without a fixture file.
+        buffer: Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAFAAAAAoCAIAAADmAupWAAAAS0lEQVR4nO3PAQkAIBDAQDvZyU62NYawP1iA3drnjmp9PwAGBgYGBgYeE3A94HrA9YDrAdcDrgdcD7gecD3gesD1gOsB1wOuB1zvATsb8dMAsQmGAAAAAElFTkSuQmCC', 'base64'),
+      });
+      const saved = page.waitForResponse(res => new URL(res.url()).pathname === '/api/dataset-header-config/save'
+        && res.request().method() === 'POST');
+      await modal.locator('button[type="submit"]').click();
+      const response = await saved;
+      expect(response.ok(), await response.text()).toBe(true);
+      const config = (await response.json()).config;
+      expect(config.dataset_name).toBe(name);
+      expect(config.cover_image_path).not.toBe('');
+      expect(config.cover_image_hidden).toBe(false);
+      await expect(modal).toBeHidden();
+      await expect(page.locator(`#${name}_tab_parts_container .filterbar-inline-hero--has-cover`)).toBeVisible();
+      await use(name);
+    } finally {
+      await dropTempDataset(page, name);
+    }
+  },
+  selectTheme: async ({ page }, use) => {
+    const response = await page.request.get('/api/user-visual-preference');
+    expect(response.ok()).toBe(true);
+    const original = (await response.json()).theme_mode;
+    expect(['system', 'dark', 'light']).toContain(original);
+    try {
+      await use(theme => selectApplicationTheme(page, theme));
+    } finally {
+      const csrf = await fetchCsrfTokenForRequest(page.request);
+      const restored = await page.request.patch('/api/user-visual-preference', {
+        headers: { 'X-CSRF-Token': csrf }, data: { theme_mode: original },
+      });
+      expect(restored.ok(), await restored.text()).toBe(true);
+      expect((await restored.json()).theme_mode).toBe(original);
+    }
+  },
+});
+
+// Use the controller's visible toggle so startup/auth and OS listeners agree.
+async function selectApplicationTheme(page: Page, theme: 'light' | 'dark') {
+  const style = await revealActiveFilterbarSection(page, 'style');
+  const toggle = style.getByTestId('filterbar-theme-toggle');
+  await expect(toggle).toBeEnabled();
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    if (await toggle.getAttribute('data-aria-label-lang-key') === `theme_toggle_${theme}`) break;
+    // The nonmodal palette can overlap the filter panel; keyboard activation
+    // reaches the same user action without forcing a click through the palette.
+    await toggle.focus();
+    await toggle.press('Space');
+    await expect(toggle).toBeEnabled();
+  }
+  await expect(toggle).toHaveAttribute('data-aria-label-lang-key', `theme_toggle_${theme}`);
+  await page.emulateMedia({ colorScheme: theme === 'light' ? 'dark' : 'light' });
+  await expect(page.locator('body')).toHaveClass(new RegExp(`\\b${theme}-mode\\b`));
+  await expect(page.locator('body')).not.toHaveClass(/\bsystem-mode\b/);
+}
+
+test('admin cover palette is protected, movable, resizable, themed, and live-only', async ({ page, coverDataset, selectTheme }) => {
   const response = await page.request.get('/api/admin/ui-feature-flags');
   expect(response.ok()).toBe(true);
   expect(await response.json()).toEqual({ view_admin_cover_image_test_palette: true });
   const presentationResponse = await page.request.get('/api/site-presentation-settings');
   expect(presentationResponse.ok()).toBe(true);
-  const presentation = (await loadDatasetCardVisibility(page.request, 'app_autojen_vanteet')).dataset_appearance;
+  const presentation = (await loadDatasetCardVisibility(page.request, coverDataset)).dataset_appearance;
 
-  const hero = page.locator('.filterbar-inline-hero--has-cover');
-  await page.evaluate(() => {
-    document.body.classList.remove('light-mode');
-    document.body.classList.add('dark-mode');
-  });
+  const hero = page.locator(`#${coverDataset}_tab_parts_container .filterbar-inline-hero--has-cover`);
+  await selectTheme('dark');
   await expect.poll(async () => hero.evaluate((element) => (
     getComputedStyle(element, '::before').opacity
   ))).toBe(String(presentation.tab_values['dark.image_opacity']));
@@ -37,16 +108,13 @@ test('admin cover palette is protected, movable, resizable, themed, and live-onl
   await expect.poll(async () => hero.evaluate((element) => (
     getComputedStyle(element, '::before').maskImage
   ))).toContain('linear-gradient');
-  await page.evaluate(() => {
-    document.body.classList.remove('dark-mode');
-    document.body.classList.add('light-mode');
-  });
+  await selectTheme('light');
   await expect.poll(async () => hero.evaluate((element) => (
     getComputedStyle(element, '::before').maskImage
   ))).toContain('linear-gradient');
 
-  await revealActiveFilterbarSection(page, 'style');
-  const button = page.locator('[data-testid="dataset-cover-test-palette-button"]');
+  const styleSection = await revealActiveFilterbarSection(page, 'style');
+  const button = styleSection.getByTestId('dataset-cover-test-palette-button');
   await expect(button).toBeVisible({ timeout: 10_000 });
   await button.click();
 
@@ -113,10 +181,7 @@ test('admin cover palette is protected, movable, resizable, themed, and live-onl
     input.value = '0';
     input.dispatchEvent(new Event('input', { bubbles: true }));
   });
-  await page.evaluate(() => {
-    document.body.classList.remove('light-mode');
-    document.body.classList.add('dark-mode');
-  });
+  await selectTheme('dark');
   await expect.poll(async () => hero.evaluate((element) => (
     getComputedStyle(element, '::before').filter
   ))).toBe('blur(0px)');
@@ -126,10 +191,7 @@ test('admin cover palette is protected, movable, resizable, themed, and live-onl
   ))).toBe('0px');
 
   await panel.locator('[data-testid="dataset-cover-test-palette-tab-light"]').click();
-  await page.evaluate(() => {
-    document.body.classList.remove('dark-mode');
-    document.body.classList.add('light-mode');
-  });
+  await selectTheme('light');
 
   const defaultHeight = (await hero.boundingBox())!.height;
   const heroHeight = page.locator('[data-testid="dataset-cover-test-palette-hero-height"]');
@@ -391,23 +453,39 @@ test('dataset card palette saves style and detail columns through the administra
 });
 
 // The common shell must keep the dataset's unsaved preview when closed and release it on navigation.
-test('shared palette shell keeps dataset preview through close and restores saved values on teardown', async ({ page }) => {
-  const saved = (await loadDatasetCardVisibility(page.request, 'app_autojen_vanteet')).dataset_appearance;
-  await page.goto('/app_autojen_vanteet', { waitUntil: 'domcontentloaded' });
+test('shared palette shell keeps dataset preview through close and restores saved values on teardown', async ({ page, coverDataset }) => {
+  const saved = (await loadDatasetCardVisibility(page.request, coverDataset)).dataset_appearance;
   const styleSection = await revealActiveFilterbarSection(page, 'style');
   const button = styleSection.getByTestId('dataset-cover-test-palette-button');
   await button.click();
   const panel = page.getByTestId('dataset-cover-test-palette');
   const input = panel.getByTestId('dataset-cover-test-palette-hero-height');
-  await input.evaluate((element: HTMLInputElement) => { element.value = '200'; element.dispatchEvent(new Event('input', { bubbles: true })); });
-  const hero = page.locator('.filterbar-inline-hero--has-cover');
+  const hero = page.locator(`#${coverDataset}_tab_parts_container .filterbar-inline-hero--has-cover`);
+  const savedHeight = (await hero.boundingBox())!.height;
+  // Background and cover image uses native details; `has` searches inside each
+  // disclosure, so its input locator must not include the outer palette panel.
+  const coverDisclosure = panel.locator('details').filter({ has: page.getByTestId('dataset-cover-test-palette-hero-height') });
+  if (!(await coverDisclosure.evaluate((element: HTMLDetailsElement) => element.open))) {
+    await coverDisclosure.locator(':scope > summary').click();
+  }
+  await expect(input).toBeVisible();
+  await expect(input).toBeEnabled();
+  await input.press('End');
+  const steps = (Number(await input.getAttribute('max')) - 200) / Number(await input.getAttribute('step'));
+  expect(Number.isInteger(steps) && steps >= 0).toBe(true);
+  for (let step = 0; step < steps; step += 1) await input.press('ArrowLeft');
+  await expect(input).toHaveValue('200');
   const preview = () => hero.evaluate(el => getComputedStyle(el).getPropertyValue('--dataset-cover-hero-extra-height').trim());
   await expect.poll(preview).toBe('200px');
+  const previewHeight = savedHeight + 200 - Number(saved.tab_values['shared.hero_extra_height']);
+  await expect.poll(async () => (await hero.boundingBox())!.height).toBeCloseTo(previewHeight, 0);
   await page.keyboard.press('Escape'); await expect(button).toBeFocused(); await expect(panel).toBeHidden();
   await expect.poll(preview).toBe('200px');
+  await expect.poll(async () => (await hero.boundingBox())!.height).toBeCloseTo(previewHeight, 0);
   await button.click(); await panel.getByTestId('dataset-cover-test-palette-reset').click();
   await expect(input).toHaveValue(String(saved.tab_values['shared.hero_extra_height']));
   await expect.poll(preview).toBe(`${saved.tab_values['shared.hero_extra_height']}px`);
+  await expect.poll(async () => (await hero.boundingBox())!.height).toBeCloseTo(savedHeight, 0);
   await page.goto('/login', { waitUntil: 'domcontentloaded' });
   await expect(panel).toHaveCount(0);
 });
