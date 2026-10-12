@@ -8,7 +8,7 @@ import { projectAppearanceAttribute, projectAppearanceStyle, clearAppearanceProj
     from '../../reusable_components/appearance_projection_writer.js';
 import { applyCardFieldPresentationSetting } from './card_view/card_field_presentation.js';
 import { applyCardImagePresentationSetting } from './card_view/card_image_presentation.js';
-import { applySiteLabelValueLayoutSetting } from '../../reusable_components/key_value_container/label_value_layout.js';
+import { applySiteLabelValueLayoutSetting } from './label_value_layout_adapter.js';
 
 const coverNames = {
     oval_width: 'mask-oval-x', oval_height: 'mask-oval-y', oval_position_y: 'mask-position-y',

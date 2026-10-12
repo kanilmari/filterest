@@ -6,15 +6,22 @@
 
 import { afterEach, beforeEach, describe, expect, test } from "vitest";
 import { readFileSync } from "node:fs";
-import { applyLabelValueLayout, normalizeLabelValueLayout, applySiteLabelValueLayoutSetting } from "./label_value_layout.js";
+import { applyLabelValueLayout, normalizeLabelValueLayout, applySiteLabelValueLayoutSetting,
+    registerAutomaticLabelValueLayoutAvailability } from "./label_value_layout.js";
 
 describe("shared field label/value layout", () => {
     beforeEach(() => {
         document.head.innerHTML = '<meta name="app-env" content="dev">';
+        registerAutomaticLabelValueLayoutAvailability(() => (
+            document.querySelector('meta[name="app-env"]')?.content === 'dev'
+        ));
         document.body.innerHTML = '';
         delete document.documentElement.dataset.labelValueLayout;
     });
-    afterEach(() => { document.head.innerHTML = ''; });
+    afterEach(() => {
+        document.head.innerHTML = '';
+        registerAutomaticLabelValueLayoutAvailability(() => false);
+    });
     const cases = JSON.parse(readFileSync('testing/shared_contracts/site_label_value_layout.json', 'utf8'));
     test.each(cases)("normalizes $value in $environment to $expected", ({ environment, value, expected }) => {
         document.querySelector('meta').content = environment;

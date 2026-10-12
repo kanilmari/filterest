@@ -6,7 +6,7 @@
 import { getTranslationForKey } from '../lang/translation_handler.js';
 import { getLanguageWithBrowserFallback } from '../state_stores/lang_preference_reader.js';
 import { isExperimentalFreeLayoutAvailable } from '../table_views/experimental_free_layout_card/experimental_free_layout_card_store.js';
-import { normalizeLabelValueLayout } from '../../reusable_components/key_value_container/label_value_layout.js';
+import { normalizeLabelValueLayout } from '../table_views/label_value_layout_adapter.js';
 
 const LAYOUT_COPY = Object.freeze({
     label_value_layout: { fi: 'Kentän otsikon ja arvon asettelu', en: 'Field label and value layout' },

@@ -33,7 +33,7 @@ import {
     setExperimentalDesignModeEnabled,
 } from "./experimental_free_layout_card_store.js";
 
-import { applyLabelValueLayout } from "../../../reusable_components/key_value_container/label_value_layout.js";
+import { applyLabelValueLayout } from "../label_value_layout_adapter.js";
 
 const workingTemplatesByTable = new Map();
 

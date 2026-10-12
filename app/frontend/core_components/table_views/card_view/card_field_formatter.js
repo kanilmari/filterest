@@ -29,7 +29,7 @@ import {
     normalizeTicketStatusForDb,
 } from './card_field_formatter_helpers.js';
 import { applyNumberInputStep } from '../../general_tables/gt_1_row_crud/number_input_step_resolver.js';
-import { applyLabelValueLayout } from '../../../reusable_components/key_value_container/label_value_layout.js';
+import { applyLabelValueLayout } from '../label_value_layout_adapter.js';
 import { resolveCardFieldLabelPlacement } from './card_field_label_placement.js';
 
 /**

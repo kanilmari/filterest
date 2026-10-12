@@ -5,7 +5,7 @@
 // detail field is described the same way whichever renderer draws it.
 // Exists so database-held legacy SVG can never enter the DOM rendering path.
 
-import { applyLabelValueLayout } from "../../../reusable_components/key_value_container/label_value_layout.js";
+import { applyLabelValueLayout } from "../label_value_layout_adapter.js";
 import { resolveCardDetailIconKey } from "./card_detail_icon_builder.js";
 import { createSymbolMaskElement } from "../../../reusable_components/symbol_asset_resolver.js";
 import { resolveSafeExternalHttpUrl } from "../../../reusable_components/safe_external_http_url.js";

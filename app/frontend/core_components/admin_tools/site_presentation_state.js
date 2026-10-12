@@ -5,7 +5,7 @@
 
 import { fetchSitePresentationSettings } from '../endpoints/stable_endpoint_router.js';
 import { normalizeCardImagePresentation } from '../table_views/card_view/card_image_presentation.js';
-import { normalizeLabelValueLayout } from '../../reusable_components/key_value_container/label_value_layout.js';
+import { normalizeLabelValueLayout } from '../table_views/label_value_layout_adapter.js';
 import { datasetAppearanceState } from '../table_views/dataset_appearance_state.js';
 import { applyActiveFilterRemoveSide }
     from '../filterbar/filter_list/active_filter_chip_builder.js';

@@ -6,12 +6,21 @@
 import { readAppearanceAttribute, appearanceScopeElements } from '../appearance_scope_reader.js';
 import { projectAppearanceAttribute } from '../appearance_projection_writer.js';
 
-import { isExperimentalFreeLayoutAvailable } from "../../core_components/table_views/experimental_free_layout_card/experimental_free_layout_card_store.js";
+let isAutomaticLayoutAvailable = () => false;
+
+/**
+ * Core registers its availability reader before using the shared renderers.
+ * Standalone reusable consumers safely fall back to Stacked before registration;
+ * keep the reader, rather than its result, so every call uses current availability.
+ */
+export function registerAutomaticLabelValueLayoutAvailability(readAvailability) {
+    isAutomaticLayoutAvailable = readAvailability;
+}
 
 // Mirrors normalizeSiteLabelValueLayout in backend/core_components/system_table_tools/site_presentation_validator.go.
 export function normalizeLabelValueLayout(value) {
     return value === "inline" || value === "stacked"
-        || (value === "auto" && isExperimentalFreeLayoutAvailable()) ? value : "stacked";
+        || (value === "auto" && isAutomaticLayoutAvailable()) ? value : "stacked";
 }
 
 export function readSiteLabelValueLayout(element = null) {
