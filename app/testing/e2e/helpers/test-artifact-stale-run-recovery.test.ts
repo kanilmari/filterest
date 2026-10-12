@@ -163,6 +163,82 @@ describe('automatic dead E2E artifact run recovery', () => {
     expect(log).toHaveBeenCalledWith(`[E2E recovery] dataset=${JSON.stringify(plannedName())} serverId=unknown outcome=already absent`);
   });
 
+  test.each(['planned', 'confirmed'] as const)('recovers a separately recorded %s image child after its parent disappeared', async status => {
+    const parent = plannedName();
+    const child = `${parent}_assets`;
+    seedArtifact(parent, 'confirmed', 919);
+    seedArtifact(child, status, 920);
+    const api = fakeApi({ [child]: { uid: 920 }, e2e_unrecorded_assets: { uid: 921 } });
+    const { log } = await recover(api);
+    expect(api.post).toHaveBeenCalledExactlyOnceWith('/api/drop-dataset', {
+      data: { dataset_name: child, confirm_dataset_name: child },
+      headers: { 'X-CSRF-Token': 'fake-csrf' },
+    });
+    expect(api.datasets).toEqual({ e2e_unrecorded_assets: { uid: 921 } });
+    expect(log).toHaveBeenCalledWith(`[E2E recovery] dataset=${JSON.stringify(child)} serverId=920 outcome=dropped`);
+    expect(fs.existsSync(path.join(root, RUN_ID))).toBe(false);
+    expect(listRegisteredTestArtifacts()).toEqual([]);
+  });
+
+  test.each(['planned', 'confirmed'] as const)('proves an already-deleted %s image child absent without a drop', async status => {
+    seedArtifact(plannedName(), 'confirmed', 919);
+    seedArtifact(`${plannedName()}_assets`, status, 920);
+    const api = fakeApi();
+    await recover(api);
+    expect(api.post).not.toHaveBeenCalled();
+    expect(fs.existsSync(path.join(root, RUN_ID))).toBe(false);
+  });
+
+  test('never infers an unrecorded orphan child from a recorded parent name', async () => {
+    seedArtifact(plannedName(), 'confirmed', 919);
+    const child = `${plannedName()}_assets`;
+    const api = fakeApi({ [child]: { uid: 920 } });
+    await recover(api);
+    expect(api.post).not.toHaveBeenCalled();
+    expect(api.datasets[child].uid).toBe(920);
+  });
+
+  test('a planned image child renamed by a successful drop retains its observed id and all records', async () => {
+    const child = `${plannedName()}_assets`;
+    seedArtifact(child, 'planned');
+    const api = fakeApi({ [child]: { uid: 920 } });
+    api.post.mockImplementationOnce(async () => {
+      api.datasets.e2e_renamed_assets = api.datasets[child];
+      delete api.datasets[child];
+      return response({ message: 'dropped' });
+    });
+    await expect(recover(api)).rejects.toThrow(/serverId=920.*e2e_renamed_assets.*refusing renamed identity/);
+    expect(api.post).toHaveBeenCalledOnce();
+    expectDeadRecordKept();
+    expect(listRegisteredTestArtifacts(RUN_ID)).toHaveLength(1);
+  });
+
+  test('rechecks the child id after parent deletion before releasing dead-run records', async () => {
+    const parent = plannedName();
+    const child = `${parent}_assets`;
+    seedArtifact(parent, 'confirmed', 919);
+    seedArtifact(child, 'confirmed', 920);
+    const api = fakeApi({ [parent]: { uid: 919 }, [child]: { uid: 920 } });
+    const drop = api.post.getMockImplementation()!;
+    api.post.mockImplementation(async (url, options) => {
+      const result = await drop(url, options);
+      if (options.data.dataset_name === parent) api.datasets.e2e_renamed_assets = { uid: 920 };
+      return result;
+    });
+    await expect(recover(api)).rejects.toThrow(/serverId=920.*e2e_renamed_assets.*refusing renamed identity/);
+    expect(api.post).toHaveBeenCalledTimes(2);
+    expectDeadRecordKept();
+    expect(listRegisteredTestArtifacts(RUN_ID)).toHaveLength(2);
+  });
+
+  test('a generated random suffix equal to assets still proves ordinary planned ownership', async () => {
+    const name = plannedName().replace('abc123', 'assets');
+    seedArtifact(name, 'planned');
+    const api = fakeApi({ [name]: { uid: 920 } });
+    await recover(api);
+    expect(api.post).toHaveBeenCalledOnce();
+  });
+
   test.each([START, '2026-10-11T11:59:59.000Z', '2026-10-11T14:00:00', null, undefined, 'invalid'])
   ('valid planned name ignores database creation time: %s', async (created) => {
     seedArtifact(plannedName(), 'planned');
@@ -173,7 +249,9 @@ describe('automatic dead E2E artifact run recovery', () => {
   });
 
   test.each(['e2e_planned', 'e2e_planned_badtime_abc123', 'e2e_planned_0abc_abc123',
-    plannedName(Date.parse(START) - 1), `${plannedName()}_extra`, plannedName().replace('abc123', 'abc')])
+    plannedName(Date.parse(START) - 1), `${plannedName()}_extra`, plannedName().replace('abc123', 'abc'),
+    `${plannedName(Date.parse(START) - 1)}_assets`, 'e2e_planned_assets',
+    `${'long_prefix_'.repeat(5)}${plannedName()}_assets`])
   ('unproven planned name is skipped even with a misleading server creation time: %s', async (name) => {
     seedArtifact(name, 'planned');
     // A timezone-less registry value at 14:00 in UTC+3 predates the 12:00Z

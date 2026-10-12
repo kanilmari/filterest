@@ -9,6 +9,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { APIRequestContext } from '@playwright/test';
 import type { RegisteredTestArtifact } from './test-artifact-run-registry';
+import { fakeApi, response } from './test-artifact-recovery-fakes';
 import {
   cleanupSyntheticTestArtifacts,
   normalizeE2EBaseURL,
@@ -134,7 +135,9 @@ describe('E2E artifact cleanup ownership', () => {
       }
       if (url === '/api/csrf-token') return jsonResponse({ csrf_token: 'csrf' });
       if (url === '/api/datasets') {
-        return jsonResponse({ datasets: datasets.map((dataset_name) => ({ dataset_name })) });
+        return jsonResponse({ datasets: datasets.map((dataset_name) => ({
+          dataset_name, table_uid: dataset_name === 'e2e_registered_exactly' ? 8123 : 9001,
+        })) });
       }
       if (url === '/api/tree_data') {
         return jsonResponse({
@@ -167,6 +170,61 @@ describe('E2E artifact cleanup ownership', () => {
     expect(summary.remainingDatasetNames).toEqual([]);
     expect(post).toHaveBeenCalledTimes(1);
     expect(datasets).toContain('e2e_unregistered_same_prefix');
+  });
+
+  it('verifies a recorded asset child by name and id after its parent removes it', async () => {
+    const parent = 'e2e_parent';
+    const child = `${parent}_assets`;
+    const api = fakeApi({ [parent]: { uid: 8123 }, [child]: { uid: 8124 }, e2e_unrecorded_assets: { uid: 9999 } });
+    const originalGet = api.get.getMockImplementation()!;
+    api.get.mockImplementation((url, options) => url === '/api/translations?lang=en'
+      ? Promise.resolve(response({ orders: 'Orders' })) : originalGet(url, options));
+    api.post.mockImplementationOnce(async (_url, options) => {
+      expect(options.data.dataset_name).toBe(parent);
+      delete api.datasets[parent];
+      delete api.datasets[child];
+      return response({ message: 'dropped' });
+    });
+    // Parent-first order models the managed deletion already used by C11.
+    const summary = await cleanupSyntheticTestArtifacts(api.request, baseline(), [
+      artifact({ name: child, serverId: 8124 }), artifact({ name: parent }),
+    ]);
+    expect(summary.remainingDatasetNames).toEqual([]);
+    expect(summary.deletedDatasets).toEqual([parent, child]);
+    expect(api.post).toHaveBeenCalledOnce();
+    expect(api.datasets).toEqual({ e2e_unrecorded_assets: { uid: 9999 } });
+  });
+
+  it.each(['preflight', 'after drop'])('refuses a renamed recorded asset child %s', async (stage) => {
+    const child = 'e2e_parent_assets';
+    const api = fakeApi({ [child]: { uid: 8123 } });
+    const rename = () => {
+      api.datasets.e2e_renamed_assets = api.datasets[child];
+      delete api.datasets[child];
+    };
+    if (stage === 'preflight') rename();
+    else api.post.mockImplementationOnce(async () => {
+      rename();
+      return response({ message: 'dropped' });
+    });
+    const originalGet = api.get.getMockImplementation()!;
+    api.get.mockImplementation((url, options) => url === '/api/translations?lang=en'
+      ? Promise.resolve(response({ orders: 'Orders' })) : originalGet(url, options));
+    await expect(cleanupSyntheticTestArtifacts(api.request, baseline(), [artifact({ name: child })]))
+      .rejects.toThrow(/e2e_parent_assets.*e2e_renamed_assets.*refusing renamed identity/);
+    expect(api.post).toHaveBeenCalledTimes(stage === 'preflight' ? 0 : 1);
+    expect(api.datasets.e2e_renamed_assets.uid).toBe(8123);
+  });
+
+  it('refuses an image child whose tree and dataset inventories disagree before any drop', async () => {
+    const child = 'e2e_parent_assets';
+    const api = fakeApi({ [child]: { uid: 8123 } });
+    const originalGet = api.get.getMockImplementation()!;
+    api.get.mockImplementation((url, options) => url === '/api/datasets'
+      ? Promise.resolve(response({ datasets: [] })) : originalGet(url, options));
+    await expect(cleanupSyntheticTestArtifacts(api.request, baseline(), [artifact({ name: child })]))
+      .rejects.toThrow(/inventories disagree/);
+    expect(api.post).not.toHaveBeenCalled();
   });
 
   it('refuses a same-name replacement with a different table_uid before cleanup POST', async () => {

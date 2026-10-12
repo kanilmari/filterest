@@ -4,6 +4,8 @@
 // Uses returned values only and never edits classifications or memberships.
 
 import { test, expect, type Page, type Locator } from '@playwright/test';
+import { waitForActiveFilterbarLayout } from '../helpers/filterbar';
+import { waitForVisiblePageReady } from '../../../server_tools/lib/browser_view_readiness.mjs';
 
 const DATASET = process.env.FILTEREST_E2E_CATEGORY_DATASET || '';
 const PANEL = `#${DATASET}_row_group_facets`;
@@ -54,23 +56,36 @@ async function listingGeometry(page: Page) {
     const card = host.getBoundingClientRect();
     const box = result.getBoundingClientRect();
     const scrollHost = controls.closest('.scrollable_content') || controls.parentElement!;
+    // Attribute any remaining shift to the in-flow controls or hero rather
+    // than guessing that the popup's out-of-flow focus ring resized the list.
+    const hero = scrollHost.querySelector('.filterbar-inline-hero');
     return { height: card.height, resultTop: box.top, resultBottom: box.bottom, resultWidth: box.width,
+      controlsHeight: controls.getBoundingClientRect().height,
+      controlChildHeights: [...controls.children].map(child => ({
+        id: child.id || child.tagName, height: child.getBoundingClientRect().height,
+      })),
+      heroHeight: hero?.getBoundingClientRect().height || 0,
+      searchHeight: hero?.querySelector('.dataset-search-input-row')?.getBoundingClientRect().height || 0,
       pageScroll: document.scrollingElement!.scrollTop, resultScroll: scrollHost.scrollTop };
   }, DATASET);
 }
 
-// A selection, a language or theme switch and a viewport change keep the layout moving for a moment; compare positions
-// only once two readings agree, so a real shift caused by the popup still shows. The width counts too: after a reload
-// the filter bar opens beside the listing and the listing's right margin animates for 0.7 s, so the selected-filters
-// row can wrap well after every height and top first read the same.
+// Two early equal readings do not prove that saved layout, webfonts or the
+// 0.7 s shell transitions have finished. Await those concrete dependencies,
+// then poll the full geometry; a persistent popup-induced shift still fails
+// the exact before/open/closed comparisons below. Never return on exhaustion.
 async function settledGeometry(page: Page) {
+  await waitForActiveFilterbarLayout(page);
+  await waitForVisiblePageReady(page);
   let previous = await listingGeometry(page);
-  for (let attempt = 0; attempt < 20; attempt += 1) {
-    await page.waitForTimeout(150);
+  await expect.poll(async () => {
+    await waitForVisiblePageReady(page);
+    await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => resolve())));
     const current = await listingGeometry(page);
-    if (JSON.stringify(current) === JSON.stringify(previous)) return current;
+    const equal = JSON.stringify(current) === JSON.stringify(previous);
     previous = current;
-  }
+    return equal;
+  }, { timeout: 15000, message: 'Category and listing geometry settle after shell, font and transition readiness' }).toBe(true);
   return previous;
 }
 

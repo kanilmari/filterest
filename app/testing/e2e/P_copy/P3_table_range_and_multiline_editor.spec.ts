@@ -54,8 +54,21 @@ test.describe('P3 — Table Range And Multiline Editor', () => {
       );
       await expect(descriptionCells).toHaveCount(3, { timeout: 10000 });
 
-      const firstBox = await descriptionCells.nth(0).boundingBox();
-      const secondBox = await descriptionCells.nth(1).boundingBox();
+      // The listing defaults to newest first (3, 2, 1), not seed insertion
+      // order. Identify the fixture rows so selection and editing prove the
+      // same content in either sort direction.
+      const descriptionForRow = (id: number) => page.locator(
+        `#${datasetName}_table_view_container tr[data-row-id="${id}"] td[data-column="description"]`,
+      );
+      const firstDescription = descriptionForRow(1);
+      const secondDescription = descriptionForRow(2);
+      const shortDescription = descriptionForRow(3);
+      await expect(firstDescription).toHaveText(longDescription);
+      await expect(secondDescription).toHaveText(`${longDescription}\nSecond row.`);
+      await expect(shortDescription).toHaveText('Short control row.');
+      await firstDescription.scrollIntoViewIfNeeded();
+      const firstBox = await firstDescription.boundingBox();
+      const secondBox = await secondDescription.boundingBox();
       expect(firstBox).not.toBeNull();
       expect(secondBox).not.toBeNull();
 
@@ -79,7 +92,7 @@ test.describe('P3 — Table Range And Multiline Editor', () => {
       expect(visibleSelectionStyle.backgroundColor).not.toBe('rgba(0, 0, 0, 0)');
       expect(visibleSelectionStyle.boxShadow).not.toBe('none');
 
-      const sameCellTextSelection = await descriptionCells.nth(2).evaluate((cell) => {
+      const sameCellTextSelection = await shortDescription.evaluate((cell) => {
         const textNode = document.createTreeWalker(cell, NodeFilter.SHOW_TEXT).nextNode();
         if (!(textNode instanceof Text) || !textNode.data.length) {
           return { defaultPrevented: true, selectedText: '' };
@@ -115,7 +128,7 @@ test.describe('P3 — Table Range And Multiline Editor', () => {
         selectedText: 'Short',
       });
 
-      const firstCellInnerSize = await descriptionCells.first().evaluate((cell) => {
+      const firstCellInnerSize = await firstDescription.evaluate((cell) => {
         const rect = cell.getBoundingClientRect();
         const style = getComputedStyle(cell);
         return {
@@ -124,7 +137,7 @@ test.describe('P3 — Table Range And Multiline Editor', () => {
         };
       });
 
-      await descriptionCells.first().dblclick();
+      await firstDescription.dblclick();
       const textarea = page.locator(
         `#${datasetName}_table_view_container textarea[data-testid="table-editor"]`,
       );
@@ -139,7 +152,7 @@ test.describe('P3 — Table Range And Multiline Editor', () => {
       expect(editorSize.height).toBeGreaterThanOrEqual(firstCellInnerSize.height - 2);
 
       await textarea.press('Escape');
-      await expect(descriptionCells.first()).toContainText(longDescription);
+      await expect(firstDescription).toContainText(longDescription);
     } finally {
       if (!page.isClosed()) {
         await dropTempDataset(page, datasetName);

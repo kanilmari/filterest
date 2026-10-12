@@ -8,6 +8,7 @@ import path from "path";
 import { spawn } from "child_process";
 import { fileURLToPath, pathToFileURL } from "url";
 import { requireNodeDependency } from "../lib/node_dependency_loader.mjs";
+import { waitForVisiblePageReady } from "../lib/browser_view_readiness.mjs";
 import {
     loadBrowserTestCredentials,
     resolveBrowserTestOtpCode,
@@ -628,7 +629,7 @@ async function runBrowserSession(sessionPath) {
             }
         }
         await targetPage.goto(session.target, { waitUntil: "domcontentloaded", timeout: 60000 });
-        await targetPage.waitForLoadState("networkidle", { timeout: 15000 }).catch(() => {});
+        await waitForVisiblePageReady(targetPage);
         const instructionsPage = await context.newPage();
         await instructionsPage.goto(pathToFileURL(session.htmlPath).toString(), { waitUntil: "domcontentloaded" });
         await targetPage.bringToFront();

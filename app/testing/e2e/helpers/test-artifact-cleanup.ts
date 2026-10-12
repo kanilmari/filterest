@@ -12,6 +12,7 @@ import {
 } from '@playwright/test';
 import type { RegisteredTestArtifact } from './test-artifact-run-registry';
 import { fetchCsrfTokenForRequest } from './temp-dataset';
+import { readDatasetTableUIDFromRequest } from './test-artifact-dataset-identity-reader';
 import { normalizeE2EBaseURL } from './test-artifact-run-target';
 import {
   requestTestArtifactResponse, readTestArtifactText, parseTestArtifactJson, testArtifactFailure,
@@ -393,31 +394,22 @@ function sortFoldersByDepthDescending(
   return [...nodes].sort((left, right) => getDepth(right) - getDepth(left));
 }
 
-function validateRegisteredDatasetIdentity(
+async function validateRegisteredDatasetIdentity(
+  request: APIRequestContext,
   artifact: RegisteredTestArtifact,
-  liveDatasetNames: string[],
-  liveDatasetIdentities: DatasetServerIdentity[],
-): boolean {
-  const liveNames = new Set(liveDatasetNames);
-  const identityByName = new Map(
-    liveDatasetIdentities.map((identity) => [identity.name, identity.tableUID]),
-  );
-  const nameExists = liveNames.has(artifact.name);
-  const currentTableUID = identityByName.get(artifact.name);
-
-  if (!nameExists && currentTableUID === undefined) {
-    return false;
-  }
-  if (!nameExists || currentTableUID === undefined) {
-    throw new Error(
-      `Refusing to drop registered E2E dataset "${artifact.name}": `
-      + 'the live inventories disagree about its stable table_uid identity.',
-    );
-  }
+): Promise<boolean> {
+  const currentTableUID = await readDatasetTableUIDFromRequest(request, artifact.name, artifact.serverId!);
+  if (currentTableUID === null) return false;
   if (currentTableUID !== artifact.serverId) {
     throw new Error(
       `Refusing to drop registered E2E dataset "${artifact.name}": `
       + `registered table_uid=${artifact.serverId}, current table_uid=${currentTableUID}.`,
+    );
+  }
+  if (!(await listAllDatasetNames(request)).includes(artifact.name)) {
+    throw new Error(
+      `Refusing to drop registered E2E dataset "${artifact.name}": `
+      + 'the live inventories disagree about its stable table_uid identity.',
     );
   }
   return true;
@@ -430,16 +422,12 @@ async function dropRegisteredDatasets(
 ): Promise<string[]> {
   const resolved: string[] = [];
   const datasets = artifacts.filter((artifact) => artifact.kind === 'dataset').reverse();
-  const [liveDatasetNames, liveDatasetIdentities] = await Promise.all([
-    listAllDatasetNames(request),
-    listAllDatasetServerIdentities(request),
-  ]);
   const deletionCandidates: RegisteredTestArtifact[] = [];
 
   // Validate every current server identity before the first destructive request.
   // This prevents partial cleanup when any registered name was replaced or is ambiguous.
   for (const artifact of datasets) {
-    if (!validateRegisteredDatasetIdentity(artifact, liveDatasetNames, liveDatasetIdentities)) {
+    if (!await validateRegisteredDatasetIdentity(request, artifact)) {
       resolved.push(artifact.name);
       continue;
     }
@@ -449,15 +437,7 @@ async function dropRegisteredDatasets(
   for (const artifact of deletionCandidates) {
     // The API currently deletes by name. Re-read and validate the exact stable
     // identity immediately before that name-only request to close the setup-to-delete race.
-    const [latestDatasetNames, latestDatasetIdentities] = await Promise.all([
-      listAllDatasetNames(request),
-      listAllDatasetServerIdentities(request),
-    ]);
-    if (!validateRegisteredDatasetIdentity(
-      artifact,
-      latestDatasetNames,
-      latestDatasetIdentities,
-    )) {
+    if (!await validateRegisteredDatasetIdentity(request, artifact)) {
       resolved.push(artifact.name);
       continue;
     }
@@ -589,8 +569,12 @@ export async function cleanupSyntheticTestArtifacts(
   const csrfToken = await fetchCsrfTokenForRequest(request);
   const deletedDatasets = await dropRegisteredDatasets(request, csrfToken, artifacts);
   const deletedFolders = await deleteRegisteredFolders(request, csrfToken, artifacts);
+  // Reuse recovery's name-and-UID reader after all drops: a parent may have
+  // removed its registered managed child, and a renamed UID is still a survivor.
   const [remainingDatasets, remainingFolders, langKeyInventory] = await Promise.all([
-    listAllDatasetNames(request),
+    Promise.all(artifacts.filter((artifact) => artifact.kind === 'dataset').map(async (artifact) =>
+      await readDatasetTableUIDFromRequest(request, artifact.name, artifact.serverId!) === null ? [] : [artifact.name],
+    )),
     listAllFolderNodes(request),
     readLangKeyInventory(request),
   ]);
@@ -602,7 +586,7 @@ export async function cleanupSyntheticTestArtifacts(
     deletedDatasets,
     deletedFolders,
     deletedLangKeys: [],
-    remainingDatasetNames: remainingDatasets.filter((name) => registeredNames.has(name)),
+    remainingDatasetNames: remainingDatasets.flat().sort(),
     remainingFolderNames: remainingFolders
       .filter((folder) => registeredFolderIds.has(folder.db_id))
       .map((folder) => folder.name)

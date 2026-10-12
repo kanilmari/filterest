@@ -9,6 +9,7 @@ import path from "path";
 import { spawnSync } from "child_process";
 import { fileURLToPath } from "url";
 import { requireNodeDependency } from "../lib/node_dependency_loader.mjs";
+import { waitForVisiblePageReady } from "../lib/browser_view_readiness.mjs";
 import {
     buildFindings,
     writeDbTaskDraft,
@@ -251,7 +252,7 @@ async function runPlaywrightAudit(options, targetUrl, outputDir) {
         if (navigation.status() >= 400) {
             throw new Error(`browser navigation returned HTTP ${navigation.status()} for ${targetUrl}`);
         }
-        await page.waitForLoadState("networkidle", { timeout: 15000 }).catch(() => {});
+        await waitForVisiblePageReady(page);
         await page.waitForTimeout(options.settleMs);
 
         const domSnapshot = await collectDomSnapshot(page, targetUrl);

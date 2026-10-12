@@ -562,9 +562,10 @@ FILTEREST_E2E_BASE_URL=https://localhost:8082 PLAYWRIGHT_HTML_OPEN=never \
 If no dedicated spec exists, capture one cold Playwright page load:
 
 ```js
-const responses = [];
-page.on('response', (response) => responses.push(response));
-await page.goto(url, { waitUntil: 'networkidle' });
+import { waitForVisiblePageReady } from './app/server_tools/lib/browser_view_readiness.mjs';
+const responses = []; page.on('response', (response) => responses.push(response));
+await page.goto(url, { waitUntil: 'domcontentloaded' });
+await waitForVisiblePageReady(page);
 ```
 
 Record request count, transferred bytes (`response.headers()['content-length']`
@@ -589,7 +590,6 @@ that is larger than its original with a copy of the original (row assets, datase
 cover/background media and the media library); the scan reads image headers only and
 is safe to repeat. Count those URLs with
 `testing/e2e/helpers/storage-media-requests.ts` (see `C11_network_media_variants`).
-
 
 ### Unified QA
 

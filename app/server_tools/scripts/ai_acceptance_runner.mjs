@@ -8,6 +8,7 @@ import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
 import { requireNodeDependency } from "../lib/node_dependency_loader.mjs";
+import { waitForVisiblePageReady } from "../lib/browser_view_readiness.mjs";
 import {
     loadBrowserTestCredentials,
     resolveBrowserTestOtpCode,
@@ -387,7 +388,7 @@ export async function runAcceptance(options, identity, outputDir) {
 
         if (auth.status !== "login_failed") {
             navigation = await page.goto(options.target, { waitUntil: "domcontentloaded", timeout: 60000 });
-            await page.waitForLoadState("networkidle", { timeout: 15000 }).catch(() => {});
+            await waitForVisiblePageReady(page);
             await page.waitForTimeout(options.settleMs);
             for (let index = 0; index < options.steps.length; index += 1) {
                 steps.push(await executeStep(page, options.steps[index], options, outputDir, index + 1));

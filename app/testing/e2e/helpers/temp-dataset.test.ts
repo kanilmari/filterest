@@ -34,6 +34,7 @@ import {
 } from './temp-dataset';
 import { readDatasetTableUIDFromPage } from './test-artifact-dataset-identity-reader';
 import { datasetTreeNode, treeResponseWithDatasetNodes } from './test-artifact-tree-fixture';
+import { fakeApi, response } from './test-artifact-recovery-fakes';
 
 type FakePageOptions = {
   createStatus?: number;
@@ -373,5 +374,74 @@ describe('createTempDataset compensation', () => {
 
     expect(request.get).toHaveBeenCalledTimes(1);
     expect(request.post).not.toHaveBeenCalled();
+  });
+
+  it('releases a recorded image child only after parent deletion proves its name and id absent', async () => {
+    const parent = 'e2e_catalog_media';
+    const child = `${parent}_assets`;
+    const api = fakeApi({ [parent]: { uid: 73 }, [child]: { uid: 74 }, e2e_unrecorded_assets: { uid: 75 } });
+    registryMocks.requireConfirmedTestArtifact.mockImplementation((_kind, name) => ({
+      name, status: 'confirmed', serverId: name === parent ? 73 : 74,
+    }));
+    api.post.mockImplementationOnce(async (_url, options) => {
+      expect(options.data.dataset_name).toBe(parent);
+      delete api.datasets[parent];
+      delete api.datasets[child];
+      return response({ message: 'dropped' });
+    });
+    await cleanupDatasetViaRequest(api.request, parent);
+    await cleanupDatasetViaRequest(api.request, child);
+    expect(api.post).toHaveBeenCalledOnce();
+    expect(registryMocks.unregisterTestArtifact.mock.calls).toEqual([
+      ['dataset', parent], ['dataset', child],
+    ]);
+    expect(api.datasets).toEqual({ e2e_unrecorded_assets: { uid: 75 } });
+  });
+
+  it('drops a recorded orphan child by its exact name and proves its id gone', async () => {
+    const child = 'e2e_catalog_media_assets';
+    const api = fakeApi({ [child]: { uid: 73 }, e2e_unrecorded_assets: { uid: 75 } });
+    await cleanupDatasetViaRequest(api.request, child);
+    expect(api.post).toHaveBeenCalledExactlyOnceWith('/api/drop-dataset', {
+      data: { dataset_name: child, confirm_dataset_name: child },
+      headers: { 'X-CSRF-Token': 'fake-csrf' },
+    });
+    expect(registryMocks.unregisterTestArtifact).toHaveBeenCalledWith('dataset', child);
+    expect(api.datasets).toEqual({ e2e_unrecorded_assets: { uid: 75 } });
+  });
+
+  it.each(['before drop', 'after drop'])('retains a renamed image-child identity %s', async stage => {
+    const child = 'e2e_catalog_media_assets';
+    const api = fakeApi({ [child]: { uid: 73 } });
+    const rename = () => {
+      api.datasets.e2e_renamed_assets = api.datasets[child];
+      delete api.datasets[child];
+    };
+    if (stage === 'before drop') rename();
+    else api.post.mockImplementationOnce(async () => {
+      rename();
+      return response({ message: 'dropped' });
+    });
+    await expect(cleanupDatasetViaRequest(api.request, child))
+      .rejects.toThrow(/e2e_catalog_media_assets.*e2e_renamed_assets.*refusing renamed identity/);
+    expect(api.post).toHaveBeenCalledTimes(stage === 'before drop' ? 0 : 1);
+    expect(registryMocks.unregisterTestArtifact).not.toHaveBeenCalled();
+  });
+
+  it('retains the child record when a drop reports success but leaves it present', async () => {
+    const child = 'e2e_catalog_media_assets';
+    const api = fakeApi({ [child]: { uid: 73 } });
+    api.state.keepOnDrop = true;
+    await expect(cleanupDatasetViaRequest(api.request, child)).rejects.toThrow(/reported success.*remains/);
+    expect(registryMocks.unregisterTestArtifact).not.toHaveBeenCalled();
+  });
+
+  it('refuses a replacement image child created while obtaining CSRF', async () => {
+    const child = 'e2e_catalog_media_assets';
+    const api = fakeApi({ [child]: { uid: 73 } });
+    api.state.onCsrf = () => { api.datasets[child].uid = 74; };
+    await expect(cleanupDatasetViaRequest(api.request, child)).rejects.toThrow(/identity changed before drop/);
+    expect(api.post).not.toHaveBeenCalled();
+    expect(registryMocks.unregisterTestArtifact).not.toHaveBeenCalled();
   });
 });

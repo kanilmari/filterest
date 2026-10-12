@@ -374,7 +374,7 @@ export async function dropTempDataset(
 }
 
 /**
- * Drops a dataset by name through the request fixture and tolerates already-missing tables.
+ * Drops a recorded dataset through the request fixture and proves name/UID absence.
  * Bridges test afterEach cleanup hooks and the app's drop-dataset API.
  * Exists so admin create/delete tests can always clean up server state even if the page breaks.
  */
@@ -387,7 +387,7 @@ export async function cleanupDatasetViaRequest(
   }
 
   const registeredArtifact = requireConfirmedTestArtifact('dataset', datasetName);
-  const currentTableUID = await readDatasetTableUIDFromRequest(request, datasetName);
+  const currentTableUID = await readDatasetTableUIDFromRequest(request, datasetName, registeredArtifact.serverId!);
   if (currentTableUID === null) {
     unregisterTestArtifact('dataset', datasetName);
     return;
@@ -399,6 +399,14 @@ export async function cleanupDatasetViaRequest(
     );
   }
   const csrfToken = await fetchCsrfTokenForRequest(request);
+  const latestTableUID = await readDatasetTableUIDFromRequest(request, datasetName, registeredArtifact.serverId!);
+  if (latestTableUID === null) {
+    unregisterTestArtifact('dataset', datasetName);
+    return;
+  }
+  if (latestTableUID !== registeredArtifact.serverId) {
+    throw new Error(`Refusing request-scoped cleanup for dataset "${datasetName}": identity changed before drop.`);
+  }
   const response = await request.post('/api/drop-dataset', {
     data: { dataset_name: datasetName, confirm_dataset_name: datasetName },
     headers: {
@@ -409,6 +417,11 @@ export async function cleanupDatasetViaRequest(
 
   if (!response.ok() && !responseBody.includes('does not exist')) {
     throw new Error(`Failed to drop dataset "${datasetName}" during request-scoped cleanup: ${responseBody}`);
+  }
+  // A successful response alone cannot release ownership: a managed child may
+  // survive its parent, or the recorded identity may survive under a new name.
+  if (await readDatasetTableUIDFromRequest(request, datasetName, registeredArtifact.serverId!) !== null) {
+    throw new Error(`Request-scoped cleanup reported success but dataset "${datasetName}" remains.`);
   }
   unregisterTestArtifact('dataset', datasetName);
 }

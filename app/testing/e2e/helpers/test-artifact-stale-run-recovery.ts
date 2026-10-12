@@ -139,6 +139,7 @@ export async function recoverStaleRunDatasets(
       return current;
     };
     const candidates = [];
+    const recovered: Array<{ artifact: RegisteredTestArtifact; serverId: number | null }> = [];
     // Validate every artifact before the first drop, including those encountered
     // later in reverse creation order (dependent datasets are removed first).
     for (const artifact of [...artifacts].reverse()) {
@@ -176,13 +177,26 @@ export async function recoverStaleRunDatasets(
               data: { dataset_name: artifact.name, confirm_dataset_name: artifact.name },
               headers: { 'X-CSRF-Token': csrfToken },
             }), { name: artifact.name, serverId: artifact.serverId });
-            if (await readCandidate(artifact)) throw safeTestArtifactError('drop reported success but dataset remains');
+            // A planned child can die before confirmation. Its observed UID
+            // still has to disappear, including if the drop renamed it.
+            if (await readDatasetIdentityFromRequest(request, artifact.name, current.tableUID)) {
+              throw safeTestArtifactError('drop reported success but dataset remains');
+            }
             outcome = 'dropped';
           }
         }
+        if (!outcome.startsWith('skipped:')) recovered.push({ artifact, serverId });
         log(`[E2E recovery] dataset=${JSON.stringify(artifact.name)} serverId=${serverId ?? 'unknown'} outcome=${outcome}`);
       } catch (error) {
         throw safeTestArtifactFailure(error, 'recover dataset', { name: artifact.name, serverId: artifact.serverId });
+      }
+    }
+    // Verify the complete recorded set again after parent deletion, before the
+    // initializer releases any dead-run evidence or publishes a new baseline.
+    for (const { artifact, serverId } of recovered) {
+      assertStillDead();
+      if (await readDatasetIdentityFromRequest(request, artifact.name, serverId ?? undefined)) {
+        throw safeTestArtifactError(`dataset ${JSON.stringify(artifact.name)} serverId=${serverId ?? 'unknown'} remains after recovery`);
       }
     }
     // Even an all-absent or skipped run must still belong to this installation
@@ -193,12 +207,15 @@ export async function recoverStaleRunDatasets(
   }
 }
 
-/** Matches buildTempDatasetName's prefix/base36 milliseconds/random suffix contract. */
+/** Matches generated names and their exact, separately recorded canonical asset child. */
 function plannedNameProvesOwnership(name: string, startedAt: number): boolean {
   if (name.length > 63) return false;
-  const match = /^([a-z0-9](?:[a-z0-9_]*[a-z0-9])?)_([a-z0-9]+)_([a-z0-9]{6})$/.exec(name);
-  if (!match) return false;
-  const embeddedTime = Number.parseInt(match[2], 36);
-  return Number.isSafeInteger(embeddedTime) && embeddedTime.toString(36) === match[2]
-    && embeddedTime >= startedAt && embeddedTime <= 8.64e15;
+  const generatedNames = name.endsWith('_assets') ? [name, name.slice(0, -'_assets'.length)] : [name];
+  return generatedNames.some(generatedName => {
+    const match = /^([a-z0-9](?:[a-z0-9_]*[a-z0-9])?)_([a-z0-9]+)_([a-z0-9]{6})$/.exec(generatedName);
+    if (!match) return false;
+    const embeddedTime = Number.parseInt(match[2], 36);
+    return Number.isSafeInteger(embeddedTime) && embeddedTime.toString(36) === match[2]
+      && embeddedTime >= startedAt && embeddedTime <= 8.64e15;
+  });
 }

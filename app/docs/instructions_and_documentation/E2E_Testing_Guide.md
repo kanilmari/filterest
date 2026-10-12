@@ -142,7 +142,7 @@ not relocate CSVs.
 
 ### Measuring page-load network waste
 
-Use a cold Playwright page with `waitUntil: 'networkidle'` and listen to
+Use a cold Playwright page with `waitUntil: 'domcontentloaded'` and listen to
 `request`/`response`/`requestfailed`. Count unique `/api/translations` and
 `/api/datasets` GETs, cancelled catalog PNG URLs, 404s (especially
 `codex-query`), and whether catalog/background URLs use `300`/`1000`/`2160`
@@ -150,6 +150,27 @@ instead of `original`. Compare LNCD and a production Network capture; script
 count is not comparable across unbundled vs bundled builds. See
 [DEV_GUIDE.md](DEV_GUIDE.md) § Page-load network waste for the 2026-09-14
 baseline and the LNCD #888 before/after notes.
+
+Administrator pages keep an update-notice SSE stream open for up to 60 seconds.
+Network idle therefore cannot establish readiness. The shared
+`server_tools/lib/browser_view_readiness.mjs` waits for shell boot, loaded fonts,
+visible busy indicators, requested images and finite visible animations;
+offscreen lazy images and infinite decoration do not block it. C11 additionally
+waits for its started storage media requests and requires sized media to have
+been requested, so an empty early capture cannot pass.
+
+Geometry comparisons must first await the active filterbar's saved-layout
+promise, then rendering readiness. E13 retains exact before/open/closed
+geometry assertions, including control, hero and search-row heights to locate
+any remaining movement. A settling timeout fails instead of returning a guess.
+
+Dataset navigation retains mounted listings and their viewport (G7). Q2 checks
+that a first visit to an explicitly different dataset starts at zero using
+that dataset's visible scroll container; the previous dataset keeps its own
+position. Never select an ordinal tab or read a global first scroll container.
+Likewise, P3 identifies seeded table rows by their row IDs: newest-first sorting
+does not preserve insertion order. Selection, text and editor-size assertions
+still check the same fixture content.
 
 `app/testing/e2e/helpers/storage-media-requests.ts` counts `/storage/.../(original|300|1000|2160)/`
 URLs from a captured request list. `C11_network_media_variants.spec.ts` uses it on
@@ -238,6 +259,9 @@ A `planned` dataset is dropped only when its exact registered name exists,
 matches `buildTempDatasetName`'s normalized prefix, base36 process timestamp and
 six-character random suffix (at most 63 characters), and its embedded timestamp
 is **not before** the dead run's start. Registration precedes the create request.
+The exact canonical `<generated-name>_assets` child follows the same timestamp
+rule only when separately registered before enabling media; a parent record never
+authorizes discovery or deletion of an unrecorded child.
 Names outside this format, truncated names without a complete suffix, and names
 with an earlier embedded time are skipped and reported; their datasets remain.
 The database registry's `created` value is never read for ownership: its
@@ -245,6 +269,9 @@ timezone-less column cannot establish ordering, even when serialized with `Z`.
 No prefix, language key or unrecorded name authorizes a drop.
 Planned artifacts have no confirmed server id: their absence rule remains the
 exact recorded name in both inventories, without claiming ownership of other ids.
+When recovery finds and drops a planned dataset, it also verifies that the stable
+id observed during preflight is gone. All recovered names and known ids are checked
+again after parent deletion before the dead-run records are released.
 
 Every drop uses `/api/drop-dataset` with the fresh administrator session and its
 CSRF token, rechecks identity immediately before deletion, and verifies absence
