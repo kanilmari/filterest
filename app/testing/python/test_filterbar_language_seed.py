@@ -43,7 +43,8 @@ def test_filterbar_seed_declares_actual_filename_and_database_owner():
 
 
 def test_filterbar_guide_uses_assigned_database_release():
-    guide = (APP / "docs/instructions_and_documentation/Frontend_Guide.md").read_text()
+    # The toolbar section moved with the frontend guide split (#921) into the dataset appearance guide.
+    guide = (APP / "docs/instructions_and_documentation/Frontend_Dataset_Appearance.md").read_text()
     paragraph = next(line for line in guide.splitlines() if MIGRATION.name in line)
     assert "unreleased DB 9.10.2" in paragraph
     assert OWNER in paragraph
