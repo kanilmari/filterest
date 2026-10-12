@@ -60,7 +60,10 @@ release assembly run locally. Do not add `.github/workflows/*`.
 ## How To Work
 
 1. **Orient.** Confirm the branch, and understand the real task rather than the
-   visible symptom. Before designing anything new, search whether the
+   visible symptom. Check whether an open ticket or workline already covers the
+   topic (`./db_task list`, `./db_report workline board`) and continue it
+   rather than starting a parallel one; read what it already records. Before
+   designing anything new, search whether the
    capability already exists in some form — a tree, a picker, a project
    concept, a settings screen — however many worklines are open, and extend it
    rather than building a second one. When a new implementation does replace an
@@ -76,10 +79,20 @@ release assembly run locally. Do not add `.github/workflows/*`.
    logic, a targeted browser proof for layout, theme or multi-element interface
    work. Run `npm run build` after file moves or renames. Passing tests alone
    are not proof — check the likely regressions too.
-5. **Capture knowledge.** Update the document that is now wrong, rather than
-   adding a new one beside it.
+5. **Look back, wise up and capture knowledge.** Look back over the whole piece
+   of work before closing it: what changed, what it revealed, and which
+   assumptions turned out wrong. Wise up: record what you learned where the next
+   person will find it — update the document that is now wrong rather than
+   adding a new one beside it, and correct an instruction that misled you (see
+   [Processes Age](#processes-age-do-not-assume-ours-is-correct)). Then decide,
+   for every relevant ticket and workline, whether it stays open or closes: a
+   finished one closes, an unfinished one stays open with a dated note of what
+   remains, and a finding you will not handle now goes to the open ticket or
+   workline it belongs to instead of a loose note.
 6. **Close.** Commit and push only what the person asked for, on `main` unless
-   told otherwise.
+   told otherwise. Then close the tickets and worklines step 5 found finished,
+   naming the commit in the closing note. Close one earlier when its work is
+   already published or it has turned out to be unnecessary.
 
 ## Processes Age; Do Not Assume Ours Is Correct
 
