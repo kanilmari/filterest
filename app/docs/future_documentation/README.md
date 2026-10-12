@@ -65,3 +65,5 @@ Update incoming documentation links when text moves or a document is deleted.
   database enforcement and administrator explanations of access refusals.
 - [Browse restrictions](Browse_Restrictions.md) describes restricted direct browsing
   while groups with read rights can still read selected values through references.
+- [Live schema workbench](Live_Schema_Workbench.md) describes a living administrator
+  overview of table structure, activity, masked samples and reference-schema differences.
