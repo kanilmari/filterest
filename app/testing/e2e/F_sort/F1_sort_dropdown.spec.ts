@@ -1,3 +1,7 @@
+// F1_sort_dropdown.spec.ts
+// Verifies rendered sort order and the scoped, persistent sorting defaults.
+// Connects native dropdown interactions with listing and settings API evidence.
+// Keeps timestamp fixtures within the platform-managed create contract.
 import { test, expect } from '@playwright/test';
 import { login, loadCredentials, type TestCredentials } from '../helpers/auth';
 import { navigateToDataset, waitForDataLoaded } from '../helpers/navigation';
@@ -30,34 +34,64 @@ test.describe('FX — Sort Dropdown', () => {
     await sortBtn.click();
 
     const sortOption = page
-      .locator('[data-testid="sort-dropdown-option-created-desc"]:visible')
+      .locator('[data-testid="sort-dropdown-option-newest-desc"]:visible')
       .first();
     await expect(sortOption).toBeVisible({ timeout: 3000 });
+    const sortedResponsePromise = page.waitForResponse((response) => {
+      const url = new URL(response.url());
+      return url.pathname === '/api/get-results'
+        && url.searchParams.get('dataset') === 'app_service_catalog'
+        && url.searchParams.get('sort_column') === '__newest'
+        && url.searchParams.get('sort_order') === 'DESC'
+        && Number(url.searchParams.get('offset') || 0) === 0;
+    }, { timeout: 10000 });
     await sortOption.click();
 
     await expect(sortBtn).toHaveAttribute('data-lang-key', 'sort_newest', { timeout: 5000 });
-    await expect(
-      page.locator(
-        '#app_service_catalog_table_view_container [data-testid="column-sort-created"]',
-      ),
-    ).toHaveText('▼', { timeout: 10000 });
-    await expect(
-      page.locator(
-        '#app_service_catalog_table_view_container [data-testid="dataset-view-table"] tbody tr',
-    ).first(),
-    ).toBeVisible({ timeout: 10000 });
+    await expect(page).toHaveURL(/sort_column=__newest.*sort_order=DESC|sort_order=DESC.*sort_column=__newest/);
+    const sortedResponse = await sortedResponsePromise;
+    expect(sortedResponse.ok()).toBe(true);
+    const { data } = await sortedResponse.json() as {
+      data: Array<{ id: number; created: string | null }>;
+    };
+    expect(data.length, 'The sort proof needs multiple service rows').toBeGreaterThan(1);
+    for (const row of data) {
+      if (row.created != null) expect(Number.isFinite(Date.parse(row.created))).toBe(true);
+    }
+    // Newest is a semantic sort (8dc8ad85), so it has no physical-column arrow.
+    // Check the actual created DESC NULLS LAST, id DESC order and its rendered rows.
+    const expectedRows = [...data].sort((left, right) => {
+      if (left.created == null && right.created != null) return 1;
+      if (right.created == null && left.created != null) return -1;
+      const timeDifference = left.created != null && right.created != null
+        ? Date.parse(right.created) - Date.parse(left.created) : 0;
+      return timeDifference || right.id - left.id;
+    });
+    expect(data.map((row) => row.id)).toEqual(expectedRows.map((row) => row.id));
+    const rows = page.locator(
+      '#app_service_catalog_table_view_container [data-testid="dataset-view-table"] tbody tr',
+    );
+    await expect(rows.first()).toBeVisible({ timeout: 10000 });
+    await expect.poll(
+      () => rows.evaluateAll((elements) => elements.map((row) => row.getAttribute('data-row-id'))),
+      { timeout: 10000 },
+    ).toEqual(expectedRows.map((row) => String(row.id)));
   });
 
   test('admin can open the scoped default action without changing the saved default', async ({ page }) => {
     await navigateToDataset(page, 'app_service_catalog');
     await waitForDataLoaded(page, 'app_service_catalog');
+    const defaultUrl = '/api/dataset-sort-default?dataset=app_service_catalog';
+    const beforeResponse = await page.request.get(defaultUrl);
+    expect(beforeResponse.ok()).toBe(true);
+    const savedDefault = await beforeResponse.json();
 
     const sortBtn = page.locator('[data-testid="sort-dropdown-trigger"]:visible').first();
     await expect(sortBtn).toBeVisible({ timeout: 5000 });
     await sortBtn.click();
 
     const newestOption = page
-      .locator('[data-testid="sort-dropdown-option-created-desc"]:visible')
+      .locator('[data-testid="sort-dropdown-option-newest-desc"]:visible')
       .first();
     await expect(newestOption).toBeVisible({ timeout: 3000 });
     await newestOption.hover();
@@ -83,6 +117,9 @@ test.describe('FX — Sort Dropdown', () => {
 
     await page.keyboard.press('Escape');
     await expect(modal).toBeHidden();
+    const afterResponse = await page.request.get(defaultUrl);
+    expect(afterResponse.ok()).toBe(true);
+    await expect(afterResponse.json()).resolves.toEqual(savedDefault);
   });
 
   test('admin can persist a personal default for a temporary dataset', async ({ page }) => {
@@ -96,9 +133,9 @@ test.describe('FX — Sort Dropdown', () => {
         title: 'TEXT',
         created: 'TIMESTAMPTZ',
       },
+      // The create API refuses created/updated in row payloads (18356d0c).
       seedRows: [{
         title: 'Sorting default proof',
-        created: new Date().toISOString(),
       }],
     });
 
@@ -110,7 +147,7 @@ test.describe('FX — Sort Dropdown', () => {
       await sortBtn.click();
 
       const newestOption = page
-        .locator('[data-testid="sort-dropdown-option-created-desc"]:visible')
+        .locator('[data-testid="sort-dropdown-option-newest-desc"]:visible')
         .first();
       await newestOption.hover();
       await newestOption.locator('.sort-default-action').click();
@@ -127,7 +164,7 @@ test.describe('FX — Sort Dropdown', () => {
         page.locator('[data-testid="toast"]:visible').filter({ hasText: /newest|uusin/i }),
       ).toBeVisible({ timeout: 5000 });
       await expect(sortBtn).toHaveAttribute('data-lang-key', 'sort_newest', { timeout: 5000 });
-      await expect(page).toHaveURL(/sort_column=created.*sort_order=DESC|sort_order=DESC.*sort_column=created/);
+      await expect(page).toHaveURL(/sort_column=__newest.*sort_order=DESC|sort_order=DESC.*sort_column=__newest/);
 
       const readResponse = await page.request.get(
         `/api/dataset-sort-default?dataset=${encodeURIComponent(datasetName)}`,
@@ -135,7 +172,7 @@ test.describe('FX — Sort Dropdown', () => {
       expect(readResponse.ok()).toBe(true);
       await expect(readResponse.json()).resolves.toMatchObject({
         dataset: datasetName,
-        value: 'created:DESC',
+        value: '__newest:DESC',
         scope: 'user',
         configured: true,
       });

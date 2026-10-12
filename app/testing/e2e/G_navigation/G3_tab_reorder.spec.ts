@@ -2,6 +2,8 @@
  * G3_tab_reorder.spec.ts
  *
  * Verifies that dragging a tab to a new position performs a reorder without errors.
+ * Connects native tab dragging with immediate DOM order and API persistence.
+ * Restores shared navigation order after each proof to keep other specs isolated.
  */
 
 import { test, expect, type Page, type Response } from '@playwright/test';
@@ -76,16 +78,17 @@ async function dragTabRelativeToTarget(
     };
   });
 
-  const edgeInset = 1;
+  // The navbar overlaps adjacent tabs by 2px (navbar_layout.css:683,
+  // present at da45d4dd). A 1px edge drop hits the next tab, not this target.
+  // The handler orders on either side of the midpoint, so use that half's centre.
+  const dropFraction = position === 'after' ? 0.75 : 0.25;
   const targetPosition = layout.vertical
     ? {
         x: targetBox!.width / 2,
-        y: position === 'after' ? targetBox!.height - edgeInset : edgeInset,
+        y: targetBox!.height * dropFraction,
       }
     : {
-        x: position === 'after'
-          ? (layout.rtl ? edgeInset : targetBox!.width - edgeInset)
-          : (layout.rtl ? targetBox!.width - edgeInset : edgeInset),
+        x: targetBox!.width * (layout.rtl ? 1 - dropFraction : dropFraction),
         y: targetBox!.height / 2,
       };
 
