@@ -79,12 +79,13 @@ func getPilotReadQuerier(ctx context.Context, tableName string, fallback *sql.DB
 }
 
 // shouldApplyReadRowPolicy returns whether a named Go-side read policy should constrain a query.
-// It exists between policy metadata and SQL builders; RLS-pilot tables intentionally rely on database policies.
+// The pilot keeps the same fallback as other datasets; database protection is
+// checked inside its read statement before that fallback may be skipped.
 func shouldApplyReadRowPolicy(tableName, userRole string, policy ReadRowPolicy) bool {
 	if userRole == "admin" || !policy.hasFlagColumns() {
 		return false
 	}
-	return tableName != rlsPilotTableName
+	return true
 }
 
 // buildReadRowPolicyCondition constructs the SQL fragment for the active read-row policy.
@@ -168,7 +169,11 @@ func buildLegacyReadPolicyBaseConditionForReference(
 		}
 		conditions = append(conditions, condition)
 	}
-	return strings.Join(conditions, " AND "), args
+	condition := strings.Join(conditions, " AND ")
+	if tableName == rlsPilotTableName {
+		condition = guardPilotReadPolicy(condition, userID, policy)
+	}
+	return condition, args
 }
 
 // buildEffectiveRowAccessConditionForReference wraps an existing broader rule
@@ -530,9 +535,6 @@ func rowsVisibleForMutation(q *sql.Tx, tableName, userRole string, userID int, r
 // It exists so callers can stop passing raw mustTrue column slices while the database metadata migrates later.
 // The owner comes from resolveRowPolicyOwnerColumn and is empty when unproven, which keeps the rule fail-closed.
 func getLegacyMustTrueReadPolicy(db dbutils.Querier, tableName string) (ReadRowPolicy, error) {
-	if tableName == rlsPilotTableName {
-		return ReadRowPolicy{}, nil
-	}
 	cols, ownerColumn, err := getMustBeTrueColumnsWithOwner(db, tableName)
 	if err != nil {
 		return ReadRowPolicy{}, err

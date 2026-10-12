@@ -8,10 +8,10 @@ func TestRLSPilotTableNameTargetsAppServiceCatalog(t *testing.T) {
 	}
 }
 
-func TestShouldApplyReadRowPolicySkipsPilotAndAdmin(t *testing.T) {
+func TestShouldApplyReadRowPolicyKeepsPilotFallbackAndSkipsAdmin(t *testing.T) {
 	policy := legacyMustTrueReadPolicy([]string{"published"}, "")
-	if shouldApplyReadRowPolicy(rlsPilotTableName, "basic", policy) {
-		t.Fatalf("pilot table should rely on its database policy, not the Go-side flag filter")
+	if !shouldApplyReadRowPolicy(rlsPilotTableName, "basic", policy) {
+		t.Fatalf("pilot table must retain its Go-side flag fallback")
 	}
 	if !shouldApplyReadRowPolicy("some_other_table", "basic", policy) {
 		t.Fatalf("non-pilot table should still use the Go-side flag filter")
@@ -95,15 +95,17 @@ func TestLegacyMustTrueReadPolicyCopiesColumns(t *testing.T) {
 	}
 }
 
-// A nil querier proves the pilot never reaches the metadata lookup.
-func TestGetLegacyMustTrueReadPolicySkipsPilotMetadataLookup(t *testing.T) {
-	policy, err := getLegacyMustTrueReadPolicy(nil, rlsPilotTableName)
+// The pilot loads the same mandatory metadata as an ordinary dataset.
+func TestGetLegacyMustTrueReadPolicyLoadsPilotFlags(t *testing.T) {
+	db, state := openStorageAuthorizationTestDB(t, []storageAuthorizationQueuedQuery{ownerFlagColumns(pilotExpectedFlags...)})
+	policy, err := getLegacyMustTrueReadPolicy(db, rlsPilotTableName)
 	if err != nil {
 		t.Fatalf("getLegacyMustTrueReadPolicy returned error for pilot table: %v", err)
 	}
-	if policy.hasFlagColumns() || policy.OwnerColumn != "" || policy.Name != "" {
-		t.Fatalf("pilot table policy = %#v, want empty", policy)
+	if len(policy.FlagColumns) != len(pilotExpectedFlags) || policy.OwnerColumn != rlsPilotOwnerColumn || policy.Name != rowPolicyAllFlagsTrueUnlessOwner {
+		t.Fatalf("pilot table policy = %#v, want mandatory flags and fixed owner", policy)
 	}
+	assertStorageAuthorizationQueriesDrained(t, state)
 }
 
 // The guest (user 1) never owns a row, even on a dataset with a proven owner.

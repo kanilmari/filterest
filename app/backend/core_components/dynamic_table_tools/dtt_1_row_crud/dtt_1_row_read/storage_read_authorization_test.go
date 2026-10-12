@@ -338,6 +338,7 @@ func TestAuthorizeStorageReadUsesRequestTransactionForRLSPilot(t *testing.T) {
 		storageMediaColumns("cached_image"),
 	})
 	roleDB, roleState := openStorageAuthorizationTestDB(t, []storageAuthorizationQueuedQuery{
+		ownerFlagColumns(pilotExpectedFlags...),
 		storageRowVisibility(true),
 		storageSelectableQuery("id", "cached_image"),
 		{
@@ -371,6 +372,7 @@ func TestAuthorizeStorageReadReusesSamePoolTransactionForRLSPilot(t *testing.T) 
 	db, state := openStorageAuthorizationTestDB(t, []storageAuthorizationQueuedQuery{
 		storageTableLookup("app_service_catalog"),
 		storagePermissionLookup("app_service_catalog"),
+		ownerFlagColumns(pilotExpectedFlags...),
 		storageRowVisibility(true),
 		storageSelectableQuery("id", "cached_image"),
 		storageMediaColumns("cached_image"),

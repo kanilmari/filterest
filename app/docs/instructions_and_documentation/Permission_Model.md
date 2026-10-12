@@ -172,13 +172,13 @@ The owner column must be proven, never inferred. It is the column named in `syst
 
 Results responses mark the proven owner column with `is_row_owner` in its column description. The article view uses that mark only to hide `hide_on_bg_crd_if_not_own` fields from anyone but the owner, and hides them when no column is marked. That is presentation, not a security boundary: the values are already in the response.
 
-The RLS pilot is intentionally narrow. It applies to `app_service_catalog` and routes selected row reads and writes through a request-scoped transaction that sets:
+The RLS pilot is intentionally narrow. It applies to `app_service_catalog` and routes selected row reads and writes through a request-scoped transaction that sets `app.user_id`, `app.user_role` and `app.is_admin`.
 
-- `app.user_id`
-- `app.user_role`
-- `app.is_admin`
+Pilot reads load the same mandatory flag metadata as ordinary datasets. The shared compiler retains those flags as a fallback, skipping their evaluation only when the executing SQL statement verifies RLS, the effective reading role, matching actor settings and the exact expected policies declared in [rls_pilot_protection.go](../../backend/core_components/dynamic_table_tools/dtt_1_row_crud/dtt_1_row_read/rls_pilot_protection.go). PostgreSQL evaluates each uncorrelated verification once per occurrence in a statement (an InitPlan; a statement with two guarded predicates, such as a facet count, verifies twice); evidence never survives into another statement or request. Disabled RLS, a missing or changed policy, extra policies, a superuser, BYPASSRLS or an unforced owner keep the Go condition. Verification errors refuse the read. Mandatory flags remain outside discretionary row allowances in both mechanisms; the former pilot policy that put flags inside the allowance resolver is not accepted as sufficient protection. No policies are installed by this check.
 
-The pilot has PostgreSQL policies for select, insert, update, and delete. Its write preflight follows the narrower admin-or-owner UPDATE/DELETE eligibility rather than the broader public SELECT policy. Non-pilot datasets still use the Go-side `must_be_true_unless_own` path.
+The pilot's write preflight follows the narrower admin-or-owner UPDATE/DELETE eligibility rather than the broader public SELECT policy. Ordinary dataset reads retain their existing Go predicates.
+
+The legacy `/api/get-view-data` route uses the server-owned administrator profile in [route_profiles.go](../../backend/pipeline/route_profiles.go); a route grant alone cannot open it. Its administrator-connection raw view reads remain separate from dataset row and field authorization. Moving supported views into shared dataset reads and retiring the raw route are later steps.
 
 ### Row creators, owners and backup restore
 
@@ -554,28 +554,11 @@ selectors must not serialize them by accident.
 
 Permission enforcement must be server-owned. The frontend can hide buttons and reduce user confusion, but the backend must be authoritative.
 
-Every data-returning path that can expose rows must use the same row-visibility decision. This includes:
-
-- `/api/get-results`
-- row count queries
-- filter option queries
-- article/card detail hydration
-- semantic search hydration
-- vector search hydration
-- child-row and attachment reads
-- export endpoints
-- AI/tool endpoints that read rows on behalf of a user
+Every data-returning path that can expose rows must use the same row-visibility decision. This includes `/api/get-results`, row count and filter option queries, article/card detail hydration, semantic and vector search hydration, child-row and attachment reads, exports, and AI/tool endpoints reading rows on behalf of a user.
 
 Related-data endpoints must also bind every body-supplied parent dataset to the dataset already authorized by the route pipeline. Each discovered incoming or outgoing relation target needs its own dataset-action check before its name, metadata, count, or rows enter the response; parent access must not become a confused-deputy grant for child datasets.
 
-Every data-mutating path must check:
-
-- capability or dataset action permission
-- scope permission when the row belongs to a scoped dataset
-- row policy for updates/deletes
-- field permission for each written column
-- write policy for constrained values
-- server presets before final persistence
+Every data-mutating path must check capability or dataset action permission, scope permission for scoped rows, row policy for updates/deletes, field permission for each written column, write policy for constrained values, and server presets before final persistence.
 
 The same permission engine should be callable from normal UI routes and AI/tool execution paths. Ticket #777 ("Permission Integration") is specifically about ensuring AI agents cannot see or execute tools beyond the user's normal permissions; it should consume this model once the core model exists.
 
@@ -625,13 +608,7 @@ Initial inputs:
 - admin bypass
 - guest principal
 
-Initial consumers:
-
-- normal result queries
-- row counts
-- intelligent row fetches
-- vector/semantic hydration paths
-- filter options
+Initial consumers: normal result queries, row counts, intelligent row fetches, vector/semantic hydration paths, and filter options.
 
 This slice should preserve current behavior before adding new concepts.
 

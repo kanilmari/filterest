@@ -48,7 +48,7 @@ func TestAppendIntelligentSearchAuthorizationConditionContinuesExistingPlacehold
 	}
 }
 
-func TestAppendIntelligentSearchAuthorizationConditionKeepsRLSPilotOnDatabasePolicy(t *testing.T) {
+func TestAppendIntelligentSearchAuthorizationConditionKeepsUnverifiedPilotFlags(t *testing.T) {
 	authorization := intelligentSearchAuthorization{
 		userRole: "basic",
 		userID:   8,
@@ -69,10 +69,10 @@ func TestAppendIntelligentSearchAuthorizationConditionKeepsRLSPilotOnDatabasePol
 	if err != nil {
 		t.Fatalf("appendIntelligentSearchAuthorizationCondition returned error: %v", err)
 	}
-	if strings.Contains(condition, "approved") || !strings.Contains(condition, "row_group_membership") {
-		t.Fatalf("pilot condition mixed Go row policy with RLS or lost group filter: %s", condition)
+	if !strings.Contains(condition, `("src"."approved" = TRUE OR "src"."user_id" = $1)`) || !strings.Contains(condition, "row_group_membership") {
+		t.Fatalf("pilot condition lost mandatory flags or group filter: %s", condition)
 	}
-	wantArgs := []interface{}{rlsPilotTableName, 8, int64(42), testRowGroupSelection("security").requirementsJSON()}
+	wantArgs := []interface{}{8, rlsPilotTableName, 8, int64(42), testRowGroupSelection("security").requirementsJSON()}
 	if !reflect.DeepEqual(args, wantArgs) {
 		t.Fatalf("args = %#v, want %#v", args, wantArgs)
 	}

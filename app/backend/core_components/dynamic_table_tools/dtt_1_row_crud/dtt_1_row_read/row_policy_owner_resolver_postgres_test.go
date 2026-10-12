@@ -352,9 +352,10 @@ func ownerResolverIDsMissingFrom(ids, reference []int) []int {
 }
 
 // TestRemovingTheIDGuessChangesOnlyIntendedRowsPostgres compares the removed
-// rule with the new one for every actor on the three read paths. Non-admins
-// may only lose rows; the only row lost is the unapproved system_about row
-// whose number equals the disabled user carol's number.
+// rule with current enforcement for every actor on three read paths. Ordinary
+// datasets only lose the unapproved system_about row that matched carol's id.
+// This fixture has no pilot RLS: WL33 additionally hides its non-owned rows
+// with failed mandatory flags. Keep the frozen pre-WL58 copy above unchanged.
 func TestRemovingTheIDGuessChangesOnlyIntendedRowsPostgres(t *testing.T) {
 	owner, reader := ownerResolverPostgres(t)
 	captureOwnerWarnings(t)
@@ -419,8 +420,14 @@ func TestRemovingTheIDGuessChangesOnlyIntendedRowsPostgres(t *testing.T) {
 		}
 	}
 
-	if want := map[string][]int{"system_about/carol": {40}}; !reflect.DeepEqual(lostRows, want) {
-		t.Fatalf("rows lost by removing the id guess = %v, want only %v", lostRows, want)
+	if want := map[string][]int{
+		"system_about/carol":        {40},
+		"app_service_catalog/guest": {2, 3, 40},
+		"app_service_catalog/alice": {3, 40},
+		"app_service_catalog/bob":   {2, 40},
+		"app_service_catalog/carol": {2, 3},
+	}; !reflect.DeepEqual(lostRows, want) {
+		t.Fatalf("rows lost by read-policy hardening = %v, want only %v", lostRows, want)
 	}
 	for _, actor := range actors[:4] {
 		policy, err := getLegacyMustTrueReadPolicy(reader, "system_about")

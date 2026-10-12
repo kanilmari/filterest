@@ -373,7 +373,8 @@ var RouteProfiles = map[string]RouteProfile{
 
 	// Vanilla tree
 	"vanilla_tree.GetTreeDataHandler": DefaultProfile,
-	"vanilla_tree.GetViewDataHandler": DefaultProfile,
+	// Raw views use the administrator connection until they move to shared dataset reads.
+	"vanilla_tree.GetViewDataHandler": AdminProfile,
 
 	// AI language API routes (conditional: ENABLE_API_LANGUAGE)
 	"dtt_crud_workflows.SimpleQueryTableHandler": AdminProfile,

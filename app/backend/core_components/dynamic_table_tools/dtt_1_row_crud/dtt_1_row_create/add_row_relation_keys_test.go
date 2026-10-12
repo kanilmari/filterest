@@ -113,6 +113,8 @@ func TestExistingLinkAuthorizationStillChecksPhysicalIDs(t *testing.T) {
 	tx := relationKeyTx(t)
 	pushQuery(queuedQuery{cols: []string{"allowed"}, rows: [][]driver.Value{{int64(1)}}, wantArgs: []driver.Value{"/api/get-results", int64(4), "9001"}})
 	pushQuery(queuedQuery{cols: []string{"allowed"}, rows: [][]driver.Value{{int64(1)}}, wantArgs: []driver.Value{"/api/add-row-multipart", int64(4), "9002"}})
+	// The shared read policy now loads pilot metadata even for administrator reference checks.
+	pushQuery(queuedQuery{cols: []string{"column_name"}, wantArgs: []driver.Value{"app_service_catalog"}})
 	pushQuery(queuedQuery{cols: []string{"id"}, rows: [][]driver.Value{{int64(7)}}, wantArgs: []driver.Value{"{7}"},
 		wantSQL: `SELECT "app_service_catalog"."id" FROM "app_service_catalog" WHERE "app_service_catalog"."id" = ANY($1) ORDER BY "app_service_catalog"."id" FOR KEY SHARE`})
 	err := authorizeExistingLink(tx, resolvedExistingLink{Kind: existingRelationManyToMany, RelatedTableName: "app_service_catalog",
