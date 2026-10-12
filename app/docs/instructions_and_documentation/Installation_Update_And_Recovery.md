@@ -322,6 +322,9 @@ folder. It stops at the first failing command. It restores the checkout, the
 settings, the stored files, and the database together, and moves what the new
 version left behind into a `backups/replaced_*` folder instead of deleting it:
 
+An update rollback restores the whole installation from that update's backup;
+individual rows or schema changes cannot be undone separately.
+
 **Opt-in Docker installations cannot safely use this block to roll back across
 the introduction of host-proxy, private database ports or pinned networks.**
 The older runner re-enables local TLS (a host nginx HTTP upstream then receives
