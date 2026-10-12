@@ -32,7 +32,7 @@ import { setChosenDatasetView } from '../state_stores/dataset_view_choice_saver.
 const views = RENDERABLE_DATASET_VIEW_DEFINITIONS.map(definition => definition.viewKey);
 const dataset = 'scroll_reset';
 const draw = (name = dataset, rows = [{ id: 1 }], options = {}) =>
-    generate_table(name, ['id'], rows, { id: 'INTEGER' }, rows.length, false, null, null, null, options);
+    generate_table(name, ['id', 'clock'], rows, { id: 'INTEGER', clock: 'DATE' }, rows.length, false, null, null, null, options);
 const hostFor = view => document.getElementById(getDatasetViewContainerId(view, dataset));
 
 beforeEach(() => {

@@ -67,7 +67,6 @@ describe("dataset_view_registry", () => {
                 "product_card",
                 "calendar",
                 "map",
-                "price_chart",
                 "settings",
                 "cloud_management",
             ]);
@@ -113,6 +112,7 @@ describe("dataset_view_registry", () => {
             transposed: "/ui/view/transposed",
             tree: "/ui/view/tree",
             ticket: "/ui/view/ticket",
+            price_chart: "/ui/view/price_chart",
             settings: "/ui/view/settings",
             cloud_management: "/ui/view/cloud_management",
         });
@@ -121,14 +121,14 @@ describe("dataset_view_registry", () => {
     test("keeps layout and translation metadata queryable", () => {
         const fallbacks = getDatasetViewLocalTranslationFallbacks();
 
-        expect(getDatasetViewLangKey("price_chart")).toBe("view_price_chart");
+        expect(getDatasetViewLangKey("price_chart")).toBe("view_chart");
         expect(getDatasetViewLabelFallback("map")).toBe("Kartta");
         expect(getDatasetViewScrollDirection("transposed")).toBe("horizontal");
         expect(usesFullWidthDatasetContent("table")).toBe(true);
         expect(usesFullWidthDatasetContent("card")).toBe(false);
         expect(DATASET_VIEW_SELECTOR_TEXT.moreViews.langKey).toBe("add_more_views");
         expect(fallbacks.view_article.en).toBe("Article");
-        expect(fallbacks.view_price_chart.fi).toBe("Hintagraafi");
+        expect(fallbacks.view_chart.fi).toBe("Kaavio");
         expect(fallbacks.view_cloud_management.en).toBe("Cloud management");
         expect(fallbacks.view_cloud_management.yue).toBe("\u96f2\u7aef\u7ba1\u7406");
         expect(fallbacks.views_and_presentations.en).toBe("Views and presentations");
@@ -148,4 +148,16 @@ test("image-first is a named history presentation, not a duplicate dataset rende
     expect(getDatasetViewLabelForLanguage("image_first_view", "fi")).toBe("Kuvapainotteinen artikkeli");
     expect(getDatasetViewSelectorOptions(DATASET_VIEW_SELECTOR_GROUP_DIRECT).map(option => option.viewKey)).not.toContain("image_first_view");
     expect(getDatasetViewSelectorOptions(DATASET_VIEW_SELECTOR_GROUP_MORE).map(option => option.viewKey)).not.toContain("image_first_view");
+});
+
+test.each([
+    [{ id: 'integer', clock: 'date' }, true],
+    [{ id: 'integer', clock: 'text' }, false],
+    [{ id: 'uuid', clock: 'date' }, false],
+    [{ id: 'integer', clock: 'timestamp[]' }, false],
+])('chart selector uses the common fit rule for %j', (dataTypes, fits) => {
+    const options = getDatasetViewSelectorOptions(DATASET_VIEW_SELECTOR_GROUP_MORE, {
+        datasetName: 'series', columns: ['id', 'clock'], dataTypes,
+    });
+    expect(options.some(option => option.viewKey === 'price_chart')).toBe(fits);
 });

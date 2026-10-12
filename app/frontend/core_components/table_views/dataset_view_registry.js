@@ -5,6 +5,8 @@
 // Keep this file renderer-free so selectors can read metadata without loading view modules.
 
 import { datasetSupportsTreeView } from "./dataset_tree_availability_checker.js";
+import { datasetSupportsChartView } from "./price_chart_view/price_chart_data_reader.js";
+import { CHART_TRANSLATION_FALLBACKS } from "./price_chart_view/chart_copy.js";
 
 export const DATASET_VIEW_SELECTOR_GROUP_DIRECT = "direct";
 export const DATASET_VIEW_SELECTOR_GROUP_MORE = "more";
@@ -204,15 +206,11 @@ const DATASET_VIEW_DEFINITION_LIST = [
     {
         viewKey: "price_chart",
         rendererKey: "price_chart",
+        permissionRoute: "/ui/view/price_chart",
         containerSuffix: "price_chart_view_container",
-        langKey: "view_price_chart",
-        labelFallback: "Hintagraafi",
-        translations: {
-            fi: "Hintagraafi",
-            en: "Price chart",
-            ch: "\u4ef7\u683c\u56fe\u8868",
-            yue: "\u50f9\u683c\u5716\u8868",
-        },
+        langKey: "view_chart",
+        labelFallback: "Kaavio",
+        translations: CHART_TRANSLATION_FALLBACKS.view_chart,
         selectorGroup: DATASET_VIEW_SELECTOR_GROUP_MORE,
         translateDropdownLabel: true,
     },
@@ -374,6 +372,10 @@ export function getDatasetViewSelectorOptions(selectorGroup, availabilityContext
                 availabilityContext.dataTypes
             )
         ))
+        .filter((definition) => definition.viewKey !== "price_chart"
+            || Boolean(availabilityContext && datasetSupportsChartView(
+                availabilityContext.columns, availabilityContext.dataTypes
+            )))
         .map((definition) => ({
             viewKey: definition.viewKey,
             label: definition.labelFallback,
@@ -515,5 +517,5 @@ export function getDatasetViewLocalTranslationFallbacks() {
         ]);
     }
 
-    return Object.fromEntries(fallbackEntries);
+    return { ...CHART_TRANSLATION_FALLBACKS, ...Object.fromEntries(fallbackEntries) };
 }

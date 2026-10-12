@@ -16,6 +16,7 @@ const createGenericViewSelectorMock = vi.hoisted(() => vi.fn(() => document.crea
 const selectDatasetViewMock = vi.hoisted(() => vi.fn());
 const createVanillaDropdownMock = vi.hoisted(() => vi.fn(() => document.createElement("div")));
 const hasDatasetPermissionMock = vi.hoisted(() => vi.fn(() => Promise.resolve(false)));
+const hasRoutePermissionMock = vi.hoisted(() => vi.fn(() => true));
 const createFieldViewEditorButtonMock = vi.hoisted(() => vi.fn(() => {
     const button = document.createElement("button");
     button.dataset.testid = "btn-edit-fields-view";
@@ -55,6 +56,7 @@ vi.mock("../ai_features/table_chat/table_chat_mode_resolver.js", () => ({
 
 vi.mock("../route_permission_checker.js", () => ({
     hasDatasetPermission: hasDatasetPermissionMock,
+    hasRoutePermission: hasRoutePermissionMock,
 }));
 
 vi.mock("../endpoints/endpoint_router.js", () => ({
@@ -94,6 +96,7 @@ describe("appendChatUIIfAllowed", () => {
         createVanillaDropdownMock.mockClear();
         hasDatasetPermissionMock.mockReset();
         hasDatasetPermissionMock.mockResolvedValue(false);
+        hasRoutePermissionMock.mockReturnValue(true);
         createFieldViewEditorButtonMock.mockClear();
         createEditRowPermissionsButtonMock.mockClear();
         getTranslationForKeyMock.mockReset();
@@ -195,7 +198,6 @@ describe("appendChatUIIfAllowed", () => {
                 { value: "product_card", label: "Product card", langKey: "view_product_card" },
                 { value: "calendar", label: "Calendar", langKey: "view_calendar" },
                 { value: "map", label: "Map", langKey: "view_map" },
-                { value: "price_chart", label: "Price chart", langKey: "view_price_chart" },
                 { value: "settings", label: "Settings", langKey: "view_settings" },
                 { value: "cloud_management", label: "Cloud management", langKey: "view_cloud_management" },
             ],
@@ -205,6 +207,19 @@ describe("appendChatUIIfAllowed", () => {
         createVanillaDropdownMock.mock.calls[0][0].onChange("calendar");
         expect(selectDatasetViewMock).toHaveBeenCalledWith("demo_table", "calendar", "card");
         expect(viewSelectorContainer.children).toHaveLength(1);
+    });
+
+    test.each([false, true])('More menu offers a fitting Chart only with the route grant (%s)', async granted => {
+        getTranslationForKeyMock.mockImplementation((_key, options = {}) => options.fallback || '');
+        hasDatasetPermissionMock.mockResolvedValue(true);
+        hasRoutePermissionMock.mockImplementation(route => route !== '/ui/view/price_chart' || granted);
+        // Even a configured default cannot make a staged Chart visible.
+        localStorage.setItem('demo_table_tableMeta', JSON.stringify({ default_view_name: 'price_chart' }));
+        const { appendAdminFeatures } = await import('./admin_button_builder.js');
+        await appendAdminFeatures('demo_table', document.createElement('div'), document.createElement('div'), 'card',
+            { columns: ['observed_at', 'volume'], dataTypes: { observed_at: 'date', volume: 'integer' } });
+        const offered = createVanillaDropdownMock.mock.calls[0][0].options.some(option => option.value === 'price_chart');
+        expect(offered).toBe(granted);
     });
 
     test("includes translated tree option for a verified self-parent dataset", async () => {

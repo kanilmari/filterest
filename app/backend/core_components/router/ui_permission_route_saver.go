@@ -29,6 +29,7 @@ var canonicalUIPermissionRoutes = [...]uiPermissionRouteDefinition{
 	{Name: "ui.view.transposed", URLRouteEndpoint: "/ui/view/transposed", SpecificTableRelated: false},
 	{Name: "ui.view.tree", URLRouteEndpoint: "/ui/view/tree", SpecificTableRelated: false},
 	{Name: "ui.view.ticket", URLRouteEndpoint: "/ui/view/ticket", SpecificTableRelated: false},
+	{Name: "ui.view.price_chart", URLRouteEndpoint: "/ui/view/price_chart", SpecificTableRelated: false},
 	{Name: "ui.view.settings", URLRouteEndpoint: "/ui/view/settings", SpecificTableRelated: false},
 	{Name: "ui.view.cloud_management", URLRouteEndpoint: "/ui/view/cloud_management", SpecificTableRelated: false},
 

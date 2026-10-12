@@ -116,6 +116,25 @@ describe("generate_permissions_form", () => {
         expect(scopedCheckbox.disabled).toBe(true);
     });
 
+    test.each([
+        ['fi', 'Kaavionäkymä'], ['en', 'Chart view'], ['ch', '图表视图'], ['yue', '圖表視圖'],
+    ])('labels the Chart permission in %s with its translation key', async (language, label) => {
+        localStorage.setItem('chosen_language', language);
+        localStorage.setItem('permissions_filter_endpoint', 'ui');
+        const { fetch_all_functions } = await import('./permission_checker.js');
+        fetch_all_functions.mockResolvedValueOnce([
+            { id: 3, name: 'ui.view.price_chart', url_route_endpoint: '/ui/view/price_chart', specific_table_related: false, ui_only: true },
+        ]);
+        const { generate_permissions_form } = await import('./permission_editor.js');
+        const container = document.createElement('div');
+        document.body.append(container);
+        await generate_permissions_form(container);
+        const name = container.querySelector('.mp-function-name');
+        expect(name.textContent).toBe(label);
+        expect(name.dataset.langKey).toBe('ui.view.price_chart');
+        expect(container.querySelector('.mp-function-route').textContent).toBe('/ui/view/price_chart');
+    });
+
     test("shows cell-level hover edit button inside readonly permission cells and clicking it opens edit mode", async () => {
         const { generate_permissions_form } = await import("./permission_editor.js");
         const container = document.createElement("div");

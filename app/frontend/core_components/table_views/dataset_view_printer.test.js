@@ -43,27 +43,21 @@ vi.mock('../infinite_scroll/infinite_scroll_handler.js', () => ({
     initializeInfiniteScroll: initializeInfiniteScrollMock,
     seedInfiniteScrollRowCount: seedInfiniteScrollRowCountMock,
 }));
-
 vi.mock('../filterbar/filter_bar_builder.js', () => ({
     create_filter_bar: createFilterBarMock,
 }));
-
 vi.mock('../../reusable_components/results_count/results_count_printer.js', () => ({
     setResultsCount: setResultsCountMock,
 }));
-
 vi.mock('../filterbar/filter_list/active_filter_tag_printer.js', () => ({
     renderActiveFilters: renderActiveFiltersMock,
 }));
-
 vi.mock('../filterbar/filter_list/row_group_facet_printer.js', () => ({
     renderRowGroupFacets: renderRowGroupFacetsMock,
 }));
-
 vi.mock('./tree_view/tree_view_printer.js', () => ({
     create_tree_view: createTreeViewMock,
 }));
-
 vi.mock('./table_component_builder.js', () => ({
     TableComponent: class {
         getElement() {
@@ -71,19 +65,24 @@ vi.mock('./table_component_builder.js', () => ({
         }
     },
 }));
-
 vi.mock('./view_selector_printer.js', () => ({
     applyViewStyling: applyViewStylingMock,
+    createGenericViewSelector: vi.fn((_dataset, _view, options) => {
+        const host = document.createElement('div');
+        for (const option of options) {
+            const button = document.createElement('button');
+            button.dataset.viewKey = option.viewKey;
+            host.appendChild(button);
+        }
+        return host;
+    }),
 }));
-
 vi.mock('./settings_view/settings_view_printer.js', () => ({
     create_settings_view: createSettingsViewMock,
 }));
-
 vi.mock('./product_card_view/product_card_view_printer.js', () => ({
     create_product_card_view: createProductCardViewMock,
 }));
-
 vi.mock('./calendar_view/calendar_view_printer.js', () => ({
     create_calendar_view: createCalendarViewMock,
 }));
@@ -91,6 +90,11 @@ vi.mock('./calendar_view/calendar_view_printer.js', () => ({
 vi.mock('./map_view/map_view_printer.js', () => ({
     create_map_view: createMapViewMock,
     dataset_supports_map_view: datasetSupportsMapViewMock,
+}));
+
+vi.mock('../endpoints/stable_endpoint_router.js', () => ({
+    getViewFieldSets: vi.fn(async dataset => ({ dataset, view_key: 'price_chart', field_sets: [] })),
+    saveSiteViewFieldSet: vi.fn(),
 }));
 
 vi.mock('./price_chart_view/price_chart_view_printer.js', () => ({
@@ -134,7 +138,6 @@ describe('generate_table', () => {
         getAllSpecsMock.mockReturnValue({});
         getDefaultViewSyncMock.mockReturnValue('card');
     });
-
     test('uses an empty results snapshot to scope the content before rendering and retains current appearance on row reuse', async () => {
         const { DEFAULT_DATASET_APPEARANCE } = await import('../../shared/dataset_appearance/validator.js');
         const { datasetAppearanceState } = await import('./dataset_appearance_state.js');
@@ -153,11 +156,9 @@ describe('generate_table', () => {
         expect(document.getElementById('empty_container').style.getPropertyValue('--dataset-background-light-image-blur')).toBe('12px');
         expect(document.documentElement.style.getPropertyValue('--dataset-background-light-image-blur')).toBe('');
     });
-
 	test('uses presentation media returned with dataset results without admin tree metadata', async () => {
 		setChosenDatasetView('demo_dataset', 'card');
 		getAllSpecsMock.mockReturnValue({});
-
 		const { generate_table } = await import('./dataset_view_printer.js');
 		await generate_table(
 			'demo_dataset',
@@ -171,7 +172,6 @@ describe('generate_table', () => {
 				background_image_path: '/storage/104/dataset_media/background/original/background.webp',
 			}
 		);
-
 		const contentArea = document.querySelector('.tab-content-area');
 		expect(contentArea).not.toBeNull();
 		expect(contentArea.classList.contains('tab-content-area--has-dataset-background')).toBe(true);
@@ -179,8 +179,6 @@ describe('generate_table', () => {
 			.toContain('/storage/104/dataset_media/background/2160/background.webp');
 		expect(document.querySelector('.dataset-results-surface')).not.toBeNull();
 	});
-
-
     test.each([
         [null, true, false],
         [null, false, true],
@@ -202,7 +200,6 @@ describe('generate_table', () => {
             expect(content.style.getPropertyValue('--dataset-background-image')).toContain('new.webp');
         }
     });
-
     test.each([null, {card_style_variant: null}, {card_style_variant: 'standard'}])('retains style inheritance or an explicit override from metadata %j', async tableMeta => {
         setChosenDatasetView('demo_dataset', 'card');
         const { generate_table } = await import('./dataset_view_printer.js');
@@ -211,11 +208,9 @@ describe('generate_table', () => {
             .toBe(tableMeta?.card_style_variant ?? null);
         expect(createCardViewMock).toHaveBeenCalled();
     });
-
     test('starts building the filterbar before an async card view finishes', async () => {
         const events = [];
         let resolveCardView;
-
         createCardViewMock.mockImplementationOnce(() => {
             events.push('view-start');
             return new Promise((resolve) => {
@@ -231,9 +226,7 @@ describe('generate_table', () => {
             events.push('filterbar');
             return document.createElement('div');
         });
-
         setChosenDatasetView('demo_dataset', 'card');
-
         const { generate_table } = await import('./dataset_view_printer.js');
         const renderPromise = generate_table(
             'demo_dataset',
@@ -257,7 +250,6 @@ describe('generate_table', () => {
         expect(seedInfiniteScrollRowCountMock).toHaveBeenCalledWith('demo_dataset', 1);
         expect(initializeInfiniteScrollMock).toHaveBeenCalledWith('demo_dataset', 'vertical');
     });
-
     test('creates the result-count mirror before filling the initial dataset count', async () => {
         const events = [];
         renderActiveFiltersMock.mockImplementationOnce(() => {
@@ -282,7 +274,6 @@ describe('generate_table', () => {
         expect(events).toEqual(['create-count-mirror', 'fill-count']);
         expect(setResultsCountMock).toHaveBeenCalledWith('demo_dataset', 1);
     });
-
     test('renders first-page row-group metadata in the controls shared by all views', async () => {
         setChosenDatasetView('demo_dataset', 'table');
         const facets = [
@@ -310,7 +301,6 @@ describe('generate_table', () => {
             setResultsCountMock.mock.invocationCallOrder[0]
         );
     });
-
     test('retains the category host and focused control across a full dataset redraw', async () => {
         const { generate_table } = await import('./dataset_view_printer.js');
         setChosenDatasetView('demo_dataset', 'table');
@@ -353,7 +343,6 @@ describe('generate_table', () => {
         expect(popup.isConnected).toBe(true);
         dropdown.destroy();
     });
-
     test('falls back from map view when the dataset has no map-capable fields', async () => {
         datasetSupportsMapViewMock.mockReturnValueOnce(false);
         setChosenDatasetView('demo_dataset', 'map');
@@ -379,7 +368,6 @@ describe('generate_table', () => {
         expect(sessionStorage.getItem('demo_dataset_view')).toBe('card');
         expect(activeContainer.id).toBe('demo_dataset_card_view_container');
     });
-
     test('keeps map view when the dataset has geospatial support', async () => {
         datasetSupportsMapViewMock.mockReturnValueOnce(true);
         setChosenDatasetView('demo_dataset', 'map');
@@ -405,7 +393,6 @@ describe('generate_table', () => {
         expect(sessionStorage.getItem('demo_dataset_view')).toBe('map');
         expect(activeContainer.id).toBe('demo_dataset_map_view_container');
     });
-
     test('passes multilingual column metadata to the tree view', async () => {
         setChosenDatasetView('demo_dataset', 'tree');
         const rows = [{ id: 1, parent_id: null, name: '{"en":"English","fi":"Suomi"}' }];
@@ -437,7 +424,6 @@ describe('generate_table', () => {
             dataTypes
         );
     });
-
     test('falls back from tree view when the dataset has no verified hierarchy', async () => {
         setChosenDatasetView('demo_dataset', 'tree');
 
@@ -461,7 +447,6 @@ describe('generate_table', () => {
         expect(sessionStorage.getItem('demo_dataset_view')).toBe('card');
         expect(activeContainer.id).toBe('demo_dataset_card_view_container');
     });
-
     test('renders price chart view when selected', async () => {
         setChosenDatasetView('demo_dataset', 'price_chart');
 
@@ -480,11 +465,58 @@ describe('generate_table', () => {
             'demo_dataset',
             ['observed_at', 'close_price'],
             [{ observed_at: '2026-01-01', close_price: 100 }],
-            { observed_at: 'DATE', close_price: 'NUMERIC' }
+            { observed_at: 'DATE', close_price: 'NUMERIC' },
+            expect.objectContaining({ savedColumns: [], canSaveDefault: false })
         );
         expect(activeContainer.id).toBe('demo_dataset_price_chart_view_container');
     });
-
+    test.each([
+        ['group without the Chart grant', false, null, 'card'],
+        ['administrator with the startup grant', true, null, 'card'],
+        ['group explicitly granted Chart', true, null, 'card'],
+        ['denied dataset Chart default', false, 'price_chart', 'card'],
+        ['denied site Chart default', false, null, 'price_chart'],
+        ['administrator dataset Chart default', true, 'price_chart', 'card'],
+        ['administrator site Chart default', true, null, 'price_chart'],
+    ])('%s: gates a fitting direct Chart address', async (_principal, granted, datasetDefault, siteDefault) => {
+        getDefaultViewSyncMock.mockReturnValue(siteDefault);
+        hasRoutePermissionMock.mockImplementation(route => route !== '/ui/view/price_chart' || granted);
+        setChosenDatasetView('demo_dataset', 'price_chart');
+        const { generate_table } = await import('./dataset_view_printer.js');
+        const active = await generate_table('demo_dataset', ['observed_at', 'close_price'],
+            [{ observed_at: '2026-01-01', close_price: 100 }], { observed_at: 'date', close_price: 'numeric' },
+            1, false, { default_view_name: datasetDefault });
+        expect(active.id).toBe(granted ? 'demo_dataset_price_chart_view_container' : 'demo_dataset_card_view_container');
+        expect(sessionStorage.getItem('demo_dataset_view')).toBe(granted ? 'price_chart' : 'card');
+        expect(hasRoutePermissionMock).toHaveBeenCalledWith('/ui/view/price_chart');
+        expect(createPriceChartViewMock).toHaveBeenCalledTimes(granted ? 1 : 0);
+    });
+    test('an unfitting chart address explains the fallback and offers permitted views', async () => {
+        setChosenDatasetView('demo_dataset', 'price_chart');
+        hasRoutePermissionMock.mockImplementation(route => route !== '/ui/view/settings');
+        const { generate_table } = await import('./dataset_view_printer.js');
+        const active = await generate_table('demo_dataset', ['id', 'name'], [{ id: 1, name: 'Note' }],
+            { id: 'integer', name: 'text' }, 1);
+        expect(createPriceChartViewMock).not.toHaveBeenCalled();
+        expect(createCardViewMock).toHaveBeenCalled();
+        expect(active.id).toBe('demo_dataset_card_view_container');
+        expect(sessionStorage.getItem('demo_dataset_view')).toBe('card');
+        const notice = active.querySelector('[data-testid="chart-unavailable"]');
+        expect(notice.textContent).toContain('Chart requires');
+        expect(notice.querySelector('[data-view-key="table"]')).not.toBeNull();
+        expect(notice.querySelector('[data-view-key="price_chart"]')).toBeNull();
+        expect(notice.querySelector('[data-view-key="tree"]')).toBeNull();
+        expect(notice.querySelector('[data-view-key="settings"]')).toBeNull();
+    });
+    test('an unsuitable chart chooses a permitted list when card and table are denied', async () => {
+        setChosenDatasetView('demo_dataset', 'price_chart');
+        hasRoutePermissionMock.mockImplementation(route => ['/ui/view/list', '/ui/view/price_chart'].includes(route));
+        const { generate_table } = await import('./dataset_view_printer.js');
+        const active = await generate_table('demo_dataset', ['id'], [], { id: 'integer' }, 0);
+        expect(active.id).toBe('demo_dataset_normal_view_container');
+        expect(sessionStorage.getItem('demo_dataset_view')).toBe('normal');
+        expect(createCardViewMock).not.toHaveBeenCalled();
+    });
     test('normalizes selector aliases to renderable view keys', async () => {
         setChosenDatasetView('demo_dataset', 'article');
 
@@ -508,7 +540,6 @@ describe('generate_table', () => {
         expect(sessionStorage.getItem('demo_dataset_view')).toBe('article_view');
         expect(activeContainer.id).toBe('demo_dataset_article_view_container');
     });
-
     test('falls back from stale non-renderable view keys', async () => {
         setChosenDatasetView('demo_dataset', 'legacy_magic_view');
 
@@ -532,7 +563,6 @@ describe('generate_table', () => {
         expect(sessionStorage.getItem('demo_dataset_view')).toBe('card');
         expect(activeContainer.id).toBe('demo_dataset_card_view_container');
     });
-
     test.each([
         ['fresh reader without admin tree', {}, null, 'table', 'table'],
         ['read metadata wins a stale tree', { default_view_name: 'article_view' }, null, 'table', 'table'],
@@ -549,7 +579,6 @@ describe('generate_table', () => {
         expect(active.id).toBe(expected === 'article_view'
             ? 'demo_dataset_article_view_container' : `demo_dataset_${expected}_view_container`);
     });
-
     test.each([null, 'article_view', 'card'])('uses the reader default with no extra route grants (stored=%s)', async stored => {
         hasRoutePermissionMock.mockReturnValue(false);
         getAllSpecsMock.mockReturnValue({});
@@ -560,7 +589,6 @@ describe('generate_table', () => {
         expect(active.id).toBe('demo_dataset_table_view_container');
         expect(sessionStorage.getItem('demo_dataset_view')).toBe('table');
     });
-
     test('does not restore an unsupported default after permission fallback', async () => {
         datasetSupportsMapViewMock.mockReturnValue(false);
         hasRoutePermissionMock.mockReturnValue(false);
@@ -625,7 +653,6 @@ describe('generate_table', () => {
             vi.unstubAllGlobals();
         }
     });
-
     test("only an explicitly retained card host survives classic article generation", async () => {
         setChosenDatasetView("events", "card");
         createCardViewMock.mockImplementation(() => {
@@ -650,7 +677,6 @@ describe('generate_table', () => {
         await generate_table("events", ["id"], [{ id: 3 }], {}, 100);
         expect(original.isConnected).toBe(false);
     });
-
     test.each(['card', 'table'])('records the initial %s rows for a later article transfer', async view => {
         setChosenDatasetView('events', view);
         const { generate_table } = await import('./dataset_view_printer.js');

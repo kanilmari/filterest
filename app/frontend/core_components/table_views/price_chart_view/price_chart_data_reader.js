@@ -1,5 +1,5 @@
 // price_chart_data_reader.js
-// Extracts time-series price points from generic dataset rows.
+// Extracts time-series numeric points from typed dataset rows.
 // Bridges table column metadata and the price chart view renderer.
 // Exists so chart column inference and numeric parsing stay testable outside the DOM.
 
@@ -29,17 +29,11 @@ const PRICE_COLUMN_ALIASES = [
     "last_price",
 ];
 
-const TEMPORAL_DATA_TYPE_HINTS = ["date", "time", "timestamp", "timestamptz"];
-const NUMERIC_DATA_TYPE_HINTS = [
-    "numeric",
-    "decimal",
-    "integer",
-    "bigint",
-    "smallint",
-    "real",
-    "double",
-    "float",
-];
+// Exact scalar types: text aliases, arrays, intervals and domains do not qualify.
+const TEMPORAL_TYPE = /^(?:date|time(?:\(\d+\))?(?: with(?:out)? time zone)?|timetz|timestamp(?:\(\d+\))?(?: with(?:out)? time zone)?|timestamptz)$/;
+const NUMERIC_TYPE = /^(?:smallint|integer|bigint|int[248]?|smallserial|serial|bigserial|serial[248]|numeric(?:\(\d+(?:\s*,\s*\d+)?\))?|decimal(?:\(\d+(?:\s*,\s*\d+)?\))?|real|double precision|float[48]?)$/;
+
+export const CHART_AXIS_PARAMS = Object.freeze({ x: "chart_x", y: "chart_y" });
 
 // Normalizes names so aliases survive snake_case, spaces, and punctuation.
 function normalizeColumnName(columnName) {
@@ -50,19 +44,19 @@ function normalizeColumnName(columnName) {
 function getColumnDataType(dataTypes, columnName) {
     const columnInfo = dataTypes?.[columnName];
     if (typeof columnInfo === "string") {
-        return columnInfo.toLowerCase();
+        return columnInfo.toLowerCase().trim();
     }
-    return String(columnInfo?.data_type || "").toLowerCase();
+    return String(columnInfo?.data_type || "").toLowerCase().trim();
 }
 
 // Checks whether a backend type is suitable for the chart's x-axis.
 function isTemporalDataType(dataType) {
-    return TEMPORAL_DATA_TYPE_HINTS.some((hint) => dataType.includes(hint));
+    return TEMPORAL_TYPE.test(dataType);
 }
 
 // Checks whether a backend type is suitable for the chart's y-axis.
 function isNumericDataType(dataType) {
-    return NUMERIC_DATA_TYPE_HINTS.some((hint) => dataType.includes(hint));
+    return NUMERIC_TYPE.test(dataType);
 }
 
 // Finds a column by exact normalized aliases before falling back to type hints.
@@ -71,9 +65,23 @@ function findColumnByAliases(columns, aliases) {
     return columns.find((column) => normalizedAliases.includes(normalizeColumnName(column))) || null;
 }
 
-// Finds the first column with a matching data type hint.
-function findColumnByType(columns, dataTypes, predicate) {
-    return columns.find((column) => predicate(getColumnDataType(dataTypes, column))) || null;
+/** Eligible delivered scalar columns, independent of rows or view permissions. */
+export function getChartAxisChoices(columns = [], dataTypes = {}) {
+    const available = Array.isArray(columns) ? columns.filter(column => {
+        const metadata = dataTypes?.[column];
+        return !metadata?.hide_everywhere
+            && (!metadata?.client_delivery_mode || metadata.client_delivery_mode === "include");
+    }) : [];
+    return {
+        x: available.filter(column => isTemporalDataType(getColumnDataType(dataTypes, column))),
+        y: available.filter(column => isNumericDataType(getColumnDataType(dataTypes, column))),
+    };
+}
+
+/** The single chart fit rule; id counts, text dates do not, empty tables can fit. */
+export function datasetSupportsChartView(columns = [], dataTypes = {}) {
+    const choices = getChartAxisChoices(columns, dataTypes);
+    return choices.x.length > 0 && choices.y.length > 0;
 }
 
 /**
@@ -82,20 +90,36 @@ function findColumnByType(columns, dataTypes, predicate) {
  * Exists to keep the view useful without per-dataset chart configuration.
  */
 export function infer_price_chart_columns(columns, dataTypes = {}) {
-    const safeColumns = Array.isArray(columns) ? columns : [];
-    const timeColumn = findColumnByAliases(safeColumns, TIME_COLUMN_ALIASES)
-        || findColumnByType(safeColumns, dataTypes, isTemporalDataType);
-    const priceColumn = findColumnByAliases(safeColumns, PRICE_COLUMN_ALIASES)
-        || findColumnByType(
-            safeColumns.filter((column) => column !== timeColumn && normalizeColumnName(column) !== "id"),
-            dataTypes,
-            isNumericDataType
-        );
+    const choices = getChartAxisChoices(columns, dataTypes);
+    const timeColumn = findColumnByAliases(choices.x, TIME_COLUMN_ALIASES) || choices.x[0] || null;
+    const priceColumn = findColumnByAliases(choices.y, PRICE_COLUMN_ALIASES)
+        || choices.y.find(column => normalizeColumnName(column) !== "id")
+        || choices.y[0] || null;
 
     return {
         timeColumn,
         priceColumn,
     };
+}
+
+/** Address > eligible saved member by type > inference; resolve each axis separately. */
+export function resolveChartAxes(columns, dataTypes, params = {}, savedColumns = []) {
+    const choices = getChartAxisChoices(columns, dataTypes);
+    const inferred = infer_price_chart_columns(columns, dataTypes);
+    // The field-set API removes inaccessible members and compacts the list.
+    // Type membership keeps the surviving saved axis without relying on its position.
+    const saved = Array.isArray(savedColumns) ? savedColumns : [];
+    const timeDefault = saved.find(column => choices.x.includes(column)) || inferred.timeColumn;
+    const valueDefault = saved.find(column => choices.y.includes(column)) || inferred.priceColumn;
+    return {
+        timeColumn: choices.x.includes(params.chart_x) ? params.chart_x : timeDefault,
+        priceColumn: choices.y.includes(params.chart_y) ? params.chart_y : valueDefault,
+    };
+}
+
+/** Preserve filters, sorting and the legacy view key when sharing an axis choice. */
+export function chartAxesToParams(params, axes) {
+    return { ...params, view: "price_chart", chart_x: axes.timeColumn, chart_y: axes.priceColumn };
 }
 
 /**
@@ -116,7 +140,11 @@ export function parse_price_chart_time(rawValue) {
         return null;
     }
 
-    const parsedTime = Date.parse(rawValue.trim());
+    // PostgreSQL TIME/TIMETZ have no date. Anchor clocks to one fixed UTC day.
+    const value = rawValue.trim();
+    const clock = /^(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d(?:\.\d+)?)?(?:Z|[+-]\d{2}(?::?\d{2})?)?$/i.test(value);
+    const clockValue = value.replace(/([+-]\d{2})$/, "$1:00");
+    const parsedTime = Date.parse(clock ? `1970-01-01T${clockValue}${/[Z+-]/i.test(clockValue) ? "" : "Z"}` : value);
     return Number.isFinite(parsedTime) ? parsedTime : null;
 }
 
@@ -150,9 +178,9 @@ export function parse_price_chart_value(rawValue) {
  * Operates between raw API rows and the price chart renderer.
  * Exists to drop malformed cells without making the whole view fail.
  */
-export function extract_price_chart_points(columns, data, dataTypes = {}) {
+export function extract_price_chart_points(columns, data, dataTypes = {}, axes = null) {
     const safeRows = Array.isArray(data) ? data : [];
-    const chartColumns = infer_price_chart_columns(columns, dataTypes);
+    const chartColumns = axes || infer_price_chart_columns(columns, dataTypes);
 
     if (!chartColumns.timeColumn || !chartColumns.priceColumn) {
         return {
@@ -205,11 +233,13 @@ export function format_price_chart_value(value) {
  * Operates between millisecond timestamps and locale-aware UI text.
  * Exists so the same chart works for date and timestamp datasets.
  */
-export function format_price_chart_time(value) {
+export function format_price_chart_time(value, clockOnly = false) {
     if (!Number.isFinite(value)) {
         return "";
     }
-    return new Intl.DateTimeFormat(undefined, {
+    return new Intl.DateTimeFormat(undefined, clockOnly ? {
+        hour: "2-digit", minute: "2-digit", second: "2-digit", timeZone: "UTC",
+    } : {
         year: "numeric",
         month: "short",
         day: "2-digit",

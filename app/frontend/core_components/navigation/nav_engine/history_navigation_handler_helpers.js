@@ -98,5 +98,7 @@ export function buildParamsFromParsed(parsed) {
         ...(parsed.offset > 0 ? { offset: String(parsed.offset) } : {}),
         ...(parsed.search ? { search: parsed.search } : {}),
         ...(parsed.view ? { view: parsed.view } : {}),
+        ...(parsed.chart_x !== undefined ? { chart_x: parsed.chart_x } : {}),
+        ...(parsed.chart_y !== undefined ? { chart_y: parsed.chart_y } : {}),
     };
 }

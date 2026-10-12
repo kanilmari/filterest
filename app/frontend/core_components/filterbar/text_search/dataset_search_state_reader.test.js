@@ -70,6 +70,8 @@ describe('RESERVED_PARAM_KEYS', () => {
       'table',
       'lang',
       'view',
+      'chart_x',
+      'chart_y',
     ]));
   });
 });

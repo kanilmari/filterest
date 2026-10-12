@@ -35,7 +35,8 @@
         "app/testing/e2e/Q_scroll/Q2_offset_reset.spec.ts",
         "app/testing/e2e/P_copy/P2_select_range.spec.ts",
         "app/testing/e2e/E_search_filter/E17_card_refresh_lifecycle.spec.ts",
-        "app/testing/e2e/C_card_view/C12_article_reload_reading_position.spec.ts"
+        "app/testing/e2e/C_card_view/C12_article_reload_reading_position.spec.ts",
+        "app/testing/e2e/C_card_view/C15_chart_axes.spec.ts"
       ],
       "projects": [
         "mobile-card",
@@ -73,7 +74,8 @@
         "app/testing/e2e/A_row_crud/A1_add_row.spec.ts",
         "app/testing/e2e/A_row_crud/A2_edit_cell.spec.ts",
         "app/testing/e2e/P_copy/P2_select_range.spec.ts",
-        "app/testing/e2e/Q_scroll/Q2_offset_reset.spec.ts"
+        "app/testing/e2e/Q_scroll/Q2_offset_reset.spec.ts",
+        "app/testing/e2e/C_card_view/C15_chart_axes.spec.ts"
       ],
       "projects": [
         "mobile-card",

@@ -38,6 +38,9 @@ function getTargetView(datasetName, parsed) {
 
 function targetViewNeedsRender(datasetName, parsed) {
     const targetView = getTargetView(datasetName, parsed);
+    // Same-view chart entries can select different axes or restore saved defaults.
+    // Rebuild through the chart configuration owner rather than retaining old axes.
+    if (targetView === 'price_chart') return true;
     const renderedView = document.getElementById(`${datasetName}_container`)
         ?.querySelector('.tab_parts_container')?.dataset.view;
     return Boolean(targetView && targetView !== renderedView);

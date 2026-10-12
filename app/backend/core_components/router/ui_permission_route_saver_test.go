@@ -108,7 +108,7 @@ func (tx *uiPermissionRouteTestTx) Rollback() error {
 }
 
 func TestCanonicalUIPermissionRoutesAreUniqueAndComplete(t *testing.T) {
-	if got, want := len(canonicalUIPermissionRoutes), 32; got != want {
+	if got, want := len(canonicalUIPermissionRoutes), 33; got != want {
 		t.Fatalf("canonical UI route count = %d, want %d", got, want)
 	}
 
@@ -151,6 +151,18 @@ func TestCanonicalUIPermissionRoutesAreUniqueAndComplete(t *testing.T) {
 			frontendEndpoints,
 		)
 	}
+}
+
+func TestChartUIPermissionIsTablelessForAdministratorSafetyNet(t *testing.T) {
+	for _, route := range canonicalUIPermissionRoutes {
+		if route.Name == "ui.view.price_chart" {
+			if route.URLRouteEndpoint != "/ui/view/price_chart" || route.SpecificTableRelated {
+				t.Fatalf("Chart must use the ordinary tableless view permission: %#v", route)
+			}
+			return
+		}
+	}
+	t.Fatal("Chart is missing from startup UI route reconciliation")
 }
 
 func TestReactivateUIRoutesCommitsCompleteRegistry(t *testing.T) {

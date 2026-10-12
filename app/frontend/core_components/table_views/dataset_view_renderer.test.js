@@ -142,7 +142,8 @@ test('calendar append retains mode/date and raw rows for language refresh; empty
 test('price chart appends points with retained zoom controls, clears, and can grow from empty', async () => {
     const columns = ['id', 'observed_at', 'close_price'];
     const row = id => ({ id, observed_at: `2026-10-${10 + id}`, close_price: 100 + id });
-    const root = create_price_chart_view(dataset, columns, [row(1), row(2)]);
+    const types = { id: 'integer', observed_at: 'timestamp with time zone', close_price: 'numeric' };
+    const root = create_price_chart_view(dataset, columns, [row(1), row(2)], types);
     mount('price_chart', root);
     const zoomButton = root.querySelector('[data-lang-key="price_chart_zoom_in"]');
     await appendDataToView(dataset, [row(3)]);
@@ -156,7 +157,7 @@ test('price chart appends points with retained zoom controls, clears, and can gr
     expect(root.querySelectorAll('.price-chart-view__point')).toHaveLength(0);
     await appendDataToView(dataset, [row(1)], false);
     expect(root.querySelectorAll('.price-chart-view__point')).toHaveLength(1);
-    const emptyRoot = create_price_chart_view(dataset, columns, []);
+    const emptyRoot = create_price_chart_view(dataset, columns, [], types);
     root.replaceWith(emptyRoot);
     await appendDataToView(dataset, [], false);
     await appendDataToView(dataset, [row(1)]);

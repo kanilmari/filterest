@@ -18,7 +18,9 @@ import { create_chat_ui } from "../ai_features/table_chat/table_chat_printer.js"
 import { resolveAvailableFilterbarAIChatMode } from "../ai_features/table_chat/table_chat_mode_resolver.js";
 import {
     hasDatasetPermission,
+    hasRoutePermission,
 } from "../route_permission_checker.js";
+import { resolveDatasetDefaultView } from "../table_views/dataset_default_view.js";
 import { createMaskIconSpan } from "../../icons/icon_mask_builder.js";
 import { get_endpoint_url } from "../endpoints/endpoint_router.js";
 import { getTranslationForKey } from "../lang/translation_handler.js";
@@ -36,6 +38,7 @@ import {
     DATASET_VIEW_SELECTOR_GROUP_MORE,
     DATASET_VIEW_SELECTOR_TEXT,
     getDatasetViewLabelForLanguage,
+    getDatasetViewPermissionRoute,
     getDatasetViewSelectorOptions,
     getDatasetViewSelectorTextForLanguage,
 } from "../table_views/dataset_view_registry.js";
@@ -112,6 +115,7 @@ function createEmbedButton(table_name) {
  */
 function createAdminViewButtons(table_name, current_view, columns = [], dataTypes = {}) {
     const activeLanguage = getLanguageWithBrowserFallback();
+    const defaultView = resolveDatasetDefaultView(table_name);
     const directButtons = getDatasetViewSelectorOptions(
         DATASET_VIEW_SELECTOR_GROUP_DIRECT
     ).map((option) => ({
@@ -138,7 +142,10 @@ function createAdminViewButtons(table_name, current_view, columns = [], dataType
             columns,
             dataTypes,
         }
-    ).map((option) => ({
+    ).filter((option) => {
+        const route = getDatasetViewPermissionRoute(option.viewKey);
+        return option.viewKey === defaultView || !route || hasRoutePermission(route);
+    }).map((option) => ({
         value: option.viewKey,
         label: getTranslationForKey(option.langKey, {
             fallback: getDatasetViewLabelForLanguage(

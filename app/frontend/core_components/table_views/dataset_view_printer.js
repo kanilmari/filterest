@@ -44,6 +44,8 @@ import {
     resolveDatasetViewSelectionTarget,
 } from "./dataset_view_registry.js";
 import { datasetSupportsTreeView } from "./dataset_tree_availability_checker.js";
+import { datasetSupportsChartView } from "./price_chart_view/price_chart_data_reader.js";
+import { createChartUnavailableNotice } from "./price_chart_view/chart_unavailable_notice.js";
 
 function isFilterbarVisible(tableName) {
     // Check unified panel
@@ -101,13 +103,17 @@ function toggleDatasetSearchAndFilter(tableName) {
     }
 }
 
-function resolveFallbackViewForUnavailableView(datasetName, tableSpecs, globalDefault, unavailableView) {
+function resolveFallbackViewForUnavailableView(datasetName, tableSpecs, globalDefault, unavailableView, columns, dataTypes) {
     const defaultViewName = tableSpecs[datasetName]?.default_view_name;
-    const fallbackCandidates = [defaultViewName, globalDefault, "card", "table"];
+    const fallbackCandidates = [defaultViewName, globalDefault, "card", "table",
+        ...(unavailableView === "price_chart" ? ["normal", "transposed", "article_view", "product_card"] : [])];
     const fallbackView = fallbackCandidates.find((candidate) => (
         candidate
         && candidate !== unavailableView
         && isRenderableDatasetView(candidate)
+        && (candidate !== "price_chart" || datasetSupportsChartView(columns, dataTypes))
+        && (candidate !== "tree" || datasetSupportsTreeView(datasetName, columns, dataTypes))
+        && (!getDatasetViewPermissionRoute(candidate) || hasRoutePermission(getDatasetViewPermissionRoute(candidate)))
     ));
     return fallbackView || "card";
 }
@@ -142,19 +148,23 @@ function resolveRenderableView(datasetName, currentView, columns, data, dataType
     const selectedView = resolveDatasetViewSelectionTarget(currentView);
     const renderableView = isRenderableDatasetView(selectedView)
         ? selectedView
-        : resolveFallbackViewForUnavailableView(datasetName, tableSpecs, globalDefault, currentView);
+        : resolveFallbackViewForUnavailableView(datasetName, tableSpecs, globalDefault, currentView, columns, dataTypes);
+
+    if (renderableView === "price_chart" && !datasetSupportsChartView(columns, dataTypes)) {
+        return resolveFallbackViewForUnavailableView(datasetName, tableSpecs, globalDefault, renderableView, columns, dataTypes);
+    }
 
     if (
         renderableView === "map"
         && !dataset_supports_map_view(columns, data, dataTypes, hasGeo)
     ) {
-        return resolveFallbackViewForUnavailableView(datasetName, tableSpecs, globalDefault, renderableView);
+        return resolveFallbackViewForUnavailableView(datasetName, tableSpecs, globalDefault, renderableView, columns, dataTypes);
     }
     if (
         renderableView === "tree"
         && !datasetSupportsTreeView(datasetName, columns, dataTypes)
     ) {
-        return resolveFallbackViewForUnavailableView(datasetName, tableSpecs, globalDefault, renderableView);
+        return resolveFallbackViewForUnavailableView(datasetName, tableSpecs, globalDefault, renderableView, columns, dataTypes);
     }
     return renderableView;
 }
@@ -200,7 +210,8 @@ export async function generate_table(
     datasetPresentation = null,
     rowGroupFacets = null,
     { preserveCardReturn = null, loadedRows = null, rowGroupFacetContext = {},
-        datasetAppearance = null, appearanceToken = null, isCurrent = () => true } = {}
+        datasetAppearance = null, appearanceToken = null, isCurrent = () => true,
+        chartRequested = false } = {}
 ) {
     const token = appearanceToken || loadedRows?.appearanceToken || datasetAppearanceState.capture(dataset_name);
     const canCommit = () => isCurrent() && datasetAppearanceState.isCurrent(token);
@@ -229,6 +240,11 @@ export async function generate_table(
             datasetName, datasetDefault, columns, data, data_types, hasGeo, tableSpecs, globalDefault
         );
         let current_view = resolveStoredViewForDatasetDefault(datasetName, defaultView);
+        // A fallback projection refetch keeps the original request only for
+        // this explanation. Permission denial is never a dataset-fit failure.
+        const chartUnavailable = (chartRequested || resolveDatasetViewSelectionTarget(current_view) === "price_chart")
+            && hasRoutePermission(getDatasetViewPermissionRoute("price_chart"))
+            && !datasetSupportsChartView(columns, data_types);
         current_view = resolvePermittedView(current_view, defaultView);
         current_view = resolveRenderableView(
             datasetName,
@@ -419,6 +435,9 @@ export async function generate_table(
             pendingView = currentViewElement;
             if (!canCommit()) return null;
             datasetAppearanceState.paint(dataset_name);
+            if (chartUnavailable) resultsSurface.appendChild(
+                createChartUnavailableNotice(dataset_name, current_view, columns, data_types)
+            );
             resultsSurface.appendChild(currentViewElement);
             viewContainers[current_view].style.display = "block";
         }

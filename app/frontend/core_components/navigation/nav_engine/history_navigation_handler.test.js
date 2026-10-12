@@ -105,6 +105,8 @@ vi.mock("./history_navigation_handler_helpers.js", () => ({
         ...(parsed.filters || {}),
         ...(parsed.search ? { search: parsed.search } : {}),
         ...(parsed.view ? { view: parsed.view } : {}),
+        ...(parsed.chart_x !== undefined ? { chart_x: parsed.chart_x } : {}),
+        ...(parsed.chart_y !== undefined ? { chart_y: parsed.chart_y } : {}),
     }),
     getPrefixFromPathname: (pathname, datasetPrefix) => (
         pathname === "/" || pathname.startsWith("/api/") || pathname.startsWith("/frontend/")
@@ -401,6 +403,17 @@ describe("history_navigation_handler", () => {
         await vi.waitFor(() => expect(handleAllNavigationMock).toHaveBeenCalledOnce());
         expect(sessionStorage.getItem("events_view")).toBe("calendar");
         expect(handleAllNavigationMock.mock.calls[0][2].forceReload).toBe(true);
+    });
+
+    test("same chart history entries rebuild their axes", async () => {
+        parseTableQueryStringMock.mockReturnValue({ filters: {}, sort: {}, offset: 0,
+            view: "price_chart", chart_x: "clock", chart_y: "id" });
+        document.body.innerHTML = '<div id="events_container"><div class="tab_parts_container" data-view="price_chart"></div></div>';
+        history.replaceState({}, "", "/events?view=price_chart&chart_x=clock&chart_y=id");
+        window.dispatchEvent(new PopStateEvent("popstate"));
+        await vi.waitFor(() => expect(handleAllNavigationMock).toHaveBeenCalledOnce());
+        expect(handleAllNavigationMock.mock.calls[0][2].forceReload).toBe(true);
+        expect(setParamsMock).toHaveBeenCalledWith("events", expect.objectContaining({ chart_x: "clock", chart_y: "id" }));
     });
 
     test.each(["other dataset", "other path", "same renderer"])("%s entry metadata does not force an unrelated reload or card default", async reason => {

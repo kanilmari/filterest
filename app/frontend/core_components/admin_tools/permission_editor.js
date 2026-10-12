@@ -27,6 +27,9 @@ import { renderTableSelectorTree } from "../vanilla_tree/van_tr_components/admin
 import { extractSelectedTableNames } from "./tree_selection_helpers.js";
 import { computeMultipleTableState } from "./permission_checker_helpers.js";
 import { createVanillaCheckboxTable } from "../../reusable_components/vanilla_checkbox_table/vanilla_checkbox_table.js";
+import { getTranslationForKey } from "../lang/translation_handler.js";
+import { getLanguageWithBrowserFallback } from "../state_stores/lang_preference_reader.js";
+import { chartFallback } from "../table_views/price_chart_view/chart_copy.js";
 
 const SEARCH_KEY = "permissions_search_term";
 const FILTER_ENDPOINT_KEY = "permissions_filter_endpoint";
@@ -39,6 +42,10 @@ export async function load_permissions() {
 }
 
 function formatFunctionName(functionName) {
+    const localLabel = chartFallback(functionName, getLanguageWithBrowserFallback());
+    if (localLabel) {
+        return getTranslationForKey(functionName, { fallback: localLabel }) || localLabel;
+    }
     let cleanedName = functionName.replace(/Handler/g, "");
     cleanedName = cleanedName.replace(/([A-Z])/g, " $1");
     cleanedName = cleanedName.replace(/_/g, " ");
@@ -83,6 +90,8 @@ function createFunctionInfoCell(row) {
     const nameDiv = document.createElement("div");
     nameDiv.classList.add("mp-function-name");
     nameDiv.textContent = row.functionLabel;
+    // Register bundled permission copy for live language changes as well as first paint.
+    if (chartFallback(row.functionName)) nameDiv.dataset.langKey = row.functionName;
 
     const routeDiv = document.createElement("div");
     routeDiv.classList.add("mp-function-route");

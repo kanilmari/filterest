@@ -170,3 +170,39 @@
     justify-content: flex-start;
   }
 }
+
+/* Axis pickers follow the scrolling hero, including on empty fitting tables. */
+.price-chart-view__axes {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 12px;
+}
+
+.price-chart-view__axes label {
+  display: flex;
+  flex: 1 1 180px;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.price-chart-view__axes select {
+  width: 100%;
+  min-height: 44px;
+  padding: 8px;
+  border: 1px solid var(--price-chart-border);
+  border-radius: 8px;
+  background: var(--price-chart-surface);
+  color: var(--price-chart-text);
+  font: inherit;
+}
+
+.price-chart-view__axes button {
+  min-height: 44px;
+}
+
+.price-chart-view__axes :is(select, button):focus-visible {
+  outline: 2px solid var(--price-chart-accent);
+  outline-offset: 2px;
+}

@@ -14,7 +14,7 @@ import { create_settings_view } from './settings_view/settings_view_printer.js';
 import { create_product_card_view } from './product_card_view/product_card_view_printer.js';
 import { create_calendar_view } from './calendar_view/calendar_view_printer.js';
 import { create_map_view } from './map_view/map_view_printer.js';
-import { create_price_chart_view } from './price_chart_view/price_chart_view_printer.js';
+import { createConfiguredChartView } from './price_chart_view/chart_configuration.js';
 import { create_cloud_management_view } from './cloud_management_view/cloud_management_view_printer.js';
 import { getChosenDatasetView } from '../state_stores/dataset_view_choice_saver.js';
 import { getDatasetViewContainerId, getDatasetViewDefinition } from './dataset_view_registry.js';
@@ -63,8 +63,8 @@ const DATASET_VIEW_RENDERERS = {
     },
     price_chart: {
         commitRows: commitOwnedRows,
-        create: (table_name, columns, data, data_types) => {
-            return create_price_chart_view(table_name, columns, data, data_types);
+        create: (table_name, columns, data, data_types, options) => {
+            return createConfiguredChartView(table_name, columns, data, data_types, options);
         },
     },
     tree: {

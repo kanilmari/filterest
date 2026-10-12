@@ -174,6 +174,25 @@ describe("view_selector_printer", () => {
     });
 
     test.each([
+        ['group without the Chart grant', false],
+        ['administrator with the startup grant', true],
+        ['group explicitly granted Chart', true],
+    ])('%s can select Chart only with its route grant', async (_principal, granted) => {
+        hasRoutePermissionMock.mockImplementation(route => route !== '/ui/view/price_chart' || granted);
+        const { createGenericViewSelector, selectDatasetView } = await loadModule();
+        const selector = createGenericViewSelector('demo_table', 'table', [{ viewKey: 'price_chart' }]);
+        const chart = selector.querySelector('[data-testid="view-btn-price_chart"]');
+        expect(applyPermissionMock).toHaveBeenCalledWith(chart, '/ui/view/price_chart');
+        chart.click();
+        expect(sessionStorage.getItem('demo_table_view')).toBe(granted ? 'price_chart' : 'table');
+        expect(updateURLMock).toHaveBeenLastCalledWith('demo_table', { view: granted ? 'price_chart' : 'table' });
+        // A configured Chart default cannot make this developing view public.
+        localStorage.setItem('demo_table_tableMeta', JSON.stringify({ default_view_name: 'price_chart' }));
+        selectDatasetView('demo_table', 'price_chart', 'table');
+        expect(sessionStorage.getItem('demo_table_view')).toBe(granted ? 'price_chart' : 'table');
+    });
+
+    test.each([
         ["table", "Taulu"],
         ["transposed", "Vertailu"],
     ])("closes an open article before switching to %s view", async (viewKey, label) => {

@@ -211,7 +211,8 @@ export async function refreshTableUnified(tableName, options = {}) {
 			result.dataset_presentation,
             // Counts belong to this listing, including its committed text search.
             result.row_group_facets,
-            { preserveCardReturn, loadedRows, datasetAppearance: result.dataset_appearance,
+            { preserveCardReturn, loadedRows, chartRequested: options.chartRequested,
+                datasetAppearance: result.dataset_appearance,
                 appearanceToken, isCurrent: isRenderCurrent, rowGroupFacetContext: {
                 // Remembered prefixes and later pages cannot resolve a fresh selection.
                 authoritative: !loadedRows && Number(currentState.offset) === 0
@@ -226,7 +227,11 @@ export async function refreshTableUnified(tableName, options = {}) {
         if (!_activeContainer || !isRenderCurrent()) return null;
         const renderedView = resolveDatasetViewSelectionTarget(getChosenDatasetView(tableName) || currentView);
         if (renderedView !== currentView) {
-            await refreshTableUnified(tableName, { skipUrlParams: true });
+            // Refetch the fallback's projection without forgetting why an
+            // allowed but unsuitable Chart address needs an explanation.
+            // This context ends with this refresh; view and history stay settled.
+            await refreshTableUnified(tableName, { skipUrlParams: true,
+                chartRequested: options.chartRequested || currentView === 'price_chart' });
             return;
         }
 

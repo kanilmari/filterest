@@ -19,6 +19,7 @@ describe('VIEW_PERMISSION_ROUTES', () => {
       transposed: '/ui/view/transposed',
       tree: '/ui/view/tree',
       ticket: '/ui/view/ticket',
+      price_chart: '/ui/view/price_chart',
       settings: '/ui/view/settings',
       cloud_management: '/ui/view/cloud_management',
     });

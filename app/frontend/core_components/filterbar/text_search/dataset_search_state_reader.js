@@ -4,6 +4,7 @@
 // Exists to keep search state concerns isolated from UI rendering logic.
 import { getParams } from "../../navigation/nav_engine/query_params.js";
 import { getUnifiedTableState } from "../../general_tables/gt_1_row_crud/gt_1_2_row_read/table_refresh_unified.js";
+import { CHART_AXIS_PARAMS } from '../../table_views/price_chart_view/price_chart_data_reader.js';
 
 export const tableMetaCache = {}; // { [tableName]: { rowCount, hasGeo } }
 
@@ -17,6 +18,7 @@ export const RESERVED_PARAM_KEYS = new Set([
     "table",
     "lang",
     "view",
+    ...Object.values(CHART_AXIS_PARAMS),
 ]);
 
 export function getActiveFiltersSnapshot(tableName) {

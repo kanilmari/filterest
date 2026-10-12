@@ -289,3 +289,16 @@ test('waits for catalogue hydration before attaching alias URL filters to canoni
   expect(mod.getParams('app_orders')).toEqual({ search: 'ferry', view: 'card' });
   expect(JSON.parse(localStorage.getItem('dataset_query_params'))).toEqual({ app_orders: { search: 'ferry' } });
 });
+
+test('chart axes survive parsing and history rebuilding without becoming filters or shared tab state', async () => {
+  const { buildParamsFromParsed } = await import('./history_navigation_handler_helpers.js');
+  const parsed = parseTableQueryString('?view=price_chart&chart_x=clock&chart_y=id&status=active');
+  expect(parsed.filters).toEqual({ status: 'active' });
+  expect(buildParamsFromParsed(parsed)).toEqual({ status: 'active', view: 'price_chart', chart_x: 'clock', chart_y: 'id' });
+  updateURL('app_service_catalog', buildParamsFromParsed(parsed));
+  expect(new URLSearchParams(location.search).get('chart_y')).toBe('id');
+  expect(JSON.parse(localStorage.getItem('dataset_query_params')).app_service_catalog)
+    .toEqual({ status: 'active' });
+  expect(buildTableQueryString(parsed)).toContain('chart_x=clock');
+  expect(buildTableQueryString(parsed)).toContain('chart_y=id');
+});

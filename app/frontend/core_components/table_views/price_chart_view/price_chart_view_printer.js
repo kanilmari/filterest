@@ -1,13 +1,31 @@
 // price_chart_view_printer.js
-// Renders generic price rows into a zoomable SVG line chart.
-// Bridges inferred time-series data and the dataset view rendering system.
-// Exists to provide a small dependency-free chart view for price history datasets.
+// Renders selected time and numeric columns into a zoomable SVG line chart.
+// Bridges selected time-series data and the dataset view rendering system.
+// Exists to provide a dependency-free general chart for typed time and numbers.
 
 import {
     extract_price_chart_points,
+    getChartAxisChoices,
+    resolveChartAxes,
+    chartAxesToParams,
     format_price_chart_time,
     format_price_chart_value,
 } from "./price_chart_data_reader.js";
+
+import { getParams, updateURL } from '../../navigation/nav_engine/query_params.js';
+import { getTranslationForKey } from '../../lang/component_language_dictionary.js';
+import { getLanguageWithBrowserFallback } from '../../state_stores/lang_preference_reader.js';
+import { chartFallback } from './chart_copy.js';
+
+function copy(key) {
+    return getTranslationForKey(key, { fallback: chartFallback(key, getLanguageWithBrowserFallback()) });
+}
+
+function translateElement(element, key) {
+    element.dataset.langKey = key;
+    element.textContent = copy(key);
+    return element;
+}
 
 const SVG_NAMESPACE = "http://www.w3.org/2000/svg";
 const SVG_WIDTH = 920;
@@ -41,6 +59,9 @@ function createToolbarButton(label, langKey, ariaLabel, onClick) {
     button.textContent = label;
     button.setAttribute("aria-label", ariaLabel);
     button.title = ariaLabel;
+    const helpKey = label === '+' ? 'chart_zoom_in' : label === '-' ? 'chart_zoom_out' : langKey;
+    button.dataset.ariaLabelLangKey = helpKey;
+    button.dataset.titleLangKey = helpKey;
     button.addEventListener("click", onClick);
     return button;
 }
@@ -175,14 +196,14 @@ function appendGridAndAxes(svg, state, scale) {
     }));
 
     svg.appendChild(createSvgText(
-        format_price_chart_time(state.visibleStartTime),
+        format_price_chart_time(state.visibleStartTime, state.clockOnly),
         PLOT_PADDING.left,
         plotBottom + 34,
         "price-chart-view__axis-label",
         "start"
     ));
     svg.appendChild(createSvgText(
-        format_price_chart_time(state.visibleEndTime),
+        format_price_chart_time(state.visibleEndTime, state.clockOnly),
         plotRight,
         plotBottom + 34,
         "price-chart-view__axis-label",
@@ -204,7 +225,7 @@ function createLinePath(visiblePoints, scale) {
 }
 
 // Appends small point markers so sparse demo data remains inspectable.
-function appendPointMarkers(svg, visiblePoints, scale) {
+function appendPointMarkers(svg, visiblePoints, scale, clockOnly) {
     visiblePoints.forEach((point) => {
         const marker = createSvgElement("circle", {
             cx: scale.xForTime(point.time).toFixed(2),
@@ -213,23 +234,21 @@ function appendPointMarkers(svg, visiblePoints, scale) {
             class: "price-chart-view__point",
         });
         marker.appendChild(createSvgElement("title"));
-        marker.querySelector("title").textContent = `${format_price_chart_time(point.time)}: ${format_price_chart_value(point.price)}`;
+        marker.querySelector("title").textContent = `${format_price_chart_time(point.time, clockOnly)}: ${format_price_chart_value(point.price)}`;
         svg.appendChild(marker);
     });
 }
 
 // Creates the empty or unsupported state for non-price datasets.
-function createNoticeElement(titleKey, titleText, bodyKey, bodyText) {
+function createNoticeElement(titleKey, bodyKey) {
     const notice = document.createElement("div");
     notice.classList.add("price-chart-view__notice");
 
     const title = document.createElement("h3");
-    title.dataset.langKey = titleKey;
-    title.textContent = titleText;
+    translateElement(title, titleKey);
 
     const body = document.createElement("p");
-    body.dataset.langKey = bodyKey;
-    body.textContent = bodyText;
+    translateElement(body, bodyKey);
 
     notice.append(title, body);
     return notice;
@@ -245,11 +264,17 @@ function updateStatusElement(statusElement, state, visibleCount, totalCount, tim
 
     const range = document.createElement("span");
     range.classList.add("price-chart-view__status-item");
-    range.textContent = `${format_price_chart_time(state.visibleStartTime)} - ${format_price_chart_time(state.visibleEndTime)}`;
+    range.textContent = `${format_price_chart_time(state.visibleStartTime, state.clockOnly)} - ${format_price_chart_time(state.visibleEndTime, state.clockOnly)}`;
 
     const columns = document.createElement("span");
     columns.classList.add("price-chart-view__status-item", "price-chart-view__status-item--muted");
-    columns.textContent = `${timeColumn} / ${priceColumn}`;
+    const x = document.createElement('span');
+    const y = document.createElement('span');
+    x.dataset.langKey = timeColumn;
+    y.dataset.langKey = priceColumn;
+    x.textContent = getTranslationForKey(timeColumn, { fallback: timeColumn });
+    y.textContent = getTranslationForKey(priceColumn, { fallback: priceColumn });
+    columns.append(x, ' / ', y);
 
     statusElement.append(count, range, columns);
 }
@@ -262,10 +287,7 @@ function renderChart(plotHost, statusElement, points, state, timeColumn, priceCo
 
     if (visiblePoints.length === 0) {
         plotHost.appendChild(createNoticeElement(
-            "price_chart_no_visible_data_title",
-            "No visible price data",
-            "price_chart_no_visible_data_body",
-            "Reset the chart range or zoom out to show price rows."
+            "chart_no_visible_data_title", "chart_no_visible_data_body"
         ));
         return;
     }
@@ -274,22 +296,23 @@ function renderChart(plotHost, statusElement, points, state, timeColumn, priceCo
         class: "price-chart-view__svg",
         viewBox: `0 0 ${SVG_WIDTH} ${SVG_HEIGHT}`,
         role: "img",
-        "aria-label": "Price chart",
+        "aria-label": copy("view_chart"),
         preserveAspectRatio: "xMidYMid meet",
     });
     const scale = createScale(state, visiblePoints);
+    svg.dataset.ariaLabelLangKey = 'view_chart';
     appendGridAndAxes(svg, state, scale);
     if (visiblePoints.length > 1) {
         svg.appendChild(createLinePath(visiblePoints, scale));
     }
-    appendPointMarkers(svg, visiblePoints, scale);
+    appendPointMarkers(svg, visiblePoints, scale, state.clockOnly);
     plotHost.appendChild(svg);
 }
 
 // Wires Alt+wheel zooming to the plot host.
 function attachWheelZoom(plotHost, state, render) {
     plotHost.addEventListener("wheel", (event) => {
-        if (!event.altKey) {
+        if (!event.altKey || !Number.isFinite(state.domainStartTime) || !Number.isFinite(state.domainEndTime)) {
             return;
         }
         event.preventDefault();
@@ -303,125 +326,152 @@ function attachWheelZoom(plotHost, state, render) {
 }
 
 /**
- * Creates the price chart view for a dataset.
- * Operates between dataset_view_printer.js and inferred price-series rows.
+ * Creates the general chart under its existing price_chart compatibility key.
+ * Operates between the dataset renderer and selected numeric-series rows.
  * Exists as the integration point for the reusable dataset view registry.
  */
-export function create_price_chart_view(table_name, columns, data, data_types = {}) {
-    let extraction = extract_price_chart_points(columns, data, data_types);
-    let currentRows = data;
+export function create_price_chart_view(table_name, columns, data, data_types = {}, options = {}) {
+    const choices = getChartAxisChoices(columns, data_types);
+    let axes = resolveChartAxes(columns, data_types, options.params || getParams(table_name), options.savedColumns);
+    let currentRows = Array.isArray(data) ? data : [];
+    let extraction = extract_price_chart_points(columns, currentRows, data_types, axes);
     const root = document.createElement("section");
     root.classList.add("price-chart-view");
     root.dataset.datasetName = table_name;
     root.dataset.testid = "price-chart-view";
     root.dataset.datasetRowCommitter = 'price-chart';
-    // A notice can become a chart after rows arrive. Keep the owning root.
-    root.commitDatasetRows = function (rows, { append, isCurrent }) {
-        if (!isCurrent()) return false;
-        const nextRows = append ? [...currentRows, ...rows] : rows;
-        const replacement = create_price_chart_view(table_name, columns, nextRows, data_types);
-        this.replaceChildren(...replacement.childNodes);
-        this.commitDatasetRows = replacement.commitDatasetRows;
-        return true;
-    };
 
-    if (!extraction.timeColumn || !extraction.priceColumn) {
-        root.appendChild(createNoticeElement(
-            "price_chart_missing_columns_title",
-            "No price chart columns found",
-            "price_chart_missing_columns_body",
-            "Add one date or timestamp column and one numeric price column."
-        ));
+    if (!axes.timeColumn || !axes.priceColumn) {
+        root.appendChild(createNoticeElement("chart_unavailable_title", "chart_unavailable_body"));
         return root;
     }
 
-    if (extraction.points.length < 1) {
-        root.appendChild(createNoticeElement(
-            "price_chart_no_data_title",
-            "No price data found",
-            "price_chart_no_data_body",
-            "Rows need valid time and price values before the chart can render."
-        ));
-        return root;
-    }
-
-    const domainStartTime = extraction.points[0].time;
-    const domainEndTime = extraction.points[extraction.points.length - 1].time;
-    const state = {
-        domainStartTime,
-        domainEndTime,
-        visibleStartTime: domainStartTime,
-        visibleEndTime: domainEndTime,
-    };
-
-    const toolbar = document.createElement("div");
-    toolbar.classList.add("price-chart-view__toolbar");
-
-    const title = document.createElement("h3");
-    title.classList.add("price-chart-view__title");
-    title.dataset.langKey = "price_chart_view_title";
-    title.textContent = "Price chart";
-
-    const actions = document.createElement("div");
-    actions.classList.add("price-chart-view__toolbar-actions");
-    const render = () => renderChart(
-        plotHost,
-        status,
-        extraction.points,
-        state,
-        extraction.timeColumn,
-        extraction.priceColumn
-    );
-    actions.append(
-        createToolbarButton("+", "price_chart_zoom_in", "Zoom in", () => {
-            zoomRange(state, ZOOM_IN_FACTOR);
-            render();
-        }),
-        createToolbarButton("-", "price_chart_zoom_out", "Zoom out", () => {
-            zoomRange(state, ZOOM_OUT_FACTOR);
-            render();
-        }),
-        createToolbarButton("Reset", "price_chart_reset_zoom", "Reset zoom", () => {
+    const state = {};
+    const updateDomain = (reset = false) => {
+        if (!extraction.points.length) {
+            Object.assign(state, { domainStartTime: undefined, domainEndTime: undefined,
+                visibleStartTime: undefined, visibleEndTime: undefined });
+            return;
+        }
+        const followedDomain = state.visibleStartTime === state.domainStartTime
+            && state.visibleEndTime === state.domainEndTime;
+        state.domainStartTime = extraction.points[0].time;
+        state.domainEndTime = extraction.points.at(-1).time;
+        if (reset || followedDomain || state.visibleStartTime === undefined) {
             state.visibleStartTime = state.domainStartTime;
             state.visibleEndTime = state.domainEndTime;
-            render();
-        })
-    );
-
-    toolbar.append(title, actions);
-
+        } else {
+            state.visibleStartTime = Math.max(state.domainStartTime, state.visibleStartTime);
+            state.visibleEndTime = Math.min(state.domainEndTime, state.visibleEndTime);
+        }
+    };
+    const toolbar = document.createElement("div");
+    toolbar.classList.add("price-chart-view__toolbar");
+    const title = translateElement(document.createElement("h3"), "view_chart");
+    title.classList.add("price-chart-view__title");
+    const actions = document.createElement("div");
+    actions.classList.add("price-chart-view__toolbar-actions");
     const status = document.createElement("div");
     status.classList.add("price-chart-view__status");
-
     const plotHost = document.createElement("div");
     plotHost.classList.add("price-chart-view__plot-host");
     plotHost.dataset.testid = "price-chart-plot";
-    plotHost.title = "Alt+scroll zooms the time range";
+    plotHost.title = copy("chart_wheel_help");
+    plotHost.dataset.titleLangKey = 'chart_wheel_help';
+    const render = () => {
+        root.dataset.chartX = axes.timeColumn;
+        root.dataset.chartY = axes.priceColumn;
+        const type = data_types[axes.timeColumn];
+        state.clockOnly = /^(time(?:\(|\s|$)|timetz$)/i.test(typeof type === 'string' ? type : type?.data_type || '');
+        if (!extraction.points.length) {
+            plotHost.replaceChildren(createNoticeElement("chart_no_data_title", "chart_no_data_body"));
+            status.replaceChildren();
+            return;
+        }
+        renderChart(plotHost, status, extraction.points, state, axes.timeColumn, axes.priceColumn);
+    };
+    actions.append(
+        createToolbarButton("+", "price_chart_zoom_in", copy("chart_zoom_in"), () => {
+            if (!extraction.points.length) return;
+            zoomRange(state, ZOOM_IN_FACTOR);
+            render();
+        }),
+        createToolbarButton("-", "price_chart_zoom_out", copy("chart_zoom_out"), () => {
+            if (!extraction.points.length) return;
+            zoomRange(state, ZOOM_OUT_FACTOR);
+            render();
+        }),
+        createToolbarButton(copy("chart_reset"), "chart_reset", copy("chart_reset"), () => {
+            updateDomain(true);
+            render();
+        })
+    );
+    toolbar.append(title, actions);
 
-    root.append(toolbar, status, plotHost);
+    const pickers = document.createElement("div");
+    pickers.className = "price-chart-view__axes";
+    const saveStatus = document.createElement("span");
+    saveStatus.setAttribute("role", "status");
+    const changeAxes = () => {
+        if (options.isCurrent && !options.isCurrent()) return;
+        axes = { timeColumn: xSelect.value, priceColumn: ySelect.value };
+        extraction = extract_price_chart_points(columns, currentRows, data_types, axes);
+        updateDomain(true);
+        render();
+        updateURL(table_name, chartAxesToParams(getParams(table_name), axes));
+    };
+    const createPicker = (axis, key, selected) => {
+        const label = document.createElement("label");
+        label.appendChild(translateElement(document.createElement("span"), key));
+        const select = document.createElement("select");
+        select.dataset.testid = `chart-${axis}-axis`;
+        choices[axis].forEach(column => {
+            const option = document.createElement("option");
+            option.value = column;
+            option.dataset.langKey = column;
+            option.textContent = column;
+            select.appendChild(option);
+        });
+        select.value = selected;
+        select.addEventListener("change", changeAxes);
+        label.appendChild(select);
+        pickers.appendChild(label);
+        return select;
+    };
+    const xSelect = createPicker('x', 'chart_x_axis', axes.timeColumn);
+    const ySelect = createPicker('y', 'chart_y_axis', axes.priceColumn);
+    if (options.canSaveDefault && options.onSaveDefault) {
+        const save = translateElement(document.createElement("button"), "chart_save_default");
+        save.type = "button";
+        save.dataset.testid = "chart-save-default";
+        save.className = "price-chart-view__toolbar-button";
+        save.addEventListener("click", async () => {
+            if (options.isCurrent && !options.isCurrent()) return;
+            save.disabled = true;
+            try {
+                await options.onSaveDefault({ ...axes });
+                translateElement(saveStatus, "chart_default_saved");
+            } catch {
+                translateElement(saveStatus, "chart_default_failed");
+            } finally {
+                save.disabled = false;
+            }
+        });
+        pickers.appendChild(save);
+    }
+    pickers.appendChild(saveStatus);
+    if (options.defaultLoadFailed) translateElement(saveStatus, 'chart_defaults_unavailable');
+    root.append(pickers, toolbar, status, plotHost);
     root.commitDatasetRows = (rows, { append, isCurrent }) => {
         if (!isCurrent()) return false;
         currentRows = append ? [...currentRows, ...rows] : rows;
-        extraction = extract_price_chart_points(columns, currentRows, data_types);
-        if (extraction.points.length) {
-            const followedDomain = state.visibleStartTime === state.domainStartTime
-                && state.visibleEndTime === state.domainEndTime;
-            state.domainStartTime = extraction.points[0].time;
-            state.domainEndTime = extraction.points.at(-1).time;
-            if (!append || followedDomain) {
-                state.visibleStartTime = state.domainStartTime;
-                state.visibleEndTime = state.domainEndTime;
-            } else {
-                Object.assign(state, {
-                    visibleStartTime: Math.max(state.domainStartTime, state.visibleStartTime),
-                    visibleEndTime: Math.min(state.domainEndTime, state.visibleEndTime),
-                });
-            }
-        }
+        extraction = extract_price_chart_points(columns, currentRows, data_types, axes);
+        updateDomain(!append);
         render();
         return true;
     };
     attachWheelZoom(plotHost, state, render);
+    updateDomain(true);
     render();
     return root;
 }

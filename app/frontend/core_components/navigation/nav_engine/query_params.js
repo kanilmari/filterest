@@ -1,12 +1,13 @@
 // query_params.js
 // Manages per-dataset URL query parameters: the search, filter and sort parameters in
-// localStorage, shared by every browser tab, and the view parameter in this page's memory only.
+// localStorage, shared by every browser tab, and view/axis parameters in page memory only.
 // Bridges the URL bar and filter/sort state across navigation and popstate events.
 // Exists to centralise param read/write logic so every navigation path shares a consistent state model.
 
 import { writeDatasetAddress } from "./dataset_address_writer.js";
 import { getInternalDatasetName } from './dataset_aliases.js';
 import { hasDatasetAccessSnapshot, subscribeDatasetAccessRegistry } from './dataset_access_registry.js';
+import { CHART_AXIS_PARAMS } from '../../table_views/price_chart_view/price_chart_data_reader.js';
 
 const STORAGE_KEY = 'dataset_query_params';
 export const DATASET_PREFIX = '/';
@@ -17,22 +18,22 @@ const AUTH_SHELL_QUERY_KEYS = new Set([
 ]);
 /**
  * The address's view parameter names the view this page shows, which is the
- * page's own choice (owner decision K143). It is cached only in this page's
+ * page's own choice (owner decision K143). Chart axes share that ownership.
+ * They are cached only in this page's
  * memory, so another tab's view never reaches this one's addresses, and a newly
  * loaded page starts from the view its own address names. A view that earlier
  * versions stored with the shared parameters is ignored and left out of the
  * next write.
  */
-const PAGE_OWN_PARAM_KEY = 'view';
+const PAGE_OWN_PARAM_KEYS = new Set(['view', ...Object.values(CHART_AXIS_PARAMS)]);
 let datasetParams = {};
 let currentDataset = null;
 
 function withoutPageOwnParams(params) {
-    if (!params || typeof params !== 'object' || !Object.hasOwn(params, PAGE_OWN_PARAM_KEY)) {
+    if (!params || typeof params !== 'object') {
         return params;
     }
-    const { [PAGE_OWN_PARAM_KEY]: _pageOwnView, ...sharedParams } = params;
-    return sharedParams;
+    return Object.fromEntries(Object.entries(params).filter(([key]) => !PAGE_OWN_PARAM_KEYS.has(key)));
 }
 
 /**
@@ -45,7 +46,7 @@ function withoutPageOwnParams(params) {
 function keepPageParamOrder(pageParams, sharedParams) {
     const merged = {};
     for (const key of Object.keys(pageParams)) {
-        if (key === PAGE_OWN_PARAM_KEY) {
+        if (PAGE_OWN_PARAM_KEYS.has(key)) {
             merged[key] = pageParams[key];
         } else if (Object.hasOwn(sharedParams, key)) {
             merged[key] = sharedParams[key];
@@ -70,7 +71,7 @@ function loadFromStorage() {
         datasetParams[dataset] = withoutPageOwnParams(params);
     }
     for (const [dataset, params] of Object.entries(pageParams)) {
-        if (params && Object.hasOwn(params, PAGE_OWN_PARAM_KEY)) {
+        if (params && [...PAGE_OWN_PARAM_KEYS].some(key => Object.hasOwn(params, key))) {
             datasetParams[dataset] = keepPageParamOrder(params, datasetParams[dataset] || {});
         }
     }
@@ -205,7 +206,7 @@ export function updateURL(
 
 /**
  * Parses a URL search string into a structured table-query object.
- * Recognized keys: sort_column, sort_order, offset, search, view. All others → filters.
+ * Recognized keys: sort_column, sort_order, offset, search, view, chart_x, chart_y. All others → filters.
  *
  * @param {string} searchString - e.g. "?sort_column=name&sort_order=ASC&offset=20&status=active"
  * @returns {{ sort: { column: string|null, direction: string|null }, offset: number, filters: Object }}
@@ -231,6 +232,9 @@ export function parseTableQueryString(searchString) {
     if (offsetStr) result.offset = parseInt(offsetStr, 10) || 0;
     if (search) result.search = search;
     if (view) result.view = view;
+    for (const key of Object.values(CHART_AXIS_PARAMS)) {
+        if (sp.has(key)) result[key] = sp.get(key);
+    }
 
     const RESERVED_KEYS = new Set([
         'sort_column',
@@ -239,6 +243,7 @@ export function parseTableQueryString(searchString) {
         'table',
         'search',
         'view',
+        ...Object.values(CHART_AXIS_PARAMS),
         ...AUTH_SHELL_QUERY_KEYS,
     ]);
     sp.forEach((value, key) => {
@@ -267,6 +272,9 @@ export function buildTableQueryString(params = {}) {
         if (dir === 'ASC' || dir === 'DESC') sp.set('sort_order', dir);
     }
     if (offset > 0) sp.set('offset', String(offset));
+    for (const key of Object.values(CHART_AXIS_PARAMS)) {
+        if (params[key]) sp.set(key, params[key]);
+    }
 
     for (const [key, value] of Object.entries(filters)) {
         if (value != null && value !== '') {
