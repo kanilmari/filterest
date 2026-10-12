@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
 // row_article_child_tabs.test.js
-// Verifies related-record article navigation does not pollute browser history.
-// Bridges related-tab row clicks with the shared navigation handler contract.
-// Exists so Back returns to the previous article instead of an intermediate card list.
+// Verifies article tab configuration, related appearance and record navigation.
+// Bridges the real article builder with API responses and navigation contracts.
+// Keeps saved visibility/order and Back-to-article behaviour from regressing.
 
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import { DATE_TIME_DISPLAY_SEPARATOR } from "../timestamp_display_formatter.js";
@@ -134,6 +134,13 @@ function expectPublicRelatedSurface(surface, probes = appearanceProbes(surface))
     expect.soft(probes.photo.style.getPropertyValue('--card-photo-source')).toBe('');
 }
 
+function configuredTabFixture() {
+    // Deliberately not alphabetical: default order comes from the related results.
+    return ['z_child', 'a_child', 'middle_child'].map((dataset, index) => ({
+        dataset, column: 'parent_id', rows: [{ id: index + 1, title: dataset }],
+    }));
+}
+
 describe("buildRowArticleRelatedTabs related-record navigation", () => {
     beforeEach(() => {
         vi.clearAllMocks();
@@ -149,6 +156,59 @@ describe("buildRowArticleRelatedTabs related-record navigation", () => {
             </div>
         `;
     });
+
+    test('omits a configured hidden dataset button and panel', async () => {
+        mocks.endpointRouter.mockResolvedValueOnce([
+            { tab_key: 'a_child', tab_order: 0, hidden: true },
+        ]);
+        const tabs = await buildRowArticleRelatedTabs(configuredTabFixture(), 'parent', 42, null);
+        expect([...tabs.querySelectorAll('.related_tab_button')].map(tab => tab.dataset.tabKey))
+            .toEqual(['z_child__parent_id__', 'middle_child__parent_id__']);
+        expect([...tabs.querySelectorAll('.related_tab_panel')].map(tab => tab.dataset.tabKey))
+            .toEqual(['z_child__parent_id__', 'middle_child__parent_id__']);
+        expect(tabs.querySelector('[data-tab-key="a_child__parent_id__"]')).toBeNull();
+        expect(mocks.endpointRouter).toHaveBeenCalledWith('getChildTabConfig', { url_params: 'parent' });
+    });
+
+    test('orders configured datasets before unconfigured tabs and keeps comments last', async () => {
+        // Response order and dataset order differ from the configured order.
+        mocks.endpointRouter.mockResolvedValueOnce([
+            { tab_key: 'z_child', tab_order: 20, hidden: false },
+            { tab_key: '__comments', tab_order: -1, hidden: false },
+            { tab_key: 'a_child', tab_order: 10, hidden: false },
+        ]);
+        const tabs = await buildRowArticleRelatedTabs(configuredTabFixture(), 'parent', 42, 7);
+        const expected = ['a_child__parent_id__', 'z_child__parent_id__', 'middle_child__parent_id__', '__comments'];
+        expect([...tabs.querySelectorAll('.related_tab_button')].map(tab => tab.dataset.tabKey)).toEqual(expected);
+        expect([...tabs.querySelectorAll('.related_tab_panel')].map(tab => tab.dataset.tabKey)).toEqual(expected);
+        expect(tabs.querySelector('.related_tab_button.active').dataset.tabKey).toBe(expected[0]);
+        expect(tabs.querySelector('.related_tab_panel.active').dataset.tabKey).toBe(expected[0]);
+    });
+
+    test('hides comments for a signed-in reader and returns no tabs when nothing remains', async () => {
+        const configuration = [{ tab_key: '__comments', tab_order: 0, hidden: true }];
+        mocks.endpointRouter.mockResolvedValueOnce(configuration);
+        const tabs = await buildRowArticleRelatedTabs(configuredTabFixture(), 'parent', 42, 7);
+        expect(tabs.querySelector('[data-tab-key="__comments"]')).toBeNull();
+        expect(tabs.querySelector('.comment_form')).toBeNull();
+        expect(tabs.querySelectorAll('.related_tab_button')).toHaveLength(3);
+
+        mocks.endpointRouter.mockResolvedValueOnce(configuration);
+        expect(await buildRowArticleRelatedTabs([], 'parent', 42, 7)).toBeNull();
+        expect(mocks.endpointRouter.mock.calls.every(([route]) => route === 'getChildTabConfig')).toBe(true);
+    });
+
+    test.each(['empty response', 'unavailable configuration'])(
+        'keeps the default dataset order and comments last with %s', async (scenario) => {
+            if (scenario === 'empty response') mocks.endpointRouter.mockResolvedValueOnce([]);
+            else mocks.endpointRouter.mockRejectedValueOnce(new Error('Configuration unavailable'));
+            const tabs = await buildRowArticleRelatedTabs(configuredTabFixture(), 'unconfigured', 42, 7);
+            const expected = ['z_child__parent_id__', 'a_child__parent_id__', 'middle_child__parent_id__', '__comments'];
+            expect([...tabs.querySelectorAll('.related_tab_button')].map(tab => tab.dataset.tabKey)).toEqual(expected);
+            expect([...tabs.querySelectorAll('.related_tab_panel')].map(tab => tab.dataset.tabKey)).toEqual(expected);
+            expect(mocks.endpointRouter).toHaveBeenCalledWith('getChildTabConfig', { url_params: 'unconfigured' });
+        },
+    );
 
     test.each(['denied', 'hidden'].flatMap(reason => ['initial', 'lazy', 'reload'].map(stage => [reason, stage])))(
         '%s omission during %s clears cached related appearance and keeps rows readable', async (_reason, stage) => {
