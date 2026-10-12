@@ -44,7 +44,7 @@ const DATASET_VIEW_RENDERERS = {
         },
     },
     product_card: {
-        commitRows: retainInitialRows,
+        commitRows: commitOwnedRows,
         create: (table_name, columns, data, data_types) => {
             return create_product_card_view(table_name, columns, data, data_types);
         },
@@ -150,8 +150,8 @@ export function createDatasetViewElement(viewDefinition, tableName, columns, dat
  * Pagination owns deduplication, raw offsets and retained projections. This
  * boundary owns only the visible rows, and guards the exact surface across
  * asynchronous work. Empty replacement is a real commit; empty append is inert.
- * Product/map retain their initial output until WL162 batches 4/5 replace that
- * explicit policy. A retained answer preserves their existing paging behavior.
+ * Map retains its initial output until WL162 batch 5 replaces that explicit
+ * policy. A retained answer preserves its existing paging behavior.
  * @param {string} tableName
  * @param {object[]} rows Already deduplicated against the committed prefix.
  * @param {{mode?: 'replace'|'append', viewKey?: string, container?: HTMLElement,

@@ -48,16 +48,35 @@ export function create_product_card_view(
     wrapper.classList.add("product-card-view");
     wrapper.dataset.tableName = table_name;
     wrapper.dataset.testid = "product-card-view";
+    wrapper.dataset.datasetRowCommitter = "product-card";
 
     const context = {
         tableName: table_name,
         columns: safeColumns,
         rows: safeData,
         dataTypes: safeDataTypes,
+        preferredLanguage,
+    };
+    // Rows and language share this root's current state. A later language
+    // render must never resurrect the first page or rows replaced by search.
+    wrapper.commitDatasetRows = (rows, { append, isCurrent }) => {
+        if (!isCurrent()) return false;
+        const addedRows = append ? unseenProductRows(rows, context.rows) : rows;
+        if (append && addedRows.length === 0) return true;
+        const content = buildProductCardContent({ ...context, rows: addedRows }, context.preferredLanguage);
+        if (!isCurrent()) return false;
+        const grid = append && wrapper.querySelector('[data-testid="product-card-view-grid"]');
+        if (grid) grid.append(...content.childNodes);
+        else wrapper.replaceChildren(content);
+        context.rows = append ? [...context.rows, ...addedRows] : rows;
+        return true;
     };
     bindDatasetLanguageRenderer(
         wrapper,
-        (chosenLanguage) => renderProductCardView(wrapper, context, chosenLanguage),
+        (chosenLanguage) => {
+            context.preferredLanguage = chosenLanguage;
+            wrapper.replaceChildren(buildProductCardContent(context, chosenLanguage));
+        },
         preferredLanguage
     );
     return wrapper;
@@ -76,11 +95,22 @@ export function refreshProductCardLanguages(
     return refreshLocalizedDatasetValues(chosenLanguage, document);
 }
 
-function renderProductCardView(wrapper, context, preferredLanguage) {
-    wrapper.replaceChildren();
+// The pagination owner already filters its retained prefix. Also protect this
+// root when a caller commits overlapping pages directly through the interface.
+function unseenProductRows(rows, previousRows) {
+    const seen = new Set(previousRows.filter(row => row?.id != null).map(row => String(row.id)));
+    return rows.filter(row => {
+        if (row?.id == null) return true;
+        const key = String(row.id);
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+    });
+}
+
+function buildProductCardContent(context, preferredLanguage) {
     if (context.rows.length === 0) {
-        wrapper.appendChild(createEmptyState());
-        return;
+        return createEmptyState();
     }
 
     const grid = document.createElement("div");
@@ -99,7 +129,7 @@ function renderProductCardView(wrapper, context, preferredLanguage) {
         );
     }
 
-    wrapper.appendChild(grid);
+    return grid;
 }
 
 /**

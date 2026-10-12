@@ -46,16 +46,19 @@ async function waitForNavbarOpenedEvent(page: Page): Promise<void> {
 export async function ensureNavbarVisible(page: Page): Promise<void> {
   const navbar = page.locator('#navbar');
   const showMenuButton = page.locator('#showMenuButton');
+  // When the shared top bar renders its own menu button, #showMenuButton stays as its hidden source
+  // (shared-topbar-menu-source-hidden), so open through whichever real button is visible.
+  const visibleMenuButton = page.locator('[data-navbar-menu-button="true"]:visible, #showMenuButton:visible').first();
   await expect(navbar).toHaveCount(1);
 
   const navbarClasses = await navbar.getAttribute('class');
   if (String(navbarClasses || '').split(/\s+/).includes('collapsed')) {
-    await expect(showMenuButton).toBeVisible({ timeout: NAVBAR_OPEN_TIMEOUT_MS });
-    await expect(showMenuButton).toBeEnabled();
+    await expect(visibleMenuButton).toBeVisible({ timeout: NAVBAR_OPEN_TIMEOUT_MS });
+    await expect(visibleMenuButton).toBeEnabled();
 
     await Promise.all([
       waitForNavbarOpenedEvent(page),
-      showMenuButton.click(),
+      visibleMenuButton.click(),
     ]);
   }
 

@@ -57,7 +57,7 @@ test.each(['normal', 'transposed', 'ticket'])('%s uses setData for empty replace
     expect(controls.isConnected).toBe(true);
 });
 
-test.each(['product_card', 'map', 'cloud_management'])('%s explicitly retains current output for both modes', async view => {
+test.each(['map', 'cloud_management'])('%s explicitly retains current output for both modes', async view => {
     const root = document.createElement('div'); root.textContent = 'Original output';
     const { container } = mount(view, root);
     for (const mode of ['replace', 'append']) {
