@@ -2,8 +2,8 @@
 -- Seeds publication labels and validation copy in the canonical language stores.
 -- Connects the Observatory and dedicated API with multilingual reader-facing terms.
 -- Adds missing keys and translations while preserving installation-authored values.
--- VERSION_DB: 9.10.2
--- VERSION_DB_OWNER: 20261009000099_record_database_release_9_10_2.sql
+-- VERSION_DB: 9.11.0
+-- VERSION_DB_OWNER: 20261009000099_record_database_release_9_11_0.sql
 
 WITH authored(lang_key,fi,en,ch,yue) AS (VALUES
  ('workline_publication_goal','Julkaisut','Publications','发布','發佈'),

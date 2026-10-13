@@ -354,13 +354,13 @@ def test_migration_specification_cannot_misstate_reviewed_bytes_or_directives(tm
     directory = root / "app/server_tools/migrations"
     directory.mkdir(parents=True)
     subprocess.run(["git", "init", "-q", str(root)], check=True, capture_output=True)
-    name = "20261009000099_record_database_release_9_10_2.sql"
-    data = b"-- VERSION_DB: 9.10.2\nSELECT 'fixture only';\n"
+    name = "20261009000099_record_database_release_9_11_0.sql"
+    data = b"-- VERSION_DB: 9.11.0\nSELECT 'fixture only';\n"
     if change == "owner":
         data = b"-- VERSION_DB_OWNER: 20261009000100_other.sql\n" + data
     (directory / name).write_bytes(data)
     commit = commit_fixture(root)
-    row = {"id": name, "component": "filterest", "database_version": "9.10.2",
+    row = {"id": name, "component": "filterest", "database_version": "9.11.0",
            "transaction_policy": "runner", "error_policy": "required", "publishes_database_version": True}
     if change == "hash":
         row["content_sha256"] = "f" * 64
@@ -379,12 +379,12 @@ def test_migration_hash_comes_from_git_and_archive_preserves_it(tmp_path):
     directory = root / "app/server_tools/migrations"
     directory.mkdir(parents=True)
     subprocess.run(["git", "init", "-q", str(root)], check=True, capture_output=True)
-    name = "20261009000099_record_database_release_9_10_2.sql"
-    data = b"-- VERSION_DB: 9.10.2\nSELECT 'fixture only';\n"
+    name = "20261009000099_record_database_release_9_11_0.sql"
+    data = b"-- VERSION_DB: 9.11.0\nSELECT 'fixture only';\n"
     (directory / name).write_bytes(data)
     commit = commit_fixture(root)
     rows = source_archive.bind_migrations(root, commit, [{"id": name, "component": "filterest",
-        "database_version": "9.10.2", "transaction_policy": "runner", "error_policy": "required", "publishes_database_version": True}])
+        "database_version": "9.11.0", "transaction_policy": "runner", "error_policy": "required", "publishes_database_version": True}])
     assert rows[0]["content_sha256"] == hashlib.sha256(data).hexdigest()
     (directory / name).write_bytes(b"changed worktree cannot rewrite recorded hash")
     path = tmp_path / "source.tar.gz"

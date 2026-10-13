@@ -20,7 +20,7 @@ APP = Path(__file__).resolve().parents[2]
 MIGRATIONS = APP / "server_tools/migrations"
 MIGRATION = MIGRATIONS / "20261009000020_add_migration_execution_evidence.sql"
 BOOTSTRAP = APP / "server_tools/public_bootstrap"
-OWNER = "20261009000099_record_database_release_9_10_2.sql"
+OWNER = "20261009000099_record_database_release_9_11_0.sql"
 EVIDENCE_ROWS = re.compile(
     r"\('([^']+\.sql)', '([0-9a-f]{64})', 'bootstrap_baseline', 'bootstrap'\)"
 )
@@ -180,7 +180,7 @@ def test_continuations_require_scanner_newlines_and_exclude_block_comments(audit
 def test_evidence_migration_joins_unreleased_version_and_has_no_history_backfill():
     sql = MIGRATION.read_text()
     assert MIGRATION.name.startswith("2026100900002") and MIGRATION.name < OWNER
-    assert "-- VERSION_DB: 9.10.2" in sql
+    assert "-- VERSION_DB: 9.11.0" in sql
     assert f"-- VERSION_DB_OWNER: {OWNER}" in sql
     assert "-- COMPLETION_MARKER: wl157_migration_execution_evidence" in sql
     assert "system_db_version" not in sql
@@ -204,7 +204,7 @@ def test_bootstrap_evidence_binds_every_source_and_matching_snapshot():
         digest = hashlib.sha256((BOOTSTRAP / filename).read_bytes()).hexdigest()
         assert manifest["generated_files"]["server_tools/public_bootstrap/" + filename]["sha256"] == digest
     assert (BOOTSTRAP / "schema.sql").read_bytes() == (
-        APP / "server_tools/versioning/schema_snapshots/db-9.10.2.sql").read_bytes()
+        APP / "server_tools/versioning/schema_snapshots/db-9.11.0.sql").read_bytes()
     assert (BOOTSTRAP / "schema.sql").read_text().count(MIGRATION.read_text()) == 1
     acceptance = seed[seed.index("DO $filterest_acceptance$"):]
     assert "wl157_migration_execution_evidence" in acceptance

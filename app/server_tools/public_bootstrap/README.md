@@ -100,7 +100,7 @@ If you need to change the public bootstrap schema or seed rows, change the
 reviewed inputs and regenerate the derived artifacts. Do not treat ad-hoc edits
 in a local Filterest database as durable source changes.
 
-## Platform timestamp conversion (unreleased DB 9.10.2)
+## Platform timestamp conversion (unreleased DB 9.11.0)
 
 Migration `20261009000080` zones every naive column in its explicit platform
 table scope, including restricted-schema tables and embedding children of managed
@@ -134,7 +134,7 @@ Dependent materialized views are refused before conversion rather than rebuilt.
 The [Table Creation Protocol](../../docs/instructions_and_documentation/Table_Creation_Protocol.md)
 owns timestamp interpretation and consumer formats.
 
-## Dataset appearance cutover (unreleased DB 9.10.2)
+## Dataset appearance cutover (unreleased DB 9.11.0)
 
 Migration `20261009000060` extends the private appearance table before seeds;
 `20261009000061` then backfills every seeded or existing registry UID from the

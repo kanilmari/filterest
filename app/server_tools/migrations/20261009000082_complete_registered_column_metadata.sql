@@ -2,8 +2,8 @@
 -- Completes column metadata before a registered dataset reaches a generic editor.
 -- Connects fresh bootstrap and upgraded registries to the same structural defaults.
 -- Keeps creation scoped to its own relation without depending on incidental global repair.
--- VERSION_DB: 9.10.2
--- VERSION_DB_OWNER: 20261009000099_record_database_release_9_10_2.sql
+-- VERSION_DB: 9.11.0
+-- VERSION_DB_OWNER: 20261009000099_record_database_release_9_11_0.sql
 -- COMPLETION_MARKER: t919_registered_column_metadata
 
 DO $registered_columns$

@@ -43,7 +43,7 @@ def table(name="public.system_example"):
             "parents": [], "replica_identity": "d"}
 
 
-def snapshot(version="9.10.2"):
+def snapshot(version="9.11.0"):
     return {"format_version": 1, "export_type": "filterest_schema_catalogue",
             "db_version": version, "database": "site_database", "server_version": "160011",
             "tables": [table()], "sequences": [], "functions": [],
@@ -416,7 +416,7 @@ def bootstrap_package(tmp_path, reference):
     return root
 
 
-@pytest.mark.parametrize("version", ["9.10.2", "9.7.13"])
+@pytest.mark.parametrize("version", ["9.11.0", "9.7.13"])
 def test_cli_reads_existing_db_json_envelope_and_matching_bootstrap(tmp_path, version):
     reference = snapshot(version)
     root = bootstrap_package(tmp_path, reference)

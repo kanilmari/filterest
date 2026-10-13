@@ -2,8 +2,8 @@
 -- Seeds separate Home description and three-field editor guidance in Finnish and English.
 -- Connects upgrades and fresh installations to the canonical translation stores.
 -- Preserves reviewed site copy and registers intentional empty description text.
--- VERSION_DB: 9.10.2
--- VERSION_DB_OWNER: 20261009000099_record_database_release_9_10_2.sql
+-- VERSION_DB: 9.11.0
+-- VERSION_DB_OWNER: 20261009000099_record_database_release_9_11_0.sql
 
 WITH authored_keys(lang_key, fi, en, old_fi, old_en) AS (
     VALUES

@@ -151,7 +151,7 @@ release_data_migrations = (
 release_record_migrations = (
     "20261005000099_record_database_release_9_10_0.sql",
     "20261007000099_record_database_release_9_10_1.sql",
-    "20261009000099_record_database_release_9_10_2.sql",
+    "20261009000099_record_database_release_9_11_0.sql",
 )
 # Every public migration whose sequence number comes after this one belongs to
 # exactly one list above, so no file is marked as run while missing from the

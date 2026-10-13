@@ -2,8 +2,8 @@
 -- Labels kind metadata and evidence-read errors in every bundled language.
 -- Connects registry inspection and API refusals to the existing translation stores.
 -- Preserves authored site translations on upgrades and replay.
--- VERSION_DB: 9.10.2
--- VERSION_DB_OWNER: 20261009000099_record_database_release_9_10_2.sql
+-- VERSION_DB: 9.11.0
+-- VERSION_DB_OWNER: 20261009000099_record_database_release_9_11_0.sql
 WITH authored(lang_key,fi,en,ch,yue) AS (VALUES
  ('table_kind','Tietoaineiston laji','Dataset kind','数据集类型','資料集類型'),
  ('kind_version','Lajisopimuksen versio','Kind contract version','类型契约版本','類型契約版本'),

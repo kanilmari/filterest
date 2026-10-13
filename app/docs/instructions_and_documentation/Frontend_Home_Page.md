@@ -68,7 +68,7 @@ never flows into columns. Home settings uses the shared language-key editor,
 with a single-line title and full-width slogan/description textareas, saving both
 legacy language columns and served translations. Fixed `front_page_hero` sources
 retain intentional empty keys through catalog cleanup. The description key and
-three-field guidance are seeded by DB 9.10.2's migration, also used by bootstrap.
+three-field guidance are seeded by DB 9.11.0's migration, also used by bootstrap.
 Saving settings sections refreshes visible Home without changing navigation/history.
 
 The administrator-only house-and-palette button beside the gear lazy-loads

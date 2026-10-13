@@ -17,7 +17,7 @@ import (
 )
 
 const evidenceMigrationName = "20261009000020_add_migration_execution_evidence.sql"
-const evidenceVersionOwner = "20261009000099_record_database_release_9_10_2.sql"
+const evidenceVersionOwner = "20261009000099_record_database_release_9_11_0.sql"
 const evidenceLegacySchema = `CREATE TABLE system_schema_migrations(filename text PRIMARY KEY, applied_at timestamptz DEFAULT now());
 CREATE TABLE system_data_repair_records(migration text, action text);
 CREATE TABLE system_db_version(version text, description text);
@@ -128,7 +128,7 @@ func TestMigrationEvidenceUpgradePostgres(t *testing.T) {
 	// A release row may only appear after all earlier migrations; the extension
 	// is not promoted to the front of the globally merged public/private order.
 	evidenceSQL(t, db, `CREATE FUNCTION check_release_order() RETURNS trigger LANGUAGE plpgsql AS $$
-		BEGIN IF NEW.version='9.10.2' AND (SELECT count(*) FROM execution_trace) <> 4
+		BEGIN IF NEW.version='9.11.0' AND (SELECT count(*) FROM execution_trace) <> 4
 		THEN RAISE EXCEPTION 'version owner ran too early'; END IF; RETURN NEW; END $$;
 		CREATE TRIGGER release_order BEFORE INSERT ON system_db_version FOR EACH ROW EXECUTE FUNCTION check_release_order()`)
 	for run := 0; run < 2; run++ {

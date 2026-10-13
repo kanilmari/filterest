@@ -4578,8 +4578,8 @@ WHERE NOT EXISTS (
 -- Stores sparse appearance overrides and durable revisions for each dataset.
 -- Connects the immutable registry UID with validated per-tab settings persistence.
 -- Keeps empty rows after reset; legacy card columns remain authoritative until WL160 slice 3.
--- VERSION_DB: 9.10.2
--- VERSION_DB_OWNER: 20261009000099_record_database_release_9_10_2.sql
+-- VERSION_DB: 9.11.0
+-- VERSION_DB_OWNER: 20261009000099_record_database_release_9_11_0.sql
 -- COMPLETION_MARKER: system_dataset_appearance_table
 -- FINAL_CHECK: public.app_check_dataset_appearance_storage()
 
@@ -4658,8 +4658,8 @@ WHERE NOT EXISTS (SELECT 1 FROM public.system_data_repair_records
 -- Adds nullable byte hashes, truthful outcomes and provenance to the migration ledger.
 -- Connects startup execution and bootstrap baselines to future signed-release checks.
 -- Leaves every historical row unverified; present files cannot prove past execution.
--- VERSION_DB: 9.10.2
--- VERSION_DB_OWNER: 20261009000099_record_database_release_9_10_2.sql
+-- VERSION_DB: 9.11.0
+-- VERSION_DB_OWNER: 20261009000099_record_database_release_9_11_0.sql
 -- COMPLETION_MARKER: wl157_migration_execution_evidence
 
 DO $migration_evidence$
@@ -4703,8 +4703,8 @@ END $migration_evidence$;
 -- Preserves explicit legacy card choices as canonical dataset appearance overrides.
 -- Connects upgrades and fresh bootstrap with the sole revision-protected authority.
 -- Retires both physical columns and their editable metadata after checking preservation.
--- VERSION_DB: 9.10.2
--- VERSION_DB_OWNER: 20261009000099_record_database_release_9_10_2.sql
+-- VERSION_DB: 9.11.0
+-- VERSION_DB_OWNER: 20261009000099_record_database_release_9_11_0.sql
 -- COMPLETION_MARKER: dataset_card_appearance_cutover
 -- FINAL_CHECK: public.app_check_dataset_card_appearance_cutover()
 
@@ -4777,8 +4777,8 @@ WHERE NOT EXISTS(SELECT 1 FROM public.system_data_repair_records WHERE migration
 -- Creates private durable update intent, authentication proofs and audit records.
 -- Connects administrator admission to a future manager-controlled execution worker.
 -- Ships disabled: no installation identity, release offer or executor is bootstrapped.
--- VERSION_DB: 9.10.2
--- VERSION_DB_OWNER: 20261009000099_record_database_release_9_10_2.sql
+-- VERSION_DB: 9.11.0
+-- VERSION_DB_OWNER: 20261009000099_record_database_release_9_11_0.sql
 -- COMPLETION_MARKER: wl157_application_update_admission
 -- FINAL_CHECK: public.app_check_application_update_admission()
 
@@ -4920,8 +4920,8 @@ END $acceptance$;
 -- 20261009000060_extend_dataset_appearance_three_places.sql
 -- Activates owned tab values and sparse default overrides without shared cover writes.
 -- Connects upgrades and fresh bootstrap with the reviewed version-two definition.
--- VERSION_DB: 9.10.2
--- VERSION_DB_OWNER: 20261009000099_record_database_release_9_10_2.sql
+-- VERSION_DB: 9.11.0
+-- VERSION_DB_OWNER: 20261009000099_record_database_release_9_11_0.sql
 -- COMPLETION_MARKER: dataset_appearance_three_place_schema
 -- FINAL_CHECK: public.app_check_dataset_appearance_storage()
 
@@ -5387,8 +5387,8 @@ WHERE NOT EXISTS(SELECT 1 FROM public.system_data_repair_records WHERE migration
 -- Extends existing release decisions into planned and published publications.
 -- Connects reader-facing promises and scheduling with the existing locked contracts.
 -- Preserves contract revisions and old rows; publication metadata has its own revision.
--- VERSION_DB: 9.10.2
--- VERSION_DB_OWNER: 20261009000099_record_database_release_9_10_2.sql
+-- VERSION_DB: 9.11.0
+-- VERSION_DB_OWNER: 20261009000099_record_database_release_9_11_0.sql
 -- COMPLETION_MARKER: wl164_publication_fields
 -- FINAL_CHECK: public.app_check_publications()
 
@@ -5506,8 +5506,8 @@ END $publication_acceptance$;
 -- Adds versioned kind intent without converting historical schemas or rights.
 -- Connects registry table_uid identities with the shared structural resolver.
 -- Ordered after 70-74 and before the 20261009000099 release record.
--- VERSION_DB: 9.10.2
--- VERSION_DB_OWNER: 20261009000099_record_database_release_9_10_2.sql
+-- VERSION_DB: 9.11.0
+-- VERSION_DB_OWNER: 20261009000099_record_database_release_9_11_0.sql
 -- COMPLETION_MARKER: wl163_dataset_kind_contracts
 
 DO $dataset_kinds$
@@ -5544,8 +5544,8 @@ END $dataset_kinds$;
 -- Serializes dataset names and all active aliases in one global namespace.
 -- Connects registry/alias persistence and the administrator naming endpoints.
 -- Keeps real names on upgrade; conflicting aliases retain their rows and timestamps.
--- VERSION_DB: 9.10.2
--- VERSION_DB_OWNER: 20261009000099_record_database_release_9_10_2.sql
+-- VERSION_DB: 9.11.0
+-- VERSION_DB_OWNER: 20261009000099_record_database_release_9_11_0.sql
 -- COMPLETION_MARKER: wl159_dataset_namespace
 
 -- Only the small metadata tables are changed/locked, never dataset contents.
@@ -5755,8 +5755,8 @@ WHERE NOT EXISTS (SELECT 1 FROM public.system_data_repair_records
 -- Adopts the native installer's identity schema as shared product schema.
 -- Connects bootstrap, legacy upgrades and native setup to one physical definition.
 -- Preserves every existing identity value; native setup alone owns the first row.
--- VERSION_DB: 9.10.2
--- VERSION_DB_OWNER: 20261009000099_record_database_release_9_10_2.sql
+-- VERSION_DB: 9.11.0
+-- VERSION_DB_OWNER: 20261009000099_record_database_release_9_11_0.sql
 -- COMPLETION_MARKER: wl167_database_identity_schema
 -- FINAL_CHECK: public.app_check_database_identity_schema()
 
@@ -5945,8 +5945,8 @@ END $reconcile$;
 -- Converts platform table clocks to instants using their historic Helsinki zone.
 -- Connects upgraded databases, public bootstrap and runtime embedding helpers.
 -- Preserves dependent objects atomically; unsupported dependencies refuse the upgrade.
--- VERSION_DB: 9.10.2
--- VERSION_DB_OWNER: 20261009000099_record_database_release_9_10_2.sql
+-- VERSION_DB: 9.11.0
+-- VERSION_DB_OWNER: 20261009000099_record_database_release_9_11_0.sql
 -- COMPLETION_MARKER: wl167_managed_timestamp_zones
 -- FINAL_CHECK: public.app_check_managed_timestamp_zones()
 

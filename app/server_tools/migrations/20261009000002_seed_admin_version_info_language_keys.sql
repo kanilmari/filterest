@@ -2,8 +2,8 @@
 -- Seeds truthful release-check actions, timing and running-database requirement copy.
 -- Connects upgrades and fresh installations to the administrator's shared language keys.
 -- Inserts missing Finnish/English copy only, preserving reviewed site translations.
--- VERSION_DB: 9.10.2
--- VERSION_DB_OWNER: 20261009000099_record_database_release_9_10_2.sql
+-- VERSION_DB: 9.11.0
+-- VERSION_DB_OWNER: 20261009000099_record_database_release_9_11_0.sql
 
 WITH authored_keys(lang_key, fi, en) AS (
     VALUES

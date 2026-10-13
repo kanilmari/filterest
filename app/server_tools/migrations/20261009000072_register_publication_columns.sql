@@ -2,8 +2,8 @@
 -- Registers publication columns with the existing release-goal dataset metadata.
 -- Connects upgraded installations and fresh seeds to the same discovered fields.
 -- Preserves administrator-authored metadata and creates no publication content.
--- VERSION_DB: 9.10.2
--- VERSION_DB_OWNER: 20261009000099_record_database_release_9_10_2.sql
+-- VERSION_DB: 9.11.0
+-- VERSION_DB_OWNER: 20261009000099_record_database_release_9_11_0.sql
 -- COMPLETION_MARKER: wl164_publication_column_metadata
 
 DO $publication_metadata$

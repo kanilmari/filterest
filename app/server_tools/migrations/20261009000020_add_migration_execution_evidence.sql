@@ -2,8 +2,8 @@
 -- Adds nullable byte hashes, truthful outcomes and provenance to the migration ledger.
 -- Connects startup execution and bootstrap baselines to future signed-release checks.
 -- Leaves every historical row unverified; present files cannot prove past execution.
--- VERSION_DB: 9.10.2
--- VERSION_DB_OWNER: 20261009000099_record_database_release_9_10_2.sql
+-- VERSION_DB: 9.11.0
+-- VERSION_DB_OWNER: 20261009000099_record_database_release_9_11_0.sql
 -- COMPLETION_MARKER: wl157_migration_execution_evidence
 
 DO $migration_evidence$

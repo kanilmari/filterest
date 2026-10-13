@@ -2,8 +2,8 @@
 -- Stores sparse appearance overrides and durable revisions for each dataset.
 -- Connects the immutable registry UID with validated per-tab settings persistence.
 -- Keeps empty rows after reset; legacy card columns remain authoritative until WL160 slice 3.
--- VERSION_DB: 9.10.2
--- VERSION_DB_OWNER: 20261009000099_record_database_release_9_10_2.sql
+-- VERSION_DB: 9.11.0
+-- VERSION_DB_OWNER: 20261009000099_record_database_release_9_11_0.sql
 -- COMPLETION_MARKER: system_dataset_appearance_table
 -- FINAL_CHECK: public.app_check_dataset_appearance_storage()
 

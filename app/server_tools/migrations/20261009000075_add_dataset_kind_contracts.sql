@@ -2,8 +2,8 @@
 -- Adds versioned kind intent without converting historical schemas or rights.
 -- Connects registry table_uid identities with the shared structural resolver.
 -- Ordered after 70-74 and before the 20261009000099 release record.
--- VERSION_DB: 9.10.2
--- VERSION_DB_OWNER: 20261009000099_record_database_release_9_10_2.sql
+-- VERSION_DB: 9.11.0
+-- VERSION_DB_OWNER: 20261009000099_record_database_release_9_11_0.sql
 -- COMPLETION_MARKER: wl163_dataset_kind_contracts
 
 DO $dataset_kinds$

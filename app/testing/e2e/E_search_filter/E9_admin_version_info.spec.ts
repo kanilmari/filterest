@@ -298,8 +298,8 @@ for (const [language, theme, osTheme] of [
     const time = '2026-10-09T09:00:00Z';
     const releaseURL = 'https://github.com/kanilmari/filterest/releases/tag/v99.0.1';
     const initial = {
-      product_name: 'Filterest', app_version: '99.0.0', db_version: '9.10.2',
-      required_db_version: '9.10.2', db_compatible: true, runtime_mode: 'native',
+      product_name: 'Filterest', app_version: '99.0.0', db_version: '9.11.0',
+      required_db_version: '9.11.0', db_compatible: true, runtime_mode: 'native',
       latest_stable_version: '99.0.1', latest_release_url: releaseURL,
       update_status: 'available', update_available: true, upstream_check_performed: true,
       update_checked_at: time, last_successful_check_at: time, refresh_allowed_at: '',

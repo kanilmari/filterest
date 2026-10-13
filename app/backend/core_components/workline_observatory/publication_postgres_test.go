@@ -109,7 +109,7 @@ func publicationSQL(t *testing.T, db *sql.DB, text string) {
 func applyPublicationMigrations(t *testing.T, db *sql.DB) {
 	t.Helper()
 	dir := t.TempDir()
-	for _, name := range []string{"20261009000020_add_migration_execution_evidence.sql", publicationMigration, publicationLanguageMigration, publicationMetadataMigration, publicationRepairMigration, "20261009000099_record_database_release_9_10_2.sql"} {
+	for _, name := range []string{"20261009000020_add_migration_execution_evidence.sql", publicationMigration, publicationLanguageMigration, publicationMetadataMigration, publicationRepairMigration, "20261009000099_record_database_release_9_11_0.sql"} {
 		if err := os.WriteFile(filepath.Join(dir, name), publicationSource(t, name), 0600); err != nil {
 			t.Fatal(err)
 		}

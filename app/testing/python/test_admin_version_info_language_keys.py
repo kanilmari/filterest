@@ -1,6 +1,6 @@
 """test_admin_version_info_language_keys.py
 Verify release-check copy, bootstrap packaging and translation preservation.
-Connect the reviewed DB 9.10.2 seed with shared frontend language-key readers.
+Connect the reviewed DB 9.11.0 seed with shared frontend language-key readers.
 Keep source proofs database-free and executable replay explicitly opt-in.
 """
 import hashlib
@@ -14,7 +14,7 @@ APP = Path(__file__).resolve().parents[2]
 MIGRATION = APP / "server_tools/migrations/20261009000002_seed_admin_version_info_language_keys.sql"
 BOOTSTRAP = APP / "server_tools/public_bootstrap"
 FRONTEND = APP / "frontend/core_components/admin_tools"
-OWNER = "20261009000099_record_database_release_9_10_2.sql"
+OWNER = "20261009000099_record_database_release_9_11_0.sql"
 
 
 def authored_keys():
@@ -47,7 +47,7 @@ def test_reviewed_release_check_copy_matches_frontend_fallbacks_and_key_reader()
 
 def test_release_check_migration_joins_unreleased_9102_before_its_owner():
     sql = MIGRATION.read_text()
-    assert "-- VERSION_DB: 9.10.2" in sql
+    assert "-- VERSION_DB: 9.11.0" in sql
     assert f"-- VERSION_DB_OWNER: {OWNER}" in sql
     assert MIGRATION.name < OWNER
     assert "system_db_version" not in sql
@@ -64,7 +64,7 @@ def test_release_check_copy_is_embodied_and_hashed_in_fresh_bootstrap():
     generator = (BOOTSTRAP / "generate_bootstrap.py").read_text()
     assert MIGRATION.name in re.search(r"language_seed_migrations = \((.*?)\n\)", generator, re.S)[1]
     manifest = json.loads((BOOTSTRAP / "manifest.json").read_text())
-    assert manifest["db_version"] == (APP / "VERSION_DB").read_text().strip() == "9.10.2"
+    assert manifest["db_version"] == (APP / "VERSION_DB").read_text().strip() == "9.11.0"
     ledger = manifest["migration_ledger_baseline"]
     assert ledger.index(MIGRATION.name) < ledger.index(OWNER)
     evidence = manifest["source_files"]["filterest/app/server_tools/migrations/" + MIGRATION.name]

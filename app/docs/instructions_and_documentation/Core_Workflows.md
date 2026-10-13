@@ -173,7 +173,7 @@ reader information and publication state remain editable after locking, guarded
 by their separate revision. Contract editing remains on the existing contracts
 endpoint; starting a new scope revision creates another release-goal row.
 
-Migrations `20261009000070`–`20261009000073` belong to unreleased DB 9.10.2:
+Migrations `20261009000070`–`20261009000073` belong to unreleased DB 9.11.0:
 they add checked storage, language keys and column metadata; migration 73 repairs
 missing canonical translations on development instances that applied old 71.
 The schema migration's final check verifies column shapes, constraint validation, the

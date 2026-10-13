@@ -21,13 +21,13 @@ MIGRATION = MIGRATIONS / "20261009000003_create_system_dataset_appearance.sql"
 CUTOVER = MIGRATIONS / "20261009000040_cut_over_dataset_card_appearance.sql"
 SCHEMA = MIGRATIONS / "20261009000060_extend_dataset_appearance_three_places.sql"
 BACKFILL = MIGRATIONS / "20261009000061_backfill_dataset_appearance_three_places.sql"
-OWNER = MIGRATIONS / "20261009000099_record_database_release_9_10_2.sql"
+OWNER = MIGRATIONS / "20261009000099_record_database_release_9_11_0.sql"
 BASE = "e314e34"
 
 
 def test_dataset_appearance_migration_version_and_generated_artifacts():
     sql = MIGRATION.read_text()
-    assert "-- VERSION_DB: 9.10.2" in sql
+    assert "-- VERSION_DB: 9.11.0" in sql
     assert f"-- VERSION_DB_OWNER: {OWNER.name}" in sql
     assert MIGRATION.name < OWNER.name
     assert "-- COMPLETION_MARKER: system_dataset_appearance_table" in sql
@@ -35,10 +35,10 @@ def test_dataset_appearance_migration_version_and_generated_artifacts():
     assert "system_db_version" not in sql
     assert "card_style_variant" not in sql and "card_detail_columns" not in sql
     assert sql in (BOOTSTRAP / "schema.sql").read_text()
-    assert (BOOTSTRAP / "schema.sql").read_bytes() == (APP / "server_tools/versioning/schema_snapshots/db-9.10.2.sql").read_bytes()
-    assert (APP / "VERSION_DB").read_text().strip() == "9.10.2"
+    assert (BOOTSTRAP / "schema.sql").read_bytes() == (APP / "server_tools/versioning/schema_snapshots/db-9.11.0.sql").read_bytes()
+    assert (APP / "VERSION_DB").read_text().strip() == "9.11.0"
     manifest = json.loads((BOOTSTRAP / "manifest.json").read_text())
-    assert manifest["db_version"] == "9.10.2"
+    assert manifest["db_version"] == "9.11.0"
     assert "public.system_dataset_appearance" in manifest["allowed_schema_tables"]
     assert "public.system_dataset_appearance" in manifest["allowed_seed_tables"]
     assert MIGRATION.name in manifest["migration_ledger_baseline"]
@@ -62,7 +62,7 @@ def test_dataset_appearance_bootstrap_regeneration_is_exact(tmp_path):
 
 @pytest.fixture
 def appearance_upgrade(cluster):
-    """Existing main's unreleased 9.10.2 package, before the slice 2 table exists."""
+    """Existing main's unreleased 9.11.0 package, before the slice 2 table exists."""
     cluster("CREATE DATABASE appearance_upgrade")
     for name in ("schema.sql", "seed_data.sql"):
         original = subprocess.run(["git", "show", f"{BASE}:app/server_tools/public_bootstrap/{name}"],
@@ -167,7 +167,7 @@ def test_three_place_migration_sources_and_definition_snapshot():
     assert rules == expected
     for migration in (SCHEMA, BACKFILL):
         source = migration.read_text()
-        assert migration.name < OWNER.name and "-- VERSION_DB: 9.10.2" in source
+        assert migration.name < OWNER.name and "-- VERSION_DB: 9.11.0" in source
         assert f"-- VERSION_DB_OWNER: {OWNER.name}" in source
         assert "-- COMPLETION_MARKER:" in source and "-- FINAL_CHECK:" in source
         assert "INSERT INTO public.system_db_version" not in source

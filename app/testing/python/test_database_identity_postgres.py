@@ -59,7 +59,7 @@ def setup_row_sql():
     start = source.index('run_local_db_psql_stdin "Database identity initialization"')
     sql = source[source.index("\nINSERT INTO system_database_identity", start):]
     sql = sql[:sql.index("\nSQL\n")]
-    return "\\set required_db_version 9.10.2\n\\set app_version 9.3.23\n" + sql
+    return "\\set required_db_version 9.11.0\n\\set app_version 9.3.23\n" + sql
 
 
 @pytest.fixture
@@ -139,7 +139,7 @@ def test_upgrade_and_replay_preserve_values_and_match_installer(cluster, origina
     else:
         row = run("SELECT database_role,source_db_version,source_app_version,notes "
                   "FROM public.system_database_identity").stdout
-        assert row.startswith("legacy_unclassified|9.10.2|9.3.23|Initialized by setup_local_dev_environment.sh")
+        assert row.startswith("legacy_unclassified|9.11.0|9.3.23|Initialized by setup_local_dev_environment.sh")
     run("UPDATE public.system_database_identity SET notes=notes || ' changed', updated='2001-01-01';")
     assert run("SELECT updated>'2001-01-02' FROM public.system_database_identity").stdout.strip() == "t"
     if origin == "public_bootstrap":

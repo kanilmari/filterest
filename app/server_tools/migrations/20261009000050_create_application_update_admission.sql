@@ -2,8 +2,8 @@
 -- Creates private durable update intent, authentication proofs and audit records.
 -- Connects administrator admission to a future manager-controlled execution worker.
 -- Ships disabled: no installation identity, release offer or executor is bootstrapped.
--- VERSION_DB: 9.10.2
--- VERSION_DB_OWNER: 20261009000099_record_database_release_9_10_2.sql
+-- VERSION_DB: 9.11.0
+-- VERSION_DB_OWNER: 20261009000099_record_database_release_9_11_0.sql
 -- COMPLETION_MARKER: wl157_application_update_admission
 -- FINAL_CHECK: public.app_check_application_update_admission()
 

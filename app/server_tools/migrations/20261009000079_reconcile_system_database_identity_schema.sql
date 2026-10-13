@@ -2,8 +2,8 @@
 -- Adopts the native installer's identity schema as shared product schema.
 -- Connects bootstrap, legacy upgrades and native setup to one physical definition.
 -- Preserves every existing identity value; native setup alone owns the first row.
--- VERSION_DB: 9.10.2
--- VERSION_DB_OWNER: 20261009000099_record_database_release_9_10_2.sql
+-- VERSION_DB: 9.11.0
+-- VERSION_DB_OWNER: 20261009000099_record_database_release_9_11_0.sql
 -- COMPLETION_MARKER: wl167_database_identity_schema
 -- FINAL_CHECK: public.app_check_database_identity_schema()
 

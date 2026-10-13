@@ -2,8 +2,8 @@
 -- Seeds guarded update admission and decision refusals in all bundled languages.
 -- Connects API reason keys to the existing multilingual translation services.
 -- Preserves operator-authored translations when upgrading or replaying.
--- VERSION_DB: 9.10.2
--- VERSION_DB_OWNER: 20261009000099_record_database_release_9_10_2.sql
+-- VERSION_DB: 9.11.0
+-- VERSION_DB_OWNER: 20261009000099_record_database_release_9_11_0.sql
 -- COMPLETION_MARKER: wl157_application_update_refusal_keys
 -- FINAL_CHECK: public.app_check_application_update_refusal_keys()
 WITH authored(lang_key,fi,en,ch,yue) AS (VALUES

@@ -2,8 +2,8 @@
 -- Extends existing release decisions into planned and published publications.
 -- Connects reader-facing promises and scheduling with the existing locked contracts.
 -- Preserves contract revisions and old rows; publication metadata has its own revision.
--- VERSION_DB: 9.10.2
--- VERSION_DB_OWNER: 20261009000099_record_database_release_9_10_2.sql
+-- VERSION_DB: 9.11.0
+-- VERSION_DB_OWNER: 20261009000099_record_database_release_9_11_0.sql
 -- COMPLETION_MARKER: wl164_publication_fields
 -- FINAL_CHECK: public.app_check_publications()
 

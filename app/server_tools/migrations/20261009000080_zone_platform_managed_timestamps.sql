@@ -2,8 +2,8 @@
 -- Converts platform table clocks to instants using their historic Helsinki zone.
 -- Connects upgraded databases, public bootstrap and runtime embedding helpers.
 -- Preserves dependent objects atomically; unsupported dependencies refuse the upgrade.
--- VERSION_DB: 9.10.2
--- VERSION_DB_OWNER: 20261009000099_record_database_release_9_10_2.sql
+-- VERSION_DB: 9.11.0
+-- VERSION_DB_OWNER: 20261009000099_record_database_release_9_11_0.sql
 -- COMPLETION_MARKER: wl167_managed_timestamp_zones
 -- FINAL_CHECK: public.app_check_managed_timestamp_zones()
 

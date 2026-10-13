@@ -177,23 +177,23 @@ def test_front_page_fresh_install_and_992_upgrade_match_and_repeat(installed, up
 
 
 DESCRIPTION = MIGRATIONS / "20261009000001_seed_front_page_description_language_key.sql"
-DESCRIPTION_OWNER = MIGRATIONS / "20261009000099_record_database_release_9_10_2.sql"
+DESCRIPTION_OWNER = MIGRATIONS / "20261009000099_record_database_release_9_11_0.sql"
 
 
 def test_home_description_release_and_generated_bootstrap():
     sql = DESCRIPTION.read_text()
-    assert "-- VERSION_DB: 9.10.2" in sql
+    assert "-- VERSION_DB: 9.11.0" in sql
     assert f"-- VERSION_DB_OWNER: {DESCRIPTION_OWNER.name}" in sql
     assert DESCRIPTION.name < DESCRIPTION_OWNER.name
-    assert "SELECT '9.10.2'" in DESCRIPTION_OWNER.read_text()
+    assert "SELECT '9.11.0'" in DESCRIPTION_OWNER.read_text()
     assert "site_front_page_description" in sql and "usage_explanation" in sql
     assert sql in (BOOTSTRAP / "seed_data.sql").read_text()
-    assert (BOOTSTRAP / "schema.sql").read_bytes() == (APP / "server_tools/versioning/schema_snapshots/db-9.10.2.sql").read_bytes()
+    assert (BOOTSTRAP / "schema.sql").read_bytes() == (APP / "server_tools/versioning/schema_snapshots/db-9.11.0.sql").read_bytes()
     manifest = json.loads((BOOTSTRAP / "manifest.json").read_text())
-    assert manifest["db_version"] == "9.10.2"
+    assert manifest["db_version"] == "9.11.0"
     assert DESCRIPTION.name in manifest["migration_ledger_baseline"]
     assert DESCRIPTION_OWNER.name in manifest["migration_ledger_baseline"]
-    assert (APP / "VERSION_DB").read_text().strip() == "9.10.2"
+    assert (APP / "VERSION_DB").read_text().strip() == "9.11.0"
 
 
 def test_home_description_fresh_upgrade_repeat_and_reviewed_copy(installed, upgrade):

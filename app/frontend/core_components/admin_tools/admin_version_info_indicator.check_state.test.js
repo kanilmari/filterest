@@ -24,7 +24,7 @@ function snapshot(overrides = {}) {
     return {
         product_name: "Filterest", app_version: "9.3.21", latest_stable_version: "9.3.22",
         latest_release_url: "https://github.com/kanilmari/filterest/releases/tag/v9.3.22",
-        db_version: "9.10.2", required_db_version: "9.10.2", db_compatible: true,
+        db_version: "9.11.0", required_db_version: "9.11.0", db_compatible: true,
         update_status: "available", update_available: true, update_checked_at: checkedAt,
         last_successful_check_at: checkedAt, upstream_check_performed: true,
         refresh_allowed_at: "2026-10-06T10:00:30Z", ...overrides,

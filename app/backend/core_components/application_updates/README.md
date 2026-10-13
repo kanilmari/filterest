@@ -54,7 +54,7 @@ The web process receives no service-control privilege or signing key. Before
 reopening, recovery follows K292's automatic verified restoration; after
 reopening, refusal or repair preserves new writes and proceeds forward.
 
-Admission's three migrations join the already open, unreleased DB 9.10.2 and
+Admission's three migrations join the already open, unreleased DB 9.11.0 and
 sort before its `20261009000099` owner. Its bootstrap and schema snapshot are
 regenerated together. Later work joining this unreleased release must also
 sort before that owner; a released version opens a new database version.

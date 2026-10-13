@@ -20,8 +20,8 @@ def test_kind_migrations_precede_release_and_bootstrap_baselines_exact_bytes():
     manifest = json.loads((BOOTSTRAP / "manifest.json").read_text())
     for name in NAMES:
         migration = MIGRATIONS / name
-        assert name < "20261009000099_record_database_release_9_10_2.sql"
-        assert "-- VERSION_DB: 9.10.2" in migration.read_text()
+        assert name < "20261009000099_record_database_release_9_11_0.sql"
+        assert "-- VERSION_DB: 9.11.0" in migration.read_text()
         assert "system_db_version" not in migration.read_text()
         assert name in manifest["migration_ledger_baseline"]
         assert_bootstrap_baseline((BOOTSTRAP / "seed_data.sql").read_text(), migration)

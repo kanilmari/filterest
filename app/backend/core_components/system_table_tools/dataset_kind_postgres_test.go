@@ -202,7 +202,7 @@ func TestDatasetKindPostgresUpgradeReplayPreservesRightsAndDefaults(t *testing.T
 	kindImportBootstrap(t, db, true)
 	kindImportBootstrap(t, fresh, false)
 	if frontPageCount(t, db, `SELECT count(*) FROM system_db_version WHERE version='9.10.1'`) != 1 ||
-		frontPageCount(t, db, `SELECT count(*) FROM system_db_version WHERE version='9.10.2'`) != 0 {
+		frontPageCount(t, db, `SELECT count(*) FROM system_db_version WHERE version='9.11.0'`) != 0 {
 		t.Fatal("upgrade must start at released DB 9.10.1")
 	}
 	frontPageExec(t, db, `UPDATE system_db_tables SET default_view_id=(SELECT id FROM system_table_views WHERE view_key='table' LIMIT 1) WHERE table_name='tiketit';`)
@@ -240,7 +240,7 @@ func TestDatasetKindPostgresUpgradeReplayPreservesRightsAndDefaults(t *testing.T
 	if err := migrations.RunMigrations(db, directory); err != nil {
 		t.Fatal(err)
 	}
-	if frontPageCount(t, db, `SELECT count(*) FROM system_db_version WHERE version='9.10.2'`) != 0 {
+	if frontPageCount(t, db, `SELECT count(*) FROM system_db_version WHERE version='9.11.0'`) != 0 {
 		t.Fatal("release recorded before final pending migrations")
 	}
 	before := kindLegacyState(t, db)
@@ -260,8 +260,8 @@ func TestDatasetKindPostgresUpgradeReplayPreservesRightsAndDefaults(t *testing.T
 		t.Fatal(err)
 	}
 	dataset_kinds.InvalidateAll()
-	if frontPageCount(t, db, `SELECT count(*) FROM system_db_version WHERE version='9.10.2'`) != 1 {
-		t.Fatal("complete upgrade did not record DB 9.10.2")
+	if frontPageCount(t, db, `SELECT count(*) FROM system_db_version WHERE version='9.11.0'`) != 1 {
+		t.Fatal("complete upgrade did not record DB 9.11.0")
 	}
 	for name, hash := range pending {
 		var got, outcome, provenance string
@@ -275,7 +275,7 @@ func TestDatasetKindPostgresUpgradeReplayPreservesRightsAndDefaults(t *testing.T
 	if len(pending) < 20 {
 		t.Fatal("incomplete 9.10.1 upgrade route", len(pending))
 	}
-	t.Logf("DB 9.10.1 -> 9.10.2: %d pending migrations executed", len(pending))
+	t.Logf("DB 9.10.1 -> 9.11.0: %d pending migrations executed", len(pending))
 	assertKindSchemaParity(t, fresh, db)
 	for _, name := range []string{"tiketit", "system_users"} {
 		if !reflect.DeepEqual(kindRead(t, fresh, name), kindRead(t, db, name)) {

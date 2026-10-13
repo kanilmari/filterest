@@ -100,7 +100,7 @@ A known local site save updates a matching tab token; conflicts keep drafts and
 loaded tokens for review. Scope, Close and Save/Reset remain outside the
 scrolling controls, including on phones. FI/EN changes retain focus and drafts.
 
-Database 9.10.2 migrates every non-null legacy style/count as an explicit
+Database 9.11.0 migrates every non-null legacy style/count as an explicit
 override, including values equal to the shared choice. Null remains inherited;
 replaying the migration never replaces an already migrated override. The older
 9.7.15 transition to the glowy default happened before this cutover.

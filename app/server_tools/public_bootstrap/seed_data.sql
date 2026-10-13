@@ -6567,8 +6567,8 @@ SELECT count(*) FROM inserted_translations;
 -- Seeds separate Home description and three-field editor guidance in Finnish and English.
 -- Connects upgrades and fresh installations to the canonical translation stores.
 -- Preserves reviewed site copy and registers intentional empty description text.
--- VERSION_DB: 9.10.2
--- VERSION_DB_OWNER: 20261009000099_record_database_release_9_10_2.sql
+-- VERSION_DB: 9.11.0
+-- VERSION_DB_OWNER: 20261009000099_record_database_release_9_11_0.sql
 
 WITH authored_keys(lang_key, fi, en, old_fi, old_en) AS (
     VALUES
@@ -6620,8 +6620,8 @@ ON CONFLICT(lang_key_id,source_type,source_high) DO NOTHING;
 -- Seeds truthful release-check actions, timing and running-database requirement copy.
 -- Connects upgrades and fresh installations to the administrator's shared language keys.
 -- Inserts missing Finnish/English copy only, preserving reviewed site translations.
--- VERSION_DB: 9.10.2
--- VERSION_DB_OWNER: 20261009000099_record_database_release_9_10_2.sql
+-- VERSION_DB: 9.11.0
+-- VERSION_DB_OWNER: 20261009000099_record_database_release_9_11_0.sql
 
 WITH authored_keys(lang_key, fi, en) AS (
     VALUES
@@ -6658,8 +6658,8 @@ SELECT count(*) FROM inserted_translations;
 -- Seeds actionable appearance save refusals in every bundled language.
 -- Connects administrator API reason keys with the canonical translation stores.
 -- Preserves reviewed translations on upgrades and replay.
--- VERSION_DB: 9.10.2
--- VERSION_DB_OWNER: 20261009000099_record_database_release_9_10_2.sql
+-- VERSION_DB: 9.11.0
+-- VERSION_DB_OWNER: 20261009000099_record_database_release_9_11_0.sql
 WITH authored(lang_key,fi,en,ch,yue) AS (VALUES
  ('dataset_appearance_conflict','Ulkoasuasetukset ovat muuttuneet. Lataa asetukset uudelleen ja tarkista muutokset ennen tallentamista.','Appearance settings changed. Reload and review before saving.','外观设置已更改。请重新加载并检查后再保存。','外觀設定已更改。請重新載入並檢查後再儲存。'),
  ('dataset_appearance_invalid','Ulkoasuasetus ei kelpaa. Tarkista arvot ja niiden järjestys.','An appearance setting is invalid. Check the values and their order.','外观设置无效。请检查数值及其顺序。','外觀設定無效。請檢查數值同次序。'),
@@ -6686,8 +6686,8 @@ WHERE NULLIF(existing.translation,'') IS NULL;
 -- Seeds guarded update admission and decision refusals in all bundled languages.
 -- Connects API reason keys to the existing multilingual translation services.
 -- Preserves operator-authored translations when upgrading or replaying.
--- VERSION_DB: 9.10.2
--- VERSION_DB_OWNER: 20261009000099_record_database_release_9_10_2.sql
+-- VERSION_DB: 9.11.0
+-- VERSION_DB_OWNER: 20261009000099_record_database_release_9_11_0.sql
 -- COMPLETION_MARKER: wl157_application_update_refusal_keys
 -- FINAL_CHECK: public.app_check_application_update_refusal_keys()
 WITH authored(lang_key,fi,en,ch,yue) AS (VALUES
@@ -6750,8 +6750,8 @@ END $acceptance$;
 -- Seeds actionable appearance save refusals in every bundled language.
 -- Connects administrator API reason keys with the canonical translation stores.
 -- Preserves reviewed translations on upgrades and replay.
--- VERSION_DB: 9.10.2
--- VERSION_DB_OWNER: 20261009000099_record_database_release_9_10_2.sql
+-- VERSION_DB: 9.11.0
+-- VERSION_DB_OWNER: 20261009000099_record_database_release_9_11_0.sql
 WITH authored(lang_key,fi,en,ch,yue) AS (VALUES
  ('dataset_appearance_reload','Ulkoasuasetusten tallennustapa on muuttunut. Lataa sivu uudelleen ennen tallentamista.','The appearance save format changed. Reload the page before saving.','外观设置的保存格式已更改。请重新加载页面后再保存。','外觀設定嘅儲存格式已更改。請重新載入頁面後再儲存。')
 ), written AS (
@@ -6776,8 +6776,8 @@ WHERE NULLIF(existing.translation,'') IS NULL;
 -- Seeds publication labels and validation copy in the canonical language stores.
 -- Connects the Observatory and dedicated API with multilingual reader-facing terms.
 -- Adds missing keys and translations while preserving installation-authored values.
--- VERSION_DB: 9.10.2
--- VERSION_DB_OWNER: 20261009000099_record_database_release_9_10_2.sql
+-- VERSION_DB: 9.11.0
+-- VERSION_DB_OWNER: 20261009000099_record_database_release_9_11_0.sql
 
 WITH authored(lang_key,fi,en,ch,yue) AS (VALUES
  ('workline_publication_goal','Julkaisut','Publications','发布','發佈'),
@@ -6837,8 +6837,8 @@ WHERE NULLIF(btrim(c.translation),'') IS NOT NULL AND NOT EXISTS (
 -- Connects the same nonblank defaults with the new translated text refusal.
 -- Applied filenames are skipped, so this repair must carry its own seed values.
 -- Adds only missing translations; legacy fields and authored served text stay untouched.
--- VERSION_DB: 9.10.2
--- VERSION_DB_OWNER: 20261009000099_record_database_release_9_10_2.sql
+-- VERSION_DB: 9.11.0
+-- VERSION_DB_OWNER: 20261009000099_record_database_release_9_11_0.sql
 
 WITH authored(lang_key,fi,en,ch,yue) AS (VALUES
  ('workline_publication_goal','Julkaisut','Publications','发布','發佈'),
@@ -6898,8 +6898,8 @@ WHERE NULLIF(btrim(c.translation),'') IS NOT NULL AND NOT EXISTS (
 -- Seeds the filter-panel appearance title and phone search toggle in every UI language.
 -- Connects filterbar disclosures and accessible controls to both translation stores.
 -- Fills blank served translations while preserving installation-authored bytes.
--- VERSION_DB: 9.10.2
--- VERSION_DB_OWNER: 20261009000099_record_database_release_9_10_2.sql
+-- VERSION_DB: 9.11.0
+-- VERSION_DB_OWNER: 20261009000099_record_database_release_9_11_0.sql
 
 WITH copy(lang_key, fi, en, ch, tw, yue) AS (VALUES
     ('filterbar_style_and_colors', 'Tyyli- ja väriasetukset', 'Style and color settings',
@@ -6946,8 +6946,8 @@ WHERE NULLIF(btrim(existing.translation, E' \t\n\r\f' || chr(11)), '') IS NULL;
 -- Labels kind metadata and evidence-read errors in every bundled language.
 -- Connects registry inspection and API refusals to the existing translation stores.
 -- Preserves authored site translations on upgrades and replay.
--- VERSION_DB: 9.10.2
--- VERSION_DB_OWNER: 20261009000099_record_database_release_9_10_2.sql
+-- VERSION_DB: 9.11.0
+-- VERSION_DB_OWNER: 20261009000099_record_database_release_9_11_0.sql
 WITH authored(lang_key,fi,en,ch,yue) AS (VALUES
  ('table_kind','Tietoaineiston laji','Dataset kind','数据集类型','資料集類型'),
  ('kind_version','Lajisopimuksen versio','Kind contract version','类型契约版本','類型契約版本'),
@@ -6984,8 +6984,8 @@ AND NOT EXISTS (SELECT 1 FROM public.system_lang_key_translations t
 -- Seeds the bounded policy-lock wait refusal in every bundled language.
 -- Connects permission mutation refusals to legacy and normalized copy.
 -- Preserves site-authored wording on upgrades and replay.
--- VERSION_DB: 9.10.2
--- VERSION_DB_OWNER: 20261009000099_record_database_release_9_10_2.sql
+-- VERSION_DB: 9.11.0
+-- VERSION_DB_OWNER: 20261009000099_record_database_release_9_11_0.sql
 
 WITH authored(lang_key, fi, en, ch, yue, zh_tw, zh_hk) AS (VALUES
     ('error_runtime_grant_policy_busy',
@@ -7212,8 +7212,8 @@ WHERE NOT EXISTS (SELECT 1 FROM public.system_config WHERE key='front_page_show_
 -- Retires the global alias catalogue now that navigation uses readable name pools.
 -- Connects removed HTTP registration and public bootstrap with stored capability grants.
 -- Keeps the separate administrator alias editor while revoking the retired read surface.
--- VERSION_DB: 9.10.2
--- VERSION_DB_OWNER: 20261009000099_record_database_release_9_10_2.sql
+-- VERSION_DB: 9.11.0
+-- VERSION_DB_OWNER: 20261009000099_record_database_release_9_11_0.sql
 
 DELETE FROM public.system_group_table_func_rights
 WHERE function_id IN (
@@ -7923,8 +7923,8 @@ WHERE NOT EXISTS (SELECT 1 FROM public.system_data_repair_records
 -- Registers the explicit-only update capability and the guarded administrator APIs.
 -- Connects existing group permission editing to durable admission and decisions.
 -- Never grants the sensitive capability, including to the initial administrator.
--- VERSION_DB: 9.10.2
--- VERSION_DB_OWNER: 20261009000099_record_database_release_9_10_2.sql
+-- VERSION_DB: 9.11.0
+-- VERSION_DB_OWNER: 20261009000099_record_database_release_9_11_0.sql
 -- COMPLETION_MARKER: wl157_application_update_capability
 -- FINAL_CHECK: public.app_check_application_update_capability()
 
@@ -7971,8 +7971,8 @@ END $acceptance$;
 -- 20261009000061_backfill_dataset_appearance_three_places.sql
 -- Activates owned tab appearance_values and sparse default overrides without shared cover writes.
 -- Connects upgrades and fresh bootstrap with the reviewed version-two definition.
--- VERSION_DB: 9.10.2
--- VERSION_DB_OWNER: 20261009000099_record_database_release_9_10_2.sql
+-- VERSION_DB: 9.11.0
+-- VERSION_DB_OWNER: 20261009000099_record_database_release_9_11_0.sql
 -- COMPLETION_MARKER: dataset_appearance_three_place_backfill
 -- FINAL_CHECK: public.app_check_dataset_appearance_three_places()
 
@@ -8094,8 +8094,8 @@ END $acceptance$;
 -- Registers publication columns with the existing release-goal dataset metadata.
 -- Connects upgraded installations and fresh seeds to the same discovered fields.
 -- Preserves administrator-authored metadata and creates no publication content.
--- VERSION_DB: 9.10.2
--- VERSION_DB_OWNER: 20261009000099_record_database_release_9_10_2.sql
+-- VERSION_DB: 9.11.0
+-- VERSION_DB_OWNER: 20261009000099_record_database_release_9_11_0.sql
 -- COMPLETION_MARKER: wl164_publication_column_metadata
 
 DO $publication_metadata$
@@ -8124,8 +8124,8 @@ END $publication_metadata$;
 -- Completes column metadata before a registered dataset reaches a generic editor.
 -- Connects fresh bootstrap and upgraded registries to the same structural defaults.
 -- Keeps creation scoped to its own relation without depending on incidental global repair.
--- VERSION_DB: 9.10.2
--- VERSION_DB_OWNER: 20261009000099_record_database_release_9_10_2.sql
+-- VERSION_DB: 9.11.0
+-- VERSION_DB_OWNER: 20261009000099_record_database_release_9_11_0.sql
 -- COMPLETION_MARKER: t919_registered_column_metadata
 
 DO $registered_columns$
@@ -8164,8 +8164,8 @@ END $registered_columns$;
 -- Adds owner decision K353's 90-day log defaults to fresh and existing settings.
 -- Connects the public bootstrap and upgrades to the existing daily retention loop.
 -- Preserves private migration rows and operator policies without duplicate keys.
--- VERSION_DB: 9.10.2
--- VERSION_DB_OWNER: 20261009000099_record_database_release_9_10_2.sql
+-- VERSION_DB: 9.11.0
+-- VERSION_DB_OWNER: 20261009000099_record_database_release_9_11_0.sql
 -- COMPLETION_MARKER: t750_automatic_log_retention
 
 -- One identity rule for policy tables and generated names. PostgreSQL's default
@@ -8491,35 +8491,35 @@ BEGIN
       ('20261007000001_seed_row_group_match_mode_language_keys.sql', '1b93be928c03128b88735ae1ac63aa15459de700f2e1d59f88fb3db04a0859fc', 'bootstrap_baseline', 'bootstrap'),
       ('20261007000002_seed_multiselect_language_keys.sql', 'db3ec0fad6fd447d9232770770755aa0c5d147a52eb81db6c299f757b01c0d81', 'bootstrap_baseline', 'bootstrap'),
       ('20261007000099_record_database_release_9_10_1.sql', '2f1a9a642dfc469e3896f79acc2e2441815c9f5cb73f4c0ee34cb7b0291f3e0d', 'bootstrap_baseline', 'bootstrap'),
-      ('20261009000001_seed_front_page_description_language_key.sql', 'eab7bbee048dd1b2b3d293a87bc1784ec78947f8af37e828f820894aae36da3a', 'bootstrap_baseline', 'bootstrap'),
-      ('20261009000002_seed_admin_version_info_language_keys.sql', '699a24ae22e7e8fc92370ae54dc513c6d4f4d282d7afe7aa18b02d821f835ac4', 'bootstrap_baseline', 'bootstrap'),
-      ('20261009000003_create_system_dataset_appearance.sql', '1de8e9aaadfd9296c51713a2fb44b5ce7678af980b9d663188bb6b4a296ea0ba', 'bootstrap_baseline', 'bootstrap'),
-      ('20261009000020_add_migration_execution_evidence.sql', 'a1916cb61a28da3fd9ed0ee8f2346bcc06ba7acad1bda0e6293e5c68b0ebde11', 'bootstrap_baseline', 'bootstrap'),
-      ('20261009000040_cut_over_dataset_card_appearance.sql', '87cb3e9606bdbb2e0ec990bd71ba87a730e2576e8e91b96f2abb8098fce4e245', 'bootstrap_baseline', 'bootstrap'),
-      ('20261009000041_seed_dataset_appearance_refusal_keys.sql', '0b177361469267120fe5a5b2c9eee43bd7380dd62f9056e5b1ab2dd95af6d223', 'bootstrap_baseline', 'bootstrap'),
-      ('20261009000050_create_application_update_admission.sql', 'f91035f4bdb22acdc6cf975971c389d0070ed7a256c0da530324cefd6a76c077', 'bootstrap_baseline', 'bootstrap'),
-      ('20261009000051_register_application_update_capability.sql', '4a2c1bb41d287908d29d49801c4f6746a3b499d8b050a7759e31ff4c32bffd76', 'bootstrap_baseline', 'bootstrap'),
-      ('20261009000052_seed_application_update_refusal_keys.sql', 'aa7a0b277f31fe8464364b96ecbc99fbea2e3b1d3fb5443b8d4514284c8f9e52', 'bootstrap_baseline', 'bootstrap'),
-      ('20261009000060_extend_dataset_appearance_three_places.sql', '8cfe203ef51eef7454a62eb959ad8065b3dd1f683462a47876416f573cb0bdba', 'bootstrap_baseline', 'bootstrap'),
-      ('20261009000061_backfill_dataset_appearance_three_places.sql', '0a0b8d2d20d8d265b0654c672ff9d8d997cba495004b20f2ec2a551129372a96', 'bootstrap_baseline', 'bootstrap'),
-      ('20261009000062_seed_three_place_appearance_reload.sql', '1fae49ca462f0fcd5b7854c2811b24c8bbf909408d0a22e29c25bca3ee9eaec8', 'bootstrap_baseline', 'bootstrap'),
-      ('20261009000070_add_publication_fields_to_release_goals.sql', '867a4d98b8415662e4d9c1a141d1e9cf5ae9d512c8342c6d49d0efda43b09e1d', 'bootstrap_baseline', 'bootstrap'),
-      ('20261009000071_seed_publication_language_keys.sql', '0659962fa39992880d95ac9641d4f0f115e56621f8a0de6df27497dc58c6277f', 'bootstrap_baseline', 'bootstrap'),
-      ('20261009000072_register_publication_columns.sql', 'c41e01edd09a747af7a11b20e8ddd440913f245d1f3783c4bac7d72e4861d3f8', 'bootstrap_baseline', 'bootstrap'),
-      ('20261009000073_repair_publication_translations.sql', '8086ea742c9a040c6e4535a35504e8e00300a270a2cc6cac72117d05ae8450c2', 'bootstrap_baseline', 'bootstrap'),
-      ('20261009000074_seed_filterbar_style_language_key.sql', 'df22114d09d6c6fe9410ad14392710aaba3134a88d74e9474c7092f2b4c4716d', 'bootstrap_baseline', 'bootstrap'),
-      ('20261009000075_add_dataset_kind_contracts.sql', '485a8204e2ce7c98fe5e7a6016774569eba5e58182c06400055114e8d85f1c81', 'bootstrap_baseline', 'bootstrap'),
-      ('20261009000076_seed_dataset_kind_language_keys.sql', 'ef3ad5ec03814d753f955ef3ea262ed19e574b318de7fd63e2f5f9c292eb93c4', 'bootstrap_baseline', 'bootstrap'),
-      ('20261009000077_retire_global_dataset_alias_catalogue.sql', 'c5ade168ebaf022b72616c90dfeb13bb0e137c9bb0476eef03d048c619071dfa', 'bootstrap_baseline', 'bootstrap'),
-      ('20261009000078_enforce_dataset_name_namespace.sql', '0b63269eb20dec354caa6a2caa9f7d273754715db78022fde7256c2830a6282b', 'bootstrap_baseline', 'bootstrap'),
-      ('20261009000079_reconcile_system_database_identity_schema.sql', '0b0684e5afae66ec807439da51db4eca4e482da3e919e98aaa14ee8df24999e1', 'bootstrap_baseline', 'bootstrap'),
-      ('20261009000080_zone_platform_managed_timestamps.sql', '826830f53f102b127c2c31d9cd6eda6b65e5bfd467fae30342bbaa381cdc49bc', 'bootstrap_baseline', 'bootstrap'),
-      ('20261009000081_seed_runtime_grant_policy_wait_language_key.sql', '9fd1da7b15c1fa55ba2060748fef6d9d72be28709b330ab952219c048b52a211', 'bootstrap_baseline', 'bootstrap'),
-      ('20261009000082_complete_registered_column_metadata.sql', '14890e0b5385434fa2b6b5eced126f263c292c785cf1aa2e058b709af57b3583', 'bootstrap_baseline', 'bootstrap'),
-      ('20261009000083_add_automatic_log_retention.sql', 'e38a347d9511302d0c7333765f7e2fa7d8cf9b2d5996954b209a521c90a51b5e', 'bootstrap_baseline', 'bootstrap'),
-      ('20261009000099_record_database_release_9_10_2.sql', '190f66df60bd062997ebd80b2392eff7fdd843c9c8a709a4a1c30f136e6bbd97', 'bootstrap_baseline', 'bootstrap')
+      ('20261009000001_seed_front_page_description_language_key.sql', '4a50a90b79aae641ef03db50dcf73ab8255356f6000d8be0ba5427c89b082117', 'bootstrap_baseline', 'bootstrap'),
+      ('20261009000002_seed_admin_version_info_language_keys.sql', '86eebea9b2a33114057cb857542fd8810ddde80746ee769492679af3b40bd226', 'bootstrap_baseline', 'bootstrap'),
+      ('20261009000003_create_system_dataset_appearance.sql', '1bbd6e3acd4ad0c9eeec4004546c49d97aae3ffb4a172de36ba3c2e423fd3523', 'bootstrap_baseline', 'bootstrap'),
+      ('20261009000020_add_migration_execution_evidence.sql', '0911a4a47971a1f3674aa121a2e2357ced17c1083b1066315b293140659b4aac', 'bootstrap_baseline', 'bootstrap'),
+      ('20261009000040_cut_over_dataset_card_appearance.sql', 'f234540cc9550a46a18defa31d1c24f0798ba3b5852cec933b41be3ce778ad7c', 'bootstrap_baseline', 'bootstrap'),
+      ('20261009000041_seed_dataset_appearance_refusal_keys.sql', 'c9a0c6291c5bc5536a0233930fc102c697e7d8aa95f4b70432457413576b97c1', 'bootstrap_baseline', 'bootstrap'),
+      ('20261009000050_create_application_update_admission.sql', 'ccfe9072bf71daa882eace37dc5c4de640cd6eadfeac0665bfd353ca3067bda7', 'bootstrap_baseline', 'bootstrap'),
+      ('20261009000051_register_application_update_capability.sql', '9b5291bfc72c07207131c591d732286220f9db2ccceb0e1fdb9561c46e95ce64', 'bootstrap_baseline', 'bootstrap'),
+      ('20261009000052_seed_application_update_refusal_keys.sql', 'd59013a9ddc1f6e2495b3845d7166d9da95d2aa113a3e69472612cd732a9cfc3', 'bootstrap_baseline', 'bootstrap'),
+      ('20261009000060_extend_dataset_appearance_three_places.sql', 'da0371808ff3dc08ed40984c09e0ea83238e4b5ad8c91639dd7dd78625e194b8', 'bootstrap_baseline', 'bootstrap'),
+      ('20261009000061_backfill_dataset_appearance_three_places.sql', 'aaf43cca1d9d35764f4459236ac7c19e8e5154b3a6059d7c3e06b52aef1ce675', 'bootstrap_baseline', 'bootstrap'),
+      ('20261009000062_seed_three_place_appearance_reload.sql', 'e5d075adb652387057ac42d04412bf1dda0320a623a862dda63c7b59d6690a0a', 'bootstrap_baseline', 'bootstrap'),
+      ('20261009000070_add_publication_fields_to_release_goals.sql', '60bf45a8381b3ee578cb3b3708e70a9b5913900a345f23026203e8e01b1a45cf', 'bootstrap_baseline', 'bootstrap'),
+      ('20261009000071_seed_publication_language_keys.sql', '84d5067ff34a6eb9d86e1963e4ad032d94d1703dc0f22f7eee1b6ba4b772a175', 'bootstrap_baseline', 'bootstrap'),
+      ('20261009000072_register_publication_columns.sql', '3780ccc6cef018298387f072ceaca473f5f54fc3e6158f508b143a20ae8a65ad', 'bootstrap_baseline', 'bootstrap'),
+      ('20261009000073_repair_publication_translations.sql', '6f6a942c2d251e56b954cf4fde1aa732117a4b47a2bb36cdff693c2cb7828726', 'bootstrap_baseline', 'bootstrap'),
+      ('20261009000074_seed_filterbar_style_language_key.sql', '1e95987f4037b2b81448659a0449476df777d5a23471c080f74a8b43a726e9ba', 'bootstrap_baseline', 'bootstrap'),
+      ('20261009000075_add_dataset_kind_contracts.sql', '5bc775116961db251754b9b959d99a49ab684510ff4ad1f3ce13370b0bd0a8c8', 'bootstrap_baseline', 'bootstrap'),
+      ('20261009000076_seed_dataset_kind_language_keys.sql', '3d162ea70322379d78bb4dc9578f6225ed16c5aa11dea02f09be7d84c4d95c1d', 'bootstrap_baseline', 'bootstrap'),
+      ('20261009000077_retire_global_dataset_alias_catalogue.sql', '1fa9a9b853b677fe646d67bb1fcf74baf3ebbaf1c07ce405feca56e17c5e510b', 'bootstrap_baseline', 'bootstrap'),
+      ('20261009000078_enforce_dataset_name_namespace.sql', '3e303b7113f75f6de21419b912beb6b04b99c6842c79b033e85b2d43727edf93', 'bootstrap_baseline', 'bootstrap'),
+      ('20261009000079_reconcile_system_database_identity_schema.sql', '16da618f149b78a45e291749512675eb299955393d86efd680eb08f361a584cf', 'bootstrap_baseline', 'bootstrap'),
+      ('20261009000080_zone_platform_managed_timestamps.sql', '6f66e08b01e369052e5a37f2f21cda1c8621c3b26edbb9645e25ef2952808b97', 'bootstrap_baseline', 'bootstrap'),
+      ('20261009000081_seed_runtime_grant_policy_wait_language_key.sql', 'ee2826a98ba31c589a57430119daf1568c4d172a4256dc7597a4700105334dce', 'bootstrap_baseline', 'bootstrap'),
+      ('20261009000082_complete_registered_column_metadata.sql', 'b5f1511c90fb44ec40fbde5c31b729aa2653241e14bdd0c860720945b12792d9', 'bootstrap_baseline', 'bootstrap'),
+      ('20261009000083_add_automatic_log_retention.sql', '2a88b75ad4e63ce02716c1f691ff3cf7e5c0d00e7e19f15fe34acb660d0c873f', 'bootstrap_baseline', 'bootstrap'),
+      ('20261009000099_record_database_release_9_11_0.sql', '6785b1cf924a5d8d99f6d632dc976638acc974044543741b47a4842c5c693e7a', 'bootstrap_baseline', 'bootstrap')
     ON CONFLICT (filename) DO NOTHING;
     INSERT INTO public.system_db_version (version, description)
-    VALUES ('9.10.2', 'Filterest generated public bootstrap');
+    VALUES ('9.11.0', 'Filterest generated public bootstrap');
 END
 $filterest_acceptance$;

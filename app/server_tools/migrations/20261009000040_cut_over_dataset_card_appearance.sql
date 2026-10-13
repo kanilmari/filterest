@@ -2,8 +2,8 @@
 -- Preserves explicit legacy card choices as canonical dataset appearance overrides.
 -- Connects upgrades and fresh bootstrap with the sole revision-protected authority.
 -- Retires both physical columns and their editable metadata after checking preservation.
--- VERSION_DB: 9.10.2
--- VERSION_DB_OWNER: 20261009000099_record_database_release_9_10_2.sql
+-- VERSION_DB: 9.11.0
+-- VERSION_DB_OWNER: 20261009000099_record_database_release_9_11_0.sql
 -- COMPLETION_MARKER: dataset_card_appearance_cutover
 -- FINAL_CHECK: public.app_check_dataset_card_appearance_cutover()
 

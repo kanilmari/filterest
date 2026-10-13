@@ -15,7 +15,7 @@ from test_row_actor_support import cluster
 APP = Path(__file__).resolve().parents[2]
 BOOTSTRAP = APP / "server_tools/public_bootstrap"
 MIGRATIONS = APP / "server_tools/migrations"
-OWNER = "20261009000099_record_database_release_9_10_2.sql"
+OWNER = "20261009000099_record_database_release_9_11_0.sql"
 NAMES = (
     "20261009000050_create_application_update_admission.sql",
     "20261009000051_register_application_update_capability.sql",
@@ -45,7 +45,7 @@ def test_application_update_bootstrap_evidence_is_complete_and_reproducible(tmp_
     for name in NAMES:
         source = (MIGRATIONS / name).read_text()
         assert name < OWNER
-        assert "-- VERSION_DB: 9.10.2" in source
+        assert "-- VERSION_DB: 9.11.0" in source
         assert f"-- VERSION_DB_OWNER: {OWNER}" in source
         marker = source.split("-- COMPLETION_MARKER: ", 1)[1].splitlines()[0]
         check = source.split("-- FINAL_CHECK: ", 1)[1].splitlines()[0]
@@ -53,7 +53,7 @@ def test_application_update_bootstrap_evidence_is_complete_and_reproducible(tmp_
         assert (schema + seed).count(source) == 1
         evidence = manifest["source_files"]["filterest/app/server_tools/migrations/" + name]
         assert evidence["sha256"] == hashlib.sha256((MIGRATIONS / name).read_bytes()).hexdigest()
-    assert schema == (APP / "server_tools/versioning/schema_snapshots/db-9.10.2.sql").read_text()
+    assert schema == (APP / "server_tools/versioning/schema_snapshots/db-9.11.0.sql").read_text()
     result = subprocess.run([sys.executable, str(BOOTSTRAP / "generate_bootstrap.py"), "--target", str(tmp_path)], capture_output=True, text=True)
     assert result.returncode == 0, result.stderr
     for name in ("schema.sql", "seed_data.sql", "manifest.json"):

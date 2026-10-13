@@ -1,8 +1,8 @@
 -- 20261009000061_backfill_dataset_appearance_three_places.sql
 -- Activates owned tab appearance_values and sparse default overrides without shared cover writes.
 -- Connects upgrades and fresh bootstrap with the reviewed version-two definition.
--- VERSION_DB: 9.10.2
--- VERSION_DB_OWNER: 20261009000099_record_database_release_9_10_2.sql
+-- VERSION_DB: 9.11.0
+-- VERSION_DB_OWNER: 20261009000099_record_database_release_9_11_0.sql
 -- COMPLETION_MARKER: dataset_appearance_three_place_backfill
 -- FINAL_CHECK: public.app_check_dataset_appearance_three_places()
 

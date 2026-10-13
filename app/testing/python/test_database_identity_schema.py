@@ -23,8 +23,8 @@ SETUP = APP / "server_tools/setup_local_dev_environment.sh"
 
 def test_migration_owns_identity_schema_and_setup_owns_only_the_first_row():
     sql = MIGRATION.read_text()
-    assert "-- VERSION_DB: 9.10.2" in sql
-    assert "-- VERSION_DB_OWNER: 20261009000099_record_database_release_9_10_2.sql" in sql
+    assert "-- VERSION_DB: 9.11.0" in sql
+    assert "-- VERSION_DB_OWNER: 20261009000099_record_database_release_9_11_0.sql" in sql
     assert "INSERT INTO public.system_database_identity" not in sql
     assert not re.search(r"\b(?:UPDATE|DELETE FROM)\s+public\.system_database_identity\b", sql)
     assert not re.search(r"\bGRANT\b", sql)
@@ -52,11 +52,11 @@ def test_bootstrap_includes_identity_schema_without_an_installation_row():
     assert "public.system_database_identity" in manifest["allowed_schema_tables"]
     assert "public.system_database_identity" not in manifest["allowed_seed_tables"]
     assert NAME in manifest["migration_ledger_baseline"]
-    assert NAME < "20261009000099_record_database_release_9_10_2.sql"
+    assert NAME < "20261009000099_record_database_release_9_11_0.sql"
     assert NAME > "20261009000078"
     assert MIGRATION.read_text() in (BOOTSTRAP / "schema.sql").read_text()
     assert manifest["source_files"]["filterest/app/server_tools/migrations/" + NAME]["sha256"] == hashlib.sha256(MIGRATION.read_bytes()).hexdigest()
-    assert (APP / "server_tools/versioning/schema_snapshots/db-9.10.2.sql").read_bytes() == (BOOTSTRAP / "schema.sql").read_bytes()
+    assert (APP / "server_tools/versioning/schema_snapshots/db-9.11.0.sql").read_bytes() == (BOOTSTRAP / "schema.sql").read_bytes()
 
 
 def test_started_native_reference_is_admitted_and_identity_stays_managed():

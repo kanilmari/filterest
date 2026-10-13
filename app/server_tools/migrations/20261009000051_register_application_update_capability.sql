@@ -2,8 +2,8 @@
 -- Registers the explicit-only update capability and the guarded administrator APIs.
 -- Connects existing group permission editing to durable admission and decisions.
 -- Never grants the sensitive capability, including to the initial administrator.
--- VERSION_DB: 9.10.2
--- VERSION_DB_OWNER: 20261009000099_record_database_release_9_10_2.sql
+-- VERSION_DB: 9.11.0
+-- VERSION_DB_OWNER: 20261009000099_record_database_release_9_11_0.sql
 -- COMPLETION_MARKER: wl157_application_update_capability
 -- FINAL_CHECK: public.app_check_application_update_capability()
 

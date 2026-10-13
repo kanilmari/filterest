@@ -56,8 +56,8 @@ def test_namespace_bootstrap_check_refuses_drift_without_repair(tmp_path):
 def test_namespace_migration_sorts_before_release_and_does_not_rewrite_timestamps():
     source = MIGRATION.read_text()
     assert "20261009000077" < MIGRATION.name < "20261009000099"
-    assert "-- VERSION_DB: 9.10.2" in source
-    assert "-- VERSION_DB_OWNER: 20261009000099_record_database_release_9_10_2.sql" in source
+    assert "-- VERSION_DB: 9.11.0" in source
+    assert "-- VERSION_DB_OWNER: 20261009000099_record_database_release_9_11_0.sql" in source
     assert "DELETE FROM public.system_db_table_aliases" not in source
     assert "NEW.updated := OLD.updated" in source
     assert "ALTER COLUMN" not in source

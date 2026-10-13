@@ -2,8 +2,8 @@
 -- Adds owner decision K353's 90-day log defaults to fresh and existing settings.
 -- Connects the public bootstrap and upgrades to the existing daily retention loop.
 -- Preserves private migration rows and operator policies without duplicate keys.
--- VERSION_DB: 9.10.2
--- VERSION_DB_OWNER: 20261009000099_record_database_release_9_10_2.sql
+-- VERSION_DB: 9.11.0
+-- VERSION_DB_OWNER: 20261009000099_record_database_release_9_11_0.sql
 -- COMPLETION_MARKER: t750_automatic_log_retention
 
 -- One identity rule for policy tables and generated names. PostgreSQL's default

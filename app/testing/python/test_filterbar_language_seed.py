@@ -13,7 +13,7 @@ from test_field_settings_language_seed import database
 
 APP = Path(__file__).resolve().parents[2]
 MIGRATION = APP / "server_tools/migrations/20261009000074_seed_filterbar_style_language_key.sql"
-OWNER = "20261009000099_record_database_release_9_10_2.sql"
+OWNER = "20261009000099_record_database_release_9_11_0.sql"
 STYLE = "filterbar_style_and_colors"
 LOCALES = ("fi", "en", "zh-CN", "zh-TW", "zh-HK")
 DEFAULTS = {
@@ -37,7 +37,7 @@ def test_filterbar_seed_requires_nonblank_candidates_and_repairs_blank_copy():
 def test_filterbar_seed_declares_actual_filename_and_database_owner():
     source = MIGRATION.read_text()
     assert source.splitlines()[0] == "-- " + MIGRATION.name
-    assert "-- VERSION_DB: 9.10.2" in source
+    assert "-- VERSION_DB: 9.11.0" in source
     assert "-- VERSION_DB_OWNER: " + OWNER in source
     assert MIGRATION.name < OWNER
 
@@ -46,7 +46,7 @@ def test_filterbar_guide_uses_assigned_database_release():
     # The toolbar section moved with the frontend guide split (#921) into the dataset appearance guide.
     guide = (APP / "docs/instructions_and_documentation/Frontend_Dataset_Appearance.md").read_text()
     paragraph = next(line for line in guide.splitlines() if MIGRATION.name in line)
-    assert "unreleased DB 9.10.2" in paragraph
+    assert "unreleased DB 9.11.0" in paragraph
     assert OWNER in paragraph
     assert "assign its next database release" not in paragraph
 

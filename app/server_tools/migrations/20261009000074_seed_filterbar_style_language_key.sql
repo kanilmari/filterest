@@ -2,8 +2,8 @@
 -- Seeds the filter-panel appearance title and phone search toggle in every UI language.
 -- Connects filterbar disclosures and accessible controls to both translation stores.
 -- Fills blank served translations while preserving installation-authored bytes.
--- VERSION_DB: 9.10.2
--- VERSION_DB_OWNER: 20261009000099_record_database_release_9_10_2.sql
+-- VERSION_DB: 9.11.0
+-- VERSION_DB_OWNER: 20261009000099_record_database_release_9_11_0.sql
 
 WITH copy(lang_key, fi, en, ch, tw, yue) AS (VALUES
     ('filterbar_style_and_colors', 'Tyyli- ja väriasetukset', 'Style and color settings',

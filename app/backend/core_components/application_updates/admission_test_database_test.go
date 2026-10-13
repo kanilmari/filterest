@@ -140,7 +140,7 @@ func testActor() Authorization {
 	return Authorization{ActorID: 42, Generation: 3, SignInID: "sign-in-42", SignInExpiresAt: time.Now().Add(time.Hour).Unix()}
 }
 func testOffer(now time.Time) Offer {
-	return Offer{ProtocolVersion: 1, ID: "offer-1", Target: testTarget(), Composition: "filterest", SourceCommit: strings.Repeat("d", 40), CurrentReleaseID: "9.3.23", CurrentImageDigest: "sha256:" + strings.Repeat("e", 64), FromDatabaseVersion: "9.10.1", ToDatabaseVersion: "9.10.2", TrustRevision: 2, ExpiresAt: timestamp(now.Add(time.Hour)), ReleaseVerified: true, InstallationCompatible: true, ExecutionReady: true}
+	return Offer{ProtocolVersion: 1, ID: "offer-1", Target: testTarget(), Composition: "filterest", SourceCommit: strings.Repeat("d", 40), CurrentReleaseID: "9.3.23", CurrentImageDigest: "sha256:" + strings.Repeat("e", 64), FromDatabaseVersion: "9.10.1", ToDatabaseVersion: "9.11.0", TrustRevision: 2, ExpiresAt: timestamp(now.Add(time.Hour)), ReleaseVerified: true, InstallationCompatible: true, ExecutionReady: true}
 }
 func proofAnswer(binding proofBinding, now time.Time, consumed bool) queryAnswer {
 	var used driver.Value

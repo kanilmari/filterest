@@ -39,7 +39,8 @@ export function fakeApi(datasets: Record<string, Dataset> = {}) {
     onCsrf: () => {}, onMetadata: (_name: string) => {} };
   const get = vi.fn(async (url: string, options?: { params?: { dataset?: string } }) => {
     if (url === '/api/user-profile') return response(state.profile);
-    if (url === '/api/admin/version-info') return response({ app_version: '9.3.24', db_version: '9.10.2' });
+    // Synthetic application version keeps recovery independent of the release cut.
+    if (url === '/api/admin/version-info') return response({ app_version: '9.3.24', db_version: '9.11.0' });
     if (url === '/api/get-results') return response({ row_count: 1,
       data: [{ singleton_key: true, database_id: state.databaseId }] });
     if (url === '/api/csrf-token') {

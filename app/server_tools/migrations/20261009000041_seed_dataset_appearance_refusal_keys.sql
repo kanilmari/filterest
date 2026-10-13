@@ -2,8 +2,8 @@
 -- Seeds actionable appearance save refusals in every bundled language.
 -- Connects administrator API reason keys with the canonical translation stores.
 -- Preserves reviewed translations on upgrades and replay.
--- VERSION_DB: 9.10.2
--- VERSION_DB_OWNER: 20261009000099_record_database_release_9_10_2.sql
+-- VERSION_DB: 9.11.0
+-- VERSION_DB_OWNER: 20261009000099_record_database_release_9_11_0.sql
 WITH authored(lang_key,fi,en,ch,yue) AS (VALUES
  ('dataset_appearance_conflict','Ulkoasuasetukset ovat muuttuneet. Lataa asetukset uudelleen ja tarkista muutokset ennen tallentamista.','Appearance settings changed. Reload and review before saving.','外观设置已更改。请重新加载并检查后再保存。','外觀設定已更改。請重新載入並檢查後再儲存。'),
  ('dataset_appearance_invalid','Ulkoasuasetus ei kelpaa. Tarkista arvot ja niiden järjestys.','An appearance setting is invalid. Check the values and their order.','外观设置无效。请检查数值及其顺序。','外觀設定無效。請檢查數值同次序。'),

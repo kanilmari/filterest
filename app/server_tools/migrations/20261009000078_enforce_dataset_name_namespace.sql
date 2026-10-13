@@ -2,8 +2,8 @@
 -- Serializes dataset names and all active aliases in one global namespace.
 -- Connects registry/alias persistence and the administrator naming endpoints.
 -- Keeps real names on upgrade; conflicting aliases retain their rows and timestamps.
--- VERSION_DB: 9.10.2
--- VERSION_DB_OWNER: 20261009000099_record_database_release_9_10_2.sql
+-- VERSION_DB: 9.11.0
+-- VERSION_DB_OWNER: 20261009000099_record_database_release_9_11_0.sql
 -- COMPLETION_MARKER: wl159_dataset_namespace
 
 -- Only the small metadata tables are changed/locked, never dataset contents.
