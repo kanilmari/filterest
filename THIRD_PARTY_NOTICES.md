@@ -9,11 +9,11 @@ Reviewed upstream legal and attribution document bytes are retained under
 
 ## Candidate
 
-- Filterest app version: `9.3.23`
-- Database version: `9.10.1`
+- Filterest app version: `9.4.0`
+- Database version: `9.11.0`
 - Project source license: `GPL-2.0-or-later`
 - Combined release-binary license: `GPL-3.0-or-later`
-- License bundle manifest SHA-256: `0283f73b37266b34be83556e4923f0b848af498ee8c24dc6359549630e093b51`
+- License bundle manifest SHA-256: `0b245f0345796437522395910d25f63b4ed08ec1767e134f74e0d2d1d660919f`
 - Go metadata source: `GOOS=linux GOARCH=amd64 CGO_ENABLED=1 go list -deps metadata for filterest[linux-release]:. tags=netgo osusergo; filterest[container]:.; filterest-admin-recovery[container]:./server_tools/admin_credential_recovery, plus compiled vendored components and Go toolchain`
 - npm metadata source: `package-lock.json production dependency graph`
 - browser bundle metadata source: `app/server_tools/licenses/browser_bundle_provenance.json matched against app/package-lock.json and app/frontend/dist/*.js`
@@ -23,7 +23,7 @@ Reviewed upstream legal and attribution document bytes are retained under
 - browser bundle build components listed: `3`
 - third-party asset files listed: `81`
 - source files containing third-party icon geometry: `6`
-- first-party asset files recorded: `48`
+- first-party asset files recorded: `53`
 - retained legal and attribution documents: `36`
 - unresolved third-party rows: `0`
 
@@ -98,7 +98,7 @@ Apache-2.0 components, the combined binaries are conveyed under GPL-3.0-or-later
 | --- | ---: | --- | --- | --- | --- |
 | Filterest brand and fallback images | 11 | Filterest project contributors | Filterest project contributors | Maintained as original Filterest project assets under the repository-wide GPL-2.0-or-later grant; the human project owner confirmed the first-party classification and approved publication on 2026-08-30. | GPL-2.0-or-later |
 | Filterest demo placeholder images | 15 | Filterest human project owner | Filterest human project owner | The author created these neutral text placeholders in Microsoft Paint without third-party source imagery and approved their redistribution with Filterest under GPL-2.0-or-later on 2026-08-30; no separate attribution is requested. | GPL-2.0-or-later |
-| Filterest original interface SVGs | 22 | Filterest project contributors | Filterest project contributors | Maintained as original Filterest project assets under the repository-wide GPL-2.0-or-later grant; the human project owner confirmed the first-party classification and approved publication on 2026-08-30. | GPL-2.0-or-later |
+| Filterest original interface SVGs | 27 | Filterest project contributors | Filterest project contributors | Maintained as original Filterest project assets under the repository-wide GPL-2.0-or-later grant; the human project owner confirmed the first-party classification and approved publication on 2026-08-30. | GPL-2.0-or-later |
 
 ## Asset Provenance
 
