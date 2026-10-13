@@ -55,7 +55,9 @@ and the resulting runtime before publishing those files. Preserve existing
 version tags and release records rather than silently moving or rewriting them.
 
 Builds and release checks run locally. GitHub stores source, tags, and reviewed
-release files; this workflow does not require GitHub Actions.
+release files; this workflow does not require GitHub Actions. A planned owned
+release mirror that keeps published versions obtainable without GitHub is
+described in [source code availability](../future_documentation/Source_Code_Availability.md).
 
 ## Maintainer automation status
 

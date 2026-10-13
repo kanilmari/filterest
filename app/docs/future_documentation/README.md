@@ -75,3 +75,5 @@ Update incoming documentation links when text moves or a document is deleted.
   on one computer, portable locations and local, rebuildable search data.
 - [AI setup choices](AI_Setup_Choices.md) describes independent, optional AI uses
   during setup and administration, data disclosures and manual translation steps.
+- [Source code availability](Source_Code_Availability.md) describes a planned
+  owned release mirror for obtaining published versions without GitHub.
