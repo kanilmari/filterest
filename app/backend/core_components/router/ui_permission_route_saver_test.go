@@ -10,6 +10,7 @@ import (
 	"database/sql/driver"
 	"errors"
 	"fmt"
+	"io"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -36,6 +37,10 @@ type uiPermissionRouteTestState struct {
 	commitCount   int
 	rollbackCount int
 	execCalls     []uiPermissionRouteExecCall
+	// Optional insert-result fixture: existing names return no row, as PostgreSQL does.
+	createdRoutes map[string]int64
+	defaultGrants map[int64]string
+	queryErr      error
 }
 
 type uiPermissionRouteTestDriver struct {
@@ -90,7 +95,44 @@ func (c *uiPermissionRouteTestConn) ExecContext(
 	if c.state.failExecAt > 0 && len(c.state.execCalls) == c.state.failExecAt {
 		return nil, errors.New("scripted UI route reconciliation failure")
 	}
+	if query == grantNewUIPermissionDefaultsSQL && c.state.defaultGrants != nil {
+		c.state.defaultGrants[args[0].Value.(int64)] = args[1].Value.(string)
+	}
 	return driver.RowsAffected(1), nil
+}
+
+type uiPermissionCreatedRows struct{ values []driver.Value }
+
+func (r *uiPermissionCreatedRows) Columns() []string { return []string{"id"} }
+func (r *uiPermissionCreatedRows) Close() error      { return nil }
+func (r *uiPermissionCreatedRows) Next(dest []driver.Value) error {
+	if len(r.values) == 0 {
+		return io.EOF
+	}
+	dest[0] = r.values[0]
+	r.values = nil
+	return nil
+}
+
+func (c *uiPermissionRouteTestConn) QueryContext(_ context.Context, query string, args []driver.NamedValue) (driver.Rows, error) {
+	c.state.mu.Lock()
+	defer c.state.mu.Unlock()
+	if query != insertMissingUIPermissionRouteSQL {
+		return nil, fmt.Errorf("unexpected query: %s", query)
+	}
+	if c.state.queryErr != nil {
+		return nil, c.state.queryErr
+	}
+	name := args[0].Value.(string)
+	if c.state.createdRoutes == nil {
+		return &uiPermissionCreatedRows{}, nil
+	}
+	if _, exists := c.state.createdRoutes[name]; exists {
+		return &uiPermissionCreatedRows{}, nil
+	}
+	id := int64(len(c.state.createdRoutes) + 1)
+	c.state.createdRoutes[name] = id
+	return &uiPermissionCreatedRows{values: []driver.Value{id}}, nil
 }
 
 func (tx *uiPermissionRouteTestTx) Commit() error {
@@ -108,7 +150,7 @@ func (tx *uiPermissionRouteTestTx) Rollback() error {
 }
 
 func TestCanonicalUIPermissionRoutesAreUniqueAndComplete(t *testing.T) {
-	if got, want := len(canonicalUIPermissionRoutes), 33; got != want {
+	if got, want := len(canonicalUIPermissionRoutes), 41; got != want {
 		t.Fatalf("canonical UI route count = %d, want %d", got, want)
 	}
 

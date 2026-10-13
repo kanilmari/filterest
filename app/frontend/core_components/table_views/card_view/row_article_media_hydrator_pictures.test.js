@@ -4,6 +4,7 @@
 // Connects the hydrator with the real asset resolver, inline media and gallery builder.
 // Guards K120 and K128: the server orders and names the gallery and names the card picture,
 // the article opens on that picture, and row fields only stand in without a response.
+import { ROW_ARTICLE_PERMISSION_ROUTES } from './row_article_permission_checker.js';
 import { beforeEach, describe, expect, test, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
@@ -57,6 +58,7 @@ const rowImage = (filename) => ({
 beforeEach(() => {
     localStorage.clear();
     document.body.replaceChildren();
+        sessionStorage.setItem('user_permissions', JSON.stringify(Object.values(ROW_ARTICLE_PERMISSION_ROUTES)));
     vi.clearAllMocks();
     mocks.confirm.mockResolvedValue(true);
     mocks.request.mockResolvedValue({ ok: true });
@@ -113,6 +115,22 @@ const activeThumbnail = (content) => Array
     .from(content.querySelectorAll('.row_article_image_gallery [data-testid^="big-card-image-thumb-"]'))
     .find((thumbnail) => thumbnail.classList.contains("active_thumb"))
     ?.querySelector("img").getAttribute("src") ?? null;
+
+test('hiding the gallery keeps the real inline main image and its refreshed picture', async () => {
+    sessionStorage.setItem('user_permissions', JSON.stringify([ROW_ARTICLE_PERMISSION_ROUTES.details]));
+    const { content, controller } = openArticle({ responses: [{
+        gallery_relation: relation,
+        card_picture: 'https://cdn.example/card.png',
+        child_tables: [gallery([first, second])],
+    }, { gallery_relation: relation, card_picture: null, child_tables: [gallery([third])] }] });
+    await controller.hydrateRelatedSections();
+    expect(inlineSource(content)).toBe('https://cdn.example/card.png');
+    expect(content.querySelector('.row_article_image_gallery_section')).toBeNull();
+    await controller.refreshMediaSections();
+    expect(inlineSource(content)).toBe(resolveImagePath(third.filename));
+    expect(content.querySelector('.row_article_image_gallery_section')).toBeNull();
+    controller.dispose();
+});
 
 test("the inline main image and the gallery follow the fresh response, a card-only picture first", async () => {
     const { content, controller } = openArticle({

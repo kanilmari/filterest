@@ -25,11 +25,13 @@ vi.mock("../../../reusable_components/notifications/toast_notification_printer.j
 
 import { buildRowArticleTaskProgressSection } from "./row_article_task_progress.js";
 import { renderTaskTodoCheckboxList } from "./row_article_task_todo_list.js";
+import { ROW_ARTICLE_PERMISSION_ROUTES } from './row_article_permission_checker.js';
 
 describe("row_article_task_todo_list", () => {
     beforeEach(() => {
         document.body.innerHTML = `<article class="active_row_article"></article>`;
         endpointRouterMock.mockReset();
+        sessionStorage.setItem('user_permissions', JSON.stringify(Object.values(ROW_ARTICLE_PERMISSION_ROUTES)));
         showErrorToastMock.mockReset();
     });
 

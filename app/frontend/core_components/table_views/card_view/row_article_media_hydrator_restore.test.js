@@ -3,6 +3,7 @@
 // Verifies article media hydration restores related-tab and Related rows state.
 // Bridges persisted articleView restore fields with related-tab construction.
 // Exists so F5 on the same ticket article_view URL reopens Agent task todos.
+import { ROW_ARTICLE_PERMISSION_ROUTES } from './row_article_permission_checker.js';
 import { beforeEach, expect, test, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
@@ -44,6 +45,7 @@ import { createRowArticleMediaHydrator } from "./row_article_media_hydrator.js";
 beforeEach(() => {
     localStorage.clear();
     sessionStorage.clear();
+        sessionStorage.setItem('user_permissions', JSON.stringify(Object.values(ROW_ARTICLE_PERMISSION_ROUTES)));
     document.body.replaceChildren();
     vi.clearAllMocks();
 });

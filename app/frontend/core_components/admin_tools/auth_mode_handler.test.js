@@ -82,7 +82,7 @@ describe('auth_mode_handler', () => {
     );
   });
 
-  test('clears cached permissions for guest mode', async () => {
+  test('clears cached permissions when an older bootstrap lacks guest grants', async () => {
     sessionStorage.setItem('user_permissions', JSON.stringify(['/ui/view/table']));
     localStorage.setItem('login_required_for_browse', 'true');
     localStorage.setItem('show_login_button', 'false');
@@ -99,6 +99,55 @@ describe('auth_mode_handler', () => {
     expect(localStorage.getItem('only_admin_can_login')).toBe('false');
     expect(sessionStorage.getItem('user_permissions')).toBe(null);
     expect(synchronizeThemePreferenceForAuthStateMock).toHaveBeenCalledWith(false);
+  });
+
+  test('guest, sign-in and sign-out replace their route sets without merging', async () => {
+    const mod = await loadModule();
+    fetchAuthModesMock.mockResolvedValue({ needs_button: 'login', guest_ui_endpoints: ['/ui/article/section/details'] });
+    await mod.setAuthModes();
+    expect(JSON.parse(sessionStorage.getItem('user_permissions'))).toEqual(['/ui/article/section/details']);
+    fetchAuthModesMock.mockResolvedValue({ needs_button: 'logout', guest_ui_endpoints: ['/ui/article/section/details'] });
+    fetchUserPermissionsMock.mockResolvedValue({ endpoints: ['/ui/article/section/attachments'] });
+    await mod.setAuthModes();
+    expect(JSON.parse(sessionStorage.getItem('user_permissions'))).toEqual(['/ui/article/section/attachments']);
+    fetchAuthModesMock.mockResolvedValue({ needs_button: 'login', guest_ui_endpoints: ['/ui/article/section/details'] });
+    await mod.setAuthModes();
+    expect(JSON.parse(sessionStorage.getItem('user_permissions'))).toEqual(['/ui/article/section/details']);
+    expect(fetchUserPermissionsMock).toHaveBeenCalledTimes(1);
+  });
+
+  test.each(['guest', 'user'])('discards a delayed %s response after a newer bootstrap', async identity => {
+    const mod = await loadModule();
+    let finish;
+    if (identity === 'guest') {
+      fetchAuthModesMock.mockReturnValueOnce(new Promise(resolve => { finish = resolve; }));
+    } else {
+      fetchAuthModesMock.mockResolvedValueOnce({ needs_button: 'logout' });
+      fetchUserPermissionsMock.mockReturnValueOnce(new Promise(resolve => { finish = resolve; }));
+    }
+    const pending = mod.setAuthModes();
+    await vi.waitFor(() => expect(identity === 'guest' ? fetchAuthModesMock : fetchUserPermissionsMock).toHaveBeenCalled());
+    fetchAuthModesMock.mockResolvedValueOnce({ needs_button: 'login', guest_ui_endpoints: ['/ui/current'] });
+    await mod.setAuthModes();
+    finish(identity === 'guest' ? { needs_button: 'login', guest_ui_endpoints: ['/ui/stale'] } : { endpoints: ['/ui/stale'] });
+    await pending;
+    expect(JSON.parse(sessionStorage.getItem('user_permissions'))).toEqual(['/ui/current']);
+    expect(localStorage.getItem('button_state')).toBe('login');
+  });
+
+  test('session invalidation clears grants and rejects an in-flight bootstrap', async () => {
+    const mod = await loadModule();
+    const session = await import('../auth/session_generation_store.js');
+    fetchAuthModesMock.mockResolvedValueOnce({ needs_button: 'login', guest_ui_endpoints: ['/ui/old'] });
+    await mod.setAuthModes();
+    let finish;
+    fetchAuthModesMock.mockReturnValueOnce(new Promise(resolve => { finish = resolve; }));
+    const pending = mod.setAuthModes();
+    expect(sessionStorage.getItem('user_permissions')).toBeNull();
+    session.invalidateSessionGeneration({ reason: 'logout' });
+    finish({ needs_button: 'login', guest_ui_endpoints: ['/ui/stale'] });
+    await pending;
+    expect(sessionStorage.getItem('user_permissions')).toBeNull();
   });
 
   test('stores the two Home presentation fields and resets stale values from an older server', async () => {

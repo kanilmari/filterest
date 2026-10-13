@@ -4,9 +4,10 @@
 // Exists to preserve article content contracts while shared renderers and wrappers evolve.
 // @vitest-environment jsdom
 
+import { ROW_ARTICLE_PERMISSION_ROUTES, hasRowArticlePermission } from './row_article_permission_checker.js';
 import { beforeEach, describe, expect, test, vi } from 'vitest';
 
-const {
+import {
     createImageElementMock,
     createSeededAvatarMock,
     createRowArticleKeyValueElementMock,
@@ -16,101 +17,22 @@ const {
     isTicketStatusFieldMock,
     resolveRowArticleTimestampDisplayOptionsMock,
     resolveRowArticleRelationDetailEntriesMock,
-} = vi.hoisted(() => ({
-    createImageElementMock: vi.fn(),
-    createSeededAvatarMock: vi.fn(),
-    createRowArticleKeyValueElementMock: vi.fn(),
-    createRowArticleNavigableElementMock: vi.fn(),
-    createTicketStatusBadgeMock: vi.fn(),
-    bindImageFirstViewActivationMock: vi.fn(),
-    isTicketStatusFieldMock: vi.fn(),
-    resolveRowArticleTimestampDisplayOptionsMock: vi.fn(),
-    resolveRowArticleRelationDetailEntriesMock: vi.fn((entries) => entries),
-}));
-
-vi.mock('./card_field_formatter.js', () => ({
-    parseRoleString: vi.fn((roleString = '') => {
-        const baseRoles = [];
-        let hasLangKey = false;
-        String(roleString || '').split(',').forEach((role) => {
-            const parts = role.split('+').map((part) => part.trim()).filter(Boolean);
-            const [mainRole, ...extras] = parts;
-            if (mainRole) baseRoles.push(mainRole);
-            if (extras.some((extra) => extra === 'lang-key' || extra === 'lang_key')) {
-                hasLangKey = true;
-            }
-        });
-        return { baseRoles, hasLangKey };
-    }),
-    format_column_name: vi.fn((column) => column),
-    createTicketStatusBadge: createTicketStatusBadgeMock,
-}));
-
-vi.mock('./card_field_formatter_helpers.js', () => ({
-    isGeneratedForeignDisplayColumn: vi.fn(() => false),
-    isTicketStatusField: isTicketStatusFieldMock,
-    resolveCardFieldDisplayValue: vi.fn((rowItem, column) => ({
-        rawValue: rowItem[column] ?? '',
-        displayValue: String(rowItem[column] ?? ''),
-        isMultilingual: false,
-    })),
-}));
-
-vi.mock('../../filterbar/filter_list/column_visibility_handler.js', () => ({
-    makeColumnClass: vi.fn(() => 'mock-column'),
-}));
-
-vi.mock('./card_element_builder.js', () => ({
-    addUsernameElement: vi.fn(() => document.createElement('div')),
-}));
-
-vi.mock('./card_avatar_builder.js', () => ({
-    createImageElement: createImageElementMock,
-    create_seeded_avatar: createSeededAvatarMock,
-}));
-
-vi.mock('./image_first_view_activation.js', () => ({
-    bindImageFirstViewActivation: bindImageFirstViewActivationMock,
-}));
-
-vi.mock('../../../ui_config.js', () => ({
-    always_show_empty_fields_on_cards: true,
-    row_article_relation_details_mode: 'hide',
-}));
-
-vi.mock('../../state_stores/lang_preference_reader.js', () => ({
-    getLanguageWithBrowserFallback: vi.fn(() => 'en'),
-}));
-
-vi.mock('./row_article_presentation_settings.js', () => ({
-    resolveRowArticleTimestampDisplayOptions: resolveRowArticleTimestampDisplayOptionsMock,
-}));
-
-vi.mock('./row_article_ui_handler.js', () => ({
-    createRowArticleKeyValueElement: createRowArticleKeyValueElementMock,
-    createRowArticleNavigableElement: createRowArticleNavigableElementMock,
-    resolveRowArticleLocalizedValue: vi.fn((value) => String(value ?? '')),
-}));
-
-vi.mock('./row_article_content_builder_helpers.js', () => ({
-    extractSuffixNumber: vi.fn(() => 0),
-    resolveImagePath: vi.fn((value) => value),
-    classifyRole: vi.fn((role) => role),
-}));
-
-vi.mock('./relation_detail_helpers.js', () => ({
-    expandForeignKeyDetailEntries: vi.fn((entries) => entries),
-    resolveRowArticleRelationDetailEntries: resolveRowArticleRelationDetailEntriesMock,
-}));
+    fetchAuthModesMock,
+    fetchUserPermissionsMock,
+} from './row_article_content_builder_test_setup.js';
 
 import { buildRowArticleContent } from './row_article_content_builder.js';
 import { CARD_IMAGE_RENDER_SLOTS } from './card_image_render_options.js';
 import { resolveCardFieldDisplayValue } from './card_field_formatter_helpers.js';
+import { setAuthModes } from '../../admin_tools/auth_mode_handler.js';
 
 describe('row_article_content_builder', () => {
     beforeEach(() => {
         document.body.innerHTML = '';
+        sessionStorage.setItem('user_permissions', JSON.stringify(Object.values(ROW_ARTICLE_PERMISSION_ROUTES)));
         localStorage.clear();
+        fetchAuthModesMock.mockReset();
+        fetchUserPermissionsMock.mockReset();
         createImageElementMock.mockReset();
         createSeededAvatarMock.mockReset();
         createRowArticleKeyValueElementMock.mockReset();
@@ -140,6 +62,61 @@ describe('row_article_content_builder', () => {
         createSeededAvatarMock.mockResolvedValue(document.createElement('div'));
         createRowArticleKeyValueElementMock.mockImplementation(() => document.createElement('div'));
         createRowArticleNavigableElementMock.mockImplementation(() => document.createElement('div'));
+    });
+
+    test.each(['administrator', 'reader', 'revoked'])('%s grants keep article text and the large image', async (group) => {
+        const grants = group === 'administrator' ? Object.values(ROW_ARTICLE_PERMISSION_ROUTES)
+            : group === 'revoked' ? [] : [ROW_ARTICLE_PERMISSION_ROUTES.details];
+        sessionStorage.setItem('user_permissions', JSON.stringify(grants));
+        createRowArticleKeyValueElementMock.mockImplementation((_label, value, column, _key, className) => {
+            const element = document.createElement('div');
+            element.className = className;
+            element.dataset.column = column;
+            element.textContent = value;
+            return element;
+        });
+        const row = { title: 'An article', description: 'Always visible text', image: '/photo.jpg', note: 'A detail' };
+        const roles = { title: 'header', description: 'description', image: 'image', note: 'details' };
+        const metadata = Object.fromEntries(Object.entries(roles).map(([column, card_element]) => [column, { card_element }]));
+        const { rowArticleContentElement: content } = await buildRowArticleContent(
+            row, 'events', metadata, Object.keys(row), 'seed', 'A', true,
+        );
+        expect(content.querySelector('.big_card_description_container').textContent).toBe('Always visible text');
+        expect(content.querySelector('.big_card_image img').getAttribute('src')).toBe('/photo.jpg');
+        expect(content.querySelectorAll('.row_article_details_section')).toHaveLength(group === 'revoked' ? 0 : 1);
+        const detailBuilds = createRowArticleKeyValueElementMock.mock.calls.filter(args => args[2] === 'note');
+        expect(detailBuilds).toHaveLength(group === 'revoked' ? 0 : 1);
+    });
+
+    test.each(['default', 'revoked', 'fetch failure', 'malformed', 'non-UI'])('real anonymous bootstrap: %s', async (state) => {
+        sessionStorage.clear(); // No synthetic permissions: run the application's guest bootstrap.
+        createRowArticleKeyValueElementMock.mockImplementation((_label, value) => {
+            const element = document.createElement('div');
+            element.textContent = value;
+            return element;
+        });
+        const grants = state === 'default' ? [ROW_ARTICLE_PERMISSION_ROUTES.details]
+            : state === 'malformed' ? 'invalid' : state === 'non-UI' ? ['/api/delete-rows'] : [];
+        fetchAuthModesMock.mockResolvedValue({ needs_button: 'login', guest_ui_endpoints: grants });
+        await setAuthModes();
+        if (state === 'revoked' || state === 'fetch failure') {
+            fetchAuthModesMock.mockResolvedValueOnce({ needs_button: 'login', guest_ui_endpoints: [ROW_ARTICLE_PERMISSION_ROUTES.details] });
+            await setAuthModes();
+            expect(hasRowArticlePermission('details')).toBe(true);
+            if (state === 'fetch failure') fetchAuthModesMock.mockRejectedValueOnce(new Error('offline'));
+            await setAuthModes();
+        }
+        const { rowArticleContentElement: content } = await buildRowArticleContent(
+            { description: 'Visible body', note: 'Guest detail' }, 'events',
+            { description: { card_element: 'description' }, note: { card_element: 'details' } },
+            ['description', 'note'], 'seed', '', false, 1,
+        );
+        expect(content.querySelector('.big_card_description_container').textContent).toBe('Visible body');
+        expect(content.querySelectorAll('.row_article_details_section')).toHaveLength(state === 'default' ? 1 : 0);
+        for (const key of Object.keys(ROW_ARTICLE_PERMISSION_ROUTES)) {
+            expect(hasRowArticlePermission(key)).toBe(state === 'default' && key === 'details');
+        }
+        expect(fetchUserPermissionsMock).not.toHaveBeenCalled();
     });
 
     test.each([false, true])('applies details opening default %s without losing field content', async (startOpen) => {

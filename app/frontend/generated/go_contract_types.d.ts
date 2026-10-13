@@ -312,6 +312,7 @@ export interface AuthModesResponse {
     only_admin_can_login: boolean;
     separate_front_page: boolean;
     front_page_button_site_name: string;
+    guest_ui_endpoints?: string[];
 }
 
 export interface UserPermissionsResponse {

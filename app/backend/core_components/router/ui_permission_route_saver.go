@@ -13,6 +13,8 @@ type uiPermissionRouteDefinition struct {
 	Name                 string
 	URLRouteEndpoint     string
 	SpecificTableRelated bool
+	// Empty preserves other UI defaults; article routes seed only on creation.
+	DefaultGrantGroups string
 }
 
 // Renaming a canonical UI permission name clears the old row route. Remap its
@@ -32,6 +34,15 @@ var canonicalUIPermissionRoutes = [...]uiPermissionRouteDefinition{
 	{Name: "ui.view.price_chart", URLRouteEndpoint: "/ui/view/price_chart", SpecificTableRelated: false},
 	{Name: "ui.view.settings", URLRouteEndpoint: "/ui/view/settings", SpecificTableRelated: false},
 	{Name: "ui.view.cloud_management", URLRouteEndpoint: "/ui/view/cloud_management", SpecificTableRelated: false},
+
+	{Name: "ui.article.section.details", URLRouteEndpoint: "/ui/article/section/details", DefaultGrantGroups: "readers"},
+	{Name: "ui.article.section.images", URLRouteEndpoint: "/ui/article/section/images", DefaultGrantGroups: "admins"},
+	{Name: "ui.article.section.attachments", URLRouteEndpoint: "/ui/article/section/attachments", DefaultGrantGroups: "admins"},
+	{Name: "ui.article.section.related_rows", URLRouteEndpoint: "/ui/article/section/related_rows", DefaultGrantGroups: "admins"},
+	{Name: "ui.article.section.task_progress", URLRouteEndpoint: "/ui/article/section/task_progress", DefaultGrantGroups: "admins"},
+	{Name: "ui.article.action.edit", URLRouteEndpoint: "/ui/article/action/edit", DefaultGrantGroups: "admins"},
+	{Name: "ui.article.action.edit_language_versions", URLRouteEndpoint: "/ui/article/action/edit_language_versions", DefaultGrantGroups: "admins"},
+	{Name: "ui.article.action.delete", URLRouteEndpoint: "/ui/article/action/delete", DefaultGrantGroups: "admins"},
 
 	{Name: "ui.admin.permissions", URLRouteEndpoint: "/ui/admin/permissions", SpecificTableRelated: false},
 	{Name: "ui.admin.notification_triggers", URLRouteEndpoint: "/ui/admin/notification_triggers", SpecificTableRelated: false},
@@ -148,6 +159,9 @@ func ReactivateUIRoutes(db *sql.DB) error {
 	}()
 
 	for _, route := range canonicalUIPermissionRoutes {
+		if err := grantNewUIPermissionDefaults(tx, route); err != nil {
+			return fmt.Errorf("create UI route defaults %s: %w", route.URLRouteEndpoint, err)
+		}
 		if _, err := tx.Exec(
 			reconcileUIPermissionRouteSQL,
 			route.Name,

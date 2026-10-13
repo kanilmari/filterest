@@ -94,6 +94,9 @@ type authModesMockConfig struct {
 	registrationEnable bool
 	userExists         bool
 	adminMember        bool
+	guestUIEndpoints   []string
+	guestUIReadError   bool
+	guestUIRowsError   bool
 }
 
 type authModesMockDriver struct{ cfg authModesMockConfig }
@@ -101,10 +104,12 @@ type authModesMockConn struct{ cfg authModesMockConfig }
 type authModesMockTx struct{}
 
 type authModesMockRows struct {
-	cols  []string
-	vals  []driver.Value
-	done  bool
-	empty bool
+	cols           []string
+	vals           []driver.Value
+	done           bool
+	empty          bool
+	remaining      [][]driver.Value
+	iterationError bool
 }
 
 func (d *authModesMockDriver) Open(_ string) (driver.Conn, error) {
@@ -121,6 +126,14 @@ func (t *authModesMockTx) Rollback() error             { return nil }
 func (r *authModesMockRows) Columns() []string         { return r.cols }
 func (r *authModesMockRows) Close() error              { return nil }
 func (r *authModesMockRows) Next(dest []driver.Value) error {
+	if len(r.remaining) > 0 {
+		copy(dest, r.remaining[0])
+		r.remaining = r.remaining[1:]
+		return nil
+	}
+	if r.iterationError {
+		return fmt.Errorf("guest permission iteration failed")
+	}
 	if r.empty || r.done {
 		return io.EOF
 	}
@@ -162,6 +175,15 @@ func (c *authModesMockConn) Query(query string, args []driver.Value) (driver.Row
 
 func (c *authModesMockConn) QueryContext(_ context.Context, query string, args []driver.NamedValue) (driver.Rows, error) {
 	switch {
+	case strings.Contains(query, "groups.name = 'guests'"):
+		if c.cfg.guestUIReadError {
+			return nil, fmt.Errorf("guest permissions unavailable")
+		}
+		rows := &authModesMockRows{cols: []string{"url_route_endpoint"}, empty: true, iterationError: c.cfg.guestUIRowsError}
+		for _, endpoint := range c.cfg.guestUIEndpoints {
+			rows.remaining = append(rows.remaining, []driver.Value{endpoint})
+		}
+		return rows, nil
 	case isSignInLimitQuery(query):
 		return answerSignInLimit(), nil
 	case strings.Contains(query, "FROM system_config") && len(args) == 1:

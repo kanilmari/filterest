@@ -42,6 +42,7 @@ import { DEFAULT_DATASET_APPEARANCE } from '../../shared/dataset_appearance/vali
 import { generate_table } from './dataset_view_printer.js';
 import { openRowArticleView } from './card_view/row_article_opener.js';
 import { buildRowArticleContent } from './card_view/row_article_content_builder.js';
+import { ROW_ARTICLE_PERMISSION_ROUTES } from './card_view/row_article_permission_checker.js';
 import { setChosenDatasetView, getChosenDatasetView } from '../state_stores/dataset_view_choice_saver.js';
 import { setAllSpecs } from '../state_stores/table_specs_reader.js';
 import { fetchDatasetData } from '../endpoints/endpoint_data_fetcher.js';
@@ -70,6 +71,7 @@ let palette;
 beforeEach(() => {
     datasetAppearanceState.clear(); request.mockReset(); request.mockResolvedValue({});
     resetSitePresentationStatesForTests(); localStorage.clear(); sessionStorage.clear(); setAllSpecs({});
+    sessionStorage.setItem('user_permissions', JSON.stringify(Object.values(ROW_ARTICLE_PERMISSION_ROUTES)));
     document.body.innerHTML = '<div id="tabs_container"></div>'; document.documentElement.lang = 'fi';
     window.history.replaceState({}, '', '/');
     setParams('demo', {});

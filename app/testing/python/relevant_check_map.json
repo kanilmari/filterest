@@ -46,6 +46,30 @@
       ]
     },
     {
+      "area": "Article toolbar permissions",
+      "paths": [
+        "app/frontend/core_components/table_views/card_view/row_article_permission_checker.js",
+        "app/frontend/core_components/table_views/card_view/row_article_content_builder.js",
+        "app/frontend/core_components/table_views/card_view/row_article_media_hydrator.js",
+        "app/frontend/core_components/table_views/card_view/row_article_opener.js",
+        "app/frontend/core_components/table_views/card_view/row_article_task_progress.js",
+        "app/frontend/core_components/admin_tools/article_toolbar_permission_names.js",
+        "app/frontend/core_components/admin_tools/auth_mode_handler.js",
+        "app/backend/core_components/auth/get_auth_modes.go",
+        "app/backend/core_components/auth/user_permissions.go",
+        "app/backend/core_components/router/ui_permission_route_saver.go",
+        "app/backend/core_components/router/ui_permission_default_grant_saver.go"
+      ],
+      "specs": [
+        "app/testing/e2e/C_card_view/C17_article_toolbar_group_permissions.spec.ts"
+      ],
+      "projects": [
+        "mobile-card",
+        "tablet-card",
+        "desktop-card"
+      ]
+    },
+    {
       "area": "Filtering and categories",
       "paths": [
         "app/frontend/core_components/filterbar",

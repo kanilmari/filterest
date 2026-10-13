@@ -96,7 +96,7 @@ The core permission tables are:
 - `system_functions` for registered backend routes, UI-only functions, and whether the function is dataset-specific.
 - `system_group_table_func_rights` for granting a user group access to a function either table-independently or for one `target_table_uid`.
 
-Backend enforcement currently runs mainly through `filterest/app/backend/pipeline/access_control/access_control.go`. Frontend visibility mirrors the backend through `filterest/app/frontend/core_components/route_permission_checker.js` and the `/api/user-permissions`, `/api/check-table-right`, `/api/check-table-rights`, and `/api/check-table-rights-multi` endpoints.
+Backend enforcement runs through [access control](../../backend/pipeline/access_control/access_control.go). Frontend visibility uses [route checks](../../frontend/core_components/route_permission_checker.js), authenticated `/api/user-permissions`, and the dataset-right endpoints. Anonymous `/api/auth-modes` delivers `guest_ui_endpoints`: enabled `/ui/...` routes from the group named `guests`, with NULL dataset scope (the same site-wide scope as route authorization), independent of account-1 memberships. [The bootstrap reader](../../backend/core_components/auth/user_permissions.go) reads current grants without seeding defaults; failures return no grants and responses are not cacheable. [Client bootstrap](../../frontend/core_components/admin_tools/auth_mode_handler.js) clears old rights before fetching, rejects stale session generations and replaces the tab's set before articles render. Sign-in selects user rights; sign-out selects guest rights. Missing/malformed responses fail closed; revocations survive bootstrap and restarts. Dataset, row and login-to-browse enforcement remain independent.
 
 The read-only MCP relay also uses the same route/table permission helper before executing a tool call. Filterbar AI planned dataset reads use the same helper before each canonical delegate call, and the planner workspace catalog is permission-filtered when the request actor is known. This keeps AI/tool execution aligned with the existing capability and dataset-action rows instead of relying only on the inner HTTP handler pipeline.
 
@@ -248,6 +248,14 @@ Examples:
 - call a maintenance API
 
 Current table-independent `system_group_table_func_rights` rows already cover much of this layer. Future work should keep the concept and name it clearly instead of describing it only as "tableless permission".
+
+Shared article/opened-card sections and row action buttons use site-wide grants from [the startup registry](../../backend/core_components/router/ui_permission_route_saver.go).
+[First-creation grants](../../backend/core_components/router/ui_permission_default_grant_saver.go) apply defaults only when each route is first created: Details defaults to admins, users and guests.
+Images, Attachments, Related rows, Task progress, Edit, Edit language versions and Delete default to admins only.
+Later user and guest grants and revocations survive restarts; administrators always keep access through the [startup administrator safety net](../../backend/core_components/permissions_reader.go).
+Checks precede construction in classic articles and shared image-first Details; article text and main images always remain.
+Related-row tab configuration, section opening defaults and server row rights stay independent.
+The [C17 browser spec](../../testing/e2e/C_card_view/C17_article_toolbar_group_permissions.spec.ts) compares administrator, ordinary-reader and anonymous toolbars, explicit guest grants and exact restoration, with account themes pinned and translated copy.
 
 ### 2.2 Dataset Action Permissions
 

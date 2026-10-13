@@ -63,6 +63,7 @@ import { createRowArticleMediaHydrator } from "./row_article_media_hydrator.js";
 import { fetchCurrentUserProfile } from "../../user_tools/current_user_profile_fetcher.js";
 import { buildRowArticleQueryString } from "./row_article_url_state.js";
 import { fetchPermittedRowArticleData } from "./row_article_data_fetcher.js";
+import { hasRowArticlePermission } from "./row_article_permission_checker.js";
 
 function resolveVisibleResultCard(tableName, rowId) {
     if (rowId == null) {
@@ -303,10 +304,11 @@ export async function openRowArticleView(row_item, table_name, selectedCard = nu
          * -------------------------------------------------- */
         const actionBar = document.createElement("div");
         actionBar.classList.add("big_card_action_bar");
-        if (canUpdateRow) {
+        let languageEditor = null;
+        let editButton = null;
+        if (canUpdateRow && hasRowArticlePermission("edit")) {
             let edit = false;
-            let languageEditor = null;
-            const editButton = document.createElement("button");
+            editButton = document.createElement("button");
             editButton.type = "button";
             editButton.classList.add("fw-btn", "big_card_edit_button");
             editButton.dataset.langKey = 'edit';
@@ -365,10 +367,12 @@ export async function openRowArticleView(row_item, table_name, selectedCard = nu
                 syncEditUi(false);
             });
             actionBar.append(editButton, cancelButton);
+        }
+        if (canUpdateRow && hasRowArticlePermission("edit_language_versions")) {
             languageEditor = createArticleLanguageEditor({
                 row: row_item, columns: sorted_columns, dataTypes: data_types,
                 tableName: table_name, canUpdateRow, isCurrent: canCommit,
-                onActiveChange: (active) => { editButton.disabled = active; },
+                onActiveChange: (active) => { if (editButton) editButton.disabled = active; },
                 onSaved: async () => openRowArticleView(row_item, table_name, selectedCard, { isCurrent }),
             });
             if (languageEditor) {
@@ -388,7 +392,7 @@ export async function openRowArticleView(row_item, table_name, selectedCard = nu
             );
         };
 
-        if (hasDeleteRight && row_item.id != null) {
+        if (hasDeleteRight && row_item.id != null && hasRowArticlePermission("delete")) {
             const deleteBtn = document.createElement("button");
             deleteBtn.classList.add("big_card_delete");
             deleteBtn.dataset.langKey = "delete";

@@ -6,15 +6,26 @@ import { count_this_function } from "../dev_tools/function_counter.js";
 import { fetchAuthModes, fetchUserPermissions } from "../endpoints/stable_endpoint_router.js";
 import { hasRoutePermission } from "../route_permission_checker.js";
 import { synchronizeThemePreferenceForAuthState } from "../theme.js";
-import { invalidateSessionGeneration } from '../auth/session_generation_store.js';
+import { getSessionGeneration, invalidateSessionGeneration, subscribeToSessionGeneration } from '../auth/session_generation_store.js';
+
+// Use the existing session invalidation channel; route sets stay local to this
+// tab and are replaced only by its authoritative bootstrap, never merged.
+subscribeToSessionGeneration(reason => {
+    if (['bootstrap', 'login', 'logout', 'expiry', 'session-change', 'session-invalidated'].includes(reason)) {
+        sessionStorage.removeItem('user_permissions');
+    }
+});
 
 export async function setAuthModes() {
     invalidateSessionGeneration({ reason: 'bootstrap', revalidate: false });
+    const generation = getSessionGeneration();
+    sessionStorage.removeItem('user_permissions');
     count_this_function("setAuthModes");
     try {
         const data = await fetchAuthModes();
+        if (generation !== getSessionGeneration()) return;
 
-        if (data && typeof data.needs_button === "string") {
+        if (data && ['login', 'logout'].includes(data.needs_button)) {
             localStorage.setItem("button_state", data.needs_button);
 
             // These flags describe site policy, not whether this browser is signed in.
@@ -37,12 +48,15 @@ export async function setAuthModes() {
             }
 
             await synchronizeThemePreferenceForAuthState(data.needs_button === "logout");
+            if (generation !== getSessionGeneration()) return;
 
-            // Jos käyttäjä on kirjautunut sisään, haetaan ja talletetaan sallitut reitit
+            // Authenticated permissions retain their existing endpoint. Guest UI
+            // grants arrive with auth modes, before main/post-auth render articles.
             if (data.needs_button === "logout") {
                 try {
                     const permData = await fetchUserPermissions();
-                    if (permData && Array.isArray(permData.endpoints)) {
+                    if (generation !== getSessionGeneration()) return;
+                    if (permData && Array.isArray(permData.endpoints) && permData.endpoints.every(route => typeof route === 'string')) {
                         sessionStorage.setItem(
                             "user_permissions",
                             JSON.stringify(permData.endpoints)
@@ -52,12 +66,15 @@ export async function setAuthModes() {
                         sessionStorage.removeItem("user_permissions");
                     }
                 } catch (permErr) {
+                    if (generation !== getSessionGeneration()) return;
                     console.warn("Virhe käyttäjäoikeuksien haussa:", permErr);
                     sessionStorage.removeItem("user_permissions");
                 }
             } else {
-                // Ei kirjautunut -> tyhjennetään käyttäjäoikeudet
-                sessionStorage.removeItem("user_permissions");
+                if (Array.isArray(data.guest_ui_endpoints)
+                    && data.guest_ui_endpoints.every(route => typeof route === 'string' && route.startsWith('/ui/'))) {
+                    sessionStorage.setItem('user_permissions', JSON.stringify(data.guest_ui_endpoints));
+                }
             }
         } else {
             console.warn("needs_button tietoa ei saatu tai se ei ole merkkijono.");

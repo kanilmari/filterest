@@ -24,17 +24,19 @@ var authModesFrontPageSiteNameReader = backend.ConfiguredSiteName
 
 // AuthModesResponse keeps the public auth bootstrap payload stable for typed frontend callers.
 type AuthModesResponse struct {
-	NeedsButton             string `json:"needs_button"`
-	RegistrationEnabled     bool   `json:"registration_enabled"`
-	LoginRequiredForBrowse  bool   `json:"login_required_for_browse"`
-	ShowLoginButton         bool   `json:"show_login_button"`
-	OnlyAdminCanLogin       bool   `json:"only_admin_can_login"`
-	SeparateFrontPage       bool   `json:"separate_front_page"`
-	FrontPageButtonSiteName string `json:"front_page_button_site_name"`
+	NeedsButton             string   `json:"needs_button"`
+	RegistrationEnabled     bool     `json:"registration_enabled"`
+	LoginRequiredForBrowse  bool     `json:"login_required_for_browse"`
+	ShowLoginButton         bool     `json:"show_login_button"`
+	OnlyAdminCanLogin       bool     `json:"only_admin_can_login"`
+	SeparateFrontPage       bool     `json:"separate_front_page"`
+	FrontPageButtonSiteName string   `json:"front_page_button_site_name"`
+	GuestUIEndpoints        []string `json:"guest_ui_endpoints,omitempty"`
 }
 
 // GetAuthModesHandler tallentaa käyttäjän roolin sessioon
 func GetAuthModesHandler(response_writer http.ResponseWriter, request *http.Request) {
+	response_writer.Header().Set("Cache-Control", "no-store")
 
 	loginSettings, policyErr := backend.ReadLoginAccessSettings(request.Context(), backend.Db)
 	if policyErr != nil {
@@ -172,6 +174,14 @@ func clearAuthSessionValues(session *gorillaSessions.Session) {
 func buildAuthModesResponse(request *http.Request, button string, loginToBrowse bool, loginSettings backend.LoginAccessSettings) AuthModesResponse {
 	response := AuthModesResponse{NeedsButton: button, RegistrationEnabled: middlewares.CheckRegistrationEnabled(),
 		LoginRequiredForBrowse: loginToBrowse, ShowLoginButton: loginSettings.ShowLoginButton, OnlyAdminCanLogin: loginSettings.OnlyAdminCanLogin}
+	if button == "login" {
+		endpoints, err := readGuestUIEndpoints(request.Context(), backend.Db)
+		if err != nil {
+			log.Printf("\033[31merror: guest UI permissions unavailable: %v\033[0m", err)
+		} else {
+			response.GuestUIEndpoints = endpoints
+		}
+	}
 	settings, err := authModesFrontPageSettingsReader(request.Context(), backend.Db)
 	if err != nil {
 		log.Printf("[GetAuthModesHandler] front page presentation settings unavailable: %v", err)

@@ -28,6 +28,7 @@ import {
     wrapRowArticleRelatedRowsSection,
 } from "./row_article_tool_section_wrapper.js";
 import { disposeRowArticleInlineMedia, syncRowArticleInlineMedia } from "./row_article_inline_media.js";
+import { hasRowArticlePermission } from "./row_article_permission_checker.js";
 
 /**
  * Creates one article's hydration and refresh callbacks from its explicit view context.
@@ -143,7 +144,7 @@ export function createRowArticleMediaHydrator({
 
         try {
             const buildMediaState = async (dynamicChildren) => {
-                const attachmentLinking = show_related_items_on_big_cards
+                const attachmentLinking = show_related_items_on_big_cards && hasRowArticlePermission("attachments")
                     ? await rowArticleLoadSession.fetchAttachmentLinking()
                     : null;
                 // The response names the gallery and the card picture; the article
@@ -194,6 +195,7 @@ export function createRowArticleMediaHydrator({
             };
 
             const renderGallery = async (imgChild, imageRows, cardPicture) => {
+                if (!hasRowArticlePermission("images")) return null;
                 const imageDataset = imgChild?.dataset || "";
                 if (imageDataset) {
                     void primeDatasetPermissions(imageDataset, [
@@ -244,6 +246,7 @@ export function createRowArticleMediaHydrator({
             };
 
             const renderAttachments = async (assetChild, attachmentLinking) => {
+                if (!hasRowArticlePermission("attachments")) return null;
                 return buildRowArticleAttachmentList(
                     table_name,
                     row_item.id,
@@ -337,6 +340,9 @@ export function createRowArticleMediaHydrator({
                 );
             }
 
+            // Individual tab policy stays inside the existing tab builder.
+            // Gate the entire section before constructing any of its contents.
+            if (!hasRowArticlePermission("related_rows")) return;
             const restore = readRowArticleViewRestoreState(table_name, row_item.id);
             const tabsEl = await buildRowArticleRelatedTabs(
                 filterRowArticleNonMediaChildTables(dyn.child_tables),

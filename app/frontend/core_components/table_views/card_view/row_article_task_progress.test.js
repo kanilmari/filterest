@@ -4,6 +4,7 @@
 // Exists so ticket progress can evolve without breaking the first visible UI contract.
 // @vitest-environment jsdom
 
+import { ROW_ARTICLE_PERMISSION_ROUTES } from './row_article_permission_checker.js';
 import { beforeEach, describe, expect, test, vi } from "vitest";
 
 const { endpointRouterMock } = vi.hoisted(() => ({
@@ -19,6 +20,7 @@ import { applyTaskTodoStatusChangeToArticleProgress, buildRowArticleTaskProgress
 describe("row_article_task_progress", () => {
     beforeEach(() => {
         document.body.innerHTML = "";
+        sessionStorage.setItem('user_permissions', JSON.stringify(Object.values(ROW_ARTICLE_PERMISSION_ROUTES)));
         endpointRouterMock.mockReset();
     });
 
@@ -27,6 +29,18 @@ describe("row_article_task_progress", () => {
 
         expect(section).toBeNull();
         expect(endpointRouterMock).not.toHaveBeenCalled();
+    });
+
+    test("does not fetch or construct progress without its UI grant", async () => {
+        sessionStorage.setItem('user_permissions', JSON.stringify([ROW_ARTICLE_PERMISSION_ROUTES.details]));
+        expect(await buildRowArticleTaskProgressSection('dev_agent_tasks', 42)).toBeNull();
+        expect(endpointRouterMock).not.toHaveBeenCalled();
+    });
+
+    test('a progress-only grant builds its section independently', async () => {
+        sessionStorage.setItem('user_permissions', JSON.stringify([ROW_ARTICLE_PERMISSION_ROUTES.task_progress]));
+        endpointRouterMock.mockResolvedValue({ total: 2, completed: 1, percent: 50, lit_segments: 5 });
+        expect(await buildRowArticleTaskProgressSection('dev_agent_tasks', 42)).toBeInstanceOf(HTMLElement);
     });
 
     test("honors an initially closed progress section while keeping its lights", async () => {

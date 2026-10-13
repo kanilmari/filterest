@@ -5,13 +5,50 @@
 package auth
 
 import (
+	"context"
+	"database/sql"
 	backend "easelect/backend/core_components"
 	"easelect/backend/core_components/httpresponse"
 	e_sessions "easelect/backend/core_components/sessions"
 	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
 )
+
+// readGuestUIEndpoints reads only site-wide UI grants from the named guests
+// group, independently of anonymous account memberships. Bootstrap never seeds
+// defaults here: deleted rights, disabled routes and failed reads remain denied.
+func readGuestUIEndpoints(ctx context.Context, db *sql.DB) ([]string, error) {
+	if db == nil {
+		return nil, fmt.Errorf("guest permission database unavailable")
+	}
+	rows, err := db.QueryContext(ctx, `
+		SELECT DISTINCT f.url_route_endpoint
+		FROM system_group_table_func_rights gf
+		JOIN system_functions f ON gf.function_id = f.id
+		JOIN system_user_groups groups ON gf.user_group_id = groups.id
+		WHERE groups.name = 'guests' AND f.disabled = false
+		  AND f.url_route_endpoint LIKE '/ui/%'
+		  AND gf.target_table_uid IS NULL
+		ORDER BY f.url_route_endpoint`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	endpoints := []string{}
+	for rows.Next() {
+		var endpoint string
+		if err := rows.Scan(&endpoint); err != nil {
+			return nil, err
+		}
+		endpoints = append(endpoints, endpoint)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return endpoints, nil
+}
 
 // UserPermissionsResponse keeps the login-only permission cache payload stable for typed frontend callers.
 type UserPermissionsResponse struct {

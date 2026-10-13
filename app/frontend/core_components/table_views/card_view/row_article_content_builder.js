@@ -44,6 +44,7 @@ import { resolveRowArticleTimestampDisplayOptions } from "./row_article_presenta
 import { bindImageFirstViewActivation } from "./image_first_view_activation.js";
 import { splitKeywordRoleValue } from "./card_keyword_value_helpers.js";
 import { buildRowArticleDisclosureSection } from "./row_article_disclosure_section_builder.js";
+import { hasRowArticlePermission } from "./row_article_permission_checker.js";
 
 const DETAILS_ICON_PATH = "/frontend/icons/general/visible-fields-icon.svg";
 
@@ -567,7 +568,7 @@ export async function buildRowArticleContent(
     }
 
     /* -- details ----------------------------------- */
-    if (expandedDetailsEntries.length) {
+    if (expandedDetailsEntries.length && hasRowArticlePermission("details")) {
         const detailsContainer = document.createElement("div");
         detailsContainer.classList.add("big_card_details_container");
 

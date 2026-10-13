@@ -4,6 +4,7 @@
 // Bridges drawing/network mocks with real catalogue identities and article state.
 // Keeps both suites below the file limit without duplicating their setup.
 
+import { ROW_ARTICLE_PERMISSION_ROUTES } from './row_article_permission_checker.js';
 import { afterEach, beforeEach, vi } from "vitest";
 
 const {
@@ -218,6 +219,7 @@ export function setupRowArticleOpenerTests() {
         window.history.replaceState({}, "", "/");
         localStorage.clear();
         sessionStorage.clear();
+        sessionStorage.setItem('user_permissions', JSON.stringify(Object.values(ROW_ARTICLE_PERMISSION_ROUTES)));
         // Opening articles follows catalogue hydration in the real application.
         primeDatasetAccessRegistry({ datasets: [
             { table_uid: 7, dataset_name: "app_service_catalog", names: ["app_service_catalog", "service_catalog"],

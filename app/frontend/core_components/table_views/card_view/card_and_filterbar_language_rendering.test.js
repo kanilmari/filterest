@@ -14,6 +14,7 @@ import { renderDatasetAppearance } from '../dataset_appearance_renderer.js';
 import { DEFAULT_DATASET_APPEARANCE } from '../../../shared/dataset_appearance/validator.js';
 import { disposeCardResources } from './card_resource_lifecycle.js';
 import { buildRowArticleContent } from './row_article_content_builder.js';
+import { ROW_ARTICLE_PERMISSION_ROUTES } from './row_article_permission_checker.js';
 import { renderModernCardDetails } from './card_detail_tile_builder.js';
 import { renderSingleLineCardDetails } from './card_detail_single_line_helpers.js';
 import { createKeyValueElement, enableEditing, disableEditing, cancelEditing } from './card_field_formatter.js';
@@ -57,6 +58,9 @@ let sort;
 beforeEach(() => {
     document.body.replaceChildren();
     localStorage.clear();
+    // These rendering fixtures exercise administrator-visible Details. Guest
+    // delivery has its own real-bootstrap regression in the content builder tests.
+    sessionStorage.setItem('user_permissions', JSON.stringify(Object.values(ROW_ARTICLE_PERMISSION_ROUTES)));
     window.translationPromises = Object.fromEntries(Object.entries(copy).map(([language, dictionary]) =>
         [language, Promise.resolve({ ...dictionary,
             // Existing heading/search copy must not decide the count's grammar.

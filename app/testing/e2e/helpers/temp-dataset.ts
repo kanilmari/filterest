@@ -618,24 +618,30 @@ export async function openTempDataset(
     );
   }
 
-  // Each Playwright page has its own storage context. Refresh metadata here so
-  // datasets created in a beforeAll context are also available to test pages.
-  await hydrateAuthenticatedTreeDataCache(page, datasetName);
-
-  // API-created datasets may not have a database-tree DOM for this account,
-  // but row/form actions still require the numeric UID cached before reload.
-  await page.waitForFunction(
-    (targetDatasetName) => {
-      try {
-        const tableSpecs = JSON.parse(localStorage.getItem('table_specs') ?? '{}');
-        return /^\d+$/.test(String(tableSpecs?.[targetDatasetName]?.table_uid ?? ''));
-      } catch {
-        return false;
-      }
-    },
-    datasetName,
-    { timeout: TEMP_DATASET_LOAD_TIMEOUT_MS },
-  );
+  // Match admin_tree_builder.js:initializeTreeCallAdmin. Ordinary readers open
+  // /api/datasets-backed tabs and receive metadata with their dataset results;
+  // they need neither /api/tree_data access nor its localStorage cache.
+  const canUseDatabaseTree = await page.evaluate(async () => {
+    const { hasRoutePermission } = await import('/frontend/core_components/route_permission_checker.js');
+    return hasRoutePermission('/ui/nav_tree');
+  });
+  if (canUseDatabaseTree) {
+    // Refresh API-created datasets in this page's administrator metadata cache.
+    // A failed tree request still fails loudly for accounts that use the tree.
+    await hydrateAuthenticatedTreeDataCache(page, datasetName);
+    await page.waitForFunction(
+      (targetDatasetName) => {
+        try {
+          const tableSpecs = JSON.parse(localStorage.getItem('table_specs') ?? '{}');
+          return /^\d+$/.test(String(tableSpecs?.[targetDatasetName]?.table_uid ?? ''));
+        } catch {
+          return false;
+        }
+      },
+      datasetName,
+      { timeout: TEMP_DATASET_LOAD_TIMEOUT_MS },
+    );
+  }
 
   await navigateToDataset(page, datasetName);
   await page.waitForSelector(getDatasetSurfaceSelector(datasetName, viewMode), {

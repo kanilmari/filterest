@@ -30,6 +30,7 @@ import { createVanillaCheckboxTable } from "../../reusable_components/vanilla_ch
 import { getTranslationForKey } from "../lang/translation_handler.js";
 import { getLanguageWithBrowserFallback } from "../state_stores/lang_preference_reader.js";
 import { chartFallback } from "../table_views/price_chart_view/chart_copy.js";
+import { localizeArticlePermissionName, refreshArticlePermissionNames } from "./article_toolbar_permission_names.js";
 
 const SEARCH_KEY = "permissions_search_term";
 const FILTER_ENDPOINT_KEY = "permissions_filter_endpoint";
@@ -92,6 +93,7 @@ function createFunctionInfoCell(row) {
     nameDiv.textContent = row.functionLabel;
     // Register bundled permission copy for live language changes as well as first paint.
     if (chartFallback(row.functionName)) nameDiv.dataset.langKey = row.functionName;
+    localizeArticlePermissionName(row.functionName, nameDiv);
 
     const routeDiv = document.createElement("div");
     routeDiv.classList.add("mp-function-route");
@@ -296,13 +298,17 @@ export async function generate_permissions_form(permissions_container) {
 
     const listenerController = new AbortController();
     const listenerSignal = listenerController.signal;
+    let languageObserver = null;
     permissions_container.__cleanupListeners = () => {
         listenerController.abort();
+        languageObserver?.disconnect();
         delete window.check_manage_permissions_dirty;
     };
 
     const root = document.createElement("div");
     root.classList.add("mp-manage-permissions-layout");
+    languageObserver = new MutationObserver(() => refreshArticlePermissionNames(root));
+    languageObserver.observe(document.documentElement, { attributes: true, attributeFilter: ['lang'] });
 
     const leftContainer = document.createElement("div");
     leftContainer.classList.add("mp-left-container");

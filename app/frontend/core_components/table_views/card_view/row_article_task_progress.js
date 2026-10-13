@@ -5,6 +5,7 @@
 
 import { endpoint_router } from "../../endpoints/endpoint_router.js";
 import { buildRowArticleDisclosureSection } from "./row_article_disclosure_section_builder.js";
+import { hasRowArticlePermission } from "./row_article_permission_checker.js";
 import {
     patchTaskTodoProgressForStatusChange,
     TASK_PROGRESS_SEGMENTS,
@@ -137,7 +138,8 @@ export function applyTaskTodoStatusChangeToArticleProgress(articleRoot, fromStat
 export async function buildRowArticleTaskProgressSection(tableName, rowId, { startOpen = true } = {}) {
     const normalizedTableName = String(tableName || "").trim();
     const normalizedRowId = String(rowId ?? "").trim();
-    if (normalizedTableName !== TASK_PROGRESS_DATASET || !normalizedRowId) {
+    if (normalizedTableName !== TASK_PROGRESS_DATASET || !normalizedRowId
+        || !hasRowArticlePermission("task_progress")) {
         return null;
     }
 

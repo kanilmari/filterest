@@ -168,16 +168,16 @@ export async function captureImageFirstOverlayReveal(
     }
     const revealAnimations = overlay.getAnimations({ subtree: true });
     const animation = revealAnimations.find(
-      (candidate) => candidate.animationName === 'image-first-backdrop-reveal',
+      (candidate) => 'animationName' in candidate && candidate.animationName === 'image-first-backdrop-reveal',
     );
     const viewAnimation = revealAnimations.find(
-      (candidate) => candidate.animationName === 'image-first-foreground-grow',
+      (candidate) => 'animationName' in candidate && candidate.animationName === 'image-first-foreground-grow',
     );
     const applicationBlurAnimation = revealAnimations.find(
-      (candidate) => candidate.animationName === 'image-first-application-blur-reveal',
+      (candidate) => 'animationName' in candidate && candidate.animationName === 'image-first-application-blur-reveal',
     );
     const titleAnimation = revealAnimations.find(
-      (candidate) => candidate.animationName === 'image-first-reveal-title',
+      (candidate) => 'animationName' in candidate && candidate.animationName === 'image-first-reveal-title',
     );
     if (!animation || !viewAnimation || !applicationBlurAnimation || !titleAnimation) {
       throw new Error('Image-first reveal animations were not found.');
