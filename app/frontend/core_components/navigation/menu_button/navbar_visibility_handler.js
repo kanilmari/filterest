@@ -13,6 +13,22 @@ let showButtonRevealTimer = 0;
 let navbarCollapseCompletionCleanup = null;
 let navbarOpeningCleanup = null;
 
+// Home keeps its borrowed source button beside the site icon in both panel
+// states. The Home stylesheet hides the panel's duplicate control while mounted.
+function isHomeMenuButton(button) {
+  return Boolean(button.closest('.front-page-top-row'));
+}
+
+// Match front_page.css: Home's borrowed toggle replaces the hidden panel close
+// button. Reconcile both controls when Home takes or releases ownership too.
+function setHideButtonAccessibility(showButton, hideButton, isVisible) {
+  if (!hideButton) return;
+  const shouldShow = isVisible && !isHomeMenuButton(showButton);
+  hideButton.setAttribute('aria-hidden', shouldShow ? 'false' : 'true');
+  hideButton.setAttribute('aria-expanded', isVisible ? 'true' : 'false');
+  hideButton.tabIndex = shouldShow ? 0 : -1;
+}
+
 // Päivittää piilotetun navigaatiopalkin palauttavan napin paikan niin,
 // että se pysyy saman app-kuoren vasemmassa yläkulmassa kuin itse navbar.
 export function updateShowMenuButtonPosition() {
@@ -194,10 +210,8 @@ function animateInitialNavbarEntrance(
   hideButton,
   bodyContent
 ) {
-  hideButton.setAttribute('aria-hidden', 'false');
-  hideButton.setAttribute('aria-expanded', 'true');
-  hideButton.tabIndex = 0;
-  setShowButtonVisibility(showButton, false, { immediate: true });
+  setHideButtonAccessibility(showButton, hideButton, true);
+  setShowButtonVisibility(showButton, isHomeMenuButton(showButton), { immediate: true });
   showButton.setAttribute('aria-expanded', 'true');
   bodyContent?.classList.add('navbar-transitions-ready');
 
@@ -224,9 +238,7 @@ function applyNavbarVisibility(
   { immediate = false } = {}
 ) {
   const wasCollapsed = navbar.classList.contains('collapsed');
-  hideButton.setAttribute('aria-hidden', isVisible ? 'false' : 'true');
-  hideButton.setAttribute('aria-expanded', isVisible ? 'true' : 'false');
-  hideButton.tabIndex = isVisible ? 0 : -1;
+  setHideButtonAccessibility(showButton, hideButton, isVisible);
   showButton.setAttribute('aria-expanded', isVisible ? 'true' : 'false');
 
   if (isVisible) {
@@ -237,7 +249,7 @@ function applyNavbarVisibility(
       clearNavbarOpening(navbar);
     }
     navbar.classList.remove('collapsed');
-    setShowButtonVisibility(showButton, false, { immediate: true });
+    setShowButtonVisibility(showButton, isHomeMenuButton(showButton), { immediate: true });
     tabsContainer.classList.remove('navbar_hidden');
   } else {
     clearNavbarOpening(navbar);
@@ -310,8 +322,9 @@ export function syncNavbarMenuButtonAccessibility() {
     return;
   }
 
+  setHideButtonAccessibility(showButton, document.getElementById('hideMenuButton'), navVisible);
   const shouldShowFloatingButton =
-    !navVisible &&
+    (!navVisible || isHomeMenuButton(showButton)) &&
     !showButton.classList.contains('shared-topbar-menu-source-hidden');
   setShowButtonVisibility(showButton, shouldShowFloatingButton, { immediate: true });
   updateShowMenuButtonPosition();

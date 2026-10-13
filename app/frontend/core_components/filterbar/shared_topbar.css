@@ -335,7 +335,7 @@
     min-width: 0;
     color: var(--text_color);
   }
-  .dataset-shared-topbar__site-identity img { flex: none; image-rendering: pixelated; }
+  .dataset-shared-topbar__site-identity img { flex: none; image-rendering: auto; }
   .dataset-shared-topbar__site-identity span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .dataset-shared-topbar__menu-slot--visible { flex-basis: 44px; width: 44px; max-width: 44px; transition: none; }
   .dataset-shared-topbar__center .dataset-search-panel { --dataset-search-control-height: 44px; }

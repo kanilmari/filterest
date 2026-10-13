@@ -6,6 +6,7 @@ import { expect, test, type Page } from '@playwright/test';
 import { expandAdminTreeFolder, openAdminTreeButton } from '../helpers/admin-navigation';
 import { loadCredentials, login } from '../helpers/auth';
 import { waitForAppReady } from '../helpers/navigation';
+import { ensureNavbarVisible } from '../helpers/navbar';
 
 const isAccountThemeRequest = (url: URL): boolean => url.pathname === '/api/user-visual-preference';
 
@@ -27,16 +28,6 @@ async function serveAccountTheme(page: Page, theme: 'light' | 'dark'): Promise<v
       json: { theme_mode: theme, revision: 1, configured: true },
     });
   });
-}
-
-async function ensureNavbarVisible(page: Page): Promise<void> {
-  await page.evaluate(() => {
-    const navbar = document.getElementById('navbar');
-    if (navbar?.classList.contains('collapsed')) {
-      document.getElementById('showMenuButton')?.click();
-    }
-  });
-  await page.waitForFunction(() => !document.getElementById('navbar')?.classList.contains('collapsed'));
 }
 
 // The menu entry is view_field_settings; view_field_assignments stays only as a hidden bookmark alias.
@@ -427,7 +418,12 @@ test('frames the application shell sides only when an ultra-wide viewport leaves
     .toEqual([wideStyles?.expectedBorderColor, wideStyles?.expectedBorderColor]);
 
   await ensureNavbarVisible(page);
-  await page.locator('#hideMenuButton').click();
+  // This proof frames the shell at its landing view. When Home is mounted,
+  // its borrowed toggle closes the panel; disabled Home retains the panel control.
+  const homeToggle = page.locator('.front-page-top-row #showMenuButton');
+  const closeMenuButton = await homeToggle.count() ? homeToggle : page.locator('#hideMenuButton');
+  await expect(closeMenuButton).toBeVisible();
+  await closeMenuButton.click();
   await page.waitForFunction(() => document.getElementById('navbar')?.classList.contains('collapsed'));
   expect((await readShellStyles())?.borderWidths).toEqual(sideEdgesOnly);
 

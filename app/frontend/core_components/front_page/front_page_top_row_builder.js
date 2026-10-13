@@ -5,6 +5,7 @@
 
 import { createHeroDatasetTabs } from '../navigation/main_tabs/hero_dataset_tabs.js';
 import { formatSiteNameForDisplay, getCurrentSiteName } from '../state_stores/site_identity_reader.js';
+import { getSiteDisplayFaviconHref } from '../state_stores/site_favicon_reader.js';
 import { NAVBAR_VISIBILITY_CHANGED_EVENT, syncNavbarMenuButtonAccessibility } from '../navigation/menu_button/navbar_visibility_handler.js';
 import { createMaskIconSpan } from '../../icons/icon_mask_builder.js';
 import { hasRoutePermission } from '../route_permission_checker.js';
@@ -31,11 +32,11 @@ export function createFrontPageTopRow(siteName, onSaved, paletteOptions = {}) {
     icon.className = 'front-page-site-icon';
     icon.alt = '';
     icon.width = icon.height = 32;
-    const favicon = document.querySelector('link[rel~="icon"]');
-    if (favicon?.href) icon.src = favicon.href;
+    const favicon = getSiteDisplayFaviconHref();
+    if (favicon) icon.src = favicon;
     else icon.hidden = true;
     const title = document.createElement('div');
-    title.className = 'dataset-shared-topbar__dataset-title';
+    title.className = 'front-page-site-name dataset-shared-topbar__dataset-title';
     // A site without a saved name shows the shell's own name, as dataset heroes do.
     title.textContent = formatSiteNameForDisplay(siteName || getCurrentSiteName());
     title.title = title.textContent;
@@ -80,23 +81,49 @@ export function createFrontPageTopRow(siteName, onSaved, paletteOptions = {}) {
     }
     element.append(start, tabs.element, actions);
     function syncMenu() {
-        const visible = Boolean(menuButton) && document.getElementById('navbar')?.classList.contains('collapsed');
+        syncNavbarMenuButtonAccessibility();
+        const visible = Boolean(menuButton);
         menuSlot.hidden = !visible;
         menuSlot.inert = !visible;
         menuSlot.setAttribute('aria-hidden', String(!visible));
         menuSlot.classList.toggle('dataset-shared-topbar__menu-slot--visible', visible);
     }
-    syncMenu();
-    syncNavbarMenuButtonAccessibility();
+    // The complete header stays above the menu throughout the shell's overlay
+    // widths. Measure it so translated/wrapped labels fit on every surface.
+    const bodyContent = document.querySelector('.body_content');
+    const previousHeight = bodyContent?.style.getPropertyValue('--home-top-row-height') || '';
+    function syncMenuHeight() {
+        const height = element.getBoundingClientRect().height;
+        if (bodyContent && height > 0) bodyContent.style.setProperty('--home-top-row-height', `${height}px`);
+    }
+    const heightFrame = window.requestAnimationFrame(syncMenuHeight);
+    const heightObserver = typeof window.ResizeObserver === 'function' ? new window.ResizeObserver(syncMenuHeight) : null;
+    heightObserver?.observe(element);
     window.addEventListener(NAVBAR_VISIBILITY_CHANGED_EVENT, syncMenu);
+    window.addEventListener('resize', syncMenu);
+    window.addEventListener('resize', syncMenuHeight);
     return {
         element,
+        // Reconcile after insertion: borrowing detached the shell button, so
+        // document.getElementById cannot find it while this row is being built.
+        mount() {
+            syncMenu();
+            syncMenuHeight();
+        },
         destroy() {
             destroyed = true;
             paletteLanguageObserver?.disconnect();
             palette?.destroy();
             tabs.destroy();
             window.removeEventListener(NAVBAR_VISIBILITY_CHANGED_EVENT, syncMenu);
+            window.removeEventListener('resize', syncMenu);
+            window.removeEventListener('resize', syncMenuHeight);
+            heightObserver?.disconnect();
+            window.cancelAnimationFrame(heightFrame);
+            if (bodyContent) {
+                if (previousHeight) bodyContent.style.setProperty('--home-top-row-height', previousHeight);
+                else bodyContent.style.removeProperty('--home-top-row-height');
+            }
             if (menuButton && bookmark.parentNode) bookmark.replaceWith(menuButton);
             syncNavbarMenuButtonAccessibility();
         },

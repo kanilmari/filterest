@@ -23,9 +23,15 @@ export function createNavigationFitController(element) {
     const view = element.ownerDocument.defaultView;
     function sync() {
         if (destroyed) return;
+        const buttons = [...element.querySelectorAll(':scope > button')];
+        // Only Home's phone stack restores every destination, including buttons
+        // hidden before crossing 700px. Dataset projections keep their fit rule.
+        if (element.closest('.front-page-top-row') && view.getComputedStyle(element).flexDirection === 'column') {
+            buttons.forEach(button => { button.hidden = false; });
+            return;
+        }
         const availableWidth = element.clientWidth;
         if (!availableWidth) return; // An inactive view is measured when it becomes visible.
-        const buttons = [...element.querySelectorAll(':scope > button')];
         const widths = buttons.map(button => {
             const previousStyle = button.getAttribute('style');
             const wasHidden = button.hidden;
@@ -45,7 +51,9 @@ export function createNavigationFitController(element) {
             const hidden = index >= count;
             if (hidden && button === element.ownerDocument.activeElement) {
                 // The menu is the durable route to every hidden destination.
-                const menu = element.ownerDocument.querySelector('[data-navbar-menu-button="true"][aria-hidden="false"], #hideMenuButton[aria-hidden="false"]')
+                // Home owns the borrowed toggle; its panel close button is hidden.
+                const menu = element.ownerDocument.querySelector('.front-page-top-row #showMenuButton[aria-hidden="false"]')
+                    || element.ownerDocument.querySelector('[data-navbar-menu-button="true"][aria-hidden="false"], #hideMenuButton[aria-hidden="false"]')
                     || element.ownerDocument.getElementById('showMenuButton');
                 menu?.focus({ preventScroll: true });
             }

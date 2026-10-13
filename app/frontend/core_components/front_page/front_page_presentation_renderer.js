@@ -43,9 +43,9 @@ export function applyHomeMediaPresentation(container, presentation) {
 /** Numerical counterpart of the CSS stage; textWidth represents intrinsic content width. */
 export function computeHomeTextGeometry({ width, height, textHeight, textWidth, presentation }) {
     const value = readHomePresentation(presentation);
-    const phone = width <= 600;
+    const phone = width <= 700;
     const [vertical, horizontal] = value.anchor.split('-');
-    const insetX = phone ? 16 : Math.min(value.horizontal_margin_px,
+    const insetX = phone ? 16 : Math.min(value.horizontal_margin_px, width * 0.08,
         Math.max(0, (width - HOME_PRESENTATION_DEFINITION.max_width_px.min) / 2));
     const insetY = phone ? 16 : value.vertical_margin_px;
     // Phones give the block the whole width between the gutters, so short centred or right-aligned text still uses the line.

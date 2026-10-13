@@ -12,7 +12,9 @@ test.describe.configure({ mode: 'serial' });
 async function forceTheme(page: Page, theme: 'light' | 'dark') {
   await page.emulateMedia({ colorScheme: theme === 'light' ? 'dark' : 'light' });
   await page.evaluate(selected => {
-    document.body.classList.remove('light-mode', 'dark-mode');
+    // Leaving system-mode would let theme.js's still-attached OS listener (theme.js:267-271) replace the forced class
+    // when the emulated opposite preference arrives; an explicit theme clears it, as theme.js:141-144 does.
+    document.body.classList.remove('light-mode', 'dark-mode', 'system-mode');
     document.body.classList.add(`${selected}-mode`);
   }, theme);
 }

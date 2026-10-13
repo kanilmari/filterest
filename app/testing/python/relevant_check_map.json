@@ -128,7 +128,9 @@
         "app/frontend/index.html"
       ],
       "specs": [
+        "app/testing/e2e/G_navigation/G3_tab_reorder.spec.ts",
         "app/testing/e2e/G_navigation/G10_dataset_name_pool_access.spec.ts",
+        "app/testing/e2e/G_navigation/G11_home_phone_layout.spec.ts",
         "app/testing/e2e/G_navigation/G9_dataset_alias_reload.spec.ts",
         "app/testing/e2e/G_navigation/G7_dataset_scroll_retention.spec.ts",
         "app/testing/e2e/Q_scroll/Q2_offset_reset.spec.ts",
@@ -312,8 +314,11 @@
         "app/frontend/shared/front_page_presentation"
       ],
       "specs": [
+        "app/testing/e2e/L_auth/L2_logout.spec.ts",
+        "app/testing/e2e/T_admin/T15_view_field_assignments.spec.ts",
         "app/testing/e2e/T_admin/T16_home_palette.spec.ts",
-        "app/testing/e2e/E_search_filter/E10_site_identity_and_menu_contract.spec.ts"
+        "app/testing/e2e/E_search_filter/E10_site_identity_and_menu_contract.spec.ts",
+        "app/testing/e2e/G_navigation/G11_home_phone_layout.spec.ts"
       ],
       "projects": [
         "mobile-card",

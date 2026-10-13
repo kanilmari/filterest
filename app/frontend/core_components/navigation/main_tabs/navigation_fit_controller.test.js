@@ -6,6 +6,79 @@ import { afterEach, expect, test, vi } from 'vitest';
 import { countFittingNavigationButtons, createNavigationFitController } from './navigation_fit_controller.js';
 afterEach(() => { vi.restoreAllMocks(); vi.useRealTimers(); document.body.replaceChildren(); });
 
+test.each([
+    { owner: 'Home', closeHidden: 'true', target: 'showMenuButton' },
+    { owner: 'Home with stale close accessibility', closeHidden: 'false', target: 'showMenuButton' },
+    { owner: 'dataset', closeHidden: 'false', target: 'hideMenuButton' },
+    { owner: 'dataset shared topbar', closeHidden: 'false', target: 'sharedMenuButton' },
+])('$owner hands focus to $target before hiding a trailing destination', async ({ owner, closeHidden, target }) => {
+    vi.useFakeTimers();
+    const homeOwnsMenu = owner.startsWith('Home');
+    document.body.innerHTML = `
+        ${target === 'sharedMenuButton' ? '<button id="sharedMenuButton" data-navbar-menu-button="true" aria-hidden="false">Menu</button>' : ''}
+        <div id="navbar"><button id="hideMenuButton" aria-hidden="${closeHidden}">Close</button></div>
+        <div class="${homeOwnsMenu ? 'front-page-top-row' : 'dataset-hero'}">
+            <button id="showMenuButton" aria-hidden="${homeOwnsMenu ? 'false' : 'true'}">Menu</button>
+            <nav><button>Matkainfo</button><button>Matkatarjoukset</button><button>Blogit</button></nav>
+        </div>`;
+    const element = document.querySelector('nav');
+    const close = document.getElementById('hideMenuButton');
+    const closeFocus = vi.spyOn(close, 'focus');
+    if (homeOwnsMenu) close.style.display = 'none';
+    element.style.flexDirection = homeOwnsMenu ? 'column' : 'row';
+    let availableWidth = 400;
+    vi.spyOn(element, 'clientWidth', 'get').mockImplementation(() => availableWidth);
+    const buttons = [...element.children];
+    buttons.forEach(button => vi.spyOn(button, 'getBoundingClientRect').mockReturnValue({ width: 100 }));
+    const fit = createNavigationFitController(element);
+    try {
+        fit.sync(); await vi.advanceTimersByTimeAsync(20);
+        expect(buttons.map(button => button.hidden)).toEqual([false, false, false]);
+        buttons[2].focus();
+        expect(document.activeElement).toBe(buttons[2]);
+        element.style.flexDirection = 'row'; availableWidth = 250;
+        window.dispatchEvent(new Event('resize')); await vi.advanceTimersByTimeAsync(20);
+        expect(buttons.map(button => button.hidden)).toEqual([false, false, true]);
+        expect(document.activeElement).toBe(document.getElementById(target));
+        expect(window.getComputedStyle(document.activeElement).display).not.toBe('none');
+        if (homeOwnsMenu) {
+            expect(closeFocus).not.toHaveBeenCalled();
+            element.style.flexDirection = 'column';
+            window.dispatchEvent(new Event('resize')); await vi.advanceTimersByTimeAsync(20);
+            expect(buttons.map(button => button.hidden)).toEqual([false, false, false]);
+        }
+    } finally { fit.destroy(); }
+});
+
+test('only a Home phone column restores destinations hidden by a narrower desktop row', async () => {
+    vi.useFakeTimers();
+    const home = document.createElement('div');
+    home.className = 'front-page-top-row';
+    const element = document.createElement('nav');
+    element.innerHTML = '<button>Matkainfo</button><button>Matkatarjoukset</button><button>Blogit</button>';
+    home.append(element);
+    document.body.append(home);
+    const buttons = [...element.children];
+    vi.spyOn(element, 'clientWidth', 'get').mockReturnValue(80);
+    for (const button of buttons) vi.spyOn(button, 'getBoundingClientRect').mockReturnValue({ width: 70 });
+    const fit = createNavigationFitController(element);
+    try {
+        fit.sync(); await vi.advanceTimersByTimeAsync(20);
+        expect(buttons.map(button => button.hidden)).toEqual([false, true, true]);
+        element.style.flexDirection = 'column';
+        fit.sync(); await vi.advanceTimersByTimeAsync(20);
+        expect(buttons.map(button => button.hidden)).toEqual([false, false, false]);
+        // A dataset projection still fits horizontally, even if a caller stacks it.
+        home.className = 'dataset-hero';
+        fit.sync(); await vi.advanceTimersByTimeAsync(20);
+        expect(buttons.map(button => button.hidden)).toEqual([false, true, true]);
+        home.className = 'front-page-top-row';
+        element.style.flexDirection = 'row';
+        fit.sync(); await vi.advanceTimersByTimeAsync(20);
+        expect(buttons.map(button => button.hidden)).toEqual([false, true, true]);
+    } finally { fit.destroy(); }
+});
+
 test('hides only whole trailing buttons with their inter-button gaps', () => {
     expect(countFittingNavigationButtons([100, 130, 150], 396, 8)).toBe(3);
     expect(countFittingNavigationButtons([100, 130, 150], 395, 8)).toBe(2);

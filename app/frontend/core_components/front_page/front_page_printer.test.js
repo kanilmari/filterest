@@ -9,6 +9,7 @@ import { renderFrontPage, refreshFrontPage } from './front_page_printer.js';
 import { VIEW_DEACTIVATE_EVENT } from '../../reusable_components/view_lifecycle_events.js';
 import { refreshLocalizedDatasetValues } from '../table_views/dataset_value_localizer.js';
 import { invalidateSessionGeneration } from '../auth/session_generation_store.js';
+import { toggleNavbarVisibility } from '../navigation/menu_button/navbar_visibility_handler.js';
 
 const mocks = vi.hoisted(() => ({ request: vi.fn() }));
 vi.mock('../endpoints/endpoint_router.js', () => ({ endpoint_router: mocks.request }));
@@ -163,6 +164,40 @@ test('a Home without boxes shows its hero and no box area or empty-results line'
     expect(page.textContent).not.toContain('Ei tuloksia');
 });
 
+test.each([1, 42].flatMap(viewer => [false, true].map(open => ({ viewer, open }))))(
+    'viewer $viewer mounts the same Home identity and reachable toggle with the panel open=$open',
+    async ({ viewer, open }) => {
+        document.body.innerHTML = `<div class="body_content">
+            <button id="showMenuButton" aria-hidden="true" aria-expanded="true" tabindex="-1"></button>
+            <nav id="navbar"><button id="hideMenuButton"></button></nav>
+            <div id="tabs_container"></div></div>`;
+        const button = document.getElementById('showMenuButton');
+        const close = document.getElementById('hideMenuButton');
+        if (!open) toggleNavbarVisibility();
+        mocks.request.mockResolvedValue({ viewer_id: viewer, site_name: 'Fintravel', blocks: [] });
+        const page = renderFrontPage();
+        await vi.waitFor(() => expect(page.getAttribute('aria-busy')).toBe('false'));
+        const identity = page.querySelector('.front-page-top-row__identity');
+        expect(identity.querySelector('#showMenuButton')).toBe(button);
+        expect(identity.querySelector('.front-page-site-name').textContent).toBe('Fintravel');
+        for (const expanded of [open, !open, open]) {
+            expect(button.getAttribute('aria-hidden')).toBe('false');
+            expect(button.getAttribute('aria-expanded')).toBe(String(expanded));
+            expect(button.tabIndex).toBe(0);
+            expect(button.classList.contains('menu-toggle-visible')).toBe(true);
+            expect(close.getAttribute('aria-hidden')).toBe('true');
+            expect(close.tabIndex).toBe(-1);
+            toggleNavbarVisibility();
+        }
+        page.dispatchEvent(new Event(VIEW_DEACTIVATE_EVENT));
+        expect(button.parentElement).toBe(document.querySelector('.body_content'));
+        expect(close.getAttribute('aria-hidden')).toBe(String(open));
+        expect(button.getAttribute('aria-hidden')).toBe(String(!open));
+        // Leave the shared visibility owner open for the next independent fixture.
+        if (open) toggleNavbarVisibility();
+    },
+);
+
 test('failure is announced with a retry that issues one new request', async () => {
     mocks.request.mockRejectedValueOnce(new Error('failed'));
     const page = renderFrontPage();
@@ -306,7 +341,7 @@ test('top row has the shared tabs/actions and favicon/name beside the single men
     expect(page.querySelector('.hero-dataset-tabs [aria-current]')).toBeNull();
     navbar.classList.remove('collapsed');
     window.dispatchEvent(new Event('navbar-visibility-changed'));
-    expect(identity.querySelector('.dataset-shared-topbar__menu-slot').hidden).toBe(true);
+    expect(identity.querySelector('.dataset-shared-topbar__menu-slot').hidden).toBe(false);
     page.dispatchEvent(new Event(VIEW_DEACTIVATE_EVENT));
     expect(menu.parentNode).toBe(originalParent);
 });

@@ -362,7 +362,10 @@ function attachFastTabOpenHandlers(button, tabId) {
     let suppressClickAfterMouseDown = false;
 
     button.addEventListener("mousedown", (event) => {
-        if (event.defaultPrevented || event.button !== 0) {
+        // An administrator's press may become a native drag. Opening its
+        // dataset here tears down Home and moves the navbar before the drop.
+        // Draggable tabs navigate on click, after the drag handler's guard.
+        if (event.defaultPrevented || event.button !== 0 || button.draggable) {
             return;
         }
         suppressClickAfterMouseDown = true;

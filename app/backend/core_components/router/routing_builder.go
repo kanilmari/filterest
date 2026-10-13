@@ -41,7 +41,7 @@ type indexTemplateData struct {
 	InstallationEnvironment string
 	SiteName                string
 	ProductName             string
-	FaviconPath             string
+	frontendassets.SiteFaviconData
 	// SEO / Open Graph fields (populated by resolvePageMeta)
 	PageTitle       string
 	MetaDescription string
@@ -137,9 +137,9 @@ func tablesHandler(w http.ResponseWriter, r *http.Request, loginToBrowse bool, d
 		ShellBoot: frontendassets.NewShellBootData(r, lang.ResolvePageLanguage(r)),
 		CSPNonce:  nonce, UseMinifiedAssets: useMinified, IsDev: isDev,
 		InstallationEnvironment: getInstallationEnvironment(), SiteName: siteName,
-		ProductName: getSiteName(),
-		FaviconPath: frontendassets.SiteFaviconPath(localFrontendDir, siteName, configuredFaviconReader(r.Context(), backend.Db)),
-		PageTitle:   meta.PageTitle, MetaDescription: meta.MetaDescription,
+		ProductName:     getSiteName(),
+		SiteFaviconData: frontendassets.NewSiteFaviconData(localFrontendDir, siteName, configuredFaviconReader(r.Context(), backend.Db)),
+		PageTitle:       meta.PageTitle, MetaDescription: meta.MetaDescription,
 		CanonicalURL: meta.CanonicalURL, OGTitle: meta.OGTitle,
 		OGDescription: meta.OGDescription, OGType: meta.OGType,
 		OGURL: meta.OGURL, OGImage: meta.OGImage,
@@ -179,9 +179,9 @@ func adminHandler(w http.ResponseWriter, r *http.Request) {
 		ShellBoot: frontendassets.NewShellBootData(r, lang.ResolvePageLanguage(r)),
 		CSPNonce:  nonce, UseMinifiedAssets: useMinified, IsDev: os.Getenv("ENVIRONMENT_TYPE") == "dev",
 		InstallationEnvironment: getInstallationEnvironment(), SiteName: meta.SiteName,
-		ProductName: getSiteName(),
-		FaviconPath: frontendassets.SiteFaviconPath(localFrontendDir, meta.SiteName, configuredFaviconReader(r.Context(), backend.Db)),
-		PageTitle:   meta.PageTitle, MetaDescription: meta.MetaDescription,
+		ProductName:     getSiteName(),
+		SiteFaviconData: frontendassets.NewSiteFaviconData(localFrontendDir, meta.SiteName, configuredFaviconReader(r.Context(), backend.Db)),
+		PageTitle:       meta.PageTitle, MetaDescription: meta.MetaDescription,
 		CanonicalURL: meta.CanonicalURL, OGTitle: meta.OGTitle,
 		OGDescription: meta.OGDescription, OGType: meta.OGType,
 		OGURL: meta.OGURL, OGImage: meta.OGImage,

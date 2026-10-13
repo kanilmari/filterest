@@ -55,8 +55,52 @@ continue to belong to the compact group renderer.
 `createHeroDatasetTabs()` without an active dataset. It borrows the shell's
 single menu button into the shared menu slot, restoring its original position
 on teardown, and destroys the tab subscription. Site identity uses the actual
-server-rendered favicon link at 32 px with smooth scaling and the article
-bar's title class. Home applies no bottom border or shadow to that row.
+server-resolved 128 px favicon at 32 CSS px with browser downsampling (the 16 px
+link remains the fallback). Home reserves the complete name before tabs and
+actions, keeping its one borrowed menu toggle beside the icon in both panel
+states with a fixed 10 px gap. The panel’s duplicate toggle is hidden on Home,
+marked `aria-hidden="true"` and removed from the tab order. Accessibility is
+reconciled immediately after the completed row is mounted, and when Home
+returns the toggle. During construction the borrowed button is detached from
+the document; reconciling then cannot find it. Signed-in and signed-out Home
+use the same mount lifecycle, identity and toggle in both panel states.
+The name scales with the available row width beside an open menu too. At widths through 700 px the name
+uses 18 px bold: at 320 px, 200 px remain for the name; only names wider than
+that budget use an ellipsis. Fintravel, Easelect and Serlog fit. Home applies
+no bottom border or shadow to that row.
+
+Home alone keeps the dataset tabs on phones as a centred vertical stack, at
+most 480 px wide inside 16 px side gutters, with the shared icons, labels,
+current-page and focus styles and at least 44 px touch height. Administrator
+actions occupy the following row. Throughout the shell's overlay band (through
+1850 px), Home's menu starts below the measured complete header. This keeps the
+single borrowed toggle reachable by pointer and keyboard in both menu states;
+raising the toggle's own z-index cannot escape its ancestor stacking contexts.
+The shell retains the full content width in this band; above it, the open menu
+reserves its ordinary sidebar width. Dataset pages retain their existing layout
+and hidden phone tabs. The fit controller restores every destination only in a
+Home vertical stack when crossing the phone breakpoint, including buttons
+hidden in the previous horizontal row; dataset projections keep their fit rule.
+When a focused destination no longer fits after leaving the phone stack, focus
+moves to Home's visible borrowed toggle before the destination hides. Dataset
+pages retain their existing menu focus selection.
+
+Home's fitting controller only measures and hides its own hero buttons; it
+never moves the navbar's dataset tabs. Draggable navbar tabs navigate on click,
+after the drag handler suppresses a drag's trailing click. Their initial mouse
+press must not leave Home: deactivation returns the borrowed toggle and removes
+Home's navbar offset, moving drag targets before a drop. Tabs without drag
+permission retain their immediate mouse-down navigation.
+
+The five maintained 16 px site icons each have a lossless 128 px variant.
+`server_tools/site_favicon_variants/main.go` generates exact 8×
+pixel replication without dependencies; run it from the repository root with
+`go run app/server_tools/site_favicon_variants/main.go`, then update
+asset provenance and licence inventory hashes. Go tests verify every source
+pixel and alpha against its variant and all three head templates' two sizes.
+The variant derives from the already-resolved safe 16 px filename; a missing
+or non-regular variant keeps that 16 px file. The phone dataset identity uses
+the same head reader as Home, and selectable favicon names remain the 16 px ones.
 
 Fixed language keys `site_front_page_title`, `site_front_page_slogan` and
 `site_front_page_description` store three independent Finnish/English texts.
@@ -129,10 +173,12 @@ justify, with translated names and `aria-pressed`; Enter/Space activate buttons.
 Alignment changes only lines within the content-sized block up to its maximum
 width, preserving its anchored edge. Justify keeps the title and final paragraph
 lines at the left. Equal axis margins apply at all nine anchors; narrow desktop
-insets shrink to keep a usable text width. Long text expands downward, making
+insets are capped at 8% of the available Home content width per side
+(`min(saved margin, 8cqw, remaining space above the 320 px text minimum)`). Long text expands downward, making
 vertical anchors equivalent when the text exceeds the available height; full
-narrow text similarly makes horizontal anchors equivalent. Phones use 16 px
-insets instead of the saved margins, and the block takes the whole width between
+narrow text similarly makes horizontal anchors equivalent. Phones (width ≤700 px, matching the shell) use 16 px
+insets instead of the saved margins and ignore the horizontal anchor: the block
+is centred and takes the whole width between
 the gutters, so alignment shows even for short text; the vertical anchor still
 applies (the default block is centred on phones too), and long text flows from the
 top and scrolls.

@@ -189,11 +189,11 @@ func showLoginForm(w http.ResponseWriter, r *http.Request, errorMsg string) {
 
 	data := struct {
 		frontendassets.ShellPageData
-		ErrorMsg            string
-		CSRFToken           string
-		UseMinifiedAssets   bool
-		SiteName            string
-		FaviconPath         string
+		ErrorMsg          string
+		CSRFToken         string
+		UseMinifiedAssets bool
+		SiteName          string
+		frontendassets.SiteFaviconData
 		ShowBackButton      bool
 		ShowTourScreenshots bool
 		ImportsCSSPath      string
@@ -204,7 +204,7 @@ func showLoginForm(w http.ResponseWriter, r *http.Request, errorMsg string) {
 		CSRFToken:           csrfToken,
 		UseMinifiedAssets:   useMinified,
 		SiteName:            siteName,
-		FaviconPath:         frontendassets.SiteFaviconPath(frontend_dir, siteName, configuredFaviconReader(r.Context(), backend.Db)),
+		SiteFaviconData:     frontendassets.NewSiteFaviconData(frontend_dir, siteName, configuredFaviconReader(r.Context(), backend.Db)),
 		ShowBackButton:      standalonePage && !loginToBrowse,
 		ShowTourScreenshots: shouldShowLoginTourScreenshots(siteName),
 		ImportsCSSPath:      assetPaths.ImportsCSSPath,

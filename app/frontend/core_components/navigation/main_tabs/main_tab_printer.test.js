@@ -418,6 +418,65 @@ describe("initTabs", () => {
         expect(handle_all_navigation).toHaveBeenCalledTimes(2);
     });
 
+    test.each(['Home', 'dataset'])('draggable tabs preserve %s through reorder and exact restoration', async surface => {
+        const { initTabs } = await import('./main_tab_printer.js');
+        const { enableTabDragAndDrop } = await import('./tab_reorder_handler.js');
+        await initTabs({ preloadedContentTablesResponse: {
+            datasets: ['alpha', 'beta', 'gamma'].map(dataset_name => ({
+                dataset_name, is_top_level_in_current_project: true,
+            })), tab_order: null,
+        } });
+        const container = document.getElementById('navmenu');
+        const originalNodes = [...container.children];
+        const [source, successor, target] = originalNodes;
+        const activeId = container.querySelector('.active')?.dataset.id;
+        const home = document.createElement('div');
+        home.className = 'front-page-top-row';
+        home.innerHTML = '<button id="showMenuButton">Menu</button><nav><button>Alpha</button><button>Beta</button></nav>';
+        if (surface === 'Home') document.getElementById('tabs_container').append(home);
+        enableTabDragAndDrop();
+        vi.mocked(handle_all_navigation).mockClear();
+        vi.mocked(endpoint_router).mockClear();
+        for (const button of originalNodes) {
+            button.getBoundingClientRect = () => ({
+                left: 0, top: [...container.children].indexOf(button) * 56,
+                width: 300, height: 56,
+            });
+        }
+        function dragBeforeOrAfter(destination, fraction) {
+            // Native dragging starts with the same press as an ordinary click.
+            source.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, button: 0 }));
+            expect(handle_all_navigation).not.toHaveBeenCalled();
+            expect(container.querySelector('.active')?.dataset.id).toBe(activeId);
+            if (surface === 'Home') expect(home.querySelector('#showMenuButton').isConnected).toBe(true);
+            for (const type of ['dragstart', 'dragover', 'drop', 'dragend']) {
+                const event = new Event(type, { bubbles: true, cancelable: true });
+                Object.defineProperty(event, 'clientY', {
+                    value: destination.getBoundingClientRect().top + 56 * fraction,
+                });
+                source.dispatchEvent(event);
+            }
+        }
+        dragBeforeOrAfter(target, 0.75);
+        expect([...container.children]).toEqual([successor, target, source]);
+        dragBeforeOrAfter(successor, 0.25);
+        expect([...container.children]).toEqual(originalNodes);
+        expect(endpoint_router).toHaveBeenCalledTimes(2);
+        expect(endpoint_router).toHaveBeenLastCalledWith('updateTabOrder', {
+            method: 'POST', body_data: { tab_order: originalNodes.map((button, index) => ({
+                tab_id: button.dataset.id, sort_order: index + 1,
+            })) },
+        });
+        expect(handle_all_navigation).not.toHaveBeenCalled();
+        source.click();
+        expect(handle_all_navigation).not.toHaveBeenCalled();
+        await new Promise(resolve => setTimeout(resolve, 0));
+        source.click();
+        expect(handle_all_navigation).toHaveBeenCalledExactlyOnceWith(
+            source.dataset.id, expect.anything(), { skipUrlUpdate: false, forceReload: false },
+        );
+    });
+
     test("reuses preloaded content-table data when initTabs gets it from bootstrap", async () => {
         const { initTabs } = await import("./main_tab_printer.js");
         const preloadedContentTablesResponse = {

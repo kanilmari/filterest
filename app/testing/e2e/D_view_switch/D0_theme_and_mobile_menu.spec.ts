@@ -1,8 +1,19 @@
+// D0_theme_and_mobile_menu.spec.ts
+// Verifies explicit application theme switching and responsive navbar controls.
+// Connects the real menu actions to Home ownership and the dataset toggle contract.
+// Pins initial account appearance while preserving each surface's visibility proof.
 import { test, expect } from '@playwright/test';
+import { ensureNavbarVisible } from '../helpers/navbar';
 
 test.describe('Feature Tests', () => {
 
   test.beforeEach(async ({ page }) => {
+    await page.route(url => url.pathname === '/api/user-visual-preference', async route => {
+      if (route.request().method() !== 'GET') return route.continue();
+      await route.fulfill({ json: { theme_mode: 'light', revision: 1, configured: true } });
+    });
+    await page.emulateMedia({ colorScheme: 'dark' });
+    await page.addInitScript(() => localStorage.setItem('theme', 'light'));
     await page.goto('/');
   });
 
@@ -52,13 +63,19 @@ test.describe('Feature Tests', () => {
     
     // Navbar should not be collapsed anymore
     await expect(navbar).not.toHaveClass(/collapsed/);
-    await expect(showMenuBtn).toBeHidden();
+    await ensureNavbarVisible(page);
+    const homeMounted = await page.locator('.front-page-top-row').count() > 0;
+    // Home keeps its borrowed toggle; datasets retain this exact hidden assertion.
+    if (homeMounted) {
+      await expect(hideMenuBtn).toBeHidden();
+    } else {
+      await expect(showMenuBtn).toBeHidden();
+      await expect(hideMenuBtn).toBeVisible();
+    }
     await expect(showMenuBtn).toHaveAttribute('aria-expanded', 'true');
-    await expect(hideMenuBtn).toBeVisible();
 
-    // The navbar owns its own close control instead of moving the floating
-    // opener into the menu panel.
-    await hideMenuBtn.click();
+    // Home closes through its borrowed toggle; datasets keep their panel control.
+    await (homeMounted ? showMenuBtn : hideMenuBtn).click();
     
     // Navbar should be collapsed again
     await expect(navbar).toHaveClass(/collapsed/);

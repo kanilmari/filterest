@@ -47,11 +47,31 @@ test('short text on a phone keeps its vertical anchor with 16px insets, whatever
     }
 });
 
+test('all phone widths through 700px centre the text block regardless of Fintravel margins', () => {
+    for (const width of [320, 375, 600, 650, 700]) for (const anchor of rules.anchors) {
+        const geometry = computeHomeTextGeometry({ width, height: 900, textHeight: 100,
+            presentation: { ...defaults, anchor, alignment: 'left', max_width_px: 750, horizontal_margin_px: 160 } });
+        expect(geometry.x + geometry.width / 2).toBe(width / 2);
+        expect(geometry.x).toBe(16);
+        expect(geometry.width).toBe(width - 32);
+    }
+});
+
+test('Fintravel at 706px uses an 8% margin cap but retains smaller saved margins', () => {
+    const presentation = { ...defaults, anchor: 'center-left', max_width_px: 750, horizontal_margin_px: 160 };
+    const geometry = computeHomeTextGeometry({ width: 706, height: 900, textHeight: 200, presentation });
+    expect(geometry.x).toBeCloseTo(56.48, 2);
+    expect(geometry.width).toBeCloseTo(593.04, 2);
+    expect(computeHomeTextGeometry({ width: 706, height: 900, textHeight: 200,
+        presentation: { ...presentation, horizontal_margin_px: 40 } })).toMatchObject({ x: 40, width: 626 });
+});
+
 test('long text converges vertically and full narrow text converges horizontally across anchors', () => {
     for (const anchor of rules.anchors) {
-        const geometry = computeHomeTextGeometry({ width: 610, height: 300, textHeight: 1000,
+        const geometry = computeHomeTextGeometry({ width: 706, height: 300, textHeight: 1000,
             presentation: { ...defaults, anchor, horizontal_margin_px: 320, vertical_margin_px: 65 } });
-        expect(geometry).toEqual({ width: 320, height: 1000, stageHeight: 1130, x: 145, y: 65 });
+        expect(geometry).toMatchObject({ width: 593.04, height: 1000, stageHeight: 1130, y: 65 });
+        expect(geometry.x).toBeCloseTo(56.48, 2);
     }
     expect(computeHomeTextGeometry({ width: 1280, height: 760, textHeight: 200, presentation: null }))
         .toMatchObject({ x: 80, y: 280, width: 1120 });

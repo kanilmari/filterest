@@ -1,6 +1,7 @@
 // site_favicon.go
-// Resolves a versioned, hand-pixelled browser icon from the administrator-owned site name.
-// Keeps the first browser paint branded without relying on JavaScript or font rendering.
+// Resolves the configured site favicon and its optional lossless display variant.
+// Connects safe maintained filenames to shell, login and first-run head metadata.
+// Preserves administrator selection, site-initial fallbacks and regular-file checks.
 package frontendassets
 
 import (
@@ -14,6 +15,32 @@ import (
 const defaultSiteFaviconPath = "/frontend/icons/site_favicons/site-initial-f-v1-16.png"
 
 var safeSiteFaviconFilename = regexp.MustCompile(`^[a-z0-9][a-z0-9._-]{0,127}\.png$`)
+
+// SiteFaviconData supplies both head links from one resolved administrator/site choice.
+type SiteFaviconData struct {
+	FaviconPath    string
+	Favicon128Path string
+}
+
+// NewSiteFaviconData preserves 16px resolution and derives its optional display variant.
+func NewSiteFaviconData(frontendDir, siteName, configuredFile string) SiteFaviconData {
+	path := SiteFaviconPath(frontendDir, siteName, configuredFile)
+	return SiteFaviconData{FaviconPath: path, Favicon128Path: SiteFavicon128Path(frontendDir, path)}
+}
+
+// SiteFavicon128Path derives only a sibling of the resolved 16px path. Missing,
+// non-regular or unsafe variants retain the original; selection rules stay in SiteFaviconPath.
+func SiteFavicon128Path(frontendDir, resolvedPath string) string {
+	const prefix = "/frontend/icons/site_favicons/"
+	if !strings.HasPrefix(resolvedPath, prefix) || !strings.HasSuffix(resolvedPath, "-16.png") {
+		return resolvedPath
+	}
+	fileName := strings.TrimSuffix(strings.TrimPrefix(resolvedPath, prefix), "-16.png") + "-128.png"
+	if path := existingSiteFaviconPath(frontendDir, fileName); path != "" {
+		return path
+	}
+	return resolvedPath
+}
 
 // SiteFaviconPath resolves the favicon using the administrator's explicit file
 // first, then a multi-word initial such as ES, then the first site-name letter.

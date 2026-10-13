@@ -888,20 +888,40 @@
           "sha256": "27cbd2030ee927bc1fd7a6a30f907a2200c53315eae4c8dba624a5d95c833706"
         },
         {
+          "path": "app/frontend/icons/site_favicons/site-fintravel-ft-v1-128.png",
+          "sha256": "a6f3729e87c03d792fc6c7d3aa9a1ed038749d8c0d488c66899605f3c0d9c170"
+        },
+        {
           "path": "app/frontend/icons/site_favicons/site-fintravel-ft-v1-16.png",
           "sha256": "0b3059f41d718c1a5aa84a556239861d9687af70cc9418c21ee2f35e2ed04300"
+        },
+        {
+          "path": "app/frontend/icons/site_favicons/site-initial-e-v1-128.png",
+          "sha256": "17836c2b5a4a1ac2ab947ac7e5dacddef33d577094b536c631609194e85193dc"
         },
         {
           "path": "app/frontend/icons/site_favicons/site-initial-e-v1-16.png",
           "sha256": "05aa55fc11d82b1345bad7d22febe76efd6755c613cb78a60d27227f0f2bcda4"
         },
         {
+          "path": "app/frontend/icons/site_favicons/site-initial-es-v1-128.png",
+          "sha256": "0964685da788ec2eba45b6288fe7c66507d34bb41cd43d6306c70adfa1e384f8"
+        },
+        {
           "path": "app/frontend/icons/site_favicons/site-initial-es-v1-16.png",
           "sha256": "ec41e0ecd35509c200456cac33748df68dbc997c2def738f8a7bfcdf3d4d5e52"
         },
         {
+          "path": "app/frontend/icons/site_favicons/site-initial-f-v1-128.png",
+          "sha256": "efd6633fcdfb9ea4908931c5256db37cad4b144498ec7f396b91fe8ba87a116c"
+        },
+        {
           "path": "app/frontend/icons/site_favicons/site-initial-f-v1-16.png",
           "sha256": "6c2efd7f4f77c8ac63de6067fea6f0dd2ea732be7c466a67fa43c50992d0c739"
+        },
+        {
+          "path": "app/frontend/icons/site_favicons/site-initial-s-v1-128.png",
+          "sha256": "b48efff15bf011a8d8b34550198b1ddc1a353c127077e0638027ea2ab15b7ceb"
         },
         {
           "path": "app/frontend/icons/site_favicons/site-initial-s-v1-16.png",

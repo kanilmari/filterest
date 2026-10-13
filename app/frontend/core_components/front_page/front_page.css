@@ -65,7 +65,6 @@ body.dark-mode .front-page {
 }
 
 .front-page-top-row {
-  grid-template-columns: minmax(0, 1fr) minmax(0, 2fr) auto;
   flex: 0 0 auto;
   margin: 0;
   padding: 12px;
@@ -78,14 +77,46 @@ body.dark-mode .front-page {
 /* The shared hero row class pulls a dataset hero's row 12px into its padded container. Home's row has no such
    container, so it stays inside the page and keeps the shell's 12px corner inset for the menu, icon and gear. */
 .front-page > .front-page-top-row {
+  /* Identity keeps its content width; tabs consume the remainder and actions wrap. */
+  display: flex;
+  flex-wrap: wrap;
+  container-type: inline-size;
+  gap: 8px;
   margin-inline: 0;
 }
 
 .front-page-top-row__identity {
   display: flex;
   align-items: center;
-  grid-column: 1;
+  gap: 10px;
+  flex: 0 0 auto;
+  max-width: 100%;
   min-width: 0;
+}
+
+.front-page-top-row .front-page-site-name {
+  display: block;
+  flex: 0 1 auto;
+  padding: 0;
+  /* A narrow content area beside an open desktop menu needs the smaller name too. */
+  font-size: clamp(1.125rem, 4cqw, 2.15rem);
+}
+
+/* Home owns a fixed slot, so its gap never depends on the shared reveal animation. */
+.front-page-top-row .dataset-shared-topbar__menu-slot--visible {
+  flex: 0 0 44px;
+  width: 44px;
+  max-width: 44px;
+  transition: none;
+}
+
+.front-page-top-row > .hero-dataset-tabs {
+  flex: 1 1 0;
+}
+
+.front-page-top-row .filterbar-inline-hero__actions {
+  flex: 0 0 auto;
+  margin-inline-start: auto;
 }
 
 .front-page-top-row #showMenuButton {
@@ -96,6 +127,11 @@ body.dark-mode .front-page {
 
 .front-page-top-row [hidden] {
   display: none !important;
+}
+
+/* Home keeps the one borrowed toggle beside its icon in both menu states. */
+.body_content:has(.front-page:not(.hidden) > .front-page-top-row) #hideMenuButton {
+  display: none;
 }
 
 .front-page-site-icon {
@@ -250,32 +286,72 @@ body.dark-mode .front-page {
   outline-offset: -2px;
 }
 
+/* The shell overlays the menu through 1850px, including tablets and narrow
+   desktops. Its top row must stay below Home's borrowed toggle in that whole
+   band: a child z-index cannot escape the Home/container stacking contexts. */
+@media screen and (width <= 1850px) {
+  .body_content:has(.front-page:not(.hidden) > .front-page-top-row) #navbar {
+    top: var(--home-top-row-height, 68px);
+    height: calc(100vh - var(--home-top-row-height, 68px));
+  }
+}
+
 @media (width < 1000px) {
   .front-page-background::before {
     background-image: var(--front-page-background-1000);
   }
 }
 
-/* Keep navigation centred on phones while giving identity and actions a row. */
+/* Home alone keeps its destinations on phones; settings give way to the full identity. */
 @media (width <= 700px) {
-  .front-page-top-row {
-    grid-template-columns: minmax(0, 1fr) auto;
+  .front-page > .front-page-top-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
     margin: 0;
   }
 
-  .front-page-top-row > .hero-dataset-tabs {
-    grid-column: 1 / -1;
+  .front-page-top-row__identity {
+    min-height: 44px;
+    grid-column: 1;
+    grid-row: 1;
+  }
+
+  /* At 320px, 200px remain for a name at 18px bold (12px edges + 44px menu
+     + 32px icon + two 10px gaps). Only longer names use the shared ellipsis. */
+  .front-page-top-row .front-page-site-name { font-size: 1.125rem; }
+
+  .front-page > .front-page-top-row > .hero-dataset-tabs {
+    display: flex;
+    flex-direction: column;
+    grid-column: 1;
     grid-row: 2;
     justify-self: center;
+    width: calc(100% - 8px);
+    max-width: 480px;
+    overflow: visible;
+  }
+
+  .front-page-top-row .hero-dataset-tabs__button {
+    width: 100%;
+    min-height: 44px;
+    white-space: normal;
   }
 
   .front-page-top-row .filterbar-inline-hero__actions {
-    grid-column: 2;
-    grid-row: 1;
+    grid-column: 1;
+    grid-row: 3;
+  }
+
+  /* Keep Home's phone identity and destinations stationary while the shell
+     overlays its menu below the complete measured header. */
+  #tabs_container:has(.front-page:not(.hidden) > .front-page-top-row) {
+    width: 100%;
+    transform: translateX(0);
+    transition: none;
   }
 }
 
-@media (width <= 600px) {
+@media (width <= 700px) {
   .front-page-blocks {
     grid-template-columns: minmax(0, 1fr);
   }
@@ -293,7 +369,7 @@ body.dark-mode .front-page {
   box-sizing: border-box;
   min-height: 100cqh;
   padding-block: var(--home-text-vertical-margin);
-  padding-inline: min(var(--home-text-horizontal-margin), max(0px, calc((100cqw - var(--home-text-min-width)) / 2)));
+  padding-inline: min(var(--home-text-horizontal-margin), 8cqw, max(0px, calc((100cqw - var(--home-text-min-width)) / 2)));
   justify-items: start;
   align-items: start;
 }
@@ -320,7 +396,7 @@ body.dark-mode .front-page {
 }
 /* Phones keep 16 px insets and the vertical anchor: short text sits at the top, centre or bottom of the visible area,
    and long text grows the stage, so every vertical anchor flows from the top and scrolls. */
-@media (width <= 600px) {
+@media (width <= 700px) {
   .front-page-text-stage[data-anchor] {
     padding: 16px;
     justify-items: stretch;

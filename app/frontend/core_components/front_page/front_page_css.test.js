@@ -14,7 +14,7 @@ const navbar = readFileSync(resolve(currentDirectory, '../navigation/navbar/navb
 
 test('Home uses the reserved grid area and a phone-sized single column', () => {
     expect(navbar).toMatch(/#navbar > #navbarFrontPage\s*\{\s*grid-area: front-page;/);
-    expect(css).toMatch(/@media \(width <= 600px\)[\s\S]*grid-template-columns: minmax\(0, 1fr\)/);
+    expect(css).toMatch(/@media \(width <= 700px\)[\s\S]*grid-template-columns: minmax\(0, 1fr\)/);
     expect(css).toContain('min-height: 44px;');
     // The shared paragraph rule sets display, which otherwise overrides HTML hidden.
     expect(css).toMatch(/\.front-page-blocks \.supplemental-dataset-group p\[hidden\]\s*\{\s*display: none;/);
@@ -58,6 +58,33 @@ test('Home keeps the 12px corner inset that the shared hero row class would canc
     expect(css.match(/\.front-page-top-row\s*\{([^}]+)\}/)?.[1]).toContain('padding: 12px');
 });
 
+test('Home reserves identity width and a fixed 10px menu gap before tabs and actions', () => {
+    expect(css).toMatch(/\.front-page > \.front-page-top-row\s*\{[^}]*display: flex;[^}]*flex-wrap: wrap;/);
+    expect(css).toMatch(/\.front-page-top-row__identity\s*\{[^}]*gap: 10px;[^}]*flex: 0 0 auto;[^}]*max-width: 100%;/);
+    expect(css).toMatch(/\.front-page-top-row \.dataset-shared-topbar__menu-slot--visible\s*\{[^}]*flex: 0 0 44px;[^}]*transition: none;/);
+    expect(css).toMatch(/\.front-page-top-row \.front-page-site-name\s*\{[^}]*display: block;[^}]*padding: 0;/);
+    expect(css).toContain('.front-page-top-row .front-page-site-name { font-size: 1.125rem; }');
+    expect(css).toContain('font-size: clamp(1.125rem, 4cqw, 2.15rem)');
+});
+
+test('Home phone tabs stack inside 16px gutters and the menu cannot squeeze the identity', () => {
+    const tabs = css.match(/\.front-page > \.front-page-top-row > \.hero-dataset-tabs\s*\{([^}]+)\}/)?.[1];
+    expect(tabs).toContain('display: flex'); expect(tabs).toContain('flex-direction: column');
+    expect(tabs).toContain('grid-row: 2'); expect(tabs).toContain('width: calc(100% - 8px)');
+    expect(tabs).toContain('max-width: 480px'); expect(tabs).toContain('overflow: visible');
+    expect(css).toMatch(/\.front-page-top-row \.hero-dataset-tabs__button\s*\{[^}]*width: 100%;[^}]*min-height: 44px;[^}]*white-space: normal;/);
+    expect(css).toMatch(/#tabs_container:has\(\.front-page:not\(\.hidden\) > \.front-page-top-row\)\s*\{[^}]*width: 100%;[^}]*transform: translateX\(0\);/);
+    expect(css).toContain('height: calc(100vh - var(--home-top-row-height, 68px))');
+    expect(css).toContain('8cqw');
+});
+
+test('Home keeps the menu below its toggle throughout the shell overlay band', () => {
+    const overlay = css.match(/@media screen and \(width <= 1850px\)\s*\{([^@]+)/)?.[1];
+    expect(overlay).toMatch(/\.body_content:has\(\.front-page:not\(\.hidden\) > \.front-page-top-row\) #navbar\s*\{[^}]*top: var\(--home-top-row-height, 68px\);[^}]*height: calc\(100vh - var\(--home-top-row-height, 68px\)\);/);
+    const shell = readFileSync(resolve(currentDirectory, '../../styles/mobile_friendliness.css'), 'utf8');
+    expect(shell).toMatch(/@media screen and \(width <= 1850px\)/);
+});
+
 test('the slogan shows the line breaks typed in its multi-line settings fields', () => {
     expect(css).toMatch(/\.front-page-hero \.home-text-paragraph\s*\{\s*white-space: pre-line;/);
 });
@@ -72,12 +99,12 @@ test('positioned Home uses expanding flow, safe insets, theme copy and phone gut
     expect(css).toContain('min-height: 100cqh');
     expect(css).toContain('padding-inline: min(var(--home-text-horizontal-margin)');
     expect(css).toContain('.front-page-hero .home-text-paragraph { white-space: pre-line; margin-block: 0 var(--home-paragraph-gap, 1em); }');
-    const phoneStage = css.match(/@media \(width <= 600px\)\s*\{\s*\.front-page-text-stage\[data-anchor\]\s*\{([^}]*)\}/);
+    const phoneStage = css.match(/@media \(width <= 700px\)\s*\{\s*\.front-page-text-stage\[data-anchor\]\s*\{([^}]*)\}/);
     expect(phoneStage?.[1]).toMatch(/padding: 16px;[^}]*justify-items: stretch;/);
     // Phones keep the saved vertical anchor (K285: the default block is centred both ways); only long text starts at the top.
     expect(phoneStage?.[1]).not.toContain('align-items');
     // On phones the block fills the line between the gutters, so alignment is visible even for short text.
-    expect(css).toMatch(/@media \(width <= 600px\)[^@]*\.front-page-text-stage \.front-page-hero \{ width: auto; max-width: none; \}/);
+    expect(css).toMatch(/@media \(width <= 700px\)[^@]*\.front-page-text-stage \.front-page-hero \{ width: auto; max-width: none; \}/);
 });
 
 

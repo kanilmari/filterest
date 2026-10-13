@@ -479,24 +479,24 @@ func showFirstRunAdminForm(w http.ResponseWriter, r *http.Request, input firstRu
 		VerificationMethod string
 		TOTPSecret         string
 		InitialSection     string
-		FaviconPath        string
-		SiteNameErr        string
-		UsernameErr        string
-		EmailErr           string
-		PasswordErr        string
-		EnvironmentErr     string
-		VerificationErr    string
-		FactorErr          string
-		GeneralErr         string
-		CSRFToken          string
+		frontendassets.SiteFaviconData
+		SiteNameErr     string
+		UsernameErr     string
+		EmailErr        string
+		PasswordErr     string
+		EnvironmentErr  string
+		VerificationErr string
+		FactorErr       string
+		GeneralErr      string
+		CSRFToken       string
 	}{
 		ShellPageData:    shellPage,
 		FirstRunSiteName: input.SiteName, Username: input.Username, Email: input.Email,
 		DisplayName: input.DisplayName, NamesMayEqual: input.NamesMayEqual, DisplayNameErr: errs.DisplayName, NameChoiceErr: errs.NameChoice,
 		Environment: input.Environment, VerificationMethod: input.VerificationMethod,
 		TOTPSecret: totpSecret, InitialSection: initialSection,
-		FaviconPath: frontendassets.SiteFaviconPath(frontend_dir, faviconSiteName, configuredFaviconReader(r.Context(), backend.Db)),
-		SiteNameErr: errs.SiteName, UsernameErr: errs.Username, EmailErr: errs.Email,
+		SiteFaviconData: frontendassets.NewSiteFaviconData(frontend_dir, faviconSiteName, configuredFaviconReader(r.Context(), backend.Db)),
+		SiteNameErr:     errs.SiteName, UsernameErr: errs.Username, EmailErr: errs.Email,
 		PasswordErr: errs.Password, EnvironmentErr: errs.Environment,
 		VerificationErr: errs.Verification, FactorErr: errs.Factor, GeneralErr: errs.General,
 		CSRFToken: csrfToken,

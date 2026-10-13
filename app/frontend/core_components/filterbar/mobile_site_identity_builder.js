@@ -3,6 +3,7 @@
 // Connects shell metadata to the shared dataset bar without translating a proper name.
 // Reserves image geometry while the browser loads its public icon.
 import { formatSiteNameForDisplay, getCurrentSiteName } from '../state_stores/site_identity_reader.js';
+import { getSiteDisplayFaviconHref } from '../state_stores/site_favicon_reader.js';
 
 export function buildMobileSiteIdentity() {
     const element = document.createElement('div');
@@ -11,8 +12,8 @@ export function buildMobileSiteIdentity() {
     const icon = document.createElement('img');
     icon.width = icon.height = 32;
     icon.alt = '';
-    const favicon = document.querySelector('link[rel~="icon"]');
-    if (favicon?.href) icon.src = favicon.href;
+    const favicon = getSiteDisplayFaviconHref();
+    if (favicon) icon.src = favicon;
     else icon.hidden = true;
     const name = document.createElement('span');
     name.textContent = formatSiteNameForDisplay(getCurrentSiteName());

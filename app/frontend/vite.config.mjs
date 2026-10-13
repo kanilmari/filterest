@@ -142,6 +142,15 @@ function resolveDevSiteFaviconPath(siteName) {
 }
 
 const DEV_FAVICON_PATH = resolveDevSiteFaviconPath(DEV_SITE_NAME);
+const DEV_FAVICON_128_PATH = (() => {
+  const variant = DEV_FAVICON_PATH.replace(/-16\.png$/, '-128.png');
+  try {
+    if (statSync(join(__dirname, variant.slice('/frontend/'.length))).isFile()) return variant;
+  } catch {
+    // A source checkout may not yet have the optional display variant.
+  }
+  return DEV_FAVICON_PATH;
+})();
 
 function frontendDevAssetRewrite() {
   return {
@@ -299,6 +308,7 @@ const KNOWN_DEFAULTS = {
   OGImage: '',
   OGLocale: 'fi_FI',
   FaviconPath: DEV_FAVICON_PATH,
+  Favicon128Path: DEV_FAVICON_128_PATH,
   FormAction: '/api/register',
   ImportsCSSPath: '/frontend/styles/imports.css',
   MainBundlePath: '/frontend/main.js',

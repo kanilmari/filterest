@@ -103,6 +103,7 @@ function renderBlocks(container, data, visit) {
     });
     const background = createBackground(data.background, visit);
     container.replaceChildren(...(background ? [background] : []), visit.topRow.element, scroller);
+    visit.topRow.mount();
 }
 
 /** Starts one bounded request for this visit and owns its render generation. */

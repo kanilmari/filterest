@@ -63,6 +63,67 @@ describe("navbar_visibility_handler", () => {
         expect(document.getElementById("hideMenuButton").tabIndex).toBe(0);
     });
 
+    test.each([320, 706, 1440, 2000])("Home at %ipx keeps its borrowed toggle accessible through open, close and reconciliation", async width => {
+        window.innerWidth = width;
+        const row = document.createElement('div');
+        row.className = 'front-page-top-row';
+        document.getElementById('tabs_container').append(row);
+        const button = document.getElementById('showMenuButton');
+        const close = document.getElementById('hideMenuButton');
+        row.append(button);
+        localStorage.setItem('navVisibleNarrow', 'true');
+        localStorage.setItem('navVisibleWide', 'true');
+        const { initNavbar, syncNavbarMenuButtonAccessibility } = await loadModule();
+        initNavbar();
+        expect(close.getAttribute('aria-hidden')).toBe('true');
+        expect(close.tabIndex).toBe(-1);
+        for (const expanded of [true, false, true]) {
+            syncNavbarMenuButtonAccessibility();
+            expect(button.getAttribute('aria-expanded')).toBe(String(expanded));
+            expect(button.getAttribute('aria-hidden')).toBe('false');
+            expect(button.tabIndex).toBe(0);
+            expect(button.classList.contains('menu-toggle-visible')).toBe(true);
+            expect(close.getAttribute('aria-hidden')).toBe('true');
+            expect(close.tabIndex).toBe(-1);
+            expect(close.getAttribute('aria-expanded')).toBe(String(expanded));
+            button.click();
+        }
+    });
+
+    test("reconciles the open panel close button when Home borrows and returns the toggle", async () => {
+        const { initNavbar, syncNavbarMenuButtonAccessibility } = await loadModule();
+        const button = document.getElementById('showMenuButton');
+        const close = document.getElementById('hideMenuButton');
+        const row = document.createElement('div');
+        row.className = 'front-page-top-row';
+        document.getElementById('tabs_container').append(row);
+        initNavbar();
+        expect(close.getAttribute('aria-hidden')).toBe('false');
+        row.append(button); syncNavbarMenuButtonAccessibility();
+        expect(close.getAttribute('aria-hidden')).toBe('true');
+        expect(close.tabIndex).toBe(-1);
+        document.querySelector('.body_content').append(button); syncNavbarMenuButtonAccessibility();
+        expect(close.getAttribute('aria-hidden')).toBe('false');
+        expect(close.tabIndex).toBe(0);
+        expect(button.getAttribute('aria-hidden')).toBe('true');
+    });
+
+    test("keeps Home's duplicate close button inaccessible during initial navbar entrance", async () => {
+        document.querySelector('.body_content').dataset.navbarInitialOpen = 'true';
+        const row = document.createElement('div');
+        row.className = 'front-page-top-row';
+        document.getElementById('tabs_container').append(row);
+        const button = document.getElementById('showMenuButton');
+        row.append(button);
+        const { initNavbar } = await loadModule();
+        initNavbar();
+        const close = document.getElementById('hideMenuButton');
+        expect(close.getAttribute('aria-hidden')).toBe('true');
+        expect(close.tabIndex).toBe(-1);
+        expect(button.getAttribute('aria-hidden')).toBe('false');
+        expect(button.tabIndex).toBe(0);
+    });
+
     test("keeps only the menu button for the current navbar context reachable", async () => {
         localStorage.setItem("navVisibleWide", "true");
         const { initNavbar } = await loadModule();
