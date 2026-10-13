@@ -1,7 +1,7 @@
 {
   "artifact": "filterest-public-bootstrap",
   "format_version": 2,
-  "app_version": "9.4.0",
+  "app_version": "9.4.1",
   "db_version": "9.11.1",
   "schema_source": "app/server_tools/public_bootstrap/source/base.schema.sql",
   "seed_source": "app/server_tools/public_bootstrap/source/base.seed.sql",
