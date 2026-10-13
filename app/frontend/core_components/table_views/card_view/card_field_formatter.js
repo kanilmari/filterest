@@ -31,6 +31,7 @@ import {
 import { applyNumberInputStep } from '../../general_tables/gt_1_row_crud/number_input_step_resolver.js';
 import { applyLabelValueLayout } from '../label_value_layout_adapter.js';
 import { resolveCardFieldLabelPlacement } from './card_field_label_placement.js';
+import { printEmptyValue } from '../../../reusable_components/key_value_container/empty_value_printer.js';
 
 /**
  * parseRoleString - tukee useita pilkulla erotettuja rooleja 
@@ -81,7 +82,6 @@ export function createKeyValueElement(
 ) {
     const wrapper = document.createElement("div");
     wrapper.classList.add("key_value_wrapper");
-
     /* ---------- LABEL ---------- */
     // Nimen paikka luetaan sarakkeesta, ei yhden rivin arvosta.
     const labelPlacement = resolveCardFieldLabelPlacement({
@@ -97,19 +97,18 @@ export function createKeyValueElement(
         labelDiv.dataset.langKey = column;
         wrapper.appendChild(labelDiv);
     }
-
     /* ---------- VALUE ---------- */
     const valueDiv = document.createElement("div");
     valueDiv.classList.add(cssClass);
     valueDiv.setAttribute("data-column", column);
-
     // Tallennetaan raaka arvo muokkausta varten
     valueDiv.setAttribute("data-raw-value", String(raw_value ?? ''));
     const displayText = String(display_value ?? '');
     const timestampDisplay = formatTimestampDisplayParts(displayText, columnMeta);
     const resolvedDisplayText = timestampDisplay?.displayText ?? displayText;
-
-    if (hasLangKey) {
+    if (printEmptyValue(valueDiv, resolvedDisplayText)) {
+        // All card field paths use the same accessible empty representation.
+    } else if (hasLangKey) {
         valueDiv.dataset.langKey = resolvedDisplayText || String(raw_value ?? '');
     } else {
         if (timestampDisplay?.titleText) {
@@ -123,20 +122,16 @@ export function createKeyValueElement(
         }
         linkifyHttpTextNodes(valueDiv);
     }
-
     wrapper.appendChild(valueDiv);
     applyLabelValueLayout(wrapper, wrapper.querySelector(".kv_label"), valueDiv);
-
     return wrapper;
 }
-
 function restoreReadOnlyFieldContent(fieldElem, displayValue, fallbackText = '') {
     const resolvedDisplayValue = (typeof displayValue === 'boolean')
         ? String(displayValue)
-        : String(displayValue || fallbackText || '');
-
+        : String(displayValue ?? fallbackText ?? '');
     fieldElem.textContent = '';
-
+    if (printEmptyValue(fieldElem, resolvedDisplayValue)) return;
     if (containsAllowedHtml(resolvedDisplayValue)) {
         fieldElem.appendChild(renderAllowedHtml(resolvedDisplayValue));
     } else {
@@ -259,7 +254,7 @@ export function disableEditing(container) {
         if (temporalKind) {
             if (temporalDisplay?.titleText) {
                 fieldElem.title = temporalDisplay.titleText;
-            } else {
+            } else if (fieldElem.dataset.titleLangKey !== 'unknown') {
                 fieldElem.removeAttribute('title');
             }
         }
@@ -507,7 +502,7 @@ export function enableEditing(container, table_name, dataTypes) {
         const originalDisplayText = fieldElem.textContent.trim();
         const normalizedOriginalText = isTicketStatusField(table_name, columnName)
             ? normalizeTicketStatusForClient(originalText)
-            : (temporalKind ? originalDisplayText : originalText);
+            : (temporalKind && fieldElem.dataset.titleLangKey !== 'unknown' ? originalDisplayText : originalText);
 
         fieldElem.setAttribute('data-original-text', normalizedOriginalText);
         if (temporalKind) {

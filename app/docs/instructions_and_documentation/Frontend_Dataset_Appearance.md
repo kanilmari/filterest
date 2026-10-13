@@ -86,3 +86,13 @@ The phone toolbar deliberately hides the article close control. An article
 opened from a result card pushes a history entry; browser Back dismisses it and
 restores the listing. Tablet and desktop retain the shared toolbar close button.
 `C3_close_big_card.spec.ts` verifies these two paths in the same test.
+
+Card/filterbar copy uses the shared language dictionaries, seeded by `20261013000002_seed_card_and_filterbar_language_keys.sql` under unreleased DB 9.11.1 (`20261013000099_record_database_release_9_11_1.sql`). Add-row names resolve the tab's own language key. Every card detail renderer, including article date fields, prints empty values through `empty_value_printer.js`: an em dash with the `unknown` tooltip and accessible label. The generated foreign-reference aliases `created_by_name` and `owner_name (ln)` have product translations; stored row values are unchanged.
+
+Result counts use `results_count_singular` / `results_count_plural`, with
+`results_count_text_search_singular` / `results_count_text_search_plural` and
+`results_count_ai_search_singular` / `results_count_ai_search_plural` for search
+breakdowns. Generic `result` / `results` and the older search-copy keys may be
+site headings; this migration leaves them untouched. Both language storage
+representations fill only missing or blank copy and exact English fallbacks in
+other languages, retaining nonblank site translations.

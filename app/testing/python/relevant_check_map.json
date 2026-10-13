@@ -36,7 +36,8 @@
         "app/testing/e2e/P_copy/P2_select_range.spec.ts",
         "app/testing/e2e/E_search_filter/E17_card_refresh_lifecycle.spec.ts",
         "app/testing/e2e/C_card_view/C12_article_reload_reading_position.spec.ts",
-        "app/testing/e2e/C_card_view/C15_chart_axes.spec.ts"
+        "app/testing/e2e/C_card_view/C15_chart_axes.spec.ts",
+        "app/testing/e2e/C_card_view/C16_finnish_card_filterbar_text.spec.ts"
       ],
       "projects": [
         "mobile-card",
@@ -55,7 +56,8 @@
         "app/testing/e2e/E_search_filter/E13_row_group_category_panel.spec.ts",
         "app/testing/e2e/E_search_filter/E16_multiselect_scroll.spec.ts",
         "app/testing/e2e/E_search_filter/E17_card_refresh_lifecycle.spec.ts",
-        "app/testing/e2e/Q_scroll/Q2_offset_reset.spec.ts"
+        "app/testing/e2e/Q_scroll/Q2_offset_reset.spec.ts",
+        "app/testing/e2e/C_card_view/C16_finnish_card_filterbar_text.spec.ts"
       ],
       "projects": [
         "mobile-card",
@@ -75,7 +77,8 @@
         "app/testing/e2e/A_row_crud/A2_edit_cell.spec.ts",
         "app/testing/e2e/P_copy/P2_select_range.spec.ts",
         "app/testing/e2e/Q_scroll/Q2_offset_reset.spec.ts",
-        "app/testing/e2e/C_card_view/C15_chart_axes.spec.ts"
+        "app/testing/e2e/C_card_view/C15_chart_axes.spec.ts",
+        "app/testing/e2e/C_card_view/C16_finnish_card_filterbar_text.spec.ts"
       ],
       "projects": [
         "mobile-card",
@@ -226,7 +229,8 @@
       "specs": [
         "app/testing/e2e/T_admin/T1_create_table.spec.ts",
         "app/testing/e2e/T_admin/T7_card_visibility.spec.ts",
-        "app/testing/e2e/T_admin/T15_view_field_assignments.spec.ts"
+        "app/testing/e2e/T_admin/T15_view_field_assignments.spec.ts",
+        "app/testing/e2e/C_card_view/C16_finnish_card_filterbar_text.spec.ts"
       ],
       "projects": [
         "mobile-card",
@@ -267,7 +271,8 @@
       ],
       "specs": [
         "app/testing/e2e/M_language/M1_language_switch.spec.ts",
-        "app/testing/e2e/M_language/M3_card_language_refresh.spec.ts"
+        "app/testing/e2e/M_language/M3_card_language_refresh.spec.ts",
+        "app/testing/e2e/C_card_view/C16_finnish_card_filterbar_text.spec.ts"
       ],
       "projects": [
         "mobile-card",
@@ -327,7 +332,8 @@
         "app/testing/e2e/J_modals/J2_modal_close.spec.ts",
         "app/testing/e2e/R_dropdown/R1_dropdown_open_search_select.spec.ts",
         "app/testing/e2e/E_search_filter/E13_row_group_category_panel.spec.ts",
-        "app/testing/e2e/C_card_view/C3_close_big_card.spec.ts"
+        "app/testing/e2e/C_card_view/C3_close_big_card.spec.ts",
+        "app/testing/e2e/C_card_view/C16_finnish_card_filterbar_text.spec.ts"
       ],
       "projects": [
         "mobile-card",

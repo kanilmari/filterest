@@ -5,10 +5,7 @@
 import { resolveSafeExternalHttpUrl } from "../safe_external_http_url.js";
 import { appendTextWithHttpLinks } from "../http_text_linkifier.js";
 import { applyLabelValueLayout } from "./label_value_layout.js";
-
-function isEmptyValue(value) {
-    return value === "" || value === null || value === undefined;
-}
+import { isEmptyValue, printEmptyValue } from "./empty_value_printer.js";
 
 /**
  * The arrangements a caller's key hook may state for one pair: leave the name
@@ -116,10 +113,8 @@ export function createKvPairBuilders({ translate, decorateKeyElement }) {
 
             dest.appendChild(linkGroup);
         } else if (empty) {
-            dest.textContent = "—";
             dest.classList.add("kv-empty");
-            const unknown = translate("unknown");
-            dest.setAttribute("title", unknown);
+            printEmptyValue(dest, pairObj.value, translate);
         } else {
             appendTextWithHttpLinks(dest, pairObj.value);
         }

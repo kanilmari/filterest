@@ -22,6 +22,8 @@ Dates are the local (Europe/Helsinki) date on which the version was published.
 
 ## [Unreleased]
 
+- **Card and filterbar language corrections** — Sort selections and options, result counts, field-view editing headings and generated creator/owner name labels follow the interface language. Result counts and text/AI search breakdowns use dedicated translations so existing site headings keep their wording. Add-row buttons use the same translated dataset name as its tab. Empty card values, including opened-card dates, share the em dash, translated tooltip and accessible label. Copy is seeded for Finnish, English, Chinese and Cantonese under unreleased database 9.11.1.
+
 ## [9.4.0] - 2026-10-13
 
 - **Database 9.11.0** — Version 9.4.0 requires database 9.11.0, upgraded from production 9.10.1. New system tables raise the database minor version; the unreleased migration batch previously labelled 9.10.2 ships together as 9.11.0. See the release notes for permission, appearance, timestamp, naming, retention and migration-history effects.

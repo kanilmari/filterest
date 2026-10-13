@@ -188,12 +188,12 @@ def test_home_description_release_and_generated_bootstrap():
     assert "SELECT '9.11.0'" in DESCRIPTION_OWNER.read_text()
     assert "site_front_page_description" in sql and "usage_explanation" in sql
     assert sql in (BOOTSTRAP / "seed_data.sql").read_text()
-    assert (BOOTSTRAP / "schema.sql").read_bytes() == (APP / "server_tools/versioning/schema_snapshots/db-9.11.0.sql").read_bytes()
+    current = (APP / "VERSION_DB").read_text().strip()
+    assert (BOOTSTRAP / "schema.sql").read_bytes() == (APP / f"server_tools/versioning/schema_snapshots/db-{current}.sql").read_bytes()
     manifest = json.loads((BOOTSTRAP / "manifest.json").read_text())
-    assert manifest["db_version"] == "9.11.0"
+    assert manifest["db_version"] == current
     assert DESCRIPTION.name in manifest["migration_ledger_baseline"]
     assert DESCRIPTION_OWNER.name in manifest["migration_ledger_baseline"]
-    assert (APP / "VERSION_DB").read_text().strip() == "9.11.0"
 
 
 def test_home_description_fresh_upgrade_repeat_and_reviewed_copy(installed, upgrade):

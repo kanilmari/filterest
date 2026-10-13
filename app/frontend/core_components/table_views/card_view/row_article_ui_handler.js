@@ -20,6 +20,7 @@ import { getLanguageWithBrowserFallback } from "../../state_stores/lang_preferen
 import { formatTimestampDisplayParts } from "../timestamp_display_formatter.js";
 import { resolveSafeExternalHttpUrl } from "../../../reusable_components/safe_external_http_url.js";
 import { linkifyHttpTextNodes } from "../../../reusable_components/http_text_linkifier.js";
+import { printEmptyValue } from "../../../reusable_components/key_value_container/empty_value_printer.js";
 
 let highlightedCard = null;
 const OPEN_IN_NEW_TAB_LANG_KEY = "open_in_new_tab";
@@ -112,7 +113,11 @@ export function createRowArticleKeyValueElement(
     valueDiv.setAttribute("data-column", column);
     valueDiv.setAttribute("data-raw-value", storedRawValue);
 
-    if (hasLangKey) {
+    // Empty temporal values format to empty text too: apply the same placeholder
+    // before language-key, date, HTML or link rendering can bypass it.
+    if (printEmptyValue(valueDiv, value)) {
+        // The shared printer owns the complete empty representation.
+    } else if (hasLangKey) {
         valueDiv.dataset.langKey = value;
     } else {
         const resolved = resolveRowArticleLocalizedValue(value, isMultilingual);
@@ -186,7 +191,9 @@ export function createRowArticleNavigableElement({
         ? resolveSafeExternalHttpUrl(requestedNewTabHref)
         : requestedNewTabHref;
 
-    if (resolvedHref) {
+    if (printEmptyValue(valueDiv, resolvedValue)) {
+        // An empty label must not become an invisible link.
+    } else if (resolvedHref) {
         const linkGroup = document.createElement("span");
         linkGroup.classList.add("two_line_link_group");
 

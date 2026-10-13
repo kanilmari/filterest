@@ -26,6 +26,7 @@ import {
     saveOpenedFilters,
 } from "../filterbar/filterbar_engine/filterbar_state_saver.js";
 import { getLanguageWithBrowserFallback } from "../state_stores/lang_preference_reader.js";
+import { getTranslationForKey } from "../lang/translation_handler.js";
 import {
     hiddenFieldNameSet,
     moveFieldBefore,
@@ -35,8 +36,6 @@ import {
 
 const FIELD_VIEW_TEXT = Object.freeze({
     en: Object.freeze({
-        button: "Edit fields view",
-        title: "Edit fields view",
         description: "Drag fields into the shared order. Hidden fields disappear from ordinary content views and forms for every user.",
         field: "Field",
         hide: "Hide everywhere",
@@ -54,8 +53,6 @@ const FIELD_VIEW_TEXT = Object.freeze({
         lockedGeneric: "Required by application operations",
     }),
     fi: Object.freeze({
-        button: "Muokkaa kenttänäkymää",
-        title: "Muokkaa kenttänäkymää",
         description: "Vedä kentät yhteiseen järjestykseen. Piilotetut kentät poistuvat tavallisista sisältönäkymistä ja lomakkeista kaikilta käyttäjiltä.",
         field: "Kenttä",
         hide: "Piilota kaikkialta",
@@ -75,9 +72,12 @@ const FIELD_VIEW_TEXT = Object.freeze({
 });
 
 function uiText() {
-    return getLanguageWithBrowserFallback() === "fi"
-        ? FIELD_VIEW_TEXT.fi
-        : FIELD_VIEW_TEXT.en;
+    const heading = getTranslationForKey("edit_fields_view");
+    return {
+        ...(getLanguageWithBrowserFallback() === "fi" ? FIELD_VIEW_TEXT.fi : FIELD_VIEW_TEXT.en),
+        button: heading,
+        title: heading,
+    };
 }
 
 function resolveLockText(reason, text) {
@@ -168,7 +168,7 @@ export async function openFieldViewEditor(tableName) {
     saveButton.textContent = text.save;
     saveButton.disabled = true;
 
-    createModal({
+    const { modal } = createModal({
         titlePlainText: text.title,
         contentElements: [shell],
         footerElements: [cancelButton, saveButton],
@@ -176,6 +176,8 @@ export async function openFieldViewEditor(tableName) {
         maxWidth: "94vw",
         maxHeight: "88vh",
     });
+    // Keep the existing title element and layout while enabling live translation.
+    modal.querySelector("#custom_modal_title").dataset.langKey = "edit_fields_view";
     showModal();
 
     let columns = [];
@@ -332,6 +334,7 @@ export function createFieldViewEditorButton(tableName) {
     button.type = "button";
     button.className = "fw-btn field-view-editor-button";
     button.dataset.testid = "btn-edit-fields-view";
+    button.dataset.langKey = "edit_fields_view";
     button.textContent = text.button;
     button.addEventListener("click", () => {
         void openFieldViewEditor(tableName);

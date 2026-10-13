@@ -7,14 +7,15 @@ import { open_add_row_modal } from "../gt_1_row_crud/gt_1_1_row_create/row_creat
 import { delete_selected_items } from "../gt_1_row_crud/gt_1_4_row_delete/row_remover.js";
 import { open_column_management_modal } from "../gt_2_column_crud/column_manager.js";
 import { createMaskIconSpan } from "../../../icons/icon_mask_builder.js";
+import { getMainTabLangKey } from "../../navigation/main_tabs/main_tab_lang_keys.js";
 
 /**
  * Luo nappi rivin lisäämiseen
  */
 export function createAddRowButton(table_uid, table_name) {
     const button = document.createElement("button");
-    button.dataset.langKey = "add_row_" + table_name;
-    button.dataset.langKeyFallback = "add_row";
+    button.dataset.langKey = "add_row_to_dataset";
+    button.dataset.langVariableKey = getMainTabLangKey(table_name);
     button.dataset.testid = "btn-add-row";
     button.classList.add("add_row_button");
     button.classList.add("button");

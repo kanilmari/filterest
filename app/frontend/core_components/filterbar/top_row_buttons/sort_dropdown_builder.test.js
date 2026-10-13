@@ -51,6 +51,7 @@ describe("sort_dropdown_builder", () => {
         vi.clearAllMocks();
         document.body.innerHTML = "";
         mocks.dropdown = {
+            getValue: vi.fn(),
             setValue: vi.fn(),
             setOptions: vi.fn(),
             destroy: vi.fn(),

@@ -35,10 +35,10 @@ def test_dataset_appearance_migration_version_and_generated_artifacts():
     assert "system_db_version" not in sql
     assert "card_style_variant" not in sql and "card_detail_columns" not in sql
     assert sql in (BOOTSTRAP / "schema.sql").read_text()
-    assert (BOOTSTRAP / "schema.sql").read_bytes() == (APP / "server_tools/versioning/schema_snapshots/db-9.11.0.sql").read_bytes()
-    assert (APP / "VERSION_DB").read_text().strip() == "9.11.0"
+    current = (APP / "VERSION_DB").read_text().strip()
+    assert (BOOTSTRAP / "schema.sql").read_bytes() == (APP / f"server_tools/versioning/schema_snapshots/db-{current}.sql").read_bytes()
     manifest = json.loads((BOOTSTRAP / "manifest.json").read_text())
-    assert manifest["db_version"] == "9.11.0"
+    assert manifest["db_version"] == current
     assert "public.system_dataset_appearance" in manifest["allowed_schema_tables"]
     assert "public.system_dataset_appearance" in manifest["allowed_seed_tables"]
     assert MIGRATION.name in manifest["migration_ledger_baseline"]

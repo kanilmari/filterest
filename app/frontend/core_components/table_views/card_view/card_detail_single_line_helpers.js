@@ -6,6 +6,7 @@
 // Exists so database-held legacy SVG can never enter the DOM rendering path.
 
 import { applyLabelValueLayout } from "../label_value_layout_adapter.js";
+import { printEmptyValue } from "../../../reusable_components/key_value_container/empty_value_printer.js";
 import { resolveCardDetailIconKey } from "./card_detail_icon_builder.js";
 import { createSymbolMaskElement } from "../../../reusable_components/symbol_asset_resolver.js";
 import { resolveSafeExternalHttpUrl } from "../../../reusable_components/safe_external_http_url.js";
@@ -125,9 +126,8 @@ function createSingleLineCardDetailValue(detailEntry) {
     valueContainer.className = "card_detail_row_value kv-value kv-conditional-value";
 
     const displayValue = String(detailEntry?.rawValue ?? "").trim();
-    if (!displayValue) {
+    if (printEmptyValue(valueContainer, displayValue)) {
         valueContainer.classList.add("card_detail_row_value--empty", "kv-empty");
-        valueContainer.textContent = "—";
         return valueContainer;
     }
 

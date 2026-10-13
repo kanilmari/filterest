@@ -4,6 +4,8 @@
 // Exists to keep sort-control construction separate from broader filterbar layout assembly.
 
 import { createVanillaDropdown } from "../../../reusable_components/vanilla_dropdown/vanilla_dropdown_builder.js";
+import { getTranslationForKey } from "../../lang/translation_handler.js";
+import { bindDatasetLanguageRenderer } from "../../table_views/dataset_value_localizer.js";
 import {
     getUnifiedTableState,
     setUnifiedTableState,
@@ -126,6 +128,10 @@ export function createSortDropdown(tableName, columns, dataTypes, { allowPersist
     let dropdown;
     dropdown = createVanillaDropdown({
         containerElement: dropdownContainer,
+        translate: (key) => getTranslationForKey(key, {
+            fallback: options.find(option => option.langKey === key)?.label || "",
+            countUsage: false,
+        }),
         options: contextualOptions(),
         placeholder: "Select...",
         showClearButton: false,
@@ -169,6 +175,12 @@ export function createSortDropdown(tableName, columns, dataTypes, { allowPersist
         dropdown,
         availableValues
     );
+
+    // The page translator updates input placeholders. The existing language
+    // renderer hook also refreshes the selected value without firing onChange.
+    bindDatasetLanguageRenderer(wrapper, () => {
+        dropdown.setValue(dropdown.getValue(), false);
+    });
 
     wrapper.destroy = () => {
         unsubscribeSortSelection();

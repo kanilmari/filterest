@@ -12,7 +12,7 @@ describe("setResultsCount", () => {
         setSearchAiResultsCount("tasks", null);
     });
 
-    test("renders the legacy numeric count unchanged", () => {
+    test("renders the numeric count with its dedicated plural key", () => {
         document.documentElement.lang = "en";
         document.body.innerHTML = `
             <div id="tasks_results_count"></div>
@@ -25,31 +25,31 @@ describe("setResultsCount", () => {
         const mirror = document.querySelector('[data-results-count-for="tasks"]');
 
         expect(primary.textContent).toBe("3 results");
-        expect(primary.querySelector('[data-lang-key="results"]')).toBeNull();
+        expect(primary.querySelector('[data-lang-key="results_count_plural"]')).not.toBeNull();
         expect(primary.classList.contains("results-count--search-breakdown")).toBe(false);
         expect(mirror.textContent).toBe("3 results");
     });
 
-    test("renders Finnish legacy counts with partitive plural", () => {
+    test("marks the plural label for page translation regardless of HTML language", () => {
         document.documentElement.lang = "fi";
         document.body.innerHTML = `<div id="tasks_results_count"></div>`;
 
         setResultsCount("tasks", 5);
 
         const primary = document.getElementById("tasks_results_count");
-        expect(primary.textContent).toBe("5 tulosta");
-        expect(primary.querySelector('[data-lang-key="results"]')).toBeNull();
+        expect(primary.textContent).toBe("5 results");
+        expect(primary.querySelector('[data-lang-key="results_count_plural"]')).not.toBeNull();
     });
 
-    test("renders Finnish legacy singular count", () => {
+    test("marks the singular label for page translation", () => {
         document.documentElement.lang = "fi";
         document.body.innerHTML = `<div id="tasks_results_count"></div>`;
 
         setResultsCount("tasks", 1);
 
         const primary = document.getElementById("tasks_results_count");
-        expect(primary.textContent).toBe("1 tulos");
-        expect(primary.querySelector('[data-lang-key="result"]')).toBeNull();
+        expect(primary.textContent).toBe("1 result");
+        expect(primary.querySelector('[data-lang-key="results_count_singular"]')).not.toBeNull();
     });
 
     test("renders separate text and AI counts for intelligent search", () => {
@@ -70,13 +70,15 @@ describe("setResultsCount", () => {
         const items = primary.querySelectorAll(".results-count-breakdown-item");
 
         expect(primary.classList.contains("results-count--search-breakdown")).toBe(true);
-        expect(primary.textContent).toBe("3 tulosta tekstihaulla + 10 tulosta tekoälyhaulla");
+        expect(primary.textContent).toBe("3 results in text search + 10 results in AI search");
         expect(items).toHaveLength(2);
+        expect(items[0].querySelector(".results-count-breakdown-label").dataset.langKey).toBe("results_count_text_search_plural");
+        expect(items[1].querySelector(".results-count-breakdown-label").dataset.langKey).toBe("results_count_ai_search_plural");
         expect(items[0].textContent).toContain("3");
-        expect(items[0].querySelector(".results-count-breakdown-label")?.textContent).toBe("tulosta tekstihaulla");
+        expect(items[0].querySelector(".results-count-breakdown-label")?.textContent).toBe("results in text search");
         expect(items[1].textContent).toContain("10");
-        expect(items[1].querySelector(".results-count-breakdown-label")?.textContent).toBe("tulosta tekoälyhaulla");
-        expect(primary.querySelector('[data-lang-key="results"]')).toBeNull();
+        expect(items[1].querySelector(".results-count-breakdown-label")?.textContent).toBe("results in AI search");
+        expect(primary.querySelector('[data-lang-key="results_count_plural"]')).toBeNull();
         expect(mirror.textContent).toBe(primary.textContent);
     });
 
@@ -91,8 +93,18 @@ describe("setResultsCount", () => {
         });
 
         const primary = document.getElementById("tasks_results_count");
-        expect(primary.textContent).toBe("1 tulos tekstihaulla + 0 tulosta tekoälyhaulla");
-        expect(primary.querySelector(".results-count-breakdown-label")?.textContent).toBe("tulos tekstihaulla");
+        expect(primary.textContent).toBe("1 result in text search + 0 results in AI search");
+        expect(primary.querySelector(".results-count-breakdown-label")?.textContent).toBe("result in text search");
+        expect(primary.querySelector(".results-count-breakdown-label").dataset.langKey).toBe("results_count_text_search_singular");
+    });
+
+    test("uses the dedicated singular AI key beside a zero text count", () => {
+        document.body.innerHTML = `<div id="tasks_results_count"></div>`;
+        setResultsCount("tasks", { mode: "search-breakdown", textCount: 0, aiCount: 1 });
+        const primary = document.getElementById("tasks_results_count");
+        expect(primary.textContent).toBe("0 results in text search + 1 result in AI search");
+        expect(primary.querySelector('[data-lang-key="results_count_text_search_plural"]')).not.toBeNull();
+        expect(primary.querySelector('[data-lang-key="results_count_ai_search_singular"]')).not.toBeNull();
     });
 
     test("keeps the search's AI number beside the dataset's own count", () => {
@@ -105,7 +117,7 @@ describe("setResultsCount", () => {
         setResultsCount("tasks", 251);
 
         const primary = document.getElementById("tasks_results_count");
-        expect(primary.textContent).toBe("251 tulosta tekstihaulla + 8 tulosta tekoälyhaulla");
+        expect(primary.textContent).toBe("251 results in text search + 8 results in AI search");
         expect(primary.classList.contains("results-count--search-breakdown")).toBe(true);
     });
 
@@ -119,7 +131,7 @@ describe("setResultsCount", () => {
         setResultsCount("tasks", 313);
 
         const primary = document.getElementById("tasks_results_count");
-        expect(primary.textContent).toBe("313 tulosta");
+        expect(primary.textContent).toBe("313 results");
         expect(primary.classList.contains("results-count--search-breakdown")).toBe(false);
     });
 
@@ -130,7 +142,7 @@ describe("setResultsCount", () => {
         setSearchAiResultsCount("tasks", 0);
         setResultsCount("tasks", 251);
 
-        expect(document.getElementById("tasks_results_count").textContent).toBe("251 tulosta");
+        expect(document.getElementById("tasks_results_count").textContent).toBe("251 results");
     });
 
     test("one dataset's AI group never reaches another dataset's counter", () => {
@@ -144,6 +156,6 @@ describe("setResultsCount", () => {
         setResultsCount("tasks", 251);
         setResultsCount("orders", 12);
 
-        expect(document.getElementById("orders_results_count").textContent).toBe("12 tulosta");
+        expect(document.getElementById("orders_results_count").textContent).toBe("12 results");
     });
 });

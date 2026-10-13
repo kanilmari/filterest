@@ -12,6 +12,7 @@ import {
 } from "./card_detail_single_line_helpers.js";
 import { CARD_FIELD_LABEL_PLACEMENTS } from "./card_field_label_placement.js";
 import { resolveSafeExternalHttpUrl } from "../../../reusable_components/safe_external_http_url.js";
+import { printEmptyValue } from "../../../reusable_components/key_value_container/empty_value_printer.js";
 
 import { DEFAULT_CARD_DETAIL_COLUMNS, normalizeCardDetailColumns } from "./card_detail_layout_options.js";
 
@@ -22,9 +23,8 @@ function createModernCardDetailTileValue(detailEntry) {
     valueElement.className = "card_detail_tile_value";
 
     const displayValue = String(detailEntry?.rawValue ?? "").trim();
-    if (!displayValue) {
+    if (printEmptyValue(valueElement, displayValue)) {
         valueElement.classList.add("card_detail_tile_value--empty");
-        valueElement.textContent = "—";
         return valueElement;
     }
 

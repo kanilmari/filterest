@@ -27,12 +27,15 @@ vi.mock("../endpoints/stable_endpoint_router.js", () => ({
 }));
 
 vi.mock("../../reusable_components/modal/modal_builder.js", () => ({
-    createModal: vi.fn(({ contentElements, footerElements }) => {
+    createModal: vi.fn(({ titlePlainText, contentElements, footerElements }) => {
         const modal = document.createElement("div");
         modal.id = "test-field-view-modal";
-        modal.append(...contentElements, ...footerElements);
+        const title = document.createElement("h2");
+        title.id = "custom_modal_title";
+        title.textContent = titlePlainText;
+        modal.append(title, ...contentElements, ...footerElements);
         document.body.appendChild(modal);
-        return modal;
+        return { modal };
     }),
     hideModal: mocks.hideModal,
     showModal: mocks.showModal,
@@ -59,6 +62,10 @@ vi.mock("../filterbar/filterbar_engine/filterbar_state_saver.js", () => ({
 
 vi.mock("../state_stores/lang_preference_reader.js", () => ({
     getLanguageWithBrowserFallback: mocks.language,
+}));
+
+vi.mock("../lang/translation_handler.js", () => ({
+    getTranslationForKey: () => mocks.language() === "fi" ? "Muokkaa kenttänäkymää" : "Edit fields view",
 }));
 
 function buildColumn(overrides = {}) {

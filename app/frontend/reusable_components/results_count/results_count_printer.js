@@ -4,39 +4,6 @@
 // Exists to keep results-count rendering consistent across result containers.
 
 const SEARCH_BREAKDOWN_MODE = "search-breakdown";
-const BREAKDOWN_FALLBACKS = {
-    result: {
-        fi: "tulos",
-        en: "result",
-        ch: "result",
-    },
-    results: {
-        fi: "tulosta",
-        en: "results",
-        ch: "results",
-    },
-    result_in_text_search: {
-        fi: "tulos tekstihaulla",
-        en: "result in text search",
-        ch: "text search result",
-    },
-    results_in_text_search: {
-        fi: "tulosta tekstihaulla",
-        en: "results in text search",
-        ch: "text search results",
-    },
-    result_in_ai_search: {
-        fi: "tulos tekoälyhaulla",
-        en: "result in AI search",
-        ch: "AI search result",
-    },
-    results_in_ai_search: {
-        fi: "tulosta tekoälyhaulla",
-        en: "results in AI search",
-        ch: "AI search results",
-    },
-};
-
 // While a search is showing a group of AI results under the dataset's own
 // matches, the counter describes two different things at once. The dataset's
 // listing knows the true number of matches and the search knows how many AI
@@ -64,25 +31,6 @@ function composeResultsCount(tableName, count) {
     }
 
     return { mode: SEARCH_BREAKDOWN_MODE, textCount: count, aiCount };
-}
-
-function getResultsCountLanguage() {
-    const lang = String(document.documentElement?.lang || "")
-        .trim()
-        .toLowerCase();
-
-    if (lang.startsWith("fi")) return "fi";
-    if (lang.startsWith("ch") || lang.startsWith("zh")) return "ch";
-    return "en";
-}
-
-function getFallbackText(langKey, fallbackText = "") {
-    const preferredLanguage = getResultsCountLanguage();
-    return (
-        BREAKDOWN_FALLBACKS[langKey]?.[preferredLanguage] ||
-        BREAKDOWN_FALLBACKS[langKey]?.en ||
-        fallbackText
-    );
 }
 
 function isSearchBreakdownCount(count) {
@@ -113,7 +61,8 @@ function createBreakdownItem(
 
     const label = document.createElement("span");
     label.classList.add("results-count-breakdown-label");
-    label.textContent = getFallbackText(langKey, fallbackText);
+    label.dataset.langKey = langKey;
+    label.textContent = fallbackText;
 
     item.appendChild(value);
     item.append(" ");
@@ -133,8 +82,8 @@ function renderSearchBreakdownIntoElement(el, count) {
     breakdown.appendChild(
         createBreakdownItem(
             textCount,
-            "result_in_text_search",
-            "results_in_text_search",
+            "results_count_text_search_singular",
+            "results_count_text_search_plural",
             "result in text search",
             "results in text search"
         )
@@ -148,8 +97,8 @@ function renderSearchBreakdownIntoElement(el, count) {
     breakdown.appendChild(
         createBreakdownItem(
             aiCount,
-            "result_in_ai_search",
-            "results_in_ai_search",
+            "results_count_ai_search_singular",
+            "results_count_ai_search_plural",
             "result in AI search",
             "results in AI search"
         )
@@ -160,12 +109,14 @@ function renderSearchBreakdownIntoElement(el, count) {
 
 function renderLegacyResultsCountIntoElement(el, count) {
     const countValue = typeof count === "number" ? count : "?";
-    const labelKey = count === 1 ? "result" : "results";
+    // Generic result/results keys may describe site headings rather than counts.
+    const labelKey = count === 1 ? "results_count_singular" : "results_count_plural";
     el.textContent = "";
     el.classList.remove("results-count--search-breakdown");
     el.append(`${countValue} `);
     const label = document.createElement("span");
-    label.textContent = getFallbackText(labelKey, labelKey);
+    label.dataset.langKey = labelKey;
+    label.textContent = count === 1 ? "result" : "results";
     el.appendChild(label);
 }
 

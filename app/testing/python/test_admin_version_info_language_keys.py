@@ -64,7 +64,7 @@ def test_release_check_copy_is_embodied_and_hashed_in_fresh_bootstrap():
     generator = (BOOTSTRAP / "generate_bootstrap.py").read_text()
     assert MIGRATION.name in re.search(r"language_seed_migrations = \((.*?)\n\)", generator, re.S)[1]
     manifest = json.loads((BOOTSTRAP / "manifest.json").read_text())
-    assert manifest["db_version"] == (APP / "VERSION_DB").read_text().strip() == "9.11.0"
+    assert manifest["db_version"] == (APP / "VERSION_DB").read_text().strip()
     ledger = manifest["migration_ledger_baseline"]
     assert ledger.index(MIGRATION.name) < ledger.index(OWNER)
     evidence = manifest["source_files"]["filterest/app/server_tools/migrations/" + MIGRATION.name]
