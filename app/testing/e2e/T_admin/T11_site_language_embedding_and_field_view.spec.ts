@@ -10,8 +10,8 @@
 import { test, expect } from '@playwright/test';
 import { login, loadCredentials, type TestCredentials } from '../helpers/auth';
 import { expandAdminTreeFolder, openAdminTreeButton } from '../helpers/admin-navigation';
-import { navigateToDefaultDataset, waitForAppReady } from '../helpers/navigation';
-import { openActiveFilterbarSection } from '../helpers/filterbar';
+import { waitForAppReady } from '../helpers/navigation';
+import { revealActiveFilterbarSection } from '../helpers/filterbar';
 import {
   openAdminNavigationTree,
   revealFirstNavigationDatasetButton,
@@ -20,6 +20,7 @@ import {
   buildTempDatasetName,
   createTempDataset,
   dropTempDataset,
+  openTempDataset,
 } from '../helpers/temp-dataset';
 
 test.describe('Administrator-owned site and data presentation policies', () => {
@@ -124,24 +125,50 @@ test.describe('Administrator-owned site and data presentation policies', () => {
   });
 
   test('opens the shared field-order and visibility editor from dataset tools', async ({ page }) => {
-    await navigateToDefaultDataset(page);
-    const tools = await openActiveFilterbarSection(page, 'tools');
-    const editorButton = tools.locator('[data-testid="btn-edit-fields-view"]');
-    await expect(editorButton).toBeVisible({ timeout: 10000 });
-    await editorButton.click();
+    // A required input without a default is locked; generated id is exempt.
+    const datasetName = buildTempDatasetName('e2e_field_view_lock');
+    await createTempDataset(page, {
+      datasetName,
+      columns: { id: 'SERIAL', title: 'TEXT NOT NULL' },
+      seedRows: [{ title: 'required-field-row' }],
+    });
 
-    const editor = page.locator('[data-testid="field-view-editor"]');
-    await expect(editor).toBeVisible({ timeout: 10000 });
-    const rows = editor.locator('.field-view-editor__row');
-    await expect(rows.first()).toBeVisible();
-    const primaryKeyRow = rows.filter({
-      has: page.locator('.field-view-editor__field-name', { hasText: /^id$/i }),
-    }).first();
-    await expect(primaryKeyRow).toBeVisible();
-    await expect(primaryKeyRow.locator('[data-testid="field-view-hide-everywhere"]')).toBeDisabled();
+    try {
+      await openTempDataset(page, datasetName, 'table');
+      // Reveal for this page only; a heading click would save the installation-wide section layout.
+      const tools = await revealActiveFilterbarSection(page, 'tools');
+      const editorButton = tools.locator('[data-testid="btn-edit-fields-view"]');
+      await expect(editorButton).toBeVisible({ timeout: 10000 });
+      await editorButton.click();
+
+      const editor = page.locator('[data-testid="field-view-editor"]');
+      await expect(editor).toBeVisible({ timeout: 10000 });
+      const rows = editor.locator('.field-view-editor__row');
+      await expect(rows.first()).toBeVisible();
+      const primaryKeyRow = rows.filter({
+        has: page.locator('.field-view-editor__field-name', { hasText: /^id$/i }),
+      });
+      await expect(primaryKeyRow).toBeVisible();
+      await expect(primaryKeyRow.locator('[data-testid="field-view-hide-everywhere"]')).toBeEnabled();
+      await expect(primaryKeyRow.locator('.field-view-editor__lock-reason')).toHaveCount(0);
+
+      const requiredRow = rows.filter({
+        has: page.locator('.field-view-editor__field-name', { hasText: /^title$/ }),
+      });
+      await expect(requiredRow).toBeVisible();
+      const requiredVisibility = requiredRow.locator('[data-testid="field-view-hide-everywhere"]');
+      await expect(requiredVisibility).toBeDisabled();
+      await expect(requiredVisibility).not.toBeChecked();
+      await expect(requiredRow.locator('.field-view-editor__lock-reason'))
+        .toHaveText('Required when adding content');
+    } finally {
+      if (!page.isClosed()) {
+        await dropTempDataset(page, datasetName);
+      }
+    }
   });
 
-  test('keeps database-tree dataset buttons visibly bounded in the light theme', async ({ page }) => {
+  test('keeps borderless database-tree dataset buttons visually distinct in the light theme', async ({ page }) => {
     await page.evaluate(() => localStorage.setItem('theme', 'light'));
     await page.reload({ waitUntil: 'domcontentloaded' });
     await waitForAppReady(page);
@@ -155,15 +182,17 @@ test.describe('Administrator-owned site and data presentation policies', () => {
       return {
         background: style.backgroundColor,
         parentBackground: parentStyle?.backgroundColor ?? '',
+        color: style.color,
         borderTopWidth: style.borderTopWidth,
         borderTopStyle: style.borderTopStyle,
-        borderTopColor: style.borderTopColor,
       };
     });
 
     expect(appearance.background).not.toBe(appearance.parentBackground);
-    expect(appearance.borderTopWidth).not.toBe('0px');
-    expect(appearance.borderTopStyle).not.toBe('none');
-    expect(appearance.borderTopColor).not.toBe('rgba(0, 0, 0, 0)');
+    expect(appearance.background).not.toBe('rgba(0, 0, 0, 0)');
+    expect(appearance.color).not.toBe(appearance.background);
+    expect(appearance.color).not.toBe('rgba(0, 0, 0, 0)');
+    expect(appearance.borderTopWidth).toBe('0px');
+    expect(appearance.borderTopStyle).toBe('none');
   });
 });

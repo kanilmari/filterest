@@ -39,9 +39,14 @@ test.describe('T13 — Media Subfolder Bulk Check', () => {
 
     const checkAllButton = page.getByTestId('check-all-media-subfolders');
     const fixAllButton = page.getByTestId('fix-all-media-subfolders');
-    const status = page.locator('[role="status"]');
+    // The missing-files panel has a separate status; anchor this bulk panel by its own exact control ID.
+    const bulkPanel = page.locator('#fix_media_subfolders_container .tool-content-frame > div')
+      .filter({ has: checkAllButton });
+    const status = bulkPanel.getByRole('status');
     await expect(checkAllButton).toBeVisible();
     await expect(fixAllButton).toBeVisible();
+    await expect(bulkPanel).toHaveCount(1);
+    await expect(status).toHaveCount(1);
 
     await checkAllButton.click();
     await expect(status).toHaveAttribute('aria-busy', 'true');

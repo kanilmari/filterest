@@ -20,7 +20,7 @@ import {
   dropTempDataset,
   openTempDataset,
 } from '../helpers/temp-dataset';
-import { openActiveFilterbarIfCollapsed, openActiveFilterbarSection } from '../helpers/filterbar';
+import { revealActiveFilterbarSection } from '../helpers/filterbar';
 
 test.describe.serial('B4 — Column View Presets (kenttäjoukot)', () => {
   test.use({ viewport: { width: 1440, height: 900 } });
@@ -76,7 +76,9 @@ test.describe.serial('B4 — Column View Presets (kenttäjoukot)', () => {
     });
     await login(page, credentials);
     await openTempDataset(page, datasetName, 'table');
-    await openActiveFilterbarIfCollapsed(page);
+    // The field section starts closed. Reveal it for this page only: a heading click would save the
+    // installation-wide section layout for every later user and spec.
+    await revealActiveFilterbarSection(page, 'field_sets');
   });
 
   test('preset selector row is visible in the filter bar', async ({ page }) => {
@@ -90,7 +92,7 @@ test.describe.serial('B4 — Column View Presets (kenttäjoukot)', () => {
   });
 
   test('WL103: field picker opens upward near viewport bottom with first value visible', async ({ page }, testInfo) => {
-    const presetRow = await openActiveFilterbarSection(page, 'field_sets');
+    const presetRow = await revealActiveFilterbarSection(page, 'field_sets');
     const trigger = presetRow.locator('.column-preset-field-picker [role="combobox"]');
     await expect(trigger).toBeVisible();
     // Supply scroll distance without replacing the real picker or its filterbar owner.
