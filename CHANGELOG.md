@@ -22,6 +22,7 @@ Dates are the local (Europe/Helsinki) date on which the version was published.
 
 ## [Unreleased]
 
+- **Home article-link server API** — Administrators can store an ordered, revision-protected list of up to ten article targets. Home returns only links and current translated header labels each viewer may open, including when newest-row boxes are off; unavailable targets remain visible only in the administrator diagnostics. Generic deletion cannot remove a concurrent first save, and article resolution has its own budget after boxes finish, preserving box contents and partial status. The setting defaults to empty without a migration. Visitor buttons and the administrator picker follow in later batches.
 - **Card and filterbar language corrections** — Sort selections and options, result counts, field-view editing headings and generated creator/owner name labels follow the interface language. Result counts and text/AI search breakdowns use dedicated translations so existing site headings keep their wording. Add-row buttons use the same translated dataset name as its tab. Empty card values, including opened-card dates, share the em dash, translated tooltip and accessible label. Copy is seeded for Finnish, English, Chinese and Cantonese under unreleased database 9.11.1.
 
 ## [9.4.0] - 2026-10-13

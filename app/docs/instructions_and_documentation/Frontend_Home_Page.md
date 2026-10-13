@@ -71,6 +71,44 @@ retain intentional empty keys through catalog cleanup. The description key and
 three-field guidance are seeded by DB 9.11.0's migration, also used by bootstrap.
 Saving settings sections refreshes visible Home without changing navigation/history.
 
+Home's server response also supplies `article_buttons: [{href,label}]` and
+`article_buttons_placement` (`below_text` or `top_row`), independently of boxes.
+The optional `system_config.front_page_article_buttons` JSON setting (value type 5)
+stores `{schema_version:1,placement,items:[{table_uid,row_id,enabled}]}`. No row
+means an empty list with `below_text`; at most ten unique targets with positive
+dataset UIDs and canonical numeric row IDs are accepted. Labels are never stored.
+Each request checks the current viewer’s article-view grant, dataset visibility/read grant and canonical
+`article_view` results under that session, including row policies and SELECT
+projection. The first usable header-role value in the returned article field
+order supplies the label; development permission recovery never supplies a
+missing article/read grant for these links. The title is
+localized like dataset values; language-key headers
+use the same public translation reader as the interface. Denied, deleted and
+unlabelled targets disappear completely. Only authorized links carry their
+ordinary `/<dataset-or-alias>/<id>?view=article_view` address; private target
+identities, revisions, diagnostics and configured totals never leave this facade.
+Boxes finish under their existing three-second elapsed budget before article
+configuration or resolution starts. Articles get a separate three-second elapsed
+budget and a child deadline for setting and registry reads. Canonical delegates
+retain the caller's transaction context; late results and remaining targets are omitted.
+Slow denied or unlabelled targets cannot change box contents or `partial`.
+
+The independent administrator API at `/api/admin/front-page/article-buttons`
+uses Home settings’ administrator security profile. GET returns configuration,
+its opaque `version`, `unavailable_items` (index, table_uid, row_id, reason) and
+`configuration_error`. POST accepts `{article_buttons,version}`, checks every
+target through the saving administrator’s canonical article read (including
+disabled items), and creates an absent setting. Stale writes return 409;
+invalid or unreadable targets return 400. An unavailable saved target stays in
+private configuration for explicit repair/removal. Generic settings writers
+refuse this key, including deletion (clear the list with a versioned save).
+The final generic DELETE also excludes this key and rolls back a partial delete;
+this protects a first save even when deletion's preflight saw an absent setting.
+Route startup supplies and reconciles its tableless permission,
+and the existing administrator permission seed grants it. Visitor rendering and
+the administrator picker are separate later batches; this server API does not
+choose the pending placement decision or change article presentation.
+
 The administrator-only house-and-palette button beside the gear lazy-loads
 `admin_tools/home_palette_builder.js` with the same `/api/admin/front-page`
 permission. Both Home and dataset palettes use `presentation_palette_shell.js`

@@ -438,6 +438,14 @@
   "source_guards": [
     {
       "paths": [
+        "app/backend/core_components/system_config_checks/front_page_article_buttons.go",
+        "app/testing/shared_contracts/home_article_label_examples.json"
+      ],
+      "package": "app/backend/core_components/system_table_tools",
+      "anchor": "app/backend/core_components/system_table_tools/front_page_article_buttons_security_postgres_test.go"
+    },
+    {
+      "paths": [
         "app/backend"
       ],
       "package": "app/backend/core_components/sessions",

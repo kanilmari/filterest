@@ -322,8 +322,9 @@ func getPackageNameFromHandler(handlerName string) string {
 // route that takes no dataset can never satisfy a dataset-scoped permission
 // check, so leaving the stored value would keep refusing every request.
 var tablelessReconciliationHandlers = map[string]bool{
-	"dtt_crud_workflows.SimpleQueryTableHandler": true,
-	"dtt_1_row_read.ChatAttachmentHandler":       true,
+	"system_table_tools.AdminFrontPageArticleButtonsHandler": true,
+	"dtt_crud_workflows.SimpleQueryTableHandler":             true,
+	"dtt_1_row_read.ChatAttachmentHandler":                   true,
 }
 
 func defaultSpecificTableRelated(handlerName string) bool {

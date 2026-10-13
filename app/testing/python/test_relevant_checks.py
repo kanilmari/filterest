@@ -315,6 +315,29 @@ def test_changed_article_view_migration_selects_postgres_proof():
     assert_postgres_proof(make_plan(ROOT, [path]), path)
 
 
+def test_home_article_configuration_selects_privacy_postgres_proofs():
+    plan = make_plan(ROOT, ["app/backend/core_components/system_config_checks/front_page_article_buttons.go"])
+    proofs = [check for check in plan["heavy"] if check["kind"] == "go-postgres"]
+    commands = "\n".join(check["command"] for check in proofs)
+    assert "TestFrontPageArticleButtonsPostgresVisitorRightsProjectionAndLanguages" in commands
+    assert "TestFrontPageArticleButtonsPostgresDeletedTargetsAdminDiagnosticsAndKeyTitle" in commands
+    assert "TestFrontPageArticleButtonsPostgresRevisionPersistenceAndConcurrentSave" in commands
+    assert "TestFrontPageArticleButtonsPostgresSlowOmissionsKeepEnabledBoxes" in commands
+
+
+def test_home_article_delete_guard_selects_ordered_postgres_proof():
+    path = "app/backend/core_components/dynamic_table_tools/dtt_1_row_crud/dtt_1_row_delete/delete_generic_rows.go"
+    plan = make_plan(ROOT, [path])
+    proofs = [check for check in plan["heavy"] if check["kind"] == "go-postgres"]
+    assert any("TestArticleButtonsPostgresFirstSaveSurvivesOrderedGenericDeletion" in check["tests"] for check in proofs)
+
+
+def test_shared_home_article_labels_select_browser_language_contract():
+    plan = make_plan(ROOT, ["app/testing/shared_contracts/home_article_label_examples.json"])
+    targets = {path for check in plan["fast"] if check["kind"] == "vitest" for path in check["targets"]}
+    assert "app/frontend/core_components/table_views/dataset_value_localizer_home_article_contract.test.js" in targets
+
+
 def test_changed_dataset_appearance_offline_postgres_selects_postgres_proof():
     path = "app/testing/python/test_dataset_appearance_offline_postgres.py"
     assert_postgres_proof(make_plan(ROOT, [path]), path)

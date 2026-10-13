@@ -191,10 +191,11 @@ var RouteProfiles = map[string]RouteProfile{
 
 	// ── Admin-only routes (full access control + admin flag) ──
 
-	"favorites.FavoritesHandler":                    AdminProfile,
-	"system_table_tools.GetFrontPageHandler":        LoginOnlyProfile,
-	"system_table_tools.AdminFrontPageHandler":      AdminProfile,
-	"system_table_tools.FrontPageBackgroundHandler": AdminProfile,
+	"favorites.FavoritesHandler":                             AdminProfile,
+	"system_table_tools.GetFrontPageHandler":                 LoginOnlyProfile,
+	"system_table_tools.AdminFrontPageHandler":               AdminProfile,
+	"system_table_tools.AdminFrontPageArticleButtonsHandler": AdminProfile,
+	"system_table_tools.FrontPageBackgroundHandler":          AdminProfile,
 
 	// Tab ordering
 	"system_table_tools.UpdateTabOrderHandler":    AdminProfile,

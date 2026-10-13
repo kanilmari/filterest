@@ -192,6 +192,7 @@ func RegisterRoutes(frontendDir string, storagePath string) {
 	functionRegisterHandler("/api/update-profile", auth.UserProfileUpdateHandler, "auth.UserProfileUpdateHandler", http.MethodPost)
 	functionRegisterHandler("/api/front-page", system_table_tools.GetFrontPageHandler, "system_table_tools.GetFrontPageHandler", http.MethodGet)
 	functionRegisterHandler("/api/admin/front-page", system_table_tools.AdminFrontPageHandler, "system_table_tools.AdminFrontPageHandler", http.MethodGet, http.MethodPost)
+	functionRegisterHandler("/api/admin/front-page/article-buttons", system_table_tools.AdminFrontPageArticleButtonsHandler, "system_table_tools.AdminFrontPageArticleButtonsHandler", http.MethodGet, http.MethodPost)
 	functionRegisterHandler("/api/admin/front-page/background", system_table_tools.FrontPageBackgroundHandler, "system_table_tools.FrontPageBackgroundHandler", http.MethodPost, http.MethodDelete)
 	functionRegisterHandler("/api/favorites", favorites.FavoritesHandler, "favorites.FavoritesHandler", http.MethodGet, http.MethodPost, http.MethodDelete)
 	functionRegisterHandler("/api/user-visual-preference", auth.UserVisualPreferenceHandler, "auth.UserVisualPreferenceHandler", http.MethodGet, http.MethodPatch, http.MethodDelete)

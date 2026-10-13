@@ -17,7 +17,7 @@ func TestFrontPageClassification(t *testing.T) {
 	if err != nil || class != Dedicated || len(operationalPrivileges["system_front_page_revisions"]) != 0 {
 		t.Fatal("private revisions acquired runtime privileges", class, err)
 	}
-	for _, route := range []string{"/api/front-page", "/api/admin/front-page", "/api/admin/front-page/background"} {
+	for _, route := range []string{"/api/front-page", "/api/admin/front-page", "/api/admin/front-page/article-buttons", "/api/admin/front-page/background"} {
 		snapshot := policyFixture()
 		snapshot.Functions[99] = Function{ID: 99, Route: route, TableRelated: true, Disabled: boolPointer(false)}
 		snapshot.Rights = []Right{{2, 99, 1}, {3, 99, 1}}

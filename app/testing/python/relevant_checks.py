@@ -161,7 +161,9 @@ def make_plan(root: Path, paths: list[str], *, python: str = PYTHON, policy: dic
                 f"(cd app && FILTEREST_TEST_DISPOSABLE_POSTGRES=1 flock /tmp/filterest_pg_suites.lock go test {shlex.quote(target)} -count=1 -run {shlex.quote(pattern)})",
                 tests=postgres)
 
-    frontend = {path for path in changed if path.startswith("app/frontend/")}
+    # Shared browser/server examples live outside frontend, but their browser
+    # importers still require Vitest when the common contract changes.
+    frontend = {path for path in changed if path.startswith(("app/frontend/", "app/testing/shared_contracts/"))}
     vitest = frontend_tests(root, frontend) if frontend else []
     if vitest:
         add("fast", "vitest", vitest, "./filterest test-unit " + shlex.join(vitest))

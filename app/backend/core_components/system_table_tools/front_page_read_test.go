@@ -17,6 +17,7 @@ import (
 	backend "easelect/backend/core_components"
 	"easelect/backend/core_components/dbutils"
 	e_sessions "easelect/backend/core_components/sessions"
+	config "easelect/backend/core_components/system_config_checks"
 	presentation "easelect/frontend/shared/front_page_presentation"
 	"github.com/gorilla/sessions"
 )
@@ -45,6 +46,11 @@ func frontPageSessionRequest(t *testing.T, userID int, role, method, target stri
 
 func stubFrontPageRead(t *testing.T, blocks []frontPageBlock) {
 	t.Helper()
+	articleReader := frontPageArticleButtonsReader
+	frontPageArticleButtonsReader = func(context.Context, *sql.DB) (config.FrontPageArticleButtons, string, error) {
+		return config.EmptyFrontPageArticleButtons(), "none", nil
+	}
+	t.Cleanup(func() { frontPageArticleButtonsReader = articleReader })
 	layoutReader := frontPagePresentationReader
 	frontPagePresentationReader = func(context.Context, *sql.DB) (*presentation.Value, string, error) { return nil, "none", nil }
 	heroReader := frontPageHeroReader

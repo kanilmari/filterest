@@ -186,6 +186,24 @@ func TestDeleteGenericRowsSkipsDeletionLogForSystemTable(t *testing.T) {
 	}
 }
 
+func TestDeleteGenericRowsExcludesArticleSettingAndRollsBackMixedDelete(t *testing.T) {
+	_, tx, state := openDelRowTx(t, nil, []queuedExec{
+		{},                                       // SAVEPOINT
+		{rowsAffected: 1, setRowsAffected: true}, // only the ordinary setting matched
+		{},                                       // ROLLBACK TO SAVEPOINT
+		{},                                       // RELEASE SAVEPOINT
+	})
+	err := deleteGenericRows(tx, "system_config", []int{10, 20, 20}, "42", "admin", 42)
+	var forbidden *forbiddenError
+	if !errors.As(err, &forbidden) {
+		t.Fatal("protected setting did not refuse the whole request", err)
+	}
+	if len(state.execCalls) != 4 || !strings.Contains(state.execCalls[1], `AND "system_config".key IS DISTINCT FROM $4`) ||
+		state.execCalls[2] != "ROLLBACK TO SAVEPOINT generic_row_delete" || state.execCalls[3] != "RELEASE SAVEPOINT generic_row_delete" {
+		t.Fatal("final DELETE protection or partial rollback missing", state.execCalls)
+	}
+}
+
 func TestDeleteGenericRowsRlsPilotRejectsPartialDelete(t *testing.T) {
 	_, tx, state := openDelRowTx(t, nil, []queuedExec{
 		{},                                       // SAVEPOINT

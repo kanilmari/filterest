@@ -191,9 +191,10 @@ func readServedTranslationMap(languageCode string) (map[string]string, error) {
 	return fillGapsFromAuthoredTranslations(servedMap, authoredMap), nil
 }
 
-// GetTranslationsHandler returns the chosen language map and optional dev-only orphan-key metadata.
-func GetTranslationsHandler(w http.ResponseWriter, r *http.Request) {
-	chosenLang := normalizeRequestedLanguageCode(r.URL.Query().Get("lang"))
+// ReadDisplayTranslations returns the same public copy served by the translation API.
+// Callers must first authorize a row field before resolving its language-key value.
+func ReadDisplayTranslations(languageCode string) (map[string]string, error) {
+	chosenLang := normalizeRequestedLanguageCode(languageCode)
 
 	var translationMap map[string]string
 	var err error
@@ -209,6 +210,12 @@ func GetTranslationsHandler(w http.ResponseWriter, r *http.Request) {
 	if err == nil && len(translationMap) == 0 && chosenLang != "en" {
 		translationMap, err = readLegacyTranslationMap("en")
 	}
+	return translationMap, err
+}
+
+// GetTranslationsHandler returns the chosen language map and optional dev-only orphan-key metadata.
+func GetTranslationsHandler(w http.ResponseWriter, r *http.Request) {
+	translationMap, err := ReadDisplayTranslations(r.URL.Query().Get("lang"))
 	if err != nil {
 		log.Printf("\033[31merror: translations query failed: %v\033[0m", err)
 		httpresponse.RespondWithError(w, http.StatusInternalServerError, "internal server error")

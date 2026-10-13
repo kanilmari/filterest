@@ -13,7 +13,7 @@ func TestFrontPageRouteSecurityProfiles(t *testing.T) {
 		t.Fatal(descriptor)
 	}
 	containsAll(t, pipeline.DescribePipeline(pipeline.RouteContext{}, pipeline.GetProfile(read)), []string{"auth", "transaction"})
-	for _, handler := range []string{"system_table_tools.AdminFrontPageHandler", "system_table_tools.FrontPageBackgroundHandler"} {
+	for _, handler := range []string{"system_table_tools.AdminFrontPageHandler", "system_table_tools.AdminFrontPageArticleButtonsHandler", "system_table_tools.FrontPageBackgroundHandler"} {
 		if descriptor := pipeline.DescribeRouteProfile(handler); descriptor.ProfileName != "admin" || !descriptor.AdminOnly {
 			t.Fatal(descriptor)
 		}

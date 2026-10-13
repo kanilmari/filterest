@@ -1,0 +1,12 @@
+[
+  {"raw_value":" Contact ","metadata":{},"language":"en","expected":"Contact"},
+  {"raw_value":null,"metadata":{},"language":"fi","expected":""},
+  {"raw_value":{"fi":"Ota yhteyttä","en":"Contact"},"metadata":{"is_multilingual":true},"language":"fi","expected":"Ota yhteyttä"},
+  {"raw_value":{"fi":"Ota yhteyttä","en":"Contact"},"metadata":{"is_multilingual":true},"language":"en-US","expected":"Contact"},
+  {"raw_value":"{\"fi\":\"Ota yhteyttä\",\"en\":\"Contact\"}","metadata":{},"language":"fi","expected":"Ota yhteyttä"},
+  {"raw_value":{"yue":"聯絡","ch":"联系"},"metadata":{"is_multilingual":true},"language":"de","expected":"聯絡"},
+  {"raw_value":{"fi":"Ota yhteyttä","en":"Contact"},"metadata":{"is_multilingual":false},"language":"fi","expected":"{\"fi\":\"Ota yhteyttä\",\"en\":\"Contact\"}"},
+  {"raw_value":{"price":"12"},"metadata":{},"language":"en","expected":"{\"price\":\"12\"}"},
+  {"raw_value":{"fi":"  ","en":"Contact"},"metadata":{"is_multilingual":true},"language":"fi","expected":""},
+  {"raw_value":"{invalid JSON}","metadata":{"is_multilingual":true},"language":"en","expected":"{invalid JSON}"}
+]

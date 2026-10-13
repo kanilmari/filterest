@@ -35,12 +35,14 @@ type frontPageResultBlock struct {
 	Data        []json.RawMessage `json:"data"`
 }
 
-// GetFrontPageHandler returns viewer_id, site_name, hero (fi/en), background, show_blocks, blocks and partial.
+// GetFrontPageHandler returns viewer_id, site_name, hero (fi/en), background, show_blocks, blocks, partial,
+// article_buttons [{href,label}] and article_buttons_placement (below_text or top_row).
 // GET /api/front-page. Disabled sites return 404. LoginOnlyProfile establishes the
 // viewer; each block separately requires /api/get-results rights and delegates
 // with __newest DESC and row_count=0, preserving the request actor. These text
 // summaries request card support under the caller's column and gallery rights. Boxes off
-// skips resolution and delegates entirely, returning an empty blocks array.
+// skips box resolution, returning an empty blocks array. Article buttons resolve independently
+// through the viewer's article grant, dataset visibility and canonical article row/column read.
 func GetFrontPageHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		w.Header().Set("Allow", "GET")
@@ -110,11 +112,15 @@ func GetFrontPageHandler(w http.ResponseWriter, r *http.Request) {
 			results = append(results, result)
 		}
 	}
+	// Finish boxes under their original budget before optional article work.
+	// Neither a slow omitted target nor its timeout can change blocks or partial.
+	articleButtons, articleSettings := resolveFrontPageArticleButtons(r, userID)
 	w.Header().Set("Cache-Control", "private, no-store")
 	w.Header().Set("Vary", "Cookie")
 	httpresponse.RespondWithJSON(w, http.StatusOK, map[string]any{
 		"viewer_id": userID, "site_name": backend.ConfiguredSiteName(r.Context(), backend.Db), "background": background,
 		"hero": hero, "presentation": layout, "presentation_version": layoutVersion, "show_blocks": settings.FrontPageShowBlocks, "blocks": results, "partial": partial,
+		"article_buttons": articleButtons, "article_buttons_placement": articleSettings.Placement,
 	})
 }
 
