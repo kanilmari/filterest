@@ -6,15 +6,12 @@
 package dtt_1_row_read
 
 import (
-	"database/sql"
 	backend "easelect/backend/core_components"
 	auth "easelect/backend/core_components/auth"
 	store "easelect/backend/core_components/dataset_appearance_store"
 	"easelect/backend/core_components/dataset_kinds"
 	"easelect/backend/core_components/dbutils"
-	"easelect/backend/core_components/dynamic_table_tools/dtt_1_row_crud/row_mutation_policy"
 	"easelect/backend/core_components/dynamic_table_tools/dtt_card_picture"
-	dtt_utils "easelect/backend/core_components/dynamic_table_tools/dtt_utils"
 	"easelect/backend/core_components/httpresponse"
 	"encoding/json"
 	"log"
@@ -259,172 +256,17 @@ func GetDynamicRelatedItemsHandler(response_writer http.ResponseWriter, request 
 		body_data.Child_table,
 	)
 
-	// The gallery rows and the parent's shown picture come from one snapshot (a read-only
-	// REPEATABLE READ transaction), so a picture deleted or marked primary meanwhile cannot
-	// make them disagree. The row-security pilot dataset is read through the request's own
-	// transaction instead; when the parent or the gallery is the pilot, the rows are read
-	// first and the picture after them, so a deleted picture still cannot come back.
-	var snapshot *sql.Tx
-	if gallery != nil && body_data.Parent_table != rlsPilotTableName && gallery.ChildTable != rlsPilotTableName {
-		opened, snapshotErr := currentDb.BeginTx(request.Context(), &sql.TxOptions{Isolation: sql.LevelRepeatableRead, ReadOnly: true})
-		if snapshotErr != nil {
-			// Without the snapshot the gallery and the picture could disagree; a failed
-			// answer is better than one that shows a deleted picture.
-			log.Printf("\033[31merror: gallery snapshot unavailable for %s: %s\033[0m\n", body_data.Parent_table, snapshotErr.Error())
-			httpresponse.RespondWithError(response_writer, http.StatusInternalServerError, "error reading the gallery")
-			return
-		}
-		snapshot = opened
-		defer func() { _ = snapshot.Rollback() }()
+	metadata, err := prepareIncomingRelatedMetadata(currentDb, fk_infos, body_data.Child_table,
+		userRole, relationKindByChildTable, canReadRelatedDataset)
+	if err != nil {
+		httpresponse.RespondWithError(response_writer, http.StatusInternalServerError, err.Error())
+		return
 	}
-
-	// An empty list, never null: a viewer with no readable relation still gets a final
-	// answer, which the browser takes as the gallery and pictures there are.
-	relatedTablesList := []RelatedTableResult{}
-
-	for _, fk_row := range fk_infos {
-		// Optional child_table filter for lazy-loading a single tab
-		if body_data.Child_table != "" && fk_row.Referencing_table != body_data.Child_table {
-			continue
-		}
-
-		relationKind := classifyRelatedTableKind(fk_row.Referencing_table, relationKindByChildTable)
-		relatedTypes, err := getColumnDataTypesWithFK(fk_row.Referencing_table, currentDb)
-		if err != nil {
-			log.Printf("\033[33mwarning: related items type metadata lookup failed for %s: %s\033[0m\n", fk_row.Referencing_table, err.Error())
-			relatedTypes = map[string]interface{}{}
-		} else {
-			relatedTypes = enrichServiceCatalogModerationDataTypes(fk_row.Referencing_table, relatedTypes)
-		}
-		foreignKeys, err := dtt_utils.GetForeignKeysForTable(fk_row.Referencing_table)
-		if err != nil {
-			log.Printf("\033[33mwarning: related label metadata unavailable for table %s: %s\033[0m\n", fk_row.Referencing_table, err.Error())
-			foreignKeys = map[string]dtt_utils.ForeignKey{}
-		}
-		labelForeignKeys, relatedTypes, err := authorizeRelatedNestedMetadata(
-			foreignKeys,
-			relatedTypes,
-			userRole,
-			canReadRelatedDataset,
-			func(tableName string) (ReadRowPolicy, error) {
-				return getLegacyMustTrueReadPolicy(currentDb, tableName)
-			},
-		)
-		if err != nil {
-			log.Printf("\033[31merror: authorizing nested foreign keys from table %s: %s\033[0m\n", fk_row.Referencing_table, err.Error())
-			httpresponse.RespondWithError(response_writer, http.StatusInternalServerError, "error authorizing related datasets")
-			return
-		}
-
-		readQuerier, err := getPilotReadQuerier(request.Context(), fk_row.Referencing_table, currentDb)
-		if err != nil {
-			log.Printf("\033[31merror: related items pilot read setup failed for %s: %s\033[0m\n", fk_row.Referencing_table, err.Error())
-			httpresponse.RespondWithError(response_writer, http.StatusInternalServerError, "error initializing related row visibility check")
-			return
-		}
-		isGalleryRelation := gallery != nil && gallery.ChildTable == fk_row.Referencing_table && gallery.ForeignKey == fk_row.Referencing_column
-		if isGalleryRelation && snapshot != nil {
-			readQuerier = snapshot
-		}
-
-		if !shouldEagerLoadRelatedRows(body_data.Child_table, relationKind, regularRelatedTableCount) {
-			readPolicy, policyErr := getLegacyMustTrueReadPolicy(currentDb, fk_row.Referencing_table)
-			if policyErr != nil {
-				log.Printf("\033[31merror: fetching row policy metadata for table %s: %s\033[0m\n", fk_row.Referencing_table, policyErr.Error())
-				continue
-			}
-			rowCount, countErr := countRelatedRows(
-				readQuerier,
-				fk_row.Referencing_table,
-				fk_row.Referencing_column,
-				parent_id,
-				userRole,
-				userID,
-				readPolicy,
-			)
-			if countErr != nil {
-				log.Printf("\033[31merror: counting related rows from table %s: %s\033[0m\n", fk_row.Referencing_table, countErr.Error())
-				continue
-			}
-
-			relatedTablesList = append(relatedTablesList, RelatedTableResult{
-				Table_name:         fk_row.Referencing_table,
-				Column_name:        fk_row.Referencing_column,
-				RelationKind:       relationKind,
-				ReferenceDirection: relatedReferenceDirectionIncoming,
-				FilterValue:        parent_id,
-				RowCount:           rowCount,
-				Types:              relatedTypes,
-				Rows:               []map[string]interface{}{},
-			})
-			continue
-		}
-
-		visibleCols, err := getVisibleColumnNames(readQuerier, fk_row.Referencing_table)
-		if err != nil {
-			log.Printf("\033[31merror: fetching visible columns from table %s: %s\033[0m\n", fk_row.Referencing_table, err.Error())
-			continue
-		}
-		visibleCols, err = appendExistingRelatedAuditColumns(currentDb, fk_row.Referencing_table, visibleCols)
-		if err != nil {
-			log.Printf("\033[33mwarning: related items audit column lookup failed for %s: %s\033[0m\n", fk_row.Referencing_table, err.Error())
-		}
-
-		actorColumns, err := row_mutation_policy.ReadRowActorColumns(readQuerier, fk_row.Referencing_table)
-		if err != nil {
-			httpresponse.RespondWithError(response_writer, http.StatusInternalServerError, "error reading related actor columns")
-			return
-		}
-		selectColumns, joinClauses := buildRelatedSelectColumnsWithFKLabels(
-			fk_row.Referencing_table,
-			visibleCols,
-			labelForeignKeys,
-			actorColumns,
-		)
-		readPolicy, policyErr := getLegacyMustTrueReadPolicy(currentDb, fk_row.Referencing_table)
-		if policyErr != nil {
-			log.Printf("\033[31merror: fetching row policy metadata for table %s: %s\033[0m\n", fk_row.Referencing_table, policyErr.Error())
-			continue
-		}
-		rowsOrder := ""
-		if isGalleryRelation {
-			rowsOrder = galleryRowsOrder(gallery)
-		}
-		queryRelated, queryArgs := buildRelatedItemsQueryWithReadPolicy(
-			selectColumns,
-			fk_row.Referencing_table,
-			joinClauses,
-			fk_row.Referencing_column,
-			parent_id,
-			userRole,
-			userID,
-			readPolicy,
-			rowsOrder,
-		)
-		relatedRows, err := readQuerier.Query(queryRelated, queryArgs...)
-		if err != nil {
-			log.Printf("\033[31merror: fetching related rows from table %s: %s\033[0m\n", fk_row.Referencing_table, err.Error())
-			continue
-		}
-
-		table_rows, scanErr := scanRowsToMaps(relatedRows)
-		relatedRows.Close()
-		if scanErr != nil {
-			log.Printf("\033[31merror: reading related rows from table %s: %s\033[0m\n", fk_row.Referencing_table, scanErr.Error())
-			continue
-		}
-
-		FilterIndependentMediaRows(readQuerier, actor, table_rows)
-		relatedTablesList = append(relatedTablesList, RelatedTableResult{
-			Table_name:         fk_row.Referencing_table,
-			Column_name:        fk_row.Referencing_column,
-			RelationKind:       relationKind,
-			ReferenceDirection: relatedReferenceDirectionIncoming,
-			FilterValue:        parent_id,
-			RowCount:           len(table_rows),
-			Types:              relatedTypes,
-			Rows:               table_rows,
-		})
+	relatedTablesList, picture, err := readIncomingRelatedTables(request, currentDb, metadata,
+		body_data.Parent_table, parent_id, body_data.Child_table, regularRelatedTableCount, actor, gallery)
+	if err != nil {
+		httpresponse.RespondWithError(response_writer, http.StatusInternalServerError, err.Error())
+		return
 	}
 
 	outgoingRelatedTables, err := fetchOutgoingReferencedTableResults(
@@ -456,22 +298,10 @@ func GetDynamicRelatedItemsHandler(response_writer http.ResponseWriter, request 
 	if gallery != nil {
 		resp["gallery_relation"] = map[string]string{"dataset": gallery.ChildTable, "column": gallery.ForeignKey}
 	}
-	// The parent's shown picture, also for a dataset without a gallery: the browser shows
-	// a value no listed row carries as the card's own tile, and an empty value as none.
-	var pictureQuerier dbutils.Querier
-	if snapshot != nil {
-		pictureQuerier = snapshot
-	} else if pilotQuerier, pilotErr := getPilotReadQuerier(request.Context(), body_data.Parent_table, currentDb); pilotErr == nil {
-		pictureQuerier = pilotQuerier
+	for key, value := range picture {
+		resp[key] = value
 	}
-	if pictureQuerier != nil {
-		cardPicture, hasPictureFields, pictureErr := readRelatedCardPicture(pictureQuerier, actor, body_data.Parent_table, parent_id)
-		if pictureErr != nil {
-			log.Printf("\033[33mwarning: shown picture of %s row %d not readable: %s\033[0m\n", body_data.Parent_table, parent_id, pictureErr.Error())
-		} else if hasPictureFields {
-			resp["card_picture"] = cardPicture
-		}
-	}
+
 	totalRelatedRows := 0
 	for _, relatedTable := range relatedTablesList {
 		if relatedTable.RowCount > 0 {

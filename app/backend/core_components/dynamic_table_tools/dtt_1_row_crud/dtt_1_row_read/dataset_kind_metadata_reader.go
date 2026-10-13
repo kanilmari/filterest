@@ -6,17 +6,37 @@ package dtt_1_row_read
 
 import (
 	"context"
+	"database/sql"
 	"log"
 
 	backend "easelect/backend/core_components"
 	"easelect/backend/core_components/dataset_kinds"
+	"easelect/backend/core_components/dbutils"
 )
 
-func readDatasetKindCapabilities(ctx context.Context, name string) *dataset_kinds.Capabilities {
+type datasetKindQuerier interface {
+	QueryRowContext(context.Context, string, ...any) *sql.Row
+}
+
+// Pilot reads retain the request transaction until the pipeline finishes.
+// Reuse that connection for schema-only evidence instead of waiting for another
+// slot in the same bounded pool. Peek never starts an otherwise lazy transaction.
+func datasetKindReadQuerier(ctx context.Context) datasetKindQuerier {
+	if tx, open := dbutils.PeekTx(ctx); open {
+		return tx
+	}
 	if backend.Db == nil {
 		return nil
 	}
-	capabilities, err := dataset_kinds.ReadForName(ctx, backend.Db, name)
+	return backend.Db
+}
+
+func readDatasetKindCapabilities(ctx context.Context, name string) *dataset_kinds.Capabilities {
+	q := datasetKindReadQuerier(ctx)
+	if q == nil {
+		return nil
+	}
+	capabilities, err := dataset_kinds.ReadForName(ctx, q, name)
 	if err != nil {
 		log.Printf("\033[31merror: optional dataset kind evidence: %v\033[0m", err)
 		return nil
@@ -42,10 +62,11 @@ func populateRelatedKindCapabilities(ctx context.Context, results []RelatedTable
 			uids = append(uids, int64(result.DatasetUID))
 		}
 	}
-	if len(uids) == 0 || backend.Db == nil {
+	q := datasetKindReadQuerier(ctx)
+	if len(uids) == 0 || q == nil {
 		return
 	}
-	snapshot, err := dataset_kinds.ReadSnapshot(ctx, backend.Db, uids...)
+	snapshot, err := dataset_kinds.ReadSnapshot(ctx, q, uids...)
 	if err != nil {
 		log.Printf("\033[31merror: optional related dataset kind evidence: %v\033[0m", err)
 		return

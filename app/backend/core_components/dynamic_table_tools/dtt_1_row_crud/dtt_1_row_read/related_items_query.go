@@ -5,7 +5,6 @@
 package dtt_1_row_read
 
 import (
-	"database/sql"
 	"easelect/backend/core_components/dbutils"
 	"easelect/backend/core_components/dynamic_table_tools/dtt_1_row_crud/row_mutation_policy"
 	"easelect/backend/core_components/dynamic_table_tools/dtt_card_picture"
@@ -74,7 +73,7 @@ func shouldEagerLoadRelatedRows(childTableFilter string, relationKind string, re
 }
 
 func appendExistingRelatedAuditColumns(
-	db *sql.DB,
+	db dbutils.Querier,
 	tableName string,
 	columns []string,
 ) ([]string, error) {

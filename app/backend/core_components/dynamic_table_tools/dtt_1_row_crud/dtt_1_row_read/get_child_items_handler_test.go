@@ -272,11 +272,18 @@ func TestRelatedRowsAnswerAnEmptyListWhenNoRelationIsReadable(t *testing.T) {
 // the snapshot cannot start, the request fails, and nothing is read after the attempt: no
 // gallery row, no other related row, no picture.
 func TestRelatedRowsFailBeforeAnyReadWhenTheGallerySnapshotCannotStart(t *testing.T) {
-	reads := useScriptedDatabase(t, parentWithAGallery(scriptedRule{
+	rules := parentWithAGallery(scriptedRule{
 		fragment: "system_group_table_func_rights", // a grant row: readable
 		columns:  []string{"granted"},
 		rows:     [][]driver.Value{{int64(1)}},
-	}))
+	})
+	// Owner-only metadata is prepared before the snapshot; no content read
+	// may run if the snapshot fails to start.
+	rules = append(rules,
+		scriptedRule{fragment: "AND column_name = $2", columns: []string{"exists"}, rows: [][]driver.Value{{false}}},
+		scriptedRule{fragment: "SELECT c.column_name", columns: []string{"column_name"}},
+	)
+	reads := useScriptedDatabase(t, rules)
 
 	response := requestRelatedRows()
 
