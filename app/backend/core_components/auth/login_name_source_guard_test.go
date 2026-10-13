@@ -31,7 +31,7 @@ func TestLoginNameSourceGuard(t *testing.T) {
 func collectLoginNameSourceGuardFindings(appRoot string) ([]string, error) {
 	var findings []string
 	allowed := map[string]string{
-		"server_tools/versioning/schema_snapshots/db-9.11.0.sql":                    "reviewed generated unreleased bootstrap schema; matches public_bootstrap/schema.sql",
+		"server_tools/versioning/schema_snapshots/db-9.11.1.sql":                    "reviewed generated unreleased bootstrap schema; matches public_bootstrap/schema.sql",
 		"backend/core_components/startup/reserved_test_users.go":                    "exact reserved fixture reconciliation",
 		"backend/core_components/auth/register.go":                                  "registration refusal language keys",
 		"backend/core_components/auth/registration_account.go":                      "validated registration writer and duplicate check",
@@ -59,6 +59,7 @@ func collectLoginNameSourceGuardFindings(appRoot string) ([]string, error) {
 		"server_tools/public_bootstrap/seed_data.sql":                               "generated labels and acceptance checked by bootstrap hash tests",
 		"server_tools/versioning/schema_snapshots/db-9.10.0.sql":                    "versioned generated schema checked by bootstrap tests",
 		"server_tools/versioning/schema_snapshots/db-9.10.1.sql":                    "versioned generated schema checked by bootstrap tests",
+		"server_tools/versioning/schema_snapshots/db-9.11.0.sql":                    "versioned generated schema checked by bootstrap tests",
 	}
 	// Bind review to both file and function; a familiar function name in a
 	// different package must not authorize a new credential writer.
