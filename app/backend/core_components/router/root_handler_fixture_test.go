@@ -63,6 +63,9 @@ type rootHandlerMockConfig struct {
 	datasetDescription string
 	rowTitle           string
 	secondaryAlias     string
+	translations       map[string]map[string]string
+	metadataQueries    *[]string
+	enabledLanguages   []string
 }
 
 type rootHandlerMockDriver struct {
@@ -115,6 +118,9 @@ func (c *rootHandlerMockConn) Query(query string, args []driver.Value) (driver.R
 }
 
 func (c *rootHandlerMockConn) QueryContext(_ context.Context, query string, args []driver.NamedValue) (driver.Rows, error) {
+	if c.config.metadataQueries != nil {
+		*c.config.metadataQueries = append(*c.config.metadataQueries, query)
+	}
 	switch {
 	case strings.Contains(query, "FROM system_db_table_aliases"):
 		if strings.Contains(query, "SELECT table_uid, alias_slug") {
@@ -177,7 +183,44 @@ func (c *rootHandlerMockConn) QueryContext(_ context.Context, query string, args
 			vals:  []driver.Value{1},
 			empty: !allowed,
 		}, nil
+	case strings.Contains(query, "ORDER BY sort_order, language_code") && c.config.enabledLanguages != nil:
+		rows := &sitemapMockRows{cols: []string{
+			"language_code", "english_name", "native_name", "script_code", "region_code",
+			"is_enabled", "is_default", "fallback_language_code", "coverage_status", "review_status",
+			"public_selector_ready", "sort_order",
+		}}
+		for index, code := range c.config.enabledLanguages {
+			rows.vals = append(rows.vals, []driver.Value{
+				code, code, code, "", nil, true, code == "en", nil, "complete", "approved", true, int64(index),
+			})
+		}
+		return rows, nil
+	case strings.Contains(query, "WITH RECURSIVE locale_chain"):
+		rows := &sitemapMockRows{cols: []string{"lang_key", "translation"}}
+		if len(args) > 0 {
+			for key, value := range c.config.translations[fmt.Sprint(args[0].Value)] {
+				rows.vals = append(rows.vals, []driver.Value{key, value})
+			}
+		}
+		return rows, nil
+	case strings.Contains(query, "SELECT lang_key,") && strings.Contains(query, "FROM system_lang_keys"):
+		rows := &sitemapMockRows{cols: []string{"lang_key", "translation"}}
+		for code, translations := range c.config.translations {
+			if !strings.Contains(query, `"`+code+`"`) {
+				continue
+			}
+			for key, value := range translations {
+				rows.vals = append(rows.vals, []driver.Value{key, value})
+			}
+		}
+		return rows, nil
 	case strings.Contains(query, "FROM system_lang_keys"):
+		if len(args) > 0 {
+			code := strings.Fields(query)[1]
+			if value, found := c.config.translations[code][fmt.Sprint(args[0].Value)]; found {
+				return &rootHandlerMockRows{cols: []string{code}, vals: []driver.Value{value}}, nil
+			}
+		}
 		return &rootHandlerMockRows{cols: []string{"en"}, empty: true}, nil
 	case strings.Contains(query, "SELECT description FROM system_db_tables WHERE table_uid = $1"):
 		return &rootHandlerMockRows{

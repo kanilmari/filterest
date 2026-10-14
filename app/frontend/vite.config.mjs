@@ -306,6 +306,7 @@ const KNOWN_DEFAULTS = {
   OGDescription: '',
   OGURL: DEV_CANONICAL_URL,
   OGImage: '',
+  OGImageSize: '',
   OGLocale: 'fi_FI',
   FaviconPath: DEV_FAVICON_PATH,
   Favicon128Path: DEV_FAVICON_128_PATH,
@@ -328,7 +329,7 @@ const DEV_TRUE_VARS = new Set(['IsDev']);
 
 // All known conditional vars (won't trigger "unknown var" warnings)
 const KNOWN_CONDITIONAL_VARS = new Set([
-  'UseMinifiedAssets', 'IsDev', 'RobotsNoIndex',
+  'UseMinifiedAssets', 'IsDev', 'RobotsNoIndex', 'OGImageSize',
   'StandalonePage', 'ShowBackButton', 'ShowTourScreenshots',
   'EmailVerificationAvailable',
   'SiteNameErr', 'UsernameErr', 'EmailErr', 'PasswordErr', 'GeneralErr',

@@ -121,8 +121,8 @@ rate-limit HTML without icon links use that fallback. Markdown API catalogs,
 JSON, plain text, XML, images, PDFs and non-HTML errors also use the browser's
 origin fallback when it requests an icon. A custom root document such as K378's
 does the same when its own HTML has no icon link. Browser tab/cache behavior still
-needs native browser verification. The social-preview default remains the legacy
-Serlog image at `/frontend/favicon4S.png`; it is separate from the tab icon.
+needs native browser verification. Social previews use the site's resolved
+128 px icon, as described below.
 
 Fixed language keys `site_front_page_title`, `site_front_page_slogan` and
 `site_front_page_description` store three independent Finnish/English texts.
@@ -136,6 +136,33 @@ legacy language columns and served translations. Fixed `front_page_hero` sources
 retain intentional empty keys through catalog cleanup. The description key and
 three-field guidance are seeded by DB 9.11.0's migration, also used by bootstrap.
 Saving settings sections refreshes visible Home without changing navigation/history.
+
+### Shared-link metadata
+
+The generic application document (Home, administrator pages and sign-in entry
+shells without an authorized dataset) describes the site using the public Home
+keys above: slogan first, then description, then the site name. Both slogans and
+description fallbacks collapse whitespace to one line and limit the excerpt to
+200 Unicode characters, including an ellipsis when shortened. It ends at a word
+boundary when one is available; a single overlong word is cut at a safe character
+boundary. Generic metadata uses the shell's enabled request language negotiation,
+including its configured default.
+
+`router/seo_meta_builder.go` shares the translation map already read for shell
+recovery; the Home keys add no per-request query and need no Home dataset or row
+authorization bypass. The Open Graph and Twitter image is the absolute URL of
+the same resolved `Favicon128Path` as the document's 128 px icon link, with the
+same configured-file, initials and default fallback. Open Graph includes the
+site name as image alternative text and reports 128×128 only for that variant;
+a missing variant keeps the resolver's original icon without invented dimensions.
+All copy remains plain strings escaped by Go's `html/template`.
+
+Authorized dataset documents retain their own language resolver and description
+order: `search_slogan_<dataset>`, the accepted dataset UID's description, then
+its title (or site name if no title exists). Row addresses keep dataset metadata
+and never read row content for previews (WL140). Standalone `/login` has no
+preview tags; a custom project's page owns its metadata separately. Search
+indexing and authentication rules remain in force.
 
 Home's server response also supplies `article_buttons: [{href,label}]` and
 `article_buttons_placement` (`below_text` or `top_row`), independently of boxes.

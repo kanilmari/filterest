@@ -181,7 +181,10 @@ server-rendered notices. Emergency fi/en copy covers unavailable language keys;
 the first available request `?lang` then `Accept-Language` preference in descending
 quality order (stable for ties, excluding `q=0`) determines recovery copy, falling
 back to the canonical enabled default before frontend preferences load. Ordinary
-page metadata keeps its existing language resolver. Recovery respects the stored
+dataset metadata keeps its existing language resolver. Generic site previews
+use that same shell language and already-read Home wording, as described in
+[Home's shared-link metadata](Frontend_Home_Page.md#shared-link-metadata).
+Recovery respects the stored
 light/dark/system theme.
 
 Every rendered shell and maintenance response is no-store; this reduces stale

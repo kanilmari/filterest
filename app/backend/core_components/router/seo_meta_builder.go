@@ -1,7 +1,7 @@
 // seo_meta_builder.go
 // Helpers for generating SEO metadata (title, description, og: tags) for dynamic table and
-// app pages. Reads table-level SEO configuration from the database.
-// Exists to keep crawler-facing metadata aligned with dataset and app page context.
+// app pages. Shares shell Home translations and the resolved site favicon.
+// Keeps previews aligned with site identity without reading row content or adding queries.
 package router
 
 import (
@@ -19,11 +19,15 @@ import (
 
 	backend "easelect/backend/core_components"
 	"easelect/backend/core_components/dataset_routes"
+	frontendassets "easelect/backend/core_components/frontend_assets"
+	"easelect/backend/core_components/lang"
 )
 
 // pageMeta holds all SEO-relevant fields that are injected into the
 // index.html Go template alongside the existing indexTemplateData fields.
 type pageMeta struct {
+	frontendassets.SiteFaviconData
+	ShellBoot       frontendassets.ShellBootData
 	PageTitle       string // <title> tag content
 	MetaDescription string // <meta name="description">
 	CanonicalURL    string // <link rel="canonical">
@@ -32,9 +36,10 @@ type pageMeta struct {
 	OGType          string // og:type  (website)
 	OGURL           string // og:url
 	OGImage         string // og:image (absolute URL)
+	OGImageSize     int    // known square display variant; zero omits dimensions
 	SiteName        string // og:site_name and title suffix
 	OGLocale        string // og:locale (e.g. fi_FI, en_US)
-	LangCode        string // 2-letter lang code for <html lang="">
+	LangCode        string // negotiated language code for <html lang="">
 }
 
 // supportedLangs lists the language columns available in system_lang_keys.
@@ -89,26 +94,42 @@ func resolvePageMeta(r *http.Request) pageMeta {
 // A generic or sign-in shell supplies nil and publishes only site metadata.
 func resolvePageMetaForDataset(r *http.Request, dataset *dataset_routes.DatasetNamePool) pageMeta {
 	siteName := resolvePageSiteName(r)
-	lang := resolveLanguage(r)
-	locale := langToLocale(lang)
+	language := resolveLanguage(r)
+	shellLanguage := lang.ResolvePageLanguage(r)
+	shellBoot := frontendassets.NewShellBootData(r, shellLanguage)
+	// Generic previews use the shell's enabled/default language negotiation.
+	// Dataset titles and descriptions retain their existing language contract.
+	if dataset == nil {
+		language = shellLanguage
+	}
+	favicon := frontendassets.NewSiteFaviconData(localFrontendDir, siteName, configuredFaviconReader(r.Context(), backend.Db))
 	baseURL := resolveBaseURL(r)
 	canonicalPath := r.URL.Path
 
 	meta := pageMeta{
+		SiteFaviconData: favicon,
+		ShellBoot:       shellBoot,
 		PageTitle:       siteName,
-		MetaDescription: fmt.Sprintf("%s — modern service catalog", siteName),
+		MetaDescription: siteName,
 		CanonicalURL:    baseURL + canonicalPath,
 		OGTitle:         siteName,
-		OGDescription:   fmt.Sprintf("%s — modern service catalog", siteName),
+		OGDescription:   siteName,
 		OGType:          "website",
 		OGURL:           baseURL + canonicalPath,
-		OGImage:         baseURL + "/frontend/favicon4S.png",
+		OGImage:         baseURL + favicon.Favicon128Path,
 		SiteName:        siteName,
-		OGLocale:        locale,
-		LangCode:        lang,
+		OGLocale:        langToLocale(language),
+		LangCode:        language,
+	}
+	// Missing variants retain the resolver's original image; do not claim 128 px
+	// dimensions for a 16 px or administrator-supplied PNG of unknown size.
+	if strings.HasSuffix(favicon.Favicon128Path, "-128.png") {
+		meta.OGImageSize = 128
 	}
 
 	if dataset == nil {
+		meta.MetaDescription = sitePreviewDescription(siteName, shellBoot.Texts)
+		meta.OGDescription = meta.MetaDescription
 		return meta
 	}
 
@@ -122,17 +143,20 @@ func resolvePageMetaForDataset(r *http.Request, dataset *dataset_routes.DatasetN
 	meta.CanonicalURL = baseURL + canonicalPath
 	meta.OGURL = meta.CanonicalURL
 
-	title := resolveDatasetTabTitle(datasetName, dataset.TableUID, lang)
+	title := resolveDatasetTabTitle(datasetName, dataset.TableUID, language)
 
 	// Fetch description / search slogan
 	sloganKey := "search_slogan_" + datasetName
-	description := fetchTranslation(sloganKey, lang)
+	description := fetchTranslation(sloganKey, language)
 	if description == "" {
 		// Fallback: use table description from system_db_tables
 		description = fetchDatasetDescription(dataset.TableUID)
 	}
 	if description == "" {
 		description = title
+	}
+	if description == "" {
+		description = siteName
 	}
 
 	meta.PageTitle = composeBrowserTabTitle("", title, siteName)
@@ -364,13 +388,17 @@ func resolveLanguage(r *http.Request) string {
 	return "en"
 }
 
-// langToLocale converts a 2-letter lang code to an Open Graph locale string.
+// langToLocale maps canonical shell and legacy dataset codes to Open Graph locales.
 func langToLocale(lang string) string {
 	switch lang {
 	case "fi":
 		return "fi_FI"
-	case "ch":
+	case "ch", "zh-CN":
 		return "zh_CN"
+	case "zh-TW":
+		return "zh_TW"
+	case "zh-HK":
+		return "zh_HK"
 	case "yue":
 		return "yue_HK"
 	default:

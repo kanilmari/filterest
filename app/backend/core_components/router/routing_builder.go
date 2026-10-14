@@ -19,7 +19,6 @@ import (
 	"easelect/backend/core_components/dataset_routes"
 	frontendassets "easelect/backend/core_components/frontend_assets"
 	"easelect/backend/core_components/httpresponse"
-	"easelect/backend/core_components/lang"
 	"easelect/backend/core_components/middlewares"
 	productidentity "easelect/backend/core_components/product_identity"
 	"easelect/backend/core_components/session_expiry"
@@ -34,28 +33,15 @@ var (
 )
 
 type indexTemplateData struct {
-	ShellBoot               frontendassets.ShellBootData
+	pageMeta
 	CSPNonce                string
 	UseMinifiedAssets       bool
 	IsDev                   bool
 	InstallationEnvironment string
-	SiteName                string
 	ProductName             string
-	frontendassets.SiteFaviconData
-	// SEO / Open Graph fields (populated by resolvePageMeta)
-	PageTitle       string
-	MetaDescription string
-	CanonicalURL    string
-	OGTitle         string
-	OGDescription   string
-	OGType          string
-	OGURL           string
-	OGImage         string
-	OGLocale        string
-	LangCode        string
-	RobotsNoIndex   bool // true → emit <meta name="robots" content="noindex, nofollow">
-	ImportsCSSPath  string
-	MainBundlePath  string
+	RobotsNoIndex           bool // true → emit <meta name="robots" content="noindex, nofollow">
+	ImportsCSSPath          string
+	MainBundlePath          string
 }
 
 // getSiteName returns the administrator-owned site name before deployment fallbacks.
@@ -130,23 +116,16 @@ func tablesHandler(w http.ResponseWriter, r *http.Request, loginToBrowse bool, d
 	// 3) Ajetaan templaatti ja syötetään nonce + SEO-metatiedot
 	isDev := os.Getenv("ENVIRONMENT_TYPE") == "dev"
 	meta := resolvePageMetaForDataset(r, dataset)
-	siteName := meta.SiteName
 	noIndex := !isIndexingAllowed()
 	assetPaths := frontendassets.Resolve(localFrontendDir, useMinified)
 	data := indexTemplateData{
-		ShellBoot: frontendassets.NewShellBootData(r, lang.ResolvePageLanguage(r)),
-		CSPNonce:  nonce, UseMinifiedAssets: useMinified, IsDev: isDev,
-		InstallationEnvironment: getInstallationEnvironment(), SiteName: siteName,
-		ProductName:     getSiteName(),
-		SiteFaviconData: frontendassets.NewSiteFaviconData(localFrontendDir, siteName, configuredFaviconReader(r.Context(), backend.Db)),
-		PageTitle:       meta.PageTitle, MetaDescription: meta.MetaDescription,
-		CanonicalURL: meta.CanonicalURL, OGTitle: meta.OGTitle,
-		OGDescription: meta.OGDescription, OGType: meta.OGType,
-		OGURL: meta.OGURL, OGImage: meta.OGImage,
-		OGLocale: meta.OGLocale, LangCode: meta.LangCode,
-		RobotsNoIndex:  noIndex,
-		ImportsCSSPath: assetPaths.ImportsCSSPath,
-		MainBundlePath: assetPaths.MainBundlePath,
+		pageMeta: meta,
+		CSPNonce: nonce, UseMinifiedAssets: useMinified, IsDev: isDev,
+		InstallationEnvironment: getInstallationEnvironment(),
+		ProductName:             getSiteName(),
+		RobotsNoIndex:           noIndex,
+		ImportsCSSPath:          assetPaths.ImportsCSSPath,
+		MainBundlePath:          assetPaths.MainBundlePath,
 	}
 	if err := tpl.Execute(w, data); err != nil {
 		fmt.Printf("\033[31merror: %s\033[0m\n", err.Error())
@@ -176,19 +155,13 @@ func adminHandler(w http.ResponseWriter, r *http.Request) {
 	meta := resolvePageMeta(r)
 	assetPaths := frontendassets.Resolve(localFrontendDir, useMinified)
 	data := indexTemplateData{
-		ShellBoot: frontendassets.NewShellBootData(r, lang.ResolvePageLanguage(r)),
-		CSPNonce:  nonce, UseMinifiedAssets: useMinified, IsDev: os.Getenv("ENVIRONMENT_TYPE") == "dev",
-		InstallationEnvironment: getInstallationEnvironment(), SiteName: meta.SiteName,
-		ProductName:     getSiteName(),
-		SiteFaviconData: frontendassets.NewSiteFaviconData(localFrontendDir, meta.SiteName, configuredFaviconReader(r.Context(), backend.Db)),
-		PageTitle:       meta.PageTitle, MetaDescription: meta.MetaDescription,
-		CanonicalURL: meta.CanonicalURL, OGTitle: meta.OGTitle,
-		OGDescription: meta.OGDescription, OGType: meta.OGType,
-		OGURL: meta.OGURL, OGImage: meta.OGImage,
-		OGLocale: meta.OGLocale, LangCode: meta.LangCode,
-		RobotsNoIndex:  true, // admin pages are always noindex
-		ImportsCSSPath: assetPaths.ImportsCSSPath,
-		MainBundlePath: assetPaths.MainBundlePath,
+		pageMeta: meta,
+		CSPNonce: nonce, UseMinifiedAssets: useMinified, IsDev: os.Getenv("ENVIRONMENT_TYPE") == "dev",
+		InstallationEnvironment: getInstallationEnvironment(),
+		ProductName:             getSiteName(),
+		RobotsNoIndex:           true, // admin pages are always noindex
+		ImportsCSSPath:          assetPaths.ImportsCSSPath,
+		MainBundlePath:          assetPaths.MainBundlePath,
 	}
 	if err := tpl.Execute(w, data); err != nil {
 		fmt.Printf("\033[31merror: %s\033[0m\n", err.Error())

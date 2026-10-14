@@ -1,6 +1,6 @@
 // shell_boot_translation_reader.go
-// Reads the small recovery vocabulary before frontend assets are available.
-// Bridges request language, the served translation model and emergency fi/en copy.
+// Reads recovery vocabulary and public Home copy before frontend assets are available.
+// Bridges request language, the served translation model and shell preview metadata.
 // Keeps translated text out of executable script and preserves authored site wording.
 package lang
 
@@ -21,6 +21,10 @@ type ShellBootTexts struct {
 	Reload             string
 	JavaScriptRequired string
 	BrowserUnsupported string
+	// Public Home copy shares the existing shell translation read. Empty values
+	// remain empty so metadata can fall back to the site's own name.
+	HomeSlogan      string
+	HomeDescription string
 }
 
 var shellBootFallbacks = map[string][2]string{
@@ -143,5 +147,6 @@ func readShellBootTexts(languageCode string, reader func(string) (map[string]str
 		Loading: text("shell_boot_loading"), FailedTitle: text("shell_boot_failed_title"),
 		FailedMessage: text("shell_boot_failed_message"), Reload: text("shell_boot_reload"),
 		JavaScriptRequired: text("shell_boot_javascript_required"), BrowserUnsupported: text("shell_boot_browser_unsupported"),
+		HomeSlogan: values["site_front_page_slogan"], HomeDescription: values["site_front_page_description"],
 	}
 }

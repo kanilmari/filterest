@@ -53,7 +53,7 @@ func TestShellBootIndexRenderersUseDevelopmentAndNoStore(t *testing.T) {
 	}
 }
 
-func TestShellBootIndexLanguageDoesNotChangeOrdinaryMetadata(t *testing.T) {
+func TestShellBootIndexGenericMetadataUsesShellLanguage(t *testing.T) {
 	t.Setenv("ENVIRONMENT_TYPE", "dev")
 	t.Setenv("FILTEREST_FRONTEND_ASSET_MODE", "source")
 	setupRootHandlerMockDB(t, false)
@@ -62,8 +62,9 @@ func TestShellBootIndexLanguageDoesNotChangeOrdinaryMetadata(t *testing.T) {
 	localFrontendDir = filepath.Join("..", "..", "..", "frontend")
 	t.Cleanup(func() { localFrontendDir = previous })
 	for _, tc := range []struct{ query, header, metaLanguage, recovery string }{
-		{"", "fi;q=0.1,en;q=1", "fi", "Loading the page…"},
-		{"&lang=yue", "fi", "yue", "Sivua ladataan…"},
+		// K382: generic preview copy must use the shell's enabled request language.
+		{"", "fi;q=0.1,en;q=1", "en", "Loading the page…"},
+		{"&lang=yue", "fi", "fi", "Sivua ladataan…"},
 	} {
 		for _, handler := range []http.HandlerFunc{rootHandler, func(w http.ResponseWriter, r *http.Request) { tablesHandler(w, r, false, nil) }, adminHandler} {
 			request := httptest.NewRequest(http.MethodGet, "https://localhost/?login-entry=1"+tc.query, nil)
@@ -72,7 +73,7 @@ func TestShellBootIndexLanguageDoesNotChangeOrdinaryMetadata(t *testing.T) {
 			middlewares.WithCSP(handler).ServeHTTP(response, request)
 			body := response.Body.String()
 			if response.Code != http.StatusOK || !strings.Contains(body, `<html lang="`+tc.metaLanguage+`"`) || !strings.Contains(body, `property="og:locale" content="`+langToLocale(tc.metaLanguage)+`"`) {
-				t.Fatalf("ordinary metadata changed for %s / %s", tc.query, tc.header)
+				t.Fatalf("generic metadata language differs from shell for %s / %s", tc.query, tc.header)
 			}
 			if !strings.Contains(body, `<p id="shell-boot-loading" hidden>`+tc.recovery+`</p>`) {
 				t.Fatal("recovery language followed metadata instead of its own preferences")

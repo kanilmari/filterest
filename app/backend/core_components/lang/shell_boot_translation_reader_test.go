@@ -32,6 +32,36 @@ func TestShellBootTextsPreserveAuthoredCopyAndFillMissingKeys(t *testing.T) {
 	}
 }
 
+func TestShellBootHomeCopyUsesOneTranslationReadWithoutInventedFallbacks(t *testing.T) {
+	for _, code := range []string{"fi", "en", "yue"} {
+		t.Run(code, func(t *testing.T) {
+			reads := 0
+			texts := readShellBootTexts(code, func(requested string) (map[string]string, error) {
+				reads++
+				if requested != code {
+					t.Fatalf("language = %q, want %q", requested, code)
+				}
+				return map[string]string{
+					"site_front_page_slogan":      code + " slogan",
+					"site_front_page_description": code + " description",
+				}, nil
+			})
+			if reads != 1 || texts.HomeSlogan != code+" slogan" || texts.HomeDescription != code+" description" {
+				t.Fatalf("reads = %d, texts = %+v", reads, texts)
+			}
+			for _, reader := range []func(string) (map[string]string, error){
+				func(string) (map[string]string, error) { return map[string]string{}, nil },
+				func(string) (map[string]string, error) { return nil, errors.New("unavailable") },
+			} {
+				empty := readShellBootTexts(code, reader)
+				if empty.HomeSlogan != "" || empty.HomeDescription != "" {
+					t.Fatalf("Home copy invented a fallback: %+v", empty)
+				}
+			}
+		})
+	}
+}
+
 func TestShellBootRequestLanguage(t *testing.T) {
 	for _, tc := range []struct{ query, header, expected string }{
 		{"?lang=fi", "en-US", "fi"}, {"", "fi-FI, en;q=0.5", "fi"}, {"", "en-US", "en"},
