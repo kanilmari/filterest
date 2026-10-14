@@ -83,3 +83,6 @@ Update incoming documentation links when text moves or a document is deleted.
 - [One settings table template](Settings_Table.md) describes one shared
   administrator editor with typed cells, ordering, bulk choices, drafts and
   verified saves across settings domains.
+- [Colored calendar row categories](Colored_Calendar_Row_Categories.md) describes
+  dataset-owned category colours and multilingual explanations shared by every
+  calendar layout, with a legend, accessible text and support for both themes.
