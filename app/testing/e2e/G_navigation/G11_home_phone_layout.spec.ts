@@ -7,7 +7,7 @@ import { expect, test, type Locator, type Page } from '@playwright/test';
 import { installMenuVisibilityProbe, type MenuProbeWindow } from '../helpers/menu_control_visibility';
 
 type Theme = 'light' | 'dark';
-type Fixture = { name: string; width: number };
+type Fixture = { name: string; width: number; height?: number; datasetCount?: number };
 // Observe whole rendered frames and completed mutation batches, starting before
 // ownership changes. Settled locator assertions alone missed the fading copy.
 
@@ -98,14 +98,42 @@ async function openHome(page: Page, theme: Theme, language: string, fixture?: Fi
     expect(route.request().method(), 'The spec must never save account appearance').toBe('GET');
     await route.fulfill({ json: { theme_mode: theme, revision: 1, configured: true } });
   });
+  if (fixture) await page.route(url => url.pathname === '/api/datasets', async route => {
+    expect(route.request().method()).toBe('GET');
+    // Response-only destinations: no datasets, accounts or keys are created.
+    // Both Home's projection and the real navbar consume this same catalogue.
+    const response = await route.fetch();
+    expect(response.ok()).toBe(true);
+    const data = await response.json();
+    data.datasets = Array.from({ length: fixture.datasetCount ?? 2 }, (_, index) => ({
+      dataset_name: `app_e2e_home_menu_fixture_${index + 1}`, table_uid: 900000 + index,
+      is_top_level_in_current_project: true, can_read_rows: true, icon_key: 'table',
+    }));
+    data.tab_order = null;
+    await route.fulfill({ response, json: data });
+  });
+  if (fixture) await page.route(url => url.pathname === '/api/translations', async route => {
+    expect(route.request().method()).toBe('GET');
+    const response = await route.fetch();
+    expect(response.ok()).toBe(true);
+    const data = await response.json();
+    const translations = data.translations && typeof data.translations === 'object' ? data.translations : data;
+    const label = new URL(route.request().url()).searchParams.get('lang') === 'fi' ? 'Testiaineisto' : 'Fixture dataset';
+    for (let index = 1; index <= (fixture.datasetCount ?? 2); index++) {
+      translations[`app_e2e_home_menu_fixture_${index}`] = `${label} ${index}`;
+    }
+    // Response-only copy plus the protected E2E prefix prevents synthetic keys
+    // from entering translation maintenance even before a dictionary arrives.
+    await route.fulfill({ response, json: data });
+  });
   await page.route(url => url.pathname === '/api/front-page', async route => {
     expect(route.request().method()).toBe('GET');
     const response = await route.fetch();
     expect(response.ok(), 'Native Home must be enabled and readable').toBe(true);
     const data = await response.json();
     if (fixture) {
-      // Preserve viewer identity, live destinations, copy and media. Exercise the
-      // owner's saved Fintravel geometry without storing a presentation anywhere.
+      // Preserve viewer identity, copy and media while pinning header geometry.
+      // These fixtures never navigate to their response-only destinations.
       data.site_name = fixture.name;
       data.presentation = { ...data.presentation, schema_version: 2, anchor: 'center-left', alignment: 'left',
         max_width_px: 750, horizontal_margin_px: 160, vertical_margin_px: 40 };
@@ -120,7 +148,7 @@ async function openHome(page: Page, theme: Theme, language: string, fixture?: Fi
     localStorage.setItem('navVisibleWide', 'false');
     localStorage.setItem('navVisibleNarrow', 'false');
   }, { theme, language });
-  if (fixture) await page.setViewportSize({ width: fixture.width, height: 900 });
+  if (fixture) await page.setViewportSize({ width: fixture.width, height: fixture.height ?? 900 });
   await page.goto('/', { waitUntil: 'domcontentloaded' });
   await page.waitForFunction(() => (window as Window & {
     __filterestShellBoot?: { status: () => { ready: boolean } };
@@ -205,11 +233,20 @@ async function proveHome(page: Page, open: boolean, alignment: string, cappedMar
   const hero = page.locator('.front-page-text-stage .front-page-hero');
   await expect(hero).toHaveCSS('text-align', alignment);
   const stage = page.locator('.front-page-text-stage');
-  if (open && page.viewportSize()!.width <= 1850) await expect.poll(() => page.locator('#navbar').evaluate(element => {
+  if (open && phone) {
+    await expect(page.locator('#navbar')).toHaveCSS('position', 'fixed');
+    await expect.poll(() => page.locator('#navbar').evaluate(element => {
+      const box = element.getBoundingClientRect();
+      return box.top === 0 && box.bottom <= innerHeight && box.height > 0;
+    }), { message: 'Phone Home uses the viewport, independent of its dataset count' }).toBe(true);
+  }
+  if (open && !phone && page.viewportSize()!.width <= 1850) await expect.poll(() => page.locator('#navbar').evaluate(element => {
     const header = document.querySelector('.front-page-top-row')!.getBoundingClientRect();
     return element.getBoundingClientRect().top >= header.bottom - 1;
   })).toBe(true);
-  if (phone) {
+  // Destination geometry belongs to a fixed two-dataset response, so native
+  // Home checks do not assume its current count or that all tabs fit on screen.
+  if (phone && cappedMargin) {
     const stageBox = (await stage.boundingBox())!, heroBox = (await hero.boundingBox())!;
     expect(heroBox.x + heroBox.width / 2).toBeCloseTo(stageBox.x + stageBox.width / 2, 0);
     expect(heroBox.x - stageBox.x).toBeCloseTo(16, 0);
@@ -217,7 +254,7 @@ async function proveHome(page: Page, open: boolean, alignment: string, cappedMar
     const tabs = page.locator('.front-page-top-row > .hero-dataset-tabs');
     await expect(tabs).toBeVisible();
     const buttons = tabs.locator(':scope > button');
-    expect(await buttons.count(), 'Native Home needs at least two accepted dataset destinations').toBeGreaterThan(1);
+    await expect(buttons).toHaveCount(2);
     await expect.poll(() => buttons.evaluateAll(elements => elements.every(element =>
       !(element as HTMLButtonElement).hidden && getComputedStyle(element).display !== 'none'))).toBe(true);
     const boxes = await buttons.evaluateAll(elements => elements.map(element => {
@@ -225,10 +262,6 @@ async function proveHome(page: Page, open: boolean, alignment: string, cappedMar
       return { x: box.x, y: box.y, width: box.width, height: box.height };
     }));
     const homeBox = (await page.locator('.front-page').boundingBox())!;
-    if (open) await expect.poll(() => page.locator('#navbar').evaluate(element => {
-      const header = document.querySelector('.front-page-top-row')!.getBoundingClientRect();
-      return element.getBoundingClientRect().top >= header.bottom - 1;
-    })).toBe(true);
     for (const [index, box] of boxes.entries()) {
       expect(box.height).toBeGreaterThanOrEqual(44);
       expect(box.width).toBeCloseTo(boxes[0].width, 1);
@@ -238,10 +271,10 @@ async function proveHome(page: Page, open: boolean, alignment: string, cappedMar
       if (index) expect(box.y).toBeGreaterThanOrEqual(boxes[index - 1].y + boxes[index - 1].height);
       await expect(buttons.nth(index).locator('.hero-dataset-tabs__icon')).toBeVisible();
       await expect(buttons.nth(index)).toHaveAccessibleName(/\S/);
-      expect(await buttons.nth(index).evaluate(element => {
+      if (!open) expect(await buttons.nth(index).evaluate(element => {
         const box = element.getBoundingClientRect();
         return element.contains(document.elementFromPoint(box.x + box.width / 2, box.y + box.height / 2));
-      }), 'The menu must not cover Home destinations').toBe(true);
+      }), 'Closed-menu Home destinations must receive pointer input').toBe(true);
     }
     // Home has no selected dataset; its shared renderer preserves the current-page contract.
     await expect(tabs.locator(':scope > button[aria-current]')).toHaveCount(0);
@@ -252,13 +285,60 @@ async function proveHome(page: Page, open: boolean, alignment: string, cappedMar
     await expectFocusWithMenuOwner(page, buttons.first());
     await expect(buttons.first()).toHaveCSS('outline-style', 'solid');
     await expect(buttons.first()).toHaveCSS('outline-width', '2px');
-  } else if (cappedMargin) {
+  } else if (!phone && cappedMargin) {
     const insets = await stage.evaluate(element => ({ width: element.getBoundingClientRect().width,
       left: Number.parseFloat(getComputedStyle(element).paddingLeft),
       right: Number.parseFloat(getComputedStyle(element).paddingRight) }));
     const expected = Math.min(160, insets.width * 0.08, Math.max(0, (insets.width - 320) / 2));
     expect(insets.left).toBeCloseTo(expected, 1); expect(insets.right).toBeCloseTo(expected, 1);
   }
+}
+
+async function expectPointerInsideViewport(control: Locator) {
+  await expect.poll(() => control.evaluate(element => {
+    const box = element.getBoundingClientRect();
+    const hit = document.elementFromPoint(box.x + box.width / 2, box.y + box.height / 2);
+    return box.width > 0 && box.height > 0 && box.top >= 0 && box.left >= 0
+      && box.bottom <= innerHeight && box.right <= innerWidth && hit !== null && element.contains(hit);
+  }), { message: 'The whole control must fit the viewport and receive pointer input at its centre' }).toBe(true);
+}
+
+async function provePhoneDrawerControls(page: Page) {
+  const navbar = page.locator('#navbar');
+  const topControls = navbar.locator('.top-button-bar button:visible');
+  // Close, history in both directions (including disabled buttons), theme and language.
+  expect(await topControls.count()).toBeGreaterThanOrEqual(5);
+  for (const control of await topControls.all()) await expectPointerInsideViewport(control);
+  const controls = navbar.locator(':is(button, a[href], input:not([type="hidden"]), select, [role="button"], [tabindex="0"]):visible');
+  expect(await controls.count()).toBeGreaterThan(12);
+  for (const control of await controls.all()) {
+    // Real internal scrolling reveals lower controls below the sticky close row.
+    await control.evaluate(element => element.scrollIntoView({ block: 'center', inline: 'nearest' }));
+    await expectPointerInsideViewport(control);
+    if (await control.isEnabled()) await control.click({ trial: true });
+  }
+  await navbar.evaluate(element => { element.scrollTop = element.scrollHeight; });
+  expect(await navbar.evaluate(element => element.scrollTop)).toBeGreaterThan(0);
+  for (const control of await topControls.all()) await expectPointerInsideViewport(control);
+  // Batch 150's language panel remains portalled outside the drawer's scroller.
+  const language = navbar.getByTestId('language-menu-button');
+  await language.click();
+  const panel = page.getByTestId('language-menu-panel');
+  await expect(panel).toBeVisible();
+  expect(await panel.evaluate(element => element.parentElement === document.body)).toBe(true);
+  await expectPointerInsideViewport(panel);
+  for (const option of await panel.locator('.language-option').all()) {
+    await option.evaluate(element => element.scrollIntoView({ block: 'nearest' }));
+    await expectPointerInsideViewport(option);
+  }
+  await page.keyboard.press('Escape');
+  await expect(panel).toBeHidden();
+  await expect(navbar).not.toHaveClass(/\bcollapsed\b/);
+  // A pointer close from the scrolled drawer must restore Home's sole opener.
+  await navbar.locator('#hideMenuButton').click();
+  await setMenu(page, false);
+  await expect(page.locator('#showMenuButton')).toBeVisible();
+  await expect(page.locator('#hideMenuButton')).toBeHidden();
 }
 
 async function proveDatasetMenuOwnership(page: Page, sample = true) {
@@ -308,10 +388,10 @@ async function proveKeyboardMenu(page: Page, state: { alignment: string; cappedM
 }
 
 // Every Playwright project crosses the breakpoint with a destination focused,
-// using native destinations and a pinned account theme over the opposite OS theme.
-test('native Home keeps focus and restores every destination across 700px', async ({ page }) => {
+// using a fixed catalogue and a pinned account theme over the opposite OS theme.
+test('Home response fixture keeps focus and restores every destination across 700px', async ({ page }) => {
   await page.setViewportSize({ width: 700, height: 900 });
-  const state = await openHome(page, 'light', 'fi');
+  const state = await openHome(page, 'light', 'fi', { name: 'Fintravel', width: 700, datasetCount: 12 });
   await setMenu(page, true);
   await proveHome(page, true, state.alignment, false);
   const buttons = page.locator('.front-page-top-row > .hero-dataset-tabs > button');
@@ -352,6 +432,12 @@ for (const open of [false, true]) {
     await expect(page.locator('#showMenuButton')).toHaveCount(1);
     await expect(page.locator('.front-page-top-row #showMenuButton')).toHaveCount(0);
     await proveDatasetMenuOwnership(page);
+    const identity = page.locator('.dataset-shared-topbar:visible [data-testid="mobile-site-identity"]');
+    await expect(identity).toBeVisible();
+    await expect.poll(() => identity.locator('img').evaluate((image: HTMLImageElement) =>
+      image.complete && /-128\.png$/.test(image.currentSrc))).toBe(true);
+    await expect(identity.locator('img')).toHaveCSS('image-rendering', 'auto');
+    await expect(page.locator('.tab_parts_container:visible .filterbar-inline-hero .hero-dataset-tabs')).toBeHidden();
     const datasetMenu = page.locator('.dataset-shared-topbar:visible').getByTestId('shared-topbar-menu-button');
     const navbar = page.locator('#navbar');
     // Clicking the destination may close the overlay; explicitly exercise both
@@ -427,6 +513,17 @@ for (const open of [false, true]) {
 }
 
 for (const theme of ['light', 'dark'] as const) {
+  for (const viewport of [{ width: 320, height: 568 }, { width: 375, height: 667 }, { width: 414, height: 896 }]) {
+    test(`12 datasets ${viewport.width}×${viewport.height}/${theme}: phone Home drawer controls stay reachable`, async ({ page }) => {
+      const state = await openHome(page, theme, 'fi', { name: 'Fintravel', ...viewport, datasetCount: 12 });
+      await expect(page.locator('.front-page-top-row .hero-dataset-tabs__button')).toHaveCount(12);
+      await setMenu(page, true);
+      await proveHome(page, true, state.alignment, false);
+      await provePhoneDrawerControls(page);
+      await proveHome(page, false, state.alignment, false);
+      expect(state.writes).toEqual([]);
+    });
+  }
   for (const language of ['fi', 'en']) {
     test(`native Home in ${language}/${theme}: matrix width, menu closed and open`, async ({ page }) => {
       const state = await openHome(page, theme, language);
@@ -434,16 +531,6 @@ for (const theme of ['light', 'dark'] as const) {
         await setMenu(page, open); await proveHome(page, open, state.alignment, false);
       }
       await proveKeyboardMenu(page, state);
-      if (page.viewportSize()!.width <= 700) {
-        await page.locator('.front-page-top-row .hero-dataset-tabs__button').first().click();
-        const identity = page.locator('.dataset-shared-topbar:visible [data-testid="mobile-site-identity"]');
-        await expect(identity).toBeVisible();
-        await expect.poll(() => identity.locator('img').evaluate((image: HTMLImageElement) =>
-          image.complete && /-128\.png$/.test(image.currentSrc))).toBe(true);
-        await expect(identity.locator('img')).toHaveCSS('image-rendering', 'auto');
-        // The Home exception must not make the dataset hero tabs visible on phones.
-        await expect(page.locator('.tab_parts_container:visible .filterbar-inline-hero .hero-dataset-tabs')).toBeHidden();
-      }
       expect(state.writes).toEqual([]);
     });
   }

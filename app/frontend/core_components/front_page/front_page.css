@@ -287,10 +287,8 @@ body.dark-mode .front-page {
   outline-offset: -2px;
 }
 
-/* The shell overlays the menu through 1850px, including tablets and narrow
-   desktops. Its top row must stay below Home's borrowed toggle in that whole
-   band: a child z-index cannot escape the Home/container stacking contexts. */
-@media screen and (width <= 1850px) {
+/* Tablets and narrow desktops retain the menu below Home's measured header. */
+@media screen and (700px < width <= 1850px) {
   .body_content:has(.front-page:not(.hidden) > .front-page-top-row) #navbar {
     top: var(--home-top-row-height, 68px);
     height: calc(100vh - var(--home-top-row-height, 68px));
@@ -305,6 +303,16 @@ body.dark-mode .front-page {
 
 /* Home alone keeps its destinations on phones; settings give way to the full identity. */
 @media (width <= 700px) {
+  /* Home's header includes every dataset destination and can exceed the screen.
+     The fixed drawer uses the dynamic viewport instead; its existing scroller
+     and sticky control row keep the closer reachable even at the bottom. */
+  .body_content:has(.front-page:not(.hidden) > .front-page-top-row) #navbar {
+    top: 0;
+    height: 100vh;
+    height: 100dvh;
+    overscroll-behavior-y: contain;
+  }
+
   .front-page > .front-page-top-row {
     display: grid;
     grid-template-columns: minmax(0, 1fr);
@@ -343,8 +351,7 @@ body.dark-mode .front-page {
     grid-row: 3;
   }
 
-  /* Keep Home's phone identity and destinations stationary while the shell
-     overlays its menu below the complete measured header. */
+  /* Keep Home stationary underneath the phone drawer. */
   #tabs_container:has(.front-page:not(.hidden) > .front-page-top-row) {
     width: 100%;
     transform: translateX(0);

@@ -221,11 +221,17 @@ no bottom border or shadow to that row.
 Home alone keeps the dataset tabs on phones as a centred vertical stack, at
 most 480 px wide inside 16 px side gutters, with the shared icons, labels,
 current-page and focus styles and at least 44 px touch height. Administrator
-actions occupy the following row. Throughout the shell's overlay band (through
-1850 px), Home's menu starts below the measured complete header. This keeps the
-visible menu control reachable by pointer and keyboard: the navbar's closer
-while open, and the borrowed Home opener while hidden. Raising a toggle's own
-z-index cannot escape its ancestor stacking contexts.
+actions occupy the following row. On phones (through 700 px), the open menu is
+a fixed drawer starting at the viewport top and bounded by its dynamic height
+(`100dvh`, with `100vh` fallback). It overlays Home independently of the number
+of destinations or the header height. The menu's existing internal scroll area
+reveals lower navigation and account controls; its sticky top row keeps close,
+history, theme and language controls reachable while scrolling. The language
+panel stays outside that scroll area and fits the viewport separately. Home's
+borrowed slot remains hidden without an identity gap while the drawer is open.
+Tablets and narrow desktops (above 700 px through 1850 px) retain the menu below
+the measured complete header. Raising a toggle's own z-index cannot escape its
+ancestor stacking contexts.
 The shell retains the full content width in this band; above it, the open menu
 reserves its ordinary sidebar width. Dataset pages retain their existing layout
 and hidden phone tabs. The fit controller restores every destination only in a
@@ -234,6 +240,13 @@ hidden in the previous horizontal row; dataset projections keep their fit rule.
 When a focused destination no longer fits after leaving the phone stack, focus
 moves to the navbar's closer while open or Home's borrowed opener while hidden,
 before the destination hides. Dataset pages retain their existing menu focus selection.
+
+G11's read-only response fixtures pin the catalogue size for destination geometry.
+Its 12-dataset cases cover 320×568, 375×667 and 414×896 in both explicit themes
+over the opposite OS theme. They check each menu control's viewport bounds and
+pointer target after internal scrolling, the sticky close row, the portalled
+language panel, and closing from the drawer. Native Home checks retain menu
+ownership and focus coverage without assuming that its destinations fit onscreen.
 
 Home's fitting controller only measures and hides its own hero buttons; it
 never moves the navbar's dataset tabs. Draggable navbar tabs navigate on click,

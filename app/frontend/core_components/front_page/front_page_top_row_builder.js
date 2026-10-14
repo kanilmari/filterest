@@ -92,8 +92,8 @@ export function createFrontPageTopRow(siteName, onSaved, paletteOptions = {}) {
         menuSlot.classList.toggle('dataset-shared-topbar__menu-slot--visible', visible);
         syncNavbarMenuButtonAccessibility();
     }
-    // The complete header stays above the menu throughout the shell's overlay
-    // widths. Measure it so translated/wrapped labels fit on every surface.
+    // Tablets and narrow desktops place the menu below this complete header.
+    // Phones use a viewport drawer, independent of this translated/wrapped height.
     const bodyContent = document.querySelector('.body_content');
     const previousHeight = bodyContent?.style.getPropertyValue('--home-top-row-height') || '';
     function syncMenuHeight() {

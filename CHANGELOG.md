@@ -22,6 +22,7 @@ Dates are the local (Europe/Helsinki) date on which the version was published.
 
 ## [Unreleased]
 
+- **Home's phone menu stays usable on long pages** — The open menu is a viewport-height drawer with internal scrolling and a sticky close row, keeping its controls reachable regardless of Home's dataset count or screen height while preserving the hidden Home menu slot and separate language panel.
 - **Language menus stay reachable on short screens** — The menu opens upward when there is more room above, fits the viewport with internal scrolling when needed, and stays outside the scrolling menu bar in both themes. Internal scrolling holds its position while reaching a lower option and during placement measurements. Choosing a language keeps the menu bar open so the language menu can be reopened immediately.
 - **Image-first articles have breathing room** — Article panels have rounded corners and space above and below, with smaller gaps on phones; the image gains matching rounded corners after scrolling. Clicking or tapping empty space around the photo still closes the view in both scroll states without closing on the photo itself.
 - **Consistent view names and applicable layout controls** — Startup keeps the selector's product wording on every site, and the development layout lock appears only in Cards and Article, following view changes and browser history.

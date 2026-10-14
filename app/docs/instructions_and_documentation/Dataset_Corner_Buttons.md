@@ -46,6 +46,15 @@ shell opener and closer likewise hide immediately on release, including while
 the navbar's children fade during its slide-out. Ownership and the incoming
 CSS reveal start in the same task; no deferred reveal or focus intent remains.
 
+On phone Home (through 700px), the open menu overlays Home from the viewport
+top, with its height bounded by the dynamic viewport. Its own scroll area
+reveals the remaining controls while the sticky top row keeps its closer,
+history, theme and language controls reachable. Home's dataset count cannot
+push that row below the screen. The borrowed Home slot stays hidden and inert
+without leaving an identity gap; closing restores it and its existing focus
+handoff. The language panel remains outside the menu's scrolling/clipping area.
+Tablet and desktop placement, and dataset-page layouts, retain their rules.
+
 ## Modal boundary
 
 Image-first, image preview and reusable modal dialogs keep their existing controls. `card_image_modal.js` currently supplies record navigation and close in `image_modal_top_controls`, while `modal_builder.js` supplies the modal focus lifecycle. These modal overlays are above the current navbar and filter toolbar. Adding app-menu buttons there would open panels behind the modal and require a separate layer/focus behavior change, outside the button-only contract. Closing a modal returns to the existing underlying corner buttons.
@@ -73,6 +82,10 @@ Idle frames and every focus assertion require exactly one painted, on-screen,
 announced, focusable, pointer-accessible owner. Sampler negative controls reject
 the former two-painted-buttons state, two announced owners even when one is
 offscreen, and static empty frames.
+The 12-dataset response fixtures also check every rendered menu control after
+internal scrolling, sticky-row pointer access, the separate language panel and
+pointer closing at 320×568, 375×667 and 414×896 in light and dark themes.
+Destination geometry uses a fixed catalogue rather than the native dataset count.
 
 `E10_site_identity_and_menu_contract.spec.ts` verifies real clicks on the wide
 article opener, the persistent phone article opener and navbar closer, and the
