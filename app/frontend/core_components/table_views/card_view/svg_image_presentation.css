@@ -151,6 +151,24 @@
     object-fit: contain;
 }
 
+/* The modal's existing scroll state rounds only media, never captions or controls.
+   Important overrides the shared image builder's inline wrapper/image radii. */
+.image-modal-content-scrolled .image_first_view_modal .row_article_image_first_media.wrapper,
+.image-modal-content-scrolled .image_first_view_modal .row_article_image_first_media.wrapper > img {
+    border-radius: var(--border_radius) !important;
+}
+
+/* The decoded photo ratio caps width as well as height, including when height
+   is the limiting edge. An explicit width still enlarges tiny sources. The
+   existing grid centers this box at the same painted contain rectangle.
+   Until decoding supplies the ratio, no scrolled photo box can be painted. */
+.image-modal-content-scrolled .image_first_view_modal .row_article_image_first_media.wrapper > img {
+    width: min(100%, calc(100dvh * var(--row-article-image-first-photo-ratio, 0))) !important;
+    height: auto !important;
+    max-height: 100dvh;
+    justify-self: center;
+}
+
 /* CSS-composed service logos are square media presentations, not viewport-wide
    backdrops. Keep their host around the logo so the unused side space belongs
    to the one shared, clickable image-first modal backdrop. */

@@ -120,6 +120,7 @@ body.dark-mode .image_first_view_modal {
 }
 
 .image_first_view {
+    display: flow-root;
     width: 100%;
     min-height: 100%;
     background: transparent;
@@ -173,27 +174,22 @@ body.dark-mode .image_first_view_modal {
     from {
         transform: translate3d(0, 0, 0) scale3d(0.001, 0.001, 1);
     }
-
     to {
         transform: translate3d(0, 0, 0) scale3d(1, 1, 1);
     }
 }
-
 @keyframes image-first-reveal-title {
     0%, 82% {
         opacity: 1;
     }
-
     100% {
         opacity: 0;
     }
 }
-
 @keyframes image-first-view-shrink-conceal {
     from {
         clip-path: inset(0);
     }
-
     to {
         clip-path: inset(
             calc(50dvh - 0.5px)
@@ -202,28 +198,23 @@ body.dark-mode .image_first_view_modal {
         );
     }
 }
-
 @keyframes image-first-foreground-shrink {
     from {
         transform: translate3d(0, 0, 0) scale3d(1, 1, 1);
     }
-
     to {
         transform: translate3d(0, 0, 0) scale3d(0.001, 0.001, 1);
     }
 }
-
 .image_first_view_overlay.image-first-view-closing .image_first_view {
     animation: image-first-view-shrink-conceal
         var(--image-first-reveal-duration, 300ms) linear both;
 }
-
 .image_first_view_overlay.image-first-view-closing
     .row_article_image_first_reveal_cluster {
     animation: image-first-foreground-shrink
         var(--image-first-reveal-duration, 300ms) linear both;
 }
-
 /* Record navigation keeps the already-open modal and its single backdrop
    alive. Only the outgoing and incoming record media exchange places, so the
    handoff cannot flash the underlying application between records. */
@@ -234,7 +225,6 @@ body.dark-mode .image_first_view_modal {
     min-height: 100dvh;
     overflow: hidden;
 }
-
 .image-first-record-transitioning
     :is(.image_first_view--outgoing, .image_first_view--incoming) {
     position: absolute;
@@ -246,22 +236,18 @@ body.dark-mode .image_first_view_modal {
     pointer-events: none;
     animation: none;
 }
-
 .image-first-record-transitioning .image_first_view--outgoing {
     z-index: 1;
 }
-
 .image-first-record-transitioning .image_first_view--incoming {
     z-index: 2;
 }
-
 .image-first-record-transitioning
     .image_first_view--incoming
     .row_article_image_first_stage::before {
     content: none;
     animation: none;
 }
-
 .image-first-record-transitioning
     .image_first_view--outgoing
     .row_article_image_first_reveal_cluster {
@@ -269,7 +255,6 @@ body.dark-mode .image_first_view_modal {
     animation: image-first-record-media-shrink
         var(--image-first-reveal-duration, 300ms) linear both;
 }
-
 .image-first-record-transitioning
     .image_first_view--incoming
     .row_article_image_first_reveal_cluster {
@@ -277,49 +262,40 @@ body.dark-mode .image_first_view_modal {
     animation: image-first-record-media-grow
         var(--image-first-reveal-duration, 300ms) linear both;
 }
-
 @keyframes image-first-record-media-shrink {
     from {
         transform: translate3d(0, 0, 0) scale3d(1, 1, 1);
     }
-
     to {
         transform: translate3d(0, 0, 0) scale3d(0.001, 0.001, 1);
     }
 }
-
 @keyframes image-first-record-media-grow {
     from {
         transform: translate3d(0, 0, 0) scale3d(0.001, 0.001, 1);
     }
-
     to {
         transform: translate3d(0, 0, 0) scale3d(1, 1, 1);
     }
 }
-
 /* Removing the incoming marker must not replay the ordinary first-open
    reveal. The settled record starts at the final frame instead. */
 .image_first_view.image_first_view--settled {
     clip-path: inset(0);
     animation: none;
 }
-
 .image_first_view--settled .row_article_image_first_stage::before {
     opacity: var(--image-first-backdrop-opacity);
     animation: none;
 }
-
 .image_first_view--settled .row_article_image_first_reveal_cluster {
     transform: translate3d(0, 0, 0) scale3d(1, 1, 1);
     animation: none;
 }
-
 .image_first_view--settled .row_article_image_first_reveal_title {
     opacity: 0;
     animation: none;
 }
-
 .image_first_view_article_content {
     position: relative;
     z-index: 1;
@@ -327,10 +303,29 @@ body.dark-mode .image_first_view_modal {
     width: min(100%, 800px);
     max-width: 800px !important;
     min-height: auto;
+    margin-block: 40px;
     margin-inline: auto;
     padding-block: 1rem;
     overflow: visible;
+    border-radius: var(--border_radius);
     background: var(--bg_color_extreme);
+}
+
+/* Round edge backgrounds, not the content: open controls and focus rings may overflow. */
+.image_first_view_article_content > .row_article_disclosure_section {
+    overflow: visible;
+}
+
+.image_first_view_article_content > :first-child,
+.image_first_view_article_content > .row_article_disclosure_section:first-child > .row_article_disclosure_header {
+    border-start-start-radius: inherit;
+    border-start-end-radius: inherit;
+}
+
+.image_first_view_article_content > :last-child,
+.image_first_view_article_content > .row_article_disclosure_section:last-child.is-collapsed > .row_article_disclosure_header {
+    border-end-start-radius: inherit;
+    border-end-end-radius: inherit;
 }
 
 .image_modal_top_controls > .row_article_row_navigation {
@@ -388,7 +383,6 @@ body.dark-mode .image_first_view_modal {
     from {
         opacity: 0;
     }
-
     to {
         opacity: var(--image-first-backdrop-opacity);
     }
@@ -398,7 +392,6 @@ body.dark-mode .image_first_view_modal {
     from {
         opacity: var(--image-first-backdrop-opacity);
     }
-
     to {
         opacity: 0;
     }
@@ -650,6 +643,11 @@ body .image_modal.image_first_view_modal :is(
 }
 
 @media (width <= 600px) {
+    .image_first_view_article_content {
+        /* Reuse the narrow IFAV control gap rather than crowding a phone. */
+        margin-block: 20px;
+    }
+
     .row_article_image_first_bottom_controls {
         display: flex;
         flex-direction: column;

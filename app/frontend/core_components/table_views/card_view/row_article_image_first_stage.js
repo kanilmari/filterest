@@ -9,11 +9,13 @@ import { createImageElement } from "./card_avatar_builder.js";
 import { CARD_IMAGE_RENDER_SLOTS } from "./card_image_render_options.js";
 import { isSvgImageAsset } from "./svg_image_presentation.js";
 import { setRowArticleImageCaption } from "./row_article_image_caption.js";
+import { addCardResourceListener, disposeCardResources, registerCardResource } from "./card_resource_lifecycle.js";
 
 const SWIPE_NAVIGATION_THRESHOLD_PX = 44;
 const SVG_BACKDROP_RASTER_MAX_EDGE_PX = 1024;
 const SVG_BACKDROP_IMAGE_READY_TIMEOUT_MS = 2000;
 const imageFirstStageTransitionMediaStates = new WeakMap();
+const IMAGE_FIRST_PHOTO_RATIO_PROPERTY = "--row-article-image-first-photo-ratio";
 const IMAGE_FIRST_CONTROL_SELECTOR = [
     ".row_article_image_first_arrow",
     ".row_article_image_first_position",
@@ -33,6 +35,33 @@ function resolveBackdropImageValue(imagePath) {
     } catch {
         return "none";
     }
+}
+
+/** Supplies the contained foreground width before a decoded scrolled photo paints.
+ * Only direct photos participate; nested SVG/logo presentations keep their sizing.
+ * The image owns the ratio, so replacement and modal teardown revoke late writes.
+ */
+function prepareImageFirstPhotoRatio(mediaElement) {
+    const image = mediaElement.querySelector(":scope > img");
+    if (!(image instanceof HTMLImageElement)) return Promise.resolve();
+    let disposed = false;
+    registerCardResource(image, () => {
+        disposed = true;
+        image.style.removeProperty(IMAGE_FIRST_PHOTO_RATIO_PROPERTY);
+    });
+    const publishRatio = () => {
+        const ratio = image.naturalWidth / image.naturalHeight;
+        if (disposed || !Number.isFinite(ratio) || ratio <= 0) return;
+        image.style.setProperty(IMAGE_FIRST_PHOTO_RATIO_PROPERTY, String(ratio));
+    };
+    if (typeof image.decode === "function") {
+        return image.decode().then(publishRatio).catch(() => undefined);
+    }
+    // Browsers without decode publish on load, before the next paint. The CSS
+    // uses zero width until the ratio arrives, only in the scrolled state.
+    if (image.complete) publishRatio();
+    else addCardResourceListener(image, "load", publishRatio, { once: true });
+    return Promise.resolve();
 }
 
 function waitForImageReady(imageElement) {
@@ -194,9 +223,9 @@ function isPointInsideContainedImage(event, image) {
     const naturalHeight = Number(image.naturalHeight);
     if (bounds.width <= 0 || bounds.height <= 0
         || naturalWidth <= 0 || naturalHeight <= 0) {
-        // Until the image has measurable geometry, favor keeping the view open
-        // instead of treating a real image click as backdrop activation.
-        return true;
+        // Before geometry is available, the caller keeps image clicks open
+        // while retaining background activation on the surrounding wrappers.
+        return null;
     }
 
     const containedScale = Math.min(
@@ -219,35 +248,29 @@ function isBackdropActivationTarget(event, stage, mediaElement) {
     if (target instanceof Element && target.closest(IMAGE_FIRST_CONTROL_SELECTOR)) {
         return false;
     }
-    if (target === stage) {
-        return true;
-    }
     if (!(target instanceof Element) || !(mediaElement instanceof Element)) {
         return false;
     }
 
-    // Raster wrappers span the stage, so their unused letterbox area is the
-    // clickable backdrop. A CSS-composed logo or framed SVG is itself the
-    // complete presentation surface; an image-backed service logo is not,
-    // because only its nested img occupies the visible media rectangle.
-    if (mediaElement?.matches?.(".record_svg_image_frame")) {
-        return false;
-    }
-    if (mediaElement?.matches?.(".service_catalog_logo_frame")) {
-        if (mediaElement.dataset.serviceCatalogLogoRenderMode !== "image") {
-            return false;
-        }
+    const isBackgroundSurface = target === stage || target === mediaElement
+        || target === mediaElement.parentElement;
+    const visibleImage = mediaElement.querySelector("img:not([aria-hidden='true'])");
+    if (!isBackgroundSurface && target !== visibleImage) {
+        return false; // Captions, credits and other stage content stay interactive.
     }
 
-    if (target === mediaElement) {
-        return true;
+    // Framed SVGs and CSS logos keep their complete presentation surface.
+    if (mediaElement.matches(".record_svg_image_frame")
+        || (mediaElement.matches(".service_catalog_logo_frame")
+            && mediaElement.dataset.serviceCatalogLogoRenderMode !== "image")) {
+        return !mediaElement.contains(target);
     }
 
-    const visibleImage = target.closest("img:not([aria-hidden='true'])");
-    if (visibleImage && mediaElement.contains(visibleImage)) {
-        return !isPointInsideContainedImage(event, visibleImage);
-    }
-    return false;
+    // The contained photo may be smaller than both the stage and reveal
+    // cluster. Decide against its current painted bounds, whichever wrapper
+    // receives the click (including the click synthesized after a tap).
+    const insidePhoto = visibleImage ? isPointInsideContainedImage(event, visibleImage) : null;
+    return insidePhoto === null ? isBackgroundSurface : !insidePhoto;
 }
 
 
@@ -374,7 +397,9 @@ export function buildRowArticleImageFirstStage({
         if (visibleImage) {
             visibleImage.alt = resolveAlt(row);
         }
+        const photoRatioPreparation = prepareImageFirstPhotoRatio(nextMediaElement);
         if (mediaElement) {
+            disposeCardResources(mediaElement);
             mediaElement.replaceWith(nextMediaElement);
         } else {
             revealCluster.insertBefore(nextMediaElement, revealTitle);
@@ -418,6 +443,7 @@ export function buildRowArticleImageFirstStage({
                 }
             });
         }
+        transitionMediaPreparation = Promise.all([transitionMediaPreparation, photoRatioPreparation]);
         previousButton.disabled = index === 0;
         nextButton.disabled = index === imageEntries.length - 1;
         position.textContent = `${index + 1} / ${imageEntries.length}`;
@@ -442,7 +468,7 @@ export function buildRowArticleImageFirstStage({
         }
     });
 
-    stage.addEventListener("click", (event) => {
+    addCardResourceListener(stage, "click", (event) => {
         if (isBackdropActivationTarget(event, stage, mediaElement)
             && typeof onBackdropActivate === "function") {
             onBackdropActivate();

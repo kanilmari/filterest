@@ -17,6 +17,49 @@ describe("card image modal", () => {
         vi.useFakeTimers();
     });
 
+    test.each(["settled", "interrupted"])("removes foreground ratios when a record handoff is %s and closed", async (handoff) => {
+        const { openImageModalContent, transitionImageFirstModalContent } = await import("./card_image_modal.js");
+        const { buildRowArticleImageFirstStage } = await import("./row_article_image_first_stage.js");
+        const property = "--row-article-image-first-photo-ratio";
+        const makeView = filename => {
+            const row = { id: 1, filename };
+            const stage = buildRowArticleImageFirstStage({
+                imageEntries: [{ row }], getActiveRow: () => row,
+                onSelectRow: () => {}, resolvePath: name => `/storage/${name}`,
+                resolveAlt: () => "Photo",
+            });
+            const view = document.createElement("div");
+            view.className = "image_first_view";
+            view.appendChild(stage.element);
+            const image = view.querySelector("img");
+            Object.defineProperties(image, {
+                naturalWidth: { configurable: true, value: 400 },
+                naturalHeight: { configurable: true, value: 400 },
+            });
+            image.dispatchEvent(new Event("load"));
+            expect(image.style.getPropertyValue(property)).toBe("1");
+            return { view, image };
+        };
+        const outgoing = makeView("old.jpg");
+        openImageModalContent({
+            contentElement: outgoing.view, classNames: ["image_first_view_modal"],
+            overlayClassNames: ["image_first_view_overlay"],
+        });
+        const incoming = makeView("new.jpg");
+        const result = transitionImageFirstModalContent({ contentElement: incoming.view });
+        if (handoff === "settled") {
+            vi.advanceTimersByTime(300);
+            expect(outgoing.image.style.getPropertyValue(property)).toBe("");
+            expect(incoming.image.style.getPropertyValue(property)).toBe("1");
+        }
+        result.close();
+        vi.advanceTimersByTime(300);
+        for (const { image } of [outgoing, incoming]) {
+            image.dispatchEvent(new Event("load"));
+            expect(image.style.getPropertyValue(property)).toBe("");
+        }
+    });
+
     test("shows controls on pointer movement and fades them after inactivity", async () => {
         const { openImageModal } = await import("./card_image_modal.js");
 

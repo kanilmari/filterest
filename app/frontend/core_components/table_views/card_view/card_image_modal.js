@@ -12,6 +12,7 @@ import {
     activateImageFirstStageTransitionMedia,
     settleImageFirstStageTransitionMedia,
 } from "./row_article_image_first_stage.js";
+import { disposeCardResources } from "./card_resource_lifecycle.js";
 
 const IS_DEV_MODE = document.querySelector('meta[name="app-env"]')?.content === 'dev';
 const IMAGE_MODAL_CONTROL_IDLE_DELAY_MS = 1200;
@@ -260,6 +261,7 @@ export function transitionImageFirstModalContent({
 
     const settleIncomingView = () => {
         settleImageFirstStageTransitionMedia(incomingStage);
+        disposeCardResources(outgoingView);
         modalBody.replaceChildren(incomingView);
         incomingView.classList.remove("image_first_view--incoming");
         incomingView.classList.add("image_first_view--settled");
@@ -385,6 +387,8 @@ export function openImageModalContent({
     imageModalCleanup = () => {
         teardownImageFirstRecordTransition(modal_overlay);
         teardownControls();
+        // Both records can still be mounted if closing interrupted a handoff.
+        modal.querySelectorAll(".image_first_view").forEach(disposeCardResources);
         modal.classList.remove("image_modal", ...validModalClassNames);
         modal._imageModalClassNames = [];
         modal_overlay.classList.remove(

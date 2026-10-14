@@ -1,3 +1,8 @@
+// row_article_image_first_css.test.js
+// Guards the image-first layout, background corners and modal animation contracts.
+// Connects article/media styles to the existing responsive and scroll-state rules.
+// Keeps visual refinements from changing widths or clipping interactive content.
+
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -6,6 +11,98 @@ import { describe, expect, test } from "vitest";
 const directory = path.dirname(fileURLToPath(import.meta.url));
 
 describe("image-first article CSS contract", () => {
+    test("leaves space above and below the article without collapsing the bottom margin", () => {
+        const css = fs.readFileSync(path.join(directory, "big_card_image_gallery.css"), "utf8");
+        expect(css).toMatch(/\.image_first_view\s*\{[^}]*display:\s*flow-root;/s);
+        expect(css).toMatch(/\.image_first_view_article_content\s*\{[^}]*margin-block:\s*40px;[^}]*margin-inline:\s*auto;/s);
+        expect(css).toMatch(/@media \(width <= 600px\)\s*\{\s*\.image_first_view_article_content\s*\{[^}]*margin-block:\s*20px;/s);
+    });
+
+    test("rounds panel and edge backgrounds while allowing article controls to overflow", () => {
+        const css = fs.readFileSync(path.join(directory, "big_card_image_gallery.css"), "utf8");
+        expect(css).toMatch(/\.image_first_view_article_content\s*\{[^}]*overflow:\s*visible;[^}]*border-radius:\s*var\(--border_radius\);/s);
+        expect(css).toMatch(/\.image_first_view_article_content > \.row_article_disclosure_section\s*\{[^}]*overflow:\s*visible;/s);
+        expect(css).toMatch(/\.image_first_view_article_content > :first-child,[\s\S]*?\.row_article_disclosure_section:first-child > \.row_article_disclosure_header\s*\{[^}]*border-start-start-radius:\s*inherit;[^}]*border-start-end-radius:\s*inherit;/s);
+        expect(css).toMatch(/\.image_first_view_article_content > :last-child,[\s\S]*?\.row_article_disclosure_section:last-child\.is-collapsed > \.row_article_disclosure_header\s*\{[^}]*border-end-start-radius:\s*inherit;[^}]*border-end-end-radius:\s*inherit;/s);
+        const panelRules = [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)]
+            .filter(([, selector]) => selector.includes(".image_first_view_article_content"));
+        for (const [, , declarations] of panelRules) {
+            expect(declarations).not.toMatch(/overflow(?:-[xy])?:\s*(?:hidden|clip)|clip-path:|mask:/);
+        }
+    });
+
+    test("rounds only scrolled IFAV media with the same panel token, overriding inline radii", () => {
+        const css = fs.readFileSync(path.join(directory, "svg_image_presentation.css"), "utf8")
+            .replace(/\/\*[\s\S]*?\*\//g, "");
+        expect(css).toMatch(/\.row_article_image_first_media\.wrapper\s*\{[^}]*border-radius:\s*0 !important;/s);
+        expect(css).toMatch(/\.row_article_image_first_media\.wrapper > img\s*\{[^}]*border-radius:\s*0 !important;/s);
+        const roundedRules = [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)]
+            .filter(([, selector, declarations]) => selector.includes("row_article_image_first_media")
+                && /border-radius:\s*var\(--border_radius\) !important;/.test(declarations));
+        expect(roundedRules).toHaveLength(1);
+        const selectors = roundedRules[0][1].trim().split(",");
+        expect(selectors).toHaveLength(2);
+        for (const selector of selectors) {
+            expect(selector.trim()).toMatch(/^\.image-modal-content-scrolled \.image_first_view_modal \.row_article_image_first_media\.wrapper(?: > img)?$/);
+        }
+    });
+
+    test("fits the scrolled rounded image box to the photo while retaining the centered viewport stage", () => {
+        const css = fs.readFileSync(path.join(directory, "svg_image_presentation.css"), "utf8")
+            .replace(/\/\*[\s\S]*?\*\//g, "");
+        expect(css).toMatch(/\.row_article_image_first_media\.wrapper\s*\{[^}]*display:\s*grid;[^}]*place-items:\s*center;[^}]*height:\s*100dvh;/s);
+        expect(css).toMatch(/\.row_article_image_first_media\.wrapper > img\s*\{[^}]*width:\s*auto !important;[^}]*height:\s*100dvh !important;[^}]*max-width:\s*100%;[^}]*object-fit:\s*contain;/s);
+        const sizingRules = [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)]
+            .filter(([, , declarations]) => /height:\s*auto !important;/.test(declarations)
+                && /max-height:\s*100dvh;/.test(declarations));
+        expect(sizingRules).toHaveLength(1);
+        expect(sizingRules[0][1].trim()).toBe(
+            ".image-modal-content-scrolled .image_first_view_modal .row_article_image_first_media.wrapper > img",
+        );
+        expect(sizingRules[0][2]).toMatch(/width:\s*min\(100%, calc\(100dvh \* var\(--row-article-image-first-photo-ratio, 0\)\)\) !important;/);
+        expect(sizingRules[0][2]).toMatch(/justify-self:\s*center;/);
+        expect(sizingRules[0][2]).not.toMatch(/justify-self:\s*stretch;|left:|translate:/);
+    });
+
+    test.each([
+        [1920, 1080, 400, 400, 1080, 1080, 420, 0],
+        [1920, 1080, 1600, 600, 1920, 720, 0, 180],
+        [1920, 1080, 600, 1600, 405, 1080, 757.5, 0],
+        [1920, 1080, 1, 1, 1080, 1080, 420, 0],
+        [1440, 900, 1, 1, 900, 900, 270, 0],
+        [450, 900, 1, 1, 450, 450, 0, 225],
+        [390, 844, 400, 400, 390, 390, 0, 227],
+        [390, 844, 1600, 600, 390, 146.25, 0, 348.875],
+        [390, 844, 600, 1600, 316.5, 844, 36.75, 0],
+        [390, 844, 1, 1, 390, 390, 0, 227],
+    ])("fits %s×%s stage / %s×%s source to its painted bounds", (
+        viewportWidth, viewportHeight, naturalWidth, naturalHeight,
+        paintedWidth, paintedHeight, paintedLeft, paintedTop,
+    ) => {
+        const css = fs.readFileSync(path.join(directory, "svg_image_presentation.css"), "utf8")
+            .replace(/\/\*[\s\S]*?\*\//g, "");
+        const declarations = [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)]
+            .find(([, selector]) => selector.trim() ===
+                ".image-modal-content-scrolled .image_first_view_modal .row_article_image_first_media.wrapper > img")[2];
+        const width = declarations.match(/(?:^|;)\s*width:\s*([^;]+)\s*!important;/)?.[1];
+        expect(width, "The rounded box needs an explicit contain width, even for a 1×1 source").toBeTruthy();
+        // Evaluate the actual CSS length expression; jsdom does not perform layout.
+        const expression = width
+            .replace(/var\(--row-article-image-first-photo-ratio, 0\)/g, String(naturalWidth / naturalHeight))
+            .replace(/100%/g, String(viewportWidth))
+            .replace(/100dvh/g, String(viewportHeight))
+            .replace(/min\(/g, "Math.min(")
+            .replace(/calc\(/g, "(");
+        const boxWidth = Function(`"use strict"; return (${expression});`)();
+        const boxHeight = boxWidth / (naturalWidth / naturalHeight);
+        expect(declarations).toMatch(/height:\s*auto !important;/);
+        expect(declarations).toMatch(/justify-self:\s*center;/);
+        expect(boxWidth).toBeCloseTo(paintedWidth, 6);
+        expect(boxHeight).toBeCloseTo(paintedHeight, 6);
+        expect((viewportWidth - boxWidth) / 2).toBeCloseTo(paintedLeft, 6);
+        expect((viewportHeight - boxHeight) / 2).toBeCloseTo(paintedTop, 6);
+    });
+
     test("centers the caption with a separate adjacent cue and stacks safely on narrow screens", () => {
         const css = fs.readFileSync(path.join(directory, "big_card_image_gallery.css"), "utf8");
         expect(css).toMatch(/\.row_article_image_first_bottom_controls\s*\{[^}]*grid-template-columns:\s*minmax\(0, 1fr\) minmax\(0, max-content\) minmax\(0, 1fr\)/s);

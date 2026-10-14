@@ -64,6 +64,7 @@ test.describe('C10 — Standalone Image-first View', () => {
       ],
     });
 
+    let listUrl: string | undefined;
     try {
       const enableImageResponse = await postJsonWithCsrf(
         page,
@@ -160,6 +161,7 @@ test.describe('C10 — Standalone Image-first View', () => {
         .first();
       await expect(cardImageActivator).toBeVisible({ timeout: 15_000 });
       await expect(cardImageActivator.locator('img')).toBeVisible();
+      listUrl = page.url();
       const overlayReveal = await captureImageFirstOverlayReveal(
         page,
         `#${datasetName}_card_view_container .card_image [data-image-first-src][role="button"]`,
@@ -238,7 +240,29 @@ test.describe('C10 — Standalone Image-first View', () => {
           );
         }
 
+        const media = imageStage.querySelector<HTMLElement>(
+          '[data-testid="row-article-image-first-media"]',
+        );
+        const mediaHost = imageStage.querySelector<HTMLElement>(
+          '.row_article_image_first_media.wrapper',
+        );
+        if (!media || !mediaHost) throw new Error('Image-first media missing for geometry proof.');
+        const panelStyle = window.getComputedStyle(content);
+
         return {
+          stageToPanelGap:
+            content.getBoundingClientRect().top - imageStage.getBoundingClientRect().bottom,
+          radiusToken: panelStyle.getPropertyValue('--border_radius').trim(),
+          panelRadii: [
+            panelStyle.borderTopLeftRadius,
+            panelStyle.borderTopRightRadius,
+            panelStyle.borderBottomRightRadius,
+            panelStyle.borderBottomLeftRadius,
+          ],
+          mediaRadii: [
+            window.getComputedStyle(media).borderRadius,
+            window.getComputedStyle(mediaHost).borderRadius,
+          ],
           stageHeight: imageStage.getBoundingClientRect().height,
           viewportHeight: window.innerHeight,
           articleWidth: content.getBoundingClientRect().width,
@@ -268,6 +292,10 @@ test.describe('C10 — Standalone Image-first View', () => {
       expect(layout.hasAutomaticDatasetIcon).toBe(false);
       expect(layout.detailsImmediatelyAfterDescription).toBe(true);
       expect(layout.scrollRange).toBeGreaterThan(0);
+      expect(layout.stageToPanelGap).toBeGreaterThanOrEqual(40);
+      expect(Number.parseFloat(layout.radiusToken)).toBeGreaterThan(0);
+      expect(layout.panelRadii).toEqual(Array(4).fill(layout.radiusToken));
+      expect(layout.mediaRadii).toEqual(['0px', '0px']);
       await assertImageFirstVisualContract(page, stage, layout.viewportHeight);
 
       await expect(stage.locator('[data-testid="row-article-image-scroll-hint"]'))
@@ -439,7 +467,64 @@ test.describe('C10 — Standalone Image-first View', () => {
       await expect(articleContent.locator('.row_article_details_section')).toContainText(
         'Article details proof',
       );
+      await expect(stage.locator('[data-testid="row-article-image-first-media"]'))
+        .toHaveCSS('border-radius', layout.radiusToken);
+      await expect(stage.locator('.row_article_image_first_media.wrapper'))
+        .toHaveCSS('border-radius', layout.radiusToken);
+
+      // The desktop square exercises the height limit. Briefly constrain only
+      // its host to cover the width limit without changing fixture or viewport.
+      const mediaHost = stage.locator('.row_article_image_first_media.wrapper');
+      const mediaHostStyle = await mediaHost.getAttribute('style');
+      try {
+        for (const maxWidth of [null, `${Math.floor(layout.viewportHeight / 2)}px`]) {
+          if (maxWidth) await mediaHost.evaluate((element, width) => {
+            element.style.maxWidth = width;
+          }, maxWidth);
+          const photo = await stage.locator('[data-testid="row-article-image-first-media"]')
+            .evaluate(async (element: HTMLImageElement) => {
+              await element.decode();
+              if (!element.naturalWidth || !element.naturalHeight || !element.parentElement) {
+                throw new Error('Image-first photo has no intrinsic geometry.');
+              }
+              const box = element.getBoundingClientRect();
+              const host = element.parentElement.getBoundingClientRect();
+              const ratio = element.naturalWidth / element.naturalHeight;
+              const width = Math.min(host.width, host.height * ratio);
+              const height = width / ratio;
+              return {
+                radius: window.getComputedStyle(element).borderRadius,
+                aspectError: Math.abs(box.height - (box.width / ratio)),
+                containError: Math.max(
+                  Math.abs(box.width - width), Math.abs(box.height - height),
+                  Math.abs(box.left - (host.left + (host.width - width) / 2)),
+                  Math.abs(box.top - (host.top + (host.height - height) / 2)),
+                ),
+                stageHeight: host.height,
+              };
+            });
+          expect(photo.radius).toBe(layout.radiusToken);
+          expect(photo.aspectError).toBeLessThanOrEqual(1);
+          expect(photo.containError).toBeLessThanOrEqual(1);
+          expect(Math.abs(photo.stageHeight - layout.viewportHeight)).toBeLessThanOrEqual(1);
+        }
+      } finally {
+        await mediaHost.evaluate((element, style) => {
+          if (style === null) element.removeAttribute('style');
+          else element.setAttribute('style', style);
+        }, mediaHostStyle);
+      }
+      // Offscreen rectangles include the trailing margin. Read it in the wheel
+      // state: an extra end/back scroll can outlive the check and race teardown.
+      const gapAfterPanel = await articleContent.evaluate((panel) => {
+        const view = panel.closest<HTMLElement>('[data-testid="image-first-view"]');
+        if (!view) throw new Error('Image-first view missing for article-end geometry proof.');
+        return view.getBoundingClientRect().bottom - panel.getBoundingClientRect().bottom;
+      });
+      expect(gapAfterPanel).toBeGreaterThanOrEqual(40);
       await modalScrollSurface.evaluate((element) => element.scrollTo({ top: 0 }));
+      await expect(stage.locator('[data-testid="row-article-image-first-media"]'))
+        .toHaveCSS('border-radius', '0px');
       const clickPoints = await stage.evaluate((stageElement) => {
         const visibleImage = stageElement.querySelector<HTMLElement>(
           '[data-testid="row-article-image-first-media"]',
@@ -494,13 +579,32 @@ test.describe('C10 — Standalone Image-first View', () => {
       expect(closingContract.backdropAnimationName).toBe('image-first-backdrop-conceal');
       expect(closingContract.backdropAnimationDuration).toBe('0.3s');
       await expect(imageFirstView).toBeHidden({ timeout: 2_000 });
+      // Hiding the shell starts history.back(); wait for the source page before
+      // deleting the labels its UI can still request. No networkidle: the
+      // live-update stream keeps a request open, so it never settles.
+      await expect(page).toHaveURL(listUrl);
     } finally {
       if (!page.isClosed()) {
-        await postJsonWithCsrf(page, '/api/asset-linking/images/remove', {
+        // Assertions can stop while either article is open. Restore the source
+        // list before deletion so a live article cannot request deleted labels.
+        // A failure before the list address was captured uses the same opener.
+        if (!listUrl) {
+          await openTempDataset(page, datasetName, 'card');
+          listUrl = page.url();
+        } else if (page.url() !== listUrl
+          || await page.locator('[data-testid="image-first-view"]').count() > 0
+          || await page.locator('[data-testid="big-card-container"]:visible').count() > 0) {
+          await page.goto(listUrl, { waitUntil: 'domcontentloaded' });
+        }
+        await expect(page).toHaveURL(listUrl);
+        await expect(page.locator('[data-testid="image-first-view"]')).toHaveCount(0);
+        await expect(page.locator(`#${datasetName}_card_view_container`)).toBeVisible();
+        const removeImages = await postJsonWithCsrf(page, '/api/asset-linking/images/remove', {
           parent_table: datasetName,
           confirm: true,
         }).catch(() => {});
         await dropTempDataset(page, datasetName);
+        expect(removeImages?.ok, removeImages?.body || 'Image cleanup request failed.').toBe(true);
       }
     }
   });
