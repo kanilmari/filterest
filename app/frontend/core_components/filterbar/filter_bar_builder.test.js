@@ -68,6 +68,21 @@ describe('create_filter_bar inline hero mounting', () => {
         expect(activeScrollable.children[1]?.classList.contains('filterbar-inline-hero')).toBe(true);
     });
 
+    test('rebuilds a persistent panel when fresh metadata hides a reference pair', async () => {
+        const { create_filter_bar } = await import('./filter_bar_builder.js');
+        const columns = ['category_id', 'category_name (ln)', 'title'];
+        const types = { category_id: { data_type: 'integer', foreign_table: 'categories' }, title: 'text' };
+        const initial = create_filter_bar('demo', 'demo_uid', columns, types, 2, false, 'card');
+        expect(create_filter_bar('demo', 'demo_uid', columns, types, 2, false, 'card')).toBe(initial);
+        const hidden = { ...types, category_id: { ...types.category_id, hide_in_filter_panel: true } };
+        const repaired = create_filter_bar('demo', 'demo_uid', columns, hidden, 2, false, 'card');
+        expect(repaired).not.toBe(initial);
+        expect(initial.isConnected).toBe(false);
+        expect(repaired.__filterableColumnsKey).toBe(JSON.stringify(['title']));
+        expect(document.querySelectorAll('#demo_filterBar_panel')).toHaveLength(1);
+        expect(document.querySelectorAll('.filterbar-inline-hero')).toHaveLength(1);
+    });
+
     test('keeps canonical sidebar and menu actions across hero, clipped hero and shared toolbar hosts', async () => {
         const { create_filter_bar } = await import('./filter_bar_builder.js');
         const navbar = await import('../navigation/menu_button/navbar_visibility_handler.js');

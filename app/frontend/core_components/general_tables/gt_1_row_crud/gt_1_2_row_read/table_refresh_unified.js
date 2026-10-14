@@ -32,6 +32,7 @@ import {
 export { getUnifiedTableState, setUnifiedTableState };
 
 import { getDatasetQueryAdapter } from '../../../filterbar/dataset_surface_provider/dataset_query_adapter_registry.js';
+import { discardHiddenColumnFilters } from '../../../filterbar/filter_list/hidden_filter_state_reconciler.js';
 
 const refreshGenerations = new Map();
 
@@ -172,6 +173,27 @@ export async function refreshTableUnified(tableName, options = {}) {
         if (!result) {
             console.warn(`fetchDatasetData palautti tyhjän vastauksen taululle: ${tableName}`);
             return;
+        }
+        if (!result.error && result.success !== false
+            && discardHiddenColumnFilters(tableName, result.columns, result.types)) {
+            // Cleanup changes a running or completed search's signature. Its
+            // owner preserves the question/options and owns the replacement load.
+            if (query) {
+                const { restartInvalidatedSearch } = await import("../../../filterbar/text_search/dataset_search_executor.js");
+                if (!datasetAppearanceState.isCurrent(appearanceToken)
+                    || refreshGenerations.get(tableName) !== generation
+                    || String(getParams(tableName)?.search || "").trim() !== query) return null;
+                if (await restartInvalidatedSearch(tableName)) return null;
+                if (options.isCurrent && !options.isCurrent()) return null;
+            }
+            // The reply was counted with old, now-hidden selections. Load the
+            // repaired URL/state from page one before committing rows or chips.
+            return refreshTableUnified(tableName, {
+                ...options, skipUrlParams: true, loadedRows: null, preserveCardReturn: null,
+                // Overrides were already applied to state above. Reapplying
+                // them here could restore the hidden selection on every retry.
+                newFilters: null, offsetOverride: 0,
+            });
         }
         if (!loadedRows && Number(currentState.offset) === 0 && !result.error && result.success !== false
             && Array.isArray(result.row_group_selection?.slugs) && result.row_group_selection?.modes) {

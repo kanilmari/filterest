@@ -16,6 +16,7 @@ import { appendDataToCardView } from "../../table_views/card_view/card_view_prin
 import { disposeCardResources, notifyCardsMounted } from '../../table_views/card_view/card_resource_lifecycle.js';
 import { getUnifiedTableState, setUnifiedTableState } from "../../state_stores/table_state_store.js";
 import { getChosenDatasetView } from "../../state_stores/dataset_view_choice_saver.js";
+import { getParams } from "../../navigation/nav_engine/query_params.js";
 import { createSupplementalDatasetSearch } from "./supplemental_dataset_search.js";
 import { readDatasetSearchResponse } from "./dataset_search_response_reader.js";
 import { getTranslationForKey } from "../../lang/translation_handler.js";
@@ -363,13 +364,13 @@ async function placeSearchGroups(tableName, cache) {
  * The listing answers with the true number of matches and stays connected to
  * endless scrolling, so the reader can browse every match instead of a top few.
  */
-async function loadDatasetMatches(tableName, cache, isCurrent) {
+async function loadDatasetMatches(tableName, cache, isCurrent, rebuildView) {
     const requestFilters = { ...(getUnifiedTableState(tableName).filters || {}) };
     const requestHost = getSearchViewContainer(tableName);
     // Missing initial card hosts are rebuilt by the listing owner, consuming
     // that rebuild's first page. A null reload means abandoned or failed work:
     // retrying here fetched twice and silently replaced the failure surface.
-    const result = await reloadDatasetRowsFromListing(tableName, { isCurrent });
+    const result = await reloadDatasetRowsFromListing(tableName, { isCurrent, rebuildView });
     if (!isCurrent() || !result) return false;
 
     renderRowGroupFacets(tableName, result.row_group_facets, {
@@ -424,6 +425,24 @@ export async function rerenderCachedSearchResults(tableName, expectedCache = nul
     const cache = _ongoingSearchResults[tableName];
     if (!cache?.query || !isCurrentSearchCache(tableName, expectedCache || cache)) return;
     await do_intelligent_search(tableName, cache.query, cache.searchOptions || {});
+}
+
+/**
+ * Resume a search invalidated by authoritative hidden-filter cleanup.
+ * Listing owners abandon the obsolete reply; this owner cancels the old cache
+ * and repeats its question with the same options, including location/privacy.
+ * A replaced question or dataset lifetime never restarts the obsolete search.
+ * @returns {Promise<boolean>} whether this owner handled the repaired listing.
+ */
+export async function restartInvalidatedSearch(tableName) {
+    const cache = _ongoingSearchResults[tableName];
+    if (!cache?.query || !isCurrentSearchCache(tableName, cache)
+        || cache.query !== String(getParams(tableName)?.search || "").trim()
+        || cache.filterSignature === getSearchFilterContext(tableName).signature) return false;
+    // Row-only replacement retains controls and cached visibility. Let the
+    // replacement's authoritative first page rebuild those together with rows.
+    await do_intelligent_search(tableName, cache.query, cache.searchOptions || {}, { rebuildView: true });
+    return true;
 }
 
 /** The search that still answers this query under the filters now selected. */
@@ -504,7 +523,7 @@ function awaitFirstSearchResultInArticleView(tableName) {
  * then the AI group; then the other datasets' groups. A new cache identity
  * invalidates every delayed answer, render and article open from an older one.
  */
-export async function do_intelligent_search(tableName, userQuery, opts = {}) {
+export async function do_intelligent_search(tableName, userQuery, opts = {}, { rebuildView = false } = {}) {
     const adapter = getDatasetQueryAdapter(tableName);
     if (adapter) return adapter.refresh({ search: userQuery.trim() });
     const query = userQuery.trim();
@@ -557,7 +576,7 @@ export async function do_intelligent_search(tableName, userQuery, opts = {}) {
 
     const executionPromise = (async () => {
         try {
-            const listingLoaded = await loadDatasetMatches(tableName, cache, isCurrent);
+            const listingLoaded = await loadDatasetMatches(tableName, cache, isCurrent, rebuildView);
             if (!isCurrent() || !listingLoaded) return;
             // The dataset's own answer is complete as soon as its listing replies;
             // the AI group arrives afterwards and adds to it.

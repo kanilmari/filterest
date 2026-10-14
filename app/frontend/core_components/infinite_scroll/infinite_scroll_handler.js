@@ -9,6 +9,7 @@ import { commitDatasetViewRows } from "../table_views/dataset_view_renderer.js";
 import { appendLoadedDatasetRows, clearLoadedDatasetRows, filterLoadedDatasetDuplicates, getLoadedDatasetProjection, rememberLoadedDatasetRows } from "../table_views/dataset_loaded_rows.js";
 import { getDatasetViewContainerId, getDatasetViewScrollDirection } from "../table_views/dataset_view_registry.js";
 import { getDatasetListingFilters, getDatasetListingSignature } from "./dataset_listing_filters.js";
+import { discardHiddenColumnFilters } from "../filterbar/filter_list/hidden_filter_state_reconciler.js";
 import { getArticleStateKey } from "../table_views/card_view/first_listed_row.js";
 
 import { datasetAppearanceState } from '../table_views/dataset_appearance_state.js';
@@ -295,18 +296,19 @@ export function initializeInfiniteScroll(tableName, orientation = "vertical") {
  * describe the same set of matches.
  *
  * @param {string} tableName
- * @param {{ isCurrent?: () => boolean }} [options] caller's own freshness check,
- *        so a replaced search cannot commit its rows after a newer one.
+ * @param {{ isCurrent?: () => boolean, rebuildView?: boolean }} [options]
+ *        caller's freshness check and metadata repair requiring a full rebuild.
  * @returns {Promise<Object|null>} the listing's answer, or null if it was abandoned.
  */
-export async function reloadDatasetRowsFromListing(tableName, { isCurrent } = {}) {
+export async function reloadDatasetRowsFromListing(tableName, { isCurrent, rebuildView = false } = {}) {
     const currentView = getChosenDatasetView(tableName) || "table";
     const container = document.getElementById(getDatasetViewContainerId(currentView, tableName));
-    if (["card", "article_view"].includes(currentView) && !container?.querySelector('.card_container')) {
+    if (rebuildView || (["card", "article_view"].includes(currentView) && !container?.querySelector('.card_container'))) {
         // URL search can commit before the first card host is assembled. A
         // late saved sort also invalidates that build. Rebuild through the same
         // guarded refresh path and use its first page, rather than append to an
-        // unfinished host or fetch that page a second time.
+        // unfinished host or fetch that page a second time. Hidden-filter repair
+        // uses this same page to rebuild inputs, chips and cached metadata too.
         const token = datasetAppearanceState.capture(tableName);
         const canBuild = () => datasetAppearanceState.isCurrent(token)
             && (getChosenDatasetView(tableName) || "table") === currentView && (!isCurrent || isCurrent());
@@ -372,6 +374,27 @@ async function fetchMoreData(tableName, { replace = false, isCurrent: callerIsCu
             view_key: viewKey,
         });
         if (!isCurrent()) return null;
+        if (!result.error && result.success !== false
+            && discardHiddenColumnFilters(tableName, result.columns, result.types)) {
+            // A repaired search belongs to its owner, including its options.
+            // Drop this obsolete page; the restarted search loads page one once.
+            const canReload = () => datasetAppearanceState.isCurrent(appearanceToken)
+                && datasetAppearanceState.ownsSurface(container, appearanceToken.uid)
+                && (getChosenDatasetView(tableName) || "table") === currentView
+                && document.getElementById(getDatasetViewContainerId(currentView, tableName)) === container
+                && container?.isConnected;
+            if (filters.search) {
+                const { restartInvalidatedSearch } = await import('../filterbar/text_search/dataset_search_executor.js');
+                if (!canReload() || scrollSt.generation !== generation) return null;
+                if (await restartInvalidatedSearch(tableName)) return null;
+            }
+            if (callerIsCurrent && !callerIsCurrent()) return null;
+            // An ordinary listing still rebuilds completely, never appending a
+            // reply counted with a hidden selection to the old prefix.
+            const { refreshTableUnified } = await import('../general_tables/gt_1_row_crud/gt_1_2_row_read/table_refresh_unified.js');
+            if (!canReload() || scrollSt.generation !== generation) return null;
+            return refreshTableUnified(tableName, { skipUrlParams: true, isCurrent: canReload });
+        }
         if (result.dataset_appearance != null
             && !datasetAppearanceState.accept(tableName, result.dataset_appearance, { token: appearanceToken, isCurrent })) return null;
         setResultsCount(tableName, result.row_count);

@@ -20,7 +20,7 @@ import {
     buildTestIdSegment,
     categorizeColumns,
     orderFilterColumns,
-    shouldHideRedundantGeneratedForeignDisplayColumn,
+    getFilterableColumns,
 } from "./filter_column_builder_helpers.js";
 import {
     FILTER_DISPLAY_MODES, FILTER_DISPLAY_MODE_PRESENTATION, getColumnFilterBaseId,
@@ -338,9 +338,7 @@ function buildFilterSection(
     dataTypes,
     showVisibilityToggle
 ) {
-    const filterableColumns = columns.filter(
-        (column) => !shouldHideRedundantGeneratedForeignDisplayColumn(column, columns, dataTypes)
-    );
+    const filterableColumns = getFilterableColumns(columns, dataTypes);
     const categorized = categorizeColumns(filterableColumns, dataTypes);
     const { main: orderedMainFilters, hidden: hiddenColumns } = orderFilterColumns(categorized);
 

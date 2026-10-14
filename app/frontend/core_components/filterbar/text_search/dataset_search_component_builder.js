@@ -28,7 +28,7 @@ import {
     getStoredGpsCoords,
     requestGpsPosition,
 } from "./dataset_search_location_handler.js";
-import { do_intelligent_search } from "./dataset_search_executor.js";
+import { do_intelligent_search, getSearchGroupsForViewRebuild } from "./dataset_search_executor.js";
 import {
     clearCommittedDatasetSearch,
     DATASET_COMMITTED_SEARCH_CHANGED_EVENT,
@@ -490,7 +490,9 @@ export function createDatasetSearchComponent(tableName, options = {}) {
             e.preventDefault();
         }
     });
-    if (urlParams.search) {
+    // A metadata rebuild joins the search already owning this query/selection;
+    // restoring it again would replace its options and fetch the listing twice.
+    if (urlParams.search && !getSearchGroupsForViewRebuild(tableName, { query: urlParams.search })) {
         const scheduleMicrotask =
             typeof globalThis.queueMicrotask === "function"
                 ? globalThis.queueMicrotask.bind(globalThis)

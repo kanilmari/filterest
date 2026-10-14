@@ -89,6 +89,56 @@ restores the listing. Tablet and desktop retain the shared toolbar close button.
 
 Card/filterbar copy uses the shared language dictionaries, seeded by `20261013000002_seed_card_and_filterbar_language_keys.sql` in DB 9.11.1 (`20261013000099_record_database_release_9_11_1.sql`), paired with application 9.4.1. Add-row names resolve the tab's own language key. Every card detail renderer, including article date fields, prints empty values through `empty_value_printer.js`: an em dash with the `unknown` tooltip and accessible label. The generated foreign-reference aliases `created_by_name` and `owner_name (ln)` have product translations; stored row values are unchanged.
 
+### Column filter visibility
+
+Administrators set **Hide in filter panel** in the existing card visibility /
+view field settings. The source column's `hide_in_filter_panel` or
+`hide_everywhere` also hides its generated reference-name filters, including
+plain `_name`, `(ln)` and numbered `(ln)` aliases. This applies to all datasets
+and references, including creator and owner fields (owner decision K377).
+It does not hide a name value on a card merely because its filter is hidden.
+
+For a visible source, the existing redundancy rule stays: when its relation-aware
+filter is in the collection, the generated name input is omitted. If the source
+is absent from the collection but still visible in metadata, the name input
+remains available. A restored selection on such a visible generated name remains
+valid. Physical-column metadata takes precedence over generated alias inference:
+a stored `owner_name` remains independent of `owner_id` and `owner_name (ln)`.
+There is currently no independent ID/name filter visibility setting.
+
+The legacy, accordion and inline-open builders share
+`getFilterableColumns` in `filter_column_builder_helpers.js`. They inspect full
+source metadata before building sections; saved open-section lists, display
+modes and section ordering cannot recreate an omitted field. A mounted panel
+rebuilds when its available filter fields change.
+
+Previously selected hidden source/name conditions are discarded when a current,
+successful listing supplies complete metadata. Include, exclude and range keys
+are removed from unified state and saved query parameters; the address is
+replaced only if that dataset still owns the current address, using the same
+route guard as settled-address reconciliation. The current row path, hash and
+article history context survive. Remaining filters, search, sort and view stay.
+The listing reloads from page one before rows or counts commit, including during
+search reloads and pagination. An invalidated search restarts through its owner
+with the original search options. Its replacement page rebuilds mounted filter
+inputs, active chips and cached visibility metadata together. Rebuilt search
+controls join the current search instead of restoring another execution;
+unchanged conditions need no extra fetch. Chips also respect the cached
+visibility during restoration, so an invisible input leaves no orphan chip.
+Before metadata loads, selections are retained rather than guessed away.
+
+The existing results API supplies source visibility and relation metadata in
+`types` (`get_results_metadata.go`). A source marked `hide_everywhere` is omitted
+from readable column metadata and selection; the join builder generates names
+only for selected sources (`build_joins_1m.go`). When a saved name no longer has
+a returned column, physical-column metadata or a readable relation source,
+restoration discards that unavailable name too. Metadata-known ordinary name
+fields remain ordinary filters. These are presentation rules, not an API access
+restriction; no server, schema, data or permission change accompanies K377.
+
+[Independent linked-name visibility](../future_documentation/Linked_Name_Filter_Visibility.md)
+describes the missing separate-control capability and its adoption options.
+
 Result counts use `results_count_singular` / `results_count_plural`, with
 `results_count_text_search_singular` / `results_count_text_search_plural` and
 `results_count_ai_search_singular` / `results_count_ai_search_plural` for search

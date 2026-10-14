@@ -6,8 +6,9 @@
 
 import { beforeEach, describe, expect, test, vi } from "vitest";
 
-const { doIntelligentSearchMock } = vi.hoisted(() => ({
+const { doIntelligentSearchMock, searchGroupsMock } = vi.hoisted(() => ({
     doIntelligentSearchMock: vi.fn(),
+    searchGroupsMock: vi.fn(),
 }));
 
 const getParamsMock = vi.fn(() => ({}));
@@ -83,6 +84,7 @@ vi.mock("./dataset_search_location_handler.js", () => ({
 
 vi.mock("./dataset_search_executor.js", () => ({
     do_intelligent_search: doIntelligentSearchMock,
+    getSearchGroupsForViewRebuild: searchGroupsMock,
 }));
 
 vi.mock("./dataset_search_clearer.js", () => ({
@@ -97,6 +99,7 @@ describe("createDatasetSearchComponent", () => {
         document.body.innerHTML = "";
         localStorage.clear();
         vi.clearAllMocks();
+        searchGroupsMock.mockReturnValue(null);
         getParamsMock.mockReturnValue({});
         datasetSearchStateMock.initialize.mockImplementation((_tableName, value) => value);
         datasetSearchStateMock.get.mockReturnValue("");
@@ -272,6 +275,21 @@ describe("createDatasetSearchComponent", () => {
         } finally {
             vi.useRealTimers();
         }
+    });
+
+    test("rebuilt controls join the search already owning their restored query", async () => {
+        getParamsMock.mockReturnValue({ search: "travel" });
+        datasetSearchStateMock.get.mockReturnValue("travel");
+        searchGroupsMock.mockReturnValue({ isCurrent: () => true });
+        const { createDatasetSearchComponent } = await import("./dataset_search_component_builder.js");
+        const component = createDatasetSearchComponent("jobs");
+        await Promise.resolve();
+        await Promise.resolve();
+        expect(searchGroupsMock).toHaveBeenCalledWith("jobs", { query: "travel" });
+        expect(doIntelligentSearchMock).not.toHaveBeenCalled();
+        expect(updateURLMock).not.toHaveBeenCalled();
+        expect(component.input.value).toBe("travel");
+        component.destroy();
     });
 
     test("URL-seeded search preserves the current row path while syncing params", async () => {

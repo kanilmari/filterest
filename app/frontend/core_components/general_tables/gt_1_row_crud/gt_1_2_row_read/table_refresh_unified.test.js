@@ -20,12 +20,15 @@ const clearDatasetSelectionStateMock = vi.fn();
 const redirectToRootInSpaMock = vi.fn();
 const parseTableQueryStringMock = vi.fn();
 const getParamsMock = vi.fn();
+const setParamsMock = vi.fn();
+const replaceDatasetAddressQueryMock = vi.fn();
 const getUnifiedTableStateMock = vi.fn();
 const setUnifiedTableStateMock = vi.fn();
 const primeDatasetPermissionsMock = vi.fn();
 const mergeStateWithOptionsMock = vi.fn();
 const computeNextSortStateMock = vi.fn();
 const getSearchGroupsForViewRebuildMock = vi.fn();
+const restartInvalidatedSearchMock = vi.fn();
 const getDatasetListingFiltersMock = vi.fn();
 
 async function loadModule() {
@@ -62,9 +65,12 @@ async function loadModule() {
     vi.doMock("../../../navigation/root_redirect_handler.js", () => ({
         redirectToRootInSpa: redirectToRootInSpaMock,
     }));
-    vi.doMock("../../../navigation/nav_engine/dataset_address_writer.js", () => ({ updateDatasetAddress: vi.fn() }));
+    vi.doMock("../../../navigation/nav_engine/dataset_address_writer.js", () => ({
+        updateDatasetAddress: vi.fn(), replaceDatasetAddressQuery: replaceDatasetAddressQueryMock,
+    }));
     vi.doMock("../../../navigation/nav_engine/query_params.js", () => ({
         getParams: getParamsMock,
+        setParams: setParamsMock,
         parseTableQueryString: parseTableQueryStringMock,
     }));
     vi.doMock("../../../state_stores/table_state_store.js", () => ({
@@ -75,12 +81,14 @@ async function loadModule() {
         primeDatasetPermissions: primeDatasetPermissionsMock,
     }));
     vi.doMock("../../../config_fetcher.js", () => ({ getDefaultDatasetSortSync: vi.fn(() => ({ column: "__newest", direction: "DESC" })) }));
-    vi.doMock("./table_refresh_unified_helpers.js", () => ({
+    vi.doMock("./table_refresh_unified_helpers.js", async importOriginal => ({
+        ...await importOriginal(),
         mergeStateWithOptions: mergeStateWithOptionsMock,
         computeNextSortState: computeNextSortStateMock,
     }));
     vi.doMock("../../../filterbar/text_search/dataset_search_executor.js", () => ({
         getSearchGroupsForViewRebuild: getSearchGroupsForViewRebuildMock,
+        restartInvalidatedSearch: restartInvalidatedSearchMock,
     }));
 
     return import("./table_refresh_unified.js");
@@ -102,13 +110,14 @@ describe("table_refresh_unified missing-dataset recovery", () => {
         parseTableQueryStringMock.mockReturnValue(baseState);
         getParamsMock.mockReturnValue({});
         getSearchGroupsForViewRebuildMock.mockReturnValue(null);
+        restartInvalidatedSearchMock.mockResolvedValue(false);
         // The listing's own contract: a committed search is one more condition.
         getDatasetListingFiltersMock.mockImplementation((tableName, filters) => {
             const search = String(getParamsMock(tableName)?.search || "").trim();
             return { ...(filters || {}), ...(search ? { search } : {}) };
         });
         redirectToRootInSpaMock.mockResolvedValue(undefined);
-        fetchDatasetDataMock.mockRejectedValue(new Error("Dataset not found"));
+        fetchDatasetDataMock.mockReset().mockRejectedValue(new Error("Dataset not found"));
     });
 
     test('forwards the appearance snapshot on empty results and prevents late refreshes after teardown', async () => {
@@ -128,6 +137,54 @@ describe("table_refresh_unified missing-dataset recovery", () => {
         resolve({ data: [], columns: [], dataset_appearance: appearance });
         await pending;
         expect(generateTableMock).not.toHaveBeenCalled();
+    });
+
+    test.each([
+        [false, 'hide_in_filter_panel'], [true, 'hide_in_filter_panel'],
+        [false, 'hide_everywhere'], [true, 'hide_everywhere'],
+    ])('restoring saved state=%s with %s reloads before committing rows or counts', async (savedState, flag) => {
+        let state = { filters: { jobs_status_name: 'old', jobs_status_name_exclude: 'other', jobs_title: 'Trip' },
+            sort: { column: 'title', direction: 'ASC' }, offset: 0 };
+        let params = { ...state.filters, view: 'card', search: 'travel' };
+        getUnifiedTableStateMock.mockImplementation(() => state);
+        setUnifiedTableStateMock.mockImplementation((_dataset, patch) => { state = { ...state, ...patch }; });
+        getParamsMock.mockImplementation(() => ({ ...params }));
+        setParamsMock.mockImplementation((_dataset, next) => { params = next; });
+        parseTableQueryStringMock.mockReturnValue({ ...state, filters: { ...state.filters } });
+        setChosenDatasetView('jobs', 'card');
+        // hide-everywhere removes the source and its generated projection from
+        // server metadata; hide-in-panel still supplies the relation metadata.
+        const types = flag === 'hide_everywhere' ? { title: { data_type: 'text' } }
+            : { status: { data_type: 'text', foreign_table: 'statuses', [flag]: true }, title: { data_type: 'text' } };
+        const columns = flag === 'hide_everywhere' ? ['title'] : ['status', 'status_name', 'title'];
+        const first = { data: [], columns, types, row_count: 0 };
+        const repaired = { ...first, data: [{ id: 1, title: 'Trip' }], row_count: 1 };
+        fetchDatasetDataMock.mockReset().mockResolvedValueOnce(first).mockResolvedValueOnce(repaired);
+        generateTableMock.mockReturnValue(document.createElement('div'));
+        const { mergeStateWithOptions } = await vi.importActual('./table_refresh_unified_helpers.js');
+        mergeStateWithOptionsMock.mockImplementation(mergeStateWithOptions);
+        const mod = await loadModule();
+        // Explicit overrides may accompany a restore. They must be applied
+        // once, rather than resurrecting hidden selections on the repair load.
+        restartInvalidatedSearchMock.mockResolvedValue(savedState);
+        await mod.refreshTableUnified('jobs', { skipUrlParams: savedState,
+            newFilters: { jobs_status_name: 'old' }, offsetOverride: 30,
+            isCurrent: savedState ? () => Object.hasOwn(state.filters, 'jobs_status_name') : undefined });
+        if (savedState) { // Repair invalidates a search caller's old signature.
+            expect(restartInvalidatedSearchMock).toHaveBeenCalledWith('jobs');
+            expect(generateTableMock).not.toHaveBeenCalled();
+            expect(fetchDatasetDataMock).toHaveBeenCalledTimes(1);
+            expect(state.filters).toEqual({ jobs_title: 'Trip' });
+            return;
+        }
+        expect(fetchDatasetDataMock).toHaveBeenCalledTimes(2);
+        expect(fetchDatasetDataMock.mock.calls[1][0].filters).toEqual({ jobs_title: 'Trip', search: 'travel' });
+        expect(generateTableMock).toHaveBeenCalledTimes(1);
+        expect(generateTableMock.mock.calls[0][2]).toEqual(repaired.data);
+        expect(generateTableMock.mock.calls[0][4]).toBe(1);
+        expect(state.filters).toEqual({ jobs_title: 'Trip' });
+        expect(params).toEqual({ jobs_title: 'Trip', view: 'card', search: 'travel' });
+        expect(replaceDatasetAddressQueryMock).toHaveBeenCalledWith('jobs', params);
     });
 
     test("dispatches only an explicitly registered surface before SQL fetch and permissions", async () => {

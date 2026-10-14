@@ -24,6 +24,7 @@ import { createFilterBarContent } from "./filterbar_content_builder.js";
 import { wireFilterbarRuntime } from "./filterbar_runtime_controller.js";
 import { buildFilterbarStyleSection } from "./filterbar_style_section_builder.js";
 import { buildMobileSiteIdentity } from "./mobile_site_identity_builder.js";
+import { getFilterableColumns } from "./filter_list/filter_column_builder_helpers.js";
 export { createFilterBarContent, buildTextSearchFilterSection } from "./filterbar_content_builder.js";
 
 /**
@@ -63,10 +64,14 @@ export function create_filter_bar(
     const mainTableContainer = tablePartsContainer.closest(".content_div");
 
     const existingPanel = document.getElementById(`${tableName}_filterBar_panel`);
-    if (existingPanel) {
+    const filterableColumnsKey = JSON.stringify(getFilterableColumns(columns, dataTypes).sort());
+    if (existingPanel && existingPanel.__filterableColumnsKey === filterableColumnsKey) {
         existingPanel.__syncSharedTopBar?.();
         return existingPanel;
     }
+    // A persistent panel must not keep an input after refreshed metadata hides
+    // its source. Reuse its bounded teardown; saved section layout still loads.
+    existingPanel?.destroy?.();
     const lifetimeController = new AbortController();
     const { signal } = lifetimeController;
 
@@ -178,6 +183,7 @@ export function create_filter_bar(
         panel.classList.add("filterbar-panel--hidden");
     }
     panel.dataset.filterbarPanelMode = panelMode;
+    panel.__filterableColumnsKey = filterableColumnsKey;
     // Temporary consumers must wait for the saved layout before revealing a section.
     panel.__sectionLayoutReady = sectionOrdering.ready;
 

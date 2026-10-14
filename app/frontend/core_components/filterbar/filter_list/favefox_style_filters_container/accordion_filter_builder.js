@@ -4,7 +4,7 @@
 // Exists to encapsulate accordion animation and opened-filter persistence in one builder.
 
 import { buildFilterControlParts } from "../filter_column_builder.js";
-import { shouldHideRedundantGeneratedForeignDisplayColumn } from "../filter_column_builder_helpers.js";
+import { getFilterableColumns } from "../filter_column_builder_helpers.js";
 import {
     getOpenedFilters,
     hasOpenedFiltersSaved,
@@ -273,9 +273,7 @@ export function build_favefox_style_filter_bar_from_columns(
     show_visibility_toggle = true,
     options = {},
 ) {
-    const filterableColumns = columns.filter(
-        (column) => !shouldHideRedundantGeneratedForeignDisplayColumn(column, columns, data_types)
-    );
+    const filterableColumns = getFilterableColumns(columns, data_types);
     const sorted_columns = [...filterableColumns].sort((a, b) => {
         const aNum =
             data_types[a]?.fco_number ?? data_types[a]?.co_number ?? 0;

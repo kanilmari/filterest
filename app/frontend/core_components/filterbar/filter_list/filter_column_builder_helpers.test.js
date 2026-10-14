@@ -1,3 +1,7 @@
+// filter_column_builder_helpers.test.js
+// Verifies input kinds, relation aliases and filter visibility using metadata.
+// Connects pure filter policy to the builder and restored-selection contracts.
+// Prevents hidden sources from exposing generated names on another path.
 import { describe, test, expect } from 'vitest';
 import {
     determineColumnCategory,
@@ -10,6 +14,8 @@ import {
     normalizeGeneratedForeignDisplayAliasKey,
     shouldRetryForeignFilterOptionsWithSlug,
     shouldHideRedundantGeneratedForeignDisplayColumn,
+    getFilterableColumns,
+    withoutHiddenColumnFilters,
 } from './filter_column_builder_helpers.js';
 
 // ---------------------------------------------------------------------------
@@ -214,7 +220,6 @@ describe('generated foreign display aliases', () => {
         const columns = ['status', 'status_name', 'title'];
         const dataTypes = {
             status: { data_type: 'text', foreign_table: 'task_statuses' },
-            status_name: { data_type: 'text' },
             title: { data_type: 'text' },
         };
 
@@ -226,7 +231,7 @@ describe('generated foreign display aliases', () => {
         ).toBe(false);
     });
 
-    test('keeps generated FK display aliases when the source FK filter is hidden', () => {
+    test('hides generated FK display aliases when the source FK filter is hidden', () => {
         const columns = ['status', 'status_name'];
         const dataTypes = {
             status: {
@@ -234,12 +239,72 @@ describe('generated foreign display aliases', () => {
                 foreign_table: 'task_statuses',
                 hide_in_filter_panel: true,
             },
-            status_name: { data_type: 'text' },
         };
 
+        // K377 replaces the substitute exception: hiding a source hides its name
+        // too. The visible-source redundancy expectation above remains intact.
         expect(
             shouldHideRedundantGeneratedForeignDisplayColumn('status_name', columns, dataTypes)
-        ).toBe(false);
+        ).toBe(true);
+    });
+
+    test.each(['hide_in_filter_panel', 'hide_everywhere'])('hides all alias forms with %s, even after the source was removed from columns', flag => {
+        const types = { owner_id: { foreign_table: 'accounts', [flag]: true } };
+        for (const alias of ['owner_name', 'owner_name (ln)', 'owner_name (ln 2)']) {
+            expect(shouldHideRedundantGeneratedForeignDisplayColumn(alias, [alias], types)).toBe(true);
+            expect(getFilterableColumns(['owner_id', alias, 'title'], types)).toEqual(['title']);
+        }
+    });
+
+    test('keeps today’s redundancy rule when a visible source is absent from the collection', () => {
+        const types = { category_id: { foreign_table: 'categories' } };
+        expect(getFilterableColumns(['category_name (ln)'], types)).toEqual(['category_name (ln)']);
+        expect(getFilterableColumns(['category_id', 'category_name (ln)'], types)).toEqual(['category_id']);
+    });
+
+    test('does not mistake another real foreign key or a standalone name for a generated alias', () => {
+        const types = { status: { foreign_table: 'statuses', hide_in_filter_panel: true },
+            status_name: { foreign_table: 'names' }, company_name: { data_type: 'text' } };
+        expect(getFilterableColumns(['status', 'status_name', 'company_name'], types)).toEqual(['status_name', 'company_name']);
+        expect(getFilterableColumns(['title', 'count'], { title: 'text', count: 'integer' })).toEqual(['title', 'count']);
+    });
+});
+
+describe('hidden restored column filters', () => {
+    const columns = ['created_by', 'created_by_name', 'owner_id', 'owner_name (ln)', 'title'];
+    const types = { created_by: { foreign_table: 'users', hide_in_filter_panel: true },
+        owner_id: { foreign_table: 'users', hide_everywhere: true }, title: { data_type: 'text' } };
+
+    test('drops qualified/unqualified include, exclude and ranges while preserving other conditions', () => {
+        const filters = { tasks_created_by_name: 'A', created_by_name_exclude: 'B',
+            'tasks_owner_name (ln)_from': 'A', 'owner_name (ln)_to_exclude': 'Z',
+            tasks_created_by: '1', owner_id_from: '2', tasks_title: 'Trip',
+            row_group: 'one', row_group_mode: 'all', search: 'travel', view: 'card',
+            sort_column: 'title', sort_order: 'ASC', offset: '30' };
+        expect(withoutHiddenColumnFilters('tasks', filters, columns, types)).toEqual({
+            tasks_title: 'Trip', row_group: 'one', row_group_mode: 'all', search: 'travel',
+            view: 'card', sort_column: 'title', sort_order: 'ASC', offset: '30',
+        });
+        expect(filters.tasks_created_by_name).toBe('A');
+    });
+
+    test('discards omitted name projections for hide-everywhere without losing real name fields', () => {
+        const filters = { 'tasks_owner_name (ln)': 'A', created_by_name_exclude: 'B', company_name: 'C' };
+        expect(withoutHiddenColumnFilters('tasks', filters, ['title'], {
+            title: 'text', company_name: 'text',
+        })).toEqual({ company_name: 'C' });
+    });
+
+    test('preserves restored visible aliases and actual suffix-named columns', () => {
+        const filters = { status_name: 'A', status_name_exclude: 'B', label_from: 'C' };
+        const meta = { status: { foreign_table: 'statuses' }, label_from: 'text', status_name_exclude: 'text' };
+        expect(withoutHiddenColumnFilters('tasks', filters, ['status', 'label_from'], meta)).toBe(filters);
+    });
+
+    test('leaves selections intact until metadata is available and for datasets without generated names', () => {
+        const filters = { tasks_title: 'A', count_from: '2' };
+        expect(withoutHiddenColumnFilters('tasks', filters)).toBe(filters);
+        expect(withoutHiddenColumnFilters('tasks', filters, ['title', 'count'], { title: 'text', count: 'integer' })).toBe(filters);
     });
 });
 

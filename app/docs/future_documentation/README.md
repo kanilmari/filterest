@@ -71,6 +71,9 @@ Update incoming documentation links when text moves or a document is deleted.
   deliberate reveal and copy records, key replacement and random value generation.
 - [Location filters](Location_Filters.md) describes distance and map-area queries,
   shared dataset filters and nearest-first results over readable row locations.
+- [Independent linked-name filter visibility](Linked_Name_Filter_Visibility.md)
+  describes shared or separate reference/name controls, metadata model options,
+  administrator settings and adoption without reviving hidden selections.
 - [Local workspace](Local_Workspace.md) describes private file and folder datasets
   on one computer, portable locations and local, rebuildable search data.
 - [AI setup choices](AI_Setup_Choices.md) describes independent, optional AI uses

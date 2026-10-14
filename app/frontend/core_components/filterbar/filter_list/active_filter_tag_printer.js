@@ -26,6 +26,7 @@ import { getTranslationForKey } from "../../lang/translation_handler.js";
 import { bindDatasetLanguageRenderer } from "../../table_views/dataset_value_localizer.js";
 
 import { buildActiveFilterChip } from "./active_filter_chip_builder.js";
+import { getVisibleStoredFilters } from "./hidden_filter_state_reconciler.js";
 
 let bigCardFilterSyncListenerBound = false;
 
@@ -171,7 +172,9 @@ export function renderActiveFilters(tableName) {
         });
     }
 
-    const grouped = groupFilters(filters);
+    // The listing owner repairs saved state/URL after fresh metadata arrives;
+    // pending restores must not display chips for a hidden source/name pair.
+    const grouped = groupFilters(getVisibleStoredFilters(tableName, filters));
 
     Object.entries(grouped).forEach(([base, data]) => {
         if (base === ROW_GROUP_MODE_KEY) return;

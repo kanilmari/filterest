@@ -205,8 +205,10 @@ export function normalizeGeneratedForeignDisplayAliasKey(columnName) {
 }
 
 /**
- * Whether a column is a redundant FK display alias while its source FK filter
- * is already available in the same filter collection.
+ * Hide generated names with a hidden source (K377), or as redundant when the
+ * source filter is available. Inspect full metadata even if a caller already
+ * removed hidden sources from its column list; visible-source redundancy still
+ * depends on the source being in that list.
  *
  * @param {string} columnName
  * @param {string[]} columns
@@ -228,11 +230,13 @@ export function shouldHideRedundantGeneratedForeignDisplayColumn(
         return false;
     }
 
-    if (dataTypes[candidateColumn]?.foreign_table) {
+    // The types map describes physical fields (get_results_metadata.go).
+    // Generated projections have no entry; a stored name wins over alias inference.
+    if (Object.hasOwn(dataTypes, candidateColumn)) {
         return false;
     }
 
-    return columns.some((sourceColumn) => {
+    return Object.keys(dataTypes).some((sourceColumn) => {
         if (sourceColumn === candidateColumn) {
             return false;
         }
@@ -242,12 +246,55 @@ export function shouldHideRedundantGeneratedForeignDisplayColumn(
             return false;
         }
 
-        if (sourceMeta.hide_in_filter_panel || sourceMeta.hide_everywhere) {
-            return false;
-        }
-
-        return buildGeneratedForeignDisplayAliasBase(sourceColumn).toLowerCase() === normalizedCandidate;
+        return buildGeneratedForeignDisplayAliasBase(sourceColumn).toLowerCase() === normalizedCandidate
+            && (sourceMeta.hide_in_filter_panel || sourceMeta.hide_everywhere || columns.includes(sourceColumn));
     });
+}
+
+/** Whether visibility metadata hides a field or its generated reference name. */
+export function isColumnFilterHidden(columnName, dataTypes = {}) {
+    const metadata = dataTypes[columnName];
+    if (metadata?.hide_in_filter_panel || metadata?.hide_everywhere) return true;
+    // Physical identity wins even for ordinary text fields named like an alias.
+    if (Object.hasOwn(dataTypes, columnName)) return false;
+    const alias = normalizeGeneratedForeignDisplayAliasKey(columnName);
+    return alias.endsWith("_name") && Object.entries(dataTypes).some(([source, sourceMeta]) =>
+        sourceMeta?.foreign_table
+        && buildGeneratedForeignDisplayAliasBase(source).toLowerCase() === alias
+        && (sourceMeta.hide_in_filter_panel || sourceMeta.hide_everywhere)
+    );
+}
+
+/** One visibility policy for legacy, accordion and inline-open filter layouts. */
+export function getFilterableColumns(columns = [], dataTypes = {}) {
+    return columns.filter(column => !isColumnFilterHidden(column, dataTypes)
+        && !shouldHideRedundantGeneratedForeignDisplayColumn(column, columns, dataTypes));
+}
+
+/**
+ * Discard hidden selections after metadata loads, keeping visible-source alias
+ * selections valid even when their redundant input is omitted. Exact field
+ * names win over include/exclude and range suffixes, as in the results API.
+ * An unavailable name alias is discarded too: hide-everywhere sources and
+ * their generated projections are omitted entirely by the server.
+ * Missing metadata is not evidence of hiding; wait for a complete snapshot.
+ */
+export function withoutHiddenColumnFilters(tableName, filters = {}, columns, dataTypes) {
+    if (!Array.isArray(columns) || !dataTypes || typeof dataTypes !== "object") return filters;
+    const known = column => columns.includes(column) || Object.hasOwn(dataTypes, column);
+    const controls = new Set(["search", "sort_column", "sort_order", "offset", "view", "chart_x", "chart_y", "row_group", "row_group_mode"]);
+    const entries = Object.entries(filters).filter(([key]) => {
+        if (controls.has(key)) return true;
+        let column = key.startsWith(`${tableName}_`) ? key.slice(tableName.length + 1) : key;
+        if (!known(column)) column = column.replace(/_exclude$/, "");
+        if (!known(column)) column = column.replace(/_(from|to)$/, "");
+        if (isColumnFilterHidden(column, dataTypes)) return false;
+        const alias = normalizeGeneratedForeignDisplayAliasKey(column);
+        const hasSource = Object.entries(dataTypes).some(([source, meta]) => meta?.foreign_table
+            && buildGeneratedForeignDisplayAliasBase(source).toLowerCase() === alias);
+        return !alias.endsWith("_name") || known(column) || hasSource;
+    });
+    return entries.length === Object.keys(filters).length ? filters : Object.fromEntries(entries);
 }
 
 /**

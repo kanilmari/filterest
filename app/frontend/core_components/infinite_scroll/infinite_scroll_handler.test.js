@@ -668,4 +668,25 @@ describe("initializeInfiniteScroll", () => {
         scroll.disconnectInfiniteScroll('missing');
     });
 
+    test.each([false, true])('hidden-name cleanup during search=%s rebuilds instead of committing the old count', async search => {
+        createWideTableView('hidden_names', { container: 400, table: 800 });
+        let state = { offset: 0, filters: { hidden_names_owner_name: 'Old' }, sort: {} };
+        getUnifiedTableStateMock.mockImplementation(() => state);
+        setUnifiedTableStateMock.mockImplementation((_name, patch) => { state = { ...state, ...patch }; });
+        const { setParams, getParams } = await import('../navigation/nav_engine/query_params.js');
+        setParams('hidden_names', { ...state.filters, ...(search ? { search: 'travel' } : {}) });
+        fetchDatasetDataMock.mockResolvedValue({ data: [], row_count: 0, columns: ['title'], types: { title: 'text' } });
+        const repaired = { data: [{ id: 1 }], row_count: 1 };
+        const refresh = vi.fn(async () => repaired);
+        vi.doMock('../general_tables/gt_1_row_crud/gt_1_2_row_read/table_refresh_unified.js', () => ({ refreshTableUnified: refresh }));
+        const scroll = await import('./infinite_scroll_handler.js');
+        try {
+            expect(await scroll.reloadDatasetRowsFromListing('hidden_names')).toBe(repaired);
+            expect(refresh).toHaveBeenCalledWith('hidden_names', expect.objectContaining({ skipUrlParams: true }));
+            expect(state.filters).toEqual({});
+            expect(getParams('hidden_names')).toEqual(search ? { search: 'travel' } : {});
+            expect(setResultsCountMock).not.toHaveBeenCalled();
+            expect(appendDataToTableMock).not.toHaveBeenCalled();
+        } finally { scroll.disconnectInfiniteScroll('hidden_names'); vi.doUnmock('../general_tables/gt_1_row_crud/gt_1_2_row_read/table_refresh_unified.js'); }
+    });
 });

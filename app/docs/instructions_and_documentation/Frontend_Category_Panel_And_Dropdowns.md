@@ -113,6 +113,12 @@ Finnish/English mode copy is seeded by
 The reworded general hint uses `row_group_categories_modes_hint`, preserving reviewed
 copy under the previous key. Existing translations are never replaced. Apply copy
 through the migration lifecycle, never ad hoc SQL.
+Column inputs and selected-filter chips follow the
+[column filter visibility contract](Frontend_Dataset_Appearance.md#column-filter-visibility):
+hiding a reference source hides its generated name filter too. Saved hidden-name
+selections are discarded and the remaining listing is reloaded; saved panel
+layouts cannot expose them. Visible-source duplicate suppression is unchanged.
+
 The column filter also supplies shared search, selected/excluded count,
 empty-results and clear-action labels. Its extracted input builder retains raw
 option payloads and updates labels and localized options in place on language

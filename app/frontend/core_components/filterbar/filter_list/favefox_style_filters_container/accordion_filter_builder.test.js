@@ -151,7 +151,6 @@ describe("create_favefox_style_filter_bar", () => {
             ["status", "status_name", "title"],
             {
                 status: { data_type: "text", foreign_table: "task_statuses" },
-                status_name: { data_type: "text" },
                 title: { data_type: "text" },
             },
             false,

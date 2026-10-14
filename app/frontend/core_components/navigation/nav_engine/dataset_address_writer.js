@@ -155,16 +155,37 @@ function historyStateDescribes(dataset, openRowId) {
         && (currentState.dataset === undefined || currentState.dataset === dataset);
 }
 
-function writeSettledDatasetAddress(expectedDataset) {
+/** Resolve the current route before any repair can write on a dataset's behalf. */
+function getCurrentDatasetRoute(expectedDataset) {
     const pathname = normalizePath(window.location.pathname);
     const prefix = getPrefixFromPathname(pathname, DATASET_PREFIX);
-    if (!prefix) return false;
+    if (!prefix) return null;
     const { name: addressDataset } = parseDeepLink(pathname.slice(prefix.length));
-    if (!addressDataset) return false;
+    if (!addressDataset) return null;
     // A late answer about a dataset the person already left must not rewrite the
     // newer address it would land on.
-    if (expectedDataset && expectedDataset !== addressDataset) return false;
+    if (expectedDataset && expectedDataset !== addressDataset) return null;
     const dataset = expectedDataset || addressDataset;
+    return { pathname, prefix, dataset };
+}
+
+/**
+ * Replace only the query of this dataset's current entry after filter cleanup.
+ * Share settled-address ownership checks, but keep the navigation's route, hash
+ * and complete history context: cleanup does not open or close an article.
+ */
+export function replaceDatasetAddressQuery(dataset, params) {
+    if (!getCurrentDatasetRoute(dataset)) return false;
+    setParams(dataset, params);
+    writeHistoryEntry(`${window.location.pathname}${serializeDatasetQuery(params)}${window.location.hash}`,
+        history.state || {}, { replace: true });
+    return true;
+}
+
+function writeSettledDatasetAddress(expectedDataset) {
+    const route = getCurrentDatasetRoute(expectedDataset);
+    if (!route) return false;
+    const { pathname, prefix, dataset } = route;
     // The image-first article owns its own address, its row and its image hash.
     if (isImageFirstViewURL()) return false;
 

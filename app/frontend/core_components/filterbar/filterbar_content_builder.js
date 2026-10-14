@@ -135,11 +135,7 @@ function buildStandardFilterbarContent(container, {
     const showVisibilityToggle = !(currentView === "card" && hideFieldsOnCards);
 
     const visibleColumns = columns.filter(
-        (col) =>
-            !(
-                dataTypes[col]?.hide_in_filter_panel ||
-                dataTypes[col]?.hide_everywhere
-            )
+        (col) => !(dataTypes[col]?.hide_in_filter_panel || dataTypes[col]?.hide_everywhere)
     );
     /* ---------- Column View Presets ----------------------------- */
     const columnPresetRow = buildColumnViewPresetSelector(tableName, visibleColumns, currentView);
@@ -156,7 +152,9 @@ function buildStandardFilterbarContent(container, {
 
     const secondaryFilterBar = build_favefox_style_filter_bar_from_columns(
         tableName,
-        visibleColumns,
+        // Preserve source metadata/availability until the shared visibility
+        // policy runs, rather than making a hidden name appear independent.
+        columns,
         dataTypes,
         showVisibilityToggle,
         {
@@ -209,4 +207,3 @@ export function createFilterBarContent(container, filterbarOptions) {
         standardContentBuilder: buildStandardFilterbarContent,
     });
 }
-
