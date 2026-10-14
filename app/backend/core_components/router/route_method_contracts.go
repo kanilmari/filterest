@@ -187,6 +187,7 @@ func enforceRouteMethods(next http.HandlerFunc, handlerName string, contract Rou
 		allowed[method] = true
 	}
 	return func(w http.ResponseWriter, r *http.Request) {
+		w = siteRootCacheResponse(w, r)
 		if len(allowed) == 0 || allowed[r.Method] {
 			if r.Method == http.MethodHead && allowed[http.MethodGet] {
 				getRequest := new(http.Request)

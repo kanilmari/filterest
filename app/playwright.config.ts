@@ -6,6 +6,7 @@ import { defineConfig } from '@playwright/test';
 import * as path from 'node:path';
 import { resolveLocalFilterestBaseUrl } from './server_tools/scripts/local_filterest_target.cjs';
 import { resolveFilterestTestRuntimePaths } from './testing/e2e/helpers/test-runtime-paths';
+import { matrixTestIgnore } from './testing/e2e/matrix-test-selection.cjs';
 
 const testRuntimePaths = resolveFilterestTestRuntimePaths();
 
@@ -26,7 +27,7 @@ const baseURL = resolveLocalFilterestBaseUrl({ applicationRoot: path.resolve(__d
  * Easelect GUI Test Matrix
  *
  * 6 projects = 3 viewport widths × 2 card views.
- * Every .spec.ts in testing/e2e/ runs in all 6 combinations automatically.
+ * Every non-manual .spec.ts runs in all 6 combinations automatically.
  *
  * Viewports:
  *   mobile   375×667   (phone portrait)
@@ -41,9 +42,7 @@ const baseURL = resolveLocalFilterestBaseUrl({ applicationRoot: path.resolve(__d
 export default defineConfig({
   testDir: './testing/e2e',
   /* Ignore setup/ folder from matrix runs — run setup tests explicitly */
-  testIgnore: includeSetupTests
-    ? ['**/global-setup.*', '**/*.test.ts']
-    : ['**/setup/**', '**/global-setup.*', '**/*.test.ts'],
+  testIgnore: matrixTestIgnore(includeSetupTests),
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,

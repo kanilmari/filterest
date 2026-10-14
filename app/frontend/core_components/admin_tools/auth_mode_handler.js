@@ -7,12 +7,14 @@ import { fetchAuthModes, fetchUserPermissions } from "../endpoints/stable_endpoi
 import { hasRoutePermission } from "../route_permission_checker.js";
 import { synchronizeThemePreferenceForAuthState } from "../theme.js";
 import { getSessionGeneration, invalidateSessionGeneration, subscribeToSessionGeneration } from '../auth/session_generation_store.js';
+import { setCustomRootEnabled } from '../front_page/custom_root_navigation.js';
 
 // Use the existing session invalidation channel; route sets stay local to this
 // tab and are replaced only by its authoritative bootstrap, never merged.
 subscribeToSessionGeneration(reason => {
     if (['bootstrap', 'login', 'logout', 'expiry', 'session-change', 'session-invalidated'].includes(reason)) {
         sessionStorage.removeItem('user_permissions');
+        setCustomRootEnabled(false);
     }
 });
 
@@ -33,6 +35,7 @@ export async function setAuthModes() {
             localStorage.setItem('show_login_button', String(data.show_login_button !== false));
             localStorage.setItem('only_admin_can_login', String(data.only_admin_can_login === true));
             localStorage.setItem('separate_front_page', String(data.separate_front_page === true));
+            setCustomRootEnabled(data.display_index_html_at_startup === true);
             localStorage.setItem('front_page_button_site_name',
                 typeof data.front_page_button_site_name === 'string' ? data.front_page_button_site_name : '');
 

@@ -9,6 +9,7 @@ import (
 	"easelect/backend/core_components/auth_generation"
 	"easelect/backend/core_components/httpresponse"
 	"easelect/backend/core_components/middlewares"
+	"easelect/backend/core_components/runtimepaths"
 	e_sessions "easelect/backend/core_components/sessions"
 	"encoding/json"
 	"fmt"
@@ -21,17 +22,19 @@ import (
 var authModesAuthenticationGenerationMatches = backend.AuthenticatedSessionMatches
 var authModesFrontPageSettingsReader = backend.ReadFrontPageSettings
 var authModesFrontPageSiteNameReader = backend.ConfiguredSiteName
+var authModesSiteRootAvailable = func() bool { return backend.SiteRootAvailable(runtimepaths.Current().StorageRoot) }
 
 // AuthModesResponse keeps the public auth bootstrap payload stable for typed frontend callers.
 type AuthModesResponse struct {
-	NeedsButton             string   `json:"needs_button"`
-	RegistrationEnabled     bool     `json:"registration_enabled"`
-	LoginRequiredForBrowse  bool     `json:"login_required_for_browse"`
-	ShowLoginButton         bool     `json:"show_login_button"`
-	OnlyAdminCanLogin       bool     `json:"only_admin_can_login"`
-	SeparateFrontPage       bool     `json:"separate_front_page"`
-	FrontPageButtonSiteName string   `json:"front_page_button_site_name"`
-	GuestUIEndpoints        []string `json:"guest_ui_endpoints,omitempty"`
+	NeedsButton               string   `json:"needs_button"`
+	RegistrationEnabled       bool     `json:"registration_enabled"`
+	LoginRequiredForBrowse    bool     `json:"login_required_for_browse"`
+	ShowLoginButton           bool     `json:"show_login_button"`
+	OnlyAdminCanLogin         bool     `json:"only_admin_can_login"`
+	SeparateFrontPage         bool     `json:"separate_front_page"`
+	DisplayIndexHTMLAtStartup bool     `json:"display_index_html_at_startup"`
+	FrontPageButtonSiteName   string   `json:"front_page_button_site_name"`
+	GuestUIEndpoints          []string `json:"guest_ui_endpoints,omitempty"`
 }
 
 // GetAuthModesHandler tallentaa käyttäjän roolin sessioon
@@ -188,6 +191,10 @@ func buildAuthModesResponse(request *http.Request, button string, loginToBrowse 
 		return response
 	}
 	response.SeparateFrontPage = settings.SeparateFrontPage
+	// Effective readiness avoids reloading a fallback SPA shell forever when the
+	// operator has enabled the setting before placing a valid index.html.
+	response.DisplayIndexHTMLAtStartup = settings.DisplayIndexHTMLAtStartup &&
+		(!loginToBrowse || button == "logout") && authModesSiteRootAvailable()
 	if settings.FrontPageButtonShowsSiteName {
 		response.FrontPageButtonSiteName = authModesFrontPageSiteNameReader(request.Context(), backend.Db)
 	}

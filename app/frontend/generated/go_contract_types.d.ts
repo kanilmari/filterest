@@ -311,6 +311,7 @@ export interface AuthModesResponse {
     show_login_button: boolean;
     only_admin_can_login: boolean;
     separate_front_page: boolean;
+    display_index_html_at_startup: boolean;
     front_page_button_site_name: string;
     guest_ui_endpoints?: string[];
 }

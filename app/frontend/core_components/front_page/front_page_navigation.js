@@ -9,6 +9,7 @@ import { clearSelectedDataset } from '../state_stores/dataset_selection_saver.js
 import { writeHistoryEntry } from '../navigation/nav_engine/history_entry_state.js';
 import { updateBrowserTabTitle } from '../navigation/nav_engine/browser_tab_title_writer.js';
 import { refreshMainTabPresentation } from '../navigation/main_tabs/main_tab_active_state.js';
+import { isCustomRootEnabled, isRootAuthEntry, loadCustomRoot } from './custom_root_navigation.js';
 import { getSessionGeneration, isSessionValidationRequired, revalidateSessionIdentity,
     subscribeToSessionGeneration } from '../auth/session_generation_store.js';
 
@@ -20,7 +21,7 @@ subscribeToSessionGeneration(() => {
 });
 
 export function isSeparateFrontPageEnabled() {
-    return localStorage.getItem('separate_front_page') === 'true';
+    return isCustomRootEnabled() || localStorage.getItem('separate_front_page') === 'true';
 }
 
 export function isFrontPageShowing() {
@@ -31,7 +32,14 @@ export function isFrontPageShowing() {
 }
 
 /** A bootstrap passes forceReload so a visible page belongs to the new session. */
-export function openFrontPage({ replace = false, forceReload = false, isCurrentNavigation } = {}) {
+export function openFrontPage({ replace = false, forceReload = false, isCurrentNavigation, userActivation = false } = {}) {
+    if (isCurrentNavigation?.() === false) return Promise.resolve({ abort: true, reason: 'stale_navigation' });
+    // Bootstrap and history must leave the explicit login/register shell alone.
+    // A deliberate Home click still loads the root document and clears that query.
+    if (isCustomRootEnabled()) {
+        if (replace && isRootAuthEntry()) return Promise.resolve({ abort: true, reason: 'auth_entry' });
+        return loadCustomRoot({ replace, isCurrentNavigation, userActivation }).then(() => ({ abort: true, reason: 'custom_root_document' }));
+    }
     if (!isSeparateFrontPageEnabled()) return Promise.resolve({ abort: true, reason: 'front_page_disabled' });
     if (pendingOpen && (!forceReload || pendingOpen.forceReload)) return pendingOpen.promise;
     if (isFrontPageShowing() && !forceReload && !isSessionValidationRequired()) return Promise.resolve({ abort: false });

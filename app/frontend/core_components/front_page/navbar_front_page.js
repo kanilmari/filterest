@@ -38,7 +38,8 @@ export function renderNavbarFrontPage({ isLoggedIn }) {
     link.addEventListener('click', event => {
         if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
         event.preventDefault();
-        void openFrontPage();
+        // Native pointer and keyboard clicks can retry; synthetic/startup calls cannot.
+        void openFrontPage({ userActivation: event.isTrusted });
     });
     container.append(link);
 

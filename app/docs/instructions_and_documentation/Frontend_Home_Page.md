@@ -11,10 +11,147 @@ Part of the [Frontend Guide](Frontend_Guide.md); this section was formerly part 
 
 The site-wide `separate_front_page` setting defaults to false, retaining the
 existing default-dataset start and root history behavior. When enabled, `/`
-opens the hidden `front_page` custom view; `/front_page` is never a view address.
+opens the hidden `front_page` custom view unless the operator's custom root page
+below is active; `/front_page` is never a view address.
 The SPA reads the setting and the optional Home-button site name from the
 auth-modes response before loading datasets. Explicit dataset/article links
 and login/register entry flows retain their existing behavior.
+
+## Operator-provided root page (owner decision K378)
+
+Owner decision K378 (13 October 2026, 18:36Z; owner chat approximately 20:15)
+allows a site to place its own static `index.html` at the domain root instead
+of the SPA Home. Fintravel's SPA Home therefore needs no further development
+for now. The owner's draft is a local static mockup linking to dataset pages
+and the contact article. The built-in Home remains in the product and is the
+fallback when the custom page is disabled or unavailable. The custom document
+covers the **whole page**, including the menu and filter-bar buttons.
+
+K378's authoritative login clarification, verbatim:
+“Kirjautumattomille se ei saa näkyä. Pahoittelut että annoin ymmärtää väärin.
+Login_to_browsen pitää siitä huolimatta olla määräävä tekijä sovelluksessa.”
+When `login_to_browse` is true, signed-out visitors (including retained guest
+cookies) cannot read the custom document or any of its files; the existing
+root login flow runs first. Signed-in users can see it. When false, guests can
+see it too. Explicit `/?login-entry=1` and `/?register-entry=1` keep the existing
+authentication shell even when the page is ready. Those query parameters
+cannot bypass authentication on the asset prefix.
+
+### Operator steps and persistence
+
+1. Put `index.html` and its assets under the site's **storage root** in a
+   `site_root/` directory. Native portable installations use
+   `<installation>/data/storage/site_root/index.html`. Docker sees the same
+   bind-mounted directory at `/filterest/data/storage/site_root/index.html`
+   (`docker/docker-compose.yml` mounts host `data/storage/` there). Legacy flat
+   native layouts use `<runtime-root>/storage/site_root/index.html`. The exact
+   current path is shown only in Administrator → Site settings → Home settings.
+   Do not put these files under maintained `app/`, `runtime/` or `bootstrap/`.
+   Source updates and image rebuilds preserve storage. The existing full
+   recovery archive's `storage.tar.gz` includes `data/storage/` and therefore
+   this directory; a database-only dump does not back up the page. Restore the
+   storage archive together with the database containing the setting.
+2. Use absolute URLs beginning with `/.site_root/` for assets, for example
+   `<link rel="stylesheet" href="/.site_root/styles/site.css">`. CSS may use
+   relative paths within that prefix. Use ordinary dataset/article URLs for
+   navigation and `/` for Home. A `<base>` element is not permitted. Supply
+   multilingual copy, accessibility and theme behavior in the custom document;
+   it receives no SPA menu, theme styles or automatic translation.
+3. Open Home settings, check the file status, enable **Show the site's own
+   index.html at Home**, and save the settings section. The existing
+   `system_config` boolean `display_index_html_at_startup` is independent of
+   `separate_front_page`. GET and HEAD `/` serve the document when ready. The
+   Home/Etusivu link and browser history load `/` as a complete document,
+   without rendering the SPA Home first. Dataset pages retain their normal SPA.
+4. Disable and save the switch to restore the previous Home/default dataset
+   behavior. Removing the file also restores that behavior and makes its asset
+   prefix return 404. Missing, unreadable, unsafe or oversized index files
+   cannot activate the custom page. Reload Home settings to refresh file status.
+
+The asset prefix `/.site_root/` cannot be a valid dataset alias (aliases start
+with a letter or digit and contain no dots), so it needs no database namespace
+reservation or alias changes. No migration or new configuration endpoint is needed: a missing setting is
+false, and the existing administrator save creates the boolean row. Older
+settings clients that omit it preserve its value. The existing auth-modes
+response carries **effective readiness** (enabled, safely readable file and
+visitor permitted by the login policy), without a filesystem path. Keeping
+the flag in tab memory and clearing it on auth bootstrap prevents stale
+storage flags; a missing-file fallback learns false instead of repeatedly
+reloading itself. History handles custom root before dataset hydration and
+article restoration and replaces the landed history entry once.
+Home runs the existing unsaved-changes guard before starting a document load.
+An accepted departure keeps its latch while the root response is pending.
+Recovery observes the browser
+Navigation API's event abort signal and rejected navigation results, plus a
+finished result that leaves this document alive. Commitment alone does not
+release a pending load; neither `beforeunload`, focus nor elapsed time proves
+cancellation. Both result promises are observed, and an older attempt's
+completion or cancellation cannot release a newer departure.
+Chromium can drop HTTP 204/205, Stop or aborted departures without any
+page-visible terminal signal; the page cannot distinguish that from a slow
+accepted load. The sole recovery for this case is a **new deliberate Home
+activation**, by pointer or keyboard, at least ten seconds after the current
+attempt started (`HOME_DEPARTURE_RETRY_AFTER_MS = 10000` in
+`custom_root_navigation.js`). Earlier activations stay suppressed. No timer
+releases the latch, and startup, history and synthetic clicks cannot trigger
+this retry. The retry reruns the unsaved-changes guard and starts a fresh attempt
+with its own ten-second window. This also works without the Navigation API.
+Trade-off: retrying after ten seconds during a genuinely slow accepted load
+restarts the same navigation; browsers treat it as a replacement, not a second
+page. Browsers without the API cannot report prompt cancellation or an
+asynchronous abort for immediate recovery; the deliberate retry remains available.
+A SPA document restored from the browser's page cache can navigate to Home
+again: its previous departure latch is reset on the persisted `pageshow` event.
+After adding files while the SPA is already open, reload the browser to refresh
+bootstrap readiness; the recommended setup order places files before enabling.
+
+### Static-file security and browser policy
+
+The dedicated `/.site_root/` route shares the root's session-generation and
+browser-binding checks and never falls through to the frontend file server.
+No directory listings, hidden files, SQL/configuration/download files or
+symlinks are served. Canonical ASCII filenames use letters, digits, `.`, `_`
+and `-`, with no leading dot and at most 1024 characters per relative path;
+nested directories are allowed. URL escaping
+(including encoded and double-encoded separators), backslashes, traversal,
+empty segments and directory requests are refused. Go's directory-rooted
+handles confine concurrent path replacement; directory/file identity is also
+checked. Deploy ordinary readable files, preferably by atomic replacement.
+
+The exact MIME allowlist is HTML, CSS and JavaScript (2 MiB each);
+PNG/JPEG/WebP/GIF/AVIF/SVG/ICO images and WOFF/WOFF2/TTF/OTF fonts (10 MiB each);
+MP4/WebM video (50 MiB each). Only regular files qualify. Response types are
+explicit and `nosniff` prevents browser type guessing. Byte ranges support
+video; HEAD has the same policy and headers without a document body. Documents
+and assets use `Cache-Control: private, no-store` and `Vary: Cookie`, with no
+Last-Modified validator, so changes and login requirements reach the server.
+Already downloaded content cannot be recalled from a visitor's device.
+
+The custom document and its files replace the SPA CSP with this policy:
+
+| Directive | Reason |
+| --- | --- |
+| `default-src 'none'` | Deny resources unless explicitly listed. |
+| `script-src 'self'` | Optional local scripts support static-page menus, language and theme controls. Inline scripts, event handlers and evaluation are blocked; move scripts to `/.site_root/*.js`. |
+| `style-src 'self' 'unsafe-inline'` | Local CSS and operator-authored mockup style blocks/attributes work without a template nonce or build step. This relaxation applies only to the custom document and files. |
+| `img-src 'self' data:` | Local images and embedded static image data work without remote tracking hosts. |
+| `font-src 'self'`, `media-src 'self'` | Fonts and videos remain on the same site. |
+| `connect-src 'none'` | The static page does not make API, analytics or WebSocket requests. |
+| `worker-src 'none'` | Prevent background/service workers from persisting this page's behavior. |
+| `object-src 'none'`, `frame-src 'none'` | No plug-ins or embedded frames. |
+| `base-uri 'none'` | An HTML base cannot redirect relative links/resources. |
+| `form-action 'none'` | No form submissions; contact links open the existing article. |
+| `frame-ancestors 'none'` | Prevent framing/clickjacking, alongside `X-Frame-Options: DENY`. |
+
+`Referrer-Policy: no-referrer` also prevents custom-page URLs leaking through
+outgoing links. Ordinary links may leave the site; the CSP does not restrict
+top-level navigation. The operator's HTML/JS/SVG is **trusted same-origin
+code**, not a sandbox for uploads from untrusted users: local scripts retain
+the site's origin privileges. Review files before deploying them and keep
+secrets outside this directory. CSP restricts external resources and common
+injection paths; it does not make a malicious operator-authored page safe.
+
+## Built-in Home presentation
 
 `front_page/front_page_navigation.js` opens Home through the navigation
 pipeline, clears dataset selection only after navigation succeeds, writes the

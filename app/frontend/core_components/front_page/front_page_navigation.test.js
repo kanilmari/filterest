@@ -9,6 +9,7 @@ import { openFrontPage } from './front_page_navigation.js';
 import { renderFrontPage } from './front_page_printer.js';
 import { VIEW_DEACTIVATE_EVENT } from '../../reusable_components/view_lifecycle_events.js';
 import { invalidateSessionGeneration } from '../auth/session_generation_store.js';
+import * as customRoot from './custom_root_navigation.js';
 
 const mocks = vi.hoisted(() => ({ navigate: vi.fn(), request: vi.fn(), clear: vi.fn(),
     write: vi.fn(), title: vi.fn(), refreshTabs: vi.fn() }));
@@ -22,6 +23,7 @@ vi.mock('../endpoints/endpoint_router.js', () => ({ endpoint_router: mocks.reque
 vi.mock('../lang/translation_handler.js', () => ({ getTranslationForKey: (key) => key }));
 
 beforeEach(() => {
+    customRoot.setCustomRootEnabled(false);
     invalidateSessionGeneration({ revalidate: false });
     document.getElementById('front_page_container')?.dispatchEvent(new Event(VIEW_DEACTIVATE_EVENT));
     document.body.innerHTML = '<div id="tabs_container"></div>';
@@ -36,6 +38,63 @@ beforeEach(() => {
         page.classList.remove('hidden');
         return { abort: false };
     });
+});
+
+test('custom Home skips SPA rendering and history even when SPA Home is disabled', async () => {
+    localStorage.setItem('separate_front_page', 'false');
+    customRoot.setCustomRootEnabled(true);
+    const departure = vi.spyOn(customRoot, 'loadCustomRoot').mockResolvedValue(true);
+    expect(await openFrontPage()).toEqual({ abort: true, reason: 'custom_root_document' });
+    expect(departure).toHaveBeenCalledExactlyOnceWith({ replace: false, isCurrentNavigation: undefined, userActivation: false });
+    expect(mocks.navigate).not.toHaveBeenCalled();
+    expect(mocks.write).not.toHaveBeenCalled();
+    expect(mocks.clear).not.toHaveBeenCalled();
+    expect(mocks.request).not.toHaveBeenCalled();
+    departure.mockRestore();
+    customRoot.setCustomRootEnabled(false);
+});
+
+test('deliberate Home activation reaches document recovery without rendering the SPA', async () => {
+    customRoot.setCustomRootEnabled(true);
+    const departure = vi.spyOn(customRoot, 'loadCustomRoot').mockResolvedValue(true);
+    try {
+        await openFrontPage({ userActivation: true });
+        expect(departure).toHaveBeenCalledExactlyOnceWith({ replace: false, isCurrentNavigation: undefined, userActivation: true });
+        expect(mocks.navigate).not.toHaveBeenCalled();
+        expect(mocks.write).not.toHaveBeenCalled();
+    } finally { departure.mockRestore(); customRoot.setCustomRootEnabled(false); }
+});
+
+test('custom Home bootstrap preserves login/register shell entry without rendering Home', async () => {
+    const departure = vi.spyOn(customRoot, 'loadCustomRoot').mockResolvedValue(true);
+    customRoot.setCustomRootEnabled(true);
+    for (const query of ['?login-entry=1', '?register-entry=1']) {
+        window.history.replaceState({}, '', '/'+query);
+        expect(await openFrontPage({ replace: true })).toMatchObject({ reason: 'auth_entry' });
+    }
+    expect(departure).not.toHaveBeenCalled();
+    expect(mocks.navigate).not.toHaveBeenCalled();
+    departure.mockRestore();
+    customRoot.setCustomRootEnabled(false);
+    window.history.replaceState({}, '', '/');
+});
+
+test('Home itself refuses a dirty departure and navigates after saving without rendering the SPA', async () => {
+    const assign = vi.fn();
+    const guard = vi.fn().mockResolvedValueOnce(false).mockResolvedValue(true);
+    vi.stubGlobal('window', { location: { pathname: '/events', search: '', assign },
+        check_manage_permissions_dirty: guard });
+    customRoot.setCustomRootEnabled(true);
+    try {
+        await openFrontPage();
+        expect(guard).toHaveBeenCalledOnce();
+        expect(assign).not.toHaveBeenCalled();
+        await openFrontPage();
+        expect(assign).toHaveBeenCalledExactlyOnceWith('/');
+        expect(mocks.navigate).not.toHaveBeenCalled();
+        expect(mocks.request).not.toHaveBeenCalled();
+        expect(mocks.write).not.toHaveBeenCalled();
+    } finally { customRoot.setCustomRootEnabled(false); vi.unstubAllGlobals(); }
 });
 
 test('writes root once after success, clears selection, then retitles and refreshes tab shapes', async () => {

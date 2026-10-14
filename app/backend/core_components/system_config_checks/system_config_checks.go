@@ -38,10 +38,10 @@ func durationChecks() map[string]check {
 	}
 	registry["front_page_show_blocks"] = func(row map[string]interface{}) error {
 		if fmt.Sprint(row["value_type"]) != "2" {
-			return fmt.Errorf("boxes setting requires boolean value type 2")
+			return fmt.Errorf("Home switch requires boolean value type 2")
 		}
 		if _, valid := row["boolean_value"].(bool); !valid {
-			return fmt.Errorf("boxes setting requires a boolean value")
+			return fmt.Errorf("Home switch requires a boolean value")
 		}
 		return nil
 	}
@@ -52,6 +52,7 @@ func durationChecks() map[string]check {
 		_, err := presentation.Parse(row["json_value"])
 		return err
 	}
+	registry["display_index_html_at_startup"] = registry["front_page_show_blocks"]
 	return registry
 }
 
@@ -82,7 +83,7 @@ func ValidateRow(table string, row map[string]interface{}) error {
 		if key == "front_page_presentation" {
 			langKey = "save_failed"
 		}
-		if key == "front_page_show_blocks" {
+		if key == "front_page_show_blocks" || key == "display_index_html_at_startup" {
 			langKey = "error_setting_boolean_invalid"
 		}
 		return &httpresponse.Refusal{Status: 400, LangKey: langKey,

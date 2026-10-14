@@ -30,6 +30,7 @@ import {
 import { updateBrowserTabTitle } from './browser_tab_title_writer.js';
 import { updateDatasetAddress } from './dataset_address_writer.js';
 import { isSeparateFrontPageEnabled, openFrontPage } from '../../front_page/front_page_navigation.js';
+import { loadCustomRootFromHistory } from '../../front_page/custom_root_navigation.js';
 
 function getTargetView(datasetName, parsed) {
     const view = parsed.view || getHistoryDatasetView(datasetName);
@@ -264,6 +265,8 @@ subscribeDatasetAccessRegistry(response => {
 });
 
 async function handleHistoryNavigation() {
+    // This must precede hydration, article restoration and the finally URL writer.
+    if (await loadCustomRootFromHistory()) return;
     if (!hasDatasetAccessSnapshot()) {
         pendingHistoryRestoration = true;
         return;

@@ -26,6 +26,7 @@ vi.mock('../front_page/navbar_front_page.js', () => ({ renderNavbarFrontPage: mo
 vi.mock('../../reusable_components/image_source_picker/image_source_picker.js', () => ({ openImageSourcePicker: mocks.picker }));
 
 import { generate_front_page_settings_view } from './front_page_settings_view.js';
+import { setCustomRootEnabled } from '../front_page/custom_root_navigation.js';
 
 const currentDirectory = dirname(fileURLToPath(import.meta.url));
 const migration = readFileSync(resolve(currentDirectory, '../../../server_tools/migrations/20261005000033_seed_front_page_language_keys.sql'), 'utf8')
@@ -159,6 +160,30 @@ beforeEach(() => {
 afterEach(() => { target?.closest('.content_div')?.__cleanupListeners?.(); vi.restoreAllMocks(); });
 
 describe('Home settings and scope drafts', () => {
+    test('Open Home follows saved readiness rather than an unsaved checkbox', async () => {
+        localStorage.setItem('separate_front_page', 'false');
+        setCustomRootEnabled(false);
+        await generate_front_page_settings_view(target);
+        input(query('custom-root-enabled'), true, 'change');
+        expect(query('open').disabled).toBe(true);
+        setCustomRootEnabled(true);
+        input(query('custom-root-enabled'), false, 'change');
+        expect(query('open').disabled).toBe(false);
+        setCustomRootEnabled(false);
+    });
+    test('loads private file status and saves the custom-root switch through Home settings', async () => {
+        common.settings.display_index_html_at_startup = false;
+        common.site_root = { exists: true, ready: true, path: '/operator/data/storage/site_root/index.html' };
+        await generate_front_page_settings_view(target);
+        expect(query('custom-root-enabled').checked).toBe(false);
+        expect(query('custom-root-status').textContent).toContain(common.site_root.path);
+        input(query('custom-root-enabled'), true, 'change');
+        expect(query('settings-save').disabled).toBe(false);
+        await click('settings-save');
+        expect(writes()[0][1].body_data.settings.display_index_html_at_startup).toBe(true);
+        expect(mocks.auth).toHaveBeenCalledOnce();
+        expect(query('custom-root-enabled').checked).toBe(true);
+    });
     test('renders Finnish keys, native labels, seeded checkboxes and clean live results', async () => {
         await generate_front_page_settings_view(target);
         expect(target.querySelector('h2').textContent).toBe('Etusivun asetukset');
@@ -293,7 +318,7 @@ describe('Home settings and scope drafts', () => {
         await generate_front_page_settings_view(target);
         input(query('enabled'), false, 'change'); input(query('site-name'), true, 'change');
         await click('settings-save');
-        expect(writes()[0][1].body_data).toEqual({ settings: { separate_front_page: false, front_page_button_shows_site_name: true, front_page_show_blocks: true } });
+        expect(writes()[0][1].body_data).toEqual({ settings: { separate_front_page: false, front_page_button_shows_site_name: true, front_page_show_blocks: true, display_index_html_at_startup: false } });
         expect(mocks.auth).toHaveBeenCalledOnce();
         expect(mocks.navbar).toHaveBeenCalledWith({ isLoggedIn: true });
         expect(query('open').disabled).toBe(true);
@@ -497,7 +522,7 @@ describe('Background and editor lifecycle', () => {
 
     test('cleanup aborts stale loads, releases previews/picker/dirty hook and opens Home through its owner', async () => {
         await generate_front_page_settings_view(target);
-        await click('open'); expect(mocks.open).toHaveBeenCalledWith({ forceReload: true });
+        await click('open'); expect(mocks.open).toHaveBeenCalledWith({ forceReload: true, userActivation: false });
         setFile(new File(['x'], 'draft.png', { type: 'image/png' }));
         mocks.confirm.mockResolvedValueOnce(false);
         expect(await window.check_manage_permissions_dirty()).toBe(false);

@@ -5,6 +5,7 @@
 
 import { applyHomePresentation, applyHomeMediaPresentation, renderHomeDescription } from './front_page_presentation_renderer.js';
 import { createFrontPageTopRow } from './front_page_top_row_builder.js';
+import { loadCustomRoot } from './custom_root_navigation.js';
 import { createFrontPageArticleButtons } from './front_page_article_buttons.js';
 import { mountBackgroundVideo } from './front_page_background_video.js';
 import { getOrCreateContainer } from '../../reusable_components/dom_container_builder.js';
@@ -247,8 +248,9 @@ export function renderFrontPage() {
     return container;
 }
 
-/** Refresh visible Home after settings save without navigation, history or a reload. */
-export function refreshFrontPage() {
+/** Refresh visible Home after settings save, or replace it with the newly enabled custom document. */
+export async function refreshFrontPage() {
+    if (window.location.pathname === '/' && await loadCustomRoot({ replace: true })) return;
     const container = document.getElementById('front_page_container');
     const visit = container && visits.get(container);
     if (!visit || container.classList.contains('hidden')) return Promise.resolve();

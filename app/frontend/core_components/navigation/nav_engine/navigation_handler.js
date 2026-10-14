@@ -26,8 +26,14 @@ import {
 import { ensure_private_custom_views_loaded } from '../admin_and_user_tools/custom_view_reader.js';
 import { VIEW_DEACTIVATE_EVENT } from '../../../reusable_components/view_lifecycle_events.js';
 import { hasContentBesideLoadingIndicator } from '../../../reusable_components/loading/loading_indicator_printer.js';
+import { loadCustomRoot } from '../../front_page/custom_root_navigation.js';
 
 export async function handle_all_navigation(name, customViews, options = {}) {
+    if (options.isCurrentNavigation?.() === false) return { abort: true, reason: 'stale_navigation' };
+    if (name === 'front_page' && await loadCustomRoot({ replace: options.skipUrlUpdate === true,
+        isCurrentNavigation: options.isCurrentNavigation })) {
+        return { abort: true, reason: 'custom_root_document' };
+    }
     const { skipUrlUpdate = false, forceReload = false, replacementParams, restoreMountedView, preserveCardReturn, isCurrentNavigation } = options;
     await ensure_private_custom_views_loaded();
     if (isCurrentNavigation?.() === false) return { abort: true, reason: "stale_navigation" };
@@ -92,6 +98,7 @@ export async function handle_all_navigation(name, customViews, options = {}) {
 // Kept for backwards compatibility. Includes an inline dirty check for callers
 // that bypass handle_all_navigation.
 export async function performNavigation(data_lang_key, container_id, load_function, groupName, isCustomView = false) {
+    if (data_lang_key === 'front_page' && await loadCustomRoot()) return;
     if (typeof window.check_manage_permissions_dirty === 'function') {
         const ok = await window.check_manage_permissions_dirty();
         if (!ok) return;

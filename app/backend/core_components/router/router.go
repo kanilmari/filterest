@@ -143,6 +143,7 @@ func RegisterRoutes(frontendDir string, storagePath string) {
 	functionRegisterHandler("/symbol-assets/", symbol_registry.AssetHandler, "symbol_registry.AssetHandler", http.MethodGet)
 	functionRegisterHandler("/apps/", handleApps, "router.handleApps", http.MethodGet)
 	functionRegisterHandler("/storage/", ServeStorage, "router.ServeStorage", http.MethodGet)
+	functionRegisterHandler("/.site_root/", serveSiteRoot, "router.serveSiteRoot", http.MethodGet)
 	functionRegisterHandler("/api/media-library/list", media_library.ListHandler, "media_library.ListHandler", http.MethodGet)
 	functionRegisterHandler("/api/media-library/attach", media_library.AttachHandler, "media_library.AttachHandler", http.MethodPost)
 	functionRegisterHandler("/api/media-library/detach", media_library.DetachHandler, "media_library.DetachHandler", http.MethodPost)

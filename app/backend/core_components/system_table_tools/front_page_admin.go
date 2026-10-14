@@ -17,6 +17,7 @@ import (
 	backend "easelect/backend/core_components"
 	"easelect/backend/core_components/dbutils"
 	"easelect/backend/core_components/httpresponse"
+	"easelect/backend/core_components/runtimepaths"
 	e_sessions "easelect/backend/core_components/sessions"
 )
 
@@ -31,6 +32,7 @@ type frontPageBlockInput struct {
 }
 
 type frontPageAdminSettings struct {
+	DisplayIndexHTMLAtStartup    *bool `json:"display_index_html_at_startup"`
 	SeparateFrontPage            *bool `json:"separate_front_page"`
 	FrontPageButtonShowsSiteName *bool `json:"front_page_button_shows_site_name"`
 	FrontPageShowBlocks          *bool `json:"front_page_show_blocks"`
@@ -51,9 +53,10 @@ var frontPageAdminSaver = saveFrontPageAdminRequest
 
 // AdminFrontPageHandler manages front page settings and scope lists.
 // GET ?user_id=42 returns settings, hero, background, background_error, scope, saved,
-// inherits_common, source, version, blocks and datasets (newest_capable, can_read).
+// inherits_common, source, version, blocks, datasets (newest_capable, can_read),
+// and site_root {path,exists,ready,status_error} (administrator-only deployment status).
 // GET ?user_query=text returns at most 20 {user_id,display_name} accounts.
-// POST accepts {settings:{separate_front_page,front_page_button_shows_site_name,front_page_show_blocks}}
+// POST accepts {settings:{separate_front_page,front_page_button_shows_site_name,front_page_show_blocks,display_index_html_at_startup}}
 // or {hero:{title:{fi,en,usage_explanation},slogan:{fi,en,usage_explanation},description:{fi,en,usage_explanation}}}
 // or {presentation:{schema_version,anchor,horizontal_margin_px,vertical_margin_px,alignment,max_width_px,light_wash,light_opacity,dark_wash,dark_opacity},version}
 // (independent presentation_version from GET), or {user_id,version,blocks:[{dataset,result_limit,sort_order,enabled}]},
@@ -289,5 +292,5 @@ func getAdminFrontPage(w http.ResponseWriter, r *http.Request) {
 	httpresponse.RespondWithJSON(w, http.StatusOK, map[string]any{"settings": settings, "hero": hero, "background": background, "presentation": layout, "presentation_version": layoutVersion,
 		"background_error": backgroundError, "scope": map[string]any{"user_id": userID, "display_name": displayName},
 		"saved": saved, "inherits_common": scope > 1 && !saved, "source": source, "version": version,
-		"blocks": blocks, "datasets": datasets})
+		"blocks": blocks, "datasets": datasets, "site_root": backend.ReadSiteRootStatus(runtimepaths.Current().StorageRoot)})
 }

@@ -25,6 +25,7 @@ import (
 )
 
 func rootHandler(w http.ResponseWriter, r *http.Request) {
+	w = siteRootCacheResponse(w, r)
 	if pending, err := auth.IsFirstRunAdminSetupPending(r.Context(), backend.Db); err == nil && pending {
 		http.Redirect(w, r, "/first-run", http.StatusSeeOther)
 		return
@@ -33,10 +34,10 @@ func rootHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Salli suoraan JS, CSS, PNG, JPG, ... ilman kirjautumista
-	if strings.HasSuffix(r.URL.Path, ".js") ||
+	if !isSiteRootAssetRequest(r) && (strings.HasSuffix(r.URL.Path, ".js") ||
 		strings.HasSuffix(r.URL.Path, ".css") ||
 		strings.HasSuffix(r.URL.Path, ".png") ||
-		strings.HasSuffix(r.URL.Path, ".jpg") {
+		strings.HasSuffix(r.URL.Path, ".jpg")) {
 		fs := frontendassets.FileServer(localFrontendDir)
 		fs.ServeHTTP(w, r)
 		return
@@ -92,6 +93,11 @@ func rootHandler(w http.ResponseWriter, r *http.Request) {
 	if !onkoKayttaja {
 		// ei user_id:tä
 		if loginToBrowse && !authShellEntry {
+			if isSiteRootAssetRequest(r) {
+				setSiteRootHeaders(w)
+				http.Redirect(w, r, "/login", http.StatusSeeOther)
+				return
+			}
 			if r.URL.Path != "/" {
 				// File-like unknown paths are not SPA destinations. Returning 404 here
 				// prevents internet exploit scans (for example *.php probes) from being
@@ -157,6 +163,10 @@ func rootHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	} else if !loginToBrowse {
 		establishGuestBrowserBinding(w, r, session)
+	}
+
+	if tryServeCustomRoot(w, r, loginToBrowse, userIDVal) {
+		return
 	}
 
 	// Jos polku on "/", palvellaan index.html

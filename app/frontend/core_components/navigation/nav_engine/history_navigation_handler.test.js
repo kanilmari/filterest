@@ -37,6 +37,10 @@ vi.mock("./browser_tab_title_writer.js", () => ({
 }));
 
 const ifavHistory = vi.hoisted(() => ({ handle: vi.fn(async () => false) }));
+const customRootHistory = vi.hoisted(() => ({ load: vi.fn(() => false), hydrated: true }));
+vi.mock('../../front_page/custom_root_navigation.js', async importOriginal => ({
+    ...await importOriginal(), loadCustomRootFromHistory: customRootHistory.load,
+}));
 vi.mock("./image_first_view_history.js", () => ({
     handleImageFirstViewHistory: ifavHistory.handle,
     isImageFirstViewURL: () => new URL(location.href).searchParams.get("view") === "image_first_view",
@@ -126,7 +130,7 @@ vi.mock("./history_navigation_handler_helpers.js", () => ({
 }));
 
 vi.mock('./dataset_access_registry.js', () => ({
-    hasDatasetAccessSnapshot: () => true,
+    hasDatasetAccessSnapshot: () => customRootHistory.hydrated,
     subscribeDatasetAccessRegistry: () => () => {},
 }));
 
@@ -134,6 +138,8 @@ await import("./history_navigation_handler.js");
 
 describe("history_navigation_handler", () => {
     beforeEach(() => {
+        customRootHistory.load.mockReset().mockReturnValue(false);
+        customRootHistory.hydrated = true;
         ifavHistory.handle.mockResolvedValue(false);
         browserTabTitle.update.mockClear();
         closeRowArticleMock.mockClear();
@@ -149,6 +155,20 @@ describe("history_navigation_handler", () => {
         document.body.innerHTML = "";
         window.__bigCardClosing = false;
         window.history.replaceState({}, "", "/events");
+    });
+
+    test.each([false, true])('custom root history loads the document before any hydration or article restoration, hydrated=%s', async hydrated => {
+        customRootHistory.hydrated = hydrated;
+        customRootHistory.load.mockReturnValue(true);
+        window.history.replaceState({}, '', '/');
+        window.dispatchEvent(new PopStateEvent('popstate'));
+        await Promise.resolve();
+        expect(customRootHistory.load).toHaveBeenCalledOnce();
+        expect(ifavHistory.handle).not.toHaveBeenCalled();
+        expect(handleAllNavigationMock).not.toHaveBeenCalled();
+        expect(closeRowArticleMock).not.toHaveBeenCalled();
+        expect(setParamsMock).not.toHaveBeenCalled();
+        expect(browserTabTitle.update).not.toHaveBeenCalled();
     });
 
     test.each([false, true])('Back to enabled root restores Home after article cleanup, articleOpen=%s', async articleOpen => {

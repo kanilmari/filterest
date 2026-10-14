@@ -16,6 +16,7 @@ import (
 )
 
 type FrontPageSettings struct {
+	DisplayIndexHTMLAtStartup    bool `json:"display_index_html_at_startup"`
 	SeparateFrontPage            bool `json:"separate_front_page"`
 	FrontPageButtonShowsSiteName bool `json:"front_page_button_shows_site_name"`
 	FrontPageShowBlocks          bool `json:"front_page_show_blocks"`
@@ -51,6 +52,11 @@ func ReadFrontPageSettings(ctx context.Context, db *sql.DB) (FrontPageSettings, 
 			return FrontPageSettings{}, fmt.Errorf("%s must be boolean", item.key)
 		}
 		*item.value = value.Bool
+	}
+	var err error
+	settings.DisplayIndexHTMLAtStartup, err = ReadDisplayIndexHTMLAtStartup(ctx, db)
+	if err != nil {
+		return FrontPageSettings{}, err
 	}
 	return settings, nil
 }

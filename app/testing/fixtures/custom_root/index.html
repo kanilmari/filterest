@@ -1,0 +1,25 @@
+<!doctype html>
+<!-- index.html
+     Provides the operator-owned K378 browser proof document.
+     Connects the protected root to local CSS, script, image and dataset navigation.
+     Uses external scripts only, matching the custom page's CSP. -->
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>K378 custom root fixture</title>
+  <link rel="stylesheet" href="/.site_root/custom_root.css">
+  <script src="/.site_root/custom_root.js" defer></script>
+</head>
+<body>
+  <main data-testid="custom-root-fixture">
+    <h1>K378 custom root fixture</h1>
+    <p data-testid="custom-root-script-marker" hidden></p>
+    <img data-testid="custom-root-image" src="/.site_root/custom_root.svg" width="48" height="48" alt="K378 fixture square">
+    <nav aria-label="Fixture navigation">
+      <a data-testid="custom-root-home" href="/">Home / Etusivu</a>
+      <a data-testid="custom-root-dataset" href="/system_config">Dataset / Aineisto</a>
+    </nav>
+  </main>
+</body>
+</html>

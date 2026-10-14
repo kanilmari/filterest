@@ -36,6 +36,24 @@ func TestRegistryRefusesInvalidSignInLimit(t *testing.T) {
 	}
 }
 
+func TestCustomRootSwitchRequiresBoolean(t *testing.T) {
+	for _, value := range []any{false, true} {
+		if err := ValidateRow("system_config", map[string]any{"key": "display_index_html_at_startup", "value_type": 2, "boolean_value": value}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, row := range []map[string]any{
+		{"key": "display_index_html_at_startup", "value_type": 2, "boolean_value": "true"},
+		{"key": "display_index_html_at_startup", "value_type": 2, "boolean_value": nil},
+		{"key": "display_index_html_at_startup", "value_type": 5, "boolean_value": true},
+	} {
+		var refusal *httpresponse.Refusal
+		if err := ValidateRow("system_config", row); !errors.As(err, &refusal) || refusal.LangKey != "error_setting_boolean_invalid" {
+			t.Fatal(err)
+		}
+	}
+}
+
 func TestFrontPageBoxesBooleanRegistry(t *testing.T) {
 	for _, value := range []bool{true, false} {
 		if err := ValidateRow("system_config", map[string]interface{}{"key": "front_page_show_blocks", "boolean_value": value, "value_type": 2}); err != nil {

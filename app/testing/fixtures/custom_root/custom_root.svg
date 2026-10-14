@@ -1,0 +1,8 @@
+<!-- custom_root.svg
+     Provides a small local image for the protected asset proof.
+     Connects image delivery with the fixture's natural-size assertion.
+     Contains no script, embedded document or remote resource. -->
+<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 48 48">
+  <rect x="2" y="2" width="44" height="44" rx="6" fill="#276a91"/>
+  <path d="M12 24h24M24 12v24" stroke="#fff" stroke-width="4"/>
+</svg>

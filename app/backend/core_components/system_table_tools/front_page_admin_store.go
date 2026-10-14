@@ -74,6 +74,12 @@ func saveFrontPageAdminRequest(ctx context.Context, request frontPageAdminReques
 				value bool
 			}{"front_page_show_blocks", *request.Settings.FrontPageShowBlocks})
 		}
+		if request.Settings.DisplayIndexHTMLAtStartup != nil {
+			settings = append(settings, struct {
+				key   string
+				value bool
+			}{backend.DisplayIndexHTMLAtStartupKey, *request.Settings.DisplayIndexHTMLAtStartup})
+		}
 		for _, setting := range settings {
 			if err := system_config_checks.ValidateRow("system_config", map[string]interface{}{"key": setting.key, "value_type": 2, "boolean_value": setting.value}); err != nil {
 				return "", err

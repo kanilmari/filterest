@@ -2,6 +2,22 @@
   "version": 1,
   "browser_areas": [
     {
+      "area": "Manual custom root proof tooling",
+      "paths": [
+        "app/playwright.custom-root.config.ts",
+        "app/testing/e2e/manual-specs.json",
+        "app/testing/e2e/matrix-test-selection.cjs",
+        "app/testing/e2e/T_admin/T18_custom_root_page.spec.ts",
+        "app/testing/e2e/T_admin/T18_custom_root_fixture.sh",
+        "app/testing/e2e/T_admin/custom_root_fixture_operator.py",
+        "app/testing/e2e/T_admin/custom_root_setup.ts",
+        "app/testing/fixtures/custom_root",
+        "app/testing/python/test_custom_root_proof_tooling.py"
+      ],
+      "specs": [],
+      "none": "K378 is manual-only: the coordinator places owned native operator files and explicitly uses playwright.custom-root.config.ts. Never select it for a matrix or relevant-check browser run."
+    },
+    {
       "area": "Dataset listing and scroll",
       "paths": [
         "app/frontend/core_components/infinite_scroll",
@@ -310,6 +326,11 @@
     {
       "area": "Front page",
       "paths": [
+        "app/backend/core_components/custom_root_files.go",
+        "app/backend/core_components/custom_root_files_test.go",
+        "app/frontend/core_components/admin_tools/custom_root_copy.js",
+        "app/frontend/core_components/admin_tools/custom_root_settings_control.js",
+        "app/frontend/core_components/admin_tools/custom_root_settings_control.test.js",
         "app/frontend/core_components/front_page",
         "app/frontend/core_components/service_catalog",
         "app/frontend/shared/front_page_presentation"

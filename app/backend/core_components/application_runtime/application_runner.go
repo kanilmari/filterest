@@ -312,6 +312,7 @@ func Run(options Options) {
 
 	middlewares.InitMaintenanceMode()
 	wrappedHandler = middlewares.WithMaintenanceMode(wrappedHandler)
+	wrappedHandler = router.WithCustomRootCachePolicy(wrappedHandler)
 	if middlewares.IsMaintenanceMode() {
 		log.Println("\033[33m⚠ MAINTENANCE MODE ACTIVE — all requests return 503\033[0m")
 	}

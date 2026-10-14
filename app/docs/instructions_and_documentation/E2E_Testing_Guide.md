@@ -19,6 +19,10 @@ tooling. A standalone checkout ignores that legacy Easelect-only variable.
 
 ## Quick Reference
 
+The [manual K378 custom root proof](../../testing/fixtures/custom_root/README.md)
+uses its own config and owned native fixture. Ordinary, setup-enabled, nightly
+and relevant-check browser runs exclude it.
+
 ```bash
 # Run a specific test file
 ./filterest test testing/e2e/T_admin/T7_card_visibility.spec.ts --project=desktop-card

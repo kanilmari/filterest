@@ -151,15 +151,18 @@ describe('auth_mode_handler', () => {
   });
 
   test('stores the two Home presentation fields and resets stale values from an older server', async () => {
-    fetchAuthModesMock.mockResolvedValue({ needs_button: 'login', separate_front_page: true,
+    fetchAuthModesMock.mockResolvedValue({ needs_button: 'login', separate_front_page: true, display_index_html_at_startup: true,
       front_page_button_site_name: 'Configured site' });
     const mod = await loadModule();
     await mod.setAuthModes();
     expect(localStorage.getItem('separate_front_page')).toBe('true');
+    const customRoot = await import('../front_page/custom_root_navigation.js');
+    expect(customRoot.isCustomRootEnabled()).toBe(true);
     expect(localStorage.getItem('front_page_button_site_name')).toBe('Configured site');
     fetchAuthModesMock.mockResolvedValue({ needs_button: 'login' });
     await mod.setAuthModes();
     expect(localStorage.getItem('separate_front_page')).toBe('false');
+    expect(customRoot.isCustomRootEnabled()).toBe(false);
     expect(localStorage.getItem('front_page_button_site_name')).toBe('');
   });
 

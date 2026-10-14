@@ -21,6 +21,24 @@ ROOT = Path(__file__).resolve().parents[3]
 MAP_PATH = "app/testing/python/relevant_check_map.json"
 PYTHON = "data/runtime/python/venv/bin/python"
 CONTAINERS = {"core_components", "reusable_components", "pipeline", "shared"}
+MANUAL_SPECS = "app/testing/e2e/manual-specs.json"
+
+
+def manual_specs(root: Path) -> set[str]:
+    """Share explicit manual-only exclusions with both Playwright matrix modes."""
+    manifest = root / MANUAL_SPECS
+    if not manifest.exists():
+        return set()  # Small discovery fixture repositories have no manual suite.
+    entries = json.loads(manifest.read_text())
+    if not isinstance(entries, list) or not all(isinstance(path, str) for path in entries):
+        raise ValueError("manual specs must be a list of relative spec paths")
+    result = set()
+    for entry in entries:
+        path = "app/testing/e2e/" + entry
+        if normalize_path(path) != path or not entry.endswith(".spec.ts") or not (root / path).is_file():
+            raise ValueError(f"invalid or missing manual spec: {entry}")
+        result.add(path)
+    return result
 
 
 def normalize_path(value: str) -> str:
@@ -58,6 +76,7 @@ def validate_map(root: Path, policy: dict) -> None:
     """Refuse stale paths/specs/projects and uncovered areas before printing commands."""
     if policy.get("version") != 1:
         raise ValueError("unsupported relevant-check map version")
+    manual = manual_specs(root)
     projects = set(re.findall(r"\bname:\s*['\"]([^'\"]+)['\"]", (root / "app/playwright.config.ts").read_text()))
     covered, labels = set(), set()
     references = [policy["file_length_guard"], *policy["bootstrap_proofs"]]
@@ -75,6 +94,8 @@ def validate_map(root: Path, policy: dict) -> None:
             covered.add(path)
         references.extend(entry["paths"] + entry["specs"])
         for spec in entry["specs"]:
+            if spec in manual:
+                raise ValueError(f"manual spec cannot enter matrix browser coverage: {spec}")
             if not spec.startswith("app/testing/e2e/") or not spec.endswith(".spec.ts"):
                 raise ValueError(f"not a matrix browser spec: {spec}")
     for guard in policy["source_guards"]:
@@ -214,7 +235,7 @@ def make_plan(root: Path, paths: list[str], *, python: str = PYTHON, policy: dic
             plan["notes"].append(f"Browser none — {entry['area']}: {entry['none']}")
     # A changed browser spec is itself a proof even when no product path changed.
     direct_specs = {path for path in changed if path.startswith("app/testing/e2e/")
-                    and path.endswith(".spec.ts") and (root / path).is_file()}
+                    and path.endswith(".spec.ts") and (root / path).is_file()} - manual_specs(root)
     if direct_specs:
         browser.setdefault(("desktop-card", "mobile-card", "tablet-card"), set()).update(direct_specs)
     for projects, specs in sorted(browser.items()):

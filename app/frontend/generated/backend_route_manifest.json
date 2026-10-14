@@ -58,6 +58,57 @@
       ]
     },
     {
+      "path_pattern": "/.site_root/",
+      "match_type": "prefix",
+      "handler_name": "router.serveSiteRoot",
+      "methods": [
+        "GET",
+        "HEAD"
+      ],
+      "method_source": "route_registration",
+      "scenarios": [
+        {
+          "name": "production",
+          "profile_name": "public",
+          "skip_stages": [
+            "access_control",
+            "admin_check",
+            "auth",
+            "csrf",
+            "device_id",
+            "fingerprint"
+          ],
+          "admin_only": false
+        },
+        {
+          "name": "development",
+          "profile_name": "public",
+          "skip_stages": [
+            "access_control",
+            "admin_check",
+            "auth",
+            "csrf",
+            "device_id",
+            "fingerprint"
+          ],
+          "admin_only": false
+        },
+        {
+          "name": "api_language",
+          "profile_name": "public",
+          "skip_stages": [
+            "access_control",
+            "admin_check",
+            "auth",
+            "csrf",
+            "device_id",
+            "fingerprint"
+          ],
+          "admin_only": false
+        }
+      ]
+    },
+    {
       "path_pattern": "/admin/",
       "match_type": "prefix",
       "handler_name": "router.adminHandler",

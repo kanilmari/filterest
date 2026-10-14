@@ -9,10 +9,12 @@ import { bindDatasetLanguageRenderer } from '../table_views/dataset_value_locali
 import { showConfirmModal } from '../../reusable_components/modal/confirm_modal_builder.js';
 import { setAuthModes } from './auth_mode_handler.js';
 import { openFrontPage } from '../front_page/front_page_navigation.js';
+import { isCustomRootEnabled } from '../front_page/custom_root_navigation.js';
 import { renderNavbarFrontPage } from '../front_page/navbar_front_page.js';
 import { refreshFrontPage } from '../front_page/front_page_printer.js';
 import { createLangKeyEditor, applyLangKeyConfig } from './lang_key_editor_builder.js';
 import { createFrontPageBackgroundControl } from './front_page_background_control.js';
+import { createCustomRootSettingsControl } from './custom_root_settings_control.js';
 import { createFrontPageArticleButtonsEditor } from './front_page_article_buttons_editor.js';
 import {
     frontPageText, frontPageLabel, frontPageButton, frontPageField, frontPageSection, frontPageStatus,
@@ -52,6 +54,7 @@ export async function generate_front_page_settings_view(container, { onSaved = r
     toolbar.append(reloadButton, openButton);
 
     const settingsSection = frontPageSection('front_page_settings');
+    const customRoot = createCustomRootSettingsControl();
     const enabledInput = Object.assign(document.createElement('input'), { type: 'checkbox' });
     const siteNameInput = Object.assign(document.createElement('input'), { type: 'checkbox' });
     const showBlocksInput = Object.assign(document.createElement('input'), { type: 'checkbox' });
@@ -61,6 +64,7 @@ export async function generate_front_page_settings_view(container, { onSaved = r
         frontPageField('front_page_enabled', enabledInput, 'enabled'),
         frontPageField('front_page_button_shows_site_name', siteNameInput, 'site-name'),
         frontPageField('front_page_show_blocks', showBlocksInput, 'show-blocks'),
+        ...customRoot.elements,
         settingsStatus, settingsSave,
     );
 
@@ -140,7 +144,7 @@ export async function generate_front_page_settings_view(container, { onSaved = r
 
     function settingsValue() {
         return { separate_front_page: enabledInput.checked, front_page_button_shows_site_name: siteNameInput.checked,
-            front_page_show_blocks: showBlocksInput.checked };
+            front_page_show_blocks: showBlocksInput.checked, display_index_html_at_startup: customRoot.input.checked };
     }
 
     function heroValue() {
@@ -169,7 +173,7 @@ export async function generate_front_page_settings_view(container, { onSaved = r
         resetButton.disabled = busy || conflicted || !ready || (!saved && !blocksDirty());
         copyButton.disabled = busy || conflicted || !ready;
         reloadButton.disabled = busy;
-        openButton.disabled = busy || !ready || localStorage.getItem('separate_front_page') !== 'true';
+        openButton.disabled = busy || !ready || (!isCustomRootEnabled() && localStorage.getItem('separate_front_page') !== 'true');
         if (blocksDirty()) frontPageLabel(dirtyStatus, 'unsaved_changes');
         else { dirtyStatus.textContent = ''; delete dirtyStatus.dataset.langKey; }
         if (settingsDirty()) frontPageLabel(settingsStatus, 'unsaved_changes');
@@ -303,6 +307,8 @@ export async function generate_front_page_settings_view(container, { onSaved = r
         blockBaseline = scopeSignature(blocks);
         conflicted = false;
         if (global) {
+            customRoot.input.checked = data.settings.display_index_html_at_startup === true;
+            customRoot.setSnapshot(data.site_root);
             enabledInput.checked = data.settings.separate_front_page === true;
             siteNameInput.checked = data.settings.front_page_button_shows_site_name === true;
             showBlocksInput.checked = data.settings.front_page_show_blocks !== false;
@@ -385,7 +391,7 @@ export async function generate_front_page_settings_view(container, { onSaved = r
         renderBlocks(dataset.dataset, 'remove');
         updateState();
     });
-    [enabledInput, siteNameInput, showBlocksInput].forEach(input => input.addEventListener('change', updateState));
+    [enabledInput, siteNameInput, showBlocksInput, customRoot.input].forEach(input => input.addEventListener('change', updateState));
     settingsSave.addEventListener('click', () => {
         if (!ready || !settingsDirty()) return;
         void operate(async () => {
@@ -463,7 +469,7 @@ export async function generate_front_page_settings_view(container, { onSaved = r
         await operate(() => Promise.all([fetchScope(currentScope, { global: true }), articles.load()]),
             'front_page_load_failed', 'front_page_loaded');
     });
-    openButton.addEventListener('click', () => { void openFrontPage({ forceReload: true }); });
+    openButton.addEventListener('click', event => { void openFrontPage({ forceReload: true, userActivation: event.isTrusted }); });
 
     // Reuse the navigation pipeline's dirty hook and the shell's existing cleanup contract.
     const checkDirty = async () => !busy && !articles.busy() && await confirmDiscard(ready && anyDirty());

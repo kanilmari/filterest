@@ -89,6 +89,7 @@ test('ordinary click opens Home and modified clicks keep the root href', () => {
     const link = document.querySelector('a');
     link.click();
     expect(mocks.open).toHaveBeenCalledTimes(1);
+    expect(mocks.open).toHaveBeenCalledWith({ userActivation: false }); // Synthetic clicks cannot unlock retries.
     const event = new MouseEvent('click', { cancelable: true, ctrlKey: true });
     link.dispatchEvent(event);
     expect(event.defaultPrevented).toBe(false);

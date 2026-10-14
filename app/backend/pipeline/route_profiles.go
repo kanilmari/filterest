@@ -106,6 +106,8 @@ var AdminProfile = RouteProfile{
 
 // RouteProfiles is the single source of truth for per-route pipeline configuration.
 var RouteProfiles = map[string]RouteProfile{
+	// Operator root assets run the root handler's own login and browser checks.
+	"router.serveSiteRoot": PublicProfile,
 	// Article defaults reuse canonical dataset read authorization inside the handlers.
 	"system_table_tools.GetArticleSectionDefaultsHandler":  LoginOnlyProfile,
 	"system_table_tools.SaveArticleSectionDefaultsHandler": AdminProfile,

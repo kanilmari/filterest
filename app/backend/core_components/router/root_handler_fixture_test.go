@@ -58,6 +58,7 @@ const (
 // reached a browser needs them to have been worth reading in the first place.
 type rootHandlerMockConfig struct {
 	loginToBrowse      bool
+	displayIndexHTML   bool
 	instanceRole       string
 	firstRun           bool
 	datasetDescription string
@@ -122,6 +123,8 @@ func (c *rootHandlerMockConn) QueryContext(_ context.Context, query string, args
 		*c.config.metadataQueries = append(*c.config.metadataQueries, query)
 	}
 	switch {
+	case strings.Contains(query, "WHERE key = $1") && len(args) > 0 && args[0].Value == backend.DisplayIndexHTMLAtStartupKey:
+		return &rootHandlerMockRows{cols: []string{"boolean_value"}, vals: []driver.Value{c.config.displayIndexHTML}}, nil
 	case strings.Contains(query, "FROM system_db_table_aliases"):
 		if strings.Contains(query, "SELECT table_uid, alias_slug") {
 			return &rootHandlerMockRows{cols: []string{"table_uid", "alias_slug", "is_primary"},

@@ -1,0 +1,9 @@
+/* custom_root.css
+   Marks the local stylesheet's successful delivery in the K378 fixture.
+   Connects the protected static prefix to an observable computed style.
+   Provides readable operator copy with either operating-system theme. */
+:root { color-scheme: light dark; }
+body { font-family: sans-serif; margin: 2rem; }
+main { border: 3px solid currentColor; max-width: 40rem; padding: 1rem; }
+[data-testid="custom-root-script-marker"] { font-weight: 700; }
+nav { display: flex; gap: 1rem; }
