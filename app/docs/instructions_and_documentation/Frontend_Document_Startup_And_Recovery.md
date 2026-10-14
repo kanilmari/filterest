@@ -7,6 +7,26 @@
 
 Part of the [Frontend Guide](Frontend_Guide.md).
 
+## Production bundle addresses
+
+The production base in [vite.config.mjs](../../frontend/vite.config.mjs) is
+`/frontend/dist/`, matching the directory served by Go. Vite uses it for
+preload hints and emitted asset URLs; module imports resolve beside their
+bundled entry. The server selects the current hashed main, login and CSS files
+through [asset_paths.go](../../backend/core_components/frontend_assets/asset_paths.go).
+Explicit source icon URLs under `/frontend/icons/` and service addresses keep
+their own paths. Development serving retains base `/` and the existing source
+asset rewrite.
+
+Refresh the tracked bundle with `./filterest build --outDir dist`, following
+the [Developer Guide](DEV_GUIDE.md#build-and-run). The ordinary Python
+[bundle check](../../testing/python/test_browser_bundle_check.py) resolves
+emitted imports and Vite preload maps against the served dist directory and
+refuses missing files or a preload prefix outside it. The release
+[bundle audit](../../server_tools/release/audit_browser_bundle.py) separately
+rebuilds and compares every filename and byte; both checks are needed because
+an incorrect base can be reproducible.
+
 ## SPA Navigation Contract
 
 Filterest is a single-page application (SPA). **No user or administrator workflow

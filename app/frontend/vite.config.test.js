@@ -113,6 +113,11 @@ describe('vite Go-template development rendering', () => {
 });
 
 describe('vite backend-owned asset routing', () => {
+  test('addresses production chunks under served dist while keeping development at root', () => {
+    expect(viteConfig({ command: 'build' }).base).toBe('/frontend/dist/');
+    expect(viteConfig({ command: 'serve' }).base).toBe('/');
+  });
+
   test('proxies metadata symbols through the Go backend in development', () => {
     const config = viteConfig({ command: 'serve' });
 

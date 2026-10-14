@@ -12,9 +12,12 @@ path through npm, so the comparison is not the only thing proved.
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
+import re
 import shutil
 import stat
+from urllib.parse import urljoin, urlsplit
 
 import pytest
 
@@ -22,6 +25,82 @@ from server_tools.release import audit_browser_bundle, browser_bundle
 
 
 BUILT = {"main.aaaa.min.js": b"built bundle\n", "imports.bbbb.min.css": b"built styles\n"}
+SERVED_DIST = "/frontend/dist/"
+
+
+def assert_served_dependency_paths(bundle: dict[str, bytes]) -> tuple[int, int]:
+    """Resolve emitted imports and Vite preload maps as the browser does.
+
+    Vite 6 emits literal module specifiers, a JSON array in each mapDeps
+    declaration, and one shared URL-prefix function. Read that emitted prefix,
+    not the source configuration: existing files alone cannot detect a wrong
+    preload base. Refuse an unrecognized helper/map rather than silently skip it.
+    """
+    chunks = {name: data.decode() for name, data in bundle.items() if name.endswith(".js")}
+    assert chunks, "the production bundle contains no JavaScript"
+    preload_bases = {
+        match[2]
+        for source in chunks.values()
+        for match in re.findall(
+            r'function\((\w+)\)\{return(["\'])(/frontend/[^"\']*)\2\+\1\}', source
+        )
+    }
+    imports = preloads = 0
+
+    def assert_target(owner: str, reference: str, base: str) -> None:
+        address = urlsplit(urljoin(base, reference))
+        assert not address.scheme and not address.netloc, (owner, reference, address)
+        assert address.path.startswith(SERVED_DIST), f"{owner}: dependency served outside dist: {address.path}"
+        target = address.path.removeprefix(SERVED_DIST)
+        assert target in bundle, f"{owner}: missing dependency: {address.path}"
+
+    for name, source in chunks.items():
+        assert not re.search(r'/frontend/[^/"\'\s]+\.min\.js', source), name
+        # Covers static imports, re-exports and literal dynamic imports.
+        references = re.findall(r'\b(?:from\s*|import\s*\(?\s*)["\']([^"\']+)["\']', source)
+        for reference in references:
+            assert_target(name, reference, SERVED_DIST + name)
+            imports += 1
+        if "__vite__mapDeps=" not in source:
+            continue
+        maps = re.findall(r'__vite__mapDeps=\([^;]*?\.f=(\[[^\]]*\])', source)
+        assert maps, f"{name}: unrecognized Vite preload dependency map"
+        assert len(preload_bases) == 1, f"unrecognized Vite preload URL helper: {preload_bases}"
+        for dependency_map in maps:
+            for reference in json.loads(dependency_map):
+                assert_target(name, reference, next(iter(preload_bases)))
+                preloads += 1
+    return imports, preloads
+
+
+def test_tracked_browser_dependencies_resolve_under_served_dist():
+    root = Path(__file__).resolve().parents[3]
+    imports, preloads = assert_served_dependency_paths(browser_bundle.tracked_bundle(root))
+    assert imports > 0 and preloads > 0, "the shipped dependency graph was not checked"
+
+
+@pytest.mark.parametrize("failure", ["preload_base", "missing_import", "missing_preload", "absolute_import"])
+def test_dependency_guard_refuses_wrong_addresses_and_missing_files(failure):
+    bundle = {
+        "main.min.js": (
+            'const __vite__mapDeps=(i,m=__vite__mapDeps,d=(m.f||(m.f=["lazy.min.js"])))=>i.map(i=>d[i]);'
+            'const url=function(e){return"/frontend/dist/"+e};'
+            'import "./shared.min.js";import("./lazy.min.js");'
+        ).encode(),
+        "shared.min.js": b"export const shared = true;",
+        "lazy.min.js": b"export const lazy = true;",
+    }
+    assert assert_served_dependency_paths(bundle) == (2, 1)
+    if failure == "preload_base":
+        bundle["main.min.js"] = bundle["main.min.js"].replace(b'/frontend/dist/', b'/frontend/')
+    elif failure == "missing_import":
+        del bundle["shared.min.js"]
+    elif failure == "missing_preload":
+        bundle["main.min.js"] = bundle["main.min.js"].replace(b'"lazy.min.js"', b'"missing.min.js"')
+    else:
+        bundle["main.min.js"] = bundle["main.min.js"].replace(b'./shared.min.js', b'/frontend/shared.min.js')
+    with pytest.raises(AssertionError):
+        assert_served_dependency_paths(bundle)
 
 
 def checkout(tmp_path: Path, tracked: dict[str, bytes]) -> Path:

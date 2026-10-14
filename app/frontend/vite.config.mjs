@@ -435,7 +435,8 @@ function goTemplateTransform() {
 const proxyOpts = { target: DEV_BACKEND_URL, changeOrigin: true, secure: false };
 
 export default ({ command }) => ({
-  base: command === 'build' ? '/frontend/' : '/',
+  // Go serves bundled files under dist; Vite also uses this base for preload URLs.
+  base: command === 'build' ? '/frontend/dist/' : '/',
   cacheDir: projectLayout.viteCacheDir,
   server: {
     port: VITE_DEV_PORT,

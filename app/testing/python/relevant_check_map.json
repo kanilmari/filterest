@@ -507,6 +507,16 @@
   "python_guards": [
     {
       "paths": [
+        "app/frontend/vite.config.mjs",
+        "app/frontend/dist",
+        "app/server_tools/release/browser_bundle.py"
+      ],
+      "tests": [
+        "app/testing/python/test_browser_bundle_check.py"
+      ]
+    },
+    {
+      "paths": [
         "app/backend/core_components/middlewares/maintenance_page.html",
         "app/frontend",
         "app/server_tools/licenses",
