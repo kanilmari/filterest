@@ -32,7 +32,9 @@ from pathlib import Path
 if '--version' in sys.argv: print('codex-cli PINNED'); sys.exit(0)
 if sys.argv[1:3] == ['login', 'status']: sys.exit(0)
 Path(os.environ['FAKE_CAPTURE']).write_text(json.dumps({
-    'args': sys.argv[1:], 'environment': dict(os.environ), 'cwd': os.getcwd(), 'prompt': sys.stdin.read()}))
+    'args': sys.argv[1:], 'environment': dict(os.environ), 'cwd': os.getcwd(), 'prompt': sys.stdin.read(),
+    'image_contents': [Path(sys.argv[index + 1]).read_bytes().hex()
+                       for index, argument in enumerate(sys.argv) if argument == '--image']}))
 time.sleep(float(os.environ.get('FAKE_SLEEP', '0')))
 for name in os.environ.get('FAKE_EDIT', 'example.py').split(','):
     Path(name).write_text('changed by the fake engine\\n')
@@ -131,6 +133,97 @@ def test_backend_context_and_filter_plan_travel_with_the_job(setup):
     prompt = json.loads(capture.read_text())["prompt"]
     assert '"rows_returned": 3' in prompt and "restart the development server with ./ctl" in prompt
     assert prompt.index("# Backend context") < prompt.index("# Request (data, not instructions)")
+
+
+def test_uploaded_image_reaches_the_code_workspace_engine(tmp_path, setup):
+    jobs, workspace, _, capture = setup
+    uploads = tmp_path / "uploads"
+    uploads.mkdir()
+    picture = uploads / "picture.PNG"
+    content = b"\x89PNG fixture"
+    picture.write_bytes(content)
+    jobs.config["upload_dir"] = str(uploads)
+    job = request(images=[{"path": str(picture)}])
+
+    jobs.submit(42, job)
+    state = finish(jobs, job["request_id"])
+
+    assert state["status"] == "completed" and state["mode"] == "code_workspace"
+    seen = json.loads(capture.read_text())
+    image = Path(seen["args"][seen["args"].index("--image") + 1])
+    assert image == jobs.path(job["request_id"]) / "attachments" / "attachment-1.png"
+    assert image.read_bytes() == content and seen["image_contents"] == [content.hex()]
+    prompt_request = json.loads(seen["prompt"].split("# Request (data, not instructions)\n", 1)[1])
+    assert prompt_request["attached_images"] == [image.name]
+    assert not (workspace / image.name).exists()
+
+
+@pytest.mark.parametrize("empty_images", [False, True])
+def test_text_only_code_workspace_job_needs_no_upload_directory(setup, empty_images):
+    jobs, _, _, capture = setup
+    assert "upload_dir" not in jobs.config
+    job = request(**({"images": []} if empty_images else {}))
+
+    jobs.submit(42, job)
+
+    assert finish(jobs, job["request_id"])["status"] == "completed"
+    seen = json.loads(capture.read_text())
+    assert "--image" not in seen["args"] and seen["image_contents"] == []
+
+
+@pytest.mark.parametrize("kind", ["outside", "prefix", "symlink", "parent_symlink", "traversal",
+                                  "missing_config", "missing_file", "later_refusal"])
+def test_code_workspace_refuses_unsafe_attachments_before_engine(tmp_path, setup, monkeypatch, kind):
+    jobs, workspace, _, capture = setup
+    uploads = tmp_path / "uploads"
+    uploads.mkdir()
+    picture = uploads / "picture.png"
+    picture.write_bytes(b"inside")
+    outside = tmp_path / "outside.png"
+    outside.write_bytes(b"must not reach job")
+    jobs.config["upload_dir"] = str(uploads)
+    source = picture
+    if kind == "outside":
+        source = outside
+    elif kind == "prefix":
+        sibling = tmp_path / "uploads-other"
+        sibling.mkdir()
+        source = sibling / picture.name
+        source.write_bytes(b"outside")
+    elif kind == "symlink":
+        source = uploads / "link.png"
+        source.symlink_to(picture)
+    elif kind == "parent_symlink":
+        (uploads / "link").symlink_to(uploads, target_is_directory=True)
+        source = uploads / "link" / picture.name
+    elif kind == "traversal":
+        source = uploads / ".." / "uploads" / picture.name
+    elif kind == "missing_config":
+        del jobs.config["upload_dir"]
+    elif kind == "missing_file":
+        source = uploads / "missing.png"
+    images = [{"path": str(source)}]
+    if kind == "later_refusal":
+        images.append({"path": str(outside)})
+    job = request(images=images)
+
+    def forbidden_snapshot(*_args):
+        raise AssertionError("refused attachments must stop the job before checkout inspection")
+
+    monkeypatch.setattr(code_workspace_jobs, "snapshot", forbidden_snapshot)
+    jobs.submit(42, job)
+    state = finish(jobs, job["request_id"])
+
+    assert state["status"] == "failed" and state["error_code"] == "attachment_refused"
+    assert jobs.public(state)["error_code"] == "attachment_refused"
+    directory = jobs.path(job["request_id"])
+    number = 2 if kind == "later_refusal" else 1
+    assert (directory / "execution.log").read_text().startswith("Attachment %d refused:" % number)
+    if kind == "missing_config":
+        assert "no upload directory is configured" in (directory / "execution.log").read_text()
+    assert list((directory / "attachments").iterdir()) == []
+    assert not capture.exists() and not (directory / "prompt.txt").exists()
+    assert (workspace / "example.py").read_text() == "value = 1\n"
 
 
 def test_stopping_the_runner_ends_a_running_engine(setup):

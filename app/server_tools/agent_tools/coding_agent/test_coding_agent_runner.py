@@ -22,7 +22,7 @@ FAKE_CLI = """#!/usr/bin/env python3
 import json,os,sys,time
 from pathlib import Path
 if '--version' in sys.argv: print(os.environ.get('FAKE_VERSION','codex-cli PINNED'));sys.exit(0)
-if sys.argv[1:3] == ['login','status']: sys.exit(int(os.environ.get('FAKE_AUTH_EXIT','0')))
+if sys.argv[1:3] == ['login','status']: print('Logged in using ChatGPT',file=sys.stderr);sys.exit(int(os.environ.get('FAKE_AUTH_EXIT','0')))
 Path(os.environ.get('FAKE_CAPTURE', os.devnull)).write_text(json.dumps({'args': sys.argv[1:], 'environment': dict(os.environ)}))
 time.sleep(float(os.environ.get('FAKE_SLEEP','0')))
 Path('example.py').write_text('value = 2\\n')

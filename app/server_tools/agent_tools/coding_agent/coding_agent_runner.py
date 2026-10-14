@@ -19,8 +19,9 @@ from http.server import BaseHTTPRequestHandler
 from urllib.parse import parse_qs, urlsplit
 
 from codex_engine import (CODE_WORKSPACE, JOB_MODES, PINNED_CODEX_VERSION, SITE_ASSISTANT,
-                          code_workspace_sandbox, engine_environment, executable_status)
+                          code_workspace_sandbox, engine_command, engine_environment, executable_status)
 from coding_agent_jobs import CodingJobs, JobError, atomic_json, offered_modes, requested_mode
+from upload_directory import validate_upload_directory
 
 DEDICATED = "dedicated"
 SAME_USER_WORKSTATION = "same_user_workstation"
@@ -82,6 +83,8 @@ def validate_config(config):
                 raise ValueError("job storage must be outside the source checkout")
     if config.get("site_tls_ca_file"):
         absolute(config["site_tls_ca_file"], "site_tls_ca_file")
+    if config.get("upload_dir") is not None:
+        validate_upload_directory(config["upload_dir"])
     return config
 
 
@@ -97,27 +100,36 @@ def readiness(config):
     result = {"runner_ready": False, "authentication_verified": False, "reason_code": "runner_tools_missing",
               "modes": [], "offered_modes": offered_modes(config), "codex_version": "",
               "pinned_codex_version": PINNED_CODEX_VERSION}
-    status = executable_status(config["codex_command"], engine_environment(config, SITE_ASSISTANT))
-    result["codex_version"] = status["version"]
-    result["authentication_verified"] = status["authenticated"]
-    if not status["installed"]:
-        return result
-    if not status["pinned"]:
-        result["reason_code"] = "runner_version_mismatch"
-        return result
-    if not status["authenticated"]:
-        result["reason_code"] = "runner_authentication_required"
-        return result
     ready = []
+    reasons = []
     for mode in result["offered_modes"]:
+        engine = (config.get("assistant_engine") or {}) if mode == SITE_ASSISTANT else {}
+        # A custom launch template does not prove that engine's account status.
+        # Until it has a subscription checker, never mark it ready via Codex.
+        if (engine.get("name") or "codex") != "codex":
+            reasons.append("runner_engine_unsupported")
+            continue
+        status = executable_status(engine_command(config, mode), engine_environment(config, mode))
+        result["codex_version"] = status["version"]
+        result["authentication_verified"] |= status["authenticated"]
+        if not status["installed"]:
+            reasons.append("runner_tools_missing")
+            continue
+        if not status["pinned"]:
+            reasons.append("runner_version_mismatch")
+            continue
+        if not status["authenticated"]:
+            reasons.append("runner_authentication_required")
+            continue
         if mode == CODE_WORKSPACE:
             workspace = Path(config["modes"][CODE_WORKSPACE]["workspace"])
             if not (workspace / ".git").exists():
+                reasons.append("runner_mode_unavailable")
                 continue
         ready.append(mode)
     result["modes"] = ready
     if not ready:
-        result["reason_code"] = "runner_mode_unavailable"
+        result["reason_code"] = reasons[0] if reasons else "runner_mode_unavailable"
         return result
     result.update(runner_ready=True, reason_code="")
     return result
@@ -338,6 +350,8 @@ def workstation_config(arguments):
     }
     if arguments.site_tls_ca_file:
         config["site_tls_ca_file"] = arguments.site_tls_ca_file
+    if arguments.upload_dir:
+        config["upload_dir"] = arguments.upload_dir
     return validate_config(config)
 
 
@@ -362,6 +376,7 @@ def main():
     parser.add_argument("--workspace")
     parser.add_argument("--repository", action="append", default=[])
     parser.add_argument("--site-tls-ca-file")
+    parser.add_argument("--upload-dir", help="Same absolute upload directory as the web process")
     args = parser.parse_args()
     if os.getuid() == 0:
         parser.error("runner must not run as root")

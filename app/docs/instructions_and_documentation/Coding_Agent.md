@@ -35,7 +35,8 @@ use the supported Add row API with `key=coding_agent_dev_only`, `boolean_value=f
 - `feature_enabled` and `dev_only`: whether any mode is permitted here.
 - `modes`: each permitted mode the runner offers, with `ready`.
 - `runner_ready`: whether at least one listed mode is ready.
-- `authentication_verified`: the runner's local Codex account check succeeded.
+- `authentication_verified`: a checked Codex account reported a ChatGPT
+  subscription sign-in, rather than an API-key login.
 - `reason_code`: why nothing is ready, for example `runner_not_configured`,
   `runner_not_running`, `runner_version_mismatch` or
   `runner_authentication_required`.
@@ -74,6 +75,16 @@ reports `runner_version_mismatch` for any other installed version. Upgrade it
 deliberately: check the new version's `exec --help` and a harmless sandbox probe
 first, then change the one constant.
 
+Readiness checks each offered mode's actual command and account environment:
+code work uses `codex_command`; the site assistant uses
+`assistant_engine.command` when set, otherwise `codex_command`. The local Codex
+checks are only `--version` and `login status`. As in `worker_agent`, a successful
+status must contain the exact line `Logged in using ChatGPT` (trailing whitespace
+is allowed) on stdout or stderr. An API-key sign-in or an empty successful status
+is refused. Other engine names have no supported subscription readiness check
+yet and return `runner_engine_unsupported`; a custom launch template does not
+make them ready. A failed mode is excluded from the ready modes independently.
+
 ### Code workspace
 
 Codex runs in the developer's own checkout with Codex's full-access sandbox and
@@ -98,6 +109,29 @@ a waiting change the administrator approves in the chat; approval runs the
 exact prepared calls with fresh access and no new model request. Approval is
 refused for any job that is not a site assistant job.
 
+### Attached images in both modes
+
+Code workspace and Site assistant copy attached images only from the runner
+configuration's explicit `upload_dir`. Set the web process's
+`FILTEREST_CODING_AGENT_UPLOAD_DIR` to the
+same absolute directory (including the same path in a container and on its host).
+Use its canonical spelling: no leading or trailing Unicode whitespace, repeated
+slashes, trailing slash (except `/`), or `.`/`..` segments. Ctl and runner
+configuration reject another spelling, and the web writer refuses it without
+creating an attachment. Values are never silently trimmed or cleaned; spaces
+and newlines inside a directory name remain literal after dotenv decoding.
+The browser sends tokens; the web attachment store resolves them into absolute
+paths beneath that directory, and the runner checks every path before reading.
+Only regular files whose real paths remain within the directory are accepted.
+Symlinks in the file or any directory component, `..` paths, paths outside the
+directory and missing files are refused. Without `upload_dir`, every attachment
+is refused; questions with no attachments still work. A refusal fails the whole
+job before checkout inspection, site access or engine execution, returns `error_code:
+attachment_refused` in job status, and records the attachment number and reason
+in the private `execution.log`. Copies made before the refusal are removed.
+Accepted copies stay in the job's own folder: `attachments/` for Code workspace
+and `workspace/` for Site assistant.
+
 ## Development machine: `./ctl agent`
 
 Locally the runner is the developer's own user; no sudo is needed.
@@ -108,12 +142,17 @@ Locally the runner is the developer's own user; no sudo is needed.
   the runner and its jobs running. Without an installed Codex CLI the server
   still starts and the chat shows the runner as not running.
 - `./ctl agent start|stop|restart|status|check` manage it directly. `check`
-  verifies the pinned version, the Codex sign-in and each mode without a model
-  request. Sign in once with `codex login`.
+  verifies the pinned version, the ChatGPT subscription sign-in and each mode
+  without a model request. Sign in once with `codex login`.
 - Paths: configuration and jobs under
   `${XDG_STATE_HOME:-~/.local/state}/filterest-coding-agent/localhost-<port>/`
   (private), the socket in a private folder under `$XDG_RUNTIME_DIR`. The runner
   starts from a minimal environment, not the calling shell's.
+- The launcher gives the web process and runner the same upload directory,
+  normally `uploads/` beside the runner configuration. An explicit
+  `FILTEREST_CODING_AGENT_UPLOAD_DIR` in the environment or development env file
+  overrides it; `--init-workstation --upload-dir` writes the runner setting.
+  Restart the local runner after upgrading an older configuration without it.
 - The local site assistant reaches `https://localhost:<port>` and trusts the
   development certificate explicitly. It runs as the developer and could read
   the developer's files, so locally it is a functional test of the assistant,
@@ -136,13 +175,14 @@ configuration operator-owned and unwritable by the web account.
    `npm install --prefix /opt/filterest-coding-agent/tools --save-exact @openai/codex@<PINNED_CODEX_VERSION>`.
 2. Install the runner modules (`coding_agent_runner.py`, `coding_agent_jobs.py`,
    `codex_engine.py`, `site_assistant_jobs.py`, `site_assistant_api_bridge.py`,
-   `site_assistant_api_tool.py`, `site_assistant_inbox.py`) root-owned in
+   `site_assistant_api_tool.py`, `site_assistant_inbox.py`, `upload_directory.py`) root-owned in
    `/opt/filterest-coding-agent/runner/`. Copy and fill
    `coding_agent_runner.example.json` as `/etc/filterest-coding-agent/site.json`,
    mode 0640, root-owned. It lists only `site_assistant` under `modes`.
 3. Sign the service account in with the normal operator flow, for example
-   `codex login --device-auth` with that account's `CODEX_HOME`. Do not copy web
-   database secrets into its environment.
+   `codex login --device-auth` with that account's `CODEX_HOME`, using the ChatGPT
+   subscription flow. An API-key login does not make the runner ready. Do not
+   copy web database secrets into its environment.
 4. Run, as the service account,
    `python3 /opt/filterest-coding-agent/runner/coding_agent_runner.py --config /etc/filterest-coding-agent/site.json --check`.
    It checks the tools, pinned version, account and modes without a model request.
@@ -151,8 +191,11 @@ configuration operator-owned and unwritable by the web account.
    `FILTEREST_CODING_AGENT_SITE_ID` and `FILTEREST_SITE_ASSISTANT_BASE_URL`. For a
    container, mount the socket's directory, use the host-visible web UID and
    matching group, and give the container and the host the same
-   `FILTEREST_CODING_AGENT_UPLOAD_DIR` so attached images are readable by the
-   runner.
+   `FILTEREST_CODING_AGENT_UPLOAD_DIR`, matching the runner's explicit
+   `upload_dir`, so attached images are readable by the runner. Use a real
+   directory with no symlink components, writable by the web account and
+   readable by the runner. Keep production uploads outside the runner's private
+   state directory, which the service keeps inaccessible to the web account.
 6. Verify the administrator availability GET, non-administrator rejection and a
    read-only assistant question before enabling approvals.
 

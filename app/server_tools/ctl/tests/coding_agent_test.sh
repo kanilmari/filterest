@@ -26,7 +26,7 @@ mkdir -m 700 "$TEST_ROOT/run"
 cat > "$TEST_ROOT/bin/codex" <<EOF
 #!/bin/sh
 if [ "\$1" = "--version" ]; then echo "codex-cli $PINNED"; exit 0; fi
-if [ "\$1" = "login" ]; then exit 0; fi
+if [ "\$1" = "login" ]; then echo "Logged in using ChatGPT" >&2; exit 0; fi
 exit 97
 EOF
 chmod +x "$TEST_ROOT/bin/codex"
@@ -60,6 +60,7 @@ coding_agent_resolve
 [[ "$(stat -c %a "$CODING_AGENT_SOCKET")" == "600" ]] || fail "socket must be private"
 grep -q '"identity": "same_user_workstation"' "$CODING_AGENT_CONFIG" || fail "workstation identity"
 grep -q "\"workspace\": \"$TEST_ROOT/project\"" "$CODING_AGENT_CONFIG" || fail "workspace is the checkout"
+grep -q "\"upload_dir\": \"$CODING_AGENT_UPLOAD_DIR\"" "$CODING_AGENT_CONFIG" || fail "runner upload directory"
 
 pid="$(_coding_agent_pid)"
 [[ -n "$pid" ]] || fail "runner pid not found"
@@ -85,6 +86,7 @@ coding_agent_prepare_server 18555 > /dev/null
 [[ "$FILTEREST_CODING_AGENT_SOCKET" == "$CODING_AGENT_SOCKET" ]] || fail "server socket export"
 [[ "$FILTEREST_CODING_AGENT_SITE_ID" == "localhost-18555" ]] || fail "server site id export"
 [[ "$FILTEREST_SITE_ASSISTANT_BASE_URL" == "https://localhost:18555" ]] || fail "server base URL export"
+[[ "$FILTEREST_CODING_AGENT_UPLOAD_DIR" == "$CODING_AGENT_UPLOAD_DIR" ]] || fail "server upload directory export"
 
 grep -q "stopped" <<< "$(manage_coding_agent stop)" || fail "stop"
 [[ ! -e "$CODING_AGENT_SOCKET" ]] || fail "stop must remove the socket"

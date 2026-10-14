@@ -21,20 +21,28 @@ _coding_agent_env_file() {
     printf '%s' "${EASELECT_RUNTIME_ENV_FILE:-}"
 }
 
+# The optional second argument names a caller variable, preserving quoted newlines.
 _coding_agent_env_value() {
     local key="$1"
     local file
     file="$(_coding_agent_env_file)"
     [[ -f "$file" ]] || return 0
-    grep -E "^${key}=" "$file" 2>/dev/null | tail -1 | cut -d'=' -f2- || true
+    local value
+    # A sentinel preserves newlines inside quoted values through command substitution.
+    value="$(python3 "${BASH_SOURCE[0]%/*}/dotenv_reader.py" "$file" "$key" && printf '.')" || return 1
+    if [[ -n "${2:-}" ]]; then
+        printf -v "$2" '%s' "${value%.}"
+    else
+        printf '%s' "${value%.}"
+    fi
 }
 
 # The web server's port, resolved the same way start_local resolves it.
 coding_agent_port() {
     local port="${1:-}"
-    [[ -n "$port" ]] || port="$(_coding_agent_env_value APP_PORT)"
-    [[ -n "$port" ]] || port="$(_coding_agent_env_value PORT)"
-    [[ -n "$port" ]] || port="$(_coding_agent_env_value EASELECT_PORT)"
+    [[ -n "$port" ]] || _coding_agent_env_value APP_PORT port || return 1
+    [[ -n "$port" ]] || _coding_agent_env_value PORT port || return 1
+    [[ -n "$port" ]] || _coding_agent_env_value EASELECT_PORT port || return 1
     [[ -n "$port" ]] || port="${PORT:-}"
     [[ -n "$port" ]] || port="$(filterest_native_default_port "$PROJECT_ROOT")"
     printf '%s' "$port"
@@ -43,7 +51,7 @@ coding_agent_port() {
 # Resolve every runner path for one local site. Sets CODING_AGENT_* variables.
 coding_agent_resolve() {
     local port
-    port="$(coding_agent_port "${1:-}")"
+    port="$(coding_agent_port "${1:-}")" || return 1
     [[ "$port" =~ ^[0-9]+$ ]] || { echo "error: invalid local port '$port'" >&2; return 1; }
     CODING_AGENT_PORT="$port"
     CODING_AGENT_SITE_ID="localhost-$port"
@@ -52,6 +60,13 @@ coding_agent_resolve() {
     CODING_AGENT_CONFIG="$CODING_AGENT_STATE_DIR/runner.json"
     CODING_AGENT_JOBS="$CODING_AGENT_STATE_DIR/jobs"
     CODING_AGENT_LOG="$CODING_AGENT_STATE_DIR/runner.log"
+    # One explicit upload path for the web writer and runner reader. The web
+    # process otherwise creates a private random directory the runner cannot know.
+    CODING_AGENT_UPLOAD_DIR="${FILTEREST_CODING_AGENT_UPLOAD_DIR:-}"
+    [[ -n "$CODING_AGENT_UPLOAD_DIR" ]] || _coding_agent_env_value FILTEREST_CODING_AGENT_UPLOAD_DIR CODING_AGENT_UPLOAD_DIR || return 1
+    CODING_AGENT_UPLOAD_DIR="${CODING_AGENT_UPLOAD_DIR:-$CODING_AGENT_STATE_DIR/uploads}"
+    # Use the runner's rule before either handoff; never silently clean a value.
+    python3 "${CODING_AGENT_RUNNER%/*}/upload_directory.py" "$CODING_AGENT_UPLOAD_DIR" || return 1
     local runtime_base="${XDG_RUNTIME_DIR:-}"
     if [[ -z "$runtime_base" || ! -d "$runtime_base" ]]; then
         # Without a session runtime folder, use a private per-user folder in /tmp
@@ -105,6 +120,7 @@ _coding_agent_write_config() {
         --config "$CODING_AGENT_CONFIG" --init-workstation
         --site-id "$CODING_AGENT_SITE_ID" --socket "$CODING_AGENT_SOCKET"
         --jobs-root "$CODING_AGENT_JOBS" --codex "$codex" --workspace "$PROJECT_ROOT"
+        --upload-dir "$CODING_AGENT_UPLOAD_DIR"
     )
     local repository certificate
     while IFS= read -r repository; do
@@ -218,7 +234,9 @@ coding_agent_check() {
 # runner and start the runner when it is missing. Never blocks the server start.
 coding_agent_prepare_server() {
     local port="$1"
-    if [[ -n "$(_coding_agent_env_value FILTEREST_CODING_AGENT_SOCKET)" ]]; then
+    local configured_socket=""
+    _coding_agent_env_value FILTEREST_CODING_AGENT_SOCKET configured_socket || return 0
+    if [[ -n "$configured_socket" ]]; then
         # An operator-configured runner in the env file wins; leave it alone.
         return 0
     fi
@@ -226,7 +244,9 @@ coding_agent_prepare_server() {
     export FILTEREST_CODING_AGENT_SOCKET="$CODING_AGENT_SOCKET"
     export FILTEREST_CODING_AGENT_SITE_ID="$CODING_AGENT_SITE_ID"
     export FILTEREST_SITE_ASSISTANT_BASE_URL="https://localhost:$CODING_AGENT_PORT"
-    local autostart="${FILTEREST_CODING_AGENT_AUTOSTART:-$(_coding_agent_env_value FILTEREST_CODING_AGENT_AUTOSTART)}"
+    export FILTEREST_CODING_AGENT_UPLOAD_DIR="$CODING_AGENT_UPLOAD_DIR"
+    local autostart="${FILTEREST_CODING_AGENT_AUTOSTART:-}"
+    [[ -n "$autostart" ]] || _coding_agent_env_value FILTEREST_CODING_AGENT_AUTOSTART autostart || return 0
     if [[ "$autostart" == "0" ]]; then
         return 0
     fi

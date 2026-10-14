@@ -123,7 +123,13 @@ def run_code_workspace_job(jobs, job_id, *, run_engine=None):
     attachments = directory / "attachments"
     attachments.mkdir(mode=0o700, exist_ok=True)
     # Images stay in the job's own folder; nothing is written into the checkout.
-    images = store_attached_images(payload, attachments)
+    try:
+        images = store_attached_images(payload, attachments, jobs.config.get("upload_dir"))
+    except ValueError as error:
+        (directory / "execution.log").write_text(str(error) + "\n")
+        jobs.update(job_id, status="failed", error_code="attachment_refused", finished_at=time.time())
+        return
+
     prompt = build_prompt(payload, images)
     (directory / "prompt.txt").write_text(prompt)
     answer_file = directory / "answer.txt"

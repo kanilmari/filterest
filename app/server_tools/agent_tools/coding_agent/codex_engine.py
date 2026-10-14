@@ -80,6 +80,12 @@ ENGINE_TEMPLATES = {
 }
 
 
+def engine_command(config, mode):
+    """Select the same executable for a mode's local checks and its actual jobs."""
+    engine = (config.get("assistant_engine") or {}) if mode == SITE_ASSISTANT else {}
+    return list(engine.get("command") or config.get("codex_command") or [])
+
+
 def build_job_command(config, mode, workspace, answer_file, images=()):
     """Build one runner job's engine argv from configuration, never from the model."""
     if mode not in JOB_MODES:
@@ -87,7 +93,7 @@ def build_job_command(config, mode, workspace, answer_file, images=()):
     # Only the site assistant may name another engine; code work is Codex only.
     engine = (config.get("assistant_engine") or {}) if mode == SITE_ASSISTANT else {}
     name = str(engine.get("name") or "codex")
-    command = list(engine.get("command") or config.get("codex_command") or [])
+    command = engine_command(config, mode)
     if not command or not os.path.isabs(command[0]):
         raise ValueError("the engine needs an installed absolute executable")
     template = list(engine.get("argv_template") or ENGINE_TEMPLATES.get(name, {}).get(mode) or [])
@@ -154,7 +160,7 @@ def worker_arguments(sandbox, model="", reasoning_effort="", last_message_file="
 
 
 def executable_status(command, environment, timeout=10):
-    """Local installation and account status only; never a model request."""
+    """Local Codex installation and ChatGPT subscription status; never a model request."""
     status = {"installed": False, "version": "", "pinned": False, "authenticated": False}
     if not command or not os.path.isabs(command[0]) or not os.access(command[0], os.X_OK):
         return status
@@ -170,8 +176,12 @@ def executable_status(command, environment, timeout=10):
     status["pinned"] = status["version"] == PINNED_CODEX_VERSION
     try:
         login = subprocess.run([*command, "login", "status"], env=environment,
-                               capture_output=True, timeout=timeout)
-        status["authenticated"] = login.returncode == 0
+                               capture_output=True, text=True, timeout=timeout)
+        # Match worker_agent's verify_codex_subscription rule on either stream.
+        # An exit-zero API-key login is not a subscription sign-in.
+        output = login.stdout + "\n" + login.stderr
+        status["authenticated"] = login.returncode == 0 and any(
+            line.rstrip() == "Logged in using ChatGPT" for line in output.splitlines())
     except (OSError, subprocess.SubprocessError):
         pass
     return status

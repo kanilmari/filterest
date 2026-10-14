@@ -16,7 +16,9 @@ from __future__ import annotations
 
 import functools
 import json
+import os
 from pathlib import Path
+import stat
 import subprocess
 import threading
 import time
@@ -24,6 +26,7 @@ import time
 from codex_engine import SITE_ASSISTANT, build_job_command, engine_environment
 from site_assistant_api_bridge import SiteAPISession
 from site_assistant_inbox import serve_inbox
+from upload_directory import validate_upload_directory
 
 INBOX_DIRECTORY_NAME = ".filterest-site-api"
 DEFAULT_TIMEOUT_SECONDS = 1200
@@ -114,11 +117,17 @@ def run_site_assistant_job(jobs, job_id, *, session_factory=None, run_engine=Non
     inbox = workspace / INBOX_DIRECTORY_NAME
     inbox.mkdir(mode=0o700, exist_ok=True)
 
+    try:
+        images = store_attached_images(payload, workspace, jobs.config.get("upload_dir"))
+    except ValueError as error:
+        (directory / "execution.log").write_text(str(error) + "\n")
+        jobs.update(job_id, status="failed", error_code="attachment_refused", finished_at=time.time())
+        return
+
     session = session_factory(access["site_base_url"])
     session.exchange(access["delegation_code"])
     catalog = session.api_catalog(access.get("api_catalog_route"))
 
-    images = store_attached_images(payload, workspace)
     tool_path = Path(__file__).with_name("site_assistant_api_tool.py")
     prompt = build_prompt(payload, catalog, tool_path, images)
     (directory / "prompt.txt").write_text(prompt)
@@ -191,16 +200,56 @@ def apply_site_assistant_plan(jobs, job_id, access, *, session_factory=None):
     return {"status": "applied" if done else "apply_failed", "pending_changes": results}
 
 
-def store_attached_images(payload, workspace):
-    """Copy the chat's attached images into a job-owned folder for the engine."""
+def read_uploaded_image(source, upload_dir):
+    """Read beneath the configured directory without following links, even during a swap."""
+    if not upload_dir:
+        raise ValueError("no upload directory is configured")
+    root = Path(validate_upload_directory(upload_dir))
+    if not source.is_absolute() or ".." in source.parts:
+        raise ValueError("the attachment must be absolute without parent traversal")
+    try:
+        relative = source.relative_to(root)
+        source.resolve(strict=True).relative_to(root.resolve(strict=True))
+    except (ValueError, OSError, RuntimeError) as error:
+        raise ValueError("the attachment is outside the upload directory or unavailable") from error
+    if not relative.parts:
+        raise ValueError("the attachment must be a regular file")
+
+    # Pin every directory descriptor from /, including the configured root's
+    # parents. A check followed by read_bytes() would allow a symlink swap.
+    directory = os.open("/", os.O_RDONLY | os.O_DIRECTORY)
+    try:
+        for part in (*root.parts[1:], *relative.parts[:-1]):
+            child = os.open(part, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=directory)
+            os.close(directory)
+            directory = child
+        descriptor = os.open(relative.name, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=directory)
+        with os.fdopen(descriptor, "rb") as image:
+            if not stat.S_ISREG(os.fstat(image.fileno()).st_mode):
+                raise ValueError("the attachment must be a regular file")
+            return image.read()
+    except OSError as error:
+        raise ValueError("the attachment is unavailable or contains a symlink") from error
+    finally:
+        os.close(directory)
+
+
+def store_attached_images(payload, workspace, upload_dir):
+    """Both modes must supply their upload setting; a refusal rolls back earlier copies."""
     images = []
-    for index, attachment in enumerate(payload.get("images") or []):
-        source = Path(str(attachment.get("path", "")))
-        if not source.is_absolute() or source.is_symlink() or not source.is_file():
-            continue
-        target = workspace / ("attachment-%d%s" % (index + 1, source.suffix.lower()[:5]))
-        target.write_bytes(source.read_bytes())
-        images.append(target)
+    try:
+        for index, attachment in enumerate(payload.get("images") or []):
+            if not isinstance(attachment, dict) or not isinstance(attachment.get("path"), str):
+                raise ValueError("invalid attachment path")
+            source = Path(attachment["path"])
+            content = read_uploaded_image(source, upload_dir)
+            target = workspace / ("attachment-%d%s" % (index + 1, source.suffix.lower()[:5]))
+            target.write_bytes(content)
+            images.append(target)
+    except ValueError as error:
+        for image in images:
+            image.unlink()
+        raise ValueError("Attachment %d refused: %s" % (index + 1, error)) from error
     return images
 
 

@@ -268,15 +268,133 @@ def test_attached_images_are_copied_into_the_workspace(tmp_path):
     workspace.mkdir()
     picture = tmp_path / "picture.PNG"
     picture.write_bytes(b"\x89PNG fixture")
-    outside_link = tmp_path / "link.png"
-    outside_link.symlink_to(picture)
-
     images = jobs_module.store_attached_images(
-        {"images": [{"path": str(picture)}, {"path": str(outside_link)}, {"path": "relative.png"}]},
-        workspace)
+        {"images": [{"path": str(picture)}]}, workspace, str(tmp_path))
 
     assert [image.name for image in images] == ["attachment-1.png"]
     assert images[0].read_bytes() == b"\x89PNG fixture"
+
+
+def test_job_copies_from_its_configured_upload_directory(tmp_path):
+    uploads = tmp_path / "uploads"
+    uploads.mkdir()
+    picture = uploads / "picture.png"
+    picture.write_bytes(b"inside")
+    jobs, directory = prepare_job(tmp_path, {"images": [{"path": str(picture)}]})
+    jobs.config["upload_dir"] = str(uploads)
+
+    def inspect_images(command, _prompt, workspace, _environment, _directory, _timeout):
+        image = Path(command[command.index("--image") + 1])
+        assert image.parent == workspace and image.read_bytes() == b"inside"
+        Path(command[command.index("--output-last-message") + 1]).write_text("Read the attachment.")
+        return 0
+
+    jobs_module.run_site_assistant_job(jobs, "job", session_factory=FakeSession, run_engine=inspect_images)
+    assert jobs.state["status"] == "completed"
+    assert "attachment-1.png" in (directory / "prompt.txt").read_text()
+
+
+@pytest.mark.parametrize("kind", ["outside", "prefix", "symlink", "parent_symlink", "traversal",
+                                  "relative", "missing_config", "missing_file", "directory", "fifo",
+                                  "root_symlink", "root_traversal", "relative_root"])
+def test_unsafe_attachments_are_refused_without_copying(tmp_path, kind):
+    import os
+    uploads = tmp_path / "uploads"
+    uploads.mkdir()
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    picture = uploads / "picture.png"
+    picture.write_bytes(b"inside")
+    outside = tmp_path / "outside.png"
+    outside.write_bytes(b"must not reach job")
+    source, configured = picture, str(uploads)
+    if kind == "outside":
+        source = outside
+    elif kind == "prefix":
+        sibling = tmp_path / "uploads-other"
+        sibling.mkdir()
+        source = sibling / "picture.png"
+        source.write_bytes(b"outside")
+    elif kind == "symlink":
+        source = uploads / "link.png"
+        source.symlink_to(picture)
+    elif kind == "parent_symlink":
+        (uploads / "link").symlink_to(uploads, target_is_directory=True)
+        source = uploads / "link" / picture.name
+    elif kind == "traversal":
+        source = uploads / ".." / "uploads" / picture.name
+    elif kind == "relative":
+        source = Path("picture.png")
+    elif kind == "missing_config":
+        configured = None
+    elif kind == "missing_file":
+        source = uploads / "missing.png"
+    elif kind == "directory":
+        source = uploads
+    elif kind == "fifo":
+        source = uploads / "pipe.png"
+        os.mkfifo(source)
+    elif kind == "root_symlink":
+        link = tmp_path / "uploads-link"
+        link.symlink_to(uploads, target_is_directory=True)
+        configured, source = str(link), link / picture.name
+    elif kind == "root_traversal":
+        configured = str(uploads / ".." / "uploads")
+    elif kind == "relative_root":
+        configured = "uploads"
+    with pytest.raises(ValueError, match="Attachment 1 refused"):
+        jobs_module.store_attached_images({"images": [{"path": str(source)}]}, workspace, configured)
+    assert list(workspace.iterdir()) == []
+
+
+def test_later_refusal_removes_already_copied_images(tmp_path):
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    picture = tmp_path / "picture.png"
+    picture.write_bytes(b"inside")
+    with pytest.raises(ValueError, match="Attachment 2 refused"):
+        jobs_module.store_attached_images({"images": [{"path": str(picture)},
+            {"path": "/outside.png"}]}, workspace, str(tmp_path))
+    assert list(workspace.iterdir()) == []
+
+
+@pytest.mark.parametrize("replace", ["file", "directory"])
+def test_symlink_swap_after_path_validation_cannot_copy_outside_bytes(tmp_path, monkeypatch, replace):
+    uploads = tmp_path / "uploads"
+    uploads.mkdir()
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    picture = uploads / "picture.png"
+    picture.write_bytes(b"inside")
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    (outside / picture.name).write_bytes(b"must not reach job")
+    original_open = jobs_module.os.open
+
+    def swap_then_open(path, *args, **kwargs):
+        if path == "/":
+            if replace == "file":
+                picture.unlink()
+                picture.symlink_to(outside / picture.name)
+            else:
+                uploads.rename(tmp_path / "original-uploads")
+                uploads.symlink_to(outside, target_is_directory=True)
+        return original_open(path, *args, **kwargs)
+
+    monkeypatch.setattr(jobs_module.os, "open", swap_then_open)
+    with pytest.raises(ValueError, match="Attachment 1 refused"):
+        jobs_module.store_attached_images({"images": [{"path": str(picture)}]}, workspace, str(uploads))
+    assert list(workspace.iterdir()) == []
+
+
+def test_attachment_refusal_is_a_job_failure_before_site_access_or_engine(tmp_path):
+    jobs, directory = prepare_job(tmp_path, {"images": [{"path": "/outside.png"}]})
+    def forbidden(*_args):
+        raise AssertionError("refused job must not exchange access or start the engine")
+    jobs_module.run_site_assistant_job(jobs, "job", session_factory=forbidden, run_engine=forbidden)
+    assert jobs.state["status"] == "failed" and jobs.state["error_code"] == "attachment_refused"
+    assert "Attachment 1 refused: no upload directory" in (directory / "execution.log").read_text()
+    assert not (directory / "prompt.txt").exists()
 
 
 def test_runner_applies_a_plan_only_for_its_owner_and_retryable_state(tmp_path, monkeypatch):

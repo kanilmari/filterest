@@ -177,9 +177,12 @@ func (store *AttachmentStore) directoryLocked() (string, error) {
 	if store.directory != "" {
 		return store.directory, nil
 	}
-	if shared := strings.TrimSpace(os.Getenv("FILTEREST_CODING_AGENT_UPLOAD_DIR")); shared != "" {
-		if !filepath.IsAbs(shared) {
-			return "", errors.New("the shared attachment directory must be an absolute path")
+	if shared := os.Getenv("FILTEREST_CODING_AGENT_UPLOAD_DIR"); shared != "" {
+		// Match server_tools/agent_tools/coding_agent/upload_directory.py. A
+		// changed spelling would make filepath.Join disagree with the reader.
+		if !filepath.IsAbs(shared) || strings.TrimSpace(shared) != shared ||
+			filepath.Clean(shared) != shared || strings.IndexByte(shared, 0) >= 0 {
+			return "", errors.New("FILTEREST_CODING_AGENT_UPLOAD_DIR must be a canonical absolute path: no boundary whitespace, repeated or trailing slashes, . or .. segments, or NUL bytes")
 		}
 		if err := os.MkdirAll(shared, 0o755); err != nil {
 			return "", err

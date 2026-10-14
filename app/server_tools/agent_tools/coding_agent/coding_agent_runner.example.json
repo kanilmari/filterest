@@ -4,6 +4,7 @@
   "socket": "/run/filterest-coding-agent/runner.sock",
   "allowed_web_uids": [12345],
   "jobs_root": "/var/lib/filterest-coding-agent/jobs",
+  "upload_dir": "/var/lib/filterest-coding-agent-uploads",
   "codex_command": ["/opt/filterest-coding-agent/tools/node_modules/.bin/codex"],
   "codex_home": "/var/lib/filterest-coding-agent/codex",
   "assistant_timeout_seconds": 1200,
