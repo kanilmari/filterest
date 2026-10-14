@@ -13,7 +13,7 @@ Reviewed upstream legal and attribution document bytes are retained under
 - Database version: `9.11.1`
 - Project source license: `GPL-2.0-or-later`
 - Combined release-binary license: `GPL-3.0-or-later`
-- License bundle manifest SHA-256: `ea9832fa24101fdfa403256f296ecca88dcaf3bbbc650810a08ac224e55fc919`
+- License bundle manifest SHA-256: `8fcd03f1346d550344d0728658f627b1b53a81bf9fb25b04eb525d15750a6e5b`
 - Go metadata source: `GOOS=linux GOARCH=amd64 CGO_ENABLED=1 go list -deps metadata for filterest[linux-release]:. tags=netgo osusergo; filterest[container]:.; filterest-admin-recovery[container]:./server_tools/admin_credential_recovery, plus compiled vendored components and Go toolchain`
 - npm metadata source: `package-lock.json production dependency graph`
 - browser bundle metadata source: `app/server_tools/licenses/browser_bundle_provenance.json matched against app/package-lock.json and app/frontend/dist/*.js`

@@ -483,6 +483,21 @@
       "anchor": "app/backend/core_components/sessions/session_store_access_guard_test.go"
     }
   ],
+  "python_guards": [
+    {
+      "paths": [
+        "app/backend/core_components/middlewares/maintenance_page.html",
+        "app/frontend",
+        "app/server_tools/licenses",
+        "app/server_tools/public_bootstrap/source/fixtures",
+        "THIRD_PARTY_LICENSES",
+        "THIRD_PARTY_NOTICES.md"
+      ],
+      "tests": [
+        "app/testing/python/test_reviewed_provenance_hashes.py"
+      ]
+    }
+  ],
   "bootstrap_proofs": [
     "app/testing/python/test_bootstrap_ledger_postgres.py"
   ],

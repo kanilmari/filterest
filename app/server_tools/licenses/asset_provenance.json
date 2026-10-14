@@ -62,7 +62,7 @@
       "component": "Heroicons / Tailwind Labs",
       "kind": "embedded-icon-source",
       "path": "app/backend/core_components/middlewares/maintenance_page.html",
-      "sha256": "85d863542513c895a5d4450036498fd1b12555b8c783e0e6aa924bd070088d74",
+      "sha256": "2ae18db4aed5559a08c892a86b24882954fccf1ac923a410cc614f84e702a790",
       "source_detail": "Heroicons 24px outline wrench-screwdriver",
       "upstream": "https://github.com/tailwindlabs/heroicons/blob/master/optimized/24/outline/wrench-screwdriver.svg"
     },

@@ -15,7 +15,7 @@ import sys
 
 import pytest
 
-from relevant_checks import MAP_PATH, ROOT, git_changed_paths, make_plan, normalize_path, render_plan, validate_map
+from relevant_checks import MAP_PATH, ROOT, git_changed_paths, make_plan, matches, normalize_path, render_plan, validate_map
 from relevant_check_discovery import frontend_tests, go_inventory
 from python_test_tiers import HEAVY_INSTALLATION_FILES, needs_heavy_installation, tier_for_path
 
@@ -265,6 +265,57 @@ def test_python_plan_reuses_selector_partition():
         assert check["targets"] == sorted(file.relative_to(ROOT).as_posix() for file in
                                            (ROOT / "app/testing/python").glob("test_*.py") if tier_for_path(file) == tier)
     assert needs_heavy_installation(plan["changed_paths"])
+
+
+@pytest.mark.parametrize("changed", ["source", "deleted", "guard"])
+def test_python_source_guard_selects_focused_ordinary_proof(fixture_repository, changed):
+    root, policy = fixture_repository
+    source = "app/frontend/core_components/widget/leaf.js"
+    test = "app/testing/python/test_widget.py"
+    policy["python_guards"] = [{"paths": ["app/frontend/core_components/widget", test], "tests": [test]}]
+    if changed == "deleted":
+        (root / source).unlink()
+        policy["browser_areas"][0]["paths"].remove(source)
+    plan = make_plan(root, [test if changed == "guard" else source], policy=policy)
+    check = next(check for check in plan["fast"] if check["kind"] == "python-guard")
+    assert check["targets"] == [test]
+    assert shlex.split(check["command"]) == ["env", "-u", "FILTEREST_TEST_DISPOSABLE_POSTGRES", "--",
+                                            "data/runtime/python/venv/bin/python", "-m", "pytest", test]
+    assert any(check["kind"] == "python-ordinary" for check in plan["fast"])
+
+
+@pytest.mark.parametrize("change", ["empty-paths", "empty-tests", "missing-path", "missing-test", "not-test", "heavy-test"])
+def test_python_source_guard_refuses_invalid_or_stale_map(fixture_repository, change):
+    root, policy = fixture_repository
+    guard = {"paths": ["app/frontend/core_components/widget"], "tests": ["app/testing/python/test_widget.py"]}
+    policy["python_guards"] = [guard]
+    if change.startswith("empty-"):
+        guard[change.removeprefix("empty-")] = []
+    elif change.startswith("missing-"):
+        if change == "missing-path":
+            guard["paths"] = ["app/missing"]
+        else:
+            guard["tests"] = ["app/testing/python/test_missing.py"]
+    elif change == "not-test":
+        guard["tests"] = ["app/frontend/core_components/widget/leaf.js"]
+    else:
+        guard["tests"] = ["app/testing/python/test_update_verification.py"]
+        write(root, guard["tests"][0])
+    with pytest.raises(ValueError):
+        validate_map(root, policy)
+
+
+def test_every_reviewed_provenance_file_has_a_mapped_ordinary_guard():
+    from test_reviewed_provenance_hashes import REVIEWED_FILES
+
+    test = "app/testing/python/test_reviewed_provenance_hashes.py"
+    policy = json.loads((ROOT / MAP_PATH).read_text())
+    guards = [guard for guard in policy["python_guards"] if test in guard["tests"]]
+    assert guards and tier_for_path(Path(test)) == "ordinary"
+    for _, relative, _ in REVIEWED_FILES:
+        assert any(matches(relative, prefix) for guard in guards for prefix in guard["paths"]), relative
+    plan = make_plan(ROOT, [row[1] for row in REVIEWED_FILES])
+    assert any(check["kind"] == "python-guard" and test in check["targets"] for check in plan["fast"])
 
 
 def test_git_range_keeps_deleted_and_both_rename_paths(tmp_path):

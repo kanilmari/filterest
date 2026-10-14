@@ -79,6 +79,15 @@ def validate_map(root: Path, policy: dict) -> None:
                 raise ValueError(f"not a matrix browser spec: {spec}")
     for guard in policy["source_guards"]:
         references.extend([*guard["paths"], guard["package"], guard["anchor"]])
+    for guard in policy.get("python_guards", []):
+        if not guard["paths"] or not guard["tests"]:
+            raise ValueError("Python guards need nonempty paths and tests")
+        for test in guard["tests"]:
+            if not test.startswith("app/testing/python/test_") or not test.endswith(".py"):
+                raise ValueError(f"not a Python guard test: {test}")
+            if tier_for_path(Path(test)) != "ordinary":
+                raise ValueError(f"Python source guards must belong to the ordinary tier: {test}")
+        references.extend([*guard["paths"], *guard["tests"]])
     for path in references:
         if normalize_path(path) != path or not (root / path).exists():
             raise ValueError(f"curated path or spec disappeared: {path}")
@@ -128,6 +137,12 @@ def make_plan(root: Path, paths: list[str], *, python: str = PYTHON, policy: dic
     ordinary = [file.relative_to(root).as_posix() for file in python_files if tier_for_path(file) == "ordinary"]
     add("fast", "python-ordinary", ordinary,
         f"env -u FILTEREST_TEST_DISPOSABLE_POSTGRES -- {python_command} --category ordinary app/testing/python")
+    # Explicit guards expose focused proofs for reviewed source contracts while
+    # keeping the conservative whole ordinary tier in the same plan.
+    for guard in policy.get("python_guards", []):
+        if any(matches(path, prefix) for path in changed for prefix in guard["paths"]):
+            add("fast", "python-guard", guard["tests"],
+                f"env -u FILTEREST_TEST_DISPOSABLE_POSTGRES -- {python_command} " + shlex.join(guard["tests"]))
 
     tests, dependencies, sources = go_inventory(root)
     seeds = {str(Path(path).parent) for path in changed if path.startswith("app/backend/") and path.endswith(".go")}

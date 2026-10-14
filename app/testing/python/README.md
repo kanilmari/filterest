@@ -218,6 +218,11 @@ Embedded package assets also select Go consumers. Python files use the tier
 selector's partition: all ordinary files stay in fast coverage because that
 selector supplies no safer file-level application mapping. PostgreSQL opt-in is
 removed from fast Go/Python commands so proofs belong to the heavy group.
+Curated `python_guards` also print focused ordinary-tier commands for their
+source paths. The provenance guard checks every recorded asset/source hash and
+browser-license document in the reviewed registers; missing or changed files
+require re-review and an updated entry. Its map test requires all registered
+files to remain covered as the registers grow.
 Strict whole-repository length enforcement is a separate maintenance check;
 unrelated over-limit files cannot fail a change's fast group.
 
@@ -238,7 +243,8 @@ noninteractive launcher, including phone/tablet/desktop card projects.
 
 The only reviewed policy is [relevant_check_map.json](relevant_check_map.json):
 grouped component paths with browser proofs or explicit `none` reasons, the
-backend session guard, the bootstrap ledger proof and the existing length guard.
+backend session guard, focused Python source guards, the bootstrap ledger proof
+and the existing length guard.
 Exact paths are checked, without wildcard entries that survive file moves.
 The [guard tests](test_relevant_checks.py) require every component area to have
 an entry and every mapped path, spec and project to exist. Update the map with

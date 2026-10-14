@@ -339,7 +339,7 @@
       "embedded_sources": [
         {
           "path": "app/backend/core_components/middlewares/maintenance_page.html",
-          "sha256": "85d863542513c895a5d4450036498fd1b12555b8c783e0e6aa924bd070088d74"
+          "sha256": "2ae18db4aed5559a08c892a86b24882954fccf1ac923a410cc614f84e702a790"
         }
       ],
       "license": "MIT",
@@ -406,7 +406,7 @@
   ],
   "asset_provenance": {
     "path": "app/server_tools/licenses/asset_provenance.json",
-    "sha256": "22407ef88d54d69376a9d7a33415f8b47fa1e45cc5a7f4c3aaaef4c13ec1af78"
+    "sha256": "b384da8c79aac1164755130982809fbb978c38879823327c8413c409837ca596"
   },
   "browser_bundle_metadata_source": "app/server_tools/licenses/browser_bundle_provenance.json matched against app/package-lock.json and app/frontend/dist/*.js",
   "browser_bundle_provenance": {
