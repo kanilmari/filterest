@@ -42,6 +42,7 @@
       "area": "Dataset views",
       "paths": [
         "app/frontend/core_components/table_views",
+        "app/frontend/core_components/admin_tools/admin_button_builder.js",
         "app/frontend/shared/card_roles",
         "app/frontend/shared/dataset_appearance"
       ],
@@ -313,6 +314,7 @@
       "area": "Translations",
       "paths": [
         "app/frontend/core_components/lang",
+        "app/backend/core_components/startup/view_selector_lang_keys.go",
         "app/backend/core_components/lang",
         "app/backend/core_components/lang_key_naming"
       ],

@@ -259,6 +259,10 @@ function syncActiveViewButtons(tableName, activeViewKey) {
     document.querySelectorAll(".view-selector-buttons").forEach((container) => {
         if (container.dataset.tableName !== tableName) return;
 
+        // Layout tools follow the committed renderer, even if an old article
+        // node is retained for navigation. Button highlighting keeps its
+        // existing open-article behavior below.
+        container.__syncCardStyleDropdown?.(activeViewKey);
         container.querySelectorAll(".unified-view-button").forEach((button) => {
             const isActive = button.dataset.viewKey === effectiveActiveViewKey;
             button.classList.toggle("active", isActive);
@@ -282,6 +286,10 @@ document.addEventListener("row-article-toggle", (event) => {
  *        ja näyttää ne muissa näkymissä.
  */
 export function applyViewStyling(table_name) {
+    // Sync the persistent selector even when the content shell is not mounted
+    // yet. Navigation calls this after restoring stored and history views.
+    const storedViewKey = getChosenDatasetView(table_name);
+    syncActiveViewButtons(table_name, storedViewKey);
     const bodyContent = document.querySelector(".body_content");
     const bodyWrapper = document.querySelector(".body_wrapper");
 
@@ -296,10 +304,6 @@ export function applyViewStyling(table_name) {
         updateShowMenuButtonPosition();
         return;
     }
-
-    const datasetName = table_name;
-    const storedViewKey = getChosenDatasetView(datasetName);
-    syncActiveViewButtons(table_name, storedViewKey);
 
     /* --- PIILOTA / NÄYTÄ sarakkeiden checkboxit ------------------- */
     document.querySelectorAll(".column-visibility-toggle").forEach((el) => {

@@ -56,7 +56,7 @@ const DATASET_VIEW_DEFINITION_LIST = [
         rendererKey: CARD_VIEW_KEY,
         containerSuffix: "card_view_container",
         langKey: "view_card",
-        labelFallback: "Kortti",
+        labelFallback: "Kortit",
         translations: {
             fi: "Kortit",
             en: "Cards",

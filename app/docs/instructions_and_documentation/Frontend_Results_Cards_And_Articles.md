@@ -23,6 +23,26 @@ Browser row callers send only the explicit projection (`view_key`), never suppor
 How a full first-page response resolves category selections, and the category panel shown before the results, are described in [Category panel and dropdowns](Frontend_Category_Panel_And_Dropdowns.md).
 
 ### View Types
+
+The selector's product-owned names come from `dataset_view_registry.js`.
+Startup synchronizes the Finnish, English and Chinese texts for Cards, Article,
+Table, List, Compare and More, and for the More options Ticket, Product card,
+Calendar, Map, Settings, Cloud management and Tree. These keys deliberately
+replace older installation wording such as "View calendar"; other language keys
+are untouched. `dataset_view_registry.test.js` checks every startup seed against
+the registry to prevent drift. Chart keeps its separate fallback-only `view_chart`
+key for the rename reason described below.
+
+In development, the **Locked layout / Free layout (beta)** selector appears in
+Cards and Article, including legacy Article addresses. Locked layout selects
+the standard card renderer; Free layout selects the experimental renderer for
+the result cards, also used by Article's result navigation. The per-dataset choice
+lives in this browser's localStorage. The persistent view selector updates it on
+view switches and history restoration, and closes/removes its menu on leaving
+these views. The existing development-only availability check also disables the
+experimental renderer in production. Calendar and the other renderers do not
+read this choice and do not show the control.
+
 -   **Card View**: Presents each record as a card. Suitable for rich media. Implemented in `filterest/app/frontend/core_components/table_views/card_view/card_view_printer.js`.
 -   **Table View**: Displays results in rows and columns. Good for comparing fields. Implemented in `filterest/app/frontend/core_components/table_views/table_view/table_structure_builder.js`.
 -   **Tree View**: Organizes results hierarchically. Helps explore nested relationships. For ordinary datasets it uses row-level `id` + `parent_*` data; for the database catalog datasets (`system_table_folders`, `system_db_tables`) it reuses `/api/tree_data` so folders include their table leaves. Implemented in `filterest/app/frontend/core_components/table_views/tree_view/tree_view_printer.js`.

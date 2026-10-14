@@ -1,6 +1,6 @@
 // view_selector_lang_keys.go
 // Seeds canonical language keys for generic dataset view-selector controls.
-// Bridges startup maintenance and system_lang_keys values used by filterbar view buttons.
+// Bridges startup maintenance and system_lang_keys values used by filterbar view controls.
 // Exists so old DB rows with "view/nakyma" wording are normalized through app logic.
 package startup
 
@@ -45,6 +45,48 @@ var viewSelectorLangKeySeeds = []startupLangKeySeed{
 		fi:      "Lisää",
 		en:      "More",
 		ch:      "更多",
+	},
+	{
+		langKey: "view_ticket",
+		fi:      "Tiketti",
+		en:      "Ticket",
+		ch:      "工单",
+	},
+	{
+		langKey: "view_product_card",
+		fi:      "Tuotekortti",
+		en:      "Product card",
+		ch:      "产品卡片",
+	},
+	{
+		langKey: "view_calendar",
+		fi:      "Kalenteri",
+		en:      "Calendar",
+		ch:      "日历",
+	},
+	{
+		langKey: "view_map",
+		fi:      "Kartta",
+		en:      "Map",
+		ch:      "地图",
+	},
+	{
+		langKey: "view_settings",
+		fi:      "Asetusnäkymä",
+		en:      "Settings",
+		ch:      "设置视图",
+	},
+	{
+		langKey: "view_cloud_management",
+		fi:      "Pilvihallinta",
+		en:      "Cloud management",
+		ch:      "云管理",
+	},
+	{
+		langKey: "view_tree",
+		fi:      "Puunäkymä",
+		en:      "Tree",
+		ch:      "树视图",
 	},
 }
 

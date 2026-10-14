@@ -26,6 +26,7 @@ import { get_endpoint_url } from "../endpoints/endpoint_router.js";
 import { getTranslationForKey } from "../lang/translation_handler.js";
 import { applyTranslationVariable } from "../lang/translation_handler_helpers.js";
 import { getLanguageWithBrowserFallback } from "../state_stores/lang_preference_reader.js";
+import { getChosenDatasetView } from "../state_stores/dataset_view_choice_saver.js";
 import {
     EXPERIMENTAL_FREE_LAYOUT_CARD_STYLE_VARIANT,
     getCardStyleVariant,
@@ -41,6 +42,7 @@ import {
     getDatasetViewPermissionRoute,
     getDatasetViewSelectorOptions,
     getDatasetViewSelectorTextForLanguage,
+    resolveDatasetViewSelectionTarget,
 } from "../table_views/dataset_view_registry.js";
 import { createFieldViewEditorButton } from "./field_view_editor.js";
 import { createEditRowPermissionsButton } from "./row_access_editor.js";
@@ -189,12 +191,24 @@ function createAdminViewButtons(table_name, current_view, columns = [], dataType
 
     container.appendChild(dropdownWrapper);
 
-    if (
-        current_view === "card" &&
-        isExperimentalFreeLayoutAvailable()
-    ) {
-        container.appendChild(createCardStyleDropdown(table_name));
-    }
+    // The shared selector sync runs for clicks, reused toolbars and history
+    // restores. Only Cards and Article delegate to the style-reading card
+    // renderer; discard the portalled menu as well when leaving those views.
+    container.__syncCardStyleDropdown = (viewKey) => {
+        const dropdown = container.querySelector(".card-style-dropdown");
+        const usesCardRenderer = ["card", "article_view"].includes(
+            resolveDatasetViewSelectionTarget(viewKey)
+        );
+        if (!usesCardRenderer || !isExperimentalFreeLayoutAvailable()) {
+            dropdown?.__dropdown?.destroy();
+            dropdown?.remove();
+        } else if (!dropdown) {
+            container.appendChild(createCardStyleDropdown(table_name));
+        }
+    };
+    // Permissions resolve asynchronously: use the committed view if it has
+    // changed since toolbar construction began.
+    container.__syncCardStyleDropdown(getChosenDatasetView(table_name) || current_view);
 
     return container;
 }

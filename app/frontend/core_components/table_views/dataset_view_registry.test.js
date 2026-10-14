@@ -3,8 +3,12 @@
 // Bridges renderer container IDs, selector options, permission routes, and translation fallbacks.
 // Exists to keep duplicated view definitions from creeping back into view renderers or admin controls.
 
+import { readFileSync } from "node:fs";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { describe, expect, test } from "vitest";
 import {
+    DATASET_VIEW_DEFINITIONS,
     DATASET_VIEW_PERMISSION_ROUTES,
     DATASET_VIEW_SELECTOR_GROUP_DIRECT,
     DATASET_VIEW_SELECTOR_GROUP_MORE,
@@ -24,6 +28,35 @@ import {
 } from "./dataset_view_registry.js";
 
 describe("dataset_view_registry", () => {
+    test("startup-owned selector texts match the registry in all seeded languages", () => {
+        const source = readFileSync(resolve(
+            dirname(fileURLToPath(import.meta.url)),
+            "../../../backend/core_components/startup/view_selector_lang_keys.go"
+        ), "utf8");
+        const seeds = [...source.matchAll(
+            /\{\s*langKey:\s*"([^"]+)",\s*fi:\s*"([^"]*)",\s*en:\s*"([^"]*)",\s*ch:\s*"([^"]*)",?\s*\}/gu
+        )];
+        const ownedLabels = DATASET_VIEW_DEFINITIONS.filter((view) => (
+            view.selectorGroup && view.langKey !== "view_chart"
+        ));
+        const registryLabels = [
+            ...ownedLabels,
+            DATASET_VIEW_SELECTOR_TEXT.moreViews,
+        ];
+        expect(seeds.map(([, key]) => key).sort()).toEqual(
+            registryLabels.map((label) => label.langKey).sort()
+        );
+        for (const [, key, fi, en, ch] of seeds) {
+            const label = registryLabels.find((entry) => entry.langKey === key);
+            expect({ fi, en, ch }, key).toEqual({
+                fi: label.translations.fi,
+                en: label.translations.en,
+                ch: label.translations.ch,
+            });
+        }
+        expect(getDatasetViewLabelFallback("card")).toBe("Kortit");
+    });
+
     test("answers whether the article view is the selected presentation", () => {
         // One authoritative answer, used wherever a surface has to know that the
         // article presentation owns the content area. It must stay true for an
