@@ -3,10 +3,58 @@
 // Uses native Home GETs; boundary fixtures alter responses only, never saved settings.
 // Pins the account theme without writes and drives the real menu in both states.
 // Run natively with mobile-card, tablet-card and desktop-card, one worker at a time.
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Locator, type Page } from '@playwright/test';
+import { installMenuVisibilityProbe, type MenuProbeWindow } from '../helpers/menu_control_visibility';
 
 type Theme = 'light' | 'dark';
 type Fixture = { name: string; width: number };
+// Observe whole rendered frames and completed mutation batches, starting before
+// ownership changes. Settled locator assertions alone missed the fading copy.
+
+async function sampleMenuTransition(page: Page, action: () => Promise<unknown>) {
+  await page.evaluate(installMenuVisibilityProbe);
+  try {
+    await action();
+    await expect.poll(() => page.evaluate(() => {
+      const probe = (window as MenuProbeWindow).__homeMenuVisibilityProbe!;
+      return probe.frames >= 2 && probe.idleFrames >= 2;
+    }), { message: 'Sample menu ownership throughout the actual CSS transitions' }).toBe(true);
+    const result = await page.evaluate(() => {
+      const probe = (window as MenuProbeWindow).__homeMenuVisibilityProbe!;
+      return { samples: probe.samples, failures: probe.failures };
+    });
+    expect(result.samples).toBeGreaterThan(2);
+    expect(result.failures, 'Atomic menu ownership; empty frames require owner animation; strict settled control').toEqual([]);
+    expect(await page.evaluate(() => (window as MenuProbeWindow).__homeMenuVisibilityProbe!.settled()),
+      'Exactly one painted, on-screen, focusable, announced, pointer-accessible settled owner').toBe(true);
+  } finally {
+    await page.evaluate(() => {
+      (window as MenuProbeWindow).__homeMenuVisibilityProbe?.stop();
+      delete (window as MenuProbeWindow).__homeMenuVisibilityProbe;
+    });
+  }
+}
+
+async function expectFocusWithMenuOwner(page: Page, control: Locator) {
+  const ownsProbe = await page.evaluate(() => !(window as MenuProbeWindow).__homeMenuVisibilityProbe);
+  if (ownsProbe) await page.evaluate(installMenuVisibilityProbe);
+  try {
+    await expect.poll(() => page.evaluate(() => (window as MenuProbeWindow).__homeMenuVisibilityProbe!.settled()),
+      { message: 'Every focus assertion requires exactly one painted and actionable menu owner' }).toBe(true);
+    expect(await control.evaluate(element => !element.matches(
+      '#showMenuButton, #hideMenuButton, [data-navbar-menu-button="true"]')
+      || (element.getAttribute('aria-hidden') === 'false' && (element as HTMLElement).tabIndex === 0
+        && !element.closest('[hidden], [inert], .hidden, [aria-hidden="true"]'))),
+      'A focused menu control must be the announced owner').toBe(true);
+    await expect(control).toBeFocused();
+    expect(await page.evaluate(() => (window as MenuProbeWindow).__homeMenuVisibilityProbe!.failures)).toEqual([]);
+  } finally {
+    if (ownsProbe) await page.evaluate(() => {
+      (window as MenuProbeWindow).__homeMenuVisibilityProbe?.stop();
+      delete (window as MenuProbeWindow).__homeMenuVisibilityProbe;
+    });
+  }
+}
 
 test('native document fallback matches the HTML site icon for signed-out requests', async ({ page, playwright }) => {
   const state = await openHome(page, 'light', 'fi');
@@ -86,12 +134,14 @@ async function openHome(page: Page, theme: Theme, language: string, fixture?: Fi
 async function setMenu(page: Page, open: boolean, key?: 'Enter' | 'Space') {
   const navbar = page.locator('#navbar');
   const menu = page.locator('#showMenuButton');
+  const close = page.locator('#hideMenuButton');
   await expect(menu).toHaveCount(1);
   const collapsed = /\bcollapsed\b/.test(await navbar.getAttribute('class') || '');
   if (collapsed === open) {
+    const trigger = collapsed ? menu : close;
     if (key) {
-      await menu.focus(); await expect(menu).toBeFocused(); await menu.press(key);
-    } else await menu.click();
+      await trigger.focus(); await expectFocusWithMenuOwner(page, trigger); await trigger.press(key);
+    } else await trigger.click();
   }
   if (open) await expect(navbar).not.toHaveClass(/\bcollapsed\b/);
   else await expect(navbar).toHaveClass(/\bcollapsed\b/);
@@ -101,7 +151,10 @@ async function setMenu(page: Page, open: boolean, key?: 'Enter' | 'Space') {
     return element.classList.contains('collapsed') ? box.right <= 1 : Math.abs(box.left) <= 1;
   })).toBe(true);
   await expect(menu).toHaveAttribute('aria-expanded', String(open));
-  if (key) await expect(menu).toBeFocused();
+  if (key) await expectFocusWithMenuOwner(page, open ? close : menu);
+  // Check the restored on-screen state; the ownership probes below sample
+  // Home/dataset and shared-topbar handoffs through their actual transitions.
+  await sampleMenuTransition(page, async () => {});
 }
 
 async function proveHome(page: Page, open: boolean, alignment: string, cappedMargin: boolean) {
@@ -109,28 +162,45 @@ async function proveHome(page: Page, open: boolean, alignment: string, cappedMar
   const name = page.locator('.front-page-site-name');
   const icon = page.locator('.front-page-site-icon');
   const menu = page.locator('#showMenuButton');
-  await expect(name).toBeVisible(); await expect(menu).toBeVisible();
-  await expect(menu).toBeEnabled();
-  await expect(menu).toHaveAttribute('aria-hidden', 'false');
-  await expect(menu).toHaveAttribute('tabindex', '0');
+  await expect(name).toBeVisible();
   const close = page.locator('#hideMenuButton');
-  await expect(close).toBeHidden();
-  await expect(close).toHaveAttribute('aria-hidden', 'true');
-  await expect(close).toHaveAttribute('tabindex', '-1');
-  await expect.poll(() => menu.evaluate(element => {
+  const slot = page.locator('.front-page-top-row .dataset-shared-topbar__menu-slot');
+  // Owner 14.10.2026: an open menu retains its own control and leaves no Home slot gap.
+  if (open) {
+    await expect(menu).toBeHidden(); await expect(close).toBeVisible(); await expect(slot).toBeHidden();
+    expect(await slot.evaluate(element => element.getBoundingClientRect().width)).toBe(0);
+  } else {
+    await expect(menu).toBeVisible(); await expect(close).toBeHidden(); await expect(slot).toBeVisible();
+    await expect(menu).not.toHaveClass(/shared-topbar-menu-source-hidden/);
+  }
+  await expect(slot).toHaveJSProperty('inert', open);
+  await expect(slot).toHaveAttribute('aria-hidden', String(open));
+  await expect(menu).toHaveAttribute('aria-hidden', String(open));
+  await expect(menu).toHaveAttribute('tabindex', open ? '-1' : '0');
+  await expect(close).toHaveAttribute('aria-hidden', String(!open));
+  await expect(close).toHaveAttribute('tabindex', open ? '0' : '-1');
+  const control = open ? close : menu;
+  await expect(control).toBeEnabled(); await expect(control).toHaveAccessibleName(/\S/);
+  await expect.poll(() => control.evaluate(element => {
     const box = element.getBoundingClientRect();
     return element.contains(document.elementFromPoint(box.x + box.width / 2, box.y + box.height / 2));
-  }), { message: 'The Home menu toggle must receive pointer input in both panel states' }).toBe(true);
+  }), { message: 'The visible menu control must receive pointer input' }).toBe(true);
   await expect.poll(() => name.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);
   await expect.poll(() => icon.evaluate((image: HTMLImageElement) =>
     image.complete && image.naturalWidth === 128 && /-128\.png$/.test(image.currentSrc))).toBe(true);
   await expect(icon).toHaveCSS('image-rendering', 'auto');
   await expect(icon).toHaveCSS('width', '32px');
-  const nameBox = (await name.boundingBox())!, iconBox = (await icon.boundingBox())!, menuBox = (await menu.boundingBox())!;
+  const nameBox = (await name.boundingBox())!, iconBox = (await icon.boundingBox())!;
   expect(nameBox.x - iconBox.x - iconBox.width).toBeGreaterThanOrEqual(8);
-  expect(iconBox.x - menuBox.x - menuBox.width).toBeGreaterThanOrEqual(8);
-  expect(iconBox.x - menuBox.x - menuBox.width).toBeLessThanOrEqual(12);
-  expect(nameBox.x).toBeGreaterThanOrEqual(menuBox.x + menuBox.width);
+  if (open) {
+    const identity = (await page.locator('.front-page-top-row__identity').boundingBox())!;
+    expect(iconBox.x).toBeCloseTo(identity.x, 1);
+  } else {
+    const menuBox = (await menu.boundingBox())!;
+    expect(iconBox.x - menuBox.x - menuBox.width).toBeGreaterThanOrEqual(8);
+    expect(iconBox.x - menuBox.x - menuBox.width).toBeLessThanOrEqual(12);
+    expect(nameBox.x).toBeGreaterThanOrEqual(menuBox.x + menuBox.width);
+  }
   expect(nameBox.x + nameBox.width).toBeLessThanOrEqual(page.viewportSize()!.width);
   const hero = page.locator('.front-page-text-stage .front-page-hero');
   await expect(hero).toHaveCSS('text-align', alignment);
@@ -175,8 +245,11 @@ async function proveHome(page: Page, open: boolean, alignment: string, cappedMar
     }
     // Home has no selected dataset; its shared renderer preserves the current-page contract.
     await expect(tabs.locator(':scope > button[aria-current]')).toHaveCount(0);
-    await menu.focus(); await menu.press('Tab');
-    await expect(buttons.first()).toBeFocused();
+    // Enter from the preceding control in DOM tab order, including the open
+    // navbar. Pointer-driven programmatic focus alone cannot prove :focus-visible.
+    const beforeTabs = open ? page.locator('#navbar :is(button, a[href], input, select, [tabindex="0"]):visible:not([disabled]):not([tabindex="-1"])').last() : menu;
+    await beforeTabs.focus(); await beforeTabs.press('Tab');
+    await expectFocusWithMenuOwner(page, buttons.first());
     await expect(buttons.first()).toHaveCSS('outline-style', 'solid');
     await expect(buttons.first()).toHaveCSS('outline-width', '2px');
   } else if (cappedMargin) {
@@ -186,6 +259,44 @@ async function proveHome(page: Page, open: boolean, alignment: string, cappedMar
     const expected = Math.min(160, insets.width * 0.08, Math.max(0, (insets.width - 320) / 2));
     expect(insets.left).toBeCloseTo(expected, 1); expect(insets.right).toBeCloseTo(expected, 1);
   }
+}
+
+async function proveDatasetMenuOwnership(page: Page, sample = true) {
+  const source = page.locator('#showMenuButton');
+  const topbar = page.locator('.dataset-shared-topbar:visible');
+  const menu = topbar.getByTestId('shared-topbar-menu-button');
+  const open = !/\bcollapsed\b/.test(await page.locator('#navbar').getAttribute('class') || '');
+  // Round 5: the open navbar owns its closer on phones as on larger screens.
+  if (open) {
+    await expect(menu).toBeHidden();
+    await expect(menu).toHaveAttribute('aria-hidden', 'true'); await expect(menu).toHaveAttribute('tabindex', '-1');
+    await expect(topbar.locator('.dataset-shared-topbar__menu-slot')).toHaveJSProperty('inert', true);
+    await expect(source).not.toHaveClass(/shared-topbar-menu-source-hidden/);
+    await expect(source).toHaveAttribute('aria-hidden', 'true'); await expect(source).toHaveAttribute('tabindex', '-1');
+    await expect(page.locator('#hideMenuButton')).toBeVisible();
+    await expect(page.locator('#hideMenuButton')).toHaveAttribute('aria-hidden', 'false');
+    await expect(page.locator('#hideMenuButton')).toHaveAttribute('tabindex', '0');
+    if (sample) await sampleMenuTransition(page, async () => {});
+    return;
+  }
+  await expect(topbar).toBeVisible(); await expect(menu).toBeVisible();
+  await expect(source).toHaveClass(/shared-topbar-menu-source-hidden/);
+  await expect(source).toHaveAttribute('aria-hidden', 'true');
+  await expect(source).toHaveAttribute('tabindex', '-1');
+  await expect(menu).toHaveAttribute('aria-hidden', 'false');
+  await expect(menu).toHaveAttribute('tabindex', '0');
+  await expect(menu).toHaveAccessibleName(/\S/);
+  await expect(topbar.locator('.dataset-shared-topbar__menu-slot')).toHaveJSProperty('inert', false);
+  if (sample) await sampleMenuTransition(page, async () => {});
+}
+
+async function focusOutgoingMenu(page: Page, control: Locator) {
+  await expect(control).toBeVisible();
+  await control.focus();
+  // Return through actual keyboard tab order before history navigation. There
+  // is no focus call on the incoming control after Back or Forward.
+  await page.keyboard.press('Tab'); await page.keyboard.press('Shift+Tab');
+  await expectFocusWithMenuOwner(page, control);
 }
 
 async function proveKeyboardMenu(page: Page, state: { alignment: string; cappedMargin: boolean }) {
@@ -207,18 +318,18 @@ test('native Home keeps focus and restores every destination across 700px', asyn
   const count = await buttons.count();
   const trailing = buttons.last();
   await trailing.focus();
-  await expect(trailing).toBeFocused();
+  await expectFocusWithMenuOwner(page, trailing);
 
   await page.setViewportSize({ width: 706, height: 900 });
   await expect(trailing).toHaveJSProperty('hidden', true);
   await expect(trailing).toBeHidden();
-  const menu = page.locator('.front-page-top-row #showMenuButton');
-  await expect(menu).toBeVisible();
-  await expect(menu).toHaveAttribute('aria-hidden', 'false');
-  await expect(menu).toBeFocused();
+  // Resizing an open Home sends focus to the menu bar's visible closer.
+  const menu = page.locator('#hideMenuButton');
+  await expect(menu).toBeVisible(); await expect(menu).toHaveAttribute('aria-hidden', 'false');
+  await expectFocusWithMenuOwner(page, menu);
   await expect(page.locator('#navbar')).not.toHaveClass(/\bcollapsed\b/);
-  await expect(page.locator('#hideMenuButton')).toBeHidden();
-  await expect(page.locator('#hideMenuButton')).toHaveAttribute('aria-hidden', 'true');
+  await expect(page.locator('.front-page-top-row #showMenuButton')).toBeHidden();
+  await expect(page.locator('.front-page-top-row #showMenuButton')).toHaveAttribute('aria-hidden', 'true');
 
   await page.setViewportSize({ width: 700, height: 900 });
   await expect(buttons).toHaveCount(count);
@@ -226,10 +337,94 @@ test('native Home keeps focus and restores every destination across 700px', asyn
     await expect(button).toHaveJSProperty('hidden', false);
     await expect(button).toBeVisible();
   }
-  await expect(menu).toBeFocused();
+  await expectFocusWithMenuOwner(page, menu);
   await proveHome(page, true, state.alignment, false);
   expect(state.writes).toEqual([]);
 });
+
+for (const open of [false, true]) {
+  test(`Home restores menu ownership through Back/Forward with open=${open}`, async ({ page }) => {
+    await page.setViewportSize({ width: 700, height: 900 });
+    const state = await openHome(page, 'light', 'fi');
+    await setMenu(page, open);
+    await page.locator('.front-page-top-row .hero-dataset-tabs__button').first().click();
+    await expect(page.locator('.front-page-top-row')).toHaveCount(0);
+    await expect(page.locator('#showMenuButton')).toHaveCount(1);
+    await expect(page.locator('.front-page-top-row #showMenuButton')).toHaveCount(0);
+    await proveDatasetMenuOwnership(page);
+    const datasetMenu = page.locator('.dataset-shared-topbar:visible').getByTestId('shared-topbar-menu-button');
+    const navbar = page.locator('#navbar');
+    // Clicking the destination may close the overlay; explicitly exercise both
+    // outgoing dataset states instead of relying on the Home state from earlier.
+    if (/\bcollapsed\b/.test(await navbar.getAttribute('class') || '') === open) {
+      await (open ? datasetMenu : page.locator('#hideMenuButton')).click();
+    }
+    if (open) await expect(navbar).not.toHaveClass(/\bcollapsed\b/);
+    else await expect(navbar).toHaveClass(/\bcollapsed\b/);
+    await focusOutgoingMenu(page, open ? page.locator('#hideMenuButton') : datasetMenu);
+    await sampleMenuTransition(page, async () => {
+      await page.goBack();
+      await expect(page.locator('.front-page-top-row')).toBeVisible();
+      // Routing can close a narrow panel; prove the actual restored state before toggling it.
+      const restoredOpen = !/\bcollapsed\b/.test(await page.locator('#navbar').getAttribute('class') || '');
+      await expectFocusWithMenuOwner(page, page.locator(restoredOpen ? '#hideMenuButton' : '#showMenuButton'));
+      await proveHome(page, restoredOpen, state.alignment, false);
+    });
+    await setMenu(page, open); await proveHome(page, open, state.alignment, false);
+    await focusOutgoingMenu(page, page.locator(open ? '#hideMenuButton' : '#showMenuButton'));
+    await sampleMenuTransition(page, async () => {
+      await page.goForward();
+      await expect(page.locator('.front-page-top-row')).toHaveCount(0);
+      // Keep the ownership assertions here; the surrounding probe already samples.
+      await proveDatasetMenuOwnership(page, false);
+      const forwardOpen = !/\bcollapsed\b/.test(await navbar.getAttribute('class') || '');
+      await expectFocusWithMenuOwner(page, forwardOpen ? page.locator('#hideMenuButton') : datasetMenu);
+    });
+    await sampleMenuTransition(page, () => page.goBack());
+    await setMenu(page, !open); await proveHome(page, !open, state.alignment, false);
+    // Cross the overlay boundary and check the independently remembered wide state.
+    await page.setViewportSize({ width: 1851, height: 900 });
+    await expect(page.locator('#navbar')).toHaveClass(/\bcollapsed\b/);
+    await setMenu(page, true); await proveHome(page, true, state.alignment, false);
+    // NAVBAR_WIDTH_THRESHOLD is 1850 and wide means innerWidth >= 1850, so 1849 is the first narrow width.
+    await page.setViewportSize({ width: 1849, height: 900 });
+    if (open) await expect(page.locator('#navbar')).toHaveClass(/\bcollapsed\b/);
+    else await expect(page.locator('#navbar')).not.toHaveClass(/\bcollapsed\b/);
+    await setMenu(page, false); await proveHome(page, false, state.alignment, false);
+    // Reuse the same history entry at overlay, boundary and docked widths.
+    // The dataset may own its hero opener, topbar opener or shell fallback.
+    for (const width of [1280, 1850, 1851]) {
+      await page.setViewportSize({ width, height: 900 });
+      await expect.poll(() => page.evaluate(() => {
+        const stored = localStorage.getItem(window.innerWidth >= 1850 ? 'navVisibleWide' : 'navVisibleNarrow');
+        return !document.getElementById('navbar')!.classList.contains('collapsed') === (stored === 'true');
+      })).toBe(true);
+      await setMenu(page, open);
+      await focusOutgoingMenu(page, page.locator(open ? '#hideMenuButton' : '#showMenuButton'));
+      let incoming: Locator;
+      await sampleMenuTransition(page, async () => {
+        await page.goForward();
+        await expect(page.locator('.front-page-top-row')).toHaveCount(0);
+        const datasetOpen = !/\bcollapsed\b/.test(await navbar.getAttribute('class') || '');
+        incoming = datasetOpen ? page.locator('#hideMenuButton')
+          : page.locator('[data-navbar-menu-button="true"]:visible, #showMenuButton:visible');
+        await expect(incoming).toHaveCount(1); await expect(incoming).toBeVisible();
+        await expect(incoming).toHaveAttribute('aria-hidden', 'false');
+        await expect(incoming).toHaveAttribute('tabindex', '0');
+        await expect(incoming).toHaveAccessibleName(/\S/);
+        await expectFocusWithMenuOwner(page, incoming);
+      });
+      await focusOutgoingMenu(page, incoming!);
+      await sampleMenuTransition(page, async () => {
+        await page.goBack();
+        await expect(page.locator('.front-page-top-row')).toBeVisible();
+        const homeOpen = !/\bcollapsed\b/.test(await navbar.getAttribute('class') || '');
+        await expectFocusWithMenuOwner(page, page.locator(homeOpen ? '#hideMenuButton' : '#showMenuButton'));
+      });
+    }
+    expect(state.writes).toEqual([]);
+  });
+}
 
 for (const theme of ['light', 'dark'] as const) {
   for (const language of ['fi', 'en']) {

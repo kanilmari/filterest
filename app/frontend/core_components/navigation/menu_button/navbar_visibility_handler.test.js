@@ -63,7 +63,21 @@ describe("navbar_visibility_handler", () => {
         expect(document.getElementById("hideMenuButton").tabIndex).toBe(0);
     });
 
-    test.each([320, 706, 1440, 2000])("Home at %ipx keeps its borrowed toggle accessible through open, close and reconciliation", async width => {
+    test("starts the fallback fade in the same task that announces it", async () => {
+        localStorage.setItem('navVisibleWide', 'true');
+        const { initNavbar } = await loadModule();
+        initNavbar();
+        document.getElementById('hideMenuButton').click();
+        const source = document.getElementById('showMenuButton');
+        expect(source.getAttribute('aria-hidden')).toBe('false');
+        expect(source.tabIndex).toBe(0);
+        expect(source.classList.contains('menu-toggle-visible')).toBe(true);
+        expect(document.getElementById('hideMenuButton').getAttribute('aria-hidden')).toBe('true');
+        expect(document.getElementById('hideMenuButton').tabIndex).toBe(-1);
+    });
+
+    // Owner 14.10.2026: Home uses the panel closer while open and its borrowed opener while hidden.
+    test.each([320, 706, 1440, 2000])("Home at %ipx announces exactly one toggle through open, close and reconciliation", async width => {
         window.innerWidth = width;
         const row = document.createElement('div');
         row.className = 'front-page-top-row';
@@ -75,22 +89,25 @@ describe("navbar_visibility_handler", () => {
         localStorage.setItem('navVisibleWide', 'true');
         const { initNavbar, syncNavbarMenuButtonAccessibility } = await loadModule();
         initNavbar();
-        expect(close.getAttribute('aria-hidden')).toBe('true');
-        expect(close.tabIndex).toBe(-1);
+        expect(close.getAttribute('aria-hidden')).toBe('false');
+        expect(close.tabIndex).toBe(0);
         for (const expanded of [true, false, true]) {
             syncNavbarMenuButtonAccessibility();
             expect(button.getAttribute('aria-expanded')).toBe(String(expanded));
-            expect(button.getAttribute('aria-hidden')).toBe('false');
-            expect(button.tabIndex).toBe(0);
-            expect(button.classList.contains('menu-toggle-visible')).toBe(true);
-            expect(close.getAttribute('aria-hidden')).toBe('true');
-            expect(close.tabIndex).toBe(-1);
+            expect(button.getAttribute('aria-hidden')).toBe(String(expanded));
+            expect(button.tabIndex).toBe(expanded ? -1 : 0);
+            expect(button.classList.contains('menu-toggle-visible')).toBe(!expanded);
+            expect(close.getAttribute('aria-hidden')).toBe(String(!expanded));
+            expect(close.tabIndex).toBe(expanded ? 0 : -1);
             expect(close.getAttribute('aria-expanded')).toBe(String(expanded));
-            button.click();
+            const visible = expanded ? close : button;
+            visible.focus(); visible.click();
+            expect(document.activeElement).toBe(expanded ? button : close);
         }
     });
 
-    test("reconciles the open panel close button when Home borrows and returns the toggle", async () => {
+    // Borrowing must no longer suppress the menu bar's own open-state control.
+    test("keeps the open panel closer accessible when Home borrows and returns the toggle", async () => {
         const { initNavbar, syncNavbarMenuButtonAccessibility } = await loadModule();
         const button = document.getElementById('showMenuButton');
         const close = document.getElementById('hideMenuButton');
@@ -100,15 +117,16 @@ describe("navbar_visibility_handler", () => {
         initNavbar();
         expect(close.getAttribute('aria-hidden')).toBe('false');
         row.append(button); syncNavbarMenuButtonAccessibility();
-        expect(close.getAttribute('aria-hidden')).toBe('true');
-        expect(close.tabIndex).toBe(-1);
+        expect(close.getAttribute('aria-hidden')).toBe('false');
+        expect(close.tabIndex).toBe(0);
         document.querySelector('.body_content').append(button); syncNavbarMenuButtonAccessibility();
         expect(close.getAttribute('aria-hidden')).toBe('false');
         expect(close.tabIndex).toBe(0);
         expect(button.getAttribute('aria-hidden')).toBe('true');
     });
 
-    test("keeps Home's duplicate close button inaccessible during initial navbar entrance", async () => {
+    // Initial entrance must expose the same closer as any subsequent open state.
+    test("keeps Home's panel closer accessible during initial navbar entrance", async () => {
         document.querySelector('.body_content').dataset.navbarInitialOpen = 'true';
         const row = document.createElement('div');
         row.className = 'front-page-top-row';
@@ -118,10 +136,26 @@ describe("navbar_visibility_handler", () => {
         const { initNavbar } = await loadModule();
         initNavbar();
         const close = document.getElementById('hideMenuButton');
-        expect(close.getAttribute('aria-hidden')).toBe('true');
-        expect(close.tabIndex).toBe(-1);
-        expect(button.getAttribute('aria-hidden')).toBe('false');
-        expect(button.tabIndex).toBe(0);
+        expect(close.getAttribute('aria-hidden')).toBe('false');
+        expect(close.tabIndex).toBe(0);
+        expect(button.getAttribute('aria-hidden')).toBe('true');
+        expect(button.tabIndex).toBe(-1);
+    });
+
+    test('Home reconciliation follows the mounted navbar state and preserves unrelated focus', async () => {
+        const { syncNavbarMenuButtonAccessibility } = await loadModule();
+        const row = document.createElement('div'); row.className = 'front-page-top-row';
+        document.getElementById('tabs_container').append(row);
+        const button = document.getElementById('showMenuButton'); row.append(button);
+        const navbar = document.getElementById('navbar');
+        const close = document.getElementById('hideMenuButton');
+        const destination = document.createElement('button'); row.append(destination); destination.focus();
+        for (const collapsed of [true, false, true]) {
+            navbar.classList.toggle('collapsed', collapsed); syncNavbarMenuButtonAccessibility();
+            expect(button.getAttribute('aria-hidden')).toBe(String(!collapsed));
+            expect(close.getAttribute('aria-hidden')).toBe(String(collapsed));
+            expect(document.activeElement).toBe(destination);
+        }
     });
 
     test("keeps only the menu button for the current navbar context reachable", async () => {

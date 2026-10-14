@@ -1,14 +1,22 @@
-// @vitest-environment node
+// @vitest-environment jsdom
 // shared_topbar_css.test.js
-// Verifies stylesheet-only contracts for the shared dataset topbar.
-// Exists to catch sizing and ownership regressions without a browser runtime.
+// Verifies stylesheet contracts and immediate menu hiding during animated exits.
+// Connects live ownership attributes with the actual shared-topbar stylesheet.
+// Keeps non-owner buttons hidden even while their ancestors remain visible.
 
-import { describe, expect, test } from 'vitest';
+import { afterEach, describe, expect, test } from 'vitest';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { readFileSync } from 'node:fs';
 
 const CURRENT_DIR = dirname(fileURLToPath(import.meta.url));
+let style;
+
+afterEach(() => {
+    style?.remove();
+    document.body.replaceChildren();
+    document.body.className = '';
+});
 
 function readSharedTopbarCss() {
     return readFileSync(resolve(CURRENT_DIR, 'shared_topbar.css'), 'utf8');
@@ -26,6 +34,48 @@ function extractRule(css, selector) {
 }
 
 describe('shared topbar CSS', () => {
+    test.each(['light', 'dark'].flatMap(theme => ['visible', 'hiding', 'showing'].map(phase => ({ theme, phase }))))(
+        '$theme/$phase hides a released menu immediately despite the slot remaining visible', ({ theme, phase }) => {
+        style = document.createElement('style');
+        style.textContent = readSharedTopbarCss();
+        document.head.append(style);
+        document.body.className = `${theme}-mode`;
+        document.body.innerHTML = `<div class="dataset-shared-topbar dataset-shared-topbar--visible">
+            <div class="dataset-shared-topbar__menu-slot dataset-shared-topbar__menu-slot--visible">
+                <button class="dataset-shared-topbar__menu-button" aria-hidden="false" tabindex="0">
+                    <span class="environment-badge">TEST</span>
+                </button>
+            </div></div>`;
+        const bar = document.body.firstElementChild;
+        const slot = bar.firstElementChild;
+        const button = slot.firstElementChild;
+        expect(getComputedStyle(button).visibility).toBe('visible');
+        button.setAttribute('aria-hidden', 'true'); button.tabIndex = -1;
+        slot.classList.remove('dataset-shared-topbar__menu-slot--visible');
+        slot.setAttribute('aria-hidden', 'true'); slot.inert = true;
+        if (phase !== 'visible') bar.classList.remove('dataset-shared-topbar--visible');
+        // jsdom does not interpolate CSS transitions. Supply their retained
+        // intermediate ancestor values; the button's own CSS must still hide it.
+        for (const opacity of [1, 0.5, 0]) {
+            bar.style.opacity = String(opacity);
+            bar.style.visibility = 'visible';
+            bar.style.transform = 'translateY(-4px)';
+            slot.style.visibility = 'visible'; slot.style.opacity = String(opacity);
+            slot.style.width = `${52 * opacity}px`;
+            expect(getComputedStyle(button).visibility).toBe('hidden');
+            expect(getComputedStyle(button.firstElementChild).visibility).toBe('hidden');
+            expect(button.getAttribute('aria-hidden')).toBe('true');
+            expect(button.tabIndex).toBe(-1);
+        }
+        // Reacquiring the slot restores normal inheritance rather than forcing
+        // visibility through an actually hidden bar or host.
+        button.setAttribute('aria-hidden', 'false'); button.tabIndex = 0;
+        slot.classList.add('dataset-shared-topbar__menu-slot--visible');
+        slot.setAttribute('aria-hidden', 'false'); slot.inert = false;
+        bar.classList.add('dataset-shared-topbar--visible');
+        expect(getComputedStyle(button).visibility).toBe('visible');
+    });
+
     test('caps the search-only field at 600px inside the shared topbar', () => {
         const css = readSharedTopbarCss();
         const topbarRule = extractRule(css, '.dataset-shared-topbar');

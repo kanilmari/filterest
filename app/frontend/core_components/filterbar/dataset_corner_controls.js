@@ -88,13 +88,27 @@ export function createDatasetCornerControls({
     const languageObserver = new MutationObserver(refreshLabels);
     languageObserver.observe(document.documentElement, { attributes: true, attributeFilter: ["lang"] });
 
-    function sync({ active, heroControlsVisible, topbarVisible, navbarVisible, filterbarVisible, phone = false }) {
+    // Capture before a surface changes accessibility, including the topbar's
+    // own hide/show. Pass the intent to sync in the same synchronous update;
+    // inactive datasets can release local focus but cannot take shell focus.
+    function captureMenuFocus(active) {
+        if (destroyed) return false;
+        const focusedButton = document.activeElement;
+        return focusedButton === heroMenuButton || focusedButton === topbarMenuButton
+            || (active && (focusedButton === sourceMenuButton || focusedButton === document.getElementById("hideMenuButton")));
+    }
+
+    function sync({ active, heroControlsVisible, topbarVisible, navbarVisible, filterbarVisible, phone = false,
+        menuHadFocus = captureMenuFocus(active) }) {
         if (destroyed) return "none";
+        const closeMenuButton = document.getElementById("hideMenuButton");
         filterbarIsVisible = filterbarVisible;
         const owner = selectDatasetCornerOwner({ active, heroControlsVisible: !phone && heroControlsVisible, topbarVisible });
         const showFilter = active && (phone || !filterbarVisible);
         const heroMenuVisible = owner === "hero" && !navbarVisible;
-        const topbarMenuVisible = owner === "topbar" && (phone || !navbarVisible);
+        // The open panel owns its closer at every width. Keeping the phone
+        // opener announced underneath it creates two owners during history.
+        const topbarMenuVisible = owner === "topbar" && !navbarVisible;
         start.hidden = !heroMenuVisible;
         end.hidden = !(owner === "hero" && showFilter);
         setButtonVisibility(heroMenuButton, heroMenuVisible);
@@ -125,6 +139,14 @@ export function createDatasetCornerControls({
         hideFilterButton.setAttribute("aria-expanded", String(filterbarVisible));
         setButtonVisibility(hideFilterButton, active && filterbarVisible);
         syncNavbarAccessibility();
+        if (menuHadFocus) {
+            const target = navbarVisible ? closeMenuButton
+                : heroMenuVisible ? heroMenuButton : topbarMenuVisible ? topbarMenuButton : sourceMenuButton;
+            // Accessibility has now been reconciled for the incoming owner.
+            // Never focus a retained, hidden host or an unavailable shell control.
+            if (target?.isConnected && !target.disabled && target.tabIndex >= 0 && target.getAttribute("aria-hidden") === "false"
+                && !target.closest('[hidden], [inert], .hidden, [aria-hidden="true"]')) target.focus({ preventScroll: true });
+        }
         return owner;
     }
 
@@ -141,5 +163,5 @@ export function createDatasetCornerControls({
         start.remove();
         end.remove();
     }
-    return { sync, destroy };
+    return { captureMenuFocus, sync, destroy };
 }

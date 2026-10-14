@@ -418,10 +418,8 @@ test('frames the application shell sides only when an ultra-wide viewport leaves
     .toEqual([wideStyles?.expectedBorderColor, wideStyles?.expectedBorderColor]);
 
   await ensureNavbarVisible(page);
-  // This proof frames the shell at its landing view. When Home is mounted,
-  // its borrowed toggle closes the panel; disabled Home retains the panel control.
-  const homeToggle = page.locator('.front-page-top-row #showMenuButton');
-  const closeMenuButton = await homeToggle.count() ? homeToggle : page.locator('#hideMenuButton');
+  // Owner 14.10.2026: Home's open menu closes through the same panel control as datasets.
+  const closeMenuButton = page.locator('#hideMenuButton');
   await expect(closeMenuButton).toBeVisible();
   await closeMenuButton.click();
   await page.waitForFunction(() => document.getElementById('navbar')?.classList.contains('collapsed'));

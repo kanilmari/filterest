@@ -9,6 +9,7 @@ import { FILTERBAR_BREAKPOINT_PX, setStoredVisibility, updateOverlayState } from
 import { resolveResponsivePanelVisibilityState } from "./filterbar_visibility_resolver.js";
 import { FILTERBAR_COLUMN_WIDTH_PX } from "../../ui_config.js";
 import { setupScrollPassthrough } from "../../reusable_components/scroll_passthrough.js";
+import { VIEW_DEACTIVATE_EVENT } from "../../reusable_components/view_lifecycle_events.js";
 import { addEnvironmentBadgeIfNeeded, NAVBAR_VISIBILITY_CHANGED_EVENT, syncNavbarMenuButtonAccessibility } from "../navigation/menu_button/navbar_visibility_handler.js";
 import { isSharedTopBarHostActive } from "./shared_topbar_builder.js";
 import { createDatasetCornerControls, isHeroControlAreaVisible } from "./dataset_corner_controls.js";
@@ -123,10 +124,11 @@ export function wireFilterbarRuntime({
         createSharedTopbarVisibilityController({ tableName, currentView, tablePartsContainer,
         sharedTopBar, sharedTopBarArticleClose,
             getState: () => ({ bigCardOpen, inlineHeroVisible, activeScrollable }),
-            isHidden, isNavbarVisible, syncCornerControls });
-    function syncCornerControls() {
+            isHidden, isNavbarVisible, captureMenuFocus: cornerControls.captureMenuFocus, syncCornerControls });
+    function syncCornerControls(active = isSharedTopBarHostActive(sharedTopBar), menuHadFocus) {
         cornerControls.sync({
-            active: isSharedTopBarHostActive(sharedTopBar),
+            active,
+            menuHadFocus,
             heroControlsVisible: inlineHeroVisible && !bigCardOpen
                 && isHeroControlAreaVisible(inlineHeroHost, activeScrollable),
             topbarVisible: tablePartsContainer.dataset.sharedTopbarVisible === "true",
@@ -440,6 +442,11 @@ export function wireFilterbarRuntime({
     window.addEventListener(NAVBAR_VISIBILITY_CHANGED_EVENT, syncSharedTopBar, {
         signal,
     });
+
+    // Cached datasets are hidden, not destroyed, on Back/Forward and route
+    // changes. Release their local controls before Home borrows the source;
+    // the host observer below restores ownership when this dataset returns.
+    mainTableContainer?.addEventListener(VIEW_DEACTIVATE_EVENT, () => syncCornerControls(false), { signal });
 
     // Re-attach when views change (table → card → etc.)
     let viewObserverRaf = 0;

@@ -129,6 +129,8 @@
     {
       "area": "Navigation and shared requests",
       "paths": [
+        "app/testing/e2e/helpers/menu_control_visibility.ts",
+        "app/testing/e2e/helpers/menu_control_visibility.test.ts",
         "app/frontend/core_components/navigation",
         "app/frontend/core_components/endpoints",
         "app/frontend/core_components/pipeline",
@@ -145,6 +147,8 @@
       ],
       "specs": [
         "app/testing/e2e/G_navigation/G3_tab_reorder.spec.ts",
+        "app/testing/e2e/D_view_switch/D0_theme_and_mobile_menu.spec.ts",
+        "app/testing/e2e/E_search_filter/E10_site_identity_and_menu_contract.spec.ts",
         "app/testing/e2e/G_navigation/G10_dataset_name_pool_access.spec.ts",
         "app/testing/e2e/G_navigation/G11_home_phone_layout.spec.ts",
         "app/testing/e2e/G_navigation/G9_dataset_alias_reload.spec.ts",
@@ -336,6 +340,7 @@
         "app/frontend/shared/front_page_presentation"
       ],
       "specs": [
+        "app/testing/e2e/D_view_switch/D0_theme_and_mobile_menu.spec.ts",
         "app/testing/e2e/L_auth/L2_logout.spec.ts",
         "app/testing/e2e/T_admin/T15_view_field_assignments.spec.ts",
         "app/testing/e2e/T_admin/T16_home_palette.spec.ts",

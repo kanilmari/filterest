@@ -41,8 +41,8 @@ async function waitForNavbarOpenedEvent(page: Page): Promise<void> {
 
 /**
  * Opens a collapsed navbar through its real visible menu button and waits for
- * the production visibility event plus the completed on-screen state. Home's
- * mounted top row keeps its borrowed toggle actionable even while the panel is open.
+ * the production visibility event plus the completed on-screen state.
+ * Home and datasets both leave the open-state control inside the navbar.
  */
 export async function ensureNavbarVisible(page: Page): Promise<void> {
   const navbar = page.locator('#navbar');
@@ -66,19 +66,23 @@ export async function ensureNavbarVisible(page: Page): Promise<void> {
   await expect(navbar).not.toHaveClass(/(?:^|\s)collapsed(?:\s|$)/);
   await expect(navbar).toBeInViewport({ ratio: 0.95, timeout: NAVBAR_OPEN_TIMEOUT_MS });
   if (await page.locator('.front-page-top-row').count()) {
-    // Use mounted product ownership, since SPA history can change the URL
-    // without replacing Home. The same borrowed button must still close it.
+    // Owner 14.10.2026: an open Home hides its borrowed slot without an identity gap.
     await expect(page.locator('.front-page-top-row #showMenuButton')).toHaveCount(1);
-    await expect(showMenuButton).toHaveAttribute('aria-hidden', 'false');
-    await expect(showMenuButton).toHaveAttribute('aria-expanded', 'true');
-    await expect(showMenuButton).toHaveAttribute('tabindex', '0');
-    await expect(showMenuButton).toHaveClass(/(?:^|\s)menu-toggle-visible(?:\s|$)/);
-    await expect(showMenuButton).toBeVisible();
-    await expect(showMenuButton).toBeEnabled();
-    // Playwright checks stability and pointer access without toggling the panel.
-    await showMenuButton.click({ trial: true });
-    return;
+    const slot = page.locator('.front-page-top-row .dataset-shared-topbar__menu-slot');
+    await expect(slot).toBeHidden();
+    await expect(slot).toHaveAttribute('aria-hidden', 'true');
+    await expect(slot).toHaveJSProperty('inert', true);
   }
+  await expect(showMenuButton).toBeHidden();
   await expect(showMenuButton).toHaveAttribute('aria-hidden', 'true');
+  await expect(showMenuButton).toHaveAttribute('tabindex', '-1');
   await expect(showMenuButton).not.toHaveClass(/(?:^|\s)menu-toggle-visible(?:\s|$)/);
+  const close = page.locator('#hideMenuButton');
+  await expect(close).toBeVisible();
+  await expect(close).toHaveAttribute('aria-hidden', 'false');
+  await expect(close).toHaveAttribute('aria-expanded', 'true');
+  await expect(close).toHaveAttribute('tabindex', '0');
+  await expect(close).toBeEnabled();
+  // Check stability and pointer access without changing the panel state.
+  await close.click({ trial: true });
 }

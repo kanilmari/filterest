@@ -12,6 +12,7 @@ import { login, loadCredentials, type TestCredentials } from '../helpers/auth';
 import { navigateToDefaultDataset } from '../helpers/navigation';
 import { switchToView, openBigCard } from '../helpers/view-switch';
 import { waitForActiveFilterbarLayout } from '../helpers/filterbar';
+import { ensureNavbarVisible } from '../helpers/navbar';
 
 async function navigateToReadyDefaultDataset(page: Page): Promise<void> {
   // Root may show the optional Home page, which has no dataset filterbar.
@@ -31,8 +32,53 @@ test.describe('E10 — Site identity and menu contract', () => {
   });
 
   test.beforeEach(async ({ page }) => {
+    // Keep existing dataset proofs deterministic without saving account appearance.
+    await page.route(url => url.pathname === '/api/user-visual-preference', async route => {
+      expect(route.request().method()).toBe('GET');
+      await route.fulfill({ json: { theme_mode: 'light', revision: 1, configured: true } });
+    });
+    await page.emulateMedia({ colorScheme: 'dark' });
+    await page.addInitScript(() => localStorage.setItem('theme', 'light'));
     await login(page, credentials);
   });
+
+  for (const theme of ['light', 'dark']) {
+    test(`Home keeps its open-menu control in the menu bar in ${theme}`, async ({ page }) => {
+      await page.route(url => url.pathname === '/api/user-visual-preference', async route => {
+        expect(route.request().method()).toBe('GET');
+        await route.fulfill({ json: { theme_mode: theme, revision: 1, configured: true } });
+      });
+      await page.emulateMedia({ colorScheme: theme === 'light' ? 'dark' : 'light' });
+      await page.addInitScript(theme => {
+        localStorage.setItem('theme', theme); localStorage.setItem('chosen_language', 'fi');
+        localStorage.setItem('navVisibleWide', 'true'); localStorage.setItem('navVisibleNarrow', 'true');
+      }, theme);
+      await page.goto('/', { waitUntil: 'domcontentloaded' });
+      await expect(page.locator('.front-page-top-row')).toBeVisible();
+      await expect(page.locator('body')).toHaveClass(new RegExp(`\\b${theme}-mode\\b`));
+      await ensureNavbarVisible(page);
+      const slot = page.locator('.front-page-top-row .dataset-shared-topbar__menu-slot');
+      const opener = slot.locator('#showMenuButton'), closer = page.locator('#navbar #hideMenuButton');
+      // Owner's screenshot case: open on Home means no toggle or 44px gap in Home's row.
+      await expect(opener).toBeHidden(); await expect(closer).toBeVisible();
+      await expect(page.locator('#showMenuButton:visible, #hideMenuButton:visible')).toHaveCount(1);
+      expect(await slot.evaluate(element => element.getBoundingClientRect().width)).toBe(0);
+      await closer.focus(); await closer.press('Space');
+      await expect(page.locator('#navbar')).toHaveClass(/\bcollapsed\b/);
+      await expect(opener).toBeVisible(); await expect(opener).toBeFocused();
+      await expect(closer).toBeHidden();
+      await expect(page.locator('#showMenuButton:visible, #hideMenuButton:visible')).toHaveCount(1);
+      await expect(slot).toHaveJSProperty('inert', false);
+      await expect(slot).toHaveAttribute('aria-hidden', 'false');
+      await expect(opener).toHaveAttribute('aria-hidden', 'false');
+      await expect(opener).toHaveAttribute('tabindex', '0');
+      await expect(closer).toHaveAttribute('aria-hidden', 'true');
+      await expect(closer).toHaveAttribute('tabindex', '-1');
+      await opener.press('Enter'); await ensureNavbarVisible(page);
+      await expect(closer).toBeFocused();
+      await expect(slot).toHaveJSProperty('inert', true);
+    });
+  }
 
   test('shows the dynamic site–dataset heading and keeps sidebar groups structurally valid', async ({ page }, testInfo) => {
     test.skip(
@@ -298,12 +344,11 @@ test.describe('E10 — Site identity and menu contract', () => {
     await expect(page.locator('#navbar')).not.toHaveClass(/collapsed/);
     await expect(page.locator('#navbar')).toBeInViewport({ ratio: 0.95 });
     await expect(navbarMenuButton).toBeVisible();
-    // Phone chrome stays in place underneath the open drawer. Its expanded
-    // state follows the drawer; the drawer's own menu button closes the overlay.
-    await expect(narrowTopbarMenuButton).toBeVisible();
+    // Round 5: phone chrome stays, but the open drawer owns the only menu control.
+    await expect(narrowTopbarMenuButton).toBeHidden();
     await expect(narrowTopbarMenuButton).toHaveAttribute('aria-expanded', 'true');
-    await expect(narrowTopbarMenuButton).toHaveAttribute('aria-hidden', 'false');
-    await expect(narrowTopbarMenuButton).toHaveAttribute('tabindex', '0');
+    await expect(narrowTopbarMenuButton).toHaveAttribute('aria-hidden', 'true');
+    await expect(narrowTopbarMenuButton).toHaveAttribute('tabindex', '-1');
     await expect(floatingMenuButton).toBeHidden();
     await expect(floatingMenuButton).toHaveAttribute('tabindex', '-1');
     await navbarMenuButton.click();

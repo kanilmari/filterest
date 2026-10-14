@@ -103,7 +103,7 @@ body.dark-mode .front-page {
   font-size: clamp(1.125rem, 4cqw, 2.15rem);
 }
 
-/* Home owns a fixed slot, so its gap never depends on the shared reveal animation. */
+/* Home's hidden-menu slot has a fixed width without the shared reveal animation. */
 .front-page-top-row .dataset-shared-topbar__menu-slot--visible {
   flex: 0 0 44px;
   width: 44px;
@@ -130,9 +130,9 @@ body.dark-mode .front-page {
   display: none !important;
 }
 
-/* Home keeps the one borrowed toggle beside its icon in both menu states. */
-.body_content:has(.front-page:not(.hidden) > .front-page-top-row) #hideMenuButton {
-  display: none;
+/* During Home's slide-out, only its newly revealed opener remains visible. */
+.body_content:has(.front-page:not(.hidden) > .front-page-top-row) #navbar.collapsed #hideMenuButton {
+  visibility: hidden;
 }
 
 .front-page-site-icon {

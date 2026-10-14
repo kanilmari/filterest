@@ -1,12 +1,17 @@
-// @vitest-environment jsdom
+// dataset_corner_controls.test.js
 // Verifies active control ownership and lifecycle while keeping canonical button actions.
+// Connects dataset corners to real shell accessibility during focus handoff.
+// Prevents navigation from blurring menu focus or taking unrelated focus.
+// @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { createDatasetCornerControls, isHeroControlAreaVisible, selectDatasetCornerOwner } from "./dataset_corner_controls.js";
+import { syncNavbarMenuButtonAccessibility } from "../navigation/menu_button/navbar_visibility_handler.js";
 
 let controls;
 let parts;
 function fixture() {
-    document.body.innerHTML = `<button id="showMenuButton"></button><div id="parts">
+    document.body.innerHTML = `<div id="navbar" class="collapsed"><button id="hideMenuButton"></button></div>
+        <button id="showMenuButton"></button><div id="parts">
         <div id="hero"></div><div id="topbar"><div id="menu-slot"><button id="topbar-menu"></button></div><div id="end"></div></div>
         <button id="filter"></button><div id="panel"><button id="hide-filter"></button></div></div>`;
     const byId = (id) => document.getElementById(id);
@@ -108,5 +113,33 @@ describe("dataset corner owner", () => {
         controls.destroy();
         controls.sync(state);
         expect(parts.syncNavbarAccessibility).toHaveBeenCalledTimes(calls);
+    });
+    test.each(["hero", "topbar"])("hands focused %s controls to the shell and back on activation", owner => {
+        const initial = fixture();
+        parts.syncNavbarAccessibility.mockImplementation(syncNavbarMenuButtonAccessibility);
+        const state = { ...initial, heroControlsVisible: owner === "hero", topbarVisible: owner === "topbar" };
+        const local = owner === "hero" ? parts.heroMenuButton : parts.topbarMenuButton;
+        controls.sync(state);
+        local.focus();
+        controls.sync({ ...state, active: false });
+        expect(document.activeElement).toBe(parts.sourceMenuButton);
+        expect(parts.sourceMenuButton.getAttribute("aria-hidden")).toBe("false");
+        expect(parts.sourceMenuButton.tabIndex).toBe(0);
+        controls.sync(state);
+        expect(document.activeElement).toBe(local);
+        expect(local.getAttribute("aria-hidden")).toBe("false");
+        expect(local.tabIndex).toBe(0);
+    });
+    test("inactive observers cannot take focus from the active dataset's menu", () => {
+        const state = fixture();
+        parts.syncNavbarAccessibility.mockImplementation(syncNavbarMenuButtonAccessibility);
+        controls.sync(state);
+        const activeMenu = document.createElement("button");
+        document.body.append(activeMenu);
+        parts.sourceMenuButton.__sharedTopbarMenuOwner = {};
+        activeMenu.focus();
+        controls.sync({ ...state, active: false });
+        expect(document.activeElement).toBe(activeMenu);
+        expect(parts.sourceMenuButton.tabIndex).toBe(-1);
     });
 });

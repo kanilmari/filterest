@@ -1,6 +1,6 @@
 // shared_topbar_visibility_controller.js
 // Keeps the dataset toolbar visible and accessible across view and panel changes.
-// Connects live panel state and the shared toolbar to its phone search toggle.
+// Connects live panel state and the shared toolbar to phone search and menu focus.
 // Phone identity and toolbar controls stay in place independently of scrolling.
 import { getChosenDatasetView } from "../state_stores/dataset_view_choice_saver.js";
 import { show_search_only_bar_in_big_card_view } from "../../ui_config.js";
@@ -12,19 +12,13 @@ const SHARED_TOPBAR_TRANSITION_DURATION_MS = 260;
 
 export function createSharedTopbarVisibilityController({ tableName, currentView, tablePartsContainer,
     sharedTopBar, sharedTopBarArticleClose, getState,
-    isHidden, isNavbarVisible, syncCornerControls }) {
+    isHidden, isNavbarVisible, captureMenuFocus, syncCornerControls }) {
     let sharedTopBarHideTimer = null;
-    let sharedTopBarShowFrame = 0;
     const mobileSearch = createMobileTopbarSearchController(sharedTopBar);
     function clearSharedTopBarTransitionTimers() {
         if (sharedTopBarHideTimer !== null) {
             clearTimeout(sharedTopBarHideTimer);
             sharedTopBarHideTimer = null;
-        }
-
-        if (sharedTopBarShowFrame) {
-            cancelAnimationFrame(sharedTopBarShowFrame);
-            sharedTopBarShowFrame = 0;
         }
     }
 
@@ -63,10 +57,9 @@ export function createSharedTopbarVisibilityController({ tableName, currentView,
                 return;
             }
             sharedTopBar.getBoundingClientRect();
-            sharedTopBarShowFrame = requestAnimationFrame(() => {
-                sharedTopBarShowFrame = 0;
-                sharedTopBar.classList.add("dataset-shared-topbar--visible");
-            });
+            // The layout read establishes the collapsed start; begin the CSS
+            // reveal before announcing its owner, without an empty RAF gap.
+            sharedTopBar.classList.add("dataset-shared-topbar--visible");
             return;
         }
 
@@ -100,8 +93,9 @@ export function createSharedTopbarVisibilityController({ tableName, currentView,
         // view with no matching rows never opens a row and never emits one.
         const articleViewActive = isArticleDatasetView(activeView);
         const phone = window.innerWidth <= 700;
+        const active = isSharedTopBarHostActive(sharedTopBar);
         const shouldShowBar =
-            isSharedTopBarHostActive(sharedTopBar) &&
+            active &&
             (phone || shouldShowSharedTopBar({
                 navbarVisible,
                 filterbarVisible,
@@ -109,14 +103,16 @@ export function createSharedTopbarVisibilityController({ tableName, currentView,
                 allowBigCardSearchBar: show_search_only_bar_in_big_card_view,
                 inlineHeroVisible,
             }));
-
+        // Hiding/inerting the bar can blur its menu before corner reconciliation.
+        // Carry only this update's outgoing focus intent, including on history restore.
+        const menuHadFocus = captureMenuFocus(active);
         setSharedTopBarVisibility(shouldShowBar);
         mobileSearch.sync({ phone, active: shouldShowBar });
         setSharedTopBarArticleCloseVisibility(
             shouldShowBar && !phone && (bigCardOpen || activeView !== CARD_VIEW_KEY)
         );
 
-        syncCornerControls();
+        syncCornerControls(active, menuHadFocus);
         updateShowMenuButtonPosition();
     }
 

@@ -165,6 +165,7 @@ test('a Home without boxes shows its hero and no box area or empty-results line'
     expect(page.textContent).not.toContain('Ei tuloksia');
 });
 
+// Owner 14.10.2026: signed-in and signed-out Home share the dataset opener/closer contract.
 test.each([1, 42].flatMap(viewer => [false, true].map(open => ({ viewer, open }))))(
     'viewer $viewer mounts the same Home identity and reachable toggle with the panel open=$open',
     async ({ viewer, open }) => {
@@ -182,12 +183,13 @@ test.each([1, 42].flatMap(viewer => [false, true].map(open => ({ viewer, open })
         expect(identity.querySelector('#showMenuButton')).toBe(button);
         expect(identity.querySelector('.front-page-site-name').textContent).toBe('Fintravel');
         for (const expanded of [open, !open, open]) {
-            expect(button.getAttribute('aria-hidden')).toBe('false');
+            expect(page.querySelector('.dataset-shared-topbar__menu-slot').hidden).toBe(expanded);
+            expect(button.getAttribute('aria-hidden')).toBe(String(expanded));
             expect(button.getAttribute('aria-expanded')).toBe(String(expanded));
-            expect(button.tabIndex).toBe(0);
-            expect(button.classList.contains('menu-toggle-visible')).toBe(true);
-            expect(close.getAttribute('aria-hidden')).toBe('true');
-            expect(close.tabIndex).toBe(-1);
+            expect(button.tabIndex).toBe(expanded ? -1 : 0);
+            expect(button.classList.contains('menu-toggle-visible')).toBe(!expanded);
+            expect(close.getAttribute('aria-hidden')).toBe(String(!expanded));
+            expect(close.tabIndex).toBe(expanded ? 0 : -1);
             toggleNavbarVisibility();
         }
         page.dispatchEvent(new Event(VIEW_DEACTIVATE_EVENT));
@@ -320,7 +322,8 @@ test('a page restored from the back-forward cache is cleared until the viewer is
     await vi.waitFor(() => expect(page.textContent).toContain('Restored'));
 });
 
-test('top row has the shared tabs/actions and favicon/name beside the single menu in both menu states', async () => {
+// Owner 14.10.2026: identity and actions remain unchanged when the open-menu slot disappears.
+test('top row keeps its shared tabs/actions and identity while only the hidden menu shows its borrowed toggle', async () => {
     document.head.innerHTML = '<link rel="icon" href="/frontend/icons/site_favicons/site-initial-f-v1-16.png">';
     const navbar = document.createElement('div'); navbar.id = 'navbar'; navbar.className = 'collapsed';
     const menu = document.createElement('button'); menu.id = 'showMenuButton';
@@ -342,7 +345,7 @@ test('top row has the shared tabs/actions and favicon/name beside the single men
     expect(page.querySelector('.hero-dataset-tabs [aria-current]')).toBeNull();
     navbar.classList.remove('collapsed');
     window.dispatchEvent(new Event('navbar-visibility-changed'));
-    expect(identity.querySelector('.dataset-shared-topbar__menu-slot').hidden).toBe(false);
+    expect(identity.querySelector('.dataset-shared-topbar__menu-slot').hidden).toBe(true);
     page.dispatchEvent(new Event(VIEW_DEACTIVATE_EVENT));
     expect(menu.parentNode).toBe(originalParent);
 });

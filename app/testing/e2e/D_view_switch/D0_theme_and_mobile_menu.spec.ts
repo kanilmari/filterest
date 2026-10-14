@@ -68,18 +68,12 @@ test.describe('Feature Tests', () => {
     // Navbar should not be collapsed anymore
     await expect(navbar).not.toHaveClass(/collapsed/);
     await ensureNavbarVisible(page);
-    const homeMounted = await page.locator('.front-page-top-row').count() > 0;
-    // Home keeps its borrowed toggle; datasets retain this exact hidden assertion.
-    if (homeMounted) {
-      await expect(hideMenuBtn).toBeHidden();
-    } else {
-      await expect(showMenuBtn).toBeHidden();
-      await expect(hideMenuBtn).toBeVisible();
-    }
+    // Owner 14.10.2026: Home and datasets both keep the open-state control in the menu bar.
+    await expect(showMenuBtn).toBeHidden();
+    await expect(hideMenuBtn).toBeVisible();
     await expect(showMenuBtn).toHaveAttribute('aria-expanded', 'true');
 
-    // Home closes through its borrowed toggle; datasets keep their panel control.
-    await (homeMounted ? showMenuBtn : hideMenuBtn).click();
+    await hideMenuBtn.click();
     
     // Navbar should be collapsed again
     await expect(navbar).toHaveClass(/collapsed/);

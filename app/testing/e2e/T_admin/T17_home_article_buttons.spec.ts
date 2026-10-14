@@ -192,7 +192,11 @@ for (const width of [1280, 375]) for (const theme of ['light', 'dark'] as const)
           await expect(link).toHaveCount(1); await expect(link).toHaveAccessibleName(LABEL);
           const href = await link.getAttribute('href'); expect(href).toMatch(/\/1\?view=article_view$/);
           const bounds = (await link.boundingBox())!; expect(bounds.height).toBeGreaterThanOrEqual(44);
-          await page.keyboard.press('Tab'); await link.focus(); await expect(link).toBeFocused();
+          // Reach the link by Tab so the ring proves keyboard navigation after saving by pointer.
+          const beforeLink = placement === 'top_row'
+            ? page.locator('.front-page-top-row .hero-dataset-tabs__button:visible').last()
+            : page.locator('.front-page-top-row button:visible:not([disabled]):not([tabindex="-1"])').last();
+          await beforeLink.focus(); await beforeLink.press('Tab'); await expect(link).toBeFocused();
           expect(await link.evaluate(el => parseFloat(getComputedStyle(el).outlineWidth))).toBeGreaterThan(0);
           if (placement === 'below_text') {
             await expect(page.locator('.front-page-hero > .front-page-article-buttons > a')).toHaveCount(1);

@@ -51,9 +51,8 @@ export function createNavigationFitController(element) {
             const hidden = index >= count;
             if (hidden && button === element.ownerDocument.activeElement) {
                 // The menu is the durable route to every hidden destination.
-                // Home owns the borrowed toggle; its panel close button is hidden.
-                const menu = element.ownerDocument.querySelector('.front-page-top-row #showMenuButton[aria-hidden="false"]')
-                    || element.ownerDocument.querySelector('[data-navbar-menu-button="true"][aria-hidden="false"], #hideMenuButton[aria-hidden="false"]')
+                // Home follows the same visible opener/closer selection as datasets.
+                const menu = element.ownerDocument.querySelector('[data-navbar-menu-button="true"][aria-hidden="false"], #hideMenuButton[aria-hidden="false"]')
                     || element.ownerDocument.getElementById('showMenuButton');
                 menu?.focus({ preventScroll: true });
             }

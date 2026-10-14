@@ -6,9 +6,10 @@ import { afterEach, expect, test, vi } from 'vitest';
 import { countFittingNavigationButtons, createNavigationFitController } from './navigation_fit_controller.js';
 afterEach(() => { vi.restoreAllMocks(); vi.useRealTimers(); document.body.replaceChildren(); });
 
+// Owner 14.10.2026: Home focus follows the visible closer or opener, as on dataset pages.
 test.each([
-    { owner: 'Home', closeHidden: 'true', target: 'showMenuButton' },
-    { owner: 'Home with stale close accessibility', closeHidden: 'false', target: 'showMenuButton' },
+    { owner: 'Home hidden menu', closeHidden: 'true', target: 'showMenuButton' },
+    { owner: 'Home open menu', closeHidden: 'false', target: 'hideMenuButton' },
     { owner: 'dataset', closeHidden: 'false', target: 'hideMenuButton' },
     { owner: 'dataset shared topbar', closeHidden: 'false', target: 'sharedMenuButton' },
 ])('$owner hands focus to $target before hiding a trailing destination', async ({ owner, closeHidden, target }) => {
@@ -18,13 +19,14 @@ test.each([
         ${target === 'sharedMenuButton' ? '<button id="sharedMenuButton" data-navbar-menu-button="true" aria-hidden="false">Menu</button>' : ''}
         <div id="navbar"><button id="hideMenuButton" aria-hidden="${closeHidden}">Close</button></div>
         <div class="${homeOwnsMenu ? 'front-page-top-row' : 'dataset-hero'}">
-            <button id="showMenuButton" aria-hidden="${homeOwnsMenu ? 'false' : 'true'}">Menu</button>
+            <button id="showMenuButton" aria-hidden="${target === 'showMenuButton' ? 'false' : 'true'}">Menu</button>
             <nav><button>Matkainfo</button><button>Matkatarjoukset</button><button>Blogit</button></nav>
         </div>`;
     const element = document.querySelector('nav');
     const close = document.getElementById('hideMenuButton');
     const closeFocus = vi.spyOn(close, 'focus');
-    if (homeOwnsMenu) close.style.display = 'none';
+    if (closeHidden === 'true') close.style.display = 'none';
+    if (target !== 'showMenuButton') document.getElementById('showMenuButton').style.display = 'none';
     element.style.flexDirection = homeOwnsMenu ? 'column' : 'row';
     let availableWidth = 400;
     vi.spyOn(element, 'clientWidth', 'get').mockImplementation(() => availableWidth);
@@ -42,7 +44,7 @@ test.each([
         expect(document.activeElement).toBe(document.getElementById(target));
         expect(window.getComputedStyle(document.activeElement).display).not.toBe('none');
         if (homeOwnsMenu) {
-            expect(closeFocus).not.toHaveBeenCalled();
+            expect(closeFocus).toHaveBeenCalledTimes(target === 'hideMenuButton' ? 1 : 0);
             element.style.flexDirection = 'column';
             window.dispatchEvent(new Event('resize')); await vi.advanceTimersByTimeAsync(20);
             expect(buttons.map(button => button.hidden)).toEqual([false, false, false]);

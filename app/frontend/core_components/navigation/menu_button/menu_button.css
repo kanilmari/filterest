@@ -88,6 +88,13 @@
     border-color: var(--color-brand);
 }
 
+/* Release paint with accessibility, even while the panel's children fade
+   during slide-out. The incoming opener keeps its normal fade-in. */
+#showMenuButton[aria-hidden="true"],
+#hideMenuButton[aria-hidden="true"] {
+    visibility: hidden;
+}
+
 .inset {
     box-shadow: inset 5px 5px 5px 0 rgb(0 0 0 / 30%);
 }

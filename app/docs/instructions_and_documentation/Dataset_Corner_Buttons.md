@@ -15,11 +15,11 @@ The filter toolbar and main menu keep their existing open/close behavior. Only t
 | Hidden dataset | Hidden and excluded from tab order | Local copies hidden and excluded from tab order |
 
 On phones (up to 700px), the shared toolbar stays present in both card and
-article views. Its menu button remains in its slot beneath the open navbar
-overlay, with `aria-expanded` following the navbar state. Close the overlay
-through the navbar's own hide button; the local opener is then reachable again.
-The floating fallback stays hidden while this local button owns the menu.
-On larger screens, opening the navbar hides the local opener. A visible card
+article views. Opening the navbar hides and releases the local menu opener;
+the navbar's own closer is the only announced, focusable menu control at every
+width. Closing it returns ownership to the local opener. Its `aria-expanded`
+still follows the navbar state. The floating fallback stays hidden while a
+local opener owns the menu. A visible card
 hero owns its opener even when no shared toolbar is visible; absence of that
 toolbar alone does not imply that the floating fallback should appear.
 
@@ -29,6 +29,23 @@ The hero sidebar opener keeps the canonical 12px viewport top/right inset, mirro
 
 A partially visible hero does not own a button whose corner has scrolled outside the scroll viewport. Returning to the hero restores its local buttons. Tab changes and rerendering reuse the same controls, and hidden copies are removed from the tab order. Button titles and accessible names follow the existing language selection lifecycle in Finnish, English, Chinese and Cantonese.
 
+When a menu control owns keyboard focus, ownership changes hand it to the
+incoming visible opener, or to the navbar closer while the menu is open.
+Unrelated focus is left alone. The shared toolbar captures menu-focus intent
+through `dataset_corner_controls.js` before changing its own accessibility;
+the same synchronous corner reconciliation consumes it after the incoming
+controls become accessible. This also covers a restored hero scroll position
+hiding the toolbar just after Back/Forward returned focus to its opener.
+The handoff requires no timer or retained focus state.
+
+The shared toolbar's released menu button becomes visually hidden immediately
+when its own `aria-hidden` changes to `true`. Its slot and the toolbar can
+continue shrinking and fading for 260 ms; their delayed CSS visibility must
+never keep the former menu owner painted beside the incoming control. The
+shell opener and closer likewise hide immediately on release, including while
+the navbar's children fade during its slide-out. Ownership and the incoming
+CSS reveal start in the same task; no deferred reveal or focus intent remains.
+
 ## Modal boundary
 
 Image-first, image preview and reusable modal dialogs keep their existing controls. `card_image_modal.js` currently supplies record navigation and close in `image_modal_top_controls`, while `modal_builder.js` supplies the modal focus lifecycle. These modal overlays are above the current navbar and filter toolbar. Adding app-menu buttons there would open panels behind the modal and require a separate layer/focus behavior change, outside the button-only contract. Closing a modal returns to the existing underlying corner buttons.
@@ -36,6 +53,26 @@ Image-first, image preview and reusable modal dialogs keep their existing contro
 ## Verification
 
 Focused unit coverage checks host choice, partially scrolled hero corners, original button action/focus preservation, hidden datasets, ownership release, FI/EN accessible labels, teardown and canonical builder toggles. Existing responsive visibility and temporary filter shortcut tests remain applicable.
+
+`filterbar_menu_history.test.js` also checks Home/dataset Back/Forward and
+shared-toolbar/fallback/hero scroll handoffs, with both menu states and
+unrelated focus. It focuses the outgoing control before navigation and checks
+each incoming control without supplying focus after the transition.
+It also loads the actual toolbar CSS and samples the existing transition
+deadline. The CSS regressions supply intermediate ancestor visibility/opacity
+because jsdom does not interpolate animations. G11 samples rendered frames
+and completed DOM mutation batches across Home/dataset Back/Forward handoffs,
+and checks both settled Home menu states. It checks viewport/clipping/opacity,
+pointer access, tab order and accessibility; an earlier ownership-transition
+failure remains recorded after the transition settles. Every frame permits
+at most one painted control and one announced, focusable owner, with no painted
+aria-hidden copy. An empty frame is allowed only when `getAnimations()` reports
+a running animation on that announced owner or an ancestor (its fade or panel
+slide). Paused, finished and unrelated animations cannot excuse an empty frame.
+Idle frames and every focus assertion require exactly one painted, on-screen,
+announced, focusable, pointer-accessible owner. Sampler negative controls reject
+the former two-painted-buttons state, two announced owners even when one is
+offscreen, and static empty frames.
 
 `E10_site_identity_and_menu_contract.spec.ts` verifies real clicks on the wide
 article opener, the persistent phone article opener and navbar closer, and the

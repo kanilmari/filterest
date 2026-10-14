@@ -1,6 +1,6 @@
 // front_page_top_row_builder.js
 // Composes Home's site identity, shared dataset tabs and administrator actions.
-// Borrows the shell's one menu button and restores it when Home leaves the view.
+// Borrows the shell opener only for a hidden menu; the open menu keeps its closer.
 // Owns the tab subscription and navbar listener for exactly one mounted top row.
 
 import { createHeroDatasetTabs } from '../navigation/main_tabs/hero_dataset_tabs.js';
@@ -23,7 +23,10 @@ export function createFrontPageTopRow(siteName, onSaved, paletteOptions = {}) {
     const menuSlot = document.createElement('div');
     menuSlot.className = 'dataset-shared-topbar__menu-slot';
     const menuButton = document.getElementById('showMenuButton');
+    const menuWasFocused = menuButton && document.activeElement === menuButton;
     const bookmark = document.createComment('Home menu button return point');
+    menuSlot.hidden = menuSlot.inert = true;
+    menuSlot.setAttribute('aria-hidden', 'true');
     if (menuButton) {
         menuButton.before(bookmark);
         menuSlot.append(menuButton);
@@ -81,12 +84,13 @@ export function createFrontPageTopRow(siteName, onSaved, paletteOptions = {}) {
     }
     element.append(start, tabs.element, actions);
     function syncMenu() {
-        syncNavbarMenuButtonAccessibility();
-        const visible = Boolean(menuButton);
+        const navbar = document.getElementById('navbar');
+        const visible = Boolean(menuButton && navbar?.classList.contains('collapsed'));
         menuSlot.hidden = !visible;
         menuSlot.inert = !visible;
         menuSlot.setAttribute('aria-hidden', String(!visible));
         menuSlot.classList.toggle('dataset-shared-topbar__menu-slot--visible', visible);
+        syncNavbarMenuButtonAccessibility();
     }
     // The complete header stays above the menu throughout the shell's overlay
     // widths. Measure it so translated/wrapped labels fit on every surface.
@@ -108,6 +112,7 @@ export function createFrontPageTopRow(siteName, onSaved, paletteOptions = {}) {
         // document.getElementById cannot find it while this row is being built.
         mount() {
             syncMenu();
+            if (menuWasFocused && menuButton.getAttribute('aria-hidden') === 'false') menuButton.focus({ preventScroll: true });
             syncMenuHeight();
         },
         destroy() {
@@ -124,8 +129,10 @@ export function createFrontPageTopRow(siteName, onSaved, paletteOptions = {}) {
                 if (previousHeight) bodyContent.style.setProperty('--home-top-row-height', previousHeight);
                 else bodyContent.style.removeProperty('--home-top-row-height');
             }
+            const menuIsFocused = menuButton && document.activeElement === menuButton;
             if (menuButton && bookmark.parentNode) bookmark.replaceWith(menuButton);
             syncNavbarMenuButtonAccessibility();
+            if (menuIsFocused && menuButton.getAttribute('aria-hidden') === 'false') menuButton.focus({ preventScroll: true });
         },
     };
 }

@@ -194,13 +194,25 @@ single menu button into the shared menu slot, restoring its original position
 on teardown, and destroys the tab subscription. Site identity uses the actual
 server-resolved 128 px favicon at 32 CSS px with browser downsampling (the 16 px
 link remains the fallback). Home reserves the complete name before tabs and
-actions, keeping its one borrowed menu toggle beside the icon in both panel
-states with a fixed 10 px gap. The panel’s duplicate toggle is hidden on Home,
-marked `aria-hidden="true"` and removed from the tab order. Accessibility is
+actions. Only while the navbar is `collapsed`, Home shows its borrowed menu
+opener beside the icon with a fixed 10 px gap. An open menu keeps its own
+close control, exactly as on dataset pages; Home's slot is hidden, inert and
+`aria-hidden="true"`, with no reserved 44 px width or gap before the icon.
+The hidden control leaves the tab order and accessibility tree. Accessibility is
 reconciled immediately after the completed row is mounted, and when Home
 returns the toggle. During construction the borrowed button is detached from
 the document; reconciling then cannot find it. Signed-in and signed-out Home
-use the same mount lifecycle, identity and toggle in both panel states.
+use the same mount lifecycle, identity and state-dependent menu controls.
+Home hides the inactive navbar closer as soon as collapse begins, so its
+slide-out never duplicates the newly revealed opener.
+Visibility events and resizing reconcile the slot from the mounted navbar,
+including when navigation or Back/Forward remounts Home. Focus follows the
+visible menu control when opening or closing and survives borrowing and
+returning the opener. Dataset corner controls capture menu focus before
+releasing ownership on view deactivation, then pass it to the visible shell
+opener or the open menu's closer. Activation passes a focused shell opener to
+the dataset's visible local control. This also covers retained datasets on
+Back/Forward; inactive observers cannot take unrelated focus.
 The name scales with the available row width beside an open menu too. At widths through 700 px the name
 uses 18 px bold: at 320 px, 200 px remain for the name; only names wider than
 that budget use an ellipsis. Fintravel, Easelect and Serlog fit. Home applies
@@ -211,16 +223,17 @@ most 480 px wide inside 16 px side gutters, with the shared icons, labels,
 current-page and focus styles and at least 44 px touch height. Administrator
 actions occupy the following row. Throughout the shell's overlay band (through
 1850 px), Home's menu starts below the measured complete header. This keeps the
-single borrowed toggle reachable by pointer and keyboard in both menu states;
-raising the toggle's own z-index cannot escape its ancestor stacking contexts.
+visible menu control reachable by pointer and keyboard: the navbar's closer
+while open, and the borrowed Home opener while hidden. Raising a toggle's own
+z-index cannot escape its ancestor stacking contexts.
 The shell retains the full content width in this band; above it, the open menu
 reserves its ordinary sidebar width. Dataset pages retain their existing layout
 and hidden phone tabs. The fit controller restores every destination only in a
 Home vertical stack when crossing the phone breakpoint, including buttons
 hidden in the previous horizontal row; dataset projections keep their fit rule.
 When a focused destination no longer fits after leaving the phone stack, focus
-moves to Home's visible borrowed toggle before the destination hides. Dataset
-pages retain their existing menu focus selection.
+moves to the navbar's closer while open or Home's borrowed opener while hidden,
+before the destination hides. Dataset pages retain their existing menu focus selection.
 
 Home's fitting controller only measures and hides its own hero buttons; it
 never moves the navbar's dataset tabs. Draggable navbar tabs navigate on click,

@@ -10,6 +10,9 @@ vi.mock('@playwright/test', () => ({
   expect: (locator: DomLocator) => ({
     toHaveCount: async (count: number) => expect(await locator.count()).toBe(count),
     toBeVisible: async () => expect(locator.element().hidden).toBe(false),
+    toBeHidden: async () => expect(locator.element().hidden).toBe(true),
+    toHaveJSProperty: async (name: string, value: unknown) =>
+      expect(Reflect.get(locator.element(), name)).toBe(value),
     toBeEnabled: async () => expect(locator.element().matches(':disabled')).toBe(false),
     // jsdom has no layout; native specs provide the actual viewport proof.
     toBeInViewport: async () => expect(locator.element().dataset.offscreen).not.toBe('true'),
@@ -48,21 +51,27 @@ afterEach(() => { document.body.replaceChildren(); clicks.length = 0; vi.restore
 
 function mountNavbar(home: boolean, collapsed = false) {
   document.body.innerHTML = `
-    <nav id="navbar" class="${collapsed ? 'collapsed' : ''}"></nav>
+    <nav id="navbar" class="${collapsed ? 'collapsed' : ''}"><button id="hideMenuButton"></button></nav>
     <button id="showMenuButton"></button>`;
   const navbar = document.getElementById('navbar')!;
   const button = document.getElementById('showMenuButton') as HTMLButtonElement;
+  const close = document.getElementById('hideMenuButton') as HTMLButtonElement;
+  const slot = document.createElement('div'); slot.className = 'dataset-shared-topbar__menu-slot';
   if (home) {
     const row = document.createElement('div'); row.className = 'front-page-top-row';
-    row.append(button); document.body.append(row);
+    slot.append(button); row.append(slot); document.body.append(row);
   }
   const sync = () => {
     const open = !navbar.classList.contains('collapsed');
-    button.hidden = !home && open;
-    button.classList.toggle('menu-toggle-visible', home || !open);
+    button.hidden = open;
+    button.classList.toggle('menu-toggle-visible', !open);
     button.setAttribute('aria-hidden', String(button.hidden));
     button.setAttribute('aria-expanded', String(open));
     button.setAttribute('tabindex', button.hidden ? '-1' : '0');
+    slot.hidden = open; slot.inert = open; slot.setAttribute('aria-hidden', String(open));
+    close.hidden = !open;
+    close.setAttribute('aria-hidden', String(!open)); close.setAttribute('aria-expanded', String(open));
+    close.tabIndex = open ? 0 : -1;
   };
   sync();
   button.addEventListener('click', () => {
@@ -79,14 +88,18 @@ function mountNavbar(home: boolean, collapsed = false) {
         .filter(element => !selector.includes(':visible') || !element.hidden)),
     evaluate: async <T, A>(operation: (argument: A) => T, argument: A) => operation(argument),
   } as unknown as Page;
-  return { page, navbar, button, url };
+  return { page, navbar, button, close, slot, url };
 }
 
-test.each([false, true])('Home keeps an actionable expanded borrowed toggle; initially collapsed=%s', async collapsed => {
-  const { page, navbar, button, url } = mountNavbar(true, collapsed);
+// Owner 14.10.2026: the open-state actionable control belongs to the menu bar on Home too.
+test.each([false, true])('Home hides its borrowed opener and exposes its panel closer; initially collapsed=%s', async collapsed => {
+  const { page, navbar, button, close, slot, url } = mountNavbar(true, collapsed);
   await ensureNavbarVisible(page);
   expect(navbar.classList.contains('collapsed')).toBe(false);
   expect(button.getAttribute('aria-expanded')).toBe('true');
+  expect(button.getAttribute('aria-hidden')).toBe('true');
+  expect(slot.hidden && slot.inert).toBe(true);
+  expect(close.getAttribute('aria-hidden')).toBe('false');
   expect(clicks).toEqual(collapsed ? [false, true] : [true]);
   expect(url).not.toHaveBeenCalled();
 });
@@ -96,19 +109,21 @@ test.each([false, true])('datasets retain the hidden source contract; initially 
   await ensureNavbarVisible(page);
   expect(button.getAttribute('aria-hidden')).toBe('true');
   expect(button.classList.contains('menu-toggle-visible')).toBe(false);
-  expect(clicks).toEqual(collapsed ? [false] : []);
+  // Readiness now also checks the visible closer with a trial click on every surface.
+  expect(clicks).toEqual(collapsed ? [false, true] : [true]);
   expect(url).not.toHaveBeenCalled();
 });
 
 test.each(['unexpanded', 'hidden', 'disabled', 'unfocusable', 'obstructed', 'inert', 'wrong-owner'])
-('Home rejects a %s borrowed toggle', async defect => {
-  const { page, button } = mountNavbar(true);
-  if (defect === 'unexpanded') button.setAttribute('aria-expanded', 'false');
-  if (defect === 'hidden') button.hidden = true;
-  if (defect === 'disabled') button.disabled = true;
-  if (defect === 'unfocusable') button.setAttribute('tabindex', '-1');
-  if (defect === 'obstructed') button.dataset.obstructed = 'true';
-  if (defect === 'inert') button.parentElement!.setAttribute('inert', '');
+// Validation now belongs to Home's visible closer rather than its deliberately hidden opener.
+('Home rejects a %s panel closer or borrowed ownership', async defect => {
+  const { page, button, close } = mountNavbar(true);
+  if (defect === 'unexpanded') close.setAttribute('aria-expanded', 'false');
+  if (defect === 'hidden') close.hidden = true;
+  if (defect === 'disabled') close.disabled = true;
+  if (defect === 'unfocusable') close.setAttribute('tabindex', '-1');
+  if (defect === 'obstructed') close.dataset.obstructed = 'true';
+  if (defect === 'inert') close.parentElement!.setAttribute('inert', '');
   if (defect === 'wrong-owner') document.body.append(button);
   await expect(ensureNavbarVisible(page)).rejects.toThrow();
 });
@@ -132,5 +147,6 @@ test('a detached Home row cannot select the Home contract on a dataset', async (
   row.append(document.createElement('button'));
   await ensureNavbarVisible(page);
   expect(button.getAttribute('aria-hidden')).toBe('true');
-  expect(clicks).toEqual([]);
+  // The shared readiness proof checks the dataset closer without opening or closing it.
+  expect(clicks).toEqual([true]);
 });
