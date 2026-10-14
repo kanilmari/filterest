@@ -404,7 +404,8 @@ func TestPublicFilesAreStillServedWhateverTheSignInLooksLike(t *testing.T) {
 				address string
 				body    string
 			}{
-				{"/favicon4S.png", "png"},
+				// HTML now uses the resolved site PNG; fallback routes have separate proofs.
+				{"/icons/site_favicons/site-initial-f-v1-16.png", "png"},
 				{"/" + rootHandlerTestStylesheet, rootHandlerTestStylesheetBody},
 			} {
 				t.Run(expected.address, func(t *testing.T) {

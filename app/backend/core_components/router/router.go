@@ -136,6 +136,8 @@ func RegisterRoutes(frontendDir string, storagePath string) {
 	}
 
 	// Staattiset reitit
+	functionRegisterHandler("/favicon.ico", faviconHandler, "router.faviconHandler", http.MethodGet)
+	// Keep the old root address as a site-icon alias; social images use /frontend/.
 	functionRegisterHandler("/favicon4S.png", faviconHandler, "router.faviconHandler", http.MethodGet)
 	functionRegisterHandler("/frontend/", handleFrontend, "router.handleFrontend", http.MethodGet)
 	functionRegisterHandler("/symbol-assets/", symbol_registry.AssetHandler, "symbol_registry.AssetHandler", http.MethodGet)

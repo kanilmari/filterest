@@ -391,7 +391,7 @@ The comparison runs on **both** kinds of site, and the first repair of this hole
 
 `app/backend/core_components/router/root_browser_binding.go` holds the guest side of that decision and `e_sessions.RequestCarriesSessionBinding` the comparison, and `root_browser_binding_test.go` walks the attack on both kinds of site: a session cookie alone, a request to the root page and to a dataset and row address, then a protected request with whatever came back.
 
-The frontend's own files and the favicon are answered earlier in the handler, before the session is even read, and they stay that way. They have to: the login page a refused request is sent to needs its own stylesheet to look like a page, and a file that is identical for everyone discloses nothing.
+The site's favicon has its own public GET/HEAD route (`/favicon.ico`, with `/favicon4S.png` as a compatibility alias), resolved by the same site-icon selector as HTML pages. It remains reachable during maintenance and requires no browse-policy check. Both addresses share the exact `router.faviconHandler` rate-limit exemption, like public frontend assets under `router.handleFrontend`, so repeated loads and revalidations from a shared IP keep returning the icon. The remaining always-enforced pipeline stages still apply. The frontend's own files are still answered before the root page reads a session: the login page a refused request is sent to needs its stylesheet, and public assets disclose no protected page content.
 
 The same question applies to any new public route that writes `device_id` or `fingerprint_hash` into a session: it may establish a binding only for a visitor who has no sign-in to protect.
 

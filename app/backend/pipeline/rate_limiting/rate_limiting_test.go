@@ -424,6 +424,7 @@ func TestNoRateLimitFunctionsAreAlwaysAllowed(t *testing.T) {
 		"e_sessions.ResetSessionHandler",
 		"auth.LogoutHandler",
 		"router.handleFrontend",
+		"router.faviconHandler",
 	}
 
 	for _, fn := range exemptFuncs {

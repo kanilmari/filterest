@@ -28,13 +28,16 @@ func TestRegisterRoutesResetsDefinitions(t *testing.T) {
 	}
 
 	countByHandler := make(map[string]int, len(developmentRoutes))
+	countByPattern := make(map[string]int, len(developmentRoutes))
 	for _, route := range developmentRoutes {
 		countByHandler[route.HandlerName]++
+		countByPattern[route.UrlPattern]++
 	}
 
-	for handlerName, count := range countByHandler {
+	// One favicon handler intentionally owns both the fallback URL and its alias.
+	for pattern, count := range countByPattern {
 		if count != 1 {
-			t.Fatalf("expected %s to be registered exactly once after a second RegisterRoutes call, got %d", handlerName, count)
+			t.Fatalf("expected %s to be registered exactly once after a second RegisterRoutes call, got %d", pattern, count)
 		}
 	}
 

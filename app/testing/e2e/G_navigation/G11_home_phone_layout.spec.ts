@@ -8,6 +8,36 @@ import { expect, test, type Page } from '@playwright/test';
 type Theme = 'light' | 'dark';
 type Fixture = { name: string; width: number };
 
+test('native document fallback matches the HTML site icon for signed-out requests', async ({ page, playwright }) => {
+  const state = await openHome(page, 'light', 'fi');
+  const icon = await page.locator('link[rel="icon"][sizes="16x16"]').getAttribute('href');
+  expect(icon).toBeTruthy();
+  const expected = await page.request.get(new URL(icon!, page.url()).href);
+  expect(expected.status()).toBe(200);
+  const expectedBytes = await expected.body();
+  const anonymous = await playwright.request.newContext({ baseURL: new URL(page.url()).origin,
+    ignoreHTTPSErrors: true, storageState: { cookies: [], origins: [] } });
+  try {
+    for (const address of ['/favicon.ico', '/favicon4S.png']) {
+      const response = await anonymous.get(address);
+      expect(response.status()).toBe(200);
+      expect(response.headers()['content-type']).toBe('image/png');
+      expect(response.headers()['cache-control']).toBe('public, no-cache');
+      expect(await response.body()).toEqual(expectedBytes);
+      const etag = response.headers().etag;
+      expect(etag).toBeTruthy();
+      const head = await anonymous.head(address);
+      expect(head.status()).toBe(200);
+      expect(head.headers()['content-length']).toBe(String(expectedBytes.length));
+      expect(head.headers().etag).toBe(etag);
+      expect(await head.body()).toHaveLength(0);
+      const unchanged = await anonymous.get(address, { headers: { 'If-None-Match': etag } });
+      expect(unchanged.status()).toBe(304);
+    }
+  } finally { await anonymous.dispose(); }
+  expect(state.writes).toEqual([]);
+});
+
 async function openHome(page: Page, theme: Theme, language: string, fixture?: Fixture) {
   const writes: string[] = [];
   let alignment = 'left';

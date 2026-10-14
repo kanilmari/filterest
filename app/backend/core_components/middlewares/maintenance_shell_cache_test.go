@@ -1,5 +1,5 @@
 // maintenance_shell_cache_test.go
-// Checks every maintenance response is uncacheable, including failed boot assets.
+// Checks intercepted maintenance responses are uncacheable, including boot assets.
 // Bridges the outer maintenance middleware and document/subresource requests.
 // Prevents a maintenance response from surviving the outage in browser cache.
 package middlewares
@@ -14,7 +14,8 @@ func TestMaintenanceResponsesNoStore(t *testing.T) {
 	previous := IsMaintenanceMode()
 	SetMaintenanceMode(true)
 	t.Cleanup(func() { SetMaintenanceMode(previous) })
-	for _, path := range []string{"/", "/frontend/main.js", "/api/results", "/favicon.ico"} {
+	// Site icons bypass maintenance and retain their handler's revalidation policy.
+	for _, path := range []string{"/", "/frontend/main.js", "/api/results"} {
 		r := httptest.NewRequest(http.MethodGet, path, nil)
 		if path == "/" {
 			r.Header.Set("Accept", "text/html")

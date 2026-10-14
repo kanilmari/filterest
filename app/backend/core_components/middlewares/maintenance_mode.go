@@ -59,19 +59,17 @@ func IsMaintenanceMode() bool {
 // WithMaintenanceMode wraps the next handler.  When maintenance mode is
 // active, browser page navigations receive 200 + maintenance HTML (to
 // avoid red console errors), while API/XHR calls receive a proper 503
-// so programmatic clients can detect the outage.  Favicons get 204.
+// so programmatic clients can detect the outage. Site icons remain public.
 func WithMaintenanceMode(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if maintenanceActive.Load() {
-			w.Header().Set("Cache-Control", "no-store")
-			// Serve a minimal valid response for common browser-initiated
-			// requests that would otherwise show as console errors.
 			path := r.URL.Path
+			// The page's icon must keep the site's identity and revalidation policy.
 			if path == "/favicon.ico" || path == "/favicon4S.png" {
-				w.Header().Set("Cache-Control", "no-store")
-				w.WriteHeader(http.StatusNoContent) // 204 — valid, no body
+				next.ServeHTTP(w, r)
 				return
 			}
+			w.Header().Set("Cache-Control", "no-store")
 
 			// Distinguish browser navigation from API/XHR calls:
 			// - API paths (/api/) always get 503

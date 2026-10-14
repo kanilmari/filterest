@@ -257,11 +257,6 @@ func isGuestUserID(userIDVal interface{}) bool {
 	return ok && userID == 1
 }
 
-// faviconHandler palvelee tiedoston "/favicon..."
-func faviconHandler(w http.ResponseWriter, r *http.Request) {
-	http.ServeFile(w, r, filepath.Join(localFrontendDir, "favicon4S.png"))
-}
-
 func robotsHandler(w http.ResponseWriter, r *http.Request) {
 	// If indexing is not allowed, return a restrictive robots.txt
 	if !isIndexingAllowed() {

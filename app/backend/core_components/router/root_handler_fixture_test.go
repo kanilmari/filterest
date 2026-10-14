@@ -157,6 +157,13 @@ func (c *rootHandlerMockConn) QueryContext(_ context.Context, query string, args
 			cols: []string{"boolean_value"},
 			vals: []driver.Value{c.config.loginToBrowse},
 		}, nil
+	// Public favicon pipeline fixtures carry an ordinary enabled browser account.
+	case strings.Contains(query, "SELECT ur.api_only, ur.authentication_generation"):
+		return &rootHandlerMockRows{cols: []string{"api_only", "authentication_generation", "enabled"}, vals: []driver.Value{false, int64(1), true}}, nil
+	case strings.Contains(query, "SELECT rate_limit_amount, rate_limit_minutes"):
+		// Exercise the normal non-zero limits, including for public routes.
+		amount, minutes := defaultRateLimitForHandler(fmt.Sprint(args[0].Value))
+		return &rootHandlerMockRows{cols: []string{"rate_limit_amount", "rate_limit_minutes"}, vals: []driver.Value{int64(amount), int64(minutes)}}, nil
 	case strings.Contains(query, "dataset.ui_hidden"):
 		return &rootHandlerMockRows{cols: []string{"hidden"}, vals: []driver.Value{false}}, nil
 	case strings.Contains(query, "SELECT COALESCE(specific_table_related, true)"):
@@ -303,8 +310,13 @@ func setupRootHandlerFrontend(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(frontendDir, "index.html"), []byte(indexHTML), 0o644); err != nil {
 		t.Fatalf("WriteFile(index.html) error = %v", err)
 	}
-	if err := os.WriteFile(filepath.Join(frontendDir, "favicon4S.png"), []byte("png"), 0o644); err != nil {
-		t.Fatalf("WriteFile(favicon4S.png) error = %v", err)
+	// Public image fixtures follow the site's maintained icon, not the retired logo.
+	iconDir := filepath.Join(frontendDir, "icons", "site_favicons")
+	if err := os.MkdirAll(iconDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(iconDir, "site-initial-f-v1-16.png"), []byte("png"), 0o644); err != nil {
+		t.Fatalf("WriteFile(site favicon) error = %v", err)
 	}
 	// One of the frontend's own files, so a test can ask whether the site still
 	// hands out the stylesheet its login page needs in order to look like a page.

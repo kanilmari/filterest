@@ -102,6 +102,28 @@ The variant derives from the already-resolved safe 16 px filename; a missing
 or non-regular variant keeps that 16 px file. The phone dataset identity uses
 the same head reader as Home, and selectable favicon names remain the 16 px ones.
 
+The browser fallback `/favicon.ico` serves the **exact resolved PNG bytes** with
+`image/png`, using the same selection as the shell's 16 px head link. Resolution
+chooses an existing safe configured PNG basename first, then available site-name
+initials (multiple initials before the first letter), then the generated Filterest
+F. Unknown, removed, unsafe and non-regular configured files use that same fallback.
+Both GET and HEAD are public, including with sign-in required for browsing and
+during maintenance. Both icon addresses share the public frontend assets' rate-limit
+exemption, so repeated loads and revalidations from one IP remain available.
+`Cache-Control: public, no-cache` and a content-based ETag
+require revalidation; an unchanged icon returns 304, while a changed selection or
+replaced image returns current bytes even when file modification dates coincide.
+The compatibility address `/favicon4S.png` serves the same current site icon.
+
+Shell, login/OTP and first-run documents keep their existing 16/128 px icon links.
+Maintenance links `/favicon.ico`; standalone registration, template-recovery and
+rate-limit HTML without icon links use that fallback. Markdown API catalogs,
+JSON, plain text, XML, images, PDFs and non-HTML errors also use the browser's
+origin fallback when it requests an icon. A custom root document such as K378's
+does the same when its own HTML has no icon link. Browser tab/cache behavior still
+needs native browser verification. The social-preview default remains the legacy
+Serlog image at `/frontend/favicon4S.png`; it is separate from the tab icon.
+
 Fixed language keys `site_front_page_title`, `site_front_page_slogan` and
 `site_front_page_description` store three independent Finnish/English texts.
 The title falls back to the site name (or Home); empty slogan/description are

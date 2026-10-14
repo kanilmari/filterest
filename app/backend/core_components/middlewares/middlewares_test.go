@@ -311,6 +311,9 @@ func TestWithMaintenanceMode_BrowserNavigation(t *testing.T) {
 	if !strings.Contains(rr.Body.String(), "TestSite") {
 		t.Errorf("expected site name in maintenance HTML body")
 	}
+	if !strings.Contains(rr.Body.String(), `<link rel="icon" href="/favicon.ico" type="image/png">`) || strings.Contains(rr.Body.String(), "data:image/svg+xml") {
+		t.Error("maintenance page must retain the site's own icon")
+	}
 }
 
 func TestWithMaintenanceMode_APIPath(t *testing.T) {
@@ -334,8 +337,9 @@ func TestWithMaintenanceMode_Favicon(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, path, nil)
 		WithMaintenanceMode(http.HandlerFunc(okHandler)).ServeHTTP(rr, req)
 
-		if rr.Code != http.StatusNoContent {
-			t.Errorf("%s: expected 204, got %d", path, rr.Code)
+		// Maintenance now lets the public icon handler return the site's real image.
+		if rr.Code != http.StatusOK || rr.Body.String() != "ok" || rr.Header().Get("Retry-After") != "" {
+			t.Errorf("%s: expected downstream response, got %d %q", path, rr.Code, rr.Body.String())
 		}
 	}
 }

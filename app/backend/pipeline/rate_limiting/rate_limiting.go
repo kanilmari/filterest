@@ -195,6 +195,7 @@ var noRateLimitFunctions = map[string]bool{
 	"e_sessions.ResetSessionHandler": true,
 	"auth.LogoutHandler":             true,
 	"router.handleFrontend":          true,
+	"router.faviconHandler":          true, // Both site-icon addresses are public static assets.
 }
 
 // WithFunctionRateLimiting hakee funktiolta rate_limit_amount, rate_limit_minutes

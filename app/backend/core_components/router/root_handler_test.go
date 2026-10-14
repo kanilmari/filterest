@@ -121,7 +121,8 @@ func TestRootHandlerReturns404ForAnonymousFileProbeWhenLoginRequired(t *testing.
 	setupRootHandlerSessionStore(t)
 	setupRootHandlerFrontend(t)
 
-	for _, path := range []string{"/wp-content/plugins/file-manager.php", "/favicon.ico"} {
+	// The real favicon has its own public route; only unknown files are probes.
+	for _, path := range []string{"/wp-content/plugins/file-manager.php", "/unknown.ico"} {
 		t.Run(path, func(t *testing.T) {
 			req := httptest.NewRequest(http.MethodGet, path, nil)
 			rr := httptest.NewRecorder()

@@ -33,12 +33,6 @@ func rootHandler(w http.ResponseWriter, r *http.Request) {
 		log.Printf("[rootHandler] first-run state check unavailable; setup remains closed: %v", err)
 	}
 
-	// Jos pyyntö on favicon, palvellaan se suoraan
-	if r.URL.Path == "/favicon4S.png" {
-		http.ServeFile(w, r, filepath.Join(localFrontendDir, "favicon4S.png"))
-		return
-	}
-
 	// Salli suoraan JS, CSS, PNG, JPG, ... ilman kirjautumista
 	if strings.HasSuffix(r.URL.Path, ".js") ||
 		strings.HasSuffix(r.URL.Path, ".css") ||
