@@ -23,6 +23,7 @@ type AccessRow = { id: number } & Record<string, unknown>;
 type ReaderAccess = {
   groupName: string;
   groupId: number | null;
+  groupCreated: boolean;
   viewGrants: Array<{ functionId: number; grantId: number | null }>;
   userId: number | null;
   membershipId: number | null;
@@ -186,6 +187,7 @@ async function giveReaderArticleAccess(admin: Page, reader: Page, access: Reader
   }
   expect(await readAccessRow(admin, 'system_user_groups', { name: access.groupName })).toBeNull();
   await addAccessRow(admin, 'system_user_groups', { name: access.groupName });
+  access.groupCreated = true;
   const group = await readAccessRow(admin, 'system_user_groups', { name: access.groupName });
   expect(group).not.toBeNull();
   access.groupId = group!.id;
@@ -211,6 +213,11 @@ async function giveReaderArticleAccess(admin: Page, reader: Page, access: Reader
 
 /** Refuses replacements; removes the owned group and verifies both cascade targets. */
 async function removeReaderArticleAccess(admin: Page, access: ReaderAccess): Promise<void> {
+  // A successful create has no id in its reply; recover only our previously absent exact name if readback failed.
+  if (access.groupId === null && access.groupCreated) {
+    const group = await readAccessRow(admin, 'system_user_groups', { name: access.groupName });
+    if (group) access.groupId = group.id;
+  }
   if (access.groupId === null) return;
   expect(await readAccessRow(admin, 'system_user_groups', { name: access.groupName })).toMatchObject({ id: access.groupId });
   const grants = await readAccessRows(admin, 'system_group_table_func_rights', { user_group_id: access.groupId });
@@ -291,7 +298,7 @@ test('C17: administrator, reader and anonymous visitor receive their own article
   const created: string[] = [];
   const datasetNameKeyIds = new Map<string, number | null>();
   const readerAccess: ReaderAccess = {
-    groupName: buildTempDatasetName('e2e_c17_card_reader'), groupId: null,
+    groupName: buildTempDatasetName('e2e_c17_card_reader'), groupId: null, groupCreated: false,
     viewGrants: [], userId: null, membershipId: null,
   };
   let reader: Page | null = null;

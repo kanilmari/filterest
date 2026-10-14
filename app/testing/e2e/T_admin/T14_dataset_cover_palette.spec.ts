@@ -55,17 +55,19 @@ const test = base.extend<{ coverDataset: string; selectTheme: (theme: 'light' | 
   selectTheme: async ({ page }, use) => {
     const response = await page.request.get('/api/user-visual-preference');
     expect(response.ok()).toBe(true);
-    const original = (await response.json()).theme_mode;
-    expect(['system', 'dark', 'light']).toContain(original);
+    const original = await response.json() as { theme_mode: string; configured: boolean };
+    expect(['system', 'dark', 'light']).toContain(original.theme_mode);
     try {
       await use(theme => selectApplicationTheme(page, theme));
     } finally {
       const csrf = await fetchCsrfTokenForRequest(page.request);
-      const restored = await page.request.patch('/api/user-visual-preference', {
-        headers: { 'X-CSRF-Token': csrf }, data: { theme_mode: original },
-      });
+      // Preserve an inherited theme's absent preference row instead of creating a stored "system" override.
+      const headers = { 'X-CSRF-Token': csrf };
+      const restored = original.configured
+        ? await page.request.patch('/api/user-visual-preference', { headers, data: { theme_mode: original.theme_mode } })
+        : await page.request.delete('/api/user-visual-preference', { headers });
       expect(restored.ok(), await restored.text()).toBe(true);
-      expect((await restored.json()).theme_mode).toBe(original);
+      expect(await restored.json()).toMatchObject({ theme_mode: original.theme_mode, configured: original.configured });
     }
   },
 });
@@ -312,7 +314,7 @@ test('admin cover palette is protected, movable, resizable, themed, and live-onl
 test('selected-chip side previews both DOM orders, resets, saves and survives reload', async ({ page }) => {
   test.setTimeout(60_000);
   const original = await loadSitePresentationSettings(page.request);
-  const savedSide = original.site_values['shared.active_filter_remove_side'] || 'start';
+  const savedSide = (original.site_values['shared.active_filter_remove_side'] || 'start') as 'start' | 'end';
   const chosenSide = savedSide === 'start' ? 'end' : 'start';
   try {
     await page.goto('/app_autojen_vanteet?search=chip-proof', { waitUntil: 'domcontentloaded' });

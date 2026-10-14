@@ -79,6 +79,11 @@ release assembly run locally. Do not add `.github/workflows/*`.
    logic, a targeted browser proof for layout, theme or multi-element interface
    work. Run `npm run build` after file moves or renames. Passing tests alone
    are not proof — check the likely regressions too.
+   Tests and agents remove the generic test tables, datasets, accounts and
+   language keys they create when testing ends, including after failures; these
+   artifacts are assumed unused afterwards. This excludes test accounts used to
+   develop the project, including the [reserved development accounts](app/docs/instructions_and_documentation/E2E_Testing_Guide.md#reserved-development-accounts-and-identity).
+   Follow the [cleanup helper guidance](app/docs/instructions_and_documentation/E2E_Testing_Guide.md#02-prefer-temp-datasets-for-isolated-crud-and-persistence-flows) to prevent accumulation.
 5. **Look back, wise up and capture knowledge.** Look back over the whole piece
    of work before closing it: what changed, what it revealed, and which
    assumptions turned out wrong. Wise up: record what you learned where the next

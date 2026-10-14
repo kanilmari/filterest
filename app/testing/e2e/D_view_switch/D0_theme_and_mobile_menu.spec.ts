@@ -1,16 +1,20 @@
 // D0_theme_and_mobile_menu.spec.ts
 // Verifies explicit application theme switching and responsive navbar controls.
 // Connects the real menu actions to Home ownership and the dataset toggle contract.
-// Pins initial account appearance while preserving each surface's visibility proof.
+// Pins account appearance in a per-test fixture without leaving preference rows behind.
 import { test, expect } from '@playwright/test';
 import { ensureNavbarVisible } from '../helpers/navbar';
 
 test.describe('Feature Tests', () => {
 
   test.beforeEach(async ({ page }) => {
+    let preference = { theme_mode: 'light', revision: 1, configured: true };
     await page.route(url => url.pathname === '/api/user-visual-preference', async route => {
-      if (route.request().method() !== 'GET') return route.continue();
-      await route.fulfill({ json: { theme_mode: 'light', revision: 1, configured: true } });
+      // This visible-switch proof already fixtures reads; keep its writes in the same isolated state.
+      if (route.request().method() === 'PATCH') {
+        preference = { ...preference, theme_mode: route.request().postDataJSON().theme_mode, revision: preference.revision + 1 };
+      } else if (route.request().method() !== 'GET') return route.continue();
+      await route.fulfill({ json: preference });
     });
     await page.emulateMedia({ colorScheme: 'dark' });
     await page.addInitScript(() => localStorage.setItem('theme', 'light'));
