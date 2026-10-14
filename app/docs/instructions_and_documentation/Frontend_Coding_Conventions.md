@@ -170,6 +170,46 @@ Zero errors = all imports resolve correctly.
 
 Filterest uses `data-lang-key` attributes for menu and UI string localization.
 
+### Language menu placement and interaction
+
+The reusable selector in `frontend/core_components/lang/lang_panel_printer.js`
+serves the menu bar and authentication forms. Its viewport controller moves the
+open panel into the document body (or its enclosing shared modal layer), outside
+scrolling ancestors. Closing returns it to the selector. The panel remains
+right-aligned with the selector and keeps its 10 px gap when there is room.
+
+`frontend/reusable_components/floating_panel_placement.js` owns the measured
+side decision shared with the multiselect popup controller: prefer below when
+the content fits; otherwise choose the larger side. Cap the panel to that side
+and scroll its content internally when neither side fits. Bound its width and
+position to the visual viewport too; an offscreen selector uses the visible
+viewport. Opening, viewport resize/scroll, menu-bar scroll and translated
+content changes trigger fresh measurements. Read natural content height from
+`scrollHeight` plus borders while keeping the live panel's height cap in place;
+expanding its scroll box for measurement can clamp `scrollTop` to zero. This
+preserves internal scroll positions that still fit the content and new cap.
+Captured scroll events from the panel or its descendants do not trigger
+placement; scrolling ancestors and the viewport still do.
+Closing removes position listeners and content observation; aborting the owning
+form or removing the selector also releases interaction listeners and the panel.
+
+The button retains `aria-controls` and `aria-expanded`. Escape returns focus to
+the button; native radio arrow keys still choose a language, and Tab follows the
+selector's original place in the page. M1's pinned scrolling menu bar and short
+viewports exercise both themes, including explicit light over an OS dark
+preference, independently of the installation's Home datasets.
+The short-screen check holds the lower option in view across queued animation
+frames and repeated polls, then clicks it before enlarging the viewport.
+
+Clicks inside the portalled panel stop at the panel, preserving its selector's
+interaction boundary. Otherwise the menu bar's document outside-click handler
+collapses the bar before a radio's native change event, sliding the language
+button offscreen even though translation succeeds. Translation updates labels
+without changing the button anchor; replacing the selector disposes its old
+listeners and observers. M1 verifies reopening after translation and restores
+through `ensureNavbarVisible` with the current button's `aria-controls`, keeping
+the first failed assertion if cleanup also fails.
+
 ### Menu strings with `data-lang-key`
 -   **Attribute**: Every translatable element includes a `data-lang-key` attribute and an English fallback inside the element: `<div data-lang-key="show_more">Show more</div>`.
 -   **Mechanism**: `filterest/app/frontend/core_components/lang/lang.js` scans the DOM for these keys and replaces the fallback text with the active language's string from `system_lang_keys`.

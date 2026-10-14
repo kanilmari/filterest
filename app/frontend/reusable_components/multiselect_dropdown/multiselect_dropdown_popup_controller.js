@@ -4,6 +4,7 @@
 // Preserves geometry during temporary anchor detachment and cleans up permanent owner removal.
 
 import { VIEW_DEACTIVATE_EVENT } from '../view_lifecycle_events.js';
+import { measureFloatingPanelPlacement } from '../floating_panel_placement.js';
 
 const MAX_POPUP_HEIGHT = 400;
 const MIN_OPTION_ROWS = 3;
@@ -79,13 +80,9 @@ export function createMultiselectPopupController({
         listWrapper.style.left = `${left}px`;
         listWrapper.style.width = `${width}px`;
         const { requiredHeight, fixedHeight, borders, borderBox } = measureMinimumPopupHeight();
-        const visibleHeight = Math.max(0, viewportHeight - margin * 2);
-        const anchorVisible = anchorRect.bottom > offsetTop && anchorRect.top < offsetTop + viewportHeight;
-        const below = Math.max(0, offsetTop + viewportHeight - anchorRect.bottom - margin - gap);
-        const above = Math.max(0, anchorRect.top - offsetTop - margin - gap);
-        const upward = below < requiredHeight && above > below;
-        // The space beside an anchor that has left the view (an on-screen keyboard, a smaller window) can exceed the view.
-        const available = Math.min(upward ? above : below, visibleHeight);
+        const { upward, anchorVisible, visibleHeight, availableHeight: available, top, bottom } =
+            measureFloatingPanelPlacement({ anchorRect, requiredHeight, viewportHeight,
+                layoutHeight: view.innerHeight, offsetTop, margin, gap });
         // With a keyboard or a low anchor, use the viewport before fixed controls would
         // crowd out every option. The shell never scrolls: controls stay visible.
         const shortScreen = available < Math.min(requiredHeight, fixedHeight + 44) || !anchorVisible;
@@ -93,9 +90,9 @@ export function createMultiselectPopupController({
         listWrapper.classList.toggle('msd-dropdown-list--open-upward', upward && !shortScreen);
         listWrapper.style.maxHeight = `${Math.max(0, maxHeight - (borderBox ? 0 : borders))}px`;
         listWrapper.style.top = shortScreen ? `${offsetTop + margin}px`
-            : upward ? '' : `${Math.max(anchorRect.bottom + gap, offsetTop + margin)}px`;
+            : upward ? '' : `${top}px`;
         listWrapper.style.bottom = upward && !shortScreen
-            ? `${view.innerHeight - Math.min(anchorRect.top - gap, offsetTop + viewportHeight - margin)}px` : '';
+            ? `${bottom}px` : '';
     }
 
     function schedulePositionUpdate() {

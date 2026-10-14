@@ -2,6 +2,22 @@
   "version": 1,
   "browser_areas": [
     {
+      "area": "Floating panel placement",
+      "paths": [
+        "app/frontend/reusable_components/floating_panel_placement.js",
+        "app/frontend/reusable_components/floating_panel_placement.test.js"
+      ],
+      "specs": [
+        "app/testing/e2e/M_language/M1_language_switch.spec.ts",
+        "app/testing/e2e/E_search_filter/E16_multiselect_scroll.spec.ts"
+      ],
+      "projects": [
+        "mobile-card",
+        "tablet-card",
+        "desktop-card"
+      ]
+    },
+    {
       "area": "Manual custom root proof tooling",
       "paths": [
         "app/playwright.custom-root.config.ts",

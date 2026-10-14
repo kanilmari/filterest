@@ -90,7 +90,10 @@ the portalled popup. Only the option list scrolls within a popup capped at 400 p
 360 px wide on desktop, bounded by the viewport; at 600 px and narrower they use the visual viewport minus 16 px on
 each side. The shared popup controller measures fixed controls at that width and budgets three option rows (the
 whole list if shorter), capped at its maximum height; plain dropdowns also retain their existing minimum opening
-space. It opens below when that fits, otherwise on the larger side. The option budget is sampled after the opening's
+space. It opens below when that fits, otherwise on the larger side. That decision
+is shared with the language menu through `reusable_components/floating_panel_placement.js`;
+see [language menu placement](Frontend_Coding_Conventions.md#language-menu-placement-and-interaction).
+The option budget is sampled after the opening's
 reset or preserved query renders its rows, including zero matches, then retained until close so search cannot change
 sides; fixed controls are remeasured on repositioning and content-size changes (ResizeObserver). On short screens, with
 an on-screen keyboard and once the heading has left the view, the popup stays within the visual viewport, at most 400 px high. Its fixed shell never scrolls; the options use the remaining height. This applies to plain column dropdowns as well as category popups.

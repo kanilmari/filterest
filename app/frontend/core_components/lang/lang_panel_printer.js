@@ -9,6 +9,7 @@ import {
     setLanguage,
 } from "../state_stores/lang_preference_reader.js";
 import { createMaskIconSpan } from "../../icons/icon_mask_builder.js";
+import { createLanguagePanelViewportController } from "./lang_panel_viewport_controller.js";
 import {
     getUiLanguageOptions,
     loadPublicUiLanguageCatalog,
@@ -102,23 +103,6 @@ function buildLanguagePanel(languageOptions, selectorId) {
     return floatingPanel;
 }
 
-function setLanguagePanelOpen(languageButton, floatingPanel, isOpen) {
-    floatingPanel.classList.toggle("hidden", !isOpen);
-    languageButton.setAttribute("aria-expanded", String(isOpen));
-}
-
-function closeOtherLanguagePanels(activePanel) {
-    document.querySelectorAll(".floating-language-panel").forEach((panel) => {
-        if (panel === activePanel) return;
-        const button = panel.parentElement?.querySelector(".language-button");
-        if (button instanceof HTMLButtonElement) {
-            setLanguagePanelOpen(button, panel, false);
-        } else {
-            panel.classList.add("hidden");
-        }
-    });
-}
-
 function setDefaultMenuLanguage(languageSelector, languageOptions) {
     const availableValues = languageOptions.map((language) => language.value);
     const savedLanguage = getPreferredAvailableLanguage(availableValues);
@@ -136,14 +120,14 @@ function setDefaultMenuLanguage(languageSelector, languageOptions) {
  * Initializes one reusable language selector.
  *
  * @param {HTMLElement} languageSelector
- * @param {{languages?: Array<object>}} options
+ * @param {{languages?: Array<object>, signal?: AbortSignal, translateOnInitialize?: boolean}} options
  * @returns {string|null} initially selected language
  */
 export function initializeLanguageSelector(
     languageSelector,
     { languages = getUiLanguageOptions("application"), signal, translateOnInitialize = true } = {}
 ) {
-    if (!(languageSelector instanceof HTMLElement) || initializedSelectors.has(languageSelector)) {
+    if (!(languageSelector instanceof HTMLElement) || initializedSelectors.has(languageSelector) || signal?.aborted) {
         return null;
     }
     if (!Array.isArray(languages) || languages.length === 0) return null;
@@ -168,35 +152,23 @@ export function initializeLanguageSelector(
     const initialLanguage = setDefaultMenuLanguage(languageSelector, languages);
     syncMenuLanguageButton(languageButton, initialLanguage, languages);
     if (translateOnInitialize) void translatePage(initialLanguage);
+    const panelController = createLanguagePanelViewportController({
+        languageSelector, languageButton, panel: floatingPanel, signal,
+    });
 
     languageButton.addEventListener("click", (event) => {
         event.stopPropagation();
         const shouldOpen = floatingPanel.classList.contains("hidden");
-        closeOtherLanguagePanels(floatingPanel);
-        floatingPanel.style.minWidth = `${Math.max(languageButton.offsetWidth + 132, 220)}px`;
-        setLanguagePanelOpen(languageButton, floatingPanel, shouldOpen);
-    });
+        panelController.setOpen(shouldOpen);
+    }, { signal: panelController.signal });
 
     floatingPanel.querySelectorAll('input[type="radio"]').forEach((radio) => {
         radio.addEventListener("change", () => {
             setLanguage(radio.value);
             syncMenuLanguageButton(languageButton, radio.value, languages);
             void translatePage(radio.value);
-            setLanguagePanelOpen(languageButton, floatingPanel, false);
-        });
-    });
-
-    document.addEventListener("click", (event) => {
-        if (!languageSelector.contains(event.target)) {
-            setLanguagePanelOpen(languageButton, floatingPanel, false);
-        }
-    }, { signal });
-
-    languageSelector.addEventListener("keydown", (event) => {
-        if (event.key !== "Escape" || floatingPanel.classList.contains("hidden")) return;
-        event.preventDefault();
-        setLanguagePanelOpen(languageButton, floatingPanel, false);
-        languageButton.focus();
+            panelController.setOpen(false);
+        }, { signal: panelController.signal });
     });
 
     return initialLanguage;

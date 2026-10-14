@@ -135,9 +135,6 @@
 
 .language-selection {
     position: relative;
-    --language-panel-bg: color-mix(in srgb, var(--button_bg_color) 84%, var(--bg_color_extreme) 16%);
-    --language-panel-border: color-mix(in srgb, var(--border_color) 80%, transparent);
-    --language-panel-shadow: 0 18px 36px rgb(0 0 0 / 0.18);
 }
 
 .language-button {
@@ -165,11 +162,16 @@
 }
 
 .floating-language-panel {
-    position: absolute;
-    top: calc(100% + 10px);
-    right: 0;
+    --language-panel-bg: color-mix(in srgb, var(--button_bg_color) 84%, var(--bg_color_extreme) 16%);
+    --language-panel-border: color-mix(in srgb, var(--border_color) 80%, transparent);
+    --language-panel-shadow: 0 18px 36px rgb(0 0 0 / 0.18);
+
+    position: fixed;
     z-index: 1000001;
+    box-sizing: border-box;
     min-width: 220px;
+    overflow-y: auto;
+    overscroll-behavior: contain;
     padding: 10px;
     border: 1px solid var(--language-panel-border);
     border-radius: calc(var(--border_radius) + 2px);
@@ -180,6 +182,7 @@
 
 .floating-language-panel .panel-content {
     width: 220px;
+    max-width: 100%;
     display: flex;
     flex-direction: column;
     gap: 8px;
@@ -234,4 +237,5 @@
     margin-left: 0;
     flex: 1;
     cursor: pointer;
+    overflow-wrap: anywhere;
 }
