@@ -80,3 +80,6 @@ Update incoming documentation links when text moves or a document is deleted.
   during setup and administration, data disclosures and manual translation steps.
 - [Source code availability](Source_Code_Availability.md) describes a planned
   owned release mirror for obtaining published versions without GitHub.
+- [One settings table template](Settings_Table.md) describes one shared
+  administrator editor with typed cells, ordering, bulk choices, drafts and
+  verified saves across settings domains.
