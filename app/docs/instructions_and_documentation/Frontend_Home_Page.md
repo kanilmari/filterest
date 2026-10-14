@@ -149,9 +149,58 @@ refuse this key, including deletion (clear the list with a versioned save).
 The final generic DELETE also excludes this key and rolls back a partial delete;
 this protects a first save even when deletion's preflight saw an absent setting.
 Route startup supplies and reconciles its tableless permission,
-and the existing administrator permission seed grants it. Visitor rendering and
-the administrator picker are separate later batches; this server API does not
-choose the pending placement decision or change article presentation.
+and the existing administrator permission seed grants it. Home renders only these viewer-filtered links, in payload order, using the
+payload label as the accessible name. Empty lists have no wrapper. The stored
+placement selects either links immediately below the description inside the
+text block, or outlined pills at the far right after the dataset tabs, before
+administrator actions when present. Top-row pills have transparent backgrounds,
+2 px theme-text borders, rounded ends, bold labels and generous horizontal padding.
+On wider screens, Home centres tabs, pills and actions vertically through its
+page-scoped row rule, which outranks the shared dataset hero's top alignment.
+Opposing theme-background halos around text and both border edges preserve their
+contrast over images, video and either Home wash without adding a top strip.
+Below-text links retain their shared primary-button appearance. At
+700 px and below, below-text links fill the text block and top-row links occupy
+a full-width row beneath the tabs, with each pill filling the row. Buttons have a 44 px minimum height and
+visible keyboard focus. A language change cancels an obsolete Home read and
+refetches the complete payload; session changes use the existing visit guards.
+Labels never trigger another public title request.
+
+Home settings has an independent Article buttons section: placement, readable
+grouped dataset catalogue (including authorised `system_about`), searchable
+single-row picker, current-label preview, Add, enable/disable, keyboard reorder
+and Remove. The picker reuses the shared single-selection dropdown and
+`get-results` article projection, with the returned `resultsPerLoad` page size
+and `row_count`; it never uses a cell editor's write callback. Preview reads
+honour article header order, multilingual values, language-key roles and owner
+visibility. Changing datasets clears the search field and calls the shared
+dropdown's opt-in `cancelPendingSearch()` to cancel queued searches and invalidate
+option installation from searches already running. The picker's request guards
+also ignore obsolete responses, aborts and failures, keeping the current dataset's
+options and status even when old and new requests settle without a promise drain
+between them. Empty searches still load the current dataset.
+Language refresh updates the popup heading, its dialog name and action labels
+together with the search labels. Only stable identities and enabled flags enter the versioned save.
+Unavailable administrator targets remain visible as warnings with Remove;
+they must be removed before saving. A stale save keeps the draft, shows the
+existing Home conflict message and requires explicit Reload. The section
+participates in the settings view's dirty/cleanup lifecycle and supplies keyed
+Finnish, English, Chinese and Cantonese fallback copy without a migration.
+
+`T17_home_article_buttons.spec.ts` creates its own dataset row and restores the
+article configuration through the dedicated API before removing that dataset.
+It refuses invalid configuration and unavailable targets before mutations:
+the protected API cannot resave an unreadable target. If the setting was absent,
+the spec establishes and restores a behaviourally equivalent empty-list baseline,
+records that exception and verifies both viewers' omission of buttons. The API
+cannot restore absence; a target with an existing valid setting is required
+when verification must preserve the setting's existence exactly.
+It pins and exactly restores the account theme, including an absent preference,
+and restores the Home switches. At 1280 px it checks that top-row pills follow
+the last visible tab and reach the row's content edge, allowing only the
+administrator actions and their gap after them. It also checks transparent pill
+styling and text/border contrast against the protective theme halos in both
+account themes, over the opposite OS preference. The native coordinator runs it serially.
 
 The administrator-only house-and-palette button beside the gear lazy-loads
 `admin_tools/home_palette_builder.js` with the same `/api/admin/front-page`

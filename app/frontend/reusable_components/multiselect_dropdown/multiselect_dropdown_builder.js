@@ -115,6 +115,7 @@ export function createMultiselectDropdown({
 		setValue,
 		setOptions,
 		setDisabled,
+		cancelPendingSearch,
 		open,
 		close,
 		destroy,
@@ -381,6 +382,16 @@ export function createMultiselectDropdown({
 		updateDisplay();
 		renderList(preserveViewState || options.preserveViewState === true || options.preserveSearchText === true
 			? searchInput?.value?.trim() || "" : "", preserveViewState || options.preserveViewState === true);
+	}
+
+	/**
+	 * Opt out of queued searches and result installation from searches already running.
+	 * Callers changing the search context own aborting requests and resetting options/query/selection.
+	 */
+	function cancelPendingSearch() {
+		searchGeneration += 1;
+		if (searchTimer !== null) window.clearTimeout(searchTimer);
+		searchTimer = null;
 	}
 
 	function scheduleRemoteSearch(searchText, { immediate = false } = {}) {

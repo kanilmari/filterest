@@ -256,7 +256,8 @@
         "app/testing/e2e/T_admin/T1_create_table.spec.ts",
         "app/testing/e2e/T_admin/T7_card_visibility.spec.ts",
         "app/testing/e2e/T_admin/T15_view_field_assignments.spec.ts",
-        "app/testing/e2e/C_card_view/C16_finnish_card_filterbar_text.spec.ts"
+        "app/testing/e2e/C_card_view/C16_finnish_card_filterbar_text.spec.ts",
+        "app/testing/e2e/T_admin/T17_home_article_buttons.spec.ts"
       ],
       "projects": [
         "mobile-card",
@@ -318,7 +319,8 @@
         "app/testing/e2e/T_admin/T15_view_field_assignments.spec.ts",
         "app/testing/e2e/T_admin/T16_home_palette.spec.ts",
         "app/testing/e2e/E_search_filter/E10_site_identity_and_menu_contract.spec.ts",
-        "app/testing/e2e/G_navigation/G11_home_phone_layout.spec.ts"
+        "app/testing/e2e/G_navigation/G11_home_phone_layout.spec.ts",
+        "app/testing/e2e/T_admin/T17_home_article_buttons.spec.ts"
       ],
       "projects": [
         "mobile-card",

@@ -58,6 +58,43 @@ test('Home keeps the 12px corner inset that the shared hero row class would canc
     expect(css.match(/\.front-page-top-row\s*\{([^}]+)\}/)?.[1]).toContain('padding: 12px');
 });
 
+const sharedHero = readFileSync(resolve(currentDirectory, '../filterbar/morphing_filterbar_content.css'), 'utf8');
+test.each([
+    ['Home before shared hero', `${css}\n${sharedHero}`],
+    ['shared hero before Home', `${sharedHero}\n${css}`],
+])('Home centres unequal-height controls regardless of import order: %s', (_order, styles) => {
+    // Exercise the cascade, not jsdom geometry: the shared dataset header is
+    // top-aligned, but Home must centre its 36px tabs beside taller pills.
+    const style = document.createElement('style');
+    style.textContent = styles;
+    const fixture = document.createElement('div');
+    fixture.innerHTML = '<div class="front-page"><div class="front-page-top-row filterbar-inline-hero__top-row">'
+        + '<nav class="hero-dataset-tabs"><button>Matkatarjoukset</button></nav></div></div>'
+        + '<div class="filterbar-inline-hero__top-row"></div>';
+    document.head.append(style);
+    document.body.append(fixture);
+    const originalBodyClass = document.body.className;
+    try {
+        const homeRow = fixture.querySelector('.front-page-top-row');
+        const datasetRow = fixture.lastElementChild;
+        for (const theme of ['light', 'dark']) {
+            document.body.className = `${theme}-mode`;
+            expect(window.getComputedStyle(homeRow).alignItems).toBe('center');
+            const articles = document.createElement('div');
+            articles.className = 'front-page-article-buttons';
+            articles.innerHTML = '<a class="front-page-article-button">Yhteystiedot</a>';
+            homeRow.append(articles);
+            expect(window.getComputedStyle(homeRow).alignItems).toBe('center');
+            expect(window.getComputedStyle(datasetRow).alignItems).toBe('start');
+            articles.remove();
+        }
+    } finally {
+        document.body.className = originalBodyClass;
+        fixture.remove();
+        style.remove();
+    }
+});
+
 test('Home reserves identity width and a fixed 10px menu gap before tabs and actions', () => {
     expect(css).toMatch(/\.front-page > \.front-page-top-row\s*\{[^}]*display: flex;[^}]*flex-wrap: wrap;/);
     expect(css).toMatch(/\.front-page-top-row__identity\s*\{[^}]*gap: 10px;[^}]*flex: 0 0 auto;[^}]*max-width: 100%;/);

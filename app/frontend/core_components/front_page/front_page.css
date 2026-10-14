@@ -68,7 +68,6 @@ body.dark-mode .front-page {
   flex: 0 0 auto;
   margin: 0;
   padding: 12px;
-  align-items: center;
   border-bottom: 0;
   box-shadow: none;
   min-width: 0;
@@ -80,6 +79,8 @@ body.dark-mode .front-page {
   /* Identity keeps its content width; tabs consume the remainder and actions wrap. */
   display: flex;
   flex-wrap: wrap;
+  /* Outrank the shared dataset hero's later top alignment: Home centres tabs, pills and actions. */
+  align-items: center;
   container-type: inline-size;
   gap: 8px;
   margin-inline: 0;

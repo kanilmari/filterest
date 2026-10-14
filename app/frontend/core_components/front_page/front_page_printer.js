@@ -5,6 +5,7 @@
 
 import { applyHomePresentation, applyHomeMediaPresentation, renderHomeDescription } from './front_page_presentation_renderer.js';
 import { createFrontPageTopRow } from './front_page_top_row_builder.js';
+import { createFrontPageArticleButtons } from './front_page_article_buttons.js';
 import { mountBackgroundVideo } from './front_page_background_video.js';
 import { getOrCreateContainer } from '../../reusable_components/dom_container_builder.js';
 import { hasContentBesideLoadingIndicator } from '../../reusable_components/loading/loading_indicator_printer.js';
@@ -71,6 +72,8 @@ function renderBlocks(container, data, visit) {
         renderHomeDescription(description, data.hero?.description?.[code] || '');
     });
     hero.append(heading, slogan, description);
+    const articleButtons = createFrontPageArticleButtons(data.article_buttons);
+    if (articleButtons && data.article_buttons_placement === 'below_text') hero.append(articleButtons);
     stage.append(hero);
     page.append(stage);
     const grid = document.createElement('div');
@@ -101,6 +104,9 @@ function renderBlocks(container, data, visit) {
     visit.topRow = createFrontPageTopRow(data.site_name, () => refreshFrontPage(), {
         snapshot: data, render: renderPresentation,
     });
+    if (articleButtons && data.article_buttons_placement === 'top_row') {
+        visit.topRow.element.querySelector('.hero-dataset-tabs')?.after(articleButtons);
+    }
     const background = createBackground(data.background, visit);
     container.replaceChildren(...(background ? [background] : []), visit.topRow.element, scroller);
     visit.topRow.mount();
@@ -142,8 +148,9 @@ function loadVisit(container, visit) {
     });
     const request = () => {
         if (!isCurrent()) throw new DOMException('Session changed', 'AbortError');
+        visit.language = getLanguageWithBrowserFallback();
         return endpoint_router('frontPage', { signal: controller.signal, suppressErrorToast: true,
-            url_params: new URLSearchParams({ lang: getLanguageWithBrowserFallback() }).toString() });
+            url_params: new URLSearchParams({ lang: visit.language }).toString() });
     };
     visit.pending = Promise.race([
         isSessionValidationRequired() ? revalidateSessionIdentity().then(request) : request(), deadline,
@@ -227,6 +234,13 @@ export function renderFrontPage() {
         };
         container.__cleanupListeners = endVisit;
         container.addEventListener(VIEW_DEACTIVATE_EVENT, deactivateVisit);
+        // Labels are resolved by the server. A language change invalidates even
+        // an in-flight read and refreshes all visible Home content together.
+        bindDatasetLanguageRenderer(container, language => {
+            if (!isVisible() || !visit.language || visit.language === language) return;
+            cancelPending();
+            return loadVisit(container, visit);
+        });
     }
     // Navigation's spinner may already be inside the emptied container.
     if (!hasContentBesideLoadingIndicator(container)) void loadVisit(container, visit);

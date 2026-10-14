@@ -99,6 +99,7 @@ test('renders localized blocks, empty blocks and newest-first collection/article
     expect(all.searchParams.get('sort_column')).toBe('__newest');
     expect(all.searchParams.get('sort_order')).toBe('DESC');
     expect(new URL(page.querySelector('li a').href).pathname).toBe('/news/42');
+    localStorage.setItem('chosen_language', 'en');
     await refreshLocalizedDatasetValues('en');
     expect(page.textContent).toContain('English title');
     expect(page.querySelector('.supplemental-dataset-group p').textContent).toBe('Safe excerpt');
@@ -353,6 +354,7 @@ test('hero title and slogan follow fi/en, with site-name and empty slogan fallba
     const page = renderFrontPage();
     await vi.waitFor(() => expect(page.querySelector('h1')?.textContent).toBe('Oma otsikko'));
     expect(page.querySelector('.morphing-subtitle').textContent).toBe('Oma iskulause\ntoisella rivillä');
+    localStorage.setItem('chosen_language', 'en');
     await refreshLocalizedDatasetValues('en');
     expect(page.querySelector('h1').textContent).toBe('Our title');
     expect(page.querySelector('.front-page-slogan').hidden).toBe(true);
@@ -424,6 +426,7 @@ test('title, larger slogan and description form separate safe paragraphs and upd
     expect(hero.querySelector('.front-page-description p').textContent).toBe('Kuvaus\nrivi');
     expect(page.querySelector('.front-page-text-stage').dataset.anchor).toBe('center-center');
     expect(hero.dataset.alignment).toBe('left');
+    localStorage.setItem('chosen_language', 'en');
     await refreshLocalizedDatasetValues('en');
     expect(hero.querySelector('.front-page-slogan').hidden).toBe(true);
     expect(hero.querySelector('.front-page-description').textContent).toBe('Only description');

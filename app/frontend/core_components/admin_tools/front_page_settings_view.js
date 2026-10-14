@@ -13,6 +13,7 @@ import { renderNavbarFrontPage } from '../front_page/navbar_front_page.js';
 import { refreshFrontPage } from '../front_page/front_page_printer.js';
 import { createLangKeyEditor, applyLangKeyConfig } from './lang_key_editor_builder.js';
 import { createFrontPageBackgroundControl } from './front_page_background_control.js';
+import { createFrontPageArticleButtonsEditor } from './front_page_article_buttons_editor.js';
 import {
     frontPageText, frontPageLabel, frontPageButton, frontPageField, frontPageSection, frontPageStatus,
 } from './front_page_settings_controls.js';
@@ -132,7 +133,10 @@ export async function generate_front_page_settings_view(container, { onSaved = r
         onChange: () => { if (ready) updateState(); }, report,
         isEnabled: () => localStorage.getItem('separate_front_page') === 'true',
     });
-    container.append(...(modal ? [] : [heading]), toolbar, status, settingsSection, heroSection, scopeSection, background.element);
+    let articles = null;
+    articles = createFrontPageArticleButtonsEditor({ onSaved, onChange: () => { if (ready) updateState(); } });
+    container.append(...(modal ? [] : [heading]), toolbar, status, settingsSection, heroSection,
+        articles.element, scopeSection, background.element);
 
     function settingsValue() {
         return { separate_front_page: enabledInput.checked, front_page_button_shows_site_name: siteNameInput.checked,
@@ -147,7 +151,7 @@ export async function generate_front_page_settings_view(container, { onSaved = r
     function heroDirty() { return JSON.stringify(heroValue()) !== heroBaseline; }
     function blocksDirty() { return scopeSignature(blocks) !== blockBaseline; }
     function settingsDirty() { return JSON.stringify(settingsValue()) !== settingsBaseline; }
-    function anyDirty() { return settingsDirty() || heroDirty() || blocksDirty() || background.dirty(); }
+    function anyDirty() { return settingsDirty() || heroDirty() || blocksDirty() || background.dirty() || articles.dirty(); }
 
     function report(key) {
         if (!disposed) frontPageLabel(status, key);
@@ -158,7 +162,7 @@ export async function generate_front_page_settings_view(container, { onSaved = r
         scopeSection.disabled = busy || !ready || !showBlocksInput.checked;
         scopeSection.classList.toggle('front-page-settings-section--disabled', !showBlocksInput.checked);
         heroSave.disabled = busy || !ready || !heroDirty();
-        container.setAttribute('aria-busy', String(busy));
+        container.setAttribute('aria-busy', String(busy || articles.busy()));
         settingsSave.disabled = busy || !ready || !settingsDirty();
         scopeSave.disabled = busy || !ready || !showBlocksInput.checked || conflicted || !blocksDirty();
         resetButton.hidden = copyButton.hidden = !currentScope;
@@ -316,7 +320,7 @@ export async function generate_front_page_settings_view(container, { onSaved = r
 
     // One operation owns the controls. Failed writes retain the draft and its old revision.
     async function operate(operation, failureKey = 'front_page_save_failed', successKey = 'settings_saved') {
-        if (busy || disposed) return false;
+        if (busy || articles.busy() || disposed) return false;
         busy = true;
         updateState();
         report('saving');
@@ -456,14 +460,15 @@ export async function generate_front_page_settings_view(container, { onSaved = r
     });
     reloadButton.addEventListener('click', async () => {
         if (busy || !await confirmDiscard(ready && anyDirty()) || disposed) return;
-        await operate(() => fetchScope(currentScope, { global: true }), 'front_page_load_failed', 'front_page_loaded');
+        await operate(() => Promise.all([fetchScope(currentScope, { global: true }), articles.load()]),
+            'front_page_load_failed', 'front_page_loaded');
     });
     openButton.addEventListener('click', () => { void openFrontPage({ forceReload: true }); });
 
     // Reuse the navigation pipeline's dirty hook and the shell's existing cleanup contract.
-    const checkDirty = async () => !busy && await confirmDiscard(ready && anyDirty());
+    const checkDirty = async () => !busy && !articles.busy() && await confirmDiscard(ready && anyDirty());
     if (!modal) window.check_manage_permissions_dirty = checkDirty;
-    const beforeUnload = event => { if (busy || (ready && anyDirty())) { event.preventDefault(); event.returnValue = ''; } };
+    const beforeUnload = event => { if (busy || articles.busy() || (ready && anyDirty())) { event.preventDefault(); event.returnValue = ''; } };
     window.addEventListener('beforeunload', beforeUnload);
     const owner = modal ? container : container.closest('.content_div') || container;
     owner.__cleanupListeners = () => {
@@ -471,6 +476,7 @@ export async function generate_front_page_settings_view(container, { onSaved = r
         lifetime.abort();
         searchController?.abort();
         background.destroy();
+        articles.destroy();
         window.removeEventListener('beforeunload', beforeUnload);
         if (window.check_manage_permissions_dirty === checkDirty) delete window.check_manage_permissions_dirty;
         container.replaceChildren(); // Returning through loadManagementView fetches a fresh scope.
@@ -490,7 +496,7 @@ export async function generate_front_page_settings_view(container, { onSaved = r
     updateState();
     report('loading');
     try {
-        await fetchScope('', { global: true });
+        await Promise.all([fetchScope('', { global: true }), articles.load()]);
         if (!disposed) { status.textContent = ''; delete status.dataset.langKey; }
     } catch (_error) { report('front_page_load_failed'); }
     finally { busy = false; if (!disposed) updateState(); }

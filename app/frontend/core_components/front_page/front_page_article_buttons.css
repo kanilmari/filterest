@@ -1,0 +1,107 @@
+/* front_page_article_buttons.css
+ * Styles the viewer's article links and the administrator's article selection.
+ * Connects Home's existing layout and shared button/theme tokens.
+ * Keeps placement additions separate from Home's identity and phone layout.
+ */
+.front-page-article-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-width: 0;
+  margin-block-start: 12px;
+}
+.front-page-article-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  min-height: 44px;
+  max-width: 100%;
+  padding: 10px 16px;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  text-decoration: none;
+}
+.front-page-article-button:focus-visible {
+  outline: 2px solid var(--interaction-focus-ring, var(--primary_color));
+  outline-offset: 2px;
+}
+/* Reserve the right edge for article links, then any administrator actions.
+   The auto margin also keeps this order in batch 127's wrapping flex row. */
+.front-page > .front-page-top-row:has(> .front-page-article-buttons) {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 2fr) minmax(0, 1fr);
+}
+.front-page > .front-page-top-row:has(> .front-page-article-buttons):where(:has(> .filterbar-inline-hero__actions:not(:empty))) {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 2fr) minmax(0, 1fr) auto;
+}
+.front-page-top-row > .front-page-article-buttons {
+  grid-column: 3;
+  grid-row: 1;
+  flex: 0 1 auto;
+  justify-self: end;
+  justify-content: flex-end;
+  margin-inline-start: auto;
+  margin-block-start: 0;
+}
+.front-page-top-row > .front-page-article-buttons > .front-page-article-button {
+  padding: 10px 28px;
+  border: 2px solid var(--text_color);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text_color);
+  font-weight: 700;
+  /* Opaque theme halos keep text and both border edges readable on any media
+     or Home wash, while the pill itself remains transparent. */
+  text-shadow:
+    -1px -1px var(--bg_color), 0 -1px var(--bg_color), 1px -1px var(--bg_color),
+    -1px 0 var(--bg_color), 1px 0 var(--bg_color),
+    -1px 1px var(--bg_color), 0 1px var(--bg_color), 1px 1px var(--bg_color);
+  box-shadow: 0 0 0 1px var(--bg_color), inset 0 0 0 1px var(--bg_color);
+}
+.front-page-top-row > .front-page-article-buttons > .front-page-article-button:hover {
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+}
+.front-page-top-row:has(> .front-page-article-buttons) > .filterbar-inline-hero__actions {
+  grid-column: 4;
+}
+.front-page-article-picker .msd-option {
+  min-height: 44px;
+}
+.front-page-article-picker .msd-dropdown-list {
+  max-width: calc(100vw - 32px);
+}
+@media (width <= 700px) {
+  .front-page-hero:has(> .front-page-article-buttons) {
+    width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+  }
+  .front-page-hero > .front-page-article-buttons > a {
+    width: 100%;
+  }
+  .front-page > .front-page-top-row:has(> .front-page-article-buttons) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .front-page-top-row:has(> .front-page-article-buttons) > .front-page-top-row__identity {
+    grid-column: 1;
+    grid-row: 1;
+  }
+  .front-page-top-row:has(> .front-page-article-buttons) > .hero-dataset-tabs {
+    grid-column: 1;
+    grid-row: 2;
+  }
+  .front-page-top-row > .front-page-article-buttons {
+    grid-column: 1;
+    grid-row: 3;
+    width: 100%;
+    margin-inline-start: 0;
+  }
+  .front-page-top-row > .front-page-article-buttons > a {
+    width: 100%;
+  }
+  .front-page-top-row:has(> .front-page-article-buttons) > .filterbar-inline-hero__actions {
+    grid-column: 1;
+    grid-row: 4;
+  }
+}

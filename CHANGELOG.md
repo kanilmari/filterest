@@ -22,6 +22,8 @@ Dates are the local (Europe/Helsinki) date on which the version was published.
 
 ## [Unreleased]
 
+- **Home article buttons and their editor** — Home shows authorised article buttons in the saved order, either below its text or as transparent outlined pills at the far right after the dataset tabs, before administrator actions. Top-row pills align vertically with tabs and actions, using bold labels and theme contrast halos over background media and wash; phone pills fill the row below the tabs in both themes. Below-text buttons keep their current look. Home settings lets administrators choose a readable dataset and article, preview its current label, enable, reorder or remove buttons, and save with revision conflict protection. Unavailable targets warn and can be removed. Button labels refresh with language and session changes, and the editor has Finnish, English, Chinese and Cantonese copy. Dataset changes discard old picker searches, responses and their pending dropdown updates; its popup heading and accessible labels refresh with language.
+
 ## [9.4.1] - 2026-10-13
 
 - **Database 9.11.1** — Version 9.4.1 requires database 9.11.1, upgraded from 9.11.0. This text-only patch seeds 23 card and filter bar language keys, fills missing or blank translations and replaces exact English fallback text in non-English locales while preserving other authored wording. It changes no database structure.

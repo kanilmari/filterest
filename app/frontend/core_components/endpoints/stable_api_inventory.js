@@ -203,7 +203,7 @@ export const SUPPORTING_ROUTE_GROUPS = Object.freeze({
 /** @type {Readonly<Record<string, readonly string[]>>} */
 export const DYNAMIC_ROUTE_GROUPS = Object.freeze({
     frontPageAdministration: Object.freeze([
-        'adminFrontPage', 'adminFrontPageBackground',
+        'adminFrontPage', 'adminFrontPageBackground', 'adminFrontPageArticleButtons',
     ]),
     mediaLibrary: Object.freeze([
         'mediaLibraryList', 'mediaLibraryAttach', 'mediaLibraryDetach',
