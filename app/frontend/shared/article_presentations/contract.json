@@ -1,0 +1,46 @@
+{
+  "version": 1,
+  "presentations": {
+    "article_view": {
+      "reserved": false,
+      "permission_route": "/ui/view/article_view",
+      "current_permission_route": "/ui/view/article_view",
+      "legacy_section_key": "classic",
+      "blocks": ["details", "images", "attachments", "related_rows", "task_progress"]
+    },
+    "image_first_view": {
+      "reserved": false,
+      "permission_route": "/ui/view/image_first_view",
+      "current_permission_route": "/ui/view/article_view",
+      "legacy_section_key": "image_first",
+      "blocks": ["details"]
+    },
+    "image_first_page_view": {
+      "reserved": true,
+      "permission_route": "/ui/view/image_first_page_view",
+      "current_permission_route": null,
+      "legacy_section_key": null,
+      "blocks": ["details"]
+    }
+  },
+  "aliases": {"article": "article_view", "big_card": "article_view", "row_article": "article_view"},
+  "blocks": ["details", "images", "attachments", "related_rows", "task_progress"],
+  "absent_block_initial_open": true,
+  "opener_defaults": {
+    "card-body": "article_view",
+    "card-title": "article_view",
+    "card-summary": "article_view",
+    "show-more": "article_view",
+    "calendar-event": "article_view",
+    "product-body": "article_view",
+    "product-image": "article_view",
+    "free-layout-body": "article_view",
+    "free-layout-image": "article_view",
+    "search-result": "article_view",
+    "home-button": "article_view",
+    "field-link": "article_view",
+    "card-image": "image_first_view",
+    "article-image": "image_first_view",
+    "gallery-thumbnail": "image_first_view"
+  }
+}

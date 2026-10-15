@@ -84,6 +84,12 @@ Backend enforcement runs through [access control](../../backend/pipeline/access_
 
 **Article view and field settings.** The view grant `/ui/view/article_view` opens both the classic article (from titles, summaries and other record openers) and the image-first article (from ordinary card and article images). Product cards, calendar events and experimental free-layout cards retain their existing classic-article opening behavior. Selecting **User groups** in View field settings assigns fields; it never grants this route. No group receives a view right merely through field selection or dataset reading rights.
 
+The [shared article contract](../../frontend/shared/article_presentations/contract.json) records approved routes and the current IFAV gate; its page key stays reserved.
+The [K388 before-list](Article_Section_Defaults.md#k388-compatibility-before-list)
+preserves current audiences: signed-in browser grants include any target scope;
+anonymous bootstrap requires a tableless grant of the named guests group.
+Raw scopes and nullable disabled flags remain migration evidence; field assignments grant no view rights.
+
 Denied openers have no pointer, hover/link treatment, button/link role or tab stop. Clicks, synthetic keyboard activation and restored article addresses explain the missing view right through a localized notice before changing the mounted view. A cold bookmark shows its ordinary collection with the explanation while keeping the bookmark's exact address and history state. Denied Back/Forward restorations keep the mounted view and the exact entry the browser landed on, including when only its history state records the article view; later refreshes do not rewrite that entry to the retained collection. An intentional navigation can leave it normally. Guests use the server's `guest_ui_endpoints` without an implicit article allowance.
 
 Denial only adds its notice; it does not refresh permissions or cards, or change row selection, scroll or the address. Cards record their rendered language so the late startup translation pass keeps already-localized cards mounted. Every language refresh supersedes older pending builds, even when it skips already-current cards or follows a failed dictionary request. A real language change still rebuilds localized cards. Browser retention proofs wait for shell readiness before marking the view and require a fresh explanation for each activation; visible cards alone do not prove startup has finished.

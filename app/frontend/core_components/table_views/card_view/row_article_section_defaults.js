@@ -3,10 +3,7 @@
 // Bridges classic/image-first section keys and the existing disclosure primitive.
 // Keeps initial settings separate from user toggles and same-row media refreshes.
 
-const SECTION_KEYS = Object.freeze({
-    classic: Object.freeze(["details", "images", "attachments", "related_rows", "task_progress"]),
-    image_first: Object.freeze(["details"]),
-});
+import { LEGACY_ARTICLE_BLOCKS as SECTION_KEYS } from "../../../shared/article_presentations/contract_reader.js";
 
 /** No global cache: reopening a row obtains current permitted dataset settings. */
 export async function loadRowArticleSectionDefaults(dataset, presentationKey) {

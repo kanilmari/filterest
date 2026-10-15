@@ -90,7 +90,7 @@ func normalizeCardDetailsLayout(value string) string {
 // fetchUserColumnSettingsOrDefaults resolves personal > group > site > metadata
 // defaults for one stable view key. GetResults still intersects these preferences
 // with real SELECT rights, so hiding a field is never treated as authorization.
-func fetchUserColumnSettingsOrDefaults(userID int, tableName, viewKey string, db *sql.DB) ([]UserColumnSetting, error) {
+func fetchUserColumnSettingsOrDefaults(userID int, tableName, viewKey string, db dbutils.Querier) ([]UserColumnSetting, error) {
 	var tableUID int
 	if err := db.QueryRow(`SELECT table_uid FROM system_db_tables WHERE table_name = $1`, tableName).Scan(&tableUID); err != nil {
 		return nil, err
@@ -132,30 +132,39 @@ func fetchUserColumnSettingsOrDefaults(userID int, tableName, viewKey string, db
 		return nil, assignmentErr
 	}
 	if assignmentErr == nil {
-		rows, queryErr := db.Query(`
-			SELECT details.column_name, members.sort_order,
-			       COALESCE(members.column_width_px, 0), false
-			FROM public.system_column_field_set_members AS members
-			JOIN public.system_column_details AS details ON details.column_uid = members.column_uid
-			WHERE members.field_set_id = $1
-			  AND COALESCE(details.hide_everywhere, false) = false
-			  AND COALESCE(details.client_delivery_mode, 'include') = 'include'
-			ORDER BY members.sort_order`, assignedFieldSetID)
-		if queryErr != nil {
-			return nil, queryErr
-		}
-		defer rows.Close()
-		results := []UserColumnSetting{}
-		for rows.Next() {
-			var setting UserColumnSetting
-			if scanErr := rows.Scan(&setting.ColumnName, &setting.SortOrder, &setting.ColumnWidth, &setting.IsHidden); scanErr != nil {
-				return nil, scanErr
-			}
-			results = append(results, setting)
-		}
-		return results, rows.Err()
+		return fetchAssignedFieldSetColumnSettings(assignedFieldSetID, db)
 	}
+	return fetchMetadataColumnSettings(tableUID, tableName, viewKey, db)
+}
 
+// These readers also supply the read-only compatibility baseline; they bypass
+// request caches and never use installation-global database handles.
+func fetchAssignedFieldSetColumnSettings(assignedFieldSetID int64, db dbutils.Querier) ([]UserColumnSetting, error) {
+	rows, queryErr := db.Query(`
+		SELECT details.column_name, members.sort_order,
+		       COALESCE(members.column_width_px, 0), false
+		FROM public.system_column_field_set_members AS members
+		JOIN public.system_column_details AS details ON details.column_uid = members.column_uid
+		WHERE members.field_set_id = $1
+		  AND COALESCE(details.hide_everywhere, false) = false
+		  AND COALESCE(details.client_delivery_mode, 'include') = 'include'
+		ORDER BY members.sort_order`, assignedFieldSetID)
+	if queryErr != nil {
+		return nil, queryErr
+	}
+	defer rows.Close()
+	results := []UserColumnSetting{}
+	for rows.Next() {
+		var setting UserColumnSetting
+		if scanErr := rows.Scan(&setting.ColumnName, &setting.SortOrder, &setting.ColumnWidth, &setting.IsHidden); scanErr != nil {
+			return nil, scanErr
+		}
+		results = append(results, setting)
+	}
+	return results, rows.Err()
+}
+
+func fetchMetadataColumnSettings(tableUID int, tableName, viewKey string, db dbutils.Querier) ([]UserColumnSetting, error) {
 	queryDefaults := `
 		SELECT details.column_name, COALESCE(details.co_number, details.column_uid), 0, false
 		FROM public.system_column_details AS details
@@ -201,7 +210,7 @@ func personalFieldSetAssignmentUser(userID int) sql.NullInt64 {
 	return sql.NullInt64{Int64: int64(userID), Valid: true}
 }
 
-func fetchInformationSchemaColumnDefaults(tableName string, db *sql.DB) ([]UserColumnSetting, error) {
+func fetchInformationSchemaColumnDefaults(tableName string, db dbutils.Querier) ([]UserColumnSetting, error) {
 	rows, err := db.Query(`
 		SELECT column_name, ordinal_position, 0, false
 		FROM information_schema.columns

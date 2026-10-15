@@ -4,6 +4,8 @@
 // Exists to remove duplicated view keys, labels, container IDs, and UI permission routes.
 // Keep this file renderer-free so selectors can read metadata without loading view modules.
 
+import { ARTICLE_PRESENTATION_ALIASES } from "../../shared/article_presentations/contract_reader.js";
+
 import { datasetSupportsTreeView } from "./dataset_tree_availability_checker.js";
 import { datasetSupportsChartView } from "./price_chart_view/price_chart_data_reader.js";
 import { CHART_TRANSLATION_FALLBACKS } from "./price_chart_view/chart_copy.js";
@@ -16,7 +18,7 @@ export const IMAGE_FIRST_VIEW_KEY = "image_first_view";
 
 /** Resolves legacy article names without reusing the card presentation dimension. */
 export function normalizeDatasetViewKey(viewKey) {
-    return ["article", "big_card", "row_article"].includes(viewKey) ? ARTICLE_VIEW_KEY : viewKey;
+    return typeof viewKey === "string" && Object.hasOwn(ARTICLE_PRESENTATION_ALIASES, viewKey) ? ARTICLE_PRESENTATION_ALIASES[viewKey] : viewKey;
 }
 
 export const DATASET_VIEW_SELECTOR_TEXT = Object.freeze({

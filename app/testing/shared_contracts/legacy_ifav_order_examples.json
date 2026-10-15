@@ -1,0 +1,27 @@
+[
+  {
+    "fields": [
+      {"column": "z_header", "card_element": "header", "co_number": 20},
+      {"column": "a_body", "card_element": "description2", "co_number": 3},
+      {"column": "b_detail", "card_element": "details1", "co_number": 3},
+      {"column": "plain", "card_element": "", "co_number": 1}
+    ],
+    "ordered": ["a_body", "b_detail", "z_header", "plain"]
+  },
+  {
+    "fields": [
+      {"column": "z", "card_element": "details", "co_number": 0},
+      {"column": "a", "card_element": "details", "co_number": -1},
+      {"column": "third", "card_element": "details", "co_number": 4},
+      {"column": "empty_metadata", "card_element": "", "co_number": 0}
+    ],
+    "ordered": ["third", "a", "z", "empty_metadata"]
+  },
+  {
+    "fields": [
+      {"column": "title", "card_element": "header", "co_number": 4},
+      {"column": "picture", "card_element": "image", "co_number": 2}
+    ],
+    "ordered": ["picture", "title"]
+  }
+]

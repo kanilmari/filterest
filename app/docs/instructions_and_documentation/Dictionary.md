@@ -128,6 +128,14 @@ same presentation, not a separate product object. Its image stage and article
 content are distinct from the ordinary article view and from an image-only
 preview. Planned history or animation changes are not implied by this name.
 
+The [article-presentation contract](../../frontend/shared/article_presentations/contract.json)
+owns canonical keys, accepted Article aliases, opener-role defaults, supported
+collapsible blocks and permission-route identities. Page-sized IFAV
+(`image_first_page_view`) is reserved next-version vocabulary in this batch;
+it is not yet an available presentation. An **opener role** describes a trusted
+application element's purpose; its catalogue does not by itself install the
+planned central activation policy. See [Article Section Defaults](Article_Section_Defaults.md#shared-article-presentation-contract-next-version-groundwork).
+
 ### Result card
 The ordinary dataset result card. Existing `small_card` identifiers refer to
 this same card, including its compact form in the article navigation rail.

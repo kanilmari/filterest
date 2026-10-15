@@ -523,6 +523,15 @@
       ],
       "specs": [],
       "none": "Extension examples and cloud helpers have no maintained isolated browser specification."
+    },
+    {
+      "area": "Article presentation contract and compatibility export",
+      "paths": [
+        "app/frontend/shared/article_presentations",
+        "app/backend/tools"
+      ],
+      "specs": [],
+      "none": "Passive shared vocabulary and an offline read-only settings exporter; no rendered UI or opener behavior changes. Vitest and Go drift tests cover the contract; disposable PostgreSQL covers the baseline."
     }
   ],
   "source_guards": [
@@ -540,6 +549,20 @@
       ],
       "package": "app/backend/core_components/sessions",
       "anchor": "app/backend/core_components/sessions/session_store_access_guard_test.go"
+    },
+    {
+      "paths": [
+        "app/frontend/shared/article_presentations"
+      ],
+      "package": "app/backend/core_components/system_table_tools",
+      "anchor": "app/backend/core_components/system_table_tools/article_presentation_contract_test.go"
+    },
+    {
+      "paths": [
+        "app/frontend/shared/article_presentations"
+      ],
+      "package": "app/backend/core_components/dynamic_table_tools/dtt_1_row_crud/dtt_1_row_read",
+      "anchor": "app/backend/core_components/dynamic_table_tools/dtt_1_row_crud/dtt_1_row_read/article_baseline_test.go"
     }
   ],
   "python_guards": [
