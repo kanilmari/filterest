@@ -462,6 +462,19 @@ describe('create_filter_bar inline hero mounting', () => {
         expect(document.querySelectorAll('#showMenuButton')).toHaveLength(1);
     });
 
+    test('defers the initial section and disposes its category popups with the hero', async () => {
+        const { create_filter_bar } = await import('./filter_bar_builder.js');
+        const panel = create_filter_bar('demo', 'demo_uid', ['id'], { id: 'INTEGER' }, 12, false, 'card', {
+            deferFilterSection: true,
+        });
+        const section = document.getElementById('demo_dataset_filter_section');
+        expect(section.hidden).toBe(true);
+        const categories = Object.assign(document.createElement('div'), { className: 'row-group-facets', disposeRowGroupPanel: vi.fn() });
+        section.appendChild(categories);
+        panel.destroy();
+        expect(categories.disposeRowGroupPanel).toHaveBeenCalledOnce();
+    });
+
     test('keeps inline hero count-free and wires reset search to the shared filter reset', async () => {
         const topRowBuilder = await import('./top_row_buttons/top_row_builder.js');
         const { create_filter_bar } = await import('./filter_bar_builder.js');
@@ -483,6 +496,12 @@ describe('create_filter_bar inline hero mounting', () => {
         expect(resetButton?.dataset.langKey).toBe('reset_search');
         expect(filtersButton).toBeTruthy();
         expect(filtersButton?.dataset.langKey).toBe('filterbar_filter_results');
+        const section = inlineHero.querySelector('[data-testid="dataset-filter-section"]');
+        expect(inlineHero.querySelectorAll('.dataset-filter-section')).toHaveLength(1);
+        expect(section.children).toHaveLength(2);
+        expect(section.children[0]).toBe(sortRow);
+        expect(section.children[1]).toBe(filterActions);
+        expect(section.previousElementSibling.classList).toContain('dataset-search-panel');
         expect(sortRow?.contains(sortDropdown)).toBe(true);
         expect(sortRow?.contains(filtersButton)).toBe(false);
         expect(filterActions?.children).toHaveLength(2);

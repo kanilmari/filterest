@@ -1,7 +1,7 @@
-/* morphing_filterbar_content.css */
-/* Content styles for the unified filterbar panel.
- * Panel morphs between wide (hero bar) and compact (sidebar).
- * CSS classes control content appearance per mode.
+/* morphing_filterbar_content.css
+ * Styles the shared hero and filter-panel content.
+ * Connects dataset controls to application theme and spacing tokens.
+ * Keeps responsive rows together without changing their interaction geometry.
  */
 /* ============================================
    FIXED TOGGLE BUTTON
@@ -81,13 +81,21 @@
 	position: relative;
 	isolation: isolate;
 	overflow: hidden;
-  padding: 12px 24px 18px;
+  padding-block: 12px 18px;
   background:
     linear-gradient(
       180deg,
       color-mix(in srgb, var(--filter_panel_bg) 86%, var(--bg_color_extreme) 14%) 0%,
       color-mix(in srgb, var(--filter_panel_bg) 94%, transparent 6%) 100%
     );
+}
+/* Share the hero's responsive outer inset with the following listing controls.
+   The shared column width then aligns chips with the section's border box,
+   before its own padding. Keep article sidebar chips outside this scope. */
+.filterbar-inline-hero,
+.filterbar-inline-hero ~ .dataset-results-surface > .card_top_controls {
+  --filterbar-hero-inline-space: 24px;
+  padding-inline: var(--filterbar-hero-inline-space);
 }
 /* The invisible header scrolls with its hero; equal side columns keep the
    dataset navigation centered independently of the administrator actions. */
@@ -184,9 +192,13 @@
    Full-width bar at top with centered content.
    ============================================ */
 .filterbar-panel--wide .filter-content-inner,
+.filterbar-inline-hero .filter-content-inner,
+.filterbar-inline-hero ~ .dataset-results-surface > .card_top_controls > .active_filters {
+  width: min(calc(100% - (var(--filterbar-panel-inline-space, 24px) * 2)), var(--filterbar-hero-title-max-width, 1200px));
+}
+.filterbar-panel--wide .filter-content-inner,
 .filterbar-inline-hero .filter-content-inner {
   max-width: var(--filterbar-hero-title-max-width, 1200px);
-  width: min(calc(100% - (var(--filterbar-panel-inline-space, 24px) * 2)), var(--filterbar-hero-title-max-width, 1200px));
   margin: var(--filterbar-content-top-space, 40px) auto 0;
 }
 .filterbar-panel--wide .filter-content-inner > :not(.morphing-header),
@@ -240,8 +252,35 @@
 
 .filterbar-inline-hero-sort-row {
   justify-content: center;
+}
+
+/* Sorting, filter/reset actions and categories share one painted surface.
+   Derive a darker shade from the active surface, including explicit theme
+   overrides; style packages do not currently own a filter-bar scope. */
+.dataset-filter-section {
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: var(--fw-space-4);
   margin-top: 16px;
-  border: 1px solid var(--border_color);
+  padding: var(--fw-space-4);
+  border-radius: var(--fw-radius-lg);
+  background: hsl(from var(--bg_color_extreme) h s calc(l - 3));
+}
+
+.dataset-filter-section[hidden] {
+  display: none;
+}
+
+.dataset-filter-section > .dataset-filter-primary-actions,
+.dataset-filter-section > .row-group-facets {
+  width: 100%;
+  max-width: none;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
 }
 
 /* ============================================
@@ -521,8 +560,13 @@
    ============================================ */
 
 @media (width <= 768px) {
+  .filterbar-inline-hero,
+  .filterbar-inline-hero ~ .dataset-results-surface > .card_top_controls {
+    --filterbar-hero-inline-space: 12px;
+  }
+
   .filterbar-inline-hero {
-    padding: 18px 12px 14px;
+    padding-block: 18px 14px;
   }
 
   .dataset-filter-top-grid {
@@ -531,8 +575,13 @@
 }
 
 @media (width <= 480px) {
+  .filterbar-inline-hero,
+  .filterbar-inline-hero ~ .dataset-results-surface > .card_top_controls {
+    --filterbar-hero-inline-space: 8px;
+  }
+
   .filterbar-inline-hero {
-    padding: 14px 8px 12px;
+    padding-block: 14px 12px;
   }
 
   .dataset-filter-top-grid {

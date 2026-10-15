@@ -93,7 +93,7 @@ describe('morphing filterbar content CSS', () => {
         expect(cornerCss).not.toContain('.filterbar-scroll-sentinel + .filterbar-inline-hero');
     });
 
-    test('uses the title colour for wide slogans and outlines the inline sort row', () => {
+    test('uses the title colour for wide slogans and one shaded filter section', () => {
         const css = readFileSync(resolve(CURRENT_DIR, 'morphing_filterbar_content.css'), 'utf8');
         const subtitleRule = css.match(
             /\.filterbar-panel--wide \.morphing-subtitle,[\s\S]*?\.filterbar-inline-hero \.morphing-subtitle,[\s\S]*?\.front-page-hero \.morphing-subtitle\s*\{([\s\S]*?)\n\}/,
@@ -103,7 +103,12 @@ describe('morphing filterbar content CSS', () => {
         )?.[1] || '';
 
         expect(subtitleRule).toContain('color: var(--text_color)');
-        expect(sortRule).toContain('border: 1px solid var(--border_color)');
+        expect(sortRule).not.toContain('border:');
+        const sectionRule = css.match(/\.dataset-filter-section\s*\{([\s\S]*?)\n\}/)?.[1] || '';
+        expect(sectionRule).toContain('background: hsl(from var(--bg_color_extreme) h s calc(l - 3))');
+        expect(sectionRule).toContain('border-radius: var(--fw-radius-lg)');
+        expect(sectionRule).toContain('gap: var(--fw-space-4)');
+        expect(sectionRule).toContain('padding: var(--fw-space-4)');
     });
 
     test('keeps record-bearing fields opaque over the shared dataset background', () => {

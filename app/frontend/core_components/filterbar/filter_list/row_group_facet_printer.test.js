@@ -44,12 +44,12 @@ vi.mock("../../table_views/dataset_value_localizer.js", () => ({
 vi.mock("../../lang/translation_handler.js", () => ({
     getTranslationForKey: key => ({
         fi: { row_group_categories: "Kategoriat", filters: "Suodattimet", show_more: "Näytä enemmän", show_less: "Näytä vähemmän", clear_selections: "Tyhjennä valinnat", remove: "Poista", close: "Sulje", search: "Haku",
-            row_group_categories_modes_hint: "Saman otsikon valinnat laajentavat hakua.", row_group_match_any_hint: "Jokin valituista.",
+            row_group_match_any_hint: "Jokin valituista.",
             row_group_match_mode: "Hakutapa", row_group_match_any: "Vähintään yksi", row_group_match_all: "Kaikki valitut", row_group_match_all_hint: "Kaikki valitut arvot.",
             row_group_single_value_hint: "Rivillä on tässä yksi arvo.", row_group_selected_count: "valittu",
             row_group_no_name_matches: "Ei osumia.", row_group_selection_limit: "Enintään 20 arvoa.", row_group_no_results_hint: "Poista jokin valinta tai tyhjennä kaikki." },
         en: { row_group_categories: "Categories", filters: "Filters", show_more: "Show more", show_less: "Show less", clear_selections: "Clear selections", remove: "Remove", close: "Close", search: "Search",
-            row_group_categories_modes_hint: "Choices under one heading widen the search.", row_group_match_any_hint: "Any selected.",
+            row_group_match_any_hint: "Any selected.",
             row_group_match_mode: "Match mode", row_group_match_any: "At least one", row_group_match_all: "All selected", row_group_match_all_hint: "All selected values.",
             row_group_single_value_hint: "A row has one value here.", row_group_selected_count: "selected",
             row_group_no_name_matches: "No matches.", row_group_selection_limit: "Up to 20 values.", row_group_no_results_hint: "Remove a filter or clear all." },
@@ -194,7 +194,36 @@ describe("row group category panel", () => {
         expect(setUnifiedTableStateMock).not.toHaveBeenCalled();
     });
 
-    test("language switch retains panel, query, caret and scroll and translates labels and guidance", async () => {
+    test("keeps the section hidden until result controls exist", async () => {
+        const { renderRowGroupFacets } = await import("./row_group_facet_printer.js");
+        document.body.innerHTML = '<div id="travel_info_dataset_filter_section" hidden></div>';
+        expect(renderRowGroupFacets("travel_info", [value(1, "security", heading(1))])).toBeNull();
+        expect(document.getElementById("travel_info_dataset_filter_section").hidden).toBe(true);
+    });
+
+    test("mounts categories as the third shared row and retains it across refreshes", async () => {
+        const { renderRowGroupFacets } = await import("./row_group_facet_printer.js");
+        const section = document.createElement("div");
+        section.id = "travel_info_dataset_filter_section";
+        section.className = "dataset-filter-section";
+        section.hidden = true;
+        section.append(document.createElement("div"), document.createElement("div"));
+        document.body.prepend(section);
+        const facets = [value(1, "security", heading(1))];
+        const host = renderRowGroupFacets("travel_info", facets);
+        expect(section.hidden).toBe(false);
+        expect([...section.children]).toEqual([section.children[0], section.children[1], host]);
+        const controls = document.getElementById("travel_info_card_top_controls");
+        expect(controls.querySelector(".row-group-facets")).toBeNull();
+        expect(controls.querySelector(".active_filters")).not.toBeNull();
+        expect(renderRowGroupFacets("travel_info", facets)).toBe(host);
+        expect(section.children).toHaveLength(3);
+        renderRowGroupFacets("travel_info", []);
+        expect(section.children).toHaveLength(2);
+        expect(section.hidden).toBe(false);
+    });
+
+    test("language switch retains panel, query, caret and scroll and translates labels and popup hints", async () => {
         const { renderRowGroupFacets } = await import("./row_group_facet_printer.js");
         const host = renderRowGroupFacets("travel_info", [value(1, "security", heading(1), { title: { fi: "Turvallisuus", en: "Security" }, row_count: 0, selected: true })]);
         open(host);
@@ -206,6 +235,7 @@ describe("row group category panel", () => {
         popup(host).querySelector(".msd-dropdown-options").scrollTop = 80;
         languageRenderers.get(host)("en");
         expect(host.getAttribute("aria-label")).toBe("Categories");
+        expect(host.querySelector('.row-group-facets__guidance')).toBeNull();
         expect(popup(host).querySelector("h3").textContent).toBe("Heading 1");
         const close = popup(host).querySelector(".msd-popup-close");
         expect([close.textContent, close.getAttribute("aria-label"), close.title]).toEqual(["×", "Close", "Close"]);

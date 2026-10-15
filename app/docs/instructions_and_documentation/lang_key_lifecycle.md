@@ -551,6 +551,17 @@ Two rules make retirement safe:
   *"orphan for 84 days, will be archived and deleted in 6 day(s)"*. A key that is
   kept because code or schema still uses it says so instead.
 
+#### Retirement record — 2026-10-15 (WO22)
+
+`row_group_categories_modes_hint` has no code reference after the general
+Categories paragraph was removed. Its released 9.10.1 seed migration and the
+generated bootstrap copy stay unchanged, with all translations, and no migration
+deletes it. The key stays in the database: its translation rows are a
+`foreign_key` source that the startup scan keeps current, and the orphan check
+counts every source other than `orphan` and `manual_crud` as live usage, so the
+key is not marked orphaned or archived. Whether keys used only through their
+translations may retire is open under WL33.
+
 ### Step 3: Stale Source Cleanup
 
 Part of `PopulateLangKeySources()` — removes sources not seen in 7 days. This ensures that if a file is deleted from the codebase, its `source_type='code'` records eventually disappear, which may then cause the key to be marked as orphan in the next restart.

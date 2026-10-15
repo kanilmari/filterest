@@ -64,10 +64,10 @@ async function finishResultProbe(page: Page) {
 }
 
 async function assertCentredChips(page: Page) {
-  await expect.poll(async () => page.locator(PANEL).evaluate(panel => {
-    const controls = panel.parentElement!;
+  await expect.poll(async () => page.locator(PANEL).evaluate((panel, dataset) => {
+    const controls = document.getElementById(`${dataset}_card_top_controls`)!;
     const tags = controls.querySelector('.active_filters')!;
-    const box = panel.getBoundingClientRect();
+    const box = (panel.closest('.dataset-filter-section') || panel).getBoundingClientRect();
     const row = tags.getBoundingClientRect();
     const parent = controls.getBoundingClientRect();
     const inside = [...tags.children].every(child => {
@@ -77,7 +77,7 @@ async function assertCentredChips(page: Page) {
     return Math.abs(row.width - box.width) <= 1 && Math.abs(row.left - box.left) <= 1
       && Math.abs(row.left + row.width / 2 - parent.left - parent.width / 2) <= 1 && inside
       && row.right <= window.innerWidth + 1;
-  })).toBe(true);
+  }, DATASET)).toBe(true);
   const touch = await page.evaluate(() => innerWidth <= 600 || matchMedia('(any-pointer: coarse)').matches);
   for (const button of await page.locator(`${CONTAINER} .active_filters button`).all()) {
     const size = await button.boundingBox();

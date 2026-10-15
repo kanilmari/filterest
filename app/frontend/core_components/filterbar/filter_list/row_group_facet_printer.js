@@ -271,7 +271,12 @@ export function renderRowGroupFacets(
         if (item.dataset.rowGroupTable === tableName) bindRowGroupTagLabel(item, tableName, item.dataset.rowGroupSlug);
     });
     const topControls = document.getElementById(`${tableName}_card_top_controls`);
-    if (!topControls || facets.length === 0) { clearRowGroupFacets(tableName); return null; }
+    const filterSection = document.getElementById(`${tableName}_dataset_filter_section`);
+    if (!topControls || facets.length === 0) {
+        clearRowGroupFacets(tableName);
+        if (topControls && filterSection) filterSection.hidden = false;
+        return null;
+    }
 
     let host = previousHost;
     if (!host) {
@@ -281,11 +286,14 @@ export function renderRowGroupFacets(
         host.dataset.testid = "row-group-facets";
         host.dataset.ariaLabelLangKey = "row_group_categories";
         host.setAttribute("role", "region");
-        topControls.insertBefore(host, topControls.querySelector(".active_filters, .results_count"));
+        if (filterSection) filterSection.appendChild(host);
+        else topControls.insertBefore(host, topControls.querySelector(".active_filters, .results_count"));
         host.rowGroupCard = createRowGroupFacetCard({
             host, topControls, tableName, getSelectedSlugs, getSelectedModes, getFacetTitle,
         });
     }
+    if (filterSection && host.parentElement !== filterSection) filterSection.appendChild(host);
     host.rowGroupCard.update(groupFacetsByHeading(facets), { onToggle, onClear, onModeChange });
+    if (filterSection) filterSection.hidden = false;
     return host;
 }

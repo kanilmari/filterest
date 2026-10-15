@@ -228,6 +228,7 @@ export function create_filter_bar(
             allowDatasetManagement,
             appearanceActions: styleSettings.actions,
             sortOptions: surfaceOptions.sortOptions,
+            deferFilterSection: surfaceOptions.deferFilterSection,
 			coverImagePath: resolveVisibleDatasetMediaPath(
 				tableSpec.dataset_cover_image_path, tableSpec.dataset_cover_image_hidden),
         })

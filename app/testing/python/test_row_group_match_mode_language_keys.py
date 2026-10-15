@@ -21,12 +21,15 @@ def authored_keys():
 
 def test_mode_copy_bootstrap_and_frontend_keys():
     keys = authored_keys()
-    assert set(keys) == {"row_group_match_mode", "row_group_match_any", "row_group_match_all",
-                         "row_group_match_all_hint", "row_group_categories_modes_hint", "row_group_invalid_filters"}
+    active_keys = {"row_group_match_mode", "row_group_match_any", "row_group_match_all",
+                   "row_group_match_all_hint", "row_group_invalid_filters"}
+    # Released seeds retain retired copy for the startup orphan/archive lifecycle.
+    assert len(keys) == 6 and active_keys <= keys.keys()
     assert all(fi and en for fi, en in keys.values())
     source = (APP / "frontend/core_components/filterbar/filter_list/row_group_facet_card_builder.js").read_text()
-    assert all(key in source for key in keys if key not in {"row_group_invalid_filters", "row_group_match_any", "row_group_match_all"})
+    assert all(key in source for key in active_keys if key not in {"row_group_invalid_filters", "row_group_match_any", "row_group_match_all"})
     assert "`row_group_match_${value}`" in source
+    assert all(key not in source for key in keys.keys() - active_keys)
     sql = MIGRATION.read_text()
     assert "-- VERSION_DB: 9.10.1" in sql
     assert "-- VERSION_DB_OWNER: 20261007000099_record_database_release_9_10_1.sql" in sql

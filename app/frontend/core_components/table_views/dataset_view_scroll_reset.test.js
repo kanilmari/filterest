@@ -1,11 +1,11 @@
 // dataset_view_scroll_reset.test.js
 // Verifies viewport changes at the populated dataset-view commit.
-// Connects deferred renderers, existing view hosts and retained article returns.
+// Connects deferred renderers, shared filter controls and retained article returns.
 // Keeps fresh surfaces at the top without moving refreshes or abandoned builds.
 import { beforeEach, expect, test, vi } from 'vitest';
 
-const { buildView, preserveHost, startScroll } = vi.hoisted(() => ({
-    buildView: vi.fn(), preserveHost: vi.fn(), startScroll: vi.fn(),
+const { buildView, preserveHost, startScroll, buildFilterbar, printFacets } = vi.hoisted(() => ({
+    buildView: vi.fn(), preserveHost: vi.fn(), startScroll: vi.fn(), buildFilterbar: vi.fn(), printFacets: vi.fn(),
 }));
 vi.mock('./dataset_view_renderer.js', () => ({ createDatasetViewElement: buildView }));
 vi.mock('./table_view/table_structure_builder.js', () => ({ saveColumnWidths: vi.fn() }));
@@ -15,10 +15,10 @@ vi.mock('../navigation/nav_engine/card_article_return_state.js', () => ({ should
 vi.mock('../infinite_scroll/infinite_scroll_handler.js', () => ({
     initializeInfiniteScroll: startScroll, seedInfiniteScrollRowCount: vi.fn(), disconnectInfiniteScroll: vi.fn(),
 }));
-vi.mock('../filterbar/filter_bar_builder.js', () => ({ create_filter_bar: vi.fn() }));
+vi.mock('../filterbar/filter_bar_builder.js', () => ({ create_filter_bar: buildFilterbar }));
 vi.mock('../../reusable_components/results_count/results_count_printer.js', () => ({ setResultsCount: vi.fn() }));
 vi.mock('../filterbar/filter_list/active_filter_tag_printer.js', () => ({ renderActiveFilters: vi.fn() }));
-vi.mock('../filterbar/filter_list/row_group_facet_printer.js', () => ({ renderRowGroupFacets: vi.fn() }));
+vi.mock('../filterbar/filter_list/row_group_facet_printer.js', () => ({ renderRowGroupFacets: printFacets }));
 vi.mock('./view_selector_printer.js', () => ({ applyViewStyling: vi.fn() }));
 vi.mock('../route_permission_checker.js', () => ({ hasRoutePermission: () => true }));
 vi.mock('../config_fetcher.js', () => ({ getDefaultViewSync: () => 'card' }));
@@ -157,4 +157,21 @@ test('classic article generation preserves the explicitly retained card viewport
     expect(await draw()).toBe(cards);
     expect(cards.scrollTop).toBe(13000);
     expect(cards.scrollLeft).toBe(45);
+});
+
+
+test('reattaches the shared section before facets update and restores its focused heading', async () => {
+    setChosenDatasetView(dataset, 'table');
+    const section = document.createElement('div');
+    section.id = `${dataset}_dataset_filter_section`;
+    const heading = document.createElement('button');
+    section.appendChild(heading);
+    const sync = vi.fn(() => hostFor('table').prepend(section));
+    buildFilterbar.mockReturnValueOnce({ __syncActiveView: sync }).mockReturnValueOnce({ __syncActiveView: sync });
+    await draw();
+    heading.focus();
+    await draw(dataset, [{ id: 2 }]);
+    expect(document.getElementById(section.id)).toBe(section);
+    expect(document.activeElement).toBe(heading);
+    expect(sync.mock.invocationCallOrder[1]).toBeLessThan(printFacets.mock.invocationCallOrder[1]);
 });

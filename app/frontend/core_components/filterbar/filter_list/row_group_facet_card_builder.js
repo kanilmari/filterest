@@ -24,7 +24,6 @@ export function createRowGroupFacetCard({ host, topControls, tableName, getSelec
     const ownerElement = topControls.closest('#tabs_container > .content_div')
         || topControls.closest('.content_div') || topControls.parentElement;
     const title = createPanelText('h2', 'row_group_categories', 'row-group-facets__title');
-    const guidance = createPanelText('p', 'row_group_categories_modes_hint', 'row-group-facets__guidance');
     const headings = document.createElement('div');
     headings.className = 'row-group-facet-headings';
     const more = createActionButton('show_more');
@@ -42,7 +41,7 @@ export function createRowGroupFacetCard({ host, topControls, tableName, getSelec
     });
     const emptyHint = createPanelText('p', 'row_group_no_results_hint', 'row-group-facets__empty-hint');
     emptyHint.setAttribute('role', 'status');
-    host.append(title, guidance, headings, clear, emptyHint);
+    host.append(title, headings, clear, emptyHint);
     headings.appendChild(more);
     const primaryCount = document.getElementById(`${tableName}_results_count`);
     topControls.addEventListener('results-count-updated', updateEmptyHint);
@@ -197,7 +196,7 @@ export function createRowGroupFacetCard({ host, topControls, tableName, getSelec
         const selected = new Set(getSelectedSlugs(tableName));
         host.setAttribute('aria-label', getTranslationForKey('row_group_categories'));
         host.dataset.expanded = String(panelState.expanded);
-        for (const text of [title, guidance, clear, emptyHint]) text.textContent = getTranslationForKey(text.dataset.langKey);
+        for (const text of [title, clear, emptyHint]) text.textContent = getTranslationForKey(text.dataset.langKey);
         const keys = new Set(groups.map(headingKey));
         for (const [key, entry] of entries) {
             if (keys.has(key)) continue;

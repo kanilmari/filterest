@@ -407,7 +407,8 @@ export async function generate_table(
             data_types,
             rowCount,
             hasGeo,
-            current_view
+            current_view,
+            { deferFilterSection: true }
         );
 		const scrollableContainer = viewContainers[current_view];
         replacementContainer = scrollableContainer;
@@ -452,8 +453,9 @@ export async function generate_table(
         // listing (and its category controls) visible until the replacement is
         // complete and current, then swap once without an empty intermediate frame.
         if (!canCommit()) return null;
-        const focusedTopControl = retainedTopControls?.contains(document.activeElement)
-            ? document.activeElement : null;
+        const retainedFilterSection = document.getElementById(`${dataset_name}_dataset_filter_section`);
+        const focusedTopControl = [retainedTopControls, retainedFilterSection]
+            .some(container => container?.contains(document.activeElement)) ? document.activeElement : null;
         // A retained dataset tab/article return keeps its mounted host. A fresh
         // dataset or view surface starts at the origin; refreshing the same
         // surface keeps its viewport. Decide from the last populated commit,
@@ -513,15 +515,15 @@ export async function generate_table(
         // Build count mirrors before filling them. The inline hero intentionally
         // has no primary count element, so filling first left the new mirror empty
         // until infinite scroll happened to update it later.
+        // Reattach the retained hero before locating its category card. Initial
+        // assembly reveals the section only after all three rows are populated;
+        // refreshes keep the existing heading controls and keyboard focus.
+        filterBar?.__syncActiveView?.();
         // Categories precede the shared selected tags and their result count.
         renderRowGroupFacets(dataset_name, rowGroupFacets, rowGroupFacetContext);
         renderActiveFilters(dataset_name);
         setResultsCount(dataset_name, rowCount);
         datasetAppearanceState.paint(dataset_name);
-        // The persistent filterbar owns the scrolling hero and sentinel. Restore
-        // them now, rather than on its observer's next frame: a phone's fresh
-        // load must reset the complete layout, not an interim hero-less surface.
-        filterBar?.__syncActiveView?.();
         if (startsNewSurface) {
             // The single populated swap no longer collapses the old scroll range.
             scrollableContainer.scrollTop = 0;

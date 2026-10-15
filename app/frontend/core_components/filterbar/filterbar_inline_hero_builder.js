@@ -50,6 +50,7 @@ export function createInlineHeroContent(tableName, {
     allowDatasetManagement = true,
     appearanceActions,
     sortOptions = {},
+    deferFilterSection = false,
 } = {}) {
     const inlineHeroHost = document.createElement("div");
     inlineHeroHost.classList.add("filterbar-inline-hero");
@@ -114,8 +115,14 @@ export function createInlineHeroContent(tableName, {
         clearAllFilters(tableName, resetTargetElement || inlineHeroHost)
     );
     heroFilterActions.appendChild(resetSearchBtn);
-    heroInner.appendChild(heroSortRow);
-    heroInner.appendChild(heroFilterActions);
+    const filterSection = document.createElement("div");
+    filterSection.id = `${tableName}_dataset_filter_section`;
+    filterSection.className = "dataset-filter-section";
+    filterSection.dataset.testid = "dataset-filter-section";
+    // First-page assembly reveals all three rows together after facets arrive.
+    filterSection.hidden = deferFilterSection;
+    filterSection.append(heroSortRow, heroFilterActions);
+    heroInner.appendChild(filterSection);
 
     inlineHeroHost.appendChild(heroInner);
     let paletteControl = null;
@@ -134,6 +141,7 @@ export function createInlineHeroContent(tableName, {
         isDestroyed = true;
         paletteControl?.destroy?.();
         heroDatasetTabs.destroy();
+        filterSection.querySelector('.row-group-facets')?.disposeRowGroupPanel?.();
         heroSortDropdown.destroy?.();
         searchPanel.destroy?.();
     };

@@ -113,9 +113,36 @@ signature, so a late page-language initialization cannot make a current response
 Search execution identity also includes sorting: a late saved sort starts a fresh listing instead of joining the obsolete request that its change cancels. Identical synchronized controls still share one execution. Obsolete AI streams are aborted. Hierarchy and server facet paging remain later slices.
 Finnish/English mode copy is seeded by
 `20261007000001_seed_row_group_match_mode_language_keys.sql` for DB 9.10.1.
-The reworded general hint uses `row_group_categories_modes_hint`, preserving reviewed
-copy under the previous key. Existing translations are never replaced. Apply copy
-through the migration lifecycle, never ad hoc SQL.
+The Categories heading and heading-dropdown hints remain; the general guidance
+paragraph was removed and its key is no longer used in code (see its
+[language-key record](lang_key_lifecycle.md#retirement-record--2026-10-15-wo22)).
+In the inline hero, sorting, filter/reset actions and Categories share one shaded
+section, each on its own row. Selected chips and result counts follow outside it.
+The selected-chip row matches the shaded section's outer width and left edge,
+including on phones. In `morphing_filterbar_content.css`, the hero and listing
+result controls consume the same responsive `--filterbar-hero-inline-space`
+for their outer padding and share the inner column-width expression. The row
+and section retain the same content-width cap and centring. The section's own
+padding stays inside its border box; aligning chips with the inset Categories
+child would make their row too narrow. Comparing only the 550 px cap misses
+narrow-screen differences between the two hosts. Chip wrapping and removal
+targets stay unchanged.
+The ordinary filter panel has sort/reset in its text-search disclosure and no
+Categories card, so it does not duplicate this section. Phone layouts reuse the
+same inline-hero section. Existing translations are never replaced.
+The section preserves each control's existing sizing rules, rather than adding
+a common touch-target minimum. Filter results keeps the 40 px minimum in
+`filters_opener_and_closer.css`; Reset search keeps `.fw-btn`'s 44 px minimum
+and its own line-height and narrow-screen wrapping rules in `filterbar.css`.
+Category heading buttons keep the 44 px minimum in `row_group_facets.css`.
+The sort input keeps `vanilla_dropdown.css`'s font-dependent height and padding.
+`E_search_filter/E19_shared_filter_section.spec.ts` compares these controls with
+inert copies outside the section at both 375 px and desktop, in both themes and
+languages. Copies use the same allocated width to preserve translated wrapping;
+the reference is the unchanged component cascade, not the section's computed
+minimum. The proof compares actual heights, padding, borders, font metrics and
+size constraints, and checks each existing minimum width. Responsive row widths
+continue to follow the available space inside the shared section.
 Column inputs and selected-filter chips follow the
 [column filter visibility contract](Frontend_Dataset_Appearance.md#column-filter-visibility):
 hiding a reference source hides its generated name filter too. Saved hidden-name

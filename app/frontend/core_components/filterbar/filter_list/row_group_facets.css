@@ -23,14 +23,8 @@
 }
 
 .row-group-facets__title {
-    margin: 0;
+    margin: 0 0 var(--fw-space-2);
     font-size: 18px;
-}
-
-.row-group-facets__guidance {
-    margin: 2px 0 12px;
-    color: var(--text-muted);
-    font-size: 14px;
 }
 
 .row-group-facet-headings {
