@@ -111,3 +111,9 @@ Update incoming documentation links when text moves or a document is deleted.
 - [Image-first article sections](Image_First_Sections.md) describes shared article
   sections in both image-first presentations, with independent opening defaults
   and separate section rights and media authorization.
+- [Table column tools and multi-field sort](Table_Column_Tools_And_Multi_Field_Sort.md)
+  describes inline column drafts, lossless type changes and ordered sort keys,
+  extending existing dataset forms and permissions.
+- [Search result groups](Search_Result_Groups.md) describes combined text ranking,
+  an AI information control and endlessly scrolling result windows, building on
+  the existing group order and text-result scrolling.
