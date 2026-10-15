@@ -135,7 +135,7 @@ func fetchHandoverComments(handoverID int64) ([]AgentHandoverComment, error) {
 func appendHandoverCommentHandler(w http.ResponseWriter, r *http.Request, patch handoverReportPatchRequest) {
 	text, err := normalizeHandoverComment(*patch.Comment)
 	if err != nil {
-		httpresponse.RespondWithError(w, http.StatusBadRequest, err.Error())
+		respondAgentToolRequestError(w, http.StatusBadRequest, "appendHandoverCommentHandler", err)
 		return
 	}
 	if _, err := fetchHandoverReportByID(patch.ID, false); err == sql.ErrNoRows {

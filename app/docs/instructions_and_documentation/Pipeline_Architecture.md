@@ -16,8 +16,6 @@ Every HTTP request in Filterest flows through a **pipeline** — an ordered sequ
 
 The pipeline is **declarative**: the stage order is defined in a single file (`pipeline_order.go`), and a route's access profile is defined in another single file (`route_profiles.go`), where a conformance test requires every route to have an explicit entry.
 
-The profile is the part that is governed this way. A route's other properties are not yet: its permitted methods, whether it acts on one dataset, and its permission identity are decided in further lists across several files. Treat the access profile as the model the rest should follow, not as a description of the whole route story.
-
 ### The Ice Cream Kiosk Metaphor
 
 Think of the pipeline as an ice cream kiosk:
@@ -181,7 +179,9 @@ Active stages: `rate_limit` → `request_size_limit` → `logging` → `error_ha
 
 Skips: `access_control`, `admin_check`
 
-Used for: routes that require a logged-in user but no specific permissions.
+Public and LoginOnly routes never look up route grants; LoginOnly can admit user 1 when guest browsing is enabled, so user-owned handlers must reject guests. Missing rate-limit configuration is not authorization. All Agent Tools routes, including task groups, use AdminProfile and require both a grant and administrator status.
+
+The router’s `TestRegisteredPreGrantWritersAreReviewed` checks production, development and API-language registrations against `backend/core_components/router/pregrant_write_allowlist.json`: exact path, handler, profile, write methods and reason. Every registration, including optional apps, must declare methods; the guard also covers public SignOutProfile. Downstream tests can extend `router.ReviewedPreGrantWriteAllowances()` with their audited exceptions and call `router.ValidatePreGrantRouteContracts(router.GetRouteDefinitions(), allowances)` after registrations and overrides. Negative controls reject an unlisted LoginOnly POST and empty methods. Dataset scope (`specific_table_related` defaults and overrides) and permission identity are still decided across several files; that remaining split is tracked in WO-SEC3.
 
 Active stages: `rate_limit` → `request_size_limit` → `logging` → `error_handling` → `automation_check` → `site_assistant_guard` → `auth` → `csrf` → `fingerprint` → `device_id` → `transaction` → `audit` → **handler**
 

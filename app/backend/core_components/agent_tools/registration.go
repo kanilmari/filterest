@@ -71,18 +71,20 @@ func Register() {
 			"agent_tools.HandoverReportsHandler",
 			http.MethodGet, http.MethodPost, http.MethodPut, http.MethodPatch,
 		)
-		loginOnlyHandlers := []string{
+		// Task groups configure the same shared workflow as tasks and reports;
+		// a route grant alone must not delegate their administration either.
+		adminHandlers := []string{
 			"agent_tools.TasksHandler",
 			"agent_tools.TaskRunsHandler",
 			"agent_tools.TaskTodosHandler",
+			"agent_tools.TaskGroupsHandler",
 			"agent_tools.WorklinesHandler",
 			"agent_tools.WorklineReportsHandler",
 			"agent_tools.WorklineTasksHandler",
 			"agent_tools.HandoverReportsHandler",
 		}
-		for _, handlerName := range loginOnlyHandlers {
-			pipeline.RegisterRouteProfile(handlerName, pipeline.LoginOnlyProfile)
+		for _, handlerName := range adminHandlers {
+			pipeline.RegisterRouteProfile(handlerName, pipeline.AdminProfile)
 		}
-		pipeline.RegisterRouteProfile("agent_tools.TaskGroupsHandler", pipeline.DefaultProfile)
 	})
 }

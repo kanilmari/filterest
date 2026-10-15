@@ -6,6 +6,7 @@
 package agent_tools
 
 import (
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -185,8 +186,12 @@ func ListTaskRunsHandler(w http.ResponseWriter, r *http.Request) {
 		query := "SELECT " + taskRunColumns + " FROM dev_agent_task_runs WHERE run_id = $1"
 		row := backend.Db.QueryRow(query, runID)
 		run, err := scanTaskRun(row)
-		if err != nil {
+		if err == sql.ErrNoRows {
 			http.Error(w, "Task run not found", http.StatusNotFound)
+			return
+		}
+		if err != nil {
+			respondAgentToolDatabaseError(w, "fetch task run", err)
 			return
 		}
 		w.Header().Set("Content-Type", "application/json")
@@ -221,7 +226,7 @@ func ListTaskRunsHandler(w http.ResponseWriter, r *http.Request) {
 
 	rows, err := backend.Db.Query(query, args...)
 	if err != nil {
-		http.Error(w, "Database error: "+err.Error(), http.StatusInternalServerError)
+		respondAgentToolDatabaseError(w, "ListTaskRunsHandler", err)
 		return
 	}
 	defer rows.Close()
@@ -230,10 +235,14 @@ func ListTaskRunsHandler(w http.ResponseWriter, r *http.Request) {
 	for rows.Next() {
 		run, err := scanTaskRun(rows)
 		if err != nil {
-			http.Error(w, "Database error: "+err.Error(), http.StatusInternalServerError)
+			respondAgentToolDatabaseError(w, "ListTaskRunsHandler", err)
 			return
 		}
 		runs = append(runs, run)
+	}
+	if err := rows.Err(); err != nil {
+		respondAgentToolDatabaseError(w, "iterate task runs", err)
+		return
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -292,7 +301,7 @@ func CreateTaskRunHandler(w http.ResponseWriter, r *http.Request) {
 
 	run, err := scanTaskRun(row)
 	if err != nil {
-		http.Error(w, "Database error: "+err.Error(), http.StatusInternalServerError)
+		respondAgentToolDatabaseError(w, "CreateTaskRunHandler", err)
 		return
 	}
 
@@ -383,7 +392,7 @@ func UpdateTaskRunHandler(w http.ResponseWriter, r *http.Request) {
 	row := backend.Db.QueryRow(query, args...)
 	run, err := scanTaskRun(row)
 	if err != nil {
-		http.Error(w, "Database error: "+err.Error(), http.StatusInternalServerError)
+		respondAgentToolDatabaseError(w, "UpdateTaskRunHandler", err)
 		return
 	}
 

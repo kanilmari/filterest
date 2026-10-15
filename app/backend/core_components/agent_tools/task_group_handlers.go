@@ -9,7 +9,6 @@ package agent_tools
 import (
 	"encoding/json"
 	"fmt"
-	"log"
 	"net/http"
 	"strconv"
 	"strings"
@@ -35,7 +34,7 @@ func listTaskGroups(w http.ResponseWriter, r *http.Request) {
 	rows, err := backend.Db.Query(
 		"SELECT id, slug, title, description, sort_order, created, updated FROM dev_agent_task_groups ORDER BY sort_order, slug")
 	if err != nil {
-		http.Error(w, "Database error: "+err.Error(), http.StatusInternalServerError)
+		respondAgentToolDatabaseError(w, "listTaskGroups", err)
 		return
 	}
 	defer rows.Close()
@@ -45,13 +44,17 @@ func listTaskGroups(w http.ResponseWriter, r *http.Request) {
 		var g AgentTaskGroup
 		var desc *string
 		if err := rows.Scan(&g.ID, &g.Slug, &g.Title, &desc, &g.SortOrder, &g.CreatedAt, &g.UpdatedAt); err != nil {
-			log.Printf("Error scanning task group: %v", err)
-			continue
+			respondAgentToolDatabaseError(w, "scan task group", err)
+			return
 		}
 		if desc != nil {
 			g.Description = *desc
 		}
 		groups = append(groups, g)
+	}
+	if err := rows.Err(); err != nil {
+		respondAgentToolDatabaseError(w, "iterate task groups", err)
+		return
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -77,7 +80,7 @@ func createTaskGroup(w http.ResponseWriter, r *http.Request) {
 		g.Slug, g.Title, g.Description, g.SortOrder, currentAgentToolUserID(r),
 	).Scan(&g.ID, &g.CreatedAt, &g.UpdatedAt)
 	if err != nil {
-		http.Error(w, "Database error: "+err.Error(), http.StatusInternalServerError)
+		respondAgentToolDatabaseError(w, "createTaskGroup", err)
 		return
 	}
 
@@ -159,7 +162,7 @@ func updateTaskGroup(w http.ResponseWriter, r *http.Request) {
 	var desc *string
 	err = backend.Db.QueryRow(query, args...).Scan(&g.ID, &g.Slug, &g.Title, &desc, &g.SortOrder, &g.CreatedAt, &g.UpdatedAt)
 	if err != nil {
-		http.Error(w, "Database error: "+err.Error(), http.StatusInternalServerError)
+		respondAgentToolDatabaseError(w, "updateTaskGroup", err)
 		return
 	}
 	if desc != nil {
@@ -179,7 +182,7 @@ func deleteTaskGroup(w http.ResponseWriter, r *http.Request) {
 
 	result, err := backend.Db.Exec("DELETE FROM dev_agent_task_groups WHERE id = $1", idStr)
 	if err != nil {
-		http.Error(w, "Database error: "+err.Error(), http.StatusInternalServerError)
+		respondAgentToolDatabaseError(w, "deleteTaskGroup", err)
 		return
 	}
 

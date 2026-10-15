@@ -6,6 +6,7 @@ package agent_tools
 
 import (
 	"net/http"
+	"slices"
 	"testing"
 
 	appregistry "easelect/backend/core_components/app_registry"
@@ -20,8 +21,12 @@ func collectRegisteredAgentToolRoutes() map[string]string {
 	return routes
 }
 
+// Capture package initialization before any test explicitly activates the app.
+// Other handler tests also call Register, so test order must not decide dormancy.
+var agentToolRoutesBeforeActivation = collectRegisteredAgentToolRoutes()
+
 func TestAgentToolsRequireExplicitActivation(t *testing.T) {
-	if routes := collectRegisteredAgentToolRoutes(); len(routes) != 0 {
+	if routes := agentToolRoutesBeforeActivation; len(routes) != 0 {
 		t.Fatalf("Agent Tools registered %d routes before explicit activation", len(routes))
 	}
 
@@ -50,13 +55,20 @@ func TestAgentToolsRequireExplicitActivation(t *testing.T) {
 		"agent_tools.TasksHandler",
 		"agent_tools.TaskRunsHandler",
 		"agent_tools.TaskTodosHandler",
+		"agent_tools.TaskGroupsHandler",
 		"agent_tools.WorklinesHandler",
 		"agent_tools.WorklineReportsHandler",
 		"agent_tools.WorklineTasksHandler",
 		"agent_tools.HandoverReportsHandler",
 	} {
-		if got := pipeline.DescribeRouteProfile(handlerName).ProfileName; got != "login_only" {
-			t.Fatalf("%s profile = %q, want login_only", handlerName, got)
+		if got := pipeline.DescribeRouteProfile(handlerName).ProfileName; got != "admin" {
+			t.Errorf("%s profile = %q, want admin", handlerName, got)
+		}
+		stages := pipeline.DescribePipeline(pipeline.RouteContext{HandlerName: handlerName}, pipeline.GetProfile(handlerName))
+		for _, required := range []string{"auth", "csrf", "access_control", "admin_check"} {
+			if !slices.Contains(stages, required) {
+				t.Errorf("%s missing %s stage: %v", handlerName, required, stages)
+			}
 		}
 	}
 }

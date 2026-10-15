@@ -9,7 +9,6 @@ package agent_tools
 import (
 	"database/sql"
 	"encoding/json"
-	"fmt"
 	"strings"
 	"time"
 
@@ -108,7 +107,7 @@ func (p *agentTaskPatch) UnmarshalJSON(data []byte) error {
 		} else {
 			var parentID int
 			if err := json.Unmarshal(raw.ParentID, &parentID); err != nil {
-				return fmt.Errorf("invalid parent_id")
+				return validationErrorf("invalid parent_id")
 			}
 			p.ParentID = &parentID
 		}
@@ -208,7 +207,7 @@ func resolveTaskQueueIDBySlug(queueSlug string) (*int, error) {
 		normalized,
 	).Scan(&queueID)
 	if err == sql.ErrNoRows {
-		return nil, fmt.Errorf("unknown queue %q", normalized)
+		return nil, validationErrorf("unknown queue %q", normalized)
 	}
 	if err != nil {
 		return nil, err
@@ -227,7 +226,7 @@ func resolveTaskQueueIDByID(queueID int) (*int, error) {
 		queueID,
 	).Scan(&resolvedID)
 	if err == sql.ErrNoRows {
-		return nil, fmt.Errorf("unknown queue_id %d", queueID)
+		return nil, validationErrorf("unknown queue_id %d", queueID)
 	}
 	if err != nil {
 		return nil, err
@@ -361,12 +360,15 @@ func resolveGroupSlugsToIDsWithQuerier(db sqlQueryExecutor, slugs []string) ([]i
 		}
 		found[slug] = id
 	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
 
 	var ids []int
 	for _, slug := range normalized {
 		id, ok := found[slug]
 		if !ok {
-			return nil, fmt.Errorf("unknown group %q", slug)
+			return nil, validationErrorf("unknown group %q", slug)
 		}
 		ids = append(ids, id)
 	}

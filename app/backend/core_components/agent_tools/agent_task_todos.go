@@ -10,7 +10,6 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
-	"log"
 	"net/http"
 	"strconv"
 	"strings"
@@ -169,10 +168,10 @@ const taskTodoColumns = `td.id, td.task_id, td.parent_todo_id, td.todo_text, td.
 const taskTodoFromClause = ` FROM dev_agent_task_todos td LEFT JOIN system_users created_user ON created_user.id = td.created_by LEFT JOIN system_users completed_user ON completed_user.id = td.completed_by`
 
 // taskExistsForTodos checks the parent ticket before listing or creating todo rows.
-func taskExistsForTodos(taskID int) bool {
+func taskExistsForTodos(taskID int) (bool, error) {
 	var exists bool
 	err := backend.Db.QueryRow("SELECT EXISTS (SELECT 1 FROM dev_agent_tasks WHERE id = $1)", taskID).Scan(&exists)
-	return err == nil && exists
+	return exists, err
 }
 
 // fetchTaskTodoByID reloads one todo row after create/update so callers receive canonical timestamps.
@@ -227,14 +226,14 @@ func buildTaskTodoUpdateQuery(patch agentTaskTodoPatch, userID int) (string, []i
 	if patch.TodoText != nil {
 		text := validateTaskTodoText(*patch.TodoText)
 		if text == "" {
-			return "", nil, fmt.Errorf("todo_text must be 1-5000 characters")
+			return "", nil, validationErrorf("todo_text must be 1-5000 characters")
 		}
 		appendField("todo_text", text)
 	}
 	if patch.Status != nil {
 		status := validateTaskTodoStatus(*patch.Status)
 		if status == "" {
-			return "", nil, fmt.Errorf("invalid status")
+			return "", nil, validationErrorf("invalid status")
 		}
 		appendField("status", status)
 		if status == "done" {
@@ -250,7 +249,7 @@ func buildTaskTodoUpdateQuery(patch agentTaskTodoPatch, userID int) (string, []i
 	}
 
 	if first {
-		return "", nil, fmt.Errorf("no fields to update")
+		return "", nil, validationErrorf("no fields to update")
 	}
 
 	query += fmt.Sprintf(" WHERE id = $%d RETURNING updated", argID)
@@ -271,7 +270,12 @@ func ListTaskTodosHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "task_id must be a positive integer", http.StatusBadRequest)
 		return
 	}
-	if !taskExistsForTodos(taskID) {
+	exists, err := taskExistsForTodos(taskID)
+	if err != nil {
+		respondAgentToolDatabaseError(w, "check task before listing todos", err)
+		return
+	}
+	if !exists {
 		http.Error(w, "Task not found", http.StatusNotFound)
 		return
 	}
@@ -280,7 +284,7 @@ func ListTaskTodosHandler(w http.ResponseWriter, r *http.Request) {
 		" WHERE td.task_id = $1 ORDER BY COALESCE(td.parent_todo_id, td.id), CASE WHEN td.parent_todo_id IS NULL THEN 0 ELSE 1 END, td.sort_order, td.id"
 	rows, err := backend.Db.Query(query, taskID)
 	if err != nil {
-		http.Error(w, "Database error: "+err.Error(), http.StatusInternalServerError)
+		respondAgentToolDatabaseError(w, "ListTaskTodosHandler", err)
 		return
 	}
 	defer rows.Close()
@@ -289,10 +293,14 @@ func ListTaskTodosHandler(w http.ResponseWriter, r *http.Request) {
 	for rows.Next() {
 		todo, err := scanTaskTodo(rows)
 		if err != nil {
-			log.Printf("Error scanning task todo: %v", err)
-			continue
+			respondAgentToolDatabaseError(w, "scan task todo", err)
+			return
 		}
 		todos = append(todos, todo)
+	}
+	if err := rows.Err(); err != nil {
+		respondAgentToolDatabaseError(w, "iterate task todos", err)
+		return
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -310,7 +318,12 @@ func CreateTaskTodoHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "task_id is required", http.StatusBadRequest)
 		return
 	}
-	if !taskExistsForTodos(input.TaskID) {
+	exists, err := taskExistsForTodos(input.TaskID)
+	if err != nil {
+		respondAgentToolDatabaseError(w, "check task before creating todo", err)
+		return
+	}
+	if !exists {
 		http.Error(w, "Task not found", http.StatusNotFound)
 		return
 	}
@@ -323,7 +336,7 @@ func CreateTaskTodoHandler(w http.ResponseWriter, r *http.Request) {
 
 	sortOrder, err := resolveTaskTodoSortOrder(input.TaskID, input.ParentTodoID, input.SortOrder)
 	if err != nil {
-		http.Error(w, "Database error: "+err.Error(), http.StatusInternalServerError)
+		respondAgentToolDatabaseError(w, "CreateTaskTodoHandler", err)
 		return
 	}
 
@@ -336,7 +349,7 @@ func CreateTaskTodoHandler(w http.ResponseWriter, r *http.Request) {
 		input.TaskID, input.ParentTodoID, todoText, sortOrder, userID,
 	).Scan(&newID)
 	if err != nil {
-		http.Error(w, "Database error: "+err.Error(), http.StatusInternalServerError)
+		respondAgentToolDatabaseError(w, "CreateTaskTodoHandler", err)
 		return
 	}
 	event_bus.Bus.Publish(agentTaskTodoTableName, event_bus.Event{
@@ -347,7 +360,7 @@ func CreateTaskTodoHandler(w http.ResponseWriter, r *http.Request) {
 
 	todo, err := fetchTaskTodoByID(newID)
 	if err != nil {
-		http.Error(w, "Todo created but could not be reloaded", http.StatusInternalServerError)
+		respondAgentToolDatabaseError(w, "CreateTaskTodoHandler reload", err)
 		return
 	}
 
@@ -370,7 +383,7 @@ func UpdateTaskTodoHandler(w http.ResponseWriter, r *http.Request) {
 
 	query, args, err := buildTaskTodoUpdateQuery(patch, currentAgentToolUserID(r))
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		respondAgentToolRequestError(w, http.StatusBadRequest, "UpdateTaskTodoHandler", err)
 		return
 	}
 
@@ -381,7 +394,7 @@ func UpdateTaskTodoHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err != nil {
-		http.Error(w, "Database error: "+err.Error(), http.StatusInternalServerError)
+		respondAgentToolDatabaseError(w, "UpdateTaskTodoHandler", err)
 		return
 	}
 	event_bus.Bus.Publish(agentTaskTodoTableName, event_bus.Event{
@@ -393,7 +406,7 @@ func UpdateTaskTodoHandler(w http.ResponseWriter, r *http.Request) {
 
 	todo, err := fetchTaskTodoByID(patch.ID)
 	if err != nil {
-		http.Error(w, "Todo updated but could not be reloaded", http.StatusInternalServerError)
+		respondAgentToolDatabaseError(w, "UpdateTaskTodoHandler reload", err)
 		return
 	}
 
@@ -431,7 +444,7 @@ func DeleteTaskTodoHandler(w http.ResponseWriter, r *http.Request) {
 
 	result, err := backend.Db.Exec("DELETE FROM dev_agent_task_todos WHERE id = $1", todoID)
 	if err != nil {
-		http.Error(w, "Database error: "+err.Error(), http.StatusInternalServerError)
+		respondAgentToolDatabaseError(w, "DeleteTaskTodoHandler", err)
 		return
 	}
 	rowsAffected, _ := result.RowsAffected()

@@ -22,6 +22,7 @@ Dates are the local (Europe/Helsinki) date on which the version was published.
 
 ## [Unreleased]
 
+- **Agent Tools require administrators (SEC)** — Explicitly activated task, run, todo, group, workline and report routes require both their route grant and administrator access. Deliberate input-validation feedback is preserved; unexpected and database failures return generic errors while server logs retain diagnostics. A shared guard checks declared methods and reviewed exceptions for routes that bypass route grants.
 - Card description previews skip leading empty HTML blocks and whitespace after sanitization, preserving paragraph and list boundaries, language choices and full stored content.
 - Dataset sections and view headings follow the dataset title without skipping levels, while retaining their existing appearance.
 - **Integer searches find the row by ID first** — Dataset text search accepts trimmed integers with an optional leading `#`, ranks a matching integer primary-key row first under any sort (picked, saved or default), and shares that rule with assisted search while preserving permissions, filters, counts, paging and the active order of every other match.

@@ -95,7 +95,7 @@ func normalizeHandoverComment(text string) (string, error) {
 		return "", err
 	}
 	if category := detectReportSecret(normalized); category != "" {
-		return "", fmt.Errorf("handover_comment_rejected_secret_detected:%s", category)
+		return "", validationErrorf("handover_comment_rejected_secret_detected:%s", category)
 	}
 	return normalized, nil
 }
@@ -117,31 +117,31 @@ func normalizeHandoverReportCreate(input handoverReportCreateRequest) (normalize
 		input.SourceKind = "codex"
 	}
 	if !sourceKindPattern.MatchString(input.SourceKind) {
-		return normalized, fmt.Errorf("invalid source_kind")
+		return normalized, validationErrorf("invalid source_kind")
 	}
 	input.SourceRef = strings.TrimSpace(input.SourceRef)
 	if utf8RuneCount(input.SourceRef) > maxReportSourceRunes {
-		return normalized, fmt.Errorf("source_ref must be at most %d characters", maxReportSourceRunes)
+		return normalized, validationErrorf("source_ref must be at most %d characters", maxReportSourceRunes)
 	}
 	input.Tags, err = normalizeReportTags(input.Tags)
 	if err != nil {
 		return normalized, err
 	}
 	if len(input.Items) == 0 || len(input.Items) > maxHandoverItems {
-		return normalized, fmt.Errorf("items must contain 1-%d workline reports", maxHandoverItems)
+		return normalized, validationErrorf("items must contain 1-%d workline reports", maxHandoverItems)
 	}
 
 	seenWorklines := map[int64]struct{}{}
 	seenReports := map[int64]struct{}{}
 	for _, item := range input.Items {
 		if item.WorklineID <= 0 || item.WorklineReportID <= 0 {
-			return normalized, fmt.Errorf("item identifiers must be positive integers")
+			return normalized, validationErrorf("item identifiers must be positive integers")
 		}
 		if _, exists := seenWorklines[item.WorklineID]; exists {
-			return normalized, fmt.Errorf("handover may reference each workline only once")
+			return normalized, validationErrorf("handover may reference each workline only once")
 		}
 		if _, exists := seenReports[item.WorklineReportID]; exists {
-			return normalized, fmt.Errorf("handover may reference each report only once")
+			return normalized, validationErrorf("handover may reference each report only once")
 		}
 		seenWorklines[item.WorklineID] = struct{}{}
 		seenReports[item.WorklineReportID] = struct{}{}
@@ -151,21 +151,21 @@ func normalizeHandoverReportCreate(input handoverReportCreateRequest) (normalize
 	metadataObject := map[string]any{}
 	if len(input.Metadata) > 0 && string(input.Metadata) != "null" {
 		if len(input.Metadata) > maxReportMetadataSize {
-			return normalized, fmt.Errorf("metadata is too large")
+			return normalized, validationErrorf("metadata is too large")
 		}
 		if err := json.Unmarshal(input.Metadata, &metadataObject); err != nil {
-			return normalized, fmt.Errorf("metadata must be a JSON object")
+			return normalized, validationErrorf("metadata must be a JSON object")
 		}
 		metadataJSON, err = json.Marshal(metadataObject)
 		if err != nil {
-			return normalized, fmt.Errorf("metadata could not be normalized")
+			return normalized, validationErrorf("metadata could not be normalized")
 		}
 	}
 
 	secretValues := []string{input.Title, input.SourceRef, string(metadataJSON)}
 	secretValues = append(secretValues, input.Tags...)
 	if category := detectReportSecret(secretValues...); category != "" {
-		return normalized, fmt.Errorf("handover_rejected_secret_detected:%s", category)
+		return normalized, validationErrorf("handover_rejected_secret_detected:%s", category)
 	}
 
 	normalized.handoverReportCreateRequest = input
@@ -176,25 +176,25 @@ func normalizeHandoverReportCreate(input handoverReportCreateRequest) (normalize
 
 func validateHandoverWorklineReport(report AgentWorklineReport, currentWorklineStatus string) error {
 	if report.FormatVersion != 2 {
-		return fmt.Errorf("handover_requires_structured_workline_checkpoint")
+		return validationErrorf("handover_requires_structured_workline_checkpoint")
 	}
 	if _, ok := validPhaseGates[report.PhaseGate]; !ok {
-		return fmt.Errorf("handover_requires_valid_phase_gate")
+		return validationErrorf("handover_requires_valid_phase_gate")
 	}
 	if report.CurrentPhase < 0 || report.CurrentPhase > 6 {
-		return fmt.Errorf("handover_requires_valid_current_phase")
+		return validationErrorf("handover_requires_valid_current_phase")
 	}
 	if report.WorklineStatusSnapshot != currentWorklineStatus {
-		return fmt.Errorf("checkpoint_workline_status_is_stale")
+		return validationErrorf("checkpoint_workline_status_is_stale")
 	}
 	if currentWorklineStatus == "active" || currentWorklineStatus == "paused" {
 		if strings.TrimSpace(report.NextStepText) == "" {
-			return fmt.Errorf("open_workline_checkpoint_requires_next_step")
+			return validationErrorf("open_workline_checkpoint_requires_next_step")
 		}
 		return nil
 	}
 	if strings.TrimSpace(report.NextStepText) != "" {
-		return fmt.Errorf("closed_workline_checkpoint_must_omit_next_step")
+		return validationErrorf("closed_workline_checkpoint_must_omit_next_step")
 	}
 	return nil
 }

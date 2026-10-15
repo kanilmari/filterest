@@ -189,7 +189,7 @@ func normalizeBoundedText(value, fieldName string, maxRunes int) (string, error)
 	trimmed := strings.TrimSpace(value)
 	length := utf8.RuneCountInString(trimmed)
 	if length == 0 || length > maxRunes {
-		return "", fmt.Errorf("%s must be 1-%d characters", fieldName, maxRunes)
+		return "", validationErrorf("%s must be 1-%d characters", fieldName, maxRunes)
 	}
 	return trimmed, nil
 }
@@ -218,7 +218,7 @@ func normalizeReportEnum(value, fallback string, allowed map[string]struct{}) st
 
 func normalizeReportTags(tags []string) ([]string, error) {
 	if len(tags) > maxReportTags {
-		return nil, fmt.Errorf("tags may contain at most %d values", maxReportTags)
+		return nil, validationErrorf("tags may contain at most %d values", maxReportTags)
 	}
 
 	normalized := make([]string, 0, len(tags))
@@ -226,7 +226,7 @@ func normalizeReportTags(tags []string) ([]string, error) {
 	for _, raw := range tags {
 		tag := strings.TrimSpace(raw)
 		if tag == "" || utf8.RuneCountInString(tag) > maxReportTagRunes {
-			return nil, fmt.Errorf("each tag must be 1-%d characters", maxReportTagRunes)
+			return nil, validationErrorf("each tag must be 1-%d characters", maxReportTagRunes)
 		}
 		if _, exists := seen[tag]; exists {
 			continue
@@ -296,14 +296,14 @@ func normalizeOptionalBoundedText(value, fieldName string, maxRunes int) (string
 		return "", nil
 	}
 	if utf8.RuneCountInString(trimmed) > maxRunes {
-		return "", fmt.Errorf("%s must be at most %d characters", fieldName, maxRunes)
+		return "", validationErrorf("%s must be at most %d characters", fieldName, maxRunes)
 	}
 	return trimmed, nil
 }
 
 func normalizeGitChangedPaths(values []string) ([]string, error) {
 	if len(values) > maxReportGitPaths {
-		return nil, fmt.Errorf("git_workline_changed_paths may contain at most %d values", maxReportGitPaths)
+		return nil, validationErrorf("git_workline_changed_paths may contain at most %d values", maxReportGitPaths)
 	}
 	seen := map[string]struct{}{}
 	normalized := make([]string, 0, len(values))
@@ -311,10 +311,10 @@ func normalizeGitChangedPaths(values []string) ([]string, error) {
 		value := strings.TrimSpace(strings.ReplaceAll(raw, "\\", "/"))
 		cleaned := path.Clean(value)
 		if value == "" || cleaned == "." || strings.HasPrefix(cleaned, "../") || strings.HasPrefix(cleaned, "/") {
-			return nil, fmt.Errorf("git workline paths must be repository-relative")
+			return nil, validationErrorf("git workline paths must be repository-relative")
 		}
 		if utf8.RuneCountInString(cleaned) > maxReportGitPathRunes || strings.ContainsAny(cleaned, "\r\n\x00") {
-			return nil, fmt.Errorf("invalid git workline path")
+			return nil, validationErrorf("invalid git workline path")
 		}
 		if _, exists := seen[cleaned]; exists {
 			continue
@@ -375,7 +375,7 @@ func renderStructuredWorklineReport(input worklineReportCreateRequest) string {
 func normalizeWorklineReportCreate(input worklineReportCreateRequest) (normalizedWorklineReportCreate, error) {
 	var normalized normalizedWorklineReportCreate
 	if input.WorklineID <= 0 {
-		return normalized, fmt.Errorf("workline_id must be a positive integer")
+		return normalized, validationErrorf("workline_id must be a positive integer")
 	}
 
 	var err error
@@ -401,49 +401,49 @@ func normalizeWorklineReportCreate(input worklineReportCreateRequest) (normalize
 	}
 	input.PhaseGate = strings.TrimSpace(input.PhaseGate)
 	if _, ok := validReportPhaseGates[input.PhaseGate]; !ok {
-		return normalized, fmt.Errorf("invalid phase_gate")
+		return normalized, validationErrorf("invalid phase_gate")
 	}
 	if input.CurrentPhase == nil {
-		return normalized, fmt.Errorf("current_phase is required")
+		return normalized, validationErrorf("current_phase is required")
 	}
 	if *input.CurrentPhase < 0 || *input.CurrentPhase > 6 {
-		return normalized, fmt.Errorf("current_phase must be between 0 and 6")
+		return normalized, validationErrorf("current_phase must be between 0 and 6")
 	}
 	if strings.TrimSpace(input.WorklineStatusSnapshot) == "" {
-		return normalized, fmt.Errorf("workline_status_snapshot is required")
+		return normalized, validationErrorf("workline_status_snapshot is required")
 	}
 	input.WorklineStatusSnapshot = normalizeWorklineStatus(input.WorklineStatusSnapshot)
 	if input.WorklineStatusSnapshot == "" {
-		return normalized, fmt.Errorf("invalid workline_status_snapshot")
+		return normalized, validationErrorf("invalid workline_status_snapshot")
 	}
 	if input.ChangedThisTurn == nil {
-		return normalized, fmt.Errorf("changed_this_turn is required")
+		return normalized, validationErrorf("changed_this_turn is required")
 	}
 	if input.WorklineStatusSnapshot == "active" || input.WorklineStatusSnapshot == "paused" {
 		if input.NextStepText == "" {
-			return normalized, fmt.Errorf("open workline reports require next_step")
+			return normalized, validationErrorf("open workline reports require next_step")
 		}
 	} else if input.NextStepText != "" {
-		return normalized, fmt.Errorf("closed workline reports must omit next_step")
+		return normalized, validationErrorf("closed workline reports must omit next_step")
 	}
 	input.ReportType = normalizeReportEnum(input.ReportType, "completion", validWorklineReportTypes)
 	if input.ReportType == "" {
-		return normalized, fmt.Errorf("invalid report_type")
+		return normalized, validationErrorf("invalid report_type")
 	}
 	input.Outcome = normalizeReportEnum(input.Outcome, "completed", validWorklineReportOutcomes)
 	if input.Outcome == "" {
-		return normalized, fmt.Errorf("invalid outcome")
+		return normalized, validationErrorf("invalid outcome")
 	}
 	input.SourceKind = strings.ToLower(strings.TrimSpace(input.SourceKind))
 	if input.SourceKind == "" {
 		input.SourceKind = "codex"
 	}
 	if !sourceKindPattern.MatchString(input.SourceKind) {
-		return normalized, fmt.Errorf("invalid source_kind")
+		return normalized, validationErrorf("invalid source_kind")
 	}
 	input.SourceRef = strings.TrimSpace(input.SourceRef)
 	if utf8.RuneCountInString(input.SourceRef) > maxReportSourceRunes {
-		return normalized, fmt.Errorf("source_ref must be at most %d characters", maxReportSourceRunes)
+		return normalized, validationErrorf("source_ref must be at most %d characters", maxReportSourceRunes)
 	}
 	input.Tags, err = normalizeReportTags(input.Tags)
 	if err != nil {
@@ -454,54 +454,54 @@ func normalizeWorklineReportCreate(input worklineReportCreateRequest) (normalize
 	metadataObject := map[string]any{}
 	if len(input.Metadata) > 0 && string(input.Metadata) != "null" {
 		if len(input.Metadata) > maxReportMetadataSize {
-			return normalized, fmt.Errorf("metadata is too large")
+			return normalized, validationErrorf("metadata is too large")
 		}
 		if err := json.Unmarshal(input.Metadata, &metadataObject); err != nil {
-			return normalized, fmt.Errorf("metadata must be a JSON object")
+			return normalized, validationErrorf("metadata must be a JSON object")
 		}
 		metadataJSON, err = json.Marshal(metadataObject)
 		if err != nil {
-			return normalized, fmt.Errorf("metadata could not be normalized")
+			return normalized, validationErrorf("metadata could not be normalized")
 		}
 	}
 	snapshotJSON := []byte(`{}`)
 	snapshotObject := map[string]any{}
 	if len(input.Snapshot) > 0 && string(input.Snapshot) != "null" {
 		if len(input.Snapshot) > maxReportMetadataSize {
-			return normalized, fmt.Errorf("snapshot is too large")
+			return normalized, validationErrorf("snapshot is too large")
 		}
 		if err := json.Unmarshal(input.Snapshot, &snapshotObject); err != nil {
-			return normalized, fmt.Errorf("snapshot must be a JSON object")
+			return normalized, validationErrorf("snapshot must be a JSON object")
 		}
 		snapshotJSON, err = json.Marshal(snapshotObject)
 		if err != nil {
-			return normalized, fmt.Errorf("snapshot could not be normalized")
+			return normalized, validationErrorf("snapshot could not be normalized")
 		}
 	}
 	input.GitHeadCommit = strings.ToLower(strings.TrimSpace(input.GitHeadCommit))
 	if !gitCommitPattern.MatchString(input.GitHeadCommit) {
-		return normalized, fmt.Errorf("invalid git_head_commit")
+		return normalized, validationErrorf("invalid git_head_commit")
 	}
 	input.GitWorktreeState = strings.ToLower(strings.TrimSpace(input.GitWorktreeState))
 	if input.GitWorktreeState != "clean" && input.GitWorktreeState != "dirty" {
-		return normalized, fmt.Errorf("git_worktree_state must be clean or dirty")
+		return normalized, validationErrorf("git_worktree_state must be clean or dirty")
 	}
 	input.GitWorklineChangedPaths, err = normalizeGitChangedPaths(input.GitWorklineChangedPaths)
 	if err != nil {
 		return normalized, err
 	}
 	if input.GitHasOtherChanges == nil {
-		return normalized, fmt.Errorf("git_has_other_changes is required")
+		return normalized, validationErrorf("git_has_other_changes is required")
 	}
 	if input.GitWorktreeState == "clean" && (len(input.GitWorklineChangedPaths) != 0 || *input.GitHasOtherChanges) {
-		return normalized, fmt.Errorf("clean git snapshot cannot contain changed paths")
+		return normalized, validationErrorf("clean git snapshot cannot contain changed paths")
 	}
 	if input.GitWorktreeState == "dirty" && len(input.GitWorklineChangedPaths) == 0 && !*input.GitHasOtherChanges {
-		return normalized, fmt.Errorf("dirty git snapshot must contain changed paths")
+		return normalized, validationErrorf("dirty git snapshot must contain changed paths")
 	}
 	content := renderStructuredWorklineReport(input)
 	if utf8.RuneCountInString(content) > maxReportContentRunes {
-		return normalized, fmt.Errorf("rendered content must be at most %d characters", maxReportContentRunes)
+		return normalized, validationErrorf("rendered content must be at most %d characters", maxReportContentRunes)
 	}
 
 	secretValues := []string{
@@ -510,7 +510,7 @@ func normalizeWorklineReportCreate(input worklineReportCreateRequest) (normalize
 	secretValues = append(secretValues, input.Tags...)
 	secretValues = append(secretValues, input.GitWorklineChangedPaths...)
 	if category := detectReportSecret(secretValues...); category != "" {
-		return normalized, fmt.Errorf("report_rejected_secret_detected:%s", category)
+		return normalized, validationErrorf("report_rejected_secret_detected:%s", category)
 	}
 
 	normalized.worklineReportCreateRequest = input

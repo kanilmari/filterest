@@ -7,9 +7,9 @@
 package agent_tools
 
 import (
+	"database/sql"
 	"encoding/json"
 	"fmt"
-	"log"
 	"net/http"
 	"strconv"
 	"strings"
@@ -162,7 +162,7 @@ func buildTaskUpdateQuery(patch agentTaskPatch) (string, []interface{}, error) {
 			return nil
 		}
 		if strings.TrimSpace(*value) == "" {
-			return fmt.Errorf("%s cannot be empty", fieldName)
+			return validationErrorf("%s cannot be empty", fieldName)
 		}
 		return nil
 	}
@@ -170,14 +170,14 @@ func buildTaskUpdateQuery(patch agentTaskPatch) (string, []interface{}, error) {
 	if patch.Status != nil {
 		normalizedStatus := validateTaskStatus(*patch.Status)
 		if normalizedStatus == "" {
-			return "", nil, fmt.Errorf("invalid status")
+			return "", nil, validationErrorf("invalid status")
 		}
 		appendField("status", normalizedStatus)
 	}
 	if patch.IssueType != nil {
 		normalized := normalizeTaskIssueType(*patch.IssueType)
 		if normalized == "" {
-			return "", nil, fmt.Errorf("invalid issue_type")
+			return "", nil, validationErrorf("invalid issue_type")
 		}
 		appendField("issue_type", normalized)
 	}
@@ -219,7 +219,7 @@ func buildTaskUpdateQuery(patch agentTaskPatch) (string, []interface{}, error) {
 			// Group-only updates still change task state and should advance the updated timestamp.
 			appendField("updated", time.Now())
 		} else {
-			return "", nil, fmt.Errorf("no fields to update")
+			return "", nil, validationErrorf("no fields to update")
 		}
 	}
 
@@ -236,7 +236,7 @@ func buildTaskListQuery(status, queueSlug, queueIDStr, groupSlugs string) (strin
 	if status != "" {
 		normalizedStatus := validateTaskStatus(status)
 		if normalizedStatus == "" {
-			return "", nil, fmt.Errorf("invalid status")
+			return "", nil, validationErrorf("invalid status")
 		}
 		args = append(args, normalizedStatus)
 		conditions = append(conditions, fmt.Sprintf("t.status = $%d", len(args)))
@@ -250,7 +250,7 @@ func buildTaskListQuery(status, queueSlug, queueIDStr, groupSlugs string) (strin
 	if strings.TrimSpace(queueIDStr) != "" {
 		queueID, err := strconv.Atoi(strings.TrimSpace(queueIDStr))
 		if err != nil {
-			return "", nil, fmt.Errorf("invalid queue_id")
+			return "", nil, validationErrorf("invalid queue_id")
 		}
 		args = append(args, queueID)
 		conditions = append(conditions, fmt.Sprintf("t.queue_id = $%d", len(args)))
@@ -287,8 +287,12 @@ func ListTasksHandler(w http.ResponseWriter, r *http.Request) {
 	// Single task by ID
 	if idStr := r.URL.Query().Get("id"); idStr != "" {
 		t, err := fetchTaskByID(idStr)
-		if err != nil {
+		if err == sql.ErrNoRows {
 			http.Error(w, "Task not found", http.StatusNotFound)
+			return
+		}
+		if err != nil {
+			respondAgentToolDatabaseError(w, "fetch task", err)
 			return
 		}
 		w.Header().Set("Content-Type", "application/json")
@@ -306,13 +310,13 @@ func ListTasksHandler(w http.ResponseWriter, r *http.Request) {
 
 	query, args, err := buildTaskListQuery(status, queueSlug, queueIDStr, groupSlugs)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		respondAgentToolRequestError(w, http.StatusBadRequest, "ListTasksHandler", err)
 		return
 	}
 
 	rows, err := backend.Db.Query(query, args...)
 	if err != nil {
-		http.Error(w, "Database error: "+err.Error(), http.StatusInternalServerError)
+		respondAgentToolDatabaseError(w, "ListTasksHandler", err)
 		return
 	}
 	defer rows.Close()
@@ -322,16 +326,21 @@ func ListTasksHandler(w http.ResponseWriter, r *http.Request) {
 	for rows.Next() {
 		t, err := scanTask(rows)
 		if err != nil {
-			log.Printf("Error scanning task: %v", err)
-			continue
+			respondAgentToolDatabaseError(w, "scan task", err)
+			return
 		}
 		tasks = append(tasks, t)
 		taskIDs = append(taskIDs, t.ID)
 	}
+	if err := rows.Err(); err != nil {
+		respondAgentToolDatabaseError(w, "iterate tasks", err)
+		return
+	}
 
 	groupMap, err := loadTaskGroupsBulk(taskIDs)
 	if err != nil {
-		log.Printf("Error loading task groups: %v", err)
+		respondAgentToolDatabaseError(w, "load task groups", err)
+		return
 	}
 	for i := range tasks {
 		if groups, ok := groupMap[tasks[i].ID]; ok {
@@ -381,14 +390,14 @@ func CreateTaskHandler(w http.ResponseWriter, r *http.Request) {
 
 	queueID, err := resolveTaskQueueSelectionForCreate(t.QueueID, t.QueueSlug)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		respondAgentToolRequestError(w, http.StatusBadRequest, "CreateTaskHandler", err)
 		return
 	}
 	t.QueueID = queueID
 
 	tx, err := backend.Db.Begin()
 	if err != nil {
-		http.Error(w, "Database error: "+err.Error(), http.StatusInternalServerError)
+		respondAgentToolDatabaseError(w, "CreateTaskHandler", err)
 		return
 	}
 	defer tx.Rollback()
@@ -398,7 +407,7 @@ func CreateTaskHandler(w http.ResponseWriter, r *http.Request) {
 	if len(input.GroupSlugs) > 0 {
 		groupIDs, err = resolveGroupSlugsToIDsWithQuerier(tx, input.GroupSlugs)
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
+			respondAgentToolRequestError(w, http.StatusBadRequest, "CreateTaskHandler", err)
 			return
 		}
 	}
@@ -413,20 +422,20 @@ func CreateTaskHandler(w http.ResponseWriter, r *http.Request) {
 		t.Title, t.IssueType, t.Status, t.Content, t.Priority, pq.Array(t.Tags), t.ParentID, t.AssignedTo, t.QueueID, currentAgentToolUserID(r),
 	).Scan(&t.ID, &t.CreatedAt, &t.UpdatedAt)
 	if err != nil {
-		http.Error(w, "Database error: "+err.Error(), http.StatusInternalServerError)
+		respondAgentToolDatabaseError(w, "CreateTaskHandler", err)
 		return
 	}
 
 	// Insert group memberships
 	if len(groupIDs) > 0 {
 		if err := replaceTaskGroupsWithExecutor(tx, t.ID, groupIDs); err != nil {
-			http.Error(w, "Database error: "+err.Error(), http.StatusInternalServerError)
+			respondAgentToolDatabaseError(w, "CreateTaskHandler", err)
 			return
 		}
 	}
 
 	if err := tx.Commit(); err != nil {
-		http.Error(w, "Database error: "+err.Error(), http.StatusInternalServerError)
+		respondAgentToolDatabaseError(w, "CreateTaskHandler", err)
 		return
 	}
 	event_bus.Bus.Publish(agentTaskTableName, event_bus.Event{
@@ -437,7 +446,7 @@ func CreateTaskHandler(w http.ResponseWriter, r *http.Request) {
 
 	t, err = fetchTaskByID(t.ID)
 	if err != nil {
-		http.Error(w, "Task created but could not be reloaded", http.StatusInternalServerError)
+		respondAgentToolDatabaseError(w, "CreateTaskHandler reload", err)
 		return
 	}
 
@@ -462,7 +471,7 @@ func UpdateTaskHandler(w http.ResponseWriter, r *http.Request) {
 
 	queueID, queueProvided, err := resolveTaskQueueSelectionForPatch(patch.QueueID, patch.QueueSlug)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		respondAgentToolRequestError(w, http.StatusBadRequest, "UpdateTaskHandler", err)
 		return
 	}
 	if queueProvided || patch.QueueSlug != nil {
@@ -472,7 +481,7 @@ func UpdateTaskHandler(w http.ResponseWriter, r *http.Request) {
 
 	tx, err := backend.Db.Begin()
 	if err != nil {
-		http.Error(w, "Database error: "+err.Error(), http.StatusInternalServerError)
+		respondAgentToolDatabaseError(w, "UpdateTaskHandler", err)
 		return
 	}
 	defer tx.Rollback()
@@ -483,34 +492,34 @@ func UpdateTaskHandler(w http.ResponseWriter, r *http.Request) {
 	if groupsProvided {
 		groupIDs, err = resolveGroupSlugsToIDsWithQuerier(tx, *patch.GroupSlugs)
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
+			respondAgentToolRequestError(w, http.StatusBadRequest, "UpdateTaskHandler", err)
 			return
 		}
 	}
 
 	query, args, err := buildTaskUpdateQuery(patch)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		respondAgentToolRequestError(w, http.StatusBadRequest, "UpdateTaskHandler", err)
 		return
 	}
 
 	var updatedAt time.Time
 	err = tx.QueryRow(query, args...).Scan(&updatedAt)
 	if err != nil {
-		http.Error(w, "Database error: "+err.Error(), http.StatusInternalServerError)
+		respondAgentToolDatabaseError(w, "UpdateTaskHandler", err)
 		return
 	}
 
 	// Replace group memberships if provided
 	if groupsProvided {
 		if err := replaceTaskGroupsWithExecutor(tx, patch.ID, groupIDs); err != nil {
-			http.Error(w, "Database error: "+err.Error(), http.StatusInternalServerError)
+			respondAgentToolDatabaseError(w, "UpdateTaskHandler", err)
 			return
 		}
 	}
 
 	if err := tx.Commit(); err != nil {
-		http.Error(w, "Database error: "+err.Error(), http.StatusInternalServerError)
+		respondAgentToolDatabaseError(w, "UpdateTaskHandler", err)
 		return
 	}
 	event_bus.Bus.Publish(agentTaskTableName, event_bus.Event{
@@ -522,7 +531,7 @@ func UpdateTaskHandler(w http.ResponseWriter, r *http.Request) {
 
 	task, err := fetchTaskByID(patch.ID)
 	if err != nil {
-		http.Error(w, "Task updated but could not be reloaded", http.StatusInternalServerError)
+		respondAgentToolDatabaseError(w, "UpdateTaskHandler reload", err)
 		return
 	}
 
@@ -542,7 +551,7 @@ func DeleteTaskHandler(w http.ResponseWriter, r *http.Request) {
 	query := "DELETE FROM dev_agent_tasks WHERE id = $1"
 	result, err := backend.Db.Exec(query, idStr)
 	if err != nil {
-		http.Error(w, "Database error: "+err.Error(), http.StatusInternalServerError)
+		respondAgentToolDatabaseError(w, "DeleteTaskHandler", err)
 		return
 	}
 

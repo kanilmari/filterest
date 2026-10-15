@@ -189,7 +189,7 @@ func listHandoverReportsHandler(w http.ResponseWriter, r *http.Request) {
 
 	limit, err := parseAgentToolLimit(r.URL.Query().Get("limit"))
 	if err != nil {
-		httpresponse.RespondWithError(w, http.StatusBadRequest, err.Error())
+		respondAgentToolRequestError(w, http.StatusBadRequest, "listHandoverReportsHandler", err)
 		return
 	}
 	query := "SELECT " + handoverReportColumns + handoverReportFromClause
@@ -246,7 +246,7 @@ func createHandoverReportHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	normalized, err := normalizeHandoverReportCreate(input)
 	if err != nil {
-		httpresponse.RespondWithError(w, http.StatusBadRequest, err.Error())
+		respondAgentToolRequestError(w, http.StatusBadRequest, "createHandoverReportHandler", err)
 		return
 	}
 
@@ -314,7 +314,7 @@ func createHandoverReportHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if err := validateHandoverWorklineReport(report, currentWorklineStatus); err != nil {
-			httpresponse.RespondWithError(w, http.StatusConflict, err.Error())
+			respondAgentToolRequestError(w, http.StatusConflict, "createHandoverReportHandler", err)
 			return
 		}
 		report.ID = item.WorklineReportID

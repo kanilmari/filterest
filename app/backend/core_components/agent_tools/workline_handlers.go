@@ -109,7 +109,7 @@ func parseAgentToolLimit(raw string) (int, error) {
 	}
 	limit, err := strconv.Atoi(strings.TrimSpace(raw))
 	if err != nil || limit < 1 || limit > 100 {
-		return 0, fmt.Errorf("limit must be between 1 and 100")
+		return 0, validationErrorf("limit must be between 1 and 100")
 	}
 	return limit, nil
 }
@@ -136,7 +136,7 @@ func listWorklinesHandler(w http.ResponseWriter, r *http.Request) {
 
 	limit, err := parseAgentToolLimit(r.URL.Query().Get("limit"))
 	if err != nil {
-		httpresponse.RespondWithError(w, http.StatusBadRequest, err.Error())
+		respondAgentToolRequestError(w, http.StatusBadRequest, "listWorklinesHandler", err)
 		return
 	}
 	query := "SELECT " + worklineColumns + worklineFromClause
@@ -194,7 +194,7 @@ func createWorklineHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	title, err := normalizeBoundedText(input.Title, "title", maxWorklineTitleRunes)
 	if err != nil {
-		httpresponse.RespondWithError(w, http.StatusBadRequest, err.Error())
+		respondAgentToolRequestError(w, http.StatusBadRequest, "createWorklineHandler", err)
 		return
 	}
 	status := normalizeWorklineStatus(input.Status)
@@ -204,7 +204,7 @@ func createWorklineHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	tags, err := normalizeReportTags(input.Tags)
 	if err != nil {
-		httpresponse.RespondWithError(w, http.StatusBadRequest, err.Error())
+		respondAgentToolRequestError(w, http.StatusBadRequest, "createWorklineHandler", err)
 		return
 	}
 	secretValues := append([]string{title}, tags...)
@@ -251,14 +251,14 @@ func buildWorklineUpdateQuery(patch worklinePatchRequest) (string, []interface{}
 			return "", nil, err
 		}
 		if category := detectReportSecret(title); category != "" {
-			return "", nil, fmt.Errorf("workline_rejected_secret_detected:%s", category)
+			return "", nil, validationErrorf("workline_rejected_secret_detected:%s", category)
 		}
 		appendValue("title", title)
 	}
 	if patch.Status != nil {
 		status := normalizeWorklineStatus(*patch.Status)
 		if status == "" {
-			return "", nil, fmt.Errorf("invalid status")
+			return "", nil, validationErrorf("invalid status")
 		}
 		appendValue("status", status)
 	}
@@ -268,12 +268,12 @@ func buildWorklineUpdateQuery(patch worklinePatchRequest) (string, []interface{}
 			return "", nil, err
 		}
 		if category := detectReportSecret(tags...); category != "" {
-			return "", nil, fmt.Errorf("workline_rejected_secret_detected:%s", category)
+			return "", nil, validationErrorf("workline_rejected_secret_detected:%s", category)
 		}
 		appendValue("tags", pq.Array(tags))
 	}
 	if len(setParts) == 0 {
-		return "", nil, fmt.Errorf("no fields to update")
+		return "", nil, validationErrorf("no fields to update")
 	}
 	args = append(args, patch.ID)
 	query := fmt.Sprintf(
@@ -295,7 +295,7 @@ func updateWorklineHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	query, args, err := buildWorklineUpdateQuery(patch)
 	if err != nil {
-		httpresponse.RespondWithError(w, http.StatusBadRequest, err.Error())
+		respondAgentToolRequestError(w, http.StatusBadRequest, "updateWorklineHandler", err)
 		return
 	}
 	tx, err := backend.Db.Begin()
@@ -533,4 +533,26 @@ func deleteWorklineTaskLinkHandler(w http.ResponseWriter, r *http.Request) {
 func respondAgentToolDatabaseError(w http.ResponseWriter, operation string, err error) {
 	log.Printf("[agent-tools] %s failed: %v", operation, err)
 	httpresponse.RespondWithError(w, http.StatusInternalServerError, "database_error")
+}
+
+// validationError carries only a deliberate, client-safe input correction.
+// Database and wrapped errors must never acquire this type at the response boundary.
+type validationError struct{ message string }
+
+func (err validationError) Error() string { return err.message }
+
+func validationErrorf(format string, args ...any) validationError {
+	return validationError{message: fmt.Sprintf(format, args...)}
+}
+
+// respondAgentToolRequestError exposes only direct, typed validation messages.
+// Do not unwrap: wrapped diagnostics, including wrapped validation errors, stay
+// in server logs so an outer error cannot accidentally disclose internal context.
+func respondAgentToolRequestError(w http.ResponseWriter, status int, operation string, err error) {
+	if validation, ok := err.(validationError); ok {
+		httpresponse.RespondWithError(w, status, validation.message)
+		return
+	}
+	log.Printf("[agent-tools] %s rejected: %v", operation, err)
+	httpresponse.RespondWithError(w, status, "invalid_request")
 }

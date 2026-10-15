@@ -157,7 +157,7 @@ func listWorklineReportsHandler(w http.ResponseWriter, r *http.Request) {
 
 	limit, err := parseAgentToolLimit(r.URL.Query().Get("limit"))
 	if err != nil {
-		httpresponse.RespondWithError(w, http.StatusBadRequest, err.Error())
+		respondAgentToolRequestError(w, http.StatusBadRequest, "listWorklineReportsHandler", err)
 		return
 	}
 	query := "SELECT " + worklineReportSummaryColumns + worklineReportFromClause
@@ -244,7 +244,7 @@ func createWorklineReportHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	normalized, err := normalizeWorklineReportCreate(input)
 	if err != nil {
-		httpresponse.RespondWithError(w, http.StatusBadRequest, err.Error())
+		respondAgentToolRequestError(w, http.StatusBadRequest, "createWorklineReportHandler", err)
 		return
 	}
 

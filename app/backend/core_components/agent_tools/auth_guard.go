@@ -1,7 +1,7 @@
 // auth_guard.go
 // Enforces authenticated, non-guest access for private agent-tool endpoints.
 // Bridges Gorilla session identity and the agent-tools HTTP handlers.
-// Exists because LoginOnlyProfile can allow guest browsing when login_to_browse=false.
+// Exists as a non-guest identity check inside the administrator route boundary.
 package agent_tools
 
 import (

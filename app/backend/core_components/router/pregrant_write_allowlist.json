@@ -1,0 +1,300 @@
+[
+  {
+    "path_pattern": "/api/app/ai-chat/conversation",
+    "handler_name": "dtt_1_row_read.FilterbarAIConversationHandler",
+    "profile": "login_only",
+    "methods": [
+      "PUT"
+    ],
+    "reason": "Stores only the signed-in user’s conversation; the handler binds conversation ownership to the session."
+  },
+  {
+    "path_pattern": "/api/check-fingerprint",
+    "handler_name": "auth.CheckFingerprintHandler",
+    "profile": "public",
+    "methods": [
+      "POST"
+    ],
+    "reason": "Checks a browser binding during sign-in; it must work before an authenticated session exists."
+  },
+  {
+    "path_pattern": "/api/check-table-rights",
+    "handler_name": "auth.CheckTableRightsHandler",
+    "profile": "login_only",
+    "methods": [
+      "POST"
+    ],
+    "reason": "Read-only POST checks the current session’s dataset permissions; it grants no rights."
+  },
+  {
+    "path_pattern": "/api/check-table-rights-multi",
+    "handler_name": "auth.CheckTableRightsMultiHandler",
+    "profile": "login_only",
+    "methods": [
+      "POST"
+    ],
+    "reason": "Read-only POST batches permission checks for the current session; it grants no rights."
+  },
+  {
+    "path_pattern": "/api/dataset-sort-default/personal",
+    "handler_name": "system_table_tools.SavePersonalDatasetSortDefaultHandler",
+    "profile": "login_only",
+    "methods": [
+      "POST"
+    ],
+    "reason": "Saves a validated sorting preference only for the current non-guest user; it cannot change shared sorting defaults."
+  },
+  {
+    "path_pattern": "/api/image-source-picker/file",
+    "handler_name": "image_source_picker.FileHandler",
+    "profile": "login_only",
+    "methods": [
+      "POST"
+    ],
+    "reason": "Fetches a bounded, SSRF-checked provider image without attaching or persisting media; can spend provider quota (accepts guests until WO-SEC4)."
+  },
+  {
+    "path_pattern": "/api/image-source-picker/resolve",
+    "handler_name": "image_source_picker.ResolveHandler",
+    "profile": "login_only",
+    "methods": [
+      "POST"
+    ],
+    "reason": "Resolves an allowlisted image provider’s candidates without writing application data; spends provider quota (accepts guests until WO-SEC4)."
+  },
+  {
+    "path_pattern": "/api/log-client-error",
+    "handler_name": "devtools.LogClientError",
+    "profile": "public",
+    "methods": [
+      "POST"
+    ],
+    "reason": "Development-only diagnostics accept only local callers and bound the logged payload."
+  },
+  {
+    "path_pattern": "/api/login",
+    "handler_name": "auth.LoginAPIHandler",
+    "profile": "public",
+    "methods": [
+      "POST"
+    ],
+    "reason": "Authenticates credentials and creates a session; it must be reachable before sign-in."
+  },
+  {
+    "path_pattern": "/api/logout",
+    "handler_name": "auth.LogoutHandler",
+    "profile": "sign_out",
+    "methods": [
+      "POST"
+    ],
+    "reason": "Clears and revokes the caller’s own sign-in, with CSRF protection even after authentication expires."
+  },
+  {
+    "path_pattern": "/api/media-library/attach",
+    "handler_name": "media_library.AttachHandler",
+    "profile": "login_only",
+    "methods": [
+      "POST"
+    ],
+    "reason": "Attaches media only after the handler checks row edit access and rejects guests."
+  },
+  {
+    "path_pattern": "/api/media-library/detach",
+    "handler_name": "media_library.DetachHandler",
+    "profile": "login_only",
+    "methods": [
+      "POST"
+    ],
+    "reason": "Detaches media only after the handler checks row edit access and rejects guests."
+  },
+  {
+    "path_pattern": "/api/payments/create",
+    "handler_name": "payment_gateway.CreatePaymentHandler",
+    "profile": "public",
+    "methods": [
+      "POST"
+    ],
+    "reason": "Requires the payment application’s bearer authentication instead of a browser route grant."
+  },
+  {
+    "path_pattern": "/api/payments/webhook",
+    "handler_name": "payment_gateway.WebhookHandler",
+    "profile": "public",
+    "methods": [
+      "POST"
+    ],
+    "reason": "Requires provider HMAC verification before applying payment updates."
+  },
+  {
+    "path_pattern": "/api/register_ndYOyXV0INOK3F",
+    "handler_name": "auth.RegisterAPIHandler",
+    "profile": "public",
+    "methods": [
+      "POST"
+    ],
+    "reason": "Creates a new account only when registration is enabled; applicants have no session yet."
+  },
+  {
+    "path_pattern": "/api/request-email-change-otp",
+    "handler_name": "auth.RequestEmailChangeOTPHandler",
+    "profile": "login_only",
+    "methods": [
+      "POST"
+    ],
+    "reason": "Starts verified email replacement for the current non-guest account only."
+  },
+  {
+    "path_pattern": "/api/request-password-change-otp",
+    "handler_name": "auth.RequestPasswordChangeOTPHandler",
+    "profile": "login_only",
+    "methods": [
+      "POST"
+    ],
+    "reason": "Starts verified credential replacement for the current non-guest account only."
+  },
+  {
+    "path_pattern": "/api/request-password-reset-otp",
+    "handler_name": "auth.RequestPasswordResetOTPHandler",
+    "profile": "public",
+    "methods": [
+      "POST"
+    ],
+    "reason": "Starts the OTP recovery flow for a signed-out account holder."
+  },
+  {
+    "path_pattern": "/api/reset-password",
+    "handler_name": "auth.ResetPasswordWithOTPHandler",
+    "profile": "public",
+    "methods": [
+      "POST"
+    ],
+    "reason": "Changes a credential only through the verified, bounded OTP recovery flow."
+  },
+  {
+    "path_pattern": "/api/reset-session",
+    "handler_name": "e_sessions.ResetSessionHandler",
+    "profile": "public",
+    "methods": [
+      "POST"
+    ],
+    "reason": "Clears only the caller’s cookies after checking the request origin."
+  },
+  {
+    "path_pattern": "/api/sign-out-other-devices",
+    "handler_name": "auth.SignOutOtherDevicesHandler",
+    "profile": "login_only",
+    "methods": [
+      "POST"
+    ],
+    "reason": "Revokes other sign-ins for the current authenticated non-guest account only."
+  },
+  {
+    "path_pattern": "/api/site-assistant/delegation/exchange",
+    "handler_name": "auth.SiteAssistantDelegationExchangeHandler",
+    "profile": "public",
+    "methods": [
+      "POST"
+    ],
+    "reason": "Exchanges a single-use, expiring delegation code for a session carrying ordinary route rights."
+  },
+  {
+    "path_pattern": "/api/update-profile",
+    "handler_name": "auth.UserProfileUpdateHandler",
+    "profile": "login_only",
+    "methods": [
+      "POST"
+    ],
+    "reason": "Changes only the current non-guest account’s profile, using its verified-change flows."
+  },
+  {
+    "path_pattern": "/api/user-visual-preference",
+    "handler_name": "auth.UserVisualPreferenceHandler",
+    "profile": "login_only",
+    "methods": [
+      "PATCH",
+      "DELETE"
+    ],
+    "reason": "Changes only the current non-guest account’s personal appearance preference."
+  },
+  {
+    "path_pattern": "/api/view-field-sets/personal/assign",
+    "handler_name": "system_table_tools.AssignPersonalViewFieldSetHandler",
+    "profile": "login_only",
+    "methods": [
+      "POST"
+    ],
+    "reason": "Assigns a personal field set only for the current non-guest user and a readable dataset."
+  },
+  {
+    "path_pattern": "/api/view-field-sets/personal/delete",
+    "handler_name": "system_table_tools.DeletePersonalViewFieldSetHandler",
+    "profile": "login_only",
+    "methods": [
+      "POST"
+    ],
+    "reason": "Deletes only a field set owned by the current non-guest user."
+  },
+  {
+    "path_pattern": "/api/view-field-sets/personal/reset",
+    "handler_name": "system_table_tools.ResetPersonalViewFieldSetHandler",
+    "profile": "login_only",
+    "methods": [
+      "POST"
+    ],
+    "reason": "Resets only the current non-guest user’s field-set assignment on a readable dataset."
+  },
+  {
+    "path_pattern": "/api/view-field-sets/personal/save",
+    "handler_name": "system_table_tools.SavePersonalViewFieldSetHandler",
+    "profile": "login_only",
+    "methods": [
+      "POST"
+    ],
+    "reason": "Saves only the current non-guest user’s field set for an authorized dataset/view."
+  },
+  {
+    "path_pattern": "/first-run",
+    "handler_name": "auth.FirstRunAdminHandler",
+    "profile": "public",
+    "methods": [
+      "POST"
+    ],
+    "reason": "One-time administrator setup closes when a login-ready administrator exists; remote setup hardening is WO-SEC4."
+  },
+  {
+    "path_pattern": "/login",
+    "handler_name": "auth.LoginHandler",
+    "profile": "public",
+    "methods": [
+      "POST"
+    ],
+    "reason": "Processes pre-authentication sign-in and verification forms; no existing route grant is possible."
+  },
+  {
+    "path_pattern": "/system/automation-account",
+    "handler_name": "router.systemAutomationAccountHandler",
+    "profile": "public",
+    "methods": [
+      "POST"
+    ],
+    "reason": "Operator account provisioning requires the system peer boundary and a constant-time bearer check."
+  },
+  {
+    "path_pattern": "/system/drain",
+    "handler_name": "router.systemDrainHandler",
+    "profile": "public",
+    "methods": [
+      "POST"
+    ],
+    "reason": "Operator drain control requires the system peer boundary and a constant-time bearer check."
+  },
+  {
+    "path_pattern": "/system/update-notice",
+    "handler_name": "router.systemUpdateNoticeHandler",
+    "profile": "public",
+    "methods": [
+      "POST"
+    ],
+    "reason": "Operator update notices require the system peer boundary and a constant-time bearer check."
+  }
+]
