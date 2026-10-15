@@ -406,7 +406,7 @@
   ],
   "asset_provenance": {
     "path": "app/server_tools/licenses/asset_provenance.json",
-    "sha256": "b384da8c79aac1164755130982809fbb978c38879823327c8413c409837ca596"
+    "sha256": "5119d89135da0a0995f900a559ab65ba912546ac7551fdcf454c568f9f32867d"
   },
   "browser_bundle_metadata_source": "app/server_tools/licenses/browser_bundle_provenance.json matched against app/package-lock.json and app/frontend/dist/*.js",
   "browser_bundle_provenance": {
@@ -414,7 +414,7 @@
     "sha256": "868e187c8724c69e945f54f9e25f213127f91acc3cda67da3392814a284c740f"
   },
   "combined_binary_license": "GPL-3.0-or-later",
-  "database_version": "9.11.1",
+  "database_version": "9.11.2",
   "dependencies": [
     {
       "binary_targets": [
@@ -863,7 +863,7 @@
       "version": "6.4.3"
     }
   ],
-  "filterest_app_version": "9.4.1",
+  "filterest_app_version": "9.4.2",
   "first_party_components": [
     {
       "assets": [
@@ -1126,6 +1126,10 @@
         {
           "path": "app/frontend/reusable_components/vanilla_dropdown/chevron.svg",
           "sha256": "32d5f1b8148efdd827b586e59399ce876ce00815b6994da6bba75b80bec7d8e3"
+        },
+        {
+          "path": "app/testing/fixtures/custom_root/custom_root.svg",
+          "sha256": "b42d26a33ea22b298afa91cd5871b30669544ffc6e6a5e07e6cd0d40b7754809"
         }
       ],
       "author": "Filterest project contributors",
