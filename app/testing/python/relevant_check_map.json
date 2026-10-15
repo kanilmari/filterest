@@ -428,6 +428,8 @@
     {
       "area": "Media",
       "paths": [
+        "app/frontend/core_components/admin_tools/asset_linking",
+        "app/backend/core_components/dynamic_table_tools/dtt_asset_linking",
         "app/backend/core_components/media_library",
         "app/backend/core_components/media_utils",
         "app/backend/core_components/missing_media_check",

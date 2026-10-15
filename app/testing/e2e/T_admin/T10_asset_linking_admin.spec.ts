@@ -144,6 +144,13 @@ test.describe('T10 — Asset Linking Admin', () => {
   });
 
   test('asset_linking admin tab renders image + attachment capability rows and actions', async ({ page }) => {
+    // This lifecycle performs eleven committed schema/configuration writes plus
+    // login and cleanup. The default 30 s budget canceled a valid final update
+    // during permission verification, rolling it back and leaving images disabled.
+    test.setTimeout(120_000);
+    // Each toggle commits a configuration write; under a loaded machine the default 5 s state wait ran out
+    // (batch 167 job, 16.10.), so every post-toggle state check gets this budget.
+    const TOGGLE_COMMIT_MS = 20_000;
     const datasetName = buildTempDatasetName('e2e_asset_linking');
 
     await createTempDataset(page, {
@@ -178,28 +185,28 @@ test.describe('T10 — Asset Linking Admin', () => {
       await expect(imageStatus).toHaveAttribute('data-state', 'enabled');
 
       await clickVisibleTestId(page, `asset-linking-image-toggle-${datasetName}`);
-      await expect(imageStatus).toHaveAttribute('data-state', 'disabled');
+      await expect(imageStatus).toHaveAttribute('data-state', 'disabled', { timeout: TOGGLE_COMMIT_MS });
 
       await clickVisibleTestId(page, `asset-linking-image-toggle-${datasetName}`);
-      await expect(imageStatus).toHaveAttribute('data-state', 'enabled');
+      await expect(imageStatus).toHaveAttribute('data-state', 'enabled', { timeout: TOGGLE_COMMIT_MS });
 
       const attachmentStatus = page.locator(`[data-testid="asset-linking-attachment-status-${datasetName}"]`).first();
       await expect(attachmentStatus).toHaveAttribute('data-state', 'enabled');
 
       await clickVisibleTestId(page, `asset-linking-attachment-toggle-${datasetName}`);
-      await expect(attachmentStatus).toHaveAttribute('data-state', 'disabled');
+      await expect(attachmentStatus).toHaveAttribute('data-state', 'disabled', { timeout: TOGGLE_COMMIT_MS });
 
       await clickVisibleTestId(page, `asset-linking-attachment-toggle-${datasetName}`);
-      await expect(attachmentStatus).toHaveAttribute('data-state', 'enabled');
+      await expect(attachmentStatus).toHaveAttribute('data-state', 'enabled', { timeout: TOGGLE_COMMIT_MS });
 
       await clickVisibleTestId(page, `asset-linking-attachment-remove-${datasetName}`);
       await confirmModal(page);
       await expect(page.locator(`[data-testid="asset-linking-attachment-row-${datasetName}"]`)).toBeHidden({ timeout: 10000 });
       await expect(page.locator(`[data-testid="asset-linking-image-row-${datasetName}"]`)).toBeVisible();
       await clickVisibleTestId(page, `asset-linking-image-toggle-${datasetName}`);
-      await expect(imageStatus).toHaveAttribute('data-state', 'disabled');
+      await expect(imageStatus).toHaveAttribute('data-state', 'disabled', { timeout: TOGGLE_COMMIT_MS });
       await clickVisibleTestId(page, `asset-linking-image-toggle-${datasetName}`);
-      await expect(imageStatus).toHaveAttribute('data-state', 'enabled');
+      await expect(imageStatus).toHaveAttribute('data-state', 'enabled', { timeout: TOGGLE_COMMIT_MS });
 
       await clickVisibleTestId(page, `asset-linking-image-remove-${datasetName}`);
       await confirmModal(page);
