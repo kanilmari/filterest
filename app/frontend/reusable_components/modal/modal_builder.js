@@ -9,6 +9,14 @@ let modal_previous_focus_element = null;
 let modal_current_cleanup_callback = null;
 let modal_current_close_transition = null;
 let modal_pending_hide_timer = null;
+let modal_session_generation = 0;
+
+// Async content and queued focus belong to the dialog that started them.
+// Creation/replacement and every hide invalidate the same generation.
+function captureModalSession() {
+    const generation = modal_session_generation;
+    return () => generation === modal_session_generation;
+}
 
 function normalizeCloseTransition(closeTransition) {
     const className = closeTransition?.className;
@@ -105,7 +113,7 @@ function getFocusableModalElements(modal) {
     });
 }
 
-function focusModalSurface(modal) {
+function focusModalSurface(modal, isCurrent = () => true) {
     if (!modal) return;
     const focusableElements = getFocusableModalElements(modal);
     const preferredTextInput = focusableElements.find((element) => {
@@ -121,7 +129,7 @@ function focusModalSurface(modal) {
         || modal;
 
     setTimeout(() => {
-        focusElement(focusTarget);
+        if (isCurrent()) focusElement(focusTarget);
     }, 0);
 }
 
@@ -251,6 +259,8 @@ export function createModal({
     cleanupCallback = null,
     closeTransition = null,
 }) {
+    modal_session_generation += 1;
+    const isCurrent = captureModalSession();
     // The modal is a singleton. Tear down the previous feature before its DOM
     // and presentation state are reused by the next dialog.
     cancelPendingModalHide();
@@ -404,7 +414,9 @@ export function createModal({
         ? cleanupCallback
         : null;
 
-    return { modal_overlay, modal };
+    // Callers building content asynchronously must check before publishing it,
+    // including their error handling. Existing synchronous callers need no token.
+    return { modal_overlay, modal, isCurrent };
 }
 
 export function showModal() {
@@ -420,7 +432,7 @@ export function showModal() {
         modal_overlay.style.display = 'flex';
         modal_overlay.removeAttribute('aria-busy');
         modal_overlay.setAttribute('aria-hidden', 'false');
-        focusModalSurface(document.getElementById('custom_modal'));
+        focusModalSurface(document.getElementById('custom_modal'), captureModalSession());
     }
 }
 
@@ -444,6 +456,8 @@ function finishModalHide(modal_overlay) {
 }
 
 export function hideModal({ immediate = false } = {}) {
+    // Invalidate at the close request, before a visual exit transition finishes.
+    modal_session_generation += 1;
     const modal_overlay = document.getElementById('custom_modal_overlay');
     if (modal_overlay) {
         const reduceMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)')

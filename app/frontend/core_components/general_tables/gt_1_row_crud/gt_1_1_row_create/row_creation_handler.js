@@ -46,7 +46,7 @@ export async function open_add_row_modal(table_uid, table_name) {
     loadingStatus.dataset.langKey = "loading";
     loadingStatus.textContent = "Loading…";
     loadingStatus.setAttribute("role", "status");
-    createModal({
+    const { isCurrent } = createModal({
         titleDataLangKey: `add_row_${datasetName}`,
         titleDataLangKeyFallback: "add_row",
         contentElements: [loadingStatus],
@@ -81,6 +81,10 @@ export async function open_add_row_modal(table_uid, table_name) {
             columnsRequest,
             assetColumnsRequest,
         ]);
+        // The shared modal owns cancellation for X, Escape, backdrop, explicit
+        // hides and replacement by another dialog. Detached work may finish,
+        // but only its still-current session can publish content or an error.
+        if (!isCurrent()) return;
         const assetColumnsByTableUID = new Map(assetColumnEntries);
 
         if (!columns_info || columns_info.length === 0) {
@@ -124,6 +128,7 @@ export async function open_add_row_modal(table_uid, table_name) {
             modal_form_state,
             assetColumnsByTableUID
         );
+        if (!isCurrent()) return;
 
         // 4) Lomakkeen loppuun painikkeet ja submit
         appendFormActions(form, table_uid, columns, modal_form_state, clearState);
@@ -138,6 +143,7 @@ export async function open_add_row_modal(table_uid, table_name) {
         });
         showModal();
     } catch (error) {
+        if (!isCurrent()) return;
         hideModal();
         console.warn("virhe rivinlisäyslomakkeen lataamisessa:", error);
         showWarningToast(

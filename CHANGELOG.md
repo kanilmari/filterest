@@ -22,6 +22,7 @@ Dates are the local (Europe/Helsinki) date on which the version was published.
 
 ## [Unreleased]
 
+- **Add-row forms stay closed while loading (WO25)** — Closing the loading dialog with X, Escape, the backdrop or a programmatic close cancels that opening. A late form build cannot reopen or replace the dialog, move focus or show a stale error; opening it again starts a fresh session.
 - Table headers show the server-resolved Newest column with one descending mark and an accessible label using the existing translated Newest option.
 
 ## [9.4.3] - 2026-10-15

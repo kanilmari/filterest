@@ -449,6 +449,26 @@
       ]
     },
     {
+      "area": "Add-row modal session cancellation",
+      "paths": [
+        "app/frontend/core_components/general_tables/gt_1_row_crud/gt_1_1_row_create/row_creation_handler.js",
+        "app/frontend/core_components/general_tables/gt_1_row_crud/gt_1_1_row_create/row_creation_handler.test.js",
+        "app/frontend/reusable_components/modal/modal_builder.js",
+        "app/frontend/reusable_components/modal/modal_builder.test.js"
+      ],
+      "specs": [
+        "app/testing/e2e/J_modals/J2_modal_close.spec.ts"
+      ],
+      "projects": [
+        "mobile-card",
+        "mobile-bigcard",
+        "tablet-card",
+        "tablet-bigcard",
+        "desktop-card",
+        "desktop-bigcard"
+      ]
+    },
+    {
       "area": "Shared controls",
       "paths": [
         "app/frontend/reusable_components/animated_disclosure",

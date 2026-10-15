@@ -74,6 +74,19 @@ def test_repository_map_is_current_and_covers_every_area():
 
 
 @pytest.mark.parametrize("path", [
+    "app/frontend/core_components/general_tables/gt_1_row_crud/gt_1_1_row_create/row_creation_handler.js",
+    "app/frontend/reusable_components/modal/modal_builder.js",
+])
+def test_add_row_and_shared_modal_select_close_proof_in_every_project(path):
+    plan = make_plan(ROOT, [path])
+    projects = {project for check in plan["heavy"] if check["kind"] == "browser"
+                and "app/testing/e2e/J_modals/J2_modal_close.spec.ts" in check["targets"]
+                for project in check["projects"]}
+    assert projects == {"mobile-card", "mobile-bigcard", "tablet-card", "tablet-bigcard",
+                        "desktop-card", "desktop-bigcard"}
+
+
+@pytest.mark.parametrize("path", [
     "app/frontend/core_components/widget/leaf.js", "app/frontend/core_components/widget",
     "app/testing/e2e/W_widget.spec.ts", "app/backend/core_components/sessions/guard_test.go",
     "app/testing/python/test_bootstrap_ledger_postgres.py", "app/server_tools/scripts/check_file_length.sh",
