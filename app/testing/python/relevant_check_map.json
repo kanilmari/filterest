@@ -722,6 +722,24 @@
       "tests": [
         "app/testing/python/test_reviewed_provenance_hashes.py"
       ]
+    },
+    {
+      "paths": [
+        "app/server_tools/scripts/check_md_links.py",
+        "app/docs/instructions_and_documentation/lang_key_lifecycle.md"
+      ],
+      "tests": [
+        "app/testing/python/test_md_links.py"
+      ]
+    },
+    {
+      "paths": [
+        "app/server_tools/scripts/qa.sh",
+        "app/server_tools/check_gitignore/check_gitignore.sh"
+      ],
+      "tests": [
+        "app/testing/python/test_qa_workflow.py"
+      ]
     }
   ],
   "bootstrap_proofs": [

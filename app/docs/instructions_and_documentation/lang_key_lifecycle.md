@@ -22,7 +22,7 @@ This document captures the full lifecycle of Filterest's multilingual key system
 7. [Deletion — DROP Operations](#7-deletion--drop-operations)
 8. [Startup Scanning & Orphan Marking](#8-startup-scanning--orphan-marking)
 9. [Consistency Checks (Admin UI)](#9-consistency-checks-admin-ui)
-10. [Description Management](#10-description-management)
+10. [Context Management (`usage_explanation`)](#10-context-management-usage_explanation)
 11. [File Inventory](#11-file-inventory)
 12. [Design Principles](#12-design-principles)
 

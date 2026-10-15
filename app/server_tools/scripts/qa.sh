@@ -11,7 +11,8 @@ for argument in "$@"; do
         --fix) FIX_MODE=1 ;;
         --help|-h)
             echo "Usage: qa.sh [--fix]"
-            echo "Check source without repairs; --fix enables ESLint/import repairs and the gitignore report."
+            echo "Check source without repairs; --fix enables ESLint/import repairs."
+            echo "Markdown links are checked and the gitignore report is printed in both modes; reports write no source files."
             echo "E2E requires local test credentials and a healthy server; skipped E2E is reported as PARTIAL."
             exit 0
             ;;
@@ -20,11 +21,9 @@ for argument in "$@"; do
 done
 IMPORT_OPTIONS=()
 ESLINT_OPTIONS=()
-GITIGNORE_OPTIONS=()
 if [[ "$FIX_MODE" -eq 1 ]]; then
     IMPORT_OPTIONS+=(--fix-imports)
     ESLINT_OPTIONS+=(--fix)
-    GITIGNORE_OPTIONS+=(--write-report)
 fi
 # Build and coverage outputs belong to a disposable directory outside source.
 QA_TEMP_DIR="$(mktemp -d /tmp/filterest-qa.XXXXXX)"
@@ -74,11 +73,15 @@ go run ./server_tools/scripts/generate_route_manifest.go --check
 echo "🧭 Checking generated stable API client..."
 python3 ./server_tools/scripts/generate_stable_api_client.py --check
 
-# 7. Check Gitignore
-echo "🙈 Checking .gitignore..."
-./server_tools/check_gitignore/check_gitignore.sh "${GITIGNORE_OPTIONS[@]}"
+# 7. Check Markdown links and anchors
+echo "📖 Checking Markdown links and anchors..."
+python3 ./server_tools/scripts/check_md_links.py
 
-# 8. Run an optional checkout-specific QA extension
+# 8. Check Gitignore
+echo "🙈 Checking .gitignore..."
+./server_tools/check_gitignore/check_gitignore.sh
+
+# 9. Run an optional checkout-specific QA extension
 echo "🧩 Checking checkout-specific QA extension..."
 if [[ -n "$ADDITIONAL_QA_SCRIPT" ]]; then
     case "$ADDITIONAL_QA_SCRIPT" in
@@ -97,11 +100,11 @@ else
     echo "  ℹ️  No checkout-specific QA extension configured."
 fi
 
-# 9. Check File Length (DEV_GUIDE §3: max 700 lines)
+# 10. Check File Length (DEV_GUIDE §3: max 700 lines)
 echo "📏 Checking file lengths..."
 ./server_tools/scripts/check_file_length.sh --strict
 
-# 10. Check bare console.log (DEV_GUIDE §6 — bare console.log is forbidden)
+# 11. Check bare console.log (DEV_GUIDE §6 — bare console.log is forbidden)
 echo "🔇 Checking bare console.log..."
 BARE_LOGS=$(grep -rn 'console\.log(' \
     frontend/core_components frontend/reusable_components \
@@ -118,11 +121,11 @@ else
     echo "  ✅ No bare console.log calls found."
 fi
 
-# 11. Check import boundaries (reusable_components must not import from core_components)
+# 12. Check import boundaries (reusable_components must not import from core_components)
 echo "🚧 Checking import boundaries..."
 ./server_tools/scripts/check_import_boundaries.sh
 
-# 12. Go Backend Tests (with coverage floor)
+# 13. Go Backend Tests (with coverage floor)
 echo "🧪 Running Go backend tests..."
 COVERAGE_FLOOR=7
 go test ./backend/... -count=1 -coverprofile="$QA_TEMP_DIR/coverage.out"
@@ -135,7 +138,7 @@ if [ "$(echo "$COVERAGE < $COVERAGE_FLOOR" | bc -l)" = "1" ]; then
 fi
 echo "  ✅ Coverage check passed."
 
-# 13. Additional Go Workspace Tests
+# 14. Additional Go Workspace Tests
 # Backend packages already ran above with coverage, so do not run them twice.
 echo "🧪 Running additional Go workspace tests..."
 GO_TEST_PACKAGES=()
@@ -151,14 +154,14 @@ else
     go test "${GO_TEST_PACKAGES[@]}" -count=1
 fi
 
-# 14. Vite build (catches broken imports that static checks miss)
+# 15. Vite build (catches broken imports that static checks miss)
 # This only proves the frontend still compiles; the result is discarded.
 # Whether the tracked bundle in app/frontend/dist matches its source is a
 # release question, checked by audit_browser_bundle.py in release verify.
 echo "🏗️  Building frontend..."
 npm run build -- --outDir "$QA_TEMP_DIR/frontend-dist"
 
-# 15. Run E2E Smoke Tests (if credentials exist and the server is healthy)
+# 16. Run E2E Smoke Tests (if credentials exist and the server is healthy)
 E2E_STATUS="SKIPPED"
 E2E_REASON=""
 if [ ! -f "$QA_CREDENTIAL_FILE" ]; then

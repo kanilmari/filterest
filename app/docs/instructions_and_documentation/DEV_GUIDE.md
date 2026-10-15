@@ -594,9 +594,9 @@ is safe to repeat. Count those URLs with
 ### Unified QA
 
 `./filterest qa` (or `npm run qa` in app/) checks source without automatic
-repairs. `./filterest qa --fix` explicitly enables ESLint, JS/CSS import and
-gitignore-report changes. Run fixes only in the intended change scope and
-review the resulting diff. `--help` lists supported arguments.
+repairs. `./filterest qa --fix` explicitly enables ESLint and JS/CSS import
+repairs; review the resulting diff. Both modes check tracked Markdown links
+and anchors and print the gitignore report without writing it. `--help` lists arguments.
 
 [qa.sh](../../server_tools/scripts/qa.sh) reports `QA PASS` for completed
 checks and `QA PARTIAL` when browser tests are skipped, including the reason.

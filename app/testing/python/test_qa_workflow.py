@@ -1,7 +1,7 @@
-"""Exercise QA orchestration without running application tests or changing a checkout.
-
-Real import/report tools run against disposable source trees; heavy tools record
-their arguments so repair, exit-status and skipped-E2E contracts stay observable.
+"""test_qa_workflow.py
+Exercise QA orchestration without running application services or changing source.
+Connect real import/report/link tools and simulated heavy tools to CLI contracts.
+Keep repair, exit-status, read-only reports and skipped-E2E outcomes observable.
 """
 
 from __future__ import annotations
@@ -22,6 +22,7 @@ QA = Path("server_tools/scripts/qa.sh")
 GITIGNORE = Path("server_tools/check_gitignore/check_gitignore.sh")
 CSS = Path("frontend/styles/check_css_imports.js")
 JS = Path("frontend/check_js_imports.js")
+MD_LINKS = Path("server_tools/scripts/check_md_links.py")
 BYTECODE = Path("server_tools/lib/python_bytecode_cache.sh")
 
 # Only the target resolver and expensive external tools are simulated. Import
@@ -37,6 +38,8 @@ if name == "npm":
     step += "-" + args[1]
 elif name == "go" and args:
     step += "-" + args[0]
+elif name == "python3" and args and args[0].endswith("/check_md_links.py"):
+    step = "python3-md-links"
 if os.environ.get("QA_TEST_FAIL") == step:
     sys.exit(17)
 if name == "node":
@@ -44,6 +47,8 @@ if name == "node":
         print("https://localhost:8100")
     else:
         sys.exit(subprocess.call([os.environ["QA_REAL_NODE"], *args]))
+elif name == "python3" and step == "python3-md-links":
+    sys.exit(subprocess.call([os.environ["QA_REAL_PYTHON"], *args]))
 elif name == "eslint":
     if "--fix" in args:
         pathlib.Path("lint-marker.js").write_text("// repaired\n")
@@ -113,9 +118,10 @@ class Workflow:
         self.environment.update({
             "PATH": str(self.bin) + os.pathsep + environment["PATH"],
             "QA_TEST_LOG": str(self.log),
+            "QA_REAL_PYTHON": sys.executable,
             "FILTEREST_TEST_CREDENTIAL_FILE": str(tmp_path / "test-credentials"),
         })
-        for relative in (QA, CSS, JS, GITIGNORE, BYTECODE):
+        for relative in (QA, CSS, JS, GITIGNORE, BYTECODE, MD_LINKS):
             target = self.app / relative
             target.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(APP / relative, target)
@@ -128,7 +134,6 @@ class Workflow:
             "VERSION_APP": "9.0.0\n",
             "go.mod": "module example.invalid/filterest\n",
             "coverage.out": "preexisting coverage must survive\n",
-            "server_tools/check_gitignore/missing_gitignore_paths.md": "kept report\n",
             "frontend/dist/existing.js": "kept asset\n",
         }.items():
             path = self.app / relative
@@ -137,6 +142,9 @@ class Workflow:
         for relative in ("frontend/core_components", "frontend/reusable_components"):
             (self.app / relative).mkdir()
         (self.app.parent / ".gitignore").write_text("missing-runtime/\n*.log\n")
+        (self.app.parent / "README.md").write_text("# Fixture docs\n")
+        subprocess.run(["git", "init", "-q", str(self.app.parent)], check=True)
+        subprocess.run(["git", "-C", str(self.app.parent), "add", "README.md"], check=True)
         for name in ("node", "npm", "eslint", "python3", "go", "curl", "bc", "playwright"):
             tool = self.bin / name
             tool.write_text(f"#!{sys.executable}\n" + FAKE_TOOL)
@@ -187,16 +195,19 @@ def test_default_checks_preserve_source_and_remove_temporary_artifacts(workflow:
     assert tests[1] == ["test", "example.invalid/filterest/cmd/filterest", "-count=1"]
 
 
-def test_explicit_fix_repairs_imports_lint_and_report(workflow: Workflow):
+def test_explicit_fix_repairs_imports_and_lint_prints_report(workflow: Workflow):
     (workflow.app / "frontend/main.js").write_text("import './old/dependency.js';\n")
     (workflow.app / "frontend/styles/imports.css").write_text('@import "./old/present.css";\n')
+    before = source_hashes(workflow.app)
     result = workflow.run("--fix")
     assert result.returncode == 0, result.stdout + result.stderr
     assert "./old/" not in (workflow.app / "frontend/main.js").read_text()
     assert "./old/" not in (workflow.app / "frontend/styles/imports.css").read_text()
     assert (workflow.app / "lint-marker.js").read_text() == "// repaired\n"
-    report = (workflow.app / GITIGNORE.parent / "missing_gitignore_paths.md").read_text()
-    assert "missing-runtime/" in report and "*.log" not in report
+    assert "missing-runtime/" in result.stdout and "*.log" not in result.stdout
+    changed = {name for name, digest in source_hashes(workflow.app).items()
+               if before.get(name) != digest}
+    assert changed == {"frontend/main.js", "frontend/styles/imports.css", "lint-marker.js"}
     assert "--fix" in workflow.calls("eslint")[0]["args"]
     assert all("--fix-imports" in call["args"] for call in workflow.calls("node")[1:])
 
@@ -346,20 +357,18 @@ def test_js_transitive_read_failure_is_error(tmp_path: Path, node_environment: d
     assert result.returncode == 1 and "error:" in result.stderr
 
 
-@pytest.mark.parametrize("write", [False, True])
-def test_gitignore_report_only_written_on_request(workflow: Workflow, write: bool):
-    report = workflow.app / GITIGNORE.parent / "missing_gitignore_paths.md"
-    options = ["--write-report"] if write else []
+def test_gitignore_report_is_printed_without_source_changes(workflow: Workflow):
+    before = source_hashes(workflow.app)
     result = subprocess.run(
-        ["bash", str(workflow.app / GITIGNORE), *options],
+        ["bash", str(workflow.app / GITIGNORE)],
         text=True, capture_output=True, timeout=10,
     )
     assert result.returncode == 0, result.stderr
     assert "missing-runtime/" in result.stderr
     assert "*.log" not in result.stderr
-    assert ("Missing .gitignore paths" in report.read_text()) if write else (
-        report.read_text() == "kept report\n"
-    )
+    assert "Missing .gitignore paths" in result.stdout
+    assert "missing-runtime/" in result.stdout and "*.log" not in result.stdout
+    assert source_hashes(workflow.app) == before
 
 
 @pytest.mark.parametrize("relative,operation", [(CSS, "writeFileSync"), (JS, "readFileSync")])
@@ -389,12 +398,33 @@ def test_importer_reports_io_failure_as_error(
     assert "fixture I/O failure" in result.stdout + result.stderr
 
 
-def test_gitignore_default_does_not_create_absent_report(workflow: Workflow):
-    report = workflow.app / GITIGNORE.parent / "missing_gitignore_paths.md"
-    report.unlink()
-    result = subprocess.run(
-        ["bash", str(workflow.app / GITIGNORE)], text=True, capture_output=True, timeout=10,
-    )
-    assert result.returncode == 0, result.stderr
-    assert not report.exists()
-    assert "missing-runtime/" in result.stdout
+@pytest.mark.parametrize("options", [(), ("--fix",)])
+def test_md_link_step_runs_in_both_modes(workflow: Workflow, options):
+    result = workflow.run(*options)
+    assert result.returncode == 0, result.stdout + result.stderr
+    calls = [call for call in workflow.calls("python3")
+             if call["args"][0].endswith("/check_md_links.py")]
+    assert len(calls) == 1
+    assert "tracked Markdown files; 0 broken" in result.stdout
+
+
+@pytest.mark.parametrize("options", [(), ("--fix",)])
+def test_md_link_tool_failure_stops_qa(workflow: Workflow, options):
+    result = workflow.run(*options, QA_TEST_FAIL="python3-md-links")
+    assert result.returncode == 17, result.stdout + result.stderr
+    assert "QA PASS:" not in result.stdout and "QA PARTIAL:" not in result.stdout
+    assert not any(call["args"][0] == "test" for call in workflow.calls("go"))
+
+
+@pytest.mark.parametrize("options", [(), ("--fix",)])
+@pytest.mark.parametrize("destination,reason", [
+    ("absent.md", "missing target"), ("#absent", "missing anchor"),
+])
+def test_real_broken_md_link_stops_both_qa_modes(workflow: Workflow, options, destination, reason):
+    (workflow.app.parent / "README.md").write_text(f"[broken]({destination})\n")
+    result = workflow.run(*options)
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert f"README.md:1: {destination} ({reason})" in result.stdout
+    assert "QA PASS:" not in result.stdout and "QA PARTIAL:" not in result.stdout
+    assert not any(call["args"][0] == "test" for call in workflow.calls("go"))
+    assert not any(call["args"][1] == "build" for call in workflow.calls("npm"))
