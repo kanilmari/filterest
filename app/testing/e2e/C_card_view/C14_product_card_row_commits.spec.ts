@@ -172,7 +172,8 @@ test('product-card refresh/search/clear/pages keep exact row IDs and pictures in
       const navbar = page.locator('#navbar');
       const beforeLanguage = await root.getByTestId('product-card').first().elementHandle();
       await navbar.getByTestId('language-menu-button').click();
-      await navbar.getByTestId('language-menu-option-fi').check();
+      const languagePanel = page.locator(`[id="${await navbar.getByTestId('language-menu-button').getAttribute('aria-controls')}"]`);
+      await languagePanel.getByTestId('language-menu-option-fi').check();
       await expect(page.locator('html')).toHaveAttribute('lang', 'fi');
       await navbar.locator('#hideMenuButton').click();
       // Wait for the product language renderer, so unchanged IDs cannot pass on old cards.
