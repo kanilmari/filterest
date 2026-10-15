@@ -2,7 +2,7 @@
   "version": 1,
   "browser_areas": [
     {
-      "area": "Newest primary table-header sort",
+      "area": "Primary table-header sort",
       "paths": [
         "app/frontend/core_components/table_views/table_view/table_header_sort.js",
         "app/frontend/core_components/table_views/table_view/table_structure_builder.js",
@@ -566,7 +566,7 @@
         "app/testing/e2e/C_card_view/C16_finnish_card_filterbar_text.spec.ts", "app/testing/e2e/C_card_view/C17_article_toolbar_group_permissions.spec.ts", "app/testing/e2e/C_card_view/C3_close_big_card.spec.ts", "app/testing/e2e/D_view_switch/D0_theme_and_mobile_menu.spec.ts",
         "app/testing/e2e/E_search_filter/E10_site_identity_and_menu_contract.spec.ts", "app/testing/e2e/E_search_filter/E13_row_group_category_panel.spec.ts", "app/testing/e2e/E_search_filter/E14_selected_category_refresh.spec.ts", "app/testing/e2e/E_search_filter/E15_responsive_topbar.spec.ts",
         "app/testing/e2e/E_search_filter/E16_multiselect_scroll.spec.ts", "app/testing/e2e/E_search_filter/E17_card_refresh_lifecycle.spec.ts", "app/testing/e2e/E_search_filter/E6_active_filter_tags.spec.ts", "app/testing/e2e/E_search_filter/E8_filterbar_nav_layering.spec.ts",
-        "app/testing/e2e/E_search_filter/E9_admin_version_info.spec.ts", "app/testing/e2e/F_sort/F1_sort_dropdown.spec.ts", "app/testing/e2e/G_navigation/G11_home_phone_layout.spec.ts", "app/testing/e2e/G_navigation/G4_svg_tab_alignment.spec.ts", "app/testing/e2e/L_auth/L2_logout.spec.ts",
+        "app/testing/e2e/E_search_filter/E9_admin_version_info.spec.ts", "app/testing/e2e/F_sort/F1_sort_dropdown.spec.ts", "app/testing/e2e/F_sort/F2_column_header_sort.spec.ts", "app/testing/e2e/G_navigation/G11_home_phone_layout.spec.ts", "app/testing/e2e/G_navigation/G4_svg_tab_alignment.spec.ts", "app/testing/e2e/L_auth/L2_logout.spec.ts",
         "app/testing/e2e/L_auth/L4_forced_login_page.spec.ts", "app/testing/e2e/L_auth/L6_register.spec.ts", "app/testing/e2e/M_language/M1_language_switch.spec.ts", "app/testing/e2e/P_copy/P2_select_range.spec.ts",
         "app/testing/e2e/T_admin/T11_site_language_embedding_and_field_view.spec.ts", "app/testing/e2e/T_admin/T13_workline_observatory.spec.ts", "app/testing/e2e/T_admin/T14_dataset_cover_palette.spec.ts", "app/testing/e2e/T_admin/T15_dataset_alias_namespace.spec.ts",
         "app/testing/e2e/T_admin/T15_view_field_assignments.spec.ts", "app/testing/e2e/T_admin/T16_home_palette.spec.ts", "app/testing/e2e/T_admin/T16_workline_observatory_scroll.spec.ts", "app/testing/e2e/T_admin/T17_home_article_buttons.spec.ts"

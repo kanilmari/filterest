@@ -22,6 +22,7 @@ Dates are the local (Europe/Helsinki) date on which the version was published.
 
 ## [Unreleased]
 
+- Table headers announce every primary sort direction to screen readers, with translated Oldest labels and stale sort attributes cleared on changes.
 - **Agent Tools require administrators (SEC)** — Explicitly activated task, run, todo, group, workline and report routes require both their route grant and administrator access. Deliberate input-validation feedback is preserved; unexpected and database failures return generic errors while server logs retain diagnostics. A shared guard checks declared methods and reviewed exceptions for routes that bypass route grants.
 - Card description previews skip leading empty HTML blocks and whitespace after sanitization, preserving paragraph and list boundaries, language choices and full stored content.
 - Dataset sections and view headings follow the dataset title without skipping levels, while retaining their existing appearance.

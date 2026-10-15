@@ -1,5 +1,5 @@
 // table_structure_builder.test.js
-// Verifies table-view cell and row resize affordances under jsdom.
+// Verifies table-view sorting, localization, and row resize affordances under jsdom.
 // Bridges table_structure_builder.js DOM factories with mocked table-state dependencies and drag events.
 // Exists to keep the manual 1..60 line resize range and row-edge grip stable during table rendering changes.
 // @vitest-environment jsdom
@@ -122,23 +122,31 @@ describe('table_structure_builder resize affordances', () => {
     });
 
     test.each([
-        ['created', ['created', 'created_at', 'applied_at', 'id', 'name']],
-        ['created_at', ['created_at', 'applied_at', 'id', 'name']],
-        ['applied_at', ['applied_at', 'id', 'name']],
-        ['id', ['id', 'name']],
-    ])('Newest marks only the server-reported %s column', async (column, columns) => {
-        getUnifiedTableStateMock.mockReturnValue({ sort: { column: '__newest', direction: 'DESC' } });
+        ['DESC', 'created', ['created', 'created_at', 'applied_at', 'id', 'name']],
+        ['ASC', 'created', ['created', 'created_at', 'applied_at', 'id', 'name']],
+        ['DESC', 'created_at', ['created_at', 'applied_at', 'id', 'name']],
+        ['ASC', 'created_at', ['created_at', 'applied_at', 'id', 'name']],
+        ['DESC', 'applied_at', ['applied_at', 'id', 'name']],
+        ['ASC', 'applied_at', ['applied_at', 'id', 'name']],
+        ['DESC', 'id', ['id', 'name']],
+        ['ASC', 'id', ['id', 'name']],
+    ])('semantic %s sort marks only the server-reported %s column', async (direction, column, columns) => {
+        getUnifiedTableStateMock.mockReturnValue({ sort: { column: '__newest', direction } });
         const { create_table_element } = await loadModule();
-        const table = create_table_element(columns, [], 'orders', {}, { column, direction: 'DESC' });
+        const table = create_table_element(columns, [], 'orders', {}, { column, direction });
         const indicators = [...table.querySelectorAll('[data-testid^="column-sort-"]')];
-        expect(indicators.filter(element => element.textContent === '▼')).toHaveLength(1);
-        expect(table.querySelector(`[data-testid="column-sort-${column}"]`).textContent).toBe('▼');
-        expect(table.querySelectorAll('[aria-sort="descending"]')).toHaveLength(1);
+        expect(indicators.filter(element => element.textContent === (direction === 'ASC' ? '▲' : '▼'))).toHaveLength(1);
+        expect(table.querySelector(`[data-testid="column-sort-${column}"]`).textContent).toBe(direction === 'ASC' ? '▲' : '▼');
+        expect(table.querySelectorAll('[aria-sort]')).toHaveLength(1);
+        expect(table.querySelector(`[data-testid="column-header-${column}"]`).getAttribute('aria-sort'))
+            .toBe(direction === 'ASC' ? 'ascending' : 'descending');
         expect(indicators.filter(element => element.textContent === '⇵')).toHaveLength(columns.length - 1);
     });
 
-    test.each([null, undefined])('Newest never guesses a column without resolution (%s)', async effectiveSort => {
-        getUnifiedTableStateMock.mockReturnValue({ sort: { column: '__newest', direction: 'DESC' } });
+    test.each([
+        ['DESC', null], ['DESC', undefined], ['ASC', null], ['ASC', undefined],
+    ])('semantic %s sort never guesses a column without resolution (%s)', async (direction, effectiveSort) => {
+        getUnifiedTableStateMock.mockReturnValue({ sort: { column: '__newest', direction } });
         const { create_table_element } = await loadModule();
         // Even an id-looking field must not substitute for absent server metadata.
         for (const columns of [['name', 'updated'], ['id', 'created']]) {
@@ -150,42 +158,46 @@ describe('table_structure_builder resize affordances', () => {
     });
 
     test.each([
-        ['fi', 'Uusimmat: created', 'Newest: created'],
-        ['en', 'Newest: created', 'Uusimmat: created'],
-    ])('Newest has translated aria and title labels in %s', async (language, label, switchedLabel) => {
+        ['DESC', 'sort_newest', 'fi', 'Uusimmat: created', 'Newest: created'],
+        ['DESC', 'sort_newest', 'en', 'Newest: created', 'Uusimmat: created'],
+        ['ASC', 'sort_oldest', 'fi', 'Vanhimmat: created', 'Oldest: created'],
+        ['ASC', 'sort_oldest', 'en', 'Oldest: created', 'Vanhimmat: created'],
+    ])('%s sort has translated labels (%s, %s)', async (direction, langKey, language, label, switchedLabel) => {
         localStorage.setItem('chosen_language', language);
-        getUnifiedTableStateMock.mockReturnValue({ sort: { column: '__newest', direction: 'DESC' } });
+        getUnifiedTableStateMock.mockReturnValue({ sort: { column: '__newest', direction } });
         const { create_table_element, refreshTableLanguages } = await loadModule();
         // Use the real dictionary lookup with the existing dropdown key in both languages.
         endpointRouterMock.mockImplementation((_endpoint, { url_params }) => Promise.resolve({
             sort_newest: url_params === '?lang=fi' ? 'Uusimmat' : 'Newest',
+            sort_oldest: url_params === '?lang=fi' ? 'Vanhimmat' : 'Oldest',
         }));
         const { loadTranslationsForLanguage } = await import('../../lang/translation_handler.js');
         await Promise.all(['fi', 'en'].map(loadTranslationsForLanguage));
         const table = create_table_element(['id', 'created'], [], 'orders', {}, {
-            column: 'created', direction: 'DESC',
+            column: 'created', direction,
         });
         document.body.append(table);
         const indicator = table.querySelector('[data-testid="column-sort-created"]');
         expect(indicator.title).toBe(label);
         expect(indicator.closest('th').getAttribute('aria-label')).toBe(label);
-        expect(indicator.dataset.titleLangKey).toBe('sort_newest');
-        expect(indicator.closest('th').dataset.ariaLabelLangKey).toBe('sort_newest');
-        expect(indicator.closest('th').getAttribute('aria-sort')).toBe('descending');
+        expect(indicator.dataset.titleLangKey).toBe(langKey);
+        expect(indicator.closest('th').dataset.ariaLabelLangKey).toBe(langKey);
+        expect(indicator.closest('th').getAttribute('aria-sort')).toBe(direction === 'ASC' ? 'ascending' : 'descending');
+        expect(table.querySelectorAll('[aria-sort]')).toHaveLength(1);
         await refreshTableLanguages(language === 'fi' ? 'en' : 'fi');
         expect(indicator.title).toBe(switchedLabel);
         expect(indicator.closest('th').getAttribute('aria-label')).toBe(switchedLabel);
-        expect(indicator.textContent).toBe('▼');
+        expect(indicator.textContent).toBe(direction === 'ASC' ? '▲' : '▼');
         expect(table.querySelector('[data-testid="column-sort-id"]').hasAttribute('aria-label')).toBe(false);
     });
 
-    test('Newest falls back to the dropdown label when translations are unavailable', async () => {
-        getUnifiedTableStateMock.mockReturnValue({ sort: { column: '__newest', direction: 'DESC' } });
+    test.each([['DESC', 'sort_newest'], ['ASC', 'sort_oldest']])('%s falls back to the dropdown label without translations', async (direction, langKey) => {
+        getUnifiedTableStateMock.mockReturnValue({ sort: { column: '__newest', direction } });
         const { create_table_element } = await loadModule();
         const table = create_table_element(['created', 'id'], [], 'orders', {}, {
-            column: 'created', direction: 'DESC',
+            column: 'created', direction,
         });
-        const dropdownLabel = buildSortOptions([]).find(option => option.langKey === 'sort_newest').label;
+        const dropdownLabel = buildSortOptions([]).find(option => option.langKey === langKey).label;
         const indicator = table.querySelector('[data-testid="column-sort-created"]');
         expect(indicator.title).toBe(`${dropdownLabel}: created`);
         expect(indicator.closest('th').getAttribute('aria-label')).toBe(`${dropdownLabel}: created`);
@@ -201,6 +213,64 @@ describe('table_structure_builder resize affordances', () => {
             .toBe(direction === 'ASC' ? '▲' : '▼');
         expect(table.querySelector('[data-testid="column-sort-created"]').textContent).toBe('⇵');
         expect(table.querySelector('[data-aria-label-lang-key]')).toBeNull();
+        expect(table.querySelectorAll('[aria-sort]')).toHaveLength(1);
+        expect(table.querySelector('[data-testid="column-header-name"]').getAttribute('aria-sort'))
+            .toBe(direction === 'ASC' ? 'ascending' : 'descending');
+        expect(table.querySelector('[aria-label]')).toBeNull();
+    });
+
+    test('no chosen sort ignores stale effective metadata', async () => {
+        const { create_table_element } = await loadModule();
+        const table = create_table_element(['created', 'id'], [], 'orders', {}, {
+            column: 'created', direction: 'DESC',
+        });
+        expect(table.querySelector('[aria-sort]')).toBeNull();
+        expect(table.querySelector('[aria-label]')).toBeNull();
+        expect([...table.querySelectorAll('[data-testid^="column-sort-"]')]
+            .every(element => element.textContent === '⇵')).toBe(true);
+    });
+
+    test.each(['ASC', 'DESC'])('repainting a semantic %s sort clears stale direction and names', async direction => {
+        const { create_table_element, refreshTableLanguages } = await loadModule();
+        const { applyTableHeaderSort } = await import('./table_header_sort.js');
+        const table = create_table_element(['created', 'name'], [], 'orders');
+        document.body.append(table);
+        const repaint = (chosenSort, effectiveSort) => {
+            for (const column of ['created', 'name']) {
+                applyTableHeaderSort(
+                    table.querySelector(`[data-testid="column-header-${column}"]`),
+                    table.querySelector(`[data-testid="column-sort-${column}"]`),
+                    column, chosenSort, effectiveSort,
+                );
+            }
+        };
+        repaint({ column: '__newest', direction }, { column: 'created', direction });
+        expect(table.querySelectorAll('[aria-sort]')).toHaveLength(1);
+        expect(table.querySelector('[aria-label]')).not.toBeNull();
+
+        for (const sort of [
+            { column: 'created', direction: 'ASC' },
+            { column: 'name', direction: 'DESC' },
+            { column: null, direction: null },
+            { column: '__newest', direction }, // No server resolution this time.
+        ]) {
+            repaint(sort, null);
+            // A later language refresh must not resurrect the old semantic name.
+            await refreshTableLanguages('fi');
+            expect(table.querySelector('[aria-label]')).toBeNull();
+            expect(table.querySelector('[data-aria-label-lang-key]')).toBeNull();
+            expect(table.querySelector('[data-aria-label-lang-context]')).toBeNull();
+            expect(table.querySelector('[title]')).toBeNull();
+            expect(table.querySelector('[data-title-lang-key]')).toBeNull();
+            expect(table.querySelector('[data-title-lang-context]')).toBeNull();
+            const primary = sort.column && sort.column !== '__newest' ? sort.column : null;
+            expect(table.querySelectorAll('[aria-sort]')).toHaveLength(primary ? 1 : 0);
+            for (const column of ['created', 'name']) {
+                const header = table.querySelector(`[data-testid="column-header-${column}"]`);
+                expect(header.getAttribute('aria-sort')).toBe(column === primary
+                    ? (sort.direction === 'ASC' ? 'ascending' : 'descending') : null);
+            }
+        }
     });
 
     test('clicking the Newest implementation starts the column own ASC/DESC/none cycle', async () => {

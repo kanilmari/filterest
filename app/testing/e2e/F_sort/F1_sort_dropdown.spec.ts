@@ -25,7 +25,7 @@ test.describe('FX — Sort Dropdown', () => {
   });
 
   for (const theme of ['light', 'dark'] as const) {
-    test(`Newest shows its primary header and row order in ${theme} theme`, async ({ page }) => {
+    test(`Newest and Oldest show their primary headers in ${theme} theme`, async ({ page }) => {
       // Opposite OS preference proves the application's explicit theme wins.
       await page.emulateMedia({ colorScheme: theme === 'light' ? 'dark' : 'light' });
       await page.evaluate((chosenTheme) => {
@@ -73,7 +73,7 @@ test.describe('FX — Sort Dropdown', () => {
       await expect(primaryIndicator).toHaveAttribute('data-title-lang-key', 'sort_newest');
       await expect(primaryHeader).toHaveAttribute('data-aria-label-lang-key', 'sort_newest');
       await expect(primaryHeader).toHaveAttribute('aria-sort', 'descending');
-      await expect(table.locator('thead [aria-sort="descending"]')).toHaveCount(1);
+      await expect(table.locator('thead [aria-sort]')).toHaveCount(1);
       const otherIndicators = table.locator('[data-testid^="column-sort-"]');
       await expect.poll(() => otherIndicators.evaluateAll((elements) =>
         elements.filter(element => element.textContent === '▲' || element.textContent === '▼').length,
@@ -103,6 +103,41 @@ test.describe('FX — Sort Dropdown', () => {
         { timeout: 10000 },
       ).toEqual(expectedRows.map((row) => String(row.id)));
       await test.info().attach(`newest-header-${theme}`, {
+        body: await page.screenshot(), contentType: 'image/png',
+      });
+
+      // Repaint the same table from Newest to Oldest, including its accessible name.
+      await sortBtn.click();
+      const oldestResponsePromise = page.waitForResponse((response) => {
+        const url = new URL(response.url());
+        return url.pathname === '/api/get-results'
+          && url.searchParams.get('dataset') === 'app_service_catalog'
+          && url.searchParams.get('sort_column') === '__newest'
+          && url.searchParams.get('sort_order') === 'ASC'
+          && Number(url.searchParams.get('offset') || 0) === 0;
+      }, { timeout: 10000 });
+      await page.locator('[data-testid="sort-dropdown-option-newest-asc"]:visible').first().click();
+      const oldestResponse = await oldestResponsePromise;
+      expect(oldestResponse.ok()).toBe(true);
+      const oldestResult = await oldestResponse.json() as {
+        effective_sort: { column: string; direction: string } | null;
+      };
+      expect(oldestResult.effective_sort).toEqual({ column: 'created', direction: 'ASC' });
+      const oldestColumn = oldestResult.effective_sort!.column;
+      const oldestHeader = table.getByTestId(`column-header-${oldestColumn}`);
+      const oldestIndicator = table.getByTestId(`column-sort-${oldestColumn}`);
+      await expect(sortBtn).toHaveAttribute('data-lang-key', 'sort_oldest');
+      const oldestLabel = await sortBtn.inputValue();
+      await expect(oldestIndicator).toHaveText('▲');
+      await expect(oldestIndicator).toHaveAttribute('title', `${oldestLabel}: ${oldestColumn}`);
+      await expect(oldestHeader).toHaveAccessibleName(`${oldestLabel}: ${oldestColumn}`);
+      await expect(oldestIndicator).toHaveAttribute('data-title-lang-key', 'sort_oldest');
+      await expect(oldestHeader).toHaveAttribute('data-aria-label-lang-key', 'sort_oldest');
+      await expect(oldestHeader).toHaveAttribute('aria-sort', 'ascending');
+      await expect(table.locator('thead [aria-sort]')).toHaveCount(1);
+      await expect(table.locator('thead [aria-sort="descending"]')).toHaveCount(0);
+      await expect(page.locator('body')).toHaveClass(new RegExp(`${theme}-mode`));
+      await test.info().attach(`oldest-header-${theme}`, {
         body: await page.screenshot(), contentType: 'image/png',
       });
     });

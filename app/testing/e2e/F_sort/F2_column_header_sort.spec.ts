@@ -1,3 +1,7 @@
+// F2_column_header_sort.spec.ts
+// Verifies the column click cycle and its accessible direction in both themes.
+// Connects header interactions to refreshed table semantics and rendered rows.
+// Keeps sort changes observable without fixed timing waits.
 import { test, expect } from '@playwright/test';
 import { login, loadCredentials, type TestCredentials } from '../helpers/auth';
 import { navigateToDataset, waitForDataLoaded } from '../helpers/navigation';
@@ -14,28 +18,44 @@ test.describe('FX — Column Header Sort', () => {
     await login(page, credentials);
   });
 
-  test('clicking column header toggles sort', async ({ page }) => {
-    await navigateToDataset(page, 'app_service_catalog');
-    await waitForDataLoaded(page, 'app_service_catalog');
-    await switchToView(page, "table");
+  for (const theme of ['light', 'dark'] as const) {
+    test(`clicking column header cycles accessible sort in ${theme} theme`, async ({ page }) => {
+      await page.emulateMedia({ colorScheme: theme === 'light' ? 'dark' : 'light' });
+      await page.evaluate((chosenTheme) => {
+        document.body.classList.remove('light-mode', 'dark-mode');
+        document.body.classList.add(`${chosenTheme}-mode`);
+      }, theme);
+      await navigateToDataset(page, 'app_service_catalog');
+      await waitForDataLoaded(page, 'app_service_catalog');
+      await switchToView(page, 'table');
 
-    // Taulukkonäkymässä, klikkaa sarakkeen headeria
-    const sortIndicators = page.locator('[data-testid^="column-sort-"]');
-    await expect(sortIndicators.first()).toBeVisible({ timeout: 10000 });
+      // Start from a semantic choice so the first header click always means ASC,
+      // regardless of the account's saved default or a previous browser test.
+      const sortBtn = page.locator('[data-testid="sort-dropdown-trigger"]:visible').first();
+      await sortBtn.click();
+      await page.locator('[data-testid="sort-dropdown-option-newest-desc"]:visible').first().click();
+      const table = page.locator('#app_service_catalog_table');
+      await expect(table.getByTestId('column-header-created')).toHaveAttribute('aria-sort', 'descending');
+      await expect(table.getByTestId('column-header-created')).toHaveAttribute('data-aria-label-lang-key', 'sort_newest');
 
-    // Lue ensimmäisen sarakkeen solut ennen lajittelua
-    const cells = page.locator('table tbody tr td:first-child, .cell:first-child');
-    const firstCellBefore = await cells.first().textContent();
-
-    // Klikkaa headeria
-    await sortIndicators.first().click();
-    await page.waitForTimeout(500);
-
-    // Klikkaa toisen kerran (DESC)
-    await sortIndicators.first().click();
-    await page.waitForTimeout(500);
-
-    // Varmista data on edelleen näkyvissä
-    await expect(cells.first()).toBeVisible({ timeout: 5000 });
-  });
+      // Clicking the resolved Newest column still starts its own ASC/DESC/none cycle.
+      const header = table.getByTestId('column-header-created');
+      const indicator = table.getByTestId('column-sort-created');
+      for (const [direction, mark] of [['ascending', '▲'], ['descending', '▼'], [null, '⇵']] as const) {
+        await indicator.click();
+        await expect(indicator).toHaveText(mark);
+        await expect(table.locator('thead [aria-sort]')).toHaveCount(direction ? 1 : 0);
+        if (direction) {
+          await expect(header).toHaveAttribute('aria-sort', direction);
+        } else {
+          await expect(header).not.toHaveAttribute('aria-sort');
+        }
+        await expect(header).toHaveAccessibleName(new RegExp(`^created\\s*${mark}$`));
+        await expect(header).not.toHaveAttribute('aria-label');
+        await expect(indicator).not.toHaveAttribute('title');
+        await expect(table.locator('tbody tr').first()).toBeVisible();
+      }
+      await expect(page.locator('body')).toHaveClass(new RegExp(`${theme}-mode`));
+    });
+  }
 });
