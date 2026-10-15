@@ -1,12 +1,14 @@
 /**
  * V1_table_refresh.spec.ts
- *
  * Verifies that the reset-search refresh control reloads table data from get-results endpoint.
+ * Connects the shared active-filterbar helper with the reset button and results response.
+ * Keeps refresh coverage active across responsive layouts without changing saved sections.
  */
 
 import { test, expect } from '@playwright/test';
 import { login, loadCredentials, type TestCredentials } from '../helpers/auth';
-import { clickFirstVisibleByTestId, navigateToDataset, waitForDataLoaded } from '../helpers/navigation';
+import { navigateToDataset, waitForDataLoaded } from '../helpers/navigation';
+import { revealActiveFilterbarSection } from '../helpers/filterbar';
 
 test.describe('V1 — Table Refresh', () => {
   let credentials: TestCredentials;
@@ -24,16 +26,15 @@ test.describe('V1 — Table Refresh', () => {
     await navigateToDataset(page, datasetName);
     await waitForDataLoaded(page, datasetName);
 
-    const refreshControl = page.locator('[data-testid="btn-reset-search"]');
-
-    if (!(await refreshControl.first().isVisible({ timeout: 5000 }).catch(() => false))) {
-      test.skip();
-      return;
-    }
+    const filtersSection = await revealActiveFilterbarSection(page, 'filters');
+    // On phones/tablets the open filter panel overlays the hero by design.
+    // Use the reset inside the revealed section in every layout.
+    const refreshControl = filtersSection.getByTestId('btn-reset-search-filter-stack');
+    await expect(refreshControl).toBeVisible({ timeout: 5000 });
 
     const [response] = await Promise.all([
       page.waitForResponse(resp => resp.url().includes('/api/get-results'), { timeout: 10000 }).catch(() => null),
-      clickFirstVisibleByTestId(page, 'btn-reset-search'),
+      refreshControl.click(),
     ]);
 
     expect(response).not.toBeNull();
