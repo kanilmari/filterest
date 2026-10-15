@@ -215,6 +215,11 @@ check_status() {
     local recorded_billing=""
     recorded_billing=$(read_run_status_value "$RUN_SNAPSHOT_RUN_STATUS_FILE" "billing_mode")
     printf "  Billing: %s\n" "${recorded_billing:-not recorded}"
+    local recorded_claude_effort=""
+    recorded_claude_effort=$(read_run_status_value "$RUN_SNAPSHOT_RUN_STATUS_FILE" "claude_effort_requested")
+    if [[ -n "$recorded_claude_effort" ]]; then
+        printf "  Claude effort requested: %s\n" "$recorded_claude_effort"
+    fi
 
     if [[ "$RUN_SNAPSHOT_DONE_PRESENT" == "1" ]]; then
         if [[ -f "$summary_file" ]]; then

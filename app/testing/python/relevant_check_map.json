@@ -545,6 +545,17 @@
   "python_guards": [
     {
       "paths": [
+        "app/server_tools/agent_tools/worker_agent",
+        "app/server_tools/agent_tools/worker_agent_defaults.sh"
+      ],
+      "tests": [
+        "app/testing/python/test_worker_agent_codex.py",
+        "app/testing/python/test_worker_agent_effort.py",
+        "app/testing/python/test_worker_agent_routines.py"
+      ]
+    },
+    {
+      "paths": [
         "app/frontend/vite.config.mjs",
         "app/frontend/dist",
         "app/server_tools/release/browser_bundle.py"

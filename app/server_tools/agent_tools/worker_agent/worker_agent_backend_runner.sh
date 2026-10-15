@@ -7,36 +7,7 @@
 # launch details out of the main CLI parsing flow.
 # ==============================================================================
 
-find_claude_bin() {
-    if command -v claude &>/dev/null; then
-        echo "claude"
-        return 0
-    fi
-    # The Claude Code extension bundles the CLI. Desktop VS Code keeps it under
-    # ~/.vscode, while Remote/WSL and Insiders builds use their own extension
-    # roots, so every known root is scanned before the backend is declared missing.
-    local -a ext_roots=(
-        "$HOME/.vscode/extensions"
-        "$HOME/.vscode-server/extensions"
-        "$HOME/.vscode-insiders/extensions"
-        "$HOME/.vscode-server-insiders/extensions"
-    )
-    local -a ext_candidates=()
-    local ext_root ext_candidate
-    for ext_root in "${ext_roots[@]}"; do
-        for ext_candidate in "$ext_root"/anthropic.claude-code-*/resources/native-binary/claude; do
-            if [[ -x "$ext_candidate" ]]; then
-                ext_candidates+=("$ext_candidate")
-            fi
-        done
-    done
-    if (( ${#ext_candidates[@]} > 0 )); then
-        # Version sort selects the newest build; a plain sort ranks 2.1.9 above 2.1.270.
-        printf '%s\n' "${ext_candidates[@]}" | sort -V | tail -1
-        return 0
-    fi
-    return 1
-}
+source "$(dirname "${BASH_SOURCE[0]}")/worker_agent_claude.sh"
 
 cleanup_worker_server() {
     if [[ -n "${WORKER_PORT:-}" ]] && fuser "${WORKER_PORT}/tcp" > /dev/null 2>&1; then
@@ -115,6 +86,9 @@ write_run_status() {
             printf 'codex_model_requested=%s\n' "${CODEX_MODEL:-Codex config default}"
             printf 'codex_reasoning_effort_requested=%s\n' "${CODEX_REASONING_EFFORT:-Codex config default}"
         fi
+        if [[ "${BACKEND:-codex}" != codex ]]; then
+            printf 'claude_effort_requested=%s\n' "${CLAUDE_EFFORT:-Claude CLI default}"
+        fi
         if [[ -n "${TICKET_FILE:-}" ]]; then
             printf 'ticket_file=%s\n' "$TICKET_FILE"
         else
@@ -143,6 +117,9 @@ write_progress_snapshot() {
         printf -- '- Status: %s\n' "$status"
         printf -- '- Backend: %s\n' "$BACKEND"
         printf -- '- Research mode: %s\n' "$RESEARCH_MODE"
+        if [[ "${BACKEND:-codex}" != codex ]]; then
+            printf -- '- Claude effort requested: %s\n' "${CLAUDE_EFFORT:-Claude CLI default}"
+        fi
         printf -- '- Write access: %s\n' "$(describe_write_access)"
         printf -- '- Billing: %s\n' "$(describe_billing)"
         if [[ -n "$exit_code" ]]; then
@@ -247,43 +224,6 @@ verify_codex_subscription() {
     return 1
 }
 
-verify_claude_subscription() {
-    CLAUDE_BIN=$(find_claude_bin) || {
-        err "Claude CLI not found on PATH or in a Claude Code VS Code extension. No worker was started."
-        return 127
-    }
-    local status_json="" status_exit=0 sign_in=""
-    status_json=$(billing_env env -u CLAUDECODE timeout 20 "$CLAUDE_BIN" auth status --json \
-        2>/dev/null < /dev/null) || status_exit=$?
-    # Only the sign-in method and provider are read; e-mail and organisation are not.
-    sign_in=$(python3 -c '
-import json, re, sys
-try:
-    status = json.loads(sys.stdin.read())
-except ValueError:
-    status = {}
-if not isinstance(status, dict) or status.get("loggedIn") is not True:
-    print("none")
-    raise SystemExit
-def name(value):
-    return re.sub(r"[^A-Za-z0-9._-]", "", str(value))[:40] or "unknown"
-method = name(status.get("authMethod") or "")
-provider = name(status.get("apiProvider") or "firstParty")
-print(method if provider == "firstParty" else method + " via " + provider)
-' <<< "$status_json") || sign_in="unreadable"
-    if (( status_exit == 0 )) && [[ "$sign_in" == "claude.ai" ]]; then
-        BILLING_ACCOUNT="Claude signed in with claude.ai"
-        return 0
-    fi
-    if (( status_exit == 124 )); then
-        err "Claude CLI did not report its sign-in within 20 s ($CLAUDE_BIN auth status)."
-    else
-        err "Claude CLI is not signed in with a claude.ai subscription (sign-in: $sign_in)."
-    fi
-    err "Sign in with '$CLAUDE_BIN auth login --claudeai', or pass --api to bill an API key deliberately. No worker was started."
-    return 1
-}
-
 # An --api run must find a key for its backend: without one the CLI would
 # quietly bill its signed-in subscription while the run's record said API.
 # Only variable names are checked and printed, never values.
@@ -366,9 +306,13 @@ run_codex_exec() {
 }
 
 run_claude_exec() {
-    CLAUDE_BIN=$(find_claude_bin) || return 127
+    if [[ -z "${CLAUDE_BIN:-}" ]]; then
+        CLAUDE_BIN=$(find_claude_bin) || return 127
+    fi
+    printf 'Worker Claude effort requested: %s\n' "${CLAUDE_EFFORT:-Claude CLI default}" >> "$LOG_FILE"
     printf 'Worker billing: %s\n' "$(describe_billing)" >> "$LOG_FILE"
     local -a claude_args=(--print --model "$CLAUDE_MODEL" --permission-mode bypassPermissions --no-session-persistence)
+    [[ -z "${CLAUDE_EFFORT:-}" ]] || claude_args+=(--effort "$CLAUDE_EFFORT")
     # Ignore inherited CLAUDECODE overrides so worker_agent controls the binary path explicitly.
     if [[ "$RESEARCH_MODE" == true ]]; then
         # Research mode offers only tools that read. As with Codex, the final
@@ -581,7 +525,7 @@ run_background() {
 
     export WORKSPACE_ROOT SCRIPT_DIR TASK_ID OUTPUT_DIR SUMMARY_FILE LOG_FILE DONE_FILE RUN_STATUS_FILE
     export PROGRESS_FILE PID_FILE PROMPT_SAVE_FILE FULL_ACCESS RESEARCH_MODE BACKEND TICKET_FILE
-    export CLAUDE_MODEL FINALIZER_WRITE_SENTINEL BILLING_MODE BILLING_ACCOUNT
+    export CLAUDE_MODEL CLAUDE_EFFORT CLAUDE_BIN FINALIZER_WRITE_SENTINEL BILLING_MODE BILLING_ACCOUNT
     export CODEX_BIN CODEX_ACTUAL_VERSION CODEX_MODEL CODEX_REASONING_EFFORT CODEX_ENGINE_MODULE
     export RUN_FN="$run_fn"
     export -f \
@@ -638,12 +582,15 @@ show_backend_info() {
 
     case "$backend_name" in
         claude)
-            CLAUDE_BIN=$(find_claude_bin 2>/dev/null) || CLAUDE_BIN="(will resolve at runtime)"
+            if [[ -z "${CLAUDE_BIN:-}" ]]; then
+                CLAUDE_BIN=$(find_claude_bin 2>/dev/null) || CLAUDE_BIN="(will resolve at runtime)"
+            fi
             local claude_label="$CLAUDE_MODEL"
             if [[ "$RESEARCH_MODE" == true ]]; then
                 claude_label="${claude_label} — research mode, read-only tools"
             fi
             info "Backend: Claude CLI ($claude_label)"
+            info "Claude effort requested: ${CLAUDE_EFFORT:-Claude CLI default}"
             ;;
         codex)
             local access_label="workspace-write sandbox"
@@ -690,7 +637,9 @@ execute_with_backend() {
 }
 
 execute_auto_backend() {
-    CLAUDE_BIN=$(find_claude_bin 2>/dev/null) || CLAUDE_BIN=""
+    if [[ -z "${CLAUDE_BIN:-}" ]]; then
+        CLAUDE_BIN=$(find_claude_bin 2>/dev/null) || CLAUDE_BIN=""
+    fi
     if [[ -n "$CLAUDE_BIN" ]]; then
         info "Auto mode: trying Claude first..."
         execute_with_backend claude

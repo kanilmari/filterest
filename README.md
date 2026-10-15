@@ -606,21 +606,26 @@ may set `FILTEREST_WORKER_ROUTINES_DIR` to add installation-specific routines;
 those definitions are searched first, so a same-named private routine can
 override the product default without hiding unrelated product routines.
 
-Select both the model and reasoning effort when the result must be attributable
-to a specific configuration (`xhigh` is Extra high):
-
+Select model and effort to attribute a result to a configuration (`xhigh` is Extra high):
 ```bash
 ./worker_agent family=codex --codex-model gpt-5.6-sol --codex-reasoning-effort xhigh "Review the change"
 ./worker_agent family=codex --codex-model gpt-6-astra --codex-reasoning-effort xhigh "Review the change"
+./worker_agent family=claude --claude-model opus --claude-effort high "Review the change"
 ```
 
-`WORKER_CODEX_MODEL` and `WORKER_CODEX_REASONING_EFFORT` provide process defaults;
-the corresponding CLI options take precedence. Omitting them retains Codex's
-own configuration defaults. The wrapper records the requested settings and
-verified CLI path/version in the log and `run_status.txt`, including background
-runs. Check Codex's startup header in `worker_log_*.txt` for the effective model
-and effort before attributing a review. The chosen account/model must support
-the requested effort; errors are not silently retried with another model.
+`WORKER_CODEX_MODEL` and `WORKER_CODEX_REASONING_EFFORT` set process defaults;
+CLI options override them. Model defaults to Codex configuration; effort defaults
+to the project's `xhigh`. The log and `run_status.txt` record requested settings
+and verified Codex path/version, including background runs. Check Codex's startup
+header for effective settings; unsupported efforts never retry another model silently.
+
+`--claude-effort` passes `--effort` to Claude: low, medium, high, xhigh or max;
+omission keeps Claude's default. Local `--help` must document the option and level
+(verified with Claude Code 2.1.299; no Claude version is pinned). Unsupported levels
+fail before run artifacts, including with `--dry-run`. Select `family=claude` or
+`family=auto`; fallback keeps Codex's effort. The request is saved in `run_status.txt`
+as `claude_effort_requested` and shown in log, progress, status and launch output,
+including background and research runs.
 
 Local API maintenance commands default to `https://localhost:8100` and read the
 protected account values from `keys/filterest_runtime/`. Deliberate process-level

@@ -36,7 +36,7 @@ _worker_agent_completions() {
     local top_flags="--help --list --status --wait --prompt-file --ticket
         --task-id --background --research --dry-run --no-summary-instr
         --full-access --no-full-access --subscription --api --claude-model --codex-model
-        --codex-reasoning-effort --routine"
+        --codex-reasoning-effort --claude-effort --routine"
 
     # Routine sub-flags (after --routine <name>)
     local routine_flags="--list --dry-run --quicktest --claude-model --help"
@@ -102,6 +102,10 @@ _worker_agent_completions() {
         return
     fi
 
+    if [[ "$prev" == "--claude-effort" ]]; then
+        COMPREPLY=( $(compgen -W "low medium high xhigh max" -- "$cur") )
+        return
+    fi
     if [[ "$prev" == "--codex-reasoning-effort" ]]; then
         COMPREPLY=( $(compgen -W "none minimal low medium high xhigh max ultra" -- "$cur") )
         return

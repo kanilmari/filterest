@@ -8,21 +8,6 @@
 # timestamped output folders. A run bills the CLI's signed-in subscription
 # unless it passes --api.
 #
-# Usage (via root wrapper ./worker_agent):
-#   ./worker_agent "do something"                       # inline prompt
-#   ./worker_agent --prompt-file path/to/prompt.md      # prompt from file
-#   ./worker_agent --ticket agent_tasks/_db_dump/<id-slug>/ticket.md
-#   echo "do something" | ./worker_agent -              # stdin
-#   ./worker_agent --help                               # show usage
-#   ./worker_agent --list                               # list recent runs
-#   ./worker_agent --status <task_id>                   # check run status
-#   ./worker_agent --stop <task_id>                     # stop a running run
-#
-# Environment:
-#   WORKER_AGENT_BACKEND    Override backend selection (see worker_agent_defaults.sh).
-#   WORKER_AGENT_DRY_RUN    If "1", print the prompt and exit without running.
-#   WORKER_CLAUDE_MODEL     Claude model alias/ID (see worker_agent_defaults.sh).
-#
 # Output:
 #   agent_tasks/_artifacts/worker_runs/YYYY-MM-DD--HH-MM--<task_id>/
 #     prompt_<task_id>.md          — the prompt sent to the worker
@@ -47,6 +32,8 @@ REQUESTED_BACKEND=""
 BACKEND="${WORKER_AGENT_BACKEND:-$DEFAULT_BACKEND}"
 DRY_RUN="${WORKER_AGENT_DRY_RUN:-0}"
 CLAUDE_MODEL="${WORKER_CLAUDE_MODEL:-$DEFAULT_CLAUDE_MODEL}"
+CLAUDE_EFFORT=""
+CLAUDE_BIN=""
 CODEX_MODEL="${WORKER_CODEX_MODEL:-}"
 CODEX_REASONING_EFFORT="${WORKER_CODEX_REASONING_EFFORT:-${DEFAULT_CODEX_REASONING_EFFORT:-}}"
 CODEX_BIN="${WORKER_CODEX_BIN:-codex}"
@@ -70,9 +57,7 @@ STOP_GRACE_SECONDS="${WORKER_AGENT_STOP_GRACE_SECONDS:-5}"
 # How long --background waits for the run to confirm its start in worker.pid.
 LAUNCH_WAIT_SECONDS="${WORKER_AGENT_LAUNCH_WAIT_SECONDS:-15}"
 
-# ---------------------------------------------------------------------------- #
 # Colors & helpers
-# ---------------------------------------------------------------------------- #
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
@@ -274,16 +259,12 @@ status_detail_label() {
     esac
 }
 
-# ---------------------------------------------------------------------------- #
 # Sourced helper modules
-# ---------------------------------------------------------------------------- #
 source "$SCRIPT_DIR/worker_agent_run_state.sh"
 source "$SCRIPT_DIR/worker_agent_prompt_builder.sh"
 source "$SCRIPT_DIR/worker_agent_backend_runner.sh"
 
-# ---------------------------------------------------------------------------- #
 # Usage
-# ---------------------------------------------------------------------------- #
 usage() {
     cat <<'EOF'
 worker_agent — Delegate tasks to a background AI worker.
@@ -352,6 +333,10 @@ OPTIONS:
                             Codex effort, e.g. xhigh (Extra high); model must support it.
   --claude-model <model>    Claude model alias or full ID.
                             Examples: sonnet, opus, claude-sonnet-4-6, claude-opus-4-6
+  --claude-effort <level>   Claude effort: low, medium, high, xhigh, max (CLI default if omitted).
+                            Requires family=claude|auto and an installed CLI whose
+                            --help documents --effort and the requested level.
+                            Checked before creating a run, including --dry-run.
   --output-dir <path>       Override output directory (default: agent_tasks/_artifacts/worker_runs/).
                             Relative paths resolve from project root.
 
@@ -371,7 +356,7 @@ ENVIRONMENT:
 
 EXAMPLES:
   ./worker_agent "Audit all foreign keys in the SQL dump"
-  ./worker_agent family=claude "Refactor the payment handler"
+  ./worker_agent family=claude --claude-effort high "Refactor the payment handler"
   ./worker_agent family=codex --codex-model gpt-5.6-sol --codex-reasoning-effort xhigh "Review the change"
   ./worker_agent family=codex --codex-model gpt-6-astra --codex-reasoning-effort xhigh "Review the change"
   ./worker_agent --background "Long running task" && ./worker_agent --wait
@@ -388,9 +373,7 @@ EOF
     exit 0
 }
 
-# ---------------------------------------------------------------------------- #
 # Main: parse arguments
-# ---------------------------------------------------------------------------- #
 PROMPT=""
 PROMPT_FILE=""
 TICKET_FILE=""
@@ -493,6 +476,10 @@ while [[ $# -gt 0 ]]; do
             shift
             CLAUDE_MODEL="${1:?--claude-model requires a model name (e.g. sonnet, opus, claude-sonnet-4-6)}"
             ;;
+        --claude-effort)
+            shift
+            CLAUDE_EFFORT="${1:?--claude-effort requires a level (low, medium, high, xhigh, max)}"
+            ;;
         --output-dir|-o)
             shift
             CUSTOM_OUTPUT_DIR="${1:?--output-dir requires a path}"
@@ -528,9 +515,7 @@ if [[ "$BACKGROUND" == true ]] && ! command -v setsid >/dev/null 2>&1; then
     exit 1
 fi
 
-# ---------------------------------------------------------------------------- #
 # Resolve backend from family= parameter
-# ---------------------------------------------------------------------------- #
 if [[ -n "$REQUESTED_BACKEND" ]]; then
     case "$REQUESTED_BACKEND" in
         claude) BACKEND="claude" ;;
@@ -543,9 +528,7 @@ if [[ -n "$REQUESTED_BACKEND" ]]; then
     esac
 fi
 
-# ---------------------------------------------------------------------------- #
 # Resolve prompt from the chosen input mode
-# ---------------------------------------------------------------------------- #
 if [[ -n "$CODEX_MODEL" && ! "$CODEX_MODEL" =~ ^[[:alnum:]][[:alnum:]_./:-]*$ ]]; then
     err "Invalid Codex model ID: $CODEX_MODEL"
     exit 1
@@ -573,6 +556,10 @@ if [[ ! "$CODEX_REQUIRED_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+([-+][[:alnum:].-]+)
     err "WORKER_CODEX_VERSION must be an exact CLI version, not a tag or range."
     exit 1
 fi
+
+# Explicit Claude effort is checked before prompt reads and all run artifacts.
+# Auto mode applies it to Claude only; Codex fallback retains its own setting.
+validate_claude_effort || exit $?
 
 INPUT_MODES=0
 [[ -n "$PROMPT" ]] && INPUT_MODES=$((INPUT_MODES + 1))
@@ -622,9 +609,7 @@ if [[ -z "$PROMPT" ]]; then
     exit 1
 fi
 
-# ---------------------------------------------------------------------------- #
 # Generate task_id if not provided
-# ---------------------------------------------------------------------------- #
 generate_task_id() {
     local prompt_text="$1"
     local words
@@ -646,9 +631,7 @@ if [[ -z "$TASK_ID" ]]; then
 fi
 info "Task ID: $TASK_ID"
 
-# ---------------------------------------------------------------------------- #
 # Create timestamped output folder
-# ---------------------------------------------------------------------------- #
 TIMESTAMP=$(date +"%Y-%m-%d--%H-%M")
 OUTPUT_DIR_NAME="${TIMESTAMP}--${TASK_ID}"
 if [[ -n "$CUSTOM_OUTPUT_DIR" ]]; then
@@ -670,9 +653,7 @@ RUN_STATUS_FILE="$OUTPUT_DIR/run_status.txt"
 PROGRESS_FILE="$OUTPUT_DIR/progress_${TASK_ID}.md"
 PID_FILE="$OUTPUT_DIR/worker.pid"
 
-# ---------------------------------------------------------------------------- #
 # Write prompt to file and append worker-specific instructions
-# ---------------------------------------------------------------------------- #
 PROMPT_SAVE_FILE="$OUTPUT_DIR/prompt_${TASK_ID}.md"
 echo "$PROMPT" > "$PROMPT_SAVE_FILE"
 ok "Prompt saved to: $PROMPT_SAVE_FILE"
@@ -680,9 +661,7 @@ write_progress_snapshot "running"
 write_run_status "running"
 append_worker_prompt_instructions "$PROMPT_SAVE_FILE" "$OUTPUT_DIR_NAME" "$TASK_ID"
 
-# ---------------------------------------------------------------------------- #
 # Dry run — print and exit
-# ---------------------------------------------------------------------------- #
 if [[ "$DRY_RUN" == "1" ]]; then
     echo ""
     printf "${BOLD}=== DRY RUN — Prompt that would be sent ===${NC}\n"
@@ -693,6 +672,9 @@ if [[ "$DRY_RUN" == "1" ]]; then
     info "Output dir: $OUTPUT_DIR_NAME/"
     info "Backend: $BACKEND"
     info "Billing: $BILLING_MODE (sign-in and keys not checked in dry-run)"
+    if [[ "$BACKEND" != codex ]]; then
+        info "Claude effort requested: ${CLAUDE_EFFORT:-Claude CLI default}"
+    fi
     if [[ "$BACKEND" != claude ]]; then
         info "Codex executable: $CODEX_BIN (required version: $CODEX_REQUIRED_VERSION; not checked in dry-run)"
         info "Codex model requested: ${CODEX_MODEL:-Codex config default}"

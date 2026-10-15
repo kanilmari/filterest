@@ -22,6 +22,8 @@ Dates are the local (Europe/Helsinki) date on which the version was published.
 
 ## [Unreleased]
 
+- **Claude workers accept an explicit effort (#841)** — `worker_agent --claude-effort` passes the installed CLI’s documented `--effort` setting, refuses unknown or unsupported levels before creating a run, and records and displays the request for foreground, background and research runs. Omitted effort retains Claude’s default; existing Codex options and arguments remain unchanged.
+
 ## [9.4.2] - 2026-10-15
 
 - **Missing article-view rights are explained (K379)** — Card titles, images and other article openers lose their interactive appearance when the viewer lacks the article-view grant, and attempted clicks, keyboard activation or restored addresses show a localized explanation while retaining the view, address, scroll and selection. Same-language startup translation keeps mounted cards intact, and newer language refreshes discard older pending builds even after a dictionary failure. The same grant opens classic and image-first articles, including for guests. View field settings warns for each selected group missing its view right and links to Permissions without changing saving. Live updates stop after 401/403 until auth or permissions refresh. New Finnish, English, Chinese and Cantonese copy is seeded without changing any grants (database compatibility 9.11.2). Component styles load through the shared stylesheet so native sign-in and dataset pages can start.
