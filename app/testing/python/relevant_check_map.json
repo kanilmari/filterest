@@ -2,6 +2,25 @@
   "version": 1,
   "browser_areas": [
     {
+      "area": "Newest primary table-header sort",
+      "paths": [
+        "app/frontend/core_components/table_views/table_view/table_header_sort.js",
+        "app/frontend/core_components/table_views/table_view/table_structure_builder.js",
+        "app/frontend/core_components/table_views/table_view/table_structure_builder.test.js",
+        "app/backend/core_components/dynamic_table_tools/dtt_1_row_crud/dtt_1_row_read/get_results_effective_sort.go",
+        "app/backend/core_components/dynamic_table_tools/dtt_1_row_crud/dtt_1_row_read/get_results_effective_sort_test.go"
+      ],
+      "specs": [
+        "app/testing/e2e/F_sort/F1_sort_dropdown.spec.ts",
+        "app/testing/e2e/F_sort/F2_column_header_sort.spec.ts"
+      ],
+      "projects": [
+        "mobile-card",
+        "tablet-card",
+        "desktop-card"
+      ]
+    },
+    {
       "area": "Floating panel placement",
       "paths": [
         "app/frontend/reusable_components/floating_panel_placement.js",

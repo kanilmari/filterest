@@ -35,6 +35,10 @@ func TestScanFindsLangKeysDeclaredInACatalogue(t *testing.T) {
 		wantKeys     []string
 	}{
 		{
+			relativePath: "frontend/core_components/table_views/table_view/table_header_sort.js",
+			wantKeys:     []string{"sort_newest"},
+		},
+		{
 			relativePath: "frontend/core_components/ai_features/table_chat/table_chat_attachments.js",
 			wantKeys: []string{
 				"chat_attach_image", "chat_attach_remove", "chat_attach_too_many",

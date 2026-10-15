@@ -23,12 +23,13 @@ const DATASET_VIEW_RENDERERS = {
     article_view: { commitRows: commitCardRows, create: (tableName, columns, data, _types, options) => create_article_view(columns, data, tableName, options) },
     table: {
         commitRows: commitTableRows,
-        create: (table_name, columns, data, data_types) => {
+        create: (table_name, columns, data, data_types, options) => {
             const tableElement = create_table_element(
                 columns,
                 data,
                 table_name,
-                data_types
+                data_types,
+                options?.effectiveSort
             );
             // applySavedColumnVisibility(tableElement);
             return tableElement;

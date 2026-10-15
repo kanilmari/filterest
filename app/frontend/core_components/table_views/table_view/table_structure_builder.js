@@ -33,6 +33,7 @@ import {
     setLocalizedDatasetText,
 } from '../dataset_value_localizer.js';
 import { isDatasetRowSelected } from '../dataset_row_selection_store.js';
+import { applyTableHeaderSort } from './table_header_sort.js';
 
 /* ===========================================================
  *  Column Width Preservation
@@ -58,7 +59,7 @@ export function saveColumnWidths(tableName) {
 /**
  * Pääfunktio, joka luo taulun rakenteen ja asettaa datan.
  */
-export function create_table_element(columns, data, table_name, dataTypes) {
+export function create_table_element(columns, data, table_name, dataTypes, effectiveSort = null) {
     const table = document.createElement('table');
     table.classList.add('table_from_db');
     table.id = `${table_name}_table`;
@@ -71,7 +72,7 @@ export function create_table_element(columns, data, table_name, dataTypes) {
     const colgroup = createColgroup(columns, table_name);
     table.appendChild(colgroup);
 
-    const thead = createTableHead(columns, table_name);
+    const thead = createTableHead(columns, table_name, effectiveSort);
     table.appendChild(thead);
 
     const tbody = createTableBody(columns, data, table_name, dataTypes);
@@ -113,7 +114,7 @@ function createColgroup(columns, table_name) {
     return colgroup;
 }
 
-function createTableHead(columns, table_name) {
+function createTableHead(columns, table_name, effectiveSort) {
     const thead = document.createElement('thead');
     const header_row = document.createElement('tr');
     const filter_row = document.createElement('tr');
@@ -148,7 +149,7 @@ function createTableHead(columns, table_name) {
 
     // --- Data-sarakkeiden otsikot & filtterit ---
     columns.forEach(column => {
-        const th = createHeaderCell(column, table_name);
+        const th = createHeaderCell(column, table_name, effectiveSort);
         header_row.appendChild(th);
 
         const filter_cell = createFilterCell(column, table_name);
@@ -166,7 +167,7 @@ function createTableHead(columns, table_name) {
  *  - Perään sortIndicator (ASC/DESC/none)
  *  - Klikatessa sortIndicatoria päivitetään unified-tila ja kutsutaan refresh.
  */
-function createHeaderCell(column, table_name) {
+function createHeaderCell(column, table_name, effectiveSort) {
     const th = document.createElement('th');
     th.style.cursor = 'default';
     th.classList.add('table_data_header_cell');
@@ -183,13 +184,7 @@ function createHeaderCell(column, table_name) {
     sortIndicator.dataset.testid = `column-sort-${column}`;
 
     const st = getUnifiedTableState(table_name);
-    if (st.sort && st.sort.column === column) {
-        sortIndicator.textContent = (st.sort.direction === 'ASC') ? '▲'
-                                   : (st.sort.direction === 'DESC') ? '▼'
-                                   : '⇵';
-    } else {
-        sortIndicator.textContent = '⇵';
-    }
+    applyTableHeaderSort(th, sortIndicator, column, st.sort, effectiveSort);
 
     sortIndicator.addEventListener('click', (e) => {
         e.stopPropagation();

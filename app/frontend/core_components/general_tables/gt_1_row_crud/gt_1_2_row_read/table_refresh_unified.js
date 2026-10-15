@@ -235,6 +235,7 @@ export async function refreshTableUnified(tableName, options = {}) {
             result.row_group_facets,
             { preserveCardReturn, loadedRows, chartRequested: options.chartRequested,
                 datasetAppearance: result.dataset_appearance,
+                effectiveSort: result.effective_sort,
                 appearanceToken, isCurrent: isRenderCurrent, rowGroupFacetContext: {
                 // Remembered prefixes and later pages cannot resolve a fresh selection.
                 authoritative: !loadedRows && Number(currentState.offset) === 0

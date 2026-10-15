@@ -212,7 +212,7 @@ export async function generate_table(
     rowGroupFacets = null,
     { preserveCardReturn = null, loadedRows = null, rowGroupFacetContext = {},
         datasetAppearance = null, appearanceToken = null, isCurrent = () => true,
-        chartRequested = false } = {}
+        chartRequested = false, effectiveSort = null } = {}
 ) {
     const token = appearanceToken || loadedRows?.appearanceToken || datasetAppearanceState.capture(dataset_name);
     const canCommit = () => isCurrent() && datasetAppearanceState.isCurrent(token);
@@ -379,7 +379,7 @@ export async function generate_table(
                 columns,
                 data,
                 data_types,
-                { isCurrent: canCommit }
+                { isCurrent: canCommit, ...(effectiveSort ? { effectiveSort } : {}) }
             ));
             pendingBuild = currentViewElementPromise;
         } else {
@@ -533,6 +533,7 @@ export async function generate_table(
         rememberLoadedDatasetRows(scrollableContainer, dataset_name, {
             data, columns, types: data_types, row_count: rowCount, has_geo: hasGeo,
             table_meta: tableMeta, dataset_presentation: datasetPresentation,
+            effective_sort: effectiveSort,
             dataset_appearance: datasetAppearance,
             row_group_facets: rowGroupFacets,
         }, loadedRows?.projectionView || current_view, token);

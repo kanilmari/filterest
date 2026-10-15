@@ -24,59 +24,89 @@ test.describe('FX — Sort Dropdown', () => {
     await login(page, credentials);
   });
 
-  test('sort dropdown changes data order', async ({ page }) => {
-    await navigateToDataset(page, 'app_service_catalog');
-    await waitForDataLoaded(page, 'app_service_catalog');
-    await switchToView(page, "table");
+  for (const theme of ['light', 'dark'] as const) {
+    test(`Newest shows its primary header and row order in ${theme} theme`, async ({ page }) => {
+      // Opposite OS preference proves the application's explicit theme wins.
+      await page.emulateMedia({ colorScheme: theme === 'light' ? 'dark' : 'light' });
+      await page.evaluate((chosenTheme) => {
+        document.body.classList.remove('light-mode', 'dark-mode');
+        document.body.classList.add(`${chosenTheme}-mode`);
+      }, theme);
+      await navigateToDataset(page, 'app_service_catalog');
+      await waitForDataLoaded(page, 'app_service_catalog');
+      await switchToView(page, "table");
 
-    const sortBtn = page.locator('[data-testid="sort-dropdown-trigger"]:visible').first();
-    await expect(sortBtn).toBeVisible({ timeout: 5000 });
-    await sortBtn.click();
+      const sortBtn = page.locator('[data-testid="sort-dropdown-trigger"]:visible').first();
+      await expect(sortBtn).toBeVisible({ timeout: 5000 });
+      await sortBtn.click();
 
-    const sortOption = page
-      .locator('[data-testid="sort-dropdown-option-newest-desc"]:visible')
-      .first();
-    await expect(sortOption).toBeVisible({ timeout: 3000 });
-    const sortedResponsePromise = page.waitForResponse((response) => {
-      const url = new URL(response.url());
-      return url.pathname === '/api/get-results'
-        && url.searchParams.get('dataset') === 'app_service_catalog'
-        && url.searchParams.get('sort_column') === '__newest'
-        && url.searchParams.get('sort_order') === 'DESC'
-        && Number(url.searchParams.get('offset') || 0) === 0;
-    }, { timeout: 10000 });
-    await sortOption.click();
+      const sortOption = page
+        .locator('[data-testid="sort-dropdown-option-newest-desc"]:visible')
+        .first();
+      await expect(sortOption).toBeVisible({ timeout: 3000 });
+      const sortedResponsePromise = page.waitForResponse((response) => {
+        const url = new URL(response.url());
+        return url.pathname === '/api/get-results'
+          && url.searchParams.get('dataset') === 'app_service_catalog'
+          && url.searchParams.get('sort_column') === '__newest'
+          && url.searchParams.get('sort_order') === 'DESC'
+          && Number(url.searchParams.get('offset') || 0) === 0;
+      }, { timeout: 10000 });
+      await sortOption.click();
 
-    await expect(sortBtn).toHaveAttribute('data-lang-key', 'sort_newest', { timeout: 5000 });
-    await expect(page).toHaveURL(/sort_column=__newest.*sort_order=DESC|sort_order=DESC.*sort_column=__newest/);
-    const sortedResponse = await sortedResponsePromise;
-    expect(sortedResponse.ok()).toBe(true);
-    const { data } = await sortedResponse.json() as {
-      data: Array<{ id: number; created: string | null }>;
-    };
-    expect(data.length, 'The sort proof needs multiple service rows').toBeGreaterThan(1);
-    for (const row of data) {
-      if (row.created != null) expect(Number.isFinite(Date.parse(row.created))).toBe(true);
-    }
-    // Newest is a semantic sort (8dc8ad85), so it has no physical-column arrow.
-    // Check the actual created DESC NULLS LAST, id DESC order and its rendered rows.
-    const expectedRows = [...data].sort((left, right) => {
-      if (left.created == null && right.created != null) return 1;
-      if (right.created == null && left.created != null) return -1;
-      const timeDifference = left.created != null && right.created != null
-        ? Date.parse(right.created) - Date.parse(left.created) : 0;
-      return timeDifference || right.id - left.id;
+      await expect(sortBtn).toHaveAttribute('data-lang-key', 'sort_newest', { timeout: 5000 });
+      await expect(page).toHaveURL(/sort_column=__newest.*sort_order=DESC|sort_order=DESC.*sort_column=__newest/);
+      const sortedResponse = await sortedResponsePromise;
+      expect(sortedResponse.ok()).toBe(true);
+      const { data, effective_sort: effectiveSort } = await sortedResponse.json() as {
+        data: Array<{ id: number; created: string | null }>;
+        effective_sort: { column: string; direction: string } | null;
+      };
+      expect(effectiveSort).toEqual({ column: 'created', direction: 'DESC' });
+      const table = page.locator('#app_service_catalog_table');
+      const primaryIndicator = table.getByTestId(`column-sort-${effectiveSort!.column}`);
+      const primaryHeader = table.getByTestId(`column-header-${effectiveSort!.column}`);
+      await expect(primaryIndicator).toHaveText('▼');
+      const newestLabel = await sortBtn.inputValue();
+      await expect(primaryIndicator).toHaveAttribute('title', `${newestLabel}: created`);
+      await expect(primaryHeader).toHaveAttribute('aria-label', await primaryIndicator.getAttribute('title') || '');
+      await expect(primaryIndicator).toHaveAttribute('data-title-lang-key', 'sort_newest');
+      await expect(primaryHeader).toHaveAttribute('data-aria-label-lang-key', 'sort_newest');
+      await expect(primaryHeader).toHaveAttribute('aria-sort', 'descending');
+      await expect(table.locator('thead [aria-sort="descending"]')).toHaveCount(1);
+      const otherIndicators = table.locator('[data-testid^="column-sort-"]');
+      await expect.poll(() => otherIndicators.evaluateAll((elements) =>
+        elements.filter(element => element.textContent === '▲' || element.textContent === '▼').length,
+      )).toBe(1);
+      await expect(table.getByTestId('column-sort-id')).toHaveText('⇵');
+      await expect(page.locator('body')).toHaveClass(new RegExp(`${theme}-mode`));
+      expect(data.length, 'The sort proof needs multiple service rows').toBeGreaterThan(1);
+      for (const row of data) {
+        if (row.created != null) expect(Number.isFinite(Date.parse(row.created))).toBe(true);
+      }
+      // The header describes the primary created order; id only breaks ties.
+      // Check actual created DESC NULLS LAST, id DESC order and rendered rows.
+      const expectedRows = [...data].sort((left, right) => {
+        if (left.created == null && right.created != null) return 1;
+        if (right.created == null && left.created != null) return -1;
+        const timeDifference = left.created != null && right.created != null
+          ? Date.parse(right.created) - Date.parse(left.created) : 0;
+        return timeDifference || right.id - left.id;
+      });
+      expect(data.map((row) => row.id)).toEqual(expectedRows.map((row) => row.id));
+      const rows = page.locator(
+        '#app_service_catalog_table_view_container [data-testid="dataset-view-table"] tbody tr',
+      );
+      await expect(rows.first()).toBeVisible({ timeout: 10000 });
+      await expect.poll(
+        () => rows.evaluateAll((elements) => elements.map((row) => row.getAttribute('data-row-id'))),
+        { timeout: 10000 },
+      ).toEqual(expectedRows.map((row) => String(row.id)));
+      await test.info().attach(`newest-header-${theme}`, {
+        body: await page.screenshot(), contentType: 'image/png',
+      });
     });
-    expect(data.map((row) => row.id)).toEqual(expectedRows.map((row) => row.id));
-    const rows = page.locator(
-      '#app_service_catalog_table_view_container [data-testid="dataset-view-table"] tbody tr',
-    );
-    await expect(rows.first()).toBeVisible({ timeout: 10000 });
-    await expect.poll(
-      () => rows.evaluateAll((elements) => elements.map((row) => row.getAttribute('data-row-id'))),
-      { timeout: 10000 },
-    ).toEqual(expectedRows.map((row) => String(row.id)));
-  });
+  }
 
   test('admin can open the scoped default action without changing the saved default', async ({ page }) => {
     await navigateToDataset(page, 'app_service_catalog');

@@ -390,6 +390,7 @@ func GetResults(response_writer http.ResponseWriter, request *http.Request) {
 		"data":                 query_results,
 		"types":                column_data_types,
 		"table_meta":           tableMeta,
+		"effective_sort":       effectiveNewestSort(ctx.QueryParams, ctx.ColumnsMap),
 		"resultsPerLoad":       results_per_load,
 		"userColumnSettings":   userColumnSettings,
 		"row_count":            rowCount,

@@ -22,6 +22,8 @@ Dates are the local (Europe/Helsinki) date on which the version was published.
 
 ## [Unreleased]
 
+- Table headers show the server-resolved Newest column with one descending mark and an accessible label using the existing translated Newest option.
+
 ## [9.4.3] - 2026-10-15
 
 - **Faster article opening from cards (WO19, K380)** — Binding a card or article styles only its own surface. Appearance changes repaint together before the next browser paint, reuse the resolved configuration and skip unchanged surface styles while preserving previews, themes and dataset ownership.

@@ -124,9 +124,10 @@ describe("table_refresh_unified missing-dataset recovery", () => {
         const mod = await loadModule();
         const { datasetAppearanceState } = await import('../../../table_views/dataset_appearance_state.js');
         const appearance = { dataset_uid: 11, version: '1' };
-        fetchDatasetDataMock.mockResolvedValue({ data: [], columns: [], types: {}, row_count: 0, dataset_appearance: appearance });
+        fetchDatasetDataMock.mockResolvedValue({ data: [], columns: [], types: {}, row_count: 0, dataset_appearance: appearance, effective_sort: { column: "created_at", direction: "DESC" } });
         await mod.refreshTableUnified('empty', { skipUrlParams: true });
         expect(generateTableMock.mock.calls[0][9].datasetAppearance).toBe(appearance);
+        expect(generateTableMock.mock.calls[0][9].effectiveSort).toEqual({ column: "created_at", direction: "DESC" });
         expect(generateTableMock.mock.calls[0][9].isCurrent()).toBe(true);
         generateTableMock.mockClear();
         let resolve;

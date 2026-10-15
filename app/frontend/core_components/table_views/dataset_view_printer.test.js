@@ -290,9 +290,9 @@ describe('generate_table', () => {
             false,
             null,
             null,
-            facets
+            facets, { effectiveSort: { column: 'id', direction: 'DESC' } }
         );
-
+        expect(createTableElementMock).toHaveBeenCalledWith(['id'], [{ id: 1 }], 'demo_dataset', { id: 'INTEGER' }, { column: 'id', direction: 'DESC' });
         expect(renderRowGroupFacetsMock).toHaveBeenCalledWith('demo_dataset', facets, {});
         expect(renderRowGroupFacetsMock.mock.invocationCallOrder[0]).toBeLessThan(
             renderActiveFiltersMock.mock.invocationCallOrder[0]

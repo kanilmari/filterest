@@ -6,6 +6,7 @@
 
 import { beforeEach, describe, expect, test, vi } from 'vitest';
 import { DATE_TIME_DISPLAY_SEPARATOR } from '../timestamp_display_formatter.js';
+import { buildSortOptions } from '../../filterbar/top_row_buttons/sort_dropdown_builder_helpers.js';
 
 function displayDateTime(dateText, timeText) {
     return `${dateText}${DATE_TIME_DISPLAY_SEPARATOR}${timeText}`;
@@ -24,9 +25,11 @@ const emitDatasetSortSelectionMock = vi.fn();
 const getParamsMock = vi.fn();
 const setParamsMock = vi.fn();
 const updateURLMock = vi.fn();
+const endpointRouterMock = vi.fn();
 
 async function loadModule() {
     vi.resetModules();
+    vi.doMock('../../endpoints/endpoint_router.js', () => ({ endpoint_router: endpointRouterMock }));
     vi.doMock('./row_selection_handler.js', () => ({
         toggle_select_all: toggleSelectAllMock,
         update_row_selection: updateRowSelectionMock,
@@ -74,6 +77,8 @@ describe('table_structure_builder resize affordances', () => {
         getParamsMock.mockReset();
         setParamsMock.mockReset();
         updateURLMock.mockReset();
+        endpointRouterMock.mockReset();
+        delete window.translationPromises;
 
         getUnifiedTableStateMock.mockReturnValue({
             filters: {},
@@ -114,6 +119,108 @@ describe('table_structure_builder resize affordances', () => {
             'system_db_version',
             { skipUrlParams: true },
         );
+    });
+
+    test.each([
+        ['created', ['created', 'created_at', 'applied_at', 'id', 'name']],
+        ['created_at', ['created_at', 'applied_at', 'id', 'name']],
+        ['applied_at', ['applied_at', 'id', 'name']],
+        ['id', ['id', 'name']],
+    ])('Newest marks only the server-reported %s column', async (column, columns) => {
+        getUnifiedTableStateMock.mockReturnValue({ sort: { column: '__newest', direction: 'DESC' } });
+        const { create_table_element } = await loadModule();
+        const table = create_table_element(columns, [], 'orders', {}, { column, direction: 'DESC' });
+        const indicators = [...table.querySelectorAll('[data-testid^="column-sort-"]')];
+        expect(indicators.filter(element => element.textContent === '▼')).toHaveLength(1);
+        expect(table.querySelector(`[data-testid="column-sort-${column}"]`).textContent).toBe('▼');
+        expect(table.querySelectorAll('[aria-sort="descending"]')).toHaveLength(1);
+        expect(indicators.filter(element => element.textContent === '⇵')).toHaveLength(columns.length - 1);
+    });
+
+    test.each([null, undefined])('Newest never guesses a column without resolution (%s)', async effectiveSort => {
+        getUnifiedTableStateMock.mockReturnValue({ sort: { column: '__newest', direction: 'DESC' } });
+        const { create_table_element } = await loadModule();
+        // Even an id-looking field must not substitute for absent server metadata.
+        for (const columns of [['name', 'updated'], ['id', 'created']]) {
+            const table = create_table_element(columns, [], 'orders', {}, effectiveSort);
+            expect([...table.querySelectorAll('[data-testid^="column-sort-"]')]
+                .every(element => element.textContent === '⇵')).toBe(true);
+            expect(table.querySelector('[aria-sort]')).toBeNull();
+        }
+    });
+
+    test.each([
+        ['fi', 'Uusimmat: created', 'Newest: created'],
+        ['en', 'Newest: created', 'Uusimmat: created'],
+    ])('Newest has translated aria and title labels in %s', async (language, label, switchedLabel) => {
+        localStorage.setItem('chosen_language', language);
+        getUnifiedTableStateMock.mockReturnValue({ sort: { column: '__newest', direction: 'DESC' } });
+        const { create_table_element, refreshTableLanguages } = await loadModule();
+        // Use the real dictionary lookup with the existing dropdown key in both languages.
+        endpointRouterMock.mockImplementation((_endpoint, { url_params }) => Promise.resolve({
+            sort_newest: url_params === '?lang=fi' ? 'Uusimmat' : 'Newest',
+        }));
+        const { loadTranslationsForLanguage } = await import('../../lang/translation_handler.js');
+        await Promise.all(['fi', 'en'].map(loadTranslationsForLanguage));
+        const table = create_table_element(['id', 'created'], [], 'orders', {}, {
+            column: 'created', direction: 'DESC',
+        });
+        document.body.append(table);
+        const indicator = table.querySelector('[data-testid="column-sort-created"]');
+        expect(indicator.title).toBe(label);
+        expect(indicator.closest('th').getAttribute('aria-label')).toBe(label);
+        expect(indicator.dataset.titleLangKey).toBe('sort_newest');
+        expect(indicator.closest('th').dataset.ariaLabelLangKey).toBe('sort_newest');
+        expect(indicator.closest('th').getAttribute('aria-sort')).toBe('descending');
+        await refreshTableLanguages(language === 'fi' ? 'en' : 'fi');
+        expect(indicator.title).toBe(switchedLabel);
+        expect(indicator.closest('th').getAttribute('aria-label')).toBe(switchedLabel);
+        expect(indicator.textContent).toBe('▼');
+        expect(table.querySelector('[data-testid="column-sort-id"]').hasAttribute('aria-label')).toBe(false);
+    });
+
+    test('Newest falls back to the dropdown label when translations are unavailable', async () => {
+        getUnifiedTableStateMock.mockReturnValue({ sort: { column: '__newest', direction: 'DESC' } });
+        const { create_table_element } = await loadModule();
+        const table = create_table_element(['created', 'id'], [], 'orders', {}, {
+            column: 'created', direction: 'DESC',
+        });
+        const dropdownLabel = buildSortOptions([]).find(option => option.langKey === 'sort_newest').label;
+        const indicator = table.querySelector('[data-testid="column-sort-created"]');
+        expect(indicator.title).toBe(`${dropdownLabel}: created`);
+        expect(indicator.closest('th').getAttribute('aria-label')).toBe(`${dropdownLabel}: created`);
+    });
+
+    test.each(['ASC', 'DESC'])('explicit %s sorting ignores Newest metadata', async direction => {
+        getUnifiedTableStateMock.mockReturnValue({ sort: { column: 'name', direction } });
+        const { create_table_element } = await loadModule();
+        const table = create_table_element(['created', 'name'], [], 'orders', {}, {
+            column: 'created', direction: 'DESC',
+        });
+        expect(table.querySelector('[data-testid="column-sort-name"]').textContent)
+            .toBe(direction === 'ASC' ? '▲' : '▼');
+        expect(table.querySelector('[data-testid="column-sort-created"]').textContent).toBe('⇵');
+        expect(table.querySelector('[data-aria-label-lang-key]')).toBeNull();
+    });
+
+    test('clicking the Newest implementation starts the column own ASC/DESC/none cycle', async () => {
+        const state = { sort: { column: '__newest', direction: 'DESC' } };
+        getUnifiedTableStateMock.mockReturnValue(state);
+        const { create_table_element } = await loadModule();
+        const table = create_table_element(['created', 'id'], [], 'orders', {}, {
+            column: 'created', direction: 'DESC',
+        });
+        const indicator = table.querySelector('[data-testid="column-sort-created"]');
+        for (const sort of [
+            { column: 'created', direction: 'ASC' },
+            { column: 'created', direction: 'DESC' },
+            { column: null, direction: null },
+        ]) {
+            indicator.click();
+            expect(state.sort).toEqual(sort);
+        }
+        expect(emitDatasetSortSelectionMock.mock.calls.map(call => call[1]))
+            .toEqual(['created:ASC', 'created:DESC', '']);
     });
 
     test('non-compact cells no longer render a per-cell height handle', async () => {

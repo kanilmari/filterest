@@ -332,16 +332,12 @@ func buildSemanticNewestOrderByClause(
 	columnsByName map[string]dtt_models.ColumnInfo,
 	sortOrder string,
 ) string {
-	newestColumn := ""
-	for _, candidate := range []string{"created", "created_at", "applied_at", "id"} {
-		if _, exists := columnsByName[candidate]; exists {
-			newestColumn = candidate
-			break
-		}
-	}
-	if newestColumn == "" {
+	effectiveSort := resolveSemanticNewestSort(columnsByName, sortOrder)
+	if effectiveSort == nil {
 		return ""
 	}
+	newestColumn := effectiveSort.Column
+	sortOrder = effectiveSort.Direction
 
 	quotedTable := pq.QuoteIdentifier(tableName)
 	orderByParts := []string{
