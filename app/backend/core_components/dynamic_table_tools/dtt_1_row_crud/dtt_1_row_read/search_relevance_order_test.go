@@ -82,13 +82,14 @@ func relevanceDB(t *testing.T) *sql.DB {
 // searchedIDs runs the listing the way the query builder assembles it.
 func searchedIDs(t *testing.T, db *sql.DB, search string) ([]int, string) {
 	t.Helper()
-	where, args, order, err := appendDatasetTextSearchToWhereClause(
+	where, args, searchCondition, err := appendDatasetTextSearchToWhereClause(
 		db, url.Values{"search": {search}}, "tasks", "", nil,
 	)
 	if err != nil {
 		t.Fatalf("free-text condition for %q: %v", search, err)
 	}
 
+	order := searchCondition.OrderByWithSort("")
 	query := `SELECT "tasks"."id" FROM "tasks"` + where + order
 	rows, err := db.Query(query, args...)
 	if err != nil {
@@ -153,7 +154,7 @@ func TestSearchingANumberPutsThatRowFirstPostgres(t *testing.T) {
 func TestARankingAddsNoArgumentsOfItsOwnPostgres(t *testing.T) {
 	db := relevanceDB(t)
 
-	_, args, order, err := appendDatasetTextSearchToWhereClause(
+	_, args, search, err := appendDatasetTextSearchToWhereClause(
 		db, url.Values{"search": {"report"}}, "tasks", "", nil,
 	)
 	if err != nil {
@@ -165,20 +166,20 @@ func TestARankingAddsNoArgumentsOfItsOwnPostgres(t *testing.T) {
 	if len(args) != 1 {
 		t.Fatalf("ranking must not add arguments: %#v", args)
 	}
-	if !strings.Contains(order, "$1") {
-		t.Fatalf("the ranking should reuse the condition's placeholder: %q", order)
+	if !strings.Contains(search.OrderBy, "$1") {
+		t.Fatalf("the ranking should reuse the condition's placeholder: %q", search.OrderBy)
 	}
 }
 
 func TestAListingWithoutASearchIsLeftAlone(t *testing.T) {
-	where, args, order, err := appendDatasetTextSearchToWhereClause(
+	where, args, search, err := appendDatasetTextSearchToWhereClause(
 		nil, url.Values{}, "tasks", ` WHERE "tasks"."status" = $1`, []interface{}{"open"},
 	)
 	if err != nil {
 		t.Fatalf("no search should not be an error: %v", err)
 	}
-	if order != "" {
-		t.Fatalf("without a search there is nothing to rank: %q", order)
+	if search.OrderBy != "" {
+		t.Fatalf("without a search there is nothing to rank: %q", search.OrderBy)
 	}
 	if where != ` WHERE "tasks"."status" = $1` || len(args) != 1 {
 		t.Fatalf("the existing condition should be untouched: %q %#v", where, args)

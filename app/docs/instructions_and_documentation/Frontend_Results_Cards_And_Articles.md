@@ -14,13 +14,42 @@ Row support for listings and streamed/blocking search is owned by the server ([r
 Browser row callers send only the explicit projection (`view_key`), never support flags; legacy flags remain a server API compatibility contract. Refresh and deep-linked row previews send their current normalized view. Listing reloads and later pages retain the committed list's projection when available, otherwise use the current view. Main intelligent-search streams send their request's view; compact supplemental searches, permission-editor reads and translation repair explicitly use `table`, preserving their existing fields without requesting rich support. Expanded articles and Image First Article View history restoration independently request `article_view`. Home continues to delegate with `card`. A retained navigation list is not authorized article content: transferring it preserves its projection, rows and raw offset, while opening a selected article still fetches that row independently.
 
 ### Overview
-1.  **Search**: The user submits a search query. `do_intelligent_search()` sends a request to `/api/get-intelligent-results` and streams results.
-2.  **Backend**: `GetIntelligentResultsHandlerWrapper` returns matching records in two stages (text and AI). The request carries the interface language as `lang`, the reader's language: the AI stage searches every stored embedding, general and per language, and only ranks a match in the reader's language slightly ahead.
-3.  **Notices**: When the text-search stage finishes, a `text_search_ended` notice is inserted. If the AI stage returns suggestions, a `see_also` notice appears.
+1.  **Search**: The user submits a search query. `do_intelligent_search()` reloads the dataset's ordinary `/api/get-results` listing with the `search` parameter; its count, filters, sorting and offset pages remain part of that listing.
+2.  **Backend**: The supplemental `/api/get-intelligent-results` stream supplies AI suggestions after the listing. Its text candidates use the same identifier rule, and the AI group excludes every row the text listing matches. The request carries the reader's interface language as `lang`: the AI stage searches every stored embedding, general and per language, and only ranks a match in that language slightly ahead.
+3.  **Notices**: An empty text listing shows `text_search_no_results`. If the AI stage returns suggestions, a `see_also` notice appears.
 4.  **Rendering**: `filterest/app/frontend/core_components/table_views/dataset_view_printer.js` renders the data using the selected view module.
 5.  **Filters**: The global search term appears as an `.active-filter-item` above the results.
 
 How a full first-page response resolves category selections, and the category panel shown before the results, are described in [Category panel and dropdowns](Frontend_Category_Panel_And_Dropdowns.md).
+
+### Integer identifier searches
+
+Under any sort, a whole integer term such as `843`, `#843` or ` 843 ` puts row
+843 first when the dataset has a single-column
+`id` primary key of type smallint, integer or bigint. That row matches even when
+its indexed text contains no digits. Every other text match keeps its existing
+order under the active sort, whether picked, saved or default, including newest
+or images first. With no sort (`sort_column` absent), other matches keep their
+relevance and identifier order. Identifier priority is applied before paging,
+so the row appears only once, on the first page when visible under the current
+permissions and filters; counts still include the same matching rows.
+
+The term may contain ASCII digits, one optional sign (`+` or `-`), and one
+optional leading `#` before the sign. Outer whitespace and leading zeros are
+accepted; inner whitespace, a bare `#`, repeated markers, mixed text such as
+`843a`, and numbers outside the signed 64-bit range do not enable identifier
+matching. The optional marker is removed from text matching for eligible ID
+searches; the digits, including leading zeros, are retained. Other keys and
+non-integer terms retain ordinary text matching.
+
+The rule lives in
+[text_search_condition.go](../../backend/core_components/dynamic_table_tools/search_vectors/text_search_condition.go).
+It widens only the text condition, inside the same authorized, filtered query;
+row access rules, mandatory visibility flags, RLS, row groups and dataset
+visibility still apply. Counting uses that same condition, and SQL orders
+before LIMIT/OFFSET, so the identifier is counted once and later pages neither
+repeat it nor lose another match. Assisted text search and the merged blocking
+answer use this same rule; semantic similarity itself is unchanged.
 
 ### View Types
 

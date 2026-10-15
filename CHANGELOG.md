@@ -22,6 +22,7 @@ Dates are the local (Europe/Helsinki) date on which the version was published.
 
 ## [Unreleased]
 
+- **Integer searches find the row by ID first** — Dataset text search accepts trimmed integers with an optional leading `#`, ranks a matching integer primary-key row first under any sort (picked, saved or default), and shares that rule with assisted search while preserving permissions, filters, counts, paging and the active order of every other match.
 - **Add-row forms stay closed while loading (WO25)** — Closing the loading dialog with X, Escape, the backdrop or a programmatic close cancels that opening. A late form build cannot reopen or replace the dialog, move focus or show a stale error; opening it again starts a fresh session.
 - Table headers show the server-resolved Newest column with one descending mark and an accessible label using the existing translated Newest option.
 

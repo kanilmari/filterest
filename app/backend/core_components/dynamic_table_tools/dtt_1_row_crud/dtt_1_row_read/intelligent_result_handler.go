@@ -39,30 +39,6 @@ type rowTextRank struct {
 	Rank    float64
 }
 
-// prioritizeNumericIDResultFirst preserves merged intelligent-search ordering while pinning an exact id match first.
-// It exists between fetch-ranked candidate ids and row loading so numeric searches behave like direct row lookup.
-func prioritizeNumericIDResultFirst(rowOrder []int, numericID int, hasNumericID bool) []int {
-	if !hasNumericID || len(rowOrder) < 2 || rowOrder[0] == numericID {
-		return rowOrder
-	}
-	out := make([]int, 0, len(rowOrder))
-	for _, id := range rowOrder {
-		if id == numericID {
-			out = append(out, id)
-			break
-		}
-	}
-	if len(out) == 0 {
-		return rowOrder
-	}
-	for _, id := range rowOrder {
-		if id != numericID {
-			out = append(out, id)
-		}
-	}
-	return out
-}
-
 /* ===========================================================
  *  HTTP-kääre
  * =========================================================*/
@@ -120,7 +96,6 @@ func queryIntelligentResultsStream(w http.ResponseWriter, r *http.Request) error
 	if tableName == "" || userQuery == "" {
 		return fmt.Errorf("table or query parameter missing")
 	}
-	numericID, hasNumericID := dtt_search_vectors.NumericIDSearch(strings.TrimSpace(userQuery))
 	support := resolveRowSupportRequest(r.URL.Query())
 
 	session, _ := e_sessions.GetOrCreateSession(nil, r)
@@ -159,7 +134,6 @@ func queryIntelligentResultsStream(w http.ResponseWriter, r *http.Request) error
 	for _, h := range textHits {
 		order = append(order, h.RowID)
 	}
-	order = prioritizeNumericIDResultFirst(order, numericID, hasNumericID)
 	textRows, textCols, err := fetchRowsInOrder(readQuerier, tableName, order, authorization)
 	if err != nil {
 		return fmt.Errorf("fetchRowsInOrder(text): %w", err)
@@ -315,7 +289,6 @@ func queryIntelligentResults(w http.ResponseWriter, r *http.Request) error {
 	if tableName == "" || userQuery == "" {
 		return fmt.Errorf("table or query parameter missing")
 	}
-	numericID, hasNumericID := dtt_search_vectors.NumericIDSearch(userQuery)
 	support := resolveRowSupportRequest(r.URL.Query())
 
 	session, _ := e_sessions.GetOrCreateSession(nil, r)
@@ -341,6 +314,10 @@ func queryIntelligentResults(w http.ResponseWriter, r *http.Request) error {
 		return err
 	}
 	authorization, err = withIntelligentSearchFilters(currentDb, tableName, r.URL.Query().Get("filters"), lang, authorization)
+	if err != nil {
+		return err
+	}
+	idSearch, err := dtt_search_vectors.DatasetIDSearch(readQuerier, tableName, userQuery)
 	if err != nil {
 		return err
 	}
@@ -439,7 +416,7 @@ func queryIntelligentResults(w http.ResponseWriter, r *http.Request) error {
 	for _, c := range far {
 		rowOrder = append(rowOrder, c.RowID)
 	}
-	rowOrder = prioritizeNumericIDResultFirst(rowOrder, numericID, hasNumericID)
+	rowOrder = idSearch.Prioritize(rowOrder)
 
 	//------------------------------------------------
 	// 5. Hae rivit ja metatiedot

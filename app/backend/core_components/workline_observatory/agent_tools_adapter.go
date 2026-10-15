@@ -89,7 +89,10 @@ func loadBoardSearchMatches(ctx context.Context, database boardReader, rawSearch
 	if len(rawSearch) > maxBoardSearchLength {
 		return nil, errWorklineSearchTooLong
 	}
-	search, ok := dtt_search_vectors.TextSearchCondition(rawSearch, boardSearchVector, "w.id", 1)
+	// This fixed workline relation declares id as its integer primary key.
+	id, numeric := dtt_search_vectors.NumericIDSearch(rawSearch)
+	search, ok := dtt_search_vectors.TextSearchCondition(rawSearch, boardSearchVector, "w.id", 1,
+		dtt_search_vectors.IDSearch{ID: id, Enabled: numeric})
 	if !ok {
 		return nil, nil
 	}

@@ -30,29 +30,36 @@ const datasetSearchQueryKey = "search"
 // through the same on-the-fly expression the search has always used. The
 // condition and its relevance order come from the one search every list shares
 // (dtt_search_vectors.TextSearchCondition): word beginnings, any of the words,
-// and a plain number that also matches that row's identifier and comes first.
+// and an integer term that also matches that row's identifier and comes first.
 //
-// The caller uses the relevance order only when the person has not chosen a
-// sort of their own.
+// The caller composes the returned search with its active sort through
+// OrderByWithSort, keeping identifier priority under every sort.
 func appendDatasetTextSearchToWhereClause(
 	db dbutils.Querier,
 	queryParams url.Values,
 	tableName string,
 	whereClause string,
 	queryArgs []interface{},
-) (string, []interface{}, string, error) {
+) (string, []interface{}, dtt_search_vectors.TextSearch, error) {
 	rawSearch := strings.TrimSpace(queryParams.Get(datasetSearchQueryKey))
 	if dtt_search_vectors.OrPrefixTsQuery(rawSearch) == "" {
-		return whereClause, queryArgs, "", nil
+		return whereClause, queryArgs, dtt_search_vectors.TextSearch{}, nil
 	}
 
-	searchVectorExpr, err := datasetSearchVectorExpression(db, tableName)
+	searchVectorExpr, hasID, err := datasetSearchVectorExpression(db, tableName)
 	if err != nil {
-		return "", nil, "", err
+		return "", nil, dtt_search_vectors.TextSearch{}, err
+	}
+	idSearch, err := dtt_search_vectors.DatasetIDSearch(db, tableName, rawSearch)
+	if err != nil {
+		return "", nil, dtt_search_vectors.TextSearch{}, err
 	}
 
-	idExpr := pq.QuoteIdentifier(tableName) + "." + pq.QuoteIdentifier("id")
-	search, _ := dtt_search_vectors.TextSearchCondition(rawSearch, searchVectorExpr, idExpr, len(queryArgs)+1)
+	idExpr := ""
+	if hasID {
+		idExpr = pq.QuoteIdentifier(tableName) + "." + pq.QuoteIdentifier("id")
+	}
+	search, _ := dtt_search_vectors.TextSearchCondition(rawSearch, searchVectorExpr, idExpr, len(queryArgs)+1, idSearch)
 	queryArgs = append(queryArgs, search.Args...)
 
 	if strings.TrimSpace(whereClause) == "" {
@@ -61,7 +68,7 @@ func appendDatasetTextSearchToWhereClause(
 		whereClause += " AND " + search.Predicate
 	}
 
-	return whereClause, queryArgs, search.OrderBy, nil
+	return whereClause, queryArgs, search, nil
 }
 
 // rowsOutsideDatasetTextSearch keeps, in their given order, only the rows the
@@ -133,28 +140,36 @@ func rowsOutsideDatasetTextSearch(
 
 // datasetSearchVectorExpression prefers the dataset's stored search vector and
 // falls back to building one from the row, so a dataset whose vectors are not
-// built yet is still searchable.
-func datasetSearchVectorExpression(db dbutils.Querier, tableName string) (string, error) {
+// built yet is still searchable. The boolean reports whether id is available
+// as an ordering tie-break; datasets without that column must not reference it.
+func datasetSearchVectorExpression(db dbutils.Querier, tableName string) (string, bool, error) {
 	quotedTable := pq.QuoteIdentifier(tableName)
 
 	columns, err := dbutils.GetQueryableColumns(tableName, db, false)
 	if err != nil {
-		return "", err
+		return "", false, err
+	}
+	hasID := false
+	for _, column := range columns {
+		if column == "id" {
+			hasID = true
+			break
+		}
 	}
 	fallbackExpr := buildSimpleSearchVectorExpression(tableName, columns)
 
 	hasVector, err := tableHasColumn(db, tableName, "search_vector_simple")
 	if err != nil {
-		return "", err
+		return "", false, err
 	}
 	switch {
 	case hasVector && fallbackExpr != "":
-		return fmt.Sprintf("COALESCE(%s.search_vector_simple, %s)", quotedTable, fallbackExpr), nil
+		return fmt.Sprintf("COALESCE(%s.search_vector_simple, %s)", quotedTable, fallbackExpr), hasID, nil
 	case hasVector:
-		return fmt.Sprintf("%s.search_vector_simple", quotedTable), nil
+		return fmt.Sprintf("%s.search_vector_simple", quotedTable), hasID, nil
 	case fallbackExpr != "":
-		return fallbackExpr, nil
+		return fallbackExpr, hasID, nil
 	default:
-		return "", fmt.Errorf("dataset %q has no searchable columns", tableName)
+		return "", false, fmt.Errorf("dataset %q has no searchable columns", tableName)
 	}
 }

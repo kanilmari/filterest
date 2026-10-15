@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	dtt_models "easelect/backend/core_components/dynamic_table_tools/dtt_models"
+	dtt_search_vectors "easelect/backend/core_components/dynamic_table_tools/search_vectors"
 
 	"github.com/lib/pq"
 )
@@ -547,8 +548,8 @@ func BuildSelectQuery(ctx QueryBuilderContext) (string, []interface{}, int, []Ro
 	if err != nil {
 		return "", nil, 0, nil, RowGroupSelection{}, fmt.Errorf("error building where clause: %w", err)
 	}
-	var relevance_order_by string
-	where_clause, query_args, relevance_order_by, err = appendDatasetTextSearchToWhereClause(
+	var textSearch dtt_search_vectors.TextSearch
+	where_clause, query_args, textSearch, err = appendDatasetTextSearchToWhereClause(
 		ctx.DB,
 		ctx.QueryParams,
 		ctx.TableName,
@@ -598,12 +599,9 @@ func BuildSelectQuery(ctx QueryBuilderContext) (string, []interface{}, int, []Ro
 		return "", nil, 0, nil, RowGroupSelection{}, fmt.Errorf("error building order by clause: %w", err)
 	}
 
-	// Relevance is what a search means when the person has not asked for
-	// another order. A sort they did choose stays in force: choosing newest and
-	// then typing a word should still list the newest matches.
-	if order_by_clause == "" && relevance_order_by != "" {
-		order_by_clause = relevance_order_by
-	}
+	// The shared search rule lifts a matching ID ahead of any active sort.
+	// All other matches keep that sort, or relevance when no sort was sent.
+	order_by_clause = textSearch.OrderByWithSort(order_by_clause)
 
 	// 5. Count total rows (skip if client provides a cached count)
 	var rowCount int

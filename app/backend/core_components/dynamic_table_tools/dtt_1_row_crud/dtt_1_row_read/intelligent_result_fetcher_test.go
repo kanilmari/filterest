@@ -20,6 +20,7 @@ import (
 )
 
 type intelligentFetcherTestState struct {
+	nonIntegerID              bool
 	headerExists              bool
 	vectorExists              bool
 	queryableColumns          []string
@@ -123,7 +124,7 @@ func TestFetchFullTextRowsSearchesIDWhenNumericQueryUsesStoredVector(t *testing.
 	if !strings.Contains(state.finalQuery, `"src"."id" = $2`) {
 		t.Fatalf("final query = %q, want exact id predicate", state.finalQuery)
 	}
-	if !strings.Contains(state.finalQuery, `ORDER BY ("src"."id" = $2) DESC`) {
+	if !strings.Contains(state.finalQuery, `ORDER BY ("src"."id" = $2::bigint) DESC`) {
 		t.Fatalf("final query = %q, want exact id result first", state.finalQuery)
 	}
 	if len(state.finalArgs) != 4 || state.finalArgs[0].Value != "161:*" || fmt.Sprint(state.finalArgs[1].Value) != "161" || state.finalArgs[2].Value != "app_service_catalog" || fmt.Sprint(state.finalArgs[3].Value) != "1" {
@@ -150,7 +151,7 @@ func TestFetchFullTextRowsSearchesIDWhenNumericQueryUsesILikeFallback(t *testing
 	if !strings.Contains(state.finalQuery, `"app_service_catalog"."id" = $2`) {
 		t.Fatalf("final query = %q, want exact id predicate", state.finalQuery)
 	}
-	if !strings.Contains(state.finalQuery, `ORDER BY ("app_service_catalog"."id" = $2) DESC`) {
+	if !strings.Contains(state.finalQuery, `ORDER BY ("app_service_catalog"."id" = $2::bigint) DESC`) {
 		t.Fatalf("final query = %q, want exact id result first", state.finalQuery)
 	}
 	if len(state.finalArgs) != 4 || state.finalArgs[0].Value != "%161%" || fmt.Sprint(state.finalArgs[1].Value) != "161" || state.finalArgs[2].Value != "app_service_catalog" || fmt.Sprint(state.finalArgs[3].Value) != "1" {
@@ -276,22 +277,6 @@ func TestFetchSimilarRowsAppliesAuthorizationBeforeVectorLimit(t *testing.T) {
 	}
 }
 
-func TestPrioritizeNumericIDResultFirst(t *testing.T) {
-	got := prioritizeNumericIDResultFirst([]int{133, 169, 161, 186}, 161, true)
-	want := []int{161, 133, 169, 186}
-	if fmt.Sprint(got) != fmt.Sprint(want) {
-		t.Fatalf("prioritizeNumericIDResultFirst() = %v, want %v", got, want)
-	}
-}
-
-func TestPrioritizeNumericIDResultFirstKeepsNonNumericOrder(t *testing.T) {
-	got := prioritizeNumericIDResultFirst([]int{133, 169, 161, 186}, 161, false)
-	want := []int{133, 169, 161, 186}
-	if fmt.Sprint(got) != fmt.Sprint(want) {
-		t.Fatalf("prioritizeNumericIDResultFirst() = %v, want %v", got, want)
-	}
-}
-
 func TestQuoteDerivedTableNameKeepsWholeDerivedNameQuoted(t *testing.T) {
 	got := quoteDerivedTableName("app_service_catalog", "_lang_embeddings")
 	if got != `"app_service_catalog_lang_embeddings"` {
@@ -303,6 +288,7 @@ func openIntelligentFetcherTestDB(t *testing.T, state intelligentFetcherTestStat
 	t.Helper()
 
 	driverState := &intelligentFetcherTestState{
+		nonIntegerID:              state.nonIntegerID,
 		headerExists:              state.headerExists,
 		vectorExists:              state.vectorExists,
 		queryableColumns:          append([]string(nil), state.queryableColumns...),
@@ -341,6 +327,8 @@ func (*intelligentFetcherTestConn) Begin() (driver.Tx, error) {
 
 func (c *intelligentFetcherTestConn) QueryContext(_ context.Context, query string, args []driver.NamedValue) (driver.Rows, error) {
 	switch {
+	case strings.Contains(query, "FROM pg_catalog.pg_index AS key"):
+		return newIntelligentFetcherRows([]string{"exists"}, [][]driver.Value{{!c.state.nonIntegerID}}), nil
 	case strings.Contains(query, "FROM information_schema.columns") && strings.Contains(query, "column_name = $2"):
 		columnName, _ := args[1].Value.(string)
 		switch columnName {

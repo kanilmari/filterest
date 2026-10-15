@@ -212,8 +212,11 @@ func fetchFullTextRows(db dbutils.Querier, mainTable, searchString string, autho
 		return nil, nil
 	}
 
-	tsQuery := dtt_search_vectors.OrPrefixTsQuery(trimmed)
-	numericID, hasNumericID := dtt_search_vectors.NumericIDSearch(trimmed)
+	idSearch, err := dtt_search_vectors.DatasetIDSearch(db, mainTable, trimmed)
+	if err != nil {
+		return nil, err
+	}
+	trimmed = idSearch.TextTerm(trimmed)
 
 	rowName := "header"
 	if ok, err := tableHasColumn(db, mainTable, "header"); err != nil {
@@ -226,135 +229,62 @@ func fetchFullTextRows(db dbutils.Querier, mainTable, searchString string, autho
 	if err != nil {
 		return nil, err
 	}
+	cols, err := dbutils.GetQueryableColumns(mainTable, db, false)
+	if err != nil {
+		return nil, err
+	}
 
-	var (
-		query string
-		args  []interface{}
-	)
+	alias := mainTable
+	from := pq.QuoteIdentifier(mainTable)
+	prefix := ""
+	rankExpr := "1"
+	search := dtt_search_vectors.TextSearch{}
 	if hasVector {
-		cols, err := dbutils.GetQueryableColumns(mainTable, db, false)
-		if err != nil {
-			return nil, err
+		alias = "src"
+		searchVectorExpr := `"src".search_vector_simple`
+		if fallbackExpr := buildSimpleSearchVectorExpression(alias, cols); fallbackExpr != "" {
+			searchVectorExpr = fmt.Sprintf("COALESCE(%s, %s)", searchVectorExpr, fallbackExpr)
 		}
-
-		quotedSource := pq.QuoteIdentifier("src")
-		quotedID := pq.QuoteIdentifier("id")
-		searchVectorExpr := fmt.Sprintf(`%s.search_vector_simple`, quotedSource)
-		if fallbackExpr := buildSimpleSearchVectorExpression("src", cols); fallbackExpr != "" {
-			// Rows seeded before search-vector backfill should still participate in text search.
-			searchVectorExpr = fmt.Sprintf(`COALESCE(%s, %s)`, searchVectorExpr, fallbackExpr)
+		prefix = "WITH q AS (SELECT to_tsquery('simple', $1) AS query) "
+		from += fmt.Sprintf(` AS "src" CROSS JOIN q CROSS JOIN LATERAL (SELECT %s AS search_vector) AS search_doc`, searchVectorExpr)
+		rankExpr = "ts_rank(search_doc.search_vector, q.query)"
+		search = dtt_search_vectors.TextSearch{
+			Predicate: "search_doc.search_vector @@ q.query",
+			Args:      []interface{}{dtt_search_vectors.OrPrefixTsQuery(trimmed)},
+			OrderBy:   " ORDER BY rank DESC",
 		}
-
-		rankExpr := "ts_rank(search_doc.search_vector, q.query)"
-		idWhereExpr := ""
-		idOrderExpr := ""
-		if hasNumericID {
-			idExpr := fmt.Sprintf("%s.%s", quotedSource, quotedID)
-			rankExpr = fmt.Sprintf("CASE WHEN %s = $2 THEN 1.0 ELSE ts_rank(search_doc.search_vector, q.query) END", idExpr)
-			idWhereExpr = fmt.Sprintf(" OR %s = $2", idExpr)
-			idOrderExpr = fmt.Sprintf("(%s = $2) DESC, ", idExpr)
-		}
-
-		args = []interface{}{tsQuery}
-		if hasNumericID {
-			args = append(args, numericID)
-		}
-		authorizationCond, scopedArgs, err := appendIntelligentSearchAuthorizationCondition(
-			mainTable,
-			"src",
-			authorization,
-			args,
-		)
-		if err != nil {
-			return nil, err
-		}
-		args = scopedArgs
-		authorizationWhere := ""
-		if authorizationCond != "" {
-			authorizationWhere = " AND " + authorizationCond
-		}
-
-		query = fmt.Sprintf(`
-	               WITH q AS (
-	                       SELECT to_tsquery('simple', $1) AS query
-	               )
-	               SELECT %[2]s.id,
-	                      %[2]s.%[4]s,
-	                      %[6]s AS rank
-	               FROM %[1]s AS %[2]s
-	               CROSS JOIN q
-	               CROSS JOIN LATERAL (
-	                       SELECT %[5]s AS search_vector
-	               ) AS search_doc
-	               WHERE (search_doc.search_vector @@ q.query%[7]s)%[9]s
-	               ORDER BY %[8]srank DESC
-	               LIMIT %[3]d`,
-			pq.QuoteIdentifier(mainTable),
-			pq.QuoteIdentifier("src"),
-			limitResults,
-			pq.QuoteIdentifier(rowName),
-			searchVectorExpr,
-			rankExpr,
-			idWhereExpr,
-			idOrderExpr,
-			authorizationWhere,
-		)
 	} else {
-		cols, err := dbutils.GetQueryableColumns(mainTable, db, false)
-		if err != nil {
-			return nil, err
-		}
-		if len(cols) == 0 && !hasNumericID {
+		if len(cols) == 0 && !idSearch.Enabled {
 			return nil, nil
 		}
-		idExpr := fmt.Sprintf("%s.%s", pq.QuoteIdentifier(mainTable), pq.QuoteIdentifier("id"))
-		orderByClause := idExpr
-		whereClause := ""
-		if len(cols) == 0 {
-			whereClause = fmt.Sprintf("%s = $1", idExpr)
-			orderByClause = fmt.Sprintf("(%s = $1) DESC, %s", idExpr, idExpr)
-			args = []interface{}{numericID}
-		} else {
-			parts := make([]string, 0, len(cols))
-			for _, c := range cols {
-				parts = append(parts, fmt.Sprintf("coalesce(%s::text,'') ILIKE $1", pq.QuoteIdentifier(c)))
-			}
-			whereClause = strings.Join(parts, " OR ")
-			args = []interface{}{"%" + trimmed + "%"}
-			if hasNumericID {
-				whereClause = fmt.Sprintf("(%s OR %s = $2)", whereClause, idExpr)
-				orderByClause = fmt.Sprintf("(%s = $2) DESC, %s", idExpr, idExpr)
-				args = append(args, numericID)
-			}
+		// Keep the existing substring fallback and its identifier order.
+		parts := make([]string, 0, len(cols))
+		for _, column := range cols {
+			parts = append(parts, fmt.Sprintf("coalesce(%s::text,'') ILIKE $1", pq.QuoteIdentifier(column)))
 		}
-		authorizationCond, scopedArgs, err := appendIntelligentSearchAuthorizationCondition(
-			mainTable,
-			mainTable,
-			authorization,
-			args,
-		)
-		if err != nil {
-			return nil, err
+		search.Predicate = strings.Join(parts, " OR ")
+		search.OrderBy = " ORDER BY " + pq.QuoteIdentifier(mainTable) + `."id"`
+		if len(cols) > 0 {
+			search.Args = []interface{}{"%" + trimmed + "%"}
 		}
-		args = scopedArgs
-		if authorizationCond != "" {
-			whereClause = fmt.Sprintf("(%s) AND %s", whereClause, authorizationCond)
-		}
-		query = fmt.Sprintf(`
-               SELECT %[1]s.id,
-                      %[1]s.%[2]s,
-                      1 AS rank
-               FROM %[1]s
-               WHERE %[3]s
-               ORDER BY %[5]s
-               LIMIT %[4]d`,
-			pq.QuoteIdentifier(mainTable),
-			pq.QuoteIdentifier(rowName),
-			whereClause,
-			limitResults,
-			orderByClause,
-		)
 	}
+	idExpr := pq.QuoteIdentifier(alias) + `."id"`
+	search = idSearch.Apply(search, idExpr, len(search.Args)+1)
+	if hasVector && search.IDPredicate != "" {
+		// Preserve the assisted search's existing score for the exact ID hit.
+		rankExpr = fmt.Sprintf("CASE WHEN %s THEN 1.0 ELSE %s END", search.IDPredicate, rankExpr)
+	}
+	authorizationCond, args, err := appendIntelligentSearchAuthorizationCondition(mainTable, alias, authorization, search.Args)
+	if err != nil {
+		return nil, err
+	}
+	where := "(" + search.Predicate + ")"
+	if authorizationCond != "" {
+		where += " AND " + authorizationCond
+	}
+	query := fmt.Sprintf("%sSELECT %s.id, %s.%s, %s AS rank FROM %s WHERE %s%s LIMIT %d",
+		prefix, pq.QuoteIdentifier(alias), pq.QuoteIdentifier(alias), pq.QuoteIdentifier(rowName),
+		rankExpr, from, where, search.OrderBy, limitResults)
 
 	rows, err := db.Query(query, args...)
 	if err != nil {
