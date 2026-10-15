@@ -238,7 +238,7 @@ function createBodyElement(title, detailEntries) {
     const body = document.createElement("div");
     body.classList.add("product-card-view-body");
 
-    const heading = document.createElement("h3");
+    const heading = document.createElement("h2");
     heading.classList.add("product-card-view-title");
     heading.dataset.testid = "product-card-title";
     heading.textContent = truncateText(title.text, MAX_TITLE_LENGTH);

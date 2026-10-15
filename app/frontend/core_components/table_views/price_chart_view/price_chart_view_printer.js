@@ -240,11 +240,11 @@ function appendPointMarkers(svg, visiblePoints, scale, clockOnly) {
 }
 
 // Creates the empty or unsupported state for non-price datasets.
-function createNoticeElement(titleKey, bodyKey) {
+function createNoticeElement(titleKey, bodyKey, headingTag = "h3") {
     const notice = document.createElement("div");
     notice.classList.add("price-chart-view__notice");
 
-    const title = document.createElement("h3");
+    const title = document.createElement(headingTag);
     translateElement(title, titleKey);
 
     const body = document.createElement("p");
@@ -342,7 +342,7 @@ export function create_price_chart_view(table_name, columns, data, data_types = 
     root.dataset.datasetRowCommitter = 'price-chart';
 
     if (!axes.timeColumn || !axes.priceColumn) {
-        root.appendChild(createNoticeElement("chart_unavailable_title", "chart_unavailable_body"));
+        root.appendChild(createNoticeElement("chart_unavailable_title", "chart_unavailable_body", "h2"));
         return root;
     }
 
@@ -367,7 +367,7 @@ export function create_price_chart_view(table_name, columns, data, data_types = 
     };
     const toolbar = document.createElement("div");
     toolbar.classList.add("price-chart-view__toolbar");
-    const title = translateElement(document.createElement("h3"), "view_chart");
+    const title = translateElement(document.createElement("h2"), "view_chart");
     title.classList.add("price-chart-view__title");
     const actions = document.createElement("div");
     actions.classList.add("price-chart-view__toolbar-actions");

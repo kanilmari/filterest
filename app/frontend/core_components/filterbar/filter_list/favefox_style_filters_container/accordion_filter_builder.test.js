@@ -157,7 +157,7 @@ describe("create_favefox_style_filter_bar", () => {
         );
         document.body.appendChild(wrapper);
 
-        const sectionKeys = Array.from(wrapper.querySelectorAll(".filter-section h3")).map(
+        const sectionKeys = Array.from(wrapper.querySelectorAll(".filter-section .filter-section-title")).map(
             (heading) => heading.dataset.langKey
         );
 
@@ -208,7 +208,7 @@ describe("create_favefox_style_filter_bar", () => {
         const header = section.querySelector(".filter-header");
         const lead = header.querySelector(".filter-header-lead");
         const toggle = lead.querySelector(".toggle-filters-button");
-        const title = lead.querySelector("h3");
+        const title = lead.querySelector(".filter-section-title");
         const hoverActions = header.querySelector(".filter-section-hover-actions");
         const displayModes = hoverActions.querySelector(".filter-display-mode-controls");
         const visibilityToggle = header.querySelector(".filter-section-persistent-actions .column-visibility-toggle");
@@ -258,7 +258,7 @@ describe("create_favefox_style_filter_bar", () => {
         );
         document.body.appendChild(wrapper);
 
-        const sectionKeys = Array.from(wrapper.querySelectorAll(".filter-section h3")).map(
+        const sectionKeys = Array.from(wrapper.querySelectorAll(".filter-section .filter-section-title")).map(
             (heading) => heading.dataset.langKey
         );
 

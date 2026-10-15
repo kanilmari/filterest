@@ -144,6 +144,7 @@
   text-align: center;
 }
 
+.price-chart-view__notice h2,
 .price-chart-view__notice h3 {
   margin: 0;
   font-size: 1rem;
@@ -205,4 +206,9 @@
 .price-chart-view__axes :is(select, button):focus-visible {
   outline: 2px solid var(--price-chart-accent);
   outline-offset: 2px;
+}
+
+/* This standalone notice formerly used an unstyled h3; retain its native look. */
+.chart-unavailable-title {
+  font-size: 1.17em;
 }

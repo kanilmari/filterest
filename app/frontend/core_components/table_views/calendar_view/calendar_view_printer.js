@@ -380,7 +380,7 @@ function createWeekDayColumn(dateKey, eventsForDay, state) {
         section.classList.add("calendar-view__week-day--today");
     }
 
-    const heading = document.createElement("h3");
+    const heading = document.createElement("h2");
     heading.classList.add("calendar-view__week-day-heading");
     heading.textContent = formatDateLabel(dateKeyToDate(dateKey));
     section.appendChild(heading);
@@ -438,7 +438,7 @@ function createAgendaDaySection(dateKey, eventsForDay, state) {
     section.classList.add("calendar-view__day-section");
     section.dataset.date = dateKey;
 
-    const heading = document.createElement("h3");
+    const heading = document.createElement("h2");
     heading.classList.add("calendar-view__day-heading");
     heading.textContent = formatDateLabel(dateKeyToDate(dateKey));
     section.appendChild(heading);
@@ -458,7 +458,7 @@ function createEmptyDateRangeSection(startDateKey, endDateKey) {
     section.dataset.dateRange = `${startDateKey}:${endDateKey}`;
     section.dataset.testid = "calendar-empty-date-range";
 
-    const heading = document.createElement("h3");
+    const heading = document.createElement("h2");
     heading.classList.add("calendar-view__day-heading");
     heading.textContent = formatDateRangeHeading(startDateKey, endDateKey);
     section.appendChild(heading);

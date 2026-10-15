@@ -14,9 +14,10 @@ export function createChartUnavailableNotice(dataset, currentView, columns, data
     notice.className = 'price-chart-view';
     notice.dataset.testid = 'chart-unavailable';
     notice.setAttribute('role', 'status');
-    for (const [tag, key] of [['h3', 'chart_unavailable_title'], ['p', 'chart_unavailable_body']]) {
+    for (const [tag, key] of [['h2', 'chart_unavailable_title'], ['p', 'chart_unavailable_body']]) {
         const text = document.createElement(tag);
         text.dataset.langKey = key;
+        if (tag === "h2") text.classList.add("chart-unavailable-title");
         text.textContent = getTranslationForKey(key, { fallback: chartFallback(key, getLanguageWithBrowserFallback()) });
         notice.appendChild(text);
     }

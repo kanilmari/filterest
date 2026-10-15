@@ -169,6 +169,7 @@
     box-shadow: var(--map-view-shadow);
 }
 
+.map-view-list-shell h2,
 .map-view-list-shell h3 {
     margin: 0;
     padding: 0.9rem 1rem;
@@ -309,11 +310,13 @@
     text-align: center;
 }
 
+.map-view-empty h2,
 .map-view-empty h3,
 .map-view-empty p {
     margin: 0;
 }
 
+.map-view-empty h2,
 .map-view-empty h3 {
     font-size: 1.1rem;
 }

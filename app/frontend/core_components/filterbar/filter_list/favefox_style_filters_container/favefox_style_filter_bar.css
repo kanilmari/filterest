@@ -139,6 +139,7 @@ body.dark-mode .favefox-filterbar .filter-section:nth-child(even) {
     background-color: transparent;
 }
 
+.favefox-filterbar .filter-header h2,
 .favefox-filterbar .filter-header h3 {
     margin: 0;
     font-size: 0.9rem;
@@ -166,6 +167,7 @@ body.dark-mode .favefox-filterbar .filter-section:nth-child(even) {
     background-color: transparent;
 }
 
+.favefox-filterbar--inline-open .filter-header--static h2,
 .favefox-filterbar--inline-open .filter-header--static h3 {
     line-height: 1.2;
 }

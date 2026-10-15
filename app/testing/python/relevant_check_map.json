@@ -26,7 +26,7 @@
         "app/frontend/core_components/table_views/card_view/row_article_opener.js", "app/frontend/core_components/table_views/card_view/row_article_opener_helpers.js", "app/frontend/core_components/table_views/card_view/image_first_view_opener.js", "app/frontend/core_components/table_views/card_view/image_first_view_activation.js"
       ],
       "specs": [
-        "app/testing/e2e/C_card_view/C10_image_first_article.spec.ts", "app/testing/e2e/C_card_view/C11_network_media_variants.spec.ts", "app/testing/e2e/C_card_view/C12_article_reload_reading_position.spec.ts", "app/testing/e2e/C_card_view/C13_related_dataset_appearance.spec.ts",
+        "app/testing/e2e/C_card_view/C19_dataset_heading_hierarchy.spec.ts", "app/testing/e2e/C_card_view/C10_image_first_article.spec.ts", "app/testing/e2e/C_card_view/C11_network_media_variants.spec.ts", "app/testing/e2e/C_card_view/C12_article_reload_reading_position.spec.ts", "app/testing/e2e/C_card_view/C13_related_dataset_appearance.spec.ts",
         "app/testing/e2e/C_card_view/C16_finnish_card_filterbar_text.spec.ts", "app/testing/e2e/C_card_view/C17_article_toolbar_group_permissions.spec.ts", "app/testing/e2e/C_card_view/C18_article_open_appearance_probe.spec.ts", "app/testing/e2e/C_card_view/C2_open_big_card.spec.ts",
         "app/testing/e2e/C_card_view/C3_close_big_card.spec.ts", "app/testing/e2e/C_card_view/C6_big_card_attachments.spec.ts", "app/testing/e2e/C_card_view/C7_big_card_field_edit_preserves_assets.spec.ts", "app/testing/e2e/C_card_view/C8_big_card_primary_image_actions.spec.ts",
         "app/testing/e2e/C_card_view/C9_big_card_image_metadata_editor.spec.ts", "app/testing/e2e/E_search_filter/E10_site_identity_and_menu_contract.spec.ts", "app/testing/e2e/E_search_filter/E11_filterbar_persistence_and_article_seam.spec.ts", "app/testing/e2e/Q_scroll/Q2_offset_reset.spec.ts",
@@ -140,7 +140,7 @@
         "app/frontend/shared/dataset_appearance"
       ],
       "specs": [
-        "app/testing/e2e/C_card_view/C1_card_render.spec.ts",
+        "app/testing/e2e/C_card_view/C19_dataset_heading_hierarchy.spec.ts", "app/testing/e2e/C_card_view/C1_card_render.spec.ts",
         "app/testing/e2e/C_card_view/C3_close_big_card.spec.ts",
         "app/testing/e2e/Q_scroll/Q2_offset_reset.spec.ts",
         "app/testing/e2e/P_copy/P2_select_range.spec.ts",
@@ -198,7 +198,7 @@
         "app/frontend/core_components/filterbar", "app/frontend/reusable_components/multiselect_dropdown", "app/frontend/reusable_components/results_count"
       ],
       "specs": [
-        "app/testing/e2e/A_row_crud/A1_add_row.spec.ts", "app/testing/e2e/A_row_crud/A2_edit_cell.spec.ts", "app/testing/e2e/A_row_crud/A3_delete_rows.spec.ts", "app/testing/e2e/A_row_crud/A4_select_row.spec.ts",
+        "app/testing/e2e/C_card_view/C19_dataset_heading_hierarchy.spec.ts", "app/testing/e2e/A_row_crud/A1_add_row.spec.ts", "app/testing/e2e/A_row_crud/A2_edit_cell.spec.ts", "app/testing/e2e/A_row_crud/A3_delete_rows.spec.ts", "app/testing/e2e/A_row_crud/A4_select_row.spec.ts",
         "app/testing/e2e/A_row_crud/A5_select_all.spec.ts", "app/testing/e2e/A_row_crud/A6_select_card.spec.ts", "app/testing/e2e/A_row_crud/A7_fk_dropdown_edit.spec.ts", "app/testing/e2e/A_row_crud/A8_temp_dataset_persistence.spec.ts",
         "app/testing/e2e/B_column_ops/B1_column_resize.spec.ts", "app/testing/e2e/B_column_ops/B2_column_visibility.spec.ts", "app/testing/e2e/B_column_ops/B3_column_reorder.spec.ts", "app/testing/e2e/B_column_ops/B4_column_view_presets.spec.ts",
         "app/testing/e2e/C_card_view/C10_image_first_article.spec.ts", "app/testing/e2e/C_card_view/C11_network_media_variants.spec.ts", "app/testing/e2e/C_card_view/C14_product_card_row_commits.spec.ts", "app/testing/e2e/C_card_view/C15_chart_axes.spec.ts",
@@ -257,7 +257,7 @@
         "app/frontend/index.html"
       ],
       "specs": [
-        "app/testing/e2e/A_row_crud/A1_add_row.spec.ts", "app/testing/e2e/A_row_crud/A2_edit_cell.spec.ts", "app/testing/e2e/A_row_crud/A3_delete_rows.spec.ts", "app/testing/e2e/A_row_crud/A4_select_row.spec.ts",
+        "app/testing/e2e/C_card_view/C19_dataset_heading_hierarchy.spec.ts", "app/testing/e2e/A_row_crud/A1_add_row.spec.ts", "app/testing/e2e/A_row_crud/A2_edit_cell.spec.ts", "app/testing/e2e/A_row_crud/A3_delete_rows.spec.ts", "app/testing/e2e/A_row_crud/A4_select_row.spec.ts",
         "app/testing/e2e/A_row_crud/A5_select_all.spec.ts", "app/testing/e2e/A_row_crud/A6_select_card.spec.ts", "app/testing/e2e/A_row_crud/A7_fk_dropdown_edit.spec.ts", "app/testing/e2e/A_row_crud/A8_temp_dataset_persistence.spec.ts",
         "app/testing/e2e/B_column_ops/B1_column_resize.spec.ts", "app/testing/e2e/B_column_ops/B2_column_visibility.spec.ts", "app/testing/e2e/B_column_ops/B3_column_reorder.spec.ts", "app/testing/e2e/B_column_ops/B4_column_view_presets.spec.ts",
         "app/testing/e2e/C_card_view/C10_image_first_article.spec.ts", "app/testing/e2e/C_card_view/C11_network_media_variants.spec.ts", "app/testing/e2e/C_card_view/C12_article_reload_reading_position.spec.ts", "app/testing/e2e/C_card_view/C13_related_dataset_appearance.spec.ts",
@@ -323,7 +323,7 @@
         "app/backend/pipeline/device_id_check", "app/backend/pipeline/fingerprint_check", "app/backend/pipeline/csrf_check", "app/backend/pipeline/automation_check"
       ],
       "specs": [
-        "app/testing/e2e/A_row_crud/A1_add_row.spec.ts", "app/testing/e2e/A_row_crud/A2_edit_cell.spec.ts", "app/testing/e2e/A_row_crud/A3_delete_rows.spec.ts", "app/testing/e2e/A_row_crud/A4_select_row.spec.ts",
+        "app/testing/e2e/C_card_view/C19_dataset_heading_hierarchy.spec.ts", "app/testing/e2e/A_row_crud/A1_add_row.spec.ts", "app/testing/e2e/A_row_crud/A2_edit_cell.spec.ts", "app/testing/e2e/A_row_crud/A3_delete_rows.spec.ts", "app/testing/e2e/A_row_crud/A4_select_row.spec.ts",
         "app/testing/e2e/A_row_crud/A5_select_all.spec.ts", "app/testing/e2e/A_row_crud/A6_select_card.spec.ts", "app/testing/e2e/A_row_crud/A7_fk_dropdown_edit.spec.ts", "app/testing/e2e/A_row_crud/A8_temp_dataset_persistence.spec.ts",
         "app/testing/e2e/B_column_ops/B1_column_resize.spec.ts", "app/testing/e2e/B_column_ops/B2_column_visibility.spec.ts", "app/testing/e2e/B_column_ops/B3_column_reorder.spec.ts", "app/testing/e2e/B_column_ops/B4_column_view_presets.spec.ts",
         "app/testing/e2e/C_card_view/C10_image_first_article.spec.ts", "app/testing/e2e/C_card_view/C12_article_reload_reading_position.spec.ts", "app/testing/e2e/C_card_view/C13_related_dataset_appearance.spec.ts", "app/testing/e2e/C_card_view/C14_product_card_row_commits.spec.ts",
@@ -560,7 +560,7 @@
         "app/frontend/core_components/theme.js", "app/frontend/core_components/theme_preference_api.js"
       ],
       "specs": [
-        "app/testing/e2e/C_card_view/C10_image_first_article.spec.ts", "app/testing/e2e/C_card_view/C13_related_dataset_appearance.spec.ts", "app/testing/e2e/C_card_view/C14_product_card_row_commits.spec.ts", "app/testing/e2e/C_card_view/C15_chart_axes.spec.ts",
+        "app/testing/e2e/C_card_view/C19_dataset_heading_hierarchy.spec.ts", "app/testing/e2e/C_card_view/C10_image_first_article.spec.ts", "app/testing/e2e/C_card_view/C13_related_dataset_appearance.spec.ts", "app/testing/e2e/C_card_view/C14_product_card_row_commits.spec.ts", "app/testing/e2e/C_card_view/C15_chart_axes.spec.ts",
         "app/testing/e2e/C_card_view/C16_finnish_card_filterbar_text.spec.ts", "app/testing/e2e/C_card_view/C17_article_toolbar_group_permissions.spec.ts", "app/testing/e2e/C_card_view/C3_close_big_card.spec.ts", "app/testing/e2e/D_view_switch/D0_theme_and_mobile_menu.spec.ts",
         "app/testing/e2e/E_search_filter/E10_site_identity_and_menu_contract.spec.ts", "app/testing/e2e/E_search_filter/E13_row_group_category_panel.spec.ts", "app/testing/e2e/E_search_filter/E14_selected_category_refresh.spec.ts", "app/testing/e2e/E_search_filter/E15_responsive_topbar.spec.ts",
         "app/testing/e2e/E_search_filter/E16_multiselect_scroll.spec.ts", "app/testing/e2e/E_search_filter/E17_card_refresh_lifecycle.spec.ts", "app/testing/e2e/E_search_filter/E6_active_filter_tags.spec.ts", "app/testing/e2e/E_search_filter/E8_filterbar_nav_layering.spec.ts",

@@ -3,6 +3,39 @@
 // Bridges attachment child rows, upload permissions, and storage links inside the article.
 // Exists to make the new attachment-linking contract usable for end users, not only admins.
 
+import {
+    buildAcceptAttribute,
+    buildAttachmentMeta,
+    buildAttachmentUploadMeta,
+    classifyAttachmentKind,
+    filterAttachmentRows,
+    filterUploadableAttachmentFiles,
+    resolveAttachmentDescription,
+    resolveAttachmentDisplayName,
+    resolveAttachmentDownloadName,
+    resolveAttachmentKind,
+    resolveAttachmentOriginalName,
+} from "./row_article_attachment_metadata.js";
+import {
+    buildPdfThumbnail,
+    canPreviewAttachment,
+    createAttachmentPreviewPanel,
+} from "./row_article_attachment_preview.js";
+// Preserve the public attachment helper imports used by existing callers and specs.
+export {
+    buildAcceptAttribute,
+    classifyAttachmentKind,
+    filterAttachmentRows,
+    filterUploadableAttachmentFiles,
+    formatAttachmentSize,
+    resolveAttachmentDescription,
+    resolveAttachmentDisplayName,
+    resolveAttachmentDownloadName,
+    resolveAttachmentKind,
+    resolveAttachmentOriginalName,
+} from "./row_article_attachment_metadata.js";
+export { buildPdfPreviewSrc, buildPdfThumbnailSrc, canPreviewAttachment } from "./row_article_attachment_preview.js";
+
 import { endpoint_router } from "../../endpoints/endpoint_router.js";
 import {
     hasDatasetPermission,
@@ -16,14 +49,6 @@ import {
     showWarningToast,
 } from "../../../reusable_components/notifications/toast_notification_printer.js";
 import { showConfirmModal } from "../../../reusable_components/modal/confirm_modal_builder.js";
-
-const DEFAULT_ATTACHMENT_ASSET_KINDS = ["pdf", "document", "archive"];
-const DOCUMENT_EXTENSIONS = new Set([
-    "txt", "rtf", "doc", "docx", "odt", "csv", "xls", "xlsx", "ppt", "pptx",
-]);
-const ARCHIVE_EXTENSIONS = new Set([
-    "zip", "rar", "7z", "tar", "gz", "tgz", "bz2", "xz",
-]);
 
 /**
  * Builds the attachment section for an article view.
@@ -92,7 +117,7 @@ export async function buildRowArticleAttachmentList(parentTableName, parentRowId
     const titleBlock = document.createElement("div");
     titleBlock.classList.add("big_card_attachment_title_block");
 
-    const title = document.createElement("h3");
+    const title = document.createElement("h2");
     title.classList.add("big_card_attachment_title");
     title.textContent = getTranslationForKey("attachments") || "Liitteet";
     titleBlock.appendChild(title);
@@ -605,411 +630,4 @@ function createAttachmentMetadataEditor({ item, row, rowIndex, childDataset, onA
     });
 
     return { editButton, editor };
-}
-
-function buildPdfThumbnail({ row, rowIndex, href, onPreviewRequested }) {
-    const displayName = resolveAttachmentDisplayName(row);
-    const thumbnail = document.createElement("button");
-    thumbnail.type = "button";
-    thumbnail.classList.add("big_card_attachment_thumbnail");
-    thumbnail.dataset.testid = `big-card-pdf-thumbnail-${rowIndex}`;
-    thumbnail.setAttribute("aria-label", `Esikatsele PDF: ${displayName}`);
-
-    thumbnail.addEventListener("click", () => {
-        onPreviewRequested?.({
-            row,
-            href,
-            triggerButton: thumbnail,
-        });
-    });
-
-    const badge = document.createElement("span");
-    badge.classList.add("big_card_attachment_thumbnail_badge");
-    badge.textContent = "PDF";
-    thumbnail.appendChild(badge);
-
-    const frame = document.createElement("iframe");
-    frame.classList.add("big_card_attachment_thumbnail_frame");
-    frame.dataset.testid = `big-card-pdf-thumbnail-frame-${rowIndex}`;
-    frame.src = buildPdfThumbnailSrc(href);
-    frame.title = `PDF thumbnail: ${displayName}`;
-    frame.loading = "lazy";
-    frame.tabIndex = -1;
-    thumbnail.appendChild(frame);
-
-    const label = document.createElement("span");
-    label.classList.add("big_card_attachment_thumbnail_label");
-    label.textContent = "Avaa esikatselu";
-    thumbnail.appendChild(label);
-
-    return thumbnail;
-}
-
-export function canPreviewAttachment(row = {}, href = "") {
-    return Boolean(href) && resolveAttachmentKind(row) === "pdf";
-}
-
-export function buildPdfPreviewSrc(href = "") {
-    const normalizedHref = String(href || "").trim();
-    if (!normalizedHref) {
-        return "";
-    }
-
-    if (!normalizedHref.includes("#")) {
-        return `${normalizedHref}#toolbar=0&navpanes=0&view=FitH`;
-    }
-
-    if (normalizedHref.includes("toolbar=")) {
-        return normalizedHref;
-    }
-
-    return `${normalizedHref}&toolbar=0&navpanes=0&view=FitH`;
-}
-
-export function buildPdfThumbnailSrc(href = "") {
-    const previewSrc = buildPdfPreviewSrc(href);
-    if (!previewSrc) {
-        return "";
-    }
-
-    if (previewSrc.includes("#page=")) {
-        return previewSrc;
-    }
-
-    if (previewSrc.includes("#")) {
-        return `${previewSrc}&page=1`;
-    }
-
-    return `${previewSrc}#page=1`;
-}
-
-function createAttachmentPreviewPanel() {
-    const element = document.createElement("section");
-    element.classList.add("big_card_attachment_preview_panel");
-    element.dataset.testid = "big-card-pdf-preview";
-    element.hidden = true;
-
-    let activeHref = "";
-    let activeTriggerButton = null;
-
-    const setActiveButton = (button) => {
-        if (activeTriggerButton) {
-            activeTriggerButton.classList.remove("is-active");
-            activeTriggerButton.setAttribute("aria-pressed", "false");
-        }
-        activeTriggerButton = button || null;
-        if (activeTriggerButton) {
-            activeTriggerButton.classList.add("is-active");
-            activeTriggerButton.setAttribute("aria-pressed", "true");
-        }
-    };
-
-    const hide = () => {
-        element.hidden = true;
-        element.replaceChildren();
-        activeHref = "";
-        setActiveButton(null);
-    };
-
-    const show = ({ row, href, triggerButton }) => {
-        const displayName = resolveAttachmentDisplayName(row);
-        const frameSrc = buildPdfPreviewSrc(href);
-
-        element.hidden = false;
-        element.replaceChildren();
-        activeHref = href;
-        setActiveButton(triggerButton);
-
-        const header = document.createElement("div");
-        header.classList.add("big_card_attachment_preview_header");
-
-        const titleBlock = document.createElement("div");
-        titleBlock.classList.add("big_card_attachment_preview_title_block");
-
-        const title = document.createElement("h4");
-        title.classList.add("big_card_attachment_preview_title");
-        title.textContent = displayName;
-        titleBlock.appendChild(title);
-
-        const meta = document.createElement("div");
-        meta.classList.add("big_card_attachment_preview_meta");
-        meta.textContent = buildAttachmentMeta(row);
-        titleBlock.appendChild(meta);
-        header.appendChild(titleBlock);
-
-        const headerActions = document.createElement("div");
-        headerActions.classList.add("big_card_attachment_preview_actions");
-
-        const open = document.createElement("a");
-        open.classList.add("fw-btn", "big_card_attachment_preview_open");
-        open.dataset.testid = "big-card-pdf-preview-open";
-        open.textContent = getTranslationForKey("open") || "Avaa";
-        open.href = href;
-        open.target = "_blank";
-        open.rel = "noopener";
-
-        const download = document.createElement("a");
-        download.classList.add("fw-btn", "fw-btn--ghost", "big_card_attachment_preview_download");
-        download.dataset.testid = "big-card-pdf-preview-download";
-        download.textContent = getTranslationForKey("download") || "Lataa";
-        download.href = href;
-        download.download = resolveAttachmentDownloadName(row);
-
-        const close = document.createElement("button");
-        close.type = "button";
-        close.classList.add("fw-btn", "fw-btn--ghost", "big_card_attachment_preview_close");
-        close.dataset.testid = "big-card-pdf-preview-close";
-        close.textContent = getTranslationForKey("close") || "Sulje";
-        close.addEventListener("click", hide);
-
-        headerActions.append(open, download, close);
-        header.appendChild(headerActions);
-        element.appendChild(header);
-
-        const frame = document.createElement("iframe");
-        frame.classList.add("big_card_attachment_preview_frame");
-        frame.dataset.testid = "big-card-pdf-preview-frame";
-        frame.src = frameSrc;
-        frame.title = `PDF preview: ${displayName}`;
-        frame.loading = "lazy";
-        element.appendChild(frame);
-
-        const hint = document.createElement("p");
-        hint.classList.add("big_card_attachment_preview_hint");
-        hint.textContent = "Jos esikatselu ei näy, avaa PDF uuteen välilehteen tai lataa se.";
-        element.appendChild(hint);
-    };
-
-    return {
-        element,
-        hide,
-        toggle({ row, href, triggerButton }) {
-            if (!canPreviewAttachment(row, href)) {
-                return;
-            }
-            if (!element.hidden && activeHref === href) {
-                hide();
-                return;
-            }
-            show({ row, href, triggerButton });
-        },
-    };
-}
-
-export function filterAttachmentRows(rows = [], allowedKinds = DEFAULT_ATTACHMENT_ASSET_KINDS) {
-    const allowed = new Set(
-        (Array.isArray(allowedKinds) && allowedKinds.length > 0
-            ? allowedKinds
-            : DEFAULT_ATTACHMENT_ASSET_KINDS
-        ).map((value) => String(value).toLowerCase())
-    );
-
-    return rows.filter((row) => {
-        const rawKind = row?.asset_kind == null ? "" : String(row.asset_kind).trim().toLowerCase();
-        if (!rawKind) return true;
-        return allowed.has(rawKind);
-    }).sort(compareAttachmentRows);
-}
-
-export function classifyAttachmentKind(fileName = "", mimeType = "") {
-    const ext = extractFileExtension(fileName);
-    const normalizedMime = String(mimeType || "").toLowerCase();
-
-    if (normalizedMime === "application/pdf" || ext === "pdf") {
-        return "pdf";
-    }
-    if (ARCHIVE_EXTENSIONS.has(ext) || normalizedMime.includes("zip") || normalizedMime.includes("compressed")) {
-        return "archive";
-    }
-    if (DOCUMENT_EXTENSIONS.has(ext) || normalizedMime.startsWith("text/") || normalizedMime.includes("document")) {
-        return "document";
-    }
-    return "document";
-}
-
-export function resolveAttachmentKind(row = {}) {
-    if (row?.asset_kind) {
-        return String(row.asset_kind).trim().toLowerCase();
-    }
-    return classifyAttachmentKind(
-        resolveAttachmentDisplayName(row),
-        row?.mime_type || ""
-    );
-}
-
-export function resolveAttachmentDisplayName(row = {}) {
-    const preferred = [row?.title, row?.original_name, row?.filename];
-    const found = preferred.find((value) => typeof value === "string" && value.trim() !== "");
-    return found ? found.trim() : "attachment";
-}
-
-export function resolveAttachmentOriginalName(row = {}) {
-    const preferred = [row?.original_name, row?.filename];
-    const found = preferred.find((value) => typeof value === "string" && value.trim() !== "");
-    return found ? found.trim() : "";
-}
-
-export function resolveAttachmentDescription(row = {}) {
-    return typeof row?.description === "string" ? row.description.trim() : "";
-}
-
-export function resolveAttachmentDownloadName(row = {}) {
-    const displayName = resolveAttachmentDisplayName(row);
-    const originalName = resolveAttachmentOriginalName(row);
-    const originalExtension = extractFileExtension(originalName);
-
-    if (!displayName || displayName === "attachment") {
-        return originalName || displayName;
-    }
-    if (!originalExtension || hasFilenameExtension(displayName)) {
-        return displayName;
-    }
-    return `${displayName}.${originalExtension}`;
-}
-
-export function formatAttachmentSize(sizeBytes) {
-    const size = Number(sizeBytes);
-    if (!Number.isFinite(size) || size <= 0) {
-        return "";
-    }
-    if (size < 1024) {
-        return `${size} B`;
-    }
-    if (size < 1024 * 1024) {
-        return `${(size / 1024).toFixed(1)} KB`;
-    }
-    return `${(size / (1024 * 1024)).toFixed(1)} MB`;
-}
-
-export function buildAcceptAttribute(allowedFileTypes = []) {
-    if (!Array.isArray(allowedFileTypes) || allowedFileTypes.length === 0) {
-        return "";
-    }
-    return allowedFileTypes
-        .map((ext) => String(ext).trim().replace(/^\./u, ""))
-        .filter(Boolean)
-        .map((ext) => `.${ext}`)
-        .join(",");
-}
-
-export function filterUploadableAttachmentFiles(files = [], options = {}) {
-    const normalizedFiles = Array.from(files || []).filter(Boolean);
-    const allowedExtensions = new Set(extractAllowedFileExtensions(options.allowedFileTypes));
-    const maxFileSizeMB = Number(options.maxFileSizeMB || 0);
-
-    return normalizedFiles.reduce((acc, file) => {
-        if (!matchesAllowedAttachmentFile(file, allowedExtensions)) {
-            acc.rejectedByType.push(file);
-            return acc;
-        }
-        if (maxFileSizeMB > 0 && file.size / (1024 * 1024) > maxFileSizeMB) {
-            acc.rejectedBySize.push(file);
-            return acc;
-        }
-        acc.acceptedFiles.push(file);
-        return acc;
-    }, {
-        acceptedFiles: [],
-        rejectedByType: [],
-        rejectedBySize: [],
-    });
-}
-
-function buildAttachmentMeta(row = {}) {
-    const parts = [];
-    const mimeType = typeof row?.mime_type === "string" ? row.mime_type.trim() : "";
-    const formattedSize = formatAttachmentSize(row?.size_bytes);
-    const originalName = resolveAttachmentOriginalName(row);
-    const displayName = resolveAttachmentDisplayName(row);
-
-    if (originalName && displayName && originalName !== displayName) parts.push(originalName);
-    if (mimeType) parts.push(mimeType);
-    if (formattedSize) parts.push(formattedSize);
-
-    return parts.length > 0 ? parts.join(" · ") : "Tiedosto";
-}
-
-function buildAttachmentUploadMeta({ allowedFileTypes = [], maxFileSizeMB = 0 } = {}) {
-    const parts = [];
-    const allowed = Array.isArray(allowedFileTypes)
-        ? allowedFileTypes
-            .map((ext) => String(ext || "").trim().replace(/^\./u, "").toUpperCase())
-            .filter(Boolean)
-        : [];
-    if (allowed.length > 0) {
-        parts.push(allowed.join(", "));
-    }
-    if (maxFileSizeMB > 0) {
-        parts.push(`max ${maxFileSizeMB} MB`);
-    }
-    return parts.join(" · ");
-}
-
-function extractFileExtension(fileName = "") {
-    const trimmed = String(fileName || "").trim().toLowerCase();
-    const parts = trimmed.split(".");
-    return parts.length > 1 ? parts.pop() : "";
-}
-
-function hasFilenameExtension(fileName = "") {
-    return extractFileExtension(fileName) !== "";
-}
-
-function extractAllowedFileExtensions(allowedFileTypes = []) {
-    return Array.isArray(allowedFileTypes)
-        ? allowedFileTypes
-            .map((ext) => String(ext || "").trim().replace(/^\./u, "").toLowerCase())
-            .filter(Boolean)
-        : [];
-}
-
-function matchesAllowedAttachmentFile(file, allowedExtensions) {
-    if (!(allowedExtensions instanceof Set) || allowedExtensions.size === 0) {
-        return true;
-    }
-
-    const extension = extractFileExtension(file?.name || "");
-    return Boolean(extension) && allowedExtensions.has(extension);
-}
-
-function compareAttachmentRows(left = {}, right = {}) {
-    const sortOrderDelta = normalizeAttachmentSortOrder(left?.sort_order) - normalizeAttachmentSortOrder(right?.sort_order);
-    if (sortOrderDelta !== 0) {
-        return sortOrderDelta;
-    }
-
-    const createdDelta = normalizeAttachmentTimestamp(left?.created) - normalizeAttachmentTimestamp(right?.created);
-    if (createdDelta !== 0) {
-        return createdDelta;
-    }
-
-    const idDelta = normalizeAttachmentNumericID(left?.id) - normalizeAttachmentNumericID(right?.id);
-    if (idDelta !== 0) {
-        return idDelta;
-    }
-
-    return resolveAttachmentDisplayName(left).localeCompare(resolveAttachmentDisplayName(right));
-}
-
-function normalizeAttachmentSortOrder(value) {
-    const parsed = Number(value);
-    return Number.isFinite(parsed) ? parsed : Number.MAX_SAFE_INTEGER;
-}
-
-function normalizeAttachmentTimestamp(value) {
-    if (typeof value === "number" && Number.isFinite(value)) {
-        return value;
-    }
-    if (typeof value === "string" && value.trim() !== "") {
-        const parsed = Date.parse(value);
-        if (Number.isFinite(parsed)) {
-            return parsed;
-        }
-    }
-    return Number.MAX_SAFE_INTEGER;
-}
-
-function normalizeAttachmentNumericID(value) {
-    const parsed = Number(value);
-    return Number.isFinite(parsed) ? parsed : Number.MAX_SAFE_INTEGER;
 }

@@ -357,6 +357,7 @@
   background-color: transparent;
 }
 
+.filterbar-panel-body .favefox-filterbar--inline-open .filter-header--static h2,
 .filterbar-panel-body .favefox-filterbar--inline-open .filter-header--static h3 {
   line-height: 1.2;
 }

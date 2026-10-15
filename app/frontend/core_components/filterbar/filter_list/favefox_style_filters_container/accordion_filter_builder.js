@@ -139,7 +139,9 @@ export function create_favefox_style_filter_bar(table_name, sections = [], optio
             headerLead.appendChild(sectionToggleBtn);
         }
 
-        const titleElem = document.createElement('h3');
+        // Filter sections are peers directly below the dataset title (h1).
+        const titleElem = document.createElement('h2');
+        titleElem.classList.add('filter-section-title');
         titleElem.dataset.langKey = key;
         titleElem.textContent = title;
         headerLead.appendChild(titleElem);
