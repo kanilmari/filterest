@@ -932,8 +932,15 @@
       "kind": "asset",
       "path": "app/server_tools/public_bootstrap/source/fixtures/starter-images/ticket-original.jpg",
       "sha256": "adca8974a9d808d286286dc6529024d8aa2b3837c417224008f69805cd32b113"
+    },
+    {
+      "component": "Filterest original interface SVGs",
+      "kind": "asset",
+      "path": "app/testing/fixtures/custom_root/custom_root.svg",
+      "sha256": "b42d26a33ea22b298afa91cd5871b30669544ffc6e6a5e07e6cd0d40b7754809",
+      "source_detail": "Original rounded rectangle and plus-sign geometry maintained with the custom-root browser test fixture; introduced in source commit 2c572552."
     }
   ],
-  "reviewed_on": "2026-09-24",
+  "reviewed_on": "2026-10-15",
   "schema_version": 2
 }

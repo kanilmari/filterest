@@ -560,7 +560,8 @@
         "app/server_tools/licenses",
         "app/server_tools/public_bootstrap/source/fixtures",
         "THIRD_PARTY_LICENSES",
-        "THIRD_PARTY_NOTICES.md"
+        "THIRD_PARTY_NOTICES.md",
+        "app/testing/fixtures/custom_root/custom_root.svg"
       ],
       "tests": [
         "app/testing/python/test_reviewed_provenance_hashes.py"

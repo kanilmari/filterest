@@ -87,7 +87,7 @@ opened from a result card pushes a history entry; browser Back dismisses it and
 restores the listing. Tablet and desktop retain the shared toolbar close button.
 `C3_close_big_card.spec.ts` verifies these two paths in the same test.
 
-Card/filterbar copy uses the shared language dictionaries, seeded by `20261013000002_seed_card_and_filterbar_language_keys.sql` in DB 9.11.1 (`20261013000099_record_database_release_9_11_1.sql`), paired with application 9.4.1. Add-row names resolve the tab's own language key. Every card detail renderer, including article date fields, prints empty values through `empty_value_printer.js`: an em dash with the `unknown` tooltip and accessible label. The generated foreign-reference aliases `created_by_name` and `owner_name (ln)` have product translations; stored row values are unchanged.
+Card/filterbar copy uses the shared language dictionaries, seeded by `20261013000002_seed_card_and_filterbar_language_keys.sql` in DB 9.11.1 (`20261013000099_record_database_release_9_11_1.sql`). The released target for application 9.4.2 is DB 9.11.2, which adds article-view permission explanations and group field-setting warnings without changing grants. Add-row names resolve the tab's own language key. Every card detail renderer, including article date fields, prints empty values through `empty_value_printer.js`: an em dash with the `unknown` tooltip and accessible label. The generated foreign-reference aliases `created_by_name` and `owner_name (ln)` have product translations; stored row values are unchanged.
 
 ### Column filter visibility
 
