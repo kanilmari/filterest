@@ -3,9 +3,10 @@
 // Bridges the History API with the navigation engine (handle_all_navigation, setUnifiedTableState).
 // Exists to decouple history restoration logic from the main navigation entry point.
 
+import { requireArticleViewAccess } from '../../table_views/card_view/article_view_access.js';
 import { hasDatasetAccessSnapshot, subscribeDatasetAccessRegistry } from './dataset_access_registry.js';
 import { handleImageFirstViewHistory } from "./image_first_view_history.js";
-import { HISTORY_ENTRY_ID, getHistoryDatasetView } from "./history_entry_state.js";
+import { HISTORY_ENTRY_ID, getHistoryDatasetView, retainHistoryEntryAddress, releaseHistoryEntryAddress } from "./history_entry_state.js";
 import { canRestoreCardArticleReturn, restoreCardArticleReturn, getCardArticleReturnToken, refreshCardArticleReturnViewport } from "./card_article_return_state.js";
 import { custom_views } from '../admin_and_user_tools/custom_view_reader.js';
 import { setParams, DATASET_PREFIX, parseTableQueryString } from './query_params.js';
@@ -140,16 +141,24 @@ async function restoreArticleReturnView(datasetName, isCurrentNavigation) {
     return true;
 }
 
-async function restoreHistoryEntryState() {
-    const targetEntryId = history.state?.[HISTORY_ENTRY_ID] ?? null;
-    const targetURL = window.location.href;
-    const isCurrentNavigation = () => window.location.href === targetURL
-        && (history.state?.[HISTORY_ENTRY_ID] ?? null) === targetEntryId;
+async function restoreHistoryEntryState(isCurrentNavigation) {
+    if (!isCurrentNavigation()) return;
     const targetPrefix = getPrefixFromPathname(window.location.pathname, DATASET_PREFIX);
     const target = targetPrefix ? parseDeepLink(window.location.pathname.slice(targetPrefix.length)) : null;
-    if (await handleImageFirstViewHistory({
+    // Denial must use the same URL-over-history precedence as restoration,
+    // before closing an article, changing choices or taking address ownership.
+    const requestedView = target?.name
+        ? getTargetView(target.name, parseTableQueryString(window.location.search)) : null;
+    if (target?.name && (target.deepLinkedRowId || ['article_view', 'image_first_view'].includes(requestedView))
+        && !requireArticleViewAccess()) {
+        retainHistoryEntryAddress();
+        return { articleAccessDenied: true };
+    }
+    releaseHistoryEntryAddress();
+    const imageFirstResult = await handleImageFirstViewHistory({
         tableName: target?.name, rowId: target?.deepLinkedRowId, isCurrentNavigation,
-    })) return;
+    });
+    if (imageFirstResult) return imageFirstResult;
     if (!isCurrentNavigation()) return;
     if (target?.name && !target.deepLinkedRowId && canRestoreCardArticleReturn(target.name)) {
         const datasetName = target.name;
@@ -264,29 +273,40 @@ subscribeDatasetAccessRegistry(response => {
     void handleHistoryNavigation();
 });
 
+let historyRestorationGeneration = 0;
 async function handleHistoryNavigation() {
+    // Capture before the first await. URL/entry equality alone cannot distinguish
+    // Back then Forward to the same entry while an older restoration is pending.
+    const ownGeneration = ++historyRestorationGeneration;
+    const landedEntryId = history.state?.[HISTORY_ENTRY_ID] ?? null;
+    const landedURL = window.location.href;
+    const isLandedEntry = () => ownGeneration === historyRestorationGeneration
+        && window.location.href === landedURL
+        && (history.state?.[HISTORY_ENTRY_ID] ?? null) === landedEntryId;
     // This must precede hydration, article restoration and the finally URL writer.
     if (await loadCustomRootFromHistory()) return;
+    if (!isLandedEntry()) return;
     if (!hasDatasetAccessSnapshot()) {
         pendingHistoryRestoration = true;
         return;
     }
     // An entry the person has already left again is not ours to rewrite, so the
     // address owner below only speaks for the entry this restoration started on.
-    const landedEntryId = history.state?.[HISTORY_ENTRY_ID] ?? null;
-    const landedURL = window.location.href;
-    const isLandedEntry = () => window.location.href === landedURL
-        && (history.state?.[HISTORY_ENTRY_ID] ?? null) === landedEntryId;
+    let restoration;
     try {
-        await restoreHistoryEntryState();
+        restoration = await restoreHistoryEntryState(isLandedEntry);
     } finally {
         // Several restoration paths return before any navigation runs, including
         // the cached article return and the already-cleaned close. The address
         // and the browser tab still have to describe the entry the person landed
         // on, and the restored view may be a permitted fallback of the one the
         // entry asked for.
-        await updateDatasetAddress({ isCurrent: isLandedEntry });
-        await updateBrowserTabTitle();
+        if (!restoration?.articleAccessDenied && isLandedEntry()) {
+            const wroteAddress = await updateDatasetAddress({ isCurrent: isLandedEntry });
+            if (ownGeneration === historyRestorationGeneration && (wroteAddress || isLandedEntry())) {
+                await updateBrowserTabTitle();
+            }
+        }
     }
 }
 

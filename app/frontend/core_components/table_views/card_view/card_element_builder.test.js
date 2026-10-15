@@ -293,3 +293,36 @@ describe('card_element_builder updateCardImageSources', () => {
         expect(img.src).toContain('/storage/9/1/1000/9_1_1.png');
     });
 });
+
+
+describe('classic article title and show-more access', () => {
+    beforeEach(() => {
+        document.body.replaceChildren();
+        sessionStorage.clear();
+        localStorage.setItem('chosen_language', 'fi');
+    });
+    test.each([false, true])('title keeps only permitted opening behavior, allowed=%s', async allowed => {
+        const { addHeaderElement, createShowMoreLink } = await import('./card_element_builder.js');
+        const { openRowArticleView } = await import('./row_article_opener.js');
+        vi.mocked(openRowArticleView).mockClear();
+        sessionStorage.setItem('user_permissions', JSON.stringify(allowed ? ['/ui/view/article_view'] : []));
+        const card = document.createElement('div'); card.className = 'card'; document.body.append(card);
+        const row = { id: 1, title: 'Article' };
+        const title = addHeaderElement('Article', 'Title', 'title', false, row, 'news', card);
+        const more = createShowMoreLink(row, 'news'); card.append(more);
+        expect(title.dataset.articleAccess).toBe(allowed ? 'allowed' : 'denied');
+        expect(more.hasAttribute('href')).toBe(allowed);
+        title.click();
+        more.click();
+        if (allowed) expect(openRowArticleView).toHaveBeenCalledTimes(2);
+        else {
+            expect(openRowArticleView).not.toHaveBeenCalled();
+            expect(document.querySelector('[role="alert"]').textContent).toContain('do not have permission');
+            title.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter' }));
+            expect(document.querySelectorAll('[role="alert"]')).toHaveLength(3);
+            expect(title.hasAttribute('role')).toBe(false);
+            expect(title.hasAttribute('tabindex')).toBe(false);
+            expect(openRowArticleView).not.toHaveBeenCalled();
+        }
+    });
+});

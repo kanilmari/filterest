@@ -55,6 +55,7 @@ export async function setAuthModes() {
 
             // Authenticated permissions retain their existing endpoint. Guest UI
             // grants arrive with auth modes, before main/post-auth render articles.
+            let permissionSnapshotVerified = false;
             if (data.needs_button === "logout") {
                 try {
                     const permData = await fetchUserPermissions();
@@ -64,6 +65,7 @@ export async function setAuthModes() {
                             "user_permissions",
                             JSON.stringify(permData.endpoints)
                         );
+                        permissionSnapshotVerified = true;
                     } else {
                         console.warn("Virhe käyttäjäoikeuksien haussa: endpoints-taulukkoa ei saatu");
                         sessionStorage.removeItem("user_permissions");
@@ -77,8 +79,11 @@ export async function setAuthModes() {
                 if (Array.isArray(data.guest_ui_endpoints)
                     && data.guest_ui_endpoints.every(route => typeof route === 'string' && route.startsWith('/ui/'))) {
                     sessionStorage.setItem('user_permissions', JSON.stringify(data.guest_ui_endpoints));
+                    permissionSnapshotVerified = true;
                 }
             }
+            // Failed/malformed reads must leave denied live updates stopped.
+            if (permissionSnapshotVerified) window.dispatchEvent(new CustomEvent('routePermissionsRefreshed'));
         } else {
             console.warn("needs_button tietoa ei saatu tai se ei ole merkkijono.");
         }

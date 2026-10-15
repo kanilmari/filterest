@@ -179,6 +179,24 @@ describe('auth_mode_handler', () => {
     expect(warnSpy).toHaveBeenCalled();
   });
 
+  test.each(['reader-failure', 'reader-malformed', 'guest-missing', 'guest-malformed', 'reader', 'guest'])(
+    'signals verified permission refresh only for a complete snapshot: %s', async scenario => {
+      const guest = scenario.startsWith('guest');
+      fetchAuthModesMock.mockResolvedValue({ needs_button: guest ? 'login' : 'logout',
+        ...(scenario === 'guest' ? { guest_ui_endpoints: [] } : {}),
+        ...(scenario === 'guest-malformed' ? { guest_ui_endpoints: ['/api/invalid'] } : {}),
+      });
+      if (scenario === 'reader-failure') fetchUserPermissionsMock.mockRejectedValue(new Error('offline'));
+      else fetchUserPermissionsMock.mockResolvedValue({ endpoints: scenario === 'reader-malformed' ? [null] : [] });
+      vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const refreshed = vi.fn(); window.addEventListener('routePermissionsRefreshed', refreshed);
+      try {
+        const mod = await loadModule(); await mod.setAuthModes();
+        expect(refreshed).toHaveBeenCalledTimes(['reader', 'guest'].includes(scenario) ? 1 : 0);
+      } finally { window.removeEventListener('routePermissionsRefreshed', refreshed); }
+    },
+  );
+
   test('warns when needs_button is missing or invalid', async () => {
     fetchAuthModesMock.mockResolvedValue({ needs_button: null });
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});

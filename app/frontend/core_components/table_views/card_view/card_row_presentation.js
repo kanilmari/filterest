@@ -3,6 +3,7 @@
 // Bridges existing card assembly with shared selection and presentation contracts.
 // Exists to keep one card implementation within the source size limit.
 import { createImageElement, create_seeded_avatar } from "./card_avatar_builder.js";
+import { bindArticleViewActivation } from './article_view_access.js';
 import { openRowArticleView } from "./row_article_opener.js";
 import { format_column_name, createTicketStatusBadge } from "./card_field_formatter.js";
 import { renderKeyValuePairs } from "../../../reusable_components/key_value_container/kv_container_printer.js";
@@ -270,7 +271,7 @@ export function appendSmallCardSummary({
 
     summaryDiv.appendChild(imgDivSmall);
     summaryDiv.appendChild(textWrap);
-    summaryDiv.addEventListener("click", (e) => {
+    bindArticleViewActivation(summaryDiv, (e) => {
         e.preventDefault();
         openRowArticleView(row_item, table_name, card);
     });

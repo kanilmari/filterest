@@ -3,7 +3,8 @@
 // Bridges the shared URL writer, navigation permission pipeline and modal lifecycle.
 // Exists so Back leaves this view and Forward restores its selected row and image.
 
-import { HISTORY_ENTRY_ID, ensureHistoryEntryId, writeHistoryEntry } from "./history_entry_state.js";
+import { requireArticleViewAccess } from '../../table_views/card_view/article_view_access.js';
+import { HISTORY_ENTRY_ID, ensureHistoryEntryId, writeHistoryEntry, retainHistoryEntryAddress, isHistoryEntryAddressRetained } from "./history_entry_state.js";
 import { IMAGE_FIRST_VIEW_KEY, CARD_VIEW_KEY, ARTICLE_VIEW_KEY, isRenderableDatasetView } from "../../table_views/dataset_view_registry.js";
 import { subscribeDatasetAccessRegistry, hasDatasetAccessSnapshot, canReadDatasetFromRegistry } from "./dataset_access_registry.js";
 
@@ -56,12 +57,13 @@ function captureOrigin(tableName) {
 }
 
 /** Uses the existing permission and dirty stages without navigating the backing dataset. */
-export async function authorizeImageFirstView(tableName, isCurrent) {
-    const [{ runNavigationPipeline }, { hasRoutePermission }] = await Promise.all([
-        import("../../pipeline/navigation_pipeline.js"),
-        import("../../route_permission_checker.js"),
-    ]);
-    if (!isCurrent() || !hasRoutePermission("/ui/view/article_view")) return false;
+export async function authorizeImageFirstView(tableName, isCurrent, onAccessDenied) {
+    const { runNavigationPipeline } = await import("../../pipeline/navigation_pipeline.js");
+    if (!isCurrent()) return false;
+    if (!requireArticleViewAccess()) {
+        onAccessDenied?.();
+        return false;
+    }
     const result = await runNavigationPipeline({
         // This view owns its own address, including its row and image; only the
         // permission and dirty stages are borrowed here.
@@ -73,7 +75,6 @@ export async function authorizeImageFirstView(tableName, isCurrent) {
 
 /** Captures an opening intent; asynchronous media/row work cannot outlive its URL. */
 export function beginImageFirstViewOpen({ tableName, rowId, listPath, restoring = false, isCurrent = () => true }) {
-    ensureHistoryEntryId();
     const initial = currentIdentity();
     const ownGeneration = ++generation;
     pendingTableName = tableName;
@@ -87,6 +88,9 @@ export function beginImageFirstViewOpen({ tableName, rowId, listPath, restoring 
         image: target?.image || "",
         commit(image) {
             if (!canCommit() || !/^\d+$/.test(String(rowId))) return null;
+            // Assign the source's identity only after authorization/media work
+            // succeeds; even an ID-only replace would mutate a denied restore.
+            if (origin && !origin.entryId && identityMatches(origin)) origin.entryId = ensureHistoryEntryId();
             const url = new URL(listPath.replace(/\/$/, "") + "/" + rowId, location.origin);
             url.search = location.search;
             url.searchParams.set("view", IMAGE_FIRST_VIEW_KEY);
@@ -117,7 +121,7 @@ export function attachImageFirstView(entryId, modalResult) {
     let restoreFrame = null;
     body.scrollTop = savedScroll;
     const rememberScroll = () => {
-        if (restoringScroll || activeView?.entryId !== entryId || history.state?.[HISTORY_ENTRY_ID] !== entryId) return;
+        if (restoringScroll || isHistoryEntryAddressRetained() || activeView?.entryId !== entryId || history.state?.[HISTORY_ENTRY_ID] !== entryId) return;
         history.replaceState({ ...history.state, [IMAGE_FIRST_HISTORY_KEY]: {
             ...history.state[IMAGE_FIRST_HISTORY_KEY], scroll: body.scrollTop,
         } }, "", location.href);
@@ -133,9 +137,9 @@ export function attachImageFirstView(entryId, modalResult) {
         // The entrance transform temporarily reduces scrollable overflow.
         // Restore once it finishes; ignore its transient clamp, not user input.
         Promise.resolve(modalResult.whenReady).then(() => {
-            if (!restoringScroll || activeView?.entryId !== entryId) return;
+            if (!restoringScroll || isHistoryEntryAddressRetained() || activeView?.entryId !== entryId) return;
             restoreFrame = requestAnimationFrame(() => {
-                if (!restoringScroll || activeView?.entryId !== entryId
+                if (!restoringScroll || isHistoryEntryAddressRetained() || activeView?.entryId !== entryId
                     || history.state?.[HISTORY_ENTRY_ID] !== entryId) return;
                 body.scrollTop = savedScroll;
                 restoringScroll = false;
@@ -219,19 +223,30 @@ function returnFromUnavailableImageFirstView(target) {
     window.dispatchEvent(new PopStateEvent("popstate", { state: history.state }));
 }
 
-/** Returns true only when the image-first route fully owns this history transition. */
+/** Returns a denial result, or true when IFAV fully owns this transition. */
 export async function handleImageFirstViewHistory({ tableName, rowId, isCurrentNavigation = () => true } = {}) {
     const target = readTarget(tableName, rowId);
     if (target) {
-        ensureHistoryEntryId();
+        if (!isCurrentNavigation()) return true;
+        if (!requireArticleViewAccess()) {
+            retainHistoryEntryAddress();
+            return { articleAccessDenied: true };
+        }
         const expected = currentIdentity();
         const { openImageFirstView } = await import("../../table_views/card_view/image_first_view_opener.js");
         const isCurrent = () => identityMatches(expected) && isCurrentNavigation();
         if (!isCurrent()) return true;
+        let articleAccessDenied = false;
         try {
             const result = await openImageFirstView({
                 tableName, rowItem: { id: target.rowId }, restoringHistory: true, isCurrent,
+                onAccessDenied: () => {
+                    if (!isCurrent()) return;
+                    articleAccessDenied = true;
+                    retainHistoryEntryAddress();
+                },
             });
+            if (articleAccessDenied) return { articleAccessDenied: true };
             if (!result && isCurrent()) returnFromUnavailableImageFirstView(target);
         } catch (error) {
             if (isCurrent()) returnFromUnavailableImageFirstView(target);

@@ -3,6 +3,7 @@
 // Bridges raw row objects and the card DOM structure, including avatars, maps, and modals.
 // Exists to centralise card element construction so card layout logic stays out of the view printer.
 
+import { bindArticleViewActivation, canOpenArticleView, createArticleOpenerElement } from './article_view_access.js';
 import { addCardResourceListener } from './card_resource_lifecycle.js';
 import { createImageElement, create_seeded_avatar } from "./card_avatar_builder.js";
 import { openRowArticleView } from "./row_article_opener.js";
@@ -66,7 +67,7 @@ function addHeaderElement(
     headerDiv.title = val_str;
 
     // --- klikillä isompi kortti ----------------
-    addCardResourceListener(headerDiv, "click", (e) => {
+    bindArticleViewActivation(headerDiv, (e) => {
         e.preventDefault();
         openRowArticleView(row_item, table_name, headerDiv.closest(".card"));
     });
@@ -144,7 +145,7 @@ async function addImageOrAvatar(
         });
 
         elem_div.appendChild(blurredImageElement);
-        imageContainer.classList.add("card_image_content--clickable");
+        imageContainer.classList.toggle("card_image_content--clickable", canOpenArticleView());
     } else {
         // Avatar
         const avatar = await create_seeded_avatar(
@@ -239,7 +240,7 @@ function addDescriptionSection(
     setFieldHideAttribute(desc_container);
 
     // Koko description-container klikattava -> avaa ison kortin
-    addCardResourceListener(desc_container, "click", () => {
+    bindArticleViewActivation(desc_container, () => {
         openRowArticleView(row_item, table_name, container.closest(".card"));
     });
 
@@ -318,11 +319,11 @@ document.addEventListener("DOMContentLoaded", function () {
 });
 
 function createShowMoreLink(row_item, table_name) {
-    const link = document.createElement("a");
+    const link = createArticleOpenerElement("a");
     link.href = "#";
     link.classList.add("show_more_link");
     link.dataset.langKey = "show_more";
-    addCardResourceListener(link, "click", (e) => {
+    bindArticleViewActivation(link, (e) => {
         e.preventDefault();
         openRowArticleView(row_item, table_name, link.closest(".card"));
     });

@@ -33,6 +33,7 @@ function mount(dataset = "other", options = {}) {
 }
 beforeEach(() => {
     document.body.replaceChildren(); localStorage.clear(); sessionStorage.clear(); vi.clearAllMocks();
+    sessionStorage.setItem('user_permissions', JSON.stringify(['/ui/view/article_view']));
     mocks.navigate.mockResolvedValue({ abort: false });
     mocks.selected.mockReturnValue("other");
 });

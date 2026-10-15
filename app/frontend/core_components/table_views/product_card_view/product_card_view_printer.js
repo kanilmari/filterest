@@ -3,6 +3,7 @@
 // Bridges table-view row payloads, resolved product-card fields, and row-article opening behavior.
 // Exists to provide a reusable listing-card view without adding backend-specific product code.
 
+import { bindArticleViewActivation, requireArticleViewAccess } from '../card_view/article_view_access.js';
 import { openRowArticleView } from "../card_view/row_article_opener.js";
 import { getLanguageWithBrowserFallback } from "../../state_stores/lang_preference_reader.js";
 import { setUnifiedTableState } from "../../state_stores/table_state_store.js";
@@ -296,23 +297,14 @@ function createDetailElement(entry) {
  * @param {string} tableName
  */
 function attachRowOpenBehavior(card, rowItem, tableName) {
-    card.addEventListener("click", (event) => {
-        if (isInteractiveChildClick(event)) {
-            return;
-        }
+    bindArticleViewActivation(card, event => {
+        if (event.type === 'click' && isInteractiveChildClick(event)) return;
         void openProductRowArticle(rowItem, tableName, card);
-    });
-
-    card.addEventListener("keydown", (event) => {
-        if (event.key !== "Enter" && event.key !== " ") {
-            return;
-        }
-        event.preventDefault();
-        void openProductRowArticle(rowItem, tableName, card);
-    });
+    }, { keyboard: true });
 }
 
 async function openProductRowArticle(rowItem, tableName, card) {
+    if (!requireArticleViewAccess()) return;
     const rowId = rowItem?.id;
     if (rowId == null) {
         openRowArticleView(rowItem, tableName, card);

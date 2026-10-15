@@ -23,6 +23,10 @@ function openView({ restoring = false, rowId = 185, ready } = {}) {
     const intent = beginImageFirstViewOpen({ tableName: "events", rowId, listPath: "/events", restoring });
     const origin = { url: location.href, state: history.state };
     const id = intent.commit("first.jpg");
+    // The source entry receives its identity when the allowed opening commits.
+    if (history.state.imageFirstView?.origin?.entryId) {
+        origin.state = { ...origin.state, [HISTORY_ENTRY_ID]: history.state.imageFirstView.origin.entryId };
+    }
     const modal = document.createElement("div");
     modal.innerHTML = '<div class="modal_body"><div class="image_first_view">protected</div></div>';
     document.body.append(modal);
@@ -213,4 +217,72 @@ test.each([false, true])("entrance clamp preserves saved scroll; new user input 
     await new Promise(resolve => setTimeout(resolve, 25));
     expect(body.scrollTop).toBe(580);
     expect(history.state.imageFirstView.scroll).toBe(580);
+});
+
+
+test('a denied IFAV URL explains without importing the opener or changing its backing view', async () => {
+    mocks.route.mockReset().mockReturnValue(false);
+    mocks.open.mockClear();
+    document.body.replaceChildren();
+    history.replaceState({}, '', '/events/185?view=image_first_view');
+    const address = location.href;
+    const state = structuredClone(history.state);
+    const replace = vi.spyOn(history, 'replaceState'), push = vi.spyOn(history, 'pushState');
+    expect(await handleImageFirstViewHistory({ tableName: 'events', rowId: '185' })).toEqual({ articleAccessDenied: true });
+    expect(location.href).toBe(address);
+    expect(history.state).toEqual(state);
+    expect(replace).not.toHaveBeenCalled(); expect(push).not.toHaveBeenCalled();
+    expect(mocks.open).not.toHaveBeenCalled();
+    expect(document.querySelector('[data-lang-key="article_view_permission_missing"]')).not.toBeNull();
+});
+
+test.each([null, 'ifav'])('an asynchronous IFAV view denial retains entry ID %s and never takes the unavailable-media fallback', async entryId => {
+    vi.restoreAllMocks();
+    document.body.replaceChildren();
+    mocks.route.mockReset().mockReturnValue(true);
+    history.replaceState({ ...(entryId ? { [HISTORY_ENTRY_ID]: entryId } : {}), other: 9 }, '', '/events/185?view=image_first_view');
+    const href = location.href, state = structuredClone(history.state);
+    mocks.open.mockImplementationOnce(async ({ isCurrent, onAccessDenied }) => {
+        mocks.route.mockReturnValue(false);
+        expect(await authorizeImageFirstView('events', isCurrent, onAccessDenied)).toBe(false);
+        return null;
+    });
+    const replace = vi.spyOn(history, 'replaceState'), push = vi.spyOn(history, 'pushState');
+    expect(await handleImageFirstViewHistory({ tableName: 'events', rowId: '185' })).toEqual({ articleAccessDenied: true });
+    expect(location.href).toBe(href); expect(history.state).toEqual(state);
+    expect(document.querySelectorAll('[data-lang-key="article_view_permission_missing"]')).toHaveLength(1);
+    expect(replace).not.toHaveBeenCalled(); expect(push).not.toHaveBeenCalled();
+});
+
+test('a pending IFAV intent assigns no history identity before authorization succeeds', async () => {
+    vi.restoreAllMocks(); document.body.replaceChildren();
+    history.replaceState({ other: 9 }, '', '/events/185?view=image_first_view');
+    const href = location.href, state = structuredClone(history.state);
+    const replace = vi.spyOn(history, 'replaceState'), push = vi.spyOn(history, 'pushState');
+    const intent = beginImageFirstViewOpen({ tableName: 'events', rowId: '185', listPath: '/events', restoring: true });
+    mocks.route.mockReturnValue(false);
+    expect(await authorizeImageFirstView('events', intent.isCurrent)).toBe(false);
+    expect(location.href).toBe(href); expect(history.state).toEqual(state);
+    expect(replace).not.toHaveBeenCalled(); expect(push).not.toHaveBeenCalled();
+    expect(document.querySelectorAll('[data-lang-key="article_view_permission_missing"]')).toHaveLength(1);
+});
+
+test('a denied retained IFAV entry prevents its pending scroll restoration and state writer', async () => {
+    vi.restoreAllMocks(); document.body.replaceChildren();
+    mocks.route.mockReturnValue(true);
+    history.replaceState({ [HISTORY_ENTRY_ID]: 'ifav-scroll', imageFirstView: { dataset: 'events', rowId: '185', scroll: 420 } }, '', '/events/185?view=image_first_view');
+    let ready;
+    const opened = openView({ restoring: true, ready: new Promise(resolve => { ready = resolve; }) });
+    const body = opened.modal.querySelector('.modal_body');
+    body.scrollTop = 555;
+    const href = location.href, state = structuredClone(history.state);
+    mocks.route.mockReturnValue(false);
+    const replace = vi.spyOn(history, 'replaceState'), push = vi.spyOn(history, 'pushState');
+    expect(await handleImageFirstViewHistory({ tableName: 'events', rowId: '185' })).toEqual({ articleAccessDenied: true });
+    ready(); await new Promise(resolve => setTimeout(resolve, 25));
+    body.dispatchEvent(new Event('scroll'));
+    expect(body.scrollTop).toBe(555); expect(opened.modal.isConnected).toBe(true);
+    expect(location.href).toBe(href); expect(history.state).toEqual(state);
+    expect(document.querySelectorAll('[data-lang-key="article_view_permission_missing"]')).toHaveLength(1);
+    expect(replace).not.toHaveBeenCalled(); expect(push).not.toHaveBeenCalled();
 });

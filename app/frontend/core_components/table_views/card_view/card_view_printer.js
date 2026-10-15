@@ -7,6 +7,7 @@ import { openRowArticleView } from "./row_article_opener.js";
 import { updateCardImageSources } from "./card_element_builder.js";
 import { getUnifiedTableState } from "../../general_tables/gt_1_row_crud/gt_1_2_row_read/table_refresh_unified.js";
 import { getChosenDatasetView } from "../../state_stores/dataset_view_choice_saver.js";
+import { getLanguageWithBrowserFallback } from "../../state_stores/lang_preference_reader.js";
 import { hasDatasetPermission } from "../../route_permission_checker.js";
 import { always_show_empty_fields_on_cards } from "../../../ui_config.js";
 import { endpoint_router } from "../../endpoints/endpoint_router.js";
@@ -288,15 +289,26 @@ export async function create_card_view(columns, data, table_name,
     }
 }
 
+let cardLanguageRefreshGeneration = 0;
+
+/** Refresh mounted cards; even a same-language pass supersedes older builds. */
 export async function refreshCardLanguages(chosenLanguage = null) {
+    const generation = ++cardLanguageRefreshGeneration;
+    const isCurrent = () => generation === cardLanguageRefreshGeneration;
+    const language = chosenLanguage || getLanguageWithBrowserFallback();
     const cards = document.querySelectorAll('.card');
     for (const card of cards) {
+        if (!isCurrent()) return;
+        // Startup translates after results mount. A notice or denied click can
+        // overlap that pass; cards already built in its language must survive.
+        if (card._renderedLanguage === language) continue;
         if (card.classList.contains("experimental-free-layout-card")) {
             const newExperimentalCard = await rebuildExperimentalFreeLayoutCard(
                 card,
-                updateMassDeleteBar
+                updateMassDeleteBar,
+                language
             );
-            if (!card.isConnected) { disposeCardResources(newExperimentalCard); continue; }
+            if (!isCurrent() || !card.isConnected) { disposeCardResources(newExperimentalCard); continue; }
             registerCardMountImageUpdates(newExperimentalCard);
             disposeCardResources(card);
             card.replaceWith(newExperimentalCard);
@@ -318,9 +330,10 @@ export async function refreshCardLanguages(chosenLanguage = null) {
             dataTypes,
             null,
             0,
-            chosenLanguage,
+            language,
             card.dataset.cardPresentationView || "card"
         );
+        if (!isCurrent() || !card.isConnected) { disposeCardResources(newCard); continue; }
         if (card.classList.contains('small-card')) {
             newCard.classList.add('small-card');
             ensureSmallSummaryMedia(newCard);
@@ -330,13 +343,13 @@ export async function refreshCardLanguages(chosenLanguage = null) {
         newCard._table_name = tableName;
         newCard._data_types = dataTypes;
         newCard._hasLocalizedRowData = true;
-        if (!card.isConnected) { disposeCardResources(newCard); continue; }
         registerCardMountImageUpdates(newCard);
         disposeCardResources(card);
         card.replaceWith(newCard);
         notifyCardsMounted(newCard);
     }
 
+    if (!isCurrent()) return;
     const big = document.querySelector('.active_row_article, .active_big_card');
     if (big && big._row && big._table_name) {
         const row = big._row;
@@ -345,7 +358,9 @@ export async function refreshCardLanguages(chosenLanguage = null) {
         const selected = row.id != null && articleList
             ? [...articleList.querySelectorAll('.card')].find((card) => card.dataset.id === String(row.id)) || null
             : null;
-        await openRowArticleView(row, tableName, selected);
+        // The opener owns article replacement and navigation lifetime. Keep
+        // this guard tied to the refresh, so its own DOM swap cannot expire it.
+        await openRowArticleView(row, tableName, selected, { isCurrent });
     }
 }
 

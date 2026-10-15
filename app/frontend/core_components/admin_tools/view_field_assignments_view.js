@@ -27,6 +27,7 @@ import {
     getViewFieldAssignmentsCancelText,
     getViewFieldAssignmentsCopy,
 } from "./view_field_assignments_copy.js";
+import { createViewGroupPermissionWarnings } from './view_group_permission_warnings.js';
 import { createArticleSectionDefaultsPanel } from "./article_section_defaults_panel.js";
 import { createViewFieldAssignmentsLayout } from "./view_field_assignments_layout.js";
 import {
@@ -139,6 +140,7 @@ export async function generate_view_field_assignments_view(container) {
         fieldSearch,
         fieldWarning,
         groupPickerHost,
+        groupPermissionWarnings,
         mixedWarning,
         nameInput,
         page,
@@ -157,6 +159,7 @@ export async function generate_view_field_assignments_view(container) {
         rememberedViewKey: rememberedAdminState.viewKey,
     });
 
+    const permissionWarnings = createViewGroupPermissionWarnings(groupPermissionWarnings);
     const articleDefaults = createArticleSectionDefaultsPanel({ host: articleDefaultsHost });
 
     function persistAdminState() {
@@ -322,6 +325,7 @@ export async function generate_view_field_assignments_view(container) {
     }
 
     function applySelectedTarget() {
+        permissionWarnings.setContext({ groups, selectedGroupIDs, viewKey: viewSelect.value });
         editorAssignment = resolveEditorAssignment(response, selectedGroupIDs);
         const memoryKey = fieldOrderMemoryKey(dataset, viewSelect.value, editorAssignment);
         fieldRows = buildEditorFieldRows(
@@ -408,6 +412,7 @@ export async function generate_view_field_assignments_view(container) {
             console.warn("view_field_assignments_view: load failed", error);
             response = null;
             groups = [];
+            permissionWarnings.setContext({ groups, selectedGroupIDs: [], viewKey: viewSelect.value });
             fieldRows = [];
             groupPicker?.destroy?.();
             groupPicker = null;
@@ -590,6 +595,7 @@ export async function generate_view_field_assignments_view(container) {
     container.__cleanupListeners = () => {
         loadSequence += 1;
         articleDefaults.destroy();
+        permissionWarnings.destroy();
         listenerController.abort();
         groupPicker?.destroy?.();
         groupPicker = null;

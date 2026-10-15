@@ -82,6 +82,8 @@ import { load_tables, resetEarlierVisitForgettingForTests } from "./table_loader
 import { getUnifiedTableState, setUnifiedTableState as setTableState } from "../../state_stores/table_state_store.js";
 import { getChosenDatasetView, setChosenDatasetView } from "../../state_stores/dataset_view_choice_saver.js";
 import { readRowArticleViewRestoreState } from "../../table_views/card_view/row_article_view_restore_state.js";
+import { updateDatasetAddress, replaceDatasetAddressQuery, resetDatasetAddressOwnershipForTests } from '../../navigation/nav_engine/dataset_address_writer.js';
+import { updateURL } from '../../navigation/nav_engine/query_params.js';
 
 /**
  * One browser tab's own session storage. Every tab of the site shares jsdom's
@@ -89,7 +91,7 @@ import { readRowArticleViewRestoreState } from "../../table_views/card_view/row_
  * duplicated tab starts from a copy of the original's entries.
  */
 function createTabSessionStore(copiedEntries = {}) {
-    const entries = new Map(Object.entries(copiedEntries));
+    const entries = new Map(Object.entries({ user_permissions: JSON.stringify(['/ui/view/article_view']), ...copiedEntries }));
     return {
         getItem: (key) => (entries.has(key) ? entries.get(key) : null),
         setItem: (key, value) => { entries.set(key, String(value)); },
@@ -106,6 +108,7 @@ function resetLoaderMocks(datasets) {
     resetEarlierVisitForgettingForTests();
     localStorage.clear();
     sessionStorage.clear();
+    sessionStorage.setItem('user_permissions', JSON.stringify(['/ui/view/article_view']));
     mocks.getSelectedDataset.mockReturnValue(null);
     mocks.primeDatasetAccessRegistry.mockReturnValue(true);
     mocks.isCurrentDatasetAccessRefresh.mockReturnValue(true);
@@ -121,6 +124,7 @@ describe("load_tables deep-link startup routing", () => {
         resetEarlierVisitForgettingForTests();
         localStorage.clear();
         sessionStorage.clear();
+    sessionStorage.setItem('user_permissions', JSON.stringify(['/ui/view/article_view']));
         window.history.replaceState({}, "", "/");
         mocks.getSelectedDataset.mockReturnValue(null);
         mocks.primeDatasetAccessRegistry.mockReturnValue(true);
@@ -304,7 +308,8 @@ describe("load_tables deep-link startup routing", () => {
             articleView: { collapsed: true, expandedId: "5", returnView: "card" },
         });
 
-        sessionStorage.clear(); // the second tab's own session storage
+        sessionStorage.clear();
+    sessionStorage.setItem('user_permissions', JSON.stringify(['/ui/view/article_view'])); // the second tab's own session storage
         resetEarlierVisitForgettingForTests(); // and its own page
         await load_tables();
 
@@ -597,4 +602,52 @@ describe("a reload of a dataset's alias address", () => {
         expect(location.pathname).toBe("/orders");
         expect(mocks.openNavTab).toHaveBeenLastCalledWith("app_orders", { skipUrlUpdate: false, forceReload: false });
     });
+});
+
+
+test.each(['article_view', 'image_first_view'].flatMap(view => ['', '/853'].map(row => [view, row])))('a denied %s bookmark %s keeps its cold address while rendering the collection', async (view, row) => {
+    resetLoaderMocks(['dev_agent_tasks']);
+    resetDatasetAddressOwnershipForTests();
+    document.body.replaceChildren();
+    sessionStorage.setItem('user_permissions', '[]');
+    history.replaceState({ other: { keep: 4 } }, '', '/dev_agent_tasks' + row + '?view=' + view + '&search=harbour#saved');
+    const href = location.href, state = structuredClone(history.state);
+    const replace = vi.spyOn(history, 'replaceState'), push = vi.spyOn(history, 'pushState');
+    mocks.openNavTab.mockImplementationOnce(async (dataset, options) => {
+        // The real writers at the navigation and table-render boundaries.
+        if (!options.skipUrlUpdate) updateURL(dataset, { view: 'card' });
+        setChosenDatasetView(dataset, 'card');
+        await updateDatasetAddress({ dataset });
+        return {};
+    });
+    await load_tables();
+    expect(document.querySelectorAll('[data-lang-key="article_view_permission_missing"]')).toHaveLength(1);
+    expect(mocks.setUnifiedTableState).not.toHaveBeenCalled();
+    expect(getChosenDatasetView('dev_agent_tasks')).toBe('card');
+    expect(mocks.openNavTab).toHaveBeenCalledWith('dev_agent_tasks', { skipUrlUpdate: true, forceReload: false });
+    await updateDatasetAddress({ dataset: 'dev_agent_tasks' });
+    expect(replaceDatasetAddressQuery('dev_agent_tasks', { view: 'card' })).toBe(false);
+    expect(location.href).toBe(href); expect(history.state).toEqual(state);
+    expect(replace).not.toHaveBeenCalled(); expect(push).not.toHaveBeenCalled();
+    expect(ifav.restore).not.toHaveBeenCalled();
+    vi.restoreAllMocks();
+});
+
+
+test('a denied article in another dataset retains the current dataset selection and mounted rows', async () => {
+    resetLoaderMocks(['dev_agent_tasks', 'travel_deals']);
+    document.body.innerHTML = '<div id="travel_deals_container"><div class="tab-content-body">Current rows</div></div>';
+    mocks.getSelectedDataset.mockReturnValue('travel_deals');
+    sessionStorage.setItem('user_permissions', '[]');
+    setChosenDatasetView('travel_deals', 'table');
+    const retained = document.querySelector('.tab-content-body');
+    history.replaceState({}, '', '/dev_agent_tasks/853?view=article_view');
+    const href = location.href, state = structuredClone(history.state);
+    await load_tables();
+    expect(document.querySelector('.tab-content-body')).toBe(retained);
+    expect(mocks.setSelectedDataset).not.toHaveBeenCalled();
+    expect(mocks.openNavTab).not.toHaveBeenCalled();
+    expect(getChosenDatasetView('travel_deals')).toBe('table');
+    expect(location.href).toBe(href); expect(history.state).toEqual(state);
+    expect(document.querySelectorAll('[data-lang-key="article_view_permission_missing"]')).toHaveLength(1);
 });

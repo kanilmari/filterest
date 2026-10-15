@@ -3,6 +3,7 @@
 // Bridges filter and search controls, view selection, and dataset rendering components.
 // Exists to keep dataset screen assembly in one place while delegating each concrete view to its own module.
 
+import { requireArticleViewAccess } from './card_view/article_view_access.js';
 import { createDatasetViewElement } from './dataset_view_renderer.js';
 import { datasetAppearanceState } from './dataset_appearance_state.js';
 import { appendLoadedDatasetRows, clearLoadedDatasetRows, rememberLoadedDatasetRows } from "./dataset_loaded_rows.js";
@@ -236,10 +237,16 @@ export async function generate_table(
         const table_uid = datasetAppearance?.dataset_uid || tableSpecs[dataset_name]?.table_uid || dataset_name;
         const globalDefault = getDefaultViewSync();
         const datasetDefault = resolveDatasetDefaultView(datasetName, { tableMeta, tableSpecs, globalDefault });
-        const defaultView = resolveRenderableView(
+        let defaultView = resolveRenderableView(
             datasetName, datasetDefault, columns, data, data_types, hasGeo, tableSpecs, globalDefault
         );
+        if (defaultView === 'article_view' && !hasRoutePermission('/ui/view/article_view')) {
+            defaultView = resolveFallbackViewForUnavailableView(datasetName, tableSpecs, globalDefault, 'article_view', columns, data_types);
+        }
         let current_view = resolveStoredViewForDatasetDefault(datasetName, defaultView);
+        if (current_view === 'article_view' && !requireArticleViewAccess()) {
+            current_view = defaultView;
+        }
         // A fallback projection refetch keeps the original request only for
         // this explanation. Permission denial is never a dataset-fit failure.
         const chartUnavailable = (chartRequested || resolveDatasetViewSelectionTarget(current_view) === "price_chart")

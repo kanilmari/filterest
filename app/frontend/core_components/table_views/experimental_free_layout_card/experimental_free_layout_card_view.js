@@ -9,6 +9,7 @@ import { resolveImagePaths } from "../card_view/card_element_builder_helpers.js"
 import {
     createTicketStatusBadge,
 } from "../card_view/card_field_formatter.js";
+import { bindArticleViewActivation, createArticleOpenerElement } from '../card_view/article_view_access.js';
 import { openRowArticleView } from "../card_view/row_article_opener.js";
 import { update_card_selection } from "../table_view/row_selection_handler.js";
 import { isDatasetRowSelected } from "../dataset_row_selection_store.js";
@@ -274,12 +275,12 @@ async function createBlockElement({
         blockElement.classList.add("experimental-free-layout-card__block--empty");
     }
     if (block.type === "action") {
-        const actionButton = document.createElement("button");
+        const actionButton = designModeEnabled ? document.createElement("button") : createArticleOpenerElement("button");
         actionButton.type = "button";
         actionButton.classList.add("experimental-free-layout-card__action-button");
         actionButton.dataset.langKey = "show_more";
         actionButton.textContent = "Show more";
-        addCardResourceListener(actionButton, "click", (event) => {
+        bindArticleViewActivation(actionButton, (event) => {
             event.preventDefault();
             event.stopPropagation();
             if (designModeEnabled) {
@@ -480,8 +481,8 @@ export async function createExperimentalFreeLayoutCard({
     dataTypes,
     renderContext,
     onSelectionChange,
+    preferredLang = getLanguageWithBrowserFallback(),
 }) {
-    const preferredLang = getLanguageWithBrowserFallback();
     const designModeEnabled = isExperimentalDesignModeEnabled(tableName);
     const model = buildExperimentalCardModel({
         rowItem,
@@ -568,7 +569,7 @@ export async function createExperimentalFreeLayoutCard({
     card.appendChild(cardContent);
 
     const summaryElement = buildSmallSummary(model.summary);
-    addCardResourceListener(summaryElement, "click", (event) => {
+    bindArticleViewActivation(summaryElement, (event) => {
         event.preventDefault();
         if (isExperimentalDesignModeEnabled(tableName)) {
             return;
@@ -577,7 +578,7 @@ export async function createExperimentalFreeLayoutCard({
     });
     card.appendChild(summaryElement);
 
-    addCardResourceListener(card, "click", (event) => {
+    bindArticleViewActivation(card, (event) => {
         if (isExperimentalDesignModeEnabled(tableName)) {
             return;
         }
@@ -595,7 +596,7 @@ export async function createExperimentalFreeLayoutCard({
     card._data_types = dataTypes;
     card._render_context = renderContext;
     card._hasLocalizedRowData = true;
-
+    card._renderedLanguage = preferredLang;
     return card;
 }
 /**
@@ -657,12 +658,12 @@ export function createExperimentalFreeLayoutToolbar(tableName) {
  */
 export async function rebuildExperimentalFreeLayoutCard(
     card,
-    onSelectionChange
+    onSelectionChange,
+    preferredLang = getLanguageWithBrowserFallback()
 ) {
     if (!(card instanceof HTMLElement)) {
         throw new Error("Expected an HTMLElement card instance");
     }
-
     const rowItem = card._row;
     const columns = card._columns;
     const tableName = card._table_name;
@@ -679,6 +680,7 @@ export async function rebuildExperimentalFreeLayoutCard(
         dataTypes,
         renderContext,
         onSelectionChange,
+        preferredLang,
     });
 
     if (card.classList.contains("small-card")) {
@@ -687,7 +689,6 @@ export async function rebuildExperimentalFreeLayoutCard(
 
     return rebuiltCard;
 }
-
 /**
  * Keeps the working layout cache aligned with an explicit reset coming from the broader card flow.
  *

@@ -10,6 +10,7 @@ import { loadDatasetCardVisibility, saveCardVisibilityWithFreshRevisions } from 
 import { postJsonWithCsrf } from '../helpers/image-first-article';
 import { confirmTestArtifact, registerTestArtifact } from '../helpers/test-artifact-run-registry';
 import { readDatasetTableUIDFromPage } from '../helpers/test-artifact-dataset-identity-reader';
+import { waitForActiveFilterbarLayout } from '../helpers/filterbar';
 
 const ARTICLE = '.active_row_article';
 const BODY_TEXT = 'Article text stays visible';
@@ -171,16 +172,17 @@ async function readReaderEndpoints(reader: Page): Promise<string[]> {
   return [...endpoints].sort();
 }
 
-/** Adds only the two administrator-granted views; toolbar defaults stay under test. */
-async function giveReaderArticleAccess(admin: Page, reader: Page, access: ReaderAccess): Promise<void> {
+/** Adds explicit views to an isolated reader group; toolbar defaults stay under test. */
+async function giveReaderArticleAccess(admin: Page, reader: Page, access: ReaderAccess, includeArticle = true): Promise<void> {
+  const routes = READER_VIEW_ROUTES.filter(route => includeArticle || route.endpoint !== '/ui/view/article_view');
   const identity = await readSessionInfo(reader);
   expect(Number.isSafeInteger(identity.user_id) && identity.user_id! > 1).toBe(true);
   access.userId = identity.user_id!;
   // Round 6: router/ui_permission_route_saver.go:23 defines no view defaults;
   // ui_permission_default_grant_saver.go:31,38 grants no views to fresh users;
   // public_bootstrap/source/article_view.seed.sql:55 only copies existing card grants.
-  // Model the two views an administrator would grant for article reading.
-  for (const route of READER_VIEW_ROUTES) {
+  // Model the selected views an administrator would grant for reading.
+  for (const route of routes) {
     const view = await readAccessRow(admin, 'system_functions', { name: route.name });
     expect(view).toMatchObject({ url_route_endpoint: route.endpoint, disabled: false, specific_table_related: false });
     access.viewGrants.push({ functionId: view!.id, grantId: null });
@@ -204,7 +206,7 @@ async function giveReaderArticleAccess(admin: Page, reader: Page, access: Reader
     expect(grant).toMatchObject({ target_schema_name: 'public', target_table_uid: null });
     viewGrant.grantId = grant!.id;
   }
-  expect(await readAccessRows(admin, 'system_group_table_func_rights', { user_group_id: access.groupId })).toHaveLength(READER_VIEW_ROUTES.length);
+  expect(await readAccessRows(admin, 'system_group_table_func_rights', { user_group_id: access.groupId })).toHaveLength(routes.length);
   await addAccessRow(admin, 'system_user_group_memberships', { user_id: access.userId, group_id: access.groupId });
   const membership = await readAccessRow(admin, 'system_user_group_memberships', { group_id: access.groupId });
   expect(membership).toMatchObject({ user_id: access.userId });
@@ -289,6 +291,60 @@ async function proveToolbar(page: Page, dataset: string, childDataset: string, a
   if (!administrator) {
     await expect(article.locator('.row_article_attachment_list_section, .row_article_task_progress_section')).toHaveCount(0);
   }
+}
+
+/** Checks denial in real themed cards, without supplying a browser permission cache. */
+async function proveDeniedArticleOpeners(reader: Page, dataset: string, theme: 'light' | 'dark', language: 'fi' | 'en'): Promise<void> {
+  await reader.emulateMedia({ colorScheme: theme === 'light' ? 'dark' : 'light' });
+  await reader.evaluate(language => localStorage.setItem('chosen_language', language), language);
+  await reader.goto(`/${dataset}?view=card`);
+  // Startup translates after results mount. Mark the completed view, not an
+  // intermediate card that the initial language pass is still allowed to finish.
+  await waitForActiveFilterbarLayout(reader);
+  await expect(reader.locator('body')).toHaveClass(new RegExp(`${theme}-mode`));
+  const card = reader.locator(`#${dataset}_container .card[data-id="1"]`).first();
+  const title = card.locator('[data-testid="card-item-header"]');
+  const image = card.locator('[data-image-first-src]').first();
+  await expect(title).toBeVisible();
+  await expect(image).toBeVisible();
+  const url = reader.url();
+  await title.evaluate(element => { element.dataset.retainedDenialProof = 'yes'; });
+  const explanations = reader.locator('[data-lang-key="article_view_permission_missing"]');
+  const viewState = () => reader.evaluate(() => ({
+    scroll: [window.scrollX, window.scrollY, ...Array.from(document.querySelectorAll('.scrollable_content'))
+      .flatMap(element => [element.scrollLeft, element.scrollTop])],
+    selection: Array.from(document.querySelectorAll('.card')).map(element => ({
+      id: element.getAttribute('data-id'), selected: element.classList.contains('selected'),
+      checked: element.querySelector<HTMLInputElement>('.card_checkbox')?.checked ?? null,
+    })),
+  }));
+  const proveActivation = async (activate: () => Promise<unknown>) => {
+    // Dismiss earlier notices through their normal control so expiry cannot
+    // mask a new explanation, and earlier text cannot satisfy this activation.
+    for (const close of await reader.locator('[data-testid="toast"]').filter({ has: explanations })
+      .locator('.toast-notification-close').all()) await close.click();
+    await expect(explanations).toHaveCount(0);
+    const before = await explanations.count(), state = await viewState();
+    await activate();
+    await expect(explanations).toHaveCount(before + 1);
+    await expect(explanations.last()).toContainText(language === 'fi' ? 'sinulta puuttuu' : 'do not have permission');
+    expect(reader.url()).toBe(url);
+    await expect(reader.locator(ARTICLE)).toHaveCount(0);
+    await expect(reader.locator('[data-testid="image-first-view"]')).toHaveCount(0);
+    await expect(title).toHaveAttribute('data-retained-denial-proof', 'yes');
+    expect(await viewState()).toEqual(state);
+  };
+  for (const part of [title, image]) {
+    expect(await part.getAttribute('role')).toBeNull();
+    expect(await part.getAttribute('tabindex')).toBeNull();
+    expect(await part.evaluate(element => getComputedStyle(element).cursor)).toBe('default');
+    await part.hover();
+    expect(await part.evaluate(element => getComputedStyle(element).textDecorationLine)).toBe('none');
+    await proveActivation(() => part.click());
+    for (const key of ['Enter', ' ']) await proveActivation(() => part.dispatchEvent('keydown', { key }));
+  }
+  expect(await reader.evaluate(() => JSON.parse(sessionStorage.getItem('user_permissions') || '[]')))
+    .not.toContain('/ui/view/article_view');
 }
 
 test('C17: administrator, reader and anonymous visitor receive their own article grants', async ({ page, browser }, testInfo) => {
@@ -376,7 +432,36 @@ test('C17: administrator, reader and anonymous visitor receive their own article
     reader = await readerContext.newPage();
     await login(reader, loadUserCredentials());
     originalReaderEndpoints = await readReaderEndpoints(reader);
-    await giveReaderArticleAccess(page, reader, readerAccess);
+    // A temporary reader group holds cards only. The reserved development
+    // reader must have no article right in another group; never revoke shared grants.
+    expect(originalReaderEndpoints).not.toContain('/ui/view/article_view');
+    await giveReaderArticleAccess(page, reader, readerAccess, false);
+    for (const [theme, language] of [['light', 'fi'], ['dark', 'en']] as const) {
+      await withPinnedAccountTheme(reader, theme, () => proveDeniedArticleOpeners(reader!, parent, theme, language));
+    }
+    const articleFunction = await readAccessRow(page, 'system_functions', { name: 'ui.view.article_view' });
+    expect(articleFunction).toMatchObject({ disabled: false, specific_table_related: false });
+    const addedArticleGrant = { functionId: articleFunction!.id, grantId: null as number | null };
+    readerAccess.viewGrants.push(addedArticleGrant); // Cleanup owns partial setup as well.
+    await addAccessRow(page, 'system_group_table_func_rights', {
+      user_group_id: readerAccess.groupId, function_id: addedArticleGrant.functionId,
+      target_schema_name: 'public', target_table_uid: null,
+    });
+    const grantedArticle = await readAccessRow(page, 'system_group_table_func_rights', {
+      user_group_id: readerAccess.groupId!, function_id: addedArticleGrant.functionId,
+    });
+    expect(grantedArticle).toMatchObject({ target_schema_name: 'public', target_table_uid: null });
+    addedArticleGrant.grantId = grantedArticle!.id;
+    // A fresh server bootstrap sees the added right; classic title and IFAV image paths keep their behavior.
+    await withPinnedAccountTheme(reader, 'light', async () => {
+      await reader!.emulateMedia({ colorScheme: 'dark' });
+      await reader!.goto(`/${parent}?view=card`);
+      await reader!.locator(`#${parent}_container [data-testid="card-item-header"]`).first().click();
+      await expect(reader!.locator(ARTICLE)).toBeVisible();
+      await reader!.goto(`/${parent}?view=card`);
+      await reader!.locator(`#${parent}_container [data-image-first-src]`).first().click();
+      await expect(reader!.locator('[data-testid="image-first-view"]')).toBeVisible();
+    });
     expect(await readReaderEndpoints(reader)).toEqual([...new Set([...originalReaderEndpoints, ...READER_VIEW_ROUTES.map(route => route.endpoint)])].sort());
     const guests = await readAccessRow(page, 'system_user_groups', { name: 'guests' });
     expect(guests).not.toBeNull();

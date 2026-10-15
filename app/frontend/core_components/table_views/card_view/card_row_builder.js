@@ -6,6 +6,7 @@ import { datasetAppearanceState } from '../dataset_appearance_state.js';
 import { readAppearanceAttribute } from '../../../reusable_components/appearance_scope_reader.js';
 import { update_card_selection } from "../table_view/row_selection_handler.js";
 import { create_seeded_avatar } from "./card_avatar_builder.js";
+import { bindArticleViewActivation, canOpenArticleView, createArticleOpenerElement } from './article_view_access.js';
 import { openRowArticleView } from "./row_article_opener.js";
 import { addKeywordsSection } from "./card_keyword_builder.js";
 import { addCardResourceListener, disposeCardResources } from './card_resource_lifecycle.js';
@@ -69,7 +70,8 @@ count_this_function("createSingleCard");
     const card = document.createElement("div");
     try {
     if (!datasetAppearanceState.isCurrent(appearanceToken)) return card;
-    card.classList.add("card", "saturate_on_hover");
+    card.classList.add("card");
+    card.classList.toggle("saturate_on_hover", canOpenArticleView());
     card.dataset.testid = 'card-item';
     card.dataset.cardPresentationView = viewKey;
     card.dataset.datasetName = table_name;
@@ -581,9 +583,9 @@ for (const role of baseRoles) {
     }
 
     if (show_more_button_on_cards) {
-        const moreBtn = document.createElement("button");
+        const moreBtn = createArticleOpenerElement("button");
         moreBtn.dataset.langKey = "show_more";
-        addCardResourceListener(moreBtn, "click", (e) => {
+        bindArticleViewActivation(moreBtn, (e) => {
             e.preventDefault();
             openRowArticleView(row_item, table_name, card);
         });
@@ -604,6 +606,7 @@ card_text_content.appendChild(footer_div);
     card._table_name = table_name;
     card._data_types = data_types;
     card._hasLocalizedRowData = hasLocalizedRowData;
+    card._renderedLanguage = chosenLang;
 
     if (datasetAppearanceState.isCurrent(appearanceToken)) datasetAppearanceState.bind(card, table_name);
     return card;

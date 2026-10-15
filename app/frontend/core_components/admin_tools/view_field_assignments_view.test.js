@@ -8,6 +8,7 @@ import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
     get: vi.fn(),
+    permissions: vi.fn(),
     articleGet: vi.fn(),
     articleSave: vi.fn(),
     save: vi.fn(),
@@ -21,6 +22,7 @@ const mocks = vi.hoisted(() => ({
     pickerConfigs: [],
 }));
 
+vi.mock("../endpoints/endpoint_router.js", () => ({ endpoint_router: mocks.permissions }));
 vi.mock("../endpoints/stable_endpoint_router.js", () => ({
     getViewFieldSets: mocks.get,
     getArticleSectionDefaults: mocks.articleGet,
@@ -109,6 +111,7 @@ describe("view_field_assignments_view", () => {
         [mocks.get, mocks.articleGet, mocks.articleSave, mocks.save, mocks.reset, mocks.renderTree, mocks.confirm,
             mocks.success, mocks.warning, mocks.extractDataset, mocks.language]
             .forEach((mock) => mock.mockReset());
+        mocks.permissions.mockReset().mockResolvedValue([]);
         mocks.language.mockReturnValue("en");
         mocks.extractDataset.mockReturnValue("orders");
         mocks.confirm.mockResolvedValue(true);

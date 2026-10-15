@@ -2,6 +2,7 @@
 // HTTP handlers for reading and managing user group permissions.
 // Receives requests from the frontend permissions UI and interacts with the
 // database to list, update, and validate group-level access rights.
+// Exists to return complete permission snapshots and keep writes behind the existing grant workflow.
 package backend
 
 import (
@@ -35,7 +36,8 @@ func getPermissions(w http.ResponseWriter, _ *http.Request) {
               agr.function_id,
               agr.target_schema_name,
               sdt.table_name AS target_table_name,
-              COALESCE(agr.target_table_uid, 0) as target_table_uid
+              COALESCE(agr.target_table_uid, 0) as target_table_uid,
+              COALESCE(f.url_route_endpoint, '') as function_route
        FROM system_group_table_func_rights agr
        JOIN system_functions f ON f.id = agr.function_id AND f.disabled = false
        LEFT JOIN system_db_tables sdt ON sdt.table_uid = agr.target_table_uid
@@ -56,12 +58,14 @@ func getPermissions(w http.ResponseWriter, _ *http.Request) {
 			targetSchema    sql.NullString
 			targetTable     sql.NullString
 			targetUID       int
+			functionRoute   string
 		)
 		if err := rows.Scan(&authUserGroupID,
 			&functionID,
 			&targetSchema,
 			&targetTable,
-			&targetUID); err != nil {
+			&targetUID,
+			&functionRoute); err != nil {
 			log.Printf("\033[31merror reading row: %v\033[0m", err)
 			httpresponse.RespondWithError(w, http.StatusInternalServerError, "error reading row")
 			return
@@ -69,6 +73,7 @@ func getPermissions(w http.ResponseWriter, _ *http.Request) {
 		p := Permission{
 			AuthUserGroupID: authUserGroupID,
 			FunctionID:      functionID,
+			FunctionRoute:   functionRoute,
 			TargetTableUID:  targetUID,
 		}
 		if targetSchema.Valid {
@@ -78,6 +83,12 @@ func getPermissions(w http.ResponseWriter, _ *http.Request) {
 			p.TargetTableName = targetTable.String
 		}
 		permissions = append(permissions, p)
+	}
+
+	// Never present a partial permission snapshot as a complete list of rights.
+	if err := rows.Err(); err != nil {
+		httpresponse.RespondWithError(w, http.StatusInternalServerError, "error reading permissions")
+		return
 	}
 
 	w.Header().Set("Content-Type", "application/json")

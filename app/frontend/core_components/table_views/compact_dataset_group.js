@@ -3,6 +3,7 @@
 // Reuses canonical dataset/row URLs and navigation approval before changing target query state.
 // Keeps result content as text, with no editor or full article lifecycle inside a search group.
 
+import { applyArticleViewAffordance, requireArticleViewAccess } from './card_view/article_view_access.js';
 import { getTranslationForKey } from "../lang/translation_handler.js";
 import {
     bindDatasetLanguageRenderer,
@@ -144,7 +145,15 @@ function snippetColumns(columns, types, titleColumn) {
  * Ordinary show-all links keep the collection's existing navigation behavior.
  */
 export function bindQueryNavigation(link, dataset, query, rowID = null, options = {}) {
+    if (rowID !== null) applyArticleViewAffordance(link);
+    link.addEventListener('keydown', event => {
+        if (rowID !== null && link.dataset.articleAccess === 'denied' && ['Enter', ' '].includes(event.key)) {
+            event.preventDefault();
+            requireArticleViewAccess();
+        }
+    });
     link.addEventListener("click", async event => {
+        if (rowID !== null && !requireArticleViewAccess()) { event.preventDefault(); return; }
         if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
         event.preventDefault();
         let previousView;

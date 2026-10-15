@@ -7,7 +7,7 @@
 // article or a permission fallback could leave view=article_view, and sometimes a row path,
 // in an address that no longer described the page.
 
-import { writeHistoryEntry, rememberHistoryDatasetView } from "./history_entry_state.js";
+import { writeHistoryEntry, rememberHistoryDatasetView, isHistoryEntryAddressRetained, releaseHistoryEntryAddress } from "./history_entry_state.js";
 import { buildDatasetPath, getInternalDatasetName } from "./dataset_aliases.js";
 import { getParams, setParams, normalizePath, DATASET_PREFIX } from "./query_params.js";
 import { getPrefixFromPathname, parseDeepLink } from "./history_navigation_handler_helpers.js";
@@ -175,6 +175,7 @@ function getCurrentDatasetRoute(expectedDataset) {
  * and complete history context: cleanup does not open or close an article.
  */
 export function replaceDatasetAddressQuery(dataset, params) {
+    if (isHistoryEntryAddressRetained()) return false;
     if (!getCurrentDatasetRoute(dataset)) return false;
     setParams(dataset, params);
     writeHistoryEntry(`${window.location.pathname}${serializeDatasetQuery(params)}${window.location.hash}`,
@@ -183,6 +184,9 @@ export function replaceDatasetAddressQuery(dataset, params) {
 }
 
 function writeSettledDatasetAddress(expectedDataset) {
+    // A denied article address belongs to the browser, not the retained collection.
+    // This also protects later table refreshes and the navigation pipeline finalizer.
+    if (isHistoryEntryAddressRetained()) return false;
     const route = getCurrentDatasetRoute(expectedDataset);
     if (!route) return false;
     const { pathname, prefix, dataset } = route;
@@ -243,4 +247,5 @@ export function updateDatasetAddress({ dataset = null, isCurrent = null } = {}) 
 /** Test-only reset of the coalescing state this module keeps between writes. */
 export function resetDatasetAddressOwnershipForTests() {
     latestAddressRequest = null;
+    releaseHistoryEntryAddress();
 }

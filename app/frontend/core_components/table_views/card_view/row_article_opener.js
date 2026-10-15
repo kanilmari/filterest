@@ -3,6 +3,7 @@
 // Bridges row data, column roles, and permission state with the article UI shell.
 // Exists to be the single orchestration point for launching, populating, and managing the row article view.
 
+import { requireArticleViewAccess } from './article_view_access.js';
 import { datasetAppearanceState } from '../dataset_appearance_state.js';
 import { captureLoadedDatasetRows } from "../dataset_loaded_rows.js";
 
@@ -82,6 +83,7 @@ function resolveVisibleResultCard(tableName, rowId) {
 const articleOpenGenerations = new Map();
 
 export async function openRowArticleView(row_item, table_name, selectedCard = null, { isCurrent = () => true } = {}) {
+    if (!isCurrent() || !requireArticleViewAccess()) return;
     const appearanceToken = datasetAppearanceState.capture(table_name);
     const callerIsCurrent = isCurrent;
     let committed = false;

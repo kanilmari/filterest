@@ -10,6 +10,12 @@ In **View field settings**, select a dataset and the **Article** view. The
 button and Restore action. Its settings apply to every reader of that dataset;
 the field-set user-group selection does not change this scope.
 
+The **User groups** picker chooses fields and grants no view access. Selected
+groups without the view's route right are listed beside the picker with an
+**Open Permissions** link. Both article presentations require
+`/ui/view/article_view`; changing collapsible-block defaults does not grant it.
+See [Permission Model](Permission_Model.md#capability-and-dataset-permissions).
+
 - **Traditional article** supports Details, Images, Attachments, Related rows
   and Task progress.
 - **Image-first article (IFAV)** supports Details. This option never hides its

@@ -92,7 +92,21 @@
         "app/backend/core_components/auth/get_auth_modes.go",
         "app/backend/core_components/auth/user_permissions.go",
         "app/backend/core_components/router/ui_permission_route_saver.go",
-        "app/backend/core_components/router/ui_permission_default_grant_saver.go"
+        "app/backend/core_components/router/ui_permission_default_grant_saver.go",
+        "app/frontend/core_components/table_views/card_view/article_view_access.js",
+        "app/frontend/core_components/table_views/card_view/article_view_access.css",
+        "app/frontend/core_components/table_views/card_view/card_row_builder.js",
+        "app/frontend/core_components/table_views/card_view/card_view_printer.js",
+        "app/frontend/core_components/table_views/experimental_free_layout_card/experimental_free_layout_card_view.js",
+        "app/frontend/core_components/admin_tools/view_group_permission_warnings.js",
+        "app/frontend/core_components/admin_tools/main/table_loader_handler.js",
+        "app/frontend/core_components/navigation/nav_engine/history_navigation_handler.js",
+        "app/frontend/core_components/navigation/nav_engine/history_entry_state.js",
+        "app/frontend/core_components/navigation/nav_engine/dataset_address_writer.js",
+        "app/frontend/core_components/navigation/nav_engine/image_first_view_history.js",
+        "app/frontend/core_components/table_views/card_view/image_first_view_opener.js",
+        "app/backend/core_components/permissions_handlers.go",
+        "app/backend/core_components/permissions_reader.go"
       ],
       "specs": [
         "app/testing/e2e/C_card_view/C17_article_toolbar_group_permissions.spec.ts"

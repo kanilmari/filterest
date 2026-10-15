@@ -6,6 +6,25 @@
 export const HISTORY_ENTRY_ID = "__filterestEntryId";
 const HISTORY_DATASET_VIEW = "__filterestDatasetView";
 let nextEntry = 0;
+let retainedAddress = null;
+
+/** A denied restoration retains the browser's entry, even when the mounted view differs.
+ * Address reconciliation and filter cleanup consult this until navigation leaves it.
+ * Do not ensure an ID here: even adding an identity would alter the denied entry.
+ */
+export function retainHistoryEntryAddress() {
+    retainedAddress = { url: location.href, entryId: history.state?.[HISTORY_ENTRY_ID] ?? null };
+}
+
+export function isHistoryEntryAddressRetained() {
+    return retainedAddress?.url === location.href
+        && retainedAddress.entryId === (history.state?.[HISTORY_ENTRY_ID] ?? null);
+}
+
+/** Explicit navigation or an authorized restoration can take ownership again. */
+export function releaseHistoryEntryAddress() {
+    retainedAddress = null;
+}
 
 function freshEntryId() {
     return globalThis.crypto?.randomUUID?.() || `entry-${Date.now()}-${++nextEntry}`;
@@ -35,6 +54,7 @@ export function getHistoryDatasetView(dataset) {
 }
 
 export function writeHistoryEntry(url, state = {}, { replace = false } = {}) {
+    releaseHistoryEntryAddress();
     const previous = { ...(history.state || {}) };
     // Only navigation-owned fields are replaced; other history owners survive.
     for (const key of ["bigCard", "dataset", "rowId", "articleReturnAvailable", "articleOriginEntry", "imageFirstView", HISTORY_DATASET_VIEW]) delete previous[key];

@@ -7,6 +7,9 @@ import { getLanguageWithBrowserFallback } from "../state_stores/lang_preference_
 
 const VIEW_FIELD_ASSIGNMENTS_COPY = Object.freeze({
     en: Object.freeze({
+        permissionMissing: "This group does not have permission to open this view. Field selection does not grant access.",
+        openPermissions: "Open Permissions",
+        permissionsUnavailable: "View permissions could not be checked.",
         title: "View field settings",
         description: "Choose a dataset and view, then set the shared field order for the site or selected user groups.",
         instructions: "Select a dataset from the tree to load its view fields.",
@@ -45,6 +48,9 @@ const VIEW_FIELD_ASSIGNMENTS_COPY = Object.freeze({
         restored: "Inheritance restored and verified",
     }),
     fi: Object.freeze({
+        permissionMissing: "Ryhmällä ei ole tämän näkymän käyttöoikeutta. Kenttien valinta ei anna käyttöoikeutta.",
+        openPermissions: "Avaa Käyttöoikeudet",
+        permissionsUnavailable: "Näkymän käyttöoikeuksia ei voitu tarkistaa.",
         title: "Näkymien kenttäasetukset",
         description: "Valitse datasetti ja näkymä, ja määritä sitten yhteinen kenttäjärjestys koko sivustolle tai valituille käyttäjäryhmille.",
         instructions: "Valitse datasetti puurakenteesta ladataksesi sen näkymäkentät.",
@@ -83,6 +89,9 @@ const VIEW_FIELD_ASSIGNMENTS_COPY = Object.freeze({
         restored: "Perintä palautettu ja varmistettu",
     }),
     ch: Object.freeze({
+        permissionMissing: "此用户组没有打开此视图的权限。选择字段不会授予访问权限。",
+        openPermissions: "打开权限管理",
+        permissionsUnavailable: "无法检查视图权限。",
         title: "视图字段设置",
         description: "选择数据集和视图，然后为整个站点或所选用户组设置共享字段顺序。",
         instructions: "从树中选择数据集以加载其视图字段。",
@@ -103,6 +112,9 @@ const VIEW_FIELD_ASSIGNMENTS_COPY = Object.freeze({
         saved: "字段分配已保存并验证", restored: "继承已恢复并验证",
     }),
     yue: Object.freeze({
+        permissionMissing: "呢個用戶群組冇開啟呢個檢視嘅權限。揀選欄位唔會授予存取權限。",
+        openPermissions: "開啟權限管理",
+        permissionsUnavailable: "未能檢查檢視權限。",
         title: "檢視欄位設定",
         description: "揀選資料集同檢視，然後為全站或所選用戶群組設定共用欄位次序。",
         instructions: "請喺樹狀清單揀選資料集，以載入檢視欄位。",

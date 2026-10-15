@@ -88,6 +88,12 @@ export function createViewFieldAssignmentsLayout(
     groupPickerHost.dataset.testid = "view-field-assignments-groups";
     controls.append(groupLabel, groupPickerHost);
 
+    const groupPermissionWarnings = document.createElement('div');
+    groupPermissionWarnings.className = 'view-field-assignments__permission-warnings';
+    groupPermissionWarnings.setAttribute('role', 'status');
+    groupPermissionWarnings.hidden = true;
+    controls.appendChild(groupPermissionWarnings);
+
     const targetStatus = createTextElement("p", "view-field-assignments__target-status", "");
     targetStatus.setAttribute("role", "status");
     const selectionWarning = createTextElement(
@@ -248,6 +254,7 @@ export function createViewFieldAssignmentsLayout(
         fieldSearch,
         fieldWarning,
         groupPickerHost,
+        groupPermissionWarnings,
         mixedWarning,
         nameInput,
         page,

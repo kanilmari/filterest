@@ -1,5 +1,5 @@
 /* imports.css
-	Central list of CSS imports bundled by Vite.
+	Central stylesheet entry linked by the native shell and bundled by Vite.
 	Visual docs: instructions_and_documentation/visual_documentation/visual_documentation_readme.md
 	Dev guide:   instructions_and_documentation/DEV_GUIDE.md
 */
@@ -48,6 +48,7 @@
 @import url("../core_components/table_views/cloud_management_view/cloud_management_view.css");
 @import url("../core_components/table_views/table_views.css");
 @import url("../core_components/table_views/settings_view/settings_view.css");
+@import url("../core_components/table_views/card_view/article_view_access.css");
 
 /* --- Filter bar (see visual docs tab_content/filter_bar/) --- */
 @import url("../core_components/filterbar/filterbar.css");

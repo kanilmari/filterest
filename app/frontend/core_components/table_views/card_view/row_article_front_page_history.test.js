@@ -93,7 +93,7 @@ vi.mock("../../navigation/nav_engine/query_params.js", () => ({
 
 vi.mock("../../route_permission_checker.js", () => ({
     hasDatasetPermission: vi.fn(() => Promise.resolve(false)),
-    hasRoutePermission: vi.fn(() => false),
+    hasRoutePermission: vi.fn(route => route === '/ui/view/article_view'),
     primeDatasetPermissions: vi.fn(),
 }));
 

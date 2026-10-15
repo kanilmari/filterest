@@ -3,9 +3,12 @@
 // Bridges the card builder to the viewer without creating a static module cycle.
 // Exists because the viewer reuses the article content builder used by cards.
 
+import { applyArticleViewAffordance, requireArticleViewAccess } from './article_view_access.js';
+
 const imageFirstActivationBindings = new WeakMap();
 
 export async function activateImageFirstView(options) {
+    if (!requireArticleViewAccess()) return null;
     const { openImageFirstView } = await import("./image_first_view_opener.js");
     return openImageFirstView(options);
 }
@@ -30,7 +33,12 @@ export function bindImageFirstViewActivation(
         element.removeEventListener("click", previousBinding.click);
         element.removeEventListener("keydown", previousBinding.keydown);
     }
-    const openImageView = () => {
+    const openImageView = (event) => {
+        if (!requireArticleViewAccess()) {
+            event?.preventDefault();
+            event?.stopPropagation();
+            return;
+        }
         void activate(options).catch((error) => {
             console.warn(
                 "image-first view could not be opened",
@@ -44,10 +52,11 @@ export function bindImageFirstViewActivation(
     element.dataset.imageFirstSrc = imageSrc;
     element.dataset.ariaLabelLangKey = "open_article";
     element.setAttribute("aria-label", "Open article");
+    applyArticleViewAffordance(element);
     const handleKeydown = (event) => {
         if (event.key === "Enter" || event.key === " ") {
             event.preventDefault();
-            openImageView();
+            openImageView(event);
         }
     };
     element.addEventListener("click", openImageView);

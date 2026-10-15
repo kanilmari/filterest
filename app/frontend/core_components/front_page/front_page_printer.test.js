@@ -32,6 +32,7 @@ beforeEach(() => {
     invalidateSessionGeneration({ revalidate: false });
     document.body.innerHTML = '<div id="tabs_container"></div>';
     localStorage.clear(); sessionStorage.clear();
+    sessionStorage.setItem('user_permissions', JSON.stringify(['/ui/view/article_view']));
     localStorage.setItem('chosen_language', 'fi');
     mocks.request.mockReset().mockResolvedValue(response());
     vi.spyOn(HTMLMediaElement.prototype, 'pause').mockImplementation(() => {});

@@ -5,7 +5,7 @@
 // Exists to keep article-close history from losing the originating dataset view.
 
 import { beforeEach, describe, expect, test, vi } from "vitest";
-import { setChosenDatasetView } from "../../state_stores/dataset_view_choice_saver.js";
+import { getChosenDatasetView, setChosenDatasetView } from "../../state_stores/dataset_view_choice_saver.js";
 
 const {
     closeRowArticleMock,
@@ -152,6 +152,7 @@ describe("history_navigation_handler", () => {
         datasetParamsStore.clear();
         localStorage.clear();
         sessionStorage.clear();
+        sessionStorage.setItem('user_permissions', JSON.stringify(['/ui/view/article_view']));
         document.body.innerHTML = "";
         window.__bigCardClosing = false;
         window.history.replaceState({}, "", "/events");
@@ -462,4 +463,26 @@ test("the shared history handler does not navigate the background when IFAV owns
     expect(ifavHistory.handle).toHaveBeenCalledWith(expect.objectContaining({ tableName: "events", rowId: "5" }));
     expect(handleAllNavigationMock).not.toHaveBeenCalled();
     ifavHistory.handle.mockResolvedValue(false);
+});
+
+
+describe('denied article address restoration', () => {
+    test.each(['article_view', 'image_first_view'].flatMap(view => ['login', 'logout'].map(mode => [view, mode])))(
+        '%s address in %s mode explains and retains the mounted view', async (view, mode) => {
+            document.body.innerHTML = '<div id="events_container"><div class="tab_parts_container" data-view="table"><span id="retained">Current rows</span></div></div>';
+            sessionStorage.setItem('user_permissions', '[]');
+            localStorage.setItem('button_state', mode);
+            setChosenDatasetView('events', 'table');
+            handleAllNavigationMock.mockClear(); setUnifiedTableStateMock.mockClear(); ifavHistory.handle.mockClear();
+            const retained = document.getElementById('retained');
+            history.replaceState({}, '', '/events/7?view=' + view);
+            window.dispatchEvent(new PopStateEvent('popstate'));
+            await vi.waitFor(() => expect(document.querySelector('[data-lang-key="article_view_permission_missing"]')).not.toBeNull());
+            expect(document.getElementById('retained')).toBe(retained);
+            expect(getChosenDatasetView('events')).toBe('table');
+            expect(handleAllNavigationMock).not.toHaveBeenCalled();
+            expect(setUnifiedTableStateMock).not.toHaveBeenCalled();
+            expect(ifavHistory.handle).not.toHaveBeenCalled();
+        }
+    );
 });

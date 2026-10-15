@@ -1,0 +1,36 @@
+/* article_view_access.css
+ * Removes opener affordances from article parts whose view route is denied.
+ * Connects shared access markers to existing card, result and event styles.
+ * Preserves the selected application's theme and readable content.
+ */
+[data-article-access="denied"],
+[data-article-access="denied"] *:not(a[href], a[href] *, button, button *, input, select, textarea, [contenteditable="true"], [contenteditable="true"] *) {
+    cursor: default !important;
+    text-decoration: none !important;
+}
+
+[data-article-access="denied"]:hover {
+    filter: none !important;
+    box-shadow: none !important;
+}
+
+/* Keep each view's resting surface when its article opener is denied. */
+.product-card-view-card[data-article-access="denied"]:hover {
+    border-color: var(--card_border_color);
+    background: var(--style-card-background, var(--bg_color_card_frame));
+}
+
+.calendar-view__event-preview[data-article-access="denied"]:hover {
+    background: color-mix(in srgb, var(--calendar-accent) 12%, var(--calendar-panel));
+    outline: none;
+}
+
+.calendar-view__event-button[data-article-access="denied"]:hover {
+    background: transparent;
+    outline: none;
+}
+
+.show_more_link[data-article-access="denied"],
+.supplemental-dataset-group a[data-article-access="denied"] {
+    color: inherit;
+}

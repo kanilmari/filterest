@@ -130,6 +130,24 @@ the module.
 
 ## 7. Import Validation: `check_js_imports.js`
 
+### Browser-native module imports and component styles
+
+Native source mode serves frontend JavaScript modules directly to the browser.
+Shipped modules must not import `.css` files: the browser requires a JavaScript
+module MIME type, so a stylesheet import prevents the whole application from
+starting even when Vite and Vitest accept it.
+
+Keep component styles beside their implementation and register them with
+`@import url("../core_components/.../component.css");` in
+[`frontend/styles/imports.css`](../../frontend/styles/imports.css), following the
+existing card-view entries and preserving cascade order. The
+[`index.html` shell](../../frontend/index.html) links that entry in native source
+mode; [`vite.config.mjs`](../../frontend/vite.config.mjs) uses the same entry to
+produce `imports.*.min.css` for bundled delivery. No JavaScript stylesheet
+loader is needed. The ordinary Python tier's
+[`test_import_boundaries.py`](../../testing/python/test_import_boundaries.py)
+rejects stylesheet module imports across shipped frontend source.
+
 `filterest/app/frontend/check_js_imports.js` validates all JavaScript import paths in the project. Run it after renaming files, moving modules, or refactoring imports.
 
 ### Usage

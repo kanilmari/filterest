@@ -3,6 +3,7 @@
 // Bridges table metadata, navigation helpers, and redirect/session state during admin tool startup.
 // Exists to keep admin table-loading and first-open behavior out of generic navigation modules.
 
+import { canOpenArticleView, requireArticleViewAccess } from '../../table_views/card_view/article_view_access.js';
 import { isRenderableDatasetView, resolveDatasetViewSelectionTarget } from "../../table_views/dataset_view_registry.js";
 import { isImageFirstViewURL, getImageFirstViewBackingView, handleImageFirstViewHistory } from "../../navigation/nav_engine/image_first_view_history.js";
 import { create_navigation_buttons } from '../../navigation/database_tree/nav_builder.js';
@@ -29,6 +30,7 @@ import {
     getSelectedDataset,
 } from '../../state_stores/dataset_selection_saver.js';
 import { parseDeepLink, resolveTableName } from './table_loader_handler_helpers.js';
+import { retainHistoryEntryAddress } from '../../navigation/nav_engine/history_entry_state.js';
 import { isSeparateFrontPageEnabled, openFrontPage } from '../../front_page/front_page_navigation.js';
 
 // The page's first load forgets earlier visits; later loads in the same page --
@@ -160,6 +162,20 @@ export async function load_tables(options = {}) {
             return result_from_server;
         }
 
+        // The image-first route owns its row and never restored the ordinary
+        // article's reading position, so only an ordinary article row counts.
+        const requestedArticleView = resolveDatasetViewSelectionTarget(new URLSearchParams(location.search).get('view'));
+        const articleDenied = Boolean(deepLinkedRowId || ['article_view', 'image_first_view'].includes(requestedArticleView))
+            && !canOpenArticleView();
+        if (articleDenied) {
+            retainHistoryEntryAddress();
+            requireArticleViewAccess();
+            // A restored address may not replace a mounted collection. A cold
+            // bookmark still loads its ordinary collection, with the notice above.
+            const mountedRoot = document.getElementById(getSelectedDataset() + '_container');
+            if (mountedRoot?.querySelector('.tab-content-body') && !mountedRoot.classList.contains('hidden')) return result_from_server;
+            deepLinkedRowId = null;
+        }
         if (resolved_table_name) {
             setSelectedDataset(resolved_table_name);
         } else if (!isLandingOnFrontpage) {
@@ -168,8 +184,6 @@ export async function load_tables(options = {}) {
             clearDatasetSelectionState();
         }
 
-        // The image-first route owns its row and never restored the ordinary
-        // article's reading position, so only an ordinary article row counts.
         const opensImageFirst = Boolean(deepLinkedRowId) && isImageFirstViewURL();
         const reloadedArticle = resolved_table_name && deepLinkedRowId && !opensImageFirst
             ? { datasetName: resolved_table_name, rowId: deepLinkedRowId }
@@ -195,7 +209,7 @@ export async function load_tables(options = {}) {
             if (!deepLinkedRowId) {
                 const requestedView = initialParams.get("view");
                 const explicitView = resolveDatasetViewSelectionTarget(requestedView);
-                if (requestedView && isRenderableDatasetView(explicitView)
+                if (!articleDenied && requestedView && isRenderableDatasetView(explicitView)
                     && getChosenDatasetView(resolved_table_name) !== explicitView) {
                     setChosenDatasetView(resolved_table_name, explicitView);
                 }
@@ -206,7 +220,7 @@ export async function load_tables(options = {}) {
                 initialParams.set("view", backingView);
             }
             const navigation = await openNavTab(resolved_table_name, {
-                skipUrlUpdate: isLandingOnFrontpage || Boolean(deepLinkedRowId),
+                skipUrlUpdate: articleDenied || isLandingOnFrontpage || Boolean(deepLinkedRowId),
                 forceReload,
                 ...(opensImageFirst ? { replacementParams: Object.fromEntries(initialParams) } : {}),
             });

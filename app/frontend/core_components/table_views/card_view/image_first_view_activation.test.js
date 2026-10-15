@@ -15,6 +15,7 @@ import { bindImageFirstViewActivation } from "./image_first_view_activation.js";
 describe("bindImageFirstViewActivation", () => {
     beforeEach(() => {
         document.body.innerHTML = "";
+        sessionStorage.setItem('user_permissions', JSON.stringify(['/ui/view/article_view']));
         openImageFirstViewMock.mockReset();
         openImageFirstViewMock.mockResolvedValue(null);
     });
@@ -50,4 +51,21 @@ describe("bindImageFirstViewActivation", () => {
         });
         expect(openImageFirstViewMock).toHaveBeenLastCalledWith(options);
     });
+});
+
+// A denied image remains readable and explains synthetic activation without opening IFAV.
+test.each(['click', 'Enter', ' '])('denied image %s has no opener semantics', activation => {
+    sessionStorage.setItem('user_permissions', '[]');
+    document.body.replaceChildren();
+    const image = document.createElement('div');
+    const open = vi.fn();
+    bindImageFirstViewActivation(image, { imageSrc: '/photo.jpg' }, open);
+    expect(image.hasAttribute('role')).toBe(false);
+    expect(image.hasAttribute('tabindex')).toBe(false);
+    expect(image.dataset.articleAccess).toBe('denied');
+    document.body.append(image);
+    if (activation === 'click') image.click();
+    else image.dispatchEvent(new KeyboardEvent('keydown', { key: activation }));
+    expect(open).not.toHaveBeenCalled();
+    expect(document.querySelector('[data-lang-key="article_view_permission_missing"]')).not.toBeNull();
 });

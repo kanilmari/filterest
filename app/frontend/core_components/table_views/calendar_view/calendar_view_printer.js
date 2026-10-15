@@ -19,6 +19,7 @@ import {
     startOfLocalDay,
     toLocalDateKey,
 } from "./calendar_view_helpers.js";
+import { bindArticleViewActivation, createArticleOpenerElement, requireArticleViewAccess } from '../card_view/article_view_access.js';
 import { openRowArticleView } from "../card_view/row_article_opener.js";
 import { getLanguageWithBrowserFallback } from "../../state_stores/lang_preference_reader.js";
 import { setUnifiedTableState } from "../../state_stores/table_state_store.js";
@@ -500,7 +501,7 @@ function createEventListItem(event, state) {
  * Exists so every visible event affordance behaves like a normal card title click.
  */
 function createEventButton(event, state, { className, includeRange }) {
-    const button = document.createElement("button");
+    const button = createArticleOpenerElement("button");
     button.type = "button";
     button.classList.add(className);
     button.dataset.testid = "calendar-event-button";
@@ -521,7 +522,7 @@ function createEventButton(event, state, { className, includeRange }) {
     }
 
     button.setAttribute("aria-label", `${event.title}, ${formatEventRange(event)}`);
-    button.addEventListener("click", (clickEvent) => {
+    bindArticleViewActivation(button, (clickEvent) => {
         clickEvent.preventDefault();
         openCalendarEventArticle(event, state, button);
     });
@@ -529,6 +530,7 @@ function createEventButton(event, state, { className, includeRange }) {
 }
 
 async function openCalendarEventArticle(event, state, button) {
+    if (!requireArticleViewAccess()) return;
     const rowId = event.row?.id;
     if (rowId == null) {
         openRowArticleView(event.row, state.tableName, button);

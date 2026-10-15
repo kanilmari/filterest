@@ -40,7 +40,7 @@ vi.mock("./browser_tab_title_writer.js", () => ({ updateBrowserTabTitle: async (
 vi.mock("../admin_and_user_tools/custom_view_reader.js", () => ({ custom_views: [] }));
 // The server catalogue supplies the alias; drawing tests need no name-list request.
 vi.mock("../../endpoints/endpoint_router.js", () => ({ endpoint_router: shell.endpoint }));
-vi.mock("../../route_permission_checker.js", () => ({ hasRoutePermission: () => false }));
+vi.mock("../../route_permission_checker.js", () => ({ hasRoutePermission: route => route === '/ui/view/article_view' }));
 
 const DATASET = "app_service_catalog";
 const LIST_ADDRESS = "/service_catalog?search=ferry&view=card";

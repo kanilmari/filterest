@@ -21,6 +21,7 @@ type rowQueryer interface {
 type Permission struct {
 	AuthUserGroupID  int    `json:"user_group_id"`
 	FunctionID       int    `json:"function_id"`
+	FunctionRoute    string `json:"function_route,omitempty"` // Read-only route identity for group view warnings.
 	TargetSchemaName string `json:"target_schema_name"`
 	TargetTableName  string `json:"target_dataset_name"`
 	TargetTableUID   int    `json:"target_table_uid"`

@@ -106,7 +106,7 @@ vi.mock("../../navigation/nav_engine/query_params.js", () => ({
 
 vi.mock("../../route_permission_checker.js", () => ({
     hasDatasetPermission: vi.fn(() => Promise.resolve(false)),
-    hasRoutePermission: vi.fn(() => false),
+    hasRoutePermission: vi.fn(route => route === '/ui/view/article_view'),
     primeDatasetPermissions: vi.fn(),
 }));
 
@@ -150,6 +150,7 @@ vi.mock("../../../reusable_components/modal/confirm_modal_builder.js", () => ({
 
 vi.mock("../../../reusable_components/notifications/toast_notification_printer.js", () => ({
     showSuccessToast: vi.fn(),
+    showToast: vi.fn(),
 }));
 
 vi.mock("../../general_tables/gt_1_row_crud/gt_1_2_row_read/table_refresh_unified.js", () => ({

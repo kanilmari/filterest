@@ -46,6 +46,8 @@ describe("product_card_view_printer", () => {
         getLanguageWithBrowserFallbackMock.mockReturnValue("en");
         localStorage.clear();
         sessionStorage.clear();
+        // Article-opening scenarios explicitly hold the separate view grant.
+        sessionStorage.setItem('user_permissions', JSON.stringify(['/ui/view/article_view']));
         openRowArticleViewMock.mockReset();
         refreshTableUnifiedMock.mockReset();
         refreshTableUnifiedMock.mockResolvedValue(undefined);

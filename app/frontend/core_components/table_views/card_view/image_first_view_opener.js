@@ -203,6 +203,7 @@ export async function openImageFirstView({
     selectedCard = null,
     restoringHistory = false,
     isCurrent = () => true,
+    onAccessDenied,
 } = {}) {
     if (!rowItem || typeof rowItem !== "object" || !tableName) {
         return null;
@@ -215,7 +216,7 @@ export async function openImageFirstView({
         tableName, rowId: rowItem.id, listPath: buildDatasetPath(tableName, DATASET_PREFIX || "/"),
         restoring: restoringHistory, isCurrent,
     });
-    if (!await authorizeImageFirstView(tableName, intent.isCurrent)) return null;
+    if (!await authorizeImageFirstView(tableName, intent.isCurrent, onAccessDenied)) return null;
     // Reopening history always obtains current row/column permissions. Its state
     // contains only identities, never a cached copy of protected article data.
     let dataTypes = resolveRowArticleDataTypes(tableName, selectedCard);

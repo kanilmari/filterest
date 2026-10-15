@@ -95,6 +95,7 @@ vi.mock('../../general_tables/gt_1_row_crud/gt_1_2_row_read/table_refresh_unifie
 }));
 
 vi.mock('../../route_permission_checker.js', () => ({
+    hasRoutePermission: vi.fn(() => true),
     hasDatasetPermission: hasDatasetPermissionMock,
 }));
 
@@ -166,12 +167,16 @@ vi.mock('./row_article_presentation_settings.js', () => ({
 }));
 
 import { appendDataToCardView, create_card_view, refreshCardLanguages } from './card_view_printer.js';
-import { notifyCardsMounted } from './card_resource_lifecycle.js';
+import { notifyCardsMounted, registerCardResource } from './card_resource_lifecycle.js';
 import { addKeywordsSection } from './card_keyword_builder.js';
 import { datasetAppearanceState } from '../dataset_appearance_state.js';
 import { DEFAULT_DATASET_APPEARANCE } from '../../../shared/dataset_appearance/validator.js';
 import { setAllSpecs } from '../../state_stores/table_specs_reader.js';
 import { invalidateSessionGeneration } from '../../auth/session_generation_store.js';
+import { hasRoutePermission } from '../../route_permission_checker.js';
+import { bindArticleViewActivation } from './article_view_access.js';
+import { bindImageFirstViewActivation } from './image_first_view_activation.js';
+import { translatePage } from '../../lang/translation_handler.js';
 
 function applySiteCardDefaults(showAll, style, columns) {
     const config = datasetAppearanceState.effective('public-test-defaults');
@@ -223,6 +228,7 @@ describe('card language refresh', () => {
         vi.mocked(normalizeClientCardDetailsLayout).mockReturnValue('default');
         localStorage.clear();
         sessionStorage.clear();
+        vi.mocked(hasRoutePermission).mockReturnValue(true);
         getUnifiedTableStateMock.mockReturnValue({});
         hasDatasetPermissionMock.mockReset();
         hasDatasetPermissionMock.mockResolvedValue(false);
@@ -231,7 +237,38 @@ describe('card language refresh', () => {
             locale: 'en',
         });
     });
-
+    test.each(['title', 'image'].flatMap(part => ['click', 'Enter', ' '].map(key => [part, key])))(
+        'denied %s %s survives the pending startup translation in the rendered language', async (part, key) => {
+            vi.mocked(hasRoutePermission).mockReturnValue(false);
+            const table = 'denied_cards', row = { id: 7, title: JSON.stringify({ en: 'Article', fi: 'Artikkeli' }) };
+            localStorage.setItem(table + '_dataTypes', JSON.stringify({ title: {
+                card_element: 'header', show_value_on_card: true, is_multilingual: true,
+            } }));
+            const view = await create_card_view(['title'], [row], table); document.body.append(view);
+            const card = view.querySelector('.card'), title = card.querySelector('h2'); title.dataset.retainedDenialProof = 'yes';
+            const image = document.createElement('img'), open = vi.fn(); card.append(image);
+            bindArticleViewActivation(title, open);
+            bindImageFirstViewActivation(image, { imageSrc: '/photo.jpg' }, open);
+            const dispose = vi.fn(), target = part === 'title' ? title : image; registerCardResource(card, dispose);
+            let finishDictionary;
+            window.translationPromises = { en: new Promise(resolve => { finishDictionary = resolve; }) };
+            const pendingTranslation = translatePage('en');
+            if (key === 'click') target.click();
+            else target.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true }));
+            expect(document.querySelectorAll('[data-lang-key="article_view_permission_missing"]')).toHaveLength(1);
+            // main.js translates after mounting results; visibility is not boot readiness.
+            finishDictionary({ article_view_permission_missing: 'You cannot open this article.' });
+            await pendingTranslation; delete window.translationPromises;
+            expect(view.querySelector('.card')).toBe(card);
+            expect(title.dataset.retainedDenialProof).toBe('yes');
+            expect(open).not.toHaveBeenCalled(); expect(dispose).not.toHaveBeenCalled();
+            // An actual language switch still follows the existing replacement path.
+            await refreshCardLanguages('fi');
+            expect(view.querySelector('.card')).not.toBe(card);
+            expect(view.textContent).toContain('Artikkeli');
+            expect(dispose).toHaveBeenCalledOnce();
+        },
+    );
     test.each(['ordinary_dataset', 'app_service_catalog'])('uses generic nullable metadata and effective list columns for %s', async table => {
         localStorage.setItem(table + '_dataTypes', JSON.stringify({
             detail: { card_element:'details', show_value_on_card:true },
@@ -405,7 +442,7 @@ describe('card language refresh', () => {
         const selected=article.querySelector('.card');
         expect(selected.dataset.cardPresentationView).toBe('article_view');
         expect(selected.querySelector('input.card_checkbox').id).toBe(table+'_article_view_checkbox_7');
-        expect(openRowArticleView).toHaveBeenLastCalledWith(row,table,selected);
+        expect(openRowArticleView).toHaveBeenLastCalledWith(row,table,selected, { isCurrent: expect.any(Function) });
         expect(selected).not.toBe(cards.querySelector('.card'));
     });
 

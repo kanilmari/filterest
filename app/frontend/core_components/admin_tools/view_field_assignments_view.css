@@ -272,3 +272,20 @@
         width: 100%;
     }
 }
+
+/* View access stays informational and outside the saved field assignment. */
+.view-field-assignments__permission-warnings {
+    color: var(--text_color);
+    padding: 0.75rem;
+    border-inline-start: 3px solid var(--warning_color, var(--border_color));
+    background: var(--bg_color_2);
+}
+
+.view-field-assignments__permission-warnings p {
+    margin: 0.25rem 0;
+}
+
+.view-field-assignments__permission-warnings a {
+    color: var(--link_color, var(--text_color));
+    text-decoration: underline;
+}

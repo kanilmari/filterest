@@ -22,25 +22,9 @@ SSO, LDAP, OIDC, SAML, and AD are not yet a full identity-provider layer in the 
 
 ### Account Names And Account Maintenance
 
-Each credentialed account has a private **login name** in
-`restricted.users_restricted.login_name` and a public **display name** in
-`system_users.username`. Sign-in compares login names without case sensitivity;
-password recovery accepts that name or the account's email. Public profiles,
-account lists, search and new actor records use the display name. Permissions
-and browser-test identity use the account id, so changing either name does not
-create a new principal or transfer rights. Sessions carry ids and security
-state, with neither a display name nor a login name.
+Each credentialed account has a private **login name** in `restricted.users_restricted.login_name` and a public **display name** in `system_users.username`. Sign-in compares login names without case sensitivity; password recovery accepts that name or the account's email. Public profiles, account lists, search and new actor records use the display name. Permissions and browser-test identity use the account id, so changing either name does not create a new principal or transfer rights. Sessions carry ids and security state, with neither a display name nor a login name.
 
-Ordinary users choose both names during registration. The site setting
-**Display name may equal login name** (`display_name_may_equal_login_name`) is
-true by default, including on existing sites; First Run asks with yes selected.
-An administrator can change it in Settings. When false, a name change or a new
-account must leave the names different, ignoring case and edge spaces.
-Existing equal pairs survive until a name actually changes: tightening the
-setting does not rename users, prevent sign-in, or reject unrelated profile,
-membership or flag edits. The setting's description records the date and the
-count of ordinary accounts with equal names when its value changes. A user who
-chooses equal names has also chosen to publish that value as their display name.
+Ordinary users choose both names during registration. The site setting **Display name may equal login name** (`display_name_may_equal_login_name`) is true by default, including on existing sites; First Run asks with yes selected. An administrator can change it in Settings. When false, a name change or a new account must leave the names different, ignoring case and edge spaces. Existing equal pairs survive until a name actually changes: tightening the setting does not rename users, prevent sign-in, or reject unrelated profile, membership or flag edits. The setting's description records the date and the count of ordinary accounts with equal names when its value changes. A user who chooses equal names has also chosen to publish that value as their display name.
 
 Administrators' names always differ, under either setting value. New
 administrators normally receive the smallest available `admin_<n>` display
@@ -97,6 +81,16 @@ The core permission tables are:
 - `system_group_table_func_rights` for granting a user group access to a function either table-independently or for one `target_table_uid`.
 
 Backend enforcement runs through [access control](../../backend/pipeline/access_control/access_control.go). Frontend visibility uses [route checks](../../frontend/core_components/route_permission_checker.js), authenticated `/api/user-permissions`, and the dataset-right endpoints. Anonymous `/api/auth-modes` delivers `guest_ui_endpoints`: enabled `/ui/...` routes from the group named `guests`, with NULL dataset scope (the same site-wide scope as route authorization), independent of account-1 memberships. [The bootstrap reader](../../backend/core_components/auth/user_permissions.go) reads current grants without seeding defaults; failures return no grants and responses are not cacheable. [Client bootstrap](../../frontend/core_components/admin_tools/auth_mode_handler.js) clears old rights before fetching, rejects stale session generations and replaces the tab's set before articles render. Sign-in selects user rights; sign-out selects guest rights. Missing/malformed responses fail closed; revocations survive bootstrap and restarts. Dataset, row and login-to-browse enforcement remain independent.
+
+**Article view and field settings.** The view grant `/ui/view/article_view` opens both the classic article (from titles, summaries and other record openers) and the image-first article (from ordinary card and article images). Product cards, calendar events and experimental free-layout cards retain their existing classic-article opening behavior. Selecting **User groups** in View field settings assigns fields; it never grants this route. No group receives a view right merely through field selection or dataset reading rights.
+
+Denied openers have no pointer, hover/link treatment, button/link role or tab stop. Clicks, synthetic keyboard activation and restored article addresses explain the missing view right through a localized notice before changing the mounted view. A cold bookmark shows its ordinary collection with the explanation while keeping the bookmark's exact address and history state. Denied Back/Forward restorations keep the mounted view and the exact entry the browser landed on, including when only its history state records the article view; later refreshes do not rewrite that entry to the retained collection. An intentional navigation can leave it normally. Guests use the server's `guest_ui_endpoints` without an implicit article allowance.
+
+Denial only adds its notice; it does not refresh permissions or cards, or change row selection, scroll or the address. Cards record their rendered language so the late startup translation pass keeps already-localized cards mounted. Every language refresh supersedes older pending builds, even when it skips already-current cards or follows a failed dictionary request. A real language change still rebuilds localized cards. Browser retention proofs wait for shell readiness before marking the view and require a fresh explanation for each activation; visible cards alone do not prove startup has finished.
+
+Field settings lists each selected group lacking its view's global route grant, with an **Open Permissions** link to the existing `/permissions` administrator page. It reads one `/api/dataset_permissions` snapshot containing `function_route`; a matching route with NULL dataset scope counts in any schema. The snapshot excludes disabled functions and serializes NULL dataset scope as numeric `0`; dataset-scoped rights do not open global views. A failed snapshot reports that rights could not be checked. These notices do not affect saving.
+
+Live dataset updates stop for the page session after SSE admission returns 401/403. An authoritative auth/permission bootstrap (`routePermissionsRefreshed`) can resume subscribing; tab navigation or focus alone cannot. Other transport failures retain the existing capped backoff. No UI warning, opener or live-update check grants or removes rights.
 
 The read-only MCP relay also uses the same route/table permission helper before executing a tool call. Filterbar AI planned dataset reads use the same helper before each canonical delegate call, and the planner workspace catalog is permission-filtered when the request actor is known. This keeps AI/tool execution aligned with the existing capability and dataset-action rows instead of relying only on the inner HTTP handler pipeline.
 
