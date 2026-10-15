@@ -159,7 +159,7 @@ describe('what a result card leaves as it is', () => {
         expect(cardDescription('<h2>Unclosed title\nBody').innerHTML).toBe('<h2>Unclosed title\nBody</h2>');
         expect(cardDescription('<h2>Mismatched levels</h3>\nBody').innerHTML)
             .toBe('<h2>Mismatched levels</h2>\nBody');
-        expect(cardDescription('<h2/>\nBody').innerHTML).toBe('<h2>\nBody</h2>');
+        expect(cardDescription('<h2/>\nBody').innerHTML).toBe('<h2>Body</h2>');
         expect(cardDescription('Stray closing tag</h2>\nBody').textContent).toBe('Stray closing tag</h2>\nBody');
     });
 
@@ -183,9 +183,9 @@ describe('what a result card leaves as it is', () => {
         expect(value.getAttribute('data-raw-value')).toBe(storedText);
     });
 
-    test('a plain text keeps exactly the short form it had before', () => {
+    test('plain text keeps its interior spacing while empty preview edges go', () => {
         expect(cardDescription('  Indented line\n\nSecond < third &amp; fourth  ').textContent)
-            .toBe('  Indented line\nSecond < third &amp; fourth  ');
+            .toBe('Indented line\nSecond < third &amp; fourth');
     });
 
     test('a language key is handed on untouched, even one that holds heading tags', () => {

@@ -21,7 +21,7 @@ import { getLanguageWithBrowserFallback } from "../../state_stores/lang_preferen
 import { buildGoogleMapsEmbedUrl, resolveImagePaths } from "./card_element_builder_helpers.js";
 import { resolveRowMediaDisplayPath } from "../storage_media_urls.js";
 import { createDatasetIconElement } from "./dataset_icon_builder.js";
-import { removeBlankLinesFromCardDescription } from "./card_description_blank_line_remover.js";
+import { removeBlankLinesFromCardDescription, trimEmptyEdgesFromCardDescription } from "./card_description_blank_line_remover.js";
 import { removeHeadingsFromCardDescription } from "./card_description_heading_remover.js";
 
 /* ----------------------------------------------------------- */
@@ -282,8 +282,10 @@ function addDescriptionSection(
         if (valueDiv) {
             if (!descObj.hasLangKey) {
                 // Headings are taken out of what the card rendered, so the
-                // browser's own reading of the text decides what one is.
+                // browser's own reading of the text decides what one is. Empty
+                // HTML edges are then trimmed from that sanitized preview only.
                 removeHeadingsFromCardDescription(valueDiv, shortDescriptionText);
+                trimEmptyEdgesFromCardDescription(valueDiv);
             }
             valueDiv.style.whiteSpace = "pre-wrap";
             // Estetään klikkauksen kupliminen, jotta tekstin valinta toimii

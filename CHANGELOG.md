@@ -22,6 +22,7 @@ Dates are the local (Europe/Helsinki) date on which the version was published.
 
 ## [Unreleased]
 
+- Card description previews skip leading empty HTML blocks and whitespace after sanitization, preserving paragraph and list boundaries, language choices and full stored content.
 - Dataset sections and view headings follow the dataset title without skipping levels, while retaining their existing appearance.
 - **Integer searches find the row by ID first** — Dataset text search accepts trimmed integers with an optional leading `#`, ranks a matching integer primary-key row first under any sort (picked, saved or default), and shares that rule with assisted search while preserving permissions, filters, counts, paging and the active order of every other match.
 - **Add-row forms stay closed while loading (WO25)** — Closing the loading dialog with X, Escape, the backdrop or a programmatic close cancels that opening. A late form build cannot reopen or replace the dialog, move focus or show a stale error; opening it again starts a fresh session.
