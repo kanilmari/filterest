@@ -94,6 +94,7 @@ describe('public presentation state', () => {
         const refreshed = settings();
         refreshed.dataset_cover_theme.shared.article_image_caption_position = 'overlay';
         const state = createSitePresentationState({ requestFn: async () => refreshed });
+        await Promise.resolve();
         expect(document.querySelector('[data-dataset-appearance-scope]').dataset.articleImageCaptionPosition).toBe('below');
         expect(state.savedSettings().dataset_cover_theme.shared.card_detail_columns).toBe(4);
         await state.loadSettings();
@@ -103,12 +104,13 @@ describe('public presentation state', () => {
         expect((await cached.loadSettings()).dataset_cover_theme.shared.article_image_caption_position).toBe('overlay');
         const owner = {}, draft = cached.savedSettings();
         draft.dataset_cover_theme.shared.article_image_caption_position = 'below';
-        const onChange = vi.fn(() => expect(document.querySelector('[data-dataset-appearance-scope]').dataset.articleImageCaptionPosition).toBe('below'));
+        const onChange = vi.fn();
         window.addEventListener('dataset-cover-presentation-changed', onChange, { once: true });
-        cached.setPreview(owner, draft);
+        await cached.setPreview(owner, draft);
         expect(onChange).toHaveBeenCalledOnce();
+        expect(document.querySelector('[data-dataset-appearance-scope]').dataset.articleImageCaptionPosition).toBe('below');
         expect(JSON.parse(localStorage.getItem(PUBLIC_PRESENTATION_CACHE_KEY)).settings.defaults['shared.article_image_caption_position']).toBe('overlay');
-        cached.releasePreview(owner);
+        await cached.releasePreview(owner);
         expect(document.querySelector('[data-dataset-appearance-scope]').dataset.articleImageCaptionPosition).toBe('overlay');
     });
     test.each([null, true, 0, {}, [], '', 'unknown'])('rejects invalid article caption position %j', value => {
@@ -135,14 +137,15 @@ describe('public presentation state', () => {
         putCache(old);
         const stored = settings(); stored.dataset_cover_theme.shared.card_detail_columns = 3;
         const state = createSitePresentationState({ requestFn: async () => stored });
+        await Promise.resolve();
         expect(document.querySelector('[data-dataset-appearance-scope]').dataset.cardDetailColumns).toBe('2');
         await state.loadSettings();
         expect(document.querySelector('[data-dataset-appearance-scope]').dataset.cardDetailColumns).toBe('3');
         const owner = {}, preview = state.savedSettings(); preview.dataset_cover_theme.shared.card_detail_columns = 4;
-        state.setPreview(owner, preview);
+        await state.setPreview(owner, preview);
         expect(document.querySelector('[data-dataset-appearance-scope]').dataset.cardDetailColumns).toBe('4');
         expect(JSON.parse(localStorage.getItem(PUBLIC_PRESENTATION_CACHE_KEY)).settings.defaults['shared.card_detail_columns']).toBe(3);
-        state.releasePreview(owner);
+        await state.releasePreview(owner);
         expect(document.querySelector('[data-dataset-appearance-scope]').dataset.cardDetailColumns).toBe('3');
     });
     test.each([null, '3', false, {}, 0, 5, 2.5])('rejects invalid detail columns %j', value => {
@@ -154,15 +157,16 @@ describe('public presentation state', () => {
         putCache(old);
         const stored = settings(); stored.dataset_cover_theme.shared.card_style_variant = 'standard';
         const state = createSitePresentationState({ requestFn: async () => stored });
+        await Promise.resolve();
         expect(state.savedSettings().dataset_cover_theme.shared.card_style_variant).toBe('modern');
         expect(document.querySelector('[data-dataset-appearance-scope]').dataset.cardStyleVariant).toBe('modern');
         await state.loadSettings();
         expect(document.querySelector('[data-dataset-appearance-scope]').dataset.cardStyleVariant).toBe('standard');
         const owner = {}, preview = state.savedSettings(); preview.dataset_cover_theme.shared.card_style_variant = 'modern';
-        state.setPreview(owner, preview);
+        await state.setPreview(owner, preview);
         expect(document.querySelector('[data-dataset-appearance-scope]').dataset.cardStyleVariant).toBe('modern');
         expect(JSON.parse(localStorage.getItem(PUBLIC_PRESENTATION_CACHE_KEY)).settings.defaults['shared.card_style_variant']).toBe('standard');
-        state.releasePreview(owner);
+        await state.releasePreview(owner);
         expect(document.querySelector('[data-dataset-appearance-scope]').dataset.cardStyleVariant).toBe('standard');
     });
     test.each([null, true, 0, {}, 'unknown'])('rejects an invalid site card style %j', value => {
@@ -174,14 +178,15 @@ describe('public presentation state', () => {
         putCache(old);
         const stored = settings(); stored.dataset_cover_theme.shared.card_show_all_fields = false;
         const state = createSitePresentationState({ requestFn: async () => stored });
+        await Promise.resolve();
         expect(state.savedSettings().dataset_cover_theme.shared.card_show_all_fields).toBe(true);
         await state.loadSettings();
         expect(document.querySelector('[data-dataset-appearance-scope]').dataset.cardShowAllFields).toBe('false');
         const owner={}; const preview=state.savedSettings(); preview.dataset_cover_theme.shared.card_show_all_fields=true;
-        state.setPreview(owner,preview);
+        await state.setPreview(owner,preview);
         expect(document.querySelector('[data-dataset-appearance-scope]').dataset.cardShowAllFields).toBe('true');
         expect(JSON.parse(localStorage.getItem(PUBLIC_PRESENTATION_CACHE_KEY)).settings.defaults['shared.card_show_all_fields']).toBe(false);
-        state.releasePreview(owner);
+        await state.releasePreview(owner);
         expect(document.querySelector('[data-dataset-appearance-scope]').dataset.cardShowAllFields).toBe('false');
         expect(normalizePresentationSettings(old).dataset_cover_theme.shared.card_show_all_fields).toBe(true);
     });
@@ -475,6 +480,7 @@ describe('hero header top space', () => {
 
         slider.value = '88';
         slider.dispatchEvent(new Event('input', { bubbles: true }));
+        await Promise.resolve();
         expect(output.value).toBe('88px');
         expect(topSpace()).toBe('88px');
 

@@ -42,15 +42,16 @@ function projectedSurface(owner, name, uid) {
 
 beforeEach(() => { document.body.replaceChildren(); setAllSpecs({}); });
 
-test.each([false, true])('denied revalidation clears private adapters before public repaint (detached: %s)', detached => {
+test.each([false, true])('denied revalidation clears private adapters before public repaint (detached: %s)', async detached => {
     const owner = createDatasetAppearanceState();
     const host = projectedSurface(owner, 'private', 11), nested = projectedSurface(owner, 'related', 22);
     host.append(nested); document.body.append(host);
+    await Promise.resolve();
     if (detached) host.remove();
     const nestedBefore = nested.outerHTML;
     const image = host.querySelector('.card_photo_presentation');
     expect(image.style.getPropertyValue('--card-photo-source')).toContain('private.jpg');
-    owner.revoke('private', { token: owner.captureRegistry() });
+    await owner.revoke('private', { token: owner.captureRegistry() });
     expect(host.querySelector('.label-value-layout').dataset.labelValueLayout).toBe('stacked');
     expect(image.dataset.cardImagePresentation).toBe('contain');
     expect(image.style.getPropertyValue('--card-photo-source')).toBe('');
@@ -64,13 +65,14 @@ test.each([false, true])('denied revalidation clears private adapters before pub
 });
 
 test.each(['clear', 'forget'].flatMap(action => [false, true].map(detached => [action, detached])))(
-    '%s removes descendant projections (detached: %s) while retaining another UID', (action, detached) => {
+    '%s removes descendant projections (detached: %s) while retaining another UID', async (action, detached) => {
         const owner = createDatasetAppearanceState();
         // clear invalidates every dataset in its store; a foreign store's nested
         // owner survives. forget must also preserve another UID in the same store.
         const nestedOwner = action === 'forget' ? owner : createDatasetAppearanceState();
         const host = projectedSurface(owner, 'private', 11), nested = projectedSurface(nestedOwner, 'related', 22);
         host.append(nested); document.body.append(host);
+        await Promise.resolve();
         if (detached) host.remove();
         const nestedBefore = nested.outerHTML;
         const label = host.querySelector('.label-value-layout'), image = host.querySelector('.card_photo_presentation');

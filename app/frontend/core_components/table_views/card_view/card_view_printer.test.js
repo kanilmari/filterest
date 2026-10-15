@@ -178,12 +178,12 @@ import { bindArticleViewActivation } from './article_view_access.js';
 import { bindImageFirstViewActivation } from './image_first_view_activation.js';
 import { translatePage } from '../../lang/translation_handler.js';
 
-function applySiteCardDefaults(showAll, style, columns) {
+async function applySiteCardDefaults(showAll, style, columns) {
     const config = datasetAppearanceState.effective('public-test-defaults');
     config.shared.card_show_all_fields = showAll !== false;
     if (style !== undefined) config.shared.card_style_variant = style;
     if (columns !== undefined) config.shared.card_detail_columns = columns;
-    datasetAppearanceState.updateSite(config);
+    await datasetAppearanceState.updateSite(config);
 }
 import { renderKeyValuePairs } from '../../../reusable_components/key_value_container/kv_container_printer.js';
 import { renderSingleLineCardDetails } from './card_detail_single_line_helpers.js';
@@ -216,14 +216,14 @@ describe('card language refresh', () => {
             bind.mockRestore(); setAllSpecs({});
         },
     );
-    beforeEach(() => {
+    beforeEach(async () => {
         vi.clearAllMocks();
         document.body.innerHTML = '';
         delete document.documentElement.dataset.cardShowAllFields;
         delete document.documentElement.dataset.cardStyleVariant;
         datasetAppearanceState.clear();
         datasetAppearanceState.updateSite(JSON.parse(JSON.stringify(DEFAULT_DATASET_APPEARANCE)));
-        applySiteCardDefaults(true, 'standard', 2);
+        await applySiteCardDefaults(true, 'standard', 2);
         delete document.documentElement.dataset.cardDetailColumns;
         vi.mocked(normalizeClientCardDetailsLayout).mockReturnValue('default');
         localStorage.clear();
@@ -276,7 +276,7 @@ describe('card language refresh', () => {
         localStorage.setItem(table + '_tableMeta', JSON.stringify({
             card_style_variant:null, card_detail_columns:1,
         }));
-        applySiteCardDefaults(true, 'modern', 4);
+        await applySiteCardDefaults(true, 'modern', 4);
         const view = await create_card_view(['detail'], [{id:7,detail:'Value'}], table);
         document.body.append(view);
         notifyCardsMounted(view);
@@ -286,7 +286,7 @@ describe('card language refresh', () => {
         expect(card.dataset.cardColumnsOverride).toBe('1');
         expect(card.dataset.cardDetailColumns).toBe('1');
         expect(view.querySelector('.card_container').dataset.cardDetailColumns).toBe('1');
-        applySiteCardDefaults(true, 'standard', 2);
+        await applySiteCardDefaults(true, 'standard', 2);
         expect(card.dataset.cardStyleVariant).toBe('standard');
         expect(card.dataset.cardDetailColumns).toBe('1');
     });
@@ -328,11 +328,11 @@ describe('card language refresh', () => {
         const card=view.querySelector('.card'); const originalRow=structuredClone(row);
         const previous=vi.mocked(renderer).mock.calls.at(-1)[1];
         expect(previous.map(entry=>entry.column)).toEqual(columns);
-        applySiteCardDefaults(false);
+        await applySiteCardDefaults(false);
         const filtered=vi.mocked(renderer).mock.calls.at(-1)[1];
         expect(filtered.map(entry=>entry.column)).toEqual(['zero','boolean','dash','na']);
         expect(view.querySelector('.card')).toBe(card); expect(card._row).toEqual(originalRow);
-        applySiteCardDefaults(true);
+        await applySiteCardDefaults(true);
         expect(vi.mocked(renderer).mock.calls.at(-1)[1].map(entry=>entry.column)).toEqual(columns);
         expect(view.querySelector('.card')).toBe(card);
     });
@@ -347,7 +347,7 @@ describe('card language refresh', () => {
         document.body.append(cards);
         const card = cards.querySelector('.card'), media = card.querySelector('.card_image_content');
         for (const count of [1, 2, 4]) {
-            applySiteCardDefaults(true, 'standard', count);
+            await applySiteCardDefaults(true, 'standard', count);
             if (layout === 'single-line') {
                 expect(vi.mocked(renderSingleLineCardDetails).mock.calls.at(-1)[3]).toEqual({columns: count});
             } else {
@@ -361,7 +361,7 @@ describe('card language refresh', () => {
     });
 
     test('uses modern by default and changes only inherited card presentation through the existing field redraw', async () => {
-        applySiteCardDefaults(true, 'modern', 2);
+        await applySiteCardDefaults(true, 'modern', 2);
         hasDatasetPermissionMock.mockResolvedValue(true);
         const table = 'style_fixture', columns = ['title', 'detail'];
         const row = {id: 7, title: 'Title', detail: 'Value'};
@@ -380,7 +380,7 @@ describe('card language refresh', () => {
         expect(card.dataset.cardStyleOverride).toBeUndefined();
         const initialModernCalls = vi.mocked(renderModernCardDetails).mock.calls.length;
         expect(initialModernCalls).toBeGreaterThan(0);
-        applySiteCardDefaults(true, 'standard');
+        await applySiteCardDefaults(true, 'standard');
         expect(card.classList.contains('card--modern')).toBe(false);
         expect(card.querySelector('.card_modern_info_panel')).toBeNull();
         expect(renderKeyValuePairs).toHaveBeenCalled();
@@ -388,10 +388,10 @@ describe('card language refresh', () => {
         expect(card.querySelector('.card_checkbox')).toBe(checkbox); expect(checkbox.checked).toBe(true);
         expect(card.querySelector('.card_image_content')).toBe(media); expect(cards.scrollTop).toBe(73);
         expect(article.querySelector('.card_details_kv')).toBe(articleDetail);
-        applySiteCardDefaults(true, 'modern');
+        await applySiteCardDefaults(true, 'modern');
         expect(card.querySelector('.card_modern_info_panel')).not.toBeNull();
         expect(renderModernCardDetails).toHaveBeenCalledTimes(initialModernCalls + 1);
-        applySiteCardDefaults(true, 'modern', 4);
+        await applySiteCardDefaults(true, 'modern', 4);
         expect(vi.mocked(renderModernCardDetails).mock.calls.at(-1)[3]).toEqual({ columns: 4 });
         expect(cards.querySelector('.card')).toBe(card);
         expect(card.querySelector('.card_checkbox')).toBe(checkbox);
@@ -418,7 +418,7 @@ describe('card language refresh', () => {
         const summary=article.querySelector('.card_small_text');
         const articleDetails=article.querySelector('.card_details_kv');
         expect(articleDetails.querySelectorAll('.test-card-detail-value')).toHaveLength(1);
-        applySiteCardDefaults(false);
+        await applySiteCardDefaults(false);
         expect(cards.querySelector('.card_details_kv')).toBeNull();
         expect(article.querySelector('.card_details_kv')).toBe(articleDetails);
         expect(article.querySelector('.card_small_text')).toBe(summary);
@@ -462,7 +462,7 @@ describe('card language refresh', () => {
         }
         vi.mocked(create_seeded_avatar).mockImplementationOnce(async () => {
             // Generic field groups already exist on this still-detached card.
-            applySiteCardDefaults(false);
+            await applySiteCardDefaults(false);
             return document.createElement('span');
         });
         if (view) await refreshCardLanguages('fi');

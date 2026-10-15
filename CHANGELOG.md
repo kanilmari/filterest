@@ -22,6 +22,7 @@ Dates are the local (Europe/Helsinki) date on which the version was published.
 
 ## [Unreleased]
 
+- **Faster article opening from cards (WO19, K380)** — Binding a card or article styles only its own surface. Appearance changes repaint together before the next browser paint, reuse the resolved configuration and skip unchanged surface styles while preserving previews, themes and dataset ownership.
 - **One desktop scroll area in the Workline Observatory (WO13)** — The board shares the available shell height and one content scrollport, with controls that compact as it scrolls and sticky phase headings; existing scrolling at 900 px and below is preserved in both themes.
 - **Claude workers accept an explicit effort (#841)** — `worker_agent --claude-effort` passes the installed CLI’s documented `--effort` setting, refuses unknown or unsupported levels before creating a run, and records and displays the request for foreground, background and research runs. Omitted effort retains Claude’s default; existing Codex options and arguments remain unchanged.
 

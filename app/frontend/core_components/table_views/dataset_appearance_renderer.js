@@ -29,7 +29,7 @@ Object.assign(variables, {
     'shared.filterbar_content_top_space': ['--filterbar-content-top-space', 'px'],
 });
 
-/** Paint before assembly and again after it so newly created adapters use current state. */
+/** Project a changed configuration; assembly refreshes can reuse these surface writes. */
 export function renderDatasetAppearance(surface, config) {
     for (const [path, [name, unit]] of Object.entries(variables)) {
         const [group, key] = path.split('.');
@@ -48,6 +48,12 @@ export function renderDatasetAppearance(surface, config) {
     surface._datasetAppearanceAttributes = { cardShowAllFields: String(shared.card_show_all_fields),
         cardStyleVariant: shared.card_style_variant, cardDetailColumns: String(shared.card_detail_columns),
         cardImagePresentation: shared.card_image_presentation, labelValueLayout: shared.label_value_layout };
+    refreshDatasetAppearanceAdapters(surface, config);
+}
+
+/** Assembly can add captions/adapters after binding without changing the configuration. */
+export function refreshDatasetAppearanceAdapters(surface, config) {
+    const shared = config.shared;
     projectAppearanceAttribute(surface, 'articleImageCaptionPosition', shared.article_image_caption_position);
     // Captions carry their nearest owner's mode themselves: an outer dataset's
     // selector must never win over a nested related dataset's below-mode choice.

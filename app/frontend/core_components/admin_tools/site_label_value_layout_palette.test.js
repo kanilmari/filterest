@@ -87,6 +87,7 @@ test('a failed save keeps the wrapping preview and reset returns to the saved de
     expect(document.querySelector('[data-testid="toast"]').dataset.toastLevel).toBe('error');
     expect(document.querySelector('[data-dataset-appearance-scope]').dataset.labelValueLayout).toBe('inline');
     button('reset').click(); expect(select.value).toBe('stacked');
+    await Promise.resolve();
     expect(document.querySelector('[data-dataset-appearance-scope]').dataset.labelValueLayout).toBe('stacked');
     mounted.destroy();
 });

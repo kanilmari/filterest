@@ -88,6 +88,7 @@ test('tab cover alias and opacity share a value and both themes save atomically 
     get('cover-visible').click();
     change('card-image-width', 420); change('article-image-caption-position', 'overlay');
     change('filterbar-content-top-space', 0); get('card-fields-values').click();
+    await Promise.resolve();
     expect(hero.style.getPropertyValue('--dataset-cover-dark-image-opacity')).toBe('0');
     await save();
     expect(options.datasetSaveRequestFn.mock.calls[0][0]).toMatchObject({ schema_version: 2,
@@ -102,11 +103,14 @@ test('scope switches keep independent drafts, preview only the selected scope an
     const other = document.body.appendChild(document.createElement('section'));
     datasetAppearanceState.accept('other', paletteSnapshot(22)); datasetAppearanceState.bind(other, 'other');
     change('hero-height', 100); change('card-style', 'standard');
+    await Promise.resolve();
     expect(hero.dataset.cardStyleVariant).toBe('standard'); expect(other.dataset.cardStyleVariant).toBe('modern');
     get('scope-site').click(); change('brand-color', '#cc3366'); change('card-detail-columns', 4);
+    await Promise.resolve();
     expect(hero.style.getPropertyValue('--dataset-cover-hero-extra-height')).toBe('40px');
     expect(hero.dataset.cardStyleVariant).toBe('modern'); expect(other.dataset.cardDetailColumns).toBe('4');
     get('scope-tab').click();
+    await Promise.resolve();
     expect(hero.style.getPropertyValue('--dataset-cover-hero-extra-height')).toBe('100px');
     expect(hero.dataset.cardStyleVariant).toBe('standard'); expect(other.dataset.cardDetailColumns).toBe('2');
     expect(get('brand-color').value).toBe('#1a8fe6'); // Saved site value in the read-only tab row.
@@ -117,8 +121,10 @@ test('scope switches keep independent drafts, preview only the selected scope an
     get('scope-tab').click(); expect(get('hero-height').value).toBe('100'); await save();
     expect(options.datasetSaveRequestFn.mock.calls[0][0].shared_version).toBe('site-1-next');
     change('hero-height', 150); get('close').click();
+    await Promise.resolve();
     expect(hero.style.getPropertyValue('--dataset-cover-hero-extra-height')).toBe('150px');
-    control.destroy(); expect(hero.style.getPropertyValue('--dataset-cover-hero-extra-height')).toBe('100px');
+    control.destroy(); await Promise.resolve();
+    expect(hero.style.getPropertyValue('--dataset-cover-hero-extra-height')).toBe('100px');
     expect(other.dataset.cardDetailColumns).toBe('4');
 });
 

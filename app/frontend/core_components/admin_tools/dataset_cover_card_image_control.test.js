@@ -50,6 +50,7 @@ describe('site card image selector', () => {
         expect(select.value).toBe('cover');
         select.value = 'contain_blur';
         select.dispatchEvent(new Event('change'));
+        await Promise.resolve();
         expect(document.querySelector('[data-dataset-appearance-scope]').dataset.cardImagePresentation).toBe('contain_blur');
         expect(save).not.toHaveBeenCalled();
         document.documentElement.lang = 'fi';
@@ -58,6 +59,7 @@ describe('site card image selector', () => {
         expect(select.getAttribute('aria-label')).toBe('Korttikuvan esitystapa');
         expect(select.selectedOptions[0].textContent).toBe('Koko kuva ja sumennettu tausta');
         control.resetPreview();
+        await Promise.resolve();
         expect(select.value).toBe('cover');
         expect(document.querySelector('[data-dataset-appearance-scope]').dataset.cardImagePresentation).toBe('cover');
         select.value = 'contain';

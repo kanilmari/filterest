@@ -53,7 +53,7 @@ beforeEach(() => {
 });
 
 describe('dataset appearance ownership', () => {
-    test('public-only bindings cannot recover snapshots by name or UID on later paints', () => {
+    test('public-only bindings cannot recover snapshots by name or UID on later paints', async () => {
         const owner = createDatasetAppearanceState();
         owner.accept('private', snapshot(11, { 'shared.card_image_width': 480,
             'shared.label_value_layout': 'inline', 'shared.card_image_presentation': 'contain_blur' }));
@@ -68,20 +68,20 @@ describe('dataset appearance ownership', () => {
         expect(related.dataset.cardImagePresentation).toBe('contain');
         const site = clone(DEFAULT_DATASET_APPEARANCE); site.shared.card_image_width = 360;
         owner.updateSite(site, { version: 'site-2' });
-        owner.accept('private', snapshot(11, { 'shared.card_image_width': 500 }, { version: '2' }));
+        await owner.accept('private', snapshot(11, { 'shared.card_image_width': 500 }, { version: '2' }));
         expect(related.style.getPropertyValue('--card_image_large_width')).toBe('360px');
         expect(related.dataset.datasetAppearanceResolved).toBe('false');
         expect(parent.style.getPropertyValue('--card_image_large_width')).toBe('500px');
     });
 
-    test('revocation forgets the UID and draft across aliases without cancelling readable row guards', () => {
+    test('revocation forgets the UID and draft across aliases without cancelling readable row guards', async () => {
         const owner = createDatasetAppearanceState();
         owner.accept('private', snapshot(11, { 'shared.card_image_width': 480 }, { schema: 2 }));
         setAllSpecs({ private: { table_uid: 11 }, renamed: { table_uid: 11 } });
         const first = surface(owner, 'private'), alias = surface(owner, 'renamed');
         owner.setPreview({}, 'private', snapshot(11, { 'shared.card_image_width': 500 }, { schema: 2 }));
         const earlier = owner.captureRegistry(), denial = owner.captureRegistry();
-        expect(owner.revoke('private', { token: denial })).toBe(true);
+        expect(await owner.revoke('private', { token: denial })).toBe(true);
         expect(owner.isCurrent(denial)).toBe(true);
         expect(owner.savedSnapshot('private')).toBeNull();
         expect(owner.savedSnapshot('renamed')).toBeNull();
@@ -108,7 +108,7 @@ describe('dataset appearance ownership', () => {
         expect(original.dataset.datasetAppearanceUid).toBe('11');
         expect(original.dataset.cardStyleVariant).toBe('standard');
     });
-    test('former-name reuse keeps simultaneous renamed and replacement surfaces on their immutable UIDs', () => {
+    test('former-name reuse keeps simultaneous renamed and replacement surfaces on their immutable UIDs', async () => {
         const owner = createDatasetAppearanceState();
         setAllSpecs({ former: { table_uid: 11 } });
         owner.accept('former', snapshot(11, { 'shared.card_style_variant': 'standard' }));
@@ -124,7 +124,7 @@ describe('dataset appearance ownership', () => {
         const renamed = surface(owner, 'renamed', document.body, 11);
         owner.accept('renamed', snapshot(11, { 'shared.card_image_width': 444,
             'shared.card_style_variant': 'standard' }, { version: '2' }));
-        owner.paint('former');
+        await owner.paint('former');
         expect(original.dataset.datasetAppearanceUid).toBe('11');
         expect(original.dataset.cardStyleVariant).toBe('standard');
         expect(original.style.getPropertyValue('--card_image_large_width')).toBe('444px');
@@ -214,18 +214,18 @@ describe('dataset appearance ownership', () => {
         expect(document.documentElement.style.getPropertyValue('--card_image_large_width')).toBe('');
     });
 
-    test('releasing a card-only preview restores the current scoped source rather than its rendered draft', () => {
+    test('releasing a card-only preview restores the current scoped source rather than its rendered draft', async () => {
         datasetAppearanceState.accept('a', snapshot(11, { 'shared.card_style_variant': 'standard', 'shared.card_detail_columns': 3 }, { schema: 2 }));
         const host = surface(datasetAppearanceState, 'a'), item = card(datasetAppearanceState, 'a', host), preview = {};
-        datasetAppearanceState.setPreview(preview, 'a', snapshot(11, { 'shared.card_style_variant': 'modern', 'shared.card_detail_columns': 4 }, { schema: 2 }));
+        await datasetAppearanceState.setPreview(preview, 'a', snapshot(11, { 'shared.card_style_variant': 'modern', 'shared.card_detail_columns': 4 }, { schema: 2 }));
         expect(item.querySelector('.fields').textContent).toBe('true:modern:4');
-        datasetAppearanceState.releasePreview(preview, 'a');
+        await datasetAppearanceState.releasePreview(preview, 'a');
         expect(item.querySelector('.fields').textContent).toBe('true:standard:3');
-        datasetAppearanceState.accept('a', snapshot(11, { 'shared.card_style_variant': 'modern', 'shared.card_detail_columns': 1 }, { version: '2' }));
+        await datasetAppearanceState.accept('a', snapshot(11, { 'shared.card_style_variant': 'modern', 'shared.card_detail_columns': 1 }, { version: '2' }));
         expect(item.querySelector('.fields').textContent).toBe('true:modern:1');
     });
 
-    test('detached article surfaces keep their UID, captions and labels through inherited updates', () => {
+    test('detached article surfaces keep their UID, captions and labels through inherited updates', async () => {
         const owner = createDatasetAppearanceState();
         owner.accept('a', snapshot(11)); owner.accept('b', snapshot(22, { 'shared.article_image_caption_position': 'below' }));
         const a = surface(owner, 'a'), b = surface(owner, 'b');
@@ -235,16 +235,16 @@ describe('dataset appearance ownership', () => {
         const modal = document.createElement('section'); document.body.append(modal); modal.append(a);
         const draft = clone(DEFAULT_DATASET_APPEARANCE);
         draft.shared.article_image_caption_position = 'overlay'; draft.shared.label_value_layout = 'inline';
-        owner.updateSite(draft, { version: 'site-2' });
+        await owner.updateSite(draft, { version: 'site-2' });
         expect(a.querySelector('.row_article_inline_image_caption').dataset.articleImageCaptionPosition).toBe('overlay');
         expect(b.querySelector('.row_article_inline_image_caption').dataset.articleImageCaptionPosition).toBe('below');
         // A detached assembly surface also receives changes before it mounts.
-        a.remove(); draft.shared.article_image_caption_position = 'below'; owner.updateSite(draft, { preview: true });
+        a.remove(); draft.shared.article_image_caption_position = 'below'; await owner.updateSite(draft, { preview: true });
         expect(a.querySelector('.row_article_content').dataset.articleImageCaptionPosition).toBe('below');
         expect(a.dataset.datasetAppearanceUid).toBe('11');
     });
 
-    test('v1 previews retain cover behavior and explicit zero/false/equality, with saved reset', () => {
+    test('v1 previews retain cover behavior and explicit zero/false/equality, with saved reset', async () => {
         const owner = createDatasetAppearanceState(), original = clone(DEFAULT_DATASET_APPEARANCE);
         owner.updateSite(original, { version: 'site-1' });
         owner.accept('a', snapshot(11, { 'shared.card_description_lines': 0, 'shared.card_show_all_fields': false,
@@ -252,16 +252,16 @@ describe('dataset appearance ownership', () => {
         const node = surface(owner, 'a'), unchanged = node.style.cssText;
         const draft = clone(original); draft.light.image_blur = 9; draft.dark.image_blur = 0;
         draft.shared.card_description_lines = 3; draft.shared.card_show_all_fields = true; draft.shared.card_detail_columns = 4;
-        owner.updateSite(draft, { version: 'site-1', preview: true, changed: false });
+        await owner.updateSite(draft, { version: 'site-1', preview: true, changed: false });
         expect(node.style.getPropertyValue('--dataset-background-light-image-blur')).toBe('9px');
         expect(node.style.getPropertyValue('--dataset-background-dark-image-blur')).toBe('0px');
         expect(node.style.getPropertyValue('--card-description-lines')).toBe('0');
         expect(node.dataset.cardShowAllFields).toBe('false'); expect(node.dataset.cardDetailColumns).toBe('2');
-        owner.updateSite(original, { version: 'site-1', changed: false });
+        await owner.updateSite(original, { version: 'site-1', changed: false });
         expect(node.style.cssText).toBe(unchanged);
     });
 
-    test('a site save/preview recomputes v2 defaults while preserving covers and overrides', () => {
+    test('a site save/preview recomputes v2 defaults while preserving covers and overrides', async () => {
         const owner = createDatasetAppearanceState();
         const response = snapshot(11, { 'shared.card_detail_columns': 2 }, { schema: 2 });
         response.effective.light.image_blur = 6; response.effective.shared.hero_extra_height = 80;
@@ -270,12 +270,12 @@ describe('dataset appearance ownership', () => {
         const draft = clone(DEFAULT_DATASET_APPEARANCE);
         draft.light.image_blur = 19; draft.shared.hero_extra_height = 120;
         draft.shared.card_detail_columns = 4; draft.shared.card_image_width = 390;
-        owner.updateSite(draft, { version: 'site-2' });
+        await owner.updateSite(draft, { version: 'site-2' });
         expect(a.style.getPropertyValue('--dataset-background-light-image-blur')).toBe('6px');
         expect(a.style.getPropertyValue('--dataset-cover-hero-extra-height')).toBe('80px');
         expect(a.style.getPropertyValue('--card_image_large_width')).toBe('390px');
         expect(a.dataset.cardDetailColumns).toBe('2');
-        draft.shared.card_image_width = 450; owner.updateSite(draft, { preview: true });
+        draft.shared.card_image_width = 450; await owner.updateSite(draft, { preview: true });
         expect(a.style.getPropertyValue('--card_image_large_width')).toBe('450px');
         expect(a.style.getPropertyValue('--dataset-background-light-image-blur')).toBe('6px');
     });
@@ -296,9 +296,9 @@ describe('dataset appearance ownership', () => {
         expect(owner.accept('a', snapshot(22))).toBe(true);
     });
 
-    test('rename preserves UID, retained surfaces read mutable state and disposal clears projections', () => {
+    test('rename preserves UID, retained surfaces read mutable state and disposal clears projections', async () => {
         const owner = createDatasetAppearanceState(); owner.accept('old', snapshot(11));
-        const old = surface(owner, 'old'); owner.accept('renamed', snapshot(11, { 'shared.card_image_width': 440 }, { version: '2' }));
+        const old = surface(owner, 'old'); await owner.accept('renamed', snapshot(11, { 'shared.card_image_width': 440 }, { version: '2' }));
         expect(old.style.getPropertyValue('--card_image_large_width')).toBe('440px');
         const detached = document.createElement('article'), release = owner.bind(detached, 'renamed');
         expect(detached.style.getPropertyValue('--card_image_large_width')).toBe('440px');

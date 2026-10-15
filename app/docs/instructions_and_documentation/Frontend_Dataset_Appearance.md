@@ -78,6 +78,36 @@ Slice 3b adds ownership metadata and validators only. Slice 5 activates the new
 storage/API contracts and permits overrides for exactly the nine site defaults;
 it refuses site-only and tab-only overrides, aliases and derived blur.
 
+### Surface binding and repainting
+
+`dataset_appearance_state.js` applies a new binding's CSS variables and source
+attributes synchronously; card assembly reads those values immediately. Binding
+never repaints other registered surfaces. Configuration changes (authorized
+snapshots, site updates, previews and their release) coalesce in one microtask
+before the browser can paint. Effective values and their signature are cached
+per immutable UID and invalidated by those changes, including revoke/forget/clear.
+The signature includes UID, authorization status and normalized values; a new
+revision with identical values needs no surface CSS writes.
+
+Cards and articles bind before and after assembly. A separate, coalesced adapter
+refresh finishes new fields, images and captions without rewriting unchanged
+surface variables. Explicit `paint(name)` also requests that assembly refresh;
+ordinary configuration invalidation skips unchanged projections completely.
+Queued bindings hold only weak DOM references and are removed on release,
+forget and clear; detached article assembly and retained view hosts stay supported.
+No observer, listener or recurring timer is added by the repaint scheduler.
+
+The adjacent equivalence test compares all properties and attributes with the
+frozen pre-WO19 test oracle. The scaling test counts renders and CSS writes at
+50/100/200 bindings. The native `C18_article_open_appearance_probe.spec.ts`
+records CSS writes, longest long task and click-to-visible-frame time on both
+main and the changed source, with no timing threshold. Run it against a native
+test target with the command below; it creates and removes its own 60-row dataset.
+
+```bash
+./filterest test testing/e2e/C_card_view/C18_article_open_appearance_probe.spec.ts --project=desktop-card --workers=1
+```
+
 ### Dataset toolbar and appearance controls
 
 `navigation_fit_controller.js` measures complete hero destinations, gaps and available width on row resize, translated label updates and font loading. It restores inline styles through CSSOM so the page's content security policy cannot leave buttons invisible. It hides trailing buttons; all destinations remain in the menu. Phones (up to 700 px) hide that row and retain menu, site icon/name, search toggle and filter toggle. The toggle opens the existing field in an overlay below the toolbar without shifting buttons or listing, focuses it, and closes on Escape or another press while retaining the draft. Scrolling never opens search or replaces identity. Tablet/desktop keep their ordinary search. The initially collapsed `style` section reuses theme/language builders and the permission-checked gear/palette; order and collapse state follow the existing filter-panel mechanism. Temporary browser reveals wait for shell startup and the panel's saved-layout promise (`__sectionLayoutReady`) before expanding, so a late response cannot collapse the newly revealed controls. `20261009000074_seed_filterbar_style_language_key.sql` seeds these labels in all five UI languages and joins bootstrap and unreleased DB 9.11.0; `20261009000099_record_database_release_9_11_0.sql` records that release last. Browser locale checks read the served dictionary: disabled Chinese locales receive English with HTTP 200 even when `document.lang` still names Chinese. Rich category popup fixtures use the caller's 360 px minimum width; plain dropdowns follow their input row. Home keeps its own gear/palette because it has no dataset filter panel.

@@ -247,12 +247,15 @@ test.each([false, true])('the real v2 palette reaches a results-owned cover (car
     });
     const toggle = palette.panel.querySelector('[data-testid="dataset-cover-test-palette-mask-enabled"]');
     toggle.click();
+    await Promise.resolve();
     expect(hero.style.getPropertyValue('--dataset-cover-light-mask-image')).toBe('none');
     expect(hero.dataset.cardDetailColumns).toBe('3');
     palette.panel.querySelector('[data-testid="dataset-cover-test-palette-tab-dark"]').click();
     toggle.click();
+    await Promise.resolve();
     expect(hero.style.getPropertyValue('--dataset-cover-dark-mask-image')).toBe('initial');
     palette.panel.querySelector('[data-testid="dataset-cover-test-palette-reset"]').click();
+    await Promise.resolve();
     expect(hero.style.getPropertyValue('--dataset-cover-light-mask-image')).toBe('initial');
     expect(hero.style.getPropertyValue('--dataset-cover-dark-mask-image')).toBe('none');
 });

@@ -8,7 +8,8 @@ import { readDatasetAppearance } from '../../shared/dataset_appearance/snapshot.
 import { getAllSpecs, getTableSpecOwnershipVersion } from '../state_stores/table_specs_reader.js';
 import { subscribeToSessionGeneration } from '../auth/session_generation_store.js';
 import { setPublicAppearanceAttributes } from '../../reusable_components/appearance_scope_reader.js';
-import { renderDatasetAppearance, clearDatasetAppearanceSurface } from './dataset_appearance_renderer.js';
+import { renderDatasetAppearance, refreshDatasetAppearanceAdapters,
+    clearDatasetAppearanceSurface } from './dataset_appearance_renderer.js';
 
 const clone = value => JSON.parse(JSON.stringify(value));
 const leaf = (config, path) => { const [group, key] = path.split('.'); return config[group]?.[key]; };
@@ -22,6 +23,8 @@ export function createDatasetAppearanceState() {
     const entries = new Map(), names = new Map(), surfaces = new Map(), generations = new Map(), previews = new Map();
     const uidGenerations = new Map();
     const revokedSequences = new Map();
+    const configurations = new Map(), pendingNames = new Set(), assemblyNames = new Set(), pendingAssembly = new Set();
+    let paintScheduled = false;
     let surfaceOwners = new WeakMap();
     let epoch = 0, lifecycleVersion = 0, siteGeneration = 0, sequence = 0;
     let site = null;
@@ -63,24 +66,70 @@ export function createDatasetAppearanceState() {
         }
         return config;
     }
-    function paint(name) {
-        const refs = surfaces.get(name);
-        if (!refs) return;
-        for (const ref of refs) {
-            const surface = ref.node.deref();
-            if (!surface) { refs.delete(ref); continue; }
-            // Unknown owners are sealed by their first authorized snapshot.
-            // Once assigned, registry renames/reuse can never repaint this UID.
-            const uid = ref.snapshotAllowed ? (ref.uid ||= resolveUID(name)) : '';
+    function configuration(uid) {
+        if (!configurations.has(uid)) {
+            const config = effectiveUID(uid);
+            configurations.set(uid, { config, signature: JSON.stringify([uid, entries.has(uid), config]) });
+        }
+        return configurations.get(uid);
+    }
+    function apply(ref, refreshAdapters = false) {
+        const surface = ref.node.deref();
+        if (!surface) {
+            const refs = surfaces.get(ref.name);
+            refs?.delete(ref);
+            if (!refs?.size) surfaces.delete(ref.name);
+            pendingAssembly.delete(ref);
+            return;
+        }
+        if (surfaceOwners.get(surface) !== ref) return;
+        // Unknown owners seal on first authorization; renamed/reused names cannot change that UID.
+        const uid = ref.snapshotAllowed ? (ref.uid ||= resolveUID(ref.name)) : '';
+        const { config, signature } = configuration(uid);
+        if (ref.signature !== signature) {
             if (uid) surface.dataset.datasetAppearanceUid = uid;
             else delete surface.dataset.datasetAppearanceUid;
             surface.dataset.datasetAppearanceResolved = String(entries.has(uid));
-            renderDatasetAppearance(surface, effectiveUID(uid));
+            renderDatasetAppearance(surface, config);
+            ref.signature = signature;
+        } else if (refreshAdapters) {
+            // An explicit end-of-assembly paint/rebind may have added descendants.
+            // Refresh those adapters without rewriting the unchanged surface variables.
+            refreshDatasetAppearanceAdapters(surface, config);
         }
+    }
+    function schedulePaint() {
+        if (paintScheduled) return;
+        paintScheduled = true;
+        // Microtasks finish assembly before the browser's next paint. A frame callback
+        // could leave newly mounted content unstyled until a later frame.
+        queueMicrotask(() => {
+            paintScheduled = false;
+            const namesToPaint = [...pendingNames], adaptersToPaint = new Set(pendingAssembly);
+            const assembledNames = new Set(assemblyNames);
+            pendingNames.clear(); pendingAssembly.clear(); assemblyNames.clear();
+            for (const name of namesToPaint) for (const ref of surfaces.get(name) || []) {
+                const refresh = assembledNames.has(name) || adaptersToPaint.has(ref);
+                adaptersToPaint.delete(ref);
+                apply(ref, refresh);
+            }
+            for (const ref of adaptersToPaint) apply(ref, true);
+        });
+    }
+    function queuePaint(name) {
+        if (!surfaces.has(name)) return;
+        pendingNames.add(name);
+        schedulePaint();
+    }
+    /** Explicit paints also finish assembly of newly added descendants. */
+    function paint(name) {
+        if (!surfaces.has(name)) return;
+        assemblyNames.add(name);
+        queuePaint(name);
     }
     function paintUID(uid) {
         for (const [name, refs] of surfaces) {
-            if ([...refs].some(ref => ref.uid === uid || (!ref.uid && resolveUID(name) === uid))) paint(name);
+            if ([...refs].some(ref => ref.uid === uid || (!ref.uid && resolveUID(name) === uid))) queuePaint(name);
         }
     }
     function capture(name) {
@@ -135,6 +184,7 @@ export function createDatasetAppearanceState() {
         entries.set(uid, { snapshot: clone({ ...snapshot, effective: resolved, overrides: snapshot.overrides || {} }),
             siteGeneration: token?.siteGeneration ?? siteGeneration,
             sequence: Math.max(previous?.sequence || 0, token?.sequence ?? ++sequence) });
+        configurations.delete(uid);
         // A renamed dataset keeps its UID and every already mounted surface.
         paintUID(uid);
         return true;
@@ -159,8 +209,10 @@ export function createDatasetAppearanceState() {
                 surface.dataset.datasetAppearanceScope = existing.name;
                 existing.snapshotAllowed = snapshotAllowed;
                 existing.uid ||= ownerUID;
+                existing.signature = null;
             }
-            paint(existing.name);
+            apply(existing);
+            pendingAssembly.add(existing); schedulePaint();
             return existing.release;
         }
         surface.dataset.datasetAppearanceScope = name;
@@ -168,7 +220,10 @@ export function createDatasetAppearanceState() {
         surfaceOwners.set(surface, binding);
         refs.add(binding);
         surfaces.set(name, refs);
-        paint(name);
+        // Initial variables and source attributes are synchronous: card assembly reads
+        // them immediately. Only this binding is applied, never its dataset siblings.
+        apply(binding);
+        pendingAssembly.add(binding); schedulePaint();
         binding.release = () => {
             // Keeping the disposer on the binding must not retain the DOM node.
             const boundSurface = binding.node.deref();
@@ -178,7 +233,8 @@ export function createDatasetAppearanceState() {
                 clearDatasetAppearanceSurface(boundSurface);
             }
             refs.delete(binding);
-            if (!refs.size) surfaces.delete(name);
+            pendingAssembly.delete(binding);
+            if (!refs.size) { surfaces.delete(name); pendingNames.delete(name); assemblyNames.delete(name); }
         };
         return binding.release;
     }
@@ -191,6 +247,7 @@ export function createDatasetAppearanceState() {
         if (!entries.has(resolveUID(name)) || !readDatasetAppearance(settings)
             || String(settings.dataset_uid) !== resolveUID(name)) return false;
         previews.set(resolveUID(name), { owner, name, settings: clone(settings) });
+        configurations.delete(resolveUID(name));
         paintUID(resolveUID(name));
         return true;
     }
@@ -200,6 +257,7 @@ export function createDatasetAppearanceState() {
             || resolveUID(name);
         if (previews.get(uid)?.owner !== owner) return false;
         previews.delete(uid);
+        configurations.delete(uid);
         paintUID(uid);
         return true;
     }
@@ -211,11 +269,12 @@ export function createDatasetAppearanceState() {
         if (!isReadableDatasetAppearance(config)) return;
         if (changed) siteGeneration += 1;
         site = { config: normalize(config), version, preview };
+        configurations.clear();
         const shared = site.config.shared;
         setPublicAppearanceAttributes({ cardShowAllFields: String(shared.card_show_all_fields),
             cardStyleVariant: shared.card_style_variant, cardDetailColumns: String(shared.card_detail_columns),
             cardImagePresentation: shared.card_image_presentation, labelValueLayout: shared.label_value_layout });
-        for (const name of surfaces.keys()) paint(name);
+        for (const name of surfaces.keys()) queuePaint(name);
         // Standalone adapters have no dataset identity (for example a Home block).
         // Update their projection without using document-wide dataset settings.
         document.querySelectorAll('.label-value-layout, .card, .card_photo_presentation').forEach(element => {
@@ -231,6 +290,7 @@ export function createDatasetAppearanceState() {
             if (relatedOnly && !ref.related) continue;
             if (uid ? ref.uid !== uid && !(relatedOnly && candidate === name) : candidate !== name) continue;
             ref.snapshotAllowed = false;
+            ref.signature = null;
             affectedNames.add(candidate);
             const surface = ref.node.deref();
             if (!surface) continue;
@@ -239,7 +299,7 @@ export function createDatasetAppearanceState() {
             clearDatasetAppearanceSurface(surface);
             surface.dataset.datasetAppearanceScope = candidate;
         }
-        for (const candidate of affectedNames) paint(candidate);
+        for (const candidate of affectedNames) queuePaint(candidate);
     }
     /** Rejected refreshes demote related surfaces without discarding newer authorized results. */
     function rejectRelated(name, { token } = {}) {
@@ -258,6 +318,7 @@ export function createDatasetAppearanceState() {
             revokedSequences.set(key, Math.max(revokedSequences.get(key) || 0, denialSequence));
         }
         entries.delete(uid); previews.delete(uid);
+        configurations.delete(uid);
         clearBoundAppearance(name, uid);
         return true;
     }
@@ -272,8 +333,9 @@ export function createDatasetAppearanceState() {
                 const surface = ref.node.deref();
                 if (surface) { surfaceOwners.delete(surface); clearDatasetAppearanceSurface(surface); }
                 refs.delete(ref);
+                pendingAssembly.delete(ref);
             }
-            if (!refs.size) surfaces.delete(candidate);
+            if (!refs.size) { surfaces.delete(candidate); pendingNames.delete(candidate); assemblyNames.delete(candidate); }
         }
         for (const [candidate, candidateUID] of names) {
             if (candidateUID !== uid) continue;
@@ -282,6 +344,7 @@ export function createDatasetAppearanceState() {
         }
         entries.delete(uid);
         previews.delete(uid);
+        configurations.delete(uid);
     }
     function clear() {
         epoch += 1;
@@ -290,6 +353,7 @@ export function createDatasetAppearanceState() {
             if (surface) clearDatasetAppearanceSurface(surface);
         }
         surfaces.clear();
+        pendingNames.clear(); assemblyNames.clear(); pendingAssembly.clear(); configurations.clear();
         surfaceOwners = new WeakMap();
         entries.clear(); names.clear(); generations.clear(); uidGenerations.clear(); previews.clear();
         revokedSequences.clear();

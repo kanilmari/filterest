@@ -344,6 +344,20 @@ def test_git_range_cannot_be_used_to_pass_mutating_output_option(tmp_path):
     assert not (tmp_path / "unexpected.txt").exists()
 
 
+def test_appearance_binding_selects_scaling_snapshots_and_native_proofs():
+    plan = make_plan(ROOT, ["app/frontend/core_components/table_views/dataset_appearance_state.js"])
+    unit = {target for check in plan["fast"] if check["kind"] == "vitest" for target in check["targets"]}
+    assert {"app/frontend/core_components/table_views/dataset_appearance_scaling.test.js",
+            "app/frontend/core_components/table_views/dataset_appearance_equivalence.test.js"} <= unit
+    browser = {target for check in plan["heavy"] if check["kind"] == "browser" for target in check["targets"]}
+    assert {"app/testing/e2e/C_card_view/" + name + ".spec.ts" for name in (
+        "C1_card_render", "C3_close_big_card", "C10_image_first_article", "C12_article_reload_reading_position",
+        "C13_related_dataset_appearance", "C17_article_toolbar_group_permissions", "C18_article_open_appearance_probe",
+    )} <= browser
+    assert "app/testing/e2e/T_admin/T7_card_visibility.spec.ts" in browser
+    assert "app/testing/e2e/T_admin/T14_dataset_cover_palette.spec.ts" in browser
+
+
 def test_cli_json_empty_batch_and_invalid_input():
     command = [sys.executable, "-B", str(ROOT / "app/testing/python/relevant_checks.py")]
     empty = subprocess.run([*command, "--json"], capture_output=True, text=True, timeout=10)

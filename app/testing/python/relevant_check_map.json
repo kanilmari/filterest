@@ -55,6 +55,32 @@
       ]
     },
     {
+      "area": "Dataset appearance projection and binding",
+      "paths": [
+        "app/frontend/core_components/table_views/dataset_appearance_state.js",
+        "app/frontend/core_components/table_views/dataset_appearance_renderer.js",
+        "app/frontend/core_components/table_views/dataset_appearance_scaling.test.js",
+        "app/frontend/core_components/table_views/dataset_appearance_equivalence.test.js",
+        "app/frontend/core_components/table_views/dataset_appearance_legacy_test_oracle.js"
+      ],
+      "specs": [
+        "app/testing/e2e/C_card_view/C1_card_render.spec.ts",
+        "app/testing/e2e/C_card_view/C3_close_big_card.spec.ts",
+        "app/testing/e2e/C_card_view/C10_image_first_article.spec.ts",
+        "app/testing/e2e/C_card_view/C12_article_reload_reading_position.spec.ts",
+        "app/testing/e2e/C_card_view/C13_related_dataset_appearance.spec.ts",
+        "app/testing/e2e/C_card_view/C17_article_toolbar_group_permissions.spec.ts",
+        "app/testing/e2e/C_card_view/C18_article_open_appearance_probe.spec.ts",
+        "app/testing/e2e/T_admin/T7_card_visibility.spec.ts",
+        "app/testing/e2e/T_admin/T14_dataset_cover_palette.spec.ts"
+      ],
+      "projects": [
+        "mobile-card",
+        "tablet-card",
+        "desktop-card"
+      ]
+    },
+    {
       "area": "Dataset views",
       "paths": [
         "app/frontend/core_components/table_views",
