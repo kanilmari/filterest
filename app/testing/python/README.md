@@ -250,6 +250,22 @@ The [guard tests](test_relevant_checks.py) require every component area to have
 an entry and every mapped path, spec and project to exist. Update the map with
 the source move/removal; new PostgreSQL declarations require no map edit.
 
+Each shared browser component has one canonical area rule whose `drivers`
+record regular expressions for its selectors, test IDs and helper calls. Include
+every spec that drives it in that rule's `specs`, even when another area also
+selects the spec. The map's static guard scans nested browser specs, ignores
+comments, recognizes named helper aliases (including browser callbacks), and
+excludes setup and manual-only proofs; a new consumer or a removed mapping fails
+with a spec and line number.
+Record new selectors or helper wrappers in the owning rule when they are added:
+category panel IDs, headings, test IDs and category helpers belong to filtering;
+body mode-class writes, color-scheme emulation used for theme checks and visual
+theme helpers belong to themes. Mode-class reads and media emulation solely for
+unrelated checks do not establish theme coverage; record such decisions with
+file:line evidence.
+Authentication includes login-helper callers because an unavailable saved
+session can send them through the sign-in UI; this is explicit consumer coverage.
+
 Discovery does not evaluate computed import names or assembled migration
 filenames. Keep their coverage in the owning browser area or add a literal
 reference in the proof; whole-tier integration remains confirmation. The map

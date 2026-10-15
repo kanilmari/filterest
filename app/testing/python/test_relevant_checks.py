@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import copy
 import json
+import re
 from pathlib import Path
 import shlex
 import subprocess
@@ -15,7 +16,10 @@ import sys
 
 import pytest
 
-from relevant_checks import MAP_PATH, ROOT, git_changed_paths, make_plan, matches, normalize_path, render_plan, validate_map
+from relevant_checks import (
+    MANUAL_SPECS, MAP_PATH, ROOT, git_changed_paths, make_plan, manual_specs,
+    matches, normalize_path, render_plan, validate_map,
+)
 from relevant_check_discovery import frontend_tests, go_inventory
 from python_test_tiers import HEAVY_INSTALLATION_FILES, needs_heavy_installation, tier_for_path
 
@@ -506,3 +510,170 @@ def test_per_change_length_guard_uses_normal_mode_with_unrelated_legacy_files(fi
     assert result.returncode == 0, result.stderr
     assert "untouched_legacy.go (701 lines)" in result.stdout
     assert "Warning only" in result.stdout
+
+
+# Selectors and helper calls live with their owning map entry; this list only
+# prevents deleting a reviewed component's guard metadata from disabling its proof.
+SHARED_BROWSER_AREAS = {
+    "Translations", "Main menu and Home menu button", "Navigation and shared requests",
+    "Sign-in and accounts", "Filtering and categories", "Card and article opener", "Themes and shells",
+}
+
+
+def browser_driver_source(source):
+    """Ignore comments, retain selector strings and normalize named helper aliases."""
+    token = r'''("(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|`(?:\\.|[^`\\])*`)|//[^\n]*|/\*[\s\S]*?\*/'''
+    source = re.sub(token, lambda m: m[0] if m[1] else re.sub(r"[^\n]", " ", m[0]), source)
+    imports = re.findall(r"\bimport\s*\{([^}]+)\}\s*from\s*['\"]", source)
+    aliases = [pair for declaration in imports
+               for pair in re.findall(r"\b(\w+)\s+as\s+(\w+)", declaration)]
+    for original, alias in aliases:
+        source = re.sub(r"\b" + re.escape(alias) + r"(?=\s*(?:\(|[,)]))", original, source)
+    return source
+
+
+def shared_browser_evidence(root, policy):
+    """Statically link every matrix spec's recorded driver to its canonical area."""
+    excluded = manual_specs(root)
+    sources = {path.relative_to(root).as_posix(): browser_driver_source(path.read_text())
+               for path in sorted((root / "app/testing/e2e").rglob("*.spec.ts"))
+               if path.relative_to(root).as_posix() not in excluded
+               and "setup" not in path.relative_to(root / "app/testing/e2e").parts}
+    evidence = {}
+    for entry in policy["browser_areas"]:
+        if "drivers" not in entry:
+            continue
+        assert entry["drivers"], f"{entry['area']}: missing driver patterns"
+        patterns = [re.compile(pattern) for pattern in entry["drivers"]]
+        consumers = {}
+        for spec, source in sources.items():
+            hits = [hit for pattern in patterns if (hit := pattern.search(source))]
+            if hits:
+                hit = min(hits, key=lambda match: match.start())
+                consumers[spec] = (source.count("\n", 0, hit.start()) + 1, hit[0])
+        assert consumers, f"{entry['area']}: no specs match its recorded drivers"
+        evidence[entry["area"]] = consumers
+    return evidence
+
+
+def assert_shared_browser_coverage(root, policy):
+    """Refuse missing consumers in the entry itself, even if another area covers them."""
+    entries = {entry["area"]: entry for entry in policy["browser_areas"] if "drivers" in entry}
+    assert SHARED_BROWSER_AREAS <= entries.keys(), "shared component lost its canonical driver rule"
+    missing = []
+    for area, consumers in shared_browser_evidence(root, policy).items():
+        for spec, (line, marker) in consumers.items():
+            if spec not in entries[area]["specs"]:
+                missing.append(f"{area}: {spec}:{line} drives {marker!r} but is not selected")
+    assert not missing, "\n".join(missing)
+
+
+def test_shared_components_select_every_driving_browser_spec():
+    assert_shared_browser_coverage(ROOT, json.loads((ROOT / MAP_PATH).read_text()))
+
+
+@pytest.mark.parametrize("area", sorted(SHARED_BROWSER_AREAS))
+def test_shared_component_guard_rejects_removed_consumer(area):
+    policy = json.loads((ROOT / MAP_PATH).read_text())
+    entry = next(entry for entry in policy["browser_areas"] if entry["area"] == area)
+    spec = next(iter(shared_browser_evidence(ROOT, policy)[area]))
+    entry["specs"].remove(spec)
+    with pytest.raises(AssertionError, match=re.escape(spec)):
+        assert_shared_browser_coverage(ROOT, policy)
+
+
+def test_shared_component_guard_finds_new_nested_spec_and_helper_alias(tmp_path):
+    policy = json.loads((ROOT / MAP_PATH).read_text())
+    # Seed each area with an existing consumer so empty/stale rules still fail.
+    for area, consumers in shared_browser_evidence(ROOT, policy).items():
+        spec = next(iter(consumers))
+        write(tmp_path, spec, (ROOT / spec).read_text())
+    new_spec = "app/testing/e2e/new/nested/new_driver.spec.ts"
+    write(tmp_path, new_spec,
+          "import { ensureNavbarVisible as revealMenu } from '../../helpers/navbar';\n"
+          "await revealMenu(page);\nawait page.getByTestId('language-menu-button').click();\n")
+    with pytest.raises(AssertionError, match=re.escape(new_spec) + ":2"):
+        assert_shared_browser_coverage(tmp_path, policy)
+    for entry in policy["browser_areas"]:
+        if entry["area"] in {"Translations", "Main menu and Home menu button"}:
+            entry["specs"].append(new_spec)
+    assert_shared_browser_coverage(tmp_path, policy)
+    # The explicit manual-only boundary remains outside matrix selection.
+    write(tmp_path, MANUAL_SPECS, json.dumps([new_spec.removeprefix("app/testing/e2e/")]))
+    for entry in policy["browser_areas"]:
+        if new_spec in entry["specs"]:
+            entry["specs"].remove(new_spec)
+    assert_shared_browser_coverage(tmp_path, policy)
+
+
+def test_shared_component_guard_ignores_commented_driver_examples():
+    assert "language-menu-button" not in browser_driver_source(
+        "// getByTestId('language-menu-button')\n/* language-menu-button */")
+    assert "https://host/language-menu-button" in browser_driver_source(
+        "const selector = 'https://host/language-menu-button';")
+    policy = json.loads((ROOT / MAP_PATH).read_text())
+    next(entry for entry in policy["browser_areas"] if entry["area"] == "Translations").pop("drivers")
+    with pytest.raises(AssertionError, match="canonical driver rule"):
+        assert_shared_browser_coverage(ROOT, policy)
+
+
+@pytest.mark.parametrize("area,source", [
+    ("Filtering and categories", "await page.locator('#example_row_group_facets [data-heading-id]').click();"),
+    ("Filtering and categories", "await page.getByTestId('row-group-facets').isVisible();"),
+    ("Filtering and categories", "await page.getByTestId('row-group-facet-heading').click();"),
+    ("Filtering and categories", "await page.getByTestId('row-group-match-mode').check();"),
+    ("Filtering and categories", "await page.locator('.row-group-facet-heading').click();"),
+    ("Filtering and categories", "await page.locator('[data-row-group-slug=example] button').click();"),
+    ("Filtering and categories", "await page.locator('[data-option-value=example]').click();"),
+    ("Filtering and categories", "await closeCategoryPopup(page);"),
+    ("Filtering and categories", "await page.locator('[id$=\"_filterBar_panel\"]').isVisible();"),
+    ("Filtering and categories", "await page.getByTestId('dataset-search-input').fill('example');"),
+    ("Themes and shells", "await page.emulateMedia({ colorScheme: 'dark' });\n"
+     "await expect(page.locator('body')).toHaveCSS('background-color', 'rgb(0, 0, 0)');"),
+    ("Themes and shells", "async function forceTheme() { document.body.classList.add(`${theme}-mode`); }\n"
+     "await page.evaluate(forceTheme); await expect(page.locator('body')).toHaveClass(/dark-mode/);"),
+    ("Themes and shells", "import { assertImageFirstVisualContract as checkTheme } from '../helpers/image-first-article';\n"
+     "await checkTheme(page, stage, 900);"),
+    ("Main menu and Home menu button", "document.getElementById('navbar')?.click();"),
+    ("Main menu and Home menu button", "await page.locator('[id=\"showMenuButton\"]').click();"),
+    ("Main menu and Home menu button", "import { installMenuVisibilityProbe as probe } from '../helpers/menu_control_visibility';\n"
+     "await page.evaluate(probe);"),
+    ("Navigation and shared requests", "await page.locator('[id=\"navBackBtn\"]').click();"),
+    ("Sign-in and accounts", "document.getElementById('sign_out_other_devices')?.click();"),
+    ("Card and article opener", "await closeBigCard(page);"),
+] + [("Themes and shells", f"document.body.classList.{action}('{mode}-mode');")
+     for action in ("add", "remove", "toggle") for mode in ("light", "dark", "system")])
+def test_shared_component_guard_detects_alternate_driver_forms(tmp_path, area, source):
+    policy = json.loads((ROOT / MAP_PATH).read_text())
+    for consumers in shared_browser_evidence(ROOT, policy).values():
+        spec = next(iter(consumers))
+        write(tmp_path, spec, (ROOT / spec).read_text())
+    spec = "app/testing/e2e/new/alternate_driver.spec.ts"
+    write(tmp_path, spec, source)
+    consumers = shared_browser_evidence(tmp_path, policy)
+    assert spec in consumers[area]
+    for entry in policy["browser_areas"]:
+        if entry["area"] != area and spec in consumers.get(entry["area"], {}):
+            entry["specs"].append(spec)
+    with pytest.raises(AssertionError, match=re.escape(area + ": " + spec)):
+        assert_shared_browser_coverage(tmp_path, policy)
+    next(entry for entry in policy["browser_areas"] if entry["area"] == area)["specs"].append(spec)
+    assert_shared_browser_coverage(tmp_path, policy)
+
+
+@pytest.mark.parametrize("area,spec", [
+    ("Filtering and categories", "app/testing/e2e/E_search_filter/E14_selected_category_refresh.spec.ts"),
+    ("Themes and shells", "app/testing/e2e/C_card_view/C14_product_card_row_commits.spec.ts"),
+])
+def test_shared_component_guard_rejects_review_gap_removals(area, spec):
+    policy = json.loads((ROOT / MAP_PATH).read_text())
+    next(entry for entry in policy["browser_areas"] if entry["area"] == area)["specs"].remove(spec)
+    with pytest.raises(AssertionError, match=re.escape(spec)):
+        assert_shared_browser_coverage(ROOT, policy)
+
+
+def test_theme_driver_rule_ignores_reads_and_unrelated_media_emulation():
+    policy = json.loads((ROOT / MAP_PATH).read_text())
+    theme = next(entry for entry in policy["browser_areas"] if entry["area"] == "Themes and shells")
+    sources = ["document.body.classList.contains('dark-mode');", "page.emulateMedia({ reducedMotion: 'reduce' });"]
+    assert all(not re.search(pattern, source) for source in sources for pattern in theme["drivers"])
