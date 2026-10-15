@@ -86,3 +86,28 @@ Update incoming documentation links when text moves or a document is deleted.
 - [Colored calendar row categories](Colored_Calendar_Row_Categories.md) describes
   dataset-owned category colours and multilingual explanations shared by every
   calendar layout, with a legend, accessible text and support for both themes.
+- [SSO sign-in](SSO_Sign_In.md) describes owner-allowed identity providers mapped
+  to internal accounts and groups under the existing permission model.
+- [User messages](User_Messages.md) describes private conversations between
+  users, participant access and individual read positions.
+- [Lockers](Lockers.md) describes named visibility and work-allocation boundaries
+  enforced through permission scopes and row policies.
+- [Followers and watchers](Followers_And_Watchers.md) describes subscriptions,
+  explicit notification recipients and permission-safe delivery.
+- [Article sharing](Article_Sharing.md) describes browser and service sharing
+  and QR codes using one canonical article address with recipients' own rights.
+- [Immediate updates](Immediate_Updates.md) describes shared mutation identities,
+  affected parents and surfaces, safe replay and stale-cache removal.
+- [Site notices](Site_Notices.md) describes stable document kinds, structured
+  preparation, previews, immutable publication and a cookie catalogue.
+- [Account closure](Account_Closure.md) describes ending every account sign-in
+  and retaining explicit revocation evidence.
+- [Image display sizes](Image_Display_Sizes.md) describes an intermediate image
+  variant for high-density displays and coordinated variant selection.
+- [Tab context menu](Tab_Context_Menu.md) describes an accessible tab action
+  that reveals its dataset in the existing database tree.
+- [Field permissions](Field_Permissions.md) describes group-specific server
+  authorization for field reads, inserts and edits, separate from presentation.
+- [Image-first article sections](Image_First_Sections.md) describes shared article
+  sections in both image-first presentations, with independent opening defaults
+  and separate section rights and media authorization.

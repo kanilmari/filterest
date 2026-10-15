@@ -120,6 +120,24 @@ access restrictions are operator state and should not rewrite public About
 content describing the intended service.
 
 
+## Site notices
+
+About information, privacy notices and cookie notices are editable content
+rows in the About dataset (`system_about`), with multilingual titles and
+descriptions. The set of rows belongs to the installation; a separate cookie
+notice is content, not an automatically generated cookie catalogue. The About
+navigation entry opens this dataset through ordinary dataset navigation.
+
+Both the standalone sign-in page and the sign-in modal retrieve the privacy
+notice at `/api/about?id=4`. The server reads that row's title and description;
+the browser selects the current language with an English fallback and renders
+allowed HTML in a modal. The sign-in form includes a required privacy-notice
+acceptance checkbox. This fixed row selection does not provide document kinds,
+publication versions or a record of acceptance tied to a published version.
+
+[Future site notices](../future_documentation/Site_Notices.md) describe the
+missing configuration, preview, publication and cookie-catalogue capabilities.
+
 ## Workline Observatory layout
 
 Above 900 px, the observatory uses the shared results scrollport
