@@ -120,6 +120,41 @@ access restrictions are operator state and should not rewrite public About
 content describing the intended service.
 
 
+## Workline Observatory layout
+
+Above 900 px, the observatory uses the shared results scrollport
+(`.tab-content-body > .scrollable_content`) for both vertical and horizontal
+scrolling. The application shell owns the viewport height; its flex/grid chain
+uses `min-height: 0` and divides the available space instead of adding another
+viewport-height management view. The legacy management host remains supported
+as the sole scrollport when the renderer is mounted there directly.
+
+The result wrapper and phase board have visible overflow on desktop. Setting
+only `overflow-x: auto` would also make vertical overflow automatic and capture
+sticky positioning inside those wrappers. The status toolbar sticks at the
+shared scrollport's top; the phase heading sticks immediately below its measured
+height, including during compaction and when translated guidance wraps. Wide
+phase rows, the final workline and its publication action stay in that same
+scrollport. Toolbar compaction listens directly to that scrollport above 900 px,
+including before overflow is measurable. Resizing rebinds the listener; redraws
+and teardown release it and the toolbar's size observer. Filters retain their
+separate control-panel scrolling.
+
+At 900 px and below, existing padding, detail stacking, horizontal board
+scrolling and toolbar positioning are retained. The board also retains its
+original vertical overflow beside the shared content scroller. Compaction keeps
+the original window capture listener and ancestor boundary calculation, so
+scrolls from either owner still update it. Context menus capture every scroll
+owner at either width and release those listeners on redraw or teardown.
+Both explicit application themes use the same layout rules. The focused browser proof is
+`T16_workline_observatory_scroll.spec.ts`, independent of T13: it expands existing
+board rows in a GET response only, checks scroll ownership, sticky alignment,
+keyboard scrolling and focus visibility, and captures the desktop/phone layouts
+in both themes against the opposite operating-system theme. It saves no test
+data or account preferences. The shared scroller also contains the hero/search
+header, so the desktop proof scrolls past the measured phase heading before
+checking compaction and sticky alignment; a fixed distance can stop too early.
+
 ## Publications in the Workline Observatory
 
 The release decisions panel is **Julkaisut / Publications**. Significant

@@ -394,7 +394,8 @@
         "app/backend/core_components/workline_observatory"
       ],
       "specs": [
-        "app/testing/e2e/T_admin/T13_workline_observatory.spec.ts"
+        "app/testing/e2e/T_admin/T13_workline_observatory.spec.ts",
+        "app/testing/e2e/T_admin/T16_workline_observatory_scroll.spec.ts"
       ],
       "projects": [
         "mobile-card",

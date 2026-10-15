@@ -192,6 +192,31 @@ describe('workline observatory view', () => {
         expect(toolbar.dataset.compact).toBe('true');
     });
 
+    test('measures the sticky stack after toolbar resizing and releases its observer', () => {
+        let resized;
+        const disconnect = vi.fn();
+        const observe = vi.fn();
+        vi.stubGlobal('ResizeObserver', class {
+            constructor(callback) { resized = callback; }
+            observe = observe;
+            disconnect = disconnect;
+        });
+        const container = document.getElementById('view');
+        const controller = renderWorklineObservatory(container, { worklines: [] });
+        try {
+            const toolbar = container.querySelector('.workline-observatory__status-toolbar');
+            const shell = container.querySelector('.workline-observatory');
+            expect(observe).toHaveBeenCalledWith(toolbar);
+            toolbar.getBoundingClientRect = () => ({ height: 124 });
+            resized();
+            expect(shell.style.getPropertyValue('--workline-toolbar-height')).toBe('124px');
+            toolbar.getBoundingClientRect = () => ({ height: 64 });
+            resized();
+            expect(shell.style.getPropertyValue('--workline-toolbar-height')).toBe('64px');
+        } finally { controller.destroy(); vi.unstubAllGlobals(); }
+        expect(disconnect).toHaveBeenCalledOnce();
+    });
+
     test('selects multiple rows and applies one confirmed atomic status action', async () => {
         const rows = [
             { id: 1, title: 'One', status: 'active', status_revision: 2, current_phase: 4 },

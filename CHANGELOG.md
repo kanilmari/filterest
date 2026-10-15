@@ -22,6 +22,7 @@ Dates are the local (Europe/Helsinki) date on which the version was published.
 
 ## [Unreleased]
 
+- **One desktop scroll area in the Workline Observatory (WO13)** — The board shares the available shell height and one content scrollport, with controls that compact as it scrolls and sticky phase headings; existing scrolling at 900 px and below is preserved in both themes.
 - **Claude workers accept an explicit effort (#841)** — `worker_agent --claude-effort` passes the installed CLI’s documented `--effort` setting, refuses unknown or unsupported levels before creating a run, and records and displays the request for foreground, background and research runs. Omitted effort retains Claude’s default; existing Codex options and arguments remain unchanged.
 
 ## [9.4.2] - 2026-10-15

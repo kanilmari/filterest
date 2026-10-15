@@ -1,0 +1,71 @@
+/* workline_observatory_scroll.css
+ * Gives the desktop observatory one content scrollport inside the application shell.
+ * Connects the shared height chain with the phase board and its sticky controls.
+ * Keeps the existing narrow-screen layout and other management views unchanged.
+ */
+
+@media (width > 900px) {
+    /* The shell owns the viewport; descendants divide its remaining space. */
+    .body_content:has(.content_div:not(.hidden) .workline-observatory-view),
+    #tabs_container:has(> .content_div:not(.hidden) .workline-observatory-view) {
+        display: flex;
+        flex-direction: column;
+        min-height: 0;
+    }
+
+    #tabs_container:has(> .content_div:not(.hidden) .workline-observatory-view),
+    .content_div:has(.workline-observatory-view),
+    .management_forms:has(.workline-observatory-view),
+    .tab_parts_container:has(.workline-observatory-view) {
+        flex: 1 1 0;
+        height: auto;
+        min-height: 0;
+    }
+
+    .management_forms:has(.workline-observatory-view) {
+        display: flex;
+        flex-direction: column;
+        overflow: visible;
+    }
+
+    .tab_parts_container:has(.workline-observatory-view),
+    .tab-content-body:has(.workline-observatory-view) {
+        grid-template-rows: minmax(0, 1fr);
+        min-height: 0;
+    }
+
+    .tab-content-area:has(.workline-observatory-view) {
+        min-height: 0;
+    }
+
+    .tab-content-body > .scrollable_content:has(.workline-observatory-view),
+    .management_forms.workline-observatory-view {
+        flex: 1 1 0;
+        height: auto;
+        min-height: 0;
+        overflow: auto;
+    }
+
+    /* Even overflow-x:auto captures vertical sticky positioning. Both axes
+       belong to the shared scrollport, including the board's wide phase rows. */
+    .workline-observatory-view:not(.management_forms),
+    .workline-observatory .workline-observatory__board {
+        overflow: visible;
+    }
+
+    .workline-observatory .workline-observatory__board {
+        width: max(100%, 102rem);
+        max-width: none;
+    }
+
+    .workline-observatory .workline-observatory__status-toolbar {
+        top: 0;
+    }
+
+    .workline-observatory .workline-observatory__board-heading {
+        position: sticky;
+        top: var(--workline-toolbar-height, 0);
+        z-index: 10;
+        background: var(--bg_color_extreme);
+    }
+}

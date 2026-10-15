@@ -75,6 +75,8 @@ export function renderWorklineObservatory(container, initialState, copy = resolv
             };
             document.addEventListener('pointerdown', dismissContextMenu);
             window.addEventListener('resize', dismissContextMenu);
+            // The menu is portaled outside the view: capture every scroll owner
+            // (including the narrow board and navigation) at either breakpoint.
             window.addEventListener('scroll', dismissContextMenu, true);
             removeContextMenuListeners = () => {
                 document.removeEventListener('pointerdown', dismissContextMenu);
@@ -430,30 +432,61 @@ function installCompactToolbarObserver(view, onCompactChange = () => {}) {
     const toolbar = view.querySelector('.workline-observatory__status-toolbar');
     const sentinel = view.querySelector('.workline-observatory__toolbar-sentinel');
     if (!toolbar || !sentinel) return () => {};
+    let active = true;
+    let scrollport;
+    let scrollTarget;
 
+    // Translated guidance and the compact animation change the sticky stack's
+    // height. Measure it instead of reserving a fixed number of toolbar rows.
+    const updateHeight = () => {
+        if (active) view.style.setProperty('--workline-toolbar-height', `${toolbar.getBoundingClientRect().height}px`);
+    };
     const update = () => {
-        const scrollportTop = findVerticalScrollportTop(toolbar);
+        if (!active) return;
+        bindScrollport();
+        const scrollportTop = scrollport?.getBoundingClientRect().top ?? 0;
         const sentinelBottom = sentinel.getBoundingClientRect().bottom;
         const compact = sentinelBottom < scrollportTop - 0.5;
         toolbar.dataset.compact = String(compact);
         onCompactChange(compact);
+        updateHeight();
     };
-    window.addEventListener('scroll', update, true);
+    const bindScrollport = () => {
+        // Match workline_observatory_scroll.css. Desktop ownership is structural,
+        // even before content overflows; narrow screens retain the original owner.
+        const sharedScrollport = window.innerWidth > 900
+            ? view.closest('.tab-content-body > .scrollable_content, .management_forms.workline-observatory-view')
+            : null;
+        scrollport = sharedScrollport || findVerticalScrollport(toolbar);
+        // Keep the original window capture below the breakpoint: both the
+        // board and its outer scroller can move, including ancestors of the view.
+        const nextScrollTarget = window.innerWidth > 900 ? scrollport || window : window;
+        if (nextScrollTarget !== scrollTarget) {
+            scrollTarget?.removeEventListener('scroll', update, true);
+            scrollTarget = nextScrollTarget;
+            scrollTarget.addEventListener('scroll', update, true);
+        }
+    };
+    const sizeObserver = typeof ResizeObserver === 'function' ? new ResizeObserver(updateHeight) : null;
+    sizeObserver?.observe(toolbar);
+    bindScrollport();
     window.addEventListener('resize', update);
     queueMicrotask(update);
     return () => {
-        window.removeEventListener('scroll', update, true);
+        active = false;
+        sizeObserver?.disconnect();
+        scrollTarget?.removeEventListener('scroll', update, true);
         window.removeEventListener('resize', update);
     };
 }
 
-function findVerticalScrollportTop(element) {
+function findVerticalScrollport(element) {
     for (let parent = element.parentElement; parent; parent = parent.parentElement) {
         const style = window.getComputedStyle(parent);
         const canScroll = /(auto|scroll|overlay)/.test(`${style.overflow} ${style.overflowY}`);
         if (canScroll && parent.scrollHeight > parent.clientHeight) {
-            return parent.getBoundingClientRect().top;
+            return parent;
         }
     }
-    return 0;
+    return null;
 }

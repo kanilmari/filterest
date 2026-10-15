@@ -4,6 +4,8 @@
  * Exists so phase position remains readable on desktop and horizontally scrollable on mobile.
  */
 
+@import url("./workline_observatory_scroll.css");
+
 .workline-observatory {
     box-sizing: border-box;
     width: 100%;
