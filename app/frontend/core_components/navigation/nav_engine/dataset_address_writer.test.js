@@ -18,6 +18,8 @@ vi.mock("./dataset_aliases.js", () => ({
 vi.mock("../../dev_tools/function_counter.js", () => ({
     count_this_function: vi.fn(),
 }));
+vi.mock("../../config_fetcher.js", () => ({ getDefaultViewSync: () => "card" }));
+vi.mock("../../state_stores/table_specs_reader.js", () => ({ getAllSpecs: () => ({}) }));
 
 const refreshTableUnifiedMock = vi.hoisted(() => vi.fn());
 vi.mock("../../general_tables/gt_1_row_crud/gt_1_2_row_read/table_refresh_unified.js", async () => {
@@ -31,7 +33,8 @@ vi.mock("../../general_tables/gt_1_row_crud/gt_1_2_row_read/table_refresh_unifie
 
 import { closeRowArticle } from "../../table_views/card_view/row_article_ui_handler.js";
 import { getUnifiedTableState, setUnifiedTableState } from "../../state_stores/table_state_store.js";
-import { setChosenDatasetView } from "../../state_stores/dataset_view_choice_saver.js";
+import { getChosenDatasetView, setChosenDatasetView } from "../../state_stores/dataset_view_choice_saver.js";
+import { resolveDatasetDefaultView } from "../../table_views/dataset_default_view.js";
 import { getParams, setParams, updateURL, useUrlParams } from "./query_params.js";
 import { updateDatasetAddress, resetDatasetAddressOwnershipForTests } from "./dataset_address_writer.js";
 import { primeDatasetAccessRegistry } from './dataset_access_registry.js';
@@ -111,6 +114,27 @@ describe("dataset address ownership", () => {
     afterEach(() => {
         resetDatasetAddressOwnershipForTests();
     });
+
+    test.each([["calendar", "calendar"], [null, "card"]])(
+        "loading without an address or tab view resolves default %s and replaces the address with %s",
+        async (savedDefault, effectiveView) => {
+            landOn(`/${DATASET}?search=lapland#section-2`, { __filterestEntryId: "default-load" });
+            localStorage.setItem(`${DATASET}_tableMeta`, JSON.stringify({ default_view_name: savedDefault }));
+            expect(getChosenDatasetView(DATASET)).toBeNull();
+            expect(new URL(location.href).searchParams.has("view")).toBe(false);
+            const lengthBefore = history.length;
+            const entryBefore = history.state.__filterestEntryId;
+
+            // The renderer records its resolved default before the settled-address write.
+            setChosenDatasetView(DATASET, resolveDatasetDefaultView(DATASET));
+            await updateDatasetAddress({ dataset: DATASET });
+
+            expect(currentAddress()).toBe(`/${DATASET}?search=lapland&view=${effectiveView}#section-2`);
+            expect(getParams(DATASET)).toEqual({ search: "lapland", view: effectiveView });
+            expect(history.length).toBe(lengthBefore);
+            expect(history.state.__filterestEntryId).toBe(entryBefore);
+        },
+    );
 
     // The owner's own sequence: a bookmarked row address whose cached parameters
     // still say article_view, closed directly, then searched.

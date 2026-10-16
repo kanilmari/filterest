@@ -283,6 +283,7 @@ func RegisterRoutes(frontendDir string, storagePath string) {
 	functionRegisterHandler("/api/dataset-header-config/", system_table_tools.GetDatasetHeaderConfigHandler, "system_table_tools.GetDatasetHeaderConfigHandler", http.MethodGet)
 	functionRegisterHandler("/api/child-tab-config/save", system_table_tools.SaveChildTabConfigHandler, "system_table_tools.SaveChildTabConfigHandler", http.MethodPost)
 	functionRegisterHandler("/api/child-tab-config/", system_table_tools.GetChildTabConfigHandler, "system_table_tools.GetChildTabConfigHandler", http.MethodGet)
+	functionRegisterHandler("/api/admin/dataset-default-view", system_table_tools.DatasetDefaultViewHandler, "system_table_tools.DatasetDefaultViewHandler", http.MethodGet, http.MethodPost)
 	functionRegisterHandler("/api/view-field-sets", system_table_tools.GetViewFieldSetsHandler, "system_table_tools.GetViewFieldSetsHandler", http.MethodGet)
 	functionRegisterHandler("/api/view-field-settings/article-section-defaults", system_table_tools.GetArticleSectionDefaultsHandler, "system_table_tools.GetArticleSectionDefaultsHandler", http.MethodGet)
 	functionRegisterHandler("/api/admin/view-field-settings/article-section-defaults", system_table_tools.SaveArticleSectionDefaultsHandler, "system_table_tools.SaveArticleSectionDefaultsHandler", http.MethodPost)

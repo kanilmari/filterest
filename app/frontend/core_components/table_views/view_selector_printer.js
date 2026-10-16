@@ -256,13 +256,15 @@ function syncActiveViewButtons(tableName, activeViewKey) {
 
     const effectiveActiveViewKey = getEffectiveActiveViewKey(tableName, activeViewKey);
 
-    document.querySelectorAll(".view-selector-buttons").forEach((container) => {
+    document.querySelectorAll(".view-selector-buttons, .dataset-default-view-row").forEach((container) => {
         if (container.dataset.tableName !== tableName) return;
 
         // Layout tools follow the committed renderer, even if an old article
         // node is retained for navigation. Button highlighting keeps its
         // existing open-article behavior below.
         container.__syncCardStyleDropdown?.(activeViewKey);
+        // The default row also follows history when the view-button capability is absent.
+        container.__syncView?.(activeViewKey);
         container.querySelectorAll(".unified-view-button").forEach((button) => {
             const isActive = button.dataset.viewKey === effectiveActiveViewKey;
             button.classList.toggle("active", isActive);

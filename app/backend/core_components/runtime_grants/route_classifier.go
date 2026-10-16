@@ -18,6 +18,7 @@ var adminPilotRouteOperations = map[string]Operation{
 }
 
 var metadataRoutes = map[string]bool{
+	"/api/admin/dataset-default-view":       true, // AdminProfile; only registry.default_view_id, no generic grants.
 	"/api/front-page":                       true, // Delegates through the canonical dataset read; confers no dataset grant.
 	"/api/admin/front-page":                 true,
 	"/api/admin/front-page/article-buttons": true,

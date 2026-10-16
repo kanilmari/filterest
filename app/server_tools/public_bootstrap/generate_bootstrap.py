@@ -81,6 +81,7 @@ language_seed_migrations = (
     "20261013000002_seed_card_and_filterbar_language_keys.sql",
     "20261014000001_seed_article_view_access_language_keys.sql",
     "20261015000001_seed_record_title_language_keys.sql",
+    "20261015000003_seed_dataset_default_view_language_keys.sql",
 )
 # A setting an upgrade adds is added for a new installation by the same file, so
 # the default is written once and an upgraded site and a new one start with the

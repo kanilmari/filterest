@@ -166,6 +166,7 @@
   "system_table_tools.CheckMediaRowFoldersHandler": "CheckMediaRowFoldersHandler lists subfolders in storage/\u003ctable_uid\u003e that don't have a matching row in the given table.",
   "system_table_tools.CheckMediaSubfoldersHandler": "CheckMediaSubfoldersHandler verifies that each row folder has required subfolders.",
   "system_table_tools.CheckMediaTableFoldersHandler": "CheckMediaTableFoldersHandler lists directories in storage/ that don't correspond to any table_uid in system_db_tables.",
+  "system_table_tools.DatasetDefaultViewHandler": "DatasetDefaultViewHandler serves GET and POST under the administrator pipeline. It also checks the administrator flag itself, so a route grant alone never authorizes a save.",
   "system_table_tools.DeletePersonalViewFieldSetHandler": "",
   "system_table_tools.DeleteSharedViewFieldSetHandler": "",
   "system_table_tools.FixDatabaseConsistencyHandler": "FixDatabaseConsistencyHandler korjaa yksittäisen tai kaikki löydetyt ongelmat. Pyyntö: POST { \"fix_ids\": [\"cat1_tablename\", ...], \"fix_action\": {\"cat2_table\": \"drop|register\"} } tai { \"fix_all\": true }",

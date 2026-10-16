@@ -37,6 +37,7 @@ import {
  * Backend URL paths are derived from frontend/generated/backend_route_manifest.json.
  */
 export const MANIFEST_BACKED_ENDPOINT_ROUTE_HANDLERS = Object.freeze({
+    datasetDefaultView: 'system_table_tools.DatasetDefaultViewHandler',
     fetchContentTables: 'system_table_tools.GetGroupedTables',
     fetchForeignKeys: 'dtt_foreign_keys.GetForeignKeys',
     addForeignKey: 'dtt_foreign_keys.AddForeignKeyHandler',

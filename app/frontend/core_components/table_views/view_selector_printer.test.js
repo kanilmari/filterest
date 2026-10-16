@@ -90,6 +90,23 @@ describe("view_selector_printer", () => {
         expect(updateBrowserTabTitleMock).toHaveBeenCalledWith({ dataset: "demo_table" });
     });
 
+    test("history sync updates the dataset default row even without view buttons", async () => {
+        const { applyViewStyling } = await loadModule();
+        const row = document.createElement("div");
+        row.className = "dataset-default-view-row";
+        row.dataset.tableName = "demo_table";
+        row.__syncView = vi.fn();
+        const other = document.createElement("div");
+        other.className = "dataset-default-view-row";
+        other.dataset.tableName = "other_dataset";
+        other.__syncView = vi.fn();
+        document.body.append(row, other);
+        setChosenDatasetView("demo_table", "calendar");
+        applyViewStyling("demo_table");
+        expect(row.__syncView).toHaveBeenCalledWith("calendar");
+        expect(other.__syncView).not.toHaveBeenCalled();
+    });
+
     // (a) Owner decision K143: the chosen view is this tab's own. Choosing one
     // writes it to the tab's session storage and never to the storage that
     // every tab of the site shares.

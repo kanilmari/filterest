@@ -44,6 +44,7 @@ import {
     getDatasetViewSelectorTextForLanguage,
     resolveDatasetViewSelectionTarget,
 } from "../table_views/dataset_view_registry.js";
+import { createDatasetDefaultViewRow } from './dataset_default_view_row.js';
 import { createFieldViewEditorButton } from "./field_view_editor.js";
 import { createEditRowPermissionsButton } from "./row_access_editor.js";
 import { createRowGroupAssignmentButton } from "./row_group_assignment_editor.js";
@@ -323,6 +324,10 @@ export async function appendAdminFeatures(
             dataTypes
         );
         viewSelectorContainer.appendChild(viewSelector);
+    }
+    const defaultViewRow = await createDatasetDefaultViewRow(table_name, current_view, columns, dataTypes);
+    if (defaultViewRow) {
+        viewSelectorContainer.appendChild(defaultViewRow);
     }
 
     // The caller mounts labeled Tools/Views sections only after these checks

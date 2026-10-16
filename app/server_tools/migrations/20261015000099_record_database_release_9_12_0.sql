@@ -5,5 +5,5 @@
 -- VERSION_DB: 9.12.0
 
 INSERT INTO public.system_db_version (version, description)
-SELECT '9.12.0', 'Shared record titles and new-dataset card roles (ticket 962)'
+SELECT '9.12.0', 'Shared record titles, new-dataset card roles (ticket 962) and the dataset default-view control'
 WHERE NOT EXISTS (SELECT 1 FROM public.system_db_version WHERE version = '9.12.0');

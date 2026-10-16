@@ -80,6 +80,7 @@ const STABLE_CANDIDATE_ROUTE_SPECS = Object.freeze({
         { routeName: 'adminSitePresentationSettings', handlerName: 'system_table_tools.AdminSitePresentationSettingsHandler' },
     ]),
     adminConfiguration: Object.freeze([
+        { routeName: 'datasetDefaultView', handlerName: 'system_table_tools.DatasetDefaultViewHandler' },
         { routeName: 'adminDatasetUiVisibility', handlerName: 'system_table_tools.AdminDatasetUIVisibilityHandler' },
         { routeName: 'getDatasetAliasManagement', handlerName: 'router.GetDatasetAliasManagementHandler' },
         { routeName: 'saveDatasetAliasManagement', handlerName: 'router.SaveDatasetAliasManagementHandler' },

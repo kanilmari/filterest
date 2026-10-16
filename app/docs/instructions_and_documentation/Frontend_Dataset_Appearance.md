@@ -176,3 +176,51 @@ breakdowns. Generic `result` / `results` and the older search-copy keys may be
 site headings; this migration leaves them untouched. Both language storage
 representations fill only missing or blank copy and exact English fallbacks in
 other languages, retaining nonblank site translations.
+
+
+## Dataset default view in the filterbar (WL162)
+
+Administrators see **Default view for <dataset>** in **View content as…**.
+The dataset name follows its translated tab label (with its saved display name
+as fallback). The chooser uses the same vanilla dropdown and registered button/
+More options as the view selector, intersected with the server's offered views
+and the same route permissions, including the inherited site-default exception
+(Chart always requires its explicit right). Changing this chooser changes only its draft:
+the checkbox is checked exactly when that option is the saved dataset default.
+Checking saves the draft for everyone; unchecking clears the dataset default
+and inherits the site's choice. Pending controls are disabled and show the last
+acknowledged value. Failed replies trigger readback because a save may already
+have committed. Writes are serialized across remounts and superseded responses
+cannot update the row. Language refreshes and view switches update the row;
+removing its owner destroys the dropdown's portalled menu and listeners.
+
+The offered views are Cards, Article, Table, List, Compare, Tickets, Product
+cards and Calendar, plus specialized views only where they fit. Calendar can
+show undated records. Tree needs a verified self-reference (or the existing
+database catalogue tree); Chart needs delivered scalar temporal and numeric
+columns and `/ui/view/price_chart`; Map needs a declared WGS 84 Point geometry/geography or a
+recognized coordinate pair (unconstrained shapes, polygons and other SRIDs are
+excluded); Settings needs key/value-type columns and a supported value column. Cloud
+management is excluded because it operates its own cloud catalogue rather than
+rendering the selected dataset. Selector aliases, image-first presentation
+(which has no independent dataset renderer), unknown registry entries and
+view rows whose `name` differs from their renderer key are excluded. The last
+restriction matters because results metadata reads `system_table_views.name`.
+
+The precedence stays: explicit URL `view=` → this tab's session choice → saved
+dataset default → `frontend/config.json` → Cards. Clearing returns JSON null,
+which overwrites cached metadata rather than reviving an older saved default.
+A settled render replaces an address without `view=` with the resolved view;
+this adds no history entry and does not change that precedence.
+The UI uses `dataset_default_view_for`, `dataset_default_view_saved` and
+`dataset_default_view_error`, seeded in Finnish, English and Chinese locales by
+`20261015000003_seed_dataset_default_view_language_keys.sql` (DB 9.12.0).
+Browser proof: `E18_dataset_default_view.spec.ts`, in both application themes
+with the opposite operating-system theme, using the reserved administrator and
+ordinary test user (`loadUserCredentials()`) with distinct account IDs. The
+owned temporary dataset grants the Users group read access at creation; its
+registered cleanup removes those dataset-scoped grants. The spec restores both
+account theme preferences and the owned dataset's default in `afterEach`, using
+independent account request contexts so timeouts and page crashes still reach
+restoration and registered dataset cleanup. Its test-level budget covers both
+logins and the scenario; checkbox clicks retain the normal action/assertion limits.

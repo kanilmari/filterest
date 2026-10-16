@@ -1,0 +1,32 @@
+/* dataset_default_view_row.css
+   Styles the saved dataset default alongside the existing view selectors.
+   Connects the dropdown and labelled checkbox to application theme tokens.
+   Wraps translated labels on narrow filter panels without changing interaction geometry. */
+.dataset-default-view-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.4rem;
+    width: 100%;
+    min-width: 0;
+    color: var(--text_color);
+}
+
+.dataset-default-view-row > .vdw-dropdown {
+    flex: 1 1 9rem;
+    min-width: 0;
+}
+
+.dataset-default-view-row label {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+}
+
+.dataset-default-view-name {
+    overflow-wrap: anywhere;
+}
+
+.dataset-default-view-row [role="status"]:empty {
+    display: none;
+}
