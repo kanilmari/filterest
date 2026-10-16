@@ -5,6 +5,7 @@
 
 import { test, expect, type Page, type Locator } from '@playwright/test';
 import { waitForActiveFilterbarLayout } from '../helpers/filterbar';
+import { openActiveDatasetSearch } from '../helpers/dataset-search';
 import { waitForVisiblePageReady } from '../../../server_tools/lib/browser_view_readiness.mjs';
 
 const DATASET = process.env.FILTEREST_E2E_CATEGORY_DATASET || '';
@@ -387,11 +388,33 @@ test('WL103: multi-heading categories, search, reload, removal and clear-all', a
   await (await categoryPopup(page)).locator('.msd-popup-close').click();
 
   const datasetSearch = page.locator(`[data-dataset-search-input="${DATASET}"]:visible`).first();
-  if (!await datasetSearch.count()) await page.locator(`#${DATASET}_card_top_controls .card_search_filter_button`).click();
-  await expect(datasetSearch).toBeVisible();
-  await datasetSearch.fill('zzqqxx-no-such-category-row');
-  await datasetSearch.locator('xpath=ancestor::*[@data-dataset-search-variant][1]')
-    .locator('[data-testid^="dataset-search-submit"]').click();
+  for (const width of [375, 1440]) {
+    await page.setViewportSize({ width, height: 900 });
+    // The filter bar re-lays out after a width change; a late re-layout collapses an already opened phone search.
+    await waitForActiveFilterbarLayout(page);
+    const showSearch = page.getByTestId('mobile-search-toggle');
+    if (width === 375) {
+      await expect(datasetSearch).toHaveCount(0);
+      await expect(showSearch).toBeVisible();
+      await expect(showSearch).toHaveAccessibleName(/^(Näytä haku|Show search)$/);
+    } else {
+      await expect(showSearch).toBeHidden();
+    }
+    const query = width === 375 ? 'zzqqxx-phone-no-such-category-row' : 'zzqqxx-no-such-category-row';
+    // A late re-layout after the width change can collapse the phone search; reopen it as a user would.
+    await expect(async () => {
+      const input = await openActiveDatasetSearch(page);
+      await expect(input).toHaveAttribute('data-dataset-search-input', DATASET);
+      if (width === 375) await expect(showSearch).toHaveAttribute('aria-expanded', 'true');
+      await input.fill(query);
+      // The builder pairs input/submit test IDs by variant, even when the hero is rehosted.
+      const inputTestID = await input.getAttribute('data-testid');
+      const submit = page.getByTestId(inputTestID!.replace('dataset-search-input', 'dataset-search-submit'))
+        .filter({ visible: true });
+      await submit.click({ timeout: 5000 });
+      await expect.poll(() => new URL(page.url()).searchParams.get('search'), { timeout: 5000 }).toBe(query);
+    }).toPass({ timeout: 45_000 });
+  }
   await expect.poll(() => new URL(page.url()).searchParams.get('search')).toBe('zzqqxx-no-such-category-row');
   await expect(page.locator('.active-filter-item').filter({ hasText: 'zzqqxx-no-such-category-row' })).toBeVisible();
   await page.locator(`.active-filter-item[data-row-group-slug="${firstSlug}"] button`).click();
