@@ -19,7 +19,7 @@ import {
   readDatasetTableUIDFromRequest,
 } from './test-artifact-dataset-identity-reader';
 import { hydrateAuthenticatedTreeDataCache } from './tree-data-cache';
-import { recordTestDatasetColumnsFromRequest } from './test-artifact-dataset-column-recorder';
+import { recordTestDatasetOwnershipFromRequest } from './test-artifact-dataset-column-recorder';
 import { fetchCsrfTokenForRequest } from './test-artifact-csrf-reader';
 export { fetchCsrfTokenForRequest } from './test-artifact-csrf-reader';
 
@@ -361,7 +361,7 @@ export async function dropTempDataset(
       + `${registeredArtifact.serverId}, current table_uid=${currentTableUID}.`,
     );
   }
-  await recordTestDatasetColumnsFromRequest(page.request, datasetName);
+  await recordTestDatasetOwnershipFromRequest(page.request, datasetName);
   const response = await postJsonWithCsrf(page, '/api/drop-dataset', {
     dataset_name: datasetName,
     confirm_dataset_name: datasetName,

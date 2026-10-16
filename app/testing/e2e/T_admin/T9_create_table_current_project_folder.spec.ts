@@ -22,6 +22,7 @@ import {
 } from '../helpers/test-artifact-run-registry';
 import { readDatasetTableUIDFromPage } from '../helpers/test-artifact-dataset-identity-reader';
 import { cleanupDatasetViaRequest, fetchCsrfTokenForRequest } from '../helpers/temp-dataset';
+import { recordTestDatasetOwnershipFromRequest } from '../helpers/test-artifact-dataset-column-recorder';
 
 type CreatedTreeNodes = {
   folderDbId: number;
@@ -330,9 +331,12 @@ test.describe('T9 — Folder-Required Current Project Coverage', () => {
       const cleanupErrors: string[] = [];
 
       if (datasetConfirmed) {
-        await cleanupDatasetViaRequest(page.request, testTableName).catch((error: Error) => {
-          cleanupErrors.push(`drop-dataset request failed: ${error.message}`);
-        });
+        // Capture server-managed children before request-only cleanup removes their metadata.
+        await recordTestDatasetOwnershipFromRequest(page.request, testTableName)
+          .then(() => cleanupDatasetViaRequest(page.request, testTableName))
+          .catch((error: Error) => {
+            cleanupErrors.push(`drop-dataset request failed: ${error.message}`);
+          });
       }
 
       if (folderConfirmed && createdFolderDbId !== null) {
