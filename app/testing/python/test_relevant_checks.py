@@ -105,7 +105,7 @@ def test_move_or_delete_curated_target_refuses_plan(fixture_repository, path):
 
 @pytest.mark.parametrize("area", ["app/frontend/core_components/new", "app/backend/core_components/new",
                                  "app/backend/pipeline/new", "app/frontend/reusable_components/new",
-                                 "app/frontend/new_top_level"])
+                                 "app/frontend/new_top_level", "app/components/new"])
 def test_new_area_requires_explicit_browser_decision(fixture_repository, area):
     root, policy = fixture_repository
     write(root, area + "/source.txt")

@@ -68,13 +68,14 @@ def test_every_way_of_loading_private_source_is_refused(tmp_path, filename, cont
     assert codes(root) == [("app/backend/" + filename, "public-sibling-source-dependency")]
 
 
-def test_a_built_bundle_importing_a_private_owner_is_refused(tmp_path):
+@pytest.mark.parametrize("prefix", ["app/frontend/dist", "app/components/canary/frontend/dist"])
+def test_a_built_bundle_importing_a_private_owner_is_refused(tmp_path, prefix):
     # Built bundles are not text-scanned, but what they import still counts.
     root = init(tmp_path / "product")
-    track(root, "app/frontend/dist/main.js", f'import x from "../../{CANDIDATE_NAME}/x.js";\n')
-    track(root, "app/frontend/dist/about.js", f'const note = "built without {CANDIDATE_NAME}";\n')
+    track(root, prefix + "/main.js", f'import x from "../../{CANDIDATE_NAME}/x.js";\n')
+    track(root, prefix + "/about.js", f'const note = "built without {CANDIDATE_NAME}";\n')
 
-    assert codes(root) == [("app/frontend/dist/main.js", "runtime-forbidden-import")]
+    assert codes(root) == [(prefix + "/main.js", "runtime-forbidden-import")]
 
 
 def test_docs_and_tests_may_name_private_owners(tmp_path):

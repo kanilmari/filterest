@@ -469,7 +469,7 @@ On every server startup, `optional_tasks.go` runs a three-step pipeline:
 
 Scans all sources and UPSERTS records into `system_lang_key_sources`:
 
-1. **Code scan** — Walks `app/frontend/` and `app/backend/` directories, scans `.js`, `.html`, `.go` files for lang key patterns (`data-lang-key`, `dataset.langKey`, `getTranslationForKey("...")` etc.). Creates `source_type='code'` records.
+1. **Code scan** — Walks `app/frontend/`, `app/backend/` and, when present, `app/components/` directories, scans `.js`, `.html`, `.go` files for lang key patterns (`data-lang-key`, `dataset.langKey`, `getTranslationForKey("...")` etc.). Creates `source_type='code'` records. A missing optional components tree is allowed; an unreadable tree, dangling link or link outside its source root stops the scan, so incomplete discovery cannot retire still-used keys.
 
    A module that gathers its copy into one catalogue passes a *variable* to the
    translation call, so the key literal never sits beside it. The scan therefore

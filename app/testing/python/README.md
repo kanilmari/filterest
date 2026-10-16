@@ -250,6 +250,53 @@ The [guard tests](test_relevant_checks.py) require every component area to have
 an entry and every mapped path, spec and project to exist. Update the map with
 the source move/removal; new PostgreSQL declarations require no map edit.
 
+Feature directories under `app/components/<name>/` participate in the same Go,
+frontend import, language-source, permission and route-doc discovery. Each needs
+its own browser-area entry with specs or a justified `none`. Central Python and
+browser test locations stay unchanged. Pass both paths of component renames.
+The scanners tolerate an absent inventory root in fixtures and older layouts.
+QA's Go package pattern requires the checked-in `app/components/.gitkeep` until
+a component or the contract README preserves that directory; individual
+component entries must exist.
+
+The [import checker](import_boundary_checker.py) uses the planner's Go and
+frontend resolvers through the unchanged `check_import_boundaries.sh [--strict]`
+entry point. Cross-component dependencies are public entries listed as
+`- components/<name>` under `## Dependencies` in the owning README. Computed
+imports need explicit targets and a reason in
+[component_import_registry.json](component_import_registry.json), keyed by
+`repository-relative-source:line`; those targets still receive every boundary
+check. The eight accepted Go tree imports in three files are exact pins, even
+in strict mode, and cannot grow. The tree migration removes them.
+JS/TS imports come from `es-module-lexer` through
+[`frontend_import_lexer.mjs`](../../server_tools/scripts/frontend_import_lexer.mjs),
+with one Node process for the complete source batch per guard or planner run.
+The shared Node dependency loader honors an absolute `FILTEREST_NODE_MODULES_ROOT`;
+direct Python invocations need the same installed development packages as Node
+tools. Missing Node/packages, parse errors and incomplete helper responses fail
+discovery instead of returning an empty scan. `import.meta` is not an import edge.
+Template text, comments, ordinary strings and regex bodies are ignored; every
+`${…}` expression remains code, including nested templates and regexes after
+blocks. CommonJS calls retain their existing coverage through a same-width
+`require`-to-`import` copy parsed by the lexer. For lexer 2.3.1's commented keyword
+property/division bug, the existing ESLint parser identifies property names for
+same-width normalization before retrying the lexer; no custom JS tokenizer is used.
+CSS keeps its own comment/string rules: `//` in an unquoted URL is not a line comment,
+so later same-line `@import` rules remain visible to guards and test selection.
+
+**Guarantees and boundaries.** Discovery guarantees every import reported by
+`es-module-lexer` for JS/TS and every CSS `@import` per CSS Syntax Level 3,
+including decoded identifier/path escapes, ASCII case-insensitive names,
+comments and trailing layer/supports/media lists. Out of scope are source that
+the project's own parsers or linters reject, imports assembled at runtime beyond
+the computed-import registry rule, and code built deliberately to evade a
+developer guard. The import rules are a developer aid; review remains the backstop.
+
+The [temporary canary](../fixtures/component_canary.json) is shared by Python
+and Go tests: it exercises source discovery and detects skipped tests, orphaned
+keys, missing browser coverage and forbidden imports. It never installs a real
+component or registers an application route.
+
 Each shared browser component has one canonical area rule whose `drivers`
 record regular expressions for its selectors, test IDs and helper calls. Include
 every spec that drives it in that rule's `specs`, even when another area also

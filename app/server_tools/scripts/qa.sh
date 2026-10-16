@@ -128,7 +128,7 @@ echo "🚧 Checking import boundaries..."
 # 13. Go Backend Tests (with coverage floor)
 echo "🧪 Running Go backend tests..."
 COVERAGE_FLOOR=7
-go test ./backend/... -count=1 -coverprofile="$QA_TEMP_DIR/coverage.out"
+go test ./backend/... ./components/... -count=1 -coverprofile="$QA_TEMP_DIR/coverage.out"
 COVERAGE_REPORT="$(go tool cover -func="$QA_TEMP_DIR/coverage.out")"
 COVERAGE=$(printf '%s\n' "$COVERAGE_REPORT" | tail -1 | awk '{print $3}' | tr -d '%')
 echo "  📊 Total coverage: ${COVERAGE}%  (floor: ${COVERAGE_FLOOR}%)"
@@ -143,9 +143,11 @@ echo "  ✅ Coverage check passed."
 echo "🧪 Running additional Go workspace tests..."
 GO_TEST_PACKAGES=()
 GO_PACKAGE_LIST="$(go list ./...)"
+GO_MODULE="$(go list -m)"
 while IFS= read -r package; do
     [[ -n "$package" ]] || continue
-    [[ "$package" =~ /(backend|node_modules|dist-public|public-slice|open-source-export)(/|$) ]] && continue
+    [[ "$package" == "$GO_MODULE/backend/"* || "$package" == "$GO_MODULE/components/"* ]] && continue
+    [[ "$package" =~ /(node_modules|dist-public|public-slice|open-source-export)(/|$) ]] && continue
     GO_TEST_PACKAGES[${#GO_TEST_PACKAGES[@]}]="$package"
 done <<< "$GO_PACKAGE_LIST"
 if [ "${#GO_TEST_PACKAGES[@]}" -eq 0 ]; then

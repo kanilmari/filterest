@@ -118,9 +118,15 @@ func validateLangKeySourceRoot(sourceRoot string, requireApplicationMarkers bool
 			}
 		}
 	}
-	for _, sourceDirectory := range []string{"frontend", "backend"} {
+	for _, sourceDirectory := range []string{"frontend", "backend", "components"} {
 		directoryPath := filepath.Join(sourceRoot, sourceDirectory)
 		directoryInfo, directoryErr := os.Stat(directoryPath)
+		if sourceDirectory == "components" && os.IsNotExist(directoryErr) {
+			// A dangling link is not an absent, optional source tree.
+			if _, linkErr := os.Lstat(directoryPath); os.IsNotExist(linkErr) {
+				continue
+			}
+		}
 		if directoryErr != nil {
 			return fmt.Errorf("language-key source directory %q: %w", directoryPath, directoryErr)
 		}
@@ -137,7 +143,7 @@ type sourceEntry struct {
 	filePath string // suhteellinen polku projektin juuresta
 }
 
-// scanCodebaseForLangKeySources skannaa frontend/ ja backend/ -hakemistot
+// scanCodebaseForLangKeySources skannaa frontend/, backend/ ja components/ -hakemistot
 // ja palauttaa listan avain→tiedostopolku -pareista. Skipaa dist/-kansion.
 // Tunnistaa samat kaavat kuin scanCodebaseForLangKeys() mutta säilyttää tiedostopolun.
 func scanCodebaseForLangKeySources() ([]sourceEntry, error) {

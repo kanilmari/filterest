@@ -64,8 +64,13 @@ elif name == "go":
     elif args[0] == "tool":
         print("total: (statements) " + os.environ.get("QA_TEST_COVERAGE", "10.0") + "%")
     elif args[0] == "list":
-        print("example.invalid/filterest/backend/query")
-        print("example.invalid/filterest/cmd/filterest")
+        if args[1] == "-m":
+            print("example.invalid/filterest")
+        else:
+            print("example.invalid/filterest/backend/query")
+            print("example.invalid/filterest/components/canary/backend")
+            print("example.invalid/filterest/testing/backend/probe")
+            print("example.invalid/filterest/cmd/filterest")
 elif name == "bc":
     left, right = sys.stdin.read().strip().split("<")
     print(int(float(left) < float(right)))
@@ -191,8 +196,9 @@ def test_default_checks_preserve_source_and_remove_temporary_artifacts(workflow:
     cover = next(arg for call in calls for arg in call["args"] if arg.startswith("-coverprofile="))
     assert Path(cover.split("=", 1)[1]).parent == output.parent
     tests = [call["args"] for call in workflow.calls("go") if call["args"][0] == "test"]
-    assert len(tests) == 2 and tests[0][1] == "./backend/..."
-    assert tests[1] == ["test", "example.invalid/filterest/cmd/filterest", "-count=1"]
+    assert len(tests) == 2 and tests[0][1:3] == ["./backend/...", "./components/..."]
+    assert tests[1] == ["test", "example.invalid/filterest/testing/backend/probe",
+                        "example.invalid/filterest/cmd/filterest", "-count=1"]
 
 
 def test_explicit_fix_repairs_imports_and_lint_prints_report(workflow: Workflow):

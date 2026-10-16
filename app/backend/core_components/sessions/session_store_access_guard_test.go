@@ -225,18 +225,32 @@ func sessionSourceString(expression ast.Expr) string {
 	return ""
 }
 
-// scanBackendSources includes server tools as well as the backend so moving a
-// direct session reader to an operator package cannot bypass the boundary.
+// scanBackendSources includes components and server tools as well as the backend
+// so moving a direct session reader cannot bypass the boundary.
 func scanBackendSources(t *testing.T, skip map[string]bool, check func(*token.FileSet, *ast.File) []string) []string {
 	t.Helper()
 	backendRoot, err := filepath.Abs(filepath.Join("..", ".."))
 	if err != nil {
 		t.Fatalf("backend root: %v", err)
 	}
+	found, scanned := scanApplicationSources(t, filepath.Dir(backendRoot), skip, check)
+	if scanned < 100 {
+		t.Fatalf("scanned only %d files under %s; the backend root is wrong", scanned, backendRoot)
+	}
+	return found
+}
+
+// scanApplicationSources applies the same guard to real and temporary application trees.
+func scanApplicationSources(t *testing.T, appRoot string, skip map[string]bool, check func(*token.FileSet, *ast.File) []string) ([]string, int) {
+	t.Helper()
 	fileSet := token.NewFileSet()
 	scanned := 0
 	var found []string
-	for _, root := range []string{backendRoot, filepath.Join(filepath.Dir(backendRoot), "server_tools")} {
+	for _, directory := range []string{"backend", "server_tools", "components"} {
+		root := filepath.Join(appRoot, directory)
+		if _, err := os.Stat(root); os.IsNotExist(err) {
+			continue
+		}
 		walkErr := filepath.WalkDir(root, func(path string, entry fs.DirEntry, walkErr error) error {
 			if walkErr != nil {
 				return walkErr
@@ -266,10 +280,7 @@ func scanBackendSources(t *testing.T, skip map[string]bool, check func(*token.Fi
 			t.Fatalf("scan backend: %v", walkErr)
 		}
 	}
-	if scanned < 100 {
-		t.Fatalf("scanned only %d files under %s; the backend root is wrong", scanned, backendRoot)
-	}
-	return found
+	return found, scanned
 }
 
 // TestBackendLoadsAndWritesTheSessionOnlyThroughLoadAndSave scans every

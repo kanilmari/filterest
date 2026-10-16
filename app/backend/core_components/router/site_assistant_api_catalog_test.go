@@ -35,7 +35,7 @@ func TestEmbeddedRouteHandlerDocsMatchSourceComments(t *testing.T) {
 	for _, route := range manifest.Routes {
 		names = append(names, route.HandlerName)
 	}
-	fresh, err := router.ExtractRouteHandlerDocs(backendRootForTest(t), names)
+	fresh, err := router.ExtractRouteHandlerDocs(backendRootForTest(t), names, filepath.Join(filepath.Dir(backendRootForTest(t)), "components"))
 	if err != nil {
 		t.Fatalf("ExtractRouteHandlerDocs: %v", err)
 	}

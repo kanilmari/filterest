@@ -28,7 +28,7 @@
         "dev": "vite --configLoader native frontend",
         "build": "vite build --configLoader native frontend",
         "preview": "vite preview --configLoader native frontend",
-        "lint:css": "stylelint \"frontend/**/*.css\" --ignore-pattern \"frontend/dist/**\"",
+        "lint:css": "stylelint \"{frontend,components}/**/*.css\" --ignore-pattern \"frontend/dist/**\"",
         "qa": "./server_tools/scripts/qa.sh",
         "restart": "./ctl",
         "guardian": "./filterest audit visual --capture-only",

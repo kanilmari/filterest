@@ -1,0 +1,16 @@
+{
+  "app/go.mod": "module example\n\ngo 1.26.5\n",
+  "app/VERSION_APP": "fixture\n",
+  "app/playwright.config.ts": "projects: [{ name: 'desktop-card' }]\n",
+  "app/components/canary/README.md": "# Canary fixture\n\n## Dependencies\nNone.\n",
+  "app/components/canary/backend/canary.go": "// canary.go\n// Defines the discovery fixture's handler and language-independent answer.\n// Connects temporary Go tests and route-doc extraction without registering a real route.\n// Exists solely in temporary trees created by the B1a tests.\npackage canary\n\nimport \"net/http\"\n\n// CanaryHandler returns the fixture answer.\nfunc CanaryHandler(w http.ResponseWriter, r *http.Request) { w.Write([]byte(\"canary\")) }\n\nfunc Register() { http.HandleFunc(\"/api/canary\", CanaryHandler) }\n",
+  "app/components/canary/backend/canary_test.go": "package canary\nimport (\n \"net/http/httptest\"\n \"testing\"\n)\nfunc TestCanary(t *testing.T) {\n w := httptest.NewRecorder()\n CanaryHandler(w, httptest.NewRequest(\"GET\", \"/api/canary\", nil))\n if w.Body.String() != \"canary\" { t.Fatal(\"wrong fixture answer\") }\n}\n",
+  "app/components/canary/frontend/index.js": "export const key = 'component_canary_label';\nexport const permission = '/ui/canary';\nexport function label(element) { element.dataset.langKey = 'component_canary_label'; }\n",
+  "app/components/canary/frontend/index.test.js": "import { expect, test } from 'vitest';\nimport { key, permission } from './index.js';\ntest('canary entry', () => {\n expect(key).toBe('component_canary_label');\n expect(permission).toBe('/ui/canary');\n});\n",
+  "app/components/canary/frontend/canary.css": ".canary { color: inherit; }\n",
+  "app/frontend/canary_consumer.test.js": "import { expect, test } from 'vitest';\nimport { key } from '../components/canary/frontend/index.js';\ntest('core consumes public canary', () => expect(key).toBe('component_canary_label'));\n",
+  "app/testing/e2e/canary.spec.ts": "// Explicit browser fixture policy, never a real application route.\n",
+  "app/server_tools/scripts/check_file_length.sh": "exit 0\n",
+  "app/testing/python/test_fixture.py": "# fixture\n",
+  "app/testing/python/relevant_check_map.json": "{\"version\": 1, \"browser_areas\": [{\"area\": \"Canary\", \"paths\": [\"app/components/canary\"], \"specs\": [\"app/testing/e2e/canary.spec.ts\"], \"projects\": [\"desktop-card\"]}], \"source_guards\": [], \"bootstrap_proofs\": [], \"file_length_guard\": \"app/server_tools/scripts/check_file_length.sh\"}"
+}

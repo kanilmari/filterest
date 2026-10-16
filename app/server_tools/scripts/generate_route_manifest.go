@@ -48,7 +48,7 @@ func run() error {
 	for _, route := range manifest.Routes {
 		handlerNames = append(handlerNames, route.HandlerName)
 	}
-	docs, err := router.ExtractRouteHandlerDocs(filepath.Join(projectRoot, "backend"), handlerNames)
+	docs, err := router.ExtractRouteHandlerDocs(filepath.Join(projectRoot, "backend"), handlerNames, filepath.Join(projectRoot, "components"))
 	if err != nil {
 		return fmt.Errorf("extract route handler docs: %w", err)
 	}

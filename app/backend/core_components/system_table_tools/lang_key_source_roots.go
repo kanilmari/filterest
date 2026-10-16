@@ -81,7 +81,7 @@ func codebaseSourceRoots(paths runtimepaths.Paths) ([]langKeySourceRoot, error) 
 	return sourceRoots, nil
 }
 
-// langKeyScanDirectory is one frontend or backend tree of a source root: the
+// langKeyScanDirectory is one frontend, backend or components tree of a source root: the
 // directory as configured, where it really lies, the directory its recorded
 // paths are relative to, and the resolved source root no read may leave.
 type langKeyScanDirectory struct {
@@ -91,14 +91,21 @@ type langKeyScanDirectory struct {
 	rootRealPath string
 }
 
-// langKeyScanDirectories resolves the frontend and backend trees of each source
+// langKeyScanDirectories resolves the frontend, backend and components trees of each source
 // root. filepath.Walk does not enter a directory link, so a linked tree is
 // walked where it really lies, and one that leads out of its source root stops
 // the scan instead of being skipped as an empty tree.
 func langKeyScanDirectories(sourceRoots []langKeySourceRoot) ([]langKeyScanDirectory, error) {
 	var scanDirectories []langKeyScanDirectory
 	for _, sourceRoot := range sourceRoots {
-		for _, sourceDirectory := range []string{"frontend", "backend"} {
+		for _, sourceDirectory := range []string{"frontend", "backend", "components"} {
+			// B1a adds discovery before the first component exists. Additional
+			// composition roots may also have no feature components.
+			if sourceDirectory == "components" {
+				if _, err := os.Lstat(filepath.Join(sourceRoot.realPath, sourceDirectory)); os.IsNotExist(err) {
+					continue
+				}
+			}
 			realDirectory, err := containedLangKeySourcePath(
 				filepath.Join(sourceRoot.realPath, sourceDirectory),
 				sourceRoot.realPath,

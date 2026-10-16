@@ -22,6 +22,7 @@ Dates are the local (Europe/Helsinki) date on which the version was published.
 
 ## [Unreleased]
 
+- Component groundwork: local QA, check planning, source scans and import guards cover future `app/components/<name>/` trees; temporary cross-language fixtures verify discovery without shipping a component or changing the interface. Import guards and test selection use batched `es-module-lexer` discovery for JS/TS, including imports inside nested template expressions and after block-adjacent regexes, and fail visibly if Node or the lexer is unavailable. CSS imports follow CSS Syntax identifier escapes and ASCII case-insensitive names, including escaped path quotes and imports following unquoted URLs.
 - Browser tests use unique C21, T19 and T20 numbers for record titles, dataset aliases and observatory scrolling; a guard rejects new shared numbers while preserving exact legacy exceptions (J30).
 - Cookie-isolation check planning supports L4's own browser config, with a same-name, different-port login/logout regression case (J29).
 - **Database-role tools are development-only** — Listing, creating, updating and deleting PostgreSQL roles is available only in an explicit development environment, with the existing administrator checks. Role changes also protect the application's active database connection role, alongside the named system roles. Names longer than PostgreSQL's 63-byte limit are rejected before database access, and protection also recognizes truncated names.

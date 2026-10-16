@@ -685,7 +685,10 @@
     },
     {
       "paths": [
-        "app/backend"
+        "app/backend",
+        "app/components",
+        "app/testing/fixtures/component_canary.json",
+        "app/testing/componentfixture"
       ],
       "package": "app/backend/core_components/sessions",
       "anchor": "app/backend/core_components/sessions/session_store_access_guard_test.go"
@@ -703,6 +706,33 @@
       ],
       "package": "app/backend/core_components/dynamic_table_tools/dtt_1_row_crud/dtt_1_row_read",
       "anchor": "app/backend/core_components/dynamic_table_tools/dtt_1_row_crud/dtt_1_row_read/article_baseline_test.go"
+    },
+    {
+      "paths": [
+        "app/components",
+        "app/testing/fixtures/component_canary.json",
+        "app/testing/componentfixture"
+      ],
+      "package": "app/backend/core_components/auth",
+      "anchor": "app/backend/core_components/auth/component_discovery_test.go"
+    },
+    {
+      "paths": [
+        "app/components",
+        "app/testing/fixtures/component_canary.json",
+        "app/testing/componentfixture"
+      ],
+      "package": "app/backend/core_components/router",
+      "anchor": "app/backend/core_components/router/component_discovery_test.go"
+    },
+    {
+      "paths": [
+        "app/components",
+        "app/testing/fixtures/component_canary.json",
+        "app/testing/componentfixture"
+      ],
+      "package": "app/backend/core_components/system_table_tools",
+      "anchor": "app/backend/core_components/system_table_tools/component_discovery_test.go"
     }
   ],
   "python_guards": [
@@ -768,6 +798,24 @@
       ],
       "tests": [
         "app/testing/python/test_lang_key_archiving_paused_language_seed.py"
+      ]
+    },
+    {
+      "paths": [
+        "app/components",
+        "app/testing/python/import_boundary_checker.py",
+        "app/testing/python/component_import_registry.json",
+        "app/testing/python/relevant_check_discovery.py",
+        "app/server_tools/scripts/frontend_import_lexer.mjs",
+        "app/server_tools/scripts/check_import_boundaries.sh",
+        "app/testing/fixtures/component_canary.json",
+        "app/server_tools/scripts/check_file_length.sh",
+        "app/package.json"
+      ],
+      "tests": [
+        "app/testing/python/test_import_boundaries.py",
+        "app/testing/python/test_component_imports.py",
+        "app/testing/python/test_component_discovery.py"
       ]
     }
   ],

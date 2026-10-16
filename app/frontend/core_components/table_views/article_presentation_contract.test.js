@@ -1,16 +1,16 @@
-// contract_reader.test.js
+// article_presentation_contract.test.js
 // Holds active browser constants and reserved vocabulary to the shared contract.
 // Connects registry, K379 access guard and legacy disclosure settings.
 // Prevents a future route split from silently changing today's compatibility gate.
 import { describe, expect, test } from 'vitest';
-import { ARTICLE_PRESENTATION_CONTRACT as contract, LEGACY_ARTICLE_BLOCKS } from './contract_reader.js';
+import { ARTICLE_PRESENTATION_CONTRACT as contract, LEGACY_ARTICLE_BLOCKS } from '../../shared/article_presentations/contract_reader.js';
 import { ARTICLE_VIEW_KEY, IMAGE_FIRST_VIEW_KEY, DATASET_VIEW_DEFINITIONS,
-    getDatasetViewDefinition, normalizeDatasetViewKey } from '../../core_components/table_views/dataset_view_registry.js';
-import { ARTICLE_VIEW_ROUTE } from '../../core_components/table_views/card_view/article_view_access.js';
-import { ROW_ARTICLE_VIEW_KEY } from '../../core_components/table_views/card_view/row_article_data_fetcher.js';
+    getDatasetViewDefinition, normalizeDatasetViewKey } from './dataset_view_registry.js';
+import { ARTICLE_VIEW_ROUTE } from './card_view/article_view_access.js';
+import { ROW_ARTICLE_VIEW_KEY } from './card_view/row_article_data_fetcher.js';
 
 import orderExamples from '../../../testing/shared_contracts/legacy_ifav_order_examples.json' with { type: 'json' };
-import { sortColumnsByRole } from '../../core_components/table_views/card_view/row_article_opener_helpers.js';
+import { sortColumnsByRole } from './card_view/row_article_opener_helpers.js';
 
 describe('article presentation contract drift', () => {
     test('retains current keys, aliases and permission gates without registering the reserved view', () => {

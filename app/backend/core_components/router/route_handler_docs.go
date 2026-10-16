@@ -12,6 +12,7 @@ import (
 	"go/parser"
 	"go/token"
 	"io/fs"
+	"os"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -37,54 +38,59 @@ func EmbeddedRouteHandlerDocs() (RouteHandlerDocs, error) {
 	return docs, nil
 }
 
-// ExtractRouteHandlerDocs parses non-test Go files below backendRoot and
+// ExtractRouteHandlerDocs parses non-test Go files below backendRoot and any
+// additional source roots. It
 // returns the doc comment of every requested handler. Handlers without a
 // comment map to an empty string so the catalog can show the gap. Method
 // handlers (with receivers) are not route handler names and are ignored.
-func ExtractRouteHandlerDocs(backendRoot string, handlerNames []string) (RouteHandlerDocs, error) {
+func ExtractRouteHandlerDocs(backendRoot string, handlerNames []string, additionalRoots ...string) (RouteHandlerDocs, error) {
 	wanted := make(map[string]bool, len(handlerNames))
 	for _, name := range handlerNames {
 		wanted[name] = true
 	}
 
 	found := RouteHandlerDocs{}
-	walkErr := filepath.WalkDir(backendRoot, func(path string, entry fs.DirEntry, err error) error {
-		if err != nil {
-			return err
+	for index, sourceRoot := range append([]string{backendRoot}, additionalRoots...) {
+		if _, err := os.Lstat(sourceRoot); index > 0 && os.IsNotExist(err) {
+			continue
 		}
-		if entry.IsDir() {
-			if name := entry.Name(); path != backendRoot && (strings.HasPrefix(name, ".") || name == "testdata") {
-				return filepath.SkipDir
+		walkErr := filepath.WalkDir(sourceRoot, func(path string, entry fs.DirEntry, err error) error {
+			if err != nil {
+				return err
+			}
+			if entry.IsDir() {
+				if name := entry.Name(); path != sourceRoot && (strings.HasPrefix(name, ".") || name == "testdata") {
+					return filepath.SkipDir
+				}
+				return nil
+			}
+			if !strings.HasSuffix(path, ".go") || strings.HasSuffix(path, "_test.go") {
+				return nil
+			}
+			file, parseErr := parser.ParseFile(token.NewFileSet(), path, nil, parser.ParseComments)
+			if parseErr != nil {
+				return fmt.Errorf("parse %s: %w", path, parseErr)
+			}
+			for _, declaration := range file.Decls {
+				function, ok := declaration.(*ast.FuncDecl)
+				if !ok || function.Recv != nil {
+					continue
+				}
+				name := file.Name.Name + "." + function.Name.Name
+				if !wanted[name] {
+					continue
+				}
+				if existing, duplicate := found[name]; duplicate && existing != summarizeRouteHandlerDoc(function.Doc) {
+					return fmt.Errorf("handler name %s is declared in more than one package with that name", name)
+				}
+				found[name] = summarizeRouteHandlerDoc(function.Doc)
 			}
 			return nil
+		})
+		if walkErr != nil {
+			return nil, walkErr
 		}
-		if !strings.HasSuffix(path, ".go") || strings.HasSuffix(path, "_test.go") {
-			return nil
-		}
-		file, parseErr := parser.ParseFile(token.NewFileSet(), path, nil, parser.ParseComments)
-		if parseErr != nil {
-			return fmt.Errorf("parse %s: %w", path, parseErr)
-		}
-		for _, declaration := range file.Decls {
-			function, ok := declaration.(*ast.FuncDecl)
-			if !ok || function.Recv != nil {
-				continue
-			}
-			name := file.Name.Name + "." + function.Name.Name
-			if !wanted[name] {
-				continue
-			}
-			if existing, duplicate := found[name]; duplicate && existing != summarizeRouteHandlerDoc(function.Doc) {
-				return fmt.Errorf("handler name %s is declared in more than one package with that name", name)
-			}
-			found[name] = summarizeRouteHandlerDoc(function.Doc)
-		}
-		return nil
-	})
-	if walkErr != nil {
-		return nil, walkErr
 	}
-
 	for name := range wanted {
 		if _, ok := found[name]; !ok {
 			found[name] = ""

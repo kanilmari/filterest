@@ -14,7 +14,7 @@ import shlex
 import subprocess
 
 from python_test_tiers import needs_heavy_installation, tier_for_path
-from relevant_check_discovery import frontend_tests, go_inventory, migration_consumers, python_postgres_tests
+from relevant_check_discovery import COMPUTED_IMPORT_REGISTRY, GO_ROOTS, FRONTEND_ROOTS, frontend_tests, go_inventory, migration_consumers, python_postgres_tests
 
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -69,6 +69,8 @@ def component_areas(root: Path) -> set[str]:
             children = directory.iterdir() if directory.name in CONTAINERS else [directory]
             areas.update(path.relative_to(root).as_posix() for path in children
                          if path.is_dir() and path.name != "__pycache__")
+    areas.update(path.relative_to(root).as_posix() for path in (root / "app/components").glob("*")
+                 if path.is_dir() and path.name != "__pycache__")
     return areas
 
 
@@ -122,6 +124,10 @@ def validate_map(root: Path, policy: dict) -> None:
                 raise ValueError(f"not a separate-config browser spec: {spec}")
         references.extend([config, *check["paths"], *check["specs"]])
     for path in references:
+        # Discovery and guards ship before the first real component. This one
+        # reserved inventory root may be absent; individual entries may not.
+        if path == "app/components" and not (root / path).exists():
+            continue
         if normalize_path(path) != path or not (root / path).exists():
             raise ValueError(f"curated path or spec disappeared: {path}")
     missing = component_areas(root) - covered
@@ -178,7 +184,8 @@ def make_plan(root: Path, paths: list[str], *, python: str = PYTHON, policy: dic
                 f"env -u FILTEREST_TEST_DISPOSABLE_POSTGRES -- {python_command} " + shlex.join(guard["tests"]))
 
     tests, dependencies, sources = go_inventory(root)
-    seeds = {str(Path(path).parent) for path in changed if path.startswith("app/backend/") and path.endswith(".go")}
+    seeds = {str(Path(path).parent) for path in changed
+             if any(path.startswith(prefix + "/") for prefix in GO_ROOTS) and path.endswith(".go")}
     # Non-Go package assets belong to their nearest package, not every parent
     # package; selecting the backend root here would expand any edit to a tier.
     packages = {str(Path(path).parent) for path in sources}
@@ -211,7 +218,9 @@ def make_plan(root: Path, paths: list[str], *, python: str = PYTHON, policy: dic
 
     # Shared browser/server examples live outside frontend, but their browser
     # importers still require Vitest when the common contract changes.
-    frontend = {path for path in changed if path.startswith(("app/frontend/", "app/testing/shared_contracts/"))}
+    frontend = {path for path in changed
+                if path == COMPUTED_IMPORT_REGISTRY
+                or any(path.startswith(prefix + "/") for prefix in (*FRONTEND_ROOTS, "app/testing/shared_contracts"))}
     vitest = frontend_tests(root, frontend) if frontend else []
     if vitest:
         add("fast", "vitest", vitest, "./filterest test-unit " + shlex.join(vitest))

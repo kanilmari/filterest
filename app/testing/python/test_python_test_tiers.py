@@ -63,6 +63,8 @@ from python_test_tiers import HEAVY_INSTALLATION_FILES, needs_heavy_installation
     "app/testing/python/test_field_settings_language_seed.py", "app/testing/python/test_row_actor_support.py",
     "./app/server_tools/update_filterest.sh", r"app\server_tools\update_filterest.sh",
     "app/frontend/../server_tools/update_filterest.sh",
+    "app/components/updates/backend/application_update_handler.go",
+    "app/components/setup/frontend/first_run.js",
 ])
 def test_installation_paths_require_heavy_coverage_even_when_deleted(changed_path):
     assert needs_heavy_installation([changed_path])
@@ -80,6 +82,7 @@ def test_installation_paths_require_heavy_coverage_even_when_deleted(changed_pat
     "app/server_tools/release/publish_release.py", "app/docs/README.md",
     "app/frontend/core_components/ai_features/table_chat/openai_key_setup_printer.js",
     "app/frontend/initial_shell_bootstrap.test.js",
+    "app/components/canary/backend/canary.go", "app/components/canary/frontend/index.js",
 ])
 def test_application_features_and_release_tooling_remain_ordinary(changed_path):
     assert not needs_heavy_installation([changed_path])

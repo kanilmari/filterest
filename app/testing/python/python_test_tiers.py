@@ -99,6 +99,11 @@ HEAVY_PATH_PATTERNS = (
     "app/frontend/core_components/auth/first_run*", "app/frontend/templates/first_run*",
     "app/frontend/core_components/admin_tools/admin_update*",
     "app/frontend/core_components/endpoints/application_update*",
+    # Components keep feature tests ordinary, but moving installation/update
+    # orchestration must not lose the corresponding old-path tier trigger.
+    "app/components/*/backend/*migration*", "app/components/*/backend/*first_run*",
+    "app/components/*/backend/*application_update*", "app/components/*/frontend/*first_run*",
+    "app/components/*/frontend/*application_update*",
     "app/testing/python/conftest.py", "app/testing/python/python_category_support.py",
     "app/testing/python/python_test_tiers.py", "app/testing/python/test_python_category_support.py",
     "app/testing/python/test_python_test_tiers.py",

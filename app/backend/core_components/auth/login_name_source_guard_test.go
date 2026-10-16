@@ -77,7 +77,7 @@ func collectLoginNameSourceGuardFindings(appRoot string) ([]string, error) {
 	}
 	seen := map[string]bool{}
 	credentialMutation := regexp.MustCompile(`(?is)\b(?:INSERT\s+INTO|UPDATE)\s+restricted\s*\.\s*users_restricted\b`)
-	for _, directory := range []string{"backend", "server_tools", "frontend"} {
+	for _, directory := range []string{"backend", "server_tools", "frontend", "components"} {
 		if _, err := os.Stat(filepath.Join(appRoot, directory)); os.IsNotExist(err) {
 			continue
 		}

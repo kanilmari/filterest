@@ -324,36 +324,46 @@ func TestReactivateUIRoutesReportsBeginAndCommitFailures(t *testing.T) {
 
 func collectFrontendUIPermissionLiterals(t *testing.T) []string {
 	t.Helper()
-	frontendRoot := filepath.Join("..", "..", "..", "frontend")
+	return collectUIPermissionLiterals(t, filepath.Join("..", "..", ".."))
+}
+
+func collectUIPermissionLiterals(t *testing.T, appRoot string) []string {
+	t.Helper()
 	literalPattern := regexp.MustCompile(`["'](/ui/[A-Za-z0-9_.-]+(?:/[A-Za-z0-9_.-]+)*)["']`)
 	endpoints := make(map[string]struct{})
 
-	err := filepath.WalkDir(frontendRoot, func(path string, entry fs.DirEntry, walkErr error) error {
-		if walkErr != nil {
-			return walkErr
+	for _, directory := range []string{"frontend", "components"} {
+		sourceRoot := filepath.Join(appRoot, directory)
+		if _, err := os.Stat(sourceRoot); os.IsNotExist(err) {
+			continue
 		}
-		if entry.IsDir() {
-			if entry.Name() == "dist" || entry.Name() == "node_modules" {
-				return filepath.SkipDir
+		err := filepath.WalkDir(sourceRoot, func(path string, entry fs.DirEntry, walkErr error) error {
+			if walkErr != nil {
+				return walkErr
+			}
+			if entry.IsDir() {
+				if entry.Name() == "dist" || entry.Name() == "node_modules" {
+					return filepath.SkipDir
+				}
+				return nil
+			}
+			if filepath.Ext(path) != ".js" || strings.HasSuffix(path, ".test.js") {
+				return nil
+			}
+			contents, err := os.ReadFile(path)
+			if err != nil {
+				return err
+			}
+			for _, match := range literalPattern.FindAllSubmatch(contents, -1) {
+				endpoints[string(match[1])] = struct{}{}
 			}
 			return nil
-		}
-		if filepath.Ext(path) != ".js" || strings.HasSuffix(path, ".test.js") {
-			return nil
-		}
-		contents, err := os.ReadFile(path)
+		})
 		if err != nil {
-			return err
+			t.Fatalf("scan frontend UI permission literals: %v", err)
 		}
-		for _, match := range literalPattern.FindAllSubmatch(contents, -1) {
-			endpoints[string(match[1])] = struct{}{}
-		}
-		return nil
-	})
-	if err != nil {
-		t.Fatalf("scan frontend UI permission literals: %v", err)
-	}
 
+	}
 	result := make([]string, 0, len(endpoints))
 	for endpoint := range endpoints {
 		result = append(result, endpoint)

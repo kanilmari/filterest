@@ -35,7 +35,7 @@ DEPENDENCY_SOURCE_NAMES = frozenset({"Dockerfile", "go.mod", "go.work", "package
 TEXT_SCAN_IGNORED_PARTS = frozenset(
     {"dist", "docs", "fixtures", "node_modules", "testdata", "testing"}
 )
-RUNTIME_SOURCE_PREFIXES = ("app/backend/", "app/frontend/")
+RUNTIME_SOURCE_PREFIXES = ("app/backend/", "app/frontend/", "app/components/")
 RUNTIME_CONTRACTS = frozenset({"app/go.mod", "app/package.json"})
 
 

@@ -1,7 +1,7 @@
 #!/bin/bash
 # check_file_length.sh
 # Enforces the 700-line file limit from DEV_GUIDE §3.
-# Scans selected core/reusable frontend and backend source roots (.js, .go, .css).
+# Scans core/reusable and feature-component source roots (.js, .go, .css).
 # Exits 0 with warnings or exits 1 in strict mode (--strict) for unknown violations.
 #
 # Usage:
@@ -91,7 +91,7 @@ while IFS= read -r line; do
         NEW_VIOLATIONS=$((NEW_VIOLATIONS + 1))
     fi
     VIOLATIONS=$((VIOLATIONS + 1))
-done < <(find frontend/core_components frontend/reusable_components backend/core_components backend/reusable_components \
+done < <(find frontend/core_components frontend/reusable_components backend/core_components backend/reusable_components components \
     -type f \( -name '*.js' -o -name '*.go' -o -name '*.css' \) \
     -exec wc -l {} + 2>/dev/null \
     | awk -v max="$MAX_LINES" '$1 > max && $2 != "total" {print $1, $2}' \
