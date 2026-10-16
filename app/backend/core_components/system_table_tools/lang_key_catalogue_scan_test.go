@@ -2,8 +2,8 @@
 // Runs the startup scan's own recognition over the modules that declare their
 // language keys in a catalogue instead of beside the translation call.
 // Bridges langKeyPatterns with the real frontend files those keys live in.
-// Exists because a key the scan cannot see is marked an orphan while it is in
-// use, so the interface silently loses copy that was authored and translated.
+// Keeps used keys backed by code evidence while orphan maintenance is report-only.
+// Retirement and any later archiving still follow the per-site lifecycle gates.
 package system_table_tools
 
 import (
@@ -34,6 +34,17 @@ func TestScanFindsLangKeysDeclaredInACatalogue(t *testing.T) {
 		relativePath string
 		wantKeys     []string
 	}{
+		{
+			relativePath: "frontend/core_components/filterbar/filter_list/row_group_facet_card_builder.js",
+			wantKeys: []string{
+				"row_group_match_legend", "row_group_match_help_label", "row_group_match_headings_hint",
+				"row_group_match_any", "row_group_match_all", "row_group_match_any_effect", "row_group_match_all_effect",
+				"row_group_match_any_hint", "row_group_match_all_hint", "row_group_single_value_hint",
+				"row_group_categories", "row_group_no_results_hint", "row_group_selection_limit",
+				"row_group_no_name_matches", "row_group_selected_count",
+				"show_more", "show_less", "clear_selections", "filters", "close", "search",
+			},
+		},
 		{
 			relativePath: "frontend/core_components/table_views/table_view/table_header_sort.js",
 			wantKeys:     []string{"sort_newest", "sort_oldest"},
@@ -99,7 +110,7 @@ func TestScanFindsLangKeysDeclaredInACatalogue(t *testing.T) {
 			found := langKeysFoundInSource(string(content))
 			for _, key := range module.wantKeys {
 				if !found[key] {
-					t.Errorf("the startup scan does not see %q in %s, so the key would be marked an orphan while it is in use", key, module.relativePath)
+					t.Errorf("the startup scan does not see %q in %s, so code-use evidence is missing", key, module.relativePath)
 				}
 			}
 		})

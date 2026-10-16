@@ -42,18 +42,36 @@ only the 20-selection limit blocks an unchecked value, exposing `aria-disabled`
 without evicting a previous selection. Dimming never disables a value.
 The popup is a named nonmodal dialog containing a named multiselect listbox.
 Include-only options are single interaction targets with decorative checkbox
-marks and accessible names that include hit counts. Match radios, the changing
-hint and the limit notice sit above search inside the popup; category clear and
+marks and accessible names that include hit counts. Match radios, expandable
+help and the limit notice sit above search inside the popup; category clear and
 zero-results recovery stay on the card.
 Its name search is local to that returned list, never a complete vocabulary
 query. Escape and the close cross return focus to the heading; refreshes and language
 switches retain the open panel, query, focus, caret and list scroll position.
 
 Selections use unified filters and the `row_group` URL parameter with a 20-value
-limit. Multi-valued and untitled legacy headings offer native ANY/ALL radios in a
-fieldset before name search: At least one (default) or All selected. The changing
-hint is connected with `aria-describedby`; single-valued headings retain their hint
-and ANY matching. Headings always combine with AND. `row_group_mode=1:all,3:all`
+limit. Multi-valued and untitled legacy headings with at least two returned values
+offer two stacked native radio rows before name search. The legend is **When you
+select several** / **Kun valitset useita**. **Accept any** / **Mikä tahansa käy**
+(default) has a fixed **More results** / **Enemmän tuloksia** tag; **Require all** /
+**Kaikki vaaditaan** has **Fewer results** / **Vähemmän tuloksia**. The tags are part
+of the accessible radio names. They describe the relative direction, including
+equal totals with zero or one selection; they are not calculated counts.
+The 44 × 44 px help button follows the radio group in keyboard order and expands
+three lines below it: the existing ANY explanation, the existing ALL explanation
+(including candidate-value counts), and **Selections under different headings
+always narrow the search together.** Its translated name is **Explain how
+selections combine** / **Selitä valintojen yhdistäminen**. `aria-expanded` and
+`aria-controls` expose its state and target; it stays open through result and
+language updates, retains focus, and resets when the popup closes. Native arrow
+keys select modes; Tab continues from the group through help to search. While
+open, the named explanation region also takes keyboard focus for native scrolling.
+The changing mode hint remains connected to the dialog, fieldset and radios by
+`aria-describedby`, hidden visually for multi-valued headings. Single-valued
+headings retain their visible hint and ANY matching. A heading with fewer than
+two values hides the whole selector, including help. On narrow popups, effect
+tags wrap below their labels; selection and focus use native radios plus borders
+and theme tokens. Headings always combine with AND. `row_group_mode=1:all,3:all`
 records only ALL preferences, sorted by heading ID; legacy values use ID 0. A
 readable heading can retain its mode without selections, with no filtering effect.
 Removing one selection tag retains its mode; there is no separate mode tag. Clearing
@@ -86,7 +104,10 @@ counts. Guidance is shown only for zero results with selected categories.
 Category toggles, tag removal, match-mode changes and category clear each use one first-page listing refresh. Busy state announces work without discarding subsequent choices; listing/search generations reject older replies and card builds. During a committed search, its listing owns row replacement: the search does not empty rows first, and replacement cards build off screen before one guarded swap. Later-page requests still belong to endless scrolling, which stops before observing or fetching when the current search/filter/sort count is already loaded. Card fields have their card ancestor during construction but wait for the accepted, connected swap before receiving `easelect:card-mounted`. `card_resource_lifecycle.js` releases keyword/detail observers, timers and card listeners on replacement or abandonment; reordering a keyword inside its parent keeps it alive. The search-owned AI “See also” group uses this same connected mount notification and disposal on replacement, explicit search clearing and cancelled staging builds. A current build failure clears stale rows and counts, keeps the selected filters and shows the existing keyed failure notice as a toast and persistent result alert. Cancelled work leaves the committed surface alone; the next selection can replace the alert. Search never retries a null listing reload: missing initial card hosts already use the listing owner's guarded rebuild and its same first page, while failed or abandoned work ends that action.
 
 Both application themes use `variables.css` tokens; fonts and spacing are scoped to the card and the opt-in class on
-the portalled popup. Only the option list scrolls within a popup capped at 400 px; search, match-mode controls and header remain visible. Controls offer 44 px touch targets. Category popups are at least
+the portalled popup. The option list scrolls within a popup capped at 400 px;
+search, match-mode controls and header remain visible. When expanded, the named
+help region can shrink and scroll independently so its three explanations do
+not push search outside that shell. Controls offer 44 px touch targets. Category popups are at least
 360 px wide on desktop, bounded by the viewport; at 600 px and narrower they use the visual viewport minus 16 px on
 each side. The shared popup controller measures fixed controls at that width and budgets three option rows (the
 whole list if shorter), capped at its maximum height; plain dropdowns also retain their existing minimum opening
@@ -111,8 +132,16 @@ include modes, ordinary filters and order where applicable, and leave page
 language out. Only the loaded-rows cache adds page language to the listing
 signature, so a late page-language initialization cannot make a current response stale.
 Search execution identity also includes sorting: a late saved sort starts a fresh listing instead of joining the obsolete request that its change cancels. Identical synchronized controls still share one execution. Obsolete AI streams are aborted. Hierarchy and server facet paging remain later slices.
-Finnish/English mode copy is seeded by
-`20261007000001_seed_row_group_match_mode_language_keys.sql` for DB 9.10.1.
+Finnish/English selector copy is seeded in both language stores by
+`20261015000005_seed_row_group_match_selector_language_keys.sql` for DB 9.12.0,
+also registered in the public bootstrap. It replaces the old ANY/ALL wording
+only when each stored text exactly equals its superseded seed text; other site
+wording remains. Empty columns also retain authored normalized-only copy.
+The card owns full-key catalogues for its selector and other panel text; a Go
+test checks them with the real startup scan patterns. The former legend key has
+no code reference; see its [retirement record](lang_key_lifecycle.md#retirement-record--2026-10-16-wo26).
+Exact per-mode totals follow the mobile/desktop release (WL164), as described in
+[Category match-mode counts](../future_documentation/Category_Match_Mode_Counts.md).
 The Categories heading and heading-dropdown hints remain; the general guidance
 paragraph was removed and its key is no longer used in code (see its
 [language-key record](lang_key_lifecycle.md#retirement-record--2026-10-15-wo22)).
@@ -129,7 +158,8 @@ narrow-screen differences between the two hosts. Chip wrapping and removal
 targets stay unchanged.
 The ordinary filter panel has sort/reset in its text-search disclosure and no
 Categories card, so it does not duplicate this section. Phone layouts reuse the
-same inline-hero section. Existing translations are never replaced.
+same inline-hero section. Site-authored translations are preserved; only the
+exact superseded selector seed wording is replaced as described above.
 The section preserves each control's existing sizing rules, rather than adding
 a common touch-target minimum. Filter results keeps the 40 px minimum in
 `filters_opener_and_closer.css`; Reset search keeps `.fw-btn`'s 44 px minimum
@@ -172,6 +202,10 @@ The mode proof also needs a multi-valued heading with two values whose readable 
 It resolves the popup through the heading's ARIA reference and checks stable card/result geometry
 and scrolling, counts, both focus-return paths, match
 controls inside the popup, and state retained through refresh. It checks a selectable dimmed value when one is returned, and never edits classifications.
+The selector proof checks Finnish/English accessible names, fixed tags in both
+explicit themes over the opposite OS preference, keyboard help open/close,
+native arrow keys, 44 px label/button targets and no horizontal popup overflow
+at 320 px. Screenshots include the opened explanation.
 The browser matrix covers 320, 375, 600, 601 px and desktop, short height, Finnish
 and English, and application light/OS light, application dark/OS light, and
 application light/OS dark.

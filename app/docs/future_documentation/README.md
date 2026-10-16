@@ -57,6 +57,9 @@ Update incoming documentation links when text moves or a document is deleted.
 
 ## Feature descriptions
 
+- [Category match-mode counts](Category_Match_Mode_Counts.md) describes exact
+  readable result totals for Accept any and Require all beside the existing
+  category radios, following the shared mobile and desktop interface release.
 - [Lifecycle management](Lifecycle_Management.md) describes a shared way to
   follow the lives of different kinds of named things in Filterest.
 - [Row view counts](Row_View_Counts.md) describes distinct viewers of each row,

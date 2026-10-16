@@ -551,16 +551,17 @@ show the recorded age when available, and identify a counting source when one
 exists. There is no deletion countdown. Single category-8 fixes are skipped,
 and "Fix All" skips both language-key categories (7 and 8).
 
-#### Retirement record — 2026-10-15 (WO22)
+#### Retirement records — category copy (WO22/WO26)
 
-`row_group_categories_modes_hint` has no code reference after the general
-Categories paragraph was removed. Its released 9.10.1 seed migration and the
-generated bootstrap copy stay unchanged, with all translations, and no migration
-deletes it. The key stays in the database: its translation rows are a
-`foreign_key` source that the startup scan keeps current, and the orphan check
-counts every source other than `orphan` and `manual_crud` as live usage, so the
-key is not marked orphaned or archived. Whether keys used only through their
-translations may retire is open under WL33.
+<a id="retirement-record--2026-10-15-wo22"></a>
+<a id="retirement-record--2026-10-16-wo26"></a>
+
+`row_group_categories_modes_hint` (WO22) and `row_group_match_mode` (WO26) no longer have code references.
+Released seeds, bootstrap rows and stored translations remain; neither change deletes keys.
+The current scan treats translation references as use, and J36 pauses automatic archiving.
+They become candidates when WO-J35 B5 ships. If still unused, archiving can happen no earlier
+than 90 days after archiving returns to that site through B8 and explicit owner approval.
+Source expiry and removal of code references do not promise archiving.
 
 ### Step 3: Stale Source Cleanup
 

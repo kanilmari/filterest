@@ -409,6 +409,97 @@ async function categoryCounts(page: Page) {
   ])));
 }
 
+for (const language of ['fi', 'en'] as const) {
+  for (const theme of ['light', 'dark'] as const) {
+    test(`WO26: matching labels, tags and keyboard help (${language}, ${theme})`, async ({ page }, testInfo) => {
+      test.setTimeout(120_000);
+      test.skip(!/^[a-z][a-z0-9_]{0,62}$/.test(DATASET), 'Set FILTEREST_E2E_CATEGORY_DATASET to an existing categorized dataset.');
+      test.skip(testInfo.project.metadata.cardView === 'big', 'This proof uses shared listing controls.');
+      await page.addInitScript(({ language, theme }) => {
+        localStorage.setItem('chosen_language', language); localStorage.setItem('theme', theme);
+      }, { language, theme });
+      await page.emulateMedia({ colorScheme: theme === 'light' ? 'dark' : 'light' });
+      await page.goto(`/${DATASET}?view=card`);
+      await waitForCategories(page);
+      await expect(page.locator('body')).toHaveClass(new RegExp(`\\b${theme}-mode\\b`));
+      const more = page.locator(`${PANEL} [data-row-group-focus="more"]`);
+      if (await more.isVisible() && await more.getAttribute('aria-expanded') === 'false') await more.click();
+      const ids = await page.locator(`${PANEL} [data-heading-id]`).evaluateAll(buttons =>
+        buttons.map(button => (button as HTMLElement).dataset.headingId!));
+      let chosenHeading = '';
+      for (const id of ids) {
+        await activate(page.locator(`${PANEL} [data-heading-id="${id}"]`));
+        if (await (await categoryPopup(page)).locator('fieldset:not([hidden])').count()) { chosenHeading = id; break; }
+      }
+      expect(chosenHeading, 'Needs a multi-valued heading with at least two returned values.').not.toBe('');
+      const popup = await categoryPopup(page);
+      const any = popup.locator('input[type="radio"][value="any"]');
+      const all = popup.locator('input[type="radio"][value="all"]');
+      await expect(popup.locator('fieldset')).toHaveAccessibleName(language === 'fi' ? 'Kun valitset useita' : 'When you select several');
+      await expect(any).toHaveAccessibleName(language === 'fi' ? 'Mikä tahansa käy Enemmän tuloksia' : 'Accept any More results');
+      await expect(all).toHaveAccessibleName(language === 'fi' ? 'Kaikki vaaditaan Vähemmän tuloksia' : 'Require all Fewer results');
+      await expect(any).toBeChecked();
+      const button = popup.locator('.row-group-facet-mode__help-button');
+      await expect(button).toHaveAccessibleName(language === 'fi' ? 'Selitä valintojen yhdistäminen' : 'Explain how selections combine');
+      const help = popup.locator(`#${await button.getAttribute('aria-controls')}`);
+      for (const width of [1440, 375, 320]) {
+        await page.setViewportSize({ width, height: 1000 });
+        await expect(popup.locator('.row-group-facet-mode__tag')).toHaveText(language === 'fi'
+          ? ['Enemmän tuloksia', 'Vähemmän tuloksia'] : ['More results', 'Fewer results']);
+        await expect(button).toHaveAttribute('aria-expanded', 'false');
+        await expect(help).toBeHidden();
+        await any.focus(); await any.press('Tab');
+        await expect(button).toBeFocused();
+        await button.press('Enter');
+        await expect(button).toHaveAttribute('aria-expanded', 'true');
+        await expect(help).toBeVisible();
+        await expect(help.locator('p')).toHaveText(language === 'fi' ? [
+          'Mikä tahansa käy – Näytetään rivit, joissa on jokin valituista arvoista.',
+          'Kaikki vaaditaan – Näytetään rivit, joissa on kaikki valitut arvot. Luvut kertovat osumat, kun arvo lisätään valintoihin.',
+          'Eri otsikoiden valinnat rajaavat hakua aina yhdessä.',
+        ] : [
+          'Accept any – Shows rows that have any of the selected values.',
+          'Require all – Shows rows that have all selected values. Counts show matches when the value is added to the selection.',
+          'Selections under different headings always narrow the search together.',
+        ]);
+        // Measure actual label targets and the help button, not their decorative radio/icon.
+        for (const target of [popup.locator('.row-group-facet-mode__option').nth(0), popup.locator('.row-group-facet-mode__option').nth(1), button]) {
+          const box = (await target.boundingBox())!;
+          expect(box.width).toBeGreaterThanOrEqual(44); expect(box.height).toBeGreaterThanOrEqual(44);
+        }
+        expect(await popup.evaluate(element => {
+          const box = element.getBoundingClientRect();
+          const selector = element.querySelector<HTMLElement>('.row-group-facet-mode-block')!;
+          return box.left >= 0 && box.right <= window.innerWidth && element.scrollWidth <= element.clientWidth
+            && selector.scrollWidth <= selector.clientWidth;
+        })).toBe(true);
+        await expect(help).toHaveAccessibleName(language === 'fi' ? 'Selitä valintojen yhdistäminen' : 'Explain how selections combine');
+        await button.press('Tab');
+        await expect(help).toBeFocused();
+        await help.press('End');
+        await expect.poll(() => help.evaluate(element =>
+          element.scrollTop + element.clientHeight >= element.scrollHeight - 1)).toBe(true);
+        expect(await focusedInView(popup, '.row-group-facet-mode__help')).toBe(true);
+        await help.press('Tab');
+        await expect(popup.locator('input[type="search"]')).toBeFocused();
+        expect(await focusedInView(popup, 'input[type="search"]')).toBe(true);
+        await page.screenshot({ path: testInfo.outputPath(`wo26-help-${width}-${language}-${theme}.png`) });
+        await button.press('Space');
+        await expect(help).toBeHidden();
+        await expect(button).toHaveAttribute('aria-expanded', 'false');
+        await button.press('Tab');
+        await expect(popup.locator('input[type="search"]')).toBeFocused();
+      }
+      await any.focus(); await any.press('ArrowRight');
+      await waitForCategories(page); await expect(all).toBeChecked(); await expect(all).toBeFocused();
+      await all.press('ArrowLeft'); await waitForCategories(page); await expect(any).toBeChecked();
+      await button.click(); await button.press('Escape');
+      await expect(page.locator(`${PANEL} [data-heading-id="${chosenHeading}"]`)).toBeFocused();
+      await expect(help).toBeHidden();
+    });
+  }
+}
+
 // This second read-only proof needs a multi-valued heading whose two values have
 // different row support, so ANY and ALL can visibly distinguish their counts.
 test('WL103: ANY/ALL counts, mode restoration and selectable dimmed values', async ({ page }, testInfo) => {

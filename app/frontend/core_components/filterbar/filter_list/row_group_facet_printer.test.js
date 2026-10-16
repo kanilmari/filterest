@@ -45,12 +45,16 @@ vi.mock("../../lang/translation_handler.js", () => ({
     getTranslationForKey: key => ({
         fi: { row_group_categories: "Kategoriat", filters: "Suodattimet", show_more: "Näytä enemmän", show_less: "Näytä vähemmän", clear_selections: "Tyhjennä valinnat", remove: "Poista", close: "Sulje", search: "Haku",
             row_group_match_any_hint: "Jokin valituista.",
-            row_group_match_mode: "Hakutapa", row_group_match_any: "Vähintään yksi", row_group_match_all: "Kaikki valitut", row_group_match_all_hint: "Kaikki valitut arvot.",
+            row_group_match_legend: "Kun valitset useita", row_group_match_any: "Mikä tahansa käy", row_group_match_all: "Kaikki vaaditaan", row_group_match_all_hint: "Kaikki valitut arvot.",
+            row_group_match_any_effect: "Enemmän tuloksia", row_group_match_all_effect: "Vähemmän tuloksia",
+            row_group_match_help_label: "Selitä valintojen yhdistäminen", row_group_match_headings_hint: "Eri otsikoiden valinnat rajaavat hakua aina yhdessä.",
             row_group_single_value_hint: "Rivillä on tässä yksi arvo.", row_group_selected_count: "valittu",
             row_group_no_name_matches: "Ei osumia.", row_group_selection_limit: "Enintään 20 arvoa.", row_group_no_results_hint: "Poista jokin valinta tai tyhjennä kaikki." },
         en: { row_group_categories: "Categories", filters: "Filters", show_more: "Show more", show_less: "Show less", clear_selections: "Clear selections", remove: "Remove", close: "Close", search: "Search",
             row_group_match_any_hint: "Any selected.",
-            row_group_match_mode: "Match mode", row_group_match_any: "At least one", row_group_match_all: "All selected", row_group_match_all_hint: "All selected values.",
+            row_group_match_legend: "When you select several", row_group_match_any: "Accept any", row_group_match_all: "Require all", row_group_match_all_hint: "All selected values.",
+            row_group_match_any_effect: "More results", row_group_match_all_effect: "Fewer results",
+            row_group_match_help_label: "Explain how selections combine", row_group_match_headings_hint: "Selections under different headings always narrow the search together.",
             row_group_single_value_hint: "A row has one value here.", row_group_selected_count: "selected",
             row_group_no_name_matches: "No matches.", row_group_selection_limit: "Up to 20 values.", row_group_no_results_hint: "Remove a filter or clear all." },
     })[interfaceLanguage.current][key],
@@ -240,8 +244,8 @@ describe("row group category panel", () => {
         const close = popup(host).querySelector(".msd-popup-close");
         expect([close.textContent, close.getAttribute("aria-label"), close.title]).toEqual(["×", "Close", "Close"]);
         expect(popup(host).querySelector('[data-lang-key="row_group_match_any_hint"]').textContent).toBe("Any selected.");
-        expect(popup(host).querySelector("legend").textContent).toBe("Match mode");
-        expect([...popup(host).querySelectorAll("fieldset label span")].map(item => item.textContent)).toEqual(["At least one", "All selected"]);
+        expect(popup(host).querySelector("legend").textContent).toBe("When you select several");
+        expect([...popup(host).querySelectorAll(".row-group-facet-mode__text")].map(item => item.textContent)).toEqual(["Accept any", "Require all"]);
         expect(checkboxes(host)[0].getAttribute("aria-label")).toBe("Security: 0");
         expect(document.activeElement.type).toBe("search");
         expect(document.activeElement.value).toBe("i");
@@ -405,19 +409,101 @@ describe("row group category panel", () => {
 
     test("multi-valued and legacy headings expose translated radios before search; single headings keep their hint", async () => {
         const { renderRowGroupFacets } = await import("./row_group_facet_printer.js");
-        const host = renderRowGroupFacets("travel_info", [value(1, "boat", heading(1)), value(2, "train", heading(2, 2, true)), value(3, "legacy")]);
+        const host = renderRowGroupFacets("travel_info", [value(1, "boat", heading(1)), value(2, "train", heading(2, 2, true)), value(3, "legacy"),
+            value(4, "plane", heading(1)), value(5, "legacy_two")]);
         open(host, 1);
         const fieldset = popup(host).querySelector("fieldset:not([hidden])");
-        expect(fieldset.querySelector("legend").textContent).toBe("Hakutapa");
-        expect([...fieldset.querySelectorAll("span")].map(item => item.textContent)).toEqual(["Vähintään yksi", "Kaikki valitut"]);
+        expect(fieldset.querySelector("legend").textContent).toBe("Kun valitset useita");
+        expect([...fieldset.querySelectorAll(".row-group-facet-mode__text")].map(item => item.textContent)).toEqual(["Mikä tahansa käy", "Kaikki vaaditaan"]);
+        expect([...fieldset.querySelectorAll(".row-group-facet-mode__tag")].map(item => item.textContent)).toEqual(["Enemmän tuloksia", "Vähemmän tuloksia"]);
         expect(fieldset.compareDocumentPosition(popup(host).querySelector('input[type="search"]')) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
         expect(fieldset.querySelector('[value="any"]').checked).toBe(true);
         expect(fieldset.getAttribute("aria-describedby")).toBe(popup(host).querySelector(".row-group-facet-panel__hint").id);
+        expect(popup(host).querySelector(".row-group-facet-panel__hint").hidden).toBe(true);
         open(host, 0);
         expect(popup(host).querySelector("fieldset:not([hidden])")).not.toBeNull();
         open(host, 2);
         expect(popup(host).querySelector("fieldset:not([hidden])")).toBeNull();
         expect(popup(host).querySelector(".row-group-facet-panel__hint").textContent).toBe("Rivillä on tässä yksi arvo.");
+    });
+
+    test("help toggles three translated lines and retains its focus and disclosure through refresh", async () => {
+        const { renderRowGroupFacets } = await import("./row_group_facet_printer.js");
+        const facets = [value(1, "boat", heading(1)), value(2, "train", heading(1))];
+        const host = renderRowGroupFacets("travel_info", facets);
+        open(host);
+        const button = popup(host).querySelector(".row-group-facet-mode__help-button");
+        expect(button.getAttribute("aria-label")).toBe("Selitä valintojen yhdistäminen");
+        expect(button.getAttribute("aria-expanded")).toBe("false");
+        const help = document.getElementById(button.getAttribute("aria-controls"));
+        expect(help.hidden).toBe(true);
+        expect(help.getAttribute("role")).toBe("region");
+        expect(help.getAttribute("aria-labelledby")).toBe(button.id);
+        expect(help.tabIndex).toBe(0);
+        expect(help.previousElementSibling).toBe(button.parentElement.parentElement);
+        expect([...help.querySelectorAll("p")].map(line => line.textContent)).toEqual([
+            "Mikä tahansa käy – Jokin valituista.", "Kaikki vaaditaan – Kaikki valitut arvot.",
+            "Eri otsikoiden valinnat rajaavat hakua aina yhdessä.",
+        ]);
+        button.focus(); button.click();
+        expect(button.getAttribute("aria-expanded")).toBe("true");
+        expect(help.hidden).toBe(false);
+        renderRowGroupFacets("travel_info", facets);
+        expect(document.activeElement).toBe(button);
+        expect(help.hidden).toBe(false);
+        languageRenderers.get(host)("en");
+        expect(document.activeElement).toBe(button);
+        expect(button.getAttribute("aria-label")).toBe("Explain how selections combine");
+        expect([...popup(host).querySelectorAll(".row-group-facet-mode__tag")].map(tag => tag.textContent)).toEqual(["More results", "Fewer results"]);
+        expect([...help.querySelectorAll("p")].map(line => line.textContent)).toEqual([
+            "Accept any – Any selected.", "Require all – All selected values.",
+            "Selections under different headings always narrow the search together.",
+        ]);
+        button.click();
+        expect(help.hidden).toBe(true);
+        expect(button.getAttribute("aria-expanded")).toBe("false");
+        for (const close of [() => popup(host).querySelector(".msd-popup-close").click(),
+            () => button.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }))]) {
+            button.click(); close();
+            expect(help.hidden).toBe(true);
+            expect(button.getAttribute("aria-expanded")).toBe("false");
+            expect(document.activeElement).toBe(buttons(host)[0]);
+            open(host);
+            expect(help.hidden).toBe(true);
+        }
+    });
+
+    test("one returned value hides the whole selector; a second reveals it before any selections", async () => {
+        const { renderRowGroupFacets } = await import("./row_group_facet_printer.js");
+        getUnifiedTableStateMock.mockReturnValue({ filters: {} });
+        const facets = [value(1, "boat", heading(1))];
+        const host = renderRowGroupFacets("travel_info", facets);
+        open(host);
+        expect(popup(host).querySelector("fieldset").hidden).toBe(true);
+        expect(popup(host).querySelector(".row-group-facet-mode-block").hidden).toBe(true);
+        facets.push(value(2, "train", heading(1)));
+        renderRowGroupFacets("travel_info", facets);
+        expect(popup(host).querySelector("fieldset").hidden).toBe(false);
+        expect(popup(host).querySelector(".row-group-facet-mode-block").hidden).toBe(false);
+        expect(popup(host).querySelector('[value="any"]').checked).toBe(true);
+    });
+
+    test("selector translations remain text even when site wording contains HTML", async () => {
+        const translations = await import("../../lang/translation_handler.js");
+        const originalTranslation = translations.getTranslationForKey;
+        const siteCopy = '<img src=x onerror="alert(1)"><script>alert(2)</script>';
+        const translate = vi.spyOn(translations, "getTranslationForKey").mockImplementation(key =>
+            key.startsWith("row_group_match_") ? siteCopy : originalTranslation(key));
+        try {
+            const { renderRowGroupFacets } = await import("./row_group_facet_printer.js");
+            const host = renderRowGroupFacets("travel_info", [value(1, "boat", heading(1)), value(2, "train", heading(1))]);
+            open(host);
+            expect(popup(host).querySelector(".row-group-facet-mode__text").textContent).toBe(siteCopy);
+            expect(popup(host).querySelector(".row-group-facet-mode__tag").textContent).toBe(siteCopy);
+            expect(popup(host).querySelector(".row-group-facet-mode__help strong").textContent).toBe(siteCopy);
+            expect(popup(host).querySelector(".row-group-facet-mode__help-button").getAttribute("aria-label")).toBe(siteCopy);
+            expect(popup(host).querySelectorAll("img, script, [onerror]")).toHaveLength(0);
+        } finally { translate.mockRestore(); }
     });
 
     test("ALL refresh preserves radio focus, query and scroll; hint and Escape follow the mode", async () => {
