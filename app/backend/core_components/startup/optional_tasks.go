@@ -67,6 +67,18 @@ func runDeferredStartupMaintenance(projectRoot string, appDBCompatibilityManifes
 	EnsureFilterestBusinessID(backend.Db)
 
 	ai_features.StartEmbeddingRefreshWorker(backend.Db)
+	runStartupLangKeyMaintenance()
+	// The missing-media-files check reads storage, so it starts only after the
+	// rest of startup maintenance is done, and it never blocks the server. It
+	// runs by itself after an update, which it recognises from these versions.
+	missing_media_check.StartStartupRun(missingMediaCheckIdentity(projectRoot))
+
+	log.Println("[STARTUP] Optional maintenance completed.")
+}
+
+// runStartupLangKeyMaintenance refreshes sources before marking orphans.
+// Keeping this startup step bounded makes its no-retirement contract testable.
+func runStartupLangKeyMaintenance() {
 	// Populoi lähdetiedot: skannaa koodipohja (JS/HTML/Go), skeema (sarakkeet/taulut)
 	// ja tietokantapohjaiset avaimet (views, groups) system_lang_key_sources-tauluun.
 	// Tämä pitää ajaa ENNEN MarkOrphanLangKeys():ta, koska orphan-tunnistus
@@ -78,16 +90,10 @@ func runDeferredStartupMaintenance(projectRoot string, appDBCompatibilityManifes
 		log.Printf("[STARTUP] Lang key sources: %d source(s) saved", sourceCount)
 
 		// Merkitään orpoavaimet system_lang_key_sources-tauluun (source_type='orphan').
-		// Orpo = avain jolla ei ole yhtään non-orphan-lähdettä sources-taulussa.
+		// The shared counting rule excludes orphan and manual_crud sources.
 		orphanCount, deOrphaned := system_table_tools.MarkOrphanLangKeys()
 		log.Printf("[STARTUP] Orphan lang keys: %d orphans, %d de-orphaned", orphanCount, deOrphaned)
 	}
-	// The missing-media-files check reads storage, so it starts only after the
-	// rest of startup maintenance is done, and it never blocks the server. It
-	// runs by itself after an update, which it recognises from these versions.
-	missing_media_check.StartStartupRun(missingMediaCheckIdentity(projectRoot))
-
-	log.Println("[STARTUP] Optional maintenance completed.")
 }
 
 // missingMediaCheckIdentity names the running installation for the missing-media

@@ -21,10 +21,11 @@ import (
 
 // ConsistencyIssue kuvaa yhtä löydettyä epäyhtenäisyyttä
 type ConsistencyIssue struct {
-	ID          string `json:"id"`          // Yksilöivä tunniste korjausta varten
-	Category    int    `json:"category"`    // Kategoria 1-6
-	Table       string `json:"table"`       // Mikä taulu / rivi koskee
-	Description string `json:"description"` // Kuvaus ongelmasta
+	ID                  string   `json:"id"`                              // Yksilöivä tunniste korjausta varten
+	Category            int      `json:"category"`                        // Kategoria 1-8
+	Table               string   `json:"table"`                           // Mikä taulu / rivi koskee
+	Description         string   `json:"description"`                     // Kuvaus ongelmasta
+	DescriptionLangKeys []string `json:"description_lang_keys,omitempty"` // Localized explanatory copy
 }
 
 // ConsistencyCheckResult sisältää kaikkien tarkistusten tulokset
@@ -117,8 +118,8 @@ func FixDatabaseConsistencyHandler(w http.ResponseWriter, r *http.Request) {
 	if req.FixAll {
 		allIssues := getAllIssues()
 		for _, issue := range allIssues {
-			if issue.Category == 2 {
-				log.Printf("[FixDatabaseConsistency] skipping category 2 issue %s (requires explicit drop/register choice)", issue.ID)
+			if issue.Category == 2 || issue.Category == 7 || issue.Category == 8 {
+				log.Printf("[FixDatabaseConsistency] skipping category %d issue %s (requires manual review)", issue.Category, issue.ID)
 				continue
 			}
 			idsToFix = append(idsToFix, issue.ID)
@@ -314,13 +315,34 @@ func fixIssue(q dbutils.Querier, id string, fixActions map[string]string) error 
 		_, execErr := q.Exec("DELETE FROM system_group_table_func_rights WHERE id = $1::bigint", identifier)
 		return execErr
 	case 7:
-		// Roskaavaimet: poistetaan id:n perusteella
-		_, execErr7 := q.Exec("DELETE FROM system_lang_keys WHERE id = $1::bigint", identifier)
-		return execErr7
+		// Both listing eligibility and current evidence are checked by DELETE,
+		// so an old report cannot delete a repaired or newly protected key.
+		result, execErr := q.Exec(`DELETE FROM system_lang_keys slk
+            WHERE slk.id = $1::bigint AND `+garbageLangKeySQL()+`
+              AND NOT `+countingLangKeySourceExistsSQL("slk.id"), identifier)
+		if execErr != nil {
+			return execErr
+		}
+		count, countErr := result.RowsAffected()
+		if countErr != nil {
+			return countErr
+		}
+		if count == 0 {
+			return errConsistencyFixSkipped
+		}
+		return nil
 	case 8:
-		// Orpoavaimet: poistetaan id:n perusteella
-		_, execErr8 := q.Exec("DELETE FROM system_lang_keys WHERE id = $1::bigint", identifier)
-		return execErr8
+		// Report-only, even for a stale client requesting a single fix. Read
+		// today's shared source rule but never archive or delete this key.
+		var hasCountingSource bool
+		readErr := q.QueryRow(`SELECT `+countingLangKeySourceExistsSQL("slk.id")+`
+            FROM system_lang_keys slk WHERE slk.id = $1::bigint`, identifier).Scan(&hasCountingSource)
+		if readErr != nil {
+			// Even an unavailable status read cannot turn a report-only action
+			// into a mutation or an error presented as a failed deletion.
+			log.Printf("[FixDatabaseConsistency] category 8 source status unavailable; fix remains skipped")
+		}
+		return errConsistencyFixSkipped
 	default:
 		return fmt.Errorf("fix for category %d is not supported", category)
 	}

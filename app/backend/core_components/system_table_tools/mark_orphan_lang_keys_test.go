@@ -216,10 +216,6 @@ func TestMarkOrphanLangKeysUsesBulkDatabaseOperations(t *testing.T) {
 	})
 	pushOrphanExec(orphanQueuedExec{rowsAffected: 2})
 	pushOrphanExec(orphanQueuedExec{rowsAffected: 1})
-	pushOrphanQuery(orphanQueuedQuery{
-		cols: []string{"lang_key_id", "last_seen"},
-		rows: [][]driver.Value{},
-	})
 
 	orphanCount, deOrphanedCount := MarkOrphanLangKeys()
 
@@ -231,8 +227,8 @@ func TestMarkOrphanLangKeysUsesBulkDatabaseOperations(t *testing.T) {
 	}
 
 	calls := snapshotOrphanCalls()
-	if len(calls) != 4 {
-		t.Fatalf("expected 4 SQL calls, got %d (%v)", len(calls), calls)
+	if len(calls) != 3 {
+		t.Fatalf("expected 3 SQL calls, got %d (%v)", len(calls), calls)
 	}
 	if !strings.Contains(calls[1], "FROM UNNEST") {
 		t.Fatalf("expected bulk orphan upsert via UNNEST, got %q", calls[1])

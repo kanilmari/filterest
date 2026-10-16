@@ -79,7 +79,7 @@ func TestBuildLangKeyConsistencyDescription_SyntheticKey(t *testing.T) {
 
 	description := buildLangKeyConsistencyDescription(row, map[int]int{91: 12})
 
-	if !strings.Contains(description, "Synthetic test lang key") {
+	if orphanDescriptionLangKeys(row, nil)[0] != "consistency_synthetic_key_archiving_paused" {
 		t.Fatalf("description %q should explain synthetic test cleanup", description)
 	}
 	if !strings.Contains(description, `en: "Add row e2e folder abc"`) {
@@ -88,7 +88,7 @@ func TestBuildLangKeyConsistencyDescription_SyntheticKey(t *testing.T) {
 	if !strings.Contains(description, "type: ui") {
 		t.Fatalf("description %q missing lang key type", description)
 	}
-	if !strings.Contains(description, "orphan for 12 days") {
+	if orphanDescriptionLangKeys(row, map[int]int{91: 12})[1] != "consistency_orphan_age_days+12" {
 		t.Fatalf("description %q missing orphan age", description)
 	}
 }
@@ -103,7 +103,7 @@ func TestBuildLangKeyConsistencyDescription_OrdinaryOrphan(t *testing.T) {
 
 	description := buildLangKeyConsistencyDescription(row, map[int]int{})
 
-	if !strings.Contains(description, "Orphan lang key: not found in code/schema") {
+	if orphanDescriptionLangKeys(row, nil)[0] != "consistency_orphan_archiving_paused" {
 		t.Fatalf("description %q should keep ordinary orphan wording", description)
 	}
 	if strings.Contains(description, "Synthetic test lang key") {

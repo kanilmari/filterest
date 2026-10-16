@@ -9,8 +9,6 @@ Why: Keeps translated interface copy available before use and maintenance out of
 
 This document captures the full lifecycle of Filterest's multilingual key system. It is intended as a reference for developers and AI agents working with the `system_lang_keys` / `system_lang_key_sources` tables.
 
----
-
 ## Table of Contents
 
 1. [Schema Overview](#1-schema-overview)
@@ -54,11 +52,11 @@ This document captures the full lifecycle of Filterest's multilingual key system
 |--------|------|-------------|
 | `id` | serial PK | Auto-increment primary key |
 | `lang_key_id` | integer FK | → `system_lang_keys.id` **ON DELETE CASCADE** |
-| `source_type` | text | One of: `code`, `column`, `table`, `folder`, `view`, `group`, `dataset_header`, `column_value`, `manual_crud`, `orphan` |
+| `source_type` | text | Open vocabulary; see the source types and counting rule in §3. |
 | `source_high` | text | Primary identifier (table name, file path, folder name, etc.) |
 | `source_low` | text | Secondary identifier (column name, username, etc.) |
 | `last_seen` | date | Last scan or usage date |
-| `usage_explanation` | text | Per-source explanation of what the key does in this specific location. Serves two purposes: (1) **AI translation context** — tells the translator what tone, style, and meaning to use (e.g., `search_slogan` → "Marketing tagline on search page hero: should be inviting and encouraging, not a literal translation"); (2) **Developer traceability** — documents what the key does in each specific UI location. Set by seed migrations or manually; the startup scanner does not populate this. |
+| `usage_explanation` | text | Per-source explanation of what the key does in this specific location. Serves two purposes: (1) **AI translation context** — tells the translator what tone, style, and meaning to use (e.g., `search_slogan` → "Marketing tagline on search page hero: should be inviting and encouraging, not a literal translation"); (2) **Developer traceability** — documents what the key does in each specific UI location. Set by seeds, APIs and schema/table/folder scans; authored explanations are preserved. |
 
 **Unique constraint:** `(lang_key_id, source_type, source_high)` — prevents duplicate source records.
 
@@ -97,24 +95,16 @@ These keys are **declarative** — they're used in code but may not exist in `sy
 
 ### 2.3 Table/Folder/Column Creation
 
-When the supported dataset-creation or column-addition workflow creates schema
-objects, it also writes readable schema-derived labels in the same transaction.
-The write covers the dataset/column name plus the search, sort, add-row, and
-dataset-heading keys the interface constructs from it.
+When the supported dataset-creation or column-addition workflow creates schema objects, it also writes readable schema-derived labels in the same transaction. The write covers the dataset/column name plus the search, sort, add-row, and dataset-heading keys the interface constructs from it.
 
 - **Creation-time label persistence** (`EnsureDatasetInterfaceLabels` /
   `EnsureColumnInterfaceLabels`) — fills only languages enabled for the site and
   writes both `system_lang_keys` language columns and matching
   `system_lang_key_translations` rows. It never overwrites authored copy.
-- **Startup scanning** (`PopulateLangKeySources`) — refreshes
-  `source_type='table'`, `'column'`, or `'folder'` records for keys that already
-  exist. It does not create a missing key or translation value.
+- **Startup scanning** (`PopulateLangKeySources`) — refreshes `source_type='table'`, `'column'`, or `'folder'` records for keys that already exist. It does not create a missing key or translation value.
 - **Primary key check** (`EnsurePrimaryKeyLangKeys`) — ensures PK columns like `id` have lang keys.
 
-Migration `20260920000002_create_dataset_interface_labels.sql` applies the same
-schema-derived fallback to already registered datasets. The deterministic labels
-remain editable through the language-key API when a site wants more natural or
-fully translated copy.
+Migration `20260920000002_create_dataset_interface_labels.sql` applies the same schema-derived fallback to already registered datasets. The deterministic labels remain editable through the language-key API when a site wants more natural or fully translated copy.
 
 ### 2.4 Tree Node Rename (`upsertLangKey`)
 
@@ -149,30 +139,36 @@ ON CONFLICT (lang_key) DO UPDATE SET description = ...
 
 ## 3. Source Tracking
 
-**One form for a code source: the file.** A `code` source records `source_high`
-as the path of the file that uses the key, and `source_low` empty. The start-up
-scan writes this form, so a seed migration that records a folder instead creates
-a second record for the same use, and its hand-written usage explanation expires
-after seven days while the scan's record survives. Write the file path.
-
+**One form for a code source: the file.** A `code` source records `source_high` as the path of the file that uses the key, and `source_low` empty. The start-up scan writes this form, so a seed migration that records a folder instead creates a second record for the same use, and its hand-written usage explanation expires after seven days while the scan's record survives. Write the file path.
 
 Every lang key can have **multiple** source records. A key like `updated` may appear in code, as a column name in 10 tables, and have been manually edited in the admin UI — that's 12+ sources.
 
 ### Source Types
 
-| `source_type` | `source_high` | `source_low` | Created by |
-|---------------|---------------|--------------|------------|
-| `code` | file path (e.g., `app/frontend/core_components/...`) | `''` | Startup scanner |
-| `table` | table name | table name | Startup scanner |
-| `column` | table name | column name | Startup scanner |
-| `dataset_header` | dataset name | header field name (`title`, `slogan`, `search_placeholder`) | `dataset_header_config.go` |
-| `column_value` | `table.column` | lang key value stored in that column | hasLangKey scanner |
-| `folder` | folder name | `''` | Startup scanner |
-| `view` | view name | `''` | Startup scanner |
-| `group` | group name | `''` | Startup scanner |
-| `manual_crud` | `'admin_ui'` | normalized username | `EnsureLangKeySourceForCRUDMutation()` |
-| `foreign_key` | `schema.table.column` | column name | Startup scanner |
-| `orphan` | `'consistency_scan'` | `''` | `MarkOrphanLangKeys()` |
+| `source_type` | `source_high` / `source_low` | Created by | Counts as use today? |
+|---|---|---|---|
+| `code` | file path / `''` | Startup scanner, seeds | Yes |
+| `table` | dataset / dataset | Schema scanner and label creation | Yes |
+| `column` | dataset / column | Schema scanner and label creation | Yes |
+| `prefix`, `suffix`, `db` | legacy scanner identity | Historical source records | Yes |
+| `dataset_header` | dataset / header field | Dataset header settings | Yes |
+| `column_value` | `table.column` / value | hasLangKey scanner | Yes |
+| `folder` | folder name / name or `''` | Folder scanner and writes | Yes |
+| `view` | view registry / view name | Startup scanner | Yes |
+| `group` | group registry / group name | Startup scanner | Yes |
+| `foreign_key` | `schema.table.column` / column | FK-value scanner | Yes, including the translations table reference |
+| `front_page_hero` | hero identity / field | Home settings and seeds | Yes |
+| `admin_api` | `admin_lang_key` / author | Admin language-key API | Yes |
+| `dev_editor` | editor identity / author | Development editor | Yes |
+| `template`, `javascript`, `migration`, `schema` | declared source identity | Seed-written evidence | Yes |
+| `manual_crud` | `admin_ui` / normalized username | Generic CRUD editing | No |
+| `orphan` | `consistency_scan` / `''` | Orphan marking | No |
+| Any other type | source-owned identity | Existing or future writer | Yes |
+
+The shared SQL rule in `lang_key_consistency_checks.go` excludes only `orphan`
+and `manual_crud`. B1 does not change what counts as use. In particular,
+`foreign_key / public.system_lang_key_translations.lang_key_id` still protects
+its key. The later rule change belongs to WO-J35.
 
 ### UPSERT Pattern
 
@@ -186,7 +182,8 @@ ON CONFLICT (lang_key_id, source_type, source_high) DO UPDATE
       last_seen = CURRENT_DATE
 ```
 
-The `last_seen` date is key — sources not seen for 7+ days are eligible for stale cleanup.
+The `last_seen` date is used for the seven-day cleanup only for the explicit
+source types listed in §8; other types do not expire in that cleanup.
 
 `dataset_header` has one backward-compatibility wrinkle: older rows stored `source_high` in the legacy form `<dataset>:<field>`. New writes use the canonical ownership form `source_high=<dataset>`, `source_low=<field>`, and cleanup must support both until old rows are gone.
 
@@ -402,7 +399,9 @@ When database objects are renamed, lang key sources and descriptions must be upd
 
 ## 7. Deletion — DROP Operations
 
-When a database object is dropped, its lang key sources must be cleaned up. Keys that lose their **last** source are deleted entirely.
+When a database object is dropped, its language-key sources are cleaned up.
+Keys and translations remain even when the **last** source is removed; the
+normal orphan-marking pass handles the key. Automatic retirement is paused.
 
 ### Algorithm (shared by all DROP modes)
 
@@ -410,10 +409,11 @@ When a database object is dropped, its lang key sources must be cleaned up. Keys
 
 1. **Collect affected IDs** — `SELECT DISTINCT lang_key_id` from matching sources.
 2. **Delete source rows** — `DELETE FROM system_lang_key_sources WHERE ...`
-3. **Check survivors** — For each affected key, `COUNT(*)` remaining sources:
-   - **Zero sources** → `DELETE FROM system_lang_keys WHERE id = $1` (FK CASCADE cleans up)
-   - **Has sources** → key survives (e.g., `updated` is also a column in other tables)
-4. **Clear stale descriptions** — For surviving keys, clear descriptions that reference the dropped object (e.g., `"Column 'name' in table 'customers'"` is cleared when `customers` is dropped, even if the key survives due to being used in another table). `PopulateLangKeySources()` will re-populate correct descriptions on next startup.
+3. **Keep keys and translations** — no remaining-source count or key deletion
+   runs here. A later normal scan and marking pass can record an orphan marker.
+
+Only the matching source rows (and their per-source context) are removed.
+There is no separate surviving-key description-clearing step.
 
 ### Table Drop
 
@@ -435,7 +435,8 @@ Why the extra exact-key cleanup exists:
 
 - older AI-generated dynamic dataset keys could be stored with generic fallback provenance such as `code/unknown`
 - in that case, source-only cleanup would miss them on table drop even though the key name itself is dataset-owned
-- the exact-key safety net keeps table deletion at `0` leftover owned keys while newer writes are being normalized
+- the exact-key safety net removes old dataset-owned source rows while retaining
+  the keys and their translations for the orphan lifecycle
 
 ### Column Drop
 
@@ -491,14 +492,20 @@ Scans all sources and UPSERTS records into `system_lang_key_sources`:
 4. **View scan** — Queries `system_views`. Creates `source_type='view'` records.
 5. **Group scan** — Queries `system_groups`. Creates `source_type='group'` records.
 6. **Folder scan** — Queries `system_table_folders`. Creates `source_type='folder'` records.
-7. **Stale cleanup** — `cleanupStaleLangKeySources()` deletes source records with `last_seen < NOW() - 7 days` for all scannable types (`code`, `table`, `column`, `folder`, `view`, `group`). This handles the case where a file was deleted or a code reference was removed — after 7 days without being re-scanned, the stale source is removed.
+7. **Stale cleanup** — after a fresh scan, `cleanupStaleLangKeySources()` removes
+   source rows with `last_seen < CURRENT_DATE - INTERVAL '7 days'` only for
+   `code`, `column`, `table`, `prefix`, `suffix`, `view`, `group`, `folder`, `db`,
+   `foreign_key` and `column_value`. It never deletes keys. Types outside this
+   list do not expire through this cleanup: this includes `dataset_header`,
+   `front_page_hero`, `admin_api`, `dev_editor`, `template`, `javascript`,
+   `migration`, `schema`, `manual_crud`, `orphan` and unknown types.
 
 Dynamic key rule:
 
 - runtime AI saves should classify dynamic schema keys with the same ownership logic as startup scans
 - example: `add_row_customers`, `search_for_customers`, and `customers_front_page` should resolve to dataset/table ownership, not generic `code::unknown`
 
-**Description auto-population:** During schema/table/folder scans, `updateLangKeyDescriptionIfEmpty()` sets descriptions for keys that don't have one yet:
+**Context auto-population:** During schema/table/folder scans, `updateSourceUsageExplanationIfEmpty()` fills empty per-source explanations:
 
 - Tables: `"Table 'customers'"`
 - Columns: `"Column 'name' in table 'customers'"`
@@ -508,21 +515,21 @@ Dynamic key rule:
 
 **File:** `lang_key_consistency_checks.go`
 
-After sources are fully populated, identifies keys with **zero non-orphan sources**:
+After a scan counts as fresh, `findOrphanLangKeys()` lists keys with no
+counting source, plus the existing synthetic-test candidates. Raw HTML names
+(containing `<` or `>`) and names longer than 200 characters are excluded and
+reported in category 7 instead. Exactly 200 characters is not garbage by length.
 
-```sql
-SELECT id FROM system_lang_keys
-WHERE id NOT IN (
-    SELECT DISTINCT lang_key_id FROM system_lang_key_sources
-    WHERE source_type != 'orphan'
-)
-```
+The counting condition is `source_type NOT IN ('orphan', 'manual_crud')`.
+Synthetic candidates still use the existing case-insensitive
+`(^|_)(e2e|test)(_|-)` name rule, even when they have counting sources. Neither
+that rule nor scanner coverage changes in B1.
 
 For each orphan:
 - **INSERT** a `source_type='orphan'`, `source_high='consistency_scan'` record,
   with `ON CONFLICT DO NOTHING` so the original `last_seen` is kept. On an orphan
   record `last_seen` means *first seen as an orphan*, which is what the
-  retirement age is counted from. Stale-source cleanup deliberately leaves
+  reported orphan age is counted from. Stale-source cleanup deliberately leaves
   `orphan` rows alone, so the age really does accumulate.
 
 For keys that are **no longer** orphans (they gained a source since last startup):
@@ -530,26 +537,19 @@ For keys that are **no longer** orphans (they gained a source since last startup
 
 Returns `(marked, unmarked)` counts logged at startup.
 
-#### Retirement of a long-standing orphan
+#### Retirement is paused
 
-An orphan is not kept for ever. `archiveExpiredOrphans()` runs in the same
-transaction and retires a key that has carried its orphan record for more than
-`orphanTTLDays` (**90 days**): the row is copied to `system_lang_keys_archive`
-with its `orphan_since` date, and then deleted from `system_lang_keys`, where the
-foreign-key cascade removes its sources. Nothing is lost silently — the archive
-keeps the key and every translation column.
+`MarkOrphanLangKeys()` only marks and unmarks; it no longer calls
+`archiveExpiredOrphans()`. Startup, opening the consistency report and the
+on-demand scan cannot archive or delete a key. The legacy archive function and
+its 90-day constant remain for later WO-J35 work, without an automatic caller.
+Its current fi/en/ch/yue column copy does not preserve every normalized
+translation, so this document makes no lossless-archive claim.
 
-Two rules make retirement safe:
-
-- **Never a key that is still used.** Both the selection and the delete require
-  that the key has no source outside `orphan` and `manual_crud`. This matters
-  because a *synthetic test key* (`e2e_…`, `test_…`) is listed as a cleanup
-  candidate even while code still refers to it — that listing is an invitation
-  for a person to clean up, never a licence for automatic deletion.
-- **Never a surprise.** The consistency check's category 8 shows every orphan
-  with its age and, for the keys retirement will actually take, a countdown:
-  *"orphan for 84 days, will be archived and deleted in 6 day(s)"*. A key that is
-  kept because code or schema still uses it says so instead.
+Category 8 is report-only. Its fi/en language keys say archiving is paused,
+show the recorded age when available, and identify a counting source when one
+exists. There is no deletion countdown. Single category-8 fixes are skipped,
+and "Fix All" skips both language-key categories (7 and 8).
 
 #### Retirement record — 2026-10-15 (WO22)
 
@@ -564,7 +564,10 @@ translations may retire is open under WL33.
 
 ### Step 3: Stale Source Cleanup
 
-Part of `PopulateLangKeySources()` — removes sources not seen in 7 days. This ensures that if a file is deleted from the codebase, its `source_type='code'` records eventually disappear, which may then cause the key to be marked as orphan in the next restart.
+This is part of `PopulateLangKeySources()`, before marking, rather than a second
+cleanup after it. Only the explicit source list in Step 1 expires after seven
+days; other types never expire through this cleanup. Losing a source may make a
+key an orphan candidate, but never causes key deletion during this pause.
 
 ---
 
@@ -574,11 +577,17 @@ The Database Consistency Check tool (`/api/check-db-consistency`) includes two l
 
 ### Category 7: Garbage Lang Keys
 
-`checkGarbageLangKeys()` finds keys whose `lang_key` value looks like an HTML fragment or other non-key content (e.g., `<div class="...">`). These are typically created by bugs and can be fixed (deleted) via the admin UI.
+`checkGarbageLangKeys()` finds keys whose `lang_key` value looks like an HTML fragment or other non-key content (e.g., `<div class="...">`). These are typically created by bugs. A single fix deletes only if the name
+still contains `<` or `>` or exceeds 200 characters, and the key has no counting
+source. Both conditions are in the DELETE statement; an absent, repaired or newly
+protected key is skipped. "Fix All" skips category 7.
 
 ### Category 8: Orphan Lang Keys
 
-`checkOrphanLangKeys()` uses the same `findOrphanLangKeys()` function as `MarkOrphanLangKeys()`. Displays orphan keys in the admin UI for manual review. Admins can delete them one by one or use "Fix All".
+`checkOrphanLangKeys()` uses the same `findOrphanLangKeys()` function as `MarkOrphanLangKeys()`. Displays orphan keys for review with translated pause notices and no fix button.
+Category 8 is report-only: single fixes return the existing skipped result, and
+"Fix All" skips it. Re-enabling archiving and changes to source evidence belong
+to later WO-J35 batches; they are not implemented by B1.
 
 ---
 
@@ -632,7 +641,7 @@ The legacy `system_lang_keys.description` column still contains old auto-generat
 | `app/backend/core_components/lang/lang.go` | Translation serving endpoints |
 | `app/backend/core_components/lang/get_ai_translations.go` | AI translation generation handler |
 | `app/backend/core_components/lang/ensure_lang_key_source_for_crud_mutation.go` | Manual CRUD source tracking |
-| `app/backend/core_components/lang/lang_key_consistency_checks.go` | Orphan detection and marking, garbage key detection |
+| `app/backend/core_components/system_table_tools/lang_key_consistency_checks.go` | Orphan detection and marking, garbage key detection |
 | `app/backend/core_components/lang/fix_table_translations.go` | Fix JSON translations in table cells |
 | `app/backend/core_components/lang/update_relates_to_table.go` | Populate `relates_to_table` column |
 | `app/backend/core_components/lang/update_last_used.go` | Update `last_used` timestamps |
@@ -660,19 +669,27 @@ The legacy `system_lang_keys.description` column still contains old auto-generat
 
 ## 12. Design Principles
 
-1. **One key, many sources.** A lang key like `updated` can be a column in 10 tables and appear in 5 code files. Each usage is tracked independently. The key is only deleted when **all** sources are gone.
+1. **One key, many sources.** A lang key like `updated` can be a column in 10 tables and appear in 5 code files. Each usage is tracked independently. Counting sources protect a key; losing all sources leads to marking, with
+   automatic deletion paused.
 
 2. **Non-fatal metadata operations.** Lang key cleanup never aborts the parent operation (table drop, column rename, etc.). Failures are logged, not propagated.
 
 3. **UPSERT everywhere.** All source creation uses `ON CONFLICT DO UPDATE` — safe to call multiple times, idempotent.
 
-4. **7-day stale window.** Source records not refreshed by the startup scanner within 7 days are cleaned up. This handles code file deletions and removed references gracefully.
+4. **7-day stale window for an explicit list.** Only the source types listed in
+   §8 expire in scan cleanup; all other types are retained. Keys are never
+   removed by that cleanup.
 
-5. **Context lives per-source, not per-key.** `usage_explanation` on `system_lang_key_sources` is the authoritative context for AI translation and developer traceability. The legacy `system_lang_keys.description` column is still auto-populated for schema objects but is not the primary source. New features should always set `usage_explanation` on source records.
+5. **Context lives per-source, not per-key.** `usage_explanation` on `system_lang_key_sources` is the authoritative context for AI translation and developer traceability. The legacy `system_lang_keys.description` column is no longer populated by these scans. New features should always set `usage_explanation` on source records.
 
 6. **FK CASCADE as safety net.** `system_lang_key_sources.lang_key_id` references `system_lang_keys.id ON DELETE CASCADE`. Even if cleanup code misses something, deleting the lang key cleans up all sources automatically.
 
-7. **Orphan marking, then retirement — never immediate deletion.** Keys without sources are marked with `source_type='orphan'` rather than deleted. That gives a 90-day review window with a visible countdown in the consistency check tool; only then is the key archived and removed, and only if nothing uses it. Admins can still delete an orphan by hand at any point.
+7. **Marking continues; retirement is paused.** Source-less keys survive dataset
+   cleanup and receive orphan markers during normal maintenance. Category 8 is
+   report-only and "Fix All" skips categories 7 and 8. A single category-7
+   consistency fix can delete a key only with both current garbage and no-counting-source
+   conditions checked by the DELETE itself. Later WO-J35 work owns any return of
+   archiving.
 
 8. **One canonical JS syntax for lang keys.** All JS code uses `el.dataset.langKey = 'x'` — never `setAttribute('data-lang-key', ...)`. This keeps grep/search predictable. A module that keeps its copy in a catalogue is read from the catalogue instead — see the three shapes in §8 — so a key never has to be repeated just to be seen. See `langKeyPatterns` in `lang_key_consistency_checks.go`.
 

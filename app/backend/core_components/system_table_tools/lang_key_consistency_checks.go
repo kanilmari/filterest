@@ -67,12 +67,24 @@ const snakeCaseLangKeySource = `[a-z][a-z0-9]*(?:_[a-z0-9]+)+`
 // Nämä nimet päätyvät lang key:ksi render_tree_node.js kautta.
 var treeNodeNamePattern = regexp.MustCompile(`name:\s*'([^']+)'`)
 
-// htmlFragmentPattern — avaimet joissa itse avaimen nimi sisältää HTML-tageja tai on liian pitkä.
-// Huom: data-html-lang-key -ominaisuus on tarkoituksellinen — se kääntää HTML-sisältöä
-// käyttäen nimettyä avainta (esim. "privacy_notice_login_content"). Sen sijaan tässä
-// löytyvät avaimet ovat tapauksia joissa raaka HTML on päätynyt avaimen nimeksi,
-// esim. "<h2>Summary</h2>" avaimen nimenä.
-var htmlFragmentPattern = regexp.MustCompile(`[<>]|^.{200,}$`)
+// maxLangKeyNameCharacters is shared by garbage detection and orphan exclusion.
+const maxLangKeyNameCharacters = 200
+
+// countingLangKeySourceSQL preserves today's rule: every source type except
+// orphan bookkeeping and manual CRUD counts, including translation foreign keys
+// and unknown future types. WO-J35 changes that meaning in a later batch.
+const countingLangKeySourceSQL = "live.source_type NOT IN ('orphan', 'manual_crud')"
+
+// countingLangKeySourceExistsSQL accepts only code-owned SQL column expressions,
+// never request text. All lifecycle queries share this correlated source rule.
+func countingLangKeySourceExistsSQL(keyIDColumn string) string {
+	return `EXISTS (SELECT 1 FROM system_lang_key_sources live
+        WHERE live.lang_key_id = ` + keyIDColumn + ` AND ` + countingLangKeySourceSQL + `)`
+}
+
+func garbageLangKeySQL() string {
+	return fmt.Sprintf("(slk.lang_key ~ '[<>]' OR length(slk.lang_key) > %d)", maxLangKeyNameCharacters)
+}
 
 // The names of dynamically generated keys are defined once, in
 // lang_key_naming, so the startup scan and the runtime ownership resolver
@@ -101,12 +113,9 @@ func checkGarbageLangKeys() CategoryResult {
 	}
 
 	rows, err := backend.Db.Query(`
-		SELECT id, lang_key 
-		FROM system_lang_keys 
-		WHERE lang_key ~ '[<>]' 
-		   OR length(lang_key) > 200
-		ORDER BY id
-	`)
+        SELECT slk.id, slk.lang_key FROM system_lang_keys slk
+        WHERE ` + garbageLangKeySQL() + ` ORDER BY slk.id
+    `)
 	if err != nil {
 		log.Printf("[checkGarbageLangKeys] error: %v", err)
 		return cat
@@ -152,6 +161,8 @@ func isSyntheticTestLangKey(key string) bool {
 	return syntheticTestLangKeyPattern.MatchString(strings.ToLower(strings.TrimSpace(key)))
 }
 
+// buildLangKeyConsistencyDescription returns metadata only. All explanatory
+// category-8 copy is carried separately as translation keys, including its age.
 func buildLangKeyConsistencyDescription(r langKeyRow, orphanAges map[int]int) string {
 	originParts := []string{}
 	if r.en != "" {
@@ -159,34 +170,37 @@ func buildLangKeyConsistencyDescription(r langKeyRow, orphanAges map[int]int) st
 		if len(enPreview) > 60 {
 			enPreview = enPreview[:60] + "…"
 		}
-		originParts = append(originParts, fmt.Sprintf("en: \"%s\"", enPreview))
+		originParts = append(originParts, fmt.Sprintf("en: %q", enPreview))
 	}
 	if r.langKeyType != "" {
 		originParts = append(originParts, fmt.Sprintf("type: %s", r.langKeyType))
 	}
-	// The countdown is the administrator's warning before a key is retired, so
-	// it is shown only for a key that automatic retirement will actually take.
-	if ageDays, ok := orphanAges[r.id]; ok {
-		if r.hasLiveUsage {
-			originParts = append(originParts, fmt.Sprintf("orphan for %d days, kept because code or schema still uses it", ageDays))
-		} else {
-			remaining := orphanTTLDays - ageDays
-			if remaining < 0 {
-				remaining = 0
-			}
-			originParts = append(originParts, fmt.Sprintf("orphan for %d days, will be archived and deleted in %d day(s)", ageDays, remaining))
-		}
-	}
-	originInfo := ""
-	if len(originParts) > 0 {
-		originInfo = " | " + strings.Join(originParts, ", ")
-	}
+	return strings.Join(originParts, " | ")
+}
 
+// The LangKey field names also expose this catalogue to today's source scanner.
+// Keep seeded source_high aligned with this owning file; no new scan pattern is needed.
+var orphanConsistencyCopy = struct {
+	pausedLangKey, syntheticLangKey, ageLangKey, countingSourceLangKey string
+}{
+	pausedLangKey:         "consistency_orphan_archiving_paused",
+	syntheticLangKey:      "consistency_synthetic_key_archiving_paused",
+	ageLangKey:            "consistency_orphan_age_days",
+	countingSourceLangKey: "consistency_lang_key_counting_source",
+}
+
+func orphanDescriptionLangKeys(r langKeyRow, orphanAges map[int]int) []string {
+	keys := []string{orphanConsistencyCopy.pausedLangKey}
 	if isSyntheticTestLangKey(r.key) {
-		return fmt.Sprintf("Synthetic test lang key: cleanup candidate even if historical source rows still exist%s", originInfo)
+		keys[0] = orphanConsistencyCopy.syntheticLangKey
 	}
-
-	return fmt.Sprintf("Orphan lang key: not found in code/schema%s", originInfo)
+	if ageDays, ok := orphanAges[r.id]; ok {
+		keys = append(keys, fmt.Sprintf("%s+%d", orphanConsistencyCopy.ageLangKey, ageDays))
+	}
+	if r.hasLiveUsage {
+		keys = append(keys, orphanConsistencyCopy.countingSourceLangKey)
+	}
+	return keys
 }
 
 // findOrphanLangKeys — palauttaa listan orpoavaimista sources-taulun perusteella.
@@ -199,26 +213,16 @@ func buildLangKeyConsistencyDescription(r langKeyRow, orphanAges map[int]int) st
 // Kutsutaan sekä checkOrphanLangKeys():sta (UI) että MarkOrphanLangKeys():sta (UPSERT).
 func findOrphanLangKeys() []langKeyRow {
 	rows, err := backend.Db.Query(`
-		SELECT slk.id, slk.lang_key,
-		       COALESCE(slk.en, '') AS en,
-		       COALESCE(slk.lang_key_type::text, '') AS lang_key_type,
-		       EXISTS (
-		         SELECT 1 FROM system_lang_key_sources live
-		         WHERE live.lang_key_id = slk.id
-		           AND live.source_type NOT IN ('orphan', 'manual_crud')
-		       ) AS has_live_usage
-		FROM system_lang_keys slk
-		WHERE NOT (slk.lang_key ~ '[<>]' OR length(slk.lang_key) > 200)
-		  AND (
-		    slk.lang_key ~* '(^|_)(e2e|test)(_|-)'
-		    OR NOT EXISTS (
-		      SELECT 1 FROM system_lang_key_sources src
-		      WHERE src.lang_key_id = slk.id
-		        AND src.source_type NOT IN ('orphan', 'manual_crud')
-		    )
-		  )
-		ORDER BY slk.lang_key
-	`)
+        SELECT slk.id, slk.lang_key,
+               COALESCE(slk.en, '') AS en,
+               COALESCE(slk.lang_key_type::text, '') AS lang_key_type,
+               ` + countingLangKeySourceExistsSQL("slk.id") + ` AS has_live_usage
+        FROM system_lang_keys slk
+        WHERE NOT ` + garbageLangKeySQL() + `
+          AND (slk.lang_key ~* '(^|_)(e2e|test)(_|-)'
+               OR NOT ` + countingLangKeySourceExistsSQL("slk.id") + `)
+        ORDER BY slk.lang_key
+    `)
 	if err != nil {
 		log.Printf("[findOrphanLangKeys] error: %v", err)
 		return nil
@@ -236,14 +240,14 @@ func findOrphanLangKeys() []langKeyRow {
 	return orphans
 }
 
-// orphanTTLDays — kuinka monta päivää orpoavain saa olla orvoksi merkittynä
-// ennen kuin se arkistoidaan ja poistetaan automaattisesti.
+// orphanTTLDays is the retained legacy archive threshold. No automatic caller
+// uses it while language-key archiving is paused (WO-J35 B1).
 const orphanTTLDays = 90
 
 // MarkOrphanLangKeys merkitsee orpoavaimet system_lang_key_sources-tauluun
 // (source_type='orphan', source_high='consistency_scan') ja poistaa vanhat
 // orphan-merkinnät avaimista jotka eivät enää ole orvoja.
-// Arkistoi ja poistaa yli 90 päivää vanhat orpoavaimet automaattisesti.
+// Marking only: automatic archiving and deletion are paused (WO-J35 B1).
 // Kutsutaan startupissa ja consistency checkissä. DRY: käyttää findOrphanLangKeys().
 func MarkOrphanLangKeys() (orphanCount int, deOrphanedCount int) {
 	if !SourceScanIsFresh() {
@@ -306,21 +310,13 @@ func MarkOrphanLangKeys() (orphanCount int, deOrphanedCount int) {
 		deOrphanedCount = int(rowsAffected)
 	}
 
-	// 3. Arkistoi ja poista yli 90 päivää vanhat orpoavaimet
-	archived := archiveExpiredOrphans(tx)
-	if archived < 0 {
-		tx.Rollback()
-		return 0, 0
-	}
+	// Archiving is paused. Keep marking and de-orphaning in this transaction.
 
 	if err := tx.Commit(); err != nil {
 		log.Printf("[MarkOrphanLangKeys] transaction commit failed: %v", err)
 		return 0, 0
 	}
 
-	if archived > 0 {
-		log.Printf("[MarkOrphanLangKeys] %d expired orphan keys archived and deleted (TTL %d days)", archived, orphanTTLDays)
-	}
 	log.Printf("[MarkOrphanLangKeys] %d orphan keys total, %d de-orphaned", orphanCount, deOrphanedCount)
 	return orphanCount, deOrphanedCount
 }
@@ -328,6 +324,7 @@ func MarkOrphanLangKeys() (orphanCount int, deOrphanedCount int) {
 // archiveExpiredOrphans siirtää yli orphanTTLDays päivää vanhat orpoavaimet
 // system_lang_keys_archive-tauluun ja poistaa ne system_lang_keys:stä.
 // Palauttaa arkistoitujen avainten lukumäärän.
+// Retained for later WO-J35 work; no automatic or category-8 caller is enabled.
 //
 // A key is retired only when nothing outside the orphan bookkeeping refers to
 // it any more. A synthetic test key is listed as a cleanup candidate even while
@@ -341,12 +338,8 @@ func archiveExpiredOrphans(tx *sql.Tx) int {
 		WHERE src.source_type = 'orphan'
 		  AND src.source_high = 'consistency_scan'
 		  AND src.last_seen < CURRENT_DATE - INTERVAL '%d days'
-		  AND NOT EXISTS (
-		    SELECT 1 FROM system_lang_key_sources live
-		    WHERE live.lang_key_id = src.lang_key_id
-		      AND live.source_type NOT IN ('orphan', 'manual_crud')
-		  )
-	`, orphanTTLDays))
+		  AND NOT %s
+    `, orphanTTLDays, countingLangKeySourceExistsSQL("src.lang_key_id")))
 	if err != nil {
 		log.Printf("[archiveExpiredOrphans] query error: %v", err)
 		return 0
@@ -385,18 +378,13 @@ func archiveExpiredOrphans(tx *sql.Tx) int {
 			log.Printf("[archiveExpiredOrphans] archive error id=%d: %v — aborting archive batch", e.langKeyID, err)
 			return -1 // signaloi virhe kutsujalle → rollback
 		}
-		// Poista avain (CASCADE poistaa myös sources-rivit). The guard repeats
-		// here so an archive row can never outlive a key that gained a source
-		// while this batch was running.
+		// Repeat the rule for evidence visible when DELETE starts. Before
+		// re-enabling this helper, WO-J35 B8 must coordinate concurrent writers;
+		// this statement alone cannot see another transaction's uncommitted use.
 		deleteResult, err := tx.Exec(`
 			DELETE FROM system_lang_keys
 			WHERE id = $1
-			  AND NOT EXISTS (
-			    SELECT 1 FROM system_lang_key_sources live
-			    WHERE live.lang_key_id = system_lang_keys.id
-			      AND live.source_type NOT IN ('orphan', 'manual_crud')
-			  )
-		`, e.langKeyID)
+			  AND NOT `+countingLangKeySourceExistsSQL("system_lang_keys.id"), e.langKeyID)
 		if err != nil {
 			log.Printf("[archiveExpiredOrphans] delete error id=%d: %v — aborting archive batch", e.langKeyID, err)
 			return -1
@@ -415,7 +403,7 @@ func archiveExpiredOrphans(tx *sql.Tx) int {
 // Mukaan otetaan myös synteettiset testavaimet (e2e/test), joita ei haluta
 // säilyttää system_lang_keys-taulussa vaikka niille olisi jäänyt source-rivejä.
 // Kutsuu findOrphanLangKeys() (DRY) ja muotoilee tulokset UI:ta varten.
-// Näyttää ikääntymistiedon (kuinka kauan orvoksi merkittynä) ja TTL-countdown.
+// Reports age and the archiving pause; no retirement countdown or fix action.
 func checkOrphanLangKeys() CategoryResult {
 	cat := CategoryResult{
 		Number:       8,
@@ -427,14 +415,18 @@ func checkOrphanLangKeys() CategoryResult {
 	orphans := findOrphanLangKeys()
 
 	// Haetaan orphan-merkintöjen ikä (last_seen = first detected as orphan)
-	orphanAges := fetchOrphanAges()
+	orphanAges, currentUsage := fetchOrphanAges()
 
 	for _, r := range orphans {
+		if hasCountingSource, ok := currentUsage[r.id]; ok {
+			r.hasLiveUsage = hasCountingSource
+		}
 		cat.Issues = append(cat.Issues, ConsistencyIssue{
-			ID:          fmt.Sprintf("cat8_%d", r.id),
-			Category:    8,
-			Table:       r.key,
-			Description: buildLangKeyConsistencyDescription(r, orphanAges),
+			ID:                  fmt.Sprintf("cat8_%d", r.id),
+			Category:            8,
+			Table:               r.key,
+			Description:         buildLangKeyConsistencyDescription(r, orphanAges),
+			DescriptionLangKeys: orphanDescriptionLangKeys(r, orphanAges),
 		})
 	}
 
@@ -443,25 +435,30 @@ func checkOrphanLangKeys() CategoryResult {
 
 // fetchOrphanAges palauttaa lang_key_id → ikä päivissä -mappauksen
 // orphan-merkintöjen perusteella. last_seen = päivä jolloin avain merkittiin orvoksi.
-func fetchOrphanAges() map[int]int {
+// Also reads current counting-source status for the description through the shared rule.
+func fetchOrphanAges() (map[int]int, map[int]bool) {
 	result := make(map[int]int)
+	usage := make(map[int]bool)
 	rows, err := backend.Db.Query(`
-		SELECT lang_key_id, CURRENT_DATE - last_seen AS age_days
-		FROM system_lang_key_sources
-		WHERE source_type = 'orphan' AND source_high = 'consistency_scan'
-	`)
+        SELECT src.lang_key_id, CURRENT_DATE - src.last_seen AS age_days,
+               ` + countingLangKeySourceExistsSQL("src.lang_key_id") + ` AS has_counting_source
+        FROM system_lang_key_sources src
+        WHERE src.source_type = 'orphan' AND src.source_high = 'consistency_scan'
+    `)
 	if err != nil {
 		log.Printf("[fetchOrphanAges] error: %v", err)
-		return result
+		return result, usage
 	}
 	defer rows.Close()
 	for rows.Next() {
 		var id, days int
-		if err := rows.Scan(&id, &days); err == nil {
+		var hasCountingSource bool
+		if err := rows.Scan(&id, &days, &hasCountingSource); err == nil {
 			result[id] = days
+			usage[id] = hasCountingSource
 		}
 	}
-	return result
+	return result, usage
 }
 
 // fetchSchemaColumnNames hakee kaikki sarakkeiden nimet system_column_details-taulusta

@@ -5,6 +5,8 @@
 
 import { endpoint_router } from '../endpoints/endpoint_router.js';
 import { showConfirmModal } from '../../reusable_components/modal/confirm_modal_builder.js';
+import { getTranslationForKey } from '../lang/component_language_dictionary.js';
+import { splitTranslationKey, applyTranslationVariable } from '../lang/translation_handler_helpers.js';
 
 /**
  * Generoi tietokannan yhtenäisyystarkistus-näkymän annettuun containeriin.
@@ -147,6 +149,17 @@ function renderResults(resultsArea, data) {
             labelContainer.appendChild(label);
 
             // Näytetään kuvaus näkyvänä tekstinä avaimen alla (ei pelkkänä tooltipinä)
+            // Keep pause copy in the normal translation lifecycle, including
+            // language changes after the report has already been rendered.
+            for (const langKey of issue.description_lang_keys || []) {
+                const descSpan = document.createElement('div');
+                const { baseKey, variablePart } = splitTranslationKey(langKey);
+                descSpan.dataset.langKey = langKey;
+                descSpan.textContent = applyTranslationVariable(getTranslationForKey(baseKey), variablePart);
+                descSpan.style.fontSize = '0.85em';
+                descSpan.style.color = 'var(--text_color_secondary, #888)';
+                labelContainer.appendChild(descSpan);
+            }
             if (issue.description) {
                 const descSpan = document.createElement('div');
                 descSpan.textContent = issue.description;
@@ -158,9 +171,11 @@ function renderResults(resultsArea, data) {
 
             issueRow.appendChild(labelContainer);
 
-            if (cat.number !== 2) {
-                // Kaikki muut kategoriat voidaan korjata Fix All -toiminnolla
-                allFixableIds.push(issue.id);
+            if (cat.number === 8) {
+                // Report-only while language-key archiving is paused.
+            } else if (cat.number !== 2) {
+                // Garbage keys require explicit, guarded single-key review.
+                if (cat.number !== 7) allFixableIds.push(issue.id);
 
                 const fixBtn = document.createElement('button');
                 fixBtn.className = 'button';
@@ -171,10 +186,16 @@ function renderResults(resultsArea, data) {
                     fixBtn.disabled = true;
                     fixBtn.textContent = '...';
                     try {
-                        await endpoint_router('fixDbConsistency', {
+                        const result = await endpoint_router('fixDbConsistency', {
                             method: 'POST',
                             body_data: { fix_ids: [issue.id] }
                         });
+                        if (!result.fixed) {
+                            fixBtn.disabled = false;
+                            fixBtn.textContent = getTranslationForKey('fix');
+                            fixBtn.dataset.langKey = 'fix';
+                            return;
+                        }
                         issueRow.style.opacity = '0.4';
                         fixBtn.textContent = 'Done';
                         fixBtn.dataset.langKey = 'done';

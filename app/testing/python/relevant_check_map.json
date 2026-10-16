@@ -758,6 +758,17 @@
       "tests": [
         "app/testing/python/test_qa_workflow.py"
       ]
+    },
+    {
+      "paths": [
+        "app/backend/core_components/system_table_tools/lang_key_consistency_checks.go",
+        "app/backend/core_components/system_table_tools/database_consistency_check.go",
+        "app/frontend/core_components/admin_tools/database_consistency_view.js",
+        "app/server_tools/migrations/20261015000004_seed_lang_key_archiving_paused_language_keys.sql"
+      ],
+      "tests": [
+        "app/testing/python/test_lang_key_archiving_paused_language_seed.py"
+      ]
     }
   ],
   "bootstrap_proofs": [

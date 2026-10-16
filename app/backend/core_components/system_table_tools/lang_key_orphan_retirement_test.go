@@ -1,10 +1,7 @@
 // lang_key_orphan_retirement_test.go
-// Verifies that an aged orphan language key is retired, and only when nothing
-// in code or schema still refers to it.
-// Bridges archiveExpiredOrphans and the consistency-check wording with the
-// package-local SQL mock driver.
-// Exists because retirement deletes translated copy: it must be visible in
-// advance and must never take a key the interface still asks for.
+// Verifies the retained archive helper and the report-only pause description.
+// Bridges archiveExpiredOrphans and translated consistency copy with a SQL mock.
+// Protects usage guards without enabling an automatic archive caller.
 package system_table_tools
 
 import (
@@ -79,23 +76,20 @@ func TestArchiveExpiredOrphansAbortsWhenTheKeyRegainedUsage(t *testing.T) {
 	}
 }
 
-func TestOrphanDescriptionPromisesRetirementOnlyWhenItWillHappen(t *testing.T) {
-	retiring := buildLangKeyConsistencyDescription(
-		langKeyRow{id: 7, key: "orders_front_page", en: "Orders", langKeyType: "ui"},
-		map[int]int{7: 84},
-	)
-	if !strings.Contains(retiring, "orphan for 84 days, will be archived and deleted in 6 day(s)") {
-		t.Fatalf("an administrator should see the retirement countdown, got %q", retiring)
-	}
-
-	kept := buildLangKeyConsistencyDescription(
-		langKeyRow{id: 8, key: "test_connection", en: "Test connection", langKeyType: "ui", hasLiveUsage: true},
-		map[int]int{8: 400},
-	)
-	if strings.Contains(kept, "will be archived and deleted") {
-		t.Fatalf("a key that code still uses must not be announced for deletion, got %q", kept)
-	}
-	if !strings.Contains(kept, "kept because code or schema still uses it") {
-		t.Fatalf("the reason a key is kept should be stated, got %q", kept)
+func TestOrphanDescriptionReportsPauseWithoutCountdown(t *testing.T) {
+	for _, row := range []langKeyRow{
+		{id: 7, key: "orders_front_page"},
+		{id: 7, key: "test_connection", hasLiveUsage: true},
+	} {
+		keys := orphanDescriptionLangKeys(row, map[int]int{7: 400})
+		if !strings.HasSuffix(keys[0], "archiving_paused") || keys[1] != "consistency_orphan_age_days+400" {
+			t.Fatalf("missing pause/age keys: %v", keys)
+		}
+		if row.hasLiveUsage && keys[2] != "consistency_lang_key_counting_source" {
+			t.Fatalf("missing counting-source explanation: %v", keys)
+		}
+		if description := buildLangKeyConsistencyDescription(row, map[int]int{7: 400}); strings.Contains(description, "deleted") {
+			t.Fatalf("report promises deletion: %q", description)
+		}
 	}
 }

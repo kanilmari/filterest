@@ -5,8 +5,8 @@
 //
 // DROP algorithm:
 //  1. Delete matching rows from system_lang_key_sources.
-//  2. If no other sources remain for a lang_key_id, delete from system_lang_keys.
-//  3. If other sources exist, keep the key — only the source row is removed.
+//  2. Keep keys and translations, including those with no sources left.
+//     The normal orphan-marking lifecycle handles them; retirement is paused.
 //
 // RENAME algorithm:
 //  1. Update source_high/source_low to reflect the new name.
@@ -92,14 +92,14 @@ func buildDatasetOwnedSourceOrDynamicKeyWhereClause(datasetName string) (string,
 // CleanupLangKeySourcesForTable removes all lang key sources associated with a
 // dataset. This includes schema-derived table/column sources plus dataset-owned
 // metadata sources such as dataset_header and hasLangKey column_value entries.
-// Lang keys that lose their last source are deleted.
+// Keys that lose their last source remain for orphan marking.
 func CleanupLangKeySourcesForTable(q dbutils.Querier, tableName string) error {
 	return cleanupSources(q, "table-drop", tableName, "")
 }
 
 // CleanupLangKeySourcesForColumn removes lang key sources for a specific column
-// including hasLangKey column_value entries tied to that column. Lang keys that
-// lose their last source are deleted.
+// including hasLangKey column_value entries tied to that column. Keys remain
+// for the normal orphan-marking lifecycle even when their last source is removed.
 func CleanupLangKeySourcesForColumn(q dbutils.Querier, tableName string, columnName string) error {
 	return cleanupSources(q, "column-drop", tableName, columnName)
 }
@@ -202,32 +202,8 @@ func cleanupSources(q dbutils.Querier, mode string, tableName string, columnName
 		log.Printf("[CleanupLangKeySources] %s %s: deleted %d source rows", mode, tableName, n)
 	}
 
-	// 3. For each affected key, check if it now has zero sources remaining.
-	//    If so, delete the key itself (FK CASCADE cleans up any remaining sources).
-	var orphanCount int64
-	for _, keyID := range affectedIDs {
-		var remaining int
-		err := q.QueryRow(`
-			SELECT COUNT(*) FROM system_lang_key_sources WHERE lang_key_id = $1
-		`, keyID).Scan(&remaining)
-		if err != nil {
-			log.Printf("[CleanupLangKeySources] warning: could not count remaining sources for key %d: %v", keyID, err)
-			continue
-		}
-
-		if remaining == 0 {
-			_, delErr := q.Exec(`DELETE FROM system_lang_keys WHERE id = $1`, keyID)
-			if delErr != nil {
-				log.Printf("[CleanupLangKeySources] warning: could not delete orphaned lang key %d: %v", keyID, delErr)
-			} else {
-				orphanCount++
-			}
-		}
-	}
-
-	if orphanCount > 0 {
-		log.Printf("[CleanupLangKeySources] %s %s: deleted %d orphaned lang keys (no remaining sources)", mode, tableName, orphanCount)
-	}
+	// Keys and translations survive even when no source remains. The next
+	// normal marking pass records the orphan; cleanup never retires a key.
 
 	return nil
 }
@@ -385,8 +361,8 @@ func UpdateLangKeySourcesForColumnRename(q dbutils.Querier, tableName, oldColNam
 // ─── FOLDER operations ───────────────────────────────────────────────
 
 // CleanupLangKeySourcesForFolder removes lang key sources for a deleted folder
-// (source_type='folder', source_high=folderName). If the lang key has no other
-// sources, it is deleted entirely (including its description).
+// (source_type='folder', source_high=folderName). Keys and translations remain
+// for the orphan-marking lifecycle.
 func CleanupLangKeySourcesForFolder(q dbutils.Querier, folderName string) error {
 	return cleanupSources(q, "folder-drop", folderName, "")
 }

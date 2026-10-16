@@ -1,6 +1,7 @@
 // cleanup_lang_key_sources_test.go
 // Unit tests for dataset/column lang-key cleanup helpers.
 // Uses a package-local database/sql driver double so cleanup coverage stays fast and deterministic.
+// Protects retained keys and translations while dataset-owned sources are removed.
 package lang
 
 import (
@@ -167,7 +168,7 @@ func openCleanupDB(t *testing.T, queries []queuedCleanupQuery, execs []queuedCle
 	return db, state
 }
 
-func TestCleanupLangKeySourcesForTableRemovesDatasetOwnedSourcesAndDeletesOnlyOrphans(t *testing.T) {
+func TestCleanupLangKeySourcesForTableRemovesSourcesAndKeepsKeys(t *testing.T) {
 	db, state := openCleanupDB(
 		t,
 		[]queuedCleanupQuery{
@@ -194,11 +195,11 @@ func TestCleanupLangKeySourcesForTableRemovesDatasetOwnedSourcesAndDeletesOnlyOr
 		t.Fatalf("CleanupLangKeySourcesForTable() error = %v", err)
 	}
 
-	if len(state.queryCalls) != 3 {
-		t.Fatalf("query call count = %d, want 3", len(state.queryCalls))
+	if len(state.queryCalls) != 1 {
+		t.Fatalf("query call count = %d, want 1", len(state.queryCalls))
 	}
-	if len(state.execCalls) != 2 {
-		t.Fatalf("exec call count = %d, want 2", len(state.execCalls))
+	if len(state.execCalls) != 1 {
+		t.Fatalf("exec call count = %d, want 1", len(state.execCalls))
 	}
 
 	firstQuery := state.queryCalls[0]
@@ -217,9 +218,6 @@ func TestCleanupLangKeySourcesForTableRemovesDatasetOwnedSourcesAndDeletesOnlyOr
 
 	if !strings.Contains(state.execCalls[0], "DELETE FROM system_lang_key_sources") {
 		t.Fatalf("first exec should delete source rows:\n%s", state.execCalls[0])
-	}
-	if !strings.Contains(state.execCalls[1], "DELETE FROM system_lang_keys") {
-		t.Fatalf("second exec should delete orphaned lang key:\n%s", state.execCalls[1])
 	}
 }
 
@@ -246,11 +244,11 @@ func TestCleanupLangKeySourcesForColumnRemovesColumnValueSources(t *testing.T) {
 		t.Fatalf("CleanupLangKeySourcesForColumn() error = %v", err)
 	}
 
-	if len(state.queryCalls) != 2 {
-		t.Fatalf("query call count = %d, want 2", len(state.queryCalls))
+	if len(state.queryCalls) != 1 {
+		t.Fatalf("query call count = %d, want 1", len(state.queryCalls))
 	}
-	if len(state.execCalls) != 2 {
-		t.Fatalf("exec call count = %d, want 2", len(state.execCalls))
+	if len(state.execCalls) != 1 {
+		t.Fatalf("exec call count = %d, want 1", len(state.execCalls))
 	}
 
 	firstQuery := state.queryCalls[0]
@@ -259,5 +257,18 @@ func TestCleanupLangKeySourcesForColumnRemovesColumnValueSources(t *testing.T) {
 	}
 	if !strings.Contains(firstQuery, "source_high = $3") {
 		t.Fatalf("column_value source_high exact match missing from affected-id query:\n%s", firstQuery)
+	}
+}
+
+func TestCleanupLangKeySourcesForFolderKeepsSourceLessKey(t *testing.T) {
+	db, state := openCleanupDB(t,
+		[]queuedCleanupQuery{{cols: []string{"lang_key_id"}, rows: [][]driver.Value{{int64(404)}}}, {cols: []string{"count"}, rows: [][]driver.Value{{int64(0)}}}},
+		[]queuedCleanupExec{{rowsAffected: 1}, {rowsAffected: 1}},
+	)
+	if err := CleanupLangKeySourcesForFolder(db, "old_folder"); err != nil {
+		t.Fatal(err)
+	}
+	if len(state.queryCalls) != 1 || len(state.execCalls) != 1 || !strings.Contains(state.execCalls[0], "DELETE FROM system_lang_key_sources") {
+		t.Fatal("folder cleanup must remove only sources", state.queryCalls, state.execCalls)
 	}
 }
