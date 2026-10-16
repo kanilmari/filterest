@@ -75,6 +75,8 @@ account-name separation uses the existing sign-in routes.
 
 ### Capability and Dataset Permissions
 
+`/api/translations` serves unbound interface copy to everyone; object labels require the caller's existing dataset read and column visibility rights (folder labels use the tree read grant). Every domain-object association must be readable; administrators receive all keys. Foreign-key values in the reader's explicitly reviewed translation-storage/lookup catalogue are provenance, never ownership; existing source rows need no cleanup migration. Labels of those storage tables/columns still require their own rights. Anonymous callers use guest rights only when browsing without login is allowed. Lookup failures withhold the map; responses are private and uncached, including development orphan metadata. DB 9.12.0 migration `20261015000006` additively repairs ownership and lists unresolved generated names (including `_asc`, `_desc` and `_front_page`), which remain withheld from non-administrators.
+
 The core permission tables are:
 
 - `system_functions` for registered backend routes, UI-only functions, and whether the function is dataset-specific.
@@ -463,12 +465,7 @@ than one ambiguous text field:
 - optional validity window and required human-readable reason
 - creator and normal timestamps
 
-This is one reusable row-policy primitive, not the entire permission model.
-Dataset action permission is still required. Any matching direct or inherited
-deny wins over allows; an absent match denies access when the dataset declares
-that explicit row access is required. A user-specific allow must not silently
-override a deny inherited from one of the user's groups. Create normally stays
-a dataset/scope action because the target row does not yet exist.
+This is one reusable row-policy primitive, not the entire permission model. Dataset action permission is still required. Any matching direct or inherited deny wins over allows; an absent match denies access when the dataset declares that explicit row access is required. A user-specific allow must not silently override a deny inherited from one of the user's groups. Create normally stays a dataset/scope action because the target row does not yet exist.
 
 ### Permission Actions
 

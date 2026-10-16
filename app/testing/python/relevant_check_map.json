@@ -838,6 +838,18 @@
         "app/testing/python/test_component_imports.py",
         "app/testing/python/test_component_discovery.py"
       ]
+    },
+    {
+      "paths": [
+        "app/backend/core_components/lang/translation_scope_reader.go",
+        "app/backend/core_components/lang_key_naming/lang_key_naming.go",
+        "app/server_tools/migrations/20261015000006_backfill_translation_object_sources.sql",
+        "app/server_tools/public_bootstrap/generate_bootstrap.py"
+      ],
+      "tests": [
+        "app/testing/python/test_translation_object_sources.py",
+        "app/testing/python/test_translation_scope_storage.py"
+      ]
     }
   ],
   "bootstrap_proofs": [

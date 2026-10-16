@@ -10,6 +10,32 @@ import { test, expect } from '@playwright/test';
 test.describe('L4 — Forced Login Landing', () => {
   test.use({ storageState: { cookies: [], origins: [] } });
 
+  for (const language of ['fi', 'en']) {
+    test(`keeps all visible pre-login translation keys in ${language}`, async ({ page }) => {
+      await page.addInitScript((chosen) => localStorage.setItem('chosen_language', chosen), language);
+      await page.goto(`/login?lang=${language}`, { waitUntil: 'domcontentloaded' });
+      await expect(page.locator('[data-testid="login-form"]')).toBeVisible();
+      const response = await page.request.get(`/api/translations?lang=${language}`);
+      expect(response.ok()).toBe(true);
+      expect(response.headers()['cache-control']).toContain('private');
+      const payload = await response.json();
+      const translations = payload.translations || payload;
+      const keys = await page.locator('[data-lang-key]:visible, [data-html-lang-key]:visible').evaluateAll((elements) =>
+        [...new Set(elements.map((element) =>
+          (element.getAttribute('data-lang-key') || element.getAttribute('data-html-lang-key') || '').split('+')[0]
+        ).filter(Boolean))]
+      );
+      expect(keys.length).toBeGreaterThan(3);
+      for (const key of keys) {
+        expect(translations[key]?.trim(), `missing pre-login key ${key} (${language})`).toBeTruthy();
+      }
+      const submit = page.locator('[data-testid="login-submit"]');
+      const submitKey = await submit.getAttribute('data-lang-key');
+      expect(submitKey).toBeTruthy();
+      await expect(submit).toHaveValue(translations[submitKey!]);
+    });
+  }
+
   async function expectHeaderRowAlignment(page: import('@playwright/test').Page) {
     const tablist = page.locator('[data-testid="login-page-tablist"]');
     const controls = page.locator('[data-testid="login-page-controls"]');

@@ -126,8 +126,7 @@ func renameFolder(tx *sql.Tx, req RenameTreeNodeRequest) error {
 	// 4. Päivitetään kansion lang key sources ja descriptions
 	if oldName != req.NewName {
 		if cleanErr := lang.UpdateLangKeySourcesForFolderRename(tx, oldName, req.NewName); cleanErr != nil {
-			log.Printf("[HandleRenameTreeNode] warning: lang key source update for folder rename %s→%s: %v",
-				oldName, req.NewName, cleanErr)
+			return fmt.Errorf("update folder label associations: %w", cleanErr)
 		}
 	}
 
@@ -182,9 +181,7 @@ func renameTable(tx *sql.Tx, req RenameTreeNodeRequest) error {
 	//    taulun nimeen (sekä table- että column-tyyppiset lähderivit ja kuvaukset).
 	if oldName != sanitizedName {
 		if cleanErr := lang.UpdateLangKeySourcesForTableRename(tx, oldName, sanitizedName); cleanErr != nil {
-			log.Printf("[HandleRenameTreeNode] warning: lang key source update for table rename %s→%s: %v",
-				oldName, sanitizedName, cleanErr)
-			// Non-fatal: table is already renamed, metadata update is best-effort.
+			return fmt.Errorf("update dataset label associations: %w", cleanErr)
 		}
 	}
 
@@ -222,16 +219,19 @@ func upsertLangKey(tx *sql.Tx, oldKey, newKey string, itemType string, translati
 		// (idempotent UPDATE). This line must stay for folder renames which don't
 		// go through UpdateLangKeySourcesForTableRename().
 		if oldKey != newKey {
-			_, _ = tx.Exec(`
+			_, sourceErr := tx.Exec(`
 				UPDATE system_lang_key_sources
 				SET source_high = $1, source_low = $1, last_seen = CURRENT_DATE
 				WHERE lang_key_id = $2 AND source_type = $3`,
 				newKey, existingID, itemType)
+			if sourceErr != nil {
+				return fmt.Errorf("rename label association: %w", sourceErr)
+			}
 		}
 
 		// Varmistetaan että lähderivi on olemassa
-		upsertLangKeySource(tx, existingID, itemType, newKey)
-	} else {
+		return upsertLangKeySource(tx, existingID, itemType, newKey)
+	} else if err == sql.ErrNoRows {
 		// Ei löytynyt → luodaan uusi
 		var newID int64
 		insertErr := tx.QueryRow(`
@@ -244,17 +244,16 @@ func upsertLangKey(tx *sql.Tx, oldKey, newKey string, itemType string, translati
 		}
 
 		// Luodaan lähderivi uudelle avaimelle
-		upsertLangKeySource(tx, newID, itemType, newKey)
+		return upsertLangKeySource(tx, newID, itemType, newKey)
 	}
-
-	return nil
+	return fmt.Errorf("read existing language key: %w", err)
 }
 
 // upsertLangKeySource tekee UPSERT:n system_lang_key_sources-tauluun
 // transaktiopohjaisesti. Varmistaa että lang_key:llä on lähdemerkintä.
-func upsertLangKeySource(tx *sql.Tx, langKeyID int64, sourceType, sourceHigh string) {
+func upsertLangKeySource(tx *sql.Tx, langKeyID int64, sourceType, sourceHigh string) error {
 	if langKeyID == 0 {
-		return
+		return fmt.Errorf("missing language key identity")
 	}
 	_, err := tx.Exec(`
 		INSERT INTO system_lang_key_sources (lang_key_id, source_type, source_high, source_low, last_seen)
@@ -264,6 +263,7 @@ func upsertLangKeySource(tx *sql.Tx, langKeyID int64, sourceType, sourceHigh str
 		      last_seen = CURRENT_DATE`,
 		langKeyID, sourceType, sourceHigh)
 	if err != nil {
-		log.Printf("[upsertLangKeySource] error id=%d type=%s high=%s: %v", langKeyID, sourceType, sourceHigh, err)
+		return fmt.Errorf("associate language key with %s: %w", sourceType, err)
 	}
+	return nil
 }

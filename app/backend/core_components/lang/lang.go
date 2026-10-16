@@ -191,7 +191,7 @@ func readServedTranslationMap(languageCode string) (map[string]string, error) {
 	return fillGapsFromAuthoredTranslations(servedMap, authoredMap), nil
 }
 
-// ReadDisplayTranslations returns the same public copy served by the translation API.
+// ReadDisplayTranslations returns unscoped copy for already-authorized internal readers.
 // Callers must first authorize a row field before resolving its language-key value.
 func ReadDisplayTranslations(languageCode string) (map[string]string, error) {
 	chosenLang := normalizeRequestedLanguageCode(languageCode)
@@ -215,12 +215,15 @@ func ReadDisplayTranslations(languageCode string) (map[string]string, error) {
 
 // GetTranslationsHandler returns the chosen language map and optional dev-only orphan-key metadata.
 func GetTranslationsHandler(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Cache-Control", "private, no-store")
+	w.Header().Add("Vary", "Cookie")
 	translationMap, err := ReadDisplayTranslations(r.URL.Query().Get("lang"))
 	if err != nil {
 		log.Printf("\033[31merror: translations query failed: %v\033[0m", err)
 		httpresponse.RespondWithError(w, http.StatusInternalServerError, "internal server error")
 		return
 	}
+	translationMap = scopeTranslationMap(r, translationMap)
 
 	w.Header().Set("Content-Type", "application/json")
 
@@ -229,9 +232,15 @@ func GetTranslationsHandler(w http.ResponseWriter, r *http.Request) {
 	devMode := strings.ToLower(os.Getenv("DEV_MODE"))
 	if devMode == "true" || devMode == "1" {
 		orphanKeys := fetchOrphanLangKeyNames()
+		visibleOrphans := make([]string, 0, len(orphanKeys))
+		for _, key := range orphanKeys {
+			if _, visible := translationMap[key]; visible {
+				visibleOrphans = append(visibleOrphans, key)
+			}
+		}
 		wrapped := map[string]interface{}{
 			"translations": translationMap,
-			"orphan_keys":  orphanKeys,
+			"orphan_keys":  visibleOrphans,
 		}
 		if err := json.NewEncoder(w).Encode(wrapped); err != nil {
 			fmt.Printf("\033[31merror: %s\033[0m\n", err.Error())

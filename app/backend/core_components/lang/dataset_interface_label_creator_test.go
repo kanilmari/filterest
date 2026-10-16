@@ -109,3 +109,10 @@ func TestPersistDerivedInterfaceLabelsReturnsWriteError(t *testing.T) {
 		t.Fatalf("error = %v, want wrapped write failure", err)
 	}
 }
+
+func TestColumnLabelsRefuseMissingDatasetAssociation(t *testing.T) {
+	stub := &interfaceLabelExecStub{}
+	if err := EnsureColumnInterfaceLabels(stub, "", []string{"private_label"}); err == nil || len(stub.calls) != 0 {
+		t.Fatal("an object label must not be saved without its owning dataset", err, stub.calls)
+	}
+}

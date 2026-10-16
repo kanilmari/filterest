@@ -152,6 +152,7 @@ release_data_migrations = (
     "20261009000082_complete_registered_column_metadata.sql",
     "20261009000083_add_automatic_log_retention.sql",
     "20261015000002_set_exceptional_record_headers.sql",
+    "20261015000006_backfill_translation_object_sources.sql",
 )
 # The record of each database release is not run by the bootstrap: the acceptance
 # block below writes the version row of the version this bootstrap is built for.

@@ -231,6 +231,12 @@ func persistDerivedInterfaceLabels(
 	sourceLows := make([]string, 0, len(labels))
 	usageExplanations := make([]string, 0, len(labels))
 	for _, label := range labels {
+		// Ownership is part of the label write, never best-effort bookkeeping:
+		// scoped translations must not mistake a malformed source for public copy.
+		if label.SourceHigh == "" || label.SourceLow == "" ||
+			(label.SourceType != "table" && label.SourceType != "column") {
+			return fmt.Errorf("missing dataset/column association for language key %q", label.LangKey)
+		}
 		langKeys = append(langKeys, label.LangKey)
 		finnishValues = append(finnishValues, label.Finnish)
 		englishValues = append(englishValues, label.English)

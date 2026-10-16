@@ -8662,6 +8662,95 @@ BEGIN
     WHERE NOT EXISTS (SELECT 1 FROM public.system_data_repair_records
                        WHERE migration = 'record_title_headers_962' AND action = 'completed');
 END $record_title_headers$;
+-- 20261015000006_backfill_translation_object_sources.sql
+-- Associates existing dataset, column and folder labels before scoped serving.
+-- Connects upgrades and fresh installs to the runtime label creators' ownership.
+-- Adds provenance only; retains every existing source and translation (WO-SEC2).
+-- VERSION_DB: 9.12.0
+-- VERSION_DB_OWNER: 20261015000099_record_database_release_9_12_0.sql
+-- COMPLETION_MARKER: translation_object_sources_sec2
+
+DO $translation_object_sources$
+DECLARE
+    before_count bigint;
+    after_count bigint;
+    unresolved record;
+BEGIN
+    SELECT count(DISTINCT lang_key_id) INTO before_count
+    FROM public.system_lang_key_sources
+    WHERE source_type IN ('table', 'column', 'folder', 'dataset_header', 'column_value', 'foreign_key');
+
+    WITH datasets AS (
+        SELECT DISTINCT table_name FROM public.system_db_tables
+        WHERE COALESCE(NULLIF(schema_name, ''), 'public') = 'public'
+    ), columns AS (
+        SELECT DISTINCT dataset.table_name, col.column_name
+        FROM datasets dataset
+        JOIN information_schema.columns col
+          ON col.table_schema = 'public' AND col.table_name = dataset.table_name
+    ), objects(source_type, source_high, source_low) AS (
+        SELECT 'table', table_name, table_name FROM datasets
+        UNION
+        SELECT 'column', table_name, column_name FROM columns
+    ), requested AS (
+        SELECT names.lang_key, object.source_type, object.source_high, object.source_low
+        FROM objects object CROSS JOIN LATERAL (VALUES
+            (object.source_low),
+            ('add_row_' || object.source_low),
+            ('search_for_' || object.source_low),
+            ('search_slogan_' || object.source_low),
+            (object.source_low || '_front_page'),
+            (object.source_low || '_asc'),
+            (object.source_low || '_desc')
+        ) names(lang_key)
+        UNION
+        SELECT folder_name, 'folder', folder_name, folder_name
+        FROM public.system_table_folders WHERE NULLIF(btrim(folder_name), '') IS NOT NULL
+    )
+    INSERT INTO public.system_lang_key_sources
+        (lang_key_id, source_type, source_high, source_low, usage_explanation, last_seen)
+    SELECT DISTINCT ON (keys.id, requested.source_type, requested.source_high)
+           keys.id, requested.source_type, requested.source_high, requested.source_low,
+           'Object label association repaired by WO-SEC2.', CURRENT_DATE
+    FROM requested JOIN public.system_lang_keys keys USING (lang_key)
+    ORDER BY keys.id, requested.source_type, requested.source_high, requested.source_low
+    ON CONFLICT (lang_key_id, source_type, source_high) DO NOTHING;
+
+    SELECT count(DISTINCT lang_key_id) INTO after_count
+    FROM public.system_lang_key_sources
+    WHERE source_type IN ('table', 'column', 'folder', 'dataset_header', 'column_value', 'foreign_key');
+    RAISE NOTICE 'WO-SEC2 associated keys before=%, after=%', before_count, after_count;
+
+    FOR unresolved IN
+        SELECT keys.lang_key FROM public.system_lang_keys keys
+        WHERE (keys.lang_key ~ '^(add_row_|search_for_|search_slogan_)'
+               OR keys.lang_key ~ '(_asc|_desc|_front_page)$'
+               OR keys.creation_spec = 'Interface label derived from dataset schema names.')
+          AND NOT EXISTS (
+              SELECT 1 FROM public.system_lang_key_sources source
+              WHERE source.lang_key_id = keys.id
+                AND source.source_type IN ('table', 'column', 'folder', 'dataset_header', 'column_value', 'foreign_key')
+                -- Storage provenance does not resolve an object's owner. This
+                -- reviewed list mirrors translationStorageTable in the reader;
+                -- unknown system tables remain restrictive, never prefix-guessed.
+                AND NOT (source.source_type = 'foreign_key'
+                    AND split_part(source.source_high, '.', 1) = 'public'
+                    AND split_part(source.source_high, '.', 2) IN (
+                        'system_lang_keys', 'system_lang_keys_archive', 'system_lang_key_sources',
+                        'system_lang_key_translations', 'system_lang_key_types', 'system_languages'))
+          )
+        ORDER BY keys.lang_key
+    LOOP
+        RAISE WARNING 'WO-SEC2 unresolved object key (withheld from non-admin translations): %', unresolved.lang_key;
+    END LOOP;
+
+    INSERT INTO public.system_data_repair_records (migration, action, detail)
+    SELECT 'translation_object_sources_sec2', 'completed',
+           jsonb_build_object('file', '20261015000006_backfill_translation_object_sources.sql',
+                              'associated_before', before_count, 'associated_after', after_count)
+    WHERE NOT EXISTS (SELECT 1 FROM public.system_data_repair_records
+                      WHERE migration = 'translation_object_sources_sec2' AND action = 'completed');
+END $translation_object_sources$;
 
 -- Generated migration-ledger baseline and version row, written by this acceptance block only after
 -- every completion marker is present and every final check comes back empty. These migrations are
@@ -8672,7 +8761,7 @@ DECLARE
     findings text;
 BEGIN
     SELECT string_agg(marker, ', ' ORDER BY marker) INTO missing_markers
-      FROM unnest(ARRAY['wl58_row_actor_support', 'wl58_row_actor_marks_by_table_uid', 'wl58_row_actor_trigger_definitions', 'k116_login_names', 'password_reset_dummy_work', 'system_favorites_table', 'system_front_page_revisions_table', 'system_front_page_blocks_table', 'wl103_row_group_classifications', 'wl132_surviving_sign_in', 'wl52_drop_column_label_value_layout', 'system_dataset_appearance_table', 'wl157_migration_execution_evidence', 'dataset_card_appearance_cutover', 'wl157_application_update_admission', 'dataset_appearance_three_place_schema', 'wl164_publication_fields', 'wl163_dataset_kind_contracts', 'wl159_dataset_namespace', 'wl167_database_identity_schema', 'wl167_managed_timestamp_zones', 'wl157_application_update_refusal_keys', 'wl58_row_actor_columns', 'system_favorites_registry', 'system_front_page_blocks_registry', 'wl103_row_group_classifications_registry', 'wl144_registry_reference_key', 'dataset_media_hidden', 'wl157_application_update_capability', 'dataset_appearance_three_place_backfill', 'wl164_publication_column_metadata', 't919_registered_column_metadata', 't750_automatic_log_retention', 'record_title_headers_962']::text[]) AS marker
+      FROM unnest(ARRAY['wl58_row_actor_support', 'wl58_row_actor_marks_by_table_uid', 'wl58_row_actor_trigger_definitions', 'k116_login_names', 'password_reset_dummy_work', 'system_favorites_table', 'system_front_page_revisions_table', 'system_front_page_blocks_table', 'wl103_row_group_classifications', 'wl132_surviving_sign_in', 'wl52_drop_column_label_value_layout', 'system_dataset_appearance_table', 'wl157_migration_execution_evidence', 'dataset_card_appearance_cutover', 'wl157_application_update_admission', 'dataset_appearance_three_place_schema', 'wl164_publication_fields', 'wl163_dataset_kind_contracts', 'wl159_dataset_namespace', 'wl167_database_identity_schema', 'wl167_managed_timestamp_zones', 'wl157_application_update_refusal_keys', 'wl58_row_actor_columns', 'system_favorites_registry', 'system_front_page_blocks_registry', 'wl103_row_group_classifications_registry', 'wl144_registry_reference_key', 'dataset_media_hidden', 'wl157_application_update_capability', 'dataset_appearance_three_place_backfill', 'wl164_publication_column_metadata', 't919_registered_column_metadata', 't750_automatic_log_retention', 'record_title_headers_962', 'translation_object_sources_sec2']::text[]) AS marker
      WHERE NOT EXISTS (SELECT 1 FROM public.system_data_repair_records AS record
                         WHERE record.migration = marker AND record.action = 'completed');
     IF missing_markers IS NOT NULL THEN
@@ -8905,6 +8994,7 @@ BEGIN
       ('20261015000003_seed_dataset_default_view_language_keys.sql', '1129ce19fc29b7ad8eb413960ce76b4bf351392361f7e4304bc034772563b6a8', 'bootstrap_baseline', 'bootstrap'),
       ('20261015000004_seed_lang_key_archiving_paused_language_keys.sql', '0268575961f962231226fd7f1c045f75b629f5f0da9b7489bb3cd0709ef168da', 'bootstrap_baseline', 'bootstrap'),
       ('20261015000005_seed_row_group_match_selector_language_keys.sql', '018579be404cd6353e89cf5ab79508ebd700b35ffe6648590e99a83e03dbcbe8', 'bootstrap_baseline', 'bootstrap'),
+      ('20261015000006_backfill_translation_object_sources.sql', 'b8b770ff3544a228c3d5631964fe1f7401e0d2c6f8d4cc01a69a48c3cdfd26a8', 'bootstrap_baseline', 'bootstrap'),
       ('20261015000099_record_database_release_9_12_0.sql', '7681662cc532ce4f113acec7e4e992af1e1ecf32136f8c92e55b255d56556516', 'bootstrap_baseline', 'bootstrap')
     ON CONFLICT (filename) DO NOTHING;
     INSERT INTO public.system_db_version (version, description)
