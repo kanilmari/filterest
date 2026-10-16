@@ -384,6 +384,11 @@ describe('buildRowArticleImageGallery', () => {
             'big-card-image-thumb-4',
         ]);
         expect(gallery.querySelector('[data-testid="big-card-image-carousel-previous"]').disabled).toBe(true);
+        for (const button of gallery.querySelectorAll('.big_card_thumbnail_carousel_button')) {
+            expect(button.textContent).toBe('');
+            expect(button.querySelector('span.row_article_image_arrow_icon[aria-hidden="true"]')).not.toBeNull();
+            expect(button.firstElementChild.style.maskImage).toContain('nav-history-');
+        }
 
         gallery.querySelector('[data-testid="big-card-image-carousel-next"]').click();
 

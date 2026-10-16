@@ -507,10 +507,6 @@ body.dark-mode .image_first_view_modal {
     right: clamp(8px, 2vw, 28px);
 }
 
-.row_article_image_first_arrow:disabled {
-    opacity: 0.28;
-}
-
 .row_article_image_first_position {
     position: absolute;
     inset-block-start: 14px;

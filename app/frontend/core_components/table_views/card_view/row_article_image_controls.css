@@ -1,0 +1,28 @@
+/* row_article_image_controls.css
+ * Centres SVG image chevrons and shares the disabled skin across article galleries.
+ * Connects IFAV, classic inline media and thumbnail arrows to the theme tokens.
+ * Keeps their visibility lifecycle separate from disabled colour and geometry.
+ */
+
+/* Override the universal span colour so masks follow every button state. */
+.row_article_image_arrow_icon {
+    flex: 0 0 2rem;
+    width: 2rem;
+    height: 2rem;
+    color: inherit;
+    background: currentcolor;
+    pointer-events: none;
+}
+
+/* Beat the IFAV blur and inline-media skins without changing idle visibility.
+   Disabled buttons retain their hit area when the surrounding controls show. */
+body :is(.image_modal.image_first_view_modal, .row_article_inline_media, .big_card_thumbnail_row)
+    :is(.row_article_image_first_arrow, .big_card_thumbnail_carousel_button):disabled {
+    background: var(--control-disabled-bg);
+    color: var(--control-disabled-text);
+    border: 1px solid var(--control-disabled-border);
+    box-shadow: none;
+    filter: none;
+    backdrop-filter: none;
+    cursor: not-allowed;
+}

@@ -3,6 +3,15 @@
 // Connects permitted image lists to local previous/next actions and position labels.
 // Keeps button labels, propagation boundaries and appearance consistent between views.
 import { getTranslationForKey } from "../../lang/translation_handler.js";
+import { createMaskIconSpan } from "../../../icons/icon_mask_builder.js";
+
+// History chevrons keep image navigation distinct from the barred record icons.
+export function buildRowArticleImageArrowIcon(direction) {
+    return createMaskIconSpan(
+        `/frontend/icons/navigation/nav-history-${direction === "previous" ? "back" : "forward"}-icon.svg`,
+        ["row_article_image_arrow_icon"],
+    );
+}
 
 export function buildRowArticleImageArrow(direction, activate) {
     const isPrevious = direction === "previous";
@@ -19,7 +28,7 @@ export function buildRowArticleImageArrow(direction, activate) {
     button.dataset.testid = `row-article-image-${direction}`;
     button.dataset.titleLangKey = langKey;
     button.dataset.ariaLabelLangKey = langKey;
-    button.textContent = isPrevious ? "‹" : "›";
+    button.appendChild(buildRowArticleImageArrowIcon(direction));
     button.title = getTranslationForKey(langKey) || fallback;
     button.setAttribute("aria-label", button.title);
     button.addEventListener("click", (event) => {

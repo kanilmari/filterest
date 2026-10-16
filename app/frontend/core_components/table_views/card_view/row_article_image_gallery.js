@@ -2,7 +2,7 @@
 // Thumbnail gallery with inline upload and on-demand previews for the article view.
 // Bridges child table image rows, upload placeholders, and the add-row-multipart API.
 // Exists to display and manage images attached to a parent row inside the article view.
-
+import { buildRowArticleImageArrowIcon } from "./row_article_image_controls.js";
 import { createImageUploadPlaceholder } from "./row_article_image_upload.js";
 import { activateImageFirstView } from "./image_first_view_activation.js";
 import { resolveImagePath } from "./row_article_content_builder_helpers.js";
@@ -338,7 +338,7 @@ export function buildRowArticleImageGallery(parentTableName, parentRowId, childT
         button.dataset.testid = direction === "previous"
             ? "big-card-image-carousel-previous"
             : "big-card-image-carousel-next";
-        button.textContent = direction === "previous" ? "‹" : "›";
+        button.appendChild(buildRowArticleImageArrowIcon(direction));
         button.title = direction === "previous"
             ? (getTranslationForKey("previous") || "Edelliset")
             : (getTranslationForKey("next") || "Seuraavat");

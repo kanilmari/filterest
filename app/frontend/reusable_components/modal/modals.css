@@ -490,10 +490,7 @@ body.dark-mode .modal {
     }
 }
 
-.modal_overlay_blur.image-modal-controls-active .image_modal :is(
-    .row_article_image_first_arrow,
-    .row_article_row_navigation_button
-):disabled {
+.modal_overlay_blur.image-modal-controls-active .image_modal .row_article_row_navigation_button:disabled {
     opacity: var(--image-modal-disabled-control-opacity);
     /* Disabled controls still own their hit area. Letting pointer events pass
        through would turn the same click into a backdrop-close action. */

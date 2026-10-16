@@ -174,7 +174,7 @@
     color: var(--fw-color-text);
 }
 
-.fw-btn--ghost:hover {
+.fw-btn--ghost:hover:not(:disabled) {
     background: var(--fw-color-surface-muted);
 }
 

@@ -150,6 +150,10 @@
     --input_bg_color: var(--bg_color_extreme);
 
     /* Buttons */
+    /* Navbar disabled greys, with the settings control's subtle border. */
+    --control-disabled-bg: var(--table_border_color);
+    --control-disabled-text: var(--border_color);
+    --control-disabled-border: var(--border_color);
     --button_bg_color: var(--bg-surface);
     --button_text_color: var(--text-main);
     --button_hover_bg_color: var(--bg-surface-hover);
@@ -374,6 +378,10 @@ body.dark-mode {
    :root even while the application itself is forced to light mode. */
 body.light-mode,
 body.dark-mode {
+    /* Resolve disabled colours in the app theme, including light over a dark OS. */
+    --control-disabled-bg: var(--table_border_color);
+    --control-disabled-text: var(--border_color);
+    --control-disabled-border: var(--border_color);
     --interaction-control-bg-rest: var(--bg-surface);
     --interaction-control-bg-hover: color-mix(in srgb, var(--color-brand) 12%, var(--bg-surface) 88%);
     --interaction-control-bg-active: color-mix(in srgb, var(--color-brand) 22%, var(--bg-surface) 78%);
