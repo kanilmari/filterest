@@ -61,15 +61,16 @@ export async function generate_database_consistency_view(container) {
 }
 
 /**
- * Builds the language-key source scan freshness line (fresh, stale or unknown) for category 8.
+ * Builds the language-key source scan trust line (partial, suspicious, fresh, stale or unknown) for category 8.
  * @param {Object} cat - Category 8 of the backend response (source_scan_stale, source_scan_at)
  * @returns {HTMLElement}
  */
 function buildSourceScanStatus(cat) {
     const status = document.createElement('p');
     status.classList.add('fw-text-sm', 'fw-text-muted');
-    const stateKey = cat.source_scan_stale !== false
-        ? 'consistency_source_scan_stale' : 'consistency_source_scan_fresh';
+    const failureKey = { partial: 'consistency_source_scan_partial', suspicious: 'consistency_source_scan_suspicious' }[cat.source_scan_state];
+    const stateKey = failureKey || (cat.source_scan_stale !== false
+        ? 'consistency_source_scan_stale' : 'consistency_source_scan_fresh');
     const state = document.createElement('span');
     state.dataset.langKey = stateKey;
     state.textContent = getTranslationForKey(stateKey);

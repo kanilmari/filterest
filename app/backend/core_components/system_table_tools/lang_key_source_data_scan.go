@@ -1,0 +1,283 @@
+// lang_key_source_data_scan.go
+// Reads every schema and data reference and persists its protective source evidence.
+// Connects population to registry metadata, domain foreign keys and named values.
+// Propagates read, iteration and write failures so no partial scan becomes trusted.
+package system_table_tools
+
+import (
+	"database/sql"
+	"fmt"
+	"strings"
+
+	backend "easelect/backend/core_components"
+	"easelect/backend/core_components/lang_key_naming"
+	"github.com/lib/pq"
+)
+
+// readSourceRows closes readers before writers use the pool, including fixtures
+// with one connection. A failed conversion or late iteration error is a failure.
+func readSourceRows(query string, visit func(*sql.Rows) error) error {
+	rows, err := backend.Db.Query(query)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		if err := visit(rows); err != nil {
+			return err
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return err
+	}
+	return rows.Close()
+}
+
+func fetchLangKeyRegistry() (map[string]int64, error) {
+	keys := make(map[string]int64)
+	err := readSourceRows("SELECT id, lang_key FROM system_lang_keys", func(rows *sql.Rows) error {
+		var id int64
+		var key string
+		if err := rows.Scan(&id, &key); err != nil {
+			return err
+		}
+		keys[key] = id
+		return nil
+	})
+	return keys, err
+}
+
+func upsertSource(id int64, sourceType, high, low string) error {
+	if id == 0 {
+		return fmt.Errorf("source has no language-key identity")
+	}
+	_, err := backend.Db.Exec(`INSERT INTO system_lang_key_sources
+        (lang_key_id, source_type, source_high, source_low, last_seen)
+        VALUES ($1,$2,$3,$4,CURRENT_DATE)
+        ON CONFLICT (lang_key_id, source_type, source_high) DO UPDATE
+        SET source_low=EXCLUDED.source_low, last_seen=CURRENT_DATE`, id, sourceType, high, low)
+	if err != nil {
+		return fmt.Errorf("save %s source %q: %w", sourceType, high, err)
+	}
+	return nil
+}
+
+func updateSourceUsageExplanationIfEmpty(id int64, sourceType, high, explanation string) error {
+	if id == 0 || strings.TrimSpace(explanation) == "" {
+		return nil
+	}
+	_, err := backend.Db.Exec(`UPDATE system_lang_key_sources SET usage_explanation=$1
+        WHERE lang_key_id=$2 AND source_type=$3 AND source_high=$4
+        AND (usage_explanation IS NULL OR usage_explanation='')`, explanation, id, sourceType, high)
+	if err != nil {
+		return fmt.Errorf("explain %s source %q: %w", sourceType, high, err)
+	}
+	return nil
+}
+
+func saveExplainedSource(id int64, sourceType, high, low, explanation string) error {
+	if err := upsertSource(id, sourceType, high, low); err != nil {
+		return err
+	}
+	return updateSourceUsageExplanationIfEmpty(id, sourceType, high, explanation)
+}
+
+func scanSchemaLangKeySources(keys map[string]int64) (int, error) {
+	columns := make(map[string][]string)
+	err := readSourceRows(`SELECT cd.column_name, dt.table_name FROM system_column_details cd
+        JOIN system_db_tables dt ON cd.table_uid=dt.table_uid ORDER BY cd.column_name, dt.table_name`, func(rows *sql.Rows) error {
+		var column, table string
+		if err := rows.Scan(&column, &table); err != nil {
+			return err
+		}
+		columns[column] = append(columns[column], table)
+		return nil
+	})
+	if err != nil {
+		return 0, &sourceSubScanError{"schema_columns", err}
+	}
+	tables := make(map[string]bool)
+	err = readSourceRows("SELECT DISTINCT table_name FROM system_db_tables", func(rows *sql.Rows) error {
+		var table string
+		if err := rows.Scan(&table); err != nil {
+			return err
+		}
+		tables[table] = true
+		return nil
+	})
+	if err != nil {
+		return 0, &sourceSubScanError{"schema_tables", err}
+	}
+	count := 0
+	saveName := func(id int64, name string) error {
+		for _, table := range columns[name] {
+			if err := saveExplainedSource(id, "column", table, name, fmt.Sprintf("Column '%s' in table '%s'", name, table)); err != nil {
+				return err
+			}
+			count++
+		}
+		if tables[name] {
+			if err := saveExplainedSource(id, "table", name, name, fmt.Sprintf("Table '%s'", name)); err != nil {
+				return err
+			}
+			count++
+		}
+		return nil
+	}
+	for key, id := range keys {
+		names := []string{key}
+		if remainder, ok := lang_key_naming.TrimDynamicPrefix(key); ok {
+			names = append(names, remainder)
+		}
+		if base, ok := lang_key_naming.TrimDynamicSuffix(key); ok {
+			names = append(names, base)
+		}
+		for _, name := range names {
+			if err := saveName(id, name); err != nil {
+				return count, err
+			}
+		}
+	}
+	return count, nil
+}
+
+// Table and column arguments are code-owned identifiers, never request input.
+func scanNamedLangKeySources(keys map[string]int64, sourceType, table, column string) (int, error) {
+	var names []string
+	qColumn := pq.QuoteIdentifier(column)
+	err := readSourceRows(fmt.Sprintf("SELECT DISTINCT %s FROM %s WHERE %s IS NOT NULL AND %s != ''", qColumn, pq.QuoteIdentifier(table), qColumn, qColumn), func(rows *sql.Rows) error {
+		var name string
+		if err := rows.Scan(&name); err != nil {
+			return err
+		}
+		names = append(names, name)
+		return nil
+	})
+	if err != nil {
+		return 0, err
+	}
+	count := 0
+	for _, name := range names {
+		id, ok := keys[name]
+		if !ok {
+			continue
+		}
+		high := table
+		if sourceType == "folder" {
+			high = name
+		}
+		if err := upsertSource(id, sourceType, high, name); err != nil {
+			return count, err
+		}
+		if sourceType == "folder" {
+			if err := updateSourceUsageExplanationIfEmpty(id, sourceType, high, fmt.Sprintf("Folder '%s'", name)); err != nil {
+				return count, err
+			}
+		}
+		count++
+	}
+	return count, nil
+}
+
+func scanForeignKeyLangKeyReferences(keys map[string]int64) (int, error) {
+	ids := make(map[int64]bool, len(keys))
+	for _, id := range keys {
+		ids[id] = true
+	}
+	type reference struct{ schema, table, column string }
+	var refs []reference
+	err := readSourceRows(`SELECT src_ns.nspname, src.relname, src_col.attname
+        FROM pg_constraint con
+        JOIN pg_class src ON src.oid=con.conrelid
+        JOIN pg_namespace src_ns ON src_ns.oid=src.relnamespace
+        JOIN pg_class ref ON ref.oid=con.confrelid
+        JOIN pg_namespace ref_ns ON ref_ns.oid=ref.relnamespace
+        JOIN pg_attribute src_col ON src_col.attrelid=src.oid AND src_col.attnum=con.conkey[1]
+        JOIN pg_attribute ref_col ON ref_col.attrelid=ref.oid AND ref_col.attnum=con.confkey[1]
+        WHERE con.contype='f' AND ref_ns.nspname='public' AND ref.relname='system_lang_keys'
+        AND ref_col.attname='id' AND array_length(con.conkey,1)=1
+        AND NOT (src_ns.nspname='public' AND src.relname='system_lang_key_sources')
+        ORDER BY src_ns.nspname, src.relname, src_col.attname`, func(rows *sql.Rows) error {
+		var ref reference
+		if err := rows.Scan(&ref.schema, &ref.table, &ref.column); err != nil {
+			return err
+		}
+		refs = append(refs, ref)
+		return nil
+	})
+	if err != nil {
+		return 0, err
+	}
+	count := 0
+	for _, ref := range refs {
+		var found []int64
+		col := pq.QuoteIdentifier(ref.column)
+		high := fmt.Sprintf("%s.%s.%s", ref.schema, ref.table, ref.column)
+		err := readSourceRows(fmt.Sprintf("SELECT DISTINCT %s::bigint FROM %s.%s WHERE %s IS NOT NULL", col, pq.QuoteIdentifier(ref.schema), pq.QuoteIdentifier(ref.table), col), func(rows *sql.Rows) error {
+			var id int64
+			if err := rows.Scan(&id); err != nil {
+				return err
+			}
+			if ids[id] {
+				found = append(found, id)
+			}
+			return nil
+		})
+		if err != nil {
+			return count, fmt.Errorf("foreign-key values %s: %w", high, err)
+		}
+		for _, id := range found {
+			if err := saveExplainedSource(id, "foreign_key", high, ref.column, fmt.Sprintf("Foreign-key value in '%s'", high)); err != nil {
+				return count, err
+			}
+			count++
+		}
+	}
+	return count, nil
+}
+
+func scanHasLangKeyColumns(keys map[string]int64) (int, error) {
+	type columnRef struct{ column, table string }
+	var refs []columnRef
+	err := readSourceRows(`SELECT cd.column_name, dt.table_name FROM system_column_details cd
+        JOIN system_db_tables dt ON cd.table_uid=dt.table_uid
+        WHERE cd.card_element ILIKE '%lang_key%' OR cd.card_element ILIKE '%lang-key%'`, func(rows *sql.Rows) error {
+		var ref columnRef
+		if err := rows.Scan(&ref.column, &ref.table); err != nil {
+			return err
+		}
+		refs = append(refs, ref)
+		return nil
+	})
+	if err != nil {
+		return 0, err
+	}
+	count := 0
+	for _, ref := range refs {
+		var values []string
+		col := pq.QuoteIdentifier(ref.column)
+		high := fmt.Sprintf("%s.%s", ref.table, ref.column)
+		err := readSourceRows(fmt.Sprintf("SELECT DISTINCT %s FROM %s WHERE %s IS NOT NULL AND %s != ''", col, pq.QuoteIdentifier(ref.table), col, col), func(rows *sql.Rows) error {
+			var value string
+			if err := rows.Scan(&value); err != nil {
+				return err
+			}
+			values = append(values, value)
+			return nil
+		})
+		if err != nil {
+			return count, fmt.Errorf("column values %s: %w", high, err)
+		}
+		for _, value := range values {
+			id, ok := keys[value]
+			if !ok {
+				continue
+			}
+			if err := saveExplainedSource(id, "column_value", high, value, fmt.Sprintf("Value '%s' in column '%s' (hasLangKey)", value, high)); err != nil {
+				return count, err
+			}
+			count++
+		}
+	}
+	return count, nil
+}

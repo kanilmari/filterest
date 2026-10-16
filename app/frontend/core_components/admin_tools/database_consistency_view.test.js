@@ -138,3 +138,26 @@ test.each([
     if (at) expect(host.querySelector('time').dateTime).toBe(at);
     else expect(host.textContent).toContain(dictionary.copy.consistency_source_scan_unknown.en);
 });
+
+
+test.each(['fi', 'en', 'ch', 'yue'].flatMap(language => ['partial', 'suspicious'].flatMap(state =>
+    [0, 2].flatMap(total => ['light', 'dark'].map(theme => ({ language, state, total, theme }))),
+)))('scan trust $state in $language / $theme with $total issues', async ({ language, state, total, theme }) => {
+    dictionary.language = language;
+    document.documentElement.dataset.theme = theme;
+    vi.stubGlobal('matchMedia', () => ({ matches: true }));
+    const data = report();
+    data.total_count = total;
+    if (!total) for (const cat of data.categories) cat.issues = [];
+    const at = '2026-10-16T08:00:00Z';
+    Object.assign(data.categories[1], { source_scan_state: state, source_scan_stale: true, source_scan_at: at,
+        source_scan_failures: state === 'partial' ? ['schema'] : [] });
+    const host = document.createElement('div'); document.body.appendChild(host);
+    vi.mocked(endpoint_router).mockResolvedValueOnce(data);
+    await generate_database_consistency_view(host); host.querySelector('button').click();
+    const key = `consistency_source_scan_${state}`;
+    await vi.waitFor(() => expect(host.querySelector(`[data-lang-key="${key}"]`)?.textContent).toBe(dictionary.copy[key][language]));
+    expect(host.querySelector('time').dateTime).toBe(at);
+    expect(host.querySelector('[data-lang-key="consistency_source_scan_fresh"]')).toBeNull();
+    expect(endpoint_router).toHaveBeenCalledExactlyOnceWith('checkDbConsistency');
+});

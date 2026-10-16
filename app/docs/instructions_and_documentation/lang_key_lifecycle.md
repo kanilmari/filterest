@@ -467,14 +467,13 @@ On every server startup, `optional_tasks.go` runs a three-step pipeline:
 
 **File:** `lang_key_source_population.go`
 
+**Scan trust (B2):** Freshness advances only after every code, registry, schema, view, group, folder, foreign-key and key-valued-column reader and source writer succeeds. A partial scan names the failed sub-scan, preserves previous source rows and the last successful time, and logs why marking and seven-day cleanup are skipped. A complete scan is suspicious when its distinct current `code` keys fall below 90% of the rolling seven-day maximum; both operations are skipped and freshness stays invalid. The existing `system_config` JSON row `lang_key_source_scan_history` lazily retains only non-dominated timestamp/count peaks, including suspicious complete scans, and prunes expired peaks; no schema migration is needed. The read-only consistency report shows partial/suspicious status in fi/en/ch/yue alongside the last successful time.
+
 Scans all sources and UPSERTS records into `system_lang_key_sources`:
 
 1. **Code scan** — Walks `app/frontend/`, `app/backend/` and, when present, `app/components/` directories, scans `.js`, `.html`, `.go` files for lang key patterns (`data-lang-key`, `dataset.langKey`, `getTranslationForKey("...")` etc.). Creates `source_type='code'` records. A missing optional components tree is allowed; an unreadable tree, dangling link or link outside its source root stops the scan, so incomplete discovery cannot retire still-used keys.
 
-   A module that gathers its copy into one catalogue passes a *variable* to the
-   translation call, so the key literal never sits beside it. The scan therefore
-   also reads the catalogue itself. These three shapes are recognised, which is
-   why a new module needs no convention its author has to remember:
+   A module that gathers its copy into one catalogue passes a *variable* to the translation call, so the key literal never sits beside it. The scan therefore also reads the catalogue itself. These three shapes are recognised, which is why a new module needs no convention its author has to remember:
 
    ```js
    attach: ["chat_attach_image", "Attach an image"]      // catalogue entry with fallback copy
@@ -487,10 +486,10 @@ Scans all sources and UPSERTS records into `system_lang_key_sources`:
    out. A key written as a single word with no underscore is not read from a
    catalogue; give such a key an ordinary `dataset.langKey` or
    `getTranslationForKey("…")` reference somewhere.
-2. **Schema scan** — Queries `information_schema.columns` to find all dynamic table columns. Creates `source_type='column'` records with `source_high=table_name`, `source_low=column_name`.
+2. **Schema scan** — Queries `system_column_details` joined to `system_db_tables` to find dynamic table columns. Creates `source_type='column'` records with `source_high=table_name`, `source_low=column_name`.
 3. **Table scan** — Queries `system_db_tables`. Creates `source_type='table'` records.
-4. **View scan** — Queries `system_views`. Creates `source_type='view'` records.
-5. **Group scan** — Queries `system_groups`. Creates `source_type='group'` records.
+4. **View scan** — Queries `system_table_views`. Creates `source_type='view'` records.
+5. **Group scan** — Queries `system_user_groups`. Creates `source_type='group'` records.
 6. **Folder scan** — Queries `system_table_folders`. Creates `source_type='folder'` records.
 7. **Stale cleanup** — after a fresh scan, `cleanupStaleLangKeySources()` removes
    source rows with `last_seen < CURRENT_DATE - INTERVAL '7 days'` only for

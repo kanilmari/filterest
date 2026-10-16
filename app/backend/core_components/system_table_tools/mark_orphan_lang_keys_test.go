@@ -32,9 +32,10 @@ func newSystemTableToolsTestDB(t interface{ Fatal(...interface{}) }) *sql.DB {
 }
 
 type orphanQueuedQuery struct {
-	cols []string
-	rows [][]driver.Value
-	err  error
+	cols   []string
+	rows   [][]driver.Value
+	err    error
+	rowErr error
 }
 
 type orphanQueuedExec struct {
@@ -156,13 +157,14 @@ func (s *orphanQueueStmt) Query(args []driver.Value) (driver.Rows, error) {
 	if q.err != nil {
 		return nil, q.err
 	}
-	return &orphanQueueRows{cols: q.cols, data: q.rows}, nil
+	return &orphanQueueRows{cols: q.cols, data: q.rows, err: q.rowErr}, nil
 }
 
 type orphanQueueRows struct {
 	cols []string
 	data [][]driver.Value
 	idx  int
+	err  error
 }
 
 func (r *orphanQueueRows) Columns() []string { return r.cols }
@@ -170,6 +172,9 @@ func (r *orphanQueueRows) Close() error      { return nil }
 
 func (r *orphanQueueRows) Next(dest []driver.Value) error {
 	if r.idx >= len(r.data) {
+		if r.err != nil {
+			return r.err
+		}
 		return io.EOF
 	}
 	copy(dest, r.data[r.idx])
@@ -271,11 +276,14 @@ func TestScanForeignKeyLangKeyReferencesRegistersDomainReferences(t *testing.T) 
 	pushOrphanExec(orphanQueuedExec{rowsAffected: 1})
 	pushOrphanExec(orphanQueuedExec{rowsAffected: 1})
 
-	count := scanForeignKeyLangKeyReferences(map[string]int64{
+	count, err := scanForeignKeyLangKeyReferences(map[string]int64{
 		"question": 79,
 		"example":  101,
 	})
 
+	if err != nil {
+		t.Fatal(err)
+	}
 	if count != 2 {
 		t.Fatalf("scanForeignKeyLangKeyReferences count = %d, want 2", count)
 	}

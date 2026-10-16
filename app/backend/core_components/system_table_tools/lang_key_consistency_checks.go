@@ -250,8 +250,10 @@ const orphanTTLDays = 90
 // Marking only: automatic archiving and deletion are paused (WO-J35 B1).
 // Kutsutaan startupissa ja consistency checkissä. DRY: käyttää findOrphanLangKeys().
 func MarkOrphanLangKeys() (orphanCount int, deOrphanedCount int) {
+	sourceMaintenanceMu.Lock()
+	defer sourceMaintenanceMu.Unlock()
 	if !SourceScanIsFresh() {
-		log.Printf("[MarkOrphanLangKeys] skipped: source scan not fresh — run PopulateLangKeySources() first")
+		log.Printf("[MarkOrphanLangKeys] skipped: %s", sourceScanSkipReason())
 		return 0, 0
 	}
 
@@ -461,67 +463,6 @@ func fetchOrphanAges() (map[int]int, map[int]bool) {
 	return result, usage
 }
 
-// fetchSchemaColumnNames hakee kaikki sarakkeiden nimet system_column_details-taulusta
-func fetchSchemaColumnNames() map[string]bool {
-	result := make(map[string]bool)
-	rows, err := backend.Db.Query("SELECT DISTINCT column_name FROM system_column_details")
-	if err != nil {
-		log.Printf("[fetchSchemaColumnNames] error: %v", err)
-		return result
-	}
-	defer rows.Close()
-	for rows.Next() {
-		var name string
-		if err := rows.Scan(&name); err == nil {
-			result[name] = true
-		}
-	}
-	return result
-}
-
-// fetchSchemaColumnToTables hakee sarake→taulut -mappauksen.
-// Palauttaa: {"created": ["app_service_catalog", "system_users", ...], ...}
-// Käytetään lang_key_source_population.go:ssa tarkkojen lähdetietojen tallentamiseen.
-func fetchSchemaColumnToTables() map[string][]string {
-	result := make(map[string][]string)
-	rows, err := backend.Db.Query(`
-		SELECT cd.column_name, dt.table_name
-		FROM system_column_details cd
-		JOIN system_db_tables dt ON cd.table_uid = dt.table_uid
-		ORDER BY cd.column_name, dt.table_name
-	`)
-	if err != nil {
-		log.Printf("[fetchSchemaColumnToTables] error: %v", err)
-		return result
-	}
-	defer rows.Close()
-	for rows.Next() {
-		var colName, tableName string
-		if err := rows.Scan(&colName, &tableName); err == nil {
-			result[colName] = append(result[colName], tableName)
-		}
-	}
-	return result
-}
-
-// fetchSchemaTableNames hakee kaikki taulujen nimet system_db_tables-taulusta
-func fetchSchemaTableNames() map[string]bool {
-	result := make(map[string]bool)
-	rows, err := backend.Db.Query("SELECT DISTINCT table_name FROM system_db_tables")
-	if err != nil {
-		log.Printf("[fetchSchemaTableNames] error: %v", err)
-		return result
-	}
-	defer rows.Close()
-	for rows.Next() {
-		var name string
-		if err := rows.Scan(&name); err == nil {
-			result[name] = true
-		}
-	}
-	return result
-}
-
 // ScanLangSourcesHandler ajaa PopulateLangKeySources() + MarkOrphanLangKeys()
 // on-demand ilman palvelimen uudelleenkäynnistystä. Palauttaa JSON-tuloksen.
 // POST /api/scan-lang-sources
@@ -534,11 +475,13 @@ func ScanLangSourcesHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	orphanCount, deOrphaned := MarkOrphanLangKeys()
+	scanState, _ := sourceScanOutcome()
 
 	result := map[string]interface{}{
-		"sources_saved": sourceCount,
-		"orphan_count":  orphanCount,
-		"de_orphaned":   deOrphaned,
+		"sources_saved":     sourceCount,
+		"orphan_count":      orphanCount,
+		"de_orphaned":       deOrphaned,
+		"source_scan_state": scanState,
 	}
 
 	w.Header().Set("Content-Type", "application/json")

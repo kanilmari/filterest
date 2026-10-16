@@ -8,6 +8,7 @@ import { beforeEach, afterEach, describe, expect, test, vi } from 'vitest';
 import { endpoint_router } from '../endpoints/endpoint_router.js';
 import { refreshCardLanguages } from '../table_views/card_view/card_view_printer.js';
 import { refreshLocalizedDatasetValues } from '../table_views/dataset_value_localizer.js';
+import { MAINTENANCE_ACTION_TRANSLATION_FALLBACKS as maintenanceCopy } from '../admin_tools/maintenance_action_copy.js';
 
 vi.mock('../endpoints/endpoint_router.js', () => ({
     endpoint_router: vi.fn(),
@@ -62,6 +63,23 @@ describe('translatePage', () => {
         document.body.innerHTML = '';
         document.body.className = '';
         delete window.translationPromises;
+    });
+
+    test.each(['fi', 'en', 'ch', 'yue'])('uses registered scan-trust fallbacks in %s without stored translations', async language => {
+        window.translationPromises[language] = Promise.resolve({});
+        const { translatePage } = await import('./translation_handler.js');
+        const { getTranslationForKey } = await import('./component_language_dictionary.js');
+        const keys = ['consistency_source_scan_partial', 'consistency_source_scan_suspicious'];
+        for (const key of keys) {
+            const notice = document.createElement('p');
+            notice.dataset.langKey = key;
+            document.body.appendChild(notice);
+        }
+        await translatePage(language);
+        for (const key of keys) {
+            expect(document.querySelector(`[data-lang-key="${key}"]`).textContent).toBe(maintenanceCopy[key][language]);
+            expect(getTranslationForKey(key)).toBe(maintenanceCopy[key][language]);
+        }
     });
 
     test('does not call the protected AI translation writer for production-page fallbacks', async () => {

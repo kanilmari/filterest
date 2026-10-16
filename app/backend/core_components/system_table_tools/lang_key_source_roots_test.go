@@ -79,11 +79,14 @@ func markSourceScanFreshForTest(t *testing.T) {
 	t.Helper()
 	lastSourceScanMu.Lock()
 	previousScan := lastSourceScan
+	previousState, previousFailures := lastSourceScanState, lastSourceScanFailures
+	lastSourceScanState, lastSourceScanFailures = "complete", nil
 	lastSourceScan = time.Now()
 	lastSourceScanMu.Unlock()
 	t.Cleanup(func() {
 		lastSourceScanMu.Lock()
 		lastSourceScan = previousScan
+		lastSourceScanState, lastSourceScanFailures = previousState, previousFailures
 		lastSourceScanMu.Unlock()
 	})
 }
@@ -308,14 +311,18 @@ func TestPopulateLangKeySourcesSavesSiblingCompositionSources(t *testing.T) {
 	backend.Db = testDB
 	t.Cleanup(func() { backend.Db = previousDB })
 
-	// The key registry and one saved code source per scanned file. The schema
-	// and database readers that follow find nothing queued and contribute none.
+	// Every reader must explicitly succeed, even when it finds no references.
 	pushOrphanQuery(orphanQueuedQuery{
 		cols: []string{"id", "lang_key"},
 		rows: [][]driver.Value{{int64(1), "wl45_frontend_key"}, {int64(2), "wl45_private_key"}},
 	})
 	pushOrphanExec(orphanQueuedExec{rowsAffected: 1})
 	pushOrphanExec(orphanQueuedExec{rowsAffected: 1})
+	for _, q := range emptySourceScanQueries()[1:] {
+		pushOrphanQuery(q)
+	}
+	queueCodeSourceHistory(nil)
+	pushOrphanExec(orphanQueuedExec{}) // No stale rows.
 
 	total, err := PopulateLangKeySources()
 	if err != nil {

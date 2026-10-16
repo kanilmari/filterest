@@ -37,12 +37,14 @@ type ConsistencyCheckResult struct {
 
 // CategoryResult yhden kategorian tulokset
 type CategoryResult struct {
-	Number          int                `json:"number"`
-	Title           string             `json:"title"`
-	TitleLangKey    string             `json:"title_lang_key"`
-	Issues          []ConsistencyIssue `json:"issues"`
-	SourceScanAt    *time.Time         `json:"source_scan_at,omitempty"`
-	SourceScanStale bool               `json:"source_scan_stale"`
+	Number             int                `json:"number"`
+	Title              string             `json:"title"`
+	TitleLangKey       string             `json:"title_lang_key"`
+	Issues             []ConsistencyIssue `json:"issues"`
+	SourceScanAt       *time.Time         `json:"source_scan_at,omitempty"`
+	SourceScanStale    bool               `json:"source_scan_stale"`
+	SourceScanState    string             `json:"source_scan_state,omitempty"`
+	SourceScanFailures []string           `json:"source_scan_failures,omitempty"`
 }
 
 // CheckDatabaseConsistencyHandler palauttaa kaikki löydetyt epäyhtenäisyydet JSON-muodossa.
@@ -80,9 +82,8 @@ func CheckDatabaseConsistencyHandler(w http.ResponseWriter, r *http.Request) {
 
 	// Reading a report must never refresh source evidence or orphan markings.
 	// Startup and POST /api/scan-lang-sources own that maintenance work.
-	scanAt, stale := sourceScanStatus()
 	cat8 := checkOrphanLangKeys()
-	cat8.SourceScanAt, cat8.SourceScanStale = scanAt, stale
+	cat8.SourceScanAt, cat8.SourceScanStale, cat8.SourceScanState, cat8.SourceScanFailures = sourceScanSnapshot()
 	result.Categories = append(result.Categories, cat8)
 
 	totalCount := 0

@@ -61,6 +61,7 @@ func TestComponentCanaryLanguagePopulation(t *testing.T) {
 		pushOrphanQuery(orphanQueuedQuery{cols: columns})
 	}
 	pushOrphanExec(orphanQueuedExec{rowsAffected: 1})
+	queueCodeSourceHistory(nil)
 	pushOrphanExec(orphanQueuedExec{rowsAffected: 0}) // No stale sources to remove.
 	total, err := PopulateLangKeySources()
 	if err != nil || total != 1 || !SourceScanIsFresh() {

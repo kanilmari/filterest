@@ -12,6 +12,16 @@ export const MAINTENANCE_ACTION_TRANSLATION_FALLBACKS = Object.freeze({
         en: 'Embedding processing was interrupted. Check its status before trying again.',
         ch: '嵌入处理已中断。重试前请检查状态。', yue: '嵌入處理中斷咗。再試之前請檢查狀態。',
     },
+    consistency_source_scan_partial: {
+        fi: 'Lähdeskannaus on osittainen. Orpoavainten merkintä ja vanhojen lähdetietojen siivous ohitettiin.',
+        en: 'Source scan is partial. Orphan marking and stale source cleanup were skipped.',
+        ch: '来源扫描未全部完成。已跳过孤立键标记和过期来源清理。', yue: '來源掃描未全部完成。已略過孤立鍵標記同過期來源清理。',
+    },
+    consistency_source_scan_suspicious: {
+        fi: 'Lähdeskannaus on epäilyttävä: koodiavainten määrä alitti 90 % viimeisten seitsemän päivän enimmäismäärästä. Merkintä ja siivous ohitettiin.',
+        en: 'Source scan is suspicious: code keys fell below 90% of the seven-day maximum. Marking and cleanup were skipped.',
+        ch: '来源扫描可疑：代码键数量低于过去七天最大值的90%。已跳过标记和清理。', yue: '來源掃描有可疑：程式碼鍵數量低過過去七日最大值嘅90%。已略過標記同清理。',
+    },
     consistency_source_scan_stale: {
         fi: 'Orpoavainten lähdetiedot ovat vanhentuneet. Päivitä ne kieliavainten ylläpitoskannauksella.',
         en: 'Orphan source evidence is stale. Refresh it with the language-key maintenance scan.',
