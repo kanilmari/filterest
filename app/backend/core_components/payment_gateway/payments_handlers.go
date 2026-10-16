@@ -399,42 +399,7 @@ func GetPaymentStatusHandler(w http.ResponseWriter, r *http.Request) {
 		resp.PaidAt = &formatted
 	}
 
-	// Pending and authorised payments may advance from the provider's current
-	// order state. Terminal local states are never polled or downgraded.
-	if (resp.Status == "pending" || resp.Status == "authorised") && resp.RevolutOrderID != "" && revolutClient != nil {
-		order, err := revolutClient.GetOrder(resp.RevolutOrderID)
-		if err == nil && order != nil {
-			revolutState := strings.ToLower(order.State)
-			if isKnownPaymentStatus(revolutState) {
-				now := time.Now().UTC()
-				result, updateErr := backend.Db.Exec(`
-					UPDATE payments
-					SET status = $1,
-					    paid_at = CASE WHEN $1 = 'completed' THEN $2 ELSE paid_at END
-					WHERE payment_token = $3 AND `+paymentStatusTransitionPredicateSQL+`
-				`, revolutState, now, token)
-				if updateErr != nil {
-					log.Printf("\033[33mwarning: failed to update payment status: %v\033[0m", updateErr)
-				} else if rowsAffected, rowsErr := result.RowsAffected(); rowsErr != nil {
-					log.Printf("\033[33mwarning: failed to verify payment status update: %v\033[0m", rowsErr)
-				} else if rowsAffected > 0 {
-					log.Printf("[payment-gateway] Updated payment %s status to %s (from Revolut live check)", token, revolutState)
-					resp.Status = revolutState
-					if revolutState == "completed" {
-						formatted := now.Format(time.RFC3339)
-						resp.PaidAt = &formatted
-					}
-				}
-			}
-		}
-	}
-	if resp.Status == "completed" && resp.RevolutOrderID != "" {
-		if delivered, callbackErr := paymentCallbackDeliverer(resp.RevolutOrderID); callbackErr != nil {
-			log.Printf("\033[31merror: failed to redeliver completed payment callback during live status check: %v\033[0m", callbackErr)
-		} else if delivered {
-			log.Printf("[payment-gateway] Redelivered completed payment callback during live status check for %s", resp.RevolutOrderID)
-		}
-	}
+	// Status is a local read. Only verified webhooks advance state and deliver callbacks.
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(resp)

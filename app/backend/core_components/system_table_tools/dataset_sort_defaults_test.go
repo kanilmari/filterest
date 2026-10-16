@@ -7,6 +7,8 @@ package system_table_tools
 import (
 	"context"
 	"database/sql"
+	"database/sql/driver"
+	"easelect/backend/core_components/dbutils/queryfixture"
 	"errors"
 	"net/http"
 	"net/http/httptest"
@@ -242,6 +244,12 @@ func datasetSortRequestWithUser(
 	userID int,
 ) *http.Request {
 	t.Helper()
+	// This test exercises saving scope for a reader with an explicit read grant.
+	priorDB := backend.Db
+	backend.Db = queryfixture.Open(t, func(string, []driver.NamedValue) (driver.Rows, error) {
+		return queryfixture.Rows([]string{"allowed"}, []driver.Value{int64(1)}), nil
+	})
+	t.Cleanup(func() { backend.Db = priorDB })
 	originalStore := e_sessions.Store
 	originalSessionName := e_sessions.SessionName
 	store := sessions.NewCookieStore([]byte("dataset-sort-handler-secret-32-bytes"))

@@ -176,7 +176,7 @@ func TestGetTableNamesHandlerHandlesQueryErrorAndSuccess(t *testing.T) {
 		}, nil)
 		withForeignKeyDB(t, db)
 
-		req := httptest.NewRequest(http.MethodGet, "/api/table-names", nil)
+		req := foreignKeyAdminReadRequest(t, "/api/table-names", nil)
 		rec := httptest.NewRecorder()
 		GetTableNamesHandler(rec, req)
 
@@ -195,7 +195,7 @@ func TestGetTableNamesHandlerHandlesQueryErrorAndSuccess(t *testing.T) {
 		}, nil)
 		withForeignKeyDB(t, db)
 
-		req := httptest.NewRequest(http.MethodGet, "/api/table-names", nil)
+		req := foreignKeyAdminReadRequest(t, "/api/table-names", nil)
 		rec := httptest.NewRecorder()
 		GetTableNamesHandler(rec, req)
 
@@ -229,7 +229,7 @@ func TestGetTableNamesHandlerHandlesQueryErrorAndSuccess(t *testing.T) {
 		}, nil)
 		withForeignKeyDB(t, db)
 
-		req := httptest.NewRequest(http.MethodGet, "/api/table-names?with_aliases=1", nil)
+		req := foreignKeyAdminReadRequest(t, "/api/table-names?with_aliases=1", nil)
 		rec := httptest.NewRecorder()
 		GetTableNamesHandler(rec, req)
 
@@ -271,7 +271,7 @@ func TestGetTableNamesHandlerListsOnlyCataloguedDatasets(t *testing.T) {
 	withForeignKeyDB(t, db)
 
 	rec := httptest.NewRecorder()
-	GetTableNamesHandler(rec, httptest.NewRequest(http.MethodGet, "/api/dataset-names", nil))
+	GetTableNamesHandler(rec, foreignKeyAdminReadRequest(t, "/api/dataset-names", nil))
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d, want 200", rec.Code)
@@ -297,7 +297,7 @@ func TestGetForeignKeysHandlesQueryErrorAndDatasetFilterSuccess(t *testing.T) {
 		}, nil)
 		withForeignKeyDB(t, db)
 
-		req := httptest.NewRequest(http.MethodGet, "/api/foreign-keys", nil)
+		req := foreignKeyAdminReadRequest(t, "/api/foreign-keys", nil)
 		rec := httptest.NewRecorder()
 		GetForeignKeys(rec, req)
 
@@ -334,7 +334,7 @@ func TestGetForeignKeysHandlesQueryErrorAndDatasetFilterSuccess(t *testing.T) {
 		}, nil)
 		withForeignKeyDB(t, db)
 
-		req := httptest.NewRequest(http.MethodGet, "/api/foreign-keys?datasets=posts,ghosts", nil)
+		req := foreignKeyAdminReadRequest(t, "/api/foreign-keys?datasets=posts,ghosts", nil)
 		rec := httptest.NewRecorder()
 		GetForeignKeys(rec, req)
 

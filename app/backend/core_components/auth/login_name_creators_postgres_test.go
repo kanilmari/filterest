@@ -35,6 +35,7 @@ func TestLoginNameFirstRunPostgres(t *testing.T) {
 			}
 			t.Setenv("FILTEREST_SITE_SLUG", "Northwind")
 			get := httptest.NewRequest("GET", "/first-run", nil)
+			get.RemoteAddr = "127.0.0.1:1234" // SEC-4: pending setup answers loopback callers or the setup token
 			response := httptest.NewRecorder()
 			FirstRunAdminHandler(response, get)
 			if response.Code != 200 || !strings.Contains(response.Body.String(), `value="admin_northwind"`) || !strings.Contains(response.Body.String(), `value="admin_1"`) || !strings.Contains(response.Body.String(), `value="true" checked`) {
@@ -55,6 +56,7 @@ func TestLoginNameFirstRunPostgres(t *testing.T) {
 			post.AddCookie(cookie)
 			post.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 			post.RemoteAddr = "192.0.2.219:1234"
+			post.Header.Set("X-Filterest-Setup-Token", firstRunAccess.proof) // the remote caller proves setup with the logged token
 			response = httptest.NewRecorder()
 			FirstRunAdminHandler(response, post)
 			assertPrivateNameAbsent(t, response, setupLogin)

@@ -17,11 +17,13 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+	"unicode/utf8"
 
 	backend "easelect/backend/core_components"
 	e_sessions "easelect/backend/core_components/sessions"
 	"easelect/backend/core_components/sign_in_deadline"
 	"easelect/backend/core_components/sign_in_revocation"
+	"github.com/lib/pq"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -29,6 +31,12 @@ type registerAdminState struct {
 	enabled, adminMember, adminAllowed bool
 	generation                         int64
 	failQuery                          string
+	duplicate                          string
+	duplicateReads                     int
+	namesMayEqual                      bool
+	groupMissing                       bool
+	displayName                        string
+	namePolicyReads                    int
 	inserts                            int
 	passwordHash                       string
 	verification                       string
@@ -54,8 +62,14 @@ func (c *registerAdminConn) QueryContext(_ context.Context, q string, args []dri
 		return nil, fmt.Errorf("configured read failure")
 	}
 	switch {
+	case strings.Contains(q, "display_name_may_equal_login_name"):
+		s.namePolicyReads++
+		// Model PostgreSQL lower(btrim(...)); fixture names use ASCII and U+0020.
+		equal := strings.ToLower(strings.Trim(args[0].Value.(string), " ")) == strings.ToLower(strings.Trim(args[1].Value.(string), " "))
+		return &authModesMockRows{cols: []string{"may_equal", "names_equal"}, vals: []driver.Value{s.namesMayEqual, equal}}, nil
 	case strings.Contains(q, "SELECT EXISTS("):
-		return authModesBoolRow("exists", false), nil
+		s.duplicateReads++
+		return authModesBoolRow("exists", s.duplicate != "" && strings.Contains(q, "lower("+s.duplicate+")")), nil
 	case isSignInLimitQuery(q):
 		return answerSignInLimit(), nil
 	// The shared boundary asks first whether this sign-in has been signed out.
@@ -83,6 +97,13 @@ func (c *registerAdminConn) QueryContext(_ context.Context, q string, args []dri
 	case strings.Contains(q, "SELECT id FROM restricted.users_restricted WHERE email"):
 		return authModesEmptyRow("id"), nil
 	case strings.Contains(q, "INSERT INTO system_users"):
+		for _, arg := range args[:2] {
+			value := arg.Value.(string)
+			if !utf8.ValidString(value) || strings.ContainsRune(value, 0) {
+				return nil, &pq.Error{Code: "22021"}
+			}
+		}
+		s.displayName = args[0].Value.(string)
 		s.inserts++
 		s.newEnabled = args[2].Value.(bool)
 		if !strings.Contains(strings.ReplaceAll(q, " ", ""), "$3,false") {
@@ -90,6 +111,9 @@ func (c *registerAdminConn) QueryContext(_ context.Context, q string, args []dri
 		}
 		return &authModesMockRows{cols: []string{"id"}, vals: []driver.Value{int64(901)}}, nil
 	case strings.Contains(q, "SELECT id FROM system_user_groups"):
+		if s.groupMissing {
+			return authModesEmptyRow("id"), nil
+		}
 		if !strings.Contains(q, "name='users'") && (len(args) == 0 || args[0].Value != "users") {
 			return nil, fmt.Errorf("must select ordinary users group")
 		}
@@ -100,6 +124,9 @@ func (c *registerAdminConn) QueryContext(_ context.Context, q string, args []dri
 func (c *registerAdminConn) ExecContext(_ context.Context, q string, args []driver.NamedValue) (driver.Result, error) {
 	switch {
 	case strings.Contains(q, "INSERT INTO restricted.users_restricted"):
+		if !c.state.namesMayEqual && strings.EqualFold(strings.Trim(c.state.displayName, " "), strings.Trim(args[3].Value.(string), " ")) {
+			return nil, &pq.Error{Code: "23514", Constraint: "user_names_differ"}
+		}
 		c.state.passwordHash = args[1].Value.(string)
 		c.state.verification = args[4].Value.(string)
 	case strings.Contains(q, "INSERT INTO system_user_group_memberships"):
@@ -119,7 +146,7 @@ func setupRegisterAdmin(t *testing.T) *registerAdminState {
 	oldEnabled := registrationEnabledFunc
 	registrationEnabledFunc = func() bool { return false }
 	t.Cleanup(func() { registrationEnabledFunc = oldEnabled })
-	state := &registerAdminState{enabled: true, adminMember: true, adminAllowed: true, generation: 7}
+	state := &registerAdminState{enabled: true, adminMember: true, adminAllowed: true, generation: 7, namesMayEqual: true}
 	name := fmt.Sprintf("register_admin_%d", atomic.AddInt64(&authModesDriverCounter, 1))
 	sql.Register(name, &registerAdminDriver{state})
 	db, err := sql.Open(name, "")

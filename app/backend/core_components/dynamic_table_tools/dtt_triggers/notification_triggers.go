@@ -22,6 +22,7 @@ import (
 	dtt_asset_linking "easelect/backend/core_components/dynamic_table_tools/dtt_asset_linking"
 	"easelect/backend/core_components/dynamic_table_tools/dtt_card_picture"
 	"easelect/backend/core_components/httpresponse"
+	"easelect/backend/core_components/permissions"
 	"easelect/backend/core_components/runtime_grant_mutations"
 	"easelect/backend/core_components/system_config_checks"
 
@@ -50,6 +51,24 @@ func GetTriggersHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	actor := dbutils.RequestActorContextFromRequest(r)
+	var visible []map[string]interface{}
+	for _, trigger := range triggers {
+		source, err := permissions.CanReadDataset(tx, actor, trigger["source_table"].(string))
+		if err != nil {
+			httpresponse.RespondWithError(w, 500, "dataset read authorization unavailable")
+			return
+		}
+		target, err := permissions.CanReadDataset(tx, actor, trigger["target_table"].(string))
+		if err != nil {
+			httpresponse.RespondWithError(w, 500, "dataset read authorization unavailable")
+			return
+		}
+		if source && target {
+			visible = append(visible, trigger)
+		}
+	}
+	triggers = visible
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(triggers); err != nil {
 		log.Printf("error encoding response: %v", err)

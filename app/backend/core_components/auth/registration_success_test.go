@@ -54,7 +54,7 @@ func TestRegistrationSuccessNoticeIndependentOfMailDelivery(t *testing.T) {
 	}
 }
 
-func TestRegistrationSuccessPreservesJSONMailDiagnostic(t *testing.T) {
+func TestRegistrationSuccessKeepsMailDiagnosticPrivate(t *testing.T) {
 	for _, status := range []string{"registration_email_sent", "registration_email_failed", "registration_email_not_configured"} {
 		t.Run(status, func(t *testing.T) {
 			request := httptest.NewRequest(http.MethodPost, "/api/register", nil)
@@ -69,7 +69,7 @@ func TestRegistrationSuccessPreservesJSONMailDiagnostic(t *testing.T) {
 			if err := json.Unmarshal(response.Body.Bytes(), &payload); err != nil {
 				t.Fatal(err)
 			}
-			if response.Code != http.StatusOK || !payload.Registered || payload.MailStatus != status || payload.Redirect != "/login" {
+			if response.Code != http.StatusOK || !payload.Registered || payload.MailStatus != "" || payload.Redirect != "/login" {
 				t.Fatalf("JSON account API changed: %+v", payload)
 			}
 		})

@@ -238,12 +238,9 @@ administrator names always differ. Email verification uses Postmark and
 requires a free external Postmark account. Password-only, fixed-PIN, and
 standard TOTP authenticator sign-in do not require an email provider.
 
-The form is available only while the server-owned first-run setting is pending
-and no login-ready admin exists. A successful submission saves the environment
-purpose, verification factor, account, and first-run closure as one
-transaction; later visits go to normal login. A DEV/TEST/QA purpose changes the
-visible label but cannot downgrade the security boundary of the production-
-locked admin binary.
+The form accepts loopback callers or the setup token sent in the `X-Filterest-Setup-Token` header. The first pending setup request prints a one-time, process-local token to the server log; restarting generates a new token on the next pending request. The normal trusted-proxy client address boundary determines whether the caller is loopback.
+
+The form is available only while the server-owned first-run setting is pending and no login-ready admin exists. A successful submission saves the environment purpose, verification factor, account, and first-run closure as one transaction; later visits go to normal login. A DEV/TEST/QA purpose changes the visible label but cannot downgrade the security boundary of the production-locked admin binary.
 
 The bundled public seed contains synthetic multilingual example datasets and
 media only. See `app/server_tools/public_bootstrap/README.md` for the seed and

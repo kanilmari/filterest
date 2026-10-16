@@ -13,6 +13,7 @@ import (
 	backend "easelect/backend/core_components"
 	"easelect/backend/core_components/dbutils"
 	"easelect/backend/core_components/httpresponse"
+	"easelect/backend/core_components/permissions"
 	"encoding/json"
 	"log"
 	"net/http"
@@ -34,6 +35,10 @@ func GetChildTabConfigHandler(w http.ResponseWriter, r *http.Request) {
 	parentTable := strings.TrimPrefix(r.URL.Path, "/api/child-tab-config/")
 	if parentTable == "" {
 		httpresponse.RespondWithError(w, http.StatusBadRequest, "parent table name is required")
+		return
+	}
+
+	if !permissions.RequireDatasetRead(w, r, backend.Db, parentTable) {
 		return
 	}
 

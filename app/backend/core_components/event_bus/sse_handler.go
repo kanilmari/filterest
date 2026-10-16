@@ -15,6 +15,7 @@ import (
 
 	backend "easelect/backend/core_components"
 	"easelect/backend/core_components/dbutils"
+	"easelect/backend/core_components/dynamic_table_tools/dtt_1_row_crud/dtt_1_row_read"
 	"easelect/backend/core_components/httpresponse"
 	"easelect/backend/core_components/permissions"
 	"easelect/backend/core_components/runtime_grants"
@@ -263,20 +264,8 @@ func authorizeSSEEventRead(r *http.Request, event Event) (bool, error) {
 		return false, fmt.Errorf("database is not initialized")
 	}
 
-	// The dataset subscription check already proves the broader table-level
-	// read grant. This resolver adds the exact-row user/group deny-wins layer.
-	var allowed bool
-	err := roleDB.QueryRowContext(
-		r.Context(),
-		`SELECT public.resolve_effective_row_access($1, $2, $3, 'read', TRUE, FALSE)`,
-		event.Table,
-		event.RowID,
-		actor.UserID,
-	).Scan(&allowed)
-	if err != nil {
-		return false, fmt.Errorf("row event read permission check: %w", err)
-	}
-	return allowed, nil
+	// Repeat the result-reader's mandatory visibility AND exact-row ACL.
+	return dtt_1_row_read.RowVisibleForEvent(r.Context(), roleDB, event.Table, event.RowID, actor)
 }
 
 func authorizeSSEDatasetSubscription(r *http.Request, dataset string) (int, error) {

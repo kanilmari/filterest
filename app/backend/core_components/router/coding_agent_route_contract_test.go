@@ -11,6 +11,7 @@ import (
 )
 
 func TestCodingAgentGETAndPOSTRemainAdminOnly(t *testing.T) {
+	t.Setenv("FILTEREST_CODING_AGENT_SOCKET", "/fixture/runner.sock")
 	t.Setenv("ENVIRONMENT_TYPE", "prod")
 	router.RegisterRoutes("frontend", "storage")
 	manifest, err := router.BuildDefaultRouteManifest()

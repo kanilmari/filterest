@@ -8,8 +8,10 @@ package dtt_foreign_keys
 import (
 	backend "easelect/backend/core_components"
 	"easelect/backend/core_components/dataset_routes"
+	"easelect/backend/core_components/dbutils"
 	"easelect/backend/core_components/dynamic_table_tools/dtt_1_row_crud/row_mutation_policy"
 	"easelect/backend/core_components/httpresponse"
+	"easelect/backend/core_components/permissions"
 	"easelect/backend/core_components/runtime_grant_mutations"
 	"encoding/json"
 	"errors"
@@ -188,12 +190,43 @@ func GetTableNamesHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	rows.Close()
+	actor := dbutils.RequestActorContextFromRequest(r)
+	var readableNames []string
+	for _, name := range tableNames {
+		allowed, err := permissions.CanReadDataset(backend.Db, actor, name)
+		if err != nil {
+			httpresponse.RespondWithError(w, 500, "dataset read authorization unavailable")
+			return
+		}
+		if allowed {
+			readableNames = append(readableNames, name)
+		}
+	}
+	tableNames = readableNames
 	w.Header().Set("Content-Type", "application/json")
 	if withAliases {
 		registry, aliasErr := dataset_routes.LoadAliasRegistry(backend.Db)
 		if aliasErr != nil {
 			log.Printf("\033[33mwarning: dataset alias registry fallback in GetTableNamesHandler: %v\033[0m", aliasErr)
 		}
+		if !actor.IsAdmin {
+			allowedNames := make(map[string]bool, len(tableNames))
+			for _, name := range tableNames {
+				allowedNames[name] = true
+			}
+			for raw := range registry.RawToPublic {
+				if !allowedNames[raw] {
+					delete(registry.RawToPublic, raw)
+				}
+			}
+			for public, raw := range registry.PublicToRaw {
+				if !allowedNames[raw] {
+					delete(registry.PublicToRaw, public)
+				}
+			}
+		}
+
 		json.NewEncoder(w).Encode(map[string]any{
 			"names":         tableNames,
 			"raw_to_public": registry.RawToPublic,
@@ -280,6 +313,25 @@ func GetForeignKeys(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	rows.Close()
+	actor := dbutils.RequestActorContextFromRequest(r)
+	var visible []map[string]interface{}
+	for _, row := range results {
+		source, err := permissions.CanReadDataset(backend.Db, actor, row["referencing_table"].(string))
+		if err != nil {
+			httpresponse.RespondWithError(w, 500, "dataset read authorization unavailable")
+			return
+		}
+		target, err := permissions.CanReadDataset(backend.Db, actor, row["referenced_table"].(string))
+		if err != nil {
+			httpresponse.RespondWithError(w, 500, "dataset read authorization unavailable")
+			return
+		}
+		if source && target {
+			visible = append(visible, row)
+		}
+	}
+	results = visible
 	// Return response
 	response := map[string]interface{}{
 		"columns": columns,

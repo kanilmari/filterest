@@ -213,9 +213,9 @@ func RegisterRoutes(frontendDir string, storagePath string) {
 	functionRegisterHandler("/api/admin/row-groups", system_table_tools.AdminRowGroupsHandler, "system_table_tools.AdminRowGroupsHandler", http.MethodGet, http.MethodPost)
 	functionRegisterHandler("/api/admin/row-group-memberships", system_table_tools.AdminRowGroupMembershipsHandler, "system_table_tools.AdminRowGroupMembershipsHandler", http.MethodPost, http.MethodDelete)
 	functionRegisterHandler("/api/admin/row-access-rules", system_table_tools.AdminRowAccessRulesHandler, "system_table_tools.AdminRowAccessRulesHandler", http.MethodGet, http.MethodPost)
-	functionRegisterHandler("/api/image-source-picker/providers", image_source_picker.ProvidersHandler, "image_source_picker.ProvidersHandler", http.MethodGet)
-	functionRegisterHandler("/api/image-source-picker/resolve", image_source_picker.ResolveHandler, "image_source_picker.ResolveHandler", http.MethodPost)
-	functionRegisterHandler("/api/image-source-picker/file", image_source_picker.FileHandler, "image_source_picker.FileHandler", http.MethodPost)
+	functionRegisterHandler("/api/image-source-picker/providers", auth.WithRegisteredUser(image_source_picker.ProvidersHandler), "image_source_picker.ProvidersHandler", http.MethodGet)
+	functionRegisterHandler("/api/image-source-picker/resolve", auth.WithRegisteredUser(image_source_picker.ResolveHandler), "image_source_picker.ResolveHandler", http.MethodPost)
+	functionRegisterHandler("/api/image-source-picker/file", auth.WithRegisteredUser(image_source_picker.FileHandler), "image_source_picker.FileHandler", http.MethodPost)
 
 	// DevTools-reitit (vain eksplisiittisessä kehitysympäristössä)
 	envType := os.Getenv("ENVIRONMENT_TYPE")

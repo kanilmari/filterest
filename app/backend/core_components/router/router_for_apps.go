@@ -9,6 +9,8 @@ import (
 	"easelect/backend/core_components/dynamic_table_tools/dtt_1_row_crud/dtt_1_row_read"
 	payment_gateway "easelect/backend/core_components/payment_gateway"
 	"net/http"
+	"os"
+	"strings"
 )
 
 // RegisterAppRoutes registers all application routes.
@@ -51,13 +53,16 @@ func RegisterAppRoutes() {
 		dtt_1_row_read.FilterbarAIQueryHandler,
 		"dtt_1_row_read.FilterbarAIQueryHandler", http.MethodPost)
 
-	functionRegisterHandler("/api/app/ai-chat/codex-query",
-		dtt_1_row_read.FilterbarAICodexQueryHandler,
-		"dtt_1_row_read.FilterbarAICodexQueryHandler", http.MethodGet, http.MethodPost)
+	// Coding-agent execution is available in development or with an operator-configured runner.
+	if os.Getenv("ENVIRONMENT_TYPE") == "dev" || strings.TrimSpace(os.Getenv("FILTEREST_CODING_AGENT_SOCKET")) != "" {
+		functionRegisterHandler("/api/app/ai-chat/codex-query",
+			dtt_1_row_read.FilterbarAICodexQueryHandler,
+			"dtt_1_row_read.FilterbarAICodexQueryHandler", http.MethodGet, http.MethodPost)
 
-	functionRegisterHandler("/api/app/ai-chat/site-assistant-approval",
-		dtt_1_row_read.SiteAssistantApprovalHandler,
-		"dtt_1_row_read.SiteAssistantApprovalHandler", http.MethodPost)
+		functionRegisterHandler("/api/app/ai-chat/site-assistant-approval",
+			dtt_1_row_read.SiteAssistantApprovalHandler,
+			"dtt_1_row_read.SiteAssistantApprovalHandler", http.MethodPost)
+	}
 
 	functionRegisterHandler("/api/app/ai-chat/attachments",
 		dtt_1_row_read.ChatAttachmentHandler,

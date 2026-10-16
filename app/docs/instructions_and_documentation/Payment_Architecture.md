@@ -55,15 +55,10 @@ Client → GET /api/payments/{token}/status
          ↓
   SELECT from payments WHERE payment_token = $1
          ↓
-  [if status is pending/authorised AND revolut_order_id present]
-    RevolutClient.GetOrder → GET /api/orders/{revolut_order_id}
-    Apply the provider state only through the forward-only transition predicate
-    Set paid_at and deliver the app callback only for completed
-         ↓
   Response: { payment_id, payment_token, status, amount_cents, currency, paid_at, revolut_order_id, created_at }
 ```
 
-This live-check pattern means status is eventually consistent without requiring a working webhook.
+Status GETs perform only the local SELECT: no provider call, status update or callback delivery. Verified webhooks are the sole source of provider-state transitions and callback retries; an unavailable webhook leaves the stored status unchanged.
 
 ---
 

@@ -16,6 +16,7 @@ import (
 	"easelect/backend/core_components/auth_generation"
 	"easelect/backend/core_components/dbutils"
 	"easelect/backend/core_components/httpresponse"
+	"easelect/backend/core_components/permissions"
 	"easelect/backend/core_components/security"
 	e_sessions "easelect/backend/core_components/sessions"
 
@@ -78,6 +79,17 @@ func GetDatasetSortDefaultHandler(w http.ResponseWriter, r *http.Request) {
 				}
 			}
 		}
+	}
+
+	// This public route validates identity itself. Replace any actor captured
+	// before an expired sign-in was cleared, including its former admin role.
+	role := "guest"
+	if userID > 1 && sessionErr == nil {
+		role, _ = session.Values["user_role"].(string)
+	}
+	r = r.WithContext(dbutils.SetRequestActorContext(r.Context(), dbutils.NewRequestActorContext(userID, role)))
+	if !permissions.RequireDatasetRead(w, r, backend.Db, dataset) {
+		return
 	}
 
 	var sortColumn, sortDirection, scope string
@@ -156,6 +168,10 @@ func SavePersonalDatasetSortDefaultHandler(w http.ResponseWriter, r *http.Reques
 		httpresponse.RespondWithError(w, http.StatusUnauthorized, "authenticated user required")
 		return
 	}
+	if !permissions.RequireDatasetRead(w, r, backend.Db, request.Dataset) {
+		return
+	}
+
 	datasetSortDefaultSave(w, r, request.Dataset, request.Value, "user", userID)
 }
 

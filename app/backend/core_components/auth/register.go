@@ -158,6 +158,10 @@ func handleRegisterPost(w http.ResponseWriter, r *http.Request) {
 		showRegisterForm(w, r, registerErrors{LoginName: refusal.LangKey}, string(verificationMethod), refusal.Status)
 		return
 	}
+	if credentials.ValidatePassword(password) != nil {
+		showRegisterForm(w, r, registerErrors{General: "first_run_password_invalid"}, string(verificationMethod), http.StatusBadRequest)
+		return
+	}
 	hashed_password, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
 	if err != nil {
 		logging.Errorf("error: password hashing failed: %s", err.Error())
@@ -176,14 +180,16 @@ func handleRegisterPost(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		var refusal *httpresponse.Refusal
 		if errors.As(err, &refusal) {
+			if refusal.LangKey == "login_name_exists" || refusal.LangKey == "username_exists" || refusal.LangKey == "email_exists" {
+				respondRegistrationSuccess(w, r, "", string(verificationMethod))
+				return
+			}
 			errs := registerErrors{}
 			switch refusal.LangKey {
-			case "login_name_exists", "login_name_invalid", "login_name_reserved":
+			case "login_name_invalid", "login_name_reserved":
 				errs.LoginName = refusal.LangKey
-			case "username_exists", "username_empty":
+			case "username_empty":
 				errs.Username = refusal.LangKey
-			case "email_exists":
-				errs.Email = refusal.LangKey
 			default:
 				errs.General = refusal.LangKey
 			}
@@ -199,14 +205,14 @@ func handleRegisterPost(w http.ResponseWriter, r *http.Request) {
 }
 
 // respondRegistrationSuccess separates completed account creation from mail delivery.
-// Keep delivery diagnostics in the existing server log and JSON account API;
+// Keep delivery diagnostics in the existing server log;
 // the registration page shows only the translated completion notice and sign-in link.
 func respondRegistrationSuccess(w http.ResponseWriter, r *http.Request, mailStatus, verificationMethod string) {
-	if mailStatus != "registration_email_sent" {
+	if mailStatus != "" && mailStatus != "registration_email_sent" {
 		logging.Warnf("registration welcome email status=%s", mailStatus)
 	}
 	if strings.Contains(r.Header.Get("Accept"), "application/json") {
-		httpresponse.RespondWithJSON(w, http.StatusOK, map[string]interface{}{"registered": true, "mail_status": mailStatus, "redirect": "/login"})
+		httpresponse.RespondWithJSON(w, http.StatusOK, map[string]interface{}{"registered": true, "redirect": "/login"})
 		return
 	}
 	showRegisterForm(w, r, registerErrors{Success: "registration_account_created"}, verificationMethod, http.StatusOK)

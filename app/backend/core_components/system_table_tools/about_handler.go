@@ -1,7 +1,7 @@
 // about_handler.go
-// Returns system information for the About page as JSON.
-// Bridges the application version, build info, and environment details with the frontend About view.
-// Exists to expose build and environment metadata through a single admin endpoint.
+// Returns approved About content as JSON.
+// Bridges system_about rows and the public About view.
+// Unpublished drafts remain available through the protected dataset editor.
 package system_table_tools
 
 import (
@@ -33,7 +33,7 @@ func GetAboutRowHandler(w http.ResponseWriter, r *http.Request) {
 	err = backend.Db.QueryRow(`
 		SELECT COALESCE(title, ''), COALESCE(description, '')
 		FROM system_about
-		WHERE id = $1
+		WHERE id = $1 AND admin_approved = TRUE
 	`, id).Scan(&title, &description)
 
 	if err != nil {

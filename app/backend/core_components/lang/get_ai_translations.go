@@ -91,8 +91,13 @@ func GenerateTranslationsHandler(w http.ResponseWriter, r *http.Request) {
 	// anyone to approve the change, because approval is only required of
 	// writes.
 
-	// 1. Luetaan body heti alussa, jotta saadaan puuttuvat avaimet lokiin
-	// riippumatta siitä, onko käyttäjä kirjautunut vai ei.
+	userID, sessionErr := e_sessions.GetUserIDFromSession(r)
+	if sessionErr != nil || userID <= 1 {
+		httpresponse.RespondWithError(w, 403, "forbidden")
+		return
+	}
+
+	// Read and log the missing keys only after refusing guests.
 	bodyBytes, err := io.ReadAll(r.Body)
 	if err != nil {
 		httpresponse.RespondWithError(w, http.StatusBadRequest, fmt.Sprintf("error reading body: %v", err))
@@ -122,24 +127,6 @@ func GenerateTranslationsHandler(w http.ResponseWriter, r *http.Request) {
 
 	if strings.EqualFold(strings.TrimSpace(r.Header.Get("X-Bypass-Ratelimit")), "test-mode") {
 		log.Printf("[GenerateTranslations] skipping AI translation for test-mode request")
-		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode([]AiTranslationItem{})
-		return
-	}
-
-	// 2. Tarkistetaan kirjautuminen manuaalisesti
-	session, err := e_sessions.GetOrCreateSession(w, r)
-	if err != nil {
-		// Jos sessiota ei saada, palautetaan tyhjä lista (ei virhettä, ettei frontti kaadu)
-		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode([]AiTranslationItem{})
-		return
-	}
-
-	userID, ok := session.Values["user_id"]
-	if !ok || userID == nil {
-		// Ei kirjautunut -> ei generoida käännöksiä (säästetään AI-kustannuksia)
-		// Mutta lokitus yllä on jo tapahtunut, joten näemme mitä puuttuu.
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode([]AiTranslationItem{})
 		return

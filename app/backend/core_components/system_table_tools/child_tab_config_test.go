@@ -151,7 +151,9 @@ func saveChildTabConfigForTest(t *testing.T, db *sql.DB, body string, userID int
 func readChildTabConfigForTest(t *testing.T, dataset string) []childTabConfigRow {
 	t.Helper()
 	response := httptest.NewRecorder()
-	GetChildTabConfigHandler(response, httptest.NewRequest(http.MethodGet, "/api/child-tab-config/"+dataset, nil))
+	request := httptest.NewRequest(http.MethodGet, "/api/child-tab-config/"+dataset, nil)
+	request = request.WithContext(dbutils.SetRequestActorContext(request.Context(), dbutils.NewRequestActorContext(42, "admin")))
+	GetChildTabConfigHandler(response, request)
 	if response.Code != http.StatusOK {
 		t.Fatalf("read status=%d: %s", response.Code, response.Body)
 	}

@@ -81,7 +81,7 @@ type filterbarAILLMPlannerCall struct {
 
 // resolveFilterbarAIOpenAIModel chooses the chat model for API-AI planning and answering.
 // Between: OpenAI chat request builders and environment configuration.
-// Why: Keeps the product chat default separate from the DEV-only Codex path.
+// Why: Keeps the product chat default separate from administrator coding-agent execution.
 func resolveFilterbarAIOpenAIModel() string {
 	modelName := strings.TrimSpace(os.Getenv("OPENAI_API_MODEL"))
 	if modelName == "" {

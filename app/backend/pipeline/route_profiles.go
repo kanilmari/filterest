@@ -214,7 +214,7 @@ var RouteProfiles = map[string]RouteProfile{
 	"router.saveOpenAIAPIKeyHandler":              AdminProfile,
 	"router.saveProviderAPIKeyHandler":            AdminProfile,
 
-	// DEV-only local AI tooling
+	// Administrator coding-agent tooling: development, or an explicitly configured runner
 	"dtt_1_row_read.FilterbarAICodexQueryHandler": AdminProfile,
 	"dtt_1_row_read.SiteAssistantApprovalHandler": AdminProfile,
 	"dtt_1_row_read.ChatAttachmentHandler":        AdminProfile,

@@ -19,8 +19,20 @@ func FileServer(directory string) http.Handler {
 }
 
 func fileServer(filesystem http.FileSystem) http.Handler {
-	files := http.FileServer(filesystem)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Refuse directories even when they contain an index document. Files retain
+		// normal MIME, range and conditional-response handling.
+		file, err := filesystem.Open(path.Clean("/" + r.URL.Path))
+		if err != nil {
+			http.NotFound(w, r)
+			return
+		}
+		info, statErr := file.Stat()
+		defer file.Close()
+		if statErr != nil || info.IsDir() {
+			http.NotFound(w, r)
+			return
+		}
 		if isMutableBrowserAsset(r.URL.Path) {
 			w.Header().Set("Cache-Control", "no-store")
 			if r.Method == http.MethodGet || r.Method == http.MethodHead {
@@ -31,7 +43,7 @@ func fileServer(filesystem http.FileSystem) http.Handler {
 				r.Header.Del("If-None-Match")
 			}
 		}
-		files.ServeHTTP(w, r)
+		http.ServeContent(w, r, info.Name(), info.ModTime(), file)
 	})
 }
 

@@ -84,6 +84,11 @@ func FirstRunAdminHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if !firstRunAccessAllowed(r) {
+		httpresponse.RespondWithError(w, 403, "forbidden")
+		return
+	}
+
 	switch r.Method {
 	case http.MethodGet:
 		input := firstRunAdminInput{Username: credentials.SuggestedAdministratorLoginName(), NamesMayEqual: "true"}

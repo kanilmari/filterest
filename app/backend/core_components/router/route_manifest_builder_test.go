@@ -64,6 +64,7 @@ func TestRegisterRoutesDoesNotRegisterDevRoutesWhenEnvironmentUnset(t *testing.T
 }
 
 func TestRegisterRoutesKeepsAPIFirstAIChatRoutesAndDropsLegacySSE(t *testing.T) {
+	t.Setenv("FILTEREST_CODING_AGENT_SOCKET", "/fixture/runner.sock")
 	t.Setenv("ENVIRONMENT_TYPE", "production")
 	t.Setenv("ENABLE_API_LANGUAGE", "")
 

@@ -547,7 +547,8 @@ func TestLoginNamePostgresHandlers(t *testing.T) {
 		request.Header.Set("Accept", "application/json")
 		response := httptest.NewRecorder()
 		RegisterAPIHandler(response, request)
-		if response.Code != 200 || !strings.Contains(response.Body.String(), "registration_email_failed") || strings.Contains(response.Body.String(), "mail_login") {
+		// SEC-4: the reply is the same for new and existing identities, so mail status stays in the server log only.
+		if response.Code != 200 || strings.Contains(response.Body.String(), "registration_email_failed") || strings.Contains(response.Body.String(), "mail_login") {
 			t.Fatalf("registration mail=%d %s", response.Code, response.Body.String())
 		}
 	})

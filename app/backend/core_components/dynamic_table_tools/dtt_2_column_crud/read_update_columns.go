@@ -6,6 +6,7 @@ package dtt_2_column_crud
 
 import (
 	"database/sql"
+	"easelect/backend/core_components/permissions"
 
 	backend "easelect/backend/core_components"
 	"easelect/backend/core_components/httpresponse"
@@ -52,13 +53,24 @@ const tableColumnsWithTypesAndIDsQuery = `
     `
 
 func GetTableColumnsHandler(w http.ResponseWriter, r *http.Request) {
-	// Oletetaan, että URL-polku on /api/dataset-columns/{table_name}
+	// Path and query must identify the same dataset the pipeline authorized.
 	tableName := strings.TrimPrefix(r.URL.Path, "/api/dataset-columns/")
 	if tableName == "" {
 		httpresponse.RespondWithError(w, http.StatusBadRequest, "Table name is required")
 		return
 	}
 
+	for _, key := range []string{"dataset", "table"} {
+		for _, candidate := range r.URL.Query()[key] {
+			if strings.TrimSpace(candidate) != "" && strings.TrimSpace(candidate) != tableName {
+				httpresponse.RespondWithError(w, 400, "conflicting dataset identifiers")
+				return
+			}
+		}
+	}
+	if !permissions.RequireDatasetRead(w, r, backend.Db, tableName) {
+		return
+	}
 	columns, err := GetTableColumnsWithTypesAndIDs(tableName)
 	if err != nil {
 		log.Printf("\033[31merror: fetching columns: %v\033[0m", err)

@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	auth "easelect/backend/core_components/auth"
+	dtt_2_column_read "easelect/backend/core_components/dynamic_table_tools/dtt_2_column_crud/dtt_2_column_read"
 	dtt_utils "easelect/backend/core_components/dynamic_table_tools/dtt_utils"
 	"easelect/backend/core_components/httpresponse"
 	e_sessions "easelect/backend/core_components/sessions"
@@ -84,6 +85,32 @@ func GetFilterOptionsHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Intersect the result reader's role grants and client-deliverable metadata
+	// before resolving labels or querying values. Reuse its exclusions unchanged.
+	allowedColumns, err := fetchUserSelectableColumns(currentDb, tableName)
+	if err != nil {
+		httpresponse.RespondWithError(w, 500, "error fetching column permissions")
+		return
+	}
+	allowedColumnSet := selectableColumnSet(allowedColumns)
+	if !allowedColumnSet[valueColumn] {
+		httpresponse.RespondWithError(w, 403, "forbidden")
+		return
+	}
+	columnsMap, err := dtt_2_column_read.GetColumnsMapForTable(tableName)
+	if err != nil {
+		httpresponse.RespondWithError(w, http.StatusInternalServerError, "error fetching column data")
+		return
+	}
+	resultColumns := make(map[string]bool, len(columnsMap))
+	for _, column := range filterReadableColumnMetadata(columnsMap, allowedColumnSet) {
+		resultColumns[column.ColumnName] = true
+	}
+	if !resultColumns[valueColumn] {
+		httpresponse.RespondWithError(w, 403, "forbidden")
+		return
+	}
+
 	// 2. Validate that the table exists in system_db_tables
 	var exists bool
 	err = currentDb.QueryRow(
@@ -105,6 +132,10 @@ func GetFilterOptionsHandler(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		log.Printf("\033[31merror resolving display column for %s: %s\033[0m\n", tableName, err.Error())
 		httpresponse.RespondWithError(w, http.StatusInternalServerError, "could not resolve display column")
+		return
+	}
+	if !resultColumns[displayCol] {
+		httpresponse.RespondWithError(w, http.StatusForbidden, "forbidden")
 		return
 	}
 
