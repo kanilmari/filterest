@@ -1,5 +1,5 @@
 /**
- * T15_dataset_alias_namespace.spec.ts
+ * T19_dataset_alias_namespace.spec.ts
  * Proves real-name refusal, accepted alias/clear and translated notices in both themes.
  * Uses real temporary datasets and the administrator API; theme preferences are stubbed.
  * Complements the PostgreSQL collision audit/races with browser rendering evidence.

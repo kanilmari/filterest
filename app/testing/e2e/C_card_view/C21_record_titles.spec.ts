@@ -1,4 +1,4 @@
-// C18_record_titles.spec.ts
+// C21_record_titles.spec.ts
 // Proves system, developer and freshly created records have names in native views.
 // Connects real creation metadata, authorized listings, cards, tiles and articles.
 // Exercises FI/EN and app themes opposite the OS; cleans the exact temporary dataset.

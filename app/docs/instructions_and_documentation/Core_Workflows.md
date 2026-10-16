@@ -165,7 +165,7 @@ the original window capture listener and ancestor boundary calculation, so
 scrolls from either owner still update it. Context menus capture every scroll
 owner at either width and release those listeners on redraw or teardown.
 Both explicit application themes use the same layout rules. The focused browser proof is
-`T16_workline_observatory_scroll.spec.ts`, independent of T13: it expands existing
+`T20_workline_observatory_scroll.spec.ts`, independent of T13: it expands existing
 board rows in a GET response only, checks scroll ownership, sticky alignment,
 keyboard scrolling and focus visibility, and captures the desktop/phone layouts
 in both themes against the opposite operating-system theme. It saves no test

@@ -1,5 +1,5 @@
 /**
- * T16_workline_observatory_scroll.spec.ts
+ * T20_workline_observatory_scroll.spec.ts
  * Proves desktop scroll ownership, sticky headings and unchanged phone layout.
  * Connects the real observatory shell with copies of existing board fixture rows.
  * Uses GET response fixtures only; no dataset, workline or account preference is saved.
