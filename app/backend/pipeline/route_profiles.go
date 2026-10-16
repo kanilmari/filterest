@@ -269,12 +269,6 @@ var RouteProfiles = map[string]RouteProfile{
 	"router.GetDatasetAliasManagementHandler":                  AdminProfile,
 	"router.SaveDatasetAliasManagementHandler":                 AdminProfile,
 
-	// DB role management
-	"db_admin.ListRolesHandler":  AdminProfile,
-	"db_admin.CreateRoleHandler": AdminProfile,
-	"db_admin.UpdateRoleHandler": AdminProfile,
-	"db_admin.DeleteRoleHandler": AdminProfile,
-
 	// Asset linking (schema-level operations)
 	"dtt_asset_linking.EnableImageAssetLinkingHandler":    AdminProfile,
 	"dtt_asset_linking.DisableImageAssetLinkingHandler":   AdminProfile,
@@ -411,6 +405,10 @@ func ApplyDevOverrides() {
 
 	// Dev tool profiles — only relevant when dev routes are registered
 	devToolProfiles := map[string]RouteProfile{
+		"db_admin.ListRolesHandler":      AdminProfile,
+		"db_admin.CreateRoleHandler":     AdminProfile,
+		"db_admin.UpdateRoleHandler":     AdminProfile,
+		"db_admin.DeleteRoleHandler":     AdminProfile,
 		"devtools.SessionHandler":        AdminProfile,
 		"devtools.ExportTableCSVHandler": AdminProfile,
 		"devtools.ImportTableCSVHandler": AdminProfile,

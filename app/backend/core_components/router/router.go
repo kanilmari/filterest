@@ -228,6 +228,11 @@ func RegisterRoutes(frontendDir string, storagePath string) {
 		functionRegisterConditionalHandler("/api/pipeline-info", pipeline.IntrospectionHandler, "pipeline.IntrospectionHandler", devOnlyCondition, http.MethodGet)
 		functionRegisterConditionalHandler("/api/update-lang-key", lang.UpdateLangKeyHandler, "lang.UpdateLangKeyHandler", devOnlyCondition, http.MethodPost)
 		functionRegisterConditionalHandler("/api/dev-ai-translate-single", lang.AiTranslateSingleHandler, "lang.AiTranslateSingleHandler", devOnlyCondition, http.MethodPost)
+		// SQL role administration stays inside the development boundary.
+		functionRegisterConditionalHandler("/api/db-roles", db_admin.ListRolesHandler, "db_admin.ListRolesHandler", devOnlyCondition, http.MethodGet)
+		functionRegisterConditionalHandler("/api/db-roles/create", db_admin.CreateRoleHandler, "db_admin.CreateRoleHandler", devOnlyCondition, http.MethodPost)
+		functionRegisterConditionalHandler("/api/db-roles/update", db_admin.UpdateRoleHandler, "db_admin.UpdateRoleHandler", devOnlyCondition, http.MethodPost)
+		functionRegisterConditionalHandler("/api/db-roles/delete", db_admin.DeleteRoleHandler, "db_admin.DeleteRoleHandler", devOnlyCondition, http.MethodPost)
 	} else {
 		log.Printf("Skipping dev tool route registration because ENVIRONMENT_TYPE=%q", envType)
 	}
@@ -366,11 +371,6 @@ func RegisterRoutes(frontendDir string, storagePath string) {
 	functionRegisterHandler("/api/rebuild-search-vectors", dtt_search_vectors.RebuildSearchVectorHandler, "dtt_search_vectors.RebuildSearchVectorHandler", http.MethodPost)
 	functionRegisterHandler("/api/save-usergroup-right", backend.SaveUserGroupRight, "backend.SaveUserGroupRight", http.MethodPost)
 
-	// DB Role Management (admin-only, non-table-specific)
-	functionRegisterHandler("/api/db-roles", db_admin.ListRolesHandler, "db_admin.ListRolesHandler", http.MethodGet)
-	functionRegisterHandler("/api/db-roles/create", db_admin.CreateRoleHandler, "db_admin.CreateRoleHandler", http.MethodPost)
-	functionRegisterHandler("/api/db-roles/update", db_admin.UpdateRoleHandler, "db_admin.UpdateRoleHandler", http.MethodPost)
-	functionRegisterHandler("/api/db-roles/delete", db_admin.DeleteRoleHandler, "db_admin.DeleteRoleHandler", http.MethodPost)
 	functionRegisterHandler("/api/translations", lang.GetTranslationsHandler, "lang.GetTranslationsHandler", http.MethodGet)
 	functionRegisterHandler("/api/ui-languages", lang.GetPublicUILanguagesHandler, "lang.GetPublicUILanguagesHandler", http.MethodGet)
 	functionRegisterHandler("/api/get-lang-key-translations", lang.GetLangKeyTranslationsHandler, "lang.GetLangKeyTranslationsHandler", http.MethodGet)

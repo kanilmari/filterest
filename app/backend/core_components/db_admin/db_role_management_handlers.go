@@ -1,16 +1,19 @@
 // db_role_management_handlers.go
-// API handlers for PostgreSQL role management, providing full CRUD operations
-// via HTTP endpoints so admins can create, update, and delete database roles
-// without direct SQL or shell access. All operations require admin-level access.
+// Provides development-only PostgreSQL role management for administrators.
+// Connects HTTP requests to SQL role operations with protected connection identity.
+// Keeps critical roles safe while the router and pipeline enforce access.
 package db_admin
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
 	"strings"
+	"unicode/utf8"
 
 	backend "easelect/backend/core_components"
 	"easelect/backend/core_components/security"
@@ -54,6 +57,30 @@ type DeleteRoleRequest struct {
 // Helpers
 // ──────────────────────────────────────────────────────────────────────────────
 
+const maxRoleNameBytes = 63 // PostgreSQL NAMEDATALEN - 1.
+
+// sanitizeRoleName rejects truncation aliases before protection checks or SQL.
+// Keep this limit local to role requests; other identifier callers are unchanged.
+func sanitizeRoleName(name string) (string, error) {
+	if len(name) > maxRoleNameBytes {
+		return "", fmt.Errorf("role names must not exceed %d bytes", maxRoleNameBytes)
+	}
+	return security.SanitizeIdentifier(name)
+}
+
+// postgresRoleName mirrors PostgreSQL's byte limit without splitting UTF-8.
+// Protection also uses this form independently of request length validation.
+func postgresRoleName(name string) string {
+	if len(name) <= maxRoleNameBytes {
+		return name
+	}
+	end := maxRoleNameBytes
+	for end > 0 && !utf8.RuneStart(name[end]) {
+		end--
+	}
+	return name[:end]
+}
+
 // protectedRoles are system roles that must not be modified or deleted via API.
 var protectedRoles = map[string]bool{
 	"mcpuser":    true,
@@ -63,7 +90,37 @@ var protectedRoles = map[string]bool{
 
 // isProtectedRole returns true if the role name is a system-critical role.
 func isProtectedRole(name string) bool {
-	return protectedRoles[strings.ToLower(name)]
+	for protectedName, protected := range protectedRoles {
+		if protected && strings.EqualFold(postgresRoleName(name), postgresRoleName(protectedName)) {
+			return true
+		}
+	}
+	return false
+}
+
+var errProtectedRole = errors.New("protected database role")
+
+// openRoleChangeConnection checks identity on the connection that will perform
+// the change. current_user is read for each request, never cached across pooled
+// connections; failure to establish identity must prevent all role changes.
+func openRoleChangeConnection(ctx context.Context, name string) (*sql.Conn, error) {
+	if isProtectedRole(name) {
+		return nil, errProtectedRole
+	}
+	conn, err := backend.Db.Conn(ctx)
+	if err != nil {
+		return nil, err
+	}
+	var currentUser string
+	if err := conn.QueryRowContext(ctx, "SELECT current_user").Scan(&currentUser); err != nil {
+		conn.Close()
+		return nil, err
+	}
+	if strings.EqualFold(postgresRoleName(name), postgresRoleName(currentUser)) {
+		conn.Close()
+		return nil, errProtectedRole
+	}
+	return conn, nil
 }
 
 // jsonError writes a JSON error response.
@@ -148,20 +205,27 @@ func CreateRoleHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Sanitize role name to prevent SQL injection in identifier position
-	safeName, err := security.SanitizeIdentifier(req.Name)
+	safeName, err := sanitizeRoleName(req.Name)
 	if err != nil {
 		jsonError(w, fmt.Sprintf("invalid role name: %v", err), http.StatusBadRequest)
 		return
 	}
 
-	if isProtectedRole(safeName) {
+	conn, err := openRoleChangeConnection(r.Context(), safeName)
+	if errors.Is(err, errProtectedRole) {
 		jsonError(w, "cannot create a role with a protected name", http.StatusForbidden)
 		return
 	}
+	if err != nil {
+		log.Printf("\033[31merror: [db_admin] role protection check: %v\033[0m", err)
+		jsonError(w, "database error", http.StatusInternalServerError)
+		return
+	}
+	defer conn.Close()
 
 	// Check if role already exists
 	var exists bool
-	err = backend.Db.QueryRow(`SELECT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = $1)`, safeName).Scan(&exists)
+	err = conn.QueryRowContext(r.Context(), `SELECT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = $1)`, safeName).Scan(&exists)
 	if err != nil {
 		log.Printf("[db_admin] CreateRole check error: %v", err)
 		jsonError(w, "database error", http.StatusInternalServerError)
@@ -187,7 +251,7 @@ func CreateRoleHandler(w http.ResponseWriter, r *http.Request) {
 		quoteStringLiteral(req.Password),
 	)
 
-	if _, err := backend.Db.Exec(createSQL); err != nil {
+	if _, err := conn.ExecContext(r.Context(), createSQL); err != nil {
 		log.Printf("[db_admin] CreateRole exec error: %v", err)
 		jsonError(w, fmt.Sprintf("failed to create role: %v", err), http.StatusInternalServerError)
 		return
@@ -216,20 +280,27 @@ func UpdateRoleHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	safeName, err := security.SanitizeIdentifier(req.Name)
+	safeName, err := sanitizeRoleName(req.Name)
 	if err != nil {
 		jsonError(w, fmt.Sprintf("invalid role name: %v", err), http.StatusBadRequest)
 		return
 	}
 
-	if isProtectedRole(safeName) {
+	conn, err := openRoleChangeConnection(r.Context(), safeName)
+	if errors.Is(err, errProtectedRole) {
 		jsonError(w, "cannot modify a protected role", http.StatusForbidden)
 		return
 	}
+	if err != nil {
+		log.Printf("\033[31merror: [db_admin] role protection check: %v\033[0m", err)
+		jsonError(w, "database error", http.StatusInternalServerError)
+		return
+	}
+	defer conn.Close()
 
 	// Verify role exists
 	var exists bool
-	if err := backend.Db.QueryRow(`SELECT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = $1)`, safeName).Scan(&exists); err != nil || !exists {
+	if err := conn.QueryRowContext(r.Context(), `SELECT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = $1)`, safeName).Scan(&exists); err != nil || !exists {
 		jsonError(w, fmt.Sprintf("role '%s' not found", safeName), http.StatusNotFound)
 		return
 	}
@@ -254,7 +325,7 @@ func UpdateRoleHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	alterSQL := fmt.Sprintf("ALTER ROLE %s WITH %s", safeName, strings.Join(alterClauses, " "))
-	if _, err := backend.Db.Exec(alterSQL); err != nil {
+	if _, err := conn.ExecContext(r.Context(), alterSQL); err != nil {
 		log.Printf("[db_admin] UpdateRole exec error: %v", err)
 		jsonError(w, fmt.Sprintf("failed to update role: %v", err), http.StatusInternalServerError)
 		return
@@ -282,20 +353,27 @@ func DeleteRoleHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	safeName, err := security.SanitizeIdentifier(req.Name)
+	safeName, err := sanitizeRoleName(req.Name)
 	if err != nil {
 		jsonError(w, fmt.Sprintf("invalid role name: %v", err), http.StatusBadRequest)
 		return
 	}
 
-	if isProtectedRole(safeName) {
+	conn, err := openRoleChangeConnection(r.Context(), safeName)
+	if errors.Is(err, errProtectedRole) {
 		jsonError(w, "cannot delete a protected role", http.StatusForbidden)
 		return
 	}
+	if err != nil {
+		log.Printf("\033[31merror: [db_admin] role protection check: %v\033[0m", err)
+		jsonError(w, "database error", http.StatusInternalServerError)
+		return
+	}
+	defer conn.Close()
 
 	// Check current ownership to warn
 	var ownedCount int
-	_ = backend.Db.QueryRow(`
+	_ = conn.QueryRowContext(r.Context(), `
 		SELECT count(*) FROM pg_class c
 		JOIN pg_roles r ON r.oid = c.relowner
 		WHERE r.rolname = $1 AND c.relkind = 'r'
@@ -307,7 +385,7 @@ func DeleteRoleHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	dropSQL := fmt.Sprintf("DROP ROLE IF EXISTS %s", safeName)
-	if _, err := backend.Db.Exec(dropSQL); err != nil {
+	if _, err := conn.ExecContext(r.Context(), dropSQL); err != nil {
 		log.Printf("[db_admin] DeleteRole exec error: %v", err)
 		jsonError(w, fmt.Sprintf("failed to delete role: %v", err), http.StatusInternalServerError)
 		return
@@ -327,9 +405,3 @@ func quoteStringLiteral(s string) string {
 	escaped := strings.ReplaceAll(s, "'", "''")
 	return fmt.Sprintf("'%s'", escaped)
 }
-
-// ──────────────────────────────────────────────────────────────────────────────
-// Unused import prevention
-// ──────────────────────────────────────────────────────────────────────────────
-
-var _ = sql.ErrNoRows // Keep database/sql import for future use

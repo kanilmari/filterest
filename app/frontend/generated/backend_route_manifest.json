@@ -3039,21 +3039,10 @@
         "HEAD"
       ],
       "method_source": "route_registration",
+      "conditional_source": "ENVIRONMENT_TYPE='dev'",
       "scenarios": [
         {
-          "name": "production",
-          "profile_name": "admin",
-          "skip_stages": [],
-          "admin_only": true
-        },
-        {
           "name": "development",
-          "profile_name": "admin",
-          "skip_stages": [],
-          "admin_only": true
-        },
-        {
-          "name": "api_language",
           "profile_name": "admin",
           "skip_stages": [],
           "admin_only": true
@@ -3068,21 +3057,10 @@
         "POST"
       ],
       "method_source": "route_registration",
+      "conditional_source": "ENVIRONMENT_TYPE='dev'",
       "scenarios": [
         {
-          "name": "production",
-          "profile_name": "admin",
-          "skip_stages": [],
-          "admin_only": true
-        },
-        {
           "name": "development",
-          "profile_name": "admin",
-          "skip_stages": [],
-          "admin_only": true
-        },
-        {
-          "name": "api_language",
           "profile_name": "admin",
           "skip_stages": [],
           "admin_only": true
@@ -3097,21 +3075,10 @@
         "POST"
       ],
       "method_source": "route_registration",
+      "conditional_source": "ENVIRONMENT_TYPE='dev'",
       "scenarios": [
         {
-          "name": "production",
-          "profile_name": "admin",
-          "skip_stages": [],
-          "admin_only": true
-        },
-        {
           "name": "development",
-          "profile_name": "admin",
-          "skip_stages": [],
-          "admin_only": true
-        },
-        {
-          "name": "api_language",
           "profile_name": "admin",
           "skip_stages": [],
           "admin_only": true
@@ -3126,21 +3093,10 @@
         "POST"
       ],
       "method_source": "route_registration",
+      "conditional_source": "ENVIRONMENT_TYPE='dev'",
       "scenarios": [
         {
-          "name": "production",
-          "profile_name": "admin",
-          "skip_stages": [],
-          "admin_only": true
-        },
-        {
           "name": "development",
-          "profile_name": "admin",
-          "skip_stages": [],
-          "admin_only": true
-        },
-        {
-          "name": "api_language",
           "profile_name": "admin",
           "skip_stages": [],
           "admin_only": true
