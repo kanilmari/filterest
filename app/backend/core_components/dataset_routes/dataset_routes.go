@@ -44,14 +44,15 @@ func buildAliasRegistry(rawToPublic map[string]string) AliasRegistry {
 }
 
 var reservedDatasetRouteSegments = map[string]struct{}{
-	"admin":    {},
-	"api":      {},
-	"apps":     {},
-	"datasets": {},
-	"frontend": {},
-	"health":   {},
-	"login":    {},
-	"storage":  {},
+	"components": {},
+	"admin":      {},
+	"api":        {},
+	"apps":       {},
+	"datasets":   {},
+	"frontend":   {},
+	"health":     {},
+	"login":      {},
+	"storage":    {},
 }
 
 type RouteConflictError struct {
@@ -191,7 +192,23 @@ func ValidateDatasetRouteAvailability(q dbutils.Querier, tableName string, exclu
 		return err
 	}
 	_, err := q.Exec(`SELECT public.app_validate_dataset_name($1, $2)`, tableName, excludeMetadataID)
-	return NamespaceError(err)
+	if err != nil {
+		return NamespaceError(err)
+	}
+	if err := validateReservedDatasetSegment(tableName); err != nil {
+		return err
+	}
+	if alias, ok := DefaultPublicDatasetAliasCandidate(tableName); ok && EnforcesAutomaticPublicAlias(tableName) {
+		return validateReservedDatasetSegment(alias)
+	}
+	return nil
+}
+
+func validateReservedDatasetSegment(segment string) error {
+	if _, reserved := reservedDatasetRouteSegments[DatasetNameKey(segment)]; reserved {
+		return &RouteConflictError{Segment: segment, Reason: "reserved route"}
+	}
+	return nil
 }
 
 func isMissingAliasTableError(err error) bool {

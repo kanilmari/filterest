@@ -10,6 +10,7 @@ COPY package.json package-lock.json ./
 RUN npm ci
 
 COPY frontend/ ./frontend/
+COPY components/ ./components/
 # The Vite configuration inlines the page-recovery script and style that the backend also serves.
 COPY backend/core_components/frontend_assets/shell_boot_recovery.js backend/core_components/frontend_assets/shell_boot_recovery.css ./backend/core_components/frontend_assets/
 COPY server_tools/lib/easelect_private_paths.mjs ./server_tools/lib/easelect_private_paths.mjs
@@ -48,6 +49,7 @@ RUN go mod download
 
 COPY main.go ./
 COPY backend/ ./backend/
+COPY components/ ./components/
 COPY frontend/shared/ ./frontend/shared/
 COPY server_tools/admin_credential_recovery/ ./server_tools/admin_credential_recovery/
 
@@ -116,6 +118,7 @@ RUN case "${FILTEREST_RUNTIME_UID}:${FILTEREST_RUNTIME_GID}" in \
 COPY --from=backend-builder /app/filterest ./filterest
 COPY --from=backend-builder /app/filterest-admin-recovery ./filterest-admin-recovery
 COPY frontend/ ./frontend/
+COPY components/ ./components/
 # Runtime language-source maintenance scans both immutable source families.
 # Keep backend source readable in the final image without granting write access.
 COPY backend/ ./backend/

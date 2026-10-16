@@ -2,6 +2,23 @@
   "version": 1,
   "browser_areas": [
     {
+      "area": "Feature component contract and static delivery",
+      "paths": [
+        "app/components",
+        "app/backend/core_components/router/components.go",
+        "app/backend/core_components/router/component_assets_handler.go",
+        "app/backend/core_components/router/component_assets_handler_test.go",
+        "app/backend/core_components/frontend_assets/component_assets.go",
+        "app/backend/core_components/frontend_assets/component_assets_test.go",
+        "app/backend/core_components/middlewares/component_asset_path_checker.go",
+        "app/backend/core_components/middlewares/component_startup_barrier_test.go",
+        "app/backend/core_components/application_runtime/component_layout_test.go",
+        "app/backend/core_components/dataset_routes/components_reserved_segment_test.go"
+      ],
+      "specs": [],
+      "none": "No feature or visible UI ships here. Go HTTP/security and startup tests, overlay registration conformance and Vite tests prove the empty component contract."
+    },
+    {
       "area": "Dataset saved default view",
       "paths": [
         "app/frontend/core_components/admin_tools/dataset_default_view_row.js",
@@ -736,6 +753,10 @@
     }
   ],
   "python_guards": [
+    {
+      "paths": ["app/components", "app/backend/core_components/router/components.go", "app/backend/pipeline/pipeline_conformance_test.go", "app/docker/Dockerfile", "app/backend/core_components/frontend_assets/component_assets.go"],
+      "tests": ["app/testing/python/test_component_registration.py"]
+    },
     {
       "paths": [
         "app/server_tools/agent_tools/worker_agent",

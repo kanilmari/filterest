@@ -82,8 +82,9 @@ See the [runtime contract](runtime_contract.md) for current resources, lifecycle
   keys, browser state and downloaded dependencies remain outside Git and app/.
 - Existing module names and `EASELECT_*` compatibility identifiers remain
   contracts until deliberately migrated; do not mass-rename them.
-- `core_components` owns application behavior; `reusable_components` owns
-  portable behavior and must not import from `core_components`.
+- `core_components` owns policy; portable `reusable_components` imports neither core nor features.
+- `components/<name>/` owns a cross-stack feature; core Go imports it only in `router/components.go`.
+  The [component contract](../../components/README.md) defines registration, public entries and removal.
 
 The [README](../../../README.md#development) owns installation instructions:
 

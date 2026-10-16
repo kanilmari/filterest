@@ -122,6 +122,7 @@ func reconcileExistingRateLimit(handlerName string, amount, minutes int) (int, i
 // RegisterRoutes tallentaa reittien määritykset
 func RegisterRoutes(frontendDir string, storagePath string) {
 	ResetRouteDefinitions()
+	registerComponents()
 	localFrontendDir = frontendDir
 	symbol_registry.ConfigureDirectory(filepath.Join(frontendDir, "icons", "symbols"))
 
@@ -140,6 +141,7 @@ func RegisterRoutes(frontendDir string, storagePath string) {
 	// Keep the old root address as a site-icon alias; social images use /frontend/.
 	functionRegisterHandler("/favicon4S.png", faviconHandler, "router.faviconHandler", http.MethodGet)
 	functionRegisterHandler("/frontend/", handleFrontend, "router.handleFrontend", http.MethodGet)
+	functionRegisterHandler("/components/", handleComponents, "router.handleComponents", http.MethodGet)
 	functionRegisterHandler("/symbol-assets/", symbol_registry.AssetHandler, "symbol_registry.AssetHandler", http.MethodGet)
 	functionRegisterHandler("/apps/", handleApps, "router.handleApps", http.MethodGet)
 	functionRegisterHandler("/storage/", ServeStorage, "router.ServeStorage", http.MethodGet)

@@ -113,6 +113,24 @@ describe('vite Go-template development rendering', () => {
 });
 
 describe('vite backend-owned asset routing', () => {
+  test('allows sibling components and rewrites their browser imports in development', () => {
+    const config = viteConfig({ command: 'serve' });
+    expect(config.server.fs.allow).toContain('../components');
+    const plugin = config.plugins.find((entry) => entry.name === 'easelect-frontend-dev-asset-rewrite');
+    let middleware;
+    plugin.configureServer({ middlewares: { use(callback) { middleware = callback; } } });
+    const component = request('GET', '/components/sample/frontend/index.js?import');
+    middleware(component, {}, () => {});
+    const applicationRoot = fileURLToPath(new URL('..', import.meta.url)).replace(/\/$/, '');
+    expect(component.url).toBe(`/@fs/${applicationRoot}/components/sample/frontend/index.js?import`);
+    const core = request('GET', '/frontend/main.js');
+    middleware(core, {}, () => {});
+    expect(core.url).toBe('/main.js');
+    const api = request('GET', '/api/sample');
+    middleware(api, {}, () => {});
+    expect(api.url).toBe('/api/sample');
+  });
+
   test('addresses production chunks under served dist while keeping development at root', () => {
     expect(viteConfig({ command: 'build' }).base).toBe('/frontend/dist/');
     expect(viteConfig({ command: 'serve' }).base).toBe('/');

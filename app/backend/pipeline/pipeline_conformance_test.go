@@ -21,13 +21,14 @@ func TestRouteProfilesConformance(t *testing.T) {
 	os.Setenv("ENABLE_API_LANGUAGE", "true")
 	defer os.Unsetenv("ENABLE_API_LANGUAGE")
 
+	// Reset before registration: feature components register their own profiles.
+	pipeline.ResetRouteProfiles()
 	// Populate routeDefinitions from a fresh in-memory route registry.
 	router.RegisterRoutes("frontend", "storage")
 
 	// Apply dev overrides — this is part of the normal startup path
 	// (called by RegisterAllRoutesAndUpdateFunctions) and registers
 	// dev tool profiles into RouteProfiles when in dev environment.
-	pipeline.ResetRouteProfiles()
 	pipeline.ApplyDevOverrides()
 
 	routes := router.GetRouteDefinitions()

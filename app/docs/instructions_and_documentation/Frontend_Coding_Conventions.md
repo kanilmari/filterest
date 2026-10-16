@@ -32,6 +32,11 @@ durable rule set.
 
 ## 6. File Naming Convention: `[subject]_[role].js`
 
+Cross-stack features follow the [component contract](../../components/README.md).
+Import their `frontend/index.js` or portable `frontend/lib/index.js` through
+relative paths; keep implementation imports internal. Import their CSS from
+`frontend/styles/imports.css`, with translated text and explicit application themes.
+
 Every human-maintained production frontend JS module must have **one purpose**,
 and its name must communicate that purpose clearly enough for a non-technical
 person to understand. Existing mismatches are migration debt, not permanent

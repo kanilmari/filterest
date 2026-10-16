@@ -17,7 +17,8 @@ import (
 func WithStartupRequestBarrier(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Static application source and manager probes do not execute policy writes.
-		if r.URL.Path == "/health" || r.URL.Path == "/system/health" || r.URL.Path == "/system/ready" || r.URL.Path == "/system/instance-status" || r.URL.Path == "/system/drain" || strings.HasPrefix(r.URL.Path, "/frontend/") {
+		componentStatic := (r.Method == http.MethodGet || r.Method == http.MethodHead) && ComponentAssetPath(r)
+		if r.URL.Path == "/health" || r.URL.Path == "/system/health" || r.URL.Path == "/system/ready" || r.URL.Path == "/system/instance-status" || r.URL.Path == "/system/drain" || strings.HasPrefix(r.URL.Path, "/frontend/") || componentStatic {
 			next.ServeHTTP(w, r)
 			return
 		}

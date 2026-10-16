@@ -437,7 +437,7 @@ func (c *datasetRouteConn) ExecContext(_ context.Context, query string, _ []driv
 	if strings.Contains(query, "app_lock_dataset_namespace()") {
 		return driver.RowsAffected(1), nil
 	}
-	if strings.Contains(query, "app_validate_dataset_name(") {
+	if strings.Contains(query, "app_validate_dataset_name(") || strings.Contains(query, "app_validate_dataset_alias(") {
 		return driver.RowsAffected(0), c.namespaceError
 	}
 	return nil, fmt.Errorf("unexpected exec: %s", query)

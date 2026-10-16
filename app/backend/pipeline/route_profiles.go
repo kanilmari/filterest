@@ -134,6 +134,7 @@ var RouteProfiles = map[string]RouteProfile{
 	"router.sitemapHandler":                 PublicProfile,
 	"router.rootHandler":                    PublicProfile,
 	"router.handleFrontend":                 PublicProfile,
+	"router.handleComponents":               PublicProfile,
 	"router.handleApps":                     PublicProfile,
 	"router.ServeStorage":                   StorageProfile,
 	"router.datasetsRedirectHandler":        PublicProfile,

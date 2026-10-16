@@ -20,6 +20,7 @@ import (
 	backend "easelect/backend/core_components"
 	appregistry "easelect/backend/core_components/app_registry"
 	"easelect/backend/core_components/auth"
+	frontendassets "easelect/backend/core_components/frontend_assets"
 	"easelect/backend/core_components/middlewares"
 	"easelect/backend/core_components/middlewares/firewall"
 	productidentity "easelect/backend/core_components/product_identity"
@@ -125,7 +126,7 @@ func resolveFrontendDirectory(
 		if !isFrontendRoot(absoluteRoot) {
 			return "", fmt.Errorf("configured frontend root %q has no index.html", absoluteRoot)
 		}
-		return absoluteRoot, nil
+		return validateFrontendComponentsLayout(absoluteRoot)
 	}
 
 	for _, candidate := range []string{
@@ -134,10 +135,21 @@ func resolveFrontendDirectory(
 		filepath.Join(productRoot, "filterest", "frontend"),
 	} {
 		if isFrontendRoot(candidate) {
-			return candidate, nil
+			return validateFrontendComponentsLayout(candidate)
 		}
 	}
 	return "", fmt.Errorf("frontend directory not found beside executable or product root")
+}
+
+func validateFrontendComponentsLayout(directory string) (string, error) {
+	resolved, err := filepath.EvalSymlinks(directory)
+	if err != nil {
+		return "", err
+	}
+	if _, err := frontendassets.ComponentsDirectory(resolved); err != nil {
+		return "", fmt.Errorf("invalid components/frontend sibling layout: %w", err)
+	}
+	return resolved, nil
 }
 
 func effectiveEnvironmentType(
@@ -301,7 +313,7 @@ func Run(options Options) {
 	startRegisteredApps(port, environmentType)
 	startup.RunOptionalTasks(productRoot, options.AppDBCompatibilityManifest)
 
-	baseMultiplexer := http.DefaultServeMux
+	baseMultiplexer := frontendassets.WithComponentAssetPathGuard(http.DefaultServeMux)
 	firewallWrappedHandler := firewall.FirewallHandler(baseMultiplexer)
 	securityWrappedHandler := middlewares.WithSecurityHeaders(firewallWrappedHandler)
 	wrappedHandler := middlewares.WithCSP(securityWrappedHandler)

@@ -160,6 +160,8 @@ function frontendDevAssetRewrite() {
       server.middlewares.use((req, _res, next) => {
         if (req.url?.startsWith('/frontend/')) {
           req.url = req.url.replace(/^\/frontend(?=\/)/, '');
+        } else if (req.url?.startsWith('/components/')) {
+          req.url = `/@fs/${resolve(__dirname, '..')}${req.url}`;
         }
         next();
       });
@@ -441,7 +443,7 @@ export default ({ command }) => ({
   server: {
     port: VITE_DEV_PORT,
     strictPort: true,
-    fs: { allow: ['.'] },
+    fs: { allow: ['.', '../components'] },
     proxy: {
       '/api': proxyOpts,
       '/login': proxyOpts,

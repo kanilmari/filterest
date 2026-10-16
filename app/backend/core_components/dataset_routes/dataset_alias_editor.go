@@ -188,7 +188,10 @@ func ValidateExplicitDatasetAliasAvailability(q dbutils.Querier, ownerTableName 
 	}
 
 	_, err := q.Exec(`SELECT public.app_validate_dataset_alias($1, $2)`, ownerTableName, aliasSlug)
-	return NamespaceError(err)
+	if err != nil {
+		return NamespaceError(err)
+	}
+	return validateReservedDatasetSegment(aliasSlug)
 }
 
 func buildAliasManagementEntry(

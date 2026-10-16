@@ -15,7 +15,11 @@ var fingerprintedBrowserAsset = regexp.MustCompile(`^/dist/[^/]+\.[A-Za-z0-9_-]{
 
 // FileServer expects the request path relative to the mounted frontend directory.
 func FileServer(directory string) http.Handler {
-	files := http.FileServer(http.Dir(directory))
+	return fileServer(http.Dir(directory))
+}
+
+func fileServer(filesystem http.FileSystem) http.Handler {
+	files := http.FileServer(filesystem)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if isMutableBrowserAsset(r.URL.Path) {
 			w.Header().Set("Cache-Control", "no-store")

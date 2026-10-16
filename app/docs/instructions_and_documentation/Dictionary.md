@@ -144,6 +144,10 @@ apply to the card in both layouts unless a setting explicitly says otherwise.
 
 ## Interface components
 
+**Feature component** — A compiled cross-stack capability under `app/components/<name>/`,
+with explicit public entries and registration; see the [contract](../../components/README.md).
+It is distinct from a release manifest's **composition component** (a source/build input).
+
 ### Disclosure
 A titled content block that opens or closes while its heading remains available.
 Use **disclosure** or **collapsible section** for the component; **accordion**

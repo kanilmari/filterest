@@ -25,6 +25,9 @@ its source and development tools.
 Architecture and behaviour guides in
 [instructions_and_documentation/](instructions_and_documentation/) include:
 
+- [Feature component contract](../components/README.md) — compiled feature layout,
+  registration, public asset boundaries, dependencies and removal.
+
 - [Permission_Model.md](instructions_and_documentation/Permission_Model.md) —
   the authorization model across capabilities, datasets, scopes, rows and fields.
 - [Program_Accounts.md](instructions_and_documentation/Program_Accounts.md) —
