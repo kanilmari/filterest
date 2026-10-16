@@ -143,4 +143,51 @@ test.describe('L4 — parallel instance authentication-cookie isolation', () => 
 
     await browser.close();
   });
+
+  test('keeps login and logout separate for the same instance name on two ports', async ({ browser }) => {
+    // Keep every identity input equal so only the listen port can isolate cookies.
+    const [instanceA, instanceB] = await Promise.all([
+      startInstance('same-name-local', 'same-name'),
+      startInstance('same-name-local', 'same-name'),
+    ]);
+    expect(new URL(instanceA).hostname).toBe(new URL(instanceB).hostname);
+    expect(new URL(instanceA).port).not.toBe(new URL(instanceB).port);
+
+    const context = await browser.newContext();
+    try {
+      expect((await readState(context.request, instanceA)).authenticated).toBe(false);
+      expect((await readState(context.request, instanceB)).authenticated).toBe(false);
+
+      expect((await context.request.get(`${instanceA}/login`)).status()).toBe(204);
+      expect((await readState(context.request, instanceA)).authenticated).toBe(true);
+      expect((await readState(context.request, instanceB)).authenticated).toBe(false);
+      expect((await context.request.get(`${instanceB}/login`)).status()).toBe(204);
+
+      const stateA = await readState(context.request, instanceA);
+      const stateB = await readState(context.request, instanceB);
+      expect(stateA.authenticated).toBe(true);
+      expect(stateB.authenticated).toBe(true);
+      expect(stateA.device_cookie && stateA.fingerprint_cookie).toBe(true);
+      expect(stateB.device_cookie && stateB.fingerprint_cookie).toBe(true);
+      for (const key of ['Session', 'DeviceID', 'Fingerprint'] as const) {
+        expect(stateA.cookie_names[key]).not.toBe(stateB.cookie_names[key]);
+      }
+
+      expect((await context.request.post(`${instanceA}/logout`)).status()).toBe(204);
+      expect((await readState(context.request, instanceA)).authenticated).toBe(false);
+      expect((await readState(context.request, instanceB)).authenticated).toBe(true);
+      const remainingCookieNames = (await context.cookies()).map((cookie) => cookie.name);
+      for (const key of ['Session', 'DeviceID', 'Fingerprint'] as const) {
+        expect(remainingCookieNames).not.toContain(stateA.cookie_names[key]);
+        expect(remainingCookieNames).toContain(stateB.cookie_names[key]);
+      }
+
+      expect((await context.request.get(`${instanceA}/login`)).status()).toBe(204);
+      expect((await context.request.post(`${instanceB}/logout`)).status()).toBe(204);
+      expect((await readState(context.request, instanceA)).authenticated).toBe(true);
+      expect((await readState(context.request, instanceB)).authenticated).toBe(false);
+    } finally {
+      await context.close();
+    }
+  });
 });

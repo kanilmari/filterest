@@ -774,5 +774,17 @@
   "bootstrap_proofs": [
     "app/testing/python/test_bootstrap_ledger_postgres.py"
   ],
-  "file_length_guard": "app/server_tools/scripts/check_file_length.sh"
+  "file_length_guard": "app/server_tools/scripts/check_file_length.sh",
+  "separate_config_checks": [
+    {
+      "paths": [
+        "app/backend/core_components/sessions",
+        "app/testing/e2e/helpers/cookie_instance_harness"
+      ],
+      "config": "app/testing/e2e/instance-cookie-isolation.playwright.config.ts",
+      "specs": [
+        "app/testing/e2e/L_auth/L4_instance_cookie_isolation.test.ts"
+      ]
+    }
+  ]
 }

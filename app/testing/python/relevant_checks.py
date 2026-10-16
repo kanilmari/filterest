@@ -109,6 +109,18 @@ def validate_map(root: Path, policy: dict) -> None:
             if tier_for_path(Path(test)) != "ordinary":
                 raise ValueError(f"Python source guards must belong to the ordinary tier: {test}")
         references.extend([*guard["paths"], *guard["tests"]])
+    separate_configs = set()
+    for check in policy.get("separate_config_checks", []):
+        config = check["config"]
+        if config in separate_configs or not check["paths"] or not check["specs"]:
+            raise ValueError("separate-config checks need unique configs and nonempty paths and specs")
+        separate_configs.add(config)
+        if not config.startswith("app/testing/e2e/") or not config.endswith(".playwright.config.ts"):
+            raise ValueError(f"not a separate browser config: {config}")
+        for spec in check["specs"]:
+            if not spec.startswith("app/testing/e2e/") or not spec.endswith((".spec.ts", ".test.ts")):
+                raise ValueError(f"not a separate-config browser spec: {spec}")
+        references.extend([config, *check["paths"], *check["specs"]])
     for path in references:
         if normalize_path(path) != path or not (root / path).exists():
             raise ValueError(f"curated path or spec disappeared: {path}")
@@ -242,6 +254,17 @@ def make_plan(root: Path, paths: list[str], *, python: str = PYTHON, policy: dic
         command = "PLAYWRIGHT_HTML_OPEN=never ./filterest test " + shlex.join(path.removeprefix("app/") for path in sorted(specs))
         command += " " + shlex.join("--project=" + project for project in projects) + " --workers=1"
         add("heavy", "browser", specs, command, projects=list(projects))
+    # These proofs own their config and projects; never merge them into the matrix.
+    for check in policy.get("separate_config_checks", []):
+        triggers = [*check["paths"], check["config"], *check["specs"]]
+        if any(matches(path, prefix) for path in changed for prefix in triggers):
+            # The launcher changes directory to app, so resolve the config at the
+            # repository root first. Quote mapped paths as shell data as usual.
+            command = ('PLAYWRIGHT_HTML_OPEN=never ./filterest test --config '
+                       '"$PWD"/' + shlex.quote(check["config"]) + " "
+                       + shlex.join(spec.removeprefix("app/") for spec in sorted(check["specs"]))
+                       + " --workers=1")
+            add("heavy", "browser-separate-config", check["specs"], command, config=check["config"])
     plan["notes"].append("Run commands from the repository root. Heavy checks need a capable supervisor and this worktree's test target; skipped proofs are not passes.")
     return plan
 

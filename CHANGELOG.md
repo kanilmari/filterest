@@ -22,6 +22,7 @@ Dates are the local (Europe/Helsinki) date on which the version was published.
 
 ## [Unreleased]
 
+- Cookie-isolation check planning supports L4's own browser config, with a same-name, different-port login/logout regression case (J29).
 - **Database-role tools are development-only** — Listing, creating, updating and deleting PostgreSQL roles is available only in an explicit development environment, with the existing administrator checks. Role changes also protect the application's active database connection role, alongside the named system roles. Names longer than PostgreSQL's 63-byte limit are rejected before database access, and protection also recognizes truncated names.
 - **Language-key retirement is paused (J36, K423)** — Startup, consistency reports, source scans and dataset cleanup keep keys and translations. "Fix All" skips both language-key categories; orphan keys are report-only with Finnish/English pause notices. A single garbage-key fix rechecks the current name and counting sources inside its delete statement and skips stale requests.
 - **Administrators can choose each dataset’s default view** — The “View content as…” section now offers a translated dataset default row. The chooser is a draft; checking saves it for everyone, unchecking returns to the site default. Only views that can present the dataset are offered, and Chart still needs its own right. The administrator API saves only the default view reference and returns its stored state. Database 9.12.0 seeds the labels without granting other groups access.
