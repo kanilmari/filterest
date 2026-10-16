@@ -75,8 +75,10 @@ export function extractLangValue(rawVal, chosenLang = 'en', isMultilingual = nul
             ].filter((key, index, keys) => key && keys.indexOf(key) === index);
 
             for (const languageKey of preferredLanguageKeys) {
-                if (typeof parsed[languageKey] === 'string') {
-                    return String(parsed[languageKey]);
+                const storedKey = keys.find(key => key.trim().toLowerCase().replaceAll('_', '-') === languageKey
+                    && typeof parsed[key] === 'string');
+                if (storedKey !== undefined) {
+                    return String(parsed[storedKey]);
                 }
             }
             const firstKey = keys.find(k => typeof parsed[k] === 'string');

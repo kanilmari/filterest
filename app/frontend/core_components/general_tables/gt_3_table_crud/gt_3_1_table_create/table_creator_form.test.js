@@ -94,7 +94,7 @@ describe('dataset creation card roles', () => {
         const data = new FormData(form);
         expect(data.getAll('column_name')).toEqual(['id','created','summary']);
         expect(data.getAll('length')).toEqual(['','','255']);
-        expect(data.getAll('card_role')).toEqual(['details','details','description']);
+        expect(data.getAll('card_role')).toEqual(['','','description']);
         type.value = 'TEXT';
         type.dispatchEvent(new Event('change'));
         expect(new FormData(form).getAll('length')).toEqual(['','','']);
@@ -123,9 +123,9 @@ describe('dataset creation card roles', () => {
             body_data: expect.objectContaining({
                 // One ordered list: the automatic columns first, then the person's, each with its role.
                 column_list: [
-                    { name: 'id', data_type: 'SERIAL', card_role: 'details' },
-                    { name: 'created', data_type: 'TIMESTAMPTZ NOT NULL DEFAULT NOW()', card_role: 'details' },
-                    { name: 'updated', data_type: 'TIMESTAMPTZ NOT NULL DEFAULT NOW()', card_role: 'details' },
+                    { name: 'id', data_type: 'SERIAL', card_role: '' },
+                    { name: 'created', data_type: 'TIMESTAMPTZ NOT NULL DEFAULT NOW()', card_role: '' },
+                    { name: 'updated', data_type: 'TIMESTAMPTZ NOT NULL DEFAULT NOW()', card_role: '' },
                     { name: 'title', data_type: 'TEXT', card_role: 'header' },
                 ],
             }),

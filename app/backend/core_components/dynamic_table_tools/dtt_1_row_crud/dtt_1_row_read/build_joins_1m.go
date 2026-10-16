@@ -13,8 +13,10 @@ import (
 	"sync"
 	"time"
 
+	backend "easelect/backend/core_components"
 	"easelect/backend/core_components/dbutils"
 	"easelect/backend/core_components/dynamic_table_tools/dtt_1_row_crud/row_mutation_policy"
+	"easelect/backend/core_components/runtime_grant_mutations"
 	"github.com/lib/pq"
 
 	dtt_models "easelect/backend/core_components/dynamic_table_tools/dtt_models"
@@ -31,15 +33,23 @@ type joinMetadataCacheEntry struct {
 	tableUID     string
 	fkRelations  map[string]OneMRelation
 	foreignKeys  map[string]dtt_utils.ForeignKey
+	titleTargets map[string]recordTitleTargetMetadata
 	actorColumns row_mutation_policy.RowActorColumns
 	cachedAt     time.Time
 }
 
 var joinMetadataCache = struct {
-	mu      sync.RWMutex
-	byTable map[string]joinMetadataCacheEntry
+	mu         sync.RWMutex
+	byTable    map[string]joinMetadataCacheEntry
+	generation uint64
 }{
 	byTable: map[string]joinMetadataCacheEntry{},
+}
+
+func init() {
+	// Generic metadata CRUD and CSV imports commit through the grant boundary;
+	// dedicated column/settings saves use InvalidateSchemaCache instead.
+	runtime_grant_mutations.RegisterMetadataCacheInvalidator(invalidateJoinMetadataCache)
 }
 
 // getTableUID returns system_db_tables.table_uid for the given table name.
@@ -81,6 +91,7 @@ func cloneJoinMetadataCacheEntry(source joinMetadataCacheEntry) joinMetadataCach
 		tableUID:     source.tableUID,
 		fkRelations:  cloneOneMRelationMap(source.fkRelations),
 		foreignKeys:  cloneForeignKeyMap(source.foreignKeys),
+		titleTargets: maps.Clone(source.titleTargets),
 		actorColumns: maps.Clone(source.actorColumns),
 		cachedAt:     source.cachedAt,
 	}
@@ -105,7 +116,13 @@ func getCachedJoinMetadata(tableName string) (joinMetadataCacheEntry, bool) {
 	return cloneJoinMetadataCacheEntry(entry), true
 }
 
-func setCachedJoinMetadata(tableName string, entry joinMetadataCacheEntry) {
+func joinMetadataGeneration() uint64 {
+	joinMetadataCache.mu.RLock()
+	defer joinMetadataCache.mu.RUnlock()
+	return joinMetadataCache.generation
+}
+
+func setCachedJoinMetadataAtGeneration(tableName string, entry joinMetadataCacheEntry, generation uint64) {
 	normalizedTableName := strings.TrimSpace(tableName)
 	if normalizedTableName == "" {
 		return
@@ -113,14 +130,20 @@ func setCachedJoinMetadata(tableName string, entry joinMetadataCacheEntry) {
 
 	entry.cachedAt = time.Now()
 	joinMetadataCache.mu.Lock()
+	defer joinMetadataCache.mu.Unlock()
+	// The lookup may have started before a target's metadata save committed.
+	// Check and store under the invalidator's lock so it cannot restore old facts.
+	if generation != joinMetadataCache.generation {
+		return
+	}
 	joinMetadataCache.byTable[normalizedTableName] = cloneJoinMetadataCacheEntry(entry)
-	joinMetadataCache.mu.Unlock()
 }
 
 func loadJoinMetadata(
 	db dbutils.Querier,
 	tableName string,
 ) (joinMetadataCacheEntry, error) {
+	generation := joinMetadataGeneration()
 	tableUID, err := getTableUID(tableName, db)
 	if err != nil {
 		return joinMetadataCacheEntry{}, fmt.Errorf("getTableUID failed: %w", err)
@@ -147,20 +170,35 @@ func loadJoinMetadata(
 	if err != nil {
 		return joinMetadataCacheEntry{}, err
 	}
+	// Read schema facts independently of the request role, like FK resolution.
+	// Only title annotation uses them; the joins and their authorization stay as-is.
+	metadataDB := db
+	if backend.Db != nil {
+		metadataDB = backend.Db
+	}
+	titleTargets, err := fetchRecordTitleAliasTargets(metadataDB, foreignKeys)
+	if err != nil {
+		// Unproven aliases cannot name a record; ordinary FK display still works.
+		log.Printf("\033[31merror: reading relation title metadata: %v\033[0m", err)
+	}
 	entry := joinMetadataCacheEntry{
 		tableUID:     tableUID,
 		fkRelations:  fkRelations,
 		foreignKeys:  foreignKeys,
+		titleTargets: titleTargets,
 		actorColumns: actorColumns,
 	}
-	setCachedJoinMetadata(tableName, entry)
+	setCachedJoinMetadataAtGeneration(tableName, entry, generation)
 
 	return cloneJoinMetadataCacheEntry(entry), nil
 }
 
-func resetJoinMetadataCacheForTests() {
+// Target facts live under referencing datasets, so a table-local eviction cannot
+// find every dependent entry. Clear the bounded-lifetime join cache globally.
+func invalidateJoinMetadataCache() {
 	joinMetadataCache.mu.Lock()
 	joinMetadataCache.byTable = map[string]joinMetadataCacheEntry{}
+	joinMetadataCache.generation++
 	joinMetadataCache.mu.Unlock()
 }
 

@@ -537,43 +537,44 @@ describe('card language refresh', () => {
         expect(JSON.parse(localStorage.getItem(tableName + '_dataTypes'))).toEqual(oldMetadata);
     });
 
-    test('rebuilds a numeric FK card from its multilingual alias using the requested language', async () => {
+    test.each([
+        ['visible', { data_type: 'jsonb', is_multilingual: true, hide_everywhere: false, client_delivery_mode: 'include' }, 'Feature development', 'Ominaisuuksien kehitys'],
+        ['unproven', undefined, 'Record', 'Tietue'],
+        ['hidden', { data_type: 'jsonb', is_multilingual: true, hide_everywhere: true, client_delivery_mode: 'include' }, 'Record', 'Tietue'],
+        ['server only', { data_type: 'jsonb', is_multilingual: true, hide_everywhere: false, client_delivery_mode: 'server_only' }, 'Record', 'Tietue'],
+    ])('rebuilds a numeric FK card with a %s multilingual target using the requested language', async (_target, targetMetadata, englishTitle, finnishTitle) => {
         const tableName = 'tasks';
         const columns = ['queue_id'];
-        const row = {
-            id: 7,
-            queue_id: 9,
-            'queue_name (ln)': JSON.stringify({
-                en: 'Feature development',
-                fi: 'Ominaisuuksien kehitys',
-            }),
+        const row = { id: 7, queue_id: 9,
+            'queue_name (ln)': JSON.stringify({ en: 'Feature development', fi: 'Ominaisuuksien kehitys' }),
         };
         localStorage.setItem(`${tableName}_dataTypes`, JSON.stringify({
             queue_id: {
-                foreign_table: 'queues',
-                show_value_on_card: true,
-                show_key_on_card: false,
-                card_element: 'header',
+                data_type: 'integer', foreign_table: 'queues',
+                foreign_display_column: 'name', foreign_display_metadata: targetMetadata,
+                show_value_on_card: true, show_key_on_card: false, card_element: 'header',
             },
         }));
-
+        const cachedMetadata = localStorage.getItem(`${tableName}_dataTypes`);
         const view = await create_card_view(columns, [row], tableName);
         document.body.appendChild(view);
-
         const englishCard = document.querySelector('.card');
-        expect(englishCard.textContent).toContain('Feature development');
+        expect(englishCard.textContent).toContain(englishTitle);
+        expect(englishCard.textContent.includes('Feature development')).toBe(englishTitle === 'Feature development');
         expect(englishCard.textContent).not.toContain('{"en"');
         expect(englishCard._hasLocalizedRowData).toBe(true);
 
-        // The stored preference remains English. The explicit refresh argument
-        // must still drive the rebuilt card to Finnish.
+        // Stored preference stays English; the explicit argument must drive Finnish.
         await refreshCardLanguages('fi');
 
         const finnishCard = document.querySelector('.card');
         expect(finnishCard).not.toBe(englishCard);
-        expect(finnishCard.textContent).toContain('Ominaisuuksien kehitys');
+        expect(finnishCard.textContent).toContain(finnishTitle);
+        expect(finnishCard.textContent.includes('Ominaisuuksien kehitys')).toBe(finnishTitle === 'Ominaisuuksien kehitys');
         expect(finnishCard.textContent).not.toContain('Feature development');
         expect(finnishCard.textContent).not.toContain('{"en"');
+        expect(finnishCard._data_types).toEqual(englishCard._data_types);
+        expect(localStorage.getItem(`${tableName}_dataTypes`)).toBe(cachedMetadata);
     });
 
     test('routes a keywords card role to the keyword-tag renderer', async () => {

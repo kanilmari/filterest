@@ -186,7 +186,7 @@ func (c *layoutMetadataConn) QueryContext(_ context.Context, query string, args 
 	}
 	*c.state.query = query
 	if c.state.tableMeta {
-		return &layoutMetadataRows{values: []driver.Value{"conditional_multiline", c.state.cardStyle, c.state.cardDetailColumns, c.state.defaultView}}, nil
+		return &layoutMetadataRows{values: []driver.Value{"conditional_multiline", c.state.cardStyle, c.state.cardDetailColumns, c.state.defaultView, "label"}}, nil
 	}
 	dataType := c.state.dataType
 	if dataType == "" {

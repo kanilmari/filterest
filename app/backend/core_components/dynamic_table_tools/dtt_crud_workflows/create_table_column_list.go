@@ -31,8 +31,8 @@ import (
 type CreateColumnDef struct {
 	Name     string `json:"name"`
 	DataType string `json:"data_type"`
-	// CardRole is how a card shows the column; empty keeps the metadata
-	// default (details).
+	// CardRole is how a card shows the column; empty asks the one-time
+	// creation initializer to choose its default.
 	CardRole string `json:"card_role,omitempty"`
 	// IsMultilingual is this text column's own language choice; omitted, the
 	// column follows the dataset's default.
@@ -150,7 +150,7 @@ func isReservedActorColumn(name string) bool {
 }
 
 // cardRolesOf collects the roles the list sets into the map
-// applyColumnCardRoles writes. A column without a role keeps the default.
+// applyColumnCardRoles writes. Omitted roles are filled by InitialCardRoles.
 func cardRolesOf(list []CreateColumnDef) map[string]string {
 	roles := make(map[string]string, len(list))
 	for _, column := range list {

@@ -53,6 +53,7 @@ export function createDatasetColumnTable({ mode = "create", multilingualDefault 
     const fields = ["name", "type", "parameters", "role", ...(editing ? ["multilingual"] : []), "actions"];
     const typeOptions = getDatasetColumnTypeOptions(editing ? "edit" : "create");
     const roleOptions = getCardRoleOptions({ includeLegacyVariants: editing });
+    if (!editing) roleOptions.unshift({ value: '', labelKey: 'card_role_automatic' });
     const rowHandles = new WeakMap();
 
     const table = document.createElement("div");
@@ -123,7 +124,7 @@ export function createDatasetColumnTable({ mode = "create", multilingualDefault 
      * @param {string} [column.role] - a stored role, variants included
      * @returns {object} the row's handle
      */
-    function addColumn({ existing = false, name = "", dataType = "", length = "", role = "details" } = {}) {
+    function addColumn({ existing = false, name = "", dataType = "", length = "", role = editing ? "details" : "" } = {}) {
         const row = document.createElement("div");
         row.className = "dataset-column-table__row";
         row.setAttribute("role", "row");
@@ -158,7 +159,7 @@ export function createDatasetColumnTable({ mode = "create", multilingualDefault 
         for (const { value, labelKey } of roleOptions) {
             roleSelect.appendChild(setDatasetFormText(Object.assign(document.createElement("option"), { value }), labelKey));
         }
-        const storedRole = String(role || "details");
+        const storedRole = String(role || (editing ? "details" : ""));
         roleSelect.value = isValidCardRole(storedRole) ? storedRole : "details";
         if (roleSelect.value !== storedRole) roleSelect.value = "details";
         let savedRole = roleSelect.value;

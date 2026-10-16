@@ -31,6 +31,9 @@ describe('row_article_content_builder', () => {
         document.body.innerHTML = '';
         sessionStorage.setItem('user_permissions', JSON.stringify(Object.values(ROW_ARTICLE_PERMISSION_ROUTES)));
         localStorage.clear();
+        vi.mocked(resolveCardFieldDisplayValue).mockReset().mockImplementation((row, column) => ({
+            rawValue: row[column] ?? '', displayValue: String(row[column] ?? ''), isMultilingual: false,
+        }));
         fetchAuthModesMock.mockReset();
         fetchUserPermissionsMock.mockReset();
         createImageElementMock.mockReset();

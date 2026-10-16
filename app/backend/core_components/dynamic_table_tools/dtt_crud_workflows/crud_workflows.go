@@ -335,7 +335,7 @@ func CreateTableHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := applyColumnCardRoles(tx, tableName, cardRolesOf(columnList)); err != nil {
+	if err := applyColumnCardRoles(tx, tableName, dtt_3_table_create.InitialCardRoles(tableColumnsOf(columnList), cardRolesOf(columnList))); err != nil {
 		_ = tx.Rollback()
 		httpresponse.RespondWithError(w, http.StatusInternalServerError, "card role assignment failed")
 		return

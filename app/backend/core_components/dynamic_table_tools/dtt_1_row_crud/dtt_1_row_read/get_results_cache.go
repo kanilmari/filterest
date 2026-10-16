@@ -98,10 +98,11 @@ func setCachedSchemaMetadata(tableName string, entry *schemaCacheEntry) {
 	schemaCacheMu.Unlock()
 }
 
-// InvalidateSchemaCache removes a table's column metadata and all scoped kind
-// evidence, since a child/foreign-key change can affect another dataset's support.
+// InvalidateSchemaCache removes a table's column metadata, all scoped kind
+// evidence and join metadata, including other datasets' cached title-target facts.
 // Mutation callers invoke this after successful commit, never during rollback.
 func InvalidateSchemaCache(tableName string) {
+	invalidateJoinMetadataCache()
 	dataset_kinds.InvalidateAll()
 	key := "schema|" + tableName
 	schemaCacheMu.Lock()

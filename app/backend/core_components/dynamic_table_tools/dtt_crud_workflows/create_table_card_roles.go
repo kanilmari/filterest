@@ -2,14 +2,14 @@
 // Validates the card roles a dataset change carries and assigns them in the
 // same transaction. Creation checks its roles with its ordered column list
 // (create_table_column_list.go). A column without a role keeps the metadata
-// default, details.
+// defaults chosen once by InitialCardRoles.
 package dtt_crud_workflows
 
 import (
 	"easelect/backend/core_components/dbutils"
+	dtt_3_table_create "easelect/backend/core_components/dynamic_table_tools/dtt_3_table_crud/dtt_3_table_create"
 	"easelect/frontend/shared/card_roles"
 	"fmt"
-	"sort"
 	"strings"
 )
 
@@ -28,31 +28,5 @@ func validateCardRoleValues(roles map[string]string) error {
 }
 
 func applyColumnCardRoles(q dbutils.Querier, tableName string, roles map[string]string) error {
-	columns := make([]string, 0, len(roles))
-	for column := range roles {
-		columns = append(columns, column)
-	}
-	sort.Strings(columns)
-	for _, column := range columns {
-		role := strings.TrimSpace(roles[column])
-		if role == "" {
-			continue
-		}
-		result, err := q.Exec(`
-            UPDATE system_column_details AS cd
-            SET card_element = $1, updated = NOW()
-            FROM system_db_tables AS dt
-            WHERE cd.table_uid = dt.table_uid
-              AND dt.schema_name = current_schema()
-              AND dt.table_name = $2 AND cd.column_name = $3
-        `, role, strings.ToLower(tableName), strings.ToLower(column))
-		if err != nil {
-			return fmt.Errorf("assign card role: %w", err)
-		}
-		count, err := result.RowsAffected()
-		if err != nil || count != 1 {
-			return fmt.Errorf("card role assignment must match one column: %q", column)
-		}
-	}
-	return nil
+	return dtt_3_table_create.ApplyColumnCardRoles(q, tableName, roles)
 }

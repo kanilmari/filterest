@@ -51,6 +51,67 @@ before LIMIT/OFFSET, so the identifier is counted once and later pages neither
 repeat it nor lose another match. Assisted text search and the merged blocking
 answer use this same rule; semantic similarity itself is unchanged.
 
+### Record titles
+
+Every result card (including its compact article rail summary), product tile,
+article, Image First Article View label and experimental card uses
+[`record_title_resolver.js`](../../frontend/core_components/table_views/record_title_resolver.js).
+Its precedence is:
+
+1. All usable, visible configured `header` fields, preserving their layout order.
+   The first usable heading supplies the summary name and avatar initial.
+2. Exact `display_name`, `name`, `title`, then `key`, trying every candidate.
+3. The dataset's natural relation label (`fk_display_column`), delivered in the
+   existing `table_meta` response only when its column is in this request's
+   authorized visible projection.
+4. The first safe short single-line text value in stable column order
+   (`co_number`, then response order).
+5. Localized `Record {id}` when the visible authorized ID is available, otherwise
+   localized `Record` (`record_title_with_id` / `record_title_without_id`).
+
+Inference never changes roles or fetches another record. Only fields already in
+this authorized presentation are eligible. Every heading excludes hidden,
+restricted or server-only fields, secret-like names, binary/vector and other
+unsafe types, and arbitrary JSON. Configured headers keep the existing field
+formatter for numbers, dates, booleans and text, including long and multiline
+values; each view retains its own truncation. Description roles, text-only types,
+the single-line/160-character limit and JSON-looking text rejection apply only to
+inference. Inferred titles also exclude body-like field names.
+
+A relation field needs its already-authorized generated display alias; a missing
+alias never triggers a privileged value lookup or exposes its numeric foreign
+key as a name. On a cache miss the query builder reads all actual alias targets'
+schema facts in one lookup, never per row. Each response copies their column
+names (`foreign_display_column`) and type, multilingual and delivery metadata
+(`foreign_display_metadata`) without changing the shared schema cache or caching
+request authorization. A target must have metadata, be delivered to clients,
+not hidden everywhere, have a safe text type or declared multilingual data, and
+not have a secret-like name. Missing target metadata fails closed for titles.
+The relation field's ordinary display elsewhere keeps its existing behavior.
+Listing pages (including text search), vector search, each intelligent-search
+stage and the independent article fetch all deliver these facts. An AI-only
+stage copies them after its own joins load, even when the earlier text stage
+was empty. Incoming and outgoing related rows use their authorized nested join
+set and the same batched schema lookup and response-copy builder; they do not
+depend on a listing having warmed the join cache. No extra row values are read.
+Mounted cards retain this metadata for language refresh, and loaded-row and
+search caches preserve it with their rows. Language refresh localizes eligible
+aliases using the requested language without rewriting shared metadata; an
+unproven alias, including an older cached shape, keeps the safe fallback.
+After a column/settings save commits, schema invalidation clears the join cache
+globally: target facts are stored under referencing datasets, not their targets.
+Generic metadata CRUD and CSV saves use the same reader invalidation through
+their mutation-completion hook. A generation check rejects older in-flight cache
+stores; rollback and failed commit leave the cache intact.
+
+Multilingual titles use requested locale → base locale → English → first string
+translation. An explicitly empty selected translation stays empty and advances
+to the next candidate. JSON columns require multilingual metadata and a language
+map. `+lang_key` values use the interface dictionary; ordinary keys such as
+`registration_enabled` remain data. Headings and avatar initials use the same
+resolved string. Article ownership hiding follows only the server-proven owner
+mark. Administrator role choices remain editable in Card visibility.
+
 ### View Types
 
 The selector's product-owned names come from `dataset_view_registry.js`.

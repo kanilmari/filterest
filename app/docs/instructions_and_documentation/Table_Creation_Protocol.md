@@ -240,6 +240,35 @@ Use the Filterest UI or the `dtt_3_table_create` Go component.
     reports `folder_path` and `in_site_navigation`, and a new folder with a
     parent but no name is refused.
 
+At creation, omitted/Automatic card roles are filled once in the creation
+transaction by `dtt_3_table_create.InitialCardRoles`: the first name-like text
+column in creation order becomes `header`, the first text `content`,
+`description` or `kuvaus` becomes `description`, and remaining ordinary columns
+become `details`. Name-like fields include `display_name`, `name`, `title`,
+`key`, `label`, `nimi`, `otsikko` and compound names ending in those terms;
+credential/secret fields cannot be inferred as headings. Existing explicit
+roles, including several headers, hidden fields and deliberate `details`, win.
+The form offers Automatic only when creating a dataset. The API accepts an
+omitted or empty `card_role` for that same choice. Both write the existing
+`system_column_details.card_element` edited by Card visibility; later edits do
+not rerun inference.
+
+The form, direct API, `api_crud` CLI and MCP `create_dataset` tool share this route; there is no separate
+runtime dataset-template creation endpoint. Any template submitting a
+`column_list` receives the same defaults. Newly provisioned managed asset
+children use the same initializer after metadata registration; reusing a child
+leaves its saved roles alone. CSV restore/import only upserts into an existing
+schema and never initializes roles. Startup's embedding storage and payments
+schema are platform factories, not dataset-import/template routes; migrations
+remain responsible for intentional platform presentation metadata. Existing
+datasets are never bulk rewritten by the creation default. Record-title
+inference for historical datasets is separately documented in
+[Results, Cards and Articles](Frontend_Results_Cards_And_Articles.md#record-titles).
+The optional 9.12.0 migration only assigns untouched visible headers for
+`system_audit_log.handler_name` and
+`system_lang_key_translations.lang_key_id` (rendered through its permitted
+language-key display alias); it preserves configured headers and visibility.
+
 New content datasets receive `created_by` and `owner_id` after every requested
 ordinary column. Their SQL support functions run after general column metadata
 synchronization, then register hidden, non-insertable, non-editable defaults

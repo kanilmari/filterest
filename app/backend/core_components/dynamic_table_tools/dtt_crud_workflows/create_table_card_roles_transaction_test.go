@@ -77,7 +77,7 @@ func TestCreateHandlerRollsBackEverythingAfterColumnSettingsFailure(t *testing.T
 	if rec.Code != http.StatusInternalServerError || !strings.Contains(rec.Body.String(), "column settings failed") {
 		t.Fatalf("status=%d body=%s", rec.Code, rec.Body)
 	}
-	if !state.created || state.roleAttempts != 1 || state.settingsAttempts != 1 {
+	if !state.created || state.roleAttempts != 2 || state.settingsAttempts != 1 {
 		t.Fatalf("failure must follow creation and role assignment: %+v", state)
 	}
 	if state.commits != 0 || state.rollbacks != 1 || state.schemaPending {

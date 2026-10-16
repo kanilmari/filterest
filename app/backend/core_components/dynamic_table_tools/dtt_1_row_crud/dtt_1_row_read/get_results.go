@@ -388,8 +388,8 @@ func GetResults(response_writer http.ResponseWriter, request *http.Request) {
 	response_data := map[string]interface{}{
 		"columns":              result_columns,
 		"data":                 query_results,
-		"types":                column_data_types,
-		"table_meta":           tableMeta,
+		"types":                recordTitleAliasSources(table_name, column_data_types),
+		"table_meta":           authorizedRecordTitleMeta(tableMeta, visibleColumnNames, column_data_types),
 		"effective_sort":       effectiveNewestSort(ctx.QueryParams, ctx.ColumnsMap),
 		"resultsPerLoad":       results_per_load,
 		"userColumnSettings":   userColumnSettings,

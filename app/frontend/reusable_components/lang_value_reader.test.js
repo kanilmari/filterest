@@ -1,3 +1,7 @@
+// lang_value_reader.test.js
+// Proves locale-map extraction and controlled fallback for shared field values.
+// Connects stored language spellings with record titles and generic value renderers.
+// Preserves explicit empty translations and ordinary JSON bodies.
 import { describe, test, expect } from 'vitest';
 import { extractLangValue, looksLikeLangValue } from './lang_value_reader.js';
 
@@ -41,6 +45,12 @@ describe('extractLangValue', () => {
   test('falls back from a regional language code to its primary language', () => {
     const json = JSON.stringify({ en: 'Services', fi: 'Palvelut' });
     expect(extractLangValue(json, 'fi-FI', true)).toBe('Palvelut');
+  });
+
+  test('matches canonical regional keys and underscore/case variants before base language', () => {
+    expect(extractLangValue({ 'fi-FI': 'Alue', fi: 'Suomi' }, 'FI_fi', true)).toBe('Alue');
+    expect(extractLangValue({ 'zh_CN': '区域', zh: '基础' }, 'zh-CN', true)).toBe('区域');
+    expect(extractLangValue({ 'fi-FI': '', fi: 'Suomi', en: 'English' }, 'fi-fi', true)).toBe('');
   });
 
   test('defaults to en when no chosenLang', () => {

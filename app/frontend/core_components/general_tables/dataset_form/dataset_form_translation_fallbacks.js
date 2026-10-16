@@ -9,6 +9,7 @@
 // A {name} placeholder is filled by the form (datasetFormText), never by a translator.
 
 const COPY = {
+    card_role_automatic: { fi: "Automaattinen", en: "Automatic", ch: "自动", yue: "自動" },
     // --- The dataset itself ---
     table_name: { fi: "Aineiston nimi", en: "Dataset name", ch: "数据集名称", yue: "資料集名稱" },
     create_dataset_route_hint: {

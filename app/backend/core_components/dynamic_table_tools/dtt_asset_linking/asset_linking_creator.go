@@ -89,6 +89,11 @@ func EnsureSharedAssetRelation(
 			return FileUploadRelationStatus{}, false, refreshErr
 		}
 
+		if roleErr := dtt_3_table_create.ApplyColumnCardRoles(tx, childTable,
+			dtt_3_table_create.InitialCardRoles(columns, nil)); roleErr != nil {
+			return FileUploadRelationStatus{}, false, roleErr
+		}
+
 		if lookupErr := tx.QueryRow(
 			"SELECT table_uid FROM system_db_tables WHERE table_name = $1 AND schema_name = 'public'",
 			childTable,

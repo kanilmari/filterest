@@ -267,7 +267,7 @@ describe("product_card_view_printer", () => {
         });
     });
 
-    test("preserves ordinary JSON when metadata explicitly disables multilingual rendering", () => {
+    test("excludes ordinary JSON bodies from title candidates", () => {
         const ordinaryJson = JSON.stringify({ name: "Support service", count: 2 });
         const view = create_product_card_view(
             "services",
@@ -277,6 +277,6 @@ describe("product_card_view_printer", () => {
         );
 
         expect(view.querySelector(".product-card-view-title")?.textContent)
-            .toBe(ordinaryJson);
+            .toBe("Record");
     });
 });

@@ -1,3 +1,7 @@
+// build_joins_1m_test.go
+// Proves FK joins and title-target schema facts share the existing metadata cache.
+// Connects mock query counts to unchanged relation projections and copied entries.
+// Prevents title safety from adding per-row reads or changing ordinary FK display.
 package dtt_1_row_read
 
 import (
@@ -20,6 +24,8 @@ type buildJoinsQueryCounter struct {
 	mu        sync.Mutex
 	counts    map[string]int
 	actorRows [][]driver.Value
+	titleRows [][]driver.Value
+	titleErr  error
 }
 
 func (c *buildJoinsQueryCounter) add(name string) {
@@ -124,6 +130,15 @@ func (c *buildJoinsMockConn) Query(query string, args []driver.Value) (driver.Ro
 
 func (c *buildJoinsMockConn) QueryContext(_ context.Context, query string, _ []driver.NamedValue) (driver.Rows, error) {
 	switch {
+	case strings.Contains(query, "AS title_sources(source_column, target_table, target_column)"):
+		c.counter.add("title_targets")
+		if c.counter.titleErr != nil {
+			return nil, c.counter.titleErr
+		}
+		return &buildJoinsMockRows{
+			cols: []string{"source_column", "data_type", "is_multilingual", "hide_everywhere", "client_delivery_mode"},
+			rows: c.counter.titleRows,
+		}, nil
 	case strings.Contains(query, "AS roles(actor_role)"):
 		c.counter.add("actor_marks")
 		return &buildJoinsMockRows{cols: []string{"column_name", "actor_role"}, rows: c.counter.actorRows}, nil
@@ -170,6 +185,29 @@ func (c *buildJoinsMockConn) QueryContext(_ context.Context, query string, _ []d
 		}, nil
 	default:
 		return nil, fmt.Errorf("unexpected query: %s", query)
+	}
+}
+
+func TestBuildJoinsTitleMetadataFailureKeepsFieldDisplayWithoutTitleProof(t *testing.T) {
+	resetJoinMetadataCacheForTests()
+	counter := &buildJoinsQueryCounter{counts: map[string]int{}, titleErr: fmt.Errorf("schema lookup unavailable")}
+	db := openBuildJoinsForeignKeyMockDB(t, counter)
+	originalDB := backend.Db
+	backend.Db = db
+	t.Cleanup(func() {
+		backend.Db = originalDB
+		resetJoinMetadataCacheForTests()
+	})
+	selects, _, _, err := buildJoinsWith1MRelations(db, "system_column_details",
+		map[int]dtt_models.ColumnInfo{1: {ColumnName: "table_uid"}}, []int{1})
+	if err != nil || !strings.Contains(selects, `"table_uid_alias1"."table_name" AS "table_name (ln)"`) {
+		t.Fatalf("failed title lookup changed ordinary field display: %s %v", selects, err)
+	}
+	types := recordTitleAliasSources("system_column_details", map[string]interface{}{
+		"table_uid": map[string]interface{}{"foreign_table": "system_db_tables"},
+	})
+	if types["table_uid"].(map[string]interface{})["foreign_display_metadata"] != nil {
+		t.Fatal("failed lookup supplied proof for a relation title")
 	}
 }
 
@@ -273,7 +311,9 @@ func TestBuildJoinsWith1MRelationsCachesMetadataAcrossCalls(t *testing.T) {
 func TestBuildJoinsWith1MRelationsAddsTableNameAliasForColumnMetadataTableUID(t *testing.T) {
 	resetJoinMetadataCacheForTests()
 
-	counter := &buildJoinsQueryCounter{counts: map[string]int{}}
+	counter := &buildJoinsQueryCounter{counts: map[string]int{}, titleRows: [][]driver.Value{
+		{"table_uid", "text", false, false, "include"},
+	}}
 	db := openBuildJoinsForeignKeyMockDB(t, counter)
 
 	origDB := backend.Db
@@ -312,5 +352,21 @@ func TestBuildJoinsWith1MRelationsAddsTableNameAliasForColumnMetadataTableUID(t 
 	}
 	if got := columnExpressions["table_name (ln)"]; got != `"table_uid_alias1"."table_name"` {
 		t.Fatalf("table_name alias expression = %q, want joined display column", got)
+	}
+	secondSelect, secondJoins, _, err := buildJoinsWith1MRelations(db, "system_column_details", columnsMap, []int{1})
+	if err != nil || selectColumns != secondSelect || joinClauses != secondJoins {
+		t.Fatalf("cached metadata changed FK display: %q %q %v", secondSelect, secondJoins, err)
+	}
+	if got := counter.get("title_targets"); got != 1 {
+		t.Fatalf("target schema reads = %d, want one across requests", got)
+	}
+	cached, _ := getCachedJoinMetadata("system_column_details")
+	if target := cached.titleTargets["table_uid"]; target.DataType != "text" || target.ClientDeliveryMode != "include" {
+		t.Fatalf("target metadata lost: %+v", target)
+	}
+	delete(cached.titleTargets, "table_uid")
+	again, _ := getCachedJoinMetadata("system_column_details")
+	if len(again.titleTargets) != 1 {
+		t.Fatal("returned target map mutated the shared join cache")
 	}
 }

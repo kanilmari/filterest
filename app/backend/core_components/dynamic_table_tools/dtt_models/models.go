@@ -52,6 +52,7 @@ type ColumnInfo struct {
 }
 
 type TableReadMeta struct {
+	FKDisplayColumn   string  `json:"fk_display_column,omitempty"`
 	DefaultViewName   *string `json:"default_view_name"`
 	CardDetailsLayout string  `json:"card_details_layout"`
 	CardStyleVariant  *string `json:"card_style_variant"`

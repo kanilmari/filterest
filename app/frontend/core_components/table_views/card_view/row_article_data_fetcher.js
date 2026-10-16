@@ -62,5 +62,8 @@ export async function fetchPermittedRowArticleData({
             configurable: true,
         });
     }
+    Object.defineProperty(authorizedRow, '__articleTableMeta', {
+        value: response.table_meta || {}, configurable: true,
+    });
     return authorizedRow;
 }

@@ -58,7 +58,7 @@ import { showSuccessToast } from "../../../reusable_components/notifications/toa
 import { refreshTableUnified } from "../../general_tables/gt_1_row_crud/gt_1_2_row_read/table_refresh_unified.js";
 import { buildConfirmationMessage } from "../../general_tables/gt_1_row_crud/gt_1_4_row_delete/row_remover_helpers.js";
 import { getLanguageWithBrowserFallback } from "../../state_stores/lang_preference_reader.js";
-import { resolveDatasetDisplayValue } from "../dataset_value_localizer.js";
+import { resolveRecordTitle } from '../record_title_resolver.js';
 import { createRowArticleLoadSession } from "./row_article_load_session.js";
 import { createRowArticleMediaHydrator } from "./row_article_media_hydrator.js";
 import { fetchCurrentUserProfile } from "../../user_tools/current_user_profile_fetcher.js";
@@ -185,19 +185,6 @@ export async function openRowArticleView(row_item, table_name, selectedCard = nu
         /* -------------------------------------------------- *
          * 3. AVATAR / KUVA PRE-CALC
          * -------------------------------------------------- */
-        let header_first_letter = "";
-        let row_presentation_label = "";
-        for (const col of sorted_columns) {
-            const { baseRoles } = parseRoleString(data_types[col]?.card_element || "");
-            if (baseRoles.includes("header")) {
-                const txt = resolveDatasetDisplayValue(row_item[col], data_types?.[col] || null).trim();
-                if (txt) {
-                    header_first_letter = txt[0];
-                    if (!row_presentation_label) row_presentation_label = txt;
-                }
-            }
-        }
-
         const creation_seed = buildCreationSeed(row_item);
 
         const image_role_columns = sorted_columns.filter((col) =>
@@ -222,6 +209,10 @@ export async function openRowArticleView(row_item, table_name, selectedCard = nu
             console.warn('openRowArticleView: could not fetch user_id', err);
         }
 
+        const recordTitle = resolveRecordTitle({ rowItem: row_item, columns: sorted_columns,
+            tableName: table_name, dataTypes: data_types, surface: 'article', currentUserID: current_user_id });
+        const header_first_letter = recordTitle.initial;
+        const row_presentation_label = recordTitle.text;
         if (!canCommit()) return;
         const sectionDefaults = await loadRowArticleSectionDefaults(table_name, "classic");
         if (!canCommit()) return;
@@ -409,20 +400,7 @@ export async function openRowArticleView(row_item, table_name, selectedCard = nu
                         language: getLanguageWithBrowserFallback(),
                     });
 
-                // Find header text for the confirmation dialog
-                let headerText = "";
-                for (const col of sorted_columns) {
-                    const { baseRoles } = parseRoleString(
-                        data_types[col]?.card_element || ""
-                    );
-                    if (baseRoles.includes("header")) {
-                        headerText = resolveDatasetDisplayValue(
-                            row_item[col],
-                            data_types?.[col] || null
-                        ).trim();
-                        break;
-                    }
-                }
+                const headerText = recordTitle.text;
 
                 const ok = await showConfirmModal({
                     titleLangKey: "delete_confirm_title",
@@ -502,21 +480,7 @@ export async function openRowArticleView(row_item, table_name, selectedCard = nu
         // Push unique URL for this big card (SEO + deep linking)
         const rowId = extractRowId(row_item);
         if (rowId) {
-            // Build SEO-friendly slug from the header column value
-            let slug = "";
-            for (const col of sorted_columns) {
-                const { baseRoles } = parseRoleString(data_types[col]?.card_element || "");
-                if (baseRoles.includes("header")) {
-                    const txt = resolveDatasetDisplayValue(
-                        row_item[col],
-                        data_types?.[col] || null
-                    ).trim();
-                    if (txt) {
-                        slug = buildSlug(txt);
-                    }
-                    break;
-                }
-            }
+            const slug = buildSlug(recordTitle.text);
             const cardUrl = buildCardUrl(
                 DATASET_PREFIX,
                 table_name,

@@ -51,6 +51,7 @@ func prepareIncomingRelatedMetadata(currentDb *sql.DB, fkInfos []FKInfo, childFi
 			log.Printf("\033[31merror: authorizing nested foreign keys from table %s: %s\033[0m", fk.Referencing_table, err)
 			return nil, errors.New("error authorizing related datasets")
 		}
+		types = relatedRecordTitleAliasSources(currentDb, labels, types)
 		metadata = append(metadata, incomingRelatedMetadata{fk, types, labels, classifyRelatedTableKind(fk.Referencing_table, kinds)})
 	}
 	return metadata, nil

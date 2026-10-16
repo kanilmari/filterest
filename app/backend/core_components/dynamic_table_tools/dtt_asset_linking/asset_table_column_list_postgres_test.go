@@ -112,6 +112,33 @@ func TestImageTableKeepsItsColumnSetInListOrderPostgres(t *testing.T) {
 		t.Fatalf("enable pictures: status=%d body=%s", rec.Code, rec.Body)
 	}
 
+	var headerRole, descriptionRole string
+	if err := db.QueryRow(`SELECT
+        (SELECT c.card_element FROM system_column_details c JOIN system_db_tables d USING(table_uid)
+         WHERE d.table_name='wl135_places_assets' AND c.column_name='original_name'),
+        (SELECT c.card_element FROM system_column_details c JOIN system_db_tables d USING(table_uid)
+         WHERE d.table_name='wl135_places_assets' AND c.column_name='description')`).Scan(&headerRole, &descriptionRole); err != nil {
+		t.Fatal(err)
+	}
+	if headerRole != "header" || descriptionRole != "description" {
+		t.Fatalf("new child roles=%s,%s", headerRole, descriptionRole)
+	}
+	// Reusing an existing child must preserve later administrator edits.
+	if _, err := db.Exec(`UPDATE system_column_details c SET card_element='details'
+        FROM system_db_tables d WHERE c.table_uid=d.table_uid AND d.table_name='wl135_places_assets' AND c.column_name='original_name'`); err != nil {
+		t.Fatal(err)
+	}
+	if rec := postInLazyTransaction(t, db, EnableImageAssetLinkingHandler, `{"parent_table":"wl135_places"}`); rec.Code >= 400 {
+		t.Fatalf("reuse: %d %s", rec.Code, rec.Body)
+	}
+	if err := db.QueryRow(`SELECT c.card_element FROM system_column_details c JOIN system_db_tables d USING(table_uid)
+        WHERE d.table_name='wl135_places_assets' AND c.column_name='original_name'`).Scan(&headerRole); err != nil {
+		t.Fatal(err)
+	}
+	if headerRole != "details" {
+		t.Fatal("reusing child rewrote an administrator choice")
+	}
+
 	// The same fourteen columns, types and defaults the map used to create,
 	// now in one order: identity, parent link, file details, timestamps.
 	wantChild := []string{

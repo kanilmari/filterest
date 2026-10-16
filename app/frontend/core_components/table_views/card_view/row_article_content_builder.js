@@ -3,6 +3,7 @@
 // Bridges row values, column metadata, and card formatting helpers into the final detail DOM.
 // Exists to keep article-view content composition separate from the article UI state layer.
 
+import { resolveRecordTitle, isRecordViewersOwn } from '../record_title_resolver.js';
 import { datasetAppearanceState } from '../dataset_appearance_state.js';
 import { resolveRowArticleSectionStartOpen } from "./row_article_section_defaults.js";
 
@@ -61,44 +62,6 @@ function isCardImageCompanionColumn(columnName = "") {
 }
 
 /**
- * Returns the column the server proved to hold the row owner (`is_row_owner`
- * in the column metadata), or "" when the dataset has no proven owner.
- * Nothing is guessed from column names: the old `created_by ?? user_id ?? id`
- * guess let a viewer whose user id equalled a row id pass as its owner.
- */
-function resolveRowArticleOwnerColumn(dataTypes = {}) {
-    for (const [columnName, columnMeta] of Object.entries(dataTypes || {})) {
-        if (columnMeta?.is_row_owner === true) {
-            return columnName;
-        }
-    }
-    return "";
-}
-
-/**
- * Reports whether the signed-in viewer owns the row, failing closed: without a
- * proven owner column, an owner value in the row, or a signed-in user (the
- * guest, user 1, owns nothing) the row counts as someone else's.
- * This only decides what the article shows. The value is already in the
- * response, so hiding it is presentation, not a security boundary; the
- * server's row policy is.
- */
-function isRowArticleOwnRow(rowItem, ownerColumn, currentUserId) {
-    if (!ownerColumn) {
-        return false;
-    }
-    const ownerValue = rowItem?.[ownerColumn];
-    if (ownerValue === null || ownerValue === undefined || String(ownerValue).trim() === "") {
-        return false;
-    }
-    const viewerId = Number(currentUserId);
-    if (!Number.isInteger(viewerId) || viewerId <= 1) {
-        return false;
-    }
-    return String(ownerValue).trim() === String(viewerId);
-}
-
-/**
  * Builds the article-view content block for one expanded row.
  * Bridges row values, card metadata, and formatting helpers into the main overlay body.
  * Exists so callers can move toward row_article naming while legacy big-card callers still work.
@@ -124,8 +87,8 @@ export async function buildRowArticleContent(
     const keywords_list = [];
     let usernameElement = null;
     let rowArticleHeaderText = "";
-    let preferred_image_alt_header = "";
-    let preferred_image_alt_username = "";
+
+
     let statusBadge = null;
     const rowArticleHeaderElements = [];
     const rowArticleHeaderValues = new Set();
@@ -133,39 +96,37 @@ export async function buildRowArticleContent(
     const timestampDisplayOptions = await resolveRowArticleTimestampDisplayOptions(chosenLang);
     if (!datasetAppearanceState.isCurrent(appearanceToken)) return rowArticleContentElement;
 
-    for (const column of sorted_columns) {
-        if (isGeneratedForeignDisplayColumn(column, data_types)) {
-            continue;
+    const rowIsViewersOwn = isRecordViewersOwn(row_item, data_types, current_user_id);
+    const recordTitle = resolveRecordTitle({ rowItem: row_item, columns: sorted_columns,
+        tableName: table_name, dataTypes: data_types, preferredLanguage: chosenLang,
+        surface: 'article', rowIsViewersOwn });
+    header_first_letter = recordTitle.initial;
+    const preferred_image_alt_label = recordTitle.text;
+    rowArticleHeaderText = recordTitle.text;
+    for (const heading of recordTitle.headers.length ? recordTitle.headers : [recordTitle]) {
+        const column = heading.column || '';
+        const columnMeta = data_types[column] || {};
+        rowArticleHeaderValues.add(heading.text);
+        const header = document.createElement('div');
+        header.classList.add('big_card_header');
+        header.style.whiteSpace = 'pre-wrap';
+        const icon = createDatasetIconElement(table_name, 'big_card_header_dataset_icon');
+        if (icon) {
+            header.classList.add('big_card_header--with-dataset-icon');
+            header.appendChild(icon);
         }
-
-        const { displayValue } = resolveCardFieldDisplayValue(
-            row_item,
-            column,
-            data_types,
-            chosenLang,
-            table_name
-        );
-        const localizedVal = displayValue.trim();
-        const { baseRoles, hasLangKey } = parseRoleString(
-            data_types[column]?.card_element || ""
-        );
-
-        if (baseRoles.includes("header") && !hasLangKey && !preferred_image_alt_header && localizedVal) {
-            preferred_image_alt_header = localizedVal;
+        if (column) {
+            header.appendChild(createRowArticleKeyValueElement(format_column_name(column), heading.text,
+                column, false, 'big_card_header_value', columnMeta.show_key_on_card === true,
+                columnMeta.is_multilingual, row_item[column], columnMeta, timestampDisplayOptions));
+        } else {
+            const value = document.createElement('span');
+            value.classList.add('big_card_header_value');
+            value.textContent = heading.text;
+            header.appendChild(value);
         }
-
-        if (baseRoles.includes("username") && !hasLangKey && !preferred_image_alt_username && localizedVal) {
-            preferred_image_alt_username = localizedVal;
-        }
+        rowArticleHeaderElements.push(header);
     }
-
-    const preferred_image_alt_label =
-        preferred_image_alt_header || preferred_image_alt_username;
-    const rowIsViewersOwn = isRowArticleOwnRow(
-        row_item,
-        resolveRowArticleOwnerColumn(data_types),
-        current_user_id
-    );
 
     /* -------------------------------------------------- *
      * 4. SARAKKEIDEN LOOPPI
@@ -372,51 +333,7 @@ export async function buildRowArticleContent(
                 continue;
             }
 
-            /* header ----------------------------------------------------------- */
-            if (category === "header") {
-                const headerValue = String(val ?? "").trim();
-                if (headerValue) {
-                    rowArticleHeaderValues.add(headerValue);
-                }
-                rowArticleHeaderText = hasLangKey
-                    ? val
-                    : `${column_label}: ${val}`;
-
-                const h = document.createElement("div");
-                h.classList.add("big_card_header");
-                h.style.whiteSpace = "pre-wrap";
-                const datasetIcon = createDatasetIconElement(
-                    table_name,
-                    "big_card_header_dataset_icon"
-                );
-                if (datasetIcon) {
-                    h.classList.add("big_card_header--with-dataset-icon");
-                    h.appendChild(datasetIcon);
-                }
-                if (hasLangKey) {
-                    const translatedHeader = document.createElement("span");
-                    translatedHeader.classList.add("big_card_header_value");
-                    translatedHeader.dataset.langKey = val;
-                    h.appendChild(translatedHeader);
-                } else {
-                    h.appendChild(
-                        createRowArticleKeyValueElement(
-                            column_label,
-                            val,
-                            column,
-                            hasLangKey,
-                            "big_card_header_value",
-                            showKeyOnCard,
-                            colIsMultilingual,
-                            storedRawValue,
-                            data_types[column],
-                            timestampDisplayOptions
-                        )
-                    );
-                }
-                rowArticleHeaderElements.push(h);
-                continue;
-            }
+            if (category === "header") continue;
 
             /* creation_spec ---------------------------------------------------- */
             if (category === "creation_spec") {
@@ -463,11 +380,11 @@ export async function buildRowArticleContent(
         }
     }
 
-    const firstRowArticleImage = rowArticleContentElement.querySelector(".big_card_image");
+    const titleAnchor = rowArticleContentElement.querySelector(".big_card_image") || rowArticleContentElement.firstChild;
     for (const headerElement of rowArticleHeaderElements) {
         rowArticleContentElement.insertBefore(
             headerElement,
-            firstRowArticleImage || rowArticleContentElement.firstChild
+            titleAnchor
         );
     }
 

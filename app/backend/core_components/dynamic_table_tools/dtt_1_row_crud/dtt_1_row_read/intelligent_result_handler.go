@@ -153,13 +153,7 @@ func queryIntelligentResultsStream(w http.ResponseWriter, r *http.Request) error
 	//------------------------------------------------
 	w.Header().Set("Content-Type", "application/x-ndjson; charset=utf-8")
 	FilterIndependentMediaRows(readQuerier, dbutils.NewRequestActorContext(userID, userRole), textRows)
-	first := map[string]interface{}{
-		"stage":           "text",
-		"filters_applied": true,
-		"columns":         textCols,
-		"data":            textRows,
-		"types":           types,
-	}
+	first := intelligentResultStage("text", tableName, textCols, textRows, types)
 	addDatasetKindCapabilities(r.Context(), tableName, first)
 	if err := json.NewEncoder(w).Encode(first); err != nil {
 		return err
@@ -217,13 +211,7 @@ func queryIntelligentResultsStream(w http.ResponseWriter, r *http.Request) error
 							cols = textCols
 						}
 						FilterIndependentMediaRows(readQuerier, dbutils.NewRequestActorContext(userID, userRole), aiRows)
-						aiPacket := map[string]interface{}{
-							"stage":           "ai",
-							"filters_applied": true,
-							"columns":         cols,
-							"data":            aiRows,
-							"types":           types,
-						}
+						aiPacket := intelligentResultStage("ai", tableName, cols, aiRows, types)
 						if capabilities, present := first["kind_capabilities"]; present {
 							aiPacket["kind_capabilities"] = capabilities
 						}
@@ -238,6 +226,16 @@ func queryIntelligentResultsStream(w http.ResponseWriter, r *http.Request) error
 	}
 
 	return nil
+}
+
+// intelligentResultStage copies title facts after this stage has built its joins.
+// An empty text stage does not load join metadata; later AI rows must use the
+// facts their own query loaded rather than the earlier stage's unproven types.
+func intelligentResultStage(stage, tableName string, columns []string, rows []map[string]interface{}, types map[string]interface{}) map[string]interface{} {
+	return map[string]interface{}{
+		"stage": stage, "filters_applied": true, "columns": columns, "data": rows,
+		"types": recordTitleAliasSources(tableName, types),
+	}
 }
 
 /* ===========================================================
@@ -456,7 +454,7 @@ func queryIntelligentResults(w http.ResponseWriter, r *http.Request) error {
 	respJSON := map[string]interface{}{
 		"columns":        resultColumns,
 		"data":           rowsJSON,
-		"types":          columnDataTypes,
+		"types":          recordTitleAliasSources(tableName, columnDataTypes),
 		"resultsPerLoad": resultsPerLoad,
 	}
 	addDatasetKindCapabilities(r.Context(), tableName, respJSON)

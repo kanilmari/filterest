@@ -5,6 +5,7 @@
 
 import { resolveImagePaths } from "../card_view/card_element_builder_helpers.js";
 import { resolveCardFieldDisplayValue } from "../card_view/card_field_formatter_helpers.js";
+import { resolveRecordTitle } from '../record_title_resolver.js';
 import { extractLangValue } from "../../../reusable_components/lang_value_reader.js";
 
 const IMAGE_NAME_TOKENS = Object.freeze([
@@ -13,14 +14,6 @@ const IMAGE_NAME_TOKENS = Object.freeze([
     "thumbnail",
     "photo",
     "kuva",
-]);
-const TITLE_NAME_PRIORITY = Object.freeze([
-    "name",
-    "title",
-    "otsikko",
-    "header",
-    "label",
-    "display",
 ]);
 const DETAIL_NAME_PRIORITY_GROUPS = Object.freeze([
     ["price", "hinta", "cost"],
@@ -58,13 +51,7 @@ export function resolveProductCardFields({
         dataTypes,
         preferredLanguage
     );
-    const title = resolveProductTitle(
-        rowItem,
-        columns,
-        tableName,
-        dataTypes,
-        preferredLanguage
-    );
+    const title = resolveRecordTitle({ rowItem, columns, tableName, dataTypes, preferredLanguage });
     const detailEntries = resolveProductDetails({
         rowItem,
         columns,
@@ -168,90 +155,6 @@ function resolveProductImageSrc(rawValue, preferredLanguage, isMultilingual) {
 
     const { displaySrc } = resolveImagePaths(imageValue, PRODUCT_CARD_MEDIA_FOLDER);
     return displaySrc;
-}
-
-function resolveProductTitle(
-    rowItem,
-    columns,
-    tableName,
-    dataTypes,
-    preferredLanguage
-) {
-    const roleColumn = findFirstColumnByRole(columns, dataTypes, "header");
-    const roleTitle = resolveTitleFromColumn(
-        rowItem,
-        roleColumn,
-        tableName,
-        dataTypes,
-        preferredLanguage
-    );
-    if (roleTitle.text) {
-        return roleTitle;
-    }
-
-    const namedTitleColumn = findFirstColumnByNamePriority(
-        columns,
-        TITLE_NAME_PRIORITY,
-        dataTypes
-    );
-    const namedTitle = resolveTitleFromColumn(
-        rowItem,
-        namedTitleColumn,
-        tableName,
-        dataTypes,
-        preferredLanguage
-    );
-    if (namedTitle.text) {
-        return namedTitle;
-    }
-
-    const textColumn = columns.find((column) => {
-        return (
-            !isHiddenColumn(column, dataTypes) &&
-            !isIdColumn(column) &&
-            !isImageColumnCandidate(column, dataTypes) &&
-            isTextLikeColumn(column, rowItem, dataTypes)
-        );
-    });
-    const textTitle = resolveTitleFromColumn(
-        rowItem,
-        textColumn,
-        tableName,
-        dataTypes,
-        preferredLanguage
-    );
-    if (textTitle.text) {
-        return textTitle;
-    }
-
-    return { text: "Untitled", column: null, isFallback: true };
-}
-
-function resolveTitleFromColumn(
-    rowItem,
-    column,
-    tableName,
-    dataTypes,
-    preferredLanguage
-) {
-    if (!column) {
-        return { text: "", column: null, isFallback: false };
-    }
-
-    const { displayValue } = resolveCardFieldDisplayValue(
-        rowItem,
-        column,
-        dataTypes,
-        preferredLanguage,
-        tableName
-    );
-    const titleText = String(displayValue || "").trim();
-
-    return {
-        text: titleText,
-        column,
-        isFallback: false,
-    };
 }
 
 function resolveProductDetails({
@@ -444,20 +347,6 @@ function findFirstColumnByRole(columns, dataTypes, roleName) {
     }) || null;
 }
 
-function findFirstColumnByNamePriority(columns, priorityNames, dataTypes) {
-    for (const name of priorityNames) {
-        const exactColumn = columns.find((column) => {
-            return !isHiddenColumn(column, dataTypes) &&
-                normalizeColumnName(column) === name;
-        });
-        if (exactColumn) {
-            return exactColumn;
-        }
-    }
-
-    return findFirstColumnByNameTokens(columns, priorityNames, dataTypes);
-}
-
 function findFirstColumnByNameTokens(columns, tokens, dataTypes) {
     return columns.find((column) => {
         return !isHiddenColumn(column, dataTypes) &&
@@ -523,17 +412,6 @@ function isPlainIdentifierColumn(column) {
 function isImageColumnCandidate(column, dataTypes) {
     return getCardRoles(column, dataTypes).includes("image") ||
         IMAGE_NAME_TOKENS.some((token) => columnMatchesToken(column, token));
-}
-
-function isTextLikeColumn(column, rowItem, dataTypes) {
-    const dataType = String(dataTypes?.[column]?.data_type || "").toLowerCase();
-    if (!dataType) {
-        return typeof rowItem?.[column] === "string";
-    }
-
-    return dataType.includes("text") ||
-        dataType.includes("char") ||
-        dataType.includes("json");
 }
 
 function isPriceColumn(column) {

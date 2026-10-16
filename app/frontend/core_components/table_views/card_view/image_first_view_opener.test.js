@@ -399,6 +399,19 @@ describe("openImageFirstView", () => {
         expect(buildContentMock.mock.calls[0][8]).toEqual({ sectionDefaults: { details: false } });
     });
 
+    test('image-first label and avatar initial use a localized fallback name without a header', async () => {
+        localStorage.setItem('chosen_language', 'fi');
+        vi.mocked(resolveRowArticleDataTypes).mockReturnValueOnce({
+            name: { data_type: 'text', is_multilingual: true, show_value_on_card: true },
+            token: { data_type: 'text', card_element: 'header', show_value_on_card: true },
+        });
+        await openImageFirstView({ imageSrc: '/storage/hero.png',
+            imageRows: [{ id: 11, asset_kind: 'image', filename: 'hero.png' }],
+            rowItem: { id: 3, name: { fi: 'Otsikko', en: 'Title' }, token: 'Private' }, tableName: 'examples' });
+        expect(document.querySelector('[data-testid="row-article-image-first-reveal-title"]').textContent).toBe('Otsikko');
+        expect(buildContentMock.mock.calls.at(-1)[5]).toBe('O');
+    });
+
     test("opens globally without dataset activation and keeps a one-image stage bounded", async () => {
         await openImageFirstView({
             imageSrc: "/storage/hero.png",

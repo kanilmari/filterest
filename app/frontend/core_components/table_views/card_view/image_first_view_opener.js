@@ -50,7 +50,7 @@ import {
     enable_experimental_row_article_row_navigation,
     image_first_view_details_position,
 } from "../../../ui_config.js";
-import { resolveDatasetDisplayValue } from "../dataset_value_localizer.js";
+import { resolveRecordTitle } from '../record_title_resolver.js';
 
 function resolveImageAltText(row = {}) {
     return [row?.original_name, row?.title, row?.filename]
@@ -70,37 +70,6 @@ function resolveActiveImageRow(rows, chosenRow, chosenSrc, cardPicture) {
     const chosenPicture = resolveRowArticlePictureIdentity(chosenRow?.filename || chosenSrc);
     return (chosenPicture && rows.find((row) => resolveRowArticlePictureIdentity(row?.filename) === chosenPicture))
         || resolveRowArticleMainImageRow(rows, cardPicture);
-}
-
-function resolveHeaderInitial(rowItem, sortedColumns, dataTypes) {
-    for (const column of sortedColumns) {
-        const { baseRoles } = parseRoleString(dataTypes[column]?.card_element || "");
-        if (!baseRoles.includes("header")) {
-            continue;
-        }
-        const value = String(rowItem?.[column] ?? "").trim();
-        if (value) {
-            return value[0];
-        }
-    }
-    return "";
-}
-
-function resolveRowPresentationLabel(rowItem, sortedColumns, dataTypes) {
-    for (const column of sortedColumns) {
-        const { baseRoles } = parseRoleString(dataTypes[column]?.card_element || "");
-        if (!baseRoles.includes("header")) {
-            continue;
-        }
-        const value = resolveDatasetDisplayValue(
-            rowItem?.[column],
-            dataTypes?.[column] || null,
-        ).trim();
-        if (value) {
-            return value;
-        }
-    }
-    return "";
 }
 
 /**
@@ -231,11 +200,13 @@ export async function openImageFirstView({
         if (response.dataset_appearance != null
             && !datasetAppearanceState.accept(tableName, response.dataset_appearance, { token: appearanceToken, isCurrent })) return null;
         dataTypes = response.types || {};
+        Object.defineProperty(rowItem, '__articleTableMeta', { value: response.table_meta || {}, configurable: true });
+        Object.defineProperty(rowItem, '__articleColumns', { value: response.columns || Object.keys(rowItem), configurable: true });
         selectedCard = Array.from(document.getElementById(tableName + "_container")
             ?.querySelectorAll(".card[data-id]") || [])
             .find(card => String(card.dataset.id) === String(rowItem.id)) || null;
     }
-    const sortedColumns = sortColumnsByRole(Object.keys(rowItem), dataTypes);
+    const sortedColumns = sortColumnsByRole(rowItem.__articleColumns || Object.keys(rowItem), dataTypes);
     const imageRoleColumns = sortedColumns.filter((column) =>
         parseRoleString(dataTypes[column]?.card_element || "").baseRoles.includes("image")
     );
@@ -263,11 +234,9 @@ export async function openImageFirstView({
         cardPicture,
     );
     const imageEntries = resolvedRows.map((row, index) => ({ row, index }));
-    const rowPresentationLabel = resolveRowPresentationLabel(
-        rowItem,
-        sortedColumns,
-        dataTypes,
-    );
+    const recordTitle = resolveRecordTitle({ rowItem, columns: sortedColumns, tableName,
+        dataTypes, surface: 'article', currentUserID: currentUserProfile?.user_id });
+    const rowPresentationLabel = recordTitle.text;
     let closeImageFirstView = null;
     let historyEntryId = null;
     const stage = buildRowArticleImageFirstStage({
@@ -294,7 +263,7 @@ export async function openImageFirstView({
             dataTypes,
             sortedColumns,
             buildCreationSeed(rowItem),
-            resolveHeaderInitial(rowItem, sortedColumns, dataTypes),
+            recordTitle.initial,
             imageRoleColumns.length > 0,
             currentUserProfile?.user_id ?? null,
             { sectionDefaults },

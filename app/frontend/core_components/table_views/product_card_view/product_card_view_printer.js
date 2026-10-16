@@ -19,7 +19,6 @@ import {
     CARD_IMAGE_RENDER_SLOTS,
 } from "../card_view/card_image_render_options.js";
 
-const TITLE_FALLBACK_LANG_KEY = "untitled";
 const EMPTY_STATE_LANG_KEY = "no_rows";
 const NO_IMAGE_LANG_KEY = "no_image";
 const MAX_TITLE_LENGTH = 120;
@@ -168,7 +167,7 @@ function createProductCard({
 
     card.appendChild(createMediaElement(
         image,
-        title.text,
+        title,
         rowItem,
         tableName,
     ));
@@ -182,10 +181,11 @@ function createProductCard({
  * Creates the image/placeholder area for one product card.
  *
  * @param {{src: string, column: string|null}} image
- * @param {string} titleText
+ * @param {{text: string, initial: string}} title
  * @returns {HTMLElement}
  */
-function createMediaElement(image, titleText, rowItem = null, tableName = "") {
+function createMediaElement(image, title, rowItem = null, tableName = "") {
+    const titleText = title.text;
     const media = document.createElement("div");
     media.classList.add("product-card-view-media");
 
@@ -216,9 +216,9 @@ function createMediaElement(image, titleText, rowItem = null, tableName = "") {
 
     const placeholder = document.createElement("div");
     placeholder.classList.add("product-card-view-image-placeholder");
-    const initial = titleText.trim()[0] || "";
+    const initial = title.initial;
     if (initial) {
-        placeholder.textContent = initial.toUpperCase();
+        placeholder.textContent = initial;
     } else {
         placeholder.dataset.langKey = NO_IMAGE_LANG_KEY;
         placeholder.textContent = "No image";
@@ -238,15 +238,14 @@ function createBodyElement(title, detailEntries) {
     const body = document.createElement("div");
     body.classList.add("product-card-view-body");
 
-    const heading = document.createElement("h2");
-    heading.classList.add("product-card-view-title");
-    heading.dataset.testid = "product-card-title";
-    heading.textContent = truncateText(title.text, MAX_TITLE_LENGTH);
-    heading.title = title.text;
-    if (title.isFallback) {
-        heading.dataset.langKey = TITLE_FALLBACK_LANG_KEY;
+    for (const item of title.headers.length ? title.headers : [title]) {
+        const heading = document.createElement("h2");
+        heading.classList.add("product-card-view-title");
+        heading.dataset.testid = "product-card-title";
+        heading.textContent = truncateText(item.text, MAX_TITLE_LENGTH);
+        heading.title = item.text;
+        body.appendChild(heading);
     }
-    body.appendChild(heading);
 
     if (detailEntries.length > 0) {
         const details = document.createElement("dl");

@@ -12,6 +12,8 @@ import {
     resolveCardFieldDisplayValue,
 } from "../card_view/card_field_formatter_helpers.js";
 
+import { resolveRecordTitle } from '../record_title_resolver.js';
+
 const GRID_COLUMNS = 24;
 const MIN_LAYOUT_ROWS = 16;
 
@@ -113,7 +115,8 @@ export function buildExperimentalCardModel({
 
     let primaryMediaColumn = null;
     let primaryMediaValue = "";
-    let primaryHeaderBlock = null;
+    const recordTitle = resolveRecordTitle({ rowItem, columns, tableName, dataTypes,
+        preferredLanguage: preferredLang });
     let primaryUsernameBlock = null;
     let statusValue = "";
 
@@ -167,20 +170,7 @@ export function buildExperimentalCardModel({
             continue;
         }
 
-        if (visibleRoles.includes("header") && !primaryHeaderBlock) {
-            primaryHeaderBlock = buildFieldBlock({
-                id: `header:${column}`,
-                type: "header",
-                column,
-                label,
-                rawValue,
-                displayValue,
-                hasLangKey,
-                hasValue,
-                order: readRoleOrder(visibleRoles, "header"),
-            });
-            continue;
-        }
+        if (visibleRoles.includes("header")) continue;
 
         if (visibleRoles.includes("username") && !primaryUsernameBlock) {
             primaryUsernameBlock = buildFieldBlock({
@@ -291,11 +281,14 @@ export function buildExperimentalCardModel({
     keywordBlocks.sort((left, right) => left.order - right.order);
     fieldBlocks.sort((left, right) => left.order - right.order);
 
-    const headerText = String(primaryHeaderBlock?.displayValue || "").trim();
+    const headerText = recordTitle.text;
     const usernameText = String(primaryUsernameBlock?.displayValue || "").trim();
-    const headerFirstLetter = (headerText || usernameText || String(rowItem?.id || "?"))
-        .trim()
-        .slice(0, 1);
+    const headerFirstLetter = recordTitle.initial;
+    const headerBlocks = (recordTitle.headers.length ? recordTitle.headers : [recordTitle]).map(heading =>
+        buildFieldBlock({ id: `header:${heading.column || 'record'}`, type: 'header',
+            column: heading.column, label: dataTypes[heading.column]?.show_key_on_card === true
+                ? format_column_name(heading.column) : '', rawValue: rowItem[heading.column],
+            displayValue: heading.text, hasLangKey: false, hasValue: true }));
 
     const mediaBlock = {
         id: "media:primary",
@@ -310,9 +303,7 @@ export function buildExperimentalCardModel({
     };
 
     const blocks = [mediaBlock];
-    if (primaryHeaderBlock) {
-        blocks.push(primaryHeaderBlock);
-    }
+    blocks.push(...headerBlocks);
     if (primaryUsernameBlock) {
         blocks.push(primaryUsernameBlock);
     }
@@ -384,21 +375,21 @@ export function createDefaultExperimentalLayoutTemplate(blocks) {
         });
     }
 
-    const headerBlock = blocks.find((block) => block.type === "header");
+    const headerBlocks = blocks.filter((block) => block.type === "header");
     const usernameBlock = blocks.find((block) => block.type === "username");
     const statusBlock = blocks.find((block) => block.type === "status");
     const descriptionBlocks = blocks.filter((block) => block.type === "description");
     const keywordBlocks = blocks.filter((block) => block.type === "keywords");
     const fieldBlocks = blocks.filter((block) => block.type === "field");
 
-    if (headerBlock) {
+    headerBlocks.forEach((headerBlock, index) => {
         template.items[headerBlock.id] = normalizeExperimentalLayoutItem({
             x: mainColumnStart,
-            y: 1,
+            y: 1 + index * 3,
             w: usernameBlock ? Math.max(8, mainColumnSpan - 4) : mainColumnSpan,
             h: 3,
         });
-    }
+    });
 
     if (usernameBlock) {
         template.items[usernameBlock.id] = normalizeExperimentalLayoutItem({
@@ -409,7 +400,7 @@ export function createDefaultExperimentalLayoutTemplate(blocks) {
         });
     }
 
-    let currentRow = 4;
+    let currentRow = Math.max(4, 1 + headerBlocks.length * 3);
     descriptionBlocks.forEach((block, index) => {
         const blockHeight = index === 0 ? 4 : 3;
         template.items[block.id] = normalizeExperimentalLayoutItem({

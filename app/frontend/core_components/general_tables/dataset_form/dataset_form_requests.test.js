@@ -43,8 +43,8 @@ describe('create request', () => {
             requestData: {
                 dataset_name: 'sample_table',
                 column_list: [
-                    { name: 'id', data_type: 'SERIAL', card_role: 'details' },
-                    { name: 'title', data_type: 'VARCHAR(40)', card_role: 'details' },
+                    { name: 'id', data_type: 'SERIAL', card_role: '' },
+                    { name: 'title', data_type: 'VARCHAR(40)', card_role: '' },
                     { name: 'price', data_type: 'NUMERIC(12,4)', card_role: 'description' },
                 ],
                 foreign_keys: [{ referencing_column: 'owner_id', referenced_dataset: 'users', referenced_column: 'id' }],

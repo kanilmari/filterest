@@ -34,7 +34,7 @@ function buildCreateColumns(columns = []) {
         if (!dataType) return failure("missing_data_type", "columns");
         if (names.has(name.toLowerCase())) return failure("duplicate_column_name", "columns");
         names.add(name.toLowerCase());
-        const role = trimToEmpty(column?.role) || "details";
+        const role = trimToEmpty(column?.role);
         if (!isValidCardRole(role) || role.length > 255) return failure("invalid_card_role", "columns");
         list.push({
             name,

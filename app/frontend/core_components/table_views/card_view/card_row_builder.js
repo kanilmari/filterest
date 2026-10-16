@@ -2,6 +2,7 @@
 // Builds the existing standard data card from row and column metadata.
 // Bridges existing card assembly with shared selection and presentation contracts.
 // Exists to keep one card implementation within the source size limit.
+import { resolveRecordTitle } from '../record_title_resolver.js';
 import { datasetAppearanceState } from '../dataset_appearance_state.js';
 import { readAppearanceAttribute } from '../../../reusable_components/appearance_scope_reader.js';
 import { update_card_selection } from "../table_view/row_selection_handler.js";
@@ -142,8 +143,10 @@ count_this_function("createSingleCard");
     const details_entries = [];
     const keywords_list = [];
     let hasLocalizedRowData = false;
-let header_first_letter = "";
-    let preferred_image_alt_header = "";
+const recordTitle = resolveRecordTitle({ rowItem: row_item, columns, tableName: table_name,
+        dataTypes: data_types, preferredLanguage: chosenLang });
+    const header_first_letter = recordTitle.initial;
+
     let preferred_image_alt_username = "";
     const creationDateColumn = ["created", "created_at", "luontiaika"]
         .find((column) => row_item[column] !== null
@@ -154,8 +157,8 @@ let header_first_letter = "";
         : "";
     const creation_seed =
         String(row_item.id ?? "x") + "_" + creation_date_small;
-    let header_text_small = "";
-    let header_column_small = "";
+    const header_text_small = recordTitle.text;
+    const header_column_small = recordTitle.column || "";
     let username_text_small = "";
     let image_value_small = "";
     let image_column_small = "cached_image";
@@ -172,14 +175,6 @@ columns.forEach((col) => {
         );
         const localizedValue = displayValue.trim();
 
-        if (baseRoles.includes("header")) {
-            const v = localizedValue;
-            if (v) header_first_letter = String(v).trim()[0] || "";
-            if (!hasLangKey && !preferred_image_alt_header && localizedValue) {
-                preferred_image_alt_header = localizedValue;
-            }
-        }
-
         if (
             baseRoles.includes("username") &&
             !hasLangKey &&
@@ -190,9 +185,19 @@ columns.forEach((col) => {
         }
     });
     const preferred_image_alt_label =
-        preferred_image_alt_header || preferred_image_alt_username;
+        recordTitle.text || preferred_image_alt_username;
 let usernameElement = null;
     let headerElement = null;
+    for (const heading of recordTitle.headers.length ? recordTitle.headers : [recordTitle]) {
+        const column = heading.column || '';
+        const meta = data_types[column] || {};
+        headerElement = addHeaderElement(heading.text,
+            meta.show_key_on_card === true ? format_column_name(column) : '', column, false,
+            row_item, table_name, card_content_div, row_item[column], meta);
+        if (column) headerElement.classList.add(makeColumnClass(table_name, column));
+        else headerElement.querySelectorAll('[data-column]').forEach(element => element.removeAttribute('data-column'));
+        setFieldHideAttribute(headerElement);
+    }
     let found_image_for_this_row = false;
     let statusBadge = null;
     let statusBadgeValue = "";
@@ -373,26 +378,7 @@ for (const role of baseRoles) {
                 card_image_content.lastElementChild?.classList.add(columnClass);
                 continue;
             }
-    if (role === "header") {
-                if (!header_text_small) {
-                    header_text_small = val_str;
-                    header_column_small = column;
-                }
-                headerElement = addHeaderElement(
-                    val_str,
-                    col_label,
-                    column,
-                    hasLangKey,
-                    row_item,
-                    table_name,
-                    card_content_div,
-                    storedRawValue,
-                    data_types[column]
-                );
-                headerElement.classList.add(columnClass);
-                setFieldHideAttribute(headerElement);
-                continue;
-            }
+    if (role === "header") continue;
     if (role === "username") {
                 usernameElement = addUsernameElement(
                     val_str,
@@ -605,7 +591,10 @@ card_text_content.appendChild(footer_div);
     card._columns = columns;
     card._table_name = table_name;
     card._data_types = data_types;
-    card._hasLocalizedRowData = hasLocalizedRowData;
+    // Generated copy and language-key headings need the same rebuild as locale maps.
+    const titleColumns = [recordTitle.column, ...recordTitle.headers.map(heading => heading.column)];
+    card._hasLocalizedRowData = hasLocalizedRowData || !recordTitle.column || titleColumns.some(column =>
+        /\+lang[_-]key/.test(data_types[column]?.card_element || ''));
     card._renderedLanguage = chosenLang;
 
     if (datasetAppearanceState.isCurrent(appearanceToken)) datasetAppearanceState.bind(card, table_name);

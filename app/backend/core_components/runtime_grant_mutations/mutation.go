@@ -166,9 +166,12 @@ func logSlowPolicyPhase(phase string, started time.Time) {
 // Schema/registry mutations share this completion boundary, including foreign
 // keys, child creation, generic metadata writes, rename, drop and CSV import.
 // Never invalidate before commit or on rollback. Transaction-only callers must
-// call dataset_kinds.InvalidateAll themselves after their own successful commit.
+// invalidate their readers themselves after their own successful commit.
 func scheduleKindEvidenceInvalidation(ctx context.Context) {
-	dbutils.RegisterAfterCommitHook(ctx, dataset_kinds.InvalidateAll)
+	dbutils.RegisterAfterCommitHook(ctx, func() {
+		dataset_kinds.InvalidateAll()
+		invalidateDependentMetadataCaches()
+	})
 }
 
 func RespondError(w http.ResponseWriter, err error) {

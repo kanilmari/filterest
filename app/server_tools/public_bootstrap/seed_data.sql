@@ -7180,6 +7180,42 @@ SELECT id, 'code', CASE WHEN lang_key = 'article_view_permission_missing'
 FROM public.system_lang_keys
 WHERE lang_key IN ('article_view_permission_missing', 'view_group_permission_missing', 'view_group_open_permissions', 'view_group_permissions_unavailable')
 ON CONFLICT (lang_key_id, source_type, source_high) DO NOTHING;
+-- 20261015000001_seed_record_title_language_keys.sql
+-- Seeds generated record names and the new-dataset automatic role choice.
+-- Connects all card/article renderers and creation to existing UI dictionaries.
+-- Preserves authored translations on upgrades and in fresh bootstrap.
+-- VERSION_DB: 9.12.0
+-- VERSION_DB_OWNER: 20261015000099_record_database_release_9_12_0.sql
+
+WITH copy(lang_key, fi, en, ch, yue) AS (VALUES
+    ('record_title_with_id', 'Tietue {id}', 'Record {id}', '记录 {id}', '記錄 {id}'),
+    ('record_title_without_id', 'Tietue', 'Record', '记录', '記錄'),
+    ('card_role_automatic', 'Automaattinen', 'Automatic', '自动', '自動')
+)
+INSERT INTO public.system_lang_keys AS existing (lang_key, fi, en, ch, yue, creation_spec)
+SELECT lang_key, fi, en, ch, yue, 'Record titles and creation defaults, ticket 962'
+FROM copy
+ON CONFLICT (lang_key) DO UPDATE SET
+    fi = COALESCE(NULLIF(existing.fi, ''), EXCLUDED.fi),
+    en = COALESCE(NULLIF(existing.en, ''), EXCLUDED.en),
+    ch = COALESCE(NULLIF(existing.ch, ''), EXCLUDED.ch),
+    yue = COALESCE(NULLIF(existing.yue, ''), EXCLUDED.yue);
+
+INSERT INTO public.system_lang_key_translations AS existing
+    (lang_key_id, language_code, translation, source_kind, review_status)
+SELECT keys.id, copy.language_code, copy.translation, 'manual', 'approved'
+FROM public.system_lang_keys keys
+CROSS JOIN LATERAL (VALUES
+    ('fi', keys.fi), ('en', keys.en), ('ch', keys.ch), ('yue', keys.yue),
+    ('zh-CN', keys.ch), ('zh-TW', CASE keys.lang_key
+        WHEN 'record_title_with_id' THEN '記錄 {id}' WHEN 'record_title_without_id' THEN '記錄' ELSE '自動' END),
+    ('zh-HK', keys.yue)
+) copy(language_code, translation)
+JOIN public.system_languages languages ON languages.language_code = copy.language_code
+WHERE keys.lang_key IN ('record_title_with_id', 'record_title_without_id', 'card_role_automatic')
+ON CONFLICT (lang_key_id, language_code) DO UPDATE
+SET translation = EXCLUDED.translation
+WHERE NULLIF(btrim(existing.translation), '') IS NULL;
 -- Schema above is imported before registry seeds. This copy follows the
 -- language seeds; upgrades run the complete migration in one transaction.
 WITH authored(lang_key,fi,en,ch,yue) AS (VALUES
@@ -8424,6 +8460,39 @@ BEGIN
     WHERE NOT EXISTS (SELECT 1 FROM public.system_data_repair_records
                        WHERE migration = 't750_automatic_log_retention' AND action = 'completed');
 END $log_retention$;
+-- 20261015000002_set_exceptional_record_headers.sql
+-- Gives two system datasets intentional names where inference is ambiguous.
+-- Connects audit handler names and authorized language-key aliases to card roles.
+-- Changes only untouched visible metadata and preserves administrator choices.
+-- VERSION_DB: 9.12.0
+-- VERSION_DB_OWNER: 20261015000099_record_database_release_9_12_0.sql
+-- COMPLETION_MARKER: record_title_headers_962
+
+DO $record_title_headers$
+BEGIN
+    UPDATE public.system_column_details details
+    SET card_element = 'header', updated = now()
+    FROM public.system_db_tables dataset
+    WHERE details.table_uid = dataset.table_uid AND dataset.schema_name = 'public'
+      AND (dataset.table_name, details.column_name) IN (
+          ('system_audit_log', 'handler_name'), ('system_lang_key_translations', 'lang_key_id'))
+      AND COALESCE(btrim(details.card_element), '') IN ('', 'details')
+      AND COALESCE(details.hide_everywhere, false) = false
+      AND COALESCE(details.hide_on_small_card, false) = false
+      AND COALESCE(details.show_value_on_card, false) = true
+      AND COALESCE(details.client_delivery_mode, 'include') = 'include'
+      AND NOT EXISTS (
+          SELECT 1 FROM public.system_column_details configured
+          WHERE configured.table_uid = dataset.table_uid
+            AND configured.card_element ~ '(^|,)\s*header(\s*\+[^,]+)?\s*(,|$)'
+      );
+
+    INSERT INTO public.system_data_repair_records (migration, action, detail)
+    SELECT 'record_title_headers_962', 'completed',
+           '{"file":"20261015000002_set_exceptional_record_headers.sql"}'::jsonb
+    WHERE NOT EXISTS (SELECT 1 FROM public.system_data_repair_records
+                       WHERE migration = 'record_title_headers_962' AND action = 'completed');
+END $record_title_headers$;
 
 -- Generated migration-ledger baseline and version row, written by this acceptance block only after
 -- every completion marker is present and every final check comes back empty. These migrations are
@@ -8434,7 +8503,7 @@ DECLARE
     findings text;
 BEGIN
     SELECT string_agg(marker, ', ' ORDER BY marker) INTO missing_markers
-      FROM unnest(ARRAY['wl58_row_actor_support', 'wl58_row_actor_marks_by_table_uid', 'wl58_row_actor_trigger_definitions', 'k116_login_names', 'password_reset_dummy_work', 'system_favorites_table', 'system_front_page_revisions_table', 'system_front_page_blocks_table', 'wl103_row_group_classifications', 'wl132_surviving_sign_in', 'wl52_drop_column_label_value_layout', 'system_dataset_appearance_table', 'wl157_migration_execution_evidence', 'dataset_card_appearance_cutover', 'wl157_application_update_admission', 'dataset_appearance_three_place_schema', 'wl164_publication_fields', 'wl163_dataset_kind_contracts', 'wl159_dataset_namespace', 'wl167_database_identity_schema', 'wl167_managed_timestamp_zones', 'wl157_application_update_refusal_keys', 'wl58_row_actor_columns', 'system_favorites_registry', 'system_front_page_blocks_registry', 'wl103_row_group_classifications_registry', 'wl144_registry_reference_key', 'dataset_media_hidden', 'wl157_application_update_capability', 'dataset_appearance_three_place_backfill', 'wl164_publication_column_metadata', 't919_registered_column_metadata', 't750_automatic_log_retention']::text[]) AS marker
+      FROM unnest(ARRAY['wl58_row_actor_support', 'wl58_row_actor_marks_by_table_uid', 'wl58_row_actor_trigger_definitions', 'k116_login_names', 'password_reset_dummy_work', 'system_favorites_table', 'system_front_page_revisions_table', 'system_front_page_blocks_table', 'wl103_row_group_classifications', 'wl132_surviving_sign_in', 'wl52_drop_column_label_value_layout', 'system_dataset_appearance_table', 'wl157_migration_execution_evidence', 'dataset_card_appearance_cutover', 'wl157_application_update_admission', 'dataset_appearance_three_place_schema', 'wl164_publication_fields', 'wl163_dataset_kind_contracts', 'wl159_dataset_namespace', 'wl167_database_identity_schema', 'wl167_managed_timestamp_zones', 'wl157_application_update_refusal_keys', 'wl58_row_actor_columns', 'system_favorites_registry', 'system_front_page_blocks_registry', 'wl103_row_group_classifications_registry', 'wl144_registry_reference_key', 'dataset_media_hidden', 'wl157_application_update_capability', 'dataset_appearance_three_place_backfill', 'wl164_publication_column_metadata', 't919_registered_column_metadata', 't750_automatic_log_retention', 'record_title_headers_962']::text[]) AS marker
      WHERE NOT EXISTS (SELECT 1 FROM public.system_data_repair_records AS record
                         WHERE record.migration = marker AND record.action = 'completed');
     IF missing_markers IS NOT NULL THEN
@@ -8661,9 +8730,12 @@ BEGIN
       ('20261013000002_seed_card_and_filterbar_language_keys.sql', '0aba2fb1f58247856743acbeb026f844873924b0a74d5556efbf0275174e4b19', 'bootstrap_baseline', 'bootstrap'),
       ('20261013000099_record_database_release_9_11_1.sql', '3288cea7e08d2dc24aabdb30f34a3eda00646cc152c77020fae4fc29ff424433', 'bootstrap_baseline', 'bootstrap'),
       ('20261014000001_seed_article_view_access_language_keys.sql', 'af9f7baa81e31c3821ae08787c433da6950234593099a24278e346f6a3affe78', 'bootstrap_baseline', 'bootstrap'),
-      ('20261014000099_record_database_release_9_11_2.sql', '9a5524a1eaa483f9c128d47ac9d75668ac04c5345171a01def9479127d3bb9d1', 'bootstrap_baseline', 'bootstrap')
+      ('20261014000099_record_database_release_9_11_2.sql', '9a5524a1eaa483f9c128d47ac9d75668ac04c5345171a01def9479127d3bb9d1', 'bootstrap_baseline', 'bootstrap'),
+      ('20261015000001_seed_record_title_language_keys.sql', 'b0e553ea9ca577cdfb90243e4cbb37e2036a9a9e57975a72fce616d602cbee6a', 'bootstrap_baseline', 'bootstrap'),
+      ('20261015000002_set_exceptional_record_headers.sql', '72875464afd70981d595b181dc76dcb0034f2056dfa42808bcdbd03587ec1593', 'bootstrap_baseline', 'bootstrap'),
+      ('20261015000099_record_database_release_9_12_0.sql', '7b6b01c1241bd92d1092957c1304e5cacab17e991ae3b8c3cbe66666b57ad8a4', 'bootstrap_baseline', 'bootstrap')
     ON CONFLICT (filename) DO NOTHING;
     INSERT INTO public.system_db_version (version, description)
-    VALUES ('9.11.2', 'Filterest generated public bootstrap');
+    VALUES ('9.12.0', 'Filterest generated public bootstrap');
 END
 $filterest_acceptance$;
