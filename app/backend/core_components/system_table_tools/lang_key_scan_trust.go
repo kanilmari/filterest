@@ -100,14 +100,20 @@ func sourceScanSkipReason() string {
 
 const codeSourceHistoryKey = "lang_key_source_scan_history"
 
+// Bump only when intentional recognition rules change the code-key population,
+// never for deployment paths or availability: missing roots must still fail.
+const langKeyScannerRuleVersion = "j35-b3-v1"
+
 type codeSourceSample struct {
-	At    time.Time `json:"at"`
-	Count int       `json:"code_keys"`
+	At          time.Time `json:"at"`
+	Count       int       `json:"code_keys"`
+	RuleVersion string    `json:"rule_version,omitempty"`
 }
 
-// retainCodeSourcePeaks stores only non-dominated samples: a newer count at
-// least as large outlives and replaces an older one. This is the exact rolling
-// seven-day maximum with minimal history, rather than retaining every scan.
+// retainCodeSourcePeaks stores non-dominated samples per scanner rule version:
+// a newer count at least as large replaces older samples of that version only.
+// Old versions (including unversioned B2) remain until the seven-day expiry,
+// while only the current version sets the floor. Paths never select a version.
 func retainCodeSourcePeaks(samples []codeSourceSample, count int, now time.Time) ([]codeSourceSample, int, error) {
 	cutoff := now.Add(-7 * 24 * time.Hour)
 	retained := make([]codeSourceSample, 0, len(samples)+1)
@@ -123,14 +129,17 @@ func retainCodeSourcePeaks(samples []codeSourceSample, count int, now time.Time)
 	}
 	maximum := count
 	for _, sample := range retained {
-		if sample.Count > maximum {
+		if sample.RuleVersion == langKeyScannerRuleVersion && sample.Count > maximum {
 			maximum = sample.Count
 		}
 	}
-	for len(retained) > 0 && retained[len(retained)-1].Count <= count {
-		retained = retained[:len(retained)-1]
+	peaks := retained[:0]
+	for _, sample := range retained {
+		if sample.RuleVersion != langKeyScannerRuleVersion || sample.Count > count {
+			peaks = append(peaks, sample)
+		}
 	}
-	return append(retained, codeSourceSample{At: now, Count: count}), maximum, nil
+	return append(peaks, codeSourceSample{At: now, Count: count, RuleVersion: langKeyScannerRuleVersion}), maximum, nil
 }
 
 // recordCodeSourceCount uses the existing JSON configuration store; no schema or

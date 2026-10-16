@@ -276,6 +276,7 @@ func TestScanCodebaseForLangKeySourcesRecordsTheSameAppPathsInEitherLayout(t *te
 			replaceAdditionalLangKeySourceRootsForTest(t, layout.privateRoots)
 
 			got, err := scanCodebaseForLangKeySources()
+			got = definiteCodeEntries(got)
 			if err != nil {
 				t.Fatalf("scanCodebaseForLangKeySources() error = %v", err)
 			}
@@ -321,6 +322,8 @@ func TestPopulateLangKeySourcesSavesSiblingCompositionSources(t *testing.T) {
 	for _, q := range emptySourceScanQueries()[1:] {
 		pushOrphanQuery(q)
 	}
+	pushOrphanExec(orphanQueuedExec{rowsAffected: 1}) // Two literal sources.
+	pushOrphanExec(orphanQueuedExec{rowsAffected: 1})
 	queueCodeSourceHistory(nil)
 	pushOrphanExec(orphanQueuedExec{}) // No stale rows.
 
@@ -328,8 +331,8 @@ func TestPopulateLangKeySourcesSavesSiblingCompositionSources(t *testing.T) {
 	if err != nil {
 		t.Fatalf("PopulateLangKeySources() error = %v", err)
 	}
-	if total != 2 {
-		t.Fatalf("PopulateLangKeySources() total = %d, want 2", total)
+	if total != 4 {
+		t.Fatalf("PopulateLangKeySources() total = %d, want 4", total)
 	}
 	if !SourceScanIsFresh() {
 		t.Fatal("SourceScanIsFresh() = false after a complete scan")
@@ -340,8 +343,8 @@ func TestPopulateLangKeySourcesSavesSiblingCompositionSources(t *testing.T) {
 			savedCodeSources++
 		}
 	}
-	if savedCodeSources != 2 {
-		t.Fatalf("saved code sources = %d, want 2", savedCodeSources)
+	if savedCodeSources != 4 {
+		t.Fatalf("saved code sources = %d, want 4", savedCodeSources)
 	}
 }
 
@@ -501,6 +504,7 @@ func TestScanCodebaseForLangKeySourcesFollowsLinksThatStayInside(t *testing.T) {
 	replaceLangKeyRuntimePathsForTest(t, langKeyRuntimePaths(installationRoot, applicationRoot))
 
 	got, err := scanCodebaseForLangKeySources()
+	got = definiteCodeEntries(got)
 	if err != nil {
 		t.Fatalf("scanCodebaseForLangKeySources() error = %v", err)
 	}
@@ -527,6 +531,7 @@ func TestScanCodebaseForLangKeySourcesAcceptsAnApplicationReachedThroughALink(t 
 	replaceLangKeyRuntimePathsForTest(t, langKeyRuntimePaths(installationRoot, applicationRoot))
 
 	got, err := scanCodebaseForLangKeySources()
+	got = definiteCodeEntries(got)
 	if err != nil {
 		t.Fatalf("scanCodebaseForLangKeySources() error = %v", err)
 	}
@@ -534,4 +539,16 @@ func TestScanCodebaseForLangKeySourcesAcceptsAnApplicationReachedThroughALink(t 
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("scanCodebaseForLangKeySources() = %v, want %v", got, want)
 	}
+}
+
+// definiteCodeEntries keeps these root/path expectations independent of the
+// separately proved literal safety net.
+func definiteCodeEntries(entries []sourceEntry) []sourceEntry {
+	var code []sourceEntry
+	for _, entry := range entries {
+		if entry.sourceType == "" && !entry.prefix {
+			code = append(code, entry)
+		}
+	}
+	return code
 }

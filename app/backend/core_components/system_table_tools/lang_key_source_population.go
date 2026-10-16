@@ -109,15 +109,17 @@ func validateLangKeySourceRoot(sourceRoot string, requireApplicationMarkers bool
 	return nil
 }
 
-// sourceEntry — yksi avain-lähde -pari koodiskannauksesta
+// sourceEntry is a candidate until resolved against the existing key registry.
 type sourceEntry struct {
-	langKey  string
-	filePath string // suhteellinen polku projektin juuresta
+	langKey    string
+	filePath   string // Relative to the installation/source label root.
+	sourceType string // Empty means definite code evidence; literals are the safety net.
+	prefix     bool   // A candidate only; expanded against existing registry names.
 }
 
-// scanCodebaseForLangKeySources skannaa frontend/, backend/ ja components/ -hakemistot
-// ja palauttaa listan avain→tiedostopolku -pareista. Skipaa dist/-kansion.
-// Tunnistaa samat kaavat kuin scanCodebaseForLangKeys() mutta säilyttää tiedostopolun.
+// scanCodebaseForLangKeySources reads every configured frontend/backend/component
+// tree, excluding tests and build output. It returns candidates with their paths;
+// population must resolve them against the registry before recording evidence.
 func scanCodebaseForLangKeySources() ([]sourceEntry, error) {
 	var results []sourceEntry
 
@@ -138,7 +140,7 @@ func scanCodebaseForLangKeySources() ([]sourceEntry, error) {
 			if walkErr != nil {
 				return walkErr
 			}
-			if path != dir && (info.Name() == "dist" || info.Name() == "node_modules") {
+			if path != dir && skipLangKeyCodePath(info.Name(), info.IsDir()) {
 				if info.IsDir() {
 					return filepath.SkipDir
 				}
@@ -159,7 +161,8 @@ func scanCodebaseForLangKeySources() ([]sourceEntry, error) {
 			if readErr != nil {
 				return readErr
 			}
-			content := string(data)
+			rawContent := string(data)
+			content, tokens := lexLangKeyCode(rawContent, ext)
 			relPath, relErr := scanDir.recordedPath(path)
 			if relErr != nil {
 				return relErr
@@ -195,6 +198,9 @@ func scanCodebaseForLangKeySources() ([]sourceEntry, error) {
 					}
 				}
 			}
+			// D3a's literal safety net includes comments and must not inherit
+			// the lexer's destructive masking; definite patterns above still do.
+			results = appendLangKeyCodeCandidates(results, tokens, relPath, rawContent, foundInFile)
 			return nil
 		})
 		if walkErr != nil {
@@ -233,16 +239,22 @@ func PopulateLangKeySources() (total int, scanErr error) {
 	}
 	stage = "code"
 	codeKeys := make(map[int64]bool)
-	for _, src := range codeSources {
+	for _, src := range resolveLangKeyCodeSources(codeSources, keyToID) {
 		id, ok := keyToID[src.langKey]
 		if !ok {
 			continue
 		}
-		if err := upsertSource(id, "code", src.filePath, ""); err != nil {
+		sourceType := src.sourceType
+		if sourceType == "" {
+			sourceType = "code"
+		}
+		if err := upsertSource(id, sourceType, src.filePath, ""); err != nil {
 			return total, fmt.Errorf("code: %w", err)
 		}
 		total++
-		codeKeys[id] = true
+		if sourceType == "code" {
+			codeKeys[id] = true
+		}
 	}
 	// Each stage returns query, row iteration, conversion and write errors.
 	for _, step := range []struct {
@@ -301,7 +313,7 @@ func cleanupStaleLangKeySourcesLocked() int64 {
 	}
 	result, err := backend.Db.Exec(`
         DELETE FROM system_lang_key_sources
-        WHERE source_type IN ('code', 'column', 'table', 'prefix', 'suffix', 'view', 'group', 'folder', 'db', 'foreign_key', 'column_value')
+        WHERE source_type IN ('code', 'code_literal', 'column', 'table', 'prefix', 'suffix', 'view', 'group', 'folder', 'db', 'foreign_key', 'column_value')
           AND last_seen < CURRENT_DATE - INTERVAL '7 days'
     `)
 	if err != nil {

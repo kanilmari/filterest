@@ -148,6 +148,7 @@ Every lang key can have **multiple** source records. A key like `updated` may ap
 | `source_type` | `source_high` / `source_low` | Created by | Counts as use today? |
 |---|---|---|---|
 | `code` | file path / `''` | Startup scanner, seeds | Yes |
+| `code_literal` | file path / `''` | Existing-key literal or raw-text array/prefix hit in non-test code | Yes |
 | `table` | dataset / dataset | Schema scanner and label creation | Yes |
 | `column` | dataset / column | Schema scanner and label creation | Yes |
 | `prefix`, `suffix`, `db` | legacy scanner identity | Historical source records | Yes |
@@ -165,10 +166,7 @@ Every lang key can have **multiple** source records. A key like `updated` may ap
 | `orphan` | `consistency_scan` / `''` | Orphan marking | No |
 | Any other type | source-owned identity | Existing or future writer | Yes |
 
-The shared SQL rule in `lang_key_consistency_checks.go` excludes only `orphan`
-and `manual_crud`. B1 does not change what counts as use. In particular,
-`foreign_key / public.system_lang_key_translations.lang_key_id` still protects
-its key. The later rule change belongs to WO-J35.
+The shared SQL rule in `lang_key_consistency_checks.go` excludes only `orphan` and `manual_crud`. B1 does not change what counts as use. In particular, `foreign_key / public.system_lang_key_translations.lang_key_id` still protects its key. The later rule change belongs to WO-J35.
 
 ### UPSERT Pattern
 
@@ -467,7 +465,7 @@ On every server startup, `optional_tasks.go` runs a three-step pipeline:
 
 **File:** `lang_key_source_population.go`
 
-**Scan trust (B2):** Freshness advances only after every code, registry, schema, view, group, folder, foreign-key and key-valued-column reader and source writer succeeds. A partial scan names the failed sub-scan, preserves previous source rows and the last successful time, and logs why marking and seven-day cleanup are skipped. A complete scan is suspicious when its distinct current `code` keys fall below 90% of the rolling seven-day maximum; both operations are skipped and freshness stays invalid. The existing `system_config` JSON row `lang_key_source_scan_history` lazily retains only non-dominated timestamp/count peaks, including suspicious complete scans, and prunes expired peaks; no schema migration is needed. The read-only consistency report shows partial/suspicious status in fi/en/ch/yue alongside the last successful time.
+**Scan trust (B2):** Freshness advances only after every code, registry, schema, view, group, folder, foreign-key and key-valued-column reader and source writer succeeds. A partial scan names the failed sub-scan, preserves previous source rows and the last successful time, and logs why marking and seven-day cleanup are skipped. A complete scan is suspicious when its distinct current `code` keys fall below 90% of the rolling seven-day maximum for the same scanner rule version; both operations are skipped and freshness stays invalid. The existing `system_config` JSON row `lang_key_source_scan_history` lazily retains only non-dominated timestamp/count/rule-version peaks, including suspicious complete scans, and prunes expired peaks; no schema migration is needed. Unversioned B2 history and other rule versions stay retained but are not compared with B3; missing or unreadable roots still fail closed. The read-only consistency report shows partial/suspicious status in fi/en/ch/yue alongside the last successful time.
 
 Scans all sources and UPSERTS records into `system_lang_key_sources`:
 
@@ -481,11 +479,9 @@ Scans all sources and UPSERTS records into `system_lang_key_sources`:
    image_ready: { fi: "Kuva on valmis", en: "Image is ready" }  // fallback translations
    ```
 
-   In each shape the key is recognised by its own snake_case name, so ordinary
-   identifiers (`apiKey: "abc123"`) and short values (`["png", "jpeg"]`) stay
-   out. A key written as a single word with no underscore is not read from a
-   catalogue; give such a key an ordinary `dataset.langKey` or
-   `getTranslationForKey("…")` reference somewhere.
+   These legacy catalogue shapes recognize snake_case names. B3 also reads property-keyed arrays (including single-word keys), Go `const …Key = "…"`, and variable templates or concatenations only when their fixed part prefixes existing key names. Every candidate is resolved against the existing registry; no scan creates keys.
+
+   **B3 helpers and literals:** Short JS helpers `t`, `text`, `label`, `copy`, `element`, `report`, `field` and `createPanelText` are scoped to reviewed owners in `lang_key_code_evidence.go`. The five full-key `frontPage*` controls are recognized in their owner and modules with a real static import of that owner; `frontPageStatus` takes a test id. Go recognizes `profileFailure`, `respondPublicationRefusal` and the email `copy` closure in their owners; `nameRefusal` has no maintained definition. Suffix-only helpers and the cloud view's local-dictionary `t` are excluded. The lexer masks comments only for definite `code` evidence and resumes incomplete strings at line ends; its literals are unioned with overlapping per-line single, double and backtick quote candidates over raw file text, comments included (D3a), so literal recall is independent of regex/comment classification. Property-array and variable-prefix recognisers also scan raw text, comments included, and union their `code_literal` hits with the masked/lexed run; raw prefix expansion preserves that evidence type. Every quoted whole name equal to an existing key also records `code_literal`, including when definite `code` evidence exists; only `code` counts toward the floor. Files `*_test.go`, `*.test.js`, `*.test.ts`, `*.spec.*` and the `testing/` and `e2e/` folders are excluded. A B3 rollback must keep `code_literal` in stale cleanup so abandoned evidence expires. **Recall boundary (owner decision 16.10.2026):** recall is guaranteed for quoted key names. Unquoted property-array keys and literal-prefix + variable forms are best-effort: a regex literal earlier on the same line can still confuse the raw recognisers. Two cases are known. A regex containing `//` right after `}` is recovered by the raw scan. A quote inside a regex that pairs with a later string's quote can still hide such a key, because the raw array/prefix recognisers do not yet search with overlap (planned with B6). Before any archiving returns, B6's render-time key collection (P3) and the per-site review (P4) are the backstop; J36's pause stays in force.
 2. **Schema scan** — Queries `system_column_details` joined to `system_db_tables` to find dynamic table columns. Creates `source_type='column'` records with `source_high=table_name`, `source_low=column_name`.
 3. **Table scan** — Queries `system_db_tables`. Creates `source_type='table'` records.
 4. **View scan** — Queries `system_table_views`. Creates `source_type='view'` records.
@@ -493,7 +489,7 @@ Scans all sources and UPSERTS records into `system_lang_key_sources`:
 6. **Folder scan** — Queries `system_table_folders`. Creates `source_type='folder'` records.
 7. **Stale cleanup** — after a fresh scan, `cleanupStaleLangKeySources()` removes
    source rows with `last_seen < CURRENT_DATE - INTERVAL '7 days'` only for
-   `code`, `column`, `table`, `prefix`, `suffix`, `view`, `group`, `folder`, `db`,
+   `code`, `code_literal`, `column`, `table`, `prefix`, `suffix`, `view`, `group`, `folder`, `db`,
    `foreign_key` and `column_value`. It never deletes keys. Types outside this
    list do not expire through this cleanup: this includes `dataset_header`,
    `front_page_hero`, `admin_api`, `dev_editor`, `template`, `javascript`,
@@ -652,6 +648,8 @@ The legacy `system_lang_keys.description` column still contains old auto-generat
 | File | Purpose |
 |------|---------|
 | `app/backend/core_components/system_table_tools/lang_key_source_population.go` | Startup scanner: code+schema+DB objects → sources |
+| `app/backend/core_components/system_table_tools/lang_key_code_evidence.go` | Reviewed helper scopes, declarations, prefixes, literals and existing-registry gate |
+| `app/backend/core_components/system_table_tools/lang_key_scan_trust.go` | Scan freshness and persistent seven-day floor per scanner rule version |
 | `app/backend/core_components/startup/optional_tasks.go` | Startup orchestration: scan → mark orphans |
 | `app/backend/core_components/startup/primary_key_check.go` | Ensure PK columns have lang keys |
 

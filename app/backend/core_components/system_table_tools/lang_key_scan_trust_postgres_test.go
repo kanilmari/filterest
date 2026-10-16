@@ -88,7 +88,7 @@ func TestLangKeyScanTrustPostgresPartialPreservesEvidence(t *testing.T) {
 		t.Fatal("partial scan wrote history")
 	}
 	frontPageExec(t, db, `ALTER TABLE unavailable_views RENAME TO system_table_views`)
-	if count, err := PopulateLangKeySources(); err != nil || count != 1 || !SourceScanIsFresh() {
+	if count, err := PopulateLangKeySources(); err != nil || count != 2 || !SourceScanIsFresh() {
 		t.Fatal(count, err)
 	}
 	if frontPageCount(t, db, `SELECT count(*) FROM system_lang_key_sources WHERE id IN (1,3)`) != 0 {
@@ -106,7 +106,7 @@ func TestLangKeyScanTrustPostgresFloorPersistenceAndRecovery(t *testing.T) {
 	db := scanTrustPostgresFixture(t)
 	now := timeNowUTC()
 	// A missing row initializes identically on fresh and upgraded installations.
-	for _, sample := range []codeSourceSample{{At: now.Add(-6 * 24 * time.Hour), Count: 100}, {At: now.Add(-time.Hour), Count: 95}} {
+	for _, sample := range []codeSourceSample{{RuleVersion: langKeyScannerRuleVersion, At: now.Add(-6 * 24 * time.Hour), Count: 100}, {RuleVersion: langKeyScannerRuleVersion, At: now.Add(-time.Hour), Count: 95}} {
 		if _, _, err := recordCodeSourceCount(db, sample.Count, sample.At); err != nil {
 			t.Fatal(err)
 		}
@@ -130,7 +130,7 @@ func TestLangKeyScanTrustPostgresFloorPersistenceAndRecovery(t *testing.T) {
 		t.Fatal(suspicious, maximum, err)
 	}
 	// Age the fixture's history past seven days, then prove safe recovery.
-	expired, _ := json.Marshal([]codeSourceSample{{At: now.Add(-8 * 24 * time.Hour), Count: 100}})
+	expired, _ := json.Marshal([]codeSourceSample{{RuleVersion: langKeyScannerRuleVersion, At: now.Add(-8 * 24 * time.Hour), Count: 100}})
 	if _, err := db.Exec(`UPDATE system_config SET json_value=$1::jsonb WHERE key=$2`, string(expired), codeSourceHistoryKey); err != nil {
 		t.Fatal(err)
 	}
@@ -147,5 +147,58 @@ func TestLangKeyScanTrustPostgresFloorPersistenceAndRecovery(t *testing.T) {
 	var samples []codeSourceSample
 	if err := json.Unmarshal(raw, &samples); err != nil || len(samples) != 1 || samples[0].Count != 1 {
 		t.Fatal(string(raw), err)
+	}
+}
+
+// TestLangKeyScanTrustPostgresRuleVersion proves upgrades accept intentional
+// rule changes while the next same-version drop still uses persisted history.
+func TestLangKeyScanTrustPostgresRuleVersion(t *testing.T) {
+	db := scanTrustPostgresFixture(t)
+	now := timeNowUTC()
+	old, _ := json.Marshal([]codeSourceSample{{At: now.Add(-time.Hour), Count: 100}})
+	if _, err := db.Exec(`INSERT INTO system_config(key,json_value,value_type) VALUES($1,$2::jsonb,5)`, codeSourceHistoryKey, string(old)); err != nil {
+		t.Fatal(err)
+	}
+	if count, err := PopulateLangKeySources(); err != nil || count != 2 || !SourceScanIsFresh() {
+		t.Fatal(count, err)
+	}
+	var raw []byte
+	if err := db.QueryRow(`SELECT json_value FROM system_config WHERE key=$1`, codeSourceHistoryKey).Scan(&raw); err != nil {
+		t.Fatal(err)
+	}
+	var samples []codeSourceSample
+	if err := json.Unmarshal(raw, &samples); err != nil || len(samples) != 2 || samples[1].RuleVersion != langKeyScannerRuleVersion {
+		t.Fatal(string(raw), err)
+	}
+	// Establish a 100-key baseline using this scanner's actual persisted writer.
+	if _, _, err := recordCodeSourceCount(db, 100, timeNowUTC()); err != nil {
+		t.Fatal(err)
+	}
+	if suspicious, maximum, err := recordCodeSourceCount(db, 80, timeNowUTC()); err != nil || !suspicious || maximum != 100 {
+		t.Fatal(suspicious, maximum, err)
+	}
+}
+
+func TestLangKeyCodeLiteralPostgresExpiry(t *testing.T) {
+	db := scanTrustPostgresFixture(t)
+	frontPageExec(t, db, `INSERT INTO system_lang_key_sources(lang_key_id,source_type,source_high,last_seen) VALUES
+ (1,'code_literal','expired_literal.js',CURRENT_DATE-8),
+ (1,'code_literal','boundary_literal.js',CURRENT_DATE-7),
+ (1,'code_literal','recent_literal.js',CURRENT_DATE-6),
+ (1,'unknown_evidence','persistent',CURRENT_DATE-8);`)
+	markSourceScanFailed()
+	if cleanupStaleLangKeySources() != 0 {
+		t.Fatal("partial scan cleaned evidence")
+	}
+	if frontPageCount(t, db, `SELECT count(*) FROM system_lang_key_sources WHERE source_type='code_literal'`) != 3 {
+		t.Fatal("partial scan lost literals")
+	}
+	markSourceScanDone()
+	cleanupStaleLangKeySources()
+	if frontPageCount(t, db, `SELECT count(*) FROM system_lang_key_sources WHERE source_type='code_literal'`) != 2 ||
+		frontPageCount(t, db, `SELECT count(*) FROM system_lang_key_sources WHERE source_high='expired_literal.js'`) != 0 ||
+		frontPageCount(t, db, `SELECT count(*) FROM system_lang_key_sources WHERE source_type='unknown_evidence'`) != 1 ||
+		frontPageCount(t, db, `SELECT count(*) FROM system_lang_keys`) != 3 {
+		t.Fatal("expiry boundary, unknown evidence or key preservation failed")
 	}
 }

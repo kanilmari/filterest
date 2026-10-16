@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"log"
 	"net/http/httptest"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -27,7 +28,9 @@ func scanTrustFixture(t *testing.T) {
 	root := t.TempDir()
 	app := filepath.Join(root, "app")
 	createLangKeySourceRoot(t, app, true)
-	writeLangKeyReference(t, filepath.Join(app, "frontend", "view.js"), "scan_trust_key")
+	if err := os.WriteFile(filepath.Join(app, "frontend", "view.js"), []byte(`const COPY = {scan_trust_key: {fi: "", en: ""}};`), 0600); err != nil {
+		t.Fatal(err)
+	}
 	replaceLangKeyRuntimePathsForTest(t, langKeyRuntimePaths(root, app))
 	replaceAdditionalLangKeySourceRootsForTest(t, nil)
 	db := newSystemTableToolsTestDB(t)
@@ -129,7 +132,7 @@ func TestPopulateLangKeySourcesFloorAndNormalScan(t *testing.T) {
 			pushOrphanExec(orphanQueuedExec{rowsAffected: 1})
 			var samples []codeSourceSample
 			if suspicious {
-				samples = []codeSourceSample{{At: timeNowUTC().Add(-time.Hour), Count: 2}}
+				samples = []codeSourceSample{{RuleVersion: langKeyScannerRuleVersion, At: timeNowUTC().Add(-time.Hour), Count: 2}}
 			}
 			queueCodeSourceHistory(samples)
 			if !suspicious {
@@ -181,14 +184,14 @@ func TestCodeSourceFloorBoundaryAndSevenDayHistory(t *testing.T) {
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			scanTrustFixture(t)
-			queueCodeSourceHistory([]codeSourceSample{{At: now.Add(-test.age), Count: 100}})
+			queueCodeSourceHistory([]codeSourceSample{{RuleVersion: langKeyScannerRuleVersion, At: now.Add(-test.age), Count: 100}})
 			got, _, err := recordCodeSourceCount(backend.Db, test.count, now)
 			if err != nil || got != test.want {
 				t.Fatalf("suspicious=%v err=%v", got, err)
 			}
 		})
 	}
-	samples, maximum, err := retainCodeSourcePeaks([]codeSourceSample{{At: now.Add(-2 * time.Hour), Count: 100}, {At: now.Add(-time.Hour), Count: 80}}, 90, now)
+	samples, maximum, err := retainCodeSourcePeaks([]codeSourceSample{{RuleVersion: langKeyScannerRuleVersion, At: now.Add(-2 * time.Hour), Count: 100}, {RuleVersion: langKeyScannerRuleVersion, At: now.Add(-time.Hour), Count: 80}}, 90, now)
 	if err != nil || maximum != 100 || len(samples) != 2 || samples[1].Count != 90 {
 		t.Fatal(samples, maximum, err)
 	}
@@ -347,7 +350,9 @@ func TestSourceScanHistoryFailuresRemainPartial(t *testing.T) {
 func TestSuspiciousScanUsesDistinctCurrentCodeKeysAndLogsBothSkips(t *testing.T) {
 	scanTrustFixture(t)
 	paths := currentLangKeyRuntimePaths()
-	writeLangKeyReference(t, filepath.Join(paths.ApplicationRoot, "frontend", "other.js"), "scan_trust_key")
+	if err := os.WriteFile(filepath.Join(paths.ApplicationRoot, "frontend", "other.js"), []byte(`const COPY = {scan_trust_key: {fi: "", en: ""}};`), 0600); err != nil {
+		t.Fatal(err)
+	}
 	before, _ := sourceScanStatus()
 	for _, q := range emptySourceScanQueries() {
 		pushOrphanQuery(q)
@@ -355,7 +360,7 @@ func TestSuspiciousScanUsesDistinctCurrentCodeKeysAndLogsBothSkips(t *testing.T)
 	for i := 0; i < 2; i++ {
 		pushOrphanExec(orphanQueuedExec{rowsAffected: 1})
 	}
-	queueCodeSourceHistory([]codeSourceSample{{At: timeNowUTC().Add(-6 * 24 * time.Hour), Count: 10}, {At: timeNowUTC().Add(-time.Hour), Count: 1}})
+	queueCodeSourceHistory([]codeSourceSample{{RuleVersion: langKeyScannerRuleVersion, At: timeNowUTC().Add(-6 * 24 * time.Hour), Count: 10}, {RuleVersion: langKeyScannerRuleVersion, At: timeNowUTC().Add(-time.Hour), Count: 1}})
 	old := log.Writer()
 	var output bytes.Buffer
 	log.SetOutput(&output)
@@ -412,12 +417,87 @@ func TestCodeSourceFloorEmptyAndFractionalCounts(t *testing.T) {
 			now := timeNowUTC()
 			var samples []codeSourceSample
 			if tc.maximum > 0 {
-				samples = []codeSourceSample{{At: now.Add(-time.Hour), Count: tc.maximum}}
+				samples = []codeSourceSample{{RuleVersion: langKeyScannerRuleVersion, At: now.Add(-time.Hour), Count: tc.maximum}}
 			}
 			queueCodeSourceHistory(samples)
 			got, _, err := recordCodeSourceCount(backend.Db, tc.count, now)
 			if err != nil || got != tc.want {
 				t.Fatal(got, err)
+			}
+		})
+	}
+}
+
+func TestCodeSourceFloorSeparatesRuleVersions(t *testing.T) {
+	now := timeNowUTC()
+	for _, version := range []string{"", "j35-b2", langKeyScannerRuleVersion} {
+		t.Run("previous_"+version, func(t *testing.T) {
+			scanTrustFixture(t)
+			queueCodeSourceHistory([]codeSourceSample{{At: now.Add(-time.Hour), Count: 100, RuleVersion: version}})
+			suspicious, maximum, err := recordCodeSourceCount(backend.Db, 80, now)
+			if err != nil || suspicious != (version == langKeyScannerRuleVersion) {
+				t.Fatal(suspicious, maximum, err)
+			}
+			want := 80
+			if version == langKeyScannerRuleVersion {
+				want = 100
+			}
+			if maximum != want {
+				t.Fatal(maximum)
+			}
+		})
+	}
+	history := []codeSourceSample{{At: now.Add(-2 * time.Hour), Count: 100, RuleVersion: langKeyScannerRuleVersion}, {At: now.Add(-time.Hour), Count: 1000, RuleVersion: "other"}}
+	peaks, maximum, err := retainCodeSourcePeaks(history, 80, now)
+	if err != nil || maximum != 100 || len(peaks) != 3 || peaks[2].RuleVersion != langKeyScannerRuleVersion {
+		t.Fatal(peaks, maximum, err)
+	}
+}
+
+func TestCodeLiteralCleanupUsesSevenDayBoundary(t *testing.T) {
+	scanTrustFixture(t)
+	pushOrphanExec(orphanQueuedExec{rowsAffected: 1})
+	if cleanupStaleLangKeySources() != 1 {
+		t.Fatal("cleanup failed")
+	}
+	calls := snapshotOrphanCalls()
+	if len(calls) != 1 || !strings.Contains(calls[0], "'code_literal'") || !strings.Contains(calls[0], "last_seen < CURRENT_DATE - INTERVAL '7 days'") {
+		t.Fatal(calls)
+	}
+}
+func TestPopulateCodeLiteralExistingRegistryGateAndWriteFailure(t *testing.T) {
+	for _, fail := range []bool{false, true} {
+		t.Run(fmt.Sprint(fail), func(t *testing.T) {
+			scanTrustFixture(t)
+			before, _ := sourceScanStatus()
+			path := filepath.Join(currentLangKeyRuntimePaths().ApplicationRoot, "frontend", "literal.js")
+			if err := os.WriteFile(path, []byte(`const key = ok ? "scan_trust_key" : "not_in_registry";`), 0600); err != nil {
+				t.Fatal(err)
+			}
+			for _, q := range emptySourceScanQueries() {
+				pushOrphanQuery(q)
+			}
+			if fail {
+				pushOrphanExec(orphanQueuedExec{err: errors.New("literal write refused")})
+			} else {
+				pushOrphanExec(orphanQueuedExec{rowsAffected: 1})
+				pushOrphanExec(orphanQueuedExec{rowsAffected: 1})
+				queueCodeSourceHistory(nil)
+				pushOrphanExec(orphanQueuedExec{})
+			}
+			count, err := PopulateLangKeySources()
+			if fail {
+				if err == nil || !strings.Contains(err.Error(), "code_literal") {
+					t.Fatal(err)
+				}
+				assertScanTrustBlocked(t, before)
+			} else if err != nil || count != 2 || !SourceScanIsFresh() {
+				t.Fatal(count, err)
+			}
+			for _, call := range snapshotOrphanCalls() {
+				if strings.Contains(call, "INSERT INTO system_lang_keys ") {
+					t.Fatal("scan created a key", call)
+				}
 			}
 		})
 	}
