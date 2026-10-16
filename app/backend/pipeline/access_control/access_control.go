@@ -8,9 +8,11 @@ import (
 	"bytes"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log"
+	"mime"
 	"net/http"
 	"os"
 	"strings"
@@ -26,6 +28,9 @@ import (
 	"github.com/google/uuid"
 	"github.com/gorilla/sessions"
 )
+
+var errTableMoveIdentityMismatch = errors.New("moved dataset differs from authorized dataset")
+var errInvalidDatasetBody = errors.New("invalid JSON dataset request")
 
 func jsonScalarToString(raw json.RawMessage) string {
 	if len(raw) == 0 || string(raw) == "null" {
@@ -84,10 +89,22 @@ func extractRouteTableTarget(r *http.Request, urlRoute string) (string, string, 
 	bodyName := ""
 	bodyUID := ""
 	referencingName := ""
-	if r.Method != http.MethodGet && strings.Contains(r.Header.Get("Content-Type"), "application/json") {
+	// Multipart row creation has a query-only identity, irrespective of its
+	// supplied media type. Never consume or interpret its payload here.
+	if r.Method != http.MethodGet && r.Method != http.MethodHead && urlRoute != "/api/add-row-multipart" {
+		mediaType, _, mediaErr := mime.ParseMediaType(r.Header.Get("Content-Type"))
+		if mediaErr != nil || mediaType != "application/json" {
+			// These JSON payloads contain row values or an address, not the
+			// dataset identity. Preserve their existing media-type handling.
+			switch urlRoute {
+			case "/api/update-row", "/api/delete-rows", "/api/geocode-address":
+				return queryName, queryUID, nil
+			}
+			return "", "", fmt.Errorf("%w: application/json required", errInvalidDatasetBody)
+		}
 		bodyBytes, bodyErr := io.ReadAll(r.Body)
 		if bodyErr != nil {
-			return "", "", fmt.Errorf("read request body: %w", bodyErr)
+			return "", "", fmt.Errorf("%w: read request body: %v", errInvalidDatasetBody, bodyErr)
 		}
 		r.Body = io.NopCloser(bytes.NewReader(bodyBytes))
 
@@ -98,10 +115,13 @@ func extractRouteTableTarget(r *http.Request, urlRoute string) (string, string, 
 			TableUID           json.RawMessage `json:"table_uid"`
 			ReferencingDataset string          `json:"referencing_dataset"`
 			ReferencingTable   string          `json:"referencing_table"`
+			SourceDataset      string          `json:"source_dataset"`
 			Dataset            string          `json:"dataset"`
 			Table              string          `json:"table"`
 		}
-		if jsonErr := json.Unmarshal(bodyBytes, &body); jsonErr == nil {
+		if jsonErr := json.Unmarshal(bodyBytes, &body); jsonErr != nil {
+			return "", "", fmt.Errorf("%w: %v", errInvalidDatasetBody, jsonErr)
+		} else {
 			bodyName, err = singleConsistentIdentifier(
 				"request-body dataset name",
 				body.DatasetName,
@@ -124,6 +144,7 @@ func extractRouteTableTarget(r *http.Request, urlRoute string) (string, string, 
 				"referencing dataset name",
 				body.ReferencingDataset,
 				body.ReferencingTable,
+				body.SourceDataset,
 			)
 			if err != nil {
 				return "", "", err
@@ -131,16 +152,25 @@ func extractRouteTableTarget(r *http.Request, urlRoute string) (string, string, 
 		}
 	}
 
-	tableName, err := singleConsistentIdentifier("dataset name", queryName, bodyName)
+	// FK and trigger writers name their primary dataset differently. Those
+	// names must agree with the query too, rather than only serving as fallbacks.
+	pathName := ""
+	if strings.HasSuffix(urlRoute, "/") && strings.HasPrefix(r.URL.Path, urlRoute) {
+		pathName = strings.Trim(strings.TrimPrefix(r.URL.Path, urlRoute), "/")
+	}
+	tableName, err := singleConsistentIdentifier("dataset name", queryName, bodyName, referencingName, pathName)
 	if err != nil {
+		if urlRoute == "/api/update-table-folder" {
+			return "", "", errTableMoveIdentityMismatch
+		}
 		return "", "", err
+	}
+	if urlRoute == "/api/update-table-folder" && queryUID != "" && bodyUID != "" && queryUID != bodyUID {
+		return "", "", errTableMoveIdentityMismatch
 	}
 	tableUID, err := singleConsistentIdentifier("dataset UID", queryUID, bodyUID)
 	if err != nil {
 		return "", "", err
-	}
-	if tableName == "" {
-		tableName = referencingName
 	}
 	if tableUID == "" && tableName == "" && strings.HasPrefix(r.URL.Path, urlRoute) {
 		tableName = strings.Trim(strings.TrimPrefix(r.URL.Path, urlRoute), "/")
@@ -377,7 +407,13 @@ func WithAccessControl(urlRoute, handlerName string, originalHandler http.Handle
 
 		tableName, tableUID, targetErr := extractRouteTableTarget(r, urlRoute)
 		if targetErr != nil {
-			httpresponse.RespondWithError(w, http.StatusBadRequest, "conflicting dataset identifiers")
+			if errors.Is(targetErr, errTableMoveIdentityMismatch) {
+				httpresponse.RespondWithError(w, http.StatusForbidden, "moved dataset differs from authorized dataset")
+			} else if errors.Is(targetErr, errInvalidDatasetBody) {
+				httpresponse.RespondWithError(w, http.StatusBadRequest, "invalid dataset request")
+			} else {
+				httpresponse.RespondWithError(w, http.StatusBadRequest, "conflicting dataset identifiers")
+			}
 			return
 		}
 
@@ -416,7 +452,11 @@ func WithAccessControl(urlRoute, handlerName string, originalHandler http.Handle
 				return
 			}
 			if !identifiersMatch {
-				httpresponse.RespondWithError(w, http.StatusBadRequest, "dataset identifiers do not match")
+				status := http.StatusBadRequest
+				if urlRoute == "/api/update-table-folder" {
+					status = http.StatusForbidden
+				}
+				httpresponse.RespondWithError(w, status, "dataset identifiers do not match")
 				return
 			}
 

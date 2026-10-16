@@ -6,6 +6,7 @@
 package dtt_1_row_read
 
 import (
+	"database/sql"
 	backend "easelect/backend/core_components"
 	"easelect/backend/core_components/httpresponse"
 	e_sessions "easelect/backend/core_components/sessions"
@@ -35,6 +36,9 @@ func CommentListHandler(w http.ResponseWriter, r *http.Request) {
 	rowID, err := strconv.Atoi(rowIDStr)
 	if err != nil {
 		httpresponse.RespondWithError(w, http.StatusBadRequest, "row_id must be an integer")
+		return
+	}
+	if !requireCommentReadAccess(w, r, dataset, []int{rowID}) {
 		return
 	}
 
@@ -138,6 +142,9 @@ func CommentCreateHandler(w http.ResponseWriter, r *http.Request) {
 		httpresponse.RespondWithError(w, http.StatusBadRequest, "comment_text exceeds 5000 characters")
 		return
 	}
+	if !requireCommentReadAccess(w, r, body.Dataset, []int{body.RowID}) {
+		return
+	}
 
 	var newID int
 	err = backend.Db.QueryRow(`
@@ -166,6 +173,12 @@ func CommentDeleteHandler(w http.ResponseWriter, r *http.Request) {
 		httpresponse.RespondWithError(w, http.StatusUnauthorized, "not authenticated")
 		return
 	}
+	// All anonymous visitors share user 1, so that principal cannot own a
+	// deletable comment on behalf of an individual visitor.
+	if userID == 1 {
+		httpresponse.RespondWithError(w, http.StatusForbidden, "guest cannot delete comments")
+		return
+	}
 
 	commentIDStr := r.URL.Query().Get("id")
 	if commentIDStr == "" {
@@ -179,7 +192,7 @@ func CommentDeleteHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Check ownership or admin
-	var createdBy int
+	var createdBy sql.NullInt64
 	err = backend.Db.QueryRow(
 		"SELECT created_by FROM system_comments WHERE id = $1", commentID,
 	).Scan(&createdBy)
@@ -189,7 +202,7 @@ func CommentDeleteHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	isAdmin := isAdminUser(r)
-	if createdBy != userID && !isAdmin {
+	if (!createdBy.Valid || createdBy.Int64 != int64(userID)) && !isAdmin {
 		httpresponse.RespondWithError(w, http.StatusForbidden, "can only delete own comments")
 		return
 	}

@@ -8,10 +8,13 @@ package dtt_system_table_folders
 
 import (
 	"database/sql"
+	"easelect/backend/core_components/dbutils"
 	"easelect/backend/core_components/httpresponse"
+	"easelect/backend/core_components/permissions"
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strconv"
 	"strings"
 
 	backend "easelect/backend/core_components"
@@ -233,6 +236,15 @@ func HandleUpdateTableFolder(w http.ResponseWriter, r *http.Request) {
 	}
 	if err := validateTableMoveRequest(req); err != nil {
 		httpresponse.RespondWithError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	// Authorize the UID used by both the lookup and UPDATE, independently of
+	// any dataset identity supplied in the query string to the pipeline.
+	actor := dbutils.RequestActorContextFromRequest(r)
+	allowed, err := permissions.CheckRouteTablePermission(backend.Db, "/api/update-table-folder", actor.UserID,
+		permissions.RouteTableScope{TableUID: strconv.Itoa(req.DatasetUID)}, permissions.AccessControlRouteTableOptions(false))
+	if err != nil || !allowed {
+		httpresponse.RespondWithError(w, http.StatusForbidden, "dataset move access required")
 		return
 	}
 

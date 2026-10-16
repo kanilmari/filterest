@@ -84,6 +84,8 @@ The core permission tables are:
 
 Backend enforcement runs through [access control](../../backend/pipeline/access_control/access_control.go). Frontend visibility uses [route checks](../../frontend/core_components/route_permission_checker.js), authenticated `/api/user-permissions`, and the dataset-right endpoints. Anonymous `/api/auth-modes` delivers `guest_ui_endpoints`: enabled `/ui/...` routes from the group named `guests`, with NULL dataset scope (the same site-wide scope as route authorization), independent of account-1 memberships. [The bootstrap reader](../../backend/core_components/auth/user_permissions.go) reads current grants without seeding defaults; failures return no grants and responses are not cacheable. [Client bootstrap](../../frontend/core_components/admin_tools/auth_mode_handler.js) clears old rights before fetching, rejects stale session generations and replaces the tab's set before articles render. Sign-in selects user rights; sign-out selects guest rights. Missing/malformed responses fail closed; revocations survive bootstrap and restarts. Dataset, row and login-to-browse enforcement remain independent.
 
+Comments list/count/create require the parent dataset's `/api/get-results` grant and existing row visibility; user 1 cannot delete comments, other owners may delete their own, and administrators may delete any. Translation repair and shared folder mutations require administrators even with a route grant. Dataset-scoped writes taking their identity from JSON reject non-JSON or undecodable bodies before handlers; body/path identities must match the checked query, multipart row creation uses query identity only, and dataset moves re-check the moved UID.
+
 **Article view and field settings.** The view grant `/ui/view/article_view` opens both the classic article (from titles, summaries and other record openers) and the image-first article (from ordinary card and article images). Product cards, calendar events and experimental free-layout cards retain their existing classic-article opening behavior. Selecting **User groups** in View field settings assigns fields; it never grants this route. No group receives a view right merely through field selection or dataset reading rights.
 
 The [shared article contract](../../frontend/shared/article_presentations/contract.json) records approved routes and the current IFAV gate; its page key stays reserved.
@@ -504,12 +506,7 @@ The bulk row-access editor should receive immutable row IDs and show:
   direct rule;
 - a preview of the resulting changes before confirmation.
 
-The backend must re-check that the caller may administer permissions for the
-dataset and every selected row. It must validate the complete ID set before
-writing, apply the batch in one transaction, require the affected count to
-match, and produce an audit record. A mixed or stale selection fails closed;
-the endpoint must not silently apply a partial subset. The browser should send
-IDs, not trust its cached row objects as authorization evidence.
+The backend must re-check that the caller may administer permissions for the dataset and every selected row. It must validate the complete ID set before writing, apply the batch in one transaction, require the affected count to match, and produce an audit record. A mixed or stale selection fails closed; the endpoint must not silently apply a partial subset. The browser should send IDs, not trust its cached row objects as authorization evidence.
 
 ### Permission Categories
 

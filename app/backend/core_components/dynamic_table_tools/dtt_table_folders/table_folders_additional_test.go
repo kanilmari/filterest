@@ -6,6 +6,7 @@ package dtt_system_table_folders
 
 import (
 	"database/sql/driver"
+	"easelect/backend/core_components/dbutils"
 	"easelect/backend/core_components/runtime_grants/granttest"
 	"github.com/lib/pq"
 	"net/http"
@@ -18,6 +19,7 @@ func TestHandleUpdateTableFolderGuardsAndBoundUpdate(t *testing.T) {
 	t.Run("rejects missing dataset uid", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodPost, "/api/update-table-folder", strings.NewReader(`{"item_id":4,"item_type":"table","new_folder_id":10}`))
 		rec := httptest.NewRecorder()
+		req = req.WithContext(dbutils.SetRequestActorContext(req.Context(), dbutils.NewRequestActorContext(1, "guest")))
 		HandleUpdateTableFolder(rec, req)
 		if rec.Code != http.StatusBadRequest {
 			t.Fatalf("status = %d, want 400", rec.Code)
@@ -26,6 +28,7 @@ func TestHandleUpdateTableFolderGuardsAndBoundUpdate(t *testing.T) {
 
 	t.Run("success binds item id and dataset uid", func(t *testing.T) {
 		db, state := openFolderMockDB(t, []folderQueryResponse{
+			{match: "FROM system_group_table_func_rights", args: []driver.Value{"/api/update-table-folder", 1, "77"}, cols: []string{"allowed"}, rows: [][]driver.Value{{int64(1)}}},
 			{
 				match: "SELECT table_name, folder_id",
 				args:  []driver.Value{4, 77},
@@ -54,6 +57,7 @@ func TestHandleUpdateTableFolderGuardsAndBoundUpdate(t *testing.T) {
 
 		req := httptest.NewRequest(http.MethodPost, "/api/update-table-folder", strings.NewReader(`{"item_id":4,"item_type":"table","new_folder_id":10,"dataset_uid":77,"confirm_tab_visibility_change":true}`))
 		rec := httptest.NewRecorder()
+		req = req.WithContext(dbutils.SetRequestActorContext(req.Context(), dbutils.NewRequestActorContext(1, "guest")))
 		HandleUpdateTableFolder(rec, req)
 
 		if rec.Code != http.StatusOK {
@@ -69,6 +73,7 @@ func TestHandleUpdateTableFolderGuardsAndBoundUpdate(t *testing.T) {
 
 	t.Run("dataset uid mismatch returns not found", func(t *testing.T) {
 		db, _ := openFolderMockDB(t, []folderQueryResponse{
+			{match: "FROM system_group_table_func_rights", args: []driver.Value{"/api/update-table-folder", 1, "77"}, cols: []string{"allowed"}, rows: [][]driver.Value{{int64(1)}}},
 			{
 				match: "SELECT table_name, folder_id",
 				args:  []driver.Value{4, 77},
@@ -97,6 +102,7 @@ func TestHandleUpdateTableFolderGuardsAndBoundUpdate(t *testing.T) {
 
 		req := httptest.NewRequest(http.MethodPost, "/api/update-table-folder", strings.NewReader(`{"item_id":4,"item_type":"table","new_folder_id":10,"dataset_uid":77,"confirm_tab_visibility_change":true}`))
 		rec := httptest.NewRecorder()
+		req = req.WithContext(dbutils.SetRequestActorContext(req.Context(), dbutils.NewRequestActorContext(1, "guest")))
 		HandleUpdateTableFolder(rec, req)
 
 		if rec.Code != http.StatusNotFound {
@@ -106,6 +112,7 @@ func TestHandleUpdateTableFolderGuardsAndBoundUpdate(t *testing.T) {
 
 	t.Run("cross-project move requires confirmation", func(t *testing.T) {
 		db, _ := openFolderMockDB(t, []folderQueryResponse{
+			{match: "FROM system_group_table_func_rights", args: []driver.Value{"/api/update-table-folder", 1, "77"}, cols: []string{"allowed"}, rows: [][]driver.Value{{int64(1)}}},
 			{
 				match: "SELECT table_name, folder_id",
 				args:  []driver.Value{4, 77},
@@ -129,6 +136,7 @@ func TestHandleUpdateTableFolderGuardsAndBoundUpdate(t *testing.T) {
 
 		req := httptest.NewRequest(http.MethodPost, "/api/update-table-folder", strings.NewReader(`{"item_id":4,"item_type":"table","new_folder_id":21,"dataset_uid":77}`))
 		rec := httptest.NewRecorder()
+		req = req.WithContext(dbutils.SetRequestActorContext(req.Context(), dbutils.NewRequestActorContext(1, "guest")))
 		HandleUpdateTableFolder(rec, req)
 
 		if rec.Code != http.StatusConflict {
@@ -141,6 +149,7 @@ func TestHandleUpdateTableFolderGuardsAndBoundUpdate(t *testing.T) {
 
 	t.Run("top-tab visibility change requires confirmation", func(t *testing.T) {
 		db, _ := openFolderMockDB(t, []folderQueryResponse{
+			{match: "FROM system_group_table_func_rights", args: []driver.Value{"/api/update-table-folder", 1, "77"}, cols: []string{"allowed"}, rows: [][]driver.Value{{int64(1)}}},
 			{
 				match: "SELECT table_name, folder_id",
 				args:  []driver.Value{4, 77},
@@ -164,6 +173,7 @@ func TestHandleUpdateTableFolderGuardsAndBoundUpdate(t *testing.T) {
 
 		req := httptest.NewRequest(http.MethodPost, "/api/update-table-folder", strings.NewReader(`{"item_id":4,"item_type":"table","new_folder_id":19,"dataset_uid":77}`))
 		rec := httptest.NewRecorder()
+		req = req.WithContext(dbutils.SetRequestActorContext(req.Context(), dbutils.NewRequestActorContext(1, "guest")))
 		HandleUpdateTableFolder(rec, req)
 
 		if rec.Code != http.StatusConflict {
@@ -176,6 +186,7 @@ func TestHandleUpdateTableFolderGuardsAndBoundUpdate(t *testing.T) {
 
 	t.Run("confirmed cross-project move succeeds", func(t *testing.T) {
 		db, _ := openFolderMockDB(t, []folderQueryResponse{
+			{match: "FROM system_group_table_func_rights", args: []driver.Value{"/api/update-table-folder", 1, "77"}, cols: []string{"allowed"}, rows: [][]driver.Value{{int64(1)}}},
 			{
 				match: "SELECT table_name, folder_id",
 				args:  []driver.Value{4, 77},
@@ -204,6 +215,7 @@ func TestHandleUpdateTableFolderGuardsAndBoundUpdate(t *testing.T) {
 
 		req := httptest.NewRequest(http.MethodPost, "/api/update-table-folder", strings.NewReader(`{"item_id":4,"item_type":"table","new_folder_id":21,"dataset_uid":77,"confirm_cross_project_move":true}`))
 		rec := httptest.NewRecorder()
+		req = req.WithContext(dbutils.SetRequestActorContext(req.Context(), dbutils.NewRequestActorContext(1, "guest")))
 		HandleUpdateTableFolder(rec, req)
 
 		if rec.Code != http.StatusOK {

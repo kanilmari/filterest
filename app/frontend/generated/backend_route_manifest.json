@@ -2515,21 +2515,21 @@
       "scenarios": [
         {
           "name": "production",
-          "profile_name": "default",
+          "profile_name": "admin",
           "skip_stages": [],
-          "admin_only": false
+          "admin_only": true
         },
         {
           "name": "development",
-          "profile_name": "default",
+          "profile_name": "admin",
           "skip_stages": [],
-          "admin_only": false
+          "admin_only": true
         },
         {
           "name": "api_language",
-          "profile_name": "default",
+          "profile_name": "admin",
           "skip_stages": [],
-          "admin_only": false
+          "admin_only": true
         }
       ]
     },
@@ -3114,21 +3114,21 @@
       "scenarios": [
         {
           "name": "production",
-          "profile_name": "default",
+          "profile_name": "admin",
           "skip_stages": [],
-          "admin_only": false
+          "admin_only": true
         },
         {
           "name": "development",
-          "profile_name": "default",
+          "profile_name": "admin",
           "skip_stages": [],
-          "admin_only": false
+          "admin_only": true
         },
         {
           "name": "api_language",
-          "profile_name": "default",
+          "profile_name": "admin",
           "skip_stages": [],
-          "admin_only": false
+          "admin_only": true
         }
       ]
     },
@@ -3535,21 +3535,21 @@
       "scenarios": [
         {
           "name": "production",
-          "profile_name": "default",
+          "profile_name": "admin",
           "skip_stages": [],
-          "admin_only": false
+          "admin_only": true
         },
         {
           "name": "development",
-          "profile_name": "default",
+          "profile_name": "admin",
           "skip_stages": [],
-          "admin_only": false
+          "admin_only": true
         },
         {
           "name": "api_language",
-          "profile_name": "default",
+          "profile_name": "admin",
           "skip_stages": [],
-          "admin_only": false
+          "admin_only": true
         }
       ]
     },
@@ -5307,21 +5307,21 @@
       "scenarios": [
         {
           "name": "production",
-          "profile_name": "default",
+          "profile_name": "admin",
           "skip_stages": [],
-          "admin_only": false
+          "admin_only": true
         },
         {
           "name": "development",
-          "profile_name": "default",
+          "profile_name": "admin",
           "skip_stages": [],
-          "admin_only": false
+          "admin_only": true
         },
         {
           "name": "api_language",
-          "profile_name": "default",
+          "profile_name": "admin",
           "skip_stages": [],
-          "admin_only": false
+          "admin_only": true
         }
       ]
     },
@@ -5774,21 +5774,21 @@
       "scenarios": [
         {
           "name": "production",
-          "profile_name": "default",
+          "profile_name": "admin",
           "skip_stages": [],
-          "admin_only": false
+          "admin_only": true
         },
         {
           "name": "development",
-          "profile_name": "default",
+          "profile_name": "admin",
           "skip_stages": [],
-          "admin_only": false
+          "admin_only": true
         },
         {
           "name": "api_language",
-          "profile_name": "default",
+          "profile_name": "admin",
           "skip_stages": [],
-          "admin_only": false
+          "admin_only": true
         }
       ]
     },

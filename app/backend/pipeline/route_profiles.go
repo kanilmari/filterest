@@ -353,16 +353,16 @@ var RouteProfiles = map[string]RouteProfile{
 	"dtt_triggers.GetTriggersHandler": DefaultProfile,
 
 	// Table folders
-	"dtt_system_table_folders.HandleUpdateFolder":            DefaultProfile,
+	"dtt_system_table_folders.HandleUpdateFolder":            AdminProfile,
 	"dtt_system_table_folders.HandleUpdateTableFolder":       DefaultProfile,
-	"dtt_system_table_folders.HandleSetCurrentProjectFolder": DefaultProfile,
-	"dtt_system_table_folders.HandleCreateFolder":            DefaultProfile,
-	"dtt_system_table_folders.HandleDeleteFolder":            DefaultProfile,
+	"dtt_system_table_folders.HandleSetCurrentProjectFolder": AdminProfile,
+	"dtt_system_table_folders.HandleCreateFolder":            AdminProfile,
+	"dtt_system_table_folders.HandleDeleteFolder":            AdminProfile,
 	"dtt_system_table_folders.HandleRenameTreeNode":          AdminProfile,
 
 	// Language / translation
 	"lang.GenerateTranslationsHandler":   DefaultProfile,
-	"lang.FixTableTranslationsHandler":   DefaultProfile,
+	"lang.FixTableTranslationsHandler":   AdminProfile,
 	"lang.GetLangKeyTranslationsHandler": DefaultProfile,
 	"lang.AdminUILanguagesHandler":       AdminProfile,
 

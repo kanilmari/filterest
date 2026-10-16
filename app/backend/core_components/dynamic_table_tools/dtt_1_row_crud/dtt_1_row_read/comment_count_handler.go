@@ -39,6 +39,9 @@ func CommentCountHandler(w http.ResponseWriter, r *http.Request) {
 	if len(body.RowIDs) > 500 {
 		body.RowIDs = body.RowIDs[:500]
 	}
+	if !requireCommentReadAccess(w, r, body.Dataset, body.RowIDs) {
+		return
+	}
 
 	rows, err := backend.Db.Query(`
 		SELECT row_id, COUNT(*)
