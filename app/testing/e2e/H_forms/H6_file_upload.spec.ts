@@ -14,7 +14,6 @@ import {
   dropTempDataset,
   openTempDataset,
 } from '../helpers/temp-dataset';
-import { recordTestDatasetOwnershipFromRequest } from '../helpers/test-artifact-dataset-column-recorder';
 
 type JsonResponse = {
   status: number;
@@ -258,18 +257,7 @@ test.describe('H6 — File Upload', () => {
     } finally {
       if (!page.isClosed()) {
         await page.keyboard.press('Escape').catch(() => {});
-        // Record the server-created _assets child while its relation still exists: the removals below delete it,
-        // and dropTempDataset's own capture would then find nothing. A failure here leaves the child unattributed,
-        // so the global teardown still fails the run; it must not replace the test's own error.
-        await recordTestDatasetOwnershipFromRequest(page.request, datasetName).catch(() => {});
-        await postJsonWithCsrf(page, '/api/asset-linking/attachments/remove', {
-          parent_table: datasetName,
-          confirm: true,
-        }).catch(() => {});
-        await postJsonWithCsrf(page, '/api/asset-linking/images/remove', {
-          parent_table: datasetName,
-          confirm: true,
-        }).catch(() => {});
+        // Shared drop records managed children before the parent API removes them.
         await dropTempDataset(page, datasetName);
       }
     }

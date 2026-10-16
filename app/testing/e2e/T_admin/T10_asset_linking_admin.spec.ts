@@ -14,6 +14,8 @@ import {
   dropTempDataset,
 } from '../helpers/temp-dataset';
 
+import { recordTestDatasetOwnershipFromRequest } from '../helpers/test-artifact-dataset-column-recorder';
+
 type E2EPage = import('@playwright/test').Page;
 
 type JsonResponse = {
@@ -199,6 +201,8 @@ test.describe('T10 — Asset Linking Admin', () => {
       await clickVisibleTestId(page, `asset-linking-attachment-toggle-${datasetName}`);
       await expect(attachmentStatus).toHaveAttribute('data-state', 'enabled', { timeout: TOGGLE_COMMIT_MS });
 
+      // Functional removal deletes attribution evidence before shared teardown.
+      await recordTestDatasetOwnershipFromRequest(page.request, datasetName);
       await clickVisibleTestId(page, `asset-linking-attachment-remove-${datasetName}`);
       await confirmModal(page);
       await expect(page.locator(`[data-testid="asset-linking-attachment-row-${datasetName}"]`)).toBeHidden({ timeout: 10000 });
@@ -213,14 +217,7 @@ test.describe('T10 — Asset Linking Admin', () => {
       await expect(page.locator(`[data-testid="asset-linking-image-row-${datasetName}"]`)).toBeHidden({ timeout: 10000 });
     } finally {
       if (!page.isClosed()) {
-        await postJsonWithCsrf(page, '/api/asset-linking/attachments/remove', {
-          parent_table: datasetName,
-          confirm: true,
-        }).catch(() => {});
-        await postJsonWithCsrf(page, '/api/asset-linking/images/remove', {
-          parent_table: datasetName,
-          confirm: true,
-        }).catch(() => {});
+        // Shared drop records managed children before the parent API removes them.
         await dropTempDataset(page, datasetName);
       }
     }

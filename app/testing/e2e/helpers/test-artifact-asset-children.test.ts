@@ -340,3 +340,29 @@ test('T9 request-scoped cleanup captures the child before the parent drop remove
   expect(api.post).toHaveBeenCalledOnce();
   expect(replay(childKeys(name)).unexplainedAdded).toEqual([]);
 });
+
+test.each(['page', 'request'] as const)('shared %s drop registers its managed asset child before metadata disappears', async mode => {
+  const { api, page, drops } = fixture();
+  const assertChild = () => expect(listRegisteredTestArtifacts()).toContainEqual(expect.objectContaining({
+    name: child, status: 'confirmed', serverId: 200,
+  }));
+  if (mode === 'request') {
+    api.post.mockImplementation(async (_url, options) => {
+      assertChild();
+      drops.push(options.data.dataset_name);
+      delete api.datasets[parent]; delete api.datasets[child];
+      return response({ message: 'dropped' });
+    });
+    await cleanupDatasetViaRequest(api.request, parent);
+  } else await dropTempDataset(page, parent);
+  assertChild();
+  expect(drops).toEqual([parent]);
+  expect(readRecordedDatasetColumns(directory, runId, [...parents, child]).get(child)).toEqual(expect.arrayContaining(['id', `${parent}_id`]));
+});
+
+test('shared request drop propagates ownership failure and never attempts deletion', async () => {
+  const { api, state } = fixture();
+  state.status = () => ({ image_asset_linkings: 'invalid', attachment_asset_linkings: [] });
+  await expect(cleanupDatasetViaRequest(api.request, parent)).rejects.toThrow(/ownership evidence/);
+  expect(api.post).not.toHaveBeenCalled();
+});

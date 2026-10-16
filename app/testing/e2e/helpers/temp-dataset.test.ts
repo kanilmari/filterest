@@ -19,6 +19,8 @@ const registryMocks = vi.hoisted(() => ({
 const hydrateAuthenticatedTreeDataCache = vi.hoisted(() => vi.fn());
 
 vi.mock('./test-artifact-run-registry', () => registryMocks);
+// The asset-child integration suite exercises the real recorder through both drops.
+vi.mock('./test-artifact-dataset-column-recorder', () => ({ recordTestDatasetOwnershipFromRequest: vi.fn(async () => {}) }));
 vi.mock('./tree-data-cache', () => ({ hydrateAuthenticatedTreeDataCache }));
 vi.mock('./navigation', () => ({
   navigateToDataset: vi.fn(),

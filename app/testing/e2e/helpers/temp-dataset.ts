@@ -222,6 +222,7 @@ async function cleanupPartialTempDataset(page: Page, datasetName: string): Promi
       + `${registeredArtifact.serverId}, current table_uid=${currentTableUID}.`,
     );
   }
+  await recordTestDatasetOwnershipFromRequest(page.request, datasetName);
   const response = await postJsonWithCsrf(page, '/api/drop-dataset', {
     dataset_name: datasetName,
     confirm_dataset_name: datasetName,
@@ -411,6 +412,7 @@ export async function cleanupDatasetViaRequest(
   if (latestTableUID !== registeredArtifact.serverId) {
     throw new Error(`Refusing request-scoped cleanup for dataset "${datasetName}": identity changed before drop.`);
   }
+  await recordTestDatasetOwnershipFromRequest(request, datasetName);
   const response = await request.post('/api/drop-dataset', {
     data: { dataset_name: datasetName, confirm_dataset_name: datasetName },
     headers: {

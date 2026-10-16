@@ -210,14 +210,7 @@ test.describe('C6 — Big Card Attachments', () => {
       await expect(page.locator('.big_card_thumbnail_row .image_upload_placeholder.small').first()).toBeVisible({ timeout: 15000 });
     } finally {
       if (!page.isClosed()) {
-        await postJsonWithCsrf(page, '/api/asset-linking/attachments/remove', {
-          parent_table: datasetName,
-          confirm: true,
-        }).catch(() => {});
-        await postJsonWithCsrf(page, '/api/asset-linking/images/remove', {
-          parent_table: datasetName,
-          confirm: true,
-        }).catch(() => {});
+        // Shared drop records managed children before the parent API removes them.
         await dropTempDataset(page, datasetName);
       }
     }

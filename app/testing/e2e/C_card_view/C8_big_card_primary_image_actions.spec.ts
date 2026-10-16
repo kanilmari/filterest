@@ -205,10 +205,7 @@ test.describe('C8 — Big Card Primary Image Actions', () => {
         .toBe(afterUploads.filenames[0]);
     } finally {
       if (!page.isClosed()) {
-        await postJsonWithCsrf(page, '/api/asset-linking/images/remove', {
-          parent_table: datasetName,
-          confirm: true,
-        }).catch(() => {});
+        // Shared drop records managed children before the parent API removes them.
         await dropTempDataset(page, datasetName);
       }
     }

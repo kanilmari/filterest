@@ -137,10 +137,7 @@ test.describe('C9 — Big Card Image Metadata Editor', () => {
       await expect(page.locator('[data-testid="big-card-image-thumb-0"] img').first()).toHaveAttribute('src', /\/storage\//, { timeout: 5000 });
     } finally {
       if (!page.isClosed()) {
-        await postJsonWithCsrf(page, '/api/asset-linking/images/remove', {
-          parent_table: datasetName,
-          confirm: true,
-        }).catch(() => {});
+        // Shared drop records managed children before the parent API removes them.
         await dropTempDataset(page, datasetName);
       }
     }

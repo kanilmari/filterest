@@ -599,12 +599,8 @@ test.describe('C10 — Standalone Image-first View', () => {
         await expect(page).toHaveURL(listUrl);
         await expect(page.locator('[data-testid="image-first-view"]')).toHaveCount(0);
         await expect(page.locator(`#${datasetName}_card_view_container`)).toBeVisible();
-        const removeImages = await postJsonWithCsrf(page, '/api/asset-linking/images/remove', {
-          parent_table: datasetName,
-          confirm: true,
-        }).catch(() => {});
+        // Shared drop records managed children before the parent API removes them.
         await dropTempDataset(page, datasetName);
-        expect(removeImages?.ok, removeImages?.body || 'Image cleanup request failed.').toBe(true);
       }
     }
   });
