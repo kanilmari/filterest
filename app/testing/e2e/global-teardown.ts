@@ -1,7 +1,7 @@
 // global-teardown.ts
-// Removes synthetic browser-test data after the end-to-end test suite.
-// Bridges authenticated Playwright state with API-backed test-data cleanup.
-// Exists so interrupted or failed tests do not leave operator-visible residue.
+// Removes owned datasets/folders and reports retained language keys after the test suite.
+// Bridges authenticated API cleanup with registry ownership and nightly retention evidence.
+// Keeps ownership history on failure and reports every cleanup/evidence failure.
 
 import type { FullConfig } from '@playwright/test';
 import * as fs from 'fs';
@@ -17,14 +17,15 @@ import {
   getArtifactRegistryProcessIdentity,
   getCurrentArtifactRun,
   listRegisteredTestArtifacts,
+  resolveArtifactRegistryRoot,
   unregisterTestArtifact,
   type CurrentArtifactRun,
+  type RegisteredTestArtifact,
 } from './helpers/test-artifact-run-registry';
-import {
-  attributeLangKeyDrift,
-  describeMigrationSeededKeys,
-  resolveMigrationDirectories,
-} from './helpers/lang-key-drift-attribution';
+import { attributeLangKeyDrift, isOwnRunDatasetKey, ownRunDatasetForKey } from './helpers/lang-key-drift-attribution';
+import { readRecordedDatasetColumns } from './helpers/test-artifact-dataset-columns';
+import { readLangKeySourcesWithStorageState } from './helpers/lang-key-source-inventory';
+import { readCompletedDatasetNames } from './helpers/test-artifact-dataset-history';
 import { removeStorageStateFile } from './helpers/storage-state-file';
 import { resolveFilterestTestRuntimePaths } from './helpers/test-runtime-paths';
 import { resolveLocalFilterestBaseUrl } from '../../server_tools/scripts/local_filterest_target.cjs';
@@ -86,120 +87,242 @@ async function globalTeardown(config: FullConfig) {
   // cannot remove the live owner's shared auth state or mutate its registry.
   assertArtifactRunOwnedByProcess(artifactRun);
 
+  let teardownFailed = false;
+  let reportFinalizationFailure: ((stage: string) => boolean) | undefined;
   try {
-    const baseURL = resolveBaseURL(config);
-    if (!fs.existsSync(AUTH_FILE)) {
-      throw new Error(
-        '[global-teardown] missing authenticated storage state for an active artifact run. ' +
-        'No cleanup request was sent.',
-      );
-    }
-    if (!fs.existsSync(ARTIFACT_BASELINE_FILE)) {
-      throw new Error(
-        '[global-teardown] missing artifact baseline from global setup. ' +
-        'Cleanup was not started because no server-side artifact is safe to classify by name alone.',
-      );
-    }
-
-    // Validate the complete protection set before invoking a helper that can
-    // reach any mutating API. Incomplete or legacy baseline files fail closed.
-    const baseline = validateSyntheticArtifactBaseline(
-      JSON.parse(fs.readFileSync(ARTIFACT_BASELINE_FILE, 'utf8')),
-    );
-    if (baseline.runId !== artifactRun.runId) {
-      throw new Error(
-        `[global-teardown] baseline run ${baseline.runId} does not match registry run ` +
-        `${artifactRun.runId}. No cleanup request was sent.`,
-      );
-    }
-    if (normalizeE2EBaseURL(baseline.baseURL) !== normalizeE2EBaseURL(baseURL)) {
-      throw new Error(
-        `[global-teardown] baseline target ${baseline.baseURL} does not match configured target ` +
-        `${baseURL}. No cleanup request was sent.`,
-      );
-    }
-
-    const registeredArtifacts = listRegisteredTestArtifacts(artifactRun.runId);
-    const plannedArtifacts = registeredArtifacts.filter((artifact) => artifact.status !== 'confirmed');
-    if (plannedArtifacts.length > 0) {
-      throw new Error(
-        '[global-teardown] ambiguous planned artifacts require inspection; no cleanup request was sent: ' +
-        plannedArtifacts.map((artifact) => `${artifact.kind}:${artifact.name}`).join(', '),
-      );
-    }
-
-    const cleanupSummary = await cleanupSyntheticTestArtifactsWithStorageState(
-      baseURL,
-      AUTH_FILE,
-      baseline,
-      registeredArtifacts,
-    );
-
-    const deletedCount =
-      cleanupSummary.deletedDatasets.length +
-      cleanupSummary.deletedFolders.length;
-    if (deletedCount > 0) {
-      console.log(
-        `[global-teardown] cleaned registered E2E artifacts: ` +
-        `${cleanupSummary.deletedDatasets.length} datasets, ` +
-        `${cleanupSummary.deletedFolders.length} folders`,
-      );
-    }
-
-    if (
-      cleanupSummary.remainingDatasetNames.length > 0 ||
-      cleanupSummary.remainingFolderNames.length > 0 ||
-      cleanupSummary.remainingSyntheticLangKeys.length > 0
-    ) {
-      throw new Error(
-        '[global-teardown] registered E2E cleanup left artifacts behind: ' +
-        `datasets=${cleanupSummary.remainingDatasetNames.join(', ') || 'none'}; ` +
-        `folders=${cleanupSummary.remainingFolderNames.join(', ') || 'none'}; ` +
-        `lang_keys=${cleanupSummary.remainingSyntheticLangKeys.join(', ') || 'none'}`,
-      );
-    }
-
-    // Every artifact this run owned is now verified gone, so release the run
-    // before the shared language-key comparison. A language-key finding must
-    // not leave a stale run record that blocks the next run.
-    for (const artifact of registeredArtifacts) {
-      unregisterTestArtifact(artifact.kind, artifact.name, artifactRun.runId);
-    }
-    finishArtifactRunRegistry(artifactRun.runId);
-    fs.rmSync(ARTIFACT_BASELINE_FILE, { force: true });
-
-    const langKeyInventory = await readLangKeyInventoryWithStorageState(baseURL, AUTH_FILE);
-    const delta = diffSortedKeys(langKeyInventory.allLangKeys, baseline.langKeys);
-    if (
-      langKeyInventory.totalLangKeyCount !== baseline.totalLangKeyCount ||
-      delta.added.length > 0 ||
-      delta.removed.length > 0
-    ) {
-      // The key set is shared with every other session on the same database.
-      // Keys a migration file seeds were added by that migration, not by a test.
-      const attribution = attributeLangKeyDrift(
-        delta.added,
-        delta.removed,
-        resolveMigrationDirectories(APPLICATION_ROOT),
-      );
-      const migrationSeeded = describeMigrationSeededKeys(attribution.migrationSeeded);
-      if (attribution.unexplainedAdded.length === 0 && attribution.removed.length === 0) {
-        console.warn(
-          '[global-teardown] language keys were added during the run by database migration(s), '
-          + `not by the tests: ${migrationSeeded}`,
+    let baseURL: string | null = null;
+    let status = 'incomplete: target resolution failed';
+    let retainedOwnRunLangKeys: string[] = [];
+    let unverifiedOwnRunLangKeys: string[] = [];
+    let ownRunLangKeyCandidates: string[] = [];
+    let retainedOwnRunLangKeyEvidence: Array<{ key: string; dataset: string; column?: string;
+      ownership: string; countingSources: string }> = [];
+    let unexplainedAddedLangKeys: string[] = [];
+    let removedLangKeys: string[] = [];
+    let cleanupStarted = false;
+    try {
+      // Protect every owned-run read, including a missing or unreadable baseline.
+      // Fixed stage names report the reason without exposing private parser/transport data.
+      baseURL = resolveBaseURL(config);
+      status = 'incomplete: authenticated storage state validation failed';
+      if (!fs.existsSync(AUTH_FILE)) {
+        throw new Error(
+          '[global-teardown] missing authenticated storage state for an active artifact run. ' +
+          'No cleanup request was sent.',
         );
-      } else {
+      }
+      status = 'incomplete: artifact baseline validation failed';
+      if (!fs.existsSync(ARTIFACT_BASELINE_FILE)) {
+        throw new Error(
+          '[global-teardown] missing artifact baseline from global setup. ' +
+          'Cleanup was not started because no server-side artifact is safe to classify by name alone.',
+        );
+      }
+
+      // Validate the complete protection set before invoking a helper that can
+      // reach any mutating API. Incomplete or legacy baseline files fail closed.
+      const baseline = validateSyntheticArtifactBaseline(
+        JSON.parse(fs.readFileSync(ARTIFACT_BASELINE_FILE, 'utf8')),
+      );
+      if (baseline.runId !== artifactRun.runId) {
+        throw new Error(
+          `[global-teardown] baseline run ${baseline.runId} does not match registry run ` +
+          `${artifactRun.runId}. No cleanup request was sent.`,
+        );
+      }
+      if (normalizeE2EBaseURL(baseline.baseURL) !== normalizeE2EBaseURL(baseURL)) {
+        throw new Error(
+          `[global-teardown] baseline target ${baseline.baseURL} does not match configured target ` +
+          `${baseURL}. No cleanup request was sent.`,
+        );
+      }
+
+      status = 'incomplete: artifact registry validation failed';
+      const registeredArtifacts = listRegisteredTestArtifacts(artifactRun.runId);
+      status = 'incomplete: planned artifact validation failed';
+      const plannedArtifacts = registeredArtifacts.filter((artifact) => artifact.status !== 'confirmed');
+      if (plannedArtifacts.length > 0) {
+        throw new Error(
+          '[global-teardown] ambiguous planned artifacts require inspection; no cleanup request was sent: ' +
+          plannedArtifacts.map((artifact) => `${artifact.kind}:${artifact.name}`).join(', '),
+        );
+      }
+      // Per-test drops unregister their active entries. Preserve their confirmed
+      // history as well as datasets still registered when teardown starts.
+      status = 'incomplete: completed dataset history read failed';
+      const runDirectory = path.join(resolveArtifactRegistryRoot(), artifactRun.runId);
+      const completedDatasetNames = new Set(readCompletedDatasetNames(runDirectory, artifactRun.runId));
+      const ownDatasetNames = Array.from(new Set([
+        ...completedDatasetNames,
+        ...registeredArtifacts.filter(artifact => artifact.kind === 'dataset').map(artifact => artifact.name),
+      ]));
+      status = 'incomplete: dataset column history read failed';
+      const columnsByDataset = readRecordedDatasetColumns(runDirectory, artifactRun.runId, ownDatasetNames);
+
+      const releasedArtifacts = new Set<string>();
+      const releaseConfirmedArtifact = (artifact: RegisteredTestArtifact) => {
+        const key = `${artifact.kind}\0${artifact.name}`;
+        if (releasedArtifacts.has(key)) return;
+        unregisterTestArtifact(artifact.kind, artifact.name, artifactRun.runId);
+        if (artifact.kind === 'dataset') completedDatasetNames.add(artifact.name);
+        releasedArtifacts.add(key);
+      };
+      status = 'incomplete: artifact cleanup failed';
+      cleanupStarted = true;
+      // Cleanup also reads the language-key inventory, even with no active artifacts.
+      // Protect it from the first await so those failures produce retention evidence too.
+      const cleanupSummary = await cleanupSyntheticTestArtifactsWithStorageState(
+        baseURL,
+        AUTH_FILE,
+        baseline,
+        registeredArtifacts,
+        releaseConfirmedArtifact,
+      );
+
+      const deletedCount =
+        cleanupSummary.deletedDatasets.length +
+        cleanupSummary.deletedFolders.length;
+      if (deletedCount > 0) {
+        console.log(
+          `[global-teardown] cleaned registered E2E artifacts: ` +
+          `${cleanupSummary.deletedDatasets.length} datasets, ` +
+          `${cleanupSummary.deletedFolders.length} folders`,
+        );
+      }
+
+      if (
+        cleanupSummary.remainingDatasetNames.length > 0 ||
+        cleanupSummary.remainingFolderNames.length > 0
+      ) {
+        throw new Error(
+          '[global-teardown] registered E2E cleanup left artifacts behind: ' +
+          `datasets=${cleanupSummary.remainingDatasetNames.join(', ') || 'none'}; ` +
+          `folders=${cleanupSummary.remainingFolderNames.join(', ') || 'none'}`,
+        );
+      }
+
+      status = 'incomplete: language-key inventory read failed';
+      const langKeyInventory = await readLangKeyInventoryWithStorageState(baseURL, AUTH_FILE);
+      const delta = diffSortedKeys(langKeyInventory.allLangKeys, baseline.langKeys);
+      ownRunLangKeyCandidates = delta.added.filter(key => isOwnRunDatasetKey(key, ownDatasetNames, columnsByDataset));
+      unverifiedOwnRunLangKeys = ownRunLangKeyCandidates;
+      // Use fixed failure reasons: transport/parser messages can contain private response data.
+      status = 'incomplete: language-key source read failed';
+      const sources = await readLangKeySourcesWithStorageState(baseURL, AUTH_FILE, unverifiedOwnRunLangKeys);
+      status = 'incomplete: language-key drift comparison failed';
+      const attribution = attributeLangKeyDrift(delta.added, delta.removed, ownDatasetNames, sources,
+        { columnsByDataset, completedDatasetNames });
+      retainedOwnRunLangKeys = attribution.retainedOwnRun;
+      unexplainedAddedLangKeys = attribution.unexplainedAdded;
+      removedLangKeys = attribution.removed;
+      retainedOwnRunLangKeyEvidence = retainedOwnRunLangKeys.map(key => {
+        const dataset = ownRunDatasetForKey(key, ownDatasetNames, columnsByDataset)!;
+        const column = columnsByDataset.get(dataset)?.find(name =>
+          [name, `search_for_${name}`, `${name}_asc`, `${name}_desc`].includes(key));
+        return { key, dataset, ...(column ? { column } : {}),
+          ownership: completedDatasetNames.has(dataset) ? 'completed-dataset-history' : 'confirmed-dataset-registry',
+          countingSources: sources.get(key)!.length === 0 ? 'complete-empty-inventory-after-drop' : 'verified-own-sources-or-bookkeeping' };
+      });
+      unverifiedOwnRunLangKeys = [];
+      if (
+        langKeyInventory.totalLangKeyCount !== baseline.totalLangKeyCount + retainedOwnRunLangKeys.length ||
+        attribution.unexplainedAdded.length > 0 || attribution.removed.length > 0
+      ) {
         throw new Error(
           '[global-teardown] lang-key baseline drifted during E2E run: ' +
           `expected_count=${baseline.totalLangKeyCount}, got_count=${langKeyInventory.totalLangKeyCount}; ` +
           `added=${attribution.unexplainedAdded.join(', ') || 'none'}; ` +
           `removed=${attribution.removed.join(', ') || 'none'}; ` +
-          `added_by_migrations=${migrationSeeded}`,
+          `retained_own_run_count=${retainedOwnRunLangKeys.length}`,
         );
       }
+      status = 'complete';
+    } catch (error) {
+      // A failed sequence cannot contribute accepted keys to nightly totals.
+      // Keep unconfirmed registry entries and history/baseline evidence; propagate this exact failure.
+      teardownFailed = true;
+      retainedOwnRunLangKeys = [];
+      retainedOwnRunLangKeyEvidence = [];
+      throw error;
+    } finally {
+      let reportWritten = false;
+      const reportDirectory = path.join(testRuntimePaths.root, 'e2e', 'lang-key-retention');
+      const writeReport = (rewrite = false) => {
+        const retainedOwnRunLangKeyCount = retainedOwnRunLangKeys.length;
+        fs.mkdirSync(reportDirectory, { recursive: true, mode: 0o700 });
+        const reportFile = path.join(reportDirectory, `${artifactRun.runId}.json`);
+        fs.writeFileSync(reportFile, `${JSON.stringify({ version: 1, runId: artifactRun.runId, baseURL,
+          capturedAt: new Date().toISOString(), status, retainedOwnRunLangKeyCount,
+          retainedOwnRunLangKeys, unverifiedOwnRunLangKeys, retainedOwnRunLangKeyEvidence,
+          unexplainedAddedLangKeys, removedLangKeys }, null, 2)}\n`,
+        { flag: rewrite ? 'w' : 'wx', mode: 0o600 });
+        console.log(`[global-teardown] retained own-run language keys: count=${retainedOwnRunLangKeyCount}; `
+          + `names=${retainedOwnRunLangKeys.join(', ') || 'none'}; status=${status}; `
+          + `unverified=${unverifiedOwnRunLangKeys.join(', ') || 'none'}; report=${reportFile}`);
+      };
+      try {
+        writeReport();
+        reportWritten = true;
+        let rewriteAttempted = false;
+        reportFinalizationFailure = (stage) => {
+          if (rewriteAttempted) return false;
+          rewriteAttempted = true;
+          status = `incomplete: ${stage} failed`;
+          unverifiedOwnRunLangKeys = ownRunLangKeyCandidates;
+          retainedOwnRunLangKeys = [];
+          retainedOwnRunLangKeyEvidence = [];
+          // A late failure invalidates earlier acceptance. Attempt one replacement,
+          // keeping its error secondary to the finalization failure even if writing fails.
+          try {
+            writeReport(true);
+          } catch {
+            console.error('[global-teardown] retention report rewrite also failed; original finalization failure was kept.');
+          }
+          return true;
+        };
+      } catch (reportError) {
+        if (!teardownFailed) throw reportError;
+        // Reporting must not replace the original cleanup/read/comparison failure.
+        console.error('[global-teardown] retention reporting also failed; ownership evidence was kept.');
+      }
+
+      let finalizationStage = 'registry release';
+      try {
+        // Preflight failure proves no absence, even with no active entries.
+        // Keep its current pointer, baseline and history in place; never archive or release it.
+        if (cleanupStarted && reportWritten && listRegisteredTestArtifacts(artifactRun.runId).length === 0) {
+          if (teardownFailed) {
+            // A history-only run directory still blocks startup. Preserve it outside
+            // the active registry AFTER reporting, with a baseline copy that the next
+            // setup cannot overwrite. Never copy the neighbouring authenticated state.
+            finalizationStage = 'evidence archive';
+            const evidenceDirectory = path.join(reportDirectory, `${artifactRun.runId}.evidence`);
+            fs.mkdirSync(evidenceDirectory, { mode: 0o700 });
+            fs.cpSync(path.join(resolveArtifactRegistryRoot(), artifactRun.runId), evidenceDirectory,
+              { recursive: true, force: false, errorOnExist: true });
+            fs.copyFileSync(ARTIFACT_BASELINE_FILE, path.join(evidenceDirectory, 'artifact-baseline.json'), fs.constants.COPYFILE_EXCL);
+          }
+          finalizationStage = 'registry release';
+          finishArtifactRunRegistry(artifactRun.runId);
+          finalizationStage = 'artifact baseline removal';
+          if (!teardownFailed) fs.rmSync(ARTIFACT_BASELINE_FILE, { force: true });
+        }
+      } catch (releaseError) {
+        reportFinalizationFailure?.(finalizationStage);
+        throw releaseError;
+      }
     }
+  } catch (error) {
+    // A later auth-removal failure must not replace a reporting/release failure.
+    teardownFailed = true;
+    throw error;
   } finally {
-    removeStorageStateFile(AUTH_FILE);
+    try {
+      removeStorageStateFile(AUTH_FILE);
+    } catch (authError) {
+      if (reportFinalizationFailure?.('auth-state removal') || !teardownFailed) throw authError;
+      console.error('[global-teardown] auth-state removal also failed; original teardown failure was kept.');
+    }
   }
 }
 

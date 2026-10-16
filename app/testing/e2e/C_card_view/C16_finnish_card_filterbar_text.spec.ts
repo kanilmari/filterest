@@ -13,9 +13,7 @@ import { closeActiveFilterbarIfOpen, revealActiveFilterbarSection, waitForActive
 import { firstVisibleByTestId } from '../helpers/navigation';
 import { closeBigCard, openBigCard } from '../helpers/view-switch';
 
-// Product source: get_results_query.go:92 accepts column filters; the returned
-// id is the deletion identity (delete_row.go:80). Never delete by a name prefix.
-// base.schema.sql:232,235 defines the primary id and unique language key.
+// Read-only proof that creation seeds the dataset's own readable label.
 async function readDatasetNameKeyId(request: APIRequestContext, dataset: string): Promise<number | null> {
   const response = await request.get('/api/get-results', {
     params: { dataset: 'system_lang_keys', lang_key: dataset, offset: 0 },
@@ -40,15 +38,13 @@ test('Finnish sort/count/add-row and empty date stay translated in cards and art
   expect(baseline.allLangKeys).not.toContain(dataset);
   expect(await readDatasetNameKeyId(page.request, dataset)).toBeNull();
   let created = false;
-  let nameKeyId: number | null = null;
   try {
     await createTempDataset(page, { datasetName: dataset,
       columns: { id: 'SERIAL', name: 'TEXT', expiry: 'DATE' },
       seedRows: [{ name: 'Tyhjä päivämäärä', expiry: null }, { name: 'Toinen tarjous', expiry: null }] });
     created = true;
     // Product source: dataset_interface_label_creator.go:65 creates this key.
-    nameKeyId = await readDatasetNameKeyId(page.request, dataset);
-    expect(nameKeyId).not.toBeNull();
+    expect(await readDatasetNameKeyId(page.request, dataset)).not.toBeNull();
     // The public default is modern (dataset_appearance/definition.json:27).
     // A visible empty date, as reported on Fintravel, also requires the empty
     // field gates below to be off (card_row_builder.js:239,256).
@@ -228,27 +224,10 @@ test('Finnish sort/count/add-row and empty date stay translated in cards and art
   } finally {
     try {
       if (created) {
-        // Product source: CleanupLangKeySourcesForTable retains keys with other
-        // sources (cleanup_lang_key_sources.go:207). Even dropTempDataset may
-        // therefore leave the dataset-name key the browser has also used.
-        nameKeyId ??= await readDatasetNameKeyId(page.request, dataset);
         await dropTempDataset(page, dataset);
-        const remainingId = await readDatasetNameKeyId(page.request, dataset);
-        if (remainingId !== null) {
-          expect(remainingId, 'Remove only the exact language-key row this spec created').toBe(nameKeyId);
-          const csrf = await fetchCsrfTokenForRequest(page.request);
-          // Product source: delete_row.go:80 accepts ids through supported CRUD.
-          const deletion = await page.request.post('/api/delete-rows?dataset=system_lang_keys', {
-            headers: { 'X-CSRF-Token': csrf }, data: { ids: [remainingId] },
-          });
-          expect(deletion.ok(), await deletion.text()).toBe(true);
-          expect(await readDatasetNameKeyId(page.request, dataset)).toBeNull();
-        }
       }
-      // Other specs create and drop their own datasets' keys concurrently, so the complete inventory is compared once by
-      // global-teardown.ts:171-194 after the whole run. Here no key of this spec's own dataset may remain.
-      const ownKeys = (keys: string[]) => keys.filter(key => key.includes(dataset));
-      expect(ownKeys((await readLangKeyInventory(page.request)).allLangKeys)).toEqual(ownKeys(baseline.allLangKeys));
+      // K423 keeps keys and translations after a drop. Global teardown verifies
+      // exact run ownership and all remaining sources, and reports retained keys.
     } finally {
       await page.evaluate(language => {
         if (language === null) localStorage.removeItem('chosen_language');

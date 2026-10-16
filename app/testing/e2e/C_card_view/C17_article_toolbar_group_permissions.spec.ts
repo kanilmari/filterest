@@ -130,7 +130,7 @@ async function proveGuestToolbar(visitor: Page, dataset: string, theme: 'light' 
     .toEqual(await readGuestUIEndpoints(visitor));
 }
 
-/** Equal bounds use the same exact lookup as the language-key cleanup, including FK ids. */
+/** Equal bounds provide exact identity lookups, including foreign-key ids. */
 async function readAccessRows(page: Page, dataset: string, fields: Record<string, string | number>): Promise<AccessRow[]> {
   const query = new URLSearchParams({ dataset, view_key: 'table' });
   for (const [column, value] of Object.entries(fields)) {
@@ -352,7 +352,6 @@ test('C17: administrator, reader and anonymous visitor receive their own article
   const parent = buildTempDatasetName('e2e_article_toolbar');
   const child = buildTempDatasetName('e2e_article_toolbar_child');
   const created: string[] = [];
-  const datasetNameKeyIds = new Map<string, number | null>();
   const readerAccess: ReaderAccess = {
     groupName: buildTempDatasetName('e2e_c17_card_reader'), groupId: null, groupCreated: false,
     viewGrants: [], userId: null, membershipId: null,
@@ -382,7 +381,7 @@ test('C17: administrator, reader and anonymous visitor receive their own article
   const visitor = await visitorContext.newPage();
   try {
     await login(page, loadCredentials());
-    // Creation seeds each dataset-name key. Never claim a pre-existing key for cleanup.
+    // Creation seeds each dataset-name key. Protect any pre-existing label.
     for (const dataset of [parent, child]) expect(await readDatasetNameLangKeyId(page, dataset)).toBeNull();
     await createTempDataset(page, {
       // create_table_registration.go:180,207 seeds only read routes on this new
@@ -393,7 +392,6 @@ test('C17: administrator, reader and anonymous visitor receive their own article
         detail_note: 'Details stay visible', photo: PHOTO }],
     });
     created.push(parent);
-    datasetNameKeyIds.set(parent, await readDatasetNameLangKeyId(page, parent));
     const visibility = await loadDatasetCardVisibility(page.request, parent);
     const description = visibility.columns.find(column => column.column_name === 'description');
     expect(description).toBeTruthy();
@@ -415,7 +413,6 @@ test('C17: administrator, reader and anonymous visitor receive their own article
       seedRows: [{ name: 'Unchanged related tab', parent_id: 1 }],
     });
     created.push(child);
-    datasetNameKeyIds.set(child, await readDatasetNameLangKeyId(page, child));
     // Attachment linking can produce a positive administrator section without
     // a physical upload. Register and confirm its exact generated child identity.
     const assets = `${parent}_assets`;
@@ -428,7 +425,6 @@ test('C17: administrator, reader and anonymous visitor receive their own article
     const assetsId = await readDatasetTableUIDFromPage(page, assets);
     expect(assetsId).not.toBeNull();
     confirmTestArtifact('dataset', assets, assetsId!);
-    datasetNameKeyIds.set(assets, await readDatasetNameLangKeyId(page, assets));
     reader = await readerContext.newPage();
     await login(reader, loadUserCredentials());
     originalReaderEndpoints = await readReaderEndpoints(reader);
@@ -540,18 +536,8 @@ test('C17: administrator, reader and anonymous visitor receive their own article
         } finally {
           for (const dataset of [...created].reverse()) {
             await dropTempDataset(page, dataset);
-            // Product defect: lang_key_source_population.go:496 can count a key's own
-            // normalized translations as foreign_key sources. The bare dataset name
-            // survives those sources in cleanup_lang_key_sources.go:218. Native C17
-            // observed a surviving name; its actual retained source still needs inspection.
-            // Remove only this test's exact name and recorded ID through supported CRUD.
-            const leftoverId = await readDatasetNameLangKeyId(page, dataset);
-            if (leftoverId !== null) {
-              expect(leftoverId, `Refusing to delete a replacement language key for ${dataset}.`).toBe(datasetNameKeyIds.get(dataset));
-              const deletion = await postJsonWithCsrf(page, '/api/delete-rows?dataset=system_lang_keys', { ids: [leftoverId] });
-              expect(deletion.ok, deletion.body).toBe(true);
-            }
-            expect(await readDatasetNameLangKeyId(page, dataset)).toBeNull();
+            // K423 retains keys and translations; global teardown checks this
+            // run's exact dataset names and source evidence without deleting keys.
           }
         }
       }

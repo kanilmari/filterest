@@ -545,6 +545,7 @@ on-demand scan cannot archive or delete a key. The legacy archive function and
 its 90-day constant remain for later WO-J35 work, without an automatic caller.
 Its current fi/en/ch/yue column copy does not preserve every normalized
 translation, so this document makes no lossless-archive claim.
+E2E temp-dataset language keys are kept on development instances until WO-J35 B5 and the archiving that follows.
 
 Category 8 is report-only. Its fi/en language keys say archiving is paused,
 show the recorded age when available, and identify a counting source when one

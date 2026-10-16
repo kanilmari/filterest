@@ -1,88 +1,80 @@
 /**
- * lang-key-drift-attribution.ts
- *
- * Separates language keys a database migration seeded during an E2E run from
- * keys the tests themselves left behind.
- * Bridges the global teardown's language-key comparison with the migration SQL
- * files on disk, which the test identity can read even where the migration
- * ledger in the database is closed to it.
- * Exists so a migration another session applies mid-run does not fail a run
- * whose own artifacts were all removed, while a genuine test leak still fails.
+ * Attributes retained E2E keys using exact run dataset names and current source evidence.
+ * Connects teardown's inventory diff to registry ownership without retiring any keys.
+ * Recorded columns and completed ownership explain dropped dataset sources.
+ * Missing inventories, unrelated additions and every removal remain failures.
  */
-
-import * as fs from 'fs';
-import * as path from 'path';
-
-/** Extra migration folders (path-delimiter separated) an embedding shell adds. */
-export const EXTRA_MIGRATION_DIRECTORIES_ENV = 'FILTEREST_E2E_EXTRA_MIGRATION_DIRS';
-
-export type MigrationSeededKey = { key: string; migrations: string[] };
-
+export type LangKeySource = { source_type: string; source_high: string; source_low: string | null };
 export type LangKeyDriftAttribution = {
-  /** Added keys whose exact SQL literal a migration file contains. */
-  migrationSeeded: MigrationSeededKey[];
-  /** Added keys no migration file names: a possible test leak. */
+  retainedOwnRun: string[];
   unexplainedAdded: string[];
-  /** Removed keys are never attributed: tests must not delete existing keys. */
   removed: string[];
 };
 
-/** The product's own migration folder plus any folders the environment names. */
-export function resolveMigrationDirectories(
-  applicationRoot: string,
-  environment: Record<string, string | undefined> = process.env,
-): string[] {
-  const directories = [path.join(applicationRoot, 'server_tools', 'migrations')];
-  for (const entry of String(environment[EXTRA_MIGRATION_DIRECTORIES_ENV] || '').split(path.delimiter)) {
-    const trimmed = entry.trim();
-    if (trimmed !== '') {
-      directories.push(path.resolve(trimmed));
-    }
-  }
-  return directories;
+export type DatasetColumns = ReadonlyMap<string, readonly string[]>;
+export type LangKeyOwnership = {
+  columnsByDataset: DatasetColumns;
+  completedDatasetNames: ReadonlySet<string>;
+};
+
+/** Mirrors dataset_interface_label_creator.go, not arbitrary prefix/suffix combinations. */
+export function ownRunDatasetForKey(
+  key: string, datasetNames: readonly string[], columnsByDataset: DatasetColumns = new Map(),
+): string | undefined {
+  const matches = [...new Set(datasetNames)].filter(name => name !== '' && (
+    [name, `add_row_${name}`, `search_for_${name}`, `search_slogan_${name}`, `${name}_front_page`].includes(key)
+    || (columnsByDataset.get(name) ?? []).some(column => column !== ''
+      && [column, `search_for_${column}`, `${column}_asc`, `${column}_desc`].includes(key))
+  ));
+  return matches.length === 1 ? matches[0] : undefined;
 }
 
-function readMigrationSources(directories: string[]): Array<{ name: string; sql: string }> {
-  const sources: Array<{ name: string; sql: string }> = [];
-  for (const directory of directories) {
-    if (!fs.existsSync(directory)) {
-      continue;
-    }
-    for (const name of fs.readdirSync(directory).sort()) {
-      if (name.endsWith('.sql')) {
-        sources.push({ name, sql: fs.readFileSync(path.join(directory, name), 'utf8') });
-      }
-    }
-  }
-  return sources;
+export function isOwnRunDatasetKey(
+  key: string, datasetNames: readonly string[], columnsByDataset?: DatasetColumns,
+): boolean {
+  return ownRunDatasetForKey(key, datasetNames, columnsByDataset) !== undefined;
 }
 
-/**
- * Attributes each added key to the migrations that seed it as an exact quoted
- * SQL literal. Synthetic test names never appear in migration files, so a key a
- * test left behind stays unexplained and still fails the run.
- */
+function sourceBelongsToRun(source: LangKeySource, datasetNames: readonly string[]): boolean {
+  // Keep the lifecycle's counting rule: only these two types are bookkeeping.
+  if (['orphan', 'manual_crud'].includes(source.source_type)) return true;
+  if (source.source_type === 'foreign_key'
+    && source.source_high === 'public.system_lang_key_translations.lang_key_id'
+    && source.source_low === 'lang_key_id') return true;
+  return datasetNames.some(name => {
+    switch (source.source_type) {
+      case 'table':
+      case 'column': return source.source_high === name;
+      case 'dataset_header':
+        return source.source_high === name || source.source_high.startsWith(name + ':');
+      case 'column_value': return source.source_high.startsWith(name + '.') && source.source_high.length > name.length + 1;
+      case 'foreign_key':
+        return source.source_high.startsWith(`public.${name}.`)
+          && source.source_high.length > name.length + 8;
+      default: return false; // Unknown source types still count and fail closed.
+    }
+  });
+}
+
+/** An explicit empty inventory after DROP needs completed ownership; absent inventories fail. */
 export function attributeLangKeyDrift(
-  added: string[],
-  removed: string[],
-  directories: string[],
+  added: string[], removed: string[], datasetNames: readonly string[],
+  sourcesByKey: ReadonlyMap<string, readonly LangKeySource[]>,
+  ownership?: LangKeyOwnership,
 ): LangKeyDriftAttribution {
-  const sources = added.length > 0 ? readMigrationSources(directories) : [];
-  const migrationSeeded: MigrationSeededKey[] = [];
+  const retainedOwnRun: string[] = [];
   const unexplainedAdded: string[] = [];
   for (const key of added) {
-    const literal = `'${key.replace(/'/g, "''")}'`;
-    const migrations = sources.filter((source) => source.sql.includes(literal)).map((source) => source.name);
-    if (migrations.length > 0) {
-      migrationSeeded.push({ key, migrations });
-    } else {
-      unexplainedAdded.push(key);
-    }
+    const sources = sourcesByKey.get(key);
+    const owner = ownRunDatasetForKey(key, datasetNames, ownership?.columnsByDataset);
+    const hasDatasetSource = sources?.some(source => !['orphan', 'manual_crud'].includes(source.source_type)
+      && !(source.source_type === 'foreign_key'
+        && source.source_high === 'public.system_lang_key_translations.lang_key_id'
+        && source.source_low === 'lang_key_id'));
+    const own = owner !== undefined && sources !== undefined
+      && sources.every(source => sourceBelongsToRun(source, [owner]))
+      && (hasDatasetSource || !ownership || ownership.completedDatasetNames.has(owner));
+    (own ? retainedOwnRun : unexplainedAdded).push(key);
   }
-  return { migrationSeeded, unexplainedAdded, removed: [...removed] };
-}
-
-/** One readable line per attributed key, for teardown logs and errors. */
-export function describeMigrationSeededKeys(keys: MigrationSeededKey[]): string {
-  return keys.map((entry) => `${entry.key} (${entry.migrations.join(', ')})`).join('; ') || 'none';
+  return { retainedOwnRun, unexplainedAdded, removed: [...removed] };
 }

@@ -19,6 +19,7 @@ import {
   readDatasetTableUIDFromRequest,
 } from './test-artifact-dataset-identity-reader';
 import { hydrateAuthenticatedTreeDataCache } from './tree-data-cache';
+import { recordTestDatasetColumnsFromRequest } from './test-artifact-dataset-column-recorder';
 import { fetchCsrfTokenForRequest } from './test-artifact-csrf-reader';
 export { fetchCsrfTokenForRequest } from './test-artifact-csrf-reader';
 
@@ -283,6 +284,8 @@ export async function createTempDataset(
         // request can fail. Compensation still re-reads and matches this UID.
         confirmTestArtifact('dataset', config.datasetName, created.table_uid);
         confirmed = true;
+        // Ownership is already durable, so a column-history failure can compensate safely.
+        confirmTestArtifact('dataset', config.datasetName, created.table_uid, Object.keys(config.columns));
         const tableUID = await readDatasetTableUIDFromPage(page, config.datasetName);
         if (tableUID !== created.table_uid) {
           throw new Error(
@@ -358,6 +361,7 @@ export async function dropTempDataset(
       + `${registeredArtifact.serverId}, current table_uid=${currentTableUID}.`,
     );
   }
+  await recordTestDatasetColumnsFromRequest(page.request, datasetName);
   const response = await postJsonWithCsrf(page, '/api/drop-dataset', {
     dataset_name: datasetName,
     confirm_dataset_name: datasetName,

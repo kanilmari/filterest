@@ -11,6 +11,7 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { afterEach, beforeEach, describe, expect, test } from 'vitest';
+import { readCompletedDatasetNames } from './test-artifact-dataset-history';
 import {
   confirmTestArtifact,
   finishArtifactRunRegistry,
@@ -41,6 +42,29 @@ afterEach(() => {
 });
 
 describe('test artifact run registry', () => {
+  test('retains exact confirmed dataset names after per-test unregistering until the run finishes', () => {
+    const run = initializeArtifactRunRegistry({ rootDirectory: registryRoot, runId: 'run-dataset-history' });
+    registerTestArtifact('dataset', 'e2e_completed');
+    confirmTestArtifact('dataset', 'e2e_completed', 101);
+    unregisterTestArtifact('dataset', 'e2e_completed');
+    expect(listRegisteredTestArtifacts(run.runId)).toEqual([]);
+    expect(readCompletedDatasetNames(runDirectory(run.runId), run.runId)).toEqual(['e2e_completed']);
+    expect(() => readCompletedDatasetNames(runDirectory(run.runId), 'run-another')).toThrow(/Invalid E2E dataset history/);
+    finishArtifactRunRegistry(run.runId);
+    const next = initializeArtifactRunRegistry({ rootDirectory: registryRoot, runId: 'run-history-next' });
+    expect(readCompletedDatasetNames(runDirectory(next.runId), next.runId)).toEqual([]);
+  });
+
+  test('planned datasets and confirmed folders never authorize key retention', () => {
+    const run = initializeArtifactRunRegistry({ rootDirectory: registryRoot });
+    registerTestArtifact('dataset', 'e2e_never_created');
+    registerTestArtifact('folder', 'e2e_folder');
+    confirmTestArtifact('folder', 'e2e_folder', 102);
+    unregisterTestArtifact('dataset', 'e2e_never_created');
+    unregisterTestArtifact('folder', 'e2e_folder');
+    expect(readCompletedDatasetNames(runDirectory(run.runId), run.runId)).toEqual([]);
+  });
+
   test('stores the original target identically in the descriptor and current pointer', () => {
     const target = { baseURL: 'https://original.invalid/', databaseId: 'a'.repeat(32) };
     const run = initializeArtifactRunRegistry({ rootDirectory: registryRoot, target });

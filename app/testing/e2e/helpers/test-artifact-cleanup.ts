@@ -419,6 +419,7 @@ async function dropRegisteredDatasets(
   request: APIRequestContext,
   csrfToken: string,
   artifacts: RegisteredTestArtifact[],
+  onConfirmedAbsent?: (artifact: RegisteredTestArtifact) => void,
 ): Promise<string[]> {
   const resolved: string[] = [];
   const datasets = artifacts.filter((artifact) => artifact.kind === 'dataset').reverse();
@@ -429,6 +430,7 @@ async function dropRegisteredDatasets(
   for (const artifact of datasets) {
     if (!await validateRegisteredDatasetIdentity(request, artifact)) {
       resolved.push(artifact.name);
+      onConfirmedAbsent?.(artifact);
       continue;
     }
     deletionCandidates.push(artifact);
@@ -439,6 +441,7 @@ async function dropRegisteredDatasets(
     // identity immediately before that name-only request to close the setup-to-delete race.
     if (!await validateRegisteredDatasetIdentity(request, artifact)) {
       resolved.push(artifact.name);
+      onConfirmedAbsent?.(artifact);
       continue;
     }
     const response = await postJsonWithCsrf(
@@ -463,6 +466,7 @@ async function deleteRegisteredFolders(
   request: APIRequestContext,
   csrfToken: string,
   artifacts: RegisteredTestArtifact[],
+  onConfirmedAbsent?: (artifact: RegisteredTestArtifact) => void,
 ): Promise<string[]> {
   const folders = artifacts.filter((artifact) => artifact.kind === 'folder');
   const resolved = new Set<string>();
@@ -480,6 +484,7 @@ async function deleteRegisteredFolders(
       const liveNode = byServerId.get(artifact.serverId!);
       if (!liveNode) {
         resolved.add(artifact.name);
+        onConfirmedAbsent?.(artifact);
       } else if (liveNode.name !== artifact.name) {
         throw new Error(
           `Refusing to delete folder id ${artifact.serverId}: registry name ` +
@@ -547,6 +552,7 @@ export async function cleanupSyntheticTestArtifacts(
   request: APIRequestContext,
   rawBaseline: SyntheticArtifactBaseline,
   rawArtifacts: RegisteredTestArtifact[],
+  onConfirmedAbsent?: (artifact: RegisteredTestArtifact) => void,
 ): Promise<SyntheticTestCleanupSummary> {
   const baseline = validateSyntheticArtifactBaseline(rawBaseline);
   const artifacts = validateConfirmedTestArtifacts(rawArtifacts, baseline);
@@ -567,17 +573,26 @@ export async function cleanupSyntheticTestArtifacts(
   }
 
   const csrfToken = await fetchCsrfTokenForRequest(request);
-  const deletedDatasets = await dropRegisteredDatasets(request, csrfToken, artifacts);
-  const deletedFolders = await deleteRegisteredFolders(request, csrfToken, artifacts);
+  const deletedDatasets = await dropRegisteredDatasets(request, csrfToken, artifacts, onConfirmedAbsent);
+  const deletedFolders = await deleteRegisteredFolders(request, csrfToken, artifacts, onConfirmedAbsent);
   // Reuse recovery's name-and-UID reader after all drops: a parent may have
   // removed its registered managed child, and a renamed UID is still a survivor.
-  const [remainingDatasets, remainingFolders, langKeyInventory] = await Promise.all([
-    Promise.all(artifacts.filter((artifact) => artifact.kind === 'dataset').map(async (artifact) =>
-      await readDatasetTableUIDFromRequest(request, artifact.name, artifact.serverId!) === null ? [] : [artifact.name],
-    )),
-    listAllFolderNodes(request),
-    readLangKeyInventory(request),
-  ]);
+  // Publish each proof before unrelated folder/inventory reads can fail. Keep
+  // these checks sequential so no confirmation callback outlives a rejected cleanup.
+  const remainingDatasetNames: string[] = [];
+  for (const artifact of artifacts.filter(artifact => artifact.kind === 'dataset')) {
+    if (await readDatasetTableUIDFromRequest(request, artifact.name, artifact.serverId!) === null) {
+      onConfirmedAbsent?.(artifact);
+    } else {
+      remainingDatasetNames.push(artifact.name);
+    }
+  }
+  const remainingFolders = await listAllFolderNodes(request);
+  const remainingFolderIds = new Set(remainingFolders.map(folder => folder.db_id));
+  for (const artifact of artifacts.filter(artifact => artifact.kind === 'folder')) {
+    if (!remainingFolderIds.has(artifact.serverId!)) onConfirmedAbsent?.(artifact);
+  }
+  const langKeyInventory = await readLangKeyInventory(request);
   const registeredFolderIds = new Set(
     artifacts.filter((artifact) => artifact.kind === 'folder').map((artifact) => artifact.serverId),
   );
@@ -586,7 +601,7 @@ export async function cleanupSyntheticTestArtifacts(
     deletedDatasets,
     deletedFolders,
     deletedLangKeys: [],
-    remainingDatasetNames: remainingDatasets.flat().sort(),
+    remainingDatasetNames: remainingDatasetNames.sort(),
     remainingFolderNames: remainingFolders
       .filter((folder) => registeredFolderIds.has(folder.db_id))
       .map((folder) => folder.name)
@@ -611,10 +626,11 @@ export async function cleanupSyntheticTestArtifactsWithStorageState(
   storageStatePath: string,
   baseline: SyntheticArtifactBaseline,
   artifacts: RegisteredTestArtifact[],
+  onConfirmedAbsent?: (artifact: RegisteredTestArtifact) => void,
 ): Promise<SyntheticTestCleanupSummary> {
   const requestContext = await createAuthenticatedRequestContext(baseURL, storageStatePath);
   try {
-    return await cleanupSyntheticTestArtifacts(requestContext, baseline, artifacts);
+    return await cleanupSyntheticTestArtifacts(requestContext, baseline, artifacts, onConfirmedAbsent);
   } finally {
     await requestContext.dispose();
   }
