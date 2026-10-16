@@ -30,6 +30,16 @@
       "rights_review": "owner-attested",
       "source": "Original SVG geometry maintained in Filterest source"
     },
+    "Filterest tool navigation documentation illustrations": {
+      "author": "Filterest project contributors",
+      "documents": [],
+      "license": "GPL-2.0-or-later",
+      "party": "first-party",
+      "publication_rights_basis": "First-party illustrations prepared for the Coloured Tool Navigation document on 2026-10-16. The project owner supplied the cropped Filterest menu capture, confirmed publication rights and explicitly authorised copying it into the GPL-2.0-or-later repository. The owner also commissioned an original SVG mockup using plain shapes and text only, with no third-party artwork, under the same grant.",
+      "rights_holder": "Filterest project contributors",
+      "rights_review": "owner-attested",
+      "source": "Filterest menu capture and original geometric navigation mockup created for the Coloured Tool Navigation future document, 2026-10-16"
+    },
     "Google Material Icons and Symbols": {
       "documents": [
         "material-symbols-Apache-2.0.txt",
@@ -939,8 +949,22 @@
       "path": "app/testing/fixtures/custom_root/custom_root.svg",
       "sha256": "b42d26a33ea22b298afa91cd5871b30669544ffc6e6a5e07e6cd0d40b7754809",
       "source_detail": "Original rounded rectangle and plus-sign geometry maintained with the custom-root browser test fixture; introduced in source commit 2c572552."
+    },
+    {
+      "component": "Filterest tool navigation documentation illustrations",
+      "kind": "asset",
+      "path": "app/docs/future_documentation/media/navigation-illustrations/coloured_tool_navigation.svg",
+      "sha256": "bcd6fa1178e1bbb50b575c7f75183d92b015a820c486fb1ed008289c9bb21010",
+      "source_detail": "Original first-party SVG drawn for this document on 2026-10-16 from plain geometric shapes and text; light and dark concepts in one image, with no third-party artwork, traced reference or embedded raster."
+    },
+    {
+      "component": "Filterest tool navigation documentation illustrations",
+      "kind": "asset",
+      "path": "app/docs/future_documentation/media/navigation-illustrations/filterest_admin_menu.png",
+      "sha256": "cd9bcaabafe185d8fe28d214ce47433a4dd169a6d03d7cfc2dd66b71387dd896",
+      "source_detail": "First-party Filterest admin-menu capture prepared for this document on 2026-10-16; copied byte-for-byte from the owner-supplied cropped image, without browser chrome. Publication authorised by the owner in WO34."
     }
   ],
-  "reviewed_on": "2026-10-15",
+  "reviewed_on": "2026-10-16",
   "schema_version": 2
 }

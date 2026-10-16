@@ -782,6 +782,7 @@
       "paths": [
         "app/backend/core_components/middlewares/maintenance_page.html",
         "app/frontend",
+        "app/docs/future_documentation/media",
         "app/server_tools/licenses",
         "app/server_tools/public_bootstrap/source/fixtures",
         "THIRD_PARTY_LICENSES",

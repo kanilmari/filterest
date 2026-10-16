@@ -1,0 +1,143 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- coloured_tool_navigation.svg -->
+<!-- Original geometric concept illustration for coloured tool navigation. -->
+<!-- Connects group identity in the tree and favourites across both themes. -->
+<!-- Created for this document on 2026-10-16; GPL-2.0-or-later. -->
+<svg xmlns="http://www.w3.org/2000/svg" width="920" height="820" viewBox="0 0 920 820"
+     role="img" aria-labelledby="title description">
+  <title id="title">Coloured tool navigation: light and dark concepts</title>
+  <desc id="description">Two examples of the same collapsible tree. Blue Site settings,
+    teal Table tools and purple User tools have coloured icon tiles and single-line
+    entries. Site languages and My profile keep their group colours in Favourites.
+    Maintenance is collapsed. This is an illustration, not a working interface.</desc>
+  <style>
+    svg { font-family: Arial, sans-serif; }
+    .light {
+      --surface: #ffffff; --ink: #172235; --muted: #4d5b70; --rule: #bac4d2;
+      --site: #245db6; --tables: #08786c; --user: #7b3fa6; --on-tile: #ffffff;
+    }
+    .dark {
+      --surface: #111b2a; --ink: #f1f5fb; --muted: #b7c4d7; --rule: #667891;
+      --site: #8db7ff; --tables: #69d7c5; --user: #d2a6f5; --on-tile: #111b2a;
+    }
+    .surface { fill: var(--surface); stroke: var(--rule); }
+    .label { fill: var(--ink); font-size: 17px; }
+    .heading { fill: var(--ink); font-size: 18px; font-weight: bold; }
+    .note { fill: var(--muted); font-size: 14px; }
+    .branch { fill: none; stroke: var(--rule); stroke-width: 1.5; }
+    .control { fill: none; stroke: var(--muted); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+    .site { --group: var(--site); }
+    .tables { --group: var(--tables); }
+    .user { --group: var(--user); }
+    .tile { fill: var(--group); }
+    .mark { fill: none; stroke: var(--on-tile); stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+    .solid-mark { fill: var(--on-tile); }
+    .star { fill: none; stroke: var(--muted); stroke-width: 1.8; stroke-linejoin: round; }
+    .saved { fill: var(--muted); }
+  </style>
+  <defs>
+    <g id="open"><polyline class="control" points="0,0 5,5 10,0"/></g>
+    <g id="closed"><polyline class="control" points="2,-4 7,1 2,6"/></g>
+    <g id="star"><polygon class="star" points="10,1 13,7 20,8 15,13 16,20 10,17 4,20 5,13 0,8 7,7"/></g>
+    <g id="saved-star"><polygon class="star saved" points="10,1 13,7 20,8 15,13 16,20 10,17 4,20 5,13 0,8 7,7"/></g>
+    <g id="folder">
+      <polygon class="tile" points="0,3 10,3 13,7 25,7 25,23 0,23"/>
+      <line class="mark" x1="5" y1="12" x2="20" y2="12"/>
+    </g>
+    <g id="languages">
+      <rect class="tile" width="28" height="28" rx="6"/>
+      <circle class="mark" cx="14" cy="14" r="8"/>
+      <line class="mark" x1="6" y1="14" x2="22" y2="14"/>
+      <line class="mark" x1="14" y1="6" x2="14" y2="22"/>
+    </g>
+    <g id="authentication">
+      <rect class="tile" width="28" height="28" rx="6"/>
+      <rect class="mark" x="6" y="7" width="16" height="14" rx="2"/>
+      <line class="mark" x1="10" y1="11" x2="18" y2="11"/>
+      <line class="mark" x1="10" y1="16" x2="15" y2="16"/>
+    </g>
+    <g id="create-table">
+      <rect class="tile" width="28" height="28" rx="6"/>
+      <rect class="mark" x="6" y="6" width="16" height="16" rx="1"/>
+      <line class="mark" x1="10" y1="14" x2="18" y2="14"/>
+      <line class="mark" x1="14" y1="10" x2="14" y2="18"/>
+    </g>
+    <g id="relations">
+      <rect class="tile" width="28" height="28" rx="6"/>
+      <rect class="mark" x="5" y="6" width="7" height="7" rx="1"/>
+      <rect class="mark" x="16" y="15" width="7" height="7" rx="1"/>
+      <polyline class="mark" points="9,14 9,19 15,19"/>
+    </g>
+    <g id="profile">
+      <rect class="tile" width="28" height="28" rx="6"/>
+      <circle class="solid-mark" cx="14" cy="10" r="4"/>
+      <polygon class="solid-mark" points="14,15 22,22 6,22"/>
+    </g>
+    <g id="menu">
+      <rect class="surface" width="430" height="690" rx="12"/>
+      <text class="heading" x="22" y="37">Favourites</text>
+      <g class="site" transform="translate(24 57)">
+        <use href="#languages"/><text class="label" x="42" y="20">Site languages</text>
+      </g>
+      <use href="#saved-star" x="383" y="61"/>
+      <g class="user" transform="translate(24 101)">
+        <use href="#profile"/><text class="label" x="42" y="20">My profile</text>
+      </g>
+      <use href="#saved-star" x="383" y="105"/>
+      <line class="branch" x1="22" y1="151" x2="408" y2="151"/>
+      <use href="#open" x="23" y="180"/>
+      <text class="heading" x="44" y="187">Admin tools</text>
+      <polyline class="branch" points="29,204 29,539 44,539"/>
+      <g class="site" transform="translate(53 211)">
+        <use href="#folder"/><text class="heading" x="40" y="20">Site settings</text>
+      </g>
+      <use href="#open" x="34" y="224"/>
+      <polyline class="branch" points="64,247 64,310 76,310"/>
+      <line class="branch" x1="64" y1="266" x2="76" y2="266"/>
+      <g class="site" transform="translate(84 252)">
+        <use href="#languages"/><text class="label" x="42" y="20">Site languages</text>
+      </g>
+      <use href="#saved-star" x="383" y="256"/>
+      <g class="site" transform="translate(84 296)">
+        <use href="#authentication"/><text class="label" x="42" y="20">User authentication</text>
+      </g>
+      <use href="#star" x="383" y="300"/>
+      <g class="tables" transform="translate(53 355)">
+        <use href="#folder"/><text class="heading" x="40" y="20">Table tools</text>
+      </g>
+      <use href="#open" x="34" y="368"/>
+      <polyline class="branch" points="64,391 64,454 76,454"/>
+      <line class="branch" x1="64" y1="410" x2="76" y2="410"/>
+      <g class="tables" transform="translate(84 396)">
+        <use href="#create-table"/><text class="label" x="42" y="20">Create table</text>
+      </g>
+      <use href="#star" x="383" y="400"/>
+      <g class="tables" transform="translate(84 440)">
+        <use href="#relations"/><text class="label" x="42" y="20">Foreign keys</text>
+      </g>
+      <use href="#star" x="383" y="444"/>
+      <use href="#closed" x="34" y="538"/>
+      <text class="label" x="54" y="545">Maintenance</text>
+      <line class="branch" x1="22" y1="570" x2="408" y2="570"/>
+      <g class="user" transform="translate(44 589)">
+        <use href="#folder"/><text class="heading" x="40" y="20">User tools</text>
+      </g>
+      <use href="#open" x="23" y="602"/>
+      <polyline class="branch" points="55,625 55,644 67,644"/>
+      <g class="user" transform="translate(76 630)">
+        <use href="#profile"/><text class="label" x="42" y="20">My profile</text>
+      </g>
+      <use href="#saved-star" x="383" y="634"/>
+    </g>
+  </defs>
+  <rect width="920" height="820" fill="#e8edf4"/>
+  <text x="20" y="31" fill="#172235" font-size="24" font-weight="bold">Coloured tool navigation</text>
+  <text x="20" y="56" fill="#4d5b70" font-size="15">Concept only · group identity in the tree and favourites · one line per entry</text>
+  <g class="light" transform="translate(20 100)">
+    <text class="heading" x="0" y="-13">Light</text><use href="#menu"/>
+  </g>
+  <g class="dark" transform="translate(470 100)">
+    <text x="0" y="-13" fill="#172235" font-size="18" font-weight="bold">Dark</text><use href="#menu"/>
+  </g>
+  <text x="20" y="810" fill="#4d5b70" font-size="13">Original first-party illustration · 2026-10-16 · GPL-2.0-or-later</text>
+</svg>

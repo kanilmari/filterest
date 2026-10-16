@@ -55,8 +55,21 @@ an archive of completed features. Worklines and tickets retain implementation
 status and scheduling throughout, without a parallel progress record here.
 Update incoming documentation links when text moves or a document is deleted.
 
+## Illustrations
+
+Keep a feature document's media under `media/<topic>/`. Images are illustrative
+examples, never a guarantee of the current state. Compare them with the current
+implementation when using or updating the document.
+
+Every image must have its publication rights recorded in the
+[asset provenance register](../../server_tools/licenses/asset_provenance.json):
+first-party authorship or a proper licence permitting publication. Describe
+third-party product screenshots in words; never store them here.
+
 ## Feature descriptions
 
+- [Coloured tool navigation](Coloured_Tool_Navigation.md) describes group colour
+  families and single-line tool entries within the existing tree and favourites.
 - [Category match-mode counts](Category_Match_Mode_Counts.md) describes exact
   readable result totals for Accept any and Require all beside the existing
   category radios, following the shared mobile and desktop interface release.
