@@ -38,7 +38,7 @@ async function readExactRows(
 }
 
 export async function readLangKeySources(
-  request: APIRequestContext, keys: readonly string[],
+  request: APIRequestContext, keys: readonly string[], allowAbsentKeys = false,
 ): Promise<Map<string, LangKeySource[]>> {
   const sourcesByKey = new Map<string, LangKeySource[]>();
   if (!keys.length) return sourcesByKey;
@@ -46,6 +46,9 @@ export async function readLangKeySources(
   await requestTestArtifactResponse('GET /api/admin/version-info', () => request.get('/api/admin/version-info'));
   for (const key of keys) {
     const matches = await readExactRows(request, 'system_lang_keys', 'lang_key', key);
+    // The pre-drop recorder probes generator shapes, some of which may never
+    // have been created. A complete zero-row result grants no ownership evidence.
+    if (allowAbsentKeys && matches.length === 0) continue;
     if (matches.length !== 1) throw invalid();
     const sources = await readExactRows(request, 'system_lang_key_sources', 'lang_key_id', matches[0].id);
     sourcesByKey.set(key, sources.map(row => {

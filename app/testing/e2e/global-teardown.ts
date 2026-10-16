@@ -22,7 +22,9 @@ import {
   type CurrentArtifactRun,
   type RegisteredTestArtifact,
 } from './helpers/test-artifact-run-registry';
-import { attributeLangKeyDrift, isOwnRunDatasetKey, ownRunDatasetForKey } from './helpers/lang-key-drift-attribution';
+import { isOwnRunDatasetKey, ownRunDatasetForKey } from './helpers/lang-key-drift-attribution';
+import { attributeRecordedLangKeyDrift, bareColumnForKey, bareColumnKeyEvidence } from './helpers/bare-column-key-attribution';
+import { readRecordedColumnKeySources } from './helpers/test-artifact-column-key-sources';
 import { readRecordedDatasetColumns } from './helpers/test-artifact-dataset-columns';
 import { readLangKeySourcesWithStorageState } from './helpers/lang-key-source-inventory';
 import { readCompletedDatasetNames } from './helpers/test-artifact-dataset-history';
@@ -96,7 +98,7 @@ async function globalTeardown(config: FullConfig) {
     let unverifiedOwnRunLangKeys: string[] = [];
     let ownRunLangKeyCandidates: string[] = [];
     let retainedOwnRunLangKeyEvidence: Array<{ key: string; dataset: string; column?: string;
-      ownership: string; countingSources: string }> = [];
+      ownership: string; countingSources: string } | NonNullable<ReturnType<typeof bareColumnKeyEvidence>>> = [];
     let unexplainedAddedLangKeys: string[] = [];
     let removedLangKeys: string[] = [];
     let cleanupStarted = false;
@@ -158,6 +160,8 @@ async function globalTeardown(config: FullConfig) {
       ]));
       status = 'incomplete: dataset column history read failed';
       const columnsByDataset = readRecordedDatasetColumns(runDirectory, artifactRun.runId, ownDatasetNames);
+      status = 'incomplete: pre-drop column-key source history read failed';
+      const preDropSources = readRecordedColumnKeySources(runDirectory, artifactRun.runId, ownDatasetNames, columnsByDataset);
 
       const releasedArtifacts = new Set<string>();
       const releaseConfirmedArtifact = (artifact: RegisteredTestArtifact) => {
@@ -204,18 +208,21 @@ async function globalTeardown(config: FullConfig) {
       status = 'incomplete: language-key inventory read failed';
       const langKeyInventory = await readLangKeyInventoryWithStorageState(baseURL, AUTH_FILE);
       const delta = diffSortedKeys(langKeyInventory.allLangKeys, baseline.langKeys);
-      ownRunLangKeyCandidates = delta.added.filter(key => isOwnRunDatasetKey(key, ownDatasetNames, columnsByDataset));
+      ownRunLangKeyCandidates = delta.added.filter(key => isOwnRunDatasetKey(key, ownDatasetNames, columnsByDataset)
+        || bareColumnForKey(key, ownDatasetNames, columnsByDataset) !== undefined);
       unverifiedOwnRunLangKeys = ownRunLangKeyCandidates;
       // Use fixed failure reasons: transport/parser messages can contain private response data.
       status = 'incomplete: language-key source read failed';
       const sources = await readLangKeySourcesWithStorageState(baseURL, AUTH_FILE, unverifiedOwnRunLangKeys);
       status = 'incomplete: language-key drift comparison failed';
-      const attribution = attributeLangKeyDrift(delta.added, delta.removed, ownDatasetNames, sources,
-        { columnsByDataset, completedDatasetNames });
+      const attribution = attributeRecordedLangKeyDrift(delta.added, delta.removed, ownDatasetNames, sources,
+        { columnsByDataset, completedDatasetNames }, preDropSources);
       retainedOwnRunLangKeys = attribution.retainedOwnRun;
       unexplainedAddedLangKeys = attribution.unexplainedAdded;
       removedLangKeys = attribution.removed;
       retainedOwnRunLangKeyEvidence = retainedOwnRunLangKeys.map(key => {
+        const bareColumn = bareColumnKeyEvidence(key, ownDatasetNames, columnsByDataset, preDropSources);
+        if (bareColumn) return bareColumn;
         const dataset = ownRunDatasetForKey(key, ownDatasetNames, columnsByDataset)!;
         const column = columnsByDataset.get(dataset)?.find(name =>
           [name, `search_for_${name}`, `${name}_asc`, `${name}_desc`].includes(key));

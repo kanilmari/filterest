@@ -15,7 +15,9 @@ import { confirmTestArtifact, initializeArtifactRunRegistry, listRegisteredTestA
 import { readCompletedDatasetNames } from './test-artifact-dataset-history';
 import { readRecordedDatasetColumns } from './test-artifact-dataset-columns';
 import { recordTestDatasetOwnershipFromRequest } from './test-artifact-dataset-column-recorder';
-import { attributeLangKeyDrift } from './lang-key-drift-attribution';
+import { attributeLangKeyDrift, type LangKeySource } from './lang-key-drift-attribution';
+import { attributeRecordedLangKeyDrift, generatedColumnKeys } from './bare-column-key-attribution';
+import { readRecordedColumnKeySources } from './test-artifact-column-key-sources';
 import { cleanupDatasetViaRequest, dropTempDataset } from './temp-dataset';
 import { fakeApi, response } from './test-artifact-recovery-fakes';
 
@@ -33,8 +35,9 @@ let root: string;
 let directory: string;
 beforeEach(() => {
   root = fs.mkdtempSync(path.join(os.tmpdir(), 'filterest-asset-child-'));
-  directory = path.join(root, runId);
-  initializeArtifactRunRegistry({ rootDirectory: root, runId });
+  const registryRoot = path.join(root, 'artifact-runs');
+  directory = path.join(registryRoot, runId);
+  initializeArtifactRunRegistry({ rootDirectory: registryRoot, runId });
   for (const [index, name] of parents.entries()) {
     registerTestArtifact('dataset', name);
     confirmTestArtifact('dataset', name, 100 + index, ['id']);
@@ -94,6 +97,93 @@ function replay(keys = nativeKeys, removed: string[] = []) {
   return attributeLangKeyDrift(keys, removed, names, new Map(keys.map(key => [key, []])),
     { columnsByDataset, completedDatasetNames });
 }
+
+/** Adds real pre-drop source reads with a baseline isolated inside the temporary registry. */
+function fixtureWithBareColumnSources() {
+  const result = fixture();
+  const { api, state, relation } = result;
+  const sources: LangKeySource[] = [parent, child].map(source_high => ({
+    source_type: 'column', source_high, source_low: 'parent_ref',
+  }));
+  const evidence = { parentReads: 0, childReads: 0, sources: () => sources };
+  const metadata = state.metadata;
+  state.metadata = name => ({ ...metadata(name) as object,
+    columns: ['id', 'parent_ref'].map(column_name => ({ column_name })) });
+  state.status = name => ({ image_asset_linkings: [{ ...relation(name), foreign_key_column: 'parent_ref' }],
+    attachment_asset_linkings: [] });
+  fs.writeFileSync(path.join(root, 'artifact-baseline.json'), JSON.stringify({
+    runId, langKeys: generatedColumnKeys('id'),
+  }));
+  const get = api.get.getMockImplementation()!;
+  api.get.mockImplementation(async (url, options) => {
+    if (url === `/api/card-visibility/${parent}`) evidence.parentReads++;
+    if (url === `/api/card-visibility/${child}`) evidence.childReads++;
+    if (url === '/api/get-results') {
+      const params = options?.params as Record<string, unknown>;
+      if (params.dataset === 'system_lang_keys') return response({ row_count: 1,
+        data: [{ id: 10, lang_key: params.lang_key_from }] });
+      expect(params.dataset).toBe('system_lang_key_sources');
+      const rows = evidence.sources().map((source, index) => ({ id: index + 1, lang_key_id: 10, ...source }));
+      return response({ row_count: rows.length, data: rows });
+    }
+    return get(url, options);
+  });
+  return { ...result, evidence, sources };
+}
+
+function replayBareColumnKeys() {
+  const keys = generatedColumnKeys('parent_ref');
+  const completedDatasetNames = new Set(readCompletedDatasetNames(directory, runId));
+  const names = [...new Set([...completedDatasetNames,
+    ...listRegisteredTestArtifacts().map(artifact => artifact.name)])];
+  const columnsByDataset = readRecordedDatasetColumns(directory, runId, names);
+  return attributeRecordedLangKeyDrift(keys, [], names, new Map(keys.map(key => [key, []])),
+    { columnsByDataset, completedDatasetNames },
+    readRecordedColumnKeySources(directory, runId, names, columnsByDataset));
+}
+
+test('asset bare-key sources survive parent drops and repeated parent captures are idempotent', async () => {
+  const { api, page, evidence } = fixtureWithBareColumnSources();
+  await recordTestDatasetOwnershipFromRequest(api.request, parent);
+  expect(evidence).toMatchObject({ parentReads: 2, childReads: 2 });
+  const snapshots = path.join(directory, 'dataset-column-key-sources');
+  const original = fs.readdirSync(snapshots).sort();
+  expect(original).toHaveLength(8); // Four exact shapes for both confirmed datasets.
+  await recordTestDatasetOwnershipFromRequest(api.request, parent);
+  expect(fs.readdirSync(snapshots).sort()).toEqual(original);
+  await dropTempDataset(page, parent);
+  await cleanupDatasetViaRequest(api.request, child);
+  expect(replayBareColumnKeys()).toEqual({
+    retainedOwnRun: generatedColumnKeys('parent_ref'), unexplainedAdded: [], removed: [],
+  });
+  expect(api.post).not.toHaveBeenCalled();
+});
+
+test('the second parent capture preserves an earlier foreign source after later clean reads', async () => {
+  const { api, page, evidence, sources } = fixtureWithBareColumnSources();
+  evidence.sources = () => evidence.parentReads === 1
+    ? [...sources, { source_type: 'column', source_high: 'app_foreign_dataset', source_low: 'parent_ref' }]
+    : sources;
+  await dropTempDataset(page, parent);
+  await cleanupDatasetViaRequest(api.request, child);
+  expect(replayBareColumnKeys()).toEqual({
+    retainedOwnRun: [], unexplainedAdded: generatedColumnKeys('parent_ref'), removed: [],
+  });
+});
+
+test('an asset-child source failure propagates before any parent drop', async () => {
+  const { api, page, drops, evidence, sources } = fixtureWithBareColumnSources();
+  evidence.sources = () => {
+    if (evidence.childReads >= 2) throw new Error('private source response');
+    return sources;
+  };
+  await expect(dropTempDataset(page, parent)).rejects.toThrow(/language-key attribution/);
+  expect(drops).toEqual([]);
+  expect(api.post).not.toHaveBeenCalled();
+  expect(listRegisteredTestArtifacts()).toContainEqual(expect.objectContaining({
+    name: child, status: 'confirmed', serverId: 200,
+  }));
+});
 
 test('pre-drop relation proof records all four server children and accepts the exact 36 native keys', async () => {
   const { api, page } = fixture();

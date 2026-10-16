@@ -28,6 +28,13 @@ function readRecord(file: string, runId: string): ColumnRecord {
   return record;
 }
 
+/** Bind a pre-drop source snapshot to the same immutable dataset/column identity. */
+export function readRecordedDatasetColumnIdentity(
+  runDirectory: string, runId: string, dataset: string, column: string,
+): number {
+  return readRecord(path.join(runDirectory, DATASET_COLUMNS_DIRECTORY, filename(dataset, column)), runId).serverId;
+}
+
 /** Call with successful creation's column list, or validated metadata for server-created children. */
 export function rememberConfirmedDatasetColumns(
   runDirectory: string, artifact: RegisteredTestArtifact, columns: readonly string[],

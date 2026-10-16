@@ -8,6 +8,7 @@ import * as crypto from 'node:crypto';
 import { safeTestArtifactError } from './test-artifact-diagnostics';
 import { DATASET_HISTORY_DIRECTORY, rememberCompletedDataset } from './test-artifact-dataset-history';
 import { DATASET_COLUMNS_DIRECTORY, rememberConfirmedDatasetColumns } from './test-artifact-dataset-columns';
+import { COLUMN_KEY_SOURCES_DIRECTORY } from './test-artifact-column-key-sources';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { resolveFilterestTestRuntimePaths } from './test-runtime-paths';
@@ -317,7 +318,8 @@ function ensureRunDirectoryContainsOnlyRegistryFiles(
   runId: string,
 ): void {
   const runDirectory = runDirectoryPath(registryRoot, runId);
-  const allowed = new Set([RUN_DESCRIPTOR_FILE_NAME, ARTIFACT_DIRECTORY_NAME, DATASET_HISTORY_DIRECTORY, DATASET_COLUMNS_DIRECTORY]);
+  const directories = [ARTIFACT_DIRECTORY_NAME, DATASET_HISTORY_DIRECTORY, DATASET_COLUMNS_DIRECTORY, COLUMN_KEY_SOURCES_DIRECTORY];
+  const allowed = new Set([RUN_DESCRIPTOR_FILE_NAME, ...directories]);
   for (const entry of fs.readdirSync(runDirectory, { withFileTypes: true })) {
     if (!allowed.has(entry.name)) {
       throw safeTestArtifactError(`Unexpected entry in E2E artifact run ${runId}: ${entry.name}`);
@@ -325,7 +327,7 @@ function ensureRunDirectoryContainsOnlyRegistryFiles(
     if (entry.name === RUN_DESCRIPTOR_FILE_NAME && !entry.isFile()) {
       throw safeTestArtifactError(`E2E artifact run descriptor is not a file for ${runId}`);
     }
-    if ([ARTIFACT_DIRECTORY_NAME, DATASET_HISTORY_DIRECTORY, DATASET_COLUMNS_DIRECTORY].includes(entry.name) && !entry.isDirectory()) {
+    if (directories.includes(entry.name) && !entry.isDirectory()) {
       throw safeTestArtifactError(`E2E artifact directory is not a directory for ${runId}`);
     }
   }

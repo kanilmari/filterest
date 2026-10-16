@@ -5,11 +5,15 @@
  * Transport, identity and persistence failures propagate without authorizing key retention.
  */
 import type { APIRequestContext } from '@playwright/test';
+import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { confirmTestArtifact, registerTestArtifact, requireConfirmedTestArtifact,
   resolveArtifactRegistryRoot } from './test-artifact-run-registry';
 import { rememberConfirmedDatasetColumns } from './test-artifact-dataset-columns';
 import { readTestArtifactJson, requestTestArtifactResponse, safeTestArtifactError } from './test-artifact-diagnostics';
+import { generatedColumnKeys, isBareColumn } from './bare-column-key-attribution';
+import { readLangKeySources } from './lang-key-source-inventory';
+import { rememberColumnKeySources } from './test-artifact-column-key-sources';
 
 export function recordTestDatasetColumns(datasetName: string, columns: readonly string[]): void {
   const artifact = requireConfirmedTestArtifact('dataset', datasetName);
@@ -40,6 +44,25 @@ export async function recordTestDatasetColumnsFromRequest(
   const artifact = requireConfirmedTestArtifact('dataset', datasetName);
   const metadata = await readDatasetColumns(request, datasetName, artifact.serverId!);
   recordTestDatasetColumns(datasetName, metadata.columns);
+  const registryRoot = resolveArtifactRegistryRoot();
+  const baselineFile = path.join(registryRoot, '..', 'artifact-baseline.json');
+  // Standalone metadata callers may have no setup baseline. They record columns
+  // only; teardown still requires a baseline and pre-drop proof for bare additions.
+  if (!fs.existsSync(baselineFile)) return;
+  let baseline: { runId?: unknown; langKeys?: unknown };
+  try { baseline = JSON.parse(fs.readFileSync(baselineFile, 'utf8')); }
+  catch { throw safeTestArtifactError('Invalid E2E pre-drop language-key baseline'); }
+  if (!baseline || baseline.runId !== artifact.runId || !Array.isArray(baseline.langKeys)
+    || baseline.langKeys.some(key => typeof key !== 'string')) {
+    throw safeTestArtifactError('Invalid E2E pre-drop language-key baseline');
+  }
+  // Existing baseline keys are never additions. Read all other exact shapes:
+  // complete inventories can include another dataset and must be kept verbatim.
+  // Repeated parent reads append observations; identical snapshots are idempotent.
+  const keys = [...new Set(metadata.columns.filter(column => isBareColumn(column, [datasetName]))
+    .flatMap(generatedColumnKeys).filter(key => !(baseline.langKeys as string[]).includes(key)))];
+  const sources = await readLangKeySources(request, keys, true);
+  rememberColumnKeySources(path.join(registryRoot, artifact.runId), artifact, metadata.columns, sources);
 }
 
 /**
@@ -78,4 +101,7 @@ export async function recordTestDatasetOwnershipFromRequest(
   await recordTestDatasetColumnsFromRequest(request, datasetName);
   registerTestArtifact('dataset', childName);
   confirmTestArtifact('dataset', childName, child.serverId, child.columns);
+  // Asset columns can also generate bare additions. Capture their sources through
+  // the same UID-checked path before the parent's drop removes child metadata.
+  await recordTestDatasetColumnsFromRequest(request, childName);
 }
