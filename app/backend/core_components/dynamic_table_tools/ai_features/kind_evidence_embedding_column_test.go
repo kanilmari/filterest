@@ -72,7 +72,7 @@ func TestKindEvidenceEmbeddingColumnCommittedWrites(t *testing.T) {
 			old := backend.Db
 			backend.Db = db
 			t.Cleanup(func() { backend.Db = old })
-			r := kindtest.AuthenticatedRequest(t, "GET", "/api/embedding-stream?dataset=kind_probe", nil)
+			r := kindtest.AuthenticatedRequest(t, "POST", "/api/embedding_stream_handler?dataset=kind_probe", nil)
 			w := httptest.NewRecorder()
 			EmbeddingStreamHandler(w, r)
 			if state.writes != 1 {

@@ -3272,8 +3272,7 @@
       "match_type": "exact",
       "handler_name": "ai_features.EmbeddingStreamHandler",
       "methods": [
-        "GET",
-        "HEAD"
+        "POST"
       ],
       "method_source": "route_registration",
       "scenarios": [

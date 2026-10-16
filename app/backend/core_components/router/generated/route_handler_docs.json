@@ -1,6 +1,6 @@
 {
   "ai_features.CountLangEmbeddingsHandler": "",
-  "ai_features.EmbeddingStreamHandler": "EmbeddingStreamHandler lukee kaikki sarakkeet jokaiselta riviltä, kokoaa vain tekstisarakkeet (VARCHAR/TEXT) yhdeksi tekstilauseeksi ja generoi embeddingin embedding_vector-sarakkeeseen (lisää sarakkeen jos sitä ei ole).",
+  "ai_features.EmbeddingStreamHandler": "EmbeddingStreamHandler streams a POST mutation through the AdminProfile's CSRF and assistant approval boundaries. The registered method contract rejects safe methods before this handler, including HEAD requests.",
   "ai_features.ExternalEmbeddingSourcePolicyHandler": "ExternalEmbeddingSourcePolicyHandler reads or replaces one dataset's explicit outbound field set.",
   "ai_features.GetEmbeddingDatasetsHandler": "",
   "ai_features.RefreshLangEmbeddingsHandler": "",

@@ -67,6 +67,10 @@ vi.mock("../lang/translation_handler.js", () => ({
     getTranslationForKey: getTranslationForKeyMock,
 }));
 
+vi.mock("../lang/component_language_dictionary.js", () => ({
+    getTranslationForKey: getTranslationForKeyMock,
+}));
+
 vi.mock("./field_view_editor.js", () => ({
     createFieldViewEditorButton: createFieldViewEditorButtonMock,
 }));

@@ -26,6 +26,7 @@ import (
 // MarkOrphanLangKeys() ja cleanupStaleLangKeySources() tarkistavat tämän.
 var (
 	lastSourceScan                 time.Time
+	lastSuccessfulSourceScan       time.Time
 	lastSourceScanMu               sync.Mutex
 	additionalLangKeySourceRoots   []string
 	additionalLangKeySourceRootsMu sync.RWMutex
@@ -41,9 +42,28 @@ func SourceScanIsFresh() bool {
 	return !lastSourceScan.IsZero() && time.Since(lastSourceScan) < 5*time.Minute
 }
 
+// sourceScanStatus reports maintenance evidence without refreshing it. Preserve
+// the last successful time when a later scan fails; after restart it is unknown
+// until this process completes its first maintenance scan.
+func sourceScanStatus() (*time.Time, bool) {
+	lastSourceScanMu.Lock()
+	defer lastSourceScanMu.Unlock()
+	scanAt := lastSourceScan
+	if scanAt.IsZero() {
+		scanAt = lastSuccessfulSourceScan
+	}
+	if scanAt.IsZero() {
+		return nil, true
+	}
+	// UTC keeps the translated timestamp variable free of a '+' offset delimiter.
+	scanAt = scanAt.UTC()
+	return &scanAt, lastSourceScan.IsZero() || time.Since(lastSourceScan) >= 5*time.Minute
+}
+
 func markSourceScanDone() {
 	lastSourceScanMu.Lock()
 	lastSourceScan = time.Now()
+	lastSuccessfulSourceScan = lastSourceScan
 	lastSourceScanMu.Unlock()
 }
 

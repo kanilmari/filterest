@@ -1,0 +1,38 @@
+[
+  {
+    "path_pattern": "/api/payments/",
+    "handler_name": "payment_gateway.GetPaymentStatusHandler",
+    "profile": "public",
+    "reason": "Payment status currently refreshes stored provider status; temporary exception pending WO-SEC4."
+  },
+  {
+    "path_pattern": "/storage/",
+    "handler_name": "router.ServeStorage",
+    "profile": "public",
+    "reason": "Authorized display reads generate local image variants bounded to 300/1000/2160 pixels."
+  },
+  {
+    "path_pattern": "/api/get-intelligent-results",
+    "handler_name": "dtt_1_row_read.GetIntelligentResultsHandlerWrapper",
+    "profile": "default",
+    "reason": "Query embedding is a paid provider call for semantic search; it stores no vector or row changes."
+  },
+  {
+    "path_pattern": "/api/get-results-vector",
+    "handler_name": "dtt_1_row_read.GetResultsVector",
+    "profile": "default",
+    "reason": "Query embedding is a paid provider call for vector search; it stores no vector or row changes."
+  },
+  {
+    "path_pattern": "/api/export-table-csv",
+    "handler_name": "devtools.ExportTableCSVHandler",
+    "profile": "admin",
+    "reason": "Development-only administrator export writes a local CSV snapshot; unavailable outside development."
+  },
+  {
+    "path_pattern": "/api/admin/version-info",
+    "handler_name": "router.adminVersionInfoHandler",
+    "profile": "admin",
+    "reason": "Administrator version reads can fill the cached release lookup; no installation or application-data write."
+  }
+]

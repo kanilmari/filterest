@@ -8,6 +8,7 @@ import { resolve } from 'node:path';
 import { generate_database_consistency_view } from './database_consistency_view.js';
 import { endpoint_router } from '../endpoints/endpoint_router.js';
 import { showConfirmModal } from '../../reusable_components/modal/confirm_modal_builder.js';
+import { MAINTENANCE_ACTION_TRANSLATION_FALLBACKS } from './maintenance_action_copy.js';
 
 vi.mock('../endpoints/endpoint_router.js', () => ({ endpoint_router: vi.fn() }));
 vi.mock('../../reusable_components/modal/confirm_modal_builder.js', () => ({ showConfirmModal: vi.fn() }));
@@ -19,6 +20,7 @@ const seed = readFileSync(resolve('server_tools/migrations/20261015000004_seed_l
 for (const match of seed.matchAll(/^ {4}\('([^']+)', '([^']+)', '([^']+)'\)/gm)) {
     dictionary.copy[match[1]] = { fi: match[2], en: match[3] };
 }
+Object.assign(dictionary.copy, MAINTENANCE_ACTION_TRANSLATION_FALLBACKS);
 const orphan = { id: 'cat8_42', table: 'unused_key', description: 'en: "Copy"', description_lang_keys: [
     'consistency_orphan_archiving_paused', 'consistency_orphan_age_days+400',
 ] };
@@ -94,4 +96,45 @@ test.each(['fi', 'en'])('synthetic and counting-source notices use seeded %s cop
     for (const key of ['consistency_synthetic_key_archiving_paused', 'consistency_lang_key_counting_source']) {
         expect(host.querySelector(`[data-lang-key="${key}"]`).textContent).toBe(dictionary.copy[key][language]);
     }
+});
+
+test.each(['fi', 'en', 'ch', 'yue'].flatMap(language => [
+    { language, stale: true, at: '2026-10-16T08:00:00Z' },
+    { language, stale: false, at: '2026-10-16T09:00:00Z' },
+    { language, stale: true, at: null },
+]))('orphan status in $language stale=$stale scan=$at does not scan on read', async ({ language, stale, at }) => {
+    dictionary.language = language;
+    const data = report();
+    Object.assign(data.categories[1], { source_scan_stale: stale, source_scan_at: at, issues: [] });
+    const host = document.createElement('div'); document.body.appendChild(host);
+    vi.mocked(endpoint_router).mockResolvedValueOnce(data);
+    await generate_database_consistency_view(host); host.querySelector('button').click();
+    const key = stale ? 'consistency_source_scan_stale' : 'consistency_source_scan_fresh';
+    await vi.waitFor(() => expect(host.querySelector(`[data-lang-key="${key}"]`)?.textContent).toBe(dictionary.copy[key][language]));
+    if (at) {
+        expect(host.querySelector('time').dateTime).toBe(at);
+        expect(host.querySelector('time').textContent).toBe(dictionary.copy.consistency_source_scan_at[language].replace('$count', at));
+    } else expect(host.textContent).toContain(dictionary.copy.consistency_source_scan_unknown[language]);
+    expect(endpoint_router).toHaveBeenCalledTimes(1);
+    expect(endpoint_router).toHaveBeenCalledWith('checkDbConsistency');
+});
+
+// Gate 203a: a clean report (total_count 0) must still show a stale or unknown scan instead of only "No issues found".
+test.each([
+    { stale: true, at: '2026-10-16T08:00:00Z', key: 'consistency_source_scan_stale' },
+    { stale: true, at: null, key: 'consistency_source_scan_stale' },
+    { stale: false, at: '2026-10-16T09:00:00Z', key: 'consistency_source_scan_fresh' },
+])('a zero-issue report still shows the scan state stale=$stale scan=$at', async ({ stale, at, key }) => {
+    dictionary.language = 'en';
+    const data = report();
+    data.total_count = 0;
+    for (const cat of data.categories) cat.issues = [];
+    Object.assign(data.categories[1], { source_scan_stale: stale, source_scan_at: at });
+    const host = document.createElement('div'); document.body.appendChild(host);
+    vi.mocked(endpoint_router).mockResolvedValueOnce(data);
+    await generate_database_consistency_view(host); host.querySelector('button').click();
+    await vi.waitFor(() => expect(host.querySelector('[data-lang-key="consistency_no_issues"]')).not.toBeNull());
+    expect(host.querySelector(`[data-lang-key="${key}"]`)?.textContent).toBe(dictionary.copy[key].en);
+    if (at) expect(host.querySelector('time').dateTime).toBe(at);
+    else expect(host.textContent).toContain(dictionary.copy.consistency_source_scan_unknown.en);
 });

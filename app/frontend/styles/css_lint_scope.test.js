@@ -15,8 +15,9 @@ describe('CSS lint scope', () => {
         const packageJson = JSON.parse(readFileSync(packageJsonPath, 'utf8'));
         const lintCommand = packageJson.scripts['lint:css'];
 
+        // Optional components (K412 B1a) are linted beside the frontend: "{frontend,components}/**/*.css".
         expect(lintCommand).toMatch(
-            /"(?:frontend|filterest\/app\/frontend)\/\*\*\/\*\.css"/,
+            /"(?:frontend|filterest\/app\/frontend|\{frontend,components\})\/\*\*\/\*\.css"/,
         );
         expect(lintCommand).not.toContain('apps/instance_control_panel');
         expect(lintCommand).not.toContain('apps/site-template');

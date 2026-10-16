@@ -1,5 +1,5 @@
 // pregrant_route_checker.go
-// Checks explicit method contracts and reviewed writers that bypass route grants.
+// Checks method contracts, pre-grant writers and reviewed GET/HEAD side effects.
 // Bridges the live registration/profile tables and build-specific security tests.
 // Exists so optional compositions can apply the same guard to their full inventory.
 package router
@@ -28,6 +28,73 @@ type PreGrantWriteAllowance struct {
 //go:embed pregrant_write_allowlist.json
 var reviewedPreGrantWrites []byte
 
+//go:embed safe_method_side_effect_allowlist.json
+var reviewedSafeMethodSideEffects []byte
+
+// SafeMethodSideEffectAllowance binds a reviewed GET/HEAD exception to its
+// exact registration and effective security profile, including its cost or write.
+type SafeMethodSideEffectAllowance struct {
+	PathPattern string `json:"path_pattern"`
+	HandlerName string `json:"handler_name"`
+	Profile     string `json:"profile"`
+	Reason      string `json:"reason"`
+}
+
+// KnownSideEffectHandlers includes paid calls and local/cache writes. Keep the
+// POST-only writers here so accidentally registering one for GET fails too.
+// Session bookkeeping (CSRF/auth modes/sign-in renewal) is outside this audit.
+func KnownSideEffectHandlers() []string {
+	return []string{
+		"payment_gateway.GetPaymentStatusHandler", "router.ServeStorage",
+		"dtt_1_row_read.GetIntelligentResultsHandlerWrapper", "dtt_1_row_read.GetResultsVector",
+		"devtools.ExportTableCSVHandler", "router.adminVersionInfoHandler",
+		"ai_features.EmbeddingStreamHandler", "system_table_tools.ScanLangSourcesHandler",
+		"system_table_tools.FixDatabaseConsistencyHandler",
+	}
+}
+
+// ReviewedSafeMethodSideEffectAllowances exposes the same reviewed table to
+// optional compositions; newly identified writers must enter their known list.
+func ReviewedSafeMethodSideEffectAllowances() ([]SafeMethodSideEffectAllowance, error) {
+	var allowances []SafeMethodSideEffectAllowance
+	if err := json.Unmarshal(reviewedSafeMethodSideEffects, &allowances); err != nil {
+		return nil, fmt.Errorf("read safe-method side-effect allowlist: %w", err)
+	}
+	return allowances, nil
+}
+
+// ValidateSafeMethodSideEffects walks actual registrations, including HEAD
+// implied by GET. A known writer at a new path or profile needs its own review.
+func ValidateSafeMethodSideEffects(routes []RouteDefinition, knownWriters []string, allowances []SafeMethodSideEffectAllowance) error {
+	key := func(path, handler, profile string) string { return path + " " + handler + " " + profile }
+	reviewed := map[string]bool{}
+	for _, allowance := range allowances {
+		identity := key(allowance.PathPattern, allowance.HandlerName, allowance.Profile)
+		if allowance.PathPattern == "" || allowance.HandlerName == "" || allowance.Profile == "" ||
+			strings.TrimSpace(allowance.Reason) == "" || strings.ContainsAny(allowance.Reason, "\r\n") || reviewed[identity] {
+			return fmt.Errorf("incomplete or duplicate safe-method side-effect allowance: %s", identity)
+		}
+		reviewed[identity] = true
+	}
+	writers := map[string]bool{}
+	for _, handler := range knownWriters {
+		writers[handler] = true
+	}
+	var failures []error
+	for _, route := range routes {
+		if !writers[route.HandlerName] {
+			continue
+		}
+		profile := pipeline.DescribeRouteProfile(route.HandlerName).ProfileName
+		for _, method := range newRouteMethodContract(route.Methods...).Methods {
+			if (method == "GET" || method == "HEAD") && !reviewed[key(route.UrlPattern, route.HandlerName, profile)] {
+				failures = append(failures, fmt.Errorf("unreviewed safe-method side effect: %s %s (%s, %s)", method, route.UrlPattern, route.HandlerName, profile))
+			}
+		}
+	}
+	return errors.Join(failures...)
+}
+
 // ReviewedPreGrantWriteAllowances returns a fresh copy of Filterest's reviewed
 // exceptions. Downstream build tests can append their own reviewed entries and
 // pass the combined table to ValidatePreGrantRouteContracts.
@@ -42,6 +109,7 @@ func ReviewedPreGrantWriteAllowances() ([]PreGrantWriteAllowance, error) {
 // ValidatePreGrantRouteContracts checks every registration has methods and every
 // writer that skips access_control has an exact reviewed exception. In addition
 // to Public/LoginOnly, this covers the public, CSRF-protected sign-out profile.
+// Known GET/HEAD side effects also need the separate exact reviewed allowance.
 // Call after all optional registrations and environment overrides are applied;
 // this helper does not activate apps, change profiles or access a database.
 func ValidatePreGrantRouteContracts(routes []RouteDefinition, allowances []PreGrantWriteAllowance) error {
@@ -63,6 +131,13 @@ func ValidatePreGrantRouteContracts(routes []RouteDefinition, allowances []PreGr
 		}
 	}
 	var failures []error
+	safeAllowances, err := ReviewedSafeMethodSideEffectAllowances()
+	if err != nil {
+		return err
+	}
+	if err := ValidateSafeMethodSideEffects(routes, KnownSideEffectHandlers(), safeAllowances); err != nil {
+		failures = append(failures, err)
+	}
 	for _, route := range routes {
 		contract := newRouteMethodContract(route.Methods...)
 		if len(contract.Methods) == 0 {

@@ -61,6 +61,30 @@ export async function generate_database_consistency_view(container) {
 }
 
 /**
+ * Builds the language-key source scan freshness line (fresh, stale or unknown) for category 8.
+ * @param {Object} cat - Category 8 of the backend response (source_scan_stale, source_scan_at)
+ * @returns {HTMLElement}
+ */
+function buildSourceScanStatus(cat) {
+    const status = document.createElement('p');
+    status.classList.add('fw-text-sm', 'fw-text-muted');
+    const stateKey = cat.source_scan_stale !== false
+        ? 'consistency_source_scan_stale' : 'consistency_source_scan_fresh';
+    const state = document.createElement('span');
+    state.dataset.langKey = stateKey;
+    state.textContent = getTranslationForKey(stateKey);
+    status.appendChild(state);
+    status.appendChild(document.createTextNode(' '));
+    const scan = document.createElement(cat.source_scan_at ? 'time' : 'span');
+    const scanKey = cat.source_scan_at ? 'consistency_source_scan_at' : 'consistency_source_scan_unknown';
+    scan.dataset.langKey = cat.source_scan_at ? `${scanKey}+${cat.source_scan_at}` : scanKey;
+    if (cat.source_scan_at) scan.dateTime = cat.source_scan_at;
+    scan.textContent = applyTranslationVariable(getTranslationForKey(scanKey), cat.source_scan_at || null);
+    status.appendChild(scan);
+    return status;
+}
+
+/**
  * Renderöi tarkistustulokset kategorioittain
  * @param {HTMLElement} resultsArea - Kohde-elementti
  * @param {Object} data - Backend-vastaus (categories, total_count)
@@ -84,6 +108,9 @@ function renderResults(resultsArea, data) {
         summary.style.color = 'green';
         summary.dataset.langKey = 'consistency_no_issues';
         resultsArea.appendChild(summary);
+        // A clean report must still say how fresh the language-key source scan is (stale or unknown included).
+        const sourceScan = data.categories.find(cat => cat.number === 8);
+        if (sourceScan) resultsArea.appendChild(buildSourceScanStatus(sourceScan));
         return;
     }
     summary.textContent = `Found ${data.total_count} issue(s).`;
@@ -106,6 +133,8 @@ function renderResults(resultsArea, data) {
         }
         catTitle.textContent = `${cat.number}. ${cat.title}`;
         catSection.appendChild(catTitle);
+
+        if (cat.number === 8) catSection.appendChild(buildSourceScanStatus(cat));
 
         if (cat.number === 2) {
             const cat2Note = document.createElement('p');

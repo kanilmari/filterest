@@ -52,7 +52,7 @@ var legacyMethodNotAllowedResponses = map[string]methodNotAllowedResponse{
 	"agent_tools.WorklineTasksHandler":                         {Message: "method_not_allowed"},
 	"agent_tools.WorklinesHandler":                             {Message: "method_not_allowed"},
 	"ai_features.CountLangEmbeddingsHandler":                   {Message: "only POST allowed"},
-	"ai_features.EmbeddingStreamHandler":                       {Message: "only GET method allowed for SSE", NoStore: true},
+	"ai_features.EmbeddingStreamHandler":                       {Message: "only POST allowed", NoStore: true},
 	"ai_features.ExternalEmbeddingSourcePolicyHandler":         {Message: "only GET and POST allowed"},
 	"ai_features.GetEmbeddingDatasetsHandler":                  {Message: "only GET allowed"},
 	"ai_features.RefreshLangEmbeddingsHandler":                 {Message: "only POST allowed"},

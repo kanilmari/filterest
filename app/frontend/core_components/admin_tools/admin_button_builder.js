@@ -2,7 +2,6 @@
 // Builds admin-only action controls for dataset toolbars.
 // Bridges admin permissions, dataset actions, and view helpers into the toolbar button area.
 // Exists to keep admin toolbar assembly out of generic dataset view builders.
-// PIPELINE_EXCEPTION: EventSource streams cannot use endpoint_router's request/response pipeline.
 
 import {
     createDeleteSelectedButton,
@@ -22,7 +21,7 @@ import {
 } from "../route_permission_checker.js";
 import { resolveDatasetDefaultView } from "../table_views/dataset_default_view.js";
 import { createMaskIconSpan } from "../../icons/icon_mask_builder.js";
-import { get_endpoint_url } from "../endpoints/endpoint_router.js";
+import { createEmbedButton } from "./embedding_action_builder.js";
 import { getTranslationForKey } from "../lang/translation_handler.js";
 import { applyTranslationVariable } from "../lang/translation_handler_helpers.js";
 import { getLanguageWithBrowserFallback } from "../state_stores/lang_preference_reader.js";
@@ -48,70 +47,6 @@ import { createDatasetDefaultViewRow } from './dataset_default_view_row.js';
 import { createFieldViewEditorButton } from "./field_view_editor.js";
 import { createEditRowPermissionsButton } from "./row_access_editor.js";
 import { createRowGroupAssignmentButton } from "./row_group_assignment_editor.js";
-
-/**
- * SSE-yhteyden avaava funktio, joka asuu nyt admin-tiedostossa,
- * koska yleensä vain admin haluaa/voi ajaa tämän.
- */
-function embedAllData(table_name) {
-    const embedLogId = `${table_name}_embed_log`;
-    let embedLog = document.getElementById(embedLogId);
-    if (!embedLog) {
-        embedLog = document.createElement("div");
-        embedLog.id = embedLogId;
-        embedLog.style.border = "1px solid var(--border_color)";
-        embedLog.style.padding = "0.5rem";
-        embedLog.style.maxHeight = "200px";
-        embedLog.style.overflowY = "auto";
-        embedLog.style.marginTop = "0.5rem";
-        const filterBar = document.getElementById(`${table_name}_filterBar`);
-        if (filterBar) {
-            filterBar.appendChild(embedLog);
-        }
-    }
-
-    function appendLog(msg) {
-        const p = document.createElement("p");
-        p.textContent = msg;
-        embedLog.appendChild(p);
-        embedLog.scrollTop = embedLog.scrollHeight;
-    }
-
-    const url = `${get_endpoint_url('openaiEmbedStream')}?dataset=${encodeURIComponent(
-        table_name
-    )}`;
-    const evtSource = new EventSource(url);
-
-    evtSource.addEventListener("progress", (e) => {
-        appendLog(`[progress] ${e.data}`);
-    });
-    evtSource.addEventListener("error", (e) => {
-        appendLog(`virhe serveriltä: ${e.data}`);
-    });
-    evtSource.addEventListener("done", (e) => {
-        appendLog(`Valmis: ${e.data}`);
-        evtSource.close();
-    });
-
-    evtSource.onerror = (err) => {
-        console.warn("SSE transport error:", err);
-        appendLog("virhe: SSE-yhteys katkesi tai ei onnistu");
-        evtSource.close();
-    };
-}
-
-/**
- * Apunappi, jonka ainoana tarkoituksena on käynnistää edellä oleva embedAllData-funktio.
- */
-function createEmbedButton(table_name) {
-    const btn = document.createElement("button");
-    btn.classList.add("fw-btn");
-    btn.textContent = "Luo embedding";
-    btn.addEventListener("click", () => {
-        embedAllData(table_name);
-    });
-    return btn;
-}
 
 /**
  * Luodaan näkymänvalintanapit vain adminille.

@@ -23,9 +23,9 @@ import (
 	pgvector "github.com/pgvector/pgvector-go"
 )
 
-// EmbeddingStreamHandler lukee kaikki sarakkeet jokaiselta riviltä,
-// kokoaa vain tekstisarakkeet (VARCHAR/TEXT) yhdeksi tekstilauseeksi ja generoi
-// embeddingin embedding_vector-sarakkeeseen (lisää sarakkeen jos sitä ei ole).
+// EmbeddingStreamHandler streams a POST mutation through the AdminProfile's
+// CSRF and assistant approval boundaries. The registered method contract rejects
+// safe methods before this handler, including HEAD requests.
 func EmbeddingStreamHandler(w http.ResponseWriter, r *http.Request) {
 
 	userID, err := e_sessions.GetUserIDFromSession(r)
@@ -139,7 +139,7 @@ func EmbeddingStreamHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
+	ctx, cancel := context.WithTimeout(r.Context(), 90*time.Second)
 	defer cancel()
 
 	var totalRows int

@@ -105,21 +105,25 @@ func assertNoLangKeyRetirement(t *testing.T, state *langKeyPauseState, wantMark 
 		t.Errorf("orphan marking = %v, want %v", marked, wantMark)
 	}
 }
-func TestLangKeyPauseReportAndScanKeepMarking(t *testing.T) {
+func TestLangKeyPauseOnlyMaintenanceScanKeepsMarking(t *testing.T) {
 	for _, test := range []struct {
 		name    string
+		method  string
 		handler http.HandlerFunc
+		marks   bool
 	}{
-		{"report", CheckDatabaseConsistencyHandler}, {"scan", ScanLangSourcesHandler},
+		{"report GET", "GET", CheckDatabaseConsistencyHandler, false},
+		{"report HEAD", "HEAD", CheckDatabaseConsistencyHandler, false},
+		{"scan", "POST", ScanLangSourcesHandler, true},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			_, state := pauseTestDB(t)
 			rec := httptest.NewRecorder()
-			test.handler(rec, httptest.NewRequest("POST", "/", nil))
+			test.handler(rec, httptest.NewRequest(test.method, "/", nil))
 			if rec.Code != 200 {
 				t.Fatal(rec.Code, rec.Body)
 			}
-			assertNoLangKeyRetirement(t, state, true)
+			assertNoLangKeyRetirement(t, state, test.marks)
 		})
 	}
 }

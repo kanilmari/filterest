@@ -365,7 +365,7 @@ func RegisterRoutes(frontendDir string, storagePath string) {
 	functionRegisterHandler("/api/modify-columns", dtt_crud_workflows.ModifyColumnsHandler, "dtt_crud_workflows.ModifyColumnsHandler", http.MethodGet, http.MethodPost)
 	functionRegisterHandler("/api/set-comments", dtt_crud_workflows.SetCommentsHandler, "dtt_crud_workflows.SetCommentsHandler", http.MethodPost)
 	functionRegisterHandler("/api/create-indexes", dtt_crud_workflows.CreateIndexesHandler, "dtt_crud_workflows.CreateIndexesHandler", http.MethodPost)
-	functionRegisterHandler("/api/embedding_stream_handler", ai_features.EmbeddingStreamHandler, "ai_features.EmbeddingStreamHandler", http.MethodGet)
+	functionRegisterHandler("/api/embedding_stream_handler", ai_features.EmbeddingStreamHandler, "ai_features.EmbeddingStreamHandler", http.MethodPost)
 	functionRegisterHandler("/api/sse/subscribe", event_bus.SSESubscribeHandler, "event_bus.SSESubscribeHandler", http.MethodGet)
 	functionRegisterHandler("/api/refresh-lang-embeddings", ai_features.RefreshLangEmbeddingsHandler, "ai_features.RefreshLangEmbeddingsHandler", http.MethodPost)
 	functionRegisterHandler("/api/count-lang-embeddings", ai_features.CountLangEmbeddingsHandler, "ai_features.CountLangEmbeddingsHandler", http.MethodPost)

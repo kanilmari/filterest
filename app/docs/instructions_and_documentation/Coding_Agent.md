@@ -45,6 +45,8 @@ GET never starts a model. The runner intersects its offered modes with this
 site's policy; an unreachable runner keeps the permitted modes visible but not
 ready, so the chat can say the runner is not running.
 
+Embedding refresh uses administrator-only, CSRF-checked `POST /api/embedding_stream_handler` with streamed progress through the ordinary request pipeline; an assistant needs an approved plan, and GET/HEAD return 405. `GET /api/check-db-consistency` (also HEAD) only reads and reports the last successful source scan time and staleness; startup and `POST /api/scan-lang-sources` own source scanning and orphan marking, while archiving remains paused. Scan time is unknown after restart until maintenance succeeds. Reviewed GET/HEAD side effects are bound to exact paths, handlers, profiles and reasons in the router's `safe_method_side_effect_allowlist.json`; the pre-grant checker rejects an unreviewed known writer, including at a new path. Session bookkeeping is outside that audit.
+
 ## One runner, one engine
 
 The runner lives in

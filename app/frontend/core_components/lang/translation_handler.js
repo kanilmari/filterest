@@ -41,6 +41,7 @@ import { FOREIGN_KEYS_TRANSLATION_FALLBACKS } from '../admin_tools/foreign_keys_
 import { DATASET_HEADER_CONFIG_TRANSLATION_FALLBACKS } from '../admin_tools/dataset_header_config_translation_fallbacks.js';
 import { AUTH_SESSION_NOTICE_TRANSLATION_FALLBACKS } from '../auth/auth_session_notice_copy.js';
 import { MISSING_MEDIA_CHECK_TRANSLATION_FALLBACKS } from '../admin_tools/missing_media_check_translation_fallbacks.js';
+import { MAINTENANCE_ACTION_TRANSLATION_FALLBACKS } from '../admin_tools/maintenance_action_copy.js';
 
 const LOCAL_TRANSLATION_FALLBACKS = {
     delete_confirm_title: {
@@ -71,9 +72,9 @@ const LOCAL_TRANSLATION_FALLBACKS = {
     ...DATASET_HEADER_CONFIG_TRANSLATION_FALLBACKS,
     ...AUTH_SESSION_NOTICE_TRANSLATION_FALLBACKS,
     ...MISSING_MEDIA_CHECK_TRANSLATION_FALLBACKS,
+    ...MAINTENANCE_ACTION_TRANSLATION_FALLBACKS,
     ...getDatasetViewLocalTranslationFallbacks(),
-    // Existing installations or cached responses may predate this bootstrap
-    // key. Reviewed runtime translations still take priority over these labels.
+    // Older installs or cached responses may lack this bootstrap key; reviewed runtime translations still win.
     row_article_section_details: {
         fi: "Tiedot",
         en: "Details",
@@ -311,7 +312,6 @@ const TRANSLATABLE_ATTRIBUTE_FILTER = [
     'data-aria-label-lang-key',
     'data-aria-label-lang-context',
 ];
-
 
 async function fetchTranslationsForLanguage(language) {
     if (typeof window === 'undefined') {
