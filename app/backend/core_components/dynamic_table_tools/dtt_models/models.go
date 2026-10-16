@@ -68,6 +68,9 @@ type AddRowLanguageInfo struct {
 }
 
 type AddRowColumnInfo struct {
+	// Composite keys are server-side authorization metadata, never client input.
+	CompositeForeignKeys      []ForeignKeyTuple    `json:"-"`
+	IsCompositeForeignKey     bool                 `json:"-"`
 	ColumnName                string               `json:"column_name"`
 	DataType                  string               `json:"data_type"`
 	IsNullable                string               `json:"is_nullable"`
@@ -85,4 +88,15 @@ type AddRowColumnInfo struct {
 	Insertable                sql.NullBool         `json:"insertable"`
 	IsMultilingual            bool                 `json:"is_multilingual"`
 	MultilingualLanguages     []AddRowLanguageInfo `json:"multilingual_languages,omitempty"`
+}
+
+// ForeignKeyTuple preserves the ordered column pairs of one catalog constraint.
+// Mutation readers use the complete key rather than treating its components as
+// independent references, which need not identify the same physical row.
+type ForeignKeyTuple struct {
+	ConstraintID  int64
+	TargetSchema  string
+	TargetTable   string
+	SourceColumns []string
+	TargetColumns []string
 }

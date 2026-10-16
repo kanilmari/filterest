@@ -17,6 +17,12 @@ import (
 // newRelatedDatasetPermissionChecker caches canonical route/table decisions for one request actor.
 // It exists between discovered FK targets and the permissions model so unauthorized relation names never reach the response.
 func newRelatedDatasetPermissionChecker(queryer dbutils.Querier, userID int) relatedDatasetPermissionChecker {
+	return newDatasetPermissionChecker(queryer, userID, dynamicRelatedItemsRoute)
+}
+
+// Share request-local decisions while keeping each consumer's canonical route.
+// Related navigation and generated labels intentionally require different routes.
+func newDatasetPermissionChecker(queryer dbutils.Querier, userID int, route string) relatedDatasetPermissionChecker {
 	permissionByTable := make(map[string]bool)
 	return func(tableName string) (bool, error) {
 		tableName = strings.TrimSpace(tableName)
@@ -29,7 +35,7 @@ func newRelatedDatasetPermissionChecker(queryer dbutils.Querier, userID int) rel
 
 		allowed, err := permissions.CheckRouteTablePermission(
 			queryer,
-			dynamicRelatedItemsRoute,
+			route,
 			userID,
 			permissions.RouteTableScope{TableName: tableName},
 			permissions.AccessControlRouteTableOptions(false),
@@ -90,15 +96,13 @@ func filterAuthorizedOutgoingForeignKeys(
 	return filtered, nil
 }
 
-// authorizeRelatedNestedMetadata removes unauthorized nested FK targets from both label joins and type metadata.
-// Authorized metadata remains useful to the frontend, but non-admin label joins are omitted when the referenced
-// table has row-level visibility rules because a plain LEFT JOIN cannot safely reproduce those rules.
+// authorizeRelatedNestedMetadata removes unauthorized FK targets from type and
+// title metadata. Generated labels check dataset and row authorization in the
+// projection, applying the shared predicate inside each LEFT JOIN.
 func authorizeRelatedNestedMetadata(
 	foreignKeys map[string]dtt_utils.ForeignKey,
 	dataTypes map[string]interface{},
-	userRole string,
 	canReadDataset relatedDatasetPermissionChecker,
-	loadReadPolicy relatedReadPolicyLoader,
 ) (map[string]dtt_utils.ForeignKey, map[string]interface{}, error) {
 	sanitizedTypes := cloneRelatedDataTypes(dataTypes)
 	allowedByTable := make(map[string]bool)
@@ -142,8 +146,6 @@ func authorizeRelatedNestedMetadata(
 	}
 
 	labelForeignKeys := make(map[string]dtt_utils.ForeignKey, len(foreignKeys))
-	policyByTable := make(map[string]ReadRowPolicy)
-	policyLoadFailed := make(map[string]bool)
 	for _, columnName := range sortedForeignKeyColumns(foreignKeys) {
 		foreignKey := foreignKeys[columnName]
 		allowed, err := checkDataset(foreignKey.ReferencedTable)
@@ -158,27 +160,6 @@ func authorizeRelatedNestedMetadata(
 			continue
 		}
 
-		if userRole == "admin" {
-			labelForeignKeys[columnName] = foreignKey
-			continue
-		}
-		if foreignKey.ReferencedTable == rlsPilotTableName {
-			continue
-		}
-
-		policy, found := policyByTable[foreignKey.ReferencedTable]
-		if !found && !policyLoadFailed[foreignKey.ReferencedTable] {
-			policy, err = loadReadPolicy(foreignKey.ReferencedTable)
-			if err != nil {
-				// Policy lookup uncertainty must not turn into an unguarded label join.
-				policyLoadFailed[foreignKey.ReferencedTable] = true
-				continue
-			}
-			policyByTable[foreignKey.ReferencedTable] = policy
-		}
-		if policyLoadFailed[foreignKey.ReferencedTable] || shouldApplyReadRowPolicy(foreignKey.ReferencedTable, userRole, policy) {
-			continue
-		}
 		labelForeignKeys[columnName] = foreignKey
 	}
 

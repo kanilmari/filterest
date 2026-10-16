@@ -526,11 +526,12 @@ func BuildSelectQuery(ctx QueryBuilderContext) (string, []interface{}, int, []Ro
 	}
 
 	// 1. Build SELECT and JOIN parts
-	selectColumns, joinClauses, columnExpressions, err := buildJoinsWith1MRelations(
+	selectColumns, joinClauses, columnExpressions, joinArgs, err := buildJoinsWith1MRelations(
 		ctx.DB,
 		ctx.TableName,
 		ctx.ColumnsMap,
 		ctx.VisibleColUIDs,
+		newForeignLabelAuthorization(ctx.DB, ctx.UserRole, ctx.UserID), 0,
 	)
 	if err != nil {
 		return "", nil, 0, nil, RowGroupSelection{}, fmt.Errorf("error building joins: %w", err)
@@ -544,10 +545,12 @@ func BuildSelectQuery(ctx QueryBuilderContext) (string, []interface{}, int, []Ro
 		columnsByName,
 		columnExpressions,
 		ctx.ColumnDataTypes,
+		len(joinArgs),
 	)
 	if err != nil {
 		return "", nil, 0, nil, RowGroupSelection{}, fmt.Errorf("error building where clause: %w", err)
 	}
+	query_args = append(joinArgs, query_args...)
 	var textSearch dtt_search_vectors.TextSearch
 	where_clause, query_args, textSearch, err = appendDatasetTextSearchToWhereClause(
 		ctx.DB,

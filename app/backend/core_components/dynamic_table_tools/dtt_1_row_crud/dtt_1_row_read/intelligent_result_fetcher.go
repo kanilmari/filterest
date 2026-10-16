@@ -7,6 +7,7 @@ package dtt_1_row_read
 
 import (
 	"database/sql"
+	"errors"
 	"fmt"
 	"sort"
 	"strings"
@@ -114,7 +115,15 @@ func fetchRowsInOrder(db dbutils.Querier, table string, rowIDs []int, authorizat
 			colUIDs[i] = o.uid
 		}
 
-		sel, joins, _, joinErr := buildJoinsWith1MRelations(db, table, columnsMap, colUIDs)
+		labelAuthorization := authorization.labelAuthorization
+		if labelAuthorization == nil {
+			labelAuthorization = newForeignLabelAuthorization(db, authorization.userRole, authorization.userID)
+		}
+		sel, joins, _, joinArgs, joinErr := buildJoinsWith1MRelations(db, table, columnsMap, colUIDs, labelAuthorization, len(queryArgs))
+		if joinErr != nil && !errors.Is(joinErr, sql.ErrNoRows) {
+			return nil, nil, joinErr
+		}
+		queryArgs = append(queryArgs, joinArgs...)
 		if joinErr == nil {
 			selectList = sel
 			joinClauses = joins

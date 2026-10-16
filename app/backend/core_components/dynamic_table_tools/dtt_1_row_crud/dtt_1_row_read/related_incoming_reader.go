@@ -17,10 +17,10 @@ import (
 )
 
 type incomingRelatedMetadata struct {
-	fk     FKInfo
-	types  map[string]interface{}
-	labels map[string]dtt_utils.ForeignKey
-	kind   string
+	fk          FKInfo
+	types       map[string]interface{}
+	foreignKeys map[string]dtt_utils.ForeignKey
+	kind        string
 }
 
 // prepareIncomingRelatedMetadata performs the owner-only catalogue reads before
@@ -45,14 +45,15 @@ func prepareIncomingRelatedMetadata(currentDb *sql.DB, fkInfos []FKInfo, childFi
 			log.Printf("\033[33mwarning: related label metadata unavailable for table %s: %s\033[0m", fk.Referencing_table, err)
 			foreignKeys = map[string]dtt_utils.ForeignKey{}
 		}
-		labels, types, err := authorizeRelatedNestedMetadata(foreignKeys, types, userRole, canRead,
-			func(table string) (ReadRowPolicy, error) { return getLegacyMustTrueReadPolicy(currentDb, table) })
+		labels, types, err := authorizeRelatedNestedMetadata(foreignKeys, types, canRead)
 		if err != nil {
 			log.Printf("\033[31merror: authorizing nested foreign keys from table %s: %s\033[0m", fk.Referencing_table, err)
 			return nil, errors.New("error authorizing related datasets")
 		}
 		types = relatedRecordTitleAliasSources(currentDb, labels, types)
-		metadata = append(metadata, incomingRelatedMetadata{fk, types, labels, classifyRelatedTableKind(fk.Referencing_table, kinds)})
+		// Keep all FK candidates for NULL projections; only authorized metadata
+		// above may describe their targets to the frontend.
+		metadata = append(metadata, incomingRelatedMetadata{fk, types, foreignKeys, classifyRelatedTableKind(fk.Referencing_table, kinds)})
 	}
 	return metadata, nil
 }
@@ -91,7 +92,6 @@ func readIncomingRelatedTable(q dbutils.Querier, meta incomingRelatedMetadata, p
 	if err != nil {
 		return nil, errors.New("error reading related actor columns")
 	}
-	selectColumns, joins := buildRelatedSelectColumnsWithFKLabels(fk.Referencing_table, columns, meta.labels, actors)
 	policy, err := getLegacyMustTrueReadPolicy(q, fk.Referencing_table)
 	if err != nil {
 		log.Printf("\033[31merror: fetching row policy metadata for table %s: %s\033[0m", fk.Referencing_table, err)
@@ -101,8 +101,9 @@ func readIncomingRelatedTable(q dbutils.Querier, meta incomingRelatedMetadata, p
 	if gallery != nil && gallery.ChildTable == fk.Referencing_table && gallery.ForeignKey == fk.Referencing_column {
 		order = galleryRowsOrder(gallery)
 	}
-	query, args := buildRelatedItemsQueryWithReadPolicy(selectColumns, fk.Referencing_table, joins,
-		fk.Referencing_column, parentID, actor.UserRole, actor.UserID, policy, order)
+	query, args := buildRelatedItemsQueryWithFKLabels(fk.Referencing_table, columns, meta.foreignKeys, actors,
+		fk.Referencing_column, parentID, actor.UserRole, actor.UserID, policy, order,
+		newForeignLabelAuthorization(q, actor.UserRole, actor.UserID))
 	rows, err := q.Query(query, args...)
 	if err != nil {
 		log.Printf("\033[31merror: fetching related rows from table %s: %s\033[0m", fk.Referencing_table, err)

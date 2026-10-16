@@ -306,6 +306,17 @@ func UpdateRowHandler(response_writer http.ResponseWriter, request *http.Request
 			return
 		}
 
+		references, err := validateUpdatedForeignReferences(tx, tableName, update.Column, value, userID, userRole, updateRequest.ID)
+		if err != nil {
+			var refusal *httpresponse.Refusal
+			if errors.As(err, &refusal) {
+				httpresponse.RespondWithRefusal(response_writer, refusal)
+			} else {
+				httpresponse.RespondWithError(response_writer, 500, "Error checking row permissions")
+			}
+			return
+		}
+
 		// A row's card picture follows its gallery (owner decision K120). Clearing the
 		// field is an administrator's release of a picture the gallery does not carry,
 		// for example one the missing-media check lists as kept from another row's
@@ -444,6 +455,15 @@ func UpdateRowHandler(response_writer http.ResponseWriter, request *http.Request
 			}
 			log.Printf("row update failed")
 			httpresponse.RespondWithError(response_writer, http.StatusInternalServerError, "Error updating row")
+			return
+		}
+		if err := recheckUpdatedForeignReferences(tx, references, userID, userRole); err != nil {
+			var refusal *httpresponse.Refusal
+			if errors.As(err, &refusal) {
+				httpresponse.RespondWithRefusal(response_writer, refusal)
+			} else {
+				httpresponse.RespondWithError(response_writer, 500, "Error checking row permissions")
+			}
 			return
 		}
 		if err := enforcePilotUpdatedRows(tableName, result); err != nil {

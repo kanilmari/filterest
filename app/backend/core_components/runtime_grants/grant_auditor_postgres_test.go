@@ -155,8 +155,8 @@ func TestSnapshotAndReadOnlyAuditPostgres(t *testing.T) {
 	if !containsGrant(grants, "basic", target, "id", "UPDATE") {
 		t.Fatal("link lock not discovered")
 	}
-	if !containsGrant(grants, "guest", target, "title", "SELECT") || containsGrant(grants, "guest", target, "", "SELECT") {
-		t.Fatal("fresh guest label target not narrow")
+	if containsGrant(grants, "guest", target, "title", "SELECT") || containsGrant(grants, "guest", target, "", "SELECT") {
+		t.Fatal("source-only guest acquired target label access")
 	}
 	if containsGrant(grants, "guest", oidByName(&snapshot, "system_users"), "name", "SELECT") {
 		t.Fatal("actor marks implied account-name reads")
@@ -225,8 +225,8 @@ func TestSnapshotAndReadOnlyAuditPostgres(t *testing.T) {
 	fixtureExec(t, owner, "REVOKE UPDATE ON fresh_target FROM "+pq.QuoteIdentifier(config.Names["basic"]))
 	applyFixtureGrants(t, owner, snapshot, grants)
 	var label string
-	if err := guest.QueryRow(`SELECT b.title FROM fresh_source a LEFT JOIN fresh_target b ON a.target_id=b.id`).Scan(&label); err != nil || label != "visible label" {
-		t.Fatalf("fresh label listing: %v", err)
+	if err := guest.QueryRow(`SELECT b.title FROM fresh_source a LEFT JOIN fresh_target b ON a.target_id=b.id`).Scan(&label); err == nil {
+		t.Fatal("source-only guest read target label")
 	}
 	if err := guest.QueryRow(`SELECT private FROM fresh_target`).Scan(&label); err == nil {
 		t.Fatal("label dependency disclosed private column")
@@ -277,21 +277,22 @@ func TestSnapshotAndReadOnlyAuditPostgres(t *testing.T) {
 	if err := basic.QueryRow(`SELECT id FROM fresh_target WHERE id=1 FOR KEY SHARE`).Scan(new(int)); err != nil {
 		t.Fatal("narrow link row lock failed", err)
 	}
-	t.Run("fresh target labels without target rights", func(t *testing.T) {
+	t.Run("fresh target labels require target rights", func(t *testing.T) {
 		fixtureExec(t, owner, `DELETE FROM system_group_table_func_rights WHERE target_table_uid=2 AND function_id=1`)
 		t.Cleanup(func() {
 			fixtureExec(t, owner, `INSERT INTO system_group_table_func_rights VALUES(2,1,2)`)
 			fixtureExec(t, owner, "GRANT SELECT ON fresh_target TO "+pq.QuoteIdentifier(config.Names["basic"]))
 		})
 		fixtureExec(t, owner, "REVOKE SELECT ON fresh_target FROM "+pq.QuoteIdentifier(config.Names["basic"]))
+		fixtureExec(t, owner, "REVOKE SELECT (id,title) ON fresh_target FROM "+pq.QuoteIdentifier(config.Names["basic"]))
 		fresh := readFixtureSnapshot(t, owner, config)
 		freshGrants := grantsFor(t, fresh)
 		if containsGrant(freshGrants, "basic", target, "", "SELECT") {
 			t.Fatal("target acquired blanket SELECT")
 		}
 		applyFixtureGrants(t, owner, fresh, freshGrants)
-		if err := basic.QueryRow(`SELECT b.title FROM fresh_source a LEFT JOIN fresh_target b ON a.target_id=b.id WHERE a.id=1`).Scan(&label); err != nil || label != "visible label" {
-			t.Fatalf("label with no target right: %v", err)
+		if err := basic.QueryRow(`SELECT b.title FROM fresh_source a LEFT JOIN fresh_target b ON a.target_id=b.id WHERE a.id=1`).Scan(&label); err == nil {
+			t.Fatal("label SELECT granted without target Read")
 		}
 		if err := basic.QueryRow(`SELECT private FROM fresh_target WHERE id=1`).Scan(&label); err == nil {
 			t.Fatal("label access disclosed another target column")

@@ -15,14 +15,15 @@ import (
 )
 
 type intelligentSearchAuthorization struct {
-	userRole          string
-	userID            int
-	readPolicy        ReadRowPolicy
-	tableUID          int64
-	rowGroupSelection RowGroupSelection
-	userFilters       url.Values
-	filterColumns     map[string]dtt_models.ColumnInfo
-	filterTypes       map[string]interface{}
+	labelAuthorization *foreignLabelAuthorization
+	userRole           string
+	userID             int
+	readPolicy         ReadRowPolicy
+	tableUID           int64
+	rowGroupSelection  RowGroupSelection
+	userFilters        url.Values
+	filterColumns      map[string]dtt_models.ColumnInfo
+	filterTypes        map[string]interface{}
 }
 
 func resolveIntelligentSearchAuthorization(
@@ -44,9 +45,10 @@ func resolveIntelligentSearchAuthorization(
 	}
 
 	authorization := intelligentSearchAuthorization{
-		userRole:   userRole,
-		userID:     userID,
-		readPolicy: readPolicy,
+		labelAuthorization: newForeignLabelAuthorization(readDB, userRole, userID),
+		userRole:           userRole,
+		userID:             userID,
+		readPolicy:         readPolicy,
 	}
 	if len(selection.Slugs) == 0 && len(selection.Modes) == 0 {
 		return authorization, nil

@@ -128,8 +128,17 @@ func (c *buildJoinsMockConn) Query(query string, args []driver.Value) (driver.Ro
 	return c.QueryContext(context.Background(), query, named)
 }
 
-func (c *buildJoinsMockConn) QueryContext(_ context.Context, query string, _ []driver.NamedValue) (driver.Rows, error) {
+func (c *buildJoinsMockConn) QueryContext(_ context.Context, query string, args []driver.NamedValue) (driver.Rows, error) {
 	switch {
+	case strings.Contains(query, "FROM system_group_table_func_rights gf"):
+		if len(args) == 0 || args[0].Value != "/api/get-results" {
+			return nil, fmt.Errorf("labels checked the wrong route: %v", args)
+		}
+		c.counter.add("label_permission")
+		return &buildJoinsMockRows{cols: []string{"allowed"}, rows: [][]driver.Value{{int64(1)}}}, nil
+	case strings.Contains(query, "scd.must_be_true_unless_own = true"):
+		c.counter.add("label_policy")
+		return &buildJoinsMockRows{cols: []string{"column_name"}}, nil
 	case strings.Contains(query, "AS title_sources(source_column, target_table, target_column)"):
 		c.counter.add("title_targets")
 		if c.counter.titleErr != nil {
@@ -198,8 +207,8 @@ func TestBuildJoinsTitleMetadataFailureKeepsFieldDisplayWithoutTitleProof(t *tes
 		backend.Db = originalDB
 		resetJoinMetadataCacheForTests()
 	})
-	selects, _, _, err := buildJoinsWith1MRelations(db, "system_column_details",
-		map[int]dtt_models.ColumnInfo{1: {ColumnName: "table_uid"}}, []int{1})
+	selects, _, _, _, err := buildJoinsWith1MRelations(db, "system_column_details",
+		map[int]dtt_models.ColumnInfo{1: {ColumnName: "table_uid"}}, []int{1}, allowForeignLabelsForTest(), 0)
 	if err != nil || !strings.Contains(selects, `"table_uid_alias1"."table_name" AS "table_name (ln)"`) {
 		t.Fatalf("failed title lookup changed ordinary field display: %s %v", selects, err)
 	}
@@ -275,11 +284,11 @@ func TestBuildJoinsWith1MRelationsCachesMetadataAcrossCalls(t *testing.T) {
 	}
 	columnUIDs := []int{1, 2}
 
-	firstSelect, firstJoins, firstExpressions, err := buildJoinsWith1MRelations(db, "app_service_catalog", columnsMap, columnUIDs)
+	firstSelect, firstJoins, firstExpressions, _, err := buildJoinsWith1MRelations(db, "app_service_catalog", columnsMap, columnUIDs, allowForeignLabelsForTest(), 0)
 	if err != nil {
 		t.Fatalf("first buildJoinsWith1MRelations returned error: %v", err)
 	}
-	secondSelect, secondJoins, secondExpressions, err := buildJoinsWith1MRelations(db, "app_service_catalog", columnsMap, columnUIDs)
+	secondSelect, secondJoins, secondExpressions, _, err := buildJoinsWith1MRelations(db, "app_service_catalog", columnsMap, columnUIDs, allowForeignLabelsForTest(), 0)
 	if err != nil {
 		t.Fatalf("second buildJoinsWith1MRelations returned error: %v", err)
 	}
@@ -327,12 +336,11 @@ func TestBuildJoinsWith1MRelationsAddsTableNameAliasForColumnMetadataTableUID(t 
 		1: {ColumnName: "table_uid"},
 	}
 
-	selectColumns, joinClauses, columnExpressions, err := buildJoinsWith1MRelations(
+	selectColumns, joinClauses, columnExpressions, _, err := buildJoinsWith1MRelations(
 		db,
 		"system_column_details",
 		columnsMap,
-		[]int{1},
-	)
+		[]int{1}, allowForeignLabelsForTest(), 0)
 	if err != nil {
 		t.Fatalf("buildJoinsWith1MRelations returned error: %v", err)
 	}
@@ -353,7 +361,7 @@ func TestBuildJoinsWith1MRelationsAddsTableNameAliasForColumnMetadataTableUID(t 
 	if got := columnExpressions["table_name (ln)"]; got != `"table_uid_alias1"."table_name"` {
 		t.Fatalf("table_name alias expression = %q, want joined display column", got)
 	}
-	secondSelect, secondJoins, _, err := buildJoinsWith1MRelations(db, "system_column_details", columnsMap, []int{1})
+	secondSelect, secondJoins, _, _, err := buildJoinsWith1MRelations(db, "system_column_details", columnsMap, []int{1}, allowForeignLabelsForTest(), 0)
 	if err != nil || selectColumns != secondSelect || joinClauses != secondJoins {
 		t.Fatalf("cached metadata changed FK display: %q %q %v", secondSelect, secondJoins, err)
 	}

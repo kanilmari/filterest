@@ -96,6 +96,29 @@ class FakeClientFactory:
 
 
 class EaselectMCPServerTest(unittest.TestCase):
+    def test_row_dispatch_preserves_null_foreign_label_and_key(self):
+        # Exercise JSON-RPC dispatch and the real API-client route selection;
+        # the HTTP boundary returns an already-authorized server response.
+        payload = {"data": [{"id": 1, "target_id": 12, "target_name (ln)": None}]}
+        client = object.__new__(easelect_mcp_server.EaselectAPIClient)
+        calls = []
+        client.login = lambda: None
+
+        def request(method, path, **kwargs):
+            calls.append((method, path, kwargs))
+            return payload
+
+        client.request = request
+        response = easelect_mcp_server.handle_request({
+            "jsonrpc": "2.0", "id": 199, "method": "tools/call",
+            "params": {"name": "get_dataset_rows", "arguments": {"dataset_name": "sources"}},
+        }, client_factory=lambda **_: client)
+        self.assertEqual(calls[0][0:2], ("GET", "/api/get-results"))
+        self.assertEqual(calls[0][2]["query"]["dataset"], "sources")
+        row = response["result"]["structuredContent"]["data"][0]
+        self.assertEqual(row["target_id"], 12)
+        self.assertIsNone(row["target_name (ln)"])
+
     def test_initialize_uses_project_mcp_protocol(self):
         response = easelect_mcp_server.handle_request({
             "jsonrpc": "2.0",

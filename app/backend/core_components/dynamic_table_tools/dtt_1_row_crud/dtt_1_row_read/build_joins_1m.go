@@ -171,7 +171,7 @@ func loadJoinMetadata(
 		return joinMetadataCacheEntry{}, err
 	}
 	// Read schema facts independently of the request role, like FK resolution.
-	// Only title annotation uses them; the joins and their authorization stay as-is.
+	// Only title annotation uses them; authorization is resolved per request below.
 	metadataDB := db
 	if backend.Db != nil {
 		metadataDB = backend.Db
@@ -223,14 +223,17 @@ func buildJoinsWith1MRelations(
 	tableName string,
 	columnsMap map[int]dtt_models.ColumnInfo,
 	columnUids []int,
-) (string, string, map[string]string, error) {
+	authorization *foreignLabelAuthorization,
+	argumentOffset int,
+) (string, string, map[string]string, []interface{}, error) {
 	metadata, err := loadJoinMetadata(db, tableName)
 	if err != nil {
-		return "", "", nil, err
+		return "", "", nil, nil, err
 	}
 	fkRelations := metadata.fkRelations
 	foreignKeys := metadata.foreignKeys
 
+	var queryArgs []interface{}
 	selectColumns := ""
 	joinClauses := ""
 	aliasCount := make(map[string]int)
@@ -239,7 +242,7 @@ func buildJoinsWith1MRelations(
 	for _, colUid := range columnUids {
 		colInfo, exists := columnsMap[colUid]
 		if !exists {
-			return "", "", nil, fmt.Errorf(
+			return "", "", nil, nil, fmt.Errorf(
 				"column_uid %d not found in table %s",
 				colUid, tableName,
 			)
@@ -277,6 +280,18 @@ func buildJoinsWith1MRelations(
 				// Jos ei ole cached-saraketta, tehdään normaali LEFT JOIN
 				aliasCount[colName]++
 				alias := fmt.Sprintf("%s_alias%d", colName, aliasCount[colName])
+				allowed, condition, args, err := authorization.targetCondition(fk.ReferencedTable, alias, argumentOffset+len(queryArgs)+1)
+				if err != nil {
+					return "", "", nil, nil, err
+				}
+				if !allowed {
+					generated := generatedForeignNameAlias(colName)
+					selectColumns += fmt.Sprintf("%s.%s AS %s, NULL::text AS %s, ", pq.QuoteIdentifier(tableName), pq.QuoteIdentifier(colName), pq.QuoteIdentifier(colName), pq.QuoteIdentifier(generated))
+					columnExpressions[colName] = fmt.Sprintf("%s.%s", pq.QuoteIdentifier(tableName), pq.QuoteIdentifier(colName))
+					columnExpressions[generated] = "NULL::text"
+					continue
+				}
+				queryArgs = append(queryArgs, args...)
 
 				generatedColumnName := generatedForeignNameAlias(colName)
 
@@ -304,6 +319,9 @@ func buildJoinsWith1MRelations(
 					pq.QuoteIdentifier(alias),
 					pq.QuoteIdentifier(fk.ReferencedColumn),
 				)
+				if condition != "" {
+					joinClauses += "AND (" + condition + ") "
+				}
 			}
 
 		} else {
@@ -319,7 +337,7 @@ func buildJoinsWith1MRelations(
 	}
 
 	selectColumns = strings.TrimRight(selectColumns, ", ")
-	return selectColumns, joinClauses, columnExpressions, nil
+	return selectColumns, joinClauses, columnExpressions, queryArgs, nil
 }
 
 // generatedForeignNameAlias keeps actor and ordinary reference labels compatible.

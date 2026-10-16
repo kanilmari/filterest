@@ -123,6 +123,7 @@ func fetchOutgoingReferencedTableResults(
 	}
 
 	var relatedTables []RelatedTableResult
+	labelAuthorization := newForeignLabelAuthorization(currentDb, userRole, userID)
 	for _, parentColumn := range sortedForeignKeyColumns(parentForeignKeys) {
 		fk := parentForeignKeys[parentColumn]
 		if strings.TrimSpace(childTableFilter) != "" && fk.ReferencedTable != childTableFilter {
@@ -165,11 +166,7 @@ func fetchOutgoingReferencedTableResults(
 		labelForeignKeys, relatedTypes, err := authorizeRelatedNestedMetadata(
 			targetForeignKeys,
 			relatedTypes,
-			userRole,
 			canReadDataset,
-			func(tableName string) (ReadRowPolicy, error) {
-				return getLegacyMustTrueReadPolicy(currentDb, tableName)
-			},
 		)
 		if err != nil {
 			return nil, err
@@ -180,27 +177,23 @@ func fetchOutgoingReferencedTableResults(
 		if err != nil {
 			return nil, err
 		}
-		selectColumns, joinClauses := buildRelatedSelectColumnsWithFKLabels(
-			fk.ReferencedTable,
-			visibleCols,
-			labelForeignKeys,
-			actorColumns,
-		)
 		readPolicy, policyErr := getLegacyMustTrueReadPolicy(currentDb, fk.ReferencedTable)
 		if policyErr != nil {
 			log.Printf("\033[31merror: fetching row policy metadata for referenced table %s: %s\033[0m\n", fk.ReferencedTable, policyErr.Error())
 			continue
 		}
-		queryRelated, queryArgs := buildRelatedItemsQueryWithReadPolicy(
-			selectColumns,
+		queryRelated, queryArgs := buildRelatedItemsQueryWithFKLabels(
 			fk.ReferencedTable,
-			joinClauses,
+			visibleCols,
+			targetForeignKeys,
+			actorColumns,
 			fk.ReferencedColumn,
 			referencedID,
 			userRole,
 			userID,
 			readPolicy,
 			"",
+			labelAuthorization,
 		)
 		relatedRows, err := readQuerier.Query(queryRelated, queryArgs...)
 		if err != nil {

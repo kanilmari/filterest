@@ -20,9 +20,9 @@ import (
 	pgvector "github.com/pgvector/pgvector-go"
 )
 
-func rowGroupPostgres(t *testing.T) (*sql.DB, *sql.DB) {
+// loadRowGroupSchema loads the released row-group and classification schema into a disposable fixture database.
+func loadRowGroupSchema(t *testing.T, owner *sql.DB) {
 	t.Helper()
-	owner, reader := ownerResolverPostgres(t)
 	migration, err := os.ReadFile("../../../../../server_tools/migrations/20260822000001_create_system_row_groups.sql")
 	if err != nil {
 		t.Fatal(err)
@@ -47,6 +47,12 @@ func rowGroupPostgres(t *testing.T) (*sql.DB, *sql.DB) {
 	if _, err := owner.Exec(headingSchema); err != nil {
 		t.Fatal(err)
 	}
+}
+
+func rowGroupPostgres(t *testing.T) (*sql.DB, *sql.DB) {
+	t.Helper()
+	owner, reader := ownerResolverPostgres(t)
+	loadRowGroupSchema(t, owner)
 	const fixture = `
 CREATE TABLE wl103_rows (id integer PRIMARY KEY, title text, status text,
     created_by integer REFERENCES system_users(id), published boolean NOT NULL);

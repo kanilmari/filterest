@@ -11,6 +11,7 @@ import (
 	dtt_utils "easelect/backend/core_components/dynamic_table_tools/dtt_utils"
 	"fmt"
 	"github.com/lib/pq"
+	"log"
 	"strings"
 )
 
@@ -133,16 +134,22 @@ func countRelatedRows(
 	return rowCount, nil
 }
 
-func buildRelatedSelectColumnsWithFKLabels(
+// buildRelatedLabelProjection shares primary-label authorization for every
+// target, including targets without mandatory flags. A failed policy lookup
+// projects NULL without joining; a denied target row leaves the source intact.
+func buildRelatedLabelProjection(
 	tableName string,
 	columns []string,
 	foreignKeys map[string]dtt_utils.ForeignKey,
 	actorColumns row_mutation_policy.RowActorColumns,
-) (string, string) {
+	authorization *foreignLabelAuthorization,
+	argumentOffset int,
+) (string, string, []interface{}) {
 	if len(columns) == 0 {
-		return fmt.Sprintf("%s.*", pq.QuoteIdentifier(tableName)), ""
+		return fmt.Sprintf("%s.*", pq.QuoteIdentifier(tableName)), "", nil
 	}
 
+	var queryArgs []interface{}
 	selectParts := make([]string, 0, len(columns)*2)
 	joinParts := make([]string, 0, len(columns))
 	usedJoinAliases := make(map[string]int)
@@ -177,6 +184,15 @@ func buildRelatedSelectColumnsWithFKLabels(
 		usedJoinAliases[columnName]++
 		joinAlias := fmt.Sprintf("%s_related_fk_alias%d", columnName, usedJoinAliases[columnName])
 		displayAlias := buildRelatedFKDisplayAlias(columnName, existingColumns, usedDisplayAliases)
+		allowed, condition, args, err := authorization.targetCondition(fk.ReferencedTable, joinAlias, argumentOffset+len(queryArgs)+1)
+		if err != nil {
+			log.Printf("\033[33mwarning: related label policy unavailable for %s: %s\033[0m", fk.ReferencedTable, err)
+		}
+		if err != nil || !allowed {
+			selectParts = append(selectParts, "NULL::text AS "+pq.QuoteIdentifier(displayAlias))
+			continue
+		}
+		queryArgs = append(queryArgs, args...)
 
 		selectParts = append(
 			selectParts,
@@ -199,13 +215,37 @@ func buildRelatedSelectColumnsWithFKLabels(
 				pq.QuoteIdentifier(fk.ReferencedColumn),
 			),
 		)
+		if condition != "" {
+			joinParts[len(joinParts)-1] += " AND (" + condition + ")"
+		}
 	}
 
 	joinClauses := ""
 	if len(joinParts) > 0 {
 		joinClauses = strings.Join(joinParts, " ") + " "
 	}
-	return strings.Join(selectParts, ", "), joinClauses
+	return strings.Join(selectParts, ", "), joinClauses, queryArgs
+}
+
+// buildRelatedItemsQueryWithFKLabels binds the source-row filter first, then
+// target policies. Incoming and outgoing readers share this ordering so owner
+// arguments and multiple label joins cannot reuse another predicate's slots.
+func buildRelatedItemsQueryWithFKLabels(
+	tableName string,
+	columns []string,
+	foreignKeys map[string]dtt_utils.ForeignKey,
+	actorColumns row_mutation_policy.RowActorColumns,
+	referencingColumn string,
+	parentID int,
+	userRole string,
+	userID int,
+	readPolicy ReadRowPolicy,
+	orderBy string,
+	authorization *foreignLabelAuthorization,
+) (string, []interface{}) {
+	where, args := buildRelatedItemsWhereClause(tableName, referencingColumn, parentID, userRole, userID, readPolicy)
+	selected, joins, labelArgs := buildRelatedLabelProjection(tableName, columns, foreignKeys, actorColumns, authorization, len(args))
+	return buildRelatedItemsSelectQuery(selected, tableName, joins, where, orderBy), append(args, labelArgs...)
 }
 
 // buildRelatedItemsQuery creates the related-row SELECT and always qualifies the
@@ -253,6 +293,10 @@ func buildRelatedItemsQueryWithReadPolicy(
 		userID,
 		readPolicy,
 	)
+	return buildRelatedItemsSelectQuery(selectColumns, tableName, joinClauses, whereClause, orderBy), queryArgs
+}
+
+func buildRelatedItemsSelectQuery(selectColumns, tableName, joinClauses, whereClause, orderBy string) string {
 	orderClause := ""
 	if strings.TrimSpace(orderBy) != "" {
 		orderClause = " ORDER BY " + orderBy
@@ -265,7 +309,7 @@ func buildRelatedItemsQueryWithReadPolicy(
 		whereClause,
 		orderClause,
 	)
-	return query, queryArgs
+	return query
 }
 
 // galleryRowsOrder orders a gallery's rows for the article: pictures — rows of the image

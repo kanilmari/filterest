@@ -75,6 +75,9 @@ func (c *updRowConn) QueryContext(_ context.Context, query string, args []driver
 	if strings.Contains(query, "AS roles(actor_role)") {
 		return &updRowRows{cols: []string{"column_name", "actor_role"}, rows: c.state.actorRows}, nil
 	}
+	if strings.Contains(query, "SELECT ns.nspname, target.relname, dst.attname") && len(args) == 2 && args[1].Value == "table_name" {
+		return &updRowRows{cols: []string{"schema", "table", "column"}}, nil
+	}
 	if strings.Contains(query, "system_db_table_aliases") {
 		return nil, &pq.Error{Code: "42P01"}
 	}

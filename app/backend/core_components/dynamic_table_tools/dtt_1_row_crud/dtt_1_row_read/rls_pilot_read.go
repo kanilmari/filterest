@@ -364,6 +364,12 @@ func RowsVisibleForDelete(q *sql.Tx, tableName, userRole string, userID int, row
 // insert's own foreign-key check holds the reference instead, and the caller
 // repeats the check once it does (RecheckRowsVisibleAfterInsert).
 func RowsVisibleForRead(q *sql.Tx, tableName, userRole string, userID int, rowIDs []int64) (bool, error) {
+	return rowsVisibleForReadKey(q, tableName, userRole, userID, rowIDs, nil, nil)
+}
+
+// A stored-key reference repeats its key predicate after resolution has locked
+// the target. ID-only relation callers use the same policy without this predicate.
+func rowsVisibleForReadKey(q *sql.Tx, tableName, userRole string, userID int, rowIDs []int64, keyColumns []string, keyValues []interface{}) (bool, error) {
 	uniqueRowIDs := make([]int64, 0, len(rowIDs))
 	requested := make(map[int64]struct{}, len(rowIDs))
 	for _, rowID := range rowIDs {
@@ -390,6 +396,10 @@ func RowsVisibleForRead(q *sql.Tx, tableName, userRole string, userID int, rowID
 		pq.QuoteIdentifier("id"),
 	)
 	args := []interface{}{pq.Array(uniqueRowIDs)}
+	if len(keyColumns) != 0 {
+		whereClause += " AND " + foreignKeyPredicate(tableName, keyColumns, 2)
+		args = append(args, keyValues...)
+	}
 	policy, err := getLegacyMustTrueReadPolicy(q, tableName)
 	if err != nil {
 		return false, fmt.Errorf("load read row policy for %s: %w", tableName, err)

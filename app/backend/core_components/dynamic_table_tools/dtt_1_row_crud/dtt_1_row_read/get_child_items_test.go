@@ -261,9 +261,7 @@ func TestAuthorizeRelatedNestedMetadataRemovesUnauthorizedLabelAndTypeTarget(t *
 	labelForeignKeys, sanitizedTypes, err := authorizeRelatedNestedMetadata(
 		foreignKeys,
 		dataTypes,
-		"basic",
 		func(tableName string) (bool, error) { return tableName == "allowed_lookup", nil },
-		func(string) (ReadRowPolicy, error) { return ReadRowPolicy{}, nil },
 	)
 	if err != nil {
 		t.Fatalf("authorizeRelatedNestedMetadata returned error: %v", err)
@@ -297,41 +295,36 @@ func TestAuthorizeRelatedNestedMetadataRemovesUnauthorizedLabelAndTypeTarget(t *
 	}
 }
 
-func TestAuthorizeRelatedNestedMetadataOmitsUnsafeNonAdminLabelJoins(t *testing.T) {
+func TestAuthorizeRelatedNestedMetadataKeepsTargetsForGuardedProjection(t *testing.T) {
 	tests := []struct {
-		name       string
-		userRole   string
-		target     string
-		policy     ReadRowPolicy
-		policyErr  error
-		wantLabels int
+		name      string
+		userRole  string
+		target    string
+		policy    ReadRowPolicy
+		policyErr error
 	}{
 		{
-			name:       "active Go row policy",
-			userRole:   "basic",
-			target:     "policy_lookup",
-			policy:     legacyMustTrueReadPolicy([]string{"published"}, "user_id"),
-			wantLabels: 0,
+			name:     "active Go row policy",
+			userRole: "basic",
+			target:   "policy_lookup",
+			policy:   legacyMustTrueReadPolicy([]string{"published"}, "user_id"),
 		},
 		{
-			name:       "pilot RLS policy",
-			userRole:   "basic",
-			target:     rlsPilotTableName,
-			wantLabels: 0,
+			name:     "pilot RLS policy",
+			userRole: "basic",
+			target:   rlsPilotTableName,
 		},
 		{
-			name:       "policy lookup failure",
-			userRole:   "basic",
-			target:     "uncertain_lookup",
-			policyErr:  fmt.Errorf("metadata unavailable"),
-			wantLabels: 0,
+			name:      "policy lookup failure",
+			userRole:  "basic",
+			target:    "uncertain_lookup",
+			policyErr: fmt.Errorf("metadata unavailable"),
 		},
 		{
-			name:       "admin may join policy target",
-			userRole:   "admin",
-			target:     "policy_lookup",
-			policy:     legacyMustTrueReadPolicy([]string{"published"}, "user_id"),
-			wantLabels: 1,
+			name:     "admin may join policy target",
+			userRole: "admin",
+			target:   "policy_lookup",
+			policy:   legacyMustTrueReadPolicy([]string{"published"}, "user_id"),
 		},
 	}
 
@@ -354,15 +347,26 @@ func TestAuthorizeRelatedNestedMetadataOmitsUnsafeNonAdminLabelJoins(t *testing.
 			labels, sanitizedTypes, err := authorizeRelatedNestedMetadata(
 				foreignKeys,
 				dataTypes,
-				test.userRole,
 				func(string) (bool, error) { return true, nil },
-				func(string) (ReadRowPolicy, error) { return test.policy, test.policyErr },
 			)
 			if err != nil {
 				t.Fatalf("authorizeRelatedNestedMetadata returned error: %v", err)
 			}
-			if len(labels) != test.wantLabels {
-				t.Fatalf("label count = %d, want %d; labels=%#v", len(labels), test.wantLabels, labels)
+			if len(labels) != 1 {
+				t.Fatalf("dataset-authorized target missing: %#v", labels)
+			}
+			authorization := &foreignLabelAuthorization{userRole: test.userRole, userID: 4,
+				canReadDataset: func(string) (bool, error) { return true, nil },
+				loadPolicy:     func(string) (ReadRowPolicy, error) { return test.policy, test.policyErr },
+				policies:       map[string]ReadRowPolicy{},
+			}
+			selected, joins, _ := buildRelatedLabelProjection("sources", []string{"lookup_id"}, labels, nil, authorization, 0)
+			if test.policyErr != nil {
+				if joins != "" || !strings.Contains(selected, `NULL::text AS "lookup_name"`) {
+					t.Fatalf("policy failure enabled label: %s %s", selected, joins)
+				}
+			} else if joins == "" {
+				t.Fatal("readable targets must get guarded joins")
 			}
 			columnInfo := sanitizedTypes["lookup_id"].(map[string]interface{})
 			if columnInfo["foreign_table"] != test.target || columnInfo["foreign_column"] != "id" {

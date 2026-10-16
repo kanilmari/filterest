@@ -29,7 +29,8 @@ const addRowColumnsWithTypesQuery = `
             source_table.relname AS column_table_name,
             foreign_schema.nspname AS foreign_table_schema,
             foreign_table.relname AS foreign_table_name,
-            foreign_column.attname AS foreign_column_name
+            CASE WHEN cardinality(constraint_info.conkey)>1 THEN ''
+                ELSE foreign_column.attname END AS foreign_column_name
         FROM selected_table selected
         JOIN pg_catalog.pg_namespace source_schema
             ON source_schema.nspname = $2
@@ -274,6 +275,7 @@ func getAddRowColumnsWithTypes(tableUID, schemaName string) ([]dtt_models.AddRow
 		col.ForeignTableSchema = foreignTableSchema.String
 		col.ForeignTableName = foreignTableName.String
 		col.ForeignColumnName = foreignColumnName.String
+		col.IsCompositeForeignKey = col.ForeignTableName != "" && col.ForeignColumnName == ""
 		col.UdtName = udtName
 		col.InsertNewTargetWithSource = insertNewTargetWithSource
 		col.InsertNewSourceWithTarget = insertNewSourceWithTarget
@@ -289,7 +291,15 @@ func getAddRowColumnsWithTypes(tableUID, schemaName string) ([]dtt_models.AddRow
 		columns = append(columns, col)
 	}
 
-	return columns, nil
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	// Release the metadata connection before discovering complete tuples. An
+	// empty target column is a catalog marker, never a scalar reference.
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	return attachCompositeForeignKeys(columns, tableUID)
 }
 
 // GetAddRowColumnsOrdered on esimerkki taulun sarakkeiden hakemisesta järjestyksessä.

@@ -37,8 +37,12 @@ const (
 // checkedReference is one existing row a new row refers to through a foreign key, as validateMainForeignKeyReads
 // found it readable.
 type checkedReference struct {
-	tableName string
-	rowID     int64
+	tableName  string
+	rowID      int64
+	keyColumn  string
+	keyValue   interface{}
+	keyColumns []string
+	keyValues  []interface{}
 }
 
 // recheckRowsVisibleAfterInsert repeats a reference check under the insert's foreign-key lock; unit tests replace it.
@@ -288,6 +292,28 @@ func recheckReferencesAfterInsert(
 	userRole string,
 ) error {
 	for _, reference := range references {
+		if len(reference.keyColumns) > 1 {
+			err := dtt_1_row_read.RecheckReadableForeignKeyTuple(tx, reference.tableName, reference.keyColumns, reference.keyValues, userID, userRole)
+			if errors.Is(err, dtt_1_row_read.ErrForeignRowUnreadable) {
+				return &forbiddenError{msg: foreignRowUnreadable}
+			}
+			if err != nil {
+				return err
+			}
+			continue
+		}
+		// A non-ID account key can move to a different row before the INSERT.
+		// Authorize its current owner under the INSERT's immediate FK lock.
+		if reference.keyColumn != "" && reference.keyColumn != "id" {
+			err := dtt_1_row_read.RecheckReadableForeignReference(tx, reference.tableName, reference.keyColumn, reference.keyValue, userID, userRole)
+			if errors.Is(err, dtt_1_row_read.ErrForeignRowUnreadable) {
+				return &forbiddenError{msg: foreignRowUnreadable}
+			}
+			if err != nil {
+				return err
+			}
+			continue
+		}
 		visible, err := recheckRowsVisibleAfterInsert(tx, reference.tableName, userRole, userID, []int64{reference.rowID})
 		if err != nil {
 			return err
@@ -580,7 +606,24 @@ func validateMainForeignKeyReads(
 	marks row_mutation_policy.RowActorColumns,
 ) ([]checkedReference, error) {
 	var checked []checkedReference
+	seenComposite := make(map[int64]bool)
 	for _, column := range columns {
+		for _, key := range column.CompositeForeignKeys {
+			if seenComposite[key.ConstraintID] {
+				continue
+			}
+			seenComposite[key.ConstraintID] = true
+			reference, err := validateMainCompositeForeignKey(tx, key, columns, row, userID, userRole)
+			if err != nil {
+				return nil, err
+			}
+			if reference != nil {
+				checked = append(checked, *reference)
+			}
+		}
+		if column.IsCompositeForeignKey {
+			continue // Its complete tuple was checked above; never resolve a component.
+		}
 		if marks[column.ColumnName] != "" {
 			continue // Server stamps do not require read access to user accounts.
 		}
@@ -591,50 +634,15 @@ func validateMainForeignKeyReads(
 		if column.ForeignTableName == "" || column.ForeignColumnName == "" {
 			continue
 		}
-		foreignUID, err := getTableUID(column.ForeignTableName, tx)
-		if err != nil {
-			return nil, fmt.Errorf("resolve foreign dataset: %w", err)
-		}
-		allowed, err := hasStrictTableRoutePermission(
-			tx,
-			"/api/get-results",
-			userID,
-			column.ForeignTableName,
-			foreignUID,
-		)
-		if err != nil {
-			return nil, fmt.Errorf("check foreign-row read permission: %w", err)
-		}
-		if !allowed {
+		rowID, err := dtt_1_row_read.CheckReadableForeignReference(tx, column.ForeignTableName, column.ForeignColumnName, value, userID, userRole)
+		if errors.Is(err, dtt_1_row_read.ErrForeignRowUnreadable) {
 			return nil, &forbiddenError{msg: foreignRowUnreadable}
 		}
-		query := fmt.Sprintf(
-			"SELECT %s FROM %s WHERE %s = $1",
-			pq.QuoteIdentifier("id"),
-			pq.QuoteIdentifier(column.ForeignTableName),
-			pq.QuoteIdentifier(column.ForeignColumnName),
-		)
-		var rowID int64
-		if err := tx.QueryRow(query, value).Scan(&rowID); err != nil {
-			if errors.Is(err, sql.ErrNoRows) {
-				return nil, errors.New("foreign row does not exist")
-			}
-			return nil, fmt.Errorf("resolve foreign row: %w", err)
-		}
-		visible, err := dtt_1_row_read.RowsVisibleForRead(
-			tx,
-			column.ForeignTableName,
-			userRole,
-			userID,
-			[]int64{rowID},
-		)
 		if err != nil {
 			return nil, err
 		}
-		if !visible {
-			return nil, &forbiddenError{msg: foreignRowUnreadable}
-		}
-		checked = append(checked, checkedReference{tableName: column.ForeignTableName, rowID: rowID})
+		checked = append(checked, checkedReference{tableName: column.ForeignTableName, rowID: rowID,
+			keyColumn: column.ForeignColumnName, keyValue: value})
 	}
 	return checked, nil
 }

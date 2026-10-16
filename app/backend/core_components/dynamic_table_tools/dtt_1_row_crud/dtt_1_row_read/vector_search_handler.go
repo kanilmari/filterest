@@ -130,8 +130,8 @@ func GetResultsVector(response_writer http.ResponseWriter, request *http.Request
 
 	//------------------------------------------------
 	// 5. Rakennetaan SELECT- ja JOIN-lauseet
-	select_columns, join_clauses, column_expressions, err :=
-		buildJoinsWith1MRelations(readQuerier, table_name, columns_map, column_uids)
+	select_columns, join_clauses, column_expressions, joinArgs, err :=
+		buildJoinsWith1MRelations(readQuerier, table_name, columns_map, column_uids, newForeignLabelAuthorization(readQuerier, userRole, userID), 0)
 	if err != nil {
 		log.Printf("\033[31merror building JOIN clauses: %s\033[0m\n", err.Error())
 		httpresponse.RespondWithError(response_writer, http.StatusInternalServerError, "error building JOIN clauses")
@@ -146,12 +146,14 @@ func GetResultsVector(response_writer http.ResponseWriter, request *http.Request
 		columns_by_name,
 		column_expressions,
 		column_data_types,
+		len(joinArgs),
 	)
 	if err != nil {
 		log.Printf("\033[31merror building WHERE clause: %s\033[0m\n", err.Error())
 		httpresponse.RespondWithError(response_writer, http.StatusInternalServerError, "error building WHERE clause")
 		return
 	}
+	query_args = append(joinArgs, query_args...)
 	readPolicy, err := getLegacyMustTrueReadPolicy(currentDb, table_name)
 	if err != nil {
 		log.Printf("\033[31merror fetching row policy metadata: %s\033[0m\n", err.Error())

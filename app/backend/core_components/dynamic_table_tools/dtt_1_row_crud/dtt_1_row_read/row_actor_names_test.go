@@ -27,7 +27,7 @@ func TestActorNamesAreNullWithoutAJoin(t *testing.T) {
 	entry, _ := getCachedJoinMetadata("notes")
 	delete(entry.actorColumns, "user_id")
 	columns := map[int]dtt_models.ColumnInfo{1: {ColumnName: "created_by"}, 2: {ColumnName: "user_id"}, 3: {ColumnName: "reviewer_id"}}
-	selected, joins, expressions, err := buildJoinsWith1MRelations(db, "notes", columns, []int{1, 2, 3})
+	selected, joins, expressions, _, err := buildJoinsWith1MRelations(db, "notes", columns, []int{1, 2, 3}, allowForeignLabelsForTest(), 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -61,7 +61,7 @@ func TestRecreatedDatasetCannotReuseOldActorMarks(t *testing.T) {
 	setCachedJoinMetadata("notes", joinMetadataCacheEntry{tableUID: "41", foreignKeys: map[string]dtt_utils.ForeignKey{
 		"owner_id": {ReferencedTable: "system_users", ReferencedColumn: "id", NameColumn: "full_name"},
 	}})
-	selected, joins, expressions, err := buildJoinsWith1MRelations(db, "notes", map[int]dtt_models.ColumnInfo{1: {ColumnName: "owner_id"}}, []int{1})
+	selected, joins, expressions, _, err := buildJoinsWith1MRelations(db, "notes", map[int]dtt_models.ColumnInfo{1: {ColumnName: "owner_id"}}, []int{1}, allowForeignLabelsForTest(), 0)
 	if err != nil || joins != "" || expressions["owner_name (ln)"] != "NULL::text" || !strings.Contains(selected, `NULL::text AS "owner_name (ln)"`) {
 		t.Fatalf("recreated dataset exposed an actor: %s %s %v %v", selected, joins, expressions, err)
 	}

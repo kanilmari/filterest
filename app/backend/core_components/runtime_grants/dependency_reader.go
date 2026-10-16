@@ -192,7 +192,7 @@ func loadDependencies(ctx context.Context, tx *sql.Tx, snapshot *GrantSnapshot) 
 			}
 			// A missing text label produces no join in today's row reader.
 			if display != "" {
-				snapshot.Dependencies = append(snapshot.Dependencies, Dependency{SourceOID: source, TargetOID: target, Kind: "label", When: Read, Columns: []string{keyColumn, display}})
+				snapshot.Dependencies = append(snapshot.Dependencies, Dependency{SourceOID: source, TargetOID: target, Kind: "label", When: Read, Requires: Read, Columns: []string{keyColumn, display}})
 			}
 		}
 		if !targetObject.Protected && !accountTables[targetObject.Name] {

@@ -43,8 +43,8 @@ func TestCodingAgentPilotAndUnknownRoutesPostgres(t *testing.T) {
 	if err := basic.QueryRow(`SELECT title FROM app_service_catalog WHERE id=1`).Scan(&title); err != nil {
 		t.Fatal("administrator probe cannot read through basic", err)
 	}
-	if err := basic.QueryRow(`SELECT title FROM probe_label WHERE id=1`).Scan(&title); err != nil {
-		t.Fatal("administrator probe label dependency missing", err)
+	if err := basic.QueryRow(`SELECT title FROM probe_label WHERE id=1`).Scan(&title); err == nil {
+		t.Fatal("probe capability supplied target label without canonical read")
 	}
 	for _, query := range []string{
 		`SELECT private FROM probe_label WHERE id=1`,
@@ -100,7 +100,9 @@ func TestCodingAgentPilotAndUnknownRoutesPostgres(t *testing.T) {
 			routes = append(routes, finding)
 		}
 	}
-	if !reflect.DeepEqual(routes, unclassifiedRouteFindings(incomplete)) || !hasFinding(findings, "basic", "excess_read_reported", "table", pilot) || !hasFinding(findings, "basic", "excess_read_reported", "column", label) {
+	// Removing the pilot right leaves its original table ACL as excess. The
+	// target lacked canonical Read, so no label ACL was applied in the first place.
+	if !reflect.DeepEqual(routes, unclassifiedRouteFindings(incomplete)) || !hasFinding(findings, "basic", "excess_read_reported", "table", pilot) || hasFinding(findings, "basic", "excess_read_reported", "column", label) {
 		t.Fatal("route blockers prevented effective grant comparison", findings)
 	}
 	if aclFingerprint(t, owner) != before {
