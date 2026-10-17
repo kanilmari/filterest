@@ -49,7 +49,7 @@ type langKeyCodeLexeme struct {
 // would mistake quotes in a regex for strings and swallow later real evidence.
 // Incomplete strings resume at a line boundary; the overlapping literal pass
 // below also protects recall when a plausible closing quote was the wrong one.
-func lexLangKeyCode(content string, ext string) (string, []langKeyCodeLexeme) {
+func lexLangKeyCode(content string, ext string, visitComments ...func(string)) (string, []langKeyCodeLexeme) {
 	clean := []byte(content)
 	var tokens []langKeyCodeLexeme
 	mask := func(start, end int) {
@@ -92,6 +92,9 @@ func lexLangKeyCode(content string, ext string) (string, []langKeyCodeLexeme) {
 					}
 				} else if offset := strings.Index(content[i+2:], "*/"); offset >= 0 {
 					end = i + offset + 4
+				}
+				for _, visit := range visitComments {
+					visit(content[i:end])
 				}
 				mask(i, end)
 				i = end

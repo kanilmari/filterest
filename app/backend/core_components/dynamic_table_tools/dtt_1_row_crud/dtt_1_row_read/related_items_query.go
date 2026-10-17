@@ -343,6 +343,8 @@ func buildRelatedItemsWhereClause(
 	return appendReadPolicyToWhereClause(tableName, userRole, userID, readPolicy, whereClause, queryArgs)
 }
 
+// lang-key-declaration: {"schema":"linked_name","build":"candidate = baseAlias + \" (ln)\""}
+
 func buildRelatedFKDisplayAlias(
 	columnName string,
 	existingColumns map[string]struct{},

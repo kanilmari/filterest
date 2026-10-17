@@ -111,10 +111,12 @@ func validateLangKeySourceRoot(sourceRoot string, requireApplicationMarkers bool
 
 // sourceEntry is a candidate until resolved against the existing key registry.
 type sourceEntry struct {
-	langKey    string
-	filePath   string // Relative to the installation/source label root.
-	sourceType string // Empty means definite code evidence; literals are the safety net.
-	prefix     bool   // A candidate only; expanded against existing registry names.
+	schemaAlias   bool   // Live, declared linked-name builder; expanded against schema metadata.
+	schemaBuilder string // Selects the projection's own alias-generation rule.
+	langKey       string
+	filePath      string // Relative to the installation/source label root.
+	sourceType    string // Empty means definite code evidence; literals are the safety net.
+	prefix        bool   // A candidate only; expanded against existing registry names.
 }
 
 // scanCodebaseForLangKeySources reads every configured frontend/backend/component
@@ -201,6 +203,11 @@ func scanCodebaseForLangKeySources() ([]sourceEntry, error) {
 			// D3a's literal safety net includes comments and must not inherit
 			// the lexer's destructive masking; definite patterns above still do.
 			results = appendLangKeyCodeCandidates(results, tokens, relPath, rawContent, foundInFile)
+			declared, declarationErr := declaredLangKeyCandidates(relPath, rawContent, tokens)
+			if declarationErr != nil {
+				return declarationErr
+			}
+			results = append(results, declared...)
 			return nil
 		})
 		if walkErr != nil {
@@ -261,7 +268,7 @@ func PopulateLangKeySources() (total int, scanErr error) {
 		name string
 		run  func(map[string]int64) (int, error)
 	}{
-		{"schema", scanSchemaLangKeySources},
+		{"schema", func(keys map[string]int64) (int, error) { return scanSchemaLangKeySources(keys, codeSources, codeKeys) }},
 		{"views", func(keys map[string]int64) (int, error) {
 			return scanNamedLangKeySources(keys, "view", "system_table_views", "name")
 		}},

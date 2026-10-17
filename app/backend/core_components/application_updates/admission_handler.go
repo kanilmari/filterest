@@ -75,6 +75,8 @@ func decodeBody(w http.ResponseWriter, r *http.Request, out interface{}) error {
 	return nil
 }
 
+// lang-key-declaration: {"build":"\"error_application_update_\" + code","prefix":"error_application_update_","values":["invalid_request","executor_unavailable","preflight_refused","offer_conflict","active_job_conflict","idempotency_conflict","proof_replayed","proof_expired","authorization_revoked","reauthentication_refused","rate_limited","stale_decision","decision_conflict","queue_expired","decision_replayed","job_not_found","decision_not_found","admission_unavailable"]}
+
 func respondFailure(w http.ResponseWriter, err error) {
 	code, status := "admission_unavailable", http.StatusServiceUnavailable
 	var rejected *refusal

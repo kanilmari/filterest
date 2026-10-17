@@ -27,8 +27,16 @@ def test_window_copy_in_bootstrap_and_every_editor_key_has_fi_en():
     assert len(keys) == 18
     assert all(fi and en for fi, en in keys.values())
     source = (APP / "frontend/core_components/admin_tools/row_group_assignment_editor.js").read_text()
-    used = set(re.findall(r'"(row_group_window_[^"`]+)"', source))
-    used.update(("row_group_window_name_fi", "row_group_window_name_en"))
+    # Prefix fragments in B4 declarations are naming rules, not complete keys.
+    # Expand the finite values instead of maintaining a second language list.
+    marker = "// lang-key-declaration: "
+    declarations = [json.loads(line[len(marker):]) for line in source.splitlines()
+                    if line.startswith(marker)]
+    code = "\n".join(line for line in source.splitlines() if not line.startswith(marker))
+    used = set(re.findall(r'"(row_group_window_[^"`]+)"', code))
+    for declaration in declarations:
+        used.update(declaration["prefix"] + value + declaration.get("suffix", "")
+                    for value in declaration["values"])
     assert used == set(keys)
     assert "-- VERSION_DB: 9.10.0" in MIGRATION.read_text()
     assert "-- VERSION_DB_OWNER: 20261005000099_record_database_release_9_10_0.sql" in MIGRATION.read_text()

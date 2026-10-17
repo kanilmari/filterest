@@ -73,6 +73,8 @@ function validateCatalogue(response, dataset, rowIDs) {
 }
 
 /** Creates the permission-gated callers' shared action; selection is captured on open. */
+// lang-key-declaration: {"build":"`row_group_window_name_${language}`","prefix":"row_group_window_name_","values":["fi","en"]}
+
 export function createRowGroupAssignmentButton(datasetName) {
     const opener = button("row_group_classes_and_categories");
     opener.classList.add("row-group-assignment-button");

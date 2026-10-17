@@ -60,3 +60,17 @@ describe("existing images", () => {
         expect(host.querySelector("img")).toBeNull();
     });
 });
+
+test('every declared full key is built by the image picker', async () => {
+    const { readFileSync } = await import('node:fs');
+    const modulePath = './media_library_picker.js'; // Keep Vite from rewriting this source fixture as a served asset.
+    const source = readFileSync(new URL(modulePath, import.meta.url), 'utf8');
+    const line = source.split('\n').find(value => value.startsWith('// lang-key-declaration: '));
+    const { keys } = JSON.parse(line.slice('// lang-key-declaration: '.length));
+    expect(keys).toHaveLength(9);
+    for (const key of keys) {
+        const translate = vi.fn(value => `translated:${value}`);
+        expect(mediaLibraryText(key.slice('media_library_'.length), () => 'fi', translate)).toBe(`translated:${key}`);
+        expect(translate).toHaveBeenCalledWith(key);
+    }
+});

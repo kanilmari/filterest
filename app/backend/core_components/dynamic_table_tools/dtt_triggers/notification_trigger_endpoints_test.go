@@ -9,9 +9,12 @@ import (
 	"database/sql"
 	"database/sql/driver"
 	"easelect/backend/core_components/dbutils"
+	"easelect/backend/core_components/lang_key_naming"
 	"easelect/backend/core_components/runtime_grants/granttest"
+	"encoding/json"
 	"fmt"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -40,6 +43,23 @@ func (c *automationEndpointConn) QueryContext(ctx context.Context, query string,
 }
 
 func TestCreateAutomationRejectsMissingEndpointsBeforeWrite(t *testing.T) {
+	raw, err := os.ReadFile("notification_triggers.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	declared := map[string]bool{}
+	for _, line := range strings.Split(string(raw), "\n") {
+		if !strings.HasPrefix(line, lang_key_naming.DeclarationMarker) {
+			continue
+		}
+		d, err := lang_key_naming.ParseDeclaration("notification_triggers.go", line)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, name := range d.Names() {
+			declared[name] = true
+		}
+	}
 	granttest.ConfigureRoles(t)
 	for _, tc := range []struct {
 		source, target, refused string
@@ -71,6 +91,12 @@ func TestCreateAutomationRejectsMissingEndpointsBeforeWrite(t *testing.T) {
 			CreateTriggerHandler(granttest.Recorder{ResponseRecorder: rec}, req)
 			if rec.Code != 400 || !strings.Contains(rec.Body.String(), "error_trigger_"+tc.refused+"_dataset_missing") || !strings.Contains(rec.Body.String(), "dataset does not exist") {
 				t.Fatal(rec.Code, rec.Body)
+			}
+			var payload struct {
+				Key string `json:"error_lang_key"`
+			}
+			if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil || !declared[payload.Key] {
+				t.Fatalf("producer output absent from browser contract: %q %v", payload.Key, err)
 			}
 			if len(checked) != tc.checks || len(state.checked) != 0 || len(state.inserted) != 0 {
 				t.Fatal("invalid endpoint reached writes or account checks", checked, state)

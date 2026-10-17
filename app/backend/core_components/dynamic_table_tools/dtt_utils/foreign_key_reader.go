@@ -5,8 +5,10 @@
 package dtt_utils
 
 import (
+	"database/sql"
 	backend "easelect/backend/core_components"
 	"easelect/backend/core_components/fk_display"
+	"errors"
 	"fmt"
 	"log"
 )
@@ -19,6 +21,26 @@ type ForeignKey struct {
 }
 
 func GetForeignKeysForTable(tableName string) (map[string]ForeignKey, error) {
+	return getForeignKeysForTable(tableName, func(table string) (string, error) {
+		column, err := getReferencedTableNameColumn(table)
+		if err != nil {
+			log.Printf("error fetching name column for table %s: %v", table, err)
+			column = ""
+		}
+		return column, nil
+	})
+}
+
+// GetForeignKeysForTableForEvidence refuses incomplete metadata. A successful
+// read with no display column is legitimate and leaves NameColumn empty.
+func GetForeignKeysForTableForEvidence(tableName string) (map[string]ForeignKey, error) {
+	return getForeignKeysForTable(tableName, func(table string) (string, error) {
+		column, _, err := resolveFKDisplayColumn("public", table, true)
+		return column, err
+	})
+}
+
+func getForeignKeysForTable(tableName string, resolve func(string) (string, error)) (map[string]ForeignKey, error) {
 	foreignKeyQuery := `
         SELECT
             kcu.column_name AS referencing_column,
@@ -69,12 +91,9 @@ func GetForeignKeysForTable(tableName string) (map[string]ForeignKey, error) {
 	foreignKeys := make(map[string]ForeignKey, len(foreignKeyReferences))
 	for _, foreignKey := range foreignKeyReferences {
 
-		// Haetaan viitatun taulun nimisarakkeen nimi
-		nameColumn, err := getReferencedTableNameColumn(foreignKey.ReferencedTable)
+		nameColumn, err := resolve(foreignKey.ReferencedTable)
 		if err != nil {
-			log.Printf("error fetching name column for table %s: %v", foreignKey.ReferencedTable, err)
-			// Jatketaan ilman nimeä
-			nameColumn = ""
+			return nil, fmt.Errorf("display column for %s: %w", foreignKey.ReferencedTable, err)
 		}
 
 		foreignKey.NameColumn = nameColumn
@@ -95,6 +114,20 @@ func GetForeignKeysForTable(tableName string) (map[string]ForeignKey, error) {
 //  5. Heuristiikka: sisältö-osuma (name, title, username, header)
 //  6. Fallback: ensimmäinen text/varchar-sarake ordinal_position-järjestyksessä
 func ResolveFKDisplayColumn(schemaName, tableName string) (string, error) {
+	column, found, err := resolveFKDisplayColumn(schemaName, tableName, false)
+	if err == nil && !found {
+		if schemaName == "" {
+			schemaName = "public"
+		}
+		err = fmt.Errorf("no text/varchar columns found in table %s.%s", schemaName, tableName)
+	}
+	return column, err
+}
+
+// resolveFKDisplayColumn owns the selection rules for runtime and evidence.
+// Strict reads propagate optional-override failures too; runtime retains its
+// historical fallback. found distinguishes an absent label from a failed read.
+func resolveFKDisplayColumn(schemaName, tableName string, strict bool) (column string, found bool, err error) {
 	if schemaName == "" {
 		schemaName = "public"
 	}
@@ -108,24 +141,30 @@ func ResolveFKDisplayColumn(schemaName, tableName string) (string, error) {
 		 LIMIT 1`,
 		tableName,
 	).Scan(&configured)
+	if strict && configErr != nil && !errors.Is(configErr, sql.ErrNoRows) {
+		return "", false, configErr
+	}
 	if configErr == nil && configured != "" {
 		var exists bool
-		_ = backend.Db.QueryRow(
+		existsErr := backend.Db.QueryRow(
 			`SELECT EXISTS (
 				SELECT 1 FROM information_schema.columns
 				WHERE table_schema = $1 AND table_name = $2 AND column_name = $3
 			)`,
 			schemaName, tableName, configured,
 		).Scan(&exists)
+		if strict && existsErr != nil {
+			return "", false, existsErr
+		}
 		if exists {
-			return configured, nil
+			return configured, true, nil
 		}
 		log.Printf("warning: fk_display_column='%s' not found in table %s.%s, using heuristics",
 			configured, schemaName, tableName)
 	}
 
 	if column := fk_display.LegacyColumn(tableName); column != "" {
-		return column, nil
+		return column, true, nil
 	}
 
 	// 3-6) Heuristiikka + fallback: haetaan kaikki text/varchar-sarakkeet.
@@ -137,7 +176,7 @@ func ResolveFKDisplayColumn(schemaName, tableName string) (string, error) {
 		schemaName, tableName,
 	)
 	if err != nil {
-		return "", err
+		return "", false, err
 	}
 	defer rows.Close()
 
@@ -145,19 +184,19 @@ func ResolveFKDisplayColumn(schemaName, tableName string) (string, error) {
 	for rows.Next() {
 		var col string
 		if err := rows.Scan(&col); err != nil {
-			return "", err
+			return "", false, err
 		}
 		textCols = append(textCols, col)
 	}
 	if err := rows.Err(); err != nil {
-		return "", fmt.Errorf("rows iteration error in ResolveFKDisplayColumn: %w", err)
+		return "", false, fmt.Errorf("rows iteration error in ResolveFKDisplayColumn: %w", err)
 	}
 
-	column, err := fk_display.Resolve(tableName, textCols)
-	if err != nil {
-		return "", fmt.Errorf("no text/varchar columns found in table %s.%s", schemaName, tableName)
+	if len(textCols) == 0 {
+		return "", false, nil
 	}
-	return column, nil
+	column, err = fk_display.Resolve(tableName, textCols)
+	return column, err == nil, err
 }
 
 // getReferencedTableNameColumn on sisäinen apufunktio, joka delegoi

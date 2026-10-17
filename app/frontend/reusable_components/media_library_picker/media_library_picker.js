@@ -19,6 +19,8 @@ const COPY = {
     empty: ["Uudelleenkäytettäviä kuvia ei löytynyt.", "No reusable images were found."],
     selected: ["Valittu kuva", "Selected image"],
 };
+// lang-key-declaration: {"build":"`media_library_${key}`","keys":["media_library_choose","media_library_close","media_library_clear","media_library_next","media_library_loading","media_library_scope","media_library_unavailable","media_library_empty","media_library_selected"]}
+
 export function mediaLibraryText(key, getLanguage = () => "en", getTranslation = () => "") {
     const translation = getTranslation(`media_library_${key}`);
     if (translation && translation !== `media_library_${key}`) return translation;

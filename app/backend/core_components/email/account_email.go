@@ -53,6 +53,10 @@ func SendPasswordResetEmail(to, formattedCode, loginName, subject, loginLabel, c
 	return SendAccountEmail(to, subject, loginLabel+"\n"+loginName+"\n\n"+codeLabel+"\n"+formattedCode)
 }
 
+// lang-key-declaration: {"build":"return prefix +","prefix":"notice_email_","values":["not_configured","failed","sent"]}
+
+// lang-key-declaration: {"build":"return prefix +","prefix":"registration_email_","values":["not_configured","failed","sent"]}
+
 // SendAccountNotice returns a language key after a committed welcome or name change.
 // It is shared by HTTP and operator recovery callers and never exposes provider text.
 func SendAccountNotice(ctx context.Context, db *sql.DB, address, loginName string, welcome bool) string {

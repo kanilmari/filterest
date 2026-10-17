@@ -573,41 +573,14 @@
     }
   ],
   "source_guards": [
-    {
-      "paths": ["app/backend/core_components/system_config_checks/front_page_article_buttons.go", "app/testing/shared_contracts/home_article_label_examples.json"],
-      "package": "app/backend/core_components/system_table_tools",
-      "anchor": "app/backend/core_components/system_table_tools/front_page_article_buttons_security_postgres_test.go"
-    },
-    {
-      "paths": ["app/backend", "app/components", "app/testing/fixtures/component_canary.json", "app/testing/componentfixture"],
-      "package": "app/backend/core_components/sessions",
-      "anchor": "app/backend/core_components/sessions/session_store_access_guard_test.go"
-    },
-    {
-      "paths": ["app/frontend/shared/article_presentations"],
-      "package": "app/backend/core_components/system_table_tools",
-      "anchor": "app/backend/core_components/system_table_tools/article_presentation_contract_test.go"
-    },
-    {
-      "paths": ["app/frontend/shared/article_presentations"],
-      "package": "app/backend/core_components/dynamic_table_tools/dtt_1_row_crud/dtt_1_row_read",
-      "anchor": "app/backend/core_components/dynamic_table_tools/dtt_1_row_crud/dtt_1_row_read/article_baseline_test.go"
-    },
-    {
-      "paths": ["app/components", "app/testing/fixtures/component_canary.json", "app/testing/componentfixture"],
-      "package": "app/backend/core_components/auth",
-      "anchor": "app/backend/core_components/auth/component_discovery_test.go"
-    },
-    {
-      "paths": ["app/components", "app/testing/fixtures/component_canary.json", "app/testing/componentfixture"],
-      "package": "app/backend/core_components/router",
-      "anchor": "app/backend/core_components/router/component_discovery_test.go"
-    },
-    {
-      "paths": ["app/components", "app/testing/fixtures/component_canary.json", "app/testing/componentfixture"],
-      "package": "app/backend/core_components/system_table_tools",
-      "anchor": "app/backend/core_components/system_table_tools/component_discovery_test.go"
-    }
+    {"paths": ["app/frontend/reusable_components/media_library_picker/media_library_picker.js", "app/frontend/core_components/admin_tools/dataset_alias_management_copy.js", "app/frontend/core_components/admin_tools/row_group_assignment_editor.js"], "package": "app/backend/core_components/system_table_tools", "anchor": "app/backend/core_components/system_table_tools/lang_key_declared_evidence_test.go"},
+    {"paths": ["app/backend/core_components/system_config_checks/front_page_article_buttons.go", "app/testing/shared_contracts/home_article_label_examples.json"], "package": "app/backend/core_components/system_table_tools", "anchor": "app/backend/core_components/system_table_tools/front_page_article_buttons_security_postgres_test.go"},
+    {"paths": ["app/backend", "app/components", "app/testing/fixtures/component_canary.json", "app/testing/componentfixture"], "package": "app/backend/core_components/sessions", "anchor": "app/backend/core_components/sessions/session_store_access_guard_test.go"},
+    {"paths": ["app/frontend/shared/article_presentations"], "package": "app/backend/core_components/system_table_tools", "anchor": "app/backend/core_components/system_table_tools/article_presentation_contract_test.go"},
+    {"paths": ["app/frontend/shared/article_presentations"], "package": "app/backend/core_components/dynamic_table_tools/dtt_1_row_crud/dtt_1_row_read", "anchor": "app/backend/core_components/dynamic_table_tools/dtt_1_row_crud/dtt_1_row_read/article_baseline_test.go"},
+    {"paths": ["app/components", "app/testing/fixtures/component_canary.json", "app/testing/componentfixture"], "package": "app/backend/core_components/auth", "anchor": "app/backend/core_components/auth/component_discovery_test.go"},
+    {"paths": ["app/components", "app/testing/fixtures/component_canary.json", "app/testing/componentfixture"], "package": "app/backend/core_components/router", "anchor": "app/backend/core_components/router/component_discovery_test.go"},
+    {"paths": ["app/components", "app/testing/fixtures/component_canary.json", "app/testing/componentfixture"], "package": "app/backend/core_components/system_table_tools", "anchor": "app/backend/core_components/system_table_tools/component_discovery_test.go"}
   ],
   "python_guards": [
     {
@@ -700,6 +673,14 @@
       "paths": ["app/server_tools/scripts/check_file_length.sh", "app/testing/python/test_file_length_guard.py"],
       "tests": [
         "app/testing/python/test_file_length_guard.py"
+      ]
+    },
+    {
+      "paths": [
+        "app/frontend/core_components/admin_tools/row_group_assignment_editor.js"
+      ],
+      "tests": [
+        "app/testing/python/test_row_group_window_language_keys.py"
       ]
     }
   ],

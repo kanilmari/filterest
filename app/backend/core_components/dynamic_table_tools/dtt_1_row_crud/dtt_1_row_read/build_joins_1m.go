@@ -340,6 +340,8 @@ func buildJoinsWith1MRelations(
 	return selectColumns, joinClauses, columnExpressions, queryArgs, nil
 }
 
+// lang-key-declaration: {"schema":"linked_name","build":"return alias + \" (ln)\""}
+
 // generatedForeignNameAlias keeps actor and ordinary reference labels compatible.
 func generatedForeignNameAlias(column string) string {
 	alias := relatedFKDisplayAliasBase(column)
@@ -352,6 +354,12 @@ func generatedForeignNameAlias(column string) string {
 // fetchForeignKeyRelations hakee system_foreign_key_relations_1_m -taulusta rivit,
 // jotka koskevat annettua lähdetaulua (source_table_uid).
 func fetchForeignKeyRelations(db dbutils.Querier, sourceTableUID string) (map[string]OneMRelation, error) {
+	return readForeignKeyRelations(db, sourceTableUID, false)
+}
+
+// Evidence must refuse malformed relation rows; runtime keeps its historical
+// log-and-skip behavior. Both readers use the same query and conversions.
+func readForeignKeyRelations(db dbutils.Querier, sourceTableUID string, strict bool) (map[string]OneMRelation, error) {
 	query := `
                 SELECT
                         s_src.table_name AS source_table_name,
@@ -383,6 +391,9 @@ func fetchForeignKeyRelations(db dbutils.Querier, sourceTableUID string) (map[st
 			&r.NameColInTgt,
 		)
 		if err != nil {
+			if strict {
+				return nil, fmt.Errorf("read foreign-key relation: %w", err)
+			}
 			log.Printf("\033[31merror: %s\033[0m\n", err.Error()) //odotetaan
 			continue
 		}

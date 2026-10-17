@@ -182,3 +182,16 @@ test.each([undefined, null, '', '   '])('English is used for missing/blank trans
     const { aliasCopy } = await import('./dataset_alias_management_copy.js');
     expect(aliasCopy('dataset_site_only_notice')).toBe('English fallback');
 });
+
+test('every declared existing full key is produced by the alias copy owner', async () => {
+    const { readFileSync } = await import('node:fs');
+    const modulePath = './dataset_alias_management_copy.js'; // Keep Vite from rewriting this source fixture as a served asset.
+    const source = readFileSync(new URL(modulePath, import.meta.url), 'utf8');
+    const line = source.split('\n').find(value => value.startsWith('// lang-key-declaration: '));
+    const { keys } = JSON.parse(line.slice('// lang-key-declaration: '.length));
+    expect(keys.length).toBeGreaterThan(0);
+    const authored = Object.fromEntries(keys.map(key => [key, `translated:${key}`]));
+    await openEditor('en', { translations: { ...dictionaries, en: { ...dictionaries.en, ...authored } } });
+    const { aliasCopy } = await import('./dataset_alias_management_copy.js');
+    for (const key of keys) expect(aliasCopy(key)).toBe(`translated:${key}`);
+});

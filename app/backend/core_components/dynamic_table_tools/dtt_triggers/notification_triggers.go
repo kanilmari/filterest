@@ -76,6 +76,8 @@ func GetTriggersHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// lang-key-declaration: {"build":"\"error_trigger_\" + endpoint.label + \"_dataset_missing\"","prefix":"error_trigger_","values":["source","target"],"suffix":"_dataset_missing"}
+
 // CreateTriggerHandler luo uuden herätteen (POST /api/system_triggers/create)
 func CreateTriggerHandler(w http.ResponseWriter, r *http.Request) {
 

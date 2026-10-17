@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	backend "easelect/backend/core_components"
+	"easelect/backend/core_components/dynamic_table_tools/dtt_1_row_crud/dtt_1_row_read"
 	"easelect/backend/core_components/lang_key_naming"
 	"github.com/lib/pq"
 )
@@ -82,8 +83,9 @@ func saveExplainedSource(id int64, sourceType, high, low, explanation string) er
 	return updateSourceUsageExplanationIfEmpty(id, sourceType, high, explanation)
 }
 
-func scanSchemaLangKeySources(keys map[string]int64) (int, error) {
+func scanSchemaLangKeySources(keys map[string]int64, codeSources []sourceEntry, codeKeys map[int64]bool) (int, error) {
 	columns := make(map[string][]string)
+	tableColumns := make(map[string][]string)
 	err := readSourceRows(`SELECT cd.column_name, dt.table_name FROM system_column_details cd
         JOIN system_db_tables dt ON cd.table_uid=dt.table_uid ORDER BY cd.column_name, dt.table_name`, func(rows *sql.Rows) error {
 		var column, table string
@@ -91,6 +93,7 @@ func scanSchemaLangKeySources(keys map[string]int64) (int, error) {
 			return err
 		}
 		columns[column] = append(columns[column], table)
+		tableColumns[table] = append(tableColumns[table], column)
 		return nil
 	})
 	if err != nil {
@@ -124,6 +127,29 @@ func scanSchemaLangKeySources(keys map[string]int64) (int, error) {
 		}
 		return nil
 	}
+	var schemaSources []sourceEntry
+	for _, source := range codeSources {
+		if source.schemaAlias {
+			schemaSources = append(schemaSources, source)
+		}
+	}
+	aliases := map[string]map[string]bool{}
+	if len(schemaSources) > 0 {
+		for table, names := range tableColumns {
+			projections, err := dtt_1_row_read.LinkedLabelEvidenceAliases(table, names)
+			if err != nil {
+				return count, &sourceSubScanError{"schema_linked_labels", err}
+			}
+			for builder, labels := range projections {
+				if aliases[builder] == nil {
+					aliases[builder] = map[string]bool{}
+				}
+				for label := range labels {
+					aliases[builder][label] = true
+				}
+			}
+		}
+	}
 	for key, id := range keys {
 		names := []string{key}
 		if remainder, ok := lang_key_naming.TrimDynamicPrefix(key); ok {
@@ -131,6 +157,19 @@ func scanSchemaLangKeySources(keys map[string]int64) (int, error) {
 		}
 		if base, ok := lang_key_naming.TrimDynamicSuffix(key); ok {
 			names = append(names, base)
+		}
+		// Each owner gets only aliases its actual FK/actor projection emits.
+		if alias := lang_key_naming.LinkedSchemaAlias(key); alias != "" {
+			for _, source := range schemaSources {
+				if !aliases[source.schemaBuilder][alias] {
+					continue
+				}
+				if err := upsertSource(id, "code", source.filePath, ""); err != nil {
+					return count, err
+				}
+				codeKeys[id] = true
+				count++
+			}
 		}
 		for _, name := range names {
 			if err := saveName(id, name); err != nil {

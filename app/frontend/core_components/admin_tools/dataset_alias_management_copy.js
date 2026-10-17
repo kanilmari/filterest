@@ -66,6 +66,10 @@ export async function loadAliasTranslations() {
     }
 }
 
+// Only existing seeded names are declared; the alias-prefixed fallback names
+// have no seed entries. B4 must not create keys for those fallback lookups.
+// lang-key-declaration: {"build":"`dataset_alias_editor_${key}`","keys":["dataset_namespace_conflict","dataset_namespace_invalid","dataset_namespace_retry","dataset_namespace_real_name_conflict","dataset_namespace_automatic_conflict","dataset_namespace_alias_conflict","dataset_alias_saved","dataset_alias_cleared"]}
+
 /** Reads the stored editor language, which can differ from the public menu language. */
 export function aliasCopy(key, values = {}) {
     const language = String(getLanguageWithBrowserFallback() || 'en').toLowerCase();
