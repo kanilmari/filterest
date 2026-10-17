@@ -17,6 +17,13 @@
  * canonical Chinese locale and the legacy Cantonese copy.
  */
 export const FAILURE_NOTICE_TRANSLATION_FALLBACKS = Object.freeze({
+    // WO35; migration 20261015000007 seeds the same copy in both stores.
+    client_error_notice: {
+        fi: "Sovelluksessa tapahtui virhe. Kokeile ladata sivu uudelleen.",
+        en: "The application ran into an error. Try reloading the page.",
+        ch: "应用程序出现错误。请尝试重新加载页面。",
+        yue: "應用程式出咗錯。請試下重新載入頁面。",
+    },
     server_error_notice: {
         fi: "Palvelussa tapahtui virhe. Yritä hetken kuluttua uudelleen.",
         en: "The service ran into an error. Please try again in a moment.",

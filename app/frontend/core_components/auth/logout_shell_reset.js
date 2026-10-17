@@ -12,6 +12,7 @@ import { forgetPageDatasetParams } from "../navigation/nav_engine/query_params.j
 import { forgetTabSessionFallback } from "../state_stores/tab_session_storage.js";
 import { destroy_chat } from "../ai_features/table_chat/table_chat_printer.js";
 import { publishAuthLogout } from "./auth_broadcast.js";
+import { invalidateSessionGeneration } from "./session_generation_store.js";
 import { stopAdminUpdateNoticeSubscriber } from "../admin_tools/admin_update_notice_subscriber.js";
 
 // These settings describe the browser/device, not the authenticated user or
@@ -80,6 +81,9 @@ function teardownRenderedShell() {
 }
 
 export async function clearClientAuthArtifacts() {
+    // In-place logout must invalidate private UI and pending admin verification,
+    // including when no auth broadcast preceded it or browser storage refuses access.
+    invalidateSessionGeneration({ reason: 'logout' });
     datasetAppearanceState.clear();
     stopAdminUpdateNoticeSubscriber();
     // What this page holds in memory belongs to the signed-out session as well:

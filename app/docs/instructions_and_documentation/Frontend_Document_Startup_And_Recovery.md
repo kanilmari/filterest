@@ -224,3 +224,50 @@ guard, preventing an unsanitized duplicate in the normal error buffer.
 The existing development error forwarder replays these after recovery and deletes
 each only after an acknowledged 2xx. Production never forwards them. Resource-error
 events cannot identify HTTP/TLS causes; diagnosis must not invent those details.
+
+## Runtime JavaScript notices
+
+After startup, the global monitor delegates runtime errors and rejected promises
+through `client_error_classifier.js` in the error/status handling component.
+Its exported `classifyClientError` contract is also intended for WO36's future
+client error log: own, foreign or opaque. Attribution uses same-origin served
+JavaScript paths, including source modules, dist bundles and component frontend
+assets. An explicitly empty source is opaque; stack-only Error rejections can
+supply their source through an own frame. When a stack exists it must contain
+an own frame. Frame parsing removes the complete message/header, including
+multiline messages; Firefox/Safari stacks without headers retain their first frame.
+A supplied foreign source still vetoes an own frame. The document URL is always
+foreign, as browser injections can report it. Extension errors and opaque errors remain console-only.
+
+Own errors show a manually dismissed notice. Visitors and ordinary users see
+`client_error_notice`, with early fi/en/ch/yue fallback copy and runtime
+translation through the ordinary `data-lang-key` observer. Migration
+`20261015000007_seed_client_error_notice_language_key.sql` seeds Finnish/English
+in both stores and is included by the public bootstrap generator (DB 9.12.0,
+before the release owner ending in `000099`). Site-authored copy is preserved.
+Only a successful read of the existing administrator-protected version-info
+endpoint permits technical copy; a cached route grant alone is insufficient.
+Failed verification or a session change uses the generic notice. Technical
+copy is at most 240 characters, replaces full URLs with basenames, and removes
+queries and fragments. Already-visible technical notices are removed synchronously
+on session-generation invalidation; logout invalidates before clearing auth artifacts,
+including the in-place cross-tab reset. Generic notices remain visible.
+ResizeObserver loop warnings remain ignored. The fetch monitor's existing
+network/5xx policy is unchanged.
+
+The browser proof is `J_modals/J4_client_error_notices.spec.ts`. Its init script
+throws from a browser-injected context after monitor installation. Intercepted
+`/frontend/wo35-error-probe.js` modules then throw asynchronously and reject an
+Error promise, exercising native events without a production test hook. It
+covers visitors, ordinary users and administrators, fi/en, both application
+themes against the opposite operating-system theme, and the selected matrix
+viewports. Preference responses are isolated; no database records are created.
+Run it against a native instance serving this worktree, with public browsing
+and reserved administrator/user test accounts, using:
+
+```bash
+nice -n 10 env FILTEREST_NODE_MODULES_ROOT="$PWD/data/runtime/node/node_modules" \
+  FILTEREST_E2E_BASE_URL=https://localhost:8100 PLAYWRIGHT_HTML_OPEN=never \
+  ./filterest test testing/e2e/J_modals/J4_client_error_notices.spec.ts \
+  --project=desktop-card --project=mobile-card --workers=1
+```

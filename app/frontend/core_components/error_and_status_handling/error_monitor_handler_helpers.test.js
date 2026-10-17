@@ -17,6 +17,7 @@ import {
 describe('failure notices', () => {
     test('every notice key has bootstrap copy in each installed language', () => {
         expect(Object.keys(FAILURE_NOTICE_TRANSLATION_FALLBACKS).sort()).toEqual([
+            'client_error_notice',
             'error_runtime_grant_policy_busy',
             'network_error_notice', 'rate_limit_notice', 'request_failed_notice',
             'server_error_notice', 'service_unavailable_notice',

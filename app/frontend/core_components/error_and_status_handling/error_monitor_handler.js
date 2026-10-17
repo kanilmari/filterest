@@ -15,6 +15,7 @@
 //
 // Session reset is available via window.__resetSession() in the browser console
 // for recovery from corrupted session state.
+import { installClientErrorHandlers } from "./client_error_notice.js";
 import { endpoint_router } from "../endpoints/endpoint_router.js";
 import { showErrorToast } from "../../reusable_components/notifications/toast_notification_printer.js";
 import { callerOwnsFailureNotice, shortenUrl } from "./error_monitor_handler_helpers.js";
@@ -43,25 +44,7 @@ import { isExpectedNetworkAbort, showRequestFailureNotice } from "./request_fail
     // Global Error Handlers
     // ==========================================
 
-    // window.onerror: all traditional JS errors
-    window.onerror = function(message, source, lineno, colno, error) {
-        // Ignore harmless ResizeObserver warning
-        if (message && message.includes("ResizeObserver loop")) {
-            return true;
-        }
-
-        const msg = `[JS] ${message} (${source}:${lineno}:${colno})`;
-        console.error(msg, error);
-        showErrorToast(msg, 0); // duration 0 = manual dismiss for critical errors
-        return false;
-    };
-
-    // window.onunhandledrejection: promise errors
-    window.onunhandledrejection = function(event) {
-        const msg = `[Promise] ${event.reason}`;
-        console.error(msg, event);
-        showErrorToast(msg); // default 7s auto-dismiss — permanent toasts are too aggressive
-    };
+    installClientErrorHandlers();
 
     // ==========================================
     // Fetch Monkey-Patch (5xx + network errors)
