@@ -7,15 +7,14 @@ import { fetchAuthModes, fetchUserPermissions } from "../endpoints/stable_endpoi
 import { hasRoutePermission } from "../route_permission_checker.js";
 import { synchronizeThemePreferenceForAuthState } from "../theme.js";
 import { getSessionGeneration, invalidateSessionGeneration, subscribeToSessionGeneration } from '../auth/session_generation_store.js';
-import { setCustomRootEnabled } from '../front_page/custom_root_navigation.js';
-import { HOME_AVAILABILITY_CHANGED_EVENT } from '../front_page/front_page_availability.js';
+import { beginFrontPageAvailabilityRequest, resetFrontPageAvailability, setFrontPageAvailability } from '../front_page/front_page_availability.js';
 
 // Use the existing session invalidation channel; route sets stay local to this
 // tab and are replaced only by its authoritative bootstrap, never merged.
 subscribeToSessionGeneration(reason => {
     if (['bootstrap', 'login', 'logout', 'expiry', 'session-change', 'session-invalidated'].includes(reason)) {
         sessionStorage.removeItem('user_permissions');
-        setCustomRootEnabled(false);
+        resetFrontPageAvailability();
     }
 });
 
@@ -24,6 +23,7 @@ export async function setAuthModes() {
     const generation = getSessionGeneration();
     sessionStorage.removeItem('user_permissions');
     count_this_function("setAuthModes");
+    const homeRevision = beginFrontPageAvailabilityRequest();
     try {
         const data = await fetchAuthModes();
         if (generation !== getSessionGeneration()) return;
@@ -35,10 +35,6 @@ export async function setAuthModes() {
             // Missing fields from an older server reset stale values to compatible defaults.
             localStorage.setItem('show_login_button', String(data.show_login_button !== false));
             localStorage.setItem('only_admin_can_login', String(data.only_admin_can_login === true));
-            localStorage.setItem('separate_front_page', String(data.separate_front_page === true));
-            setCustomRootEnabled(data.display_index_html_at_startup === true);
-            localStorage.setItem('front_page_button_site_name',
-                typeof data.front_page_button_site_name === 'string' ? data.front_page_button_site_name : '');
 
             // Store registration_enabled flag for tab visibility
             if (typeof data.registration_enabled === 'boolean') {
@@ -53,7 +49,7 @@ export async function setAuthModes() {
 
             // Home availability does not depend on the later permissions/theme
             // requests succeeding. Retained dataset headers need this policy now.
-            window.dispatchEvent(new CustomEvent(HOME_AVAILABILITY_CHANGED_EVENT));
+            setFrontPageAvailability(data, homeRevision);
 
             await synchronizeThemePreferenceForAuthState(data.needs_button === "logout");
             if (generation !== getSessionGeneration()) return;

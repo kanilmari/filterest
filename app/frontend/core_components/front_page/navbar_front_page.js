@@ -5,8 +5,12 @@
 
 import { canShowFrontPageLink, createFrontPageLink } from './front_page_link.js';
 import { isFrontPageShowing } from './front_page_navigation.js';
+import { HOME_AVAILABILITY_CHANGED_EVENT } from './front_page_availability.js';
 
 let visibilityObserver = null;
+window.addEventListener(HOME_AVAILABILITY_CHANGED_EVENT, () => {
+    renderNavbarFrontPage({ isLoggedIn: localStorage.getItem('button_state') === 'logout' });
+});
 
 export function renderNavbarFrontPage({ isLoggedIn }) {
     visibilityObserver?.disconnect();

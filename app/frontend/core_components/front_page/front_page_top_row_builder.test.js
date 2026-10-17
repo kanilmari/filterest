@@ -18,11 +18,11 @@ vi.mock('./front_page_navigation.js', () => ({ openFrontPage: vi.fn(), isSeparat
 vi.mock('../admin_tools/front_page_settings_modal.js', () => ({ createFrontPageSettingsHeroButton: () => null }));
 vi.mock('../lang/translation_handler.js', () => ({ getTranslationForKey: (_key, options) => options.fallback }));
 import { createFrontPageTopRow } from './front_page_top_row_builder.js';
-import { HOME_AVAILABILITY_CHANGED_EVENT } from './front_page_availability.js';
+import { HOME_AVAILABILITY_CHANGED_EVENT, setFrontPageAvailability } from './front_page_availability.js';
 beforeEach(() => mocks.unsubscribe.mockClear());
 
 test('the current Home control follows live availability without moving menu focus', () => {
-    localStorage.setItem('separate_front_page', 'true');
+    setFrontPageAvailability({ separate_front_page: true });
     document.body.innerHTML = '<div id="navbar" class="collapsed"></div><button id="showMenuButton"></button>';
     const row = createFrontPageTopRow('Site'); document.body.append(row.element); row.mount();
     const menu = document.getElementById('showMenuButton');
@@ -30,13 +30,13 @@ test('the current Home control follows live availability without moving menu foc
     menu.focus();
     try {
         for (const enabled of [true, false, true]) {
-            localStorage.setItem('separate_front_page', String(enabled));
+            setFrontPageAvailability({ separate_front_page: enabled });
             window.dispatchEvent(new Event(HOME_AVAILABILITY_CHANGED_EVENT));
             expect(home.hidden).toBe(!enabled);
             expect(document.activeElement).toBe(menu);
             expect(home.getAttribute('aria-current')).toBe('page');
         }
-    } finally { row.destroy(); row.element.remove(); localStorage.clear(); }
+    } finally { row.destroy(); row.element.remove(); localStorage.clear(); setFrontPageAvailability({}); }
 });
 
 test('Home tabs have no active dataset, update from the shared model and unsubscribe on teardown', () => {
@@ -145,7 +145,7 @@ test('Home follows the initial collapsed state until the animated menu entrance 
         expect(button.getAttribute('aria-hidden')).toBe('true');
         expect(close.getAttribute('aria-hidden')).toBe('false');
         expect(document.activeElement).toBe(close);
-    } finally { row.destroy(); vi.useRealTimers(); localStorage.clear(); }
+    } finally { row.destroy(); vi.useRealTimers(); localStorage.clear(); setFrontPageAvailability({}); }
 });
 
 test('the overlay menu follows the complete header height and releases its measurement on teardown', () => {

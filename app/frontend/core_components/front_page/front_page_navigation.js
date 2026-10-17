@@ -13,14 +13,38 @@ import { isCustomRootEnabled, isRootAuthEntry, loadCustomRoot } from './custom_r
 import { getSessionGeneration, isSessionValidationRequired, revalidateSessionIdentity,
     subscribeToSessionGeneration } from '../auth/session_generation_store.js';
 
-import { isSeparateFrontPageEnabled } from './front_page_availability.js';
+import { HOME_AVAILABILITY_CHANGED_EVENT, isSeparateFrontPageEnabled } from './front_page_availability.js';
 export { isSeparateFrontPageEnabled } from './front_page_availability.js';
 
 let pendingOpen = null;
 let openGeneration = 0;
+let pendingStart = null;
 subscribeToSessionGeneration(() => {
     openGeneration += 1;
     pendingOpen = null;
+});
+
+/** Use the ordinary startup resolver after Home is disabled, without reloading. */
+export function openNormalStartView({ isCurrentNavigation } = {}) {
+    if (isCurrentNavigation?.() === false) return Promise.resolve({ abort: true });
+    if (pendingStart) return pendingStart;
+    openGeneration += 1;
+    const generation = openGeneration;
+    const sessionGeneration = getSessionGeneration();
+    pendingOpen = null;
+    clearSelectedDataset();
+    writeHistoryEntry('/', {}, { replace: true });
+    const address = window.location.href;
+    pendingStart = import('../admin_tools/main/table_loader_handler.js').then(({ load_tables }) => {
+        if (generation !== openGeneration || sessionGeneration !== getSessionGeneration()
+            || address !== window.location.href || isCurrentNavigation?.() === false) return { abort: true };
+        return load_tables();
+    }).finally(() => { pendingStart = null; });
+    return pendingStart;
+}
+
+window.addEventListener(HOME_AVAILABILITY_CHANGED_EVENT, event => {
+    if (event.detail?.confirmed !== false && !isSeparateFrontPageEnabled() && isFrontPageShowing()) void openNormalStartView();
 });
 
 export function isFrontPageShowing() {

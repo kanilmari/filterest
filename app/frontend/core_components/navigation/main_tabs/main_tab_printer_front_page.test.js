@@ -4,6 +4,7 @@
 // Exists to prevent regressions where nav-tab icons silently disappear after rerenders.
 // @vitest-environment jsdom
 
+import { setFrontPageAvailability } from '../../front_page/front_page_availability.js';
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import { endpoint_router } from "../../endpoints/endpoint_router.js";
 import { getButtonState, setAuthModes } from "../../admin_tools/auth_mode_handler.js";
@@ -128,7 +129,7 @@ describe("initTabs", () => {
     beforeEach(() => {
         setViewportWidth(1024);
         history.replaceState({}, "", "/");
-        localStorage.clear(); sessionStorage.clear();
+        localStorage.clear(); setFrontPageAvailability({}); sessionStorage.clear();
         document.body.innerHTML = `
             <nav id="navbarFrontPage" hidden></nav>
             <div id="navbarAuthActions" class="navbar-auth-actions"></div>
@@ -150,7 +151,7 @@ describe("initTabs", () => {
     });
 
     test('enabled root opens Home instead of auto-opening the first dataset', async () => {
-        localStorage.setItem('separate_front_page', 'true');
+        setFrontPageAvailability({ separate_front_page: true });
         const { initTabs } = await import('./main_tab_printer.js');
         await initTabs();
         expect(handle_all_navigation).toHaveBeenCalledExactlyOnceWith('front_page', expect.anything(), {
@@ -160,7 +161,7 @@ describe("initTabs", () => {
     });
 
     test('enabled root with preloaded Home does not navigate or fetch again', async () => {
-        localStorage.setItem('separate_front_page', 'true');
+        setFrontPageAvailability({ separate_front_page: true });
         document.getElementById('tabs_container').innerHTML = '<div id="front_page_container">Loaded</div>';
         const { getSessionGeneration } = await import('../../auth/session_generation_store.js');
         document.getElementById('front_page_container').dataset.sessionGeneration = String(getSessionGeneration());
@@ -171,7 +172,7 @@ describe("initTabs", () => {
     });
 
     test('Home setting preserves explicit login/register shell entries', async () => {
-        localStorage.setItem('separate_front_page', 'true');
+        setFrontPageAvailability({ separate_front_page: true });
         vi.mocked(getButtonState).mockReturnValue('login');
         history.replaceState({}, '', '/?login-entry=1');
         const { initTabs } = await import('./main_tab_printer.js');

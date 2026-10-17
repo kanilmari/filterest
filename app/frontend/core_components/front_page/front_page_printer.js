@@ -22,9 +22,17 @@ import { formatSiteNameForDisplay, getCurrentSiteName } from '../state_stores/si
 import { getLanguageWithBrowserFallback } from '../state_stores/lang_preference_reader.js';
 import { getSessionGeneration, acceptSessionIdentity, isSessionValidationRequired,
     revalidateSessionIdentity, subscribeToSessionGeneration } from '../auth/session_generation_store.js';
+import { beginFrontPageAvailabilityRequest, isSeparateFrontPageEnabled,
+    setFrontPageAvailability } from './front_page_availability.js';
 
 const FRONT_PAGE_TIMEOUT_MS = 15000;
 const visits = new WeakMap();
+
+function isHomeUnavailable(error) {
+    if (error?.status !== 404 || typeof error.responseBody !== 'string') return false;
+    try { return JSON.parse(error.responseBody)?.error === 'front page unavailable'; }
+    catch { return error.responseBody.trim() === 'front page unavailable'; }
+}
 
 function translatedElement(tag, key) {
     const element = document.createElement(tag);
@@ -161,9 +169,12 @@ function loadVisit(container, visit) {
             reject(new DOMException('Home visit ended', 'AbortError'));
         };
     });
+    let homeRevision;
+    let retryWithNewerPolicy = false;
     const request = () => {
         if (!isCurrent()) throw new DOMException('Session changed', 'AbortError');
         visit.language = getLanguageWithBrowserFallback();
+        homeRevision = beginFrontPageAvailabilityRequest();
         return endpoint_router('frontPage', { signal: controller.signal, suppressErrorToast: true,
             url_params: new URLSearchParams({ lang: visit.language }).toString() });
     };
@@ -171,8 +182,22 @@ function loadVisit(container, visit) {
         isSessionValidationRequired() ? revalidateSessionIdentity().then(request) : request(), deadline,
     ]).then(data => {
         if (isCurrent() && acceptSessionIdentity(data.viewer_id, sessionGeneration)) renderBlocks(container, data, visit);
-    }).catch(() => {
+    }).catch(async error => {
         if (!isCurrent()) return;
+        // The endpoint's explicit disabled response is policy, not a failed visit.
+        // Other 404s, server errors and timeouts retain the existing retry surface.
+        if (isHomeUnavailable(error)) {
+            // Reject obsolete policy writes without leaving the current visit unsettled.
+            // Only confirmed enabled policy keeps Home; fetch content again after releasing this request.
+            if (!setFrontPageAvailability({}, homeRevision) && isSeparateFrontPageEnabled()) {
+                retryWithNewerPolicy = true;
+                return;
+            }
+            container.replaceChildren();
+            const { openNormalStartView } = await import('./front_page_navigation.js');
+            if (isCurrent()) await openNormalStartView({ isCurrentNavigation: isCurrent });
+            return;
+        }
         skeleton.remove();
         status.append(translatedElement('p', 'front_page_load_failed'));
         const retry = translatedElement('button', 'shell_boot_reload');
@@ -186,6 +211,7 @@ function loadVisit(container, visit) {
         visit.pending = null;
         visit.controller = null;
         visit.cancel = null;
+        if (retryWithNewerPolicy) return loadVisit(container, visit);
     });
     return visit.pending;
 }

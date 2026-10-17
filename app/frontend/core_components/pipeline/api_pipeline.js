@@ -585,6 +585,8 @@ async function errorHandlerStage(ctx) {
     }
     const error = new Error(`Virhe pyynnössä (${ctx.routeName}): ${errorText}`);
     error.status = status;
+    // Business recovery reads the server contract, independently of diagnostic copy.
+    error.responseBody = errorText;
     // The same translated sentence for a caller that reports the failure in its
     // own surface, such as a chat bubble, instead of the technical message.
     error.failureNotice = notice;

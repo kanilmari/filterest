@@ -10,7 +10,7 @@ import { updateShowMenuButtonPosition } from "../navigation/menu_button/navbar_v
 import { createMobileTopbarSearchController } from './mobile_topbar_search_controller.js';
 import { createTopNavHomeButton, placeTopNavHomeButton } from '../front_page/top_nav_home_button.js';
 import { isHeroControlAreaVisible } from './dataset_corner_controls.js';
-import { canShowFrontPageLink } from '../front_page/front_page_link.js';
+import { canShowFrontPageLink, refreshFrontPageLinkLabel } from '../front_page/front_page_link.js';
 import { HOME_AVAILABILITY_CHANGED_EVENT } from '../front_page/front_page_availability.js';
 const SHARED_TOPBAR_TRANSITION_DURATION_MS = 260;
 
@@ -26,6 +26,7 @@ export function createSharedTopbarVisibilityController({ tableName, currentView,
             homeLink = null;
         } else {
             homeLink ||= createTopNavHomeButton();
+            refreshFrontPageLinkLabel(homeLink);
         }
     }
     function clearSharedTopBarTransitionTimers() {
@@ -110,11 +111,11 @@ export function createSharedTopbarVisibilityController({ tableName, currentView,
         const articleViewActive = isArticleDatasetView(activeView);
         const phone = window.innerWidth <= 700;
         const active = isSharedTopBarHostActive(sharedTopBar);
-        const homeInHero = !phone && !bigCardOpen && !navbarVisible
+        const homeInHero = !phone && !bigCardOpen
             && isHeroControlAreaVisible(inlineHeroHost, activeScrollable);
         const shouldShowBar =
             active &&
-            (phone || (homeLink && !homeInHero) || shouldShowSharedTopBar({
+            (phone || shouldShowSharedTopBar({
                 navbarVisible,
                 filterbarVisible,
                 articleViewActive,
@@ -126,10 +127,10 @@ export function createSharedTopbarVisibilityController({ tableName, currentView,
         const menuHadFocus = captureMenuFocus(active);
         const homeHadFocus = document.activeElement === homeLink;
         setSharedTopBarVisibility(shouldShowBar);
-        // On phones the compact bar owns Home; elsewhere the complete hero row
-        // owns it until that row leaves the viewport. Never clone the link.
-        placeTopNavHomeButton(homeLink, homeInHero && !shouldShowBar
-            ? inlineHeroHost.querySelector('.hero-dataset-tabs')
+        // Home follows its row, independently of the menu and bar visibility.
+        // This bar has identity/search/end slots, but no navigation tab list.
+        placeTopNavHomeButton(homeLink, homeInHero || !shouldShowBar
+            ? inlineHeroHost?.querySelector('.hero-dataset-tabs')
             : sharedTopBar.querySelector('.dataset-shared-topbar__slot--end'));
         if (active && homeHadFocus) homeLink.focus({ preventScroll: true });
         mobileSearch.sync({ phone, active: shouldShowBar });

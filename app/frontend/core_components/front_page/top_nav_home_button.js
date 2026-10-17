@@ -12,6 +12,10 @@ export function createTopNavHomeButton() {
 export function placeTopNavHomeButton(link, host) {
     if (!link || !host || link.parentElement === host) return;
     const focused = document.activeElement === link;
+    const inHero = host.classList.contains('hero-dataset-tabs');
+    link.classList.toggle('hero-dataset-tabs__button', inHero);
+    // Use exactly the tab surface here; the menu's base link rules are larger.
+    link.classList.toggle('navbar-front-page-link', !inHero);
     host.prepend(link);
     // The dataset navigation may have no ordinary tabs, but still has Home.
     host.hidden = false;

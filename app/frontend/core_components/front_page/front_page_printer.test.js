@@ -5,13 +5,15 @@
 // @vitest-environment jsdom
 
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
+import { setFrontPageAvailability, isSeparateFrontPageEnabled } from './front_page_availability.js';
 import { renderFrontPage, refreshFrontPage } from './front_page_printer.js';
 import { VIEW_DEACTIVATE_EVENT } from '../../reusable_components/view_lifecycle_events.js';
 import { refreshLocalizedDatasetValues } from '../table_views/dataset_value_localizer.js';
 import { invalidateSessionGeneration } from '../auth/session_generation_store.js';
 import { toggleNavbarVisibility } from '../navigation/menu_button/navbar_visibility_handler.js';
 
-const mocks = vi.hoisted(() => ({ request: vi.fn() }));
+const mocks = vi.hoisted(() => ({ request: vi.fn(), start: vi.fn() }));
+vi.mock('./front_page_navigation.js', () => ({ openNormalStartView: mocks.start, openFrontPage: vi.fn(), isSeparateFrontPageEnabled: () => false, isFrontPageShowing: () => false }));
 vi.mock('../endpoints/endpoint_router.js', () => ({ endpoint_router: mocks.request }));
 vi.mock('../lang/translation_handler.js', () => ({
     getTranslationForKey: (key) => ({ front_page: 'Etusivu', front_page_show_all: 'Näytä kaikki',
@@ -35,6 +37,7 @@ beforeEach(() => {
     sessionStorage.setItem('user_permissions', JSON.stringify(['/ui/view/article_view']));
     localStorage.setItem('chosen_language', 'fi');
     mocks.request.mockReset().mockResolvedValue(response());
+    mocks.start.mockReset().mockResolvedValue();
     vi.spyOn(HTMLMediaElement.prototype, 'pause').mockImplementation(() => {});
     vi.spyOn(HTMLMediaElement.prototype, 'load').mockImplementation(() => {});
     vi.spyOn(HTMLMediaElement.prototype, 'play').mockResolvedValue();
@@ -434,4 +437,71 @@ test('title, larger slogan and description form separate safe paragraphs and upd
     await refreshLocalizedDatasetValues('en');
     expect(hero.querySelector('.front-page-slogan').hidden).toBe(true);
     expect(hero.querySelector('.front-page-description').textContent).toBe('Only description');
+});
+
+
+test.each(['json', 'text'])('404 %s front page unavailable turns Home off and opens the normal start without a retry box', async bodyType => {
+    setFrontPageAvailability({ separate_front_page: true });
+    mocks.request.mockRejectedValueOnce(Object.assign(new Error('diagnostic copy is not the server contract'), { status: 404, responseBody: bodyType === 'json' ? JSON.stringify({ error: 'front page unavailable', code: 404 }) : 'front page unavailable\n' }));
+    const page = renderFrontPage();
+    await vi.waitFor(() => expect(mocks.start).toHaveBeenCalledOnce());
+    expect(isSeparateFrontPageEnabled()).toBe(false);
+    expect(localStorage.getItem('separate_front_page')).toBe('false');
+    expect(page.querySelector('.front-page-status')).toBeNull();
+    expect(page.textContent).not.toContain('Lataus epäonnistui');
+});
+
+test.each([[404, 'dataset missing'], [500, 'front page unavailable'], [0, 'offline']])(
+    'other failure %s/%s retains Home and the retry box', async (status, message) => {
+        setFrontPageAvailability({ separate_front_page: true });
+        mocks.request.mockRejectedValueOnce(Object.assign(new Error(message), { status, responseBody: JSON.stringify({ error: message, code: status }) }));
+        const page = renderFrontPage();
+        await vi.waitFor(() => expect(page.querySelector('.front-page-status button')).not.toBeNull());
+        expect(isSeparateFrontPageEnabled()).toBe(true);
+        expect(mocks.start).not.toHaveBeenCalled();
+    });
+
+test('a late unavailable response from a departed visit cannot disable current Home', async () => {
+    setFrontPageAvailability({ separate_front_page: true });
+    let fail;
+    mocks.request.mockReturnValueOnce(new Promise((_, reject) => { fail = reject; }));
+    const page = renderFrontPage();
+    page.dispatchEvent(new Event(VIEW_DEACTIVATE_EVENT));
+    fail(Object.assign(new Error('front page unavailable'), { status: 404, responseBody: JSON.stringify({ error: 'front page unavailable', code: 404 }) }));
+    await Promise.resolve(); await Promise.resolve();
+    expect(isSeparateFrontPageEnabled()).toBe(true);
+    expect(mocks.start).not.toHaveBeenCalled();
+});
+
+test('an older unavailable response cannot disable a newer enabled policy in the same visit', async () => {
+    let fail;
+    mocks.request.mockReturnValueOnce(new Promise((_, reject) => { fail = reject; }));
+    const page = renderFrontPage();
+    setFrontPageAvailability({ separate_front_page: true });
+    fail(Object.assign(new Error('front page unavailable'), { status: 404, responseBody: 'front page unavailable' }));
+    await vi.waitFor(() => expect(page.getAttribute('aria-busy')).toBe('false'));
+    expect(isSeparateFrontPageEnabled()).toBe(true);
+    expect(mocks.start).not.toHaveBeenCalled();
+    expect(page.querySelector('.front-page-status button')).toBeNull();
+});
+
+test.each(['content', 'failure'])('newer enabled policy settles its fresh Home request with %s', async outcome => {
+    let fail;
+    mocks.request.mockReturnValueOnce(new Promise((_, reject) => { fail = reject; }));
+    if (outcome === 'failure') mocks.request.mockRejectedValueOnce(new Error('offline'));
+    const page = renderFrontPage();
+    setFrontPageAvailability({ separate_front_page: true });
+    fail(Object.assign(new Error('front page unavailable'), { status: 404, responseBody: 'front page unavailable' }));
+    await vi.waitFor(() => expect(page.getAttribute('aria-busy')).toBe('false'));
+    expect(isSeparateFrontPageEnabled()).toBe(true);
+    expect(localStorage.getItem('separate_front_page')).toBe('true');
+    expect(mocks.start).not.toHaveBeenCalled();
+    expect(mocks.request).toHaveBeenCalledTimes(2);
+    expect(page.querySelector('.front-page-skeleton')).toBeNull();
+    if (outcome === 'content') {
+        expect(page.querySelector('.front-page-scroller')).not.toBeNull();
+        expect(page.textContent).toContain('Current account');
+    } else {
+        expect(page.querySelector('.front-page-status button')?.textContent).toBe('Lataa sivu uudelleen');
+    }
 });

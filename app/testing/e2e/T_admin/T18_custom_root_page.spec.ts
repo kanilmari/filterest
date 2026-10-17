@@ -1,7 +1,7 @@
 // T18_custom_root_page.spec.ts
 // Proves K378 root delivery, access boundaries, Home/history and missing-file fallback.
 // Connects the manual native config, supported administrator APIs and owned operator files.
-// Restores original switches/theme; the global teardown removes the fixture even when assertions fail.
+// Restores/verifies all six Home settings and theme; global teardown always removes the fixture.
 import { expect, test, type APIRequestContext, type APIResponse, type BrowserContext, type Page } from '@playwright/test';
 import { execFileSync } from 'node:child_process';
 import * as fs from 'node:fs';
@@ -11,6 +11,7 @@ import { fetchCsrfTokenForRequest } from '../helpers/test-artifact-csrf-reader';
 import { expandAdminTreeFolder, openAdminTreeButton } from '../helpers/admin-navigation';
 import { ensureNavbarVisible } from '../helpers/navbar';
 import { writeOwnerOnlyJsonFile } from '../helpers/storage-state-file';
+import { snapshotHomeSettings } from '../helpers/home-settings';
 
 const fixture = process.env.FILTEREST_E2E_CUSTOM_ROOT_FIXTURE;
 if (!fixture || !path.isAbsolute(fixture)) throw new Error('K378 requires FILTEREST_E2E_CUSTOM_ROOT_FIXTURE.');
@@ -28,6 +29,7 @@ type HomeState = { settings: Record<string, boolean>; site_root: { path: string;
 let adminContext: BrowserContext;
 let admin: APIRequestContext;
 let originalHome: HomeState | undefined;
+let homeSnapshot: Awaited<ReturnType<typeof snapshotHomeSettings>> | undefined;
 let originalSwitch: ConfigRow | null | undefined;
 const originalHomeRows: Record<string, ConfigRow | null> = {};
 let originalBrowse: ConfigRow | undefined;
@@ -154,7 +156,8 @@ test.beforeAll(async ({ browser, baseURL }, info) => {
   });
   admin = adminContext.request;
   // Snapshot every value column and original absence before any mutation.
-  originalHome = await home();
+  homeSnapshot = await snapshotHomeSettings(admin);
+  originalHome = homeSnapshot.home;
   for (const key of HOME_SWITCHES) originalHomeRows[key] = await row(key);
   originalSwitch = originalHomeRows[SWITCH];
   originalBrowse = (await row('login_to_browse')) ?? undefined;
@@ -168,6 +171,7 @@ test.beforeAll(async ({ browser, baseURL }, info) => {
   originalTheme = { theme_mode: theme.theme_mode, configured: theme.configured };
   const recovery = info.outputPath('original-k378-settings.json');
   writeOwnerOnlyJsonFile(recovery, { switch: originalSwitch, home_settings: originalHomeRows,
+    home: homeSnapshot.home, article_buttons: homeSnapshot.articles,
     login_to_browse: originalBrowse, theme: originalTheme });
   await info.attach('original-k378-settings', { path: recovery, contentType: 'application/json' });
 });
@@ -191,6 +195,7 @@ test.afterAll(async () => {
     await restoreRow(key, originalHomeRows[key]);
   });
   await attempt(async () => { if (switchTouched) expect((await home()).settings).toEqual(originalHome!.settings); });
+  await attempt(async () => { await homeSnapshot?.restore(); });
   await attempt(async () => {
     if (!browseTouched) return;
     await restoreRow('login_to_browse', originalBrowse!);

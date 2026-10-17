@@ -13,6 +13,18 @@ export function canShowFrontPageLink(isLoggedIn) {
         && (isLoggedIn || localStorage.getItem('login_required_for_browse') !== 'true');
 }
 
+/** Settings refresh and language changes share the same visible/accessibility copy. */
+export function refreshFrontPageLinkLabel(link) {
+    const text = formatSiteNameForDisplay(localStorage.getItem('front_page_button_site_name'))
+        || getTranslationForKey('front_page', { countUsage: false });
+    const label = link.querySelector('.navbar-front-page-label');
+    if (label.textContent !== text) label.textContent = text;
+    if (link.title !== text) link.title = text;
+    if (link.getAttribute('aria-label') !== text) link.setAttribute('aria-label', text);
+    const region = link.closest('#navbarFrontPage');
+    if (region && region.getAttribute('aria-label') !== text) region.setAttribute('aria-label', text);
+}
+
 /** Both menu and top navigation use this exact destination and activation path. */
 export function createFrontPageLink({ topNavigation = false, current = false } = {}) {
     const link = document.createElement('a');
@@ -26,15 +38,8 @@ export function createFrontPageLink({ topNavigation = false, current = false } =
     link.append(createSymbolMaskElement('home', 'navbar-front-page-icon'));
     const label = document.createElement('span');
     label.className = 'navbar-front-page-label';
-    bindDatasetLanguageRenderer(label, () => {
-        const text = formatSiteNameForDisplay(localStorage.getItem('front_page_button_site_name'))
-            || getTranslationForKey('front_page', { countUsage: false });
-        label.textContent = text;
-        link.title = text;
-        link.setAttribute('aria-label', text);
-        link.closest('#navbarFrontPage')?.setAttribute('aria-label', text);
-    });
     link.append(label);
+    bindDatasetLanguageRenderer(label, () => refreshFrontPageLinkLabel(link));
     link.addEventListener('click', event => {
         if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
         event.preventDefault();

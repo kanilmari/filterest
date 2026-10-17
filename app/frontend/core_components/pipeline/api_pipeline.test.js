@@ -86,6 +86,15 @@ describe('api_pipeline', () => {
         document.documentElement.lang = 'en';
     });
 
+    test('preserves the exact JSON error body for Home unavailable recovery without a toast', async () => {
+        const mod = await loadModule();
+        const body = JSON.stringify({ error: 'front page unavailable', code: 404 }) + '\n';
+        globalThis.fetch = vi.fn().mockResolvedValue(buildResponse(body, { ok: false, status: 404 }));
+        await expect(mod.runApiPipeline({ routeName: 'frontPage', suppressErrorToast: true }))
+            .rejects.toMatchObject({ status: 404, responseBody: body });
+        expect(shownNotices()).toEqual([]);
+    });
+
     test('keeps private endpoint registration available beside manifest-backed routes', async () => {
         const mod = await loadModule();
 

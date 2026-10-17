@@ -13,7 +13,7 @@ import { HOME_PALETTE_COPY } from '../admin_tools/home_palette_copy.js';
 import { getPaletteCopy } from '../admin_tools/presentation_palette_shell.js';
 import { showToast } from '../../reusable_components/notifications/toast_notification_printer.js';
 import { createFrontPageSettingsHeroButton } from '../admin_tools/front_page_settings_modal.js';
-import { canShowFrontPageLink, createFrontPageLink } from './front_page_link.js';
+import { canShowFrontPageLink, createFrontPageLink, refreshFrontPageLinkLabel } from './front_page_link.js';
 import { HOME_AVAILABILITY_CHANGED_EVENT } from './front_page_availability.js';
 
 /** Reuse the hero grid/actions and tabs; no active dataset is selected on Home. */
@@ -55,6 +55,7 @@ export function createFrontPageTopRow(siteName, onSaved, paletteOptions = {}) {
     actions.append(homeLink);
     function syncHomeAvailability() {
         homeLink.hidden = !canShowFrontPageLink(localStorage.getItem('button_state') === 'logout');
+        refreshFrontPageLinkLabel(homeLink);
     }
     syncHomeAvailability();
     window.addEventListener(HOME_AVAILABILITY_CHANGED_EVENT, syncHomeAvailability);

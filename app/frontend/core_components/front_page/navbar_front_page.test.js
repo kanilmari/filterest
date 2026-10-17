@@ -4,6 +4,7 @@
 // Keeps long site names complete for assistive technology and native link gestures.
 // @vitest-environment jsdom
 
+import { setFrontPageAvailability } from './front_page_availability.js';
 import { beforeEach, expect, test, vi } from 'vitest';
 import { renderNavbarFrontPage } from './navbar_front_page.js';
 import { refreshLocalizedDatasetValues } from '../table_views/dataset_value_localizer.js';
@@ -20,7 +21,7 @@ vi.mock('../lang/translation_handler.js', () => ({ getTranslationForKey: () => m
 
 beforeEach(() => {
     document.body.innerHTML = '<nav id="navbarFrontPage" hidden></nav><div id="tabs_container"></div>';
-    localStorage.clear();
+    localStorage.clear(); setFrontPageAvailability({});
     mocks.open.mockReset(); mocks.language = 'fi';
 });
 
@@ -33,7 +34,7 @@ test('setting off hides the region for users and guests', () => {
 });
 
 test('setting on is visible to signed-in users and public guests, hidden for login-only guests', () => {
-    localStorage.setItem('separate_front_page', 'true');
+    setFrontPageAvailability({ separate_front_page: true });
     for (const isLoggedIn of [true, false]) {
         renderNavbarFrontPage({ isLoggedIn });
         expect(document.getElementById('navbarFrontPage').hidden).toBe(false);
@@ -45,7 +46,7 @@ test('setting on is visible to signed-in users and public guests, hidden for log
 });
 
 test('label falls back to translated Home and follows interface-language changes', async () => {
-    localStorage.setItem('separate_front_page', 'true');
+    setFrontPageAvailability({ separate_front_page: true });
     localStorage.setItem('front_page_button_site_name', '  ');
     renderNavbarFrontPage({ isLoggedIn: true });
     expect(document.querySelector('a').getAttribute('aria-label')).toBe('Etusivu');
@@ -56,7 +57,7 @@ test('label falls back to translated Home and follows interface-language changes
 
 test('long site name stays complete in text, title and accessible name', async () => {
     const name = 'Long site '.repeat(10).trim();
-    localStorage.setItem('separate_front_page', 'true');
+    setFrontPageAvailability({ separate_front_page: true });
     localStorage.setItem('front_page_button_site_name', name);
     renderNavbarFrontPage({ isLoggedIn: true });
     const link = document.querySelector('a');
@@ -69,7 +70,7 @@ test('long site name stays complete in text, title and accessible name', async (
 });
 
 test('active state tracks page visibility through switches and shell rebuilds', async () => {
-    localStorage.setItem('separate_front_page', 'true');
+    setFrontPageAvailability({ separate_front_page: true });
     renderNavbarFrontPage({ isLoggedIn: true });
     const page = document.createElement('div');
     page.id = 'front_page_container'; page.textContent = 'content';
@@ -84,7 +85,7 @@ test('active state tracks page visibility through switches and shell rebuilds', 
 });
 
 test('ordinary click opens Home and modified clicks keep the root href', async () => {
-    localStorage.setItem('separate_front_page', 'true');
+    setFrontPageAvailability({ separate_front_page: true });
     renderNavbarFrontPage({ isLoggedIn: true });
     const link = document.querySelector('a');
     link.click();

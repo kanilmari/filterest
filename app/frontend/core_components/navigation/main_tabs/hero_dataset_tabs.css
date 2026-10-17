@@ -50,7 +50,10 @@
 .hero-dataset-tabs__label {
     min-width: 0;
 }
-.hero-dataset-tabs__button { flex: none; width: max-content; }
+.hero-dataset-tabs__button {
+    flex: none;
+    width: max-content;
+}
 .hero-dataset-tabs__icon {
     width: 18px;
     height: 18px;
@@ -60,12 +63,15 @@
 .hero-dataset-tabs__button[aria-current="page"],
 .hero-dataset-tabs__button:hover,
 .hero-dataset-tabs__button:focus-visible,
+.hero-dataset-tabs > .top-nav-home-button:hover,
+.hero-dataset-tabs > .top-nav-home-button:focus-visible,
 .filterbar-inline-hero__actions > button:hover,
 .filterbar-inline-hero__actions > button:focus-visible {
     background: color-mix(in srgb, var(--color-brand) 12%, var(--button_bg_color));
     border-color: var(--color-brand);
 }
 .hero-dataset-tabs__button:focus-visible,
+.hero-dataset-tabs > .top-nav-home-button:focus-visible,
 .filterbar-inline-hero__actions > button:focus-visible {
     outline: 2px solid var(--color-brand);
     outline-offset: 2px;

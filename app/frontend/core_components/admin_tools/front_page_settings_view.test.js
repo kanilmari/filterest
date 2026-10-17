@@ -26,6 +26,7 @@ vi.mock('../front_page/navbar_front_page.js', () => ({ renderNavbarFrontPage: mo
 vi.mock('../../reusable_components/image_source_picker/image_source_picker.js', () => ({ openImageSourcePicker: mocks.picker }));
 
 import { generate_front_page_settings_view } from './front_page_settings_view.js';
+import { setFrontPageAvailability } from '../front_page/front_page_availability.js';
 import { setCustomRootEnabled } from '../front_page/custom_root_navigation.js';
 import { loadManagementView } from '../../reusable_components/dom_container_builder.js';
 import { hasContentBesideLoadingIndicator } from '../../reusable_components/loading/loading_indicator_printer.js';
@@ -119,14 +120,14 @@ beforeEach(() => {
     document.body.innerHTML = '<div class="content_div"><main id="target"></main></div>';
     target = document.getElementById('target');
     localStorage.clear();
-    localStorage.setItem('separate_front_page', 'true');
+    setFrontPageAvailability({ separate_front_page: true });
     localStorage.setItem('button_state', 'logout');
     URL.createObjectURL = vi.fn(() => 'blob:home-preview');
     URL.revokeObjectURL = vi.fn();
     mocks.confirm.mockResolvedValue(true);
     mocks.picker.mockReturnValue({ hide: vi.fn() });
     mocks.auth.mockImplementation(async () => {
-        localStorage.setItem('separate_front_page', String(common.settings.separate_front_page));
+        setFrontPageAvailability(common.settings);
     });
     mocks.endpoint.mockImplementation(async (name, options = {}) => {
         if (name === 'adminFrontPageBackground') {
@@ -179,7 +180,7 @@ describe('Home settings and scope drafts', () => {
     });
 
     test('Open Home follows saved readiness rather than an unsaved checkbox', async () => {
-        localStorage.setItem('separate_front_page', 'false');
+        setFrontPageAvailability({ separate_front_page: false });
         setCustomRootEnabled(false);
         await generate_front_page_settings_view(target);
         input(query('custom-root-enabled'), true, 'change');

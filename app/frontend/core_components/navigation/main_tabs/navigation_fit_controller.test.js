@@ -163,3 +163,46 @@ test('restores caller styles through CSSOM when CSP rejects style-attribute writ
         expect(buttons.every(button => !button.hidden && button.style.visibility !== 'hidden')).toBe(true);
     } finally { fit.destroy(); }
 });
+
+test('Home hides only its visual label when the first translated dataset would not fit, then restores it', async () => {
+    vi.useFakeTimers();
+    document.body.innerHTML = '<nav><a href="/" class="top-nav-home-button" aria-label="Site name">Site name</a><button>Dataset</button></nav>';
+    const row = document.querySelector('nav');
+    const home = row.querySelector('a');
+    let available = 150;
+    vi.spyOn(row, 'clientWidth', 'get').mockImplementation(() => available);
+    vi.spyOn(home, 'getBoundingClientRect').mockImplementation(() => ({
+        width: home.classList.contains('top-nav-home-button--compact') ? 36 : 100,
+    }));
+    vi.spyOn(row.querySelector('button'), 'getBoundingClientRect').mockReturnValue({ width: 100 });
+    const fit = createNavigationFitController(row);
+    try {
+        fit.sync(); await vi.advanceTimersByTimeAsync(30);
+        expect(home.classList.contains('top-nav-home-button--compact')).toBe(true);
+        expect(row.querySelector('button').hidden).toBe(false);
+        expect(home.getAttribute('aria-label')).toBe('Site name');
+        available = 300; fit.sync(); await vi.advanceTimersByTimeAsync(30);
+        expect(home.classList.contains('top-nav-home-button--compact')).toBe(false);
+        expect(row.querySelector('button').hidden).toBe(false);
+    } finally { fit.destroy(); }
+});
+
+test('a live Home site-name change refits the existing row without waiting for a resize', async () => {
+    vi.useFakeTimers();
+    document.body.innerHTML = '<nav><a href="/" class="top-nav-home-button">Home</a><button>Dataset</button></nav>';
+    const row = document.querySelector('nav'); const home = row.querySelector('a');
+    vi.spyOn(row, 'clientWidth', 'get').mockReturnValue(150);
+    vi.spyOn(row.querySelector('button'), 'getBoundingClientRect').mockReturnValue({ width: 100 });
+    vi.spyOn(home, 'getBoundingClientRect').mockImplementation(() => ({ width:
+        home.textContent === 'Home' || home.classList.contains('top-nav-home-button--compact') ? 40 : 100,
+    }));
+    const fit = createNavigationFitController(row);
+    try {
+        fit.sync(); await vi.advanceTimersByTimeAsync(30);
+        expect(home.classList.contains('top-nav-home-button--compact')).toBe(false);
+        home.textContent = 'Long current site name';
+        await vi.advanceTimersByTimeAsync(30);
+        expect(home.classList.contains('top-nav-home-button--compact')).toBe(true);
+        expect(row.querySelector('button').hidden).toBe(false);
+    } finally { fit.destroy(); }
+});

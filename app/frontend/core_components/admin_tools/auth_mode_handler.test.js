@@ -46,11 +46,11 @@ describe('auth_mode_handler', () => {
   test('announces fresh Home policy for both transitions before theme and permission work', async () => {
     const { HOME_AVAILABILITY_CHANGED_EVENT } = await import('../front_page/front_page_availability.js');
     const snapshots = [];
-    const listener = () => snapshots.push({
+    const listener = event => { if (event.detail?.confirmed === false) return; snapshots.push({
       enabled: localStorage.getItem('separate_front_page'),
       mode: localStorage.getItem('button_state'),
       browse: localStorage.getItem('login_required_for_browse'),
-    });
+    }); };
     window.addEventListener(HOME_AVAILABILITY_CHANGED_EVENT, listener);
     const mod = await loadModule();
     // A failed later theme request must not leave the mounted Home link stale.

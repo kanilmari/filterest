@@ -217,41 +217,82 @@ enabled or a server-confirmed custom root). Login-only guests see neither link.
 The server supplies a Home-button site name only when the corresponding switch
 is enabled; otherwise the existing `front_page` language key supplies the label.
 
-Every dataset owns one top-navigation Home link. The toolbar controller moves
-that same node to the beginning of the main dataset tabs while the complete
-header row is on screen, or to the compact toolbar otherwise. Phones use the
-compact toolbar; its trailing Home icon remains outside the open 300 px menu
-at a 375 px viewport. Opening the menu also uses this compact position. Home's
-own header marks its link current beside the trailing actions, preserving the
-existing menu-to-dataset keyboard order. Compact links hide only the visual label;
-their accessible name and native keyboard/link gestures remain available.
-The Home activation stops its own click from reaching the menu's outside-click
-listener. Menu opening, closing, saved visibility and resize behavior stay with
-the existing menu owner; Home navigation writes none of that state.
+When Home is enabled, each dataset owns one top-navigation Home link. The toolbar controller moves
+that same node to the first position in the hero's dataset tab row, with the
+same button styling and size, whether the side menu is open or closed. Its
+house icon and translated/site-name label stay together; only a tight row hides
+the visual label to retain room for the first dataset. Once that row scrolls
+away, Home moves to the compact toolbar's end slot: this toolbar has identity,
+search and end slots, without a dataset tab list. Focus follows the original
+node. Home never participates in deciding whether the toolbar is visible.
+The pre-WO37 rule remains `active && (phone || shouldShowSharedTopBar(...))`:
+at widths up to 700 CSS pixels the active toolbar stays visible independently
+of the hero; above 700 it is hidden while the inline hero is visible. This phone
+rule dates from 11 October 2026, before the Home button was added.
+Home's own header keeps its current-page link beside the trailing actions,
+preserving G11's existing menu-to-dataset keyboard order. Compact links retain
+their full accessible name and native keyboard/link gestures. Home activation
+stops its own click from reaching the menu's outside-click listener. Menu
+opening, closing, saved visibility and resizing stay with the existing owner.
 
-After the auth-modes response replaces Home and browse policy, it announces
-`HOME_AVAILABILITY_CHANGED_EVENT`. Dataset toolbar controllers reconcile the
-link immediately and on every toolbar synchronization, including cached-view
-reactivation. Disabling removes the old node; enabling creates one link in the
-current host without requiring a document reload. Controller teardown releases
-the settings listener. Home's own current-page control follows the same event,
-including when an administrator disables Home while its page is still open.
+`front_page_availability.js` keeps server-confirmed availability in tab memory;
+a stale local-storage value cannot enable a link or route. Auth bootstrap clears
+that authority, then accepts the fresh auth-modes response. The settings editor
+saves through the existing API and refreshes auth modes. Confirmed policy emits
+`HOME_AVAILABILITY_CHANGED_EVENT` with `detail.confirmed=true`; invalidation
+uses false. Menu links, dataset toolbars (including cached views) and Home's own
+control reconcile immediately. A confirmed disable also replaces visible Home
+with the normal start view through the existing startup dataset resolver.
+Cross-tab storage changes for `separate_front_page`, custom-root readiness or
+the button label invalidate the receiving tab and re-read auth modes. Persisted
+values are refresh hints only. Every availability-producing request reserves a
+revision before it starts: authentication bootstrap (including the editor's
+post-save refresh), storage refresh and the Home content request's 404 path.
+One guard in the availability setter rejects older responses before changing
+memory, persisted hints or events. Invalidation goes through that same setter.
+Failed reads stay disabled; late enabled and disabled responses cannot override
+newer policy. Missing or disabled server fields mean off.
 
-`G12_top_nav_home_button.spec.ts` captures all four Home switches and restores
-their exact values in independent fixture teardown. It checks the six main
-dataset presentations at 1440, 1000 and 375 px in both explicit themes, with
-Home enabled/disabled and the menu open/closed. It captures owner screenshots
-under the test runtime root's `wo37/before` or `wo37/after` directory, selected
-by `WO37_PROBE_PHASE`. The native coordinator runs it serially in card projects;
-the before phase captures the old source without requiring a new control.
-The after phase also saves disable/enable transitions through the real Home
-editor, returns to the same retained dataset node, and checks that the document
-was never reloaded. Settings restoration still uses the independent fixture.
-Keyboard checks start at the document rather than a pointer-selected table cell,
-so their bounded Tab walk measures header reachability rather than table size.
+Home layout specs G11/G12/G13 use `helpers/home-policy-fixture.ts` for response-only
+policy/content and never save server settings. G11 opens the explicit SPA Home
+address so an operator's custom root cannot intercept its initial document.
+Real-writing Home specs T16/T17/T18 share `helpers/home-settings.ts`: snapshot
+all four Home switches plus article buttons and presentation before mutation,
+enter `withHomeSettings` or a `try`/`afterAll` cleanup boundary before the first
+save, and restore/read back all six even on failure or a lost save response.
+Every restore failure or readback mismatch fails the spec. Absent presentation
+is removed through supported application CRUD; absent article configuration
+uses the API's established equivalent empty list because deletion is protected.
 
-`front_page/front_page_printer.js` makes one `/api/front-page` request per visit,
-with cancellation, a render generation and a fifteen-second timeout/retry.
+A 404 JSON error with `error: "front page unavailable"` from `/api/front-page`
+confirms Home is off. The shared request pipeline preserves its body as
+`error.responseBody`, so recovery does not parse localized diagnostic copy. Recovery
+removes the controls and opens the normal start view without a load-error box.
+Rejecting an obsolete availability write does not abandon the current visit:
+it still opens the start view when a newer policy refresh is pending or failed.
+Only a newer response confirming Home enabled keeps the visit, which requests
+fresh content after releasing the old request; a failed fresh load offers retry.
+Other failures, including other 404s and the fifteen-second timeout, retain retry.
+A response from a departed visit cannot change current availability or navigation.
+
+`G12_top_nav_home_button.spec.ts` intercepts Home, auth-mode and settings responses;
+settings saves exercise the real client path without sending writes to the server.
+It checks both menu states at 1920, 1440 and 1000 px in both explicit themes over
+the opposite OS preference, first-item geometry, focus during scroll handoffs,
+menu memory, cached cross-tab disable, root fallback and unavailable/error responses.
+Its existing six dataset presentations remain covered at 1440, 1000 and 375 px.
+`G13_phone_topbar_measurements.spec.ts` measures 390×844, 412×915 and 430×932 in
+portrait and landscape, Home on/off and both menu states, before/after scrolling.
+Run both specs serially against a native target serving the intended checkout.
+`WO37_PROBE_PHASE=before` on `a9b4520c^` and `after` on the fix selects screenshot
+and JSON filenames under the configured test-results directory. Use a separate
+Playwright `--output` subdirectory there for each phase to retain both sets. Baseline skips
+assertions about the newly added Home control, while checking historical visibility.
+Browser contexts discard all intercepted policy and local UI preferences at teardown;
+no owner settings or test datasets require restoration.
+
+`front_page/front_page_printer.js` keeps one `/api/front-page` request in flight
+per visit, with cancellation, a render generation and a fifteen-second timeout/retry.
 Deactivation empties the view and aborts its request. Navigation's cleanup hook
 also removes the visit's listener and session subscription, so returning to a
 retained Home container creates a complete new lifecycle. The shared session

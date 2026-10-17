@@ -4,6 +4,7 @@
 // Bridges mocked navigation state with the real popstate listener side effects.
 // Exists to keep article-close history from losing the originating dataset view.
 
+import { setFrontPageAvailability } from '../../front_page/front_page_availability.js';
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import { getChosenDatasetView, setChosenDatasetView } from "../../state_stores/dataset_view_choice_saver.js";
 
@@ -150,7 +151,7 @@ describe("history_navigation_handler", () => {
         setUnifiedTableStateMock.mockClear();
         tableStates.clear();
         datasetParamsStore.clear();
-        localStorage.clear();
+        localStorage.clear(); setFrontPageAvailability({});
         sessionStorage.clear();
         sessionStorage.setItem('user_permissions', JSON.stringify(['/ui/view/article_view']));
         document.body.innerHTML = "";
@@ -173,7 +174,7 @@ describe("history_navigation_handler", () => {
     });
 
     test.each([false, true])('Back to enabled root restores Home after article cleanup, articleOpen=%s', async articleOpen => {
-        localStorage.setItem('separate_front_page', 'true');
+        setFrontPageAvailability({ separate_front_page: true });
         if (articleOpen) document.body.innerHTML = `
             <div class="card_view_wrapper big-card-open" data-table-name="events">
                 <div class="card_container"></div><article class="active_row_article"></article>
@@ -195,7 +196,7 @@ describe("history_navigation_handler", () => {
     });
 
     test.each([true, false])('history never renders /front_page, enabled=%s', async enabled => {
-        localStorage.setItem('separate_front_page', String(enabled));
+        setFrontPageAvailability({ separate_front_page: enabled });
         history.replaceState({}, '', '/front_page');
         window.dispatchEvent(new PopStateEvent('popstate'));
         await vi.waitFor(() => expect(browserTabTitle.update).toHaveBeenCalled());

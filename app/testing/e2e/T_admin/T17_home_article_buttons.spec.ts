@@ -8,6 +8,7 @@ import { login, loadUserCredentials, readSessionInfo } from '../helpers/auth';
 import { waitForAppReady } from '../helpers/navigation';
 import { buildTempDatasetName, createTempDataset, dropTempDataset, fetchCsrfTokenForRequest } from '../helpers/temp-dataset';
 import { loadDatasetCardVisibility, saveCardVisibilityWithFreshRevisions } from '../helpers/appearance-revisions';
+import { snapshotHomeSettings } from '../helpers/home-settings';
 
 test.describe.configure({ mode: 'serial' });
 const SETTINGS_URL = '/api/admin/front-page/article-buttons';
@@ -87,9 +88,10 @@ for (const width of [1280, 375]) for (const theme of ['light', 'dark'] as const)
       catch (error) { failures.push(error); printStepError(name, error); throw error; }
       finally { console.log(`[T17] elapsed: ${name}: ${Math.round(performance.now() - started)} ms`); }
     };
-    const { original, originallyAbsent, baseline, originalHome, originalTheme, identity } = await step('capture original settings', async () => {
-      await page.goto('/', { waitUntil: 'domcontentloaded' }); await waitForAppReady(page);
-      const original = await readJSON<ArticleSettings>(page.request, SETTINGS_URL);
+    const { homeSnapshot, original, originallyAbsent, baseline, originalHome, originalTheme, identity } = await step('capture original settings', async () => {
+      await page.goto('/system_config', { waitUntil: 'domcontentloaded' }); await waitForAppReady(page);
+      const homeSnapshot = await snapshotHomeSettings(page.request);
+      const original = homeSnapshot.articles;
       expect(original.configuration_error, 'T17 refuses to mutate invalid article settings: the API cannot restore them exactly.').toBe('');
       expect(original.unavailable_items, 'T17 refuses to mutate article settings with unavailable targets: the API cannot restore them exactly.').toEqual([]);
       const originallyAbsent = original.version === 'none';
@@ -107,14 +109,14 @@ for (const width of [1280, 375]) for (const theme of ['light', 'dark'] as const)
         testInfo.annotations.push({ type: 'home-article-buttons-original-state',
           description: 'Setting was absent; baseline and restoration use the behaviourally equivalent empty list.' });
       }
-      const originalHome = await readJSON<{ settings: Record<string, boolean> }>(page.request, '/api/admin/front-page');
+      const originalHome = homeSnapshot.home;
       const originalTheme = await readJSON<ThemePreference>(page.request, '/api/user-visual-preference');
       const identity = await readSessionInfo(page);
-      return { original, originallyAbsent, baseline, originalHome, originalTheme, identity };
+      return { homeSnapshot, original, originallyAbsent, baseline, originalHome, originalTheme, identity };
     });
     const name = buildTempDatasetName('e2e_home_article_button');
     const readerContext = await step('create reader context', () => browser.newContext({ ignoreHTTPSErrors: true, storageState: { cookies: [], origins: [] } }));
-    let created = false, settingsChanged = false, themeAttempted = false, themeSaved: ThemePreference | null = null;
+    let created = false, themeAttempted = false, themeSaved: ThemePreference | null = null;
     let lastVersion = original.version, buttonsChanged = false, buttonSaveAttempted = false;
     let expectedConfiguration = baseline;
     let pendingConfiguration = baseline;
@@ -159,9 +161,9 @@ for (const width of [1280, 375]) for (const theme of ['light', 'dark'] as const)
       });
       await step('configure Home, pin account theme and load viewport', async () => {
         const headers = { 'X-CSRF-Token': await fetchCsrfTokenForRequest(page.request) };
-        settingsChanged = true;
         const enabled = await page.request.post('/api/admin/front-page', { headers,
-          data: { settings: { ...originalHome.settings, separate_front_page: true, front_page_show_blocks: false } } });
+          data: { settings: { ...originalHome.settings, separate_front_page: true, front_page_show_blocks: false,
+            display_index_html_at_startup: false } } });
         expect(enabled.ok(), await enabled.text()).toBe(true);
         themeAttempted = true; themeSaved = await pinTheme(page, theme);
         await page.setViewportSize({ width, height: 900 }); await home(page);
@@ -303,10 +305,7 @@ for (const width of [1280, 375]) for (const theme of ['light', 'dark'] as const)
           // fail. Only our exact attempted list authorizes that compensation.
           expect(latest.article_buttons, 'Refusing to overwrite another editor during cleanup.').toEqual(pendingConfiguration);
         }
-        const restored = await page.request.post(SETTINGS_URL, { headers: { 'X-CSRF-Token': await fetchCsrfTokenForRequest(page.request) },
-          data: { article_buttons: baseline, version: latest.version } });
-        expect(restored.ok(), await restored.text()).toBe(true);
-        const restoredState = await readJSON<ArticleSettings>(page.request, SETTINGS_URL);
+        const restoredState = await homeSnapshot.restoreArticleButtons();
         expect(restoredState.article_buttons).toEqual(baseline);
         if (originallyAbsent) {
           expect(restoredState.version).not.toBe('none');
@@ -321,12 +320,8 @@ for (const width of [1280, 375]) for (const theme of ['light', 'dark'] as const)
           }
         }
       });
-      await attempt('restore exact Home switches', async () => {
-        if (!settingsChanged) return;
-        const restored = await page.request.post('/api/admin/front-page', {
-          headers: { 'X-CSRF-Token': await fetchCsrfTokenForRequest(page.request) }, data: { settings: originalHome.settings },
-        });
-        expect(restored.ok(), await restored.text()).toBe(true);
+      await attempt('restore and verify all six Home settings', async () => {
+        await homeSnapshot.restore();
         expect((await readJSON<{ settings: Record<string, boolean> }>(page.request, '/api/admin/front-page')).settings).toEqual(originalHome.settings);
       });
       await attempt('restore exact account theme preference', async () => {

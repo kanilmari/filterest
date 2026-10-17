@@ -9,7 +9,7 @@ import { bindDatasetLanguageRenderer } from '../table_views/dataset_value_locali
 import { showConfirmModal } from '../../reusable_components/modal/confirm_modal_builder.js';
 import { setAuthModes } from './auth_mode_handler.js';
 import { openFrontPage } from '../front_page/front_page_navigation.js';
-import { isCustomRootEnabled } from '../front_page/custom_root_navigation.js';
+import { isInternalFrontPageEnabled, isSeparateFrontPageEnabled } from '../front_page/front_page_availability.js';
 import { renderNavbarFrontPage } from '../front_page/navbar_front_page.js';
 import { refreshFrontPage } from '../front_page/front_page_printer.js';
 import { createLangKeyEditor, applyLangKeyConfig } from './lang_key_editor_builder.js';
@@ -135,7 +135,7 @@ export async function generate_front_page_settings_view(container, { onSaved = r
     const lifetime = new AbortController();
     const background = createFrontPageBackgroundControl({
         onChange: () => { if (ready) updateState(); }, report,
-        isEnabled: () => localStorage.getItem('separate_front_page') === 'true',
+        isEnabled: isInternalFrontPageEnabled,
     });
     let articles = null;
     articles = createFrontPageArticleButtonsEditor({ onSaved, onChange: () => { if (ready) updateState(); } });
@@ -173,7 +173,7 @@ export async function generate_front_page_settings_view(container, { onSaved = r
         resetButton.disabled = busy || conflicted || !ready || (!saved && !blocksDirty());
         copyButton.disabled = busy || conflicted || !ready;
         reloadButton.disabled = busy;
-        openButton.disabled = busy || !ready || (!isCustomRootEnabled() && localStorage.getItem('separate_front_page') !== 'true');
+        openButton.disabled = busy || !ready || !isSeparateFrontPageEnabled();
         if (blocksDirty()) frontPageLabel(dirtyStatus, 'unsaved_changes');
         else { dirtyStatus.textContent = ''; delete dirtyStatus.dataset.langKey; }
         if (settingsDirty()) frontPageLabel(settingsStatus, 'unsaved_changes');

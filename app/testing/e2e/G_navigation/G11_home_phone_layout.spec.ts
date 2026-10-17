@@ -1,10 +1,12 @@
 // G11_home_phone_layout.spec.ts
 // Proves Home identity, phone navigation, saved text placement and display icons.
-// Uses native Home GETs; boundary fixtures alter responses only, never saved settings.
+// Intercepts Home and auth policy even when the owner's Home is disabled; never saves settings.
 // Pins the account theme without writes and drives the real menu in both states.
 // Run natively with mobile-card, tablet-card and desktop-card, one worker at a time.
 import { expect, test, type Locator, type Page } from '@playwright/test';
 import { installMenuVisibilityProbe, type MenuProbeWindow } from '../helpers/menu_control_visibility';
+import { installHomePolicy } from '../helpers/home-policy-fixture';
+import presentationDefinition from '../../../frontend/shared/front_page_presentation/definition.json';
 
 type Theme = 'light' | 'dark';
 type Fixture = { name: string; width: number; height?: number; datasetCount?: number };
@@ -88,15 +90,16 @@ test('native document fallback matches the HTML site icon for signed-out request
 
 async function openHome(page: Page, theme: Theme, language: string, fixture?: Fixture) {
   const writes: string[] = [];
-  let alignment = 'left';
+  const alignment = 'left';
+  await installHomePolicy(page.context(), theme, fixture ? {
+    site_name: fixture.name,
+    presentation: { ...presentationDefinition.default, anchor: 'center-left', alignment,
+      max_width_px: 750, horizontal_margin_px: 160, vertical_margin_px: 40 },
+  } : {});
   page.on('request', request => {
     if (/\/api\/(?:admin\/)?front-page(?:[/?]|$)/.test(request.url()) && request.method() !== 'GET') {
       writes.push(`${request.method()} ${new URL(request.url()).pathname}`);
     }
-  });
-  await page.route(url => url.pathname === '/api/user-visual-preference', async route => {
-    expect(route.request().method(), 'The spec must never save account appearance').toBe('GET');
-    await route.fulfill({ json: { theme_mode: theme, revision: 1, configured: true } });
   });
   if (fixture) await page.route(url => url.pathname === '/api/datasets', async route => {
     expect(route.request().method()).toBe('GET');
@@ -126,22 +129,6 @@ async function openHome(page: Page, theme: Theme, language: string, fixture?: Fi
     // from entering translation maintenance even before a dictionary arrives.
     await route.fulfill({ response, json: data });
   });
-  await page.route(url => url.pathname === '/api/front-page', async route => {
-    expect(route.request().method()).toBe('GET');
-    const response = await route.fetch();
-    expect(response.ok(), 'Native Home must be enabled and readable').toBe(true);
-    const data = await response.json();
-    if (fixture) {
-      // Preserve viewer identity, copy and media while pinning header geometry.
-      // These fixtures never navigate to their response-only destinations.
-      data.site_name = fixture.name;
-      data.presentation = { ...data.presentation,
-        text_style: { preset: 'default', reveal: { mode: 'none', start_ms: 3000, interval_ms: 800 } }, anchor: 'center-left', alignment: 'left',
-        max_width_px: 750, horizontal_margin_px: 160, vertical_margin_px: 40 };
-    }
-    alignment = data.presentation?.alignment || 'left';
-    await route.fulfill({ response, json: data });
-  });
   await page.emulateMedia({ colorScheme: theme === 'light' ? 'dark' : 'light' });
   await page.addInitScript(({ theme, language }) => {
     localStorage.setItem('theme', theme);
@@ -150,7 +137,8 @@ async function openHome(page: Page, theme: Theme, language: string, fixture?: Fi
     localStorage.setItem('navVisibleNarrow', 'false');
   }, { theme, language });
   if (fixture) await page.setViewportSize({ width: fixture.width, height: fixture.height ?? 900 });
-  await page.goto('/', { waitUntil: 'domcontentloaded' });
+  // An explicit SPA Home address also bypasses an enabled custom root document.
+  await page.goto('/front_page', { waitUntil: 'domcontentloaded' });
   await page.waitForFunction(() => (window as Window & {
     __filterestShellBoot?: { status: () => { ready: boolean } };
   }).__filterestShellBoot?.status().ready === true);

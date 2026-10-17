@@ -47,6 +47,13 @@ export function createNavigationFitController(element) {
         });
         const gap = Number.parseFloat(view.getComputedStyle(element).columnGap) || 0;
         const home = element.querySelector(':scope > .top-nav-home-button');
+        if (home) {
+            home.classList.remove('top-nav-home-button--compact');
+            // Keep Home and the first dataset together when translated labels
+            // exhaust the row; retain the full accessible name on the link.
+            home.classList.toggle('top-nav-home-button--compact',
+                home.getBoundingClientRect().width + (widths[0] || 0) + (buttons.length ? gap : 0) > availableWidth);
+        }
         const reserved = home ? home.getBoundingClientRect().width + (buttons.length ? gap : 0) : 0;
         const count = countFittingNavigationButtons(widths, availableWidth - reserved, gap);
         buttons.forEach((button, index) => {
@@ -67,10 +74,10 @@ export function createNavigationFitController(element) {
     }
     const observer = typeof view.ResizeObserver === 'function' ? new view.ResizeObserver(schedule) : null;
     observer?.observe(element);
-    // Home changes hosts without changing this row's width. Refit the dataset
-    // prefix when that reserved destination arrives or leaves.
+    // Home can change hosts or its site-name label without resizing this row.
+    // Refit after either change; fitting's style/hidden writes are not observed.
     const children = new view.MutationObserver(schedule);
-    children.observe(element, { childList: true });
+    children.observe(element, { childList: true, subtree: true, characterData: true });
     view.addEventListener('resize', schedule);
     element.ownerDocument.fonts?.addEventListener('loadingdone', schedule);
     return {
