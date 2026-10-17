@@ -1,6 +1,6 @@
 // system_config_checks.go
 // Owns per-key checks for every generic writer of the settings table.
-// Connects transaction-local row candidates to duration and boolean validation.
+// Connects transaction-local row candidates to duration, boolean and integer validation.
 // Exists to refuse unusable settings before a writer changes any data.
 package system_config_checks
 
@@ -27,6 +27,7 @@ var checks = durationChecks()
 
 func durationChecks() map[string]check {
 	registry := make(map[string]check, len(durations))
+	registry[TableCellMaxLinesKey] = validateTableCellMaxLines
 	for key, definition := range durations {
 		registry[key] = func(row map[string]interface{}) error {
 			if fmt.Sprint(row["value_type"]) != "5" {
@@ -86,6 +87,9 @@ func ValidateRow(table string, row map[string]interface{}) error {
 	}
 	if err := validate(row); err != nil {
 		langKey := InvalidValueLangKey
+		if key == TableCellMaxLinesKey {
+			langKey = "table_cell_max_lines_invalid"
+		}
 		if key == "front_page_presentation" {
 			langKey = "save_failed"
 		}

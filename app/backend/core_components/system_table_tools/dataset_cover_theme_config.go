@@ -6,6 +6,7 @@ package system_table_tools
 
 import (
 	store "easelect/backend/core_components/dataset_appearance_store"
+	"easelect/backend/core_components/system_config_checks"
 	appearance "easelect/frontend/shared/dataset_appearance"
 )
 
@@ -15,5 +16,5 @@ type DatasetCoverThemeConfig = appearance.DatasetCoverThemeConfig
 
 func defaultSitePresentationSettings() SitePresentationSettingsResponse {
 	values := store.DefaultSiteAppearanceValues()
-	return SitePresentationSettingsResponse{SchemaVersion: 2, SiteValues: values.SiteValues, Defaults: values.Defaults, RowArticleTimestampDisplayMode: rowArticleTimestampDateTime}
+	return SitePresentationSettingsResponse{TableCellMaxLines: system_config_checks.DefaultTableCellMaxLines, SchemaVersion: 2, SiteValues: values.SiteValues, Defaults: values.Defaults, RowArticleTimestampDisplayMode: rowArticleTimestampDateTime}
 }

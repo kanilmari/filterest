@@ -13,12 +13,14 @@ import (
 	"slices"
 
 	store "easelect/backend/core_components/dataset_appearance_store"
+	"easelect/backend/core_components/system_config_checks"
 	appearance "easelect/frontend/shared/dataset_appearance"
 )
 
-// SitePresentationSettingsPatch changes only the sixteen site-owned values.
-// An omitted timestamp keeps its separate existing setting.
+// SitePresentationSettingsPatch changes site-owned appearance values and optional
+// table/timestamp settings. Omitted separate settings retain their stored values.
 type SitePresentationSettingsPatch struct {
+	TableCellMaxLines              *int           `json:"table_cell_max_lines,omitempty"`
 	SchemaVersion                  int            `json:"schema_version"`
 	Version                        string         `json:"version"`
 	Set                            map[string]any `json:"set"`
@@ -44,7 +46,7 @@ func decodeSitePresentationSettings(reader io.Reader) (SitePresentationSettingsP
 	}
 	for key := range keys {
 		switch key {
-		case "schema_version", "version", "set", "row_article_timestamp_display_mode":
+		case "schema_version", "version", "set", "row_article_timestamp_display_mode", "table_cell_max_lines":
 		default:
 			return patch, fmt.Errorf("unknown site appearance field %s", key)
 		}
@@ -58,6 +60,9 @@ func decodeSitePresentationSettings(reader io.Reader) (SitePresentationSettingsP
 	if timestamp, provided := keys["row_article_timestamp_display_mode"]; provided && string(timestamp) == "null" {
 		return patch, errors.New("timestamp display mode cannot be null")
 	}
+	if value, provided := keys["table_cell_max_lines"]; provided && string(value) == "null" {
+		return patch, errors.New("table cell maximum lines cannot be null")
+	}
 	if err := validateSitePresentationPatch(patch); err != nil {
 		return patch, err
 	}
@@ -67,6 +72,11 @@ func decodeSitePresentationSettings(reader io.Reader) (SitePresentationSettingsP
 func validateSitePresentationPatch(patch SitePresentationSettingsPatch) error {
 	if patch.SchemaVersion != 2 || patch.Set == nil {
 		return errors.New("appearance contract changed; reload")
+	}
+	if patch.TableCellMaxLines != nil {
+		if _, err := system_config_checks.ParseTableCellMaxLines(*patch.TableCellMaxLines); err != nil {
+			return err
+		}
 	}
 	rules := appearance.Rules()
 	development := os.Getenv("ENVIRONMENT_TYPE") == "dev"
@@ -106,6 +116,9 @@ func validateSitePresentationSettings(settings SitePresentationSettingsResponse)
 		return err
 	}
 	if err := appearance.ValidateDefaultsV2(settings.Defaults, development); err != nil {
+		return err
+	}
+	if _, err := system_config_checks.ParseTableCellMaxLines(settings.TableCellMaxLines); err != nil {
 		return err
 	}
 	return validateTimestampDisplayMode(settings.RowArticleTimestampDisplayMode)

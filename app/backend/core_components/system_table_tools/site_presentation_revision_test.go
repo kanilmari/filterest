@@ -71,6 +71,7 @@ func siteConfigForTest(t *testing.T, settings SitePresentationSettingsResponse) 
 	var value map[string]any
 	_ = json.Unmarshal(raw, &value)
 	delete(value, "version")
+	delete(value, "table_cell_max_lines")
 	delete(value, "row_article_timestamp_display_mode")
 	raw, _ = json.Marshal(value)
 	config, err := store.DecodeSiteAppearance(raw, false)

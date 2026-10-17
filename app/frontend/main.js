@@ -21,6 +21,8 @@ import {
     loadPublicUiLanguageCatalog,
 } from "./core_components/lang/ui_language_catalog.js";
 
+import { getSitePresentationState } from './core_components/admin_tools/site_presentation_state.js';
+
 window.__filterestShellBoot?.evaluated();
 
 const IS_DEV_MODE = document.querySelector('meta[name="app-env"]')?.content === 'dev';
@@ -41,6 +43,7 @@ if (document.querySelector('meta[name="app-env"]')?.content === 'dev') {
 document.addEventListener("DOMContentLoaded", async () => {
     await loadPublicUiLanguageCatalog();
     await loadConfig();
+    await getSitePresentationState().loadSettings();
     initDevToolbox();
     // Initialize the navbar before heavy dataset rendering so the content area
     // can animate with the sidebar instead of snapping to a new left edge later.

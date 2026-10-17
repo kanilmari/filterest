@@ -21,6 +21,7 @@ const (
 
 // SitePresentationSettingsResponse is the public, typed presentation allowlist.
 type SitePresentationSettingsResponse struct {
+	TableCellMaxLines              int            `json:"table_cell_max_lines"`
 	SchemaVersion                  int            `json:"schema_version"`
 	Version                        string         `json:"version"`
 	SiteValues                     map[string]any `json:"site_values"`

@@ -36,6 +36,8 @@ import { generate_user_authentication_view } from '../../admin_tools/user_authen
 import { generate_symbol_registry_view } from '../../admin_tools/symbol_registry_view.js';
 import { generate_front_page_settings_view } from '../../admin_tools/front_page_settings_view.js';
 
+import { generate_table_view_settings_view } from '../../admin_tools/table_view_settings_view.js';
+
 // Nämä user_tools-näkymät:
 import { generate_register_view } from '../../user_tools/register_tab_printer.js';
 import { generate_user_view } from '../../user_tools/user_profile_printer.js';
@@ -70,6 +72,13 @@ export const custom_views = [
         navigationHidden: true,
     },
     // --- ADMIN_TOOLS RYHMÄ ---
+    {
+        name: 'table_view_settings',
+        loadFunction: () => loadManagementView('table_view_settings_container', generate_table_view_settings_view),
+        containerId: 'table_view_settings_container',
+        group: 'admin_tools',
+        requiredPermission: '/api/admin/site-presentation-settings',
+    },
     {
         name: 'permissions',
         loadFunction: async () => {

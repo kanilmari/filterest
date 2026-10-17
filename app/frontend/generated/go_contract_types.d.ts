@@ -175,6 +175,7 @@ export interface DatasetAppearanceRequest {
 }
 
 export interface SitePresentationSettingsResponse {
+    table_cell_max_lines: number;
     schema_version: number;
     version: string;
     site_values: Record<string, unknown>;
@@ -183,6 +184,7 @@ export interface SitePresentationSettingsResponse {
 }
 
 export interface SitePresentationSettingsPatch {
+    table_cell_max_lines?: number;
     schema_version: number;
     version: string;
     set: Record<string, unknown>;

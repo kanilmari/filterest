@@ -40,10 +40,10 @@ func TestGetSitePresentationSettingsHandlerReturnsOnlyTypedAllowlist(t *testing.
 	w := httptest.NewRecorder()
 	GetSitePresentationSettingsHandler(w, httptest.NewRequest("GET", "/api/site-presentation-settings", nil))
 	var payload map[string]any
-	if json.Unmarshal(w.Body.Bytes(), &payload) != nil || w.Code != 200 || len(payload) != 5 {
+	if json.Unmarshal(w.Body.Bytes(), &payload) != nil || w.Code != 200 || len(payload) != 6 {
 		t.Fatal(w.Code, w.Body.String())
 	}
-	for _, key := range []string{"schema_version", "version", "site_values", "defaults", "row_article_timestamp_display_mode"} {
+	for _, key := range []string{"schema_version", "version", "site_values", "defaults", "row_article_timestamp_display_mode", "table_cell_max_lines"} {
 		if _, ok := payload[key]; !ok {
 			t.Fatal(key)
 		}
@@ -219,7 +219,7 @@ func sitePresentationDisposableDB(t *testing.T) *sql.DB {
 		t.Fatal(err)
 	}
 	if _, err := db.Exec(`CREATE TABLE public.system_config (
-		key text PRIMARY KEY, json_value jsonb, text_value text, creation_spec text, updated timestamptz
+		key text PRIMARY KEY, json_value jsonb, text_value text, int_value integer, value_type integer, creation_spec text, updated timestamptz
 	)`); err != nil {
 		t.Fatal(err)
 	}

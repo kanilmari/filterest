@@ -1,7 +1,7 @@
 // site_presentation_store.go
 // Reads and saves the site presentation configuration.
 // Connects the typed allowlist with transaction-owned system_config writes.
-// Preserves omitted site defaults and the separate article timestamp setting.
+// Preserves omitted site defaults and separate table-line/timestamp settings.
 package system_table_tools
 
 import (
@@ -16,6 +16,7 @@ import (
 	store "easelect/backend/core_components/dataset_appearance_store"
 	"easelect/backend/core_components/dbutils"
 	"easelect/backend/core_components/httpresponse"
+	"easelect/backend/core_components/system_config_checks"
 	appearance "easelect/frontend/shared/dataset_appearance"
 )
 
@@ -30,7 +31,8 @@ const readSitePresentationSettingsSQL = `
 			SELECT COALESCE(NULLIF(text_value, ''), json_value ->> 'value')
 			FROM public.system_config
 			WHERE key = $2
-		), ''), COALESCE((SELECT updated::text FROM public.system_config WHERE key=$1),'')`
+		), ''), COALESCE((SELECT updated::text FROM public.system_config WHERE key=$1),''),
+        (SELECT int_value FROM public.system_config WHERE key=$3 AND value_type=1)`
 
 const upsertDatasetCoverThemeSQL = `
  INSERT INTO public.system_config(key,json_value,creation_spec,updated)
@@ -98,6 +100,9 @@ var persistSitePresentationSettings = func(r *http.Request, patch SitePresentati
 	if patch.RowArticleTimestampDisplayMode != nil {
 		settings.RowArticleTimestampDisplayMode = *patch.RowArticleTimestampDisplayMode
 	}
+	if patch.TableCellMaxLines != nil {
+		settings.TableCellMaxLines = *patch.TableCellMaxLines
+	}
 	if err := validateSitePresentationSettings(settings); err != nil {
 		return SitePresentationSettingsResponse{}, err
 	}
@@ -115,6 +120,14 @@ var persistSitePresentationSettings = func(r *http.Request, patch SitePresentati
 			return SitePresentationSettingsResponse{}, err
 		}
 	}
+	if patch.TableCellMaxLines != nil {
+		if _, err := tx.Exec(`INSERT INTO public.system_config (key,int_value,value_type,creation_spec,updated)
+            VALUES ($1,$2,1,'Site-wide table cell line limit.',clock_timestamp())
+            ON CONFLICT (key) DO UPDATE SET int_value=EXCLUDED.int_value,value_type=1,updated=clock_timestamp()`,
+			system_config_checks.TableCellMaxLinesKey, settings.TableCellMaxLines); err != nil {
+			return SitePresentationSettingsResponse{}, err
+		}
+	}
 	settings.Version = store.SharedRevision(raw, stamp)
 	return settings, nil
 }
@@ -128,7 +141,8 @@ func readSitePresentationSettingsWith(q dbutils.Querier) (SitePresentationSettin
 	var rawCover []byte
 	var rawTimestamp sql.NullString
 	var stamp string
-	if err := q.QueryRow(readSitePresentationSettingsSQL, datasetCoverThemeConfigKey, rowArticleTimestampDisplayKey).Scan(&rawCover, &rawTimestamp, &stamp); err != nil {
+	var rawLines sql.NullInt64
+	if err := q.QueryRow(readSitePresentationSettingsSQL, datasetCoverThemeConfigKey, rowArticleTimestampDisplayKey, system_config_checks.TableCellMaxLinesKey).Scan(&rawCover, &rawTimestamp, &stamp, &rawLines); err != nil {
 		return SitePresentationSettingsResponse{}, err
 	}
 	config, err := store.DecodeSiteAppearance(rawCover, os.Getenv("ENVIRONMENT_TYPE") == "dev")
@@ -140,6 +154,11 @@ func readSitePresentationSettingsWith(q dbutils.Querier) (SitePresentationSettin
 	settings.Version = store.SharedRevision(rawCover, stamp)
 	if rawTimestamp.Valid && validateTimestampDisplayMode(rawTimestamp.String) == nil {
 		settings.RowArticleTimestampDisplayMode = rawTimestamp.String
+	}
+	if rawLines.Valid {
+		if lines, err := system_config_checks.ParseTableCellMaxLines(rawLines.Int64); err == nil {
+			settings.TableCellMaxLines = lines
+		}
 	}
 	return settings, nil
 }

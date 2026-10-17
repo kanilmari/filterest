@@ -200,6 +200,7 @@ def test_current_allowlist_preserves_nullable_presentation_overrides(generator):
         ("DatasetCatalogueEntry", "icon_key", True),
         ("ApplicationUpdateStatusResponse", "offer", False),
         ("ApplicationUpdateStatusResponse", "latest_job", False),
+        ("SitePresentationSettingsPatch", "table_cell_max_lines", True),
         ("SitePresentationSettingsPatch", "row_article_timestamp_display_mode", True),
         ("DatasetTable", "kind_capabilities", True),
         ("DatasetTable", "is_main_table", True),
@@ -214,6 +215,8 @@ def test_current_allowlist_preserves_nullable_presentation_overrides(generator):
     ]
     output = generator.build_output(parsed)
     contracts = {item.ts_name: item for item in parsed}
+    table_lines = generator.build_output([contracts["SitePresentationSettingsPatch"]])
+    assert "    table_cell_max_lines?: number;" in table_lines
     # WL52 retired the column override; the shared appearance setting remains.
     columns = generator.build_output([contracts["CardVisibilityColumn"]])
     assert "label_value_layout" not in columns

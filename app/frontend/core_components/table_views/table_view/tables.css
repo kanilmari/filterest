@@ -5,6 +5,10 @@
  *   - Relates to data content (Table View).
  */
 
+:root {
+    --table-cell-max-lines: 3;
+}
+
 /* Taulukon tyylit */
 .table_from_db {
     border-collapse: separate;
@@ -16,7 +20,6 @@
     --table-cell-max-inline-size: 300px;
     --table-cell-compact-inline-size: 180px;
     --table-cell-line-height: 1.45;
-    --table-cell-max-lines: 15;
 }
 
 .table_from_db th,

@@ -99,6 +99,7 @@ export function getAdminToolsStructure() {
                 { id: 'site_languages', name: 'site_languages' },
                 { id: 'user_authentication', name: 'user_authentication' },
                 { id: 'front_page_settings', name: 'front_page_settings' },
+                { id: 'table_view_settings', name: 'table_view_settings' },
             ],
         },
         {

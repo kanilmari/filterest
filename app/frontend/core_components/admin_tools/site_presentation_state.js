@@ -40,6 +40,16 @@ export function isValidThemeConfig(config) {
     return isReadableDatasetAppearance(config);
 }
 
+export function validTableCellMaxLines(value) {
+    return Number.isInteger(value) && value >= 1 && value <= 30 ? value : 3;
+}
+
+export function applyTableCellMaxLines(value) {
+    if (typeof document !== 'undefined') {
+        document.documentElement.style.setProperty('--table-cell-max-lines', String(validTableCellMaxLines(value)));
+    }
+}
+
 export function normalizePresentationSettings(payload) {
     // Site drafts retain the nested control projection; saves serialize a strict
     // patch of the two public owned maps, excluding every tab cover value.
@@ -55,6 +65,7 @@ export function normalizePresentationSettings(payload) {
     theme.shared.card_image_presentation = normalizeCardImagePresentation(theme.shared.card_image_presentation);
     return {
         schema_version: 2,
+        table_cell_max_lines: validTableCellMaxLines(payload?.table_cell_max_lines),
         site_values: appearanceValuesForPlace(theme, 'site_only'),
         defaults: appearanceValuesForPlace(theme, 'site_default'),
         version: typeof payload?.version === "string" ? payload.version : "",
@@ -124,10 +135,10 @@ export function applySitePresentationGlobals(config, { preserveKnownBrand = fals
     window.dispatchEvent(new Event('dataset-cover-presentation-changed'));
 }
 
-// Cache only the public 7/9 contract; the nested renderer projection stays in memory.
+// Cache only the public presentation contract; the nested renderer projection stays in memory.
 function publicSettings(settings) {
-    const { schema_version, version, site_values, defaults, row_article_timestamp_display_mode } = settings;
-    return { schema_version, version, site_values, defaults, row_article_timestamp_display_mode };
+    const { schema_version, version, site_values, defaults, row_article_timestamp_display_mode, table_cell_max_lines } = settings;
+    return { schema_version, version, site_values, defaults, row_article_timestamp_display_mode, table_cell_max_lines };
 }
 
 function browserStorage() {
@@ -152,6 +163,7 @@ export function createSitePresentationState({ requestFn = fetchSitePresentationS
     const savedSettings = () => clone(saved || normalizePresentationSettings(null));
     const effectiveSettings = () => clone(preview?.settings || saved || normalizePresentationSettings(null));
     function paint() {
+        applyTableCellMaxLines(savedSettings().table_cell_max_lines);
         applySitePresentationGlobals(effectiveSettings().dataset_cover_theme, {
             preserveKnownBrand: !saved && !preview, version: saved?.version || '', preview: Boolean(preview),
         });
@@ -159,6 +171,7 @@ export function createSitePresentationState({ requestFn = fetchSitePresentationS
     function accept(payload, { siteChanged = false } = {}) {
         if (!readSiteAppearance(payload)) throw new Error('Invalid public presentation settings');
         saved = normalizePresentationSettings(payload);
+        applyTableCellMaxLines(saved.table_cell_max_lines);
         loaded = true;
         revision += 1;
         try {
@@ -206,12 +219,16 @@ export function createSitePresentationState({ requestFn = fetchSitePresentationS
         if (normalized.row_article_timestamp_display_mode !== baseline.row_article_timestamp_display_mode) {
             payload.row_article_timestamp_display_mode = normalized.row_article_timestamp_display_mode;
         }
+        if (normalized.table_cell_max_lines !== baseline.table_cell_max_lines) {
+            payload.table_cell_max_lines = normalized.table_cell_max_lines;
+        }
         // Invalidate an older GET immediately. Serial POSTs preserve user intent
         // even if two still-mounted palette controls attempt to save together.
         revision += 1;
         const pending = saveQueue.then(async () => {
             const response = await saveRequestFn(clone(payload));
             if (!readSiteAppearance(response)
+                || (payload.table_cell_max_lines !== undefined && response.table_cell_max_lines !== payload.table_cell_max_lines)
                 || Object.entries(payload.set).some(([path, value]) => (
                     response.site_values?.[path] ?? response.defaults?.[path]) !== value)
                 || (payload.row_article_timestamp_display_mode !== undefined
@@ -225,6 +242,7 @@ export function createSitePresentationState({ requestFn = fetchSitePresentationS
         saveQueue = pending.catch(() => {});
         return pending;
     }
+    applyTableCellMaxLines(savedSettings().table_cell_max_lines);
     applyActiveFilterRemoveSide(effectiveSettings().dataset_cover_theme.shared.active_filter_remove_side);
     datasetAppearanceState.updateSite(effectiveSettings().dataset_cover_theme, { version: saved?.version || '', changed: false });
     return { loadSettings, savedSettings, effectiveSettings, paint, setPreview, releasePreview, saveSettings };
