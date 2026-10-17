@@ -13,6 +13,8 @@ import { HOME_PALETTE_COPY } from '../admin_tools/home_palette_copy.js';
 import { getPaletteCopy } from '../admin_tools/presentation_palette_shell.js';
 import { showToast } from '../../reusable_components/notifications/toast_notification_printer.js';
 import { createFrontPageSettingsHeroButton } from '../admin_tools/front_page_settings_modal.js';
+import { canShowFrontPageLink, createFrontPageLink } from './front_page_link.js';
+import { HOME_AVAILABILITY_CHANGED_EVENT } from './front_page_availability.js';
 
 /** Reuse the hero grid/actions and tabs; no active dataset is selected on Home. */
 export function createFrontPageTopRow(siteName, onSaved, paletteOptions = {}) {
@@ -45,8 +47,17 @@ export function createFrontPageTopRow(siteName, onSaved, paletteOptions = {}) {
     title.title = title.textContent;
     start.append(menuSlot, icon, title);
     const tabs = createHeroDatasetTabs();
+    const homeLink = createFrontPageLink({ topNavigation: true, current: true });
     const actions = document.createElement('div');
     actions.className = 'filterbar-inline-hero__actions';
+    // On Home, preserve the established menu → dataset keyboard order. The
+    // current-page link belongs with the trailing controls, before admin actions.
+    actions.append(homeLink);
+    function syncHomeAvailability() {
+        homeLink.hidden = !canShowFrontPageLink(localStorage.getItem('button_state') === 'logout');
+    }
+    syncHomeAvailability();
+    window.addEventListener(HOME_AVAILABILITY_CHANGED_EVENT, syncHomeAvailability);
     const gear = createFrontPageSettingsHeroButton(onSaved);
     if (gear) actions.append(gear);
     let destroyed = false;
@@ -121,6 +132,7 @@ export function createFrontPageTopRow(siteName, onSaved, paletteOptions = {}) {
             palette?.destroy();
             tabs.destroy();
             window.removeEventListener(NAVBAR_VISIBILITY_CHANGED_EVENT, syncMenu);
+            window.removeEventListener(HOME_AVAILABILITY_CHANGED_EVENT, syncHomeAvailability);
             window.removeEventListener('resize', syncMenu);
             window.removeEventListener('resize', syncMenuHeight);
             heightObserver?.disconnect();

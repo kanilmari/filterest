@@ -122,7 +122,7 @@ export function wireFilterbarRuntime({
     }
     const { syncSharedTopBar, destroy: destroySharedTopBarController } =
         createSharedTopbarVisibilityController({ tableName, currentView, tablePartsContainer,
-        sharedTopBar, sharedTopBarArticleClose,
+        sharedTopBar, sharedTopBarArticleClose, inlineHeroHost,
             getState: () => ({ bigCardOpen, inlineHeroVisible, activeScrollable }),
             isHidden, isNavbarVisible, captureMenuFocus: cornerControls.captureMenuFocus, syncCornerControls });
     function syncCornerControls(active = isSharedTopBarHostActive(sharedTopBar), menuHadFocus) {

@@ -485,7 +485,11 @@ export async function generate_front_page_settings_view(container, { onSaved = r
         articles.destroy();
         window.removeEventListener('beforeunload', beforeUnload);
         if (window.check_manage_permissions_dirty === checkDirty) delete window.check_manage_permissions_dirty;
-        container.replaceChildren(); // Returning through loadManagementView fetches a fresh scope.
+        container.replaceChildren();
+        // An empty management_forms wrapper still counts as loaded content to
+        // navigation. Remove it so the next admin-menu visit loads a fresh editor.
+        if (!modal && container.classList.contains('management_forms')) container.remove();
+        delete owner.__cleanupListeners;
     };
     bindDatasetLanguageRenderer(container, () => {
         container.querySelectorAll('[data-lang-key]').forEach(element => frontPageLabel(element, element.dataset.langKey));

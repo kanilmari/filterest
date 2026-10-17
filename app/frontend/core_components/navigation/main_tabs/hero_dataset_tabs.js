@@ -85,7 +85,7 @@ export function createHeroDatasetTabs(activeDataset) {
             entry.button.remove();
             entries.delete(dataset);
         }
-        element.hidden = entries.size === 0;
+        element.hidden = entries.size === 0 && !element.querySelector('.top-nav-home-button');
         updateCopy();
         if (focused?.isConnected && element.contains(focused) && document.activeElement !== focused) {
             focused.focus({ preventScroll: true });

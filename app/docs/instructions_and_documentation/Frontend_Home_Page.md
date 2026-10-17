@@ -160,6 +160,46 @@ bootstrap passes `forceReload` to refresh the current session. The static
 `navbarFrontPage` region is rendered by `initTabs`, in the reserved `front-page`
 grid area, with a translated label or the configured site name.
 
+The menu and top navigation share `front_page/front_page_link.js`: the same
+root address, house symbol, language renderer and Home activation handler.
+`front_page_availability.js` owns the effective feature rule (built-in Home
+enabled or a server-confirmed custom root). Login-only guests see neither link.
+The server supplies a Home-button site name only when the corresponding switch
+is enabled; otherwise the existing `front_page` language key supplies the label.
+
+Every dataset owns one top-navigation Home link. The toolbar controller moves
+that same node to the beginning of the main dataset tabs while the complete
+header row is on screen, or to the compact toolbar otherwise. Phones use the
+compact toolbar; its trailing Home icon remains outside the open 300 px menu
+at a 375 px viewport. Opening the menu also uses this compact position. Home's
+own header marks its link current beside the trailing actions, preserving the
+existing menu-to-dataset keyboard order. Compact links hide only the visual label;
+their accessible name and native keyboard/link gestures remain available.
+The Home activation stops its own click from reaching the menu's outside-click
+listener. Menu opening, closing, saved visibility and resize behavior stay with
+the existing menu owner; Home navigation writes none of that state.
+
+After the auth-modes response replaces Home and browse policy, it announces
+`HOME_AVAILABILITY_CHANGED_EVENT`. Dataset toolbar controllers reconcile the
+link immediately and on every toolbar synchronization, including cached-view
+reactivation. Disabling removes the old node; enabling creates one link in the
+current host without requiring a document reload. Controller teardown releases
+the settings listener. Home's own current-page control follows the same event,
+including when an administrator disables Home while its page is still open.
+
+`G12_top_nav_home_button.spec.ts` captures all four Home switches and restores
+their exact values in independent fixture teardown. It checks the six main
+dataset presentations at 1440, 1000 and 375 px in both explicit themes, with
+Home enabled/disabled and the menu open/closed. It captures owner screenshots
+under the test runtime root's `wo37/before` or `wo37/after` directory, selected
+by `WO37_PROBE_PHASE`. The native coordinator runs it serially in card projects;
+the before phase captures the old source without requiring a new control.
+The after phase also saves disable/enable transitions through the real Home
+editor, returns to the same retained dataset node, and checks that the document
+was never reloaded. Settings restoration still uses the independent fixture.
+Keyboard checks start at the document rather than a pointer-selected table cell,
+so their bounded Tab walk measures header reachability rather than table size.
+
 `front_page/front_page_printer.js` makes one `/api/front-page` request per visit,
 with cancellation, a render generation and a fifteen-second timeout/retry.
 Deactivation empties the view and aborts its request. Navigation's cleanup hook

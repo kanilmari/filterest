@@ -83,12 +83,12 @@ test('active state tracks page visibility through switches and shell rebuilds', 
     expect(document.querySelectorAll('a')).toHaveLength(1);
 });
 
-test('ordinary click opens Home and modified clicks keep the root href', () => {
+test('ordinary click opens Home and modified clicks keep the root href', async () => {
     localStorage.setItem('separate_front_page', 'true');
     renderNavbarFrontPage({ isLoggedIn: true });
     const link = document.querySelector('a');
     link.click();
-    expect(mocks.open).toHaveBeenCalledTimes(1);
+    await vi.waitFor(() => expect(mocks.open).toHaveBeenCalledTimes(1));
     expect(mocks.open).toHaveBeenCalledWith({ userActivation: false }); // Synthetic clicks cannot unlock retries.
     const event = new MouseEvent('click', { cancelable: true, ctrlKey: true });
     link.dispatchEvent(event);

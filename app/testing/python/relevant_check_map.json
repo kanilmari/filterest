@@ -40,14 +40,8 @@
         "app/backend/core_components/system_table_tools/dataset_default_view_handler.go",
         "app/backend/core_components/system_table_tools/dataset_default_view_validator.go"
       ],
-      "specs": [
-        "app/testing/e2e/E_search_filter/E18_dataset_default_view.spec.ts"
-      ],
-      "projects": [
-        "mobile-card",
-        "tablet-card",
-        "desktop-card"
-      ]
+      "specs": ["app/testing/e2e/E_search_filter/E18_dataset_default_view.spec.ts"],
+      "projects": ["mobile-card", "tablet-card", "desktop-card"]
     },
     {
       "area": "Primary table-header sort",
@@ -58,15 +52,8 @@
         "app/backend/core_components/dynamic_table_tools/dtt_1_row_crud/dtt_1_row_read/get_results_effective_sort.go",
         "app/backend/core_components/dynamic_table_tools/dtt_1_row_crud/dtt_1_row_read/get_results_effective_sort_test.go"
       ],
-      "specs": [
-        "app/testing/e2e/F_sort/F1_sort_dropdown.spec.ts",
-        "app/testing/e2e/F_sort/F2_column_header_sort.spec.ts"
-      ],
-      "projects": [
-        "mobile-card",
-        "tablet-card",
-        "desktop-card"
-      ]
+      "specs": ["app/testing/e2e/F_sort/F1_sort_dropdown.spec.ts", "app/testing/e2e/F_sort/F2_column_header_sort.spec.ts"],
+      "projects": ["mobile-card", "tablet-card", "desktop-card"]
     },
     {
       "area": "Card and article opener",
@@ -90,6 +77,7 @@
         "app/frontend/core_components/front_page/navbar_front_page.js", "app/testing/e2e/helpers/navbar.ts", "app/testing/e2e/helpers/menu_control_visibility.ts", "app/testing/e2e/helpers/menu_control_visibility.test.ts"
       ],
       "specs": [
+        "app/testing/e2e/G_navigation/G12_top_nav_home_button.spec.ts",
         "app/testing/e2e/C_card_view/C14_product_card_row_commits.spec.ts", "app/testing/e2e/D_view_switch/D0_theme_and_mobile_menu.spec.ts", "app/testing/e2e/E_search_filter/E10_site_identity_and_menu_contract.spec.ts", "app/testing/e2e/E_search_filter/E11_filterbar_persistence_and_article_seam.spec.ts",
         "app/testing/e2e/E_search_filter/E15_responsive_topbar.spec.ts", "app/testing/e2e/E_search_filter/E8_filterbar_nav_layering.spec.ts", "app/testing/e2e/G_navigation/G11_home_phone_layout.spec.ts", "app/testing/e2e/G_navigation/G1_tree_table_select.spec.ts",
         "app/testing/e2e/G_navigation/G3_tab_reorder.spec.ts", "app/testing/e2e/G_navigation/G4_history_back.spec.ts", "app/testing/e2e/G_navigation/G4_svg_tab_alignment.spec.ts", "app/testing/e2e/L_auth/L2_logout.spec.ts",
@@ -98,23 +86,13 @@
         "app/testing/e2e/T_admin/T9_create_table_current_project_folder.spec.ts"
       ],
       "projects": ["mobile-card", "tablet-card", "desktop-card"],
-      "drivers": ["#navbar\\b", "#(?:show|hide)MenuButton\\b", "data-navbar-menu-button", "\\bensureNavbarVisible\\s*\\(", "\\b(?:openAdminNavigationTree|revealFirstNavigationDatasetButton|revealNavigationDatasetButtonByNodeId)\\s*\\(", "\\binstallMenuVisibilityProbe\\s*\\(", "\\.(?:evaluate|addInitScript)\\s*\\(\\s*installMenuVisibilityProbe\\b", "\\bid\\s*[*^$|~]?=\\s*[\\'\\\"](?:navbar|(?:show|hide)MenuButton)[\\'\\\"]", "\\bgetElementById\\s*\\(\\s*[\\'\\\"](?:navbar|(?:show|hide)MenuButton)[\\'\\\"]"]
+      "drivers": ["top-nav-home-button|navbarFrontPage", "#navbar\\b", "#(?:show|hide)MenuButton\\b", "data-navbar-menu-button", "\\bensureNavbarVisible\\s*\\(", "\\b(?:openAdminNavigationTree|revealFirstNavigationDatasetButton|revealNavigationDatasetButtonByNodeId)\\s*\\(", "\\binstallMenuVisibilityProbe\\s*\\(", "\\.(?:evaluate|addInitScript)\\s*\\(\\s*installMenuVisibilityProbe\\b", "\\bid\\s*[*^$|~]?=\\s*[\\'\\\"](?:navbar|(?:show|hide)MenuButton)[\\'\\\"]", "\\bgetElementById\\s*\\(\\s*[\\'\\\"](?:navbar|(?:show|hide)MenuButton)[\\'\\\"]"]
     },
     {
       "area": "Floating panel placement",
-      "paths": [
-        "app/frontend/reusable_components/floating_panel_placement.js",
-        "app/frontend/reusable_components/floating_panel_placement.test.js"
-      ],
-      "specs": [
-        "app/testing/e2e/M_language/M1_language_switch.spec.ts",
-        "app/testing/e2e/E_search_filter/E16_multiselect_scroll.spec.ts"
-      ],
-      "projects": [
-        "mobile-card",
-        "tablet-card",
-        "desktop-card"
-      ]
+      "paths": ["app/frontend/reusable_components/floating_panel_placement.js", "app/frontend/reusable_components/floating_panel_placement.test.js"],
+      "specs": ["app/testing/e2e/M_language/M1_language_switch.spec.ts", "app/testing/e2e/E_search_filter/E16_multiselect_scroll.spec.ts"],
+      "projects": ["mobile-card", "tablet-card", "desktop-card"]
     },
     {
       "area": "Manual custom root proof tooling",
@@ -134,12 +112,9 @@
     },
     {
       "area": "Dataset listing and scroll",
-      "paths": [
-        "app/frontend/core_components/infinite_scroll",
-        "app/frontend/core_components/state_stores",
-        "app/frontend/core_components/infinite_scroll/infinite_scroll_handler.js"
-      ],
+      "paths": ["app/frontend/core_components/infinite_scroll", "app/frontend/core_components/state_stores", "app/frontend/core_components/infinite_scroll/infinite_scroll_handler.js"],
       "specs": [
+        "app/testing/e2e/G_navigation/G12_top_nav_home_button.spec.ts",
         "app/testing/e2e/Q_scroll/Q1_infinite_scroll.spec.ts",
         "app/testing/e2e/Q_scroll/Q2_offset_reset.spec.ts",
         "app/testing/e2e/G_navigation/G7_dataset_scroll_retention.spec.ts",
@@ -147,11 +122,7 @@
         "app/testing/e2e/E_search_filter/E13_row_group_category_panel.spec.ts",
         "app/testing/e2e/P_copy/P2_select_range.spec.ts"
       ],
-      "projects": [
-        "mobile-card",
-        "tablet-card",
-        "desktop-card"
-      ]
+      "projects": ["mobile-card", "tablet-card", "desktop-card"]
     },
     {
       "area": "Dataset appearance projection and binding",
@@ -173,11 +144,7 @@
         "app/testing/e2e/T_admin/T7_card_visibility.spec.ts",
         "app/testing/e2e/T_admin/T14_dataset_cover_palette.spec.ts"
       ],
-      "projects": [
-        "mobile-card",
-        "tablet-card",
-        "desktop-card"
-      ]
+      "projects": ["mobile-card", "tablet-card", "desktop-card"]
     },
     {
       "area": "Dataset views",
@@ -188,6 +155,7 @@
         "app/frontend/shared/dataset_appearance"
       ],
       "specs": [
+        "app/testing/e2e/G_navigation/G12_top_nav_home_button.spec.ts",
         "app/testing/e2e/C_card_view/C22_article_image_arrows_probe.spec.ts", "app/testing/e2e/C_card_view/C21_record_titles.spec.ts", "app/testing/e2e/C_card_view/C20_description_empty_blocks.spec.ts", "app/testing/e2e/C_card_view/C19_dataset_heading_hierarchy.spec.ts", "app/testing/e2e/C_card_view/C1_card_render.spec.ts",
         "app/testing/e2e/C_card_view/C3_close_big_card.spec.ts",
         "app/testing/e2e/Q_scroll/Q2_offset_reset.spec.ts",
@@ -198,11 +166,7 @@
         "app/testing/e2e/C_card_view/C15_chart_axes.spec.ts",
         "app/testing/e2e/C_card_view/C16_finnish_card_filterbar_text.spec.ts"
       ],
-      "projects": [
-        "mobile-card",
-        "tablet-card",
-        "desktop-card"
-      ]
+      "projects": ["mobile-card", "tablet-card", "desktop-card"]
     },
     {
       "area": "Article toolbar permissions",
@@ -231,20 +195,12 @@
         "app/backend/core_components/permissions_handlers.go",
         "app/backend/core_components/permissions_reader.go"
       ],
-      "specs": [
-        "app/testing/e2e/C_card_view/C17_article_toolbar_group_permissions.spec.ts"
-      ],
-      "projects": [
-        "mobile-card",
-        "tablet-card",
-        "desktop-card"
-      ]
+      "specs": ["app/testing/e2e/C_card_view/C17_article_toolbar_group_permissions.spec.ts"],
+      "projects": ["mobile-card", "tablet-card", "desktop-card"]
     },
     {
       "area": "Filtering and categories",
-      "paths": [
-        "app/frontend/core_components/filterbar", "app/frontend/reusable_components/multiselect_dropdown", "app/frontend/reusable_components/results_count"
-      ],
+      "paths": ["app/frontend/core_components/filterbar", "app/frontend/reusable_components/multiselect_dropdown", "app/frontend/reusable_components/results_count"],
       "specs": [
         "app/testing/e2e/E_search_filter/E18_dataset_default_view.spec.ts", "app/testing/e2e/C_card_view/C21_record_titles.spec.ts", "app/testing/e2e/E_search_filter/E19_shared_filter_section.spec.ts", "app/testing/e2e/C_card_view/C19_dataset_heading_hierarchy.spec.ts", "app/testing/e2e/A_row_crud/A1_add_row.spec.ts", "app/testing/e2e/A_row_crud/A2_edit_cell.spec.ts", "app/testing/e2e/A_row_crud/A3_delete_rows.spec.ts", "app/testing/e2e/A_row_crud/A4_select_row.spec.ts",
         "app/testing/e2e/A_row_crud/A5_select_all.spec.ts", "app/testing/e2e/A_row_crud/A6_select_card.spec.ts", "app/testing/e2e/A_row_crud/A7_fk_dropdown_edit.spec.ts", "app/testing/e2e/A_row_crud/A8_temp_dataset_persistence.spec.ts",
@@ -277,11 +233,7 @@
     },
     {
       "area": "Dataset writes and cell selection",
-      "paths": [
-        "app/frontend/core_components/general_tables",
-        "app/frontend/reusable_components/vanilla_checkbox_table",
-        "app/frontend/reusable_components/key_value_container"
-      ],
+      "paths": ["app/frontend/core_components/general_tables", "app/frontend/reusable_components/vanilla_checkbox_table", "app/frontend/reusable_components/key_value_container"],
       "specs": [
         "app/testing/e2e/A_row_crud/A1_add_row.spec.ts",
         "app/testing/e2e/A_row_crud/A2_edit_cell.spec.ts",
@@ -290,11 +242,7 @@
         "app/testing/e2e/C_card_view/C15_chart_axes.spec.ts",
         "app/testing/e2e/C_card_view/C16_finnish_card_filterbar_text.spec.ts"
       ],
-      "projects": [
-        "mobile-card",
-        "tablet-card",
-        "desktop-card"
-      ]
+      "projects": ["mobile-card", "tablet-card", "desktop-card"]
     },
     {
       "area": "Navigation and shared requests",
@@ -305,6 +253,7 @@
         "app/frontend/index.html"
       ],
       "specs": [
+        "app/testing/e2e/G_navigation/G12_top_nav_home_button.spec.ts",
         "app/testing/e2e/C_card_view/C22_article_image_arrows_probe.spec.ts", "app/testing/e2e/E_search_filter/E18_dataset_default_view.spec.ts", "app/testing/e2e/C_card_view/C19_dataset_heading_hierarchy.spec.ts", "app/testing/e2e/A_row_crud/A1_add_row.spec.ts", "app/testing/e2e/A_row_crud/A2_edit_cell.spec.ts", "app/testing/e2e/A_row_crud/A3_delete_rows.spec.ts", "app/testing/e2e/A_row_crud/A4_select_row.spec.ts",
         "app/testing/e2e/A_row_crud/A5_select_all.spec.ts", "app/testing/e2e/A_row_crud/A6_select_card.spec.ts", "app/testing/e2e/A_row_crud/A7_fk_dropdown_edit.spec.ts", "app/testing/e2e/A_row_crud/A8_temp_dataset_persistence.spec.ts",
         "app/testing/e2e/B_column_ops/B1_column_resize.spec.ts", "app/testing/e2e/B_column_ops/B2_column_visibility.spec.ts", "app/testing/e2e/B_column_ops/B3_column_reorder.spec.ts", "app/testing/e2e/B_column_ops/B4_column_view_presets.spec.ts",
@@ -356,11 +305,7 @@
         "app/testing/e2e/C_card_view/C3_close_big_card.spec.ts",
         "app/testing/e2e/P_copy/P2_select_range.spec.ts"
       ],
-      "projects": [
-        "mobile-card",
-        "tablet-card",
-        "desktop-card"
-      ]
+      "projects": ["mobile-card", "tablet-card", "desktop-card"]
     },
     {
       "area": "Sign-in and accounts",
@@ -371,7 +316,8 @@
         "app/backend/pipeline/device_id_check", "app/backend/pipeline/fingerprint_check", "app/backend/pipeline/csrf_check", "app/backend/pipeline/automation_check"
       ],
       "specs": [
-        "app/testing/e2e/J_modals/J4_client_error_notices.spec.ts", "app/testing/e2e/C_card_view/C22_article_image_arrows_probe.spec.ts", "app/testing/e2e/E_search_filter/E18_dataset_default_view.spec.ts", "app/testing/e2e/C_card_view/C21_record_titles.spec.ts", "app/testing/e2e/E_search_filter/E19_shared_filter_section.spec.ts", "app/testing/e2e/C_card_view/C19_dataset_heading_hierarchy.spec.ts", "app/testing/e2e/A_row_crud/A1_add_row.spec.ts", "app/testing/e2e/A_row_crud/A2_edit_cell.spec.ts", "app/testing/e2e/A_row_crud/A3_delete_rows.spec.ts", "app/testing/e2e/A_row_crud/A4_select_row.spec.ts",
+        "app/testing/e2e/J_modals/J4_client_error_notices.spec.ts", "app/testing/e2e/G_navigation/G12_top_nav_home_button.spec.ts",
+        "app/testing/e2e/C_card_view/C22_article_image_arrows_probe.spec.ts", "app/testing/e2e/E_search_filter/E18_dataset_default_view.spec.ts", "app/testing/e2e/C_card_view/C21_record_titles.spec.ts", "app/testing/e2e/E_search_filter/E19_shared_filter_section.spec.ts", "app/testing/e2e/C_card_view/C19_dataset_heading_hierarchy.spec.ts", "app/testing/e2e/A_row_crud/A1_add_row.spec.ts", "app/testing/e2e/A_row_crud/A2_edit_cell.spec.ts", "app/testing/e2e/A_row_crud/A3_delete_rows.spec.ts", "app/testing/e2e/A_row_crud/A4_select_row.spec.ts",
         "app/testing/e2e/A_row_crud/A5_select_all.spec.ts", "app/testing/e2e/A_row_crud/A6_select_card.spec.ts", "app/testing/e2e/A_row_crud/A7_fk_dropdown_edit.spec.ts", "app/testing/e2e/A_row_crud/A8_temp_dataset_persistence.spec.ts",
         "app/testing/e2e/B_column_ops/B1_column_resize.spec.ts", "app/testing/e2e/B_column_ops/B2_column_visibility.spec.ts", "app/testing/e2e/B_column_ops/B3_column_reorder.spec.ts", "app/testing/e2e/B_column_ops/B4_column_view_presets.spec.ts",
         "app/testing/e2e/C_card_view/C10_image_first_article.spec.ts", "app/testing/e2e/C_card_view/C12_article_reload_reading_position.spec.ts", "app/testing/e2e/C_card_view/C13_related_dataset_appearance.spec.ts", "app/testing/e2e/C_card_view/C14_product_card_row_commits.spec.ts",
@@ -423,11 +369,7 @@
         "app/testing/e2e/S_permissions/S2_permission_check_action.spec.ts",
         "app/testing/e2e/G_navigation/G10_dataset_name_pool_access.spec.ts"
       ],
-      "projects": [
-        "mobile-card",
-        "tablet-card",
-        "desktop-card"
-      ]
+      "projects": ["mobile-card", "tablet-card", "desktop-card"]
     },
     {
       "area": "Startup and upgrades",
@@ -439,16 +381,8 @@
         "app/backend/core_components/update_capability",
         "app/backend/core_components/release_updates"
       ],
-      "specs": [
-        "app/testing/e2e/smoke.spec.ts",
-        "app/testing/e2e/G_navigation/G10_dataset_name_pool_access.spec.ts",
-        "app/testing/e2e/E_search_filter/E9_admin_version_info.spec.ts"
-      ],
-      "projects": [
-        "mobile-card",
-        "tablet-card",
-        "desktop-card"
-      ]
+      "specs": ["app/testing/e2e/smoke.spec.ts", "app/testing/e2e/G_navigation/G10_dataset_name_pool_access.spec.ts", "app/testing/e2e/E_search_filter/E9_admin_version_info.spec.ts"],
+      "projects": ["mobile-card", "tablet-card", "desktop-card"]
     },
     {
       "area": "Administration",
@@ -467,11 +401,7 @@
         "app/testing/e2e/C_card_view/C16_finnish_card_filterbar_text.spec.ts",
         "app/testing/e2e/T_admin/T17_home_article_buttons.spec.ts"
       ],
-      "projects": [
-        "mobile-card",
-        "tablet-card",
-        "desktop-card"
-      ]
+      "projects": ["mobile-card", "tablet-card", "desktop-card"]
     },
     {
       "area": "Media",
@@ -493,11 +423,7 @@
         "app/testing/e2e/T_admin/T10_asset_linking_admin.spec.ts",
         "app/testing/e2e/C_card_view/C9_big_card_image_metadata_editor.spec.ts"
       ],
-      "projects": [
-        "mobile-card",
-        "tablet-card",
-        "desktop-card"
-      ]
+      "projects": ["mobile-card", "tablet-card", "desktop-card"]
     },
     {
       "area": "Translations",
@@ -524,6 +450,7 @@
         "app/frontend/shared/front_page_presentation"
       ],
       "specs": [
+        "app/testing/e2e/G_navigation/G12_top_nav_home_button.spec.ts",
         "app/testing/e2e/D_view_switch/D0_theme_and_mobile_menu.spec.ts",
         "app/testing/e2e/L_auth/L2_logout.spec.ts",
         "app/testing/e2e/T_admin/T15_view_field_assignments.spec.ts",
@@ -532,27 +459,13 @@
         "app/testing/e2e/G_navigation/G11_home_phone_layout.spec.ts",
         "app/testing/e2e/T_admin/T17_home_article_buttons.spec.ts"
       ],
-      "projects": [
-        "mobile-card",
-        "tablet-card",
-        "desktop-card"
-      ]
+      "projects": ["mobile-card", "tablet-card", "desktop-card"]
     },
     {
       "area": "Workline observatory",
-      "paths": [
-        "app/frontend/core_components/workline_observatory",
-        "app/backend/core_components/workline_observatory"
-      ],
-      "specs": [
-        "app/testing/e2e/T_admin/T13_workline_observatory.spec.ts",
-        "app/testing/e2e/T_admin/T20_workline_observatory_scroll.spec.ts"
-      ],
-      "projects": [
-        "mobile-card",
-        "tablet-card",
-        "desktop-card"
-      ]
+      "paths": ["app/frontend/core_components/workline_observatory", "app/backend/core_components/workline_observatory"],
+      "specs": ["app/testing/e2e/T_admin/T13_workline_observatory.spec.ts", "app/testing/e2e/T_admin/T20_workline_observatory_scroll.spec.ts"],
+      "projects": ["mobile-card", "tablet-card", "desktop-card"]
     },
     {
       "area": "Add-row modal session cancellation",
@@ -562,17 +475,8 @@
         "app/frontend/reusable_components/modal/modal_builder.js",
         "app/frontend/reusable_components/modal/modal_builder.test.js"
       ],
-      "specs": [
-        "app/testing/e2e/J_modals/J2_modal_close.spec.ts"
-      ],
-      "projects": [
-        "mobile-card",
-        "mobile-bigcard",
-        "tablet-card",
-        "tablet-bigcard",
-        "desktop-card",
-        "desktop-bigcard"
-      ]
+      "specs": ["app/testing/e2e/J_modals/J2_modal_close.spec.ts"],
+      "projects": ["mobile-card", "mobile-bigcard", "tablet-card", "tablet-bigcard", "desktop-card", "desktop-bigcard"]
     },
     {
       "area": "Shared controls",
@@ -597,11 +501,7 @@
         "app/testing/e2e/C_card_view/C3_close_big_card.spec.ts",
         "app/testing/e2e/C_card_view/C16_finnish_card_filterbar_text.spec.ts"
       ],
-      "projects": [
-        "mobile-card",
-        "tablet-card",
-        "desktop-card"
-      ]
+      "projects": ["mobile-card", "tablet-card", "desktop-card"]
     },
     {
       "area": "Themes and shells",
@@ -610,7 +510,8 @@
         "app/frontend/core_components/theme.js", "app/frontend/core_components/theme_preference_api.js"
       ],
       "specs": [
-        "app/testing/e2e/J_modals/J4_client_error_notices.spec.ts", "app/testing/e2e/C_card_view/C22_article_image_arrows_probe.spec.ts", "app/testing/e2e/E_search_filter/E18_dataset_default_view.spec.ts", "app/testing/e2e/C_card_view/C21_record_titles.spec.ts", "app/testing/e2e/E_search_filter/E19_shared_filter_section.spec.ts", "app/testing/e2e/C_card_view/C20_description_empty_blocks.spec.ts", "app/testing/e2e/C_card_view/C19_dataset_heading_hierarchy.spec.ts", "app/testing/e2e/C_card_view/C10_image_first_article.spec.ts", "app/testing/e2e/C_card_view/C13_related_dataset_appearance.spec.ts", "app/testing/e2e/C_card_view/C14_product_card_row_commits.spec.ts", "app/testing/e2e/C_card_view/C15_chart_axes.spec.ts",
+        "app/testing/e2e/J_modals/J4_client_error_notices.spec.ts", "app/testing/e2e/G_navigation/G12_top_nav_home_button.spec.ts",
+        "app/testing/e2e/C_card_view/C22_article_image_arrows_probe.spec.ts", "app/testing/e2e/E_search_filter/E18_dataset_default_view.spec.ts", "app/testing/e2e/C_card_view/C21_record_titles.spec.ts", "app/testing/e2e/E_search_filter/E19_shared_filter_section.spec.ts", "app/testing/e2e/C_card_view/C20_description_empty_blocks.spec.ts", "app/testing/e2e/C_card_view/C19_dataset_heading_hierarchy.spec.ts", "app/testing/e2e/C_card_view/C10_image_first_article.spec.ts", "app/testing/e2e/C_card_view/C13_related_dataset_appearance.spec.ts", "app/testing/e2e/C_card_view/C14_product_card_row_commits.spec.ts", "app/testing/e2e/C_card_view/C15_chart_axes.spec.ts",
         "app/testing/e2e/C_card_view/C16_finnish_card_filterbar_text.spec.ts", "app/testing/e2e/C_card_view/C17_article_toolbar_group_permissions.spec.ts", "app/testing/e2e/C_card_view/C3_close_big_card.spec.ts", "app/testing/e2e/D_view_switch/D0_theme_and_mobile_menu.spec.ts",
         "app/testing/e2e/E_search_filter/E10_site_identity_and_menu_contract.spec.ts", "app/testing/e2e/E_search_filter/E13_row_group_category_panel.spec.ts", "app/testing/e2e/E_search_filter/E14_selected_category_refresh.spec.ts", "app/testing/e2e/E_search_filter/E15_responsive_topbar.spec.ts",
         "app/testing/e2e/E_search_filter/E16_multiselect_scroll.spec.ts", "app/testing/e2e/E_search_filter/E17_card_refresh_lifecycle.spec.ts", "app/testing/e2e/E_search_filter/E6_active_filter_tags.spec.ts", "app/testing/e2e/E_search_filter/E8_filterbar_nav_layering.spec.ts",
@@ -624,143 +525,86 @@
     },
     {
       "area": "Developer tooling",
-      "paths": [
-        "app/frontend/core_components/dev_tools",
-        "app/backend/core_components/agent_tools",
-        "app/backend/core_components/dev_tools",
-        "app/backend/core_components/maintainer_tools"
-      ],
+      "paths": ["app/frontend/core_components/dev_tools", "app/backend/core_components/agent_tools", "app/backend/core_components/dev_tools", "app/backend/core_components/maintainer_tools"],
       "specs": [],
       "none": "Operator/agent tools have Python and Go proofs; no maintained browser flow covers their process execution."
     },
     {
       "area": "Internal backend foundations",
       "paths": [
-        "app/backend/core_components/app_registry",
-        "app/backend/core_components/context_keys",
-        "app/backend/core_components/dbutils",
-        "app/backend/core_components/dynamic_function_engine",
-        "app/backend/core_components/email",
-        "app/backend/core_components/event_bus",
-        "app/backend/core_components/httpresponse",
-        "app/backend/core_components/logging",
-        "app/backend/core_components/product_identity",
-        "app/backend/core_components/runtimepaths",
-        "app/backend/pipeline/audit",
-        "app/backend/pipeline/error_handling",
-        "app/backend/pipeline/lazy_transaction",
-        "app/backend/pipeline/rate_limiting",
-        "app/backend/pipeline/request_logging",
-        "app/backend/pipeline/request_size_limit",
-        "app/backend/pipeline/txlog"
+        "app/backend/core_components/app_registry", "app/backend/core_components/context_keys", "app/backend/core_components/dbutils",
+        "app/backend/core_components/dynamic_function_engine", "app/backend/core_components/email", "app/backend/core_components/event_bus", "app/backend/core_components/httpresponse",
+        "app/backend/core_components/logging", "app/backend/core_components/product_identity", "app/backend/core_components/runtimepaths", "app/backend/pipeline/audit",
+        "app/backend/pipeline/error_handling", "app/backend/pipeline/lazy_transaction", "app/backend/pipeline/rate_limiting", "app/backend/pipeline/request_logging",
+        "app/backend/pipeline/request_size_limit", "app/backend/pipeline/txlog"
       ],
       "specs": [],
       "none": "Internal libraries and transport policy use Go tests and consumer proofs; no isolated browser surface."
     },
     {
       "area": "Assistant",
-      "paths": [
-        "app/frontend/core_components/ai_features",
-        "app/frontend/reusable_components/ai_features",
-        "app/backend/core_components/site_assistant"
-      ],
+      "paths": ["app/frontend/core_components/ai_features", "app/frontend/reusable_components/ai_features", "app/backend/core_components/site_assistant"],
       "specs": [],
       "none": "Assistant boundaries have Go and Vitest proofs; no maintained chat browser spec exists. E2_vector_search tests dataset search, not the assistant."
     },
     {
       "area": "Payment provider",
-      "paths": [
-        "app/backend/core_components/payment_gateway"
-      ],
+      "paths": ["app/backend/core_components/payment_gateway"],
       "specs": [],
       "none": "Provider integration needs an external account; payment setup specs are fixtures, not a browser proof."
     },
     {
       "area": "Static and generated assets",
-      "paths": [
-        "app/frontend/icons",
-        "app/frontend/generated",
-        "app/frontend/dist"
-      ],
+      "paths": ["app/frontend/icons", "app/frontend/generated", "app/frontend/dist"],
       "specs": [],
       "none": "Static icons and generated bundles/contracts use source/build checks; consumer specs follow their source area."
     },
     {
       "area": "Extension examples and cloud helpers",
-      "paths": [
-        "app/frontend/custom_views",
-        "app/backend/cloud"
-      ],
+      "paths": ["app/frontend/custom_views", "app/backend/cloud"],
       "specs": [],
       "none": "Extension examples and cloud helpers have no maintained isolated browser specification."
     },
     {
       "area": "Article presentation contract and compatibility export",
-      "paths": [
-        "app/frontend/shared/article_presentations",
-        "app/backend/tools"
-      ],
+      "paths": ["app/frontend/shared/article_presentations", "app/backend/tools"],
       "specs": [],
       "none": "Passive shared vocabulary and an offline read-only settings exporter; no rendered UI or opener behavior changes. Vitest and Go drift tests cover the contract; disposable PostgreSQL covers the baseline."
     }
   ],
   "source_guards": [
     {
-      "paths": [
-        "app/backend/core_components/system_config_checks/front_page_article_buttons.go",
-        "app/testing/shared_contracts/home_article_label_examples.json"
-      ],
+      "paths": ["app/backend/core_components/system_config_checks/front_page_article_buttons.go", "app/testing/shared_contracts/home_article_label_examples.json"],
       "package": "app/backend/core_components/system_table_tools",
       "anchor": "app/backend/core_components/system_table_tools/front_page_article_buttons_security_postgres_test.go"
     },
     {
-      "paths": [
-        "app/backend",
-        "app/components",
-        "app/testing/fixtures/component_canary.json",
-        "app/testing/componentfixture"
-      ],
+      "paths": ["app/backend", "app/components", "app/testing/fixtures/component_canary.json", "app/testing/componentfixture"],
       "package": "app/backend/core_components/sessions",
       "anchor": "app/backend/core_components/sessions/session_store_access_guard_test.go"
     },
     {
-      "paths": [
-        "app/frontend/shared/article_presentations"
-      ],
+      "paths": ["app/frontend/shared/article_presentations"],
       "package": "app/backend/core_components/system_table_tools",
       "anchor": "app/backend/core_components/system_table_tools/article_presentation_contract_test.go"
     },
     {
-      "paths": [
-        "app/frontend/shared/article_presentations"
-      ],
+      "paths": ["app/frontend/shared/article_presentations"],
       "package": "app/backend/core_components/dynamic_table_tools/dtt_1_row_crud/dtt_1_row_read",
       "anchor": "app/backend/core_components/dynamic_table_tools/dtt_1_row_crud/dtt_1_row_read/article_baseline_test.go"
     },
     {
-      "paths": [
-        "app/components",
-        "app/testing/fixtures/component_canary.json",
-        "app/testing/componentfixture"
-      ],
+      "paths": ["app/components", "app/testing/fixtures/component_canary.json", "app/testing/componentfixture"],
       "package": "app/backend/core_components/auth",
       "anchor": "app/backend/core_components/auth/component_discovery_test.go"
     },
     {
-      "paths": [
-        "app/components",
-        "app/testing/fixtures/component_canary.json",
-        "app/testing/componentfixture"
-      ],
+      "paths": ["app/components", "app/testing/fixtures/component_canary.json", "app/testing/componentfixture"],
       "package": "app/backend/core_components/router",
       "anchor": "app/backend/core_components/router/component_discovery_test.go"
     },
     {
-      "paths": [
-        "app/components",
-        "app/testing/fixtures/component_canary.json",
-        "app/testing/componentfixture"
-      ],
+      "paths": ["app/components", "app/testing/fixtures/component_canary.json", "app/testing/componentfixture"],
       "package": "app/backend/core_components/system_table_tools",
       "anchor": "app/backend/core_components/system_table_tools/component_discovery_test.go"
     }
@@ -771,10 +615,7 @@
       "tests": ["app/testing/python/test_component_registration.py"]
     },
     {
-      "paths": [
-        "app/server_tools/agent_tools/worker_agent",
-        "app/server_tools/agent_tools/worker_agent_defaults.sh"
-      ],
+      "paths": ["app/server_tools/agent_tools/worker_agent", "app/server_tools/agent_tools/worker_agent_defaults.sh"],
       "tests": [
         "app/testing/python/test_worker_agent_codex.py",
         "app/testing/python/test_worker_agent_effort.py",
@@ -782,11 +623,7 @@
       ]
     },
     {
-      "paths": [
-        "app/frontend/vite.config.mjs",
-        "app/frontend/dist",
-        "app/server_tools/release/browser_bundle.py"
-      ],
+      "paths": ["app/frontend/vite.config.mjs", "app/frontend/dist", "app/server_tools/release/browser_bundle.py"],
       "tests": [
         "app/testing/python/test_browser_bundle_check.py"
       ]
@@ -807,19 +644,13 @@
       ]
     },
     {
-      "paths": [
-        "app/server_tools/scripts/check_md_links.py",
-        "app/docs/instructions_and_documentation/lang_key_lifecycle.md"
-      ],
+      "paths": ["app/server_tools/scripts/check_md_links.py", "app/docs/instructions_and_documentation/lang_key_lifecycle.md"],
       "tests": [
         "app/testing/python/test_md_links.py"
       ]
     },
     {
-      "paths": [
-        "app/server_tools/scripts/qa.sh",
-        "app/server_tools/check_gitignore/check_gitignore.sh"
-      ],
+      "paths": ["app/server_tools/scripts/qa.sh", "app/server_tools/check_gitignore/check_gitignore.sh"],
       "tests": [
         "app/testing/python/test_qa_workflow.py"
       ]
@@ -872,14 +703,9 @@
   "file_length_guard": "app/server_tools/scripts/check_file_length.sh",
   "separate_config_checks": [
     {
-      "paths": [
-        "app/backend/core_components/sessions",
-        "app/testing/e2e/helpers/cookie_instance_harness"
-      ],
+      "paths": ["app/backend/core_components/sessions", "app/testing/e2e/helpers/cookie_instance_harness"],
       "config": "app/testing/e2e/instance-cookie-isolation.playwright.config.ts",
-      "specs": [
-        "app/testing/e2e/L_auth/L4_instance_cookie_isolation.test.ts"
-      ]
+      "specs": ["app/testing/e2e/L_auth/L4_instance_cookie_isolation.test.ts"]
     }
   ]
 }

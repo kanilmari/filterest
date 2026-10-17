@@ -46,7 +46,9 @@ export function createNavigationFitController(element) {
             return width;
         });
         const gap = Number.parseFloat(view.getComputedStyle(element).columnGap) || 0;
-        const count = countFittingNavigationButtons(widths, availableWidth, gap);
+        const home = element.querySelector(':scope > .top-nav-home-button');
+        const reserved = home ? home.getBoundingClientRect().width + (buttons.length ? gap : 0) : 0;
+        const count = countFittingNavigationButtons(widths, availableWidth - reserved, gap);
         buttons.forEach((button, index) => {
             const hidden = index >= count;
             if (hidden && button === element.ownerDocument.activeElement) {
@@ -65,6 +67,10 @@ export function createNavigationFitController(element) {
     }
     const observer = typeof view.ResizeObserver === 'function' ? new view.ResizeObserver(schedule) : null;
     observer?.observe(element);
+    // Home changes hosts without changing this row's width. Refit the dataset
+    // prefix when that reserved destination arrives or leaves.
+    const children = new view.MutationObserver(schedule);
+    children.observe(element, { childList: true });
     view.addEventListener('resize', schedule);
     element.ownerDocument.fonts?.addEventListener('loadingdone', schedule);
     return {
@@ -72,6 +78,7 @@ export function createNavigationFitController(element) {
         destroy() {
             destroyed = true;
             observer?.disconnect();
+            children.disconnect();
             if (frame) view.cancelAnimationFrame(frame);
             view.removeEventListener('resize', schedule);
             element.ownerDocument.fonts?.removeEventListener('loadingdone', schedule);

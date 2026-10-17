@@ -8,6 +8,7 @@ import { hasRoutePermission } from "../route_permission_checker.js";
 import { synchronizeThemePreferenceForAuthState } from "../theme.js";
 import { getSessionGeneration, invalidateSessionGeneration, subscribeToSessionGeneration } from '../auth/session_generation_store.js';
 import { setCustomRootEnabled } from '../front_page/custom_root_navigation.js';
+import { HOME_AVAILABILITY_CHANGED_EVENT } from '../front_page/front_page_availability.js';
 
 // Use the existing session invalidation channel; route sets stay local to this
 // tab and are replaced only by its authoritative bootstrap, never merged.
@@ -49,6 +50,10 @@ export async function setAuthModes() {
             } else {
                 localStorage.removeItem('login_required_for_browse');
             }
+
+            // Home availability does not depend on the later permissions/theme
+            // requests succeeding. Retained dataset headers need this policy now.
+            window.dispatchEvent(new CustomEvent(HOME_AVAILABILITY_CHANGED_EVENT));
 
             await synchronizeThemePreferenceForAuthState(data.needs_button === "logout");
             if (generation !== getSessionGeneration()) return;

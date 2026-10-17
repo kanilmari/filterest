@@ -27,6 +27,8 @@ vi.mock('../../reusable_components/image_source_picker/image_source_picker.js', 
 
 import { generate_front_page_settings_view } from './front_page_settings_view.js';
 import { setCustomRootEnabled } from '../front_page/custom_root_navigation.js';
+import { loadManagementView } from '../../reusable_components/dom_container_builder.js';
+import { hasContentBesideLoadingIndicator } from '../../reusable_components/loading/loading_indicator_printer.js';
 
 const currentDirectory = dirname(fileURLToPath(import.meta.url));
 const migration = readFileSync(resolve(currentDirectory, '../../../server_tools/migrations/20261005000033_seed_front_page_language_keys.sql'), 'utf8')
@@ -160,6 +162,22 @@ beforeEach(() => {
 afterEach(() => { target?.closest('.content_div')?.__cleanupListeners?.(); vi.restoreAllMocks(); });
 
 describe('Home settings and scope drafts', () => {
+    test('leaving the management editor lets navigation load editable settings on every return', async () => {
+        document.body.innerHTML = '<div id="tabs_container"></div>';
+        for (const enabled of [false, true, false, true]) {
+            common.settings.separate_front_page = enabled;
+            await loadManagementView('front_page_settings_container', generate_front_page_settings_view);
+            const owner = document.getElementById('front_page_settings_container');
+            target = owner.querySelector('.management_forms');
+            expect(query('enabled').checked).toBe(enabled);
+            expect(query('enabled').disabled).toBe(false);
+            owner.__cleanupListeners();
+            // Navigation reloads only containers without content beside its spinner.
+            expect(hasContentBesideLoadingIndicator(owner)).toBe(false);
+            expect(window.check_manage_permissions_dirty).toBeUndefined();
+        }
+    });
+
     test('Open Home follows saved readiness rather than an unsaved checkbox', async () => {
         localStorage.setItem('separate_front_page', 'false');
         setCustomRootEnabled(false);

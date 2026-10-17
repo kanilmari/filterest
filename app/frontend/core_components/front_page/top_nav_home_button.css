@@ -1,0 +1,46 @@
+/* top_nav_home_button.css
+ * Fits the menu's Home link into dataset and Home navigation surfaces.
+ * Existing theme tokens own colours; compact bars reserve a complete touch target.
+ * Responsive labels never remove the link's full accessible name. */
+.navbar-front-page-link.top-nav-home-button {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-width: 44px;
+  max-width: min(200px, 100%);
+  min-height: 44px;
+  padding: 6px 12px;
+  border: 1px solid var(--border_color);
+  border-radius: var(--navigation-radius, 8px);
+  background: var(--navigation-background, var(--button_bg_color));
+  color: var(--navigation-text, var(--button_text_color));
+  font: inherit;
+  font-size: var(--navigation-size, 0.85rem);
+  font-weight: 600;
+}
+
+.top-nav-home-button[aria-current="page"] {
+  border-color: var(--color-brand);
+  background: color-mix(in srgb, var(--color-brand) 12%, var(--button_bg_color));
+}
+
+.dataset-shared-topbar__slot--end:has(> .top-nav-home-button) { gap: 8px; }
+.dataset-shared-topbar .top-nav-home-button .navbar-front-page-label { display: none; }
+.dataset-shared-topbar .top-nav-home-button {
+  order: 10;
+  width: 44px;
+  padding: 0;
+}
+
+@media (width <= 700px) {
+  .top-nav-home-button .navbar-front-page-label { display: none; }
+  .navbar-front-page-link.top-nav-home-button {
+    width: 44px;
+    padding: 0;
+  }
+  .dataset-shared-topbar__inner:has(.top-nav-home-button) {
+    grid-template-columns: 44px minmax(0, 1fr) 148px;
+  }
+}

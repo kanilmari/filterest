@@ -8,13 +8,26 @@ import { isSharedTopBarHostActive, shouldShowSharedTopBar } from "./shared_topba
 import { CARD_VIEW_KEY, isArticleDatasetView } from "../table_views/dataset_view_registry.js";
 import { updateShowMenuButtonPosition } from "../navigation/menu_button/navbar_visibility_handler.js";
 import { createMobileTopbarSearchController } from './mobile_topbar_search_controller.js';
+import { createTopNavHomeButton, placeTopNavHomeButton } from '../front_page/top_nav_home_button.js';
+import { isHeroControlAreaVisible } from './dataset_corner_controls.js';
+import { canShowFrontPageLink } from '../front_page/front_page_link.js';
+import { HOME_AVAILABILITY_CHANGED_EVENT } from '../front_page/front_page_availability.js';
 const SHARED_TOPBAR_TRANSITION_DURATION_MS = 260;
 
 export function createSharedTopbarVisibilityController({ tableName, currentView, tablePartsContainer,
-    sharedTopBar, sharedTopBarArticleClose, getState,
+    sharedTopBar, sharedTopBarArticleClose, inlineHeroHost, getState,
     isHidden, isNavbarVisible, captureMenuFocus, syncCornerControls }) {
     let sharedTopBarHideTimer = null;
     const mobileSearch = createMobileTopbarSearchController(sharedTopBar);
+    let homeLink = null;
+    function reconcileHomeAvailability() {
+        if (!canShowFrontPageLink(localStorage.getItem('button_state') === 'logout')) {
+            homeLink?.remove();
+            homeLink = null;
+        } else {
+            homeLink ||= createTopNavHomeButton();
+        }
+    }
     function clearSharedTopBarTransitionTimers() {
         if (sharedTopBarHideTimer !== null) {
             clearTimeout(sharedTopBarHideTimer);
@@ -83,7 +96,10 @@ export function createSharedTopbarVisibilityController({ tableName, currentView,
     }
 
     function syncSharedTopBar() {
-        const { bigCardOpen, inlineHeroVisible } = getState();
+        // Settings refresh updates mounted headers immediately; the same check
+        // also runs when the runtime's host observer reactivates a cached dataset.
+        reconcileHomeAvailability();
+        const { bigCardOpen, inlineHeroVisible, activeScrollable } = getState();
         const navbarVisible = isNavbarVisible();
         const filterbarVisible = !isHidden();
         const activeView =
@@ -94,9 +110,11 @@ export function createSharedTopbarVisibilityController({ tableName, currentView,
         const articleViewActive = isArticleDatasetView(activeView);
         const phone = window.innerWidth <= 700;
         const active = isSharedTopBarHostActive(sharedTopBar);
+        const homeInHero = !phone && !bigCardOpen && !navbarVisible
+            && isHeroControlAreaVisible(inlineHeroHost, activeScrollable);
         const shouldShowBar =
             active &&
-            (phone || shouldShowSharedTopBar({
+            (phone || (homeLink && !homeInHero) || shouldShowSharedTopBar({
                 navbarVisible,
                 filterbarVisible,
                 articleViewActive,
@@ -106,7 +124,14 @@ export function createSharedTopbarVisibilityController({ tableName, currentView,
         // Hiding/inerting the bar can blur its menu before corner reconciliation.
         // Carry only this update's outgoing focus intent, including on history restore.
         const menuHadFocus = captureMenuFocus(active);
+        const homeHadFocus = document.activeElement === homeLink;
         setSharedTopBarVisibility(shouldShowBar);
+        // On phones the compact bar owns Home; elsewhere the complete hero row
+        // owns it until that row leaves the viewport. Never clone the link.
+        placeTopNavHomeButton(homeLink, homeInHero && !shouldShowBar
+            ? inlineHeroHost.querySelector('.hero-dataset-tabs')
+            : sharedTopBar.querySelector('.dataset-shared-topbar__slot--end'));
+        if (active && homeHadFocus) homeLink.focus({ preventScroll: true });
         mobileSearch.sync({ phone, active: shouldShowBar });
         setSharedTopBarArticleCloseVisibility(
             shouldShowBar && !phone && (bigCardOpen || activeView !== CARD_VIEW_KEY)
@@ -116,6 +141,10 @@ export function createSharedTopbarVisibilityController({ tableName, currentView,
         updateShowMenuButtonPosition();
     }
 
+    window.addEventListener(HOME_AVAILABILITY_CHANGED_EVENT, syncSharedTopBar);
     return { syncSharedTopBar, clearSharedTopBarTransitionTimers,
-        destroy() { clearSharedTopBarTransitionTimers(); mobileSearch.destroy(); } };
+        destroy() {
+            window.removeEventListener(HOME_AVAILABILITY_CHANGED_EVENT, syncSharedTopBar);
+            clearSharedTopBarTransitionTimers(); mobileSearch.destroy(); homeLink?.remove();
+        } };
 }

@@ -13,16 +13,15 @@ import { isCustomRootEnabled, isRootAuthEntry, loadCustomRoot } from './custom_r
 import { getSessionGeneration, isSessionValidationRequired, revalidateSessionIdentity,
     subscribeToSessionGeneration } from '../auth/session_generation_store.js';
 
+import { isSeparateFrontPageEnabled } from './front_page_availability.js';
+export { isSeparateFrontPageEnabled } from './front_page_availability.js';
+
 let pendingOpen = null;
 let openGeneration = 0;
 subscribeToSessionGeneration(() => {
     openGeneration += 1;
     pendingOpen = null;
 });
-
-export function isSeparateFrontPageEnabled() {
-    return isCustomRootEnabled() || localStorage.getItem('separate_front_page') === 'true';
-}
 
 export function isFrontPageShowing() {
     const container = document.getElementById('front_page_container');

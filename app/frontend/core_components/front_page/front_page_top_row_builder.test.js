@@ -4,7 +4,7 @@
 // Prevents detached Home rows from retaining stale permission-dependent tabs.
 // @vitest-environment jsdom
 
-import { expect, test, vi } from 'vitest';
+import { beforeEach, expect, test, vi } from 'vitest';
 const mocks = vi.hoisted(() => ({ snapshot: [{ dataset: 'news', text: 'News', langKey: 'news' }], listeners: new Set(), unsubscribe: vi.fn() }));
 vi.mock('../navigation/main_tabs/main_dataset_tabs.js', () => ({
     getMainDatasetTabs: () => mocks.snapshot,
@@ -14,9 +14,30 @@ vi.mock('../navigation/main_tabs/main_dataset_tabs.js', () => ({
     },
 }));
 vi.mock('../navigation/main_tabs/main_tab_printer.js', () => ({ openNavTab: vi.fn() }));
+vi.mock('./front_page_navigation.js', () => ({ openFrontPage: vi.fn(), isSeparateFrontPageEnabled: () => true, isFrontPageShowing: () => true }));
 vi.mock('../admin_tools/front_page_settings_modal.js', () => ({ createFrontPageSettingsHeroButton: () => null }));
 vi.mock('../lang/translation_handler.js', () => ({ getTranslationForKey: (_key, options) => options.fallback }));
 import { createFrontPageTopRow } from './front_page_top_row_builder.js';
+import { HOME_AVAILABILITY_CHANGED_EVENT } from './front_page_availability.js';
+beforeEach(() => mocks.unsubscribe.mockClear());
+
+test('the current Home control follows live availability without moving menu focus', () => {
+    localStorage.setItem('separate_front_page', 'true');
+    document.body.innerHTML = '<div id="navbar" class="collapsed"></div><button id="showMenuButton"></button>';
+    const row = createFrontPageTopRow('Site'); document.body.append(row.element); row.mount();
+    const menu = document.getElementById('showMenuButton');
+    const home = row.element.querySelector('.top-nav-home-button');
+    menu.focus();
+    try {
+        for (const enabled of [true, false, true]) {
+            localStorage.setItem('separate_front_page', String(enabled));
+            window.dispatchEvent(new Event(HOME_AVAILABILITY_CHANGED_EVENT));
+            expect(home.hidden).toBe(!enabled);
+            expect(document.activeElement).toBe(menu);
+            expect(home.getAttribute('aria-current')).toBe('page');
+        }
+    } finally { row.destroy(); row.element.remove(); localStorage.clear(); }
+});
 
 test('Home tabs have no active dataset, update from the shared model and unsubscribe on teardown', () => {
     document.body.innerHTML = '<div id="navbar"></div>';
@@ -24,9 +45,14 @@ test('Home tabs have no active dataset, update from the shared model and unsubsc
     document.body.append(row.element);
     row.mount();
     expect(row.element.querySelectorAll('.hero-dataset-tabs__button')).toHaveLength(1);
-    expect(row.element.querySelector('[aria-current]')).toBeNull();
+    expect(row.element.querySelector('.hero-dataset-tabs__button[aria-current]')).toBeNull();
+    expect(row.element.querySelector('.top-nav-home-button').getAttribute('aria-current')).toBe('page');
+    expect(row.element.querySelector('.filterbar-inline-hero__actions > .top-nav-home-button')).not.toBeNull();
+    // G11's existing one-Tab menu → first destination contract stays intact.
+    expect(row.element.querySelector('a[href], button')).toBe(row.element.querySelector('.hero-dataset-tabs__button'));
     for (const listener of mocks.listeners) listener([{ dataset: 'events', text: 'Events', langKey: 'events' }]);
     expect(row.element.querySelector('.hero-dataset-tabs__button').dataset.dataset).toBe('events');
+    expect(row.element.querySelector('a[href], button')).toBe(row.element.querySelector('.hero-dataset-tabs__button'));
     row.destroy();
     expect(mocks.listeners.size).toBe(0);
     expect(mocks.unsubscribe).toHaveBeenCalledOnce();

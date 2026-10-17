@@ -88,6 +88,26 @@ test('hides only whole trailing buttons with their inter-button gaps', () => {
     expect(countFittingNavigationButtons([100], 99)).toBe(0);
 });
 
+test('reserves the Home link before dataset fitting and restores space when it moves away', async () => {
+    vi.useFakeTimers();
+    const element = document.createElement('nav');
+    element.innerHTML = '<button>First</button><button>Second</button>';
+    document.body.append(element);
+    vi.spyOn(element, 'clientWidth', 'get').mockReturnValue(220);
+    const buttons = [...element.children];
+    buttons.forEach(button => vi.spyOn(button, 'getBoundingClientRect').mockReturnValue({ width: 100 }));
+    const home = document.createElement('a'); home.className = 'top-nav-home-button'; home.href = '/';
+    vi.spyOn(home, 'getBoundingClientRect').mockReturnValue({ width: 44 });
+    const fit = createNavigationFitController(element);
+    try {
+        element.prepend(home); await vi.advanceTimersByTimeAsync(30);
+        expect(buttons.map(button => button.hidden)).toEqual([false, true]);
+        expect(home.hidden).toBe(false);
+        home.remove(); await vi.advanceTimersByTimeAsync(30);
+        expect(buttons.map(button => button.hidden)).toEqual([false, false]);
+    } finally { fit.destroy(); }
+});
+
 test('remeasures hidden buttons after translation, restores on grow, and gives focus to menu', async () => {
     vi.useFakeTimers();
     const element = document.createElement('nav');

@@ -43,6 +43,34 @@ describe('auth_mode_handler', () => {
     vi.restoreAllMocks();
   });
 
+  test('announces fresh Home policy for both transitions before theme and permission work', async () => {
+    const { HOME_AVAILABILITY_CHANGED_EVENT } = await import('../front_page/front_page_availability.js');
+    const snapshots = [];
+    const listener = () => snapshots.push({
+      enabled: localStorage.getItem('separate_front_page'),
+      mode: localStorage.getItem('button_state'),
+      browse: localStorage.getItem('login_required_for_browse'),
+    });
+    window.addEventListener(HOME_AVAILABILITY_CHANGED_EVENT, listener);
+    const mod = await loadModule();
+    // A failed later theme request must not leave the mounted Home link stale.
+    synchronizeThemePreferenceForAuthStateMock.mockRejectedValue(new Error('theme unavailable'));
+    const warning = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      for (const enabled of [true, false, true]) {
+        fetchAuthModesMock.mockResolvedValue({ needs_button: 'logout', separate_front_page: enabled,
+          login_required_for_browse: true });
+        await mod.setAuthModes();
+      }
+      expect(snapshots).toEqual([true, false, true].map(enabled => ({
+        enabled: String(enabled), mode: 'logout', browse: 'true',
+      })));
+    } finally {
+      window.removeEventListener(HOME_AVAILABILITY_CHANGED_EVENT, listener);
+      warning.mockRestore();
+    }
+  });
+
   test('invalidates the session generation before awaiting delayed auth modes', async () => {
     const mod = await loadModule();
     const session = await import('../auth/session_generation_store.js');

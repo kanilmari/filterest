@@ -343,7 +343,7 @@ test('top row keeps its shared tabs/actions and identity while only the hidden m
     expect(page.querySelector('.hero-dataset-tabs')).not.toBeNull();
     expect(page.querySelector('.filterbar-inline-hero__actions')).not.toBeNull();
     expect(page.querySelector('.dataset-shared-topbar')).toBeNull();
-    expect(page.querySelector('.hero-dataset-tabs [aria-current]')).toBeNull();
+    expect(page.querySelector('.hero-dataset-tabs__button[aria-current]')).toBeNull();
     navbar.classList.remove('collapsed');
     window.dispatchEvent(new Event('navbar-visibility-changed'));
     expect(identity.querySelector('.dataset-shared-topbar__menu-slot').hidden).toBe(true);
