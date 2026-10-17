@@ -7,6 +7,8 @@
 
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { setChosenDatasetView } from "../state_stores/dataset_view_choice_saver.js";
+// Transform imports outside test deadlines; resetModules still isolates each case.
+import "./infinite_scroll_handler.js";
 
 const {
     appendDataToCardViewMock,
@@ -26,21 +28,26 @@ const {
     setUnifiedTableStateMock: vi.fn(),
 }));
 
-vi.mock("../endpoints/endpoint_data_fetcher.js", () => ({
-    fetchDatasetData: fetchDatasetDataMock,
-}));
+vi.mock("../endpoints/endpoint_data_fetcher.js", () => ({ fetchDatasetData: fetchDatasetDataMock }));
 
-vi.mock("../table_views/table_view/table_row_printer.js", () => ({
-    appendDataToTable: appendDataToTableMock,
-}));
+vi.mock("../table_views/table_view/table_row_printer.js", () => ({ appendDataToTable: appendDataToTableMock }));
 
-vi.mock("../table_views/card_view/card_view_printer.js", () => ({
-    appendDataToCardView: appendDataToCardViewMock,
-}));
+vi.mock("../table_views/card_view/card_view_printer.js", () => ({ appendDataToCardView: appendDataToCardViewMock }));
 
-vi.mock("../../reusable_components/results_count/results_count_printer.js", () => ({
-    setResultsCount: setResultsCountMock,
-}));
+// Keep real row-commit policies, without unused builders importing the shell
+// and startup requests on every resetModules(). Unexpected builder calls fail.
+vi.mock("../table_views/table_view/table_structure_builder.js", () => ({}));
+vi.mock("../table_views/article_view/article_view_printer.js", () => ({}));
+vi.mock("../table_views/tree_view/tree_view_printer.js", () => ({}));
+vi.mock("../table_views/table_component_builder.js", () => ({}));
+vi.mock("../table_views/settings_view/settings_view_printer.js", () => ({}));
+vi.mock("../table_views/product_card_view/product_card_view_printer.js", () => ({}));
+vi.mock("../table_views/calendar_view/calendar_view_printer.js", () => ({}));
+vi.mock("../table_views/map_view/map_view_printer.js", () => ({}));
+vi.mock("../table_views/price_chart_view/chart_configuration.js", () => ({}));
+vi.mock("../table_views/cloud_management_view/cloud_management_view_printer.js", () => ({}));
+
+vi.mock("../../reusable_components/results_count/results_count_printer.js", () => ({ setResultsCount: setResultsCountMock }));
 
 vi.mock("../state_stores/table_state_store.js", () => ({
     getUnifiedTableState: getUnifiedTableStateMock,
@@ -120,10 +127,11 @@ describe("initializeInfiniteScroll", () => {
         scroll.seedInfiniteScrollRowCount("complete_cards", rowCount);
         scroll.initializeInfiniteScroll("complete_cards");
         intersectionObservers.at(-1)?.callback([{ isIntersecting: true }]);
-        await Promise.resolve();
-        scroll.disconnectInfiniteScroll("complete_cards");
+        // Exercise the complete fill-screen window without waiting ten seconds.
+        await vi.advanceTimersByTimeAsync(10000);
         expect(fetchDatasetDataMock).not.toHaveBeenCalled();
         expect(document.getElementById("complete_cards_infinite_scroll_sentinel")).toBeNull();
+        scroll.disconnectInfiniteScroll("complete_cards");
     });
 
     test("a queued observer notification cannot page past the total just loaded", async () => {

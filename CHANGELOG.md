@@ -22,6 +22,7 @@ Dates are the local (Europe/Helsinki) date on which the version was published.
 
 ## [Unreleased]
 
+- **Stable pagination and article-arrow unit tests (test only)** — Isolated unused view builders, exercised fill-screen timers with virtual time, and reused only fixture-relevant rules from the complete stylesheet cascade to avoid machine-load timeouts.
 - **Service-catalog logos follow asset metadata (J1)** — Remove service-specific rendering defaults and redundant logo CSS; text marks accept trimmed `logo_mark_text` up to eight Unicode code points, otherwise using the variant's first two uppercase letters.
 - **Unused icons removed (J14, K404)** — Removed three unused sign-in, sign-out and card-visibility SVG files and their license inventory entries.
 - **Backend cleanups (J5/J13/J2)** — Removed the unused dynamic-function stub, centralized image extension defaults in the image profile, and made image sourcing prefer decodable formats while retaining AVIF at lower priority.

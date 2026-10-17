@@ -18,8 +18,8 @@ function readCascade(relativePath, base = import.meta.url) {
         (_, relative) => readCascade(relative, url),
     );
 }
-const cascade = readCascade("../../../styles/imports.css");
-const enabledHover = cascade.match(/\.fw-btn:hover:not\(:disabled\)\s*\{[^}]*\}/)[0];
+const fullCascade = readCascade("../../../styles/imports.css");
+const enabledHover = fullCascade.match(/\.fw-btn:hover:not\(:disabled\)\s*\{[^}]*\}/)[0];
 const disabledBorderProbe = "rgb(101, 102, 103)";
 const surfaces = [
     ["IFAV", "modal_overlay_blur image-modal-controls-active", "image_modal image_first_view_modal", "row_article_image_first_arrow"],
@@ -27,6 +27,81 @@ const surfaces = [
     ["classic inline media", "", "row_article_inline_media", "row_article_image_first_arrow"],
     ["thumbnail carousel", "", "big_card_thumbnail_row", "big_card_thumbnail_carousel_button"],
 ];
+const classicMarkup = `<div class="big_card_image"><div class="row_article_inline_media">
+    <div class="wrapper card_photo_presentation"><img></div>
+    <button class="row_article_image_first_arrow fw-btn fw-btn--ghost">
+        <span class="row_article_image_arrow_icon"></span>
+    </button>
+</div></div>`;
+
+function surfaceMarkup(overlayClass, rootClass, arrowClass) {
+    return `<div class="${overlayClass}"><div class="${rootClass}">
+        <button disabled class="${arrowClass} fw-btn fw-btn--ghost">
+            <span class="row_article_image_arrow_icon"></span>
+        </button>
+        <button class="${arrowClass} fw-btn fw-btn--ghost">
+            <span class="row_article_image_arrow_icon"></span>
+        </button>
+    </div></div>`;
+}
+
+const fixtureStates = ["light", "dark"].flatMap(theme =>
+    ["rest", "hover"].flatMap(state =>
+        ["body", "root class", "root attribute"].map(themeScope => ({ theme, state, themeScope }))));
+const simulateHover = css => css.replace(/:hover\b/g, ".test-hover");
+
+// Use the same theme, tree and interaction setup for filtering and assertions.
+// Separate theme scopes also preserve selectors that require an unthemed root/body.
+function populateSurface(fixture, { theme, state, themeScope }, classes) {
+    fixture.body.innerHTML = surfaceMarkup(...classes);
+    const themeRoot = themeScope === "body" ? fixture.body : fixture.documentElement;
+    if (themeScope === "root attribute") themeRoot.dataset.theme = theme;
+    else themeRoot.className = `${theme}-mode`;
+    if (state === "hover") fixture.querySelectorAll("button")
+        .forEach(button => button.classList.add("test-hover"));
+}
+
+// Parse the full cascade once, outside the timed tests. Keep every rule that
+// can affect a fixture (including global/ancestor rules) in its original order.
+// Re-parsing unrelated application CSS in each jsdom fixture took seconds.
+function createProbe() {
+    const probe = document.implementation.createHTMLDocument();
+    const style = probe.createElement("style");
+    // The assertion fixtures have a nonempty style node too (:empty/:has()).
+    style.textContent = "/* cascade */";
+    probe.head.replaceChildren(style);
+    return probe;
+}
+const classicProbe = createProbe();
+classicProbe.body.innerHTML = classicMarkup;
+const probes = [
+    { fixture: classicProbe, transform: selector => selector },
+    ...fixtureStates.flatMap(fixtureState => surfaces.map(([, ...classes]) => {
+        // Keep trees separate so :only-child, :has(), etc. see the real fixture.
+        const fixture = createProbe();
+        populateSurface(fixture, fixtureState, classes);
+        return { fixture, transform: simulateHover };
+    })),
+];
+const sheet = new CSSStyleSheet();
+sheet.replaceSync(fullCascade);
+function matchingRules(rules) {
+    return Array.from(rules, rule => {
+        if (!rule.selectorText && rule.cssRules) {
+            const children = matchingRules(rule.cssRules);
+            return children ? `${rule.cssText.slice(0, rule.cssText.indexOf("{") + 1)}${children}}` : "";
+        }
+        if (!rule.selectorText) return rule.cssText;
+        try {
+            return probes.some(({ fixture, transform }) => fixture.querySelector(transform(rule.selectorText)))
+                ? rule.cssText : "";
+        } catch {
+            // Retain selectors the query engine cannot classify, conservatively.
+            return rule.cssText;
+        }
+    }).join("\n");
+}
+const cascade = matchingRules(sheet.cssRules);
 
 afterEach(() => {
     document.head.replaceChildren();
@@ -39,12 +114,7 @@ describe("article image arrow CSS", () => {
         const style = document.createElement("style");
         style.textContent = cascade;
         document.head.append(style);
-        document.body.innerHTML = `<div class="big_card_image"><div class="row_article_inline_media">
-            <div class="wrapper card_photo_presentation"><img></div>
-            <button class="row_article_image_first_arrow fw-btn fw-btn--ghost">
-                <span class="row_article_image_arrow_icon"></span>
-            </button>
-        </div></div>`;
+        document.body.innerHTML = classicMarkup;
         const media = getComputedStyle(document.querySelector(".row_article_inline_media"));
         const image = getComputedStyle(document.querySelector(".wrapper"));
         const button = getComputedStyle(document.querySelector("button"));
@@ -62,9 +132,9 @@ describe("article image arrow CSS", () => {
         // after entering the media, and checks :hover on the arrow itself.
     });
 
-    for (const [theme, state] of ["light", "dark"].flatMap(theme =>
-        ["rest", "hover"].map(state => [theme, state]))) {
-        test.each(surfaces)(`keeps arrow colours in the full ${theme} ${state} cascade: %s`,
+    for (const fixtureState of fixtureStates) {
+        const { theme, state, themeScope } = fixtureState;
+        test.each(surfaces)(`keeps arrow colours in the full ${theme} ${state} cascade (${themeScope}): %s`,
             (_name, overlayClass, rootClass, arrowClass) => {
                 // Isolate selector caches between fixtures, especially body :is() matches.
                 const frame = document.createElement("iframe");
@@ -76,21 +146,10 @@ describe("article image arrow CSS", () => {
                 // It also misranks later :is() rules: replay the more specific framework hover last.
                 // Its var() border shorthands lack longhands: substitute only the edge alias.
                 // The binding guard below and C22 verify the actual theme-derived colour.
-                style.textContent = `${cascade}\n${state === "hover" ? enabledHover : ""}`
-                    .replace(/:hover\b/g, ".test-hover")
+                style.textContent = simulateHover(`${cascade}\n${state === "hover" ? enabledHover : ""}`)
                     .replaceAll("var(--control-disabled-border)", disabledBorderProbe);
                 fixture.head.append(style);
-                fixture.body.className = `${theme}-mode`;
-                fixture.body.innerHTML = `<div class="${overlayClass}"><div class="${rootClass}">
-                    <button disabled class="${arrowClass} fw-btn fw-btn--ghost">
-                        <span class="row_article_image_arrow_icon"></span>
-                    </button>
-                    <button class="${arrowClass} fw-btn fw-btn--ghost">
-                        <span class="row_article_image_arrow_icon"></span>
-                    </button>
-                </div></div>`;
-                if (state === "hover") fixture.querySelectorAll("button")
-                    .forEach(button => button.classList.add("test-hover"));
+                populateSurface(fixture, fixtureState, [overlayClass, rootClass, arrowClass]);
                 const disabled = fixture.querySelector("button:disabled");
                 const enabled = fixture.querySelector("button:enabled");
                 const disabledIcon = context.getComputedStyle(disabled.firstElementChild).backgroundColor;
