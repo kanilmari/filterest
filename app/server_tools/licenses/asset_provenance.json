@@ -136,12 +136,6 @@
     {
       "component": "Filterest original interface SVGs",
       "kind": "asset",
-      "path": "app/frontend/icons/admin/card-visibility-checkbox-unchecked-icon.svg",
-      "sha256": "4b89cfad43d350df34ae83912e53d41c8fb8a3d5e5f081079c24e3d0d7282b5c"
-    },
-    {
-      "component": "Filterest original interface SVGs",
-      "kind": "asset",
       "path": "app/frontend/icons/admin/permission-checkbox-ambiguous-icon.svg",
       "sha256": "8366973113453020da6c67f66627aadc6525242e43f3189b542b8090434c1676"
     },
@@ -186,18 +180,6 @@
       "kind": "asset",
       "path": "app/frontend/icons/admin/permission-user-icon.svg",
       "sha256": "d5b5997bd01ef1d3b3a7bb7b70197fed10b225eabb332a7ed871e35a3509231e"
-    },
-    {
-      "component": "Google Material Icons and Symbols",
-      "kind": "asset",
-      "path": "app/frontend/icons/auth/login-icon.svg",
-      "sha256": "12a690a6c694d0bc0bfb3cc4cad1f750d929a8327cbe22d4340b1f0ed51868ae"
-    },
-    {
-      "component": "Google Material Icons and Symbols",
-      "kind": "asset",
-      "path": "app/frontend/icons/auth/logout-icon.svg",
-      "sha256": "e071244e57265d6f7e39eafabb3c8173029d7c92b49e3e71985f66c91a82cd1d"
     },
     {
       "component": "Google Material Icons and Symbols",
