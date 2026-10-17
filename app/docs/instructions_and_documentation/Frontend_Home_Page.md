@@ -171,6 +171,8 @@ Every palette save carries the complete text style even when it was untouched.
 Serif story combines the title and slogan in one heading: upright Georgia / Times
 New Roman plus an italic accent. An empty slogan omits the accent; the existing
 site-name title fallback remains. The hero's language follows its rendered copy.
+Keep title and slogan short, for example “Matkatiedot ja -edut” + “yhdellä
+silmäyksellä”; a longer lead sentence belongs in the description.
 Each description line becomes one paragraph; blank lines start sections and a
 whole line `**…**` marks bold emphasis. Only the outer markers are removed;
 other asterisks stay literal. All copy uses text nodes. Default keeps the existing
@@ -179,8 +181,12 @@ separate slogan and literal paragraph rendering.
 `front_page_serif_story.css` owns responsive fonts, colours and shadows under
 `.front-page-hero--serif-story-v1`, with explicit body theme classes overriding
 OS preference. Text is left-aligned; story and emphasis paragraphs wrap at every
-width, keeping authored lines separate. Only the title and accent stay nowrap
-above 760 px; at or below that breakpoint they wrap inside Home's gutters. No navigation,
+width, keeping authored lines separate and the configured maximum story-column
+width. Font sizes use container units (`cqi`) and the 1180/760 px container queries
+follow the content scroller's width, accounting for a docked side menu. The hero
+uses the full stage width when needed: a title and accent that fit stay on one
+line; otherwise the heading wraps in balanced lines inside Home's gutters, and a single word
+too long for the content width breaks rather than running off-screen. No navigation,
 listing, media or background setting is changed. There are no custom font,
 colour or CSS-string controls, and WL170 only reserves this existing ownership.
 
@@ -195,8 +201,9 @@ styles are used; bounded delays and indexes use CSSOM custom properties.
 
 `T21_home_text_style.spec.ts` is a GET-only fixture proof using the actual signed-in
 viewer id. It covers the reference's exact Finnish/English 12-line story, desktop
-and phone wrapping, timing, stable geometry, theme continuity, language restart
-and reduced motion. Native screenshots go under `data/testing/wo38a/after/`
+and phone wrapping, a long slogan at 1920 px with the menu docked, timing, stable
+geometry, theme continuity, language restart and reduced motion. Native
+screenshots go under `data/testing/wo38a/after/`
 (or the configured test runtime root's `wo38a/after/`). It never enables Home.
 Only a non-default text style (Serif story or line reveal) stores schema 3.
 Default-style sites store v2 and stay readable by older binaries. Older binaries

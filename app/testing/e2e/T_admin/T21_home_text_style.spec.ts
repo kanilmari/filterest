@@ -52,7 +52,8 @@ const presentation = {
 };
 const outputRoot = path.join(resolveFilterestTestRuntimeRoot(), 'wo38a', 'after');
 
-async function fixture(page: Page, language: 'fi' | 'en', theme: 'light' | 'dark') {
+async function fixture(page: Page, language: 'fi' | 'en', theme: 'light' | 'dark',
+  { dockMenu = false, slogan = copy[language].accent } = {}) {
   await login(page, loadCredentials());
   const profileResponse = await page.request.get('/api/user-profile');
   expect(profileResponse.ok()).toBe(true);
@@ -69,7 +70,7 @@ async function fixture(page: Page, language: 'fi' | 'en', theme: 'light' | 'dark
     expect(route.request().method()).toBe('GET');
     await route.fulfill({ json: { viewer_id: viewerID, site_name: 'Fintravel', blocks: [], show_blocks: false,
       presentation, presentation_version: 'wo38a-response-only', hero: {
-        title: { fi: copy.fi.title, en: copy.en.title }, slogan: { fi: copy.fi.accent, en: copy.en.accent },
+        title: { fi: copy.fi.title, en: copy.en.title }, slogan: { fi: copy.fi.accent, en: copy.en.accent, [language]: slogan },
         description: { fi: copy.fi.description, en: copy.en.description },
       } } });
   });
@@ -83,10 +84,10 @@ async function fixture(page: Page, language: 'fi' | 'en', theme: 'light' | 'dark
     if (shared.includes(new URL(request.url()).pathname)) expect(request.method()).toBe('GET');
   });
   await page.emulateMedia({ colorScheme: theme === 'light' ? 'dark' : 'light', reducedMotion: 'no-preference' });
-  await page.addInitScript(({ language, theme }) => {
+  await page.addInitScript(({ language, theme, dockMenu }) => {
     localStorage.setItem('chosen_language', language); localStorage.setItem('theme', theme);
-    localStorage.setItem('navVisibleWide', 'false'); localStorage.setItem('navVisibleNarrow', 'false');
-  }, { language, theme });
+    localStorage.setItem('navVisibleWide', String(dockMenu)); localStorage.setItem('navVisibleNarrow', 'false');
+  }, { language, theme, dockMenu });
 }
 
 const linesFor = (page: Page) => page.locator('.front-page-story-line');
@@ -112,6 +113,51 @@ async function openHome(page: Page) {
   await expect(hero.locator('.front-page-story-line--section-start')).toHaveCount(4);
   await expect(hero.locator('.front-page-story-line--emphasis')).toHaveCount(2);
   return hero;
+}
+
+async function expectHeadingFits(hero: Locator) {
+  const heading = hero.locator('h1');
+  for (const part of [heading, heading.locator('em')]) {
+    await expect(part).toHaveCSS('white-space', 'normal');
+    await expect(part).toHaveCSS('text-wrap', 'balance');
+  }
+  const bounds = await heading.evaluate(element => {
+    const hero = element.parentElement!;
+    const scroller = element.closest('.front-page-scroller')!;
+    const scrollerBox = scroller.getBoundingClientRect();
+    const range = document.createRange(); range.selectNodeContents(element);
+    const rects = [...range.getClientRects()].filter(rect => rect.width > 0);
+    const top = Math.min(...rects.map(rect => rect.top));
+    const lineHeight = parseFloat(getComputedStyle(element).lineHeight);
+    const actual = { left: element.getBoundingClientRect().left,
+      right: Math.max(...rects.map(rect => rect.right)),
+      rows: new Set(rects.map(rect => Math.round((rect.top - top) / lineHeight))).size,
+      availableWidth: hero.getBoundingClientRect().width,
+      scrollerLeft: scrollerBox.left, scrollerRight: scrollerBox.right,
+      scrollWidth: scroller.scrollWidth, clientWidth: scroller.clientWidth };
+    // Measure the actual regular/italic fonts, including spacing, rather than assuming Georgia is installed.
+    // A temporary stylesheet keeps the probe out of inline styles; both probe and sheet are always removed.
+    const clone = element.cloneNode(true) as HTMLElement;
+    clone.classList.add('home-heading-width-probe'); clone.setAttribute('aria-hidden', 'true');
+    const sheet = new CSSStyleSheet();
+    sheet.insertRule('.home-heading-width-probe, .home-heading-width-probe em { white-space: nowrap !important; }');
+    const previous = [...document.adoptedStyleSheets];
+    try {
+      document.adoptedStyleSheets = [...previous, sheet]; hero.append(clone);
+      range.selectNodeContents(clone);
+      return { ...actual, singleLineWidth: range.getBoundingClientRect().width };
+    } finally {
+      clone.remove(); document.adoptedStyleSheets = previous;
+    }
+  });
+  expect(bounds.availableWidth).toBeGreaterThan(0);
+  expect(bounds.scrollWidth).toBeLessThanOrEqual(bounds.clientWidth);
+  expect(bounds.right).toBeLessThanOrEqual(bounds.scrollerRight);
+  if (bounds.singleLineWidth <= bounds.availableWidth) expect(bounds.rows).toBe(1);
+  else expect(bounds.rows).toBeGreaterThan(1);
+  const storyWidth = await hero.locator('.front-page-description').evaluate(element => element.getBoundingClientRect().width);
+  expect(storyWidth).toBeLessThanOrEqual(presentation.max_width_px);
+  return bounds;
 }
 
 for (const language of ['fi', 'en'] as const) for (const theme of ['light', 'dark'] as const) {
@@ -141,27 +187,11 @@ for (const language of ['fi', 'en'] as const) for (const theme of ['light', 'dar
         story: parseFloat(getComputedStyle(element.querySelector('.front-page-story-line')!).fontSize) }));
       expect(sizes.title).toBeGreaterThan(sizes.story * 2.5);
       await expect(hero.locator('.front-page-story-line[hidden], .front-page-story-line[aria-hidden], .front-page-story-line[aria-live]')).toHaveCount(0);
-      const bounds = await heading.evaluate(element => {
-        const box = element.getBoundingClientRect();
-        const scroller = element.closest('.front-page-scroller')!.getBoundingClientRect();
-        const range = document.createRange(); range.selectNodeContents(element);
-        const rects = [...range.getClientRects()].filter(rect => rect.width > 0);
-        return { left: box.left, right: Math.max(box.right, ...rects.map(rect => rect.right)),
-          topRows: [...new Set(rects.map(rect => Math.round(rect.top)))].length,
-          scrollerLeft: scroller.left, scrollerRight: scroller.right };
-      });
-      if (viewport.width === 1440) {
-        expect(bounds.topRows).toBe(1);
-        await expect(heading).toHaveCSS('white-space', 'nowrap');
-        await expect(heading.locator('em')).toHaveCSS('white-space', 'nowrap');
-        // The right edge with real Georgia is checked by the Stylist's Windows-fonts probe, not by this spec.
-      }
+      const bounds = await expectHeadingFits(hero);
       if (viewport.width === 390) {
         expect(bounds.right).toBeLessThanOrEqual(bounds.scrollerRight - 15);
         expect(bounds.left).toBeGreaterThanOrEqual(bounds.scrollerLeft + 15);
-        expect(bounds.topRows).toBeGreaterThan(1);
-        await expect(heading).toHaveCSS('white-space', 'normal');
-        await expect(heading.locator('em')).toHaveCSS('white-space', 'normal');
+        expect(bounds.rows).toBeGreaterThan(1);
       }
       await waitUntilAge(first, 3700); await expect(first).toHaveCSS('opacity', '1');
       await waitUntilAge(first, 12600); await expectComplete(page);
@@ -173,6 +203,26 @@ for (const language of ['fi', 'en'] as const) for (const theme of ['light', 'dar
     });
   }
 }
+
+test('long slogan at 1920 with the side menu docked', async ({ page }) => {
+  test.setTimeout(90_000);
+  const slogan = 'Fintravel kokoaa yhteen sen, mitä matkaa suunnitteleva tarvitsee: päivitetyn matkatiedon ja edulliset tarjoukset.';
+  await page.setViewportSize({ width: 1920, height: 1080 });
+  await fixture(page, 'fi', 'light', { dockMenu: true, slogan });
+  const hero = await openHome(page);
+  const navbar = page.locator('#navbar');
+  await expect(navbar).toBeVisible();
+  await expect(navbar).not.toHaveClass(/\bcollapsed\b/);
+  await expect.poll(async () => {
+    const menu = (await navbar.boundingBox())!;
+    const content = (await page.locator('.front-page-scroller--positioned').boundingBox())!;
+    return menu.x >= 0 && menu.width > 0 && menu.x + menu.width <= content.x;
+  }).toBe(true);
+  await expect(hero.locator('h1')).toHaveText(`${copy.fi.title} ${slogan}`);
+  const bounds = await expectHeadingFits(hero);
+  expect(bounds.rows).toBeGreaterThan(1);
+  await waitUntilAge(linesFor(page).first(), 12600); await expectComplete(page);
+});
 
 test('language restarts; theme continues; entering reduced motion completes and leaving keeps all visible', async ({ page }) => {
   test.setTimeout(120_000);

@@ -22,6 +22,7 @@ Dates are the local (Europe/Helsinki) date on which the version was published.
 
 ## [Unreleased]
 
+- **Serif story headings fit Home (WO38a-FIX)** — Typography follows the content width, including a docked side menu; short headings stay on one line and longer titles and slogans wrap in balanced lines while the story keeps its configured column width. Finnish/English palette guidance explains the short title-and-slogan split.
 - **Home follows its server setting and the existing toolbar rules (WO37-FIX)** — Home no longer reveals the top bar; it is the first tab-sized dataset hero item with either menu state, and one focused link moves to the bar when needed. Cross-tab settings remove stale Home links, and an unavailable Home opens the normal start view; the historical phone rule is unchanged.
 - **Table cell line limit (WO30)** — Administrator → Site settings now offers one site-wide integer limit (1–30), applied immediately without reloading. The default is 3: existing sites move from 15 to 3 lines; longer cells scroll inside the cell. Database 9.12.0 seeds the setting and Finnish/English copy for fresh installs and upgrades, preserving authored translations.
 - Keep literal interface words and shared readable labels available to guests with trusted scan evidence while protecting private names; automatic AI translation of missing interface words now runs only for administrators, and other users keep the readable fallback until then.
