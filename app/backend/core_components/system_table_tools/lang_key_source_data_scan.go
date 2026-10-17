@@ -127,6 +127,15 @@ func scanSchemaLangKeySources(keys map[string]int64, codeSources []sourceEntry, 
 		}
 		return nil
 	}
+	literalFiles := map[string]map[string]bool{}
+	for _, source := range codeSources {
+		if source.literalUI {
+			if literalFiles[source.filePath] == nil {
+				literalFiles[source.filePath] = map[string]bool{}
+			}
+			literalFiles[source.filePath][source.langKey] = true
+		}
+	}
 	var schemaSources []sourceEntry
 	for _, source := range codeSources {
 		if source.schemaAlias {
@@ -162,6 +171,11 @@ func scanSchemaLangKeySources(keys map[string]int64, codeSources []sourceEntry, 
 		if alias := lang_key_naming.LinkedSchemaAlias(key); alias != "" {
 			for _, source := range schemaSources {
 				if !aliases[source.schemaBuilder][alias] {
+					continue
+				}
+				// The code stage already merged this exact literal hit. A generic
+				// schema alias in the same file must not overwrite its marker.
+				if literalFiles[source.filePath][key] {
 					continue
 				}
 				if err := upsertSource(id, "code", source.filePath, ""); err != nil {

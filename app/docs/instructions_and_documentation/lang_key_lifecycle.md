@@ -264,9 +264,17 @@ been written to the normalized table alone.
 
 ### Bulk Fetch — `GetTranslationsHandler`
 
-`GET /api/get-translations?lang=fi`
+`GET /api/translations?lang=fi`
 
-Returns all translations as `{lang_key: translation}` for the requested language. The requested tag is normalized first (`normalizeRequestedLanguageCode`), then routed to the store above.
+Returns `{lang_key: translation}` for the requested language, filtered by the [Permission Model](Permission_Model.md#capability-and-dataset-permissions). Administrators receive all keys. Other callers receive keys with any readable object binding, trusted literal UI evidence, or no object binding/derived-name restriction. Existing dataset, column, cloud and folder checks still apply. One association query includes literal evidence; lookup, scan or iteration errors withhold the whole map. Responses remain `private, no-store` with `Vary: Cookie`. The requested tag is normalized first, then routed to the store above.
+
+### Literal UI evidence and persistent scan trust
+
+Only `source_type='code'`, `source_low='ui_literal_v1:<generation>'` grants the literal exemption. The scanner writes it for full-key literals directly passed to reviewed named translation helpers and the two finite B4 UI catalogues in [the reviewed list](../../backend/core_components/system_table_tools/lang_key_ui_evidence.go). Patterns, naming families, schema-linked declarations, derived aliases, generic catalogue/property matches, comments, `code_literal` and tests never qualify. A literal hit wins over generic evidence for the same key and file before saving. Object provenance and creator re-binding remain; no repair migration removes links. AI translation generation requires the existing administrator pipeline because it creates keys and their object provenance together. A route grant alone cannot authorize those writes. Frontend context can never supply a trusted literal marker, even in an administrator request.
+
+The lazily created `system_config` row `lang_key_ui_scan` stores JSON with `scanner`, `complete_generation`, `complete_fingerprint`, `completed_at` and `attempt: {generation, fingerprint, state, at}`. States are `running`, `complete` and `failed`. A database advisory lock serializes scans. Before any evidence write, the scanner commits the new running attempt. Completion publishes all completed fields and attempt state in one statement, comparing the attempt's generation; failure uses the same comparison and preserves completed history. Every B2 sub-scan, the sanity floor and seven-day cleanup must succeed first. Cleanup errors propagate; a failed or blocked scan logs one error with its reason.
+
+The SHA-256 fingerprint uses the scanner's own stat-only walker and exclusions: every configured application/frontend/backend/component root, including additional composition roots; sorted relative file paths, sizes and modification times; scanner identity `ui_literal_v1`; and reviewed helper and catalogue lists, including catalogue owners. A policy-only change therefore requires a new complete scan. An unchanged-code running attempt accepts both completed and attempt markers, so rewritten rows remain available mid-scan. A completed attempt accepts only its own generation. Missing identities/fingerprints, a failed attempt, a running attempt over changed code, or evidence older than `CURRENT_DATE - 7` grant no exemption. Exactly seven-day-old rows remain eligible and survive cleanup; eight-day-old rows do neither. A removed literal loses eligibility at the next complete scan, even on the same day. Live source edits without a restart/scan retain prior evidence until the next scan; deployed changes restart and rescan. Until a site's first complete scan, literal exemptions remain disabled.
 
 ### Single Key — `GetLangKeyTranslationsHandler`
 
@@ -535,13 +543,7 @@ Returns `(marked, unmarked)` counts logged at startup.
 
 #### Retirement is paused
 
-`MarkOrphanLangKeys()` only marks and unmarks; it no longer calls
-`archiveExpiredOrphans()`. Startup, opening the consistency report and the
-on-demand scan cannot archive or delete a key. The legacy archive function and
-its 90-day constant remain for later WO-J35 work, without an automatic caller.
-Its current fi/en/ch/yue column copy does not preserve every normalized
-translation, so this document makes no lossless-archive claim.
-E2E temp-dataset language keys remain stored during B5's report period; B8 requires a separate per-site go.
+`MarkOrphanLangKeys()` only marks and unmarks; it no longer calls `archiveExpiredOrphans()`. Startup, opening the consistency report and the on-demand scan cannot archive or delete a key. The legacy archive function and its 90-day constant remain for later WO-J35 work, without an automatic caller. Its current fi/en/ch/yue column copy does not preserve every normalized translation, so this document makes no lossless-archive claim. E2E temp-dataset language keys remain stored during B5's report period; B8 requires a separate per-site go.
 
 Category 8 is report-only. Its fi/en language keys say archiving is paused,
 show the recorded age when available, and identify a counting source when one

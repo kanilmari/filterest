@@ -44,7 +44,7 @@ func TestTranslationStorageReferencesDoNotOwnLabels(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if filtered["login"] != "Login" || filtered["reader_label"] != "Reader" || len(filtered) != 2 {
+			if filtered["login"] != "Login" || filtered["reader_label"] != "Reader" || len(filtered) != 3 || filtered["shared_label"] != "Shared" {
 				t.Fatalf("storage denied interface/reader copy or a real owner leaked: %v", filtered)
 			}
 		})

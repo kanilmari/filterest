@@ -26,7 +26,7 @@ func newSystemTableToolsTestDB(t interface{ Fatal(...interface{}) }) *sql.DB {
 	if err != nil {
 		t.Fatal("newSystemTableToolsTestDB:", err)
 	}
-	db.SetMaxOpenConns(1)
+	db.SetMaxOpenConns(2)
 	db.SetMaxIdleConns(1)
 	return db
 }
@@ -41,13 +41,16 @@ type orphanQueuedQuery struct {
 type orphanQueuedExec struct {
 	err          error
 	rowsAffected int64
+	resultErr    error
 }
 
 var (
-	orphanQueueMu    sync.Mutex
-	orphanQueryQueue []orphanQueuedQuery
-	orphanExecQueue  []orphanQueuedExec
-	orphanCallLog    []string
+	orphanQueueMu       sync.Mutex
+	orphanQueryQueue    []orphanQueuedQuery
+	orphanExecQueue     []orphanQueuedExec
+	orphanCallLog       []string
+	orphanCallArguments [][]driver.Value
+	orphanUIExecQueue   []orphanQueuedExec
 )
 
 func pushOrphanQuery(q orphanQueuedQuery) {
@@ -67,6 +70,8 @@ func resetOrphanQueues() {
 	orphanQueryQueue = nil
 	orphanExecQueue = nil
 	orphanCallLog = nil
+	orphanCallArguments = nil
+	orphanUIExecQueue = nil
 	orphanQueueMu.Unlock()
 }
 
@@ -100,9 +105,10 @@ func popOrphanExec() (orphanQueuedExec, bool) {
 	return e, true
 }
 
-func recordOrphanCall(query string) {
+func recordOrphanCall(query string, args ...driver.Value) {
 	orphanQueueMu.Lock()
 	orphanCallLog = append(orphanCallLog, query)
+	orphanCallArguments = append(orphanCallArguments, append([]driver.Value(nil), args...))
 	orphanQueueMu.Unlock()
 }
 
@@ -137,7 +143,20 @@ func (s *orphanQueueStmt) Close() error  { return nil }
 func (s *orphanQueueStmt) NumInput() int { return -1 }
 
 func (s *orphanQueueStmt) Exec(args []driver.Value) (driver.Result, error) {
-	recordOrphanCall(s.query)
+	recordOrphanCall(s.query, args...)
+	if strings.Contains(s.query, "'lang_key_ui_scan'") {
+		orphanQueueMu.Lock()
+		defer orphanQueueMu.Unlock()
+		if len(orphanUIExecQueue) > 0 {
+			e := orphanUIExecQueue[0]
+			orphanUIExecQueue = orphanUIExecQueue[1:]
+			if e.err != nil {
+				return nil, e.err
+			}
+			return &orphanQueueResult{rowsAffected: e.rowsAffected, resultErr: e.resultErr}, nil
+		}
+		return &orphanQueueResult{rowsAffected: 1}, nil
+	}
 	e, ok := popOrphanExec()
 	if !ok {
 		return nil, errors.New("mock: unexpected Exec call (exec queue empty)")
@@ -145,11 +164,11 @@ func (s *orphanQueueStmt) Exec(args []driver.Value) (driver.Result, error) {
 	if e.err != nil {
 		return nil, e.err
 	}
-	return &orphanQueueResult{rowsAffected: e.rowsAffected}, nil
+	return &orphanQueueResult{rowsAffected: e.rowsAffected, resultErr: e.resultErr}, nil
 }
 
 func (s *orphanQueueStmt) Query(args []driver.Value) (driver.Rows, error) {
-	recordOrphanCall(s.query)
+	recordOrphanCall(s.query, args...)
 	q, ok := popOrphanQuery()
 	if !ok {
 		return nil, errors.New("mock: unexpected Query call (query queue empty)")
@@ -183,11 +202,12 @@ func (r *orphanQueueRows) Next(dest []driver.Value) error {
 }
 
 type orphanQueueResult struct {
+	resultErr    error
 	rowsAffected int64
 }
 
 func (r *orphanQueueResult) LastInsertId() (int64, error) { return 0, nil }
-func (r *orphanQueueResult) RowsAffected() (int64, error) { return r.rowsAffected, nil }
+func (r *orphanQueueResult) RowsAffected() (int64, error) { return r.rowsAffected, r.resultErr }
 
 func TestMarkOrphanLangKeysUsesBulkDatabaseOperations(t *testing.T) {
 	resetOrphanQueues()

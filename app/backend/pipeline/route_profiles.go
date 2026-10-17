@@ -361,7 +361,7 @@ var RouteProfiles = map[string]RouteProfile{
 	"dtt_system_table_folders.HandleRenameTreeNode":          AdminProfile,
 
 	// Language / translation
-	"lang.GenerateTranslationsHandler":   DefaultProfile,
+	"lang.GenerateTranslationsHandler":   AdminProfile, // Writes translation keys and trusted provenance.
 	"lang.FixTableTranslationsHandler":   AdminProfile,
 	"lang.GetLangKeyTranslationsHandler": DefaultProfile,
 	"lang.AdminUILanguagesHandler":       AdminProfile,

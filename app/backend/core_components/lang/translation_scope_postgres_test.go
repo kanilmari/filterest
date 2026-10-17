@@ -57,6 +57,7 @@ func translationDisposableDB(t *testing.T, notices *[]string) *sql.DB {
 }
 
 const translationPostgresFixture = `
+CREATE TABLE system_config(key text PRIMARY KEY,json_value jsonb,value_type integer);
 CREATE TABLE system_languages(language_code text PRIMARY KEY, is_enabled boolean, fallback_language_code text);
 INSERT INTO system_languages VALUES ('fi',true,NULL),('en',true,NULL);
 CREATE TABLE system_lang_keys(id serial PRIMARY KEY,lang_key text UNIQUE,fi text,en text,ch text,yue text,creation_spec text,updated timestamptz);

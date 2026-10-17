@@ -211,7 +211,7 @@ func GenerateTranslationsHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Tallennetaan lähdetiedot system_lang_key_sources -tauluun
+	// The administrator-only route preserves object ownership with generated keys.
 	saveLangKeySources(contextualKeys, requestData.Sources)
 	saveDynamicDatasetTranslationContexts(dynamicContexts)
 
@@ -650,7 +650,7 @@ func saveLangKeySources(keys []string, frontendSources map[string]string) {
 				parts := strings.SplitN(src, "::", 2)
 				sourceHigh = parts[0]
 				if len(parts) > 1 {
-					sourceLow = parts[1]
+					sourceLow = frontendTranslationSourceDetail(parts[1])
 				}
 			}
 			if _, err := backend.Db.Exec(upsertQuery, langKeyID, sourceType, sourceHigh, sourceLow); err != nil {

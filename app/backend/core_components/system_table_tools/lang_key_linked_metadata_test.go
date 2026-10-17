@@ -78,7 +78,7 @@ func assertLinkedLabelScanPartial(t *testing.T, before *time.Time, err error) {
 	}
 	assertScanTrustBlocked(t, before)
 	for _, call := range snapshotOrphanCalls() {
-		if strings.Contains(call, "pg_advisory_xact_lock") {
+		if strings.Contains(call, "pg_advisory_xact_lock") && strings.Contains(call, "lang_key_source_scan_history") {
 			t.Fatal("partial scan reached history/freshness stage")
 		}
 	}

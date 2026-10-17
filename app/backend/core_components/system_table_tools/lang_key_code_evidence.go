@@ -33,6 +33,8 @@ var langKeyHelperOwners = map[string]map[string]int{
 	"email/account_email.go":                                        {"copy": 0},
 }
 
+var langKeyGlobalHelpers = map[string]int{"getTranslationForKey": 0}
+
 var frontPageKeyHelpers = map[string]int{
 	"frontPageText": 0, "frontPageLabel": 1, "frontPageButton": 0,
 	"frontPageField": 0, "frontPageSection": 0,
@@ -334,6 +336,9 @@ func importsFrontPageKeyHelpers(content string) bool {
 
 func keyHelperArguments(path, content string) map[string]int {
 	helpers := make(map[string]int)
+	for name, argument := range langKeyGlobalHelpers {
+		helpers[name] = argument
+	}
 	for owner, names := range langKeyHelperOwners {
 		if strings.HasSuffix(filepath.ToSlash(path), "/"+owner) {
 			for name, argument := range names {
@@ -393,7 +398,8 @@ func appendLangKeyCodeCandidates(results []sourceEntry, tokens []langKeyCodeLexe
 	for i, token := range tokens {
 		if argument, ok := helpers[token.text]; ok && i+1 < len(tokens) && tokens[i+1].text == "(" &&
 			(i == 0 || (tokens[i-1].text != "." && tokens[i-1].text != "function" && tokens[i-1].text != "func")) {
-			if key, ok := keyHelperArgument(tokens, i+1, argument); ok {
+			if key, ok := keyHelperArgument(tokens, i+1, argument); ok && key.value != "" {
+				results = append(results, sourceEntry{langKey: key.value, filePath: path, literalUI: true})
 				addCode(key.value)
 			}
 		}
@@ -485,12 +491,19 @@ func resolveLangKeyCodeSources(candidates []sourceEntry, registry map[string]int
 	}
 	sort.Strings(keys)
 	var sources []sourceEntry
-	seen := make(map[sourceEntry]bool)
+	seen := make(map[sourceEntry]int)
 	add := func(source sourceEntry) {
-		if _, exists := registry[source.langKey]; exists && !seen[source] {
-			seen[source] = true
-			sources = append(sources, source)
+		if _, exists := registry[source.langKey]; !exists {
+			return
 		}
+		identity := source
+		identity.literalUI = false
+		if index, exists := seen[identity]; exists {
+			sources[index].literalUI = sources[index].literalUI || source.literalUI
+			return
+		}
+		seen[identity] = len(sources)
+		sources = append(sources, source)
 	}
 	for _, candidate := range candidates {
 		if !candidate.prefix {
@@ -514,7 +527,7 @@ func skipLangKeyCodePath(name string, directory bool) bool {
 	// Match ignored directory names before resolving links too: an excluded
 	// node_modules/testing link may legitimately lead outside the source root.
 	switch strings.ToLower(name) {
-	case "dist", "node_modules", "testing", "e2e":
+	case "dist", "node_modules", "testing", "e2e", "test", "tests", "__tests__":
 		return true
 	}
 	if directory {

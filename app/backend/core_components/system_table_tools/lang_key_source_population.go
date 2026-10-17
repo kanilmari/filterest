@@ -5,6 +5,7 @@
 package system_table_tools
 
 import (
+	"database/sql"
 	"errors"
 	"fmt"
 	"log"
@@ -111,6 +112,7 @@ func validateLangKeySourceRoot(sourceRoot string, requireApplicationMarkers bool
 
 // sourceEntry is a candidate until resolved against the existing key registry.
 type sourceEntry struct {
+	literalUI     bool   // Only reviewed full-key helper arguments and finite catalogues.
 	schemaAlias   bool   // Live, declared linked-name builder; expanded against schema metadata.
 	schemaBuilder string // Selects the projection's own alias-generation rule.
 	langKey       string
@@ -123,96 +125,63 @@ type sourceEntry struct {
 // tree, excluding tests and build output. It returns candidates with their paths;
 // population must resolve them against the registry before recording evidence.
 func scanCodebaseForLangKeySources() ([]sourceEntry, error) {
+	files, _, err := langKeyCodeInventory()
+	if err != nil {
+		return nil, err
+	}
+	return scanLangKeyCodeFiles(files)
+}
+
+func scanLangKeyCodeFiles(files []langKeyCodeFile) ([]sourceEntry, error) {
 	var results []sourceEntry
+	for _, file := range files {
+		readPath, relPath, ext := file.readPath, file.relativePath, filepath.Ext(file.relativePath)
 
-	paths := currentLangKeyRuntimePaths()
-	sourceRoots, err := codebaseSourceRoots(paths)
-	if err != nil {
-		return nil, err
-	}
-
-	scanDirs, err := langKeyScanDirectories(sourceRoots)
-	if err != nil {
-		return nil, err
-	}
-
-	for _, scanDir := range scanDirs {
-		dir := scanDir.realPath
-		walkErr := walkLangKeySourceTree(dir, func(path string, info os.FileInfo, walkErr error) error {
-			if walkErr != nil {
-				return walkErr
-			}
-			if path != dir && skipLangKeyCodePath(info.Name(), info.IsDir()) {
-				if info.IsDir() {
-					return filepath.SkipDir
-				}
-				return nil
-			}
-			if info.IsDir() {
-				return nil
-			}
-			readPath, linkErr := scanDir.fileToRead(path, info)
-			if linkErr != nil || readPath == "" {
-				return linkErr
-			}
-			ext := filepath.Ext(path)
-			if !scanExtensions[ext] {
-				return nil
-			}
-			data, readErr := os.ReadFile(readPath)
-			if readErr != nil {
-				return readErr
-			}
-			rawContent := string(data)
-			content, tokens := lexLangKeyCode(rawContent, ext)
-			relPath, relErr := scanDir.recordedPath(path)
-			if relErr != nil {
-				return relErr
-			}
-
-			// Kerätään kustakin tiedostosta löytyneet avaimet (deduplikoitu per tiedosto)
-			foundInFile := make(map[string]bool)
-
-			// Staattiset kieliavainviittaukset (data-lang-key, dataset.langKey, jne.)
-			for _, pattern := range langKeyPatterns {
-				for _, match := range pattern.FindAllStringSubmatch(content, -1) {
-					if len(match) > 1 && !foundInFile[match[1]] {
-						foundInFile[match[1]] = true
-						results = append(results, sourceEntry{langKey: match[1], filePath: relPath})
-					}
-				}
-			}
-			// Go-tiedostoista: registerErrors{...} -tyyppiset avaimet
-			if ext == ".go" {
-				for _, match := range goTemplateKeyPattern.FindAllStringSubmatch(content, -1) {
-					if len(match) > 1 && !foundInFile[match[1]] {
-						foundInFile[match[1]] = true
-						results = append(results, sourceEntry{langKey: match[1], filePath: relPath})
-					}
-				}
-			}
-			// JS-tiedostoista: tree-solmunimet (name: 'xxx')
-			if ext == ".js" {
-				for _, match := range treeNodeNamePattern.FindAllStringSubmatch(content, -1) {
-					if len(match) > 1 && !foundInFile[match[1]] {
-						foundInFile[match[1]] = true
-						results = append(results, sourceEntry{langKey: match[1], filePath: relPath})
-					}
-				}
-			}
-			// D3a's literal safety net includes comments and must not inherit
-			// the lexer's destructive masking; definite patterns above still do.
-			results = appendLangKeyCodeCandidates(results, tokens, relPath, rawContent, foundInFile)
-			declared, declarationErr := declaredLangKeyCandidates(relPath, rawContent, tokens)
-			if declarationErr != nil {
-				return declarationErr
-			}
-			results = append(results, declared...)
-			return nil
-		})
-		if walkErr != nil {
-			return nil, fmt.Errorf("scan language-key source directory %q: %w", scanDir.path, walkErr)
+		data, readErr := os.ReadFile(readPath)
+		if readErr != nil {
+			return nil, readErr
 		}
+		rawContent := string(data)
+		content, tokens := lexLangKeyCode(rawContent, ext)
+
+		// Kerätään kustakin tiedostosta löytyneet avaimet (deduplikoitu per tiedosto)
+		foundInFile := make(map[string]bool)
+
+		// Staattiset kieliavainviittaukset (data-lang-key, dataset.langKey, jne.)
+		for _, pattern := range langKeyPatterns {
+			for _, match := range pattern.FindAllStringSubmatch(content, -1) {
+				if len(match) > 1 && !foundInFile[match[1]] {
+					foundInFile[match[1]] = true
+					results = append(results, sourceEntry{langKey: match[1], filePath: relPath})
+				}
+			}
+		}
+		// Go-tiedostoista: registerErrors{...} -tyyppiset avaimet
+		if ext == ".go" {
+			for _, match := range goTemplateKeyPattern.FindAllStringSubmatch(content, -1) {
+				if len(match) > 1 && !foundInFile[match[1]] {
+					foundInFile[match[1]] = true
+					results = append(results, sourceEntry{langKey: match[1], filePath: relPath})
+				}
+			}
+		}
+		// JS-tiedostoista: tree-solmunimet (name: 'xxx')
+		if ext == ".js" {
+			for _, match := range treeNodeNamePattern.FindAllStringSubmatch(content, -1) {
+				if len(match) > 1 && !foundInFile[match[1]] {
+					foundInFile[match[1]] = true
+					results = append(results, sourceEntry{langKey: match[1], filePath: relPath})
+				}
+			}
+		}
+		// D3a's literal safety net includes comments and must not inherit
+		// the lexer's destructive masking; definite patterns above still do.
+		results = appendLangKeyCodeCandidates(results, tokens, relPath, rawContent, foundInFile)
+		declared, declarationErr := declaredLangKeyCandidates(relPath, rawContent, tokens)
+		if declarationErr != nil {
+			return nil, declarationErr
+		}
+		results = append(results, declared...)
 	}
 
 	return results, nil
@@ -224,21 +193,53 @@ func PopulateLangKeySources() (total int, scanErr error) {
 	sourceMaintenanceMu.Lock()
 	defer sourceMaintenanceMu.Unlock()
 	markSourceScanFailed()
-	stage := "code"
+	stage := "lock"
+	var attempt uiLiteralScanAttempt
+	var scanLock *sql.Tx
+	blocked := ""
 	defer func() {
-		if scanErr != nil {
+		// Keep serialization until failure state has also been persisted.
+		defer func() {
+			if scanLock != nil {
+				scanLock.Rollback()
+			}
+		}()
+		if scanErr != nil || blocked != "" {
 			var subScan *sourceSubScanError
 			if errors.As(scanErr, &subScan) {
 				stage = subScan.name
 			}
-			recordSourceScanOutcome("partial", []string{stage})
-			log.Printf("[PopulateLangKeySources] partial scan (%s): %v; orphan marking and stale source cleanup skipped", stage, scanErr)
+			if blocked == "" {
+				recordSourceScanOutcome("partial", []string{stage})
+			}
+			if attempt.generation != "" {
+				if _, err := attempt.finish(backend.Db, false); err != nil {
+					scanErr = errors.Join(scanErr, fmt.Errorf("record failed UI scan: %w", err))
+				}
+			}
+			log.Printf("ERROR [PopulateLangKeySources] blocked scan (%s): %v %s; orphan marking and stale source cleanup skipped", stage, scanErr, blocked)
 		}
 	}()
-	codeSources, err := scanCodebaseForLangKeySources()
+	var err error
+	scanLock, err = lockUILiteralScan(backend.Db)
+	if err != nil {
+		return 0, fmt.Errorf("scan lock: %w", err)
+	}
+	stage = "code"
+	files, fingerprint, inventoryErr := langKeyCodeInventory()
+	// An unreadable inventory also invalidates prior trust before returning.
+	attempt, err = beginUILiteralScan(backend.Db, fingerprint)
+	if err != nil {
+		return 0, fmt.Errorf("start UI scan: %w", err)
+	}
+	if inventoryErr != nil {
+		return 0, fmt.Errorf("code: %w", inventoryErr)
+	}
+	codeSources, err := scanLangKeyCodeFiles(files)
 	if err != nil {
 		return 0, fmt.Errorf("code: %w", err)
 	}
+
 	stage = "registry"
 	keyToID, err := fetchLangKeyRegistry()
 	if err != nil {
@@ -255,7 +256,11 @@ func PopulateLangKeySources() (total int, scanErr error) {
 		if sourceType == "" {
 			sourceType = "code"
 		}
-		if err := upsertSource(id, sourceType, src.filePath, ""); err != nil {
+		low := ""
+		if src.literalUI && sourceType == "code" {
+			low = attempt.marker()
+		}
+		if err := upsertSource(id, sourceType, src.filePath, low); err != nil {
 			return total, fmt.Errorf("code: %w", err)
 		}
 		total++
@@ -295,11 +300,20 @@ func PopulateLangKeySources() (total int, scanErr error) {
 	}
 	if suspicious {
 		recordSourceScanOutcome("suspicious", nil)
-		log.Printf("[PopulateLangKeySources] suspicious scan: %d code keys below 90%% of seven-day maximum %d; orphan marking and stale source cleanup skipped", len(codeKeys), maximum)
+		blocked = fmt.Sprintf("suspicious scan: %d code keys below 90%% of seven-day maximum %d", len(codeKeys), maximum)
 		return total, nil
 	}
+	stage = "cleanup"
+	deletedCount, err := deleteStaleLangKeySources()
+	if err != nil {
+		return total, fmt.Errorf("cleanup: %w", err)
+	}
+	stage = "completion"
+	if err := requireUILiteralCompletion(attempt, backend.Db); err != nil {
+		return total, err
+	}
 	markSourceScanDone()
-	if deletedCount := cleanupStaleLangKeySourcesLocked(); deletedCount > 0 {
+	if deletedCount > 0 {
 		log.Printf("[PopulateLangKeySources] stale source cleanup removed %d outdated source rows", deletedCount)
 	}
 	log.Printf("[PopulateLangKeySources] %d source(s) saved; %d distinct code keys", total, len(codeKeys))
@@ -318,18 +332,23 @@ func cleanupStaleLangKeySourcesLocked() int64 {
 		log.Printf("[cleanupStaleLangKeySources] skipped: %s", sourceScanSkipReason())
 		return 0
 	}
+	count, err := deleteStaleLangKeySources()
+	if err != nil {
+		log.Printf("ERROR [cleanupStaleLangKeySources] %v", err)
+	}
+	return count
+}
+
+// Called by population only after every sub-scan and the sanity floor succeed.
+// Propagate both execution and result errors before publishing completion.
+func deleteStaleLangKeySources() (int64, error) {
 	result, err := backend.Db.Exec(`
         DELETE FROM system_lang_key_sources
         WHERE source_type IN ('code', 'code_literal', 'column', 'table', 'prefix', 'suffix', 'view', 'group', 'folder', 'db', 'foreign_key', 'column_value')
           AND last_seen < CURRENT_DATE - INTERVAL '7 days'
     `)
 	if err != nil {
-		log.Printf("[cleanupStaleLangKeySources] error: %v", err)
-		return 0
+		return 0, err
 	}
-	deletedRows, err := result.RowsAffected()
-	if err != nil {
-		return 0
-	}
-	return deletedRows
+	return result.RowsAffected()
 }

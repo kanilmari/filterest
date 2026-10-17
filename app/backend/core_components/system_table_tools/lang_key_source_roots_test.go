@@ -122,8 +122,11 @@ func assertFailedPopulationDidNotRunDestructiveMaintenance(
 			t.Fatalf("failed scan executed destructive SQL: %q", call)
 		}
 	}
-	if calls := snapshotOrphanCalls(); len(calls) != 0 {
-		t.Fatalf("failed scan reached database, calls = %v", calls)
+	for _, call := range snapshotOrphanCalls() {
+		// Persist a failed attempt even when no file could be inventoried.
+		if !strings.Contains(call, "'lang_key_ui_scan'") {
+			t.Fatalf("failed scan reached evidence or destructive SQL: %s", call)
+		}
 	}
 }
 

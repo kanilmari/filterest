@@ -112,9 +112,9 @@ func TestTranslationsHandlerScopesEveryIdentityAndOrphans(t *testing.T) {
 	}{
 		{"anonymous", 0, false, false, false, nil, []string{"login"}},
 		{"guest", 1, false, false, false, nil, []string{"login"}},
-		{"public reader", 0, false, false, false, []int64{11}, []string{"login", "app_a", "add_row_app_a", "search_for_app_a", "a_column"}},
-		{"reader A", 42, false, false, false, []int64{11}, []string{"login", "app_a", "add_row_app_a", "search_for_app_a", "a_column"}},
-		{"reader B", 43, false, false, false, []int64{22}, []string{"login", "app_b"}},
+		{"public reader", 0, false, false, false, []int64{11}, []string{"login", "app_a", "add_row_app_a", "search_for_app_a", "a_column", "shared_key"}},
+		{"reader A", 42, false, false, false, []int64{11}, []string{"login", "app_a", "add_row_app_a", "search_for_app_a", "a_column", "shared_key"}},
+		{"reader B", 43, false, false, false, []int64{22}, []string{"login", "app_b", "shared_key"}},
 		{"tree reader", 44, false, false, true, nil, []string{"login", "private_folder"}},
 		{"login required guest", 1, true, false, false, nil, []string{"login"}},
 		{"admin", 99, false, true, false, nil, nil},

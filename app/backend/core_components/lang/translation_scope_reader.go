@@ -100,13 +100,17 @@ func filterTranslationMap(ctx context.Context, values map[string]string, scope t
 		return nil, fmt.Errorf("translation associations: %w", err)
 	}
 	defer rows.Close()
-	bound, denied, derived := map[string]bool{}, map[string]bool{}, map[string]bool{}
+	bound, readable, derived, literalUI := map[string]bool{}, map[string]bool{}, map[string]bool{}, map[string]bool{}
 	for rows.Next() {
 		var key, sourceType, dataset string
 		var uid int
 		var visible bool
 		if err := rows.Scan(&key, &sourceType, &dataset, &uid, &visible); err != nil {
 			return nil, err
+		}
+		if sourceType == "literal_ui" {
+			literalUI[key] = true
+			continue
 		}
 		if sourceType == "unresolved" {
 			derived[key] = true
@@ -122,17 +126,15 @@ func filterTranslationMap(ctx context.Context, values map[string]string, scope t
 		if sourceType == "folder" {
 			allowed = scope.folders && visible
 		}
-		// A generic code/manual source never overrides an unreadable object.
-		if !allowed {
-			denied[key] = true
-		}
+		// Shared words disclose no other binding: any readable object suffices.
+		readable[key] = readable[key] || allowed
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
 	filtered := make(map[string]string, len(values))
 	for key, value := range values {
-		if !denied[key] && (bound[key] || (!derived[key] && !unresolvedObjectKey(key))) {
+		if literalUI[key] || readable[key] || (!bound[key] && !derived[key] && !unresolvedObjectKey(key)) {
 			filtered[key] = value
 		}
 	}
@@ -164,7 +166,31 @@ func unresolvedObjectKey(key string) bool {
 	return ok
 }
 
+// literal_ui is part of the same association query. During an unchanged-code
+// restart both generations count, including rows already rewritten mid-scan.
+// Require all trust identities explicitly; missing/failed/changed state is closed.
 const translationObjectSourcesQuery = `
+ WITH literal_ui AS (
+ SELECT DISTINCT k.lang_key FROM system_lang_key_sources s
+ JOIN system_lang_keys k ON k.id=s.lang_key_id
+ JOIN system_config c ON c.key='lang_key_ui_scan'
+ WHERE s.source_type='code' AND s.last_seen >= CURRENT_DATE - 7
+   AND c.json_value->>'scanner'='ui_literal_v1'
+   AND COALESCE(c.json_value->>'complete_generation','')<>''
+   AND COALESCE(c.json_value->>'complete_fingerprint','')<>''
+   AND COALESCE(c.json_value #>> '{attempt,generation}','')<>''
+   AND COALESCE(c.json_value #>> '{attempt,fingerprint}','')<>''
+   AND (
+     (c.json_value #>> '{attempt,state}'='complete'
+       AND c.json_value #>> '{attempt,generation}'=c.json_value->>'complete_generation'
+       AND c.json_value #>> '{attempt,fingerprint}'=c.json_value->>'complete_fingerprint'
+       AND s.source_low='ui_literal_v1:' || (c.json_value->>'complete_generation'))
+     OR (c.json_value #>> '{attempt,state}'='running'
+       AND c.json_value #>> '{attempt,fingerprint}'=c.json_value->>'complete_fingerprint'
+       AND s.source_low IN ('ui_literal_v1:' || (c.json_value->>'complete_generation'),
+                           'ui_literal_v1:' || (c.json_value #>> '{attempt,generation}')))
+   )
+ )
 	SELECT keys.lang_key, sources.source_type, COALESCE(dataset.table_name,
 	       CASE WHEN sources.source_type = 'foreign_key' AND split_part(sources.source_high, '.', 1) = 'public'
 	            THEN split_part(sources.source_high, '.', 2) END, ''),
@@ -197,4 +223,6 @@ const translationObjectSourcesQuery = `
 	SELECT keys.lang_key, 'unresolved', '', 0, false
 	FROM system_lang_keys keys
 	WHERE keys.creation_spec = 'Interface label derived from dataset schema names.'
+ UNION ALL
+ SELECT lang_key, 'literal_ui', '', 0, true FROM literal_ui
 `

@@ -17,6 +17,7 @@ import (
 func scanTrustPostgresFixture(t *testing.T) *sql.DB {
 	t.Helper()
 	db := sitePresentationDisposableDB(t) // Opt-in precedes cluster or SQL access.
+	db.SetMaxOpenConns(2)                 // Dedicated advisory lock plus scanner statements.
 	old := backend.Db
 	backend.Db = db
 	t.Cleanup(func() { backend.Db = old })

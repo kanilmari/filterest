@@ -22,6 +22,7 @@ Dates are the local (Europe/Helsinki) date on which the version was published.
 
 ## [Unreleased]
 
+- Keep literal interface words and shared readable labels available to guests with trusted scan evidence while protecting private names; automatic AI translation of missing interface words now runs only for administrators, and other users keep the readable fallback until then.
 - **Browser-ready first-run setup (WO41)** — Open the form and enter the server-log setup code on every submission; per-client and global back-off protect attempts, each form binds its own authenticator key, and the obsolete payment-status GET side-effect allowance is removed.
 - **Serif story on native Home (WO38a)** — The Home palette can opt into a serif title with an italic slogan accent, wrapping bold story lines and a slow line reveal that respects reduced motion, explicit themes and language changes; default-style sites keep downgrade-safe presentation storage and unchanged Home text.
 - Browser tests wait for the requested dataset before using its view, filter and search controls; the heading fixture removes its generated language keys even after failure.

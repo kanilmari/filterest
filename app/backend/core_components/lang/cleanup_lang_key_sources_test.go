@@ -18,9 +18,10 @@ import (
 )
 
 type queuedCleanupQuery struct {
-	cols []string
-	rows [][]driver.Value
-	err  error
+	rowErr error
+	cols   []string
+	rows   [][]driver.Value
+	err    error
 }
 
 type queuedCleanupExec struct {
@@ -36,6 +37,7 @@ type cleanupState struct {
 
 	queryCalls []string
 	execCalls  []string
+	execArgs   [][]driver.NamedValue
 }
 
 type cleanupDriver struct {
@@ -47,6 +49,7 @@ type cleanupConn struct {
 }
 
 type cleanupRows struct {
+	err  error
 	cols []string
 	rows [][]driver.Value
 	idx  int
@@ -92,6 +95,7 @@ func (c *cleanupConn) QueryContext(_ context.Context, query string, _ []driver.N
 	}
 
 	return &cleanupRows{
+		err:  next.rowErr,
 		cols: append([]string(nil), next.cols...),
 		rows: cloneCleanupRows(next.rows),
 	}, nil
@@ -105,11 +109,12 @@ func (c *cleanupConn) Exec(query string, args []driver.Value) (driver.Result, er
 	return c.ExecContext(context.Background(), query, named)
 }
 
-func (c *cleanupConn) ExecContext(_ context.Context, query string, _ []driver.NamedValue) (driver.Result, error) {
+func (c *cleanupConn) ExecContext(_ context.Context, query string, args []driver.NamedValue) (driver.Result, error) {
 	c.state.mu.Lock()
 	defer c.state.mu.Unlock()
 
 	c.state.execCalls = append(c.state.execCalls, query)
+	c.state.execArgs = append(c.state.execArgs, append([]driver.NamedValue(nil), args...))
 	if len(c.state.execs) == 0 {
 		return nil, errors.New("unexpected exec")
 	}
@@ -127,6 +132,9 @@ func (r *cleanupRows) Close() error      { return nil }
 
 func (r *cleanupRows) Next(dest []driver.Value) error {
 	if r.idx >= len(r.rows) {
+		if r.err != nil {
+			return r.err
+		}
 		return io.EOF
 	}
 	copy(dest, r.rows[r.idx])

@@ -41,7 +41,7 @@ func declaredLangKeyCandidates(path, raw string, tokens []langKeyCodeLexeme) ([]
 			continue
 		}
 		for _, key := range d.Names() {
-			results = append(results, sourceEntry{langKey: key, filePath: d.Owner})
+			results = append(results, sourceEntry{langKey: key, filePath: d.Owner, literalUI: reviewedUILiteralCatalogue(d)})
 		}
 	}
 	return results, nil
