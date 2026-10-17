@@ -27,10 +27,13 @@ class DomLocator {
   async scrollIntoViewIfNeeded() {}
 }
 
-afterEach(() => { document.body.replaceChildren(); vi.restoreAllMocks(); });
+afterEach(() => { document.body.replaceChildren(); sessionStorage.clear(); vi.restoreAllMocks(); });
 
 test('waits for saved collapse state before revealing style, without persisting the reveal', async () => {
   const parts = document.createElement('div'); parts.className = 'tab_parts_container';
+  parts.id = 'demo_tab_parts_container';
+  sessionStorage.setItem('selected_dataset', 'demo');
+  vi.spyOn(HTMLElement.prototype, 'getClientRects').mockReturnValue([new DOMRect(0, 0, 100, 100)] as unknown as DOMRectList);
   const panel = document.createElement('div') as HTMLElement & { __sectionLayoutReady: Promise<void> };
   panel.className = 'filterbar-panel';
   const content = document.createElement('div'); content.innerHTML = '<button>Palette</button>';
@@ -39,7 +42,11 @@ test('waits for saved collapse state before revealing style, without persisting 
   panel.append(section); parts.append(panel); document.body.append(parts);
   let finishLayout!: () => void;
   panel.__sectionLayoutReady = new Promise(resolve => { finishLayout = resolve; });
-  const waitForShellReady = vi.fn(async (operation: () => boolean) => expect(operation()).toBe(true));
+  const waitForShellReady = vi.fn(async (operation: (argument: unknown) => unknown, argument: unknown) => {
+    const value = operation(argument);
+    expect(value).toBeTruthy();
+    return { jsonValue: async () => value, dispose: async () => {} };
+  });
   const page = { locator: () => new DomLocator(parts),
     waitForFunction: waitForShellReady,
   } as unknown as Page;
@@ -49,7 +56,7 @@ test('waits for saved collapse state before revealing style, without persisting 
   });
   const reveal = revealActiveFilterbarSection(page, 'style');
   await Promise.resolve(); await Promise.resolve();
-  expect(waitForShellReady).toHaveBeenCalledOnce();
+  expect(waitForShellReady).toHaveBeenCalled();
   expect(section.classList.contains('is-collapsed')).toBe(true);
   // The delayed response retains the saved collapsed state, then unlocks the helper.
   await section.collapse({ animate: false }); persisted.mockClear(); finishLayout();

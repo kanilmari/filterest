@@ -35,7 +35,7 @@ export function isOwnRunDatasetKey(
   return ownRunDatasetForKey(key, datasetNames, columnsByDataset) !== undefined;
 }
 
-function sourceBelongsToRun(source: LangKeySource, datasetNames: readonly string[]): boolean {
+export function sourceBelongsToRun(source: LangKeySource, datasetNames: readonly string[]): boolean {
   // Keep the lifecycle's counting rule: only these two types are bookkeeping.
   if (['orphan', 'manual_crud'].includes(source.source_type)) return true;
   if (source.source_type === 'foreign_key'

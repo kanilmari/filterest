@@ -22,6 +22,7 @@ Dates are the local (Europe/Helsinki) date on which the version was published.
 
 ## [Unreleased]
 
+- Browser tests wait for the requested dataset before using its view, filter and search controls; the heading fixture removes its generated language keys even after failure.
 - **Orphan candidates use the reviewed source rule (WO-J35 B5)** — Only the exact translations-table foreign-key reference stops counting as use; other and unknown evidence protects keys. Generated test names are narrowed, and category 8 shows whether any canonical translation exists. Reports write nothing and archiving stays paused; no migration or new language keys.
 - **Stable pagination and article-arrow unit tests (test only)** — Isolated unused view builders, exercised fill-screen timers with virtual time, and reused only fixture-relevant rules from the complete stylesheet cascade to avoid machine-load timeouts.
 - **Service-catalog logos follow asset metadata (J1)** — Remove service-specific rendering defaults and redundant logo CSS; text marks accept trimmed `logo_mark_text` up to eight Unicode code points, otherwise using the variant's first two uppercase letters.

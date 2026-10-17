@@ -2,20 +2,26 @@
  * navigation.ts — Navigation helpers for E2E tests.
  *
  * Provides functions to navigate to datasets and wait for content to load.
- * The app is an SPA — direct URL navigation to /tableName is NOT supported.
- * Navigation must go through the tab bar via stable tab-* data-testid anchors.
+ * Exercises same-page SPA navigation through stable tab-* data-testid anchors.
  *
- * After login, the app auto-opens the first available dataset. If the requested
- * dataset isn't available as a tab, the helper uses whatever dataset loaded by
- * default rather than failing.
+ * The start view can be Home or a dataset. A tab click must settle on its own
+ * dataset before another helper can inspect view controls or loaded content.
+ * Missing tabs fail unless the caller explicitly permits the default fallback.
  */
 
 import { type Locator, type Page } from '@playwright/test';
 import { revealActiveFilterbarSection } from './filterbar';
+import { getActiveDatasetContainer } from './active-dataset';
 
 export type NavigateToDatasetOptions = {
   allowFallback?: boolean;
 };
+
+async function waitForDatasetContent(page: Page, tableName: string): Promise<void> {
+  const container = await getActiveDatasetContainer(page, tableName);
+  // A dataset holds one scrollable surface per view (card, table, map…); any one attached proves the content mounted.
+  await container.locator('.scrollable_content').first().waitFor({ state: 'attached', timeout: 15000 });
+}
 
 function buildDatasetSurfaceSelectors(tableName: string): string[] {
   return [
@@ -232,23 +238,18 @@ export async function navigateToDataset(
       }
     });
 
-    await page.waitForSelector('.scrollable_content', {
-      state: 'attached',
-      timeout: 15000,
-    });
+    await waitForDatasetContent(page, tableName);
     return;
   }
 
   const requestedDatasetAlreadyLoaded = await page.evaluate(
-    (selectors) => selectors.some((selector) => document.querySelector(selector)),
-    datasetSurfaceSelectors,
+    (name) => sessionStorage.getItem('selected_dataset') === name
+      && document.getElementById(`${name}_tab_parts_container`) !== null,
+    tableName,
   );
 
   if (requestedDatasetAlreadyLoaded) {
-    await page.waitForSelector('.scrollable_content', {
-      state: 'attached',
-      timeout: 15000,
-    });
+    await waitForDatasetContent(page, tableName);
     return;
   }
 
@@ -289,24 +290,20 @@ export async function navigateToDataset(
     throw new Error(`Could not resolve a dataset tab to open for "${tableName}".`);
   }
 
-  // Wait for the content area to render after tab click
-  await page.waitForSelector('.scrollable_content', {
-    state: 'attached',
-    timeout: 15000,
-  });
+  await waitForDatasetContent(page, targetId);
 }
 
 /**
  * Navigates to the first available (default) dataset.
- * After login the app auto-selects the first tab, so this just waits for
- * the content to appear.
+ * Clicks the first data tab and waits for that dataset to own the content area,
+ * whether login initially opened Home or another dataset.
  */
 export async function navigateToDefaultDataset(page: Page): Promise<void> {
   await waitForAppReady(page);
 
   // Click the first data tab to load content via JS DOM click()
   const utilityTabs = ['user', 'logout', 'system_about'];
-  await page.evaluate((skip) => {
+  const targetId = await page.evaluate((skip) => {
     const all = document.querySelectorAll(
       '[data-testid^="tab-"]',
     );
@@ -314,7 +311,7 @@ export async function navigateToDefaultDataset(page: Page): Promise<void> {
       const id = (btn as HTMLElement).dataset.id;
       if (id && !skip.includes(id)) {
         (btn as HTMLElement).click();
-        return;
+        return id;
       }
     }
     // Last resort
@@ -322,12 +319,11 @@ export async function navigateToDefaultDataset(page: Page): Promise<void> {
       '[data-testid^="tab-"]',
     ) as HTMLElement | null;
     if (first) first.click();
+    return first?.dataset.id ?? null;
   }, utilityTabs);
 
-  await page.waitForSelector('.scrollable_content', {
-    state: 'attached',
-    timeout: 15000,
-  });
+  if (!targetId) throw new Error('Could not resolve a default dataset tab.');
+  await waitForDatasetContent(page, targetId);
 }
 
 /**

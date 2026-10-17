@@ -11,11 +11,13 @@
  * See source: frontend/reusable_components/filterbar/admin_buttons/create_admin_buttons.js
  */
 
-import { expect, type Page } from '@playwright/test';
+import { expect, type Locator, type Page } from '@playwright/test';
 import {
   closeActiveFilterbarIfOpen,
   openActiveFilterbarIfCollapsed,
+  revealActiveFilterbarSection,
 } from './filterbar';
+import { getActiveDatasetContainer } from './active-dataset';
 
 export type CardView = 'normal' | 'big';
 export type ViewMode = 'table' | 'card' | 'article_view' | 'normal' | 'tree' | 'transposed' | 'ticket' | 'settings';
@@ -56,24 +58,11 @@ const VIEW_SURFACE_SUFFIXES: Record<ViewMode, string> = {
  * Bridges permission-limited selector controls and the actual active dataset surface.
  * Exists so tests can accept an already-correct view without requiring a redundant button.
  */
-async function isRequestedViewSurfaceActive(page: Page, viewMode: ViewMode): Promise<boolean> {
-  return page.evaluate((surfaceSuffix) => {
-    const activeTableParts = Array.from(
-      document.querySelectorAll('.tab_parts_container'),
-    ).find((candidate) => {
-      if (!(candidate instanceof HTMLElement)) {
-        return false;
-      }
-      const style = getComputedStyle(candidate);
-      return style.display !== 'none'
-        && style.visibility !== 'hidden'
-        && candidate.getClientRects().length > 0;
-    });
-
-    if (!(activeTableParts instanceof HTMLElement)) {
-      return false;
-    }
-
+async function isRequestedViewSurfaceActive(container: Locator, viewMode: ViewMode): Promise<boolean> {
+  return container.evaluate((activeTableParts, surfaceSuffix) => {
+    const containerStyle = getComputedStyle(activeTableParts);
+    if (containerStyle.display === 'none' || containerStyle.visibility === 'hidden'
+      || activeTableParts.getClientRects().length === 0) return false;
     const tablePartsSuffix = '_tab_parts_container';
     if (!activeTableParts.id.endsWith(tablePartsSuffix)) {
       return false;
@@ -93,8 +82,8 @@ async function isRequestedViewSurfaceActive(page: Page, viewMode: ViewMode): Pro
 }
 
 /** Opens the shared view-selector disclosure when the current UI keeps tool groups collapsed. */
-async function openViewSelectorSectionIfCollapsed(page: Page): Promise<void> {
-  const section = page.locator('.dataset-filter-views-section:visible').first();
+async function openViewSelectorSectionIfCollapsed(page: Page, container: Locator): Promise<void> {
+  const section = container.locator('.dataset-filter-views-section:visible').first();
   if (!await section.isVisible({ timeout: 2000 }).catch(() => false)) {
     return;
   }
@@ -102,8 +91,7 @@ async function openViewSelectorSectionIfCollapsed(page: Page): Promise<void> {
     return;
   }
 
-  const header = section.locator(':scope > .animated-disclosure-header').first();
-  await header.click({ timeout: 5000 });
+  await revealActiveFilterbarSection(page, 'views', container);
   await expect(section).not.toHaveClass(/\bis-collapsed\b/, { timeout: 5000 });
 }
 
@@ -126,8 +114,9 @@ export async function switchToView(
   options: SwitchToViewOptions = {},
 ): Promise<void> {
   const { allowMissing = false } = options;
-  await page.evaluate(() => {
-    const candidates = Array.from(document.querySelectorAll('.scrollable_content')) as HTMLElement[];
+  const container = await getActiveDatasetContainer(page);
+  await container.evaluate((parts) => {
+    const candidates = Array.from(parts.querySelectorAll('.scrollable_content')) as HTMLElement[];
     const activeContainer = candidates.find((element) => {
       const style = window.getComputedStyle(element);
       return style.display !== 'none' && style.visibility !== 'hidden' && element.getClientRects().length > 0;
@@ -139,22 +128,22 @@ export async function switchToView(
     window.scrollTo(0, 0);
   });
 
-  if (await isRequestedViewSurfaceActive(page, viewMode)) {
+  if (await isRequestedViewSurfaceActive(container, viewMode)) {
     return;
   }
 
-  const openedFilterbarForSwitch = await openActiveFilterbarIfCollapsed(page);
+  const openedFilterbarForSwitch = await openActiveFilterbarIfCollapsed(page, container);
 
   try {
-    await openViewSelectorSectionIfCollapsed(page);
+    await openViewSelectorSectionIfCollapsed(page, container);
     const directTestId = DIRECT_VIEW_TEST_IDS[viewMode];
     if (directTestId) {
-      const btnByTestId = page.locator(`[data-testid="${directTestId}"]:visible`).first();
+      const btnByTestId = container.locator(`[data-testid="${directTestId}"]:visible`).first();
       if (await btnByTestId.isVisible({ timeout: 3000 }).catch(() => false)) {
         await btnByTestId.scrollIntoViewIfNeeded();
         await btnByTestId.click({ timeout: 5000 });
         await expect.poll(
-          () => isRequestedViewSurfaceActive(page, viewMode),
+          () => isRequestedViewSurfaceActive(container, viewMode),
           { timeout: 5000 },
         ).toBe(true);
         return;
@@ -167,19 +156,28 @@ export async function switchToView(
 
     const dropdownOptionTestId = DROPDOWN_VIEW_TEST_IDS[viewMode];
     if (dropdownOptionTestId) {
-      const dropdownContainer = page.locator('[data-testid="view-dropdown-more"]:visible').first();
+      const dropdownContainer = container.locator('[data-testid="view-dropdown-more"]:visible').first();
       if (await dropdownContainer.isVisible({ timeout: 3000 }).catch(() => false)) {
-        const trigger = page.locator('[data-testid="view-dropdown-more-trigger"]:visible').first();
+        // VanillaDropdown portals its menu to body and closes it on a document click outside it, but its trigger
+        // stops propagation, so a menu another dataset left open would stay open. Close every open menu first, so
+        // the scoped trigger opens the only visible one.
+        const menuSelector = '[data-testid="view-dropdown-more-list"]:visible';
+        if (await page.locator(menuSelector).count() > 0) {
+          await page.evaluate(() => document.body.dispatchEvent(new MouseEvent('click', { bubbles: true })));
+        }
+        const trigger = dropdownContainer.locator('[data-testid="view-dropdown-more-trigger"]:visible').first();
         if (await trigger.isVisible({ timeout: 2000 }).catch(() => false)) {
           await trigger.scrollIntoViewIfNeeded();
           await trigger.click({ timeout: 5000 });
         }
-        const option = page.locator(`[data-testid="${dropdownOptionTestId}"]:visible`).first();
-        if (await option.isVisible({ timeout: 3000 }).catch(() => false)) {
+        // Exactly one visible menu now: the one the requested dataset's trigger opened.
+        const openMenus = page.locator(menuSelector);
+        const option = openMenus.getByTestId(dropdownOptionTestId);
+        if (await openMenus.count() === 1 && await option.isVisible({ timeout: 3000 }).catch(() => false)) {
           await option.scrollIntoViewIfNeeded();
           await option.click({ timeout: 5000 });
           await expect.poll(
-            () => isRequestedViewSurfaceActive(page, viewMode),
+            () => isRequestedViewSurfaceActive(container, viewMode),
             { timeout: 5000 },
           ).toBe(true);
           return;
@@ -196,7 +194,7 @@ export async function switchToView(
     }
   } finally {
     if (openedFilterbarForSwitch) {
-      await closeActiveFilterbarIfOpen(page);
+      await closeActiveFilterbarIfOpen(page, container);
     }
   }
 }

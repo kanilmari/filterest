@@ -4,6 +4,7 @@
 // Avoids hidden duplicate inputs and fails when neither field nor button is reachable.
 import { expect, type Locator, type Page } from '@playwright/test';
 import { waitForActiveFilterbarLayout } from './filterbar';
+import { getActiveDatasetContainer } from './active-dataset';
 
 /**
  * Returns a usable search field in the active dataset, opening phone search if needed.
@@ -13,8 +14,8 @@ export async function openActiveDatasetSearch(
   page: Page,
   activation: 'click' | 'tap' = 'click',
 ): Promise<Locator> {
-  await waitForActiveFilterbarLayout(page);
-  const activeDataset = page.locator('.tab_parts_container:visible').first();
+  const activeDataset = await getActiveDatasetContainer(page);
+  await waitForActiveFilterbarLayout(page, activeDataset);
   // Each host has its own input; DOM order does not identify the current search surface.
   const input = activeDataset.locator(
     '[data-testid="dataset-search-input"]:visible, [data-testid^="dataset-search-input-"]:visible',

@@ -6,6 +6,7 @@
  */
 
 import { expect, type Locator, type Page } from '@playwright/test';
+import { getActiveDatasetContainer } from './active-dataset';
 
 function buildFilterTestIdSegment(value: string): string {
   return String(value ?? '')
@@ -14,12 +15,8 @@ function buildFilterTestIdSegment(value: string): string {
     .replace(/^-+|-+$/g, '') || 'unknown';
 }
 
-function getActiveTableParts(page: Page): Locator {
-  return page.locator('.tab_parts_container:visible').first();
-}
-
 /** Wait for the live shell and saved section layout before any temporary reveal. */
-export async function waitForActiveFilterbarLayout(page: Page): Promise<void> {
+export async function waitForActiveFilterbarLayout(page: Page, container?: Locator): Promise<void> {
   // Visible DOM is exposed before main.js finishes its post-authentication startup.
   await page.waitForFunction(() => {
     const boot = (window as Window & {
@@ -27,7 +24,7 @@ export async function waitForActiveFilterbarLayout(page: Page): Promise<void> {
     }).__filterestShellBoot;
     return boot ? boot.status().ready : !document.body.classList.contains('loading');
   }, null, { timeout: 15000 });
-  const panel = getActiveTableParts(page).locator('.filterbar-panel').first();
+  const panel = (container ?? await getActiveDatasetContainer(page)).locator('.filterbar-panel').first();
   await expect(panel).toBeAttached({ timeout: 10000 });
   await panel.evaluate(async element => {
     const ready = (element as HTMLElement & { __sectionLayoutReady?: Promise<unknown> }).__sectionLayoutReady;
@@ -41,8 +38,8 @@ export async function waitForActiveFilterbarLayout(page: Page): Promise<void> {
  * Bridges responsive panel state and E2E helpers that need toolbar or view controls.
  * Exists to centralize the idempotent mobile-safe disclosure step.
  */
-export async function openActiveFilterbarIfCollapsed(page: Page): Promise<boolean> {
-  const activeTableParts = getActiveTableParts(page);
+export async function openActiveFilterbarIfCollapsed(page: Page, container?: Locator): Promise<boolean> {
+  const activeTableParts = container ?? await getActiveDatasetContainer(page);
   if ((await activeTableParts.count()) === 0) {
     return false;
   }
@@ -81,7 +78,7 @@ export async function openActiveFilterbarSection(
   await waitForActiveFilterbarLayout(page);
   await openActiveFilterbarIfCollapsed(page);
 
-  const section = getActiveTableParts(page)
+  const section = (await getActiveDatasetContainer(page))
     .locator(`[data-filterbar-section-key="${buildFilterTestIdSegment(sectionKey)}"]`)
     .first();
   await expect(section).toBeVisible({ timeout: 5000 });
@@ -107,11 +104,13 @@ export async function openActiveFilterbarSection(
 export async function revealActiveFilterbarSection(
   page: Page,
   sectionKey: string,
+  container?: Locator,
 ): Promise<Locator> {
-  await waitForActiveFilterbarLayout(page);
-  await openActiveFilterbarIfCollapsed(page);
+  const activeTableParts = container ?? await getActiveDatasetContainer(page);
+  await waitForActiveFilterbarLayout(page, activeTableParts);
+  await openActiveFilterbarIfCollapsed(page, activeTableParts);
 
-  const section = getActiveTableParts(page)
+  const section = activeTableParts
     .locator(`[data-filterbar-section-key="${buildFilterTestIdSegment(sectionKey)}"]`)
     .first();
   await expect(section).toBeVisible({ timeout: 5000 });
@@ -144,8 +143,8 @@ export async function revealActiveFilterbarSection(
  * Bridges temporary helper-opened panels and the responsive state expected by surface interactions.
  * Exists so shared navigation can restore a previously collapsed mobile panel without changing desktop state.
  */
-export async function closeActiveFilterbarIfOpen(page: Page): Promise<boolean> {
-  const activeTableParts = getActiveTableParts(page);
+export async function closeActiveFilterbarIfOpen(page: Page, container?: Locator): Promise<boolean> {
+  const activeTableParts = container ?? await getActiveDatasetContainer(page);
   if ((await activeTableParts.count()) === 0) {
     return false;
   }
@@ -180,9 +179,8 @@ export async function openColumnFilterAccordion(
   datasetName: string,
   columnName: string,
 ): Promise<Locator> {
-  await openActiveFilterbarIfCollapsed(page);
-
-  const activeTableParts = getActiveTableParts(page);
+  const activeTableParts = await getActiveDatasetContainer(page, datasetName);
+  await openActiveFilterbarIfCollapsed(page, activeTableParts);
   const rowTestId =
     `column-filter-row-${buildFilterTestIdSegment(datasetName)}-${buildFilterTestIdSegment(columnName)}`;
   const row = activeTableParts.locator(`[data-testid="${rowTestId}"]`).first();

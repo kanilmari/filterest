@@ -2,13 +2,64 @@
 // Proves the audited dataset outline and preserves the original computed heading appearance.
 // Connects native page navigation, disposable API fixtures and frozen pre-J17 heading rules.
 // Runs both application themes over the opposite OS theme at every matrix viewport.
-import { expect, test, type Locator, type Page } from '@playwright/test';
+import { expect, test as base, type Locator, type Page } from '@playwright/test';
+import * as path from 'node:path';
 import { login, loadCredentials } from '../helpers/auth';
 import { buildTempDatasetName, createTempDataset, cleanupDatasetViaRequest,
   fetchCsrfTokenForRequest, openTempDatasetRowArticle } from '../helpers/temp-dataset';
 import { closeActiveFilterbarIfOpen, openColumnFilterAccordion,
   waitForActiveFilterbarLayout } from '../helpers/filterbar';
 import { compareHeadingAppearance } from '../helpers/heading-appearance-baseline';
+import { cleanupDatasetLanguageKeys } from '../helpers/dataset-language-key-cleanup';
+import { readLangKeyInventory } from '../helpers/test-artifact-cleanup';
+import { getCurrentArtifactRun, listRegisteredTestArtifacts, resolveArtifactRegistryRoot } from '../helpers/test-artifact-run-registry';
+import { readCompletedDatasetNames } from '../helpers/test-artifact-dataset-history';
+import { readRecordedDatasetColumns } from '../helpers/test-artifact-dataset-columns';
+
+type HeadingDatasets = { populated: string; empty: string; flat: string };
+
+async function cleanupHeadingDatasets(page: Page, ownedNames: ReadonlySet<string>, baseline: ReadonlySet<string>) {
+  const errors: unknown[] = [];
+  const run = getCurrentArtifactRun();
+  if (!run) throw new Error('J17 fixture lost its artifact ownership registry.');
+  for (const name of ownedNames) {
+    const artifact = listRegisteredTestArtifacts().find(entry => entry.kind === 'dataset' && entry.name === name);
+    if (!artifact) continue;
+    if (artifact.status !== 'confirmed') {
+      errors.push(new Error(`J17 fixture cannot clean unconfirmed dataset "${name}".`));
+      continue;
+    }
+    try { await cleanupDatasetViaRequest(page.request, name); }
+    catch (error) { errors.push(error); }
+  }
+  try {
+    const runDirectory = path.join(resolveArtifactRegistryRoot(), run.runId);
+    const completedNames = readCompletedDatasetNames(runDirectory, run.runId);
+    const allNames = [...completedNames,
+      ...listRegisteredTestArtifacts().filter(entry => entry.kind === 'dataset').map(entry => entry.name)];
+    const columns = readRecordedDatasetColumns(runDirectory, run.runId, allNames);
+    const ownedColumns = new Map([...columns].filter(([name]) => ownedNames.has(name) && completedNames.includes(name)));
+    await cleanupDatasetLanguageKeys(page.request, baseline, ownedColumns);
+  } catch (error) { errors.push(error); }
+  if (errors.length) throw new AggregateError(errors, 'J17 fixture cleanup failed');
+}
+
+const test = base.extend<{ headingDatasets: HeadingDatasets }>({
+  headingDatasets: [async ({ page }, use) => {
+    await login(page, loadCredentials());
+    const datasets = { populated: buildTempDatasetName('e2e_j17_headings'),
+      empty: buildTempDatasetName('e2e_j17_empty'), flat: buildTempDatasetName('e2e_j17_flat') };
+    const ownedNames = new Set(Object.values(datasets).flatMap(name => [name, `${name}_assets`]));
+    const baseline = new Set((await readLangKeyInventory(page.request)).allLangKeys);
+    try {
+      await use(datasets);
+    } finally {
+      // Fixture teardown has its own timeout and a live request context even
+      // when the test body times out or creation fails after committing.
+      await cleanupHeadingDatasets(page, ownedNames, baseline);
+    }
+  }, { timeout: 120_000 }],
+});
 
 async function setPageTheme(page: Page, theme: 'light' | 'dark') {
   await waitForActiveFilterbarLayout(page);
@@ -30,23 +81,17 @@ async function expectOutline(root: Locator, expected: number[]) {
   });
 }
 
-async function postAssetLinking(page: Page, action: 'enable' | 'remove', dataset: string) {
-  const response = await page.request.post(`/api/asset-linking/attachments/${action}`, {
+async function enableAttachments(page: Page, dataset: string) {
+  const response = await page.request.post('/api/asset-linking/attachments/enable', {
     headers: { 'X-CSRF-Token': await fetchCsrfTokenForRequest(page.request) },
-    data: action === 'enable' ? { parent_table: dataset, max_file_size_mb: 1 }
-      : { parent_table: dataset, confirm: true },
+    data: { parent_table: dataset, max_file_size_mb: 1 },
   });
   expect(response.ok(), await response.text()).toBe(true);
 }
 
-test('dataset headings keep their old computed look and follow the real hierarchy', async ({ page }, testInfo) => {
+test('dataset headings keep their old computed look and follow the real hierarchy', async ({ page, headingDatasets }, testInfo) => {
   test.setTimeout(300_000);
-  await login(page, loadCredentials());
-  const populated = buildTempDatasetName('e2e_j17_headings');
-  const empty = buildTempDatasetName('e2e_j17_empty');
-  const flat = buildTempDatasetName('e2e_j17_flat');
-  const created: string[] = [];
-  let attachmentsEnabled = false;
+  const { populated, empty, flat } = headingDatasets;
   const evidence: Record<string, unknown> = {};
   const columns = { id: 'SERIAL', name: 'TEXT', event_date: 'DATE', price: 'NUMERIC(12,2)',
     latitude: 'NUMERIC(10,6)', longitude: 'NUMERIC(10,6)' };
@@ -56,13 +101,9 @@ test('dataset headings keep their old computed look and follow the real hierarch
     await createTempDataset(page, { datasetName: populated, columns,
       seedRows: [{ name: 'Heading / Otsikko 中文', event_date: '2026-04-15', price: 10,
         latitude: 60.1699, longitude: 24.9384 }] });
-    created.push(populated);
     await createTempDataset(page, { datasetName: empty, columns });
-    created.push(empty);
     await createTempDataset(page, { datasetName: flat, columns: { id: 'SERIAL', name: 'TEXT' } });
-    created.push(flat);
-    await postAssetLinking(page, 'enable', populated);
-    attachmentsEnabled = true;
+    await enableAttachments(page, populated);
 
     for (const language of ['en', 'fi']) {
       for (const theme of ['light', 'dark'] as const) {
@@ -154,22 +195,8 @@ test('dataset headings keep their old computed look and follow the real hierarch
       }
     }
   } finally {
-    // Attach diagnostics and attempt every cleanup even if either operation fails.
-    const cleanupErrors: unknown[] = [];
-    try {
-      await testInfo.attach('J17-heading-computed-styles', { body: JSON.stringify({
-        viewport: page.viewportSize(), baseline: 'Original tags and frozen pre-J17 rules in the same DOM position', evidence,
-      }, null, 2), contentType: 'application/json' });
-    } finally {
-      if (attachmentsEnabled) {
-        try { await postAssetLinking(page, 'remove', populated); }
-        catch (error) { cleanupErrors.push(error); }
-      }
-      for (const dataset of created.reverse()) {
-        try { await cleanupDatasetViaRequest(page.request, dataset); }
-        catch (error) { cleanupErrors.push(error); }
-      }
-      if (cleanupErrors.length) throw new AggregateError(cleanupErrors, 'J17 fixture cleanup failed');
-    }
+    await testInfo.attach('J17-heading-computed-styles', { body: JSON.stringify({
+      viewport: page.viewportSize(), baseline: 'Original tags and frozen pre-J17 rules in the same DOM position', evidence,
+    }, null, 2), contentType: 'application/json' });
   }
 });

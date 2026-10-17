@@ -72,6 +72,7 @@ let controller: ReturnType<typeof createMobileTopbarSearchController> | undefine
 afterEach(() => {
   controller?.destroy(); controller = undefined;
   document.body.replaceChildren(); activations.length = 0; vi.restoreAllMocks();
+  sessionStorage.clear();
 });
 
 function mountSearch(width: number, heroVisible = true) {
@@ -79,7 +80,7 @@ function mountSearch(width: number, heroVisible = true) {
     <div class="tab_parts_container" hidden>
       <input data-testid="dataset-search-input" value="inactive dataset">
     </div>
-    <div class="tab_parts_container" id="active-dataset">
+    <div class="tab_parts_container" id="demo_tab_parts_container">
       <div class="dataset-shared-topbar" data-filterbar-shared-topbar-for="demo">
         <div class="dataset-shared-topbar__site-identity">Site</div>
         <div class="dataset-search-panel">
@@ -94,6 +95,10 @@ function mountSearch(width: number, heroVisible = true) {
       </div>
     </div>`;
   const phone = width <= 700;
+  sessionStorage.setItem('selected_dataset', 'demo');
+  vi.spyOn(HTMLElement.prototype, 'getClientRects').mockImplementation(function () {
+    return (isVisible(this) ? [new DOMRect(0, 0, 100, 100)] : []) as unknown as DOMRectList;
+  });
   const bar = document.querySelector<HTMLElement>('.dataset-shared-topbar')!;
   bar.hidden = !phone && heroVisible;
   document.getElementById('hero')!.hidden = phone || !heroVisible;
@@ -106,7 +111,11 @@ function mountSearch(width: number, heroVisible = true) {
   const root = new DomLocator(() => [document.body]);
   const page = {
     locator: (selector: string) => root.locator(selector),
-    waitForFunction: async (operation: () => boolean) => expect(operation()).toBe(true),
+    waitForFunction: async (operation: (argument: unknown) => unknown, argument: unknown) => {
+      const value = operation(argument);
+      expect(value).toBeTruthy();
+      return { jsonValue: async () => value, dispose: async () => {} };
+    },
   } as unknown as Page;
   return { page, bar, filterClick };
 }
@@ -131,7 +140,7 @@ test.each([768, 1440])('at %i px selects visible hero past hidden shared/inactiv
   const { page, filterClick } = mountSearch(width);
   const input = await openActiveDatasetSearch(page) as unknown as DomLocator;
   expect(input.element().id).toBe('hero-input');
-  expect(input.element().closest('.tab_parts_container')!.id).toBe('active-dataset');
+  expect(input.element().closest('.tab_parts_container')!.id).toBe('demo_tab_parts_container');
   expect(activations).toEqual([]); expect(filterClick).not.toHaveBeenCalled();
 });
 
