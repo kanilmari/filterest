@@ -1,7 +1,8 @@
 #!/bin/bash
 # check_file_length.sh
 # Enforces the 700-line file limit from DEV_GUIDE §3.
-# Scans core/reusable and feature-component source roots (.js, .go, .css).
+# Scans core/reusable and feature sources (.js, .go, .css), pipeline Go,
+# and Python under server_tools/ and testing/.
 # Exits 0 with warnings or exits 1 in strict mode (--strict) for unknown violations.
 #
 # Usage:
@@ -25,36 +26,28 @@ LEGACY_VIOLATIONS=0
 # Known legacy violations — these warn but don't fail in strict mode.
 # Remove entries as files are refactored under the limit.
 KNOWN_LEGACY=(
-    "backend/core_components/dynamic_table_tools/dtt_1_row_crud/dtt_1_row_delete/delete_row.go"
-    "backend/core_components/dynamic_table_tools/dtt_1_row_crud/dtt_1_row_delete/delete_row_test.go"
-    "backend/core_components/dynamic_table_tools/dtt_1_row_crud/dtt_1_row_read/card_support_enrichment.go"
-    "backend/core_components/dynamic_table_tools/dtt_1_row_crud/dtt_1_row_read/card_support_enrichment_test.go"
     "backend/core_components/dynamic_table_tools/dtt_1_row_crud/dtt_1_row_read/filterbar_ai_facade_handler.go"
-    "backend/core_components/dynamic_table_tools/dtt_1_row_crud/dtt_1_row_read/filterbar_ai_facade_handler_test.go"
     "backend/core_components/dynamic_table_tools/dtt_1_row_crud/dtt_1_row_read/filterbar_ai_query_builder.go"
-    "backend/core_components/dynamic_table_tools/dtt_1_row_crud/dtt_1_row_read/get_child_items.go"
-    "backend/core_components/dynamic_table_tools/dtt_asset_linking/image_asset_linking_handlers_test.go"
-    "backend/core_components/dynamic_table_tools/dtt_table_folders/table_folders_test.go"
-    "backend/core_components/router/health_handler_test.go"
-    "backend/core_components/router/routing_builder.go"
+    "backend/pipeline/access_control/access_control_test.go"
     "frontend/core_components/ai_features/table_chat/table_chat_printer.js"
-    "frontend/core_components/ai_features/table_chat/table_chat_printer.test.js"
     "frontend/core_components/auth/auth.css"
-    "frontend/core_components/filterbar/filter_bar_builder.js"
-    "frontend/core_components/filterbar/filter_list/filter_column_builder.js"
     "frontend/core_components/filterbar/filterbar.css"
-    "frontend/core_components/lang/translation_handler.js"
     "frontend/core_components/general_tables/gt_1_row_crud/gt_1_1_row_create/row_relation_builder.js"
-    "frontend/core_components/navigation/main_tabs/main_tab_printer.js"
-    "frontend/core_components/table_views/card_view/row_article_image_gallery.js"
-    "frontend/core_components/table_views/card_view/row_article_opener.test.js"
-    "frontend/core_components/table_views/card_view/card_view_printer.js"
+    "frontend/core_components/lang/translation_handler.js"
     "frontend/core_components/table_views/card_view/cards.css"
     "frontend/core_components/table_views/table_component_builder.js"
-    "frontend/core_components/vanilla_tree/van_tr_components/admin_tree_builder.js"
-    "frontend/core_components/workline_observatory/workline_observatory_view_printer.js"
-    "frontend/reusable_components/key_value_container/kv_container_printer.js"
     "frontend/reusable_components/vanilla_checkbox_table/vanilla_checkbox_table.js"
+    "server_tools/agent_tools/db_report.py"
+    "server_tools/agent_tools/db_task.py"
+    "server_tools/agent_tools/easelect_api_client.py"
+    "server_tools/agent_tools/easelect_mcp_server.py"
+    "server_tools/agent_tools/test_easelect_api_client.py"
+    "server_tools/public_slice_export/generate_third_party_notices.py"
+    "testing/essential/generate_dummy_test_database.py"
+    "testing/python/test_db_task_http_helpers.py"
+    "testing/python/test_filterest_docker_runner.py"
+    "testing/python/test_filterest_paths.py"
+    "testing/python/test_worker_agent_codex.py"
 )
 
 for arg in "$@"; do
@@ -91,10 +84,13 @@ while IFS= read -r line; do
         NEW_VIOLATIONS=$((NEW_VIOLATIONS + 1))
     fi
     VIOLATIONS=$((VIOLATIONS + 1))
-done < <(find frontend/core_components frontend/reusable_components backend/core_components backend/reusable_components components \
-    -type f \( -name '*.js' -o -name '*.go' -o -name '*.css' \) \
-    -exec wc -l {} + 2>/dev/null \
-    | awk -v max="$MAX_LINES" '$1 > max && $2 != "total" {print $1, $2}' \
+done < <({
+    find frontend/core_components frontend/reusable_components backend/core_components backend/reusable_components components \
+        -type f \( -name '*.js' -o -name '*.go' -o -name '*.css' \) \
+        -exec wc -l {} + 2>/dev/null
+    find backend/pipeline -type f -name '*.go' -exec wc -l {} + 2>/dev/null
+    find server_tools testing -type f -name '*.py' -exec wc -l {} + 2>/dev/null
+} | awk -v max="$MAX_LINES" '$1 > max && $2 != "total" {print $1, $2}' \
     | sort -rn)
 
 if [ "$VIOLATIONS" -eq 0 ]; then

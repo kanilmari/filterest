@@ -695,6 +695,12 @@
         "app/testing/python/test_translation_object_sources.py",
         "app/testing/python/test_translation_scope_storage.py"
       ]
+    },
+    {
+      "paths": ["app/server_tools/scripts/check_file_length.sh", "app/testing/python/test_file_length_guard.py"],
+      "tests": [
+        "app/testing/python/test_file_length_guard.py"
+      ]
     }
   ],
   "bootstrap_proofs": [
