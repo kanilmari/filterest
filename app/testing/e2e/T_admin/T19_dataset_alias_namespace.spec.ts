@@ -9,9 +9,9 @@ import { login, loadCredentials, type TestCredentials } from '../helpers/auth';
 import { buildTempDatasetName, createTempDataset, dropTempDataset } from '../helpers/temp-dataset';
 import { sanitizeTestIdPart } from '../../../frontend/reusable_components/vanilla_dropdown/vanilla_dropdown_builder.js';
 
-const realName = buildTempDatasetName('e2e_ns_real');
-const ownerName = buildTempDatasetName('app_e2e_ns_owner');
-const safeAlias = ownerName.slice(4) + '_saved';
+let realName: string;
+let ownerName: string;
+let safeAlias: string;
 const isAccountTheme = (url: URL) => url.pathname === '/api/user-visual-preference';
 const runsHere = (project: TestInfo['project']) => project.metadata?.screenWidth === 'desktop' && project.metadata?.cardView === 'normal';
 const copy = {
@@ -28,6 +28,11 @@ test.describe('T15 — One namespace for dataset names and aliases', () => {
   test.beforeAll(async ({ browser }, workerInfo) => {
     credentials = loadCredentials();
     if (!runsHere(workerInfo.project)) return;
+    // fullyParallel can run this hook again in the same worker after cleanup.
+    // Registry history retains each name/UID pair, so every setup needs new names.
+    realName = buildTempDatasetName('e2e_ns_real');
+    ownerName = buildTempDatasetName('app_e2e_ns_owner');
+    safeAlias = ownerName.slice(4) + '_saved';
     const context = await browser.newContext({ ignoreHTTPSErrors: true });
     const page = await context.newPage();
     try {
@@ -46,7 +51,10 @@ test.describe('T15 — One namespace for dataset names and aliases', () => {
     try {
       await login(page, credentials);
       // Reverse order also proves deletion of a dataset with its alias metadata.
-      for (const name of [...created].reverse()) await dropTempDataset(page, name);
+      while (created.length) {
+        await dropTempDataset(page, created[created.length - 1]);
+        created.pop();
+      }
     } finally { await context.close(); }
   });
 

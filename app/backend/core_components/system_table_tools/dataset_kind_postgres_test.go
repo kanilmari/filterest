@@ -17,11 +17,16 @@ import (
 	"testing"
 
 	backend "easelect/backend/core_components"
+	"easelect/backend/core_components/auth_generation"
 	"easelect/backend/core_components/dataset_kinds"
 	"easelect/backend/core_components/dbutils"
 	read "easelect/backend/core_components/dynamic_table_tools/dtt_1_row_crud/dtt_1_row_read"
 	"easelect/backend/core_components/lang"
 	"easelect/backend/core_components/migrations"
+	e_sessions "easelect/backend/core_components/sessions"
+	"easelect/backend/core_components/sign_in_deadline"
+	"easelect/backend/core_components/sign_in_revocation"
+	"github.com/gorilla/sessions"
 	"github.com/lib/pq"
 )
 
@@ -106,14 +111,22 @@ func assertKindEnabledTranslations(t *testing.T, db *sql.DB) {
 	}
 	// The upgrade database differs from the fresh database bound by the fixture.
 	// Verify the endpoint against this database, restoring the binding afterwards.
-	oldDB := backend.Db
-	backend.Db = db
-	defer func() { backend.Db = oldDB }()
+	oldStore, oldSessionName := e_sessions.Store, e_sessions.SessionName
+	e_sessions.Store = sessions.NewCookieStore([]byte("dataset-kind-test-session-key"))
+	e_sessions.SessionName = "dataset-kind-test-session"
+	defer func() { e_sessions.Store, e_sessions.SessionName = oldStore, oldSessionName }()
+	oldDB, oldConfidential := backend.Db, backend.DbConfidential
+	backend.Db, backend.DbConfidential = db, db
+	defer func() { backend.Db, backend.DbConfidential = oldDB, oldConfidential }()
 	t.Setenv("DEV_MODE", "false")
+	readerCookie := kindTranslationReaderCookie(t, db)
 	for _, code := range languages {
 		t.Run("translations/"+code, func(t *testing.T) {
+			// SEC-2 serves these column labels only to a current dataset reader.
+			request := httptest.NewRequest(http.MethodGet, "/api/translations?lang="+code, nil)
+			request.AddCookie(readerCookie)
 			response := httptest.NewRecorder()
-			lang.GetTranslationsHandler(response, httptest.NewRequest(http.MethodGet, "/api/translations?lang="+code, nil))
+			lang.GetTranslationsHandler(response, request)
 			if response.Code != http.StatusOK {
 				t.Fatalf("translations returned %d: %s", response.Code, response.Body.String())
 			}
@@ -126,8 +139,70 @@ func assertKindEnabledTranslations(t *testing.T, db *sql.DB) {
 					t.Errorf("enabled locale %s does not serve nonblank copy for %s", code, key)
 				}
 			}
+			guest := httptest.NewRecorder()
+			lang.GetTranslationsHandler(guest, httptest.NewRequest(http.MethodGet, request.URL.String(), nil))
+			if guest.Code != http.StatusOK {
+				t.Fatalf("guest translations returned %d: %s", guest.Code, guest.Body.String())
+			}
+			var guestCopy map[string]string
+			if err := json.Unmarshal(guest.Body.Bytes(), &guestCopy); err != nil {
+				t.Fatal(err)
+			}
+			for _, key := range []string{"table_kind", "kind_version", "kind_config"} {
+				if _, exposed := guestCopy[key]; exposed {
+					t.Errorf("enabled locale %s exposes private column copy for %s to the guest", code, key)
+				}
+			}
+			if strings.TrimSpace(guestCopy["dataset_kind_evidence_unavailable"]) == "" {
+				t.Errorf("enabled locale %s withholds public dataset-kind guidance from the guest", code)
+			}
 		})
 	}
+}
+
+// Use a real admitted administrator, as in the login-name PostgreSQL handler
+// proofs: a role label alone cannot pass translationPrincipal's session check.
+// The disposable database owns these fixture rows and removes them on cleanup.
+func kindTranslationReaderCookie(t *testing.T, db *sql.DB) *http.Cookie {
+	t.Helper()
+	const userID = 91220
+	frontPageExec(t, db, `INSERT INTO system_users(id,username,enabled,admin_access_allowed)
+ VALUES(91220,'kind_translation_reader',true,true);
+ INSERT INTO restricted.users_restricted(id,login_name,password,email,login_verification_method)
+ VALUES(91220,'kind_translation_reader_login','fixture','kind-reader@example.invalid','none');
+ INSERT INTO system_user_group_memberships(user_id,group_id) VALUES(91220,1);`)
+	request := httptest.NewRequest(http.MethodGet, "/", nil)
+	session, err := e_sessions.Load(request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	session.Values["user_id"], session.Values["authenticated"], session.Values["user_role"] = userID, true, "admin"
+	generation, err := auth_generation.Current(request.Context(), db, userID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := auth_generation.Set(session, generation); err != nil {
+		t.Fatal(err)
+	}
+	signInID, err := sign_in_revocation.NewSignInID()
+	if err != nil {
+		t.Fatal(err)
+	}
+	session.Values[sign_in_revocation.SessionKey] = signInID
+	if err := sign_in_deadline.Stamp(request.Context(), db, session); err != nil {
+		t.Fatal(err)
+	}
+	response := httptest.NewRecorder()
+	if err := e_sessions.Save(response, request, session); err != nil {
+		t.Fatal(err)
+	}
+	for _, cookie := range response.Result().Cookies() {
+		if cookie.Name == e_sessions.SessionName {
+			return cookie
+		}
+	}
+	t.Fatal("translation reader session did not produce a cookie")
+	return nil
 }
 
 func TestDatasetKindPostgresFreshLegacyEmptyRelationsDrift(t *testing.T) {

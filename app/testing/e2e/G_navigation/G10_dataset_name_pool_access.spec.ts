@@ -13,10 +13,12 @@ import {
 
 const runsHere = (project: TestInfo['project']) =>
   project.metadata?.screenWidth === 'desktop' && project.metadata?.cardView === 'normal';
-const readableName = buildTempDatasetName('app_e2e_pool_readable');
-const privateName = buildTempDatasetName('app_e2e_pool_private');
-const explicitAlias = `${readableName}-public`;
-const privateAlias = `${privateName}-secret`;
+// fullyParallel can run beforeAll again in the same worker after cleanup, and the
+// artifact registry keeps each name/UID pair, so every setup gets new names (as T19).
+let readableName: string;
+let privateName: string;
+let explicitAlias: string;
+let privateAlias: string;
 const rowTitle = 'WL159 pool access row';
 const created: string[] = [];
 
@@ -58,13 +60,13 @@ async function proveReadablePool(page: Page, legacyRequests: string[]): Promise<
   await page.goto(`/${explicitAlias}?search=${encodeURIComponent(rowTitle)}&view=card`, { waitUntil: 'domcontentloaded' });
   await waitForDataLoaded(page, readableName);
   const surface = page.locator(`#${readableName}_container:visible`);
-  await expect(surface.getByText(rowTitle, { exact: true })).toBeVisible({ timeout: 20_000 });
+  await expect(surface.getByTestId('card-item-header').getByText(rowTitle, { exact: true })).toBeVisible({ timeout: 20_000 });
   expect(await page.evaluate(dataset => {
     const params = JSON.parse(localStorage.getItem('dataset_query_params') || '{}');
     return { canonical: params[dataset], alias: params[`${dataset}-public`] };
   }, readableName)).toEqual({ canonical: { search: rowTitle }, alias: undefined });
   await page.reload({ waitUntil: 'domcontentloaded' });
-  await expect(surface.getByText(rowTitle, { exact: true })).toBeVisible({ timeout: 20_000 });
+  await expect(surface.getByTestId('card-item-header').getByText(rowTitle, { exact: true })).toBeVisible({ timeout: 20_000 });
   expect(new URL(page.url()).pathname).toBe(`/${explicitAlias}`);
   expect(legacyRequests).toEqual([]);
 }
@@ -74,6 +76,10 @@ test.describe('G10 — Readable name pools without legacy alias reads', () => {
 
   test.beforeAll(async ({ browser }, workerInfo) => {
     if (!runsHere(workerInfo.project)) return;
+    readableName = buildTempDatasetName('app_e2e_pool_readable');
+    privateName = buildTempDatasetName('app_e2e_pool_private');
+    explicitAlias = `${readableName}-public`;
+    privateAlias = `${privateName}-secret`;
     const context = await browser.newContext({ ignoreHTTPSErrors: true });
     const page = await context.newPage();
     try {
@@ -94,7 +100,11 @@ test.describe('G10 — Readable name pools without legacy alias reads', () => {
     const page = await context.newPage();
     try {
       await login(page, loadCredentials());
-      for (const name of [...created].reverse()) await dropTempDataset(page, name);
+      // Drain as each drop succeeds, so a re-entered setup never drops an earlier pair again.
+      while (created.length) {
+        await dropTempDataset(page, created[created.length - 1]);
+        created.pop();
+      }
     } finally { await context.close(); }
   });
 

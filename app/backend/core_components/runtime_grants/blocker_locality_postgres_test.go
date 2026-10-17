@@ -18,6 +18,8 @@ import (
 
 func TestUnrelatedAdministratorSavesBesideOldAutomationBlockerPostgres(t *testing.T) {
 	f := newMutationHooksFixture(t)
+	// The actor must be able to read the group selected by the membership edit.
+	f.right("system_user_groups", "/api/get-results")
 	f.create("old_blocker_source", "")
 	f.create("old_blocker_target", "")
 	FixtureExec(t, f.owner, `

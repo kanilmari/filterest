@@ -148,7 +148,7 @@ func TestSavePersonalDatasetSortDefaultUsesOnlySessionOwner(t *testing.T) {
 	t.Cleanup(func() { datasetSortDefaultSave = originalSave })
 	response := httptest.NewRecorder()
 
-	SavePersonalDatasetSortDefaultHandler(response, request)
+	datasetSortServeWithReadGrant(t, SavePersonalDatasetSortDefaultHandler, response, request)
 
 	if response.Code != http.StatusNoContent {
 		t.Fatalf("status = %d, want %d", response.Code, http.StatusNoContent)
@@ -176,7 +176,7 @@ func TestSavePersonalDatasetSortDefaultRejectsScopeInput(t *testing.T) {
 	t.Cleanup(func() { datasetSortDefaultSave = originalSave })
 	response := httptest.NewRecorder()
 
-	SavePersonalDatasetSortDefaultHandler(response, request)
+	datasetSortServeWithReadGrant(t, SavePersonalDatasetSortDefaultHandler, response, request)
 
 	if response.Code != http.StatusBadRequest {
 		t.Fatalf("status = %d, want %d", response.Code, http.StatusBadRequest)
@@ -198,7 +198,7 @@ func TestSavePersonalDatasetSortDefaultRejectsGuest(t *testing.T) {
 	t.Cleanup(func() { datasetSortDefaultSave = originalSave })
 	response := httptest.NewRecorder()
 
-	SavePersonalDatasetSortDefaultHandler(response, request)
+	datasetSortServeWithReadGrant(t, SavePersonalDatasetSortDefaultHandler, response, request)
 
 	if response.Code != http.StatusUnauthorized {
 		t.Fatalf("status = %d, want %d", response.Code, http.StatusUnauthorized)
@@ -229,7 +229,7 @@ func TestSaveDatasetSortDefaultRetainsAdministratorSiteScope(t *testing.T) {
 	t.Cleanup(func() { datasetSortDefaultSave = originalSave })
 	response := httptest.NewRecorder()
 
-	SaveDatasetSortDefaultHandler(response, request)
+	datasetSortServeWithReadGrant(t, SaveDatasetSortDefaultHandler, response, request)
 
 	if response.Code != http.StatusNoContent || capturedScope != "site" {
 		t.Fatalf("status/scope = %d/%q, want %d/site", response.Code, capturedScope, http.StatusNoContent)
@@ -244,12 +244,6 @@ func datasetSortRequestWithUser(
 	userID int,
 ) *http.Request {
 	t.Helper()
-	// This test exercises saving scope for a reader with an explicit read grant.
-	priorDB := backend.Db
-	backend.Db = queryfixture.Open(t, func(string, []driver.NamedValue) (driver.Rows, error) {
-		return queryfixture.Rows([]string{"allowed"}, []driver.Value{int64(1)}), nil
-	})
-	t.Cleanup(func() { backend.Db = priorDB })
 	originalStore := e_sessions.Store
 	originalSessionName := e_sessions.SessionName
 	store := sessions.NewCookieStore([]byte("dataset-sort-handler-secret-32-bytes"))
@@ -277,4 +271,39 @@ func datasetSortRequestWithUser(
 		request.AddCookie(cookie)
 	}
 	return request
+}
+
+// Only the sort scope unit tests use a query mock; request construction must
+// leave the real database available to subsequent handlers in PostgreSQL tests.
+func datasetSortServeWithReadGrant(t *testing.T, handler http.HandlerFunc, response http.ResponseWriter, request *http.Request) {
+	t.Helper()
+	// This test exercises saving scope for a reader with an explicit read grant.
+	priorDB := backend.Db
+	backend.Db = queryfixture.Open(t, func(string, []driver.NamedValue) (driver.Rows, error) {
+		return queryfixture.Rows([]string{"allowed"}, []driver.Value{int64(1)}), nil
+	})
+	defer func() { backend.Db = priorDB }()
+	handler(response, request)
+}
+
+func TestDatasetSortHelpersRestoreDatabaseBeforeNextRequest(t *testing.T) {
+	priorDB := backend.Db
+	request := datasetSortRequestWithUser(t, http.MethodPost, "/api/dataset-sort-default/personal", "{}", 42)
+	if backend.Db != priorDB {
+		t.Fatal("building a signed request replaced the database")
+	}
+	called := false
+	datasetSortServeWithReadGrant(t, func(w http.ResponseWriter, r *http.Request) {
+		called = true
+		if backend.Db == priorDB {
+			t.Fatal("sort scope handler did not receive its read-grant fixture")
+		}
+		var allowed int
+		if err := backend.Db.QueryRow("SELECT allowed").Scan(&allowed); err != nil || allowed != 1 {
+			t.Fatalf("scoped read grant: %d, %v", allowed, err)
+		}
+	}, httptest.NewRecorder(), request)
+	if !called || backend.Db != priorDB {
+		t.Fatal("the next request would inherit the sort query mock")
+	}
 }

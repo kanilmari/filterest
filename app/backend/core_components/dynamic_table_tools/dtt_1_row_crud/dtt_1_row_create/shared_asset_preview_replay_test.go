@@ -37,6 +37,13 @@ CREATE TABLE system_db_tables(table_uid integer PRIMARY KEY, table_name text, sc
 CREATE TABLE system_column_details(table_uid bigint, column_name text, editable_in_ui boolean DEFAULT false, must_be_true_unless_own boolean);
 CREATE TABLE system_foreign_key_relations_1_m(id bigint PRIMARY KEY, source_table_uid bigint, target_table_uid bigint,
  source_column_name text, target_column_name text, target_insert_specs jsonb);
+-- Referenced-row authorization uses real enabled Read grants, including for admins.
+CREATE TABLE system_functions(id bigint PRIMARY KEY, url_route_endpoint text, disabled boolean);
+CREATE TABLE system_user_group_memberships(user_id integer, group_id integer);
+CREATE TABLE system_group_table_func_rights(user_group_id integer, function_id bigint, target_table_uid integer);
+INSERT INTO system_functions VALUES(1, '/api/get-results', false);
+INSERT INTO system_user_group_memberships VALUES(2, 1);
+INSERT INTO system_group_table_func_rights VALUES(1, 1, 117);
 CREATE TABLE deletion_log(table_name text, record_id text, deleted_by text, UNIQUE(table_name, record_id));
 CREATE TABLE system_about(id bigint PRIMARY KEY, cached_image text);
 CREATE TABLE system_about_assets(id serial PRIMARY KEY, system_about_id integer REFERENCES system_about(id) ON DELETE CASCADE,

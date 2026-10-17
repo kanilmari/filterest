@@ -312,7 +312,8 @@ func UpdateRowHandler(response_writer http.ResponseWriter, request *http.Request
 			if errors.As(err, &refusal) {
 				httpresponse.RespondWithRefusal(response_writer, refusal)
 			} else {
-				httpresponse.RespondWithError(response_writer, 500, "Error checking row permissions")
+				log.Printf("error: validate foreign reference for %s.%s: %s", tableName, update.Column, foreignReferenceErrorClass(err))
+				httpresponse.RespondWithError(response_writer, http.StatusInternalServerError, "Error checking row permissions")
 			}
 			return
 		}
@@ -462,6 +463,7 @@ func UpdateRowHandler(response_writer http.ResponseWriter, request *http.Request
 			if errors.As(err, &refusal) {
 				httpresponse.RespondWithRefusal(response_writer, refusal)
 			} else {
+				log.Printf("error: recheck foreign reference for %s.%s: %s", tableName, update.Column, foreignReferenceErrorClass(err))
 				httpresponse.RespondWithError(response_writer, 500, "Error checking row permissions")
 			}
 			return

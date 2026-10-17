@@ -51,10 +51,22 @@ test('962: every record has the same name in cards, small summaries, product til
         await page.emulateMedia({ colorScheme: theme === 'light' ? 'dark' : 'light' });
         for (const [name, field] of [['system_config', 'key'], ['system_db_tables', 'table_name'],
           ['dev_agent_tasks', 'title'], [dataset, 'title']]) {
-          await page.goto(`/${name}?view=card`, { waitUntil: 'domcontentloaded' });
+          // Other workers delete their temporary registry rows while this test runs.
+          // Pin the registry proof to a system table that survives their cleanup.
+          let stableID: number | undefined;
+          if (name === 'system_db_tables') {
+            const stable = await page.request.get('/api/get-results', {
+              params: { dataset: name, view_key: 'card', table_name: 'system_config' },
+            });
+            expect(stable.ok(), await stable.text()).toBe(true);
+            const records = (await stable.json()).data as Array<{ id: number; table_name: string }>;
+            stableID = records.find(row => row.table_name === 'system_config')?.id;
+            expect(stableID).toBeGreaterThan(0);
+          }
+          await page.goto(`/${name}?view=card${stableID ? `&id=${stableID}` : ''}`, { waitUntil: 'domcontentloaded' });
           await applyTheme(page, theme);
           await expect(page.locator('html')).toHaveAttribute('lang', language);
-          // Choose from the rendered page, whose sort/page size can differ from API defaults.
+          // Choose from the rendered page; the registry listing is pinned to its stable ID.
           const firstCard = page.locator(`#${name}_card_view_container [data-testid="card-item"]`).first();
           await expect(firstCard).toBeVisible();
           await expect(firstCard).toHaveAttribute('data-id', /^\d+$/);
