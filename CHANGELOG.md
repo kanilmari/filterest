@@ -22,6 +22,7 @@ Dates are the local (Europe/Helsinki) date on which the version was published.
 
 ## [Unreleased]
 
+- **Service-catalog logos follow asset metadata (J1)** — Remove service-specific rendering defaults and redundant logo CSS; text marks accept trimmed `logo_mark_text` up to eight Unicode code points, otherwise using the variant's first two uppercase letters.
 - **Unused icons removed (J14, K404)** — Removed three unused sign-in, sign-out and card-visibility SVG files and their license inventory entries.
 - **Backend cleanups (J5/J13/J2)** — Removed the unused dynamic-function stub, centralized image extension defaults in the image profile, and made image sourcing prefer decodable formats while retaining AVIF at lower priority.
 - **Declared language-key evidence (WO-J35 B4)** — File-owned full-key catalogues and finite naming declarations now record existing keys as code use only while their name builders remain. Server status/refusal contracts and schema-built linked labels share this evidence path; copy, keys, migrations and the archiving pause are unchanged.

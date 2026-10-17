@@ -38,9 +38,7 @@ const SERVICE_CATALOG_STANDALONE_LOGO_EXTENSIONS = new Set([
     "webp",
     "gif",
 ]);
-const SERVICE_CATALOG_IMAGE_ONLY_LOGO_VARIANTS = new Set([
-    "matrix",
-]);
+const SERVICE_CATALOG_LOGO_MARK_TEXT_MAX_LENGTH = 8;
 const EXTERNALLY_SIZED_RENDER_SLOTS = new Set([
     CARD_IMAGE_RENDER_SLOTS.ROW_ARTICLE_GALLERY_THUMBNAIL,
     CARD_IMAGE_RENDER_SLOTS.IMAGE_FIRST,
@@ -53,12 +51,6 @@ const SERVICE_CATALOG_LOGO_PRESENTATION_STYLES = Object.freeze({
     STANDALONE_MARK: "standalone",
     CSS_ASSISTED: "css",
 });
-const SERVICE_CATALOG_LOGO_DEFAULTS = {
-    firefox: { markText: "Fx", showLabel: true, useImageMark: true },
-    thunderbird: { markText: "Tb", showLabel: true, useImageMark: true },
-    wikipedia: { markText: "W", showLabel: true, useImageMark: true },
-    openstreetmap: { markText: "OSM", showLabel: true, useImageMark: true },
-};
 
 /**
  * Luo SHA-256 -pohjainen "avatar" annetusta siemenarvosta.
@@ -327,9 +319,7 @@ function resolveServiceCatalogLogoPlan({
     // Explicit asset presentation also wins when an old filename could trigger
     // the compatibility fallback. Dataset identity is not an image setting.
     const metadata = parseImageMetadata(imageMetadata);
-    const typedVariant = resolveTypedServiceCatalogLogoVariant(imageTypeId, metadata);
-    if (SERVICE_CATALOG_IMAGE_RENDER_MODES.has(resolveServiceCatalogLogoRenderMode(metadata))
-        || (typedVariant && isServiceCatalogImageOnlyLogoVariant(typedVariant))) {
+    if (SERVICE_CATALOG_IMAGE_RENDER_MODES.has(resolveServiceCatalogLogoRenderMode(metadata))) {
         return null;
     }
     const typedPlan = resolveTypedServiceCatalogLogoPlan({
@@ -342,15 +332,12 @@ function resolveServiceCatalogLogoPlan({
 
     const legacyVariant = resolveLegacyServiceCatalogLogoVariant({ imageSrc });
     if (legacyVariant) {
-        if (isServiceCatalogImageOnlyLogoVariant(legacyVariant)) {
-            return null;
-        }
         return {
             variant: legacyVariant,
             useImageMark: false,
             cssOnly: true,
             markText: resolveServiceCatalogLogoMarkText(legacyVariant),
-            showLabel: resolveServiceCatalogLogoDefault(legacyVariant).showLabel,
+            showLabel: true,
             hasExplicitShowLabel: false,
         };
     }
@@ -371,9 +358,6 @@ function resolveTypedServiceCatalogLogoPlan({
     const metadata = parseImageMetadata(imageMetadata);
     const variant = resolveTypedServiceCatalogLogoVariant(imageTypeId, metadata);
     if (!variant) return null;
-    if (isServiceCatalogImageOnlyLogoVariant(variant)) {
-        return null;
-    }
     const renderMode = resolveServiceCatalogLogoRenderMode(metadata);
     if (SERVICE_CATALOG_IMAGE_RENDER_MODES.has(renderMode)) {
         return null;
@@ -382,15 +366,14 @@ function resolveTypedServiceCatalogLogoPlan({
         return null;
     }
 
-    const defaults = resolveServiceCatalogLogoDefault(variant);
     const explicitShowLabel = resolveServiceCatalogLogoLabelPreference(metadata);
     const explicitUseImageMark = resolveServiceCatalogLogoMarkPreference(metadata);
     return {
         variant,
-        useImageMark: explicitUseImageMark ?? (defaults.useImageMark !== false),
+        useImageMark: explicitUseImageMark ?? true,
         cssOnly: false,
-        markText: resolveServiceCatalogLogoMarkText(variant),
-        showLabel: explicitShowLabel ?? defaults.showLabel,
+        markText: resolveServiceCatalogLogoMarkText(variant, metadata),
+        showLabel: explicitShowLabel ?? true,
         hasExplicitShowLabel: explicitShowLabel !== null,
     };
 }
@@ -433,20 +416,13 @@ function resolveServiceCatalogLogoKind(imageSrc = "", logoPlan = null) {
         : SERVICE_CATALOG_LOGO_PRESENTATION_STYLES.FULL_IMAGE;
 }
 
-function resolveServiceCatalogLogoMarkText(variant = "") {
+// A short literal mark fits the logo slot; count code points to preserve surrogate pairs.
+function resolveServiceCatalogLogoMarkText(variant = "", metadata = null) {
+    const markText = typeof metadata?.logo_mark_text === "string"
+        ? Array.from(metadata.logo_mark_text.trim()).slice(0, SERVICE_CATALOG_LOGO_MARK_TEXT_MAX_LENGTH).join("")
+        : "";
     const normalizedVariant = String(variant || "").trim().toLowerCase();
-    return resolveServiceCatalogLogoDefault(normalizedVariant).markText
-        || normalizedVariant.slice(0, 2).toUpperCase()
-        || "S";
-}
-
-function resolveServiceCatalogLogoDefault(variant = "") {
-    const normalizedVariant = String(variant || "").trim().toLowerCase();
-    return SERVICE_CATALOG_LOGO_DEFAULTS[normalizedVariant] || {
-        markText: "",
-        showLabel: true,
-        useImageMark: true,
-    };
+    return markText || normalizedVariant.slice(0, 2).toUpperCase() || "S";
 }
 
 function resolveServiceCatalogLogoRenderMode(metadata = null) {
@@ -495,12 +471,6 @@ function resolveServiceCatalogLogoMarkPreference(metadata = null) {
         }
     }
     return null;
-}
-
-function isServiceCatalogImageOnlyLogoVariant(variant = "") {
-    return SERVICE_CATALOG_IMAGE_ONLY_LOGO_VARIANTS.has(
-        String(variant || "").trim().toLowerCase()
-    );
 }
 
 function shouldShowServiceCatalogLogoTitle(logoPlan = null) {

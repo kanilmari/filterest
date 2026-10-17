@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
 // card_avatar_builder.test.js
-// Verifies card image DOM styling stays consistent across media formats.
-// Bridges createImageElement and jsdom style assertions for card media wrappers.
-// Exists to prevent square image corners from leaking through rounded cards.
+// Verifies generic card media and metadata-driven logo presentation.
+// Bridges createImageElement and jsdom assertions for card media wrappers.
+// Keeps asset metadata authoritative while preserving ordinary image defaults.
 
 import { describe, expect, test } from 'vitest';
 
@@ -111,9 +111,10 @@ describe('createImageElement', () => {
     );
 
     test.each([
-        ['/storage/service_catalog_logos/firefox.svg', 'firefox', 'Firefox', 'Fx'],
-        ['service_catalog_logos/openstreetmap.svg', 'openstreetmap', 'OpenStreetMap', 'OSM'],
-        ['/storage/service_catalog_logos/wikipedia.svg', 'wikipedia', 'Wikipedia', 'W', 'service_catalog'],
+        ['/storage/service_catalog_logos/firefox.svg', 'firefox', 'Firefox', 'FI'],
+        ['service_catalog_logos/openstreetmap.svg', 'openstreetmap', 'OpenStreetMap', 'OP'],
+        ['/storage/service_catalog_logos/wikipedia.svg', 'wikipedia', 'Wikipedia', 'WI', 'service_catalog'],
+        ['/storage/service_catalog_logos/matrix.svg', 'matrix', 'Matrix', 'MA'],
     ])('renders legacy service-catalog logo path %s without fetching the old file', (
         imagePath,
         expectedVariant,
@@ -136,20 +137,6 @@ describe('createImageElement', () => {
         expect(logoMark?.textContent).toBe(expectedMarkText);
         expect(wrapper.querySelector(`img[src="${imagePath}"]`)).toBeNull();
         expect(wrapper.querySelector('img')).toBeNull();
-    });
-
-    test('renders legacy Matrix logo paths as normal images', () => {
-        const imagePath = '/storage/service_catalog_logos/matrix.svg';
-        const wrapper = createImageElement(imagePath, true, {
-            tableName: 'app_service_catalog',
-            rowLabel: 'Matrix',
-        });
-        const image = wrapper.querySelector('img');
-
-        expect(wrapper.dataset.serviceCatalogLogoRenderMode).toBe('image');
-        expect(wrapper.dataset.serviceCatalogLogoKind).toBe('standalone');
-        expect(wrapper.querySelector('.service-catalog-css-logo')).toBeNull();
-        expect(image?.getAttribute('src')).toBe(imagePath);
     });
 
     test('renders typed service-catalog logo image with a label in card media slots by default', () => {
@@ -216,14 +203,17 @@ describe('createImageElement', () => {
         expect(logoTitle?.style.getPropertyValue('--service-logo-title-length')).toBe('9');
     });
 
-    test('renders Matrix as a normal image instead of a CSS-assisted wordmark', () => {
+    test('renders Matrix as a plain image when its row requests image rendering', () => {
         const imagePath = '/storage/104/6010/300/104_6010_7010.svg';
         const wrapper = createImageElement('/storage/104/6010/300/104_6010_7010.svg', true, {
             tableName: 'app_service_catalog',
             rowLabel: 'Matrix',
             renderSlot: CARD_IMAGE_RENDER_SLOTS.CARD_MEDIA,
             imageTypeId: 1,
-            imageMetadata: JSON.stringify({ logo_variant: 'matrix' }),
+            imageMetadata: JSON.stringify({
+                logo_variant: 'matrix', logo_render_mode: 'image',
+                logo_mark_mode: 'css_wordmark', logo_show_label: false,
+            }),
         });
         const image = wrapper.querySelector('img');
 
@@ -249,24 +239,27 @@ describe('createImageElement', () => {
         expect(wrapper.querySelector('.service-catalog-css-logo__title')).toBeNull();
     });
 
-    test('keeps Matrix image-only even when metadata asks for a label', () => {
+    test('renders Matrix as a labelled CSS logo when its row requests css_logo', () => {
         const imagePath = '/storage/104/6010/300/104_6010_7010.svg';
         const wrapper = createImageElement('/storage/104/6010/300/104_6010_7010.svg', true, {
             tableName: 'app_service_catalog',
             rowLabel: 'Matrix',
             renderSlot: CARD_IMAGE_RENDER_SLOTS.CARD_MEDIA,
             imageTypeId: 1,
-            imageMetadata: JSON.stringify({ logo_variant: 'matrix', logo_show_label: true }),
+            imageMetadata: JSON.stringify({
+                logo_variant: 'matrix', logo_render_mode: 'css_logo', logo_show_label: true,
+            }),
         });
         const image = wrapper.querySelector('img');
 
-        expect(wrapper.dataset.serviceCatalogLogoRenderMode).toBe('image');
-        expect(wrapper.dataset.serviceCatalogLogoKind).toBe('standalone');
-        expect(wrapper.querySelector('.service-catalog-css-logo')).toBeNull();
+        expect(wrapper.dataset.serviceCatalogLogoRenderMode).toBe('css');
+        expect(wrapper.dataset.serviceCatalogLogoVariant).toBe('matrix');
+        expect(wrapper.dataset.serviceCatalogLogoPresentation).toBe('mark-title');
+        expect(wrapper.querySelector('.service-catalog-css-logo__title')?.textContent).toBe('Matrix');
         expect(image?.getAttribute('src')).toBe(imagePath);
     });
 
-    test('keeps Matrix image-only even when metadata asks for an image mark', () => {
+    test('renders Matrix as an unlabelled text mark when its row requests css_wordmark', () => {
         const imagePath = '/storage/104/6010/300/104_6010_7010.svg';
         const wrapper = createImageElement(imagePath, true, {
             tableName: 'app_service_catalog',
@@ -275,14 +268,15 @@ describe('createImageElement', () => {
             imageTypeId: 1,
             imageMetadata: JSON.stringify({
                 logo_variant: 'matrix',
-                logo_mark_mode: 'image',
+                logo_render_mode: 'css_logo',
+                logo_mark_mode: 'css_wordmark',
+                logo_show_label: false,
             }),
         });
-        const image = wrapper.querySelector('img');
-
-        expect(wrapper.dataset.serviceCatalogLogoRenderMode).toBe('image');
-        expect(wrapper.dataset.serviceCatalogLogoKind).toBe('standalone');
-        expect(image?.getAttribute('src')).toBe(imagePath);
+        expect(wrapper.dataset.serviceCatalogLogoRenderMode).toBe('css');
+        expect(wrapper.dataset.serviceCatalogLogoPresentation).toBe('mark-only');
+        expect(wrapper.querySelector('.service-catalog-css-logo__mark')?.textContent).toBe('MA');
+        expect(wrapper.querySelector('img')).toBeNull();
         expect(wrapper.querySelector('.service-catalog-css-logo__title')).toBeNull();
     });
 
@@ -319,7 +313,7 @@ describe('createImageElement', () => {
             const legacy = createImageElement('/storage/service_catalog_logos/firefox.svg', true, { tableName, rowLabel: 'Firefox' });
             expect(legacy.dataset.serviceCatalogLogoVariant).toBe('firefox');
             expect(legacy.querySelector('img')).toBeNull();
-            expect(legacy.querySelector('.service-catalog-css-logo__mark')?.textContent).toBe('Fx');
+            expect(legacy.querySelector('.service-catalog-css-logo__mark')?.textContent).toBe('FI');
         }
     );
 
@@ -335,14 +329,65 @@ describe('createImageElement', () => {
         }
     );
 
-    test('preserves typed Matrix image-only metadata over a different legacy name', () => {
+    test('preserves typed image rendering over a different legacy name', () => {
         const src = '/storage/service_catalog_logos/firefox.svg';
         const wrapper = createImageElement(src, true, {
             tableName: 'ordinary_dataset', rowLabel: 'Matrix', imageTypeId: 1,
-            imageMetadata: { logo_variant: 'matrix' },
+            imageMetadata: { logo_variant: 'matrix', logo_render_mode: 'image' },
         });
         expect(wrapper.querySelector('.service-catalog-css-logo')).toBeNull();
         expect(wrapper.querySelector('img')?.getAttribute('src')).toBe(src);
+    });
+
+    test.each([
+        ['firefox', 'Fx', 'FI'],
+        ['thunderbird', 'Tb', 'TH'],
+        ['wikipedia', 'W', 'WI'],
+        ['openstreetmap', 'OSM', 'OP'],
+        ['matrix', 'Mx', 'MA'],
+        ['new-service', '新', 'NE'],
+    ])('takes %s text marks from metadata and otherwise uses generic initials', (
+        variant, markText, fallback
+    ) => {
+        for (const [metadataText, expected] of [[`  ${markText}  `, markText], [undefined, fallback]]) {
+            const wrapper = createImageElement('/storage/logo.svg', true, {
+                imageTypeId: 1,
+                rowLabel: 'Palvelu 服务',
+                imageMetadata: {
+                    logo_variant: variant, logo_mark_mode: 'text', logo_mark_text: metadataText,
+                    logo_show_label: false,
+                },
+            });
+            expect(wrapper.querySelector('.service-catalog-css-logo__mark')?.textContent).toBe(expected);
+            expect(wrapper.querySelector('img')).toBeNull();
+            expect(wrapper.querySelector('.service-catalog-css-logo__title')).toBeNull();
+            expect(wrapper.querySelector('.service-catalog-css-logo')?.getAttribute('aria-label'))
+                .toBe('Palvelu 服务');
+        }
+    });
+
+    test.each([
+        ['   ', 'FI'], [null, 'FI'], [42, 'FI'], [{ text: 'bad' }, 'FI'],
+        ['  ABCDEFGHI  ', 'ABCDEFGH'], ['😀😀😀😀😀😀😀😀😀', '😀😀😀😀😀😀😀😀'],
+        ['<b>X</b>', '<b>X</b>'],
+    ])('keeps mark text short and literal for %j', (logo_mark_text, expected) => {
+        const wrapper = createImageElement('/storage/logo.svg', true, {
+            imageTypeId: 1,
+            imageMetadata: { logo_variant: 'firefox', logo_mark_mode: 'text', logo_mark_text },
+        });
+        const mark = wrapper.querySelector('.service-catalog-css-logo__mark');
+        expect(mark?.textContent).toBe(expected);
+        expect(mark?.childElementCount).toBe(0);
+    });
+
+    test('keeps image-mark and visible-label defaults even when mark text is supplied', () => {
+        const wrapper = createImageElement('/storage/logo.svg', true, {
+            imageTypeId: 1, rowLabel: 'Uusi palvelu',
+            imageMetadata: { logo_variant: 'new-service', logo_mark_text: 'NS' },
+        });
+        expect(wrapper.dataset.serviceCatalogLogoRenderMode).toBe('css');
+        expect(wrapper.querySelector('.service-catalog-css-logo__mark')?.tagName).toBe('IMG');
+        expect(wrapper.querySelector('.service-catalog-css-logo__title')?.textContent).toBe('Uusi palvelu');
     });
 
     test.each([

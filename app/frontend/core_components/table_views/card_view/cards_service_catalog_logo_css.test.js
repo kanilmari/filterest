@@ -1,15 +1,52 @@
 // @vitest-environment node
 // cards_service_catalog_logo_css.test.js
-// Verifies service catalog logo CSS keeps card media in one stable square.
-// Bridges card CSS source and regression tests for visual sizing constants.
-// Exists to prevent catalog logo marks from shrinking below the 300px media area.
+// Verifies generic logo CSS sizing and metadata ownership of service presentation.
+// Bridges card CSS/renderer source and regression tests for logo policy and geometry.
+// Prevents service-specific defaults from returning to production card media code.
 
 import { describe, expect, test } from 'vitest';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 
 const CURRENT_DIR = dirname(fileURLToPath(import.meta.url));
+const FORMER_LOGO_VARIANTS = 'firefox|thunderbird|wikipedia|openstreetmap|matrix';
+const SERVICE_LOGO_POLICY_PATTERN = new RegExp([
+    `["'\`](?:${FORMER_LOGO_VARIANTS})["'\`]`,
+    `\\b(?:${FORMER_LOGO_VARIANTS})\\s*:`,
+    `service-catalog-css-logo(?:__mark)?--(?:${FORMER_LOGO_VARIANTS})\\b`,
+    `service_catalog_logos/(?:${FORMER_LOGO_VARIANTS})\\.svg`,
+].join('|'), 'i');
+
+describe('metadata owns service logo policy', () => {
+    test('keeps service variant identifiers out of the renderer, card helpers and CSS', () => {
+        const productionFiles = readdirSync(CURRENT_DIR, { recursive: true })
+            .filter(filename => filename.endsWith('.js') && !filename.includes('test'));
+        expect(productionFiles).toContain('card_avatar_builder.js');
+        expect(productionFiles).toContain('card_avatar_builder_helpers.js');
+        for (const filename of [...productionFiles, 'cards.css']) {
+            const source = readFileSync(resolve(CURRENT_DIR, filename), 'utf8');
+            expect(source, `Service logo policy in ${filename}`).not.toMatch(SERVICE_LOGO_POLICY_PATTERN);
+        }
+    });
+
+    test.each(FORMER_LOGO_VARIANTS.split('|'))('detects %s policy in helpers or CSS', variant => {
+        for (const source of [
+            `new Set(["${variant}"])`, `const defaults = { ${variant}: {} };`,
+            `.service-catalog-css-logo--${variant} .service-catalog-css-logo__mark {}`,
+            `.service-catalog-css-logo__mark--${variant} {}`,
+            `const path = "service_catalog_logos/${variant}.svg";`,
+        ]) {
+            expect(source).toMatch(SERVICE_LOGO_POLICY_PATTERN);
+        }
+    });
+
+    test('allows CSS matrix transforms and browser compatibility comments', () => {
+        expect('.logo { transform: matrix(1, 0, 0, 1, 0, 0); }')
+            .not.toMatch(SERVICE_LOGO_POLICY_PATTERN);
+        expect('// Firefox can composite SVG paths.').not.toMatch(SERVICE_LOGO_POLICY_PATTERN);
+    });
+});
 
 function readSiblingCss(filename) {
     return readFileSync(resolve(CURRENT_DIR, filename), 'utf8');
