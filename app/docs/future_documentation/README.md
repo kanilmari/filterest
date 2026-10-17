@@ -139,3 +139,7 @@ third-party product screenshots in words; never store them here.
 - [Search result groups](Search_Result_Groups.md) describes combined text ranking,
   an AI information control and endlessly scrolling result windows, building on
   the existing group order and text-result scrolling.
+- [API access tokens](Programmatic_API_Access.md) describes revocable, scoped tokens for
+  programs acting on behalf of one account under the existing permission model.
+- [Rich text values](Rich_Text_Values.md) describes save-time cleaning of formatted
+  text against one shared definition of allowed structure, with cleaning notices.
