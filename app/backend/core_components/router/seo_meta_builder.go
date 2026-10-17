@@ -1,7 +1,7 @@
 // seo_meta_builder.go
 // Helpers for generating SEO metadata (title, description, og: tags) for dynamic table and
 // app pages. Shares shell Home translations and the resolved site favicon.
-// Keeps previews aligned with site identity without reading row content or adding queries.
+// Keeps previews aligned with site identity without reading row content; Home presentation selects the description policy.
 package router
 
 import (
@@ -128,7 +128,11 @@ func resolvePageMetaForDataset(r *http.Request, dataset *dataset_routes.DatasetN
 	}
 
 	if dataset == nil {
-		meta.MetaDescription = sitePreviewDescription(siteName, shellBoot.Texts)
+		preset := "default"
+		if presentation, _, err := backend.ReadFrontPagePresentation(r.Context(), backend.Db); err == nil {
+			preset = presentation.TextStyle.Preset
+		}
+		meta.MetaDescription = sitePreviewDescription(siteName, shellBoot.Texts, preset)
 		meta.OGDescription = meta.MetaDescription
 		return meta
 	}

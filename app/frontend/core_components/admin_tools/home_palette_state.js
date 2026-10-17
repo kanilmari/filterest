@@ -32,7 +32,10 @@ export function createHomePaletteState({ presentation = null, presentation_versi
         if (!isValidHomePresentation(layout)) throw new Error('Invalid Home layout');
         const result = await request({ presentation: layout, version });
         if (typeof result?.version !== 'string' || !result.version || result.version === 'none') throw new Error('Invalid Home save revision');
-        saved = layout;
+        // The server drops inactive default-style timings when it stores downgrade-safe v2.
+        const stored = result.presentation === undefined ? layout : result.presentation;
+        if (!isValidHomePresentation(stored)) throw new Error('Invalid Home saved presentation');
+        saved = clonePaletteValue(stored);
         version = result.version;
         return savedSettings();
     }

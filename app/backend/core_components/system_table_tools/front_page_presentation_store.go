@@ -13,7 +13,7 @@ import (
 )
 
 func saveFrontPagePresentation(tx *sql.Tx, raw json.RawMessage, expected string) (string, error) {
-	value, err := presentation.Parse(raw)
+	data, _, err := presentation.CanonicalStored(raw)
 	if err != nil {
 		return "", errFrontPageInput
 	}
@@ -34,10 +34,6 @@ func saveFrontPagePresentation(tx *sql.Tx, raw json.RawMessage, expected string)
 	}
 	if current != expected {
 		return "", errFrontPageConflict
-	}
-	data, err := json.Marshal(value)
-	if err != nil {
-		return "", err
 	}
 	beforeFrontPagePresentationWrite()
 	if exists {

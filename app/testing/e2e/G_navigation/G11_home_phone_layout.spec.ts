@@ -135,7 +135,8 @@ async function openHome(page: Page, theme: Theme, language: string, fixture?: Fi
       // Preserve viewer identity, copy and media while pinning header geometry.
       // These fixtures never navigate to their response-only destinations.
       data.site_name = fixture.name;
-      data.presentation = { ...data.presentation, schema_version: 2, anchor: 'center-left', alignment: 'left',
+      data.presentation = { ...data.presentation,
+        text_style: { preset: 'default', reveal: { mode: 'none', start_ms: 3000, interval_ms: 800 } }, anchor: 'center-left', alignment: 'left',
         max_width_px: 750, horizontal_margin_px: 160, vertical_margin_px: 40 };
     }
     alignment = data.presentation?.alignment || 'left';

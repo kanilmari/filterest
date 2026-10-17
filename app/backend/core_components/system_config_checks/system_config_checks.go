@@ -49,8 +49,14 @@ func durationChecks() map[string]check {
 		if fmt.Sprint(row["value_type"]) != "5" {
 			return fmt.Errorf("Home layout requires JSON value type 5")
 		}
-		_, err := presentation.Parse(row["json_value"])
-		return err
+		_, canonical, err := presentation.CanonicalStored(row["json_value"])
+		if err != nil {
+			return err
+		}
+		if !canonical {
+			return fmt.Errorf("default Home text style requires schema version 2 without text_style")
+		}
+		return nil
 	}
 	registry["display_index_html_at_startup"] = registry["front_page_show_blocks"]
 	return registry

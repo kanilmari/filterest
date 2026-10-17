@@ -1,6 +1,6 @@
 // definition.go
 // Validates Home presentation against the browser's embedded definition.
-// Connects strict version-two writes and development version-one reads.
+// Connects strict version-three values and version-one/two read conversion.
 // Keeps conversion away from revision hashing and all persistence locks.
 package front_page_presentation
 
@@ -35,21 +35,39 @@ type Definition struct {
 		SchemaVersion int               `json:"schema_version"`
 		Alignments    map[string]string `json:"alignments"`
 	} `json:"legacy"`
+	TextStyle struct {
+		Presets     []string `json:"presets"`
+		RevealModes []string `json:"reveal_modes"`
+		StartMS     Bounds   `json:"start_ms"`
+		IntervalMS  Bounds   `json:"interval_ms"`
+	} `json:"text_style"`
 	Default Value `json:"default"`
 }
 
-// Value is the complete version-two layout and per-theme media treatment.
+// TextStyle selects bundled typography and a bounded, CSS-owned line reveal.
+type TextStyle struct {
+	Preset string     `json:"preset"`
+	Reveal LineReveal `json:"reveal"`
+}
+type LineReveal struct {
+	Mode       string `json:"mode"`
+	StartMS    int    `json:"start_ms"`
+	IntervalMS int    `json:"interval_ms"`
+}
+
+// Value is the complete version-three layout, media treatment and text style.
 type Value struct {
-	SchemaVersion      int    `json:"schema_version"`
-	Anchor             string `json:"anchor"`
-	HorizontalMarginPx int    `json:"horizontal_margin_px"`
-	VerticalMarginPx   int    `json:"vertical_margin_px"`
-	Alignment          string `json:"alignment"`
-	MaxWidthPx         int    `json:"max_width_px"`
-	LightWash          int    `json:"light_wash"`
-	LightOpacity       int    `json:"light_opacity"`
-	DarkWash           int    `json:"dark_wash"`
-	DarkOpacity        int    `json:"dark_opacity"`
+	SchemaVersion      int       `json:"schema_version"`
+	Anchor             string    `json:"anchor"`
+	HorizontalMarginPx int       `json:"horizontal_margin_px"`
+	VerticalMarginPx   int       `json:"vertical_margin_px"`
+	Alignment          string    `json:"alignment"`
+	MaxWidthPx         int       `json:"max_width_px"`
+	LightWash          int       `json:"light_wash"`
+	LightOpacity       int       `json:"light_opacity"`
+	DarkWash           int       `json:"dark_wash"`
+	DarkOpacity        int       `json:"dark_opacity"`
+	TextStyle          TextStyle `json:"text_style"`
 }
 
 // Rules returns independent values so callers cannot alter the shared policy.
@@ -82,7 +100,7 @@ func presentationFields(raw any) (map[string]json.RawMessage, error) {
 	return fields, err
 }
 
-// Parse refuses partial, unknown, null, coerced and off-step version-two writes.
+// Parse refuses partial, unknown, null, coerced and off-step version-three writes.
 // Its browser twin is validator.js:isValidHomePresentation.
 func Parse(raw any) (Value, error) {
 	fields, err := presentationFields(raw)
@@ -105,8 +123,8 @@ func Parse(raw any) (Value, error) {
 		{"dark_wash", rules.DarkWash, &value.DarkWash},
 		{"dark_opacity", rules.DarkOpacity, &value.DarkOpacity},
 	}
-	if len(fields) != len(numbers)+2 {
-		return value, fmt.Errorf("Home presentation requires ten fields")
+	if len(fields) != len(numbers)+3 {
+		return value, fmt.Errorf("Home presentation requires eleven fields")
 	}
 	for _, name := range []string{"anchor", "alignment"} {
 		if len(fields[name]) == 0 || string(fields[name]) == "null" {
@@ -136,10 +154,52 @@ func Parse(raw any) (Value, error) {
 		}
 		*number.target = int(n)
 	}
+	value.TextStyle, err = parseTextStyle(fields["text_style"], rules)
+	return value, err
+}
+
+// parseTextStyle mirrors validator.js:isValidHomeTextStyle, including exact nested keys.
+func parseTextStyle(raw json.RawMessage, rules Definition) (TextStyle, error) {
+	var value TextStyle
+	fields, err := presentationFields(raw)
+	if err != nil || len(fields) != 2 || fields["preset"] == nil || fields["reveal"] == nil {
+		return value, fmt.Errorf("invalid Home text style fields")
+	}
+	if err := json.Unmarshal(fields["preset"], &value.Preset); err != nil || !slices.Contains(rules.TextStyle.Presets, value.Preset) {
+		return value, fmt.Errorf("invalid Home text style preset")
+	}
+	reveal, err := presentationFields(fields["reveal"])
+	if err != nil || len(reveal) != 3 || reveal["mode"] == nil {
+		return value, fmt.Errorf("invalid Home reveal fields")
+	}
+	if err := json.Unmarshal(reveal["mode"], &value.Reveal.Mode); err != nil || !slices.Contains(rules.TextStyle.RevealModes, value.Reveal.Mode) {
+		return value, fmt.Errorf("invalid Home reveal mode")
+	}
+	for _, field := range []struct {
+		name   string
+		bounds Bounds
+		target *int
+	}{
+		{"start_ms", rules.TextStyle.StartMS, &value.Reveal.StartMS},
+		{"interval_ms", rules.TextStyle.IntervalMS, &value.Reveal.IntervalMS},
+	} {
+		var n float64
+		raw := reveal[field.name]
+		if len(raw) == 0 || string(raw) == "null" {
+			return value, fmt.Errorf("missing %s", field.name)
+		}
+		if err := json.Unmarshal(raw, &n); err != nil {
+			return value, err
+		}
+		if math.Trunc(n) != n || n < float64(field.bounds.Min) || n > float64(field.bounds.Max) {
+			return value, fmt.Errorf("invalid %s", field.name)
+		}
+		*field.target = int(n)
+	}
 	return value, nil
 }
 
-// ParseStored converts only complete development version-one rows; writes use Parse.
+// ParseStored converts complete version-one/two rows; writes use CanonicalStored.
 // Readers hash the original stored bytes, so conversion never invalidates a revision.
 func ParseStored(raw any) (Value, error) {
 	fields, err := presentationFields(raw)
@@ -150,6 +210,14 @@ func ParseStored(raw any) (Value, error) {
 	var version float64
 	if err := json.Unmarshal(fields["schema_version"], &version); err != nil {
 		return Value{}, err
+	}
+	if version == 2 {
+		if len(fields) != 10 {
+			return Value{}, fmt.Errorf("incomplete version-two Home presentation")
+		}
+		fields["schema_version"], _ = json.Marshal(rules.SchemaVersion)
+		fields["text_style"], _ = json.Marshal(rules.Default.TextStyle)
+		return Parse(fields)
 	}
 	if version != float64(rules.Legacy.SchemaVersion) {
 		return Parse(raw)

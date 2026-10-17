@@ -81,6 +81,7 @@
   {"name": "reserved home-presentation light_opacity", "raw": "{\"schema_version\":1,\"scopes\":{\"site\":{\"light\":{\"light_opacity\":\"#ffffff\"},\"dark\":{}}}}", "valid": false, "known_fonts": []},
   {"name": "reserved home-presentation dark_wash", "raw": "{\"schema_version\":1,\"scopes\":{\"site\":{\"light\":{\"dark_wash\":\"#ffffff\"},\"dark\":{}}}}", "valid": false, "known_fonts": []},
   {"name": "reserved home-presentation dark_opacity", "raw": "{\"schema_version\":1,\"scopes\":{\"site\":{\"light\":{\"dark_opacity\":\"#ffffff\"},\"dark\":{}}}}", "valid": false, "known_fonts": []},
+  {"name": "reserved home-presentation text_style", "raw": "{\"schema_version\":1,\"scopes\":{\"site\":{\"light\":{\"text_style\":\"#ffffff\"},\"dark\":{}}}}", "valid": false, "known_fonts": []},
   {"name": "reserved home-presentation --home-text-horizontal-margin", "raw": "{\"schema_version\":1,\"scopes\":{\"site\":{\"light\":{\"--home-text-horizontal-margin\":\"#ffffff\"},\"dark\":{}}}}", "valid": false, "known_fonts": []},
   {"name": "reserved home-presentation --home-text-vertical-margin", "raw": "{\"schema_version\":1,\"scopes\":{\"site\":{\"light\":{\"--home-text-vertical-margin\":\"#ffffff\"},\"dark\":{}}}}", "valid": false, "known_fonts": []},
   {"name": "reserved home-presentation --home-text-max-width", "raw": "{\"schema_version\":1,\"scopes\":{\"site\":{\"light\":{\"--home-text-max-width\":\"#ffffff\"},\"dark\":{}}}}", "valid": false, "known_fonts": []},

@@ -5,8 +5,11 @@
 export const HOME_PALETTE_COPY = Object.freeze({
     en: {
         button: 'Home palette', title: 'Home palette', close: 'Close', reset: 'Reset', save: 'Save',
-        notice: 'Preview the title, slogan and description together. Reset restores the saved layout. Closing keeps the preview until you leave Home.',
+        notice: 'Preview the title, slogan and description together. Reset restores the saved layout. Closing keeps the preview until you leave Home. Serif story: use **…** for whole emphasis lines and blank lines for sections.',
         anchor: 'Text block position', horizontalMargin: 'Horizontal margin', verticalMargin: 'Vertical margin',
+        textStyle: 'Text style', default: 'Default', serif_story_v1: 'Serif story',
+        lineReveal: 'Line reveal', none: 'Off', lines: 'Line by line',
+        revealStart: 'Start delay (0–5000 ms)', revealInterval: 'Interval (200–2000 ms)',
         alignment: 'Text alignment', maxWidth: 'Maximum width',
         left: 'Align left', center: 'Align centre', right: 'Align right', justify: 'Justify',
         light: 'Light theme', dark: 'Dark theme', wash: 'Theme wash', opacity: 'Media opacity',
@@ -19,8 +22,11 @@ export const HOME_PALETTE_COPY = Object.freeze({
     },
     fi: {
         button: 'Etusivun paletti', title: 'Etusivun paletti', close: 'Sulje', reset: 'Palauta', save: 'Tallenna',
-        notice: 'Esikatsele otsikkoa, iskulausetta ja kuvausta yhtenä tekstilohkona. Palauta palauttaa tallennetun asettelun. Sulkeminen säilyttää esikatselun, kunnes poistut etusivulta.',
+        notice: 'Esikatsele otsikkoa, iskulausetta ja kuvausta yhtenä tekstilohkona. Palauta palauttaa tallennetun asettelun. Sulkeminen säilyttää esikatselun, kunnes poistut etusivulta. Serif-tarina: merkitse kokonaiset korostusrivit **…** ja erota osiot tyhjällä rivillä.',
         anchor: 'Tekstilohkon sijainti', horizontalMargin: 'Vaakamarginaali', verticalMargin: 'Pystymarginaali',
+        textStyle: 'Tekstityyli', default: 'Oletus', serif_story_v1: 'Serif-tarina',
+        lineReveal: 'Rivien ilmestyminen', none: 'Pois', lines: 'Rivi kerrallaan',
+        revealStart: 'Aloitusviive (0–5000 ms)', revealInterval: 'Riviväli (200–2000 ms)',
         alignment: 'Tekstin tasaus', maxWidth: 'Enimmäisleveys',
         left: 'Tasaa vasemmalle', center: 'Keskitä', right: 'Tasaa oikealle', justify: 'Tasaa molemmat reunat',
         light: 'Vaalea teema', dark: 'Tumma teema', wash: 'Vahvuus kohti teemaväriä', opacity: 'Median peittävyys',

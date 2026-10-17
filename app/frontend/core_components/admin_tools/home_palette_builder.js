@@ -8,7 +8,7 @@ import { createHomePaletteState, saveHomePresentation } from './home_palette_sta
 import { DEFAULT_HOME_PRESENTATION, HOME_PRESENTATION_DEFINITION } from '../../shared/front_page_presentation/validator.js';
 import { hasRoutePermission } from '../route_permission_checker.js';
 import { createPresentationPaletteShell, createPaletteDraftOwner,
-    createPaletteRangeControl, getPaletteCopy } from './presentation_palette_shell.js';
+    createPaletteRangeControl, createPaletteSelectControl, getPaletteCopy } from './presentation_palette_shell.js';
 
 /** Mount around Home's existing trigger; permission is checked again after lazy import. */
 export function mountHomePalette(button, { snapshot, render, saveRequestFn = saveHomePresentation,
@@ -70,9 +70,30 @@ export function mountHomePalette(button, { snapshot, render, saveRequestFn = sav
         }
         container.append(section);
     }
+    // Text style is the only extension to the frozen Home palette. Existing controls keep their order.
+    const changeTextStyle = (key, value, reveal = false) => {
+        const current = (draftOwner.draft || DEFAULT_HOME_PRESENTATION).text_style;
+        change('text_style', reveal ? { ...current, reveal: { ...current.reveal, [key]: value } }
+            : { ...current, [key]: value });
+    };
+    for (const [id, label, choices, key, reveal] of [
+        ['text-style', 'textStyle', HOME_PRESENTATION_DEFINITION.text_style.presets, 'preset', false],
+        ['line-reveal', 'lineReveal', HOME_PRESENTATION_DEFINITION.text_style.reveal_modes, 'mode', true],
+    ]) {
+        const control = createPaletteSelectControl({ id, label, choices }, copy,
+            { prefix: 'home-palette', onChange: value => changeTextStyle(key, value, reveal) });
+        controls.push({ ...control, readValue: value => reveal ? value.text_style.reveal[key] : value.text_style[key] });
+        container.append(control.element);
+    }
+    for (const [id, key, label] of [['reveal-start', 'start_ms', 'revealStart'], ['reveal-interval', 'interval_ms', 'revealInterval']]) {
+        const control = createPaletteRangeControl({ id, label, ...HOME_PRESENTATION_DEFINITION.text_style[key], unit: 'ms' }, copy,
+            { prefix: 'home-palette', onChange: value => changeTextStyle(key, value, true) });
+        controls.push({ ...control, readValue: value => value.text_style.reveal[key] });
+        container.append(control.element);
+    }
     function syncControls() {
         const value = draftOwner.draft || DEFAULT_HOME_PRESENTATION;
-        controls.forEach(control => control.setValue(value[control.key]));
+        controls.forEach(control => control.setValue(control.readValue ? control.readValue(value) : value[control.key]));
     }
     shell.body.append(container);
     syncControls();

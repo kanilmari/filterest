@@ -174,7 +174,7 @@ func TestFrontPageReadPresentationAndInvalidSaved(t *testing.T) {
 	}
 }
 
-func TestHomePresentationPostgresConversionPreservesRevisionAndWritesVersionTwo(t *testing.T) {
+func TestHomePresentationPostgresConversionPreservesRevisionAndWritesCanonicalVersionTwo(t *testing.T) {
 	db := frontPageDisposableDB(t)
 	for _, layout := range []string{"normal", "artistic"} {
 		raw := `{"schema_version":1,"anchor":"bottom-left","margin_px":71,"paragraph_layout":"` + layout + `","max_width_px":700}`
@@ -183,7 +183,7 @@ func TestHomePresentationPostgresConversionPreservesRevisionAndWritesVersionTwo(
 			t.Fatal(err)
 		}
 		value, revision, err := backend.ReadFrontPagePresentation(context.Background(), db)
-		if err != nil || value.SchemaVersion != 2 || value.HorizontalMarginPx != 71 || value.VerticalMarginPx != 71 ||
+		if err != nil || value.SchemaVersion != 3 || value.HorizontalMarginPx != 71 || value.VerticalMarginPx != 71 ||
 			value.Alignment != presentation.Rules().Legacy.Alignments[layout] {
 			t.Fatal(value, revision, err)
 		}

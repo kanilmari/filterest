@@ -39,6 +39,7 @@ Every section of the former single-file guide keeps its anchor in this list, so 
   - <a name="dataset-appearance-definition"></a>[Dataset appearance definition](Frontend_Dataset_Appearance.md#dataset-appearance-definition)
   - <a name="dataset-toolbar-and-appearance-controls"></a>[Dataset toolbar and appearance controls](Frontend_Dataset_Appearance.md#dataset-toolbar-and-appearance-controls)
   - <a name="optional-home-page"></a>[Optional Home page](Frontend_Home_Page.md#optional-home-page)
+    - [Serif story text style](Frontend_Home_Page.md#serif-story-text-style)
 - <a name="3-reusable-components-vanilla-dropdown"></a>[3. Reusable Components: Vanilla Dropdown](Frontend_Category_Panel_And_Dropdowns.md#3-reusable-components-vanilla-dropdown)
 - <a name="4-asset--media-surfaces"></a>[4. Asset / Media Surfaces](Frontend_Results_Cards_And_Articles.md#4-asset--media-surfaces)
   - <a name="current-end-user-surfaces"></a>[Current End-User Surfaces](Frontend_Results_Cards_And_Articles.md#current-end-user-surfaces)

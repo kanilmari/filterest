@@ -82,7 +82,7 @@ func TestSitePreviewDescriptionFallbacks(t *testing.T) {
 		{"blank copy", " \n ", " \t ", "Travel site"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			got := sitePreviewDescription("Travel site", lang.ShellBootTexts{HomeSlogan: tc.slogan, HomeDescription: tc.description})
+			got := sitePreviewDescription("Travel site", lang.ShellBootTexts{HomeSlogan: tc.slogan, HomeDescription: tc.description}, "default")
 			if got != tc.expected {
 				t.Fatalf("description = %q, want %q", got, tc.expected)
 			}

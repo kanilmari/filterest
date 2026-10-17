@@ -1,0 +1,118 @@
+/* front_page_serif_story.css
+ * Owns the versioned Serif story typography and line reveal on native Home.
+ * Connects one opt-in hero class to explicit application themes and motion preferences.
+ * Overrides the universal element reset locally; navigation, media and blocks keep their owners.
+ */
+.front-page-hero.front-page-hero--serif-story-v1 {
+  --home-story-text: #182226;
+  --home-story-soft: rgb(24 34 38 / 86%);
+  --home-story-accent: #a95620;
+  --home-story-title-shadow: 0 3px 20px rgb(255 255 255 / 74%);
+  --home-story-text-shadow: 0 2px 14px rgb(255 255 255 / 68%);
+
+  text-rendering: optimizelegibility;
+}
+
+body.dark-mode .front-page-hero.front-page-hero--serif-story-v1 {
+  --home-story-text: #fffdf5;
+  --home-story-soft: rgb(255 253 245 / 88%);
+  --home-story-accent: #efae55;
+  --home-story-title-shadow: 0 10px 40px rgb(0 0 0 / 58%);
+  --home-story-text-shadow: 0 3px 17px rgb(0 0 0 / 72%);
+}
+
+/* Both hero classes outrank the shared heading rule imported later in imports.css. */
+.front-page-hero.front-page-hero--serif-story-v1 .morphing-title,
+.front-page-hero.front-page-hero--serif-story-v1 .front-page-title-accent {
+  margin: 0;
+  color: var(--home-story-text);
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: clamp(36px, 5vw, 84px);
+  font-style: normal;
+  font-weight: 400;
+  line-height: 1;
+  letter-spacing: -0.06em;
+  text-align: left;
+  white-space: nowrap;
+  overflow-wrap: normal;
+  text-shadow: var(--home-story-title-shadow);
+  transition: color 300ms ease, text-shadow 300ms ease;
+}
+
+.front-page-hero.front-page-hero--serif-story-v1 .front-page-title-accent {
+  color: var(--home-story-accent);
+  font-style: italic;
+}
+
+.front-page-hero.front-page-hero--serif-story-v1 .front-page-description {
+  margin-top: clamp(30px, 3.5vh, 44px);
+  text-align: left;
+}
+
+.front-page-hero.front-page-hero--serif-story-v1 .front-page-story-line {
+  margin: 0 0 10px;
+  color: var(--home-story-soft);
+  font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-size: clamp(14px, 1.16vw, 18px);
+  font-style: normal;
+  font-weight: 570;
+  line-height: 1.45;
+  letter-spacing: -0.007em;
+  text-align: left;
+  white-space: normal;
+  overflow-wrap: break-word;
+  opacity: 1;
+  transform: none;
+  text-shadow: var(--home-story-text-shadow);
+  transition: color 300ms ease, text-shadow 300ms ease;
+}
+
+.front-page-hero.front-page-hero--serif-story-v1 .front-page-story-line--emphasis {
+  color: var(--home-story-text);
+  font-weight: 700;
+}
+
+.front-page-hero.front-page-hero--serif-story-v1 .front-page-story-line--section-start { margin-top: 17px; }
+
+@media (width <= 1180px) {
+  .front-page-hero.front-page-hero--serif-story-v1 .morphing-title,
+  .front-page-hero.front-page-hero--serif-story-v1 .front-page-title-accent { font-size: 4.7vw; }
+  .front-page-hero.front-page-hero--serif-story-v1 .front-page-story-line { font-size: 14px; }
+}
+
+@media (width <= 760px) {
+  .front-page-hero.front-page-hero--serif-story-v1 .morphing-title,
+  .front-page-hero.front-page-hero--serif-story-v1 .front-page-title-accent {
+    font-size: clamp(30px, 9vw, 54px);
+    white-space: normal;
+    overflow-wrap: break-word;
+  }
+
+  .front-page-hero.front-page-hero--serif-story-v1[lang="en"] .morphing-title,
+  .front-page-hero.front-page-hero--serif-story-v1[lang="en"] .front-page-title-accent { font-size: clamp(29px, 8.4vw, 50px); }
+
+  .front-page-hero.front-page-hero--serif-story-v1 .front-page-story-line {
+    font-size: 12px;
+    line-height: 1.4;
+  }
+}
+
+@keyframes home-story-fade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes home-story-slide { from { transform: translateY(-12px); } to { transform: translateY(0); } }
+
+/* Text always occupies its final normal-flow height. Later lines share line 40's delay. */
+@media (prefers-reduced-motion: no-preference) {
+  .front-page-hero.front-page-hero--serif-story-v1.front-page-hero--reveal-lines:not(.front-page-hero--reveal-complete) .front-page-story-line {
+    animation-name: home-story-fade, home-story-slide;
+    animation-duration: 650ms, 750ms;
+    animation-timing-function: ease, cubic-bezier(0.22, 1, 0.36, 1);
+    animation-delay: calc(var(--home-reveal-start) + var(--line-index) * var(--home-reveal-interval));
+    animation-fill-mode: both;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .front-page-hero.front-page-hero--serif-story-v1 .morphing-title,
+  .front-page-hero.front-page-hero--serif-story-v1 .front-page-title-accent,
+  .front-page-hero.front-page-hero--serif-story-v1 .front-page-story-line { transition: none; }
+}

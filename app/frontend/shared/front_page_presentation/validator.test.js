@@ -1,5 +1,5 @@
 // validator.test.js
-// Proves the shared version-two policy and read-only version-one conversion.
+// Proves the shared version-three policy and read-only version-one/two conversion.
 // Connects browser field, choice and numeric cases to the Go parser tests.
 // Protects default, independent themes and strict writes from coercion.
 import { expect, test } from 'vitest';
@@ -35,7 +35,7 @@ test('rejects partial, extra, null, coerced, fractional and off-step fields', ()
 
 test('missing defaults centre the left-aligned block and brighten only the light theme', () => {
     expect(readHomePresentation(null)).toEqual(defaults);
-    expect(defaults).toMatchObject({ schema_version: 2, anchor: 'center-center', alignment: 'left',
+    expect(defaults).toMatchObject({ schema_version: 3, anchor: 'center-center', alignment: 'left',
         horizontal_margin_px: 40, vertical_margin_px: 40, max_width_px: 1120, dark_wash: 0, dark_opacity: 20 });
     expect(defaults.light_opacity).toBeGreaterThan(defaults.dark_opacity);
 });

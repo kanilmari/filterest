@@ -21,8 +21,8 @@ and login/register entry flows retain their existing behavior.
 
 Owner decision K378 (13 October 2026, 18:36Z; owner chat approximately 20:15)
 allows a site to place its own static `index.html` at the domain root instead
-of the SPA Home. Fintravel's SPA Home therefore needs no further development
-for now. The owner's draft is a local static mockup linking to dataset pages
+of the SPA Home. K381 freezes further SPA Home and dynamic-palette development,
+with the owner's 17 October 2026 exception for the Serif story text style below. The owner's draft is a local static mockup linking to dataset pages
 and the contact article. The built-in Home remains in the product and is the
 fallback when the custom page is disabled or unavailable. The custom document
 covers the **whole page**, including the menu and filter-bar buttons.
@@ -152,6 +152,56 @@ secrets outside this directory. CSP restricts external resources and common
 injection paths; it does not make a malicious operator-authored page safe.
 
 ## Built-in Home presentation
+
+### Serif story text style
+
+The Home palette offers **Text style** (Default / Serif story), **Line reveal**
+(Off / Line by line), and bounded start-delay/interval ranges in milliseconds.
+This is the owner's 17 October exception to K381; every other palette feature
+and dynamic-Home expansion remains frozen. Copy belongs to the source-owned
+Finnish/English palette dictionary, without language keys or a migration.
+
+The opt-in `text_style` in presentation schema 3 selects `default` or
+`serif_story_v1`; `reveal` holds `mode` (`none` / `lines`), `start_ms` (0–5000,
+initial 3000) and `interval_ms` (200–2000, initial 800). Unknown, missing, null,
+extra and wrongly typed fields fail strict Go/browser validation. Old v1/v2 rows
+read with default typography and reveal off, preserving their stored revision.
+Every palette save carries the complete text style even when it was untouched.
+
+Serif story combines the title and slogan in one heading: upright Georgia / Times
+New Roman plus an italic accent. An empty slogan omits the accent; the existing
+site-name title fallback remains. The hero's language follows its rendered copy.
+Each description line becomes one paragraph; blank lines start sections and a
+whole line `**…**` marks bold emphasis. Only the outer markers are removed;
+other asterisks stay literal. All copy uses text nodes. Default keeps the existing
+separate slogan and literal paragraph rendering.
+
+`front_page_serif_story.css` owns responsive fonts, colours and shadows under
+`.front-page-hero--serif-story-v1`, with explicit body theme classes overriding
+OS preference. Text is left-aligned; story and emphasis paragraphs wrap at every
+width, keeping authored lines separate. Only the title and accent stay nowrap
+above 760 px; at or below that breakpoint they wrap inside Home's gutters. No navigation,
+listing, media or background setting is changed. There are no custom font,
+colour or CSS-string controls, and WL170 only reserves this existing ownership.
+
+All lines occupy their full height on the initial render. Optional CSS keyframes
+fade for 650 ms and slide from −12 px for 750 ms, after the configured start and
+interval; lines beyond 40 share line 40's delay. Reduced motion shows all lines
+at once. Entering reduced motion latches completion until the next text render;
+leaving it never re-hides lines. Preview, save, Reset and language changes rebuild
+the text and restart once; theme changes retain the running nodes and animation.
+Deactivation removes the motion listener. No reveal timers or authored inline
+styles are used; bounded delays and indexes use CSSOM custom properties.
+
+`T21_home_text_style.spec.ts` is a GET-only fixture proof using the actual signed-in
+viewer id. It covers the reference's exact Finnish/English 12-line story, desktop
+and phone wrapping, timing, stable geometry, theme continuity, language restart
+and reduced motion. Native screenshots go under `data/testing/wo38a/after/`
+(or the configured test runtime root's `wo38a/after/`). It never enables Home.
+Only a non-default text style (Serif story or line reveal) stores schema 3.
+Default-style sites store v2 and stay readable by older binaries. Older binaries
+cannot read a v3 row: before a downgrade, set Text style to Default and Line reveal
+to Off and save (which stores v2), or restore the row from a compatible backup.
 
 `front_page/front_page_navigation.js` opens Home through the navigation
 pipeline, clears dataset selection only after navigation succeeds, writes the
@@ -344,7 +394,9 @@ Saving settings sections refreshes visible Home without changing navigation/hist
 
 The generic application document (Home, administrator pages and sign-in entry
 shells without an authorized dataset) describes the site using the public Home
-keys above: slogan first, then description, then the site name. Both slogans and
+keys above: in Default, slogan first, then description, then the site name.
+Serif story uses the cleaned description, then the site name, never the accent.
+Whole-line emphasis markers are stripped from description metadata in both styles. Both slogans and
 description fallbacks collapse whitespace to one line and limit the excerpt to
 200 Unicode characters, including an ellipsis when shortened. It ends at a word
 boundary when one is available; a single overlong word is cut at a safe character
@@ -352,8 +404,9 @@ boundary. Generic metadata uses the shell's enabled request language negotiation
 including its configured default.
 
 `router/seo_meta_builder.go` shares the translation map already read for shell
-recovery; the Home keys add no per-request query and need no Home dataset or row
-authorization bypass. The Open Graph and Twitter image is the absolute URL of
+recovery. The existing presentation reader adds one settings read on generic
+shells to select the preset; a missing row means Default without an error.
+No Home dataset or row authorization is bypassed. The Open Graph and Twitter image is the absolute URL of
 the same resolved `Favicon128Path` as the document's 128 px icon link, with the
 same configured-file, initials and default fallback. Open Graph includes the
 site name as image alternative text and reports 128×128 only for that variant;
@@ -462,9 +515,9 @@ close/Escape focus, status toasts and draft ownership have one implementation.
 Closing keeps preview; Reset restores saved values and panel geometry; leaving
 Home releases preview. Save preserves edits made while its request is pending.
 
-Home's JSON setting `front_page_presentation` uses schema version 2: `anchor`,
+Home's JSON setting `front_page_presentation` reads as schema version 3: `anchor`,
 `horizontal_margin_px`, `vertical_margin_px`, `alignment`, `max_width_px`,
-`light_wash`, `light_opacity`, `dark_wash` and `dark_opacity`. The single definition
+`light_wash`, `light_opacity`, `dark_wash`, `dark_opacity` and `text_style`. The single definition
 in `frontend/shared/front_page_presentation/definition.json` is imported by the
 browser and embedded by Go. Both margins are 0–320 px (step 1, initial 40);
 maximum width is 320–1600 px (step 10, initial 1120). A graphical 3 × 3 button grid
@@ -488,13 +541,23 @@ A missing setting now returns the centred default with revision `none`: the
 block is centred on both axes while lines start at the left. This replaces the
 old centred-heading layout for every site without a saved presentation. Reads
 convert development version-one rows (normal → left, artistic → centre, one
-margin → both) and supply default media values. All writes require version 2.
-Public/admin GETs return presentation and its revision together; conversion hashes
+margin → both) and supply default media values. Version-two rows retain their
+layout/media choices. Both gain the default text style on read. The browser sends
+strict v3 requests; the admin API also accepts complete v2 requests without
+`text_style`. One Go policy (`CanonicalStored`) chooses the stored form: absent
+style, or `preset: default` with `reveal.mode: none`, stores exactly the ten v2
+fields without `text_style`. Inactive start/interval numbers are discarded, even
+when customized; they read back as 3000/800. Every other style stores full v3.
+Public/admin GETs return v3 presentation and its revision together; conversion hashes
 the original stored bytes and timestamp. POST `{presentation,version}` writes
 only presentation under the same separate advisory lock and row revision;
-stale or competing first writes return 409. Every successful save stamps its row.
+stale or competing first writes return 409. Every successful save stamps its row
+and returns `{version,presentation}`: the revision hashes the actual stored bytes
+and timestamp, and presentation is their normalized v3 read value. The palette
+adopts that value and revision, including default timings after a v2 save.
 Hero, boxes and switch writes omit and preserve presentation. Generic settings
-writes use the same strict validation; malformed stored values fail visibly.
+writes accept canonical v2 or non-default v3, and refuse default/none v3 rather
+than storing a non-canonical row. Malformed stored values fail visibly.
 
 Light and dark sections each offer Theme wash and Media opacity (0–100%, step 1).
 Wash blends toward white in light mode and the dark background in dark mode;

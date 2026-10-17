@@ -1,5 +1,5 @@
 {
-  "schema_version": 2,
+  "schema_version": 3,
   "anchors": ["top-left", "top-center", "top-right", "center-left", "center-center", "center-right", "bottom-left", "bottom-center", "bottom-right"],
   "alignments": ["left", "center", "right", "justify"],
   "horizontal_margin_px": {"min": 0, "max": 320, "step": 1},
@@ -10,5 +10,6 @@
   "dark_wash": {"min": 0, "max": 100, "step": 1},
   "dark_opacity": {"min": 0, "max": 100, "step": 1},
   "legacy": {"schema_version": 1, "alignments": {"normal": "left", "artistic": "center"}},
-  "default": {"schema_version": 2, "anchor": "center-center", "horizontal_margin_px": 40, "vertical_margin_px": 40, "alignment": "left", "max_width_px": 1120, "light_wash": 15, "light_opacity": 75, "dark_wash": 0, "dark_opacity": 20}
+  "text_style": {"presets": ["default", "serif_story_v1"], "reveal_modes": ["none", "lines"], "start_ms": {"min": 0, "max": 5000, "step": 1}, "interval_ms": {"min": 200, "max": 2000, "step": 1}},
+  "default": {"schema_version": 3, "anchor": "center-center", "horizontal_margin_px": 40, "vertical_margin_px": 40, "alignment": "left", "max_width_px": 1120, "light_wash": 15, "light_opacity": 75, "dark_wash": 0, "dark_opacity": 20, "text_style": {"preset": "default", "reveal": {"mode": "none", "start_ms": 3000, "interval_ms": 800}}}
 }

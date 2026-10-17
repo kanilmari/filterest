@@ -3,7 +3,9 @@
 // Reuses the shared group renderer, translations and dataset-background treatment.
 // Discards all content on deactivation; no account's blocks survive a hidden visit.
 
-import { applyHomePresentation, applyHomeMediaPresentation, renderHomeDescription } from './front_page_presentation_renderer.js';
+import { applyHomePresentation, applyHomeMediaPresentation } from './front_page_presentation_renderer.js';
+import { renderHomeHeroText } from './front_page_text_style_renderer.js';
+import { readHomePresentation } from '../../shared/front_page_presentation/validator.js';
 import { createFrontPageTopRow } from './front_page_top_row_builder.js';
 import { loadCustomRoot } from './custom_root_navigation.js';
 import { createFrontPageArticleButtons } from './front_page_article_buttons.js';
@@ -64,14 +66,18 @@ function renderBlocks(container, data, visit) {
     const description = document.createElement('div');
     description.className = 'front-page-description';
     const stage = document.createElement('div');
-    bindDatasetLanguageRenderer(hero, language => {
-        const code = language === 'fi' ? 'fi' : 'en';
-        heading.textContent = data.hero?.title?.[code]?.trim()
-            || formatSiteNameForDisplay(data.site_name || getCurrentSiteName())
-            || getTranslationForKey('front_page', { countUsage: false });
-        renderHomeDescription(slogan, data.hero?.slogan?.[code] || '');
-        renderHomeDescription(description, data.hero?.description?.[code] || '');
-    });
+    let presentation = readHomePresentation(data.presentation);
+    let renderedLanguage;
+    function renderText() {
+        const code = renderedLanguage === 'fi' ? 'fi' : 'en';
+        visit.textCleanup?.();
+        visit.textCleanup = renderHomeHeroText({ hero, heading, slogan, description, language: code,
+            title: data.hero?.title?.[code]?.trim()
+                || formatSiteNameForDisplay(data.site_name || getCurrentSiteName())
+                || getTranslationForKey('front_page', { countUsage: false }),
+            accent: data.hero?.slogan?.[code] || '', text: data.hero?.description?.[code] || '',
+            textStyle: presentation.text_style });
+    }
     hero.append(heading, slogan, description);
     const articleButtons = createFrontPageArticleButtons(data.article_buttons);
     if (articleButtons && data.article_buttons_placement === 'below_text') hero.append(articleButtons);
@@ -98,10 +104,16 @@ function renderBlocks(container, data, visit) {
     scroller.className = 'front-page-scroller scrollable_content';
     scroller.append(page);
     function renderPresentation(value) {
+        presentation = readHomePresentation(value);
         applyHomePresentation(page, scroller, stage, hero, value);
         applyHomeMediaPresentation(container, value);
+        if (renderedLanguage) renderText();
     }
     renderPresentation(data.presentation);
+    bindDatasetLanguageRenderer(hero, language => {
+        renderedLanguage = language;
+        renderText();
+    });
     visit.topRow = createFrontPageTopRow(data.site_name, () => refreshFrontPage(), {
         snapshot: data, render: renderPresentation,
     });
@@ -118,6 +130,8 @@ function loadVisit(container, visit) {
     if (visit.pending) return visit.pending;
     visit.topRow?.destroy();
     visit.topRow = null;
+    visit.textCleanup?.();
+    visit.textCleanup = null;
     visit.backgroundCleanup?.();
     visit.backgroundCleanup = null;
     const generation = ++visit.generation;
@@ -199,6 +213,8 @@ export function renderFrontPage() {
             cancelPending();
             visit.topRow?.destroy();
             visit.topRow = null;
+            visit.textCleanup?.();
+            visit.textCleanup = null;
             visit.backgroundCleanup?.();
             visit.backgroundCleanup = null;
             container.replaceChildren();

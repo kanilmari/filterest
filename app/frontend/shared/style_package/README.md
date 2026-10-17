@@ -84,8 +84,8 @@ Finnish/English; this slice adds no CJK fonts or assets.
 
 The definition's `reserved` inventory records existing setting fields and CSS
 projections. Brand colour and navigation appearance stay with site presentation;
-Home anchors, margins, alignment, width, wash and opacity stay with Home
-presentation; dataset covers and card/caption/header choices stay with dataset
+Home anchors, margins, alignment, width, wash, opacity and the versioned
+`text_style` (including its reveal variables) stay with Home presentation; dataset covers and card/caption/header choices stay with dataset
 appearance. A package cannot claim these keys or their projections. Package
 revert therefore restores only package-owned choices. Existing definitions
 remain authoritative for reserved values and validation.
