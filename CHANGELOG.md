@@ -22,6 +22,7 @@ Dates are the local (Europe/Helsinki) date on which the version was published.
 
 ## [Unreleased]
 
+- **Backend cleanups (J5/J13/J2)** — Removed the unused dynamic-function stub, centralized image extension defaults in the image profile, and made image sourcing prefer decodable formats while retaining AVIF at lower priority.
 - **Declared language-key evidence (WO-J35 B4)** — File-owned full-key catalogues and finite naming declarations now record existing keys as code use only while their name builders remain. Server status/refusal contracts and schema-built linked labels share this evidence path; copy, keys, migrations and the archiving pause are unchanged.
 - **File-length guard and test organization (K404)** — Prune stale legacy exemptions, enforce the 700-line limit for pipeline Go and tool/test Python, and split router-health and filter-bar AI tests by topic without changing coverage.
 - **Nightly regression fixes (17 October)** — Isolated test database mocks and translation sessions, supplied explicit foreign-row Read grants in fixtures, and stabilized record-title, readable-name and alias-namespace browser proofs. Failed foreign-reference checks now log the error and table/column on the server; permission checks remain unchanged.

@@ -31,23 +31,6 @@ const (
 	CapabilityStateDisabled CapabilityState = "disabled"
 )
 
-// DefaultImageAllowedTypes preserves the current image-linking defaults during migration.
-var DefaultImageAllowedTypes = []string{
-	"jpg",
-	"jpeg",
-	"jfif",
-	"bmp",
-	"png",
-	"webp",
-	"avif",
-	"gif",
-	"ico",
-	"tif",
-	"tiff",
-	"heic",
-	"heif",
-}
-
 // CacheTarget points from an asset child table back to a parent cache column.
 type CacheTarget struct {
 	Table  string `json:"table"`

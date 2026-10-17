@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"net/http"
 
+	imageprofile "easelect/backend/core_components/dynamic_table_tools/dtt_asset_linking/profiles/image"
 	"easelect/backend/core_components/httpresponse"
 	"easelect/backend/core_components/runtime_grant_mutations"
 	"easelect/backend/core_components/security"
@@ -34,10 +35,7 @@ func EnableImageAssetLinkingHandler(w http.ResponseWriter, r *http.Request) {
 		maxSize = 10
 	}
 
-	allowedTypes := append([]string(nil), req.AllowedFileTypes...)
-	if len(allowedTypes) == 0 {
-		allowedTypes = append([]string(nil), DefaultImageAllowedTypes...)
-	}
+	allowedTypes := imageAssetLinkingAllowedTypes(req.AllowedFileTypes)
 
 	mutation, err := runtime_grant_mutations.Begin(r.Context(), w)
 	if err != nil {
@@ -120,4 +118,12 @@ func EnableImageAssetLinkingHandler(w http.ResponseWriter, r *http.Request) {
 		"reused_table": reusedRelation,
 		"relation_id":  relationStatus.RelationID,
 	})
+}
+
+// imageAssetLinkingAllowedTypes isolates each request from shared profile defaults.
+func imageAssetLinkingAllowedTypes(requestedTypes []string) []string {
+	if len(requestedTypes) == 0 {
+		return append([]string(nil), imageprofile.DefaultAllowedTypes...)
+	}
+	return append([]string(nil), requestedTypes...)
 }

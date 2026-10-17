@@ -119,6 +119,25 @@ func TestImageDownloadRejectsProviderMediaHostEscape(t *testing.T) {
 	}
 }
 
+func TestImageDownloadAcceptPrefersDecodableFormats(t *testing.T) {
+	var accept string
+	client := &http.Client{
+		Timeout: defaultRequestTimeout,
+		Transport: roundTripFunc(func(request *http.Request) (*http.Response, error) {
+			accept = request.Header.Get("Accept")
+			return response(http.StatusOK, "image/jpeg", "raster-image"), nil
+		}),
+	}
+	service := NewService(Config{HTTPClient: client})
+	if _, err := service.fetchImage(context.Background(), "pexels", "123", "https://images.pexels.com/photos/123/original.jpeg"); err != nil {
+		t.Fatal(err)
+	}
+	const wantAccept = "image/webp,image/jpeg,image/png,image/gif,image/avif;q=0.5"
+	if accept != wantAccept {
+		t.Fatalf("Accept = %q, want %q", accept, wantAccept)
+	}
+}
+
 func TestProvidersHandlerDoesNotExposeCredentials(t *testing.T) {
 	previousProvider := serviceForRequest
 	testService := NewService(Config{UnsplashAccessKey: "do-not-leak"})

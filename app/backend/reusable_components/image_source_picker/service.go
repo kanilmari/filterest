@@ -139,7 +139,7 @@ func (service *Service) fetchImage(ctx context.Context, providerKey, assetID, ra
 	if err != nil {
 		return DownloadedImage{}, err
 	}
-	request.Header.Set("Accept", "image/avif,image/webp,image/png,image/jpeg,image/gif")
+	request.Header.Set("Accept", "image/webp,image/jpeg,image/png,image/gif,image/avif;q=0.5")
 	request.Header.Set("User-Agent", "Filterest-Image-Source-Picker/1.0")
 
 	client := *service.client
