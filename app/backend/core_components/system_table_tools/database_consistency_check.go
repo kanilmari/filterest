@@ -27,6 +27,7 @@ type ConsistencyIssue struct {
 	Table               string   `json:"table"`                           // Mikä taulu / rivi koskee
 	Description         string   `json:"description"`                     // Kuvaus ongelmasta
 	DescriptionLangKeys []string `json:"description_lang_keys,omitempty"` // Localized explanatory copy
+	Translated          *bool    `json:"translated,omitempty"`            // Category 8: nonempty normalized translation in any language
 }
 
 // ConsistencyCheckResult sisältää kaikkien tarkistusten tulokset

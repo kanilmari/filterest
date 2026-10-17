@@ -159,7 +159,7 @@ func TestPopulateLangKeySourcesFloorAndNormalScan(t *testing.T) {
 				if stale || !after.After(*before) {
 					t.Fatal("normal scan did not advance freshness")
 				}
-				pushOrphanQuery(orphanQueuedQuery{cols: []string{"id", "key", "en", "type", "live"}, rows: [][]driver.Value{{int64(2), "orphan_key", "Copy", "ui", false}}})
+				pushOrphanQuery(orphanQueuedQuery{cols: []string{"id", "key", "en", "type", "live", "translated"}, rows: [][]driver.Value{{int64(2), "orphan_key", "Copy", "ui", false, true}}})
 				pushOrphanExec(orphanQueuedExec{rowsAffected: 1})
 				pushOrphanExec(orphanQueuedExec{rowsAffected: 1})
 				if marked, unmarked := MarkOrphanLangKeys(); marked != 1 || unmarked != 1 {

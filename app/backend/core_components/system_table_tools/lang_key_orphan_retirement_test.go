@@ -42,7 +42,12 @@ func TestArchiveExpiredOrphansRetiresAnAgedOrphan(t *testing.T) {
 		t.Fatalf("retirement should use the 90-day age, got %q", calls[0])
 	}
 	for _, index := range []int{0, 2} {
-		if !strings.Contains(calls[index], "source_type NOT IN ('orphan', 'manual_crud')") {
+		keyColumn := "src.lang_key_id"
+		if index == 2 {
+			keyColumn = "system_lang_keys.id"
+		}
+		fragment := strings.Join(strings.Fields(countingLangKeySourceExistsSQL(keyColumn)), " ")
+		if !strings.Contains(strings.Join(strings.Fields(calls[index]), " "), fragment) {
 			t.Fatalf("call %d should refuse a key that still has usage, got %q", index, calls[index])
 		}
 	}

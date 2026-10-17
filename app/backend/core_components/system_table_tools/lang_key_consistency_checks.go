@@ -70,10 +70,13 @@ var treeNodeNamePattern = regexp.MustCompile(`name:\s*'([^']+)'`)
 // maxLangKeyNameCharacters is shared by garbage detection and orphan exclusion.
 const maxLangKeyNameCharacters = 200
 
-// countingLangKeySourceSQL preserves today's rule: every source type except
-// orphan bookkeeping and manual CRUD counts, including translation foreign keys
-// and unknown future types. WO-J35 changes that meaning in a later batch.
-const countingLangKeySourceSQL = "live.source_type NOT IN ('orphan', 'manual_crud')"
+// countingLangKeySourceSQL ignores bookkeeping and exactly the translation
+// storage FK. Unknown types and incomplete identities protect the key: SQL NULL
+// must never turn uncertain evidence into an orphan candidate (WO-J35 B5).
+const countingLangKeySourceSQL = `(live.source_type IS NULL OR live.source_high IS NULL OR (
+    live.source_type NOT IN ('orphan', 'manual_crud')
+    AND NOT (live.source_type = 'foreign_key'
+             AND live.source_high = 'public.system_lang_key_translations.lang_key_id')))`
 
 // countingLangKeySourceExistsSQL accepts only code-owned SQL column expressions,
 // never request text. All lifecycle queries share this correlated source rule.
@@ -153,12 +156,40 @@ type langKeyRow struct {
 	en           string
 	langKeyType  string
 	hasLiveUsage bool
+	translated   bool
 }
 
-var syntheticTestLangKeyPattern = regexp.MustCompile(`(^|_)(e2e|test)(_|-)`)
+// Share these patterns between Go descriptions and PostgreSQL selection.
+// Random tails need at least six alphanumeric characters and a digit; ordinary
+// words such as test_connection are not evidence of a generated test name.
+// Case is spelled out as ASCII classes and both engines match case-sensitively: Go's (?i) folds Unicode (ſ, K)
+// differently from PostgreSQL's ~*, so neither engine's case-insensitive mode is used.
+const syntheticE2ELangKeyPattern = `^[Ee]2[Ee]_.+$`
+const syntheticNumericLangKeyPattern = `^[Tt][Ee][Ss][Tt]_([a-zA-Z0-9]+[_-])*[0-9]+$`
+const syntheticRandomLangKeyPattern = `^[Tt][Ee][Ss][Tt]_([a-zA-Z0-9]+[_-])*[a-zA-Z0-9]{6,}$`
+const syntheticRandomDigitPattern = `^[Tt][Ee][Ss][Tt]_.*[0-9][a-zA-Z0-9]*$`
+const syntheticUUIDLangKeyPattern = `^[Tt][Ee][Ss][Tt]_([a-zA-Z0-9]+[_-])*([a-fA-F0-9]{32}|[a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{12})$`
+
+// (?s): PostgreSQL's "." also matches a newline, so Go's must too.
+var syntheticTestLangKeyPatterns = []*regexp.Regexp{
+	regexp.MustCompile("(?s)" + syntheticE2ELangKeyPattern),
+	regexp.MustCompile("(?s)" + syntheticNumericLangKeyPattern),
+	regexp.MustCompile("(?s)" + syntheticRandomLangKeyPattern),
+	regexp.MustCompile("(?s)" + syntheticRandomDigitPattern),
+	regexp.MustCompile("(?s)" + syntheticUUIDLangKeyPattern),
+}
 
 func isSyntheticTestLangKey(key string) bool {
-	return syntheticTestLangKeyPattern.MatchString(strings.ToLower(strings.TrimSpace(key)))
+	p := syntheticTestLangKeyPatterns
+	return p[0].MatchString(key) || p[1].MatchString(key) ||
+		(p[2].MatchString(key) && p[3].MatchString(key)) || p[4].MatchString(key)
+}
+
+func syntheticTestLangKeySQL(keyColumn string) string {
+	return fmt.Sprintf(`(%s ~ '%s' OR %s ~ '%s' OR (%s ~ '%s' AND %s ~ '%s') OR %s ~ '%s')`,
+		keyColumn, syntheticE2ELangKeyPattern, keyColumn, syntheticNumericLangKeyPattern,
+		keyColumn, syntheticRandomLangKeyPattern, keyColumn, syntheticRandomDigitPattern,
+		keyColumn, syntheticUUIDLangKeyPattern)
 }
 
 // buildLangKeyConsistencyDescription returns metadata only. All explanatory
@@ -205,8 +236,8 @@ func orphanDescriptionLangKeys(r langKeyRow, orphanAges map[int]int) []string {
 
 // findOrphanLangKeys — palauttaa listan orpoavaimista sources-taulun perusteella.
 // Orpo = avain jolla ei ole yhtään merkityksellistä lähdettä (code/schema/db).
-// Synteettiset testavaimet (e2e/test) palautetaan aina siivousehdokkaina,
-// vaikka niille olisi jäänyt historiallisia code-lähderivejä.
+// Generated names beginning e2e_ or test_ are also listed for review, even
+// with counting sources. Ordinary test words follow the normal source rule.
 // manual_crud-lähde yksinään ei estä orpoluokittelua, koska se kertoo vain
 // "joku muokkasi tätä admin-UI:ssa" eikä "tätä avainta tarvitaan edelleen".
 // PopulateLangKeySources() pitää ajaa ensin, jotta lähdetiedot ovat ajan tasalla.
@@ -216,10 +247,13 @@ func findOrphanLangKeys() []langKeyRow {
         SELECT slk.id, slk.lang_key,
                COALESCE(slk.en, '') AS en,
                COALESCE(slk.lang_key_type::text, '') AS lang_key_type,
-               ` + countingLangKeySourceExistsSQL("slk.id") + ` AS has_live_usage
+               ` + countingLangKeySourceExistsSQL("slk.id") + ` AS has_live_usage,
+               EXISTS (SELECT 1 FROM system_lang_key_translations translation
+                       WHERE translation.lang_key_id = slk.id
+                         AND NULLIF(btrim(translation.translation), '') IS NOT NULL) AS translated
         FROM system_lang_keys slk
         WHERE NOT ` + garbageLangKeySQL() + `
-          AND (slk.lang_key ~* '(^|_)(e2e|test)(_|-)'
+          AND (` + syntheticTestLangKeySQL("slk.lang_key") + `
                OR NOT ` + countingLangKeySourceExistsSQL("slk.id") + `)
         ORDER BY slk.lang_key
     `)
@@ -232,7 +266,7 @@ func findOrphanLangKeys() []langKeyRow {
 	var orphans []langKeyRow
 	for rows.Next() {
 		var r langKeyRow
-		if err := rows.Scan(&r.id, &r.key, &r.en, &r.langKeyType, &r.hasLiveUsage); err != nil {
+		if err := rows.Scan(&r.id, &r.key, &r.en, &r.langKeyType, &r.hasLiveUsage, &r.translated); err != nil {
 			continue
 		}
 		orphans = append(orphans, r)
@@ -429,6 +463,7 @@ func checkOrphanLangKeys() CategoryResult {
 			Table:               r.key,
 			Description:         buildLangKeyConsistencyDescription(r, orphanAges),
 			DescriptionLangKeys: orphanDescriptionLangKeys(r, orphanAges),
+			Translated:          &r.translated,
 		})
 	}
 

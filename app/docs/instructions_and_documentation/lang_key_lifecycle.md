@@ -157,7 +157,7 @@ Every lang key can have **multiple** source records. A key like `updated` may ap
 | `folder` | folder name / name or `''` | Folder scanner and writes | Yes |
 | `view` | view registry / view name | Startup scanner | Yes |
 | `group` | group registry / group name | Startup scanner | Yes |
-| `foreign_key` | `schema.table.column` / column | FK-value scanner | Yes, including the translations table reference |
+| `foreign_key` | `schema.table.column` / column | FK-value scanner | Yes, except exactly `public.system_lang_key_translations.lang_key_id` |
 | `front_page_hero` | hero identity / field | Home settings and seeds | Yes |
 | `admin_api` | `admin_lang_key` / author | Admin language-key API | Yes |
 | `dev_editor` | editor identity / author | Development editor | Yes |
@@ -166,7 +166,7 @@ Every lang key can have **multiple** source records. A key like `updated` may ap
 | `orphan` | `consistency_scan` / `''` | Orphan marking | No |
 | Any other type | source-owned identity | Existing or future writer | Yes |
 
-The shared SQL rule in `lang_key_consistency_checks.go` excludes only `orphan` and `manual_crud`. B1 does not change what counts as use. In particular, `foreign_key / public.system_lang_key_translations.lang_key_id` still protects its key. The later rule change belongs to WO-J35.
+The shared SQL rule in `lang_key_consistency_checks.go` excludes `orphan`, `manual_crud`, and exactly `foreign_key / public.system_lang_key_translations.lang_key_id` (WO-J35 B5). Translation-reference rows remain stored. Every other identity and unknown type protects its key; a NULL type or missing source identity also protects it. Prefix, case, whitespace and other near-matches are not excluded.
 
 ### UPSERT Pattern
 
@@ -518,10 +518,8 @@ counting source, plus the existing synthetic-test candidates. Raw HTML names
 (containing `<` or `>`) and names longer than 200 characters are excluded and
 reported in category 7 instead. Exactly 200 characters is not garbage by length.
 
-The counting condition is `source_type NOT IN ('orphan', 'manual_crud')`.
-Synthetic candidates still use the existing case-insensitive
-`(^|_)(e2e|test)(_|-)` name rule, even when they have counting sources. Neither
-that rule nor scanner coverage changes in B1.
+Counting sources follow the single shared rule in §3, including B5's exact translation-reference exclusion.
+Generated names are case-insensitive, begin with `e2e_` and a nonempty tail, or begin with `test_` and end in a numeric, mixed alphanumeric (at least six characters with a digit), UUID or 32-character hexadecimal tail. Ordinary `test_x`, `test_connection` and `testimonial` names follow the normal source rule. Embedded prefixes and trailing words do not qualify. Go descriptions and SQL selection share these patterns; even generated keys with counting sources stay listed for review.
 
 For each orphan:
 - **INSERT** a `source_type='orphan'`, `source_high='consistency_scan'` record,
@@ -543,7 +541,7 @@ on-demand scan cannot archive or delete a key. The legacy archive function and
 its 90-day constant remain for later WO-J35 work, without an automatic caller.
 Its current fi/en/ch/yue column copy does not preserve every normalized
 translation, so this document makes no lossless-archive claim.
-E2E temp-dataset language keys are kept on development instances until WO-J35 B5 and the archiving that follows.
+E2E temp-dataset language keys remain stored during B5's report period; B8 requires a separate per-site go.
 
 Category 8 is report-only. Its fi/en language keys say archiving is paused,
 show the recorded age when available, and identify a counting source when one
@@ -557,8 +555,8 @@ and "Fix All" skips both language-key categories (7 and 8).
 
 `row_group_categories_modes_hint` (WO22) and `row_group_match_mode` (WO26) no longer have code references.
 Released seeds, bootstrap rows and stored translations remain; neither change deletes keys.
-The current scan treats translation references as use, and J36 pauses automatic archiving.
-They become candidates when WO-J35 B5 ships. If still unused, archiving can happen no earlier
+The B5 rule excludes the exact translation reference, and J36 still pauses automatic archiving.
+These keys are candidates only if no other counting evidence remains. If still unused, archiving can happen no earlier
 than 90 days after archiving returns to that site through B8 and explicit owner approval.
 Source expiry and removal of code references do not promise archiving.
 
@@ -584,10 +582,9 @@ protected key is skipped. "Fix All" skips category 7.
 
 ### Category 8: Orphan Lang Keys
 
-`checkOrphanLangKeys()` uses the same `findOrphanLangKeys()` function as `MarkOrphanLangKeys()`. Displays orphan keys for review with translated pause notices and no fix button.
+`checkOrphanLangKeys()` uses the same `findOrphanLangKeys()` function as `MarkOrphanLangKeys()`. Displays orphan keys for review with translated pause notices and no fix button. Each row's Translation column reports whether any language has a nonempty canonical `system_lang_key_translations` row; an English legacy preview alone is not a translation, and “yes” does not mean complete language coverage. The response carries this state as `translated`, including explicit `false`.
 Category 8 is report-only: single fixes return the existing skipped result, and
-"Fix All" skips it. Re-enabling archiving and changes to source evidence belong
-to later WO-J35 batches; they are not implemented by B1.
+"Fix All" skips it. Reading the report writes no evidence, marker, archive or deletion. Source scans retain B2's freshness gates and the existing marker maintenance. Re-enabling archiving belongs to B8, after the review gates and explicit per-site approval.
 
 ---
 

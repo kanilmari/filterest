@@ -39,7 +39,7 @@ func (startupPauseTx) Rollback() error                { return nil }
 func (c *startupPauseConn) QueryContext(_ context.Context, query string, _ []driver.NamedValue) (driver.Rows, error) {
 	*c.calls = append(*c.calls, query)
 	if strings.Contains(query, "AS has_live_usage") {
-		return &startupPauseRows{columns: []string{"id", "key", "en", "type", "live"}, values: []driver.Value{int64(42), "unused_startup_key", "Copy", "ui", false}}, nil
+		return &startupPauseRows{columns: []string{"id", "key", "en", "type", "live", "translated"}, values: []driver.Value{int64(42), "unused_startup_key", "Copy", "ui", false, true}}, nil
 	}
 	if strings.Contains(query, "SELECT src.lang_key_id, src.last_seen") {
 		return &startupPauseRows{columns: []string{"id", "date"}, values: []driver.Value{int64(42), "2020-01-01"}}, nil

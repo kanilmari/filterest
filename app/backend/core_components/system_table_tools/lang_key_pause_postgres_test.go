@@ -20,6 +20,7 @@ func TestLangKeyPausePostgresGuardAndCharacterBoundaries(t *testing.T) {
 	t.Cleanup(func() { backend.Db = oldDB })
 	frontPageExec(t, db, `CREATE TABLE system_lang_keys (
         id serial PRIMARY KEY, lang_key text UNIQUE, en text, lang_key_type integer);
+        CREATE TABLE system_lang_key_translations (lang_key_id integer REFERENCES system_lang_keys(id), translation text);
         CREATE TABLE system_lang_key_sources (lang_key_id integer REFERENCES system_lang_keys(id) ON DELETE CASCADE,
         source_type text,source_high text,last_seen date);`)
 	for _, test := range []struct {
@@ -70,12 +71,12 @@ func TestLangKeyPausePostgresGuardAndCharacterBoundaries(t *testing.T) {
 			if err := db.QueryRow(`INSERT INTO system_lang_keys(lang_key) VALUES($1) RETURNING id`, key).Scan(&id); err != nil {
 				t.Fatal(err)
 			}
-			// The exact translation-table reference still counts in B1.
+			// B5 excludes only the exact translation-table foreign-key reference.
 			if _, err := db.Exec(`INSERT INTO system_lang_key_sources VALUES($1,$2,'public.system_lang_key_translations.lang_key_id',CURRENT_DATE)`, id, source); err != nil {
 				t.Fatal(err)
 			}
 			err := fixIssue(db, fmt.Sprintf("cat7_%d", id), nil)
-			counting := source != "orphan" && source != "manual_crud"
+			counting := source != "orphan" && source != "manual_crud" && source != "foreign_key"
 			if counting && !errors.Is(err, errConsistencyFixSkipped) || !counting && err != nil {
 				t.Fatal("changed source meaning", source, err)
 			}

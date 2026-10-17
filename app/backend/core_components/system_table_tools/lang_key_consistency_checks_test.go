@@ -5,8 +5,12 @@
 package system_table_tools
 
 import (
+	"database/sql/driver"
+	"encoding/json"
 	"strings"
 	"testing"
+
+	backend "easelect/backend/core_components"
 )
 
 func TestIsSyntheticTestLangKey(t *testing.T) {
@@ -17,9 +21,26 @@ func TestIsSyntheticTestLangKey(t *testing.T) {
 	}{
 		{name: "e2e prefix", key: "e2e_folder_abc", want: true},
 		{name: "test prefix", key: "test_perm_table_123", want: true},
-		{name: "embedded after prefix", key: "add_row_e2e_folder_abc", want: true},
-		{name: "search slogan", key: "search_slogan_test_perm_table_123", want: true},
-		{name: "front page suffix", key: "test_perm_table_123_front_page", want: true},
+		{name: "embedded after prefix", key: "add_row_e2e_folder_abc", want: false},
+		{name: "search slogan", key: "search_slogan_test_perm_table_123", want: false},
+		{name: "front page suffix", key: "test_perm_table_123_front_page", want: false},
+		{name: "ordinary short key", key: "test_x", want: false},
+		{name: "ordinary test word", key: "testimonial", want: false},
+		{name: "ordinary test key", key: "test_connection", want: false},
+		{name: "random tail", key: "test_abc123", want: true},
+		{name: "numeric tail", key: "test_123", want: true},
+		{name: "e2e random", key: "e2e_abc123", want: true},
+		{name: "e2e tail with newline", key: "e2e_a\nb", want: true},
+		{name: "test digit tail with newline", key: "test_ab\n1cdef2", want: false},
+		{name: "long s is not ASCII s", key: "teſt_123", want: false},
+		{name: "Kelvin sign is not ASCII k", key: "test_abK123", want: false},
+		{name: "mixed ASCII case", key: "TeSt_AbC123", want: true},
+		{name: "bare e2e", key: "e2e_", want: false},
+		{name: "dash prefix", key: "test-123", want: false},
+		{name: "short mixed tail", key: "test_x1", want: false},
+		{name: "case insensitive", key: "TEST_ABC123", want: true},
+		{name: "no whitespace normalization", key: " test_123 ", want: false},
+		{name: "uuid", key: "test_aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee", want: true},
 		{name: "normal lang key", key: "orders_front_page", want: false},
 		{name: "word containing test", key: "latest_status", want: false},
 	}
@@ -72,7 +93,7 @@ func TestLangKeyPatternsRecognizeLowerCamelConfigKeys(t *testing.T) {
 func TestBuildLangKeyConsistencyDescription_SyntheticKey(t *testing.T) {
 	row := langKeyRow{
 		id:          91,
-		key:         "add_row_e2e_folder_abc",
+		key:         "e2e_folder_abc",
 		en:          "Add row e2e folder abc",
 		langKeyType: "ui",
 	}
@@ -108,5 +129,36 @@ func TestBuildLangKeyConsistencyDescription_OrdinaryOrphan(t *testing.T) {
 	}
 	if strings.Contains(description, "Synthetic test lang key") {
 		t.Fatalf("description %q should not flag normal keys as synthetic", description)
+	}
+}
+
+func TestOrphanReportIncludesBothTranslationStatesWithoutWriting(t *testing.T) {
+	resetOrphanQueues()
+	t.Cleanup(resetOrphanQueues)
+	db := newSystemTableToolsTestDB(t)
+	previous := backend.Db
+	backend.Db = db
+	t.Cleanup(func() { backend.Db = previous; _ = db.Close() })
+	pushOrphanQuery(orphanQueuedQuery{
+		cols: []string{"id", "key", "en", "type", "live", "translated"},
+		rows: [][]driver.Value{
+			{int64(1), "translated_key", "Copy", "ui", false, true},
+			{int64(2), "untranslated_key", "", "ui", false, false},
+		},
+	})
+	pushOrphanQuery(orphanQueuedQuery{cols: []string{"id", "age", "live"}})
+	report := checkOrphanLangKeys()
+	if len(report.Issues) != 2 || report.Issues[0].Translated == nil || report.Issues[1].Translated == nil ||
+		!*report.Issues[0].Translated || *report.Issues[1].Translated {
+		t.Fatalf("missing or mixed translation states: %+v", report)
+	}
+	encoded, err := json.Marshal(report)
+	if err != nil || !strings.Contains(string(encoded), `"translated":false`) {
+		t.Fatalf("untranslated state was omitted: %s, %v", encoded, err)
+	}
+	for _, query := range snapshotOrphanCalls() {
+		if !strings.HasPrefix(strings.TrimSpace(query), "SELECT") {
+			t.Fatalf("report attempted a write: %s", query)
+		}
 	}
 }

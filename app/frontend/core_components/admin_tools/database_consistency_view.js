@@ -202,6 +202,22 @@ function renderResults(resultsArea, data) {
             issueRow.appendChild(labelContainer);
 
             if (cat.number === 8) {
+                if (typeof issue.translated === 'boolean') {
+                    // Existing seeded copy keeps this report column multilingual
+                    // without introducing keys or a database migration.
+                    const translationState = document.createElement('div');
+                    translationState.classList.add('consistency-orphan-translated-state', 'fw-text-sm', 'fw-text-muted');
+                    translationState.style.flexShrink = '0';
+                    const heading = document.createElement('span');
+                    heading.dataset.langKey = 'translation';
+                    heading.textContent = getTranslationForKey('translation');
+                    const value = document.createElement('span');
+                    const valueKey = issue.translated ? 'missing_media_check_yes' : 'missing_media_check_no';
+                    value.dataset.langKey = valueKey;
+                    value.textContent = getTranslationForKey(valueKey);
+                    translationState.append(heading, document.createTextNode(': '), value);
+                    issueRow.appendChild(translationState);
+                }
                 // Report-only while language-key archiving is paused.
             } else if (cat.number !== 2) {
                 // Garbage keys require explicit, guarded single-key review.

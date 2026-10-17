@@ -49,7 +49,7 @@ func (c *langKeyPauseConn) QueryContext(_ context.Context, query string, args []
 	}
 	switch {
 	case strings.Contains(query, "AS has_live_usage"):
-		return &orphanQueueRows{cols: []string{"id", "lang_key", "en", "type", "live"}, data: [][]driver.Value{{int64(42), "unused_pause_key", "Copy", "ui", false}}}, nil
+		return &orphanQueueRows{cols: []string{"id", "lang_key", "en", "type", "live", "translated"}, data: [][]driver.Value{{int64(42), "unused_pause_key", "Copy", "ui", false, true}}}, nil
 	case strings.Contains(query, "AS age_days"):
 		return &orphanQueueRows{cols: []string{"id", "age", "live"}, data: [][]driver.Value{{int64(42), int64(400), false}}}, nil
 	case strings.Contains(query, "SELECT src.lang_key_id, src.last_seen"):
@@ -209,7 +209,7 @@ func TestLangKeyPauseSkippedFixHandlerReportsZero(t *testing.T) {
 		})
 	}
 }
-func TestLangKeyPauseSQLUsesOneUnchangedCountingRule(t *testing.T) {
+func TestLangKeyPauseSQLUsesOneSharedCountingRule(t *testing.T) {
 	db, state := pauseTestDB(t)
 	findOrphanLangKeys()
 	checkOrphanLangKeys() // description query shares detection
@@ -233,7 +233,7 @@ func TestLangKeyPauseSQLUsesOneUnchangedCountingRule(t *testing.T) {
 		if strings.Contains(query, "AS age_days") || strings.Contains(query, "SELECT src.lang_key_id, src.last_seen") {
 			keyColumn = "src.lang_key_id"
 		}
-		expected := "EXISTS (SELECT 1 FROM system_lang_key_sources live WHERE live.lang_key_id = " + keyColumn + " AND live.source_type NOT IN ('orphan', 'manual_crud'))"
+		expected := strings.Join(strings.Fields(countingLangKeySourceExistsSQL(keyColumn)), " ")
 		if !strings.Contains(strings.Join(strings.Fields(query), " "), expected) {
 			t.Errorf("missing full shared counting-source fragment: %s", query)
 		}

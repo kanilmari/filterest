@@ -40,9 +40,10 @@ func TestConsistencySafeMethodsOnlyRead(t *testing.T) {
 				assertNoLangKeyRetirement(t, state, false)
 				var result struct {
 					Categories []struct {
-						Number int        `json:"number"`
-						At     *time.Time `json:"source_scan_at"`
-						Stale  *bool      `json:"source_scan_stale"`
+						Number int                `json:"number"`
+						At     *time.Time         `json:"source_scan_at"`
+						Stale  *bool              `json:"source_scan_stale"`
+						Issues []ConsistencyIssue `json:"issues"`
 					}
 				}
 				if err := json.Unmarshal(w.Body.Bytes(), &result); err != nil {
@@ -54,6 +55,9 @@ func TestConsistencySafeMethodsOnlyRead(t *testing.T) {
 						continue
 					}
 					orphanFound = true
+					if len(category.Issues) != 1 || category.Issues[0].Translated == nil || !*category.Issues[0].Translated {
+						t.Fatal("report lost translated state or the reference-only candidate", w.Body)
+					}
 					if category.Stale == nil || *category.Stale != (age == 0 || age >= 5*time.Minute) {
 						t.Fatal("missing or wrong freshness", w.Body)
 					}

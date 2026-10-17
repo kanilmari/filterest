@@ -21,6 +21,14 @@ for (const match of seed.matchAll(/^ {4}\('([^']+)', '([^']+)', '([^']+)'\)/gm))
     dictionary.copy[match[1]] = { fi: match[2], en: match[3] };
 }
 Object.assign(dictionary.copy, MAINTENANCE_ACTION_TRANSLATION_FALLBACKS);
+for (const [key, source] of [
+    ['translation', 'server_tools/public_bootstrap/source/app_tables.lang_keys.sql'],
+    ['missing_media_check_yes', 'server_tools/migrations/20260929000005_seed_missing_media_check_language_keys.sql'],
+    ['missing_media_check_no', 'server_tools/migrations/20260929000005_seed_missing_media_check_language_keys.sql'],
+]) {
+    const match = readFileSync(resolve(source), 'utf8').match(new RegExp(`\\('${key}',\\s*'([^']+)',\\s*'([^']+)'`));
+    dictionary.copy[key] = { fi: match[1], en: match[2] };
+}
 const orphan = { id: 'cat8_42', table: 'unused_key', description: 'en: "Copy"', description_lang_keys: [
     'consistency_orphan_archiving_paused', 'consistency_orphan_age_days+400',
 ] };
@@ -63,6 +71,31 @@ test.each(['fi', 'en'].flatMap(language => [
     const garbageLabel = [...host.querySelectorAll('span')].find(span => span.textContent === garbage.table);
     expect(garbageLabel.childElementCount).toBe(0);
 });
+
+test.each(['fi', 'en'].flatMap(language => ['light', 'dark'].map(theme => ({ language, theme }))))(
+    'translation column in $language / $theme over a dark OS stays report only', async ({ language, theme }) => {
+        dictionary.language = language;
+        document.documentElement.dataset.theme = theme;
+        vi.stubGlobal('matchMedia', () => ({ matches: true }));
+        const data = report();
+        data.categories[1].issues = [
+            { ...orphan, translated: true },
+            { ...orphan, id: 'cat8_44', table: 'untranslated_key', translated: false },
+        ];
+        const host = await openReport(data);
+        const cells = [...host.querySelectorAll('.consistency-orphan-translated-state')];
+        expect(cells).toHaveLength(2);
+        for (const [index, cell] of cells.entries()) {
+            const valueKey = index === 0 ? 'missing_media_check_yes' : 'missing_media_check_no';
+            expect(cell.querySelector('[data-lang-key="translation"]').textContent).toBe(dictionary.copy.translation[language]);
+            expect(cell.querySelector(`[data-lang-key="${valueKey}"]`).textContent).toBe(dictionary.copy[valueKey][language]);
+            expect(cell.classList.contains('fw-text-muted')).toBe(true);
+            expect(cell.style.color).toBe('');
+            expect(cell.parentElement.querySelector('button')).toBeNull();
+        }
+        expect(endpoint_router).toHaveBeenCalledExactlyOnceWith('checkDbConsistency');
+    },
+);
 
 test.each([0, 1])('a guarded single garbage fix reports fixed=%s truthfully', async fixed => {
     const host = await openReport();
