@@ -53,7 +53,7 @@ def test_application_update_bootstrap_evidence_is_complete_and_reproducible(tmp_
         assert (schema + seed).count(source) == 1
         evidence = manifest["source_files"]["filterest/app/server_tools/migrations/" + name]
         assert evidence["sha256"] == hashlib.sha256((MIGRATIONS / name).read_bytes()).hexdigest()
-    assert schema == (APP / "server_tools/versioning/schema_snapshots/db-9.11.0.sql").read_text()
+    assert schema == (APP / f"server_tools/versioning/schema_snapshots/db-{(APP / 'VERSION_DB').read_text().strip()}.sql").read_text()
     result = subprocess.run([sys.executable, str(BOOTSTRAP / "generate_bootstrap.py"), "--target", str(tmp_path)], capture_output=True, text=True)
     assert result.returncode == 0, result.stderr
     for name in ("schema.sql", "seed_data.sql", "manifest.json"):

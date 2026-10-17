@@ -24,6 +24,7 @@ const forms = {
     },
     first_run_admin: {
         username: 'username',
+        setup_code: 'off',
         password: 'new-password',
         confirm_password: 'new-password',
         fixed_pin: 'one-time-code',

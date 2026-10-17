@@ -22,6 +22,7 @@ Dates are the local (Europe/Helsinki) date on which the version was published.
 
 ## [Unreleased]
 
+- **Browser-ready first-run setup (WO41)** — Open the form and enter the server-log setup code on every submission; per-client and global back-off protect attempts, each form binds its own authenticator key, and the obsolete payment-status GET side-effect allowance is removed.
 - **Serif story on native Home (WO38a)** — The Home palette can opt into a serif title with an italic slogan accent, wrapping bold story lines and a slow line reveal that respects reduced motion, explicit themes and language changes; default-style sites keep downgrade-safe presentation storage and unchanged Home text.
 - Browser tests wait for the requested dataset before using its view, filter and search controls; the heading fixture removes its generated language keys even after failure.
 - **Orphan candidates use the reviewed source rule (WO-J35 B5)** — Only the exact translations-table foreign-key reference stops counting as use; other and unknown evidence protects keys. Generated test names are narrowed, and category 8 shows whether any canonical translation exists. Reports write nothing and archiving stays paused; no migration or new language keys.

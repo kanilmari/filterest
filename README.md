@@ -229,7 +229,7 @@ browser sessions. Its verified binary, setup markers, and logs live under
 `keys/filterest_runtime/`. Source, templates, versions, and database bootstrap
 inputs continue to come from `app/`.
 
-On first browser access, Filterest opens a two-section form. First choose the
+The first-run form has two sections. First choose the
 visible development, testing, quality-assurance, or production purpose and the first
 administrator's sign-in verification method; choose whether ordinary users may
 use the same sign-in and public name, then create the administrator login name,
@@ -238,7 +238,11 @@ administrator names always differ. Email verification uses Postmark and
 requires a free external Postmark account. Password-only, fixed-PIN, and
 standard TOTP authenticator sign-in do not require an email provider.
 
-The form accepts loopback callers or the setup token sent in the `X-Filterest-Setup-Token` header. The first pending setup request prints a one-time, process-local token to the server log; restarting generates a new token on the next pending request. The normal trusted-proxy client address boundary determines whether the caller is loopback.
+Open `/first-run` in a browser and enter the **Setup code** from the server log or installation/recovery output.
+Every submission requires the code, including on the same machine; loading the page needs no code.
+The first pending setup request logs it once. Restarting creates a new process-local code on the next pending request.
+Scripts may send `X-Filterest-Setup-Token` on POST with the form's session cookie and CSRF token.
+Keep the code out of URLs. Per-client and global limits apply, with increasing lockout delays after wrong codes.
 
 The form is available only while the server-owned first-run setting is pending and no login-ready admin exists. A successful submission saves the environment purpose, verification factor, account, and first-run closure as one transaction; later visits go to normal login. A DEV/TEST/QA purpose changes the visible label but cannot downgrade the security boundary of the production-locked admin binary.
 

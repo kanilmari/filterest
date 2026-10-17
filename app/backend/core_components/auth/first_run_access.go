@@ -1,38 +1,46 @@
 // first_run_access.go
-// Requires operator proof for remote first-administrator setup.
-// Connects the pending setup form, direct network peer and one process-local key.
-// Only the server log receives the generated key; forwarded headers confer no access.
+// Requires operator proof for every first-administrator setup submission.
+// Connects the pending setup form and one process-local key, independent of network identity.
+// Only the server log receives the generated key; failed generation refuses every caller.
 package auth
 
 import (
 	"crypto/rand"
+	"crypto/sha256"
 	"crypto/subtle"
 	"easelect/backend/core_components/logging"
 	"encoding/hex"
-	"net"
 	"net/http"
 	"sync"
 )
 
-var firstRunAccess struct {
+type firstRunAccessCode struct {
 	sync.Once
 	proof string
 	err   error
 }
 
-func firstRunAccessAllowed(r *http.Request) bool {
+var firstRunAccess = &firstRunAccessCode{}
+
+func ensureFirstRunAccessCode() {
 	firstRunAccess.Do(func() {
 		var bytes [32]byte
 		if _, firstRunAccess.err = rand.Read(bytes[:]); firstRunAccess.err == nil {
 			firstRunAccess.proof = hex.EncodeToString(bytes[:])
-			logging.Infof("First-run setup token (send as X-Filterest-Setup-Token): %s", firstRunAccess.proof)
+			logging.Infof("First-run setup token (enter in the Setup code field of the first-run form, or send as X-Filterest-Setup-Token): %s", firstRunAccess.proof)
 		}
 	})
-	if ip := net.ParseIP(getClientIP(r)); ip != nil && ip.IsLoopback() {
-		return true
-	}
+}
+
+func firstRunAccessAllowed(r *http.Request) bool {
+	ensureFirstRunAccessCode()
 	if firstRunAccess.err != nil {
 		return false
 	}
-	return subtle.ConstantTimeCompare([]byte(r.Header.Get("X-Filterest-Setup-Token")), []byte(firstRunAccess.proof)) == 1
+	// Only the POST body and script header carry proof; URL parameters never do.
+	// Fixed-size digests keep comparisons constant-time even for wrong lengths.
+	expected := sha256.Sum256([]byte(firstRunAccess.proof))
+	field := sha256.Sum256([]byte(r.PostForm.Get("setup_code")))
+	header := sha256.Sum256([]byte(r.Header.Get("X-Filterest-Setup-Token")))
+	return (subtle.ConstantTimeCompare(field[:], expected[:]) | subtle.ConstantTimeCompare(header[:], expected[:])) == 1
 }

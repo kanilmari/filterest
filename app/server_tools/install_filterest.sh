@@ -196,7 +196,7 @@ show_plan() {
         printf '  Development tools: Go, Node.js, npm packages, and Playwright Chromium\n'
     fi
     printf '  Browser address: https://localhost:%s/first-run\n' "$native_port"
-    printf '  Administrator account: created in the guarded browser form\n'
+    printf '  Administrator account: open the page and enter the setup code from the server log or installation output\n'
     printf '  Privileges: sudo is used only when host packages or the initial PostgreSQL role are missing\n\n'
 }
 
@@ -1020,7 +1020,7 @@ main() {
 
     native_port="$(installation_native_port)" || return
     printf '\nFilterest installation completed.\n'
-    printf 'Open: https://localhost:%s/first-run\n' "$native_port"
+    printf 'Open: https://localhost:%s/first-run\nEnter the setup code from the server log or installation output in the Setup code field.\n' "$native_port"
 }
 
 if [[ "${FILTEREST_INSTALLER_LIBRARY_ONLY:-0}" != "1" ]]; then

@@ -56,7 +56,8 @@ def test_bootstrap_includes_identity_schema_without_an_installation_row():
     assert NAME > "20261009000078"
     assert MIGRATION.read_text() in (BOOTSTRAP / "schema.sql").read_text()
     assert manifest["source_files"]["filterest/app/server_tools/migrations/" + NAME]["sha256"] == hashlib.sha256(MIGRATION.read_bytes()).hexdigest()
-    assert (APP / "server_tools/versioning/schema_snapshots/db-9.11.0.sql").read_bytes() == (BOOTSTRAP / "schema.sql").read_bytes()
+    version = (APP / "VERSION_DB").read_text().strip()
+    assert (APP / f"server_tools/versioning/schema_snapshots/db-{version}.sql").read_bytes() == (BOOTSTRAP / "schema.sql").read_bytes()
 
 
 def test_started_native_reference_is_admitted_and_identity_stays_managed():

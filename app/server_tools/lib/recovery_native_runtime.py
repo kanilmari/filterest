@@ -186,6 +186,7 @@ def start(root, binary, log_file, pid_file, port):
                 if _reply(reply_read, 5) != b"READY\n":
                     raise RuntimeError("Recovery startup log failed")
                 print(f"Filterest is ready: https://localhost:{port}/first-run")
+                print("Open the page and enter the setup code from the server log or recovery output in the Setup code field.")
                 return 0
             # Wait for a failure while respecting the ordinary probe rate limit.
             if select.select([reply_read], [], [], 1)[0]:

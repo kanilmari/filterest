@@ -23,7 +23,8 @@ func TestSEC4FirstRunRemoteRequiresSetupProof(t *testing.T) {
 	var output bytes.Buffer
 	logging.SetOutput(&output)
 	t.Cleanup(func() { logging.SetOutput(os.Stderr) })
-	for _, method := range []string{"GET", "POST"} {
+	// A2 serves GET publicly; only submissions require operator proof.
+	for _, method := range []string{"POST"} {
 		req := httptest.NewRequest(method, "/first-run", nil)
 		req.RemoteAddr = "192.0.2.42:1234"
 		req.Header.Set("X-Forwarded-For", "127.0.0.1")
@@ -42,8 +43,14 @@ func TestSEC4FirstRunRemoteRequiresSetupProof(t *testing.T) {
 	}
 	req.Header.Del("X-Filterest-Setup-Token")
 	req.RemoteAddr = "127.0.0.1:1234"
-	if !firstRunAccessAllowed(req) {
-		t.Fatal("direct loopback refused")
+	req.Method = "POST"
+	if firstRunAccessAllowed(req) {
+		t.Fatal("loopback without the code bypassed setup proof")
+	}
+	loopback := httptest.NewRecorder()
+	FirstRunAdminHandler(loopback, req)
+	if loopback.Code != 403 {
+		t.Fatalf("loopback without the code: status=%d want 403", loopback.Code)
 	}
 	req = req.WithContext(context.WithValue(req.Context(), context_keys.ClientIPKey{}, "192.0.2.42"))
 	if firstRunAccessAllowed(req) {

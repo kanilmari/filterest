@@ -39,7 +39,7 @@ def test_all_bootstrap_schema_declarations_are_zoned_and_snapshot_is_exact():
     for source in (BOOTSTRAP / "source").glob("*.schema.sql"):
         validate_zoned_timestamp_schema(source.read_text(), source.name)
     assert (BOOTSTRAP / "schema.sql").read_bytes() == \
-        (APP / "server_tools/versioning/schema_snapshots/db-9.11.0.sql").read_bytes()
+        (APP / "server_tools/versioning/schema_snapshots" / f"db-{(APP / 'VERSION_DB').read_text().strip()}.sql").read_bytes()
     assert_bootstrap_baseline((BOOTSTRAP / "seed_data.sql").read_text(), MIGRATION)
     assert "public.app_check_managed_timestamp_zones() AS result" in (BOOTSTRAP / "seed_data.sql").read_text()
 

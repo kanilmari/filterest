@@ -6313,6 +6313,23 @@ BEGIN
         wl167_timestamp_view_columns, wl167_timestamp_views, wl167_timestamp_columns;
 END;
 $conversion$;
+-- 20261015000016_seed_first_run_setup_code.sql
+-- Seeds Finnish and English setup-code copy and makes name suggestions read-only.
+-- Connects the public first-run form to both language stores and its source context.
+-- Preserves installation wording; the suggestion body uses only reads, lower and unnest.
+-- VERSION_DB: 9.12.0
+-- VERSION_DB_OWNER: 20261015000099_record_database_release_9_12_0.sql
+-- COMPLETION_MARKER: wo41_first_run_readonly
+
+-- The original body only checks public/restricted names and the caller's exclusions.
+-- lower(text) and unnest(anyarray) are immutable; no write or volatile call occurs.
+ALTER FUNCTION public.app_next_admin_display_name(text, text[]) STABLE;
+
+INSERT INTO public.system_data_repair_records (migration, action)
+SELECT 'wo41_first_run_readonly', 'completed'
+WHERE NOT EXISTS (SELECT 1 FROM public.system_data_repair_records
+    WHERE migration = 'wo41_first_run_readonly' AND action = 'completed');
+
 -- row_actor_columns.schema.sql
 -- Completes the creator and owner structure of the sixteen public content tables.
 -- Bridges the common actor functions and the package's final schema, before seed rows

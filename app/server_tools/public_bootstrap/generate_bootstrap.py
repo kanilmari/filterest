@@ -125,6 +125,7 @@ repair_schema_migrations = (
     "20261009000078_enforce_dataset_name_namespace.sql",
     "20261009000079_reconcile_system_database_identity_schema.sql",
     "20261009000080_zone_platform_managed_timestamps.sql",
+    "20261015000016_seed_first_run_setup_code.sql",
 )
 # Complete the physical actor columns after development tables and support functions,
 # before schema privileges. The data step later registers the same columns.

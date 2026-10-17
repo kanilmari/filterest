@@ -7463,6 +7463,49 @@ CROSS JOIN LATERAL(VALUES('fi',s.fi),('en',s.en),('ch',s.ch),('yue',s.yue)) c(la
 JOIN public.system_languages l ON l.language_code=c.language_code
 ON CONFLICT(lang_key_id,language_code) DO UPDATE SET
  translation=COALESCE(NULLIF(existing.translation,''),EXCLUDED.translation);
+-- Schema runs before synthetic users; copy runs after supported languages exist.
+WITH authored_keys(lang_key, fi, en) AS (VALUES
+    ('first_run_setup_code', 'Käyttöönottokoodi', 'Setup code'),
+    ('first_run_setup_code_help', 'Syötä palvelimen lokissa tai asennuksen tai palautuksen tulosteessa näkyvä käyttöönottokoodi.', 'Enter the setup code from the server log or the installation or recovery output.')
+), resolved AS (
+    SELECT copy.lang_key,
+        COALESCE(CASE WHEN NULLIF(btrim(keys.fi), '') IS NOT NULL THEN keys.fi END,
+            CASE WHEN NULLIF(btrim(fi.translation), '') IS NOT NULL THEN fi.translation END, copy.fi) AS fi,
+        COALESCE(CASE WHEN NULLIF(btrim(keys.en), '') IS NOT NULL THEN keys.en END,
+            CASE WHEN NULLIF(btrim(en.translation), '') IS NOT NULL THEN en.translation END, copy.en) AS en
+    FROM authored_keys copy
+    LEFT JOIN public.system_lang_keys keys USING (lang_key)
+    LEFT JOIN public.system_lang_key_translations fi ON fi.lang_key_id = keys.id AND fi.language_code = 'fi'
+    LEFT JOIN public.system_lang_key_translations en ON en.lang_key_id = keys.id AND en.language_code = 'en'
+), written AS (
+    INSERT INTO public.system_lang_keys AS existing (lang_key, fi, en, creation_spec)
+    SELECT lang_key, fi, en, 'WO41 A2 first-run setup-code form.' FROM resolved
+    ON CONFLICT (lang_key) DO UPDATE
+    SET fi = CASE WHEN NULLIF(btrim(existing.fi), '') IS NULL THEN EXCLUDED.fi ELSE existing.fi END,
+        en = CASE WHEN NULLIF(btrim(existing.en), '') IS NULL THEN EXCLUDED.en ELSE existing.en END
+    WHERE NULLIF(btrim(existing.fi), '') IS NULL OR NULLIF(btrim(existing.en), '') IS NULL
+    RETURNING id, lang_key, fi, en
+), served AS (
+    SELECT * FROM written UNION ALL
+    SELECT k.id, k.lang_key, k.fi, k.en FROM public.system_lang_keys k JOIN authored_keys USING (lang_key)
+    WHERE k.id NOT IN (SELECT id FROM written)
+)
+INSERT INTO public.system_lang_key_translations AS existing
+    (lang_key_id, language_code, translation, source_kind, review_status)
+SELECT s.id, translated.language_code, translated.translation, 'manual', 'approved'
+FROM served s
+CROSS JOIN LATERAL (VALUES ('fi', s.fi), ('en', s.en)) AS translated(language_code, translation)
+JOIN public.system_languages language ON language.language_code = translated.language_code
+ON CONFLICT (lang_key_id, language_code) DO UPDATE
+SET translation = EXCLUDED.translation, source_kind = EXCLUDED.source_kind, review_status = EXCLUDED.review_status
+WHERE NULLIF(btrim(existing.translation), '') IS NULL;
+
+INSERT INTO public.system_lang_key_sources
+    (lang_key_id, source_type, source_high, source_low, usage_explanation, last_seen)
+SELECT id, 'code', 'frontend/templates/first_run_admin.html', '',
+    'Setup-code label and operator instructions on the first-run form.', CURRENT_DATE
+FROM public.system_lang_keys WHERE lang_key IN ('first_run_setup_code', 'first_run_setup_code_help')
+ON CONFLICT (lang_key_id, source_type, source_high) DO NOTHING;
 -- 20260927000001_add_absolute_sign_in_limit.sql
 -- Adds the setting that decides how long one sign-in may last at the very most.
 -- Bridges the administrator's settings view and the deadline stamped into every
@@ -8810,7 +8853,7 @@ DECLARE
     findings text;
 BEGIN
     SELECT string_agg(marker, ', ' ORDER BY marker) INTO missing_markers
-      FROM unnest(ARRAY['wl58_row_actor_support', 'wl58_row_actor_marks_by_table_uid', 'wl58_row_actor_trigger_definitions', 'k116_login_names', 'password_reset_dummy_work', 'system_favorites_table', 'system_front_page_revisions_table', 'system_front_page_blocks_table', 'wl103_row_group_classifications', 'wl132_surviving_sign_in', 'wl52_drop_column_label_value_layout', 'system_dataset_appearance_table', 'wl157_migration_execution_evidence', 'dataset_card_appearance_cutover', 'wl157_application_update_admission', 'dataset_appearance_three_place_schema', 'wl164_publication_fields', 'wl163_dataset_kind_contracts', 'wl159_dataset_namespace', 'wl167_database_identity_schema', 'wl167_managed_timestamp_zones', 'wl157_application_update_refusal_keys', 'wl58_row_actor_columns', 'system_favorites_registry', 'system_front_page_blocks_registry', 'wl103_row_group_classifications_registry', 'wl144_registry_reference_key', 'dataset_media_hidden', 'wl157_application_update_capability', 'dataset_appearance_three_place_backfill', 'wl164_publication_column_metadata', 't919_registered_column_metadata', 't750_automatic_log_retention', 'record_title_headers_962', 'translation_object_sources_sec2']::text[]) AS marker
+      FROM unnest(ARRAY['wl58_row_actor_support', 'wl58_row_actor_marks_by_table_uid', 'wl58_row_actor_trigger_definitions', 'k116_login_names', 'password_reset_dummy_work', 'system_favorites_table', 'system_front_page_revisions_table', 'system_front_page_blocks_table', 'wl103_row_group_classifications', 'wl132_surviving_sign_in', 'wl52_drop_column_label_value_layout', 'system_dataset_appearance_table', 'wl157_migration_execution_evidence', 'dataset_card_appearance_cutover', 'wl157_application_update_admission', 'dataset_appearance_three_place_schema', 'wl164_publication_fields', 'wl163_dataset_kind_contracts', 'wl159_dataset_namespace', 'wl167_database_identity_schema', 'wl167_managed_timestamp_zones', 'wo41_first_run_readonly', 'wl157_application_update_refusal_keys', 'wl58_row_actor_columns', 'system_favorites_registry', 'system_front_page_blocks_registry', 'wl103_row_group_classifications_registry', 'wl144_registry_reference_key', 'dataset_media_hidden', 'wl157_application_update_capability', 'dataset_appearance_three_place_backfill', 'wl164_publication_column_metadata', 't919_registered_column_metadata', 't750_automatic_log_retention', 'record_title_headers_962', 'translation_object_sources_sec2']::text[]) AS marker
      WHERE NOT EXISTS (SELECT 1 FROM public.system_data_repair_records AS record
                         WHERE record.migration = marker AND record.action = 'completed');
     IF missing_markers IS NOT NULL THEN
@@ -9045,6 +9088,7 @@ BEGIN
       ('20261015000005_seed_row_group_match_selector_language_keys.sql', '018579be404cd6353e89cf5ab79508ebd700b35ffe6648590e99a83e03dbcbe8', 'bootstrap_baseline', 'bootstrap'),
       ('20261015000006_backfill_translation_object_sources.sql', 'b8b770ff3544a228c3d5631964fe1f7401e0d2c6f8d4cc01a69a48c3cdfd26a8', 'bootstrap_baseline', 'bootstrap'),
       ('20261015000007_seed_client_error_notice_language_key.sql', '16b2c1391f7b1190e8d25ac2d6df88f080ad5440868bfaf6be15ec636b845e5b', 'bootstrap_baseline', 'bootstrap'),
+      ('20261015000016_seed_first_run_setup_code.sql', 'd5573b95644acea6168e73d1c020ddf91268d2ca9ac7b50a08fdd33f602a05d4', 'bootstrap_baseline', 'bootstrap'),
       ('20261015000099_record_database_release_9_12_0.sql', '7681662cc532ce4f113acec7e4e992af1e1ecf32136f8c92e55b255d56556516', 'bootstrap_baseline', 'bootstrap')
     ON CONFLICT (filename) DO NOTHING;
     INSERT INTO public.system_db_version (version, description)

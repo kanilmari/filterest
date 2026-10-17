@@ -7,6 +7,7 @@ package auth
 import (
 	"bytes"
 	"context"
+	"crypto/subtle"
 	"database/sql"
 	backend "easelect/backend/core_components"
 	"easelect/backend/core_components/auth/credentials"
@@ -17,6 +18,7 @@ import (
 	"errors"
 	"html/template"
 	"net/http"
+	"net/url"
 	"path/filepath"
 	"strings"
 	"time"
@@ -84,10 +86,8 @@ func FirstRunAdminHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if !firstRunAccessAllowed(r) {
-		httpresponse.RespondWithError(w, 403, "forbidden")
-		return
-	}
+	ensureFirstRunAccessCode()
+	frontendassets.SetShellNoStoreHeaders(w)
 
 	switch r.Method {
 	case http.MethodGet:
@@ -108,14 +108,17 @@ func FirstRunAdminHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func handleFirstRunAdminPost(w http.ResponseWriter, r *http.Request) {
-	clientIP := getClientIP(r)
-	if checkLoginRateLimit(clientIP) {
-		httpresponse.RespondWithError(w, http.StatusTooManyRequests, "Too many setup attempts. Please try again later.")
+	if !firstRunSameOrigin(r) {
+		httpresponse.RespondWithError(w, http.StatusForbidden, "forbidden")
 		return
 	}
 
+	r.Body = http.MaxBytesReader(w, r.Body, 64<<10)
 	if err := r.ParseForm(); err != nil {
 		httpresponse.RespondWithError(w, http.StatusBadRequest, "form processing failed")
+		return
+	}
+	if !requireFirstRunCode(w, r) {
 		return
 	}
 
@@ -139,10 +142,10 @@ func handleFirstRunAdminPost(w http.ResponseWriter, r *http.Request) {
 		showFirstRunAdminForm(w, r, input, firstRunAdminErrors{General: "session_error"}, http.StatusInternalServerError)
 		return
 	}
-	postedToken := r.FormValue("csrf_token")
+	postedToken := r.PostForm.Get("csrf_token")
 	sessionToken, _ := session.Values["csrf_token"].(string)
-	if postedToken == "" || sessionToken == "" || postedToken != sessionToken {
-		showFirstRunAdminForm(w, r, input, firstRunAdminErrors{General: "csrf_token_invalid"}, http.StatusForbidden)
+	if postedToken == "" || sessionToken == "" || subtle.ConstantTimeCompare([]byte(postedToken), []byte(sessionToken)) != 1 {
+		httpresponse.RespondWithError(w, http.StatusForbidden, "csrf_token_invalid")
 		return
 	}
 	input.TOTPSecret, _ = session.Values["first_run_totp_secret"].(string)
@@ -183,6 +186,24 @@ func handleFirstRunAdminPost(w http.ResponseWriter, r *http.Request) {
 	}
 
 	http.Redirect(w, r, "/login?first-run-complete=1", http.StatusSeeOther)
+}
+
+// Existing pre-session CSRF tokens and SameSite=Lax cookies remain mandatory.
+// Reject explicit foreign browser origins too; scripts without browser metadata
+// still need the setup code, session cookie and CSRF token.
+func firstRunSameOrigin(r *http.Request) bool {
+	if r.Header.Get("Sec-Fetch-Site") == "cross-site" {
+		return false
+	}
+	source := r.Header.Get("Origin")
+	if source == "" {
+		source = r.Header.Get("Referer")
+	}
+	if source == "" {
+		return true
+	}
+	origin, err := url.Parse(source)
+	return err == nil && origin.User == nil && (origin.Scheme == "https" || origin.Scheme == "http") && strings.EqualFold(origin.Host, r.Host)
 }
 
 func validateFirstRunAdminInput(input firstRunAdminInput) firstRunAdminErrors {
@@ -420,28 +441,20 @@ func showFirstRunAdminForm(w http.ResponseWriter, r *http.Request, input firstRu
 		session = e_sessions.NewSessionWithCookieOptions()
 	}
 
-	csrfToken, _ := session.Values["csrf_token"].(string)
-	sessionChanged := false
-	if csrfToken == "" {
-		csrfToken = uuid.NewString()
-		session.Values["csrf_token"] = csrfToken
-		sessionChanged = true
+	// Every rendered form gets a fresh factor and CSRF binding. The signed
+	// session cookie binds them together; POST never accepts a submitted secret.
+	// A visitor cannot transfer their displayed key into another visitor's form.
+	csrfToken := uuid.NewString()
+	totpSecret, err := generateTOTPSecret()
+	if err != nil {
+		respondAuthPageFailure(w, r, true)
+		return
 	}
-	totpSecret, _ := session.Values["first_run_totp_secret"].(string)
-	if totpSecret == "" {
-		totpSecret, err = generateTOTPSecret()
-		if err != nil {
-			respondAuthPageFailure(w, r, true)
-			return
-		}
-		session.Values["first_run_totp_secret"] = totpSecret
-		sessionChanged = true
-	}
-	if sessionChanged {
-		if err = e_sessions.Save(w, r, session); err != nil {
-			respondAuthPageFailure(w, r, true)
-			return
-		}
+	session.Values["csrf_token"] = csrfToken
+	session.Values["first_run_totp_secret"] = totpSecret
+	if err = e_sessions.Save(w, r, session); err != nil {
+		respondAuthPageFailure(w, r, true)
+		return
 	}
 
 	tmpl, err := template.ParseFiles(filepath.Join(frontend_dir, "templates", "first_run_admin.html"))

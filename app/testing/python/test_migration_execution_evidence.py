@@ -204,7 +204,7 @@ def test_bootstrap_evidence_binds_every_source_and_matching_snapshot():
         digest = hashlib.sha256((BOOTSTRAP / filename).read_bytes()).hexdigest()
         assert manifest["generated_files"]["server_tools/public_bootstrap/" + filename]["sha256"] == digest
     assert (BOOTSTRAP / "schema.sql").read_bytes() == (
-        APP / "server_tools/versioning/schema_snapshots/db-9.11.0.sql").read_bytes()
+        APP / f"server_tools/versioning/schema_snapshots/db-{(APP / 'VERSION_DB').read_text().strip()}.sql").read_bytes()
     assert (BOOTSTRAP / "schema.sql").read_text().count(MIGRATION.read_text()) == 1
     acceptance = seed[seed.index("DO $filterest_acceptance$"):]
     assert "wl157_migration_execution_evidence" in acceptance

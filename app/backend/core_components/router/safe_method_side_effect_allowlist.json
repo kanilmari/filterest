@@ -1,11 +1,5 @@
 [
   {
-    "path_pattern": "/api/payments/",
-    "handler_name": "payment_gateway.GetPaymentStatusHandler",
-    "profile": "public",
-    "reason": "Payment status currently refreshes stored provider status; temporary exception pending WO-SEC4."
-  },
-  {
     "path_pattern": "/storage/",
     "handler_name": "router.ServeStorage",
     "profile": "public",

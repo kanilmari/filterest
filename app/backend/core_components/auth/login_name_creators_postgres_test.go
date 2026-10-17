@@ -27,6 +27,7 @@ import (
 func TestLoginNameFirstRunPostgres(t *testing.T) {
 	for _, choice := range []string{"true", "false"} {
 		t.Run("LT8 setup choice "+choice, func(t *testing.T) {
+			resetFirstRunLimits(t)
 			db := loginNameDisposableCluster(t)
 			if _, err := db.Exec(`UPDATE system_users SET admin_access_allowed=false,username='demoted_fixture_display' WHERE id=91001;
                 DELETE FROM system_user_group_memberships WHERE user_id=91001 AND group_id=1;
@@ -35,12 +36,14 @@ func TestLoginNameFirstRunPostgres(t *testing.T) {
 			}
 			t.Setenv("FILTEREST_SITE_SLUG", "Northwind")
 			get := httptest.NewRequest("GET", "/first-run", nil)
-			get.RemoteAddr = "127.0.0.1:1234" // SEC-4: pending setup answers loopback callers or the setup token
+			get.RemoteAddr = "127.0.0.1:1234"
+			// Browser navigation needs no header; the code travels only in POST.
 			response := httptest.NewRecorder()
 			FirstRunAdminHandler(response, get)
 			if response.Code != 200 || !strings.Contains(response.Body.String(), `value="admin_northwind"`) || !strings.Contains(response.Body.String(), `value="admin_1"`) || !strings.Contains(response.Body.String(), `value="true" checked`) {
 				t.Fatalf("suggestions/default choice: %d %s", response.Code, response.Body.String())
 			}
+			assertFirstRunCodeNotEchoed(t, response, firstRunAccess.proof)
 			cookie := latestPostgresCookie(t, response)
 			decodedRequest := httptest.NewRequest("GET", "/", nil)
 			decodedRequest.AddCookie(cookie)
@@ -52,13 +55,41 @@ func TestLoginNameFirstRunPostgres(t *testing.T) {
 			form := url.Values{"site_name": {"Fixture site"}, "username": {"chosen_setup_login"}, "display_name": {"admin_1"}, "email": {"setup@example.invalid"}, "password": {loginFixturePassword}, "confirm_password": {loginFixturePassword}, "installation_environment": {"prod"}, "verification_method": {"none"}, "display_name_may_equal_login_name": {choice}, "csrf_token": {token}}
 			setupLogin := "a" + strings.ReplaceAll(uuid.NewString(), "-", "")
 			form.Set("username", setupLogin)
+			var before int
+			if err = db.QueryRow(`SELECT count(*) FROM public.system_users`).Scan(&before); err != nil {
+				t.Fatal(err)
+			}
+			var refusalBody string
+			for _, email := range []string{"91002@example.invalid", "setup@example.invalid"} {
+				form.Set("email", email)
+				for _, code := range []string{"", "wrong-native-setup-proof"} {
+					form.Set("setup_code", code)
+					refusedPost := httptest.NewRequest("POST", "/first-run", strings.NewReader(form.Encode()))
+					refusedPost.AddCookie(cookie)
+					refusedPost.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+					refusedPost.RemoteAddr = "192.0.2.219:1234"
+					refused := httptest.NewRecorder()
+					FirstRunAdminHandler(refused, refusedPost)
+					var after int
+					if err = db.QueryRow(`SELECT count(*) FROM public.system_users`).Scan(&after); err != nil || after != before || refused.Code != 403 || refused.Header().Get("Set-Cookie") != "" {
+						t.Fatalf("refused setup: status=%d account delta=%d err=%v", refused.Code, after-before, err)
+					}
+					assertFirstRunCodeNotEchoed(t, refused, firstRunAccess.proof)
+					if refusalBody != "" && refused.Body.String() != refusalBody {
+						t.Fatal("wrong setup code disclosed whether the email was taken")
+					}
+					refusalBody = refused.Body.String()
+				}
+			}
+			form.Set("email", "setup@example.invalid")
+			form.Set("setup_code", firstRunAccess.proof)
 			post := httptest.NewRequest("POST", "/first-run", strings.NewReader(form.Encode()))
 			post.AddCookie(cookie)
 			post.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 			post.RemoteAddr = "192.0.2.219:1234"
-			post.Header.Set("X-Filterest-Setup-Token", firstRunAccess.proof) // the remote caller proves setup with the logged token
 			response = httptest.NewRecorder()
 			FirstRunAdminHandler(response, post)
+			assertFirstRunCodeNotEchoed(t, response, firstRunAccess.proof)
 			assertPrivateNameAbsent(t, response, setupLogin)
 			assertPrivateNameAbsentFromPublic(t, db, setupLogin)
 			if response.Code != 303 || strings.Contains(response.Header().Get("Location"), setupLogin) {

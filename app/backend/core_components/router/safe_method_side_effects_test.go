@@ -81,3 +81,38 @@ func TestSafeMethodAllowancesRequireReasonAndExactIdentity(t *testing.T) {
 		}
 	}
 }
+
+func TestPaymentStatusWriteWouldRequireSafeMethodReview(t *testing.T) {
+	const handler = "payment_gateway.GetPaymentStatusHandler"
+	allowances, err := ReviewedSafeMethodSideEffectAllowances()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, writer := range KnownSideEffectHandlers() {
+		if writer == handler {
+			t.Error("read-only payment status remains listed as a writer")
+		}
+	}
+	t.Cleanup(func() { pipeline.ResetRouteProfiles(); ResetRouteDefinitions() })
+	t.Setenv("ENVIRONMENT_TYPE", "production")
+	pipeline.ResetRouteProfiles()
+	RegisterRoutes(t.TempDir(), t.TempDir())
+	var paymentRoutes []RouteDefinition
+	for _, route := range GetRouteDefinitions() {
+		if route.HandlerName == handler {
+			paymentRoutes = append(paymentRoutes, route)
+		}
+	}
+	if len(paymentRoutes) == 0 {
+		t.Fatal("payment-status route missing from real registrations")
+	}
+	// Simulate reintroducing the provider write into the known-writer inventory.
+	// The actual public route must have no stale allowance for either safe method.
+	writers := append(KnownSideEffectHandlers(), handler)
+	err = ValidateSafeMethodSideEffects(paymentRoutes, writers, allowances)
+	for _, method := range []string{http.MethodGet, http.MethodHead} {
+		if err == nil || !strings.Contains(err.Error(), "unreviewed safe-method side effect: "+method+" /api/payments/") {
+			t.Errorf("payment write negative control passed for %s: %v", method, err)
+		}
+	}
+}

@@ -45,7 +45,7 @@ type SafeMethodSideEffectAllowance struct {
 // Session bookkeeping (CSRF/auth modes/sign-in renewal) is outside this audit.
 func KnownSideEffectHandlers() []string {
 	return []string{
-		"payment_gateway.GetPaymentStatusHandler", "router.ServeStorage",
+		"router.ServeStorage",
 		"dtt_1_row_read.GetIntelligentResultsHandlerWrapper", "dtt_1_row_read.GetResultsVector",
 		"devtools.ExportTableCSVHandler", "router.adminVersionInfoHandler",
 		"ai_features.EmbeddingStreamHandler", "system_table_tools.ScanLangSourcesHandler",
