@@ -59,16 +59,29 @@ func TestFilterbarLayoutPublicReadAndGrantedEdit(t *testing.T) {
 	}
 	for _, id := range []int{1, 42} {
 		for _, grant := range []bool{false, true} {
-			allowed = grant
-			request := queryfixture.Request(t, "POST", "/api/filterbar-section-layout/save", `{}`, id, "user")
-			request.Header.Set("Content-Type", "application/json")
-			response := httptest.NewRecorder()
-			name := "system_table_tools.SaveFilterbarSectionLayoutHandler"
-			called := false
-			pipeline.BuildHandler(func(w http.ResponseWriter, _ *http.Request) { called = true; w.WriteHeader(204) },
-				pipeline.RouteContext{URLPattern: "/api/filterbar-section-layout/save", HandlerName: name}, pipeline.GetProfile(name))(response, request)
-			if called != grant || (!grant && response.Code != 403) {
-				t.Fatalf("actor=%d grant=%t called=%t status=%d", id, grant, called, response.Code)
+			for _, body := range []string{`{"section_order":["style"]}`, `{"section_collapsed":{"filters":true}}`, `{"section_collapsed":{"filters":null}}`, `{"allow_own_order":true}`, `{"allow_own_order":false}`, `{"section_order":["style"],"allow_own_order":true}`} {
+				allowed = grant
+				request := queryfixture.Request(t, "POST", "/api/filterbar-section-layout/save", body, id, "user")
+				request.Header.Set("Content-Type", "application/json")
+				response := httptest.NewRecorder()
+				name := "system_table_tools.SaveFilterbarSectionLayoutHandler"
+				called := false
+				pipeline.BuildHandler(func(w http.ResponseWriter, r *http.Request) {
+					called = true
+					if id == 1 {
+						system_table_tools.SaveFilterbarSectionLayoutHandler(w, r)
+						return
+					}
+					w.WriteHeader(204)
+				},
+					pipeline.RouteContext{URLPattern: "/api/filterbar-section-layout/save", HandlerName: name}, pipeline.GetProfile(name))(response, request)
+				want := 403
+				if id != 1 && grant {
+					want = 204
+				}
+				if called != grant || response.Code != want {
+					t.Fatalf("actor=%d grant=%t called=%t status=%d", id, grant, called, response.Code)
+				}
 			}
 		}
 	}

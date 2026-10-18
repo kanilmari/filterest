@@ -29,6 +29,8 @@ func TestRemainingActiveRouteClassifications(t *testing.T) {
 		{72589, "/api/app/ai-chat/conversation", 0},
 		{72602, "/api/app/ai-chat/codex-query", 0},
 		{82986, "/api/app/ai-chat/site-assistant-approval", 0},
+		{500001, "/api/filterbar-section-layout/save", 0},
+		{500002, "/api/user-filterbar-preference", 0},
 	} {
 		t.Run(test.route, func(t *testing.T) {
 			for _, disabled := range []*bool{nil, boolPointer(false), boolPointer(true)} {

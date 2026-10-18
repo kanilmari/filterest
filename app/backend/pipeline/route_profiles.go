@@ -315,7 +315,7 @@ var RouteProfiles = map[string]RouteProfile{
 
 	// System table tools
 	"system_table_tools.GetGroupedTables":    DefaultProfile,
-	"system_table_tools.GetEmptyRowsHandler": DefaultProfile,
+	"system_table_tools.GetEmptyRowsHandler": AdminProfile,
 
 	// Row create
 	"dtt_1_row_create.AddRowMultipartHandlerWrapper":       DefaultProfile,

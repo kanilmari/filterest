@@ -1,7 +1,7 @@
 // filterbar_section_layout.go
 // Public safe reads and permission-checked writes for the shared filterbar layout.
 // Bridges the draggable filterbar section UI and DB-backed application configuration.
-// Exists so admins can reorder filterbar sections without adding a table-shaped route.
+// Lets signed-in route grantees edit shared settings without a table-shaped route.
 package system_table_tools
 
 import (
@@ -16,6 +16,7 @@ import (
 	backend "easelect/backend/core_components"
 	"easelect/backend/core_components/dbutils"
 	"easelect/backend/core_components/httpresponse"
+	e_sessions "easelect/backend/core_components/sessions"
 )
 
 const filterbarSectionLayoutConfigKey = "filterbar_section_layout"
@@ -95,11 +96,17 @@ func GetFilterbarSectionLayoutHandler(w http.ResponseWriter, r *http.Request) {
 	httpresponse.RespondWithJSON(w, http.StatusOK, config)
 }
 
-// SaveFilterbarSectionLayoutHandler patches the shared layout with the caller's route grant.
+// SaveFilterbarSectionLayoutHandler patches the shared layout for signed-in route grantees.
 // Optional section_order, section_collapsed deltas (null removes a default), and
 // allow_own_order preserve all omitted fields, including other datasets' defaults.
+// Access control enforces the route grant; this handler refuses guests before any write.
 // POST /api/filterbar-section-layout/save
 func SaveFilterbarSectionLayoutHandler(w http.ResponseWriter, r *http.Request) {
+	userID, err := e_sessions.GetUserIDFromSession(r)
+	if err != nil || userID <= 1 {
+		httpresponse.RespondWithError(w, http.StatusForbidden, "authenticated user required")
+		return
+	}
 
 	var req saveFilterbarLayoutRequest
 	if err := decodeFilterbarRequest(w, r, &req); err != nil || !validFilterbarLayoutRequest(req) {

@@ -73,6 +73,7 @@ func TestLatentAdminRoutesRefuseExistingNonAdminGrant(t *testing.T) {
 	e_sessions.Store, e_sessions.SessionName = store, "latent-test"
 	t.Cleanup(func() { backend.Db, e_sessions.Store, e_sessions.SessionName = oldDB, oldStore, oldName; db.Close() })
 	for _, route := range []struct{ path, handler string }{
+		{"/api/empty-rows", "system_table_tools.GetEmptyRowsHandler"},
 		{"/api/fix-translations", "lang.FixTableTranslationsHandler"},
 		{"/api/update-folder", "dtt_system_table_folders.HandleUpdateFolder"},
 		{"/api/create-folder", "dtt_system_table_folders.HandleCreateFolder"},

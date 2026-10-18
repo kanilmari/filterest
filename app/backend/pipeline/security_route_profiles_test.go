@@ -13,6 +13,7 @@ import (
 
 func TestSensitiveMaintenanceRoutesRequireAdmin(t *testing.T) {
 	handlerNames := []string{
+		"system_table_tools.GetEmptyRowsHandler",
 		"ai_features.GetEmbeddingDatasetsHandler",
 		"ai_features.EmbeddingStreamHandler",
 		"ai_features.RefreshLangEmbeddingsHandler",

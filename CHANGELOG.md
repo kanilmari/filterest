@@ -22,6 +22,7 @@ Dates are the local (Europe/Helsinki) date on which the version was published.
 
 ## [Unreleased]
 
+- **Route authorization (SEC-4 M1/M2)** — Empty-row reports require administrator access; guests cannot save shared filter bar settings, while signed-in route grantees retain shared-order and site-policy editing and personal orders follow the site's policy.
 - Rich-text links in cards and articles keep validated HTTP, HTTPS and mailto destinations with safe new-tab attributes; unsafe links retain their text and allowed children.
 - Full Permissions saves preserve grants of disabled functions in both global and dataset scopes.
 - Added native `restore-check` for this installation's authenticated packets, with pre-creation allowlisting of exact extension/language identities matched to definitions using pg_restore's owner-less extension format, native-function/event-trigger/global refusals and stored-code tripwires, scoped restores, exact object/row comparisons, materialized-view definitions only, proven disposal, interruption reporting, recovery-key scanning before credential redaction and safe JSON diagnostics, without stopping the application; stored code still runs as superuser on the live cluster.

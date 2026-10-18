@@ -46,6 +46,23 @@ func TestRegisterRoutesResetsDefinitions(t *testing.T) {
 	}
 }
 
+func TestEmptyRowsRegisteredRouteUsesAdminProfile(t *testing.T) {
+	manifest, err := router.BuildDefaultRouteManifest()
+	if err != nil {
+		t.Fatal(err)
+	}
+	route := mustFindManifestRoute(t, manifest, "system_table_tools.GetEmptyRowsHandler")
+	if route.PathPattern != "/api/empty-rows" {
+		t.Fatalf("unexpected empty-row route: %s", route.PathPattern)
+	}
+	assertRouteMethods(t, route, []string{"GET", "HEAD"}, router.RouteMethodSourceRegistration)
+	for _, scenario := range route.Scenarios {
+		if scenario.ProfileName != "admin" || !scenario.AdminOnly {
+			t.Fatalf("empty-row profile in %s: %+v", scenario.Name, scenario)
+		}
+	}
+}
+
 func TestRegisterRoutesDoesNotRegisterDevRoutesWhenEnvironmentUnset(t *testing.T) {
 	t.Setenv("ENVIRONMENT_TYPE", "")
 	t.Setenv("ENABLE_API_LANGUAGE", "")

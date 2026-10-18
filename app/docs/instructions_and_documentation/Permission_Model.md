@@ -1,9 +1,7 @@
-<!--
-Permission_Model.md
+<!-- Permission_Model.md
 Defines Filterest's current and target authorization model.
 Connects route, dataset, scope, row, field, SSO, and RLS concepts into one permission architecture.
-Exists so future permission work extends one coherent model instead of adding table-specific exceptions.
--->
+Exists so future permission work extends one coherent model instead of adding table-specific exceptions. -->
 # Permission Model
 
 This document describes how Filterest should reason about permissions as the platform grows from route and dataset rights into scoped, row-level, field-level, and SSO-backed authorization.
@@ -85,11 +83,13 @@ Backend enforcement runs through [access control](../../backend/pipeline/access_
 
 Comments list/count/create require the parent dataset's `/api/get-results` grant and existing row visibility; user 1 cannot delete comments, other owners may delete their own, and administrators may delete any. Translation repair and shared folder mutations require administrators even with a route grant. Dataset-scoped writes taking their identity from JSON reject non-JSON or undecodable bodies before handlers; body/path identities must match the checked query, multipart row creation uses query identity only, and dataset moves re-check the moved UID.
 
+- `/api/empty-rows` uses `AdminProfile`: its cross-dataset report requires administrator access even with an ordinary user's route grant (SEC-4 M1).
+- `/api/filterbar-section-layout/save` keeps `DefaultProfile`: the route grant authorizes signed-in users to edit shared order, collapsed defaults and `AllowOwnOrder`; the handler refuses user 1 before any write, while personal order uses `/api/user-filterbar-preference` and follows `AllowOwnOrder` with the existing administrator exception (WO77, SEC-4 M2).
+
 **Article view and field settings.** The view grant `/ui/view/article_view` opens both the classic article (from titles, summaries and other record openers) and the image-first article (from ordinary card and article images). Product cards, calendar events and experimental free-layout cards retain their existing classic-article opening behavior. Selecting **User groups** in View field settings assigns fields; it never grants this route. No group receives a view right merely through field selection or dataset reading rights.
 
 The [shared article contract](../../frontend/shared/article_presentations/contract.json) records approved routes and the current IFAV gate; its page key stays reserved.
-The [K388 before-list](Article_Section_Defaults.md#k388-compatibility-before-list)
-preserves current audiences: signed-in browser grants include any target scope;
+The [K388 before-list](Article_Section_Defaults.md#k388-compatibility-before-list) preserves current audiences: signed-in browser grants include any target scope;
 anonymous bootstrap requires a tableless grant of the named guests group.
 Raw scopes and nullable disabled flags remain migration evidence; field assignments grant no view rights.
 

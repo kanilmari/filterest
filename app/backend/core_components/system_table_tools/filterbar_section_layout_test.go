@@ -1,13 +1,42 @@
 // filterbar_section_layout_test.go
 // Verifies that the shared filterbar layout preserves explicit open and closed states.
+// Connects session identities to the shared writer before validation or persistence.
 // Exists so page reloads can restore disclosures without changing legacy defaults.
 package system_table_tools
 
 import (
+	"encoding/json"
+	"net/http/httptest"
 	"reflect"
 	"strings"
 	"testing"
+
+	"easelect/backend/core_components/dbutils/queryfixture"
 )
+
+func TestSharedFilterbarLayoutRefusesGuestBeforeParsingOrTransaction(t *testing.T) {
+	for _, body := range []string{
+		`{"section_order":["style"]}`,
+		`{"section_collapsed":{"filters":true}}`,
+		`{"section_collapsed":{"filters":null}}`,
+		`{"allow_own_order":true}`,
+		`{"allow_own_order":false}`,
+		`{"section_order":["style"],"section_collapsed":{"tools":false},"allow_own_order":true}`,
+		`{}`, `invalid JSON`,
+	} {
+		for _, id := range []int{0, 1} {
+			request := queryfixture.Request(t, "POST", "/api/filterbar-section-layout/save", body, id, "user")
+			response := httptest.NewRecorder()
+			// No transaction is supplied: every path must stop before requesting one.
+			SaveFilterbarSectionLayoutHandler(response, request)
+			var refusal map[string]interface{}
+			if response.Code != 403 || response.Header().Get("Content-Type") != "application/json; charset=utf-8" ||
+				json.Unmarshal(response.Body.Bytes(), &refusal) != nil || refusal["error"] == nil || refusal["code"] != float64(403) {
+				t.Fatalf("actor=%d body=%s: %d %s", id, body, response.Code, response.Body)
+			}
+		}
+	}
+}
 
 func TestFilterbarSectionLayoutUpsertDoesNotRequireValueTypeCatalog(t *testing.T) {
 	if strings.Contains(filterbarSectionLayoutUpsertSQL, "system_config_value_data_types") {
