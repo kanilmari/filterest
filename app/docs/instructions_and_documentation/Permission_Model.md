@@ -79,7 +79,7 @@ Ancillary dataset columns, referring-tab configuration, sorting defaults and cat
 The core permission tables are:
 
 - `system_functions` for registered backend routes, UI-only functions, and whether the function is dataset-specific.
-- `system_group_table_func_rights` for granting a user group access to a function either table-independently or for one `target_table_uid`.
+- `system_group_table_func_rights` for granting a user group access to a function either table-independently or for one `target_table_uid`. A full permission replacement never removes grants of disabled functions, whether global or dataset-scoped.
 
 Backend enforcement runs through [access control](../../backend/pipeline/access_control/access_control.go). Frontend visibility uses [route checks](../../frontend/core_components/route_permission_checker.js), authenticated `/api/user-permissions`, and the dataset-right endpoints. Anonymous `/api/auth-modes` delivers `guest_ui_endpoints`: enabled `/ui/...` routes from the group named `guests`, with NULL dataset scope (the same site-wide scope as route authorization), independent of account-1 memberships. [The bootstrap reader](../../backend/core_components/auth/user_permissions.go) reads current grants without seeding defaults; failures return no grants and responses are not cacheable. [Client bootstrap](../../frontend/core_components/admin_tools/auth_mode_handler.js) clears old rights before fetching, rejects stale session generations and replaces the tab's set before articles render. Sign-in selects user rights; sign-out selects guest rights. Missing/malformed responses fail closed; revocations survive bootstrap and restarts. Dataset, row and login-to-browse enforcement remain independent.
 

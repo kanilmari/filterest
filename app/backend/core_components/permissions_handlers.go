@@ -98,6 +98,17 @@ func getPermissions(w http.ResponseWriter, _ *http.Request) {
 	}
 }
 
+// Replace only grants the editor can list; hidden grants must survive a full save.
+const deleteDisplayablePermissionsSQL = `
+    DELETE FROM system_group_table_func_rights agr
+    WHERE agr.target_schema_name=$1
+      AND agr.target_table_uid IS NOT DISTINCT FROM $2
+      AND EXISTS (
+          SELECT 1 FROM system_functions f
+          WHERE f.id = agr.function_id AND f.disabled = false
+      )
+`
+
 func createPermissions(w http.ResponseWriter, r *http.Request) {
 	var payload struct {
 		Permissions []Permission `json:"permissions"`
@@ -171,7 +182,7 @@ func createPermissions(w http.ResponseWriter, r *http.Request) {
 	if uid != 0 {
 		target = sql.NullInt64{Int64: uid, Valid: true}
 	}
-	if _, err := tx.Exec(`DELETE FROM system_group_table_func_rights WHERE target_schema_name=$1 AND target_table_uid IS NOT DISTINCT FROM $2`, schema, target); err != nil {
+	if _, err := tx.Exec(deleteDisplayablePermissionsSQL, schema, target); err != nil {
 		runtime_grant_mutations.RespondError(w, err)
 		return
 	}

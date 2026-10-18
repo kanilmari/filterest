@@ -1,7 +1,7 @@
 // permissions_handlers_test.go
-// Verifies table-specific permission target validation for the patch-permissions flow.
+// Verifies replacement scope and table-specific target validation.
 // Bridges permission payload normalization and dataset lookup expectations in isolation.
-// Exists to prevent unresolved dataset names from being accepted as successful permission saves.
+// Prevents hidden grants being replaced and unresolved dataset names being accepted.
 
 package backend
 
@@ -10,6 +10,19 @@ import (
 	"strings"
 	"testing"
 )
+
+func TestPermissionReplacementDeleteMatchesDisplayableScope(t *testing.T) {
+	query := strings.Join(strings.Fields(deleteDisplayablePermissionsSQL), " ")
+	for _, predicate := range []string{
+		"DELETE FROM system_group_table_func_rights agr",
+		"WHERE agr.target_schema_name=$1 AND agr.target_table_uid IS NOT DISTINCT FROM $2",
+		"AND EXISTS ( SELECT 1 FROM system_functions f WHERE f.id = agr.function_id AND f.disabled = false )",
+	} {
+		if !strings.Contains(query, predicate) {
+			t.Errorf("replacement query lacks %q: %s", predicate, query)
+		}
+	}
+}
 
 func TestResolveTableSpecificPermissionTargetUsesExistingUID(t *testing.T) {
 	lookupCalled := false
