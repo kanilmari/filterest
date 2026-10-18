@@ -12,8 +12,8 @@ Part of the [Frontend Guide](Frontend_Guide.md); this section was formerly part 
 Version-one runtime appearance retains the `dataset_cover_theme_config` shape:
 `light`, `dark` and `shared`; `shared` means theme-independent, never storage scope.
 The browser imports and Go embeds `frontend/shared/dataset_appearance/definition.json`.
-Each of its 44 canonical paths has one `place`: 28 `tab_only` cover/hero values,
-seven `site_only` brand/navigation/remove-side values, or nine `site_default`
+Each of its 45 canonical paths has one `place`: 28 `tab_only` cover/hero values,
+eight `site_only` brand/navigation/category-heading/remove-side values, or nine `site_default`
 card/caption/header-spacing values that a tab may override. Inventories and flat
 defaults derive from that metadata. Separate `ValidateTabValuesV2`,
 `ValidateSiteValuesV2`, `ValidateDefaultsV2` and `ValidateOverridesV2` (Go) and
@@ -42,7 +42,7 @@ runtime grants and generic writes are refused.
 
 Authorized `/api/get-results` responses include `dataset_appearance` with
 `dataset_uid`, `schema_version`, nested `shared` and `effective` values, sparse
-`overrides`, all 44 canonical-path `sources` (`shared` or `override`),
+`overrides`, all 45 canonical-path `sources` (`shared` or `override`),
 `shared_version` and `version`. Both scopes and revisions are read in one SQL
 statement after existing dataset read checks, including empty results. Mutable
 appearance projections are refreshed outside the schema cache. The public site
@@ -77,6 +77,24 @@ cover values belong to tabs, so site changes cannot invalidate another tab's mas
 Slice 3b adds ownership metadata and validators only. Slice 5 activates the new
 storage/API contracts and permits overrides for exactly the nine site defaults;
 it refuses site-only and tab-only overrides, aliases and derived blur.
+
+### Category heading order
+
+The site-only `shared.row_group_heading_order` choice belongs to the palette's
+Dataset tabs toolbox beside the remove-button choice. `manual` (default,
+including absent older storage) preserves the administrator's heading order;
+`result_count` uses the sum of returned value counts. It is independent of theme
+and cannot be overridden by a dataset. Public site settings and authorized
+get-results snapshots deliver it through existing appearance maps. Site previews,
+reset and revision-protected saves repaint existing cards without requests.
+The [category panel guide](Frontend_Category_Panel_And_Dropdowns.md#category-panel-and-selected-filters)
+owns the first-response reference, deep-link limit and top-three visibility rule.
+DB 9.12.0 migration `20261015000020` adds the database rule and permits an absent
+stored choice without a data backfill. Only a site that chooses **Most results
+first** stores the key, as `result_count`; all server writes omit the default
+`manual`. Older binaries cannot read the appearance of a site storing the key.
+Before a downgrade, choose **Administrator's order** and save to remove it, or
+restore from a backup. Sites that never choose Most results first stay readable.
 
 ### Surface binding and repainting
 

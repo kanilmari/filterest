@@ -29,6 +29,8 @@ import { ROW_GROUP_FILTER_KEY, ROW_GROUP_MODE_KEY, parseRowGroupModes, serialize
 export { ROW_GROUP_FILTER_KEY, ROW_GROUP_MODE_KEY } from "./row_group_filter_contract.js";
 import { createRowGroupFacetCard } from "./row_group_facet_card_builder.js";
 import { buildActiveFilterChip } from "./active_filter_chip_builder.js";
+import { groupFacetsByHeading } from "./row_group_heading_order.js";
+import { datasetAppearanceState } from "../../table_views/dataset_appearance_state.js";
 const SELECTION_LIMIT = 20;
 const facetsByTable = new Map();
 const SAFE_ROW_GROUP_SLUG = /^[a-z0-9][a-z0-9_-]{0,63}$/;
@@ -67,20 +69,6 @@ function normalizeHeading(heading) {
         is_single: heading.is_single === true,
         sort_order: Number.isSafeInteger(heading.sort_order) ? heading.sort_order : 0,
     };
-}
-
-// The payload orders values; group without losing that order and sort headings
-// explicitly so legacy untitled values stay together even in additive payloads.
-function groupFacetsByHeading(facets) {
-    const groups = new Map();
-    for (const facet of facets) {
-        const key = facet.heading?.id ?? null;
-        if (!groups.has(key)) groups.set(key, { heading: facet.heading, values: [] });
-        groups.get(key).values.push(facet);
-    }
-    return [...groups.values()].sort((a, b) =>
-        (a.heading?.sort_order ?? 0) - (b.heading?.sort_order ?? 0)
-        || (a.heading?.id ?? 0) - (b.heading?.id ?? 0));
 }
 
 function getFacetHostId(tableName) {
@@ -290,10 +278,11 @@ export function renderRowGroupFacets(
         else topControls.insertBefore(host, topControls.querySelector(".active_filters, .results_count"));
         host.rowGroupCard = createRowGroupFacetCard({
             host, topControls, tableName, getSelectedSlugs, getSelectedModes, getFacetTitle,
+            headingOrder: datasetAppearanceState.effective(tableName).shared.row_group_heading_order,
         });
     }
     if (filterSection && host.parentElement !== filterSection) filterSection.appendChild(host);
-    host.rowGroupCard.update(groupFacetsByHeading(facets), { onToggle, onClear, onModeChange });
+    host.rowGroupCard.update(groupFacetsByHeading(facets), { onToggle, onClear, onModeChange }, { authoritative });
     if (filterSection) filterSection.hidden = false;
     return host;
 }

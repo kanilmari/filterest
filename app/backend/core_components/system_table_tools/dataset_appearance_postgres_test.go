@@ -344,7 +344,7 @@ func TestDatasetAppearancePostgresCompleteTabFirstSaveAndNineOverrides(t *testin
 	if err != nil || initial.Version != "none" {
 		t.Fatal(initial, err)
 	}
-	if len(initial.TabValues) != 28 || len(initial.SiteValues) != 7 || len(initial.Defaults) != 9 {
+	if len(initial.TabValues) != 28 || len(initial.SiteValues) != 8 || len(initial.Defaults) != 9 {
 		t.Fatal(initial)
 	}
 	set := appearance.Rules().DefaultsForPlace(appearance.SiteDefault)

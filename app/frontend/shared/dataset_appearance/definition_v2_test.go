@@ -57,7 +57,7 @@ func TestDatasetAppearanceThreePlaces(t *testing.T) {
 	rules := Rules()
 	contract := readAppearanceV2Contract(t)
 	seen := map[string]bool{}
-	for place, count := range map[Place]int{TabOnly: 28, SiteOnly: 7, SiteDefault: 9} {
+	for place, count := range map[Place]int{TabOnly: 28, SiteOnly: 8, SiteDefault: 9} {
 		paths := rules.PathsForPlace(place)
 		if len(paths) != count || !slices.Equal(paths, contract.Places[place]) {
 			t.Fatalf("unexpected %s inventory: %v", place, paths)

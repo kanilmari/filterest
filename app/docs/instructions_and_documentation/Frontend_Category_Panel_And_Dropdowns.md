@@ -37,7 +37,22 @@ This explicit owner keeps a popup alive across a full redraw: the old results an
 hits. The first three headings are shown initially, with selected headings
 always reachable and remaining headings available through Show more. The panel
 lists up to 200 readable values in server order, with selected values pinned before
-the cap. Zero-hit values stay visible, dimmed through theme text tokens, and selectable;
+the cap. The appearance palette's Dataset tabs toolbox offers **Category heading
+order**: **Administrator's order** (`manual`, the default) retains heading
+`sort_order`, then ID, with the untitled heading treated as 0/0. **Most results
+first** (`result_count`) sorts by the sum of each heading's returned value counts,
+descending, with the same manual tie breakers; the untitled heading participates.
+The first authoritative first-page response establishes a reference on the newly
+built card. Selections, search, filters, match-mode changes and clearing reuse
+that reference throughout the visit. Manual retains dormant sums for a later live switch; they never affect its order or visibility. A new dataset container or page reload
+recomputes it. A reload or deep link already carrying selections/search uses
+that filtered first response, without an extra unfiltered request. Headings absent
+from the reference follow known ones, using their current sums and manual tie
+breakers. The first three by this order are initially visible; Show more exposes
+the remaining headings, and selected/open headings stay reachable. A live palette
+preview/save re-sorts the existing card from its stored sums without refetching.
+Only a site choosing Most results first stores the new key. Older binaries cannot read that site's appearance; before a downgrade, choose Administrator's order and save (which removes the key), or restore a backup. Sites that never choose Most results first stay readable.
+Zero-hit values stay visible, dimmed through theme text tokens, and selectable;
 only the 20-selection limit blocks an unchecked value, exposing `aria-disabled`
 without evicting a previous selection. Dimming never disables a value.
 The popup is a named nonmodal dialog containing a named multiselect listbox.
@@ -93,7 +108,8 @@ The palette's Dataset header group offers Remove button: Before the label / Afte
 the label. This site-wide, theme-independent choice is stored as
 `dataset_cover_theme.shared.active_filter_remove_side` (`start` / `end`, default
 `start`), with Finnish/English labels in the palette's own copy dictionary. It needs
-no language-key migration or database version change. Preview and reset reorder
+no language keys. Appearance fields also participate in database validation;
+new fields require a versioned rules migration and regenerated bootstrap/snapshot. Preview and reset reorder
 existing labels in real DOM order, preserving the remove button's focus and
 listeners without rebuilding filters or sending requests. Legacy saves omitting
 the field preserve the saved side under the upsert's row lock. Tags continue

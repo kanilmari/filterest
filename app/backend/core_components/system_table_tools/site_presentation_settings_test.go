@@ -1,5 +1,5 @@
 // site_presentation_settings_test.go
-// Proves the public 7/9 allowlist and revision-protected site patch protocol.
+// Proves the public 8/9 allowlist and revision-protected site patch protocol.
 // Connects handlers, strict ownership and persisted omission behavior.
 // Uses only synthetic disposable storage for transaction proofs.
 package system_table_tools
@@ -24,7 +24,7 @@ import (
 
 func TestDefaultSitePresentationSettingsMatchApprovedThemeContract(t *testing.T) {
 	settings := defaultSitePresentationSettings()
-	if settings.SchemaVersion != 2 || len(settings.SiteValues) != 7 || len(settings.Defaults) != 9 || validateSitePresentationSettings(settings) != nil {
+	if settings.SchemaVersion != 2 || len(settings.SiteValues) != 8 || len(settings.Defaults) != 9 || validateSitePresentationSettings(settings) != nil {
 		t.Fatal(settings)
 	}
 	data, _ := json.Marshal(settings)

@@ -7,6 +7,7 @@ package dataset_appearance_store
 import (
 	"encoding/json"
 	"fmt"
+	"maps"
 	"strings"
 
 	appearance "easelect/frontend/shared/dataset_appearance"
@@ -17,6 +18,18 @@ type SiteAppearanceValues struct {
 	SchemaVersion int            `json:"schema_version"`
 	SiteValues    map[string]any `json:"site_values"`
 	Defaults      map[string]any `json:"defaults"`
+}
+
+// MarshalJSON keeps the default absent in storage so older binaries can read it.
+// Public responses still project the complete values, including manual.
+func (values SiteAppearanceValues) MarshalJSON() ([]byte, error) {
+	type storedValues SiteAppearanceValues
+	stored := storedValues(values)
+	stored.SiteValues = maps.Clone(values.SiteValues)
+	if stored.SiteValues["shared.row_group_heading_order"] == "manual" {
+		delete(stored.SiteValues, "shared.row_group_heading_order")
+	}
+	return json.Marshal(stored)
 }
 
 func DefaultSiteAppearanceValues() SiteAppearanceValues {

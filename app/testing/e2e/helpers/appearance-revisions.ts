@@ -9,7 +9,7 @@ import type {
 import { fetchCsrfTokenForRequest } from './temp-dataset';
 
 // Follows dataset_appearance_palette_state.js and site_presentation_state.js:
-// tab patches own 28 cover values plus nine overrides; site patches own 7/9 maps.
+// tab patches own 28 cover values plus nine overrides; site patches own site-only/default maps.
 export type SitePresentationSettings = SitePresentationSettingsResponse;
 
 async function readJson<T>(request: APIRequestContext, url: string): Promise<T> {

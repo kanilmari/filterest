@@ -21,6 +21,7 @@ MIGRATION = MIGRATIONS / "20261009000003_create_system_dataset_appearance.sql"
 CUTOVER = MIGRATIONS / "20261009000040_cut_over_dataset_card_appearance.sql"
 SCHEMA = MIGRATIONS / "20261009000060_extend_dataset_appearance_three_places.sql"
 BACKFILL = MIGRATIONS / "20261009000061_backfill_dataset_appearance_three_places.sql"
+HEADING_ORDER = MIGRATIONS / "20261015000020_add_row_group_heading_order_appearance_field.sql"
 OWNER = MIGRATIONS / "20261009000099_record_database_release_9_11_0.sql"
 BASE = "e314e34"
 
@@ -94,6 +95,7 @@ def test_dataset_appearance_fresh_upgrade_and_twice_replay(installed, appearance
     appearance_upgrade(CUTOVER.read_text())
     appearance_upgrade(SCHEMA.read_text())
     appearance_upgrade(BACKFILL.read_text())
+    appearance_upgrade(HEADING_ORDER.read_text())
     appearance_upgrade(OWNER.read_text())
     expected = appearance_shape(installed)
     assert expected == appearance_shape(appearance_upgrade)
@@ -107,6 +109,7 @@ def test_dataset_appearance_fresh_upgrade_and_twice_replay(installed, appearance
         before = value(run, "SELECT jsonb_agg(to_jsonb(a) ORDER BY table_uid) FROM system_dataset_appearance a")
         for _ in range(2):
             run(SCHEMA.read_text())
+            run(HEADING_ORDER.read_text())
             run(BACKFILL.read_text())
             assert appearance_shape(run) == expected
             assert value(run, "SELECT jsonb_agg(to_jsonb(a) ORDER BY table_uid) FROM system_dataset_appearance a") == before
@@ -153,7 +156,7 @@ def test_three_place_migration_sources_and_definition_snapshot():
     schema = SCHEMA.read_text()
     backfill = BACKFILL.read_text()
     definition = json.loads((APP / "frontend/shared/dataset_appearance/definition.json").read_text())
-    rules = json.loads(re.search(r"SELECT '\n(.*?)\n'::jsonb;", schema, re.S).group(1))
+    rules = json.loads(re.search(r"SELECT '\n(.*?)\n'::jsonb;", HEADING_ORDER.read_text(), re.S).group(1))
     expected = {}
     for group in ("light", "dark", "shared"):
         fields = definition["shared_fields" if group == "shared" else "theme_fields"]
@@ -174,3 +177,26 @@ def test_three_place_migration_sources_and_definition_snapshot():
     assert schema in (BOOTSTRAP / "schema.sql").read_text()
     assert backfill in (BOOTSTRAP / "seed_data.sql").read_text()
     assert "preflight refused" in backfill and "effective appearance or one-time revision preservation failed" in backfill
+
+
+def test_heading_order_migration_adds_only_its_rule_and_canonicalizes_default_storage():
+    import re
+    old = SCHEMA.read_text()
+    new = HEADING_ORDER.read_text()
+    rules = lambda sql: json.loads(re.search(r"SELECT '\n(.*?)\n'::jsonb;", sql, re.S).group(1))
+    previous, current = rules(old), rules(new)
+    added = current.pop('shared.row_group_heading_order')
+    assert current == previous
+    assert added == {"place": "site_only", "type": "string", "default": "manual", "values": ["manual", "result_count"]}
+    assert '-- VERSION_DB: 9.12.0' in new
+    assert '-- VERSION_DB_OWNER: 20261015000099_record_database_release_9_12_0.sql' in new
+    assert '-- COMPLETION_MARKER: row_group_heading_order_appearance_field' in new
+    assert 'system_db_version' not in new
+    schema, canonical = new.split('-- BOOTSTRAP_AFTER_DATA_SEED\n')
+    assert not re.search(r'\b(?:UPDATE|DELETE|ALTER|DROP|TRIGGER)\b', schema)
+    assert "AND json_value->'site_values'->>'shared.row_group_heading_order'='manual'" in canonical
+    assert "(json_value->'site_values')-'shared.row_group_heading_order'" in canonical
+    assert 'updated=' not in canonical and 'INSERT INTO public.system_config' not in canonical
+    assert schema in (BOOTSTRAP / 'schema.sql').read_text()
+    seed = (BOOTSTRAP / 'seed_data.sql').read_text()
+    assert canonical in seed and seed.index(canonical) > seed.index(BACKFILL.read_text())

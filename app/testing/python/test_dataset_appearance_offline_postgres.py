@@ -15,6 +15,7 @@ BOOTSTRAP = APP / "server_tools/public_bootstrap"
 MIGRATIONS = APP / "server_tools/migrations"
 SCHEMA = MIGRATIONS / "20261009000060_extend_dataset_appearance_three_places.sql"
 BACKFILL = MIGRATIONS / "20261009000061_backfill_dataset_appearance_three_places.sql"
+HEADING_ORDER = MIGRATIONS / "20261015000020_add_row_group_heading_order_appearance_field.sql"
 
 
 @pytest.fixture
@@ -72,6 +73,7 @@ def test_three_places_fresh_bootstrap_and_lifecycle(offline_postgres):
     run("CREATE TABLE fixture_before AS SELECT * FROM system_dataset_appearance;")
     for _ in range(2):
         run(SCHEMA.read_text())
+        run(HEADING_ORDER.read_text())
         run(BACKFILL.read_text())
         assert_sql(run, "NOT EXISTS ((SELECT * FROM fixture_before EXCEPT SELECT * FROM system_dataset_appearance) "
                    "UNION ALL (SELECT * FROM system_dataset_appearance EXCEPT SELECT * FROM fixture_before))", "replay changed revisions")
@@ -94,10 +96,11 @@ def test_three_places_upgrade_normalization_preservation_revisions_and_replay(of
         "'{\"shared.card_style_variant\":\"modern\",\"shared.card_detail_columns\":2}',7 FROM system_db_tables WHERE table_name='tiketit';")
     run(SCHEMA.read_text())
     run(BACKFILL.read_text())
+    run(HEADING_ORDER.read_text())
     defaults = "(SELECT jsonb_object_agg(key,value->'default') FROM jsonb_each(app_dataset_appearance_v2_rules()))"
     expected = f"({defaults} || {literal(case['normalized'])})"
     assert_sql(run, "NOT EXISTS(SELECT 1 FROM system_dataset_appearance a JOIN system_config c ON c.key='dataset_cover_theme_config' "
-               f"WHERE a.tab_values||(c.json_value->'site_values')||(c.json_value->'defaults')||a.overrides IS DISTINCT FROM {expected}||a.overrides)", "visual value changed")
+               f"WHERE a.tab_values||jsonb_build_object('shared.row_group_heading_order','manual')||(c.json_value->'site_values')||(c.json_value->'defaults')||a.overrides IS DISTINCT FROM {expected}||a.overrides)", "visual value changed")
     assert_sql(run, "EXISTS(SELECT 1 FROM system_dataset_appearance a JOIN system_db_tables d USING(table_uid) "
                "WHERE d.table_name='tiketit' AND revision=8 AND overrides='{\"shared.card_style_variant\":\"modern\",\"shared.card_detail_columns\":2}')")
     assert_sql(run, "NOT EXISTS(SELECT 1 FROM system_dataset_appearance a JOIN system_db_tables d USING(table_uid) WHERE d.table_name<>'tiketit' AND revision<>1)")
@@ -106,6 +109,7 @@ def test_three_places_upgrade_normalization_preservation_revisions_and_replay(of
     run("CREATE TABLE fixture_before AS SELECT * FROM system_dataset_appearance; CREATE TABLE site_before AS SELECT * FROM system_config WHERE key='dataset_cover_theme_config';")
     for _ in range(2):
         run(SCHEMA.read_text())
+        run(HEADING_ORDER.read_text())
         run(BACKFILL.read_text())
     assert_sql(run, "NOT EXISTS(SELECT * FROM fixture_before EXCEPT SELECT * FROM system_dataset_appearance) AND "
                "NOT EXISTS(SELECT * FROM site_before EXCEPT SELECT * FROM system_config WHERE key='dataset_cover_theme_config')", "replay changed values or revisions")
@@ -116,6 +120,7 @@ def test_three_places_upgrade_preflight_rollback(offline_postgres):
     install(run, upgrade=True)
     run("INSERT INTO system_dataset_appearance(table_uid,overrides,revision) SELECT table_uid,'{\"light.image_blur\":0}',7 FROM system_db_tables WHERE table_name='tiketit';")
     run(SCHEMA.read_text())
+    run(HEADING_ORDER.read_text())
     run(BACKFILL.read_text(), "preflight refused")
     assert_sql(run, "EXISTS(SELECT 1 FROM system_dataset_appearance WHERE schema_version=1 AND revision=7 AND overrides='{\"light.image_blur\":0}') AND "
                "NOT EXISTS(SELECT 1 FROM system_data_repair_records WHERE migration='dataset_appearance_three_place_backfill')", "failed migration changed data")
@@ -141,3 +146,49 @@ def test_three_places_bootstrap_final_checks_refuse_corruption(offline_postgres,
         return
     run((BOOTSTRAP / "seed_data.sql").read_text(), "missing completion markers" if fault == "marker" else "appearance")
     assert_sql(run, "NOT EXISTS(SELECT 1 FROM system_schema_migrations) AND NOT EXISTS(SELECT 1 FROM system_db_version)")
+
+
+def test_heading_order_rules_upgrade_without_backfill_and_replay(offline_postgres):
+    """Native proof: additive rules preserve stored bytes/revisions and validate both choices."""
+    run = offline_postgres
+    install(run)
+    # Model a pre-field site without touching the installation database.
+    run("UPDATE system_config SET json_value=jsonb_set(json_value,'{site_values}',"
+        "(json_value->'site_values')-'shared.row_group_heading_order') WHERE key='dataset_cover_theme_config';")
+    run(SCHEMA.read_text())
+    run("DELETE FROM system_data_repair_records WHERE migration='row_group_heading_order_appearance_field';")
+    run("CREATE TABLE heading_order_site_before AS SELECT * FROM system_config WHERE key='dataset_cover_theme_config';")
+    run("CREATE TABLE heading_order_tabs_before AS SELECT * FROM system_dataset_appearance;")
+    for _ in range(2):
+        run(HEADING_ORDER.read_text())
+        assert_sql(run, "NOT EXISTS(SELECT * FROM heading_order_site_before EXCEPT SELECT * FROM system_config "
+                   "WHERE key='dataset_cover_theme_config') AND NOT EXISTS(SELECT * FROM heading_order_tabs_before "
+                   "EXCEPT SELECT * FROM system_dataset_appearance)", "heading order backfilled data or changed revisions")
+        assert_sql(run, "NOT EXISTS(SELECT 1 FROM app_check_dataset_appearance_three_places())")
+    rule = json.loads((APP / "frontend/shared/dataset_appearance/definition.json").read_text())["shared_fields"]["row_group_heading_order"]
+    assert_sql(run, "app_dataset_appearance_v2_rules()->'shared.row_group_heading_order'=" + literal(rule))
+    site = "(SELECT json_value->'site_values' FROM system_config WHERE key='dataset_cover_theme_config')"
+    assert_sql(run, f"app_valid_dataset_appearance_v2({site},'site_only',true)")
+    assert_sql(run, f"app_valid_dataset_appearance_v2({site}||" + literal({"shared.row_group_heading_order": "result_count"}) + ",'site_only',true)")
+    for value in ("manual", "result_count", None, True, 7, "count", ""):
+        condition = "app_valid_dataset_appearance_v2(" + literal({"shared.row_group_heading_order": value}) + ",'site_only',false)"
+        assert_sql(run, condition if value in ("manual", "result_count") else "NOT " + condition)
+    assert_sql(run, "(SELECT count(*)=1 FROM system_data_repair_records "
+               "WHERE migration='row_group_heading_order_appearance_field' AND action='completed')")
+
+
+def test_heading_order_storage_canonicalizes_fresh_bootstrap_and_replay(offline_postgres):
+    """Fresh bootstrap/replay omit manual; Go proves all revision-protected saves."""
+    run = offline_postgres
+    install(run)
+    site = "(SELECT json_value->'site_values' FROM system_config WHERE key='dataset_cover_theme_config')"
+    assert_sql(run, f"NOT ({site} ? 'shared.row_group_heading_order')", "fresh bootstrap stored manual")
+    for value in ("result_count", "manual"):
+        run("UPDATE system_config SET json_value=jsonb_set(json_value,'{site_values,shared.row_group_heading_order}',"
+            + literal(value) + ") WHERE key='dataset_cover_theme_config';")
+        run(HEADING_ORDER.read_text())
+        if value == "manual":
+            assert_sql(run, f"NOT ({site} ? 'shared.row_group_heading_order')", "manual stored a key")
+        else:
+            assert_sql(run, f"{site}->>'shared.row_group_heading_order'='result_count'")
+        assert_sql(run, "NOT EXISTS(SELECT 1 FROM app_check_dataset_appearance_three_places())")

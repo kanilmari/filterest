@@ -31,7 +31,7 @@ func TestDatasetAppearanceSnapshotOneStatementAndAllSources(t *testing.T) {
 	tabRaw, _ := json.Marshal(tab)
 	pushOrphanQuery(orphanQueuedQuery{cols: []string{"shared", "stamp", "schema", "tab_values", "overrides", "revision"}, rows: [][]driver.Value{{string(raw), "stamp-1", int64(2), tabRaw, []byte(`{"shared.card_detail_columns":2}`), "9"}}})
 	snapshot, err := store.ReadAppearance(db, 42, false)
-	if err != nil || snapshot.DatasetUID != 42 || snapshot.Version != "9" || snapshot.SharedVersion != store.SharedRevision(raw, "stamp-1") || snapshot.Effective.Light.ImageBlur != 0 || snapshot.Effective.Light.OvalEnabled || snapshot.Effective.Dark.ImageBlur != 7 || len(snapshot.Sources) != 44 {
+	if err != nil || snapshot.DatasetUID != 42 || snapshot.Version != "9" || snapshot.SharedVersion != store.SharedRevision(raw, "stamp-1") || snapshot.Effective.Light.ImageBlur != 0 || snapshot.Effective.Light.OvalEnabled || snapshot.Effective.Dark.ImageBlur != 7 || len(snapshot.Sources) != 45 {
 		t.Fatal(snapshot, err)
 	}
 	if len(snapshotOrphanCalls()) != 1 || snapshot.Sources["light.image_blur"] != "tab" || snapshot.Sources["dark.image_blur"] != "tab" || snapshot.Sources["shared.card_detail_columns"] != "override" {

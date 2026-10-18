@@ -28,7 +28,7 @@ def test_raw_definition_has_exactly_three_complete_places():
             assert field["place"] in inventories
             inventories[field["place"]].append(path)
     assert {place: sorted(paths) for place, paths in inventories.items()} == examples["places"]
-    assert [len(inventories[place]) for place in ("tab_only", "site_only", "site_default")] == [28, 7, 9]
+    assert [len(inventories[place]) for place in ("tab_only", "site_only", "site_default")] == [28, 8, 9]
     for path, example in examples["aliases"].items():
         owner, key = path.split(".")
         alias = definition["aliases"][key]

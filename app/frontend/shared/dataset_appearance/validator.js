@@ -128,7 +128,7 @@ export function isValidDatasetAppearanceTabValuesV2(values, options) {
             order.every((key, index) => index === 0 || values[`${owner}.${order[index - 1]}`] <= values[`${owner}.${key}`])));
 }
 
-/** Twin of definition.go: ValidateSiteValuesV2; exactly seven site-only values. */
+/** Twin of definition.go: ValidateSiteValuesV2; all site-only values. */
 export function isValidDatasetAppearanceSiteValuesV2(values, options) {
     return isValidPlaceValuesV2(values, 'site_only', true, options);
 }

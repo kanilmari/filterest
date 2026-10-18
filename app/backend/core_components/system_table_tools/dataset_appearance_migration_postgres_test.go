@@ -43,7 +43,7 @@ func TestDatasetAppearancePostgresLegacyMigrationFreshUpgradeAndReplay(t *testin
 		t.Fatal(err)
 	}
 	frontPageExec(t, upgraded, string(migration))
-	for _, name := range []string{"20261009000060_extend_dataset_appearance_three_places.sql", "20261009000061_backfill_dataset_appearance_three_places.sql"} {
+	for _, name := range []string{"20261009000060_extend_dataset_appearance_three_places.sql", "20261009000061_backfill_dataset_appearance_three_places.sql", "20261015000020_add_row_group_heading_order_appearance_field.sql"} {
 		raw, err := os.ReadFile(filepath.Join("..", "..", "..", "server_tools", "migrations", name))
 		if err != nil {
 			t.Fatal(err)

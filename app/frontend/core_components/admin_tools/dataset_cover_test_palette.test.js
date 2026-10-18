@@ -42,7 +42,7 @@ test('opens This tab first every time with native scope radios, ordered places a
     ]);
     expect(radios[0].name).toBe(radios[1].name);
     expect([...control.panel.querySelectorAll('[data-place]')].map(row => row.dataset.place))
-        .toEqual([...Array(15).fill('tab_only'), ...Array(9).fill('site_default'), ...Array(7).fill('site_only')]);
+        .toEqual([...Array(15).fill('tab_only'), ...Array(9).fill('site_default'), ...Array(8).fill('site_only')]);
     expect(get('scope').parentElement).toBe(control.panel);
     expect(get('save').closest('.dataset-cover-test-palette__actions').parentElement).toBe(control.panel);
     expect(options.datasetSettingsRequestFn).not.toHaveBeenCalled();

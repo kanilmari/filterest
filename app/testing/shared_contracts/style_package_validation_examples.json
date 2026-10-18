@@ -56,6 +56,7 @@
   {"name": "reserved site-presentation active_tab_glow_intensity", "raw": "{\"schema_version\":1,\"scopes\":{\"site\":{\"light\":{\"active_tab_glow_intensity\":\"#ffffff\"},\"dark\":{}}}}", "valid": false, "known_fonts": []},
   {"name": "reserved site-presentation active_tab_glow_width", "raw": "{\"schema_version\":1,\"scopes\":{\"site\":{\"light\":{\"active_tab_glow_width\":\"#ffffff\"},\"dark\":{}}}}", "valid": false, "known_fonts": []},
   {"name": "reserved site-presentation active_tab_glow_blur", "raw": "{\"schema_version\":1,\"scopes\":{\"site\":{\"light\":{\"active_tab_glow_blur\":\"#ffffff\"},\"dark\":{}}}}", "valid": false, "known_fonts": []},
+  {"name": "reserved site-presentation row_group_heading_order", "raw": "{\"schema_version\":1,\"scopes\":{\"site\":{\"light\":{\"row_group_heading_order\":\"manual\"},\"dark\":{}}}}", "valid": false, "known_fonts": []},
   {"name": "reserved site-presentation active_filter_remove_side", "raw": "{\"schema_version\":1,\"scopes\":{\"site\":{\"light\":{\"active_filter_remove_side\":\"#ffffff\"},\"dark\":{}}}}", "valid": false, "known_fonts": []},
   {"name": "reserved site-presentation brand_color", "raw": "{\"schema_version\":1,\"scopes\":{\"site\":{\"light\":{\"brand_color\":\"#ffffff\"},\"dark\":{}}}}", "valid": false, "known_fonts": []},
   {"name": "reserved site-presentation --brand-hue", "raw": "{\"schema_version\":1,\"scopes\":{\"site\":{\"light\":{\"--brand-hue\":\"#ffffff\"},\"dark\":{}}}}", "valid": false, "known_fonts": []},

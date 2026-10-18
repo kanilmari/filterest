@@ -29,6 +29,7 @@ type DatasetCoverThemeValues struct {
 // DatasetCoverSharedValues contains visual settings shared by light and dark themes.
 type DatasetCoverSharedValues struct {
 	ActiveFilterRemoveSide string  `json:"active_filter_remove_side"`
+	RowGroupHeadingOrder   string  `json:"row_group_heading_order"`
 	HeroExtraHeight        float64 `json:"hero_extra_height"`
 	HeroBottomFade         float64 `json:"hero_bottom_fade"`
 	// ImageBlur remains as a rollback-safe fallback for older application builds.

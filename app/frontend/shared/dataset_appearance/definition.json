@@ -34,9 +34,10 @@
     "active_tab_glow_blur": {"place": "site_only", "type": "number", "default": 4, "min": 0, "max": 12, "step": 0.5},
     "filterbar_content_top_space": {"place": "site_default", "type": "number", "default": 40, "min": 0, "max": 200, "step": 2},
     "active_filter_remove_side": {"place": "site_only", "type": "string", "default": "start", "values": ["start", "end"]},
+    "row_group_heading_order": {"place": "site_only", "type": "string", "default": "manual", "values": ["manual", "result_count"]},
     "brand_color": {"place": "site_only", "type": "hex_color", "default": "#1a8fe6"}
   },
   "mask_order": [["center_opacity", "mid_opacity", "edge_opacity"], ["center_stop", "mid_stop", "edge_stop"]],
   "aliases": {"show_cover_photo": {"owners": ["light", "dark"], "field": "image_opacity"}},
-  "compatibility": {"shared_write_optional": ["card_show_all_fields", "card_style_variant", "card_detail_columns", "article_image_caption_position", "filterbar_content_top_space", "active_filter_remove_side", "label_value_layout"], "browser_optional": ["active_filter_remove_side", "card_detail_columns", "card_show_all_fields", "card_style_variant", "card_image_presentation", "article_image_caption_position"], "browser_unchecked": ["label_value_layout", "image_blur"]}
+  "compatibility": {"shared_write_optional": ["card_show_all_fields", "card_style_variant", "card_detail_columns", "article_image_caption_position", "filterbar_content_top_space", "active_filter_remove_side", "row_group_heading_order", "label_value_layout"], "browser_optional": ["active_filter_remove_side", "row_group_heading_order", "card_detail_columns", "card_show_all_fields", "card_style_variant", "card_image_presentation", "article_image_caption_position"], "browser_unchecked": ["label_value_layout", "image_blur"]}
 }

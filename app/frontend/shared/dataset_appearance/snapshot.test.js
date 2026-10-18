@@ -22,7 +22,7 @@ describe('three-place snapshot', () => {
         expect(effective.light.image_blur).toBe(0); expect(effective.light.oval_enabled).toBe(false);
         expect(effective.shared.image_blur).toBe(0); expect(effective.shared.card_show_all_fields).toBe(false);
         expect(effective.shared.filterbar_content_top_space).toBe(0); expect(effective.shared.card_detail_columns).toBe(2);
-        expect(Object.keys(data.tab_values)).toHaveLength(28); expect(Object.keys(data.site_values)).toHaveLength(7);
+        expect(Object.keys(data.tab_values)).toHaveLength(28); expect(Object.keys(data.site_values)).toHaveLength(8);
         expect(Object.keys(data.defaults)).toHaveLength(9); expect(Object.keys(data.overrides)).toHaveLength(3);
     });
     test('public site settings project definition covers without exposing a stored cover', () => {
@@ -50,4 +50,21 @@ describe('three-place snapshot', () => {
         expect(readSiteAppearance({ dataset_cover_theme: DEFAULT_DATASET_APPEARANCE })).toEqual(DEFAULT_DATASET_APPEARANCE);
         expect(readDatasetAppearance({ schema_version: 3, effective: DEFAULT_DATASET_APPEARANCE })).toBeNull();
     });
+});
+
+test('absent heading order in old snapshots defaults to manual without changing other choices', () => {
+    const data = response(); delete data.site_values['shared.row_group_heading_order'];
+    data.site_values['shared.active_filter_remove_side'] = 'end';
+    for (const read of [readSiteAppearance, readDatasetAppearance]) {
+        expect(read(data).shared.row_group_heading_order).toBe('manual');
+        expect(read(data).shared.active_filter_remove_side).toBe('end');
+    }
+    expect(Object.hasOwn(data.site_values, 'shared.row_group_heading_order')).toBe(false);
+    const legacy = structuredClone(DEFAULT_DATASET_APPEARANCE); delete legacy.shared.row_group_heading_order;
+    expect(readSiteAppearance({ dataset_cover_theme: legacy }).shared.row_group_heading_order).toBe('manual');
+    expect(readDatasetAppearance({ schema_version: 1, effective: legacy }).shared.row_group_heading_order).toBe('manual');
+    for (const value of ['count', null, 12]) {
+        data.site_values['shared.row_group_heading_order'] = value;
+        expect(readDatasetAppearance(data)).toBeNull();
+    }
 });

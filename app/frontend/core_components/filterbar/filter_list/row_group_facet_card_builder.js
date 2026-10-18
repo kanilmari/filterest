@@ -7,6 +7,7 @@ import { bindDatasetLanguageRenderer } from '../../table_views/dataset_value_loc
 import { getTranslationForKey } from '../../lang/translation_handler.js';
 import { createMultiselectDropdown } from '../../../reusable_components/multiselect_dropdown/multiselect_dropdown_builder.js';
 import { createSymbolMaskElement } from '../../../reusable_components/symbol_asset_resolver.js';
+import { createRowGroupHeadingOrder } from './row_group_heading_order.js';
 
 // Full-key catalogues keep helper arguments visible to the startup language scan.
 const MATCH_MODE_COPY = Object.freeze({
@@ -39,8 +40,10 @@ const SELECTION_LIMIT = 20;
 const headingKey = group => String(group.heading?.id ?? 'legacy');
 
 /** Presentation only: the caller retains all reconciliation, URL and search boundaries. */
-export function createRowGroupFacetCard({ host, topControls, tableName, getSelectedSlugs, getSelectedModes, getFacetTitle }) {
+export function createRowGroupFacetCard({ host, topControls, tableName, getSelectedSlugs, getSelectedModes, getFacetTitle,
+    headingOrder = 'manual' }) {
     const entries = new Map();
+    const ordering = createRowGroupHeadingOrder();
     const panelState = { expanded: false, openHeading: null };
     host.rowGroupPanelState = panelState;
     let groups = [];
@@ -320,7 +323,20 @@ export function createRowGroupFacetCard({ host, topControls, tableName, getSelec
         }
     }
 
-    return { update(nextGroups, nextCallbacks) { groups = nextGroups; callbacks = nextCallbacks; render(); } };
+    return {
+        update(nextGroups, nextCallbacks, { authoritative = false } = {}) {
+            ordering.accept(nextGroups, authoritative);
+            groups = ordering.sort(nextGroups, headingOrder);
+            callbacks = nextCallbacks;
+            render();
+        },
+        setHeadingOrder(value) {
+            if (headingOrder === value) return;
+            headingOrder = value;
+            groups = ordering.sort(groups, headingOrder);
+            render();
+        },
+    };
 }
 
 function createPanelText(tag, key, className) {

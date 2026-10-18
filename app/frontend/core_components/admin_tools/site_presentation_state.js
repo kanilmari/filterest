@@ -227,10 +227,11 @@ export function createSitePresentationState({ requestFn = fetchSitePresentationS
         revision += 1;
         const pending = saveQueue.then(async () => {
             const response = await saveRequestFn(clone(payload));
-            if (!readSiteAppearance(response)
+            const readback = readSiteAppearance(response) ? normalizePresentationSettings(response) : null;
+            if (!readback
                 || (payload.table_cell_max_lines !== undefined && response.table_cell_max_lines !== payload.table_cell_max_lines)
                 || Object.entries(payload.set).some(([path, value]) => (
-                    response.site_values?.[path] ?? response.defaults?.[path]) !== value)
+                    readback.site_values?.[path] ?? readback.defaults?.[path]) !== value)
                 || (payload.row_article_timestamp_display_mode !== undefined
                     && response.row_article_timestamp_display_mode !== payload.row_article_timestamp_display_mode)) {
                 throw new Error('Site appearance save readback mismatch');

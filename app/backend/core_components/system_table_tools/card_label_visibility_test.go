@@ -102,6 +102,7 @@ func cardLabelVisibilityFixture(t *testing.T) *sql.DB {
 		"20261009000041_seed_dataset_appearance_refusal_keys.sql",
 		datasetAppearanceSchemaMigration,
 		"20261009000061_backfill_dataset_appearance_three_places.sql",
+		"20261015000020_add_row_group_heading_order_appearance_field.sql",
 	} {
 		migration, err := os.ReadFile(filepath.Join("..", "..", "..", "server_tools", "migrations", name))
 		if err != nil {

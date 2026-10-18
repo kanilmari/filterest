@@ -12,6 +12,21 @@ const clone = value => JSON.parse(JSON.stringify(value));
 // the installation's development boundary before any value reaches this decoder.
 const readOptions = { development: true };
 
+// Only the additive heading preference may be absent in older v2 responses or
+// public caches. Strict writers still require the complete canonical map.
+function readableSiteValues(values) {
+    return values && typeof values === 'object' && !Array.isArray(values)
+        ? { 'shared.row_group_heading_order': DEFAULT_DATASET_APPEARANCE.shared.row_group_heading_order, ...values }
+        : values;
+}
+
+function readLegacyAppearance(config) {
+    if (!isReadableDatasetAppearance(config)) return null;
+    const result = clone(config);
+    result.shared.row_group_heading_order ??= DEFAULT_DATASET_APPEARANCE.shared.row_group_heading_order;
+    return result;
+}
+
 export function projectAppearanceMaps(...maps) {
     const config = clone(DEFAULT_DATASET_APPEARANCE);
     for (const map of maps) for (const [path, value] of Object.entries(map || {})) {
@@ -29,21 +44,23 @@ export function appearanceValuesForPlace(config, place) {
 
 export function readSiteAppearance(payload) {
     if (payload?.schema_version === 2) {
-        if (!isValidDatasetAppearanceSiteValuesV2(payload.site_values, readOptions)
+        const siteValues = readableSiteValues(payload.site_values);
+        if (!isValidDatasetAppearanceSiteValuesV2(siteValues, readOptions)
             || !isValidDatasetAppearanceDefaultsV2(payload.defaults, readOptions)) return null;
-        return projectAppearanceMaps(payload.site_values, payload.defaults);
+        return projectAppearanceMaps(siteValues, payload.defaults);
     }
-    return isReadableDatasetAppearance(payload?.dataset_cover_theme) ? clone(payload.dataset_cover_theme) : null;
+    return readLegacyAppearance(payload?.dataset_cover_theme);
 }
 
 export function readDatasetAppearance(snapshot) {
     if (snapshot?.schema_version === 1) {
-        return isReadableDatasetAppearance(snapshot.effective) ? clone(snapshot.effective) : null;
+        return readLegacyAppearance(snapshot.effective);
     }
+    const siteValues = readableSiteValues(snapshot?.site_values);
     if (snapshot?.schema_version !== 2
         || !isValidDatasetAppearanceTabValuesV2(snapshot.tab_values, readOptions)
-        || !isValidDatasetAppearanceSiteValuesV2(snapshot.site_values, readOptions)
+        || !isValidDatasetAppearanceSiteValuesV2(siteValues, readOptions)
         || !isValidDatasetAppearanceDefaultsV2(snapshot.defaults, readOptions)
         || !isValidDatasetAppearanceOverridesV2(snapshot.overrides, readOptions)) return null;
-    return projectAppearanceMaps(snapshot.site_values, snapshot.defaults, snapshot.tab_values, snapshot.overrides);
+    return projectAppearanceMaps(siteValues, snapshot.defaults, snapshot.tab_values, snapshot.overrides);
 }

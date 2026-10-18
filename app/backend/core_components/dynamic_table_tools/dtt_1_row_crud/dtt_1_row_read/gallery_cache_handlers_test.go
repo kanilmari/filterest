@@ -318,7 +318,7 @@ func TestGalleryCacheAuthorizationAtResponseHandlers(t *testing.T) {
 						}
 						// Ordinary results own the appearance contract; semantic packets
 						// retain the dataset state established by the ordinary response.
-						if mode == "ordinary" && (packet.Appearance.SchemaVersion != 2 || len(packet.Appearance.TabValues) != 28 || len(packet.Appearance.SiteValues) != 7 || len(packet.Appearance.Defaults) != 9) {
+						if mode == "ordinary" && (packet.Appearance.SchemaVersion != 2 || len(packet.Appearance.TabValues) != 28 || len(packet.Appearance.SiteValues) != 8 || len(packet.Appearance.Defaults) != 9) {
 							t.Fatal("results lost their owned appearance snapshot", packet.Appearance)
 						}
 						row := packet.Data[0]

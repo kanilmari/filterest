@@ -209,6 +209,7 @@ export interface DatasetCoverThemeValues {
 
 export interface DatasetCoverSharedValues {
     active_filter_remove_side: string;
+    row_group_heading_order: string;
     hero_extra_height: number;
     hero_bottom_fade: number;
     image_blur: number;

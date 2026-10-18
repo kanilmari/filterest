@@ -104,7 +104,7 @@ func TestRelatedAppearanceHandlerContract(t *testing.T) {
 				if err := json.Unmarshal(child["dataset_appearance"], &snapshot); err != nil {
 					t.Fatal(err)
 				}
-				if snapshot.DatasetUID != 22 || snapshot.Version != "2" || snapshot.SchemaVersion != 2 || len(snapshot.TabValues) != 28 || len(snapshot.Sources) != 44 || snapshot.Effective.Shared.CardImageWidth != 440 {
+				if snapshot.DatasetUID != 22 || snapshot.Version != "2" || snapshot.SchemaVersion != 2 || len(snapshot.TabValues) != 28 || len(snapshot.Sources) != 45 || snapshot.Effective.Shared.CardImageWidth != 440 {
 					t.Fatalf("wrong current appearance: %+v", snapshot)
 				}
 			}

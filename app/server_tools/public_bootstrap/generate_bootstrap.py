@@ -127,6 +127,7 @@ repair_schema_migrations = (
     "20261009000079_reconcile_system_database_identity_schema.sql",
     "20261009000080_zone_platform_managed_timestamps.sql",
     "20261015000016_seed_first_run_setup_code.sql",
+    "20261015000020_add_row_group_heading_order_appearance_field.sql",
 )
 # Complete the physical actor columns after development tables and support functions,
 # before schema privileges. The data step later registers the same columns.
@@ -192,14 +193,18 @@ def reviewed_public_migration(name: str) -> str:
 # A namespace upgrade owns schema and refusal copy together. Its schema must be
 # present before the registry seeds; translations need the seeded language rows.
 # The exact full file still owns the baseline hash and completion marker.
+# Schema migrations may also canonicalize data after historical backfills; keep
+# that suffix after release data seeds without editing released migration bytes.
 language_phase_marker = "-- BOOTSTRAP_LANGUAGE_SEED\n"
+after_data_phase_marker = "-- BOOTSTRAP_AFTER_DATA_SEED\n"
 
-def schema_migration_parts(name: str) -> tuple[str, str]:
+def schema_migration_parts(name: str) -> tuple[str, str, str]:
     text = reviewed_public_migration(name)
-    if text.count(language_phase_marker) > 1:
-        parser.error(f"Migration repeats its language phase marker: {name}")
+    if text.count(language_phase_marker) > 1 or text.count(after_data_phase_marker) > 1:
+        parser.error(f"Migration repeats its bootstrap phase marker: {name}")
+    text, data_separator, after_data = text.partition(after_data_phase_marker)
     before, separator, after = text.partition(language_phase_marker)
-    return before, after if separator else ""
+    return before, after if separator else "", after_data if data_separator else ""
 
 schema_sql = (
     "".join(reviewed_source(name) for name in schema_sources)
@@ -216,6 +221,7 @@ seed_sql = (
     + "".join(schema_migration_parts(name)[1] for name in repair_schema_migrations)
     + "".join(reviewed_public_migration(name) for name in setting_seed_migrations)
     + "".join(reviewed_public_migration(name) for name in release_data_migrations)
+    + "".join(schema_migration_parts(name)[2] for name in repair_schema_migrations)
 )
 if "__FILTEREST_DB_VERSION__" in schema_sql + seed_sql:
     parser.error("The version row belongs to the acceptance block, not to a source")

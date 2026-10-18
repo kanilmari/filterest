@@ -46,7 +46,7 @@ func TestDatasetAppearancePostgresResultsAuthorizedEmptyAndFresh(t *testing.T) {
 		if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
 			t.Fatal(err)
 		}
-		if len(body.Data) != 0 || body.DatasetAppearance.DatasetUID != uid || body.DatasetAppearance.Version != saved.Revision || len(body.DatasetAppearance.Sources) != 44 || body.DatasetAppearance.Sources["shared.card_style_variant"] != "override" {
+		if len(body.Data) != 0 || body.DatasetAppearance.DatasetUID != uid || body.DatasetAppearance.Version != saved.Revision || len(body.DatasetAppearance.Sources) != 45 || body.DatasetAppearance.Sources["shared.card_style_variant"] != "override" {
 			t.Fatal(body)
 		}
 	}

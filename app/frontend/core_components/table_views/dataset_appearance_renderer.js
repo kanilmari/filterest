@@ -9,6 +9,7 @@ import { projectAppearanceAttribute, projectAppearanceStyle, clearAppearanceProj
 import { applyCardFieldPresentationSetting } from './card_view/card_field_presentation.js';
 import { applyCardImagePresentationSetting } from './card_view/card_image_presentation.js';
 import { applySiteLabelValueLayoutSetting } from './label_value_layout_adapter.js';
+import { applyRowGroupHeadingOrder } from '../filterbar/filter_list/row_group_heading_order.js';
 
 const coverNames = {
     oval_width: 'mask-oval-x', oval_height: 'mask-oval-y', oval_position_y: 'mask-position-y',
@@ -62,6 +63,7 @@ export function refreshDatasetAppearanceAdapters(surface, config) {
     applyCardFieldPresentationSetting(shared.card_show_all_fields, shared.card_style_variant, shared.card_detail_columns, surface);
     applySiteLabelValueLayoutSetting(shared.label_value_layout, surface);
     applyCardImagePresentationSetting(shared.card_image_presentation, surface, config.cardImageDefaults);
+    applyRowGroupHeadingOrder(shared.row_group_heading_order, surface);
 }
 
 /** Remove the private projection as well as its identity on lifecycle invalidation. */

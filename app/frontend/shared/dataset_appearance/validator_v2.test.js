@@ -15,9 +15,9 @@ const validators = { tab_values: isValidDatasetAppearanceTabValuesV2, site_value
     defaults: isValidDatasetAppearanceDefaultsV2, overrides: isValidDatasetAppearanceOverridesV2 };
 const places = { tab_values: 'tab_only', site_values: 'site_only', defaults: 'site_default' };
 
-test('every canonical value belongs to exactly one place: 28 / 7 / 9', () => {
+test('every canonical value belongs to exactly one place: 28 / 8 / 9', () => {
     const all = [];
-    for (const [place, count] of Object.entries({ tab_only: 28, site_only: 7, site_default: 9 })) {
+    for (const [place, count] of Object.entries({ tab_only: 28, site_only: 8, site_default: 9 })) {
         const paths = DATASET_APPEARANCE_PATHS_BY_PLACE[place];
         expect(paths).toHaveLength(count);
         expect(paths).toEqual(contract.places[place]);
@@ -33,7 +33,7 @@ test('every canonical value belongs to exactly one place: 28 / 7 / 9', () => {
         expect(datasetAppearanceDefaultsForPlace(place)[paths[0]]).not.toBe(null);
         all.push(...paths);
     }
-    expect(new Set(all).size).toBe(44);
+    expect(new Set(all).size).toBe(45);
     expect(all.sort()).toEqual(DATASET_APPEARANCE_PATHS);
     expect(Object.isFrozen(DATASET_APPEARANCE_PATHS_BY_PLACE)).toBe(true);
     for (const unknown of ['unknown', '__proto__', 'toString']) {

@@ -14,6 +14,7 @@ import { buildCardStyleControl } from './card_style_palette_control.js';
 import { buildLabelValueLayoutControl } from './site_label_value_layout_control.js';
 import { buildCardImagePresentationControl } from './dataset_cover_card_image_control.js';
 import { buildActiveFilterRemoveSideControl } from './active_filter_remove_side_control.js';
+import { buildRowGroupHeadingOrderControl } from './row_group_heading_order_control.js';
 import { buildArticleImageCaptionControl } from './site_article_image_control.js';
 import { DEFAULT_DATASET_COVER_THEME, isValidThemeConfig, applySitePresentationGlobals,
     getSitePresentationState } from './site_presentation_state.js';
@@ -303,6 +304,7 @@ function buildPaletteControl(hero, datasetName, siteState, options) {
         [buildLabelValueLayoutControl(value => change('label_value_layout', value)), 'label_value_layout', cardScope],
         [buildArticleImageCaptionControl(copy, value => change('article_image_caption_position', value)), 'article_image_caption_position', toolboxByGroup.get('articleImages').controls],
         [buildActiveFilterRemoveSideControl(copy, value => change('active_filter_remove_side', value)), 'active_filter_remove_side', toolboxByGroup.get('navigation').controls],
+        [buildRowGroupHeadingOrderControl(copy, value => change('row_group_heading_order', value)), 'row_group_heading_order', toolboxByGroup.get('navigation').controls],
     ];
     controls.forEach(([control, key, parent]) => addRow(control, key, parent));
     const brand = document.createElement('label'), brandText = document.createElement('span'), brandInput = document.createElement('input');

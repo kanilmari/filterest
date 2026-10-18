@@ -258,7 +258,7 @@ func ValidateTabValuesV2(raw any, development bool) error {
 	return nil
 }
 
-// ValidateSiteValuesV2 requires exactly the seven site-only canonical paths.
+// ValidateSiteValuesV2 requires all site-only canonical paths.
 // Its browser twin is validator.js:isValidDatasetAppearanceSiteValuesV2.
 func ValidateSiteValuesV2(raw any, development bool) error {
 	_, err := validatePlaceValuesV2(raw, SiteOnly, true, development)

@@ -37,7 +37,8 @@
       "shared.active_tab_glow_intensity",
       "shared.active_tab_glow_width",
       "shared.active_tab_max_opacity",
-      "shared.brand_color"
+      "shared.brand_color",
+      "shared.row_group_heading_order"
     ],
     "site_default": [
       "shared.article_image_caption_position",
@@ -63,6 +64,10 @@
   },
   "derived": ["shared.image_blur"],
   "cases": [
+    {"name": "manual heading order", "target": "site_values", "valid": true, "set": {"shared.row_group_heading_order": "manual"}},
+    {"name": "count heading order", "target": "site_values", "valid": true, "set": {"shared.row_group_heading_order": "result_count"}},
+    {"name": "invalid heading order", "target": "site_values", "valid": false, "set": {"shared.row_group_heading_order": "count"}},
+    {"name": "heading order is site only", "target": "overrides", "valid": false, "set": {"shared.row_group_heading_order": "result_count"}},
     {"name": "complete definition values", "target": "tab_values", "valid": true},
     {"name": "empty map", "target": "tab_values", "valid": false, "raw": {}},
     {"name": "invalid map shape null", "target": "tab_values", "valid": false, "raw": null},

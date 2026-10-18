@@ -60,7 +60,7 @@ The physical style/count columns and their editable metadata are retired.
 
 Site saves require their loaded `version`. Every shared and dataset writer uses
 one shared-before-dataset lock order, including the absent shared-row case.
-A site save patches only the sixteen site-owned values and preserves omitted
+A site save patches only the site-owned values and preserves omitted
 settings, including article timestamps. Authorized results carry the complete
 version-two appearance snapshot without another browser request. Each tab
 validates both themes' mask ordering before saving; site saves cannot change

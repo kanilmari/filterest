@@ -1,0 +1,17 @@
+{
+  "default": "manual",
+  "valid": [
+    "manual",
+    "result_count"
+  ],
+  "invalid": [
+    null,
+    true,
+    24,
+    {},
+    [],
+    "",
+    "count",
+    "RESULT_COUNT"
+  ]
+}

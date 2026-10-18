@@ -8975,6 +8975,17 @@ BEGIN
     SELECT 'wl69_card_image_usage_storage','completed' WHERE NOT EXISTS (
         SELECT 1 FROM public.system_data_repair_records WHERE migration='wl69_card_image_usage_storage' AND action='completed');
 END $upgrade$;
+-- The historical three-place seed uses the current rules' defaults. Run this
+-- canonicalization after it on fresh installs, and normally on upgrades/replay.
+-- Absent/default sites are untouched; no default is inserted or timestamp changed.
+UPDATE public.system_config
+SET json_value=jsonb_set(json_value,'{site_values}',(json_value->'site_values')-'shared.row_group_heading_order')
+WHERE key='dataset_cover_theme_config' AND json_value->>'schema_version'='2'
+  AND json_value->'site_values'->>'shared.row_group_heading_order'='manual';
+
+INSERT INTO public.system_data_repair_records(migration,action,detail)
+SELECT 'row_group_heading_order_appearance_field','completed',jsonb_build_object('file','20261015000020_add_row_group_heading_order_appearance_field.sql')
+WHERE NOT EXISTS(SELECT 1 FROM public.system_data_repair_records WHERE migration='row_group_heading_order_appearance_field' AND action='completed');
 
 -- Generated migration-ledger baseline and version row, written by this acceptance block only after
 -- every completion marker is present and every final check comes back empty. These migrations are
@@ -8985,7 +8996,7 @@ DECLARE
     findings text;
 BEGIN
     SELECT string_agg(marker, ', ' ORDER BY marker) INTO missing_markers
-      FROM unnest(ARRAY['wl58_row_actor_support', 'wl58_row_actor_marks_by_table_uid', 'wl58_row_actor_trigger_definitions', 'k116_login_names', 'password_reset_dummy_work', 'system_favorites_table', 'system_front_page_revisions_table', 'system_front_page_blocks_table', 'wl103_row_group_classifications', 'wl132_surviving_sign_in', 'wl52_drop_column_label_value_layout', 'system_dataset_appearance_table', 'wl157_migration_execution_evidence', 'dataset_card_appearance_cutover', 'wl157_application_update_admission', 'dataset_appearance_three_place_schema', 'wl164_publication_fields', 'wl163_dataset_kind_contracts', 'wl159_dataset_namespace', 'wl167_database_identity_schema', 'wl167_managed_timestamp_zones', 'wo41_first_run_readonly', 'wl157_application_update_refusal_keys', 'wl58_row_actor_columns', 'system_favorites_registry', 'system_front_page_blocks_registry', 'wl103_row_group_classifications_registry', 'wl144_registry_reference_key', 'dataset_media_hidden', 'wl157_application_update_capability', 'dataset_appearance_three_place_backfill', 'wl164_publication_column_metadata', 't919_registered_column_metadata', 't750_automatic_log_retention', 'record_title_headers_962', 'translation_object_sources_sec2', 'wl69_card_image_usage_storage']::text[]) AS marker
+      FROM unnest(ARRAY['wl58_row_actor_support', 'wl58_row_actor_marks_by_table_uid', 'wl58_row_actor_trigger_definitions', 'k116_login_names', 'password_reset_dummy_work', 'system_favorites_table', 'system_front_page_revisions_table', 'system_front_page_blocks_table', 'wl103_row_group_classifications', 'wl132_surviving_sign_in', 'wl52_drop_column_label_value_layout', 'system_dataset_appearance_table', 'wl157_migration_execution_evidence', 'dataset_card_appearance_cutover', 'wl157_application_update_admission', 'dataset_appearance_three_place_schema', 'wl164_publication_fields', 'wl163_dataset_kind_contracts', 'wl159_dataset_namespace', 'wl167_database_identity_schema', 'wl167_managed_timestamp_zones', 'wo41_first_run_readonly', 'row_group_heading_order_appearance_field', 'wl157_application_update_refusal_keys', 'wl58_row_actor_columns', 'system_favorites_registry', 'system_front_page_blocks_registry', 'wl103_row_group_classifications_registry', 'wl144_registry_reference_key', 'dataset_media_hidden', 'wl157_application_update_capability', 'dataset_appearance_three_place_backfill', 'wl164_publication_column_metadata', 't919_registered_column_metadata', 't750_automatic_log_retention', 'record_title_headers_962', 'translation_object_sources_sec2', 'wl69_card_image_usage_storage']::text[]) AS marker
      WHERE NOT EXISTS (SELECT 1 FROM public.system_data_repair_records AS record
                         WHERE record.migration = marker AND record.action = 'completed');
     IF missing_markers IS NOT NULL THEN
@@ -9223,6 +9234,7 @@ BEGIN
       ('20261015000008_seed_table_cell_max_lines.sql', '446c6db2923a14859efbb71a6de055260fdc2a15b510e0abdaf1a5e99a531b38', 'bootstrap_baseline', 'bootstrap'),
       ('20261015000009_add_card_image_usage_presentation.sql', '24bce4ab54d1ac303c687df8a9288b8197f9e137a3a470d37448dde3011dd294', 'bootstrap_baseline', 'bootstrap'),
       ('20261015000016_seed_first_run_setup_code.sql', 'd5573b95644acea6168e73d1c020ddf91268d2ca9ac7b50a08fdd33f602a05d4', 'bootstrap_baseline', 'bootstrap'),
+      ('20261015000020_add_row_group_heading_order_appearance_field.sql', '99450690b81c7c60f0d3bd34c11da3c6382bebf460a6c68614d8de0722dec16b', 'bootstrap_baseline', 'bootstrap'),
       ('20261015000099_record_database_release_9_12_0.sql', '7681662cc532ce4f113acec7e4e992af1e1ecf32136f8c92e55b255d56556516', 'bootstrap_baseline', 'bootstrap')
     ON CONFLICT (filename) DO NOTHING;
     INSERT INTO public.system_db_version (version, description)

@@ -33,11 +33,11 @@ test.each(contract.cases)('shared validation: $name', example => {
     }
 });
 
-test('inventories 44 canonical leaves, excluding visibility aliases and legacy blur', () => {
-    expect(DATASET_APPEARANCE_PATHS).toHaveLength(44);
+test('inventories 45 canonical leaves, excluding visibility aliases and legacy blur', () => {
+    expect(DATASET_APPEARANCE_PATHS).toHaveLength(45);
     expect(DATASET_APPEARANCE_PATHS.filter(path => path.startsWith('light.'))).toHaveLength(13);
     expect(DATASET_APPEARANCE_PATHS.filter(path => path.startsWith('dark.'))).toHaveLength(13);
-    expect(DATASET_APPEARANCE_PATHS.filter(path => path.startsWith('shared.'))).toHaveLength(18);
+    expect(DATASET_APPEARANCE_PATHS.filter(path => path.startsWith('shared.'))).toHaveLength(19);
     expect(DATASET_APPEARANCE_PATHS).not.toContain('shared.image_blur');
     expect(datasetAppearanceField('shared.image_blur')).toMatchObject({ derived_from: 'light.image_blur', min: 0, max: 24 });
     for (const unknown of ['light.unknown', 'unknown.image_blur', 'shared.toString', 'light.__proto__', 'light.image_blur.extra']) {
@@ -96,4 +96,14 @@ test('preserves the old public read guard, including clamped outliers and ignore
     delete config.shared.card_image_presentation;
     expect(isReadableDatasetAppearance(config)).toBe(true);
     expect(isValidDatasetAppearance(config)).toBe(false);
+});
+
+test('heading order shares the strict Go/browser value contract', () => {
+    const headingContract = JSON.parse(readFileSync('testing/shared_contracts/row_group_heading_order.json', 'utf8'));
+    expect(DEFAULT_DATASET_APPEARANCE.shared.row_group_heading_order).toBe(headingContract.default);
+    for (const value of [...headingContract.valid, ...headingContract.invalid]) {
+        expect(isValidDatasetAppearanceLeaf('shared.row_group_heading_order', value)).toBe(headingContract.valid.includes(value));
+        const config = clone(DEFAULT_DATASET_APPEARANCE); config.shared.row_group_heading_order = value;
+        expect(isValidDatasetAppearance(config)).toBe(headingContract.valid.includes(value));
+    }
 });
