@@ -89,7 +89,7 @@ async function _openEditor(langKey) {
             </div>
             <div class="dev-lang-editor-actions">
                 <button class="dev-lang-editor-save">Tallenna</button>
-                <button class="dev-lang-editor-cancel">Peruuta</button>
+                <button class="dev-lang-editor-cancel" data-lang-key="cancel_changes">Peruuta muutokset</button>
             </div>
         </div>
     `;

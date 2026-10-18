@@ -19,6 +19,7 @@ const mocks = vi.hoisted(() => ({
     getOpened: vi.fn(),
     saveOpened: vi.fn(),
     language: vi.fn(),
+    translation: vi.fn(),
 }));
 
 vi.mock("../endpoints/stable_endpoint_router.js", () => ({
@@ -65,7 +66,7 @@ vi.mock("../state_stores/lang_preference_reader.js", () => ({
 }));
 
 vi.mock("../lang/translation_handler.js", () => ({
-    getTranslationForKey: () => mocks.language() === "fi" ? "Muokkaa kenttänäkymää" : "Edit fields view",
+    getTranslationForKey: mocks.translation,
 }));
 
 function buildColumn(overrides = {}) {
@@ -95,6 +96,9 @@ describe("field_view_editor", () => {
         localStorage.clear();
         Object.values(mocks).forEach((mock) => mock.mockReset());
         mocks.language.mockReturnValue("en");
+        mocks.translation.mockImplementation((key, { fallback } = {}) => key === "edit_fields_view"
+            ? mocks.language() === "fi" ? "Muokkaa kenttänäkymää" : "Edit fields view"
+            : fallback);
         mocks.getState.mockReturnValue({
             sort: { column: "title", direction: "asc" },
             filters: { title: "draft", summary_from: "a" },
@@ -180,6 +184,28 @@ describe("field_view_editor", () => {
         });
         expect(mocks.saveOpened).toHaveBeenCalledWith("orders", ["summary"]);
     });
+
+    test.each([["fi", "Peruuta muutokset"], ["en", "Cancel changes"]])(
+        "%s discard label closes visibility and order drafts without saving",
+        async (language, label) => {
+            mocks.language.mockReturnValue(language);
+            const { openFieldViewEditor } = await import("./field_view_editor.js");
+            await openFieldViewEditor("orders");
+
+            const checkbox = document.querySelectorAll('[data-testid="field-view-hide-everywhere"]')[1];
+            checkbox.click();
+            document.querySelectorAll(".field-view-editor__move")[1].click();
+            expect(document.querySelector(".field-view-editor__field-name").textContent).toBe("title");
+            const cancel = document.querySelector('button[data-lang-key="cancel_changes"]');
+            expect(cancel?.textContent).toBe(label);
+            cancel.click();
+
+            expect(mocks.hideModal).toHaveBeenCalledOnce();
+            expect(mocks.save).not.toHaveBeenCalled();
+            expect(mocks.setState).not.toHaveBeenCalled();
+            expect(mocks.saveOpened).not.toHaveBeenCalled();
+        }
+    );
 
     test("creates a Tools button with the requested English label", async () => {
         const { createFieldViewEditorButton } = await import("./field_view_editor.js");

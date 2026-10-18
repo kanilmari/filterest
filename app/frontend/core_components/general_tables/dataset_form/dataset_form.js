@@ -153,7 +153,7 @@ export function buildDatasetForm({ mode, source, host = {} }) {
     });
     let dropButton = null;
     if (!creating) {
-        const cancel = button("manage_table_cancel", { testid: "dataset-form-cancel", className: "cancel-button" });
+        const cancel = button("cancel_changes", { testid: "dataset-form-cancel", className: "cancel-button" });
         cancel.addEventListener("click", () => host.close?.());
         // Removal is offered once the dataset's visibility is known.
         dropButton = button("manage_table_delete", { testid: "btn-delete-table", className: "danger-button" });

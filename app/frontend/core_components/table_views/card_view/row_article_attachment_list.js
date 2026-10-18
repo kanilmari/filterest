@@ -553,7 +553,7 @@ function createAttachmentMetadataEditor({ item, row, rowIndex, childDataset, onA
     cancelButton.type = "button";
     cancelButton.classList.add("fw-btn", "fw-btn--ghost", "big_card_attachment_editor_cancel");
     cancelButton.dataset.testid = `big-card-attachment-cancel-${rowIndex}`;
-    cancelButton.textContent = getTranslationForKey("cancel") || "Peru";
+    cancelButton.textContent = getTranslationForKey("cancel_changes") || "Peruuta muutokset";
 
     actionRow.append(saveButton, cancelButton);
     editor.append(titleLabel, descriptionLabel, helper, actionRow);

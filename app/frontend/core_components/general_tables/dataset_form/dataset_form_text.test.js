@@ -21,13 +21,25 @@ beforeEach(() => {
 });
 
 describe('dataset form text', () => {
-    test('every text of the form has Finnish, English, Chinese and Cantonese copy', () => {
+    test('new copy has FI/EN and existing four-language copy stays complete', () => {
         for (const [key, copy] of Object.entries(DATASET_FORM_TRANSLATION_FALLBACKS)) {
-            for (const language of ['fi', 'en', 'ch', 'yue']) {
+            // lang_key_lifecycle.md: new development copy requires FI/EN only.
+            for (const language of key === 'cancel_changes' ? ['fi', 'en'] : ['fi', 'en', 'ch', 'yue']) {
                 expect(copy[language], `${key}.${language}`).toBeTruthy();
             }
         }
     });
+
+    test.each([['fi', 'Peruuta muutokset'], ['en', 'Cancel changes'], ['ch', 'Cancel changes'], ['yue', 'Cancel changes']])(
+        'the discard button has reviewed copy or English fallback in %s', (language, expected) => {
+            document.documentElement.lang = language;
+            const button = setDatasetFormText(document.createElement('button'), 'cancel_changes');
+            expect(button.dataset.langKey).toBe('cancel_changes');
+            expect(button.textContent).toBe(expected);
+            runtime.cancel_changes = 'Site copy';
+            expect(datasetFormText('cancel_changes')).toBe('Site copy');
+        },
+    );
 
     test('the site’s reviewed translation comes first, then the form’s copy in the page language', () => {
         document.documentElement.lang = 'fi';

@@ -133,6 +133,8 @@ export async function generate_child_tab_config_form(container) {
                 const save = await showConfirmModal({
                     messagePlainText: 'Save changes before you stop editing?',
                     messageLangKey: 'confirm_save_child_tab_config_on_exit',
+                    cancelLangKey: 'cancel_changes',
+                    cancelText: 'Cancel changes',
                 });
                 if (save) {
                     await doSave();
@@ -439,6 +441,8 @@ export async function generate_child_tab_config_form(container) {
                 const save = await showConfirmModal({
                     messagePlainText: 'Tallenna muutokset ennen taulun vaihtoa?',
                     messageLangKey: 'confirm_save_child_tab_config',
+                    cancelLangKey: 'cancel_changes',
+                    cancelText: 'Cancel changes',
                 });
                 if (save) {
                     await doSave();
@@ -460,6 +464,8 @@ export async function generate_child_tab_config_form(container) {
             const save = await showConfirmModal({
                 messagePlainText: 'Tallenna muutokset ennen taulun vaihtoa?',
                 messageLangKey: 'confirm_save_child_tab_config',
+                cancelLangKey: 'cancel_changes',
+                cancelText: 'Cancel changes',
             });
             if (save) {
                 await doSave();

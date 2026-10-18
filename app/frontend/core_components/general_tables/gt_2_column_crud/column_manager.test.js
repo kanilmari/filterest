@@ -89,7 +89,7 @@ describe('open_column_management_modal: schema edits', () => {
         input.focus();
         input.setSelectionRange(2, 7);
         const actionButtons = document.querySelectorAll('.form-actions button');
-        expect([...actionButtons].map(button => button.textContent)).toEqual(['Cancel', 'Delete', 'Save']);
+        expect([...actionButtons].map(button => button.textContent)).toEqual(['Cancel changes', 'Delete', 'Save']);
         const type = document.querySelector('select[name="data_type"]');
         type.value = 'VARCHAR';
         type.dispatchEvent(new Event('change', { bubbles: true }));
@@ -97,11 +97,11 @@ describe('open_column_management_modal: schema edits', () => {
         length.value = '77';
         endpointRouterMock.mockClear();
         for (const [lang, name, cancel, save] of [
-            ['fi', 'Sarakkeen nimi', 'Peruuta', 'Tallenna'],
-            ['en', 'Column name', 'Cancel', 'Save'],
-            ['ch', '列名', '取消', '保存'],
-            ['yue', '欄位名稱', '取消', '儲存'],
-            ['fi', 'Sarakkeen nimi', 'Peruuta', 'Tallenna'],
+            ['fi', 'Sarakkeen nimi', 'Peruuta muutokset', 'Tallenna'],
+            ['en', 'Column name', 'Cancel changes', 'Save'],
+            ['ch', '列名', 'Cancel changes', '保存'],
+            ['yue', '欄位名稱', 'Cancel changes', '儲存'],
+            ['fi', 'Sarakkeen nimi', 'Peruuta muutokset', 'Tallenna'],
         ]) {
             document.documentElement.lang = lang;
             await new Promise(resolve => setTimeout(resolve, 0));

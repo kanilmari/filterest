@@ -40,7 +40,7 @@ const FIELD_VIEW_TEXT = Object.freeze({
         field: "Field",
         hide: "Hide everywhere",
         save: "Save changes",
-        cancel: "Cancel",
+        cancel_changes: "Cancel changes",
         loading: "Loading fields…",
         loadError: "Fields could not be loaded.",
         saved: "Field order and visibility saved",
@@ -57,7 +57,7 @@ const FIELD_VIEW_TEXT = Object.freeze({
         field: "Kenttä",
         hide: "Piilota kaikkialta",
         save: "Tallenna muutokset",
-        cancel: "Peruuta",
+        cancel_changes: "Peruuta muutokset",
         loading: "Ladataan kenttiä…",
         loadError: "Kenttiä ei voitu ladata.",
         saved: "Kenttien järjestys ja näkyvyys tallennettu",
@@ -73,8 +73,10 @@ const FIELD_VIEW_TEXT = Object.freeze({
 
 function uiText() {
     const heading = getTranslationForKey("edit_fields_view");
+    const fallback = getLanguageWithBrowserFallback() === "fi" ? FIELD_VIEW_TEXT.fi : FIELD_VIEW_TEXT.en;
     return {
-        ...(getLanguageWithBrowserFallback() === "fi" ? FIELD_VIEW_TEXT.fi : FIELD_VIEW_TEXT.en),
+        ...fallback,
+        cancel_changes: getTranslationForKey("cancel_changes", { fallback: fallback.cancel_changes }),
         button: heading,
         title: heading,
     };
@@ -158,7 +160,8 @@ export async function openFieldViewEditor(tableName) {
     const cancelButton = document.createElement("button");
     cancelButton.type = "button";
     cancelButton.className = "fw-btn fw-btn--ghost";
-    cancelButton.textContent = text.cancel;
+    cancelButton.dataset.langKey = "cancel_changes";
+    cancelButton.textContent = text.cancel_changes;
     cancelButton.addEventListener("click", hideModal);
 
     const saveButton = document.createElement("button");

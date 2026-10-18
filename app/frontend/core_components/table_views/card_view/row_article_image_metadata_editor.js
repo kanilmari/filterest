@@ -74,7 +74,7 @@ export function createImageMetadataEditor({ childDataset, columnTypes = {}, onRe
     resetButton.type = "button";
     resetButton.classList.add("fw-btn", "fw-btn--ghost", "big_card_image_editor_reset");
     resetButton.dataset.testid = "big-card-image-reset";
-    resetButton.textContent = getTranslationForKey("cancel") || "Peru";
+    resetButton.textContent = getTranslationForKey("cancel_changes") || "Peruuta muutokset";
 
     actionRow.append(saveButton, resetButton);
     form.append(titleLabel, descriptionLabel, helper, actionRow);

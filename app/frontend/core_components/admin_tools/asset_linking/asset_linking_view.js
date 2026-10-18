@@ -229,7 +229,7 @@ async function createCapabilityEnableForm(container, config) {
 
     const cancelButton = document.createElement('button');
     cancelButton.type = 'button';
-    cancelButton.textContent = getTranslationForKey('cancel') || 'Cancel';
+    cancelButton.textContent = getTranslationForKey('cancel_changes') || 'Cancel changes';
     cancelButton.classList.add('cancel-button');
     cancelButton.addEventListener('click', () => hideModal());
 

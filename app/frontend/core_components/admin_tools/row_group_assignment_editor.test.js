@@ -46,7 +46,7 @@ async function open() {
 beforeEach(() => {
     document.body.replaceChildren();
     mocks.language = "fi";
-    mocks.copy = { save: { fi: "Tallenna", en: "Save" }, cancel: { fi: "Peruuta", en: "Cancel" } };
+    mocks.copy = { save: { fi: "Tallenna", en: "Save" }, cancel_changes: { fi: "Peruuta muutokset", en: "Cancel changes" } };
     for (const path of ["20261005000036_seed_row_group_classification_language_keys.sql", "20261005000038_seed_row_group_window_language_keys.sql"]) {
         const source = readFileSync(`server_tools/migrations/${path}`, "utf8");
         for (const match of source.matchAll(/\('(row_group_[^']+)', '((?:''|[^'])*)', '((?:''|[^'])*)'\)/g)) {
@@ -315,7 +315,7 @@ describe("classification assignment window", () => {
     });
     test("cancel and successful saving return focus to the opener", async () => {
         const opener = await open();
-        document.querySelector('[data-lang-key="cancel"]').click();
+        document.querySelector('[data-lang-key="cancel_changes"]').click();
         await vi.waitFor(() => expect(document.activeElement).toBe(opener));
         await openRowGroupAssignmentEditor("orders", opener);
         change(control(3), true);

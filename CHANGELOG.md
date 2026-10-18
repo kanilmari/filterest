@@ -22,6 +22,7 @@ Dates are the local (Europe/Helsinki) date on which the version was published.
 
 ## [Unreleased]
 
+- Form actions that discard unsaved edits now say “Cancel changes” (Finnish “Peruuta muutokset”); plain close and abort actions keep “Cancel”. Database 9.12.0 seeds the new wording in both translation stores, preserving authored copy.
 - The database image installs PostgreSQL 16 / PostGIS 3 packages without expiring APT build pins and records both installed package versions in each build log (#896).
 - Shared frontend changes select their consumers' browser checks across areas; build, test and import-check configuration has an explicit developer-tooling policy.
 - **Route authorization (SEC-4 M1/M2)** — Empty-row reports require administrator access; guests cannot save shared filter bar settings, while signed-in route grantees retain shared-order and site-policy editing and personal orders follow the site's policy.

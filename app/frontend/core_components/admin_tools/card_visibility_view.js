@@ -465,7 +465,7 @@ export async function generate_card_visibility_form(container, { initialDatasetN
             storageKey: currentTableName ? buildDraftStorageKey(currentTableName) : '',
             editLabel: getTranslationForKey('edit') || 'Edit',
             saveLabel: getTranslationForKey('save') || 'Save',
-            cancelLabel: getTranslationForKey('cancel') || 'Cancel',
+            cancelLabel: getTranslationForKey('cancel_changes') || 'Cancel changes',
             dirtyLabel: getTranslationForKey('unsaved_changes') || 'Unsaved changes',
             cleanLabel: '',
             onSave: async ({ rows }) => {
@@ -521,6 +521,8 @@ export async function generate_card_visibility_form(container, { initialDatasetN
         const save = await showConfirmModal({
             messagePlainText: 'Save changes before switching tables?',
             messageLangKey: 'confirm_save_card_visibility',
+            cancelLangKey: 'cancel_changes',
+            cancelText: 'Cancel changes',
         });
 
         if (save) {

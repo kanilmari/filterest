@@ -310,7 +310,8 @@ export async function openRowArticleView(row_item, table_name, selectedCard = nu
             const cancelButton = document.createElement("button");
             cancelButton.type = "button";
             cancelButton.classList.add("fw-btn", "fw-btn--ghost", "big_card_cancel_button");
-            cancelButton.dataset.langKey = 'cancel';
+            cancelButton.dataset.langKey = 'cancel_changes';
+            cancelButton.textContent = 'Cancel changes';
             cancelButton.dataset.testid = 'big-card-cancel-button';
             cancelButton.hidden = true;
             cancelButton.style.display = 'none';

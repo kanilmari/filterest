@@ -174,7 +174,7 @@ function buildDialog(resolve, { itemId, itemType, currentName, prefillFi, prefil
 
         const cancelBtn = document.createElement('button');
         cancelBtn.dataset.testid = 'rename-tree-node-cancel';
-        cancelBtn.textContent = getTranslationForKey('cancel', { countUsage: false }) || 'Cancel';
+        cancelBtn.textContent = getTranslationForKey('cancel_changes', { countUsage: false }) || 'Cancel changes';
         Object.assign(cancelBtn.style, {
             padding: '8px 18px', border: '1px solid var(--border_color, #ccc)',
             borderRadius: '4px', background: 'var(--bg_color, #fff)',

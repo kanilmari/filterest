@@ -60,7 +60,7 @@
       "paths": [
         "app/frontend/reusable_components/dom_container_builder.js", "app/frontend/reusable_components/dom_container_builder_helpers.js", "app/frontend/reusable_components/http_text_linkifier.js", "app/frontend/core_components/table_views/card_view/row_article_opener.js", "app/frontend/core_components/table_views/card_view/row_article_opener_helpers.js", "app/frontend/core_components/table_views/card_view/image_first_view_opener.js", "app/frontend/core_components/table_views/card_view/image_first_view_activation.js"
       ],
-      "specs": [
+      "specs": ["app/testing/e2e/C_card_view/C24_cancel_changes.spec.ts",
         "app/testing/e2e/C_card_view/C25_rich_text_links.spec.ts",
         "app/testing/e2e/G_navigation/G10_dataset_name_pool_access.spec.ts", "app/testing/e2e/C_card_view/C22_article_image_arrows_probe.spec.ts", "app/testing/e2e/C_card_view/C21_record_titles.spec.ts", "app/testing/e2e/C_card_view/C19_dataset_heading_hierarchy.spec.ts", "app/testing/e2e/C_card_view/C10_image_first_article.spec.ts", "app/testing/e2e/C_card_view/C11_network_media_variants.spec.ts", "app/testing/e2e/C_card_view/C12_article_reload_reading_position.spec.ts", "app/testing/e2e/C_card_view/C13_related_dataset_appearance.spec.ts",
         "app/testing/e2e/C_card_view/C16_finnish_card_filterbar_text.spec.ts", "app/testing/e2e/C_card_view/C17_article_toolbar_group_permissions.spec.ts", "app/testing/e2e/C_card_view/C18_article_open_appearance_probe.spec.ts", "app/testing/e2e/C_card_view/C2_open_big_card.spec.ts",
@@ -253,7 +253,7 @@
         "app/backend/core_components/frontend_assets", "app/backend/reusable_components/vanilla_tree", "app/frontend/reusable_components/vanilla_tree", "app/frontend/main.js",
         "app/frontend/index.html"
       ],
-      "specs": [
+      "specs": ["app/testing/e2e/C_card_view/C24_cancel_changes.spec.ts",
         "app/testing/e2e/C_card_view/C25_rich_text_links.spec.ts",
         "app/testing/e2e/E_search_filter/E20_filterbar_order_and_memory.spec.ts", "app/testing/e2e/G_navigation/G13_phone_topbar_measurements.spec.ts", "app/testing/e2e/D_view_switch/D6_table_cell_line_limit.spec.ts", "app/testing/e2e/T_admin/T21_home_text_style.spec.ts", "app/testing/e2e/G_navigation/G12_top_nav_home_button.spec.ts",
         "app/testing/e2e/C_card_view/C22_article_image_arrows_probe.spec.ts", "app/testing/e2e/E_search_filter/E18_dataset_default_view.spec.ts", "app/testing/e2e/C_card_view/C19_dataset_heading_hierarchy.spec.ts", "app/testing/e2e/A_row_crud/A1_add_row.spec.ts", "app/testing/e2e/A_row_crud/A2_edit_cell.spec.ts", "app/testing/e2e/A_row_crud/A3_delete_rows.spec.ts", "app/testing/e2e/A_row_crud/A4_select_row.spec.ts",
@@ -317,7 +317,7 @@
         "app/backend/core_components/sign_in_deadline", "app/backend/core_components/sign_in_revocation", "app/backend/core_components/security", "app/backend/pipeline/auth_check",
         "app/backend/pipeline/device_id_check", "app/backend/pipeline/fingerprint_check", "app/backend/pipeline/csrf_check", "app/backend/pipeline/automation_check"
       ],
-      "specs": [
+      "specs": ["app/testing/e2e/C_card_view/C24_cancel_changes.spec.ts",
         "app/testing/e2e/C_card_view/C25_rich_text_links.spec.ts",
         "app/testing/e2e/E_search_filter/E20_filterbar_order_and_memory.spec.ts", "app/testing/e2e/E_search_filter/E21_category_heading_order.spec.ts", "app/testing/e2e/G_navigation/G13_phone_topbar_measurements.spec.ts", "app/testing/e2e/D_view_switch/D6_table_cell_line_limit.spec.ts", "app/testing/e2e/T_admin/T21_home_text_style.spec.ts", "app/testing/e2e/J_modals/J4_client_error_notices.spec.ts", "app/testing/e2e/G_navigation/G12_top_nav_home_button.spec.ts",
         "app/testing/e2e/C_card_view/C22_article_image_arrows_probe.spec.ts", "app/testing/e2e/E_search_filter/E18_dataset_default_view.spec.ts", "app/testing/e2e/C_card_view/C21_record_titles.spec.ts", "app/testing/e2e/E_search_filter/E19_shared_filter_section.spec.ts", "app/testing/e2e/C_card_view/C19_dataset_heading_hierarchy.spec.ts", "app/testing/e2e/A_row_crud/A1_add_row.spec.ts", "app/testing/e2e/A_row_crud/A2_edit_cell.spec.ts", "app/testing/e2e/A_row_crud/A3_delete_rows.spec.ts", "app/testing/e2e/A_row_crud/A4_select_row.spec.ts",
@@ -512,7 +512,7 @@
         "app/frontend/styles", "app/frontend/shared/style_package", "app/frontend/templates", "app/frontend/ui_config.js",
         "app/frontend/core_components/theme.js", "app/frontend/core_components/theme_preference_api.js"
       ],
-      "specs": [
+      "specs": ["app/testing/e2e/C_card_view/C24_cancel_changes.spec.ts",
         "app/testing/e2e/C_card_view/C25_rich_text_links.spec.ts",
         "app/testing/e2e/E_search_filter/E20_filterbar_order_and_memory.spec.ts", "app/testing/e2e/C_card_view/C23_card_image_usage_presentation.spec.ts", "app/testing/e2e/G_navigation/G13_phone_topbar_measurements.spec.ts", "app/testing/e2e/D_view_switch/D6_table_cell_line_limit.spec.ts", "app/testing/e2e/T_admin/T21_home_text_style.spec.ts", "app/testing/e2e/J_modals/J4_client_error_notices.spec.ts", "app/testing/e2e/G_navigation/G12_top_nav_home_button.spec.ts",
         "app/testing/e2e/C_card_view/C22_article_image_arrows_probe.spec.ts", "app/testing/e2e/E_search_filter/E18_dataset_default_view.spec.ts", "app/testing/e2e/C_card_view/C21_record_titles.spec.ts", "app/testing/e2e/E_search_filter/E19_shared_filter_section.spec.ts", "app/testing/e2e/C_card_view/C20_description_empty_blocks.spec.ts", "app/testing/e2e/C_card_view/C19_dataset_heading_hierarchy.spec.ts", "app/testing/e2e/C_card_view/C10_image_first_article.spec.ts", "app/testing/e2e/C_card_view/C13_related_dataset_appearance.spec.ts", "app/testing/e2e/C_card_view/C14_product_card_row_commits.spec.ts", "app/testing/e2e/C_card_view/C15_chart_axes.spec.ts",
@@ -735,6 +735,15 @@
     {
       "paths": ["app/docker/Dockerfile.db"],
       "tests": ["app/testing/python/test_docker_postgis_packages.py"]
+    },
+    {
+      "paths": [
+        "app/server_tools/migrations/20261015000015_seed_cancel_changes_language_key.sql",
+        "app/frontend/core_components/lang/cancel_changes_labels.test.js"
+      ],
+      "tests": [
+        "app/testing/python/test_cancel_changes_language_seed.py"
+      ]
     }
   ],
   "bootstrap_proofs": [

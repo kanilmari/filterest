@@ -4,11 +4,12 @@
 // its column table and the dataset removal dialog it opens.
 // Bridges the form with an installation whose language keys are still missing:
 // the site's own reviewed translations always take precedence over these.
-// Exists so every text the form shows has Finnish, English, Chinese (ch) and
-// Cantonese (yue) copy in one place, instead of one file per form.
+// Exists so form copy stays together; new development copy has Finnish and
+// English, while existing Chinese (ch) and Cantonese (yue) copy is preserved.
 // A {name} placeholder is filled by the form (datasetFormText), never by a translator.
 
 const COPY = {
+    cancel_changes: { fi: "Peruuta muutokset", en: "Cancel changes" },
     card_role_automatic: { fi: "Automaattinen", en: "Automatic", ch: "自动", yue: "自動" },
     // --- The dataset itself ---
     table_name: { fi: "Aineiston nimi", en: "Dataset name", ch: "数据集名称", yue: "資料集名稱" },

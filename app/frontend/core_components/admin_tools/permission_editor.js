@@ -431,6 +431,7 @@ export async function generate_permissions_form(permissions_container) {
                 rows: tablelessRows,
                 rowIdKey: "functionId",
                 storageKey: "permissions_tableless",
+                cancelLabel: getTranslationForKey("cancel_changes") || "Cancel changes",
                 cleanLabel: "",
                 showCellEditButtonOnHover: true,
                 renderCellEditButton: () => createSvgNode(edit_icon_svg),
@@ -471,6 +472,7 @@ export async function generate_permissions_form(permissions_container) {
                 rows: scopedRows,
                 rowIdKey: "functionId",
                 storageKey: getScopedStorageKey(),
+                cancelLabel: getTranslationForKey("cancel_changes") || "Cancel changes",
                 cleanLabel: "",
                 showCellEditButtonOnHover: true,
                 renderCellEditButton: () => createSvgNode(edit_icon_svg),
@@ -515,6 +517,8 @@ export async function generate_permissions_form(permissions_container) {
         const shouldSave = await showConfirmModal({
             messagePlainText: "Tallennetaanko muutetut oikeudet?",
             messageLangKey: "confirm_save_permissions",
+            cancelLangKey: "cancel_changes",
+            cancelText: "Cancel changes",
         });
 
         if (shouldSave) {

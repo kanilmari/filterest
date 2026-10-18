@@ -24,8 +24,8 @@ export function appendFormActions(form, table_uid, columns, modal_form_state, cl
 
     const cancel_button = document.createElement("button");
     cancel_button.type = "button";
-    // cancel_button.textContent = 'Peruuta';
-    cancel_button.dataset.langKey = "cancel";
+    cancel_button.textContent = "Peruuta muutokset";
+    cancel_button.dataset.langKey = "cancel_changes";
     cancel_button.dataset.testid = "btn-cancel-add-row";
     cancel_button.classList.add("cancel-button");
     cancel_button.addEventListener("click", () => {

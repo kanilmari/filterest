@@ -135,8 +135,8 @@ async function createForeignKeyForm(container) {
 
     const cancelButton = document.createElement('button');
     cancelButton.type = 'button';
-    cancelButton.dataset.langKey = 'cancel';
-    cancelButton.textContent = 'Cancel';
+    cancelButton.dataset.langKey = 'cancel_changes';
+    cancelButton.textContent = 'Cancel changes';
     cancelButton.classList.add('cancel-button');
     cancelButton.addEventListener('click', () => {
         hideModal();

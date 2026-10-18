@@ -112,8 +112,8 @@ export function createArticleLanguageEditor({
     const cancel = document.createElement("button");
     cancel.type = "button";
     cancel.className = "fw-btn fw-btn--ghost";
-    cancel.dataset.langKey = "cancel";
-    cancel.textContent = copy("cancel", "Cancel");
+    cancel.dataset.langKey = "cancel_changes";
+    cancel.textContent = copy("cancel_changes", "Cancel changes");
     actions.append(save, cancel);
     panel.append(fieldLabel, help, grid, status, actions);
 

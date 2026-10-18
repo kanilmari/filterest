@@ -458,7 +458,7 @@ export async function openRowAccessEditor(datasetName) {
 
         const actions = document.createElement("div");
         actions.classList.add("form-actions", "row-access-editor__footer");
-        const cancelButton = createTranslatedElement("button", "cancel", "Cancel");
+        const cancelButton = createTranslatedElement("button", "cancel_changes", "Cancel changes");
         cancelButton.type = "button";
         cancelButton.classList.add("fw-btn", "fw-btn--ghost", "cancel-button");
         const saveButton = createTranslatedElement(

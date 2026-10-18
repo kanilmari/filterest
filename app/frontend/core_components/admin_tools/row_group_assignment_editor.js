@@ -11,14 +11,14 @@ import { refreshTableUnified } from "../general_tables/gt_1_row_crud/gt_1_2_row_
 import { createModal, hideModal, showModal } from "../../reusable_components/modal/modal_builder.js";
 import { showWarningToast } from "../../reusable_components/notifications/toast_notification_printer.js";
 
-function text(key) { return getTranslationForKey(key) || key; }
-function element(tag, key) {
+function text(key, fallback = key) { return getTranslationForKey(key) || fallback; }
+function element(tag, key, fallback) {
     const node = document.createElement(tag);
-    if (key) { node.dataset.langKey = key; node.textContent = text(key); }
+    if (key) { node.dataset.langKey = key; node.textContent = text(key, fallback); }
     return node;
 }
-function button(key) {
-    const node = element("button", key);
+function button(key, fallback) {
+    const node = element("button", key, fallback);
     node.type = "button";
     node.className = "fw-btn";
     return node;
@@ -110,7 +110,7 @@ export async function openRowGroupAssignmentEditor(datasetName, opener = documen
     save.type = "submit";
     save.disabled = true;
     save.dataset.testid = "row-group-save";
-    const cancel = button("cancel");
+    const cancel = button("cancel_changes", "Cancel changes");
     cancel.addEventListener("click", () => hideModal());
     footer.append(cancel, save);
     content.append(summary, catalogue, status, footer);
