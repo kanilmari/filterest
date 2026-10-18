@@ -235,12 +235,13 @@ the first failed assertion if cleanup also fails.
 
 ### Menu strings with `data-lang-key`
 -   **Attribute**: Every translatable element includes a `data-lang-key` attribute and an English fallback inside the element: `<div data-lang-key="show_more">Show more</div>`.
--   **Mechanism**: `filterest/app/frontend/core_components/lang/lang.js` scans the DOM for these keys and replaces the fallback text with the active language's string from `system_lang_keys`.
+-   **Mechanism**: `app/frontend/core_components/lang/translation_handler.js` scans the DOM for these keys and replaces the fallback text with the active language's string from `system_lang_keys`.
 -   **Programmatic Creation**: Prefer `element.dataset.langKey = "show_more"` and **always provide the fallback text**.
 -   **Fallback**: Always include an English fallback text so the UI remains readable without JavaScript.
 
 ### UI literal localization sweep
 -   When touching UI code, scan for user-facing hardcoded strings in `textContent`, `appendChild(document.createTextNode(...))`, button labels, placeholders, titles, and modal/toast messages.
 -   Replace each user-facing literal with a stable `dataset.langKey` in JS, or `data-lang-key="..."` in HTML templates only. Keep an English fallback in the element so the UI remains readable while translations load.
--   Seed or update the key through the application API, not direct SQL: `./filterest language upsert key_name --fi "..." --en "..." --ch "..." --usage-explanation "..."`.
+-   Ship new copy as reviewed Finnish and English rows in a seed migration under `app/server_tools/migrations/` that adds missing keys and fills blank translations while preserving authored copy, list it in `language_seed_migrations` in `generate_bootstrap.py` and regenerate the public bootstrap; see [Lang Key Lifecycle](lang_key_lifecycle.md#5-translation-serving). The application API (`./filterest language upsert key_name --fi "..." --en "..." --usage-explanation "..."`, never direct SQL) changes only the installation it is run against.
+-   Keep a value out of the key: copy that names something writes `$table_name` (or `$count`) and the element carries the value in `data-lang-variable`, so a language change keeps it. A startup notice also registers its bootstrap copy in the language layer's [local fallback catalogue](../../frontend/core_components/lang/local_translation_fallback_catalog.js), so the page translator keeps a readable sentence when both translation stores lack its key; `navigation/dataset_redirect_notice_copy.js` is a small example.
 -   Keep `usage_explanation` concrete: identify the exact UI location, the control type, and what action or state the text represents.

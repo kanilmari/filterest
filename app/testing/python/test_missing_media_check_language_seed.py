@@ -170,8 +170,10 @@ def test_the_retired_startup_routine_is_gone_and_its_keys_are_seeded():
 
 def test_the_page_translator_serves_the_fallback_copy():
     translator = TRANSLATOR.read_bytes()
-    assert b"from '../admin_tools/missing_media_check_translation_fallbacks.js'" in translator
-    assert b"...MISSING_MEDIA_CHECK_TRANSLATION_FALLBACKS," in translator
+    assert b"import { LOCAL_TRANSLATION_FALLBACKS } from './local_translation_fallback_catalog.js'" in translator
+    catalogue = TRANSLATOR.with_name("local_translation_fallback_catalog.js").read_bytes()
+    assert b"from '../admin_tools/missing_media_check_translation_fallbacks.js'" in catalogue
+    assert b"...MISSING_MEDIA_CHECK_TRANSLATION_FALLBACKS," in catalogue
 
 
 def test_bootstrap_runs_the_seed_in_upgrade_order_and_baselines_it():

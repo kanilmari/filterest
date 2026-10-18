@@ -18,7 +18,7 @@ from disposable_postgres import disposable_postgres
 APP = Path(__file__).resolve().parents[2]
 SEED = APP / "server_tools/public_bootstrap/source/field_settings.lang_keys.sql"
 MIGRATION = APP / "server_tools/migrations/20260908000001_seed_field_settings_language_keys.sql"
-HANDLER = APP / "frontend/core_components/lang/translation_handler.js"
+FALLBACKS = APP / "frontend/core_components/lang/local_translation_fallback_catalog.js"
 KEYS = (
     "field_set_owner_personal", "field_set_source_personal", "field_set_source_group",
     "field_set_source_site", "field_set_source_metadata", "field_set_editing_site_default",
@@ -54,9 +54,9 @@ def _seed_rows():
 def test_reviewed_seed_covers_exact_field_selection_copy_and_matches_fallbacks():
     rows = _seed_rows()
     assert set(rows) == set(KEYS)
-    handler = HANDLER.read_text()
+    catalogue = FALLBACKS.read_text()
     for key in KEYS:
-        block = re.search(r"\b" + key + r": \{(.*?)\n    \},", handler, re.S)[1]
+        block = re.search(r"\b" + key + r": \{(.*?)\n    \},", catalogue, re.S)[1]
         fallbacks = tuple(
             json.loads(re.search(r"\b" + language + r': ("(?:[^"\\]|\\.)*")', block)[1])
             for language in ("fi", "en", "ch", "yue")

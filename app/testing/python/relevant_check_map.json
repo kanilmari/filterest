@@ -693,6 +693,22 @@
       "tests": [
         "app/testing/python/test_table_cell_lines_seed.py"
       ]
+    },
+    {
+      "paths": [
+        "app/frontend/core_components/lang/local_translation_fallback_catalog.js",
+        "app/frontend/core_components/navigation/dataset_redirect_notice_copy.js",
+        "app/frontend/core_components/navigation/dataset_redirect_notice_copy.test.js",
+        "app/frontend/core_components/navigation/root_redirect_handler.js",
+        "app/frontend/core_components/navigation/root_redirect_handler.test.js",
+        "app/server_tools/migrations/20261015000014_seed_redirect_notice_language_keys.sql",
+        "app/testing/python/test_dataset_redirect_notice_language_keys.py"
+      ],
+      "tests": [
+        "app/testing/python/test_dataset_redirect_notice_language_keys.py",
+        "app/testing/python/test_field_settings_language_seed.py",
+        "app/testing/python/test_missing_media_check_language_seed.py"
+      ]
     }
   ],
   "bootstrap_proofs": [
