@@ -127,7 +127,7 @@
     },
     {
       "area": "Dataset appearance projection and binding",
-      "paths": [
+      "paths": ["app/frontend/reusable_components/appearance_projection_writer.js", "app/frontend/reusable_components/appearance_scope_reader.js",
         "app/frontend/core_components/table_views/dataset_appearance_state.js",
         "app/frontend/core_components/table_views/dataset_appearance_renderer.js",
         "app/frontend/core_components/table_views/dataset_appearance_scaling.test.js",
@@ -149,7 +149,7 @@
     },
     {
       "area": "Dataset views",
-      "paths": [
+      "paths": ["app/frontend/reusable_components/appearance_projection_writer.js", "app/frontend/reusable_components/appearance_scope_reader.js", "app/frontend/reusable_components/lang_value_reader.js", "app/frontend/reusable_components/safe_external_http_url.js", "app/frontend/reusable_components/symbol_asset_resolver.js", "app/frontend/core_components/config_fetcher.js", "app/frontend/core_components/database_view_fetcher.js", "app/frontend/core_components/function_access_checker.js", "app/frontend/core_components/permission_cache_reader.js", "app/frontend/core_components/route_permission_checker.js",
         "app/frontend/core_components/table_views",
         "app/frontend/core_components/admin_tools/admin_button_builder.js",
         "app/frontend/shared/card_roles",
@@ -201,7 +201,7 @@
     },
     {
       "area": "Filtering and categories",
-      "paths": ["app/server_tools/migrations/20261015000020_add_row_group_heading_order_appearance_field.sql", "app/frontend/core_components/filterbar", "app/frontend/reusable_components/multiselect_dropdown", "app/frontend/reusable_components/results_count"],
+      "paths": ["app/frontend/reusable_components/appearance_scope_reader.js", "app/frontend/reusable_components/scroll_passthrough.js", "app/frontend/reusable_components/symbol_asset_resolver.js", "app/frontend/reusable_components/view_lifecycle_events.js", "app/frontend/core_components/permission_cache_reader.js", "app/frontend/core_components/route_permission_checker.js", "app/server_tools/migrations/20261015000020_add_row_group_heading_order_appearance_field.sql", "app/frontend/core_components/filterbar", "app/frontend/reusable_components/multiselect_dropdown", "app/frontend/reusable_components/results_count"],
       "specs": [
         "app/testing/e2e/E_search_filter/E20_filterbar_order_and_memory.spec.ts", "app/testing/e2e/E_search_filter/E21_category_heading_order.spec.ts", "app/testing/e2e/G_navigation/G12_top_nav_home_button.spec.ts", "app/testing/e2e/G_navigation/G13_phone_topbar_measurements.spec.ts", "app/testing/e2e/D_view_switch/D6_table_cell_line_limit.spec.ts", "app/testing/e2e/E_search_filter/E18_dataset_default_view.spec.ts", "app/testing/e2e/C_card_view/C21_record_titles.spec.ts", "app/testing/e2e/E_search_filter/E19_shared_filter_section.spec.ts", "app/testing/e2e/C_card_view/C19_dataset_heading_hierarchy.spec.ts", "app/testing/e2e/A_row_crud/A1_add_row.spec.ts", "app/testing/e2e/A_row_crud/A2_edit_cell.spec.ts", "app/testing/e2e/A_row_crud/A3_delete_rows.spec.ts", "app/testing/e2e/A_row_crud/A4_select_row.spec.ts",
         "app/testing/e2e/A_row_crud/A5_select_all.spec.ts", "app/testing/e2e/A_row_crud/A6_select_card.spec.ts", "app/testing/e2e/A_row_crud/A7_fk_dropdown_edit.spec.ts", "app/testing/e2e/A_row_crud/A8_temp_dataset_persistence.spec.ts",
@@ -234,7 +234,7 @@
     },
     {
       "area": "Dataset writes and cell selection",
-      "paths": ["app/frontend/core_components/general_tables", "app/frontend/reusable_components/vanilla_checkbox_table", "app/frontend/reusable_components/key_value_container"],
+      "paths": ["app/frontend/reusable_components/appearance_projection_writer.js", "app/frontend/reusable_components/safe_external_http_url.js", "app/frontend/core_components/general_tables", "app/frontend/reusable_components/vanilla_checkbox_table", "app/frontend/reusable_components/key_value_container"],
       "specs": [
         "app/testing/e2e/A_row_crud/A1_add_row.spec.ts",
         "app/testing/e2e/A_row_crud/A2_edit_cell.spec.ts",
@@ -247,7 +247,7 @@
     },
     {
       "area": "Navigation and shared requests",
-      "paths": [
+      "paths": ["app/frontend/reusable_components/dom_element_checker.js", "app/frontend/reusable_components/scroll_passthrough.js", "app/frontend/reusable_components/symbol_asset_resolver.js", "app/frontend/reusable_components/view_lifecycle_events.js", "app/frontend/core_components/config_fetcher.js", "app/frontend/core_components/database_view_fetcher.js", "app/frontend/core_components/permission_cache_reader.js", "app/frontend/core_components/route_permission_checker.js",
         "app/frontend/core_components/navigation", "app/frontend/core_components/endpoints", "app/frontend/core_components/pipeline",
         "app/frontend/core_components/vanilla_tree", "app/backend/core_components/dataset_routes", "app/backend/core_components/dataset_visibility", "app/backend/core_components/router",
         "app/backend/core_components/frontend_assets", "app/backend/reusable_components/vanilla_tree", "app/frontend/reusable_components/vanilla_tree", "app/frontend/main.js",
@@ -311,7 +311,7 @@
     },
     {
       "area": "Sign-in and accounts",
-      "paths": [
+      "paths": ["app/frontend/reusable_components/browser_identity_builder.js", "app/frontend/core_components/config_fetcher.js", "app/frontend/core_components/permission_cache_reader.js", "app/frontend/core_components/route_permission_checker.js",
         "app/frontend/core_components/auth", "app/frontend/core_components/user_tools", "app/backend/core_components/accountwrite", "app/backend/core_components/auth",
         "app/backend/core_components/auth_generation", "app/backend/core_components/otp", "app/backend/core_components/sessions", "app/backend/core_components/session_expiry",
         "app/backend/core_components/sign_in_deadline", "app/backend/core_components/sign_in_revocation", "app/backend/core_components/security", "app/backend/pipeline/auth_check",
@@ -389,7 +389,7 @@
     },
     {
       "area": "Administration",
-      "paths": [
+      "paths": ["app/frontend/core_components/function_access_checker.js",
         "app/frontend/core_components/admin_tools",
         "app/backend/core_components/db_admin",
         "app/backend/core_components/system_config_checks",
@@ -442,7 +442,7 @@
     },
     {
       "area": "Front page",
-      "paths": ["app/testing/e2e/helpers/home-writer-lock.test.ts", "app/testing/e2e/helpers/home-writer-lock.ts", "app/testing/e2e/helpers/home-settings.test.ts", "app/testing/e2e/helpers/home-settings.ts", "app/testing/e2e/helpers/home-policy-fixture.ts",
+      "paths": ["app/frontend/reusable_components/symbol_asset_resolver.js", "app/frontend/reusable_components/view_lifecycle_events.js", "app/frontend/core_components/permission_cache_reader.js", "app/frontend/core_components/route_permission_checker.js", "app/testing/e2e/helpers/home-writer-lock.test.ts", "app/testing/e2e/helpers/home-writer-lock.ts", "app/testing/e2e/helpers/home-settings.test.ts", "app/testing/e2e/helpers/home-settings.ts", "app/testing/e2e/helpers/home-policy-fixture.ts",
         "app/backend/core_components/custom_root_files.go",
         "app/backend/core_components/custom_root_files_test.go",
         "app/frontend/core_components/admin_tools/custom_root_copy.js",
@@ -508,7 +508,7 @@
     },
     {
       "area": "Themes and shells",
-      "paths": [
+      "paths": ["app/frontend/reusable_components/symbol_asset_resolver.css",
         "app/frontend/styles", "app/frontend/shared/style_package", "app/frontend/templates", "app/frontend/ui_config.js",
         "app/frontend/core_components/theme.js", "app/frontend/core_components/theme_preference_api.js"
       ],
@@ -529,9 +529,9 @@
     },
     {
       "area": "Developer tooling",
-      "paths": ["app/frontend/core_components/dev_tools", "app/backend/core_components/agent_tools", "app/backend/core_components/dev_tools", "app/backend/core_components/maintainer_tools"],
+      "paths": ["app/frontend/check_js_imports.js", "app/frontend/vite.config.mjs", "app/frontend/vitest.config.mjs", "app/frontend/core_components/dev_tools", "app/backend/core_components/agent_tools", "app/backend/core_components/dev_tools", "app/backend/core_components/maintainer_tools"],
       "specs": [],
-      "none": "Operator/agent tools have Python and Go proofs; no maintained browser flow covers their process execution."
+      "none": "Operator/agent tools and build, test and import-check configuration have Python, Go and Vitest proofs; no isolated browser flow covers their process execution or configuration."
     },
     {
       "area": "Internal backend foundations",

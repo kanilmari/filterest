@@ -128,6 +128,22 @@ def test_removed_area_entry_and_empty_none_fail(fixture_repository):
         validate_map(root, updated)
 
 
+@pytest.mark.parametrize("placement", ["same-area", "other-area", "other-area-twice"])
+def test_shared_curated_paths_only_reject_duplicates_within_an_area(fixture_repository, placement):
+    root, policy = fixture_repository
+    entry = policy["browser_areas"][0]
+    shared = entry["paths"][0]
+    target = entry if placement == "same-area" else {**entry, "area": "Shared consumer", "paths": []}
+    if target is not entry:
+        policy["browser_areas"].append(target)
+    target["paths"].extend([shared] * (2 if placement == "other-area-twice" else 1))
+    if placement == "other-area":
+        validate_map(root, policy)
+    else:
+        with pytest.raises(ValueError, match="duplicate curated path"):
+            validate_map(root, policy)
+
+
 def test_removed_or_unknown_project_fails(fixture_repository):
     root, policy = fixture_repository
     policy["browser_areas"][0]["projects"] = ["retired-card"]

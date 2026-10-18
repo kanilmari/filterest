@@ -90,10 +90,13 @@ def validate_map(root: Path, policy: dict) -> None:
             raise ValueError(f"{entry['area']} needs specs or explicit none with a reason")
         if entry["specs"] and (not entry.get("projects") or set(entry["projects"]) - projects):
             raise ValueError(f"{entry['area']} has missing or unknown browser projects")
+        # Shared sources may serve several areas; repeats within one are mistakes.
+        area_paths = set()
         for path in entry["paths"]:
-            if path in covered:
-                raise ValueError(f"duplicate curated path: {path}")
-            covered.add(path)
+            if path in area_paths:
+                raise ValueError(f"duplicate curated path in {entry['area']}: {path}")
+            area_paths.add(path)
+        covered.update(area_paths)
         references.extend(entry["paths"] + entry["specs"])
         for spec in entry["specs"]:
             if spec in manual:

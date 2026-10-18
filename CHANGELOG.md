@@ -22,6 +22,7 @@ Dates are the local (Europe/Helsinki) date on which the version was published.
 
 ## [Unreleased]
 
+- Shared frontend changes select their consumers' browser checks across areas; build, test and import-check configuration has an explicit developer-tooling policy.
 - **Route authorization (SEC-4 M1/M2)** — Empty-row reports require administrator access; guests cannot save shared filter bar settings, while signed-in route grantees retain shared-order and site-policy editing and personal orders follow the site's policy.
 - Rich-text links in cards and articles keep validated HTTP, HTTPS and mailto destinations with safe new-tab attributes; unsafe links retain their text and allowed children.
 - Full Permissions saves preserve grants of disabled functions in both global and dataset scopes.
