@@ -87,6 +87,11 @@ def run_database_tool(database, command, *, source=None, destination=None, sensi
         except RecoveryError:
             log.write(b"Recovery tool stream refused: authentication key representation detected.\n")
             raise
+        except InterruptedError:
+            # Cancellation is an OSError subclass, but is not a missing tool.
+            # Preserve it after the child group is reaped so callers can report
+            # interruption while proving disposal of their disposable database.
+            raise
         except OSError:
             log.write(b"Required recovery command unavailable.\n")
             raise RecoveryError(f"A required recovery command is unavailable; log: {filename}") from None
@@ -97,7 +102,7 @@ def run_database_tool(database, command, *, source=None, destination=None, sensi
             if diagnostics:
                 log.write(b"Protected diagnostic text redacted.\n")
         else:
-            text = (content + diagnostics).decode("utf-8", errors="replace")
+            text = safe_diagnostic((content + diagnostics).decode("utf-8", errors="replace"), database.key)
             text = re.sub(r"(?im)^.*(?:PASSWORD|SCRAM-SHA-256|md5[0-9a-f]{32}).*$", "[credential redacted]", text)
             for secret in database.hidden:
                 text = text.replace(secret, "[secret redacted]")

@@ -477,7 +477,7 @@ these operator interfaces and the recovery invocations listed here:
 | Root `./ctl`, direct `./app/ctl` and direct `./app/server_tools/ctl/ctl_main.sh` | Control arguments containing `--backup`, `--restore`, `--restore-db` or `backup-all`, in the applicable control mode |
 | Direct `./app/server_tools/run_filterest_docker.sh` | `dump-database`, `restore-database`; finite recovery helpers `profile`, `update-preflight`, `app-image-id`, `stop-app`, `ready-check`; `start` with `--for-update`, `--backup`, `--restore` or `--restore-db` |
 | Direct `./app/server_tools/update_filterest.sh` | All updater invocations, including help and parser refusals |
-| `python3 app/server_tools/lib/database_recovery.py` | `backup`, `verify`, `restore`, `preflight`, `setup-key`, including help and parser refusals |
+| `python3 app/server_tools/lib/database_recovery.py` | `backup`, `verify`, `restore`, `restore-check`, `preflight`, `setup-key`, including help and parser refusals |
 | `python3 app/server_tools/lib/database_recovery_update.py` | `preflight`, `archive`, `manifest`, `seal`, `verify`, `extract`, including help and parser refusals |
 
 Paths in this table are relative to the installation root; an installed Python
@@ -654,6 +654,47 @@ never bypasses authentication of a new packet. Archives containing the
 authentication key are refused; create a new safe packet from a trusted
 installation.
 
-Scheduling, retention and off-host copies remain operator responsibilities.
-Packets, authentication keys and role verifiers must never enter source or
-public releases.
+### Test a backup in a disposable database (native)
+
+Use the database recovery tool directly, supplying the same resolved protected
+settings paths used by this native installation (repeat `--settings` as needed):
+
+```bash
+python3 app/server_tools/lib/database_recovery.py restore-check \
+  --root "$PWD" --profile native \
+  --settings "$PWD/keys/filterest_runtime/runtime_environment.env" \
+  --backup /absolute/path/to/private/packet --target auto
+```
+
+The restore check executes the site's own stored code as the database superuser on the live cluster, exactly as a real restore would. It is safe only for this installation's authenticated packets.
+It authenticates a private snapshot with this installation's own recovery key before creation, never accepting another installation's packet or an unauthenticated packet.
+Key custody is part of this boundary: keep the recovery key at mode 600, outside the web root and outside the packet, with a separate protected backup.
+It never creates a key and accepts no unauthenticated/legacy bypass switches.
+
+The explicit `--target auto` creates a uniquely named `<database-prefix>_restorecheck_<random>` database from `template0` on the live cluster.
+Existing names, including the live database, are refused. Names are vetted against cached credentials; a collision switches to a random-only name or refuses.
+The check holds a superuser connection on the live cluster while it runs; the dump's allowed extensions must already be installed on the server.
+The tool leaves the application running and itself never imports roles, saved settings or database properties; it restores with `--no-owner --no-privileges --no-tablespaces --no-publications --no-subscriptions --no-security-labels`.
+
+Before creation, archive listings and nonexecuting definitions refuse native `LANGUAGE c`/`internal` functions without allowed-extension ownership, event triggers, role/tablespace globals, foreign tables, subscriptions (even disabled/disconnected), INSERT-style data and incomplete inventories.
+The extension allowlist is exactly `plpgsql`, `vector`, `postgis`, `uuid-ossp` and `pg_trgm`, derived from the installation bootstrap/migrations and PostgreSQL's default language.
+Every other extension and nondefault procedural language is refused, including `adminpack`, `lo`, `pageinspect`, `pg_cron`, `plv8`, `dblink`, all foreign-data wrappers and untrusted languages.
+Allowed extensions recreate their own native members; an explicitly dumped standalone native function has no such ownership proof. Publications are omitted; prepared transactions and replication slots are not pg_dump objects, but their listing entries are nevertheless refused.
+
+A case-insensitive **tripwire, not a boundary**, scans function bodies, constraints (including domain CHECKs), generated columns and index expressions before creation.
+It refuses `PROGRAM`, `lo_import`, `lo_export`, `pg_read_file`, `pg_read_binary_file`, `pg_ls_dir`, `pg_file_write`, `ALTER SYSTEM`, `ALTER ROLE`, `CREATE ROLE`, `DROP ROLE`, `SET ROLE`, `SET SESSION AUTHORIZATION`, `pg_terminate_backend` and `dblink`.
+Refusals name the object without printing its body or expression. Dynamic SQL can bypass this tripwire; it does not contain stored code.
+**Switch to a private throwaway cluster** (run `initdb` as an unprivileged OS user, with its own socket) if packets ever come from outside this installation: a host move, a customer's packet or a shared key. The live-cluster check must not be used for those cases.
+
+Expected table/view/function/sequence counts come from dump definitions; exact per-table counts come from COPY data, including empty and partitioned tables (`ONLY` avoids inherited double counts).
+Materialized-view DATA entries are never restored: no refresh query runs; definitions contribute to view counts, but their row counts are unchecked. JSON reports `materialized_views_definition_only` and `materialized_view_row_counts_checked: false`.
+Extension members are excluded from object totals; extension table data uses its configured dump filter. Authenticated format-2 packets need no rewrite.
+Stdout is one JSON document built from fixed vocabulary, vetted target and counts; diagnostics use stderr. JSON never passes through free-text redaction. Helper diagnostics and fixed errors redact cached password, secret, token and API-key values; JSON string collisions use Unicode escapes preserving decoded protocol words.
+Secrets shorter than 8 characters cannot be redacted reliably: a configured value matching only fixed JSON grammar (`true`, `false`, `null`, punctuation) or a typed count is not treated as a disclosure.
+Free text, errors, paths and the scratch database name never contain a configured value.
+
+The uniquely named scratch database is always dropped in `finally`; exit 0 requires matching counts and confirmed disposal. Success, failure, SIGINT and SIGTERM attempt forced disposal; repeated signals cannot interrupt it. Interrupts report `interrupted` after proven disposal.
+Creation defers signals until its outcome (30-second statement timeout, 5-second connection timeout). Cleanup waits up to 35 seconds for the tagged creator to exit, then drops and checks database/backend absence before saying `dropped`.
+If PostgreSQL prevents cleanup, the command fails and reports its vetted target for operator removal, even if settings later become unreadable. SIGKILL or host failure cannot run cleanup. Docker is explicitly unsupported by this action. Scheduling remains the caller's job.
+
+Scheduling, retention and off-host copies remain operator responsibilities. Packets, authentication keys and role verifiers must never enter source or public releases.

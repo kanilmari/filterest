@@ -22,6 +22,7 @@ Dates are the local (Europe/Helsinki) date on which the version was published.
 
 ## [Unreleased]
 
+- Added native `restore-check` for this installation's authenticated packets, with pre-creation allowlisting of exact extension/language identities matched to definitions using pg_restore's owner-less extension format, native-function/event-trigger/global refusals and stored-code tripwires, scoped restores, exact object/row comparisons, materialized-view definitions only, proven disposal, interruption reporting, recovery-key scanning before credential redaction and safe JSON diagnostics, without stopping the application; stored code still runs as superuser on the live cluster.
 - Missing and deleted dataset redirects use Finnish and English language keys, preserving dataset names and site-authored translations through language changes.
 - **Shared filter bar order and visibility choices (WO77)** — Guests and signed-in users read one shared section order; authorized edits update open bars. Users can explicitly choose a site-wide personal order when permitted, and shared or per-dataset visibility memory. Finnish and English settings explain the choices without JSON; first visits receive the dataset’s visibility default with the results. Database 9.12.0 extends the existing visual preferences.
 - Added a site-wide category heading order choice: administrator order or most results first, stable throughout each visit.

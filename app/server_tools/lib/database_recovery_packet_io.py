@@ -14,6 +14,7 @@ import inspect
 import json
 import os
 from pathlib import Path
+import re
 import shutil
 import stat
 import sys
@@ -23,12 +24,46 @@ import zlib
 
 
 _diagnostic_key = ContextVar("recovery_diagnostic_key", default=None)
+_diagnostic_credentials = ContextVar("recovery_diagnostic_credentials", default=())
 _snapshot_sizes = ContextVar("recovery_snapshot_sizes", default=None)
 SNAPSHOT_MARGIN = 64 * 1024 * 1024
 EVIDENCE_FILE_LIMIT = 1024 * 1024
 EVIDENCE_TOTAL_LIMIT = 8 * EVIDENCE_FILE_LIMIT
 EVIDENCE_NAMES = {"database.backup.json", "update.backup.json", "database.sha256",
                   "database.roles.sql", "database.properties.json", "manifest.txt"}
+
+
+def configured_credentials(values):
+    """Snapshot every configured password, secret, token and API key for output."""
+    return tuple(sorted({value for name, value in values.items() if value and
+                         re.search(r"PASSWORD|SECRET|TOKEN|API_?KEY", name, re.I)}, key=len, reverse=True))
+
+
+@contextmanager
+def credential_diagnostics():
+    """Scope one cached snapshot across helper diagnostics and summary errors."""
+    hidden = []
+    token = _diagnostic_credentials.set(hidden)
+    try:
+        yield hidden
+    finally:
+        _diagnostic_credentials.reset(token)
+
+
+def redact_credentials(message):
+    hidden = _diagnostic_credentials.get()
+    if not hidden:
+        return message
+    # A character absent from every value cannot form a secret inside the
+    # marker or across a replacement boundary, even for one-character values.
+    alphabet = set("".join(hidden))
+    marker = "*"
+    codepoint = 0xE000
+    while marker in alphabet:
+        marker = chr(codepoint)
+        codepoint += 1
+    pattern = re.compile("|".join(map(re.escape, sorted(set(hidden), key=len, reverse=True))))
+    return pattern.sub(lambda match: marker, message)
 
 
 def diagnostic_key(key) -> None:
@@ -179,7 +214,7 @@ def _escaped_diagnostic_spans(content, pattern, alphabet_forms=()):
 
 
 def safe_diagnostic(message, key=None, *, utility_escapes=True) -> str:
-    """Scan final diagnostic text, redacting whole key-bearing path components."""
+    """Remove key-bearing components from original text, then redact credentials."""
     if __package__:
         from .recovery_key_safety import KeyScanner, key_representations
     else:
@@ -187,9 +222,12 @@ def safe_diagnostic(message, key=None, *, utility_escapes=True) -> str:
     import re
     key = key if key is not None else _diagnostic_key.get()
     scanner = KeyScanner(key)
-    content = str(message).encode("utf-8", errors="surrogateescape")
+    # Credential overlap must never split a complete key representation before
+    # the scanner can recognize and remove its whole original printed span.
+    message = str(message)
+    content = message.encode("utf-8", errors="surrogateescape")
     if scanner.pattern is None:
-        return str(message)
+        return redact_credentials(message)
     matches = [match.span() for match in scanner.pattern.finditer(content)]
     if utility_escapes:
         # The canonical representation list supplies all patterns, including the
@@ -220,7 +258,7 @@ def safe_diagnostic(message, key=None, *, utility_escapes=True) -> str:
     for start, end in reversed(spans):
         content = content[:start] + b"<redacted: contains the recovery key>" + content[end:]
     scanner.check(content)
-    return content.decode("utf-8", errors="surrogateescape")
+    return redact_credentials(content.decode("utf-8", errors="surrogateescape"))
 
 
 _diagnostic_stderr = None

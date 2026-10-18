@@ -709,6 +709,24 @@
         "app/testing/python/test_field_settings_language_seed.py",
         "app/testing/python/test_missing_media_check_language_seed.py"
       ]
+    },
+    {
+      "paths": [
+        "app/server_tools/lib/database_recovery.py",
+        "app/server_tools/lib/database_recovery_cli.py",
+        "app/server_tools/lib/database_recovery_check.py",
+        "app/server_tools/lib/database_recovery_counts.py",
+        "app/server_tools/lib/database_recovery_packet_io.py",
+        "app/server_tools/lib/database_recovery_tools.py",
+        "app/server_tools/lib/database_recovery_archive_guard.py",
+        "app/server_tools/public_bootstrap/schema.sql",
+        "app/server_tools/db_init/01_init_extensions.sh",
+        "app/server_tools/migrations"
+      ],
+      "tests": [
+        "app/testing/python/test_database_restore_check.py",
+        "app/testing/python/test_database_restore_check_security.py"
+      ]
     }
   ],
   "bootstrap_proofs": [

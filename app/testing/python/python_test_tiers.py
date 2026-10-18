@@ -23,6 +23,7 @@ HEAVY_INSTALLATION_FILES = {
     "test_current_release_bootstrap.py": "Complete fresh installation and bootstrap import ordering.",
     "test_database_recovery.py": "Backup/restore ordering, packet authentication and failure isolation.",
     "test_database_recovery_postgres.py": "Real disposable-database recovery and rollback.",
+    "test_database_restore_check_postgres.py": "Disposable restore comparison, cleanup and live-database isolation.",
     "test_database_recovery_role_scope.py": "Recovery role scope, snapshot races and rollback refusals.",
     "test_database_recovery_update.py": "Whole-update rollback, archive authentication and extraction.",
     "test_development_dependencies.py": "Installation dependency setup and failure receipts.",

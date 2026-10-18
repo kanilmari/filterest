@@ -44,7 +44,7 @@ LIBRARY = Path(__file__).resolve().parents[1] / "ctl/lib"
 
 
 if __package__:
-    from .database_recovery_cli import RecoveryArgumentParser, database_parser
+    from .database_recovery_cli import RecoveryArgumentParser, database_parser, validate_database_arguments
     from .database_recovery_packet_io import (RecoveryError, Outcome, private_file, regular_file,
         private_folder, verify_packet_files, digest, stream_digest, publish_file, private_diagnostics, recovery_operation,
         snapshot_packet, snapshot_file, diagnostic_key, prime_diagnostic_key, print_diagnostic)
@@ -54,7 +54,7 @@ if __package__:
     from .database_recovery_tools import run_database_tool
     from .recovery_archives import create_settings_archive, verify_settings_sources, verify_settings_archive, logical_settings_path, resolve_archive_root, directory_descriptor, verify_root_link_policy
 else:
-    from database_recovery_cli import RecoveryArgumentParser, database_parser
+    from database_recovery_cli import RecoveryArgumentParser, database_parser, validate_database_arguments
     from database_recovery_packet_io import (RecoveryError, Outcome, private_file, regular_file,
         private_folder, verify_packet_files, digest, stream_digest, publish_file, private_diagnostics, recovery_operation,
         snapshot_packet, snapshot_file, diagnostic_key, prime_diagnostic_key, print_diagnostic)
@@ -635,10 +635,13 @@ def restore_backup(args, root: Path, paths: list[Path], outcome: Outcome) -> Non
 def main() -> int:
     parser = database_parser(__doc__)
     args = parser.parse_args()
-    if args.action == "backup" and not args.output or args.action in ("verify", "restore") and not args.backup:
-        parser.error("backup requires --output; verify/restore require --backup")
-    if args.action != "restore" and (args.yes or args.legacy or args.allow_unauthenticated_restore):
-        parser.error("--yes, --legacy and --allow-unauthenticated-restore apply only to restore")
+    validate_database_arguments(parser, args)
+    if args.action == "restore-check":
+        if __package__:
+            from .database_recovery_check import restore_check_main
+        else:
+            from database_recovery_check import restore_check_main
+        return restore_check_main(args)
     steps = {"backup": ["Dump and read back the database", "Export and validate installation roles", "Authenticate and publish the packet"],
              "verify": ["Verify database recovery packet"], "preflight": ["Check portable recovery prerequisites"], "setup-key": ["Prepare protected recovery authentication key"],
              "restore": ["Authenticate backup and check protected settings", "Stop the application", "Import installation roles before data",
