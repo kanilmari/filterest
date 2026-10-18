@@ -7,31 +7,53 @@ import { revealActiveFilterbarSection, waitForActiveFilterbarLayout } from '../h
 import { openActiveDatasetSearch } from '../helpers/dataset-search';
 
 const DATASET = process.env.FILTEREST_E2E_TOPBAR_DATASET || '';
-const COPY = {
-  fi: ['Näytä haku', 'Piilota haku', 'Tyyli- ja väriasetukset'],
-  en: ['Show search', 'Hide search', 'Style and color settings'],
-  'zh-CN': ['显示搜索', '隐藏搜索', '样式和颜色设置'],
-  'zh-TW': ['顯示搜尋', '隱藏搜尋', '樣式與色彩設定'],
-  'zh-HK': ['顯示搜尋', '隱藏搜尋', '樣式及顏色設定'],
-};
+const LANGUAGES = ['fi', 'en', 'zh-CN', 'zh-TW', 'zh-HK'];
 
-async function servedTopbarCopy(page: Page, requestedLanguage: string) {
-  // Disabled installation locales legitimately use the served English dictionary.
-  // Read that independent source, never the label on the control under test.
-  await expect(page.locator('body')).not.toHaveClass(/\bloading\b/);
-  const activeLanguage = await page.locator('html').getAttribute('lang') || 'en';
-  const response = await page.request.get(`/api/translations?lang=${encodeURIComponent(activeLanguage)}`);
+async function topbarCopyForLanguage(page: Page, language: string) {
+  // Read language-key values, including site-authored copy, rather than duplicate seed strings.
+  // This source is independent of the label on the control under test.
+  const response = await page.request.get(`/api/translations?lang=${encodeURIComponent(language)}`);
   expect(response.ok()).toBe(true);
   const payload = await response.json();
   const dictionary = payload.translations || payload;
   const served = ['filterbar_show_search', 'filterbar_hide_search', 'filterbar_style_and_colors']
     .map(key => dictionary[key] as string);
   expect(served.every(label => typeof label === 'string' && Boolean(label.trim()) && !label.includes('filterbar_'))).toBe(true);
-  // The server can return English for a disabled canonical locale with HTTP 200,
-  // while document.lang still names the requested Chinese locale.
-  if (requestedLanguage === 'fi' || requestedLanguage === 'en') expect(served).toEqual(COPY[requestedLanguage]);
   expect(served[0]).not.toBe(served[1]);
   return served;
+}
+
+async function servedTopbarCopy(page: Page, requestedLanguage: string) {
+  await expect(page.locator('body')).not.toHaveClass(/\bloading\b/);
+  // Public selector eligibility: frontend/core_components/lang/ui_language_catalog.js:90-99.
+  const response = await page.request.get('/api/ui-languages');
+  expect(response.ok(), 'Public site-language catalogue must be available.').toBe(true);
+  const { languages } = await response.json() as { languages: Array<{
+    language_code: string; is_enabled: boolean; public_selector_ready: boolean; is_default: boolean;
+  }> };
+  expect(Array.isArray(languages), 'Public site-language catalogue must contain languages.').toBe(true);
+  const enabled = languages.filter(language => language.is_enabled && language.public_selector_ready);
+  const defaults = enabled.filter(language => language.is_default);
+  expect(defaults, 'Public site-language catalogue must have one enabled default.').toHaveLength(1);
+  const codes = enabled.map(language => language.language_code);
+  // Startup uses saved preference -> browser -> site default (frontend/main.js:80-85,
+  // state_stores/lang_preference_reader.js:72-84). This group's browser locale is en-US.
+  const fallback = codes.includes('en') ? 'en' : defaults[0].language_code;
+  const intendedLanguage = codes.includes(requestedLanguage) ? requestedLanguage : fallback;
+  await expect(page.locator('html'),
+    `Requested ${requestedLanguage}; expected ${intendedLanguage} (${codes.includes(requestedLanguage)
+      ? 'enabled on this site' : 'unavailable in the public selector; browser/site-default fallback'}).`)
+    .toHaveAttribute('lang', intendedLanguage);
+
+  const labels = await topbarCopyForLanguage(page, intendedLanguage);
+  const englishLabels = intendedLanguage === 'en' ? labels : await topbarCopyForLanguage(page, 'en');
+  const nonEnglishCopies = await Promise.all(LANGUAGES.filter(language => language !== 'en' && codes.includes(language))
+    .map(language => language === intendedLanguage ? labels : topbarCopyForLanguage(page, language)));
+  // Require a non-English witness among the requested cases. Its label assertions below
+  // then prove that differing dictionary copy renders, even if other locales fall back to English.
+  expect(nonEnglishCopies.some(copy => copy.some((label, index) => label !== englishLabels[index])),
+    'At least one enabled requested non-English locale must have topbar copy different from English.').toBe(true);
+  return { labels, englishLabels };
 }
 
 async function geometry(page: Page) {
@@ -48,8 +70,8 @@ async function geometry(page: Page) {
 }
 
 test.describe('guest phone toolbar and style controls', () => {
-  test.use({ storageState: { cookies: [], origins: [] }, hasTouch: true });
-  for (const language of Object.keys(COPY)) for (const theme of ['light', 'dark'] as const) {
+  test.use({ storageState: { cookies: [], origins: [] }, hasTouch: true, locale: 'en-US' });
+  for (const language of LANGUAGES) for (const theme of ['light', 'dark'] as const) {
     test(`#901b/#902: phone search button and translated style (${language}, ${theme})`, async ({ page }, info) => {
       test.skip(!/^[a-z][a-z0-9_]{0,62}$/.test(DATASET), 'Set FILTEREST_E2E_TOPBAR_DATASET to an existing readable dataset.');
       test.skip(info.project.metadata.screenWidth !== 'mobile' || info.project.metadata.cardView === 'big', 'Phone proof.');
@@ -59,7 +81,7 @@ test.describe('guest phone toolbar and style controls', () => {
       }, { language, theme });
       await page.goto(`/${DATASET}?view=card`);
       await waitForActiveFilterbarLayout(page);
-      const labels = await servedTopbarCopy(page, language);
+      const { labels, englishLabels } = await servedTopbarCopy(page, language);
       const bar = page.locator('.dataset-shared-topbar:visible');
       await expect(bar).toBeVisible();
       await expect(page.locator('body')).toHaveClass(new RegExp(`\\b${theme}-mode\\b`));
@@ -69,6 +91,7 @@ test.describe('guest phone toolbar and style controls', () => {
       await expect(identity).toBeVisible(); await expect(identity).not.toHaveText('');
       await expect(bar.locator('.dataset-shared-topbar__dataset-title')).toBeHidden();
       await expect(input).toBeHidden(); await expect(toggle).toHaveAccessibleName(labels[0]);
+      if (labels[0] !== englishLabels[0]) await expect(toggle).not.toHaveAccessibleName(englishLabels[0]);
       await expect(toggle).toHaveAttribute('data-aria-label-lang-key', 'filterbar_show_search');
       await expect(toggle).toHaveAttribute('aria-pressed', 'false');
       const before = await geometry(page);
@@ -76,6 +99,7 @@ test.describe('guest phone toolbar and style controls', () => {
       expect(before.filter.x - before.search.x - before.search.width).toBeLessThanOrEqual(9);
       await openActiveDatasetSearch(page, 'tap'); await expect(input).toBeFocused();
       await expect(toggle).toHaveAccessibleName(labels[1]);
+      if (labels[1] !== englishLabels[1]) await expect(toggle).not.toHaveAccessibleName(englishLabels[1]);
       await expect(toggle).toHaveAttribute('data-aria-label-lang-key', 'filterbar_hide_search');
       await expect(toggle).toHaveAttribute('aria-pressed', 'true');
       expect(await geometry(page)).toEqual(before); await expect(identity).toBeVisible();
@@ -91,12 +115,21 @@ test.describe('guest phone toolbar and style controls', () => {
       await expect(bar.getByTestId('filterbar-toggle')).toBeVisible();
       const style = await revealActiveFilterbarSection(page, 'style');
       await expect(style.locator('[data-lang-key="filterbar_style_and_colors"]')).toHaveText(labels[2]);
+      if (labels[2] !== englishLabels[2]) {
+        await expect(style.locator('[data-lang-key="filterbar_style_and_colors"]')).not.toHaveText(englishLabels[2]);
+      }
       await expect(style.getByTestId('filterbar-theme-toggle')).toBeVisible();
-      await expect(style.locator('.language-button')).toBeVisible();
-      await style.locator('.language-button').press('Enter');
-      await expect(style.locator('.floating-language-panel')).toBeVisible();
-      await style.locator('.language-button').press('Escape');
-      await expect(style.locator('.floating-language-panel')).toBeHidden();
+      const button = style.locator('.language-button');
+      await expect(button).toBeVisible();
+      await expect(button).toHaveAttribute('aria-controls', /\S+/);
+      // Opening moves the panel to document.body; its button-owned ID stays stable.
+      const panel = page.locator(`[id="${await button.getAttribute('aria-controls')}"]`);
+      await button.press('Enter');
+      await expect(button).toHaveAttribute('aria-expanded', 'true');
+      await expect(panel).toBeVisible();
+      await button.press('Escape');
+      await expect(button).toHaveAttribute('aria-expanded', 'false');
+      await expect(panel).toBeHidden();
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
     });
   }
