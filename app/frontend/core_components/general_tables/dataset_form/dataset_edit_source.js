@@ -137,16 +137,26 @@ export async function createDatasetEditSource(datasetName, { drop = () => {} } =
 
     async function saveReaders(draft, control) {
         if (!control.changed() || !readers) return "unchanged";
+        const touched = control.touched();
         const changes = buildGroupReadPermissionChanges({
-            ...readers, chosen: draft.readers, datasetName, tableUID: readers.tableUID,
+            ...readers, chosen: draft.readers, touched, datasetName, tableUID: readers.tableUID,
         });
-        if (changes.add.length === 0 && changes.remove.length === 0) return "unchanged";
-        return applySetting(control, async () => {
+        if (changes.add.length === 0 && changes.remove.length === 0) {
+            control.accept();
+            return "unchanged";
+        }
+        try {
             await saveGroupReadPermissionChanges(changes);
-            for (const [groupName, granted] of Object.entries(draft.readers)) {
-                if (readers.state[groupName]) readers.state[groupName].granted = granted;
-            }
-        });
+            // Remember and display the actual rows, including their schemas,
+            // before accepting the save. A failed refresh leaves it retryable.
+            readers = await readGroupReadState(readers.tableUID);
+            control.accept(readers);
+            return "saved";
+        } catch (error) {
+            control.reportFailure();
+            void error;
+            return "failed";
+        }
     }
 
     async function saveLinks(draft, control) {

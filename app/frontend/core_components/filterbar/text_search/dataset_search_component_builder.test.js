@@ -15,7 +15,6 @@ const getParamsMock = vi.fn(() => ({}));
 const setParamsMock = vi.fn();
 const updateURLMock = vi.fn();
 const renderActiveFiltersMock = vi.fn();
-const applyPermissionMock = vi.fn();
 const registerComponentMock = vi.fn();
 const unregisterStateMock = vi.fn();
 const unregisterLocationStateMock = vi.fn();
@@ -57,8 +56,10 @@ vi.mock("../filter_list/active_filter_tag_printer.js", () => ({
     renderActiveFilters: renderActiveFiltersMock,
 }));
 
-vi.mock("../../route_permission_checker.js", () => ({
-    applyPermission: applyPermissionMock,
+vi.mock("../../navigation/nav_engine/dataset_access_registry.js", () => ({
+    canReadDatasetFromRegistry: () => true,
+    subscribeDatasetAccessRegistry: () => () => {},
+    resolveDataset: ({ name }) => ({ status: "found", dataset: { dataset_name: name } }),
 }));
 
 vi.mock("./dataset_search_state_reader.js", () => ({

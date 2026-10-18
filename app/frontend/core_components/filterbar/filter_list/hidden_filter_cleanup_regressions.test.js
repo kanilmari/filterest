@@ -53,6 +53,7 @@ beforeEach(() => {
     vi.resetAllMocks();
     localStorage.clear();
     sessionStorage.clear();
+    sessionStorage.setItem("user_permissions", JSON.stringify(["/api/get-intelligent-results"]));
     for (const key of Object.keys(ongoingSearchResults)) delete ongoingSearchResults[key];
     history.replaceState({}, "", "/");
     primeDatasetAccessRegistry({ datasets: ["jobs", "other"].map((dataset_name, index) => ({

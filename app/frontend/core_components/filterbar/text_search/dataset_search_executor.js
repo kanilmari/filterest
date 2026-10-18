@@ -19,6 +19,7 @@ import { getChosenDatasetView } from "../../state_stores/dataset_view_choice_sav
 import { getParams } from "../../navigation/nav_engine/query_params.js";
 import { createSupplementalDatasetSearch } from "./supplemental_dataset_search.js";
 import { readDatasetSearchResponse } from "./dataset_search_response_reader.js";
+import { hasDatasetAiSearchPermission } from "./dataset_search_permission_reader.js";
 import { getTranslationForKey } from "../../lang/translation_handler.js";
 import { getLanguageWithBrowserFallback } from "../../state_stores/lang_preference_reader.js";
 import {
@@ -344,7 +345,8 @@ async function placeSearchGroups(tableName, cache) {
     if (cache.complete && cache.data.length === 0) {
         insertLocalizedNotice(tableName, NO_DATASET_MATCHES_NOTICE);
     }
-    const aiRows = getSearchPresentationRows(tableName, cache, cache.aiData);
+    const aiRows = hasDatasetAiSearchPermission()
+        ? getSearchPresentationRows(tableName, cache, cache.aiData) : [];
     const aiHost = aiRows.length ? createSecondSearchResultsHost(tableName) : null;
     if (aiHost) {
         const committed = await renderRowsIntoTarget(
@@ -570,9 +572,9 @@ export async function do_intelligent_search(tableName, userQuery, opts = {}, { r
     if (isNewQuestion) awaitFirstSearchResultInArticleView(tableName);
     const isCurrent = () => isCurrentSearchCache(tableName, cache)
         && cache.filterSignature === getSearchFilterContext(tableName).signature;
-    cache.supplemental = createSupplementalDatasetSearch(tableName, cache.query, {
+    cache.supplemental = hasDatasetAiSearchPermission() ? createSupplementalDatasetSearch(tableName, cache.query, {
         isCurrent, getContainer: () => getSearchResultsFlowContainer(tableName),
-    });
+    }) : null;
 
     const executionPromise = (async () => {
         try {

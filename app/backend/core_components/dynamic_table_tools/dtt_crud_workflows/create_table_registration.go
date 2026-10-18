@@ -164,17 +164,10 @@ func describeCreatedDataset(q dbutils.Querier, tableName string, folderID int) (
 	return response, nil
 }
 
-func ensureTablePermissions(q dbutils.Querier, tableName string, grantUsersRead, grantGuestsRead bool) error {
-	// 1. Hae taulun UID
-	tableUID, err := ensureRegisteredTableUID(q, tableName)
-	if err != nil {
-		return err
-	}
-
-	// 2. Määrittele tarvittavat funktiot ja ryhmät
-
-	// Funktiot, jotka annetaan Users/Guests (vain luku)
-	readFuncNames := []string{
+// datasetReadFunctionNames preserves the signed-in reader bundle. Guests get
+// ordinary reads only; paid AI routes require an explicit administrator grant.
+func datasetReadFunctionNames(includeAI bool) []string {
+	names := []string{
 		"dtt_1_row_read.GetResultsHandlerWrapper",
 		"dtt_1_row_read.GetIntelligentResultsHandlerWrapper",
 		"dtt_1_row_read.GetRowCountHandlerWrapper",
@@ -183,6 +176,23 @@ func ensureTablePermissions(q dbutils.Querier, tableName string, grantUsersRead,
 		"dtt_1_row_read.GetResultsVector",
 		"dtt_2_column_crud.GetTableColumnsHandler",
 		"dtt_3_table_read.GetTableViewHandlerWrapper",
+	}
+	if includeAI {
+		return names
+	}
+	ordinary := make([]string, 0, len(names)-2)
+	for _, name := range names {
+		if name != "dtt_1_row_read.GetIntelligentResultsHandlerWrapper" && name != "dtt_1_row_read.GetResultsVector" {
+			ordinary = append(ordinary, name)
+		}
+	}
+	return ordinary
+}
+
+func ensureTablePermissions(q dbutils.Querier, tableName string, grantUsersRead, grantGuestsRead bool) error {
+	tableUID, err := ensureRegisteredTableUID(q, tableName)
+	if err != nil {
+		return err
 	}
 
 	// Hae funktioiden ID:t
@@ -209,7 +219,7 @@ func ensureTablePermissions(q dbutils.Querier, tableName string, grantUsersRead,
 		if err != nil {
 			return fmt.Errorf("users group not found: %w", err)
 		}
-		for _, fnName := range readFuncNames {
+		for _, fnName := range datasetReadFunctionNames(true) {
 			fid, err := getFuncID(fnName)
 			if err != nil {
 				log.Printf("warning: function %q not found, skipping users permission", fnName)
@@ -227,7 +237,7 @@ func ensureTablePermissions(q dbutils.Querier, tableName string, grantUsersRead,
 		if err != nil {
 			return fmt.Errorf("guests group not found: %w", err)
 		}
-		for _, fnName := range readFuncNames {
+		for _, fnName := range datasetReadFunctionNames(false) {
 			fid, err := getFuncID(fnName)
 			if err != nil {
 				log.Printf("warning: function %q not found, skipping guests permission", fnName)

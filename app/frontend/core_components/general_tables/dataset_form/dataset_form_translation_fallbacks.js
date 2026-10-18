@@ -139,6 +139,18 @@ const COPY = {
     default_permissions: { fi: "Oletusoikeudet", en: "Default permissions", ch: "默认权限", yue: "預設權限" },
     grant_users_read: { fi: "Anna käyttäjille lukuoikeus", en: "Allow users to read", ch: "允许用户读取", yue: "允許用戶讀取" },
     grant_guests_read: { fi: "Anna vieraille lukuoikeus", en: "Allow guests to read", ch: "允许访客读取", yue: "允許訪客讀取" },
+    dataset_permissions_partial: {
+        fi: "Osittainen lukuoikeus",
+        en: "Partial reading right",
+        ch: "部分读取权限",
+        yue: "部分讀取權限",
+    },
+    dataset_permissions_ai_only: {
+        fi: "Vain tekoälyhaku",
+        en: "AI search only",
+        ch: "仅限人工智能搜索",
+        yue: "只限人工智能搜尋",
+    },
     dataset_permissions_loading: { fi: "Luetaan lukuoikeuksia…", en: "Reading the rights…", ch: "正在读取权限…", yue: "正在讀取權限…" },
     dataset_permissions_unavailable: {
         fi: "Lukuoikeuksia ei voitu lukea.",

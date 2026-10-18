@@ -154,6 +154,7 @@ export function resetDatasetSearchTest() {
     vi.clearAllMocks();
     localStorage.clear();
     sessionStorage.clear();
+    sessionStorage.setItem("user_permissions", JSON.stringify(["/api/get-intelligent-results"]));
     document.body.innerHTML = "";
     document.documentElement.lang = "fi";
     getActiveFiltersSnapshotMock.mockReturnValue({});

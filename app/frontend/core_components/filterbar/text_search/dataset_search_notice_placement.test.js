@@ -83,6 +83,7 @@ describe("search stage notice placement", () => {
         vi.clearAllMocks();
         localStorage.clear();
         sessionStorage.clear();
+        sessionStorage.setItem("user_permissions", JSON.stringify(["/api/get-intelligent-results"]));
         document.body.replaceChildren();
     });
 

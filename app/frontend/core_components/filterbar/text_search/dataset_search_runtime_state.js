@@ -9,6 +9,7 @@ import { getUnifiedTableState } from "../../state_stores/table_state_store.js";
 import { getChosenDatasetView } from "../../state_stores/dataset_view_choice_saver.js";
 import { getDatasetViewContainerId, resolveDatasetViewSelectionTarget } from "../../table_views/dataset_view_registry.js";
 import { setResultsCount, setSearchAiResultsCount } from "../../../reusable_components/results_count/results_count_printer.js";
+import { hasDatasetAiSearchPermission } from "./dataset_search_permission_reader.js";
 import { ROW_GROUP_FILTER_KEY, ROW_GROUP_MODE_KEY } from "../filter_list/row_group_filter_contract.js";
 import { getActiveFiltersSnapshot, RESERVED_PARAM_KEYS } from "./dataset_search_state_reader.js";
 import {
@@ -170,7 +171,7 @@ export function getVisibleSearchCounts(
                 searchCache.types
             ),
         // Only a view that shows the AI group counts its rows.
-        aiCount: showsSearchAiGroup(getCurrentSearchView(tableName))
+        aiCount: hasDatasetAiSearchPermission() && showsSearchAiGroup(getCurrentSearchView(tableName))
             ? countVisibleRows(
                 searchCache.aiData,
                 searchCache.filters,

@@ -7,6 +7,7 @@ import { endpoint_router } from "../../endpoints/endpoint_router.js";
 import { getLanguageWithBrowserFallback } from "../../state_stores/lang_preference_reader.js";
 import { ROW_GROUP_FILTER_KEY, ROW_GROUP_MODE_KEY } from "../filter_list/row_group_filter_contract.js";
 import { datasetAppearanceState } from '../../table_views/dataset_appearance_state.js';
+import { hasDatasetAiSearchPermission } from './dataset_search_permission_reader.js';
 
 /**
  * Read one search through the usual permission, CSRF and session pipeline.
@@ -14,6 +15,9 @@ import { datasetAppearanceState } from '../../table_views/dataset_appearance_sta
  * every content language regardless and only ranks matches in this one first.
  */
 export async function* readDatasetSearchResponse(tableName, query, options, isCurrent) {
+    // Covers supplemental datasets too: even a restored URL cannot start AI
+    // or server-side embedding work without the existing AI route permission.
+    if (!hasDatasetAiSearchPermission()) return;
     const appearanceToken = options.appearanceToken || datasetAppearanceState.capture(tableName);
     const callerIsCurrent = isCurrent;
     isCurrent = () => callerIsCurrent() && datasetAppearanceState.isCurrent(appearanceToken);

@@ -22,6 +22,7 @@ Dates are the local (Europe/Helsinki) date on which the version was published.
 
 ## [Unreleased]
 
+- Readable datasets offer text search to guests and users without AI access; AI search stays route-gated, creation and editor guest-read bundles exclude intelligent and vector search, and untouched grants stay unchanged.
 - Added a security-owned route authorization matrix with production pipeline stubs, disposable PostgreSQL personas and grants, sanitized infrastructure-failure detection, explicit pending handler checks, and TSV triage output (test only).
 - Form actions that discard unsaved edits now say “Cancel changes” (Finnish “Peruuta muutokset”); plain close and abort actions keep “Cancel”. Database 9.12.0 seeds the new wording in both translation stores, preserving authored copy.
 - The database image installs PostgreSQL 16 / PostGIS 3 packages without expiring APT build pins and records both installed package versions in each build log (#896).

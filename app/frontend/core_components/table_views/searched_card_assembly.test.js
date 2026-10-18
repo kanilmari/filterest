@@ -39,6 +39,7 @@ import { getSearchGroupsForViewRebuild, ongoingSearchResults } from '../filterba
 import { disposeCardResources } from './card_view/card_resource_lifecycle.js';
 import { clearCommittedDatasetSearch } from '../filterbar/text_search/dataset_search_clearer.js';
 import { toggleRowGroupFacet } from '../filterbar/filter_list/row_group_facet_printer.js';
+import { primeDatasetAccessRegistry } from '../navigation/nav_engine/dataset_access_registry.js';
 
 let datasetName, useSavedSort, datasetSequence = 0;
 const lifecycleCards = new Set();
@@ -48,6 +49,8 @@ beforeEach(() => {
     lifecycleResizeTargets.clear();
     datasetName = `demo_${++datasetSequence}`; useSavedSort = true;
     localStorage.clear(); sessionStorage.clear(); datasetAppearanceState.clear();
+    sessionStorage.setItem('user_permissions', JSON.stringify(['/api/get-intelligent-results']));
+    primeDatasetAccessRegistry({ datasets: [{ dataset_name: datasetName, table_uid: 104, can_read_rows: true }] });
     resetSitePresentationStatesForTests(); setAllSpecs({ [datasetName]: { table_uid: 104 } });
     document.body.innerHTML = '<div id="tabs_container"></div>';
     window.history.replaceState({}, '', `/${datasetName}?search=chip-proof&title=filter-proof`);

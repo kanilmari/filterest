@@ -4,9 +4,6 @@
 // Exists to isolate DOM construction from shared state and streaming implementation details.
 
 import {
-    get_endpoint_url,
-} from "../../endpoints/endpoint_router.js";
-import {
     DATASET_PREFIX,
     getParams,
     setParams,
@@ -14,7 +11,8 @@ import {
 } from "../../navigation/nav_engine/query_params.js";
 import { isDatasetRowPath } from "../../navigation/nav_engine/history_navigation_handler_helpers.js";
 import { renderActiveFilters } from "../filter_list/active_filter_tag_printer.js";
-import { applyPermission } from "../../route_permission_checker.js";
+import { canReadDatasetFromRegistry, subscribeDatasetAccessRegistry } from "../../navigation/nav_engine/dataset_access_registry.js";
+import { hasDatasetAiSearchPermission } from "./dataset_search_permission_reader.js";
 import {
     datasetSearchRegistry,
     datasetSearchLocationState,
@@ -122,8 +120,14 @@ export function createDatasetSearchComponent(tableName, options = {}) {
         variant === "filterbar"
             ? "dataset-search-panel"
             : `dataset-search-panel-${variant}`;
-    const searchRoute = get_endpoint_url("getIntelligentResults");
-    applyPermission(wrapper, searchRoute, { remove: true });
+    // The catalogue uses the same GetResults read right as the row listing.
+    // Guest route caches contain UI routes only, so they cannot decide this.
+    const syncReadAccess = () => {
+        wrapper.hidden = canReadDatasetFromRegistry(tableName) !== true;
+        wrapper.style.display = wrapper.hidden ? "none" : "";
+    };
+    syncReadAccess();
+    listenerCleanups.push(subscribeDatasetAccessRegistry(syncReadAccess));
 
     const leftColumn = document.createElement("div");
     leftColumn.classList.add(...classConfig.fields);
@@ -176,7 +180,7 @@ export function createDatasetSearchComponent(tableName, options = {}) {
     locationRow.appendChild(useLocationCheckbox);
     locationRow.appendChild(useLocationLabel);
     const showLocationCheckbox =
-        options.showLocationCheckbox ?? shouldRenderLocationCheckbox(tableName);
+        hasDatasetAiSearchPermission() && (options.showLocationCheckbox ?? shouldRenderLocationCheckbox(tableName));
     if (!showLocationCheckbox) {
         locationRow.style.display = "none";
     } else {
@@ -358,10 +362,10 @@ export function createDatasetSearchComponent(tableName, options = {}) {
     }
 
     async function commitSearch(options = {}) {
-        if (destroyed) return;
+        if (destroyed || canReadDatasetFromRegistry(tableName) !== true) return;
         const query = datasetSearchState.get(tableName).trim();
         if (!query) return;
-        const useLocation = useLocationCheckbox
+        const useLocation = hasDatasetAiSearchPermission() && useLocationCheckbox
             ? datasetSearchLocationState.get(tableName)
             : false;
         const gpsCoords = useLocation ? await ensureGpsIfNeeded() : null;
@@ -510,7 +514,7 @@ export function createDatasetSearchComponent(tableName, options = {}) {
         focusInput: () => globalSearchInput.focus(),
         id: componentId,
         setLocationRowVisible(visible = true) {
-            locationRow.style.display = visible ? locationRowDisplay : "none";
+            locationRow.style.display = visible && hasDatasetAiSearchPermission() ? locationRowDisplay : "none";
         },
         destroy() {
             if (destroyed) {

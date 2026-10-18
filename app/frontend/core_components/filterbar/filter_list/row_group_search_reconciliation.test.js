@@ -172,6 +172,7 @@ beforeEach(() => {
     });
     observers.length = 0;
     localStorage.clear(); sessionStorage.clear(); forgetPageDatasetParams();
+    sessionStorage.setItem("user_permissions", JSON.stringify(["/api/get-intelligent-results"]));
     document.documentElement.lang = "en"; document.body.innerHTML = '<div id="tabs_container"></div>';
     primeDatasetAccessRegistry({ datasets: [{ dataset_name: dataset }] }); delete ongoingSearchResults[dataset];
     fetchListing.mockReset().mockResolvedValue(answer());

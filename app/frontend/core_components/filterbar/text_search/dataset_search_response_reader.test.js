@@ -3,7 +3,7 @@
 // Connects mocked endpoint streams to the same async iterator used by both search phases.
 // Prevents stale or split packets from corrupting the active query's result set.
 // @vitest-environment jsdom
-import { expect, test, vi } from "vitest";
+import { beforeEach, expect, test, vi } from "vitest";
 const endpoint = vi.hoisted(() => vi.fn());
 vi.mock("../../endpoints/endpoint_router.js", () => ({ endpoint_router: endpoint }));
 vi.mock("../filter_list/row_group_facet_printer.js", () => ({ ROW_GROUP_FILTER_KEY: "row_group" }));
@@ -11,6 +11,10 @@ import { readDatasetSearchResponse } from "./dataset_search_response_reader.js";
 import { datasetAppearanceState } from '../../table_views/dataset_appearance_state.js';
 import { setAllSpecs } from '../../state_stores/table_specs_reader.js';
 import { invalidateSessionGeneration } from '../../auth/session_generation_store.js';
+
+beforeEach(() => {
+    sessionStorage.setItem("user_permissions", JSON.stringify(["/api/get-intelligent-results"]));
+});
 
 test.each(['sign-out', 'deletion', 'ownership'])('late stream headers and packets are discarded after %s', async reason => {
     datasetAppearanceState.clear(); setAllSpecs({ tasks: { table_uid: 11 } });
