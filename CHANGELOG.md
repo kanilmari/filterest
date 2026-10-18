@@ -22,6 +22,7 @@ Dates are the local (Europe/Helsinki) date on which the version was published.
 
 ## [Unreleased]
 
+- **Language-key scan PostgreSQL tests run again (test only)** — Their minimal settings fixture adds the value-type column only when the shared fixture does not already have it.
 - **Per-image card presentation storage (WL69)** — Gallery image uses can store an inherited or explicit card presentation and an independent focal point. Version-checked writes reuse row-edit permissions and atomically adopt eligible local images; cards retain the exact image-use identity. Database 9.12.0 includes the same storage for upgrades and fresh installations. The editor follows separately; viewer preferences, locks and smart crop remain future features.
 - **Serif story headings fit Home (WO38a-FIX)** — Typography follows the content width, including a docked side menu; short headings stay on one line and longer titles and slogans wrap in balanced lines while the story keeps its configured column width. Finnish/English palette guidance explains the short title-and-slogan split.
 - **Home follows its server setting and the existing toolbar rules (WO37-FIX)** — Home no longer reveals the top bar; it is the first tab-sized dataset hero item with either menu state, and one focused link moves to the bar when needed. Cross-tab settings remove stale Home links, and an unavailable Home opens the normal start view; the historical phone rule is unchanged.

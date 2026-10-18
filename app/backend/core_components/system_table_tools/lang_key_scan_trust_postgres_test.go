@@ -35,7 +35,7 @@ func scanTrustPostgresFixture(t *testing.T) *sql.DB {
 		lastSourceScan, lastSuccessfulSourceScan, lastSourceScanState, lastSourceScanFailures = at, success, state, failures
 		lastSourceScanMu.Unlock()
 	})
-	frontPageExec(t, db, `ALTER TABLE system_config ADD COLUMN value_type integer;
+	frontPageExec(t, db, `ALTER TABLE system_config ADD COLUMN IF NOT EXISTS value_type integer;
         CREATE TABLE system_lang_keys(id serial PRIMARY KEY,lang_key text UNIQUE,en text,lang_key_type integer);
         CREATE TABLE system_lang_key_translations(lang_key_id integer REFERENCES system_lang_keys(id),translation text);
         CREATE TABLE system_lang_key_sources(id serial PRIMARY KEY,
