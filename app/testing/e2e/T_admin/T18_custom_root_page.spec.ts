@@ -1,7 +1,7 @@
 // T18_custom_root_page.spec.ts
 // Proves K378 root delivery, access boundaries, Home/history and missing-file fallback.
 // Connects the manual native config, supported administrator APIs and owned operator files.
-// Restores/verifies all six Home settings and theme; global teardown always removes the fixture.
+// Restores/verifies six Home settings, hero texts and theme; global teardown always removes the fixture.
 import { expect, test, type APIRequestContext, type APIResponse, type BrowserContext, type Page } from '@playwright/test';
 import { execFileSync } from 'node:child_process';
 import * as fs from 'node:fs';
@@ -11,7 +11,7 @@ import { fetchCsrfTokenForRequest } from '../helpers/test-artifact-csrf-reader';
 import { expandAdminTreeFolder, openAdminTreeButton } from '../helpers/admin-navigation';
 import { ensureNavbarVisible } from '../helpers/navbar';
 import { writeOwnerOnlyJsonFile } from '../helpers/storage-state-file';
-import { snapshotHomeSettings } from '../helpers/home-settings';
+import { runHomeTimeoutBackstop, snapshotHomeSettings } from '../helpers/home-settings';
 
 const fixture = process.env.FILTEREST_E2E_CUSTOM_ROOT_FIXTURE;
 if (!fixture || !path.isAbsolute(fixture)) throw new Error('K378 requires FILTEREST_E2E_CUSTOM_ROOT_FIXTURE.');
@@ -156,7 +156,7 @@ test.beforeAll(async ({ browser, baseURL }, info) => {
   });
   admin = adminContext.request;
   // Snapshot every value column and original absence before any mutation.
-  homeSnapshot = await snapshotHomeSettings(admin);
+  homeSnapshot = await snapshotHomeSettings(admin, `${info.title || info.file} (beforeAll)`);
   originalHome = homeSnapshot.home;
   for (const key of HOME_SWITCHES) originalHomeRows[key] = await row(key);
   originalSwitch = originalHomeRows[SWITCH];
@@ -184,33 +184,36 @@ test.beforeEach(async ({ page }) => {
   await setRoot(true);
 });
 
-test.afterAll(async () => {
-  const failures: unknown[] = [];
-  const attempt = async (step: () => unknown | Promise<unknown>) => {
-    try { await step(); } catch (error) { failures.push(error); }
-  };
-  // Home saves overwrite boolean/text/JSON/type together. Restore the complete original rows or absence.
-  for (const key of HOME_SWITCHES) await attempt(async () => {
-    if (!switchTouched) return;
-    await restoreRow(key, originalHomeRows[key]);
-  });
-  await attempt(async () => { if (switchTouched) expect((await home()).settings).toEqual(originalHome!.settings); });
-  await attempt(async () => { await homeSnapshot?.restore(); });
-  await attempt(async () => {
-    if (!browseTouched) return;
-    await restoreRow('login_to_browse', originalBrowse!);
-  });
-  await attempt(async () => {
-    if (!themeTouched) return;
-    await write('/api/user-visual-preference', originalTheme!.configured ? { theme_mode: originalTheme!.theme_mode } : undefined,
-      originalTheme!.configured ? 'PATCH' : 'DELETE');
-    expect(await json<Theme>(await admin.get('/api/user-visual-preference'))).toMatchObject(originalTheme!);
-  });
-  // No fixture removal here: Playwright replaces the worker after a failed test and runs afterAll on the way out, so
-  // removing it here would break every later proof. custom_root_setup's returned cleanup (the global teardown)
-  // removes it once, after the last worker, even when assertions fail.
-  await attempt(() => adminContext?.close());
-  if (failures.length) throw new AggregateError(failures, 'K378 restoration/fixture cleanup failed.');
+test.afterAll(async ({}, info) => {
+  try {
+    info.setTimeout(60_000); // Home backstop plus the existing row, login and theme cleanup.
+    const failures: unknown[] = [];
+    const attempt = async (step: () => unknown | Promise<unknown>) => {
+      try { await step(); } catch (error) { failures.push(error); }
+    };
+    // Home saves overwrite boolean/text/JSON/type together. Restore the complete original rows or absence.
+    for (const key of HOME_SWITCHES) await attempt(async () => {
+      if (!switchTouched) return;
+      await restoreRow(key, originalHomeRows[key]);
+    });
+    await attempt(async () => { if (switchTouched) expect((await home()).settings).toEqual(originalHome!.settings); });
+    await attempt(async () => { if (homeSnapshot) await runHomeTimeoutBackstop(admin, homeSnapshot); });
+    await attempt(async () => {
+      if (!browseTouched) return;
+      await restoreRow('login_to_browse', originalBrowse!);
+    });
+    await attempt(async () => {
+      if (!themeTouched) return;
+      await write('/api/user-visual-preference', originalTheme!.configured ? { theme_mode: originalTheme!.theme_mode } : undefined,
+        originalTheme!.configured ? 'PATCH' : 'DELETE');
+      expect(await json<Theme>(await admin.get('/api/user-visual-preference'))).toMatchObject(originalTheme!);
+    });
+    // No fixture removal here: Playwright replaces the worker after a failed test and runs afterAll on the way out, so
+    // removing it here would break every later proof. custom_root_setup's returned cleanup (the global teardown)
+    // removes it once, after the last worker, even when assertions fail.
+    await attempt(() => adminContext?.close());
+    if (failures.length) throw new AggregateError(failures, 'K378 restoration/fixture cleanup failed.');
+  } finally { homeSnapshot?.releaseWriter(); }
 });
 
 test('disabled switch retains the root shell and refuses fixture assets', async ({ page }) => {

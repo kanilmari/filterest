@@ -263,13 +263,66 @@ newer policy. Missing or disabled server fields mean off.
 Home layout specs G11/G12/G13 use `helpers/home-policy-fixture.ts` for response-only
 policy/content and never save server settings. G11 opens the explicit SPA Home
 address so an operator's custom root cannot intercept its initial document.
-Real-writing Home specs T16/T17/T18 share `helpers/home-settings.ts`: snapshot
-all four Home switches plus article buttons and presentation before mutation,
-enter `withHomeSettings` or a `try`/`afterAll` cleanup boundary before the first
-save, and restore/read back all six even on failure or a lost save response.
-Every restore failure or readback mismatch fails the spec. Absent presentation
-is removed through supported application CRUD; absent article configuration
-uses the API's established equivalent empty list because deletion is protected.
+Real-writing Home specs T16/T17/T18 and the deliberate-timeout proof T22 share
+`helpers/home-settings.ts` and its cross-process Home writer lock in `os.tmpdir()`.
+The lock is exclusive per server origin, derived from the first Home GET's
+response URL. That discovery response is discarded; restoration values are read
+fresh only after acquisition. The atomic lock directory contains an exclusively
+created owner file with PID, start time and test label. A live competing writer
+fails immediately before reading a snapshot or sending any write/restore:
+`Another real-writing Home spec (pid N, "<label>") is running against <origin>; run real-writing Home specs with one worker (lock: <path>)`.
+Nested/repeated snapshots in the same worker share refcounted ownership. The
+body's restore retains the hook's reference: T16/T17 release in the shared
+afterEach's `finally`, T18 after its complete afterAll cleanup, and T22 after its
+independent afterAll verification/recovery and context disposal. Snapshot failure
+and unarmed body cleanup also release in `finally`, including restore/readback
+failures. Release checks owner PID and identity and never deletes a foreign lock.
+The snapshot covers the four switches, presentation (including
+absence), article buttons and every hero text part/field (Finnish, English,
+usage explanation and language-key identity) before mutation. The Home save trims
+hero text, refuses NUL or over 2000 characters and limits its body to 32 KiB, so a
+stored hero it could not store back exactly makes the snapshot fail before any
+write. Body cleanup stays
+in place. T16/T17/T22 also arm one shared `afterEach` timeout backstop immediately
+after their snapshot; T18 uses the same runner in its existing worker `afterAll`,
+before closing its administrator context. The backstop restores hero texts,
+unconditionally re-saves an originally present presentation with the latest
+revision, then restores and reads back all six settings plus the hero texts.
+Equal presentation updates still advance the revision, so stale presentation
+saves conflict. Other writes happen only on a difference; every cleanup step
+runs even after another fails, and aggregated failures fail the spec.
+The owner's Serif story (schema-3) presentation survives T16's temporary default-style pin unchanged on the pass, body-failure and timeout paths; `helpers/home-settings.test.ts` proves all three and T22 proves the timeout path natively when the development Home has a non-default text style.
+Absent presentation is removed through supported application CRUD; absent article
+configuration uses the API's equivalent empty list because deletion is protected.
+The shared afterEach has a separate 60-second cleanup budget. T22 has a 20-second
+body budget, verifies completed button-label switch/hero/presentation changes,
+then sets `expectedStatus = 'timedOut'` immediately before hanging with no request
+in flight. The expected timeout passes without stopping the worker or skipping
+the next serial test. T22's second test is the proof: it checks the actual timeout,
+the same worker, no additional cleanup errors and every value against the
+independent original snapshot. Earlier failures/timeouts keep the default
+expectation and fail; ignoring the assignment also fails. Playwright 1.60 sources
+under `node_modules/playwright/` establish this: `types/test.d.ts:2498`,
+`lib/worker/workerProcessEntry.js:2554-2556,3073,3085-3086`, and
+`lib/runner/index.js:585-594,5293-5297,5430-5449`. T22's `afterAll` only verifies
+and recovers differences before disposing its context, with a 60-second budget;
+verification, restoration and disposal failures are aggregated and fail the spec.
+Real-writing Home specs must run with one worker (and one project for isolated
+proofs); the nightly runs them in a separate one-worker pass. With two workers,
+some of these specs intentionally fail fast and turn the run red to protect Home.
+T21 and G11/G12/G13 stay lock-free because they only replace responses/read Home.
+Different server origins are independent. A dead PID's lock is reclaimed with
+one atomic retry. SIGKILL leaves a lock until a later run detects its dead PID;
+PID reuse by an unrelated live process can retain a stale lock. The diagnostic
+names its path for manual removal.
+
+A body request still in flight when the backstop runs may commit afterwards.
+Each supervisor job compares the owner's Home switches, layout `json_value`,
+article buttons and hero texts before and after its browser run; a difference
+stops publication.
+An owner editing Home during a run is overwritten by restoration, as before.
+Non-Home values (T17's account theme/owned dataset and T18's `login_to_browse`/theme
+rows) retain their existing cleanup. A worker crash or killed process runs no hooks.
 
 A 404 JSON error with `error: "front page unavailable"` from `/api/front-page`
 confirms Home is off. The shared request pipeline preserves its body as

@@ -439,7 +439,7 @@
     },
     {
       "area": "Front page",
-      "paths": ["app/testing/e2e/helpers/home-settings.test.ts", "app/testing/e2e/helpers/home-settings.ts", "app/testing/e2e/helpers/home-policy-fixture.ts",
+      "paths": ["app/testing/e2e/helpers/home-writer-lock.test.ts", "app/testing/e2e/helpers/home-writer-lock.ts", "app/testing/e2e/helpers/home-settings.test.ts", "app/testing/e2e/helpers/home-settings.ts", "app/testing/e2e/helpers/home-policy-fixture.ts",
         "app/backend/core_components/custom_root_files.go",
         "app/backend/core_components/custom_root_files_test.go",
         "app/frontend/core_components/admin_tools/custom_root_copy.js",
@@ -450,7 +450,7 @@
         "app/frontend/shared/front_page_presentation"
       ],
       "specs": [
-        "app/testing/e2e/G_navigation/G13_phone_topbar_measurements.spec.ts", "app/testing/e2e/T_admin/T21_home_text_style.spec.ts", "app/testing/e2e/G_navigation/G12_top_nav_home_button.spec.ts",
+        "app/testing/e2e/T_admin/T22_home_timeout_backstop.spec.ts", "app/testing/e2e/G_navigation/G13_phone_topbar_measurements.spec.ts", "app/testing/e2e/T_admin/T21_home_text_style.spec.ts", "app/testing/e2e/G_navigation/G12_top_nav_home_button.spec.ts",
         "app/testing/e2e/D_view_switch/D0_theme_and_mobile_menu.spec.ts",
         "app/testing/e2e/L_auth/L2_logout.spec.ts",
         "app/testing/e2e/T_admin/T15_view_field_assignments.spec.ts",

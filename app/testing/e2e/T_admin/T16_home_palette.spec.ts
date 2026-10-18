@@ -4,70 +4,13 @@
 // Home retains its own API; shared actions remain outside the scrolling controls.
 // Connects the real Home API and administrator session; cleanup restores original settings.
 // Run serially on the supervisor's native test instance, never a production instance.
-import { expect, test, type APIRequestContext, type Page } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
 import { fetchCsrfTokenForRequest } from '../helpers/temp-dataset';
-import { withHomeSettings } from '../helpers/home-settings';
+import { homeTimeoutBackstop, withHomeSettings } from '../helpers/home-settings';
 
 test.describe.configure({ mode: 'serial' });
 
-// Timeout backstop (gates 252c/252d): Playwright runs afterEach hooks in their own time slot after a test times out
-// and before fixture teardown, so Home settings and hero texts a body changed are restored even then. Each step
-// writes only what differs and verifies, so this second pass after the body's own cleanup is a no-op.
-let restoreHome: (() => Promise<unknown>) | null = null;
-test.afterEach(async () => {
-  const restore = restoreHome;
-  restoreHome = null;
-  if (restore) await restore();
-});
-
-type HeroTexts = Record<'title' | 'slogan' | 'description', { fi: string; en: string; usage_explanation: string }>;
-
-// The shared snapshot restores switches, presentation and article buttons, not the hero texts T16 also writes
-// (gate 252d), so the backstop restores those too: it writes only when they differ, then reads them back.
-async function restoreHeroTexts(request: APIRequestContext, original: HeroTexts) {
-  const parts = ['title', 'slogan', 'description'] as const;
-  const pick = (hero: HeroTexts) => Object.fromEntries(parts.map(part =>
-    [part, { fi: hero[part].fi, en: hero[part].en, usage_explanation: hero[part].usage_explanation }]));
-  const read = async () => {
-    const response = await request.get('/api/admin/front-page');
-    if (!response.ok()) throw new Error(`Home hero readback failed: HTTP ${response.status()}`);
-    return JSON.stringify(pick((await response.json()).hero as HeroTexts));
-  };
-  const wanted = pick(original);
-  if (await read() === JSON.stringify(wanted)) return;
-  const response = await request.post('/api/admin/front-page', {
-    headers: { 'X-CSRF-Token': await fetchCsrfTokenForRequest(request) }, data: { hero: wanted } });
-  if (!response.ok()) throw new Error(`Home hero restoration failed: HTTP ${response.status()}`);
-  if (await read() !== JSON.stringify(wanted)) throw new Error('Home hero readback mismatch');
-}
-
-// Coordinator 18.10. (a)+(b): the backstop guarantees values written by COMPLETED requests; a body request still in
-// flight when it runs is an accepted boundary (each job's before/after Home compare stops publication). For the
-// revision-protected presentation, re-saving the original always stamps a new revision (the store sets `updated`),
-// so a stale in-flight presentation POST is refused with a conflict instead of committing after the readback.
-async function resaveOriginalPresentation(request: APIRequestContext, home: { presentation: unknown; presentation_version: string }) {
-  if (home.presentation_version === 'none') return;
-  const latest = await request.get('/api/admin/front-page');
-  if (!latest.ok()) throw new Error(`Home presentation read failed: HTTP ${latest.status()}`);
-  const { presentation_version: version } = await latest.json();
-  if (version === 'none') return;
-  const response = await request.post('/api/admin/front-page', {
-    headers: { 'X-CSRF-Token': await fetchCsrfTokenForRequest(request) }, data: { presentation: home.presentation, version } });
-  if (!response.ok()) throw new Error(`Home presentation re-save failed: HTTP ${response.status()}`);
-}
-
-/** Every step runs even when another fails; any failure is reported. snapshot.restore() verifies last. */
-function homeBackstop(request: APIRequestContext, snapshot: {
-  home: { hero: unknown; presentation: unknown; presentation_version: string }; restore: () => Promise<unknown> }) {
-  return async () => {
-    const failures: unknown[] = [];
-    for (const step of [() => restoreHeroTexts(request, snapshot.home.hero as HeroTexts),
-      () => resaveOriginalPresentation(request, snapshot.home), snapshot.restore]) {
-      try { await step(); } catch (error) { failures.push(error); }
-    }
-    if (failures.length) throw new AggregateError(failures, 'Home timeout backstop failed');
-  };
-}
+const armHomeBackstop = homeTimeoutBackstop(test);
 
 async function forceTheme(page: Page, theme: 'light' | 'dark') {
   await page.emulateMedia({ colorScheme: theme === 'light' ? 'dark' : 'light' });
@@ -91,8 +34,8 @@ test('Home preview, saved reset and reload at 1280 and 375 pixels in both explic
   // cleanup in `finally` shares this budget: a timed-out body would leave the test's copy and layout on Home.
   test.setTimeout(150_000);
   await withHomeSettings(page.request, async (snapshot) => {
+    armHomeBackstop(page.request, snapshot);
     const original = snapshot.home;
-    restoreHome = homeBackstop(page.request, snapshot);
     const csrf = await fetchCsrfTokenForRequest(page.request);
     const headers = { 'X-CSRF-Token': csrf };
     const description = 'First line\nSecond line\n\nAnother paragraph. ' + 'Long translated text wraps safely. '.repeat(25);
@@ -224,15 +167,15 @@ test('Home preview, saved reset and reload at 1280 and 375 pixels in both explic
       if (failures.length && completed) throw failures[0];
       if (failures.length) console.error('Home cleanup also failed:', failures);
     }
-  });
+  }, test.info().title);
 });
 
 test('a missing layout centres a content-sized block with left-aligned text and resets to that default', async ({ page }) => {
   // Four width/theme rounds plus nine anchors at two widths; the settings restore in `finally` shares this budget.
   test.setTimeout(120_000);
   await withHomeSettings(page.request, async (snapshot) => {
+    armHomeBackstop(page.request, snapshot);
     const original = snapshot.home;
-    restoreHome = homeBackstop(page.request, snapshot);
     const headers = { 'X-CSRF-Token': await fetchCsrfTokenForRequest(page.request) };
     let longText = false;
     expect((await page.request.post('/api/admin/front-page', { headers, data: { settings: {
@@ -296,5 +239,5 @@ test('a missing layout centres a content-sized block with left-aligned text and 
       }
       expect(await page.locator('.front-page-scroller').evaluate(el => el.scrollHeight > el.clientHeight && el.scrollWidth <= el.clientWidth)).toBe(true);
     }
-  });
+  }, test.info().title);
 });

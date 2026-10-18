@@ -8,9 +8,10 @@ import { login, loadUserCredentials, readSessionInfo } from '../helpers/auth';
 import { waitForAppReady } from '../helpers/navigation';
 import { buildTempDatasetName, createTempDataset, dropTempDataset, fetchCsrfTokenForRequest } from '../helpers/temp-dataset';
 import { loadDatasetCardVisibility, saveCardVisibilityWithFreshRevisions } from '../helpers/appearance-revisions';
-import { snapshotHomeSettings } from '../helpers/home-settings';
+import { homeTimeoutBackstop, snapshotHomeSettings } from '../helpers/home-settings';
 
 test.describe.configure({ mode: 'serial' });
+const armHomeBackstop = homeTimeoutBackstop(test);
 const SETTINGS_URL = '/api/admin/front-page/article-buttons';
 const LABEL = 'Temporary Home contact';
 type ArticleConfiguration = { schema_version: number; placement: 'below_text' | 'top_row';
@@ -90,7 +91,8 @@ for (const width of [1280, 375]) for (const theme of ['light', 'dark'] as const)
     };
     const { homeSnapshot, original, originallyAbsent, baseline, originalHome, originalTheme, identity } = await step('capture original settings', async () => {
       await page.goto('/system_config', { waitUntil: 'domcontentloaded' }); await waitForAppReady(page);
-      const homeSnapshot = await snapshotHomeSettings(page.request);
+      const homeSnapshot = await snapshotHomeSettings(page.request, testInfo.title);
+      armHomeBackstop(page.request, homeSnapshot);
       const original = homeSnapshot.articles;
       expect(original.configuration_error, 'T17 refuses to mutate invalid article settings: the API cannot restore them exactly.').toBe('');
       expect(original.unavailable_items, 'T17 refuses to mutate article settings with unavailable targets: the API cannot restore them exactly.').toEqual([]);
