@@ -595,11 +595,17 @@
     },
     {
       "paths": ["app/server_tools/agent_tools/worker_agent", "app/server_tools/agent_tools/worker_agent_defaults.sh"],
-      "tests": ["app/testing/python/test_worker_agent_codex.py", "app/testing/python/test_worker_agent_effort.py", "app/testing/python/test_worker_agent_routines.py"]
+      "tests": [
+        "app/testing/python/test_worker_agent_codex.py",
+        "app/testing/python/test_worker_agent_effort.py",
+        "app/testing/python/test_worker_agent_routines.py"
+      ]
     },
     {
       "paths": ["app/frontend/vite.config.mjs", "app/frontend/dist", "app/server_tools/release/browser_bundle.py"],
-      "tests": ["app/testing/python/test_browser_bundle_check.py"]
+      "tests": [
+        "app/testing/python/test_browser_bundle_check.py"
+      ]
     },
     {
       "paths": [
@@ -612,19 +618,32 @@
         "THIRD_PARTY_NOTICES.md",
         "app/testing/fixtures/custom_root/custom_root.svg"
       ],
-      "tests": ["app/testing/python/test_reviewed_provenance_hashes.py"]
+      "tests": [
+        "app/testing/python/test_reviewed_provenance_hashes.py"
+      ]
     },
     {
       "paths": ["app/server_tools/scripts/check_md_links.py", "app/docs/instructions_and_documentation/lang_key_lifecycle.md"],
-      "tests": ["app/testing/python/test_md_links.py"]
+      "tests": [
+        "app/testing/python/test_md_links.py"
+      ]
     },
     {
       "paths": ["app/server_tools/scripts/qa.sh", "app/server_tools/check_gitignore/check_gitignore.sh"],
-      "tests": ["app/testing/python/test_qa_workflow.py"]
+      "tests": [
+        "app/testing/python/test_qa_workflow.py"
+      ]
     },
     {
-      "paths": ["app/backend/core_components/system_table_tools/lang_key_consistency_checks.go", "app/backend/core_components/system_table_tools/database_consistency_check.go", "app/frontend/core_components/admin_tools/database_consistency_view.js", "app/server_tools/migrations/20261015000004_seed_lang_key_archiving_paused_language_keys.sql"],
-      "tests": ["app/testing/python/test_lang_key_archiving_paused_language_seed.py"]
+      "paths": [
+        "app/backend/core_components/system_table_tools/lang_key_consistency_checks.go",
+        "app/backend/core_components/system_table_tools/database_consistency_check.go",
+        "app/frontend/core_components/admin_tools/database_consistency_view.js",
+        "app/server_tools/migrations/20261015000004_seed_lang_key_archiving_paused_language_keys.sql"
+      ],
+      "tests": [
+        "app/testing/python/test_lang_key_archiving_paused_language_seed.py"
+      ]
     },
     {
       "paths": [
@@ -638,23 +657,46 @@
         "app/server_tools/scripts/check_file_length.sh",
         "app/package.json"
       ],
-      "tests": ["app/testing/python/test_import_boundaries.py", "app/testing/python/test_component_imports.py", "app/testing/python/test_component_discovery.py"]
+      "tests": [
+        "app/testing/python/test_import_boundaries.py",
+        "app/testing/python/test_component_imports.py",
+        "app/testing/python/test_component_discovery.py"
+      ]
     },
     {
-      "paths": ["app/backend/core_components/lang/translation_scope_reader.go", "app/backend/core_components/lang_key_naming/lang_key_naming.go", "app/server_tools/migrations/20261015000006_backfill_translation_object_sources.sql", "app/server_tools/public_bootstrap/generate_bootstrap.py"],
-      "tests": ["app/testing/python/test_translation_object_sources.py", "app/testing/python/test_translation_scope_storage.py"]
+      "paths": [
+        "app/backend/core_components/lang/translation_scope_reader.go",
+        "app/backend/core_components/lang_key_naming/lang_key_naming.go",
+        "app/server_tools/migrations/20261015000006_backfill_translation_object_sources.sql",
+        "app/server_tools/public_bootstrap/generate_bootstrap.py"
+      ],
+      "tests": [
+        "app/testing/python/test_translation_object_sources.py",
+        "app/testing/python/test_translation_scope_storage.py"
+      ]
     },
     {
       "paths": ["app/server_tools/scripts/check_file_length.sh", "app/testing/python/test_file_length_guard.py"],
-      "tests": ["app/testing/python/test_file_length_guard.py"]
+      "tests": [
+        "app/testing/python/test_file_length_guard.py"
+      ]
     },
     {
-      "paths": ["app/frontend/core_components/admin_tools/row_group_assignment_editor.js"],
-      "tests": ["app/testing/python/test_row_group_window_language_keys.py"]
+      "paths": [
+        "app/frontend/core_components/admin_tools/row_group_assignment_editor.js"
+      ],
+      "tests": [
+        "app/testing/python/test_row_group_window_language_keys.py"
+      ]
     },
     {
-      "paths": ["app/server_tools/migrations/20261015000008_seed_table_cell_max_lines.sql", "app/frontend/core_components/admin_tools/table_view_settings_view.js"],
-      "tests": ["app/testing/python/test_table_cell_lines_seed.py"]
+      "paths": [
+        "app/server_tools/migrations/20261015000008_seed_table_cell_max_lines.sql",
+        "app/frontend/core_components/admin_tools/table_view_settings_view.js"
+      ],
+      "tests": [
+        "app/testing/python/test_table_cell_lines_seed.py"
+      ]
     },
     {
       "paths": [
@@ -666,7 +708,11 @@
         "app/server_tools/migrations/20261015000014_seed_redirect_notice_language_keys.sql",
         "app/testing/python/test_dataset_redirect_notice_language_keys.py"
       ],
-      "tests": ["app/testing/python/test_dataset_redirect_notice_language_keys.py", "app/testing/python/test_field_settings_language_seed.py", "app/testing/python/test_missing_media_check_language_seed.py"]
+      "tests": [
+        "app/testing/python/test_dataset_redirect_notice_language_keys.py",
+        "app/testing/python/test_field_settings_language_seed.py",
+        "app/testing/python/test_missing_media_check_language_seed.py"
+      ]
     },
     {
       "paths": [
@@ -681,7 +727,14 @@
         "app/server_tools/db_init/01_init_extensions.sh",
         "app/server_tools/migrations"
       ],
-      "tests": ["app/testing/python/test_database_restore_check.py", "app/testing/python/test_database_restore_check_security.py"]
+      "tests": [
+        "app/testing/python/test_database_restore_check.py",
+        "app/testing/python/test_database_restore_check_security.py"
+      ]
+    },
+    {
+      "paths": ["app/docker/Dockerfile.db"],
+      "tests": ["app/testing/python/test_docker_postgis_packages.py"]
     }
   ],
   "bootstrap_proofs": [
