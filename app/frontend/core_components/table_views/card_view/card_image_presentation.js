@@ -4,38 +4,49 @@
 // Keeps article images, SVG logos, avatars and thumbnails on their own rendering paths.
 
 import { addCardResourceListener } from './card_resource_lifecycle.js';
-import { readAppearanceAttribute, appearanceScopeElements } from '../../../reusable_components/appearance_scope_reader.js';
+import { APPEARANCE_SCOPE_SELECTOR, readAppearanceAttribute, appearanceScopeElements } from '../../../reusable_components/appearance_scope_reader.js';
 import { projectAppearanceAttribute, projectAppearanceStyle } from '../../../reusable_components/appearance_projection_writer.js';
+import { CARD_IMAGE_PRESENTATIONS, resolveCardImagePresentation } from './card_image_presentation_resolver.js';
 
-export const CARD_IMAGE_PRESENTATIONS = Object.freeze(['cover', 'contain', 'contain_blur']);
+export { CARD_IMAGE_PRESENTATIONS };
 
 export function normalizeCardImagePresentation(value) {
     return CARD_IMAGE_PRESENTATIONS.includes(value) ? value : 'contain';
 }
 
-export function applyCardImagePresentationSetting(value, scope = document.documentElement) {
+export function applyCardImagePresentationSetting(value, scope = document.documentElement, defaults) {
+    scope._cardImageDefaults = defaults || { site: value };
     projectAppearanceAttribute(scope, 'cardImagePresentation', normalizeCardImagePresentation(value));
     appearanceScopeElements(scope, '.card_photo_presentation').forEach(wrapper => {
-        projectAppearanceAttribute(wrapper, 'cardImagePresentation', scope.dataset.cardImagePresentation);
+        wrapper._cardImageDefaults = scope._cardImageDefaults;
         wrapper._refreshImagePresentation?.();
     });
 }
 
 function isContainBlurPresentation(wrapper) {
-    return readAppearanceAttribute(wrapper, 'cardImagePresentation') === 'contain_blur';
+    return wrapper.dataset.cardImagePresentation === 'contain_blur';
 }
 
 /** Decorative CSS uses the same resolved URL; the accessible image stays the single img. */
-export function prepareCardImagePresentation(wrapper, image) {
+export function prepareCardImagePresentation(wrapper, image, { cardImageOwn, cardImageUse } = {}) {
     if (wrapper.dataset.cardImageRenderSlot !== 'card_media'
         || wrapper.dataset.imagePresentationKind !== 'raster'
         || image.parentElement !== wrapper) return false;
     wrapper.classList.add('card_photo_presentation');
+    wrapper._cardImageOwn = cardImageOwn;
+    wrapper._cardImageUse = cardImageUse ? Object.freeze({ ...cardImageUse }) : null;
     wrapper.style.backgroundColor = 'var(--bg_color)';
     image.style.setProperty('object-fit', 'var(--card-photo-object-fit, contain)', 'important');
     let hasLoaded = image.complete;
     const updateBackdrop = () => {
-        projectAppearanceAttribute(wrapper, 'cardImagePresentation', normalizeCardImagePresentation(readAppearanceAttribute(wrapper, 'cardImagePresentation')));
+        const defaults = wrapper._cardImageDefaults
+            || wrapper.closest(APPEARANCE_SCOPE_SELECTOR)?._cardImageDefaults
+            || { site: readAppearanceAttribute(wrapper, 'cardImagePresentation') };
+        const resolved = resolveCardImagePresentation({ own: wrapper._cardImageOwn, ...defaults });
+        projectAppearanceAttribute(wrapper, 'cardImagePresentation', resolved.value);
+        projectAppearanceAttribute(wrapper, 'cardImageSource', resolved.source);
+        projectAppearanceStyle(wrapper, '--card-photo-focal', resolved.value === 'cover'
+            ? `${resolved.focal.x * 100}% ${resolved.focal.y * 100}%` : null);
         if (!isContainBlurPresentation(wrapper) || (!hasLoaded && !image.complete)) {
             projectAppearanceStyle(wrapper, '--card-photo-source', null);
             return;

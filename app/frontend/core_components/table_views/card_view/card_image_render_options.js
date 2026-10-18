@@ -47,6 +47,12 @@ export function buildCardImageRenderOptions(
         tableName,
         rowLabel,
         renderSlot,
+        cardImageUse: readCompanionValue(rowItem, safeColumnName, "usage"),
+        cardImageOwn: {
+            presentation: readCompanionValue(rowItem, safeColumnName, "presentation"),
+            focal: { x: readCompanionValue(rowItem, safeColumnName, "focal_x"),
+                y: readCompanionValue(rowItem, safeColumnName, "focal_y") },
+        },
         imageTypeId: readCompanionValue(rowItem, safeColumnName, "type_id"),
         imageMetadata: readCompanionValue(rowItem, safeColumnName, "metadata_json"),
         imageTitle: readCompanionValue(rowItem, safeColumnName, "title"),

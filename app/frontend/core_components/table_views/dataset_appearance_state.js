@@ -35,25 +35,41 @@ export function createDatasetAppearanceState() {
     function effective(name) {
         return effectiveUID(resolveUID(name));
     }
+    function publicSiteConfiguration(entry) {
+        return site?.config && (!entry || site.preview || entry.siteGeneration < siteGeneration
+            || entry.snapshot.shared_version === site.version) ? site.config : null;
+    }
+    function siteDefaultValue(entry, path) {
+        const publicConfig = publicSiteConfiguration(entry);
+        if (publicConfig) return leaf(publicConfig, path);
+        const snapshot = entry?.snapshot;
+        // V2 owns defaults separately. V1 effective values can supply a site
+        // default only when no saved override would leak into a removed draft.
+        if (snapshot?.schema_version === 2) return snapshot.defaults[path];
+        return (snapshot?.shared && leaf(snapshot.shared, path))
+            ?? (snapshot && !Object.hasOwn(snapshot.overrides, path) ? leaf(snapshot.effective, path) : undefined)
+            ?? leaf(DEFAULT_DATASET_APPEARANCE, path);
+    }
     function effectiveUID(uid) {
         const entry = entries.get(uid);
         const config = normalize(entry?.snapshot.effective || site?.config);
         if (!entry) return config;
         const snapshot = entry.snapshot;
-        const publicConfig = site?.config;
+        const publicConfig = publicSiteConfiguration(entry);
         // In v1 covers still inherit the site, including today's cover preview.
         // V2 cover ownership never follows site saves/previews.
         const inheritedPaths = snapshot.schema_version === 1 ? DATASET_APPEARANCE_PATHS
             : [...DATASET_APPEARANCE_PATHS_BY_PLACE.site_default, ...DATASET_APPEARANCE_PATHS_BY_PLACE.site_only];
-        if (publicConfig && (site.preview || entry.siteGeneration < siteGeneration
-            || snapshot.shared_version === site.version)) {
-            for (const path of inheritedPaths) {
-                // The v1 cover palette previews its shared cover on the open
-                // dataset even when a legacy cover path was stored. Releasing
-                // it restores that authorized snapshot; v2 tab covers stay local.
-                const previewCover = snapshot.schema_version === 1 && site.preview
-                    && DATASET_APPEARANCE_PATHS_BY_PLACE.tab_only.includes(path);
-                if (previewCover || !Object.hasOwn(snapshot.overrides, path)) assignLeaf(config, path, leaf(publicConfig, path));
+        for (const path of inheritedPaths) {
+            // The v1 cover palette previews its shared cover on the open
+            // dataset even when a legacy cover path was stored. Releasing
+            // it restores that authorized snapshot; v2 tab covers stay local.
+            const previewCover = snapshot.schema_version === 1 && site?.preview
+                && DATASET_APPEARANCE_PATHS_BY_PLACE.tab_only.includes(path);
+            if (previewCover || !Object.hasOwn(snapshot.overrides, path)) {
+                if (DATASET_APPEARANCE_PATHS_BY_PLACE.site_default.includes(path)) {
+                    assignLeaf(config, path, siteDefaultValue(entry, path));
+                } else if (publicConfig) assignLeaf(config, path, leaf(publicConfig, path));
             }
         }
         const preview = previews.get(uid);
@@ -61,7 +77,7 @@ export function createDatasetAppearanceState() {
             for (const [path, value] of Object.entries(preview.settings.tab_values)) assignLeaf(config, path, value);
             for (const path of DATASET_APPEARANCE_PATHS_BY_PLACE.site_default) {
                 assignLeaf(config, path, Object.hasOwn(preview.settings.overrides, path)
-                    ? preview.settings.overrides[path] : leaf(publicConfig || snapshot.effective, path));
+                    ? preview.settings.overrides[path] : siteDefaultValue(entry, path));
             }
         }
         return config;
@@ -69,6 +85,13 @@ export function createDatasetAppearanceState() {
     function configuration(uid) {
         if (!configurations.has(uid)) {
             const config = effectiveUID(uid);
+            const entry = entries.get(uid), snapshot = entry?.snapshot;
+            const overrides = previews.get(uid)?.settings.overrides || snapshot?.overrides || {};
+            const path = 'shared.card_image_presentation';
+            config.cardImageDefaults = {
+                dataset: Object.hasOwn(overrides, path) ? overrides[path] : null,
+                site: siteDefaultValue(entry, path),
+            };
             configurations.set(uid, { config, signature: JSON.stringify([uid, entries.has(uid), config]) });
         }
         return configurations.get(uid);

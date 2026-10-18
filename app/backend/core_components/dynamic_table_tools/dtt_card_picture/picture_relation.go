@@ -182,11 +182,12 @@ type PictureRelation struct {
 	Columns GalleryColumns
 	// HasAssetKind says whether rows are filtered to pictures by asset_kind; without
 	// the column every row with a stored name is a picture.
-	HasAssetKind    bool
-	HasTypeID       bool
-	HasMetadataJSON bool
-	HasTitle        bool
-	HasOriginalName bool
+	HasAssetKind         bool
+	HasTypeID            bool
+	HasMetadataJSON      bool
+	HasTitle             bool
+	HasOriginalName      bool
+	HasCardImageSettings bool
 }
 
 // PictureRelationOf returns the parent's gallery, or nil when it has none:
@@ -386,11 +387,12 @@ func pictureRelationFromCandidate(
 			Created:   hasColumn(columns, "created"),
 			ID:        hasColumn(columns, "id"),
 		},
-		HasAssetKind:    hasColumn(columns, "asset_kind"),
-		HasTypeID:       hasColumn(columns, "type_id"),
-		HasMetadataJSON: hasColumn(columns, "metadata_json"),
-		HasTitle:        hasColumn(columns, "title"),
-		HasOriginalName: hasColumn(columns, "original_name"),
+		HasAssetKind:         hasColumn(columns, "asset_kind"),
+		HasTypeID:            hasColumn(columns, "type_id"),
+		HasMetadataJSON:      hasColumn(columns, "metadata_json"),
+		HasTitle:             hasColumn(columns, "title"),
+		HasOriginalName:      hasColumn(columns, "original_name"),
+		HasCardImageSettings: hasColumn(columns, "card_image_presentation") && hasColumn(columns, "card_image_focal_x") && hasColumn(columns, "card_image_focal_y"),
 	}, nil
 }
 

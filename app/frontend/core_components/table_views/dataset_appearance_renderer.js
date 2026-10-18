@@ -61,13 +61,14 @@ export function refreshDatasetAppearanceAdapters(surface, config) {
         .forEach(element => { projectAppearanceAttribute(element, 'articleImageCaptionPosition', shared.article_image_caption_position); });
     applyCardFieldPresentationSetting(shared.card_show_all_fields, shared.card_style_variant, shared.card_detail_columns, surface);
     applySiteLabelValueLayoutSetting(shared.label_value_layout, surface);
-    applyCardImagePresentationSetting(shared.card_image_presentation, surface);
+    applyCardImagePresentationSetting(shared.card_image_presentation, surface, config.cardImageDefaults);
 }
 
 /** Remove the private projection as well as its identity on lifecycle invalidation. */
 export function clearDatasetAppearanceSurface(surface) {
     clearAppearanceProjections(surface);
     delete surface._datasetAppearanceAttributes;
+    delete surface._cardImageDefaults;
     delete surface.dataset.datasetAppearanceResolved;
     delete surface.dataset.datasetAppearanceUid;
     delete surface.dataset.datasetAppearanceScope;

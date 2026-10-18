@@ -108,6 +108,8 @@ export function createImageElement(
         imageTitle = "",
         imageOriginalName = "",
         imageMimeType = "",
+        cardImageOwn = undefined,
+        cardImageUse = undefined,
     } = {}
 ) {
     const wrapper = document.createElement('div');
@@ -209,7 +211,7 @@ export function createImageElement(
         logoPlan: serviceCatalogLogoPlan,
     });
     wrapper.classList.add('wrapper');
-    prepareCardImagePresentation(wrapper, foregroundImg);
+    prepareCardImagePresentation(wrapper, foregroundImg, { cardImageOwn, cardImageUse });
 
     return wrapper;
 }

@@ -47,88 +47,6 @@ func UpdateRowHandlerWrapper(response_writer http.ResponseWriter, request *http.
 	UpdateRowHandler(response_writer, request, tableName)
 }
 
-type updateRowFieldUpdate struct {
-	Column string      `json:"column"`
-	Value  interface{} `json:"value"`
-}
-
-type updateRowRequest struct {
-	Version       string                 `json:"version"`
-	SharedVersion string                 `json:"shared_version"`
-	ID            int64                  `json:"id"`
-	Column        string                 `json:"column"`
-	Value         interface{}            `json:"value"`
-	Updates       []updateRowFieldUpdate `json:"updates"`
-}
-
-// UnmarshalJSON distinguishes an explicit SQL NULL request from a missing value.
-func (update *updateRowFieldUpdate) UnmarshalJSON(data []byte) error {
-	type plainUpdate updateRowFieldUpdate
-	var decoded plainUpdate
-	if err := json.Unmarshal(data, &decoded); err != nil {
-		return err
-	}
-	var fields map[string]json.RawMessage
-	if err := json.Unmarshal(data, &fields); err != nil {
-		return err
-	}
-	if _, present := fields["value"]; !present {
-		return errors.New("Value is required; use explicit null to clear a nullable field")
-	}
-	*update = updateRowFieldUpdate(decoded)
-	return nil
-}
-
-// UnmarshalJSON keeps the same explicit-value boundary for the legacy single-field shape.
-func (request *updateRowRequest) UnmarshalJSON(data []byte) error {
-	type plainRequest updateRowRequest
-	var decoded plainRequest
-	if err := json.Unmarshal(data, &decoded); err != nil {
-		return err
-	}
-	if strings.TrimSpace(decoded.Column) != "" {
-		var fields map[string]json.RawMessage
-		if err := json.Unmarshal(data, &fields); err != nil {
-			return err
-		}
-		if _, present := fields["value"]; !present {
-			return errors.New("Value is required; use explicit null to clear a nullable field")
-		}
-	}
-	*request = updateRowRequest(decoded)
-	return nil
-}
-
-func normalizeUpdateOperations(request updateRowRequest) ([]updateRowFieldUpdate, error) {
-	if request.ID == 0 {
-		return nil, errors.New("ID is required")
-	}
-
-	normalized := make([]updateRowFieldUpdate, 0, len(request.Updates)+1)
-	if trimmedColumn := strings.TrimSpace(request.Column); trimmedColumn != "" {
-		normalized = append(normalized, updateRowFieldUpdate{
-			Column: trimmedColumn,
-			Value:  request.Value,
-		})
-	}
-
-	for _, update := range request.Updates {
-		trimmedColumn := strings.TrimSpace(update.Column)
-		if trimmedColumn == "" {
-			return nil, errors.New("Column is required")
-		}
-		normalized = append(normalized, updateRowFieldUpdate{
-			Column: trimmedColumn,
-			Value:  update.Value,
-		})
-	}
-
-	if len(normalized) == 0 {
-		return nil, errors.New("at least one update is required")
-	}
-	return normalized, nil
-}
-
 // UpdateRowHandler hoitaa tietokantarivin päivityksen
 func UpdateRowHandler(response_writer http.ResponseWriter, request *http.Request, tableName string) {
 	if err := accountwrite.RequireAdministrator(response_writer, request, tableName); err != nil {
@@ -153,6 +71,14 @@ func UpdateRowHandler(response_writer http.ResponseWriter, request *http.Request
 	if err := json.NewDecoder(request.Body).Decode(&updateRequest); err != nil {
 		log.Printf("\033[31merror: %s\033[0m\n", err.Error())
 		httpresponse.RespondWithError(response_writer, http.StatusBadRequest, "Invalid request data")
+		return
+	}
+	if updateRequest.Dataset != "" && updateRequest.Dataset != tableName {
+		httpresponse.RespondWithError(response_writer, 400, "body dataset conflicts with the authorized dataset")
+		return
+	}
+	if updateRequest.CardImage != nil && (updateRequest.CardImage.Use.Dataset != tableName || updateRequest.CardImage.Use.RowID != updateRequest.ID) {
+		httpresponse.RespondWithError(response_writer, 400, "image use conflicts with the authorized dataset or row")
 		return
 	}
 
@@ -234,6 +160,19 @@ func UpdateRowHandler(response_writer http.ResponseWriter, request *http.Request
 	}
 	if !rowVisible {
 		httpresponse.RespondWithError(response_writer, http.StatusForbidden, "Row is not editable by the current actor")
+		return
+	}
+	if updateRequest.CardImage != nil {
+		use, err := saveCardImageUpdate(tx, request, tableName, updateRequest.ID, updateRequest.CardImage, userID, userRole)
+		if err != nil {
+			runtime_grant_mutations.RespondError(response_writer, err)
+			return
+		}
+		if err := mutation.Finish(request.Context()); err != nil {
+			runtime_grant_mutations.RespondError(response_writer, err)
+			return
+		}
+		httpresponse.RespondWithJSON(response_writer, 200, map[string]interface{}{"card_image_use": use})
 		return
 	}
 
@@ -617,6 +556,7 @@ func getTableUID(tableName string, q queryer) (int, error) {
 		SELECT table_uid
 		FROM system_db_tables
 		WHERE table_name = $1
+		  AND COALESCE(NULLIF(schema_name, ''), 'public') = 'public'
 	`
 	err := q.QueryRow(query, tableName).Scan(&tableUID)
 	if err != nil {

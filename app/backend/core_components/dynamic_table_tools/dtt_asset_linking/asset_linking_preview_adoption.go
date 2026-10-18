@@ -8,22 +8,25 @@ package dtt_asset_linking
 
 import (
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
 
 	"easelect/backend/core_components/dbutils"
 	"easelect/backend/core_components/dynamic_table_tools/dtt_card_picture"
+	"easelect/backend/core_components/media_utils"
 
 	"github.com/lib/pq"
 )
 
-const (
-	sharedAssetPreviewColumn = "cached_image"
-	// sharedAssetPreviewRecoveredMetadata marks a gallery row that was created from
-	// the card picture, so its origin stays recognisable later.
-	sharedAssetPreviewRecoveredMetadata = `{"recovered_from":"cached_image"}`
-)
+const sharedAssetPreviewColumn = "cached_image"
+
+// CardImageStoredFileState uses the card rule's configured storage boundary.
+// Unknown or missing files remain ineligible for explicit adoption.
+func CardImageStoredFileState(relativePath string) media_utils.StoredFileStatus {
+	return cardPictureFileState(relativePath)
+}
 
 // sharedAssetPreviewLocation is where one stored picture lives under the storage root.
 type sharedAssetPreviewLocation struct {
@@ -85,9 +88,17 @@ func readSharedAssetParentPreview(q dbutils.Querier, parentTable string, parentR
 // later makes it the card picture again, as it was before; it is not primary itself
 // and records where it came from.
 func insertAdoptedSharedAssetPreviewRow(q dbutils.Querier, gallery *dtt_card_picture.PictureRelation, parentRowID int64, value string) error {
+	_, err := InsertAdoptedCardImage(q, gallery, parentRowID, value, sharedAssetPreviewColumn)
+	return err
+}
+
+// InsertAdoptedCardImage explicitly keeps the caller's actual displayed field.
+// The caller owns the parent lock, permission checks and transaction; errors must
+// roll back the adoption and its presentation together.
+func InsertAdoptedCardImage(q dbutils.Querier, gallery *dtt_card_picture.PictureRelation, parentRowID int64, value, sourceColumn string) (int64, error) {
 	columnTypes, err := readSharedAssetChildColumnTypes(q, gallery.ChildTable)
 	if err != nil {
-		return err
+		return 0, err
 	}
 	childTable := pq.QuoteIdentifier(gallery.ChildTable)
 	foreignKey := pq.QuoteIdentifier(gallery.ForeignKey)
@@ -114,24 +125,16 @@ func insertAdoptedSharedAssetPreviewRow(q dbutils.Querier, gallery *dtt_card_pic
 		))
 	}
 	if columnTypes["metadata_json"] == "jsonb" || columnTypes["metadata_json"] == "json" {
-		addArgument("metadata_json", sharedAssetPreviewRecoveredMetadata)
+		metadata, _ := json.Marshal(map[string]string{"recovered_from": sourceColumn})
+		addArgument("metadata_json", string(metadata))
 	}
 
-	result, err := q.Exec(
-		fmt.Sprintf(`INSERT INTO %s (%s) VALUES (%s)`, childTable, strings.Join(columns, ", "), strings.Join(values, ", ")),
+	var id int64
+	err = q.QueryRow(
+		fmt.Sprintf(`INSERT INTO %s (%s) VALUES (%s) RETURNING id`, childTable, strings.Join(columns, ", "), strings.Join(values, ", ")),
 		args...,
-	)
-	if err != nil {
-		return err
-	}
-	inserted, err := result.RowsAffected()
-	if err != nil {
-		return err
-	}
-	if inserted != 1 {
-		return fmt.Errorf("inserted %d gallery rows, want 1", inserted)
-	}
-	return nil
+	).Scan(&id)
+	return id, err
 }
 
 func readSharedAssetChildColumnTypes(q dbutils.Querier, childTable string) (map[string]string, error) {

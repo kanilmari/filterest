@@ -183,14 +183,19 @@ export function resolveFallbackCardImageValue(
     rowItem,
     preferredKeys = DEFAULT_CARD_IMAGE_FALLBACK_KEYS
 ) {
+    return resolveFallbackCardImageCandidate(rowItem, preferredKeys)?.value || '';
+}
+
+/** Keep the displayed field's identity alongside its value, including fallbacks. */
+export function resolveFallbackCardImageCandidate(rowItem, preferredKeys = DEFAULT_CARD_IMAGE_FALLBACK_KEYS) {
     if (!rowItem || typeof rowItem !== "object") {
-        return "";
+        return null;
     }
 
     for (const key of preferredKeys) {
         const resolved = normalizeFallbackImageCandidate(rowItem[key]);
         if (resolved) {
-            return resolved;
+            return { value: resolved, column: key };
         }
     }
 
@@ -201,11 +206,11 @@ export function resolveFallbackCardImageValue(
 
         const resolved = normalizeFallbackImageCandidate(rawValue);
         if (resolved) {
-            return resolved;
+            return { value: resolved, column: key };
         }
     }
 
-    return "";
+    return null;
 }
 
 /**

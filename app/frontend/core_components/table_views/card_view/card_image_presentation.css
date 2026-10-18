@@ -11,6 +11,10 @@
     --card-photo-object-fit: cover;
 }
 
+.card_photo_presentation[data-card-image-presentation="cover"] > img {
+    object-position: var(--card-photo-focal, 50% 50%) !important;
+}
+
 .card_photo_presentation::before {
     content: "";
     display: none;

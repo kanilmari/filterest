@@ -139,7 +139,7 @@ func TestImageTableKeepsItsColumnSetInListOrderPostgres(t *testing.T) {
 		t.Fatal("reusing child rewrote an administrator choice")
 	}
 
-	// The same fourteen columns, types and defaults the map used to create,
+	// The same fourteen columns, types and defaults the map used to create, plus card image storage,
 	// now in one order: identity, parent link, file details, timestamps.
 	wantChild := []string{
 		"id integer nextval('wl135_places_assets_id_seq'::regclass)",
@@ -156,6 +156,10 @@ func TestImageTableKeepsItsColumnSetInListOrderPostgres(t *testing.T) {
 		"metadata_json jsonb",
 		"created timestamp with time zone now()",
 		"updated timestamp with time zone now()",
+		// Card image storage (migration 000009): every new or upgraded gallery gets these three last.
+		"card_image_presentation text",
+		"card_image_focal_x numeric(5,4)",
+		"card_image_focal_y numeric(5,4)",
 	}
 	if got := physicalColumns(t, db, "wl135_places_assets"); !reflect.DeepEqual(got, wantChild) {
 		t.Fatalf("image table columns =\n%s\nwant\n%s", strings.Join(got, "\n"), strings.Join(wantChild, "\n"))

@@ -59,7 +59,9 @@ function buildSurfaces(owner) {
 
 function properties(node) {
     return [node, ...node.querySelectorAll('*')].map(element => ({
-        attributes: Object.fromEntries([...element.attributes].filter(attribute => attribute.name !== 'style')
+        // WO27 adds a source explanation; the frozen visual oracle predates it.
+        attributes: Object.fromEntries([...element.attributes].filter(attribute =>
+            !['style', 'data-card-image-source'].includes(attribute.name))
             .map(attribute => [attribute.name, attribute.value]).sort(([a], [b]) => a.localeCompare(b))),
         styles: Object.fromEntries(Array.from(element.style).sort().map(name =>
             [name, [element.style.getPropertyValue(name), element.style.getPropertyPriority(name)]])),

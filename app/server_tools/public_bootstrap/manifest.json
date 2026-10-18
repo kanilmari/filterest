@@ -208,6 +208,7 @@
     "20261015000006_backfill_translation_object_sources.sql",
     "20261015000007_seed_client_error_notice_language_key.sql",
     "20261015000008_seed_table_cell_max_lines.sql",
+    "20261015000009_add_card_image_usage_presentation.sql",
     "20261015000016_seed_first_run_setup_code.sql",
     "20261015000099_record_database_release_9_12_0.sql"
   ],
@@ -380,7 +381,7 @@
     "public.system_languages": 5,
     "public.system_permission_actions": 7,
     "public.system_permission_categories": 4,
-    "public.system_schema_migrations": 203,
+    "public.system_schema_migrations": 204,
     "public.system_table_folders": 14,
     "public.system_table_views": 13,
     "public.system_user_group_memberships": 2,
@@ -395,7 +396,7 @@
       "sha256": "8032feb23e8937d9de9a3a71cd510976ff103b686a38e9e7b79692eac5283010"
     },
     "server_tools/public_bootstrap/seed_data.sql": {
-      "sha256": "4bdde51afa1f6f49f1f1184965dd6bd743e06e1029a583af7fa18da420a7b2fb"
+      "sha256": "4608a60ffd740455a818003a3ab56953ea949d38c941ce0027816d2d7b5087e9"
     }
   },
   "source_files": {
@@ -412,7 +413,7 @@
       "sha256": "235e4b887181e150bd436d035d2d268eb821d9e5d0b830b54eb444988f31d5d1"
     },
     "filterest/app/server_tools/public_bootstrap/generate_bootstrap.py": {
-      "sha256": "250eeb477fd2d4d868954d9cf97ffe94af75c8a03425d1062a4546872c5eb731"
+      "sha256": "2317333996d576ca070dee73a3548065ab8346768e2aa75cce82144fad2235e8"
     },
     "filterest/app/server_tools/public_bootstrap/sql_identifier_validator.py": {
       "sha256": "748245fac4328a3608740c1b0fe948e6a09d6489d587143bd3b4c67064bea732"
@@ -1091,6 +1092,9 @@
     },
     "filterest/app/server_tools/migrations/20261015000008_seed_table_cell_max_lines.sql": {
       "sha256": "446c6db2923a14859efbb71a6de055260fdc2a15b510e0abdaf1a5e99a531b38"
+    },
+    "filterest/app/server_tools/migrations/20261015000009_add_card_image_usage_presentation.sql": {
+      "sha256": "24bce4ab54d1ac303c687df8a9288b8197f9e137a3a470d37448dde3011dd294"
     },
     "filterest/app/server_tools/migrations/20261015000016_seed_first_run_setup_code.sql": {
       "sha256": "d5573b95644acea6168e73d1c020ddf91268d2ca9ac7b50a08fdd33f602a05d4"

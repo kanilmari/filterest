@@ -5,6 +5,7 @@
 package dtt_1_row_read
 
 import (
+	"database/sql"
 	"fmt"
 	"log"
 	"sort"
@@ -26,6 +27,11 @@ type canonicalAssetImageValue struct {
 	title            string
 	originalName     string
 	visibleFilenames []string
+	linkID           int64
+	linkVersion      string
+	presentation     *string
+	focalX, focalY   *float64
+	uses             []canonicalAssetImageValue
 }
 
 func collectHiddenCardSupportColumns(
@@ -348,6 +354,9 @@ func enrichRowsWithCanonicalAssetImages(
 		return err
 	}
 	applyLegacyChildImageValues(rows, imageByID, gallery.parentTableUID)
+	if gallery.relation.HasCardImageSettings {
+		return enrichExactCardImageUses(querier, parentTable, rows, rowIDs, actor, gallery)
+	}
 	return nil
 }
 
@@ -395,6 +404,10 @@ func fetchCanonicalAssetImageValues(
 		originalNameSelect = `COALESCE("original_name"::text, '') AS "original_name"`
 	}
 
+	extraSelect := ""
+	if relation.HasCardImageSettings {
+		extraSelect = `, id, xmin::text, card_image_presentation, card_image_focal_x, card_image_focal_y`
+	}
 	query := fmt.Sprintf(
 		`SELECT %s, %s, %s, %s, %s, %s
 		   FROM %s
@@ -411,6 +424,9 @@ func fetchCanonicalAssetImageValues(
 		strings.Join(placeholders, ", "),
 		relation.PictureCondition(""),
 	)
+	if extraSelect != "" {
+		query = strings.Replace(query, "\n\t\t   FROM", extraSelect+"\n\t\t   FROM", 1)
+	}
 	policy, err := getLegacyMustTrueReadPolicy(querier, relation.ChildTable)
 	if err != nil {
 		return nil, err
@@ -436,14 +452,21 @@ func fetchCanonicalAssetImageValues(
 		var rawMetadataJSON interface{}
 		var rawTitle interface{}
 		var rawOriginalName interface{}
-		if scanErr := rows.Scan(
+		var image canonicalAssetImageValue
+		var presentation sql.NullString
+		var focalX, focalY sql.NullFloat64
+		values := []interface{}{
 			&rawParentID,
 			&rawFilename,
 			&rawTypeID,
 			&rawMetadataJSON,
 			&rawTitle,
 			&rawOriginalName,
-		); scanErr != nil {
+		}
+		if relation.HasCardImageSettings {
+			values = append(values, &image.linkID, &image.linkVersion, &presentation, &focalX, &focalY)
+		}
+		if scanErr := rows.Scan(values...); scanErr != nil {
 			return nil, scanErr
 		}
 
@@ -458,8 +481,18 @@ func fetchCanonicalAssetImageValues(
 		}
 
 		key := strconv.FormatInt(parentID, 10)
+		image.filename, image.typeID = filename, coerceCanonicalAssetTypeID(rawTypeID)
+		image.metadataJSON, image.title = normalizeCardSupportValue(rawMetadataJSON), normalizeCardSupportValue(rawTitle)
+		image.originalName = normalizeCardSupportValue(rawOriginalName)
+		if presentation.Valid {
+			image.presentation = &presentation.String
+		}
+		if focalX.Valid && focalY.Valid {
+			image.focalX, image.focalY = &focalX.Float64, &focalY.Float64
+		}
 		if value, exists := imageByID[key]; exists {
 			value.visibleFilenames = append(value.visibleFilenames, filename)
+			value.uses = append(value.uses, image)
 			imageByID[key] = value
 			continue
 		}
@@ -470,6 +503,7 @@ func fetchCanonicalAssetImageValues(
 			metadataJSON:     normalizeCardSupportValue(rawMetadataJSON),
 			title:            normalizeCardSupportValue(rawTitle),
 			originalName:     normalizeCardSupportValue(rawOriginalName),
+			uses:             []canonicalAssetImageValue{image},
 		}
 	}
 	if err := rows.Err(); err != nil {

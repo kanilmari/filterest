@@ -68,6 +68,9 @@ third-party product screenshots in words; never store them here.
 
 ## Feature descriptions
 
+- [Card image viewer default and smart crop](Card_Image_Viewer_Default_And_Smart_Crop.md)
+  describes personal viewing defaults, an administrator lock, independent cover
+  card presentation and optional subject-aware focal-point suggestions.
 - [Coloured tool navigation](Coloured_Tool_Navigation.md) describes group colour
   families and single-line tool entries within the existing tree and favourites.
 - [Category match-mode counts](Category_Match_Mode_Counts.md) describes exact

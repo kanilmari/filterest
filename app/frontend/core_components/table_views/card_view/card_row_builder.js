@@ -20,7 +20,7 @@ import { count_this_function } from "../../dev_tools/function_counter.js";
 import { makeColumnClass } from "../../filterbar/filter_list/column_visibility_handler.js";
 import { always_show_empty_fields_on_cards, show_more_button_on_cards } from "../../../ui_config.js";
 import { getLanguageWithBrowserFallback } from "../../state_stores/lang_preference_reader.js";
-import { hasFallbackCardImageColumn, resolveFallbackCardImageValue } from "./card_element_builder_helpers.js";
+import { hasFallbackCardImageColumn, resolveFallbackCardImageCandidate } from "./card_element_builder_helpers.js";
 import { buildCardImageRenderOptions, CARD_IMAGE_RENDER_SLOTS } from "./card_image_render_options.js";
 import { formatCardDetailEntriesForCardDisplay } from "./card_detail_value_formatter.js";
 import { CARD_STYLE_VARIANT_VALUES, normalizeCardDetailColumnOverride, resolveClientCardStyleVariant } from "./card_detail_layout_options.js";
@@ -63,7 +63,8 @@ count_this_function("createSingleCard");
         tableHasImageRole,
         timestampDisplayOptions,
     } = resolvedContext;
-    const fallbackImageValue = resolveFallbackCardImageValue(row_item);
+    const fallbackImage = resolveFallbackCardImageCandidate(row_item);
+    const fallbackImageValue = fallbackImage?.value || '';
     const usesLargeImageLayout =
         tableHasImageRole ||
         hasFallbackCardImageColumn(columns) ||
@@ -443,7 +444,7 @@ for (const role of baseRoles) {
         found_image_for_this_row = true;
         if (!image_value_small) {
             image_value_small = fallbackImageValue;
-            image_column_small = "cached_image";
+            image_column_small = fallbackImage.column;
         }
         await addImageOrAvatar(
             fallbackImageValue,
@@ -455,7 +456,7 @@ for (const role of baseRoles) {
             preferred_image_alt_label,
             buildCardImageRenderOptions(
                 row_item,
-                "cached_image",
+                fallbackImage.column,
                 table_name,
                 preferred_image_alt_label,
                 CARD_IMAGE_RENDER_SLOTS.CARD_MEDIA

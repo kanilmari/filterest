@@ -16,7 +16,7 @@ func TestExistingAssetRelationSeedsOnlyAtFirstLink(t *testing.T) {
 		db, state := openImageLinkingMockDB(t, []imageAssetLinkingQueryResponse{
 			{match: "fk.target_insert_specs::text", cols: []string{"id", "parent", "fk", "specs"}, rows: [][]driver.Value{{int64(30), "parent", "parent_id", spec}}},
 			{match: "SELECT table_uid", cols: []string{"uid"}, rows: [][]driver.Value{{int64(20)}}},
-		}, []imageAssetLinkingExecResponse{{match: "INSERT INTO system_group_table_func_rights", rowsAffected: 1}, {match: "UPDATE system_foreign_key_relations_1_m", rowsAffected: 1}})
+		}, []imageAssetLinkingExecResponse{{match: "app_ensure_card_image_storage", rowsAffected: 1}, {match: "INSERT INTO system_group_table_func_rights", rowsAffected: 1}, {match: "UPDATE system_foreign_key_relations_1_m", rowsAffected: 1}})
 		status, reused, err := EnsureSharedAssetRelation(db, "parent", 10, BuildImageFileUploadConfig("parent", 10, nil))
 		if err != nil || !reused || status.RelationID != 30 {
 			t.Fatal(status, reused, err)

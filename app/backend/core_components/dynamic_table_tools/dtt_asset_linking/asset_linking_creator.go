@@ -27,6 +27,9 @@ func EnsureSharedAssetRelation(
 	fkColumnName := parentTable + "_id"
 
 	if existingStatus, err := FindFileUploadRelationStatusByChildTable(tx, parentTableUID, childTable); err == nil {
+		if err := ensureCardImageStorage(tx, childTable); err != nil {
+			return FileUploadRelationStatus{}, false, err
+		}
 		// A pre-existing ordinary FK becomes an asset relation here. Once the
 		// file-upload config exists, later edits never seed its rights again.
 		if !existingStatus.fileUploadConfigured {
@@ -132,7 +135,17 @@ func EnsureSharedAssetRelation(
 	if err != nil {
 		return FileUploadRelationStatus{}, false, err
 	}
+	if err := ensureCardImageStorage(tx, childTable); err != nil {
+		return FileUploadRelationStatus{}, false, err
+	}
 	return status, false, nil
+}
+
+// New and upgraded galleries share the migration-owned storage installer.
+func ensureCardImageStorage(q dbutils.Querier, childTable string) error {
+	_, err := q.Exec(`SELECT public.app_ensure_card_image_storage(table_uid)
+		FROM public.system_db_tables WHERE table_name=$1 AND schema_name='public'`, childTable)
+	return err
 }
 
 // EnsureCachedImageColumn keeps the image preview cache available on the parent table.

@@ -14,8 +14,11 @@ import { prepareCardImagePresentation } from './card_view/card_image_presentatio
 import { applyLabelValueLayout } from '../../reusable_components/key_value_container/label_value_layout.js';
 
 const clone = value => JSON.parse(JSON.stringify(value));
-function snapshot(uid, overrides = {}, { version = '1', sharedVersion = 'site-1', schema = 1 } = {}) {
-    const shared = clone(DEFAULT_DATASET_APPEARANCE), effective = clone(shared);
+function snapshot(uid, overrides = {}, { version = '1', sharedVersion = 'site-1', schema = 1,
+    siteImagePresentation = DEFAULT_DATASET_APPEARANCE.shared.card_image_presentation } = {}) {
+    const shared = clone(DEFAULT_DATASET_APPEARANCE);
+    shared.shared.card_image_presentation = siteImagePresentation;
+    const effective = clone(shared);
     for (const [path, value] of Object.entries(overrides)) {
         const [group, key] = path.split('.'); effective[group][key] = value;
     }
@@ -53,6 +56,217 @@ beforeEach(() => {
 });
 
 describe('dataset appearance ownership', () => {
+    test.each([1, 2].flatMap(schema => [false, true].map(matching => [schema, matching])))(
+        'dataset previews retain accepted site defaults in schema %s (public revision matches: %s)', async (schema, matching) => {
+            const owner = createDatasetAppearanceState(), draftOwner = {};
+            owner.updateSite(clone(DEFAULT_DATASET_APPEARANCE), { version: 'site-1' });
+            owner.accept('photos', snapshot(11, {}, { schema }));
+            const host = surface(owner, 'photos'), node = card(owner, 'photos', host);
+            const photo = node.querySelector('.card_photo_presentation');
+            await Promise.resolve();
+            expect(photo.dataset.cardImagePresentation).toBe('contain');
+            const response = snapshot(11, {}, { schema, version: '2', sharedVersion: 'site-2', siteImagePresentation: 'cover' });
+            response.shared.shared.label_value_layout = response.effective.shared.label_value_layout = 'inline';
+            if (matching) owner.updateSite(response.shared, { version: 'site-2' });
+            if (schema === 2) {
+                response.defaults['shared.label_value_layout'] = 'inline';
+                delete response.shared;
+            }
+            expect(owner.accept('photos', response)).toBe(true);
+            await Promise.resolve();
+            const saved = owner.effective('photos');
+            expect(saved.shared.card_image_presentation).toBe('cover');
+            expect(saved.shared.label_value_layout).toBe('inline');
+            expect(host._cardImageDefaults).toEqual({ dataset: null, site: 'cover' });
+            expect(photo.dataset.cardImagePresentation).toBe('cover');
+            // Changing only tab values must not revive stale public site defaults.
+            const draft = clone(response);
+            draft.tab_values = appearanceValuesForPlace(saved, 'tab_only');
+            draft.tab_values['light.image_blur'] = 9; draft.tab_values['dark.image_blur'] = 0;
+            expect(owner.setPreview(draftOwner, 'photos', draft)).toBe(true);
+            await Promise.resolve();
+            expect(owner.effective('photos').shared).toEqual(saved.shared);
+            expect(host._cardImageDefaults).toEqual({ dataset: null, site: 'cover' });
+            expect(host.dataset.cardImagePresentation).toBe('cover');
+            expect(photo.dataset.cardImagePresentation).toBe('cover');
+            expect(photo.dataset.cardImageSource).toBe('site');
+            expect(host.dataset.labelValueLayout).toBe('inline');
+            expect(host.style.getPropertyValue('--dataset-background-light-image-blur')).toBe('9px');
+            expect(host.style.getPropertyValue('--dataset-background-dark-image-blur')).toBe('0px');
+            expect(owner.releasePreview(draftOwner, 'photos')).toBe(true);
+            await Promise.resolve();
+            expect(owner.effective('photos')).toEqual(saved);
+            expect(photo.dataset.cardImagePresentation).toBe('cover');
+        },
+    );
+
+    test.each([1, 2].flatMap(schema => ['stale', 'matching', 'absent'].map(cache => [schema, cache])))(
+        'removing a card override previews the site value in schema %s with %s public settings', async (schema, cache) => {
+            const owner = createDatasetAppearanceState(), draftOwner = {};
+            if (cache !== 'absent') {
+                const site = clone(DEFAULT_DATASET_APPEARANCE);
+                site.shared.card_image_presentation = cache === 'matching' ? 'cover' : 'contain';
+                owner.updateSite(site, { version: cache === 'matching' ? 'site-2' : 'site-1' });
+            }
+            const response = snapshot(11, { 'shared.card_image_presentation': 'contain_blur' },
+                { schema, sharedVersion: 'site-2', siteImagePresentation: 'cover' });
+            if (schema === 2) delete response.shared;
+            expect(owner.accept('photos', response)).toBe(true);
+            const host = surface(owner, 'photos'), node = card(owner, 'photos', host);
+            const photo = node.querySelector('.card_photo_presentation');
+            await Promise.resolve();
+            expect(photo.dataset.cardImagePresentation).toBe('contain_blur');
+            const draft = clone(response);
+            draft.tab_values = appearanceValuesForPlace(response.effective, 'tab_only');
+            delete draft.overrides['shared.card_image_presentation'];
+            expect(owner.setPreview(draftOwner, 'photos', draft)).toBe(true);
+            await Promise.resolve();
+            expect(owner.effective('photos').shared.card_image_presentation).toBe('cover');
+            expect(host._cardImageDefaults).toEqual({ dataset: null, site: 'cover' });
+            expect(host.dataset.cardImagePresentation).toBe('cover');
+            expect(photo.dataset.cardImagePresentation).toBe('cover');
+            expect(photo.dataset.cardImageSource).toBe('site');
+            owner.releasePreview(draftOwner, 'photos');
+            await Promise.resolve();
+            expect(owner.effective('photos').shared.card_image_presentation).toBe('contain_blur');
+            expect(host._cardImageDefaults).toEqual({ dataset: 'contain_blur', site: 'cover' });
+            expect(photo.dataset.cardImageSource).toBe('dataset');
+        },
+    );
+
+    test.each([false, true])('v1 preview without shared site values safely removes an override (stored: %s)', async overridden => {
+        const owner = createDatasetAppearanceState();
+        const response = snapshot(11, overridden ? { 'shared.card_image_presentation': 'contain_blur' } : {},
+            { sharedVersion: 'site-2', siteImagePresentation: 'cover' });
+        delete response.shared;
+        expect(owner.accept('photos', response)).toBe(true);
+        const host = surface(owner, 'photos'), node = card(owner, 'photos', host);
+        const draft = clone(response);
+        draft.tab_values = appearanceValuesForPlace(response.effective, 'tab_only');
+        draft.overrides = {};
+        expect(owner.setPreview({}, 'photos', draft)).toBe(true);
+        await Promise.resolve();
+        const inherited = overridden ? DEFAULT_DATASET_APPEARANCE.shared.card_image_presentation : 'cover';
+        expect(owner.effective('photos').shared.card_image_presentation).toBe(inherited);
+        expect(host._cardImageDefaults).toEqual({ dataset: null, site: inherited });
+        expect(node.querySelector('.card_photo_presentation').dataset.cardImagePresentation).toBe(inherited);
+    });
+
+    test.each([1, 2])('cards follow a newer dataset site revision while public settings lag in schema %s', async schema => {
+        const owner = createDatasetAppearanceState();
+        owner.updateSite(clone(DEFAULT_DATASET_APPEARANCE), { version: 'site-1' });
+        owner.accept('photos', snapshot(11, {}, { schema }));
+        const host = surface(owner, 'photos'), node = card(owner, 'photos', host);
+        const photo = node.querySelector('.card_photo_presentation');
+        await Promise.resolve();
+        expect(photo.dataset.cardImagePresentation).toBe('contain');
+        const response = snapshot(11, {}, { schema, version: '2', sharedVersion: 'site-2', siteImagePresentation: 'cover' });
+        if (schema === 2) delete response.shared; // V2 carries site defaults only in its canonical flat map.
+        expect(owner.accept('photos', response)).toBe(true);
+        await Promise.resolve();
+        expect(owner.effective('photos').shared.card_image_presentation).toBe('cover');
+        expect(host._cardImageDefaults).toEqual({ dataset: null, site: 'cover' });
+        expect(photo.dataset.cardImagePresentation).toBe('cover');
+        expect(photo.dataset.cardImageSource).toBe('site');
+    });
+
+    test.each([1, 2])('keeps the snapshot site default separate from its dataset override in schema %s', async schema => {
+        const owner = createDatasetAppearanceState();
+        owner.updateSite(clone(DEFAULT_DATASET_APPEARANCE), { version: 'site-1' });
+        const response = snapshot(11, { 'shared.card_image_presentation': 'contain_blur' },
+            { schema, sharedVersion: 'site-2', siteImagePresentation: 'cover' });
+        if (schema === 2) delete response.shared;
+        expect(owner.accept('photos', response)).toBe(true);
+        const host = surface(owner, 'photos'), node = card(owner, 'photos', host);
+        await Promise.resolve();
+        expect(owner.effective('photos').shared.card_image_presentation).toBe('contain_blur');
+        expect(host._cardImageDefaults).toEqual({ dataset: 'contain_blur', site: 'cover' });
+        expect(node.querySelector('.card_photo_presentation').dataset.cardImageSource).toBe('dataset');
+    });
+
+    test.each([1, 2])('a local site save wins over accepted and in-flight older dataset settings in schema %s', async schema => {
+        const owner = createDatasetAppearanceState(), saved = clone(DEFAULT_DATASET_APPEARANCE);
+        owner.updateSite(saved, { version: 'site-1' });
+        owner.accept('photos', snapshot(11, {}, { schema }));
+        const pending = owner.capture('photos');
+        const host = surface(owner, 'photos'), node = card(owner, 'photos', host);
+        const photo = node.querySelector('.card_photo_presentation');
+        saved.shared.card_image_presentation = 'cover';
+        await owner.updateSite(saved, { version: 'site-2' });
+        expect(owner.effective('photos').shared.card_image_presentation).toBe('cover');
+        expect(host._cardImageDefaults).toEqual({ dataset: null, site: 'cover' });
+        expect(photo.dataset.cardImagePresentation).toBe('cover');
+        expect(owner.accept('photos', snapshot(11, {}, { schema, version: '2' }), { token: pending })).toBe(true);
+        await Promise.resolve();
+        expect(owner.effective('photos').shared.card_image_presentation).toBe('cover');
+        expect(host._cardImageDefaults).toEqual({ dataset: null, site: 'cover' });
+        expect(photo.dataset.cardImagePresentation).toBe('cover');
+    });
+
+    test.each([1, 2])('site previews win over responses and release restores the saved projection in schema %s', async schema => {
+        const owner = createDatasetAppearanceState(), saved = clone(DEFAULT_DATASET_APPEARANCE);
+        owner.updateSite(saved, { version: 'site-1' });
+        const response = snapshot(11, {}, { schema, sharedVersion: 'site-2', siteImagePresentation: 'cover' });
+        owner.accept('photos', response);
+        const host = surface(owner, 'photos'), node = card(owner, 'photos', host);
+        const photo = node.querySelector('.card_photo_presentation'), pending = owner.capture('photos');
+        const preview = clone(saved); preview.shared.card_image_presentation = 'contain_blur';
+        await owner.updateSite(preview, { version: 'site-1', preview: true, changed: false });
+        expect(owner.effective('photos').shared.card_image_presentation).toBe('contain_blur');
+        expect(host._cardImageDefaults).toEqual({ dataset: null, site: 'contain_blur' });
+        expect(photo.dataset.cardImagePresentation).toBe('contain_blur');
+        expect(owner.accept('photos', { ...response, version: '2' }, { token: pending })).toBe(true);
+        await Promise.resolve();
+        expect(photo.dataset.cardImagePresentation).toBe('contain_blur');
+        await owner.updateSite(saved, { version: 'site-1', changed: false });
+        expect(owner.effective('photos').shared.card_image_presentation).toBe('cover');
+        expect(host._cardImageDefaults).toEqual({ dataset: null, site: 'cover' });
+        expect(photo.dataset.cardImagePresentation).toBe('cover');
+        expect(photo.dataset.cardImageSource).toBe('site');
+    });
+
+    test.each([null, 'contain_blur'])('v1 snapshots without a separate site value handle override %s safely', async override => {
+        const owner = createDatasetAppearanceState();
+        owner.updateSite(clone(DEFAULT_DATASET_APPEARANCE), { version: 'site-1' });
+        const response = snapshot(11, override ? { 'shared.card_image_presentation': override } : {},
+            { sharedVersion: 'site-2', siteImagePresentation: 'cover' });
+        delete response.shared;
+        owner.accept('photos', response);
+        const host = surface(owner, 'photos'), node = card(owner, 'photos', host);
+        await Promise.resolve();
+        expect(host._cardImageDefaults).toEqual({ dataset: override, site: override ? 'contain' : 'cover' });
+        expect(node.querySelector('.card_photo_presentation').dataset.cardImagePresentation).toBe(override || 'cover');
+    });
+
+    test.each([1, 2])('keeps per-image, dataset and site presentation separate in schema %s', async schema => {
+        const owner = createDatasetAppearanceState();
+        const site = clone(DEFAULT_DATASET_APPEARANCE);
+        site.shared.card_image_presentation = 'contain_blur';
+        owner.updateSite(site, { version: 'site-1' });
+        owner.accept('photos', snapshot(11, { 'shared.card_image_presentation': 'cover' }, { schema }));
+        const host = surface(owner, 'photos');
+        const node = card(owner, 'photos', host);
+        const photo = node.querySelector('.card_photo_presentation');
+        expect(photo.dataset.cardImagePresentation).toBe('cover');
+        expect(photo.dataset.cardImageSource).toBe('dataset');
+        photo._cardImageOwn = { presentation: 'contain', focal: { x: 0.2, y: 0.8 } };
+        owner.paint('photos');
+        await Promise.resolve();
+        expect(photo.dataset.cardImagePresentation).toBe('contain');
+        expect(photo.dataset.cardImageSource).toBe('image');
+        photo._cardImageOwn = { presentation: null, focal: { x: 0.2, y: 0.8 } };
+        owner.accept('photos', snapshot(11, {}, { schema, version: '2' }));
+        await Promise.resolve();
+        expect(photo.dataset.cardImagePresentation).toBe('contain_blur');
+        expect(photo.dataset.cardImageSource).toBe('site');
+        site.shared.card_image_presentation = 'cover';
+        owner.updateSite(site, { version: 'site-2' });
+        await Promise.resolve();
+        expect(photo.dataset.cardImagePresentation).toBe('cover');
+        expect(photo.style.getPropertyValue('--card-photo-focal')).toBe('20% 80%');
+        owner.clear();
+    });
+
     test('public-only bindings cannot recover snapshots by name or UID on later paints', async () => {
         const owner = createDatasetAppearanceState();
         owner.accept('private', snapshot(11, { 'shared.card_image_width': 480,
@@ -326,6 +540,7 @@ describe('dataset appearance ownership', () => {
         const loading = site.loadSettings(); await Promise.resolve();
         const response = snapshot(11, {}, { sharedVersion: 'newer-site' });
         response.effective.light.image_blur = 8; response.effective.shared.card_image_width = 410;
+        response.shared.shared.card_image_width = 410;
         datasetAppearanceState.accept('a', response);
         const a = surface(datasetAppearanceState, 'a');
         resolve({ version: 'old-site', dataset_cover_theme: clone(DEFAULT_DATASET_APPEARANCE) }); await loading; site.paint();

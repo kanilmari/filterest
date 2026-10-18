@@ -78,7 +78,8 @@ func ReadOwnPictureFields(querier dbutils.Querier, table string) (OwnPictureFiel
 		  FROM information_schema.columns c
 		  LEFT JOIN system_column_details d
 		         ON d.column_name = c.column_name
-		        AND d.table_uid = (SELECT table_uid FROM system_db_tables WHERE table_name = $1 LIMIT 1)
+		        AND d.table_uid = (SELECT table_uid FROM system_db_tables WHERE table_name = $1
+		            AND COALESCE(NULLIF(schema_name, ''), 'public') = 'public' LIMIT 1)
 		 WHERE c.table_schema = 'public'
 		   AND c.table_name = $1
 		   AND c.data_type IN ('text', 'character varying')
