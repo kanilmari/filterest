@@ -144,6 +144,7 @@ func TestPersonalFieldSetAssignmentUserExcludesGuestIdentity(t *testing.T) {
 type layoutMetadataDriver struct {
 	dataType          string
 	defaultView       driver.Value
+	filterbarDefault  driver.Value
 	defaultViewColumn bool
 	detailColumn      bool
 	cardDetailColumns driver.Value
@@ -186,7 +187,7 @@ func (c *layoutMetadataConn) QueryContext(_ context.Context, query string, args 
 	}
 	*c.state.query = query
 	if c.state.tableMeta {
-		return &layoutMetadataRows{values: []driver.Value{"conditional_multiline", c.state.cardStyle, c.state.cardDetailColumns, c.state.defaultView, "label"}}, nil
+		return &layoutMetadataRows{values: []driver.Value{"conditional_multiline", c.state.cardStyle, c.state.cardDetailColumns, c.state.defaultView, "label", c.state.filterbarDefault}}, nil
 	}
 	dataType := c.state.dataType
 	if dataType == "" {
@@ -493,5 +494,27 @@ func TestTableMetadataIncludesDefaultView(t *testing.T) {
 				t.Fatal("older schema must not query an absent default view column")
 			}
 		})
+	}
+}
+
+func TestTableMetadataIncludesFirstVisitFilterbarDefault(t *testing.T) {
+	for _, value := range []driver.Value{false, true, nil} {
+		query := ""
+		name := fmt.Sprintf("filterbar-default-%v", value)
+		sql.Register(name, &layoutMetadataDriver{tableMeta: true, filterbarDefault: value, query: &query})
+		db, err := sql.Open(name, "")
+		if err != nil {
+			t.Fatal(err)
+		}
+		meta, err := fetchTableReadMeta(db, "created_in_another_session")
+		db.Close()
+		if err != nil {
+			t.Fatal(err)
+		}
+		body, _ := json.Marshal(meta)
+		want, _ := json.Marshal(value)
+		if !strings.Contains(string(body), `"filterbar_visible_by_default":`+string(want)) {
+			t.Fatalf("first-visit default missing: %s", body)
+		}
 	}
 }

@@ -7463,6 +7463,75 @@ CROSS JOIN LATERAL(VALUES('fi',s.fi),('en',s.en),('ch',s.ch),('yue',s.yue)) c(la
 JOIN public.system_languages l ON l.language_code=c.language_code
 ON CONFLICT(lang_key_id,language_code) DO UPDATE SET
  translation=COALESCE(NULLIF(existing.translation,''),EXCLUDED.translation);
+-- Registry metadata is seeded after the account table exists in fresh installs.
+INSERT INTO public.system_column_details (table_uid, column_name, data_type, co_number, editable_in_ui)
+SELECT registry.table_uid, cols.column_name, cols.data_type, cols.ordinal_position, false
+FROM public.system_db_tables registry JOIN information_schema.columns cols
+    ON cols.table_name=registry.table_name AND cols.table_schema='public'
+WHERE registry.table_name='system_user_visual_preferences'
+    AND COALESCE(NULLIF(registry.schema_name,''),'public')='public'
+    AND cols.column_name IN ('filterbar_order_mode','filterbar_section_order','filterbar_visibility_memory')
+    AND NOT EXISTS (SELECT 1 FROM public.system_column_details existing
+        WHERE existing.table_uid=registry.table_uid AND existing.column_name=cols.column_name);
+
+INSERT INTO public.system_config (key, value_type, json_value, creation_spec)
+SELECT 'filterbar_section_layout', 5, '{"section_order":[],"section_collapsed":{},"allow_own_order":false}'::jsonb,
+    'Shared filter bar order and policy. Edit through the filter bar settings controls.'
+WHERE NOT EXISTS (SELECT 1 FROM public.system_config WHERE key='filterbar_section_layout');
+
+WITH authored_keys(lang_key, fi, en) AS (VALUES
+    ('filterbar_preferences', 'Suodatinpalkin asetukset', 'Filter bar settings'),
+    ('filterbar_order_title', 'Osioiden järjestys', 'Section order'),
+    ('filterbar_order_shared', 'Yhteinen järjestys', 'Shared order'),
+    ('filterbar_order_own', 'Oma järjestys', 'Own order'),
+    ('filterbar_order_help', 'Yhteinen järjestys näkyy kaikille. Oma järjestys koskee kaikkia aineistojasi tällä sivustolla. Yhteinen järjestys kopioidaan vain, kun valitset oman järjestyksen. Tavallisen käyttäjän oma järjestys edellyttää sivuston lupaa.', 'Everyone sees the shared order. Your own order applies to all your datasets on this site. The shared order is copied only when you choose your own order. An ordinary user''s own order requires the site''s permission.'),
+    ('filterbar_own_allow', 'Salli tavallisten käyttäjien oma järjestys', 'Allow ordinary users to use their own order'),
+    ('filterbar_own_allow_help', 'Ylläpitäjät voivat aina käyttää omaa järjestystä. Yhteistä järjestystä muuttaa vain ylläpitäjä tai erikseen oikeutettu käyttäjä.', 'Administrators can always use their own order. Only administrators or explicitly authorized users can change the shared order.'),
+    ('filterbar_visibility_title', 'Näkyvyyden muisti', 'Visibility memory'),
+    ('filterbar_visibility_shared', 'Yhteinen kaikille aineistoille', 'Shared for all datasets'),
+    ('filterbar_visibility_dataset', 'Muista aineistoittain', 'Remember per dataset'),
+    ('filterbar_visibility_help', 'Yhteinen muisti alkaa käytössä olevasta palkista ja säilyttää näkyvyyden aineistoa vaihdettaessa. Aineistokohtainen muisti palauttaa aineiston valinnan yhdellä siirtymällä. Ilman muistia käytetään nykytilaa tai ensimmäisellä käynnillä aineiston oletusta.', 'Shared memory starts from the bar in use and keeps its visibility when you change datasets. Per-dataset memory restores that dataset’s choice in one transition. Without memory, the current state is kept, or the dataset default on a first visit.'),
+    ('filterbar_move_up', 'Siirrä ylemmäs', 'Move up'),
+    ('filterbar_move_down', 'Siirrä alemmas', 'Move down')
+), resolved AS (
+    SELECT copy.lang_key,
+        COALESCE(CASE WHEN NULLIF(btrim(keys.fi), '') IS NOT NULL THEN keys.fi END,
+            CASE WHEN NULLIF(btrim(fi.translation), '') IS NOT NULL THEN fi.translation END, copy.fi) AS fi,
+        COALESCE(CASE WHEN NULLIF(btrim(keys.en), '') IS NOT NULL THEN keys.en END,
+            CASE WHEN NULLIF(btrim(en.translation), '') IS NOT NULL THEN en.translation END, copy.en) AS en
+    FROM authored_keys copy
+    LEFT JOIN public.system_lang_keys keys USING (lang_key)
+    LEFT JOIN public.system_lang_key_translations fi ON fi.lang_key_id = keys.id AND fi.language_code = 'fi'
+    LEFT JOIN public.system_lang_key_translations en ON en.lang_key_id = keys.id AND en.language_code = 'en'
+), written AS (
+    INSERT INTO public.system_lang_keys AS existing (lang_key, fi, en, creation_spec)
+    SELECT lang_key, fi, en, 'WO77 shared and personal filter bar choices; Finnish and English.' FROM resolved
+    ON CONFLICT (lang_key) DO UPDATE
+    SET fi = CASE WHEN NULLIF(btrim(existing.fi), '') IS NULL THEN EXCLUDED.fi ELSE existing.fi END,
+        en = CASE WHEN NULLIF(btrim(existing.en), '') IS NULL THEN EXCLUDED.en ELSE existing.en END
+    WHERE NULLIF(btrim(existing.fi), '') IS NULL OR NULLIF(btrim(existing.en), '') IS NULL
+    RETURNING id, lang_key, fi, en
+), served AS (
+    SELECT * FROM written UNION ALL
+    SELECT k.id, k.lang_key, k.fi, k.en FROM public.system_lang_keys k JOIN authored_keys USING (lang_key)
+    WHERE k.id NOT IN (SELECT id FROM written)
+)
+INSERT INTO public.system_lang_key_translations AS existing
+    (lang_key_id, language_code, translation, source_kind, review_status)
+SELECT s.id, translated.language_code, translated.translation, 'manual', 'approved'
+FROM served s
+CROSS JOIN LATERAL (VALUES ('fi', s.fi), ('en', s.en)) AS translated(language_code, translation)
+JOIN public.system_languages language ON language.language_code = translated.language_code
+ON CONFLICT (lang_key_id, language_code) DO UPDATE
+SET translation = EXCLUDED.translation, source_kind = EXCLUDED.source_kind, review_status = EXCLUDED.review_status
+WHERE NULLIF(btrim(existing.translation), '') IS NULL;
+
+INSERT INTO public.system_lang_key_sources
+    (lang_key_id, source_type, source_high, source_low, usage_explanation, last_seen)
+SELECT id, 'code', 'frontend/core_components/filterbar/filterbar_preferences_controls.js',
+    '', 'Filter bar order and visibility choices.', CURRENT_DATE
+FROM public.system_lang_keys WHERE lang_key IN ('filterbar_preferences', 'filterbar_order_title', 'filterbar_order_shared', 'filterbar_order_own', 'filterbar_order_help', 'filterbar_own_allow', 'filterbar_own_allow_help', 'filterbar_visibility_title', 'filterbar_visibility_shared', 'filterbar_visibility_dataset', 'filterbar_visibility_help', 'filterbar_move_up', 'filterbar_move_down')
+ON CONFLICT (lang_key_id, source_type, source_high) DO NOTHING;
 -- Schema runs before synthetic users; copy runs after supported languages exist.
 WITH authored_keys(lang_key, fi, en) AS (VALUES
     ('first_run_setup_code', 'Käyttöönottokoodi', 'Setup code'),
@@ -8996,7 +9065,7 @@ DECLARE
     findings text;
 BEGIN
     SELECT string_agg(marker, ', ' ORDER BY marker) INTO missing_markers
-      FROM unnest(ARRAY['wl58_row_actor_support', 'wl58_row_actor_marks_by_table_uid', 'wl58_row_actor_trigger_definitions', 'k116_login_names', 'password_reset_dummy_work', 'system_favorites_table', 'system_front_page_revisions_table', 'system_front_page_blocks_table', 'wl103_row_group_classifications', 'wl132_surviving_sign_in', 'wl52_drop_column_label_value_layout', 'system_dataset_appearance_table', 'wl157_migration_execution_evidence', 'dataset_card_appearance_cutover', 'wl157_application_update_admission', 'dataset_appearance_three_place_schema', 'wl164_publication_fields', 'wl163_dataset_kind_contracts', 'wl159_dataset_namespace', 'wl167_database_identity_schema', 'wl167_managed_timestamp_zones', 'wo41_first_run_readonly', 'row_group_heading_order_appearance_field', 'wl157_application_update_refusal_keys', 'wl58_row_actor_columns', 'system_favorites_registry', 'system_front_page_blocks_registry', 'wl103_row_group_classifications_registry', 'wl144_registry_reference_key', 'dataset_media_hidden', 'wl157_application_update_capability', 'dataset_appearance_three_place_backfill', 'wl164_publication_column_metadata', 't919_registered_column_metadata', 't750_automatic_log_retention', 'record_title_headers_962', 'translation_object_sources_sec2', 'wl69_card_image_usage_storage']::text[]) AS marker
+      FROM unnest(ARRAY['wl58_row_actor_support', 'wl58_row_actor_marks_by_table_uid', 'wl58_row_actor_trigger_definitions', 'k116_login_names', 'password_reset_dummy_work', 'system_favorites_table', 'system_front_page_revisions_table', 'system_front_page_blocks_table', 'wl103_row_group_classifications', 'wl132_surviving_sign_in', 'wl52_drop_column_label_value_layout', 'system_dataset_appearance_table', 'wl157_migration_execution_evidence', 'dataset_card_appearance_cutover', 'wl157_application_update_admission', 'dataset_appearance_three_place_schema', 'wl164_publication_fields', 'wl163_dataset_kind_contracts', 'wl159_dataset_namespace', 'wl167_database_identity_schema', 'wl167_managed_timestamp_zones', 'wl77_filterbar_preferences', 'wo41_first_run_readonly', 'row_group_heading_order_appearance_field', 'wl157_application_update_refusal_keys', 'wl58_row_actor_columns', 'system_favorites_registry', 'system_front_page_blocks_registry', 'wl103_row_group_classifications_registry', 'wl144_registry_reference_key', 'dataset_media_hidden', 'wl157_application_update_capability', 'dataset_appearance_three_place_backfill', 'wl164_publication_column_metadata', 't919_registered_column_metadata', 't750_automatic_log_retention', 'record_title_headers_962', 'translation_object_sources_sec2', 'wl69_card_image_usage_storage']::text[]) AS marker
      WHERE NOT EXISTS (SELECT 1 FROM public.system_data_repair_records AS record
                         WHERE record.migration = marker AND record.action = 'completed');
     IF missing_markers IS NOT NULL THEN
@@ -9233,6 +9302,7 @@ BEGIN
       ('20261015000007_seed_client_error_notice_language_key.sql', '16b2c1391f7b1190e8d25ac2d6df88f080ad5440868bfaf6be15ec636b845e5b', 'bootstrap_baseline', 'bootstrap'),
       ('20261015000008_seed_table_cell_max_lines.sql', '446c6db2923a14859efbb71a6de055260fdc2a15b510e0abdaf1a5e99a531b38', 'bootstrap_baseline', 'bootstrap'),
       ('20261015000009_add_card_image_usage_presentation.sql', '24bce4ab54d1ac303c687df8a9288b8197f9e137a3a470d37448dde3011dd294', 'bootstrap_baseline', 'bootstrap'),
+      ('20261015000013_add_filterbar_preferences.sql', '80877423924e2dfdb6c52ca37c81c7f25d9d7bb3ab356058770ca1d96ee24436', 'bootstrap_baseline', 'bootstrap'),
       ('20261015000016_seed_first_run_setup_code.sql', 'd5573b95644acea6168e73d1c020ddf91268d2ca9ac7b50a08fdd33f602a05d4', 'bootstrap_baseline', 'bootstrap'),
       ('20261015000020_add_row_group_heading_order_appearance_field.sql', '99450690b81c7c60f0d3bd34c11da3c6382bebf460a6c68614d8de0722dec16b', 'bootstrap_baseline', 'bootstrap'),
       ('20261015000099_record_database_release_9_12_0.sql', '7681662cc532ce4f113acec7e4e992af1e1ecf32136f8c92e55b255d56556516', 'bootstrap_baseline', 'bootstrap')

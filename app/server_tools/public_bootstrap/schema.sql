@@ -6313,6 +6313,36 @@ BEGIN
         wl167_timestamp_view_columns, wl167_timestamp_views, wl167_timestamp_columns;
 END;
 $conversion$;
+-- 20261015000013_add_filterbar_preferences.sql
+-- Extends the existing account visual preferences and seeds explained filter bar choices.
+-- Connects safe shared UI configuration to one account-wide personal order.
+-- Preserves site orders, theme choices and all legacy visibility keys.
+-- VERSION_DB: 9.12.0
+-- VERSION_DB_OWNER: 20261015000099_record_database_release_9_12_0.sql
+-- COMPLETION_MARKER: wl77_filterbar_preferences
+
+SET LOCAL lock_timeout = '3s';
+ALTER TABLE public.system_user_visual_preferences
+    ADD COLUMN IF NOT EXISTS filterbar_order_mode text NOT NULL DEFAULT 'shared',
+    ADD COLUMN IF NOT EXISTS filterbar_section_order jsonb,
+    ADD COLUMN IF NOT EXISTS filterbar_visibility_memory text NOT NULL DEFAULT 'shared';
+DO $constraints$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='ck_user_filterbar_choices'
+        AND conrelid='public.system_user_visual_preferences'::regclass) THEN
+        ALTER TABLE public.system_user_visual_preferences ADD CONSTRAINT ck_user_filterbar_choices CHECK (
+            filterbar_order_mode IN ('shared', 'own') AND filterbar_visibility_memory IN ('shared', 'dataset')
+            AND (filterbar_section_order IS NULL OR filterbar_section_order = 'null'::jsonb
+                OR jsonb_typeof(filterbar_section_order) = 'array'));
+    END IF;
+END $constraints$;
+COMMENT ON COLUMN public.system_user_visual_preferences.filterbar_section_order IS
+    'One explicit personal order across the site, never scoped to a dataset. Shared order stays in system_config.';
+
+INSERT INTO public.system_data_repair_records (migration, action, detail)
+SELECT 'wl77_filterbar_preferences', 'completed', '{"file":"20261015000013_add_filterbar_preferences.sql"}'::jsonb
+WHERE NOT EXISTS (SELECT 1 FROM public.system_data_repair_records WHERE migration='wl77_filterbar_preferences' AND action='completed');
+
 -- 20261015000016_seed_first_run_setup_code.sql
 -- Seeds Finnish and English setup-code copy and makes name suggestions read-only.
 -- Connects the public first-run form to both language stores and its source context.

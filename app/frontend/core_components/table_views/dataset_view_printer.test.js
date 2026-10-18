@@ -28,7 +28,6 @@ const createPriceChartViewMock = vi.fn(() => document.createElement('div'));
 const createCloudManagementViewMock = vi.fn(() => document.createElement('div'));
 const datasetSupportsMapViewMock = vi.fn(() => true);
 const getAllSpecsMock = vi.fn(() => ({}));
-
 vi.mock('./table_view/table_structure_builder.js', () => ({
     create_table_element: createTableElementMock,
     saveColumnWidths: saveColumnWidthsMock,
@@ -37,7 +36,6 @@ vi.mock('./table_view/table_structure_builder.js', () => ({
 vi.mock('./card_view/card_view_printer.js', () => ({
     create_card_view: createCardViewMock,
 }));
-
 vi.mock('../infinite_scroll/infinite_scroll_handler.js', () => ({
     disconnectInfiniteScroll: vi.fn(),
     initializeInfiniteScroll: initializeInfiniteScrollMock,
@@ -86,21 +84,17 @@ vi.mock('./product_card_view/product_card_view_printer.js', () => ({
 vi.mock('./calendar_view/calendar_view_printer.js', () => ({
     create_calendar_view: createCalendarViewMock,
 }));
-
 vi.mock('./map_view/map_view_printer.js', () => ({
     create_map_view: createMapViewMock,
     dataset_supports_map_view: datasetSupportsMapViewMock,
 }));
-
 vi.mock('../endpoints/stable_endpoint_router.js', () => ({
     getViewFieldSets: vi.fn(async dataset => ({ dataset, view_key: 'price_chart', field_sets: [] })),
     saveSiteViewFieldSet: vi.fn(),
 }));
-
 vi.mock('./price_chart_view/price_chart_view_printer.js', () => ({
     create_price_chart_view: createPriceChartViewMock,
 }));
-
 vi.mock('./cloud_management_view/cloud_management_view_printer.js', () => ({
     create_cloud_management_view: createCloudManagementViewMock,
 }));
@@ -137,6 +131,13 @@ describe('generate_table', () => {
         hasRoutePermissionMock.mockReturnValue(true);
         getAllSpecsMock.mockReturnValue({});
         getDefaultViewSyncMock.mockReturnValue('card');
+    });
+    test.each([false, true, null])('passes the authoritative first-visit default %s despite a stale navigation cache', async value => {
+        const { generate_table } = await import('./dataset_view_printer.js');
+        getAllSpecsMock.mockReturnValue({created_elsewhere:{filterbar_visible_by_default:true}});
+        await generate_table('created_elsewhere', ['id'], [{id:1}], {id:'INTEGER'}, 1, false,
+            {filterbar_visible_by_default:value});
+        expect(createFilterBarMock.mock.calls[0][7].metadata.filterbar_visible_by_default).toBe(value);
     });
     test('uses an empty results snapshot to scope the content before rendering and retains current appearance on row reuse', async () => {
         const { DEFAULT_DATASET_APPEARANCE } = await import('../../shared/dataset_appearance/validator.js');

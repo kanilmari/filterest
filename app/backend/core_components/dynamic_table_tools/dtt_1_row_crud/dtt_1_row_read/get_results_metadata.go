@@ -468,11 +468,11 @@ func fetchTableReadMeta(db *sql.DB, tableName string) (dtt_models.TableReadMeta,
 		metadataDB = backend.Db
 	}
 	err = metadataDB.QueryRow(fmt.Sprintf(`
-		SELECT %s, %s, %s, %s, COALESCE(fk_display_column, '')
+		SELECT %s, %s, %s, %s, COALESCE(fk_display_column, ''), filterbar_visible_by_default
 		FROM system_db_tables
 		WHERE table_name = $1
 		LIMIT 1
-	`, cardDetailsLayoutExpr, cardStyleVariantExpr, cardDetailColumnsExpr, defaultViewExpr), tableName).Scan(&layout, &styleVariant, &detailColumns, &defaultView, &meta.FKDisplayColumn)
+	`, cardDetailsLayoutExpr, cardStyleVariantExpr, cardDetailColumnsExpr, defaultViewExpr), tableName).Scan(&layout, &styleVariant, &detailColumns, &defaultView, &meta.FKDisplayColumn, &meta.FilterbarVisibleByDefault)
 	if err == sql.ErrNoRows {
 		return meta, nil
 	}

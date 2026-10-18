@@ -408,7 +408,13 @@ export async function generate_table(
             rowCount,
             hasGeo,
             current_view,
-            { deferFilterSection: true }
+            // Results own the first-visit default even when the navigation
+            // cache predates a dataset created in another browser session.
+            { deferFilterSection: true, metadata: {
+                ...tableSpecs[dataset_name],
+                ...(tableMeta && Object.hasOwn(tableMeta, 'filterbar_visible_by_default')
+                    ? { filterbar_visible_by_default: tableMeta.filterbar_visible_by_default } : {}),
+            } }
         );
 		const scrollableContainer = viewContainers[current_view];
         replacementContainer = scrollableContainer;

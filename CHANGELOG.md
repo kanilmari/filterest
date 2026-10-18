@@ -22,6 +22,7 @@ Dates are the local (Europe/Helsinki) date on which the version was published.
 
 ## [Unreleased]
 
+- **Shared filter bar order and visibility choices (WO77)** — Guests and signed-in users read one shared section order; authorized edits update open bars. Users can explicitly choose a site-wide personal order when permitted, and shared or per-dataset visibility memory. Finnish and English settings explain the choices without JSON; first visits receive the dataset’s visibility default with the results. Database 9.12.0 extends the existing visual preferences.
 - Added a site-wide category heading order choice: administrator order or most results first, stable throughout each visit.
 - **Language-key scan PostgreSQL tests run again (test only)** — Their minimal settings fixture adds the value-type column only when the shared fixture does not already have it.
 - **Per-image card presentation storage (WL69)** — Gallery image uses can store an inherited or explicit card presentation and an independent focal point. Version-checked writes reuse row-edit permissions and atomically adopt eligible local images; cards retain the exact image-use identity. Database 9.12.0 includes the same storage for upgrades and fresh installations. The editor follows separately; viewer preferences, locks and smart crop remain future features.

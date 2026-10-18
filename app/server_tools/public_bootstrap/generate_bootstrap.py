@@ -126,6 +126,7 @@ repair_schema_migrations = (
     "20261009000078_enforce_dataset_name_namespace.sql",
     "20261009000079_reconcile_system_database_identity_schema.sql",
     "20261009000080_zone_platform_managed_timestamps.sql",
+    "20261015000013_add_filterbar_preferences.sql",
     "20261015000016_seed_first_run_setup_code.sql",
     "20261015000020_add_row_group_heading_order_appearance_field.sql",
 )

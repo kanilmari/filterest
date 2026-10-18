@@ -209,6 +209,7 @@
     "20261015000007_seed_client_error_notice_language_key.sql",
     "20261015000008_seed_table_cell_max_lines.sql",
     "20261015000009_add_card_image_usage_presentation.sql",
+    "20261015000013_add_filterbar_preferences.sql",
     "20261015000016_seed_first_run_setup_code.sql",
     "20261015000020_add_row_group_heading_order_appearance_field.sql",
     "20261015000099_record_database_release_9_12_0.sql"
@@ -378,11 +379,11 @@
     "public.system_group_table_func_rights": 24,
     "public.system_lang_key_sources": 15,
     "public.system_lang_key_translations": 171,
-    "public.system_lang_keys": 1491,
+    "public.system_lang_keys": 1507,
     "public.system_languages": 5,
     "public.system_permission_actions": 7,
     "public.system_permission_categories": 4,
-    "public.system_schema_migrations": 205,
+    "public.system_schema_migrations": 206,
     "public.system_table_folders": 14,
     "public.system_table_views": 13,
     "public.system_user_group_memberships": 2,
@@ -394,10 +395,10 @@
   },
   "generated_files": {
     "server_tools/public_bootstrap/schema.sql": {
-      "sha256": "70f102d32675261a9c2cb962a2917f2ccf756da93966b76b954acd6c5953976e"
+      "sha256": "348bc7cdc5f55e8ff2ae54bf58578f85f1ab2edf82db8f07218a4eea46e32c13"
     },
     "server_tools/public_bootstrap/seed_data.sql": {
-      "sha256": "f8977fb591a54f7d00d8fcf8bec3d0608f821b1894c6d2000cfa4821da03cde4"
+      "sha256": "d18c8143760cda7be9f4fd1749dac4433ed773a2c65ee78e7f50418073678ab5"
     }
   },
   "source_files": {
@@ -414,7 +415,7 @@
       "sha256": "235e4b887181e150bd436d035d2d268eb821d9e5d0b830b54eb444988f31d5d1"
     },
     "filterest/app/server_tools/public_bootstrap/generate_bootstrap.py": {
-      "sha256": "daf47b07e90ae9cffe4c30dcbd0116a6f2abe6e75b8722a6998a32c802c76ac9"
+      "sha256": "d8e7c09a43f4a09d2ee3dd1a3d02d0ffa7fc20caf82555997145957708449aba"
     },
     "filterest/app/server_tools/public_bootstrap/sql_identifier_validator.py": {
       "sha256": "748245fac4328a3608740c1b0fe948e6a09d6489d587143bd3b4c67064bea732"
@@ -1096,6 +1097,9 @@
     },
     "filterest/app/server_tools/migrations/20261015000009_add_card_image_usage_presentation.sql": {
       "sha256": "24bce4ab54d1ac303c687df8a9288b8197f9e137a3a470d37448dde3011dd294"
+    },
+    "filterest/app/server_tools/migrations/20261015000013_add_filterbar_preferences.sql": {
+      "sha256": "80877423924e2dfdb6c52ca37c81c7f25d9d7bb3ab356058770ca1d96ee24436"
     },
     "filterest/app/server_tools/migrations/20261015000016_seed_first_run_setup_code.sql": {
       "sha256": "d5573b95644acea6168e73d1c020ddf91268d2ca9ac7b50a08fdd33f602a05d4"

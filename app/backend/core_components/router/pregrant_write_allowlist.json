@@ -207,6 +207,13 @@
     "reason": "Changes only the current non-guest account’s profile, using its verified-change flows."
   },
   {
+    "path_pattern": "/api/user-filterbar-preference",
+    "handler_name": "system_table_tools.UserFilterbarPreferenceHandler",
+    "profile": "login_only",
+    "methods": ["PATCH", "DELETE"],
+    "reason": "Changes only the non-guest session owner's allowlisted filter bar choices in the existing visual-preference row; own order requires site policy or administrator membership. CSRF and browser binding remain enforced."
+  },
+  {
     "path_pattern": "/api/user-visual-preference",
     "handler_name": "auth.UserVisualPreferenceHandler",
     "profile": "login_only",

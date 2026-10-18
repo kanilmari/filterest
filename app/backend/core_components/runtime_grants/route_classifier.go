@@ -18,6 +18,11 @@ var adminPilotRouteOperations = map[string]Operation{
 }
 
 var metadataRoutes = map[string]bool{
+	// WO77: safe allowlisted public layout read; explicit route grant for shared
+	// edits; authenticated account-owned preferences. None grants dataset DML.
+	"/api/filterbar-section-layout":         true,
+	"/api/filterbar-section-layout/save":    true,
+	"/api/user-filterbar-preference":        true,
 	"/api/admin/dataset-default-view":       true, // AdminProfile; only registry.default_view_id, no generic grants.
 	"/api/front-page":                       true, // Delegates through the canonical dataset read; confers no dataset grant.
 	"/api/admin/front-page":                 true,

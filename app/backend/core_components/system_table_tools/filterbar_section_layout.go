@@ -1,12 +1,15 @@
 // filterbar_section_layout.go
-// Admin API handlers for the compact filterbar section layout stored in system_config.
+// Public safe reads and permission-checked writes for the shared filterbar layout.
 // Bridges the draggable filterbar section UI and DB-backed application configuration.
 // Exists so admins can reorder filterbar sections without adding a table-shaped route.
 package system_table_tools
 
 import (
+	"bytes"
 	"database/sql"
 	"encoding/json"
+	"errors"
+	"io"
 	"log"
 	"net/http"
 
@@ -63,14 +66,26 @@ var legacyFilterbarSectionOrder = []string{
 
 type filterbarSectionLayoutConfig struct {
 	SectionOrder     []string        `json:"section_order"`
-	SectionCollapsed map[string]bool `json:"section_collapsed,omitempty"`
+	SectionCollapsed map[string]bool `json:"section_collapsed"`
+	AllowOwnOrder    bool            `json:"allow_own_order"`
 }
 
-// GetFilterbarSectionLayoutHandler returns the global admin-managed compact filterbar section layout.
+// Only these UI fields leave the public endpoint, even if the stored object
+// contains unrelated or legacy configuration. Reading never requires edit rights.
+var filterbarLayoutReader = readFilterbarSectionLayout
+
+type saveFilterbarLayoutRequest struct {
+	SectionOrder     []string         `json:"section_order,omitempty"`
+	SectionCollapsed map[string]*bool `json:"section_collapsed,omitempty"`
+	AllowOwnOrder    *bool            `json:"allow_own_order,omitempty"`
+}
+
+// GetFilterbarSectionLayoutHandler returns only safe shared UI settings for every role.
 // GET /api/filterbar-section-layout
 func GetFilterbarSectionLayoutHandler(w http.ResponseWriter, r *http.Request) {
 
-	config, err := readFilterbarSectionLayout()
+	w.Header().Set("Cache-Control", "no-store")
+	config, err := filterbarLayoutReader()
 	if err != nil {
 		log.Printf("\033[31merror: [GetFilterbarSectionLayoutHandler] read failed: %v\033[0m", err)
 		httpresponse.RespondWithError(w, http.StatusInternalServerError, "error reading filterbar section layout")
@@ -80,30 +95,50 @@ func GetFilterbarSectionLayoutHandler(w http.ResponseWriter, r *http.Request) {
 	httpresponse.RespondWithJSON(w, http.StatusOK, config)
 }
 
-// SaveFilterbarSectionLayoutHandler stores the global admin-managed compact filterbar section layout.
+// SaveFilterbarSectionLayoutHandler patches the shared layout with the caller's route grant.
+// Optional section_order, section_collapsed deltas (null removes a default), and
+// allow_own_order preserve all omitted fields, including other datasets' defaults.
 // POST /api/filterbar-section-layout/save
 func SaveFilterbarSectionLayoutHandler(w http.ResponseWriter, r *http.Request) {
 
-	var req filterbarSectionLayoutConfig
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	var req saveFilterbarLayoutRequest
+	if err := decodeFilterbarRequest(w, r, &req); err != nil || !validFilterbarLayoutRequest(req) {
 		httpresponse.RespondWithError(w, http.StatusBadRequest, "invalid request body")
-		return
-	}
-
-	config := filterbarSectionLayoutConfig{
-		SectionOrder:     normalizeFilterbarSectionOrder(req.SectionOrder),
-		SectionCollapsed: normalizeFilterbarSectionCollapsed(req.SectionCollapsed),
-	}
-	configJSON, err := json.Marshal(config)
-	if err != nil {
-		httpresponse.RespondWithError(w, http.StatusInternalServerError, "failed to encode filterbar section layout")
 		return
 	}
 
 	tx, ok := dbutils.RequireTx(r.Context())
 	if !ok {
-		log.Printf("\033[31merror: [SaveFilterbarSectionLayoutHandler] failed to acquire transaction\033[0m")
 		httpresponse.RespondWithError(w, http.StatusInternalServerError, "transaction start failed")
+		return
+	}
+	// Serialize partial edits, preserving the collapse defaults and site policy
+	// when another bar changes only its order. No old dataset snapshot is written.
+	if _, err := tx.ExecContext(r.Context(), `SELECT pg_advisory_xact_lock(770077)`); err != nil {
+		httpresponse.RespondWithError(w, http.StatusInternalServerError, "layout lock failed")
+		return
+	}
+	config, err := readFilterbarLayoutFrom(dbutils.BindQueryContext(r.Context(), tx))
+	if err != nil {
+		httpresponse.RespondWithError(w, http.StatusInternalServerError, "layout unavailable")
+		return
+	}
+	if req.SectionOrder != nil {
+		config.SectionOrder = normalizeFilterbarSectionOrder(req.SectionOrder)
+	}
+	for key, value := range req.SectionCollapsed {
+		if value == nil {
+			delete(config.SectionCollapsed, key)
+		} else {
+			config.SectionCollapsed[key] = *value
+		}
+	}
+	if req.AllowOwnOrder != nil {
+		config.AllowOwnOrder = *req.AllowOwnOrder
+	}
+	configJSON, err := json.Marshal(config)
+	if err != nil {
+		httpresponse.RespondWithError(w, http.StatusInternalServerError, "failed to encode filterbar section layout")
 		return
 	}
 
@@ -121,8 +156,14 @@ func SaveFilterbarSectionLayoutHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func readFilterbarSectionLayout() (filterbarSectionLayoutConfig, error) {
+	return readFilterbarLayoutFrom(backend.Db)
+}
+
+func readFilterbarLayoutFrom(q interface {
+	QueryRow(string, ...interface{}) *sql.Row
+}) (filterbarSectionLayoutConfig, error) {
 	var raw []byte
-	err := backend.Db.QueryRow(`
+	err := q.QueryRow(`
 		SELECT json_value
 		FROM system_config
 		WHERE key = $1
@@ -146,6 +187,49 @@ func readFilterbarSectionLayout() (filterbarSectionLayoutConfig, error) {
 	config.SectionOrder = normalizeFilterbarSectionOrder(config.SectionOrder)
 	config.SectionCollapsed = normalizeFilterbarSectionCollapsed(config.SectionCollapsed)
 	return config, nil
+}
+
+func decodeFilterbarRequest(w http.ResponseWriter, r *http.Request, target interface{}) error {
+	decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 16384))
+	var raw json.RawMessage
+	if err := decoder.Decode(&raw); err != nil {
+		return err
+	}
+	if len(raw) == 0 || raw[0] != '{' {
+		return errors.New("JSON object required")
+	}
+	if err := decoder.Decode(new(interface{})); !errors.Is(err, io.EOF) {
+		return errors.New("one JSON object required")
+	}
+	fields := json.NewDecoder(bytes.NewReader(raw))
+	fields.DisallowUnknownFields()
+	return fields.Decode(target)
+}
+
+func validFilterbarLayoutRequest(req saveFilterbarLayoutRequest) bool {
+	if req.SectionOrder != nil && !validFilterbarOrder(req.SectionOrder) {
+		return false
+	}
+	for key := range req.SectionCollapsed {
+		if !allowedFilterbarSectionKeys[key] {
+			return false
+		}
+	}
+	return true
+}
+
+func validFilterbarOrder(order []string) bool {
+	if len(order) == 0 || len(order) > len(defaultFilterbarSectionOrder) {
+		return false
+	}
+	seen := map[string]bool{}
+	for _, key := range order {
+		if !allowedFilterbarSectionKeys[key] || seen[key] {
+			return false
+		}
+		seen[key] = true
+	}
+	return true
 }
 
 func normalizeFilterbarSectionOrder(input []string) []string {

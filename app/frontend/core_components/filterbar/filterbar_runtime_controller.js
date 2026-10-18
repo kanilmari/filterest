@@ -5,7 +5,8 @@
 
 import { createSharedTopbarVisibilityController } from "./shared_topbar_visibility_controller.js";
 import { createFilterbarChatLayout } from "./filterbar_chat_layout_controller.js";
-import { FILTERBAR_BREAKPOINT_PX, setStoredVisibility, updateOverlayState } from "./filterbar_engine/filterbar_visibility_handler.js";
+import { FILTERBAR_BREAKPOINT_PX, updateOverlayState } from "./filterbar_engine/filterbar_visibility_handler.js";
+import { bindFilterbarVisibilityMemory, rememberFilterbarVisibility as setStoredVisibility } from './filterbar_visibility_memory.js';
 import { resolveResponsivePanelVisibilityState } from "./filterbar_visibility_resolver.js";
 import { FILTERBAR_COLUMN_WIDTH_PX } from "../../ui_config.js";
 import { setupScrollPassthrough } from "../../reusable_components/scroll_passthrough.js";
@@ -17,6 +18,15 @@ import { createTemporaryFiltersOpenerAndCloser } from "./filters_opener_and_clos
 import { FILTERBAR_PANEL_MODES } from "./filterbar_panel_mode_resolver.js";
 const FILTERBAR_COLUMN_WIDTH_CSS = `${FILTERBAR_COLUMN_WIDTH_PX}px`;
 const FILTERBAR_PANEL_HIDE_CONTENT_DELAY_MS = 700;
+
+// Keep the dismissal target test separate from state/memory ownership below.
+function wireOutsidePanelClose({ panel, fixedToggleButton, sharedTopBar, isNarrowScreen, isHidden, onClose, signal }) {
+    document.addEventListener('click', event => {
+        if (!isNarrowScreen() || isHidden()) return;
+        if (panel.contains(event.target) || fixedToggleButton.contains(event.target) || sharedTopBar.contains(event.target)) return;
+        onClose();
+    }, { signal });
+}
 
 export function wireFilterbarRuntime({
     tableName, currentView, tablePartsContainer, contentArea, mainTableContainer, initialResponsivePanelState, panelMode, lifetimeController, signal, panel, panelBody, clockBar, chatDock, datasetTitleRow, inlineHeroHost, scrollSentinel, fixedToggleButton, hideFilterBtn, showMenuButton, sharedTopBarOwner, sharedTopBar, sharedTopBarEnd, sharedTopBarMenuButton, sharedTopBarMenuSlot, sharedTopBarArticleClose, sharedTopBarSearch, heroMenuButton, filterBarContent, overviewSection, sectionOrdering, styleSettings
@@ -309,10 +319,8 @@ export function wireFilterbarRuntime({
         } else {
             hidePanel();
         }
-
         wasNarrowScreen = isNarrowScreen();
     }
-
     // =====================================================
     //  6. SCROLL-DRIVEN MODE SWITCHING
     //  Determines wide/compact based on scrollTop.
@@ -537,21 +545,15 @@ export function wireFilterbarRuntime({
     }, { signal });
 
     // Close panel on outside click (mobile)
-    document.addEventListener("click", (e) => {
-        if (!isNarrowScreen()) return;
-        if (isHidden()) return;
-        const clickedInside =
-            panel.contains(e.target) ||
-            fixedToggleButton.contains(e.target) ||
-            sharedTopBar.contains(e.target);
-        if (!clickedInside) {
+    wireOutsidePanelClose({ panel, fixedToggleButton, sharedTopBar, isNarrowScreen, isHidden, signal,
+        onClose: () => {
             temporaryFiltersCoordinator.releaseTemporaryOwnership();
             panelManuallyHidden = true;
             autoCollapsedForNarrow = false;
             hidePanel();
             setStoredVisibility(tableName, false);
         }
-    }, { signal });
+    });
 
     let destroyed = false;
     const removalObserver = new MutationObserver(() => {
@@ -605,9 +607,20 @@ export function wireFilterbarRuntime({
         panel.remove();
     }
 
-    panel.__syncSharedTopBar = syncSharedTopBar;
+    const syncVisibilityMemory = bindFilterbarVisibilityMemory({
+        tableName, panel, host: mainTableContainer, container: tablePartsContainer,
+        visible: () => !isHidden(), signal,
+        isActive: () => isSharedTopBarHostActive(mainTableContainer),
+        apply: (visible) => {
+            panelManuallyHidden = !visible;
+            autoCollapsedForNarrow = false;
+            if (visible) showPanel(); else hidePanel();
+        },
+    });
+    panel.__syncSharedTopBar = () => { syncVisibilityMemory(); syncSharedTopBar(); };
     panel.__syncActiveView = () => {
         if (destroyed) return;
+        syncVisibilityMemory();
         attachToActiveView();
         syncSharedTopBar();
     };

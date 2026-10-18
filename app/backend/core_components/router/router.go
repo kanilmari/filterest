@@ -304,6 +304,7 @@ func RegisterRoutes(frontendDir string, storagePath string) {
 	functionRegisterHandler("/api/admin/view-field-sets/shared/delete", system_table_tools.DeleteSharedViewFieldSetHandler, "system_table_tools.DeleteSharedViewFieldSetHandler", http.MethodPost)
 	functionRegisterHandler("/api/filterbar-section-layout/save", system_table_tools.SaveFilterbarSectionLayoutHandler, "system_table_tools.SaveFilterbarSectionLayoutHandler", http.MethodPost)
 	functionRegisterHandler("/api/filterbar-section-layout", system_table_tools.GetFilterbarSectionLayoutHandler, "system_table_tools.GetFilterbarSectionLayoutHandler", http.MethodGet)
+	functionRegisterHandler("/api/user-filterbar-preference", system_table_tools.UserFilterbarPreferenceHandler, "system_table_tools.UserFilterbarPreferenceHandler", http.MethodGet, http.MethodPatch, http.MethodDelete)
 	functionRegisterHandler("/api/dataset-sort-default", system_table_tools.GetDatasetSortDefaultHandler, "system_table_tools.GetDatasetSortDefaultHandler", http.MethodGet)
 	functionRegisterHandler("/api/dataset-sort-default/personal", system_table_tools.SavePersonalDatasetSortDefaultHandler, "system_table_tools.SavePersonalDatasetSortDefaultHandler", http.MethodPost)
 	functionRegisterHandler("/api/admin/dataset-sort-default", system_table_tools.SaveDatasetSortDefaultHandler, "system_table_tools.SaveDatasetSortDefaultHandler", http.MethodPost)

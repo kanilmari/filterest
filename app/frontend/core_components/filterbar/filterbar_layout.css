@@ -152,6 +152,68 @@
   pointer-events: none;
 }
 
+.filterbar-panel--loading-preferences {
+  visibility: hidden;
+  pointer-events: none;
+}
+
+/* Dataset handover commits the actual source state without an entrance flash. */
+.filterbar-visibility-instant,
+.filterbar-visibility-instant * {
+  transition: none !important;
+  animation: none !important;
+}
+
+.filterbar-preference-controls {
+  box-sizing: border-box;
+  min-width: 0;
+  width: 100%;
+  margin: 0;
+  padding: 12px;
+  color: var(--text_color);
+  background: var(--filter_panel_bg);
+  border: 1px solid var(--filter_panel_border);
+  border-radius: 8px;
+}
+
+.filterbar-preference-controls label,
+.filterbar-preference-controls li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-block: 8px;
+}
+
+.filterbar-preference-controls li > span {
+  flex: 1 1 100%;
+}
+
+.filterbar-preference-controls select {
+  width: 100%;
+  max-width: 100%;
+  min-height: 44px;
+  color: var(--text_color);
+  background: var(--bg_color);
+}
+
+.filterbar-preference-controls p {
+  font-size: 0.9em;
+  line-height: 1.5;
+}
+
+.filterbar-preference-controls button {
+  min-height: 44px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .filterbar-panel,
+  .filterbar-panel-body {
+    transition: none !important;
+    animation: none !important;
+  }
+}
+
 /* ============================================
    PANEL BODY
    Compact-mode-only lower section that stays

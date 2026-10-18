@@ -3394,21 +3394,42 @@
       "scenarios": [
         {
           "name": "production",
-          "profile_name": "admin",
-          "skip_stages": [],
-          "admin_only": true
+          "profile_name": "public",
+          "skip_stages": [
+            "access_control",
+            "admin_check",
+            "auth",
+            "csrf",
+            "device_id",
+            "fingerprint"
+          ],
+          "admin_only": false
         },
         {
           "name": "development",
-          "profile_name": "admin",
-          "skip_stages": [],
-          "admin_only": true
+          "profile_name": "public",
+          "skip_stages": [
+            "access_control",
+            "admin_check",
+            "auth",
+            "csrf",
+            "device_id",
+            "fingerprint"
+          ],
+          "admin_only": false
         },
         {
           "name": "api_language",
-          "profile_name": "admin",
-          "skip_stages": [],
-          "admin_only": true
+          "profile_name": "public",
+          "skip_stages": [
+            "access_control",
+            "admin_check",
+            "auth",
+            "csrf",
+            "device_id",
+            "fingerprint"
+          ],
+          "admin_only": false
         }
       ]
     },
@@ -3423,21 +3444,21 @@
       "scenarios": [
         {
           "name": "production",
-          "profile_name": "admin",
+          "profile_name": "default",
           "skip_stages": [],
-          "admin_only": true
+          "admin_only": false
         },
         {
           "name": "development",
-          "profile_name": "admin",
+          "profile_name": "default",
           "skip_stages": [],
-          "admin_only": true
+          "admin_only": false
         },
         {
           "name": "api_language",
-          "profile_name": "admin",
+          "profile_name": "default",
           "skip_stages": [],
-          "admin_only": true
+          "admin_only": false
         }
       ]
     },
@@ -5935,6 +5956,47 @@
           "name": "api_language",
           "profile_name": "default",
           "skip_stages": [],
+          "admin_only": false
+        }
+      ]
+    },
+    {
+      "path_pattern": "/api/user-filterbar-preference",
+      "match_type": "exact",
+      "handler_name": "system_table_tools.UserFilterbarPreferenceHandler",
+      "methods": [
+        "GET",
+        "HEAD",
+        "PATCH",
+        "DELETE"
+      ],
+      "method_source": "route_registration",
+      "scenarios": [
+        {
+          "name": "production",
+          "profile_name": "login_only",
+          "skip_stages": [
+            "access_control",
+            "admin_check"
+          ],
+          "admin_only": false
+        },
+        {
+          "name": "development",
+          "profile_name": "login_only",
+          "skip_stages": [
+            "access_control",
+            "admin_check"
+          ],
+          "admin_only": false
+        },
+        {
+          "name": "api_language",
+          "profile_name": "login_only",
+          "skip_stages": [
+            "access_control",
+            "admin_check"
+          ],
           "admin_only": false
         }
       ]

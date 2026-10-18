@@ -1,92 +1,16 @@
 // filterbar_section_order_handler.js
-// Adds admin-only drag ordering and DB persistence to compact filterbar sections.
+// Applies one loaded site or personal order to every mounted filterbar.
 // Bridges filterbar disclosure DOM, route permissions, and the tableless system_config API.
 // Exists so section layout stays shared application configuration instead of browser-local state.
 
-import { endpoint_router } from "../endpoints/endpoint_router.js";
-import { hasRoutePermission } from "../route_permission_checker.js";
 
-export const DEFAULT_FILTERBAR_SECTION_ORDER = Object.freeze([
-    "filters",
-    "search_overview",
-    "search_controls",
-    "tools",
-    "views",
-    "field_sets",
-    "style",
-    "chat",
-]);
-
-const LEGACY_FILTERBAR_SECTION_ORDER = Object.freeze([
-    "search_controls",
-    "tools",
-    "views",
-    "field_sets",
-    "filters",
-    "chat",
-]);
-
-const FILTERBAR_SECTION_LAYOUT_ROUTE = "/api/filterbar-section-layout";
-const FILTERBAR_SECTION_LAYOUT_SAVE_ROUTE = "/api/filterbar-section-layout/save";
+import { DEFAULT_FILTERBAR_SECTION_ORDER, normalizeFilterbarSectionOrder,
+    normalizeFilterbarSectionCollapsed } from './filterbar_section_layout_normalizer.js';
+import { loadFilterbarPreferences, getFilterbarPreferences, subscribeFilterbarPreferences,
+    saveFilterbarOrder, canEditFilterbarOrder, saveSharedFilterbarLayout } from './filterbar_preferences_controller.js';
+export { DEFAULT_FILTERBAR_SECTION_ORDER, normalizeFilterbarSectionOrder,
+    normalizeFilterbarSectionCollapsed } from './filterbar_section_layout_normalizer.js';
 const SECTION_SELECTOR = "[data-filterbar-section-key]";
-
-const allowedSectionKeys = new Set(DEFAULT_FILTERBAR_SECTION_ORDER);
-
-export function normalizeFilterbarSectionOrder(input = []) {
-    if (sectionOrderEquals(input, LEGACY_FILTERBAR_SECTION_ORDER)) {
-        return [...DEFAULT_FILTERBAR_SECTION_ORDER];
-    }
-
-    const normalized = [];
-    const seen = new Set();
-    const values = Array.isArray(input) ? input : [];
-
-    for (const rawKey of values) {
-        const key = String(rawKey || "").trim();
-        if (!allowedSectionKeys.has(key) || seen.has(key)) {
-            continue;
-        }
-        normalized.push(key);
-        seen.add(key);
-    }
-
-    for (const key of DEFAULT_FILTERBAR_SECTION_ORDER) {
-        if (!seen.has(key)) {
-            normalized.push(key);
-        }
-    }
-
-    return normalized;
-}
-
-export function normalizeFilterbarSectionCollapsed(input = {}) {
-    const values = input && typeof input === "object" && !Array.isArray(input)
-        ? input
-        : {};
-    const normalized = {};
-
-    for (const key of DEFAULT_FILTERBAR_SECTION_ORDER) {
-        if (values[key] === true || values[key] === false) {
-            normalized[key] = values[key];
-        }
-    }
-
-    return normalized;
-}
-
-function normalizeFilterbarSectionLayout(input = {}) {
-    return {
-        section_order: normalizeFilterbarSectionOrder(input?.section_order),
-        section_collapsed: normalizeFilterbarSectionCollapsed(input?.section_collapsed),
-    };
-}
-
-function sectionOrderEquals(input, expected) {
-    if (!Array.isArray(input) || input.length !== expected.length) {
-        return false;
-    }
-    return input.every((key, index) => key === expected[index]);
-}
 
 function getSectionElements(container) {
     return Array.from(container.querySelectorAll(`:scope > ${SECTION_SELECTOR}`))
@@ -97,24 +21,6 @@ function getCurrentSectionOrder(container) {
     return normalizeFilterbarSectionOrder(
         getSectionElements(container).map((section) => section.dataset.filterbarSectionKey)
     );
-}
-
-function getCurrentSectionCollapsed(container) {
-    return normalizeFilterbarSectionCollapsed(
-        Object.fromEntries(
-            getSectionElements(container).map((section) => [
-                section.dataset.filterbarSectionKey,
-                section.classList.contains("is-collapsed"),
-            ])
-        )
-    );
-}
-
-function getCurrentSectionLayout(container) {
-    return {
-        section_order: getCurrentSectionOrder(container),
-        section_collapsed: getCurrentSectionCollapsed(container),
-    };
 }
 
 function applySectionOrder(container, order) {
@@ -156,21 +62,6 @@ export async function applySectionCollapsedState(container, collapsedState) {
     });
 
     await Promise.all(operations);
-}
-
-async function fetchSectionLayout() {
-    const response = await endpoint_router("getFilterbarSectionLayout", {
-        method: "GET",
-    });
-    return normalizeFilterbarSectionLayout(response);
-}
-
-async function saveSectionLayout(sectionLayout) {
-    const normalizedLayout = normalizeFilterbarSectionLayout(sectionLayout);
-    return endpoint_router("saveFilterbarSectionLayout", {
-        method: "POST",
-        body_data: normalizedLayout,
-    });
 }
 
 function addHeaderDragBehavior(section, signal, shouldSuppressClick) {
@@ -228,12 +119,17 @@ export function setupFilterbarSectionOrdering(panelBody) {
     let draggedSection = null;
     let suppressNextHeaderClick = false;
     let applyingRemoteLayout = false;
+    let pendingCollapsed = {};
+    let orderChanged = false;
     let saveTimer = 0;
 
     function markSections() {
         getSectionElements(panelBody).forEach((section) => {
-            section.classList.add("filterbar-disclosure-section--reorderable");
+            const editable = canEditFilterbarOrder();
+            section.classList.toggle("filterbar-disclosure-section--reorderable", editable);
             addHeaderDragBehavior(section, signal, () => suppressNextHeaderClick);
+            const header = section.querySelector(":scope > .animated-disclosure-header");
+            if (header) header.draggable = editable;
         });
     }
 
@@ -243,7 +139,14 @@ export function setupFilterbarSectionOrdering(panelBody) {
         }
         clearTimeout(saveTimer);
         saveTimer = setTimeout(() => {
-            saveSectionLayout(getCurrentSectionLayout(panelBody)).catch((err) => {
+            const order = orderChanged ? getCurrentSectionOrder(panelBody) : null;
+            const collapsed = pendingCollapsed;
+            orderChanged = false;
+            pendingCollapsed = {};
+            const operation = order ? saveFilterbarOrder(order, collapsed)
+                : saveSharedFilterbarLayout({ section_collapsed: collapsed });
+            operation.catch((err) => {
+                applySectionOrder(panelBody, getFilterbarPreferences().order);
                 console.warn("filterbar section layout save failed", err);
             });
         }, 200);
@@ -251,14 +154,8 @@ export function setupFilterbarSectionOrdering(panelBody) {
 
     applySectionOrder(panelBody, DEFAULT_FILTERBAR_SECTION_ORDER);
 
-    const canPersistLayout =
-        hasRoutePermission(FILTERBAR_SECTION_LAYOUT_ROUTE) &&
-        hasRoutePermission(FILTERBAR_SECTION_LAYOUT_SAVE_ROUTE);
-    if (!canPersistLayout) {
-        return { ready: Promise.resolve(), destroy: () => {} };
-    }
-
     panelBody.addEventListener("dragstart", (event) => {
+        if (!canEditFilterbarOrder()) { event.preventDefault(); return; }
         const target = event.target;
         if (!(target instanceof HTMLElement)) {
             return;
@@ -305,6 +202,7 @@ export function setupFilterbarSectionOrdering(panelBody) {
         setTimeout(() => {
             suppressNextHeaderClick = false;
         }, 0);
+        orderChanged = true;
         scheduleSave();
     }, { signal });
 
@@ -313,33 +211,59 @@ export function setupFilterbarSectionOrdering(panelBody) {
         if (!shouldPersistFilterbarSectionToggle(section, panelBody)) {
             return;
         }
+        // Personal disclosure clicks are not shared order edits. Editors save
+        // only this explicit collapse delta, never an old whole-bar snapshot.
+        if (!getFilterbarPreferences().canEditShared || getFilterbarPreferences().mode === 'own') return;
+        pendingCollapsed[section.dataset.filterbarSectionKey] = section.classList.contains('is-collapsed');
         scheduleSave();
     }, { signal });
 
     markSections();
-    const sectionMountObserver = new MutationObserver(() => {
-        if (!signal.aborted) {
-            markSections();
+    let applyRevision = 0;
+    let lastOrder = '';
+    let lastCollapsed = '';
+    async function applyLoadedLayout() {
+        if (signal.aborted) return;
+        const revision = ++applyRevision;
+        const state = getFilterbarPreferences();
+        if (!state.loaded) {
+            clearTimeout(saveTimer);
+            orderChanged = false;
+            pendingCollapsed = {};
+        }
+        applyingRemoteLayout = true;
+        const orderKey = JSON.stringify(state.order);
+        if (lastOrder !== orderKey) { applySectionOrder(panelBody, state.order); lastOrder = orderKey; }
+        markSections();
+        const collapsedKey = JSON.stringify(state.shared.section_collapsed);
+        if (lastCollapsed !== collapsedKey) {
+            await applySectionCollapsedState(panelBody, state.shared.section_collapsed);
+            lastCollapsed = collapsedKey;
+        }
+        if (revision === applyRevision) applyingRemoteLayout = false;
+    }
+    const unsubscribe = subscribeFilterbarPreferences(() => { void applyLoadedLayout(); });
+    const sectionMountObserver = new MutationObserver((mutations) => {
+        // Reordering moves existing children too. Only new/replaced sections
+        // need their position and defaults applied, preventing observer loops.
+        const added = mutations.flatMap(m => [...m.addedNodes]);
+        if (!signal.aborted && added.some(node => node instanceof HTMLElement && !node.dataset.filterbarOrderMounted)) {
+            getSectionElements(panelBody).forEach(section => { section.dataset.filterbarOrderMounted = 'true'; });
+            lastOrder = ''; lastCollapsed = '';
+            void applyLoadedLayout();
         }
     });
+    getSectionElements(panelBody).forEach(section => { section.dataset.filterbarOrderMounted = 'true'; });
     sectionMountObserver.observe(panelBody, { childList: true });
-    const ready = fetchSectionLayout()
-        .then(async (layout) => {
-            applyingRemoteLayout = true;
-            applySectionOrder(panelBody, layout.section_order);
-            markSections();
-            await applySectionCollapsedState(panelBody, layout.section_collapsed);
-            applyingRemoteLayout = false;
-        })
-        .catch((err) => {
-            applyingRemoteLayout = false;
-            console.warn("filterbar section layout load failed", err);
-        });
+    const ready = loadFilterbarPreferences().then(applyLoadedLayout).catch((err) => {
+        console.warn("filterbar section layout load failed", err);
+    });
 
     return {
         ready,
         destroy() {
             clearTimeout(saveTimer);
+            unsubscribe();
             sectionMountObserver.disconnect();
             controller.abort();
         },

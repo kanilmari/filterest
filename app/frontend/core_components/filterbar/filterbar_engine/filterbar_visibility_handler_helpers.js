@@ -44,6 +44,6 @@ export function parseStoredVisibility(storedValue) {
  */
 export function resolveInitialVisibility(storedVisibility, dbDefault, isWideScreen) {
     if (storedVisibility !== null) return storedVisibility;
-    if (dbDefault !== undefined) return dbDefault;
+    if (typeof dbDefault === 'boolean') return dbDefault;
     return isWideScreen;
 }

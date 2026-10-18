@@ -8,7 +8,9 @@ import { createDatasetSearchPanel } from "./text_search/create_text_search_panel
 import { ensureTableContainers } from "./top_row_buttons/top_row_builder.js";
 import { getAllSpecs } from "../state_stores/table_specs_reader.js";
 import { resolveVisibleDatasetMediaPath } from "../table_views/dataset_media_visibility_resolver.js";
-import { FILTERBAR_BREAKPOINT_PX, ensureFilterOverlay, getStoredVisibility } from "./filterbar_engine/filterbar_visibility_handler.js";
+import { FILTERBAR_BREAKPOINT_PX, ensureFilterOverlay } from "./filterbar_engine/filterbar_visibility_handler.js";
+import { getInitialFilterbarMemory } from './filterbar_visibility_memory.js';
+import { getFilterbarPreferences } from './filterbar_preferences_controller.js';
 import { buildInitialResponsivePanelState } from "./filterbar_visibility_resolver.js";
 import { FILTERBAR_PANEL_MODE, show_filterbar_search_overview_section } from "../../ui_config.js";
 import { createMaskIconSpan } from "../../icons/icon_mask_builder.js";
@@ -49,7 +51,7 @@ export function create_filter_bar(
     const allowDatasetManagement = surfaceOptions.allowDatasetManagement !== false;
     const datasetIconKey = resolveDatasetIconKey(tableName, tableSpec);
     const initialResponsivePanelState = buildInitialResponsivePanelState({
-        storedVisibility: getStoredVisibility(tableName),
+        storedVisibility: getInitialFilterbarMemory(tableName),
         dbDefault: tableSpec.filterbar_visible_by_default,
         isNarrowScreen: window.innerWidth < FILTERBAR_BREAKPOINT_PX,
     });
@@ -183,6 +185,17 @@ export function create_filter_bar(
         panel.classList.add("filterbar-panel--hidden");
     }
     panel.dataset.filterbarPanelMode = panelMode;
+    // Rows can render while preferences load. Reveal only after the account's
+    // memory and the shared order have been resolved, avoiding a false first paint.
+    if (!getFilterbarPreferences().loaded) {
+        panel.classList.add('filterbar-panel--loading-preferences');
+        panel.inert = true;
+        sectionOrdering.ready.finally(() => {
+            if (signal.aborted) return;
+            panel.classList.remove('filterbar-panel--loading-preferences');
+            panel.inert = false;
+        });
+    }
     panel.__filterableColumnsKey = filterableColumnsKey;
     // Temporary consumers must wait for the saved layout before revealing a section.
     panel.__sectionLayoutReady = sectionOrdering.ready;

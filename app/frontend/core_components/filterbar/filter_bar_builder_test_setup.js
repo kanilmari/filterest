@@ -11,6 +11,18 @@ const mockUiConfig = vi.hoisted(() => ({
 const mockMountDatasetCoverTestPalette = vi.hoisted(() => vi.fn(async () => null));
 
 vi.mock('../theme.js', () => ({ initializeThemeToggle: vi.fn() }));
+vi.mock('./filterbar_preferences_controls.js', () => ({
+    buildFilterbarPreferenceControls: () => document.createElement('fieldset'),
+}));
+vi.mock('./filterbar_section_order_handler.js', () => ({
+    setupFilterbarSectionOrdering: () => ({ ready: Promise.resolve(), destroy: vi.fn() }),
+}));
+vi.mock('./filterbar_visibility_memory.js', async () => {
+    const legacy = await import('./filterbar_engine/filterbar_visibility_handler.js');
+    return { getInitialFilterbarMemory: legacy.getStoredVisibility,
+        rememberFilterbarVisibility: legacy.setStoredVisibility,
+        bindFilterbarVisibilityMemory: () => () => {} };
+});
 vi.mock('../lang/lang_panel_printer.js', () => ({ initializeLanguageSelector: vi.fn() }));
 
 vi.mock('../navigation/main_tabs/hero_dataset_tabs.js', () => ({

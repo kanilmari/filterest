@@ -13,6 +13,7 @@ import {
 
 import durationDefinitions from '../../../shared/setting_durations/definitions.json' with { type: 'json' };
 import { createDurationInput } from '../../../reusable_components/setting_duration/duration_input.js';
+import { buildFilterbarPreferenceControls } from '../../filterbar/filterbar_preferences_controls.js';
 
 const durationInputs = new WeakMap();
 const DIRTY_ROW_CLASS = 'settings-row-dirty';
@@ -118,6 +119,9 @@ export function create_settings_view(datasetName, columns, data, _dataTypes) {
     container.dataset.datasetName = datasetName;
     container.dataset.datasetRowCommitter = 'settings';
     container.commitDatasetRows = () => true;
+    const filterbarControls = new Set();
+    const destroyFilterbarControls = () => { filterbarControls.forEach(control => control.destroy()); filterbarControls.clear(); };
+    container.destroy = destroyFilterbarControls;
 
     const toolbar = document.createElement('div');
     toolbar.classList.add('settings-toolbar');
@@ -152,6 +156,14 @@ export function create_settings_view(datasetName, columns, data, _dataTypes) {
         const rowDiv = document.createElement('div');
         rowDiv.classList.add('settings-row');
         rowDiv.dataset.settingKey = String(row[keyColumn] || '');
+
+        if (datasetName === 'system_config' && row[keyColumn] === 'filterbar_section_layout') {
+            const preferences = buildFilterbarPreferenceControls();
+            filterbarControls.add(preferences);
+            rowDiv.append(preferences);
+            container.append(rowDiv);
+            return;
+        }
 
         const keyCell = document.createElement('div');
         keyCell.classList.add('settings-key-cell');
@@ -249,6 +261,7 @@ export function create_settings_view(datasetName, columns, data, _dataTypes) {
     appendSettingsRows(data);
     container.commitDatasetRows = (rows, { append, isCurrent }) => {
         if (!isCurrent()) return false;
+        if (!append) destroyFilterbarControls();
         if (!append) container.querySelectorAll('.settings-row').forEach(row => row.remove());
         appendSettingsRows(rows);
         updateSaveUi(container);

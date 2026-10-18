@@ -80,8 +80,9 @@ func deleteUserVisualPreference(ctx context.Context, userID int) (userVisualPref
 	if !ok {
 		return preference, errors.New("request transaction unavailable")
 	}
+	// Theme reset must leave the account's filterbar choices intact.
 	if _, err := tx.ExecContext(ctx, `
-		DELETE FROM public.system_user_visual_preferences
+		UPDATE public.system_user_visual_preferences SET theme_mode = NULL, revision = revision + 1
 		WHERE user_id = $1`, userID); err != nil {
 		return preference, err
 	}
@@ -108,11 +109,12 @@ func isSupportedUserThemeMode(themeMode string) bool {
 func readUserVisualPreference(ctx context.Context, userID int) (userVisualPreferenceResponse, error) {
 	preference := userVisualPreferenceResponse{ThemeMode: defaultUserThemeMode}
 	err := backend.Db.QueryRowContext(ctx, `
-		SELECT COALESCE(theme_mode, $2), revision
+		SELECT COALESCE(theme_mode, $2), revision, theme_mode IS NOT NULL
 		FROM public.system_user_visual_preferences
 		WHERE user_id = $1`, userID, defaultUserThemeMode).Scan(
 		&preference.ThemeMode,
 		&preference.Revision,
+		&preference.Configured,
 	)
 	if errors.Is(err, sql.ErrNoRows) {
 		return preference, nil
@@ -120,7 +122,6 @@ func readUserVisualPreference(ctx context.Context, userID int) (userVisualPrefer
 	if err != nil {
 		return preference, err
 	}
-	preference.Configured = true
 	return preference, nil
 }
 

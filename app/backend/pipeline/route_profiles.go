@@ -263,12 +263,14 @@ var RouteProfiles = map[string]RouteProfile{
 	"system_table_tools.AssignSiteViewFieldSetHandler":         AdminProfile,
 	"system_table_tools.ResetSharedViewFieldSetHandler":        AdminProfile,
 	"system_table_tools.DeleteSharedViewFieldSetHandler":       AdminProfile,
-	"system_table_tools.GetFilterbarSectionLayoutHandler":      AdminProfile,
-	"system_table_tools.SaveFilterbarSectionLayoutHandler":     AdminProfile,
-	"system_table_tools.SaveDatasetSortDefaultHandler":         AdminProfile,
-	"system_table_tools.GetTaskTodoProgressHandler":            LoginOnlyProfile,
-	"router.GetDatasetAliasManagementHandler":                  AdminProfile,
-	"router.SaveDatasetAliasManagementHandler":                 AdminProfile,
+	// Reviewed safe-only public UI read; writes retain the explicit route grant.
+	"system_table_tools.GetFilterbarSectionLayoutHandler":  PublicProfile,
+	"system_table_tools.SaveFilterbarSectionLayoutHandler": DefaultProfile,
+	"system_table_tools.UserFilterbarPreferenceHandler":    LoginOnlyProfile,
+	"system_table_tools.SaveDatasetSortDefaultHandler":     AdminProfile,
+	"system_table_tools.GetTaskTodoProgressHandler":        LoginOnlyProfile,
+	"router.GetDatasetAliasManagementHandler":              AdminProfile,
+	"router.SaveDatasetAliasManagementHandler":             AdminProfile,
 
 	// Asset linking (schema-level operations)
 	"dtt_asset_linking.EnableImageAssetLinkingHandler":    AdminProfile,

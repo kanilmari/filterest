@@ -47,3 +47,41 @@ supported. The backend API contract is unchanged.
 -   `always_show_column_sort_buttons`: Keep sort buttons visible without hover.
 -   `show_child_items_on_big_cards`: Show child items in the article view. The setting name still uses the internal `big_card` term.
 -   `always_show_empty_fields_on_cards`: Show empty fields on cards to maintain order.
+
+### Filter bar order and visibility memory
+
+The style disclosure and the configuration dataset's settings view use the same
+Finnish/English controls. Section order has one site setting
+(`system_config.filterbar_section_layout`). Its public GET endpoint
+(`/api/filterbar-section-layout`) returns only section order, collapse defaults
+and the boolean policy allowing own orders. It requires no edit grant.
+POST `/api/filterbar-section-layout/save` retains normal authentication, CSRF,
+browser binding and the explicit route grant; administrators receive that grant
+through the existing startup policy. A separately granted ordinary editor can
+also change it. Generic configuration-row writers cannot bypass this API.
+
+One controller loads the shared order for the document and publishes committed
+changes to every mounted bar. Same-origin tabs receive a change notification and
+reload the safe setting; focus refreshes it too. Order edits send only the order,
+preserving collapse defaults. Explicit disclosure edits send only changed keys.
+The published shaded filtering section and the style section retain their keys;
+the conversation remains in its pinned dock.
+
+Signed-in users may explicitly choose **Shared order / Own order**. An ordinary
+account needs the site's permission; administrators may always choose their own.
+The current shared order is copied only on that explicit choice. Account-wide
+order and visibility mode extend the existing `system_user_visual_preferences`
+row through `/api/user-filterbar-preference`; no dataset owns a personal order.
+PATCH accepts only those choices, and DELETE resets them while preserving theme.
+Theme reset likewise preserves filter bar choices. A disabled own-order policy
+hides an ordinary user's saved exception without deleting it.
+
+Visibility defaults to **Shared for all datasets** and initializes from the bar
+currently in use. **Remember per dataset** restores the destination's saved
+choice, starting from the source bar's actual state and transitioning once only
+when it differs. Shared handover and reduced motion commit without animation.
+Missing destination memory keeps the actual state; a first document visit uses
+stored memory or the dataset/responsive default. Dataset results carry that
+default (`table_meta.filterbar_visible_by_default`), so a stale navigation cache
+cannot make a newly created dataset open incorrectly. Legacy per-dataset keys
+remain during rollout and are never scanned to guess a shared starting value.

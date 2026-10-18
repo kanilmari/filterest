@@ -6,6 +6,7 @@ import { buildFilterbarDisclosureSection } from './filterbar_section_heading_bui
 import { initializeThemeToggle } from '../theme.js';
 import { initializeLanguageSelector } from '../lang/lang_panel_printer.js';
 import { createDatasetHeaderConfigHeroButton } from '../admin_tools/dataset_header_config_modal.js';
+import { buildFilterbarPreferenceControls } from './filterbar_preferences_controls.js';
 
 /** Create the filter panel's ordinary translated, reorderable appearance section. */
 export function buildFilterbarStyleSection(tableName, { allowDatasetManagement = true } = {}) {
@@ -26,12 +27,14 @@ export function buildFilterbarStyleSection(tableName, { allowDatasetManagement =
         const gear = createDatasetHeaderConfigHeroButton(tableName);
         if (gear) actions.append(gear);
     }
+    const content = document.createElement('div');
+    content.append(actions, buildFilterbarPreferenceControls({ signal: lifetime.signal }));
     const section = buildFilterbarDisclosureSection({
         iconPath: '/frontend/icons/general/view-palette-icon.svg',
         iconClassName: 'filterbar-section-heading-icon--style',
         langKey: 'filterbar_style_and_colors',
         fallbackText: 'Style and color settings',
-        contentElement: actions,
+        contentElement: content,
         sectionClassNames: ['filterbar-style-section'],
         startOpen: false,
     });

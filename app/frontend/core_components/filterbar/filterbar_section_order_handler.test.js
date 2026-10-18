@@ -5,6 +5,11 @@
 // Exists so unknown or duplicate section keys cannot corrupt the saved layout.
 
 import { describe, expect, test, vi } from "vitest";
+vi.mock('../endpoints/endpoint_router.js', () => ({ endpoint_router: vi.fn(async () => ({})) }));
+vi.mock('../auth/session_generation_store.js', () => ({
+    getSessionGeneration: () => 0, subscribeToSessionGeneration: () => () => {},
+    revalidateSessionIdentity: async () => 0,
+}));
 import {
     applySectionCollapsedState,
     DEFAULT_FILTERBAR_SECTION_ORDER,
