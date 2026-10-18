@@ -73,6 +73,8 @@ Dynamic route names live in `app/frontend/core_components/endpoints/endpoint_rou
 ### Rendering Sanitized HTML
 Use `renderAllowedHtml()` from `app/frontend/reusable_components/dom_container_builder.js` to safely display a subset of HTML tags (e.g., `<b>`, `<i>`, `<ul>`).
 
+Rich-text links retain only absolute `http:`, `https:` and `mailto:` destinations, validated without a base URL after removing ASCII tabs/newlines and trimming surrounding C0 controls/spaces. Schemes are case-insensitive; entities are decoded before validation. Relative and unsafe destinations lose the anchor wrapper while keeping allowed children. All other source attributes are stripped; kept links share the plain-URL linkifier's new-tab behavior and `rel="noopener noreferrer"`, preserving normalized query strings and fragments. This cleans browser output only; it does not change stored values.
+
 ### Multi-table Permission Editing
 The permissions view supports selecting multiple tables. Shared rights are shown; conflicting rights appear ambiguous. Changes apply to all selected tables.
 

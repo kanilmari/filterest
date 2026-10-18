@@ -1,3 +1,4 @@
+// http_text_linkifier.js
 // Turns absolute HTTP(S) addresses inside user-facing text into safe links.
 // Bridges plain-text card/article renderers with shared URL validation.
 // Exists so links work consistently without using innerHTML or trusting unsafe schemes.
@@ -29,6 +30,15 @@ function splitTrailingPunctuation(candidate) {
     return { urlText, trailing };
 }
 
+/** Builds an anchor from an already validated href with the shared browsing policy. */
+export function createExternalLink(safeHref) {
+    const link = document.createElement("a");
+    link.href = safeHref;
+    link.target = "_blank";
+    link.rel = "noopener noreferrer";
+    return link;
+}
+
 export function appendTextWithHttpLinks(container, value) {
     const text = String(value ?? "");
     let cursor = 0;
@@ -43,10 +53,7 @@ export function appendTextWithHttpLinks(container, value) {
         const { urlText, trailing } = splitTrailingPunctuation(originalCandidate);
         const safeHref = resolveSafeExternalHttpUrl(urlText);
         if (safeHref) {
-            const link = document.createElement("a");
-            link.href = safeHref;
-            link.target = "_blank";
-            link.rel = "noopener noreferrer";
+            const link = createExternalLink(safeHref);
             link.classList.add("auto-http-link");
             link.textContent = urlText;
             container.appendChild(link);

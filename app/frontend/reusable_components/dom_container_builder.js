@@ -8,7 +8,9 @@ import {
     isValidIdentifier,
     ALLOWED_HTML_TAGS,
     containsAllowedHtml,
+    resolveSafeRichTextHref,
 } from './dom_container_builder_helpers.js';
+import { createExternalLink } from './http_text_linkifier.js';
 
 // Re-export pure helpers so existing importers continue to work
 export { extract_id_from_text, isValidIdentifier, ALLOWED_HTML_TAGS, containsAllowedHtml };
@@ -74,7 +76,8 @@ export function getOrCreateManagementFormsContainer(containerId) {
 
 /**
  * Parses a limited HTML snippet and retains only tags from ALLOWED_HTML_TAGS.
- * Any attributes are stripped and nested elements are sanitized.
+ * Only validated anchor hrefs survive; browsing attributes use the plain-URL policy.
+ * All source attributes are otherwise stripped and nested elements are sanitized.
  *
  * @param {string} htmlString - The HTML snippet to render, e.g. "<div>Hello</div>".
  * @returns {DocumentFragment} A fragment containing the cleaned elements.
@@ -88,7 +91,8 @@ export function renderAllowedHtml(htmlString) {
     function sanitize(node) {
         if (node.nodeType === Node.ELEMENT_NODE) {
             const tag = node.tagName.toLowerCase();
-            if (!allowed.has(tag)) {
+            const safeHref = tag === 'a' ? resolveSafeRichTextHref(node.getAttribute('href')) : '';
+            if (!allowed.has(tag) || (tag === 'a' && !safeHref)) {
                 const frag = document.createDocumentFragment();
                 node.childNodes.forEach(child => {
                     const cleanChild = sanitize(child);
@@ -97,7 +101,7 @@ export function renderAllowedHtml(htmlString) {
                 return frag;
             }
 
-            const cleanEl = document.createElement(tag);
+            const cleanEl = tag === 'a' ? createExternalLink(safeHref) : document.createElement(tag);
             node.childNodes.forEach(child => {
                 const cleanChild = sanitize(child);
                 if (cleanChild) cleanEl.appendChild(cleanChild);

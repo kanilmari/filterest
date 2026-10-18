@@ -1,6 +1,26 @@
 // dom_container_builder_helpers.js
 // Pure helper functions extracted from dom_container_builder.js for testability.
 // Zero DOM access — all functions are pure input→output.
+// Keeps identifier, HTML detection and rich-text URL rules independent of rendering.
+
+/**
+ * Validate an entity-decoded rich-text href using the browser's absolute URL rules.
+ * Return the normalized input, not URL serialization, to preserve queries/fragments.
+ */
+export function resolveSafeRichTextHref(value) {
+    if (typeof value !== 'string') return '';
+    const withoutTabsAndNewlines = value.replace(/[\t\n\r]/g, '');
+    // eslint-disable-next-line no-control-regex -- URL normalization explicitly trims C0 controls.
+    const candidate = withoutTabsAndNewlines.replace(/^[\x00-\x20]+|[\x00-\x20]+$/g, '');
+    try {
+        // No base: relative, protocol-relative and backslash-relative links fail.
+        const { protocol } = new URL(candidate);
+        if (['http:', 'https:', 'mailto:'].includes(protocol)) return candidate;
+    } catch {
+        // Invalid absolute URLs remain ordinary content, never clickable links.
+    }
+    return '';
+}
 
 /**
  * Extract a leading numeric ID from text formatted as "id (name)" or just "id".

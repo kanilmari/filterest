@@ -58,9 +58,10 @@
     {
       "area": "Card and article opener",
       "paths": [
-        "app/frontend/core_components/table_views/card_view/row_article_opener.js", "app/frontend/core_components/table_views/card_view/row_article_opener_helpers.js", "app/frontend/core_components/table_views/card_view/image_first_view_opener.js", "app/frontend/core_components/table_views/card_view/image_first_view_activation.js"
+        "app/frontend/reusable_components/dom_container_builder.js", "app/frontend/reusable_components/dom_container_builder_helpers.js", "app/frontend/reusable_components/http_text_linkifier.js", "app/frontend/core_components/table_views/card_view/row_article_opener.js", "app/frontend/core_components/table_views/card_view/row_article_opener_helpers.js", "app/frontend/core_components/table_views/card_view/image_first_view_opener.js", "app/frontend/core_components/table_views/card_view/image_first_view_activation.js"
       ],
       "specs": [
+        "app/testing/e2e/C_card_view/C25_rich_text_links.spec.ts",
         "app/testing/e2e/G_navigation/G10_dataset_name_pool_access.spec.ts", "app/testing/e2e/C_card_view/C22_article_image_arrows_probe.spec.ts", "app/testing/e2e/C_card_view/C21_record_titles.spec.ts", "app/testing/e2e/C_card_view/C19_dataset_heading_hierarchy.spec.ts", "app/testing/e2e/C_card_view/C10_image_first_article.spec.ts", "app/testing/e2e/C_card_view/C11_network_media_variants.spec.ts", "app/testing/e2e/C_card_view/C12_article_reload_reading_position.spec.ts", "app/testing/e2e/C_card_view/C13_related_dataset_appearance.spec.ts",
         "app/testing/e2e/C_card_view/C16_finnish_card_filterbar_text.spec.ts", "app/testing/e2e/C_card_view/C17_article_toolbar_group_permissions.spec.ts", "app/testing/e2e/C_card_view/C18_article_open_appearance_probe.spec.ts", "app/testing/e2e/C_card_view/C2_open_big_card.spec.ts",
         "app/testing/e2e/C_card_view/C3_close_big_card.spec.ts", "app/testing/e2e/C_card_view/C6_big_card_attachments.spec.ts", "app/testing/e2e/C_card_view/C7_big_card_field_edit_preserves_assets.spec.ts", "app/testing/e2e/C_card_view/C8_big_card_primary_image_actions.spec.ts",
@@ -253,6 +254,7 @@
         "app/frontend/index.html"
       ],
       "specs": [
+        "app/testing/e2e/C_card_view/C25_rich_text_links.spec.ts",
         "app/testing/e2e/E_search_filter/E20_filterbar_order_and_memory.spec.ts", "app/testing/e2e/G_navigation/G13_phone_topbar_measurements.spec.ts", "app/testing/e2e/D_view_switch/D6_table_cell_line_limit.spec.ts", "app/testing/e2e/T_admin/T21_home_text_style.spec.ts", "app/testing/e2e/G_navigation/G12_top_nav_home_button.spec.ts",
         "app/testing/e2e/C_card_view/C22_article_image_arrows_probe.spec.ts", "app/testing/e2e/E_search_filter/E18_dataset_default_view.spec.ts", "app/testing/e2e/C_card_view/C19_dataset_heading_hierarchy.spec.ts", "app/testing/e2e/A_row_crud/A1_add_row.spec.ts", "app/testing/e2e/A_row_crud/A2_edit_cell.spec.ts", "app/testing/e2e/A_row_crud/A3_delete_rows.spec.ts", "app/testing/e2e/A_row_crud/A4_select_row.spec.ts",
         "app/testing/e2e/A_row_crud/A5_select_all.spec.ts", "app/testing/e2e/A_row_crud/A6_select_card.spec.ts", "app/testing/e2e/A_row_crud/A7_fk_dropdown_edit.spec.ts", "app/testing/e2e/A_row_crud/A8_temp_dataset_persistence.spec.ts",
@@ -316,6 +318,7 @@
         "app/backend/pipeline/device_id_check", "app/backend/pipeline/fingerprint_check", "app/backend/pipeline/csrf_check", "app/backend/pipeline/automation_check"
       ],
       "specs": [
+        "app/testing/e2e/C_card_view/C25_rich_text_links.spec.ts",
         "app/testing/e2e/E_search_filter/E20_filterbar_order_and_memory.spec.ts", "app/testing/e2e/E_search_filter/E21_category_heading_order.spec.ts", "app/testing/e2e/G_navigation/G13_phone_topbar_measurements.spec.ts", "app/testing/e2e/D_view_switch/D6_table_cell_line_limit.spec.ts", "app/testing/e2e/T_admin/T21_home_text_style.spec.ts", "app/testing/e2e/J_modals/J4_client_error_notices.spec.ts", "app/testing/e2e/G_navigation/G12_top_nav_home_button.spec.ts",
         "app/testing/e2e/C_card_view/C22_article_image_arrows_probe.spec.ts", "app/testing/e2e/E_search_filter/E18_dataset_default_view.spec.ts", "app/testing/e2e/C_card_view/C21_record_titles.spec.ts", "app/testing/e2e/E_search_filter/E19_shared_filter_section.spec.ts", "app/testing/e2e/C_card_view/C19_dataset_heading_hierarchy.spec.ts", "app/testing/e2e/A_row_crud/A1_add_row.spec.ts", "app/testing/e2e/A_row_crud/A2_edit_cell.spec.ts", "app/testing/e2e/A_row_crud/A3_delete_rows.spec.ts", "app/testing/e2e/A_row_crud/A4_select_row.spec.ts",
         "app/testing/e2e/A_row_crud/A5_select_all.spec.ts", "app/testing/e2e/A_row_crud/A6_select_card.spec.ts", "app/testing/e2e/A_row_crud/A7_fk_dropdown_edit.spec.ts", "app/testing/e2e/A_row_crud/A8_temp_dataset_persistence.spec.ts",
@@ -510,6 +513,7 @@
         "app/frontend/core_components/theme.js", "app/frontend/core_components/theme_preference_api.js"
       ],
       "specs": [
+        "app/testing/e2e/C_card_view/C25_rich_text_links.spec.ts",
         "app/testing/e2e/E_search_filter/E20_filterbar_order_and_memory.spec.ts", "app/testing/e2e/C_card_view/C23_card_image_usage_presentation.spec.ts", "app/testing/e2e/G_navigation/G13_phone_topbar_measurements.spec.ts", "app/testing/e2e/D_view_switch/D6_table_cell_line_limit.spec.ts", "app/testing/e2e/T_admin/T21_home_text_style.spec.ts", "app/testing/e2e/J_modals/J4_client_error_notices.spec.ts", "app/testing/e2e/G_navigation/G12_top_nav_home_button.spec.ts",
         "app/testing/e2e/C_card_view/C22_article_image_arrows_probe.spec.ts", "app/testing/e2e/E_search_filter/E18_dataset_default_view.spec.ts", "app/testing/e2e/C_card_view/C21_record_titles.spec.ts", "app/testing/e2e/E_search_filter/E19_shared_filter_section.spec.ts", "app/testing/e2e/C_card_view/C20_description_empty_blocks.spec.ts", "app/testing/e2e/C_card_view/C19_dataset_heading_hierarchy.spec.ts", "app/testing/e2e/C_card_view/C10_image_first_article.spec.ts", "app/testing/e2e/C_card_view/C13_related_dataset_appearance.spec.ts", "app/testing/e2e/C_card_view/C14_product_card_row_commits.spec.ts", "app/testing/e2e/C_card_view/C15_chart_axes.spec.ts",
         "app/testing/e2e/C_card_view/C16_finnish_card_filterbar_text.spec.ts", "app/testing/e2e/C_card_view/C17_article_toolbar_group_permissions.spec.ts", "app/testing/e2e/C_card_view/C3_close_big_card.spec.ts", "app/testing/e2e/D_view_switch/D0_theme_and_mobile_menu.spec.ts",
@@ -591,17 +595,11 @@
     },
     {
       "paths": ["app/server_tools/agent_tools/worker_agent", "app/server_tools/agent_tools/worker_agent_defaults.sh"],
-      "tests": [
-        "app/testing/python/test_worker_agent_codex.py",
-        "app/testing/python/test_worker_agent_effort.py",
-        "app/testing/python/test_worker_agent_routines.py"
-      ]
+      "tests": ["app/testing/python/test_worker_agent_codex.py", "app/testing/python/test_worker_agent_effort.py", "app/testing/python/test_worker_agent_routines.py"]
     },
     {
       "paths": ["app/frontend/vite.config.mjs", "app/frontend/dist", "app/server_tools/release/browser_bundle.py"],
-      "tests": [
-        "app/testing/python/test_browser_bundle_check.py"
-      ]
+      "tests": ["app/testing/python/test_browser_bundle_check.py"]
     },
     {
       "paths": [
@@ -614,32 +612,19 @@
         "THIRD_PARTY_NOTICES.md",
         "app/testing/fixtures/custom_root/custom_root.svg"
       ],
-      "tests": [
-        "app/testing/python/test_reviewed_provenance_hashes.py"
-      ]
+      "tests": ["app/testing/python/test_reviewed_provenance_hashes.py"]
     },
     {
       "paths": ["app/server_tools/scripts/check_md_links.py", "app/docs/instructions_and_documentation/lang_key_lifecycle.md"],
-      "tests": [
-        "app/testing/python/test_md_links.py"
-      ]
+      "tests": ["app/testing/python/test_md_links.py"]
     },
     {
       "paths": ["app/server_tools/scripts/qa.sh", "app/server_tools/check_gitignore/check_gitignore.sh"],
-      "tests": [
-        "app/testing/python/test_qa_workflow.py"
-      ]
+      "tests": ["app/testing/python/test_qa_workflow.py"]
     },
     {
-      "paths": [
-        "app/backend/core_components/system_table_tools/lang_key_consistency_checks.go",
-        "app/backend/core_components/system_table_tools/database_consistency_check.go",
-        "app/frontend/core_components/admin_tools/database_consistency_view.js",
-        "app/server_tools/migrations/20261015000004_seed_lang_key_archiving_paused_language_keys.sql"
-      ],
-      "tests": [
-        "app/testing/python/test_lang_key_archiving_paused_language_seed.py"
-      ]
+      "paths": ["app/backend/core_components/system_table_tools/lang_key_consistency_checks.go", "app/backend/core_components/system_table_tools/database_consistency_check.go", "app/frontend/core_components/admin_tools/database_consistency_view.js", "app/server_tools/migrations/20261015000004_seed_lang_key_archiving_paused_language_keys.sql"],
+      "tests": ["app/testing/python/test_lang_key_archiving_paused_language_seed.py"]
     },
     {
       "paths": [
@@ -653,46 +638,23 @@
         "app/server_tools/scripts/check_file_length.sh",
         "app/package.json"
       ],
-      "tests": [
-        "app/testing/python/test_import_boundaries.py",
-        "app/testing/python/test_component_imports.py",
-        "app/testing/python/test_component_discovery.py"
-      ]
+      "tests": ["app/testing/python/test_import_boundaries.py", "app/testing/python/test_component_imports.py", "app/testing/python/test_component_discovery.py"]
     },
     {
-      "paths": [
-        "app/backend/core_components/lang/translation_scope_reader.go",
-        "app/backend/core_components/lang_key_naming/lang_key_naming.go",
-        "app/server_tools/migrations/20261015000006_backfill_translation_object_sources.sql",
-        "app/server_tools/public_bootstrap/generate_bootstrap.py"
-      ],
-      "tests": [
-        "app/testing/python/test_translation_object_sources.py",
-        "app/testing/python/test_translation_scope_storage.py"
-      ]
+      "paths": ["app/backend/core_components/lang/translation_scope_reader.go", "app/backend/core_components/lang_key_naming/lang_key_naming.go", "app/server_tools/migrations/20261015000006_backfill_translation_object_sources.sql", "app/server_tools/public_bootstrap/generate_bootstrap.py"],
+      "tests": ["app/testing/python/test_translation_object_sources.py", "app/testing/python/test_translation_scope_storage.py"]
     },
     {
       "paths": ["app/server_tools/scripts/check_file_length.sh", "app/testing/python/test_file_length_guard.py"],
-      "tests": [
-        "app/testing/python/test_file_length_guard.py"
-      ]
+      "tests": ["app/testing/python/test_file_length_guard.py"]
     },
     {
-      "paths": [
-        "app/frontend/core_components/admin_tools/row_group_assignment_editor.js"
-      ],
-      "tests": [
-        "app/testing/python/test_row_group_window_language_keys.py"
-      ]
+      "paths": ["app/frontend/core_components/admin_tools/row_group_assignment_editor.js"],
+      "tests": ["app/testing/python/test_row_group_window_language_keys.py"]
     },
     {
-      "paths": [
-        "app/server_tools/migrations/20261015000008_seed_table_cell_max_lines.sql",
-        "app/frontend/core_components/admin_tools/table_view_settings_view.js"
-      ],
-      "tests": [
-        "app/testing/python/test_table_cell_lines_seed.py"
-      ]
+      "paths": ["app/server_tools/migrations/20261015000008_seed_table_cell_max_lines.sql", "app/frontend/core_components/admin_tools/table_view_settings_view.js"],
+      "tests": ["app/testing/python/test_table_cell_lines_seed.py"]
     },
     {
       "paths": [
@@ -704,11 +666,7 @@
         "app/server_tools/migrations/20261015000014_seed_redirect_notice_language_keys.sql",
         "app/testing/python/test_dataset_redirect_notice_language_keys.py"
       ],
-      "tests": [
-        "app/testing/python/test_dataset_redirect_notice_language_keys.py",
-        "app/testing/python/test_field_settings_language_seed.py",
-        "app/testing/python/test_missing_media_check_language_seed.py"
-      ]
+      "tests": ["app/testing/python/test_dataset_redirect_notice_language_keys.py", "app/testing/python/test_field_settings_language_seed.py", "app/testing/python/test_missing_media_check_language_seed.py"]
     },
     {
       "paths": [
@@ -723,10 +681,7 @@
         "app/server_tools/db_init/01_init_extensions.sh",
         "app/server_tools/migrations"
       ],
-      "tests": [
-        "app/testing/python/test_database_restore_check.py",
-        "app/testing/python/test_database_restore_check_security.py"
-      ]
+      "tests": ["app/testing/python/test_database_restore_check.py", "app/testing/python/test_database_restore_check_security.py"]
     }
   ],
   "bootstrap_proofs": [
