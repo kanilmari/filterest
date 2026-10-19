@@ -79,6 +79,8 @@ test.describe('E6 — Active Filter Tags', () => {
         expect((await remove.boundingBox())!.height).toBeCloseTo(24, 0);
         await expect(row.locator(':scope > :first-child')).toHaveClass('active-filters-lead');
         await expect(row.locator(':scope > :last-child')).toHaveClass('active-filters-clear-all');
+        await expect(row.locator('[data-testid="active-filter-item"]')).toHaveCount(1);
+        await expect(row.locator('[data-testid="active-filters-clear-all"]')).toHaveAttribute('data-lang-key', 'clear');
         // Measure every wrapped line's occupied span, not just the flex declaration.
         const checkLines = async () => {
           const offsets = await row.evaluate(element => {

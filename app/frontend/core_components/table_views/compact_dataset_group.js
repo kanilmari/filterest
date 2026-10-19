@@ -1,7 +1,7 @@
 // compact_dataset_group.js
 // Renders compact, localized matches from other permitted main-tab datasets.
 // Reuses canonical dataset/row URLs and navigation approval before changing target query state.
-// Keeps result content as text, with no editor or full article lifecycle inside a search group.
+// Keeps result copy as text and reuses card thumbnails without mounting article controls.
 
 import { applyArticleViewAffordance, requireArticleViewAccess } from './card_view/article_view_access.js';
 import { getTranslationForKey } from "../lang/translation_handler.js";
@@ -208,10 +208,61 @@ export function bindQueryNavigation(link, dataset, query, rowID = null, options 
     });
 }
 
+/** Reuse the card's lazy media and seeded fallback, without its article activation. */
+function createSupplementalThumbnail(row, dataset, columns, types, titleColumn) {
+    const host = document.createElement('div');
+    host.className = 'supplemental-dataset-thumbnail';
+    host.setAttribute('aria-hidden', 'true');
+    const reserved = document.createElement('div');
+    reserved.className = 'card_small_image';
+    host.append(reserved);
+    async function loadMedia() {
+        // Home also imports this group: load article/card tools only for opted-in
+        // thumbnails, after reserving geometry and before starting any media work.
+        const [{ appendSmallCardSummary }, { resolveFallbackCardImageCandidate }] = await Promise.all([
+            import('./card_view/card_row_presentation.js'),
+            import('./card_view/card_element_builder_helpers.js'),
+        ]);
+        // The section may be cached off-DOM while the primary view changes.
+        // Skip replaced rows, but still hydrate rows in that retained section.
+        if (!host.closest('.supplemental-dataset-group')) return;
+        const imageColumn = roleColumn(columns, types, 'image');
+        const fallback = resolveFallbackCardImageCandidate({ cached_image: row.cached_image });
+        const created = ['created', 'created_at', 'luontiaika'].map(column => row[column]).find(Boolean) || '';
+        const label = plainText(resolveDatasetDisplayValue(row[titleColumn], types[titleColumn]));
+        appendSmallCardSummary({
+            card: host, row_item: row, table_name: dataset, setFieldHideAttribute: () => {},
+            image_value_small: row[imageColumn] || fallback?.value || '',
+            image_column_small: row[imageColumn] ? imageColumn : fallback?.column,
+            preferred_image_alt_label: label,
+            creation_seed: `${row.id ?? 'x'}_${created}`, header_first_letter: Array.from(label)[0] || '?',
+            data_types: types,
+        });
+        // Move only media out of the summary; its link listener stays detached.
+        host.replaceChildren(host.querySelector('.card_small_summary .card_small_image'));
+        await host._ensureSmallSummaryMedia();
+        // The adjacent link already names the row; keep media decorative even
+        // after the shared image's missing-picture handler or a language change.
+        // The shared error handler (registered first) sets data-lang-key="picture_missing"; the translation
+        // observer would then refill alt from it, so every error clears the key and its context again (gate 254a).
+        const keepDecorative = image => {
+            image.alt = '';
+            delete image.dataset.langKey;
+            delete image.dataset.langAltContext;
+        };
+        host.querySelectorAll('img').forEach(image => {
+            keepDecorative(image);
+            image.addEventListener('error', () => keepDecorative(image));
+        });
+    }
+    void loadMedia().catch(() => { host.dataset.thumbnailState = 'unavailable'; });
+    return host;
+}
+
 /** One stable group per dataset; order comes solely from the accepted main-tab list. */
 export function createSupplementalDatasetGroup(tab, query, {
     rowCap = 3, headingTag = 'h3', showAllKey = null, emptyKey = null, replacementParams,
-    preselectArticle = false,
+    preselectArticle = false, includeThumbnails = false,
 } = {}) {
     const element = document.createElement("section");
     element.className = "supplemental-dataset-group";
@@ -251,6 +302,12 @@ export function createSupplementalDatasetGroup(tab, query, {
             const extractColumns = snippetColumns(columns, types, titleColumn);
             for (const row of rows.slice(0, rowCap)) {
                 const item = document.createElement("li");
+                const text = includeThumbnails ? document.createElement('div') : item;
+                if (includeThumbnails) {
+                    item.className = 'supplemental-dataset-result';
+                    text.className = 'supplemental-dataset-result-text';
+                    item.append(createSupplementalThumbnail(row, tab.dataset, columns, types, titleColumn));
+                }
                 const title = document.createElement("a");
                 title.href = buildCardUrl("/", tab.dataset, row.id, "") + querySuffix;
                 title.dataset.rowId = String(row.id);
@@ -258,7 +315,7 @@ export function createSupplementalDatasetGroup(tab, query, {
                     transform: value => plainText(value, 140) || String(row.id),
                 });
                 bindQueryNavigation(title, tab.dataset, query, row.id, { replacementParams, preselectArticle });
-                item.append(title);
+                text.append(title);
                 if (extractColumns.length) {
                     const description = document.createElement("p");
                     bindDatasetLanguageRenderer(description, language => {
@@ -275,8 +332,9 @@ export function createSupplementalDatasetGroup(tab, query, {
                         renderExcerptWithMatchesMarked(description, excerpt, query);
                         description.hidden = !excerpt;
                     });
-                    item.append(description);
+                    text.append(description);
                 }
+                if (includeThumbnails) item.append(text);
                 list.append(item);
             }
             empty.hidden = !emptyKey || rows.length > 0;

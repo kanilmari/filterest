@@ -221,7 +221,8 @@ export function renderActiveFilters(tableName) {
         });
     });
 
-    const hasSelections = content.childElementCount > 0;
+    const chipCount = content.childElementCount;
+    const hasSelections = chipCount > 0;
     let clear = container.querySelector(".active-filters-clear-all");
     if (hasSelections) {
         const lead = document.createElement("span");
@@ -232,7 +233,6 @@ export function renderActiveFilters(tableName) {
             clear.type = "button";
             clear.className = "active-filters-clear-all";
             clear.dataset.testid = "active-filters-clear-all";
-            clear.dataset.langKey = "clear_all";
             clear.addEventListener("click", async () => {
                 const { clearAllFilters } = await import("../top_row_buttons/top_row_builder.js");
                 clearAllFilters(tableName, document.getElementById(`${tableName}_filterBar_panel`));
@@ -244,7 +244,10 @@ export function renderActiveFilters(tableName) {
         }
         content.prepend(lead);
         bindDatasetLanguageRenderer(lead, () => { lead.textContent = getTranslationForKey("selected_filters"); });
-        bindDatasetLanguageRenderer(clear, () => { clear.textContent = getTranslationForKey("clear_all"); });
+        clear.dataset.langKey = chipCount === 1 ? "clear" : "clear_all";
+        bindDatasetLanguageRenderer(clear, () => {
+            clear.textContent = getTranslationForKey(clear.dataset.langKey);
+        });
     } else {
         clear?.remove();
         clear = null;

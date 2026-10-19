@@ -1,6 +1,6 @@
 """test_filterbar_language_seed.py
 Protects filter-panel labels from blank legacy and canonical translations.
-Connects migration 74, bootstrap evidence and its unreleased database owner.
+Connects the released seed, the current display rename and bootstrap evidence.
 Keeps authored bytes and replay state verifiable on disposable PostgreSQL.
 """
 import json
@@ -17,10 +17,11 @@ OWNER = "20261009000099_record_database_release_9_11_0.sql"
 STYLE = "filterbar_style_and_colors"
 LOCALES = ("fi", "en", "zh-CN", "zh-TW", "zh-HK")
 DEFAULTS = {
-    STYLE: ("Tyyli- ja väriasetukset", "Style and color settings", "样式和颜色设置", "樣式與色彩設定", "樣式及顏色設定"),
+    STYLE: ("Näyttöasetukset", "Display settings", "样式和颜色设置", "樣式與色彩設定", "樣式及顏色設定"),
     "filterbar_show_search": ("Näytä haku", "Show search", "显示搜索", "顯示搜尋", "顯示搜尋"),
     "filterbar_hide_search": ("Piilota haku", "Hide search", "隐藏搜索", "隱藏搜尋", "隱藏搜尋"),
 }
+RELEASED_DEFAULTS = {**DEFAULTS, STYLE: ("Tyyli- ja väriasetukset", "Style and color settings", *DEFAULTS[STYLE][2:])}
 BLANKS = (None, "", "   ", "\t", "\n", "\r", "\f", "\v", " \t\n\r\f\v ")
 TRIM_CHARACTERS = r"E' \t\n\r\f' || chr(11)"
 
@@ -46,7 +47,7 @@ def test_filterbar_guide_uses_assigned_database_release():
     # The toolbar section moved with the frontend guide split (#921) into the dataset appearance guide.
     guide = (APP / "docs/instructions_and_documentation/Frontend_Dataset_Appearance.md").read_text()
     paragraph = next(line for line in guide.splitlines() if MIGRATION.name in line)
-    assert "unreleased DB 9.11.0" in paragraph
+    assert "released DB 9.11.0" in paragraph
     assert OWNER in paragraph
     assert "assign its next database release" not in paragraph
 
@@ -100,7 +101,7 @@ def language_state(database):
 
 
 def assert_default_rows(database, overrides=None):
-    expected = {(key, locale): text for key, texts in DEFAULTS.items()
+    expected = {(key, locale): text for key, texts in RELEASED_DEFAULTS.items()
                 for locale, text in zip(LOCALES, texts)}
     expected.update(overrides or {})
     rows = translation_rows(database)
@@ -176,3 +177,15 @@ def test_fresh_filterbar_seed_is_complete_and_replay_is_unchanged(language_datab
     database(MIGRATION.read_text())
     assert_default_rows(database)
     assert_replay_preserves_state(database)
+
+
+def test_current_filterbar_display_defaults_follow_the_new_upgrade_seed(language_database):
+    database = language_database
+    database('CREATE TABLE system_data_repair_records(migration text, action text, detail jsonb)')
+    database(MIGRATION.read_text())
+    current = APP / 'server_tools/migrations/20261015000021_seed_filterbar_display_and_clear_language_keys.sql'
+    database(current.read_text())
+    # The new action is checked independently; this suite owns the three existing keys.
+    actual = {(key, locale): text for key, locale, text, _, _ in translation_rows(database) if key in DEFAULTS}
+    expected = {(key, locale): text for key, texts in DEFAULTS.items() for locale, text in zip(LOCALES, texts)}
+    assert actual == expected

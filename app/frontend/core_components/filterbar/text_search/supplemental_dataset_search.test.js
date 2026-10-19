@@ -85,7 +85,7 @@ test("uses permitted tab order, three unique rows per dataset, and no current fi
     for (const [dataset, query, options] of state.reader.mock.calls) {
         expect(dataset).not.toBe("current"); expect(query).toBe("shared");
         expect(options.filters).toBeUndefined(); expect(options.rowGroupSlug).toBeUndefined();
-        expect(options).toMatchObject({ view: "table", suppressAuthRedirect: true, suppressErrorToast: true });
+        expect(options).toMatchObject({ view: "table", includeCardSupport: true, suppressAuthRedirect: true, suppressErrorToast: true });
     }
 });
 test("footer remains after delayed primary AI and after a replaced stage host", async () => {

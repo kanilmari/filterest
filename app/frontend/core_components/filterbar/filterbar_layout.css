@@ -247,7 +247,7 @@
   padding-bottom: calc(var(--filterbar-clock-bar-height, 34px) + 12px);
 }
 
-.filterbar-panel-body > :not(.filterbar-overview-section, .dataset-filter-query-section, .dataset-filter-tools-section, .dataset-filter-views-section, .column-preset-row, .favefox-filterbar-wrapper) {
+.filterbar-panel-body > :not(.filterbar-overview-section, .dataset-filter-query-section, .dataset-filter-tools-section, .dataset-filter-views-section, .filterbar-style-section, .column-preset-row, .favefox-filterbar-wrapper) {
   margin-inline: var(--filterbar-panel-inline-space, 24px);
 }
 
@@ -255,6 +255,7 @@
 .filterbar-panel-body > .dataset-filter-query-section,
 .filterbar-panel-body > .dataset-filter-tools-section,
 .filterbar-panel-body > .dataset-filter-views-section,
+.filterbar-panel-body > .filterbar-style-section,
 .filterbar-panel-body > .column-preset-row,
 .filterbar-panel-body > .favefox-filterbar-wrapper {
   width: 100%;

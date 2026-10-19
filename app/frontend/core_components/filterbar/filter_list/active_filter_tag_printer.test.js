@@ -47,8 +47,8 @@ vi.mock("../../state_stores/table_state_store.js", () => ({
 vi.mock("../text_search/dataset_search_executor.js", () => ({ do_intelligent_search: doIntelligentSearchMock }));
 vi.mock("../top_row_buttons/top_row_builder.js", () => ({ clearAllFilters: clearAllFiltersMock }));
 vi.mock("../../lang/translation_handler.js", () => ({ getTranslationForKey: key => ({
-    fi: { selected_filters: "Valitut:", clear_all: "Tyhjennä kaikki", search: "Haku", remove: "Poista" },
-    en: { selected_filters: "Selected:", clear_all: "Clear all", search: "Search", remove: "Remove" },
+    fi: { selected_filters: "Valitut:", clear: "Tyhjennä", clear_all: "Tyhjennä kaikki", search: "Haku", remove: "Poista" },
+    en: { selected_filters: "Selected:", clear: "Clear", clear_all: "Clear all", search: "Search", remove: "Remove" },
 })[interfaceLanguage][key] || key }));
 vi.mock("../../table_views/dataset_value_localizer.js", () => ({
     bindDatasetLanguageRenderer: (element, render) => {
@@ -98,6 +98,32 @@ vi.mock("./active_filter_tag_printer_helpers.js", () => ({
 }));
 
 describe("renderActiveFilters", () => {
+    test("refreshes the same focused clear control for one, two and one chips and language switches", async () => {
+        const host = document.createElement('div');
+        host.id = 'tasks_card_top_controls';
+        document.body.append(host);
+        const { renderActiveFilters } = await import('./active_filter_tag_printer.js');
+        getParamsMock.mockReturnValue({});
+        renderActiveFilters('tasks');
+        const clear = host.querySelector('.active-filters-clear-all');
+        expect(clear.dataset.langKey).toBe('clear');
+        expect(clear.textContent).toBe('Tyhjennä');
+        clear.focus();
+        languageRenderers.get(clear)('en');
+        expect(clear.textContent).toBe('Clear');
+        getParamsMock.mockReturnValue({ search: 'urgent' });
+        renderActiveFilters('tasks');
+        expect(host.querySelector('.active-filters-clear-all')).toBe(clear);
+        expect(clear.dataset.langKey).toBe('clear_all');
+        expect(clear.textContent).toBe('Clear all');
+        getParamsMock.mockReturnValue({});
+        renderActiveFilters('tasks');
+        expect(clear.dataset.langKey).toBe('clear');
+        expect(clear.textContent).toBe('Clear');
+        languageRenderers.get(clear)('fi');
+        expect(clear.textContent).toBe('Tyhjennä');
+        expect(document.activeElement).toBe(clear);
+    });
     beforeEach(() => {
         applyActiveFilterRemoveSide("start");
         interfaceLanguage = "fi";

@@ -119,6 +119,18 @@ test.describe('guest phone toolbar and style controls', () => {
       if (labels[2] !== englishLabels[2]) {
         await expect(style.locator('[data-lang-key="filterbar_style_and_colors"]')).not.toHaveText(englishLabels[2]);
       }
+      const widths = await style.evaluate(element => {
+        // The panel body reserves a scrollbar gutter (filterbar_layout.css scrollbar-gutter: stable), so compare with
+        // its usable content width: clientWidth excludes the gutter, minus its own inline padding (gate 254b P3).
+        const parent = element.parentElement!;
+        const css = getComputedStyle(parent);
+        const usable = parent.clientWidth - parseFloat(css.paddingLeft) - parseFloat(css.paddingRight);
+        const section = element.getBoundingClientRect();
+        const preferences = element.querySelector('.filterbar-preference-controls')?.getBoundingClientRect();
+        return { panel: usable, section: section.width, preferences: preferences?.width || 0 };
+      });
+      expect(widths.section).toBeCloseTo(widths.panel, 0);
+      expect(widths.preferences).toBeLessThanOrEqual(widths.section);
       await expect(style.getByTestId('filterbar-theme-toggle')).toBeVisible();
       const button = style.locator('.language-button');
       await expect(button).toBeVisible();

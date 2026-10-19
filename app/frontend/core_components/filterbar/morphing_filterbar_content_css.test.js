@@ -105,7 +105,14 @@ describe('morphing filterbar content CSS', () => {
         expect(subtitleRule).toContain('color: var(--text_color)');
         expect(sortRule).not.toContain('border:');
         const sectionRule = css.match(/\.dataset-filter-section\s*\{([\s\S]*?)\n\}/)?.[1] || '';
-        expect(sectionRule).toContain('background: hsl(from var(--bg_color_extreme) h s calc(l - 3))');
+        expect(sectionRule).toContain('background: oklch(from var(--bg_color_2) calc(l - 0.023) c h)');
+        expect(sectionRule).toContain('border: 1px solid var(--border_color)');
+        // One consumer-relative rule covers both app themes, including forced light over OS dark.
+        expect(css.match(/background: oklch\(from var\(--bg_color_2\)/g)).toHaveLength(1);
+        const themes = readFileSync(resolve(CURRENT_DIR, '../../styles/variables.css'), 'utf8');
+        expect(themes).toContain('--bg_color_2: var(--bg-surface)');
+        expect(themes).toMatch(/body\.light-mode\s*\{[^}]*--bg-surface: hsl\(var\(--brand-hue\) 8% 100%\)/s);
+        expect(themes).toMatch(/body\.dark-mode\s*\{[^}]*--bg-surface: hsl\(var\(--brand-hue\) 20% 12%\)/s);
         expect(sectionRule).toContain('border-radius: var(--fw-radius-lg)');
         expect(sectionRule).toContain('gap: var(--fw-space-4)');
         expect(sectionRule).toContain('padding: var(--fw-space-4)');

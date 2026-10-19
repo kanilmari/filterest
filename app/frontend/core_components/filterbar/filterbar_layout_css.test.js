@@ -26,6 +26,18 @@ function extractRule(css, selector) {
 }
 
 describe('filterbar layout CSS', () => {
+    test('gives the style disclosure full width and bounds its preferences fieldset', () => {
+        const css = readSiblingCss('filterbar_layout.css');
+        const marginSelector = css.match(/\.filterbar-panel-body > :not\(([^)]+)\)/)[1];
+        expect(marginSelector.split(', ')).toContain('.filterbar-style-section');
+        const fullWidth = extractRule(css, '.filterbar-panel-body > .filterbar-style-section,\n.filterbar-panel-body > .column-preset-row,\n.filterbar-panel-body > .favefox-filterbar-wrapper');
+        expect(fullWidth).toContain('width: 100%');
+        expect(fullWidth).toContain('box-sizing: border-box');
+        const preferences = extractRule(css, '.filterbar-preference-controls');
+        for (const declaration of ['box-sizing: border-box', 'min-width: 0', 'width: 100%', 'margin: 0']) {
+            expect(preferences).toContain(declaration);
+        }
+    });
     test('uses the shared SVG info control with a click disclosure panel', () => {
         const css = readSiblingCss('../admin_tools/admin_version_info_indicator.css');
         const shellRule = extractRule(css, '.filterbar-clock-bar__version-info-shell');

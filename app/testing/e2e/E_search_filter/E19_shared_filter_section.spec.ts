@@ -113,7 +113,9 @@ async function assertSection(page: Page, dataset: string, width: number) {
       const [r, g, b] = context.getImageData(0, 0, 1, 1).data;
       return r + g + b;
     };
-    const surface = brightness(style.getPropertyValue('--bg_color_extreme'));
+    // WO46: the shade is a subtle step below the theme's own surface (--bg_color_2) in BOTH themes; the dark theme's
+    // old near-black shade below --bg_color_extreme was the "too dramatic" look the owner removed.
+    const surface = brightness(style.getPropertyValue('--bg_color_2'));
     const shade = brightness(style.backgroundColor);
     return { left: box.left, right: box.right, radius: Number.parseFloat(style.borderRadius), paintedRows,
       separateRows: rows[0].bottom < rows[1].top && rows[1].bottom < rows[2].top,

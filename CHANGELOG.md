@@ -22,6 +22,7 @@ Dates are the local (Europe/Helsinki) date on which the version was published.
 
 ## [Unreleased]
 
+- Filter controls gain a subtle theme-aware shade and outline, full-width Display settings, singular Clear for one selection, and 76×76 thumbnails in results from other datasets (WO46).
 - Update Go to 1.26.9 and the image/text dependencies to fix security issues in HTTP handling, lossless WebP decoding and Unicode normalization; refresh bundled third-party notices.
 - Home comes first in the native Home tab row and keeps its larger touch target and house icon in dataset hero rows too; keyboard order is menu → Home → first dataset. Its full-height side menu and top-left menu button now match dataset pages; logo and site-name clicks keep the menu open.
 - Article bundle upgrades compare authored grants without a quadratic scan and validate the complete materialization once before recording completion.

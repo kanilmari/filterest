@@ -254,9 +254,10 @@
   justify-content: center;
 }
 
-/* Sorting, filter/reset actions and categories share one painted surface.
-   Derive a darker shade from the active surface, including explicit theme
-   overrides; style packages do not currently own a filter-bar scope. */
+/* Use the ordinary surface, not the near-black extreme token, in dark mode.
+   The same OKLCH lightness step is perceptually subtle in both explicit themes.
+   White becomes L=0.977 (about the previous 97% HSL); dark loses only 0.023 too.
+   Resolve on this surface so an application theme override wins over the OS. */
 .dataset-filter-section {
   box-sizing: border-box;
   display: flex;
@@ -265,7 +266,8 @@
   margin-top: 16px;
   padding: var(--fw-space-4);
   border-radius: var(--fw-radius-lg);
-  background: hsl(from var(--bg_color_extreme) h s calc(l - 3));
+  border: 1px solid var(--border_color);
+  background: oklch(from var(--bg_color_2) calc(l - 0.023) c h);
 }
 
 .dataset-filter-section[hidden] {

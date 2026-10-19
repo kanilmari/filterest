@@ -123,3 +123,13 @@ test.each(["table", "card", "article_view", "product_card", "map", undefined])("
     expect(params.has("include_card_support")).toBe(false);
     expect(params.has("include_map_support")).toBe(false);
 });
+
+test('requests card support only when the supplemental caller opts in', async () => {
+    endpoint.mockResolvedValueOnce({ body: new ReadableStream({ start(controller) { controller.close(); } }) });
+    for await (const _packet of readDatasetSearchResponse('offers', 'trip', {
+        view: 'table', includeCardSupport: true,
+    }, () => true)) { /* empty stream */ }
+    const params = new URLSearchParams(endpoint.mock.calls.at(-1)[1].url_params);
+    expect(params.get('include_card_support')).toBe('1');
+    expect(params.get('view_key')).toBe('table');
+});

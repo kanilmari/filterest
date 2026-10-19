@@ -7554,6 +7554,84 @@ CROSS JOIN (VALUES
 ) AS source(path, explanation)
 WHERE keys.lang_key = 'cancel_changes'
 ON CONFLICT (lang_key_id, source_type, source_high) DO NOTHING;
+-- 20261015000021_seed_filterbar_display_and_clear_language_keys.sql
+-- Renames the display disclosure and seeds the singular selected-filter action.
+-- Connects the existing filter bar consumers to upgrade and fresh-install copy.
+-- Preserves site-authored values and leaves other languages for reviewed translation.
+-- VERSION_DB: 9.12.0
+-- VERSION_DB_OWNER: 20261015000099_record_database_release_9_12_0.sql
+-- COMPLETION_MARKER: wo46_filterbar_display_and_clear
+
+-- Replace only the exact shipped defaults, independently in each store/language.
+-- Whitespace, blank values and administrator edits are deliberately left alone.
+WITH copy(fi, en, old_fi, old_en) AS (VALUES
+    ('Näyttöasetukset', 'Display settings', 'Tyyli- ja väriasetukset', 'Style and color settings')
+), renamed AS (
+    UPDATE public.system_lang_keys keys
+    SET fi = CASE WHEN keys.fi = copy.old_fi THEN copy.fi ELSE keys.fi END,
+        en = CASE WHEN keys.en = copy.old_en THEN copy.en ELSE keys.en END
+    FROM copy
+    WHERE keys.lang_key = 'filterbar_style_and_colors'
+        AND (keys.fi = copy.old_fi OR keys.en = copy.old_en)
+    RETURNING keys.id
+)
+UPDATE public.system_lang_key_translations translated
+SET translation = changed.value
+FROM public.system_lang_keys keys, copy,
+    LATERAL (VALUES ('fi', copy.old_fi, copy.fi), ('en', copy.old_en, copy.en))
+        AS changed(language_code, old_value, value)
+WHERE translated.lang_key_id = keys.id AND keys.lang_key = 'filterbar_style_and_colors'
+    AND translated.language_code = changed.language_code AND translated.translation = changed.old_value;
+
+WITH authored_keys(lang_key, fi, en) AS (VALUES
+    ('clear', 'Tyhjennä', 'Clear')
+), resolved AS (
+    SELECT copy.lang_key,
+        COALESCE(CASE WHEN NULLIF(btrim(keys.fi), '') IS NOT NULL THEN keys.fi END,
+            CASE WHEN NULLIF(btrim(fi.translation), '') IS NOT NULL THEN fi.translation END, copy.fi) AS fi,
+        COALESCE(CASE WHEN NULLIF(btrim(keys.en), '') IS NOT NULL THEN keys.en END,
+            CASE WHEN NULLIF(btrim(en.translation), '') IS NOT NULL THEN en.translation END, copy.en) AS en
+    FROM authored_keys copy
+    LEFT JOIN public.system_lang_keys keys USING (lang_key)
+    LEFT JOIN public.system_lang_key_translations fi ON fi.lang_key_id = keys.id AND fi.language_code = 'fi'
+    LEFT JOIN public.system_lang_key_translations en ON en.lang_key_id = keys.id AND en.language_code = 'en'
+), written AS (
+    INSERT INTO public.system_lang_keys AS existing (lang_key, fi, en, creation_spec)
+    SELECT lang_key, fi, en, 'WO46: remove exactly one selected search or filter chip; multiple chips use clear_all.' FROM resolved
+    WHERE NOT EXISTS (SELECT 1 FROM public.system_lang_keys k WHERE k.lang_key = resolved.lang_key
+        AND NULLIF(btrim(k.fi), '') IS NOT NULL AND NULLIF(btrim(k.en), '') IS NOT NULL)
+    ON CONFLICT (lang_key) DO UPDATE
+    SET fi = CASE WHEN NULLIF(btrim(existing.fi), '') IS NULL THEN EXCLUDED.fi ELSE existing.fi END,
+        en = CASE WHEN NULLIF(btrim(existing.en), '') IS NULL THEN EXCLUDED.en ELSE existing.en END
+    WHERE NULLIF(btrim(existing.fi), '') IS NULL OR NULLIF(btrim(existing.en), '') IS NULL
+    RETURNING id, lang_key, fi, en
+), served AS (
+    SELECT * FROM written UNION ALL
+    SELECT k.id, k.lang_key, k.fi, k.en FROM public.system_lang_keys k JOIN authored_keys USING (lang_key)
+    WHERE k.id NOT IN (SELECT id FROM written)
+)
+INSERT INTO public.system_lang_key_translations AS existing
+    (lang_key_id, language_code, translation, source_kind, review_status)
+SELECT s.id, translated.language_code, translated.translation, 'manual', 'approved'
+FROM served s
+CROSS JOIN LATERAL (VALUES ('fi', s.fi), ('en', s.en)) AS translated(language_code, translation)
+JOIN public.system_languages language ON language.language_code = translated.language_code
+ON CONFLICT (lang_key_id, language_code) DO UPDATE
+SET translation = EXCLUDED.translation, source_kind = EXCLUDED.source_kind, review_status = EXCLUDED.review_status
+WHERE NULLIF(btrim(existing.translation), '') IS NULL;
+
+-- Register the new key's exact frontend context; existing display sources stay intact.
+INSERT INTO public.system_lang_key_sources
+    (lang_key_id, source_type, source_high, source_low, usage_explanation, last_seen)
+SELECT id, 'code', 'frontend/core_components/filterbar/filter_list/active_filter_tag_printer.js',
+    '', 'Remove the one selected filter or search chip; multiple selections use clear_all.', CURRENT_DATE
+FROM public.system_lang_keys WHERE lang_key = 'clear'
+ON CONFLICT (lang_key_id, source_type, source_high) DO NOTHING;
+
+INSERT INTO public.system_data_repair_records (migration, action, detail)
+SELECT 'wo46_filterbar_display_and_clear', 'completed', '{"file":"20261015000021_seed_filterbar_display_and_clear_language_keys.sql"}'::jsonb
+WHERE NOT EXISTS (SELECT 1 FROM public.system_data_repair_records
+    WHERE migration = 'wo46_filterbar_display_and_clear' AND action = 'completed');
 -- Schema above is imported before registry seeds. This copy follows the
 -- language seeds; upgrades run the complete migration in one transaction.
 WITH authored(lang_key,fi,en,ch,yue) AS (VALUES
@@ -9574,7 +9652,7 @@ DECLARE
     findings text;
 BEGIN
     SELECT string_agg(marker, ', ' ORDER BY marker) INTO missing_markers
-      FROM unnest(ARRAY['wl58_row_actor_support', 'wl58_row_actor_marks_by_table_uid', 'wl58_row_actor_trigger_definitions', 'k116_login_names', 'password_reset_dummy_work', 'system_favorites_table', 'system_front_page_revisions_table', 'system_front_page_blocks_table', 'wl103_row_group_classifications', 'wl132_surviving_sign_in', 'wl52_drop_column_label_value_layout', 'system_dataset_appearance_table', 'wl157_migration_execution_evidence', 'dataset_card_appearance_cutover', 'wl157_application_update_admission', 'dataset_appearance_three_place_schema', 'wl164_publication_fields', 'wl163_dataset_kind_contracts', 'wl159_dataset_namespace', 'wl167_database_identity_schema', 'wl167_managed_timestamp_zones', 'article_bundle_storage', 'article_bundle_mutations', 'wl77_filterbar_preferences', 'wo41_first_run_readonly', 'row_group_heading_order_appearance_field', 'wl157_application_update_refusal_keys', 'wl58_row_actor_columns', 'system_favorites_registry', 'system_front_page_blocks_registry', 'wl103_row_group_classifications_registry', 'wl144_registry_reference_key', 'dataset_media_hidden', 'wl157_application_update_capability', 'dataset_appearance_three_place_backfill', 'wl164_publication_column_metadata', 't919_registered_column_metadata', 't750_automatic_log_retention', 'record_title_headers_962', 'translation_object_sources_sec2', 'wl69_card_image_usage_storage', 'article_bundle_materialization']::text[]) AS marker
+      FROM unnest(ARRAY['wl58_row_actor_support', 'wl58_row_actor_marks_by_table_uid', 'wl58_row_actor_trigger_definitions', 'k116_login_names', 'password_reset_dummy_work', 'system_favorites_table', 'system_front_page_revisions_table', 'system_front_page_blocks_table', 'wl103_row_group_classifications', 'wl132_surviving_sign_in', 'wl52_drop_column_label_value_layout', 'system_dataset_appearance_table', 'wl157_migration_execution_evidence', 'dataset_card_appearance_cutover', 'wl157_application_update_admission', 'dataset_appearance_three_place_schema', 'wl164_publication_fields', 'wl163_dataset_kind_contracts', 'wl159_dataset_namespace', 'wl167_database_identity_schema', 'wl167_managed_timestamp_zones', 'article_bundle_storage', 'article_bundle_mutations', 'wl77_filterbar_preferences', 'wo41_first_run_readonly', 'row_group_heading_order_appearance_field', 'wl157_application_update_refusal_keys', 'wo46_filterbar_display_and_clear', 'wl58_row_actor_columns', 'system_favorites_registry', 'system_front_page_blocks_registry', 'wl103_row_group_classifications_registry', 'wl144_registry_reference_key', 'dataset_media_hidden', 'wl157_application_update_capability', 'dataset_appearance_three_place_backfill', 'wl164_publication_column_metadata', 't919_registered_column_metadata', 't750_automatic_log_retention', 'record_title_headers_962', 'translation_object_sources_sec2', 'wl69_card_image_usage_storage', 'article_bundle_materialization']::text[]) AS marker
      WHERE NOT EXISTS (SELECT 1 FROM public.system_data_repair_records AS record
                         WHERE record.migration = marker AND record.action = 'completed');
     IF missing_markers IS NOT NULL THEN
@@ -9821,6 +9899,7 @@ BEGIN
       ('20261015000015_seed_cancel_changes_language_key.sql', '60f0af138d05650ffb879cb7028a76737b4a9fdd853527e1672be3644a1fe9b3', 'bootstrap_baseline', 'bootstrap'),
       ('20261015000016_seed_first_run_setup_code.sql', 'd5573b95644acea6168e73d1c020ddf91268d2ca9ac7b50a08fdd33f602a05d4', 'bootstrap_baseline', 'bootstrap'),
       ('20261015000020_add_row_group_heading_order_appearance_field.sql', '99450690b81c7c60f0d3bd34c11da3c6382bebf460a6c68614d8de0722dec16b', 'bootstrap_baseline', 'bootstrap'),
+      ('20261015000021_seed_filterbar_display_and_clear_language_keys.sql', '42179220565b3b0cc14b0871e9e41d1a9ad5486dbb09584acbd3d1043ee42fc0', 'bootstrap_baseline', 'bootstrap'),
       ('20261015000099_record_database_release_9_12_0.sql', '7681662cc532ce4f113acec7e4e992af1e1ecf32136f8c92e55b255d56556516', 'bootstrap_baseline', 'bootstrap')
     ON CONFLICT (filename) DO NOTHING;
     INSERT INTO public.system_db_version (version, description)

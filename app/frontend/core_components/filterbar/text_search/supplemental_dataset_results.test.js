@@ -1,9 +1,17 @@
 // @vitest-environment jsdom
-// Tests localized text-only auxiliary links and approval-aware navigation.
+// supplemental_dataset_results.test.js
+// Tests localized auxiliary links, shared card media and approval-aware navigation.
 // Keeps colliding row IDs scoped to the target dataset and preserves modified clicks.
 import { beforeEach, describe, expect, test, vi } from "vitest";
+import { readFileSync } from 'node:fs';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 const mocks = vi.hoisted(() => ({
     navigate: vi.fn(), selected: vi.fn(), openArticle: vi.fn(), translate: vi.fn((_key, { fallback }) => fallback),
+    avatar: vi.fn(), image: vi.fn(),
+}));
+vi.mock('../../table_views/card_view/card_avatar_builder.js', () => ({
+    create_seeded_avatar: mocks.avatar, createImageElement: mocks.image,
 }));
 vi.mock("../../navigation/main_tabs/main_tab_printer.js", () => ({ openNavTab: mocks.navigate }));
 vi.mock("../../state_stores/dataset_selection_saver.js", () => ({ getSelectedDataset: mocks.selected }));
@@ -36,6 +44,77 @@ beforeEach(() => {
     sessionStorage.setItem('user_permissions', JSON.stringify(['/ui/view/article_view']));
     mocks.navigate.mockResolvedValue({ abort: false });
     mocks.selected.mockReturnValue("other");
+    mocks.avatar.mockResolvedValue(document.createElement('div'));
+    mocks.image.mockImplementation((_src, _large, options) => {
+        const image = document.createElement('img');
+        image.alt = options.rowLabel;
+        image.dataset.langKey = 'picture_of_target';
+        // Like card_avatar_builder.js's shared handler: a missing picture gets a translatable key and context.
+        image.addEventListener('error', () => {
+            image.alt = 'Picture missing';
+            image.dataset.langKey = 'picture_missing';
+            image.dataset.langAltContext = options.rowLabel;
+        });
+        return image;
+    });
+});
+test('reserves equal 76px media and text boxes before the seeded avatar is ready', async () => {
+    let finishAvatar;
+    mocks.avatar.mockImplementation(() => new Promise(resolve => { finishAvatar = resolve; }));
+    const group = mount('other', { includeThumbnails: true });
+    const media = group.element.querySelector('.supplemental-dataset-thumbnail');
+    expect(media.querySelector('.card_small_image')).not.toBeNull();
+    expect(media.querySelector('.card_small_image_inner')).toBeNull();
+    expect(media.getAttribute('aria-hidden')).toBe('true');
+    const css = readFileSync(resolve(dirname(fileURLToPath(import.meta.url)), 'supplemental_dataset_results.css'), 'utf8');
+    expect(css).toMatch(/\.supplemental-dataset-result\s*\{[^}]*align-items: center/s);
+    expect(css).toMatch(/\.supplemental-dataset-thumbnail,\s*\.supplemental-dataset-thumbnail \.card_small_image\s*\{[^}]*width: 76px;[^}]*height: 76px/s);
+    expect(css).toMatch(/\.supplemental-dataset-result-text\s*\{[^}]*justify-content: center;[^}]*height: 76px/s);
+    expect(group.element.querySelector('.supplemental-dataset-result-text > a')).not.toBeNull();
+    await vi.waitFor(() => expect(mocks.avatar).toHaveBeenCalledWith('1_', expect.any(String), false));
+    const avatar = document.createElement('div');
+    finishAvatar(avatar);
+    await vi.waitFor(() => expect(media.querySelector('.card_small_image_inner')).toBe(avatar));
+    expect(group.element.querySelectorAll('li a')).toHaveLength(1);
+    expect(media.querySelector('[tabindex], a, button')).toBeNull();
+});
+
+test('uses authorized card-support cached media with the shared image renderer', async () => {
+    const group = mount('other', { includeThumbnails: true });
+    mocks.avatar.mockClear();
+    group.render([{ ...rows[0], cached_image: './storage/test/300/picture.jpg' }], ['title', 'description'], types);
+    await vi.waitFor(() => expect(mocks.image).toHaveBeenCalledWith('./storage/test/300/picture.jpg', false,
+        expect.objectContaining({ tableName: 'other', renderSlot: 'small_thumbnail', rowLabel: expect.any(String) })));
+    await vi.waitFor(() => expect(group.element.querySelector('.card_small_image_inner')).not.toBeNull());
+    expect(mocks.avatar).not.toHaveBeenCalled();
+    const image = group.element.querySelector('img');
+    expect(image.alt).toBe('');
+    expect(image.dataset.langKey).toBeUndefined();
+    // Gate 254a: without a lang key, the translation observer has nothing to refill alt from.
+    const decorative = () => {
+        expect(image.alt).toBe('');
+        expect(image.dataset.langKey).toBeUndefined();
+        expect(image.dataset.langAltContext).toBeUndefined();
+    };
+    image.dispatchEvent(new Event('error'));
+    decorative();
+    image.dispatchEvent(new Event('error'));
+    decorative();
+    await refreshLocalizedDatasetValues('fi');
+    decorative();
+    await refreshLocalizedDatasetValues('en');
+    decorative();
+});
+
+test('hydrates a retained group while its primary result host is temporarily detached', async () => {
+    const group = createSupplementalDatasetGroup({ dataset: 'other', langKey: 'other' }, 'shared', {
+        includeThumbnails: true,
+    });
+    group.render(rows, ['title', 'description'], types);
+    expect(group.element.isConnected).toBe(false);
+    await vi.waitFor(() => expect(group.element.querySelector('.card_small_image_inner')).not.toBeNull());
+    document.body.append(group.element);
+    expect(group.element.querySelector('.supplemental-dataset-result-text a').textContent).not.toBe('');
 });
 test("refreshes one-language titles and plain descriptions without JSON, markup or script output", async () => {
     const group = mount();

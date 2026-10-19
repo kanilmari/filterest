@@ -63,6 +63,46 @@
   overflow-wrap: anywhere;
 }
 
+/* Reserve the complete media/text row before either image or avatar resolves. */
+.supplemental-dataset-result {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.supplemental-dataset-thumbnail,
+.supplemental-dataset-thumbnail .card_small_image {
+  flex: 0 0 76px;
+  width: 76px;
+  height: 76px;
+}
+
+/* The shared card builder sizes media inline; this slot owns its 76px geometry. */
+.supplemental-dataset-thumbnail .card_small_image_inner {
+  width: 76px !important;
+  height: 76px !important;
+  max-width: 76px;
+  max-height: 76px;
+}
+
+.supplemental-dataset-result-text {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  height: 76px;
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+}
+
+.supplemental-dataset-result-text > a {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 1;
+  overflow: hidden;
+  line-height: 1.4;
+}
+
 .supplemental-dataset-group p {
   margin: 0.25rem 0 0;
   color: var(--empty_field_text_color);

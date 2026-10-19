@@ -502,6 +502,7 @@ describe('create_filter_bar inline hero mounting', () => {
         expect(section.children[0]).toBe(sortRow);
         expect(section.children[1]).toBe(filterActions);
         expect(section.previousElementSibling.classList).toContain('dataset-search-panel');
+        expect(section.querySelector('.dataset-search-panel, .dataset-search-input')).toBeNull();
         expect(sortRow?.contains(sortDropdown)).toBe(true);
         expect(sortRow?.contains(filtersButton)).toBe(false);
         expect(filterActions?.children).toHaveLength(2);

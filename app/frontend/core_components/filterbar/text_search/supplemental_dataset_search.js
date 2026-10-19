@@ -78,8 +78,8 @@ export function createSupplementalDatasetSearch(tableName, query, { isCurrent, g
             await schedule(async () => {
                 if (!current()) return;
                 for await (const packet of readDatasetSearchResponse(entry.tab.dataset, query, {
-                    // Compact text results use the existing table field projection.
-                    view: "table",
+                    // Keep the table projection; enrich only its already-authorized rows with media.
+                    view: "table", includeCardSupport: true,
                     appearanceToken, signal: controller.signal, suppressAuthRedirect: true, suppressErrorToast: true,
                 }, current)) {
                     if (!current()) return;
@@ -118,7 +118,7 @@ export function createSupplementalDatasetSearch(tableName, query, { isCurrent, g
         snapshot = tabs;
         groups.replaceChildren();
         entries = tabs.filter(tab => tab.dataset !== tableName).map(tab => {
-            const group = createSupplementalDatasetGroup(tab, query);
+            const group = createSupplementalDatasetGroup(tab, query, { includeThumbnails: true });
             groups.append(group.element);
             return { tab, group, rows: [], ids: new Set(), columns: [], types: {}, complete: false, controller: null,
                 appearanceToken: datasetAppearanceState.capture(tab.dataset) };
