@@ -70,7 +70,7 @@ func respondViewFieldSetLookupError(w http.ResponseWriter, err error) {
 	httpresponse.RespondWithError(w, http.StatusInternalServerError, "dataset/view lookup failed")
 }
 
-func normalizeVisibleColumnNames(columns []string) ([]string, error) {
+func normalizeVisibleColumnNames(columns []string, allowEmpty ...bool) ([]string, error) {
 	seen := make(map[string]bool, len(columns))
 	result := make([]string, 0, len(columns))
 	for _, raw := range columns {
@@ -83,7 +83,7 @@ func normalizeVisibleColumnNames(columns []string) ([]string, error) {
 			result = append(result, column)
 		}
 	}
-	if len(result) == 0 {
+	if len(result) == 0 && !(len(allowEmpty) > 0 && allowEmpty[0]) {
 		return nil, fmt.Errorf("at least one visible column is required")
 	}
 	return result, nil

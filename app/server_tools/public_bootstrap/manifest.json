@@ -209,6 +209,9 @@
     "20261015000007_seed_client_error_notice_language_key.sql",
     "20261015000008_seed_table_cell_max_lines.sql",
     "20261015000009_add_card_image_usage_presentation.sql",
+    "20261015000010_add_article_bundle_storage.sql",
+    "20261015000011_add_article_bundle_mutations.sql",
+    "20261015000012_materialize_article_bundles.sql",
     "20261015000013_add_filterbar_preferences.sql",
     "20261015000014_seed_redirect_notice_language_keys.sql",
     "20261015000015_seed_cancel_changes_language_key.sql",
@@ -330,6 +333,8 @@
     "public.riskienhallinta_tiketit_relation",
     "public.system_about",
     "public.system_column_details",
+    "public.system_column_field_set_members",
+    "public.system_column_field_sets",
     "public.system_config",
     "public.system_data_repair_records",
     "public.system_dataset_appearance",
@@ -370,9 +375,11 @@
     "public.riskienhallinta_dokumentaatio_relation": 1,
     "public.riskienhallinta_tiketit_relation": 1,
     "public.system_about": 1,
-    "public.system_column_details": 45,
+    "public.system_column_details": 47,
+    "public.system_column_field_set_members": 1,
+    "public.system_column_field_sets": 0,
     "public.system_config": 20,
-    "public.system_data_repair_records": 1,
+    "public.system_data_repair_records": 4,
     "public.system_dataset_appearance": 0,
     "public.system_db_tables": 73,
     "public.system_db_version": 1,
@@ -380,27 +387,27 @@
     "public.system_functions": 50,
     "public.system_group_table_func_rights": 24,
     "public.system_lang_key_sources": 32,
-    "public.system_lang_key_translations": 171,
-    "public.system_lang_keys": 1518,
+    "public.system_lang_key_translations": 176,
+    "public.system_lang_keys": 1520,
     "public.system_languages": 5,
     "public.system_permission_actions": 7,
     "public.system_permission_categories": 4,
-    "public.system_schema_migrations": 208,
+    "public.system_schema_migrations": 211,
     "public.system_table_folders": 14,
     "public.system_table_views": 13,
     "public.system_user_group_memberships": 2,
     "public.system_user_groups": 3,
     "public.system_users": 2,
-    "public.system_view_field_set_assignments": 0,
+    "public.system_view_field_set_assignments": 1,
     "public.tiketit": 1,
     "public.tiketit_assets": 1
   },
   "generated_files": {
     "server_tools/public_bootstrap/schema.sql": {
-      "sha256": "348bc7cdc5f55e8ff2ae54bf58578f85f1ab2edf82db8f07218a4eea46e32c13"
+      "sha256": "97eca2e17d8e4821767486f9e4232fb20734056f6fc86806d0d1942ad5451503"
     },
     "server_tools/public_bootstrap/seed_data.sql": {
-      "sha256": "8f3bb211d11a9437cbed4d80b8c41d8b9d0a2d230811f9af48f5be0bfeecae85"
+      "sha256": "3c5f96842646aa8067a6ae529f8dcf7b3e93ad28a8dff18290b537d0bf74c479"
     }
   },
   "source_files": {
@@ -417,7 +424,7 @@
       "sha256": "235e4b887181e150bd436d035d2d268eb821d9e5d0b830b54eb444988f31d5d1"
     },
     "filterest/app/server_tools/public_bootstrap/generate_bootstrap.py": {
-      "sha256": "dc0c2933137111a095b54c8d5219f77fdadc60911528f19eeb86c696fdcbac3c"
+      "sha256": "8fcad69f4fd777882d547653ecad23990b4a5494901827be2bcc9e0f62ac0430"
     },
     "filterest/app/server_tools/public_bootstrap/sql_identifier_validator.py": {
       "sha256": "748245fac4328a3608740c1b0fe948e6a09d6489d587143bd3b4c67064bea732"
@@ -429,7 +436,7 @@
       "sha256": "248d536fd4fb5021fd778dd1703afbf12a8de263d3af7c4fcd72cf714630a95f"
     },
     "filterest/app/server_tools/public_slice_export/public_bootstrap_table_allowlists.py": {
-      "sha256": "e7288de46bd371001613aeda27d39660455682f4a9962b18991a33b2a0c241fc"
+      "sha256": "0a2f616c54acbbb2696880f3dae6573f2350f11079299f14898bd3cd9400f118"
     },
     "filterest/app/server_tools/public_slice_export/public_bootstrap_policy.py": {
       "sha256": "79a416bb6d32d70b66f54cba180095fbe14cdd41efdde3f706d0f8891657d014"
@@ -1099,6 +1106,15 @@
     },
     "filterest/app/server_tools/migrations/20261015000009_add_card_image_usage_presentation.sql": {
       "sha256": "24bce4ab54d1ac303c687df8a9288b8197f9e137a3a470d37448dde3011dd294"
+    },
+    "filterest/app/server_tools/migrations/20261015000010_add_article_bundle_storage.sql": {
+      "sha256": "5cb71fa4fdcf8a5738fdb58d85e6340f7437d36a3c5a8974786b20c5f3dd78be"
+    },
+    "filterest/app/server_tools/migrations/20261015000011_add_article_bundle_mutations.sql": {
+      "sha256": "3a1147b5faa445ec189a4b111bac32b89a888389a6a9a7e86ad62544ab62e88e"
+    },
+    "filterest/app/server_tools/migrations/20261015000012_materialize_article_bundles.sql": {
+      "sha256": "2424a29532141bd2f1992a054f22ebda94c08f14db402cee074a2acd31785573"
     },
     "filterest/app/server_tools/migrations/20261015000013_add_filterbar_preferences.sql": {
       "sha256": "80877423924e2dfdb6c52ca37c81c7f25d9d7bb3ab356058770ca1d96ee24436"

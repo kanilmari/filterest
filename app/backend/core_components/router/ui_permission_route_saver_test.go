@@ -21,6 +21,8 @@ import (
 	"sync"
 	"sync/atomic"
 	"testing"
+
+	articlecontract "easelect/frontend/shared/article_presentations"
 )
 
 type uiPermissionRouteExecCall struct {
@@ -150,7 +152,7 @@ func (tx *uiPermissionRouteTestTx) Rollback() error {
 }
 
 func TestCanonicalUIPermissionRoutesAreUniqueAndComplete(t *testing.T) {
-	if got, want := len(canonicalUIPermissionRoutes), 41; got != want {
+	if got, want := len(canonicalUIPermissionRoutes), 43; got != want {
 		t.Fatalf("canonical UI route count = %d, want %d", got, want)
 	}
 
@@ -181,6 +183,20 @@ func TestCanonicalUIPermissionRoutesAreUniqueAndComplete(t *testing.T) {
 	}
 
 	frontendEndpoints := collectFrontendUIPermissionLiterals(t)
+	// Storage registers future independent rights before their opener UI ships.
+	// These identities are already owned by the shared browser/server contract.
+	frontendSet := map[string]bool{}
+	for _, endpoint := range frontendEndpoints {
+		frontendSet[endpoint] = true
+	}
+	for _, presentation := range articlecontract.Read().Presentations {
+		frontendSet[presentation.PermissionRoute] = true
+	}
+	frontendEndpoints = frontendEndpoints[:0]
+	for endpoint := range frontendSet {
+		frontendEndpoints = append(frontendEndpoints, endpoint)
+	}
+	sort.Strings(frontendEndpoints)
 	canonicalEndpoints := make([]string, 0, len(endpoints))
 	for endpoint := range endpoints {
 		canonicalEndpoints = append(canonicalEndpoints, endpoint)

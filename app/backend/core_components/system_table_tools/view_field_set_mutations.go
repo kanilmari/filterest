@@ -6,7 +6,6 @@ package system_table_tools
 
 import (
 	"context"
-	"database/sql"
 	"encoding/json"
 	"net/http"
 	"strings"
@@ -25,7 +24,13 @@ func scheduleViewFieldSetCacheInvalidation(
 	viewKey string,
 ) {
 	hook := func() {
-		dtt_1_row_read.InvalidateUserColumnSettingsCache(dataset, viewKey)
+		if isArticleBundleView(viewKey) {
+			for _, key := range []string{"article_view", "image_first_view", "image_first_page_view"} {
+				dtt_1_row_read.InvalidateUserColumnSettingsCache(dataset, key)
+			}
+		} else {
+			dtt_1_row_read.InvalidateUserColumnSettingsCache(dataset, viewKey)
+		}
 	}
 	if !dbutils.RegisterAfterCommitHook(ctx, hook) {
 		hook()
@@ -97,13 +102,14 @@ func saveViewFieldSet(w http.ResponseWriter, r *http.Request, siteDefault bool) 
 		request.GroupVariants, err = normalizeViewFieldSetGroupVariants(
 			request.GroupVariants,
 			request.TargetGroupIDs,
+			isArticleBundleView(viewKey),
 		)
 		if err != nil {
 			httpresponse.RespondWithError(w, http.StatusBadRequest, err.Error())
 			return
 		}
 	} else {
-		request.VisibleColumns, err = normalizeVisibleColumnNames(request.VisibleColumns)
+		request.VisibleColumns, err = normalizeVisibleColumnNames(request.VisibleColumns, isArticleBundleView(viewKey))
 		if err != nil {
 			httpresponse.RespondWithError(w, http.StatusBadRequest, err.Error())
 			return
@@ -186,6 +192,10 @@ func saveViewFieldSet(w http.ResponseWriter, r *http.Request, siteDefault bool) 
 	columnUIDs, err := resolveVisibleColumnUIDs(tx, tableUID, request.VisibleColumns)
 	if err != nil {
 		httpresponse.RespondWithError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	if isArticleBundleView(viewKey) {
+		respondArticleProjectionSave(w, r, tx, tableUID, viewID, viewKey, dataset, int64(userID), siteDefault, request, columnUIDs)
 		return
 	}
 
@@ -385,6 +395,28 @@ func assignViewFieldSet(w http.ResponseWriter, r *http.Request, siteDefault bool
 		httpresponse.RespondWithError(w, http.StatusForbidden, "field collection is not assignable")
 		return
 	}
+	if isArticleBundleView(viewKey) {
+		columns, sourceErr := viewFieldSetMemberNames(tx, request.FieldSetID, viewKey)
+		permitted, permissionErr := selectableViewFieldSetColumns(userID, dataset)
+		if sourceErr != nil || permissionErr != nil {
+			httpresponse.RespondWithError(w, http.StatusInternalServerError, "article source permissions unavailable")
+			return
+		}
+		for _, column := range columns {
+			if !permitted[column] {
+				httpresponse.RespondWithError(w, http.StatusForbidden, "article source field is not permitted")
+				return
+			}
+		}
+		_, scope, saveErr := saveArticleProjectionTargets(tx, tableUID, viewKey, int64(userID), siteDefault, request.TargetGroupIDs, request.GroupPriority, nil, "Article selection", request.FieldSetID)
+		if saveErr != nil {
+			httpresponse.RespondWithError(w, http.StatusConflict, "article collection assignment failed")
+			return
+		}
+		scheduleViewFieldSetCacheInvalidation(r.Context(), dataset, viewKey)
+		httpresponse.RespondWithJSON(w, http.StatusOK, map[string]interface{}{"status": "ok", "scope": scope, "target_group_ids": request.TargetGroupIDs})
+		return
+	}
 	assignmentScope, err := saveViewFieldSetAssignments(
 		tx,
 		int64(userID),
@@ -439,7 +471,12 @@ func ResetPersonalViewFieldSetHandler(w http.ResponseWriter, r *http.Request) {
 		respondViewFieldSetAuthorizationError(w, err)
 		return
 	}
-	if _, err := tx.Exec(`
+	if isArticleBundleView(viewKey) {
+		if err := resetArticleTarget(tx, tableUID, int64(userID), nil); err != nil {
+			httpresponse.RespondWithError(w, http.StatusConflict, "personal article selection reset failed")
+			return
+		}
+	} else if _, err := tx.Exec(`
 		DELETE FROM public.system_view_field_set_assignments
 		WHERE user_id = $1 AND table_uid = $2 AND view_id = $3`, userID, tableUID, viewID); err != nil {
 		httpresponse.RespondWithError(w, http.StatusInternalServerError, "personal field selection reset failed")
@@ -504,6 +541,24 @@ func ResetSharedViewFieldSetHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	removedAssignments := int64(0)
+	if isArticleBundleView(viewKey) {
+		if request.TargetScope == "site" {
+			if err := restoreArticleSiteProjection(tx, tableUID, viewKey, int64(userID)); err != nil {
+				httpresponse.RespondWithError(w, http.StatusConflict, "article site defaults reset failed")
+				return
+			}
+		} else {
+			for _, group := range request.TargetGroupIDs {
+				if err := resetArticleTarget(tx, tableUID, nil, group); err != nil {
+					httpresponse.RespondWithError(w, http.StatusConflict, "group article selection reset failed")
+					return
+				}
+			}
+		}
+		scheduleViewFieldSetCacheInvalidation(r.Context(), dataset, viewKey)
+		httpresponse.RespondWithJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+		return
+	}
 	if request.TargetScope == "site" {
 		result, deleteErr := tx.Exec(`
 			DELETE FROM public.system_view_field_set_assignments
@@ -563,17 +618,28 @@ func deleteViewFieldSet(w http.ResponseWriter, r *http.Request, shared bool) {
 		httpresponse.RespondWithError(w, http.StatusInternalServerError, "transaction unavailable")
 		return
 	}
-	var result sql.Result
-	if shared {
-		result, err = tx.Exec(`DELETE FROM public.system_column_field_sets WHERE id = $1 AND owner_user_id IS NULL`, request.FieldSetID)
-	} else {
-		result, err = tx.Exec(`DELETE FROM public.system_column_field_sets WHERE id = $1 AND owner_user_id = $2`, request.FieldSetID, userID)
+	var activeSite bool
+	if err := tx.QueryRow(`SELECT EXISTS(SELECT 1 FROM public.system_column_field_sets s
+	 JOIN public.system_view_field_set_assignments a ON a.field_set_id=s.id
+	 WHERE s.id=$1 AND COALESCE((to_jsonb(s)->>'article_family')::boolean,false)
+	 AND a.user_id IS NULL AND a.group_id IS NULL)`, request.FieldSetID).Scan(&activeSite); err != nil {
+		httpresponse.RespondWithError(w, http.StatusInternalServerError, "article collection validation failed")
+		return
 	}
+	if activeSite {
+		httpresponse.RespondWithError(w, http.StatusConflict, "active article site bundle requires explicit defaults")
+		return
+	}
+	var owner interface{}
+	if !shared {
+		owner = userID
+	}
+	var deleted int64
+	err = tx.QueryRow(`SELECT public.app_delete_article_collection($1,$2)`, request.FieldSetID, owner).Scan(&deleted)
 	if err != nil {
 		httpresponse.RespondWithError(w, http.StatusInternalServerError, "field collection delete failed")
 		return
 	}
-	deleted, _ := result.RowsAffected()
 	if deleted == 0 {
 		httpresponse.RespondWithError(w, http.StatusNotFound, "field collection not found")
 		return

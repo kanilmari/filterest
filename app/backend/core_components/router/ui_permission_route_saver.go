@@ -25,6 +25,9 @@ var canonicalUIPermissionRoutes = [...]uiPermissionRouteDefinition{
 	{Name: "ui.table_view_style_buttons", URLRouteEndpoint: "/ui/table-view-style-buttons", SpecificTableRelated: true},
 
 	{Name: "ui.view.article_view", URLRouteEndpoint: "/ui/view/article_view", SpecificTableRelated: false},
+	// Audiences belong to the marked K376 upgrade, never startup reader defaults.
+	{Name: "ui.view.image_first_view", URLRouteEndpoint: "/ui/view/image_first_view", SpecificTableRelated: false},
+	{Name: "ui.view.image_first_page_view", URLRouteEndpoint: "/ui/view/image_first_page_view", SpecificTableRelated: false},
 	{Name: "ui.view.card", URLRouteEndpoint: "/ui/view/card", SpecificTableRelated: false},
 	{Name: "ui.view.table", URLRouteEndpoint: "/ui/view/table", SpecificTableRelated: false},
 	{Name: "ui.view.list", URLRouteEndpoint: "/ui/view/list", SpecificTableRelated: false},

@@ -201,7 +201,7 @@ func TestArticleSectionDefaultsAuthorizationAndPersistencePostgres(t *testing.T)
 		t.Fatal("rollback reset persisted")
 	}
 	reset := save("classic", `"reset_to_defaults":true`, true)
-	if len(reset.Overrides) != 0 || !reset.InitialOpen["details"] {
+	if len(reset.Overrides) != 5 || !reset.InitialOpen["details"] {
 		t.Fatalf("reset %#v", reset)
 	}
 	if get("fixture", "image_first", 1, http.StatusOK).InitialOpen["details"] {
@@ -277,7 +277,9 @@ func TestArticleSectionDefaultsConcurrentPatchesPostgres(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !reflect.DeepEqual(stored["classic"], map[string]bool{"details": false, "images": false}) {
+	// Batch 168 stores canonical article_view with all five sections explicit (K386); both patches must survive.
+	want := map[string]bool{"attachments": true, "details": false, "images": false, "related_rows": true, "task_progress": true}
+	if !reflect.DeepEqual(stored["article_view"], want) {
 		t.Fatalf("lost concurrent patch: %#v", stored)
 	}
 }

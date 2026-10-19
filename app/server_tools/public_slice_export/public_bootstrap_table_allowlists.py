@@ -102,6 +102,9 @@ ALLOWED_SCHEMA_TABLES = {
 }
 
 ALLOWED_SEED_TABLES = {
+    # K376 materializes synthetic dataset article settings after registry seeds.
+    "public.system_column_field_sets",
+    "public.system_column_field_set_members",
     "public.system_dataset_namespace_lock",
     "public.system_dataset_appearance",  # Complete tab values backfilled after registry seeds.
     # WL58 data migrations write identifier-only repair history and completion marks.

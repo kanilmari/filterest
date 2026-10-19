@@ -132,23 +132,33 @@ func fetchUserColumnSettingsOrDefaults(userID int, tableName, viewKey string, db
 		return nil, assignmentErr
 	}
 	if assignmentErr == nil {
-		return fetchAssignedFieldSetColumnSettings(assignedFieldSetID, db)
+		return fetchAssignedFieldSetColumnSettings(assignedFieldSetID, db, viewKey)
 	}
 	return fetchMetadataColumnSettings(tableUID, tableName, viewKey, db)
 }
 
 // These readers also supply the read-only compatibility baseline; they bypass
 // request caches and never use installation-global database handles.
-func fetchAssignedFieldSetColumnSettings(assignedFieldSetID int64, db dbutils.Querier) ([]UserColumnSetting, error) {
+func fetchAssignedFieldSetColumnSettings(assignedFieldSetID int64, db dbutils.Querier, projection ...string) ([]UserColumnSetting, error) {
+	viewKey := "article_view"
+	if len(projection) > 0 {
+		viewKey = projection[0]
+	}
+	// Row-to-JSON also lets the read-only baseline inspect a pre-upgrade schema.
+	// A bundle's NULL width becomes automatic (zero on the legacy wire), never
+	// another presentation's width. Legacy collections retain their old width.
 	rows, queryErr := db.Query(`
 		SELECT details.column_name, members.sort_order,
-		       COALESCE(members.column_width_px, 0), false
+		       COALESCE(CASE WHEN jsonb_typeof(to_jsonb(members)->'presentation_values')='object'
+		         THEN (to_jsonb(members)->'presentation_values'->$2->>'width_px')::integer
+		         ELSE members.column_width_px END, 0), false
 		FROM public.system_column_field_set_members AS members
 		JOIN public.system_column_details AS details ON details.column_uid = members.column_uid
 		WHERE members.field_set_id = $1
+		  AND COALESCE((to_jsonb(members)->'presentation_values'->$2->>'visible')::boolean,true)
 		  AND COALESCE(details.hide_everywhere, false) = false
 		  AND COALESCE(details.client_delivery_mode, 'include') = 'include'
-		ORDER BY members.sort_order`, assignedFieldSetID)
+		ORDER BY members.sort_order`, assignedFieldSetID, viewKey)
 	if queryErr != nil {
 		return nil, queryErr
 	}

@@ -32,27 +32,30 @@ current open/closed state. A newly opened article starts from the saved defaults
 The administrator's unsaved drafts are kept separately for each dataset and
 presentation while that editor remains mounted. Language changes preserve the
 draft. Save sends only changed section booleans, then verifies the exact API
-readback before showing success. Restore removes only the selected
-presentation's overrides, so its blocks again default to open. The other
+readback before showing success. Restore writes explicit open values for the selected
+presentation. The other
 presentation, dataset, field assignments and user groups are unchanged.
 
 The canonical storage is
-`system_db_tables.article_section_initial_open`, a JSON object with optional
-`classic` and `image_first` objects. Only the supported section keys and boolean
-values are accepted. The supported API is:
+`system_db_tables.article_section_initial_open`, a JSON object containing
+`article_view`, `image_first_view` and `image_first_page_view`. All five Article
+booleans and each image-first presentation's `details` boolean are explicit.
+The old `classic` and `image_first` names are request compatibility aliases;
+responses retain the requested presentation identity. The supported API is:
 
 - `GET /api/view-field-settings/article-section-defaults?dataset=<name>&presentation_key=classic|image_first`
 - `POST /api/admin/view-field-settings/article-section-defaults`, containing
-  `dataset`, `presentation_key`, and either a nonempty `initial_open` boolean
+`dataset`, `presentation_key` (canonical key or compatibility alias), and either a nonempty `initial_open` boolean
   patch or `reset_to_defaults: true`.
 
 Reads require permission to read the dataset. Mutations require administrator
 access and the normal CSRF protection. Each patch/reset is transactional and
 preserves other presentation keys. The response separates raw `overrides` from
-effective `initial_open` values; absence is resolved as open on the server.
+effective `initial_open` values. The compatibility reader resolves old absent
+values as open; every write stores the complete canonical object.
 
 
-## Shared article-presentation contract (next-version groundwork)
+## Shared article-presentation contract and storage (database 9.12.0)
 
 The source-owned [article contract](../../frontend/shared/article_presentations/contract.json)
 uses the existing shared-JSON pattern: the browser imports it through
@@ -62,13 +65,14 @@ keys and support, and permission routes. Browser and server drift tests retain
 existing constants and check them against this source.
 
 Canonical presentation keys are `article_view`, `image_first_view`, and the
-reserved `image_first_page_view`. The reserved key is vocabulary only: this
-batch adds no registration, selector, renderer, grant or API behavior for it.
+`image_first_page_view`. The storage batch registers all three database view
+identities and independent image-first permission routes. Page-sized rendering,
+the combined editor and opener activation remain later batches; the browser
+contract's reserved flag and current permission routes still describe that boundary.
 `permission_route` records the approved independent route for each key;
 `current_permission_route` explicitly preserves IFAV's existing Article gate.
-The browser still reads and the server still accepts the legacy block objects
-`classic` and `image_first`; `legacy_section_key` records that compatibility
-boundary. Block support and absent-means-open semantics are unchanged.
+The browser still requests `classic` and `image_first`; `legacy_section_key`
+records that compatibility boundary. Stored block keys are canonical.
 
 The role catalogue describes the later central opener policy. Ordinary image
 roles default to IFAV; body/title/summary, Home and field links default to
@@ -76,9 +80,118 @@ Article. Product and free-layout media have distinct roles defaulting to
 Article to preserve their current behavior. Merely reading this contract
 neither emits role attributes nor activates a resolver or a new opener.
 
-This groundwork belongs to the next article-presentation version (K387, e.g.
-application 9.5.0 / database 9.12.0), separately from the current-fix release.
-It changes neither version files nor database structure.
+Each active dataset/target has one collection (`system_column_field_sets.article_family`)
+and exactly three assignment links with identical group priority. A bundle cannot
+serve another target or listing view. Legacy collections remain intact; active
+settings are cloned. Members have one order and a `presentation_values` object:
+each canonical key contains `visible: boolean` and `width_px: integer|null`.
+Widths are independent; null means automatic, with no inheritance path. Empty
+projections are supported. Foreign keys remove deleted fields; new deliverable
+fields are visible at the site and unchecked in personal/group bundles. Restricting
+a field's delivery clears its visibility while retaining order and widths.
+
+The dataset registry row, identified by stable table UID, owns the complete
+`article_opener_policy` role map. Defaults match the shared contract, including
+Article for product/free-layout images. This batch stores the policy without
+changing opener behavior. Dataset creation initializes explicit site bundles,
+sections and policy; it creates no personal/group targets or audience grants.
+
+The shared SQL mutation service locks the dataset, updates only the requested
+projection and writes all three links. Legacy collection selection copies that
+projection into the target's bundle and preserves sibling values. Database guards
+refuse direct changes to article collections, members, assignments and opener policy,
+including otherwise valid values. The service has function-local mutation scope;
+reset, collection deletion and opener-policy saves use the same boundary. Initial
+materialization and lifecycle cascades remain permitted. Deferred checks reject
+incomplete links, incompatible families, cross-target reuse, forbidden visible
+fields and incomplete sections. The scope grants no additional table privileges.
+All three projection caches are invalidated after successful endpoint commits.
+Named saves retain a separate collection for each name; new names clone the current
+sibling values before changing the requested projection. Detached saved collections
+remain available. Selecting a collection copies into a working bundle rather than
+rewriting the previously active named choice. Reset removes personal/group links
+and retains saved choices; site Restore writes metadata defaults into the existing
+explicit site bundle. It preserves sibling values and widths.
+The runtime and portable-restore SQL-path reviews pin all twenty helper bodies,
+their catalogue settings, the six owner-run function identities and each trigger's
+exact protected-table attachment. Trigger functions have owner-only execution;
+the publicly callable owner-run helper only locks a registry row. Limited preference
+writers receive neither registry UPDATE nor repair-history SELECT through this feature.
+Portable dumps omit execution grants; restore reapplies owner-only execution to
+exact reviewed article triggers before verifying their complete helper closure and
+attachments. Unreviewed functions still refuse restoration. The bootstrap generator
+drains only `public.article_bundle_invariant` events before each release data
+migration's DDL, then restores deferral for atomic bundle writes. These boundaries
+belong to the generator, so regeneration retains them without changing released
+migrations or other constraints' modes. Before materialization the completion-marker
+guard skips validation while the boundary clears queued events. Materialization
+asserts the final state before writing its marker; commit checks later queued events.
+The fresh/upgrade proof imports schema and seed in separate complete transactions;
+the package-import proof also runs the shared shell importer through `psql`.
+
+The one-time migration `20261015000012_materialize_article_bundles.sql` locks the
+registry, assignments, members, metadata and audiences in one transaction. It
+copies each exact Article target's ordered UIDs/widths, uses that target's Article
+for missing IFAV, and IFAV for missing Page-sized IFAV. Authored image-first values
+are preserved. Targets without Article use unfiltered-by-reader metadata ordered
+by `co_number NULLS LAST, column_uid`; every dataset receives a site target.
+Compatible authored orders are merged while retaining each projection's relative
+order; cyclic order or differing priorities refuse the whole upgrade. Forbidden
+legacy selections and malformed/conflicting block objects also refuse it.
+
+`classic` becomes `article_view`, with its five absent booleans filled with true;
+`image_first` becomes `image_first_view`, with absent Details true; Page Details
+starts from IFAV. Authored canonical values are retained, and contradictory
+legacy/canonical values are refused. No legacy keys remain after the data step.
+
+Article's actual group grant tuples and nullable scopes on enabled Article-route
+functions (including authored aliases) are copied to IFAV once; disabled source
+functions do not become a new audience. Existing disabled grants remain untouched;
+that initial IFAV audience is copied to Page. Authored grants survive and null-safe
+duplicate checks prevent duplicate global rights. There is no invented users/guests
+grant. Startup has no default reader grant for these routes; its existing
+administrator recovery grants remain an exception. Independent rights activate
+only in the later opener batch; today IFAV still uses the Article gate.
+The grant uniqueness key includes both nullable schema and dataset scopes, so
+copying a distinct scope cannot silently collide with an authored grant.
+The repair record `(migration,action)=('article_bundle_materialization','completed')`
+is written only after order/width, grant and invariant assertions. A completed
+replay performs no copy or grant, including after deliberate revocation. Bootstrap
+runs the identical data file after user/group/view seeds and checks the same marker.
+
+Operational rollback restores the paired pre-upgrade database/application recovery
+snapshot. Keep before/after settings and audience evidence with that backup. After
+new edits prefer a forward repair; deleting explicit values cannot reconstruct old
+fallback behavior. The current bootstrap schema snapshot follows `VERSION_DB`;
+historical snapshots are never rewritten to satisfy a current-schema check.
+
+## Existing field-settings consumers
+
+The current editor remains the separate per-presentation editor. A uniform group
+save returns `field_set_id` for older callers plus `group_variants` with every
+selected group's actual `field_set_id`, priority and ordered fields. Its readback
+checks those exact IDs, fields and priorities, and rejects unintended targets.
+The ordinary GET retains real target identities. Site Restore succeeds when its
+explicit site projection equals the ordered `metadata_visible_columns`; other
+views still require the site assignment to disappear. No assignment is hidden.
+
+Production readers/writers under `app/frontend` (located with recursive `rg -n`
+for the endpoint names and field/assignment response keys; generated `dist/` and
+test files excluded) are:
+
+| Consumer | Expected contract retained |
+| --- | --- |
+| `core_components/admin_tools/view_field_assignments_view.js` | Reads dataset/view, permissions, available columns, groups and site collections; writes uniform/mixed saves and shared resets, then verifies a fresh GET. Uniform saves pass all returned group identities to the existing verifier. |
+| `core_components/admin_tools/view_field_assignments_state.js` | Builds exact-target and mixed payloads; resolves real shared collection IDs; verifies every group's saved ID, priority and ordered fields. Site Restore verifies explicit Article defaults, including empty projections. |
+| `core_components/filterbar/filter_list/column_view_preset_builder.js` | Reads named `field_sets`, active/personal/site IDs, scope, available/effective fields and edit permissions. Saves each name independently; assigns by ID, resets personal preferences, and deletes collections. Save/delete/reset reload GET; assignment applies the chosen fields and refreshes the dataset. Saved choices survive assignment/reset. |
+| `core_components/table_views/price_chart_view/chart_configuration.js` | Reads a shared site collection and ordered axes, then saves by ID/name and checks status. Uses `price_chart`, outside Article handling. |
+| `core_components/endpoints/stable_endpoint_router.js` | Forwards GET and all eight save/assign/reset/delete request/response objects without reshaping them. |
+| `core_components/endpoints/stable_api_inventory.js`, `core_components/pipeline/api_pipeline.js` | Register the same handlers for GET and all eight mutations; neither reads nor rewrites response contents. |
+
+`filterbar_section_order_handler.js` uses `field_sets` only as a toolbar section
+name, not as an API reader. The PostgreSQL consumer proofs serialize actual
+mutation/readback objects into the production JavaScript state functions, while
+Vitest also checks missing IDs, stale fields/priorities, and accidental targets.
 
 ## K388 compatibility before-list
 

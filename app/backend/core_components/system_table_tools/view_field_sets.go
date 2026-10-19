@@ -125,7 +125,7 @@ func GetViewFieldSetsHandler(w http.ResponseWriter, r *http.Request) {
 		respondViewFieldSetAuthorizationError(w, err)
 		return
 	}
-	sets, err := listAccessibleViewFieldSets(backend.Db, tableUID, int64(userID))
+	sets, err := listAccessibleViewFieldSets(backend.Db, tableUID, int64(userID), viewKey)
 	if err != nil {
 		httpresponse.RespondWithError(w, http.StatusInternalServerError, "field collections unavailable")
 		return

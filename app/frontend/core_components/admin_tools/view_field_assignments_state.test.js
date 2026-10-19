@@ -263,4 +263,52 @@ describe("view field assignment state", () => {
             targetScope: "site", targetGroupIDs: [],
         })).toBe(true);
     });
+
+    test("verifies every Article bundle from a uniform two-group save", () => {
+        const payload = {
+            target_scope: "groups", target_group_ids: [2, 9],
+            group_priority: 5, visible_columns: ["summary", "id"],
+        };
+        const variants = [
+            { group_id: 2, field_set_id: 22 },
+            { group_id: 9, field_set_id: 23 },
+        ];
+        const readback = response({
+            view_key: "article_view",
+            field_sets: [
+                { id: 22, scope: "shared", visible_columns: payload.visible_columns },
+                { id: 23, scope: "shared", visible_columns: payload.visible_columns },
+            ],
+            group_assignments: groups.map((group) => group.group_id === 9
+                ? { ...group, field_set_id: 23 } : group),
+        });
+        expect(resolveEditorAssignment(readback, [2, 9]).mixed).toBe(false);
+        expect(savedAssignmentMatches(readback, payload, 22, variants)).toBe(true);
+        expect(savedAssignmentMatches(readback, payload, 22, variants.slice(0, 1))).toBe(false);
+        expect(savedAssignmentMatches({ ...readback, group_assignments: groups }, payload, 22, variants)).toBe(false);
+        expect(savedAssignmentMatches({ ...readback, field_sets: readback.field_sets.map((set) => (
+            set.id === 23 ? { ...set, visible_columns: ["id"] } : set
+        )) }, payload, 22, variants)).toBe(false);
+        expect(savedAssignmentMatches({ ...readback, group_assignments: readback.group_assignments.map((group) => (
+            group.group_id === 9 ? { ...group, group_priority: 6 } : group
+        )) }, payload, 22, variants)).toBe(false);
+        expect(savedAssignmentMatches({ ...readback, group_assignments: [
+            ...readback.group_assignments, { group_id: 7, field_set_id: 23, group_priority: 5 },
+        ] }, payload, 22, variants)).toBe(false);
+    });
+
+    test("accepts restored explicit Article site defaults and rejects stale values", () => {
+        const target = { targetScope: "site", targetGroupIDs: [] };
+        const readback = response({
+            view_key: "article_view", site_default_field_set_id: 20,
+            metadata_visible_columns: ["summary", "id"],
+            field_sets: [{ id: 20, scope: "shared", visible_columns: ["summary", "id"] }],
+        });
+        expect(resetAssignmentMatches(readback, target)).toBe(true);
+        expect(resetAssignmentMatches({ ...readback, metadata_visible_columns: ["id"] }, target)).toBe(false);
+        expect(resetAssignmentMatches({ ...readback, metadata_visible_columns: ["id", "summary"] }, target)).toBe(false);
+        expect(resetAssignmentMatches({ ...readback, field_sets: [] }, target)).toBe(false);
+        expect(resetAssignmentMatches({ ...readback, view_key: "card" }, target)).toBe(false);
+        expect(resetAssignmentMatches({ ...readback, metadata_visible_columns: undefined }, target)).toBe(false);
+    });
 });

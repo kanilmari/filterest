@@ -7,6 +7,23 @@ DO $$
 DECLARE p record; original jsonb; wanted jsonb; actual jsonb; reviewed jsonb;
 BEGIN
     SELECT policy INTO reviewed FROM restore_reviewed_definers;
+    -- Portable dumps omit ACLs, so imported trigger functions acquire PUBLIC
+    -- EXECUTE. Restore owner-only execution for exact reviewed article bodies
+    -- before the full helper/attachment review below. No candidate is accepted
+    -- here: a changed body, helper or attachment still refuses the transaction.
+    FOR p IN SELECT f.oid::regprocedure::text AS identity,r.rolname AS owner_name
+             FROM pg_proc f JOIN pg_namespace n ON n.oid=f.pronamespace
+             JOIN pg_roles r ON r.oid=f.proowner
+             WHERE f.prosecdef AND f.prorettype='trigger'::regtype
+               AND NOT EXISTS(SELECT 1 FROM restore_original_functions original WHERE original.identity=f.oid::regprocedure::text)
+               AND EXISTS(SELECT 1 FROM jsonb_each(reviewed) b
+                 WHERE COALESCE((b.value->>'article_function')::boolean,false)
+                  AND b.key=md5(f.prosrc) AND b.value->>'schema'=n.nspname
+                  AND b.value->>'name'=f.proname AND b.value->>'argument_types'=oidvectortypes(f.proargtypes))
+    LOOP
+        PERFORM pg_temp.restore_acl('FUNCTION',p.identity,jsonb_build_array(jsonb_build_object(
+            'grantor',p.owner_name,'grantee',p.owner_name,'privilege','EXECUTE','grantable',false)),p.owner_name);
+    END LOOP;
     FOR p IN SELECT f.*,n.nspname,l.lanname,f.oid::regprocedure::text AS identity,
                     r.rolname AS owner_name,
                     CASE f.prokind WHEN 'p' THEN 'PROCEDURE' WHEN 'a' THEN 'AGGREGATE' ELSE 'FUNCTION' END AS kind
@@ -50,8 +67,33 @@ BEGIN
    AND helper_language.lanname='sql' AND helper.provolatile='s' AND helper.prorettype='boolean'::regtype AND NOT helper.proretset
    AND helper.proowner=p.proowner AND helper.proconfig=ARRAY['search_path=pg_catalog, public']::text[]
    AND md5(helper.prosrc)='071d19378af50082c673808a48e86525'))
+                   OR (COALESCE((b.value->>'article_function')::boolean,false) AND p.lanname='plpgsql' AND p.provolatile='v'
+ AND p.proconfig=ARRAY['search_path=pg_catalog, public']::text[]
+ AND p.proowner=(SELECT relowner FROM pg_class WHERE oid=to_regclass('public.system_db_tables'))
+ AND jsonb_typeof(b.value->'article_helpers')='array'
+ AND jsonb_array_length(b.value->'article_helpers')=20
+ AND NOT EXISTS(SELECT 1 FROM jsonb_array_elements(b.value->'article_helpers') e WHERE NOT EXISTS(
+   SELECT 1 FROM pg_proc h JOIN pg_namespace ns ON ns.oid=h.pronamespace JOIN pg_language hl ON hl.oid=h.prolang
+   WHERE ns.nspname='public' AND h.proname=e->>'name' AND oidvectortypes(h.proargtypes)=e->>'arguments'
+    AND md5(h.prosrc)=e->>'body_md5' AND h.proowner=p.proowner AND h.prosecdef=(e->>'definer')::boolean
+    AND hl.lanname=e->>'language' AND h.provolatile::text=e->>'volatility'
+    AND h.prorettype::regtype::text=e->>'returns' AND h.proretset=COALESCE((e->>'set')::boolean,false)
+    AND COALESCE(to_jsonb(h.proconfig),'[]')=e->'config'))
+ AND ((p.proname='app_lock_article_dataset_uid' AND oidvectortypes(p.proargtypes)='integer' AND p.prorettype='boolean'::regtype AND NOT p.proretset)
+  OR (p.prorettype='trigger'::regtype AND p.pronargs=0
+   AND NOT EXISTS(SELECT 1 FROM aclexplode(COALESCE(p.proacl,acldefault('f',p.proowner))) acl
+    WHERE acl.grantee<>p.proowner OR acl.privilege_type<>'EXECUTE')
+   AND (SELECT count(*) FROM pg_trigger t WHERE t.tgfoid=p.oid)=jsonb_array_length(b.value->'article_attachments')
+   AND NOT EXISTS(SELECT 1 FROM pg_trigger t JOIN pg_class c ON c.oid=t.tgrelid JOIN pg_namespace ns ON ns.oid=c.relnamespace
+    WHERE t.tgfoid=p.oid AND NOT EXISTS(SELECT 1 FROM jsonb_array_elements(b.value->'article_attachments') a
+     WHERE ns.nspname='public' AND c.relname=a->>'table' AND c.relowner=p.proowner
+      AND t.tgname=a->>'name' AND t.tgtype=(a->>'type')::integer AND NOT t.tgisinternal AND t.tgenabled='O'
+      AND t.tgnargs=0 AND t.tgqual IS NULL AND t.tgdeferrable=(a->>'deferred')::boolean AND t.tginitdeferred=(a->>'deferred')::boolean
+      AND COALESCE((SELECT jsonb_agg(att.attname ORDER BY att.attname) FROM unnest(t.tgattr::smallint[]) col
+       JOIN pg_attribute att ON att.attrelid=t.tgrelid AND att.attnum=col),'[]')=a->'columns')))))
                    OR (NOT COALESCE((b.value->>'legacy_trigger')::boolean,false)
                     AND NOT COALESCE((b.value->>'account_trigger')::boolean,false)
+                    AND NOT COALESCE((b.value->>'article_function')::boolean,false)
                     AND p.lanname='sql' AND p.provolatile IN ('s','i')
                     AND (SELECT array_agg(s) FROM unnest(p.proconfig) s WHERE s LIKE 'search_path=%')=ARRAY[b.value->>'search_path']))
             ) THEN RAISE EXCEPTION 'unmatched SECURITY DEFINER function %',p.identity;

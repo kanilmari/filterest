@@ -88,7 +88,7 @@ Comments list/count/create require the parent dataset's `/api/get-results` grant
 
 **Article view and field settings.** The view grant `/ui/view/article_view` opens both the classic article (from titles, summaries and other record openers) and the image-first article (from ordinary card and article images). Product cards, calendar events and experimental free-layout cards retain their existing classic-article opening behavior. Selecting **User groups** in View field settings assigns fields; it never grants this route. No group receives a view right merely through field selection or dataset reading rights.
 
-The [shared article contract](../../frontend/shared/article_presentations/contract.json) records approved routes and the current IFAV gate; its page key stays reserved.
+The [shared article contract](../../frontend/shared/article_presentations/contract.json) records approved routes and the current IFAV gate; its page key stays reserved. The [storage guide](Article_Section_Defaults.md#shared-article-presentation-contract-and-storage-database-9120) covers the one-time audience copy, revocation-safe replay and administrator recovery exception.
 The [K388 before-list](Article_Section_Defaults.md#k388-compatibility-before-list) preserves current audiences: signed-in browser grants include any target scope;
 anonymous bootstrap requires a tableless grant of the named guests group.
 Raw scopes and nullable disabled flags remain migration evidence; field assignments grant no view rights.

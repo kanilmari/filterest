@@ -489,7 +489,7 @@ export async function generate_view_field_assignments_view(container) {
             );
             const saveVerified = operationAssignment.mixed
                 ? savedGroupVariantsMatch(readback, payload)
-                : savedAssignmentMatches(readback, payload, saveResponse?.field_set_id);
+                : savedAssignmentMatches(readback, payload, saveResponse?.field_set_id, saveResponse?.group_variants);
             if (!saveVerified) {
                 throw new Error(text.readbackError);
             }

@@ -287,6 +287,54 @@ describe("view_field_assignments_view", () => {
         ));
     });
 
+    test("verifies an ordinary Article save with distinct bundles for two selected groups", async () => {
+        sessionStorage.setItem("view_field_settings_admin_session_v1", JSON.stringify({
+            viewKey: "article_view", selectedGroupIDs: ["2", "9"],
+        }));
+        const initial = { ...baseResponse, view_key: "article_view" };
+        const readback = {
+            ...initial,
+            field_sets: [
+                ...initial.field_sets,
+                { id: 30, scope: "shared", visible_columns: ["id"] },
+                { id: 31, scope: "shared", visible_columns: ["id"] },
+            ],
+            group_assignments: initial.group_assignments.map((group) => ({
+                ...group, field_set_id: group.group_id === 2 ? 30 : group.group_id === 9 ? 31 : null,
+            })),
+        };
+        mocks.get.mockResolvedValueOnce(initial).mockResolvedValueOnce(readback);
+        mocks.save.mockResolvedValue({ field_set_id: 30, group_variants: [
+            { group_id: 2, field_set_id: 30, group_priority: 5, visible_columns: ["id"] },
+            { group_id: 9, field_set_id: 31, group_priority: 5, visible_columns: ["id"] },
+        ] });
+        const container = await createLoadedView(initial);
+        container.querySelector('[data-testid="view-field-assignments-save"]').click();
+        await vi.waitFor(() => expect(mocks.success).toHaveBeenCalledWith("Field assignment saved and verified"));
+        expect(mocks.save).toHaveBeenCalledWith(expect.objectContaining({
+            target_scope: "groups", target_group_ids: [2, 9], visible_columns: ["id"],
+        }));
+        expect(mocks.warning).not.toHaveBeenCalled();
+    });
+
+    test("verifies Article Restore with every group selected and an explicit site bundle", async () => {
+        sessionStorage.setItem("view_field_settings_admin_session_v1", JSON.stringify({ viewKey: "article_view" }));
+        const initial = { ...baseResponse, view_key: "article_view" };
+        const readback = {
+            ...initial,
+            field_sets: initial.field_sets.map((set) => set.id === 20
+                ? { ...set, visible_columns: ["id", "title"] } : set),
+        };
+        mocks.get.mockResolvedValueOnce(initial).mockResolvedValueOnce(readback);
+        const container = await createLoadedView(initial);
+        container.querySelector('[data-testid="view-field-assignments-restore"]').click();
+        await vi.waitFor(() => expect(mocks.success).toHaveBeenCalledWith("Inheritance restored and verified"));
+        expect(mocks.reset).toHaveBeenCalledWith({
+            dataset: "orders", view_key: "article_view", target_scope: "site", target_group_ids: [],
+        });
+        expect(mocks.warning).not.toHaveBeenCalled();
+    });
+
     test("keeps save closed when every presentation field is hidden", async () => {
         const container = await createLoadedView();
         mocks.pickerConfigs[0].onChange({ includeValues: ["2"] });

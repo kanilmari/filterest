@@ -281,8 +281,12 @@ func listViewFieldSetGroupAssignments(
 	return assignments, rows.Err()
 }
 
-func listAccessibleViewFieldSets(q dbutils.Querier, tableUID int, userID int64) ([]viewFieldSet, error) {
+func listAccessibleViewFieldSets(q dbutils.Querier, tableUID int, userID int64, projection ...string) ([]viewFieldSet, error) {
 	preferenceOwner := personalViewFieldSetOwner(userID)
+	viewKey := ""
+	if len(projection) > 0 {
+		viewKey = projection[0]
+	}
 	rows, err := q.Query(`
 		SELECT sets.id, sets.name,
 		       CASE WHEN sets.owner_user_id IS NULL THEN 'shared' ELSE 'personal' END,
@@ -291,11 +295,14 @@ func listAccessibleViewFieldSets(q dbutils.Querier, tableUID int, userID int64) 
 		LEFT JOIN public.system_column_field_set_members AS members ON members.field_set_id = sets.id
 		LEFT JOIN public.system_column_details AS details
 		  ON details.column_uid = members.column_uid
+		 AND COALESCE((to_jsonb(members)->'presentation_values'->$3->>'visible')::boolean,true)
 		 AND COALESCE(details.hide_everywhere, false) = false
 		 AND COALESCE(details.client_delivery_mode, 'include') = 'include'
 		WHERE sets.table_uid = $1
 		  AND (sets.owner_user_id = $2 OR sets.owner_user_id IS NULL)
-		ORDER BY (sets.owner_user_id IS NULL), lower(sets.name), members.sort_order`, tableUID, preferenceOwner)
+		  AND ($3='' OR $3=ANY(ARRAY['article_view','image_first_view','image_first_page_view'])
+		    OR NOT COALESCE((to_jsonb(sets)->>'article_family')::boolean,false))
+		ORDER BY (sets.owner_user_id IS NULL), lower(sets.name), members.sort_order`, tableUID, preferenceOwner, viewKey)
 	if err != nil {
 		return nil, err
 	}
@@ -365,7 +372,7 @@ func resolveEffectiveViewFieldSet(q dbutils.Querier, tableUID, viewID int, userI
 		return nil, "", nil, err
 	}
 	if candidate, found := chooseEffectiveViewFieldSetAssignment(candidates); found {
-		columns, memberErr := viewFieldSetMemberNames(q, candidate.FieldSetID)
+		columns, memberErr := viewFieldSetMemberNames(q, candidate.FieldSetID, viewKey)
 		fieldSetID := candidate.FieldSetID
 		return &fieldSetID, viewFieldSetAssignmentScope(candidate), columns, memberErr
 	}
@@ -408,15 +415,16 @@ func metadataVisibleViewFieldColumns(
 	return columns, rows.Err()
 }
 
-func viewFieldSetMemberNames(q dbutils.Querier, fieldSetID int64) ([]string, error) {
+func viewFieldSetMemberNames(q dbutils.Querier, fieldSetID int64, viewKey string) ([]string, error) {
 	rows, err := q.Query(`
 		SELECT details.column_name
 		FROM public.system_column_field_set_members AS members
 		JOIN public.system_column_details AS details ON details.column_uid = members.column_uid
 		WHERE members.field_set_id = $1
+		  AND COALESCE((to_jsonb(members)->'presentation_values'->$2->>'visible')::boolean,true)
 		  AND COALESCE(details.hide_everywhere, false) = false
 		  AND COALESCE(details.client_delivery_mode, 'include') = 'include'
-		ORDER BY members.sort_order`, fieldSetID)
+		ORDER BY members.sort_order`, fieldSetID, viewKey)
 	if err != nil {
 		return nil, err
 	}

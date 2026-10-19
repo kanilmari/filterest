@@ -100,9 +100,9 @@ func articleBaselineProjection(tx *sql.Tx, dataset ArticleBaselineDataset, assig
 		settings, err = fetchMetadataColumnSettings(dataset.UID, dataset.Name, view, tx)
 	} else {
 		result.Source = winner.source()
-		settings, err = fetchAssignedFieldSetColumnSettings(winner.setID, tx)
+		settings, err = fetchAssignedFieldSetColumnSettings(winner.setID, tx, view)
 		if err == nil {
-			widths, err = articleBaselineWidths(tx, winner.setID)
+			widths, err = articleBaselineWidths(tx, winner.setID, view)
 		}
 	}
 	if err != nil {
@@ -124,11 +124,13 @@ func articleBaselineProjection(tx *sql.Tx, dataset ArticleBaselineDataset, assig
 	}
 	return result, nil
 }
-func articleBaselineWidths(tx *sql.Tx, setID int64) (map[string]*int, error) {
-	rows, err := tx.Query(`SELECT details.column_name, members.column_width_px
+func articleBaselineWidths(tx *sql.Tx, setID int64, view string) (map[string]*int, error) {
+	rows, err := tx.Query(`SELECT details.column_name,
+        CASE WHEN jsonb_typeof(to_jsonb(members)->'presentation_values')='object'
+          THEN (to_jsonb(members)->'presentation_values'->$2->>'width_px')::integer ELSE members.column_width_px END
         FROM public.system_column_field_set_members members
         JOIN public.system_column_details details ON details.column_uid=members.column_uid
-        WHERE members.field_set_id=$1 ORDER BY members.sort_order, members.column_uid`, setID)
+        WHERE members.field_set_id=$1 ORDER BY members.sort_order, members.column_uid`, setID, view)
 	if err != nil {
 		return nil, err
 	}

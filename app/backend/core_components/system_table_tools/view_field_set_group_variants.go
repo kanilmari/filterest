@@ -17,6 +17,7 @@ import (
 func normalizeViewFieldSetGroupVariants(
 	variants []saveViewFieldSetGroupVariant,
 	targetGroupIDs []int64,
+	allowEmpty ...bool,
 ) ([]saveViewFieldSetGroupVariant, error) {
 	if len(variants) == 0 || len(variants) != len(targetGroupIDs) {
 		return nil, fmt.Errorf("group_variants must cover every target group exactly once")
@@ -33,7 +34,7 @@ func normalizeViewFieldSetGroupVariants(
 		); err != nil {
 			return nil, err
 		}
-		visibleColumns, err := normalizeVisibleColumnNames(variant.VisibleColumns)
+		visibleColumns, err := normalizeVisibleColumnNames(variant.VisibleColumns, allowEmpty...)
 		if err != nil {
 			return nil, fmt.Errorf("group %d: %w", variant.GroupID, err)
 		}
@@ -78,7 +79,19 @@ func saveViewFieldSetGroupVariants(
 	columnUIDsByGroup map[int64][]int,
 ) ([]savedViewFieldSetGroupVariant, error) {
 	saved := make([]savedViewFieldSetGroupVariant, 0, len(variants))
+	var viewKey string
+	if err := q.QueryRow(`SELECT view_key FROM public.system_table_views WHERE id=$1`, viewID).Scan(&viewKey); err != nil {
+		return nil, err
+	}
 	for _, variant := range variants {
+		if isArticleBundleView(viewKey) {
+			id, err := saveArticleProjection(q, tableUID, viewKey, nil, variant.GroupID, variant.GroupPriority, columnUIDsByGroup[variant.GroupID], baseName, createdBy, nil)
+			if err != nil {
+				return nil, err
+			}
+			saved = append(saved, savedViewFieldSetGroupVariant{GroupID: variant.GroupID, FieldSetID: id, GroupPriority: variant.GroupPriority, VisibleColumns: variant.VisibleColumns})
+			continue
+		}
 		fieldSetName := mixedViewFieldSetName(baseName, variant.VisibleColumns)
 		var fieldSetID int64
 		if err := q.QueryRow(`
@@ -124,6 +137,9 @@ func saveViewFieldSetGroupVariants(
 			GroupPriority:  variant.GroupPriority,
 			VisibleColumns: append([]string(nil), variant.VisibleColumns...),
 		})
+	}
+	if isArticleBundleView(viewKey) {
+		return saved, nil
 	}
 
 	fieldSets, err := listAccessibleViewFieldSets(q, tableUID, createdBy)

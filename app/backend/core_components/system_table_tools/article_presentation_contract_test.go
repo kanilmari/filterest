@@ -1,7 +1,7 @@
 // article_presentation_contract_test.go
-// Checks the server's unchanged legacy section API against the shared vocabulary.
-// Connects source-owned canonical blocks with compatibility storage names.
-// Ensures adding a reserved presentation cannot accidentally enable API writes.
+// Checks canonical section storage and compatibility names against the vocabulary.
+// Connects the storage batch with the source-owned presentation contract.
+// Keeps block support independent from later renderer and activation delivery.
 package system_table_tools
 
 import (
@@ -34,8 +34,8 @@ func TestArticlePresentationContractDrift(t *testing.T) {
 				}
 			}
 		}
-		if len(articleSupportedSections(key)) != 0 {
-			t.Fatalf("canonical key enabled prematurely: %s", key)
+		if !reflect.DeepEqual(articleSupportedSections(key), presentation.Blocks) {
+			t.Fatalf("canonical block drift: %s", key)
 		}
 	}
 }

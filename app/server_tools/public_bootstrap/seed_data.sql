@@ -7912,6 +7912,17 @@ SELECT id, 'code', CASE WHEN lang_key = 'table_cell_max_lines_invalid'
 FROM public.system_lang_keys WHERE lang_key IN
     ('table_view_settings', 'table_cell_max_lines_label', 'table_cell_max_lines_help', 'table_cell_max_lines_invalid')
 ON CONFLICT (lang_key_id, source_type, source_high) DO NOTHING;
+
+-- Drain article events before the next data migration without changing other constraints.
+DO $article_bundle_seed_boundary$
+BEGIN
+    IF EXISTS (SELECT 1 FROM pg_catalog.pg_constraint
+               WHERE conrelid = 'public.system_db_tables'::regclass
+                 AND conname = 'article_bundle_invariant') THEN
+        SET CONSTRAINTS public.article_bundle_invariant IMMEDIATE;
+        SET CONSTRAINTS public.article_bundle_invariant DEFERRED;
+    END IF;
+END $article_bundle_seed_boundary$;
 -- 20261005000004_add_row_actor_columns.sql
 -- Gives registered content datasets their creator and owner, keeping a site's proven
 -- owner column and filling old rows only from the approved creator sources.
@@ -8269,6 +8280,17 @@ BEGIN
         SELECT 1 FROM public.system_data_repair_records WHERE migration = migration_id AND action = 'completed');
     RAISE NOTICE 'wl58_row_actor_columns: % tables, % filled values, % cleared values', total_tables, total_filled, total_cleared;
 END $row_actors$;
+
+-- Drain article events before the next data migration without changing other constraints.
+DO $article_bundle_seed_boundary$
+BEGIN
+    IF EXISTS (SELECT 1 FROM pg_catalog.pg_constraint
+               WHERE conrelid = 'public.system_db_tables'::regclass
+                 AND conname = 'article_bundle_invariant') THEN
+        SET CONSTRAINTS public.article_bundle_invariant IMMEDIATE;
+        SET CONSTRAINTS public.article_bundle_invariant DEFERRED;
+    END IF;
+END $article_bundle_seed_boundary$;
 -- 20261005000023_register_system_favorites.sql
 -- Registers favorites as a protected system dataset after folders and metadata exist.
 -- Connects upgrades and fresh installations with the same registry and column definitions.
@@ -8320,6 +8342,17 @@ BEGIN
         WHERE migration = 'system_favorites_registry' AND action = 'completed');
 END
 $favorites_registry$;
+
+-- Drain article events before the next data migration without changing other constraints.
+DO $article_bundle_seed_boundary$
+BEGIN
+    IF EXISTS (SELECT 1 FROM pg_catalog.pg_constraint
+               WHERE conrelid = 'public.system_db_tables'::regclass
+                 AND conname = 'article_bundle_invariant') THEN
+        SET CONSTRAINTS public.article_bundle_invariant IMMEDIATE;
+        SET CONSTRAINTS public.article_bundle_invariant DEFERRED;
+    END IF;
+END $article_bundle_seed_boundary$;
 -- 20261005000034_register_system_front_page_blocks.sql
 -- Registers front page blocks as a protected system dataset after folders and metadata exist.
 -- Connects upgrades and fresh installations with the same registry and column definitions.
@@ -8371,6 +8404,17 @@ BEGIN
         WHERE migration = 'system_front_page_blocks_registry' AND action = 'completed');
 END
 $front_page_registry$;
+
+-- Drain article events before the next data migration without changing other constraints.
+DO $article_bundle_seed_boundary$
+BEGIN
+    IF EXISTS (SELECT 1 FROM pg_catalog.pg_constraint
+               WHERE conrelid = 'public.system_db_tables'::regclass
+                 AND conname = 'article_bundle_invariant') THEN
+        SET CONSTRAINTS public.article_bundle_invariant IMMEDIATE;
+        SET CONSTRAINTS public.article_bundle_invariant DEFERRED;
+    END IF;
+END $article_bundle_seed_boundary$;
 -- 20261005000037_register_row_group_classifications.sql
 -- Registers classification headings as a protected system dataset after folders and metadata exist.
 -- Connects upgrades and fresh installations with the same registry and column definitions.
@@ -8443,6 +8487,17 @@ BEGIN
         WHERE migration = 'wl103_row_group_classifications_registry' AND action = 'completed');
 END
 $classifications_registry$;
+
+-- Drain article events before the next data migration without changing other constraints.
+DO $article_bundle_seed_boundary$
+BEGIN
+    IF EXISTS (SELECT 1 FROM pg_catalog.pg_constraint
+               WHERE conrelid = 'public.system_db_tables'::regclass
+                 AND conname = 'article_bundle_invariant') THEN
+        SET CONSTRAINTS public.article_bundle_invariant IMMEDIATE;
+        SET CONSTRAINTS public.article_bundle_invariant DEFERRED;
+    END IF;
+END $article_bundle_seed_boundary$;
 -- 20261005000050_require_registry_reference_key.sql
 -- Requires the dataset registry's integer reference key and protects it in the UI.
 -- Bridges stored dataset references with the registry's own column metadata.
@@ -8517,6 +8572,17 @@ BEGIN
      WHERE NOT EXISTS (SELECT 1 FROM public.system_data_repair_records
                         WHERE migration = 'wl144_registry_reference_key' AND action = 'completed');
 END $registry_key$;
+
+-- Drain article events before the next data migration without changing other constraints.
+DO $article_bundle_seed_boundary$
+BEGIN
+    IF EXISTS (SELECT 1 FROM pg_catalog.pg_constraint
+               WHERE conrelid = 'public.system_db_tables'::regclass
+                 AND conname = 'article_bundle_invariant') THEN
+        SET CONSTRAINTS public.article_bundle_invariant IMMEDIATE;
+        SET CONSTRAINTS public.article_bundle_invariant DEFERRED;
+    END IF;
+END $article_bundle_seed_boundary$;
 -- 20261005000080_add_dataset_media_hidden.sql
 -- Adds independent visibility to stored dataset cover and background images (WL153).
 -- Connects the media registry and header editor with upgrade and bootstrap metadata.
@@ -8605,6 +8671,17 @@ SELECT 'dataset_media_hidden', 'completed',
        jsonb_build_object('file', '20261005000080_add_dataset_media_hidden.sql')
 WHERE NOT EXISTS (SELECT 1 FROM public.system_data_repair_records
     WHERE migration = 'dataset_media_hidden' AND action = 'completed');
+
+-- Drain article events before the next data migration without changing other constraints.
+DO $article_bundle_seed_boundary$
+BEGIN
+    IF EXISTS (SELECT 1 FROM pg_catalog.pg_constraint
+               WHERE conrelid = 'public.system_db_tables'::regclass
+                 AND conname = 'article_bundle_invariant') THEN
+        SET CONSTRAINTS public.article_bundle_invariant IMMEDIATE;
+        SET CONSTRAINTS public.article_bundle_invariant DEFERRED;
+    END IF;
+END $article_bundle_seed_boundary$;
 -- 20261009000051_register_application_update_capability.sql
 -- Registers the explicit-only update capability and the guarded administrator APIs.
 -- Connects existing group permission editing to durable admission and decisions.
@@ -8654,6 +8731,17 @@ BEGIN
     SELECT 'wl157_application_update_capability','completed'
     WHERE NOT EXISTS (SELECT 1 FROM public.system_data_repair_records WHERE migration='wl157_application_update_capability' AND action='completed');
 END $acceptance$;
+
+-- Drain article events before the next data migration without changing other constraints.
+DO $article_bundle_seed_boundary$
+BEGIN
+    IF EXISTS (SELECT 1 FROM pg_catalog.pg_constraint
+               WHERE conrelid = 'public.system_db_tables'::regclass
+                 AND conname = 'article_bundle_invariant') THEN
+        SET CONSTRAINTS public.article_bundle_invariant IMMEDIATE;
+        SET CONSTRAINTS public.article_bundle_invariant DEFERRED;
+    END IF;
+END $article_bundle_seed_boundary$;
 -- 20261009000061_backfill_dataset_appearance_three_places.sql
 -- Activates owned tab appearance_values and sparse default overrides without shared cover writes.
 -- Connects upgrades and fresh bootstrap with the reviewed version-two definition.
@@ -8776,6 +8864,17 @@ BEGIN
     SELECT 'dataset_appearance_three_place_backfill','completed',jsonb_build_object('file','20261009000061_backfill_dataset_appearance_three_places.sql')
     WHERE NOT EXISTS(SELECT 1 FROM public.system_data_repair_records WHERE migration='dataset_appearance_three_place_backfill' AND action='completed');
 END $acceptance$;
+
+-- Drain article events before the next data migration without changing other constraints.
+DO $article_bundle_seed_boundary$
+BEGIN
+    IF EXISTS (SELECT 1 FROM pg_catalog.pg_constraint
+               WHERE conrelid = 'public.system_db_tables'::regclass
+                 AND conname = 'article_bundle_invariant') THEN
+        SET CONSTRAINTS public.article_bundle_invariant IMMEDIATE;
+        SET CONSTRAINTS public.article_bundle_invariant DEFERRED;
+    END IF;
+END $article_bundle_seed_boundary$;
 -- 20261009000072_register_publication_columns.sql
 -- Registers publication columns with the existing release-goal dataset metadata.
 -- Connects upgraded installations and fresh seeds to the same discovered fields.
@@ -8806,6 +8905,17 @@ BEGIN
     WHERE NOT EXISTS (SELECT 1 FROM public.system_data_repair_records
                       WHERE migration='wl164_publication_column_metadata' AND action='completed');
 END $publication_metadata$;
+
+-- Drain article events before the next data migration without changing other constraints.
+DO $article_bundle_seed_boundary$
+BEGIN
+    IF EXISTS (SELECT 1 FROM pg_catalog.pg_constraint
+               WHERE conrelid = 'public.system_db_tables'::regclass
+                 AND conname = 'article_bundle_invariant') THEN
+        SET CONSTRAINTS public.article_bundle_invariant IMMEDIATE;
+        SET CONSTRAINTS public.article_bundle_invariant DEFERRED;
+    END IF;
+END $article_bundle_seed_boundary$;
 -- 20261009000082_complete_registered_column_metadata.sql
 -- Completes column metadata before a registered dataset reaches a generic editor.
 -- Connects fresh bootstrap and upgraded registries to the same structural defaults.
@@ -8846,6 +8956,17 @@ BEGIN
      WHERE NOT EXISTS (SELECT 1 FROM public.system_data_repair_records
                         WHERE migration = 't919_registered_column_metadata' AND action = 'completed');
 END $registered_columns$;
+
+-- Drain article events before the next data migration without changing other constraints.
+DO $article_bundle_seed_boundary$
+BEGIN
+    IF EXISTS (SELECT 1 FROM pg_catalog.pg_constraint
+               WHERE conrelid = 'public.system_db_tables'::regclass
+                 AND conname = 'article_bundle_invariant') THEN
+        SET CONSTRAINTS public.article_bundle_invariant IMMEDIATE;
+        SET CONSTRAINTS public.article_bundle_invariant DEFERRED;
+    END IF;
+END $article_bundle_seed_boundary$;
 -- 20261009000083_add_automatic_log_retention.sql
 -- Adds owner decision K353's 90-day log defaults to fresh and existing settings.
 -- Connects the public bootstrap and upgrades to the existing daily retention loop.
@@ -8970,6 +9091,17 @@ BEGIN
     WHERE NOT EXISTS (SELECT 1 FROM public.system_data_repair_records
                        WHERE migration = 't750_automatic_log_retention' AND action = 'completed');
 END $log_retention$;
+
+-- Drain article events before the next data migration without changing other constraints.
+DO $article_bundle_seed_boundary$
+BEGIN
+    IF EXISTS (SELECT 1 FROM pg_catalog.pg_constraint
+               WHERE conrelid = 'public.system_db_tables'::regclass
+                 AND conname = 'article_bundle_invariant') THEN
+        SET CONSTRAINTS public.article_bundle_invariant IMMEDIATE;
+        SET CONSTRAINTS public.article_bundle_invariant DEFERRED;
+    END IF;
+END $article_bundle_seed_boundary$;
 -- 20261015000002_set_exceptional_record_headers.sql
 -- Gives two system datasets intentional names where inference is ambiguous.
 -- Connects audit handler names and authorized language-key aliases to card roles.
@@ -9003,6 +9135,17 @@ BEGIN
     WHERE NOT EXISTS (SELECT 1 FROM public.system_data_repair_records
                        WHERE migration = 'record_title_headers_962' AND action = 'completed');
 END $record_title_headers$;
+
+-- Drain article events before the next data migration without changing other constraints.
+DO $article_bundle_seed_boundary$
+BEGIN
+    IF EXISTS (SELECT 1 FROM pg_catalog.pg_constraint
+               WHERE conrelid = 'public.system_db_tables'::regclass
+                 AND conname = 'article_bundle_invariant') THEN
+        SET CONSTRAINTS public.article_bundle_invariant IMMEDIATE;
+        SET CONSTRAINTS public.article_bundle_invariant DEFERRED;
+    END IF;
+END $article_bundle_seed_boundary$;
 -- 20261015000006_backfill_translation_object_sources.sql
 -- Associates existing dataset, column and folder labels before scoped serving.
 -- Connects upgrades and fresh installs to the runtime label creators' ownership.
@@ -9092,6 +9235,17 @@ BEGIN
     WHERE NOT EXISTS (SELECT 1 FROM public.system_data_repair_records
                       WHERE migration = 'translation_object_sources_sec2' AND action = 'completed');
 END $translation_object_sources$;
+
+-- Drain article events before the next data migration without changing other constraints.
+DO $article_bundle_seed_boundary$
+BEGIN
+    IF EXISTS (SELECT 1 FROM pg_catalog.pg_constraint
+               WHERE conrelid = 'public.system_db_tables'::regclass
+                 AND conname = 'article_bundle_invariant') THEN
+        SET CONSTRAINTS public.article_bundle_invariant IMMEDIATE;
+        SET CONSTRAINTS public.article_bundle_invariant DEFERRED;
+    END IF;
+END $article_bundle_seed_boundary$;
 -- 20261015000009_add_card_image_usage_presentation.sql
 -- Stores presentation and a focal point on each image use, never on library assets.
 -- The same installer serves upgrades, fresh bootstrap and newly enabled galleries.
@@ -9164,6 +9318,230 @@ BEGIN
     SELECT 'wl69_card_image_usage_storage','completed' WHERE NOT EXISTS (
         SELECT 1 FROM public.system_data_repair_records WHERE migration='wl69_card_image_usage_storage' AND action='completed');
 END $upgrade$;
+
+-- Drain article events before the next data migration without changing other constraints.
+DO $article_bundle_seed_boundary$
+BEGIN
+    IF EXISTS (SELECT 1 FROM pg_catalog.pg_constraint
+               WHERE conrelid = 'public.system_db_tables'::regclass
+                 AND conname = 'article_bundle_invariant') THEN
+        SET CONSTRAINTS public.article_bundle_invariant IMMEDIATE;
+        SET CONSTRAINTS public.article_bundle_invariant DEFERRED;
+    END IF;
+END $article_bundle_seed_boundary$;
+-- 20261015000012_materialize_article_bundles.sql
+-- Materializes legacy Article settings once, retaining authored IFAV values and audiences.
+-- Connects upgrades and post-seed bootstrap through the same locked atomic data step.
+-- VERSION_DB: 9.12.0
+-- VERSION_DB_OWNER: 20261015000099_record_database_release_9_12_0.sql
+-- COMPLETION_MARKER: article_bundle_materialization
+-- FINAL_CHECK: public.app_check_article_bundles()
+
+-- The migration runner executes this whole file in one transaction. Do not split
+-- registration, assertions and marker into independently committed operations.
+DO $materialize$
+DECLARE target record; dataset record; item record; source record; bundle bigint; chosen integer;
+        position integer; findings text; blocks jsonb; canonical jsonb; projection_key text; section text;
+        raw jsonb; cell jsonb; prior_cell jsonb;
+BEGIN
+ PERFORM pg_advisory_xact_lock(hashtextextended('article_bundle_materialization',0));
+ LOCK TABLE public.system_db_tables,public.system_view_field_set_assignments,
+  public.system_column_field_sets,public.system_column_field_set_members,public.system_column_details,
+  public.system_table_views,public.system_functions,public.system_group_table_func_rights IN SHARE ROW EXCLUSIVE MODE;
+ -- Completed replay never registers, recopies, reinitializes or grants anything.
+ IF EXISTS(SELECT 1 FROM public.system_data_repair_records WHERE migration='article_bundle_materialization' AND action='completed') THEN
+  RETURN;
+ END IF;
+
+ INSERT INTO public.system_table_views(name,view_key,status)
+  SELECT p.view_key,p.view_key,'active' FROM unnest(public.app_article_keys()) p(view_key) WHERE true ON CONFLICT(view_key) DO NOTHING;
+ INSERT INTO public.system_functions(name,package,disabled,specific_table_related,url_route_endpoint,ui_only,rate_limit_amount,rate_limit_minutes,creation_spec)
+  SELECT 'ui.view.'||p.view_key,'frontend',false,false,'/ui/view/'||p.view_key,true,200,20,'Independent article presentation right.'
+  FROM unnest(ARRAY['image_first_view','image_first_page_view']) p(view_key) WHERE true ON CONFLICT(name) DO NOTHING;
+ IF EXISTS(SELECT 1 FROM unnest(public.app_article_keys()) p(view_key) WHERE NOT EXISTS(
+  SELECT 1 FROM public.system_functions f WHERE f.name='ui.view.'||p.view_key AND f.url_route_endpoint='/ui/view/'||p.view_key)) THEN
+  RAISE EXCEPTION 'authored article permission identity conflicts with its route';
+ END IF;
+ INSERT INTO public.system_lang_keys(lang_key,fi,en,ch,yue,creation_spec)
+  VALUES('ui.view.image_first_view','Kuvapainotteinen artikkeli','Image-first article','图片优先文章','圖片優先文章','Article presentation permission name.'),
+   ('ui.view.image_first_page_view','Sivukokoinen kuvapainotteinen artikkeli','Page-sized image-first article','页面大小的图片优先文章','頁面大小的圖片優先文章','Article presentation permission name.')
+  ON CONFLICT(lang_key) DO UPDATE SET
+   fi=CASE WHEN NULLIF(btrim(system_lang_keys.fi),'') IS NULL THEN EXCLUDED.fi ELSE system_lang_keys.fi END,
+   en=CASE WHEN NULLIF(btrim(system_lang_keys.en),'') IS NULL THEN EXCLUDED.en ELSE system_lang_keys.en END,
+   ch=CASE WHEN NULLIF(btrim(system_lang_keys.ch),'') IS NULL THEN EXCLUDED.ch ELSE system_lang_keys.ch END,
+   yue=CASE WHEN NULLIF(btrim(system_lang_keys.yue),'') IS NULL THEN EXCLUDED.yue ELSE system_lang_keys.yue END;
+ INSERT INTO public.system_lang_key_translations(lang_key_id,language_code,translation,source_kind,review_status)
+  SELECT k.id,t.code,t.copy,'manual','approved' FROM public.system_lang_keys k
+  CROSS JOIN LATERAL(VALUES('fi',k.fi),('en',k.en),('zh-CN',k.ch),('zh-TW',k.yue),('zh-HK',k.yue)) t(code,copy)
+  JOIN public.system_languages l ON l.language_code=t.code
+  WHERE k.lang_key IN('ui.view.image_first_view','ui.view.image_first_page_view')
+  ON CONFLICT(lang_key_id,language_code) DO UPDATE SET translation=EXCLUDED.translation
+   WHERE NULLIF(btrim(system_lang_key_translations.translation),'') IS NULL;
+
+ -- Fresh bootstrap's metadata completion already sees the folded columns.
+ -- An upgrade adds the same three metadata rows with that protocol's defaults,
+ -- without touching authored metadata or assigning a reader's column rights.
+ INSERT INTO public.system_column_details(table_uid,column_name,data_type,co_number,card_element,show_key_on_card,editable_in_ui)
+  SELECT registry.table_uid,attribute.attname,pg_catalog.format_type(attribute.atttypid,attribute.atttypmod),attribute.attnum,'details',NULL,true
+  FROM public.system_db_tables registry JOIN pg_catalog.pg_attribute attribute
+   ON attribute.attrelid=to_regclass(format('%I.%I',COALESCE(NULLIF(registry.schema_name,''),'public'),registry.table_name))
+  WHERE COALESCE(NULLIF(registry.schema_name,''),'public')='public' AND attribute.attnum>0 AND NOT attribute.attisdropped
+   AND (registry.table_name,attribute.attname) IN (('system_db_tables','article_opener_policy'),
+    ('system_column_field_sets','article_family'),('system_column_field_set_members','presentation_values'))
+   AND NOT EXISTS(SELECT 1 FROM public.system_column_details c WHERE c.table_uid=registry.table_uid AND c.column_name=attribute.attname)
+  ORDER BY registry.table_uid,attribute.attnum;
+
+ CREATE TEMP TABLE article_upgrade_sources ON COMMIT DROP AS
+  SELECT a.table_uid,a.user_id,a.group_id,a.group_priority,a.created_by,v.view_key,m.column_uid,m.sort_order,m.column_width_px
+  FROM public.system_view_field_set_assignments a JOIN public.system_table_views v ON v.id=a.view_id
+  LEFT JOIN public.system_column_field_set_members m ON m.field_set_id=a.field_set_id
+  WHERE v.view_key=ANY(public.app_article_keys());
+ CREATE TEMP TABLE article_upgrade_targets ON COMMIT DROP AS
+  SELECT DISTINCT table_uid,user_id,group_id FROM article_upgrade_sources
+  UNION SELECT table_uid,NULL::bigint,NULL::bigint FROM public.system_db_tables;
+ CREATE TEMP TABLE article_upgrade_rights ON COMMIT DROP AS SELECT * FROM public.system_group_table_func_rights;
+ CREATE TEMP TABLE article_upgrade_blocks ON COMMIT DROP AS SELECT table_uid,article_section_initial_open FROM public.system_db_tables;
+ IF EXISTS(SELECT 1 FROM article_upgrade_sources GROUP BY table_uid,user_id,group_id HAVING count(DISTINCT group_priority)>1) THEN
+  RAISE EXCEPTION 'authored article presentation precedence conflicts; upgrade refused';
+ END IF;
+ IF EXISTS(SELECT 1 FROM article_upgrade_sources s JOIN public.system_column_details c ON c.column_uid=s.column_uid
+  WHERE COALESCE(c.hide_everywhere,false) OR COALESCE(c.client_delivery_mode,'include')<>'include') THEN
+  RAISE EXCEPTION 'legacy article assignment contains a forbidden field; upgrade refused';
+ END IF;
+ IF EXISTS(SELECT 1 FROM article_upgrade_sources s JOIN public.system_column_field_sets b ON b.table_uid=s.table_uid AND b.article_family) THEN
+  RAISE EXCEPTION 'unmarked article bundles exist; upgrade refused';
+ END IF;
+
+ CREATE TEMP TABLE article_upgrade_nodes(uid integer PRIMARY KEY,rank integer,emitted boolean DEFAULT false) ON COMMIT DROP;
+ CREATE TEMP TABLE article_upgrade_edges(predecessor integer,successor integer,PRIMARY KEY(predecessor,successor)) ON COMMIT DROP;
+ CREATE TEMP TABLE article_upgrade_expected(view_key text,column_uid integer,sort_order integer,column_width_px integer) ON COMMIT DROP;
+ FOR target IN SELECT * FROM article_upgrade_targets ORDER BY table_uid,user_id NULLS FIRST,group_id NULLS FIRST LOOP
+  TRUNCATE article_upgrade_nodes,article_upgrade_edges,article_upgrade_expected;
+  -- Article comes only from this exact target, never the migrating reader.
+  IF EXISTS(SELECT 1 FROM article_upgrade_sources s WHERE s.table_uid=target.table_uid AND s.user_id IS NOT DISTINCT FROM target.user_id
+    AND s.group_id IS NOT DISTINCT FROM target.group_id AND s.view_key='article_view') THEN
+   INSERT INTO article_upgrade_expected SELECT view_key,column_uid,sort_order,column_width_px FROM article_upgrade_sources s
+    WHERE s.table_uid=target.table_uid AND s.user_id IS NOT DISTINCT FROM target.user_id AND s.group_id IS NOT DISTINCT FROM target.group_id
+     AND s.view_key='article_view' AND s.column_uid IS NOT NULL;
+  ELSE
+   INSERT INTO article_upgrade_expected SELECT 'article_view',column_uid,row_number() OVER(ORDER BY co_number NULLS LAST,column_uid),NULL
+    FROM public.system_column_details WHERE table_uid=target.table_uid AND NOT COALESCE(hide_everywhere,false)
+     AND COALESCE(client_delivery_mode,'include')='include';
+  END IF;
+  FOREACH projection_key IN ARRAY ARRAY['image_first_view','image_first_page_view'] LOOP
+   IF EXISTS(SELECT 1 FROM article_upgrade_sources s WHERE s.table_uid=target.table_uid AND s.user_id IS NOT DISTINCT FROM target.user_id
+     AND s.group_id IS NOT DISTINCT FROM target.group_id AND s.view_key=projection_key) THEN
+    INSERT INTO article_upgrade_expected SELECT view_key,column_uid,sort_order,column_width_px FROM article_upgrade_sources s
+     WHERE s.table_uid=target.table_uid AND s.user_id IS NOT DISTINCT FROM target.user_id AND s.group_id IS NOT DISTINCT FROM target.group_id
+      AND s.view_key=projection_key AND s.column_uid IS NOT NULL;
+   ELSE
+    INSERT INTO article_upgrade_expected SELECT projection_key,column_uid,sort_order,column_width_px FROM article_upgrade_expected
+     WHERE view_key=CASE projection_key WHEN 'image_first_view' THEN 'article_view' ELSE 'image_first_view' END;
+   END IF;
+  END LOOP;
+  INSERT INTO article_upgrade_nodes(uid,rank)
+   SELECT column_uid,min(sort_order+CASE view_key WHEN 'article_view' THEN 0 WHEN 'image_first_view' THEN 1000000 ELSE 2000000 END)
+   FROM article_upgrade_expected GROUP BY column_uid;
+  INSERT INTO article_upgrade_edges SELECT DISTINCT column_uid,successor FROM(
+   SELECT column_uid,lead(column_uid) OVER(PARTITION BY view_key ORDER BY sort_order) successor FROM article_upgrade_expected) ordered
+   WHERE successor IS NOT NULL;
+  INSERT INTO public.system_column_field_sets(table_uid,owner_user_id,name,article_family,created_by)
+   SELECT target.table_uid,target.user_id,public.app_article_bundle_name(target.table_uid,target.user_id,'Article upgrade bundle '||COALESCE('u'||target.user_id,'g'||target.group_id,'site')),true,min(created_by)
+   FROM article_upgrade_sources s WHERE s.table_uid=target.table_uid AND s.user_id IS NOT DISTINCT FROM target.user_id AND s.group_id IS NOT DISTINCT FROM target.group_id
+   RETURNING id INTO bundle;
+  position:=0;
+  -- A stable topological merge retains each authored projection's relative order.
+  -- Cycles are incompatible orders: abort the entire migration, including grants.
+  LOOP
+   SELECT n.uid INTO chosen FROM article_upgrade_nodes n WHERE NOT n.emitted AND NOT EXISTS(
+    SELECT 1 FROM article_upgrade_edges e JOIN article_upgrade_nodes p ON p.uid=e.predecessor
+     WHERE e.successor=n.uid AND NOT p.emitted) ORDER BY n.rank,n.uid LIMIT 1;
+   EXIT WHEN chosen IS NULL;
+   position:=position+1;
+   raw:=public.app_article_values(false);
+   FOR source IN SELECT * FROM article_upgrade_expected WHERE column_uid=chosen LOOP
+    raw:=jsonb_set(raw,ARRAY[source.view_key],jsonb_build_object('visible',true,'width_px',source.column_width_px));
+   END LOOP;
+   INSERT INTO public.system_column_field_set_members(field_set_id,table_uid,column_uid,sort_order,presentation_values)
+    VALUES(bundle,target.table_uid,chosen,position,raw);
+   UPDATE article_upgrade_nodes SET emitted=true WHERE uid=chosen;
+  END LOOP;
+  IF EXISTS(SELECT 1 FROM article_upgrade_nodes WHERE NOT emitted) THEN RAISE EXCEPTION 'authored IFAV order conflicts; upgrade refused'; END IF;
+  INSERT INTO public.system_view_field_set_assignments(user_id,group_id,table_uid,view_id,field_set_id,group_priority,created_by)
+   SELECT target.user_id,target.group_id,target.table_uid,v.id,bundle,COALESCE((SELECT max(s.group_priority) FROM article_upgrade_sources s
+    WHERE s.table_uid=target.table_uid AND s.user_id IS NOT DISTINCT FROM target.user_id AND s.group_id IS NOT DISTINCT FROM target.group_id),0),
+    (SELECT min(s.created_by) FROM article_upgrade_sources s WHERE s.table_uid=target.table_uid AND s.user_id IS NOT DISTINCT FROM target.user_id AND s.group_id IS NOT DISTINCT FROM target.group_id)
+   FROM public.system_table_views v WHERE v.view_key=ANY(public.app_article_keys())
+   ON CONFLICT(user_id,group_id,table_uid,view_id) DO UPDATE SET field_set_id=EXCLUDED.field_set_id;
+  FOREACH projection_key IN ARRAY public.app_article_keys() LOOP
+   IF (SELECT jsonb_agg(jsonb_build_array(column_uid,column_width_px) ORDER BY sort_order) FROM article_upgrade_expected WHERE view_key=projection_key)
+      IS DISTINCT FROM (SELECT jsonb_agg(jsonb_build_array(column_uid,(presentation_values->projection_key->>'width_px')::integer) ORDER BY sort_order)
+       FROM public.system_column_field_set_members WHERE field_set_id=bundle AND presentation_values->projection_key->'visible'='true') THEN
+    RAISE EXCEPTION 'article ordered UID/width preservation failed';
+   END IF;
+  END LOOP;
+ END LOOP;
+
+ FOR dataset IN SELECT * FROM article_upgrade_blocks LOOP
+  blocks:=dataset.article_section_initial_open;
+  IF jsonb_typeof(blocks)<>'object' OR EXISTS(SELECT 1 FROM jsonb_object_keys(blocks) k
+     WHERE k NOT IN('classic','image_first','article_view','image_first_view','image_first_page_view')) THEN
+   RAISE EXCEPTION 'unknown legacy article block settings';
+  END IF;
+  canonical:=public.app_article_section_defaults();
+  FOREACH projection_key IN ARRAY public.app_article_keys() LOOP
+   prior_cell:=blocks->CASE projection_key WHEN 'article_view' THEN 'classic' WHEN 'image_first_view' THEN 'image_first' ELSE projection_key END;
+   cell:=blocks->projection_key;
+   IF prior_cell IS NOT NULL AND jsonb_typeof(prior_cell)<>'object' OR cell IS NOT NULL AND jsonb_typeof(cell)<>'object' THEN
+    RAISE EXCEPTION 'invalid legacy article block settings';
+   END IF;
+   IF EXISTS(SELECT 1 FROM jsonb_each(COALESCE(prior_cell,'{}')||COALESCE(cell,'{}')) p
+     WHERE NOT canonical->projection_key ? p.key OR jsonb_typeof(p.value)<>'boolean') THEN RAISE EXCEPTION 'invalid article section'; END IF;
+   IF EXISTS(SELECT 1 FROM jsonb_each(COALESCE(prior_cell,'{}')) p WHERE cell ? p.key AND cell->p.key<>p.value) THEN
+    RAISE EXCEPTION 'conflicting canonical and legacy article blocks';
+   END IF;
+   IF projection_key='image_first_page_view' THEN canonical:=jsonb_set(canonical,ARRAY[projection_key],canonical->'image_first_view'); END IF;
+   FOR section IN SELECT jsonb_object_keys(canonical->projection_key) LOOP
+    canonical:=jsonb_set(canonical,ARRAY[projection_key,section],COALESCE(cell->section,prior_cell->section,canonical->projection_key->section));
+   END LOOP;
+  END LOOP;
+  IF NOT public.app_valid_article_sections(canonical) THEN RAISE EXCEPTION 'canonical block assertion failed'; END IF;
+  UPDATE public.system_db_tables SET article_section_initial_open=canonical WHERE table_uid=dataset.table_uid;
+ END LOOP;
+
+ -- Actual authored group grants only, including NULL/global and dataset scopes.
+ -- Page receives the initial IFAV audience (authored IFAV plus copied Article).
+ FOREACH projection_key IN ARRAY ARRAY['image_first_view','image_first_page_view'] LOOP
+  INSERT INTO public.system_group_table_func_rights(user_group_id,function_id,target_schema_name,target_table_uid,creation_spec)
+   SELECT r.user_group_id,destination.id,r.target_schema_name,r.target_table_uid,'One-time article audience materialization.'
+   FROM public.system_group_table_func_rights r JOIN public.system_functions origin ON origin.id=r.function_id
+   CROSS JOIN public.system_functions destination
+   WHERE origin.url_route_endpoint='/ui/view/'||CASE projection_key WHEN 'image_first_view' THEN 'article_view' ELSE 'image_first_view' END
+    AND origin.disabled IS FALSE
+    AND destination.name='ui.view.'||projection_key AND NOT EXISTS(
+     SELECT 1 FROM public.system_group_table_func_rights existing WHERE existing.user_group_id=r.user_group_id
+      AND existing.function_id=destination.id AND existing.target_schema_name IS NOT DISTINCT FROM r.target_schema_name
+      AND existing.target_table_uid IS NOT DISTINCT FROM r.target_table_uid) ON CONFLICT DO NOTHING;
+  IF EXISTS(SELECT 1 FROM public.system_group_table_func_rights r JOIN public.system_functions origin ON origin.id=r.function_id
+   CROSS JOIN public.system_functions destination
+   WHERE origin.url_route_endpoint='/ui/view/'||CASE projection_key WHEN 'image_first_view' THEN 'article_view' ELSE 'image_first_view' END
+    AND origin.disabled IS FALSE
+    AND destination.name='ui.view.'||projection_key AND NOT EXISTS(
+     SELECT 1 FROM public.system_group_table_func_rights copied WHERE copied.user_group_id=r.user_group_id AND copied.function_id=destination.id
+      AND copied.target_schema_name IS NOT DISTINCT FROM r.target_schema_name AND copied.target_table_uid IS NOT DISTINCT FROM r.target_table_uid)) THEN
+   RAISE EXCEPTION 'complete article audience scope preservation failed';
+  END IF;
+ END LOOP;
+ IF EXISTS(SELECT 1 FROM article_upgrade_rights b WHERE NOT EXISTS(SELECT 1 FROM public.system_group_table_func_rights a WHERE to_jsonb(a)=to_jsonb(b))) THEN
+  RAISE EXCEPTION 'authored grant preservation failed';
+ END IF;
+ SELECT string_agg(f,'; ') INTO findings FROM public.app_check_article_bundles() f;
+ IF findings IS NOT NULL THEN RAISE EXCEPTION 'article materialization refused: %',findings; END IF;
+ INSERT INTO public.system_data_repair_records(migration,action,detail)
+  VALUES('article_bundle_materialization','completed',jsonb_build_object('file','20261015000012_materialize_article_bundles.sql',
+   'targets',(SELECT count(*) FROM article_upgrade_targets),
+   'source_assignments',(SELECT count(DISTINCT(table_uid,user_id,group_id,view_key)) FROM article_upgrade_sources)));
+END $materialize$;
 -- The historical three-place seed uses the current rules' defaults. Run this
 -- canonicalization after it on fresh installs, and normally on upgrades/replay.
 -- Absent/default sites are untouched; no default is inserted or timestamp changed.
@@ -9185,7 +9563,7 @@ DECLARE
     findings text;
 BEGIN
     SELECT string_agg(marker, ', ' ORDER BY marker) INTO missing_markers
-      FROM unnest(ARRAY['wl58_row_actor_support', 'wl58_row_actor_marks_by_table_uid', 'wl58_row_actor_trigger_definitions', 'k116_login_names', 'password_reset_dummy_work', 'system_favorites_table', 'system_front_page_revisions_table', 'system_front_page_blocks_table', 'wl103_row_group_classifications', 'wl132_surviving_sign_in', 'wl52_drop_column_label_value_layout', 'system_dataset_appearance_table', 'wl157_migration_execution_evidence', 'dataset_card_appearance_cutover', 'wl157_application_update_admission', 'dataset_appearance_three_place_schema', 'wl164_publication_fields', 'wl163_dataset_kind_contracts', 'wl159_dataset_namespace', 'wl167_database_identity_schema', 'wl167_managed_timestamp_zones', 'wl77_filterbar_preferences', 'wo41_first_run_readonly', 'row_group_heading_order_appearance_field', 'wl157_application_update_refusal_keys', 'wl58_row_actor_columns', 'system_favorites_registry', 'system_front_page_blocks_registry', 'wl103_row_group_classifications_registry', 'wl144_registry_reference_key', 'dataset_media_hidden', 'wl157_application_update_capability', 'dataset_appearance_three_place_backfill', 'wl164_publication_column_metadata', 't919_registered_column_metadata', 't750_automatic_log_retention', 'record_title_headers_962', 'translation_object_sources_sec2', 'wl69_card_image_usage_storage']::text[]) AS marker
+      FROM unnest(ARRAY['wl58_row_actor_support', 'wl58_row_actor_marks_by_table_uid', 'wl58_row_actor_trigger_definitions', 'k116_login_names', 'password_reset_dummy_work', 'system_favorites_table', 'system_front_page_revisions_table', 'system_front_page_blocks_table', 'wl103_row_group_classifications', 'wl132_surviving_sign_in', 'wl52_drop_column_label_value_layout', 'system_dataset_appearance_table', 'wl157_migration_execution_evidence', 'dataset_card_appearance_cutover', 'wl157_application_update_admission', 'dataset_appearance_three_place_schema', 'wl164_publication_fields', 'wl163_dataset_kind_contracts', 'wl159_dataset_namespace', 'wl167_database_identity_schema', 'wl167_managed_timestamp_zones', 'article_bundle_storage', 'article_bundle_mutations', 'wl77_filterbar_preferences', 'wo41_first_run_readonly', 'row_group_heading_order_appearance_field', 'wl157_application_update_refusal_keys', 'wl58_row_actor_columns', 'system_favorites_registry', 'system_front_page_blocks_registry', 'wl103_row_group_classifications_registry', 'wl144_registry_reference_key', 'dataset_media_hidden', 'wl157_application_update_capability', 'dataset_appearance_three_place_backfill', 'wl164_publication_column_metadata', 't919_registered_column_metadata', 't750_automatic_log_retention', 'record_title_headers_962', 'translation_object_sources_sec2', 'wl69_card_image_usage_storage', 'article_bundle_materialization']::text[]) AS marker
      WHERE NOT EXISTS (SELECT 1 FROM public.system_data_repair_records AS record
                         WHERE record.migration = marker AND record.action = 'completed');
     IF missing_markers IS NOT NULL THEN
@@ -9215,6 +9593,8 @@ BEGIN
         SELECT 'public.app_check_application_update_capability(): ' || result FROM public.app_check_application_update_capability() AS result
         UNION ALL
         SELECT 'public.app_check_dataset_appearance_three_places(): ' || result FROM public.app_check_dataset_appearance_three_places() AS result
+        UNION ALL
+        SELECT 'public.app_check_article_bundles(): ' || result FROM public.app_check_article_bundles() AS result
     ) AS checks (finding);
     IF findings IS NOT NULL THEN
         RAISE EXCEPTION 'bootstrap import failed its final checks: %', findings;
@@ -9422,6 +9802,9 @@ BEGIN
       ('20261015000007_seed_client_error_notice_language_key.sql', '16b2c1391f7b1190e8d25ac2d6df88f080ad5440868bfaf6be15ec636b845e5b', 'bootstrap_baseline', 'bootstrap'),
       ('20261015000008_seed_table_cell_max_lines.sql', '446c6db2923a14859efbb71a6de055260fdc2a15b510e0abdaf1a5e99a531b38', 'bootstrap_baseline', 'bootstrap'),
       ('20261015000009_add_card_image_usage_presentation.sql', '24bce4ab54d1ac303c687df8a9288b8197f9e137a3a470d37448dde3011dd294', 'bootstrap_baseline', 'bootstrap'),
+      ('20261015000010_add_article_bundle_storage.sql', '5cb71fa4fdcf8a5738fdb58d85e6340f7437d36a3c5a8974786b20c5f3dd78be', 'bootstrap_baseline', 'bootstrap'),
+      ('20261015000011_add_article_bundle_mutations.sql', '3a1147b5faa445ec189a4b111bac32b89a888389a6a9a7e86ad62544ab62e88e', 'bootstrap_baseline', 'bootstrap'),
+      ('20261015000012_materialize_article_bundles.sql', '2424a29532141bd2f1992a054f22ebda94c08f14db402cee074a2acd31785573', 'bootstrap_baseline', 'bootstrap'),
       ('20261015000013_add_filterbar_preferences.sql', '80877423924e2dfdb6c52ca37c81c7f25d9d7bb3ab356058770ca1d96ee24436', 'bootstrap_baseline', 'bootstrap'),
       ('20261015000014_seed_redirect_notice_language_keys.sql', '0be225481d0662c536ef2e695280ea64327f1c0e798a98a60e230393f13990da', 'bootstrap_baseline', 'bootstrap'),
       ('20261015000015_seed_cancel_changes_language_key.sql', '60f0af138d05650ffb879cb7028a76737b4a9fdd853527e1672be3644a1fe9b3', 'bootstrap_baseline', 'bootstrap'),

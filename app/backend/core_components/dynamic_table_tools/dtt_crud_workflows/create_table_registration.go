@@ -365,7 +365,7 @@ func insertPerm(q dbutils.Querier, groupID, funcID, tableUID int) error {
 	query := `INSERT INTO system_group_table_func_rights
 		(user_group_id, function_id, target_table_uid, target_schema_name)
 		VALUES ($1, $2, $3, 'public')
-		ON CONFLICT (user_group_id, function_id, COALESCE(target_table_uid, 0)) DO NOTHING`
+		ON CONFLICT DO NOTHING`
 	_, err := q.Exec(query, groupID, funcID, tableUID)
 	return err
 }

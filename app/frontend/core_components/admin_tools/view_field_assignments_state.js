@@ -397,7 +397,7 @@ export function buildMixedGroupViewFieldSetSavePayload({
     };
 }
 
-export function savedAssignmentMatches(response, payload, savedFieldSetID) {
+export function savedAssignmentMatches(response, payload, savedFieldSetID, savedVariants) {
     const fieldSetID = positiveInteger(savedFieldSetID);
     if (!fieldSetID) return false;
     const savedSet = sharedFieldSetByID(response, fieldSetID);
@@ -408,6 +408,29 @@ export function savedAssignmentMatches(response, payload, savedFieldSetID) {
         return positiveInteger(response?.site_default_field_set_id) === fieldSetID
             && normalizeGroupAssignments(response?.group_assignments)
                 .every((assignment) => assignment.field_set_id !== fieldSetID);
+    }
+    // Article targets own separate bundles even when this editor writes the
+    // same fields to each. Verify every returned identity against the GET;
+    // unrelated groups must not acquire any of those saved collections.
+    if (Array.isArray(savedVariants) && savedVariants.length > 0) {
+        const ids = new Set(savedVariants.map((variant) => positiveInteger(variant.field_set_id)));
+        const requested = new Set(payload.target_group_ids);
+        const assignments = normalizeGroupAssignments(response?.group_assignments);
+        return ids.has(fieldSetID) && !ids.has(null)
+            && ids.size === requested.size && savedVariants.length === requested.size
+            && new Set(savedVariants.map((variant) => variant.group_id)).size === requested.size
+            && !ids.has(positiveInteger(response?.site_default_field_set_id))
+            && assignments.every((assignment) => !ids.has(assignment.field_set_id) || requested.has(assignment.group_id))
+            && savedVariants.every((variant) => requested.has(variant.group_id)
+                && assignments.find((assignment) => assignment.group_id === variant.group_id)?.field_set_id === variant.field_set_id)
+            && savedGroupVariantsMatch(response, {
+                ...payload,
+                group_variants: savedVariants.map((variant) => ({
+                    group_id: variant.group_id,
+                    group_priority: payload.group_priority,
+                    visible_columns: payload.visible_columns,
+                })),
+            });
     }
     const assignments = normalizeGroupAssignments(response?.group_assignments);
     const requestedGroupIDs = [...payload.target_group_ids].sort((left, right) => left - right);
@@ -442,7 +465,14 @@ export function savedGroupVariantsMatch(response, payload) {
 
 export function resetAssignmentMatches(response, target) {
     if (target.targetScope === "site") {
-        return positiveInteger(response?.site_default_field_set_id) === null;
+        const siteID = positiveInteger(response?.site_default_field_set_id);
+        if (siteID === null) return true;
+        // Storage requires an explicit Article site bundle. Restoring its
+        // ordered projection to metadata is the same editor-visible default.
+        const article = ["article_view", "image_first_view", "image_first_page_view"].includes(response?.view_key);
+        const site = sharedFieldSetByID(response, siteID);
+        return article && Boolean(site) && Array.isArray(response?.metadata_visible_columns)
+            && JSON.stringify(site.visible_columns) === JSON.stringify(response.metadata_visible_columns);
     }
     const assignments = normalizeGroupAssignments(response?.group_assignments);
     return target.targetGroupIDs.every((groupID) => (

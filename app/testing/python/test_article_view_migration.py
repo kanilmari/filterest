@@ -4,6 +4,8 @@ Connects the canonical migration to real constraints, assignments and permission
 Protects existing site values, card choices and repeatable upgrades without live DB writes.
 """
 from pathlib import Path
+import hashlib
+import json
 from test_field_settings_language_seed import database
 
 MIGRATION = Path(__file__).resolve().parents[2] / "server_tools/migrations/20260908000004_add_article_view_and_field_settings.sql"
@@ -75,3 +77,87 @@ def test_legacy_dimension_keeps_identity_settings_and_site_copy(database):
     first = snapshot(database)
     database(MIGRATION.read_text())
     assert snapshot(database) == first
+
+
+APP = Path(__file__).resolve().parents[2]
+BUNDLE_FILES = (
+    "20261015000010_add_article_bundle_storage.sql",
+    "20261015000011_add_article_bundle_mutations.sql",
+    "20261015000012_materialize_article_bundles.sql",
+)
+
+
+def test_article_bundle_release_bootstrap_and_completion_contract():
+    """Database-free gate for the exact files the native PostgreSQL suite runs."""
+    bootstrap = APP / "server_tools/public_bootstrap"
+    manifest = json.loads((bootstrap / "manifest.json").read_text())
+    generator = (bootstrap / "generate_bootstrap.py").read_text()
+    schema, seed = ((bootstrap / name).read_text() for name in ("schema.sql", "seed_data.sql"))
+    for name in BUNDLE_FILES:
+        path = APP / "server_tools/migrations" / name
+        sql = path.read_text()
+        assert "-- VERSION_DB: 9.12.0" in sql
+        assert "-- VERSION_DB_OWNER: 20261015000099_record_database_release_9_12_0.sql" in sql
+        assert "INSERT INTO public.system_db_version" not in sql
+        assert name < "20261015000099_record_database_release_9_12_0.sql"
+        assert name in generator and name in manifest["migration_ledger_baseline"]
+        assert manifest["source_files"]["filterest/app/server_tools/migrations/" + name]["sha256"] == hashlib.sha256(path.read_bytes()).hexdigest()
+        assert sql in (schema if name != BUNDLE_FILES[2] else seed)
+    data = (APP / "server_tools/migrations" / BUNDLE_FILES[2]).read_text()
+    assert "migration='article_bundle_materialization' AND action='completed'" in data
+    assert "VALUES('article_bundle_materialization','completed'" in data
+    assert seed.index(data) > seed.index("20261015000002_set_exceptional_record_headers.sql")
+    assert "record.migration = marker AND record.action = 'completed'" in seed
+    assert "public.app_check_article_bundles() AS result" in seed
+    assert (APP / "server_tools/versioning/schema_snapshots/db-9.12.0.sql").read_text() == schema
+
+
+def test_article_bundle_bootstrap_drains_own_events_before_registry_ddl():
+    """Regeneration must retain the DML/DDL boundary lost in the rebase."""
+    seed = (APP / "server_tools/public_bootstrap/seed_data.sql").read_text()
+    for name in ("20261005000050_require_registry_reference_key.sql", BUNDLE_FILES[2]):
+        migration = (APP / "server_tools/migrations" / name).read_text()
+        preceding = seed[:seed.index(migration)]
+        boundary = preceding[preceding.rindex("DO $article_bundle_seed_boundary$"):]
+        immediate = "SET CONSTRAINTS public.article_bundle_invariant IMMEDIATE;"
+        deferred = "SET CONSTRAINTS public.article_bundle_invariant DEFERRED;"
+        assert boundary.index(immediate) < boundary.index(deferred) < boundary.index("END $article_bundle_seed_boundary$;")
+        assert "conrelid = 'public.system_db_tables'::regclass" in boundary
+        assert "conname = 'article_bundle_invariant'" in boundary
+    assert "SET CONSTRAINTS ALL" not in seed
+    assert "SET CONSTRAINTS" not in seed[seed.index((APP / "server_tools/migrations" / BUNDLE_FILES[2]).read_text()):]
+
+
+def test_article_bundle_materializes_exact_sources_and_replay_preserves_revocation(database):
+    # Reuse the language fixture's disposable database, replacing its small
+    # schema with the same synthetic evidence the Go PostgreSQL proofs consume.
+    database("DROP TABLE system_lang_key_sources,system_lang_key_translations,system_lang_keys,system_db_version")
+    database((APP / "testing/fixtures/article_bundle_legacy.sql").read_text())
+    for name in BUNDLE_FILES:
+        database((APP / "server_tools/migrations" / name).read_text())
+    assert database("SELECT count(*) FROM public.app_check_article_bundles()") == "0"
+    assert database("SELECT count(*) FROM system_column_field_sets WHERE article_family") == "5"
+    assert database("SELECT count(*) FROM system_group_table_func_rights WHERE user_group_id=3") == "0"
+    assert database("SELECT count(*) FROM system_data_repair_records WHERE migration='article_bundle_materialization' AND action='completed'") == "1"
+    assert database("SELECT count(*) FROM system_column_field_set_members WHERE field_set_id=100 AND presentation_values IS NULL") == "2"
+    assert database("SELECT count(*) FROM system_group_table_func_rights WHERE creation_spec='Authored global IFAV'") == "1"
+    database("DELETE FROM system_group_table_func_rights WHERE function_id=(SELECT id FROM system_functions WHERE name='ui.view.image_first_view')")
+    first = database("SELECT jsonb_agg(to_jsonb(m) ORDER BY field_set_id,sort_order) FROM system_column_field_set_members m")
+    database((APP / "server_tools/migrations" / BUNDLE_FILES[2]).read_text())
+    assert database("SELECT jsonb_agg(to_jsonb(m) ORDER BY field_set_id,sort_order) FROM system_column_field_set_members m") == first
+    assert database("SELECT count(*) FROM system_group_table_func_rights WHERE function_id=(SELECT id FROM system_functions WHERE name='ui.view.image_first_view')") == "0"
+
+
+def test_bootstrap_migration_tuples_stay_in_filename_order():
+    """A rebase must never append a batch's migrations after newer ones (cp-gate-168d, guarantee 4)."""
+    import re
+    generator = (APP / "server_tools/public_bootstrap/generate_bootstrap.py").read_text()
+    tuples = re.findall(r'^\s*([A-Za-z_]+)\s*(?::[^=]*)?=\s*[\(\[]\s*\n(.*?)^\s*[\)\]]', generator, re.S | re.M)
+    checked = 0
+    for name, body in tuples:
+        names = re.findall(r'"(\d{14}_[^"]+\.sql)"', body)
+        if names:
+            checked += 1
+            assert names == sorted(names), (name, [(a, b) for a, b in zip(names, names[1:]) if a > b])
+    assert checked >= 5
+

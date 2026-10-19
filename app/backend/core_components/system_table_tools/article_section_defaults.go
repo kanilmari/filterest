@@ -39,20 +39,31 @@ type articleSectionDefaultsPatch struct {
 }
 
 func articleSupportedSections(presentation string) []string {
-	switch presentation {
-	case "classic":
+	switch canonicalArticleSectionKey(presentation) {
+	case "article_view":
 		return []string{"details", "images", "attachments", "related_rows", "task_progress"}
-	case "image_first":
+	case "image_first_view", "image_first_page_view":
 		return []string{"details"}
 	default:
 		return nil
 	}
 }
 
+func canonicalArticleSectionKey(presentation string) string {
+	switch presentation {
+	case "classic":
+		return "article_view"
+	case "image_first":
+		return "image_first_view"
+	default:
+		return presentation
+	}
+}
+
 func validateArticleSectionTarget(dataset, presentation string) (string, error) {
 	clean, err := security.SanitizeIdentifier(strings.TrimSpace(dataset))
 	if err != nil || len(articleSupportedSections(presentation)) == 0 {
-		return "", errors.New("valid dataset and classic or image_first presentation_key required")
+		return "", errors.New("valid dataset and article presentation_key required")
 	}
 	return clean, nil
 }
@@ -146,7 +157,16 @@ func decodeStoredArticleSectionDefaults(raw []byte) (map[string]map[string]bool,
 		if err != nil {
 			return nil, err
 		}
-		result[key] = sections
+		canonical := canonicalArticleSectionKey(key)
+		if result[canonical] == nil {
+			result[canonical] = map[string]bool{}
+		}
+		for section, value := range sections {
+			if prior, exists := result[canonical][section]; exists && prior != value {
+				return nil, errors.New("conflicting article section aliases")
+			}
+			result[canonical][section] = value
+		}
 	}
 	return result, nil
 }
@@ -158,7 +178,7 @@ func articleSectionDefaultsResponse(dataset, presentation string, stored map[str
 	}
 	for _, section := range result.SupportedSections {
 		result.InitialOpen[section] = true
-		if value, exists := stored[presentation][section]; exists {
+		if value, exists := stored[canonicalArticleSectionKey(presentation)][section]; exists {
 			result.Overrides[section] = value
 			result.InitialOpen[section] = value
 		}
@@ -191,14 +211,26 @@ func persistArticleSectionDefaults(tx *sql.Tx, tableUID int, input articleSectio
 	if err != nil {
 		return ArticleSectionDefaultsResponse{}, err
 	}
-	if input.ResetToDefaults {
-		delete(stored, input.PresentationKey)
-	} else {
-		if stored[input.PresentationKey] == nil {
-			stored[input.PresentationKey] = map[string]bool{}
+	// Compatibility names are accepted at the request boundary only. Every save,
+	// including restore defaults, persists all supported canonical booleans.
+	for _, key := range []string{"article_view", "image_first_view", "image_first_page_view"} {
+		if stored[key] == nil {
+			stored[key] = map[string]bool{}
 		}
+		for _, section := range articleSupportedSections(key) {
+			if _, exists := stored[key][section]; !exists {
+				stored[key][section] = true
+			}
+		}
+	}
+	key := canonicalArticleSectionKey(input.PresentationKey)
+	if input.ResetToDefaults {
+		for _, section := range articleSupportedSections(key) {
+			stored[key][section] = true
+		}
+	} else {
 		for section, value := range input.InitialOpen {
-			stored[input.PresentationKey][section] = value
+			stored[key][section] = value
 		}
 	}
 	raw, err := json.Marshal(stored)

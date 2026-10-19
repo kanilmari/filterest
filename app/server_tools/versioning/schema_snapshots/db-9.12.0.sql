@@ -6313,6 +6313,407 @@ BEGIN
         wl167_timestamp_view_columns, wl167_timestamp_views, wl167_timestamp_columns;
 END;
 $conversion$;
+-- 20261015000010_add_article_bundle_storage.sql
+-- Stores three explicit article projections in one ordered, target-owned collection.
+-- Connects assignment foreign keys, dataset policy and generic writers to one contract.
+-- VERSION_DB: 9.12.0
+-- VERSION_DB_OWNER: 20261015000099_record_database_release_9_12_0.sql
+-- COMPLETION_MARKER: article_bundle_storage
+
+ALTER TABLE public.system_column_field_sets ADD COLUMN IF NOT EXISTS article_family boolean NOT NULL DEFAULT false;
+ALTER TABLE public.system_column_field_set_members ADD COLUMN IF NOT EXISTS presentation_values jsonb;
+
+-- A copied audience must retain its complete nullable target scope. The legacy
+-- index ignored schema and could silently discard a different authored scope.
+DROP INDEX IF EXISTS public.uq_group_func_rights_group_func_table;
+CREATE UNIQUE INDEX uq_group_func_rights_group_func_table ON public.system_group_table_func_rights
+ (user_group_id,function_id,target_schema_name,target_table_uid) NULLS NOT DISTINCT;
+
+CREATE OR REPLACE FUNCTION public.app_article_keys() RETURNS text[]
+LANGUAGE sql IMMUTABLE AS $$ SELECT ARRAY['article_view','image_first_view','image_first_page_view']::text[] $$;
+
+CREATE OR REPLACE FUNCTION public.app_article_values(visible boolean, width integer DEFAULT NULL) RETURNS jsonb
+LANGUAGE sql IMMUTABLE AS $$
+ SELECT jsonb_object_agg(key,jsonb_build_object('visible',visible,'width_px',width)) FROM unnest(public.app_article_keys()) key
+$$;
+
+CREATE OR REPLACE FUNCTION public.app_valid_article_values(raw jsonb) RETURNS boolean
+LANGUAGE plpgsql IMMUTABLE SET search_path=pg_catalog,public AS $$
+DECLARE key text; cell jsonb;
+BEGIN
+ IF raw IS NULL OR jsonb_typeof(raw)<>'object' THEN RETURN false; END IF;
+ IF (SELECT count(*) FROM jsonb_object_keys(raw))<>3 THEN RETURN false; END IF;
+ FOREACH key IN ARRAY public.app_article_keys() LOOP
+  cell:=raw->key;
+  IF cell IS NULL OR jsonb_typeof(cell)<>'object' THEN RETURN false; END IF;
+  IF (SELECT count(*) FROM jsonb_object_keys(cell))<>2
+     OR jsonb_typeof(cell->'visible') IS DISTINCT FROM 'boolean'
+     OR NOT cell ? 'width_px' THEN RETURN false; END IF;
+  IF cell->'width_px'<>'null'::jsonb THEN
+   IF jsonb_typeof(cell->'width_px')<>'number' OR (cell->>'width_px') !~ '^[0-9]+$' THEN RETURN false; END IF;
+   IF (cell->>'width_px')::numeric>2147483647 THEN RETURN false; END IF;
+  END IF;
+ END LOOP;
+ RETURN true;
+END $$;
+
+CREATE OR REPLACE FUNCTION public.app_article_opener_defaults() RETURNS jsonb
+LANGUAGE sql IMMUTABLE AS $$ SELECT '{"card-body":"article_view","card-title":"article_view","card-summary":"article_view","show-more":"article_view","calendar-event":"article_view","product-body":"article_view","product-image":"article_view","free-layout-body":"article_view","free-layout-image":"article_view","search-result":"article_view","home-button":"article_view","field-link":"article_view","card-image":"image_first_view","article-image":"image_first_view","gallery-thumbnail":"image_first_view"}'::jsonb $$;
+
+CREATE OR REPLACE FUNCTION public.app_valid_article_opener_policy(raw jsonb) RETURNS boolean
+LANGUAGE plpgsql IMMUTABLE AS $$
+BEGIN
+ IF raw IS NULL OR jsonb_typeof(raw)<>'object' THEN RETURN false; END IF;
+ RETURN (SELECT array_agg(key ORDER BY key) FROM jsonb_object_keys(raw) key)
+       IS NOT DISTINCT FROM (SELECT array_agg(key ORDER BY key) FROM jsonb_object_keys(public.app_article_opener_defaults()) key)
+   AND NOT EXISTS(SELECT 1 FROM jsonb_each_text(raw) WHERE value IS NULL OR NOT value=ANY(public.app_article_keys()));
+END $$;
+
+CREATE OR REPLACE FUNCTION public.app_article_section_defaults() RETURNS jsonb
+LANGUAGE sql IMMUTABLE AS $$ SELECT '{"article_view":{"details":true,"images":true,"attachments":true,"related_rows":true,"task_progress":true},"image_first_view":{"details":true},"image_first_page_view":{"details":true}}'::jsonb $$;
+
+CREATE OR REPLACE FUNCTION public.app_valid_article_sections(raw jsonb) RETURNS boolean
+LANGUAGE plpgsql IMMUTABLE AS $$
+DECLARE key text; expected jsonb; cell jsonb;
+BEGIN
+ IF raw IS NULL OR jsonb_typeof(raw)<>'object' THEN RETURN false; END IF;
+ IF (SELECT count(*) FROM jsonb_object_keys(raw))<>3 THEN RETURN false; END IF;
+ FOR key,expected IN SELECT * FROM jsonb_each(public.app_article_section_defaults()) LOOP
+  cell:=raw->key;
+  IF cell IS NULL OR jsonb_typeof(cell)<>'object' THEN RETURN false; END IF;
+  IF (SELECT array_agg(k ORDER BY k) FROM jsonb_object_keys(cell) k)
+     IS DISTINCT FROM (SELECT array_agg(k ORDER BY k) FROM jsonb_object_keys(expected) k)
+     OR EXISTS(SELECT 1 FROM jsonb_each(cell) WHERE jsonb_typeof(value)<>'boolean') THEN RETURN false; END IF;
+ END LOOP;
+ RETURN true;
+END $$;
+
+ALTER TABLE public.system_db_tables ADD COLUMN IF NOT EXISTS article_opener_policy jsonb NOT NULL DEFAULT public.app_article_opener_defaults();
+ALTER TABLE public.system_db_tables ALTER COLUMN article_section_initial_open SET DEFAULT public.app_article_section_defaults();
+DO $$ BEGIN
+ IF NOT EXISTS(SELECT 1 FROM pg_constraint WHERE conrelid='public.system_column_field_set_members'::regclass AND conname='ck_article_member_values') THEN
+  ALTER TABLE public.system_column_field_set_members ADD CONSTRAINT ck_article_member_values
+    CHECK(presentation_values IS NULL OR public.app_valid_article_values(presentation_values));
+ END IF;
+ IF NOT EXISTS(SELECT 1 FROM pg_constraint WHERE conrelid='public.system_db_tables'::regclass AND conname='ck_article_opener_policy') THEN
+  ALTER TABLE public.system_db_tables ADD CONSTRAINT ck_article_opener_policy CHECK(public.app_valid_article_opener_policy(article_opener_policy));
+ END IF;
+END $$;
+
+-- One target owns a bundle. Deferred checks permit atomic three-link writes,
+-- but reject partial links, cross-target reuse, family changes and generic bypasses.
+CREATE OR REPLACE FUNCTION public.app_check_article_bundles() RETURNS SETOF text
+LANGUAGE sql STABLE SET search_path=pg_catalog,public AS $$
+ SELECT 'article target links disagree or are incomplete' WHERE EXISTS(
+  SELECT a.table_uid,a.user_id,a.group_id FROM public.system_view_field_set_assignments a
+  JOIN public.system_table_views v ON v.id=a.view_id
+  JOIN public.system_column_field_sets s ON s.id=a.field_set_id
+  WHERE v.view_key=ANY(public.app_article_keys()) OR s.article_family
+  GROUP BY a.table_uid,a.user_id,a.group_id
+  HAVING count(*)<>3 OR count(DISTINCT a.field_set_id)<>1 OR count(DISTINCT a.group_priority)<>1
+   OR bool_or(NOT s.article_family OR NOT v.view_key=ANY(public.app_article_keys()))
+   OR bool_or(s.owner_user_id IS NOT NULL AND s.owner_user_id IS DISTINCT FROM a.user_id))
+ UNION ALL SELECT 'article bundle reused by another target or presentation' WHERE EXISTS(
+  SELECT s.id FROM public.system_column_field_sets s JOIN public.system_view_field_set_assignments a ON a.field_set_id=s.id
+  WHERE s.article_family GROUP BY s.id HAVING count(*)<>3)
+ UNION ALL SELECT 'article member has invalid values, legacy width or forbidden field' WHERE EXISTS(
+  SELECT 1 FROM public.system_column_field_set_members m JOIN public.system_column_field_sets s ON s.id=m.field_set_id
+  JOIN public.system_column_details c ON c.column_uid=m.column_uid
+  WHERE (s.article_family AND (NOT public.app_valid_article_values(m.presentation_values) OR m.column_width_px IS NOT NULL
+    OR ((COALESCE(c.hide_everywhere,false) OR COALESCE(c.client_delivery_mode,'include')<>'include')
+      AND EXISTS(SELECT 1 FROM jsonb_each(m.presentation_values) p WHERE p.value->'visible'='true'))))
+   OR (NOT s.article_family AND m.presentation_values IS NOT NULL))
+ UNION ALL SELECT 'dataset lacks explicit article site bundle or canonical sections' WHERE EXISTS(
+  SELECT 1 FROM public.system_db_tables d WHERE NOT public.app_valid_article_sections(d.article_section_initial_open)
+   OR NOT EXISTS(SELECT 1 FROM public.system_view_field_set_assignments a JOIN public.system_table_views v ON v.id=a.view_id
+     WHERE a.table_uid=d.table_uid AND a.user_id IS NULL AND a.group_id IS NULL AND v.view_key='article_view'));
+$$;
+
+CREATE OR REPLACE FUNCTION public.app_enforce_article_bundles() RETURNS trigger
+LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,public AS $$
+DECLARE findings text;
+BEGIN
+ IF EXISTS(SELECT 1 FROM public.system_data_repair_records WHERE migration='article_bundle_materialization' AND action='completed') THEN
+  SELECT string_agg(f,'; ') INTO findings FROM public.app_check_article_bundles() f;
+  IF findings IS NOT NULL THEN RAISE EXCEPTION 'article bundle invariant: %',findings; END IF;
+ END IF;
+ RETURN NULL;
+END $$;
+
+-- Serialize writes on the registry row. Function-local mutation scope permits
+-- only the shared service, lifecycle cascades and initial materialization to
+-- write article storage; it is restored when a service call returns or fails.
+-- Limited preference writers need no UPDATE grant on the registry or SELECT
+-- grant on private repair records. Definer functions expose locks/checks only.
+CREATE OR REPLACE FUNCTION public.app_lock_article_dataset_uid(dataset_uid integer) RETURNS boolean
+LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,public AS $$
+BEGIN
+ PERFORM 1 FROM public.system_db_tables WHERE table_uid=dataset_uid FOR UPDATE;
+ RETURN FOUND;
+END $$;
+
+CREATE OR REPLACE FUNCTION public.app_lock_article_dataset() RETURNS trigger
+LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,public AS $$
+DECLARE prior jsonb; proposed jsonb; protected boolean:=false;
+BEGIN
+ IF TG_OP<>'INSERT' THEN PERFORM public.app_lock_article_dataset_uid(OLD.table_uid); END IF;
+ IF TG_OP<>'DELETE' THEN PERFORM public.app_lock_article_dataset_uid(NEW.table_uid); END IF;
+ IF TG_OP<>'INSERT' THEN prior:=to_jsonb(OLD); END IF;
+ IF TG_OP<>'DELETE' THEN proposed:=to_jsonb(NEW); END IF;
+ CASE TG_TABLE_NAME
+  WHEN 'system_db_tables' THEN
+   protected:=true;
+   IF TG_OP='INSERT' AND NEW.article_opener_policy=public.app_article_opener_defaults() THEN protected:=false; END IF;
+  WHEN 'system_column_field_sets' THEN
+   protected:=COALESCE((prior->>'article_family')::boolean,false) OR COALESCE((proposed->>'article_family')::boolean,false);
+  WHEN 'system_column_field_set_members' THEN
+   protected:=EXISTS(SELECT 1 FROM public.system_column_field_sets WHERE article_family
+    AND id IN ((prior->>'field_set_id')::bigint,(proposed->>'field_set_id')::bigint));
+  WHEN 'system_view_field_set_assignments' THEN
+   protected:=EXISTS(SELECT 1 FROM public.system_table_views WHERE view_key=ANY(public.app_article_keys())
+    AND id IN ((prior->>'view_id')::integer,(proposed->>'view_id')::integer))
+    OR EXISTS(SELECT 1 FROM public.system_column_field_sets WHERE article_family
+     AND id IN ((prior->>'field_set_id')::bigint,(proposed->>'field_set_id')::bigint));
+  ELSE NULL;
+ END CASE;
+ IF protected AND pg_trigger_depth()=1
+  AND current_setting('filterest.article_bundle_mutation',true) IS DISTINCT FROM 'on'
+  AND EXISTS(SELECT 1 FROM public.system_data_repair_records WHERE migration='article_bundle_materialization' AND action='completed') THEN
+  RAISE EXCEPTION 'article storage requires the shared mutation service';
+ END IF;
+ IF TG_OP='DELETE' THEN RETURN OLD; END IF;
+ RETURN NEW;
+END $$;
+
+REVOKE ALL ON FUNCTION public.app_enforce_article_bundles(),public.app_lock_article_dataset() FROM PUBLIC;
+
+DO $$ DECLARE relation text; BEGIN
+ FOREACH relation IN ARRAY ARRAY['system_column_field_sets','system_column_field_set_members','system_view_field_set_assignments','system_column_details'] LOOP
+  EXECUTE format('DROP TRIGGER IF EXISTS article_dataset_lock ON public.%I',relation);
+  EXECUTE format('CREATE TRIGGER article_dataset_lock BEFORE INSERT OR UPDATE OR DELETE ON public.%I FOR EACH ROW EXECUTE FUNCTION public.app_lock_article_dataset()',relation);
+ END LOOP;
+ DROP TRIGGER IF EXISTS article_opener_mutation ON public.system_db_tables;
+ CREATE TRIGGER article_opener_mutation BEFORE INSERT OR UPDATE OF article_opener_policy ON public.system_db_tables
+  FOR EACH ROW EXECUTE FUNCTION public.app_lock_article_dataset();
+ FOREACH relation IN ARRAY ARRAY['system_column_field_sets','system_column_field_set_members','system_view_field_set_assignments','system_db_tables','system_column_details','system_table_views'] LOOP
+  EXECUTE format('DROP TRIGGER IF EXISTS article_bundle_invariant ON public.%I',relation);
+  EXECUTE format('CREATE CONSTRAINT TRIGGER article_bundle_invariant AFTER INSERT OR UPDATE OR DELETE ON public.%I DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION public.app_enforce_article_bundles()',relation);
+ END LOOP;
+END $$;
+
+COMMENT ON COLUMN public.system_column_field_sets.article_family IS 'Target-owned article bundle; exactly three sibling presentation assignments share its ordered members.';
+COMMENT ON COLUMN public.system_column_field_set_members.presentation_values IS 'Explicit visible/width_px for all three article presentations. JSON null width is automatic; there is no inheritance.';
+COMMENT ON COLUMN public.system_db_tables.article_opener_policy IS 'Dataset UID owns the complete registered opener-role map. Read by future activation batches.';
+
+INSERT INTO public.system_data_repair_records(migration,action,detail)
+SELECT 'article_bundle_storage','completed','{"contract":"K376 materialize"}'::jsonb
+WHERE NOT EXISTS(SELECT 1 FROM public.system_data_repair_records WHERE migration='article_bundle_storage' AND action='completed');
+-- 20261015000011_add_article_bundle_mutations.sql
+-- Shares target-preserving projection mutations and dataset/field lifecycle defaults.
+-- Connects legacy settings endpoints and generic metadata writers to bundle storage.
+-- VERSION_DB: 9.12.0
+-- VERSION_DB_OWNER: 20261015000099_record_database_release_9_12_0.sql
+-- COMPLETION_MARKER: article_bundle_mutations
+
+-- A legacy authored name must never make cloning overwrite or reject unrelated
+-- collections. Dataset locks make suffix allocation deterministic and race-free.
+CREATE OR REPLACE FUNCTION public.app_article_bundle_name(dataset_uid integer,principal_user bigint,base_label text) RETURNS text
+LANGUAGE plpgsql SET search_path=pg_catalog,public AS $$
+DECLARE candidate_name text:=left(base_label,110); suffix integer:=0;
+BEGIN
+ WHILE EXISTS(SELECT 1 FROM public.system_column_field_sets WHERE table_uid=dataset_uid
+  AND owner_user_id IS NOT DISTINCT FROM principal_user AND name=candidate_name) LOOP
+  suffix:=suffix+1;
+  candidate_name:=left(base_label,110)||' ('||suffix||')';
+ END LOOP;
+ RETURN candidate_name;
+END $$;
+
+-- The caller owns the transaction and authorization. Dataset locks cover the
+-- complete operation; its function-local scope never authorizes later generic writes.
+CREATE OR REPLACE FUNCTION public.app_save_article_projection(
+ dataset_uid integer, presentation text, principal_user bigint, principal_group bigint,
+ priority integer, selected_columns integer[], label text, author bigint,
+ source_collection bigint DEFAULT NULL) RETURNS bigint
+LANGUAGE plpgsql SET search_path=pg_catalog,public SET filterest.article_bundle_mutation='on' AS $$
+DECLARE bundle bigint; prior bigint; item record; ordered integer[]; raw jsonb; width integer; collection_name text;
+BEGIN
+ IF NOT presentation=ANY(public.app_article_keys()) OR principal_user=1
+    OR (principal_user IS NOT NULL AND principal_group IS NOT NULL)
+    OR priority NOT BETWEEN -1000000 AND 1000000 THEN RAISE EXCEPTION 'invalid article target'; END IF;
+ IF NOT public.app_lock_article_dataset_uid(dataset_uid) THEN RAISE EXCEPTION 'unknown article dataset'; END IF;
+ IF source_collection IS NOT NULL THEN
+  IF NOT EXISTS(SELECT 1 FROM public.system_column_field_sets WHERE id=source_collection AND table_uid=dataset_uid
+    AND (owner_user_id IS NULL OR owner_user_id=principal_user)) THEN RAISE EXCEPTION 'unavailable article source'; END IF;
+  SELECT COALESCE(array_agg(m.column_uid ORDER BY m.sort_order),'{}'::integer[]) INTO selected_columns
+   FROM public.system_column_field_set_members m JOIN public.system_column_field_sets s ON s.id=m.field_set_id
+   WHERE m.field_set_id=source_collection AND (NOT s.article_family OR (m.presentation_values->presentation->>'visible')::boolean);
+ END IF;
+ selected_columns:=COALESCE(selected_columns,'{}'::integer[]);
+ IF cardinality(selected_columns)<>(SELECT count(DISTINCT uid) FROM unnest(selected_columns) uid)
+   OR EXISTS(SELECT 1 FROM unnest(selected_columns) uid WHERE NOT EXISTS(
+    SELECT 1 FROM public.system_column_details WHERE table_uid=dataset_uid AND column_uid=uid
+      AND NOT COALESCE(hide_everywhere,false) AND COALESCE(client_delivery_mode,'include')='include'))
+ THEN RAISE EXCEPTION 'forbidden or duplicate article field'; END IF;
+ SELECT a.field_set_id INTO prior FROM public.system_view_field_set_assignments a JOIN public.system_table_views v ON v.id=a.view_id
+  WHERE a.table_uid=dataset_uid AND a.user_id IS NOT DISTINCT FROM principal_user
+   AND a.group_id IS NOT DISTINCT FROM principal_group AND v.view_key='article_view';
+ -- NULL labels edit the current target (editor or restore).
+ -- Named saves select their own collection; a new name snapshots the current
+ -- siblings rather than overwriting the previous saved choice.
+ IF source_collection IS NOT NULL THEN
+  -- Selecting a saved choice must not rewrite the previously active named one.
+  -- Clone the active siblings, then copy only the selected source projection.
+  bundle:=CASE WHEN source_collection=prior THEN prior ELSE NULL END;
+ ELSIF label IS NULL THEN
+  bundle:=prior;
+ ELSE
+  collection_name:=CASE WHEN principal_group IS NULL THEN label
+   ELSE left(label,70)||' [g'||principal_group||':'||left(md5(label),16)||']' END;
+  -- A legacy/listing collection or another target may already own this label.
+  -- A deterministic Article name preserves both it and same-name save replay.
+  IF EXISTS(SELECT 1 FROM public.system_column_field_sets s WHERE s.table_uid=dataset_uid
+   AND s.owner_user_id IS NOT DISTINCT FROM principal_user AND s.name=collection_name
+   AND (NOT s.article_family OR EXISTS(SELECT 1 FROM public.system_view_field_set_assignments a
+    WHERE a.field_set_id=s.id AND (a.user_id IS DISTINCT FROM principal_user OR a.group_id IS DISTINCT FROM principal_group)))) THEN
+   collection_name:=left(label,60)||' [article '||COALESCE('u'||principal_user,'g'||principal_group,'site')||':'||left(md5(label),16)||']';
+  END IF;
+  SELECT s.id INTO bundle FROM public.system_column_field_sets s
+   WHERE s.table_uid=dataset_uid AND s.owner_user_id IS NOT DISTINCT FROM principal_user
+    AND s.name=collection_name AND s.article_family
+    AND NOT EXISTS(SELECT 1 FROM public.system_view_field_set_assignments a WHERE a.field_set_id=s.id
+     AND (a.user_id IS DISTINCT FROM principal_user OR a.group_id IS DISTINCT FROM principal_group));
+ END IF;
+ IF bundle IS NULL THEN
+  INSERT INTO public.system_column_field_sets(table_uid,owner_user_id,name,article_family,created_by)
+   VALUES(dataset_uid,principal_user,COALESCE(collection_name,public.app_article_bundle_name(dataset_uid,principal_user,'Article selection')),true,author)
+   RETURNING id INTO bundle;
+  INSERT INTO public.system_column_field_set_members(field_set_id,table_uid,column_uid,sort_order,presentation_values)
+   SELECT bundle,dataset_uid,c.column_uid,
+    row_number() OVER(ORDER BY m.sort_order NULLS LAST,c.co_number NULLS LAST,c.column_uid),
+    COALESCE(m.presentation_values,public.app_article_values(false))
+   FROM public.system_column_details c LEFT JOIN public.system_column_field_set_members m ON m.field_set_id=prior AND m.column_uid=c.column_uid
+   WHERE c.table_uid=dataset_uid;
+ END IF;
+ SELECT selected_columns||COALESCE(array_agg(column_uid ORDER BY sort_order) FILTER(WHERE NOT column_uid=ANY(selected_columns)),'{}'::integer[])
+  INTO ordered FROM public.system_column_field_set_members WHERE field_set_id=bundle;
+ -- Move orders out of the positive destination range before assigning them.
+ UPDATE public.system_column_field_set_members SET sort_order=sort_order+(SELECT COALESCE(max(sort_order),0) FROM public.system_column_field_set_members WHERE field_set_id=bundle)+cardinality(ordered)
+  WHERE field_set_id=bundle;
+ FOR item IN SELECT uid,position FROM unnest(ordered) WITH ORDINALITY c(uid,position) LOOP
+  SELECT presentation_values INTO raw FROM public.system_column_field_set_members WHERE field_set_id=bundle AND column_uid=item.uid;
+  raw:=COALESCE(raw,public.app_article_values(false));
+  width:=(raw->presentation->>'width_px')::integer;
+  IF source_collection IS NOT NULL THEN
+   SELECT CASE WHEN s.article_family THEN (m.presentation_values->presentation->>'width_px')::integer ELSE m.column_width_px END INTO width
+    FROM public.system_column_field_set_members m JOIN public.system_column_field_sets s ON s.id=m.field_set_id
+    WHERE m.field_set_id=source_collection AND m.column_uid=item.uid;
+  END IF;
+  raw:=jsonb_set(raw,ARRAY[presentation],jsonb_build_object('visible',item.uid=ANY(selected_columns),'width_px',width));
+  INSERT INTO public.system_column_field_set_members(field_set_id,table_uid,column_uid,sort_order,presentation_values)
+   VALUES(bundle,dataset_uid,item.uid,item.position,raw)
+   ON CONFLICT(field_set_id,column_uid) DO UPDATE SET sort_order=EXCLUDED.sort_order,presentation_values=EXCLUDED.presentation_values;
+ END LOOP;
+ INSERT INTO public.system_view_field_set_assignments(user_id,group_id,table_uid,view_id,field_set_id,group_priority,created_by)
+  SELECT principal_user,principal_group,dataset_uid,id,bundle,priority,author FROM public.system_table_views WHERE view_key=ANY(public.app_article_keys())
+  ON CONFLICT(user_id,group_id,table_uid,view_id) DO UPDATE SET field_set_id=EXCLUDED.field_set_id,group_priority=EXCLUDED.group_priority,updated=now();
+ RETURN bundle;
+END $$;
+
+CREATE OR REPLACE FUNCTION public.app_initialize_article_dataset(dataset_uid integer) RETURNS void
+LANGUAGE plpgsql SET search_path=pg_catalog,public SET filterest.article_bundle_mutation='on' AS $$
+DECLARE bundle bigint;
+BEGIN
+ IF NOT EXISTS(SELECT 1 FROM public.system_view_field_set_assignments a JOIN public.system_table_views v ON v.id=a.view_id
+  WHERE a.table_uid=dataset_uid AND a.user_id IS NULL AND a.group_id IS NULL AND v.view_key='article_view') THEN
+  INSERT INTO public.system_column_field_sets(table_uid,name,article_family) VALUES(dataset_uid,public.app_article_bundle_name(dataset_uid,NULL,'Article site bundle'),true) RETURNING id INTO bundle;
+  INSERT INTO public.system_column_field_set_members(field_set_id,table_uid,column_uid,sort_order,presentation_values)
+   SELECT bundle,dataset_uid,column_uid,row_number() OVER(ORDER BY co_number NULLS LAST,column_uid),
+    public.app_article_values(NOT COALESCE(hide_everywhere,false) AND COALESCE(client_delivery_mode,'include')='include')
+   FROM public.system_column_details WHERE table_uid=dataset_uid;
+  INSERT INTO public.system_view_field_set_assignments(table_uid,view_id,field_set_id)
+   SELECT dataset_uid,id,bundle FROM public.system_table_views WHERE view_key=ANY(public.app_article_keys());
+ END IF;
+END $$;
+
+-- These invoker entry points retain the caller's table privileges and the HTTP
+-- layer's authorization. Scope is confined to the call, including on rollback.
+CREATE OR REPLACE FUNCTION public.app_reset_article_target(dataset_uid integer,principal_user bigint,principal_group bigint) RETURNS void
+LANGUAGE plpgsql SET search_path=pg_catalog,public SET filterest.article_bundle_mutation='on' AS $$
+BEGIN
+ IF principal_user IS NULL AND principal_group IS NULL THEN RAISE EXCEPTION 'article site bundle requires explicit defaults'; END IF;
+ IF NOT public.app_lock_article_dataset_uid(dataset_uid) THEN RAISE EXCEPTION 'unknown article dataset'; END IF;
+ DELETE FROM public.system_view_field_set_assignments a USING public.system_table_views v
+  WHERE a.view_id=v.id AND a.table_uid=dataset_uid AND a.user_id IS NOT DISTINCT FROM principal_user
+   AND a.group_id IS NOT DISTINCT FROM principal_group AND v.view_key=ANY(public.app_article_keys());
+END $$;
+
+CREATE OR REPLACE FUNCTION public.app_delete_article_collection(collection_id bigint,principal_user bigint) RETURNS bigint
+LANGUAGE plpgsql SET search_path=pg_catalog,public SET filterest.article_bundle_mutation='on' AS $$
+DECLARE dataset_uid integer; deleted bigint;
+BEGIN
+ SELECT table_uid INTO dataset_uid FROM public.system_column_field_sets WHERE id=collection_id AND owner_user_id IS NOT DISTINCT FROM principal_user;
+ IF dataset_uid IS NULL THEN RETURN 0; END IF;
+ PERFORM public.app_lock_article_dataset_uid(dataset_uid);
+ DELETE FROM public.system_column_field_sets WHERE id=collection_id AND owner_user_id IS NOT DISTINCT FROM principal_user;
+ GET DIAGNOSTICS deleted=ROW_COUNT;
+ RETURN deleted;
+END $$;
+
+CREATE OR REPLACE FUNCTION public.app_save_article_opener_policy(dataset_uid integer,policy jsonb) RETURNS void
+LANGUAGE plpgsql SET search_path=pg_catalog,public SET filterest.article_bundle_mutation='on' AS $$
+BEGIN
+ IF NOT public.app_valid_article_opener_policy(policy) THEN RAISE EXCEPTION 'invalid article opener policy'; END IF;
+ IF NOT public.app_lock_article_dataset_uid(dataset_uid) THEN RAISE EXCEPTION 'unknown article dataset'; END IF;
+ UPDATE public.system_db_tables SET article_opener_policy=policy WHERE table_uid=dataset_uid;
+END $$;
+
+CREATE OR REPLACE FUNCTION public.app_article_dataset_created() RETURNS trigger
+LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,public AS $$
+BEGIN
+ IF EXISTS(SELECT 1 FROM public.system_data_repair_records WHERE migration='article_bundle_materialization' AND action='completed') THEN
+  PERFORM public.app_initialize_article_dataset(NEW.table_uid);
+ END IF;
+ RETURN NEW;
+END $$;
+DROP TRIGGER IF EXISTS article_dataset_created ON public.system_db_tables;
+CREATE TRIGGER article_dataset_created AFTER INSERT ON public.system_db_tables FOR EACH ROW EXECUTE FUNCTION public.app_article_dataset_created();
+
+-- New fields are explicit members of every bundle. Site defaults show deliverable
+-- fields; existing personal/group selections start with the new field unchecked.
+-- The existing member FK removes deleted fields in the same transaction.
+CREATE OR REPLACE FUNCTION public.app_article_field_created() RETURNS trigger
+LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,public AS $$
+BEGIN
+ INSERT INTO public.system_column_field_set_members(field_set_id,table_uid,column_uid,sort_order,presentation_values)
+  SELECT s.id,NEW.table_uid,NEW.column_uid,COALESCE((SELECT max(sort_order) FROM public.system_column_field_set_members WHERE field_set_id=s.id),0)+1,
+   public.app_article_values(NOT COALESCE(NEW.hide_everywhere,false) AND COALESCE(NEW.client_delivery_mode,'include')='include'
+    AND EXISTS(SELECT 1 FROM public.system_view_field_set_assignments WHERE field_set_id=s.id AND user_id IS NULL AND group_id IS NULL))
+  FROM public.system_column_field_sets s WHERE s.table_uid=NEW.table_uid AND s.article_family;
+ RETURN NEW;
+END $$;
+DROP TRIGGER IF EXISTS article_field_created ON public.system_column_details;
+CREATE TRIGGER article_field_created AFTER INSERT ON public.system_column_details FOR EACH ROW EXECUTE FUNCTION public.app_article_field_created();
+
+-- A delivery restriction clears visibility without deleting stored order/widths.
+CREATE OR REPLACE FUNCTION public.app_article_field_restricted() RETURNS trigger
+LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,public AS $$
+BEGIN
+ IF COALESCE(NEW.hide_everywhere,false) OR COALESCE(NEW.client_delivery_mode,'include')<>'include' THEN
+  UPDATE public.system_column_field_set_members m SET presentation_values=(SELECT jsonb_object_agg(key,jsonb_set(value,'{visible}','false')) FROM jsonb_each(m.presentation_values))
+   FROM public.system_column_field_sets s WHERE s.id=m.field_set_id AND s.article_family AND m.column_uid=NEW.column_uid;
+ END IF;
+ RETURN NEW;
+END $$;
+DROP TRIGGER IF EXISTS article_field_restricted ON public.system_column_details;
+CREATE TRIGGER article_field_restricted AFTER UPDATE OF hide_everywhere,client_delivery_mode ON public.system_column_details
+ FOR EACH ROW EXECUTE FUNCTION public.app_article_field_restricted();
+
+REVOKE ALL ON FUNCTION public.app_article_dataset_created(),public.app_article_field_created(),public.app_article_field_restricted() FROM PUBLIC;
+
+INSERT INTO public.system_data_repair_records(migration,action,detail)
+SELECT 'article_bundle_mutations','completed','{"contract":"K376 lifecycle"}'::jsonb
+WHERE NOT EXISTS(SELECT 1 FROM public.system_data_repair_records WHERE migration='article_bundle_mutations' AND action='completed');
 -- 20261015000013_add_filterbar_preferences.sql
 -- Extends the existing account visual preferences and seeds explained filter bar choices.
 -- Connects safe shared UI configuration to one account-wide personal order.

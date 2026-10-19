@@ -35,7 +35,8 @@ func WriteArticlePresentationBaseline(w io.Writer, report ArticleBaselineReport)
 }
 func articleBaselineBlocks(raw []byte) (map[string]ArticleBaselineBlocks, *string) {
 	supported := map[string][]string{}
-	for _, p := range contract.Read().Presentations {
+	for key, p := range contract.Read().Presentations {
+		supported[key] = p.Blocks
 		if p.LegacySectionKey != nil {
 			supported[*p.LegacySectionKey] = p.Blocks
 		}

@@ -128,6 +128,8 @@ repair_schema_migrations = (
     "20261009000078_enforce_dataset_name_namespace.sql",
     "20261009000079_reconcile_system_database_identity_schema.sql",
     "20261009000080_zone_platform_managed_timestamps.sql",
+    "20261015000010_add_article_bundle_storage.sql",
+    "20261015000011_add_article_bundle_mutations.sql",
     "20261015000013_add_filterbar_preferences.sql",
     "20261015000016_seed_first_run_setup_code.sql",
     "20261015000020_add_row_group_heading_order_appearance_field.sql",
@@ -161,6 +163,7 @@ release_data_migrations = (
     "20261015000002_set_exceptional_record_headers.sql",
     "20261015000006_backfill_translation_object_sources.sql",
     "20261015000009_add_card_image_usage_presentation.sql",
+    "20261015000012_materialize_article_bundles.sql",
 )
 # The record of each database release is not run by the bootstrap: the acceptance
 # block below writes the version row of the version this bootstrap is built for.
@@ -209,6 +212,25 @@ def schema_migration_parts(name: str) -> tuple[str, str, str]:
     before, separator, after = text.partition(language_phase_marker)
     return before, after if separator else "", after_data if data_separator else ""
 
+# The runner commits each upgrade migration separately; a bootstrap may import
+# the whole seed in one transaction. Drain only this batch's deferred events
+# before data-step DDL (notably the released registry-key ALTER), then restore
+# deferral for atomic bundle writes. Keep this in the generator: seed-only edits
+# disappeared on regeneration after the rebase. Older-schema upgrade proofs have
+# no article constraint yet, so the boundary is conditional on its presence.
+article_bundle_seed_boundary = """
+-- Drain article events before the next data migration without changing other constraints.
+DO $article_bundle_seed_boundary$
+BEGIN
+    IF EXISTS (SELECT 1 FROM pg_catalog.pg_constraint
+               WHERE conrelid = 'public.system_db_tables'::regclass
+                 AND conname = 'article_bundle_invariant') THEN
+        SET CONSTRAINTS public.article_bundle_invariant IMMEDIATE;
+        SET CONSTRAINTS public.article_bundle_invariant DEFERRED;
+    END IF;
+END $article_bundle_seed_boundary$;
+"""
+
 schema_sql = (
     "".join(reviewed_source(name) for name in schema_sources)
     + "".join(reviewed_public_migration(name) for name in developer_workflow_schema_migrations)
@@ -223,7 +245,8 @@ seed_sql = (
     + "".join(reviewed_public_migration(name) for name in language_seed_migrations)
     + "".join(schema_migration_parts(name)[1] for name in repair_schema_migrations)
     + "".join(reviewed_public_migration(name) for name in setting_seed_migrations)
-    + "".join(reviewed_public_migration(name) for name in release_data_migrations)
+    + article_bundle_seed_boundary
+    + article_bundle_seed_boundary.join(reviewed_public_migration(name) for name in release_data_migrations)
     + "".join(schema_migration_parts(name)[2] for name in repair_schema_migrations)
 )
 if "__FILTEREST_DB_VERSION__" in schema_sql + seed_sql:

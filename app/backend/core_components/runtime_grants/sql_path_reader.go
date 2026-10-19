@@ -19,6 +19,11 @@ import (
 // their only writes advance the internal witness or update the current row.
 // SECURITY DEFINER paths remain subject to the audit's separate blocker pass.
 var reviewedTriggerBodies = map[string]bool{
+	"f0b86012ff4a527eac8b145a4dcd87e0": true, // public.app_article_field_restricted; K376 owner-only attachment/helper review.
+	"84ba253a9d3472362997d5d98125ad4f": true, // public.app_article_field_created; K376 owner-only attachment/helper review.
+	"60964d839f7c7e60223ff569add899f5": true, // public.app_article_dataset_created; K376 owner-only attachment/helper review.
+	"dcffaa3dbefb8a8181cc3f349d2d5229": true, // public.app_lock_article_dataset; K376 mutation guard and owner-only attachment/helper review.
+	"96d076565b9beb4b08fd3e6fdf551114": true, // public.app_enforce_article_bundles; K376 owner-only attachment/helper review.
 	"2fb260bf1bca73592266b0dc868d1d88": true, // public.app_lock_dataset_namespace_statement; WL159 namespace, invoker only.
 	"79a8d4589a4cd7588989353296079211": true, // public.app_guard_dataset_name; WL159 namespace, invoker only.
 	"036425309af5f5a87d3ad803c3a88bc6": true, // public.app_guard_dataset_alias; WL159 namespace, invoker only.
@@ -47,12 +52,13 @@ var reviewedTriggerBodies = map[string]bool{
 }
 
 type definerFunctionIdentity struct {
-	Schema         string `json:"schema"`
-	Name           string `json:"name"`
-	ArgumentTypes  string `json:"argument_types"`
-	AccountTrigger bool   `json:"account_trigger,omitempty"`
-	LegacyTrigger  bool   `json:"legacy_trigger,omitempty"`
-	SearchPath     string `json:"search_path"` // Exact reviewed pg_proc.proconfig entry.
+	Schema          string `json:"schema"`
+	Name            string `json:"name"`
+	ArgumentTypes   string `json:"argument_types"`
+	AccountTrigger  bool   `json:"account_trigger,omitempty"`
+	LegacyTrigger   bool   `json:"legacy_trigger,omitempty"`
+	ArticleFunction bool   `json:"article_function,omitempty"`
+	SearchPath      string `json:"search_path"` // Exact reviewed pg_proc.proconfig entry.
 }
 
 // Reviewed SECURITY DEFINER paths are read-only SQL or owner-only trigger functions
@@ -91,7 +97,8 @@ const reviewedDefinerFunctionsSQL = `SELECT p.oid
  AND oidvectortypes(p.proargtypes)=b.identity->>'argument_types'
  AND ((COALESCE((b.identity->>'legacy_trigger')::boolean,false) AND ` + reviewedLegacyDefinerSQL + `)
  OR (COALESCE((b.identity->>'account_trigger')::boolean,false) AND ` + reviewedAccountTriggerSQL + `)
- OR (NOT COALESCE((b.identity->>'legacy_trigger')::boolean,false) AND NOT COALESCE((b.identity->>'account_trigger')::boolean,false) AND l.lanname='sql' AND p.provolatile IN ('s','i')
+ OR (COALESCE((b.identity->>'article_function')::boolean,false) AND ` + reviewedArticleFunctionSQL + `)
+ OR (NOT COALESCE((b.identity->>'legacy_trigger')::boolean,false) AND NOT COALESCE((b.identity->>'account_trigger')::boolean,false) AND NOT COALESCE((b.identity->>'article_function')::boolean,false) AND l.lanname='sql' AND p.provolatile IN ('s','i')
  AND (SELECT array_agg(setting) FROM unnest(p.proconfig) setting WHERE setting LIKE 'search_path=%')
      = ARRAY[b.identity->>'search_path']))`
 
@@ -146,6 +153,13 @@ func readTriggerDependencies(ctx context.Context, tx *sql.Tx, snapshot *GrantSna
 		if accepted {
 			continue
 		}
+		accepted, err = readReviewedArticleTrigger(ctx, tx, snapshot, oid, digest)
+		if err != nil {
+			return err
+		}
+		if accepted {
+			continue
+		}
 		accepted, err = readReviewedLegacyTrigger(ctx, tx, snapshot, oid, source, digest, definer)
 		if err != nil {
 			return err
@@ -168,7 +182,10 @@ func readDefaultFunctionDependencies(ctx context.Context, tx *sql.Tx, snapshot *
 			err = metadataReaderError("readDefaultFunctionDependencies", err, snapshot.Roles)
 		}
 	}()
-	return readRows(ctx, tx, `SELECT a.oid,a.adrelid,att.attname,p.oid,n.nspname,p.proname,p.prosecdef,md5(p.prosrc)
+	return readRows(ctx, tx, `SELECT a.oid,a.adrelid,att.attname,p.oid,n.nspname,p.proname,
+ p.prosecdef OR (p.proname IN('app_article_opener_defaults','app_article_section_defaults') AND
+  (p.pronargs<>0 OR p.prolang<>(SELECT oid FROM pg_language WHERE lanname='sql') OR p.provolatile<>'i'
+   OR p.prorettype<>'jsonb'::regtype OR p.proretset OR p.proconfig IS NOT NULL)),md5(p.prosrc)
  FROM pg_attrdef a JOIN pg_attribute att ON att.attrelid=a.adrelid AND att.attnum=a.adnum
  JOIN pg_depend d ON d.classid='pg_attrdef'::regclass AND d.objid=a.oid AND d.refclassid='pg_proc'::regclass
  JOIN pg_proc p ON p.oid=d.refobjid JOIN pg_namespace n ON n.oid=p.pronamespace
@@ -187,6 +204,9 @@ func readDefaultFunctionDependencies(ctx context.Context, tx *sql.Tx, snapshot *
 			return nil
 		}
 		if schema == "public" && name == "app_request_actor_id" && !definer && digest == reviewedActorDefaultBody {
+			return nil
+		}
+		if schema == "public" && !definer && reviewedArticleDefault(name, digest) {
 			return nil
 		}
 		snapshot.Blockers = append(snapshot.Blockers, Finding{Role: "policy", Kind: "column", ObjectOID: source, Object: object.Identifier(), Column: column, Finding: "blocker", Reason: fmt.Sprintf("unreviewed default SQL function OID %d", oid)})
