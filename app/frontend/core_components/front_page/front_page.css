@@ -287,14 +287,6 @@ body.dark-mode .front-page {
   outline-offset: -2px;
 }
 
-/* Tablets and narrow desktops retain the menu below Home's measured header. */
-@media screen and (700px < width <= 1850px) {
-  .body_content:has(.front-page:not(.hidden) > .front-page-top-row) #navbar {
-    top: var(--home-top-row-height, 68px);
-    height: calc(100vh - var(--home-top-row-height, 68px));
-  }
-}
-
 @media (width < 1000px) {
   .front-page-background::before {
     background-image: var(--front-page-background-1000);
@@ -303,16 +295,6 @@ body.dark-mode .front-page {
 
 /* Home alone keeps its destinations on phones; settings give way to the full identity. */
 @media (width <= 700px) {
-  /* Home's header includes every dataset destination and can exceed the screen.
-     The fixed drawer uses the dynamic viewport instead; its existing scroller
-     and sticky control row keep the closer reachable even at the bottom. */
-  .body_content:has(.front-page:not(.hidden) > .front-page-top-row) #navbar {
-    top: 0;
-    height: 100vh;
-    height: 100dvh;
-    overscroll-behavior-y: contain;
-  }
-
   .front-page > .front-page-top-row {
     display: grid;
     grid-template-columns: minmax(0, 1fr);

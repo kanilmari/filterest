@@ -5,6 +5,7 @@
 import { expect, test, type Page } from '@playwright/test';
 import { revealActiveFilterbarSection, waitForActiveFilterbarLayout } from '../helpers/filterbar';
 import { openActiveDatasetSearch } from '../helpers/dataset-search';
+import { installHomePolicy } from '../helpers/home-policy-fixture';
 
 const DATASET = process.env.FILTEREST_E2E_TOPBAR_DATASET || '';
 const LANGUAGES = ['fi', 'en', 'zh-CN', 'zh-TW', 'zh-HK'];
@@ -140,18 +141,27 @@ test.describe('measured tablet and desktop navigation', () => {
   test('#901a: whole buttons progressively hide and all menu destinations survive', async ({ page }, info) => {
     test.skip(!/^[a-z][a-z0-9_]{0,62}$/.test(DATASET), 'Set FILTEREST_E2E_TOPBAR_DATASET.');
     test.skip(info.project.metadata.cardView === 'big', 'Navigation does not depend on card presentation.');
+    // Pin the post-WO52 Home link without changing the installation's setting.
+    await installHomePolicy(page.context());
     await page.setViewportSize({ width: 1440, height: 900 });
     await page.goto(`/${DATASET}?view=card`);
     await waitForActiveFilterbarLayout(page);
     const tabs = page.locator(`.filterbar-inline-hero[data-filterbar-inline-hero-for="${DATASET}"] .hero-dataset-tabs`);
     await expect.poll(() => tabs.locator(':scope > button').count()).toBeGreaterThan(1);
     await expect(tabs).toBeVisible();
+    const home = tabs.locator(':scope > .top-nav-home-button');
+    await expect(home).toBeVisible();
+    expect(await home.evaluate(element => element === element.parentElement!.firstElementChild)).toBe(true);
+    await expect(home).toHaveCSS('height', '44px');
+    await expect(home.locator('.navbar-front-page-icon')).toHaveCSS('width', '24px');
+    const homeHref = await home.getAttribute('href');
     const destinations = await tabs.locator(':scope > button').evaluateAll(buttons =>
       buttons.map(button => (button as HTMLElement).dataset.dataset!));
     expect(destinations.length, 'The native dataset needs at least two main navigation destinations.').toBeGreaterThan(1);
     // Restrict the actual row at a fixed viewport: fitting must follow measured room, not a breakpoint.
-    const { widths, gap } = await tabs.evaluate(element => ({
+    const { widths, gap, homeWidth } = await tabs.evaluate(element => ({
       gap: Number.parseFloat(getComputedStyle(element).columnGap) || 0,
+      homeWidth: element.querySelector('.top-nav-home-button')!.getBoundingClientRect().width,
       widths: [...element.querySelectorAll(':scope > button')].map(button => {
         const target = button as HTMLElement, wasHidden = target.hidden, previousStyle = target.style.cssText;
         target.hidden = false;
@@ -162,14 +172,21 @@ test.describe('measured tablet and desktop navigation', () => {
       }),
     }));
     expect(widths.every(width => width > 0)).toBe(true);
-    const two = widths[0] + widths[1] + gap;
-    await tabs.evaluate((element, width) => { (element as HTMLElement).style.width = `${width}px`; }, two + 1);
-    await expect(tabs.locator(':scope > button:visible')).toHaveCount(2);
-    await tabs.evaluate((element, width) => { (element as HTMLElement).style.width = `${width}px`; }, widths[0] + 1);
-    await expect(tabs.locator(':scope > button:visible')).toHaveCount(1);
-    await tabs.evaluate(element => { (element as HTMLElement).style.width = '1px'; });
-    await expect(tabs.locator(':scope > button:visible')).toHaveCount(0);
-    await tabs.evaluate(element => { (element as HTMLElement).style.removeProperty('width'); });
+    // Home is a retained link, not a progressively hidden dataset button. Its
+    // measured width and leading gap must be reserved before fitting datasets.
+    const reserved = homeWidth + gap;
+    const two = reserved + widths[0] + widths[1] + gap;
+    try {
+      for (const [available, count] of [[two + 1, 2], [reserved + widths[0] + 1, 1], [1, 0]]) {
+        await tabs.evaluate((element, width) => { (element as HTMLElement).style.width = `${width}px`; }, available);
+        await expect(tabs.locator(':scope > button:visible')).toHaveCount(count);
+        expect(await tabs.locator(':scope > button:visible').evaluateAll(buttons =>
+          buttons.map(button => (button as HTMLElement).dataset.dataset))).toEqual(destinations.slice(0, count));
+        expect(await home.evaluate(element => !(element as HTMLElement).hidden)).toBe(true);
+      }
+    } finally {
+      await tabs.evaluate(element => { (element as HTMLElement).style.removeProperty('width'); });
+    }
     for (const width of [1440, 1100, 900, 768, 701, 700, 375, 320]) {
       await page.setViewportSize({ width, height: 900 });
       if (width <= 700) await expect(tabs).toBeHidden();
@@ -185,6 +202,8 @@ test.describe('measured tablet and desktop navigation', () => {
     const menuDatasets = await page.locator('#navbar .navtablinks').evaluateAll(buttons =>
       buttons.map(button => (button as HTMLElement).dataset.id));
     for (const destination of destinations) expect(menuDatasets).toContain(destination);
+    await expect(page.locator('#navbarFrontPage a')).toBeVisible();
+    await expect(page.locator('#navbarFrontPage a')).toHaveAttribute('href', homeHref || '/');
   });
 });
 

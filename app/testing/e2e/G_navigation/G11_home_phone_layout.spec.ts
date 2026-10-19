@@ -179,10 +179,17 @@ async function proveHome(page: Page, open: boolean, alignment: string, cappedMar
   const name = page.locator('.front-page-site-name');
   const icon = page.locator('.front-page-site-icon');
   const menu = page.locator('#showMenuButton');
+  const home = page.locator('.front-page-top-row .top-nav-home-button');
+  await expect(home).toBeVisible();
+  expect(await home.evaluate(element => element === element.parentElement!.firstElementChild)).toBe(true);
+  await expect(home).toHaveCSS('height', '44px');
+  await expect(home.locator('.navbar-front-page-icon')).toHaveCSS('width', '24px');
+  await expect(home.locator('.navbar-front-page-icon')).toHaveCSS('height', '24px');
+  await expect(page.locator('.front-page-top-row .filterbar-inline-hero__actions .top-nav-home-button')).toHaveCount(0);
   await expect(name).toBeVisible();
   const close = page.locator('#hideMenuButton');
   const slot = page.locator('.front-page-top-row .dataset-shared-topbar__menu-slot');
-  // Owner 14.10.2026: an open menu retains its own control and leaves no Home slot gap.
+  // Owner 18.10.2026: the full-height menu owns the top-left closer on every page.
   if (open) {
     await expect(menu).toBeHidden(); await expect(close).toBeVisible(); await expect(slot).toBeHidden();
     expect(await slot.evaluate(element => element.getBoundingClientRect().width)).toBe(0);
@@ -222,17 +229,13 @@ async function proveHome(page: Page, open: boolean, alignment: string, cappedMar
   const hero = page.locator('.front-page-text-stage .front-page-hero');
   await expect(hero).toHaveCSS('text-align', alignment);
   const stage = page.locator('.front-page-text-stage');
-  if (open && phone) {
+  if (open) {
     await expect(page.locator('#navbar')).toHaveCSS('position', 'fixed');
     await expect.poll(() => page.locator('#navbar').evaluate(element => {
       const box = element.getBoundingClientRect();
-      return box.top === 0 && box.bottom <= innerHeight && box.height > 0;
-    }), { message: 'Phone Home uses the viewport, independent of its dataset count' }).toBe(true);
+      return Math.abs(box.top) <= 1 && Math.abs(box.height - innerHeight) <= 1;
+    }), { message: 'Home uses the full viewport drawer, exactly as dataset pages do' }).toBe(true);
   }
-  if (open && !phone && page.viewportSize()!.width <= 1850) await expect.poll(() => page.locator('#navbar').evaluate(element => {
-    const header = document.querySelector('.front-page-top-row')!.getBoundingClientRect();
-    return element.getBoundingClientRect().top >= header.bottom - 1;
-  })).toBe(true);
   // Destination geometry belongs to a fixed two-dataset response, so native
   // Home checks do not assume its current count or that all tabs fit on screen.
   if (phone && cappedMargin) {
@@ -271,6 +274,11 @@ async function proveHome(page: Page, open: boolean, alignment: string, cappedMar
     // navbar. Pointer-driven programmatic focus alone cannot prove :focus-visible.
     const beforeTabs = open ? page.locator('#navbar :is(button, a[href], input, select, [tabindex="0"]):visible:not([disabled]):not([tabindex="-1"])').last() : menu;
     await beforeTabs.focus(); await beforeTabs.press('Tab');
+    await expectFocusWithMenuOwner(page, home);
+    await expect(home).toHaveCSS('outline-style', 'solid');
+    await expect(home).toHaveCSS('outline-width', '2px');
+    await expect(home).toHaveCSS('outline-offset', '-2px');
+    await home.press('Tab');
     await expectFocusWithMenuOwner(page, buttons.first());
     await expect(buttons.first()).toHaveCSS('outline-style', 'solid');
     await expect(buttons.first()).toHaveCSS('outline-width', '2px');
@@ -374,6 +382,17 @@ async function proveKeyboardMenu(page: Page, state: { alignment: string; cappedM
       await setMenu(page, open, key); await proveHome(page, open, state.alignment, state.cappedMargin);
     }
   }
+  const menu = page.locator('#showMenuButton');
+  const home = page.locator('.front-page-top-row .top-nav-home-button');
+  await menu.focus(); await menu.press('Tab');
+  await expectFocusWithMenuOwner(page, home);
+  await expect(home).toHaveAccessibleName(/\S/);
+  await expect(home).toHaveCSS('outline-width', '2px');
+  await expect(home).toHaveCSS('outline-offset', '-2px');
+  const firstDataset = page.locator('.front-page-top-row .hero-dataset-tabs > button:visible').first();
+  if (await firstDataset.count()) {
+    await home.press('Tab'); await expectFocusWithMenuOwner(page, firstDataset);
+  }
 }
 
 // Every Playwright project crosses the breakpoint with a destination focused,
@@ -416,7 +435,12 @@ for (const open of [false, true]) {
     await page.setViewportSize({ width: 700, height: 900 });
     const state = await openHome(page, 'light', 'fi');
     await setMenu(page, open);
-    await page.locator('.front-page-top-row .hero-dataset-tabs__button').first().click();
+    const firstDataset = page.locator('.front-page-top-row .hero-dataset-tabs__button').first();
+    if (open) {
+      // The full-height drawer covers Home's tabs; use its real destination.
+      const dataset = await firstDataset.getAttribute('data-dataset');
+      await page.locator(`#navbar .navtablinks[data-id="${dataset}"]`).click();
+    } else await firstDataset.click();
     await expect(page.locator('.front-page-top-row')).toHaveCount(0);
     await expect(page.locator('#showMenuButton')).toHaveCount(1);
     await expect(page.locator('.front-page-top-row #showMenuButton')).toHaveCount(0);

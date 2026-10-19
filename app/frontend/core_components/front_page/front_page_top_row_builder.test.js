@@ -27,6 +27,9 @@ test('the current Home control follows live availability without moving menu foc
     const row = createFrontPageTopRow('Site'); document.body.append(row.element); row.mount();
     const menu = document.getElementById('showMenuButton');
     const home = row.element.querySelector('.top-nav-home-button');
+    expect([...row.element.querySelectorAll('a[href], button')].slice(0, 3)).toEqual([
+        menu, home, row.element.querySelector('.hero-dataset-tabs__button'),
+    ]);
     menu.focus();
     try {
         for (const enabled of [true, false, true]) {
@@ -46,16 +49,33 @@ test('Home tabs have no active dataset, update from the shared model and unsubsc
     row.mount();
     expect(row.element.querySelectorAll('.hero-dataset-tabs__button')).toHaveLength(1);
     expect(row.element.querySelector('.hero-dataset-tabs__button[aria-current]')).toBeNull();
-    expect(row.element.querySelector('.top-nav-home-button').getAttribute('aria-current')).toBe('page');
-    expect(row.element.querySelector('.filterbar-inline-hero__actions > .top-nav-home-button')).not.toBeNull();
-    // G11's existing one-Tab menu → first destination contract stays intact.
-    expect(row.element.querySelector('a[href], button')).toBe(row.element.querySelector('.hero-dataset-tabs__button'));
+    const home = row.element.querySelector('.top-nav-home-button');
+    const tabs = row.element.querySelector('.hero-dataset-tabs');
+    expect(home.getAttribute('aria-current')).toBe('page');
+    expect(row.element.querySelector('.filterbar-inline-hero__actions > .top-nav-home-button')).toBeNull();
+    expect(tabs.firstElementChild).toBe(home);
+    expect(home.nextElementSibling).toBe(tabs.querySelector('button'));
     for (const listener of mocks.listeners) listener([{ dataset: 'events', text: 'Events', langKey: 'events' }]);
     expect(row.element.querySelector('.hero-dataset-tabs__button').dataset.dataset).toBe('events');
-    expect(row.element.querySelector('a[href], button')).toBe(row.element.querySelector('.hero-dataset-tabs__button'));
+    expect(tabs.firstElementChild).toBe(home);
+    expect(home.nextElementSibling).toBe(tabs.querySelector('button'));
     row.destroy();
     expect(mocks.listeners.size).toBe(0);
     expect(mocks.unsubscribe).toHaveBeenCalledOnce();
+});
+
+test('Home remains reachable when there are no dataset tabs', () => {
+    const previous = mocks.snapshot;
+    mocks.snapshot = [];
+    setFrontPageAvailability({ separate_front_page: true });
+    const row = createFrontPageTopRow('Site');
+    try {
+        const tabs = row.element.querySelector('.hero-dataset-tabs');
+        const home = row.element.querySelector('.top-nav-home-button');
+        expect(tabs.hidden).toBe(false);
+        expect(tabs.firstElementChild).toBe(home);
+        expect(home.hidden).toBe(false);
+    } finally { row.destroy(); mocks.snapshot = previous; setFrontPageAvailability({}); }
 });
 
 // Owner 14.10.2026: only the hidden menu borrows Home's slot; the open menu keeps its closer.
@@ -146,29 +166,4 @@ test('Home follows the initial collapsed state until the animated menu entrance 
         expect(close.getAttribute('aria-hidden')).toBe('false');
         expect(document.activeElement).toBe(close);
     } finally { row.destroy(); vi.useRealTimers(); localStorage.clear(); setFrontPageAvailability({}); }
-});
-
-test('the overlay menu follows the complete header height and releases its measurement on teardown', () => {
-    const callbacks = [];
-    vi.stubGlobal('ResizeObserver', class {
-        constructor(callback) { callbacks.push(callback); }
-        observe() {}
-        disconnect() {}
-    });
-    document.body.innerHTML = '<div class="body_content"><div id="navbar"></div></div>';
-    const body = document.querySelector('.body_content');
-    const row = createFrontPageTopRow('Fintravel');
-    body.append(row.element);
-    row.mount();
-    const measure = vi.spyOn(row.element, 'getBoundingClientRect').mockReturnValue({ height: 272 });
-    try {
-        callbacks.at(-1)();
-        expect(body.style.getPropertyValue('--home-top-row-height')).toBe('272px');
-        measure.mockReturnValue({ height: 316 });
-        callbacks.at(-1)();
-        expect(body.style.getPropertyValue('--home-top-row-height')).toBe('316px');
-    } finally {
-        row.destroy(); vi.unstubAllGlobals();
-    }
-    expect(body.style.getPropertyValue('--home-top-row-height')).toBe('');
 });

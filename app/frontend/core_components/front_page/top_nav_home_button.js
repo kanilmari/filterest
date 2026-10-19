@@ -14,7 +14,7 @@ export function placeTopNavHomeButton(link, host) {
     const focused = document.activeElement === link;
     const inHero = host.classList.contains('hero-dataset-tabs');
     link.classList.toggle('hero-dataset-tabs__button', inHero);
-    // Use exactly the tab surface here; the menu's base link rules are larger.
+    // Keep tab colours and typography; shared Home CSS owns its larger target.
     link.classList.toggle('navbar-front-page-link', !inHero);
     host.prepend(link);
     // The dataset navigation may have no ordinary tabs, but still has Home.

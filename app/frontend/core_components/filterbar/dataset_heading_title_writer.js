@@ -17,6 +17,8 @@ const DATASET_HEADING_TITLE_CLASS = "morphing-title";
 const DATASET_TITLE_CLASS = "morphing-title__dataset-name";
 const SITE_NAME_CLASS = "morphing-title__site-name";
 const SITE_NAME_SEPARATOR_CLASS = "morphing-title__separator";
+/** Marks a dataset title that itself shows the site name, so the menu treats it as site identity. */
+const SITE_IDENTITY_ATTRIBUTE = "data-site-identity";
 /** Separator between the site name and the dataset's own title. */
 const SITE_NAME_SEPARATOR = " – ";
 
@@ -48,10 +50,15 @@ export function writeSiteNameIntoDatasetHeading(titleElement) {
 
     titleElement.querySelector(`.${SITE_NAME_CLASS}`)?.remove();
     titleElement.querySelector(`.${SITE_NAME_SEPARATOR_CLASS}`)?.remove();
+    datasetTitleElement.removeAttribute(SITE_IDENTITY_ATTRIBUTE);
 
     const siteName = formatSiteNameForDisplay(getCurrentSiteName());
-    if (!siteName
-        || titleAlreadyOpensWithSiteName(readDatasetTitleAsShown(datasetTitleElement), siteName)) {
+    if (!siteName) {
+        return;
+    }
+    if (titleAlreadyOpensWithSiteName(readDatasetTitleAsShown(datasetTitleElement), siteName)) {
+        // The title shows the site name itself, so a click on it is an identity click.
+        datasetTitleElement.setAttribute(SITE_IDENTITY_ATTRIBUTE, "true");
         return;
     }
 

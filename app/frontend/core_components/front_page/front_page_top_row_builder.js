@@ -48,11 +48,11 @@ export function createFrontPageTopRow(siteName, onSaved, paletteOptions = {}) {
     start.append(menuSlot, icon, title);
     const tabs = createHeroDatasetTabs();
     const homeLink = createFrontPageLink({ topNavigation: true, current: true });
+    // Keep the native Home surface and menu → Home → dataset keyboard order.
+    tabs.element.prepend(homeLink);
+    tabs.element.hidden = false;
     const actions = document.createElement('div');
     actions.className = 'filterbar-inline-hero__actions';
-    // On Home, preserve the established menu → dataset keyboard order. The
-    // current-page link belongs with the trailing controls, before admin actions.
-    actions.append(homeLink);
     function syncHomeAvailability() {
         homeLink.hidden = !canShowFrontPageLink(localStorage.getItem('button_state') === 'logout');
         refreshFrontPageLinkLabel(homeLink);
@@ -104,20 +104,8 @@ export function createFrontPageTopRow(siteName, onSaved, paletteOptions = {}) {
         menuSlot.classList.toggle('dataset-shared-topbar__menu-slot--visible', visible);
         syncNavbarMenuButtonAccessibility();
     }
-    // Tablets and narrow desktops place the menu below this complete header.
-    // Phones use a viewport drawer, independent of this translated/wrapped height.
-    const bodyContent = document.querySelector('.body_content');
-    const previousHeight = bodyContent?.style.getPropertyValue('--home-top-row-height') || '';
-    function syncMenuHeight() {
-        const height = element.getBoundingClientRect().height;
-        if (bodyContent && height > 0) bodyContent.style.setProperty('--home-top-row-height', `${height}px`);
-    }
-    const heightFrame = window.requestAnimationFrame(syncMenuHeight);
-    const heightObserver = typeof window.ResizeObserver === 'function' ? new window.ResizeObserver(syncMenuHeight) : null;
-    heightObserver?.observe(element);
     window.addEventListener(NAVBAR_VISIBILITY_CHANGED_EVENT, syncMenu);
     window.addEventListener('resize', syncMenu);
-    window.addEventListener('resize', syncMenuHeight);
     return {
         element,
         // Reconcile after insertion: borrowing detached the shell button, so
@@ -125,7 +113,6 @@ export function createFrontPageTopRow(siteName, onSaved, paletteOptions = {}) {
         mount() {
             syncMenu();
             if (menuWasFocused && menuButton.getAttribute('aria-hidden') === 'false') menuButton.focus({ preventScroll: true });
-            syncMenuHeight();
         },
         destroy() {
             destroyed = true;
@@ -135,13 +122,6 @@ export function createFrontPageTopRow(siteName, onSaved, paletteOptions = {}) {
             window.removeEventListener(NAVBAR_VISIBILITY_CHANGED_EVENT, syncMenu);
             window.removeEventListener(HOME_AVAILABILITY_CHANGED_EVENT, syncHomeAvailability);
             window.removeEventListener('resize', syncMenu);
-            window.removeEventListener('resize', syncMenuHeight);
-            heightObserver?.disconnect();
-            window.cancelAnimationFrame(heightFrame);
-            if (bodyContent) {
-                if (previousHeight) bodyContent.style.setProperty('--home-top-row-height', previousHeight);
-                else bodyContent.style.removeProperty('--home-top-row-height');
-            }
             const menuIsFocused = menuButton && document.activeElement === menuButton;
             if (menuButton && bookmark.parentNode) bookmark.replaceWith(menuButton);
             syncNavbarMenuButtonAccessibility();

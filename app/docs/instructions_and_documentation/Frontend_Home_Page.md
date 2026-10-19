@@ -226,7 +226,7 @@ is enabled; otherwise the existing `front_page` language key supplies the label.
 
 When Home is enabled, each dataset owns one top-navigation Home link. The toolbar controller moves
 that same node to the first position in the hero's dataset tab row, with the
-same button styling and size, whether the side menu is open or closed. Its
+tab surface and the larger native Home size, whether the side menu is open or closed. Its
 house icon and translated/site-name label stay together; only a tight row hides
 the visual label to retain room for the first dataset. Once that row scrolls
 away, Home moves to the compact toolbar's end slot: this toolbar has identity,
@@ -236,9 +236,12 @@ The pre-WO37 rule remains `active && (phone || shouldShowSharedTopBar(...))`:
 at widths up to 700 CSS pixels the active toolbar stays visible independently
 of the hero; above 700 it is hidden while the inline hero is visible. This phone
 rule dates from 11 October 2026, before the Home button was added.
-Home's own header keeps its current-page link beside the trailing actions,
-preserving G11's existing menu-to-dataset keyboard order. Compact links retain
-their full accessible name and native keyboard/link gestures. Home activation
+Home's own header puts its current-page link first in the tab row, before every
+dataset; the trailing actions keep their order. Keyboard order is menu → Home →
+first dataset. Both rows share `--top-nav-home-size` and `--top-nav-home-icon-size`
+from [top_nav_home_button.css](../../frontend/core_components/front_page/top_nav_home_button.css).
+The compact toolbar's end-slot layout and native Home's focus ring are retained.
+Compact links retain their full accessible name and native keyboard/link gestures. Home activation
 stops its own click from reaching the menu's outside-click listener. Menu
 opening, closing, saved visibility and resizing stay with the existing owner.
 
@@ -387,7 +390,7 @@ server-resolved 128 px favicon at 32 CSS px with browser downsampling (the 16 px
 link remains the fallback). Home reserves the complete name before tabs and
 actions. Only while the navbar is `collapsed`, Home shows its borrowed menu
 opener beside the icon with a fixed 10 px gap. An open menu keeps its own
-close control, exactly as on dataset pages; Home's slot is hidden, inert and
+close control at the same top-left position, exactly as on dataset pages; Home's slot is hidden, inert and
 `aria-hidden="true"`, with no reserved 44 px width or gap before the icon.
 The hidden control leaves the tab order and accessibility tree. Accessibility is
 reconciled immediately after the completed row is mounted, and when Home
@@ -409,21 +412,18 @@ uses 18 px bold: at 320 px, 200 px remain for the name; only names wider than
 that budget use an ellipsis. Fintravel, Easelect and Serlog fit. Home applies
 no bottom border or shadow to that row.
 
-Home alone keeps the dataset tabs on phones as a centred vertical stack, at
-most 480 px wide inside 16 px side gutters, with the shared icons, labels,
+On phones, Home leads the dataset tabs in a centred vertical stack, at most
+480 px wide inside 16 px side gutters, with the shared icons, labels,
 current-page and focus styles and at least 44 px touch height. Administrator
-actions occupy the following row. On phones (through 700 px), the open menu is
-a fixed drawer starting at the viewport top and bounded by its dynamic height
-(`100dvh`, with `100vh` fallback). It overlays Home independently of the number
-of destinations or the header height. The menu's existing internal scroll area
+actions occupy the following row. At every width, Home uses the shared dataset
+menu: a fixed drawer from the viewport top, with height `100vh` and the menu
+button as the top-left topmost control, open or closed. There is no Home header
+offset or height measurement. The menu's existing internal scroll area
 reveals lower navigation and account controls; its sticky top row keeps close,
 history, theme and language controls reachable while scrolling. The language
 panel stays outside that scroll area and fits the viewport separately. Home's
 borrowed slot remains hidden without an identity gap while the drawer is open.
-Tablets and narrow desktops (above 700 px through 1850 px) retain the menu below
-the measured complete header. Raising a toggle's own z-index cannot escape its
-ancestor stacking contexts.
-The shell retains the full content width in this band; above it, the open menu
+Through 1850 px the menu overlays Home with the full content width; above it, the open menu
 reserves its ordinary sidebar width. Dataset pages retain their existing layout
 and hidden phone tabs. The fit controller restores every destination only in a
 Home vertical stack when crossing the phone breakpoint, including buttons
@@ -431,6 +431,9 @@ hidden in the previous horizontal row; dataset projections keep their fit rule.
 When a focused destination no longer fits after leaving the phone stack, focus
 moves to the navbar's closer while open or Home's borrowed opener while hidden,
 before the destination hides. Dataset pages retain their existing menu focus selection.
+Logo and site-name clicks never close the menu. Other outside clicks close below 1850 px, as on dataset pages.
+G14's response-only parity proof compares menu top, viewport height and button
+position on Home and a dataset at 1280, 1800 and 390 px, open and closed, in both themes.
 
 G11's read-only response fixtures pin the catalogue size for destination geometry.
 Its 12-dataset cases cover 320×568, 375×667 and 414×896 in both explicit themes

@@ -13,6 +13,7 @@ import { navigateToDefaultDataset } from '../helpers/navigation';
 import { switchToView, openBigCard } from '../helpers/view-switch';
 import { waitForActiveFilterbarLayout } from '../helpers/filterbar';
 import { ensureNavbarVisible } from '../helpers/navbar';
+import { installHomePolicy } from '../helpers/home-policy-fixture';
 
 async function navigateToReadyDefaultDataset(page: Page): Promise<void> {
   // Root may show the optional Home page, which has no dataset filterbar.
@@ -42,8 +43,9 @@ test.describe('E10 — Site identity and menu contract', () => {
     await login(page, credentials);
   });
 
-  for (const theme of ['light', 'dark']) {
-    test(`Home keeps its open-menu control in the menu bar in ${theme}`, async ({ page }) => {
+  for (const theme of ['light', 'dark'] as const) {
+    test(`Home shares the full-height menu and top-left control in ${theme}`, async ({ page }) => {
+      await installHomePolicy(page.context(), theme);
       await page.route(url => url.pathname === '/api/user-visual-preference', async route => {
         expect(route.request().method()).toBe('GET');
         await route.fulfill({ json: { theme_mode: theme, revision: 1, configured: true } });
@@ -59,13 +61,27 @@ test.describe('E10 — Site identity and menu contract', () => {
       await ensureNavbarVisible(page);
       const slot = page.locator('.front-page-top-row .dataset-shared-topbar__menu-slot');
       const opener = slot.locator('#showMenuButton'), closer = page.locator('#navbar #hideMenuButton');
-      // Owner's screenshot case: open on Home means no toggle or 44px gap in Home's row.
+      // Home uses the dataset drawer from viewport top, with its own top-left closer.
       await expect(opener).toBeHidden(); await expect(closer).toBeVisible();
+      await expect.poll(() => page.locator('#navbar').evaluate(element => {
+        const box = element.getBoundingClientRect();
+        return Math.abs(box.top) <= 1 && Math.abs(box.height - innerHeight) <= 1;
+      })).toBe(true);
+      await expect.poll(() => closer.evaluate(element => {
+        const box = element.getBoundingClientRect();
+        return Math.abs(box.x - 12) <= 1 && Math.abs(box.y - 12) <= 1;
+      })).toBe(true);
+      const closeBox = (await closer.boundingBox())!;
+      expect(closeBox.x).toBeCloseTo(12, 0); expect(closeBox.y).toBeCloseTo(12, 0);
       await expect(page.locator('#showMenuButton:visible, #hideMenuButton:visible')).toHaveCount(1);
       expect(await slot.evaluate(element => element.getBoundingClientRect().width)).toBe(0);
       await closer.focus(); await closer.press('Space');
       await expect(page.locator('#navbar')).toHaveClass(/\bcollapsed\b/);
       await expect(opener).toBeVisible(); await expect(opener).toBeFocused();
+      await expect.poll(() => opener.evaluate((element, position) => {
+        const box = element.getBoundingClientRect();
+        return Math.abs(box.x - position.x) <= 1 && Math.abs(box.y - position.y) <= 1;
+      }, { x: closeBox.x, y: closeBox.y })).toBe(true);
       await expect(closer).toBeHidden();
       await expect(page.locator('#showMenuButton:visible, #hideMenuButton:visible')).toHaveCount(1);
       await expect(slot).toHaveJSProperty('inert', false);

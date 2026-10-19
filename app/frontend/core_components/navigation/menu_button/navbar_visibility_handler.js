@@ -377,6 +377,8 @@ export function initNavbar() {
       if (
         !navbar.contains(event.target) &&
         !event.target.closest?.('[data-navbar-menu-button="true"]') &&
+        // Site identity is decorative on Home and datasets, never a menu toggle.
+        !event.target.closest?.('.front-page-site-icon, .front-page-site-name, .dataset-shared-topbar__site-identity, .morphing-title__site-name, [data-site-identity="true"]') &&
         !showButton.contains(event.target)
       ) {
         navVisible = false;

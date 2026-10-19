@@ -1,7 +1,7 @@
 // G12_top_nav_home_button.spec.ts
 // Proves Home placement, original bar visibility and live authoritative availability.
 // Every Home/settings response is intercepted; no settings POST reaches any server.
-// Before/after screenshots live under test-results; G11's Home keyboard order is unchanged.
+// Before/after screenshots live under test-results; G11 proves menu → Home → dataset.
 import { test, expect, type Page } from '@playwright/test';
 import { installHomePolicy, openHomeProbeDataset, captureHomeProbe, probePhase } from '../helpers/home-policy-fixture';
 import { ensureNavbarVisible } from '../helpers/navbar';
@@ -13,7 +13,7 @@ async function menuState(page: Page) {
 }
 
 for (const width of [1920, 1440, 1000]) for (const theme of ['light', 'dark'] as const) {
-  test(`first tab-sized Home and independent bar at ${width}px in ${theme}`, async ({ page, context }, info) => {
+  test(`first larger Home and independent bar at ${width}px in ${theme}`, async ({ page, context }, info) => {
     test.setTimeout(90_000);
     await page.setViewportSize({ width, height: 1000 });
     await page.emulateMedia({ colorScheme: theme === 'light' ? 'dark' : 'light' });
@@ -53,12 +53,13 @@ for (const width of [1920, 1440, 1000]) for (const theme of ['light', 'dark'] as
       expect(await home.evaluate(el => el === el.parentElement!.firstElementChild)).toBe(true);
       const dataset = hero.locator('.hero-dataset-tabs__button[data-dataset]:visible').first();
       await expect(dataset).toBeVisible();
-      const style = (element: Element) => {
-        const css = getComputedStyle(element);
-        return [css.height, css.padding, css.fontSize, css.lineHeight, css.borderRadius];
-      };
-      expect(await home.evaluate(style)).toEqual(await dataset.evaluate(style));
-      expect((await home.boundingBox())!.x).toBeLessThan((await dataset.boundingBox())!.x);
+      await expect(home).toHaveCSS('height', '44px');
+      await expect(home.locator('.navbar-front-page-icon')).toHaveCSS('width', '24px');
+      await expect(home.locator('.navbar-front-page-icon')).toHaveCSS('height', '24px');
+      const homeBox = (await home.boundingBox())!, datasetBox = (await dataset.boundingBox())!;
+      expect(homeBox.x + homeBox.width).toBeLessThanOrEqual(datasetBox.x);
+      expect(homeBox.y + homeBox.height / 2).toBeCloseTo(datasetBox.y + datasetBox.height / 2, 1);
+      expect(await home.evaluate(element => getComputedStyle(element.parentElement!).flexWrap)).toBe('nowrap');
       await expect(home.locator('[data-symbol-key="home"]')).toHaveCount(1);
       await expect(home).toHaveAttribute('href', await page.locator('#navbarFrontPage a').getAttribute('href') || '/');
       // Move the original node with its keyboard focus, even when the menu is open.
@@ -95,6 +96,7 @@ for (const width of [1920, 1440, 1000]) for (const theme of ['light', 'dark'] as
       await expect(page.locator('#front_page_container')).toHaveAttribute('aria-busy', 'false');
       expect(await menuState(page)).toEqual(before);
       await expect(page.locator('#front_page_container .top-nav-home-button')).toHaveAttribute('aria-current', 'page');
+      await expect(page.locator('#front_page_container .top-nav-home-button')).toHaveCSS('height', `${homeBox.height}px`);
     }
     policy.enabled = false;
     await openHomeProbeDataset(page, false);
@@ -103,6 +105,33 @@ for (const width of [1920, 1440, 1000]) for (const theme of ['light', 'dark'] as
     await page.goto('/');
     await expect(page.locator('.front-page:visible')).toHaveCount(0);
     await expect(page.locator('.front-page-status')).toHaveCount(0);
+  });
+}
+
+for (const theme of ['light', 'dark'] as const) {
+  test(`390px dataset keeps one larger Home in the existing compact bar in ${theme}`, async ({ page, context }, info) => {
+    test.setTimeout(60_000);
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.emulateMedia({ colorScheme: theme === 'light' ? 'dark' : 'light' });
+    await installHomePolicy(context, theme);
+    for (const menuOpen of [false, true]) {
+      await openHomeProbeDataset(page, menuOpen);
+      const parts = page.locator('#app_service_catalog_tab_parts_container');
+      await expect(parts.locator('.filterbar-inline-hero .hero-dataset-tabs')).toBeHidden();
+      await expect(parts.locator('.top-nav-home-button')).toHaveCount(1);
+      const home = parts.locator('.dataset-shared-topbar__slot--end .top-nav-home-button');
+      await expect(home).toBeVisible();
+      await expect(home).toHaveCSS('width', '44px');
+      await expect(home).toHaveCSS('height', '44px');
+      await expect(home.locator('.navbar-front-page-icon')).toHaveCSS('width', '24px');
+      const homeBox = (await home.boundingBox())!;
+      const barBox = (await parts.locator('.dataset-shared-topbar__inner').boundingBox())!;
+      expect(homeBox.x).toBeGreaterThanOrEqual(0);
+      expect(homeBox.x + homeBox.width).toBeLessThanOrEqual(390);
+      expect(homeBox.y).toBeGreaterThanOrEqual(barBox.y);
+      expect(homeBox.y + homeBox.height).toBeLessThanOrEqual(barBox.y + barBox.height);
+      await captureHomeProbe(page, info, `390-${theme}-${menuOpen ? 'open' : 'closed'}-compact`);
+    }
   });
 }
 

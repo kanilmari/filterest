@@ -46,6 +46,37 @@ describe("navbar_visibility_handler", () => {
         });
     });
 
+    test.each([390, 1280, 1800, 1850, 2000])('site identity never closes the menu; ordinary outside clicks retain the shared policy at %ipx', async width => {
+        window.innerWidth = width;
+        localStorage.setItem('navVisibleWide', 'true');
+        localStorage.setItem('navVisibleNarrow', 'true');
+        const { initNavbar } = await loadModule();
+        initNavbar();
+        const navbar = document.getElementById('navbar');
+        const content = document.getElementById('tabs_container');
+        for (const className of ['front-page-site-icon', 'front-page-site-name', 'dataset-shared-topbar__site-identity', 'morphing-title__site-name']) {
+            const identity = document.createElement('div');
+            identity.className = className;
+            const nested = document.createElement('span');
+            identity.append(nested); content.append(identity);
+            nested.click();
+            expect(navbar.classList.contains('collapsed')).toBe(false);
+            expect(localStorage.getItem(width >= 1850 ? 'navVisibleWide' : 'navVisibleNarrow')).toBe('true');
+        }
+        // A dataset title that itself opens with the site name ("Serlog.com – Service catalog").
+        const prefixedTitle = document.createElement('span');
+        prefixedTitle.className = 'morphing-title__dataset-name';
+        prefixedTitle.setAttribute('data-site-identity', 'true');
+        prefixedTitle.textContent = 'Serlog.com – Service catalog';
+        content.append(prefixedTitle);
+        prefixedTitle.click();
+        expect(navbar.classList.contains('collapsed')).toBe(false);
+        expect(localStorage.getItem(width >= 1850 ? 'navVisibleWide' : 'navVisibleNarrow')).toBe('true');
+        content.click();
+        expect(navbar.classList.contains('collapsed')).toBe(width < 1850);
+        expect(localStorage.getItem(width >= 1850 ? 'navVisibleWide' : 'navVisibleNarrow')).toBe(String(width >= 1850));
+    });
+
     test("dispatches navbar visibility change events from each persistent navbar button", async () => {
         localStorage.setItem("navVisibleWide", "true");
         const { initNavbar, NAVBAR_VISIBILITY_CHANGED_EVENT } = await loadModule();

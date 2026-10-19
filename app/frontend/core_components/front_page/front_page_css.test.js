@@ -111,25 +111,15 @@ test('Home phone tabs stack inside 16px gutters and the menu cannot squeeze the 
     expect(tabs).toContain('max-width: 480px'); expect(tabs).toContain('overflow: visible');
     expect(css).toMatch(/\.front-page-top-row \.hero-dataset-tabs__button\s*\{[^}]*width: 100%;[^}]*min-height: 44px;[^}]*white-space: normal;/);
     expect(css).toMatch(/#tabs_container:has\(\.front-page:not\(\.hidden\) > \.front-page-top-row\)\s*\{[^}]*width: 100%;[^}]*transform: translateX\(0\);/);
-    expect(css).toContain('height: calc(100vh - var(--home-top-row-height, 68px))');
     expect(css).toContain('8cqw');
 });
 
-test('Home keeps the measured header offset only on tablets and narrow desktops', () => {
-    const overlay = css.match(/@media screen and \(700px < width <= 1850px\)\s*\{([^@]+)/)?.[1];
-    expect(overlay).toMatch(/\.body_content:has\(\.front-page:not\(\.hidden\) > \.front-page-top-row\) #navbar\s*\{[^}]*top: var\(--home-top-row-height, 68px\);[^}]*height: calc\(100vh - var\(--home-top-row-height, 68px\)\);/);
+test('Home inherits the full-height dataset drawer at every width and keeps narrow content overlaid', () => {
+    expect(css).not.toContain('--home-top-row-height');
+    expect(css).not.toMatch(/#navbar\s*\{[^}]*\b(?:top|height):/);
+    expect(navbar).toMatch(/#navbar\s*\{[^}]*height: 100vh;/);
     const shell = readFileSync(resolve(currentDirectory, '../../styles/mobile_friendliness.css'), 'utf8');
-    expect(shell).toMatch(/@media screen and \(width <= 1850px\)/);
-});
-
-test('phone Home anchors its scrollable drawer to the viewport, independently of header length', () => {
-    const phone = css.match(/@media \(width <= 700px\)\s*\{([^@]+)/)?.[1];
-    const drawer = phone?.match(/\.body_content:has\(\.front-page:not\(\.hidden\) > \.front-page-top-row\) #navbar\s*\{([^}]+)\}/)?.[1];
-    expect(drawer).toContain('top: 0;');
-    expect(drawer).toContain('height: 100vh;');
-    expect(drawer).toContain('height: 100dvh;');
-    expect(drawer).toContain('overscroll-behavior-y: contain;');
-    expect(drawer).not.toContain('--home-top-row-height');
+    expect(shell).toMatch(/@media screen and \(width <= 1850px\)[\s\S]*#tabs_container\s*\{[^}]*transform: unset !important;[^}]*width: unset !important;/);
     expect(navbar).toMatch(/#navbar\s*\{[^}]*position: fixed;[^}]*overflow: hidden auto;/);
     expect(navbar).toMatch(/\.top-button-bar\s*\{[^}]*position: sticky;[^}]*top: 0;/);
 });

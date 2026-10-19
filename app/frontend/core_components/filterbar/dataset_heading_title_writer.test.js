@@ -67,6 +67,9 @@ describe("dataset heading title", () => {
             separator: null,
             datasetTitle: "Service catalog",
         });
+        // The title carries the site name, so the menu treats a click on it as an identity click.
+        expect(heading.querySelector(".morphing-title__dataset-name").getAttribute("data-site-identity"))
+            .toBe("true");
         // The translation handler fills the dataset title from its language key.
         heading.querySelector(".morphing-title__dataset-name").textContent =
             "Serlog.com – Service catalog";
@@ -122,12 +125,15 @@ describe("dataset heading title", () => {
             siteName: "Serlog.com",
             separator: " – ",
         });
+        const datasetTitle = heading.querySelector(".morphing-title__dataset-name");
+        expect(datasetTitle.hasAttribute("data-site-identity")).toBe(false);
 
         translations.set("app_service_catalog_front_page", "Serlog.com – Service catalog");
         await switchInterfaceLanguage("en");
 
         expect(readHeadingParts(heading).siteName).toBeNull();
         expect(heading.querySelectorAll(".morphing-title__separator")).toHaveLength(0);
+        expect(datasetTitle.getAttribute("data-site-identity")).toBe("true");
     });
 
     test("leaves the heading unbranded when the application shell has no site identity", async () => {
