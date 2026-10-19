@@ -13,6 +13,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	backend "easelect/backend/core_components"
 	"easelect/backend/core_components/auth"
@@ -21,6 +22,8 @@ import (
 	"easelect/backend/core_components/sign_in_deadline"
 	"easelect/backend/core_components/sign_in_revocation"
 	"easelect/backend/pipeline"
+	"easelect/backend/pipeline/audit"
+	"easelect/backend/pipeline/rate_limiting"
 )
 
 type matrixFixture struct {
@@ -45,6 +48,13 @@ func newMatrixFixture(t *testing.T, routes []RouteDefinition) *matrixFixture {
 	backend.Db, backend.DbAdmin, backend.DbBasic, backend.DbGuest = db, db, db, db
 	backend.DbConfidential, backend.DbReaderOnly, backend.DbLifecycle = db, db, db
 	t.Cleanup(func() {
+		// Drain while the matrix database is still installed. This cleanup was
+		// registered after the disposable database's cleanup, so it runs first.
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		if err := audit.Flush(ctx); err != nil {
+			t.Errorf("drain matrix audit events before restoring database: %v", err)
+		}
 		backend.Db, backend.DbAdmin, backend.DbBasic, backend.DbGuest = oldPools[0], oldPools[1], oldPools[2], oldPools[3]
 		backend.DbConfidential, backend.DbReaderOnly, backend.DbLifecycle = oldPools[4], oldPools[5], oldPools[6]
 	})
@@ -74,6 +84,10 @@ func newMatrixFixture(t *testing.T, routes []RouteDefinition) *matrixFixture {
  `)
 	matrixExec(t, db, `INSERT INTO system_config(key,json_value)
  VALUES($1,'{"limit_enabled":true,"limit_unit":"days","limit_amount":7}')`, sign_in_deadline.ConfigKey)
+	// The matrix registers every function without a rate limit. rate_limiting caches limits per function name
+	// process-wide, so forget them before and after the matrix: neither side may see the other's limits.
+	rate_limiting.ResetRateLimitCache()
+	t.Cleanup(rate_limiting.ResetRateLimitCache)
 	// Generate function metadata from the registration defaults, not the oracle.
 	// Admins use the product's real startup grant helpers. The separate update
 	// capability belongs to real handlers in layer B, not these route grants.

@@ -76,6 +76,13 @@ func (w *noticeAuditWriter) Flush() {
 }
 
 func TestAdminUpdateNoticeStreamAuditsFailuresAndRevocations(t *testing.T) {
+	// Earlier router tests can leave events in the process-wide writer. Finish
+	// them on their original database before installing this capture-all driver.
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	if err := audit.Flush(ctx); err != nil {
+		t.Fatalf("drain earlier audit events before installing notice database: %v", err)
+	}
 	installNoticeAdmissionFixture(t)
 	events := make(chan []driver.NamedValue, 16)
 	db := sql.OpenDB(&noticeAuditDriver{noticeAdmissionDriver: &noticeAdmissionDriver{}, events: events})

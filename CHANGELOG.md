@@ -22,6 +22,7 @@ Dates are the local (Europe/Helsinki) date on which the version was published.
 
 ## [Unreleased]
 
+- Keep the route access check's test setup from switching off later router tests' rate limits or leaking queued audit events into their databases
 - E15's guest phone toolbar test follows the language button's panel reference through opening and closing and reads translated labels from the served language keys (test only).
 - Keep the language-key helper review test in step with the row group window's translated-label helpers
 - Readable datasets offer text search to guests and users without AI access; AI search stays route-gated, creation and editor guest-read bundles exclude intelligent and vector search, and untouched grants stay unchanged.

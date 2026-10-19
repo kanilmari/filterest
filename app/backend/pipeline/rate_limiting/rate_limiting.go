@@ -115,6 +115,14 @@ func getCachedRateLimit(db *sql.DB, funcName string) (int, int, error) {
 	return amount, minutes, nil
 }
 
+// ResetRateLimitCache forgets every cached per-function limit, so the next request re-reads system_functions.
+// Tests that register functions with their own limits use it, like ResetRouteProfiles.
+func ResetRateLimitCache() {
+	rateLimitCacheMu.Lock()
+	rateLimitCacheMap = make(map[string]*rateLimitCache)
+	rateLimitCacheMu.Unlock()
+}
+
 // Clean up expired cache entries periodically
 func cleanupExpiredCache() {
 	for {

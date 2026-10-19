@@ -54,16 +54,45 @@ const (
 )
 
 var (
-	eventChan chan AuditEvent
+	eventChan chan auditQueueItem
 	startOnce sync.Once
 )
+
+// A flush barrier shares the event queue so it cannot overtake earlier events.
+type auditQueueItem struct {
+	event   AuditEvent
+	flushed chan struct{}
+}
 
 // ensureInserterRunning starts the background goroutine (once).
 func ensureInserterRunning() {
 	startOnce.Do(func() {
-		eventChan = make(chan AuditEvent, channelBufferSize)
+		eventChan = make(chan auditQueueItem, channelBufferSize)
 		go batchInserter()
 	})
+}
+
+// Flush lets tests that swap backend.Db and rare shutdown callers wait for all
+// previously queued events to pass through the single batch writer. Stop event
+// producers before swapping the database or shutting down. Cancellation stops
+// waiting, not writing; insert failures retain the usual batch error logging.
+func Flush(ctx context.Context) error {
+	ensureInserterRunning()
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	flushed := make(chan struct{})
+	select {
+	case eventChan <- auditQueueItem{flushed: flushed}:
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+	select {
+	case <-flushed:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
 }
 
 // enqueue sends an event to the background inserter.
@@ -71,7 +100,7 @@ func ensureInserterRunning() {
 func enqueue(ev AuditEvent) {
 	ensureInserterRunning()
 	select {
-	case eventChan <- ev:
+	case eventChan <- auditQueueItem{event: ev}:
 	default:
 		logging.WarnAttrs(
 			"audit channel full; dropping event",
@@ -90,8 +119,17 @@ func batchInserter() {
 
 	for {
 		select {
-		case ev := <-eventChan:
-			batch = append(batch, ev)
+		case item := <-eventChan:
+			if item.flushed != nil {
+				if len(batch) > 0 {
+					flushBatch(batch)
+					batch = batch[:0]
+				}
+				// Closing never blocks, even if the caller stopped waiting.
+				close(item.flushed)
+				continue
+			}
+			batch = append(batch, item.event)
 			if len(batch) >= batchSize {
 				flushBatch(batch)
 				batch = batch[:0]
