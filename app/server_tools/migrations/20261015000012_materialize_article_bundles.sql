@@ -22,6 +22,11 @@ BEGIN
   RETURN;
  END IF;
 
+ -- Drain any bootstrap events and fire each materialization statement's events
+ -- before the completion marker exists. The unchanged runtime handler returns
+ -- without checking until that marker; the explicit final check covers it all.
+ SET CONSTRAINTS public.article_bundle_invariant IMMEDIATE;
+
  INSERT INTO public.system_table_views(name,view_key,status)
   SELECT p.view_key,p.view_key,'active' FROM unnest(public.app_article_keys()) p(view_key) WHERE true ON CONFLICT(view_key) DO NOTHING;
  INSERT INTO public.system_functions(name,package,disabled,specific_table_related,url_route_endpoint,ui_only,rate_limit_amount,rate_limit_minutes,creation_spec)
@@ -201,7 +206,9 @@ BEGIN
    RAISE EXCEPTION 'complete article audience scope preservation failed';
   END IF;
  END LOOP;
- IF EXISTS(SELECT 1 FROM article_upgrade_rights b WHERE NOT EXISTS(SELECT 1 FROM public.system_group_table_func_rights a WHERE to_jsonb(a)=to_jsonb(b))) THEN
+ -- Compare every authored column without a quadratic, unanalysed temp-table
+ -- anti-join. EXCEPT removes a source row only when an identical JSON row exists.
+ IF EXISTS(SELECT to_jsonb(b) FROM article_upgrade_rights b EXCEPT SELECT to_jsonb(a) FROM public.system_group_table_func_rights a) THEN
   RAISE EXCEPTION 'authored grant preservation failed';
  END IF;
  SELECT string_agg(f,'; ') INTO findings FROM public.app_check_article_bundles() f;
@@ -210,4 +217,8 @@ BEGIN
   VALUES('article_bundle_materialization','completed',jsonb_build_object('file','20261015000012_materialize_article_bundles.sql',
    'targets',(SELECT count(*) FROM article_upgrade_targets),
    'source_assignments',(SELECT count(DISTINCT(table_uid,user_id,group_id,view_key)) FROM article_upgrade_sources)));
+ -- The marker is the last write, and its table has no article invariant trigger.
+ -- All covered writes fired before it; no deferred event remains for commit.
+ -- Restore deferral for later bootstrap steps in this same transaction too.
+ SET CONSTRAINTS public.article_bundle_invariant DEFERRED;
 END $materialize$;

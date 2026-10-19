@@ -6,6 +6,7 @@ Protects existing site values, card choices and repeatable upgrades without live
 from pathlib import Path
 import hashlib
 import json
+import re
 from test_field_settings_language_seed import database
 
 MIGRATION = Path(__file__).resolve().parents[2] / "server_tools/migrations/20260908000004_add_article_view_and_field_settings.sql"
@@ -125,7 +126,29 @@ def test_article_bundle_bootstrap_drains_own_events_before_registry_ddl():
         assert "conrelid = 'public.system_db_tables'::regclass" in boundary
         assert "conname = 'article_bundle_invariant'" in boundary
     assert "SET CONSTRAINTS ALL" not in seed
-    assert "SET CONSTRAINTS" not in seed[seed.index((APP / "server_tools/migrations" / BUNDLE_FILES[2]).read_text()):]
+    data = (APP / "server_tools/migrations" / BUNDLE_FILES[2]).read_text()
+    suffix = seed[seed.index(data) + len(data):]
+    assert "SET CONSTRAINTS" not in suffix
+    # The rest of the whole-seed transaction writes only release evidence;
+    # it must not queue new article events after materialization's marker.
+    covered = "system_(?:column_field_sets|column_field_set_members|view_field_set_assignments|db_tables|column_details|table_views)"
+    assert not re.search(rf"\b(?:INSERT\s+INTO|UPDATE|DELETE\s+FROM|TRUNCATE(?:\s+TABLE)?)\s+(?:public\.)?{covered}\b", suffix, re.I)
+
+
+def test_article_bundle_materialization_drains_before_marker_and_restores_deferral():
+    """The marker is the last write; runtime enforcement stays migration-10-owned."""
+    data = (APP / "server_tools/migrations" / BUNDLE_FILES[2]).read_text()
+    immediate = data.index("SET CONSTRAINTS public.article_bundle_invariant IMMEDIATE;")
+    first_write = data.index("INSERT INTO public.system_table_views")
+    final_check = data.index("SELECT string_agg(f,'; ') INTO findings FROM public.app_check_article_bundles() f;")
+    marker = data.index("INSERT INTO public.system_data_repair_records")
+    deferred = data.index("SET CONSTRAINTS public.article_bundle_invariant DEFERRED;")
+    assert immediate < first_write < final_check < marker < deferred
+    assert data.count("public.app_check_article_bundles() f;") == 1
+    # No covered write can follow the explicit full check or completion marker.
+    assert data[final_check:marker].split("END IF;", 1)[1].strip() == ""
+    after_marker = re.sub(r"--[^\n]*", "", data[marker:].split(";", 1)[1]).strip()
+    assert after_marker == "SET CONSTRAINTS public.article_bundle_invariant DEFERRED;\nEND $materialize$;"
 
 
 def test_article_bundle_materializes_exact_sources_and_replay_preserves_revocation(database):

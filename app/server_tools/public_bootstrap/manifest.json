@@ -407,7 +407,7 @@
       "sha256": "97eca2e17d8e4821767486f9e4232fb20734056f6fc86806d0d1942ad5451503"
     },
     "server_tools/public_bootstrap/seed_data.sql": {
-      "sha256": "3c5f96842646aa8067a6ae529f8dcf7b3e93ad28a8dff18290b537d0bf74c479"
+      "sha256": "31e7489dc2f4f7ed710680a844f2f7ae3367409c218d68c954c187ea9def6db9"
     }
   },
   "source_files": {
@@ -1114,7 +1114,7 @@
       "sha256": "3a1147b5faa445ec189a4b111bac32b89a888389a6a9a7e86ad62544ab62e88e"
     },
     "filterest/app/server_tools/migrations/20261015000012_materialize_article_bundles.sql": {
-      "sha256": "2424a29532141bd2f1992a054f22ebda94c08f14db402cee074a2acd31785573"
+      "sha256": "8f238a1cbb6c7db529cb9aa9981b06e3d3194ea16ba87ba722199a208688263f"
     },
     "filterest/app/server_tools/migrations/20261015000013_add_filterbar_preferences.sql": {
       "sha256": "80877423924e2dfdb6c52ca37c81c7f25d9d7bb3ab356058770ca1d96ee24436"
