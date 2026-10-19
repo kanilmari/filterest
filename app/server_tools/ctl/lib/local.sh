@@ -326,7 +326,7 @@ start_local() {
     
     # Check Go
     if ! command -v go &> /dev/null; then
-        echo -e "${RED}❌ Go not found. Please install Go 1.26.5+${NC}"
+        echo -e "${RED}❌ Go not found. Please install Go ${EASELECT_MIN_GO_VERSION}+${NC}"
         exit 1
     fi
     local go_version

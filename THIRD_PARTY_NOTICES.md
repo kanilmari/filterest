@@ -10,10 +10,10 @@ Reviewed upstream legal and attribution document bytes are retained under
 ## Candidate
 
 - Filterest app version: `9.4.3`
-- Database version: `9.11.2`
+- Database version: `9.12.0`
 - Project source license: `GPL-2.0-or-later`
 - Combined release-binary license: `GPL-3.0-or-later`
-- License bundle manifest SHA-256: `4ababeebabc07cd9f10c7279c523880bfba77d97d8500389919dc54d5d067e07`
+- License bundle manifest SHA-256: `45063d0b99923c65f119bb6480f77967c56a403527c469dfbdce7a791a069753`
 - Go metadata source: `GOOS=linux GOARCH=amd64 CGO_ENABLED=1 go list -deps metadata for filterest[linux-release]:. tags=netgo osusergo; filterest[container]:.; filterest-admin-recovery[container]:./server_tools/admin_credential_recovery, plus compiled vendored components and Go toolchain`
 - npm metadata source: `package-lock.json production dependency graph`
 - browser bundle metadata source: `app/server_tools/licenses/browser_bundle_provenance.json matched against app/package-lock.json and app/frontend/dist/*.js`
@@ -21,9 +21,9 @@ Reviewed upstream legal and attribution document bytes are retained under
 - compiled Go runtime or vendored components listed: `2`
 - runtime npm packages listed: `0`
 - browser bundle build components listed: `3`
-- third-party asset files listed: `81`
+- third-party asset files listed: `79`
 - source files containing third-party icon geometry: `6`
-- first-party asset files recorded: `59`
+- first-party asset files recorded: `60`
 - retained legal and attribution documents: `36`
 - unresolved third-party rows: `0`
 
@@ -59,16 +59,16 @@ Apache-2.0 components, the combined binaries are conveyed under GPL-3.0-or-later
 | github.com/tidwall/pretty | v1.2.1 | MIT | release-binary | filterest | [`go-github.com-tidwall-pretty-v1.2.1-bbab3931ba1a-1-LICENSE`](THIRD_PARTY_LICENSES/go-github.com-tidwall-pretty-v1.2.1-bbab3931ba1a-1-LICENSE) |
 | github.com/tidwall/sjson | v1.2.5 | MIT | release-binary | filterest | [`go-github.com-tidwall-sjson-v1.2.5-5bb783e1f317-1-LICENSE`](THIRD_PARTY_LICENSES/go-github.com-tidwall-sjson-v1.2.5-5bb783e1f317-1-LICENSE) |
 | golang.org/x/crypto | v0.40.0 | BSD-3-Clause | release-binary | filterest, filterest-admin-recovery | [`go-golang.org-x-crypto-v0.40.0-bb9f020887de-1-LICENSE`](THIRD_PARTY_LICENSES/go-golang.org-x-crypto-v0.40.0-bb9f020887de-1-LICENSE), [`go-golang.org-x-crypto-v0.40.0-bb9f020887de-2-PATENTS`](THIRD_PARTY_LICENSES/go-golang.org-x-crypto-v0.40.0-bb9f020887de-2-PATENTS) |
-| golang.org/x/image | v0.43.0 | BSD-3-Clause | release-binary | filterest | [`go-golang.org-x-image-v0.43.0-225f7a2ce8c1-1-LICENSE`](THIRD_PARTY_LICENSES/go-golang.org-x-image-v0.43.0-225f7a2ce8c1-1-LICENSE), [`go-golang.org-x-image-v0.43.0-225f7a2ce8c1-2-PATENTS`](THIRD_PARTY_LICENSES/go-golang.org-x-image-v0.43.0-225f7a2ce8c1-2-PATENTS) |
-| golang.org/x/sys | v0.34.0 | BSD-3-Clause | release-binary | filterest, filterest-admin-recovery | [`go-golang.org-x-sys-v0.34.0-8ab87b41b5af-1-LICENSE`](THIRD_PARTY_LICENSES/go-golang.org-x-sys-v0.34.0-8ab87b41b5af-1-LICENSE), [`go-golang.org-x-sys-v0.34.0-8ab87b41b5af-2-PATENTS`](THIRD_PARTY_LICENSES/go-golang.org-x-sys-v0.34.0-8ab87b41b5af-2-PATENTS) |
+| golang.org/x/image | v0.45.0 | BSD-3-Clause | release-binary | filterest | [`go-golang.org-x-image-v0.45.0-11f774151bf6-1-LICENSE`](THIRD_PARTY_LICENSES/go-golang.org-x-image-v0.45.0-11f774151bf6-1-LICENSE), [`go-golang.org-x-image-v0.45.0-11f774151bf6-2-PATENTS`](THIRD_PARTY_LICENSES/go-golang.org-x-image-v0.45.0-11f774151bf6-2-PATENTS) |
+| golang.org/x/sys | v0.47.0 | BSD-3-Clause | release-binary | filterest, filterest-admin-recovery | [`go-golang.org-x-sys-v0.47.0-e92f5f770a9c-1-LICENSE`](THIRD_PARTY_LICENSES/go-golang.org-x-sys-v0.47.0-e92f5f770a9c-1-LICENSE), [`go-golang.org-x-sys-v0.47.0-e92f5f770a9c-2-PATENTS`](THIRD_PARTY_LICENSES/go-golang.org-x-sys-v0.47.0-e92f5f770a9c-2-PATENTS) |
 | golang.org/x/term | v0.33.0 | BSD-3-Clause | release-binary | filterest-admin-recovery | [`go-golang.org-x-term-v0.33.0-8820e08dfc6e-1-LICENSE`](THIRD_PARTY_LICENSES/go-golang.org-x-term-v0.33.0-8820e08dfc6e-1-LICENSE), [`go-golang.org-x-term-v0.33.0-8820e08dfc6e-2-PATENTS`](THIRD_PARTY_LICENSES/go-golang.org-x-term-v0.33.0-8820e08dfc6e-2-PATENTS) |
-| golang.org/x/text | v0.38.0 | BSD-3-Clause | release-binary | filterest | [`go-golang.org-x-text-v0.38.0-2f2a44571e46-1-LICENSE`](THIRD_PARTY_LICENSES/go-golang.org-x-text-v0.38.0-2f2a44571e46-1-LICENSE), [`go-golang.org-x-text-v0.38.0-2f2a44571e46-2-PATENTS`](THIRD_PARTY_LICENSES/go-golang.org-x-text-v0.38.0-2f2a44571e46-2-PATENTS) |
+| golang.org/x/text | v0.43.0 | BSD-3-Clause | release-binary | filterest | [`go-golang.org-x-text-v0.43.0-01cbbee20993-1-LICENSE`](THIRD_PARTY_LICENSES/go-golang.org-x-text-v0.43.0-01cbbee20993-1-LICENSE), [`go-golang.org-x-text-v0.43.0-01cbbee20993-2-PATENTS`](THIRD_PARTY_LICENSES/go-golang.org-x-text-v0.43.0-01cbbee20993-2-PATENTS) |
 
 ## Go Runtime And Vendored Components
 
 | Component | Version | License | Scope | Binaries | Retained documents |
 | --- | --- | --- | --- | --- | --- |
-| Go runtime and standard library | go1.26.5 | BSD-3-Clause | release-binary | filterest, filterest-admin-recovery | [`go-toolchain-Go-runtime-and-standard-library-go1.26.5-666161183bab-1-LICENSE`](THIRD_PARTY_LICENSES/go-toolchain-Go-runtime-and-standard-library-go1.26.5-666161183bab-1-LICENSE), [`go-toolchain-Go-runtime-and-standard-library-go1.26.5-666161183bab-2-PATENTS`](THIRD_PARTY_LICENSES/go-toolchain-Go-runtime-and-standard-library-go1.26.5-666161183bab-2-PATENTS) |
+| Go runtime and standard library | go1.26.9 | BSD-3-Clause | release-binary | filterest, filterest-admin-recovery | [`go-toolchain-Go-runtime-and-standard-library-go1.26.9-ae02b7fe9f48-1-LICENSE`](THIRD_PARTY_LICENSES/go-toolchain-Go-runtime-and-standard-library-go1.26.9-ae02b7fe9f48-1-LICENSE), [`go-toolchain-Go-runtime-and-standard-library-go1.26.9-ae02b7fe9f48-2-PATENTS`](THIRD_PARTY_LICENSES/go-toolchain-Go-runtime-and-standard-library-go1.26.9-ae02b7fe9f48-2-PATENTS) |
 | github.com/chai2010/webp:libwebp | 1.4.0 | BSD-3-Clause | release-binary | filterest | [`go-vendored-github.com-chai2010-webp-libwebp-1.4.0-4fb52bde06ae-1-COPYING`](THIRD_PARTY_LICENSES/go-vendored-github.com-chai2010-webp-libwebp-1.4.0-4fb52bde06ae-1-COPYING), [`go-vendored-github.com-chai2010-webp-libwebp-1.4.0-4fb52bde06ae-2-PATENTS`](THIRD_PARTY_LICENSES/go-vendored-github.com-chai2010-webp-libwebp-1.4.0-4fb52bde06ae-2-PATENTS), [`go-vendored-github.com-chai2010-webp-libwebp-1.4.0-4fb52bde06ae-3-AUTHORS`](THIRD_PARTY_LICENSES/go-vendored-github.com-chai2010-webp-libwebp-1.4.0-4fb52bde06ae-3-AUTHORS) |
 
 ## Runtime npm Packages
@@ -88,7 +88,7 @@ Apache-2.0 components, the combined binaries are conveyed under GPL-3.0-or-later
 
 | Component | Asset files | Embedded source files | License | Upstream | Retained documents |
 | --- | ---: | ---: | --- | --- | --- |
-| Google Material Icons and Symbols | 74 | 2 | Apache-2.0 | [source](https://github.com/google/material-design-icons) | [`asset-Google-Material-Icons-and-Symbols-eda288bd934a-1-material-symbols-Apache-2.0.txt`](THIRD_PARTY_LICENSES/asset-Google-Material-Icons-and-Symbols-eda288bd934a-1-material-symbols-Apache-2.0.txt), [`asset-Google-Material-Icons-and-Symbols-eda288bd934a-2-material-symbols-NOTICE.txt`](THIRD_PARTY_LICENSES/asset-Google-Material-Icons-and-Symbols-eda288bd934a-2-material-symbols-NOTICE.txt) |
+| Google Material Icons and Symbols | 72 | 2 | Apache-2.0 | [source](https://github.com/google/material-design-icons) | [`asset-Google-Material-Icons-and-Symbols-eda288bd934a-1-material-symbols-Apache-2.0.txt`](THIRD_PARTY_LICENSES/asset-Google-Material-Icons-and-Symbols-eda288bd934a-1-material-symbols-Apache-2.0.txt), [`asset-Google-Material-Icons-and-Symbols-eda288bd934a-2-material-symbols-NOTICE.txt`](THIRD_PARTY_LICENSES/asset-Google-Material-Icons-and-Symbols-eda288bd934a-2-material-symbols-NOTICE.txt) |
 | Heroicons / Tailwind Labs | 0 | 1 | MIT | [source](https://github.com/tailwindlabs/heroicons) | [`asset-Heroicons-Tailwind-Labs-dac4d65f3957-1-heroicons-LICENSE.txt`](THIRD_PARTY_LICENSES/asset-Heroicons-Tailwind-Labs-dac4d65f3957-1-heroicons-LICENSE.txt) |
 | Lucide Icons | 7 | 3 | ISC | [source](https://github.com/lucide-icons/lucide) | [`asset-Lucide-Icons-b785a75e951a-1-lucide-LICENSE.txt`](THIRD_PARTY_LICENSES/asset-Lucide-Icons-b785a75e951a-1-lucide-LICENSE.txt) |
 
@@ -98,7 +98,8 @@ Apache-2.0 components, the combined binaries are conveyed under GPL-3.0-or-later
 | --- | ---: | --- | --- | --- | --- |
 | Filterest brand and fallback images | 16 | Filterest project contributors | Filterest project contributors | Maintained as original Filterest project assets under the repository-wide GPL-2.0-or-later grant; the human project owner confirmed the first-party classification and approved publication on 2026-08-30. | GPL-2.0-or-later |
 | Filterest demo placeholder images | 15 | Filterest human project owner | Filterest human project owner | The author created these neutral text placeholders in Microsoft Paint without third-party source imagery and approved their redistribution with Filterest under GPL-2.0-or-later on 2026-08-30; no separate attribution is requested. | GPL-2.0-or-later |
-| Filterest original interface SVGs | 28 | Filterest project contributors | Filterest project contributors | Maintained as original Filterest project assets under the repository-wide GPL-2.0-or-later grant; the human project owner confirmed the first-party classification and approved publication on 2026-08-30. | GPL-2.0-or-later |
+| Filterest original interface SVGs | 27 | Filterest project contributors | Filterest project contributors | Maintained as original Filterest project assets under the repository-wide GPL-2.0-or-later grant; the human project owner confirmed the first-party classification and approved publication on 2026-08-30. | GPL-2.0-or-later |
+| Filterest tool navigation documentation illustrations | 2 | Filterest project contributors | Filterest project contributors | First-party illustrations prepared for the Coloured Tool Navigation document on 2026-10-16. The project owner supplied the cropped Filterest menu capture, confirmed publication rights and explicitly authorised copying it into the GPL-2.0-or-later repository. The owner also commissioned an original SVG mockup using plain shapes and text only, with no third-party artwork, under the same grant. | GPL-2.0-or-later |
 
 ## Asset Provenance
 

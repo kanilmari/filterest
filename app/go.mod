@@ -1,6 +1,6 @@
 module easelect
 
-go 1.26.5
+go 1.26.9
 
 //	github.com/Knetic/govaluate v3.0.0+incompatible
 require github.com/lib/pq v1.10.9
@@ -15,10 +15,10 @@ require (
 	github.com/pgvector/pgvector-go v0.2.3
 	github.com/sashabaranov/go-openai v1.36.1
 	golang.org/x/crypto v0.40.0
-	golang.org/x/image v0.43.0
-	golang.org/x/sys v0.34.0
+	golang.org/x/image v0.45.0
+	golang.org/x/sys v0.47.0
 	golang.org/x/term v0.33.0
-	golang.org/x/text v0.38.0
+	golang.org/x/text v0.43.0
 )
 
 require (
@@ -27,5 +27,5 @@ require (
 	github.com/tidwall/match v1.1.1 // indirect
 	github.com/tidwall/pretty v1.2.1 // indirect
 	github.com/tidwall/sjson v1.2.5 // indirect
-	golang.org/x/sync v0.21.0 // indirect
+	golang.org/x/sync v0.24.0 // indirect
 )

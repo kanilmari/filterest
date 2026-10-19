@@ -193,7 +193,7 @@ The setup command asks which kind of installation you need:
   binary. The binary uses the supported host's glibc 2.34-or-newer C runtime;
   no glibc or compiler runtime is copied into the release asset. It does not
   install Go, Node.js, npm packages, or browser-test tools.
-- **Development and administration** installs the same runtime plus Go 1.26.5,
+- **Development and administration** installs the same runtime plus Go 1.26.9,
   Node.js 24, source dependencies, and the Chromium browser used by the
   automated UI tests.
 

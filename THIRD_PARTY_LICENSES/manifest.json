@@ -398,7 +398,7 @@
   ],
   "asset_provenance": {
     "path": "app/server_tools/licenses/asset_provenance.json",
-    "sha256": "5119d89135da0a0995f900a559ab65ba912546ac7551fdcf454c568f9f32867d"
+    "sha256": "301230e58627e85b99566e6abff963e1788fd98a0588ae77955e12290c985811"
   },
   "browser_bundle_metadata_source": "app/server_tools/licenses/browser_bundle_provenance.json matched against app/package-lock.json and app/frontend/dist/*.js",
   "browser_bundle_provenance": {
@@ -406,7 +406,7 @@
     "sha256": "868e187c8724c69e945f54f9e25f213127f91acc3cda67da3392814a284c740f"
   },
   "combined_binary_license": "GPL-3.0-or-later",
-  "database_version": "9.11.2",
+  "database_version": "9.12.0",
   "dependencies": [
     {
       "binary_targets": [
@@ -676,12 +676,12 @@
       ],
       "documents": [
         {
-          "path": "THIRD_PARTY_LICENSES/go-golang.org-x-image-v0.43.0-225f7a2ce8c1-1-LICENSE",
+          "path": "THIRD_PARTY_LICENSES/go-golang.org-x-image-v0.45.0-11f774151bf6-1-LICENSE",
           "sha256": "911f8f5782931320f5b8d1160a76365b83aea6447ee6c04fa6d5591467db9dad",
           "source_file": "LICENSE"
         },
         {
-          "path": "THIRD_PARTY_LICENSES/go-golang.org-x-image-v0.43.0-225f7a2ce8c1-2-PATENTS",
+          "path": "THIRD_PARTY_LICENSES/go-golang.org-x-image-v0.45.0-11f774151bf6-2-PATENTS",
           "sha256": "96f408bfae65bf137fc2525d3ecb030271c50c1e90799f87abf8846d8dd505cc",
           "source_file": "PATENTS"
         }
@@ -690,7 +690,7 @@
       "license": "BSD-3-Clause",
       "name": "golang.org/x/image",
       "scope": "release-binary",
-      "version": "v0.43.0"
+      "version": "v0.45.0"
     },
     {
       "binary_targets": [
@@ -699,12 +699,12 @@
       ],
       "documents": [
         {
-          "path": "THIRD_PARTY_LICENSES/go-golang.org-x-sys-v0.34.0-8ab87b41b5af-1-LICENSE",
+          "path": "THIRD_PARTY_LICENSES/go-golang.org-x-sys-v0.47.0-e92f5f770a9c-1-LICENSE",
           "sha256": "911f8f5782931320f5b8d1160a76365b83aea6447ee6c04fa6d5591467db9dad",
           "source_file": "LICENSE"
         },
         {
-          "path": "THIRD_PARTY_LICENSES/go-golang.org-x-sys-v0.34.0-8ab87b41b5af-2-PATENTS",
+          "path": "THIRD_PARTY_LICENSES/go-golang.org-x-sys-v0.47.0-e92f5f770a9c-2-PATENTS",
           "sha256": "96f408bfae65bf137fc2525d3ecb030271c50c1e90799f87abf8846d8dd505cc",
           "source_file": "PATENTS"
         }
@@ -713,7 +713,7 @@
       "license": "BSD-3-Clause",
       "name": "golang.org/x/sys",
       "scope": "release-binary",
-      "version": "v0.34.0"
+      "version": "v0.47.0"
     },
     {
       "binary_targets": [
@@ -743,12 +743,12 @@
       ],
       "documents": [
         {
-          "path": "THIRD_PARTY_LICENSES/go-golang.org-x-text-v0.38.0-2f2a44571e46-1-LICENSE",
+          "path": "THIRD_PARTY_LICENSES/go-golang.org-x-text-v0.43.0-01cbbee20993-1-LICENSE",
           "sha256": "911f8f5782931320f5b8d1160a76365b83aea6447ee6c04fa6d5591467db9dad",
           "source_file": "LICENSE"
         },
         {
-          "path": "THIRD_PARTY_LICENSES/go-golang.org-x-text-v0.38.0-2f2a44571e46-2-PATENTS",
+          "path": "THIRD_PARTY_LICENSES/go-golang.org-x-text-v0.43.0-01cbbee20993-2-PATENTS",
           "sha256": "96f408bfae65bf137fc2525d3ecb030271c50c1e90799f87abf8846d8dd505cc",
           "source_file": "PATENTS"
         }
@@ -757,7 +757,7 @@
       "license": "BSD-3-Clause",
       "name": "golang.org/x/text",
       "scope": "release-binary",
-      "version": "v0.38.0"
+      "version": "v0.43.0"
     },
     {
       "binary_targets": [
@@ -766,12 +766,12 @@
       ],
       "documents": [
         {
-          "path": "THIRD_PARTY_LICENSES/go-toolchain-Go-runtime-and-standard-library-go1.26.5-666161183bab-1-LICENSE",
+          "path": "THIRD_PARTY_LICENSES/go-toolchain-Go-runtime-and-standard-library-go1.26.9-ae02b7fe9f48-1-LICENSE",
           "sha256": "911f8f5782931320f5b8d1160a76365b83aea6447ee6c04fa6d5591467db9dad",
           "source_file": "LICENSE"
         },
         {
-          "path": "THIRD_PARTY_LICENSES/go-toolchain-Go-runtime-and-standard-library-go1.26.5-666161183bab-2-PATENTS",
+          "path": "THIRD_PARTY_LICENSES/go-toolchain-Go-runtime-and-standard-library-go1.26.9-ae02b7fe9f48-2-PATENTS",
           "sha256": "96f408bfae65bf137fc2525d3ecb030271c50c1e90799f87abf8846d8dd505cc",
           "source_file": "PATENTS"
         }
@@ -780,7 +780,7 @@
       "license": "BSD-3-Clause",
       "name": "Go runtime and standard library",
       "scope": "release-binary",
-      "version": "go1.26.5"
+      "version": "go1.26.9"
     },
     {
       "binary_targets": [
@@ -1130,6 +1130,28 @@
       "rights_holder": "Filterest project contributors",
       "rights_review": "owner-attested",
       "source": "Original SVG geometry maintained in Filterest source"
+    },
+    {
+      "assets": [
+        {
+          "path": "app/docs/future_documentation/media/navigation-illustrations/coloured_tool_navigation.svg",
+          "sha256": "bcd6fa1178e1bbb50b575c7f75183d92b015a820c486fb1ed008289c9bb21010"
+        },
+        {
+          "path": "app/docs/future_documentation/media/navigation-illustrations/filterest_admin_menu.png",
+          "sha256": "cd9bcaabafe185d8fe28d214ce47433a4dd169a6d03d7cfc2dd66b71387dd896"
+        }
+      ],
+      "author": "Filterest project contributors",
+      "component": "Filterest tool navigation documentation illustrations",
+      "documents": [],
+      "embedded_sources": [],
+      "license": "GPL-2.0-or-later",
+      "party": "first-party",
+      "publication_rights_basis": "First-party illustrations prepared for the Coloured Tool Navigation document on 2026-10-16. The project owner supplied the cropped Filterest menu capture, confirmed publication rights and explicitly authorised copying it into the GPL-2.0-or-later repository. The owner also commissioned an original SVG mockup using plain shapes and text only, with no third-party artwork, under the same grant.",
+      "rights_holder": "Filterest project contributors",
+      "rights_review": "owner-attested",
+      "source": "Filterest menu capture and original geometric navigation mockup created for the Coloured Tool Navigation future document, 2026-10-16"
     }
   ],
   "go_metadata_source": "GOOS=linux GOARCH=amd64 CGO_ENABLED=1 go list -deps metadata for filterest[linux-release]:. tags=netgo osusergo; filterest[container]:.; filterest-admin-recovery[container]:./server_tools/admin_credential_recovery, plus compiled vendored components and Go toolchain",

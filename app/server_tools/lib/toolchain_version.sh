@@ -3,9 +3,9 @@
 # Bridges shell entry points and exact minimum versions without GNU sort dependencies.
 # Exists so macOS Bash 3.2 and Linux setup paths reject unsupported Go versions consistently.
 
-EASELECT_MIN_GO_VERSION="1.26.5"
+EASELECT_MIN_GO_VERSION="1.26.9"
 
-# Compares stable numeric versions such as go1.26.5 and 1.26.5.
+# Compares stable numeric versions such as go1.26.9 and 1.26.9.
 easelect_semver_at_least() {
     local actual="${1#go}"
     local required="${2#go}"

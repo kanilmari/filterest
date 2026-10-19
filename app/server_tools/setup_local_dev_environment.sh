@@ -9,7 +9,7 @@
 # Prerequisites:
 #   - Ubuntu/Debian-based system
 #   - PostgreSQL 16 installed (apt install postgresql-16 postgresql-16-pgvector)
-#   - Go 1.26.5+ and Node.js 24+ installed for the development profile
+#   - Go 1.26.9+ and Node.js 24+ installed for the development profile
 #   - Neither Go nor Node.js is required for the prebuilt admin profile
 #   - Native environment files present at the resolved runtime/development paths
 #   - Local TLS files present or openssl available for generating them

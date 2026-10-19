@@ -1,7 +1,7 @@
 // image_formatter_test.go
-// Verifies image decode dimension, pixel, and memory budgets before thumbnail generation.
-// Bridges synthetic image headers and the upload image formatter's allocation boundary.
-// Exists to prevent decompression-bomb regressions in WebP, TIFF, and other decoders.
+// Verifies image decode budgets and lossless WebP decoding through display variants.
+// Bridges synthetic headers and real image pixels with the upload image formatter.
+// Exists to cover the WebP decoder and prevent image allocation regressions.
 
 package dtt_1_row_create
 
@@ -17,6 +17,7 @@ import (
 	"strings"
 	"testing"
 
+	webp "github.com/chai2010/webp"
 	"github.com/disintegration/imaging"
 )
 
@@ -87,6 +88,53 @@ func TestWebPInputUsesMagicHeaderInsteadOfFilenameExtension(t *testing.T) {
 	}
 	if got := decodedImage.Bounds().Size(); got.X != 2 || got.Y != 1 {
 		t.Fatalf("decoded WebP size = %v, want (2,1)", got)
+	}
+}
+
+func TestLosslessWebPDecodesAndCreatesDisplayVariant(t *testing.T) {
+	source := image.NewNRGBA(image.Rect(0, 0, 16, 8))
+	for y := 0; y < 8; y++ {
+		for x := 0; x < 16; x++ {
+			source.SetNRGBA(x, y, color.NRGBA{R: uint8(x * 37), G: uint8(y * 53), B: uint8(x * y * 19), A: 255})
+		}
+	}
+	var fixture bytes.Buffer
+	if err := webp.Encode(&fixture, source, &webp.Options{Lossless: true}); err != nil {
+		t.Fatalf("encode lossless WebP fixture: %v", err)
+	}
+	// VP8L selects x/image's lossless decoder, the path affected by GO-2026-6222.
+	if data := fixture.Bytes(); len(data) < 16 || string(data[12:16]) != "VP8L" {
+		t.Fatal("fixture must contain a lossless VP8L chunk")
+	}
+	tempDir := t.TempDir()
+	sourcePath := filepath.Join(tempDir, "lossless.webp")
+	if err := os.WriteFile(sourcePath, fixture.Bytes(), 0o644); err != nil {
+		t.Fatalf("write lossless WebP: %v", err)
+	}
+	decoded, err := decodeSourceImage(sourcePath)
+	if err != nil {
+		t.Fatalf("decode lossless WebP through image formatter: %v", err)
+	}
+	if decoded.Bounds() != source.Bounds() {
+		t.Fatalf("decoded bounds = %v, want %v", decoded.Bounds(), source.Bounds())
+	}
+	for y := 0; y < 8; y++ {
+		for x := 0; x < 16; x++ {
+			if got := color.NRGBAModel.Convert(decoded.At(x, y)); got != source.NRGBAAt(x, y) {
+				t.Fatalf("decoded pixel (%d,%d) = %v, want %v", x, y, got, source.NRGBAAt(x, y))
+			}
+		}
+	}
+	variantPath := filepath.Join(tempDir, "4", "lossless.webp")
+	if err := CreateImageDisplayVariant(sourcePath, variantPath, 4); err != nil {
+		t.Fatalf("create lossless WebP display variant: %v", err)
+	}
+	variant, err := decodeSourceImage(variantPath)
+	if err != nil {
+		t.Fatalf("decode display variant: %v", err)
+	}
+	if got := variant.Bounds().Size(); got != image.Pt(4, 2) {
+		t.Fatalf("display variant size = %v, want (4,2)", got)
 	}
 }
 

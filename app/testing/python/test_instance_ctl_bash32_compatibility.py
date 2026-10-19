@@ -143,10 +143,10 @@ class InstanceCtlBash32CompatibilityTests(unittest.TestCase):
     def test_go_minimum_version_check_is_portable_and_fail_closed(self) -> None:
         result = run_system_bash(
             'source "$PROJECT_ROOT/server_tools/lib/toolchain_version.sh"\n'
-            'for version in go1.26.5 go1.26.6 go1.27.0; do\n'
+            'for version in go1.26.9 go1.26.10 go1.27.0; do\n'
             '  easelect_go_meets_minimum "$version"\n'
             'done\n'
-            'for version in go1.26.4 go1.25.99 go1.26 devel; do\n'
+            'for version in go1.26.5 go1.26.8 go1.25.99 go1.26 devel; do\n'
             '  if easelect_go_meets_minimum "$version"; then exit 9; fi\n'
             'done\n'
             'go() { printf "go version go1.26.5 darwin/arm64\\n"; }\n'

@@ -21,7 +21,7 @@ COPY server_tools/lib/native_development_ports.env ./server_tools/lib/native_dev
 COPY server_tools/scripts/local_filterest_target.cjs ./server_tools/scripts/local_filterest_target.cjs
 RUN FILTEREST_PROJECT_ROOT_OVERRIDE=/app npm run build
 
-FROM golang:1.26.5-alpine3.24 AS backend-builder
+FROM golang:1.26.9-alpine3.24 AS backend-builder
 
 # Alpine packages are constrained by the Alpine release branch in each stage's
 # base image (3.24), never by exact builds. A branch index holds only the newest
