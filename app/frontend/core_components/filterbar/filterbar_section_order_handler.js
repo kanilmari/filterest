@@ -246,8 +246,12 @@ export function setupFilterbarSectionOrdering(panelBody) {
     const sectionMountObserver = new MutationObserver((mutations) => {
         // Reordering moves existing children too. Only new/replaced sections
         // need their position and defaults applied, preventing observer loops.
+        // Other children (a spacer, a status row) are not sections: re-applying
+        // the layout for them would move every section after them and undo a
+        // section the visitor opened only on this page.
         const added = mutations.flatMap(m => [...m.addedNodes]);
-        if (!signal.aborted && added.some(node => node instanceof HTMLElement && !node.dataset.filterbarOrderMounted)) {
+        if (!signal.aborted && added.some(node => node instanceof HTMLElement
+            && node.matches(SECTION_SELECTOR) && !node.dataset.filterbarOrderMounted)) {
             getSectionElements(panelBody).forEach(section => { section.dataset.filterbarOrderMounted = 'true'; });
             lastOrder = ''; lastCollapsed = '';
             void applyLoadedLayout();

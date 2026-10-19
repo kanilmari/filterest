@@ -1,7 +1,7 @@
 // E20_filterbar_order_and_memory.spec.ts
 // Proves shared and personal ordering, visibility memory and first-visit defaults.
 // Connects real role sessions, translated settings and cached dataset navigation.
-// Restores site/account settings and registered temporary datasets even after failures.
+// Restores site/account settings and registered temporary datasets even after failures; runs only with one worker.
 import { expect, test, type APIRequestContext, type BrowserContext, type Page } from '@playwright/test';
 import { login, loadCredentials, loadUserCredentials } from '../helpers/auth';
 import { waitForAppReady } from '../helpers/navigation';
@@ -93,6 +93,9 @@ for (const theme of ['light', 'dark'] as const) for (const language of ['fi', 'e
     test.setTimeout(180000);
     test.skip(testInfo.project.metadata?.cardView !== 'normal' || testInfo.project.metadata?.screenWidth === 'tablet',
       'This proof covers normal desktop and phone layouts.');
+    // It rewrites the site-wide section order, login_to_browse and the shared administrator's theme. Parallel specs
+    // would read those mid-test (the 19.10. nightly's E3/E18/F1 failures), so it runs only in a one-worker pass.
+    test.skip(testInfo.config.workers > 1, 'Writes site-wide settings: run it in a one-worker pass.');
     cleanup = { accounts: [], contexts: [], datasets: [] };
     await login(page, loadCredentials());
     const admin = await rememberAccount(page, playwright);

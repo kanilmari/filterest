@@ -18,6 +18,8 @@ import {
     shouldPersistFilterbarSectionToggle,
     setupFilterbarSectionOrdering,
 } from "./filterbar_section_order_handler.js";
+import { endpoint_router } from "../endpoints/endpoint_router.js";
+import { loadFilterbarPreferences } from "./filterbar_preferences_controller.js";
 
 describe("normalizeFilterbarSectionOrder", () => {
     test("keeps known unique keys and appends missing defaults", () => {
@@ -108,6 +110,56 @@ describe("normalizeFilterbarSectionOrder", () => {
         ordering.destroy();
         sessionStorage.clear();
         container.remove();
+    });
+
+    // B4 (WL103) inserts a spacer before the field-set section to reach the viewport bottom. A child that is not a
+    // section must not re-apply the layout: that moved every section after the spacer and re-collapsed field_sets.
+    test("a non-section child leaves the section order and open sections alone", async () => {
+        // The saved shared layout keeps field_sets closed, as on the dev instance.
+        endpoint_router.mockImplementation(async (route) => (route === "getFilterbarSectionLayout"
+            ? { section_order: DEFAULT_FILTERBAR_SECTION_ORDER, section_collapsed: { field_sets: true } } : {}));
+        await loadFilterbarPreferences({ refresh: true });
+        const container = document.createElement("div");
+        document.body.appendChild(container);
+        const sections = DEFAULT_FILTERBAR_SECTION_ORDER.map((key) => {
+            const section = document.createElement("section");
+            section.dataset.filterbarSectionKey = key;
+            section.expand = vi.fn(() => { section.classList.remove("is-collapsed"); return Promise.resolve(); });
+            section.collapse = vi.fn(() => { section.classList.add("is-collapsed"); return Promise.resolve(); });
+            container.appendChild(section);
+            return section;
+        });
+        const ordering = setupFilterbarSectionOrdering(container);
+        await ordering.ready;
+        const fieldSets = sections.find((section) => section.dataset.filterbarSectionKey === "field_sets");
+        expect(fieldSets.classList.contains("is-collapsed")).toBe(true); // the saved layout was applied
+        // B4 opens it for this page only, without saving the layout.
+        fieldSets.classList.remove("is-collapsed");
+        sections.forEach((section) => { section.expand.mockClear(); section.collapse.mockClear(); });
+
+        const spacer = document.createElement("div");
+        fieldSets.before(spacer);
+        await new Promise((resolve) => setTimeout(resolve, 20));
+
+        expect(fieldSets.previousElementSibling).toBe(spacer);
+        expect(Array.from(container.children).filter((child) => child !== spacer)
+            .map((section) => section.dataset.filterbarSectionKey)).toEqual(DEFAULT_FILTERBAR_SECTION_ORDER);
+        sections.forEach((section) => {
+            expect(section.collapse).not.toHaveBeenCalled();
+            expect(section.expand).not.toHaveBeenCalled();
+        });
+        expect(fieldSets.classList.contains("is-collapsed")).toBe(false);
+
+        // A real replacement section is still adopted by the loaded layout (positive control).
+        const chat = sections.find((section) => section.dataset.filterbarSectionKey === "chat");
+        const late = document.createElement("section");
+        late.dataset.filterbarSectionKey = "chat";
+        chat.replaceWith(late);
+        await vi.waitFor(() => expect(late.dataset.filterbarOrderMounted).toBe("true"));
+        ordering.destroy();
+        container.remove();
+        endpoint_router.mockImplementation(async () => ({}));
+        await loadFilterbarPreferences({ refresh: true });
     });
 });
 
