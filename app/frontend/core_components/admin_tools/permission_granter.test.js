@@ -104,3 +104,28 @@ describe("savePermissionRowsTableless", () => {
         });
     });
 });
+
+
+describe("legacy granter refusal and rejection contract", () => {
+    test.each([savePermissionRowsForMultipleTables, savePermissionRowsTableless])("refuses without an endpoint call", async save => {
+        const endpoint_router = vi.fn();
+        expect(await save({ changedCells: [{ rowId: "10", columnKey: "group_2", nextValue: false }],
+            targetTableNames: ["app_users"], existingPermissions: [],
+            functionAccessMiddleware: async () => false, endpoint_router })).toBeNull();
+        expect(endpoint_router).not.toHaveBeenCalled();
+    });
+    test.each([savePermissionRowsForMultipleTables, savePermissionRowsTableless])("propagates rejected callbacks", async save => {
+        await expect(save({ changedCells: [{ rowId: "10", columnKey: "group_2", nextValue: false }],
+            targetTableNames: ["app_users"], existingPermissions: [], functionAccessMiddleware: async () => true,
+            endpoint_router: async () => { throw new Error("refused"); } })).rejects.toThrow("refused");
+    });
+    test("removing the final tableless grant sends an explicitly empty full replacement", async () => {
+        const endpoint_router = vi.fn().mockResolvedValue(null);
+        expect(await savePermissionRowsTableless({ changedCells: [{ rowId: "10", columnKey: "group_2", nextValue: false }],
+            existingPermissions: [{ user_group_id: 2, function_id: 10, target_dataset_name: "" }],
+            functionAccessMiddleware: async () => true, endpoint_router })).toBeNull();
+        expect(endpoint_router).toHaveBeenCalledWith("datasetPermissions", {
+            method: "POST", url_params: "?schema=public&dataset=", body_data: { permissions: [] },
+        });
+    });
+});

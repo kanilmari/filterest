@@ -6,6 +6,7 @@
 
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import { createVanillaCheckboxTable } from "./vanilla_checkbox_table.js";
+import legacyDOM from "./checkbox_table_legacy_dom.json";
 
 function sampleColumns() {
     return [
@@ -34,6 +35,13 @@ describe("createVanillaCheckboxTable", () => {
     beforeEach(() => {
         localStorage.clear();
         document.body.innerHTML = "";
+    });
+
+    test("default readonly and editing markup is byte-identical to the original component", () => {
+        const table = createVanillaCheckboxTable({ containerElement: document.body, columns: sampleColumns(), rows: sampleRows() });
+        expect(table.getElement().outerHTML).toBe(legacyDOM.readonly);
+        table.enterEditMode();
+        expect(table.getElement().outerHTML).toBe(legacyDOM.editing);
     });
 
     test("renders runtime rows and columns in readonly mode", () => {
@@ -302,4 +310,39 @@ describe("createVanillaCheckboxTable", () => {
         expect(table.isDirty()).toBe(true);
         expect(table.getRows({ draft: true })[0].enabled).toBe(false);
     });
+    test("pins legacy DOM, native tab sequence, copy, payload and rejected/recovered saves", async () => {
+        const container = document.body.appendChild(document.createElement("div"));
+        const onSave = vi.fn().mockRejectedValueOnce(new Error("refused")).mockResolvedValue(null);
+        localStorage.setItem("legacy", JSON.stringify({ version: 1, editMode: true,
+            draftRows: [{ ...sampleRows()[0], enabled: false }, sampleRows()[1]] }));
+        const table = createVanillaCheckboxTable({ containerElement: container, columns: sampleColumns(),
+            rows: sampleRows(), storageKey: "legacy", onSave });
+        expect([...container.firstChild.children].map(node => node.className)).toEqual(["vct-toolbar", "vct-table-wrapper"]);
+        expect(container.querySelector("table").innerHTML).not.toMatch(/scope=|aria-label=|rowgroup/);
+        expect([...container.querySelectorAll(".vct-toolbar button")].map(node => node.textContent)).toEqual(["Edit", "Save", "Cancel"]);
+        expect([...container.querySelectorAll("button, input, select")].map(node => [node.tagName, node.tabIndex]))
+            .toEqual([["BUTTON", 0], ["BUTTON", 0], ["BUTTON", 0], ["INPUT", 0], ["SELECT", 0], ["INPUT", 0], ["SELECT", 0]]);
+        await expect(table.saveChanges()).rejects.toThrow("refused");
+        expect(table.isDirty()).toBe(true);
+        expect(localStorage.getItem("legacy")).not.toBeNull();
+        await expect(table.saveChanges()).resolves.toBe(true);
+        expect(onSave).toHaveBeenLastCalledWith({ rows: [{ ...sampleRows()[0], enabled: false }, sampleRows()[1]],
+            changedCells: [{ rowId: "row-1", columnKey: "enabled", previousValue: true, nextValue: false }] });
+        expect(localStorage.getItem("legacy")).toBeNull();
+        table.enterEditMode();
+        table.destroy();
+        expect(localStorage.getItem("legacy")).toBeNull();
+    });
+
+    test("Cancel after legacy recovery restores baseline order and values", () => {
+        localStorage.setItem("legacy-cancel", JSON.stringify({ version: 1, editMode: true,
+            draftRows: [sampleRows()[1], { ...sampleRows()[0], enabled: false }] }));
+        const table = createVanillaCheckboxTable({ containerElement: document.body, columns: sampleColumns(),
+            rows: sampleRows(), storageKey: "legacy-cancel" });
+        expect(table.getRows({ draft: true }).map(row => row.id)).toEqual(["row-1", "row-2"]);
+        table.cancelChanges();
+        expect(table.getRows({ draft: true })).toEqual(sampleRows());
+        expect(localStorage.getItem("legacy-cancel")).toBeNull();
+    });
+
 });

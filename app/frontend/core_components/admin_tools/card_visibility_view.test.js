@@ -8,6 +8,7 @@ import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 import { DEFAULT_DATASET_APPEARANCE } from '../../shared/dataset_appearance/validator.js';
 
 const mountedForms = [];
+const tableOptions = [];
 const fetchCardVisibilityMock = vi.fn();
 const saveCardVisibilityMock = vi.fn();
 const showSuccessToastMock = vi.fn();
@@ -48,6 +49,13 @@ async function flushAsyncWork() {
 
 async function loadModule() {
     vi.resetModules();
+    vi.doMock('../../reusable_components/vanilla_checkbox_table/vanilla_checkbox_table.js', async importOriginal => {
+        const original = await importOriginal();
+        return { ...original, createVanillaCheckboxTable: options => {
+            tableOptions.push(options);
+            return original.createVanillaCheckboxTable(options);
+        } };
+    });
     vi.doMock('../endpoints/stable_endpoint_router.js', () => ({
         fetchCardVisibility: fetchCardVisibilityMock,
         saveCardVisibility: saveCardVisibilityMock,
@@ -103,6 +111,7 @@ describe('card_visibility_view', () => {
         mountedForms.splice(0).forEach(container => container.__cleanupListeners?.());
     });
     beforeEach(() => {
+        tableOptions.length = 0;
         document.body.innerHTML = '';
         localStorage.clear();
         fetchCardVisibilityMock.mockReset();
@@ -365,6 +374,7 @@ describe('card_visibility_view', () => {
             columns: [expect.objectContaining({ column_uid: 9 })],
         });
         expect(showSuccessToastMock).toHaveBeenCalledWith('Layout saved');
+        expect(saveCardVisibilityMock.mock.calls[0][0].columns).toEqual([buildColumn()]);
     });
 
     test('saves the table-level card style variant without requiring column edits', async () => {
@@ -410,6 +420,7 @@ describe('card_visibility_view', () => {
             columns: [expect.objectContaining({ column_uid: 9 })],
         });
         expect(showSuccessToastMock).toHaveBeenCalledWith('Style saved');
+        expect(saveCardVisibilityMock.mock.calls[0][0].columns).toEqual([buildColumn()]);
     });
     test.each(['en', 'fi'])('keeps dataset inheritance explicit and saves either override or null in %s', async language => {
         getLanguageWithBrowserFallbackMock.mockReturnValue(language);
@@ -560,6 +571,7 @@ describe('card_visibility_view', () => {
         expect(getTranslationForKeyMock).toHaveBeenCalledWith('save_failed', expect.anything());
         expect(container.querySelector('[data-testid="card-visibility-save-error"]').textContent).toBe('Save failed.');
         expect(container.querySelector('[data-testid="card-label-visibility-select"]').value).toBe('inherit');
+        expect(localStorage.getItem('card_visibility_draft_orders')).toContain('"show_key_on_card_override":null');
     });
 
     test('normalizes legacy booleans without guessing missing overrides or replacing explicit null', async () => {
@@ -573,6 +585,23 @@ describe('card_visibility_view', () => {
             { show_key_on_card: true, show_key_on_card_override: true },
             { show_key_on_card: true, show_key_on_card_override: null }, {},
         ]);
+    });
+
+    test('pins recovered Cancel and the label passed by Card', async () => {
+        localStorage.setItem('card_visibility_draft_orders', JSON.stringify({ version: 1, editMode: true,
+            draftRows: [buildColumn({ show_key_on_card_override: null })] }));
+        fetchCardVisibilityMock.mockResolvedValue({ columns: [buildColumn()] });
+        const { generate_card_visibility_form } = await loadModule();
+        const container = document.createElement('div');
+        await generate_card_visibility_form(container, { initialDatasetName: 'orders' });
+        const passed = tableOptions.find(options => options.storageKey === 'card_visibility_draft_orders');
+        expect(container.querySelector('.vct-btn-cancel').textContent).toBe(passed.cancelLabel);
+        expect(container.querySelectorAll('tbody')).toHaveLength(1);
+        expect([...container.querySelectorAll('.vct-toolbar button')].map(node => node.tabIndex)).toEqual([0, 0, 0]);
+        container.querySelector('[data-testid="card-visibility-cancel-button"]').click();
+        await flushAsyncWork();
+        expect(localStorage.getItem('card_visibility_draft_orders')).toBeNull();
+        expect(saveCardVisibilityMock).not.toHaveBeenCalled();
     });
 
 });

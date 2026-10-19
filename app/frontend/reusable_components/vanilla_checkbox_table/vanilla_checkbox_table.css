@@ -200,3 +200,67 @@
     white-space: normal;
     overflow-wrap: anywhere;
 }
+
+/* Opt-in settings features never select the existing Card or Permissions tables. */
+.vct-features .vct-group-label th {
+    padding: 0.55rem;
+    text-align: start;
+    color: var(--text_color);
+    background: var(--bg_color_2, var(--bg_color));
+    border: 1px solid var(--table_border_color, var(--border_color));
+}
+
+.vct-features .vct-cell[scope="row"] {
+    text-align: start;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    font-weight: normal;
+}
+
+.vct-features .vct-move {
+    min-width: 44px;
+    min-height: 44px;
+    margin-inline-start: 0.25rem;
+    border: 1px solid var(--border_color);
+    border-radius: var(--border_radius_small, 6px);
+    background: var(--button_bg_color);
+    color: var(--button_text_color);
+    cursor: pointer;
+}
+
+.vct-features .vct-move:hover {
+    background: var(--button_hover_bg_color);
+    color: var(--button_hover_text_color);
+}
+
+.vct-features .vct-move:focus-visible {
+    outline: 2px solid var(--text_color);
+    outline-offset: 2px;
+}
+
+.vct-features .vct-move[aria-disabled="true"] {
+    opacity: 0.55;
+    cursor: default;
+}
+
+.vct-features .vct-row[hidden] { display: none; }
+
+.vct-features .vct-announcement {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+}
+
+.vct-features .vct-filter-hint {
+    color: var(--text_color_secondary, var(--text_color));
+}
+
+.vct-features .vct-control-target {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 44px;
+    min-height: 44px;
+}

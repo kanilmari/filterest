@@ -3,215 +3,16 @@
 // Bridges generic data models, edit/save/cancel controls, and localStorage draft persistence.
 // Exists to centralize checkbox-matrix style UI behavior without coupling to any feature endpoint.
 
-/**
- * @typedef {Object} VanillaCheckboxTableColumn
- * @property {string} key
- * @property {string} [label]
- * @property {'checkbox'|'text'|'select'|'static'} [type]
- * @property {boolean} [editable]
- * @property {Array<{value: string|number|boolean, label: string}>} [options]
- * @property {string} [className]
- * @property {string} [width]
- * @property {string} [minWidth]
- * @property {string} [maxWidth]
- * @property {(value: any, row: Record<string, any>, column: VanillaCheckboxTableColumn) => string} [formatReadOnly]
- * @property {(context: { column: VanillaCheckboxTableColumn, getRows: ({draft}: {draft?: boolean}) => Array<Record<string, any>>, isEditMode: boolean, isDirty: boolean, setColumnValues: (columnKey: string, nextValue: any, options?: { rowFilter?: (row: Record<string, any>, rowIndex: number) => boolean }) => void }) => HTMLElement|string|null} [renderHeaderCell]
- * @property {(context: { value: any, row: Record<string, any>, column: VanillaCheckboxTableColumn, rowIndex: number }) => HTMLElement|string|null} [renderReadOnlyCell]
- * @property {(context: { value: any, row: Record<string, any>, column: VanillaCheckboxTableColumn, rowIndex: number, updateValue: (nextValue: any) => void, isDisabled: boolean }) => HTMLElement|string|null} [renderEditableCell]
- * @property {(context: { value: any, row: Record<string, any>, column: VanillaCheckboxTableColumn, rowIndex: number, isEditMode: boolean }) => boolean} [isCellDisabled]
- */
-
-/**
- * @typedef {Object} VanillaCheckboxTableOptions
- * @property {HTMLElement} containerElement
- * @property {VanillaCheckboxTableColumn[]} columns
- * @property {Array<Record<string, any>>} rows
- * @property {string} [rowIdKey='id']
- * @property {string} [storageKey]
- * @property {boolean} [persistDraftToLocalStorage=true]
- * @property {boolean} [startInEditMode=false]
- * @property {(payload: {
- *   rows: Array<Record<string, any>>,
- *   changedCells: Array<{rowId: string, columnKey: string, previousValue: any, nextValue: any}>
- * }) => Promise<any>|any} [onSave]
- * @property {(dirty: boolean) => void} [onDirtyChange]
- * @property {(isEditMode: boolean) => void} [onEditModeChange]
- * @property {string} [editLabel='Edit']
- * @property {string} [saveLabel='Save']
- * @property {string} [cancelLabel='Cancel']
- * @property {string} [dirtyLabel='Unsaved changes']
- * @property {string} [cleanLabel='']
- * @property {boolean} [showCellEditButtonOnHover=false]
- * @property {(context: { row: Record<string, any>, column: VanillaCheckboxTableColumn, rowIndex: number }) => HTMLElement|string|null} [renderCellEditButton]
- * @property {(row: Record<string, any>, rowIndex: number) => string|string[]|null} [rowClassName]
- */
-
-const STORAGE_VERSION = 1;
-
-function deepClone(value) {
-    if (typeof structuredClone === "function") {
-        return structuredClone(value);
-    }
-    return JSON.parse(JSON.stringify(value));
-}
-
-function toTextValue(value) {
-    if (value === null || value === undefined) return "";
-    return String(value);
-}
-
-function isEqualValue(left, right) {
-    return Object.is(left, right);
-}
-
-function normalizeColumns(columns) {
-    if (!Array.isArray(columns)) return [];
-    return columns
-        .filter((column) => column && typeof column.key === "string" && column.key.trim() !== "")
-        .map((column) => {
-            const normalizedType = String(column.type || "checkbox").toLowerCase();
-            return {
-                key: column.key,
-                label: column.label || column.key,
-                type: normalizedType,
-                editable: column.editable !== false && normalizedType !== "static",
-                options: Array.isArray(column.options) ? column.options : [],
-                className: column.className || "",
-                width: typeof column.width === "string" ? column.width : "",
-                minWidth: typeof column.minWidth === "string" ? column.minWidth : "",
-                maxWidth: typeof column.maxWidth === "string" ? column.maxWidth : "",
-                formatReadOnly: typeof column.formatReadOnly === "function" ? column.formatReadOnly : null,
-                renderHeaderCell: typeof column.renderHeaderCell === "function" ? column.renderHeaderCell : null,
-                renderReadOnlyCell: typeof column.renderReadOnlyCell === "function" ? column.renderReadOnlyCell : null,
-                renderEditableCell: typeof column.renderEditableCell === "function" ? column.renderEditableCell : null,
-                isCellDisabled: typeof column.isCellDisabled === "function" ? column.isCellDisabled : null,
-            };
-        });
-}
-
-function normalizeCheckboxState(value) {
-    if (value === "ambiguous") return "ambiguous";
-    if (value === "checked") return "checked";
-    if (value === "unchecked") return "unchecked";
-    return value ? "checked" : "unchecked";
-}
-
-function appendRenderableContent(parentNode, content) {
-    if (content === null || content === undefined) {
-        return;
-    }
-    if (content instanceof Node) {
-        parentNode.appendChild(content);
-        return;
-    }
-    parentNode.textContent = String(content);
-}
-
-function toRenderableNode(content, fallbackClassName = "") {
-    if (content instanceof Node) {
-        return content;
-    }
-
-    const wrapper = document.createElement("span");
-    if (fallbackClassName) {
-        wrapper.classList.add(fallbackClassName);
-    }
-    wrapper.textContent = String(content ?? "");
-    return wrapper;
-}
-
-function safeParseStorage(rawValue) {
-    if (!rawValue) return null;
-    try {
-        const parsed = JSON.parse(rawValue);
-        if (!parsed || typeof parsed !== "object") return null;
-        if (Number(parsed.version) !== STORAGE_VERSION) return null;
-        return parsed;
-    } catch {
-        return null;
-    }
-}
-
-function toRowIdentifier(row, rowIdKey) {
-    const candidate = row?.[rowIdKey];
-    if (candidate === null || candidate === undefined) return "";
-    return String(candidate);
-}
-
-function restoreDraftRows(baseRows, persistedRows, rowIdKey) {
-    if (!Array.isArray(persistedRows) || persistedRows.length === 0) {
-        return deepClone(baseRows);
-    }
-
-    const persistedById = new Map();
-    persistedRows.forEach((row) => {
-        const rowId = toRowIdentifier(row, rowIdKey);
-        if (!rowId) return;
-        persistedById.set(rowId, row);
-    });
-
-    return baseRows.map((baseRow) => {
-        const rowId = toRowIdentifier(baseRow, rowIdKey);
-        if (!rowId || !persistedById.has(rowId)) {
-            return deepClone(baseRow);
-        }
-        return {
-            ...deepClone(baseRow),
-            ...deepClone(persistedById.get(rowId)),
-        };
-    });
-}
-
-function resolveReadonlyText(value, row, column) {
-    if (column.formatReadOnly) {
-        return toTextValue(column.formatReadOnly(value, row, column));
-    }
-    if (column.type === "checkbox") {
-        return value ? "Yes" : "No";
-    }
-    if (column.type === "select") {
-        const matchingOption = column.options.find((option) => isEqualValue(option.value, value));
-        return matchingOption ? toTextValue(matchingOption.label) : toTextValue(value);
-    }
-    return toTextValue(value);
-}
-
-function buildChangedCells(baseRows, draftRows, columns, rowIdKey) {
-    const changedCells = [];
-    const baseById = new Map();
-    baseRows.forEach((row) => {
-        const rowId = toRowIdentifier(row, rowIdKey);
-        if (rowId) {
-            baseById.set(rowId, row);
-        }
-    });
-
-    draftRows.forEach((draftRow) => {
-        const rowId = toRowIdentifier(draftRow, rowIdKey);
-        if (!rowId) return;
-        const baseRow = baseById.get(rowId);
-        if (!baseRow) return;
-        columns.forEach((column) => {
-            const previousValue = baseRow[column.key];
-            const nextValue = draftRow[column.key];
-            if (!isEqualValue(previousValue, nextValue)) {
-                changedCells.push({
-                    rowId,
-                    columnKey: column.key,
-                    previousValue,
-                    nextValue,
-                });
-            }
-        });
-    });
-
-    return changedCells;
-}
+import { STORAGE_VERSION, deepClone, toTextValue, isEqualValue, normalizeColumns,
+    normalizeCheckboxState, appendRenderableContent, toRenderableNode, safeParseStorage,
+    toRowIdentifier, restoreDraftRows, resolveReadonlyText, buildChangedCells } from "./checkbox_table_values.js";
+import { createCheckboxTableFeatures } from "./checkbox_table_features.js";
+import { createCheckboxTableDraft } from "./checkbox_table_draft.js";
 
 /**
  * Creates a reusable editable checkbox table instance.
  *
- * @param {VanillaCheckboxTableOptions} options
+ * @param {Object} options See README.md for the legacy and opt-in contracts.
  */
 export function createVanillaCheckboxTable(options) {
     const {
@@ -287,6 +88,20 @@ export function createVanillaCheckboxTable(options) {
     rootElement.appendChild(tableWrapperElement);
     containerElement.replaceChildren(rootElement);
 
+    const state = {
+        get rows() { return draftRows; }, set rows(value) { draftRows = value; },
+        get base() { return baseRows; }, set base(value) { baseRows = value; },
+        get columns() { return columns; },
+        get editing() { return isEditMode; }, set editing(value) { isEditMode = value; },
+        get saving() { return isSaving; },
+        changed: () => buildChangedCells(baseRows, draftRows, columns, rowIdKey,
+            { editableOnly: features.enabled || draft.enabled || draft.verified }),
+        render: () => render(), recompute: () => recomputeDirtyState(),
+        disabled: (row, index, column) => resolveCellDisabledState(row, index, column),
+    };
+    const features = createCheckboxTableFeatures(options, state, rootElement, tableElement);
+    const draft = createCheckboxTableDraft(options, state, features);
+
     function emitDirtyChange() {
         if (typeof onDirtyChange === "function") {
             onDirtyChange(isDirty);
@@ -309,13 +124,13 @@ export function createVanillaCheckboxTable(options) {
     }
 
     function persistDraftIfNeeded() {
-        if (!storageKey || !persistDraftToLocalStorage) return;
+        if (!storageKey || !persistDraftToLocalStorage || draft.preserve()) return;
         if (!isDirty && !isEditMode) {
             clearPersistedDraft();
             return;
         }
 
-        const payload = {
+        const payload = draft.enabled ? draft.payload() : {
             version: STORAGE_VERSION,
             editMode: isEditMode,
             draftRows: draftRows,
@@ -328,8 +143,8 @@ export function createVanillaCheckboxTable(options) {
     }
 
     function recomputeDirtyState() {
-        const changedCells = buildChangedCells(baseRows, draftRows, columns, rowIdKey);
-        const nextDirty = changedCells.length > 0;
+        const changedCells = state.changed();
+        const nextDirty = changedCells.length > 0 || features.orderChanged() || draft.metadataChanged();
         const dirtyChanged = nextDirty !== isDirty;
         isDirty = nextDirty;
         if (dirtyChanged) {
@@ -343,7 +158,7 @@ export function createVanillaCheckboxTable(options) {
         editButton.style.display = isEditMode ? "none" : "";
         saveButton.style.display = isEditMode ? "" : "none";
         cancelButton.style.display = isEditMode ? "" : "none";
-        saveButton.disabled = isSaving || !isDirty;
+        saveButton.disabled = isSaving || !isDirty || draft.blocked();
         cancelButton.disabled = isSaving;
         statusElement.textContent = isDirty ? dirtyLabel : cleanLabel;
         statusElement.dataset.state = isDirty ? "dirty" : "clean";
@@ -362,17 +177,21 @@ export function createVanillaCheckboxTable(options) {
     }
 
     function handleCellInputChange(rowIndex, columnKey, nextValue) {
-        if (!draftRows[rowIndex]) return;
+        if (draft.frozen() || !draftRows[rowIndex]) return;
         draftRows[rowIndex][columnKey] = nextValue;
         recomputeDirtyState();
         renderTableHead();
+        features.refreshToggles();
     }
 
     function setColumnValues(columnKey, nextValue, { rowFilter = null } = {}) {
+        if (draft.frozen()) return;
         draftRows.forEach((row, rowIndex) => {
             if (typeof rowFilter === "function" && !rowFilter(row, rowIndex)) {
                 return;
             }
+            const column = columns.find(item => item.key === columnKey);
+            if (features.enabled && (!column || column.rowToggle || !features.writable(row, column))) return;
             draftRows[rowIndex][columnKey] = nextValue;
         });
         recomputeDirtyState();
@@ -404,6 +223,8 @@ export function createVanillaCheckboxTable(options) {
     }
 
     function createReadonlyCellContent(row, rowIndex, column) {
+        if (!features.supported(row, column)) return features.unsupported(row, column);
+        if (column.rowToggle) return features.toggle(row, column);
         const value = row[column.key];
         if (column.renderReadOnlyCell) {
             const customContent = column.renderReadOnlyCell({
@@ -471,6 +292,7 @@ export function createVanillaCheckboxTable(options) {
         const contentNode = createReadonlyCellContent(row, rowIndex, column);
         const showInlineEditButton = showCellEditButtonOnHover &&
             !isEditMode &&
+            features.supported(row, column) &&
             column.editable &&
             !resolveCellDisabledState(row, rowIndex, column);
 
@@ -492,10 +314,16 @@ export function createVanillaCheckboxTable(options) {
     }
 
     function createEditableCellContent(row, rowIndex, column) {
+        if (!features.supported(row, column)) return features.unsupported(row, column);
+        if (column.rowToggle) return features.toggle(row, column);
         if (!column.editable) {
             return createReadonlyCellNode(row, rowIndex, column);
         }
 
+        // Resolve identity at activation: moving an existing DOM row must not stale its inputs.
+        const rowId = toRowIdentifier(row, rowIdKey);
+        const updateValue = nextValue => handleCellInputChange(
+            options.reorder ? draftRows.findIndex(item => toRowIdentifier(item, rowIdKey) === rowId) : rowIndex, column.key, nextValue);
         const currentValue = row[column.key];
         const isDisabled = resolveCellDisabledState(row, rowIndex, column);
 
@@ -506,7 +334,7 @@ export function createVanillaCheckboxTable(options) {
                 column,
                 rowIndex,
                 updateValue(nextValue) {
-                    handleCellInputChange(rowIndex, column.key, nextValue);
+                    if (!features.enabled || features.writable(draftRows.find(item => toRowIdentifier(item, rowIdKey) === rowId), column)) updateValue(nextValue);
                 },
                 isDisabled,
             });
@@ -529,7 +357,7 @@ export function createVanillaCheckboxTable(options) {
             checkbox.addEventListener("change", () => {
                 checkbox.indeterminate = false;
                 checkbox.classList.remove("vct-input-checkbox-ambiguous");
-                handleCellInputChange(rowIndex, column.key, checkbox.checked);
+                updateValue(checkbox.checked);
             });
             return checkbox;
         }
@@ -560,12 +388,12 @@ export function createVanillaCheckboxTable(options) {
 
             select.addEventListener("change", () => {
                 if (select.value === "") {
-                    handleCellInputChange(rowIndex, column.key, null);
+                    updateValue(null);
                     return;
                 }
                 const matchingOption = column.options.find((option) => toTextValue(option.value) === select.value);
                 const normalizedValue = matchingOption ? matchingOption.value : select.value;
-                handleCellInputChange(rowIndex, column.key, normalizedValue);
+                updateValue(normalizedValue);
             });
             return select;
         }
@@ -576,7 +404,7 @@ export function createVanillaCheckboxTable(options) {
         textInput.value = toTextValue(currentValue);
         textInput.disabled = isDisabled;
         textInput.addEventListener("input", () => {
-            handleCellInputChange(rowIndex, column.key, textInput.value);
+            updateValue(textInput.value);
         });
         return textInput;
     }
@@ -603,9 +431,11 @@ export function createVanillaCheckboxTable(options) {
             headerRow.appendChild(th);
         });
         tableHeadElement.appendChild(headerRow);
+        features.decorateHead();
     }
 
     function renderTableBody() {
+        features.clearGroups();
         tableBodyElement.replaceChildren();
         draftRows.forEach((row, rowIndex) => {
             const tr = document.createElement("tr");
@@ -622,7 +452,7 @@ export function createVanillaCheckboxTable(options) {
             }
 
             columns.forEach((column) => {
-                const td = document.createElement("td");
+                const td = document.createElement(options.rowHeaderKey === column.key ? "th" : "td");
                 td.classList.add("vct-cell");
                 td.classList.add(`vct-cell-${column.type}`);
                 if (column.className) td.classList.add(column.className);
@@ -633,11 +463,14 @@ export function createVanillaCheckboxTable(options) {
                     ? createEditableCellContent(row, rowIndex, column)
                     : createReadonlyCellNode(row, rowIndex, column);
                 td.appendChild(contentNode);
+                features.decorateCell(td, row, column);
                 tr.appendChild(td);
             });
 
-            tableBodyElement.appendChild(tr);
+            features.appendRow(tr, row, tableBodyElement);
         });
+        features.finishBody();
+        draft.freezeControls();
     }
 
     function render() {
@@ -648,6 +481,7 @@ export function createVanillaCheckboxTable(options) {
 
     function restorePersistedStateIfAvailable() {
         if (!storageKey || !persistDraftToLocalStorage) return;
+        if (draft.enabled) { draft.restore(localStorage.getItem(storageKey)); return; }
         const persisted = safeParseStorage(localStorage.getItem(storageKey));
         if (!persisted) return;
         draftRows = restoreDraftRows(baseRows, persisted.draftRows, rowIdKey);
@@ -656,18 +490,26 @@ export function createVanillaCheckboxTable(options) {
     }
 
     async function saveChanges() {
-        if (isSaving || !isDirty) return false;
+        if (isSaving || !isDirty || draft.blocked()) return false;
         isSaving = true;
         syncToolbar();
+        const generation = draft.generation();
+        draft.freezeControls();
         try {
-            const payload = {
+            const payload = draft.verified ? draft.changeSet() : {
                 rows: deepClone(draftRows),
-                changedCells: buildChangedCells(baseRows, draftRows, columns, rowIdKey),
+                changedCells: state.changed(),
             };
+            const submitted = draft.verified ? deepClone(payload) : payload;
             if (typeof onSave === "function") {
-                await onSave(payload);
+                const result = await onSave(payload);
+                if (draft.verified) {
+                    if (!draft.current(generation)) return false;
+                    draft.adopt(result, submitted);
+                }
             }
-            baseRows = deepClone(draftRows);
+            if (draft.verified && typeof onSave !== "function") draft.adopt(undefined, payload);
+            if (!draft.verified) { baseRows = deepClone(draftRows); draft.acceptMetadata(); }
             isDirty = false;
             emitDirtyChange();
             clearPersistedDraft();
@@ -675,15 +517,23 @@ export function createVanillaCheckboxTable(options) {
             renderTableBody();
             syncToolbar();
             return true;
+        } catch (error) {
+            if (draft.current(generation)) draft.saveFailed(error);
+            throw error;
         } finally {
             isSaving = false;
+            draft.freezeControls();
             syncToolbar();
         }
     }
 
     function cancelChanges() {
+        if (draft.verified && isSaving) return;
+        draft.cancel();
+        if (draft.enabled) clearPersistedDraft();
         if (!isDirty) {
             setEditMode(false);
+            draft.freezeControls();
             return;
         }
         draftRows = deepClone(baseRows);
@@ -695,7 +545,8 @@ export function createVanillaCheckboxTable(options) {
         syncToolbar();
     }
 
-    function setRows(nextRows, { resetDraft = true } = {}) {
+    function setRows(nextRows, { resetDraft = true, ...snapshot } = {}) {
+        draft.fresh(snapshot);
         const normalizedRows = deepClone(Array.isArray(nextRows) ? nextRows : []);
         baseRows = normalizedRows;
         if (resetDraft) {
@@ -731,6 +582,12 @@ export function createVanillaCheckboxTable(options) {
     recomputeDirtyState();
 
     return {
+        moveRow: features.moveRow,
+        setRowFilter: features.setRowFilter,
+        getChangeSet: draft.changeSet,
+        setDraftMetadata: draft.setMetadata,
+        getRecoveryState: draft.recoveryState,
+        reconcileDraft: draft.reconcile,
         getElement() {
             return rootElement;
         },
@@ -759,7 +616,8 @@ export function createVanillaCheckboxTable(options) {
             render();
         },
         destroy() {
-            clearPersistedDraft();
+            draft.dispose();
+            if (!draft.enabled) clearPersistedDraft();
             containerElement.replaceChildren();
         },
     };

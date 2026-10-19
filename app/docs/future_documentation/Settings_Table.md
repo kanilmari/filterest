@@ -28,6 +28,15 @@ not remove a block or replace a reader's current open or closed choice. The
 and [Home page](../instructions_and_documentation/Frontend_Home_Page.md)
 documentation own those meanings.
 
+**Available shared primitives (K376 batch 3a):** the checkbox table now offers
+opt-in labelled native row groups/row headers, within-group keyboard move actions,
+computed row selection, unsupported-cell rendering, caller-provided accessible
+names, visibility-only filtering, external controls, order/metadata drafts,
+context/revision-bound version-2 recovery and verified-result adoption guards.
+See the [component options](../../frontend/reusable_components/vanilla_checkbox_table/README.md#opt-in-settings-table-features).
+The domain adapters, combined article editor and remaining requirements below
+are still future work; this marks available primitives only.
+
 ## Concepts and interaction
 
 **Context and targets.** A context identifies the settings being edited and

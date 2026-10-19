@@ -7,6 +7,15 @@
 import { beforeEach, describe, expect, test, vi } from "vitest";
 
 let permissionsData = [];
+const { tableOptions } = vi.hoisted(() => ({ tableOptions: [] }));
+vi.mock("../../reusable_components/vanilla_checkbox_table/vanilla_checkbox_table.js", async importOriginal => {
+    const original = await importOriginal();
+    return { ...original, createVanillaCheckboxTable: options => {
+        const instance = original.createVanillaCheckboxTable(options);
+        tableOptions.push({ ...options, instance });
+        return instance;
+    } };
+});
 
 vi.mock("../../reusable_components/dom_container_builder.js", () => ({
     loadManagementView: vi.fn(async (_id, renderFn) => {
@@ -84,6 +93,7 @@ function addTreeNode(id, tableName, tableUid = "1") {
 
 describe("generate_permissions_form", () => {
     beforeEach(() => {
+        tableOptions.length = 0;
         permissionsData = [
             { target_dataset_name: "", function_id: 1, user_group_id: 10 },
             { target_dataset_name: "app_users", function_id: 2, user_group_id: 10 },
@@ -181,4 +191,44 @@ describe("generate_permissions_form", () => {
         const scopedCheckbox = scopedTable.querySelector(".vct-input-checkbox");
         expect(scopedCheckbox.indeterminate).toBe(true);
     });
+    test.each(["save", "cancel"])("pins recovered draft %s and the adopter toolbar label", async action => {
+        const { generate_permissions_form } = await import("./permission_editor.js");
+        const { savePermissionRowsTableless } = await import("./permission_granter.js");
+        if (action === "save") savePermissionRowsTableless.mockResolvedValueOnce(null);
+        localStorage.setItem("permissions_tableless", JSON.stringify({ version: 1, editMode: true,
+            draftRows: [{ functionId: 1, group_10: false, group_20: false }] }));
+        const container = document.body.appendChild(document.createElement("div"));
+        await generate_permissions_form(container);
+        const root = container.querySelectorAll(".vct-root")[1];
+        const passed = tableOptions.find(options => options.storageKey === "permissions_tableless");
+        const defaultHost = document.createElement("div");
+        const { createVanillaCheckboxTable } = await import("../../reusable_components/vanilla_checkbox_table/vanilla_checkbox_table.js");
+        createVanillaCheckboxTable({ containerElement: defaultHost, columns: [], rows: [] });
+        expect(root.querySelector(".vct-btn-cancel").textContent).toBe(passed.cancelLabel ?? defaultHost.querySelector(".vct-btn-cancel").textContent);
+        expect(root.querySelectorAll("tbody")).toHaveLength(1);
+        expect([...root.querySelectorAll(".vct-toolbar button")].map(node => node.tabIndex)).toEqual([0, 0, 0]);
+        root.querySelector(`.vct-btn-${action}`).click();
+        await vi.waitFor(() => expect(localStorage.getItem("permissions_tableless")).toBeNull());
+        if (action === "save") expect(savePermissionRowsTableless).toHaveBeenLastCalledWith(expect.objectContaining({
+            changedCells: [{ rowId: "1", columnKey: "group_10", previousValue: true, nextValue: false }],
+        }));
+        expect(root.querySelectorAll("input.vct-input-checkbox")).toHaveLength(0);
+    });
+
+    test("a rejected granter keeps recovered Permissions edits and the legacy baseline", async () => {
+        const { generate_permissions_form } = await import("./permission_editor.js");
+        const { savePermissionRowsTableless } = await import("./permission_granter.js");
+        savePermissionRowsTableless.mockReset().mockRejectedValueOnce(new Error("endpoint refused"));
+        localStorage.setItem("permissions_tableless", JSON.stringify({ version: 1, editMode: true,
+            draftRows: [{ functionId: 1, group_10: false, group_20: false }] }));
+        await generate_permissions_form(document.body);
+        const { instance } = tableOptions.find(options => options.storageKey === "permissions_tableless");
+        await expect(instance.saveChanges()).rejects.toThrow("endpoint refused");
+        expect(instance.getRows()[0].group_10).toBe(true);
+        expect(instance.getRows({ draft: true })[0].group_10).toBe(false);
+        expect(instance.isDirty()).toBe(true);
+        expect(localStorage.getItem("permissions_tableless")).not.toBeNull();
+        instance.cancelChanges();
+    });
+
 });
