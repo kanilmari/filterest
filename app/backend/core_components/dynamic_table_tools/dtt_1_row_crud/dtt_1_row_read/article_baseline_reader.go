@@ -19,7 +19,11 @@ import (
 // PostgreSQL enforces READ ONLY for every reader, including shared helpers. The
 // transaction always rolls back; a partial report is never returned as success.
 func ReadArticlePresentationBaseline(ctx context.Context, db *sql.DB) (ArticleBaselineReport, error) {
-	result := ArticleBaselineReport{FormatVersion: 1, ContractVersion: contract.Read().Version,
+	return readArticlePresentationSnapshot(ctx, db, false)
+}
+
+func readArticlePresentationSnapshot(ctx context.Context, db *sql.DB, after bool) (ArticleBaselineReport, error) {
+	result := ArticleBaselineReport{Phase: "before", FormatVersion: 2, ContractVersion: contract.Read().Version,
 		Scope: "current saved presentation settings before reader column grants and row-value visibility",
 		Limitations: []string{
 			"IFAV is source-dependent: normal opening uses the supplied row; history restoration fetches Article, not the configured IFAV projection.",
@@ -27,25 +31,36 @@ func ReadArticlePresentationBaseline(ctx context.Context, db *sql.DB) (ArticleBa
 			"Additional row keys, suffix-sorted description/details, empty/false values, ownership, relation expansion and media are row-dependent; this settings report is not a rendered-row or reader-column-grant proof.",
 			"Signed-in browser route rights include grants at any target scope; guest bootstrap uses the named guests group with NULL dataset scope. Article route audiences describe current grants only; dataset, row, column, media and login-to-browse checks still apply. Startup admin grants are not simulated.",
 		}, Groups: []ArticleBaselineGroup{}, Users: []ArticleBaselineUser{}, Datasets: []ArticleBaselineDataset{}}
+	if after {
+		result.Phase = "after"
+	}
 	tx, err := db.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelRepeatableRead, ReadOnly: true})
 	if err != nil {
 		return ArticleBaselineReport{}, err
 	}
 	defer tx.Rollback()
+	if err := articlePresentationPhase(tx, after); err != nil {
+		return ArticleBaselineReport{}, err
+	}
 	if err := articleBaselinePrincipals(tx, &result); err != nil {
 		return ArticleBaselineReport{}, err
 	}
 	rows, err := tx.Query(`SELECT table_uid, table_name, COALESCE(NULLIF(schema_name,''),'public'),
-        article_section_initial_open FROM public.system_db_tables ORDER BY table_uid`)
+        article_section_initial_open, to_jsonb(system_db_tables)->'article_opener_policy' FROM public.system_db_tables ORDER BY table_uid`)
 	if err != nil {
 		return ArticleBaselineReport{}, err
 	}
 	for rows.Next() {
 		var dataset ArticleBaselineDataset
-		if err := rows.Scan(&dataset.UID, &dataset.Name, &dataset.Schema, &dataset.StoredBlocks); err != nil {
+		// database/sql stores SQL NULL into *[]byte but not into a named byte slice like json.RawMessage. Both JSON
+		// columns can be NULL here: the blocks column by data, the opener column on every pre-upgrade copy (it
+		// arrives with migration 10, NOT NULL there). nil = absent; blocks keep the explicit "null" below.
+		var storedBlocks, opener []byte
+		if err := rows.Scan(&dataset.UID, &dataset.Name, &dataset.Schema, &storedBlocks, &opener); err != nil {
 			rows.Close()
 			return ArticleBaselineReport{}, err
 		}
+		dataset.StoredBlocks, dataset.OpenerPolicy = storedBlocks, opener
 		if len(dataset.StoredBlocks) == 0 {
 			dataset.StoredBlocks = []byte("null")
 		}
@@ -154,7 +169,11 @@ func articleBaselineDataset(tx *sql.Tx, dataset *ArticleBaselineDataset, users [
 		if err != nil {
 			return err
 		}
-		output := ArticleBaselineTarget{Kind: target.kind, Article: article, IFAV: ifav}
+		page, err := articleBaselineProjection(tx, *dataset, assignments, columns, target, "image_first_page_view")
+		if err != nil {
+			return err
+		}
+		output := ArticleBaselineTarget{Kind: target.kind, Article: article, IFAV: ifav, Page: page}
 		if target.kind == "personal" || target.kind == "group" {
 			id := target.id
 			output.ID = &id
@@ -194,7 +213,11 @@ func articleBaselineDataset(tx *sql.Tx, dataset *ArticleBaselineDataset, users [
 				}
 			}
 		}
-		dataset.Readers = append(dataset.Readers, ArticleBaselineReader{UserID: user.ID, Article: article, IFAV: ifav, ArticleRouteAllowed: browserAllowed, ArticleRouteTablelessAllowed: allowed, ArticleRouteAccessControlAllowed: access})
+		page, err := articleBaselineProjection(tx, *dataset, assignments, columns, target, "image_first_page_view")
+		if err != nil {
+			return err
+		}
+		dataset.Readers = append(dataset.Readers, ArticleBaselineReader{Page: page, UserID: user.ID, Article: article, IFAV: ifav, ArticleRouteAllowed: browserAllowed, ArticleRouteTablelessAllowed: allowed, ArticleRouteAccessControlAllowed: access})
 	}
 	return nil
 }

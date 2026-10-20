@@ -22,6 +22,8 @@ Dates are the local (Europe/Helsinki) date on which the version was published.
 
 ## [Unreleased]
 
+- **Article upgrade approval evidence (K388)** — Add read-only BEFORE/AFTER reports, value-free owner difference lists and an offline SHA256-approved exact-difference gate.
+
 ## [9.5.0] - 2026-10-20
 
 - **Article presentations share one editor** — Field settings now combines three article projections and their opening blocks in one five-column table, with preserved group differences, scoped drafts and one atomic revision-checked Save verified by complete readback. On phones the editor shrinks to the page so the table scrolls sideways within its wrapper and keeps the field identity visible.

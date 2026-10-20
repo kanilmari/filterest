@@ -17,6 +17,9 @@ import (
 type baselineSnapshotDriver struct {
 	began, rolledBack bool
 	reads             int
+	upgraded          bool
+	completed         bool
+	findings          int
 	failAt            int
 }
 
@@ -47,9 +50,18 @@ func (d *baselineSnapshotDriver) QueryContext(_ context.Context, query string, _
 	if d.failAt == d.reads {
 		return nil, errors.New("fixture read failure")
 	}
+	if strings.Contains(query, "information_schema.columns") {
+		return &baselineScalarRows{value: d.upgraded}, nil
+	}
+	if strings.Contains(query, "system_data_repair_records") {
+		return &baselineScalarRows{value: d.completed}, nil
+	}
+	if strings.Contains(query, "app_check_article_bundles") {
+		return &baselineScalarRows{value: int64(d.findings)}, nil
+	}
 	columns := []string{"id", "name"}
 	if strings.Contains(query, "FROM public.system_db_tables") {
-		columns = []string{"table_uid", "table_name", "schema_name", "article_section_initial_open"}
+		columns = []string{"table_uid", "table_name", "schema_name", "article_section_initial_open", "opener_policy"}
 	}
 	return baselineEmptyRows{columns: columns}, nil
 }
@@ -67,7 +79,7 @@ func TestArticleBaselineSnapshotTransaction(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !connector.began || !connector.rolledBack || connector.reads != 3 {
+	if !connector.began || !connector.rolledBack || connector.reads != 4 {
 		t.Fatalf("snapshot lifecycle: %+v", connector)
 	}
 	if report.Datasets == nil || report.Users == nil || report.Groups == nil {
@@ -82,5 +94,46 @@ func TestArticleBaselineSnapshotFailure(t *testing.T) {
 	report, err := ReadArticlePresentationBaseline(context.Background(), db)
 	if err == nil || report.Datasets != nil || !connector.rolledBack {
 		t.Fatal("failed snapshot must roll back and return no partial evidence")
+	}
+}
+
+// A scalar driver response makes phase checks fail closed without PostgreSQL.
+type baselineScalarRows struct {
+	value driver.Value
+	done  bool
+}
+
+func (*baselineScalarRows) Columns() []string { return []string{"value"} }
+func (*baselineScalarRows) Close() error      { return nil }
+func (r *baselineScalarRows) Next(v []driver.Value) error {
+	if r.done {
+		return io.EOF
+	}
+	r.done = true
+	v[0] = r.value
+	return nil
+}
+func TestArticleExportPhaseGuards(t *testing.T) {
+	for _, test := range []struct {
+		name                       string
+		after, upgraded, completed bool
+		findings                   int
+		want                       error
+	}{
+		{name: "before rejects upgraded", upgraded: true, want: ErrArticleBaselineUpgraded},
+		{name: "after rejects legacy", after: true, want: ErrArticleAfterIncomplete},
+		{name: "after rejects incomplete", after: true, upgraded: true, want: ErrArticleAfterIncomplete},
+		{name: "after rejects broken bundles", after: true, upgraded: true, completed: true, findings: 1, want: ErrArticleAfterIncomplete},
+		{name: "after snapshot", after: true, upgraded: true, completed: true},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			connector := &baselineSnapshotDriver{upgraded: test.upgraded, completed: test.completed, findings: test.findings}
+			db := sql.OpenDB(connector)
+			defer db.Close()
+			_, err := readArticlePresentationSnapshot(context.Background(), db, test.after)
+			if !errors.Is(err, test.want) || !connector.began || !connector.rolledBack {
+				t.Fatalf("phase guard: %v, %+v", err, connector)
+			}
+		})
 	}
 }

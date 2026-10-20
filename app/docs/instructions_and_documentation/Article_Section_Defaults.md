@@ -203,78 +203,171 @@ name, not as an API reader. The PostgreSQL consumer proofs serialize actual
 mutation/readback objects into the production JavaScript state functions, while
 Vitest also checks missing IDs, stale fields/priorities, and accidental targets.
 
-## K388 compatibility before-list
+<a id="k388-compatibility-before-list"></a>
 
-The coordinator runs the read-only exporter on a database **copy**, with an
-explicit connection supplied through an environment variable. It does not
-load installation credentials or start application services:
+## K388 compatibility reports and approval gate
+
+K388 uses a read-only BEFORE snapshot from the pre-upgrade database and an
+AFTER snapshot from its upgraded copy. The offline difference command produces
+the owner's complete settings-difference list. Approval identifies the JSON
+list's SHA256 digest. The stop rule is an **operational gate after the upgrade**:
+an unlisted or approved-but-missing difference requires rollback. It is not a
+check inside migration 12; migrations 10–12 are unchanged.
+
+### Read-only exports
+
+Supply a connection securely in an environment variable, then explicitly name
+that variable. Neither command loads installation credentials, starts Filterest,
+or runs migrations. Both enforce one PostgreSQL `REPEATABLE READ, READ ONLY`
+transaction, issue read queries, create no temporary objects, and always roll
+back. AFTER reads the already materialized members; no migration SQL is replayed
+or copied into a temporary table. JSON output begins only after the complete
+snapshot succeeds. Database errors never print the connection or driver message.
+The optional `--timeout 10m` bounds the complete snapshot.
 
 ```bash
-# Supply FILTEREST_BASELINE_DSN securely for the chosen database copy first.
 cd app
-go run ./backend/tools/article_presentation_baseline > before.json
-# Optional: --dsn-env NAME --timeout 10m
+# Before upgrade, on a database copy (and Tuesday on production read-only):
+go run ./backend/tools/article_presentation_baseline \
+  --dsn-env FILTEREST_BASELINE_DSN > before.json
+
+# On the same copy after the release binary's first start runs migrations 10–12:
+go run ./backend/tools/article_presentation_after \
+  --dsn-env FILTEREST_AFTER_DSN > after.json
 ```
 
-The exporter requests a PostgreSQL `REPEATABLE READ, READ ONLY` transaction,
-uses SELECT queries and the existing uncached field-settings readers, and
-always rolls back. No migration, setting, grant or row is written. Failure
-returns a nonzero exit status; a successful database read must finish before
-JSON output starts. A role with SELECT access to the public settings tables
-and information schema suffices. No database-name or user-sensitive installation
-configuration is included in the output; principal ids and group names are
-intended evidence and should stay with the rehearsal backup.
+The distinct AFTER command makes database phase explicit. BEFORE refuses any
+database with the article-bundle schema, including one with only migration 10
+applied, with a message directing the operator to AFTER. Keep a pre-upgrade copy
+for BEFORE; an upgraded database cannot reconstruct that evidence. AFTER requires
+the completed materialization marker and a clean existing bundle invariant check.
+Both commands accept a SELECT-only role with access to public presentation,
+principal and permission tables and information schema; AFTER also needs SELECT
+on repair records and EXECUTE on the read-only bundle checker.
 
-Format version 1 sorts object keys, datasets by UID, principals by id, targets
-as metadata/site/group/personal (ids ascending), and opener sources by view
-key followed by history restoration. Field arrays retain the current SQL
-order; group ties use group id, then collection id. Targets include the
-metadata fallback, site layer, and the union of assigned group/personal
-principals across views. Each target includes Article, the configured IFAV
-projection, and IFAV's separate supplied-row/history sources. Every user also
-has a resolved Article projection, IFAV sources and route checks, so competing
-and tied memberships and guest preference handling are explicit. A personal
-assignment wins over applicable groups; guests do not receive personal **or
-group** field preferences because today's resolver uses a null preference
-identity for account 1. Site/metadata still apply.
+Both exports use **format version 2**, contract version 1. Version 1 BEFORE
+files lack Page evidence and must be exported again from a pre-upgrade copy.
+The schema is shared with the offline comparison, without runtime/database
+imports in that comparison. Datasets are ordered by UID, principals by ID,
+targets metadata/site/group/personal by ID, and IFAV opening sources by view key
+then history restoration. Field arrays retain their effective order; JSON object
+keys are sorted by the exporter. There are no timestamps or connection details.
 
-Fields carry UID, name, current width (`NULL` becomes zero), the nullable
-stored width, role/order metadata and row-visibility flags. Metadata fallback
-has no stored width. Information-schema-only fallback fields have a null UID;
-this is evidence of missing metadata, not an invented stable field identity.
-`stored_blocks` retains the original object, while `blocks` separates object
-presence, explicit booleans and effective initial-open values. A null or
-invalid object is reported with `block_read_error`; the browser then falls
-back to open after the legacy API rejects it. Invalid overrides are never
-silently applied in part.
+Each dataset reports the effective saved Article, configured IFAV, and Page
+projection per target and reader: ordered field UID/name, effective width,
+nullable stored width, `card_element`, `co_number`, and row-visibility flags.
+A null UID records information-schema fallback rather than inventing an identity.
+Page was reserved before upgrade; its BEFORE projection records the configured
+assignment or metadata fallback, **not an existing rendered Page surface**.
+AFTER reads visible `presentation_values` from the selected materialized bundle;
+metadata remains a separately reported fallback. Personal settings win over
+groups, then site and metadata; priority and group-ID ties follow the uncached
+resolver. Account 1 receives neither personal nor group field preferences.
 
-IFAV's `source_dependent: true` is deliberate. Ordinary openings consume their
-supplied row, not the configured IFAV assignment; restoration fetches Article.
-`ordered_projection_fields` applies the current role/positive-order sorter to
-server JSON keys for each registered source view, with aliases normalized.
-It includes widths from that source, without pretending that a dormant IFAV
-assignment controls those openings. `additional_row_keys` and top-level
-`limitations` identify transport/media/generated keys and row-dependent
-rendering that this settings-only report cannot prove. Description/Details
-suffix sorting, empty values, ownership, expanded relations, column grants
-and actual rendered rows need the later browser/reader proof. This report
-must not be treated as a complete rendered-row compatibility approval.
+IFAV remains source-dependent in this upgrade. Its configured projection does
+not describe every opening: the report also records supplied-row sources and
+Article history restoration, applying the legacy role/positive-order sorter to
+server JSON keys. `additional_row_keys`, `different_from_article` and
+`source_dependent` retain that evidence on both sides. Empty values, ownership,
+relations, media, suffix sorting and reader column grants still need separate
+rendered-row/browser proof; these reports do not approve those behaviors.
 
-Audience evidence retains every Article-route grant, including nullable
-schema/dataset scopes and disabled flags. `group_ids` matches the signed-in
-browser cache, which includes enabled grants at **any** dataset scope;
-`tableless_group_ids` and `dataset_scoped_group_ids` distinguish the stricter
-route checks. `access_control_group_ids` additionally reflects legacy
-null-disabled acceptance. `guest_allowed` matches the anonymous bootstrap:
-only enabled tableless grants of the group named `guests`, independently of
-account-1 memberships. Reader checks expose these distinctions. Dataset,
-row, column, media and login-to-browse rights remain separate; administrator
-startup safety-net grants are not simulated.
+`stored_blocks`, parsed `blocks` and `block_read_error` preserve raw presence,
+explicit/absent booleans, effective initial-open values and malformed-object
+fallback evidence. Migration normalization from legacy to canonical keys is
+listed even when effective open states are equal. The Article route audience
+retains every grant, nullable schema/dataset scope, disabled/specific-table flag,
+browser/tableless/access-control/dataset-scoped group sets, and named-guests
+bootstrap result. Each reader's three route checks are also compared. These are
+Article-route settings, not dataset, row, column, media or login-to-browse rights;
+startup administrator safety-net grants are not simulated.
 
-Batch 2 can consume this versioned before-list, preserve assignment provenance,
-width null/zero, explicit/absent blocks and grant scopes, and enumerate changes
-against its new materialized model. It must add the after-list and diff, list
-all differences for owner approval, and refuse unlisted differences (K388).
-A source-dependent IFAV result or null field UID is never permission to
-normalize silently. Use the disposable `TestArticleBaselinePostgres` proof;
-no production baseline is run by a worker.
+`opener_policy` is new AFTER-only evidence (null BEFORE); the difference lists
+its materialization under **Other evidence**. IFAV/Page's independent future
+route audience is not substituted for the explicitly reported Article audience.
+
+### Owner list and exact approval
+
+The offline command opens only the named files and writes three protected files
+with permissions 0600. Keep the input reports and machine evidence with the
+rehearsal backup: they contain principal IDs and configuration evidence.
+
+```bash
+# Rehearsal, after both exports (commands run from app/):
+go run ./backend/tools/article_presentation_diff \
+  --before before.json --after after.json --out proposed
+# Review proposed.md and proposed.csv; owner approval names proposed.json's SHA256.
+# Preserve that exact machine file as approved.json with the recorded approval.
+```
+
+Markdown and CSV contain one changed row per dataset/target/presentation, with
+dataset name, target kind, group **name**, field counts, added/removed counts and
+order/width/block/audience flags. **Other evidence** covers roles, row flags,
+source provenance, IFAV paths, identities and opener policy. Unchanged surfaces
+are omitted and counted. All readers become personal comparison surfaces,
+including readers without a saved preference, so memberships and competing group
+resolution remain covered. Personal rows sum only changed reader surfaces per
+dataset/presentation and include a changed-target count; they contain no user IDs,
+field names, row content or stored setting values. The CSV summary carries the
+digest and unchanged count; configuration names are escaped for Markdown/CSV.
+
+The machine list has deterministic dataset/target/presentation order and separate
+before/after SHA256 hashes of each changed surface. Equal visible flags with a
+different width, role, grant, or other evidence therefore cannot pass approval.
+Field additions/removals match by UID (by name only when UID is null); the order
+flag checks relative order of common fields, and width checks preserve null/zero.
+IFAV's order/width flags also cover matched supplied-row/history projections;
+its added/removed counts describe the configured projection. Blocks include all
+stored/parsed evidence. Audience includes memberships and reader route results.
+Group names used by targets or audience grants participate in comparison.
+
+Every report field participates except these explicit bookkeeping exclusions:
+
+- Format/contract versions and phase are validated, rather than listed as changes.
+- `scope` and `limitations` are explanatory report text, not saved presentation.
+- Source `assignment_id` and `field_set_id` are deliberately regenerated by
+  materialization; source kind, priority, user and group identity are compared.
+- Unreferenced group inventory entries have no presentation/audience counterpart.
+  Reader IDs/memberships are compared through the personal surfaces. Duplicate
+  explicit personal-target and reader projections must agree or input is invalid.
+
+The digest covers compact JSON of the complete machine document with `sha256`
+set to the empty string, including its normalized BEFORE digest, unchanged
+count and ordered differences. Object keys and unordered inventories are
+canonicalized; field order is preserved. The approved file's digest is verified
+before checking. Unknown/missing fields, duplicate JSON keys/targets/fields,
+unsupported versions and incomplete reader inventories are invalid input.
+
+### Production operating steps
+
+1. Rehearse on a copy: BEFORE, release binary first start (migrations 10–12),
+   AFTER, then the offline owner list. Obtain approval of its digest.
+2. Tuesday: export production BEFORE read-only and retain that exact file.
+   The approved evidence must have been generated against this same BEFORE
+   evidence; a different BEFORE is refused. Rehearse/approve again if needed.
+3. Wednesday: upgrade production through the release binary's first start,
+   then immediately export production AFTER read-only and run the gate offline:
+
+```bash
+go run ./backend/tools/article_presentation_after \
+  --dsn-env FILTEREST_AFTER_DSN > production-after.json
+# Use a built diff binary when the shell needs its exact exit status:
+go build -o article-presentation-diff ./backend/tools/article_presentation_diff
+./article-presentation-diff --before before.json --after production-after.json \
+  --check approved.json
+```
+
+The diff binary exits **0** only for the exact approved difference set and
+unchanged inventory; **1** reports unlisted and missing approved differences,
+value-free, aggregating personal targets; **2** means invalid input/output,
+including a corrupted approval or an approval for another BEFORE snapshot.
+Treat every nonzero result as a failed operational gate. `go run` can wrap a
+program's nonzero exit code, so use the built binary for exit-code automation.
+The tool does not upgrade or roll back a database; the coordinator handles the
+rollback on any gate failure.
+
+The disposable `TestArticlePresentationUpgradePostgres` proof builds the legacy
+fixture, exports BEFORE with a SELECT-only role, applies the real migrations
+10–12, exports AFTER and verifies the expected differences, including the group
+IFAV site-fallback change, repeat approval and phase refusal. No worker export
+runs against production or another installation's database.

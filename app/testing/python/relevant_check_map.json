@@ -571,9 +571,9 @@
     },
     {
       "area": "Article presentation contract and compatibility export",
-      "paths": ["app/frontend/shared/article_presentations", "app/backend/tools"],
+      "paths": ["app/backend/reusable_components/article_presentation_report", "app/frontend/shared/article_presentations", "app/backend/tools"],
       "specs": [],
-      "none": "Passive shared vocabulary and an offline read-only settings exporter; no rendered UI or opener behavior changes. Vitest and Go drift tests cover the contract; disposable PostgreSQL covers the baseline."
+      "none": "Shared vocabulary and offline read-only BEFORE/AFTER exports and approval comparison; no rendered UI or opener behavior changes. Go tests cover exact diffs and value-free lists; the disposable PostgreSQL proof runs migrations 10–12."
     }
   ],
   "source_guards": [{"paths": ["app/testing/fixtures/route_auth_matrix/README.md", "app/testing/fixtures/route_auth_matrix/route_auth_matrix_expectations.jsonl"], "package": "app/backend/core_components/router", "anchor": "app/backend/core_components/router/route_auth_matrix_runner_test.go"},
