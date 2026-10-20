@@ -1,6 +1,8 @@
 // @vitest-environment jsdom
-// Proves shared Home policy/destination, a single movable control and menu preservation.
+// top_nav_home_button.test.js
+// Proves shared Home policy/destination, a single movable control and shared menu closing.
 // Uses real link rendering and effective custom-root availability, with navigation isolated.
+import { createHeroDatasetTabs } from '../navigation/main_tabs/hero_dataset_tabs.js';
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 import { createTopNavHomeButton, placeTopNavHomeButton } from './top_nav_home_button.js';
 import { renderNavbarFrontPage } from './navbar_front_page.js';
@@ -8,7 +10,12 @@ import { setCustomRootEnabled } from './custom_root_navigation.js';
 import { refreshLocalizedDatasetValues } from '../table_views/dataset_value_localizer.js';
 import { createSharedTopbarVisibilityController } from '../filterbar/shared_topbar_visibility_controller.js';
 import { HOME_AVAILABILITY_CHANGED_EVENT, setFrontPageAvailability } from './front_page_availability.js';
-const mocks = vi.hoisted(() => ({ open: vi.fn(), heroVisible: true }));
+const mocks = vi.hoisted(() => ({ open: vi.fn(), heroVisible: true, datasetOpen: vi.fn() }));
+vi.mock('../navigation/main_tabs/main_tab_printer.js', () => ({ openNavTab: mocks.datasetOpen }));
+vi.mock('../navigation/main_tabs/main_dataset_tabs.js', () => ({
+    getMainDatasetTabs: () => [{ dataset: 'demo', text: 'Demo', langKey: 'demo' }],
+    subscribeMainDatasetTabs: () => () => {},
+}));
 vi.mock('./front_page_navigation.js', () => ({ openFrontPage: mocks.open, isFrontPageShowing: () => false }));
 vi.mock('../lang/translation_handler.js', () => ({ getTranslationForKey: () => 'Etusivu' }));
 vi.mock('../filterbar/dataset_corner_controls.js', () => ({ isHeroControlAreaVisible: () => mocks.heroVisible }));
@@ -76,18 +83,71 @@ test('repeated hero/compact handoffs retain one keyboard-reachable node and its 
     expect(top.getAttribute('aria-label')).toBe('Etusivu');
 });
 
-test('Home activation cannot reach the menu outside-click listener or write its saved state', async () => {
+test('Home and dataset tabs have identical overlay/docked menu state and storage; native gestures never close', async () => {
     setFrontPageAvailability({ separate_front_page: true });
-    localStorage.setItem('navVisibleNarrow', 'true');
-    localStorage.setItem('navVisibleWide', 'false');
-    const outside = vi.fn(); document.addEventListener('click', outside);
+    document.body.innerHTML = '<div class="body_content"><button id="showMenuButton"></button>'
+        + '<nav id="navbar"><button id="hideMenuButton"></button><div id="navbarFrontPage"></div></nav>'
+        + '<div id="tabs_container"><div id="hero"></div></div></div>';
+    const { initNavbar, toggleNavbarVisibility, NAVBAR_VISIBILITY_CHANGED_EVENT } =
+        await vi.importActual('../navigation/menu_button/navbar_visibility_handler.js');
+    const navbar = document.getElementById('navbar');
+    const home = createTopNavHomeButton();
+    const tabs = createHeroDatasetTabs('demo');
+    const tab = tabs.element.querySelector('button');
+    document.getElementById('hero').append(home, tabs.element);
+    const changed = vi.fn();
+    const writes = vi.spyOn(Storage.prototype, 'setItem');
+    const snapshot = () => ({ collapsed: navbar.classList.contains('collapsed'),
+        expanded: document.getElementById('showMenuButton').getAttribute('aria-expanded'),
+        closerExpanded: document.getElementById('hideMenuButton').getAttribute('aria-expanded'),
+        narrow: localStorage.getItem('navVisibleNarrow'), wide: localStorage.getItem('navVisibleWide') });
+    localStorage.setItem('navVisibleNarrow', 'true'); localStorage.setItem('navVisibleWide', 'true');
+    const registrations = vi.spyOn(document, 'addEventListener');
+    initNavbar();
+    window.addEventListener(NAVBAR_VISIBILITY_CHANGED_EVENT, changed);
     try {
-        const top = createTopNavHomeButton(); document.getElementById('hero').append(top);
-        top.click(); await vi.waitFor(() => expect(mocks.open).toHaveBeenCalledOnce());
-        expect(outside).not.toHaveBeenCalled();
-        expect(localStorage.getItem('navVisibleNarrow')).toBe('true');
-        expect(localStorage.getItem('navVisibleWide')).toBe('false');
-    } finally { document.removeEventListener('click', outside); }
+        for (const width of [375, 768, 1440, 1849, 1850, 1920]) {
+            vi.spyOn(window, 'innerWidth', 'get').mockReturnValue(width);
+            const results = [];
+            for (const target of [home, tab]) {
+                if (navbar.classList.contains('collapsed')) toggleNavbarVisibility();
+                localStorage.setItem('navVisibleNarrow', 'true'); localStorage.setItem('navVisibleWide', 'true');
+                changed.mockClear(); writes.mockClear();
+                mocks.open.mockClear();
+                target.click();
+                if (target === home) await vi.waitFor(() => expect(mocks.open).toHaveBeenCalledOnce());
+                results.push(snapshot());
+                expect(changed).toHaveBeenCalledTimes(width < 1850 ? 1 : 0);
+                expect(writes.mock.calls.filter(([key]) => key === 'navVisibleNarrow' || key === 'navVisibleWide'))
+                    .toHaveLength(width < 1850 ? 1 : 0);
+            }
+            expect(results[0]).toEqual(results[1]);
+            expect(results[0]).toEqual({ collapsed: width < 1850, expanded: String(width >= 1850),
+                closerExpanded: String(width >= 1850), narrow: String(width >= 1850), wide: 'true' });
+        }
+        vi.spyOn(window, 'innerWidth', 'get').mockReturnValue(375);
+        if (navbar.classList.contains('collapsed')) toggleNavbarVisibility();
+        const before = snapshot();
+        for (const gesture of [{ ctrlKey: true }, { metaKey: true }, { shiftKey: true }, { altKey: true }, { button: 1 }, { button: 2 }]) {
+            changed.mockClear(); mocks.open.mockClear(); writes.mockClear();
+            const event = new MouseEvent('click', { bubbles: true, cancelable: true, ...gesture });
+            home.dispatchEvent(event);
+            expect(event.defaultPrevented).toBe(false);
+            await Promise.resolve();
+            expect(mocks.open).not.toHaveBeenCalled();
+            expect(changed).not.toHaveBeenCalled();
+            expect(snapshot()).toEqual(before);
+            expect(writes).not.toHaveBeenCalled();
+        }
+        renderNavbarFrontPage({ isLoggedIn: true });
+        document.querySelector('#navbarFrontPage a').click();
+        expect(snapshot()).toEqual(before);
+    } finally {
+        tabs.destroy();
+        for (const [type, listener] of registrations.mock.calls) document.removeEventListener(type, listener);
+        window.removeEventListener(NAVBAR_VISIBILITY_CHANGED_EVENT, changed);
+        vi.restoreAllMocks();
+    }
 });
 
 test('the real toolbar controller moves one node through phone, scroll, open menu and hero states', () => {
@@ -95,7 +155,8 @@ test('the real toolbar controller moves one node through phone, scroll, open men
     document.getElementById('hero').innerHTML = '<nav class="hero-dataset-tabs"></nav>';
     const hero = document.getElementById('hero');
     const compact = document.getElementById('compact');
-    compact.innerHTML = '<div class="dataset-shared-topbar__slot--end"></div>';
+    compact.innerHTML = '<div class="dataset-shared-topbar__slot--start"><button class="menu"></button></div>'
+        + '<div class="dataset-shared-topbar__slot--end"></div>';
     const close = document.createElement('button'); compact.append(close);
     let navbarVisible = false;
     const controller = createSharedTopbarVisibilityController({
@@ -119,6 +180,9 @@ test('the real toolbar controller moves one node through phone, scroll, open men
             expect(document.getElementById(target).querySelector('.top-nav-home-button')).not.toBeNull();
             if (target === 'compact') {
                 expect(compact.inert).toBe(false);
+                const slot = compact.querySelector(width <= 700 ? '.dataset-shared-topbar__slot--start' : '.dataset-shared-topbar__slot--end');
+                expect(slot.querySelector('.top-nav-home-button')).not.toBeNull();
+                if (width <= 700) expect(slot.firstElementChild.className).toBe('menu');
                 expect(compact.querySelector('a').classList.contains('navbar-front-page-link')).toBe(true);
             }
             else {
@@ -146,7 +210,8 @@ test.each(['settings-refresh', 'cached-reactivation'])('%s reconciles both Home 
     const hero = document.getElementById('hero');
     const compact = document.getElementById('compact');
     hero.innerHTML = '<nav class="hero-dataset-tabs"></nav>';
-    compact.innerHTML = '<div class="dataset-shared-topbar__slot--end"></div>';
+    compact.innerHTML = '<div class="dataset-shared-topbar__slot--start"><button class="menu"></button></div>'
+        + '<div class="dataset-shared-topbar__slot--end"></div>';
     const dataset = document.createElement('div'); dataset.className = 'content_div';
     document.body.append(dataset); dataset.append(hero, compact);
     const close = document.createElement('button'); compact.append(close);

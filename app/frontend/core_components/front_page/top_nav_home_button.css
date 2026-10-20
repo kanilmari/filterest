@@ -76,6 +76,19 @@
     padding: 0;
   }
   .dataset-shared-topbar__inner:has(.top-nav-home-button) {
-    grid-template-columns: 44px minmax(0, 1fr) 148px;
+    /* Menu + gap + Home, plus the menu slot's corner inset (shared_topbar.css). */
+    grid-template-columns: calc(96px + 12px - var(--dataset-shared-topbar-padding-inline, 12px)) minmax(0, 1fr) 96px;
+  }
+
+  /* Only native Home stacks destinations. Dataset toolbar links stay square,
+     even if a previous horizontal fit left the compact class on this node. */
+  .front-page-top-row .navbar-front-page-link.top-nav-home-button {
+    width: 100%;
+    max-width: none;
+    min-height: var(--top-nav-home-size);
+    padding: 6px 12px;
+  }
+  .front-page-top-row .top-nav-home-button .navbar-front-page-label {
+    display: inline;
   }
 }

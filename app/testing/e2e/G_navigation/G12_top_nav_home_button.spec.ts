@@ -12,6 +12,16 @@ async function menuState(page: Page) {
     narrow: localStorage.getItem('navVisibleNarrow'), wide: localStorage.getItem('navVisibleWide') }));
 }
 
+async function expectHomeMenuState(page: Page, before: Awaited<ReturnType<typeof menuState>>, width: number) {
+  if (width >= 1850) expect(await menuState(page)).toEqual(before);
+  else {
+    await expect(page.locator('#navbar')).toHaveClass(/collapsed/);
+    expect((await menuState(page)).narrow).toBe('false');
+    expect((await menuState(page)).wide).toBe(before.wide);
+    await expect(page.locator('#showMenuButton')).toHaveAttribute('aria-expanded', 'false');
+  }
+}
+
 for (const width of [1920, 1440, 1000]) for (const theme of ['light', 'dark'] as const) {
   test(`first larger Home and independent bar at ${width}px in ${theme}`, async ({ page, context }, info) => {
     test.setTimeout(90_000);
@@ -76,6 +86,8 @@ for (const width of [1920, 1440, 1000]) for (const theme of ['light', 'dark'] as
         await expect(parts).toHaveAttribute('data-shared-topbar-visible', 'true');
         const compact = parts.locator('.dataset-shared-topbar .top-nav-home-button');
         await expect(compact).toBeVisible();
+        await expect(compact).toHaveCSS('width', '44px');
+        await expect(compact).toHaveCSS('height', '44px');
         await expect(compact).toBeFocused();
         expect(await node!.evaluate(el => el === document.activeElement)).toBe(true);
         await expect(parts.locator('.top-nav-home-button')).toHaveCount(1);
@@ -94,7 +106,7 @@ for (const width of [1920, 1440, 1000]) for (const theme of ['light', 'dark'] as
       await home.press('Enter');
       await expect(page).toHaveURL(/\/$/);
       await expect(page.locator('#front_page_container')).toHaveAttribute('aria-busy', 'false');
-      expect(await menuState(page)).toEqual(before);
+      await expectHomeMenuState(page, before, width);
       await expect(page.locator('#front_page_container .top-nav-home-button')).toHaveAttribute('aria-current', 'page');
       await expect(page.locator('#front_page_container .top-nav-home-button')).toHaveCSS('height', `${homeBox.height}px`);
     }
@@ -108,18 +120,28 @@ for (const width of [1920, 1440, 1000]) for (const theme of ['light', 'dark'] as
   });
 }
 
-for (const theme of ['light', 'dark'] as const) {
-  test(`390px dataset keeps one larger Home in the existing compact bar in ${theme}`, async ({ page, context }, info) => {
+for (const width of [375, 390, 768, 1920]) for (const theme of ['light', 'dark'] as const) {
+  test(`${width}px dataset keeps one larger Home in the existing compact bar in ${theme}`, async ({ page, context }, info) => {
     test.setTimeout(60_000);
-    await page.setViewportSize({ width: 390, height: 844 });
+    await page.setViewportSize({ width, height: 844 });
     await page.emulateMedia({ colorScheme: theme === 'light' ? 'dark' : 'light' });
     await installHomePolicy(context, theme);
     for (const menuOpen of [false, true]) {
       await openHomeProbeDataset(page, menuOpen);
       const parts = page.locator('#app_service_catalog_tab_parts_container');
-      await expect(parts.locator('.filterbar-inline-hero .hero-dataset-tabs')).toBeHidden();
+      if (width <= 700) await expect(parts.locator('.filterbar-inline-hero .hero-dataset-tabs')).toBeHidden();
       await expect(parts.locator('.top-nav-home-button')).toHaveCount(1);
-      const home = parts.locator('.dataset-shared-topbar__slot--end .top-nav-home-button');
+      if (width > 700) {
+        await parts.locator('.filterbar-inline-hero').evaluate(hero => {
+          const scroller = hero.closest('.scrollable_content')!;
+          const spacer = document.createElement('div'); spacer.dataset.wo70Spacer = 'true'; spacer.style.height = '2000px';
+          scroller.append(spacer); scroller.scrollTop = scroller.scrollHeight; scroller.dispatchEvent(new Event('scroll'));
+        });
+        // Above 700 px the bar reveals over 260 ms (rows, padding, translateY); measure it settled.
+        await expect(parts).toHaveAttribute('data-shared-topbar-visible', 'true');
+        await expect.poll(() => parts.locator('.dataset-shared-topbar').evaluate(bar => bar.getAnimations().length)).toBe(0);
+      }
+      const home = parts.locator('.dataset-shared-topbar .top-nav-home-button');
       await expect(home).toBeVisible();
       await expect(home).toHaveCSS('width', '44px');
       await expect(home).toHaveCSS('height', '44px');
@@ -127,10 +149,11 @@ for (const theme of ['light', 'dark'] as const) {
       const homeBox = (await home.boundingBox())!;
       const barBox = (await parts.locator('.dataset-shared-topbar__inner').boundingBox())!;
       expect(homeBox.x).toBeGreaterThanOrEqual(0);
-      expect(homeBox.x + homeBox.width).toBeLessThanOrEqual(390);
+      expect(homeBox.x + homeBox.width).toBeLessThanOrEqual(width);
       expect(homeBox.y).toBeGreaterThanOrEqual(barBox.y);
       expect(homeBox.y + homeBox.height).toBeLessThanOrEqual(barBox.y + barBox.height);
-      await captureHomeProbe(page, info, `390-${theme}-${menuOpen ? 'open' : 'closed'}-compact`);
+      await captureHomeProbe(page, info, `${width}-${theme}-${menuOpen ? 'open' : 'closed'}-compact`);
+      await parts.evaluate(element => element.querySelector('[data-wo70-spacer]')?.remove());
     }
   });
 }
@@ -222,11 +245,11 @@ for (const width of [1440, 1000, 375]) for (const theme of ['light', 'dark'] as 
         await expect(home).toHaveAccessibleName(/\S/);
         expect(await home.getAttribute('href')).toBe(await page.locator('#navbarFrontPage a').getAttribute('href'));
         const before = await menuState(page);
-        // Keyboard activation does not trigger the menu's outside-pointer policy.
+        // Enter creates the same bubbling primary click as a dataset destination.
         await home.focus(); await home.press('Enter');
         await expect(page).toHaveURL(/\/$/);
         await expect(page.locator('#front_page_container')).toHaveAttribute('aria-busy', 'false');
-        expect(await menuState(page)).toEqual(before);
+        await expectHomeMenuState(page, before, width);
         await expect(page.getByTestId('top-nav-home-button').filter({ visible: true })).toHaveCount(1);
       }
     }

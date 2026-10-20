@@ -249,7 +249,10 @@ async function proveHome(page: Page, open: boolean, alignment: string, cappedMar
     await expect(buttons).toHaveCount(2);
     await expect.poll(() => buttons.evaluateAll(elements => elements.every(element =>
       !(element as HTMLButtonElement).hidden && getComputedStyle(element).display !== 'none'))).toBe(true);
-    const boxes = await buttons.evaluateAll(elements => elements.map(element => {
+    const destinations = tabs.locator(':scope > :is(a.top-nav-home-button, button)');
+    await expect(destinations).toHaveCount(3);
+    await expect(home.locator('.navbar-front-page-label')).toBeVisible();
+    const boxes = await destinations.evaluateAll(elements => elements.map(element => {
       const box = element.getBoundingClientRect();
       return { x: box.x, y: box.y, width: box.width, height: box.height };
     }));
@@ -261,9 +264,9 @@ async function proveHome(page: Page, open: boolean, alignment: string, cappedMar
       expect(box.x).toBeGreaterThanOrEqual(homeBox.x + 16);
       expect(box.x + box.width).toBeLessThanOrEqual(homeBox.x + homeBox.width - 16);
       if (index) expect(box.y).toBeGreaterThanOrEqual(boxes[index - 1].y + boxes[index - 1].height);
-      await expect(buttons.nth(index).locator('.hero-dataset-tabs__icon')).toBeVisible();
-      await expect(buttons.nth(index)).toHaveAccessibleName(/\S/);
-      if (!open) expect(await buttons.nth(index).evaluate(element => {
+      await expect(destinations.nth(index).locator('.navbar-front-page-icon, .hero-dataset-tabs__icon')).toBeVisible();
+      await expect(destinations.nth(index)).toHaveAccessibleName(/\S/);
+      if (!open) expect(await destinations.nth(index).evaluate(element => {
         const box = element.getBoundingClientRect();
         return element.contains(document.elementFromPoint(box.x + box.width / 2, box.y + box.height / 2));
       }), 'Closed-menu Home destinations must receive pointer input').toBe(true);

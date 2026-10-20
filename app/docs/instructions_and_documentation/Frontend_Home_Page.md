@@ -224,26 +224,26 @@ enabled or a server-confirmed custom root). Login-only guests see neither link.
 The server supplies a Home-button site name only when the corresponding switch
 is enabled; otherwise the existing `front_page` language key supplies the label.
 
-When Home is enabled, each dataset owns one top-navigation Home link. The toolbar controller moves
-that same node to the first position in the hero's dataset tab row, with the
-tab surface and the larger native Home size, whether the side menu is open or closed. Its
-house icon and translated/site-name label stay together; only a tight row hides
-the visual label to retain room for the first dataset. Once that row scrolls
-away, Home moves to the compact toolbar's end slot: this toolbar has identity,
-search and end slots, without a dataset tab list. Focus follows the original
-node. Home never participates in deciding whether the toolbar is visible.
-The pre-WO37 rule remains `active && (phone || shouldShowSharedTopBar(...))`:
-at widths up to 700 CSS pixels the active toolbar stays visible independently
-of the hero; above 700 it is hidden while the inline hero is visible. This phone
-rule dates from 11 October 2026, before the Home button was added.
-Home's own header puts its current-page link first in the tab row, before every
-dataset; the trailing actions keep their order. Keyboard order is menu → Home →
-first dataset. Both rows share `--top-nav-home-size` and `--top-nav-home-icon-size`
-from [top_nav_home_button.css](../../frontend/core_components/front_page/top_nav_home_button.css).
-The compact toolbar's end-slot layout and native Home's focus ring are retained.
-Compact links retain their full accessible name and native keyboard/link gestures. Home activation
-stops its own click from reaching the menu's outside-click listener. Menu
-opening, closing, saved visibility and resizing stay with the existing owner.
+When Home is enabled, each dataset owns one top-navigation Home link. The toolbar controller moves that same
+node to the first position in the hero's dataset tab row, with the tab surface and the larger native Home
+size, whether the side menu is open or closed. Its house icon and translated/site-name label stay together;
+only a tight row hides the visual label to retain room for the first dataset. Once that row scrolls away, Home
+moves to the compact toolbar's end slot above 700 CSS pixels; on phones it moves right after the menu (start
+slot), so visual and keyboard order is menu → Home → site identity → search → filter-toolbar button (keyboard
+focus skips the decorative identity). Focus follows the original node. Home never participates in deciding
+whether the toolbar is visible. The pre-WO37 rule remains `active && (phone || shouldShowSharedTopBar(...))`:
+at widths up to 700 CSS pixels the active toolbar stays visible independently of the hero; above 700 it is
+hidden while the inline hero is visible. This phone rule dates from 11 October 2026, before the Home button
+was added. Home's own header puts its current-page link first in the tab row, before every dataset; the
+trailing actions keep their order. Keyboard order is menu → Home → first dataset. Both rows share
+`--top-nav-home-size` and `--top-nav-home-icon-size` from
+[top_nav_home_button.css](../../frontend/core_components/front_page/top_nav_home_button.css). Only Home's own
+stacked phone navigation gives Home the full tab width, 44px minimum height and its translated/site-name label
+(the fit controller never compacts that stack); dataset toolbars keep the 44px square Home. Focus ring,
+accessible name and current-page marker are unchanged. An ordinary Home activation bubbles to the same
+outside-click closer as a dataset tab: below 1850 CSS pixels it closes the overlay menu and saves that state;
+a docked menu stays open, Home inside the menu is an inside click, and modified or non-primary gestures stay
+native and leave the menu alone. Menu state still has one owner.
 
 `front_page_availability.js` keeps server-confirmed availability in tab memory;
 a stale local-storage value cannot enable a link or route. Auth bootstrap clears

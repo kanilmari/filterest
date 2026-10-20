@@ -128,10 +128,13 @@ export function createSharedTopbarVisibilityController({ tableName, currentView,
         const homeHadFocus = document.activeElement === homeLink;
         setSharedTopBarVisibility(shouldShowBar);
         // Home follows its row, independently of the menu and bar visibility.
-        // This bar has identity/search/end slots, but no navigation tab list.
+        // Phone DOM order is menu → Home → identity → search → filter toolbar.
+        // Desktop keeps the existing end slot and hero placement.
         placeTopNavHomeButton(homeLink, homeInHero || !shouldShowBar
             ? inlineHeroHost?.querySelector('.hero-dataset-tabs')
-            : sharedTopBar.querySelector('.dataset-shared-topbar__slot--end'));
+            : sharedTopBar.querySelector(phone
+                ? '.dataset-shared-topbar__slot--start'
+                : '.dataset-shared-topbar__slot--end'));
         if (active && homeHadFocus) homeLink.focus({ preventScroll: true });
         mobileSearch.sync({ phone, active: shouldShowBar });
         setSharedTopBarArticleCloseVisibility(

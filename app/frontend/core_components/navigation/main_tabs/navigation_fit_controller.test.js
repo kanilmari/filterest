@@ -61,15 +61,24 @@ test('only a Home phone column restores destinations hidden by a narrower deskto
     home.append(element);
     document.body.append(home);
     const buttons = [...element.children];
-    vi.spyOn(element, 'clientWidth', 'get').mockReturnValue(80);
+    vi.spyOn(element, 'clientWidth', 'get').mockReturnValue(120);
     for (const button of buttons) vi.spyOn(button, 'getBoundingClientRect').mockReturnValue({ width: 70 });
+    const link = document.createElement('a'); link.className = 'top-nav-home-button';
+    const homeMeasurement = vi.spyOn(link, 'getBoundingClientRect').mockImplementation(() =>
+        ({ width: link.classList.contains('top-nav-home-button--compact') ? 44 : 100 }));
+    element.prepend(link);
     const fit = createNavigationFitController(element);
     try {
         fit.sync(); await vi.advanceTimersByTimeAsync(20);
         expect(buttons.map(button => button.hidden)).toEqual([false, true, true]);
+        expect(link.classList.contains('top-nav-home-button--compact')).toBe(true);
+        link.classList.remove('top-nav-home-button--compact');
+        homeMeasurement.mockClear();
         element.style.flexDirection = 'column';
         fit.sync(); await vi.advanceTimersByTimeAsync(20);
         expect(buttons.map(button => button.hidden)).toEqual([false, false, false]);
+        expect(link.classList.contains('top-nav-home-button--compact')).toBe(false);
+        expect(homeMeasurement).not.toHaveBeenCalled();
         // A dataset projection still fits horizontally, even if a caller stacks it.
         home.className = 'dataset-hero';
         fit.sync(); await vi.advanceTimersByTimeAsync(20);

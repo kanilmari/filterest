@@ -5,6 +5,7 @@
 import { expect, test, type Page } from '@playwright/test';
 import { revealActiveFilterbarSection, waitForActiveFilterbarLayout } from '../helpers/filterbar';
 import { openActiveDatasetSearch } from '../helpers/dataset-search';
+import { assertPhoneHeroSpacing } from '../helpers/phone-hero-spacing';
 import { installHomePolicy } from '../helpers/home-policy-fixture';
 
 const DATASET = process.env.FILTEREST_E2E_TOPBAR_DATASET || '';
@@ -95,6 +96,7 @@ test.describe('guest phone toolbar and style controls', () => {
       if (labels[0] !== englishLabels[0]) await expect(toggle).not.toHaveAccessibleName(englishLabels[0]);
       await expect(toggle).toHaveAttribute('data-aria-label-lang-key', 'filterbar_show_search');
       await expect(toggle).toHaveAttribute('aria-pressed', 'false');
+      await info.attach('phone hero gaps', { body: JSON.stringify(await assertPhoneHeroSpacing(page, DATASET), null, 2), contentType: 'application/json' });
       const before = await geometry(page);
       expect(before.search.x + before.search.width).toBeLessThanOrEqual(before.filter.x);
       expect(before.filter.x - before.search.x - before.search.width).toBeLessThanOrEqual(9);

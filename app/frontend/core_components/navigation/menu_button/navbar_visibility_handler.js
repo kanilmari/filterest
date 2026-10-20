@@ -372,6 +372,8 @@ export function initNavbar() {
 
   // Piilota navigaatio, jos klikataan sen ulkopuolelle kapeassa näkymässä
   document.addEventListener('click', (event) => {
+    // Native link gestures must leave both the current page and its menu alone.
+    if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
     const currentIsWide = window.innerWidth >= NAVBAR_WIDTH_THRESHOLD;
     if (!currentIsWide && navVisible) {
       if (

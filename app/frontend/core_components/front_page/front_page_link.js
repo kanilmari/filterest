@@ -43,9 +43,7 @@ export function createFrontPageLink({ topNavigation = false, current = false } =
     link.addEventListener('click', event => {
         if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
         event.preventDefault();
-        // A Home activation is navigation, not a click on the page outside the
-        // menu. Preserve the existing outside-click policy for every other click.
-        if (topNavigation) event.stopPropagation();
+        // Bubble through the same document outside-click closer as dataset tabs.
         // Native pointer and keyboard clicks can retry; synthetic/startup calls cannot.
         void import('./front_page_navigation.js').then(({ openFrontPage }) =>
             openFrontPage({ userActivation: event.isTrusted }));

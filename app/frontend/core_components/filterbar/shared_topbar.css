@@ -318,9 +318,26 @@
   }
   .dataset-shared-topbar--visible { overflow: visible; }
   .dataset-shared-topbar__inner {
-    grid-template-columns: 44px minmax(0, 1fr) 96px;
+    /* The first track also holds the menu slot's corner inset (below). */
+    grid-template-columns: calc(44px + 12px - var(--dataset-shared-topbar-padding-inline, 12px)) minmax(0, 1fr) 96px;
     grid-template-rows: 44px;
     gap: 8px;
+  }
+
+  .dataset-shared-topbar__slot--start { gap: 8px; }
+  /* Keep the row stationary when ownership passes to the drawer's closer.
+     The SLOT carries the canonical 12px viewport inset (Dataset_Corner_Buttons.md,
+     G14) on bars with narrower padding, so the button never shifts inside the
+     slot's 44px clip and its border stays whole. */
+  .dataset-shared-topbar .dataset-shared-topbar__menu-slot {
+    flex: 0 0 44px;
+    width: 44px;
+    max-width: 44px;
+    margin-inline-start: calc(12px - var(--dataset-shared-topbar-padding-inline, 12px));
+    transition: none;
+  }
+  .dataset-shared-topbar .dataset-shared-topbar__menu-slot > .dataset-shared-topbar__menu-button {
+    left: 0;
   }
 
   .dataset-shared-topbar__center {

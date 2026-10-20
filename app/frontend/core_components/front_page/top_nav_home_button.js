@@ -16,7 +16,9 @@ export function placeTopNavHomeButton(link, host) {
     link.classList.toggle('hero-dataset-tabs__button', inHero);
     // Keep tab colours and typography; shared Home CSS owns its larger target.
     link.classList.toggle('navbar-front-page-link', !inHero);
-    host.prepend(link);
+    // Phone's start slot already owns the menu: native tab order follows it.
+    if (host.classList.contains('dataset-shared-topbar__slot--start')) host.append(link);
+    else host.prepend(link);
     // The dataset navigation may have no ordinary tabs, but still has Home.
     host.hidden = false;
     if (focused) link.focus({ preventScroll: true });

@@ -3,6 +3,7 @@
 // Connects a temporary dataset, an existing category and explicit application themes.
 // Keeps shared categories unchanged and removes the dataset and its memberships on failure too.
 import { expect, test, type Page } from '@playwright/test';
+import { assertPhoneHeroSpacing } from '../helpers/phone-hero-spacing';
 import { login, loadCredentials } from '../helpers/auth';
 import { buildTempDatasetName, createTempDataset, cleanupDatasetViaRequest,
   fetchCsrfTokenForRequest } from '../helpers/temp-dataset';
@@ -137,6 +138,9 @@ async function assertSection(page: Page, dataset: string, width: number) {
   await page.keyboard.press('Tab');
   await expect(actions.locator('button').nth(1)).toBeFocused();
   await assertUnchangedControlSizes(page, dataset);
+  if (width <= 700) await test.info().attach('phone hero gaps', {
+    body: JSON.stringify(await assertPhoneHeroSpacing(page, dataset), null, 2), contentType: 'application/json',
+  });
 }
 
 test('one shared filter section stays stable on load at desktop/375 px in both themes and languages', async ({ page }) => {

@@ -1,9 +1,11 @@
 // G13_phone_topbar_measurements.spec.ts
-// Measures the exact pre-218 phone rule on a9b4520c^ and WO37-FIX without changing it.
+// Measures phone toolbar order, clipping, focus and the unchanged desktop cascade.
 // Run WO37_PROBE_PHASE=before/after on the respective native checkout, --workers=1.
 // Records CSS pixels, hero/search/bar geometry and screenshots under test-results.
 import { test, expect, type Page } from '@playwright/test';
-import { writeFile } from 'node:fs/promises';
+import { readFile, writeFile } from 'node:fs/promises';
+import { join } from 'node:path';
+import { measurePhoneHeroSpacing } from '../helpers/phone-hero-spacing';
 import { installHomePolicy, openHomeProbeDataset, captureHomeProbe, probePhase } from '../helpers/home-policy-fixture';
 
 async function measure(page: Page) {
@@ -28,6 +30,120 @@ async function measure(page: Page) {
       search: [...hero.querySelectorAll('.dataset-search-panel')].map(node => ({
         rect: rect(node), display: getComputedStyle(node).display,
       })) };
+  });
+}
+
+async function phoneControls(page: Page) {
+  return page.locator('.dataset-shared-topbar:visible').evaluate(bar => {
+    const selectors = ['.dataset-shared-topbar__menu-button', '.top-nav-home-button',
+      '.dataset-shared-topbar__site-identity', '.dataset-shared-topbar__search-toggle', '.filterbar-fixed-toggle'];
+    const rect = (node: Element) => {
+      const box = node.getBoundingClientRect();
+      const style = getComputedStyle(node);
+      return { x: box.x, right: box.right, y: box.y, width: box.width, height: box.height,
+        overflow: style.overflow, margin: style.margin, left: style.left };
+    };
+    return { controls: selectors.map(selector => rect(bar.querySelector(selector)!)),
+      slot: rect(bar.querySelector('.dataset-shared-topbar__menu-slot')!),
+      image: rect(bar.querySelector('.dataset-shared-topbar__site-identity img')!),
+      tracks: getComputedStyle(bar.querySelector('.dataset-shared-topbar__inner')!).gridTemplateColumns };
+  });
+}
+
+for (const width of [375, 390, 700]) for (const theme of ['light', 'dark'] as const) {
+  test(`phone order and complete menu border ${width}px ${theme}`, async ({ page, context }, info) => {
+    await page.setViewportSize({ width, height: 844 });
+    await page.emulateMedia({ colorScheme: theme === 'light' ? 'dark' : 'light', reducedMotion: 'no-preference' });
+    await installHomePolicy(context, theme);
+    await openHomeProbeDataset(page, false);
+    const bar = page.locator('.dataset-shared-topbar:visible');
+    const sample = await phoneControls(page);
+    await info.attach(`${probePhase}-phone-control-boxes`, { body: JSON.stringify(sample, null, 2), contentType: 'application/json' });
+    await info.attach(`${probePhase}-phone-hero-gaps`, {
+      body: JSON.stringify(await measurePhoneHeroSpacing(page, 'app_service_catalog'), null, 2), contentType: 'application/json',
+    });
+    if (probePhase === 'before') return;
+    const [menuBox, homeBox, identityBox, searchBox, filterBox] = sample.controls;
+    for (const box of [menuBox, homeBox, searchBox, filterBox]) {
+      expect(box.width).toBeGreaterThanOrEqual(44); expect(box.height).toBeGreaterThanOrEqual(44);
+    }
+    for (let index = 1; index < sample.controls.length; index++) {
+      expect(sample.controls[index - 1].right).toBeLessThanOrEqual(sample.controls[index].x);
+    }
+    expect(menuBox.x).toBeGreaterThanOrEqual(sample.slot.x);
+    expect(menuBox.right).toBeLessThanOrEqual(sample.slot.right);
+    expect(menuBox.right).toBeLessThanOrEqual(identityBox.x);
+    if (sample.image.width) expect(menuBox.right).toBeLessThanOrEqual(sample.image.x);
+    expect(filterBox.right).toBeLessThanOrEqual(width);
+    const menu = bar.getByTestId('shared-topbar-menu-button');
+    const home = bar.getByTestId('top-nav-home-button');
+    const search = bar.getByTestId('mobile-search-toggle');
+    const filter = bar.getByTestId('filterbar-toggle');
+    await menu.focus(); await page.keyboard.press('Tab'); await expect(home).toBeFocused();
+    await page.keyboard.press('Tab'); await expect(search).toBeFocused();
+    await page.keyboard.press('Tab'); await expect(filter).toBeFocused();
+    // Identity is decorative; native keyboard order skips it, matching the row.
+    expect(await bar.getByTestId('mobile-site-identity').evaluate(el => (el as HTMLElement).tabIndex)).toBe(-1);
+    const opening = await menu.evaluate(button => {
+      (button as HTMLButtonElement).click();
+      const navbar = document.getElementById('navbar')!;
+      return { active: navbar.classList.contains('navbar-opening'),
+        row: getComputedStyle(navbar.querySelector('.top-button-bar')!).cursor,
+        gap: getComputedStyle(navbar.querySelector('.nav-history-buttons')!).cursor,
+        menu: getComputedStyle(navbar.querySelector('#hideMenuButton')!).cursor };
+    });
+    expect(opening).toEqual({ active: true, row: 'default', gap: 'default', menu: 'pointer' });
+    expect(await phoneControls(page)).toEqual(sample);
+    await captureHomeProbe(page, info, `${width}-${theme}-phone-order`);
+  });
+}
+
+for (const width of [1440, 1920]) for (const theme of ['light', 'dark'] as const) {
+  test(`desktop computed styles remain equal ${width}px ${theme}`, async ({ page, context }, info) => {
+    await page.setViewportSize({ width, height: 1000 });
+    await page.emulateMedia({ colorScheme: theme === 'light' ? 'dark' : 'light' });
+    await installHomePolicy(context, theme);
+    await openHomeProbeDataset(page, false);
+    await page.evaluate(() => document.fonts.ready);
+    const styles = await page.evaluate(() => {
+      const nodes = [...document.querySelectorAll('#app_service_catalog_tab_parts_container :is(.top-nav-home-button, '
+        + '.dataset-shared-topbar__inner, .dataset-shared-topbar__slot--start, .dataset-shared-topbar__menu-slot, '
+        + '.dataset-shared-topbar__menu-button, .dataset-shared-topbar__site-identity, .filterbar-inline-hero, '
+        + '.filter-content-inner, .morphing-header, .morphing-title, .morphing-subtitle, '
+        + '.filterbar-hero-dataset-icon, .dataset-search-panel, .dataset-filter-section)')];
+      const snapshot = () => nodes.map(node => {
+        const style = getComputedStyle(node);
+        return { selector: node.className, style: Object.fromEntries([...style].map(key => [key, style.getPropertyValue(key)])) };
+      });
+      const before = snapshot();
+      const media: { rule: CSSMediaRule; text: string }[] = [];
+      const disablePhoneRules = (rules: CSSRuleList) => {
+        for (const rule of [...rules]) {
+          if (rule instanceof CSSMediaRule && /^\((?:width\s*<=\s*700px|max-width:\s*700px)\)$/.test(rule.conditionText)) {
+            media.push({ rule, text: rule.media.mediaText }); rule.media.mediaText = 'not all';
+          } else if ('cssRules' in rule) disablePhoneRules((rule as CSSGroupingRule).cssRules);
+          if (rule instanceof CSSImportRule && rule.styleSheet) disablePhoneRules(rule.styleSheet.cssRules);
+        }
+      };
+      try {
+        for (const sheet of [...document.styleSheets]) {
+          // Cross-origin fonts do not own these application selectors.
+          if (sheet.href && new URL(sheet.href).origin !== location.origin) continue;
+          disablePhoneRules(sheet.cssRules);
+        }
+        return { before, after: snapshot(), phoneRules: media.length };
+      } finally { media.forEach(({ rule, text }) => { rule.media.mediaText = text; }); }
+    });
+    expect(styles.before.length).toBeGreaterThan(0); expect(styles.phoneRules).toBeGreaterThan(0);
+    expect(styles.after).toEqual(styles.before);
+    const name = `desktop-${width}-${theme}.json`;
+    await writeFile(info.outputPath(name), JSON.stringify(styles.before, null, 2));
+    await info.attach(`${probePhase}-computed-styles`, { path: info.outputPath(name), contentType: 'application/json' });
+    // Maintenance can compare native before/after artifacts as well as the
+    // in-browser phone-rule isolation and Vitest's non-phone source hashes.
+    if (probePhase === 'after' && process.env.WO70_BASELINE_DIR) {
+      expect(styles.before).toEqual(JSON.parse(await readFile(join(process.env.WO70_BASELINE_DIR, name), 'utf8')));
+    }
   });
 }
 
