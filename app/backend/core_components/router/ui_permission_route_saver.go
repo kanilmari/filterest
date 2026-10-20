@@ -19,6 +19,8 @@ type uiPermissionRouteDefinition struct {
 
 // Renaming a canonical UI permission name clears the old row route. Remap its
 // system_favorites targets in the same migration so personal tool shortcuts survive.
+// Article presentations editing uses ArticlePresentationsHandler with AdminProfile.
+// It is an API metadata route, never an extra UI right or a startup reader grant.
 var canonicalUIPermissionRoutes = [...]uiPermissionRouteDefinition{
 	{Name: "nav_container_ui", URLRouteEndpoint: "/ui/nav_container", SpecificTableRelated: false},
 	{Name: "nav_tree_ui", URLRouteEndpoint: "/ui/nav_tree", SpecificTableRelated: false},

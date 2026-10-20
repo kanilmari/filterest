@@ -1,0 +1,19 @@
+/* article_presentations_table.css
+ * Keeps five translated columns reachable on phones with a visible field identity.
+ * Uses explicit application theme tokens and leaves vertical scrolling to the page.
+ */
+/* The editor's grid item must shrink below the table's intrinsic width so
+ * horizontal overflow belongs to the wrapper, rather than widening the page. */
+.view-field-assignments__article-presentations { min-width: 0; }
+.article-presentations-table { min-width: 0; max-width: 100%; }
+.article-presentations-table .vct-table-wrapper { overflow-x: auto; max-height: none; }
+.article-presentations-table .vct-table { min-width: 740px; table-layout: fixed; }
+.article-presentations-table .vct-header-cell { white-space: normal; overflow-wrap: anywhere; }
+.article-presentations-table .vct-cell[scope="row"],
+.article-presentations-table thead th:first-child {
+    position: sticky; left: 0; z-index: 2; width: 210px; min-width: 210px;
+    background: var(--bg_color); color: var(--text_color);
+    border-inline-end: 2px solid var(--border_color);
+}
+.article-presentations-table .vct-control-target { min-width: 44px; min-height: 44px; }
+.article-presentations-table .vct-input-checkbox { cursor: pointer; }

@@ -84,6 +84,7 @@ const STABLE_CANDIDATE_ROUTE_SPECS = Object.freeze({
         { routeName: 'adminDatasetUiVisibility', handlerName: 'system_table_tools.AdminDatasetUIVisibilityHandler' },
         { routeName: 'getDatasetAliasManagement', handlerName: 'router.GetDatasetAliasManagementHandler' },
         { routeName: 'saveDatasetAliasManagement', handlerName: 'router.SaveDatasetAliasManagementHandler' },
+        { routeName: 'articlePresentations', handlerName: 'system_table_tools.ArticlePresentationsHandler' },
         { routeName: 'getArticleSectionDefaults', handlerName: 'system_table_tools.GetArticleSectionDefaultsHandler' },
         { routeName: 'saveArticleSectionDefaults', handlerName: 'system_table_tools.SaveArticleSectionDefaultsHandler' },
         { routeName: 'getCardVisibility', handlerName: 'system_table_tools.GetCardVisibilityHandler' },

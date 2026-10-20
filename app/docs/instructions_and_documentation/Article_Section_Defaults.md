@@ -5,36 +5,46 @@
 
 # Article collapsible-block defaults
 
-In **View field settings**, select a dataset and the **Article** view. The
-**Article collapsible blocks** panel has its own presentation selector, Save
-button and Restore action. Its settings apply to every reader of that dataset;
-the field-set user-group selection does not change this scope.
+In **View field settings**, select a dataset and **Article presentations**. One
+five-column table contains field name and UID, Article, Image-first article,
+Page-sized image-first article and computed Select all. Fields share an order;
+Details, Images, Attachments, Related items and Task progress are fixed block rows.
+Article supports all five blocks; both image-first columns support Details only.
+Unsupported cells show an explained dash. The block cells mean **Open at start**.
 
-The **User groups** picker chooses fields and grants no view access. Selected
-groups without the view's route right are listed beside the picker with an
-**Open Permissions** link. Both article presentations require
-`/ui/view/article_view`; changing collapsible-block defaults does not grant it.
-See [Permission Model](Permission_Model.md#capability-and-dataset-permissions).
+The group picker normally resolves all selected groups to the site. Mixed real
+values or orders retain explicit group targets. Blocks are editable only for an
+actual site save; group and personal contexts label them dataset-wide and read-only.
+Fields and opening blocks commit together through one administrator Save. Group
+priority and name changes belong to that same draft. Restore defaults stages explicit
+visible/open values; Cancel discards the draft. Zero visible fields are allowed in
+each article projection. Neither field choices nor block values grant access.
+The informational warning checks all three registered presentation rights from one
+permission snapshot and links to Permissions when a selected group lacks access.
 
-- **Traditional article** supports Details, Images, Attachments, Related rows
-  and Task progress.
-- **Image-first article (IFAV)** supports Details. This option never hides its
-  article image or changes image-first navigation.
-- A missing setting means **open**. An explicitly closed block keeps its
-  heading and opening control visible.
-- Cards, compact article lists and tables keep their current behavior.
+Each target retains its original widths, order, name and priority until an explicit
+intent changes that property. Different orders are explained; only a move adopts
+one order for all selected targets. Mixed cells cycle visible, hidden, unchanged.
+Recovery is bound to actor, dataset UID, exact targets and baseline revisions.
+Changed revisions leave the draft pending, never silently replayed. Context switches
+preserve drafts, including after a failed save or verification.
 
-Each new article opening reads the defaults for that dataset and presentation.
-A reader can open or close a block normally; these reading actions do not save
-administrator settings. A media refresh within the same article preserves its
-current open/closed state. A newly opened article starts from the saved defaults.
+`GET /api/admin/view-field-settings/article-presentations?dataset=<name>&targets=site`
+returns complete targets; groups use `group:8,group:9`. POST to the same administrator
+route sends dataset UID, family `article`, ordered UID members with all three
+visibility/width maps, assignment links/names/priorities, revisions, and site-only
+blocks. The dataset row lock covers revision comparison and every target mutation;
+any failure rolls back. Stale revisions return 409 `article_revision_conflict`.
+After commit all three projection caches are invalidated. The editor accepts the
+new baseline only after a matching GET verifies every value, assignment and revision.
+A committed write with failed verification keeps the draft and requires fresh state.
+The opener policy is untouched. Personal targets have the same adapter contract;
+a personal editor is not mounted here.
 
-The administrator's unsaved drafts are kept separately for each dataset and
-presentation while that editor remains mounted. Language changes preserve the
-draft. Save sends only changed section booleans, then verifies the exact API
-readback before showing success. Restore writes explicit open values for the selected
-presentation. The other
-presentation, dataset, field assignments and user groups are unchanged.
+Readers can still open or close blocks normally; these actions do not save
+administrator settings. A media refresh preserves current disclosure state.
+The horizontal table scroller keeps its identity column visible on phones;
+vertical scrolling stays with the page. Controls are at least 44 pixels.
 
 The canonical storage is
 `system_db_tables.article_section_initial_open`, a JSON object containing
@@ -43,7 +53,7 @@ booleans and each image-first presentation's `details` boolean are explicit.
 The old `classic` and `image_first` names are request compatibility aliases;
 responses retain the requested presentation identity. The supported API is:
 
-- `GET /api/view-field-settings/article-section-defaults?dataset=<name>&presentation_key=classic|image_first`
+- `GET /api/view-field-settings/article-section-defaults?dataset=<name>&presentation_key=<canonical-key-or-classic-or-image_first>`
 - `POST /api/admin/view-field-settings/article-section-defaults`, containing
 `dataset`, `presentation_key` (canonical key or compatibility alias), and either a nonempty `initial_open` boolean
   patch or `reset_to_defaults: true`.
@@ -66,13 +76,13 @@ existing constants and check them against this source.
 
 Canonical presentation keys are `article_view`, `image_first_view`, and the
 `image_first_page_view`. The storage batch registers all three database view
-identities and independent image-first permission routes. Page-sized rendering,
-the combined editor and opener activation remain later batches; the browser
+identities and independent image-first permission routes. Page-sized rendering
+and opener activation remain later batches; the combined editor is implemented; the browser
 contract's reserved flag and current permission routes still describe that boundary.
 `permission_route` records the approved independent route for each key;
 `current_permission_route` explicitly preserves IFAV's existing Article gate.
-The browser still requests `classic` and `image_first`; `legacy_section_key`
-records that compatibility boundary. Stored block keys are canonical.
+Compatibility block readers may still request `classic` and `image_first`;
+`legacy_section_key` records that boundary. The combined editor uses canonical keys. Stored block keys are canonical.
 
 The role catalogue describes the later central opener policy. Ordinary image
 roles default to IFAV; body/title/summary, Home and field links default to
@@ -167,7 +177,7 @@ historical snapshots are never rewritten to satisfy a current-schema check.
 
 ## Existing field-settings consumers
 
-The current editor remains the separate per-presentation editor. A uniform group
+The compatibility field-set endpoints remain available to older callers. A uniform group
 save returns `field_set_id` for older callers plus `group_variants` with every
 selected group's actual `field_set_id`, priority and ordered fields. Its readback
 checks those exact IDs, fields and priorities, and rejects unintended targets.

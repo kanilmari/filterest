@@ -162,6 +162,7 @@ export const MANIFEST_BACKED_ENDPOINT_ROUTE_HANDLERS = Object.freeze({
     getDatasetHeaderConfig: 'system_table_tools.GetDatasetHeaderConfigHandler',
     saveDatasetHeaderConfig: 'system_table_tools.SaveDatasetHeaderConfigHandler',
     getViewFieldSets: 'system_table_tools.GetViewFieldSetsHandler',
+    articlePresentations: 'system_table_tools.ArticlePresentationsHandler',
     getArticleSectionDefaults: 'system_table_tools.GetArticleSectionDefaultsHandler',
     saveArticleSectionDefaults: 'system_table_tools.SaveArticleSectionDefaultsHandler',
     savePersonalViewFieldSet: 'system_table_tools.SavePersonalViewFieldSetHandler',

@@ -94,6 +94,7 @@ export function createVanillaCheckboxTable(options) {
         get columns() { return columns; },
         get editing() { return isEditMode; }, set editing(value) { isEditMode = value; },
         get saving() { return isSaving; },
+        frozen: () => draft.frozen(),
         changed: () => buildChangedCells(baseRows, draftRows, columns, rowIdKey,
             { editableOnly: features.enabled || draft.enabled || draft.verified }),
         render: () => render(), recompute: () => recomputeDirtyState(),

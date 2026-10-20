@@ -293,3 +293,11 @@ test('read-only identity objects are not mistaken for editable cell intents', ()
     table.setColumnValues('b', true);
     expect(table.getChangeSet().changedCells).toEqual([{ rowId: 'a', columnKey: 'b', previousValue: false, nextValue: true }]);
 });
+
+test('filter-only tables preserve row visibility after body rerenders', () => {
+    const table = createVanillaCheckboxTable({ containerElement: host, rows: [{id:'a', value:true},{id:'b',value:false}],
+        columns:[{key:'value',type:'checkbox'}], startInEditMode:true });
+    table.setRowFilter(row => row.id === 'a');table.rerender();
+    expect(rowNode('b').hidden).toBe(true);expect(rowNode('a').hidden).toBe(false);
+    table.setColumnValues('value',true);expect(rowNode('b').hidden).toBe(true);
+});

@@ -34,8 +34,13 @@ computed row selection, unsupported-cell rendering, caller-provided accessible
 names, visibility-only filtering, external controls, order/metadata drafts,
 context/revision-bound version-2 recovery and verified-result adoption guards.
 See the [component options](../../frontend/reusable_components/vanilla_checkbox_table/README.md#opt-in-settings-table-features).
-The domain adapters, combined article editor and remaining requirements below
-are still future work; this marks available primitives only.
+The article adapter and combined administrator editor now implement the five-column
+family table, fixed opening-block rows, per-target baselines, one atomic revision-checked
+Save with complete GET verification, staged defaults, external Cancel, scoped recovery
+and phone scrolling with a sticky identity column (K376 batch 3b). Native browser
+and PostgreSQL acceptance proofs accompany the source; their execution is a release
+gate. Other domain adapters and the general requirements below remain future work;
+the personal hosting surface is still unimplemented.
 
 ## Concepts and interaction
 

@@ -160,6 +160,7 @@
   "system_table_tools.AdminRowGroupsHandler": "AdminRowGroupsHandler lists headings and selected values, or creates/edits names. GET|POST /api/admin/row-groups; the target query deliberately avoids dataset routing.",
   "system_table_tools.AdminSitePresentationSettingsHandler": "AdminSitePresentationSettingsHandler reads or atomically patches the typed settings. GET|POST /api/admin/site-presentation-settings",
   "system_table_tools.ArchiveMediaTableFoldersHandler": "ArchiveMediaTableFoldersHandler moves top-level storage folders without a matching live table_uid into storage_deleted/.",
+  "system_table_tools.ArticlePresentationsHandler": "ArticlePresentationsHandler reads or saves complete article-family targets. GET /api/admin/view-field-settings/article-presentations?dataset=...\u0026targets=site|group:8,group:9 POST uses the GET shape (dataset, dataset_uid, family, targets, revisions), plus complete site-only blocks; members carry ordered UIDs and all three visible/width values.",
   "system_table_tools.AssignPersonalViewFieldSetHandler": "",
   "system_table_tools.AssignSiteViewFieldSetHandler": "",
   "system_table_tools.CheckArchivedMediaTableFoldersHandler": "CheckArchivedMediaTableFoldersHandler lists top-level storage_deleted folders and whether they are safe to prune.",

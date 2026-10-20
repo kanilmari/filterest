@@ -5,6 +5,11 @@
 // @vitest-environment jsdom
 
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
+import { readFileSync } from "node:fs";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+
+import { articleFixture } from "./article_presentations_test_fixture.js";
 
 const mocks = vi.hoisted(() => ({
     get: vi.fn(),
@@ -94,7 +99,7 @@ async function createLoadedView(response = baseResponse) {
     }));
     await vi.waitFor(() => expect(mocks.get).toHaveBeenCalledWith("orders", response.view_key));
     await vi.waitFor(() => expect(container.querySelectorAll(
-        ".view-field-assignments__field-row"
+        response.view_key === "article_view" ? ".vct-row[data-row-id^=\"field:\"]" : ".view-field-assignments__field-row"
     )).toHaveLength(2));
     return container;
 }
@@ -111,7 +116,17 @@ describe("view_field_assignments_view", () => {
         [mocks.get, mocks.articleGet, mocks.articleSave, mocks.save, mocks.reset, mocks.renderTree, mocks.confirm,
             mocks.success, mocks.warning, mocks.extractDataset, mocks.language]
             .forEach((mock) => mock.mockReset());
-        mocks.permissions.mockReset().mockResolvedValue([]);
+        mocks.permissions.mockReset().mockImplementation(async (route, options) => {
+            if (route !== 'articlePresentations') return [];
+            const snapshot = articleFixture(); snapshot.dataset = 'orders';
+            if (options.method === 'POST') return { ...snapshot, ...options.body_data, fields: snapshot.fields, actor_id:42 };
+            const keys = new URLSearchParams(options.url_params.replace(/^\?/, '')).get('targets').split(',');
+            snapshot.targets = keys.map((key,index) => ({ ...structuredClone(snapshot.targets[0]),
+                scope:key === 'site' ? 'site':'group', ...(key === 'site' ? {} : {group_id:Number(key.split(':')[1])}),
+                assignments:snapshot.targets[0].assignments.map(link => ({...link,field_set_id:30+index})) }));
+            snapshot.revisions = Object.fromEntries(['blocks','fields',...keys].map(key => [key,'revision']));
+            return snapshot;
+        });
         mocks.language.mockReturnValue("en");
         mocks.extractDataset.mockReturnValue("orders");
         mocks.confirm.mockResolvedValue(true);
@@ -287,52 +302,49 @@ describe("view_field_assignments_view", () => {
         ));
     });
 
-    test("verifies an ordinary Article save with distinct bundles for two selected groups", async () => {
-        sessionStorage.setItem("view_field_settings_admin_session_v1", JSON.stringify({
-            viewKey: "article_view", selectedGroupIDs: ["2", "9"],
-        }));
-        const initial = { ...baseResponse, view_key: "article_view" };
-        const readback = {
-            ...initial,
-            field_sets: [
-                ...initial.field_sets,
-                { id: 30, scope: "shared", visible_columns: ["id"] },
-                { id: 31, scope: "shared", visible_columns: ["id"] },
-            ],
-            group_assignments: initial.group_assignments.map((group) => ({
-                ...group, field_set_id: group.group_id === 2 ? 30 : group.group_id === 9 ? 31 : null,
-            })),
-        };
-        mocks.get.mockResolvedValueOnce(initial).mockResolvedValueOnce(readback);
-        mocks.save.mockResolvedValue({ field_set_id: 30, group_variants: [
-            { group_id: 2, field_set_id: 30, group_priority: 5, visible_columns: ["id"] },
-            { group_id: 9, field_set_id: 31, group_priority: 5, visible_columns: ["id"] },
-        ] });
-        const container = await createLoadedView(initial);
+    test("Article uses one five-column table and one atomic metadata-inclusive Save", async () => {
+        sessionStorage.setItem("view_field_settings_admin_session_v1", JSON.stringify({ viewKey: "article_view", selectedGroupIDs: ["2", "9"] }));
+        const container = await createLoadedView({ ...baseResponse, view_key: "article_view" });
+        expect(container.querySelectorAll('table')).toHaveLength(1);
+        expect(container.querySelectorAll('thead th')).toHaveLength(5);
+        const name = container.querySelector('[data-testid="view-field-assignments-name"]');
+        name.value = 'Reviewed'; name.dispatchEvent(new Event('input'));
         container.querySelector('[data-testid="view-field-assignments-save"]').click();
-        await vi.waitFor(() => expect(mocks.success).toHaveBeenCalledWith("Field assignment saved and verified"));
-        expect(mocks.save).toHaveBeenCalledWith(expect.objectContaining({
-            target_scope: "groups", target_group_ids: [2, 9], visible_columns: ["id"],
-        }));
-        expect(mocks.warning).not.toHaveBeenCalled();
+        await vi.waitFor(() => expect(mocks.permissions).toHaveBeenCalledWith('articlePresentations', expect.objectContaining({ method:'POST' })));
+        expect(mocks.save).not.toHaveBeenCalled(); expect(mocks.articleSave).not.toHaveBeenCalled();
+        expect(container.querySelector('[data-testid="article-section-defaults"]')).toBeNull();
     });
 
-    test("verifies Article Restore with every group selected and an explicit site bundle", async () => {
+    test("Article's grid host can shrink so the table scrolls with a sticky identity and no height cap", async () => {
         sessionStorage.setItem("view_field_settings_admin_session_v1", JSON.stringify({ viewKey: "article_view" }));
-        const initial = { ...baseResponse, view_key: "article_view" };
-        const readback = {
-            ...initial,
-            field_sets: initial.field_sets.map((set) => set.id === 20
-                ? { ...set, visible_columns: ["id", "title"] } : set),
-        };
-        mocks.get.mockResolvedValueOnce(initial).mockResolvedValueOnce(readback);
-        const container = await createLoadedView(initial);
+        const container = await createLoadedView({ ...baseResponse, view_key: "article_view" });
+        const style = document.createElement("style");
+        style.textContent = readFileSync(resolve(dirname(fileURLToPath(import.meta.url)), "article_presentations_table.css"), "utf8");
+        document.head.appendChild(style);
+        try {
+            // The grid item's automatic minimum otherwise expands to the 740px
+            // table, leaving scrollWidth === clientWidth even on a phone.
+            const host = container.querySelector('[data-testid="article-presentations-host"]');
+            expect(getComputedStyle(host).minWidth).toBe("0px");
+            const wrapper = host.querySelector('.vct-table-wrapper');
+            expect(getComputedStyle(wrapper).overflowX).toBe("auto");
+            expect(getComputedStyle(wrapper).maxHeight).toBe("none");
+            const identity = host.querySelector('.vct-row th');
+            expect(getComputedStyle(identity).position).toBe("sticky");
+            expect(getComputedStyle(identity).left).toBe("0px");
+        } finally {
+            style.remove();
+        }
+    });
+
+    test("Article defaults stage explicit values and Cancel discards without inheritance reset", async () => {
+        sessionStorage.setItem("view_field_settings_admin_session_v1", JSON.stringify({ viewKey:"article_view",selectedGroupIDs:["2"] }));
+        const container = await createLoadedView({ ...baseResponse,view_key:'article_view' });
         container.querySelector('[data-testid="view-field-assignments-restore"]').click();
-        await vi.waitFor(() => expect(mocks.success).toHaveBeenCalledWith("Inheritance restored and verified"));
-        expect(mocks.reset).toHaveBeenCalledWith({
-            dataset: "orders", view_key: "article_view", target_scope: "site", target_group_ids: [],
-        });
-        expect(mocks.warning).not.toHaveBeenCalled();
+        expect(mocks.reset).not.toHaveBeenCalled();
+        container.querySelector('[data-testid="article-presentations-cancel"]').click();
+        expect(mocks.reset).not.toHaveBeenCalled();
+        expect(mocks.permissions.mock.calls.filter(([,options]) => options?.method === 'POST')).toHaveLength(0);
     });
 
     test("keeps save closed when every presentation field is hidden", async () => {
@@ -359,24 +371,37 @@ describe("view_field_assignments_view", () => {
         expect(container.querySelector("h2").textContent).toBe("View field settings");
     });
 
-    test("article block settings use dataset context independently of group field sets", async () => {
-        const container = await createLoadedView();
-        expect(mocks.articleGet).not.toHaveBeenCalled();
-        const view = container.querySelector('[data-testid="view-field-assignments-view"]');
-        mocks.get.mockResolvedValue({ ...baseResponse, view_key: 'article_view' });
-        view.value = 'article_view'; view.dispatchEvent(new Event('change'));
-        await vi.waitFor(() => expect(mocks.articleGet).toHaveBeenCalledWith('orders', 'classic'));
-        const panel = container.querySelector('[data-testid="article-section-defaults"]');
-        expect(panel.hidden).toBe(false);
-        const details = panel.querySelector('[data-testid="article-section-default-details"]');
-        details.checked = false; details.dispatchEvent(new Event('change'));
-        const count = mocks.articleGet.mock.calls.length;
-        mocks.pickerConfigs.at(-1).onChange({ includeValues: ['2'] });
-        expect(mocks.articleGet).toHaveBeenCalledTimes(count);
-        expect(panel.querySelector('[data-testid="article-section-default-details"]').checked).toBe(false);
-        expect(mocks.articleSave).not.toHaveBeenCalled();
-        container.__cleanupListeners();
-        expect(container.querySelector('[data-testid="article-section-defaults"]')).toBeNull();
+    test("Article group block rows remain dataset-wide read-only", async () => {
+        sessionStorage.setItem("view_field_settings_admin_session_v1", JSON.stringify({ viewKey:'article_view',selectedGroupIDs:['2'] }));
+        const container = await createLoadedView({ ...baseResponse,view_key:'article_view' });
+        for (const input of container.querySelector('[data-row-id="block:details"]').querySelectorAll('input')) expect(input.disabled).toBe(true);
+        expect(mocks.articleGet).not.toHaveBeenCalled(); expect(mocks.articleSave).not.toHaveBeenCalled();
+        container.__cleanupListeners(); expect(container.querySelector('table')).toBeNull();
+    });
+
+    test("all selected mixed article groups keep explicit targets and read-only dataset blocks", async () => {
+        sessionStorage.setItem("view_field_settings_admin_session_v1", JSON.stringify({ viewKey:'article_view' }));
+        const original = mocks.permissions.getMockImplementation();
+        mocks.permissions.mockImplementation(async (route,options) => {
+            const value = await original(route,options);
+            if (route === 'articlePresentations' && options.method !== 'POST' && value.targets.length > 1) {
+                value.targets[1].members.reverse();
+                value.targets[1].members[0].values.image_first_page_view.visible = false;
+            }
+            return value;
+        });
+        const container = await createLoadedView({ ...baseResponse, view_key:'article_view' });
+        expect(container.querySelector('.view-field-assignments__target-status').textContent).toBe('Applies only to the selected groups');
+        expect(container.querySelector('[data-row-id="block:details"] input').disabled).toBe(true);
+        expect(mocks.permissions.mock.calls.filter(([route,options]) => route === 'articlePresentations' && options?.url_params?.includes('targets=site'))).toHaveLength(0);
+    });
+
+    test("Article permits every field hidden while the nonarticle nonempty rule stays intact", async () => {
+        sessionStorage.setItem("view_field_settings_admin_session_v1", JSON.stringify({ viewKey:'article_view',selectedGroupIDs:['2'] }));
+        const container = await createLoadedView({ ...baseResponse,view_key:'article_view' });
+        for (const control of container.querySelectorAll('.vct-row[data-row-id^="field:"] .vct-row-toggle')) control.click();
+        await vi.waitFor(() => expect(container.querySelector('[data-testid="view-field-assignments-save"]').disabled).toBe(false));
+        expect(container.querySelector('[data-testid="view-field-assignments-field-warning"]').hidden).toBe(true);
     });
 
 });

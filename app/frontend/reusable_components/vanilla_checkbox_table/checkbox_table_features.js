@@ -16,7 +16,7 @@ export function createCheckboxTableFeatures(options, state, root, table) {
     let filter = null;
     let announcement;
     let filterHint;
-    const frozen = () => options.baselinePolicy === 'verified-result' && state.saving;
+    const frozen = () => Boolean(state.frozen?.()) || options.baselinePolicy === 'verified-result' && state.saving;
     const id = row => toRowIdentifier(row, rowIdKey);
     const group = row => row?.[rowGroupKey];
     const order = rows => rows.map(id);
@@ -197,7 +197,7 @@ export function createCheckboxTableFeatures(options, state, root, table) {
         clearGroups() { groups.forEach(body => body.remove()); groups.clear(); },
         appendRow,
         finishBody() {
-            if (!enabled) return;
+            if (!enabled && !filter) return;
             const keys = [...rowGroups.map(item => item.key), ...groups.keys()];
             [...new Set(keys)].forEach(key => { if (groups.has(key)) table.appendChild(groups.get(key)); });
             table.querySelectorAll('.vct-row').forEach(node => {

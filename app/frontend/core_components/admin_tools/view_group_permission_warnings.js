@@ -3,8 +3,10 @@
 // Connects the existing read-only permission snapshot with the canonical view registry.
 // Keeps field selection and permission changes separate, without affecting save payloads.
 
+import { ARTICLE_PRESENTATION_CONTRACT } from '../../shared/article_presentations/contract_reader.js';
+import { getArticlePresentationsCopy } from './article_presentations_copy.js';
 import { endpoint_router } from '../endpoints/endpoint_router.js';
-import { getDatasetViewPermissionRoute } from '../table_views/dataset_view_registry.js';
+import { getDatasetViewPermissionRoute, getDatasetViewLabelForLanguage } from '../table_views/dataset_view_registry.js';
 import { getViewFieldAssignmentsCopy } from './view_field_assignments_copy.js';
 
 /** Mirrors route_table_checker.go's unscoped query: matching route, NULL dataset, any schema.
@@ -12,6 +14,18 @@ import { getViewFieldAssignmentsCopy } from './view_field_assignments_copy.js';
  * Missing/malformed scope is not evidence of a global grant.
  */
 export function groupsMissingViewPermission(groups, selectedGroupIDs, viewKey, permissions) {
+    if (Array.isArray(viewKey)) {
+        const selected = new Set(selectedGroupIDs.map(String));
+        return groups.filter(group => selected.has(String(group.group_id))).flatMap(group => {
+            const missingViews = viewKey.filter(key => {
+                const route = ARTICLE_PRESENTATION_CONTRACT.presentations[key]?.permission_route || getDatasetViewPermissionRoute(key);
+                return route && !(permissions || []).some(right => right.function_route === route
+                    && String(right.user_group_id) === String(group.group_id)
+                    && (right.target_table_uid === null || right.target_table_uid === 0));
+            });
+            return missingViews.length ? [{ ...group, missingViews }] : [];
+        });
+    }
     const route = getDatasetViewPermissionRoute(viewKey);
     if (!route) return [];
     const grantedGroups = new Set((permissions || []).filter(right => (
@@ -58,6 +72,14 @@ export function createViewGroupPermissionWarnings(host) {
                 link.dataset.langKey = 'view_group_open_permissions';
                 link.textContent = text.openPermissions;
                 warning.append(name, ': ', reason, ' ', link);
+                if (group.missingViews) {
+                    const views = document.createElement('span');
+                    views.textContent = ' (' + group.missingViews.map(key => {
+                        const family = getArticlePresentationsCopy();
+                        return ({article_view:family.article,image_first_view:family.image,image_first_page_view:family.page})[key] || getDatasetViewLabelForLanguage(key);
+                    }).join(', ') + ')';
+                    warning.append(views);
+                }
                 host.append(warning);
             }
         }

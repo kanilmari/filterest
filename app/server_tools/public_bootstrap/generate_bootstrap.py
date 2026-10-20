@@ -87,6 +87,7 @@ language_seed_migrations = (
     "20261015000007_seed_client_error_notice_language_key.sql",
     "20261015000014_seed_redirect_notice_language_keys.sql",
     "20261015000015_seed_cancel_changes_language_key.sql",
+    "20261015000018_seed_article_presentations_language_keys.sql",
     "20261015000021_seed_filterbar_display_and_clear_language_keys.sql",
 )
 # A setting an upgrade adds is added for a new installation by the same file, so
@@ -133,6 +134,7 @@ repair_schema_migrations = (
     "20261015000011_add_article_bundle_mutations.sql",
     "20261015000013_add_filterbar_preferences.sql",
     "20261015000016_seed_first_run_setup_code.sql",
+    "20261015000017_add_article_presentations_editor.sql",
     "20261015000020_add_row_group_heading_order_appearance_field.sql",
 )
 # Complete the physical actor columns after development tables and support functions,

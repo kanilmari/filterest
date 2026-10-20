@@ -259,6 +259,7 @@ var RouteProfiles = map[string]RouteProfile{
 	"system_table_tools.AssignPersonalViewFieldSetHandler":     LoginOnlyProfile,
 	"system_table_tools.ResetPersonalViewFieldSetHandler":      LoginOnlyProfile,
 	"system_table_tools.DeletePersonalViewFieldSetHandler":     LoginOnlyProfile,
+	"system_table_tools.ArticlePresentationsHandler":           AdminProfile,
 	"system_table_tools.SaveSiteViewFieldSetHandler":           AdminProfile,
 	"system_table_tools.AssignSiteViewFieldSetHandler":         AdminProfile,
 	"system_table_tools.ResetSharedViewFieldSetHandler":        AdminProfile,

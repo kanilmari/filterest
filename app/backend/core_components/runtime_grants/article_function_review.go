@@ -53,6 +53,11 @@ func readReviewedArticleTrigger(ctx context.Context, tx *sql.Tx, snapshot *Grant
 	return accepted, err
 }
 
+// The atomic editor adds app_save_article_presentations as an invoker wrapper.
+// It calls the reviewed projection service under the caller's transaction and
+// privileges; it adds no definer, trigger attachment, owner grant or policy edit.
+// Its administrator route is explicitly metadata-classified in route_classifier.go.
+
 // Only the two immutable JSON-literal defaults qualify, never an arbitrary
 // immutable wrapper. Invoker execution cannot borrow the owner's privileges.
 func reviewedArticleDefault(name, digest string) bool {

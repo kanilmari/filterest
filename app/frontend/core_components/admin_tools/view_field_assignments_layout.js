@@ -7,6 +7,7 @@ import {
     getDatasetViewLabelForLanguage,
     RENDERABLE_DATASET_VIEW_DEFINITIONS,
 } from "../table_views/dataset_view_registry.js";
+import { getArticlePresentationsCopy } from "./article_presentations_copy.js";
 import { createSymbolMaskElement } from "../../reusable_components/symbol_asset_resolver.js";
 import {
     createViewAssignmentTextElement as createTextElement,
@@ -66,8 +67,9 @@ export function createViewFieldAssignmentsLayout(
     for (const definition of RENDERABLE_DATASET_VIEW_DEFINITIONS) {
         const option = document.createElement("option");
         option.value = definition.viewKey;
-        option.dataset.langKey = definition.langKey;
-        option.textContent = getDatasetViewLabelForLanguage(definition.viewKey, language);
+        option.dataset.langKey = definition.viewKey === "article_view" ? "article_presentations_title" : definition.langKey;
+        option.textContent = definition.viewKey === "article_view" ? getArticlePresentationsCopy(language).title
+            : getDatasetViewLabelForLanguage(definition.viewKey, language);
         viewSelect.appendChild(option);
     }
     if (Array.from(viewSelect.options).some((option) => option.value === rememberedViewKey)) {
@@ -179,9 +181,10 @@ export function createViewFieldAssignmentsLayout(
     mixedWarning.hidden = true;
     controls.appendChild(mixedWarning);
     editor.appendChild(controls);
-    const articleDefaultsHost = document.createElement('div');
-    articleDefaultsHost.dataset.testid = 'article-section-defaults-host';
-    editor.appendChild(articleDefaultsHost);
+    const articlePresentationsHost = document.createElement('div');
+    articlePresentationsHost.className = 'view-field-assignments__article-presentations';
+    articlePresentationsHost.dataset.testid = 'article-presentations-host';
+    editor.appendChild(articlePresentationsHost);
 
     const fieldsHeader = document.createElement("div");
     fieldsHeader.className = "view-field-assignments__fields-header";
@@ -245,11 +248,15 @@ export function createViewFieldAssignmentsLayout(
     );
     saveButton.type = "button";
     saveButton.dataset.testid = "view-field-assignments-save";
-    actions.append(restoreButton, saveButton);
+    const cancelButton = createTextElement("button", "fw-btn", getArticlePresentationsCopy(language).cancel, "article_presentations_cancel");
+    cancelButton.type = "button"; cancelButton.hidden = true;
+    cancelButton.dataset.testid = "article-presentations-cancel";
+    actions.append(restoreButton, cancelButton, saveButton);
     editor.appendChild(actions);
 
     return {
-        articleDefaultsHost,
+        articlePresentationsHost,
+        cancelButton,
         fieldList,
         fieldSearch,
         fieldWarning,

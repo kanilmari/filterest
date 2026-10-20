@@ -28,7 +28,8 @@ import {
     getViewFieldAssignmentsCopy,
 } from "./view_field_assignments_copy.js";
 import { createViewGroupPermissionWarnings } from './view_group_permission_warnings.js';
-import { createArticleSectionDefaultsPanel } from "./article_section_defaults_panel.js";
+import { createArticlePresentationsEditor } from "./article_presentations_editor.js";
+import { ARTICLE_KEYS } from "./article_presentations_state.js";
 import { createViewFieldAssignmentsLayout } from "./view_field_assignments_layout.js";
 import {
     buildEditorFieldRows,
@@ -135,7 +136,8 @@ export async function generate_view_field_assignments_view(container) {
     let loadSequence = 0;
 
     const {
-        articleDefaultsHost,
+        articlePresentationsHost,
+        cancelButton,
         fieldList,
         fieldSearch,
         fieldWarning,
@@ -160,7 +162,10 @@ export async function generate_view_field_assignments_view(container) {
     });
 
     const permissionWarnings = createViewGroupPermissionWarnings(groupPermissionWarnings);
-    const articleDefaults = createArticleSectionDefaultsPanel({ host: articleDefaultsHost });
+    const isArticle = () => viewSelect.value === "article_view";
+    const articleEditor = createArticlePresentationsEditor({ host: articlePresentationsHost, nameInput, priorityInput, priorityRow,
+        saveButton, cancelButton, restoreButton, status, targetStatus, targetCopy: text, language, onBusy: setBusy });
+    cancelButton.addEventListener("click", () => articleEditor.cancel());
 
     function persistAdminState() {
         writeRememberedAdminState({
@@ -191,6 +196,7 @@ export async function generate_view_field_assignments_view(container) {
         groupPicker?.setDisabled?.(isBusy);
         saveButton.disabled = isBusy || !editorAssignment?.mutationAllowed || !hasVisibleField;
         restoreButton.disabled = isBusy || !editorAssignment?.mutationAllowed;
+        if (isArticle() && !isBusy) articleEditor.sync();
     }
 
     function currentGroupVariants() {
@@ -202,6 +208,7 @@ export async function generate_view_field_assignments_view(container) {
     }
 
     function hasValidVisibleFieldDraft() {
+        if (isArticle()) return true;
         if (editorAssignment?.mixed) {
             return everyGroupVariantHasVisibleColumns(currentGroupVariants());
         }
@@ -233,6 +240,7 @@ export async function generate_view_field_assignments_view(container) {
     }
 
     function renderFieldRows() {
+        if (isArticle()) { articleEditor.filter(fieldSearch.value); return; }
         fieldList.replaceChildren();
         const searchTerm = fieldSearch.value.trim().toLocaleLowerCase();
         fieldRows.forEach((field, index) => {
@@ -325,7 +333,7 @@ export async function generate_view_field_assignments_view(container) {
     }
 
     function applySelectedTarget() {
-        permissionWarnings.setContext({ groups, selectedGroupIDs, viewKey: viewSelect.value });
+        permissionWarnings.setContext({ groups, selectedGroupIDs, viewKey: isArticle() ? ARTICLE_KEYS : viewSelect.value });
         editorAssignment = resolveEditorAssignment(response, selectedGroupIDs);
         const memoryKey = fieldOrderMemoryKey(dataset, viewSelect.value, editorAssignment);
         fieldRows = buildEditorFieldRows(
@@ -345,8 +353,17 @@ export async function generate_view_field_assignments_view(container) {
             delete priorityInput.dataset.langKey;
         }
         fieldSearch.value = "";
-        renderFieldRows();
+        fieldList.hidden = isArticle();
         syncMutationControls();
+        if (isArticle()) {
+            fieldList.replaceChildren();
+            void articleEditor.load({ dataset, assignment: editorAssignment });
+        } else {
+            articleEditor.hide();
+            saveButton.textContent = text.save; saveButton.dataset.langKey = "view_field_assignments_save";
+            restoreButton.textContent = text.restore; restoreButton.dataset.langKey = "view_field_assignments_restore";
+            renderFieldRows();
+        }
     }
 
     function mountGroupPicker() {
@@ -392,12 +409,12 @@ export async function generate_view_field_assignments_view(container) {
         persistAdminState();
         mountGroupPicker();
         applySelectedTarget();
-        status.hidden = true;
-        status.dataset.langKey = "view_field_assignments_instructions";
+        if (!isArticle()) { status.hidden = true; status.dataset.langKey = "view_field_assignments_instructions"; }
     }
 
     async function loadAssignments({ selectAllGroups = false } = {}) {
         if (!dataset || !viewSelect.value) return;
+        articleEditor.hide();
         const requestSequence = ++loadSequence;
         status.hidden = false;
         status.textContent = text.loading;
@@ -430,6 +447,7 @@ export async function generate_view_field_assignments_view(container) {
     }
 
     saveButton.addEventListener("click", async () => {
+        if (isArticle()) { await articleEditor.save(); return; }
         if (!editorAssignment?.mutationAllowed) return;
         if (!hasValidVisibleFieldDraft()) {
             syncMutationControls();
@@ -507,6 +525,7 @@ export async function generate_view_field_assignments_view(container) {
     });
 
     restoreButton.addEventListener("click", async () => {
+        if (isArticle()) { articleEditor.defaults(); return; }
         if (!editorAssignment?.mutationAllowed) return;
         const operationDataset = dataset;
         const operationViewKey = viewSelect.value;
@@ -550,7 +569,6 @@ export async function generate_view_field_assignments_view(container) {
     });
 
     viewSelect.addEventListener("change", () => {
-        void articleDefaults.setContext(dataset, viewSelect.value);
         persistAdminState();
         if (dataset) void loadAssignments();
     });
@@ -560,7 +578,6 @@ export async function generate_view_field_assignments_view(container) {
         const selectedDataset = extractFirstSelectedTableName(event.detail?.selectedCategories);
         if (!selectedDataset || selectedDataset === dataset) return;
         dataset = selectedDataset;
-        void articleDefaults.setContext(dataset, viewSelect.value);
         void loadAssignments({ selectAllGroups: !hasRememberedGroupSelection });
     }, { signal: listenerController.signal });
 
@@ -594,7 +611,7 @@ export async function generate_view_field_assignments_view(container) {
     syncMutationControls();
     container.__cleanupListeners = () => {
         loadSequence += 1;
-        articleDefaults.destroy();
+        articleEditor.destroy();
         permissionWarnings.destroy();
         listenerController.abort();
         groupPicker?.destroy?.();

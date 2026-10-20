@@ -22,6 +22,7 @@ func TestRemainingActiveRouteClassifications(t *testing.T) {
 		operation Operation
 	}{
 		{72411, "/api/add_foreign_key", 0},
+		{99991, "/api/admin/view-field-settings/article-presentations", 0},
 		{72413, "/api/foreign_keys", 0},
 		{72556, "/api/update-table-folder", 0},
 		{72587, "/api/app/ai-chat/capabilities", 0},

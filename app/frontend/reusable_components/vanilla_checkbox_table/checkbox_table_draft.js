@@ -65,7 +65,7 @@ export function createCheckboxTableDraft(options, state, features) {
             const row = state.base.find(item => id(item) === cell.rowId);
             const column = state.columns.find(item => item.key === cell.columnKey);
             const key = JSON.stringify([cell.rowId, cell.columnKey]);
-            if (!row || !column || column.rowToggle || !column.editable || !features.supported(row, column) || seen.has(key)) {
+            if (!row || !column || column.rowToggle || !column.editable || !features.supported(row, column) || state.disabled(row, state.base.indexOf(row), column) || seen.has(key)) {
                 return 'invalid-cells';
             }
             seen.add(key);

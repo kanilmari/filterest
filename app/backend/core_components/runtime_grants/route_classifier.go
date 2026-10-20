@@ -20,15 +20,16 @@ var adminPilotRouteOperations = map[string]Operation{
 var metadataRoutes = map[string]bool{
 	// WO77: safe allowlisted public layout read; explicit route grant for shared
 	// edits; authenticated account-owned preferences. None grants dataset DML.
-	"/api/filterbar-section-layout":         true,
-	"/api/filterbar-section-layout/save":    true,
-	"/api/user-filterbar-preference":        true,
-	"/api/admin/dataset-default-view":       true, // AdminProfile; only registry.default_view_id, no generic grants.
-	"/api/front-page":                       true, // Delegates through the canonical dataset read; confers no dataset grant.
-	"/api/admin/front-page":                 true,
-	"/api/admin/front-page/article-buttons": true,
-	"/api/admin/front-page/background":      true,
-	"/api/favorites":                        true, // AdminProfile; account-owned metadata, no generic dataset grant.
+	"/api/filterbar-section-layout":                        true,
+	"/api/filterbar-section-layout/save":                   true,
+	"/api/user-filterbar-preference":                       true,
+	"/api/admin/view-field-settings/article-presentations": true, // Administrator bundle metadata only; no content grant.
+	"/api/admin/dataset-default-view":                      true, // AdminProfile; only registry.default_view_id, no generic grants.
+	"/api/front-page":                                      true, // Delegates through the canonical dataset read; confers no dataset grant.
+	"/api/admin/front-page":                                true,
+	"/api/admin/front-page/article-buttons":                true,
+	"/api/admin/front-page/background":                     true,
+	"/api/favorites":                                       true, // AdminProfile; account-owned metadata, no generic dataset grant.
 	// filterbar_ai_facade_handler.go:240,335 separately authorizes the canonical
 	// read route. The facade right alone adds no dataset/label/embedding reads.
 	"/api/app/ai-chat/query":                                  true,

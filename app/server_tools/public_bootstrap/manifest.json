@@ -216,6 +216,8 @@
     "20261015000014_seed_redirect_notice_language_keys.sql",
     "20261015000015_seed_cancel_changes_language_key.sql",
     "20261015000016_seed_first_run_setup_code.sql",
+    "20261015000017_add_article_presentations_editor.sql",
+    "20261015000018_seed_article_presentations_language_keys.sql",
     "20261015000020_add_row_group_heading_order_appearance_field.sql",
     "20261015000021_seed_filterbar_display_and_clear_language_keys.sql",
     "20261015000099_record_database_release_9_12_0.sql"
@@ -389,11 +391,11 @@
     "public.system_group_table_func_rights": 24,
     "public.system_lang_key_sources": 32,
     "public.system_lang_key_translations": 176,
-    "public.system_lang_keys": 1524,
+    "public.system_lang_keys": 1572,
     "public.system_languages": 5,
     "public.system_permission_actions": 7,
     "public.system_permission_categories": 4,
-    "public.system_schema_migrations": 212,
+    "public.system_schema_migrations": 214,
     "public.system_table_folders": 14,
     "public.system_table_views": 13,
     "public.system_user_group_memberships": 2,
@@ -405,10 +407,10 @@
   },
   "generated_files": {
     "server_tools/public_bootstrap/schema.sql": {
-      "sha256": "97eca2e17d8e4821767486f9e4232fb20734056f6fc86806d0d1942ad5451503"
+      "sha256": "c71dd887acb0471a1f8fb3ab5cb7090d496c5985db03e8790691aced107cb392"
     },
     "server_tools/public_bootstrap/seed_data.sql": {
-      "sha256": "76b4cb384be2c64c33f40cb2bacf167a786a8c512afa39badd98cef8fe75b25f"
+      "sha256": "9e66d911d6f67a15888977f027473961a76cc03260b9896857f0ce75d34e8f1d"
     }
   },
   "source_files": {
@@ -425,7 +427,7 @@
       "sha256": "235e4b887181e150bd436d035d2d268eb821d9e5d0b830b54eb444988f31d5d1"
     },
     "filterest/app/server_tools/public_bootstrap/generate_bootstrap.py": {
-      "sha256": "d01365e0b640da4994ed43f707b05520541e66ec3bb056f5e7f2d47399405db1"
+      "sha256": "bf8683952a8b4ef2676fb3231f5883d007c2404ae8528009e8ed2179ccea7ca1"
     },
     "filterest/app/server_tools/public_bootstrap/sql_identifier_validator.py": {
       "sha256": "748245fac4328a3608740c1b0fe948e6a09d6489d587143bd3b4c67064bea732"
@@ -1128,6 +1130,12 @@
     },
     "filterest/app/server_tools/migrations/20261015000016_seed_first_run_setup_code.sql": {
       "sha256": "d5573b95644acea6168e73d1c020ddf91268d2ca9ac7b50a08fdd33f602a05d4"
+    },
+    "filterest/app/server_tools/migrations/20261015000017_add_article_presentations_editor.sql": {
+      "sha256": "268afa1e3c0c50d9f3c67e16146c4f3700928a7c5841068695b4aedc097e75e6"
+    },
+    "filterest/app/server_tools/migrations/20261015000018_seed_article_presentations_language_keys.sql": {
+      "sha256": "58c89467e9ef489a89478736155fa38ff02861289a8693854efe10b280d75e6b"
     },
     "filterest/app/server_tools/migrations/20261015000020_add_row_group_heading_order_appearance_field.sql": {
       "sha256": "99450690b81c7c60f0d3bd34c11da3c6382bebf460a6c68614d8de0722dec16b"

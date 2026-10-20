@@ -57,3 +57,15 @@ test('a failed snapshot shows uncertainty rather than declaring a grant missing'
     await vi.waitFor(() => expect(host.querySelector('[data-lang-key="view_group_permissions_unavailable"]')).not.toBeNull());
     expect(host.querySelector('[data-group-id]')).toBeNull();
 });
+
+test('one family snapshot identifies missing canonical IFAV and Page grants without changing single-view behavior', async () => {
+    const family = ['article_view','image_first_view','image_first_page_view'];
+    expect(groupsMissingViewPermission(groups,['3'],family,[grant])).toEqual([{...groups[1],missingViews:['image_first_view','image_first_page_view']}]);
+    const rights = family.map(key => ({...grant,function_route:`/ui/view/${key}`}));
+    expect(groupsMissingViewPermission(groups,['3'],family,rights)).toEqual([]);
+    vi.mocked(endpoint_router).mockResolvedValue([grant]);
+    const host=document.body.appendChild(document.createElement('div'));
+    controller=createViewGroupPermissionWarnings(host);controller.setContext({groups,selectedGroupIDs:['3'],viewKey:family});
+    await vi.waitFor(()=>expect(host.textContent).toContain('IFAV'));
+    expect(endpoint_router).toHaveBeenCalledTimes(1);
+});

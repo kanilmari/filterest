@@ -2,6 +2,7 @@
 // Verifies the group/site field-assignment administrator without changing saved assignments.
 // Covers real navigation, dataset loading, localization, and explicit light/dark theme overrides.
 
+import { ARTICLE_EDITOR_ROUTE, ARTICLE_VIEWS, articleGet, articlePost, withArticleFixture, openArticleEditor } from '../helpers/article-presentations-fixture';
 import { expect, test, type Page } from '@playwright/test';
 import { expandAdminTreeFolder, openAdminTreeButton } from '../helpers/admin-navigation';
 import { loadCredentials, login } from '../helpers/auth';
@@ -228,11 +229,18 @@ test('keeps an exact group target across view changes and closes its portal on n
   expect(editorWidth).toBeLessThanOrEqual(1200.5);
 
   const viewSelect = page.locator('[data-testid="view-field-assignments-view"]');
-  const nextView = await viewSelect.locator('option').evaluateAll((options, currentValue) => (
+  const nextView = await viewSelect.locator('option').evaluateAll((options, { currentValue, articleViews }) => (
     options.map((option) => (option as HTMLOptionElement).value)
-      .find((value) => value !== currentValue) || ''
-  ), await viewSelect.inputValue());
+      .find((value) => value !== currentValue && !articleViews.includes(value)) || ''
+  ), { currentValue: await viewSelect.inputValue(), articleViews: ARTICLE_VIEWS });
   expect(nextView).not.toBe('');
+
+  // Article settings intentionally replace the field list with their combined
+  // table. Returning to a listing view must keep this same exact group target.
+  await viewSelect.selectOption('article_view');
+  await expect(page.getByTestId('article-presentations-table')).toBeVisible();
+  await expect(page.getByTestId('view-field-assignments-field-list')).toBeHidden();
+  await expect(groupInput).toHaveValue(selectedGroup.label);
   await viewSelect.selectOption(nextView);
   await expect(page.locator('[data-testid="view-field-assignments-field-list"] > li').first())
     .toBeVisible({ timeout: 15000 });
@@ -439,4 +447,41 @@ test('frames the application shell sides only when an ultra-wide viewport leaves
 
   await page.setViewportSize({ width: 2400, height: 1000 });
   expect((await readShellStyles())?.borderWidths).toEqual(['0px', '0px', '0px', '0px']);
+});
+
+// Real mixed article targets extend the existing T15 group workflow. Existing
+// groups' rights and the owner's site settings are never mutated by this fixture.
+test('K383MixedTargetsRecovery', async ({ page }) => {
+  test.setTimeout(120_000); // Dataset + two groups, reload/navigation and teardown passed on desktop only with 120s (d246).
+  await withArticleFixture(page, async ({ dataset, groups }) => {
+    const site = await articleGet(page, dataset);
+    const seeded = structuredClone(site);
+    seeded.targets = groups.map((group_id, index) => ({ ...structuredClone(site.targets[0]), scope: 'group', group_id,
+      assignments: ARTICLE_VIEWS.map(view_key => ({ view_key, field_set_id: 0, name: `${dataset}_g${index}`, priority: index + 3 })),
+    }));
+    // Read absent exact targets for their revision dependencies before creating them.
+    const absent = await articleGet(page, dataset, groups.map(id => `group:${id}`).join(','));
+    seeded.revisions = absent.revisions;
+    seeded.targets[1].members.reverse();
+    seeded.targets[1].members[0].values.article_view.visible = false;
+    const saved = await articlePost(page, seeded); expect(saved.status(), await saved.text()).toBe(200);
+    await openArticleEditor(page, dataset, groups);
+    const first = page.locator('.vct-row[data-row-id^="field:"]').first();
+    const moved = await first.getAttribute('data-row-id');
+    await first.locator('[data-delta="1"]').click();
+    await page.reload({ waitUntil: 'domcontentloaded' }); await openArticleEditor(page, dataset, groups);
+    await expect(page.getByTestId('view-field-assignments-status')).toHaveText(/Draft recovered|Luonnos palautettu|草稿已恢复/);
+    await expect(page.locator('.vct-row[data-row-id^="field:"]').nth(1)).toHaveAttribute('data-row-id', moved!);
+    // A second writer changes priority on just these owned groups. The recovered
+    // browser draft still carries the old revisions; Save must refuse it atomically.
+    const current = await articleGet(page, dataset, groups.map(id => `group:${id}`).join(','));
+    current.targets[0].assignments.forEach((link: any) => { link.priority += 10; });
+    const concurrent = await articlePost(page, current); expect(concurrent.status()).toBe(200);
+    const conflict = page.waitForResponse(response => response.url().includes(ARTICLE_EDITOR_ROUTE) && response.request().method() === 'POST');
+    await page.getByTestId('view-field-assignments-save').click(); expect((await conflict).status()).toBe(409);
+    await expect(page.getByTestId('view-field-assignments-status')).toHaveText(/Settings changed|Asetukset ovat muuttuneet|设置已更改/);
+    const actual = await articleGet(page, dataset, groups.map(id => `group:${id}`).join(','));
+    expect(actual.targets.map((target: any) => target.members)).toEqual(current.targets.map((target: any) => target.members));
+    expect(await page.evaluate(() => Object.keys(localStorage).some(key => key.startsWith('article-presentations-v2:')))).toBe(true);
+  }, true);
 });
