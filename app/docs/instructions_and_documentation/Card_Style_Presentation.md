@@ -9,16 +9,18 @@ Filterest has one ordinary card view with two presentation styles: **Glowy**
 and **Plain**. The service catalog uses this same renderer, selection and article
 opening path. Its moderation controls do not define another card view.
 
-Open the appearance palette from a dataset hero. Every opening selects
+The [dataset appearance guide](Frontend_Dataset_Appearance.md) owns the complete
+setting inventory, editing rights and palette lifecycle. Open the appearance
+palette from a dataset hero. Every opening selects
 **This tab** (Tämä välilehti) first in the native scope radio group:
 
 - **This tab** shows the tab's cover/background first, then the nine card,
   article and header settings that may override site defaults. Their badges
   distinguish **Site default** from **Override**. **Use site default** stages
   removal until **Save this tab**; equality, zero and false remain explicit.
-  The seven site-wide rows appear last, with readable saved values and an
+  The eight site-wide rows appear last, with readable saved values and an
   authorized action to switch to **All datasets**.
-- **All datasets** edits the nine defaults and the seven site-wide settings.
+- **All datasets** edits the nine defaults and the eight site-wide settings.
   It has no cover controls. **Save all datasets** patches this scope alone.
   Existing card-control rights remain required; a missing site right leaves
   values readable, explains the limitation and disables editing/Save.
@@ -41,7 +43,7 @@ and wide field tables scroll horizontally without moving Edit or Save off-screen
 | Dataset style | `system_dataset_appearance.overrides`, key `shared.card_style_variant` | Absent key inherits the site |
 | Dataset columns | `system_dataset_appearance.overrides`, key `shared.card_detail_columns` | Absent key inherits the site |
 
-The version-two public API exposes seven `site_values` and nine `defaults`;
+The version-two public API exposes eight `site_values` and nine `defaults`;
 cover values belong to each dataset and are excluded. These site
 choices are shared by light and dark themes. Browser metadata is a projection
 of these server settings, not another authority. Unsaved preview values remain

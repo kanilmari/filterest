@@ -104,15 +104,17 @@ button is 24 × 24 px and Clear all has no 44 px minimum, so a single-line chip 
 on any coarse pointer both controls keep real 44 × 44 px touch targets, giving
 46 px single-line chips. The K282 size values live together as custom properties
 in the row's stylesheet block; the media query only chooses the touch values.
-The palette's Dataset header group offers Remove button: Before the label / After
-the label. This site-wide, theme-independent choice is stored as
-`dataset_cover_theme.shared.active_filter_remove_side` (`start` / `end`, default
-`start`), with Finnish/English labels in the palette's own copy dictionary. It needs
-no language keys. Appearance fields also participate in database validation;
+The palette's Dataset tabs group offers Remove button: Before the label / After
+the label. This site-wide, theme-independent choice
+(`shared.active_filter_remove_side`: `start` / `end`, default `start`) cannot be
+overridden by a tab. The [dataset appearance guide](Frontend_Dataset_Appearance.md)
+owns its storage, editing rights and revision-protected save contract. The
+palette's own copy dictionary supplies its translated labels.
+Appearance fields also participate in database validation;
 new fields require a versioned rules migration and regenerated bootstrap/snapshot. Preview and reset reorder
 existing labels in real DOM order, preserving the remove button's focus and
-listeners without rebuilding filters or sending requests. Legacy saves omitting
-the field preserve the saved side under the upsert's row lock. Tags continue
+listeners without rebuilding filters or sending requests. Site patches omitting
+the field preserve the saved side. Tags continue
 to move into an open article's sidebar, whose explicit left alignment stays. The shared count publishes its numeric
 value so zero-result guidance never parses translated labels or requests new
 counts. Guidance is shown only for zero results with selected categories.

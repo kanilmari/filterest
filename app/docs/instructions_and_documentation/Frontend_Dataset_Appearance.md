@@ -1,82 +1,265 @@
-<!-- Frontend_Dataset_Appearance.md: explains the dataset appearance definition and its contracts. -->
-<!-- Connects the shared definition, Go and JavaScript validators, storage and appearance APIs. -->
-<!-- Exists to keep dataset appearance guidance aligned with the product. -->
+<!-- Frontend_Dataset_Appearance.md: explains dataset and site appearance ownership. -->
+<!-- Connects the shared definition, scoped palette, storage and revision-protected APIs. -->
+<!-- Exists to keep appearance guidance aligned with the shipped product. -->
 <!-- Part of the Frontend Guide; Frontend_Guide.md lists every focused frontend guide. -->
 
 # Frontend Guide: Dataset Appearance
 
-Part of the [Frontend Guide](Frontend_Guide.md); this section was formerly part of section 2, UI Configuration. Card styles and their palette controls are described in [Card_Style_Presentation.md](Card_Style_Presentation.md).
+Part of the [Frontend Guide](Frontend_Guide.md); this section was formerly part of section 2, UI Configuration. Card rendering and field layout are described in [Card_Style_Presentation.md](Card_Style_Presentation.md). The [Home palette](Frontend_Home_Page.md) edits Home's separate presentation settings.
 
 ## Dataset appearance definition
 
-Version-one runtime appearance retains the `dataset_cover_theme_config` shape:
-`light`, `dark` and `shared`; `shared` means theme-independent, never storage scope.
-The browser imports and Go embeds `frontend/shared/dataset_appearance/definition.json`.
-Each of its 45 canonical paths has one `place`: 28 `tab_only` cover/hero values,
-eight `site_only` brand/navigation/category-heading/remove-side values, or nine `site_default`
-card/caption/header-spacing values that a tab may override. Inventories and flat
-defaults derive from that metadata. Separate `ValidateTabValuesV2`,
-`ValidateSiteValuesV2`, `ValidateDefaultsV2` and `ValidateOverridesV2` (Go) and
-`isValidDatasetAppearance*V2` (JavaScript) check complete groups or sparse overrides.
-Both themes' masks are checked within one complete tab map. Version-one consumers
-remain unchanged. Types, bounds and choices stay authoritative; slider steps are
-UI hints, so valid off-step numbers remain accepted without rounding.
+Appearance belongs either to one dataset tab or to the whole site. **This tab**
+means the dataset identified by its immutable UID, shared by everyone viewing
+that dataset; it is not a personal browser-tab preference.
 
-“Show cover photo” aliases the active theme's `image_opacity`; it stores no boolean.
-The compatibility-only `shared.image_blur` borrows the light blur rule and remains
-copied from light blur by palette saves. Go stored reads inherit that legacy value
-only when a theme blur is absent; explicit zero wins. Browser snapshots retain
-their existing more permissive read guard and normalization. Strict complete and
-leaf validators in `dataset_appearance/validator.js` mirror the embedded Go policy.
-Paired examples live in `testing/shared_contracts/dataset_appearance{,_v2}_examples.json`.
-Site handlers, persistence, validation and the stored shape are separated into
-`site_presentation_settings.go`, `site_presentation_store.go`,
-`site_presentation_validator.go` and `dataset_cover_theme_config.go`.
+The browser imports and Go embeds the same
+[definition](../../frontend/shared/dataset_appearance/definition.json).
+Its `place` metadata assigns every canonical path exactly one storage place:
 
-Dataset appearance is stored in `system_dataset_appearance`: one sparse canonical-path
-map, schema version and durable revision per immutable dataset UID. Zero, false
-and a value equal to the shared choice remain overrides; null is refused and
-removing the last override retains the empty revision row. Renames preserve it;
-dataset deletion cascades it. The unregistered internal table has no ordinary
-runtime grants and generic writes are refused.
+- **Tab-only** (`tab_only`): complete cover/background and hero values owned by
+  the tab, with no site inheritance.
+- **Site-wide only** (`site_only`): one administrator-managed value for the
+  whole site, with no per-tab override.
+- **Site default + tab override** (`site_default`): an administrator-managed
+  default with an optional explicit value for each tab.
 
-Authorized `/api/get-results` responses include `dataset_appearance` with
-`dataset_uid`, `schema_version`, nested `shared` and `effective` values, sparse
-`overrides`, all 45 canonical-path `sources` (`shared` or `override`),
-`shared_version` and `version`. Both scopes and revisions are read in one SQL
-statement after existing dataset read checks, including empty results. Mutable
-appearance projections are refreshed outside the schema cache. The public site
-settings endpoint continues to return shared values only, now with `version`.
+The nested rendering groups `light`, `dark` and `shared` describe theme
+selection. `shared` means theme-independent; it does not mean site-wide.
+Storage and API maps use flat canonical paths such as `light.image_opacity`.
 
-Administrator POST `/api/admin/dataset-appearance` accepts
-`{dataset_uid,set,unset,shared_version,version}` and returns that persisted
-snapshot. Site presentation POST keeps its complete settings shape and requires
-`version`. The shared token hashes stored JSON plus its durable update stamp;
-`none` covers an absent shared row. Every shared writer takes the same exclusive
-advisory lock; every override/compatibility writer takes its shared form before
-the dataset advisory lock, registry key-share lock and override row lock.
-Missing/stale revisions receive translated 409 refusals; invalid leaves receive
-translated 400 refusals. Drafts retain their loaded tokens after refusal.
+### Setting places
 
-Legacy nullable card style and detail-column choices were migrated as explicit
-overrides, including equality with the shared value. The physical registry
-columns and their editable metadata are retired. Results/card APIs keep nullable
-`card_style_variant`/`card_detail_columns` projections from this map. Both card
-editors use the new authority. Compatibility card writes and generic metadata
-card writes require loaded `shared_version` and `version`; omitted fields are
-preserved and null removes the corresponding override. Generic shared-setting
-creation, editing, renaming and deletion are refused in favour of the dedicated
-revision-protected administrator endpoint. Column visibility/media remain in
-their own stores. Full scoped rendering and scope palette controls are later slices.
+This inventory is expanded from the definition's theme owners, fields and
+`place` metadata: 45 canonical paths, comprising 28 tab-only values, nine
+site defaults and eight site-only values. Each theme path below is independent;
+the `shared.*` rows apply in both themes. Bounds, choices and initial values
+remain authoritative in the definition rather than in this table.
 
-The version-one shared writer validates shared values without rewriting overrides.
-Its override writers still accept only `shared.card_style_variant` and
-`shared.card_detail_columns`; stored legacy paths resolve under the full canonical
-read contract, including merged masks. K289–K291/K298 settle future ownership:
-cover values belong to tabs, so site changes cannot invalidate another tab's masks.
-Slice 3b adds ownership metadata and validators only. Slice 5 activates the new
-storage/API contracts and permits overrides for exactly the nine site defaults;
-it refuses site-only and tab-only overrides, aliases and derived blur.
+| Setting | Canonical paths | Place |
+| --- | --- | --- |
+| Oval mask enabled | `light.oval_enabled`, `dark.oval_enabled` | Tab-only |
+| Oval width | `light.oval_width`, `dark.oval_width` | Tab-only |
+| Oval height | `light.oval_height`, `dark.oval_height` | Tab-only |
+| Oval vertical position | `light.oval_position_y`, `dark.oval_position_y` | Tab-only |
+| Mask centre opacity | `light.center_opacity`, `dark.center_opacity` | Tab-only |
+| Mask middle opacity | `light.mid_opacity`, `dark.mid_opacity` | Tab-only |
+| Mask edge opacity | `light.edge_opacity`, `dark.edge_opacity` | Tab-only |
+| Mask centre stop | `light.center_stop`, `dark.center_stop` | Tab-only |
+| Mask middle stop | `light.mid_stop`, `dark.mid_stop` | Tab-only |
+| Mask edge stop | `light.edge_stop`, `dark.edge_stop` | Tab-only |
+| Cover image opacity / Show cover photo | `light.image_opacity`, `dark.image_opacity` | Tab-only |
+| Cover overlay opacity | `light.overlay_opacity`, `dark.overlay_opacity` | Tab-only |
+| Background image blur | `light.image_blur`, `dark.image_blur` | Tab-only |
+| Hero extra height | `shared.hero_extra_height` | Tab-only |
+| Hero bottom fade | `shared.hero_bottom_fade` | Tab-only |
+| Card image width | `shared.card_image_width` | Site default + tab override |
+| Card image presentation | `shared.card_image_presentation` | Site default + tab override |
+| Article image caption position | `shared.article_image_caption_position` | Site default + tab override |
+| All fields or only filled fields | `shared.card_show_all_fields` | Site default + tab override |
+| Label/value layout | `shared.label_value_layout` | Site default + tab override |
+| Card style | `shared.card_style_variant` | Site default + tab override |
+| Card description lines | `shared.card_description_lines` | Site default + tab override |
+| Card detail columns | `shared.card_detail_columns` | Site default + tab override |
+| Space above dataset header icon | `shared.filterbar_content_top_space` | Site default + tab override |
+| Active navigation tab fade | `shared.active_tab_fade` | Site-wide only (administrator) |
+| Active navigation tab maximum opacity | `shared.active_tab_max_opacity` | Site-wide only (administrator) |
+| Active navigation tab glow intensity | `shared.active_tab_glow_intensity` | Site-wide only (administrator) |
+| Active navigation tab glow width | `shared.active_tab_glow_width` | Site-wide only (administrator) |
+| Active navigation tab glow blur | `shared.active_tab_glow_blur` | Site-wide only (administrator) |
+| Filter chip remove-button side | `shared.active_filter_remove_side` | Site-wide only (administrator) |
+| Category heading order | `shared.row_group_heading_order` | Site-wide only (administrator) |
+| Brand colour | `shared.brand_color` | Site-wide only (administrator) |
+
+**Brand colour** and the **active-tab navigation highlight** are site-wide-only
+examples: selecting another dataset cannot give it a different brand or change
+its navigation highlight. The active-tab controls style navigation, not the
+tab's cover. Category heading order is another site-only setting; see below.
+
+**Show cover photo** aliases the active theme's `image_opacity`; there is no
+stored visibility boolean. The compatibility-only `shared.image_blur` derives
+from `light.image_blur` and is excluded from the 45 canonical paths. It is not
+another independently editable setting or storage place.
+
+### Resolution and new tabs
+
+For a setting that permits overrides, resolution is **tab override → site
+default → definition default**. Presence determines an override: zero, false
+and a value equal to today's site default are still explicit overrides. A later
+site change affects only tabs without that override. Removing the key restores
+inheritance; JSON null is not an override value.
+
+Tab-only settings resolve from the tab's complete `tab_values` map. They do
+not inherit site values. Site-only settings resolve from `site_values`; no tab
+map can replace them. An absent site setting uses the definition defaults;
+the server treats malformed saved maps as errors.
+
+A new dataset without an appearance row reads all 28 tab-only definition
+defaults and an empty override map, without creating storage. Its first
+successful appearance save stores the complete tab map. Thus its cards,
+captions and header spacing initially follow current site defaults, while its
+cover starts from the definition. During the three-place migration, existing
+datasets instead received a copy of the then-current normalized site cover,
+preserving their visible appearance and existing card overrides.
+
+The [Go definition and validators](../../frontend/shared/dataset_appearance/definition.go)
+and their [JavaScript twins](../../frontend/shared/dataset_appearance/validator.js)
+validate complete tab/site/default groups and sparse overrides. Mask opacity
+and stop sequences must be ascending within each theme of the same tab. Site
+changes cannot invalidate another tab's masks. Numeric slider steps are UI
+hints; valid off-step values are accepted without rounding.
+
+### Palette scopes and section order
+
+The dataset palette opens in **This tab** mode every time, including after
+closing it in **All datasets**. A native radio group switches scopes. Its
+collapsible toolboxes follow this order:
+
+1. **Background and cover image**: the tab's own values, with separate Light
+   and Dark controls, Background image blur and Cover image mask/opacity/hero
+   controls.
+2. **Card layout**: the seven overridable card settings.
+3. **Article images**: the overridable caption position.
+4. **Dataset header**: the overridable space above the header icon.
+5. **Dataset tabs**: the eight site-only values, readable but not editable here.
+
+**All datasets** hides cover controls and tab editor actions. It edits the nine
+site defaults in the same card/article/header order, followed by site-only
+values. Toolbox open/closed choices are remembered in local storage. The scope
+switch always opens on This tab regardless of those choices.
+
+In This tab, overridable settings display **Site default** or **Override**.
+**Use site default** removes the override from the draft; **Save this tab**
+persists that removal. Tab-only rows have no inheritance action. Site-only
+rows display **Site-wide**, the current saved value, and **Edit in All
+datasets** when permitted; that action switches scope and opens the toolbox.
+A missing right keeps values readable with an explanation and disabled editing
+or Save for the affected scope.
+
+**Edit tab images and header** and **Edit card fields** open the existing
+editors with this dataset selected. These editors save media/header and field
+metadata through their own flows; the appearance draft survives their use.
+
+### Drafts, reset and phone layout
+
+Tab and site scopes keep independent drafts. Switching scope retains both but
+previews only the selected scope. **Save this tab** or **Save all datasets**
+saves that scope alone. Closing, clicking outside or pressing Escape hides the
+palette and keeps its draft and preview; Close and Escape return focus to its
+trigger. Reopening selects This tab and activates its preview. Destroying the
+palette releases both preview owners.
+
+**Reset to saved values** discards the selected scope's unsaved changes and
+restores its saved baseline and the panel geometry. It does not reset all tabs
+or replace saved values with factory defaults. Conflicts and reload refusals
+keep the draft and its loaded revision tokens for review; reload and review
+before saving again. Edits made while a save is pending survive and adopt the
+successful save's revisions. A successful site save made in this palette also
+updates its tab draft's matching site token; unrelated stale tokens still
+conflict. Language changes update copy while retaining focus, drafts and scope.
+
+The shared [palette shell](../../frontend/core_components/admin_tools/presentation_palette_shell.js)
+and [stylesheet](../../frontend/core_components/admin_tools/presentation_palette.css)
+provide a draggable, resizable panel with a scrolling body. At widths up to
+600 px, it fills the viewport width apart from 12 px side margins, uses 97dvh
+height and one-column controls. The scope switch and Save/Reset sit outside
+the scrolling body; controls have 44 px minimum touch targets. Surfaces follow
+the application's theme variables. The separate media/field editors stack their
+dataset tree above the fields on phones; see [Card styles](Card_Style_Presentation.md).
+
+### Editing rights and server refusals
+
+Both appearance write endpoints use the administrator pipeline profile:
+authentication, CSRF, route access control, administrator status and a request
+transaction remain required. Access control follows the route's registered
+permission scope: function-level, or dataset-scoped using the requested UID
+when configured that way. New registrations of these handlers default to
+function-level access. The saver checks that the target dataset still exists.
+Ordinary dataset read or row-edit access alone does not grant appearance editing.
+
+The palette's [capability reader](../../frontend/core_components/admin_tools/dataset_appearance_capabilities.js)
+derives separate tab and site editing rights. Mounting requires the appearance
+palette feature flag and dataset-header configuration permission. Tab editing
+also requires the dataset-appearance API right; site editing requires the site
+presentation API right. Card controls additionally require card-visibility
+permission in either scope. Media/header and card-field actions keep their
+existing permissions. These UI capabilities do not grant server access.
+
+The server refuses:
+
+- Site-only fields in any tab override, including brand colour and navigation
+  highlight values. Override `set` and `unset` accept only the nine defaults.
+- Non-tab paths in `tab_set`, or attempts to unset tab-only values into
+  inheritance. The site endpoint accepts only site-only/default paths, never
+  tab cover settings.
+- Unknown paths, aliases, derived blur, null values, wrong types, out-of-range
+  values, invalid choices and masks out of order. A path cannot be both set and
+  unset in one patch. These validation refusals use HTTP 400.
+- Obsolete save formats, with translated reload feedback (400), and missing or
+  stale revision tokens, with translated conflict feedback (409). Saving to a
+  deleted dataset is refused (404).
+- Generic row writes to the private appearance table or generic creation,
+  editing, renaming or deletion of the site's appearance configuration row;
+  dedicated revision-protected APIs own these writes.
+
+### Storage, API and revisions
+
+| Store | Ownership and source |
+| --- | --- |
+| `system_config.json_value`, key `dataset_cover_theme_config` | Schema version 2, `site_values` and `defaults`. Reads fill absent keys from the definition; storage omits the default category heading order (see below). [Site value decoder](../../backend/core_components/dataset_appearance_store/site_appearance_values.go) and [site persistence](../../backend/core_components/system_table_tools/site_presentation_store.go). No cover values. |
+| `system_dataset_appearance` | One row per immutable `system_db_tables.table_uid`: schema version 2, complete `tab_values`, sparse `overrides` and a positive `revision`; [tab reader/saver](../../backend/core_components/dataset_appearance_store/dataset_appearance_saver.go). Rename preserves ownership; dataset deletion cascades the row. |
+
+The tab table is internal, unregistered and excluded from ordinary runtime
+grants. Removing its last override retains the row with an advanced revision;
+one revision covers both tab values and overrides. The
+[resolver](../../backend/core_components/dataset_appearance_store/dataset_appearance_resolver.go)
+builds nested `light`/`dark`/`shared` effective values for rendering; that
+projection is not another storage authority.
+
+| Endpoint | Contract and source |
+| --- | --- |
+| `GET /api/get-results` | After dataset read authorization, includes `dataset_appearance`, even for empty results; [results handler](../../backend/core_components/dynamic_table_tools/dtt_1_row_crud/dtt_1_row_read/get_results.go). |
+| `GET /api/site-presentation-settings` | Public site-only values and defaults, schema version and site revision; excludes tab values/overrides. Also returns the separate table-line and article timestamp settings. [Site handlers](../../backend/core_components/system_table_tools/site_presentation_settings.go). |
+| `GET/POST /api/admin/site-presentation-settings` | Administrator read or patch: `{schema_version:2,version,set}`, plus optional `table_cell_max_lines` and `row_article_timestamp_display_mode`. Omitted settings are preserved; returns saved site settings. [Patch validator](../../backend/core_components/system_table_tools/site_presentation_validator.go). |
+| `POST /api/admin/dataset-appearance` | `{schema_version:2,dataset_uid,tab_set,set,unset,shared_version,version}`; patches tab-owned values and default overrides atomically, returning the persisted snapshot. [Tab handler](../../backend/core_components/system_table_tools/dataset_appearance_handler.go). |
+
+An authorized snapshot contains `dataset_uid`, `schema_version`, `tab_values`,
+`site_values`, `defaults`, `overrides`, nested `effective`, `sources`,
+`shared_version` and `version`. Sources cover all 45 paths with `tab`, `site`,
+`default` or `override`. Both scopes and revisions are read in one SQL
+statement after dataset authorization, outside the mutable schema cache; see
+[snapshot and revision handling](../../backend/core_components/dataset_appearance_store/shared_appearance_revision.go).
+
+Treat both revision tokens as opaque. The tab token is its durable increasing
+revision, or `none` before a row exists. The site token hashes stored JSON and
+its update stamp, or is `none` for absent storage. Every tab save checks both;
+every site save checks its loaded site token and preserves tab values and
+overrides. Writers take the shared-setting advisory lock first: exclusive for
+site writes, shared for tab writes. Tab writes then take the dataset advisory
+lock, registry key-share lock and appearance-row lock, including first saves.
+
+Saves run inside the caller-owned request transaction. A refusal rolls it back;
+rolling back a tab save also rolls back its revision. Revisions are concurrency
+guards, not saved appearance history. To undo an unsaved edit, use Reset or
+leave the surface so preview ownership is released. To reverse a committed
+choice, load current revisions and save the earlier values again; to restore
+inheritance, unset the relevant default override. The API has no appearance
+history/restore endpoint.
+
+The [schema extension](../../server_tools/migrations/20261009000060_extend_dataset_appearance_three_places.sql)
+and [backfill](../../server_tools/migrations/20261009000061_backfill_dataset_appearance_three_places.sql)
+separate storage setup from copying existing covers. The backfill checks
+unchanged effective appearance, preserves overrides, advances migrated row
+revisions once and creates missing rows at revision 1 before removing the old
+active site cover.
+
+Legacy nullable `card_style_variant` and `card_detail_columns` metadata are
+projections of overrides, not additional authorities; their physical registry
+columns were retired. Compatibility card and generic metadata writers use the
+same saver and both revisions, preserve omitted fields, and translate null to
+removing the corresponding override. Column visibility and media stay in their
+own stores. See [Card styles](Card_Style_Presentation.md) for these adapters and
+scoped rendering.
 
 ### Category heading order
 
