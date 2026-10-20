@@ -22,6 +22,7 @@ Dates are the local (Europe/Helsinki) date on which the version was published.
 
 ## [Unreleased]
 
+- **Page image-first pilot** — Explicit row links and Home article buttons can opt into `image_first_page_view`, with a contained image inside the text column, image-free rows, Page-scoped access checks and shared Back/Forward/close behavior. Existing openers and Home defaults stay unchanged. **Rollback:** 9.5.0's strict reader rejects a stored `view` field, so rolling back hides all Home article buttons (fail-closed) until they are re-saved without Page and without the `view` field.
 - **Side menu history buttons** — Disabled back and forward buttons show the normal cursor intended for them instead of "not allowed"; the layering browser test now follows the menu's neutral opening cursor.
 - **Article upgrade approval evidence (K388)** — Add read-only BEFORE/AFTER reports, value-free owner difference lists and an offline SHA256-approved exact-difference gate.
 

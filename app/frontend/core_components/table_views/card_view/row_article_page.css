@@ -1,0 +1,54 @@
+/* row_article_page.css
+ * Contains the pilot's optional image within the existing IFAV text panel.
+ * Connects the opt-in Page class to application theme and responsive tokens.
+ * Keeps the full-height IFAV stage and every ordinary article unchanged.
+ */
+.image_first_page_view .image_first_view_article_content {
+    box-sizing: border-box;
+    min-width: 0;
+    max-width: 100%;
+    overflow-wrap: anywhere;
+    color: var(--text_color);
+    background: var(--bg_color);
+}
+
+.row_article_page_image {
+    min-width: 0;
+    max-width: 100%;
+}
+
+.row_article_page_image > img[hidden] {
+    display: none;
+}
+
+.row_article_page_image > img:not([hidden]) {
+    display: block;
+    width: 100%;
+    height: auto;
+    max-height: min(40dvh, 360px);
+    object-fit: contain;
+}
+
+@media (width <= 480px) {
+    .image_first_page_view .image_first_view_article_content {
+        width: 100%;
+        margin-inline: 0;
+    }
+
+    .image_first_page_view .big_card_details_container {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr);
+        columns: 1;
+        min-width: 0;
+    }
+
+    .image_first_page_view .big_card_details_container .two_line_field {
+        flex-direction: column;
+        align-items: stretch;
+        min-width: 0;
+    }
+
+    .image_first_page_view .big_card_details_container .two_line_label {
+        flex-basis: auto;
+    }
+}

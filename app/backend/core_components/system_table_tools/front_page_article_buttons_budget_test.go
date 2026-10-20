@@ -40,7 +40,7 @@ func TestFrontPageArticleButtonsSlowOmissionsKeepBoxesAndPartial(t *testing.T) {
 					}
 					value := config.EmptyFrontPageArticleButtons()
 					if configured {
-						value.Items = []config.FrontPageArticleItem{{102, "87654321", true}, {102, "87654322", true}}
+						value.Items = []config.FrontPageArticleItem{{102, "87654321", true, ""}, {102, "87654322", true, ""}}
 						if slow == "setting" {
 							now = now.Add(4 * time.Second)
 						}

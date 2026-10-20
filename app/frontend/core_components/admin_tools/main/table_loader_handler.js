@@ -165,11 +165,11 @@ export async function load_tables(options = {}) {
         // The image-first route owns its row and never restored the ordinary
         // article's reading position, so only an ordinary article row counts.
         const requestedArticleView = resolveDatasetViewSelectionTarget(new URLSearchParams(location.search).get('view'));
-        const articleDenied = Boolean(deepLinkedRowId || ['article_view', 'image_first_view'].includes(requestedArticleView))
-            && !canOpenArticleView();
+        const articleDenied = Boolean(deepLinkedRowId || ['article_view', 'image_first_view', 'image_first_page_view'].includes(requestedArticleView))
+            && !canOpenArticleView(requestedArticleView);
         if (articleDenied) {
             retainHistoryEntryAddress();
-            requireArticleViewAccess();
+            requireArticleViewAccess(requestedArticleView);
             // A restored address may not replace a mounted collection. A cold
             // bookmark still loads its ordinary collection, with the notice above.
             const mountedRoot = document.getElementById(getSelectedDataset() + '_container');

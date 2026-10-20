@@ -12,7 +12,9 @@ import { createFrontPageArticleButtons } from './front_page_article_buttons.js';
 import { refreshLocalizedDatasetValues } from '../table_views/dataset_value_localizer.js';
 import { invalidateSessionGeneration } from '../auth/session_generation_store.js';
 
-const mocks = vi.hoisted(() => ({ request: vi.fn() }));
+const mocks = vi.hoisted(() => ({ request: vi.fn(), openPage: vi.fn(async () => null) }));
+vi.mock('../table_views/card_view/image_first_view_opener.js', () => ({ openImageFirstView: mocks.openPage }));
+vi.mock('../navigation/nav_engine/dataset_aliases.js', () => ({ getInternalDatasetName: name => name === 'contact' ? 'system_about' : name }));
 vi.mock('../endpoints/endpoint_router.js', () => ({ endpoint_router: mocks.request }));
 vi.mock('../lang/translation_handler.js', () => ({ getTranslationForKey: key => key }));
 vi.mock('./front_page_top_row_builder.js', () => ({ createFrontPageTopRow: () => {
@@ -127,4 +129,20 @@ test('only top-row buttons become transparent outlined pills with theme contrast
     const belowText = css.match(/\n\.front-page-article-button \{([^}]+)\}/)[1];
     expect(belowText).toContain('padding: 10px 16px;');
     expect(belowText).not.toMatch(/border:|border-radius:|background:|color:|font-weight:|text-shadow:|box-shadow:/);
+});
+
+
+test('only an unmodified Home Page click borrows the shared opener and preserves its native href', async () => {
+    mocks.openPage.mockClear();
+    const list = createFrontPageArticleButtons([{ href: '/contact/5?view=image_first_page_view', label: 'Contact' }]);
+    document.body.append(list);
+    const link = list.querySelector('a');
+    const modified = new MouseEvent('click', { button: 0, ctrlKey: true, bubbles: true, cancelable: true });
+    link.dispatchEvent(modified); expect(modified.defaultPrevented).toBe(false);
+    expect(mocks.openPage).not.toHaveBeenCalled();
+    const click = new MouseEvent('click', { button: 0, bubbles: true, cancelable: true });
+    link.dispatchEvent(click); expect(click.defaultPrevented).toBe(true);
+    await vi.waitFor(() => expect(mocks.openPage).toHaveBeenCalledOnce());
+    expect(mocks.openPage).toHaveBeenCalledWith(expect.objectContaining({ tableName: 'system_about', rowItem: { id: '5' }, layout: 'page' }));
+    expect(link.getAttribute('href')).toBe('/contact/5?view=image_first_page_view');
 });

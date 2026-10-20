@@ -50,6 +50,7 @@ vi.mock("./row_article_load_session.js", () => ({
 
 vi.mock("../../route_permission_checker.js", () => ({
     hasRoutePermission: vi.fn(route => route === "/ui/view/article_view"),
+    hasDatasetPermission: vi.fn(async () => true),
 }));
 
 vi.mock("../../user_tools/current_user_profile_fetcher.js", () => ({
@@ -596,4 +597,53 @@ test("an old media build cannot resurrect IFAV after the URL changed", async () 
     expect(openImageModalContentMock).not.toHaveBeenCalled();
     expect(transitionImageFirstModalContentMock).not.toHaveBeenCalled();
     expect(location.pathname).toBe("/elsewhere");
+});
+
+describe('opt-in Page layout', () => {
+    beforeEach(async () => {
+        document.body.replaceChildren(); history.replaceState({}, '', '/');
+        datasetAppearanceState.clear(); setAllSpecs({});
+        const { hasRoutePermission } = await import('../../route_permission_checker.js');
+        hasRoutePermission.mockImplementation(() => true);
+        const { fetchDatasetData } = await import('../../endpoints/endpoint_data_fetcher.js');
+        fetchDatasetData.mockReset().mockResolvedValue({ columns: ['title'], data: [{ id: 3, title: 'Page' }],
+            types: { title: { card_element: 'header' } } });
+        buildContentMock.mockReset().mockImplementation(async () => ({ rowArticleContentElement: buildArticleContent() }));
+        loadSession.fetchDynamicChildren.mockReset().mockResolvedValue(null);
+        openImageModalContentMock.mockReset().mockImplementation(({ contentElement }) => {
+            document.body.append(contentElement); return { modal: document.createElement('div'), close: vi.fn() };
+        });
+        transitionImageFirstModalContentMock.mockReset().mockReturnValue(null);
+    });
+    test('fetches Page fields and places a contained image inside the text column without a full-height stage', async () => {
+        const { fetchDatasetData } = await import('../../endpoints/endpoint_data_fetcher.js');
+        await openImageFirstView({ tableName: 'examples', rowItem: { id: 3 }, layout: 'page', imageRows: [{ filename: 'page.png' }] });
+        const shell = document.querySelector('.image_first_page_view');
+        expect(shell).not.toBeNull();
+        expect(shell.querySelector('.image_first_view_article_content > .row_article_page_image img')).not.toBeNull();
+        expect(shell.querySelector('.row_article_image_first_stage')).toBeNull();
+        expect(shell.querySelector('.row_article_row_navigation')).toBeNull();
+        expect(fetchDatasetData).toHaveBeenLastCalledWith(expect.objectContaining({ view_key: 'image_first_page_view' }));
+        expect(new URL(location.href).searchParams.get('view')).toBe('image_first_page_view');
+    });
+    test('no image still opens the article and creates no image box or placeholder', async () => {
+        expect(await openImageFirstView({ tableName: 'examples', rowItem: { id: 3 }, layout: 'page' })).not.toBeNull();
+        const shell = document.querySelector('.image_first_page_view');
+        expect(shell.querySelector('img, .row_article_page_image, .row_article_image_first_stage, .big_card_image')).toBeNull();
+    });
+    test('a failed image removes its complete box', async () => {
+        await openImageFirstView({ tableName: 'examples', rowItem: { id: 3 }, layout: 'page', imageRows: [{ filename: 'broken.png' }] });
+        const image = document.querySelector('.row_article_page_image img');
+        expect(image.hidden).toBe(true);
+        image.dispatchEvent(new Event('error'));
+        expect(document.querySelector('.row_article_page_image, .image_first_page_view img')).toBeNull();
+    });
+    test('Page authorization uses its own permission route before fetching fields', async () => {
+        const { hasRoutePermission } = await import('../../route_permission_checker.js');
+        const { fetchDatasetData } = await import('../../endpoints/endpoint_data_fetcher.js');
+        hasRoutePermission.mockImplementation(route => route === '/ui/view/article_view');
+        expect(await openImageFirstView({ tableName: 'examples', rowItem: { id: 3 }, layout: 'page' })).toBeNull();
+        expect(hasRoutePermission).toHaveBeenCalledWith('/ui/view/image_first_page_view');
+        expect(fetchDatasetData).not.toHaveBeenCalled();
+    });
 });

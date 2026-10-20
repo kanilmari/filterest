@@ -1,8 +1,9 @@
 // article_view_access.js
 // Gates article openers before they change dataset, history or modal state.
 // Connects authoritative route grants, card affordances and the shared notice component.
-// Keeps classic and image-first articles behind the same view permission for every viewer.
+// Preserves the classic/IFAV gate and supplies the explicit Page pilot its own route.
 
+import { ARTICLE_PRESENTATION_CONTRACT } from '../../../shared/article_presentations/contract_reader.js';
 import { hasRoutePermission } from '../../route_permission_checker.js';
 import { getLanguageWithBrowserFallback } from '../../state_stores/lang_preference_reader.js';
 import { showToast } from '../../../reusable_components/notifications/toast_notification_printer.js';
@@ -17,13 +18,21 @@ const COPY = Object.freeze({
     yue: '你冇文章視圖嘅使用權限，無法開啟呢篇文章。',
 });
 
-export function canOpenArticleView() {
-    return hasRoutePermission(ARTICLE_VIEW_ROUTE);
+export function canOpenArticleView(viewKey = 'article_view') {
+    const route = viewKey === 'image_first_page_view'
+        ? ARTICLE_PRESENTATION_CONTRACT.presentations[viewKey].permission_route : ARTICLE_VIEW_ROUTE;
+    return hasRoutePermission(route);
 }
 
 /** Explains denial locally before any opener commits its view or address. */
-export function requireArticleViewAccess() {
-    if (canOpenArticleView()) return true;
+export function requireArticleViewAccess(viewKey = 'article_view') {
+    if (canOpenArticleView(viewKey)) return true;
+    showArticleViewAccessDenied();
+    return false;
+}
+
+/** The one localized notice for a refused article presentation (Article, IFAV or Page). */
+export function showArticleViewAccessDenied() {
     const language = getLanguageWithBrowserFallback();
     const content = document.createElement('span');
     content.dataset.langKey = ARTICLE_VIEW_DENIED_KEY;
@@ -31,7 +40,6 @@ export function requireArticleViewAccess() {
     content.textContent = COPY[locale] || COPY.en;
     // The normal language observer applies site-authored copy and live language changes.
     showToast({ content, level: 'warning' });
-    return false;
 }
 
 /** Removes opening semantics while retaining a click/keyboard explanation. */

@@ -253,6 +253,13 @@ func adminPermissionRecoveryModeEnabled() bool {
 	}
 }
 
+// AdministratorPermissionRecoveryAllowed shares the row-route recovery rule with
+// additional handler boundaries. Only an opted-in development administrator may
+// recover a missing grant; database errors and explicit-only routes stay denied.
+func AdministratorPermissionRecoveryAllowed(userID int, route string) bool {
+	return !update_capability.RequiresExplicitGrant(route) && adminPermissionRecoveryModeEnabled() && userIsAdmin(userID)
+}
+
 // Yhdistetty tarkistusfunktio: tarkistaa sekä function-level että (tarvittaessa) table-level -oikeudet.
 // userHasFunctionPermissionOnTable.go
 // UserHasFunctionPermissionOnTableQuiet uses the exact route decision without denial logs.
@@ -272,7 +279,7 @@ func routeTablePermissionDecision(userID int, urlRoute, tableName, tableUID stri
 	} else if tableUID == "" && tableName == "" {
 		return false, false, tableName, tableUID, fmt.Errorf("specific_table_related true but table info missing for urlRoute='%s'", urlRoute)
 	}
-	recovery := !update_capability.RequiresExplicitGrant(urlRoute) && adminPermissionRecoveryModeEnabled() && userIsAdmin(userID)
+	recovery := AdministratorPermissionRecoveryAllowed(userID, urlRoute)
 	allowed, err := permissions.CheckRouteTablePermission(backend.Db, urlRoute, userID,
 		permissions.RouteTableScope{TableName: tableName, TableUID: tableUID}, permissions.AccessControlRouteTableOptions(false))
 	if err != nil {

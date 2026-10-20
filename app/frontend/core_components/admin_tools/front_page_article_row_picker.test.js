@@ -206,3 +206,17 @@ test.each(['fi', 'en', 'ch', 'yue'].flatMap(language => ['light', 'dark'].map(th
         expect(optionLabels()).toEqual(['Article A']);
     },
 );
+
+test('Page selection requests the Page projection and returns its view; Article stays absent', async () => {
+    await mountAndOpen();
+    await picker.setView('image_first_page_view');
+    expect(readsFor(datasetA).at(-1).get('view_key')).toBe('image_first_page_view');
+    picker.element.querySelector('[role="combobox"]').click(); await vi.advanceTimersByTimeAsync(0);
+    picker.element.querySelector('[role="option"]').click();
+    expect(mocks.changed).toHaveBeenLastCalledWith({ table_uid: 7, row_id: '1', label: 'Article A', view: 'image_first_page_view' });
+    await picker.setView('article_view');
+    expect(readsFor(datasetA).at(-1).get('view_key')).toBe('article_view');
+    picker.element.querySelector('[role="combobox"]').click(); await vi.advanceTimersByTimeAsync(0);
+    picker.element.querySelector('[role="option"]').click();
+    expect(mocks.changed).toHaveBeenLastCalledWith({ table_uid: 7, row_id: '1', label: 'Article A' });
+});

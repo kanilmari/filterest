@@ -7,8 +7,9 @@ const mocks = vi.hoisted(() => ({
     open: vi.fn(async () => ({ close() {} })),
     pipeline: vi.fn(async context => context),
     route: vi.fn(() => true),
+    datasetRight: vi.fn(async () => true),
 }));
-vi.mock("../../route_permission_checker.js", () => ({ hasRoutePermission: mocks.route }));
+vi.mock("../../route_permission_checker.js", () => ({ hasRoutePermission: mocks.route, hasDatasetPermission: mocks.datasetRight }));
 vi.mock("../../table_views/card_view/image_first_view_opener.js", () => ({ openImageFirstView: mocks.open }));
 vi.mock("../../pipeline/navigation_pipeline.js", () => ({ runNavigationPipeline: mocks.pipeline }));
 import {
@@ -285,4 +286,47 @@ test('a denied retained IFAV entry prevents its pending scroll restoration and s
     expect(location.href).toBe(href); expect(history.state).toEqual(state);
     expect(document.querySelectorAll('[data-lang-key="article_view_permission_missing"]')).toHaveLength(1);
     expect(replace).not.toHaveBeenCalled(); expect(push).not.toHaveBeenCalled();
+});
+
+test('Page keeps its key, restores with the shared opener and returns to its Home origin', async () => {
+    mocks.route.mockReset().mockReturnValue(true); mocks.open.mockClear();
+    history.replaceState({}, '', '/');
+    const intent = beginImageFirstViewOpen({ tableName: 'events', rowId: 185, listPath: '/events', viewKey: 'image_first_page_view' });
+    const entryId = intent.commit('page.png');
+    expect(location.search).toBe('?view=image_first_page_view');
+    expect(history.state.imageFirstView.origin.url).toBe(location.origin + '/');
+    updateImageFirstViewImage(entryId, 'next.png');
+    expect(location.search).toBe('?view=image_first_page_view');
+    expect(location.hash).toContain('next.png');
+    expect(await handleImageFirstViewHistory({ tableName: 'events', rowId: '185' })).toBe(true);
+    expect(mocks.open).toHaveBeenCalledWith(expect.objectContaining({ layout: 'page', restoringHistory: true, rowItem: { id: '185' } }));
+    const back = vi.spyOn(history, 'back').mockImplementation(() => {});
+    imageFirstViewDidClose(entryId);
+    expect(back).toHaveBeenCalledOnce(); back.mockRestore();
+});
+test('Page denial uses the contract Page route and preserves its address', async () => {
+    mocks.open.mockClear();
+    history.replaceState({}, '', '/events/185?view=image_first_page_view');
+    mocks.route.mockImplementation(route => route === '/ui/view/article_view');
+    expect(await handleImageFirstViewHistory({ tableName: 'events', rowId: '185' })).toEqual({ articleAccessDenied: true });
+    expect(mocks.route).toHaveBeenCalledWith('/ui/view/image_first_page_view');
+    expect(location.search).toBe('?view=image_first_page_view');
+    expect(mocks.open).not.toHaveBeenCalled();
+});
+
+
+test('Page follows the route list only; the server owns its dataset boundary (F1: tableless global grants)', async () => {
+    // A global Page grant (the production shape) must pass on every dataset; a dataset-scoped client call
+    // (/api/check-table-right) would refuse it, so none is made.
+    mocks.route.mockImplementation(route => route === '/ui/view/image_first_page_view'); mocks.datasetRight.mockClear();
+    mocks.pipeline.mockClear();
+    const denied = vi.fn();
+    await authorizeImageFirstView('events', () => true, denied, 'image_first_page_view');
+    expect(mocks.datasetRight).not.toHaveBeenCalled();
+    expect(denied).not.toHaveBeenCalled(); expect(mocks.pipeline).toHaveBeenCalled();
+    // Without the Page route the IFAV-style denial runs before the pipeline.
+    mocks.route.mockReturnValue(false); mocks.pipeline.mockClear();
+    expect(await authorizeImageFirstView('events', () => true, denied, 'image_first_page_view')).toBe(false);
+    expect(denied).toHaveBeenCalledOnce(); expect(mocks.pipeline).not.toHaveBeenCalled();
+    mocks.route.mockReturnValue(true);
 });

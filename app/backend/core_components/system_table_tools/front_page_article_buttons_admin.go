@@ -32,7 +32,7 @@ type frontPageArticleUnavailable struct {
 // AdminFrontPageArticleButtonsHandler manages site-wide Home article links.
 // GET /api/admin/front-page/article-buttons returns {article_buttons,version,unavailable_items,configuration_error}.
 // Missing configuration is {schema_version:1,placement:"below_text",items:[]} with version "none".
-// POST accepts {article_buttons:{schema_version:1,placement:"below_text"|"top_row",items:[{table_uid,row_id,enabled}]},version}.
+// POST accepts {article_buttons:{schema_version:1,placement:"below_text"|"top_row",items:[{table_uid,row_id,enabled,view?}]},version}.
 // At most 10 unique targets; row_id is a canonical numeric string.
 // Every target must exist and be readable through the saving administrator's article results.
 // Success returns {version}; invalid/unreadable targets return 400, stale writes 409.
@@ -109,10 +109,10 @@ func frontPageArticleTargetUnavailable(r *http.Request, userID int, item config.
 	if err != nil {
 		return "dataset_missing_or_unavailable"
 	}
-	if !frontPageCanRead(userID, dataset) {
+	if !frontPageCanRead(userID, dataset) || (item.PresentationView() == "image_first_page_view" && !frontPageItemViewAllowed(userID, dataset, item.PresentationView())) {
 		return "dataset_unreadable"
 	}
-	if _, ok := delegateFrontPageArticle(r, dataset, item.RowID); !ok {
+	if _, ok := delegateFrontPageArticle(r, dataset, item.RowID, item.PresentationView()); !ok {
 		return "row_missing_or_unreadable"
 	}
 	return ""

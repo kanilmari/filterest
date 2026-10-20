@@ -199,3 +199,29 @@ test.each(['fi', 'en', 'ch', 'yue'])('renders editor controls and warnings in %s
     expect(control('save').textContent).toBe(ARTICLE_BUTTON_COPY.save[index]);
     expect(control('list').querySelector('.front-page-settings-warning').textContent).toBe(ARTICLE_BUTTON_COPY.unavailable[index]);
 });
+
+test('per-button presentation defaults to Article, renders existing keys and saves Page', async () => {
+    original.article_buttons = value([item()]); await mount();
+    expect(control('0-view').value).toBe('article_view');
+    expect([...control('0-view').options].map(option => option.value)).toEqual(['article_view', 'image_first_page_view']);
+    expect(control('0-view').labels[0].textContent).toContain(articleButtonCopy('presentation'));
+    expect(articleButtonCopy('presentation')).toBe('article_presentations_title');
+    expect(articleButtonCopy('article_view')).toBe('article_presentations_article');
+    expect(articleButtonCopy('image_first_page_view')).toBe('article_presentations_page');
+    control('0-view').value = 'image_first_page_view'; control('0-view').dispatchEvent(new Event('change'));
+    await vi.waitFor(() => expect(control('save').disabled).toBe(false));
+    control('save').click(); await vi.waitFor(() => expect(writes()).toHaveLength(1));
+    expect(writes()[0][1].body_data.article_buttons.items).toEqual([{ ...item(), view: 'image_first_page_view' }]);
+    expect(mocks.request.mock.calls.some(([route, options]) => route === 'getResults'
+        && new URLSearchParams(options.url_params).get('view_key') === 'image_first_page_view')).toBe(true);
+});
+test('a newly picked Page carries its presentation through the save payload', async () => {
+    await mount();
+    control('new-view').value = 'image_first_page_view'; control('new-view').dispatchEvent(new Event('change'));
+    await selectAndAdd();
+    expect(control('0-view').value).toBe('image_first_page_view');
+    control('save').click(); await vi.waitFor(() => expect(writes()).toHaveLength(1));
+    expect(writes()[0][1].body_data.article_buttons.items[0].view).toBe('image_first_page_view');
+    expect(validArticleButtonConfiguration(value([{ ...item(), view: 'unknown' }]))).toBe(false);
+    expect(validArticleButtonConfiguration(value([{ ...item(), view: null }]))).toBe(false);
+});

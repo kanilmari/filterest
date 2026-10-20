@@ -24,7 +24,8 @@ export function validArticleButtonConfiguration(value) {
         const identity = `${item.table_uid}:${item.row_id}`;
         const valid = Number.isSafeInteger(item.table_uid) && item.table_uid > 0
             && typeof item.row_id === 'string' && /^(0|[1-9]\d*)$/.test(item.row_id)
-            && typeof item.enabled === 'boolean' && !seen.has(identity);
+            && typeof item.enabled === 'boolean' && !seen.has(identity)
+            && (item.view === undefined || ['article_view', 'image_first_page_view'].includes(item.view));
         seen.add(identity);
         return valid;
     });
@@ -58,6 +59,16 @@ export function createFrontPageArticleButtonsEditor({ onSaved, onChange = () => 
     for (const key of ['below_text', 'top_row']) {
         const option = translated('option', key); option.value = key; placement.append(option);
     }
+    function presentationSelect(view, changed) {
+        const select = document.createElement('select');
+        for (const key of ['article_view', 'image_first_page_view']) {
+            const option = translated('option', key); option.value = key; select.append(option);
+        }
+        select.value = view || 'article_view';
+        select.addEventListener('change', () => changed(select.value));
+        return select;
+    }
+    const newPresentation = presentationSelect('article_view', view => { void picker.setView(view); });
     const datasetSelect = document.createElement('select');
     const list = document.createElement('ol');
     list.className = 'front-page-settings-block-list'; list.dataset.testid = 'front-page-article-list';
@@ -76,21 +87,22 @@ export function createFrontPageArticleButtonsEditor({ onSaved, onChange = () => 
     const rowLabel = translated('label', 'row'); rowLabel.htmlFor = 'front-page-article-row'; rowLabel.id = 'front-page-article-picker-label';
     picker.element.setAttribute('aria-labelledby', rowLabel.id);
     element.append(translated('legend', 'title'), translated('p', 'help'), field('placement', placement, 'placement'),
-        list, field('dataset', datasetSelect, 'dataset'), rowLabel, picker.element, preview, add, status, actions);
+        list, field('presentation', newPresentation, 'new-view'), field('dataset', datasetSelect, 'dataset'), rowLabel, picker.element, preview, add, status, actions);
 
     function payload() {
         return { schema_version: 1, placement: placement.value,
-            items: draft.items.map(({ table_uid, row_id, enabled }) => ({ table_uid, row_id, enabled })) };
+            items: draft.items.map(({ table_uid, row_id, enabled, view }) => ({ table_uid, row_id, enabled,
+                ...(view === undefined ? {} : { view }) })) };
     }
     function dirty() { return ready && (configurationError || JSON.stringify(payload()) !== baseline); }
     function report(key) { statusKey = key; status.textContent = key ? copy(key) : ''; }
     function update() {
-        placement.disabled = datasetSelect.disabled = !ready || busy;
+        placement.disabled = datasetSelect.disabled = newPresentation.disabled = !ready || busy;
         picker.setDisabled(!ready || busy);
         add.disabled = !ready || busy || !selection || !selection.label || draft.items.length >= MAX_BUTTONS;
         save.disabled = !ready || busy || conflicted || !dirty();
         reload.disabled = busy;
-        list.querySelectorAll('input,button').forEach(control => {
+        list.querySelectorAll('input,button,select').forEach(control => {
             control.disabled = busy || control.dataset.boundary === 'true' || control.dataset.unavailable === 'true';
         });
         preview.textContent = selection ? copy('preview', { label: selection.label }) : '';
@@ -131,7 +143,13 @@ export function createFrontPageArticleButtonsEditor({ onSaved, onChange = () => 
                 });
                 rowActions.append(control);
             }
-            row.append(title, warning, field('enabled', enabled, `${index}-enabled`), rowActions);
+            const presentation = presentationSelect(item.view, view => {
+                item.view = view;
+                item.targetUnavailable = false;
+                void refreshLabels(); update();
+            });
+            row.append(title, warning, field('enabled', enabled, `${index}-enabled`),
+                field('presentation', presentation, `${index}-view`), rowActions);
             return row;
         }));
         Array.from(list.children).find(row => row.dataset.identity === focusIdentity)
@@ -161,7 +179,7 @@ export function createFrontPageArticleButtonsEditor({ onSaved, onChange = () => 
             try {
                 const response = await endpoint_router('getResults', { signal: lifetime.signal, suppressErrorToast: true,
                     suppressAuthRedirect: true, url_params: `?${new URLSearchParams({ dataset: dataset.dataset_name,
-                        id: item.row_id, row_count: '0', view_key: 'article_view', lang: language })}` });
+                        id: item.row_id, row_count: '0', view_key: item.view || 'article_view', lang: language })}` });
                 if (disposed || generation !== labelsGeneration) return;
                 const row = response.data?.find(value => String(value.id) === item.row_id);
                 item.label = row ? resolveArticleButtonLabel(row, response.columns, response.types, language, viewerID) : '';
@@ -194,6 +212,7 @@ export function createFrontPageArticleButtonsEditor({ onSaved, onChange = () => 
             }
             baseline = JSON.stringify(payload()); conflicted = false; ready = true;
             renderDatasets(); renderList(); await picker.setDataset(null); datasetSelect.value = '';
+            newPresentation.value = 'article_view'; await picker.setView('article_view');
             await refreshLabels(); report(configurationError ? 'configurationError' : '');
         } catch { if (!disposed) report('loadFailed'); }
         finally { busy = false; if (!disposed) update(); }
@@ -203,7 +222,8 @@ export function createFrontPageArticleButtonsEditor({ onSaved, onChange = () => 
         void picker.setDataset(datasets.find(entry => String(entry.table_uid) === datasetSelect.value) || null);
     });
     add.addEventListener('click', () => {
-        const candidate = selection && { table_uid: selection.table_uid, row_id: selection.row_id, enabled: true };
+        const candidate = selection && { table_uid: selection.table_uid, row_id: selection.row_id, enabled: true,
+            ...(selection.view === undefined ? {} : { view: selection.view }) };
         const proposed = { ...payload(), items: [...payload().items, candidate] };
         if (!candidate || !selection.label || !validArticleButtonConfiguration(proposed)) { report('invalid'); return; }
         draft.items.push({ ...candidate, label: selection.label });

@@ -527,19 +527,19 @@ indexing and authentication rules remain in force.
 Home's server response also supplies `article_buttons: [{href,label}]` and
 `article_buttons_placement` (`below_text` or `top_row`), independently of boxes.
 The optional `system_config.front_page_article_buttons` JSON setting (value type 5)
-stores `{schema_version:1,placement,items:[{table_uid,row_id,enabled}]}`. No row
-means an empty list with `below_text`; at most ten unique targets with positive
-dataset UIDs and canonical numeric row IDs are accepted. Labels are never stored.
-Each request checks the current viewer’s article-view grant, dataset visibility/read grant and canonical
-`article_view` results under that session, including row policies and SELECT
-projection. The first usable header-role value in the returned article field
-order supplies the label; development permission recovery never supplies a
-missing article/read grant for these links. The title is
-localized like dataset values; language-key headers
-use the same public translation reader as the interface. Denied, deleted and
-unlabelled targets disappear completely. Only authorized links carry their
-ordinary `/<dataset-or-alias>/<id>?view=article_view` address; private target
-identities, revisions, diagnostics and configured totals never leave this facade.
+stores `{schema_version:1,placement,items:[{table_uid,row_id,enabled,view?}]}`. No row
+means an empty list with `below_text` and version `none`; its first POST creates the key. At most ten unique targets are accepted.
+Absent `view` means Article; Page uses `image_first_page_view`. Unknown views return 400 on save and fail-closed on stored read.
+The presentation select, picker, label refresh and save carry the chosen projection using existing labels.
+Each request needs that presentation's view grant and the dataset's get-results read grant. A view grant follows its catalogue scope: Page's entry is
+tableless, so a global grant counts, and the get-results grant keeps the dataset boundary. Title delegates request the chosen
+`view_key` with the viewer's session, row policies and SELECT projection.
+The first usable header supplies the localized label; permission recovery never
+supplies a missing Home view/read grant. Denied, deleted and unlabelled targets
+leave no element. Links use `/<preferred-name>/<id>?view=<chosen-view>`; private
+identities, revisions and diagnostics never leave this facade. Article links keep
+their native behavior. An ordinary Page-button click borrows IFAV's opener/history
+so X/Esc and Back return Home, and Forward reopens the same row. Modified clicks retain the native link for a new tab. Default Home and other openers stay unchanged.
 Boxes finish under their existing three-second elapsed budget before article
 configuration or resolution starts. Articles get a separate three-second elapsed
 budget and a child deadline for setting and registry reads. Canonical delegates
@@ -550,8 +550,8 @@ The independent administrator API at `/api/admin/front-page/article-buttons`
 uses Home settings’ administrator security profile. GET returns configuration,
 its opaque `version`, `unavailable_items` (index, table_uid, row_id, reason) and
 `configuration_error`. POST accepts `{article_buttons,version}`, checks every
-target through the saving administrator’s canonical article read (including
-disabled items), and creates an absent setting. Stale writes return 409;
+target through the saving administrator’s chosen presentation (including
+disabled items); Page needs the Page grant in its catalogue scope (global), `/api/get-results` and the Page delegate. Stale writes return 409;
 invalid or unreadable targets return 400. An unavailable saved target stays in
 private configuration for explicit repair/removal. Generic settings writers
 refuse this key, including deletion (clear the list with a versioned save).
@@ -575,11 +575,11 @@ visible keyboard focus. A language change cancels an obsolete Home read and
 refetches the complete payload; session changes use the existing visit guards.
 Labels never trigger another public title request.
 
-Home settings has an independent Article buttons section: placement, readable
+Home settings has an independent Article buttons section: placement, presentation, readable
 grouped dataset catalogue (including authorised `system_about`), searchable
 single-row picker, current-label preview, Add, enable/disable, keyboard reorder
 and Remove. The picker reuses the shared single-selection dropdown and
-`get-results` article projection, with the returned `resultsPerLoad` page size
+`get-results` chosen Article/Page projection, with the returned `resultsPerLoad` page size
 and `row_count`; it never uses a cell editor's write callback. Preview reads
 honour article header order, multilingual values, language-key roles and owner
 visibility. Changing datasets clears the search field and calls the shared
@@ -589,7 +589,7 @@ also ignore obsolete responses, aborts and failures, keeping the current dataset
 options and status even when old and new requests settle without a promise drain
 between them. Empty searches still load the current dataset.
 Language refresh updates the popup heading, its dialog name and action labels
-together with the search labels. Only stable identities and enabled flags enter the versioned save.
+together with the search labels. Only identities, enabled flags and optional `view` enter the versioned save.
 Unavailable administrator targets remain visible as warnings with Remove;
 they must be removed before saving. A stale save keeps the draft, shows the
 existing Home conflict message and requires explicit Reload. The section

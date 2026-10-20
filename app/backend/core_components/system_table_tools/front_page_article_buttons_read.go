@@ -27,20 +27,24 @@ var frontPageArticleViewAllowed = func(userID int, dataset string) bool {
 var frontPageArticleReadGranted = func(userID int, dataset string) bool {
 	return frontPageArticleRouteGranted(userID, dataset, "/api/get-results")
 }
+var frontPagePageViewAllowed = func(userID int, dataset string) bool {
+	return frontPageArticleRouteGranted(userID, dataset, "/ui/view/image_first_page_view")
+}
+
+func frontPageItemViewAllowed(userID int, dataset, view string) bool {
+	if view == "image_first_page_view" {
+		return frontPagePageViewAllowed(userID, dataset)
+	}
+	return frontPageArticleViewAllowed(userID, dataset)
+}
+
 var frontPageArticlePathReader = frontPageArticlePath
 
 // Buttons require real grants even when a developer has enabled administrator
-// permission recovery. The canonical permission checker owns dataset scoping.
+// permission recovery. The shared canonical rule owns dataset scoping, the same
+// one get_results' Page gate uses, so a visible button never leads to a 403.
 func frontPageArticleRouteGranted(userID int, dataset, route string) bool {
-	related, err := permissions.FunctionSpecificTableRelated(backend.Db, route, permissions.DisabledFunctionFalseOrNull)
-	if err != nil {
-		return false
-	}
-	scope := permissions.RouteTableScope{}
-	if related {
-		scope.TableName = dataset
-	}
-	allowed, err := permissions.CheckRouteTablePermission(backend.Db, route, userID, scope, permissions.AccessControlRouteTableOptions(false))
+	allowed, err := permissions.CheckDatasetRoutePermission(backend.Db, route, userID, dataset)
 	return err == nil && allowed
 }
 
@@ -82,12 +86,16 @@ func frontPageArticlePath(r *http.Request, tableUID int, dataset, rowID string) 
 
 // delegateFrontPageArticle retains the exact caller session and transaction.
 // Only the configured numeric ID and article projection enter the row query.
-func delegateFrontPageArticle(original *http.Request, dataset, rowID string) (frontPageArticleResult, bool) {
+func delegateFrontPageArticle(original *http.Request, dataset, rowID string, views ...string) (frontPageArticleResult, bool) {
 	request := original.Clone(original.Context())
 	request.Method, request.Body = http.MethodGet, http.NoBody
 	delegateURL := *request.URL
 	delegateURL.Path, delegateURL.RawPath = "/api/get-results", ""
-	query := url.Values{"dataset": {dataset}, "id": {rowID}, "row_count": {"0"}, "view_key": {"article_view"}}
+	view := "article_view"
+	if len(views) > 0 {
+		view = views[0]
+	}
+	query := url.Values{"dataset": {dataset}, "id": {rowID}, "row_count": {"0"}, "view_key": {view}}
 	if language := original.URL.Query().Get("lang"); language != "" {
 		query.Set("lang", language)
 	}
@@ -138,7 +146,7 @@ func resolveFrontPageArticleButtons(r *http.Request, userID int) ([]frontPageArt
 			continue
 		}
 		dataset, err := frontPageArticleTargetReader(r, item.TableUID)
-		if err != nil || !frontPageArticleViewAllowed(userID, dataset) || !frontPageArticleReadGranted(userID, dataset) || !frontPageCanRead(userID, dataset) {
+		if err != nil || !frontPageItemViewAllowed(userID, dataset, item.PresentationView()) || !frontPageArticleReadGranted(userID, dataset) || !frontPageCanRead(userID, dataset) {
 			continue
 		}
 		if expired() {
@@ -147,7 +155,7 @@ func resolveFrontPageArticleButtons(r *http.Request, userID int) ([]frontPageArt
 		// A child deadline must not own a lazily opened shared transaction:
 		// cancelling it would roll back the caller's transaction at return.
 		// Preserve the canonical delegate's context and discard late results.
-		result, ok := delegateFrontPageArticle(original, dataset, item.RowID)
+		result, ok := delegateFrontPageArticle(original, dataset, item.RowID, item.PresentationView())
 		if expired() {
 			break
 		}
@@ -166,6 +174,16 @@ func resolveFrontPageArticleButtons(r *http.Request, userID int) ([]frontPageArt
 			break
 		}
 		if ok {
+			if item.PresentationView() == "image_first_page_view" {
+				address, err := url.Parse(href)
+				if err != nil {
+					continue
+				}
+				query := address.Query()
+				query.Set("view", item.PresentationView())
+				address.RawQuery = query.Encode()
+				href = address.String()
+			}
 			buttons = append(buttons, frontPageArticleButton{Href: href, Label: label})
 		}
 	}

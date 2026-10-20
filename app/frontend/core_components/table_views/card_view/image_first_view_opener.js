@@ -3,6 +3,7 @@
 // Bridges the existing image modal, row content builder, and already-visible result cards.
 // Exists so every real content image can lead into a full-height media view by default.
 
+import { buildRowArticlePageImage } from "./row_article_page_image.js";
 import { datasetAppearanceState } from '../dataset_appearance_state.js';
 import { loadRowArticleSectionDefaults } from "./row_article_section_defaults.js";
 
@@ -173,26 +174,29 @@ export async function openImageFirstView({
     restoringHistory = false,
     isCurrent = () => true,
     onAccessDenied,
+    layout = "image_first",
 } = {}) {
     if (!rowItem || typeof rowItem !== "object" || !tableName) {
         return null;
     }
 
+    const pageLayout = layout === "page";
+    const viewKey = pageLayout ? "image_first_page_view" : "image_first_view";
     const appearanceToken = datasetAppearanceState.capture(tableName);
     const callerIsCurrent = isCurrent;
     isCurrent = () => callerIsCurrent() && datasetAppearanceState.isCurrent(appearanceToken);
     const intent = beginImageFirstViewOpen({
         tableName, rowId: rowItem.id, listPath: buildDatasetPath(tableName, DATASET_PREFIX || "/"),
-        restoring: restoringHistory, isCurrent,
+        restoring: restoringHistory, isCurrent, viewKey,
     });
-    if (!await authorizeImageFirstView(tableName, intent.isCurrent, onAccessDenied)) return null;
+    if (!await authorizeImageFirstView(tableName, intent.isCurrent, onAccessDenied, viewKey)) return null;
     // Reopening history always obtains current row/column permissions. Its state
     // contains only identities, never a cached copy of protected article data.
     let dataTypes = resolveRowArticleDataTypes(tableName, selectedCard);
-    if (restoringHistory) {
+    if (restoringHistory || pageLayout) {
         const response = await fetchDatasetData({
             dataset_name: tableName, filters: { id: rowItem.id },
-            view_key: "article_view", callerName: "openImageFirstView",
+            view_key: pageLayout ? viewKey : "article_view", callerName: "openImageFirstView",
         });
         if (!intent.isCurrent()) return null;
         rowItem = response?.data?.find(row => String(row.id) === String(rowItem.id));
@@ -219,9 +223,9 @@ export async function openImageFirstView({
             imageSrc,
         }),
         fetchCurrentUserProfile().catch(() => null),
-        loadRowArticleSectionDefaults(tableName, "image_first"),
+        loadRowArticleSectionDefaults(tableName, pageLayout ? viewKey : "image_first"),
     ]);
-    if (!intent.isCurrent() || resolvedRows.length === 0) {
+    if (!intent.isCurrent() || (!pageLayout && resolvedRows.length === 0)) {
         return null;
     }
 
@@ -239,7 +243,9 @@ export async function openImageFirstView({
     const rowPresentationLabel = recordTitle.text;
     let closeImageFirstView = null;
     let historyEntryId = null;
-    const stage = buildRowArticleImageFirstStage({
+    const stage = pageLayout ? buildRowArticlePageImage({
+        imageRow: currentImageRow, resolvePath: resolveImagePath, resolveAlt: resolveImageAltText,
+    }) : buildRowArticleImageFirstStage({
         imageEntries,
         getActiveRow: () => currentImageRow,
         onSelectRow: (row) => {
@@ -252,7 +258,7 @@ export async function openImageFirstView({
         rowLabel: rowPresentationLabel,
         onBackdropActivate: () => closeImageFirstView?.(),
     });
-    if (!stage) {
+    if (!stage && !pageLayout) {
         return null;
     }
 
@@ -268,7 +274,7 @@ export async function openImageFirstView({
             currentUserProfile?.user_id ?? null,
             { sectionDefaults },
         ),
-        stage.whenTransitionMediaReady(),
+        stage?.whenTransitionMediaReady?.(),
     ]);
     if (!intent.isCurrent()) return null;
     rowArticleContentElement
@@ -296,7 +302,7 @@ export async function openImageFirstView({
     });
 
     let rowNavigation = null;
-    if (enable_experimental_row_article_row_navigation) {
+    if (!pageLayout && enable_experimental_row_article_row_navigation) {
         const cardContainer = selectedCard?.closest?.(".card_container");
         rowNavigation = buildRowArticleRowNavigation({
             cardContainer,
@@ -318,8 +324,14 @@ export async function openImageFirstView({
         });
     }
 
-    shell.append(stage.element, rowArticleContentElement);
-    if (!window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches) {
+    if (pageLayout) {
+        shell.classList.add("image_first_page_view");
+        if (stage) rowArticleContentElement.prepend(stage.element);
+        shell.append(rowArticleContentElement);
+    } else {
+        shell.append(stage.element, rowArticleContentElement);
+    }
+    if (!pageLayout && !window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches) {
         activateImageFirstStageTransitionMedia(stage.element);
     }
     const ariaLabel = getTranslationForKey("open_article") || "Open article";

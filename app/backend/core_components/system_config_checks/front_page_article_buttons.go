@@ -28,6 +28,15 @@ type FrontPageArticleItem struct {
 	TableUID int    `json:"table_uid"`
 	RowID    string `json:"row_id"`
 	Enabled  bool   `json:"enabled"`
+	View     string `json:"view,omitempty"`
+}
+
+// PresentationView preserves absent legacy values without adding a stored field.
+func (item FrontPageArticleItem) PresentationView() string {
+	if item.View == "" {
+		return "article_view"
+	}
+	return item.View
 }
 
 var articleRowID = regexp.MustCompile(`^(0|[1-9][0-9]*)$`)
@@ -44,9 +53,10 @@ func ParseFrontPageArticleButtons(raw []byte) (FrontPageArticleButtons, error) {
 		SchemaVersion int    `json:"schema_version"`
 		Placement     string `json:"placement"`
 		Items         []struct {
-			TableUID int    `json:"table_uid"`
-			RowID    string `json:"row_id"`
-			Enabled  *bool  `json:"enabled"`
+			TableUID int             `json:"table_uid"`
+			RowID    string          `json:"row_id"`
+			Enabled  *bool           `json:"enabled"`
+			View     json.RawMessage `json:"view"`
 		} `json:"items"`
 	}
 	decoder := json.NewDecoder(bytes.NewReader(raw))
@@ -67,8 +77,14 @@ func ParseFrontPageArticleButtons(raw []byte) (FrontPageArticleButtons, error) {
 		if item.TableUID <= 0 || !articleRowID.MatchString(item.RowID) || item.Enabled == nil || seen[identity] {
 			return value, fmt.Errorf("article button %d requires a positive dataset UID, canonical numeric row ID, enabled boolean and unique target", index+1)
 		}
+		view := ""
+		if len(item.View) > 0 {
+			if json.Unmarshal(item.View, &view) != nil || (view != "article_view" && view != "image_first_page_view") {
+				return EmptyFrontPageArticleButtons(), fmt.Errorf("article button %d requires a known view", index+1)
+			}
+		}
 		seen[identity] = true
-		value.Items = append(value.Items, FrontPageArticleItem{TableUID: item.TableUID, RowID: item.RowID, Enabled: *item.Enabled})
+		value.Items = append(value.Items, FrontPageArticleItem{TableUID: item.TableUID, RowID: item.RowID, Enabled: *item.Enabled, View: view})
 	}
 	return value, nil
 }

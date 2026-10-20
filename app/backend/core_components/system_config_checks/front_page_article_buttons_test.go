@@ -37,13 +37,13 @@ func TestFrontPageArticleButtonsValidation(t *testing.T) {
 	}
 	value := EmptyFrontPageArticleButtons()
 	for i := 1; i <= 11; i++ {
-		value.Items = append(value.Items, FrontPageArticleItem{102, fmt.Sprint(i), true})
+		value.Items = append(value.Items, FrontPageArticleItem{102, fmt.Sprint(i), true, ""})
 		raw, _ := json.Marshal(value)
 		if _, err := ParseFrontPageArticleButtons(raw); (err == nil) != (i <= 10) {
 			t.Fatal(i, err)
 		}
 	}
-	value.Items = []FrontPageArticleItem{{102, "7", true}, {102, "7", false}}
+	value.Items = []FrontPageArticleItem{{102, "7", true, ""}, {102, "7", false, ""}}
 	raw, _ := json.Marshal(value)
 	if _, err := ParseFrontPageArticleButtons(raw); err == nil {
 		t.Fatal("accepted duplicate disabled target")
@@ -53,5 +53,28 @@ func TestFrontPageArticleButtonsValidation(t *testing.T) {
 func TestFrontPageArticleButtonsRequireDedicatedWriter(t *testing.T) {
 	if err := ValidateRow("system_config", map[string]interface{}{"key": FrontPageArticleButtonsKey, "value_type": 5, "json_value": EmptyFrontPageArticleButtons()}); err == nil {
 		t.Fatal("generic settings writer bypassed target authorization and revision")
+	}
+}
+
+func TestFrontPageArticleButtonsPresentationValidation(t *testing.T) {
+	legacy := `{"schema_version":1,"placement":"top_row","items":[{"table_uid":201,"row_id":"5","enabled":true%s}]}`
+	for _, view := range []string{"article_view", "image_first_page_view"} {
+		value, err := ParseFrontPageArticleButtons([]byte(fmt.Sprintf(legacy, `,"view":"`+view+`"`)))
+		if err != nil || value.Items[0].PresentationView() != view {
+			t.Fatal(value, err)
+		}
+	}
+	value, err := ParseFrontPageArticleButtons([]byte(fmt.Sprintf(legacy, "")))
+	if err != nil || value.Items[0].PresentationView() != "article_view" {
+		t.Fatal(value, err)
+	}
+	raw, _ := json.Marshal(value)
+	if strings.Contains(string(raw), `"view"`) {
+		t.Fatal("legacy serialization changed", string(raw))
+	}
+	for _, rawView := range []string{`"other"`, `""`, `null`, `true`, `7`, `{}`} {
+		if _, err := ParseFrontPageArticleButtons([]byte(fmt.Sprintf(legacy, `,"view":`+rawView))); err == nil {
+			t.Fatal("accepted unknown view", rawView)
+		}
 	}
 }

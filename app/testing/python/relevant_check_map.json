@@ -60,7 +60,8 @@
       "paths": [
         "app/frontend/reusable_components/dom_container_builder.js", "app/frontend/reusable_components/dom_container_builder_helpers.js", "app/frontend/reusable_components/http_text_linkifier.js", "app/frontend/core_components/table_views/card_view/row_article_opener.js", "app/frontend/core_components/table_views/card_view/row_article_opener_helpers.js", "app/frontend/core_components/table_views/card_view/image_first_view_opener.js", "app/frontend/core_components/table_views/card_view/image_first_view_activation.js"
       ],
-      "specs": ["app/testing/e2e/C_card_view/C24_cancel_changes.spec.ts",
+      "specs": ["app/testing/e2e/C_card_view/C26_page_ifav_pilot.spec.ts",
+        "app/testing/e2e/C_card_view/C24_cancel_changes.spec.ts",
         "app/testing/e2e/C_card_view/C25_rich_text_links.spec.ts",
         "app/testing/e2e/G_navigation/G10_dataset_name_pool_access.spec.ts", "app/testing/e2e/C_card_view/C22_article_image_arrows_probe.spec.ts", "app/testing/e2e/C_card_view/C21_record_titles.spec.ts", "app/testing/e2e/C_card_view/C19_dataset_heading_hierarchy.spec.ts", "app/testing/e2e/C_card_view/C10_image_first_article.spec.ts", "app/testing/e2e/C_card_view/C11_network_media_variants.spec.ts", "app/testing/e2e/C_card_view/C12_article_reload_reading_position.spec.ts", "app/testing/e2e/C_card_view/C13_related_dataset_appearance.spec.ts",
         "app/testing/e2e/C_card_view/C16_finnish_card_filterbar_text.spec.ts", "app/testing/e2e/C_card_view/C17_article_toolbar_group_permissions.spec.ts", "app/testing/e2e/C_card_view/C18_article_open_appearance_probe.spec.ts", "app/testing/e2e/C_card_view/C2_open_big_card.spec.ts",
@@ -226,7 +227,7 @@
         "app/testing/e2e/P_copy/P2_select_range.spec.ts", "app/testing/e2e/P_copy/P3_table_range_and_multiline_editor.spec.ts", "app/testing/e2e/Q_scroll/Q1_infinite_scroll.spec.ts", "app/testing/e2e/Q_scroll/Q2_offset_reset.spec.ts",
         "app/testing/e2e/R_dropdown/R1_dropdown_open_search_select.spec.ts", "app/testing/e2e/R_dropdown/R2_dropdown_keyboard_nav.spec.ts", "app/testing/e2e/S_permissions/S2_permission_check_action.spec.ts", "app/testing/e2e/S_permissions/S3_runtime_role_browsing.spec.ts",
         "app/testing/e2e/T_admin/T11_site_language_embedding_and_field_view.spec.ts", "app/testing/e2e/T_admin/T14_dataset_cover_palette.spec.ts", "app/testing/e2e/T_admin/T19_dataset_alias_namespace.spec.ts", "app/testing/e2e/T_admin/T15_view_field_assignments.spec.ts",
-        "app/testing/e2e/T_admin/T17_home_article_buttons.spec.ts", "app/testing/e2e/T_admin/T1_create_table.spec.ts", "app/testing/e2e/T_admin/T2_delete_table.spec.ts", "app/testing/e2e/T_admin/T3_modify_columns.spec.ts",
+        "app/testing/e2e/T_admin/T17_home_article_buttons.spec.ts", "app/testing/e2e/C_card_view/C26_page_ifav_pilot.spec.ts", "app/testing/e2e/T_admin/T1_create_table.spec.ts", "app/testing/e2e/T_admin/T2_delete_table.spec.ts", "app/testing/e2e/T_admin/T3_modify_columns.spec.ts",
         "app/testing/e2e/T_admin/T4_create_folder.spec.ts", "app/testing/e2e/T_admin/T5_rename_tree_node.spec.ts", "app/testing/e2e/T_admin/T7_card_visibility.spec.ts", "app/testing/e2e/V_refresh/V1_table_refresh.spec.ts"
       ],
       "projects": ["mobile-card", "tablet-card", "desktop-card"],
@@ -282,7 +283,7 @@
         "app/testing/e2e/P_copy/P3_table_range_and_multiline_editor.spec.ts", "app/testing/e2e/Q_scroll/Q1_infinite_scroll.spec.ts", "app/testing/e2e/Q_scroll/Q2_offset_reset.spec.ts", "app/testing/e2e/R_dropdown/R1_dropdown_open_search_select.spec.ts",
         "app/testing/e2e/R_dropdown/R2_dropdown_keyboard_nav.spec.ts", "app/testing/e2e/S_permissions/S1_permission_disable.spec.ts", "app/testing/e2e/S_permissions/S2_permission_check_action.spec.ts", "app/testing/e2e/S_permissions/S3_runtime_role_browsing.spec.ts",
         "app/testing/e2e/T_admin/T10_asset_linking_admin.spec.ts", "app/testing/e2e/T_admin/T11_site_language_embedding_and_field_view.spec.ts", "app/testing/e2e/T_admin/T14_dataset_cover_palette.spec.ts", "app/testing/e2e/T_admin/T15_view_field_assignments.spec.ts",
-        "app/testing/e2e/T_admin/T20_workline_observatory_scroll.spec.ts", "app/testing/e2e/T_admin/T17_home_article_buttons.spec.ts", "app/testing/e2e/T_admin/T1_create_table.spec.ts", "app/testing/e2e/T_admin/T2_delete_table.spec.ts",
+        "app/testing/e2e/T_admin/T20_workline_observatory_scroll.spec.ts", "app/testing/e2e/T_admin/T17_home_article_buttons.spec.ts", "app/testing/e2e/C_card_view/C26_page_ifav_pilot.spec.ts", "app/testing/e2e/T_admin/T1_create_table.spec.ts", "app/testing/e2e/T_admin/T2_delete_table.spec.ts",
         "app/testing/e2e/T_admin/T3_modify_columns.spec.ts", "app/testing/e2e/T_admin/T4_create_folder.spec.ts", "app/testing/e2e/T_admin/T5_rename_tree_node.spec.ts", "app/testing/e2e/T_admin/T6_update_oids.spec.ts",
         "app/testing/e2e/T_admin/T7_card_visibility.spec.ts", "app/testing/e2e/T_admin/T8_app_db_compatibility_mirror.spec.ts", "app/testing/e2e/T_admin/T9_create_table_current_project_folder.spec.ts", "app/testing/e2e/V_refresh/V1_table_refresh.spec.ts"
       ],
@@ -348,7 +349,7 @@
         "app/testing/e2e/S_permissions/S1_permission_disable.spec.ts", "app/testing/e2e/S_permissions/S2_permission_check_action.spec.ts", "app/testing/e2e/S_permissions/S3_runtime_role_browsing.spec.ts", "app/testing/e2e/T_admin/T10_asset_linking_admin.spec.ts",
         "app/testing/e2e/T_admin/T11_site_language_embedding_and_field_view.spec.ts", "app/testing/e2e/T_admin/T11_storage_root_cleanup.spec.ts", "app/testing/e2e/T_admin/T12_storage_deleted_prune.spec.ts", "app/testing/e2e/T_admin/T13_media_subfolder_bulk_check.spec.ts",
         "app/testing/e2e/T_admin/T13_workline_observatory.spec.ts", "app/testing/e2e/T_admin/T19_dataset_alias_namespace.spec.ts", "app/testing/e2e/T_admin/T15_view_field_assignments.spec.ts", "app/testing/e2e/T_admin/T20_workline_observatory_scroll.spec.ts",
-        "app/testing/e2e/T_admin/T17_home_article_buttons.spec.ts", "app/testing/e2e/T_admin/T1_create_table.spec.ts", "app/testing/e2e/T_admin/T2_delete_table.spec.ts", "app/testing/e2e/T_admin/T3_modify_columns.spec.ts",
+        "app/testing/e2e/T_admin/T17_home_article_buttons.spec.ts", "app/testing/e2e/C_card_view/C26_page_ifav_pilot.spec.ts", "app/testing/e2e/T_admin/T1_create_table.spec.ts", "app/testing/e2e/T_admin/T2_delete_table.spec.ts", "app/testing/e2e/T_admin/T3_modify_columns.spec.ts",
         "app/testing/e2e/T_admin/T4_create_folder.spec.ts", "app/testing/e2e/T_admin/T5_rename_tree_node.spec.ts", "app/testing/e2e/T_admin/T6_update_oids.spec.ts", "app/testing/e2e/T_admin/T7_card_visibility.spec.ts",
         "app/testing/e2e/T_admin/T8_app_db_compatibility_mirror.spec.ts", "app/testing/e2e/T_admin/T9_create_table_current_project_folder.spec.ts", "app/testing/e2e/U_export_import/U1_export_csv.spec.ts", "app/testing/e2e/U_export_import/U2_import_csv.spec.ts",
         "app/testing/e2e/V_refresh/V1_table_refresh.spec.ts"
@@ -402,7 +403,7 @@
         "app/testing/e2e/T_admin/T7_card_visibility.spec.ts",
         "app/testing/e2e/T_admin/T15_view_field_assignments.spec.ts",
         "app/testing/e2e/C_card_view/C16_finnish_card_filterbar_text.spec.ts",
-        "app/testing/e2e/T_admin/T17_home_article_buttons.spec.ts"
+        "app/testing/e2e/T_admin/T17_home_article_buttons.spec.ts", "app/testing/e2e/C_card_view/C26_page_ifav_pilot.spec.ts"
       ],
       "projects": ["mobile-card", "tablet-card", "desktop-card"]
     },
@@ -460,7 +461,7 @@
         "app/testing/e2e/T_admin/T16_home_palette.spec.ts",
         "app/testing/e2e/E_search_filter/E10_site_identity_and_menu_contract.spec.ts",
         "app/testing/e2e/G_navigation/G11_home_phone_layout.spec.ts",
-        "app/testing/e2e/T_admin/T17_home_article_buttons.spec.ts"
+        "app/testing/e2e/T_admin/T17_home_article_buttons.spec.ts", "app/testing/e2e/C_card_view/C26_page_ifav_pilot.spec.ts"
       ],
       "projects": ["mobile-card", "tablet-card", "desktop-card"]
     },
@@ -522,7 +523,7 @@
         "app/testing/e2e/E_search_filter/E9_admin_version_info.spec.ts", "app/testing/e2e/F_sort/F1_sort_dropdown.spec.ts", "app/testing/e2e/F_sort/F2_column_header_sort.spec.ts", "app/testing/e2e/G_navigation/G11_home_phone_layout.spec.ts", "app/testing/e2e/G_navigation/G4_svg_tab_alignment.spec.ts", "app/testing/e2e/L_auth/L2_logout.spec.ts",
         "app/testing/e2e/L_auth/L4_forced_login_page.spec.ts", "app/testing/e2e/L_auth/L6_register.spec.ts", "app/testing/e2e/M_language/M1_language_switch.spec.ts", "app/testing/e2e/P_copy/P2_select_range.spec.ts",
         "app/testing/e2e/T_admin/T11_site_language_embedding_and_field_view.spec.ts", "app/testing/e2e/T_admin/T13_workline_observatory.spec.ts", "app/testing/e2e/T_admin/T14_dataset_cover_palette.spec.ts", "app/testing/e2e/T_admin/T19_dataset_alias_namespace.spec.ts",
-        "app/testing/e2e/T_admin/T15_view_field_assignments.spec.ts", "app/testing/e2e/T_admin/T16_home_palette.spec.ts", "app/testing/e2e/T_admin/T20_workline_observatory_scroll.spec.ts", "app/testing/e2e/T_admin/T17_home_article_buttons.spec.ts"
+        "app/testing/e2e/T_admin/T15_view_field_assignments.spec.ts", "app/testing/e2e/T_admin/T16_home_palette.spec.ts", "app/testing/e2e/T_admin/T20_workline_observatory_scroll.spec.ts", "app/testing/e2e/T_admin/T17_home_article_buttons.spec.ts", "app/testing/e2e/C_card_view/C26_page_ifav_pilot.spec.ts"
       ],
       "projects": ["mobile-card", "tablet-card", "desktop-card"],
       "drivers": ["(?:themeToggleBtn|filterbar-theme-toggle|login-theme-toggle|first-run-theme-toggle|data-theme-toggle)", "\\b(?:initializeThemeToggle|toggleTheme)\\s*\\(", "\\btop-button-bar\\b", "localStorage\\.(?:setItem|getItem)\\(\\s*['\"]theme['\"]", "\\btheme_mode\\b", "document\\s*\\.\\s*body\\s*\\.\\s*classList\\s*\\.\\s*(?:add|remove|toggle)\\s*\\([^)]*?(?:[\\'\\\"](?:light|dark|system)-mode[\\'\\\"]|`\\$\\{[^}]+\\}-mode`)", "\\.emulateMedia\\s*\\(\\s*\\{[^}]*\\bcolorScheme\\b", "\\bassertImageFirstVisualContract\\s*\\("]

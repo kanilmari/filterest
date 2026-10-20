@@ -50,7 +50,9 @@ export function articleButtonCopy(key, values = {}) {
     const lower = language.toLowerCase();
     const index = lower.startsWith('fi') ? 0 : ['yue', 'zh-hk', 'zh-tw'].includes(lower) ? 3
         : lower === 'ch' || lower.startsWith('zh') ? 2 : 1;
-    const langKey = key === 'conflict' ? 'front_page_save_conflict' : `front_page_article_buttons_${key}`;
+    const presentationKeys = { presentation: 'article_presentations_title',
+        article_view: 'article_presentations_article', image_first_page_view: 'article_presentations_page' };
+    const langKey = presentationKeys[key] || (key === 'conflict' ? 'front_page_save_conflict' : `front_page_article_buttons_${key}`);
     const text = getTranslationForKey(langKey, { language, fallback: ARTICLE_BUTTON_COPY[key]?.[index], countUsage: false });
     return Object.entries(values).reduce((result, [name, value]) => result.replaceAll(`{${name}}`, String(value)), text);
 }

@@ -149,8 +149,8 @@ async function restoreHistoryEntryState(isCurrentNavigation) {
     // before closing an article, changing choices or taking address ownership.
     const requestedView = target?.name
         ? getTargetView(target.name, parseTableQueryString(window.location.search)) : null;
-    if (target?.name && (target.deepLinkedRowId || ['article_view', 'image_first_view'].includes(requestedView))
-        && !requireArticleViewAccess()) {
+    if (target?.name && (target.deepLinkedRowId || ['article_view', 'image_first_view', 'image_first_page_view'].includes(requestedView))
+        && !requireArticleViewAccess(requestedView)) {
         retainHistoryEntryAddress();
         return { articleAccessDenied: true };
     }

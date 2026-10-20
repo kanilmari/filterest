@@ -55,6 +55,9 @@ func GetResults(response_writer http.ResponseWriter, request *http.Request) {
 		return
 	}
 
+	if !allowResultsPresentationRead(response_writer, table_name, userID, viewKey) {
+		return
+	}
 	if !allowDatasetUIRead(response_writer, table_name, userID) {
 		return
 	}

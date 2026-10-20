@@ -62,7 +62,7 @@ func articleButtonsPostgresFixture(t *testing.T) (*sql.DB, int) {
 	}
 	articleButtonsInvalidateFixtureCaches()
 	t.Cleanup(articleButtonsInvalidateFixtureCaches)
-	value := config.FrontPageArticleButtons{SchemaVersion: 1, Placement: "below_text", Items: []config.FrontPageArticleItem{{uid, articleButtonsFixtureRow, true}}}
+	value := config.FrontPageArticleButtons{SchemaVersion: 1, Placement: "below_text", Items: []config.FrontPageArticleItem{{uid, articleButtonsFixtureRow, true, ""}}}
 	raw, _ := json.Marshal(value)
 	request := frontPageSessionRequest(t, 74, "admin", "POST", "/api/admin/front-page/article-buttons")
 	if err := validateFrontPageArticleTargets(request, 74, raw); err != nil {

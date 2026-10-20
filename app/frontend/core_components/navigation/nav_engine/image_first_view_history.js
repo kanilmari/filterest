@@ -15,7 +15,7 @@ let closingReturn = null;
 let pendingTableName = null;
 
 export function isImageFirstViewURL() {
-    return new URL(location.href).searchParams.get("view") === IMAGE_FIRST_VIEW_KEY;
+    return [IMAGE_FIRST_VIEW_KEY, "image_first_page_view"].includes(new URL(location.href).searchParams.get("view"));
 }
 
 function currentIdentity() {
@@ -57,10 +57,13 @@ function captureOrigin(tableName) {
 }
 
 /** Uses the existing permission and dirty stages without navigating the backing dataset. */
-export async function authorizeImageFirstView(tableName, isCurrent, onAccessDenied) {
+export async function authorizeImageFirstView(tableName, isCurrent, onAccessDenied, viewKey = IMAGE_FIRST_VIEW_KEY) {
     const { runNavigationPipeline } = await import("../../pipeline/navigation_pipeline.js");
     if (!isCurrent()) return false;
-    if (!requireArticleViewAccess()) {
+    // Page's presentation right follows its catalogue scope (production: tableless, granted globally), which the
+    // viewer's route list already answers here. The dataset boundary is the server's: get_results checks the same
+    // shared rule plus /api/get-results, so no dataset-scoped client call can disagree with it.
+    if (!requireArticleViewAccess(viewKey)) {
         onAccessDenied?.();
         return false;
     }
@@ -74,7 +77,7 @@ export async function authorizeImageFirstView(tableName, isCurrent, onAccessDeni
 }
 
 /** Captures an opening intent; asynchronous media/row work cannot outlive its URL. */
-export function beginImageFirstViewOpen({ tableName, rowId, listPath, restoring = false, isCurrent = () => true }) {
+export function beginImageFirstViewOpen({ tableName, rowId, listPath, restoring = false, isCurrent = () => true, viewKey = IMAGE_FIRST_VIEW_KEY }) {
     const initial = currentIdentity();
     const ownGeneration = ++generation;
     pendingTableName = tableName;
@@ -93,7 +96,7 @@ export function beginImageFirstViewOpen({ tableName, rowId, listPath, restoring 
             if (origin && !origin.entryId && identityMatches(origin)) origin.entryId = ensureHistoryEntryId();
             const url = new URL(listPath.replace(/\/$/, "") + "/" + rowId, location.origin);
             url.search = location.search;
-            url.searchParams.set("view", IMAGE_FIRST_VIEW_KEY);
+            url.searchParams.set("view", viewKey);
             if (image) url.hash = new URLSearchParams({ image }).toString();
             const saved = { dataset: tableName, rowId: String(rowId), image: image || "", origin, scroll: target?.scroll || 0 };
             const entryId = writeHistoryEntry(url.pathname + url.search + url.hash,
@@ -228,7 +231,8 @@ export async function handleImageFirstViewHistory({ tableName, rowId, isCurrentN
     const target = readTarget(tableName, rowId);
     if (target) {
         if (!isCurrentNavigation()) return true;
-        if (!requireArticleViewAccess()) {
+        const viewKey = new URL(location.href).searchParams.get("view");
+        if (!requireArticleViewAccess(viewKey)) {
             retainHistoryEntryAddress();
             return { articleAccessDenied: true };
         }
@@ -240,6 +244,7 @@ export async function handleImageFirstViewHistory({ tableName, rowId, isCurrentN
         try {
             const result = await openImageFirstView({
                 tableName, rowItem: { id: target.rowId }, restoringHistory: true, isCurrent,
+                ...(viewKey === "image_first_page_view" ? { layout: "page" } : {}),
                 onAccessDenied: () => {
                     if (!isCurrent()) return;
                     articleAccessDenied = true;

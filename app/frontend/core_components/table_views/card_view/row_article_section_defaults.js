@@ -3,11 +3,12 @@
 // Bridges classic/image-first section keys and the existing disclosure primitive.
 // Keeps initial settings separate from user toggles and same-row media refreshes.
 
-import { LEGACY_ARTICLE_BLOCKS as SECTION_KEYS } from "../../../shared/article_presentations/contract_reader.js";
+import { ARTICLE_PRESENTATION_CONTRACT, LEGACY_ARTICLE_BLOCKS as SECTION_KEYS } from "../../../shared/article_presentations/contract_reader.js";
 
 /** No global cache: reopening a row obtains current permitted dataset settings. */
 export async function loadRowArticleSectionDefaults(dataset, presentationKey) {
-    const keys = SECTION_KEYS[presentationKey] || [];
+    const keys = presentationKey === 'image_first_page_view'
+        ? ARTICLE_PRESENTATION_CONTRACT.presentations[presentationKey].blocks : SECTION_KEYS[presentationKey] || [];
     let initial = {};
     try {
         // Load at the article action boundary, not while the renderer graph is

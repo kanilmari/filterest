@@ -6,12 +6,17 @@ package dtt_1_row_read
 
 import (
 	"database/sql"
+	"net/http"
 	"net/url"
 	"regexp"
 	"strings"
 
+	backend "easelect/backend/core_components"
 	"easelect/backend/core_components/dbutils"
 	dtt_models "easelect/backend/core_components/dynamic_table_tools/dtt_models"
+	"easelect/backend/core_components/httpresponse"
+	"easelect/backend/core_components/permissions"
+	"easelect/backend/pipeline/access_control"
 )
 
 var resultsViewKeyPattern = regexp.MustCompile(`^[a-z][a-z0-9_]{0,63}$`)
@@ -40,7 +45,7 @@ type rowSupportRequest struct {
 func resolveRowSupportRequest(params url.Values) rowSupportRequest {
 	support := rowSupportRequest{viewKey: normalizeResultsViewKey(params.Get("view_key"))}
 	switch support.viewKey {
-	case "card", "article_view", "product_card":
+	case "card", "article_view", "product_card", "image_first_page_view":
 		support.includeCardSupport = true
 	case "map":
 		support.includeMapSupport = true
@@ -134,4 +139,24 @@ func filterAllowedSupportColumns(supportColumns []string, allowedColumns map[str
 		filteredColumns = append(filteredColumns, trimmedColumn)
 	}
 	return filteredColumns
+}
+
+// allowResultsPresentationRead runs before projection, row queries and row logs.
+// Page's presentation right uses its catalogue's own scope through the shared rule
+// (a tableless entry counts a global grant, a dataset-specific one only that dataset),
+// the same rule as Home button visibility. The dataset boundary stays get_results'
+// own /api/get-results check. All older view keys retain their original route boundary.
+func allowResultsPresentationRead(w http.ResponseWriter, dataset string, userID int, viewKey string) bool {
+	if viewKey != "image_first_page_view" {
+		return true
+	}
+	const route = "/ui/view/image_first_page_view"
+	// A missing or disabled function is an error here, so recovery never revives it,
+	// as in the route pipeline.
+	allowed, err := permissions.CheckDatasetRoutePermission(backend.Db, route, userID, dataset)
+	if err == nil && (allowed || access_control.AdministratorPermissionRecoveryAllowed(userID, route)) {
+		return true
+	}
+	httpresponse.RespondWithError(w, http.StatusForbidden, "403 - Forbidden (single table)")
+	return false
 }

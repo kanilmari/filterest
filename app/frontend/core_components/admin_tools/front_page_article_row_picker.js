@@ -53,6 +53,7 @@ export function createArticleRowPicker({ onChange, viewerID = 0 }) {
     const pageLabel = document.createElement('span');
     paging.append(previous, pageLabel, next);
     element.append(host, status);
+    let view = undefined;
     let dataset = null, query = '', offset = 0, pageSize = INITIAL_PAGE_SIZE, total = null;
     let hasNext = false, options = [], selected = null;
     let sequence = 0, controller = null, disposed = false, busy = false, enabled = true;
@@ -69,7 +70,7 @@ export function createArticleRowPicker({ onChange, viewerID = 0 }) {
         },
         onChange: ({ includeValues }) => {
             selected = options.find(option => option.value === includeValues[0]) || null;
-            onChange(selected ? { table_uid: dataset.table_uid, row_id: selected.value, label: selected.label } : null);
+            onChange(selected ? { table_uid: dataset.table_uid, row_id: selected.value, label: selected.label, ...(view === undefined ? {} : { view }) } : null);
         },
     });
     const input = host.querySelector('[role="combobox"]');
@@ -100,7 +101,7 @@ export function createArticleRowPicker({ onChange, viewerID = 0 }) {
         try {
             const response = await endpoint_router('getResults', {
                 url_params: buildDatasetQueryParams({ dataset_name: dataset.dataset_name, offset,
-                    row_count: total, view_key: 'article_view', lang: getLanguageWithBrowserFallback(),
+                    row_count: total, view_key: view || 'article_view', lang: getLanguageWithBrowserFallback(),
                     sort_column: 'id', sort_order: 'ASC', filters: query ? { search: query } : {} }),
                 signal: controller.signal, suppressErrorToast: true, suppressAuthRedirect: true,
             });
@@ -151,6 +152,10 @@ export function createArticleRowPicker({ onChange, viewerID = 0 }) {
         element,
         setDisabled(value) { enabled = !value; update(); },
         setViewerID(value) { viewerID = value; },
+        async setView(value) {
+            view = value === 'article_view' ? undefined : value;
+            await this.setDataset(dataset);
+        },
         async setDataset(value) {
             // Returning current options alone can hand the dropdown a snapshot taken before the new page loads.
             dropdown.cancelPendingSearch();

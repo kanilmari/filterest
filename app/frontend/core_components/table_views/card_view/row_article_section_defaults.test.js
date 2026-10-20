@@ -54,3 +54,10 @@ test("current user disclosure state wins over either initial boolean", () => {
     expect(resolveRowArticleSectionStartOpen({ images: true }, "images", section)).toBe(false);
     expect(resolveRowArticleSectionStartOpen({}, "images")).toBe(true);
 });
+
+
+test('Page reads its independent canonical Details default without changing legacy keys', async () => {
+    getDefaults.mockResolvedValue({ dataset: 'events', presentation_key: 'image_first_page_view', initial_open: { details: false, images: false } });
+    expect(await loadRowArticleSectionDefaults('events', 'image_first_page_view')).toEqual({ details: false });
+    expect(getDefaults).toHaveBeenCalledWith('events', 'image_first_page_view');
+});

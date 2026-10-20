@@ -127,7 +127,7 @@ func TestFrontPageArticleButtonsOmissionBoundaries(t *testing.T) {
 					if denial == "invalid setting" {
 						return config.EmptyFrontPageArticleButtons(), "private-version", errors.New("private_dataset malformed")
 					}
-					return config.FrontPageArticleButtons{SchemaVersion: 1, Placement: "below_text", Items: []config.FrontPageArticleItem{{102, "87654321", false}}}, "v", nil
+					return config.FrontPageArticleButtons{SchemaVersion: 1, Placement: "below_text", Items: []config.FrontPageArticleItem{{102, "87654321", false, ""}}}, "v", nil
 				}
 			}
 			request := frontPageSessionRequest(t, 42, "basic", "GET", "/api/front-page?lang=en")
@@ -212,7 +212,7 @@ func TestFrontPageArticleButtonsAdministratorRequestsAndUnavailable(t *testing.T
 	if response.Code != 401 {
 		t.Fatal(response.Code)
 	}
-	item := config.FrontPageArticleButtons{SchemaVersion: 1, Placement: "below_text", Items: []config.FrontPageArticleItem{{102, "7", false}}}
+	item := config.FrontPageArticleButtons{SchemaVersion: 1, Placement: "below_text", Items: []config.FrontPageArticleItem{{102, "7", false, ""}}}
 	raw, _ := json.Marshal(item)
 	if err := validateFrontPageArticleTargets(httptest.NewRequest("POST", "/", nil), 74, raw); !errors.Is(err, errFrontPageInput) {
 		t.Fatal("disabled invalid target accepted", err)

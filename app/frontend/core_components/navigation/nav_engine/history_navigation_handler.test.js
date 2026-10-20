@@ -468,7 +468,7 @@ test("the shared history handler does not navigate the background when IFAV owns
 
 
 describe('denied article address restoration', () => {
-    test.each(['article_view', 'image_first_view'].flatMap(view => ['login', 'logout'].map(mode => [view, mode])))(
+    test.each(['article_view', 'image_first_view', 'image_first_page_view'].flatMap(view => ['login', 'logout'].map(mode => [view, mode])))(
         '%s address in %s mode explains and retains the mounted view', async (view, mode) => {
             document.body.innerHTML = '<div id="events_container"><div class="tab_parts_container" data-view="table"><span id="retained">Current rows</span></div></div>';
             sessionStorage.setItem('user_permissions', '[]');

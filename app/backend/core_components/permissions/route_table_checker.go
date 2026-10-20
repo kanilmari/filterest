@@ -159,6 +159,21 @@ func FunctionSpecificTableRelated(queryer dbutils.Querier, route string, disable
 	return specificTableRelated, nil
 }
 
+// CheckDatasetRoutePermission checks a route for one dataset in the catalogue's own scope, as the route pipeline
+// does: a dataset-specific route needs a grant on that dataset, a tableless route a global (NULL-target) grant.
+// A missing or disabled function is an error, so callers deny. Recovery stays the caller's decision.
+func CheckDatasetRoutePermission(queryer dbutils.Querier, route string, userID int, dataset string) (bool, error) {
+	related, err := FunctionSpecificTableRelated(queryer, route, DisabledFunctionFalseOrNull)
+	if err != nil {
+		return false, err
+	}
+	scope := RouteTableScope{}
+	if related {
+		scope.TableName = dataset
+	}
+	return CheckRouteTablePermission(queryer, route, userID, scope, AccessControlRouteTableOptions(false))
+}
+
 // HasRouteTablePermission checks one route permission in the current context.
 func (ctx PermissionContext) HasRouteTablePermission(route string, scope RouteTableScope, options RouteTablePermissionOptions) (bool, error) {
 	return CheckRouteTablePermission(ctx.queryer, route, ctx.principal.UserID, scope, options)

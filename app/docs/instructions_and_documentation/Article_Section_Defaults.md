@@ -76,12 +76,13 @@ existing constants and check them against this source.
 
 Canonical presentation keys are `article_view`, `image_first_view`, and the
 `image_first_page_view`. The storage batch registers all three database view
-identities and independent image-first permission routes. Page-sized rendering
-and opener activation remain later batches; the combined editor is implemented; the browser
-contract's reserved flag and current permission routes still describe that boundary.
+identities and independent image-first permission routes. The Page pilot now renders only explicit row links and Home buttons carrying
+`view: "image_first_page_view"`, reusing IFAV with an opt-in contained-image layout.
+The combined editor is implemented; the browser contract keeps Page `reserved:true`
+so it does not enter ordinary opener choices or activate dataset opener policy.
 `permission_route` records the approved independent route for each key;
 `current_permission_route` explicitly preserves IFAV's existing Article gate.
-Compatibility block readers may still request `classic` and `image_first`;
+Page requests its canonical Details default; compatibility readers still request `classic` and `image_first`;
 `legacy_section_key` records that boundary. The combined editor uses canonical keys. Stored block keys are canonical.
 
 The role catalogue describes the later central opener policy. Ordinary image
@@ -142,7 +143,9 @@ the package-import proof also runs the shared shell importer through `psql`.
 The one-time migration `20261015000012_materialize_article_bundles.sql` locks the
 registry, assignments, members, metadata and audiences in one transaction. It
 copies each exact Article target's ordered UIDs/widths, uses that target's Article
-for missing IFAV, and IFAV for missing Page-sized IFAV. Authored image-first values
+for missing IFAV, and IFAV for missing Page-sized IFAV. Thus an upgraded target
+without an authored Page projection initially gets its effective IFAV fields and
+widths (or Article/metadata through that fallback chain). Authored image-first values
 are preserved. Targets without Article use unfiltered-by-reader metadata ordered
 by `co_number NULLS LAST, column_uid`; every dataset receives a site target.
 Compatible authored orders are merged while retaining each projection's relative
@@ -371,3 +374,13 @@ fixture, exports BEFORE with a SELECT-only role, applies the real migrations
 10–12, exports AFTER and verifies the expected differences, including the group
 IFAV site-fallback change, repeat approval and phase refusal. No worker export
 runs against production or another installation's database.
+
+
+The Page get-results boundary independently requires its view right in the
+catalogue's scope (global for this tableless route) plus the requested dataset's
+get-results right, before projection or row reads. A dataset without a selected
+Page bundle at runtime uses the existing metadata fallback in
+`get_results_metadata.go` (after personal/group/site assignment resolution),
+ordered by column metadata and intersected with readable columns. It does not
+switch to another renderer or read dataset opener policy. See the
+[backend row-read guide](../../backend/core_components/dynamic_table_tools/dtt_readme.md).
