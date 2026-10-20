@@ -74,6 +74,49 @@ test('responsive language sizes and normal-flow animation stay scoped to the pre
     expect(css).not.toMatch(/prefers-color-scheme|display: none|position: absolute|(?<!line-)height:/);
 });
 
+test.each(['light', 'dark'])('the lead keeps smaller italic serif text in the explicit %s theme', theme => {
+    const style = document.createElement('style'); style.dataset.storyTest = 'true'; style.textContent = styles;
+    document.head.append(style); document.body.className = `${theme}-mode`;
+    const hero = document.createElement('header'); hero.className = 'front-page-hero front-page-hero--serif-story-v1';
+    const lead = document.createElement('p'); lead.className = 'front-page-story-lead'; lead.textContent = 'Long slogan';
+    hero.append(lead); document.body.append(hero);
+    const computed = getComputedStyle(lead);
+    expect(computed.fontFamily).toBe('Georgia, "Times New Roman", serif');
+    expect(computed.fontStyle).toBe('italic');
+    expect(computed.fontWeight).toBe('400');
+    expect(computed.color).toBe('var(--home-story-accent)');
+    expect(computed.textShadow).toBe('var(--home-story-text-shadow)');
+    expect(computed.margin).toBe('0px 0px 14px');
+    expect(computed.lineHeight).toBe('1.4');
+    expect(computed.letterSpacing).toBe('normal');
+    expect(computed.textAlign).toBe('left');
+    expect(computed.whiteSpace).toBe('normal');
+    expect(computed.overflowWrap).toBe('break-word');
+    expect(computed.transition).toBe('color 300ms ease, text-shadow 300ms ease');
+    expect(computed.animationName).not.toContain('home-story');
+});
+
+test('lead sizes, reduced motion and reveal exclusion belong only to Serif story', () => {
+    const selector = '.front-page-hero.front-page-hero--serif-story-v1 .front-page-story-lead';
+    const lead = css.match(/\.front-page-hero\.front-page-hero--serif-story-v1 \.front-page-story-lead \{([^}]+)\}/)?.[1];
+    expect(lead).toContain('font-family: Georgia, "Times New Roman", serif');
+    expect(lead).toContain('font-style: italic');
+    expect(lead).toContain('font-size: clamp(17px, 1.4cqi, 22px)');
+    const titleMinimum = Number(css.match(/font-size: clamp\((\d+)px/)?.[1]);
+    expect(22).toBeLessThan(titleMinimum);
+    const tablet = css.split('@container (width <= 1180px)')[1].split('@container')[0];
+    const phone = css.split('@container (width <= 760px)')[1].split('@keyframes')[0];
+    expect(tablet).toContain(`${selector} { font-size: 17px; }`);
+    expect(phone).toContain(`${selector} { font-size: 15px; }`);
+    const reduced = css.split('@media (prefers-reduced-motion: reduce)')[1];
+    expect(reduced).toMatch(/\.front-page-story-lead,[^}]+transition: none/);
+    const reveal = css.split('@media (prefers-reduced-motion: no-preference)')[1].split('@media')[0];
+    expect(reveal).not.toContain('front-page-story-lead');
+    for (const line of css.split('\n').filter(line => line.includes('.front-page-story-lead'))) {
+        expect(line.trim()).toMatch(/^\.front-page-hero\.front-page-hero--serif-story-v1 \.front-page-story-lead/);
+    }
+});
+
 test('the default preset keeps the shared layout and typography when the scoped stylesheet is loaded', () => {
     const style = document.createElement('style'); style.dataset.storyTest = 'true';
     style.textContent = sharedStyles + laterStyles; document.head.append(style);

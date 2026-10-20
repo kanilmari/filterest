@@ -5,7 +5,7 @@
 export const HOME_PALETTE_COPY = Object.freeze({
     en: {
         button: 'Home palette', title: 'Home palette', close: 'Close', reset: 'Reset', save: 'Save',
-        notice: 'Preview the title, slogan and description together. Reset restores the saved layout. Closing keeps the preview until you leave Home. Serif story: The title and slogan form one heading row – keep them short, e.g. "Travel news and deals" + "at a glance". A longer lead sentence belongs in the description. Use **…** for whole emphasis lines and blank lines for sections.',
+        notice: 'Preview the title, slogan and description together. Reset restores the saved layout. Closing keeps the preview until you leave Home. Serif story: The title and slogan form one heading row – keep them short, e.g. "Travel news and deals" + "at a glance". A slogan of up to 40 characters joins the title in italics; a longer one is shown below the title as a smaller lead paragraph. Use **…** for whole emphasis lines and blank lines for sections.',
         anchor: 'Text block position', horizontalMargin: 'Horizontal margin', verticalMargin: 'Vertical margin',
         textStyle: 'Text style', default: 'Default', serif_story_v1: 'Serif story',
         lineReveal: 'Line reveal', none: 'Off', lines: 'Line by line',
@@ -22,7 +22,7 @@ export const HOME_PALETTE_COPY = Object.freeze({
     },
     fi: {
         button: 'Etusivun paletti', title: 'Etusivun paletti', close: 'Sulje', reset: 'Palauta', save: 'Tallenna',
-        notice: 'Esikatsele otsikkoa, iskulausetta ja kuvausta yhtenä tekstilohkona. Palauta palauttaa tallennetun asettelun. Sulkeminen säilyttää esikatselun, kunnes poistut etusivulta. Serif-tarina: Otsikko ja iskulause muodostavat yhden otsikkorivin – pidä ne lyhyinä, esim. ”Matkatiedot ja -edut” + ”yhdellä silmäyksellä”. Pidempi johdantolause kuuluu kuvaukseen. Merkitse kokonaiset korostusrivit **…** ja erota osiot tyhjällä rivillä.',
+        notice: 'Esikatsele otsikkoa, iskulausetta ja kuvausta yhtenä tekstilohkona. Palauta palauttaa tallennetun asettelun. Sulkeminen säilyttää esikatselun, kunnes poistut etusivulta. Serif-tarina: Otsikko ja iskulause muodostavat yhden otsikkorivin – pidä ne lyhyinä, esim. ”Matkatiedot ja -edut” + ”yhdellä silmäyksellä”. Enintään 40 merkin iskulause liittyy otsikkoon kursiivina; pidempi näytetään otsikon alla pienempänä johdantokappaleena. Merkitse kokonaiset korostusrivit **…** ja erota osiot tyhjällä rivillä.',
         anchor: 'Tekstilohkon sijainti', horizontalMargin: 'Vaakamarginaali', verticalMargin: 'Pystymarginaali',
         textStyle: 'Tekstityyli', default: 'Oletus', serif_story_v1: 'Serif-tarina',
         lineReveal: 'Rivien ilmestyminen', none: 'Pois', lines: 'Rivi kerrallaan',

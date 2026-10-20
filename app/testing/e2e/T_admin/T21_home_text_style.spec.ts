@@ -97,13 +97,29 @@ async function age(line: Locator) {
   return line.evaluate(element => Number(element.getAnimations()
     .find(animation => (animation as CSSAnimation).animationName === 'home-story-fade')?.currentTime ?? -1));
 }
+// 20.10. (d258c: clean main fails 3/60 at 390 px, mobile/tablet/desktop) a line's fade is sometimes not listed by
+// getAnimations() when read, e.g. a late hero rebuild replaced the lines (WO62). Decide from the line's state instead
+// of failing: poll (bounded) until its current fade exists, or the line is already fully shown, which means the
+// requested age has passed.
 async function waitUntilAge(line: Locator, milliseconds: number) {
-  const elapsed = await age(line);
-  expect(elapsed).toBeGreaterThanOrEqual(0);
-  await line.page().waitForTimeout(Math.max(0, milliseconds - elapsed));
+  let elapsed = -1;
+  await expect.poll(async () => {
+    elapsed = await age(line);
+    return elapsed >= 0 || await line.evaluate(element => getComputedStyle(element).opacity === '1');
+  }, { timeout: 5_000 }).toBe(true);
+  if (elapsed >= 0) await line.page().waitForTimeout(Math.max(0, milliseconds - elapsed));
 }
 async function expectComplete(page: Page) {
   await expect.poll(() => linesFor(page).evaluateAll(lines => lines.every(line => getComputedStyle(line).opacity === '1'))).toBe(true);
+}
+// End of the reveal (the fixture's 12 lines: 3000 + 11 × 800 + 650 = 12 450 ms after the first line's start; 12 600
+// leaves a margin). The first line's fade may be unlisted at this point (see waitUntilAge), so the end wait polls the
+// end state instead of trusting that one clock.
+async function expectRevealCompletes(page: Page, first: Locator) {
+  const elapsed = await age(first);
+  if (elapsed >= 0) await page.waitForTimeout(Math.max(0, 12600 - elapsed));
+  await expect.poll(() => linesFor(page).evaluateAll(lines => lines.length > 0
+    && lines.every(line => getComputedStyle(line).opacity === '1')), { timeout: 15_000 }).toBe(true);
 }
 async function openHome(page: Page) {
   await page.goto('/', { waitUntil: 'domcontentloaded' });
@@ -194,7 +210,7 @@ for (const language of ['fi', 'en'] as const) for (const theme of ['light', 'dar
         expect(bounds.rows).toBeGreaterThan(1);
       }
       await waitUntilAge(first, 3700); await expect(first).toHaveCSS('opacity', '1');
-      await waitUntilAge(first, 12600); await expectComplete(page);
+      await expectRevealCompletes(page, first);
       const final = (await hero.boundingBox())!;
       for (const key of ['x', 'y', 'width', 'height'] as const) expect(final[key]).toBeCloseTo(initial[key], 1);
       await expect(page.locator('body')).toHaveClass(new RegExp(`\\b${theme}-mode\\b`));
@@ -218,10 +234,34 @@ test('long slogan at 1920 with the side menu docked', async ({ page }) => {
     const content = (await page.locator('.front-page-scroller--positioned').boundingBox())!;
     return menu.x >= 0 && menu.width > 0 && menu.x + menu.width <= content.x;
   }).toBe(true);
-  await expect(hero.locator('h1')).toHaveText(`${copy.fi.title} ${slogan}`);
-  const bounds = await expectHeadingFits(hero);
-  expect(bounds.rows).toBeGreaterThan(1);
-  await waitUntilAge(linesFor(page).first(), 12600); await expectComplete(page);
+  const heading = hero.locator('h1');
+  expect(await heading.textContent()).toBe(copy.fi.title);
+  await expect(heading.locator('.front-page-title-accent')).toHaveCount(0);
+  const lead = hero.locator('.front-page-story-lead');
+  await expect(lead).toHaveCount(1);
+  await expect(lead).toHaveText(slogan);
+  await expect(lead).toBeVisible();
+  await expect(lead).toHaveCSS('font-style', 'italic');
+  await expect(lead).toHaveCSS('animation-name', 'none');
+  await expect(lead).toHaveCSS('opacity', '1');
+  await expect(hero.locator('.front-page-description > :first-child')).toHaveClass('front-page-story-lead');
+  const bounds = await hero.evaluate(element => {
+    const heading = element.querySelector('h1')!.getBoundingClientRect();
+    const lead = element.querySelector('.front-page-story-lead')!;
+    const leadBox = lead.getBoundingClientRect();
+    const scroller = element.closest('.front-page-scroller')!;
+    const scrollerBox = scroller.getBoundingClientRect();
+    return { headingBottom: heading.bottom, headingRight: heading.right, leadTop: leadBox.top, leadRight: leadBox.right,
+      leadSize: parseFloat(getComputedStyle(lead).fontSize), scrollerRight: scrollerBox.right,
+      scrollWidth: scroller.scrollWidth, clientWidth: scroller.clientWidth };
+  });
+  expect(bounds.leadTop).toBeGreaterThanOrEqual(bounds.headingBottom);
+  expect(bounds.leadSize).toBeGreaterThan(0);
+  expect(bounds.leadSize).toBeLessThanOrEqual(22);
+  expect(bounds.scrollWidth).toBeLessThanOrEqual(bounds.clientWidth);
+  expect(bounds.headingRight).toBeLessThanOrEqual(bounds.scrollerRight);
+  expect(bounds.leadRight).toBeLessThanOrEqual(bounds.scrollerRight);
+  await expectRevealCompletes(page, linesFor(page).first());
 });
 
 test('language restarts; theme continues; entering reduced motion completes and leaving keeps all visible', async ({ page }) => {

@@ -5,6 +5,13 @@
 import { renderHomeDescription } from './front_page_presentation_renderer.js';
 
 const LAST_REVEAL_INDEX = 39;
+export const SERIF_STORY_ACCENT_MAX_CHARS = 40;
+
+/** Keep only short slogans in the title; count Unicode code points after trimming. */
+export function serifStoryAccentFitsTitle(accent) {
+    const length = Array.from(accent.trim()).length;
+    return length > 0 && length <= SERIF_STORY_ACCENT_MAX_CHARS;
+}
 
 /** Only whole-line markers have meaning; every other asterisk remains literal text. */
 export function homeStoryLines(text) {
@@ -37,7 +44,8 @@ export function renderHomeHeroText({ hero, heading, slogan, description, title, 
     }
     hero.lang = language;
     slogan.remove();
-    if (accent.trim()) {
+    const accentFitsTitle = serifStoryAccentFitsTitle(accent);
+    if (accentFitsTitle) {
         const emphasis = document.createElement('em');
         emphasis.className = 'front-page-title-accent';
         emphasis.textContent = accent;
@@ -45,6 +53,12 @@ export function renderHomeHeroText({ hero, heading, slogan, description, title, 
     }
     description.removeAttribute('hidden');
     description.replaceChildren();
+    if (!accentFitsTitle && accent.trim()) {
+        const lead = document.createElement('p');
+        lead.className = 'front-page-story-lead';
+        lead.textContent = accent;
+        description.append(lead);
+    }
     homeStoryLines(text).forEach((item, index) => {
         const line = document.createElement('p');
         line.className = 'front-page-story-line';

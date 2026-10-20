@@ -22,6 +22,7 @@ Dates are the local (Europe/Helsinki) date on which the version was published.
 
 ## [Unreleased]
 
+- **Serif story long slogans (WO68)** — Slogans up to 40 Unicode code points keep the italic title accent; longer slogans appear below the title as a smaller italic lead outside the line reveal, with Finnish/English palette guidance.
 - On phones, Home fills its stacked navigation row, dataset headings have tighter spacing, and the top bar places Home beside the menu with a complete menu-button border; Home closes an overlay menu like a dataset tab.
 - **Page image-first pilot** — Explicit row links and Home article buttons can opt into `image_first_page_view`, with a contained image inside the text column, image-free rows, Page-scoped access checks and shared Back/Forward/close behavior. Existing openers and Home defaults stay unchanged. **Rollback:** 9.5.0's strict reader rejects a stored `view` field, so rolling back hides all Home article buttons (fail-closed) until they are re-saved without Page and without the `view` field.
 - **Side menu history buttons** — Disabled back and forward buttons show the normal cursor intended for them instead of "not allowed"; the layering browser test now follows the menu's neutral opening cursor.

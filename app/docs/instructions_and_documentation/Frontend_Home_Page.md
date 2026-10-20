@@ -168,11 +168,11 @@ extra and wrongly typed fields fail strict Go/browser validation. Old v1/v2 rows
 read with default typography and reveal off, preserving their stored revision.
 Every palette save carries the complete text style even when it was untouched.
 
-Serif story combines the title and slogan in one heading: upright Georgia / Times
-New Roman plus an italic accent. An empty slogan omits the accent; the existing
-site-name title fallback remains. The hero's language follows its rendered copy.
-Keep title and slogan short, for example “Matkatiedot ja -edut” + “yhdellä
-silmäyksellä”; a longer lead sentence belongs in the description.
+Serif story uses upright Georgia / Times New Roman; a non-empty slogan of at most 40 trimmed Unicode code points joins the title as an italic accent (emoji surrogate pairs count once).
+Longer slogans appear once as the first paragraph below the title, before the story lines, in italic Georgia / Times New Roman and the accent colour.
+The lead has a 17–22 px size clamp, 1.4 line height and the story shadow (17/15 px at the 1180/760 px container steps); it is visible from first paint, outside the line reveal, without changing story-line indexes.
+Blank slogans render neither accent nor lead; the site-name title fallback remains, and the hero's language follows its rendered copy.
+Keep title and slogan short, e.g. “Matkatiedot ja -edut” + “yhdellä silmäyksellä”.
 Each description line becomes one paragraph; blank lines start sections and a
 whole line `**…**` marks bold emphasis. Only the outer markers are removed;
 other asterisks stay literal. All copy uses text nodes. Default keeps the existing

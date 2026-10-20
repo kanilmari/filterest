@@ -3,7 +3,7 @@
 // Connects the text renderer to Finnish/English copy and live reduced-motion changes.
 // Checks one listener per render and no delayed insertion or inaccessible pending text.
 import { afterEach, expect, test, vi } from 'vitest';
-import { homeStoryLines, renderHomeHeroText } from './front_page_text_style_renderer.js';
+import { homeStoryLines, renderHomeHeroText, SERIF_STORY_ACCENT_MAX_CHARS, serifStoryAccentFitsTitle } from './front_page_text_style_renderer.js';
 import { DEFAULT_HOME_PRESENTATION } from '../../shared/front_page_presentation/validator.js';
 
 let cleanup = () => {};
@@ -37,9 +37,88 @@ test.each([
     expect(hero.lang).toBe(language);
     expect(heading.textContent).toBe(`${title} ${accent}`);
     expect(heading.querySelector('em')?.textContent).toBe(accent);
+    expect(heading.childNodes[1].textContent).toBe(' ');
+    expect(hero.querySelector('.front-page-story-lead')).toBeNull();
     expect(hero.querySelector('.front-page-slogan')).toBeNull();
     expect(hero.querySelectorAll('.front-page-story-line--section-start')).toHaveLength(1);
     expect(hero.querySelectorAll('.front-page-story-line--emphasis')).toHaveLength(1);
+});
+
+test.each([
+    ['at a glance', true], ['a'.repeat(40), true], ['a'.repeat(41), false],
+    ['a'.repeat(39) + '🌍', true], ['  ' + 'a'.repeat(40) + '  ', true], ['', false], [' \n\t ', false],
+])('title accent eligibility counts trimmed Unicode code points: %j', (accent, expected) => {
+    expect(SERIF_STORY_ACCENT_MAX_CHARS).toBe(40);
+    expect(serifStoryAccentFitsTitle(accent)).toBe(expected);
+});
+
+test.each(['a'.repeat(40), 'a'.repeat(39) + '🌍', '  ' + 'a'.repeat(40) + '  '])(
+    'forty code points keep the original title accent DOM: %j', accent => {
+        const { hero, heading, title } = fixture({ accent });
+        expect(heading.textContent).toBe(`${title} ${accent}`);
+        expect(heading.querySelector('em.front-page-title-accent')?.textContent).toBe(accent);
+        expect(hero.querySelector('.front-page-story-lead')).toBeNull();
+    });
+
+test.each(['a'.repeat(41), '<img src=x onerror=alert(1)>' + '🌍'.repeat(16)])(
+    'a long slogan becomes one literal lead before the story: %j', accent => {
+        const { hero, heading, description, title } = fixture({ accent });
+        expect(heading.textContent).toBe(title);
+        expect(heading.querySelector('em')).toBeNull();
+        expect(hero.querySelectorAll('.front-page-story-lead')).toHaveLength(1);
+        const lead = description.firstElementChild;
+        expect(lead.tagName).toBe('P');
+        expect(lead.className).toBe('front-page-story-lead');
+        expect(lead.textContent).toBe(accent);
+        expect(lead.children).toHaveLength(0);
+        expect(lead.hasAttribute('style')).toBe(false);
+        expect(lead.hasAttribute('hidden')).toBe(false);
+        expect([...description.querySelectorAll('.front-page-story-line')]
+            .map(line => line.style.getPropertyValue('--line-index'))).toEqual(['0', '1', '2']);
+    });
+
+test.each(['', ' \n\t '])('a blank slogan renders neither accent nor lead: %j', accent => {
+    const { hero, heading, title } = fixture({ accent });
+    expect(heading.textContent).toBe(title);
+    expect(hero.querySelector('em, .front-page-story-lead')).toBeNull();
+});
+
+test.each([
+    ['at a glance', 'yhdellä silmäyksellä'], ['a'.repeat(41), '🌍'.repeat(41)],
+    ['at a glance', 'a'.repeat(41)], ['a'.repeat(41), 'yhdellä silmäyksellä'],
+])('language rebuilds replace accents and leads without duplicates: %j → %j', (english, finnish) => {
+    const options = fixture({ language: 'en', accent: english });
+    for (const [language, title, accent] of [['fi', 'Matkatiedot', finnish], ['en', 'Travel', english]]) {
+        cleanup();
+        Object.assign(options, { language, title, accent });
+        cleanup = renderHomeHeroText(options);
+        const fits = serifStoryAccentFitsTitle(accent);
+        expect(options.hero.querySelectorAll('.front-page-title-accent')).toHaveLength(fits ? 1 : 0);
+        expect(options.hero.querySelectorAll('.front-page-story-lead')).toHaveLength(fits ? 0 : 1);
+        expect(options.heading.textContent).toBe(fits ? `${title} ${accent}` : title);
+    }
+});
+
+test('line reveal leaves the lead present and outside the indexed story lines', () => {
+    vi.stubGlobal('matchMedia', vi.fn(() => ({ matches: false, addEventListener: vi.fn(), removeEventListener: vi.fn() })));
+    const { hero, description } = fixture({ accent: '🌍'.repeat(41),
+        textStyle: { preset: 'serif_story_v1', reveal: { mode: 'lines', start_ms: 3000, interval_ms: 800 } } });
+    expect(hero.classList.contains('front-page-hero--reveal-lines')).toBe(true);
+    const lead = description.firstElementChild;
+    expect(lead.className).toBe('front-page-story-lead');
+    expect(lead.style.getPropertyValue('--line-index')).toBe('');
+    expect(lead.hasAttribute('hidden')).toBe(false);
+    expect(description.querySelector('.front-page-story-line').style.getPropertyValue('--line-index')).toBe('0');
+});
+
+test('default keeps long slogans separate and clears a previous Serif lead', () => {
+    const options = fixture({ accent: 'a'.repeat(41) });
+    cleanup();
+    options.textStyle = DEFAULT_HOME_PRESENTATION.text_style;
+    cleanup = renderHomeHeroText(options);
+    expect(options.heading.textContent).toBe(options.title);
+    expect(options.hero.querySelector('em, .front-page-story-lead')).toBeNull();
+    expect(options.hero.querySelector('.front-page-slogan')?.textContent).toBe(options.accent);
 });
 
 test('empty slogan omits the accent and markup-like copy is literal', () => {

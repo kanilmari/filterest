@@ -113,14 +113,18 @@ test('fi/en labels and bounds remain accessible and existing control order prece
 });
 
 test.each([
-    ['en', 'The title and slogan form one heading row – keep them short, e.g. "Travel news and deals" + "at a glance". A longer lead sentence belongs in the description.',
-        'Use **…** for whole emphasis lines and blank lines for sections.'],
-    ['fi', 'Otsikko ja iskulause muodostavat yhden otsikkorivin – pidä ne lyhyinä, esim. ”Matkatiedot ja -edut” + ”yhdellä silmäyksellä”. Pidempi johdantolause kuuluu kuvaukseen.',
-        'Merkitse kokonaiset korostusrivit **…** ja erota osiot tyhjällä rivillä.'],
-])('%s notice explains short headings and retains story-authoring guidance', (language, headingHint, storyHint) => {
+    ['en', 'The title and slogan form one heading row – keep them short, e.g. "Travel news and deals" + "at a glance".',
+        'A slogan of up to 40 characters joins the title in italics; a longer one is shown below the title as a smaller lead paragraph.',
+        'Use **…** for whole emphasis lines and blank lines for sections.', 'A longer lead sentence belongs in the description.'],
+    ['fi', 'Otsikko ja iskulause muodostavat yhden otsikkorivin – pidä ne lyhyinä, esim. ”Matkatiedot ja -edut” + ”yhdellä silmäyksellä”.',
+        'Enintään 40 merkin iskulause liittyy otsikkoon kursiivina; pidempi näytetään otsikon alla pienempänä johdantokappaleena.',
+        'Merkitse kokonaiset korostusrivit **…** ja erota osiot tyhjällä rivillä.', 'Pidempi johdantolause kuuluu kuvaukseen.'],
+])('%s notice explains slogan placement and retains story-authoring guidance', (language, headingHint, leadHint, storyHint, oldHint) => {
     document.documentElement.lang = language;
     setup();
     const notice = mounted.panel.querySelector('.dataset-cover-test-palette__notice');
     expect(notice.textContent).toContain(headingHint);
+    expect(notice.textContent).toContain(leadHint);
     expect(notice.textContent).toContain(storyHint);
+    expect(notice.textContent).not.toContain(oldHint);
 });

@@ -70,6 +70,32 @@ test('language render replaces lines and restarts once, without retaining the ol
     expect(motion.removeEventListener).toHaveBeenCalledTimes(1);
 });
 
+test('long slogans stay unique across preview/save/reset and language rebuilds', async () => {
+    const accent = 'Fintravel kokoaa yhteen sen, mitä matkaa suunnitteleva tarvitsee.';
+    mocks.request.mockResolvedValue({ viewer_id: 42, site_name: 'fintravel', blocks: [], presentation: defaults,
+        hero: { title: { fi: 'Matkatiedot', en: 'Travel' }, slogan: { fi: accent, en: 'at a glance' },
+            description: { fi: '**Alku**\nLoppu', en: '**Start**\nEnd' } } });
+    page = renderFrontPage();
+    await vi.waitFor(() => expect(mocks.preview).toBeTypeOf('function'));
+    for (let render = 0; render < 2; render++) {
+        mocks.preview(story); // Preview and save use the same render callback.
+        expect(page.querySelectorAll('.front-page-story-lead')).toHaveLength(1);
+        expect(page.querySelector('.front-page-story-lead').textContent).toBe(accent);
+        expect(page.querySelector('h1').textContent).toBe('Matkatiedot');
+    }
+    mocks.preview(defaults);
+    expect(page.querySelector('.front-page-story-lead')).toBeNull();
+    expect(page.querySelector('.front-page-slogan').textContent).toBe(accent);
+    mocks.preview(story);
+    await refreshLocalizedDatasetValues('en', page);
+    expect(page.querySelectorAll('.front-page-title-accent')).toHaveLength(1);
+    expect(page.querySelector('.front-page-story-lead')).toBeNull();
+    await refreshLocalizedDatasetValues('fi', page);
+    expect(page.querySelectorAll('.front-page-story-lead')).toHaveLength(1);
+    expect(page.querySelector('.front-page-title-accent')).toBeNull();
+    expect(page.querySelector('.front-page-story-line').style.getPropertyValue('--line-index')).toBe('0');
+});
+
 test.each(['fi', 'en'])('empty title keeps the site fallback and empty slogan omits the accent in %s', async language => {
     localStorage.setItem('chosen_language', language);
     mocks.request.mockResolvedValue({ viewer_id: 42, site_name: 'fintravel', blocks: [], presentation: story,

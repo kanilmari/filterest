@@ -54,6 +54,22 @@ body.dark-mode .front-page-hero.front-page-hero--serif-story-v1 {
   text-align: left;
 }
 
+.front-page-hero.front-page-hero--serif-story-v1 .front-page-story-lead {
+  margin: 0 0 14px;
+  color: var(--home-story-accent);
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: clamp(17px, 1.4cqi, 22px);
+  font-style: italic;
+  font-weight: 400;
+  line-height: 1.4;
+  letter-spacing: normal;
+  text-align: left;
+  white-space: normal;
+  overflow-wrap: break-word;
+  text-shadow: var(--home-story-text-shadow);
+  transition: color 300ms ease, text-shadow 300ms ease;
+}
+
 .front-page-hero.front-page-hero--serif-story-v1 .front-page-story-line {
   margin: 0 0 10px;
   color: var(--home-story-soft);
@@ -82,6 +98,7 @@ body.dark-mode .front-page-hero.front-page-hero--serif-story-v1 {
 @container (width <= 1180px) {
   .front-page-hero.front-page-hero--serif-story-v1 .morphing-title,
   .front-page-hero.front-page-hero--serif-story-v1 .front-page-title-accent { font-size: 4.7cqi; }
+  .front-page-hero.front-page-hero--serif-story-v1 .front-page-story-lead { font-size: 17px; }
   .front-page-hero.front-page-hero--serif-story-v1 .front-page-story-line { font-size: 14px; }
 }
 
@@ -94,6 +111,8 @@ body.dark-mode .front-page-hero.front-page-hero--serif-story-v1 {
 
   .front-page-hero.front-page-hero--serif-story-v1[lang="en"] .morphing-title,
   .front-page-hero.front-page-hero--serif-story-v1[lang="en"] .front-page-title-accent { font-size: clamp(29px, 8.4cqi, 50px); }
+
+  .front-page-hero.front-page-hero--serif-story-v1 .front-page-story-lead { font-size: 15px; }
 
   .front-page-hero.front-page-hero--serif-story-v1 .front-page-story-line {
     font-size: 12px;
@@ -118,5 +137,6 @@ body.dark-mode .front-page-hero.front-page-hero--serif-story-v1 {
 @media (prefers-reduced-motion: reduce) {
   .front-page-hero.front-page-hero--serif-story-v1 .morphing-title,
   .front-page-hero.front-page-hero--serif-story-v1 .front-page-title-accent,
+  .front-page-hero.front-page-hero--serif-story-v1 .front-page-story-lead,
   .front-page-hero.front-page-hero--serif-story-v1 .front-page-story-line { transition: none; }
 }
