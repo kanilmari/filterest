@@ -22,6 +22,7 @@ Dates are the local (Europe/Helsinki) date on which the version was published.
 
 ## [Unreleased]
 
+- **Side menu history buttons** — Disabled back and forward buttons show the normal cursor intended for them instead of "not allowed"; the layering browser test now follows the menu's neutral opening cursor.
 - **Article upgrade approval evidence (K388)** — Add read-only BEFORE/AFTER reports, value-free owner difference lists and an offline SHA256-approved exact-difference gate.
 
 ## [9.5.0] - 2026-10-20

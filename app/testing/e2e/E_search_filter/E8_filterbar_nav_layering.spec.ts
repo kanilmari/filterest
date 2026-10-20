@@ -87,6 +87,8 @@ test.describe('E8 — Filterbar and Navbar Layering', () => {
       testInfo.project.metadata?.screenWidth !== 'desktop',
       'This test drives its own viewport sweep and only needs one project.',
     );
+    // Five widths, each with a fresh page load and data wait: the default 30 s ran out under nightly load (20.10.).
+    test.setTimeout(90_000);
 
     for (const width of NARROW_WIDTHS) {
       await prepareHiddenNarrowDrawers(page, width);
@@ -134,7 +136,9 @@ test.describe('E8 — Filterbar and Navbar Layering', () => {
     expect(transitionState.right).toBeLessThan(transitionState.width);
   });
 
-  test('keeps the complete top-row cursor stable only while the navbar opens', async ({ page }, testInfo) => {
+  // navbar_layout.css keeps the sliding top row on a neutral cursor while it opens (it moves under a stationary
+  // pointer); only the navbar's own menu control stays a pointer. Its Vitest pins the same contract.
+  test('keeps the opening top row neutral except for its menu button', async ({ page }, testInfo) => {
     test.skip(
       testInfo.project.metadata?.screenWidth !== 'desktop',
       'This proof drives its own viewport and only needs one project.',
@@ -152,12 +156,14 @@ test.describe('E8 — Filterbar and Navbar Layering', () => {
     const openingCursorState = await navbar.evaluate((element) => {
       const topBar = element.querySelector<HTMLElement>('.top-button-bar');
       const historyGap = element.querySelector<HTMLElement>('.nav-history-buttons');
+      const menuButton = element.querySelector<HTMLElement>('#hideMenuButton');
       const disabledHistoryButtons = Array.from(
         element.querySelectorAll<HTMLButtonElement>('.nav-history-btn:disabled'),
       );
       return {
         topBar: topBar ? getComputedStyle(topBar).cursor : '',
         historyGap: historyGap ? getComputedStyle(historyGap).cursor : '',
+        menuButton: menuButton ? getComputedStyle(menuButton).cursor : '',
         disabledButtons: disabledHistoryButtons.map((button) => ({
           cursor: getComputedStyle(button).cursor,
           disabled: button.disabled,
@@ -165,10 +171,11 @@ test.describe('E8 — Filterbar and Navbar Layering', () => {
       };
     });
 
-    expect(openingCursorState.topBar).toBe('pointer');
-    expect(openingCursorState.historyGap).toBe('pointer');
+    expect(openingCursorState.topBar).toBe('default');
+    expect(openingCursorState.historyGap).toBe('default');
+    expect(openingCursorState.menuButton).toBe('pointer');
     expect(openingCursorState.disabledButtons.length).toBeGreaterThan(0);
-    expect(openingCursorState.disabledButtons.every(({ cursor }) => cursor === 'pointer')).toBe(true);
+    expect(openingCursorState.disabledButtons.every(({ cursor }) => cursor === 'default')).toBe(true);
     expect(openingCursorState.disabledButtons.every(({ disabled }) => disabled)).toBe(true);
 
     await expect(navbar).not.toHaveClass(/navbar-opening/, { timeout: 1000 });

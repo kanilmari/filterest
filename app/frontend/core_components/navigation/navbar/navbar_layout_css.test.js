@@ -29,6 +29,15 @@ describe('navbar layout CSS', () => {
         expect(css).not.toContain('#navbar:not(.collapsed) .top-button-bar *');
     });
 
+    test('keeps disabled history buttons on a neutral cursor once the navbar has opened', () => {
+        const css = readFileSync(resolve(CURRENT_DIR, 'navbar_layout.css'), 'utf8');
+        const historyRule = css.match(/#navbar \.nav-history-btn:disabled\s*\{([^}]*)\}/)?.[1] || '';
+
+        // Same ID weight as `#navbar button:disabled` (not-allowed) plus one class, so this rule wins.
+        expect(historyRule).toContain('cursor: default;');
+        expect(css).not.toMatch(/^\.nav-history-btn:disabled\s*\{/m);
+    });
+
     test('keeps a dedicated sticky top-row edge above scrolling dataset tabs', () => {
         const css = readFileSync(resolve(CURRENT_DIR, 'navbar_layout.css'), 'utf8');
         const topBarRule = css.match(/\.top-button-bar\s*\{([^}]*)\}/)?.[1] || '';

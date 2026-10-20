@@ -431,7 +431,8 @@ body.light-mode #nav_tree .tree-current-project-badge {
     z-index: 1; /* Ensure hover border is on top */
 }
 
-.nav-history-btn:disabled {
+/* The #navbar prefix outranks the generic `#navbar button:disabled` not-allowed cursor above. */
+#navbar .nav-history-btn:disabled {
     opacity: 0.3;
     cursor: default;
 }
