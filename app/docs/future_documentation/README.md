@@ -146,3 +146,6 @@ third-party product screenshots in words; never store them here.
   programs acting on behalf of one account under the existing permission model.
 - [Rich text values](Rich_Text_Values.md) describes save-time cleaning of formatted
   text against one shared definition of allowed structure, with cleaning notices.
+- [Modularity and its deviations in tests](Modularity_In_Tests.md) describes
+  structure checks that fail when code bypasses a shared library or the
+  component folder rules, with a reviewed allow-list of known deviations.

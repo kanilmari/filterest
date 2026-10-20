@@ -667,10 +667,9 @@ Use a **larger refactor** when most of these are true:
 - The refactor removes duplication without adding a parallel contract.
 - You are collapsing already-proven migration scaffolding rather than inventing a new direction.
 
-A useful slice establishes one real seam and one canonical policy, with tests
-and a clear continuation. Avoid duplicated mappings, parallel quasi-canonical
-paths and unrelated cleanup. Prefer one verifiable vertical change before a
-wider rollout when the blast radius is uncertain.
+A useful slice establishes one real seam and one canonical policy, with tests and a clear continuation. Avoid duplicated mappings, parallel quasi-canonical paths and unrelated cleanup. Prefer one verifiable vertical change before a wider rollout when the blast radius is uncertain.
+
+**Merging implementations:** when several implementations of the same capability are merged into one, compare them before choosing the survivor and combine their best parts: a clearer contract, a better-tested path, an accessibility or performance detail, or a case that only one of them handles. Do not simply keep the largest or most widely used implementation as it is when it is imperfect; size and usage show where the callers are, not which design is best. Name what was taken from each source in the change description, and leave one implementation behind.
 
 ### Callers, moves and review
 
