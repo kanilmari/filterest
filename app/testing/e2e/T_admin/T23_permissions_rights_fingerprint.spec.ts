@@ -30,6 +30,12 @@ async function readRows(page: Page, dataset: string, fields: Record<string, stri
   for (const row of rows) expect(row).toMatchObject(fields);
   return rows;
 }
+async function readRightsSnapshot(page: Page) {
+  const [rows, datasets] = await Promise.all([
+    readRows(page, 'system_group_table_func_rights'), readRows(page, 'system_db_tables'),
+  ]);
+  return { rows, datasetUIDs: new Set(datasets.map(row => Number(row.table_uid))) };
+}
 async function addRow(page: Page, dataset: string, fields: Record<string, unknown>) {
   const response = await page.request.post(`/api/add-row-multipart?dataset=${dataset}`, {
     headers: { 'X-CSRF-Token': await fetchCsrfTokenForRequest(page.request) }, multipart: { jsonPayload: JSON.stringify(fields) },
@@ -43,10 +49,14 @@ async function deleteRows(page: Page, dataset: string, ids: number[]) {
   });
   expect(response.ok(), await response.text()).toBe(true);
 }
-const normalize = (rows: Row[] | Right[]) => rows.map(row => ({
-  group: row.user_group_id, function: row.function_id,
-  scope: { schema: row.target_schema_name, datasetUID: row.target_table_uid || null },
-})).sort((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b)));
+// Freeze the dataset scope with each rights snapshot: another worker's new dataset
+// can add admin grants, but globals and snapshot-time datasets must still match exactly.
+const normalize = (rows: Row[] | Right[], snapshotDatasetUIDs: ReadonlySet<number>) => rows
+  .filter(row => row.target_table_uid === null || snapshotDatasetUIDs.has(Number(row.target_table_uid)))
+  .map(row => ({
+    group: row.user_group_id, function: row.function_id,
+    scope: { schema: row.target_schema_name, datasetUID: row.target_table_uid || null },
+  })).sort((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b)));
 const sortRights = (rights: Right[]) => [...rights].sort((a, b) =>
   a.user_group_id - b.user_group_id || a.function_id - b.function_id ||
   String(a.target_schema_name).localeCompare(String(b.target_schema_name)) ||
@@ -152,7 +162,8 @@ test('K390PermissionsRightsFingerprint', async ({ page }, testInfo: TestInfo) =>
   await addRow(page, 'system_group_table_func_rights', {
     user_group_id: B, function_id: G, target_schema_name: 'public', target_table_uid: null,
   });
-  const nonOwned = normalize((await readRows(page, 'system_group_table_func_rights')).filter(row => !fixture.groupIDs.includes(row.user_group_id)));
+  const snapshot = await readRightsSnapshot(page);
+  const nonOwned = normalize(snapshot.rows.filter(row => !fixture.groupIDs.includes(row.user_group_id)), snapshot.datasetUIDs);
   const expected = (tuples: Array<[string, string, string | null]>) => tuples.map(([group, fn, dataset]) => ({
     group: fixture.groups[group === 'A' ? 0 : 1], function: fixture.functions[['F', 'T', 'G', 'H'].indexOf(fn)],
     route: `/ui/${fixture.functions[['F', 'T', 'G', 'H'].indexOf(fn)]}`,
@@ -179,9 +190,9 @@ test('K390PermissionsRightsFingerprint', async ({ page }, testInfo: TestInfo) =>
     })).sort((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b)));
     await testInfo.attach(name, { body: JSON.stringify(listing, null, 2), contentType: 'application/json' });
     expect(listing, name).toEqual(expected(tuples));
-    expect(normalize(all.filter(row => !fixture.groupIDs.includes(row.user_group_id))), `${name}: existing groups unchanged`).toEqual(nonOwned);
+    expect(normalize(all.filter(row => !fixture.groupIDs.includes(row.user_group_id)), snapshot.datasetUIDs), `${name}: existing groups unchanged`).toEqual(nonOwned);
   }
-  let fullPost: { before: ReturnType<typeof normalize>; permissions: Right[]; intercepted: boolean } | null = null;
+  let fullPost: { before: ReturnType<typeof normalize>; datasetUIDs: ReadonlySet<number>; permissions: Right[]; intercepted: boolean } | null = null;
   // A full POST deletes/replaces ALL public/global grants, so NEVER forward one, even
   // if its payload matches a fresh read: another administrator could write after that read.
   // The pending expectation is armed immediately before Save, independently of UI state.
@@ -261,7 +272,7 @@ test('K390PermissionsRightsFingerprint', async ({ page }, testInfo: TestInfo) =>
     via: 'toolbar' | 'question' = 'toolbar') {
     if (method === 'POST') {
       // Read immediately before the Save click, never reuse the seed/preflight snapshot.
-      const before = await readRows(page, 'system_group_table_func_rights');
+      const { rows: before, datasetUIDs: snapshotDatasetUIDs } = await readRightsSnapshot(page);
       const nonOwnedGlobals = before.filter(row => !fixture.groupIDs.includes(row.user_group_id) &&
         row.target_schema_name === 'public' && row.target_table_uid === null)
         .map(({ user_group_id, function_id, target_schema_name, target_table_uid }) =>
@@ -278,7 +289,7 @@ test('K390PermissionsRightsFingerprint', async ({ page }, testInfo: TestInfo) =>
         const [fn] = await readRows(page, 'system_functions', { id: right.function_id });
         expect(fn?.disabled, `omitted global ${right.user_group_id}-${right.function_id} is a disabled function`).toBe(true);
       }
-      fullPost = { before: normalize(before), intercepted: false, permissions: [...nonOwnedGlobals.filter(isVisible),
+      fullPost = { before: normalize(before, snapshotDatasetUIDs), datasetUIDs: snapshotDatasetUIDs, intercepted: false, permissions: [...nonOwnedGlobals.filter(isVisible),
         ...ownedGlobals.map(([user_group_id, function_id]) =>
           ({ user_group_id, function_id, target_schema_name: 'public', target_table_uid: null }))] };
     }
@@ -292,8 +303,8 @@ test('K390PermissionsRightsFingerprint', async ({ page }, testInfo: TestInfo) =>
       expect(fullPost!.intercepted).toBe(true);
       expect(result.status()).toBe(201);
       expect(await result.json()).toEqual({ message: 'permissions saved successfully' });
-      expect(normalize(await readRows(page, 'system_group_table_func_rights')),
-        'Intercepted full POST leaves the entire server listing unchanged').toEqual(fullPost!.before);
+      expect(normalize(await readRows(page, 'system_group_table_func_rights'), fullPost!.datasetUIDs),
+        'Intercepted full POST leaves global and snapshot-time dataset grants unchanged').toEqual(fullPost!.before);
       fullPost = null;
     }
   }
