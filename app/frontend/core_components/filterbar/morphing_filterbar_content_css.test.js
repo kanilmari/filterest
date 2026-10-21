@@ -113,7 +113,7 @@ describe('morphing filterbar content CSS', () => {
         expect(themes).toContain('--bg_color_2: var(--bg-surface)');
         expect(themes).toMatch(/body\.light-mode\s*\{[^}]*--bg-surface: hsl\(var\(--brand-hue\) 8% 100%\)/s);
         expect(themes).toMatch(/body\.dark-mode\s*\{[^}]*--bg-surface: hsl\(var\(--brand-hue\) 20% 12%\)/s);
-        expect(sectionRule).toContain('border-radius: var(--fw-radius-lg)');
+        expect(sectionRule).toContain('border-radius: var(--search_tools_radius)');
         expect(sectionRule).toContain('gap: var(--fw-space-4)');
         expect(sectionRule).toContain('padding: var(--fw-space-4)');
     });

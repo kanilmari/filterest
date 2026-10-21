@@ -265,13 +265,23 @@
   gap: var(--fw-space-4);
   margin-top: 16px;
   padding: var(--fw-space-4);
-  border-radius: var(--fw-radius-lg);
+  border-radius: var(--search_tools_radius);
   border: 1px solid var(--border_color);
   background: oklch(from var(--bg_color_2) calc(l - 0.023) c h);
 }
 
 .dataset-filter-section[hidden] {
   display: none;
+}
+
+/* K465: one soft radius for the search-tools box and its controls; the search
+   field above it uses the same token (text_search.css). Shared controls
+   elsewhere keep their own radii. */
+.dataset-filter-section .sort-dropdown-wrapper .vdw-dropdown-input,
+.dataset-filter-section .filterbar-filters-toggle-button,
+.dataset-filter-section .reset-search-button,
+.dataset-filter-section .row-group-facet-heading {
+  border-radius: var(--search_tools_radius);
 }
 
 .dataset-filter-section > .dataset-filter-primary-actions,

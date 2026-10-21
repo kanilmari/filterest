@@ -55,7 +55,7 @@
   min-width: 0;
   box-sizing: border-box;
   border: 1px solid var(--border_color);
-  border-radius: var(--fw-radius-lg);
+  border-radius: var(--search_tools_radius);
   background: var(--input_bg_color);
   box-shadow: var(--fw-shadow-soft);
   transition: border-color 0.3s ease, box-shadow 0.3s ease;
@@ -77,7 +77,7 @@
   border: none !important;
   box-shadow: none !important;
   color: var(--text_color) !important;
-  border-radius: var(--fw-radius-lg) 0 0 var(--fw-radius-lg) !important;
+  border-radius: var(--search_tools_radius) 0 0 var(--search_tools_radius) !important;
   padding: 0 20px !important;
   font-family: 'JetBrains Mono', monospace;
   transition: background-color 0.3s ease, border-color 0.3s ease, color 0.3s ease;
@@ -92,7 +92,7 @@
   box-sizing: border-box;
   border: none !important;
   border-inline-start: 1px solid var(--border_color) !important;
-  border-radius: 0 calc(var(--fw-radius-lg) - 1px) calc(var(--fw-radius-lg) - 1px) 0 !important;
+  border-radius: 0 calc(var(--search_tools_radius) - 1px) calc(var(--search_tools_radius) - 1px) 0 !important;
   background: transparent !important;
   box-shadow: none !important;
   transition: background-color 0.3s ease, color 0.3s ease;

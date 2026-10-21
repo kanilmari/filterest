@@ -76,6 +76,7 @@
     --navbar_padding: 8px;
     --navbar_width: 300px;
     --border_radius: 10px;
+    --search_tools_radius: 10px;
     --border_radius_small: 4px;
     --border_radius_tiny: 3px;
     --button_pressed_scale: 1; /* Deprecated motion token: pressing controls must not move geometry. */

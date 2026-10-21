@@ -165,6 +165,7 @@ paragraph was removed and its key is no longer used in code (see its
 [language-key record](lang_key_lifecycle.md#retirement-record--2026-10-15-wo22)).
 In the inline hero, sorting, filter/reset actions and Categories share one shaded
 section, each on its own row. Selected chips and result counts follow outside it.
+The section, its sort select, Filter results, Reset search and category heading buttons share the global `--search_tools_radius` soft radius in both themes and at every width; the dataset search field (`text_search.css`) uses the same token.
 The selected-chip row matches the shaded section's outer width and left edge,
 including on phones. In `morphing_filterbar_content.css`, the hero and listing
 result controls consume the same responsive `--filterbar-hero-inline-space`
