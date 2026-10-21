@@ -67,6 +67,10 @@ test('responsive language sizes and normal-flow animation stay scoped to the pre
     const phone = css.split('@container (width <= 760px)')[1].split('@keyframes')[0];
     expect(phone).toContain('clamp(30px, 9cqi, 54px)'); expect(phone).toContain('clamp(29px, 8.4cqi, 50px)');
     expect(phone.match(/overflow-wrap: break-word/g)).toHaveLength(1);
+    // WO82: phone story lines are body-sized and keep the base line height (no phone override).
+    expect(phone).toContain('.front-page-hero.front-page-hero--serif-story-v1 .front-page-story-line { font-size: 15px; }');
+    expect(phone).not.toMatch(/\.front-page-story-line \{[^}]*line-height/);
+    expect(css).toMatch(/\.front-page-hero\.front-page-hero--serif-story-v1 \.front-page-story-line \{[^}]*line-height: 1\.45/);
     expect(css).not.toMatch(/nowrap|[\d.]vw|@media \(width|container-type/);
     expect(css).toContain('animation-fill-mode: both');
     expect(css).toContain('calc(var(--home-reveal-start) + var(--line-index) * var(--home-reveal-interval))');
@@ -107,7 +111,7 @@ test('lead sizes, reduced motion and reveal exclusion belong only to Serif story
     const tablet = css.split('@container (width <= 1180px)')[1].split('@container')[0];
     const phone = css.split('@container (width <= 760px)')[1].split('@keyframes')[0];
     expect(tablet).toContain(`${selector} { font-size: 17px; }`);
-    expect(phone).toContain(`${selector} { font-size: 15px; }`);
+    expect(phone).toContain(`${selector} { font-size: 16px; }`);
     const reduced = css.split('@media (prefers-reduced-motion: reduce)')[1];
     expect(reduced).toMatch(/\.front-page-story-lead,[^}]+transition: none/);
     const reveal = css.split('@media (prefers-reduced-motion: no-preference)')[1].split('@media')[0];

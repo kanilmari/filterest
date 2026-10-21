@@ -22,6 +22,7 @@ Dates are the local (Europe/Helsinki) date on which the version was published.
 
 ## [Unreleased]
 
+- On phones, Home's Serif story lines are body-sized (15 px, the base 1.45 line height) instead of 12 px, and a long slogan's lead is 16 px; wider screens are unchanged.
 - Filter-bar input-mode buttons (value, range, expression) now also open their collapsed filter section, and never close it; the remembered open sections stay in step.
 - On phones, dataset text search is visible directly above the search tools for every reader; the top-bar search button remains available after scrolling.
 

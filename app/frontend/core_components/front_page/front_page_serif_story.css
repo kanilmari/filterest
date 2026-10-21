@@ -112,12 +112,10 @@ body.dark-mode .front-page-hero.front-page-hero--serif-story-v1 {
   .front-page-hero.front-page-hero--serif-story-v1[lang="en"] .morphing-title,
   .front-page-hero.front-page-hero--serif-story-v1[lang="en"] .front-page-title-accent { font-size: clamp(29px, 8.4cqi, 50px); }
 
-  .front-page-hero.front-page-hero--serif-story-v1 .front-page-story-lead { font-size: 15px; }
+  /* Phone reading size (WO82): body-sized story lines; the base 1.45 line height applies. */
+  .front-page-hero.front-page-hero--serif-story-v1 .front-page-story-lead { font-size: 16px; }
 
-  .front-page-hero.front-page-hero--serif-story-v1 .front-page-story-line {
-    font-size: 12px;
-    line-height: 1.4;
-  }
+  .front-page-hero.front-page-hero--serif-story-v1 .front-page-story-line { font-size: 15px; }
 }
 
 @keyframes home-story-fade { from { opacity: 0; } to { opacity: 1; } }

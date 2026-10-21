@@ -236,7 +236,9 @@ for (const language of ['fi', 'en'] as const) for (const theme of ['light', 'dar
       await expect(heading).toHaveCSS('text-align', 'left');
       const sizes = await hero.evaluate(element => ({ title: parseFloat(getComputedStyle(element.querySelector('h1')!).fontSize),
         story: parseFloat(getComputedStyle(element.querySelector('.front-page-story-line')!).fontSize) }));
-      expect(sizes.title).toBeGreaterThan(sizes.story * 2.5);
+      // WO82 (owner 21.10.): phones raised the story text to body size (15 px) while the title keeps its clamp, so the
+      // phone hierarchy is ≥ 1.75×; wider screens keep the mockup's ≥ 2.5×.
+      expect(sizes.title).toBeGreaterThan(sizes.story * (viewport.width <= 700 ? 1.75 : 2.5));
       await expect(hero.locator('.front-page-story-line[hidden], .front-page-story-line[aria-hidden], .front-page-story-line[aria-live]')).toHaveCount(0);
       const bounds = await expectHeadingFits(hero);
       if (viewport.width === 390) {

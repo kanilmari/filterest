@@ -170,7 +170,7 @@ Every palette save carries the complete text style even when it was untouched.
 
 Serif story uses upright Georgia / Times New Roman; a non-empty slogan of at most 40 trimmed Unicode code points joins the title as an italic accent (emoji surrogate pairs count once).
 Longer slogans appear once as the first paragraph below the title, before the story lines, in italic Georgia / Times New Roman and the accent colour.
-The lead has a 17–22 px size clamp, 1.4 line height and the story shadow (17/15 px at the 1180/760 px container steps); it is visible from first paint, outside the line reveal, without changing story-line indexes.
+The lead has a 17–22 px size clamp, 1.4 line height and the story shadow (17/16 px at the 1180/760 px container steps); it is visible from first paint, outside the line reveal, without changing story-line indexes. At the 760 px step story lines are body-sized (15 px, the base 1.45 line height; WO82), so phone titles stay at least 1.75× the story text (2.5× on wider screens).
 Blank slogans render neither accent nor lead; the site-name title fallback remains, and the hero's language follows its rendered copy.
 Keep title and slogan short, e.g. “Matkatiedot ja -edut” + “yhdellä silmäyksellä”.
 Each description line becomes one paragraph; blank lines start sections and a
