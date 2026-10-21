@@ -149,3 +149,6 @@ third-party product screenshots in words; never store them here.
 - [Modularity and its deviations in tests](Modularity_In_Tests.md) describes
   structure checks that fail when code bypasses a shared library or the
   component folder rules, with a reviewed allow-list of known deviations.
+- [Embedded listings](Embedded_Listings.md) describes visitor-readable listings shown
+  inside another website's pages, server-side first for the host's search visibility,
+  with host permission and canonical item addresses.
