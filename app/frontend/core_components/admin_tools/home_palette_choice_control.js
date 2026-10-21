@@ -24,7 +24,8 @@ export function createHomePaletteChoiceControl({ id, label, choices, grid }, cop
             marker.setAttribute('aria-hidden', 'true');
             button.append(marker);
         } else {
-            button.append(createMaskIconSpan(`/frontend/icons/general/home-align-${choice}-icon.svg`, 'home-palette-alignment-icon'));
+            const icon = { start: 'left', end: 'right' }[choice] || choice;
+            button.append(createMaskIconSpan(`/frontend/icons/general/home-align-${icon}-icon.svg`, 'home-palette-alignment-icon'));
         }
         button.addEventListener('click', () => choose(index));
         button.addEventListener('keydown', event => {

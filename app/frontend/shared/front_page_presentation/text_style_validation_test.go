@@ -33,10 +33,17 @@ func TestHomeTextStyleTwinExamples(t *testing.T) {
 			if (err == nil) != example.Readable {
 				t.Fatal("read", err)
 			}
-			if example.Readable && got.SchemaVersion != 3 {
+			if example.Readable && got.SchemaVersion != 4 {
 				t.Fatal(got)
 			}
-			if example.Readable && !example.Valid && got.TextStyle != Rules().Default.TextStyle {
+			if example.Readable && got.PhoneAlignment != Rules().Default.PhoneAlignment && !example.Valid {
+				t.Fatal(got)
+			}
+			var stored struct {
+				SchemaVersion int `json:"schema_version"`
+			}
+			json.Unmarshal(example.Value, &stored)
+			if example.Readable && stored.SchemaVersion < 3 && got.TextStyle != Rules().Default.TextStyle {
 				t.Fatal(got)
 			}
 		})

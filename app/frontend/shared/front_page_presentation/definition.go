@@ -1,6 +1,6 @@
 // definition.go
 // Validates Home presentation against the browser's embedded definition.
-// Connects strict version-three values and version-one/two read conversion.
+// Connects strict version-four values and version-one/two/three read conversion.
 // Keeps conversion away from revision hashing and all persistence locks.
 package front_page_presentation
 
@@ -24,6 +24,7 @@ type Definition struct {
 	SchemaVersion    int      `json:"schema_version"`
 	Anchors          []string `json:"anchors"`
 	Alignments       []string `json:"alignments"`
+	PhoneAlignments  []string `json:"phone_alignments"`
 	HorizontalMargin Bounds   `json:"horizontal_margin_px"`
 	VerticalMargin   Bounds   `json:"vertical_margin_px"`
 	MaxWidth         Bounds   `json:"max_width_px"`
@@ -55,13 +56,14 @@ type LineReveal struct {
 	IntervalMS int    `json:"interval_ms"`
 }
 
-// Value is the complete version-three layout, media treatment and text style.
+// Value is the complete version-four layout, phone alignment, media and text style.
 type Value struct {
 	SchemaVersion      int       `json:"schema_version"`
 	Anchor             string    `json:"anchor"`
 	HorizontalMarginPx int       `json:"horizontal_margin_px"`
 	VerticalMarginPx   int       `json:"vertical_margin_px"`
 	Alignment          string    `json:"alignment"`
+	PhoneAlignment     string    `json:"phone_alignment"`
 	MaxWidthPx         int       `json:"max_width_px"`
 	LightWash          int       `json:"light_wash"`
 	LightOpacity       int       `json:"light_opacity"`
@@ -100,7 +102,7 @@ func presentationFields(raw any) (map[string]json.RawMessage, error) {
 	return fields, err
 }
 
-// Parse refuses partial, unknown, null, coerced and off-step version-three writes.
+// Parse refuses partial, unknown, null, coerced and off-step version-four writes.
 // Its browser twin is validator.js:isValidHomePresentation.
 func Parse(raw any) (Value, error) {
 	fields, err := presentationFields(raw)
@@ -123,10 +125,10 @@ func Parse(raw any) (Value, error) {
 		{"dark_wash", rules.DarkWash, &value.DarkWash},
 		{"dark_opacity", rules.DarkOpacity, &value.DarkOpacity},
 	}
-	if len(fields) != len(numbers)+3 {
-		return value, fmt.Errorf("Home presentation requires eleven fields")
+	if len(fields) != len(numbers)+4 {
+		return value, fmt.Errorf("Home presentation requires twelve fields")
 	}
-	for _, name := range []string{"anchor", "alignment"} {
+	for _, name := range []string{"anchor", "alignment", "phone_alignment"} {
 		if len(fields[name]) == 0 || string(fields[name]) == "null" {
 			return value, fmt.Errorf("missing %s", name)
 		}
@@ -137,7 +139,11 @@ func Parse(raw any) (Value, error) {
 	if err := json.Unmarshal(fields["alignment"], &value.Alignment); err != nil {
 		return value, err
 	}
-	if !slices.Contains(rules.Anchors, value.Anchor) || !slices.Contains(rules.Alignments, value.Alignment) {
+	if err := json.Unmarshal(fields["phone_alignment"], &value.PhoneAlignment); err != nil {
+		return value, err
+	}
+	if !slices.Contains(rules.Anchors, value.Anchor) || !slices.Contains(rules.Alignments, value.Alignment) ||
+		!slices.Contains(rules.PhoneAlignments, value.PhoneAlignment) {
 		return value, fmt.Errorf("invalid Home presentation choice")
 	}
 	for _, number := range numbers {
@@ -199,7 +205,7 @@ func parseTextStyle(raw json.RawMessage, rules Definition) (TextStyle, error) {
 	return value, nil
 }
 
-// ParseStored converts complete version-one/two rows; writes use CanonicalStored.
+// ParseStored converts complete version-one/two/three rows; writes use CanonicalStored.
 // Readers hash the original stored bytes, so conversion never invalidates a revision.
 func ParseStored(raw any) (Value, error) {
 	fields, err := presentationFields(raw)
@@ -211,12 +217,32 @@ func ParseStored(raw any) (Value, error) {
 	if err := json.Unmarshal(fields["schema_version"], &version); err != nil {
 		return Value{}, err
 	}
-	if version == 2 {
-		if len(fields) != 10 {
-			return Value{}, fmt.Errorf("incomplete version-two Home presentation")
+	if version == 2 || version == 3 {
+		if len(fields) != int(version)+8 || fields["phone_alignment"] != nil {
+			return Value{}, fmt.Errorf("invalid legacy Home presentation fields")
 		}
+		var alignment string
+		if err := json.Unmarshal(fields["alignment"], &alignment); err != nil {
+			return Value{}, err
+		}
+		switch alignment {
+		case "left":
+			alignment = "start"
+		case "right":
+			alignment = "end"
+		case "center", "justify":
+		default:
+			return Value{}, fmt.Errorf("invalid legacy Home alignment")
+		}
+		fields["alignment"], _ = json.Marshal(alignment)
 		fields["schema_version"], _ = json.Marshal(rules.SchemaVersion)
-		fields["text_style"], _ = json.Marshal(rules.Default.TextStyle)
+		fields["phone_alignment"] = json.RawMessage(`"inherit"`)
+		if version == 2 {
+			if fields["text_style"] != nil {
+				return Value{}, fmt.Errorf("version-two Home presentation forbids text_style")
+			}
+			fields["text_style"], _ = json.Marshal(rules.Default.TextStyle)
+		}
 		return Parse(fields)
 	}
 	if version != float64(rules.Legacy.SchemaVersion) {

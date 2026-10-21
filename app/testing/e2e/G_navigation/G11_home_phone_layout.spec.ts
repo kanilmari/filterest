@@ -90,7 +90,7 @@ test('native document fallback matches the HTML site icon for signed-out request
 
 async function openHome(page: Page, theme: Theme, language: string, fixture?: Fixture) {
   const writes: string[] = [];
-  const alignment = 'left';
+  const alignment = 'start';
   await installHomePolicy(page.context(), theme, fixture ? {
     site_name: fixture.name,
     presentation: { ...presentationDefinition.default, anchor: 'center-left', alignment,

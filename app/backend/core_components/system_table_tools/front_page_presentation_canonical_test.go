@@ -108,21 +108,27 @@ func TestHomePresentationStoresCanonicalBytesAndReturnsTheirRevision(t *testing.
 	for _, tc := range []struct {
 		name, preset, mode             string
 		start, interval, storedVersion int
+		phone                          string
 	}{
-		{"absent style", "", "", 0, 0, 2},
-		{"default", "default", "none", 3000, 800, 2},
-		{"inactive timings", "default", "none", 1234, 567, 2},
-		{"serif", "serif_story_v1", "none", 1234, 567, 3},
-		{"reveal", "default", "lines", 1234, 567, 3},
+		{"absent style", "", "", 0, 0, 2, "inherit"},
+		{"default", "default", "none", 3000, 800, 2, "inherit"},
+		{"inactive timings", "default", "none", 1234, 567, 2, "inherit"},
+		{"serif", "serif_story_v1", "none", 1234, 567, 3, "inherit"},
+		{"reveal", "default", "lines", 1234, 567, 3, "inherit"},
+		{"phone start", "default", "none", 3000, 800, 4, "start"},
+		{"phone centre", "serif_story_v1", "lines", 1234, 567, 4, "center"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			value := presentation.Rules().Default
+			value.PhoneAlignment = tc.phone
 			value.TextStyle = presentation.TextStyle{Preset: tc.preset, Reveal: presentation.LineReveal{Mode: tc.mode, StartMS: tc.start, IntervalMS: tc.interval}}
 			raw, _ := json.Marshal(value)
 			if tc.preset == "" {
 				var fields map[string]any
 				json.Unmarshal(raw, &fields)
 				fields["schema_version"] = 2
+				fields["alignment"] = "left"
+				delete(fields, "phone_alignment")
 				delete(fields, "text_style")
 				raw, _ = json.Marshal(fields)
 			}
@@ -141,10 +147,11 @@ func TestHomePresentationStoresCanonicalBytesAndReturnsTheirRevision(t *testing.
 				json.Unmarshal(state.raw, &fields)
 				_, hasStyle := fields["text_style"]
 				wantFields := 10
-				if tc.storedVersion == 3 {
-					wantFields = 11
+				if tc.storedVersion >= 3 {
+					wantFields = tc.storedVersion + 8
 				}
-				if fields["schema_version"] != float64(tc.storedVersion) || hasStyle != (tc.storedVersion == 3) || len(fields) != wantFields {
+				_, hasPhone := fields["phone_alignment"]
+				if fields["schema_version"] != float64(tc.storedVersion) || hasStyle != (tc.storedVersion >= 3) || len(fields) != wantFields || hasPhone != (tc.storedVersion == 4) {
 					t.Fatal(string(state.raw))
 				}
 				read, readRevision, err := backend.ReadFrontPagePresentation(context.Background(), db)
@@ -168,7 +175,7 @@ func TestHomePresentationV2ReadAndRestorePreservesAllOriginalFields(t *testing.T
 	db := sql.OpenDB(canonicalHomeConnector{state})
 	defer db.Close()
 	read, revision, err := backend.ReadFrontPagePresentation(context.Background(), db)
-	if err != nil || read.SchemaVersion != 3 || read.TextStyle != presentation.Rules().Default.TextStyle || revision != backend.FrontPagePresentationRevision(original, "original") {
+	if err != nil || read.SchemaVersion != 4 || read.TextStyle != presentation.Rules().Default.TextStyle || revision != backend.FrontPagePresentationRevision(original, "original") {
 		t.Fatal(read, revision, err)
 	}
 	raw, _ := json.Marshal(read)

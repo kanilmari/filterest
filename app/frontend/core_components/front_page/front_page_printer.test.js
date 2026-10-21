@@ -432,7 +432,7 @@ test('title, larger slogan and description form separate safe paragraphs and upd
     expect(hero.querySelector('.front-page-description').children).toHaveLength(2);
     expect(hero.querySelector('.front-page-description p').textContent).toBe('Kuvaus\nrivi');
     expect(page.querySelector('.front-page-text-stage').dataset.anchor).toBe('center-center');
-    expect(hero.dataset.alignment).toBe('left');
+    expect(hero.dataset.alignment).toBe('start');
     localStorage.setItem('chosen_language', 'en');
     await refreshLocalizedDatasetValues('en');
     expect(hero.querySelector('.front-page-slogan').hidden).toBe(true);

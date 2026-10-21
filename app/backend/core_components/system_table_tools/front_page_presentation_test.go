@@ -183,7 +183,7 @@ func TestHomePresentationPostgresConversionPreservesRevisionAndWritesCanonicalVe
 			t.Fatal(err)
 		}
 		value, revision, err := backend.ReadFrontPagePresentation(context.Background(), db)
-		if err != nil || value.SchemaVersion != 3 || value.HorizontalMarginPx != 71 || value.VerticalMarginPx != 71 ||
+		if err != nil || value.SchemaVersion != 4 || value.HorizontalMarginPx != 71 || value.VerticalMarginPx != 71 ||
 			value.Alignment != presentation.Rules().Legacy.Alignments[layout] {
 			t.Fatal(value, revision, err)
 		}

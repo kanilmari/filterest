@@ -1,6 +1,6 @@
 // text_style_validation.test.js
 // Exercises the exact same accepted and refused presentations as Go.
-// Connects v3 strict writes with read-only v1/v2 compatibility fixtures.
+// Connects v4 strict writes with read-only v1–v3 compatibility fixtures.
 // Protects nested key/type/bounds validation and independent default copies.
 import { expect, test } from 'vitest';
 import examples from '../../../testing/shared_contracts/home_presentation_validation_examples.json' with { type: 'json' };
@@ -10,9 +10,9 @@ for (const example of examples) test(example.name, () => {
     expect(isValidHomePresentation(example.value)).toBe(example.valid);
     if (example.readable) {
         const value = readHomePresentation(example.value);
-        expect(value.schema_version).toBe(3);
+        expect(value.schema_version).toBe(4);
         expect(isValidHomePresentation(value)).toBe(true);
-        if (!example.valid) expect(value.text_style).toEqual(DEFAULT_HOME_PRESENTATION.text_style);
+        if (example.value.schema_version < 3) expect(value.text_style).toEqual(DEFAULT_HOME_PRESENTATION.text_style);
     } else expect(() => readHomePresentation(example.value)).toThrow();
 });
 

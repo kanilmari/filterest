@@ -157,11 +157,11 @@ injection paths; it does not make a malicious operator-authored page safe.
 
 The Home palette offers **Text style** (Default / Serif story), **Line reveal**
 (Off / Line by line), and bounded start-delay/interval ranges in milliseconds.
-This is the owner's 17 October exception to K381; every other palette feature
-and dynamic-Home expansion remains frozen. Copy belongs to the source-owned
+The owner's 17 October exception to K381 permits text style; K466 also permits
+logical alignment and its phone override. Other expansion remains frozen. Copy belongs to the source-owned
 Finnish/English palette dictionary, without language keys or a migration.
 
-The opt-in `text_style` in presentation schema 3 selects `default` or
+The opt-in `text_style` in presentation schema 4 selects `default` or
 `serif_story_v1`; `reveal` holds `mode` (`none` / `lines`), `start_ms` (0–5000,
 initial 3000) and `interval_ms` (200–2000, initial 800). Unknown, missing, null,
 extra and wrongly typed fields fail strict Go/browser validation. Old v1/v2 rows
@@ -619,49 +619,49 @@ close/Escape focus, status toasts and draft ownership have one implementation.
 Closing keeps preview; Reset restores saved values and panel geometry; leaving
 Home releases preview. Save preserves edits made while its request is pending.
 
-Home's JSON setting `front_page_presentation` reads as schema version 3: `anchor`,
-`horizontal_margin_px`, `vertical_margin_px`, `alignment`, `max_width_px`,
-`light_wash`, `light_opacity`, `dark_wash`, `dark_opacity` and `text_style`. The single definition
+Home's JSON setting `front_page_presentation` reads as schema version 4: `anchor`,
+`horizontal_margin_px`, `vertical_margin_px`, `alignment`, `phone_alignment`,
+`max_width_px`, the four theme wash/opacity fields, and `text_style`. The definition
 in `frontend/shared/front_page_presentation/definition.json` is imported by the
-browser and embedded by Go. Both margins are 0–320 px (step 1, initial 40);
+browser and embedded by Go.
+Both margins are 0–320 px (step 1, initial 40);
 maximum width is 320–1600 px (step 10, initial 1120). A graphical 3 × 3 button grid
 chooses the anchor; arrows select and focus adjacent cells, Home/End choose the
-first/last. Four original alignment glyph buttons choose left, centre, right or
-justify, with translated names and `aria-pressed`; Enter/Space activate buttons.
-Alignment changes only lines within the content-sized block up to its maximum
-width, preserving its anchored edge. Justify keeps the title and final paragraph
-lines at the left. Equal axis margins apply at all nine anchors; narrow desktop
-insets are capped at 8% of the available Home content width per side
-(`min(saved margin, 8cqw, remaining space above the 320 px text minimum)`). Long text expands downward, making
-vertical anchors equivalent when the text exceeds the available height; full
-narrow text similarly makes horizontal anchors equivalent. Phones (width ≤700 px, matching the shell) use 16 px
-insets instead of the saved margins and ignore the horizontal anchor: the block
-is centred and takes the whole width between
-the gutters, so alignment shows even for short text; the vertical anchor still
-applies (the default block is centred on phones too), and long text flows from the
-top and scrolls.
+first/last. The existing glyphs choose logical start, centre, end or justify,
+with translated names and `aria-pressed`; Enter/Space activate buttons. Start/end
+follow the language direction; Finnish/English retain their left/right appearance.
+Alignment changes lines within the content-sized block, preserving its anchored
+edge. Justify keeps the title and final paragraph lines at the logical start.
+Equal axis margins apply at all nine anchors; narrow desktop insets are capped
+at 8% of available Home width per side (`min(saved margin, 8cqw, remaining space
+above the 320 px text minimum)`). Long text expands downward, making vertical
+anchors equivalent when text exceeds the available height; full narrow text
+similarly makes horizontal anchors equivalent. Phones (width ≤700 px) use 16 px
+insets and ignore the horizontal anchor: the block fills the space between the
+gutters, so alignment shows even for short text. The vertical anchor still
+applies; long text flows from the top and scrolls. **On phones** offers
+`phone_alignment: inherit | start | center`, initially `inherit` (As elsewhere).
+Overrides affect hero text, including Serif story; top-row buttons keep their layout.
 
-A missing setting now returns the centred default with revision `none`: the
-block is centred on both axes while lines start at the left. This replaces the
-old centred-heading layout for every site without a saved presentation. Reads
-convert development version-one rows (normal → left, artistic → centre, one
-margin → both) and supply default media values. Version-two rows retain their
-layout/media choices. Both gain the default text style on read. The browser sends
-strict v3 requests; the admin API also accepts complete v2 requests without
-`text_style`. One Go policy (`CanonicalStored`) chooses the stored form: absent
-style, or `preset: default` with `reveal.mode: none`, stores exactly the ten v2
-fields without `text_style`. Inactive start/interval numbers are discarded, even
-when customized; they read back as 3000/800. Every other style stores full v3.
-Public/admin GETs return v3 presentation and its revision together; conversion hashes
-the original stored bytes and timestamp. POST `{presentation,version}` writes
-only presentation under the same separate advisory lock and row revision;
-stale or competing first writes return 409. Every successful save stamps its row
-and returns `{version,presentation}`: the revision hashes the actual stored bytes
-and timestamp, and presentation is their normalized v3 read value. The palette
-adopts that value and revision, including default timings after a v2 save.
-Hero, boxes and switch writes omit and preserve presentation. Generic settings
-writes accept canonical v2 or non-default v3, and refuse default/none v3 rather
-than storing a non-canonical row. Malformed stored values fail visibly.
+A missing setting returns the centred default with revision `none`: the block
+is centred on both axes with logical start alignment. Version-one reads convert
+normal → start, artistic → centre, one margin → both and supply default media.
+Version-two/three reads map left → start, right → end, retaining centre/justify;
+all old rows gain inherited phone alignment; v1/v2 gain default text style.
+Strict Go/browser writes require complete v4; the admin API also accepts complete
+v2/v3 storage forms. One Go policy (`CanonicalStored`) selects downgrade-safe
+storage: inherited phone alignment stores v3 with start → left, end → right,
+or ten-field v2 without `text_style` when style is default and reveal is off.
+That v2 form discards inactive timings, which read back as 3000/800. Only an
+explicit phone override stores complete v4. Before rollback to 9.5.1, re-save
+Home with phone alignment **As elsewhere** (as on desktop) to remove stored v4.
+Public/admin GETs return v4 and its revision together; reads hash the original
+stored bytes and timestamp without rewriting them. POST `{presentation,version}`
+writes only presentation under its advisory lock and revision; stale or competing
+first writes return 409. Saves stamp the row and return `{version,presentation}`
+with actual stored revision and normalized v4. The palette adopts both. Other
+Home writes preserve presentation. Generic settings accept canonical v2/v3/v4
+only; malformed stored values fail visibly.
 
 Light and dark sections each offer Theme wash and Media opacity (0–100%, step 1).
 Wash blends toward white in light mode and the dark background in dark mode;

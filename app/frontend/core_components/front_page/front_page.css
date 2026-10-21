@@ -373,12 +373,29 @@ body.dark-mode .front-page {
   width: max-content;
   max-width: min(var(--home-text-max-width), 100%);
   padding: 0;
-  text-align: left;
+  text-align: start;
 }
+.front-page-text-stage .front-page-hero[data-alignment="start"] { text-align: start; }
 .front-page-text-stage .front-page-hero[data-alignment="center"] { text-align: center; }
-.front-page-text-stage .front-page-hero[data-alignment="right"] { text-align: right; }
-.front-page-text-stage .front-page-hero[data-alignment="justify"] { text-align: justify; text-align-last: left; }
-.front-page-hero[data-alignment="justify"] .morphing-title { text-align: left; }
+.front-page-text-stage .front-page-hero[data-alignment="end"] { text-align: end; }
+.front-page-text-stage .front-page-hero[data-alignment="justify"] {
+  text-align: justify;
+  text-align-last: start;
+}
+.front-page-text-stage .front-page-hero[data-alignment="justify"] .morphing-title { text-align: start; }
+/* Overrides affect hero copy only; the stage already stretches short text on phones. */
+@media (width <= 700px) {
+  .front-page-text-stage .front-page-hero[data-phone-alignment="start"],
+  .front-page-text-stage .front-page-hero[data-phone-alignment="start"] .morphing-title {
+    text-align: start;
+    text-align-last: auto;
+  }
+  .front-page-text-stage .front-page-hero[data-phone-alignment="center"],
+  .front-page-text-stage .front-page-hero[data-phone-alignment="center"] .morphing-title {
+    text-align: center;
+    text-align-last: auto;
+  }
+}
 .front-page-content--positioned > .front-page-blocks {
   max-width: 1200px;
   padding: 1rem;

@@ -43,6 +43,11 @@ export function mountHomePalette(button, { snapshot, render, saveRequestFn = sav
         controls.push({ ...control, key });
         container.append(control.element);
     }
+    const phoneAlignment = createPaletteSelectControl({ id: 'phone-alignment', label: 'phoneAlignment',
+        choices: HOME_PRESENTATION_DEFINITION.phone_alignments }, copy,
+        { prefix: 'home-palette', onChange: value => change('phone_alignment', value) });
+    controls.push({ ...phoneAlignment, key: 'phone_alignment' });
+    container.append(phoneAlignment.element);
     for (const [id, key, label] of [
         ['horizontal-margin', 'horizontal_margin_px', 'horizontalMargin'],
         ['vertical-margin', 'vertical_margin_px', 'verticalMargin'],
@@ -70,7 +75,7 @@ export function mountHomePalette(button, { snapshot, render, saveRequestFn = sav
         }
         container.append(section);
     }
-    // Text style is the only extension to the frozen Home palette. Existing controls keep their order.
+    // Nested typography choices share the same draft as layout and phone alignment.
     const changeTextStyle = (key, value, reveal = false) => {
         const current = (draftOwner.draft || DEFAULT_HOME_PRESENTATION).text_style;
         change('text_style', reveal ? { ...current, reveal: { ...current.reveal, [key]: value } }

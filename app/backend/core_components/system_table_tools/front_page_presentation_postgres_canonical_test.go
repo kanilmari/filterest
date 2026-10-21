@@ -20,15 +20,18 @@ func TestHomePresentationPostgresCanonicalFormsAndRestore(t *testing.T) {
 	for _, tc := range []struct {
 		preset, mode             string
 		start, interval, version int
+		phone                    string
 	}{
-		{"default", "none", 3000, 800, 2}, {"default", "none", 1234, 567, 2},
-		{"serif_story_v1", "none", 1234, 567, 3}, {"default", "lines", 1234, 567, 3},
+		{"default", "none", 3000, 800, 2, "inherit"}, {"default", "none", 1234, 567, 2, "inherit"},
+		{"serif_story_v1", "none", 1234, 567, 3, "inherit"}, {"default", "lines", 1234, 567, 3, "inherit"},
+		{"default", "none", 3000, 800, 4, "start"}, {"serif_story_v1", "lines", 1234, 567, 4, "center"},
 	} {
 		_, current, err := backend.ReadFrontPagePresentation(context.Background(), db)
 		if err != nil {
 			t.Fatal(err)
 		}
 		value.TextStyle = presentation.TextStyle{Preset: tc.preset, Reveal: presentation.LineReveal{Mode: tc.mode, StartMS: tc.start, IntervalMS: tc.interval}}
+		value.PhoneAlignment = tc.phone
 		raw, _ := json.Marshal(value)
 		revision, err := frontPageTestSave(db, frontPageAdminRequest{Presentation: raw, Version: current})
 		if err != nil {
@@ -42,11 +45,12 @@ func TestHomePresentationPostgresCanonicalFormsAndRestore(t *testing.T) {
 		var fields map[string]any
 		json.Unmarshal(stored, &fields)
 		_, hasStyle := fields["text_style"]
-		if fields["schema_version"] != float64(tc.version) || hasStyle != (tc.version == 3) || revision != backend.FrontPagePresentationRevision(stored, updated) {
+		_, hasPhone := fields["phone_alignment"]
+		if fields["schema_version"] != float64(tc.version) || hasStyle != (tc.version >= 3) || hasPhone != (tc.version == 4) || revision != backend.FrontPagePresentationRevision(stored, updated) {
 			t.Fatal(string(stored), revision)
 		}
 	}
-	// A v2 request has no text_style. Its v3 GET value restores exactly those ten fields.
+	// A v2 request has no text_style. Its v4 GET value restores exactly those ten fields.
 	original := []byte(`{"schema_version":2,"anchor":"bottom-left","horizontal_margin_px":73,"vertical_margin_px":91,"alignment":"right","max_width_px":700,"light_wash":27,"light_opacity":61,"dark_wash":19,"dark_opacity":43}`)
 	_, current, err := backend.ReadFrontPagePresentation(context.Background(), db)
 	if err != nil {
@@ -56,7 +60,7 @@ func TestHomePresentationPostgresCanonicalFormsAndRestore(t *testing.T) {
 		t.Fatal(err)
 	}
 	read, revision, err := backend.ReadFrontPagePresentation(context.Background(), db)
-	if err != nil || read.SchemaVersion != 3 || read.TextStyle != presentation.Rules().Default.TextStyle {
+	if err != nil || read.SchemaVersion != 4 || read.TextStyle != presentation.Rules().Default.TextStyle {
 		t.Fatal(read, err)
 	}
 	raw, _ := json.Marshal(read)

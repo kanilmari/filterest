@@ -147,16 +147,29 @@ test('positioned Home uses expanding flow, safe insets, theme copy and phone gut
 });
 
 
-test('alignment leaves intrinsic sizing intact, justify starts title and last lines at the left', () => {
+test('alignment leaves intrinsic sizing intact, justify starts title and last lines at the logical start', () => {
     expect(css).toContain('width: max-content;');
     expect(css).toContain('max-width: min(var(--home-text-max-width), 100%);');
     // Without a fixed column a long text's max-content width widens the grid and pushes right/centre anchors off the page.
     expect(css).toMatch(/\.front-page-text-stage \{[^}]*grid-template-columns: minmax\(0, 1fr\);/);
-    expect(css).toContain('text-align: justify; text-align-last: left;');
-    expect(css).toContain('.front-page-hero[data-alignment="justify"] .morphing-title { text-align: left; }');
+    expect(css).toMatch(/text-align: justify;\s*text-align-last: start;/);
+    expect(css).toContain('.front-page-hero[data-alignment="justify"] .morphing-title { text-align: start; }');
     expect(css).toContain('font-size: var(--home-slogan-size, 1.25rem)');
     expect(css).toContain('font-size: var(--home-description-size, 1rem)');
     expect(css).not.toMatch(/column-count|column-width/);
+});
+
+test('logical hero alignment and phone overrides leave anchors and navigation with their existing owners', () => {
+    for (const alignment of ['start', 'center', 'end', 'justify']) {
+        expect(css).toMatch(new RegExp(`\\[data-alignment="${alignment}"\\] \\{\\s*text-align: ${alignment};`));
+    }
+    const override = css.split('/* Overrides affect hero copy only;')[1].split('.front-page-content--positioned >')[0];
+    expect(override).toContain('@media (width <= 700px)');
+    for (const alignment of ['start', 'center']) {
+        expect(override).toMatch(new RegExp(`\\[data-phone-alignment="${alignment}"\\] \\.morphing-title \\{\\s*text-align: ${alignment};\\s*text-align-last: auto;`));
+    }
+    expect(css).not.toContain('[data-phone-alignment="inherit"]');
+    expect(override).not.toMatch(/justify-items|top-row|topbar|nav/);
 });
 
 

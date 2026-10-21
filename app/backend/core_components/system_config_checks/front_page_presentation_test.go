@@ -11,12 +11,12 @@ import (
 
 func TestHomePresentationGenericWriteValidation(t *testing.T) {
 	styled := presentation.Rules().Default
-	styled.TextStyle.Preset = "serif_story_v1"
+	styled.PhoneAlignment = "center"
 	for _, kind := range []int{2, 5} {
 		for _, value := range []any{styled, presentation.Rules().Default, nil, `{"anchor":"top-left"}`, `[]`} {
 			err := ValidateRow("system_config", map[string]interface{}{"key": "front_page_presentation", "value_type": kind, "json_value": value})
 			v, valid := value.(presentation.Value)
-			valid = valid && v.TextStyle.Preset == "serif_story_v1"
+			valid = valid && v.PhoneAlignment == "center"
 			if (err == nil) != (kind == 5 && valid) {
 				t.Fatal(kind, value, err)
 			}

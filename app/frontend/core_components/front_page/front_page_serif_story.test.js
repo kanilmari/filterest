@@ -12,6 +12,13 @@ const laterStyles = read('../filterbar/morphing_filterbar_content.css');
 const styles = sharedStyles + css + laterStyles;
 afterEach(() => { document.body.replaceChildren(); document.body.className = ''; document.head.querySelector('[data-story-test]')?.remove(); });
 
+test('title, accent, description, lead and story inherit the hero alignment', () => {
+    for (const selector of ['morphing-title', 'front-page-title-accent', 'front-page-description', 'front-page-story-lead', 'front-page-story-line']) {
+        expect(css).toMatch(new RegExp(`\\.${selector}[^{}]*\\{[^}]*text-align: inherit;`));
+    }
+    expect(css).not.toContain('text-align: left');
+});
+
 test.each(['light', 'dark'])('computed text styles defeat the element reset in the explicit %s theme', theme => {
     const style = document.createElement('style'); style.dataset.storyTest = 'true'; style.textContent = styles;
     document.head.append(style); document.body.className = `${theme}-mode`;
@@ -93,7 +100,7 @@ test.each(['light', 'dark'])('the lead keeps smaller italic serif text in the ex
     expect(computed.margin).toBe('0px 0px 14px');
     expect(computed.lineHeight).toBe('1.4');
     expect(computed.letterSpacing).toBe('normal');
-    expect(computed.textAlign).toBe('left');
+    expect(computed.textAlign).toBe('inherit');
     expect(computed.whiteSpace).toBe('normal');
     expect(computed.overflowWrap).toBe('break-word');
     expect(computed.transition).toBe('color 300ms ease, text-shadow 300ms ease');

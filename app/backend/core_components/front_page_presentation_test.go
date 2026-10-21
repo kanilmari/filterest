@@ -95,29 +95,42 @@ func TestReadHomePresentationConvertsStoredVersionOneWithoutChangingRevision(t *
 		}
 		t.Cleanup(func() { db.Close() })
 		value, revision, err := ReadFrontPagePresentation(context.Background(), db)
-		if err != nil || value == nil || value.SchemaVersion != 3 || value.Alignment != presentation.Rules().Legacy.Alignments[layout] ||
+		if err != nil || value == nil || value.SchemaVersion != 4 || value.Alignment != presentation.Rules().Legacy.Alignments[layout] ||
 			value.HorizontalMarginPx != 55 || value.VerticalMarginPx != 55 || revision != FrontPagePresentationRevision(raw, "old-stamp") {
 			t.Fatal(value, revision, err)
 		}
 	}
 }
 
-func TestReadHomePresentationConvertsStoredVersionTwoWithoutChangingRevision(t *testing.T) {
-	current, _ := json.Marshal(presentation.Rules().Default)
-	var fields map[string]json.RawMessage
-	json.Unmarshal(current, &fields)
-	fields["schema_version"] = json.RawMessage(`2`)
-	delete(fields, "text_style")
-	raw, _ := json.Marshal(fields)
-	name := fmt.Sprintf("home_layout_%d", homeLayoutDriverID.Add(1))
-	sql.Register(name, homeLayoutDriver{[]driver.Value{raw, "old-stamp", int64(5)}})
-	db, err := sql.Open(name, "")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer db.Close()
-	value, revision, err := ReadFrontPagePresentation(context.Background(), db)
-	if err != nil || value == nil || *value != presentation.Rules().Default || revision != FrontPagePresentationRevision(raw, "old-stamp") {
-		t.Fatal(value, revision, err)
+func TestReadHomePresentationConvertsStoredVersionsTwoAndThreeWithoutChangingRevision(t *testing.T) {
+	for _, version := range []int{2, 3} {
+		for _, alignment := range []string{"left", "right", "center", "justify"} {
+			current, _ := json.Marshal(presentation.Rules().Default)
+			var fields map[string]json.RawMessage
+			json.Unmarshal(current, &fields)
+			fields["schema_version"], _ = json.Marshal(version)
+			fields["alignment"], _ = json.Marshal(alignment)
+			delete(fields, "phone_alignment")
+			if version == 2 {
+				delete(fields, "text_style")
+			}
+			raw, _ := json.Marshal(fields)
+			original := string(raw)
+			name := fmt.Sprintf("home_layout_%d", homeLayoutDriverID.Add(1))
+			sql.Register(name, homeLayoutDriver{[]driver.Value{raw, "old-stamp", int64(5)}})
+			db, err := sql.Open(name, "")
+			if err != nil {
+				t.Fatal(err)
+			}
+			t.Cleanup(func() { db.Close() })
+			expected := presentation.Rules().Default
+			expected.Alignment = map[string]string{"left": "start", "right": "end", "center": "center", "justify": "justify"}[alignment]
+			for range 2 {
+				value, revision, err := ReadFrontPagePresentation(context.Background(), db)
+				if err != nil || value == nil || *value != expected || revision != FrontPagePresentationRevision([]byte(original), "old-stamp") || string(raw) != original {
+					t.Fatal(value, revision, err)
+				}
+			}
+		}
 	}
 }

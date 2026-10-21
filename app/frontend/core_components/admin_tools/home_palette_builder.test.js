@@ -23,9 +23,45 @@ test('requires Home admin permission and exposes shared definition bounds', () =
     expect(get('anchor').querySelectorAll('button')).toHaveLength(9);
     expect(get('alignment').querySelectorAll('button')).toHaveLength(4);
     expect(get('anchor-center-center').getAttribute('aria-pressed')).toBe('true');
-    expect(get('alignment-left').getAttribute('aria-pressed')).toBe('true');
+    expect(get('alignment-start').getAttribute('aria-pressed')).toBe('true');
+    expect(get('phone-alignment').value).toBe('inherit');
     expect([get('horizontal-margin').min, get('horizontal-margin').max, get('horizontal-margin').step, get('horizontal-margin').value]).toEqual(['0', '320', '1', '40']);
     expect([get('max-width').min, get('max-width').max, get('max-width').step, get('max-width').value]).toEqual(['320', '1600', '10', '1120']);
+});
+
+test('logical buttons reuse icons and phone choices translate, preview, save and reset in both languages', async () => {
+    document.documentElement.lang = 'en';
+    const { get, render, saveRequestFn } = setup();
+    const phone = get('phone-alignment');
+    expect([...phone.options].map(option => option.value)).toEqual(['inherit', 'start', 'center']);
+    for (const [language, start, end, label, inherit] of [
+        ['en', 'Start', 'End', 'On phones', 'As elsewhere'],
+        ['fi', 'Alkuun', 'Loppuun', 'Puhelimella', 'Kuten muualla'],
+    ]) {
+        document.documentElement.lang = language;
+        await vi.waitFor(() => expect(get('alignment-start').title).toBe(start));
+        expect(get('alignment-start').getAttribute('aria-label')).toBe(start);
+        expect(get('alignment-end').getAttribute('aria-label')).toBe(end);
+        expect(get('alignment-end').title).toBe(end);
+        expect(phone.getAttribute('aria-label')).toBe(label);
+        expect(phone.options[0].textContent).toBe(inherit);
+        expect(phone.options[1].textContent).toBe(start);
+    }
+    for (const [logical, icon] of [['start', 'left'], ['end', 'right']]) {
+        expect(get(`alignment-${logical}`).querySelector('span').style.cssText).toContain(`home-align-${icon}-icon.svg`);
+    }
+    get('alignment-end').click();
+    edit(phone, 'center', 'change');
+    const value = { ...defaults, alignment: 'end', phone_alignment: 'center' };
+    expect(render).toHaveBeenLastCalledWith(value);
+    get('save').click();
+    await vi.waitFor(() => expect(get('save').disabled).toBe(false));
+    expect(saveRequestFn).toHaveBeenCalledWith({ presentation: value, version: 'none' });
+    edit(phone, 'start', 'change');
+    expect(render).toHaveBeenLastCalledWith({ ...value, phone_alignment: 'start' });
+    get('reset').click();
+    expect(phone.value).toBe('center');
+    expect(render).toHaveBeenLastCalledWith(value);
 });
 
 test('default edit previews, closing retains it, reset/destroy restore saved layout', () => {
@@ -122,7 +158,7 @@ test('position grid arrows select and focus without wrapping across rows', () =>
     get('alignment-justify').click();
     expect(render).toHaveBeenLastCalledWith({ ...defaults, anchor: 'center-right', alignment: 'justify' });
     press('alignment-justify', 'ArrowLeft');
-    expect(get('alignment-right').getAttribute('aria-pressed')).toBe('true');
+    expect(get('alignment-end').getAttribute('aria-pressed')).toBe('true');
 });
 
 test('both margins and independent wash/opacity pairs preview, save and reset together', async () => {

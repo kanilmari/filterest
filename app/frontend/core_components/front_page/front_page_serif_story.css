@@ -34,7 +34,7 @@ body.dark-mode .front-page-hero.front-page-hero--serif-story-v1 {
   font-weight: 400;
   line-height: 1;
   letter-spacing: -0.06em;
-  text-align: left;
+  text-align: inherit;
   white-space: normal;
   text-wrap: balance;
   /* An unbreakable word longer than the content width breaks instead of running off-screen (gate 252a). */
@@ -51,7 +51,7 @@ body.dark-mode .front-page-hero.front-page-hero--serif-story-v1 {
 .front-page-hero.front-page-hero--serif-story-v1 .front-page-description {
   max-width: var(--home-text-max-width);
   margin-top: clamp(30px, 3.5vh, 44px);
-  text-align: left;
+  text-align: inherit;
 }
 
 .front-page-hero.front-page-hero--serif-story-v1 .front-page-story-lead {
@@ -63,7 +63,7 @@ body.dark-mode .front-page-hero.front-page-hero--serif-story-v1 {
   font-weight: 400;
   line-height: 1.4;
   letter-spacing: normal;
-  text-align: left;
+  text-align: inherit;
   white-space: normal;
   overflow-wrap: break-word;
   text-shadow: var(--home-story-text-shadow);
@@ -79,7 +79,7 @@ body.dark-mode .front-page-hero.front-page-hero--serif-story-v1 {
   font-weight: 570;
   line-height: 1.45;
   letter-spacing: -0.007em;
-  text-align: left;
+  text-align: inherit;
   white-space: normal;
   overflow-wrap: break-word;
   opacity: 1;

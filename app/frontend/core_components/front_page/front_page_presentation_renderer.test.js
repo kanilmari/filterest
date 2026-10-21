@@ -8,17 +8,19 @@ import { applyHomePresentation, applyHomeMediaPresentation, renderHomeDescriptio
 
 test('nine anchors and every alignment preserve intrinsic block width and anchored edges', () => {
     const xs = { left: 40, center: 490, right: 940 }, ys = { top: 40, center: 280, bottom: 520 };
-    for (const anchor of rules.anchors) for (const alignment of rules.alignments) {
-        const presentation = { ...defaults, anchor, alignment };
+    for (const anchor of rules.anchors) for (const alignment of rules.alignments) for (const phone_alignment of rules.phone_alignments) {
+        const presentation = { ...defaults, anchor, alignment, phone_alignment };
         const [vertical, horizontal] = anchor.split('-');
         expect(computeHomeTextGeometry({ width: 1280, height: 760, textHeight: 200, textWidth: 300, presentation }))
             .toEqual({ width: 300, height: 200, stageHeight: 760, x: xs[horizontal], y: ys[vertical] });
         const [page, scroller, stage, hero] = Array.from({ length: 4 }, () => document.createElement('div'));
         applyHomePresentation(page, scroller, stage, hero, presentation);
         expect(stage.dataset.anchor).toBe(anchor); expect(hero.dataset.alignment).toBe(alignment);
+        expect(hero.dataset.phoneAlignment).toBe(phone_alignment);
         expect(hero.style.getPropertyValue('--home-text-max-width')).toBe('1120px');
         applyHomePresentation(page, scroller, stage, hero, null);
-        expect(stage.dataset.anchor).toBe('center-center'); expect(hero.dataset.alignment).toBe('left');
+        expect(stage.dataset.anchor).toBe('center-center'); expect(hero.dataset.alignment).toBe('start');
+        expect(hero.dataset.phoneAlignment).toBe('inherit');
     }
 });
 
@@ -50,7 +52,7 @@ test('short text on a phone keeps its vertical anchor with 16px insets, whatever
 test('all phone widths through 700px centre the text block regardless of Fintravel margins', () => {
     for (const width of [320, 375, 600, 650, 700]) for (const anchor of rules.anchors) {
         const geometry = computeHomeTextGeometry({ width, height: 900, textHeight: 100,
-            presentation: { ...defaults, anchor, alignment: 'left', max_width_px: 750, horizontal_margin_px: 160 } });
+            presentation: { ...defaults, anchor, alignment: 'start', max_width_px: 750, horizontal_margin_px: 160 } });
         expect(geometry.x + geometry.width / 2).toBe(width / 2);
         expect(geometry.x).toBe(16);
         expect(geometry.width).toBe(width - 32);

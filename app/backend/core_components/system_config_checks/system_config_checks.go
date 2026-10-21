@@ -55,7 +55,7 @@ func durationChecks() map[string]check {
 			return err
 		}
 		if !canonical {
-			return fmt.Errorf("default Home text style requires schema version 2 without text_style")
+			return fmt.Errorf("Home presentation requires canonical storage: v2 for default style, v3 for styled text, v4 for phone overrides")
 		}
 		return nil
 	}

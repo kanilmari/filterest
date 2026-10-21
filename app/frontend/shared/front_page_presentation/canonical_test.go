@@ -1,51 +1,97 @@
 // canonical_test.go
-// Proves the downgrade-safe v2/v3 storage rule independently of persistence.
+// Proves the downgrade-safe v2/v3/v4 storage rule independently of persistence.
 // Connects strict old/new requests, inactive timings and restore round trips.
 // Keeps default-style sites readable by binaries that accept only v2.
 package front_page_presentation
 
 import (
+	"bytes"
 	"encoding/json"
 	"reflect"
 	"strconv"
 	"testing"
 )
 
+func TestCanonicalStoredPreservesLegacyCanonicalBytes(t *testing.T) {
+	for _, version := range []int{2, 3} {
+		for _, alignment := range []string{"left", "center", "right", "justify"} {
+			fields, _ := presentationFields(Rules().Default)
+			fields["schema_version"], _ = json.Marshal(version)
+			fields["alignment"], _ = json.Marshal(alignment)
+			delete(fields, "phone_alignment")
+			if version == 2 {
+				delete(fields, "text_style")
+			} else {
+				style := Rules().Default.TextStyle
+				style.Preset = "serif_story_v1"
+				fields["text_style"], _ = json.Marshal(style)
+			}
+			original, _ := json.Marshal(fields)
+			read, err := ParseStored(original)
+			if err != nil {
+				t.Fatal(err)
+			}
+			stored, canonical, err := CanonicalStored(original)
+			if err != nil || !canonical || !bytes.Equal(stored, original) {
+				t.Fatal("old canonical bytes changed", string(stored), err)
+			}
+			roundTrip, _, err := CanonicalStored(read)
+			if err != nil || !bytes.Equal(roundTrip, original) {
+				t.Fatal("read/save changed legacy bytes", string(roundTrip), err)
+			}
+		}
+	}
+}
+
 func TestCanonicalStoredFormsAndRestore(t *testing.T) {
 	for _, tc := range []struct {
 		name, preset, mode string
 		start, interval    int
 		version            int
+		phone              string
 	}{
-		{"absent style", "", "", 0, 0, 2},
-		{"default timings", "default", "none", 3000, 800, 2},
-		{"inactive custom timings", "default", "none", 1234, 567, 2},
-		{"serif without reveal", "serif_story_v1", "none", 1234, 567, 3},
-		{"default with reveal", "default", "lines", 1234, 567, 3},
-		{"serif with reveal", "serif_story_v1", "lines", 3000, 800, 3},
+		{"absent style", "", "", 0, 0, 2, "inherit"},
+		{"default timings", "default", "none", 3000, 800, 2, "inherit"},
+		{"inactive custom timings", "default", "none", 1234, 567, 2, "inherit"},
+		{"serif without reveal", "serif_story_v1", "none", 1234, 567, 3, "inherit"},
+		{"default with reveal", "default", "lines", 1234, 567, 3, "inherit"},
+		{"serif with reveal", "serif_story_v1", "lines", 3000, 800, 3, "inherit"},
+		{"default phone start", "default", "none", 1234, 567, 4, "start"},
+		{"serif phone centre", "serif_story_v1", "lines", 3000, 800, 4, "center"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			value := Rules().Default
+			value.Alignment, value.PhoneAlignment = "end", tc.phone
 			value.Anchor, value.HorizontalMarginPx, value.DarkWash = "bottom-right", 73, 19
 			fields, _ := presentationFields(value)
 			if tc.preset == "" {
 				fields["schema_version"] = json.RawMessage(`2`)
+				fields["alignment"] = json.RawMessage(`"right"`)
+				delete(fields, "phone_alignment")
 				delete(fields, "text_style")
 			} else {
 				value.TextStyle = TextStyle{tc.preset, LineReveal{tc.mode, tc.start, tc.interval}}
 				fields, _ = presentationFields(value)
 			}
 			stored, canonical, err := CanonicalStored(fields)
-			if err != nil || canonical != (tc.preset == "" || tc.version == 3) {
+			if err != nil || canonical != (tc.preset == "" || tc.version == 4) {
 				t.Fatal(canonical, err)
 			}
 			gotFields, _ := presentationFields(stored)
 			wantCount := 10
-			if tc.version == 3 {
-				wantCount = 11
+			if tc.version >= 3 {
+				wantCount = tc.version + 8
 			}
 			if len(gotFields) != wantCount || string(gotFields["schema_version"]) != strconv.Itoa(tc.version) ||
-				(gotFields["text_style"] != nil) != (tc.version == 3) {
+				(gotFields["text_style"] != nil) != (tc.version >= 3) ||
+				(gotFields["phone_alignment"] != nil) != (tc.version == 4) {
+				t.Fatal(string(stored))
+			}
+			wantAlignment := `"right"`
+			if tc.version == 4 {
+				wantAlignment = `"end"`
+			}
+			if string(gotFields["alignment"]) != wantAlignment {
 				t.Fatal(string(stored))
 			}
 			read, err := ParseStored(stored)
@@ -55,7 +101,7 @@ func TestCanonicalStoredFormsAndRestore(t *testing.T) {
 			if err != nil || read != value {
 				t.Fatal(read, value, err)
 			}
-			// T16 restores the complete GET value, which is v3 even when the row is v2.
+			// Restores use the complete v4 GET value even when the row is v2/v3.
 			restored, _, err := CanonicalStored(read)
 			if err != nil {
 				t.Fatal(err)
@@ -82,6 +128,8 @@ func TestCanonicalStoredRejectsMalformedRequests(t *testing.T) {
 		t.Fatal("v2 with text_style accepted")
 	}
 	delete(fields, "text_style")
+	delete(fields, "phone_alignment")
+	fields["alignment"] = json.RawMessage(`"left"`)
 	for _, change := range []struct {
 		key   string
 		value json.RawMessage

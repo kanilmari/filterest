@@ -86,18 +86,19 @@ test('Home preview, saved reset and reload at 1280 and 375 pixels in both explic
           el.closest('.dataset-cover-test-palette__actions')!.parentElement === el.closest('section'))).toBe(true);
         await expect(panel).toBeVisible();
         await panel.getByTestId('home-palette-anchor-top-left').click();
-        await panel.getByTestId('home-palette-alignment-left').click();
+        await panel.getByTestId('home-palette-phone-alignment').selectOption('inherit');
+        await panel.getByTestId('home-palette-alignment-start').click();
         await changeRange(page, 'home-palette-horizontal-margin', 40);
         await changeRange(page, 'home-palette-vertical-margin', 55);
         await changeRange(page, 'home-palette-max-width', 1120);
         const stage = page.locator('.front-page-text-stage');
         const hero = page.locator('.front-page-hero');
-        await expect(hero).toHaveCSS('text-align', 'left');
+        await expect(hero).toHaveCSS('text-align', 'start');
         await expect(hero.locator('.front-page-description p')).toHaveCount(2);
         await expect(hero.locator('.front-page-slogan p')).toHaveCount(1);
         expect(await hero.locator('.front-page-slogan').evaluate(el => parseFloat(getComputedStyle(el).fontSize)))
           .toBeGreaterThan(await hero.locator('.front-page-description').evaluate(el => parseFloat(getComputedStyle(el).fontSize)));
-        for (const alignment of ['left', 'center', 'right', 'justify']) {
+        for (const alignment of ['start', 'center', 'end', 'justify']) {
           const before = (await hero.boundingBox())!;
           await panel.getByTestId(`home-palette-alignment-${alignment}`).click();
           await expect(panel.getByTestId(`home-palette-alignment-${alignment}`)).toHaveAttribute('aria-pressed', 'true');
@@ -105,7 +106,7 @@ test('Home preview, saved reset and reload at 1280 and 375 pixels in both explic
           const after = (await hero.boundingBox())!;
           expect(after.x).toBeCloseTo(before.x, 1); expect(after.y).toBeCloseTo(before.y, 1);
           expect(after.width).toBeCloseTo(before.width, 1);
-          if (alignment === 'justify') await expect(hero.locator('h1')).toHaveCSS('text-align', 'left');
+          if (alignment === 'justify') await expect(hero.locator('h1')).toHaveCSS('text-align', 'start');
         }
         for (const selected of ['light', 'dark']) {
           await expect(panel.getByTestId(`home-palette-${selected}`).locator('input[type="range"]')).toHaveCount(2);
@@ -170,7 +171,7 @@ test('Home preview, saved reset and reload at 1280 and 375 pixels in both explic
   }, test.info().title);
 });
 
-test('a missing layout centres a content-sized block with left-aligned text and resets to that default', async ({ page }) => {
+test('a missing layout centres a content-sized block with start-aligned text and resets to that default', async ({ page }) => {
   // Four width/theme rounds plus nine anchors at two widths; the settings restore in `finally` shares this budget.
   test.setTimeout(120_000);
   await withHomeSettings(page.request, async (snapshot) => {
@@ -193,7 +194,7 @@ test('a missing layout centres a content-sized block with left-aligned text and 
       await page.setViewportSize({ width, height: 900 });
       await page.goto('/', { waitUntil: 'domcontentloaded' }); await forceTheme(page, theme);
       const hero = page.locator('.front-page-hero'), stage = page.locator('.front-page-text-stage');
-      await expect(hero).toBeVisible(); await expect(hero).toHaveCSS('text-align', 'left');
+      await expect(hero).toBeVisible(); await expect(hero).toHaveCSS('text-align', 'start');
       await expect(stage).toHaveAttribute('data-anchor', 'center-center');
       const block = (await hero.boundingBox())!, area = (await stage.boundingBox())!;
       if (width === 1280) {
@@ -213,10 +214,10 @@ test('a missing layout centres a content-sized block with left-aligned text and 
       await page.keyboard.press('ArrowUp');
       await expect(page.getByTestId('home-palette-anchor-top-center')).toBeFocused();
       await expect(stage).toHaveAttribute('data-anchor', 'top-center');
-      await page.getByTestId('home-palette-alignment-right').click();
-      await expect(hero).toHaveCSS('text-align', 'right');
+      await page.getByTestId('home-palette-alignment-end').click();
+      await expect(hero).toHaveCSS('text-align', 'end');
       await page.getByTestId('home-palette-reset').click();
-      await expect(hero).toHaveCSS('text-align', 'left');
+      await expect(hero).toHaveCSS('text-align', 'start');
       await expect(stage).toHaveAttribute('data-anchor', 'center-center');
     }
     longText = true;

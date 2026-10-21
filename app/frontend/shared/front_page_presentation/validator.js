@@ -1,7 +1,7 @@
 // validator.js
 // Validates the complete saved Home presentation without coercing values.
 // Connects palette controls and rendering to the Go-embedded JSON definition.
-// Converts version-one/two rows and supplies the centred site default.
+// Converts version-one/two/three rows and supplies the centred site default.
 import definition from './definition.json' with { type: 'json' };
 export const HOME_PRESENTATION_DEFINITION = definition;
 export const DEFAULT_HOME_PRESENTATION = Object.freeze({ ...definition.default,
@@ -29,6 +29,7 @@ export function isValidHomePresentation(value) {
     return value.schema_version === definition.schema_version
         && definition.anchors.includes(value.anchor)
         && definition.alignments.includes(value.alignment)
+        && definition.phone_alignments.includes(value.phone_alignment)
         && isValidHomeTextStyle(value.text_style)
         && Object.keys(definition.default).filter(key => definition[key]?.step).every(key => {
             const bounds = definition[key];
@@ -37,12 +38,19 @@ export function isValidHomePresentation(value) {
         });
 }
 
-/** Read compatibility only: writes always pass the strict version-three validator. */
+/** Read compatibility only: writes always pass the strict version-four validator. */
 export function readHomePresentation(value) {
     if (value == null) return clone(DEFAULT_HOME_PRESENTATION);
     if (isValidHomePresentation(value)) return clone(value);
-    if (value?.schema_version === 2 && exact(value, Object.keys(definition.default).filter(key => key !== 'text_style'))) {
-        return readHomePresentation({ ...value, schema_version: 3, text_style: DEFAULT_HOME_PRESENTATION.text_style });
+    if (value?.schema_version === 2 || value?.schema_version === 3) {
+        const keys = Object.keys(definition.default).filter(key => key !== 'phone_alignment'
+            && (value.schema_version !== 2 || key !== 'text_style'));
+        const alignments = { left: 'start', center: 'center', right: 'end', justify: 'justify' };
+        if (!exact(value, keys) || typeof value.alignment !== 'string'
+            || !Object.hasOwn(alignments, value.alignment)) throw new Error('Invalid Home presentation');
+        return readHomePresentation({ ...value, schema_version: definition.schema_version,
+            alignment: alignments[value.alignment], phone_alignment: 'inherit',
+            text_style: value.schema_version === 2 ? DEFAULT_HOME_PRESENTATION.text_style : value.text_style });
     }
     const keys = ['schema_version', 'anchor', 'margin_px', 'paragraph_layout', 'max_width_px'];
     if (typeof value !== 'object' || Array.isArray(value) || Object.keys(value).length !== keys.length

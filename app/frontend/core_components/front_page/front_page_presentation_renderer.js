@@ -25,6 +25,7 @@ export function applyHomePresentation(page, scroller, stage, hero, presentation)
     stage.classList.add('front-page-text-stage');
     stage.dataset.anchor = value.anchor;
     hero.dataset.alignment = value.alignment;
+    hero.dataset.phoneAlignment = value.phone_alignment;
     stage.style.setProperty('--home-text-min-width', `${HOME_PRESENTATION_DEFINITION.max_width_px.min}px`);
     stage.style.setProperty('--home-text-horizontal-margin', `${value.horizontal_margin_px}px`);
     stage.style.setProperty('--home-text-vertical-margin', `${value.vertical_margin_px}px`);

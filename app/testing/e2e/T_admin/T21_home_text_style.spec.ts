@@ -46,14 +46,14 @@ const copy = {
   },
 };
 const presentation = {
-  schema_version: 3, anchor: 'center-center', alignment: 'left', horizontal_margin_px: 40,
+  schema_version: 4, anchor: 'center-center', alignment: 'start', phone_alignment: 'inherit', horizontal_margin_px: 40,
   vertical_margin_px: 40, max_width_px: 1120, light_wash: 15, light_opacity: 75, dark_wash: 0, dark_opacity: 20,
   text_style: { preset: 'serif_story_v1', reveal: { mode: 'lines', start_ms: 3000, interval_ms: 800 } },
 };
 const outputRoot = path.join(resolveFilterestTestRuntimeRoot(), 'wo38a', 'after');
 
 async function fixture(page: Page, language: 'fi' | 'en', theme: 'light' | 'dark',
-  { dockMenu = false, slogan = copy[language].accent } = {}) {
+  { dockMenu = false, slogan = copy[language].accent, layout = presentation } = {}) {
   await login(page, loadCredentials());
   const profileResponse = await page.request.get('/api/user-profile');
   expect(profileResponse.ok()).toBe(true);
@@ -69,7 +69,7 @@ async function fixture(page: Page, language: 'fi' | 'en', theme: 'light' | 'dark
   await page.route(url => url.pathname === '/api/front-page', async route => {
     expect(route.request().method()).toBe('GET');
     await route.fulfill({ json: { viewer_id: viewerID, site_name: 'Fintravel', blocks: [], show_blocks: false,
-      presentation, presentation_version: 'wo38a-response-only', hero: {
+      presentation: layout, presentation_version: 'wo38a-response-only', hero: {
         title: { fi: copy.fi.title, en: copy.en.title }, slogan: { fi: copy.fi.accent, en: copy.en.accent, [language]: slogan },
         description: { fi: copy.fi.description, en: copy.en.description },
       } } });
@@ -104,6 +104,31 @@ async function fixture(page: Page, language: 'fi' | 'en', theme: 'light' | 'dark
 }
 
 const linesFor = (page: Page) => page.locator('.front-page-story-line');
+
+for (const language of ['fi', 'en'] as const) for (const theme of ['light', 'dark'] as const) {
+  test(`${language} ${theme} phone text override ends at 700px`, async ({ page }) => {
+    const layout = { ...presentation, alignment: 'end', phone_alignment: 'center' };
+    await fixture(page, language, theme, { layout });
+    await page.setViewportSize({ width: 700, height: 900 });
+    let hero = await openHome(page);
+    await expect(hero).toHaveAttribute('data-alignment', 'end');
+    await expect(hero).toHaveAttribute('data-phone-alignment', 'center');
+    const text = [hero, hero.locator('h1'), hero.locator('em'), linesFor(page).first()];
+    for (const element of text) await expect(element).toHaveCSS('text-align', 'center');
+    await page.setViewportSize({ width: 701, height: 900 });
+    for (const element of text) await expect(element).toHaveCSS('text-align', 'end');
+    layout.alignment = 'justify'; layout.phone_alignment = 'start';
+    await page.setViewportSize({ width: 390, height: 844 });
+    hero = await openHome(page);
+    for (const element of [hero, hero.locator('h1'), hero.locator('em'), linesFor(page).first()]) {
+      await expect(element).toHaveCSS('text-align', 'start');
+      await expect(element).toHaveCSS('text-align-last', 'auto');
+    }
+    await page.setViewportSize({ width: 701, height: 900 });
+    await expect(hero).toHaveCSS('text-align', 'justify');
+    await expect(hero.locator('h1')).toHaveCSS('text-align', 'start');
+  });
+}
 // The reveal's own fade animation: a theme switch also starts short colour/shadow transitions on the same line,
 // and getAnimations() then lists those first (native diag 17.10.: [0] was a 17-83 ms transition).
 async function age(line: Locator) {
@@ -233,7 +258,7 @@ for (const language of ['fi', 'en'] as const) for (const theme of ['light', 'dar
         await expect(line).toHaveCSS('white-space', 'normal');
         await expect(line).toHaveCSS('overflow-wrap', 'break-word');
       }
-      await expect(heading).toHaveCSS('text-align', 'left');
+      await expect(heading).toHaveCSS('text-align', 'start');
       const sizes = await hero.evaluate(element => ({ title: parseFloat(getComputedStyle(element.querySelector('h1')!).fontSize),
         story: parseFloat(getComputedStyle(element.querySelector('.front-page-story-line')!).fontSize) }));
       // WO82 (owner 21.10.): phones raised the story text to body size (15 px) while the title keeps its clamp, so the
