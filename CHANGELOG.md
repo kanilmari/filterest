@@ -22,6 +22,8 @@ Dates are the local (Europe/Helsinki) date on which the version was published.
 
 ## [Unreleased]
 
+## [9.5.1] - 2026-10-21
+
 - **Phone articles (WO71 A)** — At widths up to 700 px, ordinary articles lose their frame and excess spacing, article/IFAV record buttons become 44 px icons, all three article presentations stack detail keys above values, and revealed disabled image arrows dim while hidden arrows stay hidden.
 - **Serif story long slogans (WO68)** — Slogans up to 40 Unicode code points keep the italic title accent; longer slogans appear below the title as a smaller italic lead outside the line reveal, with Finnish/English palette guidance.
 - On phones, Home fills its stacked navigation row, dataset headings have tighter spacing, and the top bar places Home beside the menu with a complete menu-button border; Home closes an overlay menu like a dataset tab.
