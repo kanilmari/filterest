@@ -42,7 +42,9 @@ async function openOfflineFixture(page: Page, theme: string) {
     if (stubs[url.pathname]) return route.fulfill({ contentType: 'text/javascript', body: stubs[url.pathname] });
     const file = path.resolve(appRoot, '.' + url.pathname);
     if (!file.startsWith(appRoot + path.sep)) throw Error('Fixture path escaped app');
-    await route.fulfill({ contentType: file.endsWith('.css') ? 'text/css' : 'text/javascript', body: await readFile(file) });
+    // JSON modules (`import … with { type: 'json' }`, e.g. contract_reader.js) need the JSON MIME type, as the server sends.
+    const contentType = file.endsWith('.css') ? 'text/css' : file.endsWith('.json') ? 'application/json' : 'text/javascript';
+    await route.fulfill({ contentType, body: await readFile(file) });
   });
   await page.goto(origin);
 }

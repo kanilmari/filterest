@@ -25,7 +25,9 @@ for (const theme of ['light', 'dark']) {
         <body class="${theme}-mode"><main class="card_image"></main></body>` });
       const file = path.resolve(appRoot, '.' + url.pathname);
       if (!file.startsWith(appRoot + path.sep)) throw Error('Fixture path escaped app');
-      return route.fulfill({ contentType: file.endsWith('.css') ? 'text/css' : 'text/javascript', body: await readFile(file) });
+      // JSON modules (`import … with { type: 'json' }`) need the JSON MIME type, as the server sends.
+      const contentType = file.endsWith('.css') ? 'text/css' : file.endsWith('.json') ? 'application/json' : 'text/javascript';
+      return route.fulfill({ contentType, body: await readFile(file) });
     });
     await page.goto(origin);
     await page.evaluate(async cardRoot => {
