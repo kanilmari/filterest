@@ -592,8 +592,8 @@
 }
 
 @media (width <= 700px) {
-  /* Phone hero spacing is independent of desktop appearance insets. Search
-     moves to the top bar, leaving one small gap before the tools box. */
+  /* Phone hero spacing is independent of desktop appearance insets, with one
+     small gap between the heading, search field and tools box. */
   .filterbar-inline-hero,
   .filterbar-inline-hero.filterbar-inline-hero--has-cover { padding-block: 8px; }
   .filterbar-inline-hero > .filter-content-inner {
@@ -603,13 +603,18 @@
     gap: 8px;
   }
   .filterbar-inline-hero .morphing-header { margin: 0; }
-  .filterbar-inline-hero .filterbar-hero-dataset-icon { margin-bottom: 8px; }
+  /* The icon span also carries .metadata-symbol-icon (inline-block, symbol_asset_resolver.css, loaded later);
+     as an inline box its line added ~7px under the 8px margin. */
+  .filterbar-inline-hero .filterbar-hero-dataset-icon { display: block; margin-bottom: 8px; }
   .filterbar-inline-hero .morphing-title { margin: 0 0 4px; }
   .filterbar-inline-hero .morphing-subtitle { margin: 0; }
   .filterbar-inline-hero .filter-content-inner > .dataset-filter-section {
     margin: 0;
     max-width: none;
   }
+  /* Same specificity as the wide-state 550px cap above and later in the cascade than shared_topbar.css, so the
+     phone search field spans the inner width like the tools box. */
+  .filterbar-inline-hero .filter-content-inner > .dataset-search-panel { max-width: none; }
 }
 
 .filterbar-fixed-toggle:focus-visible,

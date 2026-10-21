@@ -29,7 +29,8 @@ function phoneRule(file, selector) {
     return declarations;
 }
 
-test.each(Object.keys(baseline))('%s keeps every rule outside the phone breakpoint byte-identical to d373e6c6', file => {
+// Batch 512 (63b9b250) retains these non-phone hashes from d373e6c6.
+test.each(Object.keys(baseline))('%s keeps every rule outside the phone breakpoint byte-identical to batch 512', file => {
     const root = sheets[file].clone();
     root.walkAtRules('media', media => { if (media.params === '(width <= 700px)') media.remove(); });
     expect(createHash('sha256').update(root.toString()).digest('hex')).toBe(baseline[file]);
@@ -79,7 +80,28 @@ test('phone hero has small title/search-area gaps and a full-width tools box wit
     const file = '../filterbar/morphing_filterbar_content.css';
     expect(phoneRule(file, '.filterbar-inline-hero > .filter-content-inner')).toEqual({ width: '100%', 'max-width': 'none', margin: '0', gap: '8px' });
     expect(phoneRule(file, '.filterbar-inline-hero .morphing-header')).toEqual({ margin: '0' });
+    // A block icon: as .metadata-symbol-icon's inline-block its line box added ~7px under the margin (d515, 15px gap).
+    expect(phoneRule(file, '.filterbar-inline-hero .filterbar-hero-dataset-icon')).toEqual({ display: 'block', 'margin-bottom': '8px' });
     expect(phoneRule(file, '.filterbar-inline-hero .morphing-title')).toEqual({ margin: '0 0 4px' });
     expect(phoneRule(file, '.filterbar-inline-hero .morphing-subtitle')).toEqual({ margin: '0' });
     expect(phoneRule(file, '.filterbar-inline-hero .filter-content-inner > .dataset-filter-section')).toEqual({ margin: '0', 'max-width': 'none' });
+});
+
+test('phone hero search is visible at full inner width with the same 44px controls as the toolbar', () => {
+    const file = '../filterbar/shared_topbar.css';
+    const panel = '.filterbar-inline-hero > .filter-content-inner > .dataset-search-panel';
+    expect(phoneRule(file, panel)).toEqual({
+        '--dataset-search-control-height': '44px', display: 'flex', width: '100%',
+        'min-width': '0', 'max-width': 'none', margin: '0',
+    });
+    expect(phoneRule(file, `${panel} .dataset-search-fields`)).toEqual({ 'min-width': '0' });
+    // shared_topbar.css loads before morphing_filterbar_content.css, whose equal-specificity wide-state rule caps
+    // `> :not(.morphing-header)` at 550px; its phone block lifts the cap (d515: the field sat centred at x=75 on 700px).
+    expect(phoneRule('../filterbar/morphing_filterbar_content.css', '.filterbar-inline-hero .filter-content-inner > .dataset-search-panel'))
+        .toEqual({ 'max-width': 'none' });
+    expect(phoneRule(file, '.dataset-shared-topbar__center .dataset-search-panel'))
+        .toEqual({ '--dataset-search-control-height': '44px' });
+    // The second surface remains an overlay, without changing the toolbar row.
+    expect(phoneRule(file, '.dataset-shared-topbar__center > .dataset-search-panel'))
+        .toMatchObject({ position: 'absolute', top: '100%', width: 'auto' });
 });

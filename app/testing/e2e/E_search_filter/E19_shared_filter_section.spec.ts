@@ -143,8 +143,8 @@ async function assertSection(page: Page, dataset: string, width: number) {
   });
 }
 
-test('one shared filter section stays stable on load at desktop/375 px in both themes and languages', async ({ page }) => {
-  test.setTimeout(180_000);
+test('hero search and shared filter section stay stable at desktop/320–700 px in both themes and languages', async ({ page }) => {
+  test.setTimeout(300_000);
   await login(page, loadCredentials());
   const dataset = buildTempDatasetName('e2e_wo22_section');
   let created = false;
@@ -169,7 +169,7 @@ test('one shared filter section stays stable on load at desktop/375 px in both t
     });
     expect(membership.ok(), await membership.text()).toBe(true);
     await installLoadProbe(page, dataset);
-    for (const width of [1440, 375]) for (const theme of ['light', 'dark'] as const) for (const language of ['fi', 'en']) {
+    for (const width of [1440, 320, 375, 390, 700]) for (const theme of ['light', 'dark'] as const) for (const language of ['fi', 'en']) {
       await page.setViewportSize({ width, height: 1000 });
       await page.emulateMedia({ colorScheme: theme === 'light' ? 'dark' : 'light' });
       await page.evaluate(({ theme, language }) => {

@@ -4,7 +4,6 @@
 // Requires FILTEREST_E2E_TOPBAR_DATASET; preserves shared layout with temporary reveals.
 import { expect, test, type Page } from '@playwright/test';
 import { revealActiveFilterbarSection, waitForActiveFilterbarLayout } from '../helpers/filterbar';
-import { openActiveDatasetSearch } from '../helpers/dataset-search';
 import { assertPhoneHeroSpacing } from '../helpers/phone-hero-spacing';
 import { installHomePolicy } from '../helpers/home-policy-fixture';
 
@@ -90,30 +89,49 @@ test.describe('guest phone toolbar and style controls', () => {
       const identity = bar.getByTestId('mobile-site-identity');
       const input = bar.locator('.dataset-search-input');
       const toggle = bar.getByTestId('mobile-search-toggle');
+      const heroInput = page.locator(`.filterbar-inline-hero[data-filterbar-inline-hero-for="${DATASET}"] .dataset-search-input`);
       await expect(identity).toBeVisible(); await expect(identity).not.toHaveText('');
       await expect(bar.locator('.dataset-shared-topbar__dataset-title')).toBeHidden();
       await expect(input).toBeHidden(); await expect(toggle).toHaveAccessibleName(labels[0]);
       if (labels[0] !== englishLabels[0]) await expect(toggle).not.toHaveAccessibleName(englishLabels[0]);
       await expect(toggle).toHaveAttribute('data-aria-label-lang-key', 'filterbar_show_search');
       await expect(toggle).toHaveAttribute('aria-pressed', 'false');
-      await info.attach('phone hero gaps', { body: JSON.stringify(await assertPhoneHeroSpacing(page, DATASET), null, 2), contentType: 'application/json' });
+      await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+      const viewport = page.viewportSize()!;
+      for (const width of [320, 375, 390, 700]) {
+        await page.setViewportSize({ ...viewport, width });
+        await info.attach(`phone hero gaps ${width}px`, {
+          body: JSON.stringify(await assertPhoneHeroSpacing(page, DATASET), null, 2), contentType: 'application/json',
+        });
+      }
+      await page.setViewportSize(viewport);
+      await expect(heroInput).toBeEditable();
+      await heroInput.fill('Helsinki');
       const before = await geometry(page);
       expect(before.search.x + before.search.width).toBeLessThanOrEqual(before.filter.x);
       expect(before.filter.x - before.search.x - before.search.width).toBeLessThanOrEqual(9);
-      await openActiveDatasetSearch(page, 'tap'); await expect(input).toBeFocused();
+      // The general search helper now finds the visible hero; exercise the toolbar button explicitly.
+      await toggle.tap(); await expect(input).toBeFocused();
+      await expect(input).toHaveValue('Helsinki'); await expect(heroInput).toBeVisible();
       await expect(toggle).toHaveAccessibleName(labels[1]);
       if (labels[1] !== englishLabels[1]) await expect(toggle).not.toHaveAccessibleName(englishLabels[1]);
       await expect(toggle).toHaveAttribute('data-aria-label-lang-key', 'filterbar_hide_search');
       await expect(toggle).toHaveAttribute('aria-pressed', 'true');
+      await expect(toggle).toHaveAttribute('aria-expanded', 'true');
       expect(await geometry(page)).toEqual(before); await expect(identity).toBeVisible();
-      await input.fill('Helsinki'); const url = page.url();
+      await input.fill('Turku'); await expect(heroInput).toHaveValue('Turku'); const url = page.url();
       await input.press('Escape'); await expect(input).toBeHidden(); await expect(toggle).toBeFocused();
+      await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+      await expect(toggle).toHaveAttribute('aria-pressed', 'false');
       expect(page.url()).toBe(url); expect(await geometry(page)).toEqual(before);
-      await toggle.press('Enter'); await expect(input).toBeFocused(); await expect(input).toHaveValue('Helsinki');
+      await toggle.press('Enter'); await expect(input).toBeFocused(); await expect(input).toHaveValue('Turku');
       await toggle.tap(); await expect(input).toBeHidden();
+      await expect(toggle).toBeFocused();
       const scrollable = page.locator('.scrollable_content:visible').first();
       await scrollable.evaluate(element => { element.scrollTop = 300; element.dispatchEvent(new Event('scroll')); });
       await expect(input).toBeHidden(); await expect(identity).toBeVisible();
+      await toggle.tap(); await expect(input).toBeFocused(); await expect(input).toHaveValue('Turku');
+      await input.press('Escape'); await expect(toggle).toBeFocused(); await expect(input).toBeHidden();
       await expect(bar.getByTestId('shared-topbar-menu-button')).toBeVisible();
       await expect(bar.getByTestId('filterbar-toggle')).toBeVisible();
       const style = await revealActiveFilterbarSection(page, 'style');

@@ -22,6 +22,8 @@ Dates are the local (Europe/Helsinki) date on which the version was published.
 
 ## [Unreleased]
 
+- On phones, dataset text search is visible directly above the search tools for every reader; the top-bar search button remains available after scrolling.
+
 ## [9.5.1] - 2026-10-21
 
 - **Phone articles (WO71 A)** — At widths up to 700 px, ordinary articles lose their frame and excess spacing, article/IFAV record buttons become 44 px icons, all three article presentations stack detail keys above values, and revealed disabled image arrows dim while hidden arrows stay hidden.

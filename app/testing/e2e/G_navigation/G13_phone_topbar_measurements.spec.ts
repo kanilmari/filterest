@@ -5,7 +5,7 @@
 import { test, expect, type Page } from '@playwright/test';
 import { readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { measurePhoneHeroSpacing } from '../helpers/phone-hero-spacing';
+import { assertPhoneHeroSpacing, measurePhoneHeroSpacing } from '../helpers/phone-hero-spacing';
 import { installHomePolicy, openHomeProbeDataset, captureHomeProbe, probePhase } from '../helpers/home-policy-fixture';
 
 async function measure(page: Page) {
@@ -50,7 +50,7 @@ async function phoneControls(page: Page) {
   });
 }
 
-for (const width of [375, 390, 700]) for (const theme of ['light', 'dark'] as const) {
+for (const width of [320, 375, 390, 700]) for (const theme of ['light', 'dark'] as const) {
   test(`phone order and complete menu border ${width}px ${theme}`, async ({ page, context }, info) => {
     await page.setViewportSize({ width, height: 844 });
     await page.emulateMedia({ colorScheme: theme === 'light' ? 'dark' : 'light', reducedMotion: 'no-preference' });
@@ -60,7 +60,8 @@ for (const width of [375, 390, 700]) for (const theme of ['light', 'dark'] as co
     const sample = await phoneControls(page);
     await info.attach(`${probePhase}-phone-control-boxes`, { body: JSON.stringify(sample, null, 2), contentType: 'application/json' });
     await info.attach(`${probePhase}-phone-hero-gaps`, {
-      body: JSON.stringify(await measurePhoneHeroSpacing(page, 'app_service_catalog'), null, 2), contentType: 'application/json',
+      body: JSON.stringify(await (probePhase === 'before' ? measurePhoneHeroSpacing : assertPhoneHeroSpacing)(page, 'app_service_catalog'), null, 2),
+      contentType: 'application/json',
     });
     if (probePhase === 'before') return;
     const [menuBox, homeBox, identityBox, searchBox, filterBox] = sample.controls;
@@ -82,6 +83,17 @@ for (const width of [375, 390, 700]) for (const theme of ['light', 'dark'] as co
     await menu.focus(); await page.keyboard.press('Tab'); await expect(home).toBeFocused();
     await page.keyboard.press('Tab'); await expect(search).toBeFocused();
     await page.keyboard.press('Tab'); await expect(filter).toBeFocused();
+    await page.keyboard.press('Shift+Tab'); await expect(search).toBeFocused();
+    await search.press('Enter');
+    const input = bar.locator('.dataset-search-input');
+    await expect(input).toBeFocused();
+    await expect(search).toHaveAttribute('aria-expanded', 'true');
+    await expect(search).toHaveAttribute('aria-pressed', 'true');
+    await input.press('Escape');
+    await expect(input).toBeHidden(); await expect(search).toBeFocused();
+    await expect(search).toHaveAttribute('aria-expanded', 'false');
+    await expect(search).toHaveAttribute('aria-pressed', 'false');
+    expect(await phoneControls(page)).toEqual(sample);
     // Identity is decorative; native keyboard order skips it, matching the row.
     expect(await bar.getByTestId('mobile-site-identity').evaluate(el => (el as HTMLElement).tabIndex)).toBe(-1);
     const opening = await menu.evaluate(button => {
