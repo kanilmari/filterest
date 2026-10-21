@@ -600,3 +600,65 @@
     font-style: italic;
     font-size: 0.85rem;
 }
+
+/* Phone article chrome is flush; IFAV and Page retain their own panels.
+   Shared details and record controls use the toolbar's viewport boundary. */
+@media (width <= 700px) {
+    .big_card_container.row_article_container {
+        border-inline: 0;
+        border-radius: 0;
+    }
+
+    .row_article_container .big_card_header {
+        width: 100%;
+        margin: 0 0 10px;
+        padding-block-start: 10px;
+        padding-inline: 10px;
+    }
+
+    .row_article_container .big_card_image {
+        margin-top: 10px;
+        padding-inline: 10px;
+    }
+
+    .big_card_details_container .two_line_field {
+        flex-direction: column;
+        align-items: stretch;
+        min-width: 0;
+    }
+
+    .big_card_details_container .two_line_label {
+        flex: 0 0 auto;
+    }
+
+    .big_card_details_container .two_line_label_text {
+        overflow: visible;
+        text-overflow: clip;
+        white-space: normal;
+        overflow-wrap: anywhere;
+    }
+
+    .big_card_details_container .two_line_value {
+        min-width: 0;
+        white-space: normal;
+        overflow-wrap: anywhere;
+    }
+
+    /* Beat the existing 720px gallery sizing without changing that tablet band. */
+    body :is(.image_first_view_modal, .row_article_inline_media) .row_article_row_navigation_button {
+        width: 44px;
+        min-width: 44px;
+        height: 44px;
+        min-height: 44px;
+        padding: 0;
+        gap: 0;
+    }
+
+    body .row_article_row_navigation_preview_slot {
+        display: none;
+    }
+
+    .row_article_row_navigation {
+        padding: 0;
+    }
+}

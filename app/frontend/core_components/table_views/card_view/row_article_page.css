@@ -34,21 +34,4 @@
         width: 100%;
         margin-inline: 0;
     }
-
-    .image_first_page_view .big_card_details_container {
-        display: grid;
-        grid-template-columns: minmax(0, 1fr);
-        columns: 1;
-        min-width: 0;
-    }
-
-    .image_first_page_view .big_card_details_container .two_line_field {
-        flex-direction: column;
-        align-items: stretch;
-        min-width: 0;
-    }
-
-    .image_first_page_view .big_card_details_container .two_line_label {
-        flex-basis: auto;
-    }
 }

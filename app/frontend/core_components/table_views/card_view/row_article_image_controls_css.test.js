@@ -4,6 +4,7 @@
 // Prevents invisible borders, opacity/blur skins and hover rules from masking disabled state.
 import fs from "node:fs";
 import { afterEach, describe, expect, test } from "vitest";
+import { expectPhoneRule, withoutPhone } from "./row_article_phone_css_test_helpers.js";
 
 const read = relative => fs.readFileSync(new URL(relative, import.meta.url), "utf8");
 const controls = read("./row_article_image_controls.css");
@@ -181,7 +182,7 @@ describe("article image arrow CSS", () => {
         }
     });
 
-    test("gives IFAV, inline and thumbnails one opaque, stationary disabled skin", () => {
+    test("keeps the disabled skin opaque and stationary above 700px", () => {
         expect(controls).toMatch(/\.row_article_image_arrow_icon\s*\{[^}]*flex:\s*0 0 2rem;[^}]*width:\s*2rem;[^}]*height:\s*2rem;/s);
         expect(controls).toContain(".image_modal.image_first_view_modal, .row_article_inline_media, .big_card_thumbnail_row");
         expect(controls).toContain(":is(.row_article_image_first_arrow, .big_card_thumbnail_carousel_button):disabled");
@@ -191,11 +192,35 @@ describe("article image arrow CSS", () => {
             "backdrop-filter: none", "cursor: not-allowed",
         ]) expect(controls).toContain(declaration);
         // Idle visibility belongs to each view; disabled skins must not override it.
-        expect(controls).not.toMatch(/opacity\s*:/);
+        expect(withoutPhone(controls)).not.toMatch(/opacity\s*:/);
         expect(read("./big_card_image_gallery.css")).not.toMatch(/\.row_article_image_first_arrow:disabled\s*\{/);
         expect(read("../../../reusable_components/modal/modals.css"))
             .not.toMatch(/[^{}]*row_article_image_first_arrow[^{}]*:disabled\s*\{/);
         expect(read("../../../styles/framework.css")).toContain(".fw-btn--ghost:hover:not(:disabled)");
         expect(read("../../../styles/framework.css")).not.toContain(".fw-btn--ghost:hover {");
+    });
+
+    test("dims only revealed disabled phone arrows without defeating idle, hover or touch visibility", () => {
+        const alpha = "var(--row-article-image-arrow-visible-alpha, 1)";
+        expectPhoneRule(controls,
+            ":is(.row_article_image_first_arrow, .big_card_thumbnail_carousel_button):disabled",
+            { "--row-article-image-arrow-visible-alpha": "0.5" });
+        expect(controls.match(/--row-article-image-arrow-visible-alpha\s*:/g)).toHaveLength(1);
+        expectPhoneRule(controls,
+            ".row_article_inline_media .row_article_image_first_arrow, .big_card_thumbnail_row .big_card_thumbnail_carousel_button",
+            { opacity: alpha });
+        expectPhoneRule(controls,
+            "body .modal_overlay_blur.image-modal-controls-active .image_modal .row_article_image_first_arrow, body .image_modal .row_article_image_first_arrow:focus-visible",
+            { opacity: alpha });
+        const [touch] = expectPhoneRule(controls,
+            "body .modal_overlay_blur .image_modal .row_article_image_first_arrow", { opacity: alpha });
+        expect(touch.parent.params).toBe("(hover: none), (pointer: coarse)");
+        expect(touch.parent.parent.params).toBe("(width <= 700px)");
+        // No phone opacity override for an inactive fine-pointer modal; its zero survives.
+        expect(controls).not.toMatch(/body \.image_modal \.row_article_image_first_arrow\s*\{/);
+        expect(read("../../../reusable_components/modal/modals.css"))
+            .toMatch(/\.image_modal :is\([^)]*\.row_article_image_first_arrow[^)]*\)\s*\{\s*opacity: 0;/s);
+        expect(read("./row_article_inline_media.css"))
+            .toMatch(/@media \(hover: hover\)\s*\{[^}]*:not\(:hover, :focus-within\)[^}]*opacity: 0;/s);
     });
 });

@@ -26,3 +26,28 @@ body :is(.image_modal.image_first_view_modal, .row_article_inline_media, .big_ca
     backdrop-filter: none;
     cursor: not-allowed;
 }
+
+@media (width <= 700px) {
+    /* Alpha belongs to the revealed state; hidden arrows still resolve to zero. */
+    :is(.row_article_image_first_arrow, .big_card_thumbnail_carousel_button):disabled {
+        --row-article-image-arrow-visible-alpha: 0.5;
+    }
+
+    .row_article_inline_media .row_article_image_first_arrow,
+    .big_card_thumbnail_row .big_card_thumbnail_carousel_button {
+        opacity: var(--row-article-image-arrow-visible-alpha, 1);
+    }
+
+    /* The body prefix beats the later modal stylesheet only when revealed.
+       Its idle opacity: 0 and the inline hover hider remain authoritative. */
+    body .modal_overlay_blur.image-modal-controls-active .image_modal .row_article_image_first_arrow,
+    body .image_modal .row_article_image_first_arrow:focus-visible {
+        opacity: var(--row-article-image-arrow-visible-alpha, 1);
+    }
+
+    @media (hover: none), (pointer: coarse) {
+        body .modal_overlay_blur .image_modal .row_article_image_first_arrow {
+            opacity: var(--row-article-image-arrow-visible-alpha, 1);
+        }
+    }
+}

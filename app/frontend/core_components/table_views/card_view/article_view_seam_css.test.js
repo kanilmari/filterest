@@ -7,6 +7,7 @@ import { describe, expect, test } from "vitest";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { readFileSync } from "node:fs";
+import { expectPhoneRule, withoutPhone } from "./row_article_phone_css_test_helpers.js";
 
 const currentDirectory = dirname(fileURLToPath(import.meta.url));
 
@@ -44,7 +45,7 @@ describe("article view top seam", () => {
     });
 
     test("removes the article content panel's own top border", () => {
-        const css = readCss("cards_big.css");
+        const css = withoutPhone(readCss("cards_big.css"));
         const rule = css.match(
             /\.card_view_wrapper\.big-card-open \.big_card_container\s*\{([^}]*)\}/
         )?.[1] || "";
@@ -53,7 +54,7 @@ describe("article view top seam", () => {
     });
 
     test("keeps article chrome full-width while padding text and action controls", () => {
-        const css = readCss("cards_big.css");
+        const css = withoutPhone(readCss("cards_big.css"));
         const containerRule = css.match(
             /\.big_card_container\.row_article_container\s*\{([^}]*)\}/
         )?.[1] || "";
@@ -79,5 +80,21 @@ describe("article view top seam", () => {
 
         expect(rule).toContain("padding-top: 0");
         expect(rule).toContain("transition: none");
+    });
+
+    test("removes only ordinary article phone framing and outer padding", () => {
+        const css = readCss("cards_big.css");
+        expectPhoneRule(css, ".big_card_container.row_article_container", {
+            "border-inline": "0", "border-radius": "0",
+        });
+        expectPhoneRule(css, ".row_article_container .big_card_header", {
+            width: "100%", margin: "0 0 10px", "padding-block-start": "10px", "padding-inline": "10px",
+        });
+        expectPhoneRule(css, ".row_article_container .big_card_image", {
+            "margin-top": "10px", "padding-inline": "10px",
+        });
+        expectPhoneRule(readCss("cards.css"), ".card_view_wrapper.big-card-open", { padding: "0" });
+        expect(withoutPhone(css)).toMatch(/\.big_card_container\s*\{[^}]*border-inline: 1px solid var\(--border_color\);[^}]*border-radius: 10px;/s);
+        expect(withoutPhone(readCss("cards.css"))).toMatch(/@media \(width <= 1200px\)\s*\{[^}]*padding: 20px 0;/s);
     });
 });

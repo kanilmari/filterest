@@ -538,7 +538,6 @@ body.dark-mode .card--modern {
 
 }
 
-
 .card_content {
     display: flex;
     flex-direction: column;
@@ -596,10 +595,6 @@ body.dark-mode .card--modern {
 .card_image_content.card_image_content--clickable {
     cursor: pointer;
 }
-
-/* .card_image {
-    background-color: var(--bg_color_image);
-} */
 
 .card_image img {
     box-sizing: border-box;
@@ -1790,6 +1785,11 @@ body.dark-mode .card--modern {
     .tab_parts_container:has(.card_view_wrapper.big-card-open) .filterbar_results_count {
         display: none !important;
     }
+}
+
+/* Only the ordinary article wrapper owns this narrow-screen outer padding. */
+@media (width <= 700px) {
+    .card_view_wrapper.big-card-open { padding: 0; }
 }
 
 .card_container .card_front_page {

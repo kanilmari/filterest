@@ -156,7 +156,8 @@ async function assertDisabled(page: Page, button: Locator, touch: boolean) {
   const rest = await disabledSkin(button);
   expect(rest).toMatchObject({ background: rest.expectedBackground, color: rest.expectedColor,
     iconColor: rest.expectedColor,
-    border: rest.expectedBorder, shadow: 'none', filter: 'none', blur: 'none', cursor: 'not-allowed', opacity: '1' });
+    border: rest.expectedBorder, shadow: 'none', filter: 'none', blur: 'none', cursor: 'not-allowed',
+    opacity: touch && (page.viewportSize()?.width ?? Infinity) <= 700 ? '0.5' : '1' });
   for (const border of rest.borders) {
     expect(border.color, `${border.side} edge follows the resolved disabled border token`)
       .toBe(rest.resolvedDisabledBorder);
@@ -215,7 +216,9 @@ async function capturePair(page: Page, root: Locator, name: string, testInfo: Te
     const button = arrow(root, direction, carousel);
     await expect(button).toBeVisible();
     if (phase === 'after') {
-      await expect(button).toHaveCSS('opacity', '1');
+      const opacity = touch && (page.viewportSize()?.width ?? Infinity) <= 700
+        && await button.isDisabled() ? '0.5' : '1';
+      await expect(button).toHaveCSS('opacity', opacity);
       const measurement = await measureInk(button);
       expect(Math.abs(measurement.dx), `${name} ${direction} ink X`).toBeLessThanOrEqual(1);
       expect(Math.abs(measurement.dy), `${name} ${direction} ink Y`).toBeLessThanOrEqual(1);

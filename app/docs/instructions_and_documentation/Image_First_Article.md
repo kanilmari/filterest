@@ -43,6 +43,14 @@ own interactions. The stage click listener is removed on record or modal disposa
 
 The details section uses the existing `row_article_section_details` translation key. Reviewed runtime translations remain authoritative. When a site's response lacks that key, the frontend supplies the existing bootstrap wording in Finnish, English, Chinese and Cantonese instead of displaying the technical key. Changing the UI language updates an already-open section. This fallback does not create or rewrite translation rows.
 
+At viewport widths of 700 px and below, record-switch buttons use 44 × 44 px
+icon-only targets; their preview thumbnails are hidden. Revealed disabled image
+arrows use 0.5 opacity, while enabled arrows and existing hidden states keep
+their visibility rules. Details place each wrapping label above its value in
+IFAV, Page and ordinary articles. IFAV and Page retain their panel spacing and
+corners. The shared [phone article layout](Frontend_Results_Cards_And_Articles.md#phone-article-layout)
+owns this viewport boundary and the ordinary article's compact frame.
+
 The modal uses the application's explicit theme and existing reduced-motion behavior. Image captions and their original-photo attribution are described in [Article image captions](Article_Image_Captions.md).
 
 Focused regression tests live beside `image_first_view_opener.js` and `translation_handler.js`; the image-stage and modal tests cover the existing close animation, image/letterbox boundary and ratio disposal, including a close during record handoff. Explicit stage/photo rectangles check clicks and simulated taps beside, above/below and on photos at desktop/phone sizes, both scroll states, image replacement and click-listener disposal. The CSS contract test checks both panel gaps (desktop and narrow screens), background corners, visible overflow and the scrolled-state image sizing/corners, with width- and height-limited square, portrait, landscape and 1×1 sources. The C10 browser flow measures, in its desktop project, the gap above and below the panel, the panel corners and the image corners before and after a real scroll. It checks the foreground box against the natural photo ratio and centered contain rectangle, briefly constraining/restoring only the media host to cover both size limits with its existing square fixture. Trailing space is measurable offscreen without an extra end/back scroll. Its foreground click keeps the view open, then the adjacent backdrop click proves the existing closing animation. Before cleanup, including after an assertion failure, C10 restores the source list address, verifies the image-first view is gone and waits for the card list. It does not wait for network idle because the live-update stream stays open. Browser verification should also include square, portrait and landscape photos at phone/desktop sizes, real article gutters, text selection, interactive content, language switches and both explicit themes.

@@ -7,6 +7,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, test } from "vitest";
+import { expectPhoneRule, withoutPhone } from "./row_article_phone_css_test_helpers.js";
 
 const directory = path.dirname(fileURLToPath(import.meta.url));
 
@@ -225,7 +226,14 @@ describe("image-first article CSS contract", () => {
             path.join(directory, "cards_big.css"),
             "utf8",
         );
-        expect(bigCardCss).toMatch(/\.big_card_header\s*\{[^}]*justify-content:\s*flex-start;[^}]*width:\s*calc\(100% - 20px\);[^}]*margin:\s*0px 10px 30px 10px;[^}]*text-align:\s*left;/s);
+        expect(withoutPhone(bigCardCss)).toMatch(/\.big_card_header\s*\{[^}]*justify-content:\s*flex-start;[^}]*width:\s*calc\(100% - 20px\);[^}]*margin:\s*0px 10px 30px 10px;[^}]*text-align:\s*left;/s);
+        expectPhoneRule(bigCardCss,
+            "body :is(.image_first_view_modal, .row_article_inline_media) .row_article_row_navigation_button",
+            { width: "44px", height: "44px", "min-width": "44px", "min-height": "44px", padding: "0" });
+        expectPhoneRule(bigCardCss, "body .row_article_row_navigation_preview_slot", { display: "none" });
+        expectPhoneRule(bigCardCss, ".row_article_container .big_card_header", {
+            margin: "0 0 10px", "padding-block-start": "10px", "padding-inline": "10px",
+        });
         expect(modalCss).not.toMatch(/@media \(prefers-reduced-motion: reduce\)[\s\S]*\.image_first_view_overlay::before[\s\S]*animation:\s*none;/s);
         expect(galleryCss).toMatch(/@media \(prefers-reduced-motion: reduce\)\s*\{[^}]*\.image_first_view,[^}]*\.row_article_image_first_stage::before,[^}]*animation:\s*none;/s);
         expect(variablesCss).toContain("--filterbar-hero-title-max-width: 1200px");

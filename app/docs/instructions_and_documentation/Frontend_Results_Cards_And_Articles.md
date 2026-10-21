@@ -163,6 +163,28 @@ each compatibility event is consumed once. Completion, expiry, a new press or
 disposal retires that state, so keyboard requests, mouse right-clicks and later
 taps can use the same cell again.
 
+### Phone article layout
+
+At viewport widths of 700 px and below (the shared toolbar's phone boundary),
+ordinary articles have no inline frame border or corner radius and no outer
+wrapper padding. Their title and image use 10 px spacing and side gutters.
+IFAV and Page retain their existing panels, margins and corners.
+
+The shared article details styles place each key above its value in ordinary
+articles, IFAV and Page. Labels take their natural height, wrap without ellipsis
+and stretch across the detail; values can wrap anywhere. Page's former 480 px
+details override is removed; its separate 480 px panel-width rule remains.
+
+Ordinary inline media and IFAV share 44 × 44 px record-switch buttons with
+hidden thumbnail slots and zero navigation padding. Existing accessible names,
+keyboard order and markup remain in use. Revealed disabled image arrows,
+including thumbnail-carousel arrows, use 0.5 opacity through one shared visible
+alpha; enabled arrows remain fully visible. Hidden modal arrows and the
+article's hover hiding retain zero opacity. The existing touch visibility rule
+still reveals IFAV controls, including at idle, and respects the disabled alpha.
+These overrides use viewport media queries; widths above 700 px retain the
+existing rules, including in narrow desktop panes and on touch tablets.
+
 ### Where a Dataset's View State Lives
 Each browser tab keeps its own view and open row, so one tab never changes or erases another's (owner decision K143, 3.10.2026):
 -   **This tab only** (`sessionStorage`): the view a dataset shows, read and written only through `filterest/app/frontend/core_components/state_stores/dataset_view_choice_saver.js`, and the row the article or card view holds open, the `articleView` and `cardView` parts of `getUnifiedTableState`/`setUnifiedTableState` in `filterest/app/frontend/core_components/state_stores/table_state_store.js`. The view in a dataset's cached address parameters stays in the page's memory (`query_params.js`).
@@ -216,6 +238,6 @@ to the origin (a standalone bookmark without an origin uses IFAV's card fallback
 
 Page puts one contained image inside the text column, at most
 `min(40dvh, 360px)` high. Missing/failed images leave no box or placeholder. At
-480 px and below it has one column; theme tokens supply text and background and
+700 px and below its shared details put keys above values; theme tokens supply text and background and
 shared modal transitions retain reduced-motion handling. Ordinary IFAV still
 uses its full-height stage and its original Article projection on restoration.
