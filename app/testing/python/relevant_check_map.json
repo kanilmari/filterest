@@ -254,7 +254,7 @@
         "app/backend/core_components/frontend_assets", "app/backend/reusable_components/vanilla_tree", "app/frontend/reusable_components/vanilla_tree", "app/frontend/main.js",
         "app/frontend/index.html"
       ],
-      "specs": ["app/testing/e2e/G_navigation/G14_home_menu_parity.spec.ts", "app/testing/e2e/E_search_filter/E22_guest_text_search.spec.ts", "app/testing/e2e/C_card_view/C24_cancel_changes.spec.ts",
+      "specs": ["app/testing/e2e/T_admin/T13_workline_observatory.spec.ts", "app/testing/e2e/G_navigation/G14_home_menu_parity.spec.ts", "app/testing/e2e/E_search_filter/E22_guest_text_search.spec.ts", "app/testing/e2e/C_card_view/C24_cancel_changes.spec.ts",
         "app/testing/e2e/C_card_view/C25_rich_text_links.spec.ts",
         "app/testing/e2e/E_search_filter/E20_filterbar_order_and_memory.spec.ts", "app/testing/e2e/G_navigation/G13_phone_topbar_measurements.spec.ts", "app/testing/e2e/D_view_switch/D6_table_cell_line_limit.spec.ts", "app/testing/e2e/T_admin/T21_home_text_style.spec.ts", "app/testing/e2e/G_navigation/G12_top_nav_home_button.spec.ts",
         "app/testing/e2e/C_card_view/C22_article_image_arrows_probe.spec.ts", "app/testing/e2e/E_search_filter/E18_dataset_default_view.spec.ts", "app/testing/e2e/C_card_view/C19_dataset_heading_hierarchy.spec.ts", "app/testing/e2e/A_row_crud/A1_add_row.spec.ts", "app/testing/e2e/A_row_crud/A2_edit_cell.spec.ts", "app/testing/e2e/A_row_crud/A3_delete_rows.spec.ts", "app/testing/e2e/A_row_crud/A4_select_row.spec.ts",

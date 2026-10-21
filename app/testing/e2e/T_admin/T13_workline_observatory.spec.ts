@@ -74,6 +74,7 @@ test.describe('T13 — Workline observatory', () => {
     const rows = page.locator('.workline-observatory__workline-row');
     const labels = page.locator('.workline-observatory__workline-button');
     const checkboxes = page.locator('.workline-observatory__workline-checkbox');
+    const firstSelectionArea = rows.nth(0).locator('.workline-observatory__selection-area');
     expect(await rows.count()).toBeGreaterThan(1);
 
     const selectionToggle = page.locator('.workline-observatory__selection-toggle');
@@ -90,6 +91,9 @@ test.describe('T13 — Workline observatory', () => {
     await page.locator('[data-selection-action="deselect-all"]').click();
     await expect(selectionToggle).not.toBeChecked();
 
+    // Bring the selection control into view before measuring, so the click below
+    // does not scroll the page and only a real selection effect can move a row.
+    await firstSelectionArea.scrollIntoViewIfNeeded();
     const initialRowBoxes = await rows.evaluateAll((elements) => elements.map((element) => {
       const box = element.getBoundingClientRect();
       return { x: box.x, y: box.y, width: box.width, height: box.height };
@@ -97,23 +101,27 @@ test.describe('T13 — Workline observatory', () => {
     const toolbar = page.locator('.workline-observatory__status-toolbar');
     const initialToolbarHeight = await toolbar.evaluate((element) => element.getBoundingClientRect().height);
 
-    const firstTitleBox = await labels.nth(0).locator('.workline-observatory__workline-title').boundingBox();
-    const firstCheckboxBox = await checkboxes.nth(0).boundingBox();
-    expect(firstTitleBox).not.toBeNull();
-    expect(firstCheckboxBox).not.toBeNull();
-    await page.mouse.click(
-      ((firstTitleBox?.x ?? 0) + (firstTitleBox?.width ?? 0) + (firstCheckboxBox?.x ?? 0)) / 2,
-      (firstCheckboxBox?.y ?? 0) + (firstCheckboxBox?.height ?? 0) / 2,
-    );
+    await firstSelectionArea.click();
     await expect(checkboxes.nth(0)).toBeChecked();
     const selectedRowBoxes = await rows.evaluateAll((elements) => elements.map((element) => {
       const box = element.getBoundingClientRect();
       return { x: box.x, y: box.y, width: box.width, height: box.height };
     }));
-    expect(selectedRowBoxes).toEqual(initialRowBoxes);
-    expect(await toolbar.evaluate((element) => element.getBoundingClientRect().height)).toBe(initialToolbarHeight);
+    // Selecting may re-render toolbar text (count, guidance); glyph metrics can move a line box by a
+    // fraction of a pixel. A real layout shift is whole pixels, so compare with a half-pixel tolerance.
+    expect(selectedRowBoxes.length).toBe(initialRowBoxes.length);
+    selectedRowBoxes.forEach((box, index) => {
+      const initial = initialRowBoxes[index];
+      for (const key of ['x', 'y', 'width', 'height'] as const) {
+        expect(Math.abs(box[key] - initial[key]), `row ${index} ${key}`).toBeLessThanOrEqual(0.5);
+      }
+    });
+    const selectedToolbarHeight = await toolbar.evaluate((element) => element.getBoundingClientRect().height);
+    expect(Math.abs(selectedToolbarHeight - initialToolbarHeight)).toBeLessThanOrEqual(0.5);
 
-    const firstTitle = (await labels.nth(0).locator('.workline-observatory__workline-title').textContent())?.trim() ?? '';
+    // The row label shows "#<id> <title>"; status actions name the bare workline title.
+    const firstTitle = ((await labels.nth(0).locator('.workline-observatory__workline-title').textContent())?.trim() ?? '')
+      .replace(/^#\d+\s+/, '');
     const firstLifecycle = await rows.nth(0).getAttribute('data-lifecycle-status');
     const targetStatus = firstLifecycle === 'paused' ? 'active' : 'paused';
     const targetStateLabel = targetStatus === 'active' ? 'Active' : 'Paused';
@@ -122,12 +130,7 @@ test.describe('T13 — Workline observatory', () => {
     await expect(targetAction).toHaveAttribute('title', `Move “${firstTitle}” to ${targetStateLabel}.`);
     await checkboxes.nth(0).uncheck();
 
-    const firstLabelBox = await labels.nth(0).boundingBox();
-    const firstTrackBox = await page.locator('.workline-observatory__track').nth(0).boundingBox();
-    await page.mouse.click(
-      ((firstLabelBox?.x ?? 0) + (firstLabelBox?.width ?? 0) + (firstTrackBox?.x ?? 0)) / 2,
-      (firstTrackBox?.y ?? 0) + (firstTrackBox?.height ?? 0) / 2,
-    );
+    await firstSelectionArea.click();
     await expect(checkboxes.nth(0)).toBeChecked();
     await checkboxes.nth(1).check();
     await expect(page.locator('.workline-observatory__selection-count')).toContainText('2');
@@ -149,16 +152,31 @@ test.describe('T13 — Workline observatory', () => {
     });
     await page.waitForTimeout(180);
     const contextRow = page.locator('.workline-observatory__workline-row').nth(1);
-    const contextRowBox = await contextRow.boundingBox();
-    expect(contextRowBox).not.toBeNull();
+    // Any scroll dismisses the portaled menu (a capture-phase window scroll listener), and a click
+    // scrolls its row into view first. Scroll now and let that event settle, so the click scrolls nothing.
+    await contextRow.scrollIntoViewIfNeeded();
+    await page.evaluate(() => new Promise<void>((resolve) => {
+      requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+    }));
     await contextRow.click({ button: 'right', position: { x: 40, y: 30 } });
     const contextMenu = page.locator('.workline-observatory__context-menu');
     await expect(contextMenu).toBeVisible();
     await expect(contextMenu.locator('[data-status-action]')).toHaveCount(4);
     await expect(page.locator('.workline-observatory__selection-count')).toContainText('2');
-    const contextMenuBox = await contextMenu.boundingBox();
-    expect(Math.abs((contextMenuBox?.x ?? 0) - ((contextRowBox?.x ?? 0) + 40))).toBeLessThan(3);
-    expect(Math.abs((contextMenuBox?.y ?? 0) - ((contextRowBox?.y ?? 0) + 30))).toBeLessThan(3);
+    // The row box is read after the click, which may have scrolled the row into view first.
+    const contextRowBox = (await contextRow.boundingBox())!;
+    const contextMenuBox = (await contextMenu.boundingBox())!;
+    // Since #908 (d5c33f78) the shared positioner keeps the menu on screen: it opens at the pointer,
+    // clamped to an 8 px margin inside the viewport (viewport_context_menu_positioner.js).
+    const viewport = page.viewportSize()!;
+    const menuMargin = 8;
+    const expectedMenuX = Math.min(Math.max(menuMargin, contextRowBox.x + 40),
+      Math.max(menuMargin, viewport.width - contextMenuBox.width - menuMargin));
+    const expectedMenuY = Math.min(Math.max(menuMargin, contextRowBox.y + 30),
+      Math.max(menuMargin, viewport.height - contextMenuBox.height - menuMargin));
+    expect(Math.abs(contextMenuBox.x - expectedMenuX)).toBeLessThan(3);
+    expect(Math.abs(contextMenuBox.y - expectedMenuY)).toBeLessThan(3);
+    expect(contextMenuBox.y + contextMenuBox.height).toBeLessThanOrEqual(viewport.height);
     await expect(contextMenu).toHaveCSS('position', 'fixed');
     const lightContextMenuLuminance = await contextMenu.evaluate(readButtonLuminance);
     expect(lightContextMenuLuminance.background).toBeGreaterThan(0.9);
@@ -217,8 +235,7 @@ test.describe('T13 — Workline observatory', () => {
     const toolbar = page.locator('.workline-observatory__status-toolbar');
     await expect(toolbar).toBeVisible();
     await expect(toolbar).toHaveAttribute('data-compact', 'false');
-    await expect(page.locator('.workline-observatory__header p'))
-      .toHaveText('Select one or more worklines to change their state.');
+    // 4caa80a2 removed the header subtitle; selection guidance now belongs to the row context menu.
     await expect(page.locator('.workline-observatory__status-action-group--before-now button'))
       .toHaveText(['Activate', 'Pause']);
     await expect(page.locator('.workline-observatory__status-action-group--after-now button'))
@@ -247,14 +264,26 @@ test.describe('T13 — Workline observatory', () => {
     await page.waitForTimeout(180);
 
     const expandedHeight = await toolbar.evaluate((element) => element.getBoundingClientRect().height);
+    const statusAction = page.locator('.workline-observatory__status-action').first();
+    const expandedActionHeight = (await statusAction.boundingBox())!.height;
+    expect(expandedActionHeight).toBeGreaterThanOrEqual(44);
     const toolbarBackground = await toolbar.evaluate((element) => getComputedStyle(element).backgroundColor);
     expect(toolbarBackground).not.toBe('rgba(0, 0, 0, 0)');
-    const nowBox = await page.locator('.workline-observatory__now').boundingBox();
-    const beforeNowBox = await page.locator('.workline-observatory__status-action-group--before-now').boundingBox();
-    const afterNowBox = await page.locator('.workline-observatory__status-action-group--after-now').boundingBox();
-    const nowCenter = (nowBox?.x ?? 0) + (nowBox?.width ?? 0) / 2;
-    expect((beforeNowBox?.x ?? 0) + (beforeNowBox?.width ?? 0)).toBeLessThan(nowCenter);
-    expect(afterNowBox?.x ?? 0).toBeGreaterThan(nowCenter);
+    // 4caa80a2 made the action groups a wrapping row that no longer aligns with the board's NOW axis;
+    // the before-now group (Activate, Pause) still comes first in reading order.
+    const beforeNowGroup = page.locator('.workline-observatory__status-action-group--before-now');
+    const afterNowGroup = page.locator('.workline-observatory__status-action-group--after-now');
+    await expect(beforeNowGroup).toBeVisible();
+    await expect(afterNowGroup).toBeVisible();
+    expect(await beforeNowGroup.evaluate((before, after) =>
+      Boolean(before.compareDocumentPosition(after as Node) & Node.DOCUMENT_POSITION_FOLLOWING),
+    await afterNowGroup.elementHandle())).toBe(true);
+    // Reading order on screen too: on one line before-now ends left of after-now; after a wrap it sits above it.
+    const beforeNowBox = (await beforeNowGroup.boundingBox())!;
+    const afterNowBox = (await afterNowGroup.boundingBox())!;
+    const sameLine = beforeNowBox.y < afterNowBox.y + afterNowBox.height && afterNowBox.y < beforeNowBox.y + beforeNowBox.height;
+    if (sameLine) expect(beforeNowBox.x + beforeNowBox.width).toBeLessThanOrEqual(afterNowBox.x + 0.5);
+    else expect(beforeNowBox.y + beforeNowBox.height).toBeLessThanOrEqual(afterNowBox.y + 0.5);
 
     await page.locator('.workline-observatory__workline-row').last().scrollIntoViewIfNeeded();
     await expect(toolbar).toHaveAttribute('data-compact', 'true');
@@ -263,10 +292,33 @@ test.describe('T13 — Workline observatory', () => {
     const compactBox = await toolbar.boundingBox();
     const compactHeight = compactBox?.height ?? expandedHeight;
     expect(compactHeight).toBeLessThan(expandedHeight);
-    expect(compactHeight).toBeLessThan(45);
-    expect(compactBox?.y ?? Number.POSITIVE_INFINITY).toBeLessThanOrEqual(2);
+    // Since 4caa80a2 the toolbar wraps and stacks three selection links, so it is never one row tall.
+    // Compaction means slimmer padding, hidden count and guidance, and 2 rem action buttons.
+    const compactActionHeight = (await statusAction.boundingBox())!.height;
+    expect(compactActionHeight).toBeLessThan(expandedActionHeight);
+    expect(compactActionHeight).toBeLessThanOrEqual(33);
+    expect(compactHeight).toBeLessThanOrEqual(expandedHeight - (expandedActionHeight - compactActionHeight));
+    // Above 900 px the bar sticks to the top edge of the content scrollport that owns the observatory
+    // (workline_observatory_scroll.css, `top: 0`). Narrow screens keep their original scroll owner, where
+    // the bar scrolls away with the content (recorded in the WO69 triage), so only the desktop position is pinned.
+    const stickyTop = await toolbar.evaluate((element) => {
+      if (window.innerWidth <= 900) return null;
+      // Mirror the renderer's owner lookup: the shared scrollport, else the nearest vertical scroller, else the window.
+      let owner = element.closest('.tab-content-body > .scrollable_content, .management_forms.workline-observatory-view');
+      for (let parent = element.parentElement; !owner && parent; parent = parent.parentElement) {
+        const style = getComputedStyle(parent);
+        if (/(auto|scroll|overlay)/.test(`${style.overflow} ${style.overflowY}`) && parent.scrollHeight > parent.clientHeight) owner = parent;
+      }
+      const ownerTop = owner ? owner.getBoundingClientRect().top : 0;
+      return ownerTop + Number.parseFloat(getComputedStyle(element).top);
+    });
+    // Only the narrow branch may omit the position proof.
+    expect(stickyTop === null).toBe(page.viewportSize()!.width <= 900);
+    if (stickyTop !== null) expect(Math.abs((compactBox?.y ?? Number.POSITIVE_INFINITY) - stickyTop)).toBeLessThanOrEqual(2);
 
-    await page.locator('.workline-observatory__header').scrollIntoViewIfNeeded();
+    // Scroll the toolbar's origin marker because the sticky toolbar can already be in view.
+    await page.locator('.workline-observatory__toolbar-sentinel')
+      .evaluate((element) => element.scrollIntoView({ block: 'center' }));
     await expect(toolbar).toHaveAttribute('data-compact', 'false');
     await page.waitForTimeout(220);
     const restoredHeight = await toolbar.evaluate((element) => element.getBoundingClientRect().height);
