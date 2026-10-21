@@ -8,6 +8,12 @@ import { buildTempDatasetName, createTempDataset, cleanupDatasetViaRequest, fetc
 import { loadDatasetCardVisibility } from '../helpers/appearance-revisions';
 import { waitForActiveFilterbarLayout } from '../helpers/filterbar';
 
+function expectedProductTileTitle(text: string): string {
+  // Mirrors MAX_TITLE_LENGTH and truncateText in product_card_view/product_card_view_printer.js.
+  const maxTitleLength = 120;
+  return text.length <= maxTitleLength ? text : `${text.slice(0, maxTitleLength - 3).trim()}...`;
+}
+
 async function datasetNameKey(page: Page, dataset: string): Promise<number | null> {
   const response = await page.request.get('/api/get-results', { params: { dataset: 'system_lang_keys', view_key: 'table', lang_key: dataset } });
   expect(response.ok(), await response.text()).toBe(true);
@@ -89,7 +95,9 @@ test('962: every record has the same name in cards, small summaries, product til
           await page.goto(`/${name}?view=product_card&id=${id}`, { waitUntil: 'domcontentloaded' });
           await applyTheme(page, theme);
           const tile = page.locator(`[data-testid="product-card"][data-row-id="${id}"]`).first();
-          await expect(tile.locator('.product-card-view-title').first()).toHaveText(expected);
+          const heading = tile.locator('.product-card-view-title').first();
+          await expect(heading).toHaveAttribute('title', expected);
+          await expect(heading).toHaveText(expectedProductTileTitle(expected));
 
           await page.goto(`/${name}/${id}?view=article_view`, { waitUntil: 'domcontentloaded' });
           await applyTheme(page, theme);
