@@ -22,6 +22,7 @@ Dates are the local (Europe/Helsinki) date on which the version was published.
 
 ## [Unreleased]
 
+- Filter-bar input-mode buttons (value, range, expression) now also open their collapsed filter section, and never close it; the remembered open sections stay in step.
 - On phones, dataset text search is visible directly above the search tools for every reader; the top-bar search button remains available after scrolling.
 
 ## [9.5.1] - 2026-10-21

@@ -218,9 +218,11 @@ export function create_favefox_style_filter_bar(table_name, sections = [], optio
         }
 
         function toggle() {
-            const isExpanded = contentHeightController.isExpanded();
-            const nextExpanded = !isExpanded;
+            setExpanded(!contentHeightController.isExpanded());
+        }
 
+        // The one open/close path, shared by the header toggle and the input-mode buttons.
+        function setExpanded(nextExpanded) {
             sectionToggleBtn.setAttribute('aria-expanded', String(nextExpanded));
             sectionToggleBtn.textContent = nextExpanded ? '▾' : '▸';
             sectionWrapper.classList.toggle('section-expanded', nextExpanded);
@@ -246,6 +248,17 @@ export function create_favefox_style_filter_bar(table_name, sections = [], optio
             sectionToggleBtn.addEventListener('click', (e) => {
                 e.stopPropagation();
                 toggle();
+            });
+            // WO75 (owner 20.10.): an input-mode button (= value, ↔ range, f(x)) also OPENS its collapsed section, and
+            // never closes it. Each mode button stops propagation in its own handler, so this listener sits on the
+            // button itself and runs after the mode switch. Keyboard activation of a button fires the same click.
+            // The sort button is not an input-mode button and keeps its behaviour.
+            displayModeControls?.querySelectorAll('button[data-filter-display-mode]').forEach((modeButton) => {
+                modeButton.addEventListener('click', () => {
+                    if (!contentHeightController.isExpanded()) {
+                        setExpanded(true);
+                    }
+                });
             });
         }
 

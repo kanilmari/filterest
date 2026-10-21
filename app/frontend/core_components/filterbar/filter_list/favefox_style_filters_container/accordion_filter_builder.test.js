@@ -9,6 +9,24 @@ import {
     build_favefox_style_filter_bar_from_columns,
     create_favefox_style_filter_bar,
 } from "./accordion_filter_builder.js";
+import { getOpenedFilters } from "../../filterbar_engine/filterbar_state_saver.js";
+
+/** Mode buttons shaped like filter_column_builder.js's: each stops propagation in its own click handler. */
+function buildModeControls(onMode = () => {}) {
+    const controls = document.createElement("div");
+    controls.classList.add("filter-display-mode-controls");
+    for (const mode of ["value", "range", "expression"]) {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.dataset.filterDisplayMode = mode;
+        button.addEventListener("click", (event) => {
+            event.stopPropagation();
+            onMode(mode);
+        });
+        controls.appendChild(button);
+    }
+    return controls;
+}
 
 function buildSections(count) {
     return Array.from({ length: count }, (_, index) => {
@@ -96,6 +114,98 @@ describe("create_favefox_style_filter_bar", () => {
         expect(secondContent.hidden).toBe(false);
         expect(secondContent.classList.contains("expanded")).toBe(true);
         expect(secondToggle.getAttribute("aria-expanded")).toBe("true");
+    });
+
+    // WO75: an input-mode button opens its collapsed section and never closes it; the sort button does not open it.
+    test("an input-mode button opens its collapsed section through the shared path and never closes it", () => {
+        const modes = [];
+        const sections = buildSections(3);
+        const sortButton = document.createElement("button");
+        sortButton.setAttribute("data-sort-state", "none");
+        sections[1].displayModeControls = buildModeControls((mode) => modes.push(mode));
+        sections[1].sortButton = sortButton;
+        const wrapper = create_favefox_style_filter_bar("users", sections, { layoutMode: "accordion" });
+        document.body.appendChild(wrapper);
+
+        const section = wrapper.querySelectorAll(".filter-section")[1];
+        const content = section.querySelector(".filter-content");
+        const toggleButton = section.querySelector(".toggle-filters-button");
+        const modeButtons = section.querySelectorAll("button[data-filter-display-mode]");
+        const expectOpen = () => {
+            expect(content.hidden).toBe(false);
+            expect(content.classList.contains("expanded")).toBe(true);
+            expect(section.classList.contains("section-expanded")).toBe(true);
+            expect(toggleButton.getAttribute("aria-expanded")).toBe("true");
+            expect(toggleButton.textContent).toBe("▾");
+            expect(getOpenedFilters("users")).toContain("section_2");
+        };
+        expect(content.hidden).toBe(true);
+
+        sortButton.click();
+        expect(content.hidden).toBe(true);
+        expect(toggleButton.getAttribute("aria-expanded")).toBe("false");
+        expect(getOpenedFilters("users")).not.toContain("section_2");
+
+        // A keyboard Enter/Space on a button dispatches this same click event.
+        modeButtons[1].click();
+        expect(modes).toEqual(["range"]);
+        expectOpen();
+        modeButtons[1].click();
+        modeButtons[2].click();
+        modeButtons[0].click();
+        expect(modes).toEqual(["range", "range", "expression", "value"]);
+        expectOpen();
+        expect(getOpenedFilters("users").filter((key) => key === "section_2")).toHaveLength(1);
+
+        // The header toggle still closes it, through the same path.
+        toggleButton.click();
+        expect(content.classList.contains("expanded")).toBe(false);
+        expect(getOpenedFilters("users")).not.toContain("section_2");
+    });
+
+    test("input-mode buttons leave the inline-open (phone) layout unchanged", () => {
+        const sections = buildSections(2);
+        sections[1].displayModeControls = buildModeControls();
+        const wrapper = create_favefox_style_filter_bar("users", sections, { layoutMode: "inline-open" });
+        document.body.appendChild(wrapper);
+        const storage = () => JSON.stringify(Object.entries({ ...localStorage }).sort());
+        const before = storage();
+
+        wrapper.querySelectorAll(".filter-section")[1].querySelector("button[data-filter-display-mode='range']").click();
+
+        wrapper.querySelectorAll(".filter-content").forEach((content) => {
+            expect(content.hidden).toBe(false);
+            expect(content.classList.contains("expanded")).toBe(true);
+        });
+        expect(wrapper.querySelector(".toggle-filters-button")).toBeNull();
+        expect(storage()).toBe(before);   // no opened-state write in the inline-open layout
+    });
+
+    test("the real column builder's mode buttons open a collapsed column section and keep it open", () => {
+        const wrapper = build_favefox_style_filter_bar_from_columns(
+            "tasks",
+            ["title", "id"],
+            { title: { data_type: "text", co_number: 1 }, id: { data_type: "integer", co_number: 2 } },
+            true,
+            { layoutMode: "accordion" },
+        );
+        document.body.appendChild(wrapper);
+        const section = [...wrapper.querySelectorAll(".filter-section")]
+            .find((candidate) => candidate.querySelector(".filter-section-title").dataset.langKey === "id");
+        const content = section.querySelector(".filter-content");
+        const modeButtons = section.querySelectorAll("button[data-filter-display-mode]");
+        expect(modeButtons.length).toBeGreaterThan(1);
+        expect(content.classList.contains("expanded")).toBe(false);
+
+        modeButtons[1].click();
+        expect(content.classList.contains("expanded")).toBe(true);
+        expect(section.querySelector(".toggle-filters-button").getAttribute("aria-expanded")).toBe("true");
+        expect(modeButtons[1].getAttribute("aria-pressed")).toBe("true");
+        expect(getOpenedFilters("tasks")).toContain("id");
+
+        modeButtons[0].click();
+        expect(content.classList.contains("expanded")).toBe(true);
+        expect(modeButtons[0].getAttribute("aria-pressed")).toBe("true");
     });
 
     test("renders all accordion sections without a show-more footer", () => {
