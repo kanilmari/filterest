@@ -202,7 +202,14 @@ test('admin cover palette is protected, movable, resizable, themed, and live-onl
     input.dispatchEvent(new Event('input', { bubbles: true }));
   });
   const zeroExtraHeight = (await hero.boundingBox())!.height;
-  expect(defaultHeight - zeroExtraHeight).toBeCloseTo(Number(presentation.tab_values['shared.hero_extra_height']), 0);
+  // morphing_filterbar_content.css fixes phone padding at the owner's request to remove oversized gaps.
+  if (page.viewportSize()!.width <= 700) {
+    expect(defaultHeight - zeroExtraHeight).toBeCloseTo(0, 0);
+    await expect(hero).toHaveCSS('padding-top', '8px');
+    await expect(hero).toHaveCSS('padding-bottom', '8px');
+  } else {
+    expect(defaultHeight - zeroExtraHeight).toBeCloseTo(Number(presentation.tab_values['shared.hero_extra_height']), 0);
+  }
 
   const ovalPosition = page.locator(
     '[data-testid="dataset-cover-test-palette-oval-position-y"]'
@@ -479,7 +486,9 @@ test('shared palette shell keeps dataset preview through close and restores save
   await expect(input).toHaveValue('200');
   const preview = () => hero.evaluate(el => getComputedStyle(el).getPropertyValue('--dataset-cover-hero-extra-height').trim());
   await expect.poll(preview).toBe('200px');
-  const previewHeight = savedHeight + 200 - Number(saved.tab_values['shared.hero_extra_height']);
+  // Phones (≤ 700 px) keep the cover hero's fixed padding (morphing_filterbar_content.css), so only the variable changes.
+  const previewHeight = page.viewportSize()!.width <= 700
+    ? savedHeight : savedHeight + 200 - Number(saved.tab_values['shared.hero_extra_height']);
   await expect.poll(async () => (await hero.boundingBox())!.height).toBeCloseTo(previewHeight, 0);
   await page.keyboard.press('Escape'); await expect(button).toBeFocused(); await expect(panel).toBeHidden();
   await expect.poll(preview).toBe('200px');

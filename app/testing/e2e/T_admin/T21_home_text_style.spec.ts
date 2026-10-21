@@ -78,6 +78,19 @@ async function fixture(page: Page, language: 'fi' | 'en', theme: 'light' | 'dark
     expect(route.request().method()).toBe('GET');
     await route.fulfill({ json: { theme_mode: theme, revision: 1, configured: true } });
   });
+  // Home projects /api/datasets into hero tabs at bootstrap and catalogue refreshes.
+  // Pin two real built-in entries so other workers' temporary names cannot change the top row.
+  const catalogueResponse = await page.request.get('/api/datasets');
+  expect(catalogueResponse.ok()).toBe(true);
+  const catalogue = await catalogueResponse.json();
+  const datasets = catalogue.datasets.filter((entry: { dataset_name: string }) =>
+    ['system_users', 'system_about'].includes(entry.dataset_name));
+  expect(datasets.map((entry: { dataset_name: string }) => entry.dataset_name).sort())
+    .toEqual(['system_about', 'system_users']);
+  await page.route(url => url.pathname === '/api/datasets', async route => {
+    expect(route.request().method()).toBe('GET');
+    await route.fulfill({ json: { ...catalogue, datasets, tab_order: null } });
+  });
   // The spec must fail if a future edit accidentally adds a shared-settings write.
   page.on('request', request => {
     const shared = ['/api/admin/front-page', '/api/row-update', '/api/row-create', '/api/user-visual-preference'];
@@ -131,6 +144,27 @@ async function openHome(page: Page) {
   return hero;
 }
 
+async function settleTopRow(page: Page, language: 'fi' | 'en') {
+  const labels = page.locator('.front-page-top-row .navbar-front-page-label, .front-page-top-row .hero-dataset-tabs__label');
+  let previous = '';
+  let unchangedSamples = 0;
+  // Translation can relabel even the fixed tabs after Home mounts. Require two unchanged
+  // samples after the baseline (~600 ms minimum), leaving time before the 3000 ms reveal.
+  await expect.poll(async () => {
+    const sample = await labels.evaluateAll(elements => ({ language: document.documentElement.lang,
+      boxes: elements.map(element => {
+        const { x, y, width, height } = element.getBoundingClientRect();
+        return { text: element.textContent, x, y, width, height };
+      }) }));
+    const current = JSON.stringify(sample);
+    unchangedSamples = sample.language === language && sample.boxes.length === 3 && current === previous
+      ? unchangedSamples + 1 : 0;
+    previous = current;
+    return unchangedSamples;
+  }, { intervals: [300], timeout: 1800,
+    message: 'Home top-row labels must settle within 1800 ms, before the 3000 ms line reveal' }).toBeGreaterThanOrEqual(2);
+}
+
 async function expectHeadingFits(hero: Locator) {
   const heading = hero.locator('h1');
   for (const part of [heading, heading.locator('em')]) {
@@ -182,6 +216,7 @@ for (const language of ['fi', 'en'] as const) for (const theme of ['light', 'dar
       test.setTimeout(90_000);
       await page.setViewportSize(viewport); await fixture(page, language, theme);
       const hero = await openHome(page);
+      await settleTopRow(page, language);
       const first = linesFor(page).first();
       expect(await age(first)).toBeLessThan(3000);
       expect(Number(await first.evaluate(element => getComputedStyle(element).opacity))).toBeLessThan(0.1);

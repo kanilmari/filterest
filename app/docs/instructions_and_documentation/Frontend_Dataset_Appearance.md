@@ -51,7 +51,7 @@ remain authoritative in the definition rather than in this table.
 | Cover image opacity / Show cover photo | `light.image_opacity`, `dark.image_opacity` | Tab-only |
 | Cover overlay opacity | `light.overlay_opacity`, `dark.overlay_opacity` | Tab-only |
 | Background image blur | `light.image_blur`, `dark.image_blur` | Tab-only |
-| Hero extra height | `shared.hero_extra_height` | Tab-only |
+| Hero extra height | `shared.hero_extra_height` | Tab-only. On phones (≤ 700 px), a hero with a cover uses fixed 8 px block padding, so Hero extra height does not apply there. |
 | Hero bottom fade | `shared.hero_bottom_fade` | Tab-only |
 | Card image width | `shared.card_image_width` | Site default + tab override |
 | Card image presentation | `shared.card_image_presentation` | Site default + tab override |
