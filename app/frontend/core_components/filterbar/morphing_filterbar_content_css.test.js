@@ -118,6 +118,17 @@ describe('morphing filterbar content CSS', () => {
         expect(sectionRule).toContain('padding: var(--fw-space-4)');
     });
 
+    test('lets the phone selected-chip row span the uncapped tools column from its left edge', () => {
+        const css = readFileSync(resolve(CURRENT_DIR, 'morphing_filterbar_content.css'), 'utf8');
+        const phone = css.lastIndexOf('@media (width <= 700px) {');
+        const start = css.indexOf('.filterbar-inline-hero ~ .dataset-results-surface > .card_top_controls > .active_filters {', phone);
+        // Later than the same-specificity wide-state width, and stronger than active_filter_tags.css's cap and auto margins.
+        expect(phone).toBeGreaterThan(css.indexOf('.card_top_controls > .active_filters {'));
+        expect(start).toBeGreaterThan(phone);
+        const rule = css.slice(start, css.indexOf('}', start));
+        for (const declaration of ['width: 100%', 'max-width: none', 'margin-inline: 0']) expect(rule).toContain(declaration);
+    });
+
     test('keeps record-bearing fields opaque over the shared dataset background', () => {
         const css = readFileSync(resolve(CURRENT_DIR, 'morphing_filterbar_content.css'), 'utf8');
         const expectedOpaqueSelectors = [

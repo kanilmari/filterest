@@ -22,6 +22,7 @@ Dates are the local (Europe/Helsinki) date on which the version was published.
 
 ## [Unreleased]
 
+- On phones up to 700 px, the selected-chip row under a dataset's search tools is again as wide as the tools box and starts at its left edge, instead of a narrower centred row.
 - Category popups gain a compact header with match settings behind a gear; shared multiselects resize up to the available 600 px, remember viewer height, and follow their buttons while scrolling.
 - On phones, Home navigation and content scroll together beneath a compact bar with the menu and site name; opening the menu keeps the page in place.
 - **Relevant-check coverage** — Complete production-file mappings, refuse unmapped changes and unclaimed browser specs, pin saved selections to their tree and map, and expose the nightly frontend prefixes through the planner.

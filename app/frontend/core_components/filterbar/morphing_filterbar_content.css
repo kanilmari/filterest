@@ -625,6 +625,13 @@
   /* Same specificity as the wide-state 550px cap above and later in the cascade than shared_topbar.css, so the
      phone search field spans the inner width like the tools box. */
   .filterbar-inline-hero .filter-content-inner > .dataset-search-panel { max-width: none; }
+  /* The selected-chip row follows the uncapped tools box: the full column from the same left edge. The wide-state
+     width above and active_filter_tags.css's 550px cap with auto margins would centre a narrower row. */
+  .filterbar-inline-hero ~ .dataset-results-surface > .card_top_controls > .active_filters {
+    width: 100%;
+    max-width: none;
+    margin-inline: 0;
+  }
 }
 
 .filterbar-fixed-toggle:focus-visible,

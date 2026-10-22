@@ -103,7 +103,7 @@ categories removes both category parameters and preserves search/ordinary filter
 filters, modes and paging, while preserving view and ordinary sorting. Tag redraws keep Clear all connected and reuse its listener, preserving keyboard focus when a chip-removal build settles before the next Enter. All three selected chips (text search, ordinary filters and category values) use
 `active_filter_chip_builder.js`; their owners retain label formatting, translation and removal commands.
 `active_filter_tags.css` owns their geometry: Selected: first,
-chips in the middle and Clear all last, with each wrapped line centred. The row and category card share the search column's `--filterbar-hero-content-max-width` and auto inline margins, wrapping within the available width on phones and tablets. The phone top bar does not move this row; only an opened article uses its sidebar. Chips have
+chips in the middle and Clear all last, with each wrapped line centred. The row and category card share the search column's `--filterbar-hero-content-max-width` and auto inline margins above 700 px; up to 700 px the hero's row spans the whole column like the tools box, wrapping within it. The phone top bar does not move this row; only an opened article uses its sidebar. Chips have
 6 px corners, inherited font size, zero vertical padding and a 33 px minimum height; logical inline padding
 is 12 px on the label side and 4 px on the button side. At desktop widths the remove
 button is 24 × 24 px and Clear all has no 44 px minimum, so a single-line chip is
@@ -187,7 +187,7 @@ The selected-chip row matches the shaded section's outer width and left edge,
 including on phones. In `morphing_filterbar_content.css`, the hero and listing
 result controls consume the same responsive `--filterbar-hero-inline-space`
 for their outer padding and share the inner column-width expression. The row
-and section retain the same content-width cap and centring. The section's own
+and section retain the same content-width cap and centring above 700 px; up to 700 px both drop the cap and inline margins in the same phone block. The section's own
 padding stays inside its border box; aligning chips with the inset Categories
 child would make their row too narrow. Comparing only the 550 px cap misses
 narrow-screen differences between the two hosts. Chip wrapping and removal
