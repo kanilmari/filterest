@@ -361,6 +361,10 @@ start_local() {
     export TLS_CERT_FILE="${TLS_CERT_FILE:-$EASELECT_TLS_CERT_FILE}"
     export TLS_KEY_FILE="${TLS_KEY_FILE:-$EASELECT_TLS_KEY_FILE}"
     mkdir -p "$LOCAL_BINARY_DIR" "$(dirname "$LOG_FILE")"
+    local stamp_dir stamp_ldflags
+    stamp_dir=$(cd "$FILTEREST_BUILD_ROOT" && go list -m -f '{{.Dir}}' easelect 2>/dev/null || true)
+    stamp_ldflags=$(sh "$FILTEREST_SOURCE_ROOT/server_tools/lib/build_stamp_ldflags.sh" ldflags "$stamp_dir") || return 1
+    go_build_args+=(-ldflags "$stamp_ldflags")
     if ! (
         cd "$FILTEREST_BUILD_ROOT"
         go build "${go_build_args[@]}" "${FILTEREST_GO_BUILD_TARGET:-.}"

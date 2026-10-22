@@ -47,14 +47,34 @@ WORKDIR /app
 COPY go.mod go.sum ./
 RUN go mod download
 
+ARG FILTEREST_GIT_COMMIT=
+ARG FILTEREST_SOURCE_DIRTY=
+
 COPY main.go ./
 COPY backend/ ./backend/
 COPY components/ ./components/
 COPY frontend/shared/ ./frontend/shared/
 COPY server_tools/admin_credential_recovery/ ./server_tools/admin_credential_recovery/
+COPY server_tools/lib/build_stamp_ldflags.sh ./server_tools/lib/build_stamp_ldflags.sh
 
-RUN CGO_ENABLED=1 GOOS=linux go build \
-    -ldflags="-w -s -X main.buildEnv=prod" \
+RUN case "$FILTEREST_GIT_COMMIT" in \
+        ''|unknown|source-copy) ;; \
+        *) case "$FILTEREST_GIT_COMMIT" in \
+               *[!0-9a-f]*) printf 'Invalid build commit\n' >&2; exit 1 ;; \
+           esac; \
+           [ "${#FILTEREST_GIT_COMMIT}" -eq 40 ] || { printf 'Invalid build commit\n' >&2; exit 1; } ;; \
+    esac && \
+    case "$FILTEREST_SOURCE_DIRTY" in \
+        ''|true|false) ;; \
+        *) printf 'Invalid source dirty flag\n' >&2; exit 1 ;; \
+    esac && \
+    stamp_ldflags="$(sh server_tools/lib/build_stamp_ldflags.sh ldflags /app)" && \
+    case "$FILTEREST_GIT_COMMIT:$FILTEREST_SOURCE_DIRTY" in \
+        :*|unknown:*|source-copy:*|*:) ;; \
+        *) stamp_ldflags="$stamp_ldflags -X easelect/backend/core_components/build_stamp.gitCommit=$FILTEREST_GIT_COMMIT -X easelect/backend/core_components/build_stamp.sourceDirty=$FILTEREST_SOURCE_DIRTY" ;; \
+    esac && \
+    CGO_ENABLED=1 GOOS=linux go build \
+    -ldflags="-w -s -X main.buildEnv=prod $stamp_ldflags" \
     -o filterest .
 RUN CGO_ENABLED=1 GOOS=linux go build \
     -ldflags="-w -s" \

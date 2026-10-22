@@ -9,10 +9,67 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
+	"strings"
 	"testing"
 
+	buildstamp "easelect/backend/core_components/build_stamp"
 	releaseupdates "easelect/backend/core_components/release_updates"
 )
+
+func TestAdminVersionInfoBuildStamp(t *testing.T) {
+	restoreProbe := replaceSystemReadinessProbe(func() systemReadyResponse { return systemReadyResponse{} })
+	t.Cleanup(restoreProbe)
+	oldStamp, oldCheck, oldCheckNow := adminBuildStamp, adminLatestStableReleaseCheck, adminLatestStableReleaseCheckNow
+	t.Cleanup(func() {
+		adminBuildStamp, adminLatestStableReleaseCheck, adminLatestStableReleaseCheckNow = oldStamp, oldCheck, oldCheckNow
+	})
+	check := func(context.Context, string) releaseupdates.Status { return releaseupdates.Status{} }
+	adminLatestStableReleaseCheck, adminLatestStableReleaseCheckNow = check, check
+	sha, built := strings.Repeat("a", 40), "2026-10-22T11:05:00Z"
+	for _, tc := range []struct {
+		name, commit, dirty, status string
+		wantDirty                   any
+	}{
+		{"clean", sha, "false", "stamped", false},
+		{"dirty", sha, "true", "stamped", true},
+		{"invalid", "source-copy", "false", "invalid", nil},
+		{"missing", "", "", "missing", nil},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			adminBuildStamp = func() buildstamp.Stamp { return buildstamp.Resolve(tc.commit, tc.dirty, built) }
+			var get map[string]any
+			for _, method := range []string{http.MethodGet, http.MethodPost} {
+				recorder := httptest.NewRecorder()
+				adminVersionInfoHandler(recorder, httptest.NewRequest(method, "/api/admin/version-info", nil))
+				if recorder.Code != http.StatusOK || recorder.Header().Get("Cache-Control") != "private, no-store" {
+					t.Fatalf("%s status/cache = %d/%q", method, recorder.Code, recorder.Header().Get("Cache-Control"))
+				}
+				var got map[string]any
+				if err := json.Unmarshal(recorder.Body.Bytes(), &got); err != nil {
+					t.Fatal(err)
+				}
+				for _, key := range []string{"git_commit_sha", "source_dirty", "built_at", "source_status"} {
+					if _, ok := got[key]; !ok {
+						t.Errorf("%s missing %s", method, key)
+					}
+				}
+				wantCommit := ""
+				if tc.status == "stamped" {
+					wantCommit = sha
+				}
+				if got["git_commit_sha"] != wantCommit || got["source_dirty"] != tc.wantDirty || got["built_at"] != built || got["source_status"] != tc.status {
+					t.Fatalf("%s stamp = %#v", method, got)
+				}
+				if method == http.MethodGet {
+					get = got
+				} else if !reflect.DeepEqual(get, got) {
+					t.Fatal("GET and POST payloads differ")
+				}
+			}
+		})
+	}
+}
 
 func TestAdminVersionInfoHandlerReturnsReadinessVersions(t *testing.T) {
 	t.Setenv("EASELECT_RUNTIME_MODE", "docker")

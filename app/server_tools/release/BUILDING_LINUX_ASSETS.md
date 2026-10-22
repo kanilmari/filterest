@@ -50,6 +50,23 @@ directory **outside the entire source checkout**:
 ./filterest release build --output-dir /tmp/filterest-release-build
 ```
 
+The builder requires a clean Git HEAD and uses `build_stamp_ldflags.sh ldflags APP_DIR --require-clean`
+to embed that same commit, `sourceDirty=false` and one UTC build time for both
+architectures. These details are available only from the administrator's Site
+information API (`/api/admin/version-info`); the public product identity is unchanged.
+Native development uses the same helper for the public module Go actually compiles.
+Gitless source copies retain their build time with unknown source attribution.
+Source status describes the commit/dirty pair (`stamped`, `invalid` or `missing`);
+build time is validated independently, and an unknown source has a null dirty flag.
+Docker validates commit/dirty inputs before linking: a valid pair stamps the source;
+placeholders or a commit without a dirty flag build successfully with time only.
+Malformed inputs fail. Compose launchers derive the pair only when no commit override
+was supplied, and never borrow an enclosing repository's commit.
+
+Release verification continues to require Go's VCS revision and clean flag.
+It does not inspect linker flags: `-trimpath` omits them from Go's recorded build
+information. The builder's tests bind its explicit stamp to the checked HEAD.
+
 The builder rejects an unclean checkout and never bypasses that check to reuse
 an already published version number. It does not prepare version numbers,
 regenerate notices, commit, tag, upload, publish or deploy. A development change

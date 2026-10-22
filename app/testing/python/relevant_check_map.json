@@ -537,7 +537,7 @@
     {
       "area": "Internal backend foundations",
       "paths": [
-        "app/backend/core_components/app_registry", "app/backend/core_components/context_keys", "app/backend/core_components/dbutils",
+        "app/backend/core_components/app_registry", "app/backend/core_components/build_stamp", "app/backend/core_components/context_keys", "app/backend/core_components/dbutils",
         "app/backend/core_components/email", "app/backend/core_components/event_bus", "app/backend/core_components/httpresponse",
         "app/backend/core_components/logging", "app/backend/core_components/product_identity", "app/backend/core_components/runtimepaths", "app/backend/pipeline/audit",
         "app/backend/pipeline/error_handling", "app/backend/pipeline/lazy_transaction", "app/backend/pipeline/rate_limiting", "app/backend/pipeline/request_logging",
@@ -656,7 +656,7 @@
       "anchor": "app/backend/core_components/system_table_tools/lang_key_catalogue_scan_test.go"
     }
   ],
-  "python_guards": [
+  "python_guards": [{"paths": ["app/backend/core_components/build_stamp", "app/backend/core_components/router/admin_version_info_handler.go", "app/backend/core_components/router/admin_version_info_handler_test.go", "app/backend/core_components/product_identity/product_identity_contract_test.go", "app/server_tools/lib/build_stamp_ldflags.sh", "app/server_tools/ctl/lib/local.sh", "app/server_tools/ctl/lib/docker.sh", "app/server_tools/run_filterest_docker.sh", "app/server_tools/release/build_assets.sh", "app/server_tools/release/BUILDING_LINUX_ASSETS.md", "app/docker/Dockerfile", "app/docker/docker-compose.yml"], "tests": ["app/testing/python/test_build_stamp_launchers.py", "app/testing/python/test_release_asset_builder.py"]},
     {
       "paths": ["app/components", "app/backend/core_components/router/components.go", "app/backend/pipeline/pipeline_conformance_test.go", "app/docker/Dockerfile", "app/backend/core_components/frontend_assets/component_assets.go"],
       "tests": ["app/testing/python/test_component_registration.py"]

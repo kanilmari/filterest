@@ -9,9 +9,16 @@
 # Docker mode
 # ------------------------------------------------------------------------------
 _local_docker_compose() {
-    local compose_file
+    local compose_file stamp_source
     compose_file="$(filterest_local_docker_compose_file)"
     easelect_prepare_docker_context_boundaries "$PROJECT_ROOT"
+    if [[ ! ${FILTEREST_GIT_COMMIT+x} ]]; then
+        stamp_source=$(sh "$FILTEREST_SOURCE_ROOT/server_tools/lib/build_stamp_ldflags.sh" source "$FILTEREST_SOURCE_ROOT") || return 1
+        if [[ -n "$stamp_source" ]]; then
+            read -r FILTEREST_GIT_COMMIT FILTEREST_SOURCE_DIRTY <<< "$stamp_source"
+            export FILTEREST_GIT_COMMIT FILTEREST_SOURCE_DIRTY
+        fi
+    fi
     docker compose --env-file "$EASELECT_RUNTIME_ENV_FILE" -f "$compose_file" "$@"
 }
 

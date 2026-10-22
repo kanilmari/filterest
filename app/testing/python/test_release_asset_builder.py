@@ -10,6 +10,8 @@ checkout, publishing binaries, or interacting with services and databases.
 import json
 import os
 from pathlib import Path
+import re
+import shutil
 import subprocess
 import pytest
 
@@ -60,10 +62,21 @@ def release_fixture(tmp_path):
         file = source / relative
         file.parent.mkdir(parents=True, exist_ok=True)
         file.write_text(content)
+    real_git = shutil.which("git")
+    subprocess.run([real_git, "init", "-q", str(source)], check=True)
+    subprocess.run([real_git, "-C", str(source), "add", "."], check=True)
+    subprocess.run([real_git, "-C", str(source), "-c", "user.name=Release fixture",
+                    "-c", "user.email=release@example.invalid", "commit", "-qm", "fixture"], check=True)
     binary_dir = tmp_path / "fixture-bin"
     binary_dir.mkdir()
     programs = {
-        "git": '#!/bin/sh\nprintf "%s" "${FIXTURE_GIT_STATUS:-}"\nexit "${FIXTURE_GIT_EXIT:-0}"\n',
+        "git": f'''#!/bin/sh
+[ "${{FIXTURE_GIT_EXIT:-0}}" = 0 ] || exit "$FIXTURE_GIT_EXIT"
+case "$*" in
+    *status*) if [ -n "${{FIXTURE_GIT_STATUS:-}}" ]; then printf '%s' "$FIXTURE_GIT_STATUS"; exit 0; fi ;;
+esac
+exec '{real_git}' "$@"
+''',
         "find": '#!/bin/sh\nif [ "${FIXTURE_FIND_FAIL:-0}" = 1 ]; then exit 2; fi\nexec /usr/bin/find "$@"\n',
         "gcc": '#!/bin/sh\nexit 90\n',
         "aarch64-linux-gnu-gcc": '#!/bin/sh\nexit 90\n',
@@ -73,7 +86,7 @@ if sys.argv[1] == "build":
     destination = pathlib.Path(sys.argv[sys.argv.index("-o") + 1])
     destination.write_text(json.dumps({key: os.environ.get(key) for key in ["GOAMD64", "GOARM64"]}))
     with open(os.environ["FIXTURE_EVENTS"], "a") as output:
-        output.write(json.dumps({key: os.environ.get(key) for key in ["GOARCH", "GOWORK", "GOFLAGS", "GOMODCACHE", "GOCACHE", "GOAMD64", "GOARM64", "GOENV", "GOEXPERIMENT", "CGO_CFLAGS", "CGO_CPPFLAGS", "CGO_CXXFLAGS", "CGO_FFLAGS", "CGO_LDFLAGS"]}) + "\n")
+        output.write(json.dumps({**{key: os.environ.get(key) for key in ["GOARCH", "GOWORK", "GOFLAGS", "GOMODCACHE", "GOCACHE", "GOAMD64", "GOARM64", "GOENV", "GOEXPERIMENT", "CGO_CFLAGS", "CGO_CPPFLAGS", "CGO_CXXFLAGS", "CGO_FFLAGS", "CGO_LDFLAGS"]}, "args": sys.argv[1:]}) + "\n")
 elif sys.argv[1:3] == ["version", "-m"]:
     arch = "arm64" if sys.argv[3].endswith("arm64") else "amd64"
     version = os.environ.get("FIXTURE_MODULE_VERSION", "v1.2.3")
@@ -132,6 +145,7 @@ def test_root_files_must_match_the_reviewed_list(release_fixture, change):
     else:
         (source / "codesize").unlink()
         expected = "- codesize"
+    subprocess.run([shutil.which("git"), "-C", str(source), "add", "-A"], check=True)
     result = run_builder(release_fixture, "--check-only")
     assert result.returncode != 0
     assert expected in result.stdout
@@ -170,6 +184,18 @@ def test_full_assembly_keeps_fourteen_assets_and_standalone_go_boundary(release_
     assert all(event["GOMODCACHE"] == str(source / "data/runtime/go/module-cache") for event in events)
     assert all(event["GOAMD64"] == "v1" and event["GOARM64"] == "v8.0" and event["GOENV"] == "off" for event in events)
     assert all(event["CGO_CFLAGS"] == "-O2 -g" and event["CGO_CPPFLAGS"] == "" and event["GOEXPERIMENT"] == "" for event in events)
+    head = subprocess.run([shutil.which("git"), "-C", str(source), "rev-parse", "HEAD"],
+                          check=True, capture_output=True, text=True).stdout.strip()
+    times = []
+    for event in events:
+        flags = [arg.split("=", 1)[1] for arg in event["args"] if arg.startswith("-ldflags=")]
+        assert len(flags) == 1
+        assert f"-X easelect/backend/core_components/build_stamp.gitCommit={head}" in flags[0]
+        assert "-X easelect/backend/core_components/build_stamp.sourceDirty=false" in flags[0]
+        times.append(re.search(r"\.builtAt=(\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ)(?: |$)", flags[0])[1])
+        assert "-w -s -X main.buildEnv=prod" in flags[0] and "-linkmode external" in flags[0]
+        assert "-buildvcs=true" in event["args"] and "-trimpath" in event["args"]
+    assert times[0] == times[1]
 
 
 def test_dirty_source_refuses_release_binaries(release_fixture):
@@ -415,7 +441,14 @@ def test_builder_forwards_unsigned_bundle_contract_after_native_build(release_fi
     source, _, environment = release_fixture
     binary_dir = Path(environment["PATH"].split(":")[0])
     git = binary_dir / "git"
-    git.write_text('#!/bin/sh\ncase "$*" in\n*rev-parse*) printf "%s" "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" ;;\n*status*) printf "%s" "${FIXTURE_GIT_STATUS:-}" ;;\nesac\n')
+    git.write_text(f'''#!/bin/sh
+case "$*" in
+*--show-toplevel*) exec '{shutil.which("git")}' "$@" ;;
+*rev-parse*) printf "%s" "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" ;;
+*status*) printf "%s" "${{FIXTURE_GIT_STATUS:-}}" ;;
+*) exec '{shutil.which("git")}' "$@" ;;
+esac
+''')
     python = binary_dir / "python3"
     python.write_text('''#!/bin/sh
 case "$1" in

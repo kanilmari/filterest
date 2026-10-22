@@ -748,19 +748,11 @@ require_migrated_legacy_named_volumes() {
 }
 
 _migrate_legacy_named_volumes() {
-    local compose_project=""
-    local running_containers=""
+    local compose_project="" running_containers="" temporary_marker=""
     local migration_marker="$PROJECT_ROOT/config/docker-named-volume-migration-complete"
-    local mapping=""
-    local volume_suffix=""
-    local destination=""
-    local ownership_mode=""
-    local volume_name=""
-    local attached_container=""
-    local existing_volume_count=0
-    local runtime_uid=""
-    local runtime_gid=""
-    local temporary_marker=""
+    local mapping="" volume_suffix="" volume_name=""
+    local destination="" ownership_mode="" attached_container=""
+    local existing_volume_count=0 runtime_uid="" runtime_gid=""
     local -a mappings=()
     while IFS= read -r -d '' mapping; do mappings+=("$mapping"); done < <(legacy_named_volume_mappings)
 
@@ -846,6 +838,14 @@ _migrate_legacy_named_volumes() {
 }
 
 compose() {
+    local stamp_source
+    if [[ ! ${FILTEREST_GIT_COMMIT+x} ]]; then
+        stamp_source=$(sh "$SCRIPT_APPLICATION_ROOT/server_tools/lib/build_stamp_ldflags.sh" source "$APPLICATION_ROOT") || return 1
+        if [[ -n "$stamp_source" ]]; then
+            read -r FILTEREST_GIT_COMMIT FILTEREST_SOURCE_DIRTY <<< "$stamp_source"
+            export FILTEREST_GIT_COMMIT FILTEREST_SOURCE_DIRTY
+        fi
+    fi
     run docker compose \
         --project-directory "$PROJECT_ROOT" \
         --file "$COMPOSE_FILE" \

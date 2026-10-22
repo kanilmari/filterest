@@ -143,7 +143,7 @@ build_architecture() {
             -tags 'netgo osusergo' \
             -trimpath \
             -buildvcs=true \
-            -ldflags='-w -s -X main.buildEnv=prod -linkmode external' \
+            -ldflags="-w -s -X main.buildEnv=prod $stamp_ldflags -linkmode external" \
             -o "$output_abs/$asset" \
             .
     )
@@ -267,6 +267,10 @@ if [[ -n "$bundle_spec" ]]; then
     [[ "$(git -C "$target_abs" rev-parse HEAD)" == "$published_commit" ]] || \
         die "reviewed published commit must match clean HEAD"
 fi
+
+# Resolve once so both architectures carry the same clean HEAD and build time.
+stamp_ldflags=$(sh "$script_dir/../lib/build_stamp_ldflags.sh" ldflags "$target_abs" --require-clean) || \
+    die "could not stamp clean release source"
 
 build_architecture amd64 gcc 'ELF 64-bit.*x86-64'
 build_architecture arm64 aarch64-linux-gnu-gcc 'ELF 64-bit.*ARM aarch64'

@@ -350,6 +350,13 @@ def original_planner():
     module = types.ModuleType("original_relevant_checks")
     module.__file__ = str(ROOT / "app/testing/python/relevant_checks.py")
     exec(compile(original("app/testing/python/relevant_checks.py"), module.__file__, "exec"), module.__dict__)
+    # The original planner checks its own map against the current tree's component directories. A directory added
+    # since the baseline (e.g. app/backend/core_components/build_stamp) is covered by the current map, not the old
+    # one, so the replay sees only the component directories the baseline had.
+    baseline_dirs = set(subprocess.run(["git", "ls-tree", "-r", "-d", "--name-only", baseline, "--", "app"], cwd=ROOT,
+                                       capture_output=True, text=True, check=True).stdout.splitlines())
+    current_areas = module.component_areas
+    module.component_areas = lambda root: {area for area in current_areas(root) if area in baseline_dirs}
     return module, json.loads(original(MAP_PATH))
 
 

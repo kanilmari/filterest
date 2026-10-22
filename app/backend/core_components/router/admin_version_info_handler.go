@@ -9,6 +9,7 @@ import (
 	"os"
 	"strings"
 
+	buildstamp "easelect/backend/core_components/build_stamp"
 	"easelect/backend/core_components/httpresponse"
 	releaseupdates "easelect/backend/core_components/release_updates"
 )
@@ -21,6 +22,10 @@ const (
 type adminVersionInfoResponse struct {
 	ProductName            string                      `json:"product_name"`
 	AppVersion             string                      `json:"app_version"`
+	GitCommitSHA           string                      `json:"git_commit_sha"`
+	SourceDirty            *bool                       `json:"source_dirty"`
+	BuiltAt                string                      `json:"built_at"`
+	SourceStatus           string                      `json:"source_status"`
 	ReleaseChannel         string                      `json:"release_channel"`
 	ArtifactPurpose        string                      `json:"artifact_purpose"`
 	ArtifactType           string                      `json:"artifact_type"`
@@ -45,6 +50,7 @@ type adminVersionInfoResponse struct {
 
 var adminLatestStableReleaseCheck = releaseupdates.CheckLatestStable
 var adminLatestStableReleaseCheckNow = releaseupdates.CheckLatestStableNow
+var adminBuildStamp = buildstamp.Current
 
 // currentAdminRuntimeMode returns a stable, non-secret execution-mode value.
 // Docker images opt in through EASELECT_RUNTIME_MODE; ordinary host processes
@@ -59,6 +65,8 @@ func currentAdminRuntimeMode() string {
 // adminVersionInfoHandler combines running readiness with advisory release-check
 // history and installation guidance behind the router's administrator profile.
 func adminVersionInfoHandler(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Cache-Control", "private, no-store")
+	stamp := adminBuildStamp()
 	readiness := systemReadinessProbe()
 	var updateStatus releaseupdates.Status
 	if r.Method == http.MethodPost {
@@ -69,6 +77,10 @@ func adminVersionInfoHandler(w http.ResponseWriter, r *http.Request) {
 	httpresponse.RespondWithJSON(w, http.StatusOK, adminVersionInfoResponse{
 		ProductName:            readiness.ProductName,
 		AppVersion:             readiness.AppVersion,
+		GitCommitSHA:           stamp.GitCommitSHA,
+		SourceDirty:            stamp.SourceDirty,
+		BuiltAt:                stamp.BuiltAt,
+		SourceStatus:           stamp.SourceStatus,
 		ReleaseChannel:         readiness.ReleaseChannel,
 		ArtifactPurpose:        readiness.ArtifactPurpose,
 		ArtifactType:           readiness.ArtifactType,
