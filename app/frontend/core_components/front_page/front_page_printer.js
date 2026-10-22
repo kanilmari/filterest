@@ -101,6 +101,7 @@ function renderBlocks(container, data, visit) {
             rowCap: block.result_limit,
             headingTag: 'h2',
             preselectArticle: true,
+            includeThumbnails: true,
             showAllKey: 'front_page_show_all', emptyKey: 'front_page_no_results',
             replacementParams: { sort_column: '__newest', sort_order: 'DESC', view: 'card' },
         });

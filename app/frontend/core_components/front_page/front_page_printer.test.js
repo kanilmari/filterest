@@ -12,7 +12,13 @@ import { refreshLocalizedDatasetValues } from '../table_views/dataset_value_loca
 import { invalidateSessionGeneration } from '../auth/session_generation_store.js';
 import { toggleNavbarVisibility } from '../navigation/menu_button/navbar_visibility_handler.js';
 
-const mocks = vi.hoisted(() => ({ request: vi.fn(), start: vi.fn() }));
+const mocks = vi.hoisted(() => ({ request: vi.fn(), start: vi.fn(), tabs: [], image: vi.fn(), avatar: vi.fn() }));
+vi.mock('../navigation/main_tabs/main_dataset_tabs.js', () => ({
+    getMainDatasetTabs: () => mocks.tabs, subscribeMainDatasetTabs: () => () => {},
+}));
+vi.mock('../table_views/card_view/card_avatar_builder.js', () => ({
+    createImageElement: mocks.image, create_seeded_avatar: mocks.avatar,
+}));
 vi.mock('./front_page_navigation.js', () => ({ openNormalStartView: mocks.start, openFrontPage: vi.fn(), isSeparateFrontPageEnabled: () => false, isFrontPageShowing: () => false }));
 vi.mock('../endpoints/endpoint_router.js', () => ({ endpoint_router: mocks.request }));
 vi.mock('../lang/translation_handler.js', () => ({
@@ -38,6 +44,13 @@ beforeEach(() => {
     localStorage.setItem('chosen_language', 'fi');
     mocks.request.mockReset().mockResolvedValue(response());
     mocks.start.mockReset().mockResolvedValue();
+    mocks.tabs = [];
+    mocks.image.mockReset().mockImplementation(() => document.createElement('img'));
+    mocks.avatar.mockReset().mockImplementation(async (_seed, letter) => {
+        const avatar = document.createElement('div');
+        avatar.textContent = letter;
+        return avatar;
+    });
     vi.spyOn(HTMLMediaElement.prototype, 'pause').mockImplementation(() => {});
     vi.spyOn(HTMLMediaElement.prototype, 'load').mockImplementation(() => {});
     vi.spyOn(HTMLMediaElement.prototype, 'play').mockResolvedValue();
@@ -148,6 +161,41 @@ test('uses configured site heading and decorative sized background at the focal 
     expect(image.style.backgroundPosition).toBe('20% 70%');
     for (const size of ['1000', '2160']) {
         expect(image.style.getPropertyValue('--front-page-background-' + size)).toContain('/' + size + '/test.webp');
+    }
+});
+
+test('Home boxes follow tab order with shared images, letter fallbacks and one link per row', async () => {
+    const datasets = ['app_travel_info', 'app_travel_deals', 'app_blogs'];
+    mocks.tabs = datasets.map(dataset => ({ dataset, text: dataset, langKey: dataset }));
+    const block = response('Suomen matkakohteet').blocks[0];
+    mocks.request.mockResolvedValue({ viewer_id: 42, blocks: datasets.map(dataset => ({
+        ...block, dataset, data: [
+            { ...block.data[0], cached_image: './storage/test/300/home.jpg' },
+            { ...block.data[0], id: 43 },
+        ],
+    })) });
+    const page = renderFrontPage();
+    await vi.waitFor(() => expect(page.querySelectorAll('.supplemental-dataset-result')).toHaveLength(6));
+    const groups = [...page.querySelectorAll('.front-page-blocks > section')];
+    const tabs = [...page.querySelectorAll('.hero-dataset-tabs__button')];
+    expect(groups.map(group => group.dataset.dataset)).toEqual(tabs.map(tab => tab.dataset.dataset));
+    expect(groups.map(group => group.dataset.dataset)).toEqual(datasets);
+    await vi.waitFor(() => expect(mocks.image).toHaveBeenCalledTimes(3));
+    await vi.waitFor(() => expect(mocks.avatar).toHaveBeenCalledTimes(3));
+    expect(mocks.image).toHaveBeenCalledWith('./storage/test/300/home.jpg', false,
+        expect.objectContaining({ renderSlot: 'small_thumbnail', rowLabel: 'Suomen matkakohteet' }));
+    expect(mocks.avatar).toHaveBeenCalledWith('43_', 'S', false);
+    for (const group of groups) {
+        const rows = [...group.querySelectorAll('li')];
+        expect(rows.map(row => row.querySelector('a').dataset.rowId)).toEqual(['42', '43']);
+        for (const row of rows) {
+            expect(row.querySelectorAll('a[href], button, [tabindex]')).toHaveLength(1);
+            expect(row.querySelector('a').tabIndex).toBe(0);
+            expect(row.querySelector('.supplemental-dataset-thumbnail').getAttribute('aria-hidden')).toBe('true');
+            expect(row.querySelector('p').textContent).toBe('Safe excerpt');
+        }
+        await vi.waitFor(() => expect(rows[1].querySelector('.card_small_image_inner')?.textContent).toBe('S'));
+        expect(group.lastElementChild.className).toBe('supplemental-dataset-show-all');
     }
 });
 

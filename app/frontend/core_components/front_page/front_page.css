@@ -199,7 +199,11 @@ body.dark-mode .front-page {
 
 .front-page-blocks {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: minmax(0, 1fr);
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 800px;
+  margin-inline: auto;
   gap: var(--home-block-gap, 1rem);
 }
 
@@ -211,11 +215,28 @@ body.dark-mode .front-page {
   display: none;
 }
 
-.front-page-blocks a,
+.front-page-blocks .supplemental-dataset-show-all,
 .front-page-status button {
   display: flex;
   align-items: center;
   min-height: 44px;
+}
+
+/* Stretch the existing title link over its row without changing the shared
+   one-line title / two-line excerpt layout or adding another keyboard stop. */
+.front-page-blocks .supplemental-dataset-result {
+  position: relative;
+}
+
+.front-page-blocks .supplemental-dataset-result-text > a::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+}
+
+.front-page-blocks .supplemental-dataset-result-text > a:focus-visible::after {
+  outline: 2px solid var(--primary_color);
+  outline-offset: 3px;
 }
 
 .front-page-status:empty {
@@ -418,12 +439,6 @@ body.dark-mode .front-page {
   }
 }
 
-@media (width <= 700px) {
-  .front-page-blocks {
-    grid-template-columns: minmax(0, 1fr);
-  }
-}
-
 /* Size containment measures the flex scroller below the stationary top row.
    Equal insets on every anchor make long copy / narrow columns converge naturally. */
 .front-page .front-page-scroller--positioned { container-type: size; }
@@ -474,9 +489,7 @@ body.dark-mode .front-page {
   }
 }
 .front-page-content--positioned > .front-page-blocks {
-  max-width: 1200px;
   padding: 1rem;
-  margin-inline: auto;
 }
 /* Phones keep 16 px insets and the vertical anchor: short text sits at the top, centre or bottom of the visible area,
    and long text grows the stage, so every vertical anchor flows from the top and scrolls. */

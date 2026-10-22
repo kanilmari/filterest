@@ -453,7 +453,7 @@
         "app/frontend/core_components/service_catalog",
         "app/frontend/shared/front_page_presentation"
       ],
-      "specs": ["app/testing/e2e/G_navigation/G14_home_menu_parity.spec.ts",
+      "specs": ["app/testing/e2e/G_navigation/G15_home_boxes.spec.ts", "app/testing/e2e/G_navigation/G14_home_menu_parity.spec.ts",
         "app/testing/e2e/T_admin/T22_home_timeout_backstop.spec.ts", "app/testing/e2e/G_navigation/G13_phone_topbar_measurements.spec.ts", "app/testing/e2e/T_admin/T21_home_text_style.spec.ts", "app/testing/e2e/G_navigation/G12_top_nav_home_button.spec.ts",
         "app/testing/e2e/D_view_switch/D0_theme_and_mobile_menu.spec.ts",
         "app/testing/e2e/L_auth/L2_logout.spec.ts",
@@ -513,7 +513,7 @@
         "app/frontend/styles", "app/frontend/shared/style_package", "app/frontend/templates", "app/frontend/ui_config.js",
         "app/frontend/core_components/theme.js", "app/frontend/core_components/theme_preference_api.js", "app/frontend/icons"
       ],
-      "specs": ["app/testing/e2e/T_admin/T24_article_presentations.spec.ts", "app/testing/e2e/G_navigation/G14_home_menu_parity.spec.ts", "app/testing/e2e/C_card_view/C24_cancel_changes.spec.ts",
+      "specs": ["app/testing/e2e/G_navigation/G15_home_boxes.spec.ts", "app/testing/e2e/T_admin/T24_article_presentations.spec.ts", "app/testing/e2e/G_navigation/G14_home_menu_parity.spec.ts", "app/testing/e2e/C_card_view/C24_cancel_changes.spec.ts",
         "app/testing/e2e/C_card_view/C25_rich_text_links.spec.ts",
         "app/testing/e2e/E_search_filter/E20_filterbar_order_and_memory.spec.ts", "app/testing/e2e/C_card_view/C23_card_image_usage_presentation.spec.ts", "app/testing/e2e/G_navigation/G13_phone_topbar_measurements.spec.ts", "app/testing/e2e/D_view_switch/D6_table_cell_line_limit.spec.ts", "app/testing/e2e/T_admin/T21_home_text_style.spec.ts", "app/testing/e2e/J_modals/J4_client_error_notices.spec.ts", "app/testing/e2e/G_navigation/G12_top_nav_home_button.spec.ts",
         "app/testing/e2e/C_card_view/C22_article_image_arrows_probe.spec.ts", "app/testing/e2e/E_search_filter/E18_dataset_default_view.spec.ts", "app/testing/e2e/C_card_view/C21_record_titles.spec.ts", "app/testing/e2e/E_search_filter/E19_shared_filter_section.spec.ts", "app/testing/e2e/C_card_view/C20_description_empty_blocks.spec.ts", "app/testing/e2e/C_card_view/C19_dataset_heading_hierarchy.spec.ts", "app/testing/e2e/C_card_view/C10_image_first_article.spec.ts", "app/testing/e2e/C_card_view/C13_related_dataset_appearance.spec.ts", "app/testing/e2e/C_card_view/C14_product_card_row_commits.spec.ts", "app/testing/e2e/C_card_view/C15_chart_axes.spec.ts",

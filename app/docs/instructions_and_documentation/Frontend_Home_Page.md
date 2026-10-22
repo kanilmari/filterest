@@ -370,18 +370,18 @@ save invalidates Home even when the caller suppresses the sign-in redirect. Comp
 search; the server's row cap for Home). Search retains its existing navigation.
 Home row links preselect their exact article without adding a dataset entry,
 so one Back returns to Home; Show all opens the
-card collection newest first (`__newest`). Theme surfaces keep text above a
-decorative sized image or original video background, and phones show one column.
+card collection newest first (`__newest`). Boxes follow tab order in one centred
+800px column at every width, above the theme-aware image or video background.
 
-The `front_page_show_blocks` boolean defaults to **true even when its row is
-absent**, so existing sites and localhost retain their boxes. When false the
+The `front_page_show_blocks` boolean defaults to **true even when absent**, retaining boxes. When false the
 public facade resolves no datasets and returns `show_blocks:false, blocks:[]`;
 the editor disables and greys its retained box list. The key is registered in
 `system_config_checks`, so generic writes also refuse a non-boolean value.
 Home has one inner scrolling surface (`.front-page-scroller`); the absolute
 background and video remain siblings outside it and cover the viewport. Above
 700 px the top row stays before the scroller, with the existing desktop layout.
-Row caps continue to belong to the compact group renderer.
+Row caps stay in the shared compact renderer: 76px images or search's letter fallback,
+one-line titles, two-line excerpts and one stretched title link per row; Show all stays 44px.
 
 `front_page_top_row_builder.js` owns the live dataset tabs, admin actions and
 borrowed shell menu button. It returns that button and destroys the tab

@@ -12,6 +12,54 @@ import { requireNodeDependency } from '../../../server_tools/lib/node_dependency
 const currentDirectory = dirname(fileURLToPath(import.meta.url));
 const css = readFileSync(resolve(currentDirectory, 'front_page.css'), 'utf8');
 const navbar = readFileSync(resolve(currentDirectory, '../navigation/navbar/navbar_layout.css'), 'utf8');
+const postcss = requireNodeDependency('postcss');
+
+test('Home boxes keep one centred 800px column at every width', () => {
+    const root = postcss.parse(css);
+    const columns = [];
+    root.walkRules(rule => {
+        if (!rule.selector.includes('.front-page-blocks')) return;
+        rule.walkDecls('grid-template-columns', declaration => columns.push(declaration.value));
+        rule.walkDecls('max-width', declaration => {
+            if (rule.selector.endsWith('.front-page-blocks')) expect(declaration.value).toBe('800px');
+        });
+    });
+    expect(columns).toEqual(['minmax(0, 1fr)']);
+    expect(css).toMatch(/\.front-page-blocks\s*\{[^}]*box-sizing: border-box;[^}]*width: 100%;[^}]*max-width: 800px;[^}]*margin-inline: auto;/);
+});
+
+test('only Show all gets the 44px link target; the existing title stretches over the row', () => {
+    const root = postcss.parse(css);
+    root.walkRules(rule => {
+        if (!rule.selector.includes('.front-page-blocks')) return;
+        expect(rule.selectors).not.toContain('.front-page-blocks a');
+        rule.walkDecls('min-height', declaration => {
+            expect(rule.selectors).toContain('.front-page-blocks .supplemental-dataset-show-all');
+            expect(declaration.value).toBe('44px');
+        });
+    });
+    expect(css).toMatch(/\.front-page-blocks \.supplemental-dataset-show-all,[^{]*\{[^}]*display: flex;[^}]*min-height: 44px;/);
+    expect(css).toMatch(/\.front-page-blocks \.supplemental-dataset-result\s*\{\s*position: relative;/);
+    expect(css).toMatch(/\.front-page-blocks \.supplemental-dataset-result-text > a::after\s*\{[^}]*content: "";[^}]*position: absolute;[^}]*inset: 0;/);
+    expect(css).toMatch(/\.front-page-blocks \.supplemental-dataset-result-text > a:focus-visible::after\s*\{[^}]*outline: 2px solid var\(--primary_color\);/);
+    // The production import order exposed the broad anchor rule overriding the title clamp.
+    const style = document.createElement('style');
+    style.textContent = readFileSync(resolve(currentDirectory, '../filterbar/text_search/supplemental_dataset_results.css'), 'utf8') + css;
+    const fixture = document.createElement('div');
+    fixture.className = 'front-page-blocks';
+    fixture.innerHTML = '<section class="supplemental-dataset-group"><li class="supplemental-dataset-result">'
+        + '<div class="supplemental-dataset-result-text"><a href="/news/1">Pitkä otsikko</a><p>Kuvaus</p></div>'
+        + '</li><a class="supplemental-dataset-show-all" href="/news">Näytä kaikki</a></section>';
+    document.head.append(style); document.body.append(fixture);
+    try {
+        const title = getComputedStyle(fixture.querySelector('li a'));
+        expect(title.display).toBe('-webkit-box');
+        expect(title.getPropertyValue('-webkit-line-clamp')).toBe('1');
+        expect(title.minHeight).not.toBe('44px');
+        expect(getComputedStyle(fixture.querySelector('p')).getPropertyValue('-webkit-line-clamp')).toBe('2');
+        expect(getComputedStyle(fixture.querySelector('.supplemental-dataset-show-all')).minHeight).toBe('44px');
+    } finally { fixture.remove(); style.remove(); }
+});
 
 test('sticky Home bar, drawer lock and measured offsets are confined to the phone breakpoint', () => {
     const root = requireNodeDependency('postcss').parse(css);

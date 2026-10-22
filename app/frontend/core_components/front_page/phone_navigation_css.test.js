@@ -10,7 +10,7 @@ import { requireNodeDependency } from '../../../server_tools/lib/node_dependency
 
 const postcss = requireNodeDependency('postcss');
 const baseline = {
-    'front_page.css': '72fe427bd3e1bd9f967bf7e0fecb26094e6084a6a4a495c5914152ac34da1cef',
+    'front_page.css': 'e91f9bb8d2da02ceba545f33e1bb50ffbdb849b0c09a1cf9e99d2e21e2e52e67',
     'top_nav_home_button.css': '4c2b8e10a17ee70737ee8af0adf2b21b6fc3bca40f92c85f403de5f91ab8003c',
     '../filterbar/shared_topbar.css': '662fce1278e4845710e0e338215d67db3009ccc8447cef4bbd1c67974325abf1',
     '../filterbar/morphing_filterbar_content.css': '9cbd87a66e156e3ef77514e94ee00bb79c5bb309c7e30bf4f4cd264979773b8a',
