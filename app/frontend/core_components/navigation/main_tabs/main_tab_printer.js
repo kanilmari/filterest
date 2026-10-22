@@ -502,7 +502,7 @@ function createSVGTabButton(tabElement, buttonText, iconPathD, iconKey = "") {
 export async function openNavTab(tableName, options = {}) {
     count_this_function("openNavTab");
 
-    const { skipNavigation = false, skipUrlUpdate = false, forceReload = false, replacementParams } = options;
+    const { skipNavigation = false, skipUrlUpdate = false, forceReload = false, replacementParams, replaceUrl = false } = options;
 
     /* --- Special handling: login opens modal, logout does full cleanup --- */
     if (tableName === 'login' && !skipNavigation) {
@@ -537,6 +537,7 @@ export async function openNavTab(tableName, options = {}) {
         useStorageParams();
         const result = await handle_all_navigation(tableName, custom_views, {
             skipUrlUpdate, forceReload, ...(replacementParams === undefined ? {} : { replacementParams }),
+            ...(replaceUrl ? { replaceUrl } : {}),
         });
         useUrlParams();
         if (result?.abort) return result;

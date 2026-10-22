@@ -292,6 +292,31 @@ test('failure is announced with a retry that issues one new request', async () =
     expect(mocks.request).toHaveBeenCalledTimes(2);
 });
 
+test('a request stopped by a leave the browser cancelled loads once more, and only once (G5)', async () => {
+    const stopped = () => new TypeError('Failed to fetch');
+    try {
+        window.dispatchEvent(new Event('beforeunload'));
+        mocks.request.mockRejectedValueOnce(stopped());
+        const page = renderFrontPage();
+        await vi.waitFor(() => expect(page.textContent).toContain('Current account'));
+        expect(mocks.request).toHaveBeenCalledTimes(2);
+        expect(page.textContent).not.toContain('Lataus epäonnistui');
+
+        document.body.innerHTML = '<div id="tabs_container"></div>';
+        mocks.request.mockReset().mockRejectedValueOnce(stopped()).mockRejectedValueOnce(stopped());
+        const again = renderFrontPage();
+        await vi.waitFor(() => expect(again.querySelector('[aria-live]').textContent).toContain('Lataus epäonnistui'));
+        expect(mocks.request).toHaveBeenCalledTimes(2);
+    } finally {
+        window.dispatchEvent(new Event('pageshow'));
+    }
+    document.body.innerHTML = '<div id="tabs_container"></div>';
+    mocks.request.mockReset().mockRejectedValueOnce(stopped());
+    const unrelated = renderFrontPage();
+    await vi.waitFor(() => expect(unrelated.querySelector('[aria-live]').textContent).toContain('Lataus epäonnistui'));
+    expect(mocks.request).toHaveBeenCalledTimes(1);
+});
+
 test('timeout aborts the request and offers retry after fifteen seconds', async () => {
     vi.useFakeTimers();
     mocks.request.mockReturnValue(new Promise(() => {}));

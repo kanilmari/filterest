@@ -622,7 +622,7 @@ Handles client-side view transitions — every tab/route change flows through th
 |---|------------------|:-:|---|
 | 1 | `dirtyCheck`     | No  | Aborts if user has unsaved changes (calls `window.check_manage_permissions_dirty()`) |
 | 2 | `permissionCheck`| No  | Aborts if user lacks access to target route (API routes, custom views, dataset tables) |
-| 3 | `urlUpdate`      | No  | Writes the URL the caller asked for, via `updateURL()` |
+| 3 | `urlUpdate`      | No  | Writes the URL the caller asked for, via `updateURL()`; with `replaceUrl` (the document's own landing or an access refresh in `table_loader_handler.js`) it replaces the current entry, so Forward entries survive |
 | 4 | `viewRender`     | Yes | Switches containers, lazy-loads content, shows/hides loading spinner |
 | 5 | `datasetAddress` | No  | Corrects the address to the state that actually rendered, via `updateDatasetAddress()` |
 | 6 | `browserTabTitle`| Yes | Retitles the browser tab for the settled state, via `updateBrowserTabTitle()` |

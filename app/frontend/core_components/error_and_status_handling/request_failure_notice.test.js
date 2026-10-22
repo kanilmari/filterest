@@ -92,6 +92,30 @@ describe('expected network aborts', () => {
         expect(isExpectedNetworkAbort(failure, {})).toBe(false);
     });
 
+    test('an abort-like failure soon after beforeunload is a leave, even one the browser then cancelled', async () => {
+        vi.useFakeTimers({ now: 1_000_000, toFake: ['Date'] });
+        try {
+            const { isExpectedNetworkAbort, isLeavingNetworkAbort } = await loadNotice();
+            const failure = new TypeError('Failed to fetch');
+
+            expect(isLeavingNetworkAbort(failure)).toBe(false);
+            window.dispatchEvent(new Event('beforeunload'));
+            expect(isLeavingNetworkAbort(failure)).toBe(true);
+            expect(isExpectedNetworkAbort(failure, {})).toBe(true);
+            expect(isLeavingNetworkAbort(new Error('certificate rejected'))).toBe(false);
+            vi.setSystemTime(1_002_999);
+            expect(isLeavingNetworkAbort(failure)).toBe(true);
+            vi.setSystemTime(1_003_000);
+            expect(isLeavingNetworkAbort(failure)).toBe(false);
+
+            window.dispatchEvent(new Event('beforeunload'));
+            window.dispatchEvent(new Event('pageshow'));
+            expect(isLeavingNetworkAbort(failure)).toBe(false);
+        } finally {
+            vi.useRealTimers();
+        }
+    });
+
     test('a failure that is not abort-like is never expected', async () => {
         const { isExpectedNetworkAbort } = await loadNotice();
 

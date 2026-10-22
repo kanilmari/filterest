@@ -22,8 +22,12 @@ import {
 } from "./core_components/lang/ui_language_catalog.js";
 
 import { getSitePresentationState } from './core_components/admin_tools/site_presentation_state.js';
+import { ensureRootEntryIdentity } from './core_components/navigation/nav_engine/history_entry_state.js';
 
 window.__filterestShellBoot?.evaluated();
+// Home's root entry gets its identity before DOMContentLoaded, so Home's later boot write of the same address is a
+// no-op rather than a same-document navigation racing a pending Back/Forward. Other entries stay untouched.
+ensureRootEntryIdentity();
 
 const IS_DEV_MODE = document.querySelector('meta[name="app-env"]')?.content === 'dev';
 

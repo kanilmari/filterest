@@ -335,7 +335,7 @@ Rejecting an obsolete availability write does not abandon the current visit:
 it still opens the start view when a newer policy refresh is pending or failed.
 Only a newer response confirming Home enabled keeps the visit, which requests
 fresh content after releasing the old request; a failed fresh load offers retry.
-Other failures, including other 404s and the fifteen-second timeout, retain retry.
+Other failures, including other 404s and the fifteen-second timeout, retain retry. A request stopped by a leave the browser then cancelled (Back, then Forward at once; `isLeavingNetworkAbort` counts 3 s from `beforeunload`) loads once more silently before that retry surface appears. The boot gives a bare `/` entry its history identity before DOMContentLoaded (`ensureRootEntryIdentity`; other entries, denied bookmarks included, stay as loaded), so Home's `writeHistoryEntry('/', …, { replace })` is a no-op on an unchanged all-primitive entry state (any object-holding state is still written) rather than a same-document navigation racing Back/Forward (G5).
 A response from a departed visit cannot change current availability or navigation.
 
 `G12_top_nav_home_button.spec.ts` intercepts Home, auth-mode and settings responses;

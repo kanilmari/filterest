@@ -105,7 +105,10 @@ async function permissionCheckStage(ctx) {
  */
 async function urlUpdateStage(ctx) {
     if (ctx.isCurrentNavigation?.() === false) return { abort: true, reason: "stale_navigation" };
-    updateURL(ctx.name, ctx.params, ctx.prefix);
+    // A document's own landing (or a refresh of the entry it shows) rewrites that entry: a push there would add a
+    // step to Back through and erase the Forward entries (G5).
+    if (ctx.replaceUrl === true) updateURL(ctx.name, ctx.params, ctx.prefix, { replace: true });
+    else updateURL(ctx.name, ctx.params, ctx.prefix);
 }
 
 /**

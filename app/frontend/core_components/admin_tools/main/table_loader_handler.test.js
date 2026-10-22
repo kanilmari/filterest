@@ -151,7 +151,7 @@ describe("load_tables deep-link startup routing", () => {
         expect(mocks.openFrontPage).not.toHaveBeenCalled();
         expect(mocks.setSelectedDataset).toHaveBeenCalledWith('dev_agent_tasks');
         expect(mocks.openNavTab).toHaveBeenCalledWith('dev_agent_tasks', {
-            skipUrlUpdate: true, forceReload: false,
+            skipUrlUpdate: true, forceReload: false, replaceUrl: true,
         });
     });
 
@@ -170,7 +170,7 @@ describe("load_tables deep-link startup routing", () => {
         history.replaceState({}, '', '/dev_agent_tasks/853');
         await load_tables();
         expect(mocks.openFrontPage).not.toHaveBeenCalled();
-        expect(mocks.openNavTab).toHaveBeenCalledWith('dev_agent_tasks', { skipUrlUpdate: true, forceReload: false });
+        expect(mocks.openNavTab).toHaveBeenCalledWith('dev_agent_tasks', { skipUrlUpdate: true, forceReload: false, replaceUrl: true });
     });
 
     test("opens a deep-linked row without pushing the dataset base URL first", async () => {
@@ -189,6 +189,7 @@ describe("load_tables deep-link startup routing", () => {
         expect(mocks.openNavTab).toHaveBeenCalledWith("dev_agent_tasks", {
             skipUrlUpdate: true,
             forceReload: false,
+            replaceUrl: true,
         });
     });
 
@@ -350,6 +351,7 @@ describe("load_tables deep-link startup routing", () => {
         expect(mocks.openNavTab).toHaveBeenCalledWith("dev_agent_tasks", {
             skipUrlUpdate: false,
             forceReload: false,
+            replaceUrl: true,
         });
     });
 });
@@ -362,7 +364,7 @@ test("IFAV bookmark prepares its backing dataset without opening a classic artic
     await load_tables();
     expect(mocks.setUnifiedTableState).not.toHaveBeenCalled();
     expect(mocks.openNavTab).toHaveBeenCalledWith("dev_agent_tasks", {
-        skipUrlUpdate: true, forceReload: false, replacementParams: { search: "test", view: "card" },
+        skipUrlUpdate: true, forceReload: false, replaceUrl: true, replacementParams: { search: "test", view: "card" },
     });
     expect(ifav.restore).toHaveBeenCalledWith(expect.objectContaining({ tableName: "dev_agent_tasks", rowId: "853" }));
     expect(location.search).toContain("view=image_first_view");
@@ -600,7 +602,8 @@ describe("a reload of a dataset's alias address", () => {
 
         expect(mocks.setRedirectNotice).not.toHaveBeenCalled();
         expect(location.pathname).toBe("/orders");
-        expect(mocks.openNavTab).toHaveBeenLastCalledWith("app_orders", { skipUrlUpdate: false, forceReload: false });
+        // A cold landing replaces its own entry, so Back gains no step and Forward survives (G5).
+        expect(mocks.openNavTab).toHaveBeenLastCalledWith("app_orders", { skipUrlUpdate: false, forceReload: false, replaceUrl: true });
     });
 });
 
@@ -624,7 +627,7 @@ test.each(['article_view', 'image_first_view'].flatMap(view => ['', '/853'].map(
     expect(document.querySelectorAll('[data-lang-key="article_view_permission_missing"]')).toHaveLength(1);
     expect(mocks.setUnifiedTableState).not.toHaveBeenCalled();
     expect(getChosenDatasetView('dev_agent_tasks')).toBe('card');
-    expect(mocks.openNavTab).toHaveBeenCalledWith('dev_agent_tasks', { skipUrlUpdate: true, forceReload: false });
+    expect(mocks.openNavTab).toHaveBeenCalledWith('dev_agent_tasks', { skipUrlUpdate: true, forceReload: false, replaceUrl: true });
     await updateDatasetAddress({ dataset: 'dev_agent_tasks' });
     expect(replaceDatasetAddressQuery('dev_agent_tasks', { view: 'card' })).toBe(false);
     expect(location.href).toBe(href); expect(history.state).toEqual(state);

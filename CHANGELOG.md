@@ -22,6 +22,7 @@ Dates are the local (Europe/Helsinki) date on which the version was published.
 
 ## [Unreleased]
 
+- Back followed at once by Forward while Home is still loading no longer leaves Home with a load failure and a "service could not be reached" notice: Home loads once more, and its unchanged address is no longer rewritten after loading. A page that loads or reloads on a dataset now rewrites its own history entry instead of adding one, so Back needs no extra step and Forward still works after going Back to it.
 - Home boxes stack in one centred column at every width, with the same small images and letter fallbacks as cross-dataset search results; each row is clickable with one keyboard stop.
 - Home's Serif story palette now offers phone story text sizes from 12–18 px in 1 px steps (default 15 px; schema v5), with the long-slogan lead 1 px larger and desktop unchanged. **Rollback:** a 9.5.x binary from before this change refuses stored v5; before rollback, set the story size back to 15 px in the palette and save, so Home stores v4 or lower.
 - Page-sized image-first articles (cifav) show taller desktop images, use consistent title-to-text spacing, and pause Home's background video until closing; phone image sizing is unchanged.

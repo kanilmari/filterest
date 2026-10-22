@@ -219,9 +219,12 @@ export async function load_tables(options = {}) {
                 setChosenDatasetView(resolved_table_name, backingView);
                 initialParams.set("view", backingView);
             }
+            // The landing (or an access refresh) describes the entry the browser already shows: replace it, so Back
+            // gains no extra step and the Forward entries survive (G5: Back to a dataset, then Forward).
             const navigation = await openNavTab(resolved_table_name, {
                 skipUrlUpdate: articleDenied || isLandingOnFrontpage || Boolean(deepLinkedRowId),
                 forceReload,
+                replaceUrl: true,
                 ...(opensImageFirst ? { replacementParams: Object.fromEntries(initialParams) } : {}),
             });
             if (opensImageFirst && !navigation?.abort && isCurrentDatasetAccessRefresh(accessGeneration)

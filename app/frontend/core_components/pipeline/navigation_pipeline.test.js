@@ -207,6 +207,19 @@ describe('navigation_pipeline', () => {
     );
   });
 
+  test('a landing that owns its entry replaces the address instead of pushing (G5)', async () => {
+    hasDatasetPermissionMock.mockResolvedValue(true);
+    const mod = await loadModule();
+
+    await mod.runNavigationPipeline({
+      name: 'system_users', params: { page: 2 }, prefix: '/app', containerId: 'dataset_container',
+      loadFunction: 'loader', groupName: 'datasets', isCustomView: false, replaceUrl: true,
+      _performNavigationCore: vi.fn().mockResolvedValue('rendered'),
+    });
+
+    expect(updateURLMock).toHaveBeenCalledWith('system_users', { page: 2 }, '/app', { replace: true });
+  });
+
   test('allows skipping urlUpdate while still enforcing viewRender', async () => {
     hasDatasetPermissionMock.mockResolvedValue(true);
     const performNavigationCore = vi.fn();

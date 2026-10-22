@@ -16,14 +16,34 @@ import {
     isAbortLikeNetworkError,
 } from './error_monitor_handler_helpers.js';
 
+// Leaving starts at beforeunload. A navigation cancelled after it (Back, then Forward at once) stops the page's loads
+// without a pagehide, so network aborts in that short window count as leaving too.
+const LEAVING_WINDOW_MS = 3000;
 let pageUnloadInProgress = false;
+let leavingSince = null;
 if (typeof window !== 'undefined') {
+    window.addEventListener('beforeunload', () => {
+        leavingSince = Date.now();
+    });
     window.addEventListener('pagehide', () => {
         pageUnloadInProgress = true;
     });
     window.addEventListener('pageshow', () => {
         pageUnloadInProgress = false;
+        leavingSince = null;
     });
+}
+
+/**
+ * Tells whether a request that never reached the service was stopped because
+ * the page was being left, including a leave the browser then cancelled.
+ *
+ * @param {unknown} error - What fetch() rejected with
+ * @returns {boolean}
+ */
+export function isLeavingNetworkAbort(error) {
+    if (!isAbortLikeNetworkError(error)) return false;
+    return pageUnloadInProgress || (leavingSince !== null && Date.now() - leavingSince < LEAVING_WINDOW_MS);
 }
 
 /**
@@ -41,7 +61,7 @@ export function isExpectedNetworkAbort(error, fetchOptions) {
     const headers = fetchOptions?.headers || {};
     const expendable = headers['X-Ignore-Network-Abort'] === '1'
         || headers['x-ignore-network-abort'] === '1';
-    return pageUnloadInProgress || expendable;
+    return isLeavingNetworkAbort(error) || expendable;
 }
 
 /**

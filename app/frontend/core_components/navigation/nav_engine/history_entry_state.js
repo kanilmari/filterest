@@ -53,6 +53,23 @@ export function getHistoryDatasetView(dataset) {
         && typeof remembered.view === "string" ? remembered.view : null;
 }
 
+/** Home's cold load at the bare root gets its identity at boot; any other entry, a denied bookmark included, is
+ * left exactly as the browser loaded it until navigation owns it. */
+export function ensureRootEntryIdentity() {
+    if (location.pathname !== "/" || location.search) return null;
+    return ensureHistoryEntryId();
+}
+
+// Only a state whose own values are all primitives can be proved unchanged (Object.is, so undefined is not null).
+// A state holding any object, array or Date is written as before, whatever it contains.
+function samePrimitiveState(a, b) {
+    if (!a || !b) return false;
+    const primitive = value => value === null || (typeof value !== "object" && typeof value !== "function");
+    const keys = Object.keys(a);
+    return keys.length === Object.keys(b).length && keys.every(key => Object.prototype.hasOwnProperty.call(b, key)
+        && primitive(a[key]) && Object.is(a[key], b[key]));
+}
+
 export function writeHistoryEntry(url, state = {}, { replace = false } = {}) {
     releaseHistoryEntryAddress();
     const previous = { ...(history.state || {}) };
@@ -61,6 +78,11 @@ export function writeHistoryEntry(url, state = {}, { replace = false } = {}) {
     const nextState = replace
         ? { ...previous, ...state, [HISTORY_ENTRY_ID]: ensureHistoryEntryId() }
         : { ...state, [HISTORY_ENTRY_ID]: freshEntryId() };
+    // An unchanged replacement is not written: it would still be a same-document navigation, and one landing while
+    // Back or Forward loads another document is taken for that navigation's end (G5: Home's boot write of '/').
+    if (replace && new URL(url, location.href).href === location.href && samePrimitiveState(nextState, history.state)) {
+        return nextState[HISTORY_ENTRY_ID];
+    }
     history[replace ? "replaceState" : "pushState"](nextState, "", url);
     return nextState[HISTORY_ENTRY_ID];
 }

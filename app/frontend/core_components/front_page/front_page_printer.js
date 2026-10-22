@@ -25,6 +25,7 @@ import { getSessionGeneration, acceptSessionIdentity, isSessionValidationRequire
     revalidateSessionIdentity, subscribeToSessionGeneration } from '../auth/session_generation_store.js';
 import { beginFrontPageAvailabilityRequest, isSeparateFrontPageEnabled,
     setFrontPageAvailability } from './front_page_availability.js';
+import { isLeavingNetworkAbort } from '../error_and_status_handling/request_failure_notice.js';
 
 const FRONT_PAGE_TIMEOUT_MS = 15000;
 const visits = new WeakMap();
@@ -176,6 +177,7 @@ function loadVisit(container, visit) {
     });
     let homeRevision;
     let retryWithNewerPolicy = false;
+    let retryAfterLeave = false;
     const request = () => {
         if (!isCurrent()) throw new DOMException('Session changed', 'AbortError');
         visit.language = getLanguageWithBrowserFallback();
@@ -186,6 +188,7 @@ function loadVisit(container, visit) {
     visit.pending = Promise.race([
         isSessionValidationRequired() ? revalidateSessionIdentity().then(request) : request(), deadline,
     ]).then(data => {
+        visit.leaveRetried = false;
         if (isCurrent() && acceptSessionIdentity(data.viewer_id, sessionGeneration)) renderBlocks(container, data, visit);
     }).catch(async error => {
         if (!isCurrent()) return;
@@ -203,6 +206,13 @@ function loadVisit(container, visit) {
             if (isCurrent()) await openNormalStartView({ isCurrentNavigation: isCurrent });
             return;
         }
+        // A leave the browser then cancelled (Back, then Forward at once) stopped this request while the page stayed:
+        // load once more instead of reporting a failure.
+        if (isLeavingNetworkAbort(error) && !visit.leaveRetried) {
+            visit.leaveRetried = true;
+            retryAfterLeave = true;
+            return;
+        }
         skeleton.remove();
         status.append(translatedElement('p', 'front_page_load_failed'));
         const retry = translatedElement('button', 'shell_boot_reload');
@@ -216,7 +226,7 @@ function loadVisit(container, visit) {
         visit.pending = null;
         visit.controller = null;
         visit.cancel = null;
-        if (retryWithNewerPolicy) return loadVisit(container, visit);
+        if (retryWithNewerPolicy || retryAfterLeave) return loadVisit(container, visit);
     });
     return visit.pending;
 }

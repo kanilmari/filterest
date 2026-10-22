@@ -34,7 +34,8 @@ export async function handle_all_navigation(name, customViews, options = {}) {
         isCurrentNavigation: options.isCurrentNavigation })) {
         return { abort: true, reason: 'custom_root_document' };
     }
-    const { skipUrlUpdate = false, forceReload = false, replacementParams, restoreMountedView, preserveCardReturn, isCurrentNavigation } = options;
+    const { skipUrlUpdate = false, forceReload = false, replacementParams, restoreMountedView, preserveCardReturn, isCurrentNavigation,
+        replaceUrl = false } = options;
     await ensure_private_custom_views_loaded();
     if (isCurrentNavigation?.() === false) return { abort: true, reason: "stale_navigation" };
     const arrayOfViews = customViews || [];
@@ -66,6 +67,7 @@ export async function handle_all_navigation(name, customViews, options = {}) {
         params,
         prefix,
         skip: skipUrlUpdate ? ['urlUpdate'] : [],
+        replaceUrl,
         _performNavigationCore: (
             targetName,
             targetContainerId,
