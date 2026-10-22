@@ -49,6 +49,10 @@ def policies():
     previous = copy.deepcopy(current)
     for entry in previous["browser_areas"]:
         entry["paths"] = [path for path in entry["paths"] if path not in AUDITED_PATHS]
+    # This fixture deliberately removes named coverage to model the old policy.
+    # Declare that historical no-browser state explicitly under the S2 guard.
+    previous["nightly_only"].append({"paths": sorted(AUDITED_PATHS),
+                                    "reason": "Historical pre-mapping selection fixture."})
     return current, previous
 
 

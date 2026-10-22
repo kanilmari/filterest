@@ -50,7 +50,8 @@
         "app/frontend/core_components/table_views/table_view/table_structure_builder.js",
         "app/frontend/core_components/table_views/table_view/table_structure_builder.test.js",
         "app/backend/core_components/dynamic_table_tools/dtt_1_row_crud/dtt_1_row_read/get_results_effective_sort.go",
-        "app/backend/core_components/dynamic_table_tools/dtt_1_row_crud/dtt_1_row_read/get_results_effective_sort_test.go"
+        "app/backend/core_components/dynamic_table_tools/dtt_1_row_crud/dtt_1_row_read/get_results_effective_sort_test.go",
+        "app/frontend/config.json"
       ],
       "specs": ["app/testing/e2e/F_sort/F1_sort_dropdown.spec.ts", "app/testing/e2e/F_sort/F2_column_header_sort.spec.ts"],
       "projects": ["mobile-card", "tablet-card", "desktop-card"]
@@ -60,14 +61,13 @@
       "paths": [
         "app/frontend/reusable_components/dom_container_builder.js", "app/frontend/reusable_components/dom_container_builder_helpers.js", "app/frontend/reusable_components/http_text_linkifier.js", "app/frontend/core_components/table_views/card_view/row_article_opener.js", "app/frontend/core_components/table_views/card_view/row_article_opener_helpers.js", "app/frontend/core_components/table_views/card_view/image_first_view_opener.js", "app/frontend/core_components/table_views/card_view/image_first_view_activation.js"
       ],
-      "specs": ["app/testing/e2e/C_card_view/C26_page_ifav_pilot.spec.ts",
-        "app/testing/e2e/C_card_view/C24_cancel_changes.spec.ts",
+      "specs": ["app/testing/e2e/C_card_view/C24_cancel_changes.spec.ts",
         "app/testing/e2e/C_card_view/C25_rich_text_links.spec.ts",
         "app/testing/e2e/G_navigation/G10_dataset_name_pool_access.spec.ts", "app/testing/e2e/C_card_view/C22_article_image_arrows_probe.spec.ts", "app/testing/e2e/C_card_view/C21_record_titles.spec.ts", "app/testing/e2e/C_card_view/C19_dataset_heading_hierarchy.spec.ts", "app/testing/e2e/C_card_view/C10_image_first_article.spec.ts", "app/testing/e2e/C_card_view/C11_network_media_variants.spec.ts", "app/testing/e2e/C_card_view/C12_article_reload_reading_position.spec.ts", "app/testing/e2e/C_card_view/C13_related_dataset_appearance.spec.ts",
         "app/testing/e2e/C_card_view/C16_finnish_card_filterbar_text.spec.ts", "app/testing/e2e/C_card_view/C17_article_toolbar_group_permissions.spec.ts", "app/testing/e2e/C_card_view/C18_article_open_appearance_probe.spec.ts", "app/testing/e2e/C_card_view/C2_open_big_card.spec.ts",
         "app/testing/e2e/C_card_view/C3_close_big_card.spec.ts", "app/testing/e2e/C_card_view/C6_big_card_attachments.spec.ts", "app/testing/e2e/C_card_view/C7_big_card_field_edit_preserves_assets.spec.ts", "app/testing/e2e/C_card_view/C8_big_card_primary_image_actions.spec.ts",
         "app/testing/e2e/C_card_view/C9_big_card_image_metadata_editor.spec.ts", "app/testing/e2e/E_search_filter/E10_site_identity_and_menu_contract.spec.ts", "app/testing/e2e/E_search_filter/E11_filterbar_persistence_and_article_seam.spec.ts", "app/testing/e2e/Q_scroll/Q2_offset_reset.spec.ts",
-        "app/testing/e2e/T_admin/T17_home_article_buttons.spec.ts", "app/testing/e2e/T_admin/T3_modify_columns.spec.ts"
+        "app/testing/e2e/T_admin/T17_home_article_buttons.spec.ts", "app/testing/e2e/T_admin/T3_modify_columns.spec.ts", "app/testing/e2e/C_card_view/C26_page_ifav_pilot.spec.ts"
       ],
       "projects": ["mobile-card", "tablet-card", "desktop-card"],
       "drivers": ["(?:big-card-container|card-item-header|card-show-more|shared-topbar-article-close|row-article-image-first)", "active_(?:row_article|big_card)", "\\b(?:openBigCard|openTempDatasetRowArticle|closeArticleToCardView)\\s*\\(", "\\b(?:closeBigCard|setupCardView|captureImageFirstOverlayReveal|assertImageFirstVisualContract)\\s*\\(", "(?:row_article_container|image_first_view_(?:overlay|modal)|big-card-close)"]
@@ -227,8 +227,8 @@
         "app/testing/e2e/P_copy/P2_select_range.spec.ts", "app/testing/e2e/P_copy/P3_table_range_and_multiline_editor.spec.ts", "app/testing/e2e/Q_scroll/Q1_infinite_scroll.spec.ts", "app/testing/e2e/Q_scroll/Q2_offset_reset.spec.ts",
         "app/testing/e2e/R_dropdown/R1_dropdown_open_search_select.spec.ts", "app/testing/e2e/R_dropdown/R2_dropdown_keyboard_nav.spec.ts", "app/testing/e2e/S_permissions/S2_permission_check_action.spec.ts", "app/testing/e2e/S_permissions/S3_runtime_role_browsing.spec.ts",
         "app/testing/e2e/T_admin/T11_site_language_embedding_and_field_view.spec.ts", "app/testing/e2e/T_admin/T14_dataset_cover_palette.spec.ts", "app/testing/e2e/T_admin/T19_dataset_alias_namespace.spec.ts", "app/testing/e2e/T_admin/T15_view_field_assignments.spec.ts",
-        "app/testing/e2e/T_admin/T17_home_article_buttons.spec.ts", "app/testing/e2e/C_card_view/C26_page_ifav_pilot.spec.ts", "app/testing/e2e/T_admin/T1_create_table.spec.ts", "app/testing/e2e/T_admin/T2_delete_table.spec.ts", "app/testing/e2e/T_admin/T3_modify_columns.spec.ts",
-        "app/testing/e2e/T_admin/T4_create_folder.spec.ts", "app/testing/e2e/T_admin/T5_rename_tree_node.spec.ts", "app/testing/e2e/T_admin/T7_card_visibility.spec.ts", "app/testing/e2e/V_refresh/V1_table_refresh.spec.ts"
+        "app/testing/e2e/T_admin/T17_home_article_buttons.spec.ts", "app/testing/e2e/T_admin/T1_create_table.spec.ts", "app/testing/e2e/T_admin/T2_delete_table.spec.ts", "app/testing/e2e/T_admin/T3_modify_columns.spec.ts",
+        "app/testing/e2e/T_admin/T4_create_folder.spec.ts", "app/testing/e2e/T_admin/T5_rename_tree_node.spec.ts", "app/testing/e2e/T_admin/T7_card_visibility.spec.ts", "app/testing/e2e/V_refresh/V1_table_refresh.spec.ts", "app/testing/e2e/C_card_view/C26_page_ifav_pilot.spec.ts"
       ],
       "projects": ["mobile-card", "tablet-card", "desktop-card"],
       "drivers": ["filterbar-(?:panel|toggle|section|inline|heading|shell)", "data-filterbar-", "_filterBar\\b", "dataset-filter-", "\\b(?:waitForActiveFilterbarLayout|openActiveFilterbarIfCollapsed|closeActiveFilterbarIfOpen|openActiveFilterbarSection|revealActiveFilterbarSection|switchToView|openActiveDatasetSearch|navigateToDataset)\\s*\\(", "\\b(?:navigateToDefaultDataset|openAddRowForm|openColumnFilterAccordion)\\s*\\(", "_row_group_facets\\b", "row-group-(?:facets|facet-[\\w-]+|match-mode)", "data-(?:heading-id|option-value|row-group-(?:slug|table|focus))\\b", "msd-(?:dropdown|option|popup)-[\\w-]+", "\\b(?:waitForCategories|categoryPopup|closeCategoryPopup|openValues)\\s*\\(", "\\b(?:openTempDataset|setupCardView)\\s*\\(", "filterbar-(?:sidebar|hero|style|filters|tools|views)", "_filterBar(?:_(?:panel|sidebar|hero))?\\b", "(?:dataset-search-|mobile-search-toggle|active-filter(?:s|-))"]
@@ -254,7 +254,7 @@
         "app/backend/core_components/frontend_assets", "app/backend/reusable_components/vanilla_tree", "app/frontend/reusable_components/vanilla_tree", "app/frontend/main.js",
         "app/frontend/index.html"
       ],
-      "specs": ["app/testing/e2e/T_admin/T13_workline_observatory.spec.ts", "app/testing/e2e/G_navigation/G14_home_menu_parity.spec.ts", "app/testing/e2e/E_search_filter/E22_guest_text_search.spec.ts", "app/testing/e2e/C_card_view/C24_cancel_changes.spec.ts",
+      "specs": ["app/testing/e2e/G_navigation/G14_home_menu_parity.spec.ts", "app/testing/e2e/E_search_filter/E22_guest_text_search.spec.ts", "app/testing/e2e/C_card_view/C24_cancel_changes.spec.ts",
         "app/testing/e2e/C_card_view/C25_rich_text_links.spec.ts",
         "app/testing/e2e/E_search_filter/E20_filterbar_order_and_memory.spec.ts", "app/testing/e2e/G_navigation/G13_phone_topbar_measurements.spec.ts", "app/testing/e2e/D_view_switch/D6_table_cell_line_limit.spec.ts", "app/testing/e2e/T_admin/T21_home_text_style.spec.ts", "app/testing/e2e/G_navigation/G12_top_nav_home_button.spec.ts",
         "app/testing/e2e/C_card_view/C22_article_image_arrows_probe.spec.ts", "app/testing/e2e/E_search_filter/E18_dataset_default_view.spec.ts", "app/testing/e2e/C_card_view/C19_dataset_heading_hierarchy.spec.ts", "app/testing/e2e/A_row_crud/A1_add_row.spec.ts", "app/testing/e2e/A_row_crud/A2_edit_cell.spec.ts", "app/testing/e2e/A_row_crud/A3_delete_rows.spec.ts", "app/testing/e2e/A_row_crud/A4_select_row.spec.ts",
@@ -283,9 +283,9 @@
         "app/testing/e2e/P_copy/P3_table_range_and_multiline_editor.spec.ts", "app/testing/e2e/Q_scroll/Q1_infinite_scroll.spec.ts", "app/testing/e2e/Q_scroll/Q2_offset_reset.spec.ts", "app/testing/e2e/R_dropdown/R1_dropdown_open_search_select.spec.ts",
         "app/testing/e2e/R_dropdown/R2_dropdown_keyboard_nav.spec.ts", "app/testing/e2e/S_permissions/S1_permission_disable.spec.ts", "app/testing/e2e/S_permissions/S2_permission_check_action.spec.ts", "app/testing/e2e/S_permissions/S3_runtime_role_browsing.spec.ts",
         "app/testing/e2e/T_admin/T10_asset_linking_admin.spec.ts", "app/testing/e2e/T_admin/T11_site_language_embedding_and_field_view.spec.ts", "app/testing/e2e/T_admin/T14_dataset_cover_palette.spec.ts", "app/testing/e2e/T_admin/T15_view_field_assignments.spec.ts",
-        "app/testing/e2e/T_admin/T20_workline_observatory_scroll.spec.ts", "app/testing/e2e/T_admin/T17_home_article_buttons.spec.ts", "app/testing/e2e/C_card_view/C26_page_ifav_pilot.spec.ts", "app/testing/e2e/T_admin/T1_create_table.spec.ts", "app/testing/e2e/T_admin/T2_delete_table.spec.ts",
+        "app/testing/e2e/T_admin/T20_workline_observatory_scroll.spec.ts", "app/testing/e2e/T_admin/T17_home_article_buttons.spec.ts", "app/testing/e2e/T_admin/T1_create_table.spec.ts", "app/testing/e2e/T_admin/T2_delete_table.spec.ts",
         "app/testing/e2e/T_admin/T3_modify_columns.spec.ts", "app/testing/e2e/T_admin/T4_create_folder.spec.ts", "app/testing/e2e/T_admin/T5_rename_tree_node.spec.ts", "app/testing/e2e/T_admin/T6_update_oids.spec.ts",
-        "app/testing/e2e/T_admin/T7_card_visibility.spec.ts", "app/testing/e2e/T_admin/T8_app_db_compatibility_mirror.spec.ts", "app/testing/e2e/T_admin/T9_create_table_current_project_folder.spec.ts", "app/testing/e2e/V_refresh/V1_table_refresh.spec.ts"
+        "app/testing/e2e/T_admin/T7_card_visibility.spec.ts", "app/testing/e2e/T_admin/T8_app_db_compatibility_mirror.spec.ts", "app/testing/e2e/T_admin/T9_create_table_current_project_folder.spec.ts", "app/testing/e2e/V_refresh/V1_table_refresh.spec.ts", "app/testing/e2e/T_admin/T13_workline_observatory.spec.ts", "app/testing/e2e/C_card_view/C26_page_ifav_pilot.spec.ts"
       ],
       "projects": ["mobile-card", "tablet-card", "desktop-card"],
       "drivers": ["#nav(?:Back|Forward)Btn\\b", "nav-history-(?:btn|buttons)", "\\.go(?:Back|Forward)\\s*\\(", "\\b(?:navigateToDataset|waitForAppReady|openAdminNavigationTree|revealFirstNavigationDatasetButton|revealNavigationDatasetButtonByNodeId)\\s*\\(", "(?:tab-|nav-tree-btn-)", "#(?:nav_tree|vanillaTree_nav|admin_tools_tree)\\b", "\\b(?:navigateToDefaultDataset|ensureAdminToolsOpen|expandAdminTreeFolder|openAdminTreeButton|openAdminTreeContextMenu|openNavTreeContextMenu)\\s*\\(", "(?:admin-tree-|nav-group-)", "\\b(?:openBigCard|closeBigCard|openTempDatasetRowArticle|closeArticleToCardView)\\s*\\(", "\\bid\\s*[*^$|~]?=\\s*[\\'\\\"](?:nav(?:Back|Forward)Btn|nav_tree|vanillaTree_nav|admin_tools_tree)[\\'\\\"]", "\\bgetElementById\\s*\\(\\s*[\\'\\\"](?:nav(?:Back|Forward)Btn|nav_tree|vanillaTree_nav|admin_tools_tree)[\\'\\\"]", "\\b(?:openTempDataset|clickAdminTreeContextMenuItem)\\s*\\("]
@@ -349,10 +349,10 @@
         "app/testing/e2e/S_permissions/S1_permission_disable.spec.ts", "app/testing/e2e/S_permissions/S2_permission_check_action.spec.ts", "app/testing/e2e/S_permissions/S3_runtime_role_browsing.spec.ts", "app/testing/e2e/T_admin/T10_asset_linking_admin.spec.ts",
         "app/testing/e2e/T_admin/T11_site_language_embedding_and_field_view.spec.ts", "app/testing/e2e/T_admin/T11_storage_root_cleanup.spec.ts", "app/testing/e2e/T_admin/T12_storage_deleted_prune.spec.ts", "app/testing/e2e/T_admin/T13_media_subfolder_bulk_check.spec.ts",
         "app/testing/e2e/T_admin/T13_workline_observatory.spec.ts", "app/testing/e2e/T_admin/T19_dataset_alias_namespace.spec.ts", "app/testing/e2e/T_admin/T15_view_field_assignments.spec.ts", "app/testing/e2e/T_admin/T20_workline_observatory_scroll.spec.ts",
-        "app/testing/e2e/T_admin/T17_home_article_buttons.spec.ts", "app/testing/e2e/C_card_view/C26_page_ifav_pilot.spec.ts", "app/testing/e2e/T_admin/T1_create_table.spec.ts", "app/testing/e2e/T_admin/T2_delete_table.spec.ts", "app/testing/e2e/T_admin/T3_modify_columns.spec.ts",
+        "app/testing/e2e/T_admin/T17_home_article_buttons.spec.ts", "app/testing/e2e/T_admin/T1_create_table.spec.ts", "app/testing/e2e/T_admin/T2_delete_table.spec.ts", "app/testing/e2e/T_admin/T3_modify_columns.spec.ts",
         "app/testing/e2e/T_admin/T4_create_folder.spec.ts", "app/testing/e2e/T_admin/T5_rename_tree_node.spec.ts", "app/testing/e2e/T_admin/T6_update_oids.spec.ts", "app/testing/e2e/T_admin/T7_card_visibility.spec.ts",
         "app/testing/e2e/T_admin/T8_app_db_compatibility_mirror.spec.ts", "app/testing/e2e/T_admin/T9_create_table_current_project_folder.spec.ts", "app/testing/e2e/U_export_import/U1_export_csv.spec.ts", "app/testing/e2e/U_export_import/U2_import_csv.spec.ts",
-        "app/testing/e2e/V_refresh/V1_table_refresh.spec.ts"
+        "app/testing/e2e/V_refresh/V1_table_refresh.spec.ts", "app/testing/e2e/C_card_view/C26_page_ifav_pilot.spec.ts"
       ],
       "projects": ["mobile-card", "tablet-card", "desktop-card"],
       "drivers": ["(?:login|register|navbar-auth|tab-user|tab-logout|user-authentication|profile-security)-", "#(?:edit_username|new_login_name|sign_out_other_devices|profile_security_form)\\b", "\\b(?:login|logout|openLoginEntry|submitCredentialsAndWaitForOtp|waitForAuthenticatedApp)\\s*\\(", "/api/(?:reset-session|user-profile|logout|login)\\b", "\\bgetElementById\\s*\\(\\s*[\\'\\\"](?:edit_username|new_login_name|sign_out_other_devices|profile_security_form)[\\'\\\"]", "\\bid\\s*[*^$|~]?=\\s*[\\'\\\"](?:edit_username|new_login_name|sign_out_other_devices|profile_security_form)[\\'\\\"]", "\\breadSessionInfo\\s*\\("]
@@ -511,7 +511,7 @@
       "area": "Themes and shells",
       "paths": ["app/frontend/reusable_components/symbol_asset_resolver.css",
         "app/frontend/styles", "app/frontend/shared/style_package", "app/frontend/templates", "app/frontend/ui_config.js",
-        "app/frontend/core_components/theme.js", "app/frontend/core_components/theme_preference_api.js"
+        "app/frontend/core_components/theme.js", "app/frontend/core_components/theme_preference_api.js", "app/frontend/icons"
       ],
       "specs": ["app/testing/e2e/T_admin/T24_article_presentations.spec.ts", "app/testing/e2e/G_navigation/G14_home_menu_parity.spec.ts", "app/testing/e2e/C_card_view/C24_cancel_changes.spec.ts",
         "app/testing/e2e/C_card_view/C25_rich_text_links.spec.ts",
@@ -555,8 +555,8 @@
     {
       "area": "Payment provider",
       "paths": ["app/backend/core_components/payment_gateway"],
-      "specs": [],
-      "none": "Provider integration needs an external account; payment setup specs are fixtures, not a browser proof."
+      "specs": ["app/testing/e2e/W_payment/W1_create_payment.spec.ts"],
+      "projects": ["desktop-card", "desktop-bigcard", "tablet-card", "tablet-bigcard", "mobile-card", "mobile-bigcard"]
     },
     {
       "area": "Static and generated assets",
@@ -575,6 +575,24 @@
       "paths": ["app/backend/reusable_components/article_presentation_report", "app/frontend/shared/article_presentations", "app/backend/tools"],
       "specs": [],
       "none": "Shared vocabulary and offline read-only BEFORE/AFTER exports and approval comparison; no rendered UI or opener behavior changes. Go tests cover exact diffs and value-free lists; the disposable PostgreSQL proof runs migrations 10–12."
+    },
+    {
+      "area": "Browser setup fixtures",
+      "paths": [
+        "app/testing/e2e/setup"
+      ],
+      "specs": [
+        "app/testing/e2e/setup/delete_payments_table.spec.ts",
+        "app/testing/e2e/setup/setup_test_user.spec.ts"
+      ],
+      "projects": [
+        "desktop-card",
+        "desktop-bigcard",
+        "tablet-card",
+        "tablet-bigcard",
+        "mobile-card",
+        "mobile-bigcard"
+      ]
     }
   ],
   "source_guards": [{"paths": ["app/testing/fixtures/route_auth_matrix/README.md", "app/testing/fixtures/route_auth_matrix/route_auth_matrix_expectations.jsonl"], "package": "app/backend/core_components/router", "anchor": "app/backend/core_components/router/route_auth_matrix_runner_test.go"},
@@ -582,12 +600,63 @@
     {"paths": ["app/backend/core_components/system_table_tools/lang_key_code_inventory.go", "app/backend/core_components/system_table_tools/lang_key_ui_evidence.go", "app/backend/core_components/system_table_tools/lang_key_ui_scan_trust.go", "app/backend/core_components/system_table_tools/lang_key_source_population.go"], "package": "app/backend/core_components/runtime_grants", "anchor": "app/backend/core_components/runtime_grants/ui_literal_evidence_test.go"},
     {"paths": ["app/frontend/reusable_components/media_library_picker/media_library_picker.js", "app/frontend/core_components/admin_tools/dataset_alias_management_copy.js", "app/frontend/core_components/admin_tools/row_group_assignment_editor.js"], "package": "app/backend/core_components/system_table_tools", "anchor": "app/backend/core_components/system_table_tools/lang_key_declared_evidence_test.go"},
     {"paths": ["app/backend/core_components/system_config_checks/front_page_article_buttons.go", "app/testing/shared_contracts/home_article_label_examples.json"], "package": "app/backend/core_components/system_table_tools", "anchor": "app/backend/core_components/system_table_tools/front_page_article_buttons_security_postgres_test.go"},
-    {"paths": ["app/backend", "app/components", "app/testing/fixtures/component_canary.json", "app/testing/componentfixture"], "package": "app/backend/core_components/sessions", "anchor": "app/backend/core_components/sessions/session_store_access_guard_test.go"},
+    {"paths": ["app/backend", "app/components", "app/testing/fixtures/component_canary.json", "app/testing/componentfixture"], "package": "app/backend/core_components/sessions", "anchor": "app/backend/core_components/sessions/session_store_access_guard_test.go", "coverage_paths": []},
     {"paths": ["app/frontend/shared/article_presentations"], "package": "app/backend/core_components/system_table_tools", "anchor": "app/backend/core_components/system_table_tools/article_presentation_contract_test.go"},
     {"paths": ["app/frontend/shared/article_presentations"], "package": "app/backend/core_components/dynamic_table_tools/dtt_1_row_crud/dtt_1_row_read", "anchor": "app/backend/core_components/dynamic_table_tools/dtt_1_row_crud/dtt_1_row_read/article_baseline_test.go"},
     {"paths": ["app/components", "app/testing/fixtures/component_canary.json", "app/testing/componentfixture"], "package": "app/backend/core_components/auth", "anchor": "app/backend/core_components/auth/component_discovery_test.go"},
     {"paths": ["app/components", "app/testing/fixtures/component_canary.json", "app/testing/componentfixture"], "package": "app/backend/core_components/router", "anchor": "app/backend/core_components/router/component_discovery_test.go"},
-    {"paths": ["app/components", "app/testing/fixtures/component_canary.json", "app/testing/componentfixture"], "package": "app/backend/core_components/system_table_tools", "anchor": "app/backend/core_components/system_table_tools/component_discovery_test.go"}, {"paths": ["app/frontend/core_components/general_tables/dataset_form/dataset_group_read_access.js"], "package": "app/backend/core_components/dynamic_table_tools/dtt_crud_workflows", "anchor": "app/backend/core_components/dynamic_table_tools/dtt_crud_workflows/create_table_read_defaults_test.go"}, {"paths": ["app/server_tools/migrations/20261015000010_add_article_bundle_storage.sql", "app/server_tools/migrations/20261015000011_add_article_bundle_mutations.sql", "app/server_tools/migrations/20261015000012_materialize_article_bundles.sql", "app/testing/fixtures/article_bundle_legacy.sql"], "package": "app/backend/core_components/system_table_tools", "anchor": "app/backend/core_components/system_table_tools/article_bundle_postgres_test.go"}, {"paths": ["app/server_tools/migrations/20261015000011_add_article_bundle_mutations.sql", "app/backend/core_components/system_table_tools/article_bundle_mutations.go", "app/backend/core_components/system_table_tools/view_field_set_mutations.go", "app/frontend/core_components/admin_tools/view_field_assignments_state.js", "app/frontend/core_components/admin_tools/view_field_assignments_view.js"], "package": "app/backend/core_components/system_table_tools", "anchor": "app/backend/core_components/system_table_tools/article_bundle_consumers_postgres_test.go"}, {"paths": ["app/backend/core_components/runtime_grants/reviewed_definers.json", "app/server_tools/migrations/20261015000010_add_article_bundle_storage.sql", "app/server_tools/migrations/20261015000011_add_article_bundle_mutations.sql", "app/server_tools/ctl/lib/instance_restore_functions.sql"], "package": "app/backend/core_components/runtime_grants", "anchor": "app/backend/core_components/runtime_grants/article_function_review_test.go"}, {"paths": ["app/server_tools/ctl/lib/instance_restore_functions.sql", "app/server_tools/migrations/20261015000010_add_article_bundle_storage.sql", "app/server_tools/migrations/20261015000011_add_article_bundle_mutations.sql"], "package": "app/backend/core_components/runtime_grants", "anchor": "app/backend/core_components/runtime_grants/article_restore_postgres_test.go"}
+    {"paths": ["app/components", "app/testing/fixtures/component_canary.json", "app/testing/componentfixture"], "package": "app/backend/core_components/system_table_tools", "anchor": "app/backend/core_components/system_table_tools/component_discovery_test.go"}, {"paths": ["app/frontend/core_components/general_tables/dataset_form/dataset_group_read_access.js"], "package": "app/backend/core_components/dynamic_table_tools/dtt_crud_workflows", "anchor": "app/backend/core_components/dynamic_table_tools/dtt_crud_workflows/create_table_read_defaults_test.go"}, {"paths": ["app/server_tools/migrations/20261015000010_add_article_bundle_storage.sql", "app/server_tools/migrations/20261015000011_add_article_bundle_mutations.sql", "app/server_tools/migrations/20261015000012_materialize_article_bundles.sql", "app/testing/fixtures/article_bundle_legacy.sql"], "package": "app/backend/core_components/system_table_tools", "anchor": "app/backend/core_components/system_table_tools/article_bundle_postgres_test.go"}, {"paths": ["app/server_tools/migrations/20261015000011_add_article_bundle_mutations.sql", "app/backend/core_components/system_table_tools/article_bundle_mutations.go", "app/backend/core_components/system_table_tools/view_field_set_mutations.go", "app/frontend/core_components/admin_tools/view_field_assignments_state.js", "app/frontend/core_components/admin_tools/view_field_assignments_view.js"], "package": "app/backend/core_components/system_table_tools", "anchor": "app/backend/core_components/system_table_tools/article_bundle_consumers_postgres_test.go"}, {"paths": ["app/backend/core_components/runtime_grants/reviewed_definers.json", "app/server_tools/migrations/20261015000010_add_article_bundle_storage.sql", "app/server_tools/migrations/20261015000011_add_article_bundle_mutations.sql", "app/server_tools/ctl/lib/instance_restore_functions.sql"], "package": "app/backend/core_components/runtime_grants", "anchor": "app/backend/core_components/runtime_grants/article_function_review_test.go"}, {"paths": ["app/server_tools/ctl/lib/instance_restore_functions.sql", "app/server_tools/migrations/20261015000010_add_article_bundle_storage.sql", "app/server_tools/migrations/20261015000011_add_article_bundle_mutations.sql"], "package": "app/backend/core_components/runtime_grants", "anchor": "app/backend/core_components/runtime_grants/article_restore_postgres_test.go"},
+    {
+      "paths": [
+        "app/backend/core_components/app_registry"
+      ],
+      "package": "app/backend/core_components/agent_tools",
+      "anchor": "app/backend/core_components/agent_tools/registration_test.go"
+    },
+    {
+      "paths": [
+        "app/backend/core_components/context_keys"
+      ],
+      "package": "app/backend/pipeline/audit",
+      "anchor": "app/backend/pipeline/audit/with_audit_test.go"
+    },
+    {
+      "paths": [
+        "app/backend/core_components/dbutils/queryfixture"
+      ],
+      "package": "app/backend/core_components/system_table_tools",
+      "anchor": "app/backend/core_components/system_table_tools/user_filterbar_preference_handler_test.go"
+    },
+    {
+      "paths": [
+        "app/backend/reusable_components/article_presentation_report"
+      ],
+      "package": "app/backend/tools/internal/articlecomparison",
+      "anchor": "app/backend/tools/internal/articlecomparison/compare_test.go"
+    },
+    {
+      "paths": [
+        "app/backend/tools/article_presentation_baseline",
+        "app/backend/tools/article_presentation_after"
+      ],
+      "package": "app/backend/tools/internal/articleexport",
+      "anchor": "app/backend/tools/internal/articleexport/command_test.go"
+    },
+    {
+      "paths": [
+        "app/frontend/icons/site_favicons"
+      ],
+      "package": "app/backend/core_components/frontend_assets",
+      "anchor": "app/backend/core_components/frontend_assets/site_favicon_test.go"
+    },
+    {
+      "paths": [
+        "app/frontend/core_components/ai_features/table_chat/table_chat_attachments.js",
+        "app/frontend/core_components/ai_features/table_chat/table_chat_pending_changes.js"
+      ],
+      "package": "app/backend/core_components/system_table_tools",
+      "anchor": "app/backend/core_components/system_table_tools/lang_key_catalogue_scan_test.go"
+    }
   ],
   "python_guards": [
     {
@@ -621,7 +690,8 @@
       ],
       "tests": [
         "app/testing/python/test_reviewed_provenance_hashes.py"
-      ]
+      ],
+      "coverage_paths": []
     },
     {
       "paths": ["app/server_tools/scripts/check_md_links.py", "app/docs/instructions_and_documentation/lang_key_lifecycle.md"],
@@ -745,7 +815,32 @@
       "tests": [
         "app/testing/python/test_cancel_changes_language_seed.py"
       ]
-    }, {"paths": ["app/server_tools/migrations/20261015000010_add_article_bundle_storage.sql", "app/server_tools/migrations/20261015000011_add_article_bundle_mutations.sql", "app/server_tools/migrations/20261015000012_materialize_article_bundles.sql", "app/testing/fixtures/article_bundle_legacy.sql"], "tests": ["app/testing/python/test_article_view_migration.py"]}
+    }, {"paths": ["app/server_tools/migrations/20261015000010_add_article_bundle_storage.sql", "app/server_tools/migrations/20261015000011_add_article_bundle_mutations.sql", "app/server_tools/migrations/20261015000012_materialize_article_bundles.sql", "app/testing/fixtures/article_bundle_legacy.sql"], "tests": ["app/testing/python/test_article_view_migration.py"]},
+    {
+      "paths": [
+        "app/frontend/check_js_imports.js"
+      ],
+      "tests": [
+        "app/testing/python/test_qa_workflow.py"
+      ]
+    },
+    {
+      "paths": [
+        "app/frontend/generated/go_contract_types.d.ts"
+      ],
+      "tests": [
+        "app/testing/python/test_generate_go_contract_types.py"
+      ]
+    },
+    {
+      "paths": [
+        "app/frontend/core_components/ai_features/table_chat/table_chat_coding_agent_copy.js",
+        "app/frontend/custom_views/embedding_status_translation_fallbacks.js"
+      ],
+      "tests": [
+        "app/testing/python/test_interface_language_seed_981.py"
+      ]
+    }
   ],
   "bootstrap_proofs": [
     "app/testing/python/test_bootstrap_ledger_postgres.py"
@@ -757,5 +852,87 @@
       "config": "app/testing/e2e/instance-cookie-isolation.playwright.config.ts",
       "specs": ["app/testing/e2e/L_auth/L4_instance_cookie_isolation.test.ts"]
     }
+  ],
+  "nightly_only": [
+    {
+      "paths": [
+        "app/frontend/core_components/ai_features",
+        "app/frontend/reusable_components/ai_features"
+      ],
+      "reason": "Remaining assistant interaction has focused Vitest coverage but no maintained browser spec or named Go/Python source proof; full nightly frontend tests remain required until a chat browser proof exists."
+    },
+    {
+      "paths": [
+        "app/frontend/core_components/dev_tools"
+      ],
+      "reason": "Developer toolbox diagnostics have no maintained isolated browser assertion; nightly frontend/build checks cover their integration."
+    },
+    {
+      "paths": [
+        "app/frontend/custom_views"
+      ],
+      "reason": "Remaining optional embedding and translation extension views have focused Vitest tests but no maintained browser or named Go/Python source proof; nightly frontend/build checks cover integration without requiring external providers in a batch."
+    },
+    {
+      "paths": [
+        "app/frontend/generated/backend_route_manifest.json",
+        "app/frontend/generated/stable_api_client.d.ts",
+        "app/frontend/generated/stable_api_client.js"
+      ],
+      "reason": "Generated route/client exports are checked by nightly generation/build consistency; no isolated named behaviour proof covers their emitted bytes."
+    },
+    {
+      "paths": [
+        "app/frontend/vitest.config.mjs"
+      ],
+      "reason": "The frontend-local test runner configuration is exercised by nightly frontend test execution; no isolated named guard verifies this alternate entry point."
+    },
+    {
+      "paths": [
+        "app/frontend/robots.txt",
+        "app/frontend/imageERR.png",
+        "app/frontend/favicon.ico",
+        "app/frontend/favicon4E.png",
+        "app/frontend/favicon4ER.png",
+        "app/frontend/favicon4S.png",
+        "app/frontend/favicon4SL.png"
+      ],
+      "reason": "Static crawler policy, legacy favicon bytes and the error-image fallback have no maintained focused assertion; favicon route tests read icons/site_favicons instead. Nightly asset/build checks retain integration coverage."
+    },
+    {
+      "paths": [
+        "app/backend/core_components/maintainer_tools"
+      ],
+      "reason": "The dormant optional private route registry has no package tests or public browser flow; nightly Go/build checks retain integration coverage until a public registry contract test is added."
+    },
+    {
+      "paths": [
+        "app/frontend/core_components/readme.txt",
+        "app/frontend/reusable_components/readme.txt",
+        "app/backend/reusable_components/readme.txt"
+      ],
+      "reason": "Legacy .txt directory notes are conservatively inventoried because only .md/.rst and exact extensionless README/CHANGELOG qualify as documentation; no focused named assertion reads these notes, so nightly source/build checks retain coverage."
+    }
+  ],
+  "exceptions": [],
+  "nightly_cross_cutting_prefixes": [
+    "app/frontend/core_components/navigation",
+    "app/frontend/core_components/auth",
+    "app/frontend/core_components/admin_tools/main",
+    "app/frontend/core_components/front_page",
+    "app/frontend/core_components/main_menu",
+    "app/frontend/core_components/header",
+    "app/frontend/core_components/language",
+    "app/frontend/core_components/lang_",
+    "app/frontend/core_components/session",
+    "app/frontend/core_components/shell",
+    "app/frontend/core_components/app_shell",
+    "app/frontend/core_components/state",
+    "app/frontend/shared/",
+    "app/frontend/reusable_components/language",
+    "app/frontend/reusable_components/lang_",
+    "app/frontend/reusable_components/menu",
+    "app/frontend/reusable_components/session",
+    "app/frontend/reusable_components/state"
   ]
 }

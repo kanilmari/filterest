@@ -395,7 +395,10 @@ def test_cli_json_empty_batch_and_invalid_input():
     command = [sys.executable, "-B", str(ROOT / "app/testing/python/relevant_checks.py")]
     empty = subprocess.run([*command, "--json"], capture_output=True, text=True, timeout=10)
     assert empty.returncode == 0, empty.stderr
-    assert json.loads(empty.stdout) == {"version": 1, "changed_paths": [], "fast": [], "heavy": [], "notes": []}
+    payload = json.loads(empty.stdout)
+    evidence = payload.pop("evidence")  # S2 pins empty plans too; existing keys retain their values.
+    assert evidence["tree"] and evidence["map_sha256"] and evidence["checks"] == []
+    assert payload == {"version": 1, "changed_paths": [], "fast": [], "heavy": [], "notes": []}
     invalid = subprocess.run([*command, "../escape"], capture_output=True, text=True, timeout=10)
     assert invalid.returncode == 2
     assert not invalid.stdout

@@ -197,6 +197,8 @@ prints commands; it never runs checks, starts services or accesses a database:
 python3 app/testing/python/relevant_checks.py app/frontend/core_components/infinite_scroll/infinite_scroll_handler.js
 python3 app/testing/python/relevant_checks.py --range HEAD~1..HEAD
 python3 app/testing/python/relevant_checks.py --json --range main...HEAD
+python3 app/testing/python/relevant_checks.py --compare-plan data/runtime/check_plan.json --json
+python3 app/testing/python/relevant_checks.py --nightly-cross-cutting --range HEAD~1..HEAD
 ```
 
 Paths are relative to the repository root. Include deletions and both rename
@@ -207,6 +209,25 @@ name. `--python /path/to/python` changes the interpreter in printed pytest
 commands when a worktree uses an existing local test environment. Empty and
 option-like interpreter values are refused; commands quote the interpreter and
 end `env` option parsing before it.
+
+Plans add `evidence` without changing `fast`, `heavy`, `kind` or `targets`.
+Evidence records the map version and exact-byte SHA256, the interpreter, every
+check's stable ID and targets, and its projects (including the unnamed default
+project of a separate config). A clean checkout uses `git rev-parse HEAD^{tree}`;
+a dirty checkout hashes HEAD's tree, staged and unstaged binary diffs, and
+nonignored untracked file contents. Non-Git fixture/source trees use an app-content
+digest. Ignored runtime artifacts do not change evidence, so save plans there.
+`--compare-plan FILE` recomputes the complete saved JSON, reusing its paths and
+interpreter unless supplied explicitly. Identical inputs produce identical plans;
+a changed map, source tree, input or selection fails with exit status 2 and the
+mismatch fields. Always recompute after rebasing.
+
+`--nightly-cross-cutting` prints matching input paths, preserving input order and
+duplicates (`--json` prints an array). Its `nightly_cross_cutting_prefixes` map
+list preserves the former nightly regex exactly, including partial-name prefixes
+such as `lang_` and `state` and the required slash after `shared/`. This mode
+does not select or execute checks. The external nightly caller can replace its
+regex with this interface; policy/pipeline scripts are maintained separately.
 
 **Fast:** the map guards, existing file-length guard in its normal warning-only
 mode, Go unit tests in
@@ -240,6 +261,13 @@ PostgreSQL lock, which the Go PostgreSQL tests still use; the Python harness
 above no longer requires it.
 Curated browser areas supply specs and explicit projects to the existing
 noninteractive launcher, including phone/tablet/desktop card projects.
+Commands selecting any `testing/e2e/setup/` spec also set
+`PLAYWRIGHT_INCLUDE_SETUP=1`, including direct spec changes and mixed selections.
+The [collection guard](test_relevant_checks_setup.py) uses only Playwright
+`--list` to prove the emitted setup command collects both specs in all six
+projects and every mapped matrix spec/project pair collects at least one test.
+It uses installed development dependencies, stays offline, and runs no hooks,
+browsers or application/database services.
 
 The only reviewed policy is [relevant_check_map.json](relevant_check_map.json):
 grouped component paths with browser proofs or explicit `none` reasons, the
@@ -249,6 +277,45 @@ Exact paths are checked, without wildcard entries that survive file moves.
 The [guard tests](test_relevant_checks.py) require every component area to have
 an entry and every mapped path, spec and project to exist. Update the map with
 the source move/removal; new PostgreSQL declarations require no map edit.
+
+The [coverage guards](test_relevant_checks_coverage.py) also walk every tracked
+production file in `app/frontend/` and `app/backend/`, including tree-root files,
+static assets, generated code and configuration. Named coverage resolves by the
+longest matching exact file/directory prefix; ties retain all named proofs.
+Browser areas with specs, a Go file's own package with declared `_test.go` tests
+(including its PostgreSQL proofs), source guards, focused Python guards, or
+`nightly_only: [{paths: [...], reason: "..."}]` count. Browser `none` alone,
+generic lint, the file-length guard, the ordinary tier and whole Vitest do not.
+Guards can declare `coverage_paths` to certify fewer paths than their conservative
+selection triggers; empty coverage paths keep a scanner selected without treating
+it as a behavioural proof for every file it scans. No existing selection is
+narrowed by this resolution; the broad importer and ancestor selections remain.
+
+An existing unmapped production file makes both the API and CLI refuse selection,
+naming every unmapped changed file and how to map it. Existing untracked additions
+are checked too, before staging. Exemptions only affect this coverage requirement:
+missing/deleted names still select surviving consumers; files outside the two
+production trees keep their current discovery. Documentation means a
+case-insensitive `.md`/`.rst` extension, or the entire extensionless name
+`README`/`CHANGELOG` (case-insensitive). A name prefix alone never exempts code or legacy `.txt`
+notes; those notes have explicit nightly mappings. Test exemptions follow the
+case-sensitive `_test.go` suffix reserved by Go and the configured frontend
+Vitest pattern `.test.js` outside `dist`. Other `.test.*`/`.spec.*` suffixes do
+not establish test ownership in the production trees. Fixture markers
+`testdata`, `__tests__` and `__snapshots__` must be exact parent-directory
+components, never the leaf filename or a similar name. Direct test changes
+retain their existing selection. Every `.spec.ts` in the six-project config's
+literal testDir, including opt-in setup specs, must belong to a browser area. The manual manifest
+and `manual_specs` directories are excluded; Visual Guardian, cookie isolation
+and the explicit native manual config are separate suites, outside this matrix.
+
+`exceptions` starts empty. An unavoidable temporary exception requires exactly
+`{scope: "exact/existing/file", reason: "...", owner: "...", expires: "YYYY-MM-DD"}`.
+Directories, globs, duplicate scopes, missing/blank fields, malformed dates and
+expired entries fail validation. Expiry is inclusive through the stated day.
+Exceptions waive only that exact file and must be reviewed by the gate.
+Inheritance is not branch coverage: a review names the assertion for each new
+route, exported behaviour or changed branch, or requires a new check.
 
 Feature directories under `app/components/<name>/` participate in the same Go,
 frontend import, language-source, permission and route-doc discovery. Each needs

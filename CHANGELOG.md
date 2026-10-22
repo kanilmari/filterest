@@ -22,6 +22,7 @@ Dates are the local (Europe/Helsinki) date on which the version was published.
 
 ## [Unreleased]
 
+- **Relevant-check coverage** — Complete production-file mappings, refuse unmapped changes and unclaimed browser specs, pin saved selections to their tree and map, and expose the nightly frontend prefixes through the planner.
 - Home text alignment now follows language direction (start/centre/end/justify), with an inherited/start/centre hero-text choice for phones up to 700 px (schema v4). **Rollback:** a 9.5.1 binary refuses stored v4; before rollback, re-save Home with “Phone alignment: as on desktop” (On phones → As elsewhere) so it stores v3, or v2 for the default text style.
 - Dataset search tools share one soft corner radius for the box, search field, sort select, filter/reset actions and category headings in both themes and at every width.
 - On phones, Home's Serif story lines are body-sized (15 px, the base 1.45 line height) instead of 12 px, and a long slogan's lead is 16 px; wider screens are unchanged.

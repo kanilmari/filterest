@@ -15,6 +15,11 @@ import subprocess
 
 from python_test_tiers import needs_heavy_installation, tier_for_path
 from relevant_check_discovery import COMPUTED_IMPORT_REGISTRY, GO_ROOTS, FRONTEND_ROOTS, frontend_tests, go_inventory, migration_consumers, python_postgres_tests
+from relevant_check_coverage import (
+    coverage_index, matches, matrix_specs, nightly_cross_cutting_paths, require_coverage,
+    resolve_coverage, validate_coverage_metadata,
+)
+from relevant_check_evidence import attach_evidence, canonical, compare_plan
 
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -55,10 +60,6 @@ def normalize_path(value: str) -> str:
     return "/".join(parts)
 
 
-def matches(path: str, prefix: str) -> bool:
-    return path == prefix or path.startswith(prefix + "/")
-
-
 def component_areas(root: Path) -> set[str]:
     """Require an explicit choice for each current top-level component directory."""
     areas = set()
@@ -78,6 +79,7 @@ def validate_map(root: Path, policy: dict) -> None:
     """Refuse stale paths/specs/projects and uncovered areas before printing commands."""
     if policy.get("version") != 1:
         raise ValueError("unsupported relevant-check map version")
+    validate_coverage_metadata(root, policy, normalize_path)
     manual = manual_specs(root)
     projects = set(re.findall(r"\bname:\s*['\"]([^'\"]+)['\"]", (root / "app/playwright.config.ts").read_text()))
     covered, labels = set(), set()
@@ -127,15 +129,21 @@ def validate_map(root: Path, policy: dict) -> None:
                 raise ValueError(f"not a separate-config browser spec: {spec}")
         references.extend([config, *check["paths"], *check["specs"]])
     for path in references:
-        # Discovery and guards ship before the first real component. This one
-        # reserved inventory root may be absent; individual entries may not.
-        if path == "app/components" and not (root / path).exists():
-            continue
         if normalize_path(path) != path or not (root / path).exists():
             raise ValueError(f"curated path or spec disappeared: {path}")
-    missing = component_areas(root) - covered
+    # Nightly decisions and exact-file exceptions are explicit coverage choices
+    # too. They waive only file resolution, never neighbouring file coverage.
+    areas = component_areas(root)
+    decisions = [path for entry in policy.get("nightly_only", []) for path in entry["paths"]]
+    decisions += [entry["scope"] for entry in policy.get("exceptions", [])]
+    covered.update(area for area in areas if any(matches(path, area) or matches(area, path) for path in decisions))
+    missing = areas - covered
     if missing:
         raise ValueError("component areas need specs or explicit none: " + ", ".join(sorted(missing)))
+    claimed = {spec for entry in policy["browser_areas"] for spec in entry["specs"]}
+    unclaimed = matrix_specs(root) - manual - claimed
+    if unclaimed:
+        raise ValueError("matrix specs need a browser area in " + MAP_PATH + ": " + ", ".join(sorted(unclaimed)))
 
 
 def git_changed_paths(root: Path, git_range: str) -> list[str]:
@@ -159,18 +167,32 @@ def make_plan(root: Path, paths: list[str], *, python: str = PYTHON, policy: dic
     if not python.strip() or python.lstrip().startswith("-"):
         raise ValueError("Python interpreter must be nonempty and must not start with an option")
     changed = set(map(normalize_path, paths))
-    policy = policy if policy is not None else json.loads((root / MAP_PATH).read_text())
+    map_bytes = canonical(policy) if policy is not None else (root / MAP_PATH).read_bytes()
+    policy = policy if policy is not None else json.loads(map_bytes)
+    # Report every changed unmapped file before the older directory-level guard
+    # can stop at just the first missing area. Validate waivers before using them.
+    validate_coverage_metadata(root, policy, normalize_path)
+    tests, dependencies, sources = go_inventory(root)
+    index = coverage_index(root, policy, tests)
+    require_coverage(root, changed, index)
     validate_map(root, policy)
     plan = {"version": 1, "changed_paths": sorted(changed), "fast": [], "heavy": [], "notes": []}
     if not changed:
-        return plan
+        return attach_evidence(root, plan, policy, map_bytes, python)
+    plan["coverage"] = {path: resolve_coverage(path, index) for path in sorted(changed)
+                        if (root / path).is_file()}
+    for path, records in plan["coverage"].items():
+        for record in records:
+            if record["class"] in {"nightly_only", "exception"}:
+                plan["notes"].append(f"{record['class']} — {path}: {record['reason']}")
 
     def add(group, kind, targets, command, **details):
         plan[group].append({"kind": kind, "targets": sorted(targets), "command": command, **details})
 
     python_command = shlex.quote(python) + " -m pytest"
-    add("fast", "map-guards", ["app/testing/python/test_relevant_checks.py"],
-        f"{python_command} app/testing/python/test_relevant_checks.py")
+    map_guards = ["app/testing/python/test_relevant_checks.py", "app/testing/python/test_relevant_checks_coverage.py",
+                  "app/testing/python/test_relevant_checks_setup.py"]
+    add("fast", "map-guards", map_guards, f"{python_command} " + shlex.join(map_guards))
     add("fast", "file-length", [policy["file_length_guard"]],
         f"(cd app && bash {shlex.quote(policy['file_length_guard'].removeprefix('app/'))})")
     # The tier selector promises file tiers, not a finer Python dependency map.
@@ -186,7 +208,6 @@ def make_plan(root: Path, paths: list[str], *, python: str = PYTHON, policy: dic
             add("fast", "python-guard", guard["tests"],
                 f"env -u FILTEREST_TEST_DISPOSABLE_POSTGRES -- {python_command} " + shlex.join(guard["tests"]))
 
-    tests, dependencies, sources = go_inventory(root)
     seeds = {str(Path(path).parent) for path in changed
              if any(path.startswith(prefix + "/") for prefix in GO_ROOTS) and path.endswith(".go")}
     # Non-Go package assets belong to their nearest package, not every parent
@@ -263,7 +284,12 @@ def make_plan(root: Path, paths: list[str], *, python: str = PYTHON, policy: dic
     if direct_specs:
         browser.setdefault(("desktop-card", "mobile-card", "tablet-card"), set()).update(direct_specs)
     for projects, specs in sorted(browser.items()):
-        command = "PLAYWRIGHT_HTML_OPEN=never ./filterest test " + shlex.join(path.removeprefix("app/") for path in sorted(specs))
+        environment = "PLAYWRIGHT_HTML_OPEN=never "
+        if any(matches(spec, "app/testing/e2e/setup") for spec in specs):
+            # Both mapped and directly changed setup specs need the config's
+            # explicit opt-in; otherwise a claimed proof/project collects zero.
+            environment += "PLAYWRIGHT_INCLUDE_SETUP=1 "
+        command = environment + "./filterest test " + shlex.join(path.removeprefix("app/") for path in sorted(specs))
         command += " " + shlex.join("--project=" + project for project in projects) + " --workers=1"
         add("heavy", "browser", specs, command, projects=list(projects))
     # These proofs own their config and projects; never merge them into the matrix.
@@ -278,7 +304,7 @@ def make_plan(root: Path, paths: list[str], *, python: str = PYTHON, policy: dic
                        + " --workers=1")
             add("heavy", "browser-separate-config", check["specs"], command, config=check["config"])
     plan["notes"].append("Run commands from the repository root. Heavy checks need a capable supervisor and this worktree's test target; skipped proofs are not passes.")
-    return plan
+    return attach_evidence(root, plan, policy, map_bytes, python)
 
 
 def render_plan(plan: dict) -> str:
@@ -299,12 +325,29 @@ def main() -> int:
     parser.add_argument("changed_paths", nargs="*", help="Repository-relative files, deletions and both rename paths.")
     parser.add_argument("--range", dest="git_range", help="Git diff range, e.g. HEAD~1..HEAD (includes both rename paths).")
     parser.add_argument("--json", action="store_true", help="Include every target and discovered Go test name.")
-    parser.add_argument("--python", default=PYTHON, help="Interpreter for printed pytest commands.")
+    parser.add_argument("--python", help="Interpreter for printed pytest commands (default: " + PYTHON + ").")
+    parser.add_argument("--compare-plan", type=Path, help="Recompute a saved JSON plan and refuse any mismatch; defaults to its inputs.")
+    parser.add_argument("--nightly-cross-cutting", action="store_true", help="Print matching input paths using the map's literal nightly prefixes.")
     args = parser.parse_args()
     try:
         paths = args.changed_paths + (git_changed_paths(ROOT, args.git_range) if args.git_range else [])
-        plan = make_plan(ROOT, paths, python=args.python)
-    except (ValueError, OSError, subprocess.CalledProcessError) as error:
+        if args.nightly_cross_cutting:
+            if args.compare_plan:
+                raise ValueError("--nightly-cross-cutting cannot compare a check plan")
+            policy = json.loads((ROOT / MAP_PATH).read_bytes())
+            validate_coverage_metadata(ROOT, policy, normalize_path)
+            selected = nightly_cross_cutting_paths(paths, policy)
+            print(json.dumps(selected) if args.json else "\n".join(selected), end="\n" if selected or args.json else "")
+            return 0
+        saved = json.loads(args.compare_plan.read_bytes()) if args.compare_plan else None
+        if saved is not None and not paths and not args.git_range:
+            paths = saved["changed_paths"]
+            if args.python is None:
+                args.python = saved.get("evidence", {}).get("inputs", {}).get("python", PYTHON)
+        plan = make_plan(ROOT, paths, python=args.python if args.python is not None else PYTHON)
+        if saved is not None:
+            compare_plan(saved, plan)
+    except (ValueError, OSError, KeyError, TypeError, subprocess.CalledProcessError) as error:
         parser.error(str(error))
     print(json.dumps(plan, indent=2) if args.json else render_plan(plan), end="\n" if args.json else "")
     return 0

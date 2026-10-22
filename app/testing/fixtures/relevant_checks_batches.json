@@ -1,0 +1,100 @@
+{
+  "baseline_revision": "d373e6c6a4422c6d91a90bef0529b63921b73367",
+  "batches": [
+    {
+      "batch": "256",
+      "commit": "492f3c00",
+      "paths": [
+        "CHANGELOG.md",
+        "app/docs/instructions_and_documentation/Frontend_Home_Page.md",
+        "app/frontend/core_components/filterbar/dataset_heading_title_writer.js",
+        "app/frontend/core_components/filterbar/dataset_heading_title_writer.test.js",
+        "app/frontend/core_components/front_page/front_page.css",
+        "app/frontend/core_components/front_page/front_page_css.test.js",
+        "app/frontend/core_components/front_page/front_page_top_row_builder.js",
+        "app/frontend/core_components/front_page/front_page_top_row_builder.test.js",
+        "app/frontend/core_components/front_page/top_nav_home_button.css",
+        "app/frontend/core_components/front_page/top_nav_home_button.js",
+        "app/frontend/core_components/navigation/menu_button/navbar_visibility_handler.js",
+        "app/frontend/core_components/navigation/menu_button/navbar_visibility_handler.test.js",
+        "app/testing/e2e/E_search_filter/E10_site_identity_and_menu_contract.spec.ts",
+        "app/testing/e2e/E_search_filter/E15_responsive_topbar.spec.ts",
+        "app/testing/e2e/G_navigation/G11_home_phone_layout.spec.ts",
+        "app/testing/e2e/G_navigation/G12_top_nav_home_button.spec.ts",
+        "app/testing/e2e/G_navigation/G14_home_menu_parity.spec.ts",
+        "app/testing/python/relevant_check_map.json"
+      ]
+    },
+    {
+      "batch": "257",
+      "commit": "c2dbf6d1",
+      "paths": [
+        "app/frontend/core_components/filterbar/filterbar_section_order_handler.js",
+        "app/frontend/core_components/filterbar/filterbar_section_order_handler.test.js",
+        "app/testing/e2e/E_search_filter/E20_filterbar_order_and_memory.spec.ts"
+      ]
+    },
+    {
+      "batch": "259",
+      "commit": "92dcd7f2",
+      "paths": [
+        "CHANGELOG.md",
+        "app/frontend/core_components/navigation/navbar/navbar_layout.css",
+        "app/frontend/core_components/navigation/navbar/navbar_layout_css.test.js",
+        "app/testing/e2e/E_search_filter/E8_filterbar_nav_layering.spec.ts"
+      ]
+    },
+    {
+      "batch": "292",
+      "commit": "77aa1d80",
+      "paths": [
+        "CHANGELOG.md",
+        "README.md",
+        "THIRD_PARTY_LICENSES/go-golang.org-x-image-v0.45.0-11f774151bf6-1-LICENSE",
+        "THIRD_PARTY_LICENSES/go-golang.org-x-image-v0.45.0-11f774151bf6-2-PATENTS",
+        "THIRD_PARTY_LICENSES/go-golang.org-x-sys-v0.47.0-e92f5f770a9c-1-LICENSE",
+        "THIRD_PARTY_LICENSES/go-golang.org-x-sys-v0.47.0-e92f5f770a9c-2-PATENTS",
+        "THIRD_PARTY_LICENSES/go-golang.org-x-text-v0.43.0-01cbbee20993-1-LICENSE",
+        "THIRD_PARTY_LICENSES/go-golang.org-x-text-v0.43.0-01cbbee20993-2-PATENTS",
+        "THIRD_PARTY_LICENSES/go-toolchain-Go-runtime-and-standard-library-go1.26.9-ae02b7fe9f48-1-LICENSE",
+        "THIRD_PARTY_LICENSES/go-toolchain-Go-runtime-and-standard-library-go1.26.9-ae02b7fe9f48-2-PATENTS",
+        "THIRD_PARTY_LICENSES/manifest.json",
+        "THIRD_PARTY_NOTICES.md",
+        "app/backend/core_components/dynamic_table_tools/dtt_1_row_crud/dtt_1_row_create/image_formatter_test.go",
+        "app/docker/Dockerfile",
+        "app/go.mod",
+        "app/go.sum",
+        "app/server_tools/ctl/lib/local.sh",
+        "app/server_tools/lib/toolchain_version.sh",
+        "app/server_tools/setup_local_dev_environment.sh",
+        "app/testing/python/test_instance_ctl_bash32_compatibility.py"
+      ]
+    },
+    {
+      "batch": "293",
+      "commit": "d01d077f",
+      "paths": [
+        "CHANGELOG.md",
+        "app/backend/core_components/dynamic_table_tools/dtt_1_row_crud/dtt_1_row_read/article_after_reader.go",
+        "app/backend/core_components/dynamic_table_tools/dtt_1_row_crud/dtt_1_row_read/article_baseline_reader.go",
+        "app/backend/core_components/dynamic_table_tools/dtt_1_row_crud/dtt_1_row_read/article_baseline_report.go",
+        "app/backend/core_components/dynamic_table_tools/dtt_1_row_crud/dtt_1_row_read/article_baseline_transaction_test.go",
+        "app/backend/reusable_components/article_presentation_report/report.go",
+        "app/backend/tools/article_presentation_after/main.go",
+        "app/backend/tools/article_presentation_baseline/main.go",
+        "app/backend/tools/article_presentation_diff/main.go",
+        "app/backend/tools/article_presentation_diff/main_test.go",
+        "app/backend/tools/internal/articlecomparison/approval.go",
+        "app/backend/tools/internal/articlecomparison/compare.go",
+        "app/backend/tools/internal/articlecomparison/compare_test.go",
+        "app/backend/tools/internal/articlecomparison/input.go",
+        "app/backend/tools/internal/articlecomparison/owner.go",
+        "app/backend/tools/internal/articlecomparison/upgrade_postgres_test.go",
+        "app/backend/tools/internal/articleexport/command.go",
+        "app/backend/tools/internal/articleexport/command_test.go",
+        "app/docs/instructions_and_documentation/Article_Section_Defaults.md",
+        "app/testing/python/relevant_check_map.json"
+      ]
+    }
+  ]
+}

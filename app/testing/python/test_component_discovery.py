@@ -78,6 +78,11 @@ def test_canary_browser_none_needs_reason(canary):
     with pytest.raises(ValueError, match="explicit none"):
         validate_map(canary, policy)
     policy["browser_areas"][0]["none"] = "Fixture's HTTP and unit tests cover its nonvisual entry."
+    # A nonvisual component must retire its unused dummy spec too: the matrix
+    # inventory may no longer contain an unclaimed browser proof.
+    with pytest.raises(ValueError, match="matrix specs need a browser area"):
+        validate_map(canary, policy)
+    (canary / "app/testing/e2e/canary.spec.ts").unlink()
     validate_map(canary, policy)
 
 
