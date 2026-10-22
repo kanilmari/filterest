@@ -94,6 +94,68 @@ describe("navbar_visibility_handler", () => {
         expect(document.getElementById("hideMenuButton").tabIndex).toBe(0);
     });
 
+    test('phone bar owns menu focus across open/close while the row scrolls separately', async () => {
+        const { initNavbar } = await loadModule();
+        localStorage.setItem('navVisibleWide', 'false');
+        const bar = document.createElement('div'); bar.className = 'front-page-phone-topbar';
+        document.getElementById('tabs_container').append(bar);
+        const show = document.getElementById('showMenuButton'); bar.append(show);
+        initNavbar(); show.focus(); show.click();
+        expect(document.activeElement).toBe(document.getElementById('hideMenuButton'));
+        document.getElementById('hideMenuButton').click();
+        expect(document.activeElement).toBe(show);
+    });
+
+    test.each([700, 701])('drawer wheel and Home scroll locking respect the 700px boundary at %ipx', async width => {
+        const real = await vi.importActual('../../../reusable_components/scroll_passthrough.js');
+        setupScrollPassthroughMock.mockImplementationOnce(real.setupScrollPassthrough);
+        window.innerWidth = width;
+        const media = new EventTarget(); media.matches = width <= 700;
+        vi.stubGlobal('matchMedia', () => media);
+        const { initNavbar, toggleNavbarVisibility } = await loadModule();
+        const { mountFrontPagePhoneLayout } = await import('../../front_page/front_page_phone_layout.js');
+        document.getElementById('tabs_container').innerHTML = '<div class="front-page">'
+            + '<div class="front-page-top-row"><div class="front-page-top-row__identity">'
+            + '<div class="dataset-shared-topbar__menu-slot"></div><span>Matkailu</span></div><nav></nav></div>'
+            + '<div class="front-page-scroller scrollable_content"><p>Story</p></div></div>';
+        const row = document.querySelector('.front-page-top-row');
+        row.querySelector('.dataset-shared-topbar__menu-slot').append(document.getElementById('showMenuButton'));
+        const scroller = document.querySelector('.front-page-scroller');
+        scroller.scrollBy = vi.fn(); scroller.scrollTop = 125;
+        localStorage.setItem('navVisibleNarrow', 'false');
+        initNavbar();
+        const layout = mountFrontPagePhoneLayout(row, scroller);
+        try {
+            toggleNavbarVisibility();
+            expect(scroller.classList.contains('front-page-scroller--drawer-open')).toBe(width <= 700);
+            expect(scroller.scrollTop).toBe(125);
+            const navbar = document.getElementById('navbar');
+            const wheel = new WheelEvent('wheel', { deltaY: 100, bubbles: true, cancelable: true });
+            navbar.dispatchEvent(wheel);
+            expect(wheel.defaultPrevented).toBe(width > 700);
+            expect(scroller.scrollBy).toHaveBeenCalledTimes(width > 700 ? 1 : 0);
+            // A long drawer always retains native scrolling, including above 700px.
+            Object.defineProperty(navbar, 'scrollHeight', { value: 1000, configurable: true });
+            const nativeWheel = new WheelEvent('wheel', { deltaY: 100, cancelable: true });
+            navbar.dispatchEvent(nativeWheel);
+            expect(nativeWheel.defaultPrevented).toBe(false);
+            scroller.scrollTop = 999;
+            toggleNavbarVisibility();
+            expect(scroller.classList.contains('front-page-scroller--drawer-open')).toBe(false);
+            expect(scroller.scrollTop).toBe(width <= 700 ? 125 : 999);
+            // Resize or deactivation with an open drawer also releases the lock.
+            toggleNavbarVisibility();
+            media.matches = false; media.dispatchEvent(new Event('change'));
+            expect(scroller.classList.contains('front-page-scroller--drawer-open')).toBe(false);
+            media.matches = true; media.dispatchEvent(new Event('change'));
+            expect(scroller.classList.contains('front-page-scroller--drawer-open')).toBe(true);
+            layout.destroy();
+            expect(scroller.classList.contains('front-page-scroller--drawer-open')).toBe(false);
+            window.dispatchEvent(new Event('navbar-visibility-changed'));
+            expect(scroller.classList.contains('front-page-scroller--drawer-open')).toBe(false);
+        } finally { layout.destroy(); vi.unstubAllGlobals(); }
+    });
+
     test("starts the fallback fade in the same task that announces it", async () => {
         localStorage.setItem('navVisibleWide', 'true');
         const { initNavbar } = await loadModule();

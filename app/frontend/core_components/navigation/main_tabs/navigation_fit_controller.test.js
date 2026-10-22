@@ -4,6 +4,7 @@
 // Uses measured button widths with real hiding, focus and lifetime behaviour.
 import { afterEach, expect, test, vi } from 'vitest';
 import { countFittingNavigationButtons, createNavigationFitController } from './navigation_fit_controller.js';
+import { mountFrontPagePhoneLayout } from '../../front_page/front_page_phone_layout.js';
 afterEach(() => { vi.restoreAllMocks(); vi.useRealTimers(); document.body.replaceChildren(); });
 
 // Owner 14.10.2026: Home focus follows the visible closer or opener, as on dataset pages.
@@ -95,6 +96,28 @@ test('hides only whole trailing buttons with their inter-button gaps', () => {
     expect(countFittingNavigationButtons([100, 130, 150], 395, 8)).toBe(2);
     expect(countFittingNavigationButtons([100, 130, 150], 237, 8)).toBe(1);
     expect(countFittingNavigationButtons([100], 99)).toBe(0);
+});
+
+test('Home ancestry survives projection into the phone scroller and restores every destination', async () => {
+    vi.useFakeTimers();
+    const media = { matches: true, addEventListener: vi.fn(), removeEventListener: vi.fn() };
+    vi.stubGlobal('matchMedia', () => media);
+    document.body.innerHTML = '<div class="front-page"><div class="front-page-top-row">'
+        + '<div class="front-page-top-row__identity"><div class="dataset-shared-topbar__menu-slot"></div></div>'
+        + '<nav style="flex-direction:column"><button>Matkainfo</button><button hidden>Matkatarjoukset</button></nav></div>'
+        + '<div class="front-page-scroller"></div></div>';
+    const row = document.querySelector('.front-page-top-row');
+    const scroller = document.querySelector('.front-page-scroller');
+    const projection = mountFrontPagePhoneLayout(row, scroller);
+    const nav = row.querySelector('nav');
+    const fit = createNavigationFitController(nav);
+    try {
+        expect(nav.closest('.front-page-scroller')).toBe(scroller);
+        expect(scroller.firstElementChild.className).toBe('front-page-phone-topbar');
+        expect(nav.closest('.front-page-top-row')).toBe(row);
+        fit.sync(); await vi.advanceTimersByTimeAsync(20);
+        expect([...nav.children].map(button => button.hidden)).toEqual([false, false]);
+    } finally { fit.destroy(); projection.destroy(); vi.unstubAllGlobals(); }
 });
 
 test('reserves the Home link before dataset fitting and restores space when it moves away', async () => {

@@ -7,10 +7,80 @@ import { readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { expect, test } from 'vitest';
+import { requireNodeDependency } from '../../../server_tools/lib/node_dependency_loader.mjs';
 
 const currentDirectory = dirname(fileURLToPath(import.meta.url));
 const css = readFileSync(resolve(currentDirectory, 'front_page.css'), 'utf8');
 const navbar = readFileSync(resolve(currentDirectory, '../navigation/navbar/navbar_layout.css'), 'utf8');
+
+test('sticky Home bar, drawer lock and measured offsets are confined to the phone breakpoint', () => {
+    const root = requireNodeDependency('postcss').parse(css);
+    const phone = {};
+    root.walkRules(rule => {
+        if (/front-page-phone-topbar|front-page-scroller--drawer-open/.test(rule.selector)
+            || rule.nodes.some(node => /--home-phone-bar-size|100dvh/.test(node.value || ''))) {
+            let ancestor = rule.parent;
+            while (ancestor && !(ancestor.type === 'atrule' && ancestor.name === 'media')) ancestor = ancestor.parent;
+            expect(ancestor?.params).toBe('(width <= 700px)');
+            phone[rule.selector] ||= {};
+            rule.walkDecls(decl => { phone[rule.selector][decl.prop] = decl.value; });
+        }
+    });
+    expect(phone['.front-page-phone-topbar']).toMatchObject({ position: 'sticky', top: '0', 'z-index': '1',
+        display: 'grid', 'grid-template-columns': '44px minmax(0, 1fr) 44px',
+        padding: '12px', 'padding-top': 'calc(12px + env(safe-area-inset-top))',
+        'border-bottom': '1px solid var(--border_color)' });
+    expect(css).toContain('background: color-mix(in srgb, var(--bg_color) 92%, transparent)');
+    expect(css).toContain('@supports not (backdrop-filter: blur(1px))');
+    expect(phone['.front-page-phone-topbar'].background).toBe('var(--bg_color)');
+    expect(phone['.front-page-phone-topbar > .dataset-shared-topbar__menu-slot']['grid-column']).toBe('1');
+    expect(phone['.front-page-phone-topbar > .front-page-top-row__identity']['grid-column']).toBe('2');
+    expect(phone['.front-page-phone-topbar__end']).toMatchObject({ 'grid-column': '3', width: '44px' });
+    expect(phone['.front-page-phone-topbar #showMenuButton']).toMatchObject({ position: 'relative', inset: 'auto' });
+    expect(phone['.front-page-phone-topbar .front-page-site-name']).toMatchObject({ display: 'block', padding: '0',
+        'font-size': '1.125rem', 'font-weight': 'bold', 'text-overflow': 'ellipsis', 'white-space': 'nowrap' });
+    expect(phone['.front-page .front-page-scroller--drawer-open']['overflow-y']).toBe('hidden');
+    // The scrolled content clears the bar with its own margin; the scroller has no scroll padding, which would make
+    // focusing the sticky menu button scroll Home to the top (b513 G11:437).
+    const clearing = Object.entries(phone).find(([selector, decls]) =>
+        selector.includes('.front-page-scroller > :not(.front-page-phone-topbar)') && decls['scroll-margin-top']);
+    expect(clearing?.[1]['scroll-margin-top']).toBe('calc(var(--home-phone-bar-size, 0px) + 8px)');
+    let scrollPadding = 0;
+    root.walkDecls(/^scroll-padding/, () => { scrollPadding += 1; });
+    expect(scrollPadding).toBe(0);
+    expect(Object.keys(phone).filter(selector => /front-page-phone-topbar/.test(selector)
+        && !/:not\(\.front-page-phone-topbar\)/.test(selector)
+        && phone[selector]['scroll-margin-top'])).toEqual([]);
+    expect(phone['.front-page-text-stage[data-anchor]']['min-height']).toBe('calc(100cqh - var(--home-phone-bar-size, 0px))');
+    expect(phone['.front-page'].height).toBe('100dvh');
+});
+
+test('phone navigation, Contact and actions occupy separate rows regardless of shared stylesheet import order', () => {
+    const postcss = requireNodeDependency('postcss');
+    const articles = readFileSync(resolve(currentDirectory, 'front_page_article_buttons.css'), 'utf8');
+    const hero = readFileSync(resolve(currentDirectory, '../filterbar/morphing_filterbar_content.css'), 'utf8');
+    function phoneRules(source) {
+        const rules = [];
+        postcss.parse(source).walkAtRules('media', media => {
+            if (media.params === '(width <= 700px)') rules.push(...media.nodes.filter(node => node.type === 'rule').map(node => node.toString()));
+        });
+        return rules.join('\n');
+    }
+    const style = document.createElement('style');
+    const fixture = document.createElement('div');
+    fixture.innerHTML = '<div class="front-page"><div class="front-page-scroller"><div class="front-page-top-row filterbar-inline-hero__top-row">'
+        + '<nav class="hero-dataset-tabs"></nav><div class="front-page-article-buttons"><a>Contact</a></div>'
+        + '<div class="filterbar-inline-hero__actions"><button>Settings</button></div></div></div></div>';
+    document.head.append(style); document.body.append(fixture);
+    try {
+        for (const order of [[css, articles, hero], [hero, articles, css], [articles, css, hero]]) {
+            style.textContent = order.map(phoneRules).join('\n');
+            expect(getComputedStyle(fixture.querySelector('nav')).gridRow).toBe('1');
+            expect(getComputedStyle(fixture.querySelector('.front-page-article-buttons')).gridRow).toBe('2');
+            expect(getComputedStyle(fixture.querySelector('.filterbar-inline-hero__actions')).gridRow).toBe('3');
+        }
+    } finally { style.remove(); fixture.remove(); }
+});
 
 test('Home uses the reserved grid area and a phone-sized single column', () => {
     expect(navbar).toMatch(/#navbar > #navbarFrontPage\s*\{\s*grid-area: front-page;/);
@@ -100,17 +170,17 @@ test('Home reserves identity width and a fixed 10px menu gap before tabs and act
     expect(css).toMatch(/\.front-page-top-row__identity\s*\{[^}]*gap: 10px;[^}]*flex: 0 0 auto;[^}]*max-width: 100%;/);
     expect(css).toMatch(/\.front-page-top-row \.dataset-shared-topbar__menu-slot--visible\s*\{[^}]*flex: 0 0 44px;[^}]*transition: none;/);
     expect(css).toMatch(/\.front-page-top-row \.front-page-site-name\s*\{[^}]*display: block;[^}]*padding: 0;/);
-    expect(css).toContain('.front-page-top-row .front-page-site-name { font-size: 1.125rem; }');
+    expect(css).toMatch(/\.front-page-phone-topbar \.front-page-site-name\s*\{[^}]*font-size: 1.125rem;/);
     expect(css).toContain('font-size: clamp(1.125rem, 4cqw, 2.15rem)');
 });
 
 test('Home phone tabs stack inside 16px gutters and the menu cannot squeeze the identity', () => {
-    const tabs = css.match(/\.front-page > \.front-page-top-row > \.hero-dataset-tabs\s*\{([^}]+)\}/)?.[1];
+    const tabs = css.match(/\.front-page \.front-page-scroller > \.front-page-top-row > \.hero-dataset-tabs\s*\{([^}]+)\}/)?.[1];
     expect(tabs).toContain('display: flex'); expect(tabs).toContain('flex-direction: column');
-    expect(tabs).toContain('grid-row: 2'); expect(tabs).toContain('width: calc(100% - 8px)');
+    expect(tabs).toContain('grid-row: 1'); expect(tabs).toContain('width: calc(100% - 8px)');
     expect(tabs).toContain('max-width: 480px'); expect(tabs).toContain('overflow: visible');
     expect(css).toMatch(/\.front-page-top-row \.hero-dataset-tabs__button\s*\{[^}]*width: 100%;[^}]*min-height: 44px;[^}]*white-space: normal;/);
-    expect(css).toMatch(/#tabs_container:has\(\.front-page:not\(\.hidden\) > \.front-page-top-row\)\s*\{[^}]*width: 100%;[^}]*transform: translateX\(0\);/);
+    expect(css).toMatch(/#tabs_container:has\(\.front-page:not\(\.hidden\) > \.front-page-scroller > \.front-page-phone-topbar\)\s*\{[^}]*width: 100%;[^}]*transform: translateX\(0\);/);
     expect(css).toContain('8cqw');
 });
 

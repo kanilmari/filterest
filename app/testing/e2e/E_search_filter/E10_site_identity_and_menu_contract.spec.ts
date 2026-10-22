@@ -59,7 +59,8 @@ test.describe('E10 — Site identity and menu contract', () => {
       await expect(page.locator('.front-page-top-row')).toBeVisible();
       await expect(page.locator('body')).toHaveClass(new RegExp(`\\b${theme}-mode\\b`));
       await ensureNavbarVisible(page);
-      const slot = page.locator('.front-page-top-row .dataset-shared-topbar__menu-slot');
+      const host = page.viewportSize()!.width <= 700 ? '.front-page-phone-topbar' : '.front-page-top-row';
+      const slot = page.locator(`${host} .dataset-shared-topbar__menu-slot`);
       const opener = slot.locator('#showMenuButton'), closer = page.locator('#navbar #hideMenuButton');
       // Home uses the dataset drawer from viewport top, with its own top-left closer.
       await expect(opener).toBeHidden(); await expect(closer).toBeVisible();
@@ -83,6 +84,13 @@ test.describe('E10 — Site identity and menu contract', () => {
         return Math.abs(box.x - position.x) <= 1 && Math.abs(box.y - position.y) <= 1;
       }, { x: closeBox.x, y: closeBox.y })).toBe(true);
       await expect(closer).toBeHidden();
+      if (page.viewportSize()!.width <= 700) {
+        await page.locator('.front-page-scroller').evaluate(element => { element.scrollTop = 100; });
+        await expect.poll(() => page.locator('.front-page-scroller').evaluate(element => element.scrollTop)).toBeGreaterThan(0);
+        expect((await page.locator('.front-page-phone-topbar').boundingBox())!.y).toBeCloseTo(0, 0);
+        await opener.press('Enter'); await expect(closer).toBeFocused();
+        await closer.press('Enter'); await expect(opener).toBeFocused();
+      }
       await expect(page.locator('#showMenuButton:visible, #hideMenuButton:visible')).toHaveCount(1);
       await expect(slot).toHaveJSProperty('inert', false);
       await expect(slot).toHaveAttribute('aria-hidden', 'false');

@@ -209,7 +209,8 @@ for (const width of [1280, 375]) for (const theme of ['light', 'dark'] as const)
               expect(bounds.width).toBeCloseTo(heroBounds.width, 0);
             }
           } else {
-            await expect(page.locator('.front-page-top-row > .hero-dataset-tabs + .front-page-article-buttons > a')).toHaveCount(1);
+            const rowHost = width <= 700 ? '.front-page-scroller > .front-page-top-row' : '.front-page > .front-page-top-row';
+            await expect(page.locator(`${rowHost} > .hero-dataset-tabs + .front-page-article-buttons > a`)).toHaveCount(1);
             const pill = await link.evaluate(el => {
               const style = getComputedStyle(el);
               const luminance = (colour: string) => {

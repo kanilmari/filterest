@@ -232,12 +232,13 @@ test('P5 close, Back, Forward, reload and a new tab keep the row and origin', as
 test('P6 top-row Home Page button sits after tabs, opens Page, and returns Home', async ({ page, pilot, homeButton: _homeButton }, info) => {
   test.skip(!['desktop-card', 'mobile-card'].includes(info.project.name), 'Desktop and phone proof');
   await home(page);
-  const link = page.locator('.front-page-top-row .front-page-article-button').filter({ hasText: 'Page pilot with image' });
+  const rowHost = page.viewportSize()!.width <= 700 ? '.front-page-scroller > .front-page-top-row' : '.front-page > .front-page-top-row';
+  const link = page.locator(`${rowHost} .front-page-article-button`).filter({ hasText: 'Page pilot with image' });
   await expect(link).toHaveAttribute('href', pilot.pageURL);
   const tabs = await page.locator('#front_page_container .hero-dataset-tabs').boundingBox();
   const button = await link.boundingBox(); expect(tabs).not.toBeNull(); expect(button).not.toBeNull();
   if (desktop(info.project.name)) expect(button!.x).toBeGreaterThanOrEqual(tabs!.x + tabs!.width - 1);
-  else expect(await link.evaluate(node => Boolean(node.closest('.front-page-top-row')))).toBe(true);
+  else expect(await link.evaluate(node => Boolean(node.closest('.front-page-scroller > .front-page-top-row')))).toBe(true);
   await link.click(); await pageVisible(page); await containedImage(page);
   await page.goBack(); await expect(page).toHaveURL(/\/$/); await expect(page.locator(PAGE)).toHaveCount(0);
   await page.goForward(); await pageVisible(page);

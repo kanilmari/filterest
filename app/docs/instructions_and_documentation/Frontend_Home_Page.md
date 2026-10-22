@@ -378,62 +378,60 @@ absent**, so existing sites and localhost retain their boxes. When false the
 public facade resolves no datasets and returns `show_blocks:false, blocks:[]`;
 the editor disables and greys its retained box list. The key is registered in
 `system_config_checks`, so generic writes also refuse a non-boolean value.
-Home's inner `.front-page-scroller` scrolls vertically below a stationary top
-row; its background is an absolute sibling, outside that scroller. Row caps
-continue to belong to the compact group renderer.
+Home has one inner scrolling surface (`.front-page-scroller`); the absolute
+background and video remain siblings outside it and cover the viewport. Above
+700 px the top row stays before the scroller, with the existing desktop layout.
+Row caps continue to belong to the compact group renderer.
 
-`front_page_top_row_builder.js` composes the existing hero grid/actions and
-`createHeroDatasetTabs()` without an active dataset. It borrows the shell's
-single menu button into the shared menu slot, restoring its original position
-on teardown, and destroys the tab subscription. Site identity uses the actual
-server-resolved 128 px favicon at 32 CSS px with browser downsampling (the 16 px
-link remains the fallback). Home reserves the complete name before tabs and
-actions. Only while the navbar is `collapsed`, Home shows its borrowed menu
-opener beside the icon with a fixed 10 px gap. An open menu keeps its own
-close control at the same top-left position, exactly as on dataset pages; Home's slot is hidden, inert and
-`aria-hidden="true"`, with no reserved 44 px width or gap before the icon.
-The hidden control leaves the tab order and accessibility tree. Accessibility is
-reconciled immediately after the completed row is mounted, and when Home
-returns the toggle. During construction the borrowed button is detached from
-the document; reconciling then cannot find it. Signed-in and signed-out Home
-use the same mount lifecycle, identity and state-dependent menu controls.
-Home hides the inactive navbar closer as soon as collapse begins, so its
-slide-out never duplicates the newly revealed opener.
-Visibility events and resizing reconcile the slot from the mounted navbar,
-including when navigation or Back/Forward remounts Home. Focus follows the
-visible menu control when opening or closing and survives borrowing and
-returning the opener. Dataset corner controls capture menu focus before
-releasing ownership on view deactivation, then pass it to the visible shell
-opener or the open menu's closer. Activation passes a focused shell opener to
-the dataset's visible local control. This also covers retained datasets on
-Back/Forward; inactive observers cannot take unrelated focus.
-The name scales with the available row width beside an open menu too. At widths through 700 px the name
-uses 18 px bold: at 320 px, 200 px remain for the name; only names wider than
-that budget use an ellipsis. Fintravel, Easelect and Serlog fit. Home applies
-no bottom border or shadow to that row.
+`front_page_top_row_builder.js` owns the live dataset tabs, admin actions and
+borrowed shell menu button. It returns that button and destroys the tab
+subscription on teardown. Identity uses the resolved 128 px favicon at 32 CSS px
+(the 16 px link remains the fallback). Dataset corner controls keep their own
+ownership and focus lifecycle, including retained datasets on Back/Forward.
 
-On phones, Home leads the dataset tabs in a centred vertical stack, at most
-480 px wide inside 16 px side gutters, with the shared icons, labels,
-current-page and focus styles and at least 44 px touch height. Administrator
-actions occupy the following row. At every width, Home uses the shared dataset
-menu: a fixed drawer from the viewport top, with height `100vh` and the menu
-button as the top-left topmost control, open or closed. There is no Home header
-offset or height measurement. The menu's existing internal scroll area
-reveals lower navigation and account controls; its sticky top row keeps close,
-history, theme and language controls reachable while scrolling. The language
-panel stays outside that scroll area and fits the viewport separately. Home's
-borrowed slot remains hidden without an identity gap while the drawer is open.
-Through 1850 px the menu overlays Home with the full content width; above it, the open menu
-reserves its ordinary sidebar width. Dataset pages retain their existing layout
-and hidden phone tabs. The fit controller restores every destination only in a
-Home vertical stack when crossing the phone breakpoint, including buttons
-hidden in the previous horizontal row; dataset projections keep their fit rule.
-When a focused destination no longer fits after leaving the phone stack, focus
-moves to the navbar's closer while open or Home's borrowed opener while hidden,
-before the destination hides. Dataset pages retain their existing menu focus selection.
-Logo and site-name clicks never close the menu. Other outside clicks close below 1850 px, as on dataset pages.
-G14's response-only parity proof compares menu top, viewport height and button
-position on Home and a dataset at 1280, 1800 and 390 px, open and closed, in both themes.
+At `(width <= 700px)`, `front_page_phone_layout.js` is mounted by the printer
+and owns the reversible projection. The scroller begins with the sticky
+`.front-page-phone-topbar`: menu slot | centred icon and site name | empty
+44 px `.front-page-phone-topbar__end` balance slot (`aria-hidden="true"`).
+Home has no filter-bar control; the end slot contains no control. The name
+stays visible at 18 px bold, with ellipsis for names wider than the centre track.
+The menu keeps the shell's 12 px corner inset; safe-area top padding adds to it.
+The translucent theme surface has a border and blur, with a solid theme surface
+when blur is unsupported. Its stacking level stays below drawers and modals.
+
+The existing row follows the bar inside the scroller: Home and dataset tabs,
+top-row article buttons, then administrator actions. The story and dataset
+blocks follow in the same scrolling surface. Tabs retain their centred vertical
+stack, at most 480 px wide within 16 px gutters, shared labels/icons, current-page
+and focus styles, and at least 44 px touch height. The page uses dynamic viewport
+height with the existing viewport-height fallback. A border-box ResizeObserver
+publishes `--home-phone-bar-size` on the scroller, including safe-area changes;
+the scrolled content's own scroll margin clears the bar (the bar has none, so
+focusing its menu never scrolls Home) and the text stage subtracts that size
+from its viewport minimum. Long text still grows the stage.
+
+Crossing 700 ↔ 701 px moves the same nodes back to their original parents and
+order; listeners, translated copy, tab subscription and accessibility attributes
+survive. Every focused descendant is preserved; fitting a destination out of a
+desktop row transfers focus to the visible menu. Above 700 px and on destroy,
+the bar, measurement and observer disappear. Destroy also removes both listeners.
+No Home scroll memory or root-fragment policy is added by this projection.
+
+At every width the shared menu remains a fixed full-height drawer, with its
+closer at the top-left. Only the collapsed menu shows Home's borrowed opener;
+the inactive control and slot are hidden, inert and removed from the tab order.
+On phone Home the centre and end tracks remain balanced while that slot is
+hidden. While the phone drawer is open, Home's scroller is locked by
+`.front-page-scroller--drawer-open`, retaining and restoring its scroll position
+on close, breakpoint exit or teardown. Drawer wheel events are not forwarded to
+Home; the drawer scrolls natively and keeps its sticky controls and portalled
+language panel. Above 700 px wheel forwarding keeps its existing behavior.
+Through 1850 px the drawer overlays content; above it the ordinary sidebar width
+is reserved. Dataset layout, menu ownership and phone tab fitting are unchanged.
+Logo and site-name clicks never close the menu; ordinary outside clicks close
+below 1850 px. G14/E10 cover sole-control ownership, focus and corner parity on
+scrolled phone Home; G13 measures 320/375/390/414/700 px and the 701 px boundary.
+The non-phone CSS hash and desktop DOM test pin the original desktop contract.
 
 G11's read-only response fixtures pin the catalogue size for destination geometry.
 Its 12-dataset cases cover 320×568, 375×667 and 414×896 in both explicit themes
@@ -672,8 +670,8 @@ save, and CSS follows the application's resolved theme class even when the OS
 preference differs. Video cross-fades and image focal points retain their behavior.
 `front_page_presentation_renderer.js` applies the whole presentation before the
 first content frame; no second settings request or late layout shift is needed.
-The single grid stage fills the scroller below the stationary top row and grows
-for long text, with dataset boxes following it.
+The single grid stage fills the scroller (less the sticky phone bar on phones)
+and grows for long text, with dataset boxes following it.
 
 Background uploads retain PNG/JPEG/WebP with a 10 MiB file ceiling, plus
 MP4/WebM with a 50 MiB ceiling matching the media library. The request body

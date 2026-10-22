@@ -50,6 +50,44 @@ async function phoneControls(page: Page) {
   });
 }
 
+for (const width of [320, 375, 390, 414, 700, 701]) for (const theme of ['light', 'dark'] as const) {
+  test(`Home compact bar geometry ${width}px ${theme}`, async ({ page, context }, info) => {
+    await page.setViewportSize({ width, height: 844 });
+    await page.emulateMedia({ colorScheme: theme === 'light' ? 'dark' : 'light' });
+    await installHomePolicy(context, theme, { site_name: 'Fintravel' });
+    await page.addInitScript(theme => {
+      localStorage.setItem('theme', theme); localStorage.setItem('navVisibleNarrow', 'false');
+      localStorage.setItem('navVisibleWide', 'false');
+    }, theme);
+    await page.goto('/front_page', { waitUntil: 'domcontentloaded' });
+    const row = page.locator('.front-page-top-row'); await expect(row).toBeVisible();
+    const bar = page.locator('.front-page-phone-topbar');
+    if (width === 701) {
+      await expect(bar).toHaveCount(0);
+      expect(await row.evaluate(element => element.parentElement!.classList.contains('front-page')
+        && element.nextElementSibling!.classList.contains('front-page-scroller'))).toBe(true);
+    } else {
+      await expect(page.locator('.front-page-scroller > .front-page-phone-topbar + .front-page-top-row')).toHaveCount(1);
+      const menu = bar.locator('#showMenuButton'), identity = bar.locator('.front-page-top-row__identity');
+      const end = bar.locator('.front-page-phone-topbar__end');
+      await expect(end).toHaveAttribute('aria-hidden', 'true'); await expect(end).toBeEmpty();
+      await expect(bar.locator('.front-page-site-name')).toBeVisible();
+      const header = (await bar.boundingBox())!, button = (await menu.boundingBox())!, middle = (await identity.boundingBox())!;
+      expect(header.y).toBeCloseTo(0, 0);
+      expect(header.width).toBe(await page.locator('.front-page-scroller').evaluate(element => element.clientWidth));
+      expect(button.x).toBeCloseTo(12, 0); expect(button.y).toBeCloseTo(12, 0);
+      expect(button.width).toBe(44); expect(button.height).toBe(44);
+      expect(middle.x + middle.width / 2).toBeCloseTo(header.x + header.width / 2, 0);
+      expect((await end.boundingBox())!.width).toBe(44);
+      await expect.poll(() => page.locator('.front-page-scroller').evaluate(element =>
+        parseFloat(getComputedStyle(element).getPropertyValue('--home-phone-bar-size')))).toBeCloseTo(header.height, 0);
+      await page.locator('.front-page-scroller').evaluate(element => { element.scrollTop = 100; });
+      expect((await bar.boundingBox())!.y).toBeCloseTo(0, 0);
+    }
+    await captureHomeProbe(page, info, `${width}-${theme}-home-bar`);
+  });
+}
+
 for (const width of [320, 375, 390, 700]) for (const theme of ['light', 'dark'] as const) {
   test(`phone order and complete menu border ${width}px ${theme}`, async ({ page, context }, info) => {
     await page.setViewportSize({ width, height: 844 });

@@ -9,7 +9,7 @@ import { installHomePolicy } from '../helpers/home-policy-fixture';
 import presentationDefinition from '../../../frontend/shared/front_page_presentation/definition.json';
 
 type Theme = 'light' | 'dark';
-type Fixture = { name: string; width: number; height?: number; datasetCount?: number };
+type Fixture = { name: string; width: number; height?: number; datasetCount?: number; scrolling?: boolean };
 // Observe whole rendered frames and completed mutation batches, starting before
 // ownership changes. Settled locator assertions alone missed the fading copy.
 
@@ -95,6 +95,9 @@ async function openHome(page: Page, theme: Theme, language: string, fixture?: Fi
     site_name: fixture.name,
     presentation: { ...presentationDefinition.default, anchor: 'center-left', alignment,
       max_width_px: 750, horizontal_margin_px: 160, vertical_margin_px: 40 },
+    ...(fixture.scrolling ? { article_buttons_placement: 'top_row',
+      article_buttons: [{ label: 'Contact', href: '/contact/1?view=article_view' }],
+      hero: { title: { fi: 'Etusivu' }, description: { fi: 'Pitkä tarina kulkee navigoinnin mukana. '.repeat(100) } } } : {}),
   } : {});
   page.on('request', request => {
     if (/\/api\/(?:admin\/)?front-page(?:[/?]|$)/.test(request.url()) && request.method() !== 'GET') {
@@ -188,7 +191,7 @@ async function proveHome(page: Page, open: boolean, alignment: string, cappedMar
   await expect(page.locator('.front-page-top-row .filterbar-inline-hero__actions .top-nav-home-button')).toHaveCount(0);
   await expect(name).toBeVisible();
   const close = page.locator('#hideMenuButton');
-  const slot = page.locator('.front-page-top-row .dataset-shared-topbar__menu-slot');
+  const slot = page.locator(`${phone ? '.front-page-phone-topbar' : '.front-page-top-row'} .dataset-shared-topbar__menu-slot`);
   // Owner 18.10.2026: the full-height menu owns the top-left closer on every page.
   if (open) {
     await expect(menu).toBeHidden(); await expect(close).toBeVisible(); await expect(slot).toBeHidden();
@@ -216,7 +219,10 @@ async function proveHome(page: Page, open: boolean, alignment: string, cappedMar
   await expect(icon).toHaveCSS('width', '32px');
   const nameBox = (await name.boundingBox())!, iconBox = (await icon.boundingBox())!;
   expect(nameBox.x - iconBox.x - iconBox.width).toBeGreaterThanOrEqual(8);
-  if (open) {
+  if (phone) {
+    const bar = (await page.locator('.front-page-phone-topbar').boundingBox())!;
+    expect((iconBox.x + nameBox.x + nameBox.width) / 2).toBeCloseTo(bar.x + bar.width / 2, 0);
+  } else if (open) {
     const identity = (await page.locator('.front-page-top-row__identity').boundingBox())!;
     expect(iconBox.x).toBeCloseTo(identity.x, 1);
   } else {
@@ -398,6 +404,43 @@ async function proveKeyboardMenu(page: Page, state: { alignment: string; cappedM
   }
 }
 
+for (const theme of ['light', 'dark'] as const) test(`phone whole Home scroll and focus clearance/${theme}`, async ({ page }) => {
+  const state = await openHome(page, theme, 'fi', { name: 'Fintravel', width: 390, height: 667,
+    datasetCount: 12, scrolling: true });
+  const scroller = page.locator('.front-page-scroller');
+  const bar = scroller.locator(':scope > .front-page-phone-topbar');
+  const row = scroller.locator(':scope > .front-page-top-row');
+  const contact = row.getByRole('link', { name: 'Contact', exact: true });
+  const story = scroller.locator('.front-page-description');
+  await expect(row.locator('.hero-dataset-tabs__button')).toHaveCount(12);
+  const before = await Promise.all([row, contact, story].map(node => node.boundingBox()));
+  expect((await bar.boundingBox())!.y).toBeCloseTo(0, 0);
+  await scroller.evaluate(element => { element.scrollTop = 220; });
+  await expect(scroller).toHaveJSProperty('scrollTop', 220);
+  const after = await Promise.all([row, contact, story].map(node => node.boundingBox()));
+  for (let index = 0; index < before.length; index++) expect(before[index]!.y - after[index]!.y).toBeCloseTo(220, 0);
+  expect((await bar.boundingBox())!.y).toBeCloseTo(0, 0);
+  const last = row.locator('.hero-dataset-tabs__button').last();
+  await last.focus(); await expect(last).toBeFocused();
+  await last.press('Tab'); await expect(contact).toBeFocused();
+  // Traverse every remaining control in the row; browser focus scrolling must clear the sticky bar.
+  for (const control of await row.locator('a[href], button:not([hidden]):not([disabled])').all()) {
+    await control.focus(); await expect(control).toBeFocused();
+    const box = (await control.boundingBox())!, header = (await bar.boundingBox())!;
+    expect(box.y).toBeGreaterThanOrEqual(header.y + header.height - 1);
+    expect(box.y + box.height).toBeLessThanOrEqual(page.viewportSize()!.height + 1);
+  }
+  await scroller.evaluate(element => { element.scrollTop = 220; });
+  await setMenu(page, true, 'Enter');
+  await expect(scroller).toHaveCSS('overflow-y', 'hidden');
+  await page.locator('#navbar').hover(); await page.mouse.wheel(0, 300);
+  await expect(scroller).toHaveJSProperty('scrollTop', 220);
+  await setMenu(page, false, 'Enter');
+  await expect(scroller).toHaveJSProperty('scrollTop', 220);
+  await expect(scroller).toHaveCSS('overflow-y', 'auto');
+  expect(state.writes).toEqual([]);
+});
+
 // Every Playwright project crosses the breakpoint with a destination focused,
 // using a fixed catalogue and a pinned account theme over the opposite OS theme.
 test('Home response fixture keeps focus and restores every destination across 700px', async ({ page }) => {
@@ -411,7 +454,7 @@ test('Home response fixture keeps focus and restores every destination across 70
   await trailing.focus();
   await expectFocusWithMenuOwner(page, trailing);
 
-  await page.setViewportSize({ width: 706, height: 900 });
+  await page.setViewportSize({ width: 701, height: 900 });
   await expect(trailing).toHaveJSProperty('hidden', true);
   await expect(trailing).toBeHidden();
   // Resizing an open Home sends focus to the menu bar's visible closer.

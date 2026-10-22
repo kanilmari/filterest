@@ -295,27 +295,102 @@ body.dark-mode .front-page {
 
 /* Home alone keeps its destinations on phones; settings give way to the full identity. */
 @media (width <= 700px) {
-  .front-page > .front-page-top-row {
+  .front-page {
+    height: 100vh;
+    height: 100dvh;
+  }
+
+  /* Focus and anchor scrolling clear the sticky bar through the scrolled content's own margin. The bar carries none:
+     a scroller scroll-padding put the bar inside the padding, so focusing its menu button scrolled Home to the top. */
+  .front-page .front-page-scroller > :not(.front-page-phone-topbar),
+  .front-page .front-page-scroller > :not(.front-page-phone-topbar) * {
+    /* stylelint-disable-next-line length-zero-no-unit -- The measured custom property has length units. */
+    scroll-margin-top: calc(var(--home-phone-bar-size, 0px) + 8px);
+  }
+
+  .front-page .front-page-scroller--drawer-open {
+    overflow-y: hidden;
+  }
+
+  .front-page-phone-topbar {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    display: grid;
+    grid-template-columns: 44px minmax(0, 1fr) 44px;
+    align-items: center;
+    gap: 8px;
+    padding: 12px;
+    padding-top: calc(12px + env(safe-area-inset-top));
+    background: color-mix(in srgb, var(--bg_color) 92%, transparent);
+    border-bottom: 1px solid var(--border_color);
+    backdrop-filter: blur(10px);
+  }
+
+  @supports not (backdrop-filter: blur(1px)) {
+    .front-page-phone-topbar { background: var(--bg_color); }
+  }
+
+  .front-page-phone-topbar > .dataset-shared-topbar__menu-slot {
+    grid-column: 1;
+    grid-row: 1;
+    width: 44px;
+    max-width: 44px;
+    transition: none;
+  }
+
+  .front-page-phone-topbar > .front-page-top-row__identity {
+    grid-column: 2;
+    grid-row: 1;
+    justify-content: center;
+    min-height: 44px;
+  }
+
+  /* The shared dataset title is hidden on phones; Home keeps its full name with ellipsis. */
+  .front-page-phone-topbar .front-page-site-name {
+    display: block;
+    flex: 0 1 auto;
+    min-width: 0;
+    padding: 0;
+    font-size: 1.125rem;
+    font-weight: bold;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .front-page-phone-topbar__end {
+    grid-column: 3;
+    grid-row: 1;
+    width: 44px;
+  }
+
+  .front-page-phone-topbar #showMenuButton {
+    position: relative;
+    inset: auto;
+    flex: 0 0 44px;
+  }
+
+  .front-page-phone-topbar [hidden] { display: none !important; }
+
+  .body_content:has(.front-page:not(.hidden) > .front-page-scroller > .front-page-phone-topbar) #navbar.collapsed #hideMenuButton {
+    visibility: hidden;
+  }
+
+  .front-page-scroller > .front-page-top-row {
     display: grid;
     grid-template-columns: minmax(0, 1fr);
+    align-items: center;
+    container-type: inline-size;
+    gap: 8px;
     margin: 0;
   }
 
-  .front-page-top-row__identity {
-    min-height: 44px;
-    grid-column: 1;
-    grid-row: 1;
-  }
-
-  /* At 320px, 200px remain for a name at 18px bold (12px edges + 44px menu
-     + 32px icon + two 10px gaps). Only longer names use the shared ellipsis. */
-  .front-page-top-row .front-page-site-name { font-size: 1.125rem; }
-
-  .front-page > .front-page-top-row > .hero-dataset-tabs {
+  .front-page .front-page-scroller > .front-page-top-row > .hero-dataset-tabs {
     display: flex;
     flex-direction: column;
     grid-column: 1;
-    grid-row: 2;
+    grid-row: 1;
     justify-self: center;
     width: calc(100% - 8px);
     max-width: 480px;
@@ -328,13 +403,15 @@ body.dark-mode .front-page {
     white-space: normal;
   }
 
-  .front-page-top-row .filterbar-inline-hero__actions {
+  .front-page .front-page-scroller > .front-page-top-row > .filterbar-inline-hero__actions {
     grid-column: 1;
     grid-row: 3;
   }
 
+  .front-page-scroller > .front-page-top-row > .front-page-article-buttons { grid-row: 2; }
+
   /* Keep Home stationary underneath the phone drawer. */
-  #tabs_container:has(.front-page:not(.hidden) > .front-page-top-row) {
+  #tabs_container:has(.front-page:not(.hidden) > .front-page-scroller > .front-page-phone-topbar) {
     width: 100%;
     transform: translateX(0);
     transition: none;
@@ -405,6 +482,7 @@ body.dark-mode .front-page {
    and long text grows the stage, so every vertical anchor flows from the top and scrolls. */
 @media (width <= 700px) {
   .front-page-text-stage[data-anchor] {
+    min-height: calc(100cqh - var(--home-phone-bar-size, 0px));
     padding: 16px;
     justify-items: stretch;
   }

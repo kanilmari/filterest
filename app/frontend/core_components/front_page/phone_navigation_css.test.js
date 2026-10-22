@@ -10,6 +10,7 @@ import { requireNodeDependency } from '../../../server_tools/lib/node_dependency
 
 const postcss = requireNodeDependency('postcss');
 const baseline = {
+    'front_page.css': '72fe427bd3e1bd9f967bf7e0fecb26094e6084a6a4a495c5914152ac34da1cef',
     'top_nav_home_button.css': '4c2b8e10a17ee70737ee8af0adf2b21b6fc3bca40f92c85f403de5f91ab8003c',
     '../filterbar/shared_topbar.css': '662fce1278e4845710e0e338215d67db3009ccc8447cef4bbd1c67974325abf1',
     '../filterbar/morphing_filterbar_content.css': '9cbd87a66e156e3ef77514e94ee00bb79c5bb309c7e30bf4f4cd264979773b8a',
@@ -29,7 +30,8 @@ function phoneRule(file, selector) {
     return declarations;
 }
 
-// Batch 512 (63b9b250) retains the non-phone baseline from d373e6c6; K465 updates only the hero's shared radius.
+// Batch 512 (63b9b250) retains the non-phone baseline from d373e6c6; K465 updates only the hero's shared radius;
+// Home's front_page.css pin is from the batch 513 base fe0d999f.
 test.each(Object.keys(baseline))('%s keeps every rule outside the phone breakpoint byte-identical to its approved baseline', file => {
     const root = sheets[file].clone();
     root.walkAtRules('media', media => { if (media.params === '(width <= 700px)') media.remove(); });

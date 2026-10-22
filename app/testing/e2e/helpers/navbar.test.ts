@@ -49,7 +49,7 @@ class DomLocator {
 
 afterEach(() => { document.body.replaceChildren(); clicks.length = 0; vi.restoreAllMocks(); });
 
-function mountNavbar(home: boolean, collapsed = false) {
+function mountNavbar(home: boolean | 'phone', collapsed = false) {
   document.body.innerHTML = `
     <nav id="navbar" class="${collapsed ? 'collapsed' : ''}"><button id="hideMenuButton"></button></nav>
     <button id="showMenuButton"></button>`;
@@ -59,7 +59,10 @@ function mountNavbar(home: boolean, collapsed = false) {
   const slot = document.createElement('div'); slot.className = 'dataset-shared-topbar__menu-slot';
   if (home) {
     const row = document.createElement('div'); row.className = 'front-page-top-row';
-    slot.append(button); row.append(slot); document.body.append(row);
+    const host = home === 'phone' ? document.createElement('div') : row;
+    if (home === 'phone') host.className = 'front-page-phone-topbar';
+    slot.append(button); host.append(slot); document.body.append(row);
+    if (home === 'phone') document.body.append(host);
   }
   const sync = () => {
     const open = !navbar.classList.contains('collapsed');
@@ -90,6 +93,13 @@ function mountNavbar(home: boolean, collapsed = false) {
   } as unknown as Page;
   return { page, navbar, button, close, slot, url };
 }
+
+test.each([false, true])('phone Home uses the bar instead of the scrolling row; collapsed=%s', async collapsed => {
+  const { page, button, close, slot } = mountNavbar('phone', collapsed);
+  await ensureNavbarVisible(page);
+  expect(button.closest('.front-page-phone-topbar')).not.toBeNull();
+  expect(button.hidden).toBe(true); expect(slot.inert).toBe(true); expect(close.hidden).toBe(false);
+});
 
 // Owner 14.10.2026: the open-state actionable control belongs to the menu bar on Home too.
 test.each([false, true])('Home hides its borrowed opener and exposes its panel closer; initially collapsed=%s', async collapsed => {

@@ -170,7 +170,9 @@ async function openHome(page: Page) {
 }
 
 async function settleTopRow(page: Page, language: 'fi' | 'en') {
-  const labels = page.locator('.front-page-top-row .navbar-front-page-label, .front-page-top-row .hero-dataset-tabs__label');
+  const host = page.viewportSize()!.width <= 700 ? '.front-page-scroller > .front-page-top-row' : '.front-page > .front-page-top-row';
+  await expect(page.locator(`${host} > .hero-dataset-tabs`)).toHaveCount(1);
+  const labels = page.locator(`${host} .navbar-front-page-label, ${host} .hero-dataset-tabs__label`);
   let previous = '';
   let unchangedSamples = 0;
   // Translation can relabel even the fixed tabs after Home mounts. Require two unchanged

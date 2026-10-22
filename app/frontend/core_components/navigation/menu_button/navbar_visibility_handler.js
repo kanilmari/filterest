@@ -13,7 +13,7 @@ let navbarOpeningCleanup = null;
 
 // Home borrows the hidden-menu opener; focus follows its visible counterpart.
 function isHomeMenuButton(button) {
-  return Boolean(button.closest('.front-page-top-row'));
+  return Boolean(button.closest('.front-page-top-row, .front-page-phone-topbar'));
 }
 
 // The open menu owns its closer on Home as it does on dataset pages.
@@ -402,7 +402,8 @@ export function initNavbar() {
   setupScrollPassthrough(navbar, {
       getScrollTarget: () =>
           document.querySelector("#tabs_container .scrollable_content:not([style*='display: none'])"),
-      isActive: () => !navbar.classList.contains("collapsed"),
+      isActive: () => !navbar.classList.contains("collapsed") &&
+          !document.querySelector('.front-page:not(.hidden) > .front-page-scroller > .front-page-phone-topbar'),
   });
 
   // Add the user-selected non-production environment badge.

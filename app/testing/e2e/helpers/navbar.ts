@@ -65,10 +65,12 @@ export async function ensureNavbarVisible(page: Page): Promise<void> {
 
   await expect(navbar).not.toHaveClass(/(?:^|\s)collapsed(?:\s|$)/);
   await expect(navbar).toBeInViewport({ ratio: 0.95, timeout: NAVBAR_OPEN_TIMEOUT_MS });
-  if (await page.locator('.front-page-top-row').count()) {
+  const homeHost = await page.locator('.front-page-phone-topbar').count()
+    ? '.front-page-phone-topbar' : '.front-page-top-row';
+  if (await page.locator(homeHost).count()) {
     // Owner 14.10.2026: an open Home hides its borrowed slot without an identity gap.
-    await expect(page.locator('.front-page-top-row #showMenuButton')).toHaveCount(1);
-    const slot = page.locator('.front-page-top-row .dataset-shared-topbar__menu-slot');
+    await expect(page.locator(`${homeHost} #showMenuButton`)).toHaveCount(1);
+    const slot = page.locator(`${homeHost} .dataset-shared-topbar__menu-slot`);
     await expect(slot).toBeHidden();
     await expect(slot).toHaveAttribute('aria-hidden', 'true');
     await expect(slot).toHaveJSProperty('inert', true);

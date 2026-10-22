@@ -7,6 +7,7 @@ import { applyHomePresentation, applyHomeMediaPresentation } from './front_page_
 import { renderHomeHeroText } from './front_page_text_style_renderer.js';
 import { readHomePresentation } from '../../shared/front_page_presentation/validator.js';
 import { createFrontPageTopRow } from './front_page_top_row_builder.js';
+import { mountFrontPagePhoneLayout } from './front_page_phone_layout.js';
 import { loadCustomRoot } from './custom_root_navigation.js';
 import { createFrontPageArticleButtons } from './front_page_article_buttons.js';
 import { mountBackgroundVideo } from './front_page_background_video.js';
@@ -131,11 +132,14 @@ function renderBlocks(container, data, visit) {
     const background = createBackground(data.background, visit);
     container.replaceChildren(...(background ? [background] : []), visit.topRow.element, scroller);
     visit.topRow.mount();
+    visit.phoneLayout = mountFrontPagePhoneLayout(visit.topRow.element, scroller);
 }
 
 /** Starts one bounded request for this visit and owns its render generation. */
 function loadVisit(container, visit) {
     if (visit.pending) return visit.pending;
+    visit.phoneLayout?.destroy();
+    visit.phoneLayout = null;
     visit.topRow?.destroy();
     visit.topRow = null;
     visit.textCleanup?.();
@@ -237,6 +241,8 @@ export function renderFrontPage() {
         };
         const deactivateVisit = () => {
             cancelPending();
+            visit.phoneLayout?.destroy();
+            visit.phoneLayout = null;
             visit.topRow?.destroy();
             visit.topRow = null;
             visit.textCleanup?.();

@@ -83,7 +83,14 @@ for (const width of [1280, 1800, 390]) for (const theme of ['light', 'dark'] as 
       await page.waitForFunction(() => (window as Window & {
         __filterestShellBoot?: { status: () => { ready: boolean } };
       }).__filterestShellBoot?.status().ready === true);
-      if (surface === 'home') await expect(page.locator('.front-page-top-row')).toBeVisible();
+      if (surface === 'home') {
+        await expect(page.locator('.front-page-top-row')).toBeVisible();
+        if (width <= 700) {
+          await expect(page.locator('.front-page-scroller > .front-page-phone-topbar #showMenuButton')).toHaveCount(1);
+          await page.locator('.front-page-scroller').evaluate(element => { element.scrollTop = 100; });
+          await expect.poll(() => page.locator('.front-page-scroller').evaluate(element => element.scrollTop)).toBeGreaterThan(0);
+        }
+      }
       else {
         await expect(page.locator('#app_service_catalog_tab_parts_container')).toBeVisible();
         await closeActiveFilterbarIfOpen(page);
@@ -110,6 +117,12 @@ for (const width of [1280, 1800, 390]) for (const theme of ['light', 'dark'] as 
       await page.locator('#tabs_container').dispatchEvent('click');
       await expect(page.locator('#navbar')).toHaveClass(/\bcollapsed\b/);
       await menuGeometry(page, false);
+      if (surface === 'home' && width <= 700) {
+        const opener = page.locator('.front-page-phone-topbar #showMenuButton');
+        await opener.focus(); await opener.press('Enter'); await expect(page.locator('#hideMenuButton')).toBeFocused();
+        await page.locator('#hideMenuButton').press('Enter'); await expect(opener).toBeFocused();
+        await menuGeometry(page, false);
+      }
     }
     expect(writes, 'No server mutations were attempted').toEqual([]);
   });

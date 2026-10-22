@@ -1,7 +1,7 @@
 // T16_home_palette.spec.ts
 // Proves Home's desktop/phone geometry, themes, live palette and durable save/reload.
 // Follows admin_tools/home_palette_builder.js and presentation_palette_shell.js.
-// Home retains its own API; shared actions remain outside the scrolling controls.
+// Home retains its own API; on phones its navigation and actions share the page scroller.
 // Connects the real Home API and administrator session; cleanup restores original settings.
 // Run serially on the supervisor's native test instance, never a production instance.
 import { expect, test, type Page } from '@playwright/test';
@@ -65,6 +65,9 @@ test('Home preview, saved reset and reload at 1280 and 375 pixels in both explic
         await page.setViewportSize({ width, height: 900 });
         await page.goto('/', { waitUntil: 'domcontentloaded' });
         await expect(page.locator('.front-page-hero')).toBeVisible();
+        const rowHost = width <= 700 ? '.front-page-scroller > .front-page-top-row' : '.front-page > .front-page-top-row';
+        await expect(page.locator(`${rowHost} > .hero-dataset-tabs`)).toHaveCount(1);
+        await expect(page.locator(`${rowHost} [data-testid="home-palette-button"]`)).toHaveCount(1);
         await forceTheme(page, theme);
         const trigger = page.getByTestId('home-palette-button');
         await expect(trigger).toBeVisible();

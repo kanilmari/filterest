@@ -73,6 +73,34 @@ test('single-flight loader issues only one facade request and shows an accessibl
     expect(mocks.request.mock.calls.some(([route]) => route === 'getResults')).toBe(false);
 });
 
+test.each([700, 701])('Home mounts the reversible phone host at %ipx with media outside the scroller', async width => {
+    window.matchMedia = vi.fn(query => ({ matches: query === '(width <= 700px)' && width <= 700,
+        addEventListener: vi.fn(), removeEventListener: vi.fn() }));
+    document.body.insertAdjacentHTML('afterbegin', '<div id="navbar" class="collapsed"></div><button id="showMenuButton"></button>');
+    mocks.request.mockResolvedValue({ ...response(), background: {
+        storage_key: 'site_media/front_page/original/test.webp', focal_x: 0.5, focal_y: 0.5,
+    } });
+    const page = renderFrontPage();
+    await vi.waitFor(() => expect(page.querySelector('.front-page-top-row')).not.toBeNull());
+    const scroller = page.querySelector('.front-page-scroller');
+    const row = page.querySelector('.front-page-top-row');
+    const background = page.querySelector('.front-page-background');
+    expect(background.parentElement).toBe(page);
+    expect(scroller.contains(background)).toBe(false);
+    if (width <= 700) {
+        expect(scroller.firstElementChild.className).toBe('front-page-phone-topbar');
+        expect(scroller.firstElementChild.querySelector('#showMenuButton')).not.toBeNull();
+        expect(scroller.firstElementChild.nextElementSibling).toBe(row);
+        expect(row.nextElementSibling.classList.contains('front-page-content')).toBe(true);
+    } else {
+        expect(page.querySelector('.front-page-phone-topbar')).toBeNull();
+        expect(row.parentElement).toBe(page);
+        expect(row.nextElementSibling).toBe(scroller);
+    }
+    page.dispatchEvent(new Event(VIEW_DEACTIVATE_EVENT));
+    expect(document.getElementById('showMenuButton').parentElement).toBe(document.body);
+});
+
 test('a returning visit loads although navigation already put its spinner into the emptied container', async () => {
     const container = document.createElement('div');
     container.id = 'front_page_container';
