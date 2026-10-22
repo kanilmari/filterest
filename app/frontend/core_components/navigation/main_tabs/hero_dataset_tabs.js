@@ -17,15 +17,15 @@ const NAV_LABELS = Object.freeze({
     yue: '資料集',
 });
 
-function navigationLabel() {
-    const language = String(document.documentElement.lang || getLanguageWithBrowserFallback()).toLowerCase();
+function navigationLabel(code) {
+    const language = String(code || document.documentElement.lang || getLanguageWithBrowserFallback()).toLowerCase();
     const key = language.startsWith('zh-hk') || language.startsWith('zh-hant') ? 'yue'
         : language.startsWith('zh') ? 'ch' : language.split('-')[0];
     return NAV_LABELS[key] || NAV_LABELS.en;
 }
 
 /** Build one view-scoped projection of the latest accepted main-tab snapshot. */
-export function createHeroDatasetTabs(activeDataset) {
+export function createHeroDatasetTabs(activeDataset, { language } = {}) {
     const element = document.createElement('nav');
     element.className = 'hero-dataset-tabs';
     element.dataset.testid = 'hero-dataset-tabs';
@@ -36,12 +36,12 @@ export function createHeroDatasetTabs(activeDataset) {
 
     function updateCopy() {
         if (destroyed) return;
-        element.setAttribute('aria-label', navigationLabel());
+        element.setAttribute('aria-label', navigationLabel(language));
         for (const { button, label, tab } of entries.values()) {
             const fallback = String(tab.text || tab.dataset);
-            const text = getTranslationForKey(tab.langKey, { fallback, countUsage: false });
-            label.textContent = text;
-            button.title = text;
+            const text = getTranslationForKey(tab.langKey, { fallback, countUsage: false, language });
+            if (label.textContent !== text) label.textContent = text;
+            if (button.title !== text) button.title = text;
         }
         fit.sync();
     }
@@ -115,7 +115,10 @@ export function createHeroDatasetTabs(activeDataset) {
     element.addEventListener('click', navigate);
     const unsubscribe = subscribeMainDatasetTabs(render);
     render(getMainDatasetTabs());
-    const languageObserver = new MutationObserver(updateCopy);
+    const languageObserver = new MutationObserver(() => {
+        language = document.documentElement.lang || getLanguageWithBrowserFallback();
+        updateCopy();
+    });
     languageObserver.observe(document.documentElement, { attributes: true, attributeFilter: ['lang'] });
 
     return {

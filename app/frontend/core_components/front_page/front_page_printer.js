@@ -7,6 +7,7 @@ import { applyHomePresentation, applyHomeMediaPresentation } from './front_page_
 import { renderHomeHeroText } from './front_page_text_style_renderer.js';
 import { readHomePresentation } from '../../shared/front_page_presentation/validator.js';
 import { createFrontPageTopRow } from './front_page_top_row_builder.js';
+import { loadFrontPageNavigationLanguage } from './front_page_link.js';
 import { mountFrontPagePhoneLayout } from './front_page_phone_layout.js';
 import { loadCustomRoot } from './custom_root_navigation.js';
 import { createFrontPageArticleButtons } from './front_page_article_buttons.js';
@@ -28,6 +29,7 @@ import { beginFrontPageAvailabilityRequest, isSeparateFrontPageEnabled,
 import { isLeavingNetworkAbort } from '../error_and_status_handling/request_failure_notice.js';
 
 const FRONT_PAGE_TIMEOUT_MS = 15000;
+const NAVIGATION_LANGUAGE_WAIT_MS = 3000;
 const visits = new WeakMap();
 
 function isHomeUnavailable(error) {
@@ -127,7 +129,7 @@ function renderBlocks(container, data, visit) {
     });
     visit.topRow = createFrontPageTopRow(data.site_name, () => refreshFrontPage(), {
         snapshot: data, render: renderPresentation,
-    });
+    }, { language: visit.language });
     if (articleButtons && data.article_buttons_placement === 'top_row') {
         visit.topRow.element.querySelector('.hero-dataset-tabs')?.after(articleButtons);
     }
@@ -182,8 +184,15 @@ function loadVisit(container, visit) {
         if (!isCurrent()) throw new DOMException('Session changed', 'AbortError');
         visit.language = getLanguageWithBrowserFallback();
         homeRevision = beginFrontPageAvailabilityRequest();
-        return endpoint_router('frontPage', { signal: controller.signal, suppressErrorToast: true,
-            url_params: new URLSearchParams({ lang: visit.language }).toString() });
+        // Resolve navigation copy during the content read, rather than painting
+        // formatted keys and waiting for main.js's later whole-page translation.
+        // A slow dictionary waits at most 3 s; Home then paints and relabels later.
+        return Promise.all([
+            endpoint_router('frontPage', { signal: controller.signal, suppressErrorToast: true,
+                url_params: new URLSearchParams({ lang: visit.language }).toString() }),
+            Promise.race([loadFrontPageNavigationLanguage(visit.language),
+                new Promise(resolve => { setTimeout(resolve, NAVIGATION_LANGUAGE_WAIT_MS); })]),
+        ]).then(([data]) => data);
     };
     visit.pending = Promise.race([
         isSessionValidationRequired() ? revalidateSessionIdentity().then(request) : request(), deadline,

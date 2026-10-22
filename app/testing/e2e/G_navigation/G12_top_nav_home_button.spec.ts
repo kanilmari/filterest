@@ -7,6 +7,90 @@ import { installHomePolicy, openHomeProbeDataset, captureHomeProbe, probePhase }
 import { ensureNavbarVisible } from '../helpers/navbar';
 import { expandAdminTreeFolder, openAdminTreeButton } from '../helpers/admin-navigation';
 
+for (const language of ['fi', 'en']) for (const theme of ['light', 'dark'] as const) {
+  test(`390px Home first-paint labels stay in ${language} in ${theme}`, async ({ page, context }) => {
+    test.setTimeout(60_000);
+    page.on('request', request => {
+      if (['/api/admin/front-page', '/api/user-visual-preference', '/api/row-update', '/api/row-create']
+        .includes(new URL(request.url()).pathname)) expect(request.method()).toBe('GET');
+    });
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.emulateMedia({ colorScheme: theme === 'light' ? 'dark' : 'light' });
+    await installHomePolicy(context, theme);
+    const expected = language === 'fi'
+      ? ['Etusivu', 'Matkailupalvelut ja pitkät paikalliset matkatarjoukset']
+      : ['Home', 'Travel services and local offers'];
+    let homeRequested!: () => void;
+    const homeRead = new Promise<void>(resolve => { homeRequested = resolve; });
+    await context.route(/\/api\/front-page(?:\?.*)?$/, async route => {
+      expect(route.request().method()).toBe('GET');
+      homeRequested(); await route.fallback();
+    });
+    await context.route(/\/api\/datasets(?:\?.*)?$/, async route => {
+      expect(route.request().method()).toBe('GET');
+      const response = await route.fetch();
+      const data = await response.json();
+      const dataset = data.datasets.find((entry: { dataset_name: string }) => entry.dataset_name === 'app_service_catalog');
+      expect(dataset).toBeTruthy();
+      await route.fulfill({ response, json: { ...data, tab_order: null,
+        datasets: [{ ...dataset, is_top_level_in_current_project: true }] } });
+    });
+    await context.route(/\/api\/translations\?lang=(?:fi|en)$/, async route => {
+      expect(route.request().method()).toBe('GET');
+      const response = await route.fetch();
+      const data = await response.json();
+      const fi = new URL(route.request().url()).searchParams.get('lang') === 'fi';
+      const overrides = { front_page: fi ? 'Etusivu' : 'Home', app_service_catalog: fi
+        ? 'Matkailupalvelut ja pitkät paikalliset matkatarjoukset' : 'Travel services and local offers' };
+      // Force the old cold-start race, even on a fast local target. Only GET responses change.
+      await homeRead; await new Promise(resolve => setTimeout(resolve, 300));
+      await route.fulfill({ response, json: data.translations
+        ? { ...data, translations: { ...data.translations, ...overrides } } : { ...data, ...overrides } });
+    });
+    await page.addInitScript(language => {
+      localStorage.setItem('chosen_language', language);
+      localStorage.setItem('navVisibleNarrow', 'false');
+      type Sample = { time: number; labels: { text: string; width: number; height: number }[];
+        rowHeight: number; heroTop: number };
+      const probe = { samples: [] as Sample[], done: false };
+      (window as unknown as { homeLanguageProbe: typeof probe }).homeLanguageProbe = probe;
+      let start: number | undefined;
+      function sample(time: number) {
+        const root = document.getElementById('front_page_container');
+        const row = root?.querySelector('.front-page-top-row');
+        const hero = root?.querySelector('.front-page-hero');
+        const labels = [...(row?.querySelectorAll('.navbar-front-page-label, .hero-dataset-tabs__label') || [])];
+        if (hero && row && labels.length >= 2 && labels.every(label => label.getBoundingClientRect().width > 0)) {
+          start ??= time;
+          probe.samples.push({ time: time - start, labels: labels.map(label => {
+            const box = label.getBoundingClientRect();
+            return { text: label.textContent || '', width: box.width, height: box.height };
+          }), rowHeight: row.getBoundingClientRect().height, heroTop: hero.getBoundingClientRect().top });
+          if (time - start >= 1000) { probe.done = true; return; }
+        }
+        requestAnimationFrame(sample);
+      }
+      requestAnimationFrame(sample);
+    }, language);
+    await page.goto('/', { waitUntil: 'domcontentloaded' });
+    await page.waitForFunction(() => (window as unknown as { homeLanguageProbe: { done: boolean } }).homeLanguageProbe.done);
+    const samples = await page.evaluate(() => (window as unknown as { homeLanguageProbe: {
+      samples: { time: number; labels: { text: string; width: number; height: number }[]; rowHeight: number; heroTop: number }[];
+    } }).homeLanguageProbe.samples);
+    expect(samples.length).toBeGreaterThan(10);
+    expect(samples.at(-1)!.time).toBeGreaterThanOrEqual(1000);
+    const first = samples[0];
+    for (const sample of samples) {
+      expect(sample.labels.map(label => label.text)).toEqual(expected);
+      expect(sample.labels.map(({ width, height }) => ({ width, height }))).toEqual(
+        first.labels.map(({ width, height }) => ({ width, height })));
+      expect(sample.rowHeight).toBe(first.rowHeight);
+      expect(sample.heroTop).toBe(first.heroTop);
+    }
+    await expect(page.locator('body')).toHaveClass(new RegExp(`\\b${theme}-mode\\b`));
+  });
+}
+
 async function menuState(page: Page) {
   return page.evaluate(() => ({ classes: document.getElementById('navbar')!.className,
     narrow: localStorage.getItem('navVisibleNarrow'), wide: localStorage.getItem('navVisibleWide') }));

@@ -217,12 +217,12 @@ bootstrap passes `forceReload` to refresh the current session. The static
 `navbarFrontPage` region is rendered by `initTabs`, in the reserved `front-page`
 grid area, with a translated label or the configured site name.
 
-The menu and top navigation share `front_page/front_page_link.js`: the same
-root address, house symbol, language renderer and Home activation handler.
-`front_page_availability.js` owns the effective feature rule (built-in Home
-enabled or a server-confirmed custom root). Login-only guests see neither link.
-The server supplies a Home-button site name only when the corresponding switch
-is enabled; otherwise the existing `front_page` language key supplies the label.
+The menu and top navigation share `front_page/front_page_link.js`: the same root address, house symbol,
+language renderer and Home activation handler. `front_page_availability.js` owns the effective feature rule
+(built-in Home enabled or a server-confirmed custom root). Login-only guests see neither link. The server
+supplies a Home-button site name only when its switch is enabled; otherwise the `front_page` language key does.
+Home's content read also loads its navigation dictionaries (at most 3 s): Home and dataset labels use the chosen language
+from the first paint. The later page-translation pass shares that cache; unchanged labels keep their text nodes and geometry.
 
 When Home is enabled, each dataset owns one top-navigation Home link. The toolbar controller moves that same
 node to the first position in the hero's dataset tab row, with the tab surface and the larger native Home

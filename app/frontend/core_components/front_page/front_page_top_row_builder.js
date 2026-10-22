@@ -17,7 +17,7 @@ import { canShowFrontPageLink, createFrontPageLink, refreshFrontPageLinkLabel } 
 import { HOME_AVAILABILITY_CHANGED_EVENT } from './front_page_availability.js';
 
 /** Reuse the hero grid/actions and tabs; no active dataset is selected on Home. */
-export function createFrontPageTopRow(siteName, onSaved, paletteOptions = {}) {
+export function createFrontPageTopRow(siteName, onSaved, paletteOptions = {}, { language } = {}) {
     const element = document.createElement('div');
     element.className = 'front-page-top-row filterbar-inline-hero__top-row';
     const start = document.createElement('div');
@@ -44,8 +44,8 @@ export function createFrontPageTopRow(siteName, onSaved, paletteOptions = {}) {
     title.textContent = formatSiteNameForDisplay(siteName || getCurrentSiteName());
     title.title = title.textContent;
     start.append(menuSlot, icon, title);
-    const tabs = createHeroDatasetTabs();
-    const homeLink = createFrontPageLink({ topNavigation: true, current: true });
+    const tabs = createHeroDatasetTabs(undefined, { language });
+    const homeLink = createFrontPageLink({ topNavigation: true, current: true, language });
     // Keep the native Home surface and menu → Home → dataset keyboard order.
     tabs.element.prepend(homeLink);
     tabs.element.hidden = false;
@@ -53,7 +53,7 @@ export function createFrontPageTopRow(siteName, onSaved, paletteOptions = {}) {
     actions.className = 'filterbar-inline-hero__actions';
     function syncHomeAvailability() {
         homeLink.hidden = !canShowFrontPageLink(localStorage.getItem('button_state') === 'logout');
-        refreshFrontPageLinkLabel(homeLink);
+        refreshFrontPageLinkLabel(homeLink, language);
     }
     syncHomeAvailability();
     window.addEventListener(HOME_AVAILABILITY_CHANGED_EVENT, syncHomeAvailability);

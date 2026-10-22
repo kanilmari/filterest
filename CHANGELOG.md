@@ -22,6 +22,7 @@ Dates are the local (Europe/Helsinki) date on which the version was published.
 
 ## [Unreleased]
 
+- **Home navigation starts in the chosen language** — Home and dataset labels use the viewer's Finnish or English translations on their first render, preventing a later relabel from moving the phone navigation and hero.
 - In the dark theme, Home's site icon exchanges its two colours for a dark background and light lettering, and follows theme changes on phones and wider screens.
 - Back followed at once by Forward while Home is still loading no longer leaves Home with a load failure and a "service could not be reached" notice: Home loads once more, and its unchanged address is no longer rewritten after loading. A page that loads or reloads on a dataset now rewrites its own history entry instead of adding one, so Back needs no extra step and Forward still works after going Back to it.
 - Home boxes stack in one centred column at every width, with the same small images and letter fallbacks as cross-dataset search results; each row is clickable with one keyboard stop.
