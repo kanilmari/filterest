@@ -443,7 +443,7 @@
     },
     {
       "area": "Front page",
-      "paths": ["app/frontend/reusable_components/symbol_asset_resolver.js", "app/frontend/reusable_components/view_lifecycle_events.js", "app/frontend/core_components/permission_cache_reader.js", "app/frontend/core_components/route_permission_checker.js", "app/testing/e2e/helpers/home-writer-lock.test.ts", "app/testing/e2e/helpers/home-writer-lock.ts", "app/testing/e2e/helpers/home-settings.test.ts", "app/testing/e2e/helpers/home-settings.ts", "app/testing/e2e/helpers/home-policy-fixture.ts",
+      "paths": ["app/frontend/reusable_components/background_media_hold.js", "app/frontend/reusable_components/symbol_asset_resolver.js", "app/frontend/reusable_components/view_lifecycle_events.js", "app/frontend/core_components/permission_cache_reader.js", "app/frontend/core_components/route_permission_checker.js", "app/testing/e2e/helpers/home-writer-lock.test.ts", "app/testing/e2e/helpers/home-writer-lock.ts", "app/testing/e2e/helpers/home-settings.test.ts", "app/testing/e2e/helpers/home-settings.ts", "app/testing/e2e/helpers/home-policy-fixture.ts",
         "app/backend/core_components/custom_root_files.go",
         "app/backend/core_components/custom_root_files_test.go",
         "app/frontend/core_components/admin_tools/custom_root_copy.js",

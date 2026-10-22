@@ -7,6 +7,7 @@ import { requireArticleViewAccess } from '../../table_views/card_view/article_vi
 import { HISTORY_ENTRY_ID, ensureHistoryEntryId, writeHistoryEntry, retainHistoryEntryAddress, isHistoryEntryAddressRetained } from "./history_entry_state.js";
 import { IMAGE_FIRST_VIEW_KEY, CARD_VIEW_KEY, ARTICLE_VIEW_KEY, isRenderableDatasetView } from "../../table_views/dataset_view_registry.js";
 import { subscribeDatasetAccessRegistry, hasDatasetAccessSnapshot, canReadDatasetFromRegistry } from "./dataset_access_registry.js";
+import { acquire, release } from "../../../reusable_components/background_media_hold.js";
 
 export const IMAGE_FIRST_HISTORY_KEY = "imageFirstView";
 let generation = 0;
@@ -104,9 +105,18 @@ export function beginImageFirstViewOpen({ tableName, rowId, listPath, restoring 
             activeView?.cleanup?.();
             pendingTableName = null;
             closingReturn = null;
+            const holdsBackground = viewKey === 'image_first_page_view';
+            let cleaned = false;
+            if (holdsBackground) acquire('cifav');
             activeView = {
                 entryId, origin, tableName, root: document.getElementById(tableName + "_container"),
                 close: null, modal: null,
+                // Close can be followed by navigation cleanup for the same entry.
+                cleanup() {
+                    if (cleaned) return;
+                    cleaned = true;
+                    if (holdsBackground) release('cifav');
+                },
             };
             return entryId;
         },
@@ -150,7 +160,9 @@ export function attachImageFirstView(entryId, modalResult) {
             });
         });
     }
+    const cleanup = activeView.cleanup;
     activeView.cleanup = () => {
+        cleanup();
         cancelScrollRestore();
         body.removeEventListener("scroll", rememberScroll);
         inputEvents.forEach(type => body.removeEventListener(type, cancelScrollRestore));

@@ -8,7 +8,10 @@ const mocks = vi.hoisted(() => ({
     pipeline: vi.fn(async context => context),
     route: vi.fn(() => true),
     datasetRight: vi.fn(async () => true),
+    acquire: vi.fn(),
+    release: vi.fn(),
 }));
+vi.mock("../../../reusable_components/background_media_hold.js", () => ({ acquire: mocks.acquire, release: mocks.release }));
 vi.mock("../../route_permission_checker.js", () => ({ hasRoutePermission: mocks.route, hasDatasetPermission: mocks.datasetRight }));
 vi.mock("../../table_views/card_view/image_first_view_opener.js", () => ({ openImageFirstView: mocks.open }));
 vi.mock("../../pipeline/navigation_pipeline.js", () => ({ runNavigationPipeline: mocks.pipeline }));
@@ -20,8 +23,8 @@ import {
 import { clearDatasetAccessRegistry, beginDatasetAccessRefresh, primeDatasetAccessRegistry } from "./dataset_access_registry.js";
 import { HISTORY_ENTRY_ID } from "./history_entry_state.js";
 
-function openView({ restoring = false, rowId = 185, ready } = {}) {
-    const intent = beginImageFirstViewOpen({ tableName: "events", rowId, listPath: "/events", restoring });
+function openView({ restoring = false, rowId = 185, ready, viewKey } = {}) {
+    const intent = beginImageFirstViewOpen({ tableName: "events", rowId, listPath: "/events", restoring, viewKey });
     const origin = { url: location.href, state: history.state };
     const id = intent.commit("first.jpg");
     // The source entry receives its identity when the allowed opening commits.
@@ -150,6 +153,94 @@ describe("image-first history", () => {
         expect(history.state.imageFirstView.scroll).toBe(420);
         expect(document.querySelector(".tab_parts_container").dataset.view).toBe("table");
         expect(history.state.imageFirstView.origin.url).toBe(opened.origin.url);
+    });
+});
+
+describe('cifav background hold lifecycle', () => {
+    beforeEach(() => {
+        clearDatasetAccessRegistry();
+        vi.restoreAllMocks();
+        mocks.acquire.mockClear(); mocks.release.mockClear();
+        mocks.route.mockReturnValue(true);
+        history.replaceState({}, '', '/events?view=card');
+        document.body.replaceChildren();
+    });
+
+    test('only a cifav commit acquires, even before a modal body is attached', () => {
+        const intent = beginImageFirstViewOpen({ tableName: 'events', rowId: 185,
+            listPath: '/events', viewKey: 'image_first_page_view' });
+        expect(mocks.acquire).not.toHaveBeenCalled();
+        const id = intent.commit('page.png');
+        expect(mocks.acquire).toHaveBeenCalledExactlyOnceWith('cifav');
+        attachImageFirstView(id, {});
+        vi.spyOn(history, 'back').mockImplementation(() => {});
+        imageFirstViewDidClose(id);
+        imageFirstViewDidClose(id);
+        expect(mocks.release).toHaveBeenCalledExactlyOnceWith('cifav');
+    });
+
+    test.each(['user close', 'navigation', 'Back', 'access reset'])('%s releases exactly once after modal attachment', async exit => {
+        const opened = openView({ viewKey: 'image_first_page_view' });
+        expect(mocks.acquire).toHaveBeenCalledExactlyOnceWith('cifav');
+        vi.spyOn(history, 'back').mockImplementation(() => {});
+        if (exit === 'user close') imageFirstViewDidClose(opened.id);
+        if (exit === 'access reset') clearDatasetAccessRegistry();
+        if (exit === 'Back') moveTo(opened.origin);
+        else history.replaceState({}, '', '/another?view=card');
+        await handleImageFirstViewHistory({ tableName: 'another' });
+        await handleImageFirstViewHistory({ tableName: 'another' });
+        imageFirstViewDidClose(opened.id);
+        expect(mocks.release).toHaveBeenCalledExactlyOnceWith('cifav');
+        // The existing scroll-listener cleanup must survive hold composition.
+        const replace = vi.spyOn(history, 'replaceState');
+        opened.modal.querySelector('.modal_body').dispatchEvent(new Event('scroll'));
+        expect(replace).not.toHaveBeenCalled();
+    });
+
+    test('a replacing cifav releases the old hold once and owns its own hold until close', () => {
+        openView({ viewKey: 'image_first_page_view' });
+        const next = openView({ rowId: 186, viewKey: 'image_first_page_view' });
+        expect(mocks.acquire).toHaveBeenCalledTimes(2);
+        expect(mocks.release).toHaveBeenCalledExactlyOnceWith('cifav');
+        vi.spyOn(history, 'back').mockImplementation(() => {});
+        imageFirstViewDidClose(next.id);
+        imageFirstViewDidClose(next.id);
+        expect(mocks.release).toHaveBeenCalledTimes(2);
+    });
+
+    test('Forward restores a fresh cifav hold after Back released the previous visit', async () => {
+        const opened = openView({ viewKey: 'image_first_page_view' });
+        const target = { url: location.href, state: history.state };
+        moveTo(opened.origin);
+        await handleImageFirstViewHistory({ tableName: 'events' });
+        expect(mocks.release).toHaveBeenCalledExactlyOnceWith('cifav');
+        moveTo(target);
+        mocks.open.mockImplementationOnce(() => openView({ restoring: true, viewKey: 'image_first_page_view' }));
+        await handleImageFirstViewHistory({ tableName: 'events', rowId: '185' });
+        expect(mocks.acquire).toHaveBeenCalledTimes(2);
+        vi.spyOn(history, 'back').mockImplementation(() => {});
+        imageFirstViewDidClose(history.state[HISTORY_ENTRY_ID]);
+        moveTo(opened.origin);
+        await handleImageFirstViewHistory({ tableName: 'events' });
+        expect(mocks.release).toHaveBeenCalledTimes(2);
+    });
+
+    test('replacing cifav with IFAV releases without taking another hold', () => {
+        openView({ viewKey: 'image_first_page_view' });
+        const next = openView();
+        expect(mocks.acquire).toHaveBeenCalledExactlyOnceWith('cifav');
+        expect(mocks.release).toHaveBeenCalledExactlyOnceWith('cifav');
+        vi.spyOn(history, 'back').mockImplementation(() => {});
+        imageFirstViewDidClose(next.id);
+        expect(mocks.release).toHaveBeenCalledTimes(1);
+    });
+
+    test.each(['image_first_view', 'article_view'])('%s takes no background hold', viewKey => {
+        const opened = openView({ viewKey });
+        vi.spyOn(history, 'back').mockImplementation(() => {});
+        imageFirstViewDidClose(opened.id);
+        expect(mocks.acquire).not.toHaveBeenCalled();
+        expect(mocks.release).not.toHaveBeenCalled();
     });
 });
 

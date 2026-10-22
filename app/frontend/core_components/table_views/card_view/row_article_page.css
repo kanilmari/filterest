@@ -12,26 +12,43 @@
     background: var(--bg_color);
 }
 
-.row_article_page_image {
+.image_first_page_view .row_article_page_image {
     min-width: 0;
     max-width: 100%;
+    margin-block-end: 24px;
 }
 
-.row_article_page_image > img[hidden] {
+.image_first_page_view .row_article_page_image > img[hidden] {
     display: none;
 }
 
-.row_article_page_image > img:not([hidden]) {
+.image_first_page_view .row_article_page_image > img:not([hidden]) {
     display: block;
     width: 100%;
     height: auto;
-    max-height: min(40dvh, 360px);
+    max-height: 80dvh;
     object-fit: contain;
+}
+
+/* The description already supplies 20px of top padding; do not stack title/first-block margins on it. */
+.image_first_page_view .big_card_header {
+    margin-block-end: 0;
+}
+
+.image_first_page_view .big_card_description_container .big_description_value > :first-child {
+    margin-block-start: 0;
 }
 
 @media (width <= 480px) {
     .image_first_page_view .image_first_view_article_content {
         width: 100%;
         margin-inline: 0;
+    }
+}
+
+/* Phones keep the contained-image cap from the original Page pilot. */
+@media (width <= 700px) {
+    .image_first_page_view .row_article_page_image > img:not([hidden]) {
+        max-height: min(40dvh, 360px);
     }
 }

@@ -55,6 +55,29 @@ The modal uses the application's explicit theme and existing reduced-motion beha
 
 Focused regression tests live beside `image_first_view_opener.js` and `translation_handler.js`; the image-stage and modal tests cover the existing close animation, image/letterbox boundary and ratio disposal, including a close during record handoff. Explicit stage/photo rectangles check clicks and simulated taps beside, above/below and on photos at desktop/phone sizes, both scroll states, image replacement and click-listener disposal. The CSS contract test checks both panel gaps (desktop and narrow screens), background corners, visible overflow and the scrolled-state image sizing/corners, with width- and height-limited square, portrait, landscape and 1×1 sources. The C10 browser flow measures, in its desktop project, the gap above and below the panel, the panel corners and the image corners before and after a real scroll. It checks the foreground box against the natural photo ratio and centered contain rectangle, briefly constraining/restoring only the media host to cover both size limits with its existing square fixture. Trailing space is measurable offscreen without an extra end/back scroll. Its foreground click keeps the view open, then the adjacent backdrop click proves the existing closing animation. Before cleanup, including after an assertion failure, C10 restores the source list address, verifies the image-first view is gone and waits for the card list. It does not wait for network idle because the live-update stream stays open. Browser verification should also include square, portrait and landscape photos at phone/desktop sizes, real article gutters, text selection, interactive content, language switches and both explicit themes.
 
+## Page-sized image-first article (cifav)
+
+The Page presentation keeps the stored key `image_first_page_view`. Its image
+stays inside the text column, with its whole photo contained at full column
+width and a maximum height of 80dvh above 700 px. At 700 px and below, it keeps
+the original `min(40dvh, 360px)` cap; the existing phone layout rules still apply.
+
+Only cifav adds 24 px below the image box; the title retains its 19 px top
+padding (43 px from the image box to the title content). The title has no bottom
+margin, leaving the description's existing 20 px top padding as the single gap
+before text. The first rich-text child's top margin is zero, whether it is a
+heading or paragraph. Later headings keep their normal section spacing. These
+overrides do not change ordinary Article or IFAV presentation.
+
+While cifav is open, a shared background-media hold pauses Home's background
+video, including both copies during a cross-fade. Close, navigation (including
+Back/Forward) and replacement release its hold once. Other hold reasons keep
+playback paused until the last release. Playback resumes only if it was playing
+when held (or Home mounted during the hold), remains mounted and reduced motion is
+off; an already paused video stays paused. IFAV and ordinary Article take no hold. The player unsubscribes
+when Home is cleaned up. Focused media/history tests prove these exit paths;
+C26 uses the width-dependent contained-image limit for browser verification.
+
 ## Ordinary article result lists
 
 Opening an ordinary article from a paginated result view transfers its currently

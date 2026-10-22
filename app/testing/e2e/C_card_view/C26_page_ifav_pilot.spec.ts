@@ -64,7 +64,7 @@ async function containedImage(page: Page) {
     const box = node.getBoundingClientRect();
     const panel = node.closest('.image_first_view_article_content')!.getBoundingClientRect();
     return { height: box.height, left: box.left, right: box.right, panelLeft: panel.left, panelRight: panel.right,
-      limit: Math.min(innerHeight * 0.4, 360), fit: getComputedStyle(node).objectFit,
+      limit: innerWidth <= 700 ? Math.min(innerHeight * 0.4, 360) : innerHeight * 0.8, fit: getComputedStyle(node).objectFit,
       width: node.naturalWidth, naturalHeight: node.naturalHeight };
   });
   expect(geometry.height).toBeGreaterThan(0);
