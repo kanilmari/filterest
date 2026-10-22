@@ -2,7 +2,7 @@
 // Builds Home's lazy text-position, alignment and per-theme media editor.
 // Connects the shared shell to Home's typed snapshot, controls and live renderer.
 // Shares all preview/reset/save lifecycle behaviour with the dataset palette.
-import { createHomePaletteChoiceControl } from './home_palette_choice_control.js';
+import { createHomePaletteChoiceControl, createHomePaletteSizeControl } from './home_palette_choice_control.js';
 import { HOME_PALETTE_COPY } from './home_palette_copy.js';
 import { createHomePaletteState, saveHomePresentation } from './home_palette_state.js';
 import { DEFAULT_HOME_PRESENTATION, HOME_PRESENTATION_DEFINITION } from '../../shared/front_page_presentation/validator.js';
@@ -32,6 +32,7 @@ export function mountHomePalette(button, { snapshot, render, saveRequestFn = sav
     function change(key, value) {
         // The same draft owns positioning, alignment and both themes during preview.
         draftOwner.replaceDraft({ ...(draftOwner.draft || DEFAULT_HOME_PRESENTATION), [key]: value });
+        syncControls();
     }
     const copy = getCopy();
     for (const [id, key, label, choices, grid] of [
@@ -90,6 +91,10 @@ export function mountHomePalette(button, { snapshot, render, saveRequestFn = sav
         controls.push({ ...control, readValue: value => reveal ? value.text_style.reveal[key] : value.text_style[key] });
         container.append(control.element);
     }
+    const phoneStorySize = createHomePaletteSizeControl(HOME_PRESENTATION_DEFINITION.phone_story_size, copy,
+        value => change('phone_story_size', value));
+    controls.push({ ...phoneStorySize, key: 'phone_story_size' });
+    container.append(phoneStorySize.element);
     for (const [id, key, label] of [['reveal-start', 'start_ms', 'revealStart'], ['reveal-interval', 'interval_ms', 'revealInterval']]) {
         const control = createPaletteRangeControl({ id, label, ...HOME_PRESENTATION_DEFINITION.text_style[key], unit: 'ms' }, copy,
             { prefix: 'home-palette', onChange: value => changeTextStyle(key, value, true) });
@@ -99,6 +104,8 @@ export function mountHomePalette(button, { snapshot, render, saveRequestFn = sav
     function syncControls() {
         const value = draftOwner.draft || DEFAULT_HOME_PRESENTATION;
         controls.forEach(control => control.setValue(control.readValue ? control.readValue(value) : value[control.key]));
+        // Only Serif story consumes this size; preserve it when another style is previewed.
+        phoneStorySize.element.hidden = value.text_style.preset !== 'serif_story_v1';
     }
     shell.body.append(container);
     syncControls();

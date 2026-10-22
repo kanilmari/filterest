@@ -1,7 +1,7 @@
 // canonical.go
-// Chooses downgrade-safe stored Home presentations from complete v2/v3/v4 requests.
+// Chooses downgrade-safe stored Home presentations from complete v2 through v5 requests.
 // Connects admin normalization and generic-row validation to one storage policy.
-// Readers and browser requests use v4; only a phone override requires v4 storage.
+// Readers and browser requests use v5; only a nondefault phone size needs v5 storage.
 package front_page_presentation
 
 import "encoding/json"
@@ -9,7 +9,7 @@ import "encoding/json"
 // CanonicalStored returns the bytes to store and whether the input already uses
 // the canonical schema. A generic writer must refuse a false result instead of
 // storing its original row. Inactive default-style timings are discarded in v2.
-// No browser twin is needed: the admin response supplies the normalized v4 value.
+// No browser twin is needed: the admin response supplies the normalized v5 value.
 func CanonicalStored(raw any) (data json.RawMessage, canonical bool, err error) {
 	fields, err := presentationFields(raw)
 	if err != nil {
@@ -20,10 +20,10 @@ func CanonicalStored(raw any) (data json.RawMessage, canonical bool, err error) 
 		return nil, false, err
 	}
 	var value Value
-	if version == 2 || version == 3 {
+	if version == 2 || version == 3 || version == 4 {
 		value, err = ParseStored(raw)
 	} else {
-		// Version one remains read-only; partial version-four requests are refused.
+		// Version one remains read-only; partial version-five requests are refused.
 		value, err = Parse(raw)
 	}
 	if err != nil {
@@ -34,7 +34,11 @@ func CanonicalStored(raw any) (data json.RawMessage, canonical bool, err error) 
 		return nil, false, err
 	}
 	storedVersion := value.SchemaVersion
-	if value.PhoneAlignment == "inherit" {
+	if value.PhoneStorySize == Rules().Default.PhoneStorySize {
+		storedVersion = 4
+		delete(fields, "phone_story_size")
+	}
+	if storedVersion == 4 && value.PhoneAlignment == "inherit" {
 		storedVersion = 3
 		delete(fields, "phone_alignment")
 		switch value.Alignment {
@@ -47,8 +51,8 @@ func CanonicalStored(raw any) (data json.RawMessage, canonical bool, err error) 
 			storedVersion = 2
 			delete(fields, "text_style")
 		}
-		fields["schema_version"], _ = json.Marshal(storedVersion)
 	}
+	fields["schema_version"], _ = json.Marshal(storedVersion)
 	data, err = json.Marshal(fields)
 	return data, version == float64(storedVersion), err
 }

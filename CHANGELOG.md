@@ -22,6 +22,7 @@ Dates are the local (Europe/Helsinki) date on which the version was published.
 
 ## [Unreleased]
 
+- Home's Serif story palette now offers phone story text sizes from 12–18 px in 1 px steps (default 15 px; schema v5), with the long-slogan lead 1 px larger and desktop unchanged. **Rollback:** a 9.5.x binary from before this change refuses stored v5; before rollback, set the story size back to 15 px in the palette and save, so Home stores v4 or lower.
 - Page-sized image-first articles (cifav) show taller desktop images, use consistent title-to-text spacing, and pause Home's background video until closing; phone image sizing is unchanged.
 - On phones up to 700 px, the selected-chip row under a dataset's search tools is again as wide as the tools box and starts at its left edge, instead of a narrower centred row.
 - Category popups gain a compact header with match settings behind a gear; shared multiselects resize up to the available 600 px, remember viewer height, and follow their buttons while scrolling.

@@ -1,6 +1,6 @@
 // definition.go
 // Validates Home presentation against the browser's embedded definition.
-// Connects strict version-four values and version-one/two/three read conversion.
+// Connects strict version-five values and version-one through four read conversion.
 // Keeps conversion away from revision hashing and all persistence locks.
 package front_page_presentation
 
@@ -25,6 +25,7 @@ type Definition struct {
 	Anchors          []string `json:"anchors"`
 	Alignments       []string `json:"alignments"`
 	PhoneAlignments  []string `json:"phone_alignments"`
+	PhoneStorySize   Bounds   `json:"phone_story_size"`
 	HorizontalMargin Bounds   `json:"horizontal_margin_px"`
 	VerticalMargin   Bounds   `json:"vertical_margin_px"`
 	MaxWidth         Bounds   `json:"max_width_px"`
@@ -56,7 +57,7 @@ type LineReveal struct {
 	IntervalMS int    `json:"interval_ms"`
 }
 
-// Value is the complete version-four layout, phone alignment, media and text style.
+// Value is the complete version-five layout, phone typography, media and text style.
 type Value struct {
 	SchemaVersion      int       `json:"schema_version"`
 	Anchor             string    `json:"anchor"`
@@ -64,6 +65,7 @@ type Value struct {
 	VerticalMarginPx   int       `json:"vertical_margin_px"`
 	Alignment          string    `json:"alignment"`
 	PhoneAlignment     string    `json:"phone_alignment"`
+	PhoneStorySize     int       `json:"phone_story_size"`
 	MaxWidthPx         int       `json:"max_width_px"`
 	LightWash          int       `json:"light_wash"`
 	LightOpacity       int       `json:"light_opacity"`
@@ -102,7 +104,7 @@ func presentationFields(raw any) (map[string]json.RawMessage, error) {
 	return fields, err
 }
 
-// Parse refuses partial, unknown, null, coerced and off-step version-four writes.
+// Parse refuses partial, unknown, null, coerced and off-step version-five writes.
 // Its browser twin is validator.js:isValidHomePresentation.
 func Parse(raw any) (Value, error) {
 	fields, err := presentationFields(raw)
@@ -119,6 +121,7 @@ func Parse(raw any) (Value, error) {
 		{"schema_version", Bounds{rules.SchemaVersion, rules.SchemaVersion, 1}, &value.SchemaVersion},
 		{"horizontal_margin_px", rules.HorizontalMargin, &value.HorizontalMarginPx},
 		{"vertical_margin_px", rules.VerticalMargin, &value.VerticalMarginPx},
+		{"phone_story_size", rules.PhoneStorySize, &value.PhoneStorySize},
 		{"max_width_px", rules.MaxWidth, &value.MaxWidthPx},
 		{"light_wash", rules.LightWash, &value.LightWash},
 		{"light_opacity", rules.LightOpacity, &value.LightOpacity},
@@ -126,7 +129,7 @@ func Parse(raw any) (Value, error) {
 		{"dark_opacity", rules.DarkOpacity, &value.DarkOpacity},
 	}
 	if len(fields) != len(numbers)+4 {
-		return value, fmt.Errorf("Home presentation requires twelve fields")
+		return value, fmt.Errorf("Home presentation requires thirteen fields")
 	}
 	for _, name := range []string{"anchor", "alignment", "phone_alignment"} {
 		if len(fields[name]) == 0 || string(fields[name]) == "null" {
@@ -205,7 +208,7 @@ func parseTextStyle(raw json.RawMessage, rules Definition) (TextStyle, error) {
 	return value, nil
 }
 
-// ParseStored converts complete version-one/two/three rows; writes use CanonicalStored.
+// ParseStored converts complete version-one through four rows; writes use CanonicalStored.
 // Readers hash the original stored bytes, so conversion never invalidates a revision.
 func ParseStored(raw any) (Value, error) {
 	fields, err := presentationFields(raw)
@@ -218,7 +221,7 @@ func ParseStored(raw any) (Value, error) {
 		return Value{}, err
 	}
 	if version == 2 || version == 3 {
-		if len(fields) != int(version)+8 || fields["phone_alignment"] != nil {
+		if len(fields) != int(version)+8 || fields["phone_alignment"] != nil || fields["phone_story_size"] != nil {
 			return Value{}, fmt.Errorf("invalid legacy Home presentation fields")
 		}
 		var alignment string
@@ -237,12 +240,21 @@ func ParseStored(raw any) (Value, error) {
 		fields["alignment"], _ = json.Marshal(alignment)
 		fields["schema_version"], _ = json.Marshal(rules.SchemaVersion)
 		fields["phone_alignment"] = json.RawMessage(`"inherit"`)
+		fields["phone_story_size"], _ = json.Marshal(rules.Default.PhoneStorySize)
 		if version == 2 {
 			if fields["text_style"] != nil {
 				return Value{}, fmt.Errorf("version-two Home presentation forbids text_style")
 			}
 			fields["text_style"], _ = json.Marshal(rules.Default.TextStyle)
 		}
+		return Parse(fields)
+	}
+	if version == 4 {
+		if len(fields) != 12 || fields["phone_story_size"] != nil {
+			return Value{}, fmt.Errorf("invalid version-four Home presentation fields")
+		}
+		fields["schema_version"], _ = json.Marshal(rules.SchemaVersion)
+		fields["phone_story_size"], _ = json.Marshal(rules.Default.PhoneStorySize)
 		return Parse(fields)
 	}
 	if version != float64(rules.Legacy.SchemaVersion) {

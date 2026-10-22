@@ -345,6 +345,16 @@
 }
 .home-palette-theme { display: grid; gap: 10px; }
 .home-palette-alignment { display: flex; }
+.home-palette-story-size > div {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+.home-palette-story-size output {
+    min-width: 5ch;
+    text-align: center;
+    font-variant-numeric: tabular-nums;
+}
 .home-palette-position-grid {
     display: grid;
     grid-template-columns: repeat(3, 44px);

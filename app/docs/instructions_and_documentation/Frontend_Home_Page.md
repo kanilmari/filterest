@@ -156,12 +156,12 @@ injection paths; it does not make a malicious operator-authored page safe.
 ### Serif story text style
 
 The Home palette offers **Text style** (Default / Serif story), **Line reveal**
-(Off / Line by line), and bounded start-delay/interval ranges in milliseconds.
+(Off / Line by line), bounded start-delay/interval ranges, and a Serif-only phone-size stepper (12–18 px, step 1, default 15): translated −/+ buttons have 44 px targets, disable at the bounds and announce the px value through `aria-live`.
 The owner's 17 October exception to K381 permits text style; K466 also permits
-logical alignment and its phone override. Other expansion remains frozen. Copy belongs to the source-owned
+logical alignment and its phone override; K474 permits phone story size. Other expansion remains frozen. Copy belongs to the source-owned
 Finnish/English palette dictionary, without language keys or a migration.
 
-The opt-in `text_style` in presentation schema 4 selects `default` or
+The opt-in `text_style` in presentation schema 5 selects `default` or
 `serif_story_v1`; `reveal` holds `mode` (`none` / `lines`), `start_ms` (0–5000,
 initial 3000) and `interval_ms` (200–2000, initial 800). Unknown, missing, null,
 extra and wrongly typed fields fail strict Go/browser validation. Old v1/v2 rows
@@ -170,7 +170,7 @@ Every palette save carries the complete text style even when it was untouched.
 
 Serif story uses upright Georgia / Times New Roman; a non-empty slogan of at most 40 trimmed Unicode code points joins the title as an italic accent (emoji surrogate pairs count once).
 Longer slogans appear once as the first paragraph below the title, before the story lines, in italic Georgia / Times New Roman and the accent colour.
-The lead has a 17–22 px size clamp, 1.4 line height and the story shadow (17/16 px at the 1180/760 px container steps); it is visible from first paint, outside the line reveal, without changing story-line indexes. At the 760 px step story lines are body-sized (15 px, the base 1.45 line height; WO82), so phone titles stay at least 1.75× the story text (2.5× on wider screens).
+The lead keeps its desktop 17–22 px clamp, 1.4 line height and story shadow (17 px at the 1180 px step); at the unchanged 760 px container step, story lines use `phone_story_size` with a 15 px fallback and 1.45 line height (15 → 21.75 px), and the lead follows at size + 1 px (12→13 … 18→19). It is visible from first paint, outside the reveal, without changing story-line indexes; title sizes stay unchanged.
 Blank slogans render neither accent nor lead; the site-name title fallback remains, and the hero's language follows its rendered copy.
 Keep title and slogan short, e.g. “Matkatiedot ja -edut” + “yhdellä silmäyksellä”.
 Each description line becomes one paragraph; blank lines start sections and a
@@ -180,7 +180,7 @@ separate slogan and literal paragraph rendering.
 
 `front_page_serif_story.css` owns responsive fonts, colours and shadows under
 `.front-page-hero--serif-story-v1`, with explicit body theme classes overriding
-OS preference. Text is left-aligned; story and emphasis paragraphs wrap at every
+OS preference. Text inherits hero alignment; story and emphasis paragraphs wrap at every
 width, keeping authored lines separate and the configured maximum story-column
 width. Font sizes use container units (`cqi`) and the 1180/760 px container queries
 follow the content scroller's width, accounting for a docked side menu. The hero
@@ -205,8 +205,8 @@ and phone wrapping, a long slogan at 1920 px with the menu docked, timing, stabl
 geometry, theme continuity, language restart and reduced motion. Native
 screenshots go under `data/testing/wo38a/after/`
 (or the configured test runtime root's `wo38a/after/`). It never enables Home.
-Only a non-default text style (Serif story or line reveal) stores schema 3.
-Default-style sites store v2 and stay readable by older binaries. Older binaries
+At 15 px with inherited phone alignment, a non-default text style stores schema 3.
+The default style then stores v2 and stays readable by older binaries. Pre-v3 binaries
 cannot read a v3 row: before a downgrade, set Text style to Default and Line reveal
 to Off and save (which stores v2), or restore the row from a compatible backup.
 
@@ -617,9 +617,9 @@ close/Escape focus, status toasts and draft ownership have one implementation.
 Closing keeps preview; Reset restores saved values and panel geometry; leaving
 Home releases preview. Save preserves edits made while its request is pending.
 
-Home's JSON setting `front_page_presentation` reads as schema version 4: `anchor`,
+Home's JSON setting `front_page_presentation` reads as schema version 5: `anchor`,
 `horizontal_margin_px`, `vertical_margin_px`, `alignment`, `phone_alignment`,
-`max_width_px`, the four theme wash/opacity fields, and `text_style`. The definition
+`phone_story_size`, `max_width_px`, four theme wash/opacity fields, and `text_style`. The definition
 in `frontend/shared/front_page_presentation/definition.json` is imported by the
 browser and embedded by Go.
 Both margins are 0–320 px (step 1, initial 40);
@@ -639,26 +639,26 @@ insets and ignore the horizontal anchor: the block fills the space between the
 gutters, so alignment shows even for short text. The vertical anchor still
 applies; long text flows from the top and scrolls. **On phones** offers
 `phone_alignment: inherit | start | center`, initially `inherit` (As elsewhere).
-Overrides affect hero text, including Serif story; top-row buttons keep their layout.
+Overrides affect hero text, including Serif story; top-row buttons keep their layout. Phone story size is hidden for Default because only Serif story consumes it; switching styles retains the size in the same preview/save/reset draft.
 
 A missing setting returns the centred default with revision `none`: the block
 is centred on both axes with logical start alignment. Version-one reads convert
 normal → start, artistic → centre, one margin → both and supply default media.
 Version-two/three reads map left → start, right → end, retaining centre/justify;
-all old rows gain inherited phone alignment; v1/v2 gain default text style.
-Strict Go/browser writes require complete v4; the admin API also accepts complete
-v2/v3 storage forms. One Go policy (`CanonicalStored`) selects downgrade-safe
-storage: inherited phone alignment stores v3 with start → left, end → right,
+v1–v3 gain inherited phone alignment; v1/v2 gain default text style; v1–v4 gain 15 px.
+Strict Go/browser writes require complete v5; the admin API also accepts complete
+v2/v3/v4 storage forms. One Go policy (`CanonicalStored`) selects downgrade-safe
+storage: at 15 px, inherited phone alignment stores v3 with start → left, end → right,
 or ten-field v2 without `text_style` when style is default and reveal is off.
 That v2 form discards inactive timings, which read back as 3000/800. Only an
-explicit phone override stores complete v4. Before rollback to 9.5.1, re-save
-Home with phone alignment **As elsewhere** (as on desktop) to remove stored v4.
-Public/admin GETs return v4 and its revision together; reads hash the original
+explicit phone alignment stores v4; a size other than 15 px stores v5. Pre-change 9.5.x binaries refuse v5: before rollback, set the size to 15 px and save (v4 or lower).
+Before rollback to 9.5.1, also re-save phone alignment **As elsewhere** to remove v4.
+Public/admin GETs return v5 and its revision together; reads hash the original
 stored bytes and timestamp without rewriting them. POST `{presentation,version}`
 writes only presentation under its advisory lock and revision; stale or competing
 first writes return 409. Saves stamp the row and return `{version,presentation}`
-with actual stored revision and normalized v4. The palette adopts both. Other
-Home writes preserve presentation. Generic settings accept canonical v2/v3/v4
+with actual stored revision and normalized v5. The palette adopts both. Other
+Home writes preserve presentation. Generic settings accept canonical v2/v3/v4/v5
 only; malformed stored values fail visibly.
 
 Light and dark sections each offer Theme wash and Media opacity (0–100%, step 1).

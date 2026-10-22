@@ -74,8 +74,8 @@ test('responsive language sizes and normal-flow animation stay scoped to the pre
     const phone = css.split('@container (width <= 760px)')[1].split('@keyframes')[0];
     expect(phone).toContain('clamp(30px, 9cqi, 54px)'); expect(phone).toContain('clamp(29px, 8.4cqi, 50px)');
     expect(phone.match(/overflow-wrap: break-word/g)).toHaveLength(1);
-    // WO82: phone story lines are body-sized and keep the base line height (no phone override).
-    expect(phone).toContain('.front-page-hero.front-page-hero--serif-story-v1 .front-page-story-line { font-size: 15px; }');
+    // WO90 preserves WO82 at 15px and scales through the same container step.
+    expect(phone).toContain('.front-page-hero.front-page-hero--serif-story-v1 .front-page-story-line { font-size: var(--home-phone-story-size, 15px); }');
     expect(phone).not.toMatch(/\.front-page-story-line \{[^}]*line-height/);
     expect(css).toMatch(/\.front-page-hero\.front-page-hero--serif-story-v1 \.front-page-story-line \{[^}]*line-height: 1\.45/);
     expect(css).not.toMatch(/nowrap|[\d.]vw|@media \(width|container-type/);
@@ -83,6 +83,27 @@ test('responsive language sizes and normal-flow animation stay scoped to the pre
     expect(css).toContain('calc(var(--home-reveal-start) + var(--line-index) * var(--home-reveal-interval))');
     expect(css).toMatch(/@media \(prefers-reduced-motion: no-preference\)[\s\S]*:not\(\.front-page-hero--reveal-complete\)/);
     expect(css).not.toMatch(/prefers-color-scheme|display: none|position: absolute|(?<!line-)height:/);
+});
+
+test('seven phone sizes only affect story lines and the lead, preserving the 15/16px default and 1.45 ratio', () => {
+    const phone = css.split('@container (width <= 760px)')[1].split('@keyframes')[0];
+    const selector = '.front-page-hero.front-page-hero--serif-story-v1';
+    for (let size = 12; size <= 18; size++) {
+        const mapping = `${selector}[data-phone-story-size="${size}"] { --home-phone-story-size: ${size}px; }`;
+        expect(phone).toContain(mapping);
+        expect(css.split(mapping)).toHaveLength(2);
+    }
+    expect(phone.match(/\[data-phone-story-size=/g)).toHaveLength(7);
+    expect(phone).toContain(`${selector} .front-page-story-line { font-size: var(--home-phone-story-size, 15px); }`);
+    expect(phone).toContain(`${selector} .front-page-story-lead { font-size: calc(var(--home-phone-story-size, 15px) + 1px); }`);
+    // Container queries and var() resolution need the native T21 proof; pin the winning declarations here.
+    const ratio = Number(css.match(/\.front-page-story-line \{[^}]*line-height: ([\d.]+);/)[1]);
+    expect(ratio).toBe(1.45);
+    expect(15 * ratio).toBe(21.75);
+    expect(phone).not.toContain('line-height:');
+    const desktop = css.split('@container (width <= 760px)')[0];
+    expect(desktop).not.toMatch(/phone-story-size/);
+    expect(css.split('@keyframes')[1]).not.toContain('--home-phone-story-size');
 });
 
 test.each(['light', 'dark'])('the lead keeps smaller italic serif text in the explicit %s theme', theme => {
@@ -118,7 +139,7 @@ test('lead sizes, reduced motion and reveal exclusion belong only to Serif story
     const tablet = css.split('@container (width <= 1180px)')[1].split('@container')[0];
     const phone = css.split('@container (width <= 760px)')[1].split('@keyframes')[0];
     expect(tablet).toContain(`${selector} { font-size: 17px; }`);
-    expect(phone).toContain(`${selector} { font-size: 16px; }`);
+    expect(phone).toContain(`${selector} { font-size: calc(var(--home-phone-story-size, 15px) + 1px); }`);
     const reduced = css.split('@media (prefers-reduced-motion: reduce)')[1];
     expect(reduced).toMatch(/\.front-page-story-lead,[^}]+transition: none/);
     const reveal = css.split('@media (prefers-reduced-motion: no-preference)')[1].split('@media')[0];

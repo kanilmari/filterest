@@ -1,7 +1,7 @@
 // validator.js
 // Validates the complete saved Home presentation without coercing values.
 // Connects palette controls and rendering to the Go-embedded JSON definition.
-// Converts version-one/two/three rows and supplies the centred site default.
+// Converts version-one through four rows and supplies the centred site default.
 import definition from './definition.json' with { type: 'json' };
 export const HOME_PRESENTATION_DEFINITION = definition;
 export const DEFAULT_HOME_PRESENTATION = Object.freeze({ ...definition.default,
@@ -38,19 +38,27 @@ export function isValidHomePresentation(value) {
         });
 }
 
-/** Read compatibility only: writes always pass the strict version-four validator. */
+/** Read compatibility only: writes always pass the strict version-five validator. */
 export function readHomePresentation(value) {
     if (value == null) return clone(DEFAULT_HOME_PRESENTATION);
     if (isValidHomePresentation(value)) return clone(value);
     if (value?.schema_version === 2 || value?.schema_version === 3) {
-        const keys = Object.keys(definition.default).filter(key => key !== 'phone_alignment'
+        const keys = Object.keys(definition.default).filter(key => key !== 'phone_alignment' && key !== 'phone_story_size'
             && (value.schema_version !== 2 || key !== 'text_style'));
         const alignments = { left: 'start', center: 'center', right: 'end', justify: 'justify' };
         if (!exact(value, keys) || typeof value.alignment !== 'string'
             || !Object.hasOwn(alignments, value.alignment)) throw new Error('Invalid Home presentation');
         return readHomePresentation({ ...value, schema_version: definition.schema_version,
             alignment: alignments[value.alignment], phone_alignment: 'inherit',
+            phone_story_size: DEFAULT_HOME_PRESENTATION.phone_story_size,
             text_style: value.schema_version === 2 ? DEFAULT_HOME_PRESENTATION.text_style : value.text_style });
+    }
+    if (value?.schema_version === 4) {
+        if (!exact(value, Object.keys(definition.default).filter(key => key !== 'phone_story_size'))) {
+            throw new Error('Invalid Home presentation');
+        }
+        return readHomePresentation({ ...value, schema_version: definition.schema_version,
+            phone_story_size: DEFAULT_HOME_PRESENTATION.phone_story_size });
     }
     const keys = ['schema_version', 'anchor', 'margin_px', 'paragraph_layout', 'max_width_px'];
     if (typeof value !== 'object' || Array.isArray(value) || Object.keys(value).length !== keys.length

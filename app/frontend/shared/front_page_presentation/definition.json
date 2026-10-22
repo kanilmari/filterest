@@ -1,8 +1,9 @@
 {
-  "schema_version": 4,
+  "schema_version": 5,
   "anchors": ["top-left", "top-center", "top-right", "center-left", "center-center", "center-right", "bottom-left", "bottom-center", "bottom-right"],
   "alignments": ["start", "center", "end", "justify"],
   "phone_alignments": ["inherit", "start", "center"],
+  "phone_story_size": {"min": 12, "max": 18, "step": 1},
   "horizontal_margin_px": {"min": 0, "max": 320, "step": 1},
   "vertical_margin_px": {"min": 0, "max": 320, "step": 1},
   "max_width_px": {"min": 320, "max": 1600, "step": 10},
@@ -12,5 +13,5 @@
   "dark_opacity": {"min": 0, "max": 100, "step": 1},
   "legacy": {"schema_version": 1, "alignments": {"normal": "start", "artistic": "center"}},
   "text_style": {"presets": ["default", "serif_story_v1"], "reveal_modes": ["none", "lines"], "start_ms": {"min": 0, "max": 5000, "step": 1}, "interval_ms": {"min": 200, "max": 2000, "step": 1}},
-  "default": {"schema_version": 4, "anchor": "center-center", "horizontal_margin_px": 40, "vertical_margin_px": 40, "alignment": "start", "phone_alignment": "inherit", "max_width_px": 1120, "light_wash": 15, "light_opacity": 75, "dark_wash": 0, "dark_opacity": 20, "text_style": {"preset": "default", "reveal": {"mode": "none", "start_ms": 3000, "interval_ms": 800}}}
+  "default": {"schema_version": 5, "anchor": "center-center", "horizontal_margin_px": 40, "vertical_margin_px": 40, "alignment": "start", "phone_alignment": "inherit", "phone_story_size": 15, "max_width_px": 1120, "light_wash": 15, "light_opacity": 75, "dark_wash": 0, "dark_opacity": 20, "text_style": {"preset": "default", "reveal": {"mode": "none", "start_ms": 3000, "interval_ms": 800}}}
 }

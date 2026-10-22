@@ -112,10 +112,17 @@ body.dark-mode .front-page-hero.front-page-hero--serif-story-v1 {
   .front-page-hero.front-page-hero--serif-story-v1[lang="en"] .morphing-title,
   .front-page-hero.front-page-hero--serif-story-v1[lang="en"] .front-page-title-accent { font-size: clamp(29px, 8.4cqi, 50px); }
 
-  /* Phone reading size (WO82): body-sized story lines; the base 1.45 line height applies. */
-  .front-page-hero.front-page-hero--serif-story-v1 .front-page-story-lead { font-size: 16px; }
+  /* WO90 keeps WO82's 15/16 px defaults and the story's base 1.45 line height. */
+  .front-page-hero.front-page-hero--serif-story-v1[data-phone-story-size="12"] { --home-phone-story-size: 12px; }
+  .front-page-hero.front-page-hero--serif-story-v1[data-phone-story-size="13"] { --home-phone-story-size: 13px; }
+  .front-page-hero.front-page-hero--serif-story-v1[data-phone-story-size="14"] { --home-phone-story-size: 14px; }
+  .front-page-hero.front-page-hero--serif-story-v1[data-phone-story-size="15"] { --home-phone-story-size: 15px; }
+  .front-page-hero.front-page-hero--serif-story-v1[data-phone-story-size="16"] { --home-phone-story-size: 16px; }
+  .front-page-hero.front-page-hero--serif-story-v1[data-phone-story-size="17"] { --home-phone-story-size: 17px; }
+  .front-page-hero.front-page-hero--serif-story-v1[data-phone-story-size="18"] { --home-phone-story-size: 18px; }
+  .front-page-hero.front-page-hero--serif-story-v1 .front-page-story-lead { font-size: calc(var(--home-phone-story-size, 15px) + 1px); }
 
-  .front-page-hero.front-page-hero--serif-story-v1 .front-page-story-line { font-size: 15px; }
+  .front-page-hero.front-page-hero--serif-story-v1 .front-page-story-line { font-size: var(--home-phone-story-size, 15px); }
 }
 
 @keyframes home-story-fade { from { opacity: 0; } to { opacity: 1; } }

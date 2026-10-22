@@ -24,6 +24,18 @@ test('nine anchors and every alignment preserve intrinsic block width and anchor
     }
 });
 
+test('all phone story sizes use data attributes and reset to 15 without inline typography', () => {
+    const [page, scroller, stage, hero] = Array.from({ length: 4 }, () => document.createElement('div'));
+    for (let phone_story_size = 12; phone_story_size <= 18; phone_story_size++) {
+        applyHomePresentation(page, scroller, stage, hero, { ...defaults, phone_story_size });
+        expect(hero.dataset.phoneStorySize).toBe(String(phone_story_size));
+        expect(hero.style.getPropertyValue('--home-phone-story-size')).toBe('');
+        expect(hero.style.fontSize).toBe('');
+    }
+    applyHomePresentation(page, scroller, stage, hero, null);
+    expect(hero.dataset.phoneStorySize).toBe('15');
+});
+
 test('375px phones keep 16px gutters; long text flows from the top with every saved anchor and margin', () => {
     for (const anchor of rules.anchors) for (const margin of [0, 40, 320]) {
         expect(computeHomeTextGeometry({ width: 375, height: 600, textHeight: 900,

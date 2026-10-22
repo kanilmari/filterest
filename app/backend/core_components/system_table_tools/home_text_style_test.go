@@ -1,5 +1,5 @@
 // home_text_style_test.go
-// Verifies complete v2/v3/v4 admin/store validation and an offline stale-revision refusal.
+// Verifies complete v2–v5 admin/store validation and an offline stale-revision refusal.
 // Connects the shared twin examples to both write entry points and a narrow SQL driver.
 // Ensures invalid or stale presentations cannot reach a database write.
 package system_table_tools
@@ -37,7 +37,8 @@ func TestHomeTextStyleAdminAndStoreTwinExamples(t *testing.T) {
 			_, err := decodeFrontPageAdminRequest(strings.NewReader(`{"presentation":` + string(example.Value) + `,"version":"none"}`))
 			var value presentation.Value
 			json.Unmarshal(example.Value, &value)
-			validRequest := example.Valid || (example.Readable && (value.SchemaVersion == 2 || value.SchemaVersion == 3))
+			// Readable v2–v4 requests are accepted and stored canonically; v1 stays read-only.
+			validRequest := example.Valid || (example.Readable && value.SchemaVersion >= 2 && value.SchemaVersion <= 4)
 			if (err == nil) != validRequest {
 				t.Fatal("admin", err)
 			}

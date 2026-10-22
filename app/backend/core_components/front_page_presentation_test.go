@@ -95,22 +95,29 @@ func TestReadHomePresentationConvertsStoredVersionOneWithoutChangingRevision(t *
 		}
 		t.Cleanup(func() { db.Close() })
 		value, revision, err := ReadFrontPagePresentation(context.Background(), db)
-		if err != nil || value == nil || value.SchemaVersion != 4 || value.Alignment != presentation.Rules().Legacy.Alignments[layout] ||
+		if err != nil || value == nil || value.SchemaVersion != 5 || value.PhoneStorySize != 15 || value.Alignment != presentation.Rules().Legacy.Alignments[layout] ||
 			value.HorizontalMarginPx != 55 || value.VerticalMarginPx != 55 || revision != FrontPagePresentationRevision(raw, "old-stamp") {
 			t.Fatal(value, revision, err)
 		}
 	}
 }
 
-func TestReadHomePresentationConvertsStoredVersionsTwoAndThreeWithoutChangingRevision(t *testing.T) {
-	for _, version := range []int{2, 3} {
+func TestReadHomePresentationConvertsStoredVersionsTwoThroughFourWithoutChangingRevision(t *testing.T) {
+	for _, version := range []int{2, 3, 4} {
 		for _, alignment := range []string{"left", "right", "center", "justify"} {
 			current, _ := json.Marshal(presentation.Rules().Default)
 			var fields map[string]json.RawMessage
 			json.Unmarshal(current, &fields)
 			fields["schema_version"], _ = json.Marshal(version)
 			fields["alignment"], _ = json.Marshal(alignment)
-			delete(fields, "phone_alignment")
+			logical := map[string]string{"left": "start", "right": "end", "center": "center", "justify": "justify"}[alignment]
+			delete(fields, "phone_story_size")
+			if version == 4 {
+				fields["alignment"], _ = json.Marshal(logical)
+				fields["phone_alignment"] = json.RawMessage(`"center"`)
+			} else {
+				delete(fields, "phone_alignment")
+			}
 			if version == 2 {
 				delete(fields, "text_style")
 			}
@@ -124,7 +131,10 @@ func TestReadHomePresentationConvertsStoredVersionsTwoAndThreeWithoutChangingRev
 			}
 			t.Cleanup(func() { db.Close() })
 			expected := presentation.Rules().Default
-			expected.Alignment = map[string]string{"left": "start", "right": "end", "center": "center", "justify": "justify"}[alignment]
+			expected.Alignment = logical
+			if version == 4 {
+				expected.PhoneAlignment = "center"
+			}
 			for range 2 {
 				value, revision, err := ReadFrontPagePresentation(context.Background(), db)
 				if err != nil || value == nil || *value != expected || revision != FrontPagePresentationRevision([]byte(original), "old-stamp") || string(raw) != original {

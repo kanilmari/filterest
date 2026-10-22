@@ -29,7 +29,7 @@ func TestHomePresentationValidAndInvalid(t *testing.T) {
 	data, _ := json.Marshal(rules.Default)
 	var defaults map[string]any
 	json.Unmarshal(data, &defaults)
-	for _, key := range []string{"schema_version", "anchor", "horizontal_margin_px", "vertical_margin_px", "alignment", "phone_alignment", "max_width_px", "light_wash", "light_opacity", "dark_wash", "dark_opacity", "text_style"} {
+	for _, key := range []string{"schema_version", "anchor", "horizontal_margin_px", "vertical_margin_px", "alignment", "phone_alignment", "phone_story_size", "max_width_px", "light_wash", "light_opacity", "dark_wash", "dark_opacity", "text_style"} {
 		for _, missing := range []bool{false, true} {
 			fields := map[string]any{}
 			for k, v := range defaults {
@@ -50,6 +50,7 @@ func TestHomePresentationValidAndInvalid(t *testing.T) {
 		value any
 	}{
 		{"schema_version", 1}, {"anchor", "left"}, {"alignment", "artistic"}, {"alignment", "left"}, {"alignment", "right"}, {"phone_alignment", "unknown"},
+		{"phone_story_size", 11}, {"phone_story_size", 19}, {"phone_story_size", 15.5}, {"phone_story_size", "15"},
 		{"horizontal_margin_px", -1}, {"horizontal_margin_px", 321}, {"horizontal_margin_px", 1.5}, {"horizontal_margin_px", "40"},
 		{"max_width_px", 319}, {"max_width_px", 1601}, {"max_width_px", 321}, {"max_width_px", "1120"}, {"vertical_margin_px", 321}, {"light_wash", -1}, {"light_opacity", 101}, {"dark_wash", 1.5}, {"dark_opacity", "20"}, {"unknown", true},
 	} {
@@ -114,8 +115,39 @@ func TestHomePresentationStoredNumericVersionMatchesBrowserIntegers(t *testing.T
 	}
 	raw, _ := json.Marshal(Rules().Default)
 	fields, _ := presentationFields(raw)
-	fields["schema_version"] = json.RawMessage(`4.0`)
+	fields["schema_version"] = json.RawMessage(`5.0`)
 	if _, err := ParseStored(fields); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestHomePhoneStorySizeContract(t *testing.T) {
+	for size := 12; size <= 18; size++ {
+		value := Rules().Default
+		value.PhoneStorySize = size
+		if got, err := Parse(value); err != nil || got != value {
+			t.Fatal(got, err)
+		}
+	}
+	fields, _ := presentationFields(Rules().Default)
+	for _, bad := range []string{`11`, `19`, `15.5`, `"15"`, `null`, `false`} {
+		fields["phone_story_size"] = json.RawMessage(bad)
+		for _, parse := range []func(any) (Value, error){Parse, ParseStored} {
+			if _, err := parse(fields); err == nil {
+				t.Fatal("invalid phone size accepted", bad)
+			}
+		}
+	}
+	delete(fields, "phone_story_size")
+	if _, err := Parse(fields); err == nil {
+		t.Fatal("missing v5 phone size accepted")
+	}
+	fields["schema_version"] = json.RawMessage(`4`)
+	if got, err := ParseStored(fields); err != nil || got.PhoneStorySize != 15 || got.SchemaVersion != 5 {
+		t.Fatal(got, err)
+	}
+	fields["phone_story_size"] = json.RawMessage(`15`)
+	if _, err := ParseStored(fields); err == nil {
+		t.Fatal("v4 with phone size accepted")
 	}
 }

@@ -45,9 +45,9 @@ test.each([
     expect(render).toHaveBeenCalledExactlyOnceWith({ ...defaults, text_style: textStyle });
 });
 
-test('an untouched v2 origin saves a complete v4 request and remains editable with the new revision', async () => {
+test('an untouched v2 origin saves a complete v5 request and remains editable with the new revision', async () => {
     const origin = { ...defaults, schema_version: 2, alignment: 'left', horizontal_margin_px: 73 };
-    delete origin.text_style; delete origin.phone_alignment;
+    delete origin.text_style; delete origin.phone_alignment; delete origin.phone_story_size;
     const normalized = { ...defaults, horizontal_margin_px: 73 };
     const request = vi.fn(async () => ({ version: 'stored-v2-revision', presentation: normalized }));
     const { get, render } = setup(origin, request);

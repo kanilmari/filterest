@@ -1,5 +1,5 @@
 // home_palette_choice_control.js
-// Builds Home's spatial grid and familiar text-alignment buttons.
+// Builds Home's spatial grid, text-alignment buttons and bounded phone-size stepper.
 // Connects translated names and pressed state to the palette draft.
 // Keeps arrow-key choices, focus and position independent of text alignment.
 import { createMaskIconSpan } from '../../icons/icon_mask_builder.js';
@@ -60,6 +60,50 @@ export function createHomePaletteChoiceControl({ id, label, choices, grid }, cop
             button.setAttribute('aria-label', next[choices[index]]);
             button.title = next[choices[index]];
         });
+    }
+    setCopy(copy);
+    return { element, setValue, setCopy };
+}
+
+/** Phone story typography uses the definition's bounds and the existing preview owner. */
+export function createHomePaletteSizeControl(bounds, copy, onChange) {
+    const element = document.createElement('fieldset');
+    element.className = 'home-palette-choice home-palette-story-size';
+    element.dataset.testid = 'home-palette-phone-story-size';
+    const legend = document.createElement('legend');
+    const group = document.createElement('div');
+    group.setAttribute('role', 'group');
+    const output = document.createElement('output');
+    output.dataset.testid = 'home-palette-phone-story-size-value';
+    output.setAttribute('aria-live', 'polite');
+    output.setAttribute('aria-atomic', 'true');
+    let value;
+    const buttons = [-1, 1].map(direction => {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.textContent = direction < 0 ? '−' : '+';
+        button.dataset.testid = `home-palette-phone-story-size-${direction < 0 ? 'decrease' : 'increase'}`;
+        button.addEventListener('click', () => {
+            const next = value + direction * bounds.step;
+            if (next < bounds.min || next > bounds.max) return;
+            setValue(next);
+            onChange(next);
+        });
+        return button;
+    });
+    group.append(buttons[0], output, buttons[1]);
+    element.append(legend, group);
+    function setValue(next) {
+        value = next;
+        output.value = `${value} px`;
+        buttons[0].disabled = value <= bounds.min;
+        buttons[1].disabled = value >= bounds.max;
+    }
+    function setCopy(next) {
+        legend.textContent = next.phoneStorySize;
+        group.setAttribute('aria-label', next.phoneStorySize);
+        buttons[0].setAttribute('aria-label', next.phoneStorySizeDecrease);
+        buttons[1].setAttribute('aria-label', next.phoneStorySizeIncrease);
     }
     setCopy(copy);
     return { element, setValue, setCopy };

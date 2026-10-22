@@ -65,6 +65,8 @@ test('theme omissions use their own defaults and never copy light values', () =>
 test('reserved inventory matches the existing setting owners and stays disjoint', () => {
     expect(rules.reserved['home-presentation'].fields).toEqual(Object.keys(homeDefinition.default).filter(key => key !== 'schema_version'));
     expect(reservedStyleTokenOwner('phone_alignment')).toBe('home-presentation');
+    expect(reservedStyleTokenOwner('phone_story_size')).toBe('home-presentation');
+    expect(reservedStyleTokenOwner('--home-phone-story-size')).toBe('home-presentation');
     const siteFields = Object.entries(datasetDefinition.shared_fields).filter(([, rule]) => rule.place === 'site_only').map(([key]) => key);
     expect(rules.reserved['site-presentation'].fields).toEqual(siteFields);
     const datasetFields = [
