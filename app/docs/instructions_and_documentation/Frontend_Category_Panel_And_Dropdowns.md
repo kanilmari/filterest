@@ -57,29 +57,36 @@ only the 20-selection limit blocks an unchecked value, exposing `aria-disabled`
 without evicting a previous selection. Dimming never disables a value.
 The popup is a named nonmodal dialog containing a named multiselect listbox.
 Include-only options are single interaction targets with decorative checkbox
-marks and accessible names that include hit counts. Match radios, expandable
-help and the limit notice sit above search inside the popup; category clear and
+marks and accessible names that include hit counts. The compact header centres the title,
+Settings gear and close button on one row. Match radios and expandable help
+are hidden behind the gear; the limit notice sits above search inside the popup; category clear and
 zero-results recovery stay on the card.
 Its name search is local to that returned list, never a complete vocabulary
-query. Escape and the close cross return focus to the heading; refreshes and language
+query. Escape closes settings first and returns focus to the gear; the next Escape
+or the main close cross closes the popup and returns focus to the heading; refreshes and language
 switches retain the open panel, query, focus, caret and list scroll position.
 
 Selections use unified filters and the `row_group` URL parameter with a 20-value
 limit. Multi-valued and untitled legacy headings with at least two returned values
-offer two stacked native radio rows before name search. The legend is **When you
-select several** / **Kun valitset useita**. **Accept any** / **Mikä tahansa käy**
+offer a settings gear named after what it opens (`row_group_match_legend`: **Kun
+valitset useita** / **When you select several**). It exposes `aria-expanded`, `aria-controls` and opens
+a settings section before name search. Its own header centres **When you
+select several** / **Kun valitset useita**, the ? help button and a close button
+on one row; closing it restores focus to the gear. Two stacked native radio
+rows follow that header. **Accept any** / **Mikä tahansa käy**
 (default) has a fixed **More results** / **Enemmän tuloksia** tag; **Require all** /
 **Kaikki vaaditaan** has **Fewer results** / **Vähemmän tuloksia**. The tags are part
 of the accessible radio names. They describe the relative direction, including
 equal totals with zero or one selection; they are not calculated counts.
-The 44 × 44 px help button follows the radio group in keyboard order and expands
-three lines below it: the existing ANY explanation, the existing ALL explanation
+The 44 × 44 px help button in the settings header expands
+three lines below the radios: the existing ANY explanation, the existing ALL explanation
 (including candidate-value counts), and **Selections under different headings
 always narrow the search together.** Its translated name is **Explain how
 selections combine** / **Selitä valintojen yhdistäminen**. `aria-expanded` and
 `aria-controls` expose its state and target; it stays open through result and
 language updates, retains focus, and resets when the popup closes. Native arrow
-keys select modes; Tab continues from the group through help to search. While
+keys select modes; Tab follows the main header, settings header, radios, expanded
+help and search, then options and the resize handle. While
 open, the named explanation region also takes keyboard focus for native scrolling.
 The changing mode hint remains connected to the dialog, fieldset and radios by
 `aria-describedby`, hidden visually for multi-valued headings. Single-valued
@@ -122,20 +129,30 @@ counts. Guidance is shown only for zero results with selected categories.
 Category toggles, tag removal, match-mode changes and category clear each use one first-page listing refresh. Busy state announces work without discarding subsequent choices; listing/search generations reject older replies and card builds. During a committed search, its listing owns row replacement: the search does not empty rows first, and replacement cards build off screen before one guarded swap. Later-page requests still belong to endless scrolling, which stops before observing or fetching when the current search/filter/sort count is already loaded. Card fields have their card ancestor during construction but wait for the accepted, connected swap before receiving `easelect:card-mounted`. `card_resource_lifecycle.js` releases keyword/detail observers, timers and card listeners on replacement or abandonment; reordering a keyword inside its parent keeps it alive. The search-owned AI “See also” group uses this same connected mount notification and disposal on replacement, explicit search clearing and cancelled staging builds. A current build failure clears stale rows and counts, keeps the selected filters and shows the existing keyed failure notice as a toast and persistent result alert. Cancelled work leaves the committed surface alone; the next selection can replace the alert. Search never retries a null listing reload: missing initial card hosts already use the listing owner's guarded rebuild and its same first page, while failed or abandoned work ends that action.
 
 Both application themes use `variables.css` tokens; fonts and spacing are scoped to the card and the opt-in class on
-the portalled popup. The option list scrolls within a popup capped at 400 px;
-search, match-mode controls and header remain visible. When expanded, the named
-help region can shrink and scroll independently so its three explanations do
-not push search outside that shell. Controls offer 44 px touch targets. Category popups are at least
-360 px wide on desktop, bounded by the viewport; at 600 px and narrower they use the visual viewport minus 16 px on
-each side. The shared popup controller measures fixed controls at that width and budgets three option rows (the
-whole list if shorter), capped at its maximum height; plain dropdowns also retain their existing minimum opening
-space. It opens below when that fits, otherwise on the larger side. That decision
+the portalled popup. The option list scrolls within a screen-sized shell capped
+at `min(600px, available height)`. A visible bottom grip is a focusable resize
+separator: drag it or use Up/Down in 20 px steps (reversed for an upward popup),
+Home for minimum and End for maximum. A chosen height is browser-local viewer
+memory, separate for rich and plain popup kinds (`filterest.multiselect.height.rich`
+and `.plain`), never a shared setting. All storage access is guarded; denied or
+invalid storage leaves the control usable. A smaller viewport temporarily clamps
+the height without overwriting the remembered preference. Search and the main
+header stay fixed; the settings section can scroll independently on short screens.
+Controls offer 44 px touch targets. Category popups are at least 360 px wide
+on desktop, bounded by the viewport; through the inclusive 700 px phone
+boundary they use the visual viewport minus 16 px on each side.
+The controller measures fixed controls and budgets three option rows (the whole
+list if shorter); plain dropdowns retain their minimum opening space. It opens
+below when that fits, otherwise on the larger side. The initial fitting rule
 is shared with the language menu through `reusable_components/floating_panel_placement.js`;
 see [language menu placement](Frontend_Coding_Conventions.md#language-menu-placement-and-interaction).
-The option budget is sampled after the opening's
-reset or preserved query renders its rows, including zero matches, then retained until close so search cannot change
-sides; fixed controls are remeasured on repositioning and content-size changes (ResizeObserver). On short screens, with
-an on-screen keyboard and once the heading has left the view, the popup stays within the visual viewport, at most 400 px high. Its fixed shell never scrolls; the options use the remaining height. This applies to plain column dropdowns as well as category popups.
+The option budget is sampled after the opening query renders and retained until
+close. Only opening and viewport resize choose a side and clamp to the visual
+viewport, including keyboard offsets. The portal retains fixed CSS positioning
+so scroll containers and modal callers cannot clip it; captured scroll events
+re-anchor it on the chosen side using its opening offset, without viewport
+re-clamping. It therefore moves offscreen with its button. Filtering, translated
+content growth and result updates cannot flip it. Resize fits it again.
 Enter, Space and ArrowDown open from the heading and focus search without scrolling the page.
 Focus changes and preserved updates reveal their target only inside the option list, keeping
 fixed controls and the page stationary. Unmoved targets retain the option scroll position;
@@ -227,7 +244,8 @@ native arrow keys, 44 px label/button targets and no horizontal popup overflow
 at 320 px. Screenshots include the opened explanation.
 The browser matrix covers 320, 375, 600, 601 px and desktop, short height, Finnish
 and English, and application light/OS light, application dark/OS light, and
-application light/OS dark.
+application light/OS dark. The placement unit tests separately prove the
+inclusive 700 px phone boundary at 699/700/701 px.
 
 ## 3. Reusable Components: Vanilla Dropdown
 

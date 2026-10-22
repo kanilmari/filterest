@@ -58,7 +58,7 @@
   border: 1px solid var(--border_color);
   background-color: var(--bg_color_extreme, var(--bg_color));
   color: var(--text_color);
-  max-height: 400px;
+  max-height: 600px;
   overflow: hidden;
   position: fixed;
   z-index: calc(var(--z-filterbar, 100001) + 10);
@@ -284,23 +284,23 @@
   text-align: left;
 }
 
-.msd-dropdown-list--rich [hidden] { display: none; }
-
-.msd-dropdown-list--rich .msd-popup-header {
+.msd-dropdown-list--rich :is(.msd-popup-header, .msd-popup-settings-header) {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
   gap: 12px;
   flex: none;
 }
 
-.msd-dropdown-list--rich h3 {
+.msd-dropdown-list--rich :is(h3, h4) {
+  flex: 1;
+  min-width: 0;
   margin: 0;
   font-size: 16px;
   overflow-wrap: anywhere;
 }
 
-.msd-dropdown-list--rich .msd-popup-close {
+.msd-dropdown-list--rich :is(.msd-popup-close, .msd-popup-settings-close, .msd-popup-settings-toggle) {
   flex: none;
   min-width: 44px;
   min-height: 44px;
@@ -377,7 +377,7 @@
   color: var(--primary_text_color);
 }
 
-.msd-dropdown-list--rich :is(.msd-option, .msd-popup-close):hover {
+.msd-dropdown-list--rich :is(.msd-option, .msd-popup-close, .msd-popup-settings-close, .msd-popup-settings-toggle):hover {
   background: var(--bg-surface-hover);
 }
 
@@ -404,3 +404,58 @@
   color: var(--text-main);
   border-color: var(--border-strong);
 }
+
+/* The settings section may scroll on a keyboard-shortened viewport; search stays outside it. */
+.msd-dropdown-list--rich .msd-popup-settings {
+  display: flex;
+  flex-direction: column;
+  flex: 0 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.msd-dropdown-list--rich .msd-popup-settings-header {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--bg-surface);
+  gap: 4px;
+}
+
+.msd-dropdown-list--rich .msd-popup-settings-toggle {
+  display: grid;
+  place-items: center;
+}
+
+.msd-popup-settings-icon {
+  width: 22px;
+  height: 22px;
+  background-color: currentcolor;
+}
+
+.msd-popup-resize {
+  display: grid;
+  place-items: center;
+  flex: none;
+  min-height: 20px;
+  cursor: ns-resize;
+  touch-action: none;
+  color: var(--text-muted, var(--text_color));
+}
+
+.msd-popup-resize::after {
+  content: "";
+  width: 36px;
+  height: 4px;
+  border-block: 1px solid currentcolor;
+}
+
+.msd-popup-resize:hover { color: var(--primary_color); }
+
+.msd-popup-resize:focus-visible {
+  outline: 2px solid var(--primary_color);
+  outline-offset: -2px;
+}
+
+.msd-dropdown-list--rich [hidden] { display: none; }

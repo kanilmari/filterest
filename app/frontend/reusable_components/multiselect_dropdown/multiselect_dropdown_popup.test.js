@@ -183,6 +183,9 @@ test('option keys preserve local navigation and Tab exits to the following page 
     expect(dropdown.getValue()).toEqual(['hit']); expect(document.activeElement).toBe(rows()[1]);
     rows()[1].dispatchEvent(new KeyboardEvent('keydown', { key: 'Home', bubbles: true })); expect(document.activeElement).toBe(rows()[0]);
     rows()[1].focus(); rows()[1].dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', bubbles: true }));
+    expect(popup.style.display).toBe('flex');
+    const resize = popup.querySelector('.msd-popup-resize'); resize.focus();
+    resize.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', bubbles: true }));
     expect(popup.style.display).toBe('none'); expect(document.activeElement).toBe(next);
     dropdown.open(); const close = popup.querySelector('button'); close.focus();
     close.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', shiftKey: true, bubbles: true })); expect(document.activeElement).toBe(trigger);
@@ -302,7 +305,7 @@ test('deactivation and destruction close once without stealing focus', () => {
 test('rich geometry bounds desktop and phone widths and short visual viewports', () => {
     const { dropdown, trigger, popup } = mount({ external: true, minPopupWidth: 360 });
     vi.spyOn(trigger, 'getBoundingClientRect').mockReturnValue({ left: 200, width: 90, top: 100, bottom: 144 });
-    vi.spyOn(window, 'innerWidth', 'get').mockReturnValue(601);
+    vi.spyOn(window, 'innerWidth', 'get').mockReturnValue(701);
     dropdown.open(); expect(popup.style.width).toBe('360px'); dropdown.close();
     vi.spyOn(window, 'innerWidth', 'get').mockReturnValue(320);
     dropdown.open(); expect(popup.style.width).toBe('288px'); expect(popup.style.left).toBe('16px'); dropdown.close();
@@ -343,9 +346,9 @@ test('a rich popup whose anchor has left a short view stays inside the view', ()
     expect(popup.style.maxHeight).toBe('318px');
     dropdown.close();
     delete window.visualViewport;
-    // A desktop page scrolled past the heading keeps the popup in view at its usual height, not the view's.
+    // Opening at an offscreen anchor still fits the viewport; subsequent scroll follows that anchor.
     vi.spyOn(window, 'innerHeight', 'get').mockReturnValue(1000);
     dropdown.open();
     expect(popup.style.top).toBe('8px');
-    expect(popup.style.maxHeight).toBe('400px');
+    expect(popup.style.maxHeight).toBe('600px');
 });

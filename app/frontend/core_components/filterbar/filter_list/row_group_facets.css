@@ -126,11 +126,16 @@
 }
 
 .msd-dropdown-list--rich .row-group-facet-mode-block {
-    position: relative;
-    margin: 8px 0 4px;
+    display: flex;
+    flex-direction: column;
+    flex: 0 1 auto;
+    min-height: 0;
+    margin: 4px 0;
+    overflow-y: auto;
 }
 
 .msd-dropdown-list--rich .row-group-facet-mode {
+    flex: none;
     min-width: 0;
     margin: 0;
     padding: 0;
@@ -139,8 +144,8 @@
 
 .msd-dropdown-list--rich .row-group-facet-mode__legend {
     box-sizing: border-box;
-    min-height: 44px;
-    padding: 8px 52px 8px 0;
+    margin: 0;
+    padding: 0;
     color: var(--text-muted);
     font-size: 14px;
     line-height: 20px;
@@ -217,9 +222,7 @@
 }
 
 .msd-dropdown-list--rich .row-group-facet-mode__help-button {
-    position: absolute;
-    top: 0;
-    right: 0;
+    flex: none;
     display: grid;
     place-items: center;
     width: 44px;
@@ -239,6 +242,8 @@
 
 .msd-dropdown-list--rich .row-group-facet-mode__help[role="region"] {
     flex: 0 1 auto;
+    overflow-y: auto;
+    overscroll-behavior: contain;
     box-sizing: border-box;
     min-height: 44px;
     margin: 10px 0 2px;
@@ -250,8 +255,6 @@
     font-size: 13px;
     line-height: 1.45;
     overflow-wrap: anywhere;
-    overflow-y: auto;
-    overscroll-behavior: contain;
 }
 
 .msd-dropdown-list--rich .row-group-facet-mode__help:focus-visible {

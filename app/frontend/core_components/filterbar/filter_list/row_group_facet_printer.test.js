@@ -244,7 +244,7 @@ describe("row group category panel", () => {
         const close = popup(host).querySelector(".msd-popup-close");
         expect([close.textContent, close.getAttribute("aria-label"), close.title]).toEqual(["×", "Close", "Close"]);
         expect(popup(host).querySelector('[data-lang-key="row_group_match_any_hint"]').textContent).toBe("Any selected.");
-        expect(popup(host).querySelector("legend").textContent).toBe("When you select several");
+        expect(popup(host).querySelector(".row-group-facet-mode__legend").textContent).toBe("When you select several");
         expect([...popup(host).querySelectorAll(".row-group-facet-mode__text")].map(item => item.textContent)).toEqual(["Accept any", "Require all"]);
         expect(checkboxes(host)[0].getAttribute("aria-label")).toBe("Security: 0");
         expect(document.activeElement.type).toBe("search");
@@ -413,7 +413,7 @@ describe("row group category panel", () => {
             value(4, "plane", heading(1)), value(5, "legacy_two")]);
         open(host, 1);
         const fieldset = popup(host).querySelector("fieldset:not([hidden])");
-        expect(fieldset.querySelector("legend").textContent).toBe("Kun valitset useita");
+        expect(document.getElementById(fieldset.getAttribute("aria-labelledby")).textContent).toBe("Kun valitset useita");
         expect([...fieldset.querySelectorAll(".row-group-facet-mode__text")].map(item => item.textContent)).toEqual(["Mikä tahansa käy", "Kaikki vaaditaan"]);
         expect([...fieldset.querySelectorAll(".row-group-facet-mode__tag")].map(item => item.textContent)).toEqual(["Enemmän tuloksia", "Vähemmän tuloksia"]);
         expect(fieldset.compareDocumentPosition(popup(host).querySelector('input[type="search"]')) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
@@ -440,7 +440,8 @@ describe("row group category panel", () => {
         expect(help.getAttribute("role")).toBe("region");
         expect(help.getAttribute("aria-labelledby")).toBe(button.id);
         expect(help.tabIndex).toBe(0);
-        expect(help.previousElementSibling).toBe(button.parentElement.parentElement);
+        expect(help.previousElementSibling.className).toBe("row-group-facet-mode");
+        popup(host).querySelector(".msd-popup-settings-toggle").click();
         expect([...help.querySelectorAll("p")].map(line => line.textContent)).toEqual([
             "Mikä tahansa käy – Jokin valituista.", "Kaikki vaaditaan – Kaikki valitut arvot.",
             "Eri otsikoiden valinnat rajaavat hakua aina yhdessä.",
@@ -462,15 +463,19 @@ describe("row group category panel", () => {
         button.click();
         expect(help.hidden).toBe(true);
         expect(button.getAttribute("aria-expanded")).toBe("false");
-        for (const close of [() => popup(host).querySelector(".msd-popup-close").click(),
-            () => button.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }))]) {
-            button.click(); close();
-            expect(help.hidden).toBe(true);
-            expect(button.getAttribute("aria-expanded")).toBe("false");
-            expect(document.activeElement).toBe(buttons(host)[0]);
-            open(host);
-            expect(help.hidden).toBe(true);
-        }
+        button.click();
+        popup(host).querySelector(".msd-popup-settings-close").click();
+        expect(help.hidden).toBe(true);
+        const gear = popup(host).querySelector(".msd-popup-settings-toggle");
+        expect(document.activeElement).toBe(gear);
+        gear.click(); button.click();
+        button.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+        expect(help.hidden).toBe(true);
+        expect(document.activeElement).toBe(gear);
+        gear.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+        expect(document.activeElement).toBe(buttons(host)[0]);
+        open(host);
+        expect(help.hidden).toBe(true);
     });
 
     test("one returned value hides the whole selector; a second reveals it before any selections", async () => {
@@ -481,10 +486,13 @@ describe("row group category panel", () => {
         open(host);
         expect(popup(host).querySelector("fieldset").hidden).toBe(true);
         expect(popup(host).querySelector(".row-group-facet-mode-block").hidden).toBe(true);
+        expect(popup(host).querySelector(".msd-popup-settings-toggle").hidden).toBe(true);
         facets.push(value(2, "train", heading(1)));
         renderRowGroupFacets("travel_info", facets);
         expect(popup(host).querySelector("fieldset").hidden).toBe(false);
         expect(popup(host).querySelector(".row-group-facet-mode-block").hidden).toBe(false);
+        expect(popup(host).querySelector(".msd-popup-settings-toggle").hidden).toBe(false);
+        expect(popup(host).querySelector(".msd-popup-settings").hidden).toBe(true);
         expect(popup(host).querySelector('[value="any"]').checked).toBe(true);
     });
 
@@ -517,6 +525,7 @@ describe("row group category panel", () => {
         popup(host).querySelector('input[type="search"]').value = "sec";
         popup(host).querySelector('input[type="search"]').dispatchEvent(new Event("input"));
         popup(host).querySelector(".msd-dropdown-options").scrollTop = 81;
+        const gear = popup(host).querySelector(".msd-popup-settings-toggle"); gear.click();
         const radio = popup(host).querySelector('[value="all"]'); radio.focus(); radio.click();
         await vi.waitFor(() => expect(host.getAttribute("aria-busy")).not.toBe("true"));
         expect(onModeChange).toHaveBeenCalledWith("travel_info", 1, "all");
@@ -527,7 +536,47 @@ describe("row group category panel", () => {
         expect(popup(host).querySelector(".msd-dropdown-options").scrollTop).toBe(81);
         expect(popup(host).querySelector(".row-group-facet-panel__hint").textContent).toBe("Kaikki valitut arvot.");
         document.activeElement.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+        expect(document.activeElement).toBe(gear);
+        gear.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
         expect(document.activeElement).toBe(buttons(host)[0]);
+    });
+
+    test("the gear is named after the settings it opens (row_group_match_legend) in fi/en, with a separate settings header", async () => {
+        const { renderRowGroupFacets } = await import("./row_group_facet_printer.js");
+        const host = renderRowGroupFacets("travel_info", [value(1, "boat", heading(1)), value(2, "train", heading(1))]);
+        open(host);
+        const dialog = popup(host);
+        const header = dialog.querySelector(".msd-popup-header");
+        expect([...header.children].map(child => child.tagName)).toEqual(["H3", "BUTTON", "BUTTON"]);
+        const gear = header.querySelector(".msd-popup-settings-toggle");
+        expect(gear.getAttribute("aria-label")).toBe("Kun valitset useita");
+        expect(gear.title).toBe("Kun valitset useita");
+        const settings = document.getElementById(gear.getAttribute("aria-controls"));
+        expect(settings.hidden).toBe(true);
+        expect(gear.getAttribute("aria-expanded")).toBe("false");
+        gear.click();
+        expect(settings.hidden).toBe(false);
+        expect([...settings.firstElementChild.children].map(child => child.className)).toEqual([
+            "row-group-facet-mode__legend", "row-group-facet-mode__help-button", "msd-popup-settings-close",
+        ]);
+        const radio = settings.querySelector('[value="all"]'); radio.focus();
+        const counts = checkboxes(host).map(row => row.getAttribute("aria-label"));
+        languageRenderers.get(host)("en");
+        expect(gear.getAttribute("aria-label")).toBe("When you select several");
+        expect(gear.title).toBe("When you select several");
+        expect(gear.getAttribute("aria-expanded")).toBe("true");
+        expect(document.activeElement).toBe(radio);
+        expect(checkboxes(host).map(row => row.getAttribute("aria-label"))).toEqual(counts);
+        settings.querySelector(".msd-popup-settings-close").click();
+        expect(document.activeElement).toBe(gear);
+        gear.click();
+        buttons(host)[0].focus();
+        const outerEscape = vi.fn(); document.addEventListener("keydown", outerEscape);
+        buttons(host)[0].dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+        document.removeEventListener("keydown", outerEscape);
+        expect(outerEscape).not.toHaveBeenCalled();
+        expect(settings.hidden).toBe(true);
+        expect(document.activeElement).toBe(gear);
     });
 
     test("unselected zero hits remain dimmed, focusable and selectable", async () => {

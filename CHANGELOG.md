@@ -22,6 +22,7 @@ Dates are the local (Europe/Helsinki) date on which the version was published.
 
 ## [Unreleased]
 
+- Category popups gain a compact header with match settings behind a gear; shared multiselects resize up to the available 600 px, remember viewer height, and follow their buttons while scrolling.
 - On phones, Home navigation and content scroll together beneath a compact bar with the menu and site name; opening the menu keeps the page in place.
 - **Relevant-check coverage** — Complete production-file mappings, refuse unmapped changes and unclaimed browser specs, pin saved selections to their tree and map, and expose the nightly frontend prefixes through the planner.
 - Home text alignment now follows language direction (start/centre/end/justify), with an inherited/start/centre hero-text choice for phones up to 700 px (schema v4). **Rollback:** a 9.5.1 binary refuses stored v4; before rollback, re-save Home with “Phone alignment: as on desktop” (On phones → As elsewhere) so it stores v3, or v2 for the default text style.

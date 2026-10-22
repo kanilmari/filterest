@@ -29,6 +29,12 @@ async function categoryPopup(page: Page) {
   return popup;
 }
 
+async function openCategorySettings(page: Page) {
+  const gear = (await categoryPopup(page)).locator('.msd-popup-settings-toggle');
+  await expect(gear).toBeVisible();
+  if (await gear.getAttribute('aria-expanded') === 'false') await gear.click();
+}
+
 async function selectValue(page: Page, option: Locator) {
   const slug = await option.getAttribute('data-option-value');
   expect(slug).toBeTruthy();
@@ -134,13 +140,13 @@ async function popupPlacementGeometry(popup: Locator) {
       if (child === list || child.classList.contains('msd-no-results') || childStyle.display === 'none') continue;
       fixedHeight += child.getBoundingClientRect().height + pixels(childStyle.marginTop) + pixels(childStyle.marginBottom);
     }
-    const requiredHeight = Math.min(400, fixedHeight + last.bottom - list.getBoundingClientRect().top + list.scrollTop);
+    const requiredHeight = Math.min(600, fixedHeight + last.bottom - list.getBoundingClientRect().top + list.scrollTop);
     const viewport = window.visualViewport;
     const left = viewport?.offsetLeft || 0;
     const top = viewport?.offsetTop || 0;
     const right = left + (viewport?.width || window.innerWidth);
     const bottom = top + (viewport?.height || window.innerHeight);
-    const margin = right - left <= 600 ? 16 : 8;
+    const margin = right - left <= 700 ? 16 : 8;
     const below = Math.max(0, bottom - trigger.bottom - margin - 4);
     const above = Math.max(0, trigger.top - top - margin - 4);
     const preferUpward = below < requiredHeight && above > below;
@@ -179,7 +185,7 @@ async function provePopupGeometryAndFocus(page: Page, headingID: string, width: 
   });
   expect(geometry.left).toBeGreaterThanOrEqual(0);
   expect(geometry.right).toBeLessThanOrEqual(width);
-  if (width <= 600) expect(geometry.width).toBe(width - 32);
+  if (width <= 700) expect(geometry.width).toBe(width - 32);
   else expect(geometry.width).toBeGreaterThanOrEqual(360);
   expect(geometry.shortestTarget).toBeGreaterThanOrEqual(44);
   expect(geometry.overflow).toBe('auto');
@@ -248,8 +254,8 @@ for (const [language, theme, osTheme] of [['fi', 'light', 'dark'], ['en', 'dark'
     await closeCategoryPopup(page);
     const heading = page.locator(`${PANEL} [data-heading-id="${chosenHeading}"]`);
     const viewport = page.viewportSize()!;
-    const margin = viewport.width <= 600 ? 16 : 8;
-    const targetBelow = viewport.width <= 600 ? 220 : 300;
+    const margin = viewport.width <= 700 ? 16 : 8;
+    const targetBelow = 220;
     // Some datasets put every heading near the top. A temporary DOM spacer supplies scroll distance without
     // changing the dataset or moving the heading out of its real owner. Use the actual listing's scroll container.
     await page.locator(PANEL).evaluate(host => {
@@ -456,6 +462,7 @@ for (const language of ['fi', 'en'] as const) {
       }
       expect(chosenHeading, 'Needs a multi-valued heading with at least two returned values.').not.toBe('');
       const popup = await categoryPopup(page);
+      await openCategorySettings(page);
       const any = popup.locator('input[type="radio"][value="any"]');
       const all = popup.locator('input[type="radio"][value="all"]');
       await expect(popup.locator('fieldset')).toHaveAccessibleName(language === 'fi' ? 'Kun valitset useita' : 'When you select several');
@@ -471,8 +478,7 @@ for (const language of ['fi', 'en'] as const) {
           ? ['Enemmän tuloksia', 'Vähemmän tuloksia'] : ['More results', 'Fewer results']);
         await expect(button).toHaveAttribute('aria-expanded', 'false');
         await expect(help).toBeHidden();
-        await any.focus(); await any.press('Tab');
-        await expect(button).toBeFocused();
+        await button.focus();
         await button.press('Enter');
         await expect(button).toHaveAttribute('aria-expanded', 'true');
         await expect(help).toBeVisible();
@@ -498,6 +504,8 @@ for (const language of ['fi', 'en'] as const) {
         })).toBe(true);
         await expect(help).toHaveAccessibleName(language === 'fi' ? 'Selitä valintojen yhdistäminen' : 'Explain how selections combine');
         await button.press('Tab');
+        await expect(popup.locator('.msd-popup-settings-close')).toBeFocused();
+        await page.keyboard.press('Tab'); await page.keyboard.press('Tab');
         await expect(help).toBeFocused();
         await help.press('End');
         await expect.poll(() => help.evaluate(element =>
@@ -510,13 +518,15 @@ for (const language of ['fi', 'en'] as const) {
         await button.press('Space');
         await expect(help).toBeHidden();
         await expect(button).toHaveAttribute('aria-expanded', 'false');
-        await button.press('Tab');
+        await button.press('Tab'); await page.keyboard.press('Tab'); await page.keyboard.press('Tab');
         await expect(popup.locator('input[type="search"]')).toBeFocused();
       }
       await any.focus(); await any.press('ArrowRight');
       await waitForCategories(page); await expect(all).toBeChecked(); await expect(all).toBeFocused();
       await all.press('ArrowLeft'); await waitForCategories(page); await expect(any).toBeChecked();
       await button.click(); await button.press('Escape');
+      await expect(popup.locator('.msd-popup-settings-toggle')).toBeFocused();
+      await page.keyboard.press('Escape');
       await expect(page.locator(`${PANEL} [data-heading-id="${chosenHeading}"]`)).toBeFocused();
       await expect(help).toBeHidden();
     });
@@ -554,6 +564,7 @@ test('WL103: ANY/ALL counts, mode restoration and selectable dimmed values', asy
     await page.locator(`${PANEL} [data-heading-id="${heading}"]`).click();
     if (!await (await categoryPopup(page)).locator('fieldset:not([hidden]) input[type="radio"][value="all"]').count()
       || await (await positiveCheckboxes(page)).count() < 2) continue;
+    await openCategorySettings(page);
     await expect((await categoryPopup(page)).locator('fieldset:not([hidden]) input[type="radio"][value="any"]')).toBeChecked();
     const first = await selectValue(page, (await positiveCheckboxes(page)).first());
     const second = await selectValue(page, (await positiveCheckboxes(page)).first());
@@ -591,6 +602,7 @@ test('WL103: ANY/ALL counts, mode restoration and selectable dimmed values', asy
   await page.reload();
   await waitForCategories(page);
   await page.locator(`${PANEL} [data-heading-id="${chosenHeading}"]`).click();
+  await openCategorySettings(page);
   await expect((await categoryPopup(page)).locator('fieldset:not([hidden]) input[type="radio"][value="all"]')).toBeChecked();
   expect(new URL(page.url()).searchParams.get('row_group')?.split(',').sort()).toEqual(slugs.sort());
   expect(await categoryCounts(page)).toEqual(allCounts);
@@ -624,6 +636,7 @@ test('WL103: ANY/ALL counts, mode restoration and selectable dimmed values', asy
   await waitForCategories(page);
   expect(new URL(page.url()).searchParams.get('row_group_mode')).toBe(`${headingID}:all`);
   if (await selectedHeading.getAttribute('aria-expanded') !== 'true') await selectedHeading.click();
+  await openCategorySettings(page);
   await (await categoryPopup(page)).locator('fieldset:not([hidden]) input[type="radio"][value="any"]').check();
   await waitForCategories(page);
   await expect.poll(() => new URL(page.url()).searchParams.has('row_group_mode')).toBe(false);
@@ -637,5 +650,6 @@ test('WL103: ANY/ALL counts, mode restoration and selectable dimmed values', asy
   // The open heading stays open through the clearing re-render; a click would close it.
   const clearedHeading = page.locator(`${PANEL} [data-heading-id="${chosenHeading}"]`);
   if (await clearedHeading.getAttribute('aria-expanded') !== 'true') await clearedHeading.click();
+  await openCategorySettings(page);
   await expect((await categoryPopup(page)).locator('fieldset:not([hidden]) input[type="radio"][value="any"]')).toBeChecked();
 });

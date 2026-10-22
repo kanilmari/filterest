@@ -7,6 +7,7 @@ import { createMaskIconSpan } from '../../icons/icon_mask_builder.js';
 import { createMultiselectPopupController } from './multiselect_dropdown_popup_controller.js';
 import { createMultiselectOptionPrinter } from './multiselect_dropdown_option_printer.js';
 import { createMultiselectLabelUpdater } from './multiselect_dropdown_labels.js';
+import { createMultiselectSettingsController } from './multiselect_dropdown_settings_controller.js';
 import {
 	mergeSelectedMultiselectOptions,
 	normalizeMultiselectState,
@@ -38,6 +39,7 @@ let multiselectDropdownSequence = 0;
  * @param {function(string): Promise<Array>|Array} [config.onSearch] - Optional server-backed option search
  * @param {number} [config.searchDebounceMs=200] - Delay before a server-backed search
  * @param {{title:string, showCloseButton?:boolean}|null} [config.popupHeader=null] - Opt-in dialog header
+ * @param {{element:HTMLElement, titleElement:HTMLElement, helpButton?:HTMLElement, label:string, onClose?:function}|null} [config.popupSettings=null] - Optional match settings
  * @param {string} [config.closeLabel="Close"] - Header close action's name and tooltip
  * @param {HTMLElement|null} [config.beforeSearchElement=null] - Caller-owned content mounted once
  * @param {string|null} [config.popupDescriptionId=null] - Hint describing dialog and listbox
@@ -72,6 +74,7 @@ export function createMultiselectDropdown({
 	searchDebounceMs = 200,
 	onChange,
 	popupHeader = null,
+	popupSettings = null,
 	closeLabel = "Close",
 	beforeSearchElement = null,
 	popupDescriptionId = null,
@@ -84,7 +87,8 @@ export function createMultiselectDropdown({
 	onClose = null,
 }) {
 	const labels = { placeholder, searchPlaceholder, excludeLabel, resetLabel, excludeTooltip,
-		resetTooltip, selectedCountLabel, excludedCountLabel, noResultsLabel, clearLabel, closeLabel, popupTitle: popupHeader?.title || placeholder };
+		resetTooltip, selectedCountLabel, excludedCountLabel, noResultsLabel, clearLabel, closeLabel, popupTitle: popupHeader?.title || placeholder,
+		settingsLabel: popupSettings?.label || "" };
 	if (!containerElement) {
 		throw new Error("containerElement is required.");
 	}
@@ -98,7 +102,7 @@ export function createMultiselectDropdown({
 	}
 	const explicitOwner = ownerElement !== null;
 	ownerElement = ownerElement || containerElement;
-	const richPopup = Boolean(popupHeader || beforeSearchElement);
+	const richPopup = Boolean(popupHeader || beforeSearchElement || popupSettings);
 	let destroyed = false;
 	let isOpen = false;
 	let currentOptions = options || [];
@@ -182,6 +186,7 @@ export function createMultiselectDropdown({
 	listWrapper.classList.toggle('msd-dropdown-list--rich', richPopup);
 	let popupTitle = null;
 	let closeButton = null;
+	let settingsController = null;
 	if (richPopup) {
 		listWrapper.setAttribute('role', 'dialog');
 		listWrapper.setAttribute('aria-modal', 'false');
@@ -192,6 +197,8 @@ export function createMultiselectDropdown({
 		popupTitle.textContent = labels.popupTitle;
 		header.appendChild(popupTitle);
 		listWrapper.setAttribute('aria-labelledby', popupTitle.id);
+		listWrapper.appendChild(header);
+		if (popupSettings) settingsController = createMultiselectSettingsController({ listWrapper, header, settings: popupSettings, labels });
 		if (popupHeader?.showCloseButton === true) {
 			closeButton = document.createElement('button');
 			closeButton.type = 'button';
@@ -202,7 +209,6 @@ export function createMultiselectDropdown({
 			closeButton.addEventListener('click', () => close({ returnFocus: true, reason: 'close-button' }));
 			header.appendChild(closeButton);
 		}
-		listWrapper.appendChild(header);
 	}
 	if (beforeSearchElement) listWrapper.appendChild(beforeSearchElement);
 	if (popupDescriptionId) listWrapper.setAttribute('aria-describedby', popupDescriptionId);
@@ -258,7 +264,10 @@ export function createMultiselectDropdown({
 	};
 	const handleTriggerKeydown = (event) => {
 		if (event.key === 'Escape') {
-			close({ returnFocus: true, reason: 'escape' });
+			if (settingsController?.close({ returnFocus: true })) {
+				event.preventDefault();
+				event.stopPropagation();
+			} else close({ returnFocus: true, reason: 'escape' });
 			return;
 		}
 		if (event.key === 'ArrowDown' || event.key === 'Enter' || event.key === ' ') {
@@ -273,7 +282,7 @@ export function createMultiselectDropdown({
 		if (event.key === 'Escape') {
 			event.preventDefault();
 			event.stopPropagation();
-			close({ returnFocus: true, reason: 'escape' });
+			if (!settingsController?.close({ returnFocus: true })) close({ returnFocus: true, reason: 'escape' });
 		} else if (event.key === 'Tab' && triggerElement) {
 			const controls = Array.from(listWrapper.querySelectorAll('button, input, select, textarea, a[href], [tabindex="0"]'))
 				.filter(element => !element.disabled && !element.closest('[hidden]'));
@@ -460,6 +469,7 @@ export function createMultiselectDropdown({
 	function close({ returnFocus = false, reason = 'programmatic' } = {}) {
 		if (!isOpen) return;
 		isOpen = false;
+		settingsController?.close();
 		listWrapper.style.display = 'none';
 		trigger.setAttribute('aria-expanded', 'false');
 		listWrapper.style.visibility = '';
@@ -491,10 +501,16 @@ export function createMultiselectDropdown({
 		else close({ returnFocus: Boolean(triggerElement), reason: 'trigger' });
 	}
 
-	instance.setLabels = createMultiselectLabelUpdater({
+	const updateLabels = createMultiselectLabelUpdater({
 		labels, input: inputEl, searchInput, clearButton: clearBtn, optionsList, emptyStatus, popupTitle, closeButton,
 		updateDisplay, isDestroyed: () => destroyed,
 	});
+	instance.setLabels = nextLabels => {
+		updateLabels(nextLabels);
+		settingsController?.setLabels();
+		if (!richPopup) listWrapper.querySelector('.msd-popup-resize')?.setAttribute('aria-label', trigger.getAttribute('aria-label') || labels.placeholder);
+	};
+	instance.setSettingsAvailable = available => settingsController?.setAvailable(available);
 	renderList("");
 	updateDisplay();
 	return instance;

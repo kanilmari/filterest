@@ -43,7 +43,7 @@ function mount({ rich = true, below = 300, height = 1000, width = 1440, count = 
     popup.style.border = '1px solid';
     let fixedCallerHeight = callerHeight;
     let currentRowHeight = rowHeight;
-    const margin = rich && width <= 600 ? 16 : 8;
+    const margin = rich && width <= 700 ? 16 : 8;
     const anchor = rich ? trigger : container.querySelector('.msd-dropdown-input-row');
     let anchorBottom = height - margin - 4 - below;
     vi.spyOn(window, 'innerHeight', 'get').mockReturnValue(height);
@@ -74,7 +74,7 @@ test.each([220, 280, 350])('rich fixed content plus three rows flips upward with
     expect(fixture.popup.style.top).toBe('');
     expect(fixture.popup.style.bottom).toBe(`${below + 60}px`);
     const popupHeight = Number.parseFloat(fixture.popup.style.maxHeight);
-    expect(popupHeight).toBe(400);
+    expect(popupHeight).toBe(Math.min(600, fixture.above()));
     // The first option and the useful three-row minimum fit after all fixed content.
     expect(popupHeight - fixture.fixedHeight).toBeGreaterThanOrEqual(3 * 44);
     expect(fixture.above() - popupHeight).toBeGreaterThanOrEqual(0);
@@ -85,7 +85,7 @@ test.each([368, 440, 600])('rich popup stays downward when the useful content fi
     dropdown.open();
     expect(popup.classList.contains('msd-dropdown-list--open-upward')).toBe(false);
     expect(popup.style.top).toBe(`${992 - below}px`);
-    expect(popup.style.maxHeight).toBe(`${Math.min(400, below)}px`);
+    expect(popup.style.maxHeight).toBe(`${Math.min(600, below)}px`);
 });
 
 test.each([1, 2])('a short rich list requires its whole %i-row list rather than three rows', count => {
@@ -95,11 +95,11 @@ test.each([1, 2])('a short rich list requires its whole %i-row list rather than 
     expect(325 - fixture.fixedHeight).toBeGreaterThanOrEqual(count * 44);
 });
 
-test('required content is capped at 400 px even when controls and wrapped rows need more', () => {
-    const { dropdown, popup } = mount({ callerHeight: 200, rowHeight: 80, below: 440 });
+test('required content is capped at 600 px even when controls and wrapped rows need more', () => {
+    const { dropdown, popup } = mount({ callerHeight: 400, rowHeight: 100, below: 620 });
     dropdown.open();
     expect(popup.classList.contains('msd-dropdown-list--open-upward')).toBe(false);
-    expect(popup.style.maxHeight).toBe('400px');
+    expect(popup.style.maxHeight).toBe('600px');
 });
 
 test('group labels are included in the minimum option extent, independently of list scroll', () => {
@@ -109,7 +109,7 @@ test('group labels are included in the minimum option extent, independently of l
     expect(popup.classList.contains('msd-dropdown-list--open-upward')).toBe(true);
 });
 
-test.each([[600, false, 400], [300, false, 300], [220, false, 220], [180, true, 400]])(
+test.each([[600, false, 600], [300, false, 300], [220, false, 220], [180, true, 600]])(
     'plain dropdown preserves placement with %i px below', (below, upward, maxHeight) => {
         const { dropdown, popup } = mount({ rich: false, below });
         dropdown.open();
@@ -249,7 +249,7 @@ test('short visual viewport keeps the existing whole-popup branch and keyboard o
     expect(popup.classList.contains('msd-dropdown-list--open-upward')).toBe(false);
 });
 
-test('visual viewport resize and scroll re-evaluate the open popup and detach on close', async () => {
+test('visual viewport resize fits the popup; viewport scroll retains its side and detaches on close', async () => {
     vi.useFakeTimers();
     const viewport = Object.assign(new EventTarget(), { width: 1440, height: 1000, offsetLeft: 0, offsetTop: 0 });
     vi.stubGlobal('visualViewport', viewport);
@@ -268,13 +268,13 @@ test('visual viewport resize and scroll re-evaluate the open popup and detach on
     viewport.offsetTop = 0;
     viewport.dispatchEvent(new Event('scroll'));
     await vi.advanceTimersByTimeAsync(20);
-    expect(popup.classList.contains('msd-dropdown-list--open-upward')).toBe(true);
+    expect(popup.classList.contains('msd-dropdown-list--open-upward')).toBe(false);
     dropdown.close();
     expect(removeListener).toHaveBeenCalledWith('resize', expect.any(Function));
     expect(removeListener).toHaveBeenCalledWith('scroll', expect.any(Function));
 });
 
-test('content growth repositions a capped popup, while filtering retains its opening option budget', async () => {
+test('content growth, filtering and page scroll retain the opening side until reopening or viewport resize', async () => {
     vi.useFakeTimers();
     const observers = [];
     vi.stubGlobal('ResizeObserver', class {
@@ -289,13 +289,13 @@ test('content growth repositions a capped popup, while filtering retains its ope
     fixture.setCallerHeight(110);
     observers[0].callback();
     await vi.advanceTimersByTimeAsync(20);
-    expect(fixture.popup.classList.contains('msd-dropdown-list--open-upward')).toBe(true);
+    expect(fixture.popup.classList.contains('msd-dropdown-list--open-upward')).toBe(false);
     for (const query of ['Value 0', 'missing', '']) {
         fixture.search.value = query;
         fixture.search.dispatchEvent(new Event('input'));
         observers[0].callback();
         await vi.advanceTimersByTimeAsync(20);
-        expect(fixture.popup.classList.contains('msd-dropdown-list--open-upward')).toBe(true);
+        expect(fixture.popup.classList.contains('msd-dropdown-list--open-upward')).toBe(false);
     }
     fixture.search.value = 'Value 0'; fixture.search.dispatchEvent(new Event('input'));
     fixture.dropdown.close();
@@ -310,11 +310,51 @@ test('content growth repositions a capped popup, while filtering retains its ope
     expect(fixture.popup.classList.contains('msd-dropdown-list--open-upward')).toBe(true);
     fixture.setBelow(500); window.dispatchEvent(new Event('scroll'));
     await vi.advanceTimersByTimeAsync(20);
-    expect(fixture.popup.classList.contains('msd-dropdown-list--open-upward')).toBe(false);
+    expect(fixture.popup.classList.contains('msd-dropdown-list--open-upward')).toBe(true);
     fixture.setBelow(280); window.dispatchEvent(new Event('resize'));
     await vi.advanceTimersByTimeAsync(20);
     expect(fixture.popup.classList.contains('msd-dropdown-list--open-upward')).toBe(true);
     fixture.dropdown.destroy();
     expect(observers[1].disconnect).toHaveBeenCalledTimes(1);
     expect(observers[2].disconnect).toHaveBeenCalledTimes(1);
+});
+
+
+test.each([699, 700, 701])('rich popup uses the inclusive 700 px phone boundary at %i px', width => {
+    const { dropdown, popup } = mount({ width, below: 600 });
+    dropdown.open();
+    expect(popup.style.width).toBe(width <= 700 ? `${width - 32}px` : '360px');
+    expect(popup.style.left).toBe(width <= 700 ? '16px' : '100px');
+});
+
+test.each([true, false])('scroll follows even an offscreen anchor without viewport clamping (rich: %s)', async rich => {
+    vi.useFakeTimers();
+    const { dropdown, popup, setBelow } = mount({ rich, below: 600 });
+    dropdown.open();
+    const openingTop = Number.parseFloat(popup.style.top);
+    const openingMax = popup.style.maxHeight;
+    setBelow(1400);
+    window.dispatchEvent(new Event('scroll'));
+    await vi.advanceTimersByTimeAsync(20);
+    expect(popup.style.top).toBe(`${openingTop - 800}px`);
+    expect(Number.parseFloat(popup.style.top)).toBeLessThan(0);
+    expect(popup.style.maxHeight).toBe(openingMax);
+    expect(popup.classList.contains('msd-dropdown-list--open-upward')).toBe(false);
+    window.dispatchEvent(new Event('resize'));
+    await vi.advanceTimersByTimeAsync(20);
+    expect(popup.style.top).toBe('8px');
+});
+
+test('upward scroll keeps its opening side, gap and height even when below becomes larger', async () => {
+    vi.useFakeTimers();
+    const { dropdown, popup, setBelow } = mount({ below: 220 });
+    dropdown.open();
+    const openingBottom = Number.parseFloat(popup.style.bottom);
+    const openingMax = popup.style.maxHeight;
+    setBelow(1200);
+    window.dispatchEvent(new Event('scroll'));
+    await vi.advanceTimersByTimeAsync(20);
+    expect(popup.classList.contains('msd-dropdown-list--open-upward')).toBe(true);
+    expect(popup.style.bottom).toBe(`${openingBottom + 980}px`);
+    expect(popup.style.maxHeight).toBe(openingMax);
 });

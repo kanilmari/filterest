@@ -162,7 +162,7 @@ export function createRowGroupFacetCard({ host, topControls, tableName, getSelec
         const fieldset = document.createElement('fieldset');
         fieldset.className = 'row-group-facet-mode';
         fieldset.setAttribute('aria-describedby', hint.id);
-        fieldset.appendChild(createPanelText('legend', MATCH_MODE_COPY.legendKey, 'row-group-facet-mode__legend'));
+        const settingsTitle = createPanelText('h4', MATCH_MODE_COPY.legendKey, 'row-group-facet-mode__legend');
         const rows = document.createElement('div');
         rows.className = 'row-group-facet-mode__rows';
         const help = document.createElement('div');
@@ -192,7 +192,7 @@ export function createRowGroupFacetCard({ host, topControls, tableName, getSelec
         }
         fieldset.appendChild(rows);
         help.appendChild(createPanelText('p', MATCH_MODE_COPY.headingsHintKey, ''));
-        // Outside the legend so the disclosure name is not part of the radio-group name.
+        // The settings header owns help; its name stays outside the radio-group label.
         const helpButton = document.createElement('button');
         helpButton.id = `${entry.button.id}_help_toggle`;
         helpButton.type = 'button';
@@ -205,15 +205,19 @@ export function createRowGroupFacetCard({ host, topControls, tableName, getSelec
             help.hidden = !help.hidden;
             helpButton.setAttribute('aria-expanded', String(!help.hidden));
         });
-        modeBlock.append(fieldset, helpButton);
-        content.append(modeBlock, hint, limit);
+        modeBlock.append(fieldset, help);
+        content.append(hint, limit);
         // Separate mounts avoid overwriting host.__dropdown when multiple headings have been opened.
         host.appendChild(mount);
-        Object.assign(entry, { mount, content, modeBlock, fieldset, helpButton, help, hint, limit });
+        Object.assign(entry, { mount, content, modeBlock, fieldset, settingsTitle, helpButton, help, hint, limit });
         entry.dropdown = createMultiselectDropdown({
             containerElement: mount, triggerElement: entry.button, ownerElement, minPopupWidth: 360,
             options: [], allowExclude: false, preserveViewState: true,
             popupHeader: { title: headingTitle(entry.group), showCloseButton: true },
+            // The gear is named after the settings it opens ("When you select several"): an existing key, no migration.
+            popupSettings: { element: modeBlock, titleElement: settingsTitle, helpButton,
+                label: getTranslationForKey(MATCH_MODE_COPY.legendKey),
+                onClose: () => { help.hidden = true; helpButton.setAttribute('aria-expanded', 'false'); } },
             closeLabel: getTranslationForKey(PANEL_COPY.close.langKey), beforeSearchElement: content,
             popupDescriptionId: hint.id, searchPlaceholder: getTranslationForKey(PANEL_COPY.search.langKey),
             noResultsLabel: getTranslationForKey(PANEL_COPY.noMatchesKey),
@@ -232,9 +236,7 @@ export function createRowGroupFacetCard({ host, topControls, tableName, getSelec
                 else render();
             },
         });
-        // A direct popup child can shrink independently of the radios/search in
-        // the shared 400 px shell. Keyboard users can focus and scroll the help.
-        content.after(help);
+        fieldset.setAttribute('aria-labelledby', settingsTitle.id);
         patchPopup(entry);
     }
 
@@ -247,6 +249,8 @@ export function createRowGroupFacetCard({ host, topControls, tableName, getSelec
         entry.hint.hidden = !isSingle;
         entry.modeBlock.hidden = isSingle || entry.group.values.length < 2;
         entry.fieldset.hidden = entry.modeBlock.hidden;
+        entry.dropdown.setSettingsAvailable(!entry.modeBlock.hidden);
+        entry.settingsTitle.textContent = getTranslationForKey(MATCH_MODE_COPY.legendKey);
         if (entry.modeBlock.hidden) {
             entry.help.hidden = true;
             entry.helpButton.setAttribute('aria-expanded', 'false');
@@ -254,12 +258,13 @@ export function createRowGroupFacetCard({ host, topControls, tableName, getSelec
         entry.helpButton.setAttribute('aria-label', getTranslationForKey(MATCH_MODE_COPY.helpLabelKey));
         entry.fieldset.querySelectorAll('input').forEach(radio => { radio.checked = radio.value === mode; });
         entry.limit.hidden = getSelectedSlugs(tableName).length < SELECTION_LIMIT;
-        for (const root of [entry.content, entry.help]) {
+        for (const root of [entry.content, entry.modeBlock]) {
             root.querySelectorAll('[data-lang-key]').forEach(element => {
                 element.textContent = getTranslationForKey(element.dataset.langKey);
             });
         }
         entry.dropdown.setLabels({
+            settingsLabel: getTranslationForKey(MATCH_MODE_COPY.legendKey),
             popupTitle: headingTitle(entry.group), closeLabel: getTranslationForKey(PANEL_COPY.close.langKey),
             searchPlaceholder: getTranslationForKey(PANEL_COPY.search.langKey), noResultsLabel: getTranslationForKey(PANEL_COPY.noMatchesKey),
         });

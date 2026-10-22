@@ -68,7 +68,7 @@ describe('createMultiselectDropdown', () => {
         expect(listWrapper.style.left).toBe('24px');
         expect(listWrapper.style.top).toBe('164px');
         expect(listWrapper.style.width).toBe('280px');
-        expect(listWrapper.style.maxHeight).toBe('400px');
+        expect(listWrapper.style.maxHeight).toBe('596px');
         expect(dropdown.getLabelsForValues(['done', 'archived'])).toEqual(['Done', 'Archived']);
         const chevron = container.querySelector('.msd-dropdown-chevron');
         expect(chevron?.tagName).toBe('SPAN');
