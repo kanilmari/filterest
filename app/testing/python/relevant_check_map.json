@@ -643,11 +643,9 @@
       "anchor": "app/backend/tools/internal/articleexport/command_test.go"
     },
     {
-      "paths": [
-        "app/frontend/icons/site_favicons"
-      ],
+      "paths": ["app/frontend/icons/site_favicons", "app/frontend/icons/site_favicons/site-fintravel-ft-v1-128-dark-v1.png", "app/frontend/icons/site_favicons/site-initial-e-v1-128-dark-v1.png", "app/frontend/icons/site_favicons/site-initial-es-v1-128-dark-v1.png", "app/frontend/icons/site_favicons/site-initial-f-v1-128-dark-v1.png", "app/frontend/icons/site_favicons/site-initial-s-v1-128-dark-v1.png"],
       "package": "app/backend/core_components/frontend_assets",
-      "anchor": "app/backend/core_components/frontend_assets/site_favicon_test.go"
+      "anchor": "app/backend/core_components/frontend_assets/site_favicon_variant_test.go"
     },
     {
       "paths": [

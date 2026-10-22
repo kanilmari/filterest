@@ -21,6 +21,7 @@ import { fileURLToPath } from 'node:url';
 import viteConfig, {
   isRootDocumentRequest,
   renderGoTemplateForDev,
+  resolveDevSiteFaviconVariant,
   resolveViteProjectLayout,
   shouldRedirectDevRootToStandaloneLogin,
 } from './vite.config.mjs';
@@ -82,6 +83,24 @@ describe('vite forced-login root redirect helpers', () => {
 });
 
 describe('vite Go-template development rendering', () => {
+  test('resolves dark regular siblings and refuses missing, unsafe, directory and symlink variants', () => {
+    const root = temporaryRoot();
+    const assets = resolve(root, 'icons/site_favicons'); mkdirSync(assets, { recursive: true });
+    const source = '/frontend/icons/site_favicons/site-test-16.png';
+    const normal = source.replace('-16.png', '-128.png');
+    const dark = source.replace('-16.png', '-128-dark-v1.png');
+    const file = resolve(assets, 'site-test-128-dark-v1.png');
+    const select = (path = source, suffix = '-128-dark-v1.png') => resolveDevSiteFaviconVariant(root, path, suffix, normal);
+    expect(select()).toBe(normal);
+    writeFileSync(file, 'png'); expect(select()).toBe(dark);
+    for (const path of ['/outside/site-test-16.png', source.replace('site-test', '../site-test'), source + '?x', source.replace('site-test', 'X'.repeat(140))]) {
+      expect(select(path)).toBe(normal);
+    }
+    expect(select(source, '../bad.png')).toBe(normal);
+    rmSync(file); mkdirSync(file); expect(select()).toBe(normal); rmSync(file, { recursive: true });
+    writeFileSync(resolve(assets, 'target.png'), 'png'); symlinkSync('target.png', file); expect(select()).toBe(normal);
+  });
+
   test('inlines the shared guard and independent style in the index preview', () => {
     const config = viteConfig({ command: 'serve' });
     const transform = config.plugins.find((plugin) => plugin.name === 'easelect-go-template-transform');
@@ -93,6 +112,7 @@ describe('vite Go-template development rendering', () => {
     expect(rendered).toContain('Sivua ladataan…');
     expect(rendered).not.toContain('{{');
     expect(rendered).toContain('visibility: hidden !important');
+    expect(rendered).toMatch(/sizes="128x128" href="\/icons\/site_favicons\/[^"/]+-128\.png" data-home-dark-href="\/icons\/site_favicons\/[^"/]+-128-dark-v1\.png"/);
   });
 
   test('selects only matching equality-conditional defaults', () => {

@@ -5,7 +5,7 @@
 
 import { createHeroDatasetTabs } from '../navigation/main_tabs/hero_dataset_tabs.js';
 import { formatSiteNameForDisplay, getCurrentSiteName } from '../state_stores/site_identity_reader.js';
-import { getSiteDisplayFaviconHref } from '../state_stores/site_favicon_reader.js';
+import { bindHomeSiteFavicon } from '../state_stores/site_favicon_reader.js';
 import { NAVBAR_VISIBILITY_CHANGED_EVENT, syncNavbarMenuButtonAccessibility } from '../navigation/menu_button/navbar_visibility_handler.js';
 import { createMaskIconSpan } from '../../icons/icon_mask_builder.js';
 import { hasRoutePermission } from '../route_permission_checker.js';
@@ -37,9 +37,7 @@ export function createFrontPageTopRow(siteName, onSaved, paletteOptions = {}) {
     icon.className = 'front-page-site-icon';
     icon.alt = '';
     icon.width = icon.height = 32;
-    const favicon = getSiteDisplayFaviconHref();
-    if (favicon) icon.src = favicon;
-    else icon.hidden = true;
+    const releaseFavicon = bindHomeSiteFavicon(icon);
     const title = document.createElement('div');
     title.className = 'front-page-site-name dataset-shared-topbar__dataset-title';
     // A site without a saved name shows the shell's own name, as dataset heroes do.
@@ -116,6 +114,7 @@ export function createFrontPageTopRow(siteName, onSaved, paletteOptions = {}) {
         },
         destroy() {
             destroyed = true;
+            releaseFavicon();
             paletteLanguageObserver?.disconnect();
             palette?.destroy();
             tabs.destroy();

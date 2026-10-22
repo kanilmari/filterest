@@ -150,7 +150,8 @@ func TestSitePreviewRenderersUseTranslatedHomeCopyAndEscapeAttributes(t *testing
 					`<meta property="og:image" content="https://travel.example/frontend/icons/site_favicons/site-fintravel-ft-v1-128.png">`,
 					`<meta property="og:image:width" content="128">`,
 					`<meta property="og:image:height" content="128">`,
-					`<link rel="icon" type="image/png" sizes="128x128" href="/frontend/icons/site_favicons/site-fintravel-ft-v1-128.png">`,
+					`<link rel="icon" type="image/png" sizes="128x128" href="/frontend/icons/site_favicons/site-fintravel-ft-v1-128.png"`,
+					`data-home-dark-href="/frontend/icons/site_favicons/site-fintravel-ft-v1-128-dark-v1.png"`,
 				} {
 					if !strings.Contains(body, expected) {
 						t.Errorf("missing escaped metadata: %s", expected)

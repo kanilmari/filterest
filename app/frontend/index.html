@@ -54,7 +54,7 @@
     <meta name="installation-environment" content="{{.InstallationEnvironment}}">
 
     <link rel="icon" type="image/png" sizes="16x16" href="{{.FaviconPath}}">
-    <link rel="icon" type="image/png" sizes="128x128" href="{{.Favicon128Path}}">
+    <link rel="icon" type="image/png" sizes="128x128" href="{{.Favicon128Path}}" data-home-dark-href="{{.Favicon128DarkPath}}">
     {{/* dev_error_forwarder is now loaded as ES module import in main.js */}}
     <script id="site-presentation-bootstrap" nonce="{{ .CSPNonce }}">
     // First paint uses only validated local cache; no network dependency before CSS.

@@ -4,7 +4,7 @@
 // Prevents detached Home rows from retaining stale permission-dependent tabs.
 // @vitest-environment jsdom
 
-import { beforeEach, expect, test, vi } from 'vitest';
+import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 const mocks = vi.hoisted(() => ({ snapshot: [{ dataset: 'news', text: 'News', langKey: 'news' }], listeners: new Set(), unsubscribe: vi.fn() }));
 vi.mock('../navigation/main_tabs/main_dataset_tabs.js', () => ({
     getMainDatasetTabs: () => mocks.snapshot,
@@ -20,6 +20,35 @@ vi.mock('../lang/translation_handler.js', () => ({ getTranslationForKey: (_key, 
 import { createFrontPageTopRow } from './front_page_top_row_builder.js';
 import { HOME_AVAILABILITY_CHANGED_EVENT, setFrontPageAvailability } from './front_page_availability.js';
 beforeEach(() => mocks.unsubscribe.mockClear());
+afterEach(() => { document.head.replaceChildren(); document.body.className = ''; vi.unstubAllGlobals(); });
+
+test.each(['light', 'dark'])('Home %s icon follows theme in the real phone projection and releases it on destroy', async theme => {
+    const { mountFrontPagePhoneLayout } = await import('./front_page_phone_layout.js');
+    const { buildMobileSiteIdentity } = await import('../filterbar/mobile_site_identity_builder.js');
+    const media = { matches: true, addEventListener: vi.fn(), removeEventListener: vi.fn() };
+    vi.stubGlobal('matchMedia', vi.fn(() => media));
+    document.head.innerHTML = '<link rel="icon" sizes="128x128" href="/chosen-128.png" data-home-dark-href="/chosen-128-dark-v1.png">';
+    document.body.className = `${theme}-mode`;
+    document.body.innerHTML = '<div id="navbar" class="collapsed"></div><button id="showMenuButton"></button><main></main><div class="front-page-scroller"></div>';
+    const row = createFrontPageTopRow('Site'); document.querySelector('main').append(row.element); row.mount();
+    const icon = row.element.querySelector('.front-page-site-icon');
+    const scroller = document.querySelector('.front-page-scroller');
+    const projection = mountFrontPagePhoneLayout(row.element, scroller);
+    try {
+        expect(scroller.querySelector('.front-page-phone-topbar .front-page-site-icon')).toBe(icon);
+        expect(icon.src.endsWith('-128-dark-v1.png')).toBe(theme === 'dark');
+        expect(buildMobileSiteIdentity().querySelector('img').src).toMatch(/chosen-128\.png$/);
+        document.body.className = `${theme === 'light' ? 'dark' : 'light'}-mode`; await Promise.resolve();
+        expect(icon.src.endsWith('-128-dark-v1.png')).toBe(theme === 'light');
+        projection.destroy();
+        expect(row.element.querySelector('.front-page-site-icon')).toBe(icon);
+        document.body.className = 'dark-mode'; await Promise.resolve();
+        expect(icon.src).toMatch(/chosen-128-dark-v1\.png$/);
+        row.destroy();
+        document.body.className = 'light-mode'; await Promise.resolve(); icon.dispatchEvent(new Event('error'));
+        expect(icon.src).toMatch(/chosen-128-dark-v1\.png$/);
+    } finally { projection.destroy(); row.destroy(); row.element.remove(); }
+});
 
 test('the current Home control follows live availability without moving menu focus', () => {
     setFrontPageAvailability({ separate_front_page: true });

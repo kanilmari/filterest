@@ -213,8 +213,11 @@ async function proveHome(page: Page, open: boolean, alignment: string, cappedMar
     return element.contains(document.elementFromPoint(box.x + box.width / 2, box.y + box.height / 2));
   }), { message: 'The visible menu control must receive pointer input' }).toBe(true);
   await expect.poll(() => name.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);
-  await expect.poll(() => icon.evaluate((image: HTMLImageElement) =>
-    image.complete && image.naturalWidth === 128 && /-128\.png$/.test(image.currentSrc))).toBe(true);
+  await expect.poll(() => icon.evaluate((image: HTMLImageElement) => {
+    const dark = document.body.classList.contains('dark-mode');
+    const suffix = dark ? '-128-dark-v1.png' : '-128.png';
+    return image.complete && image.naturalWidth === 128 && image.currentSrc.endsWith(suffix);
+  })).toBe(true);
   await expect(icon).toHaveCSS('image-rendering', 'auto');
   await expect(icon).toHaveCSS('width', '32px');
   const nameBox = (await name.boundingBox())!, iconBox = (await icon.boundingBox())!;

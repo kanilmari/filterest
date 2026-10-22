@@ -373,60 +373,40 @@
       "path": "app/frontend/icons/site_favicons/site-fintravel-ft-v1-16.png",
       "sha256": "0b3059f41d718c1a5aa84a556239861d9687af70cc9418c21ee2f35e2ed04300"
     },
-    {
-      "component": "Filterest brand and fallback images",
-      "kind": "asset",
-      "path": "app/frontend/icons/site_favicons/site-fintravel-ft-v1-128.png",
-      "sha256": "a6f3729e87c03d792fc6c7d3aa9a1ed038749d8c0d488c66899605f3c0d9c170"
-    },
+    {"component": "Filterest brand and fallback images", "kind": "asset", "path": "app/frontend/icons/site_favicons/site-fintravel-ft-v1-128.png", "sha256": "a6f3729e87c03d792fc6c7d3aa9a1ed038749d8c0d488c66899605f3c0d9c170"},
+    {"component": "Filterest brand and fallback images", "kind": "asset", "path": "app/frontend/icons/site_favicons/site-fintravel-ft-v1-128-dark-v1.png", "sha256": "2841c184bd7213e36dde43580852b4c1ed0dc9aced4bc76bf830a908320eb884", "source_detail": "Offline two-colour endpoint swap of the maintained 16 px source; alpha preserved; exact 8x pixel replication."},
     {
       "component": "Filterest brand and fallback images",
       "kind": "asset",
       "path": "app/frontend/icons/site_favicons/site-initial-e-v1-16.png",
       "sha256": "05aa55fc11d82b1345bad7d22febe76efd6755c613cb78a60d27227f0f2bcda4"
     },
-    {
-      "component": "Filterest brand and fallback images",
-      "kind": "asset",
-      "path": "app/frontend/icons/site_favicons/site-initial-e-v1-128.png",
-      "sha256": "17836c2b5a4a1ac2ab947ac7e5dacddef33d577094b536c631609194e85193dc"
-    },
+    {"component": "Filterest brand and fallback images", "kind": "asset", "path": "app/frontend/icons/site_favicons/site-initial-e-v1-128.png", "sha256": "17836c2b5a4a1ac2ab947ac7e5dacddef33d577094b536c631609194e85193dc"},
+    {"component": "Filterest brand and fallback images", "kind": "asset", "path": "app/frontend/icons/site_favicons/site-initial-e-v1-128-dark-v1.png", "sha256": "a99480cb2b22c9edcb6c133d8d6eded7641bf140719085d255594f81af8d18b9", "source_detail": "Offline two-colour endpoint swap of the maintained 16 px source; alpha preserved; exact 8x pixel replication."},
     {
       "component": "Filterest brand and fallback images",
       "kind": "asset",
       "path": "app/frontend/icons/site_favicons/site-initial-es-v1-16.png",
       "sha256": "ec41e0ecd35509c200456cac33748df68dbc997c2def738f8a7bfcdf3d4d5e52"
     },
-    {
-      "component": "Filterest brand and fallback images",
-      "kind": "asset",
-      "path": "app/frontend/icons/site_favicons/site-initial-es-v1-128.png",
-      "sha256": "0964685da788ec2eba45b6288fe7c66507d34bb41cd43d6306c70adfa1e384f8"
-    },
+    {"component": "Filterest brand and fallback images", "kind": "asset", "path": "app/frontend/icons/site_favicons/site-initial-es-v1-128.png", "sha256": "0964685da788ec2eba45b6288fe7c66507d34bb41cd43d6306c70adfa1e384f8"},
+    {"component": "Filterest brand and fallback images", "kind": "asset", "path": "app/frontend/icons/site_favicons/site-initial-es-v1-128-dark-v1.png", "sha256": "e7fd1ba107addc8c690585b13107c01b9a791c9c1b3e5cb643ca71980ab4cc32", "source_detail": "Offline two-colour endpoint swap of the maintained 16 px source; alpha preserved; exact 8x pixel replication."},
     {
       "component": "Filterest brand and fallback images",
       "kind": "asset",
       "path": "app/frontend/icons/site_favicons/site-initial-f-v1-16.png",
       "sha256": "6c2efd7f4f77c8ac63de6067fea6f0dd2ea732be7c466a67fa43c50992d0c739"
     },
-    {
-      "component": "Filterest brand and fallback images",
-      "kind": "asset",
-      "path": "app/frontend/icons/site_favicons/site-initial-f-v1-128.png",
-      "sha256": "efd6633fcdfb9ea4908931c5256db37cad4b144498ec7f396b91fe8ba87a116c"
-    },
+    {"component": "Filterest brand and fallback images", "kind": "asset", "path": "app/frontend/icons/site_favicons/site-initial-f-v1-128.png", "sha256": "efd6633fcdfb9ea4908931c5256db37cad4b144498ec7f396b91fe8ba87a116c"},
+    {"component": "Filterest brand and fallback images", "kind": "asset", "path": "app/frontend/icons/site_favicons/site-initial-f-v1-128-dark-v1.png", "sha256": "4a5c76b46d48e47186a2a53bfa75e607d61326798ecf6944711a9062fdad784e", "source_detail": "Offline two-colour endpoint swap of the maintained 16 px source; alpha preserved; exact 8x pixel replication."},
     {
       "component": "Filterest brand and fallback images",
       "kind": "asset",
       "path": "app/frontend/icons/site_favicons/site-initial-s-v1-16.png",
       "sha256": "ac34524cbcaf4b253d11e4f001a002c791538dbaca0cf3a02469e2b599142cad"
     },
-    {
-      "component": "Filterest brand and fallback images",
-      "kind": "asset",
-      "path": "app/frontend/icons/site_favicons/site-initial-s-v1-128.png",
-      "sha256": "b48efff15bf011a8d8b34550198b1ddc1a353c127077e0638027ea2ab15b7ceb"
-    },
+    {"component": "Filterest brand and fallback images", "kind": "asset", "path": "app/frontend/icons/site_favicons/site-initial-s-v1-128.png", "sha256": "b48efff15bf011a8d8b34550198b1ddc1a353c127077e0638027ea2ab15b7ceb"},
+    {"component": "Filterest brand and fallback images", "kind": "asset", "path": "app/frontend/icons/site_favicons/site-initial-s-v1-128-dark-v1.png", "sha256": "ec40c82f538d433e804fc721739f440ee0579e5e75a015a409a458723087ca89", "source_detail": "Offline two-colour endpoint swap of the maintained 16 px source; alpha preserved; exact 8x pixel replication."},
     {
       "component": "Google Material Icons and Symbols",
       "kind": "asset",
@@ -947,6 +927,6 @@
       "source_detail": "First-party Filterest admin-menu capture prepared for this document on 2026-10-16; copied byte-for-byte from the owner-supplied cropped image, without browser chrome. Publication authorised by the owner in WO34."
     }
   ],
-  "reviewed_on": "2026-10-16",
+  "reviewed_on": "2026-10-22",
   "schema_version": 2
 }

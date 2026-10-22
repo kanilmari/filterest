@@ -447,37 +447,39 @@ press must not leave Home: deactivation returns the borrowed toggle and removes
 Home's navbar offset, moving drag targets before a drop. Tabs without drag
 permission retain their immediate mouse-down navigation.
 
-The five maintained 16 px site icons each have a lossless 128 px variant.
-`server_tools/site_favicon_variants/main.go` generates exact 8×
-pixel replication without dependencies; run it from the repository root with
-`go run app/server_tools/site_favicon_variants/main.go`, then update
-asset provenance and licence inventory hashes. Go tests verify every source
-pixel and alpha against its variant and all three head templates' two sizes.
-The variant derives from the already-resolved safe 16 px filename; a missing
-or non-regular variant keeps that 16 px file. The phone dataset identity uses
-the same head reader as Home, and selectable favicon names remain the 16 px ones.
+The five maintained 16 px icons have exact 8× normal and two-colour dark variants.
+Run `go run app/server_tools/site_favicon_variants/main.go` offline from the root;
+refresh `server_tools/licenses/asset_provenance.json`. The pure helper ignores
+zero-alpha RGB and preserves alpha. Two opaque bases must each outnumber any
+mixture and cover ≥75% of opaque pixels; bases within two 8-bit steps are ambiguous.
+Visible mixtures fit `(1−t)A+tB` within one 8-bit step/channel (257 at 16-bit); dark is `tA+(1−t)B`.
+Mixtures touch both opaque bases in their eight-neighbourhood; wider ramps fall back.
+Unclear gradients, third/single colours and ambiguous art are rejected; stale dark
+files are removed. Pixel tests cover generated and shipped files.
+Safe regular siblings supply `data-home-dark-href` on the shell's 128 px icon link
+(Vite too); missing/unsafe dark files fall back to the normal 128/16 px icon.
+Home alone observes body theme classes and swaps its img live even inside the phone bar;
+it falls back once on error and disconnects on teardown. No invert, filter, inline
+handler or OS media selection. Light pixels, dataset identities, 16 px names and social previews stay unchanged.
+Only `*-128-dark-v1.png` static siblings use `image/png`, `public, no-cache` and
+content ETags for GET/HEAD/304; same-date byte replacements return fresh content.
 
 The browser fallback `/favicon.ico` serves the **exact resolved PNG bytes** with
 `image/png`, using the same selection as the shell's 16 px head link. Resolution
 chooses an existing safe configured PNG basename first, then available site-name
 initials (multiple initials before the first letter), then the generated Filterest
 F. Unknown, removed, unsafe and non-regular configured files use that same fallback.
-Both GET and HEAD are public, including with sign-in required for browsing and
-during maintenance. Both icon addresses share the public frontend assets' rate-limit
-exemption, so repeated loads and revalidations from one IP remain available.
-`Cache-Control: public, no-cache` and a content-based ETag
-require revalidation; an unchanged icon returns 304, while a changed selection or
-replaced image returns current bytes even when file modification dates coincide.
+GET/HEAD stay public during maintenance and required sign-in. Both icon addresses
+share the public frontend rate-limit exemption for repeated loads from one IP.
+`Cache-Control: public, no-cache` and content ETags return 304 for unchanged bytes
+and fresh content for changed selections/replacements even with matching dates.
 The compatibility address `/favicon4S.png` serves the same current site icon.
-
 Shell, login/OTP and first-run documents keep their existing 16/128 px icon links.
-Maintenance links `/favicon.ico`; standalone registration, template-recovery and
-rate-limit HTML without icon links use that fallback. Markdown API catalogs,
-JSON, plain text, XML, images, PDFs and non-HTML errors also use the browser's
-origin fallback when it requests an icon. A custom root document such as K378's
-does the same when its own HTML has no icon link. Browser tab/cache behavior still
-needs native browser verification. Social previews use the site's resolved
-128 px icon, as described below.
+Maintenance links `/favicon.ico`; standalone registration, recovery and rate-limit
+HTML without icon links use that fallback, as do non-HTML responses (Markdown API
+catalogs, JSON, text, XML, images, PDFs and errors) and custom roots without links.
+Browser tab/cache behavior still needs native browser verification. Social previews
+use the site's normal resolved 128 px icon, as described below.
 
 Fixed language keys `site_front_page_title`, `site_front_page_slogan` and
 `site_front_page_description` store three independent Finnish/English texts.

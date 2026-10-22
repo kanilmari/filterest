@@ -5,7 +5,7 @@
 
 import http from 'http';
 import https from 'https';
-import { readFileSync, readdirSync, statSync } from 'fs';
+import { readFileSync, readdirSync, statSync, lstatSync } from 'fs';
 import { join, resolve } from 'path';
 import { fileURLToPath } from 'url';
 import {
@@ -131,7 +131,7 @@ function resolveDevSiteFaviconPath(siteName) {
 		if (!candidate) continue;
 		const fileName = `site-initial-${candidate}-v1-16.png`;
 		try {
-			if (statSync(join(__dirname, 'icons', 'site_favicons', fileName)).isFile()) {
+			if (lstatSync(join(__dirname, 'icons', 'site_favicons', fileName)).isFile()) {
 				return `/frontend/icons/site_favicons/${fileName}`;
 			}
 		} catch {
@@ -142,15 +142,24 @@ function resolveDevSiteFaviconPath(siteName) {
 }
 
 const DEV_FAVICON_PATH = resolveDevSiteFaviconPath(DEV_SITE_NAME);
-const DEV_FAVICON_128_PATH = (() => {
-  const variant = DEV_FAVICON_PATH.replace(/-16\.png$/, '-128.png');
+// Twin of frontend_assets/site_favicon.go: safe regular siblings only, no links.
+export function resolveDevSiteFaviconVariant(frontendDir, source, suffix, fallback = source) {
+  if (!['-128.png', '-128-dark-v1.png'].includes(suffix)) return fallback;
+  const match = /^\/frontend\/icons\/site_favicons\/([a-z0-9][a-z0-9._-]*-16\.png)$/.exec(source);
+  if (!match) return fallback;
+  const fileName = match[1].replace(/-16\.png$/, suffix);
+  if (fileName.length > 132) return fallback;
   try {
-    if (statSync(join(__dirname, variant.slice('/frontend/'.length))).isFile()) return variant;
+    if (lstatSync(join(frontendDir, 'icons', 'site_favicons', fileName)).isFile()) {
+      return `/frontend/icons/site_favicons/${fileName}`;
+    }
   } catch {
     // A source checkout may not yet have the optional display variant.
   }
-  return DEV_FAVICON_PATH;
-})();
+  return fallback;
+}
+const DEV_FAVICON_128_PATH = resolveDevSiteFaviconVariant(__dirname, DEV_FAVICON_PATH, '-128.png');
+const DEV_FAVICON_128_DARK_PATH = resolveDevSiteFaviconVariant(__dirname, DEV_FAVICON_PATH, '-128-dark-v1.png', DEV_FAVICON_128_PATH);
 
 function frontendDevAssetRewrite() {
   return {
@@ -312,6 +321,7 @@ const KNOWN_DEFAULTS = {
   OGLocale: 'fi_FI',
   FaviconPath: DEV_FAVICON_PATH,
   Favicon128Path: DEV_FAVICON_128_PATH,
+  Favicon128DarkPath: DEV_FAVICON_128_DARK_PATH,
   FormAction: '/api/register',
   ImportsCSSPath: '/frontend/styles/imports.css',
   MainBundlePath: '/frontend/main.js',

@@ -16,16 +16,30 @@ const defaultSiteFaviconPath = "/frontend/icons/site_favicons/site-initial-f-v1-
 
 var safeSiteFaviconFilename = regexp.MustCompile(`^[a-z0-9][a-z0-9._-]{0,127}\.png$`)
 
-// SiteFaviconData supplies both head links from one resolved administrator/site choice.
+// SiteFaviconData supplies both head links and optional Home dark metadata from one choice.
 type SiteFaviconData struct {
-	FaviconPath    string
-	Favicon128Path string
+	FaviconPath        string
+	Favicon128Path     string
+	Favicon128DarkPath string
 }
 
 // NewSiteFaviconData preserves 16px resolution and derives its optional display variant.
 func NewSiteFaviconData(frontendDir, siteName, configuredFile string) SiteFaviconData {
 	path := SiteFaviconPath(frontendDir, siteName, configuredFile)
-	return SiteFaviconData{FaviconPath: path, Favicon128Path: SiteFavicon128Path(frontendDir, path)}
+	return SiteFaviconData{FaviconPath: path, Favicon128Path: SiteFavicon128Path(frontendDir, path), Favicon128DarkPath: SiteFavicon128DarkPath(frontendDir, path)}
+}
+
+// SiteFavicon128DarkPath offers Home's optional colour swap, retaining the normal
+// display path when the offline generator rejected the art or the file is unsafe.
+func SiteFavicon128DarkPath(frontendDir, resolvedPath string) string {
+	const prefix = "/frontend/icons/site_favicons/"
+	if strings.HasPrefix(resolvedPath, prefix) && strings.HasSuffix(resolvedPath, "-16.png") {
+		fileName := strings.TrimSuffix(strings.TrimPrefix(resolvedPath, prefix), "-16.png") + "-128-dark-v1.png"
+		if path := existingSiteFaviconPath(frontendDir, fileName); path != "" {
+			return path
+		}
+	}
+	return SiteFavicon128Path(frontendDir, resolvedPath)
 }
 
 // SiteFavicon128Path derives only a sibling of the resolved 16px path. Missing,

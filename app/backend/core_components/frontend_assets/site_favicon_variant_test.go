@@ -61,7 +61,7 @@ func TestSiteFaviconVariantResolutionPreservesFallbackAndSafety(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(directory, filepath.Base(variant)), []byte("png"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if got := NewSiteFaviconData(frontendDir, "Unknown", "../invalid.png"); got != (SiteFaviconData{original, variant}) {
+	if got := NewSiteFaviconData(frontendDir, "Unknown", "../invalid.png"); got.FaviconPath != original || got.Favicon128Path != variant {
 		t.Fatalf("resolved links = %+v", got)
 	}
 	for _, path := range []string{"/frontend/icons/site_favicons/../site-initial-f-v1-16.png", "/outside/site-initial-f-v1-16.png", original + "?query", "/frontend/icons/site_favicons/custom.png"} {
@@ -112,9 +112,66 @@ func TestSiteFaviconHeadTemplatesOfferBothSizes(t *testing.T) {
 						t.Fatalf("%s missing %s", tag, attribute)
 					}
 				}
+				if file == "index.html" && index == 1 && !strings.Contains(tag, `data-home-dark-href="/frontend/icons/site_favicons/site-fintravel-ft-v1-128-dark-v1.png"`) {
+					t.Fatalf("Home dark metadata missing: %s", tag)
+				}
 			}
 		})
 	}
+}
+
+func TestHomeDarkFaviconResolutionUsesSafeRegularSiblingOrNormal(t *testing.T) {
+	root := t.TempDir()
+	directory := filepath.Join(root, "icons", "site_favicons")
+	if err := os.MkdirAll(directory, 0700); err != nil {
+		t.Fatal(err)
+	}
+	const stem = "site-initial-f-v1"
+	const prefix = "/frontend/icons/site_favicons/"
+	for _, suffix := range []string{"-16.png", "-128.png"} {
+		if err := os.WriteFile(filepath.Join(directory, stem+suffix), []byte("png"), 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// Rendering the field exercises the shell's metadata contract without a second selector.
+	tpl := template.Must(template.New("dark").Parse("{{.Favicon128DarkPath}}"))
+	assertPath := func(configured, want string) {
+		t.Helper()
+		var rendered bytes.Buffer
+		if err := tpl.Execute(&rendered, NewSiteFaviconData(root, "Filterest", configured)); err != nil {
+			t.Fatal(err)
+		}
+		if rendered.String() != want {
+			t.Fatalf("dark path %q, want %q", rendered.String(), want)
+		}
+	}
+	dark := filepath.Join(directory, stem+"-128-dark-v1.png")
+	assertPath("", prefix+stem+"-128.png")
+	if err := os.WriteFile(dark, []byte("dark"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	assertPath(stem+"-16.png", prefix+stem+"-128-dark-v1.png")
+	for _, unsafe := range []string{"../outside-16.png", "/outside-16.png", "bad?name-16.png"} {
+		assertPath(unsafe, prefix+stem+"-128-dark-v1.png")
+	}
+	if err := os.Remove(dark); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(stem+"-128.png", dark); err != nil {
+		t.Fatal(err)
+	}
+	assertPath("", prefix+stem+"-128.png")
+	if err := os.Remove(dark); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Mkdir(dark, 0700); err != nil {
+		t.Fatal(err)
+	}
+	assertPath("", prefix+stem+"-128.png")
+	if err := os.Remove(filepath.Join(directory, stem+"-128.png")); err != nil {
+		t.Fatal(err)
+	}
+	assertPath("", prefix+stem+"-16.png")
 }
 
 func readFaviconPNG(t *testing.T, path string) image.Image {
@@ -129,4 +186,43 @@ func readFaviconPNG(t *testing.T, path string) image.Image {
 		t.Fatal(err)
 	}
 	return value
+}
+
+func TestCommittedDarkPixelsExchangeMaintainedSourceColours(t *testing.T) {
+	blue := color.NRGBA{55, 83, 121, 255}
+	white := color.NRGBA{255, 255, 255, 255}
+	sources, err := filepath.Glob("../../../frontend/icons/site_favicons/*-16.png")
+	if err != nil || len(sources) != 5 {
+		t.Fatalf("maintained sources: %v %v", sources, err)
+	}
+	for _, source := range sources {
+		original := readFaviconPNG(t, source)
+		dark := readFaviconPNG(t, strings.TrimSuffix(source, "-16.png")+"-128-dark-v1.png")
+		if dark.Bounds().Size() != image.Pt(128, 128) {
+			t.Fatal(dark.Bounds())
+		}
+		for y := 0; y < 128; y++ {
+			for x := 0; x < 128; x++ {
+				want := faviconColourAt(original, x/8, y/8)
+				if want.A != 0 {
+					switch want {
+					case blue:
+						want = white
+					case white:
+						want = blue
+					default:
+						t.Fatalf("unexpected maintained colour %v", want)
+					}
+				}
+				got := faviconColourAt(dark, x, y)
+				if got.A != want.A || want.A != 0 && got != want {
+					t.Fatalf("%s %d,%d: %v != %v", source, x, y, got, want)
+				}
+			}
+		}
+	}
+}
+
+func faviconColourAt(img image.Image, x, y int) color.NRGBA {
+	return color.NRGBAModel.Convert(img.At(x, y)).(color.NRGBA)
 }
