@@ -400,7 +400,8 @@ test('WL103: multi-heading categories, search, reload, removal and clear-all', a
     await waitForActiveFilterbarLayout(page);
     const showSearch = page.getByTestId('mobile-search-toggle');
     if (width === 375) {
-      await expect(datasetSearch).toHaveCount(0);
+      // Since 6100661e phones show the dataset search above the search tools; the top-bar button stays available.
+      await expect(datasetSearch).toBeVisible();
       await expect(showSearch).toBeVisible();
       await expect(showSearch).toHaveAccessibleName(/^(Näytä haku|Show search)$/);
     } else {
@@ -411,7 +412,8 @@ test('WL103: multi-heading categories, search, reload, removal and clear-all', a
     await expect(async () => {
       const input = await openActiveDatasetSearch(page);
       await expect(input).toHaveAttribute('data-dataset-search-input', DATASET);
-      if (width === 375) await expect(showSearch).toHaveAttribute('aria-expanded', 'true');
+      // The helper takes the visible hero field directly, so the top-bar search stays closed.
+      if (width === 375) await expect(showSearch).toHaveAttribute('aria-expanded', 'false');
       await input.fill(query);
       // The builder pairs input/submit test IDs by variant, even when the hero is rehosted.
       const inputTestID = await input.getAttribute('data-testid');
