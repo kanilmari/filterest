@@ -3,6 +3,7 @@
 // Connects the shared presentation to a shrink-wrapped, single-column stage.
 // Alignment changes line placement only; oversized text expands normal flow.
 import { readHomePresentation, HOME_PRESENTATION_DEFINITION } from '../../shared/front_page_presentation/validator.js';
+import { PHONE_BREAKPOINT_PX } from '../../ui_config.js';
 
 /** Blank lines separate plain-text paragraphs; single newlines remain authored line breaks. */
 export function renderHomeDescription(element, text) {
@@ -45,7 +46,7 @@ export function applyHomeMediaPresentation(container, presentation) {
 /** Numerical counterpart of the CSS stage; textWidth represents intrinsic content width. */
 export function computeHomeTextGeometry({ width, height, textHeight, textWidth, presentation }) {
     const value = readHomePresentation(presentation);
-    const phone = width <= 700;
+    const phone = width <= PHONE_BREAKPOINT_PX;
     const [vertical, horizontal] = value.anchor.split('-');
     const insetX = phone ? 16 : Math.min(value.horizontal_margin_px, width * 0.08,
         Math.max(0, (width - HOME_PRESENTATION_DEFINITION.max_width_px.min) / 2));

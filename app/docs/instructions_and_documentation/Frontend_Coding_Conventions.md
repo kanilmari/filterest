@@ -189,6 +189,28 @@ Checked 137 files. 0 errors, 473 OK, 473 total imports.
 
 Zero errors = all imports resolve correctly.
 
+## 7.1. Responsive structure
+
+The phone boundary is viewport width ≤ 700 px (K444); its single source is
+`LAYOUT_BREAKPOINTS.phone` in [ui_config.js](../../frontend/ui_config.js), with
+`PHONE_BREAKPOINT_PX` for JavaScript. CSS uses exactly `@media (width <= 700px)`;
+the [structure guard](../../frontend/styles/responsive_structure.test.js) ties that literal to the source.
+CSS escapes in names are decoded before the checks, so `@m\65 dia` and `(w\69 dth …)` are read as `@media` and `width`.
+The guard runs in every whole-Vitest run (the batch jobs and the nightly); selecting it by stylesheet change belongs to the test-map work (WO69 S2), not to this guard.
+Other viewport widths use the named layout bands there: 1060, 1100, 1550 and 1850 px.
+Container queries size components intrinsically; they never replace the viewport phone gate.
+Keep one phone section at the end of each stylesheet, introduced by `/* Phone (≤ 700px, K444) */`.
+The phone query is outermost; hover, pointer, any-pointer, reduced-motion and color-scheme
+conditions may nest inside it, but width conditions may not. No top-level style rule follows it.
+Phone selectors need a base rule in the same file or explicit ownership in the
+[owner map](../../frontend/styles/responsive_owner_map.json); shared classes follow their named owner.
+Add an ownership entry only with a reviewed reason; the seeded map only shrinks as ownership is resolved.
+Do not use `!important` inside phone sections.
+The [allow-list](../../frontend/styles/responsive_allowlist.json) records individual pre-existing deviations;
+it only shrinks, and the guard rejects both new deviations and stale entries.
+Migrations prove the old boundary at −1, exactly, and +1 px, plus phone/tablet/desktop in both themes.
+Moving a section also proves cascade order; changing an old 720 px boundary changes the 701–720 px layout.
+
 ## 7. Languages and Translations (UI)
 
 Filterest uses `data-lang-key` attributes for menu and UI string localization.

@@ -22,6 +22,7 @@ Dates are the local (Europe/Helsinki) date on which the version was published.
 
 ## [Unreleased]
 
+- Phone layout rules are checked by a structure test to keep shared breakpoints and stylesheet ownership consistent as existing exceptions are reduced.
 - Remove unused legacy styles from the administrator permission view; no visible change.
 - **Installation tests copy every helper the scripts name** — the installation test fixtures derive the helpers they copy from the update and launcher scripts, so a new helper such as the build-stamp script no longer breaks the heavy installation tests; an ordinary-tier check catches a missing one.
 - Administrators' Site information API reports the built commit, uncommitted-changes flag and UTC build time.

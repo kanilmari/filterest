@@ -8,7 +8,7 @@ import { createFilterbarChatLayout } from "./filterbar_chat_layout_controller.js
 import { FILTERBAR_BREAKPOINT_PX, updateOverlayState } from "./filterbar_engine/filterbar_visibility_handler.js";
 import { bindFilterbarVisibilityMemory, rememberFilterbarVisibility as setStoredVisibility } from './filterbar_visibility_memory.js';
 import { resolveResponsivePanelVisibilityState } from "./filterbar_visibility_resolver.js";
-import { FILTERBAR_COLUMN_WIDTH_PX } from "../../ui_config.js";
+import { FILTERBAR_COLUMN_WIDTH_PX, PHONE_BREAKPOINT_PX } from "../../ui_config.js";
 import { setupScrollPassthrough } from "../../reusable_components/scroll_passthrough.js";
 import { VIEW_DEACTIVATE_EVENT } from "../../reusable_components/view_lifecycle_events.js";
 import { addEnvironmentBadgeIfNeeded, NAVBAR_VISIBILITY_CHANGED_EVENT, syncNavbarMenuButtonAccessibility } from "../navigation/menu_button/navbar_visibility_handler.js";
@@ -144,7 +144,7 @@ export function wireFilterbarRuntime({
             topbarVisible: tablePartsContainer.dataset.sharedTopbarVisible === "true",
             navbarVisible: isNavbarVisible(),
             filterbarVisible: !isHidden(),
-            phone: window.innerWidth <= 700,
+            phone: window.innerWidth <= PHONE_BREAKPOINT_PX,
         });
     }
     function closeOpenFilterDropdowns() {

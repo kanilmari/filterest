@@ -4,6 +4,7 @@
 // Exists to prevent magic numbers and flag values from scattering across feature modules.
 
 export const LAYOUT_BREAKPOINTS = Object.freeze({
+    phone: 700, // K444: phone layout follows the viewport through 700 px.
     navbarCollapsed: 1850,
     filterbarOverlay: 1100,
     cardStack: 1060,
@@ -16,6 +17,7 @@ export const LAYOUT_DIMENSIONS = Object.freeze({
     filterbarColumn: 450,
 });
 
+export const PHONE_BREAKPOINT_PX = LAYOUT_BREAKPOINTS.phone;
 export const NAVBAR_WIDTH_THRESHOLD = LAYOUT_BREAKPOINTS.navbarCollapsed;
 export const NAVTAB_BUTTON_BREAKPOINT_PX = LAYOUT_BREAKPOINTS.cardStack;
 export const FILTERBAR_OVERLAY_BREAKPOINT_PX =

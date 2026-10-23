@@ -126,6 +126,7 @@ vi.mock('../../ui_config.js', () => ({
         return mockUiConfig.filterbarPanelMode;
     },
     FILTERBAR_COLUMN_WIDTH_PX: 450,
+    PHONE_BREAKPOINT_PX: 700,
     show_search_only_bar_in_big_card_view: true,
     show_filterbar_search_overview_section: false,
     show_filterbar_search_basic_controls_section: false,

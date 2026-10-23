@@ -3,7 +3,7 @@
 // Connects live panel state and the shared toolbar to phone search and menu focus.
 // Phone identity and toolbar controls stay in place independently of scrolling.
 import { getChosenDatasetView } from "../state_stores/dataset_view_choice_saver.js";
-import { show_search_only_bar_in_big_card_view } from "../../ui_config.js";
+import { PHONE_BREAKPOINT_PX, show_search_only_bar_in_big_card_view } from "../../ui_config.js";
 import { isSharedTopBarHostActive, shouldShowSharedTopBar } from "./shared_topbar_builder.js";
 import { CARD_VIEW_KEY, isArticleDatasetView } from "../table_views/dataset_view_registry.js";
 import { updateShowMenuButtonPosition } from "../navigation/menu_button/navbar_visibility_handler.js";
@@ -66,7 +66,7 @@ export function createSharedTopbarVisibilityController({ tableName, currentView,
             clearSharedTopBarTransitionTimers();
             sharedTopBar.hidden = false;
             setSharedTopBarAccessibility(true);
-            if (window.innerWidth <= 700) {
+            if (window.innerWidth <= PHONE_BREAKPOINT_PX) {
                 sharedTopBar.classList.add('dataset-shared-topbar--visible');
                 return;
             }
@@ -109,7 +109,7 @@ export function createSharedTopbarVisibilityController({ tableName, currentView,
         // showing". An article-open event cannot answer it, because an article
         // view with no matching rows never opens a row and never emits one.
         const articleViewActive = isArticleDatasetView(activeView);
-        const phone = window.innerWidth <= 700;
+        const phone = window.innerWidth <= PHONE_BREAKPOINT_PX;
         const active = isSharedTopBarHostActive(sharedTopBar);
         const homeInHero = !phone && !bigCardOpen
             && isHeroControlAreaVisible(inlineHeroHost, activeScrollable);
