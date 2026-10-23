@@ -6,6 +6,7 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { createDatasetCornerControls, isHeroControlAreaVisible, selectDatasetCornerOwner } from "./dataset_corner_controls.js";
 import { syncNavbarMenuButtonAccessibility } from "../navigation/menu_button/navbar_visibility_handler.js";
+import { placeTopNavHomeButton } from '../front_page/top_nav_home_button.js';
 
 let controls;
 let parts;
@@ -29,6 +30,31 @@ beforeEach(() => { localStorage.clear(); });
 afterEach(() => { controls?.destroy(); document.body.innerHTML = ""; });
 
 describe("dataset corner owner", () => {
+    test.each([true, false])('original Home hosts and final panel survive handoffs, panel first=%s', panelFirst => {
+        const initial = fixture();
+        const home = document.createElement('a'); home.href = '/'; home.className = 'top-nav-home-button';
+        const tabs = document.createElement('nav'); tabs.className = 'hero-dataset-tabs';
+        tabs.append(document.createElement('button')); parts.hero.prepend(tabs);
+        const start = document.createElement('div'); start.className = 'dataset-shared-topbar__slot--start';
+        start.append(document.createElement('button')); parts.topbarEnd.before(start);
+        parts.topbarEnd.classList.add('dataset-shared-topbar__slot--end');
+        for (const [width, atTop] of [[1440, true], [1000, true], [1000, false], [700, true], [390, false], [1440, false], [1440, true]]) {
+            const phone = width <= 700;
+            const inHero = !phone && atTop;
+            const host = inHero ? tabs : phone ? start : parts.topbarEnd;
+            const state = { ...initial, phone, heroControlsVisible: inHero, topbarVisible: !inHero };
+            const moveHome = () => placeTopNavHomeButton(home, host);
+            const movePanel = () => controls.sync(state);
+            for (const move of panelFirst ? [movePanel, moveHome] : [moveHome, movePanel]) move();
+            moveHome(); movePanel();
+            expect(home.parentElement).toBe(host);
+            expect(inHero ? host.firstElementChild : phone ? host.lastElementChild : host.firstElementChild).toBe(home);
+            expect(parts.filterButton.parentElement.lastElementChild).toBe(parts.filterButton);
+            if (!inHero && !phone) expect(home.nextElementSibling).toBe(parts.filterButton);
+            if (inHero) expect(parts.hero.querySelector('.dataset-corner-controls--end').contains(home)).toBe(false);
+            home.focus(); moveHome(); movePanel(); expect(document.activeElement).toBe(home);
+        }
+    });
     test.each([
         [false, true, true, "none"], [true, true, false, "hero"],
         [true, false, true, "topbar"], [true, false, false, "fallback"],

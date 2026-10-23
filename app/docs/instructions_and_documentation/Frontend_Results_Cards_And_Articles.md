@@ -241,3 +241,15 @@ Page puts one contained image inside the text column, at most
 700 px and below its shared details put keys above values; theme tokens supply text and background and
 shared modal transitions retain reduced-motion handling. Ordinary IFAV still
 uses its full-height stage and its original Article projection on restoration.
+
+### Card list edges and Show more
+
+Both result-card image sizes use square detail lists with no inline borders and
+1px block edges in `--border_color`. In modern cards, the description and details
+share the outer `card_modern_info_panel`; nested details keep their existing
+separators without duplicating the outer edges. Expanded-card details use the
+same edges and retain their 2px row separators. The shared rules live in
+`card_field_label_placement.css`, after the base card and article styles.
+Card Show more controls use `--search_tools_radius`, the category heading radius,
+in both themes and at every width. C28 proves both image sizes, both card styles
+and expanded detail lists using disposable datasets; it never saves site settings.

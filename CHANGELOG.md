@@ -22,6 +22,7 @@ Dates are the local (Europe/Helsinki) date on which the version was published.
 
 ## [Unreleased]
 
+- Dataset headers and compact toolbars keep the panel button rightmost while preserving Home's original row, sizing and responsive label fitting; card details have straight top/bottom edges without side borders, and Show more shares the category-button radius.
 - Card photos lose their decorative 1px frame when stacked and keep it on the normal 300 px wide-card image; big-card and inline-article photos lose it on phones and tablets (≤ 1200 px) and keep it on desktop (≥ 1201 px), with logo/contrast/SVG frames, corners and image sizing unchanged (WO47).
 - Home with a shown background image or video now shares datasets' rectangular opaque navigation buttons, including hero/Home buttons and side-menu connector shapes; views without media keep their existing shapes.
 - Dataset top bars, filter heroes and status bars keep their theme background in dark mode instead of becoming transparent when mixing the panel colour.

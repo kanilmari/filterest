@@ -11,7 +11,7 @@ import { requireNodeDependency } from '../../../server_tools/lib/node_dependency
 const postcss = requireNodeDependency('postcss');
 const baseline = {
     'front_page.css': 'e91f9bb8d2da02ceba545f33e1bb50ffbdb849b0c09a1cf9e99d2e21e2e52e67',
-    'top_nav_home_button.css': '4c2b8e10a17ee70737ee8af0adf2b21b6fc3bca40f92c85f403de5f91ab8003c',
+    'top_nav_home_button.css': '370d13d5d63468cd1e8e03d637d3290e4375a7ef0654a41ba43b815ca207566b',
     '../filterbar/shared_topbar.css': '47dcce674bc0e9974a499e7f19db9e98f7988a23688051561e4ed73ed15a484f',
     '../filterbar/morphing_filterbar_content.css': '9b0c7307b1a1448328bb6e7bb59fbaf440006f72ac04827c02d6bb511324708a',
 };
@@ -33,10 +33,19 @@ function phoneRule(file, selector) {
 // Batch 512 (63b9b250) retains the non-phone baseline from d373e6c6; K465 updates only the hero's shared radius;
 // Home's front_page.css pin is from the batch 513 base fe0d999f.
 // Batch 569 re-pins only the topbar/hero colour mixes to use their solid companion.
+// WO96 removes only Home's shared-bar order:10; original hosts, sizing and phone tracks stay pinned.
 test.each(Object.keys(baseline))('%s keeps every rule outside the phone breakpoint byte-identical to its approved baseline', file => {
     const root = sheets[file].clone();
     root.walkAtRules('media', media => { if (media.params === '(width <= 700px)') media.remove(); });
     expect(createHash('sha256').update(root.toString()).digest('hex')).toBe(baseline[file]);
+});
+
+test('Home follows DOM order without changing its original hero sizing or corner reservation', () => {
+    sheets['top_nav_home_button.css'].walkDecls('order', declaration => expect(declaration.value).toBe('0'));
+    const corner = postcss.parse(readFileSync(new URL('../filterbar/dataset_corner_controls.css', import.meta.url), 'utf8'));
+    corner.walkDecls('--hero-action-space', declaration => expect(declaration.value).toBe('52px'));
+    const hero = sheets['top_nav_home_button.css'].nodes.find(rule => rule.selector === '.hero-dataset-tabs > .top-nav-home-button');
+    expect(hero.nodes.map(({ prop, value }) => [prop, value])).toContainEqual(['min-height', 'var(--top-nav-home-size)']);
 });
 
 test('only Home has a full-width labelled phone link, including a stale compact fit class', () => {

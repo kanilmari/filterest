@@ -4,6 +4,25 @@
  * Card style, name visibility and viewport width never override the site choice.
  */
 
+/* Shared list edges for both result-card image sizes and the expanded card.
+   Modern cards group description and details inside one outer list. */
+.card .card_modern_info_panel,
+.card .card_details_kv,
+.big_card_details_container {
+    border-radius: 0;
+    border-inline: 0;
+    border-block: 1px solid var(--border_color);
+}
+
+.card .card_modern_info_panel .card_details_kv {
+    border-block: 0;
+}
+
+.card [data-lang-key="show_more"],
+.big_card_container [data-lang-key="show_more"] {
+    border-radius: var(--search_tools_radius);
+}
+
 /* Only result cards cap the preview; article pairs show the whole value.
    The card scope adds specificity over the shared adapter's :root display reset,
    so even a later KV stylesheet cannot turn the clamped value into a block. */

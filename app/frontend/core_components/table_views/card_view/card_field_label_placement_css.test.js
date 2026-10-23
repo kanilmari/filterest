@@ -8,12 +8,57 @@ import { readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, test } from 'vitest';
+import { requireNodeDependency } from '../../../../server_tools/lib/node_dependency_loader.mjs';
+
+const postcss = requireNodeDependency('postcss');
 
 const CURRENT_DIR = dirname(fileURLToPath(import.meta.url));
 const CSS_PATH = resolve(CURRENT_DIR, 'card_field_label_placement.css');
 const IMPORTS_PATH = resolve(CURRENT_DIR, '../../../styles/imports.css');
 
 describe('card field label placement CSS', () => {
+    test('both card sizes use square, open-sided list edges without changing separators', () => {
+        const root = postcss.parse(readFileSync(CSS_PATH, 'utf8'));
+        const edges = {};
+        root.walkRules(rule => {
+            if (!rule.selectors.includes('.big_card_details_container')) return;
+            expect(rule.selectors).toEqual([
+                '.card .card_modern_info_panel', '.card .card_details_kv', '.big_card_details_container',
+            ]);
+            expect(rule.parent.type).toBe('root');
+            rule.walkDecls(decl => { edges[decl.prop] = decl.value; });
+        });
+        expect(edges).toEqual({ 'border-radius': '0', 'border-inline': '0', 'border-block': '1px solid var(--border_color)' });
+        const cards = postcss.parse(readFileSync(resolve(CURRENT_DIR, 'cards.css'), 'utf8'));
+        const big = postcss.parse(readFileSync(resolve(CURRENT_DIR, 'cards_big.css'), 'utf8'));
+        for (const [css, selector, property, value] of [
+            [cards, '.card--modern .card_modern_info_panel > :not(:first-child)', 'border-top', '1px solid var(--card-modern-separator-color)'],
+            [big, '.big_card_details_container > div', 'border-bottom', '2px solid var(--border_color)'],
+        ]) {
+            const separators = [];
+            css.walkRules(selector, rule => rule.walkDecls(property, decl => separators.push(decl.value)));
+            expect(separators).toEqual([value]);
+        }
+        const nested = [];
+        root.walkRules('.card .card_modern_info_panel .card_details_kv', rule =>
+            rule.walkDecls('border-block', decl => nested.push(decl.value)));
+        expect(nested).toEqual(['0']);
+    });
+
+    test('Show more inherits category-button rounding at every width and theme', () => {
+        const root = postcss.parse(readFileSync(CSS_PATH, 'utf8'));
+        const radii = [];
+        root.walkRules(rule => {
+            if (!rule.selector.includes('[data-lang-key="show_more"]')) return;
+            expect(rule.selectors).toEqual(['.card [data-lang-key="show_more"]', '.big_card_container [data-lang-key="show_more"]']);
+            expect(rule.parent.type).toBe('root');
+            rule.walkDecls('border-radius', decl => radii.push(decl.value));
+        });
+        expect(radii).toEqual(['var(--search_tools_radius)']);
+        const imports = readFileSync(IMPORTS_PATH, 'utf8');
+        expect(imports.indexOf('card_field_label_placement.css')).toBeGreaterThan(imports.indexOf('cards_big.css'));
+    });
+
     test('adds no colon to labels in any card style or detail variant', () => {
         const stylesheets = [
             CSS_PATH,

@@ -64,7 +64,6 @@
 .dataset-shared-topbar__slot--end:has(> .top-nav-home-button) { gap: 8px; }
 .dataset-shared-topbar .top-nav-home-button .navbar-front-page-label { display: none; }
 .dataset-shared-topbar .top-nav-home-button {
-  order: 10;
   width: var(--top-nav-home-size);
   padding: 0;
 }

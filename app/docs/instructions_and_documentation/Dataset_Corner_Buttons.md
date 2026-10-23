@@ -93,3 +93,23 @@ card hero opener. It checks the hidden fallback's accessibility state as well
 as the active controls, after startup and saved filterbar layout have settled.
 
 The native regression checklist includes desktop/mobile, Finnish/English, and explicit light/dark themes opposite the OS theme: hide/show both panels, scroll between hero and shared toolbar, switch active dataset/view, open/cancel settings and image dialogs, and verify that gear, palette and close actions remain reachable. Verify pointer/touch activation, keyboard activation and focus visibility without changing application content. Each verification receipt must distinguish the views actually exercised from source review or unit coverage; this checklist is not a claim that every view was exercised in a particular run.
+
+## End-control order
+
+The panel button is always last; do not insert controls after it. Keep Home in
+its original host: first in the hero dataset-navigation row, in the shared
+bar's end slot above 700px, and after the menu in its start slot on phones.
+Where Home and panel share an end slot, existing Home-prepend/panel-append
+placement supplies DOM order; CSS must not reverse it with `order: 10`.
+The hero panel stays in its absolute corner with main's 52px reservation;
+Home stays in normal flow, preserving the 44px row and direct-child label fitter.
+Native Home keeps its first navigation link and has no dataset filter panel.
+
+`dataset_corner_controls.test.js` guards original hosts and panel-last placement
+through both arrival orders, resize and retained-host handoffs. The phone CSS
+pins guard sizing/reservations and the absence of CSS reordering. G16 covers
+390/700/1000/1440px in both themes, top/scroll, resize, history and keyboard order.
+It compares row/Home/dataset heights and actual compact outcomes with main's
+Home stylesheet, including a long GET-fixtured label in a crowded row. Only the
+production fitter changes the compact class. G12/G13 retain their original
+placement and phone geometry checks; native browser receipts remain required.
