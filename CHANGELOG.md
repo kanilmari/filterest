@@ -22,6 +22,7 @@ Dates are the local (Europe/Helsinki) date on which the version was published.
 
 ## [Unreleased]
 
+- Remove unused legacy styles from the administrator permission view; no visible change.
 - **Installation tests copy every helper the scripts name** — the installation test fixtures derive the helpers they copy from the update and launcher scripts, so a new helper such as the build-stamp script no longer breaks the heavy installation tests; an ordinary-tier check catches a missing one.
 - Administrators' Site information API reports the built commit, uncommitted-changes flag and UTC build time.
 - **Home navigation starts in the chosen language** — Home and dataset labels use the viewer's Finnish or English translations on their first render, preventing a later relabel from moving the phone navigation and hero.
