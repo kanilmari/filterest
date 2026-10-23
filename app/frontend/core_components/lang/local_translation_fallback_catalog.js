@@ -17,6 +17,8 @@ import { MISSING_MEDIA_CHECK_TRANSLATION_FALLBACKS } from '../admin_tools/missin
 import { DATASET_REDIRECT_NOTICE_TRANSLATION_FALLBACKS } from '../navigation/dataset_redirect_notice_copy.js';
 import { MAINTENANCE_ACTION_TRANSLATION_FALLBACKS } from '../admin_tools/maintenance_action_copy.js';
 
+import { SECOND_STEP_TRANSLATION_FALLBACKS } from '../auth/second_step_translation_fallbacks.js';
+
 export const LOCAL_TRANSLATION_FALLBACKS = {
     delete_confirm_title: {
         fi: "Vahvista poisto",
@@ -45,6 +47,7 @@ export const LOCAL_TRANSLATION_FALLBACKS = {
     ...FOREIGN_KEYS_TRANSLATION_FALLBACKS,
     ...DATASET_HEADER_CONFIG_TRANSLATION_FALLBACKS,
     ...AUTH_SESSION_NOTICE_TRANSLATION_FALLBACKS,
+    ...SECOND_STEP_TRANSLATION_FALLBACKS,
     ...MISSING_MEDIA_CHECK_TRANSLATION_FALLBACKS,
     ...MAINTENANCE_ACTION_TRANSLATION_FALLBACKS,
     ...DATASET_REDIRECT_NOTICE_TRANSLATION_FALLBACKS,

@@ -63,6 +63,7 @@ func runDeferredStartupMaintenance(projectRoot string, appDBCompatibilityManifes
 	EnsurePrimaryKeyLangKeys(backend.Db)
 	EnsureAppDBCompatibilityLangKeys(backend.Db)
 	EnsureLoginPageLangKeys(backend.Db)
+	EnsureLoginSecondStepLangKeys(backend.Db)
 	EnsureViewSelectorLangKeys(backend.Db)
 	EnsureFilterestBusinessID(backend.Db)
 

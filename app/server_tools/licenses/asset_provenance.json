@@ -77,6 +77,13 @@
       "upstream": "https://github.com/tailwindlabs/heroicons/blob/master/optimized/24/outline/wrench-screwdriver.svg"
     },
     {
+      "component": "Lucide Icons",
+      "kind": "embedded-icon-source",
+      "path": "app/frontend/core_components/auth/second_step_view.js",
+      "sha256": "49ac6e44945b19f3104cb377a8e99cb6890c588cf3e58ede5bc982fbd4d4d764",
+      "source_detail": "Embedded eye and shield geometry from the accepted WO97 mock, conservatively covered by the retained Lucide/Feather terms; no first-party authorship or exact upstream byte identity is claimed."
+    },
+    {
       "component": "Google Material Icons and Symbols",
       "kind": "embedded-icon-source",
       "path": "app/frontend/core_components/navigation/main_tabs/tab_icon_library.js",
@@ -813,7 +820,7 @@
       "component": "Google Material Icons and Symbols",
       "kind": "embedded-icon-source",
       "path": "app/frontend/templates/login.html",
-      "sha256": "c78cfced822386943761db0499ea666ce297ea8ce5ff9128e35b4580282b24ec"
+      "sha256": "e7d50c2ae7d86114756ee51149ded6ff4e0b1eedc1a48fa6a1d44599b791436e"
     },
     {
       "component": "Filterest demo placeholder images",
@@ -927,6 +934,6 @@
       "source_detail": "First-party Filterest admin-menu capture prepared for this document on 2026-10-16; copied byte-for-byte from the owner-supplied cropped image, without browser chrome. Publication authorised by the owner in WO34."
     }
   ],
-  "reviewed_on": "2026-10-22",
+  "reviewed_on": "2026-10-23",
   "schema_version": 2
 }

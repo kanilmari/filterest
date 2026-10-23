@@ -245,21 +245,7 @@ var loginPageLangKeySeeds = []startupLangKeySeed{
 
 // EnsureLoginPageLangKeys seeds the multilingual intro copy used by the login page.
 func EnsureLoginPageLangKeys(db *sql.DB) {
-	const upsertQuery = `
-		INSERT INTO system_lang_keys (lang_key, fi, en, ch)
-		VALUES ($1, $2, $3, $4)
-		ON CONFLICT (lang_key) DO UPDATE
-			SET fi = CASE WHEN system_lang_keys.fi IS NULL OR system_lang_keys.fi = '' THEN EXCLUDED.fi ELSE system_lang_keys.fi END,
-			    en = CASE WHEN system_lang_keys.en IS NULL OR system_lang_keys.en = '' THEN EXCLUDED.en ELSE system_lang_keys.en END,
-			    ch = CASE WHEN system_lang_keys.ch IS NULL OR system_lang_keys.ch = '' THEN EXCLUDED.ch ELSE system_lang_keys.ch END
-	`
-
-	for _, seed := range loginPageLangKeySeeds {
-		_, err := db.Exec(upsertQuery, seed.langKey, seed.fi, seed.en, seed.ch)
-		if err != nil {
-			log.Printf("[STARTUP] Error upserting login page lang key %q: %v", seed.langKey, err)
-		}
-	}
+	ensureStartupLangKeySeeds(db, loginPageLangKeySeeds, "login page")
 
 	replacements := []struct {
 		oldFI string

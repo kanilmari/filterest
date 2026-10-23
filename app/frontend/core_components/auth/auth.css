@@ -4,6 +4,14 @@
 /* Exists so pre-session pages remain usable across supported screen sizes. */
 @import url("../lang/lang_panel.css");
 
+/* Shared validation messages also appear on setup and registration pages.
+ * Standalone registration can load without the theme variables. */
+.error {
+    color: var(--color-error, #ff4c4c);
+    margin: 0 0 10px;
+    text-align: center;
+}
+
 body.login-page {
     min-height: 100vh;
     display: flex;
@@ -994,27 +1002,6 @@ body.dark-mode {
     }
 }
 
-/* OTP section and resend link are hidden by default (CSS instead of inline style
-   because CSP style-src-attr blocks inline style="display:none" attributes). */
-#otp-section {
-    display: none;
-}
-
-#password-reset-section {
-    display: none;
-}
-
-#resend-otp {
-    display: none;
-    font-size: 0.85em;
-}
-
-#resend-password-reset-otp,
-#back-to-login-link {
-    display: none;
-    font-size: 0.85em;
-}
-
 .auth-secondary-actions {
     display: flex;
     justify-content: space-between;
@@ -1041,13 +1028,6 @@ body.loading .auth-page-shell {
     animation: none !important;
     transition: none !important;
 }
-
-.error {
-    color: #ff4c4c;
-    margin: 0 0 10px;
-    text-align: center;
-}
-
 /* Intro box shown under the site title on the login page.
    Center the box under the title. Inside the box, use an inline-block
    paragraph so a single-line intro appears visually centered, while
@@ -1124,6 +1104,15 @@ body.loading .auth-page-shell {
     padding: 0;
 }
 
+/* Keep verification section defaults with the standalone page layout below. */
+#otp-section,
+#password-reset-section {
+    display: none;
+}
+.auth-form.is-verifying .auth-verify {
+    width: 100%;
+    margin: 0;
+}
 @media (width <= 820px) {
     body.login-page.standalone-login-page {
         align-items: stretch;
@@ -1279,6 +1268,16 @@ body.loading .auth-page-shell {
 
     .standalone-login-page .auth-form > #submit input[type="submit"] {
         width: 100%;
+    }
+    .standalone-login-page .auth-page-content-card:has(.is-verifying) {
+        padding: 0 16px;
+    }
+    .standalone-login-page .auth-form.is-verifying {
+        padding: 26px 22px;
+    }
+    .standalone-login-page .auth-form.is-verifying > .auth-verify {
+        width: 100%;
+        margin: 0;
     }
 }
 

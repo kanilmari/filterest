@@ -1,0 +1,272 @@
+/* auth_verify.css
+ * Styles shared sign-in and recovery fields inside the page and modal.
+ * Connects factor slots to the application-owned auth theme tokens.
+ * Exists to preserve field boundaries, focus and action order in both themes.
+ */
+#resend-otp {
+    display: none;
+    font-size: 0.85em;
+}
+#resend-password-reset-otp,
+#back-to-login-link {
+    display: none;
+    font-size: 0.85em;
+}
+.auth-verify__header {
+    margin-bottom: 28px;
+}
+.auth-verify__step {
+    margin: 0 0 18px;
+    color: var(--text-muted);
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: .02em;
+}
+.auth-verify__icon {
+    display: grid;
+    place-items: center;
+    width: 44px;
+    height: 44px;
+    margin-bottom: 18px;
+    color: var(--auth-focus-color);
+    background: var(--auth-notice-bg);
+    border-radius: 12px;
+}
+.auth-verify__icon svg {
+    width: 24px;
+    height: 24px;
+}
+.auth-verify .auth-verify__heading {
+    margin: 0 0 10px;
+    font-size: 28px;
+    font-weight: 650;
+    line-height: 1.2;
+    letter-spacing: -.025em;
+    overflow-wrap: anywhere;
+    text-align: left;
+}
+.auth-verify .auth-verify__heading:focus {
+    outline: none;
+}
+.auth-verify__instruction {
+    margin: 0;
+    color: var(--text-muted);
+    font-size: 16px;
+    line-height: 1.55;
+    overflow-wrap: anywhere;
+}
+.auth-verify__context {
+    margin: 16px 0 0;
+    padding: 12px 14px;
+    border-radius: 10px;
+    background: var(--auth-notice-bg);
+    font-size: 14px;
+    overflow-wrap: anywhere;
+}
+.auth-verify__fields {
+    display: grid;
+    gap: 20px;
+}
+.auth-verify__field {
+    display: grid;
+    gap: 8px;
+}
+.auth-verify__label {
+    font-size: 14px;
+    font-weight: 650;
+}
+.auth-verify .auth-verify__input-wrap {
+    position: relative;
+}
+.auth-verify input.auth-verify__input {
+    appearance: none;
+    width: 100%;
+    min-width: 0;
+    min-height: 56px;
+    padding: 12px 14px;
+    border: 2px solid var(--verify-input-border);
+    border-radius: 10px;
+    background: var(--input_bg_color);
+    color: var(--text_color);
+    font-size: 22px;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: .12em;
+}
+.auth-verify input.auth-verify__input::placeholder {
+    color: var(--text-muted);
+    opacity: 1;
+}
+.auth-verify input.auth-verify__input[data-kind="password"] {
+    font-size: 17px;
+    letter-spacing: .02em;
+}
+.auth-verify .auth-verify__input-wrap:has(.auth-verify__reveal:not([hidden])) input.auth-verify__input {
+    padding-right: 60px;
+}
+.auth-verify input.auth-verify__input:focus {
+    outline: none;
+    border-color: var(--auth-focus-color);
+    box-shadow: 0 0 0 3px var(--auth-focus-ring);
+    transform: none;
+}
+.auth-verify input.auth-verify__input[aria-invalid="true"] {
+    border-color: var(--verify-error-text);
+}
+.auth-verify input.auth-verify__input[aria-invalid="true"]:focus {
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--verify-error-text) 23%, transparent);
+}
+.auth-verify .auth-verify__reveal {
+    position: absolute;
+    top: 6px;
+    right: 6px;
+    display: grid;
+    place-items: center;
+    width: 44px;
+    height: 44px;
+    padding: 0;
+    border: 0;
+    border-radius: 8px;
+    color: var(--text-muted);
+    background: transparent;
+}
+.auth-verify__reveal svg {
+    width: 22px;
+    height: 22px;
+}
+.auth-verify__hint {
+    margin: 0;
+    color: var(--text-muted);
+    font-size: 13px;
+    line-height: 1.5;
+    overflow-wrap: anywhere;
+}
+.auth-verify__error {
+    display: flex;
+    align-items: start;
+    gap: 8px;
+    margin: 0;
+    color: var(--verify-error-text);
+    font-size: 14px;
+    line-height: 1.5;
+}
+.auth-verify__error:empty {
+    display: none;
+}
+.auth-verify__status {
+    margin: 16px 0 0;
+    color: var(--text-muted);
+    font-size: 14px;
+}
+.auth-verify__status:empty {
+    display: none;
+}
+.auth-form.is-verifying input[type="submit"] {
+    width: 100%;
+    min-height: 50px;
+    margin-top: 24px;
+    padding: 12px 16px;
+    border: 0;
+    border-radius: 10px;
+    font-size: 16px;
+    font-weight: 650;
+    color: var(--color-brand-text);
+    background: var(--auth-submit-bg-end);
+    box-shadow: 0 4px 12px var(--auth-submit-shadow);
+}
+.auth-form.is-verifying input[type="submit"]:hover {
+    filter: brightness(1.08);
+}
+.auth-form.is-verifying input[type="submit"]:disabled {
+    opacity: .65;
+    cursor: wait;
+}
+.auth-verify__actions {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    margin-top: 14px;
+}
+.auth-verify a:focus-visible, .auth-verify button:focus-visible {
+    outline: 3px solid var(--auth-focus-color);
+    outline-offset: 3px;
+}
+.auth-form.is-verifying {
+    width: min(460px, 100%);
+    gap: 0;
+    padding: 32px;
+}
+.modal .auth-form.is-verifying {
+    width: 100%;
+    padding: 0;
+}
+.auth-verify [hidden] {
+    display: none !important;
+}
+.auth-form.is-verifying #submit {
+    display: block;
+    margin: 0;
+}
+.auth-form.is-verifying .auth-submit-back-button {
+    display: none;
+}
+.auth-verify__actions a,
+.auth-verify__actions button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 44px;
+    padding: 10px 8px;
+    border: 0;
+    background: transparent;
+    color: var(--auth-link-color);
+    font: inherit;
+    font-size: 14px;
+    text-align: center;
+    text-decoration: underline;
+    text-underline-offset: 0.2em;
+}
+.auth-verify__actions [aria-disabled="true"] {
+    pointer-events: none;
+    opacity: 0.65;
+}
+.auth-verify__error:not(:empty)::before {
+    content: "!";
+    font-weight: 700;
+}
+.auth-form.is-verifying #toggle-password-reset {
+    min-width: 44px;
+    min-height: 44px;
+    right: 6px;
+}
+
+.auth-verify {
+    --verify-error-text: color-mix(in srgb, var(--color-error) 60%, var(--text_color));
+    --verify-input-border: color-mix(in srgb, var(--auth-input-border) 55%, var(--text_color));
+}
+
+.auth-verify__reveal-label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+}
+
+.auth-form.is-verifying #password-reset-new-password {
+    padding-right: 60px;
+}
+
+/* Phone (≤ 700px, K444) */
+@media (width <= 700px) {
+    .auth-form.is-verifying {
+        padding: 26px 22px;
+    }
+    .auth-verify .auth-verify__heading {
+        font-size: 26px;
+    }
+    .modal .auth-form.is-verifying {
+        padding: 0;
+    }
+}

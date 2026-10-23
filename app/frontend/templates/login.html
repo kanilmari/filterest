@@ -27,6 +27,7 @@
     <link rel="stylesheet" {{if .StandalonePage}}data-shell-boot-required{{end}} href="/frontend/styles/base.css">
     <link rel="stylesheet" {{if .StandalonePage}}data-shell-boot-required{{end}} href="/frontend/styles/form.css">
     <link rel="stylesheet" {{if .StandalonePage}}data-shell-boot-required data-shell-boot-probe-link{{end}} href="/frontend/core_components/auth/auth.css">
+    <link rel="stylesheet" {{if .StandalonePage}}data-shell-boot-required{{end}} href="/frontend/core_components/auth/auth_verify.css">
     <link rel="stylesheet" {{if .StandalonePage}}data-shell-boot-required{{end}} href="/frontend/reusable_components/modal/modals.css">
     <link rel="stylesheet" {{if .StandalonePage}}data-shell-boot-required{{end}} href="/frontend/styles/theme_transition.css">
     {{end}}
@@ -151,7 +152,7 @@
         <label for="password" data-lang-key="password"></label>
         <div class="password-wrapper">
             <input type="password" id="password" name="password" required autocomplete="current-password" aria-label="Password" data-testid="login-password">
-            <button type="button" id="toggle-password" aria-label="Show password" data-testid="login-toggle-password">
+            <button type="button" id="toggle-password" aria-label="Show password" data-aria-label-lang-key="show_password" data-testid="login-toggle-password">
                 <svg id="password-icon" xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px" fill="currentColor"><path d="m644-428-58-58q9-47-27-88t-93-32l-58-58q17-8 34.5-12t37.5-4q75 0 127.5 52.5T660-500q0 20-4 37.5T644-428Zm128 126-58-56q38-29 67.5-63.5T832-500q-50-101-143.5-160.5T480-720q-29 0-57 4t-55 12l-62-62q41-17 84-25.5t90-8.5q151 0 269 83.5T920-500q-23 59-60.5 109.5T772-302Zm20 246L624-222q-35 11-70.5 16.5T480-200q-151 0-269-83.5T40-500q21-53 53-98.5t73-81.5L56-792l56-56 736 736-56 56ZM222-624q-29 26-53 57t-41 67q50 101 143.5 160.5T480-280q20 0 39-2.5t39-5.5l-36-38q-11 3-21 4.5t-21 1.5q-75 0-127.5-52.5T300-500q0-11 1.5-21t4.5-21l-84-82Zm319 93Zm-151 75Z"/></svg>
             </button>
         </div>
@@ -160,11 +161,32 @@
 
         <input type="hidden" class="hidden_fields" id="csrf_token" name="csrf_token" value="{{.CSRFToken}}">
 
-        <div id="otp-section" data-testid="login-otp-section">
-            <div id="otp-message" class="otp-message" role="status" aria-live="polite" aria-atomic="true" data-testid="login-otp-message"></div>
-            <label for="otp" data-lang-key="otp">OTP</label>
-            <input type="text" id="otp" name="otp" autocomplete="off" data-testid="login-otp">
-            <a href="#" id="resend-otp" data-lang-key="resend_code" data-testid="login-resend-otp">Lähetä koodi uudelleen</a>
+        <div id="otp-section" class="auth-verify" data-testid="login-otp-section">
+            <header class="auth-verify__header">
+                <p class="auth-verify__step" data-verify="step"></p>
+                <span class="auth-verify__icon" data-verify="icon" aria-hidden="true"></span>
+                <h2 class="auth-verify__heading" data-verify="heading" tabindex="-1"></h2>
+                <p id="otp-message" class="auth-verify__instruction" data-verify="instruction" role="status" aria-live="polite" aria-atomic="true" data-testid="login-otp-message"></p>
+                <p class="auth-verify__context" data-verify="recipient" hidden><span data-verify="recipient-label"></span>: <bdi data-verify="recipient-value"></bdi></p>
+            </header>
+            <div class="auth-verify__fields">
+                <div class="auth-verify__field">
+                    <label for="otp" class="auth-verify__label" data-verify="label"></label>
+                    <div class="auth-verify__input-wrap">
+                        <input type="text" id="otp" name="otp" autocomplete="off" class="auth-verify__input" data-verify="input" data-testid="login-otp">
+                        <button type="button" class="auth-verify__reveal" data-verify="reveal" hidden></button>
+                    </div>
+                    <p class="auth-verify__hint" data-verify="hint"></p>
+                    <p class="auth-verify__error" data-verify="error" role="status" aria-live="polite" aria-atomic="true"></p>
+                </div>
+            </div>
+            <p class="auth-verify__status" data-verify="status" role="status" aria-live="polite" aria-atomic="true"></p>
+            <p class="auth-verify__status" data-verify="attempts" role="status" aria-live="polite" aria-atomic="true"></p>
+            <div class="auth-verify__actions" data-verify="actions">
+                <a href="#" id="resend-otp" data-verify="resend" data-lang-key="verification_resend" data-testid="login-resend-otp"></a>
+                <button type="button" data-verify="help-action" aria-expanded="false" hidden></button>
+                <p class="auth-verify__context" data-verify="help" hidden></p>
+            </div>
         </div>
 
         <div class="auth-secondary-actions">
@@ -172,20 +194,44 @@
             <a href="#" id="back-to-login-link" data-lang-key="back_to_login" data-testid="login-back-to-login">Back to login</a>
         </div>
 
-        <div id="password-reset-section" data-testid="login-password-reset-section">
-            <div id="password-reset-message" class="otp-message" role="status" aria-live="polite" aria-atomic="true" data-testid="login-password-reset-message"></div>
-            <label for="password-reset-otp" data-lang-key="otp">OTP</label>
-            <input type="text" id="password-reset-otp" name="password_reset_otp" autocomplete="off" data-testid="login-password-reset-otp">
-
-            <label for="password-reset-new-password" data-lang-key="new_password">Uusi salasana</label>
+        <div id="password-reset-section" class="auth-verify" data-testid="login-password-reset-section">
+            <header class="auth-verify__header">
+                <p class="auth-verify__step" data-verify="step"></p>
+                <span class="auth-verify__icon" data-verify="icon" aria-hidden="true"></span>
+                <h2 class="auth-verify__heading" data-verify="heading" tabindex="-1"></h2>
+                <p id="password-reset-message" class="auth-verify__instruction" data-verify="instruction" role="status" aria-live="polite" aria-atomic="true" data-testid="login-password-reset-message"></p>
+                <p class="auth-verify__context" data-verify="recipient" hidden><span data-verify="recipient-label"></span>: <bdi data-verify="recipient-value"></bdi></p>
+            </header>
+            <div class="auth-verify__fields">
+                <div class="auth-verify__field">
+                    <label for="password-reset-otp" class="auth-verify__label" data-verify="label"></label>
+                    <div class="auth-verify__input-wrap">
+                        <input type="text" id="password-reset-otp" name="password_reset_otp" autocomplete="off" class="auth-verify__input" data-verify="input" data-testid="login-password-reset-otp">
+                        <button type="button" class="auth-verify__reveal" data-verify="reveal" hidden></button>
+                    </div>
+                    <p class="auth-verify__hint" data-verify="hint"></p>
+                    <p class="auth-verify__error" data-verify="error" role="status" aria-live="polite" aria-atomic="true"></p>
+                </div>
+            <div class="auth-verify__field">
+            <label for="password-reset-new-password" class="auth-verify__label" data-lang-key="new_password">Uusi salasana</label>
             <div class="password-wrapper password-reset-wrapper">
-                <input type="password" id="password-reset-new-password" name="password_reset_new_password" autocomplete="new-password" aria-label="New password" data-testid="login-password-reset-new-password">
-                <button type="button" id="toggle-password-reset" aria-label="Show password" data-testid="login-toggle-password-reset">
+                <input type="password" id="password-reset-new-password" class="auth-verify__input" data-kind="password" name="password_reset_new_password" autocomplete="new-password" data-aria-label-lang-key="new_password" data-testid="login-password-reset-new-password">
+                <button type="button" id="toggle-password-reset" data-aria-label-lang-key="show_password" aria-controls="password-reset-new-password" aria-pressed="false" data-testid="login-toggle-password-reset">
                     <svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px" fill="currentColor"><path d="m644-428-58-58q9-47-27-88t-93-32l-58-58q17-8 34.5-12t37.5-4q75 0 127.5 52.5T660-500q0 20-4 37.5T644-428Zm128 126-58-56q38-29 67.5-63.5T832-500q-50-101-143.5-160.5T480-720q-29 0-57 4t-55 12l-62-62q41-17 84-25.5t90-8.5q151 0 269 83.5T920-500q-23 59-60.5 109.5T772-302Zm20 246L624-222q-35 11-70.5 16.5T480-200q-151 0-269-83.5T40-500q21-53 53-98.5t73-81.5L56-792l56-56 736 736-56 56ZM222-624q-29 26-53 57t-41 67q50 101 143.5 160.5T480-280q20 0 39-2.5t39-5.5l-36-38q-11 3-21 4.5t-21 1.5q-75 0-127.5-52.5T300-500q0-11 1.5-21t4.5-21l-84-82Zm319 93Zm-151 75Z"/></svg>
                 </button>
             </div>
 
-            <a href="#" id="resend-password-reset-otp" data-lang-key="resend_code" data-testid="login-resend-password-reset-otp">Resend code</a>
+                <p class="auth-verify__hint" data-verify="password-hint" data-lang-key="reset_password_hint"></p>
+                <p class="auth-verify__error" data-verify="password-error" role="status" aria-live="polite" aria-atomic="true"></p>
+            </div>
+            </div>
+            <p class="auth-verify__status" data-verify="status" role="status" aria-live="polite" aria-atomic="true"></p>
+            <p class="auth-verify__status" data-verify="attempts" role="status" aria-live="polite" aria-atomic="true"></p>
+            <div class="auth-verify__actions" data-verify="actions">
+                <a href="#" id="resend-password-reset-otp" data-verify="resend" data-lang-key="verification_resend" data-testid="login-resend-password-reset-otp"></a>
+                <button type="button" data-verify="help-action" aria-expanded="false" hidden></button>
+                <p class="auth-verify__context" data-verify="help" hidden></p>
+            </div>
         </div>
 
         <label for="authCode" class="hidden_fields" aria-hidden="true" data-lang-key="authenticator_code">Authenticator code</label>

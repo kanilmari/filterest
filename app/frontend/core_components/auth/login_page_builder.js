@@ -6,6 +6,7 @@
 // runApiPipeline; they are sent by pre_auth_request_sender.js, which also
 // recovers a stale CSRF token.
 import { gather_browser_fingerprint_hash } from "../../reusable_components/browser_identity_builder.js";
+import { mountLoginSecondStep, leaveLoginSecondStep, bindLoginCodeResend, setSecondStepReveal, showLoginStatus } from './second_step_view.js';
 import { postPreAuthJson } from "./pre_auth_request_sender.js";
 import { createModal, showModal } from "../../reusable_components/modal/modal_builder.js";
 import { endpoint_router } from "../endpoints/endpoint_router.js";
@@ -26,7 +27,6 @@ import {
     buildOtpBody,
     buildPasswordResetRequestBody,
     buildPasswordResetBody,
-    formatOtpError,
     resolvePostLoginTarget,
     computeStandaloneLoginBackTarget,
     applyLoginLangKey,
@@ -51,6 +51,7 @@ document.addEventListener("DOMContentLoaded", () => {
     let loginPhase = 'credentials'; // 'credentials' | 'otp' | 'reset_request' | 'reset_verify'
     let cachedFingerprint = '';
     let resetIdentifier = '';
+    let secondStep = null;
 
     if (loginForm) {
         loginForm.addEventListener("submit", async function (event) {
@@ -58,6 +59,7 @@ document.addEventListener("DOMContentLoaded", () => {
             const submitBtn = loginForm.querySelector('input[type="submit"]');
             if (submitBtn) submitBtn.disabled = true;
 
+            secondStep?.busy(true);
             try {
                 if (loginPhase === 'credentials') {
                     await handleCredentialsPhase(loginForm, submitBtn);
@@ -70,13 +72,16 @@ document.addEventListener("DOMContentLoaded", () => {
                 }
             } catch (err) {
                 console.error("[login] error:", err);
-                showLoginError(err.message || "Virhe kirjautumisessa.");
+                if (secondStep) secondStep.error();
+                else showLoginError(err.message || "Virhe kirjautumisessa.");
                 if (submitBtn) submitBtn.disabled = false;
+            } finally {
+                secondStep?.busy(false);
             }
         });
     }
 
-    async function handleCredentialsPhase(form, submitBtn) {
+    async function handleCredentialsPhase(form, submitBtn, resending = false) {
         // Calculate fingerprint
         try {
             cachedFingerprint = await gather_browser_fingerprint_hash();
@@ -97,9 +102,9 @@ document.addEventListener("DOMContentLoaded", () => {
         const data = await resp.json();
 
         if (!resp.ok) {
-            showLoginError(translateError(data.error));
+            if (!resending) showLoginError(translateError(data.error));
             if (submitBtn) submitBtn.disabled = false;
-            return;
+            return false;
         }
 
         if (data.otp_required) {
@@ -107,7 +112,7 @@ document.addEventListener("DOMContentLoaded", () => {
             loginPhase = 'otp';
             showOTPPhase(data);
             if (submitBtn) submitBtn.disabled = false;
-            return;
+            return true;
         }
 
         if (data.authenticated) {
@@ -126,15 +131,10 @@ document.addEventListener("DOMContentLoaded", () => {
     async function handleOTPPhase(form, submitBtn) {
         const otpCode = sanitizeOtpCode(document.getElementById("otp")?.value);
 
-        if (!otpCode) {
-            showLoginError(
-                getTranslationForKey("enter_otp", { fallback: "Enter the verification code." })
-                    || "Enter the verification code."
-            );
+        if (!secondStep.validate()) {
             if (submitBtn) submitBtn.disabled = false;
             return;
         }
-
         const resp = await postPreAuthJson(
             "/api/login",
             document.getElementById("csrf_token"),
@@ -144,8 +144,7 @@ document.addEventListener("DOMContentLoaded", () => {
         const data = await resp.json();
 
         if (!resp.ok) {
-            const msg = formatOtpError(translateError(data.error), data.attempts_remaining);
-            showLoginError(msg);
+            secondStep.error(data);
             if (submitBtn) submitBtn.disabled = false;
             return;
         }
@@ -193,16 +192,12 @@ document.addEventListener("DOMContentLoaded", () => {
         const otpCode = sanitizeOtpCode(document.getElementById("password-reset-otp")?.value);
         const newPassword = document.getElementById("password-reset-new-password")?.value || '';
 
-        if (!otpCode) {
-            showLoginError(
-                getTranslationForKey("enter_otp", { fallback: "Enter the verification code." })
-                    || "Enter the verification code."
-            );
+        if (!secondStep.validate()) {
             if (submitBtn) submitBtn.disabled = false;
             return;
         }
         if (!newPassword.trim()) {
-            showLoginError(translateError("new_password_required"));
+            secondStep.passwordError();
             if (submitBtn) submitBtn.disabled = false;
             return;
         }
@@ -215,76 +210,25 @@ document.addEventListener("DOMContentLoaded", () => {
         const data = await resp.json();
 
         if (!resp.ok) {
-            showLoginError(translateError(data.error));
+            secondStep.error(data);
             if (submitBtn) submitBtn.disabled = false;
             return;
         }
 
         restoreLoginCredentialsPhase();
-        showLoginError(
-            getTranslationForKey("password_updated_sign_in", {
-                fallback: "Password updated. Log in with the new password.",
-            }) || "Password updated. Log in with the new password."
-        );
+        showLoginStatus(loginForm, 'password_updated_sign_in');
         document.getElementById("password")?.focus();
         if (submitBtn) submitBtn.disabled = false;
     }
 
     function showOTPPhase(data) {
-        // Hide credentials section
-        const usernameLabel = document.querySelector('label[for="username"]');
-        const usernameInput = document.getElementById("username");
-        const passwordLabel = document.querySelector('label[for="password"]');
-        const passwordWrapper = document.querySelector(".password-wrapper");
-        const privacyNotice = document.querySelector(".privacy-notice-link");
-
-        [usernameLabel, usernameInput, passwordLabel, passwordWrapper, privacyNotice].forEach(el => {
-            if (el) el.style.display = 'none';
-        });
-
-        // Show OTP section
-        const otpSection = document.getElementById("otp-section");
-        const otpMessage = document.getElementById("otp-message");
-        const resendLink = document.getElementById("resend-otp");
-        const submitBtn = loginForm.querySelector('input[type="submit"]');
-
-        if (otpSection) otpSection.style.display = 'block';
-        if (otpMessage) {
-            otpMessage.setAttribute("role", "status");
-            otpMessage.setAttribute("aria-live", "polite");
-            otpMessage.setAttribute("aria-atomic", "true");
-            const method = data.verification_method;
-            if (method === 'fixed_pin') {
-                otpMessage.dataset.langKey = 'verification_fixed_pin_prompt';
-                otpMessage.textContent = 'Enter your fixed PIN.';
-            } else if (method === 'totp') {
-                otpMessage.dataset.langKey = 'verification_authenticator_prompt';
-                otpMessage.textContent = 'Enter the current code from your authenticator app.';
-            } else {
-                otpMessage.dataset.langKey = `verification_email_prompt+${data.masked_email || ''}`;
-                otpMessage.textContent = `Verification code sent: ${data.masked_email || ''}`;
-            }
-        }
-        if (resendLink) resendLink.style.display = data.verification_method === 'email' ? 'inline' : 'none';
-        applyLoginLangKey(
-            submitBtn,
-            'verify',
-            getTranslationForKey('verify', { fallback: 'Verify' }) || 'Verify'
-        );
-
-        // Focus OTP input
-        const otpInput = document.getElementById("otp");
-        if (otpInput) {
-            otpInput.inputMode = data.verification_method === 'email' ? 'text' : 'numeric';
-            otpInput.maxLength = data.verification_method === 'fixed_pin' ? 8 : data.verification_method === 'totp' ? 6 : 32;
-            otpInput.focus();
-        }
-
-        // Clear any previous error
         clearLoginError();
+        secondStep = mountLoginSecondStep(loginForm, data.verification_method, data);
     }
 
     function showPasswordResetRequestPhase() {
+        leaveLoginSecondStep(loginForm);
+        secondStep = null;
         loginPhase = 'reset_request';
         setPasswordResetMode(true);
 
@@ -315,48 +259,13 @@ document.addEventListener("DOMContentLoaded", () => {
 
     function showPasswordResetVerifyPhase() {
         setPasswordResetMode(true);
-
-        const usernameLabel = document.querySelector('label[for="username"]');
-        const usernameInput = document.getElementById("username");
-        const passwordLabel = document.querySelector('label[for="password"]');
-        const passwordWrapper = document.querySelector(".password-wrapper");
-        const privacyNotice = document.querySelector(".privacy-notice-link");
-        const otpSection = document.getElementById("otp-section");
-        const resetSection = document.getElementById("password-reset-section");
-        const resetMessage = document.getElementById("password-reset-message");
-        const resendResetLink = document.getElementById("resend-password-reset-otp");
-        const backLink = document.getElementById("back-to-login-link");
-        const forgotLink = document.getElementById("forgot-password-link");
-        const submitBtn = loginForm.querySelector('input[type="submit"]');
-
-        [usernameLabel, usernameInput, passwordLabel, passwordWrapper, privacyNotice].forEach(el => {
-            if (el) el.style.display = 'none';
-        });
-        if (otpSection) otpSection.style.display = 'none';
-        if (resetSection) resetSection.style.display = 'block';
-        if (resetMessage) {
-            applyLoginLangKey(
-                resetMessage,
-                'password_reset_send_attempted',
-                getTranslationForKey('password_reset_send_attempted', {
-                    fallback: 'If the account exists, we will try to send a recovery code. You can request a new code.',
-                }) || 'If the account exists, we will try to send a recovery code. You can request a new code.'
-            );
-        }
-        if (resendResetLink) resendResetLink.style.display = 'inline';
-        if (backLink) backLink.style.display = 'inline';
-        if (forgotLink) forgotLink.style.display = 'none';
-        applyLoginLangKey(
-            submitBtn,
-            'reset_password',
-            getTranslationForKey('reset_password', { fallback: 'Reset password' }) || 'Reset password'
-        );
-
-        document.getElementById("password-reset-otp")?.focus();
         clearLoginError();
+        secondStep = mountLoginSecondStep(loginForm, 'recovery');
     }
 
     function restoreLoginCredentialsPhase() {
+        leaveLoginSecondStep(loginForm);
+        secondStep = null;
         loginPhase = 'credentials';
         setPasswordResetMode(false);
         resetIdentifier = '';
@@ -430,16 +339,14 @@ document.addEventListener("DOMContentLoaded", () => {
         if (errEl) errEl.textContent = '';
     }
 
-    // Resend OTP link
-    const resendLink = document.getElementById("resend-otp");
-    if (resendLink) {
-        resendLink.addEventListener("click", async (e) => {
-            e.preventDefault();
-            // Go back to credentials phase and re-submit
-            loginPhase = 'credentials';
-            loginForm.dispatchEvent(new Event('submit'));
-        });
-    }
+    bindLoginCodeResend(loginForm, () => secondStep, async () => {
+        loginPhase = 'credentials';
+        try {
+            return await handleCredentialsPhase(loginForm, loginForm.querySelector('input[type="submit"]'), true);
+        } finally {
+            if (loginPhase === 'credentials') loginPhase = 'otp';
+        }
+    });
 
     const forgotPasswordLink = document.getElementById("forgot-password-link");
     if (forgotPasswordLink) {
@@ -458,18 +365,15 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     const resendPasswordResetLink = document.getElementById("resend-password-reset-otp");
-    if (resendPasswordResetLink) {
-        resendPasswordResetLink.addEventListener("click", async (e) => {
-            e.preventDefault();
-            if (!resetIdentifier) {
-                showLoginError(translateError("identifier_required"));
-                return;
-            }
-            loginPhase = 'reset_request';
-            const submitBtn = loginForm.querySelector('input[type="submit"]');
-            await handlePasswordResetRequestPhase(loginForm, submitBtn);
+    resendPasswordResetLink?.addEventListener('click', event => {
+        event.preventDefault();
+        void secondStep?.resend(async () => {
+            const resp = await postPreAuthJson('/api/request-password-reset-otp',
+                document.getElementById("csrf_token"),
+                csrf => buildPasswordResetRequestBody(resetIdentifier, csrf));
+            return resp.ok;
         });
-    }
+    });
 
     document.querySelectorAll("[data-auth-public-back]").forEach((returnButton) => {
         returnButton.addEventListener("click", (e) => {
@@ -485,7 +389,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const togglePasswordBtn = document.getElementById("toggle-password");
     const passwordInput = document.getElementById("password");
     if (togglePasswordBtn && passwordInput) {
-        togglePasswordBtn.setAttribute("aria-pressed", String(passwordInput.type !== "password"));
+        setSecondStepReveal(togglePasswordBtn, passwordInput);
         togglePasswordBtn.addEventListener("click", () => {
             const isHidden = passwordInput.type === "password";
             passwordInput.type = isHidden ? "text" : "password";
@@ -494,17 +398,14 @@ document.addEventListener("DOMContentLoaded", () => {
             if (visibilityOffSvg && visibilityOnSvg) {
                 togglePasswordBtn.innerHTML = isHidden ? visibilityOnSvg : visibilityOffSvg;
             }
-            togglePasswordBtn.setAttribute(
-                "aria-label",
-                isHidden ? "Hide password" : "Show password"
-            );
+            setSecondStepReveal(togglePasswordBtn, passwordInput);
         });
     }
 
     const toggleResetPasswordBtn = document.getElementById("toggle-password-reset");
     const resetPasswordInput = document.getElementById("password-reset-new-password");
     if (toggleResetPasswordBtn && resetPasswordInput) {
-        toggleResetPasswordBtn.setAttribute("aria-pressed", String(resetPasswordInput.type !== "password"));
+        setSecondStepReveal(toggleResetPasswordBtn, resetPasswordInput);
         toggleResetPasswordBtn.addEventListener("click", () => {
             const isHidden = resetPasswordInput.type === "password";
             resetPasswordInput.type = isHidden ? "text" : "password";
@@ -513,10 +414,7 @@ document.addEventListener("DOMContentLoaded", () => {
             if (visibilityOffSvg && visibilityOnSvg) {
                 toggleResetPasswordBtn.innerHTML = isHidden ? visibilityOnSvg : visibilityOffSvg;
             }
-            toggleResetPasswordBtn.setAttribute(
-                "aria-label",
-                isHidden ? "Hide password" : "Show password"
-            );
+            setSecondStepReveal(toggleResetPasswordBtn, resetPasswordInput);
         });
     }
 

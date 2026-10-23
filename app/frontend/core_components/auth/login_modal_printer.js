@@ -6,6 +6,7 @@
 // they are sent by pre_auth_request_sender.js, which also recovers a stale CSRF token.
 import { createModal, showModal, hideModal } from "../../reusable_components/modal/modal_builder.js";
 import { gather_browser_fingerprint_hash } from "../../reusable_components/browser_identity_builder.js";
+import { mountLoginSecondStep, leaveLoginSecondStep, bindLoginCodeResend, setSecondStepReveal, showLoginStatus } from './second_step_view.js';
 import { postPreAuthJson } from "./pre_auth_request_sender.js";
 import { getTranslationForKey } from "../lang/translation_handler.js";
 import { endpoint_router } from "../endpoints/endpoint_router.js";
@@ -146,7 +147,7 @@ function setupFormInteractions(form) {
     const passwordInput = form.querySelector("#password");
     
     if (togglePasswordBtn && passwordInput) {
-        togglePasswordBtn.setAttribute("aria-pressed", String(passwordInput.type !== "password"));
+        setSecondStepReveal(togglePasswordBtn, passwordInput);
         togglePasswordBtn.addEventListener("click", () => {
             const isHidden = passwordInput.type === "password";
             passwordInput.type = isHidden ? "text" : "password";
@@ -158,14 +159,14 @@ function setupFormInteractions(form) {
                     ? visibilityOnSvg
                     : visibilityOffSvg;
             }
-            togglePasswordBtn.setAttribute("aria-label", isHidden ? "Hide password" : "Show password");
+            setSecondStepReveal(togglePasswordBtn, passwordInput);
         });
     }
 
     const toggleResetPasswordBtn = form.querySelector("#toggle-password-reset");
     const resetPasswordInput = form.querySelector("#password-reset-new-password");
     if (toggleResetPasswordBtn && resetPasswordInput) {
-        toggleResetPasswordBtn.setAttribute("aria-pressed", String(resetPasswordInput.type !== "password"));
+        setSecondStepReveal(toggleResetPasswordBtn, resetPasswordInput);
         toggleResetPasswordBtn.addEventListener("click", () => {
             const isHidden = resetPasswordInput.type === "password";
             resetPasswordInput.type = isHidden ? "text" : "password";
@@ -177,7 +178,7 @@ function setupFormInteractions(form) {
                     ? visibilityOnSvg
                     : visibilityOffSvg;
             }
-            toggleResetPasswordBtn.setAttribute("aria-label", isHidden ? "Hide password" : "Show password");
+            setSecondStepReveal(toggleResetPasswordBtn, resetPasswordInput);
         });
     }
 
@@ -212,6 +213,7 @@ function setupFormInteractions(form) {
     let loginPhase = 'credentials'; // 'credentials' | 'otp' | 'reset_request' | 'reset_verify'
     let cachedFingerprint = '';
     let resetIdentifier = '';
+    let secondStep = null;
 
     form.addEventListener("submit", async (e) => {
         e.preventDefault();
@@ -220,6 +222,7 @@ function setupFormInteractions(form) {
         if (!submitBtn) return;
         submitBtn.disabled = true;
 
+        secondStep?.busy(true);
         try {
             if (loginPhase === 'credentials') {
                 await handleCredentialsPhase(form, submitBtn);
@@ -232,12 +235,15 @@ function setupFormInteractions(form) {
             }
         } catch (err) {
             console.warn("Login submission error:", err);
-            showFormError(form, err.message || "Login failed.");
+            if (secondStep) secondStep.error();
+            else showFormError(form, err.message || "Login failed.");
             submitBtn.disabled = false;
+        } finally {
+            secondStep?.busy(false);
         }
     });
 
-    async function handleCredentialsPhase(form, submitBtn) {
+    async function handleCredentialsPhase(form, submitBtn, resending = false) {
         try {
             cachedFingerprint = await gather_browser_fingerprint_hash();
         } catch (_err) {
@@ -256,56 +262,17 @@ function setupFormInteractions(form) {
         const data = await resp.json();
 
         if (!resp.ok) {
-            showFormError(form, translateError(data.error));
+            if (!resending) showFormError(form, translateError(data.error));
             submitBtn.disabled = false;
-            return;
+            return false;
         }
 
         if (data.otp_required) {
             loginPhase = 'otp';
-            // Hide credentials, show OTP section
-            const usernameLabel = form.querySelector('label[for="username"]');
-            const usernameInput = form.querySelector("#username");
-            const passwordLabel = form.querySelector('label[for="password"]');
-            const passwordWrapper = form.querySelector(".password-wrapper");
-            const privacyNotice = form.querySelector(".privacy-notice-link");
-            [usernameLabel, usernameInput, passwordLabel, passwordWrapper, privacyNotice].forEach(el => {
-                if (el) el.style.display = 'none';
-            });
-
-            const otpSection = form.querySelector("#otp-section");
-            const otpMessage = form.querySelector("#otp-message");
-            const resendLink = form.querySelector("#resend-otp");
-            if (otpSection) otpSection.style.display = 'block';
-            if (otpMessage) {
-                otpMessage.setAttribute("role", "status");
-                otpMessage.setAttribute("aria-live", "polite");
-                otpMessage.setAttribute("aria-atomic", "true");
-                if (data.verification_method === 'fixed_pin') {
-                    otpMessage.textContent = getTranslationForKey("verification_fixed_pin_prompt") || "Enter your fixed PIN.";
-                } else if (data.verification_method === 'totp') {
-                    otpMessage.textContent = getTranslationForKey("verification_authenticator_prompt") || "Enter the current code from your authenticator app.";
-                } else {
-                    otpMessage.textContent = `${getTranslationForKey("otp_sent") || "Verification code sent"}: ${data.masked_email || ''}`;
-                }
-            }
-            if (resendLink) resendLink.style.display = data.verification_method === 'email' ? 'inline' : 'none';
-            if (submitBtn) {
-                applyLoginLangKey(
-                    submitBtn,
-                    'verify',
-                    getTranslationForKey('verify', { fallback: 'Verify' }) || 'Verify'
-                );
-                submitBtn.disabled = false;
-            }
-            const otpInput = form.querySelector("#otp");
-            if (otpInput) {
-                otpInput.inputMode = data.verification_method === 'email' ? 'text' : 'numeric';
-                otpInput.maxLength = data.verification_method === 'fixed_pin' ? 8 : data.verification_method === 'totp' ? 6 : 32;
-                otpInput.focus();
-            }
             clearFormError(form);
-            return;
+            secondStep = mountLoginSecondStep(form, data.verification_method, data);
+            submitBtn.disabled = false;
+            return true;
         }
 
         if (data.authenticated) {
@@ -316,12 +283,10 @@ function setupFormInteractions(form) {
     async function handleOTPPhase(form, submitBtn) {
         const otpCode = sanitizeOtpCode(form.querySelector("#otp")?.value);
 
-        if (!otpCode) {
-            showFormError(form, getTranslationForKey("enter_otp") || "Enter the verification code.");
-            submitBtn.disabled = false;
+        if (!secondStep.validate()) {
+            if (submitBtn) submitBtn.disabled = false;
             return;
         }
-
         const resp = await postPreAuthJson(
             "/api/login",
             form.querySelector("#csrf_token"),
@@ -331,12 +296,8 @@ function setupFormInteractions(form) {
         const data = await resp.json();
 
         if (!resp.ok) {
-            let msg = translateError(data.error);
-            if (data.attempts_remaining !== undefined && data.attempts_remaining >= 0) {
-                msg += ` (${data.attempts_remaining} ${getTranslationForKey("attempts_remaining") || "attempts remaining"})`;
-            }
-            showFormError(form, msg);
-            submitBtn.disabled = false;
+            secondStep.error(data);
+            if (submitBtn) submitBtn.disabled = false;
             return;
         }
 
@@ -377,13 +338,12 @@ function setupFormInteractions(form) {
         const otpCode = sanitizeOtpCode(form.querySelector("#password-reset-otp")?.value);
         const newPassword = form.querySelector("#password-reset-new-password")?.value || '';
 
-        if (!otpCode) {
-            showFormError(form, getTranslationForKey("enter_otp") || "Enter the verification code.");
-            submitBtn.disabled = false;
+        if (!secondStep.validate()) {
+            if (submitBtn) submitBtn.disabled = false;
             return;
         }
         if (!newPassword.trim()) {
-            showFormError(form, translateError("new_password_required"));
+            secondStep.passwordError();
             submitBtn.disabled = false;
             return;
         }
@@ -396,18 +356,14 @@ function setupFormInteractions(form) {
         const data = await resp.json();
 
         if (!resp.ok) {
-            showFormError(form, translateError(data.error));
-            submitBtn.disabled = false;
+            secondStep.error(data);
+            if (submitBtn) submitBtn.disabled = false;
             return;
         }
 
         restoreLoginCredentialsPhase();
-        showFormError(
-            form,
-            getTranslationForKey("password_updated_sign_in", {
-                fallback: "Password updated. Log in with the new password.",
-            }) || "Password updated. Log in with the new password."
-        );
+        showLoginStatus(form, 'password_updated_sign_in');
+        form.querySelector("#password")?.focus();
         submitBtn.disabled = false;
     }
 
@@ -419,6 +375,8 @@ function setupFormInteractions(form) {
     }
 
     function showPasswordResetRequestPhase() {
+        leaveLoginSecondStep(form);
+        secondStep = null;
         loginPhase = 'reset_request';
         setPasswordResetMode(true);
 
@@ -448,47 +406,13 @@ function setupFormInteractions(form) {
 
     function showPasswordResetVerifyPhase() {
         setPasswordResetMode(true);
-
-        const usernameLabel = form.querySelector('label[for="username"]');
-        const usernameInput = form.querySelector("#username");
-        const passwordLabel = form.querySelector('label[for="password"]');
-        const passwordWrapper = form.querySelector(".password-wrapper");
-        const privacyNotice = form.querySelector(".privacy-notice-link");
-        const otpSection = form.querySelector("#otp-section");
-        const resetSection = form.querySelector("#password-reset-section");
-        const resetMessage = form.querySelector("#password-reset-message");
-        const resendResetLink = form.querySelector("#resend-password-reset-otp");
-        const forgotLink = form.querySelector("#forgot-password-link");
-        const backLink = form.querySelector("#back-to-login-link");
-        const submitBtn = form.querySelector('input[type="submit"]');
-
-        [usernameLabel, usernameInput, passwordLabel, passwordWrapper, privacyNotice].forEach(el => {
-            if (el) el.style.display = 'none';
-        });
-        if (otpSection) otpSection.style.display = 'none';
-        if (resetSection) resetSection.style.display = 'block';
-        if (resetMessage) {
-            applyLoginLangKey(
-                resetMessage,
-                'password_reset_send_attempted',
-                getTranslationForKey('password_reset_send_attempted', {
-                    fallback: 'If the account exists, we will try to send a recovery code. You can request a new code.',
-                }) || 'If the account exists, we will try to send a recovery code. You can request a new code.'
-            );
-        }
-        if (resendResetLink) resendResetLink.style.display = 'inline';
-        if (forgotLink) forgotLink.style.display = 'none';
-        if (backLink) backLink.style.display = 'inline';
-        applyLoginLangKey(
-            submitBtn,
-            'reset_password',
-            getTranslationForKey('reset_password', { fallback: 'Reset password' }) || 'Reset password'
-        );
-        form.querySelector("#password-reset-otp")?.focus();
         clearFormError(form);
+        secondStep = mountLoginSecondStep(form, 'recovery');
     }
 
     function restoreLoginCredentialsPhase() {
+        leaveLoginSecondStep(form);
+        secondStep = null;
         loginPhase = 'credentials';
         setPasswordResetMode(false);
         resetIdentifier = '';
@@ -547,6 +471,15 @@ function setupFormInteractions(form) {
         if (errEl) errEl.textContent = '';
     }
 
+    bindLoginCodeResend(form, () => secondStep, async () => {
+        loginPhase = 'credentials';
+        try {
+            return await handleCredentialsPhase(form, form.querySelector('input[type="submit"]'), true);
+        } finally {
+            if (loginPhase === 'credentials') loginPhase = 'otp';
+        }
+    });
+
     const forgotPasswordLink = form.querySelector("#forgot-password-link");
     if (forgotPasswordLink) {
         forgotPasswordLink.addEventListener("click", (e) => {
@@ -564,20 +497,15 @@ function setupFormInteractions(form) {
     }
 
     const resendPasswordResetLink = form.querySelector("#resend-password-reset-otp");
-    if (resendPasswordResetLink) {
-        resendPasswordResetLink.addEventListener("click", async (e) => {
-            e.preventDefault();
-            if (!resetIdentifier) {
-                showFormError(form, translateError("identifier_required"));
-                return;
-            }
-            loginPhase = 'reset_request';
-            const submitBtn = form.querySelector('input[type="submit"]');
-            if (!submitBtn) return;
-            submitBtn.disabled = true;
-            await handlePasswordResetRequestPhase(form, submitBtn);
+    resendPasswordResetLink?.addEventListener('click', event => {
+        event.preventDefault();
+        void secondStep?.resend(async () => {
+            const resp = await postPreAuthJson('/api/request-password-reset-otp',
+                form.querySelector("#csrf_token"),
+                csrf => buildPasswordResetRequestBody(resetIdentifier, csrf));
+            return resp.ok;
         });
-    }
+    });
 }
 
 async function showPrivacyContentInModal() {

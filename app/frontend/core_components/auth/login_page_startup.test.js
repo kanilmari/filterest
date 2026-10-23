@@ -3,8 +3,10 @@
 // Exists so slow decorative requests cannot block authentication or password reveal.
 // @vitest-environment jsdom
 
+import { SECOND_STEP_TRANSLATION_FALLBACKS } from './second_step_translation_fallbacks.js';
 import { readFileSync } from 'node:fs';
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
+import { translateError } from './login_page_builder_helpers.js';
 
 let startup;
 let icons;
@@ -54,8 +56,11 @@ async function loadStartup() {
     vi.doMock('./login_page_shell_builder.js', () => ({ initializeStandaloneLoginShell: initializeShell }));
     vi.doMock('./auth_session_notice_handler.js', () => ({ initializeAuthSessionNotice: vi.fn() }));
     vi.doMock('./auth_preference_controls.js', () => ({}));
+    vi.doMock('../state_stores/lang_preference_reader.js', () => ({
+        getLanguageWithBrowserFallback: () => uiLanguage,
+    }));
     vi.doMock('../lang/translation_handler.js', () => ({
-        getTranslationForKey: (key, { fallback } = {}) => loginCopy[uiLanguage][key] || fallback || '',
+        getTranslationForKey: (key, { fallback } = {}) => loginCopy[uiLanguage][key] || SECOND_STEP_TRANSLATION_FALLBACKS[key]?.[uiLanguage] || fallback || '',
     }));
 
     const original = document.addEventListener.bind(document);
@@ -219,4 +224,89 @@ describe('standalone login startup', () => {
         expect(submitBtn.value).not.toBe('Lähetä koodi');
         expect(submitBtn.dataset.langKey).toBe('send_code');
     });
+    test('standalone recovery uses the shared view and announces completion as a status', async () => {
+        const doc = new DOMParser().parseFromString(readFileSync('frontend/templates/login.html', 'utf8'), 'text/html');
+        document.body.replaceChildren(doc.querySelector('form.auth-form'));
+        const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ ok: true }) });
+        vi.stubGlobal('fetch', fetchMock);
+        await loadStartup();
+        startup();
+        const form = document.querySelector('form');
+        document.getElementById('username').value = 'fixture';
+        document.getElementById('forgot-password-link').click();
+        form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+        await vi.waitFor(() => expect(form.classList.contains('is-verifying')).toBe(true));
+        document.getElementById('password-reset-otp').value = 'abc 234 def';
+        document.getElementById('password-reset-new-password').value = '  exact replacement  ';
+        form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+        await vi.waitFor(() => expect(form.querySelector('[data-login-status]')?.textContent).toBe(loginCopy.en.password_updated_sign_in));
+        expect(JSON.parse(fetchMock.mock.calls[1][1].body)).toMatchObject({ otp_code: 'abc234def', new_password: '  exact replacement  ' });
+        expect(form.querySelector('[data-login-status]').getAttribute('role')).toBe('status');
+        expect(document.getElementById('login-error-msg')?.textContent || '').toBe('');
+    });
+
+    test('both password reveal controls retain Finnish accessible names', async () => {
+        uiLanguage = 'fi';
+        await loadStartup();
+        startup();
+        const form = document.querySelector('form');
+        for (const id of ['toggle-password', 'toggle-password-reset']) {
+            const button = form.querySelector('#' + id);
+            expect(button.getAttribute('aria-label')).toBe('Näytä salasana');
+            button.click();
+            expect(button.getAttribute('aria-label')).toBe('Piilota salasana');
+            expect(button.dataset.ariaLabelLangKey).toBe('hide_password');
+        }
+    });
+
+    test.each([['en', 'otp'], ['fi', 'otp'], ['en', 'recovery'], ['fi', 'recovery']])(
+        '%s %s verification preserves all pre-auth policy messages and unknown errors', async (language, phase) => {
+            uiLanguage = language;
+            const doc = new DOMParser().parseFromString(readFileSync('frontend/templates/login.html', 'utf8'), 'text/html');
+            document.body.replaceChildren(doc.querySelector('form.auth-form'));
+            const fetchMock = vi.fn().mockResolvedValue({
+                ok: true, json: async () => ({ otp_required: true, verification_method: 'email' }),
+                clone: () => ({ json: async () => ({ otp_required: true }) }),
+            });
+            vi.stubGlobal('fetch', fetchMock);
+            await loadStartup();
+            startup();
+            const form = document.querySelector('form');
+            form.querySelector('#username').value = 'fixture';
+            form.querySelector('#password').value = 'fixture value';
+            if (phase === 'recovery') form.querySelector('#forgot-password-link').click();
+            form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+            await vi.waitFor(() => expect(form.classList.contains('is-verifying')).toBe(true));
+            const root = form.querySelector(phase === 'otp' ? '#otp-section' : '#password-reset-section');
+            root.querySelector('[data-verify="input"]').value = 'abc234def';
+            form.querySelector('#password-reset-new-password').value = 'replacement value';
+            let finishVerification;
+            fetchMock.mockImplementationOnce(() => new Promise(resolve => { finishVerification = resolve; }));
+            form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+            await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+            const resend = root.querySelector('[data-verify="resend"]');
+            resend.click();
+            for (const key of ['Enter', ' ']) {
+                const event = new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true });
+                resend.dispatchEvent(event);
+                expect(event.defaultPrevented).toBe(true);
+                resend.click();
+            }
+            expect(fetchMock).toHaveBeenCalledTimes(2);
+            expect(form.querySelector('input[type="submit"]').disabled).toBe(true);
+            expect(resend.getAttribute('aria-disabled')).toBe('true');
+            expect(resend.getAttribute('tabindex')).toBe('-1');
+            finishVerification({ ok: false, json: async () => ({ error: 'wrong_otp' }) });
+            await vi.waitFor(() => expect(form.querySelector('input[type="submit"]').disabled).toBe(false));
+            for (const code of ['login_not_allowed', 'authentication_policy_unavailable', 'fingerprint_required', 'legacy_form_login_disabled', 'unknown_failure']) {
+                for (const error of [code, `HTTP 403: ${code}`]) {
+                    fetchMock.mockResolvedValue({ ok: false, json: async () => ({ error }) });
+                    form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+                    await vi.waitFor(() => expect(root.querySelector('[data-verify="error"]').textContent).toBe(translateError(error, language)));
+                    expect(form.querySelector('input[type="submit"]').disabled).toBe(false);
+                }
+            }
+        },
+    );
+
 });

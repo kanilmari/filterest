@@ -11,6 +11,7 @@
 
 /* --- Auth --- */
 @import url("../core_components/auth/auth.css");
+@import url("../core_components/auth/auth_verify.css");
 
 /* --- Navigation --- */
 @import url("../core_components/navigation/navbar/navbar_layout.css");

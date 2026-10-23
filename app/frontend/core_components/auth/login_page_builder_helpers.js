@@ -169,20 +169,6 @@ export function buildPasswordResetBody(otpCode, newPassword, csrfToken) {
 }
 
 /**
- * Format an OTP error message, optionally appending remaining attempts.
- *
- * @param {string} msg - base error message
- * @param {number|undefined} attemptsRemaining - attempts left, or undefined
- * @returns {string}
- */
-export function formatOtpError(msg, attemptsRemaining) {
-    if (attemptsRemaining !== undefined && attemptsRemaining >= 0) {
-        return `${msg} (${attemptsRemaining} yritystä jäljellä)`;
-    }
-    return msg;
-}
-
-/**
  * Resolve the post-login navigation target from the login page context.
  * Prefers the existing ?redirect= query captured by auth redirects, then falls
  * back to the backend-provided redirect if it is same-origin.

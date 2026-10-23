@@ -83,6 +83,29 @@ guest route goes to `/login`; on a public-browsing site it can serve the generic
 SPA document. Do not claim that bare `/register` hands off to
 `/?register-entry=1`. The bootstrap's route check is not a hard navigation.
 
+### Shared sign-in verification view
+
+The standalone page and modal retain their existing request controllers and
+reuse [login.html](../../frontend/templates/login.html). Their PIN, authenticator,
+email-code and recovery-code phases mount one presentation adapter from
+[second_step_view.js](../../frontend/core_components/auth/second_step_view.js).
+[second_step_factors.js](../../frontend/core_components/auth/second_step_factors.js)
+owns each factor's copy keys, input attributes, semantic length and secondary actions.
+The renderer accepts an `auth-verify` root with the template's `data-verify` slots
+and a descriptor, plus optional caller-owned primary/back/resend controls. New
+slot identities are unique per mount; existing input identities remain stable.
+Profile verification and PIN/authenticator enrollment are separate callers for a
+later batch; extend these descriptors and slots instead of adding another renderer.
+
+The code view normalizes whitespace without truncating codes, preserves password
+values, and keeps polite inline errors beside their field. It focuses the phase
+heading at phone widths up to 520px and the field on desktop; validation failures
+focus the field. Delivered email/recovery codes can be requested again, with
+pending/failure status and no client countdown. PIN/authenticator help directs the
+person to the site administrator. Password recovery retains the existing neutral
+delivery statement. Local FI/EN copy is collected by the shared translator, and
+startup only inserts missing keys or fills empty language values.
+
 ### Post-login transition
 
 Modal credentials or OTP success calls `completeSuccessfulModalLogin` in

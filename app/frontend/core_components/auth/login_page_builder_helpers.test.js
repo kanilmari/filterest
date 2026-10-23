@@ -12,7 +12,6 @@ import {
     buildOtpBody,
     buildPasswordResetRequestBody,
     buildPasswordResetBody,
-    formatOtpError,
     resolvePostLoginTarget,
     computeStandaloneLoginBackTarget,
     applyLoginLangKey,
@@ -210,31 +209,6 @@ describe('buildPasswordResetBody', () => {
             new_password: 'new-secret',
             csrf_token: 'csrf-xyz',
         });
-    });
-});
-
-// ---------------------------------------------------------------------------
-// formatOtpError
-// ---------------------------------------------------------------------------
-describe('formatOtpError', () => {
-    test('appends attempts remaining', () => {
-        expect(formatOtpError('Virheellinen koodi.', 3)).toBe(
-            'Virheellinen koodi. (3 yritystä jäljellä)'
-        );
-    });
-
-    test('appends zero attempts remaining', () => {
-        expect(formatOtpError('Virheellinen koodi.', 0)).toBe(
-            'Virheellinen koodi. (0 yritystä jäljellä)'
-        );
-    });
-
-    test('returns message unchanged when attempts is undefined', () => {
-        expect(formatOtpError('Virheellinen koodi.', undefined)).toBe('Virheellinen koodi.');
-    });
-
-    test('returns message unchanged when attempts is negative', () => {
-        expect(formatOtpError('Virheellinen koodi.', -1)).toBe('Virheellinen koodi.');
     });
 });
 

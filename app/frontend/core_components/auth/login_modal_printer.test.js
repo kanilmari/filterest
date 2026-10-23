@@ -4,7 +4,10 @@
 // Exists to keep the guest-shell login entry slice from regressing back to raw `/login` fetches or stale redirects.
 // @vitest-environment jsdom
 
+import { readFileSync } from 'node:fs';
+import { SECOND_STEP_TRANSLATION_FALLBACKS } from './second_step_translation_fallbacks.js';
 import { beforeEach, describe, expect, test, vi } from "vitest";
+import { translateError } from './login_page_builder_helpers.js';
 
 const createModalMock = vi.fn();
 const showModalMock = vi.fn();
@@ -38,38 +41,8 @@ const loginCopy = {
 };
 
 function buildLoginFormHtml() {
-    return `
-        <div class="auth-hero">
-            <h1 class="site_name">Serlog.com</h1>
-            <div class="auth-intro-box" data-html-lang-key="login_page_intro_site_html+Serlog.com">
-                <p>Intro text</p>
-            </div>
-        </div>
-        <form class="auth-form">
-            <label for="username">Username</label>
-            <input id="username" />
-            <label for="password">Password</label>
-            <div class="password-wrapper">
-                <input id="password" type="password" />
-                <button type="button" id="toggle-password">toggle</button>
-            </div>
-            <label class="privacy-notice-link" id="privacy-notice-link">Privacy</label>
-            <input id="csrf_token" value="csrf-token" />
-            <div id="otp-section" style="display:none"></div>
-            <div id="otp-message"></div>
-            <a id="resend-otp" style="display:none"></a>
-            <a id="forgot-password-link" href="#">Forgot password</a>
-            <a id="back-to-login-link" href="#" style="display:none">Back</a>
-            <div id="password-reset-section" style="display:none">
-                <div id="password-reset-message"></div>
-                <input id="password-reset-otp" />
-                <input id="password-reset-new-password" type="password" />
-                <button type="button" id="toggle-password-reset">toggle reset</button>
-                <a id="resend-password-reset-otp" href="#" style="display:none"></a>
-            </div>
-            <div id="submit"><input type="submit" data-lang-key="login" value="Login" data-testid="login-submit" /></div>
-        </form>
-    `;
+    const markup = readFileSync('frontend/templates/login.html', 'utf8');
+    return markup.slice(markup.indexOf('<div class="auth-login-stack">'), markup.indexOf('</form>') + 7);
 }
 
 async function loadModule() {
@@ -98,10 +71,10 @@ async function loadModule() {
         isCrossTabLoginSyncEnabled: isCrossTabLoginSyncEnabledMock,
     }));
     vi.doMock("../lang/translation_handler.js", () => ({
-        getTranslationForKey: (key, { fallback } = {}) => loginCopy[uiLanguage][key] || fallback || "",
+        getTranslationForKey: (key, { fallback } = {}) => loginCopy[uiLanguage][key] || SECOND_STEP_TRANSLATION_FALLBACKS[key]?.[uiLanguage] || fallback || "",
     }));
     vi.doMock("../state_stores/lang_preference_reader.js", () => ({
-        getLanguageWithBrowserFallback: () => "en",
+        getLanguageWithBrowserFallback: () => uiLanguage,
     }));
     vi.doMock("../../reusable_components/dom_container_builder.js", () => ({
         renderAllowedHtml: () => document.createElement("div"),
@@ -153,7 +126,7 @@ describe("showLoginModal", () => {
             expect(button.getAttribute("aria-label")).toBe("Hide password");
             expect(button.getAttribute("aria-pressed")).toBe("true");
             expect(document.activeElement).toBe(button);
-            expect(button.textContent).toContain("toggle");
+            expect(button.querySelector("svg")).not.toBeNull();
         }
         vi.stubGlobal("fetch", vi.fn().mockResolvedValue({
             ok: false, json: async () => ({ error: "wrong_credentials" }),
@@ -337,4 +310,119 @@ describe("showLoginModal", () => {
 
         expect(publishAuthLoginMock).not.toHaveBeenCalled();
     });
+    test("modal email resend sends another credentials request and shows failure", async () => {
+        const mod = await loadModule();
+        const responses = [
+            { ok: true, json: async () => ({ otp_required: true, verification_method: 'email', masked_email: 'a•••@example.com' }) },
+            { ok: false, json: async () => ({ error: 'too_many_otp_requests' }) },
+        ];
+        const fetchMock = vi.fn().mockImplementation(async () => {
+            const response = responses.shift();
+            return { ...response, clone: () => response };
+        });
+        vi.stubGlobal('fetch', fetchMock);
+        await mod.showLoginModal();
+        const shell = createModalMock.mock.calls.at(-1)[0].contentElements[0];
+        document.body.append(shell);
+        const form = shell.querySelector('form');
+        form.querySelector('#username').value = 'fixture';
+        form.querySelector('#password').value = 'fixture value';
+        form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+        await vi.waitFor(() => expect(form.classList.contains('is-verifying')).toBe(true));
+        form.querySelector('#resend-otp').click();
+        await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+        expect(JSON.parse(fetchMock.mock.calls[1][1].body)).toMatchObject({ username: 'fixture', password: 'fixture value' });
+        expect(JSON.parse(fetchMock.mock.calls[1][1].body)).not.toHaveProperty('otp_code');
+        await vi.waitFor(() => expect(form.querySelector('[data-verify="status"]').textContent).toBe('The code could not be sent. Try again.'));
+        expect(form.querySelector('.error')?.textContent || '').toBe('');
+    });
+
+    test('recovery keeps the exact password and reports completion as a status', async () => {
+        const mod = await loadModule();
+        const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ ok: true }) });
+        vi.stubGlobal('fetch', fetchMock);
+        await mod.showLoginModal();
+        const shell = createModalMock.mock.calls.at(-1)[0].contentElements[0];
+        document.body.append(shell);
+        const form = shell.querySelector('form');
+        form.querySelector('#username').value = 'fixture';
+        form.querySelector('#forgot-password-link').click();
+        form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+        await vi.waitFor(() => expect(form.classList.contains('is-verifying')).toBe(true));
+        form.querySelector('#password-reset-otp').value = 'abc 234 def';
+        form.querySelector('#password-reset-new-password').value = '  exact replacement  ';
+        form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+        await vi.waitFor(() => expect(form.querySelector('[data-login-status]')?.textContent).toBe(loginCopy.en.password_updated_sign_in));
+        expect(JSON.parse(fetchMock.mock.calls[1][1].body)).toMatchObject({ otp_code: 'abc234def', new_password: '  exact replacement  ' });
+        expect(form.querySelector('[data-login-status]').getAttribute('role')).toBe('status');
+        expect(form.querySelector('[data-login-status]').classList.contains('error')).toBe(false);
+        expect(form.classList.contains('is-verifying')).toBe(false);
+    });
+
+    test('both password reveal controls retain Finnish accessible names', async () => {
+        uiLanguage = 'fi';
+        const mod = await loadModule();
+        await mod.showLoginModal();
+        const shell = createModalMock.mock.calls.at(-1)[0].contentElements[0];
+        document.body.append(shell);
+        const form = shell.querySelector('form');
+        for (const id of ['toggle-password', 'toggle-password-reset']) {
+            const button = form.querySelector('#' + id);
+            expect(button.getAttribute('aria-label')).toBe('Näytä salasana');
+            button.click();
+            expect(button.getAttribute('aria-label')).toBe('Piilota salasana');
+            expect(button.dataset.ariaLabelLangKey).toBe('hide_password');
+        }
+    });
+
+    test.each([['en', 'otp'], ['fi', 'otp'], ['en', 'recovery'], ['fi', 'recovery']])(
+        '%s %s verification preserves all pre-auth policy messages and unknown errors', async (language, phase) => {
+            uiLanguage = language;
+            const mod = await loadModule();
+            const fetchMock = vi.fn().mockResolvedValue({
+                ok: true, json: async () => ({ otp_required: true, verification_method: 'email' }),
+                clone: () => ({ json: async () => ({ otp_required: true }) }),
+            });
+            vi.stubGlobal('fetch', fetchMock);
+            await mod.showLoginModal();
+            const shell = createModalMock.mock.calls.at(-1)[0].contentElements[0];
+            document.body.append(shell);
+            const form = shell.querySelector('form');
+            form.querySelector('#username').value = 'fixture';
+            form.querySelector('#password').value = 'fixture value';
+            if (phase === 'recovery') form.querySelector('#forgot-password-link').click();
+            form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+            await vi.waitFor(() => expect(form.classList.contains('is-verifying')).toBe(true));
+            const root = form.querySelector(phase === 'otp' ? '#otp-section' : '#password-reset-section');
+            root.querySelector('[data-verify="input"]').value = 'abc234def';
+            form.querySelector('#password-reset-new-password').value = 'replacement value';
+            let finishVerification;
+            fetchMock.mockImplementationOnce(() => new Promise(resolve => { finishVerification = resolve; }));
+            form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+            await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+            const resend = root.querySelector('[data-verify="resend"]');
+            resend.click();
+            for (const key of ['Enter', ' ']) {
+                const event = new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true });
+                resend.dispatchEvent(event);
+                expect(event.defaultPrevented).toBe(true);
+                resend.click();
+            }
+            expect(fetchMock).toHaveBeenCalledTimes(2);
+            expect(form.querySelector('input[type="submit"]').disabled).toBe(true);
+            expect(resend.getAttribute('aria-disabled')).toBe('true');
+            expect(resend.getAttribute('tabindex')).toBe('-1');
+            finishVerification({ ok: false, json: async () => ({ error: 'wrong_otp' }) });
+            await vi.waitFor(() => expect(form.querySelector('input[type="submit"]').disabled).toBe(false));
+            for (const code of ['login_not_allowed', 'authentication_policy_unavailable', 'fingerprint_required', 'legacy_form_login_disabled', 'unknown_failure']) {
+                for (const error of [code, `HTTP 403: ${code}`]) {
+                    fetchMock.mockResolvedValue({ ok: false, json: async () => ({ error }) });
+                    form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+                    await vi.waitFor(() => expect(root.querySelector('[data-verify="error"]').textContent).toBe(translateError(error, language)));
+                    expect(form.querySelector('input[type="submit"]').disabled).toBe(false);
+                }
+            }
+        },
+    );
+
 });
