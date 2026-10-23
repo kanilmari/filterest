@@ -5,6 +5,7 @@
 
 export const LAYOUT_BREAKPOINTS = Object.freeze({
     phone: 700, // K444: phone layout follows the viewport through 700 px.
+    tablet: 1200, // K442 / 23.10. frame rule: phone + tablet <= 1200 px, desktop > 1200 px.
     navbarCollapsed: 1850,
     filterbarOverlay: 1100,
     cardStack: 1060,

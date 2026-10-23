@@ -14,7 +14,7 @@ const repositoryRoot = fileURLToPath(new URL('../../../', import.meta.url));
 const configPath = 'app/frontend/ui_config.js';
 const configSource = readFileSync(resolve(repositoryRoot, configPath), 'utf8');
 const breakpointSource = configSource.match(/LAYOUT_BREAKPOINTS\s*=\s*Object\.freeze\(\{([\s\S]*?)\}\)/)?.[1];
-const bandNames = ['phone', 'navbarCollapsed', 'filterbarOverlay', 'cardStack', 'cardViewportStack'];
+const bandNames = ['phone', 'tablet', 'navbarCollapsed', 'filterbarOverlay', 'cardStack', 'cardViewportStack'];
 const bands = Object.fromEntries(bandNames.map(name =>
     [name, Number(breakpointSource?.match(new RegExp(`\\b${name}:\\s*(\\d+)\\b`))?.[1])]));
 const allowedWidths = new Set(Object.values(bands));

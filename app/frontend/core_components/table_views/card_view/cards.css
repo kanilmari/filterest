@@ -1781,7 +1781,7 @@ body.dark-mode .card--modern {
     }
 }
 
-@media (width >= 1201px) {
+@media (width > 1200px) {
     .tab_parts_container:has(.card_view_wrapper.big-card-open) .filterbar_results_count {
         display: none !important;
     }

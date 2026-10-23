@@ -171,7 +171,7 @@
         background: unset !important;
         border-radius: unset !important;
     }
-
+    .card_image > .wrapper:not(.service_catalog_logo_frame, .card_image_contrast_frame)::after { content: none; }
     .card_image>.wrapper>img {
         width: 100% !important;
         height: 100% !important;
@@ -381,7 +381,7 @@
         background: unset !important;
         border-radius: unset !important;
     }
-
+    .card_image > .wrapper:not(.service_catalog_logo_frame, .card_image_contrast_frame)::after { content: none; }
     .card_image>.wrapper>img {
         width: 100% !important;
         height: 100% !important;
@@ -474,5 +474,13 @@
     #tabs_container {
         transform: unset;
         width: unset;
+    }
+}
+
+/* Article photos have no 300px layout; their frame follows the device boundary. */
+@media (width <= 1200px) {
+    .big_card_image > .wrapper:not(.service_catalog_logo_frame, .card_image_contrast_frame)::after,
+    .row_article_inline_media > .wrapper:not(.service_catalog_logo_frame, .card_image_contrast_frame)::after {
+        content: none;
     }
 }

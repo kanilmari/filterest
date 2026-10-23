@@ -146,10 +146,25 @@ site settings requests that omit the count preserve the latest stored count
 within the existing save transaction. Dataset null inherits; fractional and
 out-of-range counts are invalid in both scopes. The setting does not hide fields or change stored row values.
 
-Card and inline article media use one 1px frame around the media box, preserving
-the selected contain/cover behavior and image dimensions. This frame is separate
-from the article's outer container, whose side borders remain while its top and
-bottom borders are removed. Gallery selection borders retain their own meaning.
+The card photo frame follows the card's image layout. Stacked cards have no decorative
+1px frame; the normal 300 px wide-card image keeps main's inset frame:
+1px solid `var(--border_color)`, with the media box's inherited radius.
+
+| Surface | Existing image layout condition | Photo frame |
+| --- | --- | --- |
+| Card (`.card_image > .wrapper`) | Viewport ≤ 1550 px OR `card-list` container ≤ 1060 px: stacked, fluid image | Off |
+| Card | Viewport > 1550 px AND `card-list` container > 1060 px: normal 300 px image | On, unchanged from main |
+| Big-card (`.big_card_image > .wrapper`) | Always fluid: wrapper width 100%, image height auto, maximum height 80vh (`cards_big.css`) | Off on phones/tablets (≤ 1200 px); on, unchanged from main, on desktop (≥ 1201 px) |
+| Inline article (`.row_article_inline_media > .wrapper`) | Always fluid: media width 100% (`row_article_inline_media.css`), with the big-card sizing above | Off on phones/tablets (≤ 1200 px); on, unchanged from main, on desktop (≥ 1201 px) |
+
+The two card stacking blocks in `mobile_friendliness.css` own card frame removal.
+Neither article surface has a normal 300 px image layout, so one shared
+`(width <= 1200px)` override removes their photo frames on phones and tablets.
+Desktop article photos keep the same 1px inset frame, colour token and inherited
+radius as main. Logo, contrast and SVG frames remain bordered at every width.
+Photo corners, contain/cover behavior and image dimensions are unchanged.
+The article's outer side borders, focus rings and gallery selection borders
+retain their own meaning.
 
 ## Card field wrapping defaults and dataset choices
 

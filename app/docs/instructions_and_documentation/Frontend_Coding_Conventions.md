@@ -197,7 +197,9 @@ The phone boundary is viewport width ≤ 700 px (K444); its single source is
 the [structure guard](../../frontend/styles/responsive_structure.test.js) ties that literal to the source.
 CSS escapes in names are decoded before the checks, so `@m\65 dia` and `(w\69 dth …)` are read as `@media` and `width`.
 The guard runs in every whole-Vitest run (the batch jobs and the nightly); selecting it by stylesheet change belongs to the test-map work (WO69 S2), not to this guard.
-Other viewport widths use the named layout bands there: 1060, 1100, 1550 and 1850 px.
+Other viewport widths use the named layout bands there: 1060, 1100, 1200, 1550 and 1850 px.
+`tablet` (1200 px) separates phone + tablet (`@media (width <= 1200px)`) from desktop (`@media (width > 1200px)`).
+Write the upper side of any band as `width > N`, never `width >= N + 1`, so the two sides meet without a gap.
 Container queries size components intrinsically; they never replace the viewport phone gate.
 Keep one phone section at the end of each stylesheet, introduced by `/* Phone (≤ 700px, K444) */`.
 The phone query is outermost; hover, pointer, any-pointer, reduced-motion and color-scheme

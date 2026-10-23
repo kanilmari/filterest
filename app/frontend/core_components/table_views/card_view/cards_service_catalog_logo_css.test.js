@@ -8,6 +8,9 @@ import { describe, expect, test } from 'vitest';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { readFileSync, readdirSync } from 'node:fs';
+import { requireNodeDependency } from '../../../../server_tools/lib/node_dependency_loader.mjs';
+
+const { parse } = requireNodeDependency('postcss');
 
 const CURRENT_DIR = dirname(fileURLToPath(import.meta.url));
 const FORMER_LOGO_VARIANTS = 'firefox|thunderbird|wikipedia|openstreetmap|matrix';
@@ -71,6 +74,75 @@ function expectTwoLineClamp(rule) {
     expect(rule).toContain('overflow: hidden');
     expect(rule).toContain('text-overflow: ellipsis');
 }
+
+// Frozen origin/main photo rule: keep its declarations and selector bytes intact.
+const PHOTO_FRAME_SELECTORS = ['card_image', 'big_card_image', 'row_article_inline_media']
+    .map(surface => `.${surface} > .wrapper:not(.service_catalog_logo_frame, .card_image_contrast_frame)::after`)
+    .join(',\n');
+const MAIN_PHOTO_FRAME_RULE = `${PHOTO_FRAME_SELECTORS} {
+    content: "";
+    position: absolute;
+    z-index: 2;
+    inset: 0;
+    box-sizing: border-box;
+    border: 1px solid var(--border_color);
+    border-radius: inherit;
+    pointer-events: none;
+}`;
+
+describe('photo frames follow card layout and article device widths (WO47)', () => {
+    test('retains the exact main frame rule at the stylesheet root', () => {
+        const css = readSiblingCss('cards.css');
+        expect(css).toContain(MAIN_PHOTO_FRAME_RULE);
+        const rules = parse(css).nodes.filter(node => node.type === 'rule'
+            && node.selector === PHOTO_FRAME_SELECTORS);
+        expect(rules).toHaveLength(1);
+        expect(rules[0].toString()).toBe(MAIN_PHOTO_FRAME_RULE);
+    });
+
+    test.each(['card_image', 'big_card_image', 'row_article_inline_media'])(
+        '%s only removes the frame in its required conditions, excluding protected frames', surface => {
+            const files = readdirSync(CURRENT_DIR).filter(filename => filename.endsWith('.css'));
+            files.push('../../../styles/mobile_friendliness.css');
+            const matches = [];
+            for (const filename of files) {
+                parse(readSiblingCss(filename)).walkRules(rule => {
+                    if (!new RegExp(`\\.${surface}\\b`).test(rule.selector)
+                        || !rule.selector.includes('.wrapper')
+                        || !/::?after\b/.test(rule.selector)) return;
+                    matches.push({ filename, rule });
+                });
+            }
+            // Two card stacking removals and one shared phone/tablet article removal.
+            expect(matches).toHaveLength(surface === 'card_image' ? 3 : 2);
+            const [base, ...removals] = matches;
+            expect(base.filename).toBe('cards.css');
+            expect(base.rule.parent.type).toBe('root');
+            expect(base.rule.toString()).toBe(MAIN_PHOTO_FRAME_RULE);
+            expect(removals.map(({ rule }) => [rule.parent.name, rule.parent.params])).toEqual(
+                surface === 'card_image'
+                    ? [['media', 'screen and (width <= 1550px)'], ['container', 'card-list (max-width: 1060px)']]
+                    : [['media', '(width <= 1200px)']]
+            );
+            for (const removal of removals) {
+                expect(removal.filename).toBe('../../../styles/mobile_friendliness.css');
+                expect(removal.rule.selector.split('\n').map(line => line.trim()).join('\n')).toBe(surface === 'card_image'
+                    ? PHOTO_FRAME_SELECTORS.split(',\n')[0]
+                    : PHOTO_FRAME_SELECTORS.split(',\n').slice(1).join(',\n'));
+                expect(removal.rule.parent.type).toBe('atrule');
+                expect(removal.rule.parent.parent.type).toBe('root');
+                expect(removal.rule.nodes.map(node => [node.type, node.prop, node.value, node.important]))
+                    .toEqual([['decl', 'content', 'none', undefined]]);
+                if (surface !== 'card_image') continue;
+                const layoutRules = removal.rule.parent.nodes.filter(node => node.type === 'rule');
+                expect(layoutRules.find(rule => rule.selector === '.card_body').toString())
+                    .toContain('flex-direction: column');
+                expect(layoutRules.find(rule => rule.selector === '.card_image>.wrapper').toString())
+                    .toContain('width: min(100%, 80vh) !important');
+            }
+        }
+    );
+});
 
 describe('service catalog logo CSS sizing', () => {
     test('keeps the 300px logo frame lock scoped to card view only', () => {
@@ -140,7 +212,10 @@ describe('service catalog logo CSS sizing', () => {
         );
         const cssLogoRule = extractRule(cardsCss, '.service-catalog-css-logo');
 
-        expect(sharedFrameRule).toContain('border: 1px solid');
+        expect(sharedFrameRule).toContain('border: 1px solid var(--border_color)');
+        expect(sharedFrameRule).toContain('border-radius: 14px');
+        const svgFrame = extractRule(readSiblingCss('svg_image_presentation.css'), '.record_svg_image_frame');
+        expect(svgFrame).toContain('border: 1px solid color-mix(in srgb, var(--border_color) 82%, transparent)');
         expect(cssLogoRule).toContain('clamp(0.9rem, 7cqi, 1.6rem)');
         expect(cssLogoRule).toContain('clamp(0.65rem, 4cqi, 1.1rem)');
     });
