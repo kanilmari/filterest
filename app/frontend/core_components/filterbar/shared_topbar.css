@@ -22,7 +22,7 @@
   grid-template-rows: 0fr;
   flex: 0 0 auto;
   padding: 0 var(--dataset-shared-topbar-padding-inline);
-  background: color-mix(in srgb, var(--filter_panel_bg) 94%, transparent);
+  background: color-mix(in srgb, var(--filter_panel_bg_color) 94%, transparent);
   backdrop-filter: blur(16px);
   /* Match the navbar top control row. The transparent resting color reserves
      the same 2px geometry while collapsed; the visible state supplies the

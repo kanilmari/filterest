@@ -12,8 +12,8 @@ const postcss = requireNodeDependency('postcss');
 const baseline = {
     'front_page.css': 'e91f9bb8d2da02ceba545f33e1bb50ffbdb849b0c09a1cf9e99d2e21e2e52e67',
     'top_nav_home_button.css': '4c2b8e10a17ee70737ee8af0adf2b21b6fc3bca40f92c85f403de5f91ab8003c',
-    '../filterbar/shared_topbar.css': '662fce1278e4845710e0e338215d67db3009ccc8447cef4bbd1c67974325abf1',
-    '../filterbar/morphing_filterbar_content.css': '9cbd87a66e156e3ef77514e94ee00bb79c5bb309c7e30bf4f4cd264979773b8a',
+    '../filterbar/shared_topbar.css': '47dcce674bc0e9974a499e7f19db9e98f7988a23688051561e4ed73ed15a484f',
+    '../filterbar/morphing_filterbar_content.css': '9b0c7307b1a1448328bb6e7bb59fbaf440006f72ac04827c02d6bb511324708a',
 };
 const sheets = Object.fromEntries(Object.keys(baseline).map(file =>
     [file, postcss.parse(readFileSync(new URL(file, import.meta.url), 'utf8'))]));
@@ -32,6 +32,7 @@ function phoneRule(file, selector) {
 
 // Batch 512 (63b9b250) retains the non-phone baseline from d373e6c6; K465 updates only the hero's shared radius;
 // Home's front_page.css pin is from the batch 513 base fe0d999f.
+// Batch 569 re-pins only the topbar/hero colour mixes to use their solid companion.
 test.each(Object.keys(baseline))('%s keeps every rule outside the phone breakpoint byte-identical to its approved baseline', file => {
     const root = sheets[file].clone();
     root.walkAtRules('media', media => { if (media.params === '(width <= 700px)') media.remove(); });

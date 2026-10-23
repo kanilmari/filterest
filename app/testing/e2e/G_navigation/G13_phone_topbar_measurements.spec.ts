@@ -102,6 +102,20 @@ for (const width of [320, 375, 390, 700]) for (const theme of ['light', 'dark'] 
       contentType: 'application/json',
     });
     if (probePhase === 'before') return;
+    // Resolve the expected mix inside this bar so the brand hue and explicit
+    // application theme win over the opposite OS theme, without saving settings.
+    await expect.poll(() => bar.evaluate(element => {
+      const probe = document.createElement('span');
+      probe.hidden = true;
+      probe.style.backgroundColor = 'color-mix(in srgb, var(--filter_panel_bg_color) 94%, transparent)';
+      element.append(probe);
+      try {
+        const actual = getComputedStyle(element).backgroundColor;
+        const expected = getComputedStyle(probe).backgroundColor;
+        return { actual, expected, painted: actual !== 'rgba(0, 0, 0, 0)', matchesCompanionMix: actual === expected };
+      } finally { probe.remove(); }
+    }), { message: 'The visible dataset topbar paints the solid companion at 94% in either theme.' })
+      .toMatchObject({ painted: true, matchesCompanionMix: true });
     const [menuBox, homeBox, identityBox, searchBox, filterBox] = sample.controls;
     for (const box of [menuBox, homeBox, searchBox, filterBox]) {
       expect(box.width).toBeGreaterThanOrEqual(44); expect(box.height).toBeGreaterThanOrEqual(44);

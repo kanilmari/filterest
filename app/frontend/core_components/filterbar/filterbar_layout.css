@@ -374,7 +374,7 @@
   z-index: 4;
   height: var(--filterbar-clock-bar-height, 34px);
   min-height: var(--filterbar-clock-bar-height, 34px);
-  background: color-mix(in srgb, var(--filter_panel_bg) 90%, var(--bg_color_extreme, #111) 10%);
+  background: color-mix(in srgb, var(--filter_panel_bg_color) 90%, var(--bg_color_extreme, #111) 10%);
   border-top: 1px solid var(--filter_panel_border);
   display: flex;
   align-items: center;

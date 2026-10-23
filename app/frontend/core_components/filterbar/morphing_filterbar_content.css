@@ -85,8 +85,8 @@
   background:
     linear-gradient(
       180deg,
-      color-mix(in srgb, var(--filter_panel_bg) 86%, var(--bg_color_extreme) 14%) 0%,
-      color-mix(in srgb, var(--filter_panel_bg) 94%, transparent 6%) 100%
+      color-mix(in srgb, var(--filter_panel_bg_color) 86%, var(--bg_color_extreme) 14%) 0%,
+      color-mix(in srgb, var(--filter_panel_bg_color) 94%, transparent 6%) 100%
     );
 }
 /* Share the hero's responsive outer inset with the following listing controls.
