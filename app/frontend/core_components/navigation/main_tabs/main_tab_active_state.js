@@ -12,6 +12,8 @@ import {
     buildTabOutlinePresentation,
 } from "./tab_presentation_builder.js";
 import { getChosenDatasetView } from "../../state_stores/dataset_view_choice_saver.js";
+import { observeViewPresentationMedia, syncViewPresentationMediaFlag,
+    VIEW_PRESENTATION_MEDIA_ATTRIBUTE } from "./view_presentation_media_resolver.js";
 
 const NAVTAB_OUTLINE_MORPH_ATTRIBUTE = "d";
 const NAVTAB_PRESENTATION_DURATION_PROPERTY = "--navtab-presentation-transition-duration";
@@ -236,15 +238,6 @@ function getActiveMainTabId() {
     return document.querySelector(".navtablinks.active")?.dataset?.id || "";
 }
 
-// Resolves whether the active dataset owns either presentation image role.
-// Operates between authoritative tab metadata and the shared shape policy.
-// Keeps image-bearing datasets on opaque rectangular tabs in every navbar state.
-function activeDatasetHasPresentationMedia(activeTabId, allTabButtons) {
-    if (!activeTabId) return false;
-    const activeButton = allTabButtons.find((button) => button.dataset.id === activeTabId);
-    return activeButton?.dataset.hasPresentationMedia === "true";
-}
-
 // Applies the active presentation to the dataset tab that owns the current view.
 // Operates between nav tab DOM buttons, persisted view mode, and SVG outline paths.
 // Prevents non-dataset tool views from leaving stale SVG tabs visually open.
@@ -259,10 +252,11 @@ export function applyMainTabActiveState(activeTabId = "", options = {}) {
     const navTabs = document.querySelector(".navtabs");
     const allTabButtons = Array.from(document.querySelectorAll(".navtablinks"));
     const navbarWidth = getNavbarWidthPx();
-    const forceRectangular = activeDatasetHasPresentationMedia(
-        normalizedActiveTabId,
-        allTabButtons
-    );
+    syncViewPresentationMediaFlag(normalizedActiveTabId, viewDatasetName);
+    // Read current ownership when a queued DOM/theme change settles; a shell
+    // replacement or cancelled navigation must never replay an earlier view.
+    observeViewPresentationMedia(refreshMainTabPresentation);
+    const forceRectangular = document.body.getAttribute(VIEW_PRESENTATION_MEDIA_ATTRIBUTE) === "true";
 
     if (navTabs) {
         navTabs.style.right = buildNavTabsRightOffset({

@@ -9,13 +9,7 @@ Part of the [Frontend Guide](Frontend_Guide.md); this section was formerly part 
 
 ## Optional Home page
 
-The site-wide `separate_front_page` setting defaults to false, retaining the
-existing default-dataset start and root history behavior. When enabled, `/`
-opens the hidden `front_page` custom view unless the operator's custom root page
-below is active; `/front_page` is never a view address.
-The SPA reads the setting and the optional Home-button site name from the
-auth-modes response before loading datasets. Explicit dataset/article links
-and login/register entry flows retain their existing behavior.
+The site-wide `separate_front_page` setting defaults to false, retaining the default-dataset start and root history. When enabled, `/` opens the hidden `front_page` custom view unless the custom root page below is active; `/front_page` is never a view address. The SPA reads this setting and the optional Home-button site name from auth modes before loading datasets. Explicit dataset/article links and login/register entry flows retain their behavior.
 
 ## Operator-provided root page (owner decision K378)
 
@@ -244,6 +238,12 @@ accessible name and current-page marker are unchanged. An ordinary Home activati
 outside-click closer as a dataset tab: below 1850 CSS pixels it closes the overlay menu and saves that state;
 a docked menu stays open, Home inside the menu is an inside click, and modified or non-primary gestures stay
 native and leave the menu alone. Menu state still has one owner.
+
+Navigation has one media rule: the current view's presentation media makes buttons rectangular and opaque.
+`navigation/main_tabs/view_presentation_media_resolver.js` resolves the active dataset's `has_presentation_media` or Home's mounted image/video; hidden layers, zero media opacity and a full wash do not count.
+`syncViewPresentationMediaFlag()` alone writes `body[data-view-has-presentation-media]`; active-view updates and its Home/theme observer refresh it after rendering, preview changes and hiding.
+The consumers are navbar tabs and vertical side-menu items (including connector arcs), through `main_tab_active_state.js`'s existing `forceRectangular` path, and hero/Home buttons through one rule in `hero_dataset_tabs.css`.
+The rule applies at phone widths too. Opaque surfaces, selected/hover tokens and focus outlines remain; without media the existing rounded-button and layout policies remain.
 
 `front_page_availability.js` keeps server-confirmed availability in tab memory;
 a stale local-storage value cannot enable a link or route. Auth bootstrap clears

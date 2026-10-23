@@ -22,6 +22,7 @@ Dates are the local (Europe/Helsinki) date on which the version was published.
 
 ## [Unreleased]
 
+- Home with a shown background image or video now shares datasets' rectangular opaque navigation buttons, including hero/Home buttons and side-menu connector shapes; views without media keep their existing shapes.
 - Dataset top bars, filter heroes and status bars keep their theme background in dark mode instead of becoming transparent when mixing the panel colour.
 - Phone layout rules are checked by a structure test to keep shared breakpoints and stylesheet ownership consistent as existing exceptions are reduced.
 - Remove unused legacy styles from the administrator permission view; no visible change.

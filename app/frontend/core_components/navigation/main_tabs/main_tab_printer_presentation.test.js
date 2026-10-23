@@ -8,6 +8,8 @@ import { beforeEach, describe, expect, test, vi } from "vitest";
 import { getSelectedDataset } from "../../state_stores/dataset_selection_saver.js";
 import { setChosenDatasetView } from "../../state_stores/dataset_view_choice_saver.js";
 import { resetMainTabPrinterTestState, setViewportWidth } from "./main_tab_printer_test_helpers.js";
+import { clearMainTabActiveState } from "./main_tab_active_state.js";
+import { buildTabOutlinePresentation } from "./tab_presentation_builder.js";
 
 // The retitle boundary is verified in main_tab_printer_browser_tab_title.test.js.
 vi.mock("../nav_engine/browser_tab_title_writer.js", () => ({ updateBrowserTabTitle: vi.fn() }));
@@ -112,6 +114,39 @@ vi.mock("../../filterbar/filterbar_engine/filterbar_visibility_handler.js", () =
 
 describe("initTabs", () => {
     beforeEach(resetMainTabPrinterTestState);
+
+    test.each([1920, 1440, 390])("Home media drives every side-menu shape including connector arcs at %ipx", async width => {
+        setViewportWidth(width);
+        setChosenDatasetView("app_service_catalog", "card");
+        const { initTabs, openNavTab } = await import("./main_tab_printer.js");
+        await initTabs();
+        await openNavTab("app_service_catalog");
+        const home = document.createElement("div");
+        home.id = "front_page_container";
+        home.innerHTML = '<div class="front-page-background"><video src="/probe.mp4"></video></div>';
+        document.body.append(home);
+        clearMainTabActiveState("front_page");
+        expect(document.body.getAttribute("data-view-has-presentation-media")).toBe("true");
+        for (const tab of document.querySelectorAll(".navtablinks")) {
+            expect(tab.dataset.tabPresentation).toBe("button-inactive");
+            const expected = buildTabOutlinePresentation({ forceRectangular: true, isActive: false });
+            for (const path of tab.querySelectorAll(".navtab-shape-path")) {
+                expect(path.getAttribute("d")).toBe(expected.pathD);
+                expect(path.getAttribute("d").match(/A 0 0/g)).toHaveLength(4);
+            }
+        }
+        // Home without media restores exactly the historic side-menu geometry.
+        home.replaceChildren();
+        await Promise.resolve();
+        expect(document.body.getAttribute("data-view-has-presentation-media")).toBe("false");
+        for (const tab of document.querySelectorAll(".navtablinks")) {
+            const expected = buildTabOutlinePresentation({ isActive: false,
+                isNarrow: width <= 768, isNavbarOverlay: width < 1850 });
+            expect(tab.dataset.tabPresentation).toBe(expected.state);
+            expect(tab.querySelector(".navtab-stroke-path").getAttribute("d")).toBe(expected.pathD);
+        }
+        home.remove();
+    });
 
     test("uses button tabs on wide grid-like views even with physical navbar space", async () => {
         setViewportWidth(1920);

@@ -1,6 +1,12 @@
+// hero_dataset_tabs.test.js
+// Proves shared destinations, navigation, language and media-dependent button shape.
+// Connects the approved tab projection and shell media flag to the hero and Home.
+// Keeps translated labels and interaction styles intact as corners change.
 // @vitest-environment jsdom
-// The hero consumes the approved main-tab projection without creating a second registry.
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 const mocks = vi.hoisted(() => ({
     snapshot: [], listeners: new Set(), unsubscribe: vi.fn(), open: vi.fn(),
 }));
@@ -20,6 +26,9 @@ vi.mock('../../lang/translation_handler.js', () => ({
     },
 }));
 import { createHeroDatasetTabs } from './hero_dataset_tabs.js';
+const directory = dirname(fileURLToPath(import.meta.url));
+const heroCss = readFileSync(resolve(directory, 'hero_dataset_tabs.css'), 'utf8');
+const homeCss = readFileSync(resolve(directory, '../../front_page/top_nav_home_button.css'), 'utf8');
 
 const tab = (dataset, extras = {}) => Object.freeze({
     id: dataset, dataset, text: dataset, langKey: dataset, iconKey: 'table', ...extras,
@@ -31,6 +40,7 @@ const publish = (snapshot) => {
 let controls;
 beforeEach(() => {
     document.body.replaceChildren();
+    document.body.removeAttribute('data-view-has-presentation-media');
     document.documentElement.lang = 'fi';
     mocks.listeners.clear();mocks.unsubscribe.mockClear();mocks.open.mockReset();
     mocks.open.mockResolvedValue(undefined);
@@ -45,6 +55,29 @@ function mount(active = 'places') {
 const buttons = (control) => [...control.element.querySelectorAll('button')];
 
 describe('hero dataset tabs', () => {
+    test('the one shell CSS rule squares hero and Home buttons while preserving selection and copy', () => {
+        const style = document.createElement('style');
+        // jsdom does not resolve custom-property fallbacks in border-radius.
+        style.textContent = (heroCss + homeCss).replaceAll('var(--navigation-radius, 8px)', '8px');
+        document.body.append(style);
+        const control = mount();
+        const home = document.createElement('a');
+        home.className = 'navbar-front-page-link top-nav-home-button';
+        home.setAttribute('aria-current', 'page');
+        home.textContent = 'Etusivu';
+        control.element.prepend(home);
+        const destinations = [home, ...buttons(control)];
+        const before = destinations.map(button => getComputedStyle(button).borderRadius);
+        expect(before).toEqual(['8px', '8px', '8px']);
+        document.body.setAttribute('data-view-has-presentation-media', 'true');
+        expect(destinations.map(button => getComputedStyle(button).borderRadius)).toEqual(['0px', '0px', '0px']);
+        expect(home.getAttribute('aria-current')).toBe('page');
+        expect(buttons(control)[0].getAttribute('aria-current')).toBe('page');
+        expect(buttons(control).map(button => button.textContent)).toEqual(['Paikat', 'Artikkelit']);
+        document.body.setAttribute('data-view-has-presentation-media', 'false');
+        expect(destinations.map(button => getComputedStyle(button).borderRadius)).toEqual(before);
+    });
+
     test('uses only the ordered shared snapshot and keeps navbar geometry classes separate', () => {
         const control = mount();
         expect(buttons(control).map(button => button.dataset.dataset)).toEqual(['places', 'articles']);
