@@ -76,6 +76,9 @@ body.dark-mode .front-page {
 /* The shared hero row class pulls a dataset hero's row 12px into its padded container. Home's row has no such
    container, so it stays inside the page and keeps the shell's 12px corner inset for the menu, icon and gear. */
 .front-page > .front-page-top-row {
+  /* An inset edge matches the shared bar's 2px line without changing row or hero geometry.
+     The phone layout moves this row into the scroller beneath its own bordered sticky bar. */
+  box-shadow: inset 0 -2px 0 var(--border_color);
   /* Identity keeps its content width; tabs consume the remainder and actions wrap. */
   display: flex;
   flex-wrap: wrap;

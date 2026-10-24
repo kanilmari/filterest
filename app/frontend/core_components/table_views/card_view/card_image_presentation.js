@@ -1,7 +1,7 @@
 // card_image_presentation.js
 // Applies the site's three presentation modes only to raster card media.
 // Connects the shared appearance setting with existing card image wrappers.
-// Keeps article images, SVG logos, avatars and thumbnails on their own rendering paths.
+// Compact results share this path; other article slots, SVG logos and avatars retain their own renderers.
 
 import { addCardResourceListener } from './card_resource_lifecycle.js';
 import { APPEARANCE_SCOPE_SELECTOR, readAppearanceAttribute, appearanceScopeElements } from '../../../reusable_components/appearance_scope_reader.js';

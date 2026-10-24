@@ -166,6 +166,28 @@ Photo corners, contain/cover behavior and image dimensions are unchanged.
 The article's outer side borders, focus rings and gallery selection borders
 retain their own meaning.
 
+## Card image presentation and compact results
+
+Raster card media uses `card_image_presentation.js` and its resolver: an image's
+own choice overrides its dataset, which otherwise inherits the site default.
+**Contain** shows the complete image with empty edges; **Cover** crops around
+the image's focal x/y; **Contain with blur** shows the complete image over a
+theme-tinted blurred copy. Only Cover applies the focal coordinates.
+
+Home thumbnails and supplemental cross-dataset search results reuse this same
+renderer and CSS, resolving each thumbnail's own dataset. Home forwards the
+authorized `dataset_appearance` snapshot from the canonical results handler;
+search already accepts that snapshot from its results stream. Neither needs an
+extra appearance request. Image companions retain their focal point and any
+per-image override. Rows without images keep the existing seeded letter image.
+
+The one `::before` scrim uses `--card-photo-blur` and `--card-photo-scrim-inset`:
+cards in both sizes use **32px / -40px**, and 76×76 thumbnails use **48px / -144px**
+for an unmistakably blurred, edge-free backdrop. The rule retains **16px / -20px**
+fallbacks. Contain and Cover hide the scrim; other article image slots are unchanged.
+Shared groups supply `--home-block-radius: var(--fw-radius-lg)` (10px) for Home
+and the search sheet. Raster thumbnails use `--fw-radius-md` (4px) corners.
+
 ## Card field wrapping defaults and dataset choices
 
 The **Card layout** block in either scope offers **Stacked** (Allekkain)

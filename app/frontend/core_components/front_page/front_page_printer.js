@@ -19,6 +19,7 @@ import { endpoint_router } from '../endpoints/endpoint_router.js';
 import { getTranslationForKey } from '../lang/translation_handler.js';
 import { bindDatasetLanguageRenderer } from '../table_views/dataset_value_localizer.js';
 import { createSupplementalDatasetGroup } from '../table_views/compact_dataset_group.js';
+import { datasetAppearanceState } from '../table_views/dataset_appearance_state.js';
 import { encodeCssUrlValue } from '../table_views/storage_media_urls.js';
 import { formatSiteNameForDisplay, getCurrentSiteName } from '../state_stores/site_identity_reader.js';
 import { getLanguageWithBrowserFallback } from '../state_stores/lang_preference_reader.js';
@@ -66,7 +67,7 @@ function createBackground(background, visit) {
     return layer;
 }
 
-function renderBlocks(container, data, visit) {
+function renderBlocks(container, data, visit, appearanceToken) {
     const page = document.createElement('div');
     page.className = 'front-page-content';
     const hero = document.createElement('header');
@@ -98,6 +99,9 @@ function renderBlocks(container, data, visit) {
     const grid = document.createElement('div');
     grid.className = 'front-page-blocks';
     for (const block of (data.show_blocks === false ? [] : data.blocks || [])) {
+        // This response passed the visit/session guard. Reuse the canonical results
+        // snapshot so each thumbnail's existing dataset binding resolves its own defaults.
+        if (block.dataset_appearance) datasetAppearanceState.accept(block.dataset, block.dataset_appearance, { token: appearanceToken });
         const group = createSupplementalDatasetGroup({
             dataset: block.dataset, text: block.dataset, langKey: block.dataset,
         }, '', {
@@ -180,10 +184,13 @@ function loadVisit(container, visit) {
     let homeRevision;
     let retryWithNewerPolicy = false;
     let retryAfterLeave = false;
+    let appearanceToken;
+    let retryAppearance = false;
     const request = () => {
         if (!isCurrent()) throw new DOMException('Session changed', 'AbortError');
         visit.language = getLanguageWithBrowserFallback();
         homeRevision = beginFrontPageAvailabilityRequest();
+        appearanceToken = datasetAppearanceState.captureRegistry();
         // Resolve navigation copy during the content read, rather than painting
         // formatted keys and waiting for main.js's later whole-page translation.
         // A slow dictionary waits at most 3 s; Home then paints and relabels later.
@@ -198,7 +205,11 @@ function loadVisit(container, visit) {
         isSessionValidationRequired() ? revalidateSessionIdentity().then(request) : request(), deadline,
     ]).then(data => {
         visit.leaveRetried = false;
-        if (isCurrent() && acceptSessionIdentity(data.viewer_id, sessionGeneration)) renderBlocks(container, data, visit);
+        if (!isCurrent() || !acceptSessionIdentity(data.viewer_id, sessionGeneration)) return;
+        // The registry can finish its first discovery while Home is loading.
+        // Retry against that current ownership rather than accepting stale private appearance.
+        if (!datasetAppearanceState.isCurrent(appearanceToken)) { retryAppearance = true; return; }
+        renderBlocks(container, data, visit, appearanceToken);
     }).catch(async error => {
         if (!isCurrent()) return;
         // The endpoint's explicit disabled response is policy, not a failed visit.
@@ -235,7 +246,7 @@ function loadVisit(container, visit) {
         visit.pending = null;
         visit.controller = null;
         visit.cancel = null;
-        if (retryWithNewerPolicy || retryAfterLeave) return loadVisit(container, visit);
+        if (retryWithNewerPolicy || retryAfterLeave || retryAppearance) return loadVisit(container, visit);
     });
     return visit.pending;
 }

@@ -1,8 +1,11 @@
 // @vitest-environment jsdom
 // Verifies presentation choices and the boundary around ordinary card photos.
 // Connects the real image builder with shared site settings.
-// Prevents a card default from cropping article media, thumbnails or SVG logos.
+// Prevents a card default from cropping article media, collapsed summaries or SVG logos.
 import { afterEach, describe, expect, it } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { createImageElement } from './card_avatar_builder.js';
 import {
     applyCardImagePresentationSetting,
@@ -14,6 +17,15 @@ afterEach(() => {
 });
 
 describe('card photo presentation', () => {
+    it('uses one parameterized scrim with stronger cards and the original fallback values', () => {
+        const css = readFileSync(resolve(dirname(fileURLToPath(import.meta.url)), 'card_image_presentation.css'), 'utf8');
+        expect(css).toContain('--card-photo-blur: 32px;');
+        expect(css).toContain('--card-photo-scrim-inset: -40px;');
+        expect(css).toContain('filter: blur(var(--card-photo-blur, 16px));');
+        expect(css).toContain('inset: var(--card-photo-scrim-inset, -20px);');
+        expect(css).toMatch(/\.card_photo_presentation::before\s*\{[^}]*display: none;/);
+        expect(css).toMatch(/\[data-card-image-presentation="contain_blur"\]::before\s*\{\s*display: block;/);
+    });
     it.each(['cover', 'contain', 'contain_blur'])('accepts the %s mode', (mode) => {
         applyCardImagePresentationSetting(mode);
         expect(document.documentElement.dataset.cardImagePresentation).toBe(mode);

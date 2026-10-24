@@ -4,6 +4,7 @@
 // Keeps result copy as text and reuses card thumbnails without mounting article controls.
 
 import { applyArticleViewAffordance, requireArticleViewAccess } from './card_view/article_view_access.js';
+import { CARD_IMAGE_RENDER_SLOTS } from './card_view/card_image_render_options.js';
 import { getTranslationForKey } from "../lang/translation_handler.js";
 import {
     bindDatasetLanguageRenderer,
@@ -234,6 +235,9 @@ function createSupplementalThumbnail(row, dataset, columns, types, titleColumn) 
             card: host, row_item: row, table_name: dataset, setFieldHideAttribute: () => {},
             image_value_small: row[imageColumn] || fallback?.value || '',
             image_column_small: row[imageColumn] ? imageColumn : fallback?.column,
+            // Opt compact results into the same raster presentation as full cards;
+            // collapsed-card summaries and article media retain their existing slots.
+            image_render_slot_small: CARD_IMAGE_RENDER_SLOTS.CARD_MEDIA,
             preferred_image_alt_label: label,
             creation_seed: `${row.id ?? 'x'}_${created}`, header_first_letter: Array.from(label)[0] || '?',
             data_types: types,

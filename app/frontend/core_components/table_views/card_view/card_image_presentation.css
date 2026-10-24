@@ -1,9 +1,12 @@
 /* card_image_presentation.css
  * Renders each dataset's raster-card choice on its own photo wrapper.
  * Uses the application's active theme colour for the decorative blurred-image scrim.
+ * Shares one scrim with compact results, whose small media slot increases blur and overscan.
  */
 .card_photo_presentation {
     --card-photo-object-fit: contain;
+    --card-photo-blur: 32px;
+    --card-photo-scrim-inset: -40px;
     isolation: isolate;
 }
 
@@ -19,7 +22,7 @@
     content: "";
     display: none;
     position: absolute;
-    inset: -20px;
+    inset: var(--card-photo-scrim-inset, -20px);
     z-index: 0;
     background-image:
         linear-gradient(
@@ -29,7 +32,7 @@
         var(--card-photo-source, none);
     background-position: center;
     background-size: cover;
-    filter: blur(16px);
+    filter: blur(var(--card-photo-blur, 16px));
     pointer-events: none;
 }
 
@@ -37,6 +40,6 @@
     display: block;
 }
 
-.card_image .card_photo_presentation > img {
+.card_photo_presentation > img {
     z-index: 1;
 }

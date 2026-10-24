@@ -155,7 +155,7 @@ test('text has theme surfaces and background sizing follows width, never OS them
 });
 
 
-test('only Home content scrolls, with a fixed sibling background and no structural top-row line', () => {
+test('only Home content scrolls, with a fixed sibling background and no structural top-row border', () => {
     const scroller = css.match(/\.front-page-scroller\s*\{([^}]+)\}/)?.[1];
     const row = css.match(/\.front-page-top-row\s*\{([^}]+)\}/)?.[1];
     expect(scroller).toContain('overflow: hidden auto');
@@ -169,6 +169,31 @@ test('only Home content scrolls, with a fixed sibling background and no structur
     expect(css).toMatch(/\.front-page-background video\s*\{[^}]*object-fit: cover;/);
     expect(css).toContain('image-rendering: auto');
     expect(css).not.toContain('padding-top: calc(12px + 44px');
+});
+
+test('Home alone paints its 2px inset edge in both themes without changing row layout', () => {
+    const root = postcss.parse(css);
+    const edge = root.nodes.find(rule => rule.selector === '.front-page > .front-page-top-row');
+    const declarations = Object.fromEntries(edge.nodes.filter(node => node.type === 'decl').map(node => [node.prop, node.value]));
+    expect(declarations['box-shadow']).toBe('inset 0 -2px 0 var(--border_color)');
+    for (const property of ['border-bottom', 'height', 'box-sizing', 'min-height']) expect(declarations).not.toHaveProperty(property);
+    const style = document.createElement('style');
+    style.textContent = css;
+    const fixture = document.createElement('div');
+    fixture.innerHTML = '<div class="front-page"><div class="front-page-top-row"></div></div>'
+        + '<div class="filterbar-inline-hero__top-row"></div>';
+    document.head.append(style); document.body.append(fixture);
+    const original = document.body.className;
+    try {
+        for (const theme of ['light', 'dark']) {
+            document.body.className = `${theme}-mode`;
+            const row = getComputedStyle(fixture.querySelector('.front-page-top-row'));
+            expect(row.boxShadow).toBe('inset 0 -2px 0 var(--border_color)');
+            expect(row.padding).toBe('12px');
+            expect(row.borderBottomWidth).toBe('0px');
+            expect(getComputedStyle(fixture.lastElementChild).boxShadow).not.toContain('inset');
+        }
+    } finally { document.body.className = original; fixture.remove(); style.remove(); }
 });
 
 test('Home keeps the 12px corner inset that the shared hero row class would cancel', () => {

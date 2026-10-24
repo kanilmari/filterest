@@ -1,6 +1,7 @@
 // front_page_read_test.go
 // Verifies the front page facade never leaks omitted datasets or changes delegate identity.
 // Connects session fixtures to the real handler with only persistence and canonical reads stubbed.
+// Keeps each authorized appearance snapshot with its dataset without exposing denied blocks.
 package system_table_tools
 
 import (
@@ -113,7 +114,7 @@ func TestFrontPageReadOmitsDeniedAndFailedBlocksAndKeepsDelegateContext(t *testi
 					http.Error(w, "sensitive dataset name", 403)
 					return
 				}
-				w.Write([]byte(`{"columns":["title"],"types":{"title":"text"},"data":[{"id":9,"title":"new"},{"id":8,"title":"old"}],"row_count":99}`))
+				w.Write([]byte(`{"columns":["title"],"types":{"title":"text"},"data":[{"id":9,"title":"new"},{"id":8,"title":"old"}],"row_count":99,"dataset_appearance":{"dataset_uid":7,"schema_version":2,"overrides":{"shared.card_image_presentation":"contain_blur"}}}`))
 			}
 			response := httptest.NewRecorder()
 			GetFrontPageHandler(response, request)
@@ -129,6 +130,9 @@ func TestFrontPageReadOmitsDeniedAndFailedBlocksAndKeepsDelegateContext(t *testi
 			}
 			if len(result.Blocks) != 1 || len(result.Blocks[0].Data) != 1 || !strings.Contains(string(result.Blocks[0].Data[0]), `"id":9`) || len(calls) != 3 {
 				t.Fatal(result, calls)
+			}
+			if string(result.Blocks[0].Appearance) != `{"dataset_uid":7,"schema_version":2,"overrides":{"shared.card_image_presentation":"contain_blur"}}` {
+				t.Fatal("lost authorized dataset appearance", string(result.Blocks[0].Appearance))
 			}
 			for _, hidden := range []string{"private-name", "ui-hidden", "failed-name", "sensitive", "row_count", "disabled"} {
 				if strings.Contains(response.Body.String(), hidden) {

@@ -1,7 +1,7 @@
 // front_page_read.go
 // Serves current, readable front page blocks through the canonical results handler.
 // Connects session-owned scope selection with dataset, field and row authorization.
-// Omits hidden and failed datasets completely and budgets sequential delegates.
+// Omits hidden and failed datasets completely, forwarding only authorized appearance with the rows.
 package system_table_tools
 
 import (
@@ -33,6 +33,7 @@ type frontPageResultBlock struct {
 	Columns     json.RawMessage   `json:"columns"`
 	Types       json.RawMessage   `json:"types"`
 	Data        []json.RawMessage `json:"data"`
+	Appearance  json.RawMessage   `json:"dataset_appearance,omitempty"`
 }
 
 // GetFrontPageHandler returns viewer_id, site_name, hero (fi/en), background, show_blocks, blocks, partial,

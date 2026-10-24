@@ -42,6 +42,8 @@
 }
 
 .supplemental-dataset-group {
+  /* Shared by Home boxes and the search sheet's group surface. */
+  --home-block-radius: var(--fw-radius-lg);
   padding-block: 0.75rem;
   border-top: 1px solid var(--border_color);
 }
@@ -83,6 +85,22 @@
   height: 76px !important;
   max-width: 76px;
   max-height: 76px;
+}
+
+/* Raster thumbnails share the card scrim; a 76px image needs a much stronger blur.
+   Overscan keeps the clipped backdrop free of transparent blur edges. */
+.supplemental-dataset-thumbnail .card_photo_presentation {
+  --card-photo-blur: 48px;
+  --card-photo-scrim-inset: -144px;
+}
+
+/* Override only real image wrappers; seeded letter images keep their own shape. */
+.supplemental-dataset-thumbnail .wrapper {
+  border-radius: var(--fw-radius-md) !important;
+}
+
+.supplemental-dataset-thumbnail .wrapper > img {
+  border-radius: inherit !important;
 }
 
 .supplemental-dataset-result-text {

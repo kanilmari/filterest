@@ -161,7 +161,8 @@ export function getCardPostEntranceDelay(index = 0) {
 }
 
 export function appendSmallCardSummary({
-    card, row_item, table_name, setFieldHideAttribute, image_value_small, image_column_small, preferred_image_alt_label, creation_seed, header_first_letter, username_text_small, header_text_small, header_column_small, creation_date_small, creationDateColumn, data_types, timestampDisplayOptions, statusBadgeValue, todoStatusChipValue
+    card, row_item, table_name, setFieldHideAttribute, image_value_small, image_column_small, preferred_image_alt_label, creation_seed, header_first_letter, username_text_small, header_text_small, header_column_small, creation_date_small, creationDateColumn, data_types, timestampDisplayOptions, statusBadgeValue, todoStatusChipValue,
+    image_render_slot_small = CARD_IMAGE_RENDER_SLOTS.SMALL_THUMBNAIL,
 }) {
     /* --- SMALL SUMMARY FOR COLLAPSED MODE -------------------- */
     const summaryDiv = document.createElement("div");
@@ -197,7 +198,7 @@ export function appendSmallCardSummary({
                     image_column_small,
                     table_name,
                     preferred_image_alt_label,
-                    CARD_IMAGE_RENDER_SLOTS.SMALL_THUMBNAIL
+                    image_render_slot_small
                 ),
             });
         } else {

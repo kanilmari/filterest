@@ -11,6 +11,9 @@ import { VIEW_DEACTIVATE_EVENT } from '../../reusable_components/view_lifecycle_
 import { refreshLocalizedDatasetValues } from '../table_views/dataset_value_localizer.js';
 import { invalidateSessionGeneration } from '../auth/session_generation_store.js';
 import { toggleNavbarVisibility } from '../navigation/menu_button/navbar_visibility_handler.js';
+import { datasetAppearanceState } from '../table_views/dataset_appearance_state.js';
+import { datasetAppearanceDefaultsForPlace } from '../../shared/dataset_appearance/validator.js';
+import { setAllSpecs } from '../state_stores/table_specs_reader.js';
 
 const mocks = vi.hoisted(() => ({ request: vi.fn(), start: vi.fn(), tabs: [], image: vi.fn(), avatar: vi.fn() }));
 vi.mock('../navigation/main_tabs/main_dataset_tabs.js', () => ({
@@ -38,6 +41,7 @@ function response(title = 'Current account') {
 
 beforeEach(() => {
     invalidateSessionGeneration({ revalidate: false });
+    setAllSpecs({});
     document.body.innerHTML = '<div id="tabs_container"></div>';
     localStorage.clear(); sessionStorage.clear();
     sessionStorage.setItem('user_permissions', JSON.stringify(['/ui/view/article_view']));
@@ -69,6 +73,32 @@ function setHidden(hidden) {
     Object.defineProperty(document, 'hidden', { value: hidden, configurable: true });
     document.dispatchEvent(new Event('visibilitychange'));
 }
+
+test('Home accepts each canonical appearance snapshot before thumbnail assembly without another request', async () => {
+    const data = response();
+    const snapshot = { schema_version: 2, dataset_uid: 562, version: '1', shared_version: 'site',
+        tab_values: datasetAppearanceDefaultsForPlace('tab_only'), site_values: datasetAppearanceDefaultsForPlace('site_only'),
+        defaults: datasetAppearanceDefaultsForPlace('site_default'), overrides: { 'shared.card_image_presentation': 'cover' } };
+    data.blocks[0].dataset_appearance = snapshot;
+    mocks.request.mockResolvedValue(data);
+    const page = renderFrontPage();
+    await vi.waitFor(() => expect(page.getAttribute('aria-busy')).toBe('false'));
+    expect(datasetAppearanceState.savedSnapshot('news')).toMatchObject(snapshot);
+    expect(datasetAppearanceState.effective('news').shared.card_image_presentation).toBe('cover');
+    expect(mocks.request).toHaveBeenCalledTimes(1);
+});
+
+test('Home retries if dataset ownership changes during its request', async () => {
+    let finish;
+    mocks.request.mockReturnValueOnce(new Promise(resolve => { finish = resolve; }));
+    const page = renderFrontPage();
+    setAllSpecs({ discovered: { table_uid: 562 } });
+    finish(response('Obsolete registry'));
+    await vi.waitFor(() => expect(mocks.request).toHaveBeenCalledTimes(2));
+    await vi.waitFor(() => expect(page.getAttribute('aria-busy')).toBe('false'));
+    expect(page.textContent).toContain('Current account');
+    expect(page.textContent).not.toContain('Obsolete registry');
+});
 
 test('single-flight loader issues only one facade request and shows an accessible skeleton', async () => {
     let finish;
@@ -183,7 +213,7 @@ test('Home boxes follow tab order with shared images, letter fallbacks and one l
     await vi.waitFor(() => expect(mocks.image).toHaveBeenCalledTimes(3));
     await vi.waitFor(() => expect(mocks.avatar).toHaveBeenCalledTimes(3));
     expect(mocks.image).toHaveBeenCalledWith('./storage/test/300/home.jpg', false,
-        expect.objectContaining({ renderSlot: 'small_thumbnail', rowLabel: 'Suomen matkakohteet' }));
+        expect.objectContaining({ renderSlot: 'card_media', rowLabel: 'Suomen matkakohteet' }));
     expect(mocks.avatar).toHaveBeenCalledWith('43_', 'S', false);
     for (const group of groups) {
         const rows = [...group.querySelectorAll('li')];

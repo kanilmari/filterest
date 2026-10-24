@@ -379,9 +379,9 @@ the editor disables and greys its retained box list. The key is registered in
 `system_config_checks`, so generic writes also refuse a non-boolean value.
 Home has one inner scrolling surface (`.front-page-scroller`); the absolute
 background and video remain siblings outside it and cover the viewport. Above
-700 px the top row stays before the scroller, with the existing desktop layout.
-Row caps stay in the shared compact renderer: 76px images or search's letter fallback,
-one-line titles, two-line excerpts and one stretched title link per row; Show all stays 44px.
+700 px the top row stays before the scroller, with a theme-coloured 2px inset edge that preserves its geometry.
+Row caps stay in the shared compact renderer: 76px images follow [each dataset's card presentation](Card_Style_Presentation.md#card-image-presentation-and-compact-results), or keep search's letter fallback.
+Boxes use `--fw-radius-lg` (10px); one-line titles, two-line excerpts, one stretched title link and 44px Show all stay unchanged.
 
 `front_page_top_row_builder.js` owns the live dataset tabs, admin actions and
 borrowed shell menu button. It returns that button and destroys the tab
@@ -396,7 +396,7 @@ and owns the reversible projection. The scroller begins with the sticky
 Home has no filter-bar control; the end slot contains no control. The name
 stays visible at 18 px bold, with ellipsis for names wider than the centre track.
 The menu keeps the shell's 12 px corner inset; safe-area top padding adds to it.
-The translucent theme surface has a border and blur, with a solid theme surface
+The translucent theme surface keeps its 1px bottom edge in all drawer states and blur, with a solid theme surface
 when blur is unsupported. Its stacking level stays below drawers and modals.
 
 The existing row follows the bar inside the scroller: Home and dataset tabs,

@@ -4,28 +4,36 @@
 // Keeps owner settings, datasets and language keys untouched in every viewport/theme.
 import { expect, test, type Page } from '@playwright/test';
 import { installHomePolicy } from '../helpers/home-policy-fixture';
+import { datasetAppearanceDefaultsForPlace } from '../../../frontend/shared/dataset_appearance/validator.js';
 
 const datasets = ['app_e2e_home_info', 'app_e2e_home_deals', 'app_e2e_home_blogs'];
 const labels = ['Matkailutietoa', 'Matkatarjoukset', 'Matkakertomukset'];
+const presentations = ['contain', 'cover', 'contain_blur'] as const;
 const imagePath = '/storage/app_e2e_home_boxes/300/landscape.png';
 // An in-memory PNG response: no uploaded or persistent test media.
-const image = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAIAAAD8GO2jAAAAoUlEQVR4nO3RvQmAMBCG4cxm4RIOYmUjuIVDuYKVY6gQCOa83E+8swp81UHep0hYt8N1oQG/Aec+x7kAqf42DABQB0YD7P+gHyfaAHcdcNfj5E8UQKqrDCkA6nJDBKB1ocEDRF1iMABbZw0KENZpowio6oSBAxX1koEA1XXUgMDHely3DGnBqv6M4oBhFAFsoxAwj2aAR7QIWEUzwCPaANUuQRtBWxLcjQcAAAAASUVORK5CYII=', 'base64');
+const image = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAKAAAABQCAIAAAARP+ljAAAA7ElEQVR4nO3RMRHCAAAEsCphRgQL1lDHXBE46F4Z/8/lLg5y/N7PBo/Pd911vgod8VrBgjfELwULFixYsGDBRQQLFixYsGDBgsfFLwULFixYsGDBRQQLFixYsGDBgsfFLwULFixYsGDBRQQLFixYsGDBgsfFLwULFixYsGDBRQQLFixYsGDBgsfFLwULFixYsGDBRQQLFixYsGDBgsfFLwULFixYsGDBRQQLFixYsGDBgsfFLwULFixYsGDBRQQLFixYsGDBgsfFLwULFixYsGDBRQQLFixYsGDBgsfFLwULFixYsGDBRQT/efANTQNq43U598UAAAAASUVORK5CYII=', 'base64');
 const title = 'Suomalaisen matkailijan pitkä otsikko pohjoisen maisemista ja rauhallisista retkikohteista kaikkina vuodenaikoina';
 const description = 'Koe pohjoisen maisemat ja kiireettömät retkipolut. Löydä matkavinkit, majoitus ja paikalliset elämykset seuraavaa lomaa varten. '.repeat(3);
 
 async function openHomeBoxes(page: Page, theme: 'light' | 'dark', width: number) {
   const writes: string[] = [];
   await installHomePolicy(page.context(), theme, {
-    site_name: 'WO85', show_blocks: true,
+    site_name: 'WO95', show_blocks: true,
     hero: { title: { fi: 'Matkailijan etusivu', en: 'Traveller home' } },
-    blocks: datasets.map(dataset => ({ dataset, result_limit: 3,
+    blocks: datasets.map((dataset, index) => ({ dataset, result_limit: 3,
+      // The Home facade forwards the same authorized snapshot as get-results;
+      // focal coordinates remain per-image companions, just as on full cards.
+      dataset_appearance: { schema_version: 2, dataset_uid: 900304 + index, version: '1', shared_version: 'wo95',
+        tab_values: datasetAppearanceDefaultsForPlace('tab_only'), site_values: datasetAppearanceDefaultsForPlace('site_only'),
+        defaults: datasetAppearanceDefaultsForPlace('site_default'),
+        overrides: { 'shared.card_image_presentation': presentations[index] } },
       columns: ['title', 'description'], types: {
         title: { card_element: 'header', show_value_on_card: true, is_multilingual: true },
         description: { card_element: 'description', show_value_on_card: true, is_multilingual: true },
       }, data: [1, 2, 3].map(id => ({ id,
         title: { fi: `${id === 2 ? 'Kuvaton' : 'Suomen'} ${title}`, en: 'Northern travel story' },
         description: { fi: description, en: 'Travel tips and quiet northern scenery.' },
-        ...(id === 1 ? { cached_image: imagePath } : {}),
+        ...(id === 1 ? { cached_image: imagePath, cached_image_focal_x: 0.2, cached_image_focal_y: 0.3 } : {}),
       })),
     })),
   });
@@ -82,6 +90,31 @@ for (const width of [1440, 1000, 390]) {
       expect(await page.locator('.front-page-top-row .hero-dataset-tabs__button').evaluateAll(
         elements => elements.map(element => (element as HTMLElement).dataset.dataset))).toEqual(datasets);
       await expect(groups.locator('h2')).toHaveText(labels);
+      const bar = page.locator(width <= 700 ? '.front-page-phone-topbar' : '.front-page > .front-page-top-row');
+      const edge = await bar.evaluate(element => {
+        const style = getComputedStyle(element);
+        const colour = document.createElement('span'); colour.style.color = 'var(--border_color)'; element.append(colour);
+        const expectedColour = getComputedStyle(colour).color; colour.remove();
+        return { shadow: style.boxShadow, colour: style.borderBottomColor, width: style.borderBottomWidth, expectedColour };
+      });
+      if (width > 700) {
+        expect(edge.shadow).toContain(edge.expectedColour);
+        expect(edge.shadow).toContain('inset'); expect(edge.shadow).toContain('0px -2px 0px 0px');
+        const geometry = await bar.evaluate(element => {
+          const targets = [element, document.querySelector('.front-page-hero')!, document.querySelector('.front-page-scroller')!];
+          const measure = () => targets.map(node => {
+            const { x, y, width, height } = node.getBoundingClientRect(); return { x, y, width, height };
+          });
+          const before = measure(), row = element as HTMLElement;
+          row.style.setProperty('box-shadow', 'none', 'important');
+          const withoutEdge = measure(); row.style.removeProperty('box-shadow');
+          return { before, withoutEdge, restored: measure() };
+        });
+        expect(geometry.before).toEqual(geometry.withoutEdge); expect(geometry.restored).toEqual(geometry.before);
+        expect(edge.width).toBe('0px');
+      } else {
+        expect(edge.width).toBe('1px'); expect(edge.colour).toBe(edge.expectedColour);
+      }
       const boxes = await groups.evaluateAll(elements => elements.map(element => {
         const { x, y, width, height } = element.getBoundingClientRect();
         return { x, y, width, height };
@@ -104,6 +137,11 @@ for (const width of [1440, 1000, 390]) {
 
       for (let groupIndex = 0; groupIndex < 3; groupIndex++) {
         const group = groups.nth(groupIndex);
+        const radius = await group.evaluate(element => {
+          const style = getComputedStyle(element);
+          return { actual: style.borderRadius, token: style.getPropertyValue('--fw-radius-lg').trim() };
+        });
+        expect(radius.actual).toBe(radius.token); expect(radius.actual).toBe('10px');
         const rows = group.locator('li');
         for (let rowIndex = 0; rowIndex < 3; rowIndex++) {
           const row = rows.nth(rowIndex);
@@ -143,6 +181,24 @@ for (const width of [1440, 1000, 390]) {
             const photo = row.locator('img');
             await expect(photo).toBeVisible();
             await expect.poll(() => photo.evaluate(image => image.complete && image.naturalWidth > 0)).toBe(true);
+            const mode = presentations[groupIndex];
+            const wrapper = row.locator('.card_photo_presentation');
+            await expect(wrapper).toHaveAttribute('data-card-image-presentation', mode);
+            await expect(wrapper).toHaveAttribute('data-card-image-source', 'dataset');
+            await expect(photo).toHaveCSS('object-fit', mode === 'cover' ? 'cover' : 'contain');
+            await expect(photo).toHaveCSS('object-position', mode === 'cover' ? '20% 30%' : '50% 50%');
+            expect(await wrapper.evaluate(element => getComputedStyle(element).borderRadius))
+              .toBe(await wrapper.evaluate(element => getComputedStyle(element).getPropertyValue('--fw-radius-md').trim()));
+            const scrim = await wrapper.evaluate(element => {
+              const before = getComputedStyle(element, '::before');
+              return { display: before.display, filter: before.filter, inset: before.top,
+                source: getComputedStyle(element).getPropertyValue('--card-photo-source').trim() };
+            });
+            expect(scrim.display).toBe(mode === 'contain_blur' ? 'block' : 'none');
+            if (mode === 'contain_blur') {
+              expect(scrim.filter).toBe('blur(48px)'); expect(scrim.inset).toBe('-144px');
+              expect(scrim.source).toContain(imagePath);
+            }
           } else {
             await expect(row.locator('.card_small_image_inner')).toContainText(rowIndex === 1 ? 'K' : 'S');
             await expect(row.locator('img')).toHaveCount(0);
@@ -158,6 +214,21 @@ for (const width of [1440, 1000, 390]) {
         expect((await showAll.boundingBox())!.height).toBeGreaterThanOrEqual(44);
         await group.screenshot({ path: info.outputPath(`home-box-${groupIndex + 1}-${width}-${theme}.png`), animations: 'disabled' });
         await page.keyboard.press('Tab');
+      }
+      if (width <= 700) {
+        // The same 1px phone edge survives scroll and either drawer state; its
+        // measured height (used by G13) must not change when the drawer opens.
+        const initial = await bar.boundingBox();
+        await page.locator('.front-page-scroller').evaluate(element => { element.scrollTop = element.scrollHeight; });
+        for (const open of [true, false]) {
+          await page.locator(open ? '#showMenuButton' : '#hideMenuButton').evaluate((element: HTMLElement) => element.click());
+          await expect(page.locator('#navbar')).toHaveClass(open ? /^(?!.*\bcollapsed\b)/ : /\bcollapsed\b/);
+          await expect(bar).toHaveCSS('border-bottom-width', '1px');
+          await expect(bar).toHaveCSS('border-bottom-color', edge.expectedColour);
+          expect((await bar.boundingBox())!.height).toBe(initial!.height);
+          expect(await page.locator('.front-page-scroller').evaluate(element => parseFloat(getComputedStyle(element)
+            .getPropertyValue('--home-phone-bar-size')))).toBe(initial!.height);
+        }
       }
       expect(writes).toEqual([]);
     });

@@ -29,6 +29,8 @@ import {
 import { getUnifiedTableState, setUnifiedTableState } from "../../state_stores/table_state_store.js";
 import { getChosenDatasetView, setChosenDatasetView } from "../../state_stores/dataset_view_choice_saver.js";
 import { refreshLocalizedDatasetValues } from "../../table_views/dataset_value_localizer.js";
+import { datasetAppearanceState } from '../../table_views/dataset_appearance_state.js';
+import { datasetAppearanceDefaultsForPlace } from '../../../shared/dataset_appearance/validator.js';
 const types = { title: { card_element: "header+lang_key", is_multilingual: true, show_value_on_card: true },
     description: { card_element: "description2", is_multilingual: true, show_value_on_card: true } };
 const rows = [{ id: 1, title: JSON.stringify({ fi: "Suomen otsikko", en: "English title" }),
@@ -40,6 +42,7 @@ function mount(dataset = "other", options = {}) {
     return group;
 }
 beforeEach(() => {
+    datasetAppearanceState.clear();
     document.body.replaceChildren(); localStorage.clear(); sessionStorage.clear(); vi.clearAllMocks();
     sessionStorage.setItem('user_permissions', JSON.stringify(['/ui/view/article_view']));
     mocks.navigate.mockResolvedValue({ abort: false });
@@ -84,7 +87,7 @@ test('uses authorized card-support cached media with the shared image renderer',
     mocks.avatar.mockClear();
     group.render([{ ...rows[0], cached_image: './storage/test/300/picture.jpg' }], ['title', 'description'], types);
     await vi.waitFor(() => expect(mocks.image).toHaveBeenCalledWith('./storage/test/300/picture.jpg', false,
-        expect.objectContaining({ tableName: 'other', renderSlot: 'small_thumbnail', rowLabel: expect.any(String) })));
+        expect.objectContaining({ tableName: 'other', renderSlot: 'card_media', rowLabel: expect.any(String) })));
     await vi.waitFor(() => expect(group.element.querySelector('.card_small_image_inner')).not.toBeNull());
     expect(mocks.avatar).not.toHaveBeenCalled();
     const image = group.element.querySelector('img');
@@ -104,6 +107,49 @@ test('uses authorized card-support cached media with the shared image renderer',
     decorative();
     await refreshLocalizedDatasetValues('en');
     decorative();
+});
+
+test('compact thumbnails resolve all three datasets independently with focal points and unchanged letter fallback', async () => {
+    const { createImageElement } = await vi.importActual('../../table_views/card_view/card_avatar_builder.js');
+    mocks.image.mockImplementation(createImageElement);
+    mocks.avatar.mockImplementation(async (_seed, letter) => {
+        const avatar = document.createElement('div'); avatar.textContent = letter; return avatar;
+    });
+    const groups = ['contain', 'cover', 'contain_blur'].map((mode, index) => {
+        const dataset = `compact_${mode}`;
+        expect(datasetAppearanceState.accept(dataset, { schema_version: 2, dataset_uid: 562 + index,
+            shared_version: 'site', version: '1', tab_values: datasetAppearanceDefaultsForPlace('tab_only'),
+            site_values: datasetAppearanceDefaultsForPlace('site_only'), defaults: datasetAppearanceDefaultsForPlace('site_default'),
+            overrides: { 'shared.card_image_presentation': mode } })).toBe(true);
+        const group = mount(dataset, { includeThumbnails: true });
+        group.render([{ ...rows[0], cached_image: './storage/test/300/picture.jpg',
+            cached_image_focal_x: 0.2, cached_image_focal_y: 0.3 }, { ...rows[0], id: 2 }],
+        ['title', 'description'], types);
+        return { group, mode };
+    });
+    for (const { group, mode } of groups) {
+        await vi.waitFor(() => expect(group.element.querySelector('.card_photo_presentation')).not.toBeNull());
+        const wrapper = group.element.querySelector('.card_photo_presentation');
+        expect(wrapper.dataset.cardImagePresentation).toBe(mode);
+        expect(wrapper.dataset.cardImageSource).toBe('dataset');
+        expect(wrapper.style.getPropertyValue('--card-photo-focal')).toBe(mode === 'cover' ? '20% 30%' : '');
+        const image = wrapper.querySelector('img');
+        image.dispatchEvent(new Event('load'));
+        expect(wrapper.style.getPropertyValue('--card-photo-source').includes('picture.jpg')).toBe(mode === 'contain_blur');
+        expect(image.alt).toBe('');
+        const letter = group.element.querySelectorAll('li')[1];
+        await vi.waitFor(() => expect(letter.querySelector('.card_small_image_inner')).not.toBeNull());
+        expect(letter.querySelector('img, .card_photo_presentation')).toBeNull();
+        expect(letter.querySelector('.card_small_image_inner').textContent).toBe(Array.from(letter.querySelector('a').textContent)[0]);
+        expect(mocks.avatar).toHaveBeenCalledWith('2_', expect.any(String), false);
+    }
+});
+
+test('shared group and raster thumbnail radii use theme tokens with stronger thumbnail scrim variables', () => {
+    const css = readFileSync(resolve(dirname(fileURLToPath(import.meta.url)), 'supplemental_dataset_results.css'), 'utf8');
+    expect(css).toMatch(/\.supplemental-dataset-group\s*\{[^}]*--home-block-radius: var\(--fw-radius-lg\);/);
+    expect(css).toMatch(/\.supplemental-dataset-thumbnail \.wrapper\s*\{[^}]*border-radius: var\(--fw-radius-md\) !important;/);
+    expect(css).toMatch(/\.supplemental-dataset-thumbnail \.card_photo_presentation\s*\{[^}]*--card-photo-blur: 48px;[^}]*--card-photo-scrim-inset: -144px;/);
 });
 
 test('hydrates a retained group while its primary result host is temporarily detached', async () => {
