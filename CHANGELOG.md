@@ -22,6 +22,7 @@ Dates are the local (Europe/Helsinki) date on which the version was published.
 
 ## [Unreleased]
 
+- The installation helper check's Python-import scan has its own regression test: each imported helper left out of the copy list is reported.
 - Home boxes follow the hero with a shorter 40 px gap, keep 40 px between boxes, and leave 40 px below the last box plus the phone's safe-area inset in both themes.
 - Home gains a theme-aware top-bar edge and rounder boxes; Home and cross-dataset search thumbnails follow each dataset's card image presentation and focal point, with a stronger blurred backdrop at thumbnail size and stronger blur on both card sizes.
 - Sign-in PINs use a one-time-code text field with a revealable visual mask, so password managers no longer offer the saved password there; screen readers may read the typed PIN digits aloud, as in other text fields.

@@ -109,3 +109,19 @@ def test_a_computed_library_name_is_reported(tmp_path: Path):
     root = tmp_path / "app"
     write_tree(root, {"server_tools/entry.sh": 'tool=deploy\nsh "$SCRIPT_DIR/lib/${tool}.sh"\n'})
     assert computed_library_references(["server_tools/entry.sh"], root) == [("server_tools/entry.sh", 2)]
+
+
+def test_the_independent_scan_reports_each_python_import_left_out(tmp_path: Path):
+    # Only the scan's ast branch sees these: none of the module names appears as a file-name token.
+    root = tmp_path / "app"
+    write_tree(root, {
+        "server_tools/lib/user.py": "from server_tools.lib import (\n    alpha,\n    beta,\n)\n"
+                                    "import server_tools.lib.gamma\nfrom server_tools.ctl.lib.delta import run\n",
+        "server_tools/lib/alpha.py": "", "server_tools/lib/beta.py": "", "server_tools/lib/gamma.py": "",
+        "server_tools/ctl/lib/delta.py": "",
+    })
+    imported = {"server_tools/lib/alpha.py", "server_tools/lib/beta.py", "server_tools/lib/gamma.py",
+                "server_tools/ctl/lib/delta.py"}
+    assert uncopied_library_files(["server_tools/lib/user.py"], imported, root) == set()
+    for left_out in sorted(imported):
+        assert uncopied_library_files(["server_tools/lib/user.py"], imported - {left_out}, root) == {left_out}
