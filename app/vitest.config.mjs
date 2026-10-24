@@ -49,6 +49,7 @@ export default {
       '**/server_tools/lib/**/*.test.mjs',
       '**/server_tools/scripts/vitest_process_runner.test.mjs',
       'testing/e2e/helpers/**/*.test.ts',
+      'testing/visual_guardian/**/*.test.{ts,mjs}',
     ],
     // Outer Easelect keeps ignored generated Filterest candidates under
     // dist-public/. They are release artifacts, not additional test roots.

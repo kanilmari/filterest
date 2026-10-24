@@ -12,6 +12,8 @@ const baseURL = resolveLocalFilterestBaseUrl({ applicationRoot: path.resolve(__d
 
 export default defineConfig({
   testDir: './testing/visual_guardian',
+  // Only Playwright specs: the folder also holds Node/Vitest unit tests (*.test.mjs) for the WO92 observer.
+  testMatch: '**/*.spec.ts',
   outputDir: testRuntimePaths.visualResults,
   globalSetup: './testing/e2e/global-setup.ts',
   globalTeardown: './testing/e2e/global-teardown.ts',

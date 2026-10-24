@@ -1,0 +1,37 @@
+{
+  "schemaVersion": 1,
+  "entries": [
+    {
+      "id": "home-result-image", "kind": "image-box",
+      "selector": ".front-page-blocks .supplemental-dataset-thumbnail .card_small_image_inner",
+      "shot": "any", "viewport": { "minWidth": 0, "maxWidth": 10000 },
+      "reason": "Home reserves the shared result image slot before media resolves.",
+      "source": "app/frontend/core_components/filterbar/text_search/supplemental_dataset_results.css:75-85",
+      "width": 76, "height": 76, "box": "border"
+    },
+    {
+      "id": "home-result-title", "kind": "truncation",
+      "selector": ".front-page-blocks .supplemental-dataset-result-text > a",
+      "shot": "any", "viewport": { "minWidth": 0, "maxWidth": 10000 },
+      "reason": "Home intentionally clamps result titles to one line.",
+      "source": "app/testing/e2e/G_navigation/G15_home_boxes.spec.ts:131; app/frontend/core_components/filterbar/text_search/supplemental_dataset_results.css:103-109",
+      "lines": 1
+    },
+    {
+      "id": "home-result-excerpt", "kind": "truncation",
+      "selector": ".front-page-blocks .supplemental-dataset-result-text > p",
+      "shot": "any", "viewport": { "minWidth": 0, "maxWidth": 10000 },
+      "reason": "The compact result builder places a two-line excerpt below its title.",
+      "source": "app/frontend/core_components/filterbar/text_search/supplemental_dataset_results.css:111-119; app/frontend/core_components/table_views/compact_dataset_group.js:320",
+      "lines": 2
+    },
+    {
+      "id": "home-result-row-link", "kind": "expanded-target",
+      "selector": ".front-page-blocks .supplemental-dataset-result-text > a",
+      "shot": "any", "viewport": { "minWidth": 0, "maxWidth": 10000 },
+      "reason": "The existing title link stretches across its entire result row.",
+      "source": "app/frontend/core_components/front_page/front_page.css:225-232",
+      "via": "::after"
+    }
+  ]
+}

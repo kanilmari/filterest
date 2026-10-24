@@ -1,7 +1,7 @@
 {
   "version": 1,
   "browser_areas": [
-    {
+    {"area": "Visual observations", "paths": ["app/testing/visual_guardian"], "specs": [], "none": "Harness-only, outside the application matrix. Run visual_image_structure.test.mjs, visual_report.test.mjs and visual_observer_page.test.mjs with npm test; run visual_observations_selftest.spec.ts with app/playwright.visual.config.ts in both chromium and firefox. No application page or database is used by the self-test."}, {
       "area": "Phone Home text search",
       "paths": [
         "app/frontend/core_components/front_page/front_page_search_sheet.js",

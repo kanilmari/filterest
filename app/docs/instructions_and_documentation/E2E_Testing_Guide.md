@@ -122,6 +122,7 @@ Use `--project=desktop-card` during development. No active GitHub Actions workfl
 - General E2E HTML report: `data/testing/playwright-report`
 - General E2E retry traces and Playwright outputs: `data/testing/test-results`
 - Visual Guardian screenshots captured for AI analysis: `data/testing/test-results/visual_guardian`
+- Opt-in deterministic reports beside screenshots: [Visual Guardian observations (WO92)](../../testing/visual_guardian/README.md#deterministic-visual-observations-wo92).
 - Visual Guardian failure-page HTML snapshots: `data/testing/test-results-visual/<test-output-dir>/page-source.html`
 
 These mutable files default below the public product root's `data/testing/`
