@@ -672,8 +672,8 @@ save, and CSS follows the application's resolved theme class even when the OS
 preference differs. Video cross-fades and image focal points retain their behavior.
 `front_page_presentation_renderer.js` applies the whole presentation before the
 first content frame; no second settings request or late layout shift is needed.
-The single grid stage fills the scroller (less the sticky phone bar on phones)
-and grows for long text, with dataset boxes following it.
+The grid stage fills the scroller (less the sticky phone bar) and grows for long text. `front_page_box_spacing_observer.js` measures its unused tail after the hero, including anchor-only previews; visit teardown disconnects both observers.
+CSS subtracts that tail only from the boxes' top margin, preserving the hero's anchor/alignment. Both layouts use `--home-block-gap` (40 px), `--home-hero-blocks-gap` and `--home-page-bottom-space`; phone bottom padding adds the safe-area inset inside the scroller.
 
 Background uploads retain PNG/JPEG/WebP with a 10 MiB file ceiling, plus
 MP4/WebM with a 50 MiB ceiling matching the media library. The request body

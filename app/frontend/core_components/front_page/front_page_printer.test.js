@@ -116,6 +116,36 @@ test('single-flight loader issues only one facade request and shows an accessibl
     expect(mocks.request.mock.calls.some(([route]) => route === 'getResults')).toBe(false);
 });
 
+test('Home spacing observers disconnect on refresh and deactivation, and never mount without boxes', async () => {
+    const observers = [];
+    vi.stubGlobal('ResizeObserver', class {
+        observe = vi.fn();
+        disconnect = vi.fn();
+        constructor() { observers.push(this); }
+    });
+    // Tab fitting owns its own observer too; identify the spacing observer by its actual targets.
+    const spacingObservers = () => observers.filter(observer => observer.observe.mock.calls.some(
+        ([node]) => node.classList.contains('front-page-text-stage')));
+    try {
+        const page = renderFrontPage();
+        await vi.waitFor(() => expect(page.getAttribute('aria-busy')).toBe('false'));
+        expect(spacingObservers()).toHaveLength(1);
+        expect(spacingObservers()[0].observe.mock.calls.map(([node]) => node)).toEqual([
+            page.querySelector('.front-page-text-stage'), page.querySelector('.front-page-hero'),
+        ]);
+        await refreshFrontPage();
+        expect(spacingObservers()[0].disconnect).toHaveBeenCalledOnce();
+        expect(spacingObservers()).toHaveLength(2);
+        page.dispatchEvent(new Event(VIEW_DEACTIVATE_EVENT));
+        expect(spacingObservers()[1].disconnect).toHaveBeenCalledOnce();
+        mocks.request.mockResolvedValue({ ...response(), show_blocks: false });
+        renderFrontPage();
+        await vi.waitFor(() => expect(page.getAttribute('aria-busy')).toBe('false'));
+        expect(page.querySelector('.front-page-blocks')).toBeNull();
+        expect(spacingObservers()).toHaveLength(2);
+    } finally { vi.unstubAllGlobals(); }
+});
+
 test.each([700, 701])('Home mounts the reversible phone host at %ipx with media outside the scroller', async width => {
     window.matchMedia = vi.fn(query => ({ matches: query === '(width <= 700px)' && width <= 700,
         addEventListener: vi.fn(), removeEventListener: vi.fn() }));

@@ -117,3 +117,5 @@ under both application themes over both OS preferences. It also checks title
 clamp sizes at representative widths. This unit proof does not claim browser,
 font-loading, contrast or production delivery verification; those remain in
 the later native/browser acceptance matrix.
+Home's box gap intentionally changes to 40 px in WO98; the pre-change fixture remains
+historical, while the regression resolves the current component-owned Home token.

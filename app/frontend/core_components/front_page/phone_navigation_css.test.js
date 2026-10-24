@@ -10,7 +10,7 @@ import { requireNodeDependency } from '../../../server_tools/lib/node_dependency
 
 const postcss = requireNodeDependency('postcss');
 const baseline = {
-    'front_page.css': '1fb325904ebdf8ab16ecc59ebe35dcd772ee3d3e7d64e81723caeefce6a9e9a3',
+    'front_page.css': '0d11dd6018f2d5865c63491debc6d17e39f2916b457f476fa31d6301497639a9',
     'top_nav_home_button.css': '370d13d5d63468cd1e8e03d637d3290e4375a7ef0654a41ba43b815ca207566b',
     '../filterbar/shared_topbar.css': '47dcce674bc0e9974a499e7f19db9e98f7988a23688051561e4ed73ed15a484f',
     '../filterbar/morphing_filterbar_content.css': '9b0c7307b1a1448328bb6e7bb59fbaf440006f72ac04827c02d6bb511324708a',
@@ -34,6 +34,8 @@ function phoneRule(file, selector) {
 // WO95 re-pins Home for its desktop-only inset edge; every phone rule stays unchanged.
 // Batch 569 re-pins only the topbar/hero colour mixes to use their solid companion.
 // WO96 removes only Home's shared-bar order:10; original hosts, sizing and phone tracks stay pinned.
+// WO98 re-pins Home only: shared box/hero/bottom spacing changes outside the phone breakpoint.
+// The sticky bar, drawer lock, focus clearance and hero anchoring rules retain batch 513 geometry.
 test.each(Object.keys(baseline))('%s keeps every rule outside the phone breakpoint byte-identical to its approved baseline', file => {
     const root = sheets[file].clone();
     root.walkAtRules('media', media => { if (media.params === '(width <= 700px)') media.remove(); });

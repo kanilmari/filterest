@@ -80,12 +80,24 @@ function declarationFor(entry) {
     return value;
 }
 
-describe('unchanged style-package defaults (source CSS, no browser)', () => {
+describe('style-package defaults (source CSS, no browser)', () => {
     for (const theme of ['light', 'dark']) for (const osTheme of ['light', 'dark']) {
         describe(`application ${theme}, OS ${osTheme}`, () => {
             const variables = themeVariables(theme, osTheme);
             test.each(baseline)('$name', entry => {
                 const actual = declarationFor(entry);
+                // WO98 intentionally replaces Home's old 1rem gap. Keep the pre-change fixture historical;
+                // resolve the current component-owned default instead of weakening the other token checks.
+                if (entry.token === 'home.block-gap') {
+                    const home = { ...variables };
+                    stylesheet(entry.file).walkRules(rule => {
+                        if (rule.selector !== '.front-page') return;
+                        rule.walkDecls(/^--/, declaration => { home[declaration.prop] = declaration.value; });
+                    });
+                    expect(actual).toBe(`var(${contract.tokens[entry.token].css})`);
+                    expect(resolveValue(actual, home)).toBe('40px');
+                    return;
+                }
                 for (const key of entry.tokens ?? [entry.token]) expect(actual).toContain(`var(${contract.tokens[key].css},`);
                 expect(resolveValue(actual, variables)).toBe(resolveValue(entry.before, variables));
             });

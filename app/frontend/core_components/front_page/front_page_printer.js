@@ -9,6 +9,7 @@ import { readHomePresentation } from '../../shared/front_page_presentation/valid
 import { createFrontPageTopRow } from './front_page_top_row_builder.js';
 import { loadFrontPageNavigationLanguage } from './front_page_link.js';
 import { mountFrontPagePhoneLayout } from './front_page_phone_layout.js';
+import { mountHomeBoxSpacing } from './front_page_box_spacing_observer.js';
 import { loadCustomRoot } from './custom_root_navigation.js';
 import { createFrontPageArticleButtons } from './front_page_article_buttons.js';
 import { mountBackgroundVideo } from './front_page_background_video.js';
@@ -141,11 +142,14 @@ function renderBlocks(container, data, visit, appearanceToken) {
     container.replaceChildren(...(background ? [background] : []), visit.topRow.element, scroller);
     visit.topRow.mount();
     visit.phoneLayout = mountFrontPagePhoneLayout(visit.topRow.element, scroller);
+    visit.boxSpacingCleanup = mountHomeBoxSpacing(page, stage, hero);
 }
 
 /** Starts one bounded request for this visit and owns its render generation. */
 function loadVisit(container, visit) {
     if (visit.pending) return visit.pending;
+    visit.boxSpacingCleanup?.();
+    visit.boxSpacingCleanup = null;
     visit.phoneLayout?.destroy();
     visit.phoneLayout = null;
     visit.topRow?.destroy();
@@ -272,6 +276,8 @@ export function renderFrontPage() {
         };
         const deactivateVisit = () => {
             cancelPending();
+            visit.boxSpacingCleanup?.();
+            visit.boxSpacingCleanup = null;
             visit.phoneLayout?.destroy();
             visit.phoneLayout = null;
             visit.topRow?.destroy();

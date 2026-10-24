@@ -5,6 +5,9 @@
  */
 
 .front-page {
+  --home-block-gap: 40px;
+  --home-hero-blocks-gap: var(--home-block-gap);
+  --home-page-bottom-space: var(--home-block-gap);
   position: relative;
   isolation: isolate;
   display: flex;
@@ -191,6 +194,10 @@ body.dark-mode .front-page {
   margin-inline: auto;
 }
 
+.front-page-content {
+  padding-block-end: var(--home-page-bottom-space);
+}
+
 .front-page-status,
 .front-page-blocks .supplemental-dataset-group {
   padding: var(--home-block-padding, 1rem);
@@ -207,7 +214,8 @@ body.dark-mode .front-page {
   width: 100%;
   max-width: 800px;
   margin-inline: auto;
-  gap: var(--home-block-gap, 1rem);
+  gap: var(--home-block-gap);
+  margin-block-start: var(--home-hero-blocks-gap);
 }
 
 .front-page-blocks .supplemental-dataset-group {
@@ -445,7 +453,7 @@ body.dark-mode .front-page {
 /* Size containment measures the flex scroller below the stationary top row.
    Equal insets on every anchor make long copy / narrow columns converge naturally. */
 .front-page .front-page-scroller--positioned { container-type: size; }
-.front-page-content--positioned { max-width: none; padding: 0; margin: 0; }
+.front-page-content--positioned { max-width: none; padding: 0; padding-block-end: var(--home-page-bottom-space); margin: 0; }
 .front-page-text-stage {
   display: grid;
   /* One column exactly as wide as the stage: a max-content block can never widen it, so long text wraps at the
@@ -492,7 +500,10 @@ body.dark-mode .front-page {
   }
 }
 .front-page-content--positioned > .front-page-blocks {
-  padding: 1rem;
+  /* Trim only the stage's unused tail (measured by front_page_box_spacing_observer.js).
+     Its viewport minimum, hero anchor and text alignment remain independent of the boxes. */
+  margin-block-start: calc(var(--home-hero-blocks-gap) - var(--home-hero-trailing-space, 0px));
+  padding: 0 1rem;
 }
 /* Phones keep 16 px insets and the vertical anchor: short text sits at the top, centre or bottom of the visible area,
    and long text grows the stage, so every vertical anchor flows from the top and scrolls. */
@@ -504,4 +515,7 @@ body.dark-mode .front-page {
   }
   /* Phones give the block the whole width between the gutters, so short centred or right-aligned text still uses the line. */
   .front-page-text-stage .front-page-hero { width: auto; max-width: none; }
+  .front-page-content {
+    padding-block-end: calc(var(--home-page-bottom-space) + env(safe-area-inset-bottom));
+  }
 }

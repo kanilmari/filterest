@@ -5,6 +5,7 @@
 import { expect, test, type Page } from '@playwright/test';
 import { installHomePolicy } from '../helpers/home-policy-fixture';
 import { datasetAppearanceDefaultsForPlace } from '../../../frontend/shared/dataset_appearance/validator.js';
+import presentationDefinition from '../../../frontend/shared/front_page_presentation/definition.json';
 
 const datasets = ['app_e2e_home_info', 'app_e2e_home_deals', 'app_e2e_home_blogs'];
 const labels = ['Matkailutietoa', 'Matkatarjoukset', 'Matkakertomukset'];
@@ -15,10 +16,11 @@ const image = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAKAAAABQCAIAAAARP+ljAAAA7ElEQ
 const title = 'Suomalaisen matkailijan pitkä otsikko pohjoisen maisemista ja rauhallisista retkikohteista kaikkina vuodenaikoina';
 const description = 'Koe pohjoisen maisemat ja kiireettömät retkipolut. Löydä matkavinkit, majoitus ja paikalliset elämykset seuraavaa lomaa varten. '.repeat(3);
 
-async function openHomeBoxes(page: Page, theme: 'light' | 'dark', width: number) {
+async function openHomeBoxes(page: Page, theme: 'light' | 'dark', width: number, anchor = 'center-left') {
   const writes: string[] = [];
   await installHomePolicy(page.context(), theme, {
     site_name: 'WO95', show_blocks: true,
+    presentation: { ...presentationDefinition.default, anchor, max_width_px: 750, horizontal_margin_px: 160 },
     hero: { title: { fi: 'Matkailijan etusivu', en: 'Traveller home' } },
     blocks: datasets.map((dataset, index) => ({ dataset, result_limit: 3,
       // The Home facade forwards the same authorized snapshot as get-results;
@@ -122,7 +124,7 @@ for (const width of [1440, 1000, 390]) {
       for (const [index, box] of boxes.entries()) {
         expect(box.x).toBeCloseTo(boxes[0].x, 1);
         expect(box.width).toBeCloseTo(boxes[0].width, 1);
-        if (index) expect(box.y).toBeGreaterThanOrEqual(boxes[index - 1].y + boxes[index - 1].height);
+        if (index) expect(Math.abs(box.y - boxes[index - 1].y - boxes[index - 1].height - 40)).toBeLessThanOrEqual(1);
       }
       const layout = await blocks.evaluate(element => {
         const rect = element.getBoundingClientRect();
@@ -230,6 +232,66 @@ for (const width of [1440, 1000, 390]) {
             .getPropertyValue('--home-phone-bar-size')))).toBe(initial!.height);
         }
       }
+      expect(writes).toEqual([]);
+    });
+  }
+}
+
+for (const width of [390, 1440]) for (const theme of ['light', 'dark'] as const) {
+  for (const layout of ['classic', 'top-left', 'center-left', 'bottom-right']) {
+    test(`Home spacing: ${layout}, 40px gaps and bottom clearance at ${width}px in ${theme}`, async ({ page }, info) => {
+      const writes = await openHomeBoxes(page, theme, width, layout === 'classic' ? 'center-left' : layout);
+      const content = page.locator('.front-page-content');
+      if (layout === 'classic') {
+        // The printer always selects positioned mode today. Exercise the retained classic CSS contract in the
+        // same response-only page, without changing saved presentation, node order or the phone projection.
+        await content.evaluate(element => {
+          element.classList.remove('front-page-content--positioned');
+          element.parentElement!.classList.remove('front-page-scroller--positioned');
+          element.querySelector('.front-page-text-stage')!.classList.remove('front-page-text-stage');
+        });
+      }
+      const groups = content.locator('.front-page-blocks > .supplemental-dataset-group');
+      await expect(groups).toHaveCount(3);
+      await expect.poll(() => content.evaluate(element => {
+        const hero = element.querySelector('.front-page-hero')!.getBoundingClientRect();
+        const first = element.querySelector('.supplemental-dataset-group')!.getBoundingClientRect();
+        return Math.abs(first.top - hero.bottom - 40);
+      })).toBeLessThanOrEqual(1);
+      const geometry = await content.evaluate(element => {
+        const hero = element.querySelector('.front-page-hero')!;
+        const heroRect = hero.getBoundingClientRect();
+        const stage = hero.parentElement!, stageRect = stage.getBoundingClientRect();
+        const stageStyle = getComputedStyle(stage);
+        const scroller = element.parentElement!;
+        const boxes = [...element.querySelectorAll('.supplemental-dataset-group')].map(box => box.getBoundingClientRect());
+        return { textHeight: heroRect.height, viewportHeight: scroller.clientHeight,
+          heroY: heroRect.top - stageRect.top, stageHeight: stageRect.height,
+          insetTop: parseFloat(stageStyle.paddingTop), insetBottom: parseFloat(stageStyle.paddingBottom),
+          alignment: getComputedStyle(hero).textAlign,
+          gaps: boxes.slice(1).map((box, index) => box.top - boxes[index].bottom) };
+      });
+      expect(geometry.textHeight).toBeLessThan(geometry.viewportHeight);
+      geometry.gaps.forEach(gap => expect(Math.abs(gap - 40)).toBeLessThanOrEqual(1));
+      if (layout !== 'classic') {
+        const expectedY = layout.startsWith('top-') ? geometry.insetTop : layout.startsWith('bottom-')
+          ? geometry.stageHeight - geometry.insetBottom - geometry.textHeight
+          : (geometry.stageHeight - geometry.textHeight) / 2;
+        expect(Math.abs(geometry.heroY - expectedY)).toBeLessThanOrEqual(1);
+        expect(geometry.alignment).toBe('start');
+      }
+      await page.screenshot({ path: info.outputPath(`home-spacing-${layout}-${width}-${theme}.png`), animations: 'disabled' });
+      // Measure the real scroll end, rather than treating a padding declaration as proof of clearance.
+      const bottomSpace = await page.locator('.front-page-scroller').evaluate(element => {
+        element.scrollTop = element.scrollHeight;
+        const viewport = element.getBoundingClientRect();
+        const last = element.querySelector('.front-page-blocks > :last-child')!.getBoundingClientRect();
+        // scrollHeight rounds to whole pixels; retain the fractional content end when it lies beyond that rounding.
+        const contentEnd = element.querySelector('.front-page-content')!.getBoundingClientRect().bottom;
+        return Math.max(viewport.top + element.clientTop + element.clientHeight, contentEnd) - last.bottom;
+      });
+      expect(bottomSpace).toBeGreaterThanOrEqual(40);
+      await page.screenshot({ path: info.outputPath(`home-bottom-${layout}-${width}-${theme}.png`), animations: 'disabled' });
       expect(writes).toEqual([]);
     });
   }
