@@ -9,6 +9,16 @@ import { login, loadCredentials } from '../helpers/auth';
 
 const accountTheme = (url: URL) => url.pathname === '/api/user-visual-preference';
 
+/** main.js reports ready after its start-up translation pass. That pass rewrites <html lang>, and the shared dataset
+ *  surface re-presents the board on every lang write (dataset_surface_host.js:178-185), replacing each row. Measure
+ *  and scroll only after it, so the located rows stay attached. */
+async function waitForShellBoot(page: Page) {
+  await page.waitForFunction(() => {
+    const boot = (window as Window & { __filterestShellBoot?: { status: () => { ready: boolean } } }).__filterestShellBoot;
+    return boot ? boot.status().ready : !document.body.classList.contains('loading');
+  }, null, { timeout: 15_000 });
+}
+
 /** Expand existing fixture rows in the response only, independently of T13's mutations. */
 async function overflowExistingBoard(page: Page) {
   await page.route('**/api/app/workline-observatory/board*', async (route) => {
@@ -72,6 +82,7 @@ for (const theme of ['light', 'dark'] as const) {
         const scroller = page.locator('.tab-content-body > .scrollable_content').filter({ has: view });
         const toolbar = page.locator('.workline-observatory__status-toolbar');
         const heading = page.locator('.workline-observatory__board-heading');
+        await waitForShellBoot(page);
         await expect(board).toBeVisible();
         await expect(page.locator('.workline-observatory__workline-row')).toHaveCount(64);
         await expect(page.locator('body')).toHaveClass(new RegExp(`${theme}-mode`));

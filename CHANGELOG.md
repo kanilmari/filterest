@@ -22,6 +22,7 @@ Dates are the local (Europe/Helsinki) date on which the version was published.
 
 ## [Unreleased]
 
+- **Workline observatory scroll test waits for start-up (test only)** — The scroll proof measures and scrolls only after the shell's start-up translation pass, which presents the board once more.
 - Visual Guardian adds opt-in, report-only deterministic observations beside screenshots, with reviewed expectations, allowances and fixture self-tests.
 - The installation helper check's Python-import scan has its own regression test: each imported helper left out of the copy list is reported.
 - Home boxes follow the hero with a shorter 40 px gap, keep 40 px between boxes, and leave 40 px below the last box plus the phone's safe-area inset in both themes.
