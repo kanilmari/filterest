@@ -96,6 +96,10 @@
     color: var(--text-muted);
     opacity: 1;
 }
+/* Visual PIN masking keeps the field eligible for one-time-code autofill. */
+.auth-verify input.auth-verify__input.auth-verify__masked {
+    -webkit-text-security: disc;
+}
 .auth-verify input.auth-verify__input[data-kind="password"] {
     font-size: 17px;
     letter-spacing: .02em;

@@ -80,7 +80,7 @@
       "component": "Lucide Icons",
       "kind": "embedded-icon-source",
       "path": "app/frontend/core_components/auth/second_step_view.js",
-      "sha256": "49ac6e44945b19f3104cb377a8e99cb6890c588cf3e58ede5bc982fbd4d4d764",
+      "sha256": "db1077ece5ddf9aeea2d6be6bec329c0a25cd152784aab296cda92fbb50f6171",
       "source_detail": "Embedded eye and shield geometry from the accepted WO97 mock, conservatively covered by the retained Lucide/Feather terms; no first-party authorship or exact upstream byte identity is claimed."
     },
     {
@@ -820,7 +820,7 @@
       "component": "Google Material Icons and Symbols",
       "kind": "embedded-icon-source",
       "path": "app/frontend/templates/login.html",
-      "sha256": "e7d50c2ae7d86114756ee51149ded6ff4e0b1eedc1a48fa6a1d44599b791436e"
+      "sha256": "cb078cb6190bb133c1fc20d8187af10fa409bf7d49fa1208fe29ad83a404252a"
     },
     {
       "component": "Filterest demo placeholder images",

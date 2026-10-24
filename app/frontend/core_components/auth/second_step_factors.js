@@ -17,7 +17,10 @@ export const SECOND_STEP_FACTORS = Object.freeze({
         hint: 'verification_pin_hint', error: 'verification_pin_error', empty: 'verification_pin_empty',
         format: 'verification_pin_format', reveal: true, maxCodeLength: 8,
         helpAction: 'verification_pin_help_action', help: 'verification_pin_help',
-        attributes: { type: 'password', inputmode: 'numeric', autocomplete: 'off', minlength: '4', maxlength: '32', pattern: '[0-9]{4,8}' },
+        attributes: {
+            type: 'text', inputmode: 'numeric', autocomplete: 'one-time-code', minlength: '4', maxlength: '32',
+            pattern: '[0-9]{4,8}', autocapitalize: 'none', autocorrect: 'off', spellcheck: 'false',
+        },
     },
     totp: {
         ...common, instruction: 'verification_totp_instruction', hint: 'verification_totp_hint',

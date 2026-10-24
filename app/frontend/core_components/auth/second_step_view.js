@@ -9,6 +9,7 @@ import { SECOND_STEP_FACTORS } from './second_step_factors.js';
 let nextInstance = 0;
 const mounted = new WeakMap();
 const homes = new WeakMap();
+const PIN_MASK_CLASS = 'auth-verify__masked';
 const SHIELD_ICON = "<svg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.6\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M12 3 4 6v6c0 4 4.5 7.5 8 9 3.5-1.5 8-5 8-9V6l-8-3Z\"/><path d=\"m8.5 12 2.3 2.3 4.7-4.8\"/></svg>";
 
 export function bindSecondStepCopy(node, key) {
@@ -18,7 +19,7 @@ export function bindSecondStepCopy(node, key) {
 /** Translate visibility names through the same attribute path used on language switches. */
 export function setSecondStepReveal(button, input, kind = 'password') {
     if (!button || !input) return;
-    const shown = input.type !== 'password';
+    const shown = kind === 'pin' ? !input.classList.contains(PIN_MASK_CLASS) : input.type !== 'password';
     const key = `${shown ? 'hide' : 'show'}_${kind}`;
     button.dataset.ariaLabelLangKey = key;
     button.setAttribute('aria-label', getTranslationForKey(key));
@@ -71,6 +72,8 @@ export function renderSecondStep(root, descriptor, options = {}) {
     heading?.setAttribute('tabindex', '-1');
     if (slot('icon')) slot('icon').innerHTML = SHIELD_ICON;
     Object.entries(descriptor.attributes).forEach(([key, value]) => input.setAttribute(key, value));
+    // Keep PINs out of password-manager heuristics; CSS owns only their visual mask.
+    input.classList.toggle(PIN_MASK_CLASS, Boolean(descriptor.reveal));
     for (const attribute of ['autocapitalize', 'autocorrect', 'spellcheck']) {
         if (!(attribute in descriptor.attributes)) input.removeAttribute(attribute);
     }
@@ -98,6 +101,7 @@ export function renderSecondStep(root, descriptor, options = {}) {
         bindSecondStepCopy(slot('recipient-label'), 'verification_recipient');
         slot('recipient-value').textContent = options.recipient || '';
     }
+    let resetReveal = () => {};
     if (reveal) {
         // Keep the mock's compact eye control; its translated name remains live on language switches.
         reveal.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></svg>';
@@ -107,12 +111,18 @@ export function renderSecondStep(root, descriptor, options = {}) {
         revealLabel.dataset.testid = revealLabel.id;
         reveal.append(revealLabel);
         reveal.hidden = !descriptor.reveal;
-        setSecondStepReveal(reveal, input, 'pin');
-        bindSecondStepCopy(revealLabel, 'show_pin');
-        on(reveal, 'click', () => {
-            input.type = input.type === 'password' ? 'text' : 'password';
+        const updateReveal = () => {
             setSecondStepReveal(reveal, input, 'pin');
-            bindSecondStepCopy(revealLabel, input.type === 'password' ? 'show_pin' : 'hide_pin');
+            bindSecondStepCopy(revealLabel, input.classList.contains(PIN_MASK_CLASS) ? 'show_pin' : 'hide_pin');
+        };
+        resetReveal = () => {
+            input.classList.toggle(PIN_MASK_CLASS, Boolean(descriptor.reveal));
+            updateReveal();
+        };
+        updateReveal();
+        on(reveal, 'click', () => {
+            input.classList.toggle(PIN_MASK_CLASS);
+            updateReveal();
         });
     }
     if (helpAction && help) {
@@ -273,6 +283,7 @@ export function renderSecondStep(root, descriptor, options = {}) {
             (window.matchMedia?.('(max-width: 520px)').matches ? heading : input)?.focus();
         },
         dispose() {
+            resetReveal();
             verifying = false;
             sending = false;
             updateBusy();

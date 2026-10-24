@@ -34,7 +34,7 @@ test.describe('L1 — Login', () => {
     for (const [id, hint] of [
       ['login-username', 'username'],
       ['login-password', 'current-password'],
-      ['login-otp', 'off'],
+      ['login-otp', 'one-time-code'],
       ['login-password-reset-otp', 'off'],
       ['login-password-reset-new-password', 'new-password'],
     ]) {

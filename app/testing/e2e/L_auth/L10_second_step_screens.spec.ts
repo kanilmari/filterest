@@ -8,7 +8,7 @@ const FACTORS = {
   fixed_pin: {
     heading: ['Vahvista kirjautuminen', 'Confirm sign-in'],
     instruction: ['Syötä kirjautumista varten määrittämäsi PIN-koodi.', 'Enter the PIN you set up for sign-in.'],
-    label: ['PIN-koodi', 'PIN'], value: '0123', type: 'password', mode: 'numeric', auto: 'off', min: '4', pattern: '[0-9]{4,8}',
+    label: ['PIN-koodi', 'PIN'], value: '0123', type: 'text', mode: 'numeric', auto: 'one-time-code', min: '4', pattern: '[0-9]{4,8}',
   },
   totp: {
     heading: ['Vahvista kirjautuminen', 'Confirm sign-in'],
@@ -68,8 +68,11 @@ for (const language of ['fi', 'en'] as const) test.describe(`second step ${langu
         if (route.request().method() !== 'GET') return route.abort('blockedbyclient');
         return route.fulfill({ json: { theme_mode: theme, revision: 1, configured: true } });
       });
-      await page.goto('/login', { waitUntil: 'domcontentloaded' });
+      await page.goto(`/login?lang=${language}`, { waitUntil: 'domcontentloaded' });
       await expect(page.getByTestId('login-username')).toBeVisible();
+      const password = page.getByTestId('login-password');
+      await expect(password).toHaveAttribute('type', 'password');
+      await expect(password).toHaveAttribute('autocomplete', 'current-password');
       await page.getByTestId('login-username').fill('second-step-fixture');
       if (factor === 'recovery') {
         await page.getByTestId('login-forgot-password').click();
@@ -90,7 +93,7 @@ for (const language of ['fi', 'en'] as const) test.describe(`second step ${langu
       for (const [attribute, value] of Object.entries({ type: copy.type, inputmode: copy.mode, autocomplete: copy.auto, minlength: copy.min, maxlength: '32', pattern: copy.pattern })) {
         await expect(input).toHaveAttribute(attribute, value);
       }
-      if (factor === 'email' || factor === 'recovery') {
+      if (factor === 'fixed_pin' || factor === 'email' || factor === 'recovery') {
         for (const [attribute, value] of Object.entries({ autocapitalize: 'none', autocorrect: 'off', spellcheck: 'false' })) await expect(input).toHaveAttribute(attribute, value);
       }
       await expect(page.getByTestId('login-forgot-password')).toBeHidden();
@@ -107,7 +110,37 @@ for (const language of ['fi', 'en'] as const) test.describe(`second step ${langu
       expect(border.style).not.toBe('none');
       expect(border.color).not.toMatch(/transparent|rgba\([^)]*,\s*0\s*\)/);
       await input.fill(copy.value);
-      if (factor === 'recovery') await page.getByTestId('login-password-reset-new-password').fill('  fixture-new-value  ');
+      if (factor === 'fixed_pin') {
+        await expect(input).toHaveAttribute('id', 'otp');
+        await expect(input).toHaveAttribute('name', 'otp');
+        const reveal = root.locator('[data-verify="reveal"]');
+        const show = language === 'fi' ? 'Näytä PIN-koodi' : 'Show PIN';
+        const hide = language === 'fi' ? 'Piilota PIN-koodi' : 'Hide PIN';
+        await expect(input).toHaveClass(/\bauth-verify__masked\b/);
+        await expect.poll(() => input.evaluate(node => getComputedStyle(node).webkitTextSecurity)).toBe('disc');
+        await expect(reveal).toHaveAttribute('aria-pressed', 'false');
+        await expect(reveal).toHaveAccessibleName(show);
+        await reveal.click();
+        await expect(input).toHaveAttribute('type', 'text');
+        await expect(input).not.toHaveClass(/\bauth-verify__masked\b/);
+        await expect.poll(() => input.evaluate(node => getComputedStyle(node).webkitTextSecurity)).toBe('none');
+        await expect(reveal).toHaveAttribute('aria-pressed', 'true');
+        await expect(reveal).toHaveAccessibleName(hide);
+        await reveal.click();
+        await expect(input).toHaveAttribute('type', 'text');
+        await expect.poll(() => input.evaluate(node => getComputedStyle(node).webkitTextSecurity)).toBe('disc');
+        await expect(reveal).toHaveAttribute('aria-pressed', 'false');
+        await expect(reveal).toHaveAccessibleName(show);
+        await expect(input).toHaveValue(copy.value);
+        await expect(password).toHaveAttribute('type', 'password');
+        await expect(password).toHaveAttribute('autocomplete', 'current-password');
+      }
+      if (factor === 'recovery') {
+        const replacement = page.getByTestId('login-password-reset-new-password');
+        await expect(replacement).toHaveAttribute('type', 'password');
+        await expect(replacement).toHaveAttribute('autocomplete', 'new-password');
+        await replacement.fill('  fixture-new-value  ');
+      }
       await page.getByTestId('login-submit').click();
       const error = root.locator('[data-verify="error"]');
       await expect(error).not.toBeEmpty();

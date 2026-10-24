@@ -17,7 +17,7 @@ const forms = {
     login: {
         username: 'username',
         password: 'current-password',
-        otp: 'off',
+        otp: 'one-time-code',
         'password-reset-otp': 'off',
         'password-reset-new-password': 'new-password',
         authCode: 'off',
@@ -39,6 +39,19 @@ describe.each(Object.entries(forms))('%s authentication hints', (name, hints) =>
 
     test.each(Object.entries(hints))('%s uses %s', (id, hint) => {
         expect(page.getElementById(id)?.getAttribute('autocomplete')).toBe(hint);
+    });
+
+    if (name === 'login') test('only real passwords use password fields in the login template', () => {
+        const password = page.getElementById('password');
+        expect(password.getAttribute('type')).toBe('password');
+        expect(password.getAttribute('autocomplete')).toBe('current-password');
+        const replacement = page.getElementById('password-reset-new-password');
+        expect(replacement.getAttribute('type')).toBe('password');
+        expect(replacement.getAttribute('autocomplete')).toBe('new-password');
+        const code = page.getElementById('otp');
+        expect(code.getAttribute('type')).toBe('text');
+        expect(code.getAttribute('name')).toBe('otp');
+        expect(code.className).not.toMatch(/password/i);
     });
 
     test('all masked fields have the appropriate password or PIN hint', () => {

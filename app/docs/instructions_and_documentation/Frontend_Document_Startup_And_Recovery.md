@@ -106,6 +106,22 @@ person to the site administrator. Password recovery retains the existing neutral
 delivery statement. Local FI/EN copy is collected by the shared translator, and
 startup only inserts missing keys or fills empty language values.
 
+#### Password managers
+
+The sign-in PIN is a numeric `one-time-code` text field, visually masked with
+`-webkit-text-security: disc`. The eye button toggles that CSS mask; it never
+changes the input type. Resetting or remounting the step restores the mask.
+The first step remains the only login password field (`current-password`);
+recovery's replacement password retains `new-password`. Authenticator, email
+and recovery codes keep their existing one-time-code text-field descriptors.
+
+Accessibility trade-off: a screen reader may echo the PIN digits in a masked text
+field, whereas a password field is announced as secure. The translated label,
+`aria-describedby` hint, polite errors and live status remain available.
+Manual Firefox check: with a saved login, confirm that the PIN field offers no
+saved login and that the first-step password field still offers it; also check
+mask/reveal and reset. Browser password-manager heuristics need this manual proof.
+
 ### Post-login transition
 
 Modal credentials or OTP success calls `completeSuccessfulModalLogin` in

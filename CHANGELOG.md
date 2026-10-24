@@ -22,6 +22,7 @@ Dates are the local (Europe/Helsinki) date on which the version was published.
 
 ## [Unreleased]
 
+- Sign-in PINs use a one-time-code text field with a revealable visual mask, so password managers no longer offer the saved password there; screen readers may read the typed PIN digits aloud, as in other text fields.
 - On desktop, Home shows a 280 px site-search field above 1200 px or a 44 px button at 701–1200 px, with grouped results beneath it and no added history entry; the phone sheet is unchanged.
 - Wide desktop cards keep their original details-list frame; the straight-edged list applies only to stacked cards on tablets and phones.
 - Home's and dataset pages' top tab buttons stay rounded over background pictures or videos; only the side menu's buttons and connector turn square and opaque.

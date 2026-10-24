@@ -39,6 +39,14 @@ beforeEach(async () => {
 });
 afterEach(() => { vi.unstubAllGlobals(); document.body.innerHTML = ''; });
 
+test('PIN descriptor is a numeric one-time-code text field with unchanged raw and semantic limits', () => {
+    expect(SECOND_STEP_FACTORS.fixed_pin.attributes).toEqual({
+        type: 'text', inputmode: 'numeric', autocomplete: 'one-time-code', minlength: '4', maxlength: '32',
+        pattern: '[0-9]{4,8}', autocapitalize: 'none', autocorrect: 'off', spellcheck: 'false',
+    });
+    expect(SECOND_STEP_FACTORS.fixed_pin.maxCodeLength).toBe(8);
+});
+
 for (const modal of [false, true]) describe(modal ? 'modal mount' : 'standalone mount', () => {
     test.each(Object.entries(SECOND_STEP_FACTORS))('%s: attributes, copy, aria, errors and attempts', async (factor, descriptor) => {
         const form = formFixture(modal);
@@ -47,6 +55,9 @@ for (const modal of [false, true]) describe(modal ? 'modal mount' : 'standalone 
         const root = view.input.closest('.auth-verify');
         const slot = name => root.querySelector(`[data-verify="${name}"]`);
         for (const [key, value] of Object.entries(descriptor.attributes)) expect(view.input.getAttribute(key)).toBe(value);
+        expect(view.input.type).toBe('text');
+        expect(view.input.autocomplete).toBe('one-time-code');
+        expect(view.input.classList.contains('auth-verify__masked')).toBe(Boolean(descriptor.reveal));
         for (const language of ['fi', 'en']) {
             await translatePage(language);
             for (const name of ['heading', 'instruction', 'label', 'hint']) expect(slot(name).textContent).toBe(copy[descriptor[name]][language]);
@@ -115,32 +126,69 @@ for (const modal of [false, true]) describe(modal ? 'modal mount' : 'standalone 
     });
 });
 
-test('PIN reveal/help, mobile heading focus, return placement and password preservation', async () => {
+test.each([false, true])('PIN mask/reveal/reset, help, mobile focus and password preservation (modal=%s)', async modal => {
     matchMedia.mockReturnValue({ matches: true });
-    const form = formFixture();
+    const form = formFixture(modal);
     form.querySelector('#password').value = '  exact password  ';
     const view = mountLoginSecondStep(form, 'fixed_pin');
     const root = view.input.closest('.auth-verify');
     expect(document.activeElement).toBe(root.querySelector('[data-verify="heading"]'));
     const reveal = root.querySelector('[data-verify="reveal"]');
+    expect(view.input.type).toBe('text');
+    expect(view.input.classList.contains('auth-verify__masked')).toBe(true);
+    expect(reveal.getAttribute('aria-pressed')).toBe('false');
+    expect(reveal.getAttribute('aria-label')).toBe('Show PIN');
+    paste(view.input, '01 23');
     reveal.click();
     expect(view.input.type).toBe('text');
+    expect(view.input.classList.contains('auth-verify__masked')).toBe(false);
+    expect(view.input.value).toBe('0123');
     expect(reveal.getAttribute('aria-controls')).toBe('otp');
     expect(reveal.getAttribute('aria-pressed')).toBe('true');
     await translatePage('fi');
     expect(reveal.textContent).toBe('Piilota PIN-koodi');
     expect(reveal.getAttribute('aria-label')).toBe('Piilota PIN-koodi');
+    reveal.click();
+    expect(view.input.type).toBe('text');
+    expect(view.input.classList.contains('auth-verify__masked')).toBe(true);
+    expect(reveal.getAttribute('aria-pressed')).toBe('false');
+    expect(reveal.getAttribute('aria-label')).toBe('Näytä PIN-koodi');
+    expect(reveal.textContent).toBe('Näytä PIN-koodi');
+    reveal.click();
     const help = root.querySelector('[data-verify="help-action"]');
     help.click();
     expect(help.getAttribute('aria-expanded')).toBe('true');
     expect(root.querySelector('[data-verify="help"]').hidden).toBe(false);
     leaveLoginSecondStep(form);
+    expect(view.input.type).toBe('text');
+    expect(view.input.classList.contains('auth-verify__masked')).toBe(true);
+    expect(reveal.getAttribute('aria-pressed')).toBe('false');
+    expect(reveal.getAttribute('aria-label')).toBe('Näytä PIN-koodi');
+    expect(reveal.textContent).toBe('Näytä PIN-koodi');
     expect(form.querySelector('#submit').parentNode).toBe(form);
     expect(form.querySelector('#password').value).toBe('  exact password  ');
     expect(form.noValidate).toBe(false);
     showLoginStatus(form, 'password_updated_sign_in');
     expect(form.querySelector('[data-login-status]').getAttribute('role')).toBe('status');
     expect(form.querySelector('[data-login-status]').classList.contains('error')).toBe(false);
+});
+
+test.each(['totp', 'email', 'recovery'])('PIN remount resets its mask and %s stays unmasked', factor => {
+    const form = formFixture();
+    const first = mountLoginSecondStep(form, 'fixed_pin');
+    first.input.closest('.auth-verify').querySelector('[data-verify="reveal"]').click();
+    const pin = mountLoginSecondStep(form, 'fixed_pin');
+    const reveal = pin.input.closest('.auth-verify').querySelector('[data-verify="reveal"]');
+    expect(pin.input.type).toBe('text');
+    expect(pin.input.classList.contains('auth-verify__masked')).toBe(true);
+    expect(reveal.getAttribute('aria-pressed')).toBe('false');
+    reveal.click();
+    expect(pin.input.classList.contains('auth-verify__masked')).toBe(false);
+    const next = mountLoginSecondStep(form, factor);
+    expect(next.input.type).toBe('text');
+    expect(next.input.autocomplete).toBe('one-time-code');
+    expect(next.input.classList.contains('auth-verify__masked')).toBe(false);
+    expect(next.input.closest('.auth-verify').querySelector('[data-verify="reveal"]').hidden).toBe(true);
 });
 
 test('resend is pending once, disables primary/action, recovers from failure without a countdown', async () => {
