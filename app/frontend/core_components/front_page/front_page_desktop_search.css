@@ -1,0 +1,160 @@
+/* front_page_desktop_search.css
+ * Reserves Home's D1 search width in the row measured by the existing tab fitter.
+ * Styles the desktop portal with the shared input and compact result surfaces.
+ * Theme variables resolve on the active application theme, independently of the OS.
+ */
+.front-page-desktop-search {
+  --dataset-search-control-height: 44px;
+
+  flex: 0 0 280px;
+  width: 280px;
+  min-width: 0;
+  color: var(--text_color);
+}
+
+.front-page-desktop-search[data-mode="button"] {
+  flex-basis: 44px;
+  width: 44px;
+}
+
+/* A long identity can wrap the row; keep its existing compact Home target whole. */
+.front-page > .front-page-top-row:has(> .front-page-desktop-search) > .hero-dataset-tabs {
+  min-width: var(--top-nav-home-size, 44px);
+}
+
+.front-page-desktop-search > .dataset-search-input-row,
+.front-page-desktop-search-panel__header > .dataset-search-input-row {
+  height: 44px;
+}
+
+.front-page-desktop-search .dataset-search-submit-icon {
+  margin-inline-start: 12px;
+}
+
+.front-page-desktop-search-panel__header .dataset-search-submit-icon {
+  display: none;
+}
+
+.front-page-desktop-search__button,
+.front-page-desktop-search-panel__close {
+  display: grid;
+  flex: 0 0 44px;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  min-height: 44px;
+  box-sizing: border-box;
+  padding: 0;
+  color: var(--text_color);
+  background: var(--bg_color_2);
+  border: 1px solid var(--border_color);
+  border-radius: var(--search_tools_radius);
+  cursor: pointer;
+}
+
+.front-page-desktop-search__button .dataset-search-submit-icon { margin: 0; }
+
+.front-page-desktop-search [hidden],
+.front-page-desktop-search-panel [hidden] { display: none !important; }
+
+.front-page-desktop-search__button:focus-visible,
+.front-page-desktop-search-panel__close:focus-visible {
+  outline: 2px solid var(--primary_color);
+  outline-offset: -3px;
+}
+
+.front-page-desktop-search .dataset-search-input-row:focus-within,
+.front-page-desktop-search-panel .dataset-search-input-row:focus-within {
+  border-color: var(--primary_color);
+  outline: 2px solid var(--primary_color);
+  outline-offset: -1px;
+}
+
+.front-page-desktop-search-panel {
+  --dataset-search-control-height: 44px;
+
+  position: fixed;
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+  min-height: 0;
+  overflow: hidden;
+  color: var(--text_color);
+  background: var(--bg_color_2);
+  border: 1px solid var(--border_color);
+  border-radius: var(--search_tools_radius);
+  box-shadow: var(--fw-shadow-soft);
+}
+
+.front-page-desktop-search-panel__header {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 8px;
+  padding: 12px;
+}
+
+.front-page-desktop-search-panel__header > .dataset-search-input-row {
+  flex: 1;
+  min-width: 0;
+}
+
+.front-page-desktop-search-panel__title {
+  flex: 1;
+  margin: 0;
+  font: inherit;
+  font-weight: 600;
+}
+
+.front-page-desktop-search-panel__close { font-size: 1.5rem; }
+
+.front-page-desktop-search-panel__results {
+  min-height: 0;
+  padding: 0 12px 12px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.front-page-desktop-search-panel__results [role="status"]:empty { display: none; }
+
+.front-page-desktop-search-panel .supplemental-dataset-group {
+  margin-block: 12px;
+  padding: 12px;
+  background: var(--bg_color_2);
+  border: 1px solid var(--border_color);
+  border-radius: var(--search_tools_radius);
+}
+
+.front-page-desktop-search-panel .supplemental-dataset-show-all {
+  display: flex;
+  align-items: center;
+  min-height: 44px;
+}
+
+.front-page-desktop-search-panel .supplemental-dataset-result { position: relative; }
+
+.front-page-desktop-search-panel .supplemental-dataset-result-text > a::after {
+  position: absolute;
+  inset: 0;
+  content: "";
+}
+
+.front-page-desktop-search-panel .supplemental-dataset-result-text > a:focus-visible::after {
+  outline: 2px solid var(--primary_color);
+  outline-offset: 3px;
+}
+
+/* Only runner-owned slots share phone class names; these scoped rules own their desktop surface. */
+.front-page-desktop-search-panel .front-page-search-sheet__slot:not(.front-page-search-sheet__slot--complete) {
+  min-height: calc(3 * (76px + 1.2rem) + 7rem);
+}
+
+.front-page-desktop-search-panel .front-page-search-sheet__slot[aria-busy="true"] {
+  border-bottom: 1px solid var(--border_color);
+}
+
+@media (width <= 700px) {
+  .front-page-desktop-search,
+  .front-page-desktop-search-panel { display: none; }
+}

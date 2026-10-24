@@ -15,6 +15,7 @@ import { showToast } from '../../reusable_components/notifications/toast_notific
 import { createFrontPageSettingsHeroButton } from '../admin_tools/front_page_settings_modal.js';
 import { canShowFrontPageLink, createFrontPageLink, refreshFrontPageLinkLabel } from './front_page_link.js';
 import { HOME_AVAILABILITY_CHANGED_EVENT } from './front_page_availability.js';
+import { mountFrontPageDesktopSearch } from './front_page_desktop_search_controller.js';
 
 /** Reuse the hero grid/actions and tabs; no active dataset is selected on Home. */
 export function createFrontPageTopRow(siteName, onSaved, paletteOptions = {}, { language } = {}) {
@@ -60,6 +61,7 @@ export function createFrontPageTopRow(siteName, onSaved, paletteOptions = {}, { 
     const gear = createFrontPageSettingsHeroButton(onSaved);
     if (gear) actions.append(gear);
     let destroyed = false;
+    let desktopSearch = null;
     let palette = null;
     let paletteButton = null;
     let paletteLanguageObserver = null;
@@ -110,10 +112,12 @@ export function createFrontPageTopRow(siteName, onSaved, paletteOptions = {}, { 
         // document.getElementById cannot find it while this row is being built.
         mount() {
             syncMenu();
+            desktopSearch ||= mountFrontPageDesktopSearch(element, actions);
             if (menuWasFocused && menuButton.getAttribute('aria-hidden') === 'false') menuButton.focus({ preventScroll: true });
         },
         destroy() {
             destroyed = true;
+            desktopSearch?.destroy();
             releaseFavicon();
             paletteLanguageObserver?.disconnect();
             palette?.destroy();

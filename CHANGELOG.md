@@ -22,6 +22,7 @@ Dates are the local (Europe/Helsinki) date on which the version was published.
 
 ## [Unreleased]
 
+- On desktop, Home shows a 280 px site-search field above 1200 px or a 44 px button at 701–1200 px, with grouped results beneath it and no added history entry; the phone sheet is unchanged.
 - Wide desktop cards keep their original details-list frame; the straight-edged list applies only to stacked cards on tablets and phones.
 - Home's and dataset pages' top tab buttons stay rounded over background pictures or videos; only the side menu's buttons and connector turn square and opaque.
 - On phones, Home's search button opens a focused search sheet across the viewer's readable app datasets, with three matches per dataset; closing or Back returns to Home.
