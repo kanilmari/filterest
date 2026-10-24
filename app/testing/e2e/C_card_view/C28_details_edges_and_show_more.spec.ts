@@ -1,5 +1,5 @@
 // C28_details_edges_and_show_more.spec.ts
-// Proves card list edges and category-token rounding in both card image sizes.
+// Proves stacked list edges, pre-563 wide frames and category rounding in both image sizes.
 // Uses the existing owned dataset fixture; appearance writes affect only that dataset.
 // Exercises explicit application themes over opposite OS themes and cleans up on failure.
 import { expect, test, type Locator } from '@playwright/test';
@@ -8,23 +8,37 @@ import { buildTempDatasetName, createTempDataset, cleanupDatasetViaRequest, open
 import { saveCardVisibilityWithFreshRevisions } from '../helpers/appearance-revisions';
 import { closeActiveFilterbarIfOpen } from '../helpers/filterbar';
 
-async function expectListEdges(list: Locator) {
+// Expected frames read from 96478826: cards.css:297-310, 343-346, 436-437;
+// standard card_details_kv and cards_big.css have no outer border/radius declarations.
+// Keep these values in the spec: no Git or historical stylesheet is needed at runtime.
+const PRE_563 = {
+  standard: { border: '0 none currentColor', borderRadius: '0px' },
+  modern: { border: '1px solid var(--card-modern-surface-border)', borderRadius: 'var(--border_radius)' },
+  modernDetails: { border: '0 none currentColor', borderRadius: '0px', borderTop: '1px solid var(--card-modern-separator-color)' },
+  big: { border: '0 none currentColor', borderRadius: '0px' },
+};
+const STACKED = { border: '0 none currentColor', borderRadius: '0px',
+  borderBlock: '1px solid var(--border_color)' };
+
+async function expectEdges(list: Locator, expected: Record<string, string>) {
   await expect(list).toBeVisible();
-  const edges = await list.evaluate(element => {
-    const css = getComputedStyle(element), probe = document.createElement('span');
-    probe.style.borderTop = '1px solid var(--border_color)'; element.append(probe);
-    const color = getComputedStyle(probe).borderTopColor; probe.remove();
-    return { radii: [css.borderTopLeftRadius, css.borderTopRightRadius, css.borderBottomLeftRadius, css.borderBottomRightRadius],
-      left: css.borderLeftWidth, right: css.borderRightWidth, top: css.borderTopWidth, bottom: css.borderBottomWidth,
-      topColor: css.borderTopColor, bottomColor: css.borderBottomColor, color };
-  });
-  expect(edges.radii).toEqual(['0px', '0px', '0px', '0px']);
-  expect(edges.left).toBe('0px'); expect(edges.right).toBe('0px');
-  expect(parseFloat(edges.top)).toBeGreaterThan(0); expect(parseFloat(edges.bottom)).toBeGreaterThan(0);
-  expect(edges.topColor).toBe(edges.color); expect(edges.bottomColor).toBe(edges.color);
+  const edges = await list.evaluate((element, frame) => {
+    const properties = ['border-top-left-radius', 'border-top-right-radius', 'border-bottom-left-radius', 'border-bottom-right-radius',
+      ...['top', 'right', 'bottom', 'left'].flatMap(side => ['width', 'style', 'color'].map(part => `border-${side}-${part}`))];
+    const read = (node: Element) => {
+      const css = getComputedStyle(node);
+      return Object.fromEntries(properties.map(property => [property, css.getPropertyValue(property)]));
+    };
+    const actual = read(element), probe = document.createElement('span');
+    probe.style.cssText = 'all: initial; color: var(--text_color);';
+    Object.assign(probe.style, frame); element.append(probe);
+    const resolved = read(probe); probe.remove();
+    return { actual, resolved };
+  }, expected);
+  expect(edges.actual).toEqual(edges.resolved);
 }
 
-for (const width of [390, 1440]) for (const theme of ['light', 'dark'] as const) for (const size of ['small', 'large']) {
+for (const width of [390, 1200, 1201, 1440, 1600, 1920]) for (const theme of ['light', 'dark'] as const) for (const size of ['small', 'large']) {
   test(`WO96 ${size} card edges and Show more at ${width}px/${theme}`, async ({ page, context }, info) => {
     test.setTimeout(120_000);
     await page.setViewportSize({ width, height: 900 });
@@ -40,7 +54,8 @@ for (const width of [390, 1440]) for (const theme of ['light', 'dark'] as const)
     await login(page, loadCredentials());
     const dataset = buildTempDatasetName('e2e_wo96_card'); let created = false;
     try {
-      // `created`/`updated` are system columns that row inserts refuse (add_row_db.go), so the dated details field is `published`.
+      // Seed rows carry only application columns: row inserts refuse system fields (id/created/updated);
+      // the `id` column definition stays, as in batch 563's natively passing C28 and in C29.
       await createTempDataset(page, { datasetName: dataset,
         columns: { id: 'SERIAL', name: 'TEXT', description: 'TEXT', published: 'TEXT', link: 'TEXT', ...(size === 'large' ? { thumbnail: 'TEXT' } : {}) },
         seedRows: [{ name: 'Matka / Travel', description: 'Kuvaus / Description', published: '22.10.2026', link: 'https://example.test/',
@@ -59,7 +74,16 @@ for (const width of [390, 1440]) for (const theme of ['light', 'dark'] as const)
         const card = page.locator(`#${dataset}_card_view_container [data-testid="card-item"]`).first();
         await expect(card.locator(`.card_content_${size}`)).toBeVisible();
         const list = card.locator(style === 'modern' ? '.card_modern_info_panel' : '.card_details_kv');
-        await expectListEdges(list);
+        if (width <= 1550) {
+          await expectEdges(list, STACKED);
+        } else {
+          // Prove the wide layout is active, rather than accidentally testing a narrow container.
+          await expect(card.locator('.card_body')).toHaveCSS('flex-direction', 'row');
+          const listWidth = await card.evaluate(element => element.closest('.card_container')!.getBoundingClientRect().width);
+          expect(listWidth).toBeGreaterThan(1060);
+          await expectEdges(list, PRE_563[style as 'standard' | 'modern']);
+        }
+        if (style === 'modern') await expectEdges(card.locator('.card_details_kv'), PRE_563.modernDetails);
         const more = card.locator('button[data-lang-key="show_more"]');
         await expect(more).toBeVisible();
         const radii = await more.evaluate(element => {
@@ -72,7 +96,7 @@ for (const width of [390, 1440]) for (const theme of ['light', 'dark'] as const)
       }
       await openTempDatasetRowArticle(page, dataset, 1);
       await expect(page.locator('body')).toHaveClass(new RegExp(`(^| )${theme}-mode( |$)`));
-      await expectListEdges(page.locator('.big_card_details_container:visible'));
+      await expectEdges(page.locator('.big_card_details_container:visible'), width <= 1200 ? STACKED : PRE_563.big);
       await expect(page.locator('.big_card_details_container > div').first()).toHaveCSS('border-bottom-width', '2px');
     } finally { if (created) await cleanupDatasetViaRequest(page.request, dataset); }
   });

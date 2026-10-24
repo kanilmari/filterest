@@ -17,18 +17,42 @@ const CSS_PATH = resolve(CURRENT_DIR, 'card_field_label_placement.css');
 const IMPORTS_PATH = resolve(CURRENT_DIR, '../../../styles/imports.css');
 
 describe('card field label placement CSS', () => {
-    test('both card sizes use square, open-sided list edges without changing separators', () => {
-        const root = postcss.parse(readFileSync(CSS_PATH, 'utf8'));
-        const edges = {};
-        root.walkRules(rule => {
-            if (!rule.selectors.includes('.big_card_details_container')) return;
-            expect(rule.selectors).toEqual([
-                '.card .card_modern_info_panel', '.card .card_details_kv', '.big_card_details_container',
-            ]);
-            expect(rule.parent.type).toBe('root');
-            rule.walkDecls(decl => { edges[decl.prop] = decl.value; });
-        });
-        expect(edges).toEqual({ 'border-radius': '0', 'border-inline': '0', 'border-block': '1px solid var(--border_color)' });
+    test('list edge overrides exist only in the three stacked-layout blocks', () => {
+        const mobilePath = resolve(CURRENT_DIR, '../../../styles/mobile_friendliness.css');
+        const lists = /\.(?:card_modern_info_panel|card_details_kv|big_card_details_container)\s*$/;
+        const found = [];
+        for (const path of [CSS_PATH, mobilePath]) {
+            postcss.parse(readFileSync(path, 'utf8')).walkRules(rule => {
+                if (!rule.selectors.some(selector => lists.test(selector))) return;
+                const declarations = Object.fromEntries(rule.nodes.filter(node => node.type === 'decl')
+                    .map(decl => [decl.prop, decl.value]));
+                if (!Object.keys(declarations).some(prop => prop.startsWith('border'))) return;
+                expect(path).toBe(mobilePath);
+                expect(rule.parent.type).toBe('atrule');
+                expect(rule.parent.parent.type).toBe('root');
+                found.push({ band: `${rule.parent.name} ${rule.parent.params}`, selectors: rule.selectors, declarations });
+                // Use the same block as the photo-frame boundary, including the second card-list block.
+                expect(rule.parent.nodes.some(node => node.type === 'rule'
+                    && node.selector.includes('.wrapper:not(.service_catalog_logo_frame, .card_image_contrast_frame)::after'))).toBe(true);
+            });
+        }
+        const edges = { 'border-radius': '0', 'border-inline': '0', 'border-block': '1px solid var(--border_color)' };
+        expect(found).toEqual([
+            ...['media screen and (width <= 1550px)', 'container card-list (max-width: 1060px)'].flatMap(band => [
+                { band, selectors: ['.card .card_modern_info_panel', '.card .card_details_kv'], declarations: edges },
+                { band, selectors: ['.card .card_modern_info_panel .card_details_kv'], declarations: { 'border-block': '0' } },
+                { band, selectors: [
+                    '.card--modern:not([data-card-presentation-view="card"]) .card_modern_info_panel',
+                    '.card--modern:not([data-card-presentation-view="card"]) .card_details_modern_tiles',
+                ], declarations: { border: '0', 'border-radius': '0', background: 'transparent' } },
+            ]),
+            { band: 'media (width <= 1200px)', selectors: ['.big_card_details_container'], declarations: edges },
+        ]);
+        const imports = readFileSync(IMPORTS_PATH, 'utf8');
+        expect(imports.indexOf('mobile_friendliness.css')).toBeGreaterThan(imports.indexOf('card_field_label_placement.css'));
+    });
+
+    test('stacking preserves the existing modern and expanded-card row separators', () => {
         const cards = postcss.parse(readFileSync(resolve(CURRENT_DIR, 'cards.css'), 'utf8'));
         const big = postcss.parse(readFileSync(resolve(CURRENT_DIR, 'cards_big.css'), 'utf8'));
         for (const [css, selector, property, value] of [
@@ -39,10 +63,6 @@ describe('card field label placement CSS', () => {
             css.walkRules(selector, rule => rule.walkDecls(property, decl => separators.push(decl.value)));
             expect(separators).toEqual([value]);
         }
-        const nested = [];
-        root.walkRules('.card .card_modern_info_panel .card_details_kv', rule =>
-            rule.walkDecls('border-block', decl => nested.push(decl.value)));
-        expect(nested).toEqual(['0']);
     });
 
     test('Show more inherits category-button rounding at every width and theme', () => {

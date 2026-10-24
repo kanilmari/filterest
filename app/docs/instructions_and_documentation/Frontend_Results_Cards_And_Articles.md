@@ -245,11 +245,15 @@ uses its full-height stage and its original Article projection on restoration.
 ### Card list edges and Show more
 
 Both result-card image sizes use square detail lists with no inline borders and
-1px block edges in `--border_color`. In modern cards, the description and details
-share the outer `card_modern_info_panel`; nested details keep their existing
-separators without duplicating the outer edges. Expanded-card details use the
-same edges and retain their 2px row separators. The shared rules live in
-`card_field_label_placement.css`, after the base card and article styles.
-Card Show more controls use `--search_tools_radius`, the category heading radius,
+1px block edges in `--border_color` only when stacked: viewport ≤ 1550px or
+`card-list` container ≤ 1060px. Wide cards retain their original frame. In modern
+cards, the description and details share the outer `card_modern_info_panel`;
+nested details keep their existing separators without duplicating the outer edges.
+Expanded-card details use these edges only at the tablet/phone boundary (≤ 1200px),
+retain their 2px row separators, and keep their original outer appearance above it.
+These layout rules live beside the photo-frame boundaries in `mobile_friendliness.css`.
+Card Show more controls stay unconditional in `card_field_label_placement.css` and
+use `--search_tools_radius`, the category heading radius,
 in both themes and at every width. C28 proves both image sizes, both card styles
-and expanded detail lists using disposable datasets; it never saves site settings.
+and expanded detail lists (including 1200/1201px and wide 1600/1920px) using
+disposable datasets; it never saves site settings.

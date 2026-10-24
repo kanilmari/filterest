@@ -172,6 +172,19 @@
         border-radius: unset !important;
     }
     .card_image > .wrapper:not(.service_catalog_logo_frame, .card_image_contrast_frame)::after { content: none; }
+
+    /* Stacked cards share open-sided list edges; wide cards retain their base frame. */
+    .card .card_modern_info_panel,
+    .card .card_details_kv {
+        border-radius: 0;
+        border-inline: 0;
+        border-block: 1px solid var(--border_color);
+    }
+
+    .card .card_modern_info_panel .card_details_kv {
+        border-block: 0;
+    }
+
     .card_image>.wrapper>img {
         width: 100% !important;
         height: 100% !important;
@@ -382,6 +395,19 @@
         border-radius: unset !important;
     }
     .card_image > .wrapper:not(.service_catalog_logo_frame, .card_image_contrast_frame)::after { content: none; }
+
+    /* Match viewport stacking when side UI leaves only a narrow card list. */
+    .card .card_modern_info_panel,
+    .card .card_details_kv {
+        border-radius: 0;
+        border-inline: 0;
+        border-block: 1px solid var(--border_color);
+    }
+
+    .card .card_modern_info_panel .card_details_kv {
+        border-block: 0;
+    }
+
     .card_image>.wrapper>img {
         width: 100% !important;
         height: 100% !important;
@@ -479,6 +505,12 @@
 
 /* Article photos have no 300px layout; their frame follows the device boundary. */
 @media (width <= 1200px) {
+    .big_card_details_container {
+        border-radius: 0;
+        border-inline: 0;
+        border-block: 1px solid var(--border_color);
+    }
+
     .big_card_image > .wrapper:not(.service_catalog_logo_frame, .card_image_contrast_frame)::after,
     .row_article_inline_media > .wrapper:not(.service_catalog_logo_frame, .card_image_contrast_frame)::after {
         content: none;

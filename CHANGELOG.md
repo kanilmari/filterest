@@ -22,6 +22,7 @@ Dates are the local (Europe/Helsinki) date on which the version was published.
 
 ## [Unreleased]
 
+- Wide desktop cards keep their original details-list frame; the straight-edged list applies only to stacked cards on tablets and phones.
 - Home's and dataset pages' top tab buttons stay rounded over background pictures or videos; only the side menu's buttons and connector turn square and opaque.
 - On phones, Home's search button opens a focused search sheet across the viewer's readable app datasets, with three matches per dataset; closing or Back returns to Home.
 - Sign-in and account recovery share multilingual, accessible code screens with factor-specific guidance and working email-code resend in the login modal.
