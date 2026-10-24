@@ -89,6 +89,7 @@ language_seed_migrations = (
     "20261015000015_seed_cancel_changes_language_key.sql",
     "20261015000018_seed_article_presentations_language_keys.sql",
     "20261015000021_seed_filterbar_display_and_clear_language_keys.sql",
+    "20261022000301_seed_home_phone_search_language_keys.sql",
 )
 # A setting an upgrade adds is added for a new installation by the same file, so
 # the default is written once and an upgraded site and a new one start with the
@@ -177,6 +178,7 @@ release_record_migrations = (
     "20261013000099_record_database_release_9_11_1.sql",
     "20261014000099_record_database_release_9_11_2.sql",
     "20261015000099_record_database_release_9_12_0.sql",
+    "20261022000399_record_database_release_9_13_0.sql",
 )
 # Every public migration whose sequence number comes after this one belongs to
 # exactly one list above, so no file is marked as run while missing from the

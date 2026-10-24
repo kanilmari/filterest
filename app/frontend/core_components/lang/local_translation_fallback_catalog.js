@@ -16,10 +16,12 @@ import { AUTH_SESSION_NOTICE_TRANSLATION_FALLBACKS } from '../auth/auth_session_
 import { MISSING_MEDIA_CHECK_TRANSLATION_FALLBACKS } from '../admin_tools/missing_media_check_translation_fallbacks.js';
 import { DATASET_REDIRECT_NOTICE_TRANSLATION_FALLBACKS } from '../navigation/dataset_redirect_notice_copy.js';
 import { MAINTENANCE_ACTION_TRANSLATION_FALLBACKS } from '../admin_tools/maintenance_action_copy.js';
+import { HOME_SEARCH_TRANSLATION_FALLBACKS } from '../front_page/front_page_search_copy.js';
 
 import { SECOND_STEP_TRANSLATION_FALLBACKS } from '../auth/second_step_translation_fallbacks.js';
 
 export const LOCAL_TRANSLATION_FALLBACKS = {
+    ...HOME_SEARCH_TRANSLATION_FALLBACKS,
     delete_confirm_title: {
         fi: "Vahvista poisto",
         en: "Confirm deletion",
@@ -170,4 +172,3 @@ export const LOCAL_TRANSLATION_FALLBACKS = {
         ch: "重置图表范围或缩小以显示价格行。",
     },
 };
-

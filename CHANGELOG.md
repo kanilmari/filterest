@@ -22,6 +22,7 @@ Dates are the local (Europe/Helsinki) date on which the version was published.
 
 ## [Unreleased]
 
+- On phones, Home's search button opens a focused search sheet across the viewer's readable app datasets, with three matches per dataset; closing or Back returns to Home.
 - Sign-in and account recovery share multilingual, accessible code screens with factor-specific guidance and working email-code resend in the login modal.
 - Dataset headers and compact toolbars keep the panel button rightmost while preserving Home's original row, sizing and responsive label fitting; card details have straight top/bottom edges without side borders, and Show more shares the category-button radius.
 - Card photos lose their decorative 1px frame when stacked and keep it on the normal 300 px wide-card image; big-card and inline-article photos lose it on phones and tablets (≤ 1200 px) and keep it on desktop (≥ 1201 px), with logo/contrast/SVG frames, corners and image sizing unchanged (WO47).

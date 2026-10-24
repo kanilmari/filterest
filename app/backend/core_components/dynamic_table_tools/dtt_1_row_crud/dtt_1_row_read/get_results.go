@@ -40,6 +40,11 @@ func GetResults(response_writer http.ResponseWriter, request *http.Request) {
 		httpresponse.RespondWithError(response_writer, http.StatusBadRequest, "table name is missing")
 		return
 	}
+	previewLimit, limitErr := parseResultsLimit(request.URL.Query())
+	if limitErr != nil {
+		httpresponse.RespondWithError(response_writer, http.StatusBadRequest, limitErr.Error())
+		return
+	}
 	rowGroupFilters, filterErr := parseRowGroupFilters(request.URL.Query())
 	if filterErr != nil {
 		httpresponse.RespondWithRefusal(response_writer, invalidRowGroupFilters())
@@ -125,6 +130,10 @@ func GetResults(response_writer http.ResponseWriter, request *http.Request) {
 			return
 		}
 		setCachedConfig("results_load_amount", &configCacheEntry{resultsPerLoad: results_per_load, cachedAt: time.Now()})
+	}
+
+	if previewLimit > 0 {
+		results_per_load = previewLimit
 	}
 
 	offset_str := request.URL.Query().Get("offset")

@@ -1,0 +1,119 @@
+/* front_page_search_sheet.css
+ * Anchors phone Home search beneath its measured sticky bar.
+ * Reuses the shared search field and compact dataset group surfaces.
+ * Component rules use application theme tokens; the phone gate owns visibility.
+ */
+.front-page-search-button,
+.front-page-search-sheet__close {
+  flex: 0 0 44px;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  min-height: 44px;
+  box-sizing: border-box;
+  padding: 0;
+  color: var(--text_color);
+  background: var(--bg_color_2);
+  border: 1px solid var(--border_color);
+  border-radius: var(--search_tools_radius);
+  cursor: pointer;
+}
+
+/* Also hide a retained phone mount until its resize teardown has run. */
+.front-page-search-button { display: none; }
+
+.front-page-search-button:focus-visible,
+.front-page-search-sheet__close:focus-visible {
+  outline: 2px solid var(--primary_color);
+  outline-offset: -3px;
+}
+
+.front-page-search-layer {
+  display: none;
+  position: fixed;
+  z-index: 20;
+  inset: var(--home-phone-bar-size) 0 0;
+  padding: 0 16px;
+  background: color-mix(in srgb, var(--bg_color_2) 30%, transparent);
+}
+
+.front-page-search-layer > .front-page-search-sheet {
+  display: flex;
+  flex-direction: column;
+  max-height: min(80dvh, calc(100dvh - var(--home-phone-bar-size)));
+  overflow: hidden;
+  color: var(--text_color);
+  background: var(--bg_color_2);
+  border: 1px solid var(--border_color);
+  border-radius: var(--search_tools_radius);
+}
+
+.front-page-search-sheet__header {
+  display: flex;
+  flex: 0 0 auto;
+  gap: 8px;
+  padding: 12px;
+}
+
+.front-page-search-sheet__header > .dataset-search-input-row {
+  flex: 1;
+  min-width: 0;
+  height: 44px;
+}
+
+.front-page-search-sheet__close {
+  display: grid;
+  font-size: 1.5rem;
+}
+
+.front-page-search-sheet__results {
+  min-height: 0;
+  padding: 0 12px 12px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.front-page-search-sheet__results [role="status"]:empty { display: none; }
+
+.front-page-search-sheet .supplemental-dataset-group {
+  margin-block: 12px;
+  padding: 12px;
+  background: var(--bg_color_2);
+  border: 1px solid var(--border_color);
+  border-radius: var(--search_tools_radius);
+}
+
+.front-page-search-sheet .supplemental-dataset-show-all {
+  display: flex;
+  align-items: center;
+  min-height: 44px;
+}
+
+/* Match Home boxes' one-link row target without changing the shared renderer. */
+.front-page-search-sheet .supplemental-dataset-result { position: relative; }
+
+.front-page-search-sheet .supplemental-dataset-result-text > a::after {
+  position: absolute;
+  inset: 0;
+  content: "";
+}
+
+.front-page-search-sheet .supplemental-dataset-result-text > a:focus-visible::after {
+  outline: 2px solid var(--primary_color);
+  outline-offset: 3px;
+}
+
+/* Reserve each accepted tab's place until every reply has settled. */
+.front-page-search-sheet__slot:not(.front-page-search-sheet__slot--complete) {
+  min-height: calc(3 * (76px + 1.2rem) + 7rem);
+}
+
+.front-page-search-sheet__slot[aria-busy="true"] {
+  border-bottom: 1px solid var(--border_color);
+}
+
+/* Phone (≤ 700px, K444) */
+@media (width <= 700px) {
+  .front-page-search-button { display: grid; }
+  .front-page-search-layer { display: block; }
+}

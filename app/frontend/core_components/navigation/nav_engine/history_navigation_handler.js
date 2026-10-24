@@ -32,6 +32,7 @@ import { updateBrowserTabTitle } from './browser_tab_title_writer.js';
 import { updateDatasetAddress } from './dataset_address_writer.js';
 import { isSeparateFrontPageEnabled, openFrontPage } from '../../front_page/front_page_navigation.js';
 import { loadCustomRootFromHistory } from '../../front_page/custom_root_navigation.js';
+import { consumeHomeSearchHistoryNavigation } from '../../front_page/front_page_search_history.js';
 
 function getTargetView(datasetName, parsed) {
     const view = parsed.view || getHistoryDatasetView(datasetName);
@@ -278,6 +279,7 @@ async function handleHistoryNavigation() {
     // Capture before the first await. URL/entry equality alone cannot distinguish
     // Back then Forward to the same entry while an older restoration is pending.
     const ownGeneration = ++historyRestorationGeneration;
+    if (consumeHomeSearchHistoryNavigation()) return;
     const landedEntryId = history.state?.[HISTORY_ENTRY_ID] ?? null;
     const landedURL = window.location.href;
     const isLandedEntry = () => ownGeneration === historyRestorationGeneration

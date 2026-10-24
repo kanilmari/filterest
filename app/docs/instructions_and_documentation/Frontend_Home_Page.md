@@ -5,7 +5,7 @@
 
 # Frontend Guide: Home Page
 
-Part of the [Frontend Guide](Frontend_Guide.md); this section was formerly part of section 2, UI Configuration.
+Part of the [Frontend Guide](Frontend_Guide.md); see also [phone Home search](Frontend_Home_Search.md).
 
 ## Optional Home page
 

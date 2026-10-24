@@ -74,7 +74,7 @@ export function writeHistoryEntry(url, state = {}, { replace = false } = {}) {
     releaseHistoryEntryAddress();
     const previous = { ...(history.state || {}) };
     // Only navigation-owned fields are replaced; other history owners survive.
-    for (const key of ["bigCard", "dataset", "rowId", "articleReturnAvailable", "articleOriginEntry", "imageFirstView", HISTORY_DATASET_VIEW]) delete previous[key];
+    for (const key of ["bigCard", "dataset", "rowId", "articleReturnAvailable", "articleOriginEntry", "imageFirstView", "homeSearch", HISTORY_DATASET_VIEW]) delete previous[key];
     const nextState = replace
         ? { ...previous, ...state, [HISTORY_ENTRY_ID]: ensureHistoryEntryId() }
         : { ...state, [HISTORY_ENTRY_ID]: freshEntryId() };

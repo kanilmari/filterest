@@ -64,13 +64,21 @@ for (const width of [320, 375, 390, 414, 700, 701]) for (const theme of ['light'
     const bar = page.locator('.front-page-phone-topbar');
     if (width === 701) {
       await expect(bar).toHaveCount(0);
+      await expect(page.locator('.front-page-search-button'), 'Batch 565: the phone search button is absent above 700px').toHaveCount(0);
       expect(await row.evaluate(element => element.parentElement!.classList.contains('front-page')
         && element.nextElementSibling!.classList.contains('front-page-scroller'))).toBe(true);
     } else {
       await expect(page.locator('.front-page-scroller > .front-page-phone-topbar + .front-page-top-row')).toHaveCount(1);
       const menu = bar.locator('#showMenuButton'), identity = bar.locator('.front-page-top-row__identity');
       const end = bar.locator('.front-page-phone-topbar__end');
-      await expect(end).toHaveAttribute('aria-hidden', 'true'); await expect(end).toBeEmpty();
+      // Batch 565 fills the end slot with an announced phone search button.
+      const search = end.locator('button.front-page-search-button');
+      await expect(end, 'Batch 565: the interactive end slot is announced').not.toHaveAttribute('aria-hidden', 'true');
+      await expect(end.locator('button'), 'Batch 565: the end slot contains exactly one button').toHaveCount(1);
+      await expect(search, 'Batch 565: the end slot contains the phone search button').toHaveCount(1);
+      await expect(search, 'Batch 565: the phone search button is visible').toBeVisible();
+      await expect(end.getByRole('button'), 'Batch 565: the search button is exposed to assistive technology').toHaveCount(1);
+      await expect(search, 'Batch 565: the phone search button has an accessible name').toHaveAccessibleName(/\S/);
       await expect(bar.locator('.front-page-site-name')).toBeVisible();
       const header = (await bar.boundingBox())!, button = (await menu.boundingBox())!, middle = (await identity.boundingBox())!;
       expect(header.y).toBeCloseTo(0, 0);
@@ -79,6 +87,13 @@ for (const width of [320, 375, 390, 414, 700, 701]) for (const theme of ['light'
       expect(button.width).toBe(44); expect(button.height).toBe(44);
       expect(middle.x + middle.width / 2).toBeCloseTo(header.x + header.width / 2, 0);
       expect((await end.boundingBox())!.width).toBe(44);
+      const searchBox = (await search.boundingBox())!;
+      expect(searchBox.width, 'Batch 565: the search target is 44px wide').toBe(44);
+      expect(searchBox.height, 'Batch 565: the search target is 44px tall').toBe(44);
+      expect(searchBox.y, 'Batch 565: search aligns vertically with the menu button').toBeCloseTo(button.y, 0);
+      const endInset = header.x + header.width - searchBox.x - searchBox.width;
+      expect(endInset, 'Batch 565: search is inset 12px from the bar right edge').toBeCloseTo(12, 0);
+      expect(endInset, 'Batch 565: search and menu have matching edge insets').toBeCloseTo(button.x - header.x, 0);
       await expect.poll(() => page.locator('.front-page-scroller').evaluate(element =>
         parseFloat(getComputedStyle(element).getPropertyValue('--home-phone-bar-size')))).toBeCloseTo(header.height, 0);
       await page.locator('.front-page-scroller').evaluate(element => { element.scrollTop = 100; });

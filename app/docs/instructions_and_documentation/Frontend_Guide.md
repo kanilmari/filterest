@@ -20,6 +20,7 @@ The guide is divided into focused guides in this folder. Add new frontend text t
 | [UI configuration](Frontend_UI_Configuration.md) | The administrator Site information panel in the clock bar and the interface flags collected in `ui_config.js`. |
 | [Dataset appearance](Frontend_Dataset_Appearance.md) | The three appearance places, complete setting inventory, inheritance and new tabs, palette scopes/drafts/phone layout, editing rights, storage, revisions and APIs. |
 | [Home page](Frontend_Home_Page.md) | The optional Home page: its navigation and lifecycle, texts, the Home palette and presentation, background media and the Home settings editor. |
+| [Home search](Frontend_Home_Search.md) | Phone Home's magnifier, bounded readable-dataset text search, modal focus and Back handling. |
 | [Coding conventions](Frontend_Coding_Conventions.md) | Accessibility expectations, the `[subject]_[role].js` file naming convention, import validation with `check_js_imports.js`, and translated interface text. |
 | [Document startup and recovery](Frontend_Document_Startup_And_Recovery.md) | The SPA navigation contract, login/register entry and post-login transitions, intentional hard navigation and the open session-end redirect decision; how application and authentication documents reveal their shell, recover from failed loading and keep development diagnostics. |
 

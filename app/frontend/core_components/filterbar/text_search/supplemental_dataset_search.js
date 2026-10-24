@@ -10,26 +10,7 @@ import { bindDatasetLanguageRenderer } from "../../table_views/dataset_value_loc
 import { VIEW_DEACTIVATE_EVENT } from "../../../reusable_components/view_lifecycle_events.js";
 import { datasetAppearanceState } from '../../table_views/dataset_appearance_state.js';
 
-// Shared across generations: replacement searches wait until aborted requests settle.
-const queue = [];
-let activeRequests = 0;
-function pump() {
-    while (activeRequests < 2 && queue.length) {
-        const task = queue.shift();
-        if (task.signal.aborted) { task.resolve(); continue; }
-        activeRequests += 1;
-        Promise.resolve().then(task.run).then(task.resolve, task.reject).finally(() => {
-            activeRequests -= 1;
-            pump();
-        });
-    }
-}
-function schedule(run, signal) {
-    return new Promise((resolve, reject) => {
-        queue.push({ run, signal, resolve, reject });
-        pump();
-    });
-}
+import { scheduleDatasetSearch as schedule } from "./dataset_search_queue.js";
 
 export function createSupplementalDatasetSearch(tableName, query, { isCurrent, getContainer }) {
     const parentToken = datasetAppearanceState.capture(tableName);

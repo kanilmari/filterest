@@ -93,7 +93,7 @@ func buildWhereClause(
 	for param, values := range queryParams {
 		// Skip bare controls before stripping the dataset prefix; qualified
 		// keys still address real fields with the same name.
-		if param == "dataset" || param == "sort_column" || param == "sort_order" || param == "offset" || param == "view_key" || param == "lang" || param == rowGroupFilterQueryKey || param == rowGroupModeQueryKey || param == datasetSearchQueryKey {
+		if param == "dataset" || param == "limit" || param == "sort_column" || param == "sort_order" || param == "offset" || param == "view_key" || param == "lang" || param == rowGroupFilterQueryKey || param == rowGroupModeQueryKey || param == datasetSearchQueryKey {
 			continue
 		}
 		if len(values) == 0 {

@@ -2,6 +2,28 @@
   "version": 1,
   "browser_areas": [
     {
+      "area": "Phone Home text search",
+      "paths": [
+        "app/frontend/core_components/front_page/front_page_search_sheet.js",
+        "app/frontend/core_components/front_page/front_page_search_sheet.css",
+        "app/frontend/core_components/front_page/front_page_search_runner.js",
+        "app/frontend/core_components/front_page/front_page_search_history.js",
+        "app/frontend/core_components/front_page/front_page_search_copy.js",
+        "app/frontend/core_components/front_page/front_page_search_runner.test.js",
+        "app/frontend/core_components/front_page/front_page_search_sheet.test.js",
+        "app/frontend/core_components/filterbar/text_search/dataset_search_queue.js",
+        "app/frontend/core_components/filterbar/text_search/supplemental_dataset_search.js",
+        "app/backend/core_components/dynamic_table_tools/dtt_1_row_crud/dtt_1_row_read/get_results.go",
+        "app/backend/core_components/dynamic_table_tools/dtt_1_row_crud/dtt_1_row_read/get_results_query.go",
+        "app/backend/core_components/dynamic_table_tools/dtt_1_row_crud/dtt_1_row_read/get_results_limit.go",
+        "app/backend/core_components/dynamic_table_tools/dtt_1_row_crud/dtt_1_row_read/get_results_limit_test.go",
+        "app/server_tools/migrations/20261022000301_seed_home_phone_search_language_keys.sql", "app/server_tools/migrations/20261022000399_record_database_release_9_13_0.sql", "app/server_tools/versioning/schema_snapshots/db-9.13.0.sql",
+        "app/docs/instructions_and_documentation/Frontend_Home_Search.md"
+      ],
+      "specs": ["app/testing/e2e/G_navigation/G17_home_phone_search.spec.ts"],
+      "projects": ["mobile-card", "desktop-card"]
+    },
+    {
       "area": "Topbar end-control order and card list edges",
       "paths": ["app/testing/e2e/fixtures/wo96_main_home.css", "app/frontend/core_components/front_page/top_nav_home_button.js", "app/frontend/core_components/front_page/top_nav_home_button.css", "app/frontend/core_components/filterbar/dataset_corner_controls.js", "app/frontend/core_components/filterbar/shared_topbar_visibility_controller.js", "app/frontend/core_components/table_views/card_view/card_field_label_placement.css", "app/frontend/core_components/table_views/card_view/cards_big.css", "app/frontend/core_components/filterbar/dataset_corner_controls.css"],
       "specs": ["app/testing/e2e/G_navigation/G16_topbar_end_order.spec.ts", "app/testing/e2e/C_card_view/C28_details_edges_and_show_more.spec.ts"],
@@ -260,7 +282,7 @@
         "app/backend/core_components/frontend_assets", "app/backend/reusable_components/vanilla_tree", "app/frontend/reusable_components/vanilla_tree", "app/frontend/main.js",
         "app/frontend/index.html"
       ],
-      "specs": ["app/testing/e2e/G_navigation/G16_topbar_end_order.spec.ts", "app/testing/e2e/C_card_view/C28_details_edges_and_show_more.spec.ts", "app/testing/e2e/C_card_view/C29_photo_frame_removal.spec.ts", "app/testing/e2e/G_navigation/G18_media_tab_shape.spec.ts", "app/testing/e2e/G_navigation/G14_home_menu_parity.spec.ts", "app/testing/e2e/E_search_filter/E22_guest_text_search.spec.ts", "app/testing/e2e/C_card_view/C24_cancel_changes.spec.ts",
+      "specs": ["app/testing/e2e/G_navigation/G17_home_phone_search.spec.ts", "app/testing/e2e/G_navigation/G16_topbar_end_order.spec.ts", "app/testing/e2e/C_card_view/C28_details_edges_and_show_more.spec.ts", "app/testing/e2e/C_card_view/C29_photo_frame_removal.spec.ts", "app/testing/e2e/G_navigation/G18_media_tab_shape.spec.ts", "app/testing/e2e/G_navigation/G14_home_menu_parity.spec.ts", "app/testing/e2e/E_search_filter/E22_guest_text_search.spec.ts", "app/testing/e2e/C_card_view/C24_cancel_changes.spec.ts",
         "app/testing/e2e/C_card_view/C25_rich_text_links.spec.ts",
         "app/testing/e2e/E_search_filter/E20_filterbar_order_and_memory.spec.ts", "app/testing/e2e/G_navigation/G13_phone_topbar_measurements.spec.ts", "app/testing/e2e/D_view_switch/D6_table_cell_line_limit.spec.ts", "app/testing/e2e/T_admin/T21_home_text_style.spec.ts", "app/testing/e2e/G_navigation/G12_top_nav_home_button.spec.ts",
         "app/testing/e2e/C_card_view/C22_article_image_arrows_probe.spec.ts", "app/testing/e2e/E_search_filter/E18_dataset_default_view.spec.ts", "app/testing/e2e/C_card_view/C19_dataset_heading_hierarchy.spec.ts", "app/testing/e2e/A_row_crud/A1_add_row.spec.ts", "app/testing/e2e/A_row_crud/A2_edit_cell.spec.ts", "app/testing/e2e/A_row_crud/A3_delete_rows.spec.ts", "app/testing/e2e/A_row_crud/A4_select_row.spec.ts",
@@ -519,7 +541,7 @@
         "app/frontend/styles", "app/frontend/shared/style_package", "app/frontend/templates", "app/frontend/ui_config.js",
         "app/frontend/core_components/theme.js", "app/frontend/core_components/theme_preference_api.js", "app/frontend/icons"
       ],
-      "specs": ["app/testing/e2e/L_auth/L10_second_step_screens.spec.ts", "app/testing/e2e/G_navigation/G16_topbar_end_order.spec.ts", "app/testing/e2e/C_card_view/C28_details_edges_and_show_more.spec.ts", "app/testing/e2e/C_card_view/C29_photo_frame_removal.spec.ts", "app/testing/e2e/G_navigation/G18_media_tab_shape.spec.ts", "app/testing/e2e/G_navigation/G15_home_boxes.spec.ts", "app/testing/e2e/T_admin/T24_article_presentations.spec.ts", "app/testing/e2e/G_navigation/G14_home_menu_parity.spec.ts", "app/testing/e2e/C_card_view/C24_cancel_changes.spec.ts",
+      "specs": ["app/testing/e2e/G_navigation/G17_home_phone_search.spec.ts", "app/testing/e2e/L_auth/L10_second_step_screens.spec.ts", "app/testing/e2e/G_navigation/G16_topbar_end_order.spec.ts", "app/testing/e2e/C_card_view/C28_details_edges_and_show_more.spec.ts", "app/testing/e2e/C_card_view/C29_photo_frame_removal.spec.ts", "app/testing/e2e/G_navigation/G18_media_tab_shape.spec.ts", "app/testing/e2e/G_navigation/G15_home_boxes.spec.ts", "app/testing/e2e/T_admin/T24_article_presentations.spec.ts", "app/testing/e2e/G_navigation/G14_home_menu_parity.spec.ts", "app/testing/e2e/C_card_view/C24_cancel_changes.spec.ts",
         "app/testing/e2e/C_card_view/C25_rich_text_links.spec.ts",
         "app/testing/e2e/E_search_filter/E20_filterbar_order_and_memory.spec.ts", "app/testing/e2e/C_card_view/C23_card_image_usage_presentation.spec.ts", "app/testing/e2e/G_navigation/G13_phone_topbar_measurements.spec.ts", "app/testing/e2e/D_view_switch/D6_table_cell_line_limit.spec.ts", "app/testing/e2e/T_admin/T21_home_text_style.spec.ts", "app/testing/e2e/J_modals/J4_client_error_notices.spec.ts", "app/testing/e2e/G_navigation/G12_top_nav_home_button.spec.ts",
         "app/testing/e2e/C_card_view/C22_article_image_arrows_probe.spec.ts", "app/testing/e2e/E_search_filter/E18_dataset_default_view.spec.ts", "app/testing/e2e/C_card_view/C21_record_titles.spec.ts", "app/testing/e2e/E_search_filter/E19_shared_filter_section.spec.ts", "app/testing/e2e/C_card_view/C20_description_empty_blocks.spec.ts", "app/testing/e2e/C_card_view/C19_dataset_heading_hierarchy.spec.ts", "app/testing/e2e/C_card_view/C10_image_first_article.spec.ts", "app/testing/e2e/C_card_view/C13_related_dataset_appearance.spec.ts", "app/testing/e2e/C_card_view/C14_product_card_row_commits.spec.ts", "app/testing/e2e/C_card_view/C15_chart_axes.spec.ts",

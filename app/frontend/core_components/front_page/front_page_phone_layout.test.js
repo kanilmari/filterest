@@ -34,7 +34,7 @@ function fixture(width = 701) {
     return { row, scroller, original, media, observations, move };
 }
 
-test('701px keeps the original desktop DOM; 700px puts menu | identity | empty end before the scrolling row', () => {
+test('701px keeps the original desktop DOM; 700px puts menu | identity | search before the scrolling row', () => {
     const { row, scroller, original, move } = fixture();
     layout = mountFrontPagePhoneLayout(row, scroller);
     expect(row.nextElementSibling).toBe(scroller);
@@ -47,8 +47,8 @@ test('701px keeps the original desktop DOM; 700px puts menu | identity | empty e
     expect(bar.className).toBe('front-page-phone-topbar');
     expect([...bar.children].slice(0, 2)).toEqual([slot, identity]);
     expect(bar.lastElementChild.className).toBe('front-page-phone-topbar__end');
-    expect(bar.lastElementChild.getAttribute('aria-hidden')).toBe('true');
-    expect(bar.lastElementChild.childNodes).toHaveLength(0);
+    expect(bar.lastElementChild.hasAttribute('aria-hidden')).toBe(false);
+    expect(bar.lastElementChild.querySelector('button').getAttribute('aria-expanded')).toBe('false');
     expect(bar.nextElementSibling).toBe(row);
     expect(row.nextElementSibling.className).toBe('front-page-content');
     expect(scroller.contains(document.querySelector('.front-page-background'))).toBe(false);

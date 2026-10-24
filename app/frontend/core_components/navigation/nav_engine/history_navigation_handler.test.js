@@ -5,6 +5,8 @@
 // Exists to keep article-close history from losing the originating dataset view.
 
 import { setFrontPageAvailability } from '../../front_page/front_page_availability.js';
+import { openHomeSearchHistory } from '../../front_page/front_page_search_history.js';
+import { ensureHistoryEntryId } from './history_entry_state.js';
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import { getChosenDatasetView, setChosenDatasetView } from "../../state_stores/dataset_view_choice_saver.js";
 
@@ -157,6 +159,30 @@ describe("history_navigation_handler", () => {
         document.body.innerHTML = "";
         window.__bigCardClosing = false;
         window.history.replaceState({}, "", "/events");
+    });
+
+    test('retained Home search state is ignored before hydration, custom root or view restoration', async () => {
+        history.replaceState({ homeSearch: true }, '', '/');
+        window.dispatchEvent(new PopStateEvent('popstate'));
+        await Promise.resolve();
+        expect(customRootHistory.load).not.toHaveBeenCalled();
+        expect(ifavHistory.handle).not.toHaveBeenCalled();
+        expect(handleAllNavigationMock).not.toHaveBeenCalled();
+        expect(browserTabTitle.update).not.toHaveBeenCalled();
+    });
+
+    test('Back from Home search closes without restoring Home or writing its address again', async () => {
+        history.replaceState({}, '', '/'); ensureHistoryEntryId();
+        const parent = { ...history.state };
+        const closed = vi.fn(); openHomeSearchHistory(closed);
+        history.replaceState(parent, '', '/');
+        window.dispatchEvent(new PopStateEvent('popstate'));
+        await Promise.resolve();
+        expect(closed).toHaveBeenCalledOnce();
+        expect(customRootHistory.load).not.toHaveBeenCalled();
+        expect(ifavHistory.handle).not.toHaveBeenCalled();
+        expect(handleAllNavigationMock).not.toHaveBeenCalled();
+        expect(browserTabTitle.update).not.toHaveBeenCalled();
     });
 
     test.each([false, true])('custom root history loads the document before any hydration or article restoration, hydrated=%s', async hydrated => {

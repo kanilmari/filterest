@@ -37,7 +37,7 @@ async function sampleMenuTransition(page: Page, action: () => Promise<unknown>) 
   }
 }
 
-async function expectFocusWithMenuOwner(page: Page, control: Locator) {
+async function expectFocusWithMenuOwner(page: Page, control: Locator, message?: string) {
   const ownsProbe = await page.evaluate(() => !(window as MenuProbeWindow).__homeMenuVisibilityProbe);
   if (ownsProbe) await page.evaluate(installMenuVisibilityProbe);
   try {
@@ -48,7 +48,7 @@ async function expectFocusWithMenuOwner(page: Page, control: Locator) {
       || (element.getAttribute('aria-hidden') === 'false' && (element as HTMLElement).tabIndex === 0
         && !element.closest('[hidden], [inert], .hidden, [aria-hidden="true"]'))),
       'A focused menu control must be the announced owner').toBe(true);
-    await expect(control).toBeFocused();
+    await expect(control, message).toBeFocused();
     expect(await page.evaluate(() => (window as MenuProbeWindow).__homeMenuVisibilityProbe!.failures)).toEqual([]);
   } finally {
     if (ownsProbe) await page.evaluate(() => {
@@ -56,6 +56,16 @@ async function expectFocusWithMenuOwner(page: Page, control: Locator) {
       delete (window as MenuProbeWindow).__homeMenuVisibilityProbe;
     });
   }
+}
+
+// Batch 565 adds a keyboard stop between the phone menu controls and Home.
+async function expectPhoneSearchFocus(page: Page) {
+  const search = page.locator('.front-page-search-button');
+  await expectFocusWithMenuOwner(page, search, 'Batch 565: Tab reaches the phone search button before Home');
+  await expect(search, 'Batch 565: the focused search button has an accessible name').toHaveAccessibleName(/\S/);
+  await expect(search, 'Batch 565: keyboard focus paints a solid search outline').toHaveCSS('outline-style', 'solid');
+  await expect(search, 'Batch 565: the search focus outline is 2px wide').toHaveCSS('outline-width', '2px');
+  return search;
 }
 
 test('native document fallback matches the HTML site icon for signed-out requests', async ({ page, playwright }) => {
@@ -179,6 +189,10 @@ async function setMenu(page: Page, open: boolean, key?: 'Enter' | 'Space') {
 
 async function proveHome(page: Page, open: boolean, alignment: string, cappedMargin: boolean) {
   const phone = page.viewportSize()!.width <= 700;
+  if (!phone) {
+    await expect(page.locator('.front-page-phone-topbar'), 'Batch 565: wider Home has no phone bar').toHaveCount(0);
+    await expect(page.locator('.front-page-search-button'), 'Batch 565: wider Home has no phone search button').toHaveCount(0);
+  }
   const name = page.locator('.front-page-site-name');
   const icon = page.locator('.front-page-site-icon');
   const menu = page.locator('#showMenuButton');
@@ -282,11 +296,33 @@ async function proveHome(page: Page, open: boolean, alignment: string, cappedMar
     }
     // Home has no selected dataset; its shared renderer preserves the current-page contract.
     await expect(tabs.locator(':scope > button[aria-current]')).toHaveCount(0);
-    // Enter from the preceding control in DOM tab order, including the open
-    // navbar. Pointer-driven programmatic focus alone cannot prove :focus-visible.
-    const beforeTabs = open ? page.locator('#navbar :is(button, a[href], input, select, [tabindex="0"]):visible:not([disabled]):not([tabindex="-1"])').last() : menu;
+    // Batch 565: derive the open drawer's actual document tab order, including
+    // search, rather than assuming its last control immediately precedes Home.
+    let beforeTabs = menu;
+    if (open) {
+      const controls = page.locator('button, a[href], input, select, textarea, summary, [tabindex]');
+      const order = await controls.evaluateAll(elements => {
+        const stops = elements.map((element, index) => ({ element: element as HTMLElement, index }))
+          .filter(({ element }) => element.tabIndex >= 0 && !element.matches(':disabled')
+            && !element.closest('[hidden], [inert], [aria-hidden="true"]')
+            && element.getClientRects().length > 0 && getComputedStyle(element).visibility === 'visible')
+          .sort((a, b) => (a.element.tabIndex || Number.MAX_SAFE_INTEGER) - (b.element.tabIndex || Number.MAX_SAFE_INTEGER));
+        const home = stops.findIndex(({ element }) => element.matches('.front-page-top-row .top-nav-home-button'));
+        const search = stops.findIndex(({ element }) => element.matches('.front-page-search-button'));
+        const drawer = stops.map(({ element }, index) => element.closest('#navbar') ? index : -1);
+        return { home, search, lastDrawer: Math.max(...drawer),
+          beforeHome: stops[home - 1]?.index ?? -1, beforeSearch: stops[search - 1]?.index ?? -1 };
+      });
+      expect(order.lastDrawer, 'Batch 565: the open drawer contributes keyboard controls').toBeGreaterThanOrEqual(0);
+      expect(order.search, 'Batch 565: phone search follows the drawer controls in document tab order').toBeGreaterThan(order.lastDrawer);
+      expect(order.home, 'Batch 565: Home immediately follows phone search in document tab order').toBe(order.search + 1);
+      await expect(controls.nth(order.beforeHome), 'Batch 565: the derived control preceding Home is phone search').toHaveClass(/\bfront-page-search-button\b/);
+      beforeTabs = controls.nth(order.beforeSearch);
+    }
     await beforeTabs.focus(); await beforeTabs.press('Tab');
-    await expectFocusWithMenuOwner(page, home);
+    const search = await expectPhoneSearchFocus(page);
+    await search.press('Tab');
+    await expectFocusWithMenuOwner(page, home, 'Batch 565: Tab from phone search reaches Home');
     await expect(home).toHaveCSS('outline-style', 'solid');
     await expect(home).toHaveCSS('outline-width', '2px');
     await expect(home).toHaveCSS('outline-offset', '-2px');
@@ -397,7 +433,11 @@ async function proveKeyboardMenu(page: Page, state: { alignment: string; cappedM
   const menu = page.locator('#showMenuButton');
   const home = page.locator('.front-page-top-row .top-nav-home-button');
   await menu.focus(); await menu.press('Tab');
-  await expectFocusWithMenuOwner(page, home);
+  if (page.viewportSize()!.width <= 700) {
+    const search = await expectPhoneSearchFocus(page);
+    await search.press('Tab');
+  }
+  await expectFocusWithMenuOwner(page, home, 'Batch 565: Tab reaches Home after the phone search stop when present');
   await expect(home).toHaveAccessibleName(/\S/);
   await expect(home).toHaveCSS('outline-width', '2px');
   await expect(home).toHaveCSS('outline-offset', '-2px');

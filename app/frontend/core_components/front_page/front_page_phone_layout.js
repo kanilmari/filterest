@@ -5,6 +5,7 @@
 // Moves existing nodes so tab subscriptions, translated copy and listeners survive.
 
 import { NAVBAR_VISIBILITY_CHANGED_EVENT } from '../navigation/menu_button/navbar_visibility_handler.js';
+import { mountFrontPageSearchSheet } from './front_page_search_sheet.js';
 
 const PHONE_QUERY = '(width <= 700px)';
 const BAR_SIZE = '--home-phone-bar-size';
@@ -90,6 +91,7 @@ export function mountFrontPagePhoneLayout(row, scroller) {
             end.setAttribute('aria-hidden', 'true');
             bar.append(menuSlot, identity, end);
             scroller.prepend(bar, row);
+            mountFrontPageSearchSheet(end, scroller);
         });
         publishSize();
         if (typeof view.ResizeObserver === 'function') {

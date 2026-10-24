@@ -2,7 +2,7 @@
   "artifact": "filterest-public-bootstrap",
   "format_version": 2,
   "app_version": "9.5.1",
-  "db_version": "9.12.0",
+  "db_version": "9.13.0",
   "schema_source": "app/server_tools/public_bootstrap/source/base.schema.sql",
   "seed_source": "app/server_tools/public_bootstrap/source/base.seed.sql",
   "purpose": "local independent Filterest bootstrap without private source runtime dependency",
@@ -220,7 +220,9 @@
     "20261015000018_seed_article_presentations_language_keys.sql",
     "20261015000020_add_row_group_heading_order_appearance_field.sql",
     "20261015000021_seed_filterbar_display_and_clear_language_keys.sql",
-    "20261015000099_record_database_release_9_12_0.sql"
+    "20261015000099_record_database_release_9_12_0.sql",
+    "20261022000301_seed_home_phone_search_language_keys.sql",
+    "20261022000399_record_database_release_9_13_0.sql"
   ],
   "allowed_schema_tables": [
     "public.ai_chat_conversations",
@@ -389,13 +391,13 @@
     "public.system_foreign_key_relations_1_m": 4,
     "public.system_functions": 50,
     "public.system_group_table_func_rights": 24,
-    "public.system_lang_key_sources": 32,
+    "public.system_lang_key_sources": 38,
     "public.system_lang_key_translations": 176,
-    "public.system_lang_keys": 1572,
+    "public.system_lang_keys": 1581,
     "public.system_languages": 5,
     "public.system_permission_actions": 7,
     "public.system_permission_categories": 4,
-    "public.system_schema_migrations": 214,
+    "public.system_schema_migrations": 216,
     "public.system_table_folders": 14,
     "public.system_table_views": 13,
     "public.system_user_group_memberships": 2,
@@ -410,7 +412,7 @@
       "sha256": "c71dd887acb0471a1f8fb3ab5cb7090d496c5985db03e8790691aced107cb392"
     },
     "server_tools/public_bootstrap/seed_data.sql": {
-      "sha256": "9e66d911d6f67a15888977f027473961a76cc03260b9896857f0ce75d34e8f1d"
+      "sha256": "732875a4e7633a1088cdd4e2e0a9e2260ab90a7623c337b29054629044b5fdb9"
     }
   },
   "source_files": {
@@ -427,7 +429,7 @@
       "sha256": "235e4b887181e150bd436d035d2d268eb821d9e5d0b830b54eb444988f31d5d1"
     },
     "filterest/app/server_tools/public_bootstrap/generate_bootstrap.py": {
-      "sha256": "bf8683952a8b4ef2676fb3231f5883d007c2404ae8528009e8ed2179ccea7ca1"
+      "sha256": "dbc622f121e9cfe0224fc2337fd79a90f24de64c7f8c08fae523a21beff8bffa"
     },
     "filterest/app/server_tools/public_bootstrap/sql_identifier_validator.py": {
       "sha256": "748245fac4328a3608740c1b0fe948e6a09d6489d587143bd3b4c67064bea732"
@@ -1145,6 +1147,12 @@
     },
     "filterest/app/server_tools/migrations/20261015000099_record_database_release_9_12_0.sql": {
       "sha256": "7681662cc532ce4f113acec7e4e992af1e1ecf32136f8c92e55b255d56556516"
+    },
+    "filterest/app/server_tools/migrations/20261022000301_seed_home_phone_search_language_keys.sql": {
+      "sha256": "ab1329f748ac1a9258818c7c4112c98fe643639ac447daffde35a0c001837eaf"
+    },
+    "filterest/app/server_tools/migrations/20261022000399_record_database_release_9_13_0.sql": {
+      "sha256": "838d21b465139eb61ed3671d5377ac7f32367ec154c89d9d5b20abbf5e9d1255"
     },
     "filterest/app/server_tools/public_bootstrap/source/fixtures/docs/first-dataset.png": {
       "sha256": "010bdb97d887959b6f83046d377ca8394478a812c8abfe79fd5ea2cf400e3975"
