@@ -1,5 +1,5 @@
 // G18_media_tab_shape.spec.ts
-// Proves Home and dataset buttons share the current-view media shape rule.
+// Proves top-row buttons stay rounded while only the side menu follows media.
 // GET-only fixtures shape Home media and the two existing datasets' tab metadata.
 // Default signed-in storageState; only read-only permission POSTs pass the write guard.
 import { test, expect, type Locator, type Page } from '@playwright/test';
@@ -61,7 +61,7 @@ async function expectButtons(page: Page, root: string, media: boolean, measureme
   expect(await buttons.count()).toBeGreaterThan(0);
   for (const button of await buttons.all()) {
     const radius = await button.evaluate(element => Number.parseFloat(getComputedStyle(element).borderRadius));
-    if (media) expect(radius).toBe(0); else expect(radius).toBeGreaterThan(0);
+    expect(radius).toBeGreaterThan(0);
     await button.evaluate((element: HTMLElement) => element.blur());
     await page.mouse.move(0, 0);
     for (const state of ['rest', 'hover', 'focus'] as const) {
@@ -124,7 +124,7 @@ async function expectMenuShapes(page: Page, media: boolean, width: number, measu
 }
 
 for (const width of [1440, 390]) for (const theme of ['light', 'dark'] as const) {
-  test(`current-view media shapes and label contrast at ${width}px in ${theme}`, async ({ page, context }, info) => {
+  test(`rounded top row, media-shaped side menu and label contrast at ${width}px in ${theme}`, async ({ page, context }, info) => {
     test.setTimeout(120_000);
     const policy = await installMediaTabFixture(page, context, width, theme);
     const measurements: unknown[] = [];
@@ -167,7 +167,7 @@ for (const width of [1440, 390]) for (const theme of ['light', 'dark'] as const)
   });
 }
 
-test('docked side-menu connector follows the same flag and restores its curves', async ({ page, context }) => {
+test('docked side-menu connector follows media and restores its curves while the top row stays rounded', async ({ page, context }) => {
   test.setTimeout(90_000);
   const policy = await installMediaTabFixture(page, context, 1920, 'light');
   for (const home of ['video', 'none'] as const) {
@@ -175,6 +175,10 @@ test('docked side-menu connector follows the same flag and restores its curves',
     await openMediaTabView(page, home === 'video' ? 'home_video' : 'home');
     await expectMenuShapes(page, home === 'video', 1920);
   }
-  await openMediaTabView(page, 'dataset_media');await expectMenuShapes(page, true, 1920);
+  await test.step('Media shows a rounded top row and rectangular side-menu tabs on the same page', async () => {
+    await openMediaTabView(page, 'dataset_media');
+    await expectButtons(page, `#${MEDIA_DATASET}_tab_parts_container`, true, []);
+    await expectMenuShapes(page, true, 1920);
+  });
   await openMediaTabView(page, 'dataset_plain');await expectMenuShapes(page, false, 1920);
 });

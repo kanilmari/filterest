@@ -1,7 +1,7 @@
 // hero_dataset_tabs.test.js
-// Proves shared destinations, navigation, language and media-dependent button shape.
+// Proves shared destinations, navigation, language and always-rounded top buttons.
 // Connects the approved tab projection and shell media flag to the hero and Home.
-// Keeps translated labels and interaction styles intact as corners change.
+// Keeps translated labels and interaction styles intact over presentation media.
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
@@ -55,7 +55,7 @@ function mount(active = 'places') {
 const buttons = (control) => [...control.element.querySelectorAll('button')];
 
 describe('hero dataset tabs', () => {
-    test('the one shell CSS rule squares hero and Home buttons while preserving selection and copy', () => {
+    test('hero and Home buttons stay rounded with or without media while preserving selection and copy', () => {
         const style = document.createElement('style');
         // jsdom does not resolve custom-property fallbacks in border-radius.
         style.textContent = (heroCss + homeCss).replaceAll('var(--navigation-radius, 8px)', '8px');
@@ -70,7 +70,7 @@ describe('hero dataset tabs', () => {
         const before = destinations.map(button => getComputedStyle(button).borderRadius);
         expect(before).toEqual(['8px', '8px', '8px']);
         document.body.setAttribute('data-view-has-presentation-media', 'true');
-        expect(destinations.map(button => getComputedStyle(button).borderRadius)).toEqual(['0px', '0px', '0px']);
+        expect(destinations.map(button => getComputedStyle(button).borderRadius)).toEqual(before);
         expect(home.getAttribute('aria-current')).toBe('page');
         expect(buttons(control)[0].getAttribute('aria-current')).toBe('page');
         expect(buttons(control).map(button => button.textContent)).toEqual(['Paikat', 'Artikkelit']);

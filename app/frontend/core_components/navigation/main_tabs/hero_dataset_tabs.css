@@ -54,11 +54,6 @@
     flex: none;
     width: max-content;
 }
-/* One shell state covers dataset/Home heroes and Home in the compact phone bar.
-   Surfaces and interaction tokens stay opaque; only their corner shape changes. */
-body[data-view-has-presentation-media="true"] :is(.hero-dataset-tabs__button, .navbar-front-page-link.top-nav-home-button) {
-    border-radius: 0;
-}
 .hero-dataset-tabs__icon {
     width: 18px;
     height: 18px;

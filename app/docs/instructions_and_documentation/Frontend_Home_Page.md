@@ -239,11 +239,11 @@ outside-click closer as a dataset tab: below 1850 CSS pixels it closes the overl
 a docked menu stays open, Home inside the menu is an inside click, and modified or non-primary gestures stay
 native and leave the menu alone. Menu state still has one owner.
 
-Navigation has one media rule: the current view's presentation media makes buttons rectangular and opaque.
+Navigation has one media shape rule: the current view's presentation media makes only the vertical side-menu buttons and their connector rectangular.
 `navigation/main_tabs/view_presentation_media_resolver.js` resolves the active dataset's `has_presentation_media` or Home's mounted image/video; hidden layers, zero media opacity and a full wash do not count.
 `syncViewPresentationMediaFlag()` alone writes `body[data-view-has-presentation-media]`; active-view updates and its Home/theme observer refresh it after rendering, preview changes and hiding.
-The consumers are navbar tabs and vertical side-menu items (including connector arcs), through `main_tab_active_state.js`'s existing `forceRectangular` path, and hero/Home buttons through one rule in `hero_dataset_tabs.css`.
-The rule applies at phone widths too. Opaque surfaces, selected/hover tokens and focus outlines remain; without media the existing rounded-button and layout policies remain.
+Only `#navmenu .navtablinks` and their connector arcs consume the flag, through `main_tab_active_state.js`'s existing `forceRectangular` path.
+At every width, the top-bar and hero tab buttons, including Home in the compact phone bar, keep the same rounded corners as a dataset page without media. Opaque surfaces, selected/hover tokens, focus outlines and the side menu's existing width-based shape policy remain.
 
 `front_page_availability.js` keeps server-confirmed availability in tab memory;
 a stale local-storage value cannot enable a link or route. Auth bootstrap clears
