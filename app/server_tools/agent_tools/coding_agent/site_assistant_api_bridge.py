@@ -60,6 +60,9 @@ class SiteAPISession:
         response = self._send("POST", "/api/site-assistant/delegation/exchange", body={"code": code})
         if response["status"] != 200 or not response["json"].get("authenticated"):
             raise BridgeError("delegation exchange failed: %s" % response["json"].get("error", response["status"]))
+        # Each successful exchange establishes a new sign-in and CSRF token.
+        # A reused bridge must fetch that token before its first delegated write.
+        self._csrf_token = None
         self.delegation = response["json"]
         return self.delegation
 

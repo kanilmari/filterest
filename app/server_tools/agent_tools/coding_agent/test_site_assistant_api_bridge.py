@@ -86,6 +86,22 @@ def test_exchange_then_read_uses_the_delegated_session():
     assert session.planned_writes() == []
 
 
+def test_a_new_exchange_refreshes_cached_csrf_before_the_first_write():
+    session, site = make_session({
+        ("POST", "/api/site-assistant/delegation/exchange"): (200, {"authenticated": True}),
+        ("GET", "/api/csrf-token"): (200, {"csrf_token": "first-sign-in"}),
+        ("POST", "/api/update-row"): (200, {"success": True}),
+    })
+    session.exchange("first-code")
+    assert session.call("POST", "/api/update-row", body={})["status"] == 200
+    site.responses[("GET", "/api/csrf-token")] = (200, {"csrf_token": "second-sign-in"})
+    session.exchange("second-code")
+    assert session.call("POST", "/api/update-row", body={})["status"] == 200
+    writes = [request for request in site.requests if request["url"].endswith("/api/update-row")]
+    assert [request["csrf"] for request in writes] == ["first-sign-in", "second-sign-in"]
+    assert len(site.requests) == 6  # exchange, pickup and one write per sign-in; no retries
+
+
 def test_refused_write_becomes_a_plan_entry_without_repeats():
     body = {"id": 7, "updates": [{"column": "header", "value": "New"}]}
     session, _ = make_session({

@@ -22,6 +22,7 @@ Dates are the local (Europe/Helsinki) date on which the version was published.
 
 ## [Unreleased]
 
+- Every successful sign-in now replaces its CSRF token, refreshes in-page clients before their next write, and stops storing the unused post-login return address in the session; API clients must fetch a new CSRF token after signing in.
 - Guests no longer get the browser check or the two security cookies; signed-in protection is unchanged.
 - Changing a column's row-visibility gate takes effect immediately for cached readers after commit, preserving owners' access to their own rows.
 - Hidden and server-only fields disappear immediately for every cached user and view after a visibility save; success waits for commit and cache invalidation, and metadata reads started before the save cannot restore stale cache entries.

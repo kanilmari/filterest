@@ -13,6 +13,7 @@ import (
 	"easelect/backend/core_components/sign_in_deadline"
 	"easelect/backend/core_components/sign_in_revocation"
 
+	"github.com/google/uuid"
 	"github.com/gorilla/sessions"
 )
 
@@ -58,8 +59,8 @@ func setAuthenticatedSessionIdentityAtGeneration(session *sessions.Session, user
 	// Everything that can fail is asked before anything is written. A session is
 	// shared for the whole request -- the audit stage reads it after the handler
 	// returns -- so a half-written identity left behind by a failure part way
-	// through would be seen by whatever looked next. Nothing below this line can
-	// fail, so the session either gains the whole identity or none of it.
+	// through would be seen by whatever looked next. Prepare the reads and fresh
+	// values first, then write the whole identity together below.
 	//
 	// The last moment this sign-in may be used is decided here, once, from the
 	// database's own clock, and never revised afterwards.
@@ -71,7 +72,14 @@ func setAuthenticatedSessionIdentityAtGeneration(session *sessions.Session, user
 	if err != nil {
 		return err
 	}
+	csrfToken, err := uuid.NewRandom()
+	if err != nil {
+		return fmt.Errorf("generate sign-in CSRF token: %w", err)
+	}
 
+	// All sign-in methods cross this boundary. A token known before sign-in
+	// must never authorize a write as the newly authenticated account.
+	session.Values["csrf_token"] = csrfToken.String()
 	session.Values["authenticated"] = true
 	session.Values["user_id"] = userID
 	session.Values["user_role"] = userRole

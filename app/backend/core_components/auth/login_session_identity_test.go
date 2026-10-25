@@ -111,6 +111,7 @@ func TestAFailedSignInLeavesTheSessionExactlyAsItWas(t *testing.T) {
 		"username":                    "someone-else",
 		"user_role":                   "basic",
 		"authentication_generation":   int64(3),
+		"csrf_token":                  "already-signed-in-csrf",
 		sign_in_revocation.SessionKey: "the-sign-in-already-here",
 		sign_in_deadline.SessionKey:   time.Now().Add(72 * time.Hour).Unix(),
 	}

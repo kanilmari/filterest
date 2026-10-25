@@ -468,11 +468,11 @@ Fresh bootstrap uses `bootstrap_baseline`/`bootstrap`: hashes identify folded-in
 For update admission, use the [versioned contract and security rules](../../backend/core_components/application_updates/README.md). Filterest owns `app/VERSION_APP` and `app/VERSION_DB`. Ordinary source commits do not independently advance a release number. At release preparation align the application/DB compatibility record, schema snapshot and matching bootstrap with accepted migration source.
 Keep full recovery dumps separate from the public bootstrap. Follow [Publishing Filterest](../publication/PUBLISHING.md) for candidate preparation, build, promotion, final rebuild and publication. Do not create another release ledger or rewrite published tags.
 
-Reuse the supported API client or [E2E helpers](E2E_Testing_Guide.md) for
-authentication. Fetch CSRF through `/api/csrf-token` and send `X-CSRF-Token`
-with the same authenticated session when the route profile requires it.
-A CSRF token is not a cookie. Use purpose-bound reserved development fixtures
-and ignored auth state, never real user content or credentials.
+Reuse the supported API client or [E2E helpers](E2E_Testing_Guide.md) for authentication.
+Every successful sign-in rotates CSRF in `auth/session_identity.go`, including delegation.
+Fetch the new value through `/api/csrf-token` before the next write; in-page login refreshes the shared API cache before bootstrap.
+Send `X-CSRF-Token` with the same authenticated session when its route profile requires it; the token is not a separate cookie.
+Use purpose-bound reserved development fixtures and ignored auth state, never real user content or credentials.
 
 Cookie identity is instance-scoped: preserve `INSTANCE_NAME`, session mode and
 keys through ordinary iterations. Replica-pool mode is only for nodes sharing

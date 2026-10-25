@@ -116,19 +116,24 @@ func TestTheEndedSignInIsDroppedFromTheSession(t *testing.T) {
 
 func TestPageNavigationRemembersWhereThePersonWasGoing(t *testing.T) {
 	session := signedInSession()
-	RespondSignInNoLongerValid(httptest.NewRecorder(), pageRequest("/reports?view=card"), session, "test")
+	recorder := httptest.NewRecorder()
+	RespondSignInNoLongerValid(recorder, pageRequest("/reports?view=card"), session, "test")
 
-	if session.Values["redirect_after_login"] != "/reports?view=card" {
-		t.Fatalf("return address: got %#v", session.Values["redirect_after_login"])
+	if recorder.Header().Get("Location") != LoginPathWithSessionEndedNotice("/reports?view=card") {
+		t.Fatalf("return address: got %q", recorder.Header().Get("Location"))
+	}
+	if _, present := session.Values["redirect_after_login"]; present {
+		t.Fatal("return address belongs in the login URL, not an unread session value")
 	}
 }
 
 func TestTheLoginPageIsNeverOfferedAsAReturnAddress(t *testing.T) {
 	session := signedInSession()
-	RespondSignInNoLongerValid(httptest.NewRecorder(), pageRequest("/login?redirect=%2Freports"), session, "test")
+	recorder := httptest.NewRecorder()
+	RespondSignInNoLongerValid(recorder, pageRequest("/login?redirect=%2Freports"), session, "test")
 
-	if session.Values["redirect_after_login"] != "/" {
-		t.Fatalf("return address: got %#v, want /", session.Values["redirect_after_login"])
+	if recorder.Header().Get("Location") != LoginPathWithSessionEndedNotice("/") {
+		t.Fatalf("return address: got %q, want /", recorder.Header().Get("Location"))
 	}
 }
 

@@ -20,6 +20,41 @@ test.describe('L1 — Login', () => {
     // 1. Open the guest-shell login modal.
     await openLoginEntry(page);
 
+    // Keep a real guest token in the same API cache the first signed-in write
+    // will use. The document marker and request counts expose reload/retry loops.
+    const preSignInToken = await page.evaluate(async () => {
+      const { ensureCsrfToken } = await import('/frontend/core_components/pipeline/api_pipeline.js');
+      document.documentElement.dataset.signInDocumentProof = 'same-document';
+      return ensureCsrfToken();
+    });
+    expect(Boolean(preSignInToken)).toBe(true);
+    const profileWritePath = await page.evaluate(async () => {
+      const { getEndpointUrl } = await import('/frontend/core_components/pipeline/api_pipeline.js');
+      return new URL(getEndpointUrl('updateUserProfile'), window.location.href).pathname;
+    });
+    const documentRequests: string[] = [];
+    const loginRequests: string[] = [];
+    const profileWrites: { usedNewToken: boolean; status: number }[] = [];
+    const csrfRefusals: Promise<boolean>[] = [];
+    page.on('request', (request) => {
+      if (request.isNavigationRequest() && request.frame() === page.mainFrame()) {
+        documentRequests.push(request.url());
+      }
+      if (new URL(request.url()).pathname === '/api/login' && request.method() === 'POST') {
+        loginRequests.push(request.url());
+      }
+    });
+    page.on('response', (response) => {
+      const request = response.request();
+      if (response.status() === 403 && ['POST', 'PUT', 'PATCH', 'DELETE'].includes(request.method())) {
+        csrfRefusals.push(response.text().then((body) => /csrf/i.test(body)));
+      }
+      if (new URL(request.url()).pathname === profileWritePath && request.method() === 'POST') {
+        const csrf = request.headers()['x-csrf-token'];
+        profileWrites.push({ usedNewToken: Boolean(csrf) && csrf !== preSignInToken, status: response.status() });
+      }
+    });
+
     const privacyLabel = page.locator('.privacy-notice-link label');
     await expect(privacyLabel.locator('a')).toHaveCount(1);
     await expect(privacyLabel.locator('a')).toHaveText('privacy notice');
@@ -62,6 +97,28 @@ test.describe('L1 — Login', () => {
     // 6. Verify we end up inside the authenticated app shell.
     await waitForAuthenticatedApp(page);
     expect(page.url()).not.toContain('/login');
+
+    // Save the reserved test account's existing website unchanged: a real,
+    // CSRF-protected write that needs no instance settings or test-data cleanup.
+    const writeSucceeded = await page.evaluate(async () => {
+      const { runApiPipeline } = await import('/frontend/core_components/pipeline/api_pipeline.js');
+      const profile = await runApiPipeline({ routeName: 'fetchUserProfile' });
+      const result = await runApiPipeline({
+        routeName: 'updateUserProfile', method: 'POST',
+        bodyData: { website: profile.parsedData.website || '' },
+      });
+      return result.parsedData?.success === true;
+    });
+    expect(writeSucceeded).toBe(true);
+    expect(profileWrites).toHaveLength(1);
+    expect(profileWrites[0].status).toBe(200);
+    expect(profileWrites[0].usedNewToken).toBe(true);
+    expect(loginRequests).toHaveLength(otpRequired ? 2 : 1);
+    // Include bootstrap writes too: a retry there must not repair the cache and
+    // conceal a stale first token before the explicit profile action runs.
+    expect(await Promise.all(csrfRefusals)).not.toContain(true);
+    expect(documentRequests).toEqual([]);
+    await expect(page.locator('html')).toHaveAttribute('data-sign-in-document-proof', 'same-document');
 
     const cookies = await page.context().cookies();
     const cookieNames = cookies.map((cookie) => cookie.name);

@@ -38,12 +38,14 @@ function sentTokens() {
 describe("postPreAuthJson", () => {
     beforeEach(() => {
         vi.clearAllMocks();
+        ensureCsrfTokenMock.mockReset();
         vi.stubGlobal("fetch", fetchMock);
     });
 
     test("sends once with the form's token when the service accepts it", async () => {
         const { postPreAuthJson } = await loadModule();
         fetchMock.mockResolvedValueOnce(answer(200, { authenticated: true }));
+        ensureCsrfTokenMock.mockResolvedValueOnce('signed-in-token');
 
         const response = await postPreAuthJson("/api/login", tokenField("page-token"), (csrf_token) => ({ username: "u", csrf_token }));
 
@@ -54,7 +56,40 @@ describe("postPreAuthJson", () => {
             credentials: "include",
         }));
         expect(sentTokens()).toEqual(["page-token"]);
+        expect(ensureCsrfTokenMock).toHaveBeenCalledExactlyOnceWith({ forceRefresh: true });
+    });
+
+    test.each(['password', 'email', 'fixed_pin', 'totp'])(
+        '%s completion waits for the new token and updates the form before returning', async (method) => {
+            const { postPreAuthJson } = await loadModule();
+            const { getSessionGeneration } = await import('./session_generation_store.js');
+            const generationBeforeLogin = getSessionGeneration();
+            const field = tokenField('pre-sign-in');
+            fetchMock.mockResolvedValueOnce(answer(200, { authenticated: true, verification_method: method }));
+            let finishRefresh;
+            ensureCsrfTokenMock.mockImplementationOnce(() => new Promise((resolve) => { finishRefresh = resolve; }));
+            let returned = false;
+            const completion = postPreAuthJson('/api/login', field, (csrf_token) => ({ csrf_token }))
+                .then((response) => { returned = true; return response; });
+            await vi.waitFor(() => expect(ensureCsrfTokenMock).toHaveBeenCalledTimes(1));
+            expect(getSessionGeneration()).toBe(generationBeforeLogin + 1);
+            expect(returned).toBe(false);
+            finishRefresh('post-sign-in');
+            expect((await completion).ok).toBe(true);
+            expect(field.value).toBe('post-sign-in');
+            expect(fetchMock).toHaveBeenCalledTimes(1);
+        },
+    );
+
+    test('pending factors and password-reset replies do not refresh the sign-in cache', async () => {
+        const { postPreAuthJson } = await loadModule();
+        fetchMock.mockResolvedValueOnce(answer(200, { otp_required: true }))
+            .mockResolvedValueOnce(answer(200, { success: true }));
+        const field = tokenField('pending-token');
+        await postPreAuthJson('/api/login', field, (csrf_token) => ({ csrf_token }));
+        await postPreAuthJson('/api/reset-password', field, (csrf_token) => ({ csrf_token }));
         expect(ensureCsrfTokenMock).not.toHaveBeenCalled();
+        expect(field.value).toBe('pending-token');
     });
 
     test("fetches the session's token, writes it into the form and sends once more after a token refusal", async () => {

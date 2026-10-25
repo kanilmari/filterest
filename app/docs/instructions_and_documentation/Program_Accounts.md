@@ -63,7 +63,9 @@ and the automation header `X-Filterest-Automation: 1`. The signed session carrie
 the account id, authentication generation and automation-channel marker.
 Browser/form sign-in is refused for an API-only account; adding a header does
 not replace the password or CSRF proof. The existing API client supplies the
-automation channel when configured for this account.
+automation channel when configured for this account. A successful sign-in issues a
+new CSRF token: fetch a fresh one from `/api/csrf-token` before the first write,
+because the token sent with the login body is refused afterwards.
 
 Human accounts can use **Sign out other devices** or change their login name
 with their current password in the Account profile; the current sign-in

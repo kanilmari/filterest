@@ -112,7 +112,6 @@ func RespondSignInNoLongerValid(
 	if IsBrowserDocumentNavigation(r) {
 		returnPath := returnPathForRequest(r)
 		if session != nil {
-			session.Values["redirect_after_login"] = returnPath
 			_ = e_sessions.Save(w, r, session)
 		}
 		http.Redirect(w, r, LoginPathWithSessionEndedNotice(returnPath), http.StatusSeeOther)

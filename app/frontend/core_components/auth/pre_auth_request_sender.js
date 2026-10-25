@@ -8,10 +8,17 @@ import { ensureCsrfToken } from "../pipeline/api_pipeline.js";
 import { isCsrfFailureResponse } from "../pipeline/api_pipeline_helpers.js";
 import { publishSessionChange } from './session_generation_store.js';
 
-async function observeLoginResponse(url, response) {
+async function observeLoginResponse(url, response, tokenField) {
     if (url === '/api/login' && response.ok) {
         const data = await response.clone().json();
-        if (data.authenticated === true) publishSessionChange('login');
+        if (data.authenticated === true) {
+            // Clear the old cache before the existing immediate invalidation
+            // event; await pickup before the caller can bootstrap the SPA.
+            const tokenRefresh = ensureCsrfToken({ forceRefresh: true });
+            publishSessionChange('login');
+            const sessionToken = await tokenRefresh;
+            if (tokenField) tokenField.value = sessionToken || '';
+        }
     }
     return response;
 }
@@ -44,7 +51,7 @@ export async function postPreAuthJson(url, tokenField, buildBody) {
 
     const firstResponse = await send(tokenField?.value || "");
     if (firstResponse.status !== 403) {
-        return observeLoginResponse(url, firstResponse);
+        return observeLoginResponse(url, firstResponse, tokenField);
     }
 
     let refusal = "";
@@ -64,5 +71,5 @@ export async function postPreAuthJson(url, tokenField, buildBody) {
     if (tokenField) {
         tokenField.value = sessionToken;
     }
-    return observeLoginResponse(url, await send(sessionToken));
+    return observeLoginResponse(url, await send(sessionToken), tokenField);
 }
