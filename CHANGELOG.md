@@ -22,6 +22,7 @@ Dates are the local (Europe/Helsinki) date on which the version was published.
 
 ## [Unreleased]
 
+- Self-hosters must set `SESSION_SECRET_KEY` and `SESSION_KEY` outside `ENVIRONMENT_TYPE=dev`; before database access, startup now refuses missing or placeholder session encryption keys and a missing or placeholder signing key.
 - Protected storage reads require the signed-in session's device and fingerprint cookies; unbound requests retain guest access and public-file caching (K435).
 - Browser tests now name their temporary tables so an interrupted run's leftovers are cleaned up automatically by the next run.
 - **A Finnish visitor's first view is already in Finnish** — The page stays behind its loading screen until the chosen language has been applied, for at most about 4.5 visible seconds, so a dataset list no longer shows English labels such as "Sort by" and "Filter results" for its first seconds. A page whose start-up never reports ready is shown when that time is spent.

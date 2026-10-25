@@ -56,8 +56,8 @@ func validateCredentialRoleSeparation() error {
 	return nil
 }
 
-// ValidateConfig checks that all critical environment variables are set.
-// Returns an error listing all missing variables if any are absent.
+// ValidateConfig rejects missing or invalid critical settings before startup.
+// Both session keys reject placeholders outside dev; blank signing keys always fail.
 // Also logs warnings for optional-but-recommended variables.
 func ValidateConfig() error {
 	required := []string{
@@ -79,20 +79,38 @@ func ValidateConfig() error {
 
 	var missing []string
 	for _, key := range required {
-		if os.Getenv(key) == "" {
+		value := os.Getenv(key)
+		if key == "SESSION_KEY" {
+			value = strings.TrimSpace(value)
+		}
+		if value == "" {
 			missing = append(missing, key)
 		}
 	}
 
-	// Warnings for optional but recommended variables
-	if os.Getenv("SESSION_SECRET_KEY") == "" {
+	// Reuse the environment loader's mode reader; never include key material in diagnostics.
+	if e_sessions.IsMissingSessionKey(os.Getenv("SESSION_SECRET_KEY")) {
+		if EnvironmentType() != "dev" {
+			return fmt.Errorf("SESSION_SECRET_KEY is required outside dev; see app/docs/instructions_and_documentation/runtime_contract.md#session-encryption")
+		}
 		log.Println("⚠ SESSION_SECRET_KEY not set — sessions will be stored unencrypted")
+	}
+	signingKey := os.Getenv("SESSION_KEY")
+	if e_sessions.IsMissingSessionKey(signingKey) && strings.TrimSpace(signingKey) != "" {
+		if EnvironmentType() != "dev" {
+			return fmt.Errorf("SESSION_KEY is required outside dev; see app/docs/instructions_and_documentation/runtime_contract.md#session-encryption")
+		}
+		log.Println("⚠ SESSION_KEY is a placeholder — using a temporary signing key for this process")
 	}
 	logOptionalPostmarkWarnings()
 
 	if missing != nil {
-		return fmt.Errorf("missing required environment variables:\n  %s",
-			strings.Join(missing, "\n  "))
+		guidance := ""
+		if strings.TrimSpace(signingKey) == "" {
+			guidance = "\nsee app/docs/instructions_and_documentation/runtime_contract.md#session-encryption"
+		}
+		return fmt.Errorf("missing required environment variables:\n  %s%s",
+			strings.Join(missing, "\n  "), guidance)
 	}
 	if err := validateCredentialRoleSeparation(); err != nil {
 		return err

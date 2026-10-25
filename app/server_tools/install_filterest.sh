@@ -25,6 +25,8 @@ cd "$INSTALLATION_ROOT"
 
 # shellcheck source=server_tools/lib/easelect_private_paths.sh
 source "$SOURCE_ROOT/server_tools/lib/easelect_private_paths.sh"
+# shellcheck source=server_tools/lib/installer_environment_values.sh
+source "$SOURCE_ROOT/server_tools/lib/installer_environment_values.sh"
 if [[ -n "${FILTEREST_RECOVERY_CONTENT_ROOT:-}" ]]; then
     source "$SOURCE_ROOT/server_tools/lib/installation_records.sh"
 fi
@@ -458,13 +460,6 @@ write_psql_secret_variable() {
     printf "\\set %s '%s'\n" "$variable_name" "$encoded_value"
 }
 
-is_placeholder_secret() {
-    case "$1" in
-        ""|replace-me|replace-me-with-32-plus-random-characters|readonly_pass|limited_pass|basic_pass|guest_pass) return 0 ;;
-        *) return 1 ;;
-    esac
-}
-
 validate_trusted_proxy_peer_ips() {
     python3 - "$1" <<'PY'
 import ipaddress
@@ -524,7 +519,7 @@ validate_filterest_core_environment_file() {
     done
     for key in "${secret_keys[@]}"; do
         value="$("$value_reader" "$file" "$key")"
-        if is_placeholder_secret "$value"; then
+        if is_placeholder_secret "$value" "$key"; then
             placeholder_keys+=("$key")
         fi
     done
@@ -625,11 +620,13 @@ configure_environment_files() {
 
     for key in "${secret_keys[@]}"; do
         value="$(env_value "$runtime_file" "$key")"
-        if is_placeholder_secret "$value"; then
-            value="$(openssl rand -hex 24)"
+        if is_placeholder_secret "$value" "$key"; then
+            local random_bytes=24
+            [[ "$key" != SESSION_SECRET_KEY ]] || random_bytes=32
+            value="$(openssl rand -hex "$random_bytes")"
         fi
         for file in "$runtime_file" "$development_file"; do
-            if is_placeholder_secret "$(env_value "$file" "$key")"; then
+            if is_placeholder_secret "$(env_value "$file" "$key")" "$key"; then
                 set_env_value "$file" "$key" "$value"
             fi
         done

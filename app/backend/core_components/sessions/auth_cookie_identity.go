@@ -159,7 +159,7 @@ func resolveAuthCookieConfig() (authCookieConfig, error) {
 		if sessionName == "" || sessionName != explicitSessionName || len(sessionName) > maxExplicitCookieNameLen {
 			return authCookieConfig{}, fmt.Errorf("SESSION_COOKIE_NAME must contain only letters, numbers, dots, underscores, or hyphens and be at most %d characters", maxExplicitCookieNameLen)
 		}
-		if strings.TrimSpace(os.Getenv("SESSION_SECRET_KEY")) == "" {
+		if IsMissingSessionKey(os.Getenv("SESSION_SECRET_KEY")) {
 			return authCookieConfig{}, fmt.Errorf("SESSION_SECRET_KEY is required when SESSION_COOKIE_MODE=%s", authCookieModeReplicaPool)
 		}
 		namespace := canonicalCookieNamespace("replica-pool:" + explicitSessionName)

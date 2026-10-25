@@ -10,6 +10,8 @@ import (
 
 func setRequiredConfigEnv(t *testing.T) {
 	t.Helper()
+	t.Setenv("ENVIRONMENT_TYPE", "prod")
+	t.Setenv("SESSION_SECRET_KEY", "dummy-session-encryption-key")
 	t.Setenv("EASELECT_TRUSTED_PROXY_PEER_IPS", "")
 	t.Setenv("SESSION_COOKIE_MODE", "isolated")
 	t.Setenv("SESSION_COOKIE_NAME", "")
@@ -114,6 +116,7 @@ func TestValidateConfigAllSet(t *testing.T) {
 }
 
 func TestValidateConfigMissing(t *testing.T) {
+	setRequiredConfigEnv(t)
 	// Clear all required vars
 	required := []string{
 		"SESSION_KEY", "DB_HOST", "DB_PORT", "DB_NAME",

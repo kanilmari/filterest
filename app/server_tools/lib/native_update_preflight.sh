@@ -17,7 +17,7 @@ native_update_planned_value() {
         SESSION_COOKIE_NAME) ;;
         DB_ADMIN_PASSWORD|DB_PASSWORD|DB_READONLY_PASSWORD|DB_CONFIDENTIAL_PASSWORD|DB_BASIC_PASSWORD|DB_GUEST_PASSWORD|SESSION_SECRET_KEY|SESSION_KEY)
             value="$(env_value "$file" "$key")"
-            if is_placeholder_secret "$value"; then
+            if is_placeholder_secret "$value" "$key"; then
                 printf '%048d' 0
             else
                 printf '%s' "$value"

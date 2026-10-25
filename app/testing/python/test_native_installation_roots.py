@@ -8,9 +8,12 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
+import re
 import shutil
 import stat
 import subprocess
+
+import pytest
 
 from native_lifecycle_fixture import (
     ADMIN_RUNNER,
@@ -123,6 +126,102 @@ def test_nested_scaffold_writes_only_mutable_installation_siblings(tmp_path: Pat
     ).is_file()
     for forbidden_root_entry in (".env", "dev_env.txt", "runtime", "storage", "storage_deleted", "testing"):
         assert not (installation_root / forbidden_root_entry).exists()
+
+
+@pytest.mark.parametrize("writer", ["scaffold", "installer"])
+@pytest.mark.parametrize("initial", [None, "", " \t", "replace-me-with-32-plus-random-characters",
+                                     "replace-me-custom", '"replace-me-quoted"', "c" * 64])
+def test_native_env_writers_initialize_and_preserve_session_key(tmp_path: Path, writer: str, initial: str | None) -> None:
+    """Exercise only local settings writers, with synthetic settings and no services."""
+    root = tmp_path / "filterest"
+    root.mkdir()
+    app = copy_scaffold_contract(root)
+    copy_lifecycle_libraries(app)
+    settings = dict(SITE_NAME="Test", SITE_SLUG="test", DB_HOST="localhost", DB_PORT="5432",
+                    DB_SSLMODE="disable", DB_NAME="test", INSTANCE_NAME="test",
+                    PORT="8100", EASELECT_PORT="8100", APP_PORT="8100",
+                    TLS_CERT_FILE="synthetic.crt", TLS_KEY_FILE="synthetic.key",
+                    SESSION_KEY="s" * 40)
+    for role in ("ADMIN", "READONLY", "CONFIDENTIAL", "BASIC", "GUEST"):
+        settings[f"DB_{role}_USER"] = f"test_{role.lower()}"
+        settings[f"DB_{role}_PASSWORD"] = "synthetic-existing-value"
+    settings.update(DB_USER="test_admin", DB_PASSWORD="synthetic-existing-value")
+    settings["DB_BASIC_PASSWORD"] = "replace-me-custom-existing"
+    if initial is not None:
+        settings["SESSION_SECRET_KEY"] = initial
+    content = "".join(f"{key}={value}\n" for key, value in settings.items())
+    (app / ".env.example").write_text(content)
+    environment = clean_filterest_environment(root)
+    files = [root / "keys/filterest_runtime" / name for name in
+             ("runtime_environment.env", "development_environment.env")]
+    if writer == "scaffold":
+        command = ["bash", str(app / "server_tools/scaffold.sh"), "setup"]
+    else:
+        # Isolate the installer's own repair loop; scaffold has its own cases.
+        (app / "server_tools/scaffold.sh").write_text("#!/bin/sh\nexit 0\n")
+        (app / "server_tools/scaffold.sh").chmod(0o755)
+        shutil.copy2(INSTALLER, app / "server_tools/install_filterest.sh")
+        files[0].parent.mkdir(parents=True)
+        for file in files:
+            file.write_text(content)
+            file.chmod(0o644)
+        environment["FILTEREST_INSTALLER_LIBRARY_ONLY"] = "1"
+        environment["INSTALLER_PATH"] = str(app / "server_tools/install_filterest.sh")
+        command = ["bash", "-euc", '''source "$INSTALLER_PATH"
+PROFILE=development
+installation_native_port() { printf 8100; }
+configure_installation_database_identity() { :; }
+configure_environment_files''']
+    generated = []
+    for _ in range(2):
+        result = subprocess.run(command, env=environment, capture_output=True, text=True, check=True)
+        values = []
+        for file in files:
+            assert "DB_BASIC_PASSWORD=replace-me-custom-existing\n" in file.read_text()
+            value = re.search(r"^SESSION_SECRET_KEY=(.*)$", file.read_text(), re.M)[1]
+            assert re.fullmatch(r"[a-f0-9]{64}", value)
+            assert stat.S_IMODE(file.stat().st_mode) == 0o600
+            assert value not in result.stdout + result.stderr
+            values.append(value)
+        assert values[0] == values[1]
+        if generated:
+            assert values == generated  # A second setup never rotates a real key.
+        generated = values
+    if initial == "c" * 64:
+        assert generated == [initial, initial]
+    else:
+        # Reset both inputs: another initialization must draw fresh randomness.
+        for file in files:
+            file.write_text(content)
+        result = subprocess.run(command, env=environment, capture_output=True, text=True, check=True)
+        for file in files:
+            value = re.search(r"^SESSION_SECRET_KEY=(.*)$", file.read_text(), re.M)[1]
+            assert re.fullmatch(r"[a-f0-9]{64}", value) and value != generated[0]
+            assert stat.S_IMODE(file.stat().st_mode) == 0o600
+            assert value not in result.stdout + result.stderr
+
+
+def test_scaffold_retains_distinct_real_keys_and_reuses_existing_identity(tmp_path: Path) -> None:
+    root = tmp_path / "filterest"
+    root.mkdir()
+    app = copy_scaffold_contract(root)
+    (app / ".env.example").write_text("SESSION_SECRET_KEY=replace-me\n")
+    files = [root / "keys/filterest_runtime" / name for name in
+             ("runtime_environment.env", "development_environment.env")]
+    files[0].parent.mkdir(parents=True)
+    real = '"synthetic-existing # value"'
+    files[0].write_text(f"SESSION_SECRET_KEY={real}\n")
+    command = ["bash", str(app / "server_tools/scaffold.sh"), "setup"]
+    environment = clean_filterest_environment(root)
+    result = subprocess.run(command, env=environment, capture_output=True, text=True, check=True)
+    assert files[0].read_bytes() == files[1].read_bytes()
+    assert real not in result.stdout + result.stderr
+    # Two established identities both remain verbatim, even if they differ.
+    files[1].write_text("SESSION_SECRET_KEY=x\n")
+    before = [file.read_bytes() for file in files]
+    subprocess.run(command, env=environment, capture_output=True, text=True, check=True)
+    assert [file.read_bytes() for file in files] == before
+    assert all(stat.S_IMODE(file.stat().st_mode) == 0o600 for file in files)
 
 
 def test_nested_installer_dry_run_preserves_app_tree(tmp_path: Path) -> None:
@@ -508,4 +607,3 @@ def test_embedded_and_legacy_initial_admin_handoff_contract_is_unchanged(
             text=True,
         )
         assert completed.stdout == "data/bootstrap/initial_admin_credentials.txt"
-

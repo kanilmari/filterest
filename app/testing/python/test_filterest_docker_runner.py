@@ -288,7 +288,7 @@ class FilterestDockerRunnerTests(unittest.TestCase):
             "SESSION_SECRET_KEY",
             "SESSION_KEY",
         ):
-            self.assertRegex(settings[key], r"^[a-f0-9]{48}$", key)
+            self.assertRegex(settings[key], r"^[a-f0-9]{%d}$" % (64 if key == "SESSION_SECRET_KEY" else 48), key)
             self.assertNotIn(settings[key], completed.stdout)
 
         self.assertEqual(stat.S_IMODE(env_file.stat().st_mode), 0o600)

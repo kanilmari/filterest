@@ -145,10 +145,11 @@ create_instance() {
     local db_basic_password=$(openssl rand -base64 16 | tr -dc 'a-zA-Z0-9' | head -c 16)
     local db_guest_password=$(openssl rand -base64 16 | tr -dc 'a-zA-Z0-9' | head -c 16)
     local session_key=$(openssl rand -base64 32 | tr -dc 'a-zA-Z0-9' | head -c 32)
-    local session_secret_key=$(openssl rand -base64 48 | tr -dc 'a-zA-Z0-9' | head -c 48)
+    local session_secret_key
+    session_secret_key="$(openssl rand -hex 32)" || return
     
     # Create .env file
-    cat > "$env_file" << EOF
+    (umask 077; cat > "$env_file" << EOF
 # ==============================================================================
 # Instance: ${name}
 # Created: $(date +%Y-%m-%d)
@@ -198,6 +199,8 @@ SESSION_SECRET_KEY=${session_secret_key}
 NGROK_AUTHTOKEN=
 NGROK_PORT=${ngrok_port}
 EOF
+    ) || return
+    chmod 600 "$env_file" || return
 
     if [[ "$instance_role" == "management" ]]; then
         # These keys are introduced by the block below, so appending them once

@@ -315,13 +315,16 @@ cmd_setup() {
       if [[ -n "${FILTEREST_RECOVERY_CONTENT_ROOT:-}" ]]; then
         filterest_recovery_content_to_file "$INSTALLATION_ROOT" "$env_file" cat -- "$scaffold"
       else
-        cp "$scaffold" "$env_file"
+        (umask 077; cp "$scaffold" "$env_file")
       fi
       set_secret_env_file_permissions "$env_file"
       ok "Kopioitu scaffold → $env_file"
       (( env_created++ )) || true
     fi
   done
+
+  # Copies must be ready for non-dev startup, including old placeholder files.
+  ensure_session_encryption_env_files "$EASELECT_RUNTIME_ENV_FILE" "$EASELECT_DEV_ENV_FILE"
 
   # --- 3. Yhteenveto ---
   echo ""

@@ -78,3 +78,50 @@ set_secret_env_file_permissions() {
 
     chmod 600 "$file_path"
 }
+
+# Initialize copied runtime settings together so native runtime/dev share an
+# identity. Keep every existing real key verbatim; key material never leaves Python.
+ensure_session_encryption_env_files() {
+    python3 - "$@" <<'PY'
+from pathlib import Path
+import re
+import secrets
+import sys
+
+entries = []
+existing = []
+for name in sys.argv[1:]:
+    path = Path(name)
+    if path.is_symlink() or (path.exists() and not path.is_file()):
+        sys.exit("Session encryption settings require regular files.")
+    if not path.is_file():
+        continue
+    content = path.read_text(encoding="utf-8")
+    matches = list(re.finditer(
+        r"^[ \t]*(?:export[ \t]+)?SESSION_SECRET_KEY[ \t]*=(.*)$", content, re.M))
+    if len(matches) > 1:
+        sys.exit("Duplicate SESSION_SECRET_KEY declarations refused.")
+    value = matches[0].group(1).strip() if matches else ""
+    if value[:1] in ("'", '"') and value[:1] in value[1:]:
+        value = value[1:].split(value[0], 1)[0].strip()
+    else:
+        value = value.split(" #", 1)[0].strip()
+    missing = not value or value.startswith("replace-me")
+    if not missing:
+        existing.append(matches[0].group(1))  # Preserve quoting when sharing this identity.
+    entries.append((path, content, matches, missing))
+
+key = existing[0] if existing else secrets.token_hex(32)
+for path, content, matches, missing in entries:
+    path.chmod(0o600)
+    if not missing:
+        continue
+    assignment = "SESSION_SECRET_KEY=" + key
+    if matches:
+        match = matches[0]
+        content = content[:match.start()] + assignment + content[match.end():]
+    else:
+        content += ("\n" if content and not content.endswith("\n") else "") + assignment + "\n"
+    path.write_text(content, encoding="utf-8")
+PY
+}

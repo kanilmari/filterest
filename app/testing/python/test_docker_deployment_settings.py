@@ -34,6 +34,34 @@ class DockerDeploymentSettingsTests(unittest.TestCase):
             "".join(f"{key}={value}\n" for key, value in settings.items()), encoding="utf-8"
         )
 
+    def test_session_encryption_key_initialization_and_preservation(self) -> None:
+        generated = set()
+        for initial in (None, "", " \t", "replace-me-with-32-plus-random-characters",
+                        "replace-me-custom", '"replace-me-quoted"', "' replace-me-spaced '",
+                        "x", "'synthetic-existing=value'"):
+            with self.subTest(initial=initial):
+                self.write_settings(**({} if initial is None else {"SESSION_SECRET_KEY": initial}))
+                with self.env_file.open("a") as output:
+                    output.write("DB_BASIC_PASSWORD=replace-me-custom-existing\n")
+                self.env_file.chmod(0o644)
+                result = self.fixture.run_runner("setup")
+                value = self.fixture.settings()["SESSION_SECRET_KEY"]
+                self.assertEqual(self.fixture.settings()["DB_BASIC_PASSWORD"], "replace-me-custom-existing")
+                if initial in ("x", "'synthetic-existing=value'"):
+                    self.assertEqual(value, initial)
+                else:
+                    self.assertRegex(value, r"^[a-f0-9]{64}$")
+                    self.assertNotIn(value, generated)
+                    generated.add(value)
+                self.assertEqual(stat.S_IMODE(self.env_file.stat().st_mode), 0o600)
+                diagnostic = "SESSION_SECRET_KEY=x" if value == "x" else value
+                self.assertNotIn(diagnostic, result.stdout + result.stderr)
+                again = self.fixture.run_runner("setup")
+                self.assertEqual(self.fixture.settings()["SESSION_SECRET_KEY"], value)
+                self.assertNotIn(diagnostic, again.stdout + again.stderr)
+                self.assertEqual(stat.S_IMODE(self.env_file.stat().st_mode), 0o600)
+
+
     def run_unchecked(self, *arguments: str, **environment: str) -> subprocess.CompletedProcess[str]:
         return subprocess.run(
             ["bash", str(RUNNER), *arguments], check=False, capture_output=True,

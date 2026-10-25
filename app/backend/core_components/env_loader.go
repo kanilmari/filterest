@@ -88,15 +88,22 @@ func loadAndSetEnvironmentVariablesFromRoot(projectRoot string) (string, error) 
 	setEnvironmentDefault("TLS_KEY_FILE", tlsKeyFile)
 
 	// Get environment type: fail closed to production unless development is explicit.
-	envType := strings.TrimSpace(os.Getenv("ENVIRONMENT_TYPE"))
-	if envType == "" {
-		envType = "prod"
-	}
+	envType := EnvironmentType()
 
 	// Ensure ENVIRONMENT_TYPE is set for other packages
 	_ = os.Setenv("ENVIRONMENT_TYPE", envType)
 
 	return envType, nil
+}
+
+// EnvironmentType reads the process mode using the loader's existing rules:
+// trim surrounding whitespace, preserve case, and default an empty value to prod.
+// Startup applies its production-build lock before configuration validation.
+func EnvironmentType() string {
+	if envType := strings.TrimSpace(os.Getenv("ENVIRONMENT_TYPE")); envType != "" {
+		return envType
+	}
+	return "prod"
 }
 
 // resolveProjectPrivatePaths separates the private Easelect source checkout

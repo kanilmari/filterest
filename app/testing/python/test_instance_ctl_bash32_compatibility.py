@@ -40,6 +40,38 @@ def run_system_bash(script: str, *, cwd: Path | None = None) -> subprocess.Compl
 
 
 class InstanceCtlBash32CompatibilityTests(unittest.TestCase):
+    def test_instance_creation_protects_random_session_key_and_refuses_overwrite(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            script = (
+                'RED=""; GREEN=""; BLUE=""; NC=""\n'
+                f'source "{PUBLIC_SOURCE_ROOT}/server_tools/ctl/lib/instance_crud.sh"\n'
+                'normalize_instance_role() { printf application; }\n'
+                'project_default_db_name() { printf synthetic; }\n'
+                '_next_instance_slot() { printf 0; }\n'
+                'create_instance example\n'
+            )
+            keys = set()
+            for _ in range(2):
+                result = run_system_bash(script, cwd=root)
+                file = root / "instances/example/.env"
+                value = re.search(r"^SESSION_SECRET_KEY=(.*)$", file.read_text(), re.M)[1]
+                self.assertRegex(value, r"^[a-f0-9]{64}$")
+                self.assertNotIn(value, keys)
+                keys.add(value)
+                self.assertEqual(file.stat().st_mode & 0o777, 0o600)
+                self.assertNotIn(value, result.stdout + result.stderr)
+                before = file.read_bytes()
+                with self.assertRaises(subprocess.CalledProcessError) as caught:
+                    run_system_bash(script, cwd=root)
+                self.assertEqual(file.read_bytes(), before)
+                self.assertEqual(file.stat().st_mode & 0o777, 0o600)
+                self.assertNotIn(value, caught.exception.stdout + caught.exception.stderr)
+                file.unlink()
+                for child in (root / "instances/example").iterdir():
+                    child.rmdir()
+                (root / "instances/example").rmdir()
+
     def test_case_insensitive_instance_resolution_uses_portable_lowercase(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             temp_root = Path(temp_dir)

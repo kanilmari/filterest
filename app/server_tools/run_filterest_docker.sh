@@ -46,6 +46,7 @@ if [[ "$FILTEREST_RECOVERY_OUTPUT" -eq 1 ]]; then
     source "$SCRIPT_APPLICATION_ROOT/server_tools/lib/installation_records.sh" 2>/dev/null || { printf 'Recovery diagnostic library unavailable; sensitive details withheld.\n' >&2; exit 1; }
     filterest_recovery_source "$PROJECT_ROOT" "$SCRIPT_APPLICATION_ROOT/server_tools/lib/database_dump_options.sh"
     filterest_recovery_source "$PROJECT_ROOT" "$SCRIPT_APPLICATION_ROOT/server_tools/lib/docker_deployment_settings.sh"
+    filterest_recovery_source "$PROJECT_ROOT" "$SCRIPT_APPLICATION_ROOT/server_tools/lib/docker_environment_values.sh"
 else
     # shellcheck source=server_tools/lib/database_dump_options.sh
     source "$SCRIPT_APPLICATION_ROOT/server_tools/lib/database_dump_options.sh"
@@ -53,6 +54,8 @@ else
     source "$SCRIPT_APPLICATION_ROOT/server_tools/lib/installation_records.sh"
     # shellcheck source=server_tools/lib/docker_deployment_settings.sh
     source "$SCRIPT_APPLICATION_ROOT/server_tools/lib/docker_deployment_settings.sh"
+    # shellcheck source=server_tools/lib/docker_environment_values.sh
+    source "$SCRIPT_APPLICATION_ROOT/server_tools/lib/docker_environment_values.sh"
     PROJECT_ROOT="${FILTEREST_PROJECT_ROOT_OVERRIDE:-$(cd "$SCRIPT_APPLICATION_ROOT/.." && pwd -P 2>/dev/null)}"
     PROJECT_ROOT="$(cd "$PROJECT_ROOT" && pwd -P)"
 fi
@@ -304,14 +307,7 @@ set_env_value() {
 }
 
 random_hex() {
-    od -An -N 24 -tx1 /dev/urandom | tr -d ' \n'
-}
-
-is_placeholder_secret() {
-    case "$1" in
-        ""|replace-me|replace-me-with-32-plus-random-characters|readonly_pass|limited_pass|basic_pass|guest_pass) return 0 ;;
-        *) return 1 ;;
-    esac
+    od -An -v -N "${1:-24}" -tx1 /dev/urandom | tr -d ' \n'
 }
 
 validate_port() {
@@ -674,8 +670,11 @@ _prepare_environment() {
         SESSION_KEY
     do
         value="$(env_value "$key")"
-        if is_placeholder_secret "$value"; then
-            set_env_value "$key" "$(random_hex)"
+        [[ "$key" != SESSION_SECRET_KEY ]] || value="$(compose_env_value "$key")"
+        if is_placeholder_secret "$value" "$key"; then
+            local random_bytes=24
+            [[ "$key" != SESSION_SECRET_KEY ]] || random_bytes=32
+            set_env_value "$key" "$(random_hex "$random_bytes")"
         fi
     done
 

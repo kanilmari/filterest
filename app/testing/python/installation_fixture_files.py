@@ -78,6 +78,7 @@ _LISTED_LIBRARY_FILES = (
     "server_tools/lib/native_host_packages.list",
     "server_tools/lib/native_host_package_reader.sh",
     "server_tools/lib/native_update_preflight.sh",
+    "server_tools/lib/installer_environment_values.sh",
     "server_tools/lib/easelect_private_paths.sh",
     "server_tools/lib/filterest_paths.py",
     "server_tools/lib/filterest_port_preflight.sh",

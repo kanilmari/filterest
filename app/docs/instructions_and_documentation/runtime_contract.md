@@ -99,6 +99,29 @@ never their values. Presence does not prove authentication or permissions.
 No `DATABASE_URL`, `CONFIG_DIR` or new generic directory aliases are implemented
 by this change.
 
+## Session encryption
+
+`SESSION_SECRET_KEY` is required outside development. Startup refuses an unset,
+empty or whitespace-only key before opening database connections or serving
+requests, and names this setting without printing its value. Configure a stable,
+private encryption key in the installation's protected environment settings;
+replica-pool nodes must share it. For both session keys, a trimmed value beginning
+with `replace-me`, including the template placeholder, counts as missing.
+`SESSION_KEY` is required for cookie signing: blank values (including Unicode
+whitespace) fail in every mode, and placeholders fail outside exact `dev`.
+Development warns for a placeholder signing key and uses a temporary key that
+changes on restart. Real keys have no startup length rule and retain their bytes.
+
+The environment loader trims surrounding whitespace from `ENVIRONMENT_TYPE`
+and defaults an unset or empty value to `prod`. Only the exact lowercase value
+`dev` counts as development; `test`, `staging`, `production`, `development`,
+uppercase variants and all other values require encryption. A production build
+always uses `prod`, even when runtime settings request development.
+
+In `dev`, a missing encryption key still only warns and sessions remain signed
+but unencrypted. The existing replica-pool requirement for an encryption key
+also applies in development.
+
 ## Lifecycle and live health
 
 Existing public commands remain the entrypoints:

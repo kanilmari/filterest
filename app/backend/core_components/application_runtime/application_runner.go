@@ -255,7 +255,7 @@ func Run(options Options) {
 	environmentType = effectiveEnvironmentType(
 		options.BuildEnvironment,
 		environmentType,
-		os.Getenv("ENVIRONMENT_TYPE"),
+		backend.EnvironmentType(),
 	)
 	if options.BuildEnvironment == "prod" {
 		log.Println("🔒 Production build detected - running in prod mode (cannot be overridden)")

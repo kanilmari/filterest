@@ -6,6 +6,7 @@
 package e_sessions
 
 import (
+	"crypto/rand"
 	"fmt"
 	"net/http"
 	"os"
@@ -24,6 +25,13 @@ var Store *sessions.CookieStore
 
 // SessionName is the cookie name, made unique per instance to avoid conflicts
 var SessionName = "session"
+
+// IsMissingSessionKey shares the startup and store rule for both session keys.
+// Trim only for detection: existing real keys keep their original bytes.
+func IsMissingSessionKey(value string) bool {
+	value = strings.TrimSpace(value)
+	return value == "" || strings.HasPrefix(value, "replace-me")
+}
 
 // AllowInsecureDevProxy enables HTTP cookie delivery for same-Wi-Fi Vite/LAN
 // testing. It is dev-only and opt-in because production and normal local usage
@@ -79,17 +87,23 @@ func InitSessionStore() {
 	// Luo store vain, jos se puuttuu
 	if Store == nil {
 		secretKey := os.Getenv("SESSION_KEY")
-		if secretKey == "" {
-			err := fmt.Errorf("SESSION_KEY environment variable is not set")
-			fmt.Printf("\033[31merror: %s\033[0m\n", err.Error())
-			panic(err)
+		if IsMissingSessionKey(secretKey) {
+			if strings.TrimSpace(secretKey) == "" {
+				err := fmt.Errorf("SESSION_KEY environment variable is not set; see app/docs/instructions_and_documentation/runtime_contract.md#session-encryption")
+				fmt.Printf("\033[31merror: %s\033[0m\n", err.Error())
+				panic(err)
+			}
+			// Startup validation permits placeholders only in dev. Never use the
+			// published value to sign cookies, even there; restart ends these sessions.
+			secretKey = rand.Text()
+			fmt.Printf("\033[33mwarning: SESSION_KEY is a placeholder — using a temporary signing key for this process\033[0m\n")
 		}
 
 		// Scope signing and optional encryption keys to this isolated instance or
 		// explicitly declared replica pool before constructing CookieStore.
 		scopedSigningKey := deriveScopedCookieKey(secretKey, "session-signing", config)
 		encKey := os.Getenv("SESSION_SECRET_KEY")
-		if encKey == "" {
+		if IsMissingSessionKey(encKey) {
 			fmt.Printf("\033[33mwarning: SESSION_SECRET_KEY is not set — session data will be stored unencrypted\033[0m\n")
 			Store = sessions.NewCookieStore(scopedSigningKey)
 		} else {
