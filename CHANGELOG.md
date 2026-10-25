@@ -22,6 +22,7 @@ Dates are the local (Europe/Helsinki) date on which the version was published.
 
 ## [Unreleased]
 
+- **The workline observatory keeps scroll and focus while the page starts** — Its board is no longer drawn again when start-up rewrites the page language with the same value, when its tab's classes change without hiding or showing it, or when an unchanged search is announced again. A real language switch and reopening the tab still redraw it.
 - **Workline observatory scroll test waits for start-up (test only)** — The scroll proof measures and scrolls only after the shell's start-up translation pass, which presents the board once more.
 - Visual Guardian adds opt-in, report-only deterministic observations beside screenshots, with reviewed expectations, allowances and fixture self-tests.
 - The installation helper check's Python-import scan has its own regression test: each imported helper left out of the copy list is reported.

@@ -53,6 +53,8 @@ export function mountDatasetSurface({
     let snapshot = null;
     let panel = null;
     let controlsNeedRebuild = false;
+    // The query whose results the renderer shows now; null when they must be presented again.
+    let presentedKey = null;
     const activeContainer = container.closest('.content_div') || container;
     const isActive = () => container.isConnected && !activeContainer.classList.contains('hidden');
     const keyFor = (params) => JSON.stringify(Object.entries(params).sort(([a], [b]) => a.localeCompare(b)));
@@ -77,9 +79,10 @@ export function mountDatasetSurface({
         emitDatasetSortSelection(datasetName, relevance ? '' : formatSortSelection(sort.column, sort.direction));
     }
 
-    function present(value) {
+    function present(value, key) {
         if (destroyed || !isActive()) return;
         renderSnapshot(results, value);
+        presentedKey = key;
         setResultsCount(datasetName, value.filtered_count ?? 0);
         renderActiveFilters(datasetName);
     }
@@ -115,7 +118,14 @@ export function mountDatasetSurface({
             generation += 1;
             pending = null;
             results.removeAttribute('aria-busy');
-            present(snapshot);
+            // Results that already show this query stay: a URL sync or a repeated query event replacing them
+            // dropped the reader's scroll position and focus. The shared count and filter tags still follow.
+            if (presentedKey === key && isActive()) {
+                setResultsCount(datasetName, snapshot.filtered_count ?? 0);
+                renderActiveFilters(datasetName);
+            } else {
+                present(snapshot, key);
+            }
             return snapshot;
         }
         const current = ++generation;
@@ -124,7 +134,7 @@ export function mountDatasetSurface({
             if (destroyed || current !== generation) return null;
             snapshot = value;
             completedKey = key;
-            present(value);
+            present(value, key);
             return value;
         }).catch((error) => {
             if (!destroyed && current === generation) onError(error, results);
@@ -175,17 +185,30 @@ export function mountDatasetSurface({
         if (event.detail?.dataset === datasetName) void refresh();
     };
     window.addEventListener('dataset-query-params-changed', onQueryChange);
+    // Start-up and later translation passes rewrite <html lang> with the language it already has. Only a real
+    // change rebuilds and re-presents; a same-value rewrite used to replace every result while the reader scrolled.
+    let language = document.documentElement.lang;
     const languageObserver = new MutationObserver(() => {
-        if (destroyed) return;
+        if (destroyed || document.documentElement.lang === language) return;
+        language = document.documentElement.lang;
         controlsNeedRebuild = true;
+        presentedKey = null;
         if (!isActive()) return;
         rebuildControls();
         controlsNeedRebuild = false;
-        if (snapshot) present(snapshot);
+        if (snapshot) present(snapshot, completedKey);
     });
+    // Only a hidden -> visible transition activates the surface; a class write that leaves it visible (or hidden)
+    // is not an activation and must not replace the results.
+    let wasActive = isActive();
     const activationObserver = new MutationObserver(() => {
-        if (destroyed || !isActive()) return;
+        if (destroyed) return;
+        const active = isActive();
+        const activated = active && !wasActive;
+        wasActive = active;
+        if (!activated) return;
         if (controlsNeedRebuild) { rebuildControls(); controlsNeedRebuild = false; }
+        presentedKey = null;
         void refresh();
     });
     activationObserver.observe(activeContainer, { attributes: true, attributeFilter: ['class'] });

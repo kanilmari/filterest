@@ -77,8 +77,63 @@ describe('shared data surface', () => {
         mocks.params = { search: 'B' }; const pendingB = host.refresh(); await Promise.resolve();
         mocks.params = { search: 'A' }; await host.refresh();
         finishB({ worklines: [{ id: 2 }] }); await pendingB;
-        expect(render).toHaveBeenCalledTimes(2);
+        // B never reached the renderer, so the shown A stays as it is instead of being drawn again.
+        expect(render).toHaveBeenCalledTimes(1);
         expect(render.mock.calls.at(-1)[1].worklines).toEqual([{ id: 1 }]);
+    });
+    const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
+    test('a same-value lang rewrite neither rebuilds the controls nor replaces the results', async () => {
+        const render = vi.fn(); make({ renderSnapshot: render }); await host.refresh();
+        document.documentElement.setAttribute('lang', document.documentElement.lang);
+        await settle();
+        expect(mocks.build).toHaveBeenCalledOnce();
+        expect(render).toHaveBeenCalledOnce();
+    });
+    test('a real language switch still rebuilds the controls and presents the results again', async () => {
+        const load = vi.fn(async () => ({ worklines: [] })); const render = vi.fn();
+        make({ loadSnapshot: load, renderSnapshot: render }); await host.refresh();
+        document.documentElement.lang = document.documentElement.lang === 'fi' ? 'en' : 'fi';
+        await vi.waitFor(() => expect(render).toHaveBeenCalledTimes(2));
+        expect(mocks.build).toHaveBeenCalledTimes(2);
+        expect(load).toHaveBeenCalledOnce();
+    });
+    test('a class write that keeps the surface visible is not an activation', async () => {
+        const load = vi.fn(async () => ({ worklines: [] })); const render = vi.fn();
+        make({ loadSnapshot: load, renderSnapshot: render }); await host.refresh();
+        const container = host.results.closest('.tab_parts_container').parentElement;
+        container.setAttribute('class', container.getAttribute('class') || '');
+        container.classList.add('scrolled');
+        await settle();
+        expect(render).toHaveBeenCalledOnce();
+        expect(load).toHaveBeenCalledOnce();
+    });
+    test('a hidden -> visible transition presents the shown query once more, without loading', async () => {
+        const load = vi.fn(async () => ({ worklines: [] })); const render = vi.fn();
+        make({ loadSnapshot: load, renderSnapshot: render }); await host.refresh();
+        const container = host.results.closest('.tab_parts_container').parentElement;
+        container.classList.add('hidden'); await settle();
+        container.classList.add('still-hidden'); await settle();
+        expect(render).toHaveBeenCalledOnce();
+        container.classList.remove('hidden');
+        await vi.waitFor(() => expect(render).toHaveBeenCalledTimes(2));
+        container.classList.add('visible-again'); await settle();
+        expect(render).toHaveBeenCalledTimes(2);
+        expect(load).toHaveBeenCalledOnce();
+    });
+    test('an unchanged query event keeps the shown results; a changed one loads and presents', async () => {
+        const load = vi.fn(async (params) => ({ params, worklines: [], filtered_count: 3 })); const render = vi.fn();
+        make({ loadSnapshot: load, renderSnapshot: render });
+        mocks.params = { extension_status: 'active' }; await host.refresh();
+        for (let i = 0; i < 2; i += 1) {
+            window.dispatchEvent(new CustomEvent('dataset-query-params-changed', { detail: { dataset: 'extension' } }));
+        }
+        await settle();
+        expect(render).toHaveBeenCalledOnce();
+        expect(mocks.count).toHaveBeenLastCalledWith('extension', 3);
+        mocks.params = { extension_status: 'paused' };
+        window.dispatchEvent(new CustomEvent('dataset-query-params-changed', { detail: { dataset: 'extension' } }));
+        await vi.waitFor(() => expect(render).toHaveBeenCalledTimes(2));
+        expect(load).toHaveBeenCalledTimes(2);
     });
     test('defers language rebuilding while hidden until the same container becomes active', async () => {
         make(); const container = host.results.closest('.tab_parts_container').parentElement;

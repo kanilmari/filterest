@@ -153,3 +153,36 @@ for (const theme of ['light', 'dark'] as const) {
     });
   }
 }
+
+// The shared surface draws the board once per load. Start-up's same-value <html lang> rewrite, a class write that
+// keeps the tab visible and the unchanged query events each used to replace every row, dropping focus and scroll.
+test('WO13 the board is drawn once and keeps focus through start-up', async ({ page }) => {
+  await page.addInitScript(() => {
+    const counted = window as Window & { __boardDraws?: number };
+    counted.__boardDraws = 0;
+    document.addEventListener('DOMContentLoaded', () => {
+      new MutationObserver((records) => {
+        for (const record of records) {
+          if (!(record.target as Element).classList?.contains('workline-observatory-view')) continue;
+          if ([...record.addedNodes].some((node) => node instanceof Element
+            && node.querySelector('.workline-observatory__board'))) counted.__boardDraws! += 1;
+        }
+      }).observe(document.body, { childList: true, subtree: true });
+    });
+  });
+  await login(page, loadCredentials());
+  await overflowExistingBoard(page);
+  try {
+    await page.goto('/admin/workline_observatory?workline_observatory_status=active', { waitUntil: 'domcontentloaded' });
+    const rows = page.locator('.workline-observatory__workline-row');
+    await expect(rows).toHaveCount(64);
+    const title = page.locator('.workline-observatory__workline-title').last();
+    await title.focus();
+    await waitForShellBoot(page);
+    await expect(rows).toHaveCount(64);
+    await expect(title).toBeFocused();
+    expect(await page.evaluate(() => (window as Window & { __boardDraws?: number }).__boardDraws)).toBe(1);
+  } finally {
+    await page.unroute('**/api/app/workline-observatory/board*');
+  }
+});
