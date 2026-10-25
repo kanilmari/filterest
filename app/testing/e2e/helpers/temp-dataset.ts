@@ -192,10 +192,12 @@ async function addTempDatasetRow(
 }
 
 export function buildTempDatasetName(prefix: string): string {
-  const safePrefix = normalizeDatasetPrefix(prefix);
   const timestamp = Date.now().toString(36);
-  const entropy = Math.random().toString(36).slice(2, 8);
-  return `${safePrefix}_${timestamp}_${entropy}`.slice(0, 63);
+  const entropy = Math.random().toString(36).slice(2, 8).padEnd(6, '0');
+  const suffix = `_${timestamp}_${entropy}`;
+  // Preserve the complete ownership proof; only the descriptive prefix may shrink.
+  const safePrefix = normalizeDatasetPrefix(prefix).slice(0, 63 - suffix.length).replace(/_+$/g, '');
+  return `${safePrefix}${suffix}`;
 }
 
 function isRetryableCreateTempDatasetError(status: number, body: string): boolean {

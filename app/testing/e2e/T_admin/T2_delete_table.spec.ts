@@ -9,7 +9,7 @@ import { test, expect } from '@playwright/test';
 import { login, loadCredentials, type TestCredentials } from '../helpers/auth';
 import { openAdminTreeButton } from '../helpers/admin-navigation';
 import { waitForAppReady } from '../helpers/navigation';
-import { cleanupDatasetViaRequest } from '../helpers/temp-dataset';
+import { buildTempDatasetName, cleanupDatasetViaRequest } from '../helpers/temp-dataset';
 import {
   confirmTestArtifact,
   registerTestArtifact,
@@ -40,7 +40,7 @@ test.describe('Dataset Deletion Handling', () => {
 
   test.beforeEach(async ({ page }) => {
     const projectName = test.info().project.name.replace(/[^a-z0-9]+/gi, '_').toLowerCase();
-    testTableName = `test_deletion_table_${projectName}_${Date.now()}`;
+    testTableName = buildTempDatasetName(`test_deletion_table_${projectName}`);
     testTableConfirmed = false;
     await login(page, credentials);
     await waitForAppReady(page);

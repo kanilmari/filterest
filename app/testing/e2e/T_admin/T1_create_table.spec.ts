@@ -9,7 +9,7 @@ import { test, expect } from '@playwright/test';
 import { login, loadCredentials, type TestCredentials } from '../helpers/auth';
 import { openAdminTreeButton } from '../helpers/admin-navigation';
 import { waitForAppReady } from '../helpers/navigation';
-import { cleanupDatasetViaRequest } from '../helpers/temp-dataset';
+import { buildTempDatasetName, cleanupDatasetViaRequest } from '../helpers/temp-dataset';
 import { confirmTestArtifact, registerTestArtifact } from '../helpers/test-artifact-run-registry';
 import { readDatasetTableUIDFromPage } from '../helpers/test-artifact-dataset-identity-reader';
 import { openActiveFilterbarSection } from '../helpers/filterbar';
@@ -35,7 +35,7 @@ test.describe('Table Creation Permissions', () => {
 
   test.beforeEach(async ({ page }) => {
     const projectName = test.info().project.name.replace(/[^a-z0-9]+/gi, '_').toLowerCase();
-    testTableName = `test_perm_table_${projectName}_${Date.now()}`;
+    testTableName = buildTempDatasetName(`test_perm_table_${projectName}`);
     testTableConfirmed = false;
     page.on('console', msg => console.log(`BROWSER LOG: ${msg.text()}`));
     await login(page, credentials);
@@ -84,10 +84,21 @@ test.describe('Table Creation Permissions', () => {
 
     // 3. Submit and wait for the create-dataset API response.
     registerTestArtifact('dataset', testTableName);
-    const [response, imageSetupResponse] = await Promise.all([
+    const [created, imageSetupResponse] = await Promise.all([
       page.waitForResponse(resp =>
-        resp.url().includes('/api/create_dataset')
-      ),
+        resp.url().includes('/api/create_dataset') && resp.request().method() === 'POST'
+      ).then(async response => {
+        expect(response.status()).toBe(201);
+        const created = await response.json() as { dataset_name?: unknown; table_uid?: unknown };
+        if (created.dataset_name !== testTableName || typeof created.table_uid !== 'number'
+          || !Number.isSafeInteger(created.table_uid) || created.table_uid <= 0) {
+          throw new Error('Created dataset response must include its exact name and positive table_uid.');
+        }
+        // Persist ownership before waiting for image setup or another identity request.
+        confirmTestArtifact('dataset', testTableName, created.table_uid);
+        testTableConfirmed = true;
+        return created;
+      }),
       page.waitForResponse(resp =>
         resp.url().includes('/api/asset-linking/images/enable')
           && resp.request().method() === 'POST'
@@ -95,13 +106,10 @@ test.describe('Table Creation Permissions', () => {
       page.locator('[data-testid="dataset-form-submit"]').click(),
     ]);
 
-    // Confirm API returned success
-    expect(response.ok()).toBe(true);
+    // The follow-up identity must still match the committed creation response.
     expect(imageSetupResponse.status()).toBe(201);
     const tableUID = await readDatasetTableUIDFromPage(page, testTableName);
-    expect(tableUID, 'Created dataset must expose a stable table_uid identity.').not.toBeNull();
-    confirmTestArtifact('dataset', testTableName, tableUID!);
-    testTableConfirmed = true;
+    expect(tableUID, 'Created dataset must retain its stable table_uid identity.').toBe(created.table_uid);
 
     const imageStatusResponse = await page.request.get(
       `/api/asset-linking/images/status?table=${encodeURIComponent(testTableName)}`,

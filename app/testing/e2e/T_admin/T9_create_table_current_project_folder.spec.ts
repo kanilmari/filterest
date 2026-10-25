@@ -21,7 +21,7 @@ import {
   unregisterTestArtifact,
 } from '../helpers/test-artifact-run-registry';
 import { readDatasetTableUIDFromPage } from '../helpers/test-artifact-dataset-identity-reader';
-import { cleanupDatasetViaRequest, fetchCsrfTokenForRequest } from '../helpers/temp-dataset';
+import { buildTempDatasetName, cleanupDatasetViaRequest, fetchCsrfTokenForRequest } from '../helpers/temp-dataset';
 import { recordTestDatasetOwnershipFromRequest } from '../helpers/test-artifact-dataset-column-recorder';
 
 type CreatedTreeNodes = {
@@ -43,10 +43,6 @@ type DatasetListResponse = {
     is_top_level_in_current_project?: boolean;
   }>;
 };
-
-function buildUniqueSuffix(): string {
-  return `${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
-}
 
 async function fetchDatasets(page: Page): Promise<DatasetMetadata[]> {
   return page.evaluate(async () => {
@@ -233,9 +229,8 @@ test.describe('T9 — Folder-Required Current Project Coverage', () => {
   });
 
   test('create-table flow can create a nested subfolder and keep the dataset visible in current-project navigation', async ({ page }) => {
-    const uniqueSuffix = buildUniqueSuffix();
-    const testTableName = `e2e_folder_table_${uniqueSuffix}`.slice(0, 63);
-    const testFolderName = `e2e_folder_${uniqueSuffix}`;
+    const testTableName = buildTempDatasetName('e2e_folder_table');
+    const testFolderName = buildTempDatasetName('e2e_folder');
 
     let createdFolderDbId: number | null = null;
     let datasetConfirmed = false;

@@ -115,7 +115,7 @@ test('K390PermissionsRightsFingerprint', async ({ page }, testInfo: TestInfo) =>
   const prefix = buildTempDatasetName('e2e_k390');
   const datasetUIDs: number[] = [];
   for (const suffix of ['x', 'y', 'unselected']) {
-    const name = `${prefix}_${suffix}`;
+    const name = buildTempDatasetName(`e2e_k390_${suffix}`);
     await createTempDataset(page, { datasetName: name, columns: { id: 'SERIAL', title: 'TEXT' } });
     fixture.names.push(name);
     const [dataset] = await readRows(page, 'system_db_tables', { table_name: name });

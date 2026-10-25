@@ -9,7 +9,7 @@ import { test, expect, type Page } from '@playwright/test';
 import { login, loadCredentials, type TestCredentials } from '../helpers/auth';
 import { clickAdminTreeContextMenuItem, openNavTreeContextMenu } from '../helpers/admin-navigation';
 import { navigateToDataset, waitForDataLoaded } from '../helpers/navigation';
-import { fetchCsrfTokenForRequest } from '../helpers/temp-dataset';
+import { buildTempDatasetName, fetchCsrfTokenForRequest } from '../helpers/temp-dataset';
 import {
   confirmTestArtifact,
   registerTestArtifact,
@@ -23,12 +23,6 @@ type FolderMutationResult = {
   ok: boolean;
   body: string;
 };
-
-/** Builds a collision-resistant folder name that stays recognizable in cleanup evidence. */
-function buildTestFolderName(): string {
-  const suffix = `${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
-  return `e2e_folder_control_${suffix}`;
-}
 
 /** Deletes one exact registry-confirmed folder through the authenticated application API. */
 async function deleteFolderById(
@@ -61,7 +55,7 @@ test.describe('T4 — Create Folder', () => {
   });
 
   test('rejected folder creation releases planned ownership only after exact absence', async ({ page }) => {
-    const folderName = `e2e_folder_rejected_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+    const folderName = buildTempDatasetName('e2e_folder_rejected');
     registerTestArtifact('folder', folderName);
 
     const csrfToken = await fetchCsrfTokenForRequest(page.request);
@@ -82,7 +76,7 @@ test.describe('T4 — Create Folder', () => {
   });
 
   test('admin can create folder in tree', async ({ page }) => {
-    const folderName = buildTestFolderName();
+    const folderName = buildTempDatasetName('e2e_folder_control');
     let folderId: number | null = null;
     let artifactRegistered = false;
     let primaryError: unknown = null;
