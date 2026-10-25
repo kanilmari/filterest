@@ -38,6 +38,12 @@ import (
 
 var PipelineOrder = []Stage{
 	{
+		// Storage must discard an unbound identity even before debug logging;
+		// channel/delegation checks and every later identity reader see a guest.
+		Name: "storage_binding",
+		Fn:   withStorageBinding,
+	},
+	{
 		Name:           "rate_limit",
 		AlwaysEnforced: true,
 		Fn: func(next http.HandlerFunc, ctx RouteContext) http.HandlerFunc {

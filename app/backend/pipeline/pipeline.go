@@ -59,6 +59,10 @@ type RouteProfile struct {
 	// AdminOnly marks the route as requiring admin_access_allowed = true.
 	// When true, the "admin_check" stage is activated.
 	AdminOnly bool
+
+	// storageSessionBinding opts StorageProfile into anonymous normalization
+	// before every ordinary stage. Other profiles retain their existing chain.
+	storageSessionBinding bool
 }
 
 // DefaultProfile is used for routes that don't have a custom profile.

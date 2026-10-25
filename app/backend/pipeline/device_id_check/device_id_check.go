@@ -41,11 +41,7 @@ func WithDeviceIDCheck(originalHandler http.HandlerFunc) http.HandlerFunc {
 			return
 		}
 
-		// Guest users (user_id ≤ 1) have no authenticated session to protect.
-		// Device ID validation only serves to detect session hijacking for
-		// logged-in users, so guests pass through unconditionally.
-		userID, _ := session.Values["user_id"].(int)
-		if userID <= 1 {
+		if !e_sessions.SessionRequiresBrowserBinding(session) {
 			originalHandler(w, r)
 			return
 		}

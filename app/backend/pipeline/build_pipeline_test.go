@@ -7,6 +7,7 @@ package pipeline_test
 import (
 	"bytes"
 	"os"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -389,5 +390,22 @@ func TestAutomationCheckCannotBeSkippedAndPrecedesAuth(t *testing.T) {
 	}
 	if guard < 0 || auth <= guard {
 		t.Fatalf("guard must inspect identity before guest downgrade: %v", stages)
+	}
+}
+
+func TestStorageBindingRunsFirstAndOnlyForStorageProfile(t *testing.T) {
+	// Reset exercises the same profile cloning used before route registration.
+	pipeline.ResetRouteProfiles()
+	stages := pipeline.DescribePipeline(emptyCtx, pipeline.GetProfile("router.ServeStorage"))
+	public := pipeline.DescribePipeline(emptyCtx, pipeline.PublicProfile)
+	if len(stages) == 0 || stages[0] != "storage_binding" || !reflect.DeepEqual(stages[1:], public) {
+		t.Fatalf("storage must normalize identity before every public stage: %v", stages)
+	}
+	for _, profile := range []pipeline.RouteProfile{
+		pipeline.DefaultProfile, pipeline.LoginOnlyProfile, pipeline.AdminProfile,
+		pipeline.AccessControlNoTxProfile, pipeline.AdminNoTxProfile, pipeline.PublicProfile,
+		pipeline.SignOutProfile,
+	} {
+		containsNone(t, pipeline.DescribePipeline(emptyCtx, profile), []string{"storage_binding"})
 	}
 }

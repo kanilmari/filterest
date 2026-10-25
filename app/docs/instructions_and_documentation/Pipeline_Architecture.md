@@ -82,36 +82,37 @@ type RouteProfile struct {
 }
 ```
 
-Controls which optional stages a route runs. `AlwaysEnforced` stages **cannot** be skipped regardless of profile.
+Controls which optional stages a route runs. `AlwaysEnforced` stages **cannot** be skipped regardless of profile. StorageProfile also opts into storage-only identity normalization before the ordinary chain.
 
 ---
 
 ## 3. Pipeline Order
 
-Defined in `pipeline_order.go`. This is the **single source of truth** for the request processing order. The 14 stages below use packages relative to `app/backend/pipeline/`; seven are always enforced.
+Defined in `pipeline_order.go`. This is the **single source of truth** for the request processing order. StorageProfile alone starts with `storage_binding` before the 14 ordinary stages below; seven ordinary stages are always enforced. Packages are relative to `app/backend/pipeline/`.
 
 | # | Stage Name | Package | AlwaysEnforced | Purpose |
 |---|------------|---------|:--------------:|---------|
-| 1 | `rate_limit` | `rate_limiting` | Yes | Per-function rate limiting (prevents abuse) |
-| 2 | `request_size_limit` | `request_size_limit` | Yes | Rejects oversized request bodies early |
-| 3 | `logging` | `request_logging` | Yes | Logs every request for analytics and debugging |
-| 4 | `error_handling` | `error_handling` | Yes | Catches panics from downstream, writes JSON 500 |
-| 5 | `automation_check` | `automation_check` | Yes | Restricts API-only automation accounts to current, enabled API-channel sessions; preserves ordinary route/table permissions |
-| 6 | `site_assistant_guard` | `site_assistant_guard` | Yes | Validates assistant delegation and requires matching, single-use owner approval for writes; allows reads and self sign-out through to the remaining stages |
-| 7 | `auth` | `auth_check` | No | Verifies session / login status, and refuses a sign-in that has been signed out |
-| 8 | `csrf` | `csrf_check` | No | Validates CSRF token for state-changing methods |
-| 9 | `fingerprint` | `fingerprint_check` | No | Validates the browser fingerprint against the session |
-| 10 | `device_id` | `device_id_check` | No | Validates the device ID against the session, then renews all three sign-in cookies together |
-| 11 | `access_control` | `access_control` | No | Checks function-level permissions (user group rights) |
-| 12 | `admin_check` | `admin_check` | No | Requires `admin_access_allowed = true` on user |
-| 13 | `transaction` | `lazy_transaction` | No | Lazy database transaction (commit/rollback) |
-| 14 | `audit` | `audit` | Yes | Semantic audit logging (who did what to which table) |
+| 1 | `storage_binding` | `storage_binding.go` | No | StorageProfile only: discard unbound identities before every ordinary stage |
+| 2 | `rate_limit` | `rate_limiting` | Yes | Per-function rate limiting (prevents abuse) |
+| 3 | `request_size_limit` | `request_size_limit` | Yes | Rejects oversized request bodies early |
+| 4 | `logging` | `request_logging` | Yes | Logs every request for analytics and debugging |
+| 5 | `error_handling` | `error_handling` | Yes | Catches panics from downstream, writes JSON 500 |
+| 6 | `automation_check` | `automation_check` | Yes | Restricts API-only automation accounts to current, enabled API-channel sessions; preserves ordinary route/table permissions |
+| 7 | `site_assistant_guard` | `site_assistant_guard` | Yes | Validates assistant delegation and requires matching, single-use owner approval for writes; allows reads and self sign-out through to the remaining stages |
+| 8 | `auth` | `auth_check` | No | Verifies session / login status, and refuses a sign-in that has been signed out |
+| 9 | `csrf` | `csrf_check` | No | Validates CSRF token for state-changing methods |
+| 10 | `fingerprint` | `fingerprint_check` | No | Validates the browser fingerprint against the session |
+| 11 | `device_id` | `device_id_check` | No | Validates the device ID against the session, then renews all three sign-in cookies together |
+| 12 | `access_control` | `access_control` | No | Checks function-level permissions (user group rights) |
+| 13 | `admin_check` | `admin_check` | No | Requires `admin_access_allowed = true` on user |
+| 14 | `transaction` | `lazy_transaction` | No | Lazy database transaction (commit/rollback) |
+| 15 | `audit` | `audit` | Yes | Semantic audit logging (who did what to which table) |
 
 After all stages, the **handler** runs — the actual business logic.
 
 ### Stage Ordering Rationale
 
-- **Rate limit first:** Reject abusive requests before doing any work.
+- **Storage binding before the ordinary chain:** Only StorageProfile discards unbound identities before any identity reader, including debug logging. **Rate limit first otherwise:** Reject abusive requests before doing any work.
 - **Request size limit second:** Reject oversized request bodies before request logging or auth work.
 - **Logging third:** Record every request that passes rate limiting and size limits for debugging.
 - **Error handling fourth:** Catch panics from auth/handler chain, log with context.
@@ -161,9 +162,9 @@ Active stages: `rate_limit` → `request_size_limit` → `logging` → `error_ha
 
 ### StorageProfile
 
-Uses the same pipeline-stage skips as `PublicProfile`, but is selected explicitly for `router.ServeStorage`. Generic route/table inference is skipped; the storage handler performs path-aware public-asset allowlisting and row-scoped authorization through the storage authorization layer.
+Uses the same auth/ACL skips as `PublicProfile`, with an additional first stage selected only for `router.ServeStorage`. Before any ordinary stage can read a storage identity, including on public-logo paths, `storage_binding` calls `e_sessions.AnonymizeUnboundSession`: a signed-in session without both matching binding cookies becomes an empty cached session and a cookie-free request clone, without authentication-state reads or response writes. The storage actor reuses this helper for direct callers. Debug logging, automation, delegation, generation and expiry therefore see the anonymous request; bound requests retain every existing guard. A server-only downgrade trace is throttled per user for a fixed interval in a bounded, expiring map; saturation suppresses new entries without evicting live intervals. Generic route/table inference stays skipped while storage performs path-aware row authorization. The fingerprint/device stages, storage and SSE share `e_sessions.SessionRequiresBrowserBinding`: only user IDs ≤ 1 are exempt. Guest-readable files stay readable under the browsing policy with fresh guest bindings; protected refusals retain the anonymous 404 and private cache headers. The handler's `media_utils.IsPublicStoragePath` allowlist keeps service-catalog logos public: unbound identities get anonymous delivery, caching and revalidation; bound requests retain their guards and cache policy. Storage has no signed or tokenized URL authorization bypass.
 
-Active stages: `rate_limit` → `request_size_limit` → `logging` → `error_handling` → `automation_check` → `site_assistant_guard` → `transaction` → `audit` → **handler**
+Active stages: `storage_binding` → `rate_limit` → `request_size_limit` → `logging` → `error_handling` → `automation_check` → `site_assistant_guard` → `transaction` → `audit` → **handler**
 
 ### SignOutProfile
 
@@ -243,7 +244,6 @@ In `routing_builder.go`, route registration calls:
 
 ```go
 pipeline.ApplyDevOverrides()  // Once at startup
-
 // Per route:
 profile := pipeline.GetProfile(handlerName)
 finalHandler := pipeline.BuildHandler(handler, routeCtx, profile)

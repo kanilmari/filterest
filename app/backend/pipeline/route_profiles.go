@@ -53,7 +53,8 @@ var PublicProfile = RouteProfile{
 // StorageProfile skips generic table inference because ServeStorage authorizes
 // row-scoped files from the storage path and only allowlists known public assets.
 var StorageProfile = RouteProfile{
-	SkipStages: publicSkips,
+	SkipStages:            publicSkips,
+	storageSessionBinding: true,
 }
 
 // signOutSkips is publicSkips with the forgery check kept. Signing out must stay
@@ -482,8 +483,9 @@ func cloneRouteProfile(profile RouteProfile) RouteProfile {
 		skipStages[stageName] = enabled
 	}
 	return RouteProfile{
-		SkipStages: skipStages,
-		AdminOnly:  profile.AdminOnly,
+		SkipStages:            skipStages,
+		AdminOnly:             profile.AdminOnly,
+		storageSessionBinding: profile.storageSessionBinding,
 	}
 }
 
@@ -498,6 +500,8 @@ func sortedSkipStages(profile RouteProfile) []string {
 	return stageNames
 }
 
+// profileName describes the auth/ACL skips; identity normalization is exposed
+// separately by DescribePipeline, leaving the route-manifest policy unchanged.
 func profileName(profile RouteProfile) string {
 	switch {
 	case routeProfilesEqual(profile, PublicProfile):

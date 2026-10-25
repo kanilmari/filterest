@@ -227,7 +227,7 @@ func validateSSESession(r *http.Request) (bool, error) {
 	if !readable {
 		return false, nil
 	}
-	if userID <= 1 {
+	if !e_sessions.SessionRequiresBrowserBinding(session) {
 		return true, nil
 	}
 	if !e_sessions.RequestCarriesSessionBinding(r, session) {

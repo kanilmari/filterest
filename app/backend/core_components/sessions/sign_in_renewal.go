@@ -17,10 +17,22 @@ import (
 // The session entries "device_id" and "fingerprint_hash" are what together bind
 // a session to one browser. The stages that enforce them are
 // app/backend/pipeline/device_id_check and app/backend/pipeline/fingerprint_check;
-// this file only compares the same values and re-issues them, never decides what
-// they mean. The two names are spelled as literals here because that is how every
+// this file shares their identity exemption, compares the values and renews them.
+// The two names are spelled as literals here because that is how every
 // other file in the application spells them, and a constant covering only this
 // one would leave the application with two spellings for one key.
+
+// SessionRequiresBrowserBinding is the shared identity exemption rule for the
+// pipeline, storage and SSE: guests (user ID <= 1) have no sign-in to protect.
+// Automation and delegated sign-ins still require both cookies; their channel
+// and delegation guards are additional checks, never binding exemptions.
+func SessionRequiresBrowserBinding(session *sessions.Session) bool {
+	if session == nil {
+		return false
+	}
+	userID, _ := session.Values["user_id"].(int)
+	return userID > 1
+}
 
 // RequestCarriesSessionBinding reports whether this request already presents
 // the device and fingerprint values its own session stores.
@@ -36,6 +48,22 @@ func RequestCarriesSessionBinding(r *http.Request, session *sessions.Session) bo
 	}
 	return requestCookieMatchesSessionValue(r, DeviceIDCookieName(), session, "device_id") &&
 		requestCookieMatchesSessionValue(r, FingerprintCookieName(), session, "fingerprint_hash")
+}
+
+// AnonymizeUnboundSession discards a signed-in identity without both browser
+// proofs. Storage calls it before its pipeline and again at the actor boundary
+// for direct callers. It writes nothing and never queries authentication state.
+func AnonymizeUnboundSession(r *http.Request, session *sessions.Session) *http.Request {
+	if !SessionRequiresBrowserBinding(session) || RequestCarriesSessionBinding(r, session) {
+		return r
+	}
+	// Replace the cached session in place: Gorilla's request registry is shared
+	// by context-preserving clones, so dropping Cookie alone would reload the
+	// signed-in identity. Start empty so guest fallback cannot reissue its proof.
+	*session = *NewSessionWithCookieOptions()
+	request := r.Clone(r.Context())
+	request.Header.Del("Cookie")
+	return request
 }
 
 func requestCookieMatchesSessionValue(

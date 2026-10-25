@@ -20,6 +20,13 @@ import (
 // StorageVariantFolders lists every folder one stored picture can live in, original first.
 var StorageVariantFolders = append([]string{OriginalVariant}, SizedVariants...)
 
+// IsPublicStoragePath names the sole public storage allowlist; storage delivery
+// (router/storage_handler.go) is its only caller. Callers pass a cleaned relative
+// path. Retired project_logo files remain outside this legacy logo subtree.
+func IsPublicStoragePath(cleanRel string) bool {
+	return strings.HasPrefix(filepath.ToSlash(cleanRel), "service_catalog_logos/")
+}
+
 // VariantRelativePaths returns the storage-root-relative places where one file of
 // an owner folder (`<table_uid>/<row_id>` or `media/<uuid>`) can be stored,
 // original first. A picture is still on disk while any one of them exists,

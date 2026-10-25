@@ -58,7 +58,7 @@ func TestFrontPageStorageOnlyConfiguredImageAndBrowsingActor(t *testing.T) {
 		t.Fatal("login site anonymous", decision)
 	}
 	signedIn := httptest.NewRequest("GET", "/storage/site_media/front_page/2160/file.png", nil)
-	attachStorageHandlerSessionActor(t, signedIn, 42, "basic")
+	attachRootHandlerSessionUser(t, signedIn, 42)
 	if decision := authorizeStorageRequest(httptest.NewRecorder(), signedIn, "site_media/front_page/2160/file.png"); decision != storageAuthorizationAllowed {
 		t.Fatal("signed in", decision)
 	}

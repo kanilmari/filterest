@@ -39,6 +39,12 @@ func resolveActiveStages(ctx RouteContext, profile RouteProfile) []Stage {
 	var active []Stage
 
 	for _, stage := range PipelineOrder {
+		// This first stage belongs exclusively to StorageProfile. In particular,
+		// PublicProfile shares its auth skips but must keep its existing identity.
+		if stage.Name == "storage_binding" && !profile.storageSessionBinding {
+			continue
+		}
+
 		// admin_check is opt-in: only active when profile.AdminOnly is true
 		if stage.Name == "admin_check" && !profile.AdminOnly {
 			continue

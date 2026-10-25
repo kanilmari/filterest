@@ -60,7 +60,7 @@ const (
 // they are deliberately not listed here, so they stay on disk but are no
 // longer served.
 func isPublicStoragePath(cleanRel string) bool {
-	return strings.HasPrefix(filepath.ToSlash(cleanRel), "service_catalog_logos/")
+	return media_utils.IsPublicStoragePath(cleanRel)
 }
 
 func parseProtectedStoragePath(cleanRel string) (dtt_1_row_read.StorageReadRequest, bool) {
@@ -132,6 +132,7 @@ func storageRequestActor(w http.ResponseWriter, r *http.Request) (dbutils.Reques
 		log.Printf("\033[31m[ServeStorage] session lookup failed: %v\033[0m", err)
 		return dbutils.RequestActorContext{}, storageAuthorizationInternalError
 	}
+	r = e_sessions.AnonymizeUnboundSession(r, session)
 	if userID, ok := session.Values["user_id"].(int); ok && userID > 1 {
 		generationMatches, generationErr := storageAuthenticationGenerationMatches(r.Context(), backend.DbConfidential, session, userID)
 		if generationErr != nil {
