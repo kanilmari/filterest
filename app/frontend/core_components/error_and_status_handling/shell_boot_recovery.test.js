@@ -64,7 +64,7 @@ beforeEach(() => { vi.useFakeTimers(); vi.setSystemTime(new Date('2026-10-06T09:
 afterEach(() => { harnesses.forEach((h) => h.dom.window.close()); vi.clearAllTimers(); vi.useRealTimers(); vi.unstubAllGlobals(); vi.restoreAllMocks(); });
 describe('shell gates and visible time', () => {
     test.each(['css', 'evaluation'])('requires both gates when %s arrives first', (first) => {
-        const h = boot();
+        const h = boot(); h.window.__filterestShellBoot.ready();   // the translation pass is done; only the gates wait
         if (first === 'css') h.css(); else h.window.__filterestShellBoot.evaluated();
         vi.advanceTimersByTime(100); expect(h.pending()).toBe(true);
         if (first === 'css') h.window.__filterestShellBoot.evaluated(); else h.css();
@@ -79,7 +79,8 @@ describe('shell gates and visible time', () => {
     test('loading starts at three visible seconds and disappears on reveal', () => {
         const h = boot(); vi.advanceTimersByTime(2900); expect(h.notice('loading')).toBe(false);
         vi.advanceTimersByTime(100); expect(h.notice('loading')).toBe(true);
-        h.css(); h.window.__filterestShellBoot.evaluated(); expect(h.notice('loading')).toBe(false);
+        h.css(); h.window.__filterestShellBoot.evaluated(); h.window.__filterestShellBoot.ready();
+        expect(h.notice('loading')).toBe(false);
     });
     test('hidden and frozen time do not spend the thirty-second watchdog', () => {
         const h = boot(); vi.advanceTimersByTime(1000); h.hide(true); vi.advanceTimersByTime(60000);
@@ -89,7 +90,8 @@ describe('shell gates and visible time', () => {
         expect(h.window.location.reload).toHaveBeenCalledTimes(1);
     });
     test('pageshow rechecks probes and never rearms a revealed restored page', () => {
-        const h = boot(); h.window.__filterestShellBoot.evaluated(); h.emit('pagehide'); vi.advanceTimersByTime(60000);
+        const h = boot(); h.window.__filterestShellBoot.evaluated(); h.window.__filterestShellBoot.ready();
+        h.emit('pagehide'); vi.advanceTimersByTime(60000);
         h.css(); h.emit('pageshow', { persisted: true }); expect(h.pending()).toBe(false);
         h.css(false); h.emit('pagehide'); vi.advanceTimersByTime(60000); h.emit('pageshow', { persisted: true }); vi.advanceTimersByTime(60000);
         expect(h.window.location.reload).not.toHaveBeenCalled();
@@ -98,6 +100,65 @@ describe('shell gates and visible time', () => {
         const h = boot({ dev: true }); h.css(); h.window.__filterestShellBoot.evaluated(); vi.advanceTimersByTime(30000);
         expect(JSON.parse(h.window.sessionStorage.getItem(recordKey)).some((entry) => entry.reason === 'ready-timeout')).toBe(true);
         expect(h.notice('failed')).toBe(false); h.window.__filterestShellBoot.ready(); expect(h.window.location.reload).not.toHaveBeenCalled();
+    });
+});
+describe('the reveal waits for the translation pass (K522 A)', () => {
+    test('both gates alone keep the shell hidden until ready', () => {
+        const h = boot(); h.css(); h.window.__filterestShellBoot.evaluated();
+        vi.advanceTimersByTime(4000); expect(h.pending()).toBe(true); expect(h.notice('loading')).toBe(true);
+        h.window.__filterestShellBoot.ready(); expect(h.pending()).toBe(false); expect(h.notice('loading')).toBe(false);
+        expect(h.window.__filterestShellBoot.status()).toMatchObject({ revealed: true, ready: true });
+    });
+    test('without ready the cap reveals the shell (fail open) and records it in development', () => {
+        const h = boot({ dev: true }); h.css(); h.window.__filterestShellBoot.evaluated();
+        vi.advanceTimersByTime(4400); expect(h.pending()).toBe(true);
+        vi.advanceTimersByTime(100); expect(h.pending()).toBe(false);
+        expect(JSON.parse(h.window.sessionStorage.getItem(recordKey)).some((entry) => entry.reason === 'reveal-cap')).toBe(true);
+        vi.advanceTimersByTime(60000); expect(h.window.location.reload).not.toHaveBeenCalled(); expect(h.notice('failed')).toBe(false);
+    });
+    test('the cap counts visible time only', () => {
+        const h = boot(); h.css(); h.window.__filterestShellBoot.evaluated(); h.hide(true);
+        vi.advanceTimersByTime(60000); expect(h.pending()).toBe(true);
+        h.hide(false); vi.advanceTimersByTime(4400); expect(h.pending()).toBe(true);
+        vi.advanceTimersByTime(100); expect(h.pending()).toBe(false);
+    });
+    test('ready before the gates reveals as soon as both gates hold', () => {
+        const h = boot(); h.window.__filterestShellBoot.ready(); h.css(); expect(h.pending()).toBe(true);
+        h.window.__filterestShellBoot.evaluated(); expect(h.pending()).toBe(false);
+    });
+    test('a shell that became showable near the watchdog is never timed out as an asset failure', () => {
+        const h = boot(); vi.advanceTimersByTime(28000); expect(h.notice('loading')).toBe(true);
+        h.css(); h.window.__filterestShellBoot.evaluated(); vi.advanceTimersByTime(4000);
+        expect(h.window.location.reload).not.toHaveBeenCalled(); expect(h.notice('failed')).toBe(false); expect(h.pending()).toBe(true);
+        vi.advanceTimersByTime(500); expect(h.pending()).toBe(false); expect(h.window.location.reload).not.toHaveBeenCalled();
+    });
+});
+describe('a recovered failure still reveals within the cap (gate 530a)', () => {
+    const reasons = (h) => JSON.parse(h.window.sessionStorage.getItem(recordKey) || '[]').map((entry) => entry.reason);
+    test.each(['offline', 'an unresolved earlier retry'])('late CSS recovery without ready() after the notice (%s)', (cause) => {
+        const shared = storage();
+        if (cause !== 'offline') shared.setItem(retryKey, JSON.stringify({ lastAttempt: Date.now(), unresolved: true }));
+        const h = boot({ dev: true, offline: cause === 'offline', storage: shared });
+        h.window.__filterestShellBoot.evaluated();
+        h.emit('load', { target: h.required() });   // the CSS sentinel is missing
+        vi.advanceTimersByTime(2000); expect(h.notice('failed')).toBe(true);
+        h.css(); h.emit('load', { target: h.required() });
+        expect(h.notice('failed')).toBe(false); expect(h.notice('loading')).toBe(true); expect(h.pending()).toBe(true);
+        vi.advanceTimersByTime(4400); expect(h.pending()).toBe(true);
+        vi.advanceTimersByTime(100); expect(h.pending()).toBe(false);
+        expect(h.window.location.reload).not.toHaveBeenCalled();
+        expect(reasons(h)).toEqual(['css-sentinel-missing', 'recovered', 'reveal-cap']);
+    });
+    test('assets that recover before the reload threshold are not reloaded while the translation runs', () => {
+        const h = boot({ dev: true });
+        h.window.__filterestShellBoot.evaluated();
+        h.emit('load', { target: h.required() });   // a failure is recorded at 0 ms
+        vi.advanceTimersByTime(1000); h.css(); h.emit('load', { target: h.required() });
+        vi.advanceTimersByTime(3000);
+        expect(h.window.location.reload).not.toHaveBeenCalled(); expect(h.notice('failed')).toBe(false); expect(h.pending()).toBe(true);
+        h.window.__filterestShellBoot.ready();
+        expect(h.pending()).toBe(false); expect(h.window.location.reload).not.toHaveBeenCalled();
+        expect(reasons(h)).toEqual(['css-sentinel-missing', 'ready', 'recovered']);
     });
 });
 describe('failure and retry budget', () => {
@@ -238,7 +299,7 @@ describe('failure and retry budget', () => {
         expect(h.window.location.href).toBe(temporary);
     });
     test('late CSS success reveals an evaluated module after a notice', () => {
-        const h = boot({ offline: true }); h.window.__filterestShellBoot.evaluated();
+        const h = boot({ offline: true }); h.window.__filterestShellBoot.evaluated(); h.window.__filterestShellBoot.ready();
         h.emit('load', { target: h.required() }); vi.advanceTimersByTime(1500);
         expect(h.notice('failed')).toBe(true); h.css(); h.emit('load', { target: h.required() });
         expect(h.pending()).toBe(false); expect(h.notice('failed')).toBe(false);
@@ -251,6 +312,7 @@ describe('failure and retry budget', () => {
     test('success ends an episode, preserves cooldown, and later permits a new episode', () => {
         const shared = storage(); const h = boot({ storage: shared }); h.emit('error'); vi.advanceTimersByTime(1500);
         const second = boot({ storage: shared }); second.css(); second.window.__filterestShellBoot.evaluated();
+        second.window.__filterestShellBoot.ready();
         expect(JSON.parse(shared.getItem(retryKey)).unresolved).toBe(false);
         const third = boot({ storage: shared }); third.emit('error'); vi.advanceTimersByTime(1500); expect(third.window.location.reload).not.toHaveBeenCalled();
         vi.advanceTimersByTime(600001); const fourth = boot({ storage: shared }); fourth.emit('error'); vi.advanceTimersByTime(1500);
@@ -267,7 +329,8 @@ describe('failure and retry budget', () => {
     });
     test('late success clears a failure notice without navigating', () => {
         const h = boot({ offline: true }); h.emit('error'); vi.advanceTimersByTime(1500); expect(h.notice('failed')).toBe(true);
-        h.css(); h.window.__filterestShellBoot.evaluated(); expect(h.pending()).toBe(false); expect(h.notice('failed')).toBe(false);
+        h.css(); h.window.__filterestShellBoot.evaluated(); h.window.__filterestShellBoot.ready();
+        expect(h.pending()).toBe(false); expect(h.notice('failed')).toBe(false);
     });
     test('post-evaluation exceptions and optional asset errors are ignored', () => {
         const h = boot(); h.window.__filterestShellBoot.evaluated(); h.emit('error', { message: 'app exception' }); h.emit('unhandledrejection', { reason: 'later request' });

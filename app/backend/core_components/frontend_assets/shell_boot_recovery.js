@@ -11,6 +11,10 @@
     var diagnosticKey = '__filterest_shell_boot_records_v1';
     var cooldown = 10 * 60 * 1000;
     var watchdog = 30000;
+    // K522 A (owner, 25.10.): once the shell could be shown, wait for ready() (sent after the client's translation
+    // pass) at most this many visible milliseconds, so a Finnish visitor never sees the English fallback labels.
+    // Fail open: a missing or late ready() reveals the shell when the cap is spent.
+    var revealCap = 4500;
     var loadingDelay = 3000;
     var minimumReloadDelay = 1500;
     var isDev = root.getAttribute('data-shell-boot-dev') === 'true';
@@ -19,6 +23,7 @@
     var evaluated = false;
     var ready = false;
     var revealed = false;
+    var revealableAt = null;
     var failed = false;
     var failureReason = '';
     var interacted = false;
@@ -64,7 +69,7 @@
             time: number(entry.time),
             reason: choice(entry.reason, ['resource-error', 'evaluation-error', 'evaluation-rejection',
                 'css-sentinel-missing', 'asset-timeout', 'document-template-error', 'automatic-reload',
-                'recovered', 'ready', 'ready-timeout', 'pageshow'], 'unknown'),
+                'recovered', 'ready', 'ready-timeout', 'reveal-cap', 'pageshow'], 'unknown'),
             stage: choice(entry.stage, ['startup', 'assets'], 'assets'),
             errorName: choice(entry.errorName, ['Error', 'TypeError', 'SyntaxError', 'ReferenceError',
                 'RangeError', 'URIError', 'EvalError', 'AggregateError'], null),
@@ -150,13 +155,22 @@
             displayNotice('unsupported');
             return;
         }
-        if (!revealed && evaluated && cssApplied() && !navigating) {
-            revealed = true;
-            root.removeAttribute('data-shell-boot-pending');
-            displayNotice(null);
-            finishEpisode();
-            if (failed) record('recovered');
-            notifyRecovered();
+        // Showable: the essential CSS and the entry module are in. Such a shell is never handled as failing (gate 530a):
+        // an earlier asset failure that has recovered waits for ready() or the cap like any other shell, with no reload
+        // and no failure notice, and the polling below keeps running so the cap is always enforced.
+        var showable = !revealed && evaluated && cssApplied() && !navigating;
+        if (showable) {
+            if (revealableAt === null) revealableAt = elapsed;
+            var capSpent = elapsed - revealableAt >= revealCap;
+            if (ready || capSpent) {
+                revealed = true;
+                root.removeAttribute('data-shell-boot-pending');
+                displayNotice(null);
+                finishEpisode();
+                if (failed) record('recovered');
+                if (!ready && capSpent) record('reveal-cap');
+                notifyRecovered();
+            }
         }
         if (revealed) {
             // Fail open: ready is diagnostic only. A slow data request must never
@@ -168,8 +182,9 @@
             }
             if (ready || readyTimeoutRecorded) return;
         } else {
-            if (!failed && elapsed >= watchdog) fail('asset-timeout');
-            if (failed && active && elapsed >= minimumReloadDelay && !navigating) {
+            // A shell that is only waiting for ready() has its assets: never time it out as an asset failure.
+            if (!failed && revealableAt === null && elapsed >= watchdog) fail('asset-timeout');
+            if (failed && !showable && active && elapsed >= minimumReloadDelay && !navigating) {
                 if (!recoveryOffered && reserveAutomaticReload()) {
                     navigateDocument(true);
                     return;
@@ -177,6 +192,9 @@
                 recoveryOffered = true;
                 displayNotice('failed');
                 return;
+            } else if (failed && showable) {
+                // Recovered: the failure notice gives way to the loading notice while the translation finishes.
+                displayNotice('loading');
             } else if (!failed && elapsed >= loadingDelay) {
                 displayNotice('loading');
             }
