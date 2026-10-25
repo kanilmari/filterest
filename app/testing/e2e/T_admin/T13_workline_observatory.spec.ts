@@ -351,6 +351,9 @@ test.describe('T13 — Workline observatory', () => {
         await accountThemeLoaded;
         await expect(page.locator('body')).toHaveClass(new RegExp(`\\b${theme}-mode\\b`));
         await expect(page.locator('body')).not.toHaveClass(/\bsystem-mode\b/);
+        // The chosen language lands about a second after load (<html lang> en -> fi). That real change re-presents
+        // the board and rebuilds an open modal, dropping a value typed before it; interact with the settled page.
+        await expect(page.locator('html')).toHaveAttribute('lang', language);
         const opener = page.locator('[data-release-goal-details]');
         await opener.click();
         const modal = page.locator('#custom_modal');
