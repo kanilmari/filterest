@@ -1,5 +1,5 @@
 // column_visibility_invalidation.go
-// Schedules scoped eviction for writes of server/client delivery flags.
+// Schedules scoped eviction for writes of row visibility and delivery flags.
 // Connects generic metadata mutations and dedicated card saves to registered readers.
 // Never clears caches before commit or for unrelated metadata saves.
 package runtime_grant_mutations

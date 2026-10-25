@@ -34,7 +34,9 @@ func (m *Mutation) IncludeValues(table string, values map[string]interface{}) {
 	if table == "system_column_details" {
 		_, hide := values["hide_everywhere"]
 		_, delivery := values["client_delivery_mode"]
-		m.columnVisibilityWritten = m.columnVisibilityWritten || hide || delivery
+		// Row visibility shares the guarded schema cache with delivery flags.
+		_, rowPolicy := values["must_be_true_unless_own"]
+		m.columnVisibilityWritten = m.columnVisibilityWritten || hide || delivery || rowPolicy
 	}
 	for _, column := range targetColumns(table) {
 		uid, _ := strconv.ParseInt(fmt.Sprint(values[column]), 10, 64)

@@ -70,9 +70,11 @@ func TestGenericColumnVisibilityWriteDetection(t *testing.T) {
 	}{
 		{"system_column_details", "hide_everywhere", true},
 		{"system_column_details", "client_delivery_mode", true},
+		{"system_column_details", "must_be_true_unless_own", true},
 		{"system_column_details", "card_element", false},
 		{"system_column_details", "is_multilingual", false},
 		{"app_content", "hide_everywhere", false},
+		{"app_content", "must_be_true_unless_own", false},
 	} {
 		mutation := &Mutation{}
 		mutation.IncludeValues(test.table, map[string]interface{}{test.column: false, "table_uid": 7})
