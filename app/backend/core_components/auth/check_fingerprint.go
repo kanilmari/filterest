@@ -1,7 +1,7 @@
 // check_fingerprint.go
 // Validates device fingerprints submitted by the client and stores them in the session.
 // Bridges the frontend fingerprinting POST, the session store, and the HMAC cookie.
-// Exists to enroll and re-enroll fingerprints so the pipeline fingerprint-check stage sees consistent values.
+// Exists to protect signed-in sessions; guests never enroll browser identities.
 package auth
 
 import (
@@ -14,8 +14,8 @@ import (
 )
 
 // setFingerprintCookie updates the fingerprint HTTP cookie to keep it in sync
-// with session.Values["fingerprint_hash"]. Without this, rootHandler's initial
-// UUID cookie would mismatch the HMAC stored by this handler, causing
+// with session.Values["fingerprint_hash"]. Otherwise the cookie would mismatch
+// the HMAC stored by this handler, causing
 // WithFingerprintCheck to reject subsequent requests.
 func setFingerprintCookie(w http.ResponseWriter, hmacVal string) {
 	e_sessions.SetFingerprintCookie(w, hmacVal)
@@ -23,10 +23,16 @@ func setFingerprintCookie(w http.ResponseWriter, hmacVal string) {
 
 func CheckFingerprintHandler(w http.ResponseWriter, r *http.Request) {
 
-	session, err := e_sessions.GetOrCreateSession(w, r)
-	if err != nil {
-		log.Printf("[CheckFingerprintHandler] session get failed: %v", err)
-		httpresponse.RespondWithError(w, http.StatusUnauthorized, "session error")
+	// Read without a response writer: an absent/unreadable sign-in is a no-op,
+	// including for older clients, and must not create or repair any cookies.
+	session, err := e_sessions.Load(r)
+	userID := 0
+	if session != nil {
+		userID, _ = session.Values["user_id"].(int)
+	}
+	if err != nil || userID <= 1 {
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(`{"ok":true}`))
 		return
 	}
 
@@ -45,7 +51,7 @@ func CheckFingerprintHandler(w http.ResponseWriter, r *http.Request) {
 
 	sessFingerprint, _ := session.Values["fingerprint_hash"].(string)
 
-	// No fingerprint in session yet (fresh/restarted session, or guest user).
+	// No fingerprint in a signed-in session yet.
 	// Accept the submitted fingerprint by computing its HMAC and storing it.
 	if sessFingerprint == "" {
 		hmacVal := HMACFingerprint(req.Fingerprint)
@@ -58,23 +64,8 @@ func CheckFingerprintHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Session has a stored fingerprint that was NOT set by HMAC (e.g. random UUID
-	// from routing_helpers.go guest flow). Verify fails → re-enroll rather than
-	// rejecting the user.
+	// A signed-in browser whose fingerprint differs must lose its sign-in.
 	if !VerifyFingerprintHMAC(req.Fingerprint, sessFingerprint) {
-		// Check if user is a guest (user_id == 1). Guests get re-enrolled
-		// silently; authenticated users get a mismatch error.
-		userID, _ := session.Values["user_id"].(int)
-		if userID <= 1 {
-			hmacVal := HMACFingerprint(req.Fingerprint)
-			session.Values["fingerprint_hash"] = hmacVal
-			setFingerprintCookie(w, hmacVal)
-			_ = e_sessions.Save(w, r, session)
-			log.Printf("[CheckFingerprintHandler] guest fingerprint re-registered ✅")
-			w.Header().Set("Content-Type", "application/json")
-			w.Write([]byte(`{"ok":true}`))
-			return
-		}
 		// A signed-in session whose browser no longer matches is ended here, not
 		// only refused. Refusing alone left the identity in the session: the
 		// browser was sent to the login page, the login page sent the apparently

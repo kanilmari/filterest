@@ -24,11 +24,15 @@ export async function setAuthModes() {
     sessionStorage.removeItem('user_permissions');
     count_this_function("setAuthModes");
     const homeRevision = beginFrontPageAvailabilityRequest();
+    // Startup security checks need this response's identity, never a persisted
+    // button state left by an earlier sign-in when the current request fails.
+    let bootButtonState;
     try {
         const data = await fetchAuthModes();
         if (generation !== getSessionGeneration()) return;
 
         if (data && ['login', 'logout'].includes(data.needs_button)) {
+            bootButtonState = data.needs_button;
             localStorage.setItem("button_state", data.needs_button);
 
             // These flags describe site policy, not whether this browser is signed in.
@@ -93,6 +97,7 @@ export async function setAuthModes() {
     } catch (err) {
         console.warn("Virhe auth modes -tarkistuksessa:", err);
     }
+    return bootButtonState;
 }
 
 export { hasRoutePermission };

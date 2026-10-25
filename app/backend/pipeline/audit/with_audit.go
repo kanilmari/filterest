@@ -469,6 +469,20 @@ func (sc *statusCapture) Unwrap() http.ResponseWriter {
 // handlerName is injected from RouteContext at pipeline build time.
 func WithAudit(handlerName string, next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		// Older clients may still post the now-retired guest fingerprint check.
+		// Bypass before capture/queueing, and inspect the incoming identity: a
+		// signed-in mismatch clears that identity but must still be audited.
+		if handlerName == "auth.CheckFingerprintHandler" && r.URL.Path == "/api/check-fingerprint" && r.Method == http.MethodPost {
+			session, err := e_sessions.Load(r)
+			userID := 0
+			if session != nil {
+				userID, _ = session.Values["user_id"].(int)
+			}
+			if err != nil || userID <= 1 {
+				next(w, r)
+				return
+			}
+		}
 		start := time.Now()
 
 		// Wrap writer to capture status code

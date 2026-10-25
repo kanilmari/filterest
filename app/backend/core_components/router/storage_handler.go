@@ -26,7 +26,6 @@ import (
 	"easelect/backend/core_components/middlewares"
 	e_sessions "easelect/backend/core_components/sessions"
 
-	"github.com/google/uuid"
 	"github.com/gorilla/sessions"
 	"golang.org/x/sys/unix"
 )
@@ -173,46 +172,19 @@ func storageActorFromSession(session *sessions.Session, userID int) dbutils.Requ
 	return dbutils.NewRequestActorContext(userID, userRole)
 }
 
+// ensureStorageGuestSession retains guest CSRF/language state without enrolling
+// a device. Older guest bindings must not survive the next generic session save.
 func ensureStorageGuestSession(w http.ResponseWriter, r *http.Request, session *sessions.Session) {
-	changed := false
-	if _, hasUserID := session.Values["user_id"].(int); !hasUserID {
+	userID, _ := session.Values["user_id"].(int)
+	if userID > 1 {
+		return
+	}
+	changed := e_sessions.ClearGuestBrowserBindings(w, session)
+	if userID != 1 {
 		session.Values["user_id"] = 1
 		changed = true
 	}
-
-	deviceID := ""
-	if sessDeviceID, ok := session.Values["device_id"].(string); ok && sessDeviceID != "" {
-		deviceID = sessDeviceID
-	}
-	if cookieDevice, err := r.Cookie(e_sessions.DeviceIDCookieName()); err == nil && cookieDevice.Value != "" {
-		deviceID = cookieDevice.Value
-	}
-	if deviceID == "" {
-		deviceID = uuid.NewString()
-	}
-	if sessDeviceID, _ := session.Values["device_id"].(string); sessDeviceID != deviceID {
-		session.Values["device_id"] = deviceID
-		changed = true
-	}
-	e_sessions.SetDeviceIDCookie(w, deviceID)
-
-	fingerprint := ""
-	if sessFP, ok := session.Values["fingerprint_hash"].(string); ok && sessFP != "" {
-		fingerprint = sessFP
-	}
-	if cookieFP, err := r.Cookie(e_sessions.FingerprintCookieName()); err == nil && cookieFP.Value != "" {
-		fingerprint = cookieFP.Value
-	}
-	if fingerprint == "" {
-		fingerprint = uuid.NewString()
-	}
-	if sessFP, _ := session.Values["fingerprint_hash"].(string); sessFP != fingerprint {
-		session.Values["fingerprint_hash"] = fingerprint
-		changed = true
-	}
-	e_sessions.SetFingerprintCookie(w, fingerprint)
-
-	if changed {
+	if changed || session.IsNew {
 		_ = e_sessions.Save(w, r, session)
 	}
 }

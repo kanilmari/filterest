@@ -90,6 +90,9 @@ func rootHandler(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
+	if loginToBrowse && !authShellEntry && !onkoKayttaja {
+		clearGuestBrowserBinding(w, r, session)
+	}
 	if !onkoKayttaja {
 		// ei user_id:tä
 		if loginToBrowse && !authShellEntry {
@@ -147,12 +150,8 @@ func rootHandler(w http.ResponseWriter, r *http.Request) {
 	// makes re-issues all three cookies here, with the session's own values, so
 	// the front page can never be the visit that lets one of them lapse.
 	//
-	// Giving a browser a binding, rather than renewing one, stays a guest's
-	// affair on a site that permits public browsing. Minting values there is safe
-	// precisely because there is no sign-in to protect; minting them for a
-	// signed-in request would hand it the very proof the protected routes demand
-	// afterwards. A site that requires a sign-in enrols no guest at all: a
-	// visitor without one has already been sent to the login page above.
+	// Guests keep only the functional session. Retire bindings left by older
+	// versions rather than carrying them through later generic session saves.
 	if isSignedInUserID(userIDVal) {
 		if !e_sessions.RenewUsedSignIn(w, r, session) {
 			session_expiry.RespondSignInNoLongerValid(
@@ -161,8 +160,8 @@ func rootHandler(w http.ResponseWriter, r *http.Request) {
 			)
 			return
 		}
-	} else if !loginToBrowse {
-		establishGuestBrowserBinding(w, r, session)
+	} else {
+		clearGuestBrowserBinding(w, r, session)
 	}
 
 	if tryServeCustomRoot(w, r, loginToBrowse, userIDVal) {

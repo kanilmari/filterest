@@ -1179,37 +1179,6 @@ func TestEnsureGuestSession_SetsUserID(t *testing.T) {
 	}
 }
 
-// TestEnsureGuestSession_PreservesExistingDeviceID verifies that an existing
-// device_id cookie is preserved rather than overwritten with a new UUID.
-func TestEnsureGuestSession_PreservesExistingDeviceID(t *testing.T) {
-	store := setupTestStore(t)
-
-	cookieW := httptest.NewRecorder()
-	cookieR := httptest.NewRequest(http.MethodGet, "/", nil)
-	sess, err := store.Get(cookieR, e_sessions.SessionName)
-	if err != nil {
-		t.Fatalf("store.Get: %v", err)
-	}
-	if saveErr := sess.Save(cookieR, cookieW); saveErr != nil {
-		t.Fatalf("sess.Save: %v", saveErr)
-	}
-
-	const existingDeviceID = "my-existing-device-id"
-	req := httptest.NewRequest(http.MethodGet, "/", nil)
-	for _, c := range cookieW.Result().Cookies() {
-		req.AddCookie(c)
-	}
-	req.AddCookie(&http.Cookie{Name: "device_id", Value: existingDeviceID})
-	rr := httptest.NewRecorder()
-
-	ensureGuestSession(rr, req, sess)
-
-	deviceID, _ := sess.Values["device_id"].(string)
-	if deviceID != existingDeviceID {
-		t.Errorf("device_id: got %q, want %q", deviceID, existingDeviceID)
-	}
-}
-
 // ── GetTablesVisibleToUser tests ───────────────────────────────────────────
 
 // TestGetTablesVisibleToUser_Admin verifies that an admin user returns nil
@@ -1256,35 +1225,5 @@ func TestGetTablesVisibleToUser_NonAdmin_NoTables(t *testing.T) {
 	}
 	if len(result) != 0 {
 		t.Errorf("expected empty map for non-admin with no permissions, got %v", result)
-	}
-}
-
-// TestEnsureGuestSession_GeneratesDeviceIDIfMissing verifies that a new UUID is
-// generated for device_id when neither the session nor the cookie has one.
-func TestEnsureGuestSession_GeneratesDeviceIDIfMissing(t *testing.T) {
-	store := setupTestStore(t)
-
-	cookieW := httptest.NewRecorder()
-	cookieR := httptest.NewRequest(http.MethodGet, "/", nil)
-	sess, err := store.Get(cookieR, e_sessions.SessionName)
-	if err != nil {
-		t.Fatalf("store.Get: %v", err)
-	}
-	if saveErr := sess.Save(cookieR, cookieW); saveErr != nil {
-		t.Fatalf("sess.Save: %v", saveErr)
-	}
-
-	req := httptest.NewRequest(http.MethodGet, "/", nil)
-	for _, c := range cookieW.Result().Cookies() {
-		req.AddCookie(c)
-	}
-	// No device_id cookie added.
-	rr := httptest.NewRecorder()
-
-	ensureGuestSession(rr, req, sess)
-
-	deviceID, _ := sess.Values["device_id"].(string)
-	if deviceID == "" {
-		t.Error("device_id must be generated when missing from session and cookies")
 	}
 }

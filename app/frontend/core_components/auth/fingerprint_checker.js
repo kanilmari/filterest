@@ -64,10 +64,14 @@ async function resetSessionAndRedirect() {
 }
 
 /**
- * Validate the browser fingerprint against the server session.
+ * Validate a signed-in browser's fingerprint against the server session.
  * Must be called AFTER setAuthModes() to serialize CookieStore session writes.
  */
-export async function checkFingerprint() {
+export async function checkFingerprint(bootButtonState) {
+    // Use the existing boot response's sign-in state. A failed boot request
+    // must not reuse a persisted sign-in flag from an earlier session.
+    if (bootButtonState !== 'logout') return;
+
     try {
         // The fingerprint cookie is now HttpOnly — JS cannot read it.
         // Instead, generate a fresh fingerprint hash and send it to the check endpoint.

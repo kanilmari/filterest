@@ -58,14 +58,15 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     // Haetaan login- ja admin-tilat
     try {
-        await setAuthModes(); // Odotetaan async-haun valmistumista
+        const bootButtonState = await setAuthModes();
 
-        // Fingerprint check MUST run after setAuthModes() to serialize
+        // The check skips guests using the sign-in state set above. For signed-in
+        // users it MUST run after setAuthModes() to serialize
         // CookieStore session writes. Both endpoints modify the session;
         // running them concurrently causes the last Set-Cookie response
         // to overwrite the other's session data (~1/10 page loads).
         // See Security.md §4 for full rules before adding new session-writing calls.
-        await checkFingerprint();
+        await checkFingerprint(bootButtonState);
         const { dataLoaded } = await runPostAuthBootstrap({ refreshAuthModes: false });
         if (dataLoaded) {
             showDatasetRedirectNoticeIfAvailable();

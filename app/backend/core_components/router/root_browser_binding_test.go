@@ -348,8 +348,7 @@ func TestSignedInVisitorWithItsBindingIsServedAndRenewed(t *testing.T) {
 // A visitor who never signed in, on a site that requires one, meets exactly the
 // login page they met before: the front page sends them there plainly, a deep
 // link sends them there with the address they wanted, and neither hands them a
-// browser binding, because enrolling a guest is still something that happens
-// only where public browsing is allowed.
+// browser binding: guests have no authenticated session to protect.
 func TestGuestOnASignInOnlySiteMeetsTheSameLoginPageAsBefore(t *testing.T) {
 	setupSiteWithReadableContent(t, true)
 
@@ -430,9 +429,8 @@ func TestPublicFilesAreStillServedWhateverTheSignInLooksLike(t *testing.T) {
 }
 
 // A visitor who never signed in, on a site that permits public browsing, keeps
-// that site exactly as it was: the page loads and the browser is still given the
-// values the rest of the application expects to find.
-func TestSignedOutVisitorStillReceivesItsGuestBinding(t *testing.T) {
+// browsing: the page loads and only its functional session is kept.
+func TestSignedOutVisitorKeepsOnlyItsFunctionalSession(t *testing.T) {
 	setupRootHandlerMockDB(t, false)
 	setupRootHandlerSessionStore(t)
 	setupRootHandlerFrontend(t)
@@ -453,21 +451,21 @@ func TestSignedOutVisitorStillReceivesItsGuestBinding(t *testing.T) {
 			if !strings.Contains(recorder.Body.String(), "root-shell") {
 				t.Fatalf("expected the root shell, got %q", recorder.Body.String())
 			}
-			device := responseCookie(recorder, e_sessions.DeviceIDCookieName())
-			if device == nil || device.Value == "" {
-				t.Fatal("a visitor who never signed in was given no device binding")
+			for _, name := range []string{e_sessions.DeviceIDCookieName(), e_sessions.FingerprintCookieName()} {
+				cookie := responseCookie(recorder, name)
+				if cookie == nil || cookie.Value != "" || cookie.MaxAge != -1 {
+					t.Fatalf("guest binding was not expired: %+v", cookie)
+				}
 			}
-			fingerprint := responseCookie(recorder, e_sessions.FingerprintCookieName())
-			if fingerprint == nil || fingerprint.Value == "" {
-				t.Fatal("a visitor who never signed in was given no fingerprint binding")
+			if responseCookie(recorder, e_sessions.SessionName) == nil {
+				t.Fatal("guest lost its functional session cookie")
 			}
 		})
 	}
 }
 
-// A returning guest keeps the binding it already carries, so guest identity
-// survives across page loads exactly as before.
-func TestReturningGuestKeepsTheBindingItAlreadyCarries(t *testing.T) {
+// Old guest cookies and session entries are retired on the next root visit.
+func TestReturningGuestClearsTheBindingItAlreadyCarries(t *testing.T) {
 	setupRootHandlerMockDB(t, false)
 	setupRootHandlerSessionStore(t)
 	setupRootHandlerFrontend(t)
@@ -481,11 +479,24 @@ func TestReturningGuestKeepsTheBindingItAlreadyCarries(t *testing.T) {
 	if recorder.Code != http.StatusOK {
 		t.Fatalf("status = %d, want %d", recorder.Code, http.StatusOK)
 	}
-	if rotated := responseCookie(recorder, e_sessions.DeviceIDCookieName()); rotated != nil && rotated.Value != "the-guest-device" {
-		t.Fatalf("the returning guest's device binding changed to %q", rotated.Value)
+	for _, name := range []string{e_sessions.DeviceIDCookieName(), e_sessions.FingerprintCookieName()} {
+		cookie := responseCookie(recorder, name)
+		if cookie == nil || cookie.Value != "" || cookie.MaxAge != -1 {
+			t.Fatalf("old guest cookie was not expired: %+v", cookie)
+		}
 	}
-	if rotated := responseCookie(recorder, e_sessions.FingerprintCookieName()); rotated != nil && rotated.Value != "the-guest-fingerprint" {
-		t.Fatalf("the returning guest's fingerprint binding changed to %q", rotated.Value)
+	followup := rootPageNavigation("/", responseCookie(recorder, e_sessions.SessionName))
+	cleaned, err := e_sessions.Load(followup)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cleaned.Values["user_id"] != 1 {
+		t.Fatal("guest identity lost")
+	}
+	for _, key := range []string{"device_id", "fingerprint_hash"} {
+		if _, exists := cleaned.Values[key]; exists {
+			t.Fatalf("old guest session retained %s", key)
+		}
 	}
 }
 
