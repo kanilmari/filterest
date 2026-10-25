@@ -19,6 +19,7 @@ import (
 
 	backend "easelect/backend/core_components"
 	"easelect/backend/core_components/dbutils"
+	"easelect/backend/core_components/runtime_grants/granttest"
 )
 
 func TestScheduleCardVisibilitySchemaCacheInvalidationDefersToCommitHook(t *testing.T) {
@@ -409,7 +410,7 @@ func TestCardVisibilityHandlerAcceptsRetiredColumnLayout(t *testing.T) {
 	request := httptest.NewRequest(http.MethodPost, "/api/card-visibility/update", strings.NewReader(body))
 	request = request.WithContext(dbutils.SetLazyTx(request.Context(), tx))
 	response := httptest.NewRecorder()
-	UpdateCardVisibilityHandler(response, request)
+	UpdateCardVisibilityHandler(granttest.Recorder{ResponseRecorder: response}, request)
 	if response.Code != http.StatusOK {
 		t.Fatalf("status=%d: %s", response.Code, response.Body)
 	}
@@ -450,8 +451,8 @@ func (c *cardStyleWriteConn) QueryContext(_ context.Context, query string, args 
 	if strings.Contains(query, "SELECT EXISTS") {
 		return &cardStyleWriteRows{values: []driver.Value{true}}, nil
 	}
-	if query == fieldViewColumnGuardQuery {
-		return &cardStyleWriteRows{values: []driver.Value{int64(1), "label", ""}}, nil
+	if strings.HasPrefix(query, fieldViewColumnGuardQuery) {
+		return &cardStyleWriteRows{values: []driver.Value{int64(1), "label", "", false, "include"}}, nil
 	}
 	return nil, fmt.Errorf("unexpected query: %s", query)
 }

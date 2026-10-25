@@ -47,6 +47,9 @@ func ImportTableCSV(ctx context.Context, tableName string) (string, string, erro
 }
 
 // ImportTableCSVTx imports a table dump with a transaction-only API for internal callers and tests.
+// Imports that write column delivery flags require ImportTableCSV with a LazyTx
+// context, so cache eviction can be guaranteed after commit. A raw transaction
+// import of those flags fails and rolls back instead of leaving stale readers.
 func ImportTableCSVTx(tx *sql.Tx, tableName string) (string, string, error) {
 	return ImportTableCSVTxWithUsername(tx, tableName, "unknown")
 }

@@ -167,7 +167,8 @@ func TestRelationTitleTargetSaveInvalidationPostgres(t *testing.T) {
 		request.Body = io.NopCloser(strings.NewReader(string(raw)))
 		request = request.WithContext(dbutils.SetLazyTx(request.Context(), lazy))
 		response := httptest.NewRecorder()
-		handler(response, request)
+		// Keep manual commits so reads can assert both pre-commit and post-commit titles.
+		handler(&appearanceTestResponseBuffer{response}, request)
 		if response.Code != http.StatusOK {
 			t.Fatalf("save %s: %d %s", target, response.Code, response.Body)
 		}

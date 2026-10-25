@@ -31,6 +31,11 @@ func (m *Mutation) IncludeValues(table string, values map[string]interface{}) {
 	if m == nil {
 		return
 	}
+	if table == "system_column_details" {
+		_, hide := values["hide_everywhere"]
+		_, delivery := values["client_delivery_mode"]
+		m.columnVisibilityWritten = m.columnVisibilityWritten || hide || delivery
+	}
 	for _, column := range targetColumns(table) {
 		uid, _ := strconv.ParseInt(fmt.Sprint(values[column]), 10, 64)
 		if uid > 0 {

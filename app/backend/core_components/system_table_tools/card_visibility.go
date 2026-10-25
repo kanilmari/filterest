@@ -12,6 +12,7 @@ import (
 	"easelect/backend/core_components/dbutils"
 	dtt_1_row_read "easelect/backend/core_components/dynamic_table_tools/dtt_1_row_crud/dtt_1_row_read"
 	"easelect/backend/core_components/httpresponse"
+	"easelect/backend/core_components/runtime_grant_mutations"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -59,9 +60,11 @@ type CardVisibilityResponse struct {
 }
 
 type fieldViewColumnGuard struct {
-	ColumnUID  int
-	ColumnName string
-	LockReason string
+	ColumnUID          int
+	ColumnName         string
+	LockReason         string
+	HideEverywhere     bool
+	ClientDeliveryMode string
 }
 
 const fieldViewColumnGuardQuery = `
@@ -79,7 +82,9 @@ const fieldViewColumnGuardQuery = `
 			 AND COALESCE(scd.insertable, true) = true
 			THEN 'required_input'
 			ELSE ''
-		END AS lock_reason
+		END AS lock_reason,
+		COALESCE(scd.hide_everywhere, false),
+		COALESCE(scd.client_delivery_mode, 'include')
 	FROM system_column_details scd
 	JOIN system_db_tables sdt ON sdt.table_uid = scd.table_uid
 	LEFT JOIN information_schema.columns columns
@@ -114,8 +119,14 @@ const updateFieldViewColumnOrderQuery = `
 	  )
 `
 
-func loadFieldViewColumnGuards(queryer dbutils.Querier, tableName string) ([]fieldViewColumnGuard, error) {
-	rows, err := queryer.Query(fieldViewColumnGuardQuery, tableName)
+func loadFieldViewColumnGuards(queryer dbutils.Querier, tableName string, forUpdate ...bool) ([]fieldViewColumnGuard, error) {
+	query := fieldViewColumnGuardQuery
+	if len(forUpdate) > 0 && forUpdate[0] {
+		// Compare and write the same locked flags: a competing card save must
+		// not turn a presentation-only edit into an unannounced visibility write.
+		query += " FOR UPDATE OF scd"
+	}
+	rows, err := queryer.Query(query, tableName)
 	if err != nil {
 		return nil, fmt.Errorf("load field-view column guards for %q: %w", tableName, err)
 	}
@@ -124,7 +135,7 @@ func loadFieldViewColumnGuards(queryer dbutils.Querier, tableName string) ([]fie
 	guards := make([]fieldViewColumnGuard, 0)
 	for rows.Next() {
 		var guard fieldViewColumnGuard
-		if err := rows.Scan(&guard.ColumnUID, &guard.ColumnName, &guard.LockReason); err != nil {
+		if err := rows.Scan(&guard.ColumnUID, &guard.ColumnName, &guard.LockReason, &guard.HideEverywhere, &guard.ClientDeliveryMode); err != nil {
 			return nil, fmt.Errorf("scan field-view column guard for %q: %w", tableName, err)
 		}
 		guards = append(guards, guard)
@@ -405,6 +416,12 @@ func UpdateCardVisibilityHandler(w http.ResponseWriter, r *http.Request) {
 		respondDatasetAppearanceError(w, store.ErrDatasetAppearanceConflict)
 		return
 	}
+	// Success must wait for commit and every cache-invalidation hook, including
+	// saves that also write dataset presentation before the column flags.
+	if err := httpresponse.EnableCommitBuffer(w); err != nil {
+		httpresponse.RespondWithError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
 	tx, ok := dbutils.RequireTx(r.Context())
 	if !ok {
 		log.Printf("\033[31merror: [UpdateCardVisibilityHandler] failed to acquire transaction\033[0m")
@@ -429,7 +446,7 @@ func UpdateCardVisibilityHandler(w http.ResponseWriter, r *http.Request) {
 		}
 		presentation = &result
 	}
-	guards, err := loadFieldViewColumnGuards(tx, req.TableName)
+	guards, err := loadFieldViewColumnGuards(tx, req.TableName, true)
 	if err != nil {
 		log.Printf("\033[31merror: [UpdateCardVisibilityHandler] field guard query failed: %v\033[0m", err)
 		httpresponse.RespondWithError(w, http.StatusInternalServerError, "error checking field visibility constraints")
@@ -498,11 +515,23 @@ func UpdateCardVisibilityHandler(w http.ResponseWriter, r *http.Request) {
 	// The lazy request transaction commits after this handler returns. Clearing
 	// the cache before that commit lets a fast client refresh cache the old row
 	// again for five minutes, so schedule invalidation for successful commit.
-	scheduleCardVisibilitySchemaCacheInvalidation(
-		r.Context(),
-		req.TableName,
-		dtt_1_row_read.InvalidateSchemaCache,
-	)
+	visibilityChanged := false
+	for _, guard := range guards {
+		for _, column := range req.Columns {
+			if column.ColumnUID == guard.ColumnUID &&
+				(column.HideEverywhere != guard.HideEverywhere || column.ClientDeliveryMode != guard.ClientDeliveryMode) {
+				visibilityChanged = true
+			}
+		}
+	}
+	if visibilityChanged {
+		if err := runtime_grant_mutations.ScheduleColumnVisibilityCacheInvalidation(r.Context(), req.TableName); err != nil {
+			httpresponse.RespondWithError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+	} else {
+		scheduleCardVisibilitySchemaCacheInvalidation(r.Context(), req.TableName, dtt_1_row_read.InvalidateSchemaCache)
+	}
 
 	httpresponse.RespondWithJSON(w, http.StatusOK, map[string]any{
 		"dataset_presentation": presentation,

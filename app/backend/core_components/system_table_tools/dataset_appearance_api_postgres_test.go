@@ -150,7 +150,7 @@ func TestDatasetAppearancePostgresAdminAndGenericCompatibilityWriters(t *testing
 	r = httptest.NewRequest("POST", "/api/card-visibility/update", strings.NewReader(string(body)))
 	r = r.WithContext(dbutils.SetLazyTx(r.Context(), lazy))
 	w = httptest.NewRecorder()
-	UpdateCardVisibilityHandler(w, r)
+	UpdateCardVisibilityHandler(&appearanceTestResponseBuffer{w}, r)
 	if w.Code != 200 {
 		lazy.Rollback()
 		t.Fatal(w.Code, w.Body.String())

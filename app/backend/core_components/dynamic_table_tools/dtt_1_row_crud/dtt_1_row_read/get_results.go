@@ -160,13 +160,14 @@ func GetResults(response_writer http.ResponseWriter, request *http.Request) {
 	if cached := getCachedUserColumnSettings(userID, table_name, viewKey); cached != nil {
 		userColumnSettings = cached.settings
 	} else {
+		generation := columnSettingsCacheGeneration(table_name)
 		userColumnSettings, err = fetchUserColumnSettingsOrDefaults(userID, table_name, viewKey, currentDb)
 		if err != nil {
 			log.Printf("\033[31merror: %s\033[0m\n", err.Error())
 			httpresponse.RespondWithError(response_writer, http.StatusInternalServerError, "error fetching column settings")
 			return
 		}
-		setCachedUserColumnSettings(userID, table_name, viewKey, &ucsCacheEntry{settings: userColumnSettings, cachedAt: time.Now()})
+		setCachedUserColumnSettingsAtGeneration(userID, table_name, viewKey, &ucsCacheEntry{settings: userColumnSettings, cachedAt: time.Now()}, generation)
 	}
 
 	// 3b. Haetaan sarakkeet, joihin roolilla on SELECT-oikeus (cached, 30 s TTL).
@@ -204,6 +205,7 @@ func GetResults(response_writer http.ResponseWriter, request *http.Request) {
 		geomCols = cached.geomCols
 		geomSrcs = cached.geomSrcs
 	} else {
+		generation := schemaCacheGeneration(table_name)
 		column_data_types, err = getColumnDataTypesWithFK(table_name, currentDb)
 		if err != nil {
 			log.Printf("\033[31merror: %s\033[0m\n", err.Error())
@@ -257,7 +259,7 @@ func GetResults(response_writer http.ResponseWriter, request *http.Request) {
 			return
 		}
 
-		setCachedSchemaMetadata(table_name, &schemaCacheEntry{
+		setCachedSchemaMetadataAtGeneration(table_name, &schemaCacheEntry{
 			columnDataTypes: column_data_types,
 			columnsMap:      columnsMap,
 			tableMeta:       tableMeta,
@@ -265,7 +267,7 @@ func GetResults(response_writer http.ResponseWriter, request *http.Request) {
 			geomCols:        geomCols,
 			geomSrcs:        geomSrcs,
 			cachedAt:        time.Now(),
-		})
+		}, generation)
 	}
 
 	hasGeo := len(geomCols) > 0 || len(geomSrcs) > 0

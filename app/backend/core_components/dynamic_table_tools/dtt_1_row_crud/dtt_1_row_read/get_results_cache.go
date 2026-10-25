@@ -54,18 +54,23 @@ type existsCacheEntry struct {
 // Cache stores + mutexes
 // =============================================================
 
+// Generations outlive TTL entries: recycling one while a read is in flight
+// would allow that old read to repopulate an explicitly invalidated cache.
 var (
-	schemaCache   = make(map[string]*schemaCacheEntry)
-	schemaCacheMu sync.RWMutex
-	schemaTTL     = dataset_kinds.SchemaMetadataTTL
+	schemaCache       = make(map[string]*schemaCacheEntry)
+	schemaCacheMu     sync.RWMutex
+	schemaGenerations = make(map[string]uint64)
+	schemaTTL         = dataset_kinds.SchemaMetadataTTL
 
 	permCache   = make(map[string]*permCacheEntry)
 	permCacheMu sync.RWMutex
 	permTTL     = 30 * time.Second
 
-	ucsCache   = make(map[string]*ucsCacheEntry)
-	ucsCacheMu sync.RWMutex
-	ucsTTL     = 2 * time.Minute
+	ucsCache       = make(map[string]*ucsCacheEntry)
+	ucsCacheMu     sync.RWMutex
+	ucsGenerations = make(map[string]uint64)
+	ucsEpoch       uint64
+	ucsTTL         = 2 * time.Minute
 
 	configCache   = make(map[string]*configCacheEntry)
 	configCacheMu sync.RWMutex
@@ -91,10 +96,19 @@ func getCachedSchemaMetadata(tableName string) *schemaCacheEntry {
 	return entry
 }
 
-func setCachedSchemaMetadata(tableName string, entry *schemaCacheEntry) {
+func schemaCacheGeneration(tableName string) uint64 {
+	schemaCacheMu.RLock()
+	defer schemaCacheMu.RUnlock()
+	return schemaGenerations[tableName]
+}
+
+func setCachedSchemaMetadataAtGeneration(tableName string, entry *schemaCacheEntry, generation uint64) {
 	key := "schema|" + tableName
 	schemaCacheMu.Lock()
-	schemaCache[key] = entry
+	// Compare and publish under the invalidator's lock; no stale late fill wins.
+	if schemaGenerations[tableName] == generation {
+		schemaCache[key] = entry
+	}
 	schemaCacheMu.Unlock()
 }
 
@@ -106,6 +120,7 @@ func InvalidateSchemaCache(tableName string) {
 	dataset_kinds.InvalidateAll()
 	key := "schema|" + tableName
 	schemaCacheMu.Lock()
+	schemaGenerations[tableName]++
 	delete(schemaCache, key)
 	schemaCacheMu.Unlock()
 }
@@ -163,10 +178,23 @@ func getCachedUserColumnSettings(userID int, tableName, viewKey string) *ucsCach
 	return entry
 }
 
-func setCachedUserColumnSettings(userID int, tableName, viewKey string, entry *ucsCacheEntry) {
+type userColumnSettingsGeneration struct {
+	dataset, all uint64
+}
+
+func columnSettingsCacheGeneration(tableName string) userColumnSettingsGeneration {
+	ucsCacheMu.RLock()
+	defer ucsCacheMu.RUnlock()
+	return userColumnSettingsGeneration{ucsGenerations[tableName], ucsEpoch}
+}
+
+func setCachedUserColumnSettingsAtGeneration(userID int, tableName, viewKey string, entry *ucsCacheEntry, generation userColumnSettingsGeneration) {
 	key := fmt.Sprintf("ucs|%d|%s|%s", userID, tableName, viewKey)
 	ucsCacheMu.Lock()
-	ucsCache[key] = entry
+	// Both dataset eviction and a global field-set eviction reject old reads.
+	if generation == (userColumnSettingsGeneration{ucsGenerations[tableName], ucsEpoch}) {
+		ucsCache[key] = entry
+	}
 	ucsCacheMu.Unlock()
 }
 
@@ -176,9 +204,11 @@ func InvalidateUserColumnSettingsCache(tableName, viewKey string) {
 	ucsCacheMu.Lock()
 	defer ucsCacheMu.Unlock()
 	if tableName == "" || viewKey == "" {
+		ucsEpoch++
 		ucsCache = make(map[string]*ucsCacheEntry)
 		return
 	}
+	ucsGenerations[tableName]++
 	suffix := "|" + tableName + "|" + viewKey
 	for key := range ucsCache {
 		if strings.HasSuffix(key, suffix) {

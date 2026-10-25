@@ -21,12 +21,13 @@ import (
 )
 
 type Mutation struct {
-	Tx                *sql.Tx
-	before            runtime_grants.GrantSnapshot
-	roles             runtime_grants.RoleConfiguration
-	targets           []int64
-	refuseNewBlockers bool
-	updateGuard       *update_capability.WriteGuard
+	Tx                      *sql.Tx
+	before                  runtime_grants.GrantSnapshot
+	roles                   runtime_grants.RoleConfiguration
+	targets                 []int64
+	columnVisibilityWritten bool
+	refuseNewBlockers       bool
+	updateGuard             *update_capability.WriteGuard
 }
 
 // ReadsPolicyMetadata identifies the registries read by LoadGrantSnapshot and
@@ -151,6 +152,9 @@ func (m *Mutation) Finish(ctx context.Context, datasetUIDs ...int64) (err error)
 	}
 	result, err := reconcile(ctx, m.Tx, m.roles, &m.before, scope)
 	logMutationFindings(result)
+	if err == nil {
+		err = m.scheduleColumnVisibilityInvalidation(ctx, datasetUIDs)
+	}
 	if err == nil {
 		scheduleKindEvidenceInvalidation(ctx)
 	}
