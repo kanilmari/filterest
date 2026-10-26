@@ -177,6 +177,9 @@ test('WO13 the board is drawn once and keeps focus through start-up', async ({ p
     const rows = page.locator('.workline-observatory__workline-row');
     await expect(rows).toHaveCount(64);
     const title = page.locator('.workline-observatory__workline-title').last();
+    // Since K522 A the shell stays hidden (visibility) until the chosen language is applied, and a hidden row cannot
+    // take focus; the draw count above still covers that phase.
+    await expect(page.locator('html')).not.toHaveAttribute('data-shell-boot-pending', { timeout: 15_000 });
     await title.focus();
     await waitForShellBoot(page);
     await expect(rows).toHaveCount(64);

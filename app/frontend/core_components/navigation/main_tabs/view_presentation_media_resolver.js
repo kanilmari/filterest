@@ -4,12 +4,21 @@
 // Keeps every navigation surface on the same media-dependent shape policy.
 
 export const VIEW_PRESENTATION_MEDIA_ATTRIBUTE = 'data-view-has-presentation-media';
+// Dispatched by the shell-boot guard when it reveals the page.
+const SHELL_BOOT_REVEALED_EVENT = 'filterest-shell-boot-recovered';
+
+// The shell-boot guard keeps the page under visibility: hidden until the chosen language is applied (K522 A), and
+// Home is drawn inside that phase. That is the boot overlay, not the view's own state, so it must not hide Home's
+// media; the reveal resolves the flag again (cut 9.6.0, G18).
+function shellBootPending() {
+    return document.documentElement.hasAttribute('data-shell-boot-pending');
+}
 
 function isShown(element) {
     if (!element || element.hidden || element.classList.contains('hidden')) return false;
     const style = window.getComputedStyle(element);
-    return style.display !== 'none' && style.visibility !== 'hidden'
-        && style.visibility !== 'collapse' && style.opacity !== '0';
+    const visibilityHidden = style.visibility === 'hidden' || style.visibility === 'collapse';
+    return style.display !== 'none' && (!visibilityHidden || shellBootPending()) && style.opacity !== '0';
 }
 
 /** Dataset metadata owns its rule; Home counts only configured, displayed media.
@@ -42,8 +51,9 @@ export function syncViewPresentationMediaFlag(activeTabId = '', viewName = '') {
 
 let observer;
 let refreshPresentation;
-/** Watch Home mounts, preview edits, hiding and theme changes, including async GET rendering.
- * Observe only relevant records so SVG morph frames cannot retrigger themselves.
+/** Watch Home mounts, preview edits, hiding and theme changes, including async GET rendering, and the shell-boot
+ * reveal (it changes <html>, outside the observed body). Observe only relevant records so SVG morph frames cannot
+ * retrigger themselves.
  */
 export function observeViewPresentationMedia(refresh) {
     refreshPresentation = refresh;
@@ -55,4 +65,5 @@ export function observeViewPresentationMedia(refresh) {
     });
     observer.observe(document.body, { childList: true, subtree: true, attributes: true,
         attributeFilter: ['class', 'style', 'hidden'] });
+    window.addEventListener(SHELL_BOOT_REVEALED_EVENT, () => refreshPresentation?.());
 }

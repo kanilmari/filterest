@@ -20,6 +20,7 @@ function home(kind = 'video') {
     return element;
 }
 beforeEach(() => {
+    document.documentElement.removeAttribute('data-shell-boot-pending');
     document.body.className = '';
     document.body.innerHTML = '<div id="navbar" style="--navtab-presentation-transition-duration:0ms"></div>'
         + '<div class="navtabs"><button class="navtablinks" data-id="media" data-has-presentation-media="true"></button>'
@@ -54,6 +55,20 @@ test.each(['home-hidden', 'layer-hidden', 'display-none', 'invisible', 'zero-opa
     if (mode === 'zero-opacity') element.style.setProperty('--home-media-opacity', '0');
     if (mode === 'full-wash') element.style.setProperty('--home-media-wash', '1');
     expect(resolveViewHasPresentationMedia()).toBe(false);
+});
+test('the shell-boot overlay does not hide Home media, and the reveal resolves the flag again (cut 9.6.0)', async () => {
+    const element = home();
+    // While pending, the shell-boot guard hides the whole page with visibility: hidden; Home is drawn inside that phase.
+    element.style.visibility = 'hidden';
+    document.documentElement.setAttribute('data-shell-boot-pending', '');
+    expect(resolveViewHasPresentationMedia()).toBe(true);
+    clearMainTabActiveState('front_page');await settle();expect(flag()).toBe('true');
+    // The reveal changes <html>, outside the observed body: only its event re-resolves. The view's own hiding stays
+    // here, so the flag must now follow it.
+    document.documentElement.removeAttribute('data-shell-boot-pending');
+    await settle();expect(flag()).toBe('true');
+    window.dispatchEvent(new Event('filterest-shell-boot-recovered'));
+    expect(flag()).toBe('false');
 });
 test('flag follows dataset → Home → dataset, including a late Home GET and media removal', async () => {
     applyMainTabActiveState('media');expect(flag()).toBe('true');
