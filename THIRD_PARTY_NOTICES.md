@@ -9,11 +9,11 @@ Reviewed upstream legal and attribution document bytes are retained under
 
 ## Candidate
 
-- Filterest app version: `9.5.1`
-- Database version: `9.12.0`
+- Filterest app version: `9.6.0`
+- Database version: `9.13.0`
 - Project source license: `GPL-2.0-or-later`
 - Combined release-binary license: `GPL-3.0-or-later`
-- License bundle manifest SHA-256: `434a8aa153dbef0a60fc96e0836f2dce4b252277c7a672fb67626c2a6a05e556`
+- License bundle manifest SHA-256: `675ea771cff660d283b709967030a5a37b569b88545cf35fa33a8986d2a995e6`
 - Go metadata source: `GOOS=linux GOARCH=amd64 CGO_ENABLED=1 go list -deps metadata for filterest[linux-release]:. tags=netgo osusergo; filterest[container]:.; filterest-admin-recovery[container]:./server_tools/admin_credential_recovery, plus compiled vendored components and Go toolchain`
 - npm metadata source: `package-lock.json production dependency graph`
 - browser bundle metadata source: `app/server_tools/licenses/browser_bundle_provenance.json matched against app/package-lock.json and app/frontend/dist/*.js`
@@ -22,8 +22,8 @@ Reviewed upstream legal and attribution document bytes are retained under
 - runtime npm packages listed: `0`
 - browser bundle build components listed: `3`
 - third-party asset files listed: `79`
-- source files containing third-party icon geometry: `6`
-- first-party asset files recorded: `60`
+- source files containing third-party icon geometry: `7`
+- first-party asset files recorded: `65`
 - retained legal and attribution documents: `36`
 - unresolved third-party rows: `0`
 
@@ -90,13 +90,13 @@ Apache-2.0 components, the combined binaries are conveyed under GPL-3.0-or-later
 | --- | ---: | ---: | --- | --- | --- |
 | Google Material Icons and Symbols | 72 | 2 | Apache-2.0 | [source](https://github.com/google/material-design-icons) | [`asset-Google-Material-Icons-and-Symbols-eda288bd934a-1-material-symbols-Apache-2.0.txt`](THIRD_PARTY_LICENSES/asset-Google-Material-Icons-and-Symbols-eda288bd934a-1-material-symbols-Apache-2.0.txt), [`asset-Google-Material-Icons-and-Symbols-eda288bd934a-2-material-symbols-NOTICE.txt`](THIRD_PARTY_LICENSES/asset-Google-Material-Icons-and-Symbols-eda288bd934a-2-material-symbols-NOTICE.txt) |
 | Heroicons / Tailwind Labs | 0 | 1 | MIT | [source](https://github.com/tailwindlabs/heroicons) | [`asset-Heroicons-Tailwind-Labs-dac4d65f3957-1-heroicons-LICENSE.txt`](THIRD_PARTY_LICENSES/asset-Heroicons-Tailwind-Labs-dac4d65f3957-1-heroicons-LICENSE.txt) |
-| Lucide Icons | 7 | 3 | ISC | [source](https://github.com/lucide-icons/lucide) | [`asset-Lucide-Icons-b785a75e951a-1-lucide-LICENSE.txt`](THIRD_PARTY_LICENSES/asset-Lucide-Icons-b785a75e951a-1-lucide-LICENSE.txt) |
+| Lucide Icons | 7 | 4 | ISC | [source](https://github.com/lucide-icons/lucide) | [`asset-Lucide-Icons-b785a75e951a-1-lucide-LICENSE.txt`](THIRD_PARTY_LICENSES/asset-Lucide-Icons-b785a75e951a-1-lucide-LICENSE.txt) |
 
 ## First-Party Asset Provenance
 
 | Component | Asset files | Author | Rights holder | Publication-rights basis | License |
 | --- | ---: | --- | --- | --- | --- |
-| Filterest brand and fallback images | 16 | Filterest project contributors | Filterest project contributors | Maintained as original Filterest project assets under the repository-wide GPL-2.0-or-later grant; the human project owner confirmed the first-party classification and approved publication on 2026-08-30. | GPL-2.0-or-later |
+| Filterest brand and fallback images | 21 | Filterest project contributors | Filterest project contributors | Maintained as original Filterest project assets under the repository-wide GPL-2.0-or-later grant; the human project owner confirmed the first-party classification and approved publication on 2026-08-30. | GPL-2.0-or-later |
 | Filterest demo placeholder images | 15 | Filterest human project owner | Filterest human project owner | The author created these neutral text placeholders in Microsoft Paint without third-party source imagery and approved their redistribution with Filterest under GPL-2.0-or-later on 2026-08-30; no separate attribution is requested. | GPL-2.0-or-later |
 | Filterest original interface SVGs | 27 | Filterest project contributors | Filterest project contributors | Maintained as original Filterest project assets under the repository-wide GPL-2.0-or-later grant; the human project owner confirmed the first-party classification and approved publication on 2026-08-30. | GPL-2.0-or-later |
 | Filterest tool navigation documentation illustrations | 2 | Filterest project contributors | Filterest project contributors | First-party illustrations prepared for the Coloured Tool Navigation document on 2026-10-16. The project owner supplied the cropped Filterest menu capture, confirmed publication rights and explicitly authorised copying it into the GPL-2.0-or-later repository. The owner also commissioned an original SVG mockup using plain shapes and text only, with no third-party artwork, under the same grant. | GPL-2.0-or-later |
