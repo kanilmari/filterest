@@ -22,6 +22,8 @@ Dates are the local (Europe/Helsinki) date on which the version was published.
 
 ## [Unreleased]
 
+## [9.6.0] - 2026-10-26
+
 - **Home with a background image or video keeps its media-shaped navigation from the first view** — While the page waited for its language, Home counted its media as hidden, so the tabs, their label colours and the side menu took the no-media shape until something else changed. The media check now ignores the start-up overlay and checks again when the page is shown.
 - **Workline observatory start-up test focuses a row only once the page is shown (test only).**
 - Self-hosters must set `SESSION_SECRET_KEY` and `SESSION_KEY` outside `ENVIRONMENT_TYPE=dev`; before database access, startup now refuses missing or placeholder session encryption keys and a missing or placeholder signing key.
