@@ -94,8 +94,29 @@ owns each factor's copy keys, input attributes, semantic length and secondary ac
 The renderer accepts an `auth-verify` root with the template's `data-verify` slots
 and a descriptor, plus optional caller-owned primary/back/resend controls. New
 slot identities are unique per mount; existing input identities remain stable.
-Profile verification and PIN/authenticator enrollment are separate callers for a
-later batch; extend these descriptors and slots instead of adding another renderer.
+Profile email/password codes and First Run, registration and administrator PIN
+setup use the same renderer through its embedded mounts. Each caller retains its
+requests, confirmation and final submit action, including administrator activation.
+Profile code errors are inline; other profile errors retain their existing toasts.
+The profile Save action also saves other details and keeps its label. Password
+change uses `password_change_confirm` after sending its code.
+
+PIN creation and confirmation use numeric `type="text"` fields with
+`autocomplete="one-time-code"`, raw maximum 8 and `[0-9]{4,8}`. They start masked
+with the same CSS class and mask-only eye toggle as sign-in below, keeping PINs
+out of password-manager save/generate flows. Their label keys are `pin_setup_label`
+and `pin_setup_confirm_label`; existing shared label values remain untouched.
+Hints, individual errors and translated reveal toggles are associated with each
+field. Inactive factor groups remain hidden, inert and disabled. First Run TOTP
+uses raw maximum 32 and the same whitespace normalization as sign-in; its setup
+key display remains outside the code-entry group.
+
+Setup/profile fallback copy lives in `verification_setup_translation_fallbacks.js`;
+`EnsureVerificationSetupLangKeys` runs beside the sign-in seed function and uses
+the same insert/fill-empty policy. Chinese setup seed/fallback rows are
+machine-written and await native review. `L11_verification_setup_screens.spec.ts`
+uses the shared authenticated E2E session and fulfills or aborts every non-GET
+request; First Run/registration are verified from their templates in Vitest.
 
 The code view normalizes whitespace without truncating codes, preserves password
 values, and keeps polite inline errors beside their field. It focuses the phase

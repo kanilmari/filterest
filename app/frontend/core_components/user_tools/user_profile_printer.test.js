@@ -34,8 +34,8 @@ describe('profile authentication hints', () => {
         ['current_password', 'current-password'],
         ['new_password', 'new-password'],
         ['confirm_password', 'new-password'],
-        ['email_otp', 'off'],
-        ['password_otp', 'off'],
+        ['email_otp', 'one-time-code'],
+        ['password_otp', 'one-time-code'],
         ['new_login_name', 'username'],
     ])('%s uses %s before and after focus', (id, hint) => {
         const input = document.getElementById(id);

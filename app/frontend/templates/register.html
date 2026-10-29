@@ -23,6 +23,7 @@
 
     <!-- Käytetään samaa CSS-tiedostoa kuin login-sivulla -->
     <link rel="stylesheet" {{if .StandalonePage}}data-shell-boot-required data-shell-boot-probe-link{{end}} href="/frontend/core_components/auth/auth.css">
+    <link rel="stylesheet" {{if .StandalonePage}}data-shell-boot-required{{end}} href="/frontend/core_components/auth/auth_verify.css">
     <link rel="stylesheet" {{if .StandalonePage}}data-shell-boot-required{{end}} href="/frontend/styles/theme_transition.css">
 </head>
 <body>
@@ -86,13 +87,13 @@
             </div>
         </fieldset>
 
-        <div class="first-run-method-fields" data-register-verification-fields="fixed_pin" hidden>
-            <label for="fixed_pin" data-lang-key="fixed_pin">Fixed PIN</label>
-            <input type="password" inputmode="numeric" id="fixed_pin" name="fixed_pin" minlength="4" maxlength="8" pattern="[0-9]{4,8}" autocomplete="one-time-code" data-testid="register-fixed-pin">
-            <label for="confirm_fixed_pin" data-lang-key="confirm_fixed_pin">Confirm fixed PIN</label>
-            <input type="password" inputmode="numeric" id="confirm_fixed_pin" name="confirm_fixed_pin" minlength="4" maxlength="8" pattern="[0-9]{4,8}" autocomplete="one-time-code" data-testid="register-fixed-pin-confirmation">
+        <div class="first-run-method-fields" data-register-verification-fields="fixed_pin" data-pin-setup data-setup-error="{{.VerificationErr}}" hidden>
+            <label for="fixed_pin" data-lang-key="pin_setup_label">PIN</label>
+            <input type="text" class="auth-verify__masked" inputmode="numeric" id="fixed_pin" name="fixed_pin" minlength="4" maxlength="8" pattern="[0-9]{4,8}" autocomplete="one-time-code" data-testid="register-fixed-pin">
+            <label for="confirm_fixed_pin" data-lang-key="pin_setup_confirm_label">Confirm PIN</label>
+            <input type="text" class="auth-verify__masked" inputmode="numeric" id="confirm_fixed_pin" name="confirm_fixed_pin" minlength="4" maxlength="8" pattern="[0-9]{4,8}" autocomplete="one-time-code" data-testid="register-fixed-pin-confirmation">
         </div>
-        {{if .VerificationErr}}
+        {{if and .VerificationErr (ne .VerificationErr "first_run_fixed_pin_invalid") (ne .VerificationErr "first_run_fixed_pin_mismatch")}}
         <p class="error" data-lang-key="{{.VerificationErr}}"></p>
         {{end}}
 

@@ -107,7 +107,8 @@ test.describe('L6 — Register', () => {
     await expect(page.locator('[data-testid="register-password"]')).toHaveAttribute('autocomplete', 'new-password');
     for (const id of ['register-fixed-pin', 'register-fixed-pin-confirmation']) {
       await expect(page.getByTestId(id)).toHaveAttribute('autocomplete', 'one-time-code');
-      await expect(page.getByTestId(id)).toHaveAttribute('type', 'password');
+      await expect(page.getByTestId(id)).toHaveAttribute('type', 'text');
+      await expect(page.getByTestId(id)).toHaveClass(/\bauth-verify__masked\b/);
       await expect(page.getByTestId(id)).toHaveAttribute('inputmode', 'numeric');
     }
     await page.locator('[data-testid="register-username"]').fill(`spa_register_${uniqueSuffix}`);

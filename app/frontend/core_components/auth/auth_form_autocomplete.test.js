@@ -54,18 +54,23 @@ describe.each(Object.entries(forms))('%s authentication hints', (name, hints) =>
         expect(code.className).not.toMatch(/password/i);
     });
 
-    test('all masked fields have the appropriate password or PIN hint', () => {
+    test('password fields retain their hints and never contain PINs', () => {
         const masked = [...page.querySelectorAll('input[type="password"]')];
         expect(masked.length).toBeGreaterThan(0);
         for (const input of masked) {
-            const pin = input.id.includes('pin');
-            expect(input.autocomplete).toBe(pin ? 'one-time-code' : hints[input.id]);
-            if (pin) {
-                expect(input.inputMode).toBe('numeric');
-                expect(input.pattern).toBe('[0-9]{4,8}');
-                expect(input.minLength).toBe(4);
-                expect(input.maxLength).toBe(8);
-            }
+            expect(input.id).not.toMatch(/pin/);
+            expect(input.autocomplete).toBe(hints[input.id]);
         }
+    });
+
+    if (name !== 'login') test.each(['fixed_pin', 'confirm_fixed_pin'])('%s starts as a masked one-time-code text field', id => {
+        const input = page.getElementById(id);
+        expect(input.type).toBe('text');
+        expect(input.classList.contains('auth-verify__masked')).toBe(true);
+        expect(input.autocomplete).toBe('one-time-code');
+        expect(input.inputMode).toBe('numeric');
+        expect(input.pattern).toBe('[0-9]{4,8}');
+        expect(input.minLength).toBe(4);
+        expect(input.maxLength).toBe(8);
     });
 });

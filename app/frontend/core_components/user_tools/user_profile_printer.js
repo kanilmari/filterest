@@ -3,6 +3,7 @@
 // Bridges profile API responses and form controls in the account settings UI.
 // Exists to provide one place for users to review and update their account details.
 
+import { createProfileCodeSection, bindSecondStepCopy } from '../auth/second_step_view.js';
 import { appendProfileSecurity, appendPublicProfileFields } from './profile_security_printer.js';
 import { endpoint_router } from '../endpoints/endpoint_router.js';
 import {
@@ -111,36 +112,8 @@ export async function generate_user_view(container) {
         profileFieldset.appendChild(confirmEmailField.label);
         profileFieldset.appendChild(confirmEmailField.input);
 
-        // Email change OTP section
-        const emailOtpSection = document.createElement('div');
-        emailOtpSection.id = 'email_otp_section';
-        emailOtpSection.style.display = 'none';
-
-        const emailOtpSendBtn = document.createElement('button');
-        emailOtpSendBtn.type = 'button';
-        emailOtpSendBtn.classList.add('user_profile_action_button');
-        applyTextLangKey(emailOtpSendBtn, 'send_verification_code', 'Send verification code');
-        emailOtpSendBtn.id = 'email_otp_send_btn';
-        emailOtpSection.appendChild(emailOtpSendBtn);
-
-        const emailOtpMessage = document.createElement('div');
-        emailOtpMessage.id = 'email_otp_message';
-        emailOtpMessage.style.cssText = 'font-size:0.85em;margin:4px 0;color:#666;';
-        emailOtpSection.appendChild(emailOtpMessage);
-
-        const emailOtpField = createLabeledInput({
-            labelText: 'Verification code',
-            labelLangKey: 'otp',
-            inputType: 'text',
-            inputId: 'email_otp',
-            inputName: 'email_otp',
-            autocomplete: 'off',
-        });
-        emailOtpField.label.style.display = 'none';
-        emailOtpField.input.style.display = 'none';
-        emailOtpSection.appendChild(emailOtpField.label);
-        emailOtpSection.appendChild(emailOtpField.input);
-
+        const emailCode = createProfileCodeSection('email_change');
+        const { section: emailOtpSection, sendButton: emailOtpSendBtn, input: emailOtpInput } = emailCode;
         profileFieldset.appendChild(emailOtpSection);
         const publicFields = appendPublicProfileFields(profileFieldset);
         let originalPublicFields = {};
@@ -217,36 +190,8 @@ export async function generate_user_view(container) {
         passwordFieldset.appendChild(confirmPasswordField.label);
         passwordFieldset.appendChild(confirmPasswordField.input);
 
-        // Password change OTP section
-        const passwordOtpSection = document.createElement('div');
-        passwordOtpSection.id = 'password_otp_section';
-        passwordOtpSection.style.display = 'none';
-
-        const passwordOtpSendBtn = document.createElement('button');
-        passwordOtpSendBtn.type = 'button';
-        passwordOtpSendBtn.classList.add('user_profile_action_button');
-        applyTextLangKey(passwordOtpSendBtn, 'send_verification_code', 'Send verification code');
-        passwordOtpSendBtn.id = 'password_otp_send_btn';
-        passwordOtpSection.appendChild(passwordOtpSendBtn);
-
-        const passwordOtpMessage = document.createElement('div');
-        passwordOtpMessage.id = 'password_otp_message';
-        passwordOtpMessage.style.cssText = 'font-size:0.85em;margin:4px 0;color:#666;';
-        passwordOtpSection.appendChild(passwordOtpMessage);
-
-        const passwordOtpField = createLabeledInput({
-            labelText: 'Verification code',
-            labelLangKey: 'otp',
-            inputType: 'text',
-            inputId: 'password_otp',
-            inputName: 'password_otp',
-            autocomplete: 'off',
-        });
-        passwordOtpField.label.style.display = 'none';
-        passwordOtpField.input.style.display = 'none';
-        passwordOtpSection.appendChild(passwordOtpField.label);
-        passwordOtpSection.appendChild(passwordOtpField.input);
-
+        const passwordCode = createProfileCodeSection('password_change');
+        const { section: passwordOtpSection, sendButton: passwordOtpSendBtn, input: passwordOtpInput } = passwordCode;
         passwordFieldset.appendChild(passwordOtpSection);
 
         const passwordSubmitButton = document.createElement('button');
@@ -286,10 +231,7 @@ export async function generate_user_view(container) {
             emailOtpSection.style.display = emailChanged ? '' : 'none';
             if (!emailChanged) {
                 confirmEmailField.input.value = '';
-                emailOtpField.input.value = '';
-                emailOtpField.label.style.display = 'none';
-                emailOtpField.input.style.display = 'none';
-                emailOtpMessage.textContent = '';
+                emailCode.reset();
                 if (usernameField.input.value.trim() === originalUsername) {
                     profileCurrentPassword = '';
                 }
@@ -306,22 +248,19 @@ export async function generate_user_view(container) {
             const currentPassword = await requestCurrentPassword();
             if (!currentPassword) return;
 
-            emailOtpSendBtn.disabled = true;
-            try {
-                const result = await endpoint_router('requestEmailChangeOTP', {
-                    method: 'POST',
-                    body_data: { new_email: newEmail, current_password: currentPassword },
-                });
-                emailOtpMessage.textContent = `${translatedText('verification_code_sent', 'Verification code sent')}: ${result.masked_email || newEmail}`;
-                emailOtpField.label.style.display = '';
-                emailOtpField.input.style.display = '';
-                emailOtpField.input.focus();
-                profileCurrentPassword = currentPassword;
-            } catch (error) {
-                showErrorToast(extractErrorMessage(error));
-            } finally {
-                emailOtpSendBtn.disabled = false;
-            }
+            await emailCode.resend(async () => {
+                try {
+                    const result = await endpoint_router('requestEmailChangeOTP', {
+                        method: 'POST',
+                        body_data: { new_email: newEmail, current_password: currentPassword },
+                    });
+                    emailCode.sent(result.masked_email || '');
+                    profileCurrentPassword = currentPassword;
+                } catch (error) {
+                    if (!emailCode.handleError(error)) showErrorToast(extractErrorMessage(error));
+                    throw error;
+                }
+            });
         });
 
         // Password OTP send button
@@ -331,27 +270,26 @@ export async function generate_user_view(container) {
                 showWarningToast(translatedText('enter_current_password_first', 'Enter your current password first.'));
                 return;
             }
-            passwordOtpSendBtn.disabled = true;
-            try {
-                const result = await endpoint_router('requestPasswordChangeOTP', {
-                    method: 'POST',
-                    body_data: { current_password: currentPassword },
-                });
-                passwordOtpMessage.textContent = `${translatedText('verification_code_sent', 'Verification code sent')}: ${result.masked_email || ''}`;
-                passwordOtpField.label.style.display = '';
-                passwordOtpField.input.style.display = '';
-                passwordOtpField.input.focus();
-            } catch (error) {
-                showErrorToast(extractErrorMessage(error));
-            } finally {
-                passwordOtpSendBtn.disabled = false;
-            }
+            await passwordCode.resend(async () => {
+                try {
+                    const result = await endpoint_router('requestPasswordChangeOTP', {
+                        method: 'POST',
+                        body_data: { current_password: currentPassword },
+                    });
+                    passwordCode.sent(result.masked_email || '');
+                    bindSecondStepCopy(passwordSubmitButton, 'password_change_confirm');
+                } catch (error) {
+                    if (!passwordCode.handleError(error)) showErrorToast(extractErrorMessage(error));
+                    throw error;
+                }
+            });
         });
 
         // Show password OTP section when password fields have content
         const showPasswordOtpIfNeeded = () => {
             const hasNewPassword = newPasswordField.input.value.length > 0;
             passwordOtpSection.style.display = hasNewPassword ? '' : 'none';
+            passwordOtpInput.disabled = !hasNewPassword;
         };
         newPasswordField.input.addEventListener('input', showPasswordOtpIfNeeded);
 
@@ -384,7 +322,7 @@ export async function generate_user_view(container) {
                 originalEmail,
                 username,
                 email,
-                emailOtp: emailOtpField.input.value,
+                emailOtp: emailOtpInput.value,
                 currentPassword,
             });
 
@@ -404,10 +342,7 @@ export async function generate_user_view(container) {
                     body_data: body,
                 });
                 showSuccessToast(translatedText('profile_updated_successfully', 'Profile updated successfully.'));
-                emailOtpField.input.value = '';
-                emailOtpField.label.style.display = 'none';
-                emailOtpField.input.style.display = 'none';
-                emailOtpMessage.textContent = '';
+                emailCode.reset();
                 emailOtpSection.style.display = 'none';
                 profileCurrentPassword = '';
                 await refreshProfileData();
@@ -416,7 +351,7 @@ export async function generate_user_view(container) {
                 if (errorMessage.includes('current_password')) {
                     profileCurrentPassword = '';
                 }
-                showErrorToast(errorMessage);
+                if (!emailCode.handleError(error)) showErrorToast(errorMessage);
             } finally {
                 profileSubmitButton.disabled = false;
             }
@@ -447,7 +382,7 @@ export async function generate_user_view(container) {
             const body = buildPasswordUpdateBody({
                 currentPassword,
                 newPassword,
-                passwordOtp: passwordOtpField.input.value,
+                passwordOtp: passwordOtpInput.value,
             });
 
             passwordSubmitButton.disabled = true;
@@ -458,13 +393,11 @@ export async function generate_user_view(container) {
                 });
                 showSuccessToast(translatedText('password_changed_successfully', 'Password changed successfully.'));
                 clearPasswordInputs(currentPasswordField.input, newPasswordField.input, confirmPasswordField.input);
-                passwordOtpField.input.value = '';
-                passwordOtpField.label.style.display = 'none';
-                passwordOtpField.input.style.display = 'none';
-                passwordOtpMessage.textContent = '';
+                passwordCode.reset();
+                applyTextLangKey(passwordSubmitButton, 'change_password', 'Change Password');
                 passwordOtpSection.style.display = 'none';
             } catch (error) {
-                showErrorToast(extractErrorMessage(error));
+                if (!passwordCode.handleError(error)) showErrorToast(extractErrorMessage(error));
             } finally {
                 passwordSubmitButton.disabled = false;
             }

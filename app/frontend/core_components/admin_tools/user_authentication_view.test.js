@@ -11,9 +11,11 @@ vi.mock('../endpoints/endpoint_router.js', () => ({
     endpoint_router: (...args) => endpointRouterMock(...args),
 }));
 
-vi.mock('../lang/translation_handler.js', () => ({
-    getTranslationForKey: (_key, { fallback } = {}) => fallback || '',
-}));
+vi.mock('../lang/translation_handler.js', async () => {
+    const { VERIFICATION_SETUP_TRANSLATION_FALLBACKS: copy } = await import('../auth/verification_setup_translation_fallbacks.js');
+    const { SECOND_STEP_TRANSLATION_FALLBACKS: shared } = await import('../auth/second_step_translation_fallbacks.js');
+    return { getTranslationForKey: (key, { fallback } = {}) => copy[key]?.en || shared[key]?.en || fallback || '' };
+});
 
 const usersFixture = [
     {
@@ -71,7 +73,8 @@ describe('user_authentication_view', () => {
             selectUser(7);
             const input = document.getElementById(id);
             expect(input.autocomplete).toBe('one-time-code');
-            expect(input.type).toBe('password');
+            expect(input.type).toBe('text');
+            expect(input.classList.contains('auth-verify__masked')).toBe(true);
             expect(input.inputMode).toBe('numeric');
             expect(input.pattern).toBe('[0-9]{4,8}');
             expect(input.minLength).toBe(4);
@@ -134,7 +137,8 @@ describe('user_authentication_view', () => {
         confirmation.value = '5678';
         await submitForm();
         expect(endpointRouterMock).toHaveBeenCalledTimes(1);
-        expect(document.querySelector('.user-authentication-feedback').textContent).toContain('do not match');
+        expect(document.getElementById(confirmation.getAttribute('aria-describedby').split(' ')[1]).textContent).toContain('do not match');
+        expect(confirmation.getAttribute('aria-invalid')).toBe('true');
 
         pin.value = '123456';
         confirmation.value = '123456';
@@ -209,4 +213,38 @@ describe('user_authentication_view', () => {
         expect(document.querySelector('.user-authentication-feedback').textContent)
             .toContain('cannot manage');
     });
+});
+
+test('admin PIN setup associates translated hints, reveals each field and keeps format errors inline', async () => {
+    document.body.innerHTML = '<main id="target"></main>';
+    endpointRouterMock.mockReset().mockResolvedValue({ users: usersFixture });
+    const { generate_user_authentication_view } = await import('./user_authentication_view.js');
+    await generate_user_authentication_view(document.getElementById('target'));
+    selectUser(7);
+    const pin = document.getElementById('user-authentication-fixed-pin');
+    const confirm = document.getElementById('user-authentication-fixed-pin-confirmation');
+    for (const input of [pin, confirm]) {
+        const [hint, error] = input.getAttribute('aria-describedby').split(' ').map(id => document.getElementById(id));
+        expect(hint.textContent).not.toBe(''); expect(error.textContent).toBe('');
+        const reveal = document.querySelector(`[aria-controls="${input.id}"]`);
+        input.value = '0123';
+        expect(input.type).toBe('text'); expect(input.classList.contains('auth-verify__masked')).toBe(true);
+        expect(reveal.getAttribute('aria-pressed')).toBe('false');
+        expect(reveal.getAttribute('aria-label')).toBe('Show PIN'); reveal.click();
+        expect(input.type).toBe('text'); expect(reveal.getAttribute('aria-pressed')).toBe('true');
+        expect(input.classList.contains('auth-verify__masked')).toBe(false);
+        expect(reveal.getAttribute('aria-label')).toBe('Hide PIN'); reveal.click();
+        expect(input.type).toBe('text'); expect(input.classList.contains('auth-verify__masked')).toBe(true);
+        expect(reveal.getAttribute('aria-pressed')).toBe('false'); expect(reveal.getAttribute('aria-label')).toBe('Show PIN');
+        expect(input.value).toBe('0123');
+    }
+    pin.value = '12ab'; confirm.value = '12ab'; await submitForm();
+    const error = document.getElementById(pin.getAttribute('aria-describedby').split(' ')[1]);
+    expect(error.dataset.langKey).toBe('fixed_pin_format_error'); expect(pin.getAttribute('aria-invalid')).toBe('true');
+    expect(pin.closest('.auth-verify__field').lastElementChild).toBe(error);
+    expect(endpointRouterMock).toHaveBeenCalledTimes(1);
+    const none = document.querySelector('[data-testid="verification-method-none"]'); none.checked = true; none.dispatchEvent(new Event('change', { bubbles: true }));
+    expect(pin.disabled).toBe(true); expect(pin.closest('.user-authentication-pin-fields').hasAttribute('inert')).toBe(true);
+    expect(document.querySelector('[data-testid="user-authentication-save"]').dataset.langKey).toBe('save_and_activate_admin');
+    expect(document.querySelector('.user-authentication-activation-notice').dataset.langKey).toBe('user_authentication_activation_notice');
 });

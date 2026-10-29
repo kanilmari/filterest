@@ -3,6 +3,7 @@
 // Bridges server-rendered factor choices with direct and SPA-mounted registration forms.
 // Exists so every registration entry path applies the same explicit sign-in verification rules.
 
+import { mountPinSetup } from "./second_step_view.js";
 import { translatePage } from "../lang/translation_handler.js";
 import { getPreferredAvailableLanguage } from "../state_stores/lang_preference_reader.js";
 
@@ -18,8 +19,8 @@ function updateRegistrationVerificationFields(form) {
         const active = container.dataset.registerVerificationFields === selectedMethod;
         container.hidden = !active;
         container.toggleAttribute("inert", !active);
-        container.querySelectorAll("input").forEach((input) => {
-            input.required = active;
+        container.querySelectorAll("input, button").forEach((input) => {
+            if (input instanceof HTMLInputElement) input.required = active;
             input.disabled = !active;
         });
     });
@@ -35,6 +36,7 @@ export function initializeRegistrationVerificationFields(root = document) {
     if (!(form instanceof HTMLFormElement)) return null;
 
     if (!initializedRegistrationForms.has(form)) {
+        form.querySelectorAll('[data-pin-setup]').forEach(fields => mountPinSetup(fields));
         form.querySelectorAll('input[name="verification_method"]').forEach((radio) => {
             radio.addEventListener("change", () => updateRegistrationVerificationFields(form));
         });

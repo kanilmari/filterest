@@ -145,7 +145,8 @@ describe('generate_user_view profile submit', () => {
         expect(emailOtpButton.textContent).toBe('Send verification code');
         expect(passwordOtpButton.dataset.langKey).toBe('send_verification_code');
         expect(passwordOtpButton.textContent).toBe('Send verification code');
-        expect(emailOtpLabel.dataset.langKey).toBe('otp');
+        expect(emailOtpLabel.closest('.auth-verify').querySelector('.auth-verify__header').hidden).toBe(true);
+        expect(emailOtpLabel.dataset.langKey).toBe('verification_code_label');
         expect(emailOtpLabel.textContent).toBe('Verification code');
     });
 
@@ -178,4 +179,81 @@ test('website and biography are loaded and saved from the profile', async () => 
     root.querySelector('#user_profile_form').dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
     await flushPromises();
     expect(endpointRouterMock).toHaveBeenCalledWith('updateUserProfile', { method: 'POST', body_data: { website: 'https://new.invalid', bio_social_medias: '' } });
+});
+
+// The four server code errors change presentation only; submits still carry the caller's exact bodies.
+describe('profile code presentation', () => {
+    beforeEach(async () => {
+        vi.clearAllMocks();
+        document.body.innerHTML = '<main id="profile-root"></main>';
+        window.translationPromises = { fi: Promise.resolve({}), en: Promise.resolve({}) };
+        showInputModalMock.mockResolvedValue('  current exact  ');
+        endpointRouterMock.mockImplementation(route => Promise.resolve(route === 'fetchUserProfile'
+            ? { username: 'alice', email: 'alice@example.com' } : { masked_email: 'n•••@example.com' }));
+        await generate_user_view(document.getElementById('profile-root'));
+    });
+    async function ready(kind) {
+        if (kind === 'email') {
+            const email = document.getElementById('edit_email'); email.value = 'new@example.com'; email.dispatchEvent(new Event('input'));
+            document.getElementById('confirm_email').value = 'new@example.com';
+        } else {
+            document.getElementById('current_password').value = '  current exact  ';
+            const next = document.getElementById('new_password'); next.value = '  replacement exact  '; next.dispatchEvent(new Event('input'));
+            document.getElementById('confirm_password').value = '  replacement exact  ';
+        }
+        document.getElementById(`${kind}_otp_send_btn`).click(); await flushPromises();
+    }
+    test.each(['email_otp_required', 'email_otp_invalid', 'password_otp_required', 'password_otp_invalid'])('%s stays inline and translates in fi/en', async code => {
+        const kind = code.startsWith('email') ? 'email' : 'password';
+        await ready(kind);
+        const { translatePage } = await import('../lang/translation_handler.js');
+        const { SECOND_STEP_TRANSLATION_FALLBACKS: copy } = await import('../auth/second_step_translation_fallbacks.js');
+        const input = document.getElementById(`${kind}_otp`); input.value = code.endsWith('required') ? '' : 'abc234def';
+        endpointRouterMock.mockRejectedValueOnce(new Error(`Virhe pyynnössä (updateUserProfile): {"error":"${code}"}`));
+        document.getElementById(kind === 'email' ? 'user_profile_form' : 'user_password_form').dispatchEvent(new Event('submit', { cancelable: true }));
+        await flushPromises();
+        const error = document.getElementById(input.getAttribute('aria-describedby').split(' ')[1]);
+        const key = code.endsWith('required') ? 'verification_code_empty' : 'verification_email_error';
+        expect(input.getAttribute('aria-invalid')).toBe('true'); expect(error.dataset.langKey).toBe(key);
+        for (const lang of ['fi', 'en']) { await translatePage(lang); expect(error.textContent).toBe(copy[key][lang]); }
+        expect(input.closest('.auth-verify__field').lastElementChild).toBe(error);
+        expect(showErrorToastMock).not.toHaveBeenCalled();
+        const update = endpointRouterMock.mock.calls.find(([route]) => route === 'updateUserProfile');
+        expect(update[1]).toEqual({ method: 'POST', body_data: kind === 'email'
+            ? { email: 'new@example.com', ...(input.value ? { email_otp: input.value } : {}), current_password: '  current exact  ' }
+            : { new_password: '  replacement exact  ', ...(input.value ? { password_otp: input.value } : {}), current_password: '  current exact  ' } });
+    });
+    test('hiding the password-code section removes its native validation constraint', async () => {
+        await ready('password');
+        const input = document.getElementById('password_otp'); input.value = 'bad';
+        expect(input.checkValidity()).toBe(false);
+        const next = document.getElementById('new_password'); next.value = ''; next.dispatchEvent(new Event('input'));
+        expect(input.disabled).toBe(true); expect(input.checkValidity()).toBe(true);
+        next.value = 'replacement'; next.dispatchEvent(new Event('input'));
+        expect(input.disabled).toBe(false); expect(input.checkValidity()).toBe(false);
+    });
+    test.each(['email', 'password'])('%s retains send requests, masked recipient, resend busy/failure states and other error toasts', async kind => {
+        await ready(kind);
+        const send = document.getElementById(`${kind}_otp_send_btn`);
+        const input = document.getElementById(`${kind}_otp`); const root = input.closest('.auth-verify');
+        expect(send.dataset.langKey).toBe('verification_resend');
+        expect(root.querySelector('bdi').textContent).toBe('n•••@example.com');
+        const route = kind === 'email' ? 'requestEmailChangeOTP' : 'requestPasswordChangeOTP';
+        expect(endpointRouterMock).toHaveBeenCalledWith(route, { method: 'POST', body_data: kind === 'email'
+            ? { new_email: 'new@example.com', current_password: '  current exact  ' } : { current_password: '  current exact  ' } });
+        let fail;
+        endpointRouterMock.mockImplementationOnce(() => new Promise((_resolve, reject) => { fail = reject; }));
+        send.click(); await flushPromises();
+        expect(send.disabled).toBe(true); expect(send.dataset.langKey).toBe('verification_resending');
+        expect(root.getAttribute('aria-busy')).toBe('true');
+        fail(new Error('delivery failed')); await flushPromises();
+        expect(showErrorToastMock).toHaveBeenCalledWith('delivery failed');
+        expect(send.disabled).toBe(false); expect(send.dataset.langKey).toBe('verification_resend');
+        expect(root.querySelector('[data-verify="status"]').dataset.langKey).toBe('verification_send_failed');
+        input.value = 'abc234def'; endpointRouterMock.mockRejectedValueOnce(new Error('profile_write_refused'));
+        document.getElementById(kind === 'email' ? 'user_profile_form' : 'user_password_form').dispatchEvent(new Event('submit', { cancelable: true }));
+        await flushPromises(); expect(showErrorToastMock).toHaveBeenCalled();
+        expect(document.querySelector('#user_profile_form button[type="submit"]').dataset.langKey).toBe('save_profile');
+        if (kind === 'password') expect(document.querySelector('#user_password_form button[type="submit"]').dataset.langKey).toBe('password_change_confirm');
+    });
 });

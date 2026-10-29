@@ -10,10 +10,11 @@ let nextInstance = 0;
 const mounted = new WeakMap();
 const homes = new WeakMap();
 const PIN_MASK_CLASS = 'auth-verify__masked';
+const pinSetups = new WeakMap();
 const SHIELD_ICON = "<svg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.6\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M12 3 4 6v6c0 4 4.5 7.5 8 9 3.5-1.5 8-5 8-9V6l-8-3Z\"/><path d=\"m8.5 12 2.3 2.3 4.7-4.8\"/></svg>";
 
 export function bindSecondStepCopy(node, key) {
-    if (node) applyLoginLangKey(node, key, getTranslationForKey(key));
+    if (node && key) applyLoginLangKey(node, key, getTranslationForKey(key));
 }
 
 /** Translate visibility names through the same attribute path used on language switches. */
@@ -147,6 +148,7 @@ export function renderSecondStep(root, descriptor, options = {}) {
         if (focus) input.focus();
     };
     const normalize = () => {
+        if (descriptor.normalize === false) return;
         const start = input.selectionStart;
         const end = input.selectionEnd;
         const raw = input.value;
@@ -158,36 +160,38 @@ export function renderSecondStep(root, descriptor, options = {}) {
         // Never discard a rejected paste/autofill value, including values beyond raw maxlength.
         if (clean.length > descriptor.maxCodeLength) showFieldError(descriptor.format, false);
     };
-    on(input, 'beforeinput', event => {
-        // Intercept oversized replacement/autofill before native maxlength can discard its tail.
-        if (event.isComposing || event.data == null || !event.inputType?.startsWith('insert')) return;
-        const start = input.selectionStart ?? input.value.length;
-        const end = input.selectionEnd ?? start;
-        const raw = input.value.slice(0, start) + event.data + input.value.slice(end);
-        if (raw.length <= input.maxLength) return;
-        event.preventDefault();
-        input.value = raw;
-        normalize();
-        const caret = sanitizeOtpCode(raw.slice(0, start) + event.data).length;
-        input.setSelectionRange(caret, caret);
-    });
-    on(input, 'input', event => { if (!event.isComposing) normalize(); });
-    on(input, 'change', normalize);
-    on(input, 'compositionend', normalize);
-    on(input, 'paste', event => {
-        const pasted = event.clipboardData?.getData('text');
-        if (pasted === undefined) return;
-        event.preventDefault();
-        const start = input.selectionStart ?? input.value.length;
-        const end = input.selectionEnd ?? start;
-        const before = input.value.slice(0, start);
-        input.value = before + pasted + input.value.slice(end);
-        const caret = sanitizeOtpCode(before + pasted).length;
-        normalize();
-        input.setSelectionRange(caret, caret);
-        if (input.value && !new RegExp(`^(?:${descriptor.attributes.pattern})$`).test(input.value)) showFieldError(descriptor.format, false);
-        input.dispatchEvent(new Event('input', { bubbles: true }));
-    });
+    if (descriptor.normalize !== false) {
+        on(input, 'beforeinput', event => {
+            // Intercept oversized replacement/autofill before native maxlength can discard its tail.
+            if (event.isComposing || event.data == null || !event.inputType?.startsWith('insert')) return;
+            const start = input.selectionStart ?? input.value.length;
+            const end = input.selectionEnd ?? start;
+            const raw = input.value.slice(0, start) + event.data + input.value.slice(end);
+            if (raw.length <= input.maxLength) return;
+            event.preventDefault();
+            input.value = raw;
+            normalize();
+            const caret = sanitizeOtpCode(raw.slice(0, start) + event.data).length;
+            input.setSelectionRange(caret, caret);
+        });
+        on(input, 'input', event => { if (!event.isComposing) normalize(); });
+        on(input, 'change', normalize);
+        on(input, 'compositionend', normalize);
+        on(input, 'paste', event => {
+            const pasted = event.clipboardData?.getData('text');
+            if (pasted === undefined) return;
+            event.preventDefault();
+            const start = input.selectionStart ?? input.value.length;
+            const end = input.selectionEnd ?? start;
+            const before = input.value.slice(0, start);
+            input.value = before + pasted + input.value.slice(end);
+            const caret = sanitizeOtpCode(before + pasted).length;
+            normalize();
+            input.setSelectionRange(caret, caret);
+            if (input.value && !new RegExp(`^(?:${descriptor.attributes.pattern})$`).test(input.value)) showFieldError(descriptor.format, false);
+            input.dispatchEvent(new Event('input', { bubbles: true }));
+        });
+    }
     const password = root.querySelector('#password-reset-new-password');
     if (password && slot('password-hint') && slot('password-error')) {
         password.setAttribute('aria-describedby', `${slot('password-hint').id} ${slot('password-error').id}`);
@@ -219,6 +223,20 @@ export function renderSecondStep(root, descriptor, options = {}) {
     });
     const view = {
         input,
+        fieldError(key, focus = true) { showFieldError(key, focus); },
+        clearError() { clearCopy(error); input.setAttribute('aria-invalid', 'false'); },
+        handleError(failure) {
+            const raw = typeof failure === 'string' ? failure : failure?.message || failure?.error || '';
+            const key = Object.keys(descriptor.errors || {}).find(code => new RegExp(`\\b${code}\\b`).test(raw));
+            if (!key) return false;
+            view.error({ error: key });
+            return true;
+        },
+        recipient(value) {
+            if (!recipient) return;
+            recipient.hidden = !value;
+            slot('recipient-value').textContent = value || '';
+        },
         passwordError() {
             const password = root.querySelector('#password-reset-new-password');
             bindSecondStepCopy(slot('password-error'), 'reset_password_empty');
@@ -243,7 +261,7 @@ export function renderSecondStep(root, descriptor, options = {}) {
             const message = translateError(data.error);
             const key = ({ wrong_otp: descriptor.error, no_pending_otp: 'verification_expired',
                 no_pending_password_reset: 'verification_expired', too_many_otp_requests: 'verification_locked',
-            })[data.error];
+            })[data.error] || descriptor.errors?.[data.error];
             if (key || !data.error) showFieldError(key || 'verification_unavailable');
             else {
                 // Preserve admission-policy messages and the established unknown-code fallback.
@@ -360,4 +378,119 @@ export function showLoginStatus(form, key) {
         form.querySelector('#submit')?.before(status);
     }
     bindSecondStepCopy(status, key);
+}
+
+
+/** Build embedded slots with the same renderer, retaining caller-owned input identities. */
+export function mountEmbeddedSecondStep(root, factor, options = {}) {
+    const descriptor = SECOND_STEP_FACTORS[factor];
+    const input = options.input || root.querySelector('input') || document.createElement('input');
+    if (!input.id) input.id = `auth-verify-${++nextInstance}-input`;
+    input.classList.add('auth-verify__input');
+    input.dataset.verify = 'input';
+    root.innerHTML = `${descriptor.heading ? `<header class="auth-verify__header">
+        ${descriptor.step ? '<p class="auth-verify__step" data-verify="step"></p>' : ''}
+        <h3 class="auth-verify__heading" data-verify="heading"></h3>
+        <p class="auth-verify__instruction" data-verify="instruction"></p>
+        </header>` : ''}
+        <p class="auth-verify__context" data-verify="recipient" hidden><span data-verify="recipient-label"></span> <bdi data-verify="recipient-value"></bdi></p>
+        <div class="auth-verify__fields"><div class="auth-verify__field">
+            <label class="auth-verify__label" data-verify="label"></label>
+            <div class="auth-verify__input-wrap"><button type="button" class="auth-verify__reveal" data-verify="reveal" hidden></button></div>
+            <p class="auth-verify__hint" data-verify="hint"></p>
+            <p class="auth-verify__error" data-verify="error"></p>
+        </div></div>
+        <p class="auth-verify__status" data-verify="status"></p>
+        <p class="auth-verify__status" data-verify="attempts"></p>`;
+    root.classList.add('auth-verify--embedded');
+    root.querySelector('.auth-verify__input-wrap').prepend(input);
+    // Delivery status stays visible while the original send action has not revealed the code field yet.
+    const fields = root.querySelector('.auth-verify__fields');
+    fields.hidden = Boolean(options.fieldsHidden);
+    if (fields.hidden) input.disabled = true;
+    const header = root.querySelector('.auth-verify__header');
+    if (header) header.hidden = fields.hidden;
+    const view = renderSecondStep(root, descriptor, { ...options, input });
+    return {
+        ...view,
+        showField() { fields.hidden = false; input.disabled = false; if (header) header.hidden = false; },
+        hideField() { fields.hidden = true; input.disabled = true; if (header) header.hidden = true; },
+    };
+}
+
+/** Replace a caller's PIN pair with shared fields; keep its server error codes and final action. */
+export function mountPinSetup(root, {
+    formatError = 'first_run_fixed_pin_invalid', mismatchError = 'first_run_fixed_pin_mismatch', beforeErrorFocus,
+} = {}) {
+    if (pinSetups.has(root)) return pinSetups.get(root);
+    const inputs = [...root.querySelectorAll('input')];
+    if (inputs.length !== 2) return null;
+    const initialError = root.dataset.setupError;
+    const firstRoot = document.createElement('div');
+    const confirmRoot = document.createElement('div');
+    root.replaceChildren(firstRoot, confirmRoot);
+    const pin = mountEmbeddedSecondStep(firstRoot, 'pin_setup', { input: inputs[0] });
+    const confirmation = mountEmbeddedSecondStep(confirmRoot, 'pin_confirmation', { input: inputs[1] });
+    const showError = (key, focus = true) => {
+        // Multi-section callers reveal the field before its error is announced and focused.
+        if (focus && (key === formatError || key === mismatchError)) beforeErrorFocus?.();
+        if (key === formatError) pin.fieldError(key, focus);
+        if (key === mismatchError) confirmation.fieldError(key, focus);
+    };
+    if (initialError) showError(initialError, false);
+    // Native invalid events still reach the caller's existing navigator/reportValidity flow.
+    inputs.forEach(input => input.addEventListener('invalid', () => {
+        if (input === pin.input) pin.fieldError(formatError, false);
+        else confirmation.fieldError(inputs[0].value !== input.value ? mismatchError : formatError, false);
+    }));
+    const group = {
+        pin, confirmation, showError,
+        clearErrors() { pin.clearError(); confirmation.clearError(); },
+    };
+    root.closest('form')?.addEventListener('submit', event => {
+        if (inputs[0].disabled || inputs[1].disabled) return;
+        group.clearErrors();
+        const key = !/^[0-9]{4,8}$/.test(inputs[0].value) ? formatError
+            : inputs[0].value !== inputs[1].value ? mismatchError : '';
+        if (key) { event.preventDefault(); showError(key); }
+    });
+    pinSetups.set(root, group);
+    return group;
+}
+
+/** Build profile code presentation while callers continue to own confirmations, sends and submits. */
+export function createProfileCodeSection(factor) {
+    const kind = factor === 'email_change' ? 'email' : 'password';
+    const section = document.createElement('div');
+    section.id = `${kind}_otp_section`;
+    section.style.display = 'none';
+    const root = document.createElement('div');
+    const input = document.createElement('input');
+    input.id = input.name = `${kind}_otp`;
+    const sendButton = document.createElement('button');
+    sendButton.type = 'button';
+    sendButton.id = `${kind}_otp_send_btn`;
+    sendButton.className = 'user_profile_action_button';
+    const view = mountEmbeddedSecondStep(root, factor, { input, resend: sendButton, fieldsHidden: true });
+    root.querySelector('[data-verify="status"]').id = `${kind}_otp_message`;
+    bindSecondStepCopy(sendButton, 'send_verification_code');
+    const actions = document.createElement('div');
+    actions.className = 'auth-verify__actions';
+    actions.append(sendButton);
+    root.append(actions);
+    section.append(root);
+    return {
+        ...view, section, sendButton,
+        sent(recipient) { view.recipient(recipient); view.showField(); view.clearError(); input.focus(); },
+        reset() {
+            input.value = '';
+            view.hideField(); view.clearError(); view.status(''); view.recipient('');
+            bindSecondStepCopy(sendButton, 'send_verification_code');
+        },
+        handleError(error) {
+            const handled = view.handleError(error);
+            if (handled) { view.showField(); input.focus(); }
+            return handled;
+        },
+    };
 }

@@ -48,7 +48,7 @@ test('PIN descriptor is a numeric one-time-code text field with unchanged raw an
 });
 
 for (const modal of [false, true]) describe(modal ? 'modal mount' : 'standalone mount', () => {
-    test.each(Object.entries(SECOND_STEP_FACTORS))('%s: attributes, copy, aria, errors and attempts', async (factor, descriptor) => {
+    test.each(Object.entries(SECOND_STEP_FACTORS).filter(([factor]) => ['fixed_pin', 'totp', 'email', 'recovery'].includes(factor)))('%s: attributes, copy, aria, errors and attempts', async (factor, descriptor) => {
         const form = formFixture(modal);
         const before = [...form.querySelectorAll('[id]')].map(node => [node, node.id, node.getAttribute('name'), node.dataset.testid]);
         const view = mountLoginSecondStep(form, factor, { masked_email: 'a•••@example.com' });
@@ -99,7 +99,7 @@ for (const modal of [false, true]) describe(modal ? 'modal mount' : 'standalone 
         expect(slot('error').hasAttribute('data-lang-key')).toBe(false);
     });
 
-    test.each(Object.keys(SECOND_STEP_FACTORS))('%s: paste, input/autofill and composition preserve values without truncation', factor => {
+    test.each(['fixed_pin', 'totp', 'email', 'recovery'])('%s: paste, input/autofill and composition preserve values without truncation', factor => {
         const view = mountLoginSecondStep(formFixture(modal), factor);
         const input = view.input;
         const code = factor === 'fixed_pin' ? '01 23' : factor === 'totp' ? '012 345' : 'abc 234 def';

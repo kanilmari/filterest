@@ -262,6 +262,30 @@
     padding-right: 60px;
 }
 
+/* Embedded setup/profile groups retain the caller's form width and final action. */
+.auth-verify--embedded {
+    width: 100%;
+    min-width: 0;
+    margin-block: 20px;
+}
+/* Retain the embedded heading size ahead of the shared phone section. */
+.auth-verify.auth-verify--embedded .auth-verify__heading {
+    font-size: 22px;
+}
+.auth-verify--embedded .auth-verify__header {
+    margin-bottom: 20px;
+}
+.auth-verify--embedded .auth-verify__context {
+    margin-bottom: 20px;
+}
+.auth-verify--embedded .auth-verify__label {
+    margin: 0;
+}
+.auth-verify--embedded input.auth-verify__input {
+    box-sizing: border-box;
+    margin: 0;
+}
+
 /* Phone (≤ 700px, K444) */
 @media (width <= 700px) {
     .auth-form.is-verifying {

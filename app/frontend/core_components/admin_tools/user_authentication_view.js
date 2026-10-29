@@ -3,6 +3,7 @@
 // Bridges the protected user-authentication API with Admin → Site settings.
 // Exists so account activation, admin provisioning, and verification policy stay explicit.
 
+import { mountPinSetup } from '../auth/second_step_view.js';
 import { endpoint_router } from '../endpoints/endpoint_router.js';
 import { getTranslationForKey } from '../lang/translation_handler.js';
 
@@ -178,22 +179,12 @@ export async function generate_user_authentication_view(container) {
     pinFields.hidden = true;
     const pinInput = document.createElement('input');
     pinInput.id = 'user-authentication-fixed-pin';
-    pinInput.type = 'password';
-    pinInput.inputMode = 'numeric';
-    pinInput.autocomplete = 'one-time-code';
-    pinInput.minLength = 4;
-    pinInput.maxLength = 8;
-    pinInput.pattern = '[0-9]{4,8}';
     pinInput.dataset.testid = 'user-authentication-fixed-pin';
     const confirmationInput = pinInput.cloneNode();
     confirmationInput.id = 'user-authentication-fixed-pin-confirmation';
     confirmationInput.dataset.testid = 'user-authentication-fixed-pin-confirmation';
-    pinFields.append(
-        createLabel(translatedText('fixed_pin', 'New fixed PIN'), pinInput.id),
-        pinInput,
-        createLabel(translatedText('confirm_fixed_pin', 'Confirm fixed PIN'), confirmationInput.id),
-        confirmationInput,
-    );
+    pinFields.append(pinInput, confirmationInput);
+    const pinSetup = mountPinSetup(pinFields, { formatError: 'fixed_pin_format_error', mismatchError: 'fixed_pin_mismatch' });
 
     const activationNotice = document.createElement('p');
     activationNotice.classList.add('user-authentication-activation-notice');
@@ -220,6 +211,8 @@ export async function generate_user_authentication_view(container) {
         const selectedMethod = form.elements.verification_method?.value || '';
         const isFixedPin = selectedMethod === 'fixed_pin';
         pinFields.hidden = !isFixedPin;
+        pinFields.toggleAttribute('inert', !isFixedPin);
+        pinFields.querySelectorAll('input, button').forEach(control => { control.disabled = !isFixedPin; });
         pinInput.required = isFixedPin;
         confirmationInput.required = isFixedPin;
         if (!isFixedPin) clearPinInputs(pinInput, confirmationInput);
@@ -230,6 +223,7 @@ export async function generate_user_authentication_view(container) {
         editor.hidden = !user;
         clearPinInputs(pinInput, confirmationInput);
         feedback.textContent = '';
+        pinSetup.clearErrors();
         if (!user) return;
         renderUserStatus(statusList, user);
         const method = normalizeVerificationMethod(user.verification_method);
@@ -239,6 +233,7 @@ export async function generate_user_authentication_view(container) {
         syncPinFields();
     }
 
+    syncPinFields();
     methodGroup.addEventListener('change', syncPinFields);
     userSelect.addEventListener('change', () => {
         selectUser(usersById.get(userSelect.value) || null);
@@ -256,16 +251,16 @@ export async function generate_user_authentication_view(container) {
             );
             return;
         }
+        pinSetup.clearErrors();
+        feedback.textContent = '';
         const fixedPin = pinInput.value;
         if (verificationMethod === 'fixed_pin') {
             if (!/^\d{4,8}$/.test(fixedPin)) {
-                feedback.textContent = translatedText('fixed_pin_format_error', 'PIN must contain 4–8 digits.');
-                pinInput.focus();
+                pinSetup.showError('fixed_pin_format_error');
                 return;
             }
             if (fixedPin !== confirmationInput.value) {
-                feedback.textContent = translatedText('fixed_pin_mismatch', 'The PIN entries do not match.');
-                confirmationInput.focus();
+                pinSetup.showError('fixed_pin_mismatch');
                 return;
             }
         }

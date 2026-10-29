@@ -20,6 +20,7 @@
     <link rel="stylesheet" {{if .StandalonePage}}data-shell-boot-required{{end}} href="/frontend/styles/base.css">
     <link rel="stylesheet" {{if .StandalonePage}}data-shell-boot-required{{end}} href="/frontend/styles/form.css">
     <link rel="stylesheet" {{if .StandalonePage}}data-shell-boot-required data-shell-boot-probe-link{{end}} href="/frontend/core_components/auth/auth.css">
+    <link rel="stylesheet" {{if .StandalonePage}}data-shell-boot-required{{end}} href="/frontend/core_components/auth/auth_verify.css">
     <link rel="stylesheet" {{if .StandalonePage}}data-shell-boot-required{{end}} href="/frontend/reusable_components/form_section_navigator/form_section_navigator.css">
     <link rel="stylesheet" {{if .StandalonePage}}data-shell-boot-required{{end}} href="/frontend/styles/theme_transition.css">
     <link rel="icon" href="{{.FaviconPath}}" type="image/png" sizes="16x16">
@@ -148,20 +149,22 @@
                         {{if .VerificationErr}}<p class="error" data-lang-key="{{.VerificationErr}}">{{.VerificationErr}}</p>{{end}}
                     </fieldset>
 
-                    <div class="first-run-method-fields" data-verification-fields="fixed_pin" hidden>
-                        <label for="fixed_pin" data-lang-key="fixed_pin">Fixed PIN</label>
-                        <input type="password" inputmode="numeric" id="fixed_pin" name="fixed_pin" minlength="4" maxlength="8" pattern="[0-9]{4,8}" autocomplete="one-time-code" data-testid="first-run-fixed-pin">
-                        <label for="confirm_fixed_pin" data-lang-key="confirm_fixed_pin">Confirm fixed PIN</label>
-                        <input type="password" inputmode="numeric" id="confirm_fixed_pin" name="confirm_fixed_pin" minlength="4" maxlength="8" pattern="[0-9]{4,8}" autocomplete="one-time-code" data-testid="first-run-fixed-pin-confirmation">
+                    <div class="first-run-method-fields" data-verification-fields="fixed_pin" data-pin-setup data-setup-error="{{.FactorErr}}" hidden>
+                        <label for="fixed_pin" data-lang-key="pin_setup_label">PIN</label>
+                        <input type="text" class="auth-verify__masked" inputmode="numeric" id="fixed_pin" name="fixed_pin" minlength="4" maxlength="8" pattern="[0-9]{4,8}" autocomplete="one-time-code" data-testid="first-run-fixed-pin">
+                        <label for="confirm_fixed_pin" data-lang-key="pin_setup_confirm_label">Confirm PIN</label>
+                        <input type="text" class="auth-verify__masked" inputmode="numeric" id="confirm_fixed_pin" name="confirm_fixed_pin" minlength="4" maxlength="8" pattern="[0-9]{4,8}" autocomplete="one-time-code" data-testid="first-run-fixed-pin-confirmation">
                     </div>
 
                     <div class="first-run-method-fields" data-verification-fields="totp" hidden>
                         <p class="first-run-setup-key-label" data-lang-key="authenticator_setup_key">Add this setup key to your authenticator app:</p>
                         <code class="first-run-setup-key" data-testid="first-run-totp-secret">{{.TOTPSecret}}</code>
-                        <label for="totp_code" data-lang-key="authenticator_confirmation_code">Enter the current 6-digit code to confirm setup</label>
-                        <input type="text" inputmode="numeric" id="totp_code" name="totp_code" minlength="6" maxlength="6" pattern="[0-9]{6}" autocomplete="one-time-code" data-testid="first-run-totp-code">
+                        <div data-totp-setup data-setup-error="{{.FactorErr}}">
+                            <label for="totp_code" data-lang-key="verification_code_label">Verification code</label>
+                            <input type="text" inputmode="numeric" id="totp_code" name="totp_code" minlength="6" maxlength="32" pattern="[0-9]{6}" autocomplete="one-time-code" data-testid="first-run-totp-code">
+                        </div>
                     </div>
-                    {{if .FactorErr}}<p class="error" data-lang-key="{{.FactorErr}}">{{.FactorErr}}</p>{{end}}
+                    {{if .FactorErr}}<p class="error" data-factor-error data-lang-key="{{.FactorErr}}">{{.FactorErr}}</p>{{end}}
                 </section>
 
                 <section
