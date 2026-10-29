@@ -128,6 +128,8 @@
     font-size: 5rem;
 }
 
+/* The semantic h1 keeps this title geometry above generic modal heading margins. */
+.row_article_content > .big_card_header,
 .big_card_header {
     display: flex;
     align-items: center;
@@ -143,6 +145,25 @@
     padding-block-start: 19px;
     padding-inline: 1rem;
     text-align: left;
+}
+
+/* Article-only demotion retains the authored h1 size, independently of theme. */
+.row_article_content h2[data-demoted-from="h1"] {
+    font-size: 2em;
+}
+
+.row-article-heading-hint {
+    display: block;
+    margin-block-start: 0.5rem;
+    color: var(--text-muted);
+    font-size: 0.875rem;
+    font-weight: normal;
+    line-height: 1.4;
+    white-space: normal;
+}
+
+.row-article-heading-hint:empty {
+    display: none;
 }
 
 .big_card_header_dataset_icon {

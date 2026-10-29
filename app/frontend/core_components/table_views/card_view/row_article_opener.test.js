@@ -26,6 +26,20 @@ import { setChosenDatasetView } from "../../state_stores/dataset_view_choice_sav
 describe("openRowArticleView", () => {
     setupRowArticleOpenerTests();
 
+    test('mounts the shared heading DOM unchanged in the ordinary article', async () => {
+        document.body.innerHTML = '<div id="events_article_view_container"><div class="card_view_wrapper">'
+            + '<div class="card_container"><div class="card" data-id="42"></div></div>'
+            + '<div class="row_article_placeholder"></div></div></div>';
+        const content = document.createElement('div');
+        content.className = 'big_card_content row_article_content';
+        content.innerHTML = '<h1 class="big_card_header">Contact</h1><h2 data-demoted-from="h1">Section</h2>';
+        vi.mocked(buildRowArticleContent).mockResolvedValueOnce({ rowArticleContentElement: content, rowArticleHeaderText: 'Contact' });
+        await openRowArticleView({ id: 42, title: 'Contact' }, 'events');
+        expect(document.querySelector('.active_row_article .row_article_content')).toBe(content);
+        expect(content.querySelectorAll('h1')).toHaveLength(1);
+        expect(content.querySelector('h2').dataset.demotedFrom).toBe('h1');
+    });
+
     test("does not create a standalone article host when the current view has no card container", async () => {
         await openRowArticleView(
             { id: 42, title: "Calendar row" },
@@ -393,7 +407,7 @@ describe("openRowArticleView", () => {
         expect(controller.panel.isConnected).toBe(true);
         expect(controller.button.isConnected).toBe(true);
         const options = vi.mocked(createArticleLanguageEditor).mock.calls[0][0];
-        expect(options).toMatchObject({ tableName: "events", canUpdateRow: true, row: { id: 42 } });
+        expect(options).toMatchObject({ tableName: "events", canUpdateRow: true, currentUserID: 1, row: { id: 42 } });
         const edit = document.querySelector('[data-testid="big-card-edit-button"]');
         options.onActiveChange(true);
         expect(edit.disabled).toBe(true);

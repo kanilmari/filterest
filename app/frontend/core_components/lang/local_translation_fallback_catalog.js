@@ -21,6 +21,10 @@ import { HOME_SEARCH_TRANSLATION_FALLBACKS } from '../front_page/front_page_sear
 import { SECOND_STEP_TRANSLATION_FALLBACKS } from '../auth/second_step_translation_fallbacks.js';
 
 export const LOCAL_TRANSLATION_FALLBACKS = {
+    row_article_repeated_title_hint: {
+        fi: 'Sisältö alkaa samalla otsikolla kuin rivi; otsikko näytetään jo.',
+        en: 'The content starts with the row title, which is already shown.',
+    },
     ...HOME_SEARCH_TRANSLATION_FALLBACKS,
     delete_confirm_title: {
         fi: "Vahvista poisto",

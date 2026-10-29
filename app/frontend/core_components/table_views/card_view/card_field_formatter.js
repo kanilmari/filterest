@@ -32,6 +32,10 @@ import { applyNumberInputStep } from '../../general_tables/gt_1_row_crud/number_
 import { applyLabelValueLayout } from '../label_value_layout_adapter.js';
 import { resolveCardFieldLabelPlacement } from './card_field_label_placement.js';
 import { printEmptyValue } from '../../../reusable_components/key_value_container/empty_value_printer.js';
+import { attachRowArticleHeadingHints } from './row_article_heading_hint.js';
+import { applyRowArticleHeadingRules } from './row_article_heading_renderer.js';
+import { resolveHeadingLanguage } from './row_article_heading_match.js';
+import { extractLangValue } from '../../../reusable_components/lang_value_reader.js';
 
 /**
  * parseRoleString - tukee useita pilkulla erotettuja rooleja 
@@ -127,6 +131,7 @@ export function createKeyValueElement(
     return wrapper;
 }
 function restoreReadOnlyFieldContent(fieldElem, displayValue, fallbackText = '') {
+    delete fieldElem.dataset.articleHeadingProcessed;
     const resolvedDisplayValue = (typeof displayValue === 'boolean')
         ? String(displayValue)
         : String(displayValue ?? fallbackText ?? '');
@@ -208,12 +213,7 @@ export function disableEditing(container) {
             const reconstructed = reconstructMultilingualValue(multiLangJson, editLang, newValue);
             if (reconstructed !== null) {
                 newValue = reconstructed;
-                const resolvedMultilang = resolveMultilingualValue(
-                    reconstructed,
-                    true,
-                    getLanguageWithBrowserFallback()
-                );
-                displayValue = resolvedMultilang?.displayText ?? newValue;
+                displayValue = extractLangValue(reconstructed, getLanguageWithBrowserFallback(), true);
             }
             fieldElem.removeAttribute('data-multilang-json');
             fieldElem.removeAttribute('data-multilang-edit-lang');
@@ -263,11 +263,15 @@ export function disableEditing(container) {
             fieldElem.title = resolvedDisplayValue;
         }
         fieldElem.setAttribute('data-raw-value', String(savedRawValue ?? ''));
+        // Recompute after reconstruction: a new translation may replace the displayed fallback.
+        if (Object.hasOwn(fieldElem.dataset, 'articleHeadingLanguage')) fieldElem.dataset.articleHeadingLanguage = resolveHeadingLanguage(
+            savedRawValue, multiLangJson ? true : undefined, getLanguageWithBrowserFallback());
         fieldElem.removeAttribute('data-original-text');
         fieldElem.removeAttribute('data-original-input-value');
         fieldElem.removeAttribute('data-edit-data-type');
     });
 
+    applyRowArticleHeadingRules(container);
     return updatedValues;
 }
 
@@ -320,6 +324,7 @@ export function cancelEditing(container) {
         fieldElem.removeAttribute('data-multilang-json');
         fieldElem.removeAttribute('data-multilang-edit-lang');
     });
+    applyRowArticleHeadingRules(container);
 }
 
 /** 
@@ -576,6 +581,7 @@ export function enableEditing(container, table_name, dataTypes) {
     });
 
     const multiLangFields = Array.from(container.querySelectorAll('[data-multilang-json]'));
+    attachRowArticleHeadingHints(container, dataTypes);
     const availableLanguages = new Set();
 
     multiLangFields.forEach((fieldElem) => {

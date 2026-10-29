@@ -108,6 +108,27 @@ test('article ownership visibility is honored without losing article-only names'
     expect(title({ name: 'Own', safe: 'Safe' }, types, { surface: 'article', rowIsViewersOwn: true }).text).toBe('Own');
 });
 
+test.each([
+    ['fi-FI', { fi: 'Contact', en: 'Other' }, 'fi'],
+    ['fi-FI', { 'FI_fi': 'Contact', fi: 'Other' }, 'fi-fi'],
+    ['fi', { fi: null, en: 'Contact' }, 'en'],
+    ['fi', { sv: 'Contact' }, 'sv'],
+])('returns the actual related-label language for %s %j', (language, label, expectedLanguage) => {
+    const row = { category_id: 9, category_name: JSON.stringify(label) };
+    const types = { category_id: text({ card_element: 'header', data_type: 'integer', foreign_table: 'categories',
+        foreign_display_column: 'name', foreign_display_metadata: { data_type: 'text',
+            hide_everywhere: false, client_delivery_mode: 'include', is_multilingual: true } }) };
+    const result = title(row, types, { preferredLanguage: language });
+    expect(result).toMatchObject({ text: 'Contact', language: expectedLanguage });
+    expect(result.headers[0].language).toBe(expectedLanguage);
+});
+
+test('plain text, dictionary titles and generated titles expose an unknown comparison language', () => {
+    expect(title({ name: 'Contact' }, { name: text() }).language).toBe('');
+    expect(title({ name: 'hello_key' }, { name: text({ card_element: 'header+lang_key' }) }).language).toBe('');
+    expect(title({ id: 5 }, { id: { data_type: 'integer' } }).language).toBe('');
+});
+
 const relation = (target = {}, extra = {}) => text({
     data_type: 'integer', foreign_table: 'customers', foreign_display_column: 'name',
     foreign_display_metadata: { data_type: 'text', hide_everywhere: false,

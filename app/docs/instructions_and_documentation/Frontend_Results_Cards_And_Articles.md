@@ -117,6 +117,26 @@ mark. Administrator role choices remain editable in Card visibility.
 
 ### View Types
 
+All three article presentations (ordinary, Image First and page-sized Image First)
+render the primary row title as one `h1`. Content `h1` elements render as `h2`
+with `data-demoted-from="h1"`, retaining their visual size; authored `h2`–`h6`
+levels stay unchanged. Additional configured title fields keep their existing look.
+
+Only a rich-text content field's first non-empty block, after leading empty
+`p`/`div` placeholders, can be omitted, and only when it is `h1`–`h6` and
+exactly matches a shown title in the same known language. Related titles use
+their label's resolved language, including fallbacks; unknown languages retain
+the heading. Saves refresh that language before comparison, and both editors
+share the article's title resolver and viewer ownership context. Comparison decodes HTML
+entities, strips inner tags, applies Unicode NFC and locale-aware lowercase,
+then collapses whitespace and trims. Punctuation and near matches remain
+significant; later headings are retained. Removal affects built DOM only.
+Stored text, editor values and card previews keep their existing behavior.
+Both existing ordinary-article editors show a polite, live, non-blocking hint
+when content begins with the title. IFAV and page-sized IFAV remain read-only;
+their rows use the ordinary article editor. The hint's Finnish/English copy
+uses the local translation fallback catalogue pending a versioned seed batch.
+
 The selector's product-owned names come from `dataset_view_registry.js`.
 Startup synchronizes the Finnish, English and Chinese texts for Cards, Article,
 Table, List, Compare and More, and for the More options Ticket, Product card,

@@ -28,6 +28,7 @@ import { getTranslationForKey } from "../../lang/translation_handler.js";
 import { canEditServiceCatalogColumn } from "../../service_catalog/service_catalog_moderation.js";
 import { fetchPermittedRowArticleData } from "../card_view/row_article_data_fetcher.js";
 import { createArticleLanguageEditor, getArticleLanguageFields, mergeArticleLanguageDraft, readArticleLanguageValues } from "./article_language_editor.js";
+import { resolveRecordTitle } from '../record_title_resolver.js';
 
 const metadata = { is_multilingual: true, editable_in_ui: true, card_element: "description_1", data_type: "text" };
 let row;
@@ -70,6 +71,37 @@ beforeEach(() => {
 });
 
 describe("generic article content editor", () => {
+    test('owner-only title uses the article viewer context in the language-version hint', async () => {
+        const ownRow = { id: 5, owner_id: 7, title: '{"fi":"Contact"}', summary: '{"fi":"<h2>Contact</h2><p>Teksti</p>"}' };
+        const dataTypes = { id: { data_type: 'integer' }, owner_id: { data_type: 'integer', is_row_owner: true },
+            title: { ...metadata, card_element: 'header', hide_on_bg_crd_if_not_own: true }, summary: metadata };
+        const columns = ['id', 'owner_id', 'summary', 'title'];
+        const articleTitle = resolveRecordTitle({ rowItem: ownRow, columns, dataTypes, preferredLanguage: 'fi',
+            surface: 'article', currentUserID: 7 });
+        expect(articleTitle.text).toBe('Contact');
+        setup({ row: ownRow, columns, dataTypes, currentUserID: 7 });
+        await open();
+        const content = editor.panel.querySelector('textarea[data-language="fi"]');
+        expect(content.nextElementSibling.textContent).not.toBe('');
+    });
+    test('content-language hints follow draft changes and allow saving repeated headings', async () => {
+        setup({ row: { id: 7, summary: '{"en":"<h2>Contact</h2><p>Body</p>","fi":"<h2>Yhteys</h2>"}',
+            title: '{"en":"Contact","fi":"Muu"}' } });
+        await open();
+        const english = editor.panel.querySelector('textarea[data-language="en"]');
+        const finnish = editor.panel.querySelector('textarea[data-language="fi"]');
+        expect(english.nextElementSibling.getAttribute('aria-live')).toBe('polite');
+        expect(english.nextElementSibling.textContent).not.toBe('');
+        expect(finnish.nextElementSibling.textContent).toBe('');
+        input('en', '<h2>Contact us</h2>');
+        expect(english.nextElementSibling.textContent).toBe('');
+        input('en', '<h2>Contact</h2><p>Changed body</p>');
+        expect(english.nextElementSibling.textContent).not.toBe('');
+        expect(save().disabled).toBe(false);
+        save().click();
+        await vi.waitFor(() => expect(endpoint_router).toHaveBeenCalledOnce());
+        expect(JSON.parse(endpoint_router.mock.calls[0][1].body_data.value).en).toBe('<h2>Contact</h2><p>Changed body</p>');
+    });
     test("shows metadata languages and existing non-UI languages without JSON", async () => {
         setup();
         await open();

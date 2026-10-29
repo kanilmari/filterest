@@ -46,6 +46,8 @@ import { bindImageFirstViewActivation } from "./image_first_view_activation.js";
 import { splitKeywordRoleValue } from "./card_keyword_value_helpers.js";
 import { buildRowArticleDisclosureSection } from "./row_article_disclosure_section_builder.js";
 import { hasRowArticlePermission } from "./row_article_permission_checker.js";
+import { resolveHeadingLanguage } from './row_article_heading_match.js';
+import { applyRowArticleHeadingRules } from './row_article_heading_renderer.js';
 
 const DETAILS_ICON_PATH = "/frontend/icons/general/visible-fields-icon.svg";
 
@@ -107,7 +109,7 @@ export async function buildRowArticleContent(
         const column = heading.column || '';
         const columnMeta = data_types[column] || {};
         rowArticleHeaderValues.add(heading.text);
-        const header = document.createElement('div');
+        const header = document.createElement(rowArticleHeaderElements.length ? 'div' : 'h1');
         header.classList.add('big_card_header');
         header.style.whiteSpace = 'pre-wrap';
         const icon = createDatasetIconElement(table_name, 'big_card_header_dataset_icon');
@@ -126,6 +128,8 @@ export async function buildRowArticleContent(
             header.appendChild(value);
         }
         rowArticleHeaderElements.push(header);
+        const titleValue = header.querySelector('.big_card_header_value');
+        if (titleValue) titleValue.dataset.articleHeadingLanguage = heading.language || '';
     }
 
     /* -------------------------------------------------- *
@@ -423,8 +427,7 @@ export async function buildRowArticleContent(
         dc.classList.add("big_card_description_container");
         visibleDescriptionEntries.forEach((d) => {
             // suoraan elementti ilman ylimääräistä käärettä
-            dc.appendChild(
-                createRowArticleKeyValueElement(
+            const field = createRowArticleKeyValueElement(
                     d.label,
                     d.rawValue,
                     d.column,
@@ -435,8 +438,11 @@ export async function buildRowArticleContent(
                     d.storedRawValue,
                     resolveRowArticleLabelMetadata(data_types, d),
                     timestampDisplayOptions
-                )
-            );
+                );
+            const value = field.matches('.big_description_value') ? field : field.querySelector('.big_description_value');
+            if (value) value.dataset.articleHeadingLanguage = resolveHeadingLanguage(
+                d.storedRawValue, d.isMultilingual, chosenLang);
+            dc.appendChild(field);
         });
         rowArticleContentElement.appendChild(dc);
     }
@@ -540,6 +546,7 @@ export async function buildRowArticleContent(
         );
     }
 
+    applyRowArticleHeadingRules(rowArticleContentElement);
     if (datasetAppearanceState.isCurrent(appearanceToken)) datasetAppearanceState.bind(rowArticleContentElement, table_name);
     return {
         rowArticleContentElement,

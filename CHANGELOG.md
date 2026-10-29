@@ -22,6 +22,8 @@ Dates are the local (Europe/Helsinki) date on which the version was published.
 
 ## [Unreleased]
 
+- Article views show the row title as their single main heading, omit only an exactly matching first content heading in the same known language (including related-label fallbacks and saved translations), and advise editors using the same ownership context without changing stored text.
+
 ## [9.6.0] - 2026-10-26
 
 - **Home with a background image or video keeps its media-shaped navigation from the first view** — While the page waited for its language, Home counted its media as hidden, so the tabs, their label colours and the side menu took the no-media shape until something else changed. The media check now ignores the start-up overlay and checks again when the page is shown.

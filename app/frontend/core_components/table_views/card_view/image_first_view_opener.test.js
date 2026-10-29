@@ -144,6 +144,26 @@ describe("openImageFirstView", () => {
         loadSession.fetchDynamicChildren.mockReset();
     });
 
+    test.each(['image_first', 'page'])('mounts the shared heading DOM unchanged in %s', async layout => {
+        if (layout === 'page') {
+            const { hasRoutePermission } = await import('../../route_permission_checker.js');
+            hasRoutePermission.mockReturnValueOnce(true);
+            const { fetchDatasetData } = await import('../../endpoints/endpoint_data_fetcher.js');
+            fetchDatasetData.mockResolvedValueOnce({ columns: ['title'], data: [{ id: 3, title: 'Contact' }],
+                types: { title: { card_element: 'header' } } });
+        }
+        const content = document.createElement('div');
+        content.className = 'big_card_content row_article_content';
+        content.innerHTML = '<h1 class="big_card_header">Contact</h1><h2 data-demoted-from="h1">Section</h2>';
+        buildContentMock.mockResolvedValueOnce({ rowArticleContentElement: content });
+        await openImageFirstView({ tableName: 'examples', rowItem: { id: 3, title: 'Contact' },
+            layout, imageRows: [{ filename: 'proof.png' }] });
+        expect(buildContentMock).toHaveBeenCalledOnce();
+        expect(document.querySelector('.image_first_view .row_article_content')).toBe(content);
+        expect(content.querySelectorAll('h1')).toHaveLength(1);
+        expect(content.querySelector('h2').dataset.demotedFrom).toBe('h1');
+    });
+
     describe("image rows", () => {
         const pictureTypes = {
             title: { card_element: "header" },

@@ -7,6 +7,7 @@ import { resolveCardFieldDisplayValue } from './card_view/card_field_formatter_h
 import { extractLangValue, looksLikeLangValue } from '../../reusable_components/lang_value_reader.js';
 import { getTranslationForKey } from '../lang/translation_handler.js';
 import { getLanguageWithBrowserFallback } from '../state_stores/lang_preference_reader.js';
+import { resolveHeadingLanguage } from './card_view/row_article_heading_match.js';
 
 const EXACT_NAMES = ['display_name', 'name', 'title', 'key'];
 const SECRET_NAME = /(?:password|passwd|pwd|token|secret|credential|private.?key|api.?key|embedding|vector|binary)/i;
@@ -75,6 +76,7 @@ function eligibleAliasTarget(meta, configured) {
  * `columns` is the current authorized presentation set, never all row keys.
  * Relation text comes only from an alias already returned by the authorized query.
  * Callers render `headers` as several headings and use `text`/`initial` for summaries.
+ * Each title carries its displayed translation's language, or '' when unknown.
  */
 export function resolveRecordTitle({
     rowItem = {}, columns = [], dataTypes = {}, tableName = '',
@@ -106,13 +108,16 @@ export function resolveRecordTitle({
             typeof raw === 'object' && !multilingual || Array.isArray(raw)) return null;
         if ((!configured || value.aliasColumn) && !multilingual && !/text|char|citext/.test(dataType) && !(dataType === '' && typeof raw === 'string')) return null;
         let text = value.displayValue.trim();
+        // Use the admitted display source (including a related label), never its stored FK ID.
+        let language = resolveHeadingLanguage(raw, value.isMultilingual, preferredLanguage);
         if (/(?:\+lang_key|\+lang-key)(?:,|$)/.test(meta.card_element || '') && text) {
             text = getTranslationForKey(text, { language: preferredLanguage, fallback: text }).trim();
+            language = ''; // Dictionary lookup does not expose its resolved translation language.
         }
         if (!text || !configured && (/[\r\n]/.test(text) || text.length > 160 || text.startsWith('{') || text.startsWith('['))) return null;
         if (meta[surface === 'article' ? 'hide_false_null_on_big_crd' : 'hide_false_null_on_sml_crd'] === true &&
             /^(?:false|null)$/i.test(text)) return null;
-        return { text, column, isFallback: false, configured };
+        return { text, language, column, isFallback: false, configured };
     };
     // Configured heading order follows the caller's existing layout, not inference order.
     const headers = columns.filter(column => rolesOf(dataTypes[column] || {}).includes('header'))
@@ -138,7 +143,7 @@ export function resolveRecordTitle({
         const copy = FALLBACK_COPY[key];
         const text = getTranslationForKey(key, { language: preferredLanguage,
             fallback: copy[language] || copy[language.split('-')[0]] || copy.en }).replaceAll('{id}', id);
-        title = { text, column: null, isFallback: true, configured: false };
+        title = { text, language: '', column: null, isFallback: true, configured: false };
     }
     return { ...title, headers, initial: [...title.text][0]?.toUpperCase() || '' };
 }

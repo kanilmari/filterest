@@ -365,7 +365,7 @@ export async function openRowArticleView(row_item, table_name, selectedCard = nu
         if (canUpdateRow && hasRowArticlePermission("edit_language_versions")) {
             languageEditor = createArticleLanguageEditor({
                 row: row_item, columns: sorted_columns, dataTypes: data_types,
-                tableName: table_name, canUpdateRow, isCurrent: canCommit,
+                tableName: table_name, canUpdateRow, currentUserID: current_user_id, isCurrent: canCommit,
                 onActiveChange: (active) => { if (editButton) editButton.disabled = active; },
                 onSaved: async () => openRowArticleView(row_item, table_name, selectedCard, { isCurrent }),
             });

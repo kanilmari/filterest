@@ -11,6 +11,7 @@ import { getLanguageWithBrowserFallback } from "../../state_stores/lang_preferen
 import { readCachedUserPermissions, canEditServiceCatalogColumn } from "../../service_catalog/service_catalog_moderation.js";
 import { fetchPermittedRowArticleData } from "../card_view/row_article_data_fetcher.js";
 import { reconstructMultilingualValue } from "../card_view/card_field_formatter_helpers.js";
+import { createArticleHeadingHint, articleHeadingTitlesForLanguage } from '../card_view/row_article_heading_hint.js';
 
 const LANGUAGE_CODE = /^[a-z]{2,3}(?:-[A-Za-z0-9]{2,8})*$/;
 const copy = (key, fallback) => getTranslationForKey(key, { fallback });
@@ -68,7 +69,7 @@ export function resolveArticleEditorLanguages(values, options) {
 
 /** The server rechecks row and field rights on update; client controls fail closed. */
 export function createArticleLanguageEditor({
-    row, columns, dataTypes, tableName, canUpdateRow,
+    row, columns, dataTypes, tableName, canUpdateRow, currentUserID = null,
     onActiveChange = () => {}, onSaved = async () => {}, isCurrent = () => true,
 }) {
     const fields = canUpdateRow ? getArticleLanguageFields({ row, columns, dataTypes, tableName }) : [];
@@ -167,6 +168,12 @@ export function createArticleLanguageEditor({
             textarea.value = values[code] ?? "";
             textarea.addEventListener("input", sync);
             wrapper.append(textarea);
+            if (String(dataTypes[select.value].card_element || '').split(',')
+                .some(role => /^description(?:_?\d+)?(?:\+|$)/.test(role.trim()))) {
+                const updateHint = createArticleHeadingHint(textarea, () => articleHeadingTitlesForLanguage(
+                    row, columns, dataTypes, tableName, code, currentUserID), () => code);
+                textarea.addEventListener('input', updateHint);
+            }
             grid.append(wrapper);
             inputs.set(code, textarea);
         }
