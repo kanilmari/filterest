@@ -45,11 +45,37 @@ The details section uses the existing `row_article_section_details` translation 
 
 At viewport widths of 700 px and below, record-switch buttons use 44 × 44 px
 icon-only targets; their preview thumbnails are hidden. Revealed disabled image
-arrows use 0.5 opacity, while enabled arrows and existing hidden states keep
-their visibility rules. Details place each wrapping label above its value in
+arrows use the shared 0.28 alpha at every width; enabled arrows and hidden
+states keep their existing visibility rules. Details place each wrapping label above its value in
 IFAV, Page and ordinary articles. IFAV and Page retain their panel spacing and
 corners. The shared [phone article layout](Frontend_Results_Cards_And_Articles.md#phone-article-layout)
 owns this viewport boundary and the ordinary article's compact frame.
+
+Classic inline media, IFAV and the Page modal use `installImageControlsIdle(root,
+activeClass)` in `card_view/image_controls_idle.js`: activity reveals controls,
+1200 ms of pointer inactivity hides them, hovering a control holds them, focus
+reveals them, pointerleave schedules hiding, and teardown clears listeners and
+timers. Classic's image arrows, position and record bar share its active class;
+IFAV's arrows and top record buttons share the modal active class. Page currently
+has a plain contained image and Close, with no image arrows or record bar; Close
+inherits the same modal idle lifecycle. Keyboard focus still reveals controls.
+
+On `(hover: none), (pointer: coarse)` inputs, classic controls remain visible
+(including position and record bar); IFAV arrows, Close, record buttons and image
+position remain visible at idle, with the scroll hint still suppressed after
+70 px of scrolling. Page's Close stays visible on touch; it has no arrows or
+record bar. The shared timer still expires its active class on touch; CSS owns
+these visibility exceptions. Existing fades and reduced-motion rules are unchanged.
+
+Disabled `.row_article_image_first_arrow` and `.big_card_thumbnail_carousel_button`
+buttons share exactly one revealed-alpha rule in `row_article_image_controls.css`:
+`--row-article-image-arrow-visible-alpha: 0.28`. Hidden arrows still resolve to
+opacity 0. Disabled arrows retain the normal enabled resting colours, borders and
+blur, with no shadow or hover change and a not-allowed cursor; their revealed hit
+area remains intact. There is no disabled-opacity token in `variables.css`.
+Keep this rule canonical; do not add another disabled opacity rule; the guard test enforces it.
+`row_article_disabled_arrow_guard.test.js` parses every frontend stylesheet except
+`dist` and checks disabled arrow compounds, including `:is()`/`:where()` branches.
 
 The modal uses the application's explicit theme and existing reduced-motion behavior. Image captions and their original-photo attribution are described in [Article image captions](Article_Image_Captions.md).
 

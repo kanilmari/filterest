@@ -12,29 +12,17 @@ import {
     activateImageFirstStageTransitionMedia,
     settleImageFirstStageTransitionMedia,
 } from "./row_article_image_first_stage.js";
+import { installImageControlsIdle } from "./image_controls_idle.js";
 import { disposeCardResources } from "./card_resource_lifecycle.js";
 
 const IS_DEV_MODE = document.querySelector('meta[name="app-env"]')?.content === 'dev';
-const IMAGE_MODAL_CONTROL_IDLE_DELAY_MS = 1200;
 const IMAGE_MODAL_SCROLL_HINT_HIDE_THRESHOLD_PX = 70;
 const IMAGE_FIRST_VIEW_CLOSE_DURATION_MS = 300;
 const imageModalCloseCallbacks = new WeakMap();
 const IMAGE_FIRST_RECORD_TRANSITION_DURATION_MS = 300;
 const imageFirstRecordTransitionStates = new WeakMap();
-const IMAGE_MODAL_TRANSIENT_CONTROL_SELECTOR = [
-    ".modal_close_button",
-    ".row_article_image_first_arrow",
-    ".row_article_row_navigation_button",
-    ".row_article_image_first_scroll_hint",
-].join(", ");
-const imageModalControlTimers = new WeakMap();
-const imageModalFocusHandlers = new WeakMap();
+const imageModalIdleCleanups = new WeakMap();
 const imageModalScrollHandlers = new WeakMap();
-
-function isTransientImageControl(target) {
-    return target instanceof Element
-        && Boolean(target.closest(IMAGE_MODAL_TRANSIENT_CONTROL_SELECTOR));
-}
 
 function setImageModalTopControls(modal, topControlElements = []) {
     const modalHeader = modal?.querySelector(":scope > .modal_header");
@@ -89,26 +77,9 @@ function lockImageFirstRecordControls(topControlElements) {
     };
 }
 
-function clearImageModalControlTimer(modalOverlay) {
-    const existingTimer = imageModalControlTimers.get(modalOverlay);
-    if (existingTimer !== undefined) {
-        window.clearTimeout(existingTimer);
-        imageModalControlTimers.delete(modalOverlay);
-    }
-}
-
 function teardownTransientImageControls(modalOverlay) {
-    clearImageModalControlTimer(modalOverlay);
-    modalOverlay.onpointermove = null;
-    modalOverlay.onpointerover = null;
-    modalOverlay.onpointerout = null;
-    modalOverlay.onpointerleave = null;
-
-    const focusHandler = imageModalFocusHandlers.get(modalOverlay);
-    if (focusHandler) {
-        modalOverlay.removeEventListener("focusin", focusHandler);
-        imageModalFocusHandlers.delete(modalOverlay);
-    }
+    imageModalIdleCleanups.get(modalOverlay)?.();
+    imageModalIdleCleanups.delete(modalOverlay);
 
     const scrollBinding = imageModalScrollHandlers.get(modalOverlay);
     if (scrollBinding) {
@@ -129,47 +100,8 @@ function teardownTransientImageControls(modalOverlay) {
  */
 function installTransientImageControls(modalOverlay) {
     teardownTransientImageControls(modalOverlay);
-    const hideControls = () => {
-        clearImageModalControlTimer(modalOverlay);
-        modalOverlay.classList.remove("image-modal-controls-active");
-    };
-    const scheduleControlsHide = () => {
-        clearImageModalControlTimer(modalOverlay);
-        imageModalControlTimers.set(
-            modalOverlay,
-            window.setTimeout(hideControls, IMAGE_MODAL_CONTROL_IDLE_DELAY_MS)
-        );
-    };
-    const revealControls = ({ keepVisible = false } = {}) => {
-        modalOverlay.classList.add("image-modal-controls-active");
-        if (keepVisible) {
-            clearImageModalControlTimer(modalOverlay);
-        } else {
-            scheduleControlsHide();
-        }
-    };
-    modalOverlay.onpointermove = (event) => {
-        revealControls({ keepVisible: isTransientImageControl(event.target) });
-    };
-    modalOverlay.onpointerover = (event) => {
-        if (isTransientImageControl(event.target)) {
-            revealControls({ keepVisible: true });
-        }
-    };
-    modalOverlay.onpointerout = (event) => {
-        if (isTransientImageControl(event.target)
-            && !isTransientImageControl(event.relatedTarget)) {
-            scheduleControlsHide();
-        }
-    };
-    modalOverlay.onpointerleave = scheduleControlsHide;
-    const previousFocusHandler = imageModalFocusHandlers.get(modalOverlay);
-    if (previousFocusHandler) {
-        modalOverlay.removeEventListener("focusin", previousFocusHandler);
-    }
-    const focusHandler = () => revealControls();
-    modalOverlay.addEventListener("focusin", focusHandler);
-    imageModalFocusHandlers.set(modalOverlay, focusHandler);
+    imageModalIdleCleanups.set(modalOverlay,
+        installImageControlsIdle(modalOverlay, "image-modal-controls-active"));
 
     const previousScrollBinding = imageModalScrollHandlers.get(modalOverlay);
     if (previousScrollBinding) {
@@ -200,7 +132,6 @@ function installTransientImageControls(modalOverlay) {
         modalOverlay.classList.remove("image-modal-content-scrolled");
         imageModalScrollHandlers.delete(modalOverlay);
     }
-    revealControls();
     return () => teardownTransientImageControls(modalOverlay);
 }
 

@@ -75,11 +75,6 @@ async function measureInk(button: Locator) {
     const svg = document.importNode(parsed.documentElement, true) as unknown as SVGSVGElement;
     svg.style.cssText = 'position:fixed;left:-10000px;visibility:hidden';
     document.body.append(svg);
-    const palette = document.createElement('span');
-    // Resolve tokens on the actual button, including its explicit app-theme override.
-    palette.style.cssText = 'position:fixed;visibility:hidden;'
-      + 'background-color:var(--control-disabled-bg);color:var(--control-disabled-text)';
-    element.append(palette);
     try {
       const ink = svg.getBBox();
       const view = svg.viewBox.baseVal;
@@ -90,14 +85,12 @@ async function measureInk(button: Locator) {
         + (ink.x - view.x + ink.width / 2) * scale;
       const inkY = box.top + (box.height - view.height * scale) / 2
         + (ink.y - view.y + ink.height / 2) * scale;
-      const expected = getComputedStyle(palette);
       return { dx: inkX - (bounds.left + bounds.width / 2), dy: inkY - (bounds.top + bounds.height / 2),
-        iconColor: style.backgroundColor, expectedDisabledIconColor: expected.color,
+        iconColor: style.backgroundColor,
         buttonBackground: getComputedStyle(element).backgroundColor,
-        expectedDisabledBackground: expected.backgroundColor,
         iconWidth: box.width, iconHeight: box.height, mask: url,
         disabled: (element as HTMLButtonElement).disabled, label: element.getAttribute('aria-label') };
-    } finally { svg.remove(); palette.remove(); }
+    } finally { svg.remove(); }
   });
 }
 
@@ -106,18 +99,18 @@ async function disabledSkin(button: Locator) {
     const style = getComputedStyle(element);
     const icon = element.querySelector('.row_article_image_arrow_icon');
     if (!icon) throw new Error('Expected an image-arrow mask');
-    const reference = document.createElement('span');
-    // Compare against the existing theme-local palette independently of the new
-    // aliases, so frozen root tokens under the opposite OS theme cannot pass.
-    reference.style.cssText = 'background:var(--table_border_color);color:var(--border_color);'
-      + 'border:1px solid var(--border_color);outline:1px solid var(--control-disabled-border)';
-    element.append(reference);
+    // Compare the disabled arrow to its enabled resting skin in this exact surface.
+    const reference = element.cloneNode(true) as HTMLButtonElement;
+    reference.disabled = false;
+    reference.style.cssText = 'position:fixed;left:-10000px;visibility:hidden';
+    element.parentElement!.append(reference);
     const expected = getComputedStyle(reference);
     const result = { background: style.backgroundColor, color: style.color, border: style.borderTopColor,
       iconColor: getComputedStyle(icon).backgroundColor,
       shadow: style.boxShadow, filter: style.filter, blur: style.backdropFilter, cursor: style.cursor,
+      expectedBlur: expected.backdropFilter,
       opacity: style.opacity, expectedBackground: expected.backgroundColor, expectedColor: expected.color,
-      expectedBorder: expected.borderTopColor, resolvedDisabledBorder: expected.outlineColor,
+      expectedBorder: expected.borderTopColor, resolvedDisabledBorder: expected.borderTopColor,
       borders: ['top', 'right', 'bottom', 'left'].map(side => ({ side,
         color: style.getPropertyValue(`border-${side}-color`),
         width: style.getPropertyValue(`border-${side}-width`),
@@ -156,15 +149,13 @@ async function assertDisabled(page: Page, button: Locator, touch: boolean) {
   const rest = await disabledSkin(button);
   expect(rest).toMatchObject({ background: rest.expectedBackground, color: rest.expectedColor,
     iconColor: rest.expectedColor,
-    border: rest.expectedBorder, shadow: 'none', filter: 'none', blur: 'none', cursor: 'not-allowed',
-    opacity: touch && (page.viewportSize()?.width ?? Infinity) <= 700 ? '0.5' : '1' });
+    border: rest.expectedBorder, shadow: 'none', filter: 'none', blur: rest.expectedBlur, cursor: 'not-allowed',
+    opacity: '0.28' });
   for (const border of rest.borders) {
-    expect(border.color, `${border.side} edge follows the resolved disabled border token`)
+    expect(border.color, `${border.side} edge follows the normal resting border`)
       .toBe(rest.resolvedDisabledBorder);
     expect(border.style, `${border.side} edge is solid`).toBe('solid');
     expect(parseFloat(border.width), `${border.side} edge is at least 1px`).toBeGreaterThanOrEqual(1);
-    expect(border.color, `${border.side} edge is distinct from the disabled background`)
-      .not.toBe(rest.background);
   }
   if (!touch) {
     await hoverImageArrow(page, button);
@@ -206,7 +197,7 @@ async function capturePair(page: Page, root: Locator, name: string, testInfo: Te
   await waitForVisiblePageReady(page);
   if (!touch) {
     // Reveal only after readiness, then pin the real idle controller by hovering
-    // an enabled control. Old disabled arrows use 52% opacity and may hide at idle.
+    // a control, keeping its disabled hit area available too.
     await root.hover({ position: { x: 2, y: 2 } });
     const next = arrow(root, 'next', carousel);
     await hoverImageArrow(page, await next.isEnabled() ? next : arrow(root, 'previous', carousel));
@@ -216,8 +207,7 @@ async function capturePair(page: Page, root: Locator, name: string, testInfo: Te
     const button = arrow(root, direction, carousel);
     await expect(button).toBeVisible();
     if (phase === 'after') {
-      const opacity = touch && (page.viewportSize()?.width ?? Infinity) <= 700
-        && await button.isDisabled() ? '0.5' : '1';
+      const opacity = await button.isDisabled() ? '0.28' : '1';
       await expect(button).toHaveCSS('opacity', opacity);
       const measurement = await measureInk(button);
       expect(Math.abs(measurement.dx), `${name} ${direction} ink X`).toBeLessThanOrEqual(1);
@@ -233,13 +223,6 @@ async function capturePair(page: Page, root: Locator, name: string, testInfo: Te
   const enabledIconColor = measurements.find(measurement => !measurement.disabled)?.iconColor;
   if (phase === 'after') {
     expect(enabledIconColor, `${name} enabled arrow for colour comparison`).toBeTruthy();
-    for (const measurement of measurements.filter(item => item.disabled)) {
-      expect(measurement.iconColor, `${name} disabled mask colour`)
-        .toBe(measurement.expectedDisabledIconColor);
-      expect(measurement.iconColor, `${name} disabled/enabled distinction`).not.toBe(enabledIconColor);
-      expect(measurement.buttonBackground, `${name} disabled button background`)
-        .toBe(measurement.expectedDisabledBackground);
-    }
   }
   const folder = path.join(outputRoot, testInfo.project.name, testInfo.title.replace(/[^a-z0-9-]/gi, '_'));
   await mkdir(folder, { recursive: true });

@@ -198,12 +198,13 @@ details override is removed; its separate 480 px panel-width rule remains.
 Ordinary inline media and IFAV share 44 × 44 px record-switch buttons with
 hidden thumbnail slots and zero navigation padding. Existing accessible names,
 keyboard order and markup remain in use. Revealed disabled image arrows,
-including thumbnail-carousel arrows, use 0.5 opacity through one shared visible
-alpha; enabled arrows remain fully visible. Hidden modal arrows and the
-article's hover hiding retain zero opacity. The existing touch visibility rule
+including thumbnail-carousel arrows, use 0.28 opacity at every width through one
+shared revealed alpha; enabled arrows remain fully visible. Hidden modal arrows
+and the article's shared idle hiding retain zero opacity. The existing touch visibility rule
 still reveals IFAV controls, including at idle, and respects the disabled alpha.
-These overrides use viewport media queries; widths above 700 px retain the
-existing rules, including in narrow desktop panes and on touch tablets.
+The compact layout overrides use viewport media queries; widths above 700 px
+retain their existing geometry, including narrow desktop panes and touch tablets.
+The shared idle and disabled-arrow contract is described in [Image-first article](Image_First_Article.md).
 
 ### Where a Dataset's View State Lives
 Each browser tab keeps its own view and open row, so one tab never changes or erases another's (owner decision K143, 3.10.2026):

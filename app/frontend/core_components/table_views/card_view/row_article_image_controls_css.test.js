@@ -1,10 +1,11 @@
 // row_article_image_controls_css.test.js
 // Guards inherited image-arrow colours, fixed icon geometry and interaction isolation.
-// Connects all three gallery surfaces to theme-local aliases of existing greys.
-// Prevents invisible borders, opacity/blur skins and hover rules from masking disabled state.
+// Connects all gallery surfaces to their normal theme skin and shared disabled alpha.
+// Prevents disabled skin overrides and visibility rules from masking disabled state.
 import fs from "node:fs";
 import { afterEach, describe, expect, test } from "vitest";
-import { expectPhoneRule, withoutPhone } from "./row_article_phone_css_test_helpers.js";
+import { requireNodeDependency } from "../../../../server_tools/lib/node_dependency_loader.mjs";
+const { parse } = requireNodeDependency("postcss");
 
 const read = relative => fs.readFileSync(new URL(relative, import.meta.url), "utf8");
 const controls = read("./row_article_image_controls.css");
@@ -21,7 +22,6 @@ function readCascade(relativePath, base = import.meta.url) {
 }
 const fullCascade = readCascade("../../../styles/imports.css");
 const enabledHover = fullCascade.match(/\.fw-btn:hover:not\(:disabled\)\s*\{[^}]*\}/)[0];
-const disabledBorderProbe = "rgb(101, 102, 103)";
 const surfaces = [
     ["IFAV", "modal_overlay_blur image-modal-controls-active", "image_modal image_first_view_modal", "row_article_image_first_arrow"],
     ["touch-idle IFAV", "modal_overlay_blur", "image_modal image_first_view_modal", "row_article_image_first_arrow"],
@@ -135,7 +135,7 @@ describe("article image arrow CSS", () => {
 
     for (const fixtureState of fixtureStates) {
         const { theme, state, themeScope } = fixtureState;
-        test.each(surfaces)(`keeps arrow colours in the full ${theme} ${state} cascade (${themeScope}): %s`,
+        test.each(surfaces)(`keeps the normal disabled-arrow skin in the full ${theme} ${state} cascade (${themeScope}): %s`,
             (_name, overlayClass, rootClass, arrowClass) => {
                 // Isolate selector caches between fixtures, especially body :is() matches.
                 const frame = document.createElement("iframe");
@@ -145,10 +145,7 @@ describe("article image arrow CSS", () => {
                 const style = fixture.createElement("style");
                 // JSDOM has no pointer: activate the shipped hover selectors with a class.
                 // It also misranks later :is() rules: replay the more specific framework hover last.
-                // Its var() border shorthands lack longhands: substitute only the edge alias.
-                // The binding guard below and C22 verify the actual theme-derived colour.
-                style.textContent = simulateHover(`${cascade}\n${state === "hover" ? enabledHover : ""}`)
-                    .replaceAll("var(--control-disabled-border)", disabledBorderProbe);
+                style.textContent = simulateHover(`${cascade}\n${state === "hover" ? enabledHover : ""}`);
                 fixture.head.append(style);
                 populateSurface(fixture, fixtureState, [overlayClass, rootClass, arrowClass]);
                 const disabled = fixture.querySelector("button:disabled");
@@ -156,71 +153,51 @@ describe("article image arrow CSS", () => {
                 const disabledIcon = context.getComputedStyle(disabled.firstElementChild).backgroundColor;
                 const enabledIcon = context.getComputedStyle(enabled.firstElementChild).backgroundColor;
                 const disabledStyle = context.getComputedStyle(disabled);
-                expect(disabledStyle.color).toBe("var(--control-disabled-text)");
-                for (const side of ["Top", "Right", "Bottom", "Left"]) {
-                    expect(disabledStyle[`border${side}Color`]).toBe(disabledBorderProbe);
-                    expect(disabledStyle[`border${side}Style`]).toBe("solid");
-                    expect(parseFloat(disabledStyle[`border${side}Width`])).toBeGreaterThanOrEqual(1);
+                // The disabled arrow retains the enabled resting skin, including IFAV blur.
+                enabled.classList.remove("test-hover");
+                const resting = context.getComputedStyle(enabled);
+                for (const property of ["color", "backgroundColor", "border", "backdropFilter"]) {
+                    expect(disabledStyle[property]).toBe(resting[property]);
                 }
-                expect(disabledIcon).toBe("var(--control-disabled-text)");
-                expect(disabledIcon).not.toBe(enabledIcon);
+                expect(disabledStyle.boxShadow).toBe("none");
+                expect(disabledStyle.cursor).toBe("not-allowed");
+                expect(disabledIcon).toBe(resting.color);
+                if (state === "hover") enabled.classList.add("test-hover");
                 const enabledColor = context.getComputedStyle(enabled).color;
                 expect(enabledIcon).toBe(enabledColor);
                 if (state === "hover") expect(enabledColor).toBe("var(--fw-color-primary)");
             });
     }
 
-    test("recomputes all disabled aliases for explicit app themes over either OS preference", () => {
-        const blocks = [
-            variables.match(/:root\s*\{([^}]*)/s)?.[1],
-            variables.match(/body\.light-mode,\s*body\.dark-mode\s*\{([^}]*)/s)?.[1],
-        ];
-        for (const block of blocks) {
-            expect(block).toContain("--control-disabled-bg: var(--table_border_color)");
-            expect(block).toContain("--control-disabled-text: var(--border_color)");
-            expect(block).toContain("--control-disabled-border: var(--border_color)");
+    test("retains disabled tokens for other controls while arrows use only their revealed alpha", () => {
+        for (const token of ["bg", "text", "border"]) {
+            expect(variables).toContain(`--control-disabled-${token}:`);
+            expect(controls).not.toContain(`var(--control-disabled-${token})`);
         }
-    });
-
-    test("keeps the disabled skin opaque and stationary above 700px", () => {
         expect(controls).toMatch(/\.row_article_image_arrow_icon\s*\{[^}]*flex:\s*0 0 2rem;[^}]*width:\s*2rem;[^}]*height:\s*2rem;/s);
-        expect(controls).toContain(".image_modal.image_first_view_modal, .row_article_inline_media, .big_card_thumbnail_row");
-        expect(controls).toContain(":is(.row_article_image_first_arrow, .big_card_thumbnail_carousel_button):disabled");
-        for (const declaration of [
-            "background: var(--control-disabled-bg)", "color: var(--control-disabled-text)",
-            "border: 1px solid var(--control-disabled-border)", "box-shadow: none", "filter: none",
-            "backdrop-filter: none", "cursor: not-allowed",
-        ]) expect(controls).toContain(declaration);
-        // Idle visibility belongs to each view; disabled skins must not override it.
-        expect(withoutPhone(controls)).not.toMatch(/opacity\s*:/);
-        expect(read("./big_card_image_gallery.css")).not.toMatch(/\.row_article_image_first_arrow:disabled\s*\{/);
-        expect(read("../../../reusable_components/modal/modals.css"))
-            .not.toMatch(/[^{}]*row_article_image_first_arrow[^{}]*:disabled\s*\{/);
         expect(read("../../../styles/framework.css")).toContain(".fw-btn--ghost:hover:not(:disabled)");
         expect(read("../../../styles/framework.css")).not.toContain(".fw-btn--ghost:hover {");
     });
 
-    test("dims only revealed disabled phone arrows without defeating idle, hover or touch visibility", () => {
+    test("uses alpha at every width only when revealed and keeps touch and keyboard visibility", () => {
+        const root = parse(controls);
         const alpha = "var(--row-article-image-arrow-visible-alpha, 1)";
-        expectPhoneRule(controls,
-            ":is(.row_article_image_first_arrow, .big_card_thumbnail_carousel_button):disabled",
-            { "--row-article-image-arrow-visible-alpha": "0.5" });
-        expect(controls.match(/--row-article-image-arrow-visible-alpha\s*:/g)).toHaveLength(1);
-        expectPhoneRule(controls,
-            ".row_article_inline_media .row_article_image_first_arrow, .big_card_thumbnail_row .big_card_thumbnail_carousel_button",
-            { opacity: alpha });
-        expectPhoneRule(controls,
-            "body .modal_overlay_blur.image-modal-controls-active .image_modal .row_article_image_first_arrow, body .image_modal .row_article_image_first_arrow:focus-visible",
-            { opacity: alpha });
-        const [touch] = expectPhoneRule(controls,
-            "body .modal_overlay_blur .image_modal .row_article_image_first_arrow", { opacity: alpha });
-        expect(touch.parent.params).toBe("(hover: none), (pointer: coarse)");
-        expect(touch.parent.parent.params).toBe("(width <= 700px)");
-        // No phone opacity override for an inactive fine-pointer modal; its zero survives.
-        expect(controls).not.toMatch(/body \.image_modal \.row_article_image_first_arrow\s*\{/);
-        expect(read("../../../reusable_components/modal/modals.css"))
-            .toMatch(/\.image_modal :is\([^)]*\.row_article_image_first_arrow[^)]*\)\s*\{\s*opacity: 0;/s);
-        expect(read("./row_article_inline_media.css"))
-            .toMatch(/@media \(hover: hover\)\s*\{[^}]*:not\(:hover, :focus-within\)[^}]*opacity: 0;/s);
+        let canonical = 0;
+        root.walkDecls("--row-article-image-arrow-visible-alpha", declaration => {
+            canonical++;
+            expect(declaration.value).toBe("0.28");
+            expect(declaration.parent.parent.type).toBe("root");
+        });
+        expect(canonical).toBe(1);
+        root.walkDecls("opacity", declaration => expect(declaration.value).toBe(alpha));
+        const modal = read("../../../reusable_components/modal/modals.css");
+        expect(modal).toMatch(/\.image_modal :is\([^)]*\.row_article_image_first_arrow[^)]*\)\s*\{\s*opacity: 0;/s);
+        expect(controls).toContain(".row_article_image_first_arrow:focus-visible");
+        expect(controls).toContain("@media (hover: none), (pointer: coarse)");
+        const inline = read("./row_article_inline_media.css");
+        expect(inline).toContain(":not(.article-image-controls-active, :focus-within)");
+        expect(inline).not.toContain(":not(:hover, :focus-within)");
+        expect(inline).toContain("@media (hover: hover) and (pointer: fine)");
+        expect(inline).toContain("@media (prefers-reduced-motion: reduce)");
     });
 });

@@ -22,6 +22,7 @@ Dates are the local (Europe/Helsinki) date on which the version was published.
 
 ## [Unreleased]
 
+- Article image controls share a 1200 ms idle timer; disabled image arrows retain their normal theme skin at 28% opacity at every width.
 - **Clearer profile and verification setup fields** — Profile email/password codes and PIN/authenticator setup share translated labels, hints and inline errors; PIN setup adds an accessible reveal control while retaining each form’s existing actions.
 - Article views show the row title as their single main heading, omit only an exactly matching first content heading in the same known language (including related-label fallbacks and saved translations), and advise editors using the same ownership context without changing stored text.
 

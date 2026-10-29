@@ -1,7 +1,7 @@
 /* row_article_inline_media.css
  * Places ordinary article image controls inside their own media rectangle.
  * Shares button and caption skins with the image-first gallery stylesheet.
- * Keeps article spacing and hover behavior independent from viewport animations.
+ * Keeps article spacing and idle behavior independent from viewport animations.
  */
 
 /* Ordinary articles own their image rectangle, not the image-first viewport. */
@@ -73,8 +73,8 @@
     backdrop-filter: blur(8px);
 }
 
-@media (hover: hover) {
-    .row_article_inline_media:not(:hover, :focus-within)
+@media (hover: hover) and (pointer: fine) {
+    .row_article_inline_media:not(.article-image-controls-active, :focus-within)
         :is(.row_article_image_first_arrow, .row_article_image_first_position,
             .row_article_inline_record_controls) {
         opacity: 0;

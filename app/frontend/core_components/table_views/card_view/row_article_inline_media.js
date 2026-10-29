@@ -16,6 +16,8 @@ import { buildRowArticleImageArrow, buildRowArticleImagePosition } from "./row_a
 import { buildRowArticleRowNavigation } from "./row_article_presentation.js";
 import { enable_experimental_row_article_row_navigation } from "../../../ui_config.js";
 
+import { installImageControlsIdle } from "./image_controls_idle.js";
+
 const controllers = new WeakMap();
 
 /**
@@ -80,6 +82,7 @@ function buildInlineMedia(container, article, initialContext) {
     topControls.className = "row_article_inline_top_controls";
     topControls.append(records, position);
     frame.append(previous, next, topControls);
+    const teardownControls = installImageControlsIdle(frame, "article-image-controls-active");
 
     function refreshRecordNavigation() {
         const cardContainer = context.selectedCard?.closest?.(".card_container");
@@ -177,6 +180,7 @@ function buildInlineMedia(container, article, initialContext) {
     }, { passive: true, signal: events.signal });
     return { dispose() {
         disposed = true;
+        teardownControls();
         observer?.disconnect();
         events.abort();
         records.replaceChildren();
