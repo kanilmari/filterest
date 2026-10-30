@@ -186,10 +186,11 @@ def test_worker_counts_are_copied_once_without_multiplication():
 def test_real_parallel_run_preserves_tier_counts_on_controller(mini_suite):
     environment = {**os.environ, "PYTHONDONTWRITEBYTECODE": "1", "PYTEST_DISABLE_PLUGIN_AUTOLOAD": "1"}
     environment.pop("PYTEST_ADDOPTS", None)
+    # 120 s: on a loaded runner (the i7 runs this tier with -n 4) the nested xdist start alone took over 30 s.
     result = subprocess.run(
         [sys.executable, "-B", "-m", "pytest", "-p", "xdist.plugin", "-n", "2",
          "--dist", "loadgroup", "--category", "ordinary", "-q"],
-        cwd=mini_suite, env=environment, capture_output=True, text=True, timeout=30,
+        cwd=mini_suite, env=environment, capture_output=True, text=True, timeout=120,
     )
     assert result.returncode == 0, result.stdout + result.stderr
     assert "3 passed" in result.stdout
