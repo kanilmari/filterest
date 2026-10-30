@@ -40,8 +40,9 @@ export async function measurePhoneHeroSpacing(page: Page, dataset: string) {
 export async function assertPhoneHeroSpacing(page: Page, dataset: string) {
   await expect(page.locator(`.filterbar-inline-hero[data-filterbar-inline-hero-for="${dataset}"] .dataset-search-input`)).toBeVisible();
   const sample = await measurePhoneHeroSpacing(page, dataset);
-  expect(sample.outerMargins).toEqual(['0px', '0px', '0px', '0px']);
+  expect(sample.outerMargins).toEqual(['0px', '-16px', '0px', '-16px']);
   expect(sample.heroInset).toBeCloseTo(8, 1);
+  expect(sample.inner.x).toBeCloseTo(16, 1);
   expect(sample.iconTitleGap).toBeGreaterThanOrEqual(0);
   expect(sample.iconTitleGap).toBeLessThanOrEqual(8.5);
   expect(sample.titleSloganGap).toBeGreaterThanOrEqual(0);
@@ -63,8 +64,8 @@ export async function assertPhoneHeroSpacing(page: Page, dataset: string) {
   expect(sample.search.x).toBeGreaterThanOrEqual(0);
   expect(sample.search.right).toBeLessThanOrEqual(sample.viewportWidth);
   expect(sample.pageWidth).toBeLessThanOrEqual(sample.viewportWidth);
-  expect(sample.section.x).toBeCloseTo(sample.inner.x, 1);
-  expect(sample.section.width).toBeCloseTo(sample.inner.width, 1);
+  expect(sample.section.x).toBeCloseTo(0, 1);
+  expect(sample.section.x + sample.section.width).toBeCloseTo(sample.viewportWidth, 1);
   expect(Number.parseFloat(sample.border)).toBeGreaterThan(0);
   expect(Number.parseFloat(sample.padding)).toBeGreaterThan(0);
   return sample;

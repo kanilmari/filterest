@@ -48,6 +48,13 @@
 
 /* Phones keep the contained-image cap from the original Page pilot. */
 @media (width <= 700px) {
+    .image_first_page_view .big_card_header {
+        margin-inline: 0;
+        width: auto;
+        max-width: none;
+        border-radius: 0;
+        padding-inline: 16px;
+    }
     .image_first_page_view .row_article_page_image > img:not([hidden]) {
         max-height: min(40dvh, 360px);
     }

@@ -91,7 +91,7 @@ test.each([12, 10])('bar padding %ipx: the menu button starts at x=12 and fits i
     }
 });
 
-test('phone hero has small title/search-area gaps and a full-width tools box with no outer margin', () => {
+test('phone hero has small title/search-area gaps and stretches its tools box to the screen edges', () => {
     const file = '../filterbar/morphing_filterbar_content.css';
     expect(phoneRule(file, '.filterbar-inline-hero > .filter-content-inner')).toEqual({ width: '100%', 'max-width': 'none', margin: '0', gap: '8px' });
     expect(phoneRule(file, '.filterbar-inline-hero .morphing-header')).toEqual({ margin: '0' });
@@ -99,7 +99,28 @@ test('phone hero has small title/search-area gaps and a full-width tools box wit
     expect(phoneRule(file, '.filterbar-inline-hero .filterbar-hero-dataset-icon')).toEqual({ display: 'block', 'margin-bottom': '8px' });
     expect(phoneRule(file, '.filterbar-inline-hero .morphing-title')).toEqual({ margin: '0 0 4px' });
     expect(phoneRule(file, '.filterbar-inline-hero .morphing-subtitle')).toEqual({ margin: '0' });
-    expect(phoneRule(file, '.filterbar-inline-hero .filter-content-inner > .dataset-filter-section')).toEqual({ margin: '0', 'max-width': 'none' });
+    expect(phoneRule(file, '.filterbar-inline-hero .filter-content-inner > .dataset-filter-section')).toEqual({
+        'align-self': 'stretch', width: 'auto', margin: '0',
+        'margin-inline': 'calc(-1 * var(--filterbar-hero-inline-space))', 'max-width': 'none',
+        'border-inline-width': '0', 'border-radius': '0', 'padding-inline': '16px',
+    });
+});
+
+test('phone hero and chips share 16px edges while tabs retain their additional 4px margin', () => {
+    const file = '../filterbar/morphing_filterbar_content.css';
+    const selector = '.filterbar-inline-hero,\n  .filterbar-inline-hero ~ .dataset-results-surface > .card_top_controls';
+    expect(phoneRule(file, selector)).toEqual({ '--filterbar-hero-inline-space': '16px' });
+    expect(phoneRule(file, '.filterbar-inline-hero__top-row')['margin-inline']).toBe('4px');
+    for (const [query, inset] of [['(width <= 768px)', '12px'], ['(width <= 480px)', '8px']]) {
+        const values = [];
+        sheets[file].walkAtRules('media', media => {
+            if (media.params !== query) return;
+            media.walkRules(rule => {
+                if (rule.selector === selector) rule.walkDecls('--filterbar-hero-inline-space', declaration => values.push(declaration.value));
+            });
+        });
+        expect(values).toEqual([inset]);
+    }
 });
 
 test('phone hero search is visible at full inner width with the same 44px controls as the toolbar', () => {

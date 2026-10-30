@@ -634,7 +634,7 @@
         width: 100%;
         margin: 0 0 10px;
         padding-block-start: 10px;
-        padding-inline: 10px;
+        padding-inline: 16px;
     }
 
     .row_article_container .big_card_image {

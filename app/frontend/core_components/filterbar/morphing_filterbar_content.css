@@ -605,6 +605,10 @@
   /* Phone hero spacing is independent of desktop appearance insets, with one
      small gap between the heading, search field and tools box. */
   .filterbar-inline-hero,
+  .filterbar-inline-hero ~ .dataset-results-surface > .card_top_controls {
+    --filterbar-hero-inline-space: 16px;
+  }
+  .filterbar-inline-hero,
   .filterbar-inline-hero.filterbar-inline-hero--has-cover { padding-block: 8px; }
   .filterbar-inline-hero > .filter-content-inner {
     width: 100%;
@@ -619,8 +623,14 @@
   .filterbar-inline-hero .morphing-title { margin: 0 0 4px; }
   .filterbar-inline-hero .morphing-subtitle { margin: 0; }
   .filterbar-inline-hero .filter-content-inner > .dataset-filter-section {
+    align-self: stretch;
+    width: auto;
     margin: 0;
+    margin-inline: calc(-1 * var(--filterbar-hero-inline-space));
     max-width: none;
+    border-inline-width: 0;
+    border-radius: 0;
+    padding-inline: 16px;
   }
   /* Same specificity as the wide-state 550px cap above and later in the cascade than shared_topbar.css, so the
      phone search field spans the inner width like the tools box. */

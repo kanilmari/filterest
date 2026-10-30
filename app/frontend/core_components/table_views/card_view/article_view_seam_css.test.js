@@ -88,7 +88,7 @@ describe("article view top seam", () => {
             "border-inline": "0", "border-radius": "0",
         });
         expectPhoneRule(css, ".row_article_container .big_card_header", {
-            width: "100%", margin: "0 0 10px", "padding-block-start": "10px", "padding-inline": "10px",
+            width: "100%", margin: "0 0 10px", "padding-block-start": "10px", "padding-inline": "16px",
         });
         expectPhoneRule(css, ".row_article_container .big_card_image", {
             "margin-top": "10px", "padding-inline": "10px",

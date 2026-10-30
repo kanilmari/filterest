@@ -127,7 +127,12 @@ async function assertSection(page: Page, dataset: string, width: number) {
         && element.querySelector('.row-group-facets') === element.children[2] };
   });
   expect(geometry).toMatchObject({ paintedRows: 0, separateRows: true, darker: true, outside: true, order: true });
-  expect(geometry.radius).toBeGreaterThan(0);
+  if (width <= 700) {
+    // K531: the phone tools box is edge to edge with square corners (morphing_filterbar_content.css ≤ 700 section).
+    expect(geometry.radius).toBe(0);
+  } else {
+    expect(geometry.radius).toBeGreaterThan(0);
+  }
   expect(geometry.left).toBeGreaterThanOrEqual(0);
   expect(geometry.right).toBeLessThanOrEqual(width);
   const actions = section.locator('.filterbar-inline-hero-filter-actions');

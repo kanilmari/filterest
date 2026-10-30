@@ -232,7 +232,7 @@ describe("image-first article CSS contract", () => {
             { width: "44px", height: "44px", "min-width": "44px", "min-height": "44px", padding: "0" });
         expectPhoneRule(bigCardCss, "body .row_article_row_navigation_preview_slot", { display: "none" });
         expectPhoneRule(bigCardCss, ".row_article_container .big_card_header", {
-            margin: "0 0 10px", "padding-block-start": "10px", "padding-inline": "10px",
+            margin: "0 0 10px", "padding-block-start": "10px", "padding-inline": "16px",
         });
         expect(modalCss).not.toMatch(/@media \(prefers-reduced-motion: reduce\)[\s\S]*\.image_first_view_overlay::before[\s\S]*animation:\s*none;/s);
         expect(galleryCss).toMatch(/@media \(prefers-reduced-motion: reduce\)\s*\{[^}]*\.image_first_view,[^}]*\.row_article_image_first_stage::before,[^}]*animation:\s*none;/s);
