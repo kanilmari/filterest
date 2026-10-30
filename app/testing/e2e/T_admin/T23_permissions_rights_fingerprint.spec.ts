@@ -8,33 +8,58 @@ import { buildTempDatasetName, createTempDataset, dropTempDataset, fetchCsrfToke
 import { openPermissionsTree, PERMISSIONS_TREE_SELECTOR } from '../helpers/permissions-tree';
 import { buildRightsFingerprints } from '../helpers/permissions-rights-fingerprint';
 
+const PAGE_READ_CONCURRENCY = 5;
+const MAX_LISTING_REREADS = 2;
+
 type Row = { id: number } & Record<string, any>;
 type Right = { user_group_id: number; function_id: number; target_schema_name: string | null; target_table_uid: number | null };
 type Fixture = { names: string[]; groups: string[]; functions: string[]; groupIDs: number[]; functionIDs: number[] };
 let fixture: Fixture;
 
 async function readRows(page: Page, dataset: string, fields: Record<string, string | number> = {}): Promise<Row[]> {
-  const rows: Row[] = [];
-  for (let offset = 0; ; ) {
-    const query = new URLSearchParams({ dataset, view_key: 'table', offset: String(offset) });
+  async function readPage(offset: number) {
+    const query = new URLSearchParams({ dataset, view_key: 'table', offset: String(offset), sort_column: 'id', sort_order: 'ASC' });
     for (const [key, value] of Object.entries(fields)) {
       query.set(`${key}_from`, String(value)); query.set(`${key}_to`, String(value));
     }
     const response = await page.request.get(`/api/get-results?${query}`);
-    expect(response.ok(), await response.text()).toBe(true);
+    expect(response.ok(), `${dataset} offset ${offset}: ${await response.text()}`).toBe(true);
     const body = await response.json();
-    expect(Array.isArray(body.data)).toBe(true);
-    rows.push(...body.data);
-    if (body.data.length < (body.resultsPerLoad || 20)) break;
-    offset += body.data.length;
+    expect(Array.isArray(body?.data), `${dataset} offset ${offset}: expected a row array`).toBe(true);
+    expect(Number.isSafeInteger(body.row_count) && body.row_count >= 0,
+      `${dataset} offset ${offset}: expected a nonnegative row_count`).toBe(true);
+    return body;
   }
-  for (const row of rows) expect(row).toMatchObject(fields);
-  return rows;
+  for (let attempt = 0; ; attempt++) {
+    const first = await readPage(0);
+    const pageSize = first.resultsPerLoad;
+    expect(Number.isSafeInteger(pageSize) && pageSize > 0, `${dataset} offset 0: expected a positive page size`).toBe(true);
+    const rows: Row[] = [...first.data];
+    const offsets: number[] = [];
+    for (let offset = pageSize; offset < first.row_count; offset += pageSize) offsets.push(offset);
+    for (let start = 0; start < offsets.length; start += PAGE_READ_CONCURRENCY) {
+      const pages = await Promise.all(offsets.slice(start, start + PAGE_READ_CONCURRENCY).map(readPage));
+      rows.push(...pages.flatMap(body => body.data));
+    }
+    // Other specs create/drop datasets and grants: OFFSET reads can repeat or miss rows.
+    // Re-read the whole listing on drift; fingerprint scope/meaning stays with the caller.
+    const latest = offsets.length ? await readPage(0) : first;
+    const ascending = rows.every((row, index) => Number.isSafeInteger(row?.id) &&
+      (index === 0 || row.id > rows[index - 1].id));
+    if (attempt < MAX_LISTING_REREADS &&
+      (!ascending || rows.length !== first.row_count || rows.length !== latest.row_count)) continue;
+    const context = `${dataset} after ${attempt + 1} listing read(s)`;
+    expect(ascending, `${context}: ids must be strictly ascending without repeats`).toBe(true);
+    expect(rows.length, `${context}: row count must match the first page`).toBe(first.row_count);
+    expect(rows.length, `${context}: row count must match the fresh page`).toBe(latest.row_count);
+    for (const row of rows) expect(row).toMatchObject(fields);
+    return rows;
+  }
 }
 async function readRightsSnapshot(page: Page) {
-  const [rows, datasets] = await Promise.all([
-    readRows(page, 'system_group_table_func_rights'), readRows(page, 'system_db_tables'),
-  ]);
+  // One listing at a time, so at most PAGE_READ_CONCURRENCY requests are in flight.
+  const rows = await readRows(page, 'system_group_table_func_rights');
+  const datasets = await readRows(page, 'system_db_tables');
   return { rows, datasetUIDs: new Set(datasets.map(row => Number(row.table_uid))) };
 }
 async function addRow(page: Page, dataset: string, fields: Record<string, unknown>) {
