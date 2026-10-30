@@ -69,7 +69,7 @@ function getTabOrderIdentifier(tabId) {
  * 1. Jos tab_order_json sisältää static:* entryjä: järjestää kaikki tabit (data + static)
  * 2. Jos tab_order_json on vanhassa muodossa: järjestää data-tabit, static-tabit fallbackiin
  * 3. Muuten fallback: Main-taulu → system_users → muut aakkosjärjestyksessä + static-tabit
- * 4. system_about on kirjautuneen käyttäjän viimeinen sisältövälilehti riippumatta tallennetusta järjestyksestä.
+ * 4. system_about on viimeinen sisältövälilehti riippumatta tallennetusta järjestyksestä.
  */
 export async function fetchProjectTabs({ suppressAuthRedirect = false, preloadedContentTablesResponse = null } = {}) {
     const knownGeneration = getDatasetAccessResponseGeneration(preloadedContentTablesResponse);
@@ -117,7 +117,6 @@ export async function fetchProjectTabs({ suppressAuthRedirect = false, preloaded
             }
             if (table.dataset_name === "system_about") {
                 return {
-                    userContent: true,
                     id: "system_about",
                     text: "About",
                     langKey: getMainTabLangKey("system_about"),

@@ -47,9 +47,30 @@ test('catalogue refresh after alias save rebuilds the existing tab projection wi
 test("guest snapshot excludes user-only dataset tabs; failed fetch adds no static targets", async () => {
     endpoint.mockResolvedValueOnce(response).mockRejectedValueOnce(new Error("403"));
     acceptMainDatasetTabs(await fetchProjectTabs(), false);
-    expect(getMainDatasetTabs().map(t => t.dataset)).toEqual(["beta", "alpha"]);
+    expect(getMainDatasetTabs().map(t => t.dataset)).toEqual(["beta", "alpha", "system_about"]);
     acceptMainDatasetTabs(await fetchProjectTabs(), false);
     expect(getMainDatasetTabs()).toEqual([]);
+});
+test.each([true, false])("guest About visibility follows catalogue presence (%s); Users remains signed-in only", async (includesAbout) => {
+    const catalogue = {
+        ...response,
+        datasets: response.datasets.filter(table => includesAbout || table.dataset_name !== "system_about"),
+    };
+    const fetched = await fetchProjectTabs({ preloadedContentTablesResponse: catalogue });
+    const about = fetched.tabs.find(tab => tab.id === "system_about");
+    if (includesAbout) {
+        expect(about).toBeDefined();
+        expect(about).not.toHaveProperty("userContent");
+        expect(about).not.toHaveProperty("nonUserContent");
+    } else {
+        expect(about).toBeUndefined();
+    }
+    expect(fetched.tabs.find(tab => tab.id === "system_users")).toHaveProperty("userContent", true);
+    expect(acceptMainDatasetTabs(fetched, false)).toBe(true);
+    expect(getMainDatasetTabs().map(tab => tab.id)).toEqual([
+        "beta", "alpha", ...(includesAbout ? ["system_about"] : []),
+    ]);
+    expect(endpoint).not.toHaveBeenCalled();
 });
 test("latest response and logout guard both the projection and access registry", async () => {
     let finishOld;

@@ -22,6 +22,7 @@ Dates are the local (Europe/Helsinki) date on which the version was published.
 
 ## [Unreleased]
 
+- Visitors who are not signed in now see the About tab when the site lets guests read it.
 - Administrators can check releases again as soon as the wait ends.
 - T17 browser tests restore Home settings and remove owned datasets after failures/timeouts using a fresh signed-in teardown context; T18 shares the fix and the dataset-only failure proof stays manual on explicit off-8082 targets.
 - Article image controls share a 1200 ms idle timer; disabled image arrows retain their normal theme skin at 28% opacity at every width.

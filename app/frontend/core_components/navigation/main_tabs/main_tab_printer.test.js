@@ -328,7 +328,7 @@ describe("initTabs", () => {
                 "navbar-auth-actions--solo"
             )
         ).toBe(true);
-        expect(document.querySelector('.navtablinks[data-id="system_about"]')).toBeNull();
+        expect(document.querySelector('.navtablinks[data-id="system_about"]')).not.toBeNull();
     });
 
     test("preserves explicit login-entry URL instead of auto-opening a public content tab", async () => {
@@ -340,7 +340,23 @@ describe("initTabs", () => {
 
         expect(handle_all_navigation).not.toHaveBeenCalled();
         expect(window.location.search).toBe("?login-entry=1");
-        expect(document.querySelector('.navtablinks[data-id="system_about"]')).toBeNull();
+        expect(document.querySelector('.navtablinks[data-id="system_about"]')).not.toBeNull();
+    });
+
+    test.each([true, false])("renders guest About only when present in the catalogue (%s), and never Users", async (includesAbout) => {
+        vi.mocked(getButtonState).mockReturnValue("login");
+        const { initTabs } = await import("./main_tab_printer.js");
+        await initTabs({ preloadedContentTablesResponse: {
+            datasets: [
+                { dataset_name: "app_service_catalog", is_top_level_in_current_project: true },
+                { dataset_name: "system_users", can_read_rows: true },
+                ...(includesAbout ? [{ dataset_name: "system_about", can_read_rows: true }] : []),
+            ],
+        } });
+        expect(document.querySelectorAll('[data-testid="tab-system_about"]')).toHaveLength(includesAbout ? 1 : 0);
+        expect(document.querySelector('[data-testid="tab-system_users"]')).toBeNull();
+        expect(endpoint_router).not.toHaveBeenCalledWith("fetchContentTables", expect.anything());
+        expect(primeMultipleDatasetPermissions).not.toHaveBeenCalled();
     });
 
     test.each(['light', 'dark'])("hides visitor login in %s theme while preserving content and signed-in controls", async (theme) => {
