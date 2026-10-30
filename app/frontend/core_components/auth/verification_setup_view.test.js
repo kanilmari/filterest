@@ -20,23 +20,53 @@ vi.mock('../lang/dev_lang_key_editor.js', () => ({ initDevLangKeyEditor: vi.fn()
 const copy = { ...SECOND_STEP_TRANSLATION_FALLBACKS, ...VERIFICATION_SETUP_TRANSLATION_FALLBACKS };
 beforeEach(async () => {
     document.body.innerHTML = '';
-    window.translationPromises = { fi: Promise.resolve({}), en: Promise.resolve({}) };
+    window.translationPromises = { fi: Promise.resolve({}), en: Promise.resolve({}), ch: Promise.resolve({}) };
     await translatePage('en');
 });
 
-function template(page, error = '') {
+function template(page, error = '', initialize = true) {
     // Only synthetic validation codes are substituted; enrollment key stays empty.
     const source = readFileSync(`frontend/templates/${page}.html`, 'utf8')
+        .replace(/{{if eq \.VerificationErr "([^"]+)"}}([\s\S]*?){{end}}/g,
+            (_match, code, block) => page === 'register' && error === code ? block : '')
+        .replace(/{{if and \.VerificationErr[^}]*}}([\s\S]*?){{end}}/g,
+            (_match, block) => error && !['first_run_fixed_pin_invalid', 'first_run_fixed_pin_mismatch'].includes(error) ? block : '')
         .replace(/{{if \.FactorErr}}([\s\S]*?){{end}}/g, (_match, block) => error ? block : '')
         .replaceAll('{{.FactorErr}}', error).replaceAll('{{.VerificationErr}}', page === 'register' ? error : '')
         .replaceAll('{{.FormAction}}', '/register').replace(/{{[^}]*}}/g, '');
     document.body.innerHTML = source;
     const form = document.querySelector(page === 'register' ? '[data-testid="register-form"]' : '#first-run-admin-form');
     form.querySelectorAll('input[name="verification_method"]').forEach(input => { input.checked = input.value === 'fixed_pin'; });
-    if (page === 'register') initializeRegistrationVerificationFields(document);
-    else initializeFirstRunAdminPage(document);
+    if (initialize) {
+        if (page === 'register') initializeRegistrationVerificationFields(document);
+        else initializeFirstRunAdminPage(document);
+    }
     return form;
 }
+
+test.each(['first_run_fixed_pin_invalid', 'first_run_fixed_pin_mismatch'])(
+    'registration adopts its server-rendered %s message exactly once', async code => {
+        const form = template('register', code, false);
+        const selector = `[data-lang-key="${code}"]`;
+        const serverError = form.querySelector(selector);
+        expect(serverError).not.toBeNull();
+        expect(serverError.className).toBe('auth-verify__error');
+        expect(serverError.textContent).toBe(copy[code].en);
+        expect(serverError.previousElementSibling.id).toBe(code.endsWith('mismatch') ? 'confirm_fixed_pin' : 'fixed_pin');
+        initializeRegistrationVerificationFields(form);
+        initializeRegistrationVerificationFields(form);
+        expect(form.querySelectorAll(selector)).toHaveLength(1);
+        expect(form.querySelector(selector)).toBe(serverError);
+        expect(serverError.closest('.auth-verify__field').lastElementChild).toBe(serverError);
+        expect(serverError.closest('[hidden], [inert]')).toBeNull();
+        expect(form.querySelector(`.error${selector}`)).toBeNull();
+        for (const lang of ['fi', 'en', 'ch']) {
+            await translatePage(lang);
+            expect(serverError.textContent).toBe(copy[code][lang]);
+            expect(form.querySelectorAll(selector)).toHaveLength(1);
+        }
+    }
+);
 
 for (const factor of ['email_change', 'password_change', 'pin_setup', 'pin_confirmation', 'totp_setup']) {
     test(`${factor}: descriptor attributes, translated labels and aria`, async () => {
@@ -105,7 +135,7 @@ for (const page of ['first_run_admin', 'register']) {
         expect(input.getAttribute('aria-invalid')).toBe('true');
         expect(input.closest('.auth-verify__field').lastElementChild).toBe(error);
         expect(form.querySelector('[data-factor-error]')).toBeNull();
-        if (page === 'first_run_admin') expect(form.querySelectorAll(`[data-lang-key="${code}"]`)).toHaveLength(1);
+        expect(form.querySelectorAll(`[data-lang-key="${code}"]`)).toHaveLength(1);
         await translatePage('en'); expect(error.textContent).toBe(copy[code].en);
     });
     test(`${page}: mismatched PIN submission stays in the form with the server's error key`, () => {

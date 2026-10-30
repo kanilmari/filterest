@@ -80,7 +80,7 @@
       "component": "Lucide Icons",
       "kind": "embedded-icon-source",
       "path": "app/frontend/core_components/auth/second_step_view.js",
-      "sha256": "9996d14efb606eee669e29984fd17e112b344fb5a3aabe5d90f66617a8c2b563",
+      "sha256": "7aa0caeb2fa4a03add5952457efc12fa650a9956134fd62eb44c83cc36a70cf7",
       "source_detail": "Embedded eye and shield geometry from the accepted WO97 mock, conservatively covered by the retained Lucide/Feather terms; no first-party authorship or exact upstream byte identity is claimed."
     },
     {

@@ -90,8 +90,14 @@
         <div class="first-run-method-fields" data-register-verification-fields="fixed_pin" data-pin-setup data-setup-error="{{.VerificationErr}}" hidden>
             <label for="fixed_pin" data-lang-key="pin_setup_label">PIN</label>
             <input type="text" class="auth-verify__masked" inputmode="numeric" id="fixed_pin" name="fixed_pin" minlength="4" maxlength="8" pattern="[0-9]{4,8}" autocomplete="one-time-code" data-testid="register-fixed-pin">
+            {{if eq .VerificationErr "first_run_fixed_pin_invalid"}}
+            <p class="auth-verify__error" data-verify="error" data-lang-key="first_run_fixed_pin_invalid">The PIN must contain 4–8 digits.</p>
+            {{end}}
             <label for="confirm_fixed_pin" data-lang-key="pin_setup_confirm_label">Confirm PIN</label>
             <input type="text" class="auth-verify__masked" inputmode="numeric" id="confirm_fixed_pin" name="confirm_fixed_pin" minlength="4" maxlength="8" pattern="[0-9]{4,8}" autocomplete="one-time-code" data-testid="register-fixed-pin-confirmation">
+            {{if eq .VerificationErr "first_run_fixed_pin_mismatch"}}
+            <p class="auth-verify__error" data-verify="error" data-lang-key="first_run_fixed_pin_mismatch">The PIN entries do not match.</p>
+            {{end}}
         </div>
         {{if and .VerificationErr (ne .VerificationErr "first_run_fixed_pin_invalid") (ne .VerificationErr "first_run_fixed_pin_mismatch")}}
         <p class="error" data-lang-key="{{.VerificationErr}}"></p>

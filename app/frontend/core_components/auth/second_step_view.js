@@ -404,6 +404,7 @@ export function mountEmbeddedSecondStep(root, factor, options = {}) {
         <p class="auth-verify__status" data-verify="attempts"></p>`;
     root.classList.add('auth-verify--embedded');
     root.querySelector('.auth-verify__input-wrap').prepend(input);
+    if (options.error) root.querySelector('[data-verify="error"]').replaceWith(options.error);
     // Delivery status stays visible while the original send action has not revealed the code field yet.
     const fields = root.querySelector('.auth-verify__fields');
     fields.hidden = Boolean(options.fieldsHidden);
@@ -426,11 +427,14 @@ export function mountPinSetup(root, {
     const inputs = [...root.querySelectorAll('input')];
     if (inputs.length !== 2) return null;
     const initialError = root.dataset.setupError;
+    // templates/register.html renders refusals before JS; retain them as the shared error slots.
+    const pinError = root.querySelector(`[data-lang-key="${formatError}"]`);
+    const confirmationError = root.querySelector(`[data-lang-key="${mismatchError}"]`);
     const firstRoot = document.createElement('div');
     const confirmRoot = document.createElement('div');
     root.replaceChildren(firstRoot, confirmRoot);
-    const pin = mountEmbeddedSecondStep(firstRoot, 'pin_setup', { input: inputs[0] });
-    const confirmation = mountEmbeddedSecondStep(confirmRoot, 'pin_confirmation', { input: inputs[1] });
+    const pin = mountEmbeddedSecondStep(firstRoot, 'pin_setup', { input: inputs[0], error: pinError });
+    const confirmation = mountEmbeddedSecondStep(confirmRoot, 'pin_confirmation', { input: inputs[1], error: confirmationError });
     const showError = (key, focus = true) => {
         // Multi-section callers reveal the field before its error is announced and focused.
         if (focus && (key === formatError || key === mismatchError)) beforeErrorFocus?.();
