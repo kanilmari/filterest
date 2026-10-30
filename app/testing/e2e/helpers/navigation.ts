@@ -10,7 +10,7 @@
  */
 
 import { type Locator, type Page } from '@playwright/test';
-import { revealActiveFilterbarSection } from './filterbar';
+import { isVisibleWithin, revealActiveFilterbarSection } from './filterbar';
 import { getActiveDatasetContainer } from './active-dataset';
 
 export type NavigateToDatasetOptions = {
@@ -218,11 +218,9 @@ export async function navigateToDataset(
 
   // Determine which tab to open: requested dataset or first data tab
   const utilityTabs = ['user', 'logout', 'system_about'];
-  const requestedTabVisible = await page
-    .locator(`[data-testid="tab-${tableName}"]`)
-    .first()
-    .isVisible({ timeout: 3000 })
-    .catch(() => false);
+  const requestedTabVisible = await isVisibleWithin(
+    page.locator(`[data-testid="tab-${tableName}"]`).first(), 3000,
+  );
 
   if (!requestedTabVisible && !allowFallback) {
     throw new Error(

@@ -67,7 +67,8 @@ for (const presentation of presentations) for (const theme of ['light', 'dark'] 
         for (const id of [1, 2]) {
           const same = id === 1;
           await page.goto(`/${dataset}/${id}?view=${presentation}`, { waitUntil: 'domcontentloaded' });
-          await expect(page.locator('html')).toHaveAttribute('lang', language);
+          // Shell boot can take most of 5 s under load (nightly 30.10.).
+          await expect(page.locator('html')).toHaveAttribute('lang', language, { timeout: 15_000 });
           const article = page.locator(presentation === 'article_view'
             ? '.active_row_article .row_article_content' : '.image_first_view .row_article_content');
           await expect(article).toBeVisible();

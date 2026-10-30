@@ -14,8 +14,10 @@
 import { expect, type Locator, type Page } from '@playwright/test';
 import {
   closeActiveFilterbarIfOpen,
+  isVisibleWithin,
   openActiveFilterbarIfCollapsed,
   revealActiveFilterbarSection,
+  waitForActiveFilterbarLayout,
 } from './filterbar';
 import { getActiveDatasetContainer } from './active-dataset';
 
@@ -84,7 +86,7 @@ async function isRequestedViewSurfaceActive(container: Locator, viewMode: ViewMo
 /** Opens the shared view-selector disclosure when the current UI keeps tool groups collapsed. */
 async function openViewSelectorSectionIfCollapsed(page: Page, container: Locator): Promise<void> {
   const section = container.locator('.dataset-filter-views-section:visible').first();
-  if (!await section.isVisible({ timeout: 2000 }).catch(() => false)) {
+  if (!await isVisibleWithin(section, 2000)) {
     return;
   }
   if (!await section.evaluate((element) => element.classList.contains('is-collapsed'))) {
@@ -132,6 +134,7 @@ export async function switchToView(
     return;
   }
 
+  await waitForActiveFilterbarLayout(page, container, { allowMissingPanel: true });
   const openedFilterbarForSwitch = await openActiveFilterbarIfCollapsed(page, container);
 
   try {
@@ -139,7 +142,7 @@ export async function switchToView(
     const directTestId = DIRECT_VIEW_TEST_IDS[viewMode];
     if (directTestId) {
       const btnByTestId = container.locator(`[data-testid="${directTestId}"]:visible`).first();
-      if (await btnByTestId.isVisible({ timeout: 3000 }).catch(() => false)) {
+      if (await isVisibleWithin(btnByTestId, 3000)) {
         await btnByTestId.scrollIntoViewIfNeeded();
         await btnByTestId.click({ timeout: 5000 });
         await expect.poll(
@@ -157,7 +160,7 @@ export async function switchToView(
     const dropdownOptionTestId = DROPDOWN_VIEW_TEST_IDS[viewMode];
     if (dropdownOptionTestId) {
       const dropdownContainer = container.locator('[data-testid="view-dropdown-more"]:visible').first();
-      if (await dropdownContainer.isVisible({ timeout: 3000 }).catch(() => false)) {
+      if (await isVisibleWithin(dropdownContainer, 3000)) {
         // VanillaDropdown portals its menu to body and closes it on a document click outside it, but its trigger
         // stops propagation, so a menu another dataset left open would stay open. Close every open menu first, so
         // the scoped trigger opens the only visible one.
@@ -166,14 +169,14 @@ export async function switchToView(
           await page.evaluate(() => document.body.dispatchEvent(new MouseEvent('click', { bubbles: true })));
         }
         const trigger = dropdownContainer.locator('[data-testid="view-dropdown-more-trigger"]:visible').first();
-        if (await trigger.isVisible({ timeout: 2000 }).catch(() => false)) {
+        if (await isVisibleWithin(trigger, 2000)) {
           await trigger.scrollIntoViewIfNeeded();
           await trigger.click({ timeout: 5000 });
         }
         // Exactly one visible menu now: the one the requested dataset's trigger opened.
         const openMenus = page.locator(menuSelector);
         const option = openMenus.getByTestId(dropdownOptionTestId);
-        if (await openMenus.count() === 1 && await option.isVisible({ timeout: 3000 }).catch(() => false)) {
+        if (await openMenus.count() === 1 && await isVisibleWithin(option, 3000)) {
           await option.scrollIntoViewIfNeeded();
           await option.click({ timeout: 5000 });
           await expect.poll(
@@ -215,13 +218,13 @@ export async function switchToView(
  */
 export async function openBigCard(page: Page): Promise<boolean> {
   const bigCard = page.locator('[data-testid="big-card-container"]').first();
-  if (await bigCard.isVisible({ timeout: 1000 }).catch(() => false)) {
+  if (await isVisibleWithin(bigCard, 1000)) {
     await page.waitForTimeout(750);
     return true;
   }
 
   const cardHeader = page.locator('[data-testid="card-item-header"]').first();
-  if (await cardHeader.isVisible({ timeout: 5000 }).catch(() => false)) {
+  if (await isVisibleWithin(cardHeader, 5000)) {
     await cardHeader.scrollIntoViewIfNeeded().catch(() => {});
 
     for (let attempt = 0; attempt < 3; attempt += 1) {
@@ -229,7 +232,7 @@ export async function openBigCard(page: Page): Promise<boolean> {
         (element as HTMLElement).click();
       });
 
-      if (await bigCard.isVisible({ timeout: 3000 }).catch(() => false)) {
+      if (await isVisibleWithin(bigCard, 3000)) {
         await page.waitForTimeout(750);
         return true;
       }

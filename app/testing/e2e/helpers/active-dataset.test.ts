@@ -25,7 +25,15 @@ class DomLocator {
   async evaluate<T, A>(operation: (element: HTMLElement, argument: A) => T, argument: A) {
     return operation(this.elements[0], argument);
   }
-  async waitFor() { expect(this.elements[0]?.isConnected).toBe(true); }
+  async waitFor({ state = 'visible', timeout = 30000 }: { state?: 'attached' | 'visible'; timeout?: number } = {}) {
+    if (this.elements.length > 1) throw new Error('strict mode violation: locator resolved to multiple elements');
+    const element = this.elements[0];
+    if (element?.isConnected && (state === 'attached' || visible(element))) return;
+    // Navigation fixtures settle synchronously; missing/hidden matches exhaust the wait.
+    const error = new Error(`Timeout ${timeout}ms exceeded waiting for ${state}`);
+    error.name = 'TimeoutError';
+    throw error;
+  }
 }
 
 beforeEach(() => {

@@ -3,14 +3,19 @@
 // Supplies a stale visible dataset before the requested one to expose global DOM picks.
 // Covers collapsed sections, direct controls, dropdown portals and optional views.
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
-import type { Page } from '@playwright/test';
+import type { Locator, Page } from '@playwright/test';
 import { switchToView } from './view-switch';
+import { isVisibleWithin } from './filterbar';
 
-const filterbar = vi.hoisted(() => ({ open: vi.fn(async () => false), close: vi.fn(), reveal: vi.fn() }));
-vi.mock('./filterbar', () => ({
+const filterbar = vi.hoisted(() => ({
+  open: vi.fn(async () => false), close: vi.fn(), reveal: vi.fn(), layout: vi.fn(async () => {}),
+}));
+vi.mock('./filterbar', async importOriginal => ({
+  ...await importOriginal<typeof import('./filterbar')>(),
   openActiveFilterbarIfCollapsed: filterbar.open,
   closeActiveFilterbarIfOpen: filterbar.close,
   revealActiveFilterbarSection: filterbar.reveal,
+  waitForActiveFilterbarLayout: filterbar.layout,
 }));
 vi.mock('./active-dataset', () => ({
   getActiveDatasetContainer: async (page: Page) => page.locator('#app_service_catalog_tab_parts_container'),
@@ -26,8 +31,10 @@ vi.mock('@playwright/test', () => {
 });
 
 function visible(element: HTMLElement) {
+  if (!element.isConnected) return false;
   for (let current: HTMLElement | null = element; current; current = current.parentElement) {
-    if (current.hidden || getComputedStyle(current).display === 'none') return false;
+    const style = getComputedStyle(current);
+    if (current.hidden || style.display === 'none' || style.visibility === 'hidden' || style.visibility === 'collapse') return false;
   }
   return true;
 }
@@ -41,6 +48,15 @@ class DomLocator {
   }
   getByTestId(id: string) { return this.locator(`[data-testid="${id}"]`); }
   async isVisible() { return this.elements.length > 0 && visible(this.element()); }
+  async waitFor({ state = 'visible', timeout = 30000 }: { state?: 'attached' | 'visible'; timeout?: number } = {}) {
+    if (this.elements.length > 1) throw new Error('strict mode violation: locator resolved to multiple elements');
+    const element = this.elements[0];
+    if (element?.isConnected && (state === 'attached' || visible(element))) return;
+    // These fixtures settle synchronously; an unresolved wait represents its timeout.
+    const error = new Error(`Timeout ${timeout}ms exceeded waiting for ${state}`);
+    error.name = 'TimeoutError';
+    throw error;
+  }
   async count() { return this.elements.length; }
   async evaluate<T, A>(operation: (element: HTMLElement, argument: A) => T, argument: A) {
     return operation(this.element(), argument);
@@ -91,6 +107,7 @@ test('already active requested cards need no control from the earlier dataset', 
 test('expands and clicks only the requested dataset section and direct button', async () => {
   const { page, requested, otherClick, requestedClick } = mount(false);
   await switchToView(page, 'card');
+  expect(filterbar.layout).toHaveBeenCalledWith(page, expect.objectContaining({ elements: [requested] }), { allowMissingPanel: true });
   expect(filterbar.reveal).toHaveBeenCalledWith(page, 'views', expect.objectContaining({ elements: [requested] }));
   expect(requestedClick).toHaveBeenCalledOnce(); expect(otherClick).not.toHaveBeenCalled();
   expect(document.querySelector('#subscriptions_tab_parts_container section')!.classList.contains('is-collapsed')).toBe(true);
@@ -146,4 +163,18 @@ test('closes a menu another dataset left open, then uses only the requested menu
   } finally {
     document.removeEventListener('click', outside);
   }
+});
+
+test.each(['timeout', 'strict mode violation'])('visibility wait returns false on %s rejection', async failure => {
+  const { requested } = mount(false);
+  const button = requested.querySelector<HTMLElement>('[data-testid="view-btn-card"]')!;
+  button.hidden = failure === 'timeout';
+  const matches = failure === 'timeout' ? [button] : [...document.querySelectorAll<HTMLElement>('[data-testid="view-btn-card"]')];
+  const locator = new DomLocator(matches);
+  const waitFor = vi.spyOn(locator, 'waitFor');
+  await expect(locator.waitFor({ state: 'visible', timeout: 25 })).rejects.toThrow(
+    failure === 'timeout' ? 'Timeout 25ms exceeded' : failure,
+  );
+  await expect(isVisibleWithin(locator as unknown as Locator, 25)).resolves.toBe(false);
+  expect(waitFor).toHaveBeenLastCalledWith({ state: 'visible', timeout: 25 });
 });

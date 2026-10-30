@@ -8,6 +8,11 @@
 import { expect, type Locator, type Page } from '@playwright/test';
 import { getActiveDatasetContainer } from './active-dataset';
 
+/** Returns whether one matching element becomes visible within the timeout. */
+export async function isVisibleWithin(locator: Locator, timeout: number): Promise<boolean> {
+  return locator.waitFor({ state: 'visible', timeout }).then(() => true, () => false);
+}
+
 function buildFilterTestIdSegment(value: string): string {
   return String(value ?? '')
     .trim()
@@ -16,7 +21,11 @@ function buildFilterTestIdSegment(value: string): string {
 }
 
 /** Wait for the live shell and saved section layout before any temporary reveal. */
-export async function waitForActiveFilterbarLayout(page: Page, container?: Locator): Promise<void> {
+export async function waitForActiveFilterbarLayout(
+  page: Page,
+  container?: Locator,
+  options: { allowMissingPanel?: boolean } = {},
+): Promise<void> {
   // Visible DOM is exposed before main.js finishes its post-authentication startup.
   await page.waitForFunction(() => {
     const boot = (window as Window & {
@@ -25,6 +34,8 @@ export async function waitForActiveFilterbarLayout(page: Page, container?: Locat
     return boot ? boot.status().ready : !document.body.classList.contains('loading');
   }, null, { timeout: 15000 });
   const panel = (container ?? await getActiveDatasetContainer(page)).locator('.filterbar-panel').first();
+  // Some dataset views have no filter bar; decide that only after shell boot.
+  if (options.allowMissingPanel && (await panel.count()) === 0) return;
   await expect(panel).toBeAttached({ timeout: 10000 });
   await panel.evaluate(async element => {
     const ready = (element as HTMLElement & { __sectionLayoutReady?: Promise<unknown> }).__sectionLayoutReady;

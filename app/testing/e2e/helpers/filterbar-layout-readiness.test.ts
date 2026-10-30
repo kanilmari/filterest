@@ -3,27 +3,27 @@
 // Runs the helper with real disclosure DOM and a delayed layout promise in jsdom.
 // Prevents setup from collapsing the controls immediately after a test reveals them.
 import { afterEach, expect, test, vi } from 'vitest';
-import type { Page } from '@playwright/test';
+import type { Locator, Page } from '@playwright/test';
 import { createAnimatedDisclosureSection } from '../../../frontend/reusable_components/animated_disclosure/animated_disclosure_builder.js';
-import { revealActiveFilterbarSection } from './filterbar';
+import { revealActiveFilterbarSection, waitForActiveFilterbarLayout } from './filterbar';
 
 vi.mock('@playwright/test', () => ({
   expect: (locator: DomLocator) => ({
-    toBeAttached: async () => expect(locator.element.isConnected).toBe(true),
-    toBeVisible: async () => expect(locator.element.hidden).toBe(false),
-    toHaveAttribute: async (name: string, value: string) => expect(locator.element.getAttribute(name)).toBe(value),
+    toBeAttached: async () => expect(locator.element?.isConnected).toBe(true),
+    toBeVisible: async () => expect(locator.element?.hidden).toBe(false),
+    toHaveAttribute: async (name: string, value: string) => expect(locator.element?.getAttribute(name)).toBe(value),
   }),
 }));
 
 class DomLocator {
-  constructor(readonly element: HTMLElement) {}
+  constructor(readonly element: HTMLElement | null) {}
   locator(selector: string) {
-    return new DomLocator(this.element.querySelector(selector.replaceAll(':visible', ''))!);
+    return new DomLocator(this.element?.querySelector<HTMLElement>(selector.replaceAll(':visible', '')) ?? null);
   }
   first() { return this; }
-  async count() { return 1; }
-  async getAttribute(name: string) { return this.element.getAttribute(name); }
-  async evaluate<T>(operation: (element: HTMLElement) => T) { return operation(this.element); }
+  async count() { return this.element ? 1 : 0; }
+  async getAttribute(name: string) { return this.element!.getAttribute(name); }
+  async evaluate<T>(operation: (element: HTMLElement) => T) { return operation(this.element!); }
   async scrollIntoViewIfNeeded() {}
 }
 
@@ -66,4 +66,20 @@ test('waits for saved collapse state before revealing style, without persisting 
   expect(section.dataset.filterbarTemporaryDisclosureOperation).toBeUndefined();
   expect(persisted).not.toHaveBeenCalled();
   section.destroy();
+});
+
+test('an allowed missing panel returns after shell readiness without evaluating a layout', async () => {
+  const parts = document.createElement('div'); document.body.append(parts);
+  const container = new DomLocator(parts);
+  const findPanel = vi.spyOn(container, 'locator');
+  const evaluateLayout = vi.spyOn(DomLocator.prototype, 'evaluate');
+  const waitForShellReady = vi.fn(async (operation: () => unknown) => {
+    expect(findPanel).not.toHaveBeenCalled();
+    expect(operation()).toBe(true);
+  });
+  const page = { waitForFunction: waitForShellReady } as unknown as Page;
+  await waitForActiveFilterbarLayout(page, container as unknown as Locator, { allowMissingPanel: true });
+  expect(waitForShellReady).toHaveBeenCalledWith(expect.any(Function), null, { timeout: 15000 });
+  expect(findPanel).toHaveBeenCalledWith('.filterbar-panel');
+  expect(evaluateLayout).not.toHaveBeenCalled();
 });
