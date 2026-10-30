@@ -86,6 +86,16 @@ and perform the same API repair. Do not patch the database directly.
 Production-like startup purges credentialed reserved accounts atomically and
 leaves such ambiguous public orphans untouched.
 
+C17 checks `e2e_c17_card_reader_*` groups with GET requests before setup. A
+reserved-reader membership fails with the group's identity and actual rights;
+memberless groups are logged. This check never deletes leftovers: restoration
+belongs to the owner. C26 P7 and T17 also refuse an existing article-view grant.
+C17 registers its own group and guest grants with `test-dataset-teardown.ts`
+before readback assertions. Its afterEach uses a fresh admin request context
+and separate budget when a timeout has closed the page. Exact identities still
+protect replacements; child-verification failures are reported after owned
+permission cleanup and cascade checks.
+
 ### Leftover browsers and other sessions
 
 `./filterest test` (`app/server_tools/scripts/safe_test.sh`) finds Playwright in
@@ -487,7 +497,7 @@ When a spec needs destructive CRUD, seeded rows, or a true persistence round-tri
 
 - Use `app/testing/e2e/helpers/temp-dataset.ts` to create, seed, open, and drop the dataset inside the test.
 - The helper confirms the exact name and stable identity from the successful creation response before its follow-up lookup, seeding, or cache refresh. If setup then fails, it compensates only after re-reading the same identity; failed cleanup retains confirmed ownership for teardown and reports both errors.
-- Keep the dataset unique per run, register its planned/confirmed identity through `temp-dataset.ts`, and clean it up in `finally`, even when assertions fail.
+- T17 reserves each dataset before creation by test ID and records its confirmed identity immediately; its shared `test-dataset-teardown.ts` afterEach adds 90 seconds and uses a fresh project-admin request context for exact Home restore/readback and idempotent removal (T18 afterAll follows this pattern). The dataset-only T17b proof is manual via `playwright.failure-proof.config.ts`, requires `FILTEREST_E2E_FAILURE_PROOF_TARGET` equal to the resolved baseURL, refuses port 8082, and only reads Home settings.
 - For admin-flow tests that create datasets through the visible UI instead of the temp-dataset helper, add a request-scoped `afterEach` cleanup path so the dataset is still dropped if the page flow breaks before the in-test delete step.
 - Use this pattern for create/delete persistence checks, dataset-specific view assertions, and any flow where a shared dataset could hide flaky state leakage.
 - If the test depends on a non-table view, inject the requested view preference before opening the dataset so the first landing surface matches the assertion target.

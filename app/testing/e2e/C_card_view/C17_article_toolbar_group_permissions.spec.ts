@@ -3,7 +3,7 @@
 // Connects disposable datasets and real route grants to card-project browser rendering.
 // Keeps article copy and its main image visible in both explicit themes and translated copy.
 
-import { test, expect, type Page } from '@playwright/test';
+import { test, expect, type Page, type BrowserContext } from '@playwright/test';
 import { login, loadCredentials, loadUserCredentials, readSessionInfo } from '../helpers/auth';
 import { buildTempDatasetName, createTempDataset, dropTempDataset, fetchCsrfTokenForRequest, openTempDatasetRowArticle } from '../helpers/temp-dataset';
 import { loadDatasetCardVisibility, saveCardVisibilityWithFreshRevisions } from '../helpers/appearance-revisions';
@@ -11,26 +11,16 @@ import { postJsonWithCsrf } from '../helpers/image-first-article';
 import { confirmTestArtifact, registerTestArtifact } from '../helpers/test-artifact-run-registry';
 import { readDatasetTableUIDFromPage } from '../helpers/test-artifact-dataset-identity-reader';
 import { waitForActiveFilterbarLayout } from '../helpers/filterbar';
+import { testDatasetTeardown } from '../helpers/test-dataset-teardown';
+import { READER_VIEW_ROUTES, readC17AccessRows, assertNoLeftoverC17ReaderGroups, c17AccessAPI,
+  registerReaderAccessCleanup, registerGuestGrantCleanup, restoreGuestUIGrants,
+  type AccessRow, type ReaderAccess, type GuestGrant, type PermissionCleanupStep } from '../helpers/c17-permission-cleanup';
+
+const teardown = testDatasetTeardown(test);
 
 const ARTICLE = '.active_row_article';
 const BODY_TEXT = 'Article text stays visible';
 const PHOTO = '/frontend/icons/general/table-tools-icon.svg';
-const READER_VIEW_ROUTES = [
-  { name: 'ui.view.card', endpoint: '/ui/view/card' },
-  { name: 'ui.view.article_view', endpoint: '/ui/view/article_view' },
-] as const;
-
-type AccessRow = { id: number } & Record<string, unknown>;
-type ReaderAccess = {
-  groupName: string;
-  groupId: number | null;
-  groupCreated: boolean;
-  viewGrants: Array<{ functionId: number; grantId: number | null }>;
-  userId: number | null;
-  membershipId: number | null;
-};
-
-type GuestGrant = { functionId: number; before: AccessRow[]; ownedId: number | null; marker: string };
 type ThemePreference = { theme_mode: string; configured: boolean; revision: number };
 
 /** Pins the account through its supported API, restoring both the value and absence. */
@@ -62,13 +52,14 @@ async function withPinnedAccountTheme(page: Page, theme: 'light' | 'dark', prove
 }
 
 /** Captures every scope for this function, then owns only a missing global grant. */
-async function addGuestUIGrant(admin: Page, groupId: number, name: string, marker: string, grants: GuestGrant[]): Promise<void> {
+async function addGuestUIGrant(admin: Page, groupId: number, name: string, marker: string, grants: GuestGrant[], cleanupSteps: PermissionCleanupStep[]): Promise<void> {
   const fn = await readAccessRow(admin, 'system_functions', { name });
   expect(fn).toMatchObject({ disabled: false, specific_table_related: false });
   const before = await readAccessRows(admin, 'system_group_table_func_rights', { user_group_id: groupId, function_id: fn!.id });
+  if (before.some(row => row.target_schema_name === 'public' && row.target_table_uid === null)) return;
   const grant: GuestGrant = { functionId: fn!.id, before, ownedId: null, marker };
   grants.push(grant);
-  if (before.some(row => row.target_schema_name === 'public' && row.target_table_uid === null)) return;
+  registerGuestGrantCleanup(cleanupSteps, groupId, grants);
   // creation_spec is server-managed and not insertable (add_row_db.go:145), so ownership is the one new row id.
   await addAccessRow(admin, 'system_group_table_func_rights', {
     user_group_id: groupId, function_id: fn!.id, target_schema_name: 'public', target_table_uid: null,
@@ -78,25 +69,6 @@ async function addGuestUIGrant(admin: Page, groupId: number, name: string, marke
   expect(added).toHaveLength(1);
   expect(added[0]).toMatchObject({ target_schema_name: 'public', target_table_uid: null });
   grant.ownedId = added[0].id;
-}
-
-/** Restores captured ids/scopes exactly, including when setup stopped before readback. */
-async function restoreGuestUIGrants(admin: Page, groupId: number, grants: GuestGrant[]): Promise<void> {
-  for (const grant of [...grants].reverse()) {
-    const fields = { user_group_id: groupId, function_id: grant.functionId };
-    const current = await readAccessRows(admin, 'system_group_table_func_rights', fields);
-    const added = current.filter(row => !grant.before.some(original => original.id === row.id));
-    expect(added.length).toBeLessThanOrEqual(1);
-    if (added.length) {
-      expect(added[0]).toMatchObject({ ...fields, target_schema_name: 'public', target_table_uid: null });
-      if (grant.ownedId !== null) expect(added[0].id, 'Refusing to delete a replacement guest grant.').toBe(grant.ownedId);
-      const deletion = await postJsonWithCsrf(admin, '/api/delete-rows?dataset=system_group_table_func_rights', { ids: [added[0].id] });
-      expect(deletion.ok, deletion.body).toBe(true);
-    } else expect(grant.ownedId).toBeNull();
-    expect(await readAccessRows(admin, 'system_group_table_func_rights', fields)).toEqual(grant.before);
-    grants.splice(grants.indexOf(grant), 1);
-  }
-  grants.length = 0;
 }
 
 async function readGuestUIEndpoints(visitor: Page): Promise<string[]> {
@@ -130,22 +102,9 @@ async function proveGuestToolbar(visitor: Page, dataset: string, theme: 'light' 
     .toEqual(await readGuestUIEndpoints(visitor));
 }
 
-/** Equal bounds provide exact identity lookups, including foreign-key ids. */
+/** Shared complete GET inventory, also used by fresh-request teardown. */
 async function readAccessRows(page: Page, dataset: string, fields: Record<string, string | number>): Promise<AccessRow[]> {
-  const query = new URLSearchParams({ dataset, view_key: 'table' });
-  for (const [column, value] of Object.entries(fields)) {
-    query.set(`${column}_from`, String(value));
-    query.set(`${column}_to`, String(value));
-  }
-  const response = await page.request.get(`/api/get-results?${query}`);
-  expect(response.ok(), await response.text()).toBe(true);
-  const { data } = await response.json() as { data: AccessRow[] };
-  expect(Array.isArray(data)).toBe(true);
-  for (const row of data) {
-    expect(row).toMatchObject(fields);
-    expect(Number.isSafeInteger(row.id) && row.id > 0).toBe(true);
-  }
-  return data;
+  return readC17AccessRows(page.request, dataset, fields);
 }
 
 async function readAccessRow(page: Page, dataset: string, fields: Record<string, string | number>): Promise<AccessRow | null> {
@@ -173,7 +132,7 @@ async function readReaderEndpoints(reader: Page): Promise<string[]> {
 }
 
 /** Adds explicit views to an isolated reader group; toolbar defaults stay under test. */
-async function giveReaderArticleAccess(admin: Page, reader: Page, access: ReaderAccess, includeArticle = true): Promise<void> {
+async function giveReaderArticleAccess(admin: Page, reader: Page, access: ReaderAccess, cleanupSteps: PermissionCleanupStep[], includeArticle = true): Promise<void> {
   const routes = READER_VIEW_ROUTES.filter(route => includeArticle || route.endpoint !== '/ui/view/article_view');
   const identity = await readSessionInfo(reader);
   expect(Number.isSafeInteger(identity.user_id) && identity.user_id! > 1).toBe(true);
@@ -190,6 +149,7 @@ async function giveReaderArticleAccess(admin: Page, reader: Page, access: Reader
   expect(await readAccessRow(admin, 'system_user_groups', { name: access.groupName })).toBeNull();
   await addAccessRow(admin, 'system_user_groups', { name: access.groupName });
   access.groupCreated = true;
+  registerReaderAccessCleanup(cleanupSteps, access); // Before any readback or child grant can fail.
   const group = await readAccessRow(admin, 'system_user_groups', { name: access.groupName });
   expect(group).not.toBeNull();
   access.groupId = group!.id;
@@ -211,42 +171,6 @@ async function giveReaderArticleAccess(admin: Page, reader: Page, access: Reader
   const membership = await readAccessRow(admin, 'system_user_group_memberships', { group_id: access.groupId });
   expect(membership).toMatchObject({ user_id: access.userId });
   access.membershipId = membership!.id;
-}
-
-/** Refuses replacements; removes the owned group and verifies both cascade targets. */
-async function removeReaderArticleAccess(admin: Page, access: ReaderAccess): Promise<void> {
-  // A successful create has no id in its reply; recover only our previously absent exact name if readback failed.
-  if (access.groupId === null && access.groupCreated) {
-    const group = await readAccessRow(admin, 'system_user_groups', { name: access.groupName });
-    if (group) access.groupId = group.id;
-  }
-  if (access.groupId === null) return;
-  expect(await readAccessRow(admin, 'system_user_groups', { name: access.groupName })).toMatchObject({ id: access.groupId });
-  const grants = await readAccessRows(admin, 'system_group_table_func_rights', { user_group_id: access.groupId });
-  for (const grant of grants) {
-    expect(access.viewGrants.some(viewGrant => viewGrant.functionId === grant.function_id), 'Refusing to delete an unexpected group grant.').toBe(true);
-  }
-  for (const viewGrant of access.viewGrants) {
-    const matchingGrants = grants.filter(grant => grant.function_id === viewGrant.functionId);
-    expect(matchingGrants.length).toBeLessThanOrEqual(1);
-    const grant = matchingGrants[0];
-    if (grant) {
-      expect(grant).toMatchObject({ target_schema_name: 'public', target_table_uid: null });
-      if (viewGrant.grantId !== null) expect(grant.id, 'Refusing to delete a replacement reader view grant.').toBe(viewGrant.grantId);
-    } else expect(viewGrant.grantId).toBeNull();
-  }
-  const membership = await readAccessRow(admin, 'system_user_group_memberships', { group_id: access.groupId });
-  if (membership) {
-    expect(membership).toMatchObject({ user_id: access.userId });
-    if (access.membershipId !== null) expect(membership.id, 'Refusing to delete a replacement reader membership.').toBe(access.membershipId);
-  } else expect(access.membershipId).toBeNull();
-  // 20260926000001_restore_system_foreign_keys.sql:37,46 declares ON DELETE
-  // CASCADE for this group's rights and memberships, also covering partial setup.
-  const deletion = await postJsonWithCsrf(admin, '/api/delete-rows?dataset=system_user_groups', { ids: [access.groupId] });
-  expect(deletion.ok, deletion.body).toBe(true);
-  expect(await readAccessRow(admin, 'system_user_groups', { name: access.groupName })).toBeNull();
-  expect(await readAccessRow(admin, 'system_group_table_func_rights', { user_group_id: access.groupId })).toBeNull();
-  expect(await readAccessRow(admin, 'system_user_group_memberships', { group_id: access.groupId })).toBeNull();
 }
 
 /** Exact-name lookup: equal range bounds avoid wildcard matches and pagination. */
@@ -356,6 +280,10 @@ test('C17: administrator, reader and anonymous visitor receive their own article
     groupName: buildTempDatasetName('e2e_c17_card_reader'), groupId: null, groupCreated: false,
     viewGrants: [], userId: null, membershipId: null,
   };
+  const cleanupSteps: PermissionCleanupStep[] = [];
+  let readerContext: BrowserContext | undefined;
+  let visitorContext: BrowserContext | undefined;
+  teardown.plan(testInfo.testId, cleanupSteps, [() => visitorContext?.close(), () => readerContext?.close()]);
   let reader: Page | null = null;
   let originalReaderEndpoints: string[] | null = null;
   let originalGuestEndpoints: string[] | null = null;
@@ -364,12 +292,12 @@ test('C17: administrator, reader and anonymous visitor receive their own article
   let browsePolicyChanged = false;
   const guestGrants: GuestGrant[] = [];
   const explicitGuestGrants: GuestGrant[] = [];
-  const readerContext = await browser.newContext({
+  readerContext = await browser.newContext({
     baseURL: testInfo.project.use.baseURL, ignoreHTTPSErrors: true,
     viewport: page.viewportSize(), storageState: { cookies: [], origins: [] },
     extraHTTPHeaders: { 'X-Bypass-Ratelimit': 'test-mode' },
   });
-  const visitorContext = await browser.newContext({
+  visitorContext = await browser.newContext({
     baseURL: testInfo.project.use.baseURL, ignoreHTTPSErrors: true,
     viewport: page.viewportSize(), storageState: { cookies: [], origins: [] },
     extraHTTPHeaders: { 'X-Bypass-Ratelimit': 'test-mode' },
@@ -381,6 +309,14 @@ test('C17: administrator, reader and anonymous visitor receive their own article
   const visitor = await visitorContext.newPage();
   try {
     await login(page, loadCredentials());
+    reader = await readerContext.newPage();
+    await login(reader, loadUserCredentials());
+    const readerIdentity = await readSessionInfo(reader);
+    // DETECT ONLY, before dataset/permission setup. Other runs require an owner decision.
+    await assertNoLeftoverC17ReaderGroups(page.request, readerIdentity.user_id!);
+    originalReaderEndpoints = await readReaderEndpoints(reader);
+    expect(originalReaderEndpoints, '8082 state: the reserved reader holds /ui/view/article_view (leaked grant?); C17 denial cannot be proven')
+      .not.toContain('/ui/view/article_view');
     // Creation seeds each dataset-name key. Protect any pre-existing label.
     for (const dataset of [parent, child]) expect(await readDatasetNameLangKeyId(page, dataset)).toBeNull();
     await createTempDataset(page, {
@@ -425,13 +361,8 @@ test('C17: administrator, reader and anonymous visitor receive their own article
     const assetsId = await readDatasetTableUIDFromPage(page, assets);
     expect(assetsId).not.toBeNull();
     confirmTestArtifact('dataset', assets, assetsId!);
-    reader = await readerContext.newPage();
-    await login(reader, loadUserCredentials());
-    originalReaderEndpoints = await readReaderEndpoints(reader);
-    // A temporary reader group holds cards only. The reserved development
-    // reader must have no article right in another group; never revoke shared grants.
-    expect(originalReaderEndpoints).not.toContain('/ui/view/article_view');
-    await giveReaderArticleAccess(page, reader, readerAccess, false);
+    // Cards belong to this run's isolated group; shared grants are never revoked.
+    await giveReaderArticleAccess(page, reader, readerAccess, cleanupSteps, false);
     for (const [theme, language] of [['light', 'fi'], ['dark', 'en']] as const) {
       await withPinnedAccountTheme(reader, theme, () => proveDeniedArticleOpeners(reader!, parent, theme, language));
     }
@@ -476,7 +407,7 @@ test('C17: administrator, reader and anonymous visitor receive their own article
     // Match the reader's explicitly granted views. These grant no article tools
     // or dataset reads and are restored by exact function/group/scope/id below.
     for (const route of READER_VIEW_ROUTES) {
-      await addGuestUIGrant(page, guestGroupId, route.name, `${parent}_guest_views`, guestGrants);
+      await addGuestUIGrant(page, guestGroupId, route.name, `${parent}_guest_views`, guestGrants, cleanupSteps);
     }
     for (const [theme, language] of [['light', 'fi'], ['dark', 'en']] as const) {
       for (const target of [page, reader]) await target.evaluate(lang => localStorage.setItem('chosen_language', lang), language);
@@ -487,59 +418,44 @@ test('C17: administrator, reader and anonymous visitor receive their own article
     }
     const beforeExplicitGrant = await readGuestUIEndpoints(visitor);
     try {
-      await addGuestUIGrant(page, guestGroupId, 'ui.article.section.images', `${parent}_guest_images`, explicitGuestGrants);
+      await addGuestUIGrant(page, guestGroupId, 'ui.article.section.images', `${parent}_guest_images`, explicitGuestGrants, cleanupSteps);
       expect(await readGuestUIEndpoints(visitor)).toEqual([...beforeExplicitGrant, '/ui/article/section/images'].sort());
       await proveGuestToolbar(visitor, parent, 'dark', true);
     } finally {
-      await restoreGuestUIGrants(page, guestGroupId, explicitGuestGrants);
+      await restoreGuestUIGrants(c17AccessAPI(page.request), guestGroupId, explicitGuestGrants);
       expect(await readGuestUIEndpoints(visitor)).toEqual(beforeExplicitGrant);
     }
     await proveGuestToolbar(visitor, parent, 'dark');
   } finally {
-    // Restoration runs even after a failed toolbar assertion; dataset/name-key
-    // cleanup still runs if reader-access restoration itself reports an error.
+    // Owned permissions are removed by the fresh-request hook, even if this
+    // page-based policy/dataset cleanup is interrupted by the body timeout.
+    cleanupSteps.push({ name: 'Verify reserved reader route baseline', run: async () => {
+      if (testInfo.status === 'passed') expect(await readReaderEndpoints(reader!),
+        'Reader route grants must match their exact pre-test state.').toEqual(originalReaderEndpoints);
+    } });
+    cleanupSteps.push({ name: 'Verify anonymous route baseline', run: async () => {
+      if (originalGuestEndpoints !== null && testInfo.status === 'passed') {
+        const response = await visitor.request.get('/api/auth-modes');
+        expect(response.ok(), await response.text()).toBe(true);
+        const modes = await response.json() as { guest_ui_endpoints: string[] };
+        expect([...modes.guest_ui_endpoints].sort()).toEqual(originalGuestEndpoints);
+      }
+    } });
     try {
-      try {
-        if (guestGroupId !== null) {
-          try {
-            await restoreGuestUIGrants(page, guestGroupId, explicitGuestGrants);
-          } finally {
-            await restoreGuestUIGrants(page, guestGroupId, guestGrants);
-            if (originalGuestEndpoints !== null) expect(await readGuestUIEndpoints(visitor)).toEqual(originalGuestEndpoints);
-          }
-        }
-      } finally {
-        try {
-          if (browsePolicyChanged && originalBrowsePolicy !== null) {
-            const current = await readAccessRow(page, 'system_config', { key: 'login_to_browse' });
-            expect(current).toMatchObject({ id: originalBrowsePolicy.id, boolean_value: false, json_value: originalBrowsePolicy.json_value });
-            const restored = await postJsonWithCsrf(page, '/api/update-row?dataset=system_config', {
-              id: originalBrowsePolicy.id, column: 'boolean_value', value: originalBrowsePolicy.boolean_value,
-            });
-            expect(restored.ok, restored.body).toBe(true);
-            expect(await readAccessRow(page, 'system_config', { key: 'login_to_browse' }))
-              .toMatchObject({ id: originalBrowsePolicy.id, boolean_value: originalBrowsePolicy.boolean_value, json_value: originalBrowsePolicy.json_value });
-          }
-        } finally {
-          await visitorContext.close();
-        }
+      if (browsePolicyChanged && originalBrowsePolicy !== null) {
+        const current = await readAccessRow(page, 'system_config', { key: 'login_to_browse' });
+        expect(current).toMatchObject({ id: originalBrowsePolicy.id, boolean_value: false, json_value: originalBrowsePolicy.json_value });
+        const restored = await postJsonWithCsrf(page, '/api/update-row?dataset=system_config', {
+          id: originalBrowsePolicy.id, column: 'boolean_value', value: originalBrowsePolicy.boolean_value,
+        });
+        expect(restored.ok, restored.body).toBe(true);
+        expect(await readAccessRow(page, 'system_config', { key: 'login_to_browse' }))
+          .toMatchObject({ id: originalBrowsePolicy.id, boolean_value: originalBrowsePolicy.boolean_value, json_value: originalBrowsePolicy.json_value });
       }
     } finally {
-      try {
-        await removeReaderArticleAccess(page, readerAccess);
-        if (reader && originalReaderEndpoints !== null) {
-          expect(await readReaderEndpoints(reader), 'Reader route grants must match their exact pre-test state.').toEqual(originalReaderEndpoints);
-        }
-      } finally {
-        try {
-          await readerContext.close();
-        } finally {
-          for (const dataset of [...created].reverse()) {
-            await dropTempDataset(page, dataset);
-            // K423 retains keys and translations; global teardown checks this
-            // run's exact dataset names and source evidence without deleting keys.
-          }
-        }
+      for (const dataset of [...created].reverse()) {
+        await dropTempDataset(page, dataset);
+        // K423 retains keys; global teardown checks this run's exact source evidence.
       }
     }
   }

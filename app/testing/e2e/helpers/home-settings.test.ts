@@ -334,6 +334,23 @@ test('second pass after clean body changes no values, only the presentation revi
   }]]);
 });
 
+test.each([false, true])('backstop restores/readbacks only through a fresh context after the captured transport closes; absent=%s', async absent => {
+  const f = fixture(absent), snapshot = await trackedSnapshot(f.request);
+  await f.mutate();
+  const fresh = { get: vi.fn(vi.mocked(f.request.get).getMockImplementation()!),
+    post: vi.fn(vi.mocked(f.request.post).getMockImplementation()!) } as unknown as APIRequestContext;
+  vi.mocked(f.request.get).mockReset().mockRejectedValue(new Error('captured request context closed'));
+  vi.mocked(f.request.post).mockReset().mockRejectedValue(new Error('captured request context closed'));
+  await runHomeTimeoutBackstop(fresh, snapshot);
+  await snapshot.verify(fresh);
+  expect(f.request.get).not.toHaveBeenCalled(); expect(f.request.post).not.toHaveBeenCalled();
+  expect(fresh.post).toHaveBeenCalled();
+  expect(f.state.home.settings).toEqual(f.originalHome.settings);
+  expect(f.state.home.hero).toEqual(f.originalHome.hero);
+  expect(f.state.home.presentation).toEqual(f.originalHome.presentation);
+  expect(f.state.articles.article_buttons).toEqual(f.originalArticles.article_buttons);
+});
+
 function writerIsHeld(origin: string) {
   const foreign = createHomeWriterLock({ pid: process.ppid, isAlive: () => true });
   let lease: ReturnType<typeof foreign> | undefined;

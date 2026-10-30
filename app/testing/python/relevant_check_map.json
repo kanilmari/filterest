@@ -1,7 +1,7 @@
 {
   "version": 1,
   "browser_areas": [
-    {"area": "Article one-heading rule and editor hint", "paths": ["app/frontend/core_components/table_views/record_title_resolver.js", "app/frontend/core_components/table_views/card_view/row_article_heading_match.js", "app/frontend/core_components/table_views/card_view/row_article_heading_match.test.js", "app/frontend/core_components/table_views/card_view/row_article_heading_renderer.js", "app/frontend/core_components/table_views/card_view/row_article_headings.test.js", "app/frontend/core_components/table_views/card_view/row_article_heading_hint.js", "app/frontend/core_components/table_views/card_view/row_article_heading_hint.test.js", "app/frontend/core_components/table_views/card_view/row_article_content_builder.js", "app/frontend/core_components/table_views/card_view/card_field_formatter.js", "app/frontend/core_components/table_views/card_view/cards_big.css", "app/frontend/core_components/table_views/article_view/article_language_editor.js", "app/frontend/core_components/lang/local_translation_fallback_catalog.js", "app/testing/e2e/C_card_view/C31_article_one_heading.spec.ts"], "specs": ["app/testing/e2e/C_card_view/C31_article_one_heading.spec.ts"], "projects": ["desktop-card", "mobile-card"]}, {
+    {"area": "Manual T17 cleanup failure proof", "paths": ["app/playwright.failure-proof.config.ts", "app/testing/e2e/T_admin/T17b_cleanup_after_failure.spec.ts", "app/testing/e2e/helpers/test-dataset-teardown.ts", "app/testing/e2e/helpers/test-dataset-teardown.test.ts"], "specs": [], "none": "Registry/teardown logic has focused Vitest proofs. T17b is manual-only on a foreman-agreed off-8082 native target via playwright.failure-proof.config.ts; never select deliberate failures in matrix/relevant-check runs."}, {"area": "Article one-heading rule and editor hint", "paths": ["app/frontend/core_components/table_views/record_title_resolver.js", "app/frontend/core_components/table_views/card_view/row_article_heading_match.js", "app/frontend/core_components/table_views/card_view/row_article_heading_match.test.js", "app/frontend/core_components/table_views/card_view/row_article_heading_renderer.js", "app/frontend/core_components/table_views/card_view/row_article_headings.test.js", "app/frontend/core_components/table_views/card_view/row_article_heading_hint.js", "app/frontend/core_components/table_views/card_view/row_article_heading_hint.test.js", "app/frontend/core_components/table_views/card_view/row_article_content_builder.js", "app/frontend/core_components/table_views/card_view/card_field_formatter.js", "app/frontend/core_components/table_views/card_view/cards_big.css", "app/frontend/core_components/table_views/article_view/article_language_editor.js", "app/frontend/core_components/lang/local_translation_fallback_catalog.js", "app/testing/e2e/C_card_view/C31_article_one_heading.spec.ts"], "specs": ["app/testing/e2e/C_card_view/C31_article_one_heading.spec.ts"], "projects": ["desktop-card", "mobile-card"]}, {
       "area": "Guest browser privacy",
       "paths": ["app/frontend/main.js", "app/frontend/core_components/admin_tools/auth_mode_handler.js", "app/frontend/core_components/auth/fingerprint_checker.js",
         "app/backend/core_components/auth/check_fingerprint.go", "app/backend/core_components/sessions/guest_browser_binding.go",
@@ -210,7 +210,7 @@
     },
     {
       "area": "Article toolbar permissions",
-      "paths": [
+      "paths": ["app/testing/e2e/helpers/c17-permission-cleanup.ts","app/testing/e2e/helpers/c17-permission-cleanup.test.ts",
         "app/frontend/core_components/table_views/card_view/row_article_permission_checker.js",
         "app/frontend/core_components/table_views/card_view/row_article_content_builder.js",
         "app/frontend/core_components/table_views/card_view/row_article_media_hydrator.js",
@@ -235,7 +235,7 @@
         "app/backend/core_components/permissions_handlers.go",
         "app/backend/core_components/permissions_reader.go"
       ],
-      "specs": ["app/testing/e2e/C_card_view/C17_article_toolbar_group_permissions.spec.ts"],
+      "specs": ["app/testing/e2e/C_card_view/C26_page_ifav_pilot.spec.ts", "app/testing/e2e/C_card_view/C17_article_toolbar_group_permissions.spec.ts"],
       "projects": ["mobile-card", "tablet-card", "desktop-card"]
     },
     {

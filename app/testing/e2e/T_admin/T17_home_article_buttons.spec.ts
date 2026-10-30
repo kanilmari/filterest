@@ -2,16 +2,19 @@
 // Proves administrator selection, both Home placements and ungranted reader omission.
 // Connects a disposable dataset row, real revision-protected saves and ordinary article navigation.
 // Restores captured settings (absence as an equivalent empty list) before deleting the owned dataset.
-// Run natively, serially; invalid settings or unavailable original targets are refused.
-import { expect, test, type Page, type APIRequestContext } from '@playwright/test';
+// Run natively, with independent ordered cases; invalid settings or unavailable original targets are refused.
+import { expect, test, type Page, type APIRequestContext, type BrowserContext } from '@playwright/test';
 import { login, loadUserCredentials, readSessionInfo } from '../helpers/auth';
 import { waitForAppReady } from '../helpers/navigation';
-import { buildTempDatasetName, createTempDataset, dropTempDataset, fetchCsrfTokenForRequest } from '../helpers/temp-dataset';
+import { buildTempDatasetName, createTempDataset, fetchCsrfTokenForRequest } from '../helpers/temp-dataset';
 import { loadDatasetCardVisibility, saveCardVisibilityWithFreshRevisions } from '../helpers/appearance-revisions';
-import { homeTimeoutBackstop, snapshotHomeSettings } from '../helpers/home-settings';
+import { runHomeTimeoutBackstop, snapshotHomeSettings } from '../helpers/home-settings';
+import { testDatasetTeardown } from '../helpers/test-dataset-teardown';
 
-test.describe.configure({ mode: 'serial' });
-const armHomeBackstop = homeTimeoutBackstop(test);
+// Each case captures/restores its own state. Keep shared Home/theme writes
+// ordered within a project, while allowing siblings to run after a failure.
+test.describe.configure({ mode: 'default' });
+const teardown = testDatasetTeardown(test);
 const SETTINGS_URL = '/api/admin/front-page/article-buttons';
 const LABEL = 'Temporary Home contact';
 type ArticleConfiguration = { schema_version: number; placement: 'below_text' | 'top_row';
@@ -78,21 +81,27 @@ for (const width of [1280, 375]) for (const theme of ['light', 'dark'] as const)
     // capture/baseline/context 5 s + reader sign-in 10 + create/seed/cache 15 + appearance 5 +
     // Home/theme 5 + editor 10 + two placements 2x5 + navigation 2x5 + reader
     // checks 2x5 + exact restoration/context close 30 = 110 s; 40 s margin
-    // gives 150 s shared by body and finally. No assertion/request limits change.
+    // gives the body 150 s. Teardown has its own slot and another 90 s.
     // The previous native log measured only the 30 s timeout, not its steps.
     test.setTimeout(150_000);
-    const failures: unknown[] = [];
+    const cleanupSteps: Array<{ name: string; run: (request: APIRequestContext) => Promise<unknown> }> = [];
+    let readerContext: BrowserContext | undefined;
     const step = async <T>(name: string, action: () => Promise<T>): Promise<T> => {
       const started = performance.now();
       console.log(`[T17] start: ${name}`);
       try { return await test.step(name, action); }
-      catch (error) { failures.push(error); printStepError(name, error); throw error; }
+      catch (error) { printStepError(name, error); throw error; }
       finally { console.log(`[T17] elapsed: ${name}: ${Math.round(performance.now() - started)} ms`); }
     };
     const { homeSnapshot, original, originallyAbsent, baseline, originalHome, originalTheme, identity } = await step('capture original settings', async () => {
       await page.goto('/system_config', { waitUntil: 'domcontentloaded' }); await waitForAppReady(page);
       const homeSnapshot = await snapshotHomeSettings(page.request, testInfo.title);
-      armHomeBackstop(page.request, homeSnapshot);
+      teardown.plan(testInfo.testId, cleanupSteps, [() => readerContext?.close(), homeSnapshot.releaseWriter]);
+      cleanupSteps.push({ name: 'Home timeout backstop: exact restore and readback',
+        run: request => runHomeTimeoutBackstop(request, homeSnapshot) });
+      cleanupSteps.push({ name: 'read back all original Home switches', run: async request => {
+        expect((await readJSON<{ settings: Record<string, boolean> }>(request, '/api/admin/front-page')).settings).toEqual(homeSnapshot.home.settings);
+      } });
       const original = homeSnapshot.articles;
       expect(original.configuration_error, 'T17 refuses to mutate invalid article settings: the API cannot restore them exactly.').toBe('');
       expect(original.unavailable_items, 'T17 refuses to mutate article settings with unavailable targets: the API cannot restore them exactly.').toEqual([]);
@@ -117,18 +126,60 @@ for (const width of [1280, 375]) for (const theme of ['light', 'dark'] as const)
       return { homeSnapshot, original, originallyAbsent, baseline, originalHome, originalTheme, identity };
     });
     const name = buildTempDatasetName('e2e_home_article_button');
-    const readerContext = await step('create reader context', () => browser.newContext({ ignoreHTTPSErrors: true, storageState: { cookies: [], origins: [] } }));
-    let created = false, themeAttempted = false, themeSaved: ThemePreference | null = null;
+    readerContext = await step('create reader context', () => browser.newContext({ ignoreHTTPSErrors: true, storageState: { cookies: [], origins: [] } }));
+    let themeAttempted = false, themeSaved: ThemePreference | null = null;
     let lastVersion = original.version, buttonsChanged = false, buttonSaveAttempted = false;
     let expectedConfiguration = baseline;
     let pendingConfiguration = baseline;
     let reader: Page | null = null;
+    cleanupSteps.unshift({ name: 'restore exact article configuration and absence equivalence', run: async request => {
+      if (!buttonSaveAttempted) return;
+      const latest = await readJSON<ArticleSettings>(request, SETTINGS_URL);
+      if (!buttonsChanged && latest.version === original.version) return;
+      if (latest.version === lastVersion) {
+        expect(latest.article_buttons, 'Refusing to overwrite another editor during cleanup.').toEqual(expectedConfiguration);
+      } else {
+        // A POST may commit before its response or subsequent UI assertions
+        // fail. Only our exact attempted list authorizes that compensation.
+        expect(latest.article_buttons, 'Refusing to overwrite another editor during cleanup.').toEqual(pendingConfiguration);
+      }
+      const restoredState = await homeSnapshot.restoreArticleButtons(request);
+      expect(restoredState.article_buttons).toEqual(baseline);
+      if (originallyAbsent) {
+        expect(restoredState.version).not.toBe('none');
+        expect(restoredState.configuration_error).toBe(''); expect(restoredState.unavailable_items).toEqual([]);
+        expect((await readJSON<{ article_buttons: unknown[] }>(request, '/api/front-page')).article_buttons).toEqual([]);
+        if (testInfo.status !== 'passed') return;
+        expect(reader).not.toBeNull();
+        // Prove absence-equivalent behaviour while Home is still enabled,
+        // before restoring its switches and removing the owned dataset.
+        for (const viewer of [page, reader!]) {
+          expect((await readJSON<{ article_buttons: unknown[] }>(viewer.request, '/api/front-page')).article_buttons).toEqual([]);
+          await home(viewer);
+          await expect(viewer.locator('#front_page_container .front-page-article-button')).toHaveCount(0);
+        }
+      }
+    } });
+    cleanupSteps.push({ name: 'restore exact account theme preference', run: async request => {
+      if (!themeAttempted) return;
+      expect((await readJSON<{ user_id: number }>(request, '/api/user-profile')).user_id).toBe(identity.user_id);
+      const current = await readJSON<ThemePreference>(request, '/api/user-visual-preference');
+      if (!themeSaved && JSON.stringify(current) === JSON.stringify(originalTheme)) return;
+      if (themeSaved) expect(current).toEqual(themeSaved);
+      else expect(current).toMatchObject({ theme_mode: theme, configured: true });
+      const headers = { 'X-CSRF-Token': await fetchCsrfTokenForRequest(request) };
+      const restored = originalTheme.configured
+        ? await request.patch('/api/user-visual-preference', { headers, data: { theme_mode: originalTheme.theme_mode } })
+        : await request.delete('/api/user-visual-preference', { headers });
+      expect(restored.ok(), await restored.text()).toBe(true);
+      expect(await restored.json()).toMatchObject({ theme_mode: originalTheme.theme_mode, configured: originalTheme.configured });
+    } });
     try {
       await step('reader sign-in and grant boundary', async () => {
-        reader = await readerContext.newPage(); await login(reader, loadUserCredentials());
+        reader = await readerContext!.newPage(); await login(reader, loadUserCredentials());
         // Prove the reserved ordinary reader's real grant boundary, before any
         // settings are touched. No shared grants are removed for this test.
-        expect(await reader.evaluate(() => JSON.parse(sessionStorage.getItem('user_permissions') || '[]')))
+        expect(await reader.evaluate(() => JSON.parse(sessionStorage.getItem('user_permissions') || '[]')), '8082 state: the reserved reader holds /ui/view/article_view (leaked grant?); T17 denial cannot be proven')
           .not.toContain('/ui/view/article_view');
       });
       await step('establish absent-setting baseline', async () => {
@@ -147,9 +198,10 @@ for (const width of [1280, 375]) for (const theme of ['light', 'dark'] as const)
         }
       });
       await step('create dataset, seed row and hydrate caches', async () => {
+        teardown.datasets.reserve(testInfo.testId, name);
         await createTempDataset(page, { datasetName: name, grantUsersRead: true,
           columns: { id: 'SERIAL', title: 'TEXT' }, seedRows: [{ title: LABEL }] });
-        created = true;
+        teardown.recordCreated(testInfo.testId, name);
       });
       const uid = await step('configure dataset article title', async () => {
         await saveCardVisibilityWithFreshRevisions(page.request, name, current => ({
@@ -177,9 +229,19 @@ for (const width of [1280, 375]) for (const theme of ['light', 'dark'] as const)
         while (await oldRows.locator('li').count()) await modal.getByTestId('front-page-article-0-remove').click();
         await modal.getByTestId('front-page-article-dataset').selectOption(String(uid));
         await modal.getByTestId('front-page-article-row').click();
+        const chooser = modal.getByTestId('front-page-article-row-picker').getByRole('dialog');
+        await expect(chooser).toBeVisible();
         await modal.getByTestId('front-page-article-search').fill(LABEL);
-        const option = modal.locator('.msd-option').filter({ hasText: LABEL });
+        const option = chooser.getByRole('option', { name: LABEL, exact: true });
         await expect(option).toHaveCount(1); await option.click();
+        await expect(option).toHaveAttribute('aria-selected', 'true');
+        await expect(modal.getByTestId('front-page-article-preview')).toContainText(LABEL);
+        // The shared dropdown keeps selections open; Escape dismisses only
+        // this popup, preserving the chosen row and the surrounding editor.
+        await option.press('Escape');
+        await expect(chooser).toBeHidden();
+        await expect(modal).toBeVisible();
+        await expect(modal.getByTestId('front-page-article-row')).toHaveAttribute('aria-expanded', 'false');
         await expect(modal.getByTestId('front-page-article-preview')).toContainText(LABEL);
         await modal.getByTestId('front-page-article-add').click();
       });
@@ -287,63 +349,10 @@ for (const width of [1280, 375]) for (const theme of ['light', 'dark'] as const)
           await expect(reader.locator('#front_page_container')).not.toContainText(LABEL);
         });
       }
-    } catch (error) {
-      // Named steps retain the original error. Also report any failure between
-      // steps, so future body edits cannot accidentally bypass the aggregate.
-      if (!failures.includes(error)) { failures.push(error); printStepError('body between named steps', error); }
     } finally {
-      // Run every cleanup even if an earlier restore fails. A failed body and
-      // cleanup are both reported; neither becomes a silent leftover.
-      const attempt = async (name: string, action: () => Promise<void>) => {
-        try { await step(name, action); } catch { /* Recorded above; continue every exact cleanup. */ }
-      };
-      await attempt('restore exact article configuration and absence equivalence', async () => {
-        if (!buttonSaveAttempted) return;
-        const latest = await readJSON<ArticleSettings>(page.request, SETTINGS_URL);
-        if (!buttonsChanged && latest.version === original.version) return;
-        if (latest.version === lastVersion) {
-          expect(latest.article_buttons, 'Refusing to overwrite another editor during cleanup.').toEqual(expectedConfiguration);
-        } else {
-          // A POST may commit before its response or subsequent UI assertions
-          // fail. Only our exact attempted list authorizes that compensation.
-          expect(latest.article_buttons, 'Refusing to overwrite another editor during cleanup.').toEqual(pendingConfiguration);
-        }
-        const restoredState = await homeSnapshot.restoreArticleButtons();
-        expect(restoredState.article_buttons).toEqual(baseline);
-        if (originallyAbsent) {
-          expect(restoredState.version).not.toBe('none');
-          expect(restoredState.configuration_error).toBe(''); expect(restoredState.unavailable_items).toEqual([]);
-          expect(reader).not.toBeNull();
-          // Prove absence-equivalent behaviour while Home is still enabled,
-          // before restoring its switches and removing the owned dataset.
-          for (const viewer of [page, reader!]) {
-            expect((await readJSON<{ article_buttons: unknown[] }>(viewer.request, '/api/front-page')).article_buttons).toEqual([]);
-            await home(viewer);
-            await expect(viewer.locator('#front_page_container .front-page-article-button')).toHaveCount(0);
-          }
-        }
-      });
-      await attempt('restore and verify all six Home settings', async () => {
-        await homeSnapshot.restore();
-        expect((await readJSON<{ settings: Record<string, boolean> }>(page.request, '/api/admin/front-page')).settings).toEqual(originalHome.settings);
-      });
-      await attempt('restore exact account theme preference', async () => {
-        if (!themeAttempted) return;
-        expect((await readSessionInfo(page)).user_id).toBe(identity.user_id);
-        const current = await readJSON<ThemePreference>(page.request, '/api/user-visual-preference');
-        if (!themeSaved && JSON.stringify(current) === JSON.stringify(originalTheme)) return;
-        if (themeSaved) expect(current).toEqual(themeSaved);
-        else expect(current).toMatchObject({ theme_mode: theme, configured: true });
-        const headers = { 'X-CSRF-Token': await fetchCsrfTokenForRequest(page.request) };
-        const restored = originalTheme.configured
-          ? await page.request.patch('/api/user-visual-preference', { headers, data: { theme_mode: originalTheme.theme_mode } })
-          : await page.request.delete('/api/user-visual-preference', { headers });
-        expect(restored.ok(), await restored.text()).toBe(true);
-        expect(await restored.json()).toMatchObject({ theme_mode: originalTheme.theme_mode, configured: originalTheme.configured });
-      });
-      await attempt('delete owned dataset', async () => { if (created) await dropTempDataset(page, name); });
-      await attempt('close reader context', () => readerContext.close());
+      // In-page work only. API restoration/removal belongs to afterEach even
+      // when Playwright has already disposed the body's page transport.
+      if (!page.isClosed()) await page.keyboard.press('Escape').catch(() => {});
     }
-    if (failures.length) throw new AggregateError(failures, 'T17 body or exact cleanup failed');
   });
 }

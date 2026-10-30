@@ -82,31 +82,31 @@ function unrestorableHeroField(hero: HomeState['hero']): string | null {
   return null;
 }
 
-async function snapshotLockedHomeSettings(request: APIRequestContext, home: HomeState, writer: HomeWriterLease) {
+async function snapshotLockedHomeSettings(originalRequest: APIRequestContext, home: HomeState, writer: HomeWriterLease) {
   const originalSwitches = switches(home);
   const unrestorable = unrestorableHeroField(home.hero);
   if (unrestorable) {
     throw new Error(`Home snapshot cannot be restored safely: hero ${unrestorable} has leading/trailing whitespace, NUL, `
       + 'over 2000 characters, invalid text or an oversized save body, which the Home API cannot store back exactly');
   }
-  const articles = await read<HomeArticleSettings>(request, ARTICLES_URL);
+  const articles = await read<HomeArticleSettings>(originalRequest, ARTICLES_URL);
   if (!Object.hasOwn(home, 'presentation') || !home.presentation_version || !articles.version
     || articles.configuration_error || articles.unavailable_items.length) {
     throw new Error('Home snapshot cannot be restored safely: invalid configuration or unavailable article targets');
   }
 
-  const post = async (url: string, data: unknown, headers?: Record<string, string>) => {
+  const post = async (request: APIRequestContext, url: string, data: unknown, headers?: Record<string, string>) => {
     const response = await request.post(url, { headers: headers ?? { 'X-CSRF-Token': await fetchCsrfTokenForRequest(request) }, data });
     if (!response.ok()) throw new Error(`Home restoration failed: POST ${url}, HTTP ${response.status()}`);
   };
 
-  const restoreArticleButtons = async () => {
+  const restoreArticleButtons = async (request = originalRequest) => {
     const headers = { 'X-CSRF-Token': await fetchCsrfTokenForRequest(request) };
     const latest = await read<HomeArticleSettings>(request, ARTICLES_URL);
     if (!isDeepStrictEqual(latest.article_buttons, articles.article_buttons)) {
       // An absent article setting reads as the canonical empty list. Its protected
       // API cannot restore absence; retain that established behaviour equivalence.
-      await post(ARTICLES_URL, { article_buttons: articles.article_buttons, version: latest.version }, headers);
+      await post(request, ARTICLES_URL, { article_buttons: articles.article_buttons, version: latest.version }, headers);
     }
     const restored = await read<HomeArticleSettings>(request, ARTICLES_URL);
     equal(restored.article_buttons, articles.article_buttons, 'front_page_article_buttons');
@@ -115,15 +115,15 @@ async function snapshotLockedHomeSettings(request: APIRequestContext, home: Home
     return restored;
   };
 
-  const restoreHeroTexts = async () => {
+  const restoreHeroTexts = async (request = originalRequest) => {
     const latest = await read<HomeState>(request, HOME_URL);
     // front_page_hero.go accepts the complete admin hero, including lang_key.
     // Pass every captured part/field: omitted usage explanations are erased on save.
-    if (!isDeepStrictEqual(latest.hero, home.hero)) await post(HOME_URL, { hero: home.hero });
+    if (!isDeepStrictEqual(latest.hero, home.hero)) await post(request, HOME_URL, { hero: home.hero });
     equal((await read<HomeState>(request, HOME_URL)).hero, home.hero, 'hero texts');
   };
 
-  const verify = async () => {
+  const verify = async (request = originalRequest) => {
     const failures: unknown[] = [];
     const attempt = async (step: () => Promise<void>) => { try { await step(); } catch (error) { failures.push(error); } };
     await attempt(async () => {
@@ -143,11 +143,11 @@ async function snapshotLockedHomeSettings(request: APIRequestContext, home: Home
     if (failures.length) throw new AggregateError(failures, 'Home settings readback failed');
   };
 
-  const restore = async () => {
+  const restore = async (request = originalRequest) => {
     const failures: unknown[] = [];
     const attempt = async (step: () => Promise<unknown>) => { try { await step(); } catch (error) { failures.push(error); } };
-    await attempt(restoreHeroTexts);
-    await attempt(restoreArticleButtons);
+    await attempt(() => restoreHeroTexts(request));
+    await attempt(() => restoreArticleButtons(request));
     await attempt(async () => {
       const headers = { 'X-CSRF-Token': await fetchCsrfTokenForRequest(request) };
       const latest = await read<HomeState>(request, HOME_URL);
@@ -159,17 +159,17 @@ async function snapshotLockedHomeSettings(request: APIRequestContext, home: Home
         if (rows.data.length !== 1 || rows.data[0].key !== 'front_page_presentation') {
           throw new Error('Home restoration cannot identify the introduced front_page_presentation row');
         }
-        await post('/api/delete-rows?dataset=system_config', { ids: [rows.data[0].id] }, headers);
+        await post(request, '/api/delete-rows?dataset=system_config', { ids: [rows.data[0].id] }, headers);
       } else if (!isDeepStrictEqual(latest.presentation, home.presentation)) {
-        await post(HOME_URL, { presentation: home.presentation, version: latest.presentation_version }, headers);
+        await post(request, HOME_URL, { presentation: home.presentation, version: latest.presentation_version }, headers);
       }
     });
     await attempt(async () => {
       const latest = await read<HomeState>(request, HOME_URL);
-      if (!isDeepStrictEqual(switches(latest), originalSwitches)) await post(HOME_URL, { settings: originalSwitches });
+      if (!isDeepStrictEqual(switches(latest), originalSwitches)) await post(request, HOME_URL, { settings: originalSwitches });
     });
     // A failed restore never prevents readback, or silently passes with a failed body.
-    await attempt(verify);
+    await attempt(() => verify(request));
     if (failures.length) {
       console.error('Home settings restoration/readback failures:', failures);
       throw new AggregateError(failures, 'Home settings restoration/readback failed');
@@ -188,7 +188,9 @@ export async function runHomeTimeoutBackstop(request: APIRequestContext, snapsho
     try { await action(); }
     catch (error) { failures.push(new Error(`${name}: ${error instanceof Error ? error.message : String(error)}`, { cause: error })); }
   };
-  await attempt('hero restore', snapshot.restoreHeroTexts);
+  // Every nested operation uses the supplied teardown context, never the page's
+  // captured transport, which Playwright may already have closed on timeout.
+  await attempt('hero restore', () => snapshot.restoreHeroTexts(request));
   await attempt('presentation re-save', async () => {
     if (snapshot.home.presentation_version === 'none') return;
     const latest = await read<HomeState>(request, HOME_URL);
@@ -201,7 +203,7 @@ export async function runHomeTimeoutBackstop(request: APIRequestContext, snapsho
     });
     if (!response.ok()) throw new Error(`Home presentation re-save failed: HTTP ${response.status()}`);
   });
-  await attempt('full restore/readback', snapshot.restore);
+  await attempt('full restore/readback', () => snapshot.restore(request));
   if (failures.length) throw new AggregateError(failures, 'Home timeout backstop failed');
 }
 

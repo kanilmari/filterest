@@ -5,12 +5,13 @@
 import { test as base, expect, type APIRequestContext, type Page } from '@playwright/test';
 import { isDeepStrictEqual } from 'node:util';
 import { deflateSync } from 'node:zlib';
-import { login, loadCredentials, loadUserCredentials } from '../helpers/auth';
+import { login, loadCredentials, loadUserCredentials, readSessionInfo } from '../helpers/auth';
 import { buildTempDatasetName, createTempDataset, dropTempDataset, openTempDatasetRowArticle,
   fetchCsrfTokenForRequest } from '../helpers/temp-dataset';
 import { configureArticleFieldRoles, postJsonWithCsrf } from '../helpers/image-first-article';
 import { readDatasetIdentityFromRequest } from '../helpers/test-artifact-dataset-identity-reader';
 import { acquireHomeWriter } from '../helpers/home-writer-lock';
+import { assertP7ReaderPrecondition } from '../helpers/c17-permission-cleanup';
 
 type Configuration = { schema_version: number; placement: 'below_text' | 'top_row';
   items: Array<{ table_uid: number; row_id: string; enabled: boolean; view?: string }> };
@@ -246,19 +247,43 @@ test('P6 top-row Home Page button sits after tabs, opens Page, and returns Home'
   await link.click(); await pageVisible(page);
   await page.locator('.image_first_view_modal [data-testid="modal-close-button"]').click(); await expect(page).toHaveURL(/\/$/);
 });
-test('P7 an ungranted user sees no Home button and gets the IFAV denial notice', async ({ browser, pilot, homeButton: _homeButton }, info) => {
+test('P7 an ungranted user sees no Home button and gets the IFAV denial notice', async ({ page, browser, pilot, homeButton: _homeButton }, info) => {
   test.skip(!desktop(info.project.name), 'Desktop permission proof');
   const context = await browser.newContext({ ignoreHTTPSErrors: true, storageState: { cookies: [], origins: [] } });
+  let reader: Page | undefined;
   try {
     // The reader's groups (8082's ordinary users) lack the global Page right, while grantUsersRead gives them
     // get-results on this dataset: the design's "user without the Page right" denial.
-    const reader = await context.newPage(); await login(reader, loadUserCredentials());
+    reader = await context.newPage(); await login(reader, loadUserCredentials());
+    // Additional precondition: a leaked article grant invalidates the denial proof.
+    // Only the admin's GET inventory is used to name leftovers; restoration is the owner's decision.
+    await assertP7ReaderPrecondition(page.request, (await readSessionInfo(reader)).user_id!,
+      await reader.evaluate(() => JSON.parse(sessionStorage.getItem('user_permissions') || '[]')));
     expect(await reader.evaluate(() => JSON.parse(sessionStorage.getItem('user_permissions') || '[]'))).not.toContain('/ui/view/image_first_page_view');
     await home(reader); await expect(reader.locator(`a[href="${pilot.pageURL}"]`)).toHaveCount(0);
-    await reader.goto(pilot.pageURL); await expect(reader.locator(PAGE)).toHaveCount(0);
-    await expect(reader.locator('[data-lang-key="article_view_permission_missing"]')).toBeVisible();
-    const pageDenial = await reader.locator('[data-lang-key="article_view_permission_missing"]').textContent();
+    const denial = reader.locator('[data-lang-key="article_view_permission_missing"]');
+    await reader.goto(pilot.pageURL);
+    // Both direct routes boot the app and load the dataset before showing the
+    // denial. Check content absence only after that positive readiness signal.
+    await expect(denial).toBeVisible({ timeout: 15_000 });
+    const pageDenial = await denial.textContent();
+    expect(pageDenial?.trim()).toBeTruthy();
+    await expect(reader.locator(PAGE)).toHaveCount(0);
+    await expect(reader.locator('.image_first_view_article_content')).toHaveCount(0);
     await reader.goto(`${pilot.path}/1?view=image_first_view`);
-    await expect(reader.locator('[data-lang-key="article_view_permission_missing"]')).toHaveText(pageDenial!);
+    await expect(denial).toHaveText(pageDenial!, { timeout: 15_000 });
+    await expect(denial).toBeVisible();
+    await expect(reader.locator('.image_first_view_article_content')).toHaveCount(0);
+  } catch (error) {
+    // The fixture's automatic snapshot is the admin page; preserve the actual
+    // reader failure before closing its separate context, without masking it.
+    if (reader) {
+      await info.attach('P7-reader-url', { body: reader.url(), contentType: 'text/plain' })
+        .catch(attachmentError => console.error('P7 reader URL attachment failed', attachmentError));
+      await reader.screenshot({ fullPage: true, timeout: 5_000 })
+        .then(body => info.attach('P7-reader-screenshot', { body, contentType: 'image/png' }))
+        .catch(attachmentError => console.error('P7 reader screenshot attachment failed', attachmentError));
+    }
+    throw error;
   } finally { await context.close(); }
 });

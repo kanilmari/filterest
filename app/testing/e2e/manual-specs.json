@@ -1,3 +1,4 @@
 [
-  "T_admin/T18_custom_root_page.spec.ts"
+  "T_admin/T18_custom_root_page.spec.ts",
+  "T_admin/T17b_cleanup_after_failure.spec.ts"
 ]
