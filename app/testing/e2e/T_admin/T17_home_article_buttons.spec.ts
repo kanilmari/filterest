@@ -320,15 +320,18 @@ for (const width of [1280, 375]) for (const theme of ['light', 'dark'] as const)
                 const style = getComputedStyle(el), row = el.getBoundingClientRect();
                 const actions = el.querySelector('.filterbar-inline-hero__actions');
                 const actionBounds = actions?.getClientRects().length ? actions.getBoundingClientRect() : null;
+                const search = el.querySelector(':scope > .front-page-desktop-search');
+                const searchBounds = search?.getClientRects().length ? search.getBoundingClientRect() : null;
                 return { right: row.right - parseFloat(style.paddingRight) - parseFloat(style.borderRightWidth),
-                  gap: parseFloat(style.columnGap), actions: actionBounds && { left: actionBounds.left, right: actionBounds.right } };
+                  gap: parseFloat(style.columnGap), actions: actionBounds && { left: actionBounds.left, right: actionBounds.right },
+                  search: searchBounds && { left: searchBounds.left } };
               });
               // Administrators reserve the trailing actions; visitors' pills
               // reach the same content edge directly, without an empty slot.
-              if (edge.actions) {
-                expect(edge.actions.right).toBeCloseTo(edge.right, 0);
-                expect(bounds.x + bounds.width).toBeCloseTo(edge.actions.left - edge.gap, 0);
-              } else expect(bounds.x + bounds.width).toBeCloseTo(edge.right, 0);
+              // Since 573 the D1 desktop search follows the pill, so the pill ends one gap before it.
+              if (edge.actions) expect(edge.actions.right).toBeCloseTo(edge.right, 0);
+              const end = edge.search ? edge.search.left : edge.actions ? edge.actions.left : edge.right + edge.gap;
+              expect(bounds.x + bounds.width).toBeCloseTo(end - edge.gap, 0);
             }
           }
           expect(await page.locator('#front_page_container').evaluate(el => el.scrollWidth <= el.clientWidth)).toBe(true);

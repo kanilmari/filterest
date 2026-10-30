@@ -228,6 +228,10 @@ test.describe('T13 — Workline observatory', () => {
 
   test('compacts the centered action bar when the report content scrolls under it', async ({ page }) => {
     await page.goto('/admin/workline_observatory', { waitUntil: 'domcontentloaded' });
+    // Since 649133f1 the chosen language lands after load and re-presents the page; flip the theme on the settled shell.
+    await page.waitForFunction(() => (window as Window & {
+      __filterestShellBoot?: { status: () => { ready: boolean } };
+    }).__filterestShellBoot?.status().ready === true);
     await page.evaluate(() => {
       document.body.classList.remove('dark-mode');
       document.body.classList.add('light-mode');
