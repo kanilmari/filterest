@@ -14,7 +14,7 @@ const css = readFileSync(resolve(currentDirectory, 'front_page.css'), 'utf8');
 const navbar = readFileSync(resolve(currentDirectory, '../navigation/navbar/navbar_layout.css'), 'utf8');
 const postcss = requireNodeDependency('postcss');
 
-test('Home boxes keep one centred 800px column at every width', () => {
+test('Home boxes keep one 800px column with auto margins as the default', () => {
     const root = postcss.parse(css);
     const columns = [];
     root.walkRules(rule => {
@@ -26,6 +26,39 @@ test('Home boxes keep one centred 800px column at every width', () => {
     });
     expect(columns).toEqual(['minmax(0, 1fr)']);
     expect(css).toMatch(/\.front-page-blocks\s*\{[^}]*box-sizing: border-box;[^}]*width: 100%;[^}]*max-width: 800px;[^}]*margin-inline: auto;/);
+});
+
+test('only side-anchored boxes above 700px follow the unchanged text inset less their 1rem gutter', () => {
+    const root = postcss.parse(css);
+    const stage = root.nodes.find(node => node.selector === '.front-page-text-stage');
+    const inset = stage.nodes.find(node => node.prop === 'padding-inline').value;
+    expect(inset).toBe('min(var(--home-text-horizontal-margin), 8cqw, max(0px, calc((100cqw - var(--home-text-min-width)) / 2)))');
+    const margins = [];
+    root.walkRules(rule => {
+        if (!rule.selector.endsWith('.front-page-blocks')) return;
+        rule.walkDecls('margin-inline', declaration => {
+            margins.push(rule.selector);
+            if (rule.selector === '.front-page-blocks') {
+                expect(declaration.value).toBe('auto');
+                expect(rule.parent.type).toBe('root');
+                return;
+            }
+            if (rule.selector === '.front-page-content--positioned > .front-page-text-stage[data-anchor] ~ .front-page-blocks') {
+                expect(rule.parent.name).toBe('media');
+                expect(rule.parent.params).toBe('(width <= 700px)');
+                expect(declaration.value).toBe('auto');
+                expect(rule.nodes.find(node => node.prop === 'width').value).toBe('100%');
+                return;
+            }
+            expect(rule.parent.type).toBe('root');
+            const side = rule.selector.includes('[data-anchor$="left"]') ? 'left' : 'right';
+            expect(rule.selector).toBe(`.front-page-content--positioned > .front-page-text-stage[data-anchor$="${side}"] ~ .front-page-blocks`);
+            expect(declaration.value).toBe(side === 'left' ? `calc(${inset} - 1rem) auto` : `auto calc(${inset} - 1rem)`);
+            // Auto width reserves the fixed margin at 701px instead of overflowing a 100% wrapper.
+            expect(rule.nodes.find(node => node.prop === 'width').value).toBe('auto');
+        });
+    });
+    expect(margins).toHaveLength(4);
 });
 
 test('only Show all gets the 44px link target; the existing title stretches over the row', () => {

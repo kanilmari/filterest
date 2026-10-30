@@ -81,10 +81,18 @@ async function openHomeBoxes(page: Page, theme: 'light' | 'dark', width: number,
   return writes;
 }
 
-for (const width of [1440, 1000, 390]) {
+// WO107: each case proves one anchor; the full matrix ran once in proof job d330m. Phones ignore the side.
+const HOME_BOX_ANCHORS = {
+  1440: { light: 'center-left', dark: 'center-right' },
+  1000: { light: 'center-right', dark: 'center-center' },
+  390: { light: 'center-left', dark: 'center-right' },
+} as const;
+
+for (const width of [1440, 1000, 390] as const) {
   for (const theme of ['light', 'dark'] as const) {
+    const anchor = HOME_BOX_ANCHORS[width][theme];
     test(`Home boxes: one column, shared media and row links at ${width}px in ${theme}`, async ({ page }, info) => {
-      const writes = await openHomeBoxes(page, theme, width);
+      const writes = await openHomeBoxes(page, theme, width, anchor);
       const blocks = page.locator('.front-page-blocks');
       const groups = blocks.locator(':scope > .supplemental-dataset-group');
       await expect(groups).toHaveCount(3);
@@ -135,7 +143,17 @@ for (const width of [1440, 1000, 390]) {
       expect(layout.tracks).toBe(1);
       expect(layout.width).toBeLessThanOrEqual(800);
       if (width >= 1000) expect(layout.width).toBe(800);
-      expect(layout.centre).toBeCloseTo(layout.parentCentre, 1);
+      if (width <= 700 || anchor.endsWith('-center')) {
+        expect(layout.centre).toBeCloseTo(layout.parentCentre, 1);
+      } else {
+        const text = (await page.locator('.front-page-hero').boundingBox())!;
+        for (const box of boxes) {
+          const boxEdge = anchor.endsWith('-left') ? box.x : box.x + box.width;
+          const textEdge = anchor.endsWith('-left') ? text.x : text.x + text.width;
+          expect(Math.abs(boxEdge - textEdge)).toBeLessThanOrEqual(1);
+          expect(box.width).toBe(768);
+        }
+      }
 
       for (let groupIndex = 0; groupIndex < 3; groupIndex++) {
         const group = groups.nth(groupIndex);

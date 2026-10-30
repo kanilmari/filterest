@@ -24,6 +24,34 @@ test('nine anchors and every alignment preserve intrinsic block width and anchor
     }
 });
 
+test('saved horizontal inputs belong to the shared content parent and preserve the text inset', () => {
+    const [page, scroller, stage, hero, boxes] = Array.from({ length: 5 }, () => document.createElement('div'));
+    scroller.append(page); page.append(stage, boxes); stage.append(hero);
+    for (const horizontal_margin_px of [0, 40, 160, 320]) {
+        const presentation = { ...defaults, anchor: 'top-left', horizontal_margin_px };
+        applyHomePresentation(page, scroller, stage, hero, presentation);
+        expect(stage.parentElement).toBe(page); expect(boxes.parentElement).toBe(page);
+        expect(page.style.getPropertyValue('--home-text-min-width')).toBe(`${rules.max_width_px.min}px`);
+        expect(page.style.getPropertyValue('--home-text-horizontal-margin')).toBe(`${horizontal_margin_px}px`);
+        for (const property of ['--home-text-min-width', '--home-text-horizontal-margin']) {
+            expect(stage.style.getPropertyValue(property)).toBe('');
+            expect(hero.style.getPropertyValue(property)).toBe('');
+        }
+        expect(stage.style.getPropertyValue('--home-text-vertical-margin')).toBe(`${defaults.vertical_margin_px}px`);
+        // jsdom has no container layout or custom-property inheritance. Check the numerical CSS counterpart
+        // with the parent's actual saved input; G20 checks native computed padding and anchored edges.
+        for (const [width, cappedInset] of [[700, 16], [701, 56.08], [1440, 115.2], [1920, 153.6]]) {
+            const geometry = computeHomeTextGeometry({ width, height: 900, textHeight: 80,
+                presentation: { ...presentation, horizontal_margin_px: Number.parseFloat(
+                    page.style.getPropertyValue('--home-text-horizontal-margin')) } });
+            expect(geometry.x).toBeCloseTo(width <= 700 ? 16 : Math.min(horizontal_margin_px, cappedInset), 6);
+            expect(geometry).toEqual(computeHomeTextGeometry({ width, height: 900, textHeight: 80, presentation }));
+        }
+    }
+    applyHomePresentation(page, scroller, stage, hero, null);
+    expect(page.style.getPropertyValue('--home-text-horizontal-margin')).toBe(`${defaults.horizontal_margin_px}px`);
+});
+
 test('all phone story sizes use data attributes and reset to 15 without inline typography', () => {
     const [page, scroller, stage, hero] = Array.from({ length: 4 }, () => document.createElement('div'));
     for (let phone_story_size = 12; phone_story_size <= 18; phone_story_size++) {

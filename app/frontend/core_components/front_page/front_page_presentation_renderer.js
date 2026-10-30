@@ -28,8 +28,8 @@ export function applyHomePresentation(page, scroller, stage, hero, presentation)
     hero.dataset.alignment = value.alignment;
     hero.dataset.phoneAlignment = value.phone_alignment;
     hero.dataset.phoneStorySize = String(value.phone_story_size);
-    stage.style.setProperty('--home-text-min-width', `${HOME_PRESENTATION_DEFINITION.max_width_px.min}px`);
-    stage.style.setProperty('--home-text-horizontal-margin', `${value.horizontal_margin_px}px`);
+    page.style.setProperty('--home-text-min-width', `${HOME_PRESENTATION_DEFINITION.max_width_px.min}px`);
+    page.style.setProperty('--home-text-horizontal-margin', `${value.horizontal_margin_px}px`);
     stage.style.setProperty('--home-text-vertical-margin', `${value.vertical_margin_px}px`);
     hero.style.setProperty('--home-text-max-width', `${value.max_width_px}px`);
     return true;

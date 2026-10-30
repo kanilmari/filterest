@@ -22,6 +22,7 @@ Dates are the local (Europe/Helsinki) date on which the version was published.
 
 ## [Unreleased]
 
+- Home's dataset boxes follow left- or right-anchored text with the same horizontal inset, keeping their own 800 px maximum width; centred layouts and phones remain unchanged.
 - Registration returns PIN validation messages beneath their fields in the server response, keeping one translated inline message after the page loads.
 - T23's Permissions rights fingerprint test skips both phone projects, whose matrix layout cannot be driven by pointer; tablet and desktop retain the full checks (test only).
 - T23 reads rights-listing pages five at a time in ID order, retrying a drifting listing up to twice while preserving every permissions fingerprint comparison (test only).

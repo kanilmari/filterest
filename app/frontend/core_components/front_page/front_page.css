@@ -325,6 +325,17 @@ body.dark-mode .front-page {
   }
 }
 
+/* A follows the text inset, less the wrapper's 1rem gutter, with its own 800px maximum.
+   Auto width leaves room for the fixed margin even at 701px; centre keeps its existing column. */
+.front-page-content--positioned > .front-page-text-stage[data-anchor$="left"] ~ .front-page-blocks {
+  width: auto;
+  margin-inline: calc(min(var(--home-text-horizontal-margin), 8cqw, max(0px, calc((100cqw - var(--home-text-min-width)) / 2))) - 1rem) auto;
+}
+.front-page-content--positioned > .front-page-text-stage[data-anchor$="right"] ~ .front-page-blocks {
+  width: auto;
+  margin-inline: auto calc(min(var(--home-text-horizontal-margin), 8cqw, max(0px, calc((100cqw - var(--home-text-min-width)) / 2))) - 1rem);
+}
+
 /* Home alone keeps its destinations on phones; settings give way to the full identity. */
 @media (width <= 700px) {
   .front-page {
@@ -512,6 +523,10 @@ body.dark-mode .front-page {
     min-height: calc(100cqh - var(--home-phone-bar-size, 0px));
     padding: 16px;
     justify-items: stretch;
+  }
+  .front-page-content--positioned > .front-page-text-stage[data-anchor] ~ .front-page-blocks {
+    width: 100%;
+    margin-inline: auto;
   }
   /* Phones give the block the whole width between the gutters, so short centred or right-aligned text still uses the line. */
   .front-page-text-stage .front-page-hero { width: auto; max-width: none; }

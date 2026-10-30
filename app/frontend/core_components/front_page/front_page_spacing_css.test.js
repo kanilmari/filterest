@@ -77,3 +77,25 @@ test('box compensation leaves viewport anchoring, alignment and phone clearance 
         expect(declarations([`.front-page-text-stage .front-page-hero[data-alignment="${alignment}"]`], 1440)['text-align']).toBe(alignment);
     }
 });
+
+for (const width of [390, 700, 701, 1000, 1440, 1920]) for (const side of ['left', 'center', 'right']) {
+    test.each(['light', 'dark'])(`${side} boxes at ${width}px retain A's width and margin contract in %s`, theme => {
+        const selectors = ['.front-page-blocks', '.front-page-content--positioned > .front-page-blocks',
+            `.front-page-content--positioned > .front-page-text-stage[data-anchor$="${side}"] ~ .front-page-blocks`,
+            '.front-page-content--positioned > .front-page-text-stage[data-anchor] ~ .front-page-blocks'];
+        const variables = declarations(['.front-page', ...(theme === 'dark' ? ['body.dark-mode .front-page'] : [])], width);
+        const blocks = declarations(selectors, width);
+        const inset = declarations(['.front-page-text-stage'], width)['padding-inline'];
+        expect(blocks['max-width']).toBe('800px');
+        expect(blocks['grid-template-columns']).toBe('minmax(0, 1fr)');
+        expect(blocks.padding).toBe('0 1rem'); // 800px wrapper minus two 16px gutters = 768px surface.
+        expect(pixels(blocks.gap, variables)).toBe(40);
+        if (width <= 700 || side === 'center') {
+            expect(blocks.width).toBe('100%');
+            expect(blocks['margin-inline']).toBe('auto');
+        } else {
+            expect(blocks.width).toBe('auto');
+            expect(blocks['margin-inline']).toBe(side === 'left' ? `calc(${inset} - 1rem) auto` : `auto calc(${inset} - 1rem)`);
+        }
+    });
+}
