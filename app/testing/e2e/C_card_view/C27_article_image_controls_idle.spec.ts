@@ -19,7 +19,7 @@ const test = base.extend<{ ownedImages: Fixture }>({
     await login(page, loadCredentials());
     const fixture: Fixture = { dataset: buildTempDatasetName('e2e_wo93_idle'), request: null };
     fixture.request = await playwright.request.newContext({ baseURL, extraHTTPHeaders, ignoreHTTPSErrors,
-      storageState: await page.context().storageState(), timeout: 10_000 });
+      storageState: await page.context().storageState(), timeout: 30_000 });
     const request = fixture.request;
     try {
       await createTempDataset(page, { datasetName: fixture.dataset,
@@ -50,6 +50,7 @@ const test = base.extend<{ ownedImages: Fixture }>({
       await use(fixture);
     } finally {
       // Independent request context survives a timed-out page; confirmed ownership only.
+      // Cleanup outlives a slow drop under load.
       try {
         const owned = (name: string) => listRegisteredTestArtifacts().some(artifact =>
           artifact.kind === 'dataset' && artifact.name === name && artifact.status === 'confirmed');
@@ -90,7 +91,8 @@ async function openSurface(page: Page, dataset: string, count: number, presentat
   const root = page.locator('.image_first_view_overlay');
   const image = root.locator(presentation === 'ifav'
     ? '.row_article_image_first_media img' : '.row_article_page_image img').first();
-  await expect(image).toBeVisible();
+  // The overlay can arrive after 5 s under load (nightly 30.10.).
+  await expect(image).toBeVisible({ timeout: 15_000 });
   return { root, image };
 }
 

@@ -81,10 +81,13 @@ for (const language of ['fi', 'en'] as const) for (const theme of ['light', 'dar
       await page.goto('/', { waitUntil: 'domcontentloaded' }); await waitForAppReady(page);
       // Uses global setup's reserved authenticated E2E identity. No login fallback may send a POST here.
       const profile = await page.request.get('/api/user-profile'); expect(profile.ok()).toBe(true);
-      expect((await profile.json()).user_id).toBeGreaterThan(1);
+      const profileData = await profile.json(); expect(profileData.user_id).toBeGreaterThan(1);
+      expect(profileData.email).toMatch(/\S/);
       await page.locator(ACCOUNT).first().waitFor({ state: 'attached' });
       await page.locator(ACCOUNT).first().evaluate((node: HTMLElement) => node.click());
       await expect(page.locator('#edit_email')).toBeVisible();
+      // The async profile load overwrites early typing and hides the confirm field.
+      await expect(page.locator('#edit_email')).toHaveValue(profileData.email);
       await expect(page.locator('body')).toHaveClass(new RegExp(`${theme}-mode`));
       // Profile fields start read-only and unlock on their first focus (createLabeledInput in user_profile_printer.js,
       // against browser autofill), so focus each field before filling it, as a person's click or Tab does.
