@@ -114,9 +114,12 @@ export function buildAdminVersionInfoIndicator() {
             renderAdminVersionInfoRows(panel, rows, panelTitle);
         }
 
+        const cooldownRemaining = Date.parse(currentVersionInfo?.refresh_allowed_at) - Date.now();
+        // Every render, including language refreshes, must keep a disabled action's timer armed.
+        scheduleCooldown(cooldownRemaining);
         appendAdminVersionRefreshControl(panel, labels, {
             checking: requestInFlight,
-            cooldownUntil: Date.parse(currentVersionInfo?.refresh_allowed_at) > Date.now()
+            cooldownUntil: cooldownRemaining > 0
                 ? formatUpdateCheckedAt(currentVersionInfo.refresh_allowed_at, currentLanguage) : "",
             onCheckAgain: () => void loadVersionInfo(true),
         });
@@ -144,12 +147,12 @@ export function buildAdminVersionInfoIndicator() {
         if (cooldownTimer !== null) window.clearTimeout(cooldownTimer);
         cooldownTimer = null;
     };
-    const scheduleCooldown = () => {
+    const scheduleCooldown = (remaining) => {
         stopCooldownTimer();
-        const remaining = Date.parse(currentVersionInfo?.refresh_allowed_at) - Date.now();
         if (panel.hidden || signal.aborted || !(remaining > 0)) return;
         cooldownTimer = window.setTimeout(() => {
             cooldownTimer = null;
+            if (panel.hidden || signal.aborted) return;
             renderCurrentState();
         }, Math.min(remaining, 2 ** 31 - 1));
     };
@@ -194,7 +197,6 @@ export function buildAdminVersionInfoIndicator() {
             requestInFlight = false;
             if (!signal.aborted) {
                 renderCurrentState();
-                scheduleCooldown();
             }
         }
     }

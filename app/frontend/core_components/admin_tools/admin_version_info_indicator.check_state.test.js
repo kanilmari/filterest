@@ -97,6 +97,78 @@ describe("information box check evidence", () => {
         expect(document.activeElement).toBe(refresh());
     });
 
+    test.each(["available", "unavailable"])("rearms an early cooldown after an %s check without duplicate timers", async (status) => {
+        endpoint.fetch.mockResolvedValue(snapshot({ refresh_allowed_at: "" }));
+        endpoint.refresh.mockResolvedValue(snapshot({ update_status: status, update_available: status === "available" }));
+        const { refresh, fact } = open();
+        await vi.advanceTimersByTimeAsync(0);
+        refresh().click(); await vi.advanceTimersByTimeAsync(0);
+        expect(fact("check-state")).toBe(status === "available"
+            ? "Fresh check succeeded" : "Check failed; previous result is stale");
+        expect(refresh().disabled).toBe(true);
+        expect(vi.getTimerCount()).toBe(2); // One poll and one cooldown.
+
+        // Moving the wall clock back leaves time remaining when the original timeout fires.
+        vi.setSystemTime(new Date(Date.now() - 100));
+        await vi.advanceTimersByTimeAsync(30_000);
+        expect(refresh().disabled).toBe(true);
+        expect(vi.getTimerCount()).toBe(2);
+        for (const language of ["fi", "en", "fi", "en"]) {
+            await refreshLocalizedDatasetValues(language);
+            expect(refresh().disabled).toBe(true);
+            expect(vi.getTimerCount()).toBe(2);
+        }
+        await vi.advanceTimersByTimeAsync(99);
+        expect(refresh().disabled).toBe(true);
+        await vi.advanceTimersByTimeAsync(2);
+        expect(refresh().disabled).toBe(false);
+        expect(vi.getTimerCount()).toBe(1);
+        expect(endpoint.fetch).toHaveBeenCalledTimes(1);
+        expect(endpoint.refresh).toHaveBeenCalledTimes(1);
+    });
+
+    test.each([
+        ["available", "catalog"], ["unavailable", "catalog"],
+        ["available", "page"], ["unavailable", "page"],
+    ])("rearms an expired cooldown after an %s check and %s language refresh", async (status, source) => {
+        endpoint.fetch.mockResolvedValue(snapshot({ refresh_allowed_at: "" }));
+        endpoint.refresh.mockResolvedValue(snapshot({ update_status: status, update_available: status === "available" }));
+        const { refresh } = open(); await vi.advanceTimersByTimeAsync(0);
+        refresh().click(); await vi.advanceTimersByTimeAsync(0);
+        await vi.advanceTimersByTimeAsync(30_000);
+        expect(refresh().disabled).toBe(false);
+        expect(vi.getTimerCount()).toBe(1); // Only the poll remains after normal expiry.
+
+        vi.setSystemTime(new Date(Date.now() - 100));
+        if (source === "catalog") await refreshLocalizedDatasetValues("fi");
+        else {
+            document.documentElement.lang = "fi";
+            await vi.advanceTimersByTimeAsync(0);
+        }
+        expect(refresh().disabled).toBe(true);
+        expect(vi.getTimerCount()).toBe(2); // Language rendering must restore one cooldown timer.
+        await vi.advanceTimersByTimeAsync(101);
+        expect(refresh().disabled).toBe(false);
+        expect(vi.getTimerCount()).toBe(1);
+        expect(endpoint.fetch).toHaveBeenCalledTimes(1);
+        expect(endpoint.refresh).toHaveBeenCalledTimes(1);
+    });
+
+    test.each(["close", "abort"])("stops rearming an early cooldown on panel %s", async (action) => {
+        endpoint.fetch.mockResolvedValue(snapshot());
+        const { indicator, panel } = open(); await vi.advanceTimersByTimeAsync(0);
+        vi.setSystemTime(new Date(Date.now() - 100));
+        await vi.advanceTimersByTimeAsync(30_000);
+        expect(vi.getTimerCount()).toBe(2);
+        if (action === "close") indicator.click();
+        else shell.destroy(); // Aborts the indicator's lifetime signal.
+        expect(panel.hidden).toBe(true);
+        expect(vi.getTimerCount()).toBe(0);
+        await vi.advanceTimersByTimeAsync(300_000);
+        expect(vi.getTimerCount()).toBe(0);
+        expect(endpoint.fetch).toHaveBeenCalledTimes(1);
+    });
+
     test.each(["fi", "en"])("shows every fact once, and availability only in its result, in %s", async (language) => {
         document.documentElement.lang = language;
         endpoint.fetch.mockResolvedValue(snapshot());
