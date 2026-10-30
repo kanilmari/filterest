@@ -125,9 +125,9 @@ test('K390PermissionsRightsFingerprint', async ({ page }, testInfo: TestInfo) =>
   // Phones: the Permissions editor's group matrix overlaps its own layout there (cells outside the viewport, the
   // column select-all covered by the management layout), so this flow cannot be driven by pointer. The rights it
   // fingerprints are the same on every viewport; tablet and desktop prove them through the real editor.
-  test.skip(testInfo.project.name === 'mobile-card', 'Tablet and desktop prove the rights; the phone layout of the Permissions matrix is reviewed separately.');
-  // ~6 min natively on a quiet machine, ~20 min under load (19.10.: 20.3 min with three Codex runs alongside): each
-  // checkpoint pages the whole rights listing (~5,300 rows on dev) 20 rows at a time.
+  test.skip(testInfo.project.metadata.screenWidth === 'mobile', 'Tablet and desktop prove the rights; the phone layout of the Permissions matrix is reviewed separately.');
+  // The 30.10. nightly audit measured ~6,500 calls at ~0.27 s each (~30 min per run): each
+  // checkpoint pages the whole rights listing at the configured page size (20 rows on dev).
   test.setTimeout(2_400_000);
   fixture = { names: [], groups: [], functions: [], groupIDs: [], functionIDs: [] };
   await login(page, loadCredentials());
