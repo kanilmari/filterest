@@ -51,6 +51,8 @@ var (
 	orphanCallLog       []string
 	orphanCallArguments [][]driver.Value
 	orphanUIExecQueue   []orphanQueuedExec
+	orphanSourceIndex   *orphanQueuedQuery
+	orphanSourceDate    *orphanQueuedQuery
 )
 
 func pushOrphanQuery(q orphanQueuedQuery) {
@@ -72,6 +74,8 @@ func resetOrphanQueues() {
 	orphanCallLog = nil
 	orphanCallArguments = nil
 	orphanUIExecQueue = nil
+	orphanSourceIndex = nil
+	orphanSourceDate = nil
 	orphanQueueMu.Unlock()
 }
 
@@ -169,6 +173,39 @@ func (s *orphanQueueStmt) Exec(args []driver.Value) (driver.Result, error) {
 
 func (s *orphanQueueStmt) Query(args []driver.Value) (driver.Rows, error) {
 	recordOrphanCall(s.query, args...)
+	if s.query == "SELECT CURRENT_DATE" {
+		q := orphanQueuedQuery{cols: []string{"today"}, rows: [][]driver.Value{{time.Date(2026, 10, 30, 0, 0, 0, 0, time.UTC)}}}
+		if orphanSourceDate != nil {
+			q = *orphanSourceDate
+		}
+		if q.err != nil {
+			return nil, q.err
+		}
+		return &orphanQueueRows{cols: q.cols, data: q.rows, err: q.rowErr}, nil
+	}
+	if strings.Contains(s.query, "FROM (SELECT 1) calendar") {
+		q := orphanQueuedQuery{
+			cols: []string{"today", "id", "type", "high", "low", "last_seen", "empty"},
+			rows: [][]driver.Value{{time.Date(2026, 10, 30, 0, 0, 0, 0, time.UTC), nil, nil, nil, nil, nil, true}},
+		}
+		if orphanSourceIndex != nil {
+			q = *orphanSourceIndex
+		}
+		if q.err != nil {
+			return nil, q.err
+		}
+		return &orphanQueueRows{cols: q.cols, data: q.rows, err: q.rowErr}, nil
+	}
+	if strings.Contains(s.query, "WITH saved AS (") {
+		e, ok := popOrphanExec()
+		if !ok {
+			return nil, errors.New("mock: unexpected source chunk (exec queue empty)")
+		}
+		if e.err != nil {
+			return nil, e.err
+		}
+		return &orphanQueueRows{cols: []string{"inserted", "updated"}, data: [][]driver.Value{{e.rowsAffected, int64(0)}}, err: e.resultErr}, nil
+	}
 	q, ok := popOrphanQuery()
 	if !ok {
 		return nil, errors.New("mock: unexpected Query call (query queue empty)")
@@ -296,7 +333,7 @@ func TestScanForeignKeyLangKeyReferencesRegistersDomainReferences(t *testing.T) 
 	pushOrphanExec(orphanQueuedExec{rowsAffected: 1})
 	pushOrphanExec(orphanQueuedExec{rowsAffected: 1})
 
-	count, err := scanForeignKeyLangKeyReferences(map[string]int64{
+	count, err := immediateSourceWriter().scanForeignKeyLangKeyReferences(map[string]int64{
 		"question": 79,
 		"example":  101,
 	})
@@ -308,7 +345,12 @@ func TestScanForeignKeyLangKeyReferencesRegistersDomainReferences(t *testing.T) 
 		t.Fatalf("scanForeignKeyLangKeyReferences count = %d, want 2", count)
 	}
 
-	calls := snapshotOrphanCalls()
+	var calls []string
+	for _, call := range snapshotOrphanCalls() {
+		if call != "SELECT CURRENT_DATE" {
+			calls = append(calls, call)
+		}
+	}
 	if len(calls) != 7 {
 		t.Fatalf("expected 7 SQL calls, got %d (%v)", len(calls), calls)
 	}

@@ -130,7 +130,7 @@ func TestB4SchemaEvidenceRequiresColumnAndLiveProducer(t *testing.T) {
 			}
 			registry := map[string]int64{"search_for_owner_name (ln)_asc": 1, "missing_name (ln)": 2}
 			codeKeys := map[int64]bool{}
-			_, err := scanSchemaLangKeySources(registry, sources, codeKeys)
+			_, err := immediateSourceWriter().scanSchemaLangKeySources(registry, sources, codeKeys)
 			if err != nil {
 				t.Fatal(err)
 			}

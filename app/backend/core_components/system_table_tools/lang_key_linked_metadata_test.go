@@ -90,7 +90,7 @@ func TestPopulateLinkedLabelDisplayReadFailureAboveFloor(t *testing.T) {
 	metadata := linkedLabelMetadataQueries()
 	metadata[5].err = errors.New("injected display-column read failure")
 	queueLinkedLabelPopulation(t, metadata, 999, 1000)
-	count, err := PopulateLangKeySources()
+	count, err := populateLangKeySources(1)
 	if count != 999 || err == nil || !strings.Contains(err.Error(), "injected display-column read failure") {
 		t.Fatalf("count=%d err=%v", count, err)
 	}
@@ -123,7 +123,7 @@ func TestPopulateLinkedLabelMetadataFailuresStayPartial(t *testing.T) {
 					}
 				}
 				queueLinkedLabelPopulation(t, metadata, 1, 1)
-				_, err := PopulateLangKeySources()
+				_, err := populateLangKeySources(1)
 				if err == nil || !strings.Contains(err.Error(), message) {
 					t.Fatalf("metadata failure lost: want %q, got %v", message, err)
 				}
@@ -145,7 +145,7 @@ func TestPopulateLinkedLabelNoTextColumnIsComplete(t *testing.T) {
 				metadata = append(metadata[:4], metadata[5:]...)
 			}
 			queueLinkedLabelPopulation(t, metadata, 1, 1)
-			count, err := PopulateLangKeySources()
+			count, err := populateLangKeySources(1)
 			state, failed := sourceScanOutcome()
 			after, stale := sourceScanStatus()
 			if err != nil || count != 1 || state != "complete" || len(failed) != 0 || stale || !SourceScanIsFresh() || !after.After(*before) {

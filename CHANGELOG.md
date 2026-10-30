@@ -22,6 +22,7 @@ Dates are the local (Europe/Helsinki) date on which the version was published.
 
 ## [Unreleased]
 
+- Language-key source scans write changed and day-old evidence in bounded chunks, avoiding repeat same-day source rewrites while preserving daily freshness, empty-only explanations and failed-scan maintenance gates. Pending saves flush before later database reads, each flush refreshes the database date, and chunks lock rows in identity order with up to three retries for PostgreSQL deadlocks. Successful scans that insert or update at least 10,000 source rows then run a best-effort VACUUM (ANALYZE) on the source table after releasing the scan lock; each scan logs its write totals, retry count, duration and VACUUM result/duration, and a VACUUM failure only warns.
 - Visitors who are not signed in now see the About tab when the site lets guests read it.
 - Administrators can check releases again as soon as the wait ends.
 - T17 browser tests restore Home settings and remove owned datasets after failures/timeouts using a fresh signed-in teardown context; T18 shares the fix and the dataset-only failure proof stays manual on explicit off-8082 targets.

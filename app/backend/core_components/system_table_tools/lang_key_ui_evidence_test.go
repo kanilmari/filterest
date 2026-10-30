@@ -191,7 +191,7 @@ func TestUILiteralSchemaAliasCannotOverwriteSameFileLiteral(t *testing.T) {
 	pushOrphanQuery(orphanQueuedQuery{cols: []string{"table_name"}})
 	queueB4LinkedMetadata("owner_id", true, false)
 	const owner = "app/backend/build_joins_1m.go"
-	_, err := scanSchemaLangKeySources(map[string]int64{"owner_name (ln)": 1}, []sourceEntry{
+	_, err := immediateSourceWriter().scanSchemaLangKeySources(map[string]int64{"owner_name (ln)": 1}, []sourceEntry{
 		{schemaAlias: true, schemaBuilder: `return alias + " (ln)"`, filePath: owner},
 		{langKey: "owner_name (ln)", filePath: owner, literalUI: true},
 	}, map[int64]bool{1: true})

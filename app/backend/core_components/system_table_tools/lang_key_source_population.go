@@ -1,7 +1,7 @@
 // lang_key_source_population.go
-// Populates lang_key_source records for translation keys missing source associations.
-// Bridges dynamic table metadata, template references, and the lang_key_source table.
-// Exists to back-fill source associations so orphaned translation keys become traceable.
+// Coordinates source discovery and daily evidence refreshes for translation keys.
+// Connects code/schema/data scanners to bounded source writes and scan trust.
+// Keeps incomplete scans from authorizing orphan marking or stale-source cleanup.
 package system_table_tools
 
 import (
@@ -14,16 +14,25 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"time"
 
 	backend "easelect/backend/core_components"
 	"easelect/backend/core_components/runtimepaths"
 )
+
+const langKeySourceVacuumMinWrites = 10_000
 
 var (
 	additionalLangKeySourceRoots   []string
 	additionalLangKeySourceRootsMu sync.RWMutex
 	currentLangKeyRuntimePaths     = runtimepaths.Current
 	walkLangKeySourceTree          = filepath.Walk
+	// Private seams keep the public scan path testable at small fixture sizes.
+	langKeySourceVacuumThreshold = int64(langKeySourceVacuumMinWrites)
+	runLangKeySourceVacuum       = func(db *sql.DB) error {
+		_, err := db.Exec("VACUUM (ANALYZE) system_lang_key_sources")
+		return err
+	}
 )
 
 // ConfigureAdditionalLangKeySourceRoots records composition-owned source roots.
@@ -190,8 +199,39 @@ func scanLangKeyCodeFiles(files []langKeyCodeFile) ([]sourceEntry, error) {
 // PopulateLangKeySources refreshes evidence without removing any previous rows
 // unless every reader and writer succeeded and the code-key count is credible.
 func PopulateLangKeySources() (total int, scanErr error) {
+	return populateLangKeySources(langKeySourceChunkRows)
+}
+
+// The private size parameter lets regression fixtures exercise chunk boundaries.
+func populateLangKeySources(chunkRows int) (total int, scanErr error) {
 	sourceMaintenanceMu.Lock()
 	defer sourceMaintenanceMu.Unlock()
+	started := time.Now()
+	var writer *langKeySourceWriter
+	completed := false
+	defer func() {
+		var stats langKeySourceWriteStats
+		if writer != nil {
+			stats = writer.stats
+		}
+		vacuumResult := "skipped"
+		var vacuumDuration time.Duration
+		if completed && scanErr == nil && stats.inserted+stats.updated >= langKeySourceVacuumThreshold {
+			// Registered before the failure/lock finalizer below: Go runs that
+			// finalizer (including scanLock.Rollback) first. VACUUM therefore
+			// uses the plain pool after the lock transaction releases its connection.
+			vacuumStarted := time.Now()
+			err := runLangKeySourceVacuum(backend.Db)
+			vacuumDuration = time.Since(vacuumStarted)
+			vacuumResult = "ok"
+			if err != nil {
+				vacuumResult = "failed"
+				log.Printf("WARNING [PopulateLangKeySources] source VACUUM failed: %v", err)
+			}
+		}
+		log.Printf("[PopulateLangKeySources] rows_seen=%d inserted=%d updated=%d explanations_written=%d chunks=%d deadlock_retries=%d milliseconds=%d vacuum=%s vacuum_milliseconds=%d",
+			stats.seen, stats.inserted, stats.updated, stats.explanations, stats.chunks, stats.deadlockRetries, time.Since(started).Milliseconds(), vacuumResult, vacuumDuration.Milliseconds())
+	}()
 	markSourceScanFailed()
 	stage := "lock"
 	var attempt uiLiteralScanAttempt
@@ -245,6 +285,11 @@ func PopulateLangKeySources() (total int, scanErr error) {
 	if err != nil {
 		return 0, fmt.Errorf("registry: %w", err)
 	}
+	stage = "source_index"
+	writer, err = newLangKeySourceWriter(chunkRows)
+	if err != nil {
+		return 0, &sourceSubScanError{stage, err}
+	}
 	stage = "code"
 	codeKeys := make(map[int64]bool)
 	for _, src := range resolveLangKeyCodeSources(codeSources, keyToID) {
@@ -260,37 +305,48 @@ func PopulateLangKeySources() (total int, scanErr error) {
 		if src.literalUI && sourceType == "code" {
 			low = attempt.marker()
 		}
-		if err := upsertSource(id, sourceType, src.filePath, low); err != nil {
-			return total, fmt.Errorf("code: %w", err)
+		if err := writer.upsertSource(id, sourceType, src.filePath, low); err != nil {
+			return total, &sourceSubScanError{stage, err}
 		}
 		total++
 		if sourceType == "code" {
 			codeKeys[id] = true
 		}
 	}
+	if err := writer.finishStage(stage); err != nil {
+		return total, err
+	}
 	// Each stage returns query, row iteration, conversion and write errors.
 	for _, step := range []struct {
 		name string
 		run  func(map[string]int64) (int, error)
 	}{
-		{"schema", func(keys map[string]int64) (int, error) { return scanSchemaLangKeySources(keys, codeSources, codeKeys) }},
+		{"schema", func(keys map[string]int64) (int, error) {
+			return writer.scanSchemaLangKeySources(keys, codeSources, codeKeys)
+		}},
 		{"views", func(keys map[string]int64) (int, error) {
-			return scanNamedLangKeySources(keys, "view", "system_table_views", "name")
+			return writer.scanNamedLangKeySources(keys, "view", "system_table_views", "name")
 		}},
 		{"groups", func(keys map[string]int64) (int, error) {
-			return scanNamedLangKeySources(keys, "group", "system_user_groups", "name")
+			return writer.scanNamedLangKeySources(keys, "group", "system_user_groups", "name")
 		}},
 		{"folders", func(keys map[string]int64) (int, error) {
-			return scanNamedLangKeySources(keys, "folder", "system_table_folders", "folder_name")
+			return writer.scanNamedLangKeySources(keys, "folder", "system_table_folders", "folder_name")
 		}},
-		{"foreign_keys", scanForeignKeyLangKeyReferences},
-		{"column_values", scanHasLangKeyColumns},
+		{"foreign_keys", writer.scanForeignKeyLangKeyReferences},
+		{"column_values", writer.scanHasLangKeyColumns},
 	} {
 		stage = step.name
 		count, err := step.run(keyToID)
 		total += count
 		if err != nil {
+			if writer.err != nil {
+				return total, writer.finishStage(stage)
+			}
 			return total, fmt.Errorf("%s: %w", stage, err)
+		}
+		if err := writer.finishStage(stage); err != nil {
+			return total, err
 		}
 	}
 	stage = "history"
@@ -313,6 +369,7 @@ func PopulateLangKeySources() (total int, scanErr error) {
 		return total, err
 	}
 	markSourceScanDone()
+	completed = true
 	if deletedCount > 0 {
 		log.Printf("[PopulateLangKeySources] stale source cleanup removed %d outdated source rows", deletedCount)
 	}

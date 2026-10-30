@@ -173,7 +173,7 @@ func TestB4LinkedEvidenceRequiresActualRelation(t *testing.T) {
 				pushOrphanExec(orphanQueuedExec{rowsAffected: 1})
 			}
 			keys := map[int64]bool{}
-			count, err := scanSchemaLangKeySources(map[string]int64{"owner_name (ln)": 1}, []sourceEntry{{
+			count, err := immediateSourceWriter().scanSchemaLangKeySources(map[string]int64{"owner_name (ln)": 1}, []sourceEntry{{
 				schemaAlias: true, schemaBuilder: `return alias + " (ln)"`, filePath: "app/backend/build_joins_1m.go",
 			}, {
 				schemaAlias: true, schemaBuilder: `candidate = baseAlias + " (ln)"`, filePath: "app/backend/related_items_query.go",

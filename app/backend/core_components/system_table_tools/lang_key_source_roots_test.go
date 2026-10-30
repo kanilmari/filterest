@@ -320,13 +320,10 @@ func TestPopulateLangKeySourcesSavesSiblingCompositionSources(t *testing.T) {
 		cols: []string{"id", "lang_key"},
 		rows: [][]driver.Value{{int64(1), "wl45_frontend_key"}, {int64(2), "wl45_private_key"}},
 	})
-	pushOrphanExec(orphanQueuedExec{rowsAffected: 1})
-	pushOrphanExec(orphanQueuedExec{rowsAffected: 1})
+	pushOrphanExec(orphanQueuedExec{rowsAffected: 4}) // One chunk holds all four sources.
 	for _, q := range emptySourceScanQueries()[1:] {
 		pushOrphanQuery(q)
 	}
-	pushOrphanExec(orphanQueuedExec{rowsAffected: 1}) // Two literal sources.
-	pushOrphanExec(orphanQueuedExec{rowsAffected: 1})
 	queueCodeSourceHistory(nil)
 	pushOrphanExec(orphanQueuedExec{}) // No stale rows.
 
@@ -341,9 +338,9 @@ func TestPopulateLangKeySourcesSavesSiblingCompositionSources(t *testing.T) {
 		t.Fatal("SourceScanIsFresh() = false after a complete scan")
 	}
 	savedCodeSources := 0
-	for _, call := range snapshotOrphanCalls() {
+	for i, call := range snapshotOrphanCalls() {
 		if strings.Contains(call, "INSERT INTO system_lang_key_sources") {
-			savedCodeSources++
+			savedCodeSources += len(sourceChunkTextArgument(t, orphanCallArguments[i][1]))
 		}
 	}
 	if savedCodeSources != 4 {

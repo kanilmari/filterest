@@ -97,7 +97,7 @@ func TestPopulateLangKeySourcesRejectsPartialScans(t *testing.T) {
 				pushOrphanQuery(q)
 			}
 			pushOrphanExec(orphanQueuedExec{rowsAffected: 1})
-			_, err := PopulateLangKeySources()
+			_, err := populateLangKeySources(1)
 			if err == nil || !strings.Contains(err.Error(), stage) {
 				t.Fatalf("missing %s failure: %v", stage, err)
 			}
@@ -138,7 +138,7 @@ func TestPopulateLangKeySourcesFloorAndNormalScan(t *testing.T) {
 			if !suspicious {
 				pushOrphanExec(orphanQueuedExec{rowsAffected: 1})
 			}
-			count, err := PopulateLangKeySources()
+			count, err := populateLangKeySources(1)
 			if err != nil || count != 1 {
 				t.Fatalf("count=%d err=%v", count, err)
 			}
@@ -217,7 +217,7 @@ func TestPartialSourceScanRowFailures(t *testing.T) {
 					pushOrphanQuery(q)
 				}
 				pushOrphanExec(orphanQueuedExec{rowsAffected: 1})
-				if _, err := PopulateLangKeySources(); err == nil {
+				if _, err := populateLangKeySources(1); err == nil {
 					t.Fatal("row error swallowed")
 				}
 				assertScanTrustBlocked(t, before)
@@ -275,7 +275,7 @@ func TestPartialSourceScanWritesAndValueReads(t *testing.T) {
 					pushOrphanExec(orphanQueuedExec{rowsAffected: 1})
 				}
 				pushOrphanExec(orphanQueuedExec{err: errors.New("injected source write failure")})
-				if _, err := PopulateLangKeySources(); err == nil {
+				if _, err := populateLangKeySources(1); err == nil {
 					t.Fatal("sub-scan failure swallowed")
 				}
 				assertScanTrustBlocked(t, before)
@@ -335,7 +335,7 @@ func TestSourceScanHistoryFailuresRemainPartial(t *testing.T) {
 				pushOrphanExec(orphanQueuedExec{})
 				pushOrphanExec(orphanQueuedExec{err: errors.New("history write failed")})
 			}
-			if _, err := PopulateLangKeySources(); err == nil {
+			if _, err := populateLangKeySources(1); err == nil {
 				t.Fatal("history failure swallowed")
 			}
 			state, failures := sourceScanOutcome()
@@ -365,7 +365,7 @@ func TestSuspiciousScanUsesDistinctCurrentCodeKeysAndLogsBothSkips(t *testing.T)
 	var output bytes.Buffer
 	log.SetOutput(&output)
 	defer log.SetOutput(old)
-	if count, err := PopulateLangKeySources(); err != nil || count != 2 {
+	if count, err := populateLangKeySources(1); err != nil || count != 2 {
 		t.Fatal(count, err)
 	}
 	assertScanTrustBlocked(t, before)
@@ -396,7 +396,7 @@ func TestPopulateLangKeySourcesCompleteEvidence(t *testing.T) {
 	}
 	queueCodeSourceHistory(nil)
 	pushOrphanExec(orphanQueuedExec{rowsAffected: 1})
-	count, err := PopulateLangKeySources()
+	count, err := populateLangKeySources(1)
 	if err != nil || count != 8 || !SourceScanIsFresh() {
 		t.Fatal(count, err)
 	}
@@ -485,9 +485,9 @@ func TestPopulateCodeLiteralExistingRegistryGateAndWriteFailure(t *testing.T) {
 				queueCodeSourceHistory(nil)
 				pushOrphanExec(orphanQueuedExec{})
 			}
-			count, err := PopulateLangKeySources()
+			count, err := populateLangKeySources(1)
 			if fail {
-				if err == nil || !strings.Contains(err.Error(), "code_literal") {
+				if err == nil || !strings.Contains(err.Error(), "save source chunk") {
 					t.Fatal(err)
 				}
 				assertScanTrustBlocked(t, before)

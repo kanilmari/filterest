@@ -14,6 +14,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	backend "easelect/backend/core_components"
 	"easelect/backend/core_components/runtimepaths"
@@ -38,6 +39,14 @@ func (startupPauseTx) Commit() error                  { return nil }
 func (startupPauseTx) Rollback() error                { return nil }
 func (c *startupPauseConn) QueryContext(_ context.Context, query string, _ []driver.NamedValue) (driver.Rows, error) {
 	*c.calls = append(*c.calls, query)
+	if query == "SELECT CURRENT_DATE" {
+		return &startupPauseRows{columns: []string{"today"},
+			values: []driver.Value{time.Date(2026, 10, 30, 0, 0, 0, 0, time.UTC)}}, nil
+	}
+	if strings.Contains(query, "FROM (SELECT 1) calendar") {
+		return &startupPauseRows{columns: []string{"today", "id", "type", "high", "low", "last_seen", "empty"},
+			values: []driver.Value{time.Date(2026, 10, 30, 0, 0, 0, 0, time.UTC), nil, nil, nil, nil, nil, true}}, nil
+	}
 	if strings.Contains(query, "AS has_live_usage") {
 		return &startupPauseRows{columns: []string{"id", "key", "en", "type", "live", "translated"}, values: []driver.Value{int64(42), "unused_startup_key", "Copy", "ui", false, true}}, nil
 	}

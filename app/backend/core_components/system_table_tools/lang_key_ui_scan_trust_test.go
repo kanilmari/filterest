@@ -25,8 +25,7 @@ func TestUILiteralAttemptFirstWriteAndMarkerPersistence(t *testing.T) {
 	for _, q := range emptySourceScanQueries() {
 		pushOrphanQuery(q)
 	}
-	pushOrphanExec(orphanQueuedExec{rowsAffected: 1}) // Merged generic/literal code.
-	pushOrphanExec(orphanQueuedExec{rowsAffected: 1}) // code_literal.
+	pushOrphanExec(orphanQueuedExec{rowsAffected: 2}) // Merged code and code_literal share a chunk.
 	queueCodeSourceHistory(nil)
 	pushOrphanExec(orphanQueuedExec{}) // Cleanup.
 	if _, err := PopulateLangKeySources(); err != nil {
@@ -39,7 +38,7 @@ func TestUILiteralAttemptFirstWriteAndMarkerPersistence(t *testing.T) {
 	generation := ""
 	markers := 0
 	for i, query := range snapshotOrphanCalls() {
-		if strings.HasPrefix(strings.TrimSpace(query), "INSERT") || strings.HasPrefix(strings.TrimSpace(query), "UPDATE") || strings.HasPrefix(strings.TrimSpace(query), "DELETE") {
+		if strings.HasPrefix(strings.TrimSpace(query), "INSERT") || strings.HasPrefix(strings.TrimSpace(query), "UPDATE") || strings.HasPrefix(strings.TrimSpace(query), "DELETE") || strings.Contains(query, "WITH saved AS (") {
 			if firstWrite < 0 {
 				firstWrite = i
 			}
@@ -49,10 +48,15 @@ func TestUILiteralAttemptFirstWriteAndMarkerPersistence(t *testing.T) {
 			beginAt = i
 			generation = args[0].(string)
 		}
-		if strings.Contains(query, "INSERT INTO system_lang_key_sources") && args[1] == "code" {
-			markers++
-			if args[3] != uiLiteralScanner+":"+generation {
-				t.Fatal("marker lost", args)
+		if strings.Contains(query, "INSERT INTO system_lang_key_sources") {
+			types, lows := sourceChunkTextArgument(t, args[1]), sourceChunkTextArgument(t, args[3])
+			for row, sourceType := range types {
+				if sourceType == "code" {
+					markers++
+					if lows[row] != uiLiteralScanner+":"+generation {
+						t.Fatal("marker lost", args)
+					}
+				}
 			}
 		}
 		if strings.Contains(query, "DELETE FROM system_lang_key_sources") {

@@ -18,6 +18,7 @@ import (
 	"strings"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	backend "easelect/backend/core_components"
 	"easelect/backend/core_components/dbutils"
@@ -48,6 +49,12 @@ func (c *langKeyPauseConn) QueryContext(_ context.Context, query string, args []
 		return rows, nil
 	}
 	switch {
+	case query == "SELECT CURRENT_DATE":
+		return &orphanQueueRows{cols: []string{"today"},
+			data: [][]driver.Value{{time.Date(2026, 10, 30, 0, 0, 0, 0, time.UTC)}}}, nil
+	case strings.Contains(query, "FROM (SELECT 1) calendar"):
+		return &orphanQueueRows{cols: []string{"today", "id", "type", "high", "low", "last_seen", "empty"},
+			data: [][]driver.Value{{time.Date(2026, 10, 30, 0, 0, 0, 0, time.UTC), nil, nil, nil, nil, nil, true}}}, nil
 	case strings.Contains(query, "AS has_live_usage"):
 		return &orphanQueueRows{cols: []string{"id", "lang_key", "en", "type", "live", "translated"}, data: [][]driver.Value{{int64(42), "unused_pause_key", "Copy", "ui", false, true}}}, nil
 	case strings.Contains(query, "AS age_days"):
