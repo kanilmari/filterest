@@ -22,6 +22,7 @@ Dates are the local (Europe/Helsinki) date on which the version was published.
 
 ## [Unreleased]
 
+- On phones, login and page forms use one full-width layer with fields inset 16 px; page headings clear the floating menu button.
 - Phone dataset views use 16 px content edges: the hero, full-width tools box and article titles align.
 - Home's dataset boxes follow left- or right-anchored text with the same horizontal inset, keeping their own 800 px maximum width; centred layouts and phones remain unchanged.
 - Registration returns PIN validation messages beneath their fields in the server response, keeping one translated inline message after the page loads.

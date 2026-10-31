@@ -1174,6 +1174,9 @@ body.loading .auth-page-shell {
 }
 
 @media (width <= 520px) {
+    /* One layer at <=520px; 521–700px keeps its frame until J-RS2 unifies phone sections. */
+    .standalone-login-page .auth-form { width: auto; max-width: none; align-self: stretch; margin-inline: -16px;
+        border-inline-width: 0; border-radius: 0; padding-inline: 16px; }
     .standalone-login-page .auth-page-tablist {
         width: auto;
         justify-self: start;
@@ -1216,7 +1219,6 @@ body.loading .auth-page-shell {
 
     .standalone-login-page .auth-page-content-card {
         gap: 18px;
-        padding: 0 10px;
     }
 
     .standalone-login-page .auth-page-header-row {
@@ -1246,9 +1248,7 @@ body.loading .auth-page-shell {
     }
 
     .standalone-login-page .auth-form {
-        width: 100%;
-        max-width: none;
-        padding: 28px 10px;
+        padding-block: 28px;
     }
 
     .standalone-login-page .auth-form > h2,
@@ -1261,9 +1261,8 @@ body.loading .auth-page-shell {
     .standalone-login-page .auth-form > .privacy-notice-link,
     .standalone-login-page .auth-form > #submit,
     .standalone-login-page .auth-form > .error {
-        width: calc(100% - 10px);
-        margin-left: 5px;
-        margin-right: 5px;
+        width: 100%;
+        margin-inline: 0;
     }
 
     .standalone-login-page .auth-form > #submit input[type="submit"] {

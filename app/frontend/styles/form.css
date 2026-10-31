@@ -211,3 +211,28 @@ select {
         transition: none;
     }
 }
+
+@media (width <= 700px) {
+    /* Keep the scroller and its dataset sticky-header offset on one inset. */
+    .management_forms { --management-forms-padding: 16px; }
+    .management_forms > form {
+        width: auto;
+        max-width: none;
+        margin-inline: -16px;
+        padding-inline: 16px;
+        border-radius: 0;
+    }
+    .management_forms > form fieldset {
+        margin-inline: 0;
+        padding-inline: 0;
+        border-inline-width: 0;
+    }
+    /* The fixed menu occupies x=12..56, y=12..56; leave an 8px title gap. */
+    .management_forms > :is(h1, h2, h3, h4, h5, h6):first-child {
+        display: flex;
+        align-items: center;
+        min-height: 44px;
+        margin-block-start: -4px;
+        margin-inline-start: 48px;
+    }
+}
