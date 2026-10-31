@@ -18,6 +18,20 @@ const sampleRows = [
 ];
 
 describe("buildGridCopyPayload", () => {
+    test("filters both axes without losing visible empty cells or original coordinates", () => {
+        const payload = buildGridCopyPayload({
+            range: { minRowIndex: 3, maxRowIndex: 5, minColumnIndex: 0, maxColumnIndex: 2 },
+            columns: ['Left', 'HIDDEN-HEADER', 'Right'], includeHeaders: true,
+            cellResolver: ({ rowIndex, columnIndex }) => rowIndex === 4 || columnIndex === 1
+                ? null : rowIndex === 3 && columnIndex === 0 ? '' : `${rowIndex}:${columnIndex}`,
+        });
+        expect(payload.headers).toEqual(['Left', 'Right']);
+        expect(payload.rows).toEqual([['', '3:2'], ['5:0', '5:2']]);
+        expect(payload.cells.map(cell => [cell.rowIndex, cell.columnIndex])).toEqual([[3, 0], [3, 2], [5, 0], [5, 2]]);
+        expect(payload.text).toBe('Left\tRight\n\t3:2\n5:0\t5:2');
+        expect(payload.isEmpty).toBe(false);
+    });
+
     test("builds a table-style copy payload with headers", () => {
         const payload = buildGridCopyPayload({
             range: {

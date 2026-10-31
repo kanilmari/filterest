@@ -34,10 +34,9 @@ export function appendDataToTable(table, newData, columns, dataTypes, tableName)
         row.appendChild(checkbox_td);
 
         // Luodaan data-solut
-        // Use batch-relative index (index) for createDataCell rowIndex so that
-        // editCell's data[rowIndex] lookup matches the newData batch.
+        // Grid coordinates span every rendered batch; editing uses row._row.
         columns.forEach((column, colIndex) => {
-            const td = createDataCell(item, column, columns, index, colIndex, tableName, dataTypes);
+            const td = createDataCell(item, column, columns, existingRows + index, colIndex, tableName, dataTypes);
             row.appendChild(td);
         });
 

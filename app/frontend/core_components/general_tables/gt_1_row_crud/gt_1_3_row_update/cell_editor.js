@@ -84,25 +84,26 @@ export async function editCell(cell, columns, data, dataTypes, table_name) {
         columnName,
         translate: getTranslationForKey,
     });
+    // Table coordinates are cumulative, but callers may hold only one batch.
+    // The rendered row shares its object with that batch's cache; lists use data.
+    const rowData = cell.closest('tr')?._row ?? data[parseInt(cell.dataset.rowIndex, 10)];
 
     if (inlineOptions.length > 0) {
-        await handleRegularEditing(cell, columns, data, safeDataTypes, table_name, columnName, originalContent);
+        await handleRegularEditing(cell, rowData, safeDataTypes, table_name, columnName, originalContent);
         return;
     }
 
     // Jos sarake liittyy foreign key -sarakkeeseen
     if (foreignKeyColumnName && safeDataTypes[foreignKeyColumnName] && safeDataTypes[foreignKeyColumnName].foreign_table) {
-        await handleForeignKeyEditing(cell, columns, data, safeDataTypes, table_name, columnName, foreignKeyColumnName, isNameColumn, originalContent);
+        await handleForeignKeyEditing(cell, columns, rowData, safeDataTypes, table_name, columnName, foreignKeyColumnName, isNameColumn, originalContent);
     } else {
-        await handleRegularEditing(cell, columns, data, safeDataTypes, table_name, columnName, originalContent);
+        await handleRegularEditing(cell, rowData, safeDataTypes, table_name, columnName, originalContent);
     }
 }
 
 // Single-choice editing shares option reads and value-column resolution with
 // filters, while the dropdown owns keyboard navigation and search debounce.
-async function handleForeignKeyEditing(cell, columns, data, dataTypes, table_name, columnName, foreignKeyColumnName, isNameColumn, originalContent) {
-    const rowIndex = parseInt(cell.dataset.rowIndex, 10);
-    const rowData = data[rowIndex];
+async function handleForeignKeyEditing(cell, columns, rowData, dataTypes, table_name, columnName, foreignKeyColumnName, isNameColumn, originalContent) {
     if (!rowData) {
         selectCell(cell);
         return;
@@ -226,9 +227,9 @@ async function handleForeignKeyEditing(cell, columns, data, dataTypes, table_nam
             await sendUpdateRequest(table_name, {
                 id: rowData['id'], column: foreignKeyColumnName, value: newValue,
             });
-            data[rowIndex][foreignKeyColumnName] = newValue;
-            data[rowIndex][foreignKeyColumnName + '_name'] = displayValue;
-            data[rowIndex][columnName] = isNameColumn ? displayValue : newValue;
+            rowData[foreignKeyColumnName] = newValue;
+            rowData[foreignKeyColumnName + '_name'] = displayValue;
+            rowData[columnName] = isNameColumn ? displayValue : newValue;
             const rowCells = cell.parentElement?.cells;
             if (rowCells) {
                 for (let i = 0; i < columns.length; i++) {
@@ -292,14 +293,12 @@ async function handleForeignKeyEditing(cell, columns, data, dataTypes, table_nam
     dropdown.open();
 }
 
-async function handleRegularEditing(cell, columns, data, dataTypes, table_name, columnName, originalContent) {
+async function handleRegularEditing(cell, rowData, dataTypes, table_name, columnName, originalContent) {
     const dataTypeInfo = dataTypes[columnName];
     const rawDataType = dataTypeInfo && typeof dataTypeInfo === 'object'
         ? dataTypeInfo.data_type
         : dataTypeInfo;
     const dataType = String(rawDataType || 'text');
-    const rowIndex = parseInt(cell.dataset.rowIndex, 10);
-    const rowData = data[rowIndex];
     if (!rowData) {
         cell.classList.remove('editing');
         cell.textContent = originalContent;
@@ -339,14 +338,12 @@ async function handleRegularEditing(cell, columns, data, dataTypes, table_name, 
     if (inlineOptions.length > 0) {
         await handleOptionEditing({
             cell,
-            data,
             tableName: table_name,
             columnName,
             originalContent,
             originalValue,
             options: inlineOptions,
             rowData,
-            rowIndex,
             editorWidthPx: editorLayout.widthPx,
         });
         return;
@@ -446,7 +443,7 @@ async function handleRegularEditing(cell, columns, data, dataTypes, table_name, 
         cell.dataset.inlineSaveState = 'saving';
         try {
             await sendUpdateRequest(table_name, updateData);
-            data[rowIndex][columnName] = serializedValue;
+            rowData[columnName] = serializedValue;
             if (multilingualValue) {
                 setLocalizedTableCellDisplay(cell, serializedValue, dataTypeInfo);
             } else {
@@ -496,14 +493,12 @@ async function handleRegularEditing(cell, columns, data, dataTypes, table_name, 
 
 async function handleOptionEditing({
     cell,
-    data,
     tableName,
     columnName,
     originalContent,
     originalValue,
     options,
     rowData,
-    rowIndex,
     editorWidthPx,
 }) {
     const select = document.createElement('select');
@@ -574,7 +569,7 @@ async function handleOptionEditing({
             await sendUpdateRequest(tableName, updateData);
             completed = true;
             cleanupEditingListeners();
-            data[rowIndex][columnName] = newValue;
+            rowData[columnName] = newValue;
             getInlineEditCacheInvalidationKeys({
                 tableName,
                 columnName,

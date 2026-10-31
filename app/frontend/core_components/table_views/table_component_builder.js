@@ -30,6 +30,7 @@ import {
     buildGridCopyPayload,
     deriveGridContextMenuPayload,
 } from './grid_interactions/context_menu_payload_builder.js';
+import { getCopyCellResolver } from './grid_interactions/visible_grid_cell_resolver.js';
 import { getCellCoordinateFromElement } from './grid_interactions/cell_coordinate_reader.js';
 import { EDIT_SESSION_CLICK_ACTIONS, createEditSessionState } from './grid_interactions/edit_session_checker.js';
 import { decideEditSessionClickFromTarget } from './grid_interactions/edit_session_dom_checker.js';
@@ -842,8 +843,8 @@ export class TableComponent {
             return;
         }
 
-        const copyText = copyPayload.text.trim();
-        navigator.clipboard.writeText(copyText)
+        // Keep edge separators so visible empty cells retain their positions.
+        navigator.clipboard.writeText(copyPayload.text)
             .then(() => {
                 showSuccessToast(getTranslationForKey('copied_to_clipboard') || 'Kopioitu leikepöydälle!');
             })
@@ -871,7 +872,8 @@ export class TableComponent {
         const action = this.selectionMenuPayload?.copyActions?.find(
             (copyAction) => copyAction.id === actionId
         );
-        return action?.payload ?? null;
+        // A field may have been hidden since the menu opened.
+        return action ? this.buildCurrentCopyPayload(withHeaders) : null;
     }
 
     /**
@@ -942,7 +944,7 @@ export class TableComponent {
     getNormalCopyOptions() {
         return {
             delimiter: ',',
-            valueResolver: ({ rowIndex, columnIndex }) => this.getCellText(rowIndex, columnIndex),
+            cellResolver: getCopyCellResolver(this),
         };
     }
 
@@ -1029,7 +1031,7 @@ export class TableComponent {
     getTransposedCopyOptions() {
         return {
             delimiter: ',',
-            valueResolver: ({ rowIndex, columnIndex }) => this.getCellText(rowIndex, columnIndex),
+            cellResolver: getCopyCellResolver(this),
         };
     }
 
@@ -1049,11 +1051,7 @@ export class TableComponent {
      * @private
      */
     getCellText(rowIndex, columnIndex) {
-        const cell = this.currentView === 'transposed'
-            ? this.getTransposedCellByCoordinate({ rowIndex, columnIndex })
-            : this.getListCellByCoordinate({ rowIndex, columnIndex });
-        const content = cell?.querySelector?.('.cell-content');
-        return content ? content.textContent : (cell?.textContent ?? '');
+        return getCopyCellResolver(this)({ rowIndex, columnIndex }) ?? '';
     }
 
     /**
@@ -1080,8 +1078,9 @@ export class TableComponent {
             };
         }
 
+        const visibleRowIndexes = [...new Set(payload.cells.map(cell => cell.rowIndex))];
         const rowsWithLabels = payload.rows.map((rowValues, rowOffset) => {
-            const rowIndex = payload.range.minRowIndex + rowOffset;
+            const rowIndex = visibleRowIndexes[rowOffset];
             return [this.getCellText(rowIndex, 0), ...rowValues];
         });
 

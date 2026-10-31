@@ -6,7 +6,8 @@
 import { showErrorToast, showSuccessToast } from '../../../reusable_components/notifications/toast_notification_printer.js';
 import { getTranslationForKey } from '../../lang/translation_handler.js';
 import { getCellCoordinateFromElement } from '../grid_interactions/cell_coordinate_reader.js';
-import { GRID_COPY_ACTION_IDS, deriveGridContextMenuPayload } from '../grid_interactions/context_menu_payload_builder.js';
+import { createVisibleGridCellResolver } from '../grid_interactions/visible_grid_cell_resolver.js';
+import { GRID_COPY_ACTION_IDS, buildGridCopyPayload, deriveGridContextMenuPayload } from '../grid_interactions/context_menu_payload_builder.js';
 import { showViewportContextMenu } from '../../../reusable_components/context_menu/viewport_context_menu_positioner.js';
 import {
     enumerateSelectedCells,
@@ -50,6 +51,39 @@ export function addTableGridInteractionAdapter(table, columns, data) {
     table.addEventListener('contextmenu', (event) => {
         handleTableContextMenu({ event, table, columns, data });
     });
+    table.addEventListener('copy', (event) => {
+        handleTableKeyboardCopy({ event, table, columns, data });
+    });
+}
+
+// Native Ctrl+C/Cmd+C supplies the clipboard event. Preserve editor copying
+// and deliberate text ranges; otherwise copy the highlighted grid cells.
+function handleTableKeyboardCopy({ event, table, columns, data }) {
+    const cell = resolveTableDataCell(event.target);
+    const nativeControlSelector = 'input, textarea, select, [contenteditable]:not([contenteditable="false" i])';
+    const nativeSelection = table.ownerDocument.getSelection();
+    if (!cell?.classList.contains('selected') || cell.classList.contains('editing')
+        || event.target?.closest?.(nativeControlSelector)
+        || table.ownerDocument.activeElement?.closest?.(nativeControlSelector)
+        || !event.clipboardData || (nativeSelection && !nativeSelection.isCollapsed)) {
+        return;
+    }
+    const payload = buildGridCopyPayload({
+        range: getSelectedTableRange(table),
+        rows: getRenderedTableRows(table, data),
+        columns,
+        cellResolver: getTableCopyResolver(table),
+    });
+    if (!payload.isEmpty) {
+        event.clipboardData.setData('text/plain', payload.text);
+        event.preventDefault();
+    }
+}
+
+// Read at copy time so cumulative coordinates include every appended batch.
+function getRenderedTableRows(table, data) {
+    return Array.from(table.querySelector('tbody')?.rows || [],
+        (row, rowIndex) => row._row ?? data[rowIndex]);
 }
 
 /**
@@ -224,10 +258,10 @@ function handleTableContextMenu({ event, table, columns, data }) {
         range: getSelectedTableRange(table),
         triggerCoordinate: getCellCoordinateFromElement(cell),
         menuPosition: event,
-        rows: data,
+        rows: getRenderedTableRows(table, data),
         columns,
         copyOptions: {
-            valueResolver: ({ rowIndex, columnIndex }) => getTableCellText(table, rowIndex, columnIndex),
+            cellResolver: getTableCopyResolver(table),
         },
     });
 
@@ -236,7 +270,16 @@ function handleTableContextMenu({ event, table, columns, data }) {
     }
 
     event.preventDefault();
-    showSelectionMenu(table, menuPayload);
+    showSelectionMenu(table, {
+        ...menuPayload,
+        resolveCopyPayload: includeHeaders => buildGridCopyPayload({
+            range: getSelectedTableRange(table),
+            rows: getRenderedTableRows(table, data),
+            columns,
+            includeHeaders,
+            cellResolver: getTableCopyResolver(table),
+        }),
+    });
 }
 
 /**
@@ -410,7 +453,8 @@ function handleSelectionMenuClick({ event, table: _table, menu }) {
     const actionId = action === 'copy-headers'
         ? GRID_COPY_ACTION_IDS.COPY_WITH_HEADERS
         : GRID_COPY_ACTION_IDS.COPY_WITHOUT_HEADERS;
-    const copyPayload = payload?.copyActions?.find((copyAction) => copyAction.id === actionId)?.payload;
+    const actionPayload = payload?.copyActions?.find((copyAction) => copyAction.id === actionId)?.payload;
+    const copyPayload = actionPayload && payload.resolveCopyPayload(action === 'copy-headers');
 
     if (!copyPayload || copyPayload.isEmpty) {
         hideSelectionMenu(menu);
@@ -430,18 +474,17 @@ function handleSelectionMenuClick({ event, table: _table, menu }) {
 }
 
 /**
- * Reads visible text from one table cell.
- * Operates between shared copy coordinates and table DOM text content.
- * Exists so copied data matches what the user selected on screen.
+ * Shares visible-cell resolution between the copy menu and native copy event.
+ * Hidden/missing cells return null so the builder also removes their headers.
  *
  * @param {HTMLTableElement} table
- * @param {number} rowIndex
- * @param {number} columnIndex
- * @returns {string}
+ * @returns {Function}
  */
-function getTableCellText(table, rowIndex, columnIndex) {
-    const cell = getTableCellByCoordinate(table, rowIndex, columnIndex);
-    return cell ? cell.textContent.trim() : '';
+function getTableCopyResolver(table) {
+    return createVisibleGridCellResolver(
+        ({ rowIndex, columnIndex }) => getTableCellByCoordinate(table, rowIndex, columnIndex),
+        { trim: true }
+    );
 }
 
 /**

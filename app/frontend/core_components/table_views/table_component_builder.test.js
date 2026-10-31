@@ -95,6 +95,40 @@ describe('TableComponent shared grid interactions', () => {
         expect(navigator.clipboard.writeText).toHaveBeenCalledWith('Ada,Ready\nLinus,Review');
     });
 
+    test('keeps appended list batches cumulative for selection, copy, navigation and editing', () => {
+        const rows = Array.from({ length: 30 }, (_, index) => ({ id: 30 - index, name: `row-${30 - index}` }));
+        const component = new TableComponent({
+            table_name: 'people', initialView: 'normal',
+            headers: [{ key: 'name', label: 'Name' }], data: [],
+        });
+        document.body.appendChild(component.getElement());
+        try {
+            component.appendData(rows.slice(0, 20));
+            component.appendData(rows.slice(20));
+            const cells = [...component.getElement().querySelectorAll('.cell:not(.header)')];
+            expect(cells).toHaveLength(30);
+            expect(new Set(cells.map((cell) => `${cell.dataset.row}:${cell.dataset.col}`)).size).toBe(30);
+            cells.forEach((cell, index) => {
+                expect(cell.dataset.row).toBe(String(index + 1));
+                expect(cell.dataset.rowIndex).toBe(String(index));
+            });
+            const target = getCell(22, 0);
+            target.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, button: 0 }));
+            target.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
+            expect([...component.getElement().querySelectorAll('.cell.selected')]).toEqual([target]);
+            expect(component.getCellText(21, 0)).toBe('row-9');
+            target.focus();
+            target.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'ArrowDown' }));
+            expect(document.activeElement).toBe(getCell(23, 0));
+            target.dispatchEvent(new MouseEvent('dblclick', { bubbles: true }));
+            const [cell, , visibleData] = editCellMock.mock.lastCall;
+            expect(cell).toBe(target);
+            expect(visibleData[Number(cell.dataset.rowIndex)]).toBe(rows[21]);
+        } finally {
+            component.destroy();
+        }
+    });
+
     test('starts inline editing for a div-list cell with normalized row and column metadata', () => {
         const dataTypes = { status: { data_type: 'text' } };
         const tableComponent = new TableComponent({

@@ -22,6 +22,7 @@ Dates are the local (Europe/Helsinki) date on which the version was published.
 
 ## [Unreleased]
 
+- Copying cells and keyboard navigation now act on the row you chose in long tables, including rows loaded by infinite scrolling. Grid copy excludes hidden fields and their headers, treats whitespace-only cells as empty and keeps selected empty cells in their original positions; Ctrl+C copies the selected cell range while preserving copying from focused controls and native text selections.
 - On phones, login and page forms use one full-width layer with fields inset 16 px; page headings clear the floating menu button.
 - Phone dataset views use 16 px content edges: the hero, full-width tools box and article titles align.
 - Home's dataset boxes follow left- or right-anchored text with the same horizontal inset, keeping their own 800 px maximum width; centred layouts and phones remain unchanged.

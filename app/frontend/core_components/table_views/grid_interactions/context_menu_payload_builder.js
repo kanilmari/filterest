@@ -38,6 +38,7 @@ const GRID_COPY_LABEL_KEYS = Object.freeze({
  * @param {string} [params.delimiter="\t"] - Cell delimiter used for text/plain output.
  * @param {string} [params.lineBreak="\n"] - Row delimiter used for text/plain output.
  * @param {Function} [params.valueResolver] - Optional custom cell value resolver.
+ * @param {Function} [params.cellResolver] - Visible text or null for hidden/missing cells; filters both axes and headers.
  * @returns {Object}
  */
 export function buildGridCopyPayload({
@@ -49,6 +50,7 @@ export function buildGridCopyPayload({
     delimiter = "\t",
     lineBreak = "\n",
     valueResolver = null,
+    cellResolver = null,
 } = {}) {
     const normalizedRange = normalizeRangeBounds(range);
     const normalizedDataRowStartIndex = readIntegerOption(dataRowStartIndex, 0);
@@ -59,38 +61,40 @@ export function buildGridCopyPayload({
     }
 
     const selectedColumns = buildSelectedColumnDescriptors(columns, normalizedRange);
-    const headers = includeHeaders ? selectedColumns.map((column) => column.label) : [];
-    const rowMatrix = [];
-    const cells = [];
+    const resolvedRows = [];
 
     for (let rowIndex = normalizedRange.minRowIndex; rowIndex <= normalizedRange.maxRowIndex; rowIndex += 1) {
         const sourceRowIndex = rowIndex - normalizedDataRowStartIndex;
         const row = Array.isArray(rows) ? rows[sourceRowIndex] : undefined;
-        const rowValues = [];
-
-        selectedColumns.forEach((column) => {
+        const rowCells = selectedColumns.map((column) => {
             const value = resolveCellValue({
                 row,
                 rowIndex,
                 sourceRowIndex,
                 column,
                 valueResolver,
+                cellResolver,
             });
-
-            rowValues.push(value);
-            cells.push({
+            return value === null ? null : {
                 rowIndex,
                 sourceRowIndex,
                 columnIndex: column.columnIndex,
                 columnKey: column.key,
                 columnLabel: column.label,
                 value,
-            });
+            };
         });
-
-        rowMatrix.push(rowValues);
+        if (rowCells.some(Boolean)) resolvedRows.push(rowCells);
     }
 
+    // Preserve original coordinates while removing invisible fields/records.
+    // The same offsets filter header labels and every copied row.
+    const visibleOffsets = selectedColumns.flatMap((column, offset) =>
+        resolvedRows.some(row => row[offset]) ? [offset] : []);
+    if (!visibleOffsets.length) return buildEmptyCopyPayload(includeHeaders, delimiter, lineBreak);
+    const headers = includeHeaders ? visibleOffsets.map(offset => selectedColumns[offset].label) : [];
+    const rowMatrix = resolvedRows.map(row => visibleOffsets.map(offset => row[offset]?.value ?? ''));
+    const cells = resolvedRows.flatMap(row => row.filter(Boolean));
     const textRows = includeHeaders ? [headers, ...rowMatrix] : rowMatrix;
 
     return {
@@ -267,7 +271,12 @@ function resolveCellValue({
     sourceRowIndex,
     column,
     valueResolver,
+    cellResolver,
 }) {
+    if (typeof cellResolver === 'function') {
+        const value = cellResolver({ row, rowIndex, sourceRowIndex, columnIndex: column.columnIndex, column });
+        return value === null || value === undefined ? null : formatCopyValue(value);
+    }
     if (typeof valueResolver === "function") {
         return formatCopyValue(valueResolver({
             row,
