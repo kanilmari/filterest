@@ -77,9 +77,6 @@
     min-width: 0;
     box-sizing: border-box;
   }
-  .front-page-hero > .front-page-article-buttons > a {
-    width: 100%;
-  }
   .front-page > .front-page-top-row:has(> .front-page-article-buttons) {
     grid-template-columns: minmax(0, 1fr);
   }
@@ -94,14 +91,39 @@
   .front-page-top-row > .front-page-article-buttons {
     grid-column: 1;
     grid-row: 3;
-    width: 100%;
-    margin-inline-start: 0;
-  }
-  .front-page-top-row > .front-page-article-buttons > a {
-    width: 100%;
+    /* The row has 12px gutters; these 4px match the hero's 16px gutters. */
+    padding-inline: 4px;
   }
   .front-page-top-row:has(> .front-page-article-buttons) > .filterbar-inline-hero__actions {
     grid-column: 1;
     grid-row: 4;
+  }
+  /* Both placements follow the hero; justify uses its title's logical start. */
+  .front-page-article-buttons[data-phone-alignment] {
+    box-sizing: border-box;
+    width: fit-content;
+    max-width: 100%;
+    justify-content: start;
+    margin-inline: 0 auto;
+  }
+  .front-page-article-buttons[data-phone-alignment="inherit"][data-alignment="center"],
+  .front-page-article-buttons[data-phone-alignment="center"] {
+    justify-content: center;
+    margin-inline: auto;
+  }
+  .front-page-article-buttons[data-phone-alignment="inherit"][data-alignment="end"] {
+    justify-content: end;
+    margin-inline: auto 0;
+  }
+  .front-page-hero > .front-page-article-buttons > a,
+  .front-page-top-row > .front-page-article-buttons > .front-page-article-button {
+    width: fit-content;
+    min-width: 44px;
+    max-width: 100%;
+    min-height: 54px;
+    padding-block: 0;
+    padding-inline: 27px;
+    white-space: normal;
+    overflow-wrap: anywhere;
   }
 }

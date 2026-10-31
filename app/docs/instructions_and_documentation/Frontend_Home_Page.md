@@ -569,9 +569,9 @@ page-scoped row rule, which outranks the shared dataset hero's top alignment.
 Opposing theme-background halos around text and both border edges preserve their
 contrast over images, video and either Home wash without adding a top strip.
 Below-text links retain their shared primary-button appearance. At
-700 px and below, below-text links fill the text block and top-row links occupy
-a full-width row beneath the tabs, with each pill filling the row. Buttons have a 44 px minimum height and
-visible keyboard focus. A language change cancels an obsolete Home read and
+700 px and below, both placements use content-wide buttons (27 px inline padding, 54 px minimum height) with wrapping labels;
+the group follows the hero's phone alignment, inheriting desktop start/centre/end (justify → start), using logical margins and matching 16 px gutters.
+Navigation stays full-width; wider screens and visible keyboard focus are unchanged. A language change cancels an obsolete Home read and
 refetches the complete payload; session changes use the existing visit guards.
 Labels never trigger another public title request.
 

@@ -6,10 +6,11 @@
 import { expect, test, type Locator, type Page } from '@playwright/test';
 import { installMenuVisibilityProbe, type MenuProbeWindow } from '../helpers/menu_control_visibility';
 import { installHomePolicy } from '../helpers/home-policy-fixture';
+import { proveContactButton, type ArticleFixture } from '../helpers/home-contact-button-proof';
 import presentationDefinition from '../../../frontend/shared/front_page_presentation/definition.json';
 
 type Theme = 'light' | 'dark';
-type Fixture = { name: string; width: number; height?: number; datasetCount?: number; scrolling?: boolean };
+type Fixture = { name: string; width: number; height?: number; datasetCount?: number; scrolling?: boolean; article?: ArticleFixture };
 // Observe whole rendered frames and completed mutation batches, starting before
 // ownership changes. Settled locator assertions alone missed the fading copy.
 
@@ -103,11 +104,14 @@ async function openHome(page: Page, theme: Theme, language: string, fixture?: Fi
   const alignment = 'start';
   await installHomePolicy(page.context(), theme, fixture ? {
     site_name: fixture.name,
-    presentation: { ...presentationDefinition.default, anchor: 'center-left', alignment,
+    presentation: { ...presentationDefinition.default, anchor: 'center-left', alignment: fixture.article?.alignment ?? alignment,
+      phone_alignment: fixture.article?.phoneAlignment ?? 'inherit',
       max_width_px: 750, horizontal_margin_px: 160, vertical_margin_px: 40 },
     ...(fixture.scrolling ? { article_buttons_placement: 'top_row',
       article_buttons: [{ label: 'Contact', href: '/contact/1?view=article_view' }],
       hero: { title: { fi: 'Etusivu' }, description: { fi: 'Pitkä tarina kulkee navigoinnin mukana. '.repeat(100) } } } : {}),
+    ...(fixture.article ? { article_buttons_placement: fixture.article.placement,
+      article_buttons: [{ label: fixture.article.label, href: '/contact/1?view=article_view' }] } : {}),
   } : {});
   page.on('request', request => {
     if (/\/api\/(?:admin\/)?front-page(?:[/?]|$)/.test(request.url()) && request.method() !== 'GET') {
@@ -650,6 +654,7 @@ for (const theme of ['light', 'dark'] as const) {
       }
       await proveKeyboardMenu(page, state);
       expect(state.writes).toEqual([]);
+      if (fixture.name === 'Fintravel' && fixture.width === 320) await proveContactButton(page, theme, openHome);
     });
   }
 }

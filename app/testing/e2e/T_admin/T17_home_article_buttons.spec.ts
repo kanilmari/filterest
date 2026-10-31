@@ -267,8 +267,11 @@ for (const width of [1280, 375]) for (const theme of ['light', 'dark'] as const)
           if (placement === 'below_text') {
             await expect(page.locator('.front-page-hero > .front-page-article-buttons > a')).toHaveCount(1);
             if (width === 375) {
+              // WO82b/K444: on a phone the button fits its label instead of filling the hero.
               const heroBounds = (await page.locator('.front-page-hero').boundingBox())!;
-              expect(bounds.width).toBeCloseTo(heroBounds.width, 0);
+              expect(bounds.width).toBeLessThan(heroBounds.width);
+              expect(bounds.x).toBeGreaterThanOrEqual(heroBounds.x);
+              expect(bounds.x + bounds.width).toBeLessThanOrEqual(heroBounds.x + heroBounds.width);
             }
           } else {
             const rowHost = width <= 700 ? '.front-page-scroller > .front-page-top-row' : '.front-page > .front-page-top-row';
@@ -309,7 +312,10 @@ for (const width of [1280, 375]) for (const theme of ['light', 'dark'] as const)
                 return parseFloat(style.paddingLeft) + parseFloat(style.paddingRight)
                   + parseFloat(style.borderLeftWidth) + parseFloat(style.borderRightWidth);
               });
-              expect(bounds.width).toBeCloseTo(row.width - inset, 0);
+              // WO82b/K444: in the top row too, the button fits its label inside the row's content box.
+              expect(bounds.width).toBeLessThan(row.width - inset);
+              expect(bounds.x).toBeGreaterThanOrEqual(row.x);
+              expect(bounds.x + bounds.width).toBeLessThanOrEqual(row.x + row.width);
             } else {
               const lastTab = page.locator('.front-page-top-row .hero-dataset-tabs__button:visible').last();
               await expect(lastTab).toBeVisible();

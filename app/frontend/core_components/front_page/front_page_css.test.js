@@ -140,27 +140,76 @@ test('phone navigation, Contact and actions occupy separate rows regardless of s
     const postcss = requireNodeDependency('postcss');
     const articles = readFileSync(resolve(currentDirectory, 'front_page_article_buttons.css'), 'utf8');
     const hero = readFileSync(resolve(currentDirectory, '../filterbar/morphing_filterbar_content.css'), 'utf8');
-    function phoneRules(source) {
-        const rules = [];
-        postcss.parse(source).walkAtRules('media', media => {
-            if (media.params === '(width <= 700px)') rules.push(...media.nodes.filter(node => node.type === 'rule').map(node => node.toString()));
-        });
-        return rules.join('\n');
+    function activeRules(source, width) {
+        return postcss.parse(source).nodes.flatMap(node => {
+            if (node.type === 'rule') return node.toString();
+            if (width <= 700 && node.type === 'atrule' && node.name === 'media' && node.params === '(width <= 700px)') {
+                return node.nodes.filter(child => child.type === 'rule').map(child => child.toString());
+            }
+            return [];
+        }).join('\n');
     }
+    // jsdom does not evaluate viewport media queries; apply the shipped phone block
+    // explicitly at 390/700px, and exclude it at 701px and desktop widths.
+    const alignmentCases = [
+        ['start', 'inherit', 'start', '0 auto'], ['center', 'inherit', 'center', 'auto'],
+        ['end', 'inherit', 'end', 'auto 0'], ['justify', 'inherit', 'start', '0 auto'],
+        ['end', 'start', 'start', '0 auto'], ['end', 'center', 'center', 'auto'],
+    ];
     const style = document.createElement('style');
     const fixture = document.createElement('div');
     fixture.innerHTML = '<div class="front-page"><div class="front-page-scroller"><div class="front-page-top-row filterbar-inline-hero__top-row">'
-        + '<nav class="hero-dataset-tabs"></nav><div class="front-page-article-buttons"><a>Contact</a></div>'
-        + '<div class="filterbar-inline-hero__actions"><button>Settings</button></div></div></div></div>';
+        + '<nav class="hero-dataset-tabs"></nav><div class="front-page-article-buttons"><a class="front-page-article-button">Ota yhteyttä</a></div>'
+        + '<div class="filterbar-inline-hero__actions"><button>Settings</button></div></div>'
+        + '<header class="front-page-hero"><div class="front-page-article-buttons"><a class="front-page-article-button">Ota yhteyttä</a></div></header></div></div>';
     document.head.append(style); document.body.append(fixture);
     try {
         for (const order of [[css, articles, hero], [hero, articles, css], [articles, css, hero]]) {
-            style.textContent = order.map(phoneRules).join('\n');
-            expect(getComputedStyle(fixture.querySelector('nav')).gridRow).toBe('1');
-            expect(getComputedStyle(fixture.querySelector('.front-page-article-buttons')).gridRow).toBe('2');
-            expect(getComputedStyle(fixture.querySelector('.filterbar-inline-hero__actions')).gridRow).toBe('3');
+            for (const width of [390, 700, 701, 1440]) {
+                const phone = width <= 700;
+                style.textContent = order.map(source => activeRules(source, width)).join('\n');
+                for (const [alignment, phoneAlignment, effective, marginInline] of alignmentCases) {
+                    for (const list of fixture.querySelectorAll('.front-page-article-buttons')) {
+                        delete list.dataset.alignment; delete list.dataset.phoneAlignment;
+                        const desktop = getComputedStyle(list);
+                        const desktopAlignment = { justifyContent: desktop.justifyContent,
+                            marginInline: desktop.getPropertyValue('margin-inline'), marginInlineStart: desktop.marginInlineStart };
+                        list.dataset.alignment = alignment; list.dataset.phoneAlignment = phoneAlignment;
+                        const group = getComputedStyle(list), link = getComputedStyle(list.firstElementChild);
+                        if (phone) {
+                            expect(group.getPropertyValue('margin-inline')).toBe(marginInline);
+                            expect(group.justifyContent).toBe(effective);
+                            expect(group.width).toBe('fit-content'); expect(group.maxWidth).toBe('100%');
+                            expect(link.width).toBe('fit-content'); expect(link.minWidth).toBe('44px');
+                            expect(link.minHeight).toBe('54px'); expect(link.paddingInline).toBe('27px'); expect(link.paddingBlock).toBe('0px');
+                            expect(link.whiteSpace).toBe('normal'); expect(link.overflowWrap).toBe('anywhere');
+                        } else {
+                            expect(link.minHeight).toBe('44px');
+                            expect(link.padding).toBe(list.closest('header') ? '10px 16px' : '10px 28px');
+                            expect(group.width).not.toBe('fit-content');
+                            expect({ justifyContent: group.justifyContent, marginInline: group.getPropertyValue('margin-inline'),
+                                marginInlineStart: group.marginInlineStart }).toEqual(desktopAlignment);
+                        }
+                    }
+                }
+                if (phone) {
+                    expect(getComputedStyle(fixture.querySelector('nav')).gridRow).toBe('1');
+                    expect(getComputedStyle(fixture.querySelector('.front-page-article-buttons')).gridRow).toBe('2');
+                    expect(getComputedStyle(fixture.querySelector('.filterbar-inline-hero__actions')).gridRow).toBe('3');
+                }
+            }
         }
     } finally { style.remove(); fixture.remove(); }
+});
+
+test('article-button sizing and logical alignment overrides belong only to the 700px phone block', () => {
+    const articles = postcss.parse(readFileSync(resolve(currentDirectory, 'front_page_article_buttons.css'), 'utf8'));
+    articles.walkRules(rule => {
+        if (!rule.selector.includes('[data-phone-alignment]') && !rule.selector.includes('[data-phone-alignment="')
+            && !rule.nodes.some(node => node.prop === 'width' && node.value === 'fit-content')) return;
+        expect(rule.parent.type).toBe('atrule'); expect(rule.parent.params).toBe('(width <= 700px)');
+        rule.walkDecls(decl => expect(decl.prop).not.toMatch(/^(?:margin|padding)-(?:left|right)$/));
+    });
 });
 
 test('Home uses the reserved grid area and a phone-sized single column', () => {

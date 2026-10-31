@@ -22,6 +22,7 @@ Dates are the local (Europe/Helsinki) date on which the version was published.
 
 ## [Unreleased]
 
+- On phones up to 700 px, Home's Contact and other article buttons fit their labels, wrap long text and follow the hero's phone alignment in both placements, with 54 px touch targets; navigation stays full-width and desktop is unchanged.
 - Dataset topbar search yields to a button before shortening the dataset name, and opens over the name in the same row on phones and measured button layouts.
 - Image uploads retain displayed dimensions; administrators can explicitly backfill existing image sizes in guarded batches, with a default dry run. Unsupported structural galleries are counted even without a public namesake.
 - Copying cells and keyboard navigation now act on the row you chose in long tables, including rows loaded by infinite scrolling. Grid copy excludes hidden fields and their headers, treats whitespace-only cells as empty and keeps selected empty cells in their original positions; Ctrl+C copies the selected cell range while preserving copying from focused controls and native text selections.

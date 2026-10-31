@@ -11,17 +11,20 @@ import { renderFrontPage } from './front_page_printer.js';
 import { createFrontPageArticleButtons } from './front_page_article_buttons.js';
 import { refreshLocalizedDatasetValues } from '../table_views/dataset_value_localizer.js';
 import { invalidateSessionGeneration } from '../auth/session_generation_store.js';
+import { DEFAULT_HOME_PRESENTATION as defaults } from '../../shared/front_page_presentation/validator.js';
 
-const mocks = vi.hoisted(() => ({ request: vi.fn(), openPage: vi.fn(async () => null) }));
+const mocks = vi.hoisted(() => ({ request: vi.fn(), openPage: vi.fn(async () => null), preview: null }));
 vi.mock('../table_views/card_view/image_first_view_opener.js', () => ({ openImageFirstView: mocks.openPage }));
 vi.mock('../navigation/nav_engine/dataset_aliases.js', () => ({ getInternalDatasetName: name => name === 'contact' ? 'system_about' : name }));
 vi.mock('../endpoints/endpoint_router.js', () => ({ endpoint_router: mocks.request }));
 vi.mock('../lang/translation_handler.js', () => ({ getTranslationForKey: key => key }));
-vi.mock('./front_page_top_row_builder.js', () => ({ createFrontPageTopRow: () => {
+vi.mock('./front_page_top_row_builder.js', () => ({ createFrontPageTopRow: (_siteName, _onSaved, options) => {
+    mocks.preview = options.render;
     const element = document.createElement('div'); element.className = 'front-page-top-row';
+    element.innerHTML = '<div class="front-page-top-row__identity"><div class="dataset-shared-topbar__menu-slot"></div></div>';
     const tabs = document.createElement('div'); tabs.className = 'hero-dataset-tabs';
     const actions = document.createElement('div'); actions.className = 'filterbar-inline-hero__actions';
-    element.append(tabs, actions); return { element, destroy() {} };
+    element.append(tabs, actions); return { element, mount() {}, destroy() {} };
 } }));
 const buttons = [{ href: '/news/3?view=article_view', label: '<Contact>' },
     { href: '/about/1?view=article_view', label: 'Second' }];
@@ -64,6 +67,23 @@ test.each(['below_text', 'top_row'])('empty %s has no link wrapper or leaked con
     const page = await mounted();
     expect(page.querySelector('.front-page-article-buttons')).toBeNull();
     expect(page.textContent).not.toContain('Private target');
+});
+test.each(['below_text', 'top_row'])('%s carries the hero alignment through every phone choice, preview and reset', async placement => {
+    mocks.request.mockResolvedValue({ ...response(placement), presentation: { ...defaults, alignment: 'end' } });
+    const page = await mounted();
+    const list = page.querySelector('.front-page-article-buttons');
+    expect(list.dataset.alignment).toBe('end');
+    expect(list.dataset.phoneAlignment).toBe('inherit');
+    for (const alignment of ['start', 'center', 'end', 'justify']) for (const phone_alignment of ['inherit', 'start', 'center']) {
+        mocks.preview({ ...defaults, alignment, phone_alignment });
+        expect(list.dataset.alignment).toBe(alignment);
+        expect(list.dataset.phoneAlignment).toBe(phone_alignment);
+        expect(list.dataset.alignment).toBe(page.querySelector('.front-page-hero').dataset.alignment);
+        expect(list.dataset.phoneAlignment).toBe(page.querySelector('.front-page-hero').dataset.phoneAlignment);
+    }
+    mocks.preview(null);
+    expect(list.dataset.alignment).toBe('start');
+    expect(list.dataset.phoneAlignment).toBe('inherit');
 });
 test('rejects malformed entries without deriving a label from private fields', () => {
     expect(createFrontPageArticleButtons([{ href: 'javascript:alert(1)', label: 'Bad' },
@@ -115,8 +135,9 @@ test('top-row links align at the right edge, with no empty administrator column'
     expect(list).toContain('justify-self: end;'); expect(list).toContain('justify-content: flex-end;');
     expect(list).toContain('margin-inline-start: auto;');
     const phone = css.slice(css.indexOf('@media (width <= 700px)'));
-    expect(phone).toMatch(/\.front-page-top-row > \.front-page-article-buttons \{[^}]*grid-row: 3;[^}]*width: 100%;[^}]*margin-inline-start: 0;/);
-    expect(phone).toMatch(/\.front-page-top-row > \.front-page-article-buttons > a \{[^}]*width: 100%;/);
+    expect(phone).toMatch(/\.front-page-top-row > \.front-page-article-buttons \{[^}]*grid-row: 3;[^}]*padding-inline: 4px;/);
+    expect(phone).toMatch(/\.front-page-article-buttons\[data-phone-alignment\] \{[^}]*width: fit-content;[^}]*margin-inline: 0 auto;/);
+    expect(phone).toMatch(/\.front-page-top-row > \.front-page-article-buttons > \.front-page-article-button \{[^}]*min-height: 54px;[^}]*padding-block: 0;[^}]*padding-inline: 27px;/);
 });
 test('only top-row buttons become transparent outlined pills with theme contrast halos', () => {
     const css = readFileSync(resolve(dirname(fileURLToPath(import.meta.url)), 'front_page_article_buttons.css'), 'utf8');

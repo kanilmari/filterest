@@ -124,6 +124,11 @@ function renderBlocks(container, data, visit, appearanceToken) {
     function renderPresentation(value) {
         presentation = readHomePresentation(value);
         applyHomePresentation(page, scroller, stage, hero, value);
+        // The top-row links are outside the hero; copy its validated alignment on every preview/reset too.
+        if (articleButtons) {
+            articleButtons.dataset.alignment = presentation.alignment;
+            articleButtons.dataset.phoneAlignment = presentation.phone_alignment;
+        }
         applyHomeMediaPresentation(container, value);
         if (renderedLanguage) renderText();
     }
