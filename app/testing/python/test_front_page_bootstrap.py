@@ -74,6 +74,44 @@ def test_front_page_bootstrap_source_and_generated_hashes():
         assert hashlib.sha256((APP / name).read_bytes()).hexdigest() == metadata["sha256"], name
 
 
+def test_saved_home_boxes_release_follows_phone_search_without_replacing_it():
+    home = MIGRATIONS / "20261024000001_add_saved_home_boxes.sql"
+    owner = MIGRATIONS / "20261024000099_record_database_release_9_13_1.sql"
+    phone_owner = MIGRATIONS / "20261022000399_record_database_release_9_13_0.sql"
+    sql, release = home.read_text(), owner.read_text()
+    assert phone_owner.name < home.name < owner.name
+    assert sql.startswith(f"-- {home.name}\n")
+    assert "-- VERSION_DB: 9.13.1\n" in sql
+    assert f"-- VERSION_DB_OWNER: {owner.name}\n" in sql
+    assert f"jsonb_build_object('file','{home.name}')" in sql
+    assert "-- COMPLETION_MARKER: saved_home_boxes\n" in sql
+    assert "INSERT INTO public.system_db_version" not in sql
+    assert release.startswith(f"-- {owner.name}\n")
+    assert "-- VERSION_DB: 9.13.1\n" in release
+    assert release.count("INSERT INTO public.system_db_version") == 1
+    assert "SELECT '9.13.1'" in release and "version = '9.13.1'" in release
+    assert "SELECT '9.13.0'" in phone_owner.read_text()
+    assert "9.13.1" not in phone_owner.read_text()
+    manifest = json.loads((BOOTSTRAP / "manifest.json").read_text())
+    assert manifest["db_version"] == (APP / "VERSION_DB").read_text().strip() == "9.13.1"
+    baseline = manifest["migration_ledger_baseline"]
+    assert baseline.count(home.name) == baseline.count(owner.name) == baseline.count(phone_owner.name) == 1
+    assert baseline.index(phone_owner.name) < baseline.index(home.name) < baseline.index(owner.name)
+
+
+def test_saved_home_metadata_precedes_article_bundle_completion():
+    """Register folded-in fields before draining events and marking bundles complete."""
+    seed = (BOOTSTRAP / "seed_data.sql").read_text()
+    migration = (MIGRATIONS / "20261024000001_add_saved_home_boxes.sql").read_text()
+    metadata = migration.split("-- BOOTSTRAP_AFTER_DATA_SEED\n", 1)[1]
+    registry = (MIGRATIONS / "20261005000034_register_system_front_page_blocks.sql").read_text()
+    bundles = (MIGRATIONS / "20261015000012_materialize_article_bundles.sql").read_text()
+    assert metadata in seed and "INSERT INTO public.system_column_details" in metadata
+    assert seed.index(registry) < seed.index(metadata)
+    boundary = seed.rindex("DO $article_bundle_seed_boundary$", 0, seed.index(bundles))
+    assert seed.index(metadata) + len(metadata) < boundary
+
+
 def test_front_page_legacy_revisions_normalize_keep_greatest_and_repeat(upgrade):
     # An upgrade runs 9.10.0's earlier files first; they create the completion-marker table this file writes to.
     for earlier in sorted(MIGRATIONS.glob("202610050000*.sql")):
@@ -148,10 +186,11 @@ def _shape(run):
 def test_front_page_fresh_install_and_992_upgrade_match_and_repeat(installed, upgrade):
     for migration in sorted(MIGRATIONS.glob("202610050000*.sql")):
         upgrade(migration.read_text())
+    upgrade((MIGRATIONS / "20261024000001_add_saved_home_boxes.sql").read_text())
     original = _shape(installed)
     assert original == _shape(upgrade)
     shape = json.loads(original)
-    assert len(shape["columns"]) == len(shape["metadata"]) == 8
+    assert len(shape["columns"]) == len(shape["metadata"]) == 11
     assert shape["registry"] == [["system_front_page_blocks", "system", False]]
     assert shape["markers"] == ["system_front_page_blocks_registry", "system_front_page_blocks_table"]
     for run in (installed, upgrade):

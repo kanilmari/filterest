@@ -7,6 +7,7 @@ package system_table_tools
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"strconv"
 	"strings"
@@ -14,6 +15,7 @@ import (
 	backend "easelect/backend/core_components"
 	"easelect/backend/core_components/dbutils"
 	"easelect/backend/core_components/system_config_checks"
+	"github.com/lib/pq"
 )
 
 func frontPageScopeKey(scope int) string { return "front_page_scope_version:" + strconv.Itoa(scope) }
@@ -36,15 +38,15 @@ func frontPageScopeVersion(q dbutils.Querier, scope int) (string, error) {
 	return version, err
 }
 
-func advanceFrontPageScopeVersion(tx *sql.Tx, scope int) (string, error) {
+func advanceFrontPageScopeVersion(tx *sql.Tx, scope int, custom bool) (string, error) {
 	var version string
 	// Reset keeps private editor state, while the account FK owns its deletion.
 	// greatest() makes rapid writes monotonic under the scope's transaction lock.
-	err := tx.QueryRow(`INSERT INTO public.system_front_page_revisions (user_id,revision)
-        VALUES (NULLIF($1,0)::bigint, clock_timestamp())
+	err := tx.QueryRow(`INSERT INTO public.system_front_page_revisions (user_id,revision,is_custom)
+        VALUES (NULLIF($1,0)::bigint, clock_timestamp(),$2)
         ON CONFLICT (user_id) DO UPDATE SET revision = GREATEST(clock_timestamp(),
-            public.system_front_page_revisions.revision + interval '1 microsecond')
-        RETURNING revision::text`, scope).Scan(&version)
+            public.system_front_page_revisions.revision + interval '1 microsecond'),is_custom=EXCLUDED.is_custom
+        RETURNING revision::text`, scope, custom).Scan(&version)
 	return version, err
 }
 
@@ -133,7 +135,11 @@ func saveFrontPageAdminRequest(ctx context.Context, request frontPageAdminReques
 		if err != nil {
 			return "", err
 		}
-		if len(common) == 0 {
+		custom, err := frontPageScopeCustom(tx, 0)
+		if err != nil {
+			return "", err
+		}
+		if len(common) == 0 && !custom {
 			common, err = defaultFrontPageBlocks(tx, scope)
 			if err != nil {
 				return "", err
@@ -141,15 +147,44 @@ func saveFrontPageAdminRequest(ctx context.Context, request frontPageAdminReques
 		}
 		for _, block := range common {
 			blocks = append(blocks, frontPageBlockInput{
-				Dataset: block.Dataset, ResultLimit: block.ResultLimit, SortOrder: block.SortOrder, Enabled: block.Enabled})
+				Dataset: block.Dataset, ResultLimit: block.ResultLimit, SortOrder: block.SortOrder, Enabled: block.Enabled,
+				Title: block.Title, Query: block.Query, CategoryLinks: &block.CategoryLinks})
 		}
 	}
 	if err := validateFrontPageBlockInputs(blocks); err != nil {
 		return "", err
 	}
+	existing, err := readFrontPageBlocks(tx, scope)
+	if err != nil {
+		return "", err
+	}
+	var merged []frontPageBlock
+	if request.CopyFromCommon == nil {
+		merged, err = mergeFrontPageBlockInputs(blocks, existing)
+		if err != nil {
+			return "", err
+		}
+	}
+	// Copy is an explicit replacement, including duplicate datasets and an empty common list.
+	if request.CopyFromCommon != nil {
+		byDataset := map[string][]int64{}
+		for _, block := range existing {
+			byDataset[block.Dataset] = append(byDataset[block.Dataset], block.ID)
+		}
+		merged = make([]frontPageBlock, 0, len(blocks))
+		for _, input := range blocks {
+			var id int64
+			if matches := byDataset[input.Dataset]; len(matches) > 0 {
+				id = matches[0]
+				byDataset[input.Dataset] = matches[1:]
+			}
+			merged = append(merged, frontPageBlock{ID: id, Dataset: input.Dataset, ResultLimit: input.ResultLimit, SortOrder: input.SortOrder,
+				Enabled: input.Enabled, Title: input.Title, Query: input.Query, CategoryLinks: *input.CategoryLinks})
+		}
+	}
 	// Resolve every name BEFORE deleting anything. No client-supplied SQL identifiers.
-	uids := make([]int, len(blocks))
-	for index, block := range blocks {
+	uids := make([]int, len(merged))
+	for index, block := range merged {
 		err := tx.QueryRow(`SELECT registry.table_uid FROM public.system_db_tables registry
             WHERE registry.table_name=$1 AND COALESCE(NULLIF(registry.schema_name,''),'public')='public'
               AND registry.table_name NOT IN ('system_users','system_about')
@@ -162,17 +197,47 @@ func saveFrontPageAdminRequest(ctx context.Context, request frontPageAdminReques
 		if err != nil {
 			return "", err
 		}
-	}
-	if _, err := tx.Exec(`DELETE FROM public.system_front_page_blocks WHERE user_id IS NOT DISTINCT FROM NULLIF($1,0)::bigint`, scope); err != nil {
-		return "", err
-	}
-	for index, block := range blocks {
-		if _, err := tx.Exec(`INSERT INTO public.system_front_page_blocks (user_id,table_uid,result_limit,sort_order,enabled)
-            VALUES (NULLIF($1,0)::bigint,$2,$3,$4,$5)`, scope, uids[index], block.ResultLimit, block.SortOrder, block.Enabled); err != nil {
+		if err := validateFrontPageBoxReferences(tx, block); err != nil {
 			return "", err
 		}
 	}
-	return advanceFrontPageScopeVersion(tx, scope)
+	kept := []int64{}
+	for _, block := range merged {
+		if block.ID > 0 {
+			kept = append(kept, block.ID)
+		}
+	}
+	if _, err := tx.Exec(`SET CONSTRAINTS uq_system_front_page_blocks_position DEFERRED`); err != nil {
+		return "", err
+	}
+	if _, err := tx.Exec(`DELETE FROM public.system_front_page_blocks
+        WHERE user_id IS NOT DISTINCT FROM NULLIF($1,0)::bigint AND NOT(id=ANY($2::bigint[]))`, scope, pq.Array(kept)); err != nil {
+		return "", err
+	}
+	for index, block := range merged {
+		title := any(nil)
+		if len(block.Title) > 0 && string(block.Title) != "null" {
+			title = string(block.Title)
+		}
+		query := block.Query
+		if len(query) == 0 {
+			query = json.RawMessage(`{}`)
+		}
+		if block.ID > 0 {
+			_, err = tx.Exec(`UPDATE public.system_front_page_blocks SET table_uid=$3,result_limit=$4,sort_order=$5,
+                enabled=$6,title=$7::jsonb,query=$8::jsonb,category_links=$9
+                WHERE id=$2 AND user_id IS NOT DISTINCT FROM NULLIF($1,0)::bigint`,
+				scope, block.ID, uids[index], block.ResultLimit, block.SortOrder, block.Enabled, title, string(query), block.CategoryLinks)
+		} else {
+			_, err = tx.Exec(`INSERT INTO public.system_front_page_blocks(user_id,table_uid,result_limit,sort_order,enabled,title,query,category_links)
+                VALUES(NULLIF($1,0)::bigint,$2,$3,$4,$5,$6::jsonb,$7::jsonb,$8)`,
+				scope, uids[index], block.ResultLimit, block.SortOrder, block.Enabled, title, string(query), block.CategoryLinks)
+		}
+		if err != nil {
+			return "", err
+		}
+	}
+	return advanceFrontPageScopeVersion(tx, scope, request.Reset == nil)
 }
 
 func searchFrontPageUsers(query string) ([]map[string]any, error) {

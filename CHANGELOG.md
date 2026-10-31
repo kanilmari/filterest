@@ -22,6 +22,7 @@ Dates are the local (Europe/Helsinki) date on which the version was published.
 
 ## [Unreleased]
 
+- Administrators can save Home boxes with a title, categories and sorting through the API; sites without a saved list show 3 rows per box. Box validation, metadata, row reads, lifecycle admission (including active-cohort polls) and pool waits stop at Home's remaining time budget while keeping the request transaction usable. **Rollback:** within the new binary, the current editor leaves the new fields inert until the box editor ships; downgrading below database 9.13.1 requires restoring the pre-migration backup under a write freeze. The batch's PostgreSQL tests include a rollback rehearsal.
 - Home's dataset boxes span the phone screen in one layer, with their text aligned to the hero's 16 px edge; tablet and desktop spacing stays unchanged.
 - On phones up to 700 px, Home's Contact and other article buttons fit their labels, wrap long text and follow the hero's phone alignment in both placements, with 54 px touch targets; navigation stays full-width and desktop is unchanged.
 - Dataset topbar search yields to a button before shortening the dataset name, and opens over the name in the same row on phones and measured button layouts.

@@ -182,7 +182,7 @@ func enrichRowsWithCardSupportColumns(
 	supportColumns := collectHiddenCardSupportColumns(columnsMap, visibleColumns)
 	if len(supportColumns) == 0 {
 		var err error
-		supportColumns, err = fetchCardSupportColumnsFromMetadata(tableName, visibleColumns)
+		supportColumns, err = fetchCardSupportColumnsFromMetadata(tableName, visibleColumns, dbutils.ReadBudgetFallback(readQuerier, backend.Db))
 		if err != nil {
 			return err
 		}
@@ -229,12 +229,12 @@ func enrichRowsWithCardSupportColumns(
 	return nil
 }
 
-func fetchCardSupportColumnsFromMetadata(tableName string, visibleColumns []string) ([]string, error) {
+func fetchCardSupportColumnsFromMetadata(tableName string, visibleColumns []string, q dbutils.Querier) ([]string, error) {
 	if backend.Db == nil {
 		return nil, nil
 	}
 
-	rows, err := backend.Db.Query(
+	rows, err := q.Query(
 		`SELECT scd.column_name
 		   FROM system_db_tables sdt
 		   JOIN system_column_details scd ON scd.table_uid = sdt.table_uid

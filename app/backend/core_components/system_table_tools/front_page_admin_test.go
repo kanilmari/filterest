@@ -17,6 +17,7 @@ func TestFrontPageAdminRequestForms(t *testing.T) {
 		`{"hero":{"title":{"fi":"Otsikko","en":"Title"},"slogan":{"fi":"","en":""},"description":{"fi":"Kuvaus","en":"Description"}}}`,
 		`{"settings":{"separate_front_page":true,"front_page_button_shows_site_name":false}}`,
 		`{"version":"none","blocks":[]}`,
+		`{"version":"none","blocks":[{"dataset":"content","result_limit":5,"sort_order":1},{"dataset":"content","result_limit":5,"sort_order":2}]}`,
 		`{"user_id":42,"version":"none","blocks":[{"dataset":"content","result_limit":5,"sort_order":1,"enabled":true}]}`,
 		`{"user_id":42,"version":"none","reset":true}`,
 		`{"user_id":42,"version":"none","copy_from_common":true}`,
@@ -33,7 +34,6 @@ func TestFrontPageAdminRequestForms(t *testing.T) {
 		`{"version":"none","blocks":[{"dataset":"content","result_limit":0,"sort_order":1}]}`,
 		`{"version":"none","blocks":[{"dataset":"content","result_limit":21,"sort_order":1}]}`,
 		`{"version":"none","blocks":[{"dataset":"content","result_limit":5,"sort_order":101}]}`,
-		`{"version":"none","blocks":[{"dataset":"content","result_limit":5,"sort_order":1},{"dataset":"content","result_limit":5,"sort_order":2}]}`,
 		`{"version":"none","blocks":[{"dataset":"content","result_limit":5,"sort_order":1},{"dataset":"other","result_limit":5,"sort_order":1}]}`,
 	}
 	for _, body := range invalid {

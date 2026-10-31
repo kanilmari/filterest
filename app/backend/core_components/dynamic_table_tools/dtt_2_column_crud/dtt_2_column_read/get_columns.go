@@ -8,15 +8,22 @@ package dtt_2_column_read
 import (
 	"database/sql"
 	backend "easelect/backend/core_components"
+	"easelect/backend/core_components/dbutils"
 	dtt_models "easelect/backend/core_components/dynamic_table_tools/dtt_models"
 	"fmt"
 )
 
 // Päivitetty GetColumnsMapForTable-funktio
 func GetColumnsMapForTable(datasetName string) (map[int]dtt_models.ColumnInfo, error) {
+	return GetColumnsMapForTableWithQuerier(datasetName, backend.Db)
+}
+
+// GetColumnsMapForTableWithQuerier keeps catalogue reads on the caller's bounded
+// metadata connection; existing callers retain the ordinary backend pool.
+func GetColumnsMapForTableWithQuerier(datasetName string, q dbutils.Querier) (map[int]dtt_models.ColumnInfo, error) {
 	// Hae table_uid system_db_tables-taulusta
 	var tableUID int
-	err := backend.Db.QueryRow(`
+	err := q.QueryRow(`
         SELECT table_uid
         FROM system_db_tables
         WHERE table_name = $1
@@ -30,7 +37,7 @@ func GetColumnsMapForTable(datasetName string) (map[int]dtt_models.ColumnInfo, e
                         FROM information_schema.columns
                         WHERE table_schema = 'public' AND table_name = $1
                         ORDER BY ordinal_position`
-			rows, err2 := backend.Db.Query(query, datasetName)
+			rows, err2 := q.Query(query, datasetName)
 			if err2 != nil {
 				return nil, fmt.Errorf("get_columns: info_schema query for view %s: %v", datasetName, err2)
 			}
@@ -85,7 +92,7 @@ func GetColumnsMapForTable(datasetName string) (map[int]dtt_models.ColumnInfo, e
          AND cd.column_name NOT IN ('embedding_vector', 'search_vector_simple')
        ORDER BY cd.co_number
    `
-	rows, err := backend.Db.Query(query, datasetName, tableUID)
+	rows, err := q.Query(query, datasetName, tableUID)
 	if err != nil {
 		return nil, err
 	}

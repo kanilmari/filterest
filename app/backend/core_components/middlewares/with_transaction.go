@@ -44,7 +44,10 @@ func WithLazyTransaction(next http.Handler) http.Handler {
 		})
 
 		lt.SetAdmissionHook(func(ctx context.Context) (func() error, error) {
-			if err := runtime_grants.EnsureRequestBarrier(ctx); err != nil {
+			// Admission waits on its own pool and startup lock before BeginTx.
+			// Use Home's remaining deadline here; LazyTx keeps the original
+			// request for transaction lifetime and the lease's eventual release.
+			if err := runtime_grants.EnsureRequestBarrier(dbutils.ReadBudgetContext(ctx)); err != nil {
 				return nil, err
 			}
 			return func() error { return runtime_grants.ReleaseRequestBarrier(ctx) }, nil

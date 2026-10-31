@@ -22,10 +22,10 @@ import (
 const articleButtonsFixtureDataset = "wl128_article"
 const articleButtonsFixtureRow = "87654321"
 
-func articleButtonsPostgresFixture(t *testing.T) (*sql.DB, int) {
+func articleButtonsPostgresFixture(t *testing.T, contexts ...context.Context) (*sql.DB, int) {
 	t.Helper()
 	t.Setenv("FILTEREST_ADMIN_PERMISSION_RECOVERY_MODE", "")
-	db := frontPageDisposableDB(t)
+	db := frontPageDisposableDB(t, contexts...)
 	frontPageExec(t, db, `CREATE TABLE wl128_article(id bigint PRIMARY KEY,headline jsonb,published boolean,
 		user_id bigint REFERENCES system_users(id));
 		INSERT INTO wl128_article VALUES(87654321,'{"fi":"Ota yhteyttä","en":"Contact","ch":"联系","yue":"聯絡"}',true,73);

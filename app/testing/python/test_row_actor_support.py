@@ -5,6 +5,7 @@ Keep existing test addresses and downstream fixture imports stable across the sp
 """
 from __future__ import annotations
 
+import hashlib
 import json
 from pathlib import Path
 import re
@@ -532,13 +533,29 @@ def test_dry_run_has_no_dependency_on_the_new_support_or_any_write(monkeypatch):
     assert len(split_sql_statements(sql)) == 1
 
 
-def test_schema_completion_is_before_privileges_and_included_in_checksums():
-    generator = GENERATOR.read_text()
-    assert generator.index('join(reviewed_source(name) for name in schema_completion_sources)') < generator.index('join(reviewed_public_migration(name) for name in schema_privilege_migrations)')
+def test_schema_completion_is_before_privileges_and_included_in_checksums(generator_copy):
+    result = generate(generator_copy)
+    assert result.returncode == 0, result.stderr
+    bootstrap = generator_copy / 'app/server_tools/public_bootstrap'
+    migrations = generator_copy / 'app/server_tools/migrations'
+    schema = (bootstrap / 'schema.sql').read_text()
+    seed = (bootstrap / 'seed_data.sql').read_text()
+    source = (bootstrap / 'source/row_actor_columns.schema.sql').read_text()
+    privileges = (migrations / '20260921000001_withdraw_public_table_creation.sql').read_text()
+    # Compare whole emitted blocks: completion must finish before privileges begin.
+    assert schema.index(source) + len(source) <= schema.index(privileges)
     # The metadata completion follows the development metadata seed and precedes the data step.
-    seed_completion = generator.index('join(reviewed_source(name) for name in seed_completion_sources)')
-    assert generator.index('join(reviewed_public_migration(name) for name in developer_workflow_seed_migrations)') < seed_completion
-    assert seed_completion < generator.index('join(reviewed_public_migration(name) for name in release_data_migrations)')
-    assert 'source_files.extend(public_bootstrap_sources / name for name in schema_completion_sources + seed_completion_sources)' in generator
-    source = (BOOTSTRAP / 'source/row_actor_columns.schema.sql').read_text()
+    metadata = (bootstrap / 'source/row_actor_metadata.seed.sql').read_text()
+    development_seed = (migrations / '20260919000009_seed_developer_workflow_metadata.sql').read_text()
+    data_step = (migrations / DATA_STEP.name).read_text()
+    assert seed.index(development_seed) + len(development_seed) <= seed.index(metadata)
+    assert seed.index(metadata) + len(metadata) <= seed.index(data_step)
+    manifest = json.loads((bootstrap / 'manifest.json').read_text())
+    for name in ('row_actor_columns.schema.sql', 'row_actor_metadata.seed.sql'):
+        path = bootstrap / 'source' / name
+        key = 'filterest/' + path.relative_to(generator_copy).as_posix()
+        assert manifest['source_files'][key]['sha256'] == hashlib.sha256(path.read_bytes()).hexdigest()
+    for name in ('schema.sql', 'seed_data.sql'):
+        key = 'server_tools/public_bootstrap/' + name
+        assert manifest['generated_files'][key]['sha256'] == hashlib.sha256((bootstrap / name).read_bytes()).hexdigest()
     assert set(re.findall(r"'(\w+)'", source)) - {'owner_id'} == set(ACTOR_TABLES)

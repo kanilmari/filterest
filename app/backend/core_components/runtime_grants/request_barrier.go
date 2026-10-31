@@ -144,7 +144,13 @@ func AcquireRequestBarrier(ctx context.Context, db *sql.DB) (context.Context, fu
 		case <-gate.serial:
 		}
 		if gate.active > 0 && time.Now().After(gate.pollAt) {
-			pending, err := pendingStartupDrain(gate.conn)
+			var pending bool
+			var err error
+			if bounded, _ := ctx.Value(requestBarrierBudgetKey{}).(bool); bounded {
+				pending, err = pendingStartupDrainWithinBudget(admission, gate.conn)
+			} else {
+				pending, err = pendingStartupDrain(gate.conn)
+			}
 			if err != nil {
 				gate.serial <- struct{}{}
 				return ctx, nil, err

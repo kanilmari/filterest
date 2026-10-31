@@ -723,7 +723,7 @@
       ],
       "package": "app/backend/core_components/system_table_tools",
       "anchor": "app/backend/core_components/system_table_tools/lang_key_catalogue_scan_test.go"
-    }
+    }, {"paths": ["app/server_tools/migrations/20261024000001_add_saved_home_boxes.sql", "app/server_tools/migrations/20261024000099_record_database_release_9_13_1.sql", "app/server_tools/versioning/schema_snapshots/db-9.13.1.sql"], "package": "app/backend/core_components/system_table_tools", "anchor": "app/backend/core_components/system_table_tools/front_page_boxes_postgres_test.go"}
   ],
   "python_guards": [{"paths": ["app/backend/core_components/build_stamp", "app/backend/core_components/router/admin_version_info_handler.go", "app/backend/core_components/router/admin_version_info_handler_test.go", "app/backend/core_components/product_identity/product_identity_contract_test.go", "app/server_tools/lib/build_stamp_ldflags.sh", "app/server_tools/ctl/lib/local.sh", "app/server_tools/ctl/lib/docker.sh", "app/server_tools/run_filterest_docker.sh", "app/server_tools/release/build_assets.sh", "app/server_tools/release/BUILDING_LINUX_ASSETS.md", "app/docker/Dockerfile", "app/docker/docker-compose.yml"], "tests": ["app/testing/python/test_build_stamp_launchers.py", "app/testing/python/test_release_asset_builder.py"]},
     {

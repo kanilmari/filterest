@@ -16,7 +16,7 @@ import (
 )
 
 func TestFrontPageArticleButtonsPostgresSlowOmissionsKeepEnabledBoxes(t *testing.T) {
-	db, _ := articleButtonsPostgresFixture(t)
+	db, _ := articleButtonsPostgresFixture(t, frontPageBudgetContext(t))
 	frontPageExec(t, db, `UPDATE system_config SET boolean_value=true WHERE key='front_page_show_blocks';
 		INSERT INTO wl143_content VALUES(21,'Latest public box','2026-10-13');
 		INSERT INTO system_column_details(table_uid,column_name,data_type,co_number,card_element)

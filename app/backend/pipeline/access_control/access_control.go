@@ -18,6 +18,7 @@ import (
 	"strings"
 
 	backend "easelect/backend/core_components"
+	"easelect/backend/core_components/dbutils"
 	"easelect/backend/core_components/httpresponse"
 	"easelect/backend/core_components/middlewares"
 	"easelect/backend/core_components/permissions"
@@ -223,8 +224,12 @@ func denyRouteAccess(w http.ResponseWriter, r *http.Request, session *sessions.S
 }
 
 func userIsAdmin(userID int) bool {
+	return userIsAdminWithQuerier(backend.Db, userID)
+}
+
+func userIsAdminWithQuerier(q dbutils.Querier, userID int) bool {
 	var dummy int
-	err := backend.Db.QueryRow(
+	err := q.QueryRow(
 		`SELECT 1 FROM system_user_group_memberships WHERE user_id = $1 AND group_id = 1`,
 		userID,
 	).Scan(&dummy)
@@ -256,7 +261,11 @@ func adminPermissionRecoveryModeEnabled() bool {
 // additional handler boundaries. Only an opted-in development administrator may
 // recover a missing grant; database errors and explicit-only routes stay denied.
 func AdministratorPermissionRecoveryAllowed(userID int, route string) bool {
-	return !update_capability.RequiresExplicitGrant(route) && adminPermissionRecoveryModeEnabled() && userIsAdmin(userID)
+	return administratorPermissionRecoveryWithQuerier(backend.Db, userID, route)
+}
+
+func administratorPermissionRecoveryWithQuerier(q dbutils.Querier, userID int, route string) bool {
+	return !update_capability.RequiresExplicitGrant(route) && adminPermissionRecoveryModeEnabled() && userIsAdminWithQuerier(q, userID)
 }
 
 // Yhdistetty tarkistusfunktio: tarkistaa sekä function-level että (tarvittaessa) table-level -oikeudet.
@@ -264,12 +273,22 @@ func AdministratorPermissionRecoveryAllowed(userID int, route string) bool {
 // UserHasFunctionPermissionOnTableQuiet uses the exact route decision without denial logs.
 // Facades omit unreadable datasets rather than exposing their names in a response.
 func UserHasFunctionPermissionOnTableQuiet(userID int, urlRoute, tableName, tableUID string) bool {
-	allowed, _, _, _, _ := routeTablePermissionDecision(userID, urlRoute, tableName, tableUID)
+	return UserHasFunctionPermissionOnTableQuietWithQuerier(backend.Db, userID, urlRoute, tableName, tableUID)
+}
+
+// UserHasFunctionPermissionOnTableQuietWithQuerier lets optional Home reads use
+// the same route and administrator-recovery rules through a bounded connection.
+func UserHasFunctionPermissionOnTableQuietWithQuerier(q dbutils.Querier, userID int, urlRoute, tableName, tableUID string) bool {
+	allowed, _, _, _, _ := routeTablePermissionDecisionWithQuerier(q, userID, urlRoute, tableName, tableUID)
 	return allowed
 }
 
 func routeTablePermissionDecision(userID int, urlRoute, tableName, tableUID string) (bool, bool, string, string, error) {
-	specificTableRelated, err := permissions.FunctionSpecificTableRelated(backend.Db, urlRoute, permissions.DisabledFunctionFalseOrNull)
+	return routeTablePermissionDecisionWithQuerier(backend.Db, userID, urlRoute, tableName, tableUID)
+}
+
+func routeTablePermissionDecisionWithQuerier(q dbutils.Querier, userID int, urlRoute, tableName, tableUID string) (bool, bool, string, string, error) {
+	specificTableRelated, err := permissions.FunctionSpecificTableRelated(q, urlRoute, permissions.DisabledFunctionFalseOrNull)
 	if err != nil {
 		return false, false, tableName, tableUID, fmt.Errorf("specific_table_related fetch error for urlRoute='%s': %w", urlRoute, err)
 	}
@@ -278,8 +297,8 @@ func routeTablePermissionDecision(userID int, urlRoute, tableName, tableUID stri
 	} else if tableUID == "" && tableName == "" {
 		return false, false, tableName, tableUID, fmt.Errorf("specific_table_related true but table info missing for urlRoute='%s'", urlRoute)
 	}
-	recovery := AdministratorPermissionRecoveryAllowed(userID, urlRoute)
-	allowed, err := permissions.CheckRouteTablePermission(backend.Db, urlRoute, userID,
+	recovery := administratorPermissionRecoveryWithQuerier(q, userID, urlRoute)
+	allowed, err := permissions.CheckRouteTablePermission(q, urlRoute, userID,
 		permissions.RouteTableScope{TableName: tableName, TableUID: tableUID}, permissions.AccessControlRouteTableOptions(false))
 	if err != nil {
 		return false, false, tableName, tableUID, fmt.Errorf("database error: %w", err)

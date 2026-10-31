@@ -16,6 +16,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	backend "easelect/backend/core_components"
 	"easelect/backend/core_components/dbutils"
@@ -29,12 +30,17 @@ var frontPageMigrations = []string{
 	"20261005000033_seed_front_page_language_keys.sql", "20261005000034_register_system_front_page_blocks.sql",
 	"20261005000085_add_front_page_show_blocks.sql", "20261005000086_seed_front_page_hero_language_keys.sql",
 	"20261009000001_seed_front_page_description_language_key.sql",
+	"20261024000001_add_saved_home_boxes.sql",
 }
 
-func frontPageDisposableDB(t *testing.T) *sql.DB {
+func frontPageDisposableDB(t *testing.T, contexts ...context.Context) *sql.DB {
 	t.Helper()
 	if os.Getenv("FILTEREST_TEST_DISPOSABLE_POSTGRES") != "1" {
 		t.Skip("set FILTEREST_TEST_DISPOSABLE_POSTGRES=1 for isolated PostgreSQL checks")
+	}
+	ctx := context.Background()
+	if len(contexts) > 0 {
+		ctx = contexts[0]
 	}
 	bin := os.Getenv("PG_TEST_BIN")
 	if bin == "" {
@@ -53,7 +59,9 @@ func frontPageDisposableDB(t *testing.T) *sql.DB {
 		t.Fatal(err)
 	}
 	run := func(name string, args ...string) ([]byte, error) {
-		return exec.Command(filepath.Join(bin, name), args...).CombinedOutput()
+		command := exec.CommandContext(ctx, filepath.Join(bin, name), args...)
+		command.WaitDelay = time.Second
+		return command.CombinedOutput()
 	}
 	if out, err := run("initdb", "-D", data, "-A", "trust", "-U", "fixture_owner", "--no-locale", "--encoding=UTF8"); err != nil {
 		if strings.Contains(string(out), "Operation not permitted") || strings.Contains(string(out), "Permission denied") {
@@ -62,28 +70,34 @@ func frontPageDisposableDB(t *testing.T) *sql.DB {
 		t.Fatalf("disposable initdb: %v: %s", err, out)
 	}
 	if out, err := run("pg_ctl", "-D", data, "-l", filepath.Join(root, "postgres.log"), "-o", "-h '' -k '"+socket+"' -p 15491", "-w", "start"); err != nil {
+		// A cancelled pg_ctl can leave its already-started server behind.
+		if _, pidErr := os.Stat(filepath.Join(data, "postmaster.pid")); pidErr == nil {
+			frontPageWatchPostgres(t, ctx, bin, data)
+		}
 		log, _ := os.ReadFile(filepath.Join(root, "postgres.log"))
 		if strings.Contains(string(log), "Operation not permitted") || strings.Contains(string(log), "Permission denied") {
 			t.Skipf("sandbox cannot start disposable PostgreSQL: %s", log)
 		}
 		t.Fatalf("disposable pg_ctl: %v: %s %s", err, out, log)
 	}
-	t.Cleanup(func() {
-		if out, err := run("pg_ctl", "-D", data, "-m", "immediate", "-w", "stop"); err != nil {
-			t.Errorf("stop fixture: %v %s", err, out)
-		}
-	})
+	frontPageWatchPostgres(t, ctx, bin, data)
 	db, err := sql.Open("postgres", "host="+socket+" port=15491 user=fixture_owner dbname=postgres sslmode=disable")
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { db.Close() })
+	execFixture := func(query string) {
+		t.Helper()
+		if _, err := db.ExecContext(ctx, query); err != nil {
+			t.Fatal(err)
+		}
+	}
 	for _, name := range []string{"schema.sql", "seed_data.sql"} {
 		content, err := os.ReadFile(filepath.Join("..", "..", "..", "server_tools", "public_bootstrap", name))
 		if err != nil {
 			t.Fatal(err)
 		}
-		frontPageExec(t, db, string(content))
+		execFixture(string(content))
 	}
 	for i := 0; i < 2; i++ {
 		for _, name := range frontPageMigrations {
@@ -91,7 +105,7 @@ func frontPageDisposableDB(t *testing.T) *sql.DB {
 			if err != nil {
 				t.Fatal(err)
 			}
-			frontPageExec(t, db, string(content))
+			execFixture(string(content))
 		}
 	}
 	oldDB, oldAdmin, oldBasic, oldGuest := backend.Db, backend.DbAdmin, backend.DbBasic, backend.DbGuest
@@ -99,7 +113,7 @@ func frontPageDisposableDB(t *testing.T) *sql.DB {
 	t.Cleanup(func() {
 		backend.Db, backend.DbAdmin, backend.DbBasic, backend.DbGuest = oldDB, oldAdmin, oldBasic, oldGuest
 	})
-	frontPageExec(t, db, `INSERT INTO public.system_users(id,username,enabled) VALUES(42,'Public reader',true),(73,'Another public name',true);
+	execFixture(`INSERT INTO public.system_users(id,username,enabled) VALUES(42,'Public reader',true),(73,'Another public name',true);
         INSERT INTO public.system_user_group_memberships(user_id,group_id) VALUES(42,2),(73,2);
         INSERT INTO public.system_functions(id,name,disabled,specific_table_related,url_route_endpoint)
             VALUES(500000,'front_page_fixture_read',false,true,'/api/get-results');
@@ -145,7 +159,7 @@ func TestFrontPagePostgresMigrationsConstraintsDefaultsAndCascades(t *testing.T)
 	if frontPageCount(t, db, `SELECT count(*) FROM system_db_tables t JOIN system_table_folders f ON f.id=t.folder_id WHERE t.table_name='system_front_page_blocks' AND NOT t.is_removable AND f.folder_name='system'`) != 1 {
 		t.Fatal("registry")
 	}
-	if frontPageCount(t, db, `SELECT count(*) FROM system_column_details WHERE table_uid=(SELECT table_uid FROM system_db_tables WHERE table_name='system_front_page_blocks') AND NOT insertable AND NOT editable_in_ui`) != 8 {
+	if frontPageCount(t, db, `SELECT count(*) FROM system_column_details WHERE table_uid=(SELECT table_uid FROM system_db_tables WHERE table_name='system_front_page_blocks') AND NOT insertable AND NOT editable_in_ui`) != 11 {
 		t.Fatal("column metadata")
 	}
 	settings, err := backend.ReadFrontPageSettings(context.Background(), db)
@@ -157,10 +171,10 @@ func TestFrontPagePostgresMigrationsConstraintsDefaultsAndCascades(t *testing.T)
 	}
 	frontPageExec(t, db, `INSERT INTO system_front_page_blocks(user_id,table_uid,sort_order)
         SELECT NULL,table_uid,1 FROM system_db_tables WHERE table_name='wl143_content'`)
-	if frontPageCount(t, db, `SELECT count(*) FROM system_front_page_blocks WHERE result_limit=5 AND enabled AND created=updated`) != 1 {
+	if frontPageCount(t, db, `SELECT count(*) FROM system_front_page_blocks WHERE result_limit=3 AND enabled AND created=updated AND title IS NULL AND query='{}'::jsonb AND category_links=3`) != 1 {
 		t.Fatal("defaults")
 	}
-	for _, values := range []string{"NULL,5,1", "NULL,5,2", "1,5,2", "42,0,2", "42,21,2", "42,5,0", "42,5,101", "999999,5,2"} {
+	for _, values := range []string{"NULL,5,1", "1,5,2", "42,0,2", "42,21,2", "42,5,0", "42,5,101", "999999,5,2"} {
 		if _, err := db.Exec(`INSERT INTO system_front_page_blocks(user_id,result_limit,sort_order,table_uid)
             SELECT ` + values + `,table_uid FROM system_db_tables WHERE table_name='wl143_content'`); err == nil {
 			t.Fatal("constraint accepted", values)
@@ -235,8 +249,8 @@ func TestFrontPagePostgresScopesReplaceResetAndCopy(t *testing.T) {
 		t.Fatal(err)
 	}
 	blocks, source, err = resolveFrontPageBlocks(db, 73)
-	if err != nil || source != "default" || len(blocks) == 0 {
-		t.Fatal("reset common default", blocks, source, err)
+	if err != nil || source != "common" || len(blocks) != 0 {
+		t.Fatal("custom empty common list fell through", blocks, source, err)
 	}
 	users, err := searchFrontPageUsers("Public")
 	if err != nil || len(users) != 2 {

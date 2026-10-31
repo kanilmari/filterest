@@ -28,7 +28,7 @@ func (gallery *cardGalleryRead) discover(q dbutils.Querier, parentTable string) 
 	gallery.discovered = true
 	relation, err := dtt_card_picture.PictureRelationOf(q, parentTable)
 	if (relation == nil || err != nil) && backend.Db != nil && q != backend.Db {
-		fallback, fallbackErr := dtt_card_picture.PictureRelationOf(backend.Db, parentTable)
+		fallback, fallbackErr := dtt_card_picture.PictureRelationOf(dbutils.ReadBudgetFallback(q, backend.Db), parentTable)
 		if fallbackErr == nil && fallback != nil {
 			relation, err = fallback, nil
 		} else if err == nil {
@@ -41,7 +41,7 @@ func (gallery *cardGalleryRead) discover(q dbutils.Querier, parentTable string) 
 	}
 	metadata := q
 	if backend.Db != nil {
-		metadata = backend.Db
+		metadata = dbutils.ReadBudgetFallback(q, backend.Db)
 	}
 	gallery.parentTableUID, gallery.discoveryErr = getTableUID(parentTable, metadata)
 	return gallery.discoveryErr

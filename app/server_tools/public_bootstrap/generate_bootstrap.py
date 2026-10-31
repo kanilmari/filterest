@@ -137,6 +137,7 @@ repair_schema_migrations = (
     "20261015000016_seed_first_run_setup_code.sql",
     "20261015000017_add_article_presentations_editor.sql",
     "20261015000020_add_row_group_heading_order_appearance_field.sql",
+    "20261024000001_add_saved_home_boxes.sql",
 )
 # Complete the physical actor columns after development tables and support functions,
 # before schema privileges. The data step later registers the same columns.
@@ -179,6 +180,7 @@ release_record_migrations = (
     "20261014000099_record_database_release_9_11_2.sql",
     "20261015000099_record_database_release_9_12_0.sql",
     "20261022000399_record_database_release_9_13_0.sql",
+    "20261024000099_record_database_release_9_13_1.sql",
 )
 # Every public migration whose sequence number comes after this one belongs to
 # exactly one list above, so no file is marked as run while missing from the
@@ -205,7 +207,7 @@ def reviewed_public_migration(name: str) -> str:
 # present before the registry seeds; translations need the seeded language rows.
 # The exact full file still owns the baseline hash and completion marker.
 # Schema migrations may also canonicalize data after historical backfills; keep
-# that suffix after release data seeds without editing released migration bytes.
+# that suffix before article materialization without editing released migration bytes.
 language_phase_marker = "-- BOOTSTRAP_LANGUAGE_SEED\n"
 after_data_phase_marker = "-- BOOTSTRAP_AFTER_DATA_SEED\n"
 
@@ -236,6 +238,16 @@ BEGIN
 END $article_bundle_seed_boundary$;
 """
 
+# Folded schema metadata needs the earlier registry/backfills, but must not queue
+# covered writes after article materialization's final check and completion marker.
+# Drain it at that boundary, then let materialization include every seeded field.
+# Upgrades still execute each complete migration in filename order/its own transaction.
+article_seed_index = release_data_migrations.index("20261015000012_materialize_article_bundles.sql")
+release_seed_before_article = "".join(article_bundle_seed_boundary + reviewed_public_migration(name)
+                                     for name in release_data_migrations[:article_seed_index])
+release_seed_from_article = "".join(article_bundle_seed_boundary + reviewed_public_migration(name)
+                                   for name in release_data_migrations[article_seed_index:])
+
 schema_sql = (
     "".join(reviewed_source(name) for name in schema_sources)
     + "".join(reviewed_public_migration(name) for name in developer_workflow_schema_migrations)
@@ -250,9 +262,9 @@ seed_sql = (
     + "".join(reviewed_public_migration(name) for name in language_seed_migrations)
     + "".join(schema_migration_parts(name)[1] for name in repair_schema_migrations)
     + "".join(reviewed_public_migration(name) for name in setting_seed_migrations)
-    + article_bundle_seed_boundary
-    + article_bundle_seed_boundary.join(reviewed_public_migration(name) for name in release_data_migrations)
+    + release_seed_before_article
     + "".join(schema_migration_parts(name)[2] for name in repair_schema_migrations)
+    + release_seed_from_article
 )
 if "__FILTEREST_DB_VERSION__" in schema_sql + seed_sql:
     parser.error("The version row belongs to the acceptance block, not to a source")

@@ -25,7 +25,8 @@ def test_default_view_copy_is_complete_and_does_not_grant_permissions():
     assert source in (APP / 'server_tools/public_bootstrap/seed_data.sql').read_text()
     for table in ('system_functions', 'system_group_table_func_rights', 'system_db_tables', 'system_db_version'):
         assert table not in source
-    assert (APP / 'server_tools/versioning/schema_snapshots/db-9.12.0.sql').read_bytes() == (
+    current = (APP / 'VERSION_DB').read_text().strip()
+    assert (APP / f'server_tools/versioning/schema_snapshots/db-{current}.sql').read_bytes() == (
         APP / 'server_tools/public_bootstrap/schema.sql').read_bytes()
 
 

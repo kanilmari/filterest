@@ -242,7 +242,7 @@ func fetchInformationSchemaColumnDefaults(tableName string, db dbutils.Querier) 
 }
 
 // getColumnDataTypesWithFK hakee sarakkeen data_type sekä FK-tiedot (jos niitä on).
-func getColumnDataTypesWithFK(tableName string, db *sql.DB) (map[string]interface{}, error) {
+func getColumnDataTypesWithFK(tableName string, db dbutils.Querier) (map[string]interface{}, error) {
 	hasCardDetailIconSVG, err := columnExistsInTable(db, "system_column_details", "card_detail_icon_svg")
 	if err != nil {
 		return nil, fmt.Errorf("getColumnDataTypesWithFK: checking card_detail_icon_svg column failed: %v", err)
@@ -440,7 +440,7 @@ func getColumnDataTypesWithFK(tableName string, db *sql.DB) (map[string]interfac
 	return data_types, nil
 }
 
-func fetchTableReadMeta(db *sql.DB, tableName string) (dtt_models.TableReadMeta, error) {
+func fetchTableReadMeta(db dbutils.Querier, tableName string) (dtt_models.TableReadMeta, error) {
 	meta := dtt_models.TableReadMeta{
 		CardDetailsLayout: "conditional_multiline",
 	}
@@ -475,7 +475,7 @@ func fetchTableReadMeta(db *sql.DB, tableName string) (dtt_models.TableReadMeta,
 	var detailColumns *int
 	metadataDB := db
 	if backend.Db != nil {
-		metadataDB = backend.Db
+		metadataDB = dbutils.ReadBudgetFallback(db, backend.Db)
 	}
 	err = metadataDB.QueryRow(fmt.Sprintf(`
 		SELECT %s, %s, %s, %s, COALESCE(fk_display_column, ''), filterbar_visible_by_default

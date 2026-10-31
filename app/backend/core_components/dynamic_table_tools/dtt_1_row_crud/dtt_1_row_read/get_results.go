@@ -63,7 +63,12 @@ func GetResults(response_writer http.ResponseWriter, request *http.Request) {
 	if !allowResultsPresentationRead(response_writer, table_name, userID, viewKey) {
 		return
 	}
-	if !allowDatasetUIRead(response_writer, table_name, userID) {
+	registryQuerier, _, err := dbutils.BeginReadBudget(request.Context(), backend.Db)
+	if err != nil {
+		httpresponse.RespondWithError(response_writer, http.StatusInternalServerError, "error initializing bounded metadata read")
+		return
+	}
+	if !allowDatasetUIReadWithQuerier(response_writer, table_name, userID, registryQuerier) {
 		return
 	}
 	// 1b. Hae myös user_role sessiosta, valitse oikea DB.
@@ -87,13 +92,29 @@ func GetResults(response_writer http.ResponseWriter, request *http.Request) {
 		httpresponse.RespondWithError(response_writer, http.StatusInternalServerError, "error initializing pilot read transaction")
 		return
 	}
+	// Optional Home reads carry a separate database budget. The pilot above
+	// must open its shared transaction using the original request lifetime.
+	readQuerier, finishRead, err := dbutils.BeginReadBudget(request.Context(), readQuerier)
+	if err != nil {
+		httpresponse.RespondWithError(response_writer, http.StatusInternalServerError, "error initializing bounded read")
+		return
+	}
+	defer func() {
+		if err := finishRead(); err != nil {
+			log.Printf("\033[31merror: %s\033[0m\n", err.Error())
+		}
+	}()
+	// Preserve the role/owner split while carrying the box deadline through all
+	// catalogue helpers and their owning-pool fallbacks. Ordinary results keep
+	// their existing unbounded pool behavior.
+	metadataQuerier := dbutils.ReadBudgetFallback(readQuerier, currentDb)
 
 	// Varmistetaan, että dataset on olemassa (cached, 5 min TTL).
 	var datasetExists bool
 	if cached := getCachedDatasetExists(table_name); cached != nil {
 		datasetExists = cached.exists
 	} else {
-		err = currentDb.QueryRow(
+		err = metadataQuerier.QueryRow(
 			"SELECT EXISTS (SELECT 1 FROM system_db_tables WHERE table_name = $1)",
 			table_name,
 		).Scan(&datasetExists)
@@ -110,26 +131,28 @@ func GetResults(response_writer http.ResponseWriter, request *http.Request) {
 	}
 
 	// 2. Haetaan results_per_load (cached, 5 min TTL).
-	var results_per_load int
-	if cached := getCachedConfig("results_load_amount"); cached != nil {
-		results_per_load = cached.resultsPerLoad
-	} else {
-		var results_per_load_str string
-		err = currentDb.QueryRow(
-			"SELECT int_value FROM system_config WHERE key = 'results_load_amount'",
-		).Scan(&results_per_load_str)
-		if err != nil {
-			log.Printf("\033[31merror: %s\033[0m\n", err.Error())
-			httpresponse.RespondWithError(response_writer, http.StatusInternalServerError, "error fetching configuration")
-			return
+	results_per_load := ResultsPageSizeFromContext(request.Context())
+	if results_per_load == 0 {
+		if cached := getCachedConfig("results_load_amount"); cached != nil {
+			results_per_load = cached.resultsPerLoad
+		} else {
+			var results_per_load_str string
+			err = metadataQuerier.QueryRow(
+				"SELECT int_value FROM system_config WHERE key = 'results_load_amount'",
+			).Scan(&results_per_load_str)
+			if err != nil {
+				log.Printf("\033[31merror: %s\033[0m\n", err.Error())
+				httpresponse.RespondWithError(response_writer, http.StatusInternalServerError, "error fetching configuration")
+				return
+			}
+			results_per_load, err = strconv.Atoi(results_per_load_str)
+			if err != nil {
+				log.Printf("\033[31merror: %s\033[0m\n", err.Error())
+				httpresponse.RespondWithError(response_writer, http.StatusInternalServerError, "invalid configuration value")
+				return
+			}
+			setCachedConfig("results_load_amount", &configCacheEntry{resultsPerLoad: results_per_load, cachedAt: time.Now()})
 		}
-		results_per_load, err = strconv.Atoi(results_per_load_str)
-		if err != nil {
-			log.Printf("\033[31merror: %s\033[0m\n", err.Error())
-			httpresponse.RespondWithError(response_writer, http.StatusInternalServerError, "invalid configuration value")
-			return
-		}
-		setCachedConfig("results_load_amount", &configCacheEntry{resultsPerLoad: results_per_load, cachedAt: time.Now()})
 	}
 
 	if previewLimit > 0 {
@@ -161,7 +184,7 @@ func GetResults(response_writer http.ResponseWriter, request *http.Request) {
 		userColumnSettings = cached.settings
 	} else {
 		generation := columnSettingsCacheGeneration(table_name)
-		userColumnSettings, err = fetchUserColumnSettingsOrDefaults(userID, table_name, viewKey, currentDb)
+		userColumnSettings, err = fetchUserColumnSettingsOrDefaults(userID, table_name, viewKey, metadataQuerier)
 		if err != nil {
 			log.Printf("\033[31merror: %s\033[0m\n", err.Error())
 			httpresponse.RespondWithError(response_writer, http.StatusInternalServerError, "error fetching column settings")
@@ -175,7 +198,7 @@ func GetResults(response_writer http.ResponseWriter, request *http.Request) {
 	if cached := getCachedPermissions(userRole, table_name); cached != nil {
 		allowedColumns = cached.columns
 	} else {
-		allowedColumns, err = fetchUserSelectableColumns(currentDb, table_name)
+		allowedColumns, err = fetchUserSelectableColumns(metadataQuerier, table_name)
 		if err != nil {
 			log.Printf("\033[31merror: %s\033[0m\n", err.Error())
 			httpresponse.RespondWithError(response_writer, http.StatusInternalServerError, "error fetching column permissions")
@@ -206,28 +229,28 @@ func GetResults(response_writer http.ResponseWriter, request *http.Request) {
 		geomSrcs = cached.geomSrcs
 	} else {
 		generation := schemaCacheGeneration(table_name)
-		column_data_types, err = getColumnDataTypesWithFK(table_name, currentDb)
+		column_data_types, err = getColumnDataTypesWithFK(table_name, metadataQuerier)
 		if err != nil {
 			log.Printf("\033[31merror: %s\033[0m\n", err.Error())
 			httpresponse.RespondWithError(response_writer, http.StatusInternalServerError, "error fetching column data types")
 			return
 		}
 
-		columnsMap, err = dtt_2_column_read.GetColumnsMapForTable(table_name)
+		columnsMap, err = dtt_2_column_read.GetColumnsMapForTableWithQuerier(table_name, registryQuerier)
 		if err != nil {
 			log.Printf("\033[31merror: %s\033[0m\n", err.Error())
 			httpresponse.RespondWithError(response_writer, http.StatusInternalServerError, "error fetching column data")
 			return
 		}
 
-		tableMeta, err = fetchTableReadMeta(currentDb, table_name)
+		tableMeta, err = fetchTableReadMeta(metadataQuerier, table_name)
 		if err != nil {
 			log.Printf("\033[31merror: %s\033[0m\n", err.Error())
 			httpresponse.RespondWithError(response_writer, http.StatusInternalServerError, "error fetching table metadata")
 			return
 		}
 
-		readPolicy, err = getLegacyMustTrueReadPolicy(currentDb, table_name)
+		readPolicy, err = getLegacyMustTrueReadPolicy(metadataQuerier, table_name)
 		if err != nil {
 			log.Printf("\033[31merror: %s\033[0m\n", err.Error())
 			httpresponse.RespondWithError(response_writer, http.StatusInternalServerError, "error fetching row policy metadata")
@@ -238,7 +261,7 @@ func GetResults(response_writer http.ResponseWriter, request *http.Request) {
 		// the viewer's own. The browser learns the proven owner column only from
 		// this mark and hides such fields when no column carries it.
 		var rowOwnerColumn string
-		rowOwnerColumn, err = resolveResultsRowOwnerColumn(currentDb, table_name, readPolicy, column_data_types)
+		rowOwnerColumn, err = resolveResultsRowOwnerColumn(metadataQuerier, table_name, readPolicy, column_data_types)
 		if err != nil {
 			log.Printf("\033[31merror: %s\033[0m\n", err.Error())
 			httpresponse.RespondWithError(response_writer, http.StatusInternalServerError, "error fetching row owner metadata")
@@ -246,13 +269,13 @@ func GetResults(response_writer http.ResponseWriter, request *http.Request) {
 		}
 		column_data_types = markRowOwnerColumnDescription(column_data_types, rowOwnerColumn)
 
-		geomCols, err = getGeometryColumns(currentDb, table_name)
+		geomCols, err = getGeometryColumns(metadataQuerier, table_name)
 		if err != nil {
 			log.Printf("\033[31merror: %s\033[0m\n", err.Error())
 			httpresponse.RespondWithError(response_writer, http.StatusInternalServerError, "error fetching geo columns")
 			return
 		}
-		geomSrcs, err = getGeometrySourceTables(currentDb, table_name)
+		geomSrcs, err = getGeometrySourceTables(metadataQuerier, table_name)
 		if err != nil {
 			log.Printf("\033[31merror: %s\033[0m\n", err.Error())
 			httpresponse.RespondWithError(response_writer, http.StatusInternalServerError, "error fetching geo sources")
@@ -331,7 +354,7 @@ func GetResults(response_writer http.ResponseWriter, request *http.Request) {
 
 	datasetUID := 0
 	if backend.Db != nil {
-		datasetUID, err = store.UIDForName(backend.Db, table_name)
+		datasetUID, err = store.UIDForName(registryQuerier, table_name)
 		if err != nil {
 			httpresponse.RespondWithError(response_writer, http.StatusInternalServerError, "error resolving dataset identity")
 			return
@@ -376,7 +399,7 @@ func GetResults(response_writer http.ResponseWriter, request *http.Request) {
 	// does not need access to the administrator-only navigation tree.
 	datasetPresentation := DatasetPresentationMedia{}
 	if backend.Db != nil {
-		datasetPresentation, err = fetchDatasetPresentationMedia(backend.Db, table_name)
+		datasetPresentation, err = fetchDatasetPresentationMedia(registryQuerier, table_name)
 		if err != nil {
 			log.Printf("\033[31merror: %s\033[0m\n", err.Error())
 			httpresponse.RespondWithError(response_writer, http.StatusInternalServerError, "error fetching dataset presentation")
@@ -387,7 +410,7 @@ func GetResults(response_writer http.ResponseWriter, request *http.Request) {
 	var datasetAppearance store.AppearanceResponse
 	if backend.Db != nil {
 		var appearanceErr error
-		datasetAppearance, appearanceErr = store.ReadAppearanceForName(backend.Db, datasetUID, table_name, os.Getenv("ENVIRONMENT_TYPE") == "dev")
+		datasetAppearance, appearanceErr = store.ReadAppearanceForName(registryQuerier, datasetUID, table_name, os.Getenv("ENVIRONMENT_TYPE") == "dev")
 		if appearanceErr != nil {
 			httpresponse.RespondWithError(response_writer, http.StatusInternalServerError, "error fetching dataset appearance")
 			return
@@ -424,7 +447,12 @@ func GetResults(response_writer http.ResponseWriter, request *http.Request) {
 	response_writer.Header().Set("Content-Type", "application/json; charset=utf-8")
 	// Kind evidence is refreshed even on a schema-cache hit, after row access
 	// succeeds; capabilities follow schema metadata TTL and commit invalidation.
-	addDatasetKindCapabilities(request.Context(), table_name, response_data)
+	addResultsDatasetKindCapabilities(request.Context(), table_name, response_data, readQuerier)
+	rows_result.Close()
+	if err := finishRead(); err != nil {
+		httpresponse.RespondWithError(response_writer, http.StatusInternalServerError, "error finishing bounded read")
+		return
+	}
 	if err := json.NewEncoder(response_writer).Encode(response_data); err != nil {
 		log.Printf("\033[31merror: %s\033[0m\n", err.Error())
 		httpresponse.RespondWithError(response_writer, http.StatusInternalServerError, "error encoding response")

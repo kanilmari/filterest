@@ -17,12 +17,15 @@ import (
 )
 
 type frontPageBlock struct {
-	ID          int64  `json:"id,omitempty"`
-	Dataset     string `json:"dataset"`
-	ResultLimit int    `json:"result_limit"`
-	SortOrder   int    `json:"sort_order"`
-	Enabled     bool   `json:"enabled"`
-	CanRead     bool   `json:"can_read"`
+	ID            int64           `json:"box_id,omitempty"`
+	Title         json.RawMessage `json:"title"`
+	Query         json.RawMessage `json:"query"`
+	CategoryLinks int             `json:"category_links"`
+	Dataset       string          `json:"dataset"`
+	ResultLimit   int             `json:"result_limit"`
+	SortOrder     int             `json:"sort_order"`
+	Enabled       bool            `json:"enabled"`
+	CanRead       bool            `json:"can_read"`
 }
 
 type frontPageDataset struct {
@@ -34,7 +37,8 @@ type frontPageDataset struct {
 }
 
 func readFrontPageBlocks(q dbutils.Querier, scope int) ([]frontPageBlock, error) {
-	rows, err := q.Query(`SELECT block.id, registry.table_name, block.result_limit, block.sort_order, block.enabled
+	rows, err := q.Query(`SELECT block.id, registry.table_name, block.result_limit, block.sort_order, block.enabled,
+        block.title, block.query, block.category_links
         FROM public.system_front_page_blocks block JOIN public.system_db_tables registry USING (table_uid)
         WHERE block.user_id IS NOT DISTINCT FROM NULLIF($1, 0)::bigint
         ORDER BY block.sort_order, block.id`, scope)
@@ -45,20 +49,26 @@ func readFrontPageBlocks(q dbutils.Querier, scope int) ([]frontPageBlock, error)
 	blocks := []frontPageBlock{}
 	for rows.Next() {
 		var block frontPageBlock
-		if err := rows.Scan(&block.ID, &block.Dataset, &block.ResultLimit, &block.SortOrder, &block.Enabled); err != nil {
+		var title, query []byte
+		if err := rows.Scan(&block.ID, &block.Dataset, &block.ResultLimit, &block.SortOrder, &block.Enabled, &title, &query, &block.CategoryLinks); err != nil {
 			return nil, err
 		}
+		block.Title, block.Query = title, query
 		blocks = append(blocks, block)
 	}
 	return blocks, rows.Err()
 }
 
 func frontPageDatasetReadable(userID int, dataset string) bool {
+	return frontPageDatasetReadableWithQuerier(backend.Db, userID, dataset)
+}
+
+func frontPageDatasetReadableWithQuerier(q dbutils.Querier, userID int, dataset string) bool {
 	if !backend.ShouldExposeCloudManagementDatasetName(dataset) ||
-		!access_control.UserHasFunctionPermissionOnTableQuiet(userID, "/api/get-results", dataset, "") {
+		!access_control.UserHasFunctionPermissionOnTableQuietWithQuerier(q, userID, "/api/get-results", dataset, "") {
 		return false
 	}
-	hidden, err := dataset_visibility.HiddenForUser(backend.Db, dataset, userID)
+	hidden, err := dataset_visibility.HiddenForUser(q, dataset, userID)
 	return err == nil && !hidden
 }
 
@@ -147,7 +157,7 @@ func defaultFrontPageBlocks(q dbutils.Querier, userID int) ([]frontPageBlock, er
 		if !dataset.TopLevel || !dataset.NewestCapable || !dataset.CanRead {
 			continue
 		}
-		blocks = append(blocks, frontPageBlock{Dataset: dataset.Dataset, ResultLimit: 5,
+		blocks = append(blocks, frontPageBlock{Dataset: dataset.Dataset, ResultLimit: 3, Query: json.RawMessage(`{}`), CategoryLinks: 3,
 			SortOrder: len(blocks) + 1, Enabled: true, CanRead: true})
 		if len(blocks) == 12 {
 			break
@@ -159,14 +169,29 @@ func defaultFrontPageBlocks(q dbutils.Querier, userID int) ([]frontPageBlock, er
 func resolveFrontPageBlocks(q dbutils.Querier, userID int) ([]frontPageBlock, string, error) {
 	if userID > 1 {
 		blocks, err := readFrontPageBlocks(q, userID)
-		if err != nil || len(blocks) > 0 {
+		if err != nil {
+			return nil, "user", err
+		}
+		custom, err := frontPageScopeCustom(q, userID)
+		if err != nil || custom || len(blocks) > 0 {
 			return blocks, "user", err
 		}
 	}
 	blocks, err := readFrontPageBlocks(q, 0)
-	if err != nil || len(blocks) > 0 {
+	if err != nil {
+		return nil, "common", err
+	}
+	custom, err := frontPageScopeCustom(q, 0)
+	if err != nil || custom || len(blocks) > 0 {
 		return blocks, "common", err
 	}
 	blocks, err = defaultFrontPageBlocks(q, userID)
 	return blocks, "default", err
+}
+
+func frontPageScopeCustom(q dbutils.Querier, scope int) (bool, error) {
+	var custom bool
+	err := q.QueryRow(`SELECT COALESCE((SELECT is_custom FROM public.system_front_page_revisions
+        WHERE user_id IS NOT DISTINCT FROM NULLIF($1,0)::bigint),false)`, scope).Scan(&custom)
+	return custom, err
 }

@@ -33,6 +33,12 @@ func TestFrontPageArticleButtonsSlowOmissionsKeepBoxesAndPartial(t *testing.T) {
 				start := time.Now()
 				now := start
 				frontPageNow = func() time.Time { return now }
+				frontPageCanRead = func(_ int, dataset string) bool {
+					if partial && dataset == "box_two" {
+						now = now.Add(3 * time.Second)
+					}
+					return true
+				}
 				configured, articleCalls, boxCalls := false, 0, 0
 				frontPageArticleButtonsReader = func(ctx context.Context, _ *sql.DB) (config.FrontPageArticleButtons, string, error) {
 					if _, bounded := ctx.Deadline(); !bounded {
@@ -57,9 +63,6 @@ func TestFrontPageArticleButtonsSlowOmissionsKeepBoxesAndPartial(t *testing.T) {
 					if r.URL.Query().Get("view_key") == "card" {
 						boxCalls++
 						fmt.Fprint(w, `{"columns":["title"],"types":{},"data":[{"id":9,"title":"Newest"}]}`)
-						if partial {
-							now = now.Add(3 * time.Second)
-						}
 						return
 					}
 					articleCalls++

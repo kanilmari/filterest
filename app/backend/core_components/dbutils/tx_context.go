@@ -35,6 +35,7 @@ type LazyTx struct {
 	mu                 sync.Mutex
 	admit              func(context.Context) (func() error, error)
 	admissionRelease   func() error
+	budgetConnection   *sql.Conn
 }
 
 // NewLazyTx creates a new LazyTx bound to the given database pool.
@@ -74,8 +75,20 @@ func (lt *LazyTx) BeginContext(ctx context.Context) (*sql.Tx, error) {
 		}
 		lt.admissionRelease = release
 	}
-	tx, err := lt.db.BeginTx(ctx, nil)
+	// Optional reads may time out waiting for a pool slot. Acquire that slot
+	// under their budget, then give only the original request to BeginTx.
+	var tx *sql.Tx
+	var err error
+	if _, bounded := ctx.Value(readBudgetKey{}).(context.Context); bounded {
+		lt.budgetConnection, err = lt.db.Conn(ReadBudgetContext(ctx))
+		if err == nil {
+			tx, err = lt.budgetConnection.BeginTx(ctx, nil)
+		}
+	} else {
+		tx, err = lt.db.BeginTx(ctx, nil)
+	}
 	if err != nil {
+		lt.closeBudgetConnection()
 		if lt.admissionRelease != nil {
 			_ = lt.admissionRelease()
 		}
@@ -84,6 +97,7 @@ func (lt *LazyTx) BeginContext(ctx context.Context) (*sql.Tx, error) {
 	if lt.onBegin != nil {
 		if err := lt.onBegin(tx); err != nil {
 			_ = tx.Rollback()
+			lt.closeBudgetConnection()
 			if lt.admissionRelease != nil {
 				_ = lt.admissionRelease()
 			}
@@ -104,6 +118,7 @@ func (lt *LazyTx) WasStarted() bool {
 
 // Commit commits the transaction if it was started. No-op otherwise.
 func (lt *LazyTx) Commit() (err error) {
+	defer lt.closeBudgetConnection()
 	if lt.admissionRelease != nil {
 		defer func() {
 			if e := lt.admissionRelease(); err == nil {
@@ -126,6 +141,8 @@ func (lt *LazyTx) Commit() (err error) {
 	if err := tx.Commit(); err != nil {
 		return err
 	}
+	// Hooks may query the same one-connection pool after the transaction ends.
+	lt.closeBudgetConnection()
 	if lt.admissionRelease != nil {
 		err = lt.admissionRelease()
 	}
@@ -142,6 +159,7 @@ func (lt *LazyTx) Commit() (err error) {
 
 // Rollback rolls back the transaction if it was started. No-op otherwise.
 func (lt *LazyTx) Rollback() (err error) {
+	defer lt.closeBudgetConnection()
 	if lt.admissionRelease != nil {
 		defer func() {
 			if e := lt.admissionRelease(); err == nil {
@@ -163,6 +181,7 @@ func (lt *LazyTx) Rollback() (err error) {
 	lt.mu.Unlock()
 
 	err = tx.Rollback()
+	lt.closeBudgetConnection()
 	if lt.admissionRelease != nil {
 		if e := lt.admissionRelease(); err == nil {
 			err = e

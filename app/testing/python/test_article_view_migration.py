@@ -110,7 +110,9 @@ def test_article_bundle_release_bootstrap_and_completion_contract():
     assert seed.index(data) > seed.index("20261015000002_set_exceptional_record_headers.sql")
     assert "record.migration = marker AND record.action = 'completed'" in seed
     assert "public.app_check_article_bundles() AS result" in seed
-    assert (APP / "server_tools/versioning/schema_snapshots/db-9.12.0.sql").read_text() == schema
+    current = (APP / "VERSION_DB").read_text().strip()
+    assert (APP / f"server_tools/versioning/schema_snapshots/db-{current}.sql").read_text() == schema
+    assert manifest["db_version"] == current
 
 
 def test_article_bundle_bootstrap_drains_own_events_before_registry_ddl():

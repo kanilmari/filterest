@@ -50,6 +50,28 @@ func addDatasetKindCapabilities(ctx context.Context, name string, response map[s
 	}
 }
 
+// Canonical Home reads already have a savepoint/deadline-bound querier. Reuse
+// it for the final evidence read instead of escaping through PeekTx or a pool.
+// Ordinary result callers retain the existing context-aware evidence reader.
+func addResultsDatasetKindCapabilities(ctx context.Context, name string, response map[string]interface{}, q dbutils.Querier) {
+	if dbutils.ReadBudgetContext(ctx) == ctx {
+		addDatasetKindCapabilities(ctx, name, response)
+		return
+	}
+	capabilities, err := dataset_kinds.ReadForName(ctx, resultsKindQuerier{q}, name)
+	if err != nil {
+		log.Printf("\033[31merror: optional dataset kind evidence: %v\033[0m", err)
+		return
+	}
+	response["kind_capabilities"] = capabilities
+}
+
+type resultsKindQuerier struct{ dbutils.Querier }
+
+func (q resultsKindQuerier) QueryRowContext(_ context.Context, query string, args ...any) *sql.Row {
+	return q.QueryRow(query, args...)
+}
+
 // Related appearance has already proved the ordinary read permission and
 // pinned each authorized dataset UID. Never disclose capabilities for a
 // related-only reader whose ordinary dataset metadata is unavailable.

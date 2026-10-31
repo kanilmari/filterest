@@ -7,6 +7,7 @@ package dtt_utils
 import (
 	"database/sql"
 	backend "easelect/backend/core_components"
+	"easelect/backend/core_components/dbutils"
 	"easelect/backend/core_components/fk_display"
 	"errors"
 	"fmt"
@@ -21,8 +22,17 @@ type ForeignKey struct {
 }
 
 func GetForeignKeysForTable(tableName string) (map[string]ForeignKey, error) {
-	return getForeignKeysForTable(tableName, func(table string) (string, error) {
-		column, err := getReferencedTableNameColumn(table)
+	return GetForeignKeysForTableWithQuerier(tableName, backend.Db)
+}
+
+// GetForeignKeysForTableWithQuerier carries optional read budgets through both
+// relationship discovery and each referenced table's display-column lookup.
+func GetForeignKeysForTableWithQuerier(tableName string, q dbutils.Querier) (map[string]ForeignKey, error) {
+	return getForeignKeysForTableWithQuerier(tableName, q, func(table string) (string, error) {
+		column, found, err := resolveFKDisplayColumnWithQuerier(q, "public", table, false)
+		if err == nil && !found {
+			err = fmt.Errorf("no text/varchar columns found in table public.%s", table)
+		}
 		if err != nil {
 			log.Printf("error fetching name column for table %s: %v", table, err)
 			column = ""
@@ -41,6 +51,10 @@ func GetForeignKeysForTableForEvidence(tableName string) (map[string]ForeignKey,
 }
 
 func getForeignKeysForTable(tableName string, resolve func(string) (string, error)) (map[string]ForeignKey, error) {
+	return getForeignKeysForTableWithQuerier(tableName, backend.Db, resolve)
+}
+
+func getForeignKeysForTableWithQuerier(tableName string, q dbutils.Querier, resolve func(string) (string, error)) (map[string]ForeignKey, error) {
 	foreignKeyQuery := `
         SELECT
             kcu.column_name AS referencing_column,
@@ -59,7 +73,7 @@ func getForeignKeysForTable(tableName string, resolve func(string) (string, erro
             tc.table_name = $1;
     `
 
-	fkRows, err := backend.Db.Query(foreignKeyQuery, tableName)
+	fkRows, err := q.Query(foreignKeyQuery, tableName)
 	if err != nil {
 		return nil, err
 	}
@@ -128,13 +142,17 @@ func ResolveFKDisplayColumn(schemaName, tableName string) (string, error) {
 // Strict reads propagate optional-override failures too; runtime retains its
 // historical fallback. found distinguishes an absent label from a failed read.
 func resolveFKDisplayColumn(schemaName, tableName string, strict bool) (column string, found bool, err error) {
+	return resolveFKDisplayColumnWithQuerier(backend.Db, schemaName, tableName, strict)
+}
+
+func resolveFKDisplayColumnWithQuerier(q dbutils.Querier, schemaName, tableName string, strict bool) (column string, found bool, err error) {
 	if schemaName == "" {
 		schemaName = "public"
 	}
 
 	// 1) Konfiguroitu override system_db_tables-taulusta.
 	var configured string
-	configErr := backend.Db.QueryRow(
+	configErr := q.QueryRow(
 		`SELECT fk_display_column FROM system_db_tables
 		 WHERE table_name = $1
 		   AND fk_display_column IS NOT NULL AND fk_display_column != ''
@@ -146,7 +164,7 @@ func resolveFKDisplayColumn(schemaName, tableName string, strict bool) (column s
 	}
 	if configErr == nil && configured != "" {
 		var exists bool
-		existsErr := backend.Db.QueryRow(
+		existsErr := q.QueryRow(
 			`SELECT EXISTS (
 				SELECT 1 FROM information_schema.columns
 				WHERE table_schema = $1 AND table_name = $2 AND column_name = $3
@@ -168,7 +186,7 @@ func resolveFKDisplayColumn(schemaName, tableName string, strict bool) (column s
 	}
 
 	// 3-6) Heuristiikka + fallback: haetaan kaikki text/varchar-sarakkeet.
-	rows, err := backend.Db.Query(
+	rows, err := q.Query(
 		`SELECT column_name FROM information_schema.columns
 		 WHERE table_schema = $1 AND table_name = $2
 		   AND data_type IN ('character varying', 'text')
@@ -197,10 +215,4 @@ func resolveFKDisplayColumn(schemaName, tableName string, strict bool) (column s
 	}
 	column, err = fk_display.Resolve(tableName, textCols)
 	return column, err == nil, err
-}
-
-// getReferencedTableNameColumn on sisäinen apufunktio, joka delegoi
-// ResolveFKDisplayColumn():lle. Sitä kutsuu GetForeignKeysForTable() yllä.
-func getReferencedTableNameColumn(tableName string) (string, error) {
-	return ResolveFKDisplayColumn("public", tableName)
 }

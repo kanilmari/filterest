@@ -1,6 +1,6 @@
 // front_page_admin.go
 // Provides the administrator's common and account-specific front page API.
-// Connects strict request forms, display names and versioned transactional replacement.
+// Connects strict request forms, display names and versioned transactional box updates.
 // Keeps these validated writes out of generic row mutation routes.
 package system_table_tools
 
@@ -25,10 +25,15 @@ var errFrontPageConflict = errors.New("front page changed; reload before saving"
 var errFrontPageInput = errors.New("invalid front page request")
 
 type frontPageBlockInput struct {
-	Dataset     string `json:"dataset"`
-	ResultLimit int    `json:"result_limit"`
-	SortOrder   int    `json:"sort_order"`
-	Enabled     bool   `json:"enabled"`
+	ID            int64           `json:"box_id,omitempty"`
+	Title         json.RawMessage `json:"title,omitempty"`
+	Query         json.RawMessage `json:"query,omitempty"`
+	CategoryLinks *int            `json:"category_links,omitempty"`
+	Dataset       string          `json:"dataset"`
+	ResultLimit   int             `json:"result_limit"`
+	SortOrder     int             `json:"sort_order"`
+	Enabled       bool            `json:"enabled"`
+	present       map[string]json.RawMessage
 }
 
 type frontPageAdminSettings struct {
@@ -53,7 +58,7 @@ var frontPageAdminSaver = saveFrontPageAdminRequest
 
 // AdminFrontPageHandler manages front page settings and scope lists.
 // GET ?user_id=42 returns settings, hero, background, background_error, scope, saved,
-// inherits_common, source, version, blocks, datasets (newest_capable, can_read),
+// inherits_common, source, version, blocks, diagnostics [{box_id,reason_key}], datasets (newest_capable, can_read),
 // and site_root {path,exists,ready,status_error} (administrator-only deployment status).
 // GET ?user_query=text returns at most 20 {user_id,display_name} accounts.
 // POST accepts {settings:{separate_front_page,front_page_button_shows_site_name,front_page_show_blocks,display_index_html_at_startup}}
@@ -61,12 +66,17 @@ var frontPageAdminSaver = saveFrontPageAdminRequest
 // or {presentation:{schema_version,anchor,horizontal_margin_px,vertical_margin_px,alignment,phone_alignment,phone_story_size,max_width_px,light_wash,light_opacity,dark_wash,dark_opacity,text_style:{preset,reveal:{mode,start_ms,interval_ms}}},version}
 // (v2–v4 remain accepted; 15 px stores v2/v3/v4; other phone sizes store v5). Saves return
 // {version,presentation}, with presentation normalized to the stored state as a v5 read value.
-// Use the independent presentation_version from GET. Scope writes accept {user_id,version,blocks:[{dataset,result_limit,sort_order,enabled}]},
+// Use the independent presentation_version from GET. Scope writes accept {user_id,version,blocks:[{box_id?,dataset,result_limit,sort_order,enabled,title?,query?,category_links?}]},
 // {user_id,version,reset:true}, {user_id,version,copy_from_common:true}.
 // Omit user_id or use null for common. Version is opaque, initially "none";
 // successful scope writes return {version}, stale writes return 409. Older settings
 // clients may omit front_page_show_blocks to preserve it; hero strings allow at most 2000 characters.
+// Omitted box fields retain their saved values. A legacy entry without box_id matches
+// exactly one existing box for its dataset; ambiguous matches are refused. An empty
+// saved list is custom; reset:true restores inheritance while retaining its revision.
 func AdminFrontPageHandler(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Cache-Control", "private, no-store")
+	w.Header().Set("Vary", "Cookie")
 	if r.Method != http.MethodGet && r.Method != http.MethodPost {
 		w.Header().Set("Allow", "GET, POST")
 		httpresponse.RespondWithError(w, http.StatusMethodNotAllowed, "method not allowed")
@@ -79,7 +89,7 @@ func AdminFrontPageHandler(w http.ResponseWriter, r *http.Request) {
 	r.Body = http.MaxBytesReader(w, r.Body, 32<<10)
 	request, err := decodeFrontPageAdminRequest(r.Body)
 	if err != nil {
-		httpresponse.RespondWithError(w, http.StatusBadRequest, errFrontPageInput.Error())
+		httpresponse.RespondWithRefusal(w, &httpresponse.Refusal{Status: http.StatusBadRequest, LangKey: "front_page_blocks_invalid", Message: errFrontPageInput.Error()})
 		return
 	}
 	version, err := frontPageAdminSaver(r.Context(), request)
@@ -87,7 +97,7 @@ func AdminFrontPageHandler(w http.ResponseWriter, r *http.Request) {
 	case errors.Is(err, errFrontPageConflict):
 		httpresponse.RespondWithError(w, http.StatusConflict, err.Error())
 	case errors.Is(err, errFrontPageInput):
-		httpresponse.RespondWithError(w, http.StatusBadRequest, err.Error())
+		httpresponse.RespondWithRefusal(w, &httpresponse.Refusal{Status: http.StatusBadRequest, LangKey: "front_page_blocks_invalid", Message: err.Error()})
 	case err != nil:
 		log.Printf("[AdminFrontPageHandler] save failed: %v", err)
 		httpresponse.RespondWithError(w, http.StatusInternalServerError, "front page save failed")
@@ -174,13 +184,20 @@ func validateFrontPageBlockInputs(blocks []frontPageBlockInput) error {
 	if len(blocks) > 20 {
 		return errFrontPageInput
 	}
-	seenDatasets, seenPositions := map[string]bool{}, map[int]bool{}
-	for _, block := range blocks {
-		if block.Dataset == "" || len(block.Dataset) > 63 || block.ResultLimit < 1 || block.ResultLimit > 20 ||
-			block.SortOrder < 1 || block.SortOrder > 100 || seenDatasets[block.Dataset] || seenPositions[block.SortOrder] {
+	seenIDs, seenPositions := map[int64]bool{}, map[int]bool{}
+	for index := range blocks {
+		block := &blocks[index]
+		partial := block.present != nil
+		if block.ID < 0 || (block.ID > 0 && seenIDs[block.ID]) || len(block.Dataset) > 63 ||
+			((block.ID == 0 || !partial || block.has("dataset")) && block.Dataset == "") ||
+			((!partial || block.has("result_limit")) && (block.ResultLimit < 1 || block.ResultLimit > 20)) ||
+			((!partial || block.has("sort_order")) && (block.SortOrder < 1 || block.SortOrder > 100 || seenPositions[block.SortOrder])) {
 			return errFrontPageInput
 		}
-		seenDatasets[block.Dataset], seenPositions[block.SortOrder] = true, true
+		if err := validateFrontPageBoxInputFields(block); err != nil {
+			return err
+		}
+		seenIDs[block.ID], seenPositions[block.SortOrder] = true, true
 	}
 	return nil
 }
@@ -265,7 +282,12 @@ func getAdminFrontPage(w http.ResponseWriter, r *http.Request) {
 		httpresponse.RespondWithError(w, http.StatusInternalServerError, "blocks unavailable")
 		return
 	}
-	saved := len(blocks) > 0
+	saved, err := frontPageScopeCustom(tx, scope)
+	if err != nil {
+		httpresponse.RespondWithError(w, http.StatusInternalServerError, "scope unavailable")
+		return
+	}
+	saved = saved || len(blocks) > 0
 	source := "common"
 	if scope > 1 {
 		source = "user"
@@ -302,5 +324,5 @@ func getAdminFrontPage(w http.ResponseWriter, r *http.Request) {
 	httpresponse.RespondWithJSON(w, http.StatusOK, map[string]any{"settings": settings, "hero": hero, "background": background, "presentation": layout, "presentation_version": layoutVersion,
 		"background_error": backgroundError, "scope": map[string]any{"user_id": userID, "display_name": displayName},
 		"saved": saved, "inherits_common": scope > 1 && !saved, "source": source, "version": version,
-		"blocks": blocks, "datasets": datasets, "site_root": backend.ReadSiteRootStatus(runtimepaths.Current().StorageRoot)})
+		"blocks": blocks, "diagnostics": frontPageAdminDiagnostics(r, blocks, scope), "datasets": datasets, "site_root": backend.ReadSiteRootStatus(runtimepaths.Current().StorageRoot)})
 }

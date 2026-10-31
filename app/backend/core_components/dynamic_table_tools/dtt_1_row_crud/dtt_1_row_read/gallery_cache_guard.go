@@ -38,7 +38,7 @@ func guardGalleryCachedImages(q dbutils.Querier, table string, rows []map[string
 	// are read; normalization and ownership classification stay in the K121 resolver.
 	metadata := q
 	if backend.Db != nil {
-		metadata = backend.Db
+		metadata = dbutils.ReadBudgetFallback(q, backend.Db)
 	}
 	if gallery == nil {
 		gallery = &cardGalleryRead{}

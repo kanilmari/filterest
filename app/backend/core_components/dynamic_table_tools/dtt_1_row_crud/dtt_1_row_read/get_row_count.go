@@ -159,7 +159,7 @@ func getRowCountWithReadPolicy(db dbutils.Querier, tableName, userRole string, u
 /* -----------------------------------------------------------------
  *  1) Suorat geo-sarakkeet
  * ----------------------------------------------------------------*/
-func getGeometryColumns(db *sql.DB, tableName string) ([]string, error) {
+func getGeometryColumns(db dbutils.Querier, tableName string) ([]string, error) {
 	const query = `
         SELECT column_name
         FROM information_schema.columns
@@ -190,7 +190,7 @@ func getGeometryColumns(db *sql.DB, tableName string) ([]string, error) {
  *     → Jos jokin geo-taulu viittaa tähän tauluun, merkitään se
  *       lokaatiotauluksi (hasGeo = true)
  * ----------------------------------------------------------------*/
-func getGeometrySourceTables(db *sql.DB, tableName string) ([]string, error) {
+func getGeometrySourceTables(db dbutils.Querier, tableName string) ([]string, error) {
 	const query = `
         SELECT DISTINCT tc.table_name
         FROM information_schema.table_constraints        tc

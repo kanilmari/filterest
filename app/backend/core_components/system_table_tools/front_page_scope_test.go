@@ -1,6 +1,7 @@
 // front_page_scope_test.go
 // Verifies whole-list inheritance and computed menu ordering without PostgreSQL.
 // The database fixture supplies metadata; the implementation owns scope and cap decisions.
+// Keeps an intentionally empty saved list distinct from inherited project defaults.
 package system_table_tools
 
 import (
@@ -17,6 +18,7 @@ import (
 
 type frontPageScopeFixture struct {
 	saved   map[int][][]driver.Value
+	custom  map[int]bool
 	visited []int
 }
 type frontPageScopeDriver struct{ state *frontPageScopeFixture }
@@ -50,10 +52,18 @@ func (r *frontPageScopeRows) Next(dest []driver.Value) error {
 	return nil
 }
 func (c frontPageScopeConn) QueryContext(_ context.Context, q string, args []driver.NamedValue) (driver.Rows, error) {
+	if strings.Contains(q, "FROM public.system_front_page_revisions") {
+		scope := int(args[0].Value.(int64))
+		return &frontPageScopeRows{columns: []string{"custom"}, rows: [][]driver.Value{{c.state.custom[scope]}}}, nil
+	}
 	if strings.Contains(q, "FROM public.system_front_page_blocks") {
 		scope := int(args[0].Value.(int64))
 		c.state.visited = append(c.state.visited, scope)
-		return &frontPageScopeRows{columns: []string{"id", "dataset", "limit", "sort_order", "enabled"}, rows: c.state.saved[scope]}, nil
+		data := [][]driver.Value{}
+		for _, row := range c.state.saved[scope] {
+			data = append(data, append(append([]driver.Value{}, row...), nil, []byte(`{}`), int64(3)))
+		}
+		return &frontPageScopeRows{columns: []string{"id", "dataset", "limit", "sort_order", "enabled", "title", "query", "category_links"}, rows: data}, nil
 	}
 	if strings.Contains(q, "SELECT grouped.table_name") {
 		rows := [][]driver.Value{{"z_main", true, true, true}, {"a_saved", true, false, true}, {"nested", false, false, true}, {"no_newest", true, false, false}, {"denied", true, false, true}}
@@ -102,8 +112,28 @@ func TestFrontPageScopeHierarchyGuestAndDefaultMenu(t *testing.T) {
 		t.Fatal(blocks, source, err)
 	}
 	for _, block := range blocks {
-		if block.Dataset == "nested" || block.Dataset == "no_newest" || block.Dataset == "denied" || block.ResultLimit != 5 || !block.Enabled {
+		if block.Dataset == "nested" || block.Dataset == "no_newest" || block.Dataset == "denied" || block.ResultLimit != 3 || !block.Enabled {
 			t.Fatal(block)
+		}
+	}
+}
+
+func TestFrontPageScopeCustomEmptyStopsInheritance(t *testing.T) {
+	state := &frontPageScopeFixture{saved: map[int][][]driver.Value{}, custom: map[int]bool{42: true, 0: true}}
+	name := fmt.Sprintf("front_page_empty_%d", frontPageScopeDriverID.Add(1))
+	sql.Register(name, frontPageScopeDriver{state})
+	db, err := sql.Open(name, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	for _, tc := range []struct {
+		id     int
+		source string
+	}{{42, "user"}, {73, "common"}, {1, "common"}} {
+		blocks, source, err := resolveFrontPageBlocks(db, tc.id)
+		if err != nil || source != tc.source || blocks == nil || len(blocks) != 0 {
+			t.Fatal(blocks, source, err)
 		}
 	}
 }

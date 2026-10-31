@@ -160,7 +160,7 @@ func loadJoinMetadata(
 		return joinMetadataCacheEntry{}, err
 	}
 
-	foreignKeys, err := dtt_utils.GetForeignKeysForTable(tableName)
+	foreignKeys, err := dtt_utils.GetForeignKeysForTableWithQuerier(tableName, dbutils.ReadBudgetFallback(db, backend.Db))
 	if err != nil {
 		log.Printf("\033[31merror: %s\033[0m\n", err.Error())
 		return joinMetadataCacheEntry{}, err
@@ -174,7 +174,7 @@ func loadJoinMetadata(
 	// Only title annotation uses them; authorization is resolved per request below.
 	metadataDB := db
 	if backend.Db != nil {
-		metadataDB = backend.Db
+		metadataDB = dbutils.ReadBudgetFallback(db, backend.Db)
 	}
 	titleTargets, err := fetchRecordTitleAliasTargets(metadataDB, foreignKeys)
 	if err != nil {

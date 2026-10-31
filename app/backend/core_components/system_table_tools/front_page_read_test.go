@@ -2,6 +2,7 @@
 // Verifies the front page facade never leaks omitted datasets or changes delegate identity.
 // Connects session fixtures to the real handler with only persistence and canonical reads stubbed.
 // Keeps each authorized appearance snapshot with its dataset without exposing denied blocks.
+// Keeps denied box metadata private while preserving the caller's transaction and SQL cap.
 package system_table_tools
 
 import (
@@ -17,6 +18,7 @@ import (
 
 	backend "easelect/backend/core_components"
 	"easelect/backend/core_components/dbutils"
+	read "easelect/backend/core_components/dynamic_table_tools/dtt_1_row_crud/dtt_1_row_read"
 	e_sessions "easelect/backend/core_components/sessions"
 	config "easelect/backend/core_components/system_config_checks"
 	presentation "easelect/frontend/shared/front_page_presentation"
@@ -47,6 +49,9 @@ func frontPageSessionRequest(t *testing.T, userID int, role, method, target stri
 
 func stubFrontPageRead(t *testing.T, blocks []frontPageBlock) {
 	t.Helper()
+	boxCanRead := frontPageBoxCanRead
+	frontPageBoxCanRead = func(_ context.Context, userID int, dataset string) bool { return frontPageCanRead(userID, dataset) }
+	t.Cleanup(func() { frontPageBoxCanRead = boxCanRead })
 	articleReader := frontPageArticleButtonsReader
 	frontPageArticleButtonsReader = func(context.Context, *sql.DB) (config.FrontPageArticleButtons, string, error) {
 		return config.EmptyFrontPageArticleButtons(), "none", nil
@@ -85,7 +90,7 @@ func TestFrontPageReadOffAndMethods(t *testing.T) {
 }
 
 func TestFrontPageReadOmitsDeniedAndFailedBlocksAndKeepsDelegateContext(t *testing.T) {
-	stubFrontPageRead(t, []frontPageBlock{{Dataset: "allowed", ResultLimit: 1, Enabled: true}, {Dataset: "private-name", ResultLimit: 5, Enabled: true}, {Dataset: "ui-hidden", Enabled: true}, {Dataset: "failed-name", Enabled: true}, {Dataset: "disabled", Enabled: false}})
+	stubFrontPageRead(t, []frontPageBlock{{Dataset: "allowed", ResultLimit: 1, Enabled: true}, {Dataset: "private-name", ResultLimit: 5, Enabled: true}, {Dataset: "ui-hidden", ResultLimit: 3, Enabled: true}, {Dataset: "failed-name", ResultLimit: 3, Enabled: true}, {Dataset: "disabled", Enabled: false}})
 	frontPageCanRead = func(userID int, dataset string) bool { return userID > 0 && dataset != "private-name" }
 	for _, actor := range []struct {
 		id   int
@@ -94,11 +99,12 @@ func TestFrontPageReadOmitsDeniedAndFailedBlocksAndKeepsDelegateContext(t *testi
 		t.Run(actor.role, func(t *testing.T) {
 			request := frontPageSessionRequest(t, actor.id, actor.role, "GET", "/api/front-page?dataset=attacker&query=secret")
 			lazy := dbutils.NewLazyTx(nil)
-			ctx := dbutils.SetLazyTx(request.Context(), lazy)
+			type marker struct{}
+			ctx := context.WithValue(dbutils.SetLazyTx(request.Context(), lazy), marker{}, lazy)
 			request = request.WithContext(ctx)
 			calls := []string{}
 			frontPageResultsHandler = func(w http.ResponseWriter, r *http.Request) {
-				if r.Context() != ctx {
+				if r.Context().Value(marker{}) != lazy || read.ResultsPageSizeFromContext(r.Context()) < 1 {
 					t.Fatal("delegate lost transaction and actor context")
 				}
 				id, err := e_sessions.GetUserIDFromSession(r)
@@ -145,14 +151,13 @@ func TestFrontPageReadOmitsDeniedAndFailedBlocksAndKeepsDelegateContext(t *testi
 
 func TestFrontPageReadBudgetAndCanonicalPageCap(t *testing.T) {
 	stubFrontPageRead(t, []frontPageBlock{{Dataset: "one", ResultLimit: 20, Enabled: true}, {Dataset: "two", ResultLimit: 5, Enabled: true}})
-	start := time.Now()
-	clockCalls := 0
-	frontPageNow = func() time.Time {
-		clockCalls++
-		if clockCalls > 3 {
-			return start.Add(3 * time.Second)
+	now := time.Now()
+	frontPageNow = func() time.Time { return now }
+	frontPageCanRead = func(_ int, dataset string) bool {
+		if dataset == "two" {
+			now = now.Add(3 * time.Second)
 		}
-		return start
+		return true
 	}
 	calls := 0
 	frontPageResultsHandler = func(w http.ResponseWriter, r *http.Request) {
