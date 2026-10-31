@@ -654,7 +654,11 @@ for (const theme of ['light', 'dark'] as const) {
       }
       await proveKeyboardMenu(page, state);
       expect(state.writes).toEqual([]);
-      if (fixture.name === 'Fintravel' && fixture.width === 320) await proveContactButton(page, theme, openHome);
+      if (fixture.name === 'Fintravel' && fixture.width === 320) {
+        // The proof opens Home three more times: 26 s of the default 30 s at one worker, past it at three.
+        test.setTimeout(60_000);
+        await proveContactButton(page, theme, openHome);
+      }
     });
   }
 }
