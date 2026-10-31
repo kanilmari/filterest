@@ -88,7 +88,13 @@ for (const width of [390, 700, 701, 1000, 1440, 1920]) for (const side of ['left
         const inset = declarations(['.front-page-text-stage'], width)['padding-inline'];
         expect(blocks['max-width']).toBe('800px');
         expect(blocks['grid-template-columns']).toBe('minmax(0, 1fr)');
-        expect(blocks.padding).toBe('0 1rem'); // 800px wrapper minus two 16px gutters = 768px surface.
+        expect(blocks.padding).toBe('0 1rem'); // Desktop gutters; phones override only the inline sides.
+        expect(blocks['padding-inline']).toBe(width <= 700 ? '0' : undefined);
+        const group = declarations(['.front-page-blocks .supplemental-dataset-group'], width);
+        expect(group.border).toBe('1px solid var(--border_color)');
+        expect(group['border-inline-width']).toBe(width <= 700 ? '0' : undefined);
+        expect(group['border-radius']).toBe(width <= 700 ? '0' : 'var(--home-block-radius, var(--fw-radius-md, 8px))');
+        expect(group['padding-inline']).toBe(width <= 700 ? '16px' : undefined);
         expect(pixels(blocks.gap, variables)).toBe(40);
         if (width <= 700 || side === 'center') {
             expect(blocks.width).toBe('100%');

@@ -161,7 +161,12 @@ for (const width of [1440, 1000, 390] as const) {
           const style = getComputedStyle(element);
           return { actual: style.borderRadius, token: style.getPropertyValue('--fw-radius-lg').trim() };
         });
-        expect(radius.actual).toBe(radius.token); expect(radius.actual).toBe('10px');
+        if (width <= 700) {
+          // WO108/K531: on a phone the box is one layer with square corners.
+          expect(radius.actual).toBe('0px');
+        } else {
+          expect(radius.actual).toBe(radius.token); expect(radius.actual).toBe('10px');
+        }
         const rows = group.locator('li');
         for (let rowIndex = 0; rowIndex < 3; rowIndex++) {
           const row = rows.nth(rowIndex);

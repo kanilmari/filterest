@@ -528,6 +528,14 @@ body.dark-mode .front-page {
     width: 100%;
     margin-inline: auto;
   }
+  .front-page-content--positioned > .front-page-blocks {
+    padding-inline: 0;
+  }
+  .front-page-blocks .supplemental-dataset-group {
+    border-inline-width: 0;
+    border-radius: 0;
+    padding-inline: 16px;
+  }
   /* Phones give the block the whole width between the gutters, so short centred or right-aligned text still uses the line. */
   .front-page-text-stage .front-page-hero { width: auto; max-width: none; }
   .front-page-content {
