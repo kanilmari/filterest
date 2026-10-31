@@ -11,11 +11,14 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
+	"path/filepath"
 	"strings"
 
 	"easelect/backend/core_components/dbutils"
 	"easelect/backend/core_components/dynamic_table_tools/dtt_card_picture"
 	"easelect/backend/core_components/media_utils"
+	"easelect/backend/core_components/runtimepaths"
 
 	"github.com/lib/pq"
 )
@@ -134,6 +137,15 @@ func InsertAdoptedCardImage(q dbutils.Querier, gallery *dtt_card_picture.Picture
 		fmt.Sprintf(`INSERT INTO %s (%s) VALUES (%s) RETURNING id`, childTable, strings.Join(columns, ", "), strings.Join(values, ", ")),
 		args...,
 	).Scan(&id)
+	if err == nil && (columnTypes["metadata_json"] == "jsonb" || columnTypes["metadata_json"] == "json") {
+		if size := adoptedImageSize(q, gallery, parentRowID, value); size != nil {
+			if sizeErr := media_utils.WithImageSizeSavepoint(q, func() error {
+				return media_utils.MergeImageSize(q, gallery.ChildTable, id, size, false)
+			}); sizeErr != nil {
+				log.Print("[image dimensions] optional adoption metadata write failed")
+			}
+		}
+	}
 	return id, err
 }
 
@@ -172,4 +184,40 @@ func isSharedAssetNumberColumn(dataType string) bool {
 	default:
 		return false
 	}
+}
+
+// adoptedImageSize keeps optional lookup errors inside a savepoint. Most stored
+// references carry their coordinates and need no extra database read at all.
+func adoptedImageSize(q dbutils.Querier, gallery *dtt_card_picture.PictureRelation, parentRowID int64, value string) *media_utils.DisplayedImageSize {
+	owner, file, library := "", "", false
+	if id, _, name, valid := media_utils.ParseMediaLibraryStoragePath(strings.TrimPrefix(value, "/storage/")); valid {
+		owner, file, library = filepath.Join("media", id), name, true
+	} else {
+		loc, valid := resolveSharedAssetPreviewLocation(value, "", parentRowID)
+		if !valid {
+			var uid string
+			err := media_utils.WithImageSizeSavepoint(q, func() error {
+				return q.QueryRow(`SELECT p.table_uid::text FROM system_foreign_key_relations_1_m f
+                    JOIN system_db_tables c ON c.table_uid=f.source_table_uid
+                    JOIN system_db_tables p ON p.table_uid=f.target_table_uid
+                    WHERE c.table_name=$1 AND f.source_column_name=$2 ORDER BY f.id LIMIT 1`, gallery.ChildTable, gallery.ForeignKey).Scan(&uid)
+			})
+			if err != nil {
+				log.Print("[image dimensions] adopted placement unavailable")
+				return nil
+			}
+			loc, valid = resolveSharedAssetPreviewLocation(value, uid, parentRowID)
+		}
+		if valid {
+			owner, file = filepath.Join(loc.TableUID, fmt.Sprint(loc.RowID)), loc.Filename
+		}
+	}
+	if owner == "" {
+		return nil
+	}
+	size, err := media_utils.MeasureDisplayedImageSize(filepath.Join(runtimepaths.Current().StorageRoot, owner), file, library)
+	if err != nil {
+		log.Print("[image dimensions] adopted header unavailable")
+	}
+	return size
 }

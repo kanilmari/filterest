@@ -116,6 +116,7 @@ func Attach(ctx context.Context, tx *sql.Tx, root string, actor dbutils.RequestA
 	if err = tx.QueryRow(query, req.ParentRowID, result.URL, src.ID).Scan(&result.UsageRowID); err != nil {
 		return Result{}, err
 	}
+	copyImageSize(tx, rel.Child, src.ID, result.UsageRowID, a.Filename)
 	if _, err = tx.Exec(`INSERT INTO public.system_media_asset_usages(asset_id,relation_id,parent_row_id,child_row_id) VALUES($1,$2,$3,$4)`, a.ID, rel.ID, req.ParentRowID, result.UsageRowID); err != nil {
 		return Result{}, err
 	}

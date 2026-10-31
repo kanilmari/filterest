@@ -311,7 +311,11 @@ func loadDependencies(ctx context.Context, tx *sql.Tx, snapshot *GrantSnapshot) 
 		// add_row_files.go:71,219,317 also accepts a main-row upload with no
 		// relation/configuration. Its filename UPDATE needs no general edit right.
 		if class == Content && object.hasColumn("filename") {
-			snapshot.Dependencies = append(snapshot.Dependencies, Dependency{SourceOID: oid, TargetOID: oid, Kind: "cache", When: Insert, Columns: []string{"filename"}, ReadColumns: []string{"id"}})
+			columns := []string{"filename"}
+			if object.hasColumn("metadata_json") {
+				columns = append(columns, "metadata_json")
+			}
+			snapshot.Dependencies = append(snapshot.Dependencies, Dependency{SourceOID: oid, TargetOID: oid, Kind: "cache", When: Insert, Columns: columns, ReadColumns: []string{"id"}})
 		}
 		if !object.hasColumn("cached_image") || oidByName(snapshot, "system_foreign_key_relations_1_m") == 0 {
 			continue

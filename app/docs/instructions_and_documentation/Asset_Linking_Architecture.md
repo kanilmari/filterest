@@ -20,6 +20,79 @@ hiding. A successful save updates the active page, settings cache and cached
 navigation tree. This per-image flag is independent of the site palette's
 cover-opacity setting, which can make a loaded cover transparent.
 
+## Stored Displayed Image Dimensions
+
+Gallery object metadata can contain the top-level `displayed_image_size` hint:
+`{"width_px":1000,"height_px":667,"file":"image.jpg"}`. Width and height are
+positive integer pixels; `file` is the stored leaf filename. Consumers must
+ignore a hint whose file no longer matches the current reference.
+
+The server measures the first existing row file in
+`media_utils.FallbackOrder("1000")`, or the original for media-library URLs.
+It reads bounded headers, never pixels, and swaps JPEG width/height for EXIF
+orientations 5–8. SVG, unreadable headers, missing files and zero dimensions
+produce no hint. An unreadable preferred variant does not select another file.
+This records browser orientation; it does not repair EXIF in resized variants.
+
+Uploads remove a client-sent hint and merge the measured size while keeping all
+other object keys. Preview adoption preserves `recovered_from`; library uses
+copy only the dimension hint, rewrite `file` to the library's `image.<ext>`, and
+do not copy `image_source`. Optional size SQL is isolated in a savepoint, so a
+failed hint write does not abort the upload, adoption or attachment.
+
+The server owns the key on upload and in the backfill tool only. Someone with
+edit rights can still write it through generic row writes. Generic create/update,
+CSV import, automation, bootstrap and restore have no new ownership hooks.
+
+### Administrator Backfill
+
+`POST /api/admin/image-dimensions-backfill` uses the full administrator pipeline
+with no request-long transaction. Its JSON input accepts `dry_run` (default
+`true`) and `max_rows` (default 200, allowed 1–1000). The row limit caps rows
+needing a change; already sized and skipped rows do not consume it. Thus repeat
+calls advance without a durable cursor, though `rows_seen` can exceed the limit.
+The synchronous request stops on client cancellation; committed batches remain.
+
+The tool combines canonical card-gallery discovery with all configured upload
+relations. Registry relation/table identities retain the gallery's schema and
+table name throughout discovery, deduplication, reads and writes. Only a uniquely
+resolved physical `public` table is supported; a non-public, missing, ambiguous
+or unresolvable gallery is skipped and counted as `skipped_unsupported_gallery`.
+Same-named galleries in different schemas remain separate. Qualified row SQL
+uses `ONLY` to avoid reaching inherited tables in other schemas.
+Registered non-public structural galleries without a public namesake are counted
+as unsupported using column catalog metadata only, without reading their rows
+or adding them to `galleries`.
+The tool visits each physical gallery once. It uses `ResolveReference`
+and counts unprovable references, including language maps and URL suffixes,
+without unpacking them. It measures file headers outside transactions, then
+commits batches of 100 with the request actor applied. Each update checks the
+observed filename, merges only object `jsonb` metadata, and avoids touching an
+identical size. Concurrent filename changes are safely ignored.
+
+The response contains only these counts: `galleries`, `rows_seen`, `would_write`,
+`written`, `already_sized`, `skipped_no_file`, `skipped_unresolved_reference`,
+`skipped_non_object_metadata`, `skipped_not_jsonb`, `skipped_no_metadata_column`,
+`skipped_unsupported_gallery`, `originals_rotated_by_tag`, and `failed`.
+Unsupported-target and column/type skips count galleries;
+other skips count rows. `skipped_no_file` includes unmeasurable files. Failed
+batch rows count as failed, never written; discovery/read failures count failed
+operations. `would_write` counts measured changes even in a dry run, while
+`written` counts only committed updates. A filename guard may reduce `written`.
+Zero changes does not mean every row is sized: review the skip/failure counts.
+
+`originals_rotated_by_tag` counts original JPEGs with orientation tags 2–8,
+including dry runs, to inform the separate WO121 decision. Headers are checked
+again on later calls so regenerated variants can replace an earlier hint.
+The pipeline audit records each call. Nothing invokes this tool at startup,
+and it never writes `system_data_repair_records`.
+
+Existing timestamp triggers still fire. Depending on the site's triggers,
+backfilling may change gallery “recently updated” sorting, related-row dates
+and exports. Rehearse and review counts on a mirror before an authorized site
+run; site roles, triggers, proxy limits, pass duration and rollback need their
+own verification. This backend storage does not itself change card rendering.
+
 ## 1. Why This Exists
 
 Filterest already has working image-linking behavior, but upcoming requirements expand beyond one image per row:

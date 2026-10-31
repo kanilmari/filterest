@@ -237,6 +237,7 @@ var RouteProfiles = map[string]RouteProfile{
 	"system_table_tools.CheckMediaRowFoldersHandler":           AdminProfile,
 	"system_table_tools.CheckMediaSubfoldersHandler":           AdminProfile,
 	"missing_media_check.AdminMissingMediaCheckHandler":        AdminProfile,
+	"missing_media_check.AdminImageDimensionsBackfillHandler":  AdminNoTxProfile,
 	"system_table_tools.ListFKCacheTriggersHandler":            AdminProfile,
 	"system_table_tools.RefreshFKCacheHandler":                 AdminProfile,
 	"system_table_tools.GetCardVisibilityHandler":              AdminProfile,

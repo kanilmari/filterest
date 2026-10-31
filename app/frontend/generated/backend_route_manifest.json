@@ -696,6 +696,41 @@
       ]
     },
     {
+      "path_pattern": "/api/admin/image-dimensions-backfill",
+      "match_type": "exact",
+      "handler_name": "missing_media_check.AdminImageDimensionsBackfillHandler",
+      "methods": [
+        "POST"
+      ],
+      "method_source": "route_registration",
+      "scenarios": [
+        {
+          "name": "production",
+          "profile_name": "admin_no_tx",
+          "skip_stages": [
+            "transaction"
+          ],
+          "admin_only": true
+        },
+        {
+          "name": "development",
+          "profile_name": "admin_no_tx",
+          "skip_stages": [
+            "transaction"
+          ],
+          "admin_only": true
+        },
+        {
+          "name": "api_language",
+          "profile_name": "admin_no_tx",
+          "skip_stages": [
+            "transaction"
+          ],
+          "admin_only": true
+        }
+      ]
+    },
+    {
       "path_pattern": "/api/admin/lang-key",
       "match_type": "exact",
       "handler_name": "lang.AdminLangKeyHandler",

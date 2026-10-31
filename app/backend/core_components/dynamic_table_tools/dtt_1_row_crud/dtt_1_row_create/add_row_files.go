@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"mime/multipart"
 	"net/http"
 	"os"
@@ -224,6 +225,14 @@ func saveUploadedFiles(
 				cleanupUpload()
 			}
 			return err
+		}
+		// K548: uploads own this hint, even when the client supplied a size.
+		size, sizeErr := media_utils.MeasureDisplayedImageSize(baseFolder, newFileName, false)
+		if sizeErr != nil {
+			log.Print("[image dimensions] upload header unavailable")
+		}
+		if err := media_utils.MergeUploadedImageSize(tx, childTableName, childRowID, size); err != nil {
+			log.Print("[image dimensions] optional upload metadata write failed")
 		}
 		// The gallery row now names its stored file, so the card picture rule runs for its
 		// parent, whatever the upload settings' cache targets say (owner decision K120).

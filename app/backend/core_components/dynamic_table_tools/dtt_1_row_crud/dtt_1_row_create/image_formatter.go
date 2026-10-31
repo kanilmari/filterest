@@ -13,6 +13,8 @@ import (
 	"path/filepath"
 	"strings"
 
+	"easelect/backend/core_components/media_utils"
+
 	webp "github.com/chai2010/webp" // WebP encoding
 	"github.com/disintegration/imaging"
 	xwebp "golang.org/x/image/webp"
@@ -175,27 +177,7 @@ func validateImageDecodeBudget(sourcePath string) error {
 
 // readImageConfig reads image dimensions from the header without decoding pixels.
 func readImageConfig(sourcePath string) (image.Config, error) {
-	sourceFile, err := os.Open(sourcePath)
-	if err != nil {
-		return image.Config{}, fmt.Errorf("failed to open source image for budget validation: %w", err)
-	}
-	defer sourceFile.Close()
-
-	isWebP, err := readerHasWebPHeader(sourceFile)
-	if err != nil {
-		return image.Config{}, fmt.Errorf("failed to inspect source image header: %w", err)
-	}
-
-	var config image.Config
-	if isWebP {
-		config, err = xwebp.DecodeConfig(sourceFile)
-	} else {
-		config, _, err = image.DecodeConfig(sourceFile)
-	}
-	if err != nil {
-		return image.Config{}, fmt.Errorf("failed to inspect source image dimensions: %w", err)
-	}
-	return config, nil
+	return media_utils.ReadImageConfig(sourcePath)
 }
 
 // sourceFitsWithinDimension reports whether a readable image already has a

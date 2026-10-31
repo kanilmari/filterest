@@ -172,10 +172,13 @@ func TestNestedUploadCacheUsesStoredReference(t *testing.T) {
 			if value == int64(9044) {
 				pushQuery(queuedQuery{cols: []string{"parent", "column", "specs"}}) // No shared storage relation.
 			}
-			pushQuery(queuedQuery{cols: []string{"parent"}}) // No gallery.
+			pushQuery(queuedQuery{cols: []string{"data_type"}}) // Optional size column is absent.
+			pushQuery(queuedQuery{cols: []string{"parent"}})    // No gallery.
 			pushQuery(queuedQuery{cols: []string{"specs", "table", "column"}, rows: [][]driver.Value{{specs, "parents", "reference_key"}}})
 			pushExec(queuedExec{wantSQL: `UPDATE "children" SET filename=$1 WHERE id=$2`,
 				wantArgs: []driver.Value{"20_44_12.pdf", int64(12)}, rowsAffected: 1})
+			pushExec(queuedExec{wantSQL: "SAVEPOINT displayed_image_size_write"})
+			pushExec(queuedExec{wantSQL: "RELEASE SAVEPOINT displayed_image_size_write"})
 			pushExec(queuedExec{wantSQL: `UPDATE "parents" SET "uploaded_filename" = $1 WHERE "reference_key" = $2`,
 				wantArgs: []driver.Value{"20_44_12.pdf", value}, rowsAffected: 1})
 			response := httptest.NewRecorder()
