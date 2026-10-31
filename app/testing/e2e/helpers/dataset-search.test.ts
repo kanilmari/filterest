@@ -82,11 +82,18 @@ function mountSearch(width: number, heroVisible = true) {
     </div>
     <div class="tab_parts_container" id="demo_tab_parts_container">
       <div class="dataset-shared-topbar" data-filterbar-shared-topbar-for="demo">
-        <div class="dataset-shared-topbar__site-identity">Site</div>
-        <div class="dataset-search-panel">
-          <input id="shared-input" data-testid="dataset-search-input-search-only" value="draft">
+        <div class="dataset-shared-topbar__inner">
+          <div class="dataset-shared-topbar__slot--start">
+            <div class="dataset-shared-topbar__dataset-title">Demo</div>
+          </div>
+          <div class="dataset-shared-topbar__center">
+            <div class="dataset-shared-topbar__site-identity">Site</div>
+            <div class="dataset-search-panel">
+              <input id="shared-input" data-testid="dataset-search-input-search-only" value="draft">
+            </div>
+          </div>
+          <div class="dataset-shared-topbar__slot--end"></div>
         </div>
-        <div class="dataset-shared-topbar__slot--end"></div>
       </div>
       <div id="hero"><input id="hero-input" data-testid="dataset-search-input-content-hero"></div>
       <div class="filterbar-panel">

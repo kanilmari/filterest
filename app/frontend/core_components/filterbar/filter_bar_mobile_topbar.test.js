@@ -49,13 +49,15 @@ test.each(Object.entries(LABELS))('phone search opens only by button, with focus
     document.querySelector('.scrollable_content').dispatchEvent(new Event('scroll'));
     expect(search.hidden).toBe(true); // Scroll must never open the phone search.
     toggle.click();
-    expect(search.hidden).toBe(false); expect(identity.hidden).toBe(false);
+    expect(search.hidden).toBe(false); expect(identity.hidden).toBe(true);
+    expect(identity.getAttribute('aria-hidden')).toBe('true');
     expect(document.activeElement).toBe(input);
     expect(toggle.getAttribute('aria-label')).toBe(labels[1]);
     expect(toggle.getAttribute('aria-pressed')).toBe('true');
     expect(onSubmit).not.toHaveBeenCalled();
     input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
     expect(search.hidden).toBe(true); expect(document.activeElement).toBe(toggle);
+    expect(identity.hidden).toBe(false); expect(identity.getAttribute('aria-hidden')).toBe('false');
     expect(input.value).toBe('Helsinki'); expect(toggle.getAttribute('aria-pressed')).toBe('false');
     toggle.click(); toggle.click();
     expect(search.hidden).toBe(true); expect(document.activeElement).toBe(toggle);

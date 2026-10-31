@@ -34,6 +34,33 @@ function extractRule(css, selector) {
 }
 
 describe('shared topbar CSS', () => {
+    test.each(['light', 'dark'])('%s keeps button search in the title row and restores the title', theme => {
+        style = document.createElement('style');
+        style.textContent = readSharedTopbarCss(); document.head.append(style);
+        document.body.className = `${theme}-mode`;
+        document.body.innerHTML = `<div class="dataset-shared-topbar dataset-shared-topbar--visible">
+            <div class="dataset-shared-topbar__inner">
+                <div class="dataset-shared-topbar__slot dataset-shared-topbar__slot--start">
+                    <div class="dataset-shared-topbar__dataset-title">Matkatarjoukset</div>
+                </div>
+                <div class="dataset-shared-topbar__center"><div class="dataset-search-panel"></div></div>
+                <div class="dataset-shared-topbar__slot dataset-shared-topbar__slot--end"></div>
+            </div></div>`;
+        const bar = document.body.firstElementChild;
+        const inner = bar.firstElementChild;
+        const title = bar.querySelector('.dataset-shared-topbar__dataset-title');
+        const center = bar.querySelector('.dataset-shared-topbar__center');
+        expect(getComputedStyle(inner).gridTemplateColumns).toBe('max-content minmax(0, 1fr) auto');
+        bar.dataset.topbarSearchMode = 'button'; bar.dataset.topbarSearchOpen = 'true';
+        expect(getComputedStyle(inner).gridTemplateColumns).toBe('minmax(0, 1fr) auto');
+        expect(getComputedStyle(center).position).toBe('absolute');
+        expect(getComputedStyle(center).insetBlockStart).toBe('0px');
+        expect(getComputedStyle(center).maxWidth).toBe('none');
+        expect(getComputedStyle(title).visibility).toBe('hidden');
+        bar.dataset.topbarSearchOpen = 'false';
+        expect(getComputedStyle(title).visibility).toBe('visible');
+    });
+
     test.each(['light', 'dark'].flatMap(theme => ['visible', 'hiding', 'showing'].map(phase => ({ theme, phase }))))(
         '$theme/$phase hides a released menu immediately despite the slot remaining visible', ({ theme, phase }) => {
         style = document.createElement('style');

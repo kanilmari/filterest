@@ -75,10 +75,8 @@
 
 .dataset-shared-topbar__inner {
   display: grid;
-  grid-template-columns:
-    minmax(0, 1fr)
-    minmax(0, 2fr)
-    auto;
+  grid-template-columns: max-content minmax(0, 1fr) auto;
+  position: relative;
   align-items: center;
   gap: 18px;
   width: 100%;
@@ -214,6 +212,27 @@
   width: 100%;
   max-width: var(--filterbar-search-only-max-width, 600px);
   margin: 0;
+}
+
+/* Measured button mode gives the name all remaining room. The center leaves
+   the grid, then covers only the name cell when opened; menus stay reachable. */
+.dataset-shared-topbar[data-topbar-search-mode="button"] .dataset-shared-topbar__inner {
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+.dataset-shared-topbar[data-topbar-search-mode="button"] .dataset-shared-topbar__center {
+  position: absolute;
+  inset-block-start: 0;
+  inset-inline: var(--topbar-search-start, 0) var(--topbar-search-end, 0);
+  justify-self: stretch;
+  width: auto;
+  max-width: none;
+}
+.dataset-shared-topbar[data-topbar-search-mode="button"] .dataset-shared-topbar__center > .dataset-search-panel {
+  max-width: none;
+}
+.dataset-shared-topbar[data-topbar-search-open="true"] .dataset-shared-topbar__dataset-title {
+  /* Preserve the full scrollWidth for fit decisions while visually covered. */
+  visibility: hidden;
 }
 
 .dataset-shared-topbar__site-identity { display: none; }
@@ -358,28 +377,30 @@
     min-width: 0;
     color: var(--text_color);
   }
-  .dataset-shared-topbar__site-identity img { flex: none; image-rendering: auto; }
-  .dataset-shared-topbar__site-identity span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .dataset-shared-topbar__menu-slot--visible { flex-basis: 44px; width: 44px; max-width: 44px; transition: none; }
+  .dataset-shared-topbar__site-identity img {
+    flex: none;
+    image-rendering: auto;
+  }
+  .dataset-shared-topbar__site-identity span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .dataset-shared-topbar__menu-slot--visible {
+    flex-basis: 44px;
+    width: 44px;
+    max-width: 44px;
+    transition: none;
+  }
   .dataset-shared-topbar__center .dataset-search-panel { --dataset-search-control-height: 44px; }
-  /* An overlay row preserves the bar and listing geometry beneath the finger. */
+  /* Search replaces the identity within the existing 44px row. */
   .dataset-shared-topbar__center > .dataset-search-panel {
-    position: absolute;
-    top: 100%;
-    left: var(--dataset-shared-topbar-padding-inline);
-    right: var(--dataset-shared-topbar-padding-inline);
-    width: auto;
+    width: 100%;
     max-width: none;
-    box-sizing: border-box;
-    padding: 8px !important;
-    border: 1px solid var(--border_color) !important;
-    border-radius: 8px;
-    background: var(--filter_panel_bg) !important;
-    box-shadow: var(--fw-shadow-soft);
   }
   .dataset-shared-topbar__center .dataset-search-fields { min-width: 0; }
   .filterbar-inline-hero > .filterbar-inline-hero__top-row { display: none; }
-  /* Keep search above the tools; the top-bar overlay remains available after scrolling. */
+  /* Keep search above the tools; the top-bar search remains available after scrolling. */
   .filterbar-inline-hero > .filter-content-inner > .dataset-search-panel {
     --dataset-search-control-height: 44px;
     display: flex;

@@ -12,7 +12,7 @@ const postcss = requireNodeDependency('postcss');
 const baseline = {
     'front_page.css': 'b832974c3b27a5e7972d9762869bc8d6df7168626ab6ae9966d05ed27cfbd542',
     'top_nav_home_button.css': '370d13d5d63468cd1e8e03d637d3290e4375a7ef0654a41ba43b815ca207566b',
-    '../filterbar/shared_topbar.css': '47dcce674bc0e9974a499e7f19db9e98f7988a23688051561e4ed73ed15a484f',
+    '../filterbar/shared_topbar.css': '8043291ec4200195ccbb5108c0e026dfeb802425261881eab6101abe058e93b4',
     '../filterbar/morphing_filterbar_content.css': '9b0c7307b1a1448328bb6e7bb59fbaf440006f72ac04827c02d6bb511324708a',
 };
 const sheets = Object.fromEntries(Object.keys(baseline).map(file =>
@@ -36,6 +36,7 @@ function phoneRule(file, selector) {
 // WO96 removes only Home's shared-bar order:10; original hosts, sizing and phone tracks stay pinned.
 // WO98 re-pins Home only: shared box/hero/bottom spacing changes outside the phone breakpoint.
 // WO107/K528 re-pins only Home's approved side margins and auto width; centre and phone layout stay unchanged.
+// WO111/K533 re-pins only the top bar's name-first columns and the measured button mode's search over the name.
 // The sticky bar, drawer lock, focus clearance and hero anchoring rules retain batch 513 geometry.
 test.each(Object.keys(baseline))('%s keeps every rule outside the phone breakpoint byte-identical to its approved baseline', file => {
     const root = sheets[file].clone();
@@ -137,7 +138,7 @@ test('phone hero search is visible at full inner width with the same 44px contro
         .toEqual({ 'max-width': 'none' });
     expect(phoneRule(file, '.dataset-shared-topbar__center .dataset-search-panel'))
         .toEqual({ '--dataset-search-control-height': '44px' });
-    // The second surface remains an overlay, without changing the toolbar row.
+    // WO111/K533: the second surface opens in the bar's own row over the identity, so no overlay offset or frame remains.
     expect(phoneRule(file, '.dataset-shared-topbar__center > .dataset-search-panel'))
-        .toMatchObject({ position: 'absolute', top: '100%', width: 'auto' });
+        .toEqual({ width: '100%', 'max-width': 'none' });
 });

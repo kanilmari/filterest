@@ -118,12 +118,13 @@ test.describe('guest phone toolbar and style controls', () => {
       await expect(toggle).toHaveAttribute('data-aria-label-lang-key', 'filterbar_hide_search');
       await expect(toggle).toHaveAttribute('aria-pressed', 'true');
       await expect(toggle).toHaveAttribute('aria-expanded', 'true');
-      expect(await geometry(page)).toEqual(before); await expect(identity).toBeVisible();
+      expect(await geometry(page)).toEqual(before); await expect(identity).toBeHidden();
       await input.fill('Turku'); await expect(heroInput).toHaveValue('Turku'); const url = page.url();
       await input.press('Escape'); await expect(input).toBeHidden(); await expect(toggle).toBeFocused();
       await expect(toggle).toHaveAttribute('aria-expanded', 'false');
       await expect(toggle).toHaveAttribute('aria-pressed', 'false');
       expect(page.url()).toBe(url); expect(await geometry(page)).toEqual(before);
+      await expect(identity).toBeVisible();
       await toggle.press('Enter'); await expect(input).toBeFocused(); await expect(input).toHaveValue('Turku');
       await toggle.tap(); await expect(input).toBeHidden();
       await expect(toggle).toBeFocused();
