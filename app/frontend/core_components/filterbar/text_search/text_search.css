@@ -112,6 +112,7 @@
   outline-offset: -4px;
 }
 
+.dataset-search-field-icon,
 .dataset-search-submit-icon {
   display: block;
   width: 20px;
@@ -121,10 +122,19 @@
   mask: url("/frontend/icons/general/dataset-search-icon.svg") center / contain no-repeat;
 }
 
+.dataset-search-field-icon {
+  position: absolute;
+  inset-inline-start: 14px;
+  top: 50%;
+  color: var(--text_color);
+  transform: translateY(-50%);
+  pointer-events: none;
+}
+
 .dataset-search-placeholder-fade {
   position: absolute;
   z-index: 2;
-  left: var(--dataset-search-placeholder-fade-left, 20px);
+  inset-inline-start: 44px;
   top: 50%;
   max-width: calc(100% - 82px);
   overflow: hidden;
@@ -197,16 +207,8 @@
   margin-bottom: 0;
 }
 
-.filterbar-panel--compact .dataset-search-input-row {
-  --dataset-search-placeholder-fade-left: 16px;
-}
-
 .filterbar-panel--compact .dataset-search-input {
   padding: 0 16px !important;
-}
-
-.filterbar-panel--compact.filterbar-panel--body-scrolled .dataset-search-input {
-  padding-inline: 16px !important;
 }
 
 /* ============================================
@@ -227,7 +229,6 @@
 }
 
 .filterbar-search-only .dataset-search-input-row {
-  --dataset-search-placeholder-fade-left: 16px;
   backdrop-filter: blur(10px);
 }
 
@@ -246,6 +247,7 @@
    become a third bordered segment or interrupt the input's outer edge. */
 .dataset-search-input-shell > .dataset-search-input {
   width: 100%;
+  padding-inline-start: 44px !important;
   padding-right: 44px !important;
 }
 

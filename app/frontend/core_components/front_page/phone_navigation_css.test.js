@@ -13,7 +13,7 @@ const baseline = {
     'front_page.css': 'b832974c3b27a5e7972d9762869bc8d6df7168626ab6ae9966d05ed27cfbd542',
     'top_nav_home_button.css': '370d13d5d63468cd1e8e03d637d3290e4375a7ef0654a41ba43b815ca207566b',
     '../filterbar/shared_topbar.css': '8043291ec4200195ccbb5108c0e026dfeb802425261881eab6101abe058e93b4',
-    '../filterbar/morphing_filterbar_content.css': '9b0c7307b1a1448328bb6e7bb59fbaf440006f72ac04827c02d6bb511324708a',
+    '../filterbar/morphing_filterbar_content.css': '914f86240ec27901629286c4743b81928390c06e2e7dd89b0245b9b0be30a3e8',
 };
 const sheets = Object.fromEntries(Object.keys(baseline).map(file =>
     [file, postcss.parse(readFileSync(new URL(file, import.meta.url), 'utf8'))]));

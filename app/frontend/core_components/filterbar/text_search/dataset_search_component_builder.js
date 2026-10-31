@@ -158,6 +158,10 @@ export function createDatasetSearchComponent(tableName, options = {}) {
     applyVisuallyHiddenStyles(globalSearchLabel);
     searchRow.appendChild(globalSearchLabel);
     inputShell.appendChild(globalSearchInput);
+    const searchGlass = document.createElement("span");
+    searchGlass.className = "dataset-search-field-icon";
+    searchGlass.setAttribute("aria-hidden", "true");
+    inputShell.appendChild(searchGlass);
     searchRow.appendChild(inputShell);
 
     const locationRow = document.createElement("div");

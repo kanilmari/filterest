@@ -168,6 +168,10 @@ async function popupPlacementGeometry(popup: Locator) {
 
 async function provePopupGeometryAndFocus(page: Page, headingID: string, width: number) {
   const heading = page.locator(`${PANEL} [data-heading-id="${headingID}"]`);
+  const chevron = heading.locator('.row-group-facet-heading__caret');
+  await expect(chevron).toHaveAttribute('aria-hidden', 'true');
+  await expect(chevron).toHaveText('');
+  await expect(heading).not.toHaveText(/[▴▾]/);
   if (await heading.getAttribute('aria-expanded') === 'true') await activate(heading);
   await heading.scrollIntoViewIfNeeded();
   const before = await settledGeometry(page);

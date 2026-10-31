@@ -126,18 +126,45 @@ async function assertSection(page: Page, dataset: string, width: number) {
         && element.querySelector('.filterbar-inline-hero-filter-actions') === element.children[1]
         && element.querySelector('.row-group-facets') === element.children[2] };
   });
-  expect(geometry).toMatchObject({ paintedRows: 0, separateRows: true, darker: true, outside: true, order: true });
-  if (width <= 700) {
-    // K531: the phone tools box is edge to edge with square corners (morphing_filterbar_content.css ≤ 700 section).
-    expect(geometry.radius).toBe(0);
-  } else {
-    expect(geometry.radius).toBeGreaterThan(0);
-  }
+  expect(geometry).toMatchObject({ paintedRows: 1, separateRows: true, darker: true, outside: true, order: true });
+  // K465: the panel and its controls share the search tools' one radius token (variables.css), not a literal.
+  const token = await section.evaluate(element => Number.parseFloat(getComputedStyle(element).getPropertyValue('--search_tools_radius')));
+  expect(token).toBeGreaterThan(0);
+  // K531: the phone tools box is edge to edge with square corners (morphing_filterbar_content.css ≤ 700 section).
+  expect(geometry.radius).toBe(width <= 700 ? 0 : token);
   expect(geometry.left).toBeGreaterThanOrEqual(0);
   expect(geometry.right).toBeLessThanOrEqual(width);
   const actions = section.locator('.filterbar-inline-hero-filter-actions');
-  await expect(actions.locator(':scope > button').nth(0)).toHaveAttribute('data-lang-key', 'filterbar_filter_results');
-  await expect(actions.locator(':scope > button').nth(1)).toHaveAttribute('data-lang-key', 'reset_search');
+  await expect(actions.locator(':scope > button').nth(0).locator('[data-lang-key]')).toHaveAttribute('data-lang-key', 'filterbar_filter_results');
+  await expect(actions.locator(':scope > button').nth(1).locator('[data-lang-key]')).toHaveAttribute('data-lang-key', 'reset_search');
+  for (const [index, icon] of ['filter', 'reset'].entries()) {
+    const button = actions.locator(':scope > button').nth(index);
+    await expect(button.locator(`.dataset-hero-tool-icon--${icon}`)).toHaveAttribute('aria-hidden', 'true');
+    await expect(button).toHaveAccessibleName(await button.locator('[data-lang-key]').innerText());
+  }
+  const hero = page.locator(`.filterbar-inline-hero[data-filterbar-inline-hero-for="${dataset}"]`);
+  // K465's set (morphing_filterbar_content.css, text_search.css): whole controls round every corner with the token;
+  // the search input and its submit button are one joined field, so only their outer corners are round.
+  const corners = await hero.evaluate(element => {
+    const read = (selector: string, corner: 'borderTopLeftRadius' | 'borderTopRightRadius') =>
+      [...element.querySelectorAll(selector)].map(node => getComputedStyle(node)[corner]);
+    return {
+      whole: read('.dataset-search-input-row, .dataset-filter-section .sort-dropdown-wrapper .vdw-dropdown-input, '
+        + '.dataset-filter-section .filterbar-filters-toggle-button, .dataset-filter-section .reset-search-button, '
+        + '.dataset-filter-section .row-group-facet-heading', 'borderTopLeftRadius'),
+      inputStart: read('.dataset-search-input', 'borderTopLeftRadius'),
+      seam: [...read('.dataset-search-input', 'borderTopRightRadius'), ...read('.dataset-search-submit-button', 'borderTopLeftRadius')],
+    };
+  });
+  expect(corners.whole.length).toBeGreaterThanOrEqual(5);
+  expect(corners.whole.every(radius => radius === `${token}px`)).toBe(true);
+  expect(corners.inputStart.every(radius => radius === `${token}px`)).toBe(true);
+  expect(corners.seam.every(radius => radius === '0px')).toBe(true);
+  await expect(section.locator('.vdw-dropdown-chevron')).toHaveAttribute('aria-hidden', 'true');
+  const categories = section.locator(':scope > .row-group-facets');
+  await expect(categories).toHaveCSS('border-top-width', '1px');
+  await expect(categories).toHaveCSS('border-top-style', 'solid');
+  await expect(categories.locator(':scope > hr, :scope > [role="separator"]')).toHaveCount(0);
   // Native keyboard traversal follows the same action order after the wrapper change.
   await actions.locator('button').first().focus();
   await page.keyboard.press('Tab');

@@ -1,0 +1,44 @@
+/* hero_tools.css
+ * Shares decorative icon masks and button wrapping across dataset hero tools.
+ * Connects search, sort, actions and categories with the existing theme tokens.
+ * Keeps the same controls and reading order on phones and computers.
+ * Their one corner radius is K465's --search_tools_radius (variables.css), not set here.
+ */
+
+.dataset-hero-tool-icon {
+  display: inline-block;
+  flex: 0 0 auto;
+  width: 20px;
+  height: 20px;
+  background-color: currentcolor;
+  mask-position: center;
+  mask-size: contain;
+  mask-repeat: no-repeat;
+  pointer-events: none;
+}
+
+.dataset-hero-tool-icon--filter {
+  mask-image: url('/frontend/icons/symbols/tune.svg');
+}
+
+.dataset-hero-tool-icon--reset {
+  mask-image: url('/frontend/icons/general/refresh-icon.svg');
+}
+
+.dataset-hero-tool-icon--chevron {
+  mask-image: url('/frontend/icons/general/chevron-down-icon.svg');
+}
+
+.row-group-facet-heading[aria-expanded="true"] .row-group-facet-heading__caret {
+  rotate: 180deg;
+}
+
+.filterbar-inline-hero-filter-actions > button {
+  gap: var(--fw-space-2);
+  white-space: normal;
+}
+
+.filterbar-inline-hero-filter-actions > button > [data-lang-key] {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}

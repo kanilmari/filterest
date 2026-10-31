@@ -93,7 +93,7 @@ def test_saved_home_boxes_release_follows_phone_search_without_replacing_it():
     assert "SELECT '9.13.0'" in phone_owner.read_text()
     assert "9.13.1" not in phone_owner.read_text()
     manifest = json.loads((BOOTSTRAP / "manifest.json").read_text())
-    assert manifest["db_version"] == (APP / "VERSION_DB").read_text().strip() == "9.13.1"
+    assert manifest["db_version"] == (APP / "VERSION_DB").read_text().strip()
     baseline = manifest["migration_ledger_baseline"]
     assert baseline.count(home.name) == baseline.count(owner.name) == baseline.count(phone_owner.name) == 1
     assert baseline.index(phone_owner.name) < baseline.index(home.name) < baseline.index(owner.name)

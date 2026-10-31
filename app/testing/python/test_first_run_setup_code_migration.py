@@ -74,7 +74,8 @@ def test_first_run_code_upgrade_matches_fresh_and_replay_is_idempotent(installed
         if "20260929000006" < migration.name <= MIGRATION.name:
             upgrade(migration.read_text())
     assert value(upgrade, "SELECT count(*) FROM system_db_version WHERE version='9.12.0'") == "0"
-    assert value(installed, "SELECT count(*) FROM system_db_version WHERE version='9.12.0'") == "1"
+    current_db = (APP / "VERSION_DB").read_text().strip()
+    assert value(installed, f"SELECT count(*) FROM system_db_version WHERE version='{current_db}'") == "1"
     initial = copy_shape(installed)
     assert len(json.loads(initial)) == 4
     assert copy_shape(upgrade) == initial

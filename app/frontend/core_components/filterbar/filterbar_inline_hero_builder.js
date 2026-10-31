@@ -12,6 +12,7 @@ import { createSortDropdown } from "./top_row_buttons/sort_dropdown_builder.js";
 import { createTemporaryFiltersToggleButton } from "./filters_opener_and_closer.js";
 import { clearAllFilters } from "./top_row_buttons/top_row_builder.js";
 import { mountDatasetCoverTestPalette } from "../admin_tools/dataset_cover_test_palette.js";
+import { appendHeroToolButtonIcon } from "./hero_tool_icon_builder.js";
 
 export function buildSharedTopBarMenuButton() {
     const button = document.createElement("button");
@@ -103,14 +104,15 @@ export function createInlineHeroContent(tableName, {
         "dataset-filter-primary-actions",
         "filterbar-inline-hero-filter-actions"
     );
-    heroFilterActions.appendChild(
-        createTemporaryFiltersToggleButton(tableName, "content-hero")
-    );
+    const filterResultsButton = createTemporaryFiltersToggleButton(tableName, "content-hero");
+    appendHeroToolButtonIcon(filterResultsButton, "filter");
+    heroFilterActions.appendChild(filterResultsButton);
     const resetSearchBtn = document.createElement("button");
     resetSearchBtn.classList.add("reset-search-button", "fw-btn");
     resetSearchBtn.dataset.testid = "btn-reset-search-content-hero";
     resetSearchBtn.dataset.langKey = "reset_search";
     resetSearchBtn.textContent = "Reset search";
+    appendHeroToolButtonIcon(resetSearchBtn, "reset");
     resetSearchBtn.addEventListener("click", () =>
         clearAllFilters(tableName, resetTargetElement || inlineHeroHost)
     );

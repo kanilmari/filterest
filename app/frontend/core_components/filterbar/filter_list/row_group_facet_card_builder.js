@@ -8,6 +8,7 @@ import { getTranslationForKey } from '../../lang/translation_handler.js';
 import { createMultiselectDropdown } from '../../../reusable_components/multiselect_dropdown/multiselect_dropdown_builder.js';
 import { createSymbolMaskElement } from '../../../reusable_components/symbol_asset_resolver.js';
 import { createRowGroupHeadingOrder } from './row_group_heading_order.js';
+import { createHeroToolIcon } from '../hero_tool_icon_builder.js';
 
 // Full-key catalogues keep helper arguments visible to the startup language scan.
 const MATCH_MODE_COPY = Object.freeze({
@@ -128,9 +129,7 @@ export function createRowGroupFacetCard({ host, topControls, tableName, getSelec
         const label = document.createElement('span');
         const badge = document.createElement('span');
         badge.className = 'row-group-facet-heading__badge';
-        const caret = document.createElement('span');
-        caret.setAttribute('aria-hidden', 'true');
-        caret.className = 'row-group-facet-heading__caret';
+        const caret = createHeroToolIcon('chevron', 'row-group-facet-heading__caret');
         button.append(label, badge, caret);
         const entry = { group, button, label, badge, caret, dropdown: null };
         button.addEventListener('click', () => {
@@ -301,7 +300,6 @@ export function createRowGroupFacetCard({ host, topControls, tableName, getSelec
             entry.badge.setAttribute('aria-label', `${count} ${getTranslationForKey(PANEL_COPY.selectedCountKey)}`);
             entry.button.classList.toggle('has-selection', count > 0);
             entry.button.hidden = !panelState.expanded && index >= VISIBLE_HEADING_LIMIT && !count && panelState.openHeading !== key;
-            entry.caret.textContent = panelState.openHeading === key ? '▴' : '▾';
             if (headings.children[index] !== entry.button) headings.insertBefore(entry.button, headings.children[index] || more);
             patchPopup(entry);
         });

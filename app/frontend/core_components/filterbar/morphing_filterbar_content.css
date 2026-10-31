@@ -3,6 +3,8 @@
  * Connects dataset controls to application theme and spacing tokens.
  * Keeps responsive rows together without changing their interaction geometry.
  */
+@import url('./hero_tools.css');
+
 /* ============================================
    FIXED TOGGLE BUTTON
    Always visible in top-right corner
@@ -118,6 +120,12 @@
     gap: 8px;
 }
 .filterbar-inline-hero__actions:empty { display: none; }
+/* WO50: a rule between the Filter/Reset row and the categories. One class above the row reset
+   (.dataset-filter-section > .row-group-facets), so it wins there; it stays before the phone section. */
+.dataset-filter-section > .row-group-facets:not(:first-child) {
+  padding-top: var(--fw-space-4);
+  border-top: 1px solid var(--border_color);
+}
 @media (width <= 700px) {
     .filterbar-inline-hero__top-row {
         grid-template-columns: minmax(0, 1fr) auto;
@@ -462,12 +470,11 @@
 
 .filterbar-panel-body .filterbar-text-search-row .dataset-search-input-row {
   --dataset-search-control-height: 34px;
-  --dataset-search-placeholder-fade-left: var(--fw-space-3);
 }
 
 .filterbar-panel-body .filterbar-text-search-row .dataset-search-input {
   font-family: inherit;
-  padding-inline: var(--fw-space-3) !important;
+  padding-inline: 44px !important;
 }
 
 .filterbar-panel-body .filterbar-text-search-row .dataset-search-submit-icon {

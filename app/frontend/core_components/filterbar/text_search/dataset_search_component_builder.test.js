@@ -155,6 +155,12 @@ describe("createDatasetSearchComponent", () => {
         expect(buttonIcon).not.toBeNull();
         expect(buttonLabel).not.toBeNull();
         expect(buttonLabel.textContent).toBe("Search");
+        expect(buttonIcon.getAttribute('aria-hidden')).toBe('true');
+        const glass = component.input.parentElement.querySelector('.dataset-search-field-icon');
+        expect(glass.getAttribute('aria-hidden')).toBe('true');
+        expect(glass.tabIndex).toBe(-1);
+        expect(glass.hasAttribute('style')).toBe(false);
+        expect(component.input.parentElement.querySelector('input')).toBe(component.input);
 
         component.destroy();
     });

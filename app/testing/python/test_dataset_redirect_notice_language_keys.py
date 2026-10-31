@@ -109,7 +109,8 @@ def test_redirect_notice_fresh_bootstrap_equals_upgrade_and_repeat(installed, da
     initial = value(installed, query)
     assert initial == database(query)
     assert len(json.loads(initial)) == 8
-    assert value(installed, "SELECT count(*) FROM system_db_version WHERE version='9.12.0'") == "1"
+    current_db = (APP / "VERSION_DB").read_text().strip()
+    assert value(installed, f"SELECT count(*) FROM system_db_version WHERE version='{current_db}'") == "1"
     for _ in range(2):
         installed(MIGRATION.read_text())
         database(MIGRATION.read_text())

@@ -261,6 +261,14 @@
       "sha256": "6866547a75d3ed406baa61c1894c75356a4e077b1caf47b3e6f0e33de7fb41a2"
     },
     {
+      "component": "Google Material Icons and Symbols",
+      "kind": "asset",
+      "path": "app/frontend/icons/general/refresh-icon.svg",
+      "sha256": "a311253711abb3539958b4cfc171b0b53869bd4e21fe2da4270ec3b5658b575f",
+      "source_detail": "Material Icons 24px baseline refresh with its circular curves redrawn as arcs and its arrowhead unchanged; no first-party authorship or exact upstream byte identity is claimed",
+      "upstream": "https://github.com/google/material-design-icons/blob/master/src/navigation/refresh/materialicons/24px.svg"
+    },
+    {
       "component": "Lucide Icons",
       "kind": "asset",
       "path": "app/frontend/icons/general/table-tools-icon.svg",

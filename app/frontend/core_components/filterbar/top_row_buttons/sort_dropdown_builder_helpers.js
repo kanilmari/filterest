@@ -1,6 +1,7 @@
 // sort_dropdown_builder_helpers.js
 // Pure helper functions extracted from sort_dropdown_builder.js for testability.
 // Zero DOM access — all functions are pure input→output.
+// Matches the reviewed Finnish/English seed without introducing a sorting prefix.
 
 export const IMAGE_FIRST_SORT_COLUMN = "__images_first";
 export const IMAGE_FIRST_SORT_DIRECTION = "DESC";
@@ -44,14 +45,14 @@ export function buildSortOptions(sortableColumns, availableColumns = []) {
             label: "Rows with images first",
             langKey: "sort_images_first",
         },
-        { value: NEWEST_SORT_VALUE, label: "Newest", langKey: "sort_newest" },
-        { value: `${NEWEST_SORT_COLUMN}:ASC`, label: "Oldest", langKey: "sort_oldest" },
+        { value: NEWEST_SORT_VALUE, label: "Newest first", langKey: "sort_newest" },
+        { value: `${NEWEST_SORT_COLUMN}:ASC`, label: "Oldest first", langKey: "sort_oldest" },
     ];
 
     if (availableColumnSet.has("updated")) {
         options.push(
-            { value: "updated:DESC", label: "Most recently updated", langKey: "sort_updated_newest" },
-            { value: "updated:ASC", label: "Least recently updated", langKey: "sort_updated_oldest" }
+            { value: "updated:DESC", label: "Recently updated first", langKey: "sort_updated_newest" },
+            { value: "updated:ASC", label: "Least recently updated first", langKey: "sort_updated_oldest" }
         );
     }
 

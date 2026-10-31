@@ -38,7 +38,7 @@ export function applyTableHeaderSort(header, indicator, column, chosenSort, effe
     bindDatasetLanguageRenderer(header, language => {
         // A later repaint can clear the name while this renderer remains registered.
         if (header.dataset.ariaLabelLangKey !== labelKey) return;
-        const label = `${getTranslationForKey(labelKey, { fallback: oldest ? 'Oldest' : 'Newest', language })}: ${column}`;
+        const label = `${getTranslationForKey(labelKey, { fallback: oldest ? 'Oldest first' : 'Newest first', language })}: ${column}`;
         indicator.title = label;
         header.setAttribute('aria-label', label);
     });

@@ -113,6 +113,18 @@ test.describe('guest phone toolbar and style controls', () => {
       // The general search helper now finds the visible hero; exercise the toolbar button explicitly.
       await toggle.tap(); await expect(input).toBeFocused();
       await expect(input).toHaveValue('Helsinki'); await expect(heroInput).toBeVisible();
+      const glass = bar.locator('.dataset-search-field-icon');
+      await expect(glass).toHaveAttribute('aria-hidden', 'true');
+      const fieldGeometry = await input.evaluate(element => {
+        const field = element.getBoundingClientRect();
+        const glass = element.parentElement!.querySelector('.dataset-search-field-icon')!.getBoundingClientRect();
+        const style = getComputedStyle(element);
+        return { textStart: field.left + Number.parseFloat(style.paddingInlineStart), glassEnd: glass.right,
+          radius: style.borderTopLeftRadius, token: style.getPropertyValue('--search_tools_radius').trim() };
+      });
+      expect(fieldGeometry.textStart).toBeGreaterThan(fieldGeometry.glassEnd);
+      // K465: the field shares the search tools' one radius token.
+      expect(fieldGeometry.radius).toBe(fieldGeometry.token);
       await expect(toggle).toHaveAccessibleName(labels[1]);
       if (labels[1] !== englishLabels[1]) await expect(toggle).not.toHaveAccessibleName(englishLabels[1]);
       await expect(toggle).toHaveAttribute('data-aria-label-lang-key', 'filterbar_hide_search');

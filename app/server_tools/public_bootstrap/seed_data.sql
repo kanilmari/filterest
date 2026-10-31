@@ -7773,6 +7773,79 @@ JOIN (VALUES
     ('front_page_search_failed', 'frontend/core_components/front_page/front_page_search_runner.js', 'Search could not complete; do not mistake a transport error for no matches.')
 ) AS source(lang_key, path, explanation) ON source.lang_key = keys.lang_key
 ON CONFLICT (lang_key_id, source_type, source_high) DO NOTHING;
+-- 20261029000001_seed_hero_sort_language_keys.sql
+-- Replaces automatic English key-name defaults with reviewed hero sort labels.
+-- Connects existing Finnish/English dictionaries to upgrades and fresh bootstrap.
+-- Preserves administrator copy, blanks, whitespace and all other languages.
+-- VERSION_DB: 9.13.2
+-- VERSION_DB_OWNER: 20261029000099_record_database_release_9_13_2.sql
+-- COMPLETION_MARKER: wo50_hero_sort_language_keys
+
+-- The reviewed 9.11.1 seed already has this wording. Older installations may
+-- retain automatically humanized key names in either store, including Finnish.
+-- Match those exact defaults only; never strip a prefix from site-authored text.
+WITH copy(lang_key, old_default, fi, en) AS (VALUES
+    ('sort_newest', 'Sort newest', 'Uusimmat ensin', 'Newest first'),
+    ('sort_oldest', 'Sort oldest', 'Vanhimmat ensin', 'Oldest first'),
+    ('sort_updated_newest', 'Sort updated newest', 'Viimeksi päivitetyt ensin', 'Recently updated first'),
+    ('sort_updated_oldest', 'Sort updated oldest', 'Vanhimmin päivitetyt ensin', 'Least recently updated first'),
+    ('sort_images_first', 'Sort images first', 'Kuvalliset ensin', 'Rows with images first')
+), renamed AS (
+    UPDATE public.system_lang_keys keys
+    SET fi = CASE WHEN keys.fi COLLATE "C" = copy.old_default COLLATE "C" THEN copy.fi ELSE keys.fi END,
+        en = CASE WHEN keys.en COLLATE "C" = copy.old_default COLLATE "C" THEN copy.en ELSE keys.en END
+    FROM copy
+    WHERE keys.lang_key = copy.lang_key
+        AND (keys.fi COLLATE "C" = copy.old_default COLLATE "C"
+            OR keys.en COLLATE "C" = copy.old_default COLLATE "C")
+    RETURNING keys.id
+)
+UPDATE public.system_lang_key_translations translated
+SET translation = changed.value
+FROM public.system_lang_keys keys, copy,
+    LATERAL (VALUES ('fi', copy.fi), ('en', copy.en)) AS changed(language_code, value)
+WHERE translated.lang_key_id = keys.id AND keys.lang_key = copy.lang_key
+    AND translated.language_code = changed.language_code
+    AND translated.translation COLLATE "C" = copy.old_default COLLATE "C";
+
+INSERT INTO public.system_data_repair_records (migration, action, detail)
+SELECT 'wo50_hero_sort_language_keys', 'completed', '{"file":"20261029000001_seed_hero_sort_language_keys.sql"}'::jsonb
+WHERE NOT EXISTS (SELECT 1 FROM public.system_data_repair_records
+    WHERE migration = 'wo50_hero_sort_language_keys' AND action = 'completed');
+-- 20261029000002_replace_legacy_finnish_sort_labels.sql
+-- Replaces four imported legacy Finnish sort labels with the reviewed hero sort wording.
+-- Connects long-lived installations' Finnish dictionaries with the WO50 labels in both stores.
+-- Exact matches only: site-authored Finnish, English and all other languages stay unchanged.
+-- VERSION_DB: 9.13.2
+-- VERSION_DB_OWNER: 20261029000099_record_database_release_9_13_2.sql
+-- COMPLETION_MARKER: wo50_legacy_finnish_sort_labels
+
+-- These exact texts are old imported product labels ("Lajittele ..." = "Sort ..."), never administrator copy;
+-- fresh installations already ship the reviewed wording. Any other Finnish value is left alone.
+WITH copy(lang_key, legacy_fi, fi) AS (VALUES
+    ('sort_newest', 'Lajittele uusimmat', 'Uusimmat ensin'),
+    ('sort_oldest', 'Lajittele vanhimmat', 'Vanhimmat ensin'),
+    ('sort_updated_newest', 'Lajittele päivitetyt uusimmat', 'Viimeksi päivitetyt ensin'),
+    ('sort_updated_oldest', 'Lajittele päivitetyt vanhimmat', 'Vanhimmin päivitetyt ensin')
+), renamed AS (
+    UPDATE public.system_lang_keys keys
+    SET fi = copy.fi
+    FROM copy
+    WHERE keys.lang_key = copy.lang_key
+        AND keys.fi COLLATE "C" = copy.legacy_fi COLLATE "C"
+    RETURNING keys.id
+)
+UPDATE public.system_lang_key_translations translated
+SET translation = copy.fi
+FROM public.system_lang_keys keys, copy
+WHERE translated.lang_key_id = keys.id AND keys.lang_key = copy.lang_key
+    AND translated.language_code = 'fi'
+    AND translated.translation COLLATE "C" = copy.legacy_fi COLLATE "C";
+
+INSERT INTO public.system_data_repair_records (migration, action, detail)
+SELECT 'wo50_legacy_finnish_sort_labels', 'completed', '{"file":"20261029000002_replace_legacy_finnish_sort_labels.sql"}'::jsonb
+WHERE NOT EXISTS (SELECT 1 FROM public.system_data_repair_records
+    WHERE migration = 'wo50_legacy_finnish_sort_labels' AND action = 'completed');
 -- Schema above is imported before registry seeds. This copy follows the
 -- language seeds; upgrades run the complete migration in one transaction.
 WITH authored(lang_key,fi,en,ch,yue) AS (VALUES
@@ -9806,7 +9879,7 @@ DECLARE
     findings text;
 BEGIN
     SELECT string_agg(marker, ', ' ORDER BY marker) INTO missing_markers
-      FROM unnest(ARRAY['wl58_row_actor_support', 'wl58_row_actor_marks_by_table_uid', 'wl58_row_actor_trigger_definitions', 'k116_login_names', 'password_reset_dummy_work', 'system_favorites_table', 'system_front_page_revisions_table', 'system_front_page_blocks_table', 'wl103_row_group_classifications', 'wl132_surviving_sign_in', 'wl52_drop_column_label_value_layout', 'system_dataset_appearance_table', 'wl157_migration_execution_evidence', 'dataset_card_appearance_cutover', 'wl157_application_update_admission', 'dataset_appearance_three_place_schema', 'wl164_publication_fields', 'wl163_dataset_kind_contracts', 'wl159_dataset_namespace', 'wl167_database_identity_schema', 'wl167_managed_timestamp_zones', 'article_bundle_storage', 'article_bundle_mutations', 'wl77_filterbar_preferences', 'wo41_first_run_readonly', 'article_presentations_editor', 'row_group_heading_order_appearance_field', 'saved_home_boxes', 'wl157_application_update_refusal_keys', 'wo46_filterbar_display_and_clear', 'wl58_row_actor_columns', 'system_favorites_registry', 'system_front_page_blocks_registry', 'wl103_row_group_classifications_registry', 'wl144_registry_reference_key', 'dataset_media_hidden', 'wl157_application_update_capability', 'dataset_appearance_three_place_backfill', 'wl164_publication_column_metadata', 't919_registered_column_metadata', 't750_automatic_log_retention', 'record_title_headers_962', 'translation_object_sources_sec2', 'wl69_card_image_usage_storage', 'article_bundle_materialization']::text[]) AS marker
+      FROM unnest(ARRAY['wl58_row_actor_support', 'wl58_row_actor_marks_by_table_uid', 'wl58_row_actor_trigger_definitions', 'k116_login_names', 'password_reset_dummy_work', 'system_favorites_table', 'system_front_page_revisions_table', 'system_front_page_blocks_table', 'wl103_row_group_classifications', 'wl132_surviving_sign_in', 'wl52_drop_column_label_value_layout', 'system_dataset_appearance_table', 'wl157_migration_execution_evidence', 'dataset_card_appearance_cutover', 'wl157_application_update_admission', 'dataset_appearance_three_place_schema', 'wl164_publication_fields', 'wl163_dataset_kind_contracts', 'wl159_dataset_namespace', 'wl167_database_identity_schema', 'wl167_managed_timestamp_zones', 'article_bundle_storage', 'article_bundle_mutations', 'wl77_filterbar_preferences', 'wo41_first_run_readonly', 'article_presentations_editor', 'row_group_heading_order_appearance_field', 'saved_home_boxes', 'wl157_application_update_refusal_keys', 'wo46_filterbar_display_and_clear', 'wo50_hero_sort_language_keys', 'wo50_legacy_finnish_sort_labels', 'wl58_row_actor_columns', 'system_favorites_registry', 'system_front_page_blocks_registry', 'wl103_row_group_classifications_registry', 'wl144_registry_reference_key', 'dataset_media_hidden', 'wl157_application_update_capability', 'dataset_appearance_three_place_backfill', 'wl164_publication_column_metadata', 't919_registered_column_metadata', 't750_automatic_log_retention', 'record_title_headers_962', 'translation_object_sources_sec2', 'wl69_card_image_usage_storage', 'article_bundle_materialization']::text[]) AS marker
      WHERE NOT EXISTS (SELECT 1 FROM public.system_data_repair_records AS record
                         WHERE record.migration = marker AND record.action = 'completed');
     IF missing_markers IS NOT NULL THEN
@@ -10060,9 +10133,12 @@ BEGIN
       ('20261022000301_seed_home_phone_search_language_keys.sql', 'ab1329f748ac1a9258818c7c4112c98fe643639ac447daffde35a0c001837eaf', 'bootstrap_baseline', 'bootstrap'),
       ('20261022000399_record_database_release_9_13_0.sql', '838d21b465139eb61ed3671d5377ac7f32367ec154c89d9d5b20abbf5e9d1255', 'bootstrap_baseline', 'bootstrap'),
       ('20261024000001_add_saved_home_boxes.sql', '4e2473fdc1021aa1762685f498fb68b5e630f8bed418f8557006b1b121b9550e', 'bootstrap_baseline', 'bootstrap'),
-      ('20261024000099_record_database_release_9_13_1.sql', 'c27e8f819cd77dbedab6ffb87dbb884fe71d6a9118740682f7375db33b8b581c', 'bootstrap_baseline', 'bootstrap')
+      ('20261024000099_record_database_release_9_13_1.sql', 'c27e8f819cd77dbedab6ffb87dbb884fe71d6a9118740682f7375db33b8b581c', 'bootstrap_baseline', 'bootstrap'),
+      ('20261029000001_seed_hero_sort_language_keys.sql', 'e48a5601de6067ded243bfbac5057691ef03772ff0b3c6c61770dd166e74e4d2', 'bootstrap_baseline', 'bootstrap'),
+      ('20261029000002_replace_legacy_finnish_sort_labels.sql', '64a15fa425e02748fa1d3c34d8c739fd3a10165afe95a236c1ce858132fa1965', 'bootstrap_baseline', 'bootstrap'),
+      ('20261029000099_record_database_release_9_13_2.sql', '9265ed9991ec8fb134cf9e39c6ba44209d274358b0911fb0401641ddf1296a29', 'bootstrap_baseline', 'bootstrap')
     ON CONFLICT (filename) DO NOTHING;
     INSERT INTO public.system_db_version (version, description)
-    VALUES ('9.13.1', 'Filterest generated public bootstrap');
+    VALUES ('9.13.2', 'Filterest generated public bootstrap');
 END
 $filterest_acceptance$;

@@ -137,6 +137,14 @@ describe("row group category panel", () => {
     test("discloses exactly one panel and returns focus on Close, Escape and heading toggle", async () => {
         const { renderRowGroupFacets } = await import("./row_group_facet_printer.js");
         const host = renderRowGroupFacets("travel_info", [value(1, "boat", heading(1)), value(2, "train", heading(2))]);
+        for (const button of buttons(host)) {
+            const caret = button.querySelector('.row-group-facet-heading__caret');
+            expect(caret.classList.contains('dataset-hero-tool-icon--chevron')).toBe(true);
+            expect(caret.getAttribute('aria-hidden')).toBe('true');
+            expect(caret.tabIndex).toBe(-1);
+            expect(caret.textContent).toBe('');
+            expect(button.textContent).not.toMatch(/[▴▾]/);
+        }
         open(host);
         expect(buttons(host).map(button => button.getAttribute("aria-expanded"))).toEqual(["true", "false"]);
         expect(popup(host).getAttribute("aria-labelledby")).toBe(popup(host).querySelector("h3").id);
@@ -239,6 +247,8 @@ describe("row group category panel", () => {
         popup(host).querySelector(".msd-dropdown-options").scrollTop = 80;
         languageRenderers.get(host)("en");
         expect(host.getAttribute("aria-label")).toBe("Categories");
+        expect(buttons(host)[0].textContent).toBe('Heading 11');
+        expect(buttons(host)[0].querySelector('.row-group-facet-heading__caret').textContent).toBe('');
         expect(host.querySelector('.row-group-facets__guidance')).toBeNull();
         expect(popup(host).querySelector("h3").textContent).toBe("Heading 1");
         const close = popup(host).querySelector(".msd-popup-close");

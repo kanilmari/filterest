@@ -23,7 +23,6 @@ describe('create_filter_bar inline hero mounting', () => {
         cleanupFilterBarBuilderTestDom();
     });
 
-
     test.each([true, false])('hero image visibility %s controls the CSS load property', async (hidden) => {
         const { getAllSpecs } = await import('../state_stores/table_specs_reader.js');
         vi.mocked(getAllSpecs).mockReturnValueOnce({ demo: {
@@ -36,7 +35,6 @@ describe('create_filter_bar inline hero mounting', () => {
         expect(hero.classList.contains('filterbar-inline-hero--has-cover')).toBe(!hidden);
         expect(Boolean(hero.style.getPropertyValue('--dataset-cover-image'))).toBe(!hidden);
     });
-
     test('uses explicit surface metadata and omits SQL-only hero actions for API surfaces', async () => {
         sessionStorage.setItem('user_permissions', JSON.stringify(['/ui/admin/dataset_header_config']));
         const { create_filter_bar } = await import('./filter_bar_builder.js');
@@ -493,9 +491,11 @@ describe('create_filter_bar inline hero mounting', () => {
 
         expect(inlineHero?.querySelector('.filterbar_results_count')).toBeNull();
         expect(resetButton).toBeTruthy();
-        expect(resetButton?.dataset.langKey).toBe('reset_search');
+        expect(resetButton?.querySelector('[data-lang-key="reset_search"]')?.textContent).toBe('Reset search');
+        expect(resetButton?.querySelector('.dataset-hero-tool-icon--reset')?.getAttribute('aria-hidden')).toBe('true');
         expect(filtersButton).toBeTruthy();
-        expect(filtersButton?.dataset.langKey).toBe('filterbar_filter_results');
+        expect(filtersButton?.querySelector('[data-lang-key="filterbar_filter_results"]')?.textContent).toBe('Filter results');
+        expect(filtersButton?.querySelector('.dataset-hero-tool-icon--filter')?.getAttribute('aria-hidden')).toBe('true');
         const section = inlineHero.querySelector('[data-testid="dataset-filter-section"]');
         expect(inlineHero.querySelectorAll('.dataset-filter-section')).toHaveLength(1);
         expect(section.children).toHaveLength(2);
