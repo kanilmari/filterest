@@ -94,6 +94,25 @@ const popup = host => document.getElementById(host.querySelector('[aria-expanded
 const checkboxes = host => [...popup(host).querySelectorAll('[role="option"]')];
 
 describe("row group category panel", () => {
+    test.each([null, heading(1)])('freezes dropdown values through count refreshes and re-sorts next open (%s)', async group => {
+        const { renderRowGroupFacets } = await import('./row_group_facet_printer.js');
+        const facets = [value(1, 'low', group), value(2, 'high', group)];
+        const host = renderRowGroupFacets('travel_info', facets);
+        open(host);
+        const read = () => checkboxes(host).map(option => option.dataset.optionValue);
+        expect(read()).toEqual(['high', 'low']);
+        const refreshed = [value(1, 'low', group, { row_count: 50 }), value(2, 'high', group, { row_count: 0, zero_hit: true }),
+            value(3, 'arrival-small', group), value(4, 'arrival-big', group)];
+        renderRowGroupFacets('travel_info', refreshed);
+        expect(read()).toEqual(['high', 'low', 'arrival-big', 'arrival-small']);
+        expect(checkboxes(host)[0].classList.contains('msd-option--dimmed')).toBe(true);
+        expect(facets.map(facet => facet.slug)).toEqual(['low', 'high']);
+        expect(refreshed.map(facet => facet.slug)).toEqual(['low', 'high', 'arrival-small', 'arrival-big']);
+        open(host); open(host);
+        expect(read()).toEqual(['low', 'arrival-big', 'arrival-small', 'high']);
+        expect(checkboxes(host).at(-1).classList.contains('msd-option--dimmed')).toBe(true);
+    });
+
     afterEach(async () => {
         const { clearRowGroupFacets } = await import("./row_group_facet_printer.js");
         clearRowGroupFacets("travel_info");
@@ -164,7 +183,7 @@ describe("row group category panel", () => {
         expect(popup(host)).toBeNull();
     });
 
-    test("a redraw reveals a reordered focused value by scrolling only the option list", async () => {
+    test("a redraw reveals a focused value by scrolling only the option list", async () => {
         const { renderRowGroupFacets } = await import("./row_group_facet_printer.js");
         const host = renderRowGroupFacets("travel_info", [value(1, "boat"), value(2, "train"), value(3, "plane")]);
         open(host);
@@ -172,23 +191,23 @@ describe("row group category panel", () => {
         const listbox = dialog.querySelector('[role="listbox"]');
         vi.spyOn(dialog, "getBoundingClientRect").mockReturnValue({ top: 16, bottom: 334 });
         vi.spyOn(listbox, "getBoundingClientRect").mockReturnValue({ top: 150, bottom: 334 });
-        const plane = checkboxes(host)[2];
+        const plane = checkboxes(host).find(option => option.dataset.optionValue === 'plane');
         const box = vi.spyOn(plane, "getBoundingClientRect").mockReturnValue({ top: 290, bottom: 334 });
         plane.focus(); dialog.scrollTop = 0; listbox.scrollTop = 100;
-        // Reordering moves the value above the fixed controls. Only its option viewport follows focus.
+        // A changed option viewport leaves focus above the fixed controls; only the list follows focus.
         box.mockImplementation(() => ({ top: 50 + 100 - listbox.scrollTop, bottom: 94 + 100 - listbox.scrollTop }));
         renderRowGroupFacets("travel_info", [value(3, "plane"), value(1, "boat"), value(2, "train")]);
         expect(checkboxes(host)[0]).toBe(plane); expect(document.activeElement).toBe(plane);
         expect(listbox.scrollTop).toBe(0); expect(dialog.scrollTop).toBe(0);
     });
 
-    test("lists all returned values in payload order and searches locally without changing selections or URL", async () => {
+    test("lists all returned values by count and searches locally without changing selections or URL", async () => {
         const { renderRowGroupFacets } = await import("./row_group_facet_printer.js");
         const facets = Array.from({ length: 14 }, (_, i) => value(i + 1, `group_${i}`));
         facets.push(value(20, "security", null, { row_count: 0, selected: true }));
         const host = renderRowGroupFacets("travel_info", facets);
         open(host);
-        expect(checkboxes(host).map(input => input.dataset.optionValue)).toEqual(facets.map(facet => facet.slug));
+        expect(checkboxes(host).map(input => input.dataset.optionValue)).toEqual([...facets].sort((a, b) => b.row_count - a.row_count).map(facet => facet.slug));
         const search = popup(host).querySelector('input[type="search"]');
         search.focus();
         search.value = " SECURITY ";
@@ -337,8 +356,8 @@ describe("row group category panel", () => {
         getUnifiedTableStateMock.mockReturnValue({ filters: { row_group: selected.join(",") } });
         const host = renderRowGroupFacets("travel_info", [...selected.map((slug, i) => value(i + 1, slug)), value(30, "extra")]);
         open(host);
-        expect(checkboxes(host).at(-1).getAttribute("aria-disabled") === "true").toBe(true);
-        expect(checkboxes(host)[0].getAttribute("aria-disabled") === "true").toBe(false);
+        expect(checkboxes(host).find(option => option.dataset.optionValue === 'extra').getAttribute("aria-disabled") === "true").toBe(true);
+        expect(checkboxes(host).find(option => option.dataset.optionValue === 'group_0').getAttribute("aria-disabled") === "true").toBe(false);
         expect(popup(host).querySelector('[data-lang-key="row_group_selection_limit"]')).not.toBeNull();
         expect(await toggleRowGroupFacet("travel_info", "extra")).toBe(false);
         expect(await toggleRowGroupFacet("travel_info", "bad value")).toBe(false);

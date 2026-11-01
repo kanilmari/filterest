@@ -36,8 +36,26 @@ heading, anchored to its stable button and owned by the connected dataset tab.
 This explicit owner keeps a popup alive across a full redraw: the old results and category card remain mounted while the next view builds off screen, then a current completed view replaces the result surface once. Heading badges count selections; row numbers count
 hits. The first three headings are shown initially, with selected headings
 always reachable and remaining headings available through Show more. The panel
-lists up to 200 readable values in server order, with selected values pinned before
-the cap. The appearance palette's Dataset tabs toolbox offers **Category heading
+lists up to 200 readable values; the server caps the vocabulary in administrator
+`sort_order` order before counting, with selected values pinned before the cap.
+Every heading's dropdown, including the untitled group, opens with the largest
+`row_count` first. Equal counts retain server order, so `sort_order` breaks ties.
+The opening order stays fixed through count refreshes until the popup closes;
+new values follow known values, ordered by their arrival counts. The next open
+sorts all current values again. Other consumers retain the server's value order.
+
+The site-wide text setting `category_filter_button_width_mode` chooses
+`fill_row_with_centered_label` (Model D, the default: buttons fill each row and
+centre the label plus arrow) or `fit_to_label` (Model C: buttons hug their content).
+Both retain a 6 px label-to-arrow gap when unselected. Empty selection badges
+have no box at any width; selecting a value adds a badge and may re-wrap a row.
+`/api/auth-modes` reads the setting per request for visitors and signed-in users,
+independently of Home. Missing, unreadable or unknown values use Model D.
+The document's `data-category-filter-button-width-mode` attribute drives the CSS;
+guarded local storage supplies only a refresh hint and the server answer wins.
+There is currently no per-tab override or palette control for button width.
+
+The appearance palette's Dataset tabs toolbox offers **Category heading
 order**: **Administrator's order** (`manual`, the default) retains heading
 `sort_order`, then ID, with the untitled heading treated as 0/0. **Most results
 first** (`result_count`) sorts by the sum of each heading's returned value counts,

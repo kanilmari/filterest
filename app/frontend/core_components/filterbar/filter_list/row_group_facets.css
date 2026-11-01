@@ -44,6 +44,8 @@
 
 .row-group-facet-heading {
     display: inline-flex;
+    flex: 1 1 auto;
+    justify-content: center;
     align-items: center;
     gap: 6px;
     max-width: 100%;
@@ -54,6 +56,11 @@
     overflow-wrap: anywhere;
     text-align: left;
     cursor: pointer;
+}
+
+html[data-category-filter-button-width-mode="fit_to_label"] .row-group-facet-heading {
+    flex: 0 1 auto;
+    justify-content: flex-start;
 }
 
 .row-group-facet-heading:hover,
@@ -82,7 +89,7 @@
     text-align: center;
 }
 
-.row-group-facet-heading__badge.is-empty { visibility: hidden; }
+.row-group-facet-heading__badge.is-empty { display: none; }
 
 .row-group-facet-heading__caret {
     flex: none;

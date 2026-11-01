@@ -23,7 +23,7 @@ def release_owner():
 def test_setting_and_label_share_one_versioned_default_and_last_release_owner():
     source = MIGRATION.read_text()
     version = re.search(r'^-- VERSION_DB: (.+)$', source, re.M)[1]
-    assert version == (APP / 'VERSION_DB').read_text().strip()
+    assert version == '9.13.3'
     assert MIGRATION.name[:14] > '20261029000099'
     assert release_owner().name > MIGRATION.name
     assert f'-- VERSION_DB: {version}' in release_owner().read_text()

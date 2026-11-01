@@ -22,6 +22,7 @@ Dates are the local (Europe/Helsinki) date on which the version was published.
 
 ## [Unreleased]
 
+- **Compact category buttons and count ordering** — Empty selection badges take no space; a site setting chooses row-filling centred buttons (default) or content-width buttons. Category values open largest-count first, retain administrator order for ties, and keep their order while the popup is open.
 - Vector search omits known columns the viewer cannot read, using the same column grants as ordinary results. Administrators and readers with SELECT on every column keep the same delivered fields; a withheld column no longer breaks the vector result query.
 - Browser checks remove identical project runs by default under K549, while `FILTEREST_E2E_MATRIX=full` preserves the full six-project pass for weekends and site releases; the relevant-check planner and static guard share the reviewed reduction manifest.
 - Stacked card photo frames follow their stored size from the first paint, within a 4:5 frame limit and 80% of viewport height; pictures without a usable stored size keep a square frame. Existing sites change when the image-size backfill tool runs; resizing retains the fixed 300×300 wide frame (WO114/K545/K548).

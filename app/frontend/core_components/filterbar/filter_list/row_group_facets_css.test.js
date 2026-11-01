@@ -45,3 +45,13 @@ test('settings scroll independently and the resize grip uses theme colours', () 
     expect(styles).toMatch(/\.msd-popup-resize::after\s*\{[^}]*border-block: 1px solid currentcolor/s);
     expect(styles).not.toContain('prefers-color-scheme');
 });
+
+test('category buttons default to filling rows, fit mode hugs labels and empty badges have no box', () => {
+    const base = styles.match(/^\.row-group-facet-heading\s*\{([^}]+)\}/m)[1];
+    expect(base).toContain('flex: 1 1 auto;');
+    expect(base).toContain('justify-content: center;');
+    expect(base).toContain('gap: 6px;');
+    expect(styles).toMatch(/html\[data-category-filter-button-width-mode="fit_to_label"\] \.row-group-facet-heading\s*\{\s*flex: 0 1 auto;\s*justify-content: flex-start;/);
+    expect(styles).toMatch(/\.row-group-facet-heading__badge\.is-empty\s*\{\s*display: none;\s*\}/);
+    expect(styles.match(/^\.row-group-facet-action\s*\{([^}]+)\}/m)[1]).not.toMatch(/flex(?:-grow)?:/);
+});

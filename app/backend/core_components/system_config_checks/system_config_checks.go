@@ -28,6 +28,18 @@ var checks = durationChecks()
 func durationChecks() map[string]check {
 	registry := make(map[string]check, len(durations))
 	registry[TableCellMaxLinesKey] = validateTableCellMaxLines
+	registry["category_filter_button_width_mode"] = func(row map[string]interface{}) error {
+		// Text settings have no entry in system_config_value_data_types.
+		if row["value_type"] != nil {
+			return fmt.Errorf("category button width requires a NULL value type")
+		}
+		switch row["text_value"] {
+		case "fill_row_with_centered_label", "fit_to_label":
+			return nil
+		default:
+			return fmt.Errorf("unknown category button width mode")
+		}
+	}
 	for key, definition := range durations {
 		registry[key] = func(row map[string]interface{}) error {
 			if fmt.Sprint(row["value_type"]) != "5" {

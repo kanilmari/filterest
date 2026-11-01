@@ -96,6 +96,11 @@ async function assertSection(page: Page, dataset: string, width: number) {
   await expect(section.locator(':scope > [data-testid="row-group-facets"]')).toBeVisible();
   await expect(section.locator('.row-group-facets__guidance')).toHaveCount(0);
   await expect(section.locator('.row-group-facets__title')).toBeVisible();
+  // WO112: the empty count badge takes no space; the default mode fills the row with a centred label.
+  const headingButton = section.locator('.row-group-facet-heading').first();
+  await expect(headingButton).toHaveCSS('flex-grow', '1');
+  await expect(headingButton).toHaveCSS('justify-content', 'center');
+  await expect(section.locator('.row-group-facet-heading__badge.is-empty').first()).toHaveCSS('display', 'none');
   const geometry = await section.evaluate(element => {
     const box = element.getBoundingClientRect();
     const rows = [...element.children].map(child => child.getBoundingClientRect());

@@ -35,6 +35,7 @@ type AuthModesResponse struct {
 	DisplayIndexHTMLAtStartup           bool     `json:"display_index_html_at_startup"`
 	FrontPageButtonSiteName             string   `json:"front_page_button_site_name"`
 	ShowHomeButtonInTopBarOnWideScreens bool     `json:"show_home_button_in_top_bar_on_wide_screens"`
+	CategoryFilterButtonWidthMode       string   `json:"category_filter_button_width_mode"`
 	GuestUIEndpoints                    []string `json:"guest_ui_endpoints,omitempty"`
 }
 
@@ -174,10 +175,15 @@ func clearAuthSessionValues(session *gorillaSessions.Session) {
 }
 
 // buildAuthModesResponse adds presentation switches equally to every bootstrap response.
-// Authentication decisions above remain unchanged; an unavailable optional setting stays off.
+// Optional settings use their own defaults independently of Home or authentication.
 func buildAuthModesResponse(request *http.Request, button string, loginToBrowse bool, loginSettings backend.LoginAccessSettings) AuthModesResponse {
 	response := AuthModesResponse{NeedsButton: button, RegistrationEnabled: middlewares.CheckRegistrationEnabled(),
 		LoginRequiredForBrowse: loginToBrowse, ShowLoginButton: loginSettings.ShowLoginButton, OnlyAdminCanLogin: loginSettings.OnlyAdminCanLogin}
+	mode, modeErr := readCategoryFilterButtonWidthMode(request.Context(), backend.Db)
+	response.CategoryFilterButtonWidthMode = mode
+	if modeErr != nil {
+		log.Printf("[GetAuthModesHandler] category button width setting unavailable: %v", modeErr)
+	}
 	if button == "login" {
 		endpoints, err := readGuestUIEndpoints(request.Context(), backend.Db)
 		if err != nil {

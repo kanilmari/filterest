@@ -8259,6 +8259,17 @@ JOIN (VALUES
     ('show_home_button_in_top_bar_on_wide_screens', 'frontend/core_components/admin_tools/front_page_settings_view.js', 'Site-wide Home settings: opt in to the Home button above the phone breakpoint, disabled while Home is off.')
 ) AS source(lang_key, path, explanation) ON source.lang_key = keys.lang_key
 ON CONFLICT (lang_key_id, source_type, source_high) DO NOTHING;
+-- 20261030000346_add_category_filter_button_width_mode.sql
+-- Adds the site-wide category button width setting with the fill-row default.
+-- Connects upgraded sites and fresh bootstrap to the same text setting.
+-- Replay preserves an administrator's existing choice without changing it.
+-- VERSION_DB: 9.13.4
+-- VERSION_DB_OWNER: 20261030000399_record_database_release_category_button_width.sql
+
+INSERT INTO public.system_config (key, boolean_value, json_value, text_value, value_type, creation_spec)
+SELECT 'category_filter_button_width_mode', NULL, '{"value":"fill_row_with_centered_label"}'::jsonb, 'fill_row_with_centered_label', NULL,
+    'Choose site-wide category buttons that fill each row with centred labels or fit their labels.'
+WHERE NOT EXISTS (SELECT 1 FROM public.system_config WHERE key = 'category_filter_button_width_mode');
 
 -- Drain article events before the next data migration without changing other constraints.
 DO $article_bundle_seed_boundary$
@@ -10193,9 +10204,11 @@ BEGIN
       ('20261029000002_replace_legacy_finnish_sort_labels.sql', '64a15fa425e02748fa1d3c34d8c739fd3a10165afe95a236c1ce858132fa1965', 'bootstrap_baseline', 'bootstrap'),
       ('20261029000099_record_database_release_9_13_2.sql', '9265ed9991ec8fb134cf9e39c6ba44209d274358b0911fb0401641ddf1296a29', 'bootstrap_baseline', 'bootstrap'),
       ('20261029000100_add_home_top_bar_setting.sql', '342ffd7325b21cc0a620951cb6692f3ad5abbbbc56371eefbf495151b99bcb44', 'bootstrap_baseline', 'bootstrap'),
-      ('20261029000199_record_database_release_9_13_3.sql', 'd97b6dc8139cc2fbcc9f17e532ff305c94012b1aeee9454148da2a2651443da4', 'bootstrap_baseline', 'bootstrap')
+      ('20261029000199_record_database_release_9_13_3.sql', 'd97b6dc8139cc2fbcc9f17e532ff305c94012b1aeee9454148da2a2651443da4', 'bootstrap_baseline', 'bootstrap'),
+      ('20261030000346_add_category_filter_button_width_mode.sql', '341d2fe1d2ec2227bd3ac352602b8fd5157dcc4d576d7d59ae47b83d1a52cea6', 'bootstrap_baseline', 'bootstrap'),
+      ('20261030000399_record_database_release_category_button_width.sql', '1f3d669745be67a5a302e2b82662cb5a295b6ede8aa5751a3f8183573f0b7096', 'bootstrap_baseline', 'bootstrap')
     ON CONFLICT (filename) DO NOTHING;
     INSERT INTO public.system_db_version (version, description)
-    VALUES ('9.13.3', 'Filterest generated public bootstrap');
+    VALUES ('9.13.4', 'Filterest generated public bootstrap');
 END
 $filterest_acceptance$;

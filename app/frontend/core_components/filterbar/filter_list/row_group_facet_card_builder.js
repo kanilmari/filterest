@@ -9,6 +9,7 @@ import { createMultiselectDropdown } from '../../../reusable_components/multisel
 import { createSymbolMaskElement } from '../../../reusable_components/symbol_asset_resolver.js';
 import { createRowGroupHeadingOrder } from './row_group_heading_order.js';
 import { createHeroToolIcon } from '../hero_tool_icon_builder.js';
+import { createRowGroupValueOrder } from './row_group_value_order.js';
 
 // Full-key catalogues keep helper arguments visible to the startup language scan.
 const MATCH_MODE_COPY = Object.freeze({
@@ -108,6 +109,7 @@ export function createRowGroupFacetCard({ host, topControls, tableName, getSelec
             panelState.expanded = true;
         }
         const entry = entries.get(key);
+        entry?.valueOrdering.close();
         if (entry?.help) {
             entry.help.hidden = true;
             entry.helpButton.setAttribute('aria-expanded', 'false');
@@ -131,7 +133,7 @@ export function createRowGroupFacetCard({ host, topControls, tableName, getSelec
         badge.className = 'row-group-facet-heading__badge';
         const caret = createHeroToolIcon('chevron', 'row-group-facet-heading__caret');
         button.append(label, badge, caret);
-        const entry = { group, button, label, badge, caret, dropdown: null };
+        const entry = { group, button, label, badge, caret, dropdown: null, valueOrdering: createRowGroupValueOrder() };
         button.addEventListener('click', () => {
             if (entry.dropdown) return; // The mounted library owns subsequent trigger interactions.
             mountDropdown(entry);
@@ -223,6 +225,7 @@ export function createRowGroupFacetCard({ host, topControls, tableName, getSelec
             selectionLimit: { max: SELECTION_LIMIT, getSelectionCount: () => getSelectedSlugs(tableName).length },
             onOpen: () => {
                 entries.get(panelState.openHeading)?.dropdown?.close();
+                entry.valueOrdering.open(entry.group.values);
                 panelState.openHeading = key;
                 render();
             },
@@ -267,7 +270,7 @@ export function createRowGroupFacetCard({ host, topControls, tableName, getSelec
             popupTitle: headingTitle(entry.group), closeLabel: getTranslationForKey(PANEL_COPY.close.langKey),
             searchPlaceholder: getTranslationForKey(PANEL_COPY.search.langKey), noResultsLabel: getTranslationForKey(PANEL_COPY.noMatchesKey),
         });
-        entry.dropdown.setOptions(entry.group.values.map(facet => ({
+        entry.dropdown.setOptions(entry.valueOrdering.sort(entry.group.values).map(facet => ({
             value: facet.slug, label: getFacetTitle(facet, chosenLanguage), count: facet.row_count, dimmed: facet.zero_hit,
         })));
         entry.dropdown.setValue({ includeValues: getSelectedSlugs(tableName).filter(slug => entry.group.values.some(facet => facet.slug === slug)) });

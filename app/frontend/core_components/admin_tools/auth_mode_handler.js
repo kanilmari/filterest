@@ -8,6 +8,7 @@ import { hasRoutePermission } from "../route_permission_checker.js";
 import { synchronizeThemePreferenceForAuthState } from "../theme.js";
 import { getSessionGeneration, invalidateSessionGeneration, subscribeToSessionGeneration } from '../auth/session_generation_store.js';
 import { beginFrontPageAvailabilityRequest, resetFrontPageAvailability, setFrontPageAvailability } from '../front_page/front_page_availability.js';
+import { setCategoryFilterButtonWidthMode } from '../filterbar/filter_list/category_filter_button_width_mode.js';
 
 // Use the existing session invalidation channel; route sets stay local to this
 // tab and are replaced only by its authoritative bootstrap, never merged.
@@ -30,6 +31,7 @@ export async function setAuthModes() {
     try {
         const data = await fetchAuthModes();
         if (generation !== getSessionGeneration()) return;
+        setCategoryFilterButtonWidthMode(data?.category_filter_button_width_mode);
 
         if (data && ['login', 'logout'].includes(data.needs_button)) {
             bootButtonState = data.needs_button;
