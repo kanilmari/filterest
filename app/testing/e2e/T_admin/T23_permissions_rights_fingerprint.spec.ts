@@ -23,11 +23,13 @@ async function readRows(page: Page, dataset: string, fields: Record<string, stri
       query.set(`${key}_from`, String(value)); query.set(`${key}_to`, String(value));
     }
     const response = await page.request.get(`/api/get-results?${query}`);
-    expect(response.ok(), `${dataset} offset ${offset}: ${await response.text()}`).toBe(true);
+    if (!response.ok()) expect(response.ok(), `${dataset} offset ${offset}: ${await response.text()}`).toBe(true);
     const body = await response.json();
-    expect(Array.isArray(body?.data), `${dataset} offset ${offset}: expected a row array`).toBe(true);
-    expect(Number.isSafeInteger(body.row_count) && body.row_count >= 0,
-      `${dataset} offset ${offset}: expected a nonnegative row_count`).toBe(true);
+    if (!Array.isArray(body?.data)) expect(Array.isArray(body?.data), `${dataset} offset ${offset}: expected a row array`).toBe(true);
+    if (!(Number.isSafeInteger(body.row_count) && body.row_count >= 0)) {
+      expect(Number.isSafeInteger(body.row_count) && body.row_count >= 0,
+        `${dataset} offset ${offset}: expected a nonnegative row_count`).toBe(true);
+    }
     return body;
   }
   for (let attempt = 0; ; attempt++) {
@@ -52,7 +54,13 @@ async function readRows(page: Page, dataset: string, fields: Record<string, stri
     expect(ascending, `${context}: ids must be strictly ascending without repeats`).toBe(true);
     expect(rows.length, `${context}: row count must match the first page`).toBe(first.row_count);
     expect(rows.length, `${context}: row count must match the fresh page`).toBe(latest.row_count);
-    for (const row of rows) expect(row).toMatchObject(fields);
+    const fieldEntries = Object.entries(fields);
+    // Playwright records every expect as a step, and this loop runs about 100,000 times.
+    if (fieldEntries.length) {
+      for (const row of rows) {
+        if (!fieldEntries.every(([key, value]) => Object.is(row[key], value))) expect(row).toMatchObject(fields);
+      }
+    }
     return rows;
   }
 }

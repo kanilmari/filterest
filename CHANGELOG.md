@@ -22,6 +22,7 @@ Dates are the local (Europe/Helsinki) date on which the version was published.
 
 ## [Unreleased]
 
+- T23 skips successful row-match, HTTP-status and row-array assertion steps and reads response text only on HTTP failure, preserving existing failure diagnostics (test only).
 - Trees remember explicit open and closed folder choices across reloads; defaults, search and current-path reveals stay temporary, and polluted legacy expansion lists are discarded once.
 - Home stays in the menu by default; administrators can opt in to a site-wide top-bar Home button on screens wider than 700 px.
 - On Home, crossing a phone or tablet breakpoint with search open or focused keeps keyboard focus on the search trigger.
