@@ -22,6 +22,8 @@ Dates are the local (Europe/Helsinki) date on which the version was published.
 
 ## [Unreleased]
 
+- On Home, crossing a phone or tablet breakpoint with search open or focused keeps keyboard focus on the search trigger.
+- Home search opens over the site name in the phone bar and the 701–1200 px top row, with results below and existing focus/history behavior preserved (`G26_home_search_over_name.spec.ts`).
 - Dataset hero tools get a rule before Categories and decorative search/filter/reset/chevron icons; Finnish/English sort labels omit “Sort” while preserving administrator edits (WO50).
 - Administrators can save Home boxes with a title, categories and sorting through the API; sites without a saved list show 3 rows per box. Box validation, metadata, row reads, lifecycle admission (including active-cohort polls) and pool waits stop at Home's remaining time budget while keeping the request transaction usable. **Rollback:** within the new binary, the current editor leaves the new fields inert until the box editor ships; downgrading below database 9.13.1 requires restoring the pre-migration backup under a write freeze. The batch's PostgreSQL tests include a rollback rehearsal.
 - Home's dataset boxes span the phone screen in one layer, with their text aligned to the hero's 16 px edge; tablet and desktop spacing stays unchanged.

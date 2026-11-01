@@ -21,7 +21,9 @@ beforeEach(() => {
     history.replaceState({ [HISTORY_ENTRY_ID]: `home-${++serial}` }, '', '/');
     window.addEventListener('popstate', onPop);
     vi.stubGlobal('matchMedia', vi.fn(() => ({ matches: true })));
-    document.body.innerHTML = '<main class="front-page-scroller"><div class="front-page-phone-topbar"><div class="front-page-phone-topbar__end" aria-hidden="true"></div></div><article><button>Home</button></article></main>';
+    document.body.innerHTML = '<main class="front-page-scroller"><div class="front-page-phone-topbar">'
+        + '<div class="menu"><button>Menu</button></div><div class="front-page-top-row__identity">Sivuston nimi</div>'
+        + '<div class="front-page-phone-topbar__end" aria-hidden="true"></div></div><article><button>Home</button></article></main>';
     scroller = document.querySelector('main'); end = scroller.querySelector('.front-page-phone-topbar__end');
     mocks.create.mockReset().mockReturnValue({ destroy: mocks.destroy }); mocks.destroy.mockClear();
     back = vi.spyOn(history, 'back');
@@ -45,6 +47,18 @@ test('opening creates a separately identified same-URL state, locks Home and foc
     expect(button.getAttribute('aria-controls')).toBe(dialog().id); expect(button.getAttribute('aria-expanded')).toBe('true');
     expect(scroller.classList.contains('front-page-scroller--drawer-open')).toBe(true);
     expect(scroller.querySelector('article').inert).toBe(true);
+    expect(dialog().parentElement).toBe(end.parentElement);
+    expect(dialog().querySelectorAll('input')).toHaveLength(1);
+    expect(dialog().querySelector('.front-page-search-sheet__header')).toBeNull();
+    expect(dialog().querySelector('.front-page-search-layer input')).toBeNull();
+    expect(dialog().querySelector('.front-page-search-layer .front-page-search-sheet__results')).not.toBeNull();
+    const identity = scroller.querySelector('.front-page-top-row__identity');
+    expect(identity.getAttribute('aria-hidden')).toBe('true');
+    expect(identity.classList.contains('front-page-search-identity--covered')).toBe(true);
+    expect(identity.inert).toBe(true); expect(end.inert).toBe(true);
+    expect(end.parentElement.inert).not.toBe(true); expect(dialog().inert).not.toBe(true);
+    expect(scroller.querySelector('.menu').inert).toBe(true);
+    expect(end.children).toHaveLength(1);
 });
 
 test('focus loops in both directions and programmatic outside focus returns inside', () => {
@@ -67,6 +81,19 @@ test.each(['close', 'escape', 'backdrop'])('%s closes, returns focus and removes
     expect(location.pathname).toBe('/'); expect(scroller.scrollTop).toBe(123);
     expect(scroller.classList.contains('front-page-scroller--drawer-open')).toBe(false);
     expect(button.getAttribute('aria-expanded')).toBe('false'); expect(mocks.destroy).toHaveBeenCalledOnce();
+    const identity = scroller.querySelector('.front-page-top-row__identity');
+    expect(identity.hasAttribute('aria-hidden')).toBe(false);
+    expect(identity.classList.contains('front-page-search-identity--covered')).toBe(false);
+    expect(end.parentElement.classList.contains('front-page-search-bar--open')).toBe(false);
+    expect(identity.inert).not.toBe(true); expect(end.inert).not.toBe(true);
+});
+
+test('closing restores pre-existing identity accessibility and inert states', () => {
+    const identity = scroller.querySelector('.front-page-top-row__identity');
+    identity.setAttribute('aria-hidden', 'false'); scroller.querySelector('article').inert = true;
+    button.click(); close().click();
+    expect(identity.getAttribute('aria-hidden')).toBe('false');
+    expect(scroller.querySelector('article').inert).toBe(true);
 });
 
 test('phone Back closes without leaving Home or issuing another Back', async () => {

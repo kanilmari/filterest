@@ -1,5 +1,5 @@
 // front_page_desktop_search_controller.js
-// Owns Home's desktop field/button and its anchored, nonmodal results dialog.
+// Opens Home's button-mode field over the site name, with nonmodal results below.
 // Connects the existing tab row to the phone search runner and translated copy.
 // Keeps desktop focus and disposal independent of the phone's history owner.
 
@@ -60,20 +60,30 @@ export function mountFrontPageDesktopSearch(row, actions) {
     let runner;
     let restoringFocus = false;
     let outsidePointer = false;
+    let unrendered = null;
     let destroyed = false;
     let focusFrame = 0;
+    let coveredName;
+    let nameAriaHidden;
     const trigger = () => mode === 'field' ? input : button;
+    const containsSearch = target => host.contains(target) || field.contains(target) || panel?.contains(target);
 
     function place() {
         if (!panel) return;
         const bounds = home.getBoundingClientRect();
-        const anchor = (mode === 'field' ? field : button).getBoundingClientRect();
+        if (coveredName) {
+            // Visibility keeps the name's natural width stable while it is covered.
+            field.style.left = `${coveredName.offsetLeft}px`;
+            field.style.width = `${coveredName.getBoundingClientRect().width}px`;
+        }
+        const anchor = field.getBoundingClientRect();
         const leftEdge = Math.max(GUTTER, bounds.left + GUTTER);
         const rightEdge = Math.min(view.innerWidth - GUTTER, bounds.right - GUTTER);
         const width = Math.max(0, Math.min(640, rightEdge - leftEdge));
         const top = anchor.bottom + 8;
+        const left = mode === 'field' ? anchor.right - width : anchor.left;
         panel.style.width = `${width}px`;
-        panel.style.left = `${Math.max(leftEdge, Math.min(anchor.right - width, rightEdge - width))}px`;
+        panel.style.left = `${Math.max(leftEdge, Math.min(left, rightEdge - width))}px`;
         panel.style.top = `${top}px`;
         panel.style.maxHeight = `${Math.max(0, Math.min(view.innerHeight * 0.8, view.innerHeight - top - GUTTER))}px`;
     }
@@ -86,9 +96,18 @@ export function mountFrontPageDesktopSearch(row, actions) {
         if (!panel) return;
         runner.destroy();
         runner = null;
-        // Move the single field back before removing its collapsed-mode header.
+        // Return the single field before exposing the name or restoring focus.
         field.hidden = mode !== 'field';
         host.prepend(field);
+        field.classList.remove('front-page-desktop-search__over-name');
+        field.style.removeProperty('left');
+        field.style.removeProperty('width');
+        if (coveredName) {
+            coveredName.classList.remove('front-page-desktop-search__covered-name');
+            if (nameAriaHidden === null) coveredName.removeAttribute('aria-hidden');
+            else coveredName.setAttribute('aria-hidden', nameAriaHidden);
+            coveredName = null;
+        }
         panel.remove();
         panel = null;
         for (const control of [input, button]) control.setAttribute('aria-expanded', 'false');
@@ -101,11 +120,11 @@ export function mountFrontPageDesktopSearch(row, actions) {
         if (restore && host.isConnected) restoreFocus();
     }
     function onOutsideClick(event) {
-        if (!host.contains(event.target) && !panel?.contains(event.target)) close();
+        if (!containsSearch(event.target)) close();
         outsidePointer = false;
     }
     function onPointerDown(event) {
-        outsidePointer = !host.contains(event.target) && !panel?.contains(event.target);
+        outsidePointer = !containsSearch(event.target);
     }
     function onPointerCancel() {
         if (outsidePointer) close(false);
@@ -114,7 +133,12 @@ export function mountFrontPageDesktopSearch(row, actions) {
     function onOutsideFocus(event) {
         // A pointer click finishes at click, after the browser focuses its target;
         // keyboard focus leaving remains free to continue through the page.
-        if (!outsidePointer && !host.contains(event.target) && !panel?.contains(event.target)) close(false);
+        if (!outsidePointer && !containsSearch(event.target)) close(false);
+    }
+    // A breakpoint can stop rendering the focused control before resize reaches syncMode;
+    // focus is on body by then. A control the user left stays rendered and doesn't count.
+    function onFocusOut(event) {
+        unrendered = !event.relatedTarget && !event.target.getClientRects().length ? event.target : null;
     }
     function focusable(root) {
         return [...root.querySelectorAll(FOCUSABLE)].filter(node => !node.disabled
@@ -130,9 +154,9 @@ export function mountFrontPageDesktopSearch(row, actions) {
             if (first) { event.preventDefault(); first.focus(); }
         } else if (event.key === 'Tab') {
             const nodes = focusable(panel);
-            if (mode === 'field' && !event.shiftKey && event.target === input) {
+            if (!event.shiftKey && event.target === input) {
                 event.preventDefault(); closeButton.focus();
-            } else if (mode === 'field' && event.shiftKey && event.target === closeButton) {
+            } else if (event.shiftKey && event.target === closeButton) {
                 event.preventDefault(); input.focus();
             } else if (mode === 'button' && event.shiftKey && event.target === input) {
                 event.preventDefault(); close();
@@ -162,8 +186,16 @@ export function mountFrontPageDesktopSearch(row, actions) {
         cross.textContent = '×';
         cross.setAttribute('aria-hidden', 'true');
         closeButton.append(cross);
-        if (mode === 'button') { field.hidden = false; header.append(field); }
-        else header.append(title);
+        if (mode === 'button') {
+            coveredName = row.querySelector('.front-page-site-name');
+            nameAriaHidden = coveredName.getAttribute('aria-hidden');
+            coveredName.setAttribute('aria-hidden', 'true');
+            coveredName.classList.add('front-page-desktop-search__covered-name');
+            field.hidden = false;
+            field.classList.add('front-page-desktop-search__over-name');
+            coveredName.parentElement.append(field);
+        }
+        header.append(title);
         header.append(closeButton);
         bindDatasetLanguageRenderer(panel, () => {
             const label = getTranslationForKey('front_page_search_title', { countUsage: false });
@@ -209,9 +241,12 @@ export function mountFrontPageDesktopSearch(row, actions) {
     function onButtonClick() { if (panel) close(); else open(); }
     function onNavigation() { close(false); }
     function syncMode() {
+        const remembered = unrendered;
+        unrendered = null;
         const next = getFrontPageSearchMode(view.innerWidth);
         if (mode === next) { place(); return; }
-        const active = document.activeElement;
+        const focused = document.activeElement;
+        const active = focused && focused !== document.body ? focused : remembered;
         const returnFocus = Boolean(panel || host.contains(active)
             || active?.closest('.front-page-search-button, .front-page-search-sheet'));
         close(false);
@@ -232,6 +267,7 @@ export function mountFrontPageDesktopSearch(row, actions) {
     field.addEventListener('input', onInput, true);
     input.addEventListener('focus', onInputFocus);
     button.addEventListener('click', onButtonClick);
+    document.addEventListener('focusout', onFocusOut, true);
     view.addEventListener('resize', syncMode);
     // Registered before the phone projection: retain search focus before its nodes move.
     phoneMedia?.addEventListener('change', syncMode);
@@ -247,6 +283,7 @@ export function mountFrontPageDesktopSearch(row, actions) {
             close(false);
             observer?.disconnect();
             if (focusFrame) view.cancelAnimationFrame(focusFrame);
+            document.removeEventListener('focusout', onFocusOut, true);
             view.removeEventListener('resize', syncMode);
             phoneMedia?.removeEventListener('change', syncMode);
             view.removeEventListener('popstate', onNavigation);

@@ -1,5 +1,5 @@
 /* front_page_search_sheet.css
- * Anchors phone Home search beneath its measured sticky bar.
+ * Opens phone Home search over its identity in the measured sticky bar.
  * Reuses the shared search field and compact dataset group surfaces.
  * Component rules use application theme tokens; the phone gate owns visibility.
  */
@@ -22,6 +22,9 @@
 /* Also hide a retained phone mount until its resize teardown has run. */
 .front-page-search-button { display: none; }
 
+.front-page-search-bar--open { z-index: 20; }
+.front-page-search-identity--covered { visibility: hidden; }
+
 .front-page-search-button:focus-visible,
 .front-page-search-sheet__close:focus-visible {
   outline: 2px solid var(--primary_color);
@@ -30,33 +33,26 @@
 
 .front-page-search-layer {
   display: none;
-  position: fixed;
+  position: absolute;
   z-index: 20;
-  inset: var(--home-phone-bar-size) 0 0;
+  inset: 100% 0 auto;
+  height: calc(100dvh - var(--home-phone-bar-size));
+  box-sizing: border-box;
   padding: 0 16px;
   background: color-mix(in srgb, var(--bg_color_2) 30%, transparent);
 }
 
-.front-page-search-layer > .front-page-search-sheet {
-  display: flex;
-  flex-direction: column;
-  max-height: min(80dvh, calc(100dvh - var(--home-phone-bar-size)));
-  overflow: hidden;
-  color: var(--text_color);
-  background: var(--bg_color_2);
-  border: 1px solid var(--border_color);
-  border-radius: var(--search_tools_radius);
-}
-
-.front-page-search-sheet__header {
-  display: flex;
-  flex: 0 0 auto;
+.front-page-search-sheet.dataset-search-panel {
+  display: none;
+  grid-column: 2 / 4;
+  grid-row: 1;
+  grid-template-columns: minmax(0, 1fr) 44px;
+  align-items: center;
   gap: 8px;
-  padding: 12px;
+  color: var(--text_color);
 }
 
-.front-page-search-sheet__header > .dataset-search-input-row {
-  flex: 1;
+.front-page-search-sheet > .dataset-search-input-row {
   min-width: 0;
   height: 44px;
 }
@@ -67,10 +63,16 @@
 }
 
 .front-page-search-sheet__results {
+  box-sizing: border-box;
+  max-height: min(80dvh, calc(100dvh - var(--home-phone-bar-size)));
   min-height: 0;
-  padding: 0 12px 12px;
+  padding: 12px;
   overflow-y: auto;
   overscroll-behavior: contain;
+  color: var(--text_color);
+  background: var(--bg_color_2);
+  border: 1px solid var(--border_color);
+  border-radius: var(--search_tools_radius);
 }
 
 .front-page-search-sheet__results [role="status"]:empty { display: none; }
@@ -115,5 +117,6 @@
 /* Phone (≤ 700px, K444) */
 @media (width <= 700px) {
   .front-page-search-button { display: grid; }
+  .front-page-search-sheet.dataset-search-panel { display: grid; }
   .front-page-search-layer { display: block; }
 }

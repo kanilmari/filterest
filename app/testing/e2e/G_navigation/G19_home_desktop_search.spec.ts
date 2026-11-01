@@ -106,7 +106,7 @@ async function noTabOverlap(page: Page) {
 async function openSearch(page: Page, width: number) {
   const host = page.locator('.front-page-desktop-search');
   if (width <= tablet) await host.getByRole('button', { name: 'Hae sivustolta' }).click();
-  const input = width > tablet ? host.getByRole('searchbox') : page.locator('#front-page-desktop-search-panel input');
+  const input = width > tablet ? host.getByRole('searchbox') : page.locator('.front-page-top-row__identity input');
   await input.fill('Helsinki');
   const panel = page.locator('#front-page-desktop-search-panel');
   await expect(panel).toBeVisible(); await expect(panel).toHaveAttribute('aria-modal', 'false');

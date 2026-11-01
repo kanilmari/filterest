@@ -10,11 +10,15 @@ Part of the [Frontend Guide](Frontend_Guide.md), alongside the [Home page](Front
 ## Phone sheet
 
 At widths up to 700 px, Home's existing 44 px end slot contains a magnifier.
-Opening it shows a labelled modal dialog beneath the measured sticky bar,
-with 16 px side gutters and a maximum height of 80dvh. Results scroll inside
-the sheet. The shared search input receives focus; input and close targets
-are 44 px. Home's scroller uses the drawer lock while its content is inert.
-Tab and Shift+Tab loop inside the sheet; an outside focus attempt returns to
+Opening it places the single input and close control in that bar, over the
+site identity and magnifier. The identity stays in its grid cell to preserve
+geometry but is hidden visually and from assistive technology. The results
+sheet stays beneath the measured sticky bar, with 16 px side gutters and a
+maximum height of 80dvh. Controls and results belong to one labelled modal
+subtree. The shared search input receives focus; input and close targets
+are 44 px. Home's scroller uses the drawer lock while its other content and
+the covered bar controls are inert.
+Tab and Shift+Tab loop through the dialog; an outside focus attempt returns to
 the input. Closing restores Home's position and focus to the magnifier.
 Explicit application theme tokens style both themes independently of OS theme.
 All sheet styles live in `front_page_search_sheet.css`.
@@ -42,9 +46,14 @@ the compact Home link keeps its existing minimum target width while wrapping.
 Search never floats over the tabs or changes the hero's geometry.
 
 Typing two characters in the visible field opens a labelled nonmodal dialog,
-8 px below it. The button instead opens that dialog with the same input in
-its header and focuses it. The panel is portalled outside the clipping row,
-end-aligned to its trigger, at most 640 px wide, and clamped to 16 px gutters
+8 px below it. The button instead opens the same input over the site name
+inside the top row and focuses it. The name retains its measured space but
+is hidden visually and from assistive technology until closing; menu, tabs
+and end actions keep their places. In both modes the panel starts 8 px below
+the field, with its title and close control in the panel header. It is
+portalled outside the clipping row, left-aligned to the opened field in button
+mode and right-aligned to the inline field above 1200 px, at most
+640 px wide, and clamped to 16 px gutters
 inside both Home and the viewport. Resize, row/menu geometry changes and
 scroll remeasure it. Its results scroll within the smaller of 80% viewport
 height and the actual space below the trigger.
@@ -131,3 +140,9 @@ against the opposite OS preference at 1440, 1201, 1200, 1000, 701, 700 and
 It inherits signed-in storageState and aborts every non-GET; no settings,
 datasets, accounts or language keys are persisted. Listing a spec proves
 collection only; its browser results must be recorded separately.
+
+`G26_home_search_over_name.spec.ts` checks input placement inside the row,
+covered-name accessibility, results below it and Escape/focus restoration at
+390 and 1000 px; at 1440 px it checks that the inline field and name keep their
+geometry. Both explicit themes run against the opposite OS preference with
+Finnish copy. It uses response-only fixtures and blocks writes.

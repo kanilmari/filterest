@@ -1,5 +1,5 @@
 // front_page_search_sheet.js
-// Mounts Home's phone-only magnifier and accessible search sheet in its end slot.
+// Mounts Home's phone search over its identity, with results beneath the bar.
 // Connects the bounded runner and history owner to one mounted Home visit.
 // Teardown follows removal of that slot, including resize and session changes.
 
@@ -7,6 +7,7 @@ import { getTranslationForKey } from '../lang/translation_handler.js';
 import { bindDatasetLanguageRenderer } from '../table_views/dataset_value_localizer.js';
 import { createFrontPageSearchRunner } from './front_page_search_runner.js';
 import { openHomeSearchHistory } from './front_page_search_history.js';
+import { LAYOUT_BREAKPOINTS } from '../../ui_config.js';
 
 const SHEET_ID = 'front-page-search-sheet';
 const LOCK = 'front-page-scroller--drawer-open';
@@ -14,7 +15,9 @@ const FOCUSABLE = 'input, button, a[href], [tabindex]:not([tabindex="-1"])';
 
 /** Called only after the existing phone layout has mounted its 44px end slot. */
 export function mountFrontPageSearchSheet(end, scroller) {
-    if (!window.matchMedia?.('(width <= 700px)').matches) return { destroy() {} };
+    if (!window.matchMedia?.(`(width <= ${LAYOUT_BREAKPOINTS.phone}px)`).matches) return { destroy() {} };
+    const bar = end.parentElement;
+    const identity = bar.querySelector('.front-page-top-row__identity');
     const button = document.createElement('button');
     button.type = 'button';
     button.className = 'front-page-search-button';
@@ -38,6 +41,7 @@ export function mountFrontPageSearchSheet(end, scroller) {
     let savedScrollTop;
     let hadLock;
     let inertNodes = [];
+    let identityAriaHidden;
     let destroyed = false;
 
     function hide() {
@@ -46,8 +50,13 @@ export function mountFrontPageSearchSheet(end, scroller) {
         runner = null;
         document.removeEventListener('keydown', onKeydown, true);
         document.removeEventListener('focusin', onFocus, true);
-        layer.remove();
+        dialog.remove();
+        dialog = null;
         layer = null;
+        bar.classList.remove('front-page-search-bar--open');
+        identity.classList.remove('front-page-search-identity--covered');
+        if (identityAriaHidden === null) identity.removeAttribute('aria-hidden');
+        else identity.setAttribute('aria-hidden', identityAriaHidden);
         for (const [node, wasInert] of inertNodes) node.inert = wasInert;
         inertNodes = [];
         if (!hadLock) scroller.classList.remove(LOCK);
@@ -93,8 +102,6 @@ export function mountFrontPageSearchSheet(end, scroller) {
         dialog.className = 'front-page-search-sheet dataset-search-panel';
         dialog.setAttribute('role', 'dialog');
         dialog.setAttribute('aria-modal', 'true');
-        const header = document.createElement('div');
-        header.className = 'front-page-search-sheet__header';
         const field = document.createElement('div');
         field.className = 'dataset-search-input-row';
         input = document.createElement('input');
@@ -116,7 +123,6 @@ export function mountFrontPageSearchSheet(end, scroller) {
             close.setAttribute('aria-label', getTranslationForKey('front_page_search_close', { countUsage: false }));
         });
         field.append(input);
-        header.append(field, close);
         const results = document.createElement('div');
         results.className = 'front-page-search-sheet__results';
         const status = document.createElement('p');
@@ -124,15 +130,22 @@ export function mountFrontPageSearchSheet(end, scroller) {
         status.setAttribute('aria-live', 'polite');
         const groups = document.createElement('div');
         results.append(status, groups);
-        dialog.append(header, results);
-        layer.append(dialog);
+        layer.append(results);
+        // One modal subtree spans the bar controls and the results below it.
+        // Its grid cell covers identity and magnifier without moving the end slot.
+        dialog.append(field, close, layer);
         savedScrollTop = scroller.scrollTop;
         hadLock = scroller.classList.contains(LOCK);
         scroller.classList.add(LOCK);
         // Keep Home out of keyboard and assistive-technology navigation while modal.
-        inertNodes = [...scroller.children].map(node => [node, node.inert]);
+        inertNodes = [...scroller.children].filter(node => node !== bar)
+            .concat([...bar.children]).map(node => [node, node.inert]);
         for (const [node] of inertNodes) node.inert = true;
-        scroller.append(layer);
+        identityAriaHidden = identity.getAttribute('aria-hidden');
+        identity.setAttribute('aria-hidden', 'true');
+        identity.classList.add('front-page-search-identity--covered');
+        bar.classList.add('front-page-search-bar--open');
+        bar.append(dialog);
         runner = createFrontPageSearchRunner(input, groups, status);
         entry = openHomeSearchHistory(hide);
         button.setAttribute('aria-expanded', 'true');

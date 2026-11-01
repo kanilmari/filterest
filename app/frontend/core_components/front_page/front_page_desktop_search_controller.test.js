@@ -1,7 +1,7 @@
 // front_page_desktop_search_controller.test.js
 // Proves desktop modes, focus, anchoring and delegation to the phone runner.
 // Connects real DOM events and the unchanged fitter to controlled geometry.
-// Browser G19 supplies actual flex layout, theme and viewport evidence.
+// Browsers G19/G26 supply actual flex layout, theme and viewport evidence.
 // @vitest-environment jsdom
 import { readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
@@ -47,7 +47,8 @@ function start(width = 1440) {
 beforeEach(() => {
     vi.useFakeTimers();
     document.body.innerHTML = '<main class="front-page"><div class="front-page-top-row">'
-        + '<div class="front-page-top-row__identity">Site</div><nav class="hero-dataset-tabs"></nav>'
+        + '<div class="front-page-top-row__identity"><span class="front-page-site-name">Sivuston nimi</span></div>'
+        + '<nav class="hero-dataset-tabs"></nav>'
         + '<div class="filterbar-inline-hero__actions"><button>Settings</button></div></div><article>Home</article></main>';
     home = document.querySelector('main'); row = home.querySelector('.front-page-top-row');
     vi.spyOn(home, 'getBoundingClientRect').mockReturnValue({ left: 250, right: 1440 });
@@ -98,7 +99,11 @@ test.each([1440, 1000])('close, Escape and outside click at %i restore the initi
     function open() { if (width > tablet) { input.focus(); type('Helsinki'); } else button.click(); }
     for (const gesture of ['close', 'escape', 'outside']) {
         open(); expect(panel()).not.toBeNull();
-        if (width <= tablet) { expect(panel().querySelector('input')).toBe(input); expect(document.activeElement).toBe(input); }
+        if (width <= tablet) {
+            expect(panel().querySelector('input')).toBeNull();
+            expect(row.querySelector('.front-page-top-row__identity input')).toBe(input);
+            expect(document.activeElement).toBe(input);
+        }
         if (gesture === 'close') panel().querySelector('button').click();
         if (gesture === 'escape') document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
         if (gesture === 'outside') home.querySelector('article').click();
@@ -109,16 +114,63 @@ test.each([1440, 1000])('close, Escape and outside click at %i restore the initi
     expect(push).not.toHaveBeenCalled(); expect(back).not.toHaveBeenCalled();
 });
 
-test('panel clamps to docked Home gutters and stays beneath the measured field on resize/scroll', () => {
-    start();
+test('button mode covers only the site name, keeps one field and restores the name and field on toggle', () => {
+    start(1000);
+    const name = row.querySelector('.front-page-site-name');
+    name.setAttribute('aria-hidden', 'false');
+    const nameRect = vi.spyOn(name, 'getBoundingClientRect').mockReturnValue({ width: 310 });
+    vi.spyOn(name, 'offsetLeft', 'get').mockReturnValue(54);
+    vi.spyOn(row, 'getBoundingClientRect').mockReturnValue({ right: 1000, bottom: 90 });
+    vi.spyOn(input.parentElement, 'getBoundingClientRect').mockReturnValue({ left: 304, right: 614, bottom: 55 });
+    const actions = row.lastElementChild;
+    button.click();
+    expect(name.getAttribute('aria-hidden')).toBe('true');
+    expect(name.classList.contains('front-page-desktop-search__covered-name')).toBe(true);
+    expect(input.parentElement.style.left).toBe('54px');
+    expect(input.parentElement.style.width).toBe('310px');
+    expect(panel().style.left).toBe('304px');
+    expect(panel().style.top).toBe('63px');
+    expect(row.querySelectorAll('input')).toHaveLength(1);
+    expect(panel().querySelector('input')).toBeNull();
+    expect(document.activeElement).toBe(input);
+    input.click(); expect(panel()).not.toBeNull();
+    nameRect.mockReturnValue({ width: 290 }); home.dispatchEvent(new Event('scroll'));
+    expect(input.parentElement.style.width).toBe('290px');
+    button.click();
+    expect(panel()).toBeNull(); expect(document.activeElement).toBe(button);
+    expect(name.getAttribute('aria-hidden')).toBe('false');
+    expect(name.classList.contains('front-page-desktop-search__covered-name')).toBe(false);
+    expect(input.parentElement.parentElement.className).toBe('front-page-desktop-search');
+    expect(input.parentElement.hidden).toBe(true); expect(input.parentElement.style.width).toBe('');
+    expect(row.lastElementChild).toBe(actions);
+});
+
+test.each([
+    [1000, 0, 109, 109],
+    [701, 0, 109, 45],
+    [1000, 250, 109, 266],
+])('button mode at %i anchors results to the opened field within Home gutters (%i, %i)', (width, homeLeft, fieldLeft, left) => {
+    start(width);
+    vi.mocked(home.getBoundingClientRect).mockReturnValue({ left: homeLeft, right: width });
+    vi.spyOn(input.parentElement, 'getBoundingClientRect').mockReturnValue({ left: fieldLeft, right: fieldLeft + 386, bottom: 55 });
+    vi.spyOn(button, 'getBoundingClientRect').mockReturnValue({ right: width - 100, bottom: 64 });
+    vi.spyOn(row, 'getBoundingClientRect').mockReturnValue({ bottom: 68 });
+    button.click();
+    expect(panel().style.width).toBe('640px');
+    expect(panel().style.left).toBe(`${left}px`);
+    expect(panel().style.top).toBe('63px');
+});
+
+test.each([[1440, 760, 468], [tablet + 1, 545, 269]])('field mode at %i keeps right alignment and gutter bounds on resize/scroll', (width, left, dockedWidth) => {
+    start(width);
     const rect = vi.spyOn(input.parentElement, 'getBoundingClientRect').mockReturnValue({ right: 1400, bottom: 60 });
     type('he');
-    expect(panel().style.width).toBe('640px'); expect(panel().style.left).toBe('760px');
+    expect(panel().style.width).toBe('640px'); expect(panel().style.left).toBe(`${left}px`);
     expect(panel().style.top).toBe('68px'); expect(parseFloat(panel().style.maxHeight)).toBeLessThanOrEqual(innerHeight - 84);
     vi.mocked(home.getBoundingClientRect).mockReturnValue({ left: 900, right: 1400 });
     rect.mockReturnValue({ right: 1200, bottom: 100 });
     home.dispatchEvent(new Event('scroll'));
-    expect(panel().style.width).toBe('468px'); expect(panel().style.left).toBe('916px');
+    expect(panel().style.width).toBe(`${dockedWidth}px`); expect(panel().style.left).toBe('916px');
     expect(panel().style.top).toBe('108px');
 });
 
@@ -130,13 +182,13 @@ test('an outside pointer click returns focus even when its destination takes foc
     expect(panel()).toBeNull(); expect(document.activeElement).toBe(input);
 });
 
-test('portalled links keep activation, ArrowDown and Tab reach results/end actions without a focus trap', () => {
-    start(); type('he');
+test.each([1440, 1000])('portalled links at %i keep activation, ArrowDown and Tab reach results/end actions without a trap', width => {
+    start(width); if (width <= tablet) button.click(); else type('he');
     const groups = mocks.create.mock.calls[0][1];
     groups.innerHTML = '<a href="/app_travel?search=he">Row</a><a href="/app_travel?search=he">All</a>';
     const close = panel().querySelector('button');
     const links = [...groups.children];
-    for (const node of [close, ...links, input, row.querySelector('.filterbar-inline-hero__actions button')]) {
+    for (const node of [close, ...links, input, button, row.querySelector('.filterbar-inline-hero__actions button')]) {
         vi.spyOn(node, 'getClientRects').mockReturnValue([{}]);
     }
     input.focus(); input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', bubbles: true, cancelable: true }));
@@ -147,11 +199,18 @@ test('portalled links keep activation, ArrowDown and Tab reach results/end actio
     expect(document.activeElement).toBe(links[0]);
     links[1].focus(); links[1].dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', bubbles: true, cancelable: true }));
     expect(panel()).toBeNull(); expect(document.activeElement.textContent).toBe('Settings');
-    type('he');
+    if (width <= tablet) button.click(); else type('he');
     const link = document.createElement('a'); link.href = '/app_travel?search=he';
     mocks.create.mock.calls.at(-1)[1].append(link);
     const activate = vi.fn(event => { event.preventDefault(); expect(panel()).toBeNull(); });
     link.addEventListener('click', activate); link.click(); expect(activate).toHaveBeenCalledOnce();
+});
+
+test('Shift+Tab from the over-name field closes to the button without trapping focus', () => {
+    start(1000); button.click();
+    input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', shiftKey: true, bubbles: true, cancelable: true }));
+    expect(panel()).toBeNull(); expect(document.activeElement).toBe(button);
+    expect(row.querySelector('.front-page-site-name').hasAttribute('aria-hidden')).toBe(false);
 });
 
 test('focus leaving and ordinary Back close; crossing modes disposes the runner and focuses the new trigger', async () => {
@@ -173,6 +232,53 @@ test('focus leaving and ordinary Back close; crossing modes disposes the runner 
     resize(tablet + 1); await vi.advanceTimersByTimeAsync(20); expect(document.activeElement).toBe(input);
     type('he'); mount.destroy();
     expect(panel()).toBeNull(); expect(push).not.toHaveBeenCalled(); expect(back).not.toHaveBeenCalled();
+});
+
+test.each([
+    ['sheet input', '<section class="front-page-search-sheet"><input type="search"></section>', '.front-page-search-sheet input'],
+    ['magnifier', '<button class="front-page-search-button"></button>', '.front-page-search-button'],
+])('a phone %s unrendered before resize transfers focus to the desktop button', async (_name, markup, selector) => {
+    start(phone);
+    home.insertAdjacentHTML('beforeend', markup);
+    const control = home.querySelector(selector);
+    vi.spyOn(control, 'getClientRects').mockReturnValue([]);
+    control.focus(); expect(document.activeElement).toBe(control);
+    control.blur(); expect(document.activeElement).toBe(document.body);
+    resize(phone + 1); await vi.advanceTimersByTimeAsync(20);
+    expect(document.activeElement).toBe(row.querySelector('.front-page-desktop-search__button'));
+});
+
+test('leaving a still rendered phone search input does not reclaim focus on resize', async () => {
+    start(phone);
+    home.insertAdjacentHTML('beforeend', '<section class="front-page-search-sheet"><input type="search"></section>');
+    const control = home.querySelector('.front-page-search-sheet input');
+    vi.spyOn(control, 'getClientRects').mockReturnValue([{}]);
+    control.focus(); expect(document.activeElement).toBe(control);
+    control.blur(); expect(document.activeElement).toBe(document.body);
+    resize(phone + 1); await vi.advanceTimersByTimeAsync(20);
+    expect(document.activeElement).toBe(document.body);
+});
+
+test('a crossing cancelled before its resize does not move focus at a later crossing', async () => {
+    start(phone + 1);
+    home.insertAdjacentHTML('beforeend', '<button class="front-page-search-button"></button>');
+    vi.spyOn(button, 'getClientRects').mockReturnValue([]);
+    button.focus(); expect(document.activeElement).toBe(button);
+    button.blur(); expect(document.activeElement).toBe(document.body);
+    resize(phone + 1); await vi.advanceTimersByTimeAsync(20);
+    expect(document.activeElement).toBe(document.body);
+    resize(phone); await vi.advanceTimersByTimeAsync(20);
+    expect(document.activeElement).toBe(document.body);
+});
+
+test('destroy removes the long-lived focusout listener even when no desktop panel opened', () => {
+    const add = vi.spyOn(document, 'addEventListener');
+    const remove = vi.spyOn(document, 'removeEventListener');
+    start(phone);
+    expect(add).toHaveBeenCalledWith('focusout', expect.any(Function), true);
+    const listener = add.mock.calls.find(([type]) => type === 'focusout')[1];
+    mount.destroy(); mount = null;
+    expect(remove).toHaveBeenCalledWith('focusout', listener, true);
 });
 
 test('the unchanged fitter measures the tabs after the CSS flex reservation, hiding whole destinations', async () => {
@@ -214,7 +320,9 @@ test.each([tablet + 1, tablet])('phone base rules and the shared panel reset lea
     groups.innerHTML = '<div class="front-page-search-sheet__slot" aria-busy="true">'
         + '<section class="supplemental-dataset-group"><a class="supplemental-dataset-show-all" href="/app_travel">Näytä kaikki</a></section></div>';
     const host = row.querySelector('.front-page-desktop-search');
-    const nodes = [host, ...host.querySelectorAll('*'), panel(), ...panel().querySelectorAll('*')];
+    const field = input.parentElement;
+    const nodes = [...new Set([host, ...host.querySelectorAll('*'), field, ...field.querySelectorAll('*'),
+        panel(), ...panel().querySelectorAll('*')])];
     // Phone component selectors must match only the shared runner's placeholder slot.
     const rules = [...sheets[1].sheet.cssRules].filter(rule => rule.selectorText);
     for (const node of nodes) {
@@ -224,6 +332,10 @@ test.each([tablet + 1, tablet])('phone base rules and the shared panel reset lea
         expect(node.matches('.dataset-search-panel')).toBe(false);
     }
     expect(getComputedStyle(panel())).toMatchObject({ position: 'fixed', display: 'flex' });
+    if (width <= tablet) {
+        expect(getComputedStyle(field).getPropertyValue('--dataset-search-control-height')).toBe('44px');
+        expect(getComputedStyle(field.querySelector('.dataset-search-submit-icon')).display).toBe('none');
+    }
     expect(getComputedStyle(panel().querySelector('.front-page-desktop-search-panel__close'))).toMatchObject({ display: 'grid', width: '44px' });
     expect(getComputedStyle(panel().querySelector('.front-page-desktop-search-panel__results'))).toMatchObject({ padding: '0px 12px 12px', overflowY: 'auto' });
     const properties = ['display', 'position', 'width', 'height', 'min-height', 'padding', 'overflow-y', 'background', 'border'];

@@ -94,7 +94,7 @@ for (const theme of ['light', 'dark'] as const) {
       await photo.scrollIntoViewIfNeeded();
       await expect.poll(() => photo.evaluate(img => img.complete && img.naturalWidth > 0)).toBe(true);
     }
-    await sheet.screenshot({ path: info.outputPath(`home-phone-search-${theme}.png`), animations: 'disabled' });
+    await page.locator('#front_page_container').screenshot({ path: info.outputPath(`home-phone-search-${theme}.png`), animations: 'disabled' });
     await input.focus(); await page.keyboard.press('Shift+Tab');
     await expect(groups.last().locator('.supplemental-dataset-show-all')).toBeFocused();
     await page.keyboard.press('Tab'); await expect(input).toBeFocused();
