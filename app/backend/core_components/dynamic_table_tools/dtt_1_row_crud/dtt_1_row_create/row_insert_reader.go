@@ -158,36 +158,22 @@ func getCurrentUserID(r *http.Request) (int, error) {
 	return userID, nil
 }
 
-// currentUserDisplayName reads a signed-in user's display name by id, waiting no
-// longer than backend.DisplayNameLookupTimeout. Tests replace it so they can run
-// without a database.
+// currentUserDisplayName is the raw lookup seam for database-free tests. The
+// shared fallback helper below owns the deadline and name normalization.
 var currentUserDisplayName = func(ctx context.Context, userID int) (string, error) {
-	ctx, cancel := context.WithTimeout(ctx, backend.DisplayNameLookupTimeout)
-	defer cancel()
 	return backend.UserDisplayName(ctx, backend.Db, userID)
 }
 
-// getCurrentUsername returns the signed-in user's current display name for the
-// new row's provenance (cached_username and the language-key sources), read by
-// the session's user id: the session carries no name. A request without a
-// signed-in user, such as the guest account's, has no name and is refused, as it
-// was when the name came from the session.
-// Between: insertDataAccordingToPayload -> Session -> system_users
-func getCurrentUsername(r *http.Request) (string, error) {
-	userID, err := getCurrentUserID(r)
-	if err != nil {
-		return "", err
-	}
+// currentUserProvenanceName labels cached_username and language-key sources
+// without making a save depend on the name read. The already-validated session
+// id remains the actor; guests keep an empty label and never read a name.
+func currentUserProvenanceName(ctx context.Context, userID int) string {
 	if userID <= 1 {
-		fmt.Printf("\033[31merror: no signed-in user to name\033[0m\n")
-		return "", fmt.Errorf("no signed-in user to name")
+		return ""
 	}
-	displayName, err := currentUserDisplayName(r.Context(), userID)
-	if err != nil {
+	return backend.UserDisplayNameOrWithLookup(ctx, userID, "unknown", currentUserDisplayName, func(err error) {
 		fmt.Printf("\033[31merror: display name lookup failed for user %d: %s\033[0m\n", userID, err.Error())
-		return "", fmt.Errorf("display name lookup failed for user %d: %w", userID, err)
-	}
-	return displayName, nil
+	})
 }
 
 // mustJSON marshals an interface to JSON bytes, ignoring errors (for internal use).

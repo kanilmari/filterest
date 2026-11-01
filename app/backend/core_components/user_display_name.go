@@ -38,14 +38,29 @@ func UserDisplayName(ctx context.Context, db *sql.DB, userID int) (string, error
 // they name who acted when that is a signed-in person, and a request never fails
 // or waits long over the name.
 func UserDisplayNameOr(ctx context.Context, db *sql.DB, userID int, fallback string) string {
+	return UserDisplayNameOrWithLookup(ctx, userID, fallback, func(ctx context.Context, userID int) (string, error) {
+		return UserDisplayName(ctx, db, userID)
+	}, nil)
+}
+
+// UserDisplayNameOrWithLookup shares the bounded fallback policy with writers
+// that inject their lookup for database-free tests. onFallback optionally logs
+// the lookup failure once; neither it nor the lookup decides the write's result.
+func UserDisplayNameOrWithLookup(ctx context.Context, userID int, fallback string, lookup func(context.Context, int) (string, error), onFallback func(error)) string {
 	if userID <= 1 {
 		return fallback
 	}
 	ctx, cancel := context.WithTimeout(ctx, DisplayNameLookupTimeout)
 	defer cancel()
-	displayName, err := UserDisplayName(ctx, db, userID)
-	if err != nil || strings.TrimSpace(displayName) == "" {
-		return fallback
+	displayName, err := lookup(ctx, userID)
+	if err == nil {
+		if displayName = strings.TrimSpace(displayName); displayName != "" {
+			return displayName
+		}
+		err = errors.New("display name is empty")
 	}
-	return strings.TrimSpace(displayName)
+	if onFallback != nil {
+		onFallback(err)
+	}
+	return fallback
 }

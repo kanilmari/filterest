@@ -56,15 +56,7 @@ func insertDataAccordingToPayload(
 		return 0, nil, err
 	}
 
-	currentUsername := ""
-	if currentUserID > 1 {
-		currentUsername, err = getCurrentUsername(r)
-		if err != nil {
-			fmt.Printf("\033[31m[add_row_db.go] [insertDataAccordingToPayload] error: %s\033[0m\n", err.Error())
-			httpresponse.RespondWithError(w, http.StatusInternalServerError, "failed to fetch username from session")
-			return 0, nil, err
-		}
-	}
+	currentUsername := currentUserProvenanceName(r.Context(), currentUserID)
 	userRole := getSessionUserRoleOrGuest(r)
 	marks, err := row_mutation_policy.ReadRowActorColumns(tx, tableName)
 	if err != nil {

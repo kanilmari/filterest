@@ -40,6 +40,7 @@ var qMu sync.Mutex
 type queuedQuery struct {
 	wantSQL  string
 	wantArgs []driver.Value
+	inspect  func(string, []driver.Value) error // checks unordered INSERT columns and their corresponding values
 	cols     []string
 	rows     [][]driver.Value
 	err      error // returned as query-level error (rare); use empty rows for no-rows
@@ -155,6 +156,11 @@ func (s *queueStmt) Query(args []driver.Value) (driver.Rows, error) {
 	}
 	if err := checkQueuedSQL(s.query, args, q.wantSQL, q.wantArgs); err != nil {
 		return nil, err
+	}
+	if q.inspect != nil {
+		if err := q.inspect(s.query, args); err != nil {
+			return nil, err
+		}
 	}
 	if q.err != nil {
 		return nil, q.err

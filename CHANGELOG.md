@@ -22,6 +22,7 @@ Dates are the local (Europe/Helsinki) date on which the version was published.
 
 ## [Unreleased]
 
+- Row saves by signed-in users now succeed when a provenance display-name lookup fails, times out or returns an empty name, using "unknown" while retaining the user's id.
 - Stop startup from adding another copy of a registry-less foreign-key relation at every start.
 - On phones, the dataset card's filter and reset buttons share their row evenly, so their icons no longer break the labels mid-word.
 - Native `restore-check` can explicitly opt into only legacy `pgcrypto` and `unaccent` through repeatable `--allow-extension` flags or the profile's `DATABASE_RECOVERY_ALLOW_EXTENSIONS`; results and private evidence record the effective opt-ins while default extension and language guards stay unchanged.

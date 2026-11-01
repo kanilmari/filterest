@@ -327,12 +327,15 @@ func TestGetCurrentUserID(t *testing.T) {
 	})
 }
 
-// ── getCurrentUsername ──────────────────────────────────────────────────────
+// ── currentUserProvenanceName ────────────────────────────────────────────────
 
-func TestGetCurrentUsername(t *testing.T) {
+func TestCurrentUserProvenanceName(t *testing.T) {
 	original := currentUserDisplayName
 	t.Cleanup(func() { currentUserDisplayName = original })
 	currentUserDisplayName = func(_ context.Context, userID int) (string, error) {
+		if userID <= 1 {
+			t.Fatalf("guest id %d must not trigger a name lookup", userID)
+		}
 		if userID == 42 {
 			return "alice", nil
 		}
@@ -342,33 +345,47 @@ func TestGetCurrentUsername(t *testing.T) {
 	t.Run("reads the current display name by the session's user id", func(t *testing.T) {
 		// A cookie from before the change still carries a name; it is not used.
 		req := buildRequestWithSessionValues(t, map[interface{}]interface{}{"user_id": 42, "username": "stale-copy"})
-		username, err := getCurrentUsername(req)
+		userID, err := getCurrentUserID(req)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
+		if userID != 42 {
+			t.Fatalf("session id = %d, want 42", userID)
+		}
+		username := currentUserProvenanceName(req.Context(), userID)
 		if username != "alice" {
 			t.Fatalf("username = %q, want %q", username, "alice")
 		}
 	})
 
-	t.Run("the guest account has no name", func(t *testing.T) {
-		req := buildRequestWithSessionValues(t, map[interface{}]interface{}{"user_id": 1})
-		if _, err := getCurrentUsername(req); err == nil {
-			t.Fatal("expected error for the guest account")
+	t.Run("guest and lower ids refuse the name lookup", func(t *testing.T) {
+		for _, id := range []int{-1, 0, 1} {
+			req := buildRequestWithSessionValues(t, map[interface{}]interface{}{"user_id": id})
+			userID, err := getCurrentUserID(req)
+			if err != nil || userID != id {
+				t.Fatalf("session id = %d, %v; want %d", userID, err, id)
+			}
+			if got := currentUserProvenanceName(req.Context(), userID); got != "" {
+				t.Fatalf("guest provenance = %q, want empty", got)
+			}
 		}
 	})
 
 	t.Run("missing user_id returns error", func(t *testing.T) {
 		req := buildRequestWithSessionValues(t, map[interface{}]interface{}{"username": "alice"})
-		if _, err := getCurrentUsername(req); err == nil {
+		if _, err := getCurrentUserID(req); err == nil {
 			t.Fatal("expected error without a signed-in user")
 		}
 	})
 
-	t.Run("an unreadable name returns error", func(t *testing.T) {
+	t.Run("an unreadable name falls back without losing the id", func(t *testing.T) {
 		req := buildRequestWithSessionValues(t, map[interface{}]interface{}{"user_id": 7})
-		if _, err := getCurrentUsername(req); err == nil {
-			t.Fatal("expected error when the name cannot be read")
+		userID, err := getCurrentUserID(req)
+		if err != nil || userID != 7 {
+			t.Fatalf("session id = %d, %v; want 7", userID, err)
+		}
+		if got := currentUserProvenanceName(req.Context(), userID); got != "unknown" {
+			t.Fatalf("unreadable name = %q, want unknown", got)
 		}
 	})
 }

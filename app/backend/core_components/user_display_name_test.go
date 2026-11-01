@@ -15,6 +15,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"testing"
+	"time"
 )
 
 type displayNameDriver struct {
@@ -119,5 +120,55 @@ func TestUserDisplayNameOrNamesSignedInAccountsAndFallsBackOtherwise(t *testing.
 	}
 	if _, err := UserDisplayName(ctx, nil, 42); err == nil {
 		t.Fatal("UserDisplayName without a database must return an error")
+	}
+}
+
+func TestUserDisplayNameOrWithLookupReportsFallbackOnce(t *testing.T) {
+	for _, tc := range []struct {
+		name      string
+		value     string
+		lookupErr error
+		timeout   bool
+		want      string
+		wantLogs  int
+	}{
+		{name: "normal", value: "  alice  ", want: "alice"},
+		{name: "name equals fallback", value: "unknown", want: "unknown"},
+		{name: "error", lookupErr: errors.New("unavailable"), want: "unknown", wantLogs: 1},
+		{name: "timeout", timeout: true, want: "unknown", wantLogs: 1},
+		{name: "empty", want: "unknown", wantLogs: 1},
+		{name: "whitespace", value: " \t ", want: "unknown", wantLogs: 1},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			ctx := context.Background()
+			if tc.timeout {
+				var cancel context.CancelFunc
+				ctx, cancel = context.WithTimeout(ctx, 5*time.Millisecond)
+				defer cancel()
+			}
+			calls, logs := 0, 0
+			got := UserDisplayNameOrWithLookup(ctx, 42, "unknown", func(ctx context.Context, userID int) (string, error) {
+				calls++
+				if userID != 42 {
+					t.Fatalf("lookup id = %d, want 42", userID)
+				}
+				if deadline, ok := ctx.Deadline(); !ok || time.Until(deadline) > DisplayNameLookupTimeout {
+					t.Fatal("lookup must have the shared deadline")
+				}
+				if tc.timeout {
+					<-ctx.Done()
+					return "", ctx.Err()
+				}
+				return tc.value, tc.lookupErr
+			}, func(err error) {
+				logs++
+				if err == nil || (tc.timeout && !errors.Is(err, context.DeadlineExceeded)) {
+					t.Fatalf("fallback diagnostic = %v", err)
+				}
+			})
+			if got != tc.want || calls != 1 || logs != tc.wantLogs {
+				t.Fatalf("name=%q lookups=%d logs=%d; want %q, 1, %d", got, calls, logs, tc.want, tc.wantLogs)
+			}
+		})
 	}
 }
