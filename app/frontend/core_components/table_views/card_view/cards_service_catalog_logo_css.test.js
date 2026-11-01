@@ -138,7 +138,7 @@ describe('photo frames follow card layout and article device widths (WO47)', () 
                 expect(layoutRules.find(rule => rule.selector === '.card_body').toString())
                     .toContain('flex-direction: column');
                 expect(layoutRules.find(rule => rule.selector === '.card_image>.wrapper').toString())
-                    .toContain('width: min(100%, 80vh) !important');
+                    .toContain('width: min(100%, calc(80vh * var(--card-photo-frame-ratio, 1))) !important');
             }
         }
     );

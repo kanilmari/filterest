@@ -94,6 +94,18 @@ export async function create_seeded_avatar(seed_string, letter_for_avatar, useLa
 }
 
 /**
+ * Keeps a large image's inline frame in sync at construction and after resize.
+ * Container-query stacking continues to override these viewport defaults in CSS.
+ */
+export function updateCardImageFrame(wrapper) {
+    const stacked = isCardStackViewport();
+    wrapper.style.width = stacked ? '100%' : '300px';
+    wrapper.style.height = stacked ? '' : '300px';
+    wrapper.style.maxWidth = stacked ? '1000px' : '';
+    wrapper.style.aspectRatio = stacked ? 'var(--card-photo-frame-ratio, 1)' : '';
+}
+
+/**
  * Luo kuvaelementin. PNG-kuville ei lisätä varjoa eikä sumennusta.
  */
 export function createImageElement(
@@ -131,14 +143,7 @@ export function createImageElement(
     if (usesExternalSizing) {
         wrapper.classList.add("record_image_presentation_host--externally-sized");
     } else if (useLargeSize) {
-        if (isCardStackViewport()) {
-            wrapper.style.width = '100%';
-            wrapper.style.maxWidth = '1000px';
-            wrapper.style.aspectRatio = '1 / 1';
-        } else {
-            wrapper.style.width = '300px';
-            wrapper.style.height = '300px';
-        }
+        updateCardImageFrame(wrapper);
     } else {
         wrapper.style.width = '140px';
         wrapper.style.height = '140px';
@@ -211,7 +216,7 @@ export function createImageElement(
         logoPlan: serviceCatalogLogoPlan,
     });
     wrapper.classList.add('wrapper');
-    prepareCardImagePresentation(wrapper, foregroundImg, { cardImageOwn, cardImageUse });
+    prepareCardImagePresentation(wrapper, foregroundImg, { cardImageOwn, cardImageUse, imageMetadata });
 
     return wrapper;
 }

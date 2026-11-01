@@ -2,6 +2,12 @@
   "version": 1,
   "browser_areas": [
     {
+      "area": "Stacked card photo frame ratio",
+      "paths": ["app/frontend/core_components/table_views/card_view/card_image_presentation.js", "app/frontend/core_components/table_views/card_view/card_avatar_builder.js", "app/frontend/core_components/table_views/card_view/card_photo_frame_ratio.test.js", "app/frontend/styles/mobile_friendliness.css"],
+      "specs": ["app/testing/e2e/G_navigation/G7_dataset_scroll_retention.spec.ts", "app/testing/e2e/C_card_view/C1_card_render.spec.ts", "app/testing/e2e/C_card_view/C2_open_big_card.spec.ts", "app/testing/e2e/C_card_view/C4_card_infinite_scroll.spec.ts", "app/testing/e2e/C_card_view/C28_details_edges_and_show_more.spec.ts", "app/testing/e2e/C_card_view/C29_photo_frame_removal.spec.ts"],
+      "projects": ["desktop-card", "mobile-card"]
+    },
+    {
       "area": "Home top-bar opt-in",
       "paths": ["app/backend/core_components/front_page_settings.go", "app/backend/core_components/auth/get_auth_modes.go",
         "app/backend/core_components/system_table_tools/front_page_admin.go", "app/backend/core_components/system_table_tools/front_page_admin_store.go",

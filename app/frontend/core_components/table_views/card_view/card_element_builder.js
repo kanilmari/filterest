@@ -5,7 +5,8 @@
 
 import { bindArticleViewActivation, canOpenArticleView, createArticleOpenerElement } from './article_view_access.js';
 import { addCardResourceListener } from './card_resource_lifecycle.js';
-import { createImageElement, create_seeded_avatar } from "./card_avatar_builder.js";
+import { createImageElement, create_seeded_avatar, updateCardImageFrame } from "./card_avatar_builder.js";
+import { cardImageFrameFollowsStoredShape } from "./card_image_presentation.js";
 import { openRowArticleView } from "./row_article_opener.js";
 import { bindImageFirstViewActivation } from "./image_first_view_activation.js";
 import { createKeyValueElement } from "./card_field_formatter.js";
@@ -183,6 +184,11 @@ function updateCardImageSources() {
     document
         .querySelectorAll(".card_image img, .card_small_image_inner img")
         .forEach((img) => {
+            // Reuse the settled resize pass; SVG, logo and contrast frames keep their own rules.
+            const wrapper = img.parentElement;
+            if (cardImageFrameFollowsStoredShape(wrapper)) {
+                updateCardImageFrame(wrapper);
+            }
             const imageWidth = img.getBoundingClientRect?.().width || 0;
             if (imageWidth <= 0) {
                 return;

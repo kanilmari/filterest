@@ -10,6 +10,35 @@ import { CARD_IMAGE_PRESENTATIONS, resolveCardImagePresentation } from './card_i
 
 export { CARD_IMAGE_PRESENTATIONS };
 
+const MIN_CARD_PHOTO_FRAME_RATIO = 4 / 5;
+
+/** Resolve a photo-shaped frame no taller than 1.25 times its width. */
+export function resolveCardPhotoFrameRatio(naturalWidth, naturalHeight) {
+    if (!Number.isFinite(naturalWidth) || naturalWidth <= 0
+        || !Number.isFinite(naturalHeight) || naturalHeight <= 0) return null;
+    return Math.max(MIN_CARD_PHOTO_FRAME_RATIO, naturalWidth / naturalHeight);
+}
+
+// Resolution-folder swaps retain the same stored file identity.
+function photoFileName(image) {
+    return (image.currentSrc || image.src).split(/[?#]/, 1)[0].split('/').pop();
+}
+
+/** Read a matching stored size once; malformed or stale metadata keeps the square frame. */
+export function resolveStoredCardPhotoFrameRatio(image, imageMetadata) {
+    try {
+        const metadata = typeof imageMetadata === 'string' ? JSON.parse(imageMetadata) : imageMetadata;
+        if (!metadata || typeof metadata !== 'object' || Array.isArray(metadata)) return null;
+        const size = metadata.displayed_image_size;
+        if (!size || typeof size !== 'object' || Array.isArray(size)
+            || typeof size.file !== 'string' || !size.file || size.file !== photoFileName(image)) return null;
+        const ratio = resolveCardPhotoFrameRatio(size.width_px, size.height_px);
+        return Number.isFinite(ratio) ? ratio : null;
+    } catch {
+        return null;
+    }
+}
+
 export function normalizeCardImagePresentation(value) {
     return CARD_IMAGE_PRESENTATIONS.includes(value) ? value : 'contain';
 }
@@ -27,8 +56,13 @@ function isContainBlurPresentation(wrapper) {
     return wrapper.dataset.cardImagePresentation === 'contain_blur';
 }
 
+/** Stored photo geometry applies at construction and resize; logo/contrast frames keep their own rules. */
+export function cardImageFrameFollowsStoredShape(wrapper) {
+    return wrapper?.matches('.card_photo_presentation:not(.service_catalog_logo_frame):not(.card_image_contrast_frame)') ?? false;
+}
+
 /** Decorative CSS uses the same resolved URL; the accessible image stays the single img. */
-export function prepareCardImagePresentation(wrapper, image, { cardImageOwn, cardImageUse } = {}) {
+export function prepareCardImagePresentation(wrapper, image, { cardImageOwn, cardImageUse, imageMetadata } = {}) {
     if (wrapper.dataset.cardImageRenderSlot !== 'card_media'
         || wrapper.dataset.imagePresentationKind !== 'raster'
         || image.parentElement !== wrapper) return false;
@@ -38,6 +72,8 @@ export function prepareCardImagePresentation(wrapper, image, { cardImageOwn, car
     wrapper.style.backgroundColor = 'var(--bg_color)';
     image.style.setProperty('object-fit', 'var(--card-photo-object-fit, contain)', 'important');
     let hasLoaded = image.complete;
+    const frameRatio = cardImageFrameFollowsStoredShape(wrapper)
+        ? resolveStoredCardPhotoFrameRatio(image, imageMetadata) : null;
     const updateBackdrop = () => {
         const defaults = wrapper._cardImageDefaults
             || wrapper.closest(APPEARANCE_SCOPE_SELECTOR)?._cardImageDefaults
@@ -58,8 +94,12 @@ export function prepareCardImagePresentation(wrapper, image, { cardImageOwn, car
         }
         projectAppearanceStyle(wrapper, '--card-photo-source', `url(${JSON.stringify(source)})`);
     };
-    wrapper._refreshImagePresentation = updateBackdrop;
-    updateBackdrop();
+    wrapper._refreshImagePresentation = () => {
+        // Only construction and an explicit appearance repaint project the original size.
+        projectAppearanceStyle(wrapper, '--card-photo-frame-ratio', frameRatio === null ? null : String(frameRatio));
+        updateBackdrop();
+    };
+    wrapper._refreshImagePresentation();
     addCardResourceListener(image, 'load', () => {
         hasLoaded = true;
         // Lifecycle cleanup revoked this wrapper's projection. A late image

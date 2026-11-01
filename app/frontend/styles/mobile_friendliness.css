@@ -162,11 +162,11 @@
     }
 
     .card_image>.wrapper {
-        width: min(100%, 80vh) !important;
+        width: min(100%, calc(80vh * var(--card-photo-frame-ratio, 1))) !important;
         height: auto !important;
         max-width: 1000px !important;
         max-height: 80vh !important;
-        aspect-ratio: 1 / 1;
+        aspect-ratio: var(--card-photo-frame-ratio, 1);
         box-shadow: unset !important;
         background: unset !important;
         border-radius: unset !important;
@@ -385,11 +385,11 @@
     }
 
     .card_image>.wrapper {
-        width: min(100%, 80vh) !important;
+        width: min(100%, calc(80vh * var(--card-photo-frame-ratio, 1))) !important;
         height: auto !important;
         max-width: 1000px !important;
         max-height: 80vh !important;
-        aspect-ratio: 1 / 1;
+        aspect-ratio: var(--card-photo-frame-ratio, 1);
         box-shadow: unset !important;
         background: unset !important;
         border-radius: unset !important;

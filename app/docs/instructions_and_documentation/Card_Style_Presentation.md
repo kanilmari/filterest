@@ -162,7 +162,7 @@ Neither article surface has a normal 300 px image layout, so one shared
 `(width <= 1200px)` override removes their photo frames on phones and tablets.
 Desktop article photos keep the same 1px inset frame, colour token and inherited
 radius as main. Logo, contrast and SVG frames remain bordered at every width.
-Photo corners, contain/cover behavior and image dimensions are unchanged.
+Removing the decoration preserves photo corners, contain/cover behavior and image dimensions.
 The article's outer side borders, focus rings and gallery selection borders
 retain their own meaning.
 
@@ -173,6 +173,21 @@ own choice overrides its dataset, which otherwise inherits the site default.
 **Contain** shows the complete image with empty edges; **Cover** crops around
 the image's focal x/y; **Contain with blur** shows the complete image over a
 theme-tinted blurred copy. Only Cover applies the focal coordinates.
+
+Stacked result-card photo frames follow the stored `displayed_image_size` in
+image metadata from their first paint. Its `file` must match the displayed
+filename, and `width_px` and `height_px` must be positive finite numbers. The
+frame uses width / height, clamped to at least 4:5, with the existing 80vh height
+cap and 1000px width cap. Missing, stale or malformed sizes keep today's square.
+The ratio is fixed at construction; loading, failure and resolution-folder swaps
+never change it. An explicit appearance repaint restores that same ratio.
+Wide cards keep their 300×300 frame. SVG, logo/contrast frames, avatars,
+externally sized slots, product cards and experimental cards retain their rules.
+Normal uploads store sizes. Existing sites acquire sizes when an administrator
+runs the image-dimensions backfill tool; their next card build uses those sizes.
+The frontend never learns dimensions from loaded images or a session cache.
+`card_avatar_builder.js` passes the metadata to `card_image_presentation.js`;
+the stacked frame rules remain in `mobile_friendliness.css`.
 
 Home thumbnails and supplemental cross-dataset search results reuse this same
 renderer and CSS, resolving each thumbnail's own dataset. Home forwards the

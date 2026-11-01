@@ -22,6 +22,7 @@ Dates are the local (Europe/Helsinki) date on which the version was published.
 
 ## [Unreleased]
 
+- Stacked card photo frames follow their stored size from the first paint, within a 4:5 frame limit and 80% of viewport height; pictures without a usable stored size keep a square frame. Existing sites change when the image-size backfill tool runs; resizing retains the fixed 300×300 wide frame (WO114/K545/K548).
 - T23 skips successful row-match, HTTP-status and row-array assertion steps and reads response text only on HTTP failure, preserving existing failure diagnostics (test only).
 - Trees remember explicit open and closed folder choices across reloads; defaults, search and current-path reveals stay temporary, and polluted legacy expansion lists are discarded once.
 - Home stays in the menu by default; administrators can opt in to a site-wide top-bar Home button on screens wider than 700 px.

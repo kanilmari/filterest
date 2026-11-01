@@ -99,8 +99,12 @@ async function assertPhoto(page: Page, wrapper: Locator, width: number, label: s
   }
   const current = await sample(wrapper);
   if (layout === 'stacked') {
+    // The normal upload below stores this 480×320 fixture's size, so its frame
+    // has this ratio at construction, including before the image has decoded.
+    const ratio = await wrapper.locator('img').first().evaluate((image: HTMLImageElement) =>
+      Math.max(0.8, image.naturalWidth / image.naturalHeight));
     expect(current.geometry.wrapper.box.width, `${label}: fluid image width at ${width}`)
-      .toBeCloseTo(Math.min(current.mediaContentWidth, page.viewportSize()!.height * 0.8), 1);
+      .toBeCloseTo(Math.min(current.mediaContentWidth, page.viewportSize()!.height * 0.8 * ratio), 1);
   } else if (layout === 'fluid') {
     expect(current.geometry.wrapper.box.width, `${label}: full content width at ${width}`)
       .toBeCloseTo(current.mediaContentWidth, 1);
