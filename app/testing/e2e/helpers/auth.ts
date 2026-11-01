@@ -6,6 +6,7 @@
 import { expect, type Page } from '@playwright/test';
 import * as path from 'path';
 import { readVerifiedTestIdentity, writeVerifiedTestIdentity } from './auth_identity';
+import { beginReadinessReport } from './s4w-readiness-report';
 import {
   loadBrowserTestCredentials,
   resolveBrowserTestCredentialFilePath,
@@ -259,7 +260,12 @@ export async function login(page: Page, credentials?: TestCredentials): Promise<
   await page.goto('/', { waitUntil: 'domcontentloaded' });
 
   // Give the page a moment to stabilize (redirect or SPA load)
-  await page.waitForTimeout(500);
+  const finishReadinessReport = beginReadinessReport(page, 'login', 500);
+  try {
+    await page.waitForTimeout(500);
+  } finally {
+    finishReadinessReport();
+  }
 
   const sessionInfo = await readSessionInfo(page);
   const expectedID = readVerifiedTestIdentity(creds, page.url());

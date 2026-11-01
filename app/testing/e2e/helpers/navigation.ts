@@ -12,6 +12,7 @@
 import { type Locator, type Page } from '@playwright/test';
 import { isVisibleWithin, revealActiveFilterbarSection } from './filterbar';
 import { getActiveDatasetContainer } from './active-dataset';
+import { beginReadinessReport } from './s4w-readiness-report';
 
 export type NavigateToDatasetOptions = {
   allowFallback?: boolean;
@@ -336,5 +337,10 @@ export async function waitForDataLoaded(page: Page, _tableName?: string): Promis
     timeout: 15000,
   });
   // Give data a moment to render after the container appears
-  await page.waitForTimeout(500);
+  const finishReadinessReport = beginReadinessReport(page, 'waitForDataLoaded', 500, _tableName);
+  try {
+    await page.waitForTimeout(500);
+  } finally {
+    finishReadinessReport();
+  }
 }
