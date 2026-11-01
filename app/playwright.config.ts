@@ -6,7 +6,7 @@ import { defineConfig } from '@playwright/test';
 import * as path from 'node:path';
 import { resolveLocalFilterestBaseUrl } from './server_tools/scripts/local_filterest_target.cjs';
 import { resolveFilterestTestRuntimePaths } from './testing/e2e/helpers/test-runtime-paths';
-import { matrixTestIgnore } from './testing/e2e/matrix-test-selection.cjs';
+import { matrixProjectTestIgnore } from './testing/e2e/matrix-test-selection.cjs';
 
 const testRuntimePaths = resolveFilterestTestRuntimePaths();
 
@@ -24,25 +24,23 @@ const localWorkerCount = Number.isInteger(requestedWorkerCount) && requestedWork
 const baseURL = resolveLocalFilterestBaseUrl({ applicationRoot: path.resolve(__dirname) });
 
 /**
- * Easelect GUI Test Matrix
+ * Filterest browser test matrix (K549).
  *
- * 6 projects = 3 viewport widths × 2 card views.
- * Every non-manual .spec.ts runs in all 6 combinations automatically.
+ * 6 projects = 3 viewport widths × 2 card metadata values.
+ * The default reduced matrix uses matrix-reduction.json to remove identical runs.
+ * FILTEREST_E2E_MATRIX=full restores every non-manual spec on all six projects.
  *
  * Viewports:
  *   mobile   375×667   (phone portrait)
  *   tablet   768×1024  (tablet portrait)
  *   desktop  1440×900  (full-width desktop)
  *
- * Card views (custom metadata, read via test.info().project.metadata.cardView):
- *   normal   standard compact cards
- *   big      expanded big-card modal
+ * Card metadata is available to specs; it does not switch presentation itself.
+ * Specs that never read it or the full project name run only on -card projects.
  */
 
 export default defineConfig({
   testDir: './testing/e2e',
-  /* Ignore setup/ folder from matrix runs — run setup tests explicitly */
-  testIgnore: matrixTestIgnore(includeSetupTests),
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
@@ -71,6 +69,7 @@ export default defineConfig({
     // ── Mobile (375×667) ──
     {
       name: 'mobile-card',
+      testIgnore: matrixProjectTestIgnore('mobile-card', includeSetupTests),
       use: {
         viewport: { width: 375, height: 667 },
       },
@@ -78,6 +77,7 @@ export default defineConfig({
     },
     {
       name: 'mobile-bigcard',
+      testIgnore: matrixProjectTestIgnore('mobile-bigcard', includeSetupTests),
       use: {
         viewport: { width: 375, height: 667 },
       },
@@ -87,6 +87,7 @@ export default defineConfig({
     // ── Tablet (768×1024) ──
     {
       name: 'tablet-card',
+      testIgnore: matrixProjectTestIgnore('tablet-card', includeSetupTests),
       use: {
         viewport: { width: 768, height: 1024 },
       },
@@ -94,6 +95,7 @@ export default defineConfig({
     },
     {
       name: 'tablet-bigcard',
+      testIgnore: matrixProjectTestIgnore('tablet-bigcard', includeSetupTests),
       use: {
         viewport: { width: 768, height: 1024 },
       },
@@ -103,6 +105,7 @@ export default defineConfig({
     // ── Desktop (1440×900) ──
     {
       name: 'desktop-card',
+      testIgnore: matrixProjectTestIgnore('desktop-card', includeSetupTests),
       use: {
         viewport: { width: 1440, height: 900 },
       },
@@ -110,6 +113,7 @@ export default defineConfig({
     },
     {
       name: 'desktop-bigcard',
+      testIgnore: matrixProjectTestIgnore('desktop-bigcard', includeSetupTests),
       use: {
         viewport: { width: 1440, height: 900 },
       },

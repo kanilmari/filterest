@@ -1,5 +1,5 @@
 """relevant_check_evidence.py
-Pin offline check selection to its source tree, map bytes and interpreter.
+Pin offline check selection to its source tree, map/matrix bytes and interpreter.
 Connect saved plans to reproducible checks after edits or rebases.
 Keep evidence additive to the established fast/heavy command interface.
 """
@@ -11,6 +11,8 @@ import json
 from pathlib import Path
 import re
 import subprocess
+
+from e2e_matrix_reduction import MANIFEST_PATH
 
 
 def digest(value: bytes) -> str:
@@ -69,6 +71,7 @@ def attach_evidence(root: Path, plan: dict, policy: dict, map_bytes: bytes, pyth
             identifier = check["kind"] + ":" + digest(canonical(identity))
             checks.append({"id": identifier, **identity, "projects": projects})
     plan["evidence"] = {"tree": tree_evidence(root), "map_sha256": digest(map_bytes),
+                        "matrix_sha256": digest((root / MANIFEST_PATH).read_bytes()) if (root / MANIFEST_PATH).exists() else None,
                         "map_version": policy["version"], "checks": checks,
                         "projects": sorted({project for check in checks for project in check["projects"]}),
                         "inputs": {"python": python}}
@@ -79,7 +82,7 @@ def compare_plan(saved: dict, current: dict) -> None:
     """Compare the complete selection, including evidence, with a useful refusal."""
     if saved != current:
         before, after = saved.get("evidence", {}), current["evidence"]
-        changed = [key for key in ("tree", "map_sha256", "inputs", "checks", "projects")
+        changed = [key for key in ("tree", "map_sha256", "matrix_sha256", "inputs", "checks", "projects")
                    if before.get(key) != after.get(key)]
         raise ValueError("saved plan mismatch: " + ", ".join(changed or ["selection/changed paths"])
-                         + "; recompute and review the plan for the current tree and map")
+                         + "; recompute and review the plan for the current tree, map and matrix")

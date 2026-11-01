@@ -26,6 +26,7 @@ from relevant_check_coverage import (
 )
 from relevant_check_discovery import go_inventory
 from relevant_check_evidence import compare_plan, digest, tree_evidence
+from e2e_matrix_reduction import MANIFEST_PATH, load_reduction, resolve_spec_projects
 from test_relevant_checks import fixture_repository, write
 
 
@@ -373,6 +374,53 @@ def selection(plan):
     return selected
 
 
+def projected_selection(plan, reduction):
+    """K549 changes only matrix browser pairs; all other old proofs stay required."""
+    selected = {pair for pair in selection(plan) if pair[1] != "browser"}
+    for group in ("fast", "heavy"):
+        for check in plan[group]:
+            if check["kind"] == "browser":
+                selected.update((group, "browser", spec, project) for spec in check["targets"]
+                                for project in resolve_spec_projects(spec, check["projects"], reduction))
+    return selected
+
+
+def assert_no_unapproved_narrowing(before, after, reduction):
+    assert projected_selection(before, reduction) <= selection(after)
+
+
+def test_k549_projection_still_rejects_unapproved_narrowing():
+    reduction = {"one_project": {"fixed.spec.ts": "desktop-card"}, "one_card_mode": ["blind.spec.ts"]}
+    before = {"fast": [], "heavy": [
+        {"kind": "browser", "targets": ["app/testing/e2e/" + spec], "projects": [project]}
+        for spec, project in [("fixed.spec.ts", "mobile-card"), ("blind.spec.ts", "tablet-bigcard"),
+                              ("sensitive.spec.ts", "desktop-bigcard"), ("setup/fixture.spec.ts", "mobile-bigcard")]]}
+    expected = projected_selection(before, reduction)
+    assert expected == {("heavy", "browser", "app/testing/e2e/" + spec, project)
+                        for spec, project in [("fixed.spec.ts", "desktop-card"), ("blind.spec.ts", "tablet-card"),
+                                              ("sensitive.spec.ts", "desktop-bigcard"), ("setup/fixture.spec.ts", "mobile-bigcard")]}
+    after = {"fast": [], "heavy": [
+        {"kind": kind, "targets": [target], "projects": [project]}
+        for _, kind, target, project in expected]}
+    assert_no_unapproved_narrowing(before, after, reduction)
+    for index in range(len(after["heavy"])):
+        narrowed = copy.deepcopy(after)
+        narrowed["heavy"].pop(index)
+        with pytest.raises(AssertionError):
+            assert_no_unapproved_narrowing(before, narrowed, reduction)
+
+
+def test_manifest_bytes_invalidate_saved_plan_even_when_selection_is_unchanged(fixture_repository):
+    root, _ = fixture_repository
+    write(root, MANIFEST_PATH, json.dumps({"version": 1, "one_project": {}, "one_card_mode": []}))
+    path = "app/frontend/core_components/widget/leaf.js"
+    before = make_plan(root, [path])
+    assert before["evidence"]["matrix_sha256"] == digest((root / MANIFEST_PATH).read_bytes())
+    write(root, MANIFEST_PATH, (root / MANIFEST_PATH).read_text() + "\n")
+    with pytest.raises(ValueError, match="matrix_sha256"):
+        compare_plan(before, make_plan(root, [path]))
+
+
 @pytest.mark.parametrize("batch", json.loads(BATCHES.read_bytes())["batches"], ids=lambda batch: "batch" + batch["batch"])
 def test_recent_real_batch_selection_never_narrows(original_planner, batch):
     module, policy = original_planner
@@ -381,4 +429,4 @@ def test_recent_real_batch_selection_never_narrows(original_planner, batch):
     assert actual == batch["paths"], "replay paths must come from the published real batch commit"
     before = module.make_plan(ROOT, batch["paths"], policy=policy)
     after = make_plan(ROOT, batch["paths"])
-    assert selection(before) <= selection(after)
+    assert_no_unapproved_narrowing(before, after, load_reduction(ROOT))

@@ -15,6 +15,7 @@ import subprocess
 import pytest
 
 from relevant_checks import MAP_PATH, ROOT, make_plan
+from e2e_matrix_reduction import load_reduction, resolve_spec_projects
 from test_relevant_checks import fixture_repository, write
 
 
@@ -54,7 +55,8 @@ def test_normal_browser_commands_keep_their_existing_environment(fixture_reposit
     root, policy = fixture_repository
     checks = browser_checks(make_plan(root, ["app/frontend/core_components/widget/leaf.js"], policy=policy))
     assert checks
-    assert all(command_environment_and_arguments(check["command"])[0] == {"PLAYWRIGHT_HTML_OPEN": "never"}
+    assert all(command_environment_and_arguments(check["command"])[0] == {
+                   "PLAYWRIGHT_HTML_OPEN": "never", "FILTEREST_E2E_MATRIX": "reduced"}
                for check in checks)
 
 
@@ -104,10 +106,43 @@ def test_emitted_setup_command_collects_each_claimed_proof_project_pair(tmp_path
 
 def test_every_mapped_matrix_spec_project_pair_collects(tmp_path):
     policy = json.loads((ROOT / MAP_PATH).read_bytes())
+    reduction = load_reduction(ROOT)
     expected = {(spec, project) for area in policy["browser_areas"]
-                for spec in area["specs"] for project in area.get("projects", [])}
+                for spec in area["specs"]
+                for project in resolve_spec_projects(spec, area.get("projects", []), reduction)}
     specs = sorted({spec.removeprefix("app/") for spec, _ in expected})
     projects = sorted({project for _, project in expected})
     arguments = [*specs, *("--project=" + project for project in projects), "--workers=1"]
-    actual = listed_pairs(arguments, {"PLAYWRIGHT_INCLUDE_SETUP": "1", "PLAYWRIGHT_HTML_OPEN": "never"}, tmp_path)
+    actual = listed_pairs(arguments, {"PLAYWRIGHT_INCLUDE_SETUP": "1", "PLAYWRIGHT_HTML_OPEN": "never",
+                                      "FILTEREST_E2E_MATRIX": "reduced"}, tmp_path)
     assert expected <= actual, f"Uncollected matrix proof/project pairs: {sorted(expected - actual)}"
+
+
+@pytest.mark.parametrize("direct", [False, True])
+def test_reduced_pairs_are_resolved_per_spec_before_grouping(fixture_repository, direct):
+    root, policy = fixture_repository
+    prefix = "app/testing/e2e/"
+    specs = [prefix + name + ".spec.ts" for name in ("fixed", "blind", "sensitive")]
+    for spec in specs:
+        write(root, spec, "// fixture proof")
+    write(root, "app/playwright.config.ts", " ".join("name: '" + width + mode + "'"
+          for width in ("mobile", "tablet", "desktop") for mode in ("-card", "-bigcard")))
+    write(root, prefix + "matrix-reduction.json", json.dumps({"version": 1,
+          "one_project": {"fixed.spec.ts": "mobile-card"}, "one_card_mode": ["blind.spec.ts"]}))
+    entry = policy["browser_areas"][0]
+    entry["specs"] += specs
+    entry["projects"] = ["desktop-bigcard", "tablet-bigcard"]
+    policy["browser_areas"].append({**entry, "area": "Overlapping proof", "projects": ["desktop-card"]})
+    paths = ["app/frontend/core_components/widget/leaf.js", *specs] if direct else [entry["paths"][0]]
+    plan = make_plan(root, paths, policy=policy)
+    checks = [check for check in plan["heavy"] if check["kind"] == "browser"]
+    actual = [(spec, project) for check in checks for spec in check["targets"] for project in check["projects"]]
+    assert len(actual) == len(set(actual)), "overlapping areas/direct changes must not repeat a pair"
+    expected = {specs[0]: {"mobile-card"}, specs[1]: {"desktop-card", "tablet-card"},
+                specs[2]: {"desktop-card", "desktop-bigcard", "tablet-bigcard"}}
+    if direct:
+        expected[specs[1]].add("mobile-card")
+        expected[specs[2]].update(["mobile-card", "tablet-card"])
+    for spec, projects in expected.items():
+        assert {project for target, project in actual if target == spec} == projects
+    assert all("FILTEREST_E2E_MATRIX=reduced" in check["command"] for check in checks)

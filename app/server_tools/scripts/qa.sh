@@ -173,7 +173,7 @@ if [ ! -f "$QA_CREDENTIAL_FILE" ]; then
 elif curl --fail --silent --show-error --insecure --head --connect-timeout 3 --max-time 10 "$QA_BASE_URL" >/dev/null; then
     if [ "${QA_PLAYWRIGHT_FULL:-0}" = "1" ]; then
         echo "🎭 Running full E2E matrix..."
-        PLAYWRIGHT_HTML_OPEN=never npm run test:e2e
+        FILTEREST_E2E_MATRIX=full PLAYWRIGHT_HTML_OPEN=never npm run test:e2e
         E2E_STATUS="PASS (full matrix)"
     else
         QA_PLAYWRIGHT_PROJECT="${QA_PLAYWRIGHT_PROJECT:-desktop-card}"

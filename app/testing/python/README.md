@@ -265,11 +265,12 @@ Commands selecting any `testing/e2e/setup/` spec also set
 `PLAYWRIGHT_INCLUDE_SETUP=1`, including direct spec changes and mixed selections.
 The [collection guard](test_relevant_checks_setup.py) uses only Playwright
 `--list` to prove the emitted setup command collects both specs in all six
-projects and every mapped matrix spec/project pair collects at least one test.
+projects and every mapped pair, projected through K549's reduction manifest, collects.
 It uses installed development dependencies, stays offline, and runs no hooks,
 browsers or application/database services.
 
-The only reviewed policy is [relevant_check_map.json](relevant_check_map.json):
+The reviewed area policy is [relevant_check_map.json](relevant_check_map.json);
+[matrix-reduction.json](../e2e/matrix-reduction.json) projects its browser pairs before grouping. The map owns
 grouped component paths with browser proofs or explicit `none` reasons, the
 backend session guard, focused Python source guards, the bootstrap ledger proof
 and the existing length guard.

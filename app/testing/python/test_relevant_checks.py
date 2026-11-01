@@ -21,6 +21,7 @@ from relevant_checks import (
     matches, normalize_path, render_plan, validate_map,
 )
 from relevant_check_discovery import frontend_tests, go_inventory
+from e2e_matrix_reduction import load_reduction, resolve_spec_projects
 from python_test_tiers import HEAVY_INSTALLATION_FILES, needs_heavy_installation, tier_for_path
 
 
@@ -81,13 +82,13 @@ def test_repository_map_is_current_and_covers_every_area():
     "app/frontend/core_components/general_tables/gt_1_row_crud/gt_1_1_row_create/row_creation_handler.js",
     "app/frontend/reusable_components/modal/modal_builder.js",
 ])
-def test_add_row_and_shared_modal_select_close_proof_in_every_project(path):
+def test_add_row_and_shared_modal_select_close_proof_at_every_width(path):
     plan = make_plan(ROOT, [path])
     projects = {project for check in plan["heavy"] if check["kind"] == "browser"
                 and "app/testing/e2e/J_modals/J2_modal_close.spec.ts" in check["targets"]
                 for project in check["projects"]}
-    assert projects == {"mobile-card", "mobile-bigcard", "tablet-card", "tablet-bigcard",
-                        "desktop-card", "desktop-bigcard"}
+    assert projects == set(resolve_spec_projects("J_modals/J2_modal_close.spec.ts",
+        [width + mode for width in ("mobile", "tablet", "desktop") for mode in ("-card", "-bigcard")], load_reduction(ROOT)))
 
 
 @pytest.mark.parametrize("path", [
@@ -260,7 +261,7 @@ def test_fixture_change_sets_have_stable_targets_and_ready_commands(fixture_repo
             "FILTEREST_TEST_DISPOSABLE_POSTGRES=1 flock /tmp/filterest_pg_suites.lock data/runtime/python/venv/bin/python "
             "-m pytest app/testing/python/test_widget.py")
     if "browser" in commands:
-        assert commands["browser"] == ("PLAYWRIGHT_HTML_OPEN=never ./filterest test testing/e2e/W_widget.spec.ts "
+        assert commands["browser"] == ("PLAYWRIGHT_HTML_OPEN=never FILTEREST_E2E_MATRIX=reduced ./filterest test testing/e2e/W_widget.spec.ts "
                                        "--project=desktop-card --project=mobile-card --project=tablet-card --workers=1")
 
 

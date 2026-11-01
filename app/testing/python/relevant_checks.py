@@ -20,6 +20,7 @@ from relevant_check_coverage import (
     resolve_coverage, validate_coverage_metadata,
 )
 from relevant_check_evidence import attach_evidence, canonical, compare_plan
+from e2e_matrix_reduction import load_reduction, resolve_spec_projects
 
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -270,21 +271,31 @@ def make_plan(root: Path, paths: list[str], *, python: str = PYTHON, policy: dic
         add("heavy", "python-postgres", proofs,
             f"FILTEREST_TEST_DISPOSABLE_POSTGRES=1 flock /tmp/filterest_pg_suites.lock {python_command} " + shlex.join(sorted(proofs)))
 
-    browser: dict[tuple[str, ...], set[str]] = {}
+    selected_projects: dict[str, set[str]] = {}
+    reduction = load_reduction(root)
+
+    def add_browser(specs, projects):
+        for spec in specs:
+            resolved = resolve_spec_projects(spec, projects, reduction)
+            selected_projects.setdefault(spec, set()).update(resolved)
+
     for entry in policy["browser_areas"]:
         if not any(matches(path, prefix) for path in browser_paths for prefix in entry["paths"]):
             continue
         if entry["specs"]:
-            browser.setdefault(tuple(sorted(entry["projects"])), set()).update(entry["specs"])
+            add_browser(entry["specs"], entry["projects"])
         else:
             plan["notes"].append(f"Browser none — {entry['area']}: {entry['none']}")
     # A changed browser spec is itself a proof even when no product path changed.
     direct_specs = {path for path in changed if path.startswith("app/testing/e2e/")
                     and path.endswith(".spec.ts") and (root / path).is_file()} - manual_specs(root)
     if direct_specs:
-        browser.setdefault(("desktop-card", "mobile-card", "tablet-card"), set()).update(direct_specs)
+        add_browser(direct_specs, ("desktop-card", "mobile-card", "tablet-card"))
+    browser: dict[tuple[str, ...], set[str]] = {}
+    for spec, projects in selected_projects.items():
+        browser.setdefault(tuple(sorted(projects)), set()).add(spec)
     for projects, specs in sorted(browser.items()):
-        environment = "PLAYWRIGHT_HTML_OPEN=never "
+        environment = "PLAYWRIGHT_HTML_OPEN=never FILTEREST_E2E_MATRIX=reduced "
         if any(matches(spec, "app/testing/e2e/setup") for spec in specs):
             # Both mapped and directly changed setup specs need the config's
             # explicit opt-in; otherwise a claimed proof/project collects zero.

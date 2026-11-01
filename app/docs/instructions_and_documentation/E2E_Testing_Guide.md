@@ -50,7 +50,7 @@ PLAYWRIGHT_HTML_OPEN=never ./filterest test --project=desktop-card
 For deterministic full-matrix baselines and long unattended runs, prefer:
 
 ```bash
-PLAYWRIGHT_HTML_OPEN=never ./filterest test --workers=1 --reporter=list
+FILTEREST_E2E_MATRIX=full PLAYWRIGHT_HTML_OPEN=never ./filterest test --workers=1 --reporter=list
 ```
 
 Why this is the safest broad baseline:
@@ -60,7 +60,8 @@ Why this is the safest broad baseline:
 - `PLAYWRIGHT_HTML_OPEN=never` prevents the runner from blocking on report opening in long local runs.
 - Playwright's `show-report` command is intentionally not the default agent path here, because upstream always tries to open a browser window.
 
-Local timing varies by machine and app state, but a full 6-project matrix run is on the order of tens of minutes, not hours. Plan overnight loops around multiple reruns rather than a single all-night pass.
+The full six-project pass took about nine hours in the 30 October 2026 audit.
+Timing depends on the machine and app state; reserve a long slot and avoid repeat passes.
 
 ### Reserved development accounts and identity
 
@@ -114,9 +115,12 @@ folder, the test target and the credential file, then calls this harness.
 
 ## Test Matrix
 
-Every spec runs in 6 combinations automatically (see `app/playwright.config.ts`):
+The six projects below are defined in [the config](../../playwright.config.ts).
+The default (unset or `FILTEREST_E2E_MATRIX=reduced`) applies K549's
+[reduction manifest](../../testing/e2e/matrix-reduction.json): named fixed-size
+specs and T23 run on one project; card-mode-independent specs use each width's `-card` project.
 
-| Project | Viewport | Card View |
+| Project | Viewport | Card metadata |
 |---------|----------|-----------|
 | `mobile-card` | 375×667 | normal |
 | `mobile-bigcard` | 375×667 | big |
@@ -125,7 +129,16 @@ Every spec runs in 6 combinations automatically (see `app/playwright.config.ts`)
 | `desktop-card` | 1440×900 | normal |
 | `desktop-bigcard` | 1440×900 | big |
 
-Use `--project=desktop-card` during development. No active GitHub Actions workflow currently runs the Playwright matrix or Visual Guardian; run the relevant commands locally when a change touches browser behavior or layout.
+Card metadata is available to tests; it does not open an article or change views automatically.
+`setupCardView` currently has no caller. Other specs retain all six projects;
+setup specs remain opt-in, and manual specs stay excluded in both modes.
+Use `FILTEREST_E2E_MATRIX=full ./filterest test` for weekends and before site releases.
+Any other mode value fails at config load. The relevant-check planner always selects reduced mode.
+
+A browser test proves a user path; measurements and logic belong in Vitest or Go.
+A test that sets its own width runs on one project; legacy exceptions need a reason
+in `own_size_allowed`. Do not multiply widths or themes without a written reason.
+Use `--project=desktop-card` during development. Run browser checks locally; this repository has no GitHub Actions.
 
 ## Runner Artifacts
 

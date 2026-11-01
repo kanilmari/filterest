@@ -521,9 +521,10 @@ Use the [relevant-check planner](../../testing/python/README.md#relevant-check-p
 
 [Playwright config](../../playwright.config.ts) and the
 [E2E guide](E2E_Testing_Guide.md) own the current matrix, credentials, storage
-state and helpers. E2E covers navigation, view changes, auth, CRUD, modal and
-responsive workflows; unit tests complement it rather than proving a browser
-flow. Visual Guardian complements both: `npm run guardian` captures,
+state and helpers. The default matrix removes identical runs under K549; use
+`FILTEREST_E2E_MATRIX=full ./filterest test` on weekends and before site releases.
+The E2E guide owns the standing user-path, width and theme rules. Visual Guardian:
+`npm run guardian` captures,
 `guardian:full` captures/analyzes, `guardian:analyze` uses existing captures.
 Use the existing noninteractive test launcher; do not open HTML report servers
 during unattended runs. Test changed multilingual components with non-English

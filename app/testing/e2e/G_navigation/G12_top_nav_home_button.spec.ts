@@ -253,6 +253,7 @@ for (const width of [1440, 1000, 390]) {
     const timeOrigin = await page.evaluate(() => performance.timeOrigin);
     const cached = await page.locator('#app_service_catalog_tab_parts_container').elementHandle();
     const editor = await context.newPage();
+    await editor.setViewportSize({ width, height: 1000 });
     try {
       await openHomeProbeDataset(editor, true, 'card', false);
       await ensureNavbarVisible(editor);

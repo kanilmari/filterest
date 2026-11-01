@@ -264,8 +264,8 @@ export async function closeBigCard(page: Page): Promise<void> {
 }
 
 /**
- * Sets up the correct card view for the test matrix.
- * Called by beforeEach based on the Playwright project's cardView setting.
+ * Explicitly selects a card presentation when a caller requests it.
+ * Currently unused; project metadata alone does not call this helper.
  */
 export async function setupCardView(page: Page, cardView: CardView): Promise<void> {
   if (cardView === 'big') {

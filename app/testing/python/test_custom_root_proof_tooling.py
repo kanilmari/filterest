@@ -9,6 +9,7 @@ from __future__ import annotations
 import importlib.util
 import json
 from pathlib import Path
+import re
 import subprocess
 
 import pytest
@@ -32,14 +33,17 @@ def placed(tmp_path):
 
 def test_manual_spec_excluded_from_both_matrix_modes_and_relevant_selection():
     selection = ROOT / "app/testing/e2e/matrix-test-selection.cjs"
-    script = "const {matrixTestIgnore}=require(process.argv[1]);process.stdout.write(JSON.stringify([matrixTestIgnore(false),matrixTestIgnore(true)]));"
+    script = """const {matrixProjectTestIgnore}=require(process.argv[1]);
+      const projects=['mobile','tablet','desktop'].flatMap(w=>[w+'-card',w+'-bigcard']);
+      process.stdout.write(JSON.stringify(projects.flatMap(p=>['reduced','full'].map(mode=>
+        [matrixProjectTestIgnore(p,false,mode),matrixProjectTestIgnore(p,true,mode)]))));"""
     result = subprocess.run(["node", "-e", script, str(selection)], capture_output=True, text=True, check=True)
-    ordinary, setup = json.loads(result.stdout)
     relative = MANUAL.removeprefix("app/testing/e2e/")
-    assert relative in ordinary and relative in setup
-    assert "**/setup/**" in ordinary and "**/setup/**" not in setup
+    for ordinary, setup in json.loads(result.stdout):
+        assert relative in ordinary and relative in setup
+        assert "**/setup/**" in ordinary and "**/setup/**" not in setup
     config = (ROOT / "app/playwright.config.ts").read_text()
-    assert "testIgnore: matrixTestIgnore(includeSetupTests)" in config
+    assert len(re.findall(r"testIgnore: matrixProjectTestIgnore\('[^']+', includeSetupTests\)", config)) == 6
     assert "from './testing/e2e/matrix-test-selection.cjs'" in config
     plan = make_plan(ROOT, [MANUAL])
     assert all(MANUAL not in check["targets"] for check in plan["heavy"])

@@ -10,6 +10,7 @@ import json
 import pytest
 
 from relevant_checks import MAP_PATH, ROOT, make_plan, matches
+from e2e_matrix_reduction import load_reduction, resolve_spec_projects
 
 
 APPEARANCE = "Dataset appearance projection and binding"
@@ -69,8 +70,10 @@ def test_shared_frontend_selects_consumer_browser_areas_and_preserves_fast_check
     assert after["fast"] == before["fast"]
     assert not before["heavy"]
     browser = [check for check in after["heavy"] if check["kind"] == "browser"]
+    reduction = load_reduction(ROOT)
     expected_pairs = {(project, spec) for entry in entries
-                      for project in entry.get("projects", []) for spec in entry["specs"]}
+                      for spec in entry["specs"]
+                      for project in resolve_spec_projects(spec, entry.get("projects", []), reduction)}
     actual_pairs = [(project, spec) for check in browser
                     for project in check["projects"] for spec in check["targets"]]
     assert set(actual_pairs) == expected_pairs

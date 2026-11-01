@@ -32,7 +32,8 @@ import json, os, pathlib, subprocess, sys
 name = pathlib.Path(sys.argv[0]).name
 args = sys.argv[1:]
 with open(os.environ["QA_TEST_LOG"], "a") as log:
-    log.write(json.dumps({"tool": name, "args": args, "cwd": os.getcwd()}) + "\n")
+    log.write(json.dumps({"tool": name, "args": args, "cwd": os.getcwd(),
+                         "matrix": os.environ.get("FILTEREST_E2E_MATRIX")}) + "\n")
 step = name
 if name == "npm":
     step += "-" + args[1]
@@ -245,7 +246,8 @@ def test_existing_e2e_selection_contract(workflow: Workflow, full: str, project:
     result = workflow.run(credentials=True, QA_PLAYWRIGHT_FULL=full, QA_PLAYWRIGHT_PROJECT=project)
     assert result.returncode == 0, result.stdout + result.stderr
     if full == "1":
-        assert ["run", "test:e2e"] in [call["args"] for call in workflow.calls("npm")]
+        full_call = next(call for call in workflow.calls("npm") if call["args"] == ["run", "test:e2e"])
+        assert full_call["matrix"] == "full"
         assert workflow.calls("playwright") == []
         assert "PASS (full matrix)" in result.stdout
     else:
