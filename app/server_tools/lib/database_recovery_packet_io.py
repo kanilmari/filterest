@@ -30,7 +30,7 @@ SNAPSHOT_MARGIN = 64 * 1024 * 1024
 EVIDENCE_FILE_LIMIT = 1024 * 1024
 EVIDENCE_TOTAL_LIMIT = 8 * EVIDENCE_FILE_LIMIT
 EVIDENCE_NAMES = {"database.backup.json", "update.backup.json", "database.sha256",
-                  "database.roles.sql", "database.properties.json", "manifest.txt"}
+                  "database.roles.sql", "database.properties.json", "manifest.txt", "restore-check.json"}
 
 
 def configured_credentials(values):

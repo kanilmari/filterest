@@ -82,6 +82,8 @@ def run_database_tool(database, command, *, source=None, destination=None, sensi
     descriptor, filename = private_temporary_path(database.folder, database.key, prefix="database-tool-", suffix=".log")
     os.fchmod(descriptor, 0o600)
     with KeySafeWriter(os.fdopen(descriptor, "wb"), database.key) as log:
+        if hasattr(database, "extension_optins_json"):
+            log.write((database.extension_optins_json + "\n").encode())
         try:
             status, content, diagnostics = checked_tool_streams(command, database.environment, source, destination, database.key)
         except RecoveryError:

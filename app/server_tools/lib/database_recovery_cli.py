@@ -39,6 +39,8 @@ def database_parser(description):
     parser.add_argument("--backup")
     parser.add_argument("--archive")
     parser.add_argument("--target", help="restore-check only: auto creates and drops a generated disposable database")
+    parser.add_argument("--allow-extension", action="append", default=[], metavar="NAME",
+                        help="restore-check only: opt in to pgcrypto or unaccent (repeatable; added to profile opt-ins)")
     parser.add_argument("--yes", action="store_true")
     parser.add_argument("--legacy", action="store_true", help="Explicitly permit an unauthenticated old packet")
     parser.add_argument("--allow-unauthenticated-restore", action="store_true", help="DANGER: skip packet authentication when the separately stored key is unavailable")
@@ -57,3 +59,5 @@ def validate_database_arguments(parser, args):
             parser.error("restore-check requires --target and accepts no output/archive/dump options")
     elif args.target is not None:
         parser.error("--target applies only to restore-check")
+    if args.action != "restore-check" and args.allow_extension:
+        parser.error("--allow-extension applies only to restore-check")

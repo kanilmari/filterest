@@ -891,7 +891,8 @@
       ],
       "tests": [
         "app/testing/python/test_database_restore_check.py",
-        "app/testing/python/test_database_restore_check_security.py"
+        "app/testing/python/test_database_restore_check_security.py",
+        "app/testing/python/test_database_restore_check_optins.py"
       ]
     },
     {

@@ -10,10 +10,10 @@ import json
 import re
 
 if __package__:
-    from .database_recovery_archive_guard import exact_identity, inspect_entry, inspect_definitions, RESTORE_SCOPE_FLAGS
+    from .database_recovery_archive_guard import exact_identity, inspect_entry, inspect_definitions, validate_extension_optins, RESTORE_SCOPE_FLAGS
     from .database_recovery_packet_io import RecoveryError, private_file
 else:
-    from database_recovery_archive_guard import exact_identity, inspect_entry, inspect_definitions, RESTORE_SCOPE_FLAGS
+    from database_recovery_archive_guard import exact_identity, inspect_entry, inspect_definitions, validate_extension_optins, RESTORE_SCOPE_FLAGS
     from database_recovery_packet_io import RecoveryError, private_file
 
 
@@ -81,8 +81,9 @@ class ArchiveRows:
                 for (schema, table), count in sorted(self.rows.items())]
 
 
-def archive_counts(database, dump):
+def archive_counts(database, dump, *, allowed_optins=frozenset()):
     """Derive expectations from authenticated dump bytes, never a changing live DB."""
+    allowed_optins = validate_extension_optins(allowed_optins)
     with dump.open("rb") as source:
         listing = database.run(database.command("pg_restore", "--list"), source=source, sensitive=True).decode("utf-8")
     counts = dict.fromkeys(KINDS.values(), 0)
@@ -123,7 +124,7 @@ def archive_counts(database, dump):
         # here so the guard sees globals, event triggers and stored expressions.
         definitions = database.run(["pg_restore", "--schema-only", "--file=-",
                                     "--no-owner", "--no-privileges"], source=source, sensitive=True)
-    inspect_definitions(definitions, guarded_entries)
+    inspect_definitions(definitions, guarded_entries, allowed_optins=allowed_optins)
     rows = ArchiveRows()
     with dump.open("rb") as source:
         # Native only: a file render MUST omit --dbname, otherwise pg_restore

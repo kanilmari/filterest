@@ -332,6 +332,34 @@ def test_restore_check_refuses_dblink_before_creation(site):
     assert_untouched_and_disposed(site, before)
 
 
+@pytest.mark.parametrize("source", ["cli", "profile"])
+def test_restore_check_legacy_extensions_require_recorded_optin(site, source):
+    sql = site["cluster"]
+    if sql("SELECT count(*) FROM pg_available_extensions WHERE name IN ('pgcrypto','unaccent')", "site").stdout.strip() != "2":
+        pytest.skip("pgcrypto and unaccent must be installed for the legacy-extension opt-in proof")
+    sql("CREATE EXTENSION pgcrypto; CREATE EXTENSION unaccent;", "site")
+    site["backup"]()
+    before = fingerprint(site)
+    result, report = check(site)
+    assert result.returncode != 0 and report["verified"] and report["extension_optins"] == []
+    assert report["cleanup"] == "not_created" and report["steps"][2]["status"] == "not_run"
+    assert "--allow-extension" in result.stderr
+    assert_untouched_and_disposed(site, before)
+    flags = ["--allow-extension", "pgcrypto", "--allow-extension", "unaccent"]
+    if source == "profile":
+        with site["settings"].open("a") as destination:
+            destination.write("DATABASE_RECOVERY_ALLOW_EXTENSIONS=pgcrypto,unaccent\n")
+        flags = []
+    before = fingerprint(site)
+    result = site["run"]("restore-check", "--backup", str(site["folder"]), "--target", "auto", *flags)
+    report = json.loads(result.stdout)
+    assert result.returncode == 0, result.stderr
+    assert report["status"] == "ok" and report["verified"] and report["cleanup"] == "dropped"
+    assert report["extension_optins"] == ["pgcrypto", "unaccent"]
+    assert all(item["matched"] for item in report["comparison"]["objects"].values())
+    assert_untouched_and_disposed(site, before)
+
+
 def test_restore_check_refuses_whitespace_language_before_creation(site):
     # Reuse the already installed handler: no custom native library is needed.
     # pg_restore's TOC prints this entire name unquoted, starting with plpgsql.

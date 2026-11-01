@@ -656,8 +656,7 @@ installation.
 
 ### Test a backup in a disposable database (native)
 
-Use the database recovery tool directly, supplying the same resolved protected
-settings paths used by this native installation (repeat `--settings` as needed):
+Use the database recovery tool directly, supplying the same resolved protected settings paths used by this native installation (repeat `--settings` as needed):
 
 ```bash
 python3 app/server_tools/lib/database_recovery.py restore-check \
@@ -668,8 +667,7 @@ python3 app/server_tools/lib/database_recovery.py restore-check \
 
 The restore check executes the site's own stored code as the database superuser on the live cluster, exactly as a real restore would. It is safe only for this installation's authenticated packets.
 It authenticates a private snapshot with this installation's own recovery key before creation, never accepting another installation's packet or an unauthenticated packet.
-Key custody is part of this boundary: keep the recovery key at mode 600, outside the web root and outside the packet, with a separate protected backup.
-It never creates a key and accepts no unauthenticated/legacy bypass switches.
+Key custody is part of this boundary: keep the recovery key at mode 600, outside the web root and outside the packet, with a separate protected backup. It never creates a key and accepts no unauthenticated/legacy bypass switches.
 
 The explicit `--target auto` creates a uniquely named `<database-prefix>_restorecheck_<random>` database from `template0` on the live cluster.
 Existing names, including the live database, are refused. Names are vetted against cached credentials; a collision switches to a random-only name or refuses.
@@ -677,9 +675,11 @@ The check holds a superuser connection on the live cluster while it runs; the du
 The tool leaves the application running and itself never imports roles, saved settings or database properties; it restores with `--no-owner --no-privileges --no-tablespaces --no-publications --no-subscriptions --no-security-labels`.
 
 Before creation, archive listings and nonexecuting definitions refuse native `LANGUAGE c`/`internal` functions without allowed-extension ownership, event triggers, role/tablespace globals, foreign tables, subscriptions (even disabled/disconnected), INSERT-style data and incomplete inventories.
-The extension allowlist is exactly `plpgsql`, `vector`, `postgis`, `uuid-ossp` and `pg_trgm`, derived from the installation bootstrap/migrations and PostgreSQL's default language.
-Every other extension and nondefault procedural language is refused, including `adminpack`, `lo`, `pageinspect`, `pg_cron`, `plv8`, `dblink`, all foreign-data wrappers and untrusted languages.
+The default extension allowlist is exactly `plpgsql`, `vector`, `postgis`, `uuid-ossp` and `pg_trgm`, derived from the installation bootstrap/migrations and PostgreSQL's default language.
+Without an opt-in, every other extension is refused; nondefault procedural languages are always refused, as are `adminpack`, `lo`, `pageinspect`, `pg_cron`, `plv8`, `dblink` and all foreign-data wrappers.
 Allowed extensions recreate their own native members; an explicitly dumped standalone native function has no such ownership proof. Publications are omitted; prepared transactions and replication slots are not pg_dump objects, but their listing entries are nevertheless refused.
+
+Only the legacy extensions `pgcrypto` and `unaccent` can be opted into for `restore-check`. Automation may repeat `--allow-extension NAME`; site operators set `DATABASE_RECOVERY_ALLOW_EXTENSIONS=pgcrypto,unaccent` in the protected settings resolved for `--profile`. A process environment variable alone grants no opt-in. Profile values follow the existing settings-file precedence (native: first nonempty value); CLI flags add to that value rather than replacing it. Unknown requests are refused before database work. Opted-in extension definitions must match `CREATE EXTENSION IF NOT EXISTS <name> WITH SCHEMA <schema>;`; `VERSION`, `CASCADE` and `FROM` variants are refused. Every result JSON, retained `restore-check.json` run record and tool log records the sorted `extension_optins` list, empty by default; signed packet evidence stays unchanged. Replacement `restore` does not use this archive guard or accept the flag.
 
 A case-insensitive **tripwire, not a boundary**, scans function bodies, constraints (including domain CHECKs), generated columns and index expressions before creation.
 It refuses `PROGRAM`, `lo_import`, `lo_export`, `pg_read_file`, `pg_read_binary_file`, `pg_ls_dir`, `pg_file_write`, `ALTER SYSTEM`, `ALTER ROLE`, `CREATE ROLE`, `DROP ROLE`, `SET ROLE`, `SET SESSION AUTHORIZATION`, `pg_terminate_backend` and `dblink`.

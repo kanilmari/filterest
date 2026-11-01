@@ -19,6 +19,7 @@ else:
 # plpgsql is PostgreSQL's default template0 extension. The bootstrap parity test
 # deliberately requires review here whenever installation extension creation changes.
 ALLOWED_EXTENSIONS = frozenset({"plpgsql", "vector", "postgis", "uuid-ossp", "pg_trgm"})
+OPTIN_EXTENSIONS = frozenset({"pgcrypto", "unaccent"})
 RESTORE_SCOPE_FLAGS = ("--no-tablespaces", "--no-publications", "--no-subscriptions", "--no-security-labels")
 GLOBAL_KINDS = ("ROLE", "ROLE GRANT", "USER", "GROUP", "TABLESPACE")
 IDENTIFIER = re.compile(r'"(?:[^"\x00]|"")+"|[A-Za-z_\u0080-\uffff][\w$]*')
@@ -156,8 +157,21 @@ def statements(sql):
         raise RecoveryError("Incomplete archive schema statement; restore-check refused before creation")
 
 
-def inspect_definitions(content, entries=None):
+def validate_extension_optins(allowed_optins=frozenset()):
+    """Refuse unsupported requests before callers invoke any database tool."""
+    requested = frozenset(allowed_optins)
+    unknown = requested - OPTIN_EXTENSIONS
+    if unknown:
+        label = json.dumps(safe_diagnostic(sorted(unknown)[0])[:180], ensure_ascii=True)
+        raise RecoveryError(f"Unsupported extension opt-in {label}; only pgcrypto and unaccent may be requested "
+                            "with --allow-extension or DATABASE_RECOVERY_ALLOW_EXTENSIONS; "
+                            "restore-check refused before database work")
+    return requested & OPTIN_EXTENSIONS
+
+
+def inspect_definitions(content, entries=None, *, allowed_optins=frozenset()):
     """Inspect definitions only: never execute SQL or scan COPY payload values."""
+    allowed_optins = validate_extension_optins(allowed_optins)
     identities = []
     for tokens, definition in statements(content.decode("utf-8")):
         words = [token.upper() for token in tokens]
@@ -189,12 +203,23 @@ def inspect_definitions(content, entries=None):
         if kind in ("EXTENSION", "LANGUAGE"):
             kind = "PROCEDURAL LANGUAGE" if kind == "LANGUAGE" else kind
             # No ownership/trust inference from names or TOC prefixes. Only the
-            # default language and the installation's exact extensions qualify.
-            allowed = name in ALLOWED_EXTENSIONS if kind == "EXTENSION" else name == "plpgsql"
+            # default language, installation extensions and fixed opt-ins qualify.
+            allowed = name in ALLOWED_EXTENSIONS | allowed_optins if kind == "EXTENSION" else name == "plpgsql"
             if not allowed:
-                refuse(kind, name, "extension/language is outside the installation allowlist")
+                reason = "extension/language is outside the installation allowlist"
+                if kind == "EXTENSION" and name in OPTIN_EXTENSIONS:
+                    reason += (f"; opt in with --allow-extension {name} or the profile setting "
+                               f"DATABASE_RECOVERY_ALLOW_EXTENSIONS={name}")
+                refuse(kind, name, reason)
             if tokens[end:end + 1] == ["."]:
                 refuse(kind, name, "ambiguous archive schema identity")
+            if kind == "EXTENSION" and name in OPTIN_EXTENSIONS:
+                # Fixed opt-ins authorize only pg_dump's CREATE shape, never
+                # extra install/update options or a qualified schema expression.
+                if (words[:5] != ["CREATE", "EXTENSION", "IF", "NOT", "EXISTS"]
+                        or words[end:end + 2] != ["WITH", "SCHEMA"]
+                        or len(tokens) != end + 3 or not IDENTIFIER.fullmatch(tokens[end + 2])):
+                    refuse(kind, name, "opted-in extension requires the pg_dump statement shape")
             if words[0] == "CREATE":
                 identities.append((kind, name))
             continue

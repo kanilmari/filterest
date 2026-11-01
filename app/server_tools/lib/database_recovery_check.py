@@ -17,18 +17,25 @@ import time
 
 if __package__:
     from . import database_recovery as recovery
-    from .database_recovery_archive_guard import RESTORE_SCOPE_FLAGS
+    from .database_recovery_archive_guard import RESTORE_SCOPE_FLAGS, validate_extension_optins
     from .database_recovery_counts import archive_counts, restored_counts, comparison
     from .database_recovery_packet_io import configured_credentials, credential_diagnostics, safe_diagnostic
 else:
     import database_recovery as recovery
-    from database_recovery_archive_guard import RESTORE_SCOPE_FLAGS
+    from database_recovery_archive_guard import RESTORE_SCOPE_FLAGS, validate_extension_optins
     from database_recovery_counts import archive_counts, restored_counts, comparison
     from database_recovery_packet_io import configured_credentials, credential_diagnostics, safe_diagnostic
 
 
 STEPS = ("Authenticate packet", "Read archive counts", "Create disposable database",
          "Restore disposable database", "Compare counts", "Drop disposable database")
+
+
+def extension_optins(values, requested=()):
+    """Add explicit flags to the resolved profile value; neither source overrides the other."""
+    profile = {name.strip() for name in values.get("DATABASE_RECOVERY_ALLOW_EXTENSIONS", "").split(",")
+               if name.strip()}
+    return validate_extension_optins(profile | set(requested))
 
 
 def scratch_name(live, requested, hidden=()):
@@ -113,7 +120,13 @@ def check_packet(args, root, paths, summary, values, hidden):
         raise recovery.RecoveryError("restore-check requires an existing valid protected authentication key; no key is created and authentication cannot be bypassed") from None
     packet = Path(args.backup).absolute()
     with recovery.private_diagnostics("restore-check", packet=packet, key=key) as logs:
+        # Keep a run record even when authentication/guard checks fail, without
+        # modifying the signed packet metadata retained as input evidence.
+        evidence = summary_json(dict(extension_optins=summary["extension_optins"]), hidden)
+        with recovery.private_file(logs / "restore-check.json", key=key) as destination:
+            destination.write((evidence + "\n").encode())
         database = recovery.Database(root, args.profile, paths, logs)
+        database.extension_optins_json = evidence
         if target == database.name:
             raise recovery.RecoveryError("The live database cannot be a restore-check target")
         folder = recovery.snapshot_packet(packet, logs / "packet_snapshot", key)
@@ -128,7 +141,7 @@ def check_packet(args, root, paths, summary, values, hidden):
 
         record = step(0, recovery._verify_packet_snapshot, folder, root, args.profile, paths)
         dump = folder / record["dump"]
-        expected = step(1, archive_counts, database, dump)
+        expected = step(1, archive_counts, database, dump, allowed_optins=summary["extension_optins"])
         # The name is generated internally, but still check before arming cleanup.
         exists_sql = "SELECT EXISTS(SELECT 1 FROM pg_database WHERE datname=:'scratch');"
         variables = {"scratch": target}
@@ -193,7 +206,7 @@ def summary_json(summary, hidden):
 
 def restore_check_result(args, hidden):
     summary = dict(format_version=1, action="restore-check", status="failed", verified=False,
-                   target=None, cleanup="not_created", comparison=None,
+                   target=None, cleanup="not_created", comparison=None, extension_optins=[],
                    steps=[dict(name=name, status="not_run") for name in STEPS], error=None)
     try:
         # Snapshot diagnostics also belong on stderr, leaving stdout parseable.
@@ -205,6 +218,7 @@ def restore_check_result(args, hidden):
             paths = recovery.setting_paths(root, args.profile, args.settings)
             values = recovery.environment_values(paths, args.profile)
             hidden.extend(configured_credentials(values))
+            summary["extension_optins"] = sorted(extension_optins(values, getattr(args, "allow_extension", ())))
             check_packet(args, root, paths, summary, values, hidden)
         summary["status"] = "ok"
     except recovery.RecoveryError as error:

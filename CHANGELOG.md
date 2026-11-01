@@ -22,6 +22,7 @@ Dates are the local (Europe/Helsinki) date on which the version was published.
 
 ## [Unreleased]
 
+- Native `restore-check` can explicitly opt into only legacy `pgcrypto` and `unaccent` through repeatable `--allow-extension` flags or the profile's `DATABASE_RECOVERY_ALLOW_EXTENSIONS`; results and private evidence record the effective opt-ins while default extension and language guards stay unchanged.
 - Test tooling records candidate readiness during the two shared E2E helpers' unchanged fixed waits and summarizes the reporting nightly.
 - Hidden and server-only geometry stays out of map support and geometry metadata; generated foreign-key labels are null when their target display field is withheld, including for guests, and visibility saves refresh both projections immediately.
 - **Compact category buttons and count ordering** — Empty selection badges take no space; a site setting chooses row-filling centred buttons (default) or content-width buttons. Category values open largest-count first, retain administrator order for ties, and keep their order while the popup is open.
