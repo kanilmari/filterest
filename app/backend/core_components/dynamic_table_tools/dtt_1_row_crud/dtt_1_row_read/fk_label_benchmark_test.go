@@ -33,7 +33,7 @@ func BenchmarkFKHeavyGetResults(b *testing.B) {
 		columns[i] = dtt_models.ColumnInfo{ColumnName: column}
 		uids = append(uids, i)
 	}
-	setCachedJoinMetadata("sources", joinMetadataCacheEntry{tableUID: "42", foreignKeys: keys})
+	setCachedJoinMetadata("sources", joinMetadataCacheEntry{tableUID: "42", foreignKeys: keys, titleTargets: visibleLabelTargetsForTest(keys)})
 	ctx := QueryBuilderContext{DB: db, TableName: "sources", ColumnsMap: columns, VisibleColUIDs: uids,
 		QueryParams: url.Values{}, UserID: 7, UserRole: "user", ResultsPerLoad: 50, Offset: 1, ClientRowCount: 1000}
 	b.ReportAllocs()

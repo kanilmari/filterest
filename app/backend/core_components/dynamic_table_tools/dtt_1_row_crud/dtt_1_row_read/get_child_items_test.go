@@ -360,7 +360,7 @@ func TestAuthorizeRelatedNestedMetadataKeepsTargetsForGuardedProjection(t *testi
 				loadPolicy:     func(string) (ReadRowPolicy, error) { return test.policy, test.policyErr },
 				policies:       map[string]ReadRowPolicy{},
 			}
-			selected, joins, _ := buildRelatedLabelProjection("sources", []string{"lookup_id"}, labels, nil, authorization, 0)
+			selected, joins, _ := buildRelatedLabelProjection("sources", []string{"lookup_id"}, labels, visibleLabelTargetsForTest(labels), nil, authorization, 0)
 			if test.policyErr != nil {
 				if joins != "" || !strings.Contains(selected, `NULL::text AS "lookup_name"`) {
 					t.Fatalf("policy failure enabled label: %s %s", selected, joins)

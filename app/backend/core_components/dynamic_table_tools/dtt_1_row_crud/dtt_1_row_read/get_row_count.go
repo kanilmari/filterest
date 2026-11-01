@@ -161,10 +161,15 @@ func getRowCountWithReadPolicy(db dbutils.Querier, tableName, userRole string, u
  * ----------------------------------------------------------------*/
 func getGeometryColumns(db dbutils.Querier, tableName string) ([]string, error) {
 	const query = `
-        SELECT column_name
-        FROM information_schema.columns
-        WHERE table_name = $1
-          AND udt_name = ANY($2)`
+        SELECT c.column_name
+        FROM information_schema.columns c
+        LEFT JOIN system_column_details scd
+          ON scd.column_name = c.column_name
+         AND scd.table_uid = (SELECT table_uid FROM system_db_tables WHERE table_name = $1)
+        WHERE c.table_schema = 'public' AND c.table_name = $1
+          AND c.udt_name = ANY($2)
+          AND ` + clientVisibleColumnPredicate + `
+        ORDER BY c.ordinal_position`
 	rows, err := db.Query(query, tableName, pq.Array(geoUDTNames))
 	if err != nil {
 		return nil, fmt.Errorf("querying geo columns: %w", err)

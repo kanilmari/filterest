@@ -5,6 +5,7 @@
 package dtt_1_row_read
 
 import (
+	"fmt"
 	"log"
 	"maps"
 
@@ -72,6 +73,16 @@ func fetchRecordTitleAliasTargets(db dbutils.Querier, keys map[string]dtt_utils.
 	return targets, nil
 }
 
+// fkDisplayLabelExpression is the delivery boundary for every generated FK label.
+// Missing schema proof fails closed; request-level dataset/row checks still apply.
+// Admins have no delivery-flag exemption, just as with natural record titles.
+func fkDisplayLabelExpression(alias, column string, target recordTitleTargetMetadata, proven bool) string {
+	if !proven || target.HideEverywhere || target.ClientDeliveryMode != "include" {
+		return "NULL::text"
+	}
+	return fmt.Sprintf("%s.%s", pq.QuoteIdentifier(alias), pq.QuoteIdentifier(column))
+}
+
 // authorizedRecordTitleMeta filters a value copy after the authorized query. A
 // schema cache entry is shared by actors; never redact or authorize it in place.
 func authorizedRecordTitleMeta(meta dtt_models.TableReadMeta, visibleColumns []string, types map[string]interface{}) dtt_models.TableReadMeta {
@@ -105,7 +116,7 @@ func recordTitleAliasSources(tableName string, types map[string]interface{}) map
 // relatedRecordTitleAliasSources uses the related query's authorized join set.
 // That query does not populate the listing join cache; batch schema facts here
 // without reading another record or publishing request permissions to a cache.
-func relatedRecordTitleAliasSources(db dbutils.Querier, keys map[string]dtt_utils.ForeignKey, types map[string]interface{}) map[string]interface{} {
+func relatedRecordTitleAliasSources(db dbutils.Querier, keys map[string]dtt_utils.ForeignKey, types map[string]interface{}) (map[string]interface{}, map[string]recordTitleTargetMetadata) {
 	if backend.Db != nil {
 		db = backend.Db
 	}
@@ -113,7 +124,7 @@ func relatedRecordTitleAliasSources(db dbutils.Querier, keys map[string]dtt_util
 	if err != nil {
 		log.Printf("\033[31merror: reading related relation title metadata: %v\033[0m", err)
 	}
-	return withRecordTitleAliasTargets(types, keys, targets)
+	return withRecordTitleAliasTargets(types, keys, targets), targets
 }
 
 func withRecordTitleAliasTargets(types map[string]interface{}, keys map[string]dtt_utils.ForeignKey, targets map[string]recordTitleTargetMetadata) map[string]interface{} {

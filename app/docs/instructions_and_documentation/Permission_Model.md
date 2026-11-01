@@ -126,7 +126,7 @@ Its shared pure policy (`runtime_grants`) computes the basic pool's union over d
 
 Generated foreign-key labels in ordinary results, intelligent results and vector search require the viewer's `/api/get-results` right on the referenced dataset
 and that row's existing exact-row and mandatory visibility rules.
-An unreadable target yields a null label while the source foreign-key value remains.
+An unreadable target, a hidden/server-only display field, or missing display-field metadata yields a null label while the source foreign-key value remains; this also applies to incoming/outgoing related rows, suppresses label evidence, and preserves filter options' existing refusal, with no administrator delivery-flag exemption.
 Target permissions and policy metadata are resolved once per referenced dataset per query; row checks run inside the same LEFT JOIN.
 Runtime label dependencies require target Read.
 Existing excess database SELECT grants remain reported by the additive grant policy; they cannot bypass the application label check.
@@ -556,7 +556,7 @@ renderer-visible columns but must remain available inside returned row objects
 for navigation and row actions, and it may not be marked `server_only`.
 Embeddings and search vectors should normally be `server_only`: backend search
 may use them, while ordinary result rows, metadata, cards, exports, and field
-selectors must not serialize them by accident.
+selectors must not serialize them by accident. Map support and `geom_columns` also exclude hidden/server-only geometry, even with table-wide SELECT; committed visibility saves evict its schema cache and all referencing label caches.
 
 ## 4. Enforcement Contract
 

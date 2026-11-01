@@ -1,7 +1,7 @@
 // linked_label_evidence.go
 // Enumerates linked aliases using the row projections' own metadata and naming.
 // Connects declared language-key evidence to actual FK and actor projections.
-// Does not query rows, change projection behavior or manufacture ordinary labels.
+// Reads schema proof only; withheld target fields never become label evidence.
 package dtt_1_row_read
 
 import (
@@ -32,10 +32,14 @@ func LinkedLabelEvidenceAliases(table string, columns []string) (map[string]map[
 	if err != nil {
 		return nil, err
 	}
-	return linkedLabelEvidenceAliases(columns, relations, foreignKeys, actors), nil
+	targets, err := fetchRecordTitleAliasTargets(backend.Db, foreignKeys)
+	if err != nil {
+		return nil, err
+	}
+	return linkedLabelEvidenceAliases(columns, relations, foreignKeys, targets, actors), nil
 }
 
-func linkedLabelEvidenceAliases(columns []string, relations map[string]OneMRelation, foreignKeys map[string]dtt_utils.ForeignKey, actors row_mutation_policy.RowActorColumns) map[string]map[string]bool {
+func linkedLabelEvidenceAliases(columns []string, relations map[string]OneMRelation, foreignKeys map[string]dtt_utils.ForeignKey, targets map[string]recordTitleTargetMetadata, actors row_mutation_policy.RowActorColumns) map[string]map[string]bool {
 	primary, related := map[string]bool{}, map[string]bool{}
 	existing, used := map[string]struct{}{}, map[string]struct{}{}
 	for _, column := range columns {
@@ -47,10 +51,16 @@ func linkedLabelEvidenceAliases(columns []string, relations map[string]OneMRelat
 		if !actor && (!foreign || fk.NameColumn == "") {
 			continue
 		}
+		// Reserve the same alias even for NULL labels, preserving later collisions.
+		relatedAlias := buildRelatedFKDisplayAlias(column, existing, used)
+		target, proven := targets[column]
+		if !actor && fkDisplayLabelExpression("target", fk.NameColumn, target, proven) == "NULL::text" {
+			continue
+		}
 		if actor || relations[column].CachedNameColInSrc == "" {
 			primary[generatedForeignNameAlias(column)] = true
 		}
-		related[buildRelatedFKDisplayAlias(column, existing, used)] = true
+		related[relatedAlias] = true
 	}
 	return map[string]map[string]bool{
 		`return alias + " (ln)"`:          primary,

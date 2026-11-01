@@ -15,6 +15,7 @@ import (
 func TestRowResponseMapSupportPostgres(t *testing.T) {
 	owner, reader := ownerResolverPostgres(t)
 	if _, err := owner.Exec(`
+ALTER TABLE system_column_details ADD COLUMN hide_everywhere boolean, ADD COLUMN client_delivery_mode text;
 CREATE TABLE row_support_map(id integer PRIMARY KEY, position point, private_position point);
 INSERT INTO row_support_map VALUES(1, point(24,60), point(25,61));
 GRANT SELECT(id,position) ON row_support_map TO wl58_reader;`); err != nil {

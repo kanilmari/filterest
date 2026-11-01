@@ -17,7 +17,7 @@ import (
 // Existing layout and actor tests exercise administrator projections; runtime
 // callers must supply authorization and retain the returned policy arguments.
 func buildRelatedSelectColumnsWithFKLabels(table string, columns []string, keys map[string]dtt_utils.ForeignKey, actors row_mutation_policy.RowActorColumns) (string, string) {
-	selected, joins, _ := buildRelatedLabelProjection(table, columns, keys, actors, allowForeignLabelsForTest(), 0)
+	selected, joins, _ := buildRelatedLabelProjection(table, columns, keys, visibleLabelTargetsForTest(keys), actors, allowForeignLabelsForTest(), 0)
 	return selected, joins
 }
 
@@ -37,7 +37,7 @@ func TestRelatedLabelReadPolicyOffsets(t *testing.T) {
 			return ReadRowPolicy{}, nil // The gate's target has no mandatory flags.
 		},
 	}
-	query, args := buildRelatedItemsQueryWithFKLabels("children", []string{"id", "target_id", "other_id"}, keys, nil,
+	query, args := buildRelatedItemsQueryWithFKLabels("children", []string{"id", "target_id", "other_id"}, keys, visibleLabelTargetsForTest(keys), nil,
 		"parent_id", 1, "user", 4, legacyMustTrueReadPolicy([]string{"visible"}, "user_id"), "", auth)
 	wantArgs := []interface{}{1, 4, "children", 4, "targets", 4, 4, "other_targets", 4}
 	if !reflect.DeepEqual(args, wantArgs) {
@@ -59,7 +59,7 @@ func TestRelatedLabelReadPolicyOffsets(t *testing.T) {
 	if strings.Count(joinSQL, "resolve_effective_row_access") != 2 {
 		t.Fatal("target policy escaped the LEFT JOIN", query)
 	}
-	_, _, _ = buildRelatedLabelProjection("children", []string{"target_id", "other_id"}, keys, nil, auth, 0)
+	_, _, _ = buildRelatedLabelProjection("children", []string{"target_id", "other_id"}, keys, visibleLabelTargetsForTest(keys), nil, auth, 0)
 	if policyLoads["targets"] != 1 || policyLoads["other_targets"] != 1 {
 		t.Fatal("policy lookup repeated within request", policyLoads)
 	}
@@ -81,7 +81,7 @@ func TestRelatedLabelAuthorizationFailsClosed(t *testing.T) {
 				}
 			}
 			keys := map[string]dtt_utils.ForeignKey{"target_id": {ReferencedTable: "targets", ReferencedColumn: "id", NameColumn: "title"}}
-			selected, joins, args := buildRelatedLabelProjection("children", []string{"target_id"}, keys, nil, auth, 3)
+			selected, joins, args := buildRelatedLabelProjection("children", []string{"target_id"}, keys, visibleLabelTargetsForTest(keys), nil, auth, 3)
 			if joins != "" || len(args) != 0 || !strings.Contains(selected, `NULL::text AS "target_name"`) || !strings.Contains(selected, `"children"."target_id" AS "target_id"`) {
 				t.Fatalf("unsafe label projection: %s %s %#v", selected, joins, args)
 			}
@@ -96,7 +96,7 @@ func TestRelatedLabelAdminBypassesRowPolicy(t *testing.T) {
 		return ReadRowPolicy{}, nil
 	}
 	keys := map[string]dtt_utils.ForeignKey{"target_id": {ReferencedTable: "targets", ReferencedColumn: "id", NameColumn: "title"}}
-	selected, joins, args := buildRelatedLabelProjection("children", []string{"target_id"}, keys, nil, auth, 3)
+	selected, joins, args := buildRelatedLabelProjection("children", []string{"target_id"}, keys, visibleLabelTargetsForTest(keys), nil, auth, 3)
 	if len(args) != 0 || strings.Contains(joins, "resolve_effective_row_access") || !strings.Contains(joins, `LEFT JOIN "targets"`) || !strings.Contains(selected, `"target_id_related_fk_alias1"."title" AS "target_name"`) {
 		t.Fatalf("administrator projection changed: %s %s %#v", selected, joins, args)
 	}

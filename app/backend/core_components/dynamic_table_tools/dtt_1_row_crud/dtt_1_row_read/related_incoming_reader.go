@@ -17,10 +17,11 @@ import (
 )
 
 type incomingRelatedMetadata struct {
-	fk          FKInfo
-	types       map[string]interface{}
-	foreignKeys map[string]dtt_utils.ForeignKey
-	kind        string
+	fk           FKInfo
+	types        map[string]interface{}
+	foreignKeys  map[string]dtt_utils.ForeignKey
+	titleTargets map[string]recordTitleTargetMetadata
+	kind         string
 }
 
 // prepareIncomingRelatedMetadata performs the owner-only catalogue reads before
@@ -50,10 +51,10 @@ func prepareIncomingRelatedMetadata(currentDb *sql.DB, fkInfos []FKInfo, childFi
 			log.Printf("\033[31merror: authorizing nested foreign keys from table %s: %s\033[0m", fk.Referencing_table, err)
 			return nil, errors.New("error authorizing related datasets")
 		}
-		types = relatedRecordTitleAliasSources(currentDb, labels, types)
+		types, titleTargets := relatedRecordTitleAliasSources(currentDb, labels, types)
 		// Keep all FK candidates for NULL projections; only authorized metadata
 		// above may describe their targets to the frontend.
-		metadata = append(metadata, incomingRelatedMetadata{fk, types, foreignKeys, classifyRelatedTableKind(fk.Referencing_table, kinds)})
+		metadata = append(metadata, incomingRelatedMetadata{fk, types, foreignKeys, titleTargets, classifyRelatedTableKind(fk.Referencing_table, kinds)})
 	}
 	return metadata, nil
 }
@@ -101,7 +102,7 @@ func readIncomingRelatedTable(q dbutils.Querier, meta incomingRelatedMetadata, p
 	if gallery != nil && gallery.ChildTable == fk.Referencing_table && gallery.ForeignKey == fk.Referencing_column {
 		order = galleryRowsOrder(gallery)
 	}
-	query, args := buildRelatedItemsQueryWithFKLabels(fk.Referencing_table, columns, meta.foreignKeys, actors,
+	query, args := buildRelatedItemsQueryWithFKLabels(fk.Referencing_table, columns, meta.foreignKeys, meta.titleTargets, actors,
 		fk.Referencing_column, parentID, actor.UserRole, actor.UserID, policy, order,
 		newForeignLabelAuthorization(q, actor.UserRole, actor.UserID))
 	rows, err := q.Query(query, args...)

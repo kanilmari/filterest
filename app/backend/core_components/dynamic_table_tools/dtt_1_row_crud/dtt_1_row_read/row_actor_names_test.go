@@ -21,7 +21,7 @@ func TestActorNamesAreNullWithoutAJoin(t *testing.T) {
 	marks := row_mutation_policy.RowActorColumns{"created_by": "creator", "user_id": "owner"}
 	keys := map[string]dtt_utils.ForeignKey{"created_by": fk, "user_id": fk, "reviewer_id": fk}
 	db := openBuildJoinsMockDB(t, &buildJoinsQueryCounter{counts: map[string]int{}})
-	setCachedJoinMetadata("notes", joinMetadataCacheEntry{tableUID: "42", foreignKeys: keys, actorColumns: marks, fkRelations: map[string]OneMRelation{"user_id": {CachedNameColInSrc: "cached_username"}}})
+	setCachedJoinMetadata("notes", joinMetadataCacheEntry{tableUID: "42", foreignKeys: keys, titleTargets: visibleLabelTargetsForTest(keys), actorColumns: marks, fkRelations: map[string]OneMRelation{"user_id": {CachedNameColInSrc: "cached_username"}}})
 	// Both storing and reading entries must copy the marks.
 	delete(marks, "created_by")
 	entry, _ := getCachedJoinMetadata("notes")

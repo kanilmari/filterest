@@ -34,7 +34,7 @@ func TestLinkedLabelEvidenceUsesProjectionRules(t *testing.T) {
 			if tc.cached {
 				relations["owner_id"] = OneMRelation{CachedNameColInSrc: "owner_name"}
 			}
-			aliases := linkedLabelEvidenceAliases(tc.columns, relations, tc.fk, tc.actors)
+			aliases := linkedLabelEvidenceAliases(tc.columns, relations, tc.fk, visibleLabelTargetsForTest(tc.fk), tc.actors)
 			for builder, want := range map[string]string{`return alias + " (ln)"`: tc.primary, `candidate = baseAlias + " (ln)"`: tc.related} {
 				labels := aliases[builder]
 				if want == "" && len(labels) != 0 || want != "" && (len(labels) != 1 || !labels[want]) {

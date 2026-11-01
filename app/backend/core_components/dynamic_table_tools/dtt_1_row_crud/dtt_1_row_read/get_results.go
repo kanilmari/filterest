@@ -293,6 +293,9 @@ func GetResults(response_writer http.ResponseWriter, request *http.Request) {
 		}, generation)
 	}
 
+	// The cache contains only client-deliverable geometry; response metadata and
+	// optional enrichment must also respect this reader's SELECT grants.
+	geomCols = filterAllowedGeometryColumns(geomCols, allowedColumnsMap)
 	hasGeo := len(geomCols) > 0 || len(geomSrcs) > 0
 
 	visibleColUids := make([]int, 0)
@@ -386,7 +389,7 @@ func GetResults(response_writer http.ResponseWriter, request *http.Request) {
 	result_columns = appendServiceCatalogModerationColumns(table_name, result_columns, query_results, userRole)
 
 	if err := prepareRowsForResponse(readQuerier, table_name, query_results, columnsMap, result_columns,
-		dbutils.NewRequestActorContext(userID, userRole), support, filterAllowedGeometryColumns(geomCols, allowedColumnsMap)); err != nil {
+		dbutils.NewRequestActorContext(userID, userRole), support, geomCols); err != nil {
 		httpresponse.RespondWithError(response_writer, http.StatusInternalServerError, "error authorizing card pictures")
 		return
 	}

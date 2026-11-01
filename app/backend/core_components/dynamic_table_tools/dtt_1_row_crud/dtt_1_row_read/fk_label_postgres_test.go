@@ -41,6 +41,7 @@ ALTER TABLE system_column_details ADD card_element text;
 ALTER TABLE system_column_details ADD is_multilingual boolean;
 ALTER TABLE system_column_details ADD hide_everywhere boolean;
 ALTER TABLE system_column_details ADD client_delivery_mode text;
+INSERT INTO system_column_details(table_uid,column_name) VALUES(102,'title');
 INSERT INTO system_column_details(table_uid,column_name,column_uid,co_number) VALUES(101,'id',1,1),(101,'target_id',2,2),(101,'cached_title',3,3);
 GRANT SELECT ON ALL TABLES IN SCHEMA public TO wl58_reader;
 GRANT UPDATE(id) ON label_targets TO wl58_reader;
@@ -49,7 +50,7 @@ GRANT UPDATE(id) ON label_targets TO wl58_reader;
 	backend.Db = reader
 	resetJoinMetadataCacheForTests()
 	t.Cleanup(func() { backend.Db = old; resetJoinMetadataCacheForTests() })
-	setCachedJoinMetadata("label_sources", joinMetadataCacheEntry{tableUID: "101", foreignKeys: map[string]dtt_utils.ForeignKey{
+	setCachedJoinMetadata("label_sources", joinMetadataCacheEntry{tableUID: "101", titleTargets: map[string]recordTitleTargetMetadata{"target_id": {ClientDeliveryMode: "include"}}, foreignKeys: map[string]dtt_utils.ForeignKey{
 		"target_id": {ReferencedTable: "label_targets", ReferencedColumn: "id", NameColumn: "title"},
 	}})
 	return owner, reader, map[int]dtt_models.ColumnInfo{1: {ColumnName: "id"}, 2: {ColumnName: "target_id"}, 3: {ColumnName: "cached_title"}}

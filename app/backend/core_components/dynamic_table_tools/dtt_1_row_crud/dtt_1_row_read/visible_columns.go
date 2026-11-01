@@ -13,6 +13,12 @@ import (
 	"github.com/lib/pq"
 )
 
+// clientVisibleColumnPredicate is shared by ordinary and map-support reads.
+// Row identity survives presentation hiding; server-only delivery never does.
+const clientVisibleColumnPredicate = `
+          (COALESCE(scd.hide_everywhere, false) = false OR c.column_name = 'id')
+          AND COALESCE(scd.client_delivery_mode, 'include') = 'include'`
+
 // getVisibleColumnNames returns column names for the given table
 // excluding presentation-hidden and server-only columns in system_column_details.
 func getVisibleColumnNames(db dbutils.Querier, tableName string) ([]string, error) {
@@ -26,11 +32,7 @@ func getVisibleColumnNames(db dbutils.Querier, tableName string) ([]string, erro
               )
         WHERE c.table_schema = 'public'
           AND c.table_name = $1
-	      AND (
-	          COALESCE(scd.hide_everywhere, false) = false
-	          OR c.column_name = 'id'
-	      )
-	      AND COALESCE(scd.client_delivery_mode, 'include') = 'include'
+          AND ` + clientVisibleColumnPredicate + `
           AND c.column_name NOT IN ('embedding_vector', 'search_vector_simple')
         ORDER BY c.ordinal_position`
 	rows, err := db.Query(query, tableName)

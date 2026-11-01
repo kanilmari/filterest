@@ -171,14 +171,14 @@ func loadJoinMetadata(
 		return joinMetadataCacheEntry{}, err
 	}
 	// Read schema facts independently of the request role, like FK resolution.
-	// Only title annotation uses them; authorization is resolved per request below.
+	// Label delivery and title annotation share them; authorization remains per request.
 	metadataDB := db
 	if backend.Db != nil {
 		metadataDB = dbutils.ReadBudgetFallback(db, backend.Db)
 	}
 	titleTargets, err := fetchRecordTitleAliasTargets(metadataDB, foreignKeys)
 	if err != nil {
-		// Unproven aliases cannot name a record; ordinary FK display still works.
+		// Unproven targets cannot supply either an FK label or a record title.
 		log.Printf("\033[31merror: reading relation title metadata: %v\033[0m", err)
 	}
 	entry := joinMetadataCacheEntry{
@@ -295,20 +295,16 @@ func buildJoinsWith1MRelations(
 
 				generatedColumnName := generatedForeignNameAlias(colName)
 
-				fullyQualifiedColumnName := fmt.Sprintf(
-					"%s.%s",
-					pq.QuoteIdentifier(alias),
-					pq.QuoteIdentifier(fk.NameColumn),
-				)
+				target, proven := metadata.titleTargets[colName]
+				fullyQualifiedColumnName := fkDisplayLabelExpression(alias, fk.NameColumn, target, proven)
 				columnExpressions[generatedColumnName] = fullyQualifiedColumnName
 
-				selectColumns += fmt.Sprintf("%s.%s AS %s, %s.%s AS \"%s\", ",
+				selectColumns += fmt.Sprintf("%s.%s AS %s, %s AS %s, ",
 					pq.QuoteIdentifier(tableName),
 					pq.QuoteIdentifier(colName),
 					pq.QuoteIdentifier(colName),
-					pq.QuoteIdentifier(alias),
-					pq.QuoteIdentifier(fk.NameColumn),
-					generatedColumnName,
+					fullyQualifiedColumnName,
+					pq.QuoteIdentifier(generatedColumnName),
 				)
 
 				joinClauses += fmt.Sprintf("LEFT JOIN %s AS %s ON %s.%s = %s.%s ",

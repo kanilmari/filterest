@@ -141,6 +141,7 @@ func buildRelatedLabelProjection(
 	tableName string,
 	columns []string,
 	foreignKeys map[string]dtt_utils.ForeignKey,
+	titleTargets map[string]recordTitleTargetMetadata,
 	actorColumns row_mutation_policy.RowActorColumns,
 	authorization *foreignLabelAuthorization,
 	argumentOffset int,
@@ -194,15 +195,9 @@ func buildRelatedLabelProjection(
 		}
 		queryArgs = append(queryArgs, args...)
 
-		selectParts = append(
-			selectParts,
-			fmt.Sprintf(
-				"%s.%s AS %s",
-				pq.QuoteIdentifier(joinAlias),
-				pq.QuoteIdentifier(fk.NameColumn),
-				pq.QuoteIdentifier(displayAlias),
-			),
-		)
+		target, proven := titleTargets[columnName]
+		expression := fkDisplayLabelExpression(joinAlias, fk.NameColumn, target, proven)
+		selectParts = append(selectParts, expression+" AS "+pq.QuoteIdentifier(displayAlias))
 		joinParts = append(
 			joinParts,
 			fmt.Sprintf(
@@ -234,6 +229,7 @@ func buildRelatedItemsQueryWithFKLabels(
 	tableName string,
 	columns []string,
 	foreignKeys map[string]dtt_utils.ForeignKey,
+	titleTargets map[string]recordTitleTargetMetadata,
 	actorColumns row_mutation_policy.RowActorColumns,
 	referencingColumn string,
 	parentID int,
@@ -244,7 +240,7 @@ func buildRelatedItemsQueryWithFKLabels(
 	authorization *foreignLabelAuthorization,
 ) (string, []interface{}) {
 	where, args := buildRelatedItemsWhereClause(tableName, referencingColumn, parentID, userRole, userID, readPolicy)
-	selected, joins, labelArgs := buildRelatedLabelProjection(tableName, columns, foreignKeys, actorColumns, authorization, len(args))
+	selected, joins, labelArgs := buildRelatedLabelProjection(tableName, columns, foreignKeys, titleTargets, actorColumns, authorization, len(args))
 	return buildRelatedItemsSelectQuery(selected, tableName, joins, where, orderBy), append(args, labelArgs...)
 }
 

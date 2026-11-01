@@ -152,6 +152,12 @@ func queueB4LinkedMetadata(column string, foreign, actor bool) {
 		marks.rows = [][]driver.Value{{column, "owner"}}
 	}
 	pushOrphanQuery(marks)
+	if foreign {
+		pushOrphanQuery(orphanQueuedQuery{
+			cols: []string{"source_column", "data_type", "is_multilingual", "hide_everywhere", "client_delivery_mode"},
+			rows: [][]driver.Value{{column, "text", false, false, "include"}},
+		})
+	}
 }
 
 func TestB4LinkedEvidenceRequiresActualRelation(t *testing.T) {

@@ -172,7 +172,7 @@ func fetchOutgoingReferencedTableResults(
 			return nil, err
 		}
 
-		relatedTypes = relatedRecordTitleAliasSources(currentDb, labelForeignKeys, relatedTypes)
+		relatedTypes, titleTargets := relatedRecordTitleAliasSources(currentDb, labelForeignKeys, relatedTypes)
 		actorColumns, err := row_mutation_policy.ReadRowActorColumns(readQuerier, fk.ReferencedTable)
 		if err != nil {
 			return nil, err
@@ -186,6 +186,7 @@ func fetchOutgoingReferencedTableResults(
 			fk.ReferencedTable,
 			visibleCols,
 			targetForeignKeys,
+			titleTargets,
 			actorColumns,
 			fk.ReferencedColumn,
 			referencedID,

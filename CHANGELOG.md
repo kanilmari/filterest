@@ -22,6 +22,7 @@ Dates are the local (Europe/Helsinki) date on which the version was published.
 
 ## [Unreleased]
 
+- Hidden and server-only geometry stays out of map support and geometry metadata; generated foreign-key labels are null when their target display field is withheld, including for guests, and visibility saves refresh both projections immediately.
 - **Compact category buttons and count ordering** — Empty selection badges take no space; a site setting chooses row-filling centred buttons (default) or content-width buttons. Category values open largest-count first, retain administrator order for ties, and keep their order while the popup is open.
 - Vector search omits known columns the viewer cannot read, using the same column grants as ordinary results. Administrators and readers with SELECT on every column keep the same delivered fields; a withheld column no longer breaks the vector result query.
 - Browser checks remove identical project runs by default under K549, while `FILTEREST_E2E_MATRIX=full` preserves the full six-project pass for weekends and site releases; the relevant-check planner and static guard share the reviewed reduction manifest.

@@ -160,7 +160,7 @@ func TestRelatedRecordTitleAliasSourcesUseAuthorizedSchemaFacts(t *testing.T) {
 			setCachedJoinMetadata("notes", joinMetadataCacheEntry{foreignKeys: map[string]dtt_utils.ForeignKey{
 				"customer_id": {ReferencedTable: "customers", NameColumn: "old_name"},
 			}})
-			got := relatedRecordTitleAliasSources(nil, keys, types)
+			got, _ := relatedRecordTitleAliasSources(nil, keys, types)
 			column := got["customer_id"].(map[string]interface{})
 			facts, proven := column["foreign_display_metadata"].(map[string]interface{})
 			if proven != scenario.proven || column["foreign_display_column"] != "name" || counter.get("title_targets") != 1 {
@@ -187,7 +187,7 @@ func TestRelatedRecordTitleAliasSourcesUseAuthorizedSchemaFacts(t *testing.T) {
 			}
 		})
 	}
-	if got := relatedRecordTitleAliasSources(nil, nil, map[string]interface{}{}); len(got) != 0 {
+	if got, _ := relatedRecordTitleAliasSources(nil, nil, map[string]interface{}{}); len(got) != 0 {
 		t.Fatal("empty joins should need no schema read")
 	}
 }

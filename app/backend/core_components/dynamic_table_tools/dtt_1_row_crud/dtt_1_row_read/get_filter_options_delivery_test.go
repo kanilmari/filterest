@@ -90,7 +90,7 @@ func TestSEC4FilterOptionsMetadataFailurePrecedesValues(t *testing.T) {
 	}
 }
 
-func sec4FilterOptionDeliveryFixture(t *testing.T, role, displayColumn string, metadataErr error) *int {
+func sec4FilterOptionDeliveryFixture(t *testing.T, role, displayColumn string, metadataErr error, targetMetadata ...recordTitleTargetMetadata) *int {
 	t.Helper()
 	valueQueries := 0
 	db := queryfixture.Open(t, func(q string, _ []driver.NamedValue) (driver.Rows, error) {
@@ -126,6 +126,13 @@ func sec4FilterOptionDeliveryFixture(t *testing.T, role, displayColumn string, m
 				values = append(values, []driver.Value{int64(i + 1), name, "text", int64(i + 1), "YES", "NO", nil, "", false})
 			}
 			return queryfixture.Rows(columns, values...), nil
+		case strings.Contains(q, "AS title_sources(source_column, target_table, target_column)"):
+			target := recordTitleTargetMetadata{ClientDeliveryMode: "include"}
+			if len(targetMetadata) > 0 {
+				target = targetMetadata[0]
+			}
+			return queryfixture.Rows([]string{"source", "type", "multilingual", "hidden", "mode"},
+				[]driver.Value{displayColumn, "text", false, target.HideEverywhere, target.ClientDeliveryMode}), nil
 		case strings.Contains(q, "SELECT fk_display_column"):
 			return queryfixture.Rows([]string{"fk_display_column"}, []driver.Value{displayColumn}), nil
 		case strings.Contains(q, "SELECT EXISTS"):

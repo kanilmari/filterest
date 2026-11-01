@@ -197,7 +197,7 @@ func (c *buildJoinsMockConn) QueryContext(_ context.Context, query string, args 
 	}
 }
 
-func TestBuildJoinsTitleMetadataFailureKeepsFieldDisplayWithoutTitleProof(t *testing.T) {
+func TestBuildJoinsTitleMetadataFailureWithholdsLabel(t *testing.T) {
 	resetJoinMetadataCacheForTests()
 	counter := &buildJoinsQueryCounter{counts: map[string]int{}, titleErr: fmt.Errorf("schema lookup unavailable")}
 	db := openBuildJoinsForeignKeyMockDB(t, counter)
@@ -209,8 +209,8 @@ func TestBuildJoinsTitleMetadataFailureKeepsFieldDisplayWithoutTitleProof(t *tes
 	})
 	selects, _, _, _, err := buildJoinsWith1MRelations(db, "system_column_details",
 		map[int]dtt_models.ColumnInfo{1: {ColumnName: "table_uid"}}, []int{1}, allowForeignLabelsForTest(), 0)
-	if err != nil || !strings.Contains(selects, `"table_uid_alias1"."table_name" AS "table_name (ln)"`) {
-		t.Fatalf("failed title lookup changed ordinary field display: %s %v", selects, err)
+	if err != nil || !strings.Contains(selects, `NULL::text AS "table_name (ln)"`) {
+		t.Fatalf("failed metadata lookup exposed a label: %s %v", selects, err)
 	}
 	types := recordTitleAliasSources("system_column_details", map[string]interface{}{
 		"table_uid": map[string]interface{}{"foreign_table": "system_db_tables"},

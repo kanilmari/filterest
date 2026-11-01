@@ -139,6 +139,22 @@ func GetFilterOptionsHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Keep the picker's existing refusal for withheld labels, using the same
+	// target facts and expression as row projections and label evidence.
+	targets, err := fetchRecordTitleAliasTargets(currentDb, map[string]dtt_utils.ForeignKey{
+		displayCol: {ReferencedTable: tableName, NameColumn: displayCol},
+	})
+	if err != nil {
+		httpresponse.RespondWithError(w, http.StatusInternalServerError, "error fetching column data")
+		return
+	}
+	target, proven := targets[displayCol]
+	labelExpression := fkDisplayLabelExpression(tableName, displayCol, target, proven)
+	if labelExpression == "NULL::text" {
+		httpresponse.RespondWithError(w, http.StatusForbidden, "forbidden")
+		return
+	}
+
 	var valueColumnExists bool
 	err = currentDb.QueryRow(
 		`SELECT EXISTS (
@@ -198,7 +214,7 @@ func GetFilterOptionsHandler(w http.ResponseWriter, r *http.Request) {
 	query := fmt.Sprintf(
 		"SELECT DISTINCT %s, %s FROM %s%s ORDER BY %s LIMIT %d",
 		pq.QuoteIdentifier(valueColumn),
-		pq.QuoteIdentifier(displayCol),
+		labelExpression,
 		pq.QuoteIdentifier(tableName),
 		whereClause,
 		pq.QuoteIdentifier(displayCol),

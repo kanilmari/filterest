@@ -26,6 +26,9 @@ CREATE TABLE children(id integer PRIMARY KEY,parent_id integer REFERENCES parent
 CREATE TABLE origins(id integer PRIMARY KEY,child_id integer REFERENCES children(id));
 INSERT INTO system_db_tables(table_uid,table_name,fk_display_column) VALUES
  (201,'parents',NULL),(202,'children',NULL),(203,'targets','title'),(204,'origins',NULL);
+-- Both titles are deliverable fields; only the exact-row rule makes row 7 confidential.
+INSERT INTO system_column_details(table_uid,column_name,hide_everywhere,client_delivery_mode)
+ VALUES(203,'title',false,'include');
 INSERT INTO parents VALUES(1);
 INSERT INTO targets VALUES(7,'confidential'),(8,'readable');
 INSERT INTO children VALUES(1,1,7),(2,1,8);
