@@ -8,9 +8,9 @@ import { isSharedTopBarHostActive, shouldShowSharedTopBar } from "./shared_topba
 import { CARD_VIEW_KEY, isArticleDatasetView } from "../table_views/dataset_view_registry.js";
 import { updateShowMenuButtonPosition } from "../navigation/menu_button/navbar_visibility_handler.js";
 import { createMobileTopbarSearchController } from './mobile_topbar_search_controller.js';
-import { createTopNavHomeButton, placeTopNavHomeButton } from '../front_page/top_nav_home_button.js';
+import { canShowTopNavHomeButton, createTopNavHomeButton, placeTopNavHomeButton } from '../front_page/top_nav_home_button.js';
 import { isHeroControlAreaVisible } from './dataset_corner_controls.js';
-import { canShowFrontPageLink, refreshFrontPageLinkLabel } from '../front_page/front_page_link.js';
+import { refreshFrontPageLinkLabel } from '../front_page/front_page_link.js';
 import { HOME_AVAILABILITY_CHANGED_EVENT } from '../front_page/front_page_availability.js';
 const SHARED_TOPBAR_TRANSITION_DURATION_MS = 260;
 
@@ -21,7 +21,7 @@ export function createSharedTopbarVisibilityController({ tableName, currentView,
     const mobileSearch = createMobileTopbarSearchController(sharedTopBar);
     let homeLink = null;
     function reconcileHomeAvailability() {
-        if (!canShowFrontPageLink(localStorage.getItem('button_state') === 'logout')) {
+        if (!canShowTopNavHomeButton()) {
             homeLink?.remove();
             homeLink = null;
         } else {
@@ -125,16 +125,13 @@ export function createSharedTopbarVisibilityController({ tableName, currentView,
         // Hiding/inerting the bar can blur its menu before corner reconciliation.
         // Carry only this update's outgoing focus intent, including on history restore.
         const menuHadFocus = captureMenuFocus(active);
-        const homeHadFocus = document.activeElement === homeLink;
+        const homeHadFocus = homeLink !== null && document.activeElement === homeLink;
         setSharedTopBarVisibility(shouldShowBar);
         // Home follows its row, independently of the menu and bar visibility.
-        // Phone DOM order is menu → Home → identity → search → filter toolbar.
-        // Desktop keeps the existing end slot and hero placement.
+        // Wide layouts keep the existing end slot and hero placement.
         placeTopNavHomeButton(homeLink, homeInHero || !shouldShowBar
             ? inlineHeroHost?.querySelector('.hero-dataset-tabs')
-            : sharedTopBar.querySelector(phone
-                ? '.dataset-shared-topbar__slot--start'
-                : '.dataset-shared-topbar__slot--end'));
+            : sharedTopBar.querySelector('.dataset-shared-topbar__slot--end'));
         if (active && homeHadFocus) homeLink.focus({ preventScroll: true });
         mobileSearch.sync({ phone, active: shouldShowBar });
         setSharedTopBarArticleCloseVisibility(

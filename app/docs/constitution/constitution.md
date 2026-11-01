@@ -10,6 +10,8 @@ This is the constitution for Filterest. It defines durable product principles. T
 
 Prefer clarity, maintainability and useful capability. Avoid multiple sources of truth and unnecessary moving parts. Centralize complexity when doing so makes the rest of the system simpler. Let components meet through a stated boundary rather than reaching into each other, so one can be replaced without opening the other.
 
+Names of files, functions, variables and settings are self-explanatory: a name says as plainly as possible what the thing does and to what, even when that makes the name longer. A name is a useful tool and a layer full of summaries, not a necessary evil.
+
 Finding these faults is part of maintaining the product, not a favour to it. A place where the same thing is decided twice, or where nothing decides it at all, is a defect worth locating and naming before anything visibly fails, whoever wrote it and however long it has stood.
 
 Design complete features with predictable behavior, clear language and consistent interaction. Preserve supported languages, accessibility, and the application's explicit light and dark themes. Keep detailed visual rules in the design guide and reusable code patterns in the reference implementations.

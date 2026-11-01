@@ -316,6 +316,7 @@ export interface AuthModesResponse {
     separate_front_page: boolean;
     display_index_html_at_startup: boolean;
     front_page_button_site_name: string;
+    show_home_button_in_top_bar_on_wide_screens: boolean;
     guest_ui_endpoints?: string[];
 }
 

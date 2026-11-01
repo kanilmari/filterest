@@ -6,24 +6,28 @@ import { expect, type BrowserContext, type Page, type TestInfo } from '@playwrig
 import { waitForAppReady } from './navigation';
 import { closeActiveFilterbarIfOpen } from './filterbar';
 
-export type HomePolicy = { enabled: boolean; label: string; failure: number };
+export type HomePolicy = { enabled: boolean; topBarHome: boolean; label: string; failure: number };
 export const probePhase = process.env.WO37_PROBE_PHASE || 'after';
 if (!['before', 'after'].includes(probePhase)) throw new Error('WO37_PROBE_PHASE must be before or after');
 
 export async function installHomePolicy(context: BrowserContext, theme: 'light' | 'dark' = 'light', homeContent: Record<string, unknown> = {}) {
-  const policy: HomePolicy = { enabled: true, label: '', failure: 0 };
+  // Existing placement probes explicitly opt in; production defaults stay false.
+  const policy: HomePolicy = { enabled: true, topBarHome: true, label: '', failure: 0 };
   await context.route('**/api/auth-modes', async route => {
     expect(route.request().method()).toBe('GET');
     const response = await route.fetch();
     await route.fulfill({ response, json: { ...await response.json(), separate_front_page: policy.enabled,
-      display_index_html_at_startup: false, front_page_button_site_name: policy.label } });
+      display_index_html_at_startup: false, show_home_button_in_top_bar_on_wide_screens: policy.topBarHome, front_page_button_site_name: policy.label } });
   });
   await context.route(/\/api\/admin\/front-page(?:\?.*)?$/,  async route => {
     if (route.request().method() === 'POST') {
-      // Exercise the real save path while keeping all four switches in this fixture.
+      // Exercise the editor save while all setting writes remain response-only.
       const settings = route.request().postDataJSON().settings;
       if (!settings) throw new Error('WO37 fixture only accepts simulated settings saves');
       policy.enabled = settings.separate_front_page === true;
+      if (typeof settings.show_home_button_in_top_bar_on_wide_screens === 'boolean') {
+        policy.topBarHome = settings.show_home_button_in_top_bar_on_wide_screens;
+      }
       await route.fulfill({ json: { version: '' } });
     } else {
       expect(route.request().method()).toBe('GET');
@@ -31,7 +35,7 @@ export async function installHomePolicy(context: BrowserContext, theme: 'light' 
       const data = await response.json();
       await route.fulfill({ response, json: { ...data, settings: { ...data.settings,
         separate_front_page: policy.enabled, display_index_html_at_startup: false,
-        front_page_button_shows_site_name: false } } });
+        front_page_button_shows_site_name: false, show_home_button_in_top_bar_on_wide_screens: policy.topBarHome } } });
     }
   });
   await context.route(/\/api\/front-page(?:\?.*)?$/,  async route => {

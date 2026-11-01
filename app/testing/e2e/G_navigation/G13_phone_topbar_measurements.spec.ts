@@ -35,7 +35,7 @@ async function measure(page: Page) {
 
 async function phoneControls(page: Page) {
   return page.locator('.dataset-shared-topbar:visible').evaluate(bar => {
-    const selectors = ['.dataset-shared-topbar__menu-button', '.top-nav-home-button',
+    const selectors = ['.dataset-shared-topbar__menu-button',
       '.dataset-shared-topbar__site-identity', '.dataset-shared-topbar__search-toggle', '.filterbar-fixed-toggle'];
     const rect = (node: Element) => {
       const box = node.getBoundingClientRect();
@@ -131,8 +131,8 @@ for (const width of [320, 375, 390, 700]) for (const theme of ['light', 'dark'] 
       } finally { probe.remove(); }
     }), { message: 'The visible dataset topbar paints the solid companion at 94% in either theme.' })
       .toMatchObject({ painted: true, matchesCompanionMix: true });
-    const [menuBox, homeBox, identityBox, searchBox, filterBox] = sample.controls;
-    for (const box of [menuBox, homeBox, searchBox, filterBox]) {
+    const [menuBox, identityBox, searchBox, filterBox] = sample.controls;
+    for (const box of [menuBox, searchBox, filterBox]) {
       expect(box.width).toBeGreaterThanOrEqual(44); expect(box.height).toBeGreaterThanOrEqual(44);
     }
     for (let index = 1; index < sample.controls.length; index++) {
@@ -144,11 +144,11 @@ for (const width of [320, 375, 390, 700]) for (const theme of ['light', 'dark'] 
     if (sample.image.width) expect(menuBox.right).toBeLessThanOrEqual(sample.image.x);
     expect(filterBox.right).toBeLessThanOrEqual(width);
     const menu = bar.getByTestId('shared-topbar-menu-button');
-    const home = bar.getByTestId('top-nav-home-button');
+    await expect(bar.getByTestId('top-nav-home-button')).toHaveCount(0);
+    expect(Number.parseFloat(sample.tracks)).toBeCloseTo(44, 1);
     const search = bar.getByTestId('mobile-search-toggle');
     const filter = bar.getByTestId('filterbar-toggle');
-    await menu.focus(); await page.keyboard.press('Tab'); await expect(home).toBeFocused();
-    await page.keyboard.press('Tab'); await expect(search).toBeFocused();
+    await menu.focus(); await page.keyboard.press('Tab'); await expect(search).toBeFocused();
     await page.keyboard.press('Tab'); await expect(filter).toBeFocused();
     await page.keyboard.press('Shift+Tab'); await expect(search).toBeFocused();
     await search.press('Enter');

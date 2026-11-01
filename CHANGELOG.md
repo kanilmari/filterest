@@ -22,6 +22,7 @@ Dates are the local (Europe/Helsinki) date on which the version was published.
 
 ## [Unreleased]
 
+- Home stays in the menu by default; administrators can opt in to a site-wide top-bar Home button on screens wider than 700 px.
 - On Home, crossing a phone or tablet breakpoint with search open or focused keeps keyboard focus on the search trigger.
 - Home search opens over the site name in the phone bar and the 701–1200 px top row, with results below and existing focus/history behavior preserved (`G26_home_search_over_name.spec.ts`).
 - Dataset hero tools get a rule before Categories and decorative search/filter/reset/chevron icons; Finnish/English sort labels omit “Sort” while preserving administrator edits (WO50).

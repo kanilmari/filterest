@@ -62,6 +62,10 @@ func saveFrontPageAdminRequest(ctx context.Context, request frontPageAdminReques
 		return "", saveFrontPageHero(tx, *request.Hero)
 	}
 	if request.Settings != nil {
+		homeButtonOnWideScreens, err := parseHomeTopBarSetting(request.Settings.ShowHomeButtonInTopBarOnWideScreens)
+		if err != nil {
+			return "", err
+		}
 		// Older clients may omit the new switch and must preserve its stored value.
 		settings := []struct {
 			key   string
@@ -75,6 +79,12 @@ func saveFrontPageAdminRequest(ctx context.Context, request frontPageAdminReques
 				key   string
 				value bool
 			}{"front_page_show_blocks", *request.Settings.FrontPageShowBlocks})
+		}
+		if homeButtonOnWideScreens != nil {
+			settings = append(settings, struct {
+				key   string
+				value bool
+			}{"show_home_button_in_top_bar_on_wide_screens", *homeButtonOnWideScreens})
 		}
 		if request.Settings.DisplayIndexHTMLAtStartup != nil {
 			settings = append(settings, struct {

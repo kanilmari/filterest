@@ -19,8 +19,12 @@ vi.mock('../admin_tools/front_page_settings_modal.js', () => ({ createFrontPageS
 vi.mock('../lang/translation_handler.js', () => ({ getTranslationForKey: (_key, options) => options.fallback }));
 import { createFrontPageTopRow } from './front_page_top_row_builder.js';
 import { HOME_AVAILABILITY_CHANGED_EVENT, setFrontPageAvailability } from './front_page_availability.js';
-beforeEach(() => mocks.unsubscribe.mockClear());
-afterEach(() => { document.head.replaceChildren(); document.body.className = ''; vi.unstubAllGlobals(); });
+beforeEach(() => {
+    mocks.unsubscribe.mockClear();
+    vi.spyOn(window, 'innerWidth', 'get').mockReturnValue(1440);
+    setFrontPageAvailability({ show_home_button_in_top_bar_on_wide_screens: true, separate_front_page: true });
+});
+afterEach(() => { document.head.replaceChildren(); document.body.className = ''; vi.unstubAllGlobals(); vi.restoreAllMocks(); });
 
 test.each(['light', 'dark'])('Home %s icon follows theme in the real phone projection and releases it on destroy', async theme => {
     const { mountFrontPagePhoneLayout } = await import('./front_page_phone_layout.js');
@@ -51,7 +55,7 @@ test.each(['light', 'dark'])('Home %s icon follows theme in the real phone proje
 });
 
 test('the current Home control follows live availability without moving menu focus', () => {
-    setFrontPageAvailability({ separate_front_page: true });
+    setFrontPageAvailability({ show_home_button_in_top_bar_on_wide_screens: true, separate_front_page: true });
     document.body.innerHTML = '<div id="navbar" class="collapsed"></div><button id="showMenuButton"></button>';
     const row = createFrontPageTopRow('Site'); document.body.append(row.element); row.mount();
     const menu = document.getElementById('showMenuButton');
@@ -62,9 +66,9 @@ test('the current Home control follows live availability without moving menu foc
     menu.focus();
     try {
         for (const enabled of [true, false, true]) {
-            setFrontPageAvailability({ separate_front_page: enabled });
+            setFrontPageAvailability({ show_home_button_in_top_bar_on_wide_screens: true, separate_front_page: enabled });
             window.dispatchEvent(new Event(HOME_AVAILABILITY_CHANGED_EVENT));
-            expect(home.hidden).toBe(!enabled);
+            expect(row.element.querySelectorAll('.top-nav-home-button')).toHaveLength(enabled ? 1 : 0);
             expect(document.activeElement).toBe(menu);
             expect(home.getAttribute('aria-current')).toBe('page');
         }
@@ -96,7 +100,7 @@ test('Home tabs have no active dataset, update from the shared model and unsubsc
 test('Home remains reachable when there are no dataset tabs', () => {
     const previous = mocks.snapshot;
     mocks.snapshot = [];
-    setFrontPageAvailability({ separate_front_page: true });
+    setFrontPageAvailability({ show_home_button_in_top_bar_on_wide_screens: true, separate_front_page: true });
     const row = createFrontPageTopRow('Site');
     try {
         const tabs = row.element.querySelector('.hero-dataset-tabs');
@@ -196,3 +200,19 @@ test('Home follows the initial collapsed state until the animated menu entrance 
         expect(document.activeElement).toBe(close);
     } finally { row.destroy(); vi.useRealTimers(); localStorage.clear(); setFrontPageAvailability({}); }
 });
+
+test.each([false, true].flatMap(enabled => [390, 700, 701, 1440].map(width => [enabled, width])))(
+    'native Home top row opt-in=%s at %spx also reconciles live resize', (enabled, width) => {
+        vi.spyOn(window, 'innerWidth', 'get').mockReturnValue(width);
+        setFrontPageAvailability({ separate_front_page: true, show_home_button_in_top_bar_on_wide_screens: enabled });
+        const row = createFrontPageTopRow('Site'); document.body.append(row.element);
+        try {
+            expect(row.element.querySelectorAll('.top-nav-home-button')).toHaveLength(enabled && width > 700 ? 1 : 0);
+            vi.spyOn(window, 'innerWidth', 'get').mockReturnValue(390);
+            window.dispatchEvent(new Event('resize'));
+            expect(row.element.querySelector('.top-nav-home-button')).toBeNull();
+            vi.spyOn(window, 'innerWidth', 'get').mockReturnValue(701);
+            window.dispatchEvent(new Event('resize'));
+            expect(row.element.querySelectorAll('.top-nav-home-button')).toHaveLength(enabled ? 1 : 0);
+        } finally { row.destroy(); row.element.remove(); }
+    });

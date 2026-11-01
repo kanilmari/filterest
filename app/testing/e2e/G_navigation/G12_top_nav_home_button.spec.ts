@@ -1,7 +1,7 @@
 // G12_top_nav_home_button.spec.ts
 // Proves Home placement, original bar visibility and live authoritative availability.
 // Every Home/settings response is intercepted; no settings POST reaches any server.
-// Before/after screenshots live under test-results; G11 proves menu → Home → dataset.
+// Before/after screenshots live under test-results; phones keep Home in the menu.
 import { test, expect, type Page } from '@playwright/test';
 import { installHomePolicy, openHomeProbeDataset, captureHomeProbe, probePhase } from '../helpers/home-policy-fixture';
 import { ensureNavbarVisible } from '../helpers/navbar';
@@ -18,8 +18,8 @@ for (const language of ['fi', 'en']) for (const theme of ['light', 'dark'] as co
     await page.emulateMedia({ colorScheme: theme === 'light' ? 'dark' : 'light' });
     await installHomePolicy(context, theme);
     const expected = language === 'fi'
-      ? ['Etusivu', 'Matkailupalvelut ja pitkät paikalliset matkatarjoukset']
-      : ['Home', 'Travel services and local offers'];
+      ? ['Matkailupalvelut ja pitkät paikalliset matkatarjoukset']
+      : ['Travel services and local offers'];
     let homeRequested!: () => void;
     const homeRead = new Promise<void>(resolve => { homeRequested = resolve; });
     await context.route(/\/api\/front-page(?:\?.*)?$/, async route => {
@@ -60,7 +60,7 @@ for (const language of ['fi', 'en']) for (const theme of ['light', 'dark'] as co
         const row = root?.querySelector('.front-page-top-row');
         const hero = root?.querySelector('.front-page-hero');
         const labels = [...(row?.querySelectorAll('.navbar-front-page-label, .hero-dataset-tabs__label') || [])];
-        if (hero && row && labels.length >= 2 && labels.every(label => label.getBoundingClientRect().width > 0)) {
+        if (hero && row && labels.length >= 1 && labels.every(label => label.getBoundingClientRect().width > 0)) {
           start ??= time;
           probe.samples.push({ time: time - start, labels: labels.map(label => {
             const box = label.getBoundingClientRect();
@@ -205,7 +205,7 @@ for (const width of [1920, 1440, 1000]) for (const theme of ['light', 'dark'] as
 }
 
 for (const width of [375, 390, 768, 1920]) for (const theme of ['light', 'dark'] as const) {
-  test(`${width}px dataset keeps one larger Home in the existing compact bar in ${theme}`, async ({ page, context }, info) => {
+  test(`${width}px dataset applies wide-only Home in the existing compact bar in ${theme}`, async ({ page, context }, info) => {
     test.setTimeout(60_000);
     await page.setViewportSize({ width, height: 844 });
     await page.emulateMedia({ colorScheme: theme === 'light' ? 'dark' : 'light' });
@@ -214,7 +214,8 @@ for (const width of [375, 390, 768, 1920]) for (const theme of ['light', 'dark']
       await openHomeProbeDataset(page, menuOpen);
       const parts = page.locator('#app_service_catalog_tab_parts_container');
       if (width <= 700) await expect(parts.locator('.filterbar-inline-hero .hero-dataset-tabs')).toBeHidden();
-      await expect(parts.locator('.top-nav-home-button')).toHaveCount(1);
+      await expect(parts.locator('.top-nav-home-button')).toHaveCount(width > 700 ? 1 : 0);
+      if (width <= 700) continue;
       if (width > 700) {
         await parts.locator('.filterbar-inline-hero').evaluate(hero => {
           const scroller = hero.closest('.scrollable_content')!;
@@ -321,9 +322,13 @@ for (const width of [1440, 1000, 375]) for (const theme of ['light', 'dark'] as 
         await captureHomeProbe(page, info, `${width}-${theme}-${enabled ? 'on' : 'off'}-${view}-${menuOpen ? 'open' : 'closed'}`);
         if (probePhase === 'before') continue;
         const home = page.getByTestId('top-nav-home-button').filter({ visible: true });
-        await expect(home).toHaveCount(enabled ? 1 : 0);
+        await expect(home).toHaveCount(enabled && width > 700 ? 1 : 0);
         if (!enabled) {
           await expect(page.locator('#navbarFrontPage a')).toHaveCount(0);
+          continue;
+        }
+        if (width <= 700) {
+          await expect(page.locator('#navbarFrontPage a')).toHaveAttribute('href', '/');
           continue;
         }
         await expect(home).toHaveAccessibleName(/\S/);

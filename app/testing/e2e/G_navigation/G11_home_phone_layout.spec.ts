@@ -59,7 +59,7 @@ async function expectFocusWithMenuOwner(page: Page, control: Locator, message?: 
   }
 }
 
-// Batch 565 adds a keyboard stop between the phone menu controls and Home.
+// Phone search is the keyboard stop between the menu and dataset navigation.
 async function expectPhoneSearchFocus(page: Page) {
   const search = page.locator('.front-page-search-button');
   await expectFocusWithMenuOwner(page, search, 'Batch 565: Tab reaches the phone search button before Home');
@@ -201,11 +201,14 @@ async function proveHome(page: Page, open: boolean, alignment: string, cappedMar
   const icon = page.locator('.front-page-site-icon');
   const menu = page.locator('#showMenuButton');
   const home = page.locator('.front-page-top-row .top-nav-home-button');
+  if (phone) await expect(home).toHaveCount(0);
+  else {
   await expect(home).toBeVisible();
   expect(await home.evaluate(element => element === element.parentElement!.firstElementChild)).toBe(true);
   await expect(home).toHaveCSS('height', '44px');
   await expect(home.locator('.navbar-front-page-icon')).toHaveCSS('width', '24px');
   await expect(home.locator('.navbar-front-page-icon')).toHaveCSS('height', '24px');
+  }
   await expect(page.locator('.front-page-top-row .filterbar-inline-hero__actions .top-nav-home-button')).toHaveCount(0);
   await expect(name).toBeVisible();
   const close = page.locator('#hideMenuButton');
@@ -277,8 +280,7 @@ async function proveHome(page: Page, open: boolean, alignment: string, cappedMar
     await expect.poll(() => buttons.evaluateAll(elements => elements.every(element =>
       !(element as HTMLButtonElement).hidden && getComputedStyle(element).display !== 'none'))).toBe(true);
     const destinations = tabs.locator(':scope > :is(a.top-nav-home-button, button)');
-    await expect(destinations).toHaveCount(3);
-    await expect(home.locator('.navbar-front-page-label')).toBeVisible();
+    await expect(destinations).toHaveCount(2);
     const boxes = await destinations.evaluateAll(elements => elements.map(element => {
       const box = element.getBoundingClientRect();
       return { x: box.x, y: box.y, width: box.width, height: box.height };
@@ -311,26 +313,21 @@ async function proveHome(page: Page, open: boolean, alignment: string, cappedMar
             && !element.closest('[hidden], [inert], [aria-hidden="true"]')
             && element.getClientRects().length > 0 && getComputedStyle(element).visibility === 'visible')
           .sort((a, b) => (a.element.tabIndex || Number.MAX_SAFE_INTEGER) - (b.element.tabIndex || Number.MAX_SAFE_INTEGER));
-        const home = stops.findIndex(({ element }) => element.matches('.front-page-top-row .top-nav-home-button'));
+        const firstDataset = stops.findIndex(({ element }) => element.matches('.front-page-top-row .hero-dataset-tabs__button'));
         const search = stops.findIndex(({ element }) => element.matches('.front-page-search-button'));
         const drawer = stops.map(({ element }, index) => element.closest('#navbar') ? index : -1);
-        return { home, search, lastDrawer: Math.max(...drawer),
-          beforeHome: stops[home - 1]?.index ?? -1, beforeSearch: stops[search - 1]?.index ?? -1 };
+        return { firstDataset, search, lastDrawer: Math.max(...drawer),
+          beforeFirstDataset: stops[firstDataset - 1]?.index ?? -1, beforeSearch: stops[search - 1]?.index ?? -1 };
       });
       expect(order.lastDrawer, 'Batch 565: the open drawer contributes keyboard controls').toBeGreaterThanOrEqual(0);
       expect(order.search, 'Batch 565: phone search follows the drawer controls in document tab order').toBeGreaterThan(order.lastDrawer);
-      expect(order.home, 'Batch 565: Home immediately follows phone search in document tab order').toBe(order.search + 1);
-      await expect(controls.nth(order.beforeHome), 'Batch 565: the derived control preceding Home is phone search').toHaveClass(/\bfront-page-search-button\b/);
+      expect(order.firstDataset, 'Batch 565: The first dataset immediately follows phone search in document tab order').toBe(order.search + 1);
+      await expect(controls.nth(order.beforeFirstDataset), 'Batch 565: the derived control preceding the first dataset is phone search').toHaveClass(/\bfront-page-search-button\b/);
       beforeTabs = controls.nth(order.beforeSearch);
     }
     await beforeTabs.focus(); await beforeTabs.press('Tab');
     const search = await expectPhoneSearchFocus(page);
     await search.press('Tab');
-    await expectFocusWithMenuOwner(page, home, 'Batch 565: Tab from phone search reaches Home');
-    await expect(home).toHaveCSS('outline-style', 'solid');
-    await expect(home).toHaveCSS('outline-width', '2px');
-    await expect(home).toHaveCSS('outline-offset', '-2px');
-    await home.press('Tab');
     await expectFocusWithMenuOwner(page, buttons.first());
     await expect(buttons.first()).toHaveCSS('outline-style', 'solid');
     await expect(buttons.first()).toHaveCSS('outline-width', '2px');
@@ -436,16 +433,20 @@ async function proveKeyboardMenu(page: Page, state: { alignment: string; cappedM
   }
   const menu = page.locator('#showMenuButton');
   const home = page.locator('.front-page-top-row .top-nav-home-button');
+  const firstDataset = page.locator('.front-page-top-row .hero-dataset-tabs > button:visible').first();
   await menu.focus(); await menu.press('Tab');
   if (page.viewportSize()!.width <= 700) {
     const search = await expectPhoneSearchFocus(page);
-    await search.press('Tab');
+    // K529: phones have no top-bar Home, so phone search leads to the first dataset.
+    if (await firstDataset.count()) {
+      await search.press('Tab'); await expectFocusWithMenuOwner(page, firstDataset);
+    }
+    return;
   }
-  await expectFocusWithMenuOwner(page, home, 'Batch 565: Tab reaches Home after the phone search stop when present');
+  await expectFocusWithMenuOwner(page, home, 'Tab from the menu reaches Home on wider screens');
   await expect(home).toHaveAccessibleName(/\S/);
   await expect(home).toHaveCSS('outline-width', '2px');
   await expect(home).toHaveCSS('outline-offset', '-2px');
-  const firstDataset = page.locator('.front-page-top-row .hero-dataset-tabs > button:visible').first();
   if (await firstDataset.count()) {
     await home.press('Tab'); await expectFocusWithMenuOwner(page, firstDataset);
   }

@@ -13,7 +13,8 @@ import { HOME_PALETTE_COPY } from '../admin_tools/home_palette_copy.js';
 import { getPaletteCopy } from '../admin_tools/presentation_palette_shell.js';
 import { showToast } from '../../reusable_components/notifications/toast_notification_printer.js';
 import { createFrontPageSettingsHeroButton } from '../admin_tools/front_page_settings_modal.js';
-import { canShowFrontPageLink, createFrontPageLink, refreshFrontPageLinkLabel } from './front_page_link.js';
+import { refreshFrontPageLinkLabel } from './front_page_link.js';
+import { canShowTopNavHomeButton, createTopNavHomeButton } from './top_nav_home_button.js';
 import { HOME_AVAILABILITY_CHANGED_EVENT } from './front_page_availability.js';
 import { mountFrontPageDesktopSearch } from './front_page_desktop_search_controller.js';
 
@@ -46,18 +47,23 @@ export function createFrontPageTopRow(siteName, onSaved, paletteOptions = {}, { 
     title.title = title.textContent;
     start.append(menuSlot, icon, title);
     const tabs = createHeroDatasetTabs(undefined, { language });
-    const homeLink = createFrontPageLink({ topNavigation: true, current: true, language });
-    // Keep the native Home surface and menu → Home → dataset keyboard order.
-    tabs.element.prepend(homeLink);
-    tabs.element.hidden = false;
+    let homeLink = null;
     const actions = document.createElement('div');
     actions.className = 'filterbar-inline-hero__actions';
     function syncHomeAvailability() {
-        homeLink.hidden = !canShowFrontPageLink(localStorage.getItem('button_state') === 'logout');
-        refreshFrontPageLinkLabel(homeLink, language);
+        if (!canShowTopNavHomeButton()) {
+            homeLink?.remove();
+            homeLink = null;
+        } else {
+            homeLink ||= createTopNavHomeButton({ current: true, language });
+            if (!homeLink.parentElement) tabs.element.prepend(homeLink);
+            refreshFrontPageLinkLabel(homeLink, language);
+        }
+        tabs.element.hidden = !tabs.element.children.length;
     }
     syncHomeAvailability();
     window.addEventListener(HOME_AVAILABILITY_CHANGED_EVENT, syncHomeAvailability);
+    window.addEventListener('resize', syncHomeAvailability);
     const gear = createFrontPageSettingsHeroButton(onSaved);
     if (gear) actions.append(gear);
     let destroyed = false;
@@ -124,6 +130,7 @@ export function createFrontPageTopRow(siteName, onSaved, paletteOptions = {}, { 
             tabs.destroy();
             window.removeEventListener(NAVBAR_VISIBILITY_CHANGED_EVENT, syncMenu);
             window.removeEventListener(HOME_AVAILABILITY_CHANGED_EVENT, syncHomeAvailability);
+            window.removeEventListener('resize', syncHomeAvailability);
             window.removeEventListener('resize', syncMenu);
             const menuIsFocused = menuButton && document.activeElement === menuButton;
             if (menuButton && bookmark.parentNode) bookmark.replaceWith(menuButton);

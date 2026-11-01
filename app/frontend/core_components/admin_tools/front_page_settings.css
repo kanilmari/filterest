@@ -48,6 +48,12 @@
     cursor: pointer;
 }
 
+/* Native disabled behavior and a theme-independent muted label stay together. */
+.front-page-settings-checkbox:has(input:disabled) {
+    opacity: 0.55;
+    cursor: default;
+}
+
 .front-page-settings-view :is(input, select, button) {
     box-sizing: border-box;
     min-height: 44px;

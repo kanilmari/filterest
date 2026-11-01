@@ -38,7 +38,7 @@ async function geometry(parts: Locator) {
   });
 }
 
-async function expectMainGeometry(parts: Locator, width: number, compact = width <= 700) {
+async function expectMainGeometry(parts: Locator, compact = false) {
   const page = parts.page();
   await settleFit(page);
   const actual = await geometry(parts);
@@ -60,11 +60,11 @@ async function expectMainGeometry(parts: Locator, width: number, compact = width
     await settleFit(page);
   }
   expect(actual.home.height).toBe(44);
-  if (width > 700 && !compact) {
+  if (!compact) {
     expect(actual.rowHeight).toBe(44);
     expect(actual.datasetHeights.some(height => height > 0)).toBe(true);
     expect(actual.datasetHeights.filter(height => height > 0).every(height => height === 44)).toBe(true);
-  } else if (width <= 700) expect(actual.rowHeight).toBe(0); // Main hides the hero row on phones.
+  }
   return { actual, main: main! };
 }
 
@@ -72,23 +72,33 @@ async function expectEndPair(parts: Locator, width: number, compact = width <= 7
   const surface = parts.locator(compact ? '.dataset-shared-topbar' : '.filterbar-inline-hero');
   const home = surface.locator('.top-nav-home-button:visible');
   const panel = surface.locator('.filterbar-fixed-toggle:visible');
-  await expect(home).toHaveCount(1); await expect(panel).toHaveCount(1);
-  const homeHost = compact ? width <= 700 ? 'dataset-shared-topbar__slot--start'
-    : 'dataset-shared-topbar__slot--end' : 'hero-dataset-tabs';
-  await expect.poll(() => home.evaluate((element, host) => element.parentElement!.classList.contains(host), homeHost)).toBe(true);
+  const searchToggle = surface.getByTestId('mobile-search-toggle');
+  await expect(panel).toHaveCount(1);
   expect(await panel.evaluate(element => element === element.parentElement!.lastElementChild)).toBe(true);
-  expect(await home.evaluate(element => Boolean(element.compareDocumentPosition(
-    element.closest('.tab_parts_container')!.querySelector('.filterbar-fixed-toggle')!) & Node.DOCUMENT_POSITION_FOLLOWING))).toBe(true);
-  const h = (await home.boundingBox())!, p = (await panel.boundingBox())!;
-  expect(h.x + h.width).toBeLessThanOrEqual(p.x);
+  const p = (await panel.boundingBox())!;
   const rightEdges = await surface.locator('button:visible, a:visible').evaluateAll(elements =>
     elements.map(element => element.getBoundingClientRect().right));
   expect(Math.max(...rightEdges)).toBeLessThanOrEqual(p.x + p.width + 1);
   expect(p.x + p.width).toBeLessThanOrEqual(parts.page().viewportSize()!.width);
+  // K529: phones have no top-bar Home; their search toggle leads straight to the panel.
+  if (width <= 700) {
+    await expect(parts.locator('.top-nav-home-button')).toHaveCount(0);
+    await searchToggle.focus(); await searchToggle.press('Tab');
+    await expect(panel).toBeFocused();
+    return;
+  }
+  await expect(home).toHaveCount(1);
+  const homeHost = compact ? 'dataset-shared-topbar__slot--end' : 'hero-dataset-tabs';
+  await expect.poll(() => home.evaluate((element, host) => element.parentElement!.classList.contains(host), homeHost)).toBe(true);
+  expect(await home.evaluate(element => Boolean(element.compareDocumentPosition(
+    element.closest('.tab_parts_container')!.querySelector('.filterbar-fixed-toggle')!) & Node.DOCUMENT_POSITION_FOLLOWING))).toBe(true);
+  const h = (await home.boundingBox())!;
+  expect(h.x + h.width).toBeLessThanOrEqual(p.x);
   if (compact) {
     await home.focus(); await home.press('Tab');
-    if (width <= 700) {
-      await expect(surface.getByTestId('mobile-search-toggle')).toBeFocused();
+    // A long dataset name turns the search into a button, which stays between Home and the panel.
+    if (await searchToggle.isVisible()) {
+      await expect(searchToggle).toBeFocused();
       await parts.page().keyboard.press('Tab');
     }
     await expect(panel).toBeFocused();
@@ -107,7 +117,8 @@ const labels = [
   { name: 'translated', value: '' }, { name: 'site name', value: 'Fintravel' },
   { name: 'long site name', value: 'Fintravel kansainvälinen matkailu ja paikalliset kulttuurielämykset '.repeat(8) },
 ];
-for (const width of [1440, 1000, 700, 390]) for (const theme of ['light', 'dark'] as const) for (const label of labels) {
+// K529: a phone's bar has no Home, so a site's label can't change it; one label per phone case.
+for (const width of [1440, 1000, 700, 390]) for (const theme of ['light', 'dark'] as const) for (const label of width <= 700 ? labels.slice(0, 1) : labels) {
   test(`WO96 original hosts/order/geometry/fitter: ${label.name} at ${width}px/${theme}`, async ({ page, context }, info) => {
     test.setTimeout(120_000);
     await page.setViewportSize({ width, height: 900 });
@@ -133,10 +144,15 @@ for (const width of [1440, 1000, 700, 390]) for (const theme of ['light', 'dark'
       await closeActiveFilterbarIfOpen(page, parts);
       await expect(page.locator('body')).toHaveClass(new RegExp(`(^| )${theme}-mode( |$)`));
       await expect(page.locator('html')).toHaveAttribute('lang', 'fi');
-      await expect(parts.locator('.navbar-front-page-label')).toHaveText(label.value || /\S/);
-      await info.attach('main-geometry', {
-        body: JSON.stringify(await expectMainGeometry(parts, width)), contentType: 'application/json',
-      });
+      const phone = width <= 700;
+      if (phone) { // Main hides the hero row on phones.
+        expect(await parts.locator('.filterbar-inline-hero__top-row').evaluate(row => row.getBoundingClientRect().height)).toBe(0);
+      } else {
+        await expect(parts.locator('.navbar-front-page-label')).toHaveText(label.value || /\S/);
+        await info.attach('main-geometry', {
+          body: JSON.stringify(await expectMainGeometry(parts)), contentType: 'application/json',
+        });
+      }
       const hero = parts.locator('.filterbar-inline-hero');
       const compact = parts.locator('.dataset-shared-topbar');
       await expectEndPair(parts, width);
@@ -156,7 +172,7 @@ for (const width of [1440, 1000, 700, 390]) for (const theme of ['light', 'dark'
           if (label.name === 'long site name') await expect(parts.locator('.top-nav-home-button')).toHaveClass(/top-nav-home-button--compact/);
           await expect(first).toBeVisible();
           await info.attach('crowded-main-geometry-and-fit', {
-            body: JSON.stringify(await expectMainGeometry(parts, width)), contentType: 'application/json',
+            body: JSON.stringify(await expectMainGeometry(parts)), contentType: 'application/json',
           });
           await expectEndPair(parts, width);
         } finally {
@@ -173,14 +189,15 @@ for (const width of [1440, 1000, 700, 390]) for (const theme of ['light', 'dark'
       await expect(parts).toHaveAttribute('data-shared-topbar-visible', 'true');
       await expect.poll(() => compact.evaluate(element => element.getAnimations().length)).toBe(0);
       await expectEndPair(parts, width, true);
-      await info.attach('compact-main-geometry', {
-        body: JSON.stringify(await expectMainGeometry(parts, width, true)), contentType: 'application/json',
+      if (!phone) await info.attach('compact-main-geometry', {
+        body: JSON.stringify(await expectMainGeometry(parts, true)), contentType: 'application/json',
       });
       await page.screenshot({ path: info.outputPath('dataset-compact.png') });
       for (const resized of [width === 390 ? 1440 : 390, width]) {
         await page.setViewportSize({ width: resized, height: 900 });
         await settleFit(page); await expectEndPair(parts, resized, true);
       }
+      if (phone) return; // No top-bar Home to follow forward and back.
       await compact.locator('.top-nav-home-button').click();
       await expect(page.locator('#front_page_container')).toHaveAttribute('aria-busy', 'false');
       await expect(page.locator('#front_page_container .top-nav-home-button')).toHaveAttribute('aria-current', 'page');

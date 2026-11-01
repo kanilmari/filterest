@@ -45,7 +45,7 @@ test.each(['fi', 'en'])('cold %s Home mounts chosen labels before the later page
     const { renderFrontPage } = await import('./front_page_printer.js');
     const { translatePage } = await import('../lang/translation_handler.js');
     const { setFrontPageAvailability } = await import('./front_page_availability.js');
-    setFrontPageAvailability({ separate_front_page: true });
+    setFrontPageAvailability({ separate_front_page: true, show_home_button_in_top_bar_on_wide_screens: true });
     page = renderFrontPage();
     await vi.waitFor(() => expect(mocks.request.mock.calls.some(([name]) => name === 'translations')).toBe(true));
     expect(labels()).toHaveLength(0);

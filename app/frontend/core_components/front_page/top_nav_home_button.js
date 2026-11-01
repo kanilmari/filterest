@@ -1,12 +1,21 @@
 // top_nav_home_button.js
-// Keeps one Home link reachable in the active dataset's header or compact bar.
+// Keeps an opted-in Home link in wide Home/dataset headers or the compact bar.
 // Reuses the menu's link, including translations, gestures and custom root handling.
 // Moving the same node avoids duplicate controls during header transitions.
 import { canShowFrontPageLink, createFrontPageLink } from './front_page_link.js';
+import { isHomeButtonInTopBarOnWideScreensEnabled } from './front_page_availability.js';
+import { LAYOUT_BREAKPOINTS } from '../../ui_config.js';
 
-export function createTopNavHomeButton() {
+/** Menu availability stays independent; phones never render a top-bar Home. */
+export function canShowTopNavHomeButton() {
     return canShowFrontPageLink(localStorage.getItem('button_state') === 'logout')
-        ? createFrontPageLink({ topNavigation: true }) : null;
+        && window.innerWidth > LAYOUT_BREAKPOINTS.phone
+        && isHomeButtonInTopBarOnWideScreensEnabled();
+}
+
+export function createTopNavHomeButton(options = {}) {
+    return canShowTopNavHomeButton()
+        ? createFrontPageLink({ ...options, topNavigation: true }) : null;
 }
 
 export function placeTopNavHomeButton(link, host) {
@@ -16,9 +25,7 @@ export function placeTopNavHomeButton(link, host) {
     link.classList.toggle('hero-dataset-tabs__button', inHero);
     // Keep tab colours and typography; shared Home CSS owns its larger target.
     link.classList.toggle('navbar-front-page-link', !inHero);
-    // Phone's start slot already owns the menu: native tab order follows it.
-    if (host.classList.contains('dataset-shared-topbar__slot--start')) host.append(link);
-    else host.prepend(link);
+    host.prepend(link);
     // The dataset navigation may have no ordinary tabs, but still has Home.
     host.hidden = false;
     if (focused) link.focus({ preventScroll: true });

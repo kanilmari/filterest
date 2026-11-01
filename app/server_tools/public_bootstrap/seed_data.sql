@@ -8204,6 +8204,61 @@ SELECT id, 'code', CASE WHEN lang_key = 'table_cell_max_lines_invalid'
 FROM public.system_lang_keys WHERE lang_key IN
     ('table_view_settings', 'table_cell_max_lines_label', 'table_cell_max_lines_help', 'table_cell_max_lines_invalid')
 ON CONFLICT (lang_key_id, source_type, source_high) DO NOTHING;
+-- 20261029000100_add_home_top_bar_setting.sql
+-- Adds the site-wide Home top-bar opt-in and its Finnish/English editor label.
+-- Connects upgraded sites and fresh bootstrap to the same false default.
+-- Replay preserves administrator choices and reviewed copy in both stores.
+-- VERSION_DB: 9.13.3
+-- VERSION_DB_OWNER: 20261029000199_record_database_release_9_13_3.sql
+
+INSERT INTO public.system_config (key, boolean_value, json_value, text_value, value_type, creation_spec)
+SELECT 'show_home_button_in_top_bar_on_wide_screens', false, '{"value":false}'::jsonb, 'false', 2,
+    'Show the Home button in the top bar only above the phone breakpoint; site-wide, opt-in.'
+WHERE NOT EXISTS (SELECT 1 FROM public.system_config WHERE key = 'show_home_button_in_top_bar_on_wide_screens');
+
+WITH authored_keys(lang_key, fi, en) AS (VALUES
+    ('show_home_button_in_top_bar_on_wide_screens', 'Näytä Etusivu-painike yläpalkissa leveillä näytöillä', 'Show the Home button in the top bar on wide screens')
+), resolved AS (
+    SELECT copy.lang_key,
+        COALESCE(CASE WHEN NULLIF(btrim(keys.fi), '') IS NOT NULL THEN keys.fi END,
+            CASE WHEN NULLIF(btrim(fi.translation), '') IS NOT NULL THEN fi.translation END, copy.fi) AS fi,
+        COALESCE(CASE WHEN NULLIF(btrim(keys.en), '') IS NOT NULL THEN keys.en END,
+            CASE WHEN NULLIF(btrim(en.translation), '') IS NOT NULL THEN en.translation END, copy.en) AS en
+    FROM authored_keys copy
+    LEFT JOIN public.system_lang_keys keys USING (lang_key)
+    LEFT JOIN public.system_lang_key_translations fi ON fi.lang_key_id = keys.id AND fi.language_code = 'fi'
+    LEFT JOIN public.system_lang_key_translations en ON en.lang_key_id = keys.id AND en.language_code = 'en'
+), written AS (
+    INSERT INTO public.system_lang_keys AS existing (lang_key, fi, en, creation_spec)
+    SELECT lang_key, fi, en, 'WO109 K529: site-wide Home top-bar opt-in; never shown on phones.' FROM resolved
+    ON CONFLICT (lang_key) DO UPDATE
+    SET fi = CASE WHEN NULLIF(btrim(existing.fi), '') IS NULL THEN EXCLUDED.fi ELSE existing.fi END,
+        en = CASE WHEN NULLIF(btrim(existing.en), '') IS NULL THEN EXCLUDED.en ELSE existing.en END
+    WHERE NULLIF(btrim(existing.fi), '') IS NULL OR NULLIF(btrim(existing.en), '') IS NULL
+    RETURNING id, lang_key, fi, en
+), served AS (
+    SELECT * FROM written UNION ALL
+    SELECT k.id, k.lang_key, k.fi, k.en FROM public.system_lang_keys k JOIN authored_keys USING (lang_key)
+    WHERE k.id NOT IN (SELECT id FROM written)
+)
+INSERT INTO public.system_lang_key_translations AS existing
+    (lang_key_id, language_code, translation, source_kind, review_status)
+SELECT s.id, translated.language_code, translated.translation, 'manual', 'approved'
+FROM served s
+CROSS JOIN LATERAL (VALUES ('fi', s.fi), ('en', s.en)) AS translated(language_code, translation)
+JOIN public.system_languages language ON language.language_code = translated.language_code
+ON CONFLICT (lang_key_id, language_code) DO UPDATE
+SET translation = EXCLUDED.translation, source_kind = EXCLUDED.source_kind, review_status = EXCLUDED.review_status
+WHERE NULLIF(btrim(existing.translation), '') IS NULL;
+
+INSERT INTO public.system_lang_key_sources
+    (lang_key_id, source_type, source_high, source_low, usage_explanation, last_seen)
+SELECT keys.id, 'code', source.path, '', source.explanation, CURRENT_DATE
+FROM public.system_lang_keys keys
+JOIN (VALUES
+    ('show_home_button_in_top_bar_on_wide_screens', 'frontend/core_components/admin_tools/front_page_settings_view.js', 'Site-wide Home settings: opt in to the Home button above the phone breakpoint, disabled while Home is off.')
+) AS source(lang_key, path, explanation) ON source.lang_key = keys.lang_key
+ON CONFLICT (lang_key_id, source_type, source_high) DO NOTHING;
 
 -- Drain article events before the next data migration without changing other constraints.
 DO $article_bundle_seed_boundary$
@@ -10136,9 +10191,11 @@ BEGIN
       ('20261024000099_record_database_release_9_13_1.sql', 'c27e8f819cd77dbedab6ffb87dbb884fe71d6a9118740682f7375db33b8b581c', 'bootstrap_baseline', 'bootstrap'),
       ('20261029000001_seed_hero_sort_language_keys.sql', 'e48a5601de6067ded243bfbac5057691ef03772ff0b3c6c61770dd166e74e4d2', 'bootstrap_baseline', 'bootstrap'),
       ('20261029000002_replace_legacy_finnish_sort_labels.sql', '64a15fa425e02748fa1d3c34d8c739fd3a10165afe95a236c1ce858132fa1965', 'bootstrap_baseline', 'bootstrap'),
-      ('20261029000099_record_database_release_9_13_2.sql', '9265ed9991ec8fb134cf9e39c6ba44209d274358b0911fb0401641ddf1296a29', 'bootstrap_baseline', 'bootstrap')
+      ('20261029000099_record_database_release_9_13_2.sql', '9265ed9991ec8fb134cf9e39c6ba44209d274358b0911fb0401641ddf1296a29', 'bootstrap_baseline', 'bootstrap'),
+      ('20261029000100_add_home_top_bar_setting.sql', '342ffd7325b21cc0a620951cb6692f3ad5abbbbc56371eefbf495151b99bcb44', 'bootstrap_baseline', 'bootstrap'),
+      ('20261029000199_record_database_release_9_13_3.sql', 'd97b6dc8139cc2fbcc9f17e532ff305c94012b1aeee9454148da2a2651443da4', 'bootstrap_baseline', 'bootstrap')
     ON CONFLICT (filename) DO NOTHING;
     INSERT INTO public.system_db_version (version, description)
-    VALUES ('9.13.2', 'Filterest generated public bootstrap');
+    VALUES ('9.13.3', 'Filterest generated public bootstrap');
 END
 $filterest_acceptance$;

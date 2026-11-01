@@ -16,10 +16,11 @@ import (
 )
 
 type FrontPageSettings struct {
-	DisplayIndexHTMLAtStartup    bool `json:"display_index_html_at_startup"`
-	SeparateFrontPage            bool `json:"separate_front_page"`
-	FrontPageButtonShowsSiteName bool `json:"front_page_button_shows_site_name"`
-	FrontPageShowBlocks          bool `json:"front_page_show_blocks"`
+	DisplayIndexHTMLAtStartup           bool `json:"display_index_html_at_startup"`
+	SeparateFrontPage                   bool `json:"separate_front_page"`
+	FrontPageButtonShowsSiteName        bool `json:"front_page_button_shows_site_name"`
+	FrontPageShowBlocks                 bool `json:"front_page_show_blocks"`
+	ShowHomeButtonInTopBarOnWideScreens bool `json:"show_home_button_in_top_bar_on_wide_screens"`
 }
 
 type FrontPageBackground struct {
@@ -57,6 +58,19 @@ func ReadFrontPageSettings(ctx context.Context, db *sql.DB) (FrontPageSettings, 
 	settings.DisplayIndexHTMLAtStartup, err = ReadDisplayIndexHTMLAtStartup(ctx, db)
 	if err != nil {
 		return FrontPageSettings{}, err
+	}
+	// Disabled Home never depends on the optional top-bar setting, even if an
+	// old imported row is malformed. Both internal and custom-root Home use it.
+	if settings.SeparateFrontPage || settings.DisplayIndexHTMLAtStartup {
+		var value sql.NullBool
+		err := db.QueryRowContext(ctx, `SELECT boolean_value FROM public.system_config WHERE key = $1`, "show_home_button_in_top_bar_on_wide_screens").Scan(&value)
+		if err != nil && !errors.Is(err, sql.ErrNoRows) {
+			return FrontPageSettings{}, err
+		}
+		if err == nil && !value.Valid {
+			return FrontPageSettings{}, errors.New("show_home_button_in_top_bar_on_wide_screens must be boolean")
+		}
+		settings.ShowHomeButtonInTopBarOnWideScreens = value.Bool
 	}
 	return settings, nil
 }

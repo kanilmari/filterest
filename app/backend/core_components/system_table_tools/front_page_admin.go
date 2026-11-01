@@ -41,6 +41,8 @@ type frontPageAdminSettings struct {
 	SeparateFrontPage            *bool `json:"separate_front_page"`
 	FrontPageButtonShowsSiteName *bool `json:"front_page_button_shows_site_name"`
 	FrontPageShowBlocks          *bool `json:"front_page_show_blocks"`
+	// Preserve presence so an explicit null cannot masquerade as an older client's omission.
+	ShowHomeButtonInTopBarOnWideScreens json.RawMessage `json:"show_home_button_in_top_bar_on_wide_screens"`
 }
 
 type frontPageAdminRequest struct {
@@ -61,7 +63,8 @@ var frontPageAdminSaver = saveFrontPageAdminRequest
 // inherits_common, source, version, blocks, diagnostics [{box_id,reason_key}], datasets (newest_capable, can_read),
 // and site_root {path,exists,ready,status_error} (administrator-only deployment status).
 // GET ?user_query=text returns at most 20 {user_id,display_name} accounts.
-// POST accepts {settings:{separate_front_page,front_page_button_shows_site_name,front_page_show_blocks,display_index_html_at_startup}}
+// POST accepts {settings:{separate_front_page,front_page_button_shows_site_name,
+// front_page_show_blocks,display_index_html_at_startup,show_home_button_in_top_bar_on_wide_screens}}
 // or {hero:{title:{fi,en,usage_explanation},slogan:{fi,en,usage_explanation},description:{fi,en,usage_explanation}}}
 // or {presentation:{schema_version,anchor,horizontal_margin_px,vertical_margin_px,alignment,phone_alignment,phone_story_size,max_width_px,light_wash,light_opacity,dark_wash,dark_opacity,text_style:{preset,reveal:{mode,start_ms,interval_ms}}},version}
 // (v2–v4 remain accepted; 15 px stores v2/v3/v4; other phone sizes store v5). Saves return
@@ -70,7 +73,9 @@ var frontPageAdminSaver = saveFrontPageAdminRequest
 // {user_id,version,reset:true}, {user_id,version,copy_from_common:true}.
 // Omit user_id or use null for common. Version is opaque, initially "none";
 // successful scope writes return {version}, stale writes return 409. Older settings
-// clients may omit front_page_show_blocks to preserve it; hero strings allow at most 2000 characters.
+// clients may omit front_page_show_blocks or show_home_button_in_top_bar_on_wide_screens
+// to preserve them. The top-bar switch is site-wide, never scoped by user or tab.
+// Hero strings allow at most 2000 characters.
 // Omitted box fields retain their saved values. A legacy entry without box_id matches
 // exactly one existing box for its dataset; ambiguous matches are refused. An empty
 // saved list is custom; reset:true restores inheritance while retaining its revision.
@@ -162,6 +167,9 @@ func decodeFrontPageAdminRequest(body io.Reader) (frontPageAdminRequest, error) 
 		if request.UserID != nil || request.Version != "" || request.Settings.SeparateFrontPage == nil || request.Settings.FrontPageButtonShowsSiteName == nil {
 			return request, errFrontPageInput
 		}
+		if _, err := parseHomeTopBarSetting(request.Settings.ShowHomeButtonInTopBarOnWideScreens); err != nil {
+			return request, err
+		}
 	} else if request.Hero != nil {
 		if request.UserID != nil || request.Version != "" {
 			return request, errFrontPageInput
@@ -178,6 +186,22 @@ func decodeFrontPageAdminRequest(body io.Reader) (frontPageAdminRequest, error) 
 		}
 	}
 	return request, nil
+}
+
+// Both request decoding and saving distinguish an omitted switch from a non-boolean value.
+func parseHomeTopBarSetting(raw json.RawMessage) (*bool, error) {
+	if raw == nil {
+		return nil, nil
+	}
+	var value any
+	if err := json.Unmarshal(raw, &value); err != nil {
+		return nil, errFrontPageInput
+	}
+	boolean, valid := value.(bool)
+	if !valid {
+		return nil, errFrontPageInput
+	}
+	return &boolean, nil
 }
 
 func validateFrontPageBlockInputs(blocks []frontPageBlockInput) error {

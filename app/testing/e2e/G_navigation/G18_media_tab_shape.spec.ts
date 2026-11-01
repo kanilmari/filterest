@@ -56,8 +56,11 @@ async function labelContrast(button: Locator) {
   });
 }
 
+const topRowButtons = (page: Page, root: string) =>
+  page.locator(`${root} .hero-dataset-tabs__button:visible, ${root} .top-nav-home-button:visible`);
+
 async function expectButtons(page: Page, root: string, media: boolean, measurements: unknown[]) {
-  const buttons = page.locator(`${root} .hero-dataset-tabs__button:visible, ${root} .top-nav-home-button:visible`);
+  const buttons = topRowButtons(page, root);
   expect(await buttons.count()).toBeGreaterThan(0);
   for (const button of await buttons.all()) {
     const radius = await button.evaluate(element => Number.parseFloat(getComputedStyle(element).borderRadius));
@@ -142,7 +145,10 @@ for (const width of [1440, 390]) for (const theme of ['light', 'dark'] as const)
         await openMediaTabView(page, view);
         const media = view === 'dataset_media', dataset = media ? MEDIA_DATASET : PLAIN_DATASET;
         await expect(page.locator('body')).toHaveAttribute('data-view-has-presentation-media', String(media));
-        await expectButtons(page, `#${dataset}_tab_parts_container`, media, measurements);
+        const root = `#${dataset}_tab_parts_container`;
+        // K529: a phone's dataset view has no top-row buttons: Main hides the hero row and Home is off the bar.
+        if (width <= 700) await expect(topRowButtons(page, root)).toHaveCount(0);
+        else await expectButtons(page, root, media, measurements);
         await expectMenuShapes(page, media, width, measurements);
       }
       // These in-page switches catch stale flags that cold loads cannot expose.

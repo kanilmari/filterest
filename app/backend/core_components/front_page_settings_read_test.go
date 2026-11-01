@@ -1,6 +1,6 @@
 // front_page_settings_read_test.go
 // Proves Home box defaults and malformed boolean refusal without PostgreSQL.
-// Uses a narrow in-memory SQL driver for the real settings reader's three keys.
+// Uses a narrow in-memory SQL driver for the real settings reader's site-wide keys.
 // Distinguishes an absent row from a stored false value and an invalid null.
 package backend
 
@@ -70,5 +70,36 @@ func TestReadFrontPageBoxSwitchMissingFalseAndInvalid(t *testing.T) {
 		if (err != nil) != tc.invalid || (!tc.invalid && (settings.FrontPageShowBlocks != tc.boxes || settings.SeparateFrontPage || settings.FrontPageButtonShowsSiteName)) {
 			t.Fatal(settings, err, tc)
 		}
+	}
+}
+
+func TestHomeTopBarSwitchDefaultAndDisabledReadBoundary(t *testing.T) {
+	const key = "show_home_button_in_top_bar_on_wide_screens"
+	for _, tc := range []struct {
+		name              string
+		values            map[string]driver.Value
+		expected, invalid bool
+	}{
+		{"missing", map[string]driver.Value{"separate_front_page": true}, false, false},
+		{"false", map[string]driver.Value{"separate_front_page": true, key: false}, false, false},
+		{"true", map[string]driver.Value{"separate_front_page": true, key: true}, true, false},
+		{"invalid enabled", map[string]driver.Value{"separate_front_page": true, key: nil}, false, true},
+		{"disabled ignores malformed", map[string]driver.Value{key: nil}, false, false},
+		{"disabled ignores true", map[string]driver.Value{key: true}, false, false},
+		{"custom root", map[string]driver.Value{"display_index_html_at_startup": true, key: true}, true, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			name := fmt.Sprintf("front_page_switch_%d", frontPageSwitchDriverID.Add(1))
+			sql.Register(name, frontPageSwitchDriver{tc.values})
+			db, err := sql.Open(name, "")
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer db.Close()
+			settings, err := ReadFrontPageSettings(context.Background(), db)
+			if (err != nil) != tc.invalid || (!tc.invalid && settings.ShowHomeButtonInTopBarOnWideScreens != tc.expected) {
+				t.Fatal(settings, err)
+			}
+		})
 	}
 }

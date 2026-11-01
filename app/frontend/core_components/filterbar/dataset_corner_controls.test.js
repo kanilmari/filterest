@@ -43,10 +43,15 @@ describe("dataset corner owner", () => {
             const inHero = !phone && atTop;
             const host = inHero ? tabs : phone ? start : parts.topbarEnd;
             const state = { ...initial, phone, heroControlsVisible: inHero, topbarVisible: !inHero };
-            const moveHome = () => placeTopNavHomeButton(home, host);
+            const moveHome = () => phone ? home.remove() : placeTopNavHomeButton(home, host);
             const movePanel = () => controls.sync(state);
             for (const move of panelFirst ? [movePanel, moveHome] : [moveHome, movePanel]) move();
             moveHome(); movePanel();
+            if (phone) {
+                expect(home.parentElement).toBeNull();
+                expect(parts.filterButton.parentElement.lastElementChild).toBe(parts.filterButton);
+                continue;
+            }
             expect(home.parentElement).toBe(host);
             expect(inHero ? host.firstElementChild : phone ? host.lastElementChild : host.firstElementChild).toBe(home);
             expect(parts.filterButton.parentElement.lastElementChild).toBe(parts.filterButton);

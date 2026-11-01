@@ -33,7 +33,7 @@ func TestFrontPageAuthModesAllResponsesAndFallback(t *testing.T) {
 				authModesFrontPageSettingsReader, authModesFrontPageSiteNameReader, authModesAuthenticationGenerationMatches = settings, name, matcher
 			})
 			authModesFrontPageSettingsReader = func(context.Context, *sql.DB) (backend.FrontPageSettings, error) {
-				return backend.FrontPageSettings{SeparateFrontPage: true, FrontPageButtonShowsSiteName: true}, nil
+				return backend.FrontPageSettings{SeparateFrontPage: true, FrontPageButtonShowsSiteName: true, ShowHomeButtonInTopBarOnWideScreens: true}, nil
 			}
 			authModesFrontPageSiteNameReader = func(context.Context, *sql.DB) string { return "Test site" }
 			authModesAuthenticationGenerationMatches = func(context.Context, auth_generation.Querier, *sessions.Session, int) (bool, error) {
@@ -49,7 +49,7 @@ func TestFrontPageAuthModesAllResponsesAndFallback(t *testing.T) {
 			if err := json.Unmarshal(response.Body.Bytes(), &result); err != nil {
 				t.Fatal(response.Code, err, response.Body.String())
 			}
-			if response.Code != 200 || !result.SeparateFrontPage || result.FrontPageButtonSiteName != "Test site" {
+			if response.Code != 200 || !result.SeparateFrontPage || !result.ShowHomeButtonInTopBarOnWideScreens || result.FrontPageButtonSiteName != "Test site" {
 				t.Fatal(response.Code, result)
 			}
 			authModesFrontPageSiteNameReader = func(context.Context, *sql.DB) string { return "" }

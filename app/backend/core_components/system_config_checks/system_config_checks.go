@@ -60,6 +60,7 @@ func durationChecks() map[string]check {
 		return nil
 	}
 	registry["display_index_html_at_startup"] = registry["front_page_show_blocks"]
+	registry["show_home_button_in_top_bar_on_wide_screens"] = registry["front_page_show_blocks"]
 	return registry
 }
 
@@ -96,7 +97,7 @@ func ValidateRow(table string, row map[string]interface{}) error {
 		if key == "front_page_presentation" {
 			langKey = "save_failed"
 		}
-		if key == "front_page_show_blocks" || key == "display_index_html_at_startup" {
+		if key == "front_page_show_blocks" || key == "display_index_html_at_startup" || key == "show_home_button_in_top_bar_on_wide_screens" {
 			langKey = "error_setting_boolean_invalid"
 		}
 		return &httpresponse.Refusal{Status: 400, LangKey: langKey,

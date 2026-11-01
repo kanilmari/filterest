@@ -104,6 +104,7 @@ setting_seed_migrations = (
     "20261005000085_add_front_page_show_blocks.sql",
     "20261009000077_retire_global_dataset_alias_catalogue.sql",
     "20261015000008_seed_table_cell_max_lines.sql",
+    "20261029000100_add_home_top_bar_setting.sql",
 )
 # What an upgrade adds where a site lacks it — a table, or a relationship between
 # two tables — is added for a new installation by the same file, so an upgraded
@@ -184,6 +185,7 @@ release_record_migrations = (
     "20261022000399_record_database_release_9_13_0.sql",
     "20261024000099_record_database_release_9_13_1.sql",
     "20261029000099_record_database_release_9_13_2.sql",
+    "20261029000199_record_database_release_9_13_3.sql",
 )
 # Every public migration whose sequence number comes after this one belongs to
 # exactly one list above, so no file is marked as run while missing from the

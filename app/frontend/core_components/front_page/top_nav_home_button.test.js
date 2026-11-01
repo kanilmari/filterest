@@ -26,14 +26,15 @@ vi.mock('../navigation/menu_button/navbar_visibility_handler.js', () => ({ updat
 vi.mock('../state_stores/dataset_view_choice_saver.js', () => ({ getChosenDatasetView: () => 'card' }));
 
 beforeEach(() => {
+    vi.spyOn(window, 'innerWidth', 'get').mockReturnValue(1440);
     localStorage.clear(); setFrontPageAvailability({}); mocks.open.mockReset(); mocks.heroVisible = true;
     document.body.innerHTML = '<nav id="navbarFrontPage" hidden></nav><div id="tabs_container"></div>'
         + '<div id="hero"></div><div id="compact"></div>';
 });
-afterEach(() => { setCustomRootEnabled(false); localStorage.clear(); });
+afterEach(() => { setCustomRootEnabled(false); localStorage.clear(); vi.restoreAllMocks(); });
 
 test.each([null, 'false', 'true', 'disabled'])('Home setting %s uses exactly the menu visibility rule', setting => {
-    setFrontPageAvailability({ separate_front_page: setting === 'true' });
+    setFrontPageAvailability({ show_home_button_in_top_bar_on_wide_screens: true, separate_front_page: setting === 'true' });
     for (const signedIn of [true, false]) {
         localStorage.setItem('button_state', signedIn ? 'logout' : 'login');
         for (const privateBrowse of [true, false]) {
@@ -48,7 +49,7 @@ test.each([null, 'false', 'true', 'disabled'])('Home setting %s uses exactly the
 });
 
 test.each([false, true])('menu and top Home share root href and activation with custom root=%s', async customRoot => {
-    setFrontPageAvailability({ separate_front_page: !customRoot });
+    setFrontPageAvailability({ show_home_button_in_top_bar_on_wide_screens: true, separate_front_page: !customRoot, display_index_html_at_startup: customRoot });
     setCustomRootEnabled(customRoot);
     renderNavbarFrontPage({ isLoggedIn: true });
     const menu = document.querySelector('#navbarFrontPage a');
@@ -66,7 +67,7 @@ test.each([false, true])('menu and top Home share root href and activation with 
 });
 
 test('repeated hero/compact handoffs retain one keyboard-reachable node and its full label', async () => {
-    setFrontPageAvailability({ separate_front_page: true });
+    setFrontPageAvailability({ show_home_button_in_top_bar_on_wide_screens: true, separate_front_page: true });
     localStorage.setItem('front_page_button_site_name', 'A long multilingual site name');
     const top = createTopNavHomeButton();
     placeTopNavHomeButton(top, document.getElementById('hero'));
@@ -84,7 +85,7 @@ test('repeated hero/compact handoffs retain one keyboard-reachable node and its 
 });
 
 test('Home and dataset tabs have identical overlay/docked menu state and storage; native gestures never close', async () => {
-    setFrontPageAvailability({ separate_front_page: true });
+    setFrontPageAvailability({ show_home_button_in_top_bar_on_wide_screens: true, separate_front_page: true });
     document.body.innerHTML = '<div class="body_content"><button id="showMenuButton"></button>'
         + '<nav id="navbar"><button id="hideMenuButton"></button><div id="navbarFrontPage"></div></nav>'
         + '<div id="tabs_container"><div id="hero"></div></div></div>';
@@ -143,6 +144,9 @@ test('Home and dataset tabs have identical overlay/docked menu state and storage
         document.querySelector('#navbarFrontPage a').click();
         expect(snapshot()).toEqual(before);
     } finally {
+        const transition = new Event('transitionend');
+        Object.defineProperty(transition, 'propertyName', { value: 'transform' });
+        navbar.dispatchEvent(transition);
         tabs.destroy();
         for (const [type, listener] of registrations.mock.calls) document.removeEventListener(type, listener);
         window.removeEventListener(NAVBAR_VISIBILITY_CHANGED_EVENT, changed);
@@ -151,7 +155,7 @@ test('Home and dataset tabs have identical overlay/docked menu state and storage
 });
 
 test('the real toolbar controller moves one node through phone, scroll, open menu and hero states', () => {
-    setFrontPageAvailability({ separate_front_page: true });
+    setFrontPageAvailability({ show_home_button_in_top_bar_on_wide_screens: true, separate_front_page: true });
     document.getElementById('hero').innerHTML = '<nav class="hero-dataset-tabs"></nav>';
     const hero = document.getElementById('hero');
     const compact = document.getElementById('compact');
@@ -171,7 +175,7 @@ test('the real toolbar controller moves one node through phone, scroll, open men
         for (const [width, heroVisible, open, target] of [
             [1440, true, false, 'hero'], [1000, true, false, 'hero'],
             [1000, false, false, 'compact'], [1000, true, true, 'hero'],
-            [375, true, false, 'compact'], [1440, true, false, 'hero'],
+            [1440, true, false, 'hero'],
         ]) {
             vi.spyOn(window, 'innerWidth', 'get').mockReturnValue(width);
             mocks.heroVisible = heroVisible; navbarVisible = open;
@@ -180,7 +184,7 @@ test('the real toolbar controller moves one node through phone, scroll, open men
             expect(document.getElementById(target).querySelector('.top-nav-home-button')).not.toBeNull();
             if (target === 'compact') {
                 expect(compact.inert).toBe(false);
-                const slot = compact.querySelector(width <= 700 ? '.dataset-shared-topbar__slot--start' : '.dataset-shared-topbar__slot--end');
+                const slot = compact.querySelector('.dataset-shared-topbar__slot--end');
                 expect(slot.querySelector('.top-nav-home-button')).not.toBeNull();
                 if (width <= 700) expect(slot.firstElementChild.className).toBe('menu');
                 expect(compact.querySelector('a').classList.contains('navbar-front-page-link')).toBe(true);
@@ -198,7 +202,7 @@ test('the real toolbar controller moves one node through phone, scroll, open men
             } else { link.focus(); focusedLink = link; }
             controller.syncSharedTopBar();
             expect(document.activeElement).toBe(link);
-            setFrontPageAvailability({ separate_front_page: true, front_page_button_site_name: 'Current site name' });
+            setFrontPageAvailability({ show_home_button_in_top_bar_on_wide_screens: true, separate_front_page: true, front_page_button_site_name: 'Current site name' });
             expect(link.getAttribute('aria-label')).toBe('Current site name');
             expect(document.activeElement).toBe(link);
         }
@@ -227,7 +231,7 @@ test.each(['settings-refresh', 'cached-reactivation'])('%s reconciles both Home 
         // Reuse this exact controller/DOM for enable → disable and disable → enable.
         for (const enabled of [true, false, true, false]) {
             dataset.classList.toggle('hidden', trigger === 'cached-reactivation');
-            setFrontPageAvailability({ separate_front_page: enabled });
+            setFrontPageAvailability({ show_home_button_in_top_bar_on_wide_screens: true, separate_front_page: enabled });
             if (trigger === 'settings-refresh') {
                 window.dispatchEvent(new Event(HOME_AVAILABILITY_CHANGED_EVENT));
             } else {
@@ -239,7 +243,7 @@ test.each(['settings-refresh', 'cached-reactivation'])('%s reconciles both Home 
         }
     } finally { controller.destroy(); }
     syncCornerControls.mockClear();
-    setFrontPageAvailability({ separate_front_page: true });
+    setFrontPageAvailability({ show_home_button_in_top_bar_on_wide_screens: true, separate_front_page: true });
     window.dispatchEvent(new Event(HOME_AVAILABILITY_CHANGED_EVENT));
     expect(syncCornerControls).not.toHaveBeenCalled();
     expect(dataset.querySelector('.top-nav-home-button')).toBeNull();
@@ -258,7 +262,7 @@ test.each(visibilityStates)('pre-218 visibility: %j', state => {
     dataset.innerHTML = '<div id="row"><nav class="hero-dataset-tabs"><button>Dataset</button></nav></div>'
         + '<div id="bar"><div class="dataset-shared-topbar__slot--end"></div><button></button></div>';
     document.body.append(dataset);
-    setFrontPageAvailability({ separate_front_page: state.home });
+    setFrontPageAvailability({ show_home_button_in_top_bar_on_wide_screens: true, separate_front_page: state.home });
     const bar = dataset.querySelector('#bar');
     const controller = createSharedTopbarVisibilityController({
         tableName: 'demo', currentView: 'card', tablePartsContainer: dataset,
@@ -273,4 +277,67 @@ test.each(visibilityStates)('pre-218 visibility: %j', state => {
         const expected = state.active && (state.width <= 700 || (!state.hero && (!state.menu || !state.filter)));
         expect(dataset.dataset.sharedTopbarVisible).toBe(String(expected));
     } finally { controller.destroy(); vi.restoreAllMocks(); }
+});
+
+test.each([false, true].flatMap(enabled => [390, 700, 701, 1440].map(width => [enabled, width])))(
+    'site-wide top-bar opt-in=%s at %spx leaves the enabled menu link alone', (enabled, width) => {
+        vi.spyOn(window, 'innerWidth', 'get').mockReturnValue(width);
+        setFrontPageAvailability({ separate_front_page: true, show_home_button_in_top_bar_on_wide_screens: enabled });
+        renderNavbarFrontPage({ isLoggedIn: true });
+        expect(Boolean(createTopNavHomeButton())).toBe(enabled && width > 700);
+        expect(document.querySelector('#navbarFrontPage a')).not.toBeNull();
+    });
+
+test('Home off never reads the optional setting, including with a null active element', () => {
+    const read = vi.fn(() => { throw new Error('disabled Home read the top-bar setting'); });
+    setFrontPageAvailability({ separate_front_page: false,
+        get show_home_button_in_top_bar_on_wide_screens() { return read(); } });
+    const hero = document.getElementById('hero');
+    const compact = document.getElementById('compact');
+    compact.innerHTML = '<button></button><div class="dataset-shared-topbar__slot--end"></div>';
+    vi.spyOn(document, 'activeElement', 'get').mockReturnValue(null);
+    const controller = createSharedTopbarVisibilityController({
+        tableName: 'demo', currentView: 'card', tablePartsContainer: document.body,
+        sharedTopBar: compact, sharedTopBarArticleClose: compact.querySelector('button'), inlineHeroHost: hero,
+        getState: () => ({ bigCardOpen: false, inlineHeroVisible: true }),
+        isHidden: () => true, isNavbarVisible: () => false,
+        captureMenuFocus: () => false, syncCornerControls() {},
+    });
+    try {
+        expect(() => controller.syncSharedTopBar()).not.toThrow();
+        expect(read).not.toHaveBeenCalled();
+        expect(document.querySelector('.top-nav-home-button')).toBeNull();
+    } finally { controller.destroy(); }
+});
+
+test('the mounted toolbar reconciles opt-in, resize and Home-off without duplicate or stale links', () => {
+    const hero = document.getElementById('hero');
+    const compact = document.getElementById('compact');
+    hero.innerHTML = '<nav class="hero-dataset-tabs"></nav>';
+    compact.innerHTML = '<button></button><div class="dataset-shared-topbar__slot--end"></div>';
+    const controller = createSharedTopbarVisibilityController({
+        tableName: 'demo', currentView: 'card', tablePartsContainer: document.body,
+        sharedTopBar: compact, sharedTopBarArticleClose: compact.querySelector('button'), inlineHeroHost: hero,
+        getState: () => ({ bigCardOpen: false, inlineHeroVisible: mocks.heroVisible }),
+        isHidden: () => true, isNavbarVisible: () => false,
+        captureMenuFocus: () => false, syncCornerControls() {},
+    });
+    try {
+        for (const width of [1440, 390, 700, 701]) for (const enabled of [false, true]) {
+            vi.spyOn(window, 'innerWidth', 'get').mockReturnValue(width);
+            setFrontPageAvailability({ separate_front_page: true, show_home_button_in_top_bar_on_wide_screens: enabled });
+            for (const inHero of [true, false]) {
+                mocks.heroVisible = inHero;
+                controller.syncSharedTopBar();
+                const shown = enabled && width > 700;
+                expect(document.querySelectorAll('.top-nav-home-button')).toHaveLength(shown ? 1 : 0);
+                if (shown) expect((inHero ? hero : compact).querySelector('.top-nav-home-button')).not.toBeNull();
+            }
+        }
+        setFrontPageAvailability({ separate_front_page: false, show_home_button_in_top_bar_on_wide_screens: true });
+        expect(document.querySelector('.top-nav-home-button')).toBeNull();
+        localStorage.setItem('show_home_button_in_top_bar_on_wide_screens', 'true');
+        setFrontPageAvailability({ separate_front_page: true });
+        expect(createTopNavHomeButton()).toBeNull();
+    } finally { controller.destroy(); }
 });

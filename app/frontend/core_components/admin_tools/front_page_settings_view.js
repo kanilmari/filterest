@@ -56,12 +56,14 @@ export async function generate_front_page_settings_view(container, { onSaved = r
     const settingsSection = frontPageSection('front_page_settings');
     const customRoot = createCustomRootSettingsControl();
     const enabledInput = Object.assign(document.createElement('input'), { type: 'checkbox' });
+    const topBarHomeInput = Object.assign(document.createElement('input'), { type: 'checkbox' });
     const siteNameInput = Object.assign(document.createElement('input'), { type: 'checkbox' });
     const showBlocksInput = Object.assign(document.createElement('input'), { type: 'checkbox' });
     const settingsSave = frontPageButton('save', 'settings-save', true);
     const settingsStatus = frontPageStatus('settings-status');
     settingsSection.append(
         frontPageField('front_page_enabled', enabledInput, 'enabled'),
+        frontPageField('show_home_button_in_top_bar_on_wide_screens', topBarHomeInput, 'top-bar-home'),
         frontPageField('front_page_button_shows_site_name', siteNameInput, 'site-name'),
         frontPageField('front_page_show_blocks', showBlocksInput, 'show-blocks'),
         ...customRoot.elements,
@@ -143,7 +145,8 @@ export async function generate_front_page_settings_view(container, { onSaved = r
         articles.element, scopeSection, background.element);
 
     function settingsValue() {
-        return { separate_front_page: enabledInput.checked, front_page_button_shows_site_name: siteNameInput.checked,
+        return { show_home_button_in_top_bar_on_wide_screens: topBarHomeInput.checked,
+            separate_front_page: enabledInput.checked, front_page_button_shows_site_name: siteNameInput.checked,
             front_page_show_blocks: showBlocksInput.checked, display_index_html_at_startup: customRoot.input.checked };
     }
 
@@ -162,6 +165,7 @@ export async function generate_front_page_settings_view(container, { onSaved = r
     }
 
     function updateState() {
+        topBarHomeInput.disabled = busy || !ready || (!enabledInput.checked && !customRoot.input.checked);
         [settingsSection, heroSection, background.element].forEach(section => { section.disabled = busy || !ready; });
         scopeSection.disabled = busy || !ready || !showBlocksInput.checked;
         scopeSection.classList.toggle('front-page-settings-section--disabled', !showBlocksInput.checked);
@@ -310,6 +314,7 @@ export async function generate_front_page_settings_view(container, { onSaved = r
             customRoot.input.checked = data.settings.display_index_html_at_startup === true;
             customRoot.setSnapshot(data.site_root);
             enabledInput.checked = data.settings.separate_front_page === true;
+            topBarHomeInput.checked = data.settings.show_home_button_in_top_bar_on_wide_screens === true;
             siteNameInput.checked = data.settings.front_page_button_shows_site_name === true;
             showBlocksInput.checked = data.settings.front_page_show_blocks !== false;
             applyLangKeyConfig(titleEditor, data.hero?.title || { lang_key: 'site_front_page_title' });
@@ -391,7 +396,7 @@ export async function generate_front_page_settings_view(container, { onSaved = r
         renderBlocks(dataset.dataset, 'remove');
         updateState();
     });
-    [enabledInput, siteNameInput, showBlocksInput, customRoot.input].forEach(input => input.addEventListener('change', updateState));
+    [enabledInput, topBarHomeInput, siteNameInput, showBlocksInput, customRoot.input].forEach(input => input.addEventListener('change', updateState));
     settingsSave.addEventListener('click', () => {
         if (!ready || !settingsDirty()) return;
         void operate(async () => {

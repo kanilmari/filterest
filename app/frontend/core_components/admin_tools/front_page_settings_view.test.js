@@ -33,7 +33,8 @@ import { hasContentBesideLoadingIndicator } from '../../reusable_components/load
 
 const currentDirectory = dirname(fileURLToPath(import.meta.url));
 const migration = readFileSync(resolve(currentDirectory, '../../../server_tools/migrations/20261005000033_seed_front_page_language_keys.sql'), 'utf8')
-    + readFileSync(resolve(currentDirectory, '../../../server_tools/migrations/20261005000086_seed_front_page_hero_language_keys.sql'), 'utf8');
+    + readFileSync(resolve(currentDirectory, '../../../server_tools/migrations/20261005000086_seed_front_page_hero_language_keys.sql'), 'utf8')
+    + readFileSync(resolve(currentDirectory, '../../../server_tools/migrations/20261029000100_add_home_top_bar_setting.sql'), 'utf8');
 for (const match of migration.matchAll(/\('([^']+)', '([^']*)', '([^']*)'(?:,|\))/g)) {
     mocks.copy[match[1]] = { fi: match[2], en: match[3] };
 }
@@ -337,7 +338,7 @@ describe('Home settings and scope drafts', () => {
         await generate_front_page_settings_view(target);
         input(query('enabled'), false, 'change'); input(query('site-name'), true, 'change');
         await click('settings-save');
-        expect(writes()[0][1].body_data).toEqual({ settings: { separate_front_page: false, front_page_button_shows_site_name: true, front_page_show_blocks: true, display_index_html_at_startup: false } });
+        expect(writes()[0][1].body_data).toEqual({ settings: { separate_front_page: false, front_page_button_shows_site_name: true, front_page_show_blocks: true, display_index_html_at_startup: false, show_home_button_in_top_bar_on_wide_screens: false } });
         expect(mocks.auth).toHaveBeenCalledOnce();
         expect(mocks.navbar).toHaveBeenCalledWith({ isLoggedIn: true });
         expect(query('open').disabled).toBe(true);
@@ -644,4 +645,26 @@ test('separate description fields are multi-line, keep paragraphs and save with 
     await click('hero-save');
     expect(writes()[1][1].body_data.hero.slogan.en).toBe('First slogan\nsecond line');
     expect(writes()[1][1].body_data.hero.description.fi).toContain('Toinen kappale');
+});
+
+test.each(['fi', 'en'])('site-wide top-bar toggle sits immediately below Home, greys when off and saves in %s', async language => {
+    mocks.language = language;
+    await generate_front_page_settings_view(target);
+    const toggle = query('top-bar-home');
+    const row = toggle.closest('label');
+    expect(query('enabled').closest('label').nextElementSibling).toBe(row);
+    expect(toggle.checked).toBe(false);
+    expect(toggle.disabled).toBe(false);
+    expect(row.textContent).toBe(mocks.copy.show_home_button_in_top_bar_on_wide_screens[language]);
+    input(toggle, true, 'change');
+    await click('settings-save');
+    expect(writes()[0][1].body_data.settings.show_home_button_in_top_bar_on_wide_screens).toBe(true);
+    expect(writes()[0][1].body_data.user_id).toBeUndefined();
+    input(query('enabled'), false, 'change');
+    expect(toggle.disabled).toBe(true);
+    input(query('enabled'), true, 'change');
+    expect(toggle.disabled).toBe(false);
+    await chooseUser();
+    expect(toggle.checked).toBe(true);
+    expect(toggle.closest('fieldset')).not.toBe(query('scope').closest('fieldset'));
 });

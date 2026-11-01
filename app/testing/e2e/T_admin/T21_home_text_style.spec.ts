@@ -64,7 +64,7 @@ async function fixture(page: Page, language: 'fi' | 'en', theme: 'light' | 'dark
     const response = await route.fetch();
     expect(response.ok()).toBe(true);
     await route.fulfill({ response, json: { ...await response.json(), separate_front_page: true,
-      display_index_html_at_startup: false } });
+      display_index_html_at_startup: false, show_home_button_in_top_bar_on_wide_screens: true } });
   });
   await page.route(url => url.pathname === '/api/front-page', async route => {
     expect(route.request().method()).toBe('GET');
@@ -184,7 +184,7 @@ async function settleTopRow(page: Page, language: 'fi' | 'en') {
         return { text: element.textContent, x, y, width, height };
       }) }));
     const current = JSON.stringify(sample);
-    unchangedSamples = sample.language === language && sample.boxes.length === 3 && current === previous
+    unchangedSamples = sample.language === language && sample.boxes.length === (page.viewportSize()!.width > 700 ? 3 : 2) && current === previous
       ? unchangedSamples + 1 : 0;
     previous = current;
     return unchangedSamples;
