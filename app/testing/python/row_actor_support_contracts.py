@@ -207,6 +207,8 @@ def roles(installed):
         GRANT SELECT, INSERT, UPDATE, DELETE, TRUNCATE ON public.system_row_actor_columns,
               public.system_data_repair_records TO owner_member, outsider;
         GRANT SELECT, DELETE ON public.system_db_tables TO outsider;
+        -- WL159 (migration 20261009000078): every write to system_db_tables first bumps the namespace lock row.
+        GRANT SELECT, UPDATE ON public.system_dataset_namespace_lock TO outsider;
         GRANT SELECT ON public.system_users, public.system_db_tables TO site_owner, owner_member;
         INSERT INTO public.system_db_tables (table_name, schema_name, table_uid) VALUES ('roles_demo', 'public', 99101);
         INSERT INTO public.system_row_actor_columns (table_uid, actor_role, column_name)
