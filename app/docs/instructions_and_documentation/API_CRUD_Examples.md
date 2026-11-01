@@ -20,6 +20,12 @@ Use `./filterest data` when you need table, column, row, or supported administra
 
 `rows` prints the full `get-results` JSON payload. The row id to use with `update-row` is under `data[].id`.
 
+Sorting and column filters (`--filter`, `sort_column`, `_from`/`_to`, exclusions) apply only to columns the signed-in
+role can read; any other column is ignored, and the default newest-first order is used. Vector results return every
+known column the role can read and do not apply a view's field set, which is a display choice rather than a read limit.
+Administrators and readers with every column grant see the complete set; the row id is included for any role that can
+read it, and semantic distance does not depend on which columns are returned.
+
 ## Language Table Workflow
 
 For normal language-key updates, prefer the dedicated helper because it uses the language-key API and preserves the intended translation workflow:

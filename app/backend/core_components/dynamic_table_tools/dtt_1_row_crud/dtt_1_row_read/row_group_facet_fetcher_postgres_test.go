@@ -94,6 +94,11 @@ GRANT SELECT ON ALL TABLES IN SCHEMA public TO wl58_reader;
 
 func rowGroupListingContext(t *testing.T, reader dbutils.Querier, table, role string, userID int, params url.Values) QueryBuilderContext {
 	t.Helper()
+	selectable, err := fetchUserSelectableColumns(reader, table)
+	if err != nil {
+		t.Fatal(err)
+	}
+	allowed := selectableColumnSet(selectable)
 	policy, err := getLegacyMustTrueReadPolicy(reader, table)
 	if err != nil {
 		t.Fatal(err)
@@ -101,6 +106,7 @@ func rowGroupListingContext(t *testing.T, reader dbutils.Querier, table, role st
 	return QueryBuilderContext{
 		DB: reader, TableName: table, UserRole: role, UserID: userID, ReadPolicy: policy,
 		QueryParams: params, ResultsPerLoad: 300, ClientRowCount: -1,
+		AllowedColumns: allowed,
 		ColumnsMap: map[int]dtt_models.ColumnInfo{
 			1: {ColumnName: "id", DataType: "integer"},
 			2: {ColumnName: "status", DataType: "text"},

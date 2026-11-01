@@ -99,7 +99,8 @@ func TestForeignLabelFilterParameterOffsets(t *testing.T) {
 		"target_id": {ReferencedTable: "targets", ReferencedColumn: "id", NameColumn: "title"},
 	}})
 	query, args, _, _, _, err := BuildSelectQuery(QueryBuilderContext{DB: db, TableName: "sources",
-		ColumnsMap: map[int]dtt_models.ColumnInfo{1: {ColumnName: "target_id"}}, VisibleColUIDs: []int{1},
+		AllowedColumns: map[string]bool{"target_id": true},
+		ColumnsMap:     map[int]dtt_models.ColumnInfo{1: {ColumnName: "target_id"}}, VisibleColUIDs: []int{1},
 		QueryParams: url.Values{"target_id_from": {"1"}}, UserID: 7, UserRole: "user", ClientRowCount: 1, ResultsPerLoad: 50})
 	if err != nil {
 		t.Fatal(err)

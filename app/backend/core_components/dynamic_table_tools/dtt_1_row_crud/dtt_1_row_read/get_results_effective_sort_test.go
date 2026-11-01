@@ -36,7 +36,7 @@ func TestEffectiveNewestSortResponse(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			clause, err := buildOrderByClause(params, "items", buildColumnsByName(columns), nil)
+			clause, err := buildOrderByClause(params, "items", buildColumnsByName(columns), nil, testReadableColumns(buildColumnsByName(columns)))
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -74,7 +74,7 @@ func TestEffectiveNewestSortDirectionMatchesSQL(t *testing.T) {
 	for _, direction := range []string{"ASC", "desc", "invalid", ""} {
 		params := url.Values{"sort_column": {semanticNewestSortColumn}, "sort_order": {direction}}
 		effective := effectiveNewestSort(params, columns)
-		clause, err := buildOrderByClause(params, "items", buildColumnsByName(columns), nil)
+		clause, err := buildOrderByClause(params, "items", buildColumnsByName(columns), nil, testReadableColumns(buildColumnsByName(columns)))
 		if err != nil || !strings.Contains(clause, `"id" `+effective.Direction+` NULLS LAST`) {
 			t.Fatalf("direction diverged: %#v %s %v", effective, clause, err)
 		}

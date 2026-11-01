@@ -121,6 +121,7 @@ func TestBuildWhereClauseReservesRowGroupMetaFilter(t *testing.T) {
 		columns,
 		map[string]string{},
 		testColumnDataTypes(),
+		testReadableColumns(columns),
 	)
 	if err != nil {
 		t.Fatalf("buildWhereClause returned error: %v", err)

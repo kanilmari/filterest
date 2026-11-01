@@ -23,6 +23,7 @@ func TestBuildWhereClauseBuildsInClauseForCommaSeparatedValues(t *testing.T) {
 		testColumnsByName(),
 		map[string]string{},
 		testColumnDataTypes(),
+		testReadableColumns(testColumnsByName()),
 	)
 	if err != nil {
 		t.Fatalf("buildWhereClause returned error: %v", err)
@@ -47,6 +48,7 @@ func TestBuildWhereClauseBuildsNotInClauseForExcludeCommaSeparatedValues(t *test
 		testColumnsByName(),
 		map[string]string{},
 		testColumnDataTypes(),
+		testReadableColumns(testColumnsByName()),
 	)
 	if err != nil {
 		t.Fatalf("buildWhereClause returned error: %v", err)
@@ -71,6 +73,7 @@ func TestBuildWhereClauseBuildsNotEqualClauseForSingleExcludeValue(t *testing.T)
 		testColumnsByName(),
 		map[string]string{},
 		testColumnDataTypes(),
+		testReadableColumns(testColumnsByName()),
 	)
 	if err != nil {
 		t.Fatalf("buildWhereClause returned error: %v", err)
@@ -95,6 +98,7 @@ func TestBuildWhereClauseBuildsTypedNotInClauseForIntegerExcludeValues(t *testin
 		testColumnsByName(),
 		map[string]string{},
 		testColumnDataTypes(),
+		testReadableColumns(testColumnsByName()),
 	)
 	if err != nil {
 		t.Fatalf("buildWhereClause returned error: %v", err)
@@ -119,6 +123,7 @@ func TestBuildOrderByClauseAddsIDTieBreakerForNonIDSorts(t *testing.T) {
 		"tasks",
 		testColumnsByName(),
 		map[string]string{},
+		testReadableColumns(testColumnsByName()),
 	)
 	if err != nil {
 		t.Fatalf("buildOrderByClause returned error: %v", err)
@@ -141,6 +146,7 @@ func TestBuildOrderByClauseDoesNotDuplicateIDSort(t *testing.T) {
 		"tasks",
 		testColumnsByName(),
 		map[string]string{},
+		testReadableColumns(testColumnsByName()),
 	)
 	if err != nil {
 		t.Fatalf("buildOrderByClause returned error: %v", err)
@@ -163,6 +169,7 @@ func TestBuildOrderByClauseNormalizesUnknownSortColumnToSemanticNewest(t *testin
 		"tasks",
 		testColumnsByName(),
 		map[string]string{},
+		testReadableColumns(testColumnsByName()),
 	)
 	if err != nil {
 		t.Fatalf("buildOrderByClause returned error: %v", err)
@@ -183,7 +190,7 @@ func TestBuildOrderByClauseUsesAppliedAtForSemanticNewest(t *testing.T) {
 		"applied_at": {ColumnName: "applied_at", DataType: "timestamp with time zone"},
 	}
 
-	orderByClause, err := buildOrderByClause(queryParams, "system_db_version", columns, map[string]string{})
+	orderByClause, err := buildOrderByClause(queryParams, "system_db_version", columns, map[string]string{}, testReadableColumns(columns))
 	if err != nil {
 		t.Fatalf("buildOrderByClause returned error: %v", err)
 	}
@@ -203,7 +210,7 @@ func TestBuildOrderByClauseFallsBackToIDForSemanticNewest(t *testing.T) {
 		"version": {ColumnName: "version", DataType: "text"},
 	}
 
-	orderByClause, err := buildOrderByClause(queryParams, "versions", columns, map[string]string{})
+	orderByClause, err := buildOrderByClause(queryParams, "versions", columns, map[string]string{}, testReadableColumns(columns))
 	if err != nil {
 		t.Fatalf("buildOrderByClause returned error: %v", err)
 	}
@@ -225,7 +232,7 @@ func TestBuildOrderByClausePutsRowsWithImagesFirst(t *testing.T) {
 		CoNumber:    3,
 	}
 
-	orderByClause, err := buildOrderByClause(queryParams, "tasks", columns, map[string]string{})
+	orderByClause, err := buildOrderByClause(queryParams, "tasks", columns, map[string]string{}, testReadableColumns(columns))
 	if err != nil {
 		t.Fatalf("buildOrderByClause returned error: %v", err)
 	}
@@ -247,6 +254,7 @@ func TestBuildOrderByClauseUsesNewestIDWhenDatasetHasNoImageColumn(t *testing.T)
 		"tasks",
 		testColumnsByName(),
 		map[string]string{},
+		testReadableColumns(testColumnsByName()),
 	)
 	if err != nil {
 		t.Fatalf("buildOrderByClause returned error: %v", err)
@@ -271,6 +279,14 @@ func testColumnsByName() map[string]dtt_models.ColumnInfo {
 			DataType:   "text",
 		},
 	}
+}
+
+func testReadableColumns(columns map[string]dtt_models.ColumnInfo) map[string]bool {
+	allowed := make(map[string]bool, len(columns))
+	for name := range columns {
+		allowed[name] = true
+	}
+	return allowed
 }
 
 func testColumnDataTypes() map[string]interface{} {
@@ -312,7 +328,7 @@ func TestBuildWhereClauseResolvesRealSuffixColumnsBeforeOperators(t *testing.T) 
 		{"status_exclude_exclude", "status_exclude", "<>"},
 	} {
 		t.Run(tc.key, func(t *testing.T) {
-			where, args, err := buildWhereClause(url.Values{tc.key: {"sample"}}, "tasks", columns, nil, types)
+			where, args, err := buildWhereClause(url.Values{tc.key: {"sample"}}, "tasks", columns, nil, types, testReadableColumns(columns))
 			target := "\"tasks\".\"" + tc.column + "\""
 			if err != nil || len(args) != 1 || !strings.Contains(where, target) || !strings.Contains(where, tc.operator) {
 				t.Fatalf("filter %s resolved incorrectly: %s %#v %v", tc.key, where, args, err)
@@ -327,7 +343,7 @@ func TestBuildWhereClauseDoesNotRetargetKnownForbiddenSuffixColumn(t *testing.T)
 		"ship":    map[string]interface{}{"data_type": "text"},
 		"ship_to": map[string]interface{}{"data_type": "text"},
 	}
-	where, args, err := buildWhereClause(url.Values{"ship_to": {"hidden"}}, "tasks", columns, nil, types)
+	where, args, err := buildWhereClause(url.Values{"ship_to": {"hidden"}}, "tasks", columns, nil, types, testReadableColumns(columns))
 	if err != nil || where != "" || len(args) != 0 {
 		t.Fatalf("forbidden exact field became an allowed range: %s %#v %v", where, args, err)
 	}
@@ -351,7 +367,7 @@ func TestBuildWhereClauseSeparatesViewKeyControlFromQualifiedField(t *testing.T)
 		{"renderer_and_real_field", url.Values{"view_key": {"table"}, dataset + "_view_key": {"cloud_management"}}, true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			where, args, err := buildWhereClause(tc.params, dataset, columns, nil, types)
+			where, args, err := buildWhereClause(tc.params, dataset, columns, nil, types, testReadableColumns(columns))
 			if err != nil {
 				t.Fatal(err)
 			}

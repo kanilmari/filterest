@@ -24,6 +24,7 @@ type QueryBuilderContext struct {
 	DB              dbutils.Querier
 	TableName       string
 	ColumnsMap      map[int]dtt_models.ColumnInfo
+	AllowedColumns  map[string]bool // Viewer SELECT grants; nil permits no user sort/filter columns.
 	VisibleColUIDs  []int
 	QueryParams     url.Values
 	ColumnDataTypes map[string]interface{}

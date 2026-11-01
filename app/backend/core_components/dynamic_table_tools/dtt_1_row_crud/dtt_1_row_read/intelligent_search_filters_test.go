@@ -40,7 +40,7 @@ func TestSearchFiltersRequireBothSelectableAndDeliveredColumnMetadata(t *testing
 	if err != nil {
 		t.Fatal(err)
 	}
-	condition, args, err := buildWhereClause(values, "src", columns, nil, types, 3)
+	condition, args, err := buildWhereClause(values, "src", columns, nil, types, testReadableColumns(columns), 3)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -92,7 +92,7 @@ func TestSearchFiltersShareExactColumnAndRangeResolutionWithOrdinaryWhere(t *tes
 			if err != nil {
 				t.Fatal(err)
 			}
-			where, args, err := buildWhereClause(values, "src", columns, nil, types, 3)
+			where, args, err := buildWhereClause(values, "src", columns, nil, types, testReadableColumns(columns), 3)
 			target := "\"src\".\"" + tc.column + "\""
 			if err != nil || len(args) != 1 || !strings.Contains(where, target) || !strings.Contains(where, tc.operator) || !strings.Contains(where, "$4") {
 				t.Fatalf("approved filter was dropped or retargeted: %s %#v %v", where, args, err)

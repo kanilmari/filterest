@@ -110,11 +110,6 @@ func GetResultsVector(response_writer http.ResponseWriter, request *http.Request
 		httpresponse.RespondWithError(response_writer, http.StatusInternalServerError, "error fetching columns")
 		return
 	}
-	column_uids := make([]int, 0, len(columns_map))
-	for uid := range columns_map {
-		column_uids = append(column_uids, uid)
-	}
-
 	// 4. Haetaan sarakkeiden tietotyypit (mahdollisesti ulkoavaimet yms.)
 	column_data_types, err := getColumnDataTypesWithFK(table_name, currentDb)
 	if err != nil {
@@ -127,6 +122,18 @@ func GetResultsVector(response_writer http.ResponseWriter, request *http.Request
 	for _, column_info := range columns_map {
 		columns_by_name[column_info.ColumnName] = column_info
 	}
+	// Reuse one SELECT-grant lookup for projection, filters and sorting, just
+	// as get-results does. Missing evidence adds no HTTP refusal path.
+	allowedColumns := map[string]bool{}
+	if selectable, permissionErr := fetchUserSelectableColumns(currentDb, table_name); permissionErr == nil {
+		allowedColumns = selectableColumnSet(selectable)
+	}
+	column_uids := make([]int, 0, len(columns_map))
+	for uid := range filterReadableColumnMetadata(columns_map, allowedColumns) {
+		column_uids = append(column_uids, uid)
+	}
+	// Dataset read grants include id. Optional image/helper columns need no
+	// exception; semantic distance is computed separately from this projection.
 
 	//------------------------------------------------
 	// 5. Rakennetaan SELECT- ja JOIN-lauseet
@@ -146,6 +153,7 @@ func GetResultsVector(response_writer http.ResponseWriter, request *http.Request
 		columns_by_name,
 		column_expressions,
 		column_data_types,
+		allowedColumns,
 		len(joinArgs),
 	)
 	if err != nil {
@@ -206,6 +214,7 @@ func GetResultsVector(response_writer http.ResponseWriter, request *http.Request
 		table_name,
 		columns_by_name,
 		column_expressions,
+		allowedColumns,
 	)
 	if err != nil {
 		log.Printf("\033[31merror building ORDER BY clause: %s\033[0m\n", err.Error())

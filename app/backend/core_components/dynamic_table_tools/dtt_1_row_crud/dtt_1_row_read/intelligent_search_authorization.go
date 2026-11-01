@@ -115,7 +115,11 @@ func appendIntelligentSearchAuthorizationCondition(
 			}
 			qualifiedFilters[qualifiedKey] = append([]string(nil), values...)
 		}
-		clause, filterArgs, err := buildWhereClause(qualifiedFilters, tableReference, authorization.filterColumns, nil, authorization.filterTypes, len(queryArgs))
+		allowedColumns := make(map[string]bool, len(authorization.filterColumns))
+		for name := range authorization.filterColumns {
+			allowedColumns[name] = true // Already intersected with SELECT by prepareIntelligentSearchFilters.
+		}
+		clause, filterArgs, err := buildWhereClause(qualifiedFilters, tableReference, authorization.filterColumns, nil, authorization.filterTypes, allowedColumns, len(queryArgs))
 		if err != nil {
 			return "", nil, err
 		}

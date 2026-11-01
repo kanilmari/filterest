@@ -78,6 +78,7 @@ func buildWhereClause(
 	columnsByName map[string]dtt_models.ColumnInfo,
 	columnExpressions map[string]string,
 	columnDataTypes map[string]interface{},
+	allowedColumns map[string]bool,
 	argumentOffsets ...int,
 ) (string, []interface{}, error) {
 
@@ -108,6 +109,11 @@ func buildWhereClause(
 			_, metadataKnown := columnDataTypes[name]
 			return columnKnown || expressionKnown || metadataKnown
 		})
+		// Resolve exact names before checking grants: an unreadable ship_to
+		// field must not be reinterpreted as a range on readable ship.
+		if !queryColumnIsReadable(logicalParamName, columnsByName, columnExpressions, allowedColumns) {
+			continue
+		}
 
 		// -------- 1) *_from / *_to  (>= / <=) ----------------------------
 		if rangeOperator != "" {
@@ -268,6 +274,7 @@ func buildOrderByClause(
 	tableName string,
 	columnsByName map[string]dtt_models.ColumnInfo,
 	columnExpressions map[string]string,
+	allowedColumns map[string]bool,
 ) (string, error) {
 
 	sortColumn := queryParams.Get("sort_column")
@@ -280,11 +287,16 @@ func buildOrderByClause(
 	if sortOrder != "ASC" && sortOrder != "DESC" {
 		sortOrder = "DESC"
 	}
+	// Defaults, image presence and ID tie-breakers also reference only readable fields.
+	readableColumns := readableSortColumns(columnsByName, allowedColumns)
 	if sortColumn == imageFirstSortColumn {
-		return buildImageFirstOrderByClause(tableName, columnsByName), nil
+		return buildImageFirstOrderByClause(tableName, readableColumns), nil
 	}
 	if sortColumn == semanticNewestSortColumn {
-		return buildSemanticNewestOrderByClause(tableName, columnsByName, sortOrder), nil
+		return buildSemanticNewestOrderByClause(tableName, readableColumns, sortOrder), nil
+	}
+	if !queryColumnIsReadable(sortColumn, columnsByName, columnExpressions, allowedColumns) {
+		return buildSemanticNewestOrderByClause(tableName, readableColumns, sortOrder), nil
 	}
 
 	var columnName string
@@ -311,12 +323,12 @@ func buildOrderByClause(
 			columnName = fmt.Sprintf("%s.%s", quotedTable, quotedColumn)
 		}
 	} else {
-		return buildSemanticNewestOrderByClause(tableName, columnsByName, sortOrder), nil
+		return buildSemanticNewestOrderByClause(tableName, readableColumns, sortOrder), nil
 	}
 
 	orderByParts := []string{fmt.Sprintf("%s %s", columnName, sortOrder)}
 	if sortColumn != "id" {
-		if _, hasIDColumn := columnsByName["id"]; hasIDColumn {
+		if _, hasIDColumn := readableColumns["id"]; hasIDColumn {
 			orderByParts = append(
 				orderByParts,
 				fmt.Sprintf("%s.%s %s", pq.QuoteIdentifier(tableName), pq.QuoteIdentifier("id"), sortOrder),
@@ -545,6 +557,7 @@ func BuildSelectQuery(ctx QueryBuilderContext) (string, []interface{}, int, []Ro
 		columnsByName,
 		columnExpressions,
 		ctx.ColumnDataTypes,
+		ctx.AllowedColumns,
 		len(joinArgs),
 	)
 	if err != nil {
@@ -597,6 +610,7 @@ func BuildSelectQuery(ctx QueryBuilderContext) (string, []interface{}, int, []Ro
 		ctx.TableName,
 		columnsByName,
 		columnExpressions,
+		ctx.AllowedColumns,
 	)
 	if err != nil {
 		return "", nil, 0, nil, RowGroupSelection{}, fmt.Errorf("error building order by clause: %w", err)

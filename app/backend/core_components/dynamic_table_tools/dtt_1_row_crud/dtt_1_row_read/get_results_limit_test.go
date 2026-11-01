@@ -18,7 +18,7 @@ func TestResultsLimitIsAControlAndQualifiedLimitRemainsAField(t *testing.T) {
 	for _, tc := range []struct{ parameter, want string }{
 		{"limit", ""}, {"app_example_limit", ` WHERE ("app_example"."limit" = $1)`},
 	} {
-		where, args, err := buildWhereClause(url.Values{tc.parameter: {"3"}}, "app_example", columns, nil, types)
+		where, args, err := buildWhereClause(url.Values{tc.parameter: {"3"}}, "app_example", columns, nil, types, testReadableColumns(columns))
 		if err != nil || where != tc.want || (tc.want == "" && len(args) != 0) {
 			t.Fatalf("%s: got %q, %v, %v; want %q", tc.parameter, where, args, err, tc.want)
 		}
