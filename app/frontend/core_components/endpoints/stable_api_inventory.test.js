@@ -88,7 +88,7 @@ describe('stable_api_inventory', () => {
             accessProfile: 'admin',
             methods: ['POST'],
             methodSource: 'route_registration',
-            availableScenarios: ['production', 'development', 'api_language'],
+            availableScenarios: ['production', 'development', 'api_language', 'instance_info'],
         });
 
         expect(getStableCandidateRouteDescriptor('adminVersionInfo')).toMatchObject({
@@ -169,7 +169,7 @@ describe('stable_api_inventory', () => {
             accessProfile: 'admin',
             methods: ['POST'],
             methodSource: 'route_registration',
-            availableScenarios: ['production', 'development', 'api_language'],
+            availableScenarios: ['production', 'development', 'api_language', 'instance_info'],
         });
 
         expect(getStableCandidateRouteDescriptor('adminUserAuthentication')).toMatchObject({
@@ -178,7 +178,7 @@ describe('stable_api_inventory', () => {
             accessProfile: 'admin',
             methods: ['GET', 'HEAD', 'POST'],
             methodSource: 'route_registration',
-            availableScenarios: ['production', 'development', 'api_language'],
+            availableScenarios: ['production', 'development', 'api_language', 'instance_info'],
         });
 
         expect(getStableCandidateRouteDescriptor('checkJsonColumns')).toMatchObject({

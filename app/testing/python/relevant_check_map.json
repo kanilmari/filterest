@@ -2,6 +2,12 @@
   "version": 1,
   "browser_areas": [
     {
+      "area": "Mirror and preview instance badge",
+      "paths": ["app/backend/core_components/instance_info", "app/frontend/reusable_components/instance_badge"],
+      "specs": [],
+      "none": "K523: the badge and /api/instance-info exist only when FILTEREST_INSTANCE_INFO_FILE names a mirror/preview record, which no E2E server sets. Go handler, route-manifest and template tests and the instance_badge Vitest prove it; its style shots are a manual probe."
+    },
+    {
       "area": "Stacked card photo frame ratio",
       "paths": ["app/frontend/core_components/table_views/card_view/card_image_presentation.js", "app/frontend/core_components/table_views/card_view/card_avatar_builder.js", "app/frontend/core_components/table_views/card_view/card_photo_frame_ratio.test.js", "app/frontend/styles/mobile_friendliness.css"],
       "specs": ["app/testing/e2e/G_navigation/G7_dataset_scroll_retention.spec.ts", "app/testing/e2e/C_card_view/C1_card_render.spec.ts", "app/testing/e2e/C_card_view/C2_open_big_card.spec.ts", "app/testing/e2e/C_card_view/C4_card_infinite_scroll.spec.ts", "app/testing/e2e/C_card_view/C28_details_edges_and_show_more.spec.ts", "app/testing/e2e/C_card_view/C29_photo_frame_removal.spec.ts"],
@@ -958,6 +964,12 @@
         "app/frontend/core_components/dev_tools"
       ],
       "reason": "Developer toolbox diagnostics have no maintained isolated browser assertion; nightly frontend/build checks cover their integration."
+    },
+    {
+      "paths": [
+        "app/frontend/reusable_components/instance_badge"
+      ],
+      "reason": "K523: the instance badge loads only when FILTEREST_INSTANCE_INFO_FILE names a mirror/preview record, which no E2E server sets; focused Vitest (instance_badge.test.js) and the frontend_assets template test cover it, and full nightly frontend tests remain required."
     },
     {
       "paths": [

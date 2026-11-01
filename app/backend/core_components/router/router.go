@@ -36,6 +36,7 @@ import (
 	"easelect/backend/core_components/event_bus"
 	"easelect/backend/core_components/favorites"
 	frontendassets "easelect/backend/core_components/frontend_assets"
+	"easelect/backend/core_components/instance_info"
 	lang "easelect/backend/core_components/lang"
 	missing_media_check "easelect/backend/core_components/missing_media_check"
 	productidentity "easelect/backend/core_components/product_identity"
@@ -157,6 +158,12 @@ func RegisterRoutes(frontendDir string, storagePath string) {
 	functionRegisterHandler("/system/drain", systemDrainHandler, "router.systemDrainHandler", http.MethodPost)
 	functionRegisterHandler("/system/automation-account", systemAutomationAccountHandler, "router.systemAutomationAccountHandler", http.MethodGet, http.MethodPost)
 	functionRegisterHandler("/system/update-notice", systemUpdateNoticeHandler, "router.systemUpdateNoticeHandler", http.MethodPost)
+	// A mirror or preview instance describes itself for its badge (plan §2.2, K523). Production never sets the flag,
+	// so the route does not exist there (404).
+	if instance_info.Enabled() {
+		const instanceInfoCondition = instance_info.RecordEnv + " names the mirror tool's record"
+		functionRegisterConditionalHandler("/api/instance-info", instance_info.Handler, "instance_info.Handler", instanceInfoCondition, http.MethodGet)
+	}
 	functionRegisterHandler("/api/admin/version-info", adminVersionInfoHandler, "router.adminVersionInfoHandler", http.MethodGet, http.MethodPost)
 	functionRegisterHandler("/api/admin/application-update", application_updates.StatusHandler, "application_updates.StatusHandler", http.MethodGet)
 	functionRegisterHandler("/api/admin/application-update/requests", application_updates.RequestHandler, "application_updates.RequestHandler", http.MethodPost)

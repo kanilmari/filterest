@@ -22,6 +22,7 @@ Dates are the local (Europe/Helsinki) date on which the version was published.
 
 ## [Unreleased]
 
+- **Mirror and preview instances show what they run** — When the instance-info runtime flag names a record, every page, sign-in included, shows a small badge in the bottom-left corner: one line with the code source and the data's backup time, a click for commits, data source and refresh time in Europe/Helsinki, and a dot when minimised. The flag is off by default; without it the read-only `/api/instance-info` endpoint does not exist and no page loads the badge.
 - Row saves by signed-in users now succeed when a provenance display-name lookup fails, times out or returns an empty name, using "unknown" while retaining the user's id.
 - Stop startup from adding another copy of a registry-less foreign-key relation at every start.
 - On phones, the dataset card's filter and reset buttons share their row evenly, so their icons no longer break the labels mid-word.

@@ -26,6 +26,9 @@
     <link rel="icon" href="{{.FaviconPath}}" type="image/png" sizes="16x16">
     <link rel="icon" href="{{.Favicon128Path}}" type="image/png" sizes="128x128">
     <script type="module" {{if .StandalonePage}}data-shell-boot-required{{end}} src="/frontend/core_components/auth/first_run_admin_page.js"></script>
+    {{if .StandalonePage}}{{if .ShellBoot.InstanceBadge}}
+    <script type="module" async nonce="{{.CSPNonce}}" data-instance-badge>import('/frontend/reusable_components/instance_badge/instance_badge.js').catch(function () {});</script>
+    {{end}}{{end}}
 </head>
 <body class="loading login-page standalone-login-page first-run-admin-page">
     {{if .StandalonePage}}

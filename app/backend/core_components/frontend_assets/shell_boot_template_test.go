@@ -15,6 +15,7 @@ import (
 	"testing"
 
 	frontendassets "easelect/backend/core_components/frontend_assets"
+	"easelect/backend/core_components/instance_info"
 	"easelect/backend/core_components/middlewares"
 )
 
@@ -97,6 +98,44 @@ func TestAuthFragmentsDoNotArmShellBoot(t *testing.T) {
 		for _, forbidden := range []string{"data-shell-boot-pending", "shell-boot-guard", "shell-boot-notice", "data-shell-boot-required"} {
 			if strings.Contains(response.Body.String(), forbidden) {
 				t.Fatalf("fragment %s contains %s", name, forbidden)
+			}
+		}
+	}
+}
+
+// The instance badge (K523) is linked only on a mirror/preview instance: the runtime flag on and a standalone document.
+// It is a nonce'd loader that imports the badge through a caught dynamic import, and the page links no badge stylesheet:
+// a stalled badge asset never holds the page's own modules back (gate 531a), and a failing or throwing badge module
+// rejects that import instead of raising a global error the shell would treat as a start-up failure (gate 531b).
+func TestInstanceBadgeOnlyWithTheRuntimeFlag(t *testing.T) {
+	const badge = `<script type="module" async nonce="n0nce" data-instance-badge>import('/frontend/reusable_components/instance_badge/instance_badge.js').catch(function () {});</script>`
+	for _, flag := range []string{"", "relative/record.json", "/srv/mirror/instance_info.json"} {
+		t.Setenv(instance_info.RecordEnv, flag)
+		boot := frontendassets.NewShellBootData(httptest.NewRequest(http.MethodGet, "/", nil), "fi")
+		if boot.InstanceBadge != strings.HasPrefix(flag, "/") {
+			t.Fatalf("flag %q: InstanceBadge = %v", flag, boot.InstanceBadge)
+		}
+		for _, name := range []string{"index.html", "templates/login.html", "templates/register.html", "templates/first_run_admin.html"} {
+			page, err := template.ParseFiles(filepath.Join("..", "..", "..", "frontend", name))
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, standalone := range []bool{true, false} {
+				if name == "index.html" && !standalone {
+					continue
+				}
+				response := httptest.NewRecorder()
+				data := map[string]any{"ShellBoot": boot, "CSPNonce": "n0nce", "LangCode": "fi", "StandalonePage": standalone, "SiteName": "Test", "VerificationMethod": "none"}
+				if err := page.Execute(response, data); err != nil {
+					t.Fatal(err)
+				}
+				body := response.Body.String()
+				if got, want := strings.Count(body, badge), map[bool]int{true: 1, false: 0}[boot.InstanceBadge && standalone]; got != want {
+					t.Fatalf("%s flag %q standalone %v: %d async badge modules, want %d", name, flag, standalone, got, want)
+				}
+				if strings.Count(body, "/instance_badge/") != strings.Count(body, badge) {
+					t.Fatalf("%s flag %q: a badge asset outside the one async module (a blocking <link> or script)", name, flag)
+				}
 			}
 		}
 	}

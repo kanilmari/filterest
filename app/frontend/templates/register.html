@@ -25,6 +25,9 @@
     <link rel="stylesheet" {{if .StandalonePage}}data-shell-boot-required data-shell-boot-probe-link{{end}} href="/frontend/core_components/auth/auth.css">
     <link rel="stylesheet" {{if .StandalonePage}}data-shell-boot-required{{end}} href="/frontend/core_components/auth/auth_verify.css">
     <link rel="stylesheet" {{if .StandalonePage}}data-shell-boot-required{{end}} href="/frontend/styles/theme_transition.css">
+    {{if .StandalonePage}}{{if .ShellBoot.InstanceBadge}}
+    <script type="module" async nonce="{{.CSPNonce}}" data-instance-badge>import('/frontend/reusable_components/instance_badge/instance_badge.js').catch(function () {});</script>
+    {{end}}{{end}}
 </head>
 <body>
     {{if .StandalonePage}}

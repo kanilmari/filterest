@@ -42,6 +42,9 @@
     {{else}}
     <script type="module" {{if .StandalonePage}}data-shell-boot-required{{end}} id="login-bundle" src="/frontend/core_components/auth/login_page_builder.js"></script>
     {{end}}
+    {{if .StandalonePage}}{{if .ShellBoot.InstanceBadge}}
+    <script type="module" async nonce="{{.CSPNonce}}" data-instance-badge>import('/frontend/reusable_components/instance_badge/instance_badge.js').catch(function () {});</script>
+    {{end}}{{end}}
 </head>
 
 <body class="loading login-page{{if .StandalonePage}} standalone-login-page{{end}}" data-login-page-mode="{{if .StandalonePage}}standalone{{else}}fragment{{end}}">

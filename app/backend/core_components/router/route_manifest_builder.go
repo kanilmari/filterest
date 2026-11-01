@@ -9,6 +9,7 @@ import (
 	"os"
 	"sort"
 
+	"easelect/backend/core_components/instance_info"
 	"easelect/backend/pipeline"
 )
 
@@ -18,6 +19,7 @@ type RouteManifestScenario struct {
 	Name              string
 	EnvironmentType   string
 	EnableAPILanguage bool
+	InstanceInfo      bool // a mirror or preview instance: the instance-info record flag is set (K523)
 }
 
 // RouteManifestScenarioProfile captures the effective profile for one route in
@@ -49,14 +51,20 @@ type RouteManifest struct {
 }
 
 // DefaultRouteManifestScenarios returns the canonical scenario matrix for route
-// inventory work: production, development, and API-language enabled production.
+// inventory work: production, development, API-language enabled production, and a production build running as a
+// mirror or preview instance.
 func DefaultRouteManifestScenarios() []RouteManifestScenario {
 	return []RouteManifestScenario{
 		{Name: "production", EnvironmentType: "production"},
 		{Name: "development", EnvironmentType: "dev"},
 		{Name: "api_language", EnvironmentType: "production", EnableAPILanguage: true},
+		{Name: "instance_info", EnvironmentType: "production", InstanceInfo: true},
 	}
 }
+
+// routeManifestInstanceInfoRecord is the placeholder record path of the instance_info scenario: only the flag's
+// presence matters for registration, the file is never read.
+const routeManifestInstanceInfoRecord = "/nonexistent/route-manifest/instance_info.json"
 
 // BuildDefaultRouteManifest builds the canonical route manifest using the repo's
 // normal frontend/storage placeholder paths.
@@ -161,6 +169,7 @@ func BuildRouteManifest(scenarios []RouteManifestScenario, frontendDir string, s
 type routeManifestEnvironment struct {
 	environmentType   routeManifestEnvValue
 	enableAPILanguage routeManifestEnvValue
+	instanceInfo      routeManifestEnvValue
 }
 
 type routeManifestEnvValue struct {
@@ -173,6 +182,7 @@ func captureRouteManifestEnvironment() routeManifestEnvironment {
 	return routeManifestEnvironment{
 		environmentType:   captureRouteManifestEnvValue("ENVIRONMENT_TYPE"),
 		enableAPILanguage: captureRouteManifestEnvValue("ENABLE_API_LANGUAGE"),
+		instanceInfo:      captureRouteManifestEnvValue(instance_info.RecordEnv),
 	}
 }
 
@@ -188,6 +198,7 @@ func captureRouteManifestEnvValue(key string) routeManifestEnvValue {
 func (env routeManifestEnvironment) restore() {
 	env.environmentType.restore()
 	env.enableAPILanguage.restore()
+	env.instanceInfo.restore()
 }
 
 func (env routeManifestEnvValue) restore() {
@@ -200,6 +211,11 @@ func (env routeManifestEnvValue) restore() {
 
 func activateRouteManifestScenario(scenario RouteManifestScenario) {
 	_ = os.Setenv("ENVIRONMENT_TYPE", scenario.EnvironmentType)
+	if scenario.InstanceInfo {
+		_ = os.Setenv(instance_info.RecordEnv, routeManifestInstanceInfoRecord)
+	} else {
+		_ = os.Unsetenv(instance_info.RecordEnv)
+	}
 	if scenario.EnableAPILanguage {
 		_ = os.Setenv("ENABLE_API_LANGUAGE", "true")
 		return

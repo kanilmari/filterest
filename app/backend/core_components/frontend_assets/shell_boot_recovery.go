@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os"
 
+	"easelect/backend/core_components/instance_info"
 	"easelect/backend/core_components/lang"
 	"easelect/backend/core_components/middlewares"
 )
@@ -21,11 +22,13 @@ var shellBootScript string
 var shellBootStyle string
 
 // ShellBootData carries source and plain translated text into the four documents.
+// InstanceBadge is the mirror/preview runtime flag (K523): the documents include the instance badge only then.
 type ShellBootData struct {
-	Script template.JS
-	Style  template.CSS
-	Texts  lang.ShellBootTexts
-	IsGET  bool
+	Script        template.JS
+	Style         template.CSS
+	Texts         lang.ShellBootTexts
+	IsGET         bool
+	InstanceBadge bool
 }
 
 // ShellPageData is the shared standalone-auth document presentation.
@@ -40,7 +43,8 @@ type ShellPageData struct {
 // NewShellBootData freezes document-method safety independently of client routing.
 func NewShellBootData(r *http.Request, languageCode string) ShellBootData {
 	return ShellBootData{Script: template.JS(shellBootScript), Style: template.CSS(shellBootStyle),
-		Texts: lang.ReadShellBootTexts(languageCode), IsGET: r.Method == http.MethodGet}
+		Texts: lang.ReadShellBootTexts(languageCode), IsGET: r.Method == http.MethodGet,
+		InstanceBadge: instance_info.Enabled()}
 }
 
 // NewShellPageData arms authentication guards only on standalone documents.

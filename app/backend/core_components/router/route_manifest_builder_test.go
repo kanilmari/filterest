@@ -143,7 +143,7 @@ func TestBuildDefaultRouteManifestCoversScenarioMatrix(t *testing.T) {
 	}
 
 	loginAPI := mustFindManifestRoute(t, manifest, "auth.LoginAPIHandler")
-	assertScenarioNames(t, loginAPI, []string{"production", "development", "api_language"})
+	assertScenarioNames(t, loginAPI, []string{"production", "development", "api_language", "instance_info"})
 	if loginAPI.MatchType != router.RouteMatchExact {
 		t.Fatalf("expected auth.LoginAPIHandler to use exact match, got %s", loginAPI.MatchType)
 	}
@@ -153,13 +153,13 @@ func TestBuildDefaultRouteManifestCoversScenarioMatrix(t *testing.T) {
 	}
 
 	passwordResetRequest := mustFindManifestRoute(t, manifest, "auth.RequestPasswordResetOTPHandler")
-	assertScenarioNames(t, passwordResetRequest, []string{"production", "development", "api_language"})
+	assertScenarioNames(t, passwordResetRequest, []string{"production", "development", "api_language", "instance_info"})
 	if mustFindScenarioProfile(t, passwordResetRequest, "production").ProfileName != "public" {
 		t.Fatalf("expected auth.RequestPasswordResetOTPHandler production profile to be public")
 	}
 
 	passwordResetConfirm := mustFindManifestRoute(t, manifest, "auth.ResetPasswordWithOTPHandler")
-	assertScenarioNames(t, passwordResetConfirm, []string{"production", "development", "api_language"})
+	assertScenarioNames(t, passwordResetConfirm, []string{"production", "development", "api_language", "instance_info"})
 	if mustFindScenarioProfile(t, passwordResetConfirm, "production").ProfileName != "public" {
 		t.Fatalf("expected auth.ResetPasswordWithOTPHandler production profile to be public")
 	}
@@ -177,14 +177,14 @@ func TestBuildDefaultRouteManifestCoversScenarioMatrix(t *testing.T) {
 	}
 
 	health := mustFindManifestRoute(t, manifest, "router.healthHandler")
-	assertScenarioNames(t, health, []string{"production", "development", "api_language"})
+	assertScenarioNames(t, health, []string{"production", "development", "api_language", "instance_info"})
 	assertRouteMethods(t, health, []string{"GET", "HEAD"}, router.RouteMethodSourceExplicitStableContract)
 	if mustFindScenarioProfile(t, health, "production").ProfileName != "public" {
 		t.Fatalf("expected router.healthHandler production profile to be public")
 	}
 
 	systemHealth := mustFindManifestRoute(t, manifest, "router.systemHealthHandler")
-	assertScenarioNames(t, systemHealth, []string{"production", "development", "api_language"})
+	assertScenarioNames(t, systemHealth, []string{"production", "development", "api_language", "instance_info"})
 	assertRouteMethods(t, systemHealth, []string{"GET", "HEAD"}, router.RouteMethodSourceExplicitStableContract)
 	if systemHealth.PathPattern != "/system/health" {
 		t.Fatalf("expected router.systemHealthHandler path to be /system/health, got %q", systemHealth.PathPattern)
@@ -194,7 +194,7 @@ func TestBuildDefaultRouteManifestCoversScenarioMatrix(t *testing.T) {
 	}
 
 	systemReady := mustFindManifestRoute(t, manifest, "router.systemReadyHandler")
-	assertScenarioNames(t, systemReady, []string{"production", "development", "api_language"})
+	assertScenarioNames(t, systemReady, []string{"production", "development", "api_language", "instance_info"})
 	assertRouteMethods(t, systemReady, []string{"GET", "HEAD"}, router.RouteMethodSourceExplicitStableContract)
 	if systemReady.PathPattern != "/system/ready" {
 		t.Fatalf("expected router.systemReadyHandler path to be /system/ready, got %q", systemReady.PathPattern)
@@ -204,7 +204,7 @@ func TestBuildDefaultRouteManifestCoversScenarioMatrix(t *testing.T) {
 	}
 
 	systemInstanceStatus := mustFindManifestRoute(t, manifest, "router.systemInstanceStatusHandler")
-	assertScenarioNames(t, systemInstanceStatus, []string{"production", "development", "api_language"})
+	assertScenarioNames(t, systemInstanceStatus, []string{"production", "development", "api_language", "instance_info"})
 	assertRouteMethods(t, systemInstanceStatus, []string{"GET", "HEAD"}, router.RouteMethodSourceExplicitStableContract)
 	if systemInstanceStatus.PathPattern != "/system/instance-status" {
 		t.Fatalf("expected router.systemInstanceStatusHandler path to be /system/instance-status, got %q", systemInstanceStatus.PathPattern)
@@ -214,7 +214,7 @@ func TestBuildDefaultRouteManifestCoversScenarioMatrix(t *testing.T) {
 	}
 
 	systemDrain := mustFindManifestRoute(t, manifest, "router.systemDrainHandler")
-	assertScenarioNames(t, systemDrain, []string{"production", "development", "api_language"})
+	assertScenarioNames(t, systemDrain, []string{"production", "development", "api_language", "instance_info"})
 	assertRouteMethods(t, systemDrain, []string{"POST"}, router.RouteMethodSourceExplicitStableContract)
 	if systemDrain.PathPattern != "/system/drain" {
 		t.Fatalf("expected router.systemDrainHandler path to be /system/drain, got %q", systemDrain.PathPattern)
@@ -224,7 +224,7 @@ func TestBuildDefaultRouteManifestCoversScenarioMatrix(t *testing.T) {
 	}
 
 	adminVersionInfo := mustFindManifestRoute(t, manifest, "router.adminVersionInfoHandler")
-	assertScenarioNames(t, adminVersionInfo, []string{"production", "development", "api_language"})
+	assertScenarioNames(t, adminVersionInfo, []string{"production", "development", "api_language", "instance_info"})
 	assertRouteMethods(t, adminVersionInfo, []string{"GET", "HEAD", "POST"}, router.RouteMethodSourceExplicitStableContract)
 	if adminVersionInfo.PathPattern != "/api/admin/version-info" {
 		t.Fatalf("expected router.adminVersionInfoHandler path to be /api/admin/version-info, got %q", adminVersionInfo.PathPattern)
@@ -234,7 +234,7 @@ func TestBuildDefaultRouteManifestCoversScenarioMatrix(t *testing.T) {
 	}
 
 	openAIKeySave := mustFindManifestRoute(t, manifest, "router.saveOpenAIAPIKeyHandler")
-	assertScenarioNames(t, openAIKeySave, []string{"production", "development", "api_language"})
+	assertScenarioNames(t, openAIKeySave, []string{"production", "development", "api_language", "instance_info"})
 	assertRouteMethods(t, openAIKeySave, []string{"POST"}, router.RouteMethodSourceExplicitStableContract)
 	if openAIKeySave.PathPattern != "/api/admin/openai-api-key" {
 		t.Fatalf("expected router.saveOpenAIAPIKeyHandler path to be /api/admin/openai-api-key, got %q", openAIKeySave.PathPattern)
@@ -244,7 +244,7 @@ func TestBuildDefaultRouteManifestCoversScenarioMatrix(t *testing.T) {
 	}
 
 	providerKeySave := mustFindManifestRoute(t, manifest, "router.saveProviderAPIKeyHandler")
-	assertScenarioNames(t, providerKeySave, []string{"production", "development", "api_language"})
+	assertScenarioNames(t, providerKeySave, []string{"production", "development", "api_language", "instance_info"})
 	assertRouteMethods(t, providerKeySave, []string{"POST"}, router.RouteMethodSourceExplicitStableContract)
 	if providerKeySave.PathPattern != "/api/admin/provider-api-key" {
 		t.Fatalf("expected router.saveProviderAPIKeyHandler path to be /api/admin/provider-api-key, got %q", providerKeySave.PathPattern)
@@ -275,7 +275,7 @@ func TestBuildDefaultRouteManifestCoversScenarioMatrix(t *testing.T) {
 	}
 
 	createDataset := mustFindManifestRoute(t, manifest, "dtt_crud_workflows.CreateTableHandler")
-	assertScenarioNames(t, createDataset, []string{"production", "development", "api_language"})
+	assertScenarioNames(t, createDataset, []string{"production", "development", "api_language", "instance_info"})
 	assertRouteMethods(t, createDataset, []string{"POST"}, router.RouteMethodSourceRegistration)
 	if mustFindScenarioProfile(t, createDataset, "production").ProfileName != "admin" {
 		t.Fatalf("expected CreateTableHandler production profile to be admin")
@@ -285,9 +285,9 @@ func TestBuildDefaultRouteManifestCoversScenarioMatrix(t *testing.T) {
 		t.Fatalf("expected CreateTableHandler development profile to be admin")
 	}
 
-	// The API-language switch is the manifest's only conditional gate, so one
-	// route behind it carries the contract. /api/create-table used to be the
-	// example here until its second dataset-creation route was removed.
+	// One route behind the API-language switch carries that gate's contract.
+	// /api/create-table used to be the example here until its second
+	// dataset-creation route was removed.
 	simpleQueryTable := mustFindManifestRoute(t, manifest, "dtt_crud_workflows.SimpleQueryTableHandler")
 	assertScenarioNames(t, simpleQueryTable, []string{"api_language"})
 	if simpleQueryTable.ConditionalSource != "ENABLE_API_LANGUAGE=true" {
@@ -297,25 +297,37 @@ func TestBuildDefaultRouteManifestCoversScenarioMatrix(t *testing.T) {
 		t.Fatalf("expected SimpleQueryTableHandler api_language profile to be admin")
 	}
 
+	// K523: the instance-info route exists only on a mirror or preview instance (the record flag set), and is
+	// public there because the badge shows on the sign-in page too.
+	instanceInfo := mustFindManifestRoute(t, manifest, "instance_info.Handler")
+	assertScenarioNames(t, instanceInfo, []string{"instance_info"})
+	assertRouteMethods(t, instanceInfo, []string{"GET", "HEAD"}, router.RouteMethodSourceRegistration)
+	if instanceInfo.PathPattern != "/api/instance-info" || instanceInfo.ConditionalSource != "FILTEREST_INSTANCE_INFO_FILE names the mirror tool's record" {
+		t.Fatalf("instance-info route = %+v, want the flag-gated /api/instance-info", instanceInfo)
+	}
+	if mustFindScenarioProfile(t, instanceInfo, "instance_info").ProfileName != "public" {
+		t.Fatalf("expected instance_info.Handler instance_info profile to be public")
+	}
+
 	fkCacheTriggers := mustFindManifestRoute(t, manifest, "system_table_tools.ListFKCacheTriggersHandler")
 	assertRouteMethods(t, fkCacheTriggers, []string{"GET", "HEAD"}, router.RouteMethodSourceExplicitStableContract)
 
 	sseSubscribe := mustFindManifestRoute(t, manifest, "event_bus.SSESubscribeHandler")
-	assertScenarioNames(t, sseSubscribe, []string{"production", "development", "api_language"})
+	assertScenarioNames(t, sseSubscribe, []string{"production", "development", "api_language", "instance_info"})
 	assertRouteMethods(t, sseSubscribe, []string{"GET", "HEAD"}, router.RouteMethodSourceExplicitStableContract)
 	if mustFindScenarioProfile(t, sseSubscribe, "production").ProfileName != "access_control_no_tx" {
 		t.Fatalf("expected event_bus.SSESubscribeHandler production profile to be access_control_no_tx")
 	}
 
 	datasetAliasManagementGet := mustFindManifestRoute(t, manifest, "router.GetDatasetAliasManagementHandler")
-	assertScenarioNames(t, datasetAliasManagementGet, []string{"production", "development", "api_language"})
+	assertScenarioNames(t, datasetAliasManagementGet, []string{"production", "development", "api_language", "instance_info"})
 	assertRouteMethods(t, datasetAliasManagementGet, []string{"GET", "HEAD"}, router.RouteMethodSourceExplicitStableContract)
 	if mustFindScenarioProfile(t, datasetAliasManagementGet, "production").ProfileName != "admin" {
 		t.Fatalf("expected router.GetDatasetAliasManagementHandler production profile to be admin")
 	}
 
 	datasetAliasManagementSave := mustFindManifestRoute(t, manifest, "router.SaveDatasetAliasManagementHandler")
-	assertScenarioNames(t, datasetAliasManagementSave, []string{"production", "development", "api_language"})
+	assertScenarioNames(t, datasetAliasManagementSave, []string{"production", "development", "api_language", "instance_info"})
 	assertRouteMethods(t, datasetAliasManagementSave, []string{"POST"}, router.RouteMethodSourceExplicitStableContract)
 	if mustFindScenarioProfile(t, datasetAliasManagementSave, "production").ProfileName != "admin" {
 		t.Fatalf("expected router.SaveDatasetAliasManagementHandler production profile to be admin")
@@ -337,7 +349,7 @@ func TestBuildDefaultRouteManifestCoversScenarioMatrix(t *testing.T) {
 	assertRouteMethods(t, fieldSetReset, []string{"POST"}, router.RouteMethodSourceExplicitStableContract)
 
 	setCurrentProject := mustFindManifestRoute(t, manifest, "dtt_system_table_folders.HandleSetCurrentProjectFolder")
-	assertScenarioNames(t, setCurrentProject, []string{"production", "development", "api_language"})
+	assertScenarioNames(t, setCurrentProject, []string{"production", "development", "api_language", "instance_info"})
 	assertRouteMethods(t, setCurrentProject, []string{"POST"}, router.RouteMethodSourceExplicitStableContract)
 
 	rootHandler := mustFindManifestRoute(t, manifest, "router.rootHandler")
@@ -363,14 +375,14 @@ func TestBuildDefaultRouteManifestMarksSensitiveRoutesAdmin(t *testing.T) {
 		handlerName string
 		scenarios   []string
 	}{
-		{handlerName: "ai_features.GetEmbeddingDatasetsHandler", scenarios: []string{"production", "development", "api_language"}},
-		{handlerName: "ai_features.EmbeddingStreamHandler", scenarios: []string{"production", "development", "api_language"}},
-		{handlerName: "ai_features.RefreshLangEmbeddingsHandler", scenarios: []string{"production", "development", "api_language"}},
-		{handlerName: "ai_features.CountLangEmbeddingsHandler", scenarios: []string{"production", "development", "api_language"}},
-		{handlerName: "dtt_search_vectors.TextIndexStatusHandler", scenarios: []string{"production", "development", "api_language"}},
-		{handlerName: "dtt_search_vectors.RebuildSearchVectorHandler", scenarios: []string{"production", "development", "api_language"}},
-		{handlerName: "dtt_foreign_keys.AddForeignKeyHandler", scenarios: []string{"production", "development", "api_language"}},
-		{handlerName: "dtt_foreign_keys.DeleteForeignKeyHandler", scenarios: []string{"production", "development", "api_language"}},
+		{handlerName: "ai_features.GetEmbeddingDatasetsHandler", scenarios: []string{"production", "development", "api_language", "instance_info"}},
+		{handlerName: "ai_features.EmbeddingStreamHandler", scenarios: []string{"production", "development", "api_language", "instance_info"}},
+		{handlerName: "ai_features.RefreshLangEmbeddingsHandler", scenarios: []string{"production", "development", "api_language", "instance_info"}},
+		{handlerName: "ai_features.CountLangEmbeddingsHandler", scenarios: []string{"production", "development", "api_language", "instance_info"}},
+		{handlerName: "dtt_search_vectors.TextIndexStatusHandler", scenarios: []string{"production", "development", "api_language", "instance_info"}},
+		{handlerName: "dtt_search_vectors.RebuildSearchVectorHandler", scenarios: []string{"production", "development", "api_language", "instance_info"}},
+		{handlerName: "dtt_foreign_keys.AddForeignKeyHandler", scenarios: []string{"production", "development", "api_language", "instance_info"}},
+		{handlerName: "dtt_foreign_keys.DeleteForeignKeyHandler", scenarios: []string{"production", "development", "api_language", "instance_info"}},
 		{handlerName: "dtt_crud_workflows.SimpleQueryTableHandler", scenarios: []string{"api_language"}},
 	}
 

@@ -3,7 +3,8 @@
   "scenario_order": [
     "production",
     "development",
-    "api_language"
+    "api_language",
+    "instance_info"
   ],
   "routes": [
     {
@@ -44,6 +45,19 @@
         },
         {
           "name": "api_language",
+          "profile_name": "public",
+          "skip_stages": [
+            "access_control",
+            "admin_check",
+            "auth",
+            "csrf",
+            "device_id",
+            "fingerprint"
+          ],
+          "admin_only": false
+        },
+        {
+          "name": "instance_info",
           "profile_name": "public",
           "skip_stages": [
             "access_control",
@@ -105,6 +119,19 @@
             "fingerprint"
           ],
           "admin_only": false
+        },
+        {
+          "name": "instance_info",
+          "profile_name": "public",
+          "skip_stages": [
+            "access_control",
+            "admin_check",
+            "auth",
+            "csrf",
+            "device_id",
+            "fingerprint"
+          ],
+          "admin_only": false
         }
       ]
     },
@@ -132,6 +159,12 @@
         },
         {
           "name": "api_language",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        },
+        {
+          "name": "instance_info",
           "profile_name": "admin",
           "skip_stages": [],
           "admin_only": true
@@ -186,6 +219,19 @@
             "fingerprint"
           ],
           "admin_only": false
+        },
+        {
+          "name": "instance_info",
+          "profile_name": "public",
+          "skip_stages": [
+            "access_control",
+            "admin_check",
+            "auth",
+            "csrf",
+            "device_id",
+            "fingerprint"
+          ],
+          "admin_only": false
         }
       ]
     },
@@ -215,6 +261,12 @@
           "profile_name": "default",
           "skip_stages": [],
           "admin_only": false
+        },
+        {
+          "name": "instance_info",
+          "profile_name": "default",
+          "skip_stages": [],
+          "admin_only": false
         }
       ]
     },
@@ -241,6 +293,12 @@
         },
         {
           "name": "api_language",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        },
+        {
+          "name": "instance_info",
           "profile_name": "admin",
           "skip_stages": [],
           "admin_only": true
@@ -274,6 +332,12 @@
           "profile_name": "admin",
           "skip_stages": [],
           "admin_only": true
+        },
+        {
+          "name": "instance_info",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
         }
       ]
     },
@@ -301,6 +365,12 @@
         },
         {
           "name": "api_language",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        },
+        {
+          "name": "instance_info",
           "profile_name": "admin",
           "skip_stages": [],
           "admin_only": true
@@ -333,6 +403,12 @@
           "profile_name": "admin",
           "skip_stages": [],
           "admin_only": true
+        },
+        {
+          "name": "instance_info",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
         }
       ]
     },
@@ -359,6 +435,12 @@
         },
         {
           "name": "api_language",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        },
+        {
+          "name": "instance_info",
           "profile_name": "admin",
           "skip_stages": [],
           "admin_only": true
@@ -391,6 +473,12 @@
           "profile_name": "admin",
           "skip_stages": [],
           "admin_only": true
+        },
+        {
+          "name": "instance_info",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
         }
       ]
     },
@@ -417,6 +505,12 @@
         },
         {
           "name": "api_language",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        },
+        {
+          "name": "instance_info",
           "profile_name": "admin",
           "skip_stages": [],
           "admin_only": true
@@ -449,6 +543,12 @@
           "profile_name": "admin",
           "skip_stages": [],
           "admin_only": true
+        },
+        {
+          "name": "instance_info",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
         }
       ]
     },
@@ -475,6 +575,12 @@
         },
         {
           "name": "api_language",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        },
+        {
+          "name": "instance_info",
           "profile_name": "admin",
           "skip_stages": [],
           "admin_only": true
@@ -509,6 +615,12 @@
           "profile_name": "admin",
           "skip_stages": [],
           "admin_only": true
+        },
+        {
+          "name": "instance_info",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
         }
       ]
     },
@@ -535,6 +647,12 @@
         },
         {
           "name": "api_language",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        },
+        {
+          "name": "instance_info",
           "profile_name": "admin",
           "skip_stages": [],
           "admin_only": true
@@ -569,6 +687,12 @@
           "profile_name": "admin",
           "skip_stages": [],
           "admin_only": true
+        },
+        {
+          "name": "instance_info",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
         }
       ]
     },
@@ -597,6 +721,12 @@
         },
         {
           "name": "api_language",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        },
+        {
+          "name": "instance_info",
           "profile_name": "admin",
           "skip_stages": [],
           "admin_only": true
@@ -631,6 +761,12 @@
           "profile_name": "admin",
           "skip_stages": [],
           "admin_only": true
+        },
+        {
+          "name": "instance_info",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
         }
       ]
     },
@@ -662,6 +798,12 @@
           "profile_name": "admin",
           "skip_stages": [],
           "admin_only": true
+        },
+        {
+          "name": "instance_info",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
         }
       ]
     },
@@ -689,6 +831,12 @@
         },
         {
           "name": "api_language",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        },
+        {
+          "name": "instance_info",
           "profile_name": "admin",
           "skip_stages": [],
           "admin_only": true
@@ -727,6 +875,14 @@
             "transaction"
           ],
           "admin_only": true
+        },
+        {
+          "name": "instance_info",
+          "profile_name": "admin_no_tx",
+          "skip_stages": [
+            "transaction"
+          ],
+          "admin_only": true
         }
       ]
     },
@@ -753,6 +909,12 @@
         },
         {
           "name": "api_language",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        },
+        {
+          "name": "instance_info",
           "profile_name": "admin",
           "skip_stages": [],
           "admin_only": true
@@ -787,6 +949,12 @@
           "profile_name": "admin",
           "skip_stages": [],
           "admin_only": true
+        },
+        {
+          "name": "instance_info",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
         }
       ]
     },
@@ -816,6 +984,12 @@
           "profile_name": "admin",
           "skip_stages": [],
           "admin_only": true
+        },
+        {
+          "name": "instance_info",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
         }
       ]
     },
@@ -842,6 +1016,12 @@
         },
         {
           "name": "api_language",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        },
+        {
+          "name": "instance_info",
           "profile_name": "admin",
           "skip_stages": [],
           "admin_only": true
@@ -876,6 +1056,12 @@
           "profile_name": "admin",
           "skip_stages": [],
           "admin_only": true
+        },
+        {
+          "name": "instance_info",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
         }
       ]
     },
@@ -903,6 +1089,12 @@
         },
         {
           "name": "api_language",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        },
+        {
+          "name": "instance_info",
           "profile_name": "admin",
           "skip_stages": [],
           "admin_only": true
@@ -937,6 +1129,12 @@
           "profile_name": "admin",
           "skip_stages": [],
           "admin_only": true
+        },
+        {
+          "name": "instance_info",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
         }
       ]
     },
@@ -964,6 +1162,12 @@
         },
         {
           "name": "api_language",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        },
+        {
+          "name": "instance_info",
           "profile_name": "admin",
           "skip_stages": [],
           "admin_only": true
@@ -998,6 +1202,12 @@
           "profile_name": "admin",
           "skip_stages": [],
           "admin_only": true
+        },
+        {
+          "name": "instance_info",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
         }
       ]
     },
@@ -1026,6 +1236,12 @@
         },
         {
           "name": "api_language",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        },
+        {
+          "name": "instance_info",
           "profile_name": "admin",
           "skip_stages": [],
           "admin_only": true
@@ -1059,6 +1275,12 @@
           "profile_name": "admin",
           "skip_stages": [],
           "admin_only": true
+        },
+        {
+          "name": "instance_info",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
         }
       ]
     },
@@ -1087,6 +1309,12 @@
         },
         {
           "name": "api_language",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        },
+        {
+          "name": "instance_info",
           "profile_name": "admin",
           "skip_stages": [],
           "admin_only": true
@@ -1126,6 +1354,14 @@
             "transaction"
           ],
           "admin_only": true
+        },
+        {
+          "name": "instance_info",
+          "profile_name": "admin_no_tx",
+          "skip_stages": [
+            "transaction"
+          ],
+          "admin_only": true
         }
       ]
     },
@@ -1154,6 +1390,12 @@
         },
         {
           "name": "api_language",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        },
+        {
+          "name": "instance_info",
           "profile_name": "admin",
           "skip_stages": [],
           "admin_only": true
@@ -1192,6 +1434,14 @@
             "transaction"
           ],
           "admin_only": true
+        },
+        {
+          "name": "instance_info",
+          "profile_name": "admin_no_tx",
+          "skip_stages": [
+            "transaction"
+          ],
+          "admin_only": true
         }
       ]
     },
@@ -1220,6 +1470,12 @@
         },
         {
           "name": "api_language",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        },
+        {
+          "name": "instance_info",
           "profile_name": "admin",
           "skip_stages": [],
           "admin_only": true
@@ -1252,6 +1508,12 @@
           "profile_name": "admin",
           "skip_stages": [],
           "admin_only": true
+        },
+        {
+          "name": "instance_info",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
         }
       ]
     },
@@ -1278,6 +1540,12 @@
         },
         {
           "name": "api_language",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        },
+        {
+          "name": "instance_info",
           "profile_name": "admin",
           "skip_stages": [],
           "admin_only": true
@@ -1310,6 +1578,12 @@
           "profile_name": "admin",
           "skip_stages": [],
           "admin_only": true
+        },
+        {
+          "name": "instance_info",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
         }
       ]
     },
@@ -1336,6 +1610,12 @@
         },
         {
           "name": "api_language",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        },
+        {
+          "name": "instance_info",
           "profile_name": "admin",
           "skip_stages": [],
           "admin_only": true
@@ -1370,6 +1650,12 @@
           "profile_name": "admin",
           "skip_stages": [],
           "admin_only": true
+        },
+        {
+          "name": "instance_info",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
         }
       ]
     },
@@ -1396,6 +1682,12 @@
         },
         {
           "name": "api_language",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        },
+        {
+          "name": "instance_info",
           "profile_name": "admin",
           "skip_stages": [],
           "admin_only": true
@@ -1428,6 +1720,12 @@
           "profile_name": "admin",
           "skip_stages": [],
           "admin_only": true
+        },
+        {
+          "name": "instance_info",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
         }
       ]
     },
@@ -1455,6 +1753,12 @@
         },
         {
           "name": "api_language",
+          "profile_name": "default",
+          "skip_stages": [],
+          "admin_only": false
+        },
+        {
+          "name": "instance_info",
           "profile_name": "default",
           "skip_stages": [],
           "admin_only": false
@@ -1517,6 +1821,15 @@
             "admin_check"
           ],
           "admin_only": false
+        },
+        {
+          "name": "instance_info",
+          "profile_name": "login_only",
+          "skip_stages": [
+            "access_control",
+            "admin_check"
+          ],
+          "admin_only": false
         }
       ]
     },
@@ -1543,6 +1856,12 @@
         },
         {
           "name": "api_language",
+          "profile_name": "default",
+          "skip_stages": [],
+          "admin_only": false
+        },
+        {
+          "name": "instance_info",
           "profile_name": "default",
           "skip_stages": [],
           "admin_only": false
@@ -1592,6 +1911,12 @@
           "profile_name": "admin",
           "skip_stages": [],
           "admin_only": true
+        },
+        {
+          "name": "instance_info",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
         }
       ]
     },
@@ -1618,6 +1943,12 @@
         },
         {
           "name": "api_language",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        },
+        {
+          "name": "instance_info",
           "profile_name": "admin",
           "skip_stages": [],
           "admin_only": true
@@ -1650,6 +1981,12 @@
           "profile_name": "admin",
           "skip_stages": [],
           "admin_only": true
+        },
+        {
+          "name": "instance_info",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
         }
       ]
     },
@@ -1676,6 +2013,12 @@
         },
         {
           "name": "api_language",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        },
+        {
+          "name": "instance_info",
           "profile_name": "admin",
           "skip_stages": [],
           "admin_only": true
@@ -1709,6 +2052,12 @@
           "profile_name": "admin",
           "skip_stages": [],
           "admin_only": true
+        },
+        {
+          "name": "instance_info",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
         }
       ]
     },
@@ -1735,6 +2084,12 @@
         },
         {
           "name": "api_language",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        },
+        {
+          "name": "instance_info",
           "profile_name": "admin",
           "skip_stages": [],
           "admin_only": true
@@ -1767,6 +2122,12 @@
           "profile_name": "admin",
           "skip_stages": [],
           "admin_only": true
+        },
+        {
+          "name": "instance_info",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
         }
       ]
     },
@@ -1793,6 +2154,12 @@
         },
         {
           "name": "api_language",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        },
+        {
+          "name": "instance_info",
           "profile_name": "admin",
           "skip_stages": [],
           "admin_only": true
@@ -1826,6 +2193,12 @@
           "profile_name": "admin",
           "skip_stages": [],
           "admin_only": true
+        },
+        {
+          "name": "instance_info",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
         }
       ]
     },
@@ -1852,6 +2225,12 @@
         },
         {
           "name": "api_language",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        },
+        {
+          "name": "instance_info",
           "profile_name": "admin",
           "skip_stages": [],
           "admin_only": true
@@ -1882,6 +2261,12 @@
         },
         {
           "name": "api_language",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        },
+        {
+          "name": "instance_info",
           "profile_name": "admin",
           "skip_stages": [],
           "admin_only": true
@@ -1936,6 +2321,19 @@
             "fingerprint"
           ],
           "admin_only": false
+        },
+        {
+          "name": "instance_info",
+          "profile_name": "public",
+          "skip_stages": [
+            "access_control",
+            "admin_check",
+            "auth",
+            "csrf",
+            "device_id",
+            "fingerprint"
+          ],
+          "admin_only": false
         }
       ]
     },
@@ -1966,6 +2364,12 @@
           "profile_name": "admin",
           "skip_stages": [],
           "admin_only": true
+        },
+        {
+          "name": "instance_info",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
         }
       ]
     },
@@ -1992,6 +2396,12 @@
         },
         {
           "name": "api_language",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        },
+        {
+          "name": "instance_info",
           "profile_name": "admin",
           "skip_stages": [],
           "admin_only": true
@@ -2025,6 +2435,12 @@
           "profile_name": "admin",
           "skip_stages": [],
           "admin_only": true
+        },
+        {
+          "name": "instance_info",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
         }
       ]
     },
@@ -2052,6 +2468,12 @@
         },
         {
           "name": "api_language",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        },
+        {
+          "name": "instance_info",
           "profile_name": "admin",
           "skip_stages": [],
           "admin_only": true
@@ -2095,6 +2517,19 @@
         },
         {
           "name": "api_language",
+          "profile_name": "public",
+          "skip_stages": [
+            "access_control",
+            "admin_check",
+            "auth",
+            "csrf",
+            "device_id",
+            "fingerprint"
+          ],
+          "admin_only": false
+        },
+        {
+          "name": "instance_info",
           "profile_name": "public",
           "skip_stages": [
             "access_control",
@@ -2154,6 +2589,12 @@
           "profile_name": "admin",
           "skip_stages": [],
           "admin_only": true
+        },
+        {
+          "name": "instance_info",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
         }
       ]
     },
@@ -2184,6 +2625,12 @@
           "profile_name": "admin",
           "skip_stages": [],
           "admin_only": true
+        },
+        {
+          "name": "instance_info",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
         }
       ]
     },
@@ -2211,6 +2658,12 @@
         },
         {
           "name": "api_language",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        },
+        {
+          "name": "instance_info",
           "profile_name": "admin",
           "skip_stages": [],
           "admin_only": true
@@ -2247,6 +2700,15 @@
         },
         {
           "name": "api_language",
+          "profile_name": "login_only",
+          "skip_stages": [
+            "access_control",
+            "admin_check"
+          ],
+          "admin_only": false
+        },
+        {
+          "name": "instance_info",
           "profile_name": "login_only",
           "skip_stages": [
             "access_control",
@@ -2291,6 +2753,15 @@
             "admin_check"
           ],
           "admin_only": false
+        },
+        {
+          "name": "instance_info",
+          "profile_name": "login_only",
+          "skip_stages": [
+            "access_control",
+            "admin_check"
+          ],
+          "admin_only": false
         }
       ]
     },
@@ -2323,6 +2794,15 @@
         },
         {
           "name": "api_language",
+          "profile_name": "login_only",
+          "skip_stages": [
+            "access_control",
+            "admin_check"
+          ],
+          "admin_only": false
+        },
+        {
+          "name": "instance_info",
           "profile_name": "login_only",
           "skip_stages": [
             "access_control",
@@ -2368,6 +2848,15 @@
             "admin_check"
           ],
           "admin_only": false
+        },
+        {
+          "name": "instance_info",
+          "profile_name": "login_only",
+          "skip_stages": [
+            "access_control",
+            "admin_check"
+          ],
+          "admin_only": false
         }
       ]
     },
@@ -2397,6 +2886,12 @@
           "profile_name": "admin",
           "skip_stages": [],
           "admin_only": true
+        },
+        {
+          "name": "instance_info",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
         }
       ]
     },
@@ -2423,6 +2918,12 @@
         },
         {
           "name": "api_language",
+          "profile_name": "default",
+          "skip_stages": [],
+          "admin_only": false
+        },
+        {
+          "name": "instance_info",
           "profile_name": "default",
           "skip_stages": [],
           "admin_only": false
@@ -2456,6 +2957,12 @@
           "profile_name": "default",
           "skip_stages": [],
           "admin_only": false
+        },
+        {
+          "name": "instance_info",
+          "profile_name": "default",
+          "skip_stages": [],
+          "admin_only": false
         }
       ]
     },
@@ -2482,6 +2989,12 @@
         },
         {
           "name": "api_language",
+          "profile_name": "default",
+          "skip_stages": [],
+          "admin_only": false
+        },
+        {
+          "name": "instance_info",
           "profile_name": "default",
           "skip_stages": [],
           "admin_only": false
@@ -2514,6 +3027,12 @@
           "profile_name": "default",
           "skip_stages": [],
           "admin_only": false
+        },
+        {
+          "name": "instance_info",
+          "profile_name": "default",
+          "skip_stages": [],
+          "admin_only": false
         }
       ]
     },
@@ -2540,6 +3059,12 @@
         },
         {
           "name": "api_language",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        },
+        {
+          "name": "instance_info",
           "profile_name": "admin",
           "skip_stages": [],
           "admin_only": true
@@ -2572,6 +3097,12 @@
           "profile_name": "admin",
           "skip_stages": [],
           "admin_only": true
+        },
+        {
+          "name": "instance_info",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
         }
       ]
     },
@@ -2601,6 +3132,12 @@
           "profile_name": "admin",
           "skip_stages": [],
           "admin_only": true
+        },
+        {
+          "name": "instance_info",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
         }
       ]
     },
@@ -2627,6 +3164,12 @@
         },
         {
           "name": "api_language",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        },
+        {
+          "name": "instance_info",
           "profile_name": "admin",
           "skip_stages": [],
           "admin_only": true
@@ -2681,6 +3224,19 @@
             "fingerprint"
           ],
           "admin_only": false
+        },
+        {
+          "name": "instance_info",
+          "profile_name": "public",
+          "skip_stages": [
+            "access_control",
+            "admin_check",
+            "auth",
+            "csrf",
+            "device_id",
+            "fingerprint"
+          ],
+          "admin_only": false
         }
       ]
     },
@@ -2711,6 +3267,12 @@
           "profile_name": "admin",
           "skip_stages": [],
           "admin_only": true
+        },
+        {
+          "name": "instance_info",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
         }
       ]
     },
@@ -2737,6 +3299,12 @@
         },
         {
           "name": "api_language",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        },
+        {
+          "name": "instance_info",
           "profile_name": "admin",
           "skip_stages": [],
           "admin_only": true
@@ -2770,6 +3338,12 @@
           "profile_name": "admin",
           "skip_stages": [],
           "admin_only": true
+        },
+        {
+          "name": "instance_info",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
         }
       ]
     },
@@ -2796,6 +3370,12 @@
         },
         {
           "name": "api_language",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        },
+        {
+          "name": "instance_info",
           "profile_name": "admin",
           "skip_stages": [],
           "admin_only": true
@@ -2829,6 +3409,12 @@
           "profile_name": "default",
           "skip_stages": [],
           "admin_only": false
+        },
+        {
+          "name": "instance_info",
+          "profile_name": "default",
+          "skip_stages": [],
+          "admin_only": false
         }
       ]
     },
@@ -2856,6 +3442,12 @@
         },
         {
           "name": "api_language",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        },
+        {
+          "name": "instance_info",
           "profile_name": "admin",
           "skip_stages": [],
           "admin_only": true
@@ -2888,6 +3480,12 @@
           "profile_name": "admin",
           "skip_stages": [],
           "admin_only": true
+        },
+        {
+          "name": "instance_info",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
         }
       ]
     },
@@ -2915,6 +3513,12 @@
         },
         {
           "name": "api_language",
+          "profile_name": "default",
+          "skip_stages": [],
+          "admin_only": false
+        },
+        {
+          "name": "instance_info",
           "profile_name": "default",
           "skip_stages": [],
           "admin_only": false
@@ -2969,6 +3573,19 @@
             "fingerprint"
           ],
           "admin_only": false
+        },
+        {
+          "name": "instance_info",
+          "profile_name": "public",
+          "skip_stages": [
+            "access_control",
+            "admin_check",
+            "auth",
+            "csrf",
+            "device_id",
+            "fingerprint"
+          ],
+          "admin_only": false
         }
       ]
     },
@@ -3007,6 +3624,15 @@
             "admin_check"
           ],
           "admin_only": false
+        },
+        {
+          "name": "instance_info",
+          "profile_name": "login_only",
+          "skip_stages": [
+            "access_control",
+            "admin_check"
+          ],
+          "admin_only": false
         }
       ]
     },
@@ -3039,6 +3665,12 @@
           "profile_name": "admin",
           "skip_stages": [],
           "admin_only": true
+        },
+        {
+          "name": "instance_info",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
         }
       ]
     },
@@ -3066,6 +3698,12 @@
         },
         {
           "name": "api_language",
+          "profile_name": "default",
+          "skip_stages": [],
+          "admin_only": false
+        },
+        {
+          "name": "instance_info",
           "profile_name": "default",
           "skip_stages": [],
           "admin_only": false
@@ -3171,6 +3809,12 @@
           "profile_name": "admin",
           "skip_stages": [],
           "admin_only": true
+        },
+        {
+          "name": "instance_info",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
         }
       ]
     },
@@ -3200,6 +3844,12 @@
           "profile_name": "default",
           "skip_stages": [],
           "admin_only": false
+        },
+        {
+          "name": "instance_info",
+          "profile_name": "default",
+          "skip_stages": [],
+          "admin_only": false
         }
       ]
     },
@@ -3226,6 +3876,12 @@
         },
         {
           "name": "api_language",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        },
+        {
+          "name": "instance_info",
           "profile_name": "admin",
           "skip_stages": [],
           "admin_only": true
@@ -3276,6 +3932,12 @@
           "profile_name": "admin",
           "skip_stages": [],
           "admin_only": true
+        },
+        {
+          "name": "instance_info",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
         }
       ]
     },
@@ -3303,6 +3965,12 @@
         },
         {
           "name": "api_language",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        },
+        {
+          "name": "instance_info",
           "profile_name": "admin",
           "skip_stages": [],
           "admin_only": true
@@ -3335,6 +4003,12 @@
           "profile_name": "admin",
           "skip_stages": [],
           "admin_only": true
+        },
+        {
+          "name": "instance_info",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
         }
       ]
     },
@@ -3362,6 +4036,12 @@
         },
         {
           "name": "api_language",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        },
+        {
+          "name": "instance_info",
           "profile_name": "admin",
           "skip_stages": [],
           "admin_only": true
@@ -3416,6 +4096,12 @@
           "profile_name": "admin",
           "skip_stages": [],
           "admin_only": true
+        },
+        {
+          "name": "instance_info",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
         }
       ]
     },
@@ -3442,6 +4128,12 @@
         },
         {
           "name": "api_language",
+          "profile_name": "default",
+          "skip_stages": [],
+          "admin_only": false
+        },
+        {
+          "name": "instance_info",
           "profile_name": "default",
           "skip_stages": [],
           "admin_only": false
@@ -3496,6 +4188,19 @@
             "fingerprint"
           ],
           "admin_only": false
+        },
+        {
+          "name": "instance_info",
+          "profile_name": "public",
+          "skip_stages": [
+            "access_control",
+            "admin_check",
+            "auth",
+            "csrf",
+            "device_id",
+            "fingerprint"
+          ],
+          "admin_only": false
         }
       ]
     },
@@ -3522,6 +4227,12 @@
         },
         {
           "name": "api_language",
+          "profile_name": "default",
+          "skip_stages": [],
+          "admin_only": false
+        },
+        {
+          "name": "instance_info",
           "profile_name": "default",
           "skip_stages": [],
           "admin_only": false
@@ -3554,6 +4265,12 @@
           "profile_name": "admin",
           "skip_stages": [],
           "admin_only": true
+        },
+        {
+          "name": "instance_info",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
         }
       ]
     },
@@ -3580,6 +4297,12 @@
         },
         {
           "name": "api_language",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        },
+        {
+          "name": "instance_info",
           "profile_name": "admin",
           "skip_stages": [],
           "admin_only": true
@@ -3612,6 +4335,12 @@
           "profile_name": "admin",
           "skip_stages": [],
           "admin_only": true
+        },
+        {
+          "name": "instance_info",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
         }
       ]
     },
@@ -3638,6 +4367,12 @@
         },
         {
           "name": "api_language",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        },
+        {
+          "name": "instance_info",
           "profile_name": "admin",
           "skip_stages": [],
           "admin_only": true
@@ -3671,6 +4406,12 @@
           "profile_name": "admin",
           "skip_stages": [],
           "admin_only": true
+        },
+        {
+          "name": "instance_info",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
         }
       ]
     },
@@ -3698,6 +4439,12 @@
         },
         {
           "name": "api_language",
+          "profile_name": "default",
+          "skip_stages": [],
+          "admin_only": false
+        },
+        {
+          "name": "instance_info",
           "profile_name": "default",
           "skip_stages": [],
           "admin_only": false
@@ -3740,6 +4487,15 @@
             "admin_check"
           ],
           "admin_only": false
+        },
+        {
+          "name": "instance_info",
+          "profile_name": "login_only",
+          "skip_stages": [
+            "access_control",
+            "admin_check"
+          ],
+          "admin_only": false
         }
       ]
     },
@@ -3769,6 +4525,12 @@
           "profile_name": "admin",
           "skip_stages": [],
           "admin_only": true
+        },
+        {
+          "name": "instance_info",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
         }
       ]
     },
@@ -3795,6 +4557,12 @@
         },
         {
           "name": "api_language",
+          "profile_name": "default",
+          "skip_stages": [],
+          "admin_only": false
+        },
+        {
+          "name": "instance_info",
           "profile_name": "default",
           "skip_stages": [],
           "admin_only": false
@@ -3828,6 +4596,12 @@
           "profile_name": "default",
           "skip_stages": [],
           "admin_only": false
+        },
+        {
+          "name": "instance_info",
+          "profile_name": "default",
+          "skip_stages": [],
+          "admin_only": false
         }
       ]
     },
@@ -3855,6 +4629,12 @@
         },
         {
           "name": "api_language",
+          "profile_name": "default",
+          "skip_stages": [],
+          "admin_only": false
+        },
+        {
+          "name": "instance_info",
           "profile_name": "default",
           "skip_stages": [],
           "admin_only": false
@@ -3888,6 +4668,12 @@
           "profile_name": "default",
           "skip_stages": [],
           "admin_only": false
+        },
+        {
+          "name": "instance_info",
+          "profile_name": "default",
+          "skip_stages": [],
+          "admin_only": false
         }
       ]
     },
@@ -3915,6 +4701,12 @@
         },
         {
           "name": "api_language",
+          "profile_name": "default",
+          "skip_stages": [],
+          "admin_only": false
+        },
+        {
+          "name": "instance_info",
           "profile_name": "default",
           "skip_stages": [],
           "admin_only": false
@@ -3948,6 +4740,12 @@
           "profile_name": "default",
           "skip_stages": [],
           "admin_only": false
+        },
+        {
+          "name": "instance_info",
+          "profile_name": "default",
+          "skip_stages": [],
+          "admin_only": false
         }
       ]
     },
@@ -3975,6 +4773,12 @@
         },
         {
           "name": "api_language",
+          "profile_name": "default",
+          "skip_stages": [],
+          "admin_only": false
+        },
+        {
+          "name": "instance_info",
           "profile_name": "default",
           "skip_stages": [],
           "admin_only": false
@@ -4008,6 +4812,12 @@
           "profile_name": "default",
           "skip_stages": [],
           "admin_only": false
+        },
+        {
+          "name": "instance_info",
+          "profile_name": "default",
+          "skip_stages": [],
+          "admin_only": false
         }
       ]
     },
@@ -4035,6 +4845,12 @@
         },
         {
           "name": "api_language",
+          "profile_name": "default",
+          "skip_stages": [],
+          "admin_only": false
+        },
+        {
+          "name": "instance_info",
           "profile_name": "default",
           "skip_stages": [],
           "admin_only": false
@@ -4068,6 +4884,12 @@
           "profile_name": "default",
           "skip_stages": [],
           "admin_only": false
+        },
+        {
+          "name": "instance_info",
+          "profile_name": "default",
+          "skip_stages": [],
+          "admin_only": false
         }
       ]
     },
@@ -4095,6 +4917,12 @@
         },
         {
           "name": "api_language",
+          "profile_name": "default",
+          "skip_stages": [],
+          "admin_only": false
+        },
+        {
+          "name": "instance_info",
           "profile_name": "default",
           "skip_stages": [],
           "admin_only": false
@@ -4128,6 +4956,12 @@
           "profile_name": "default",
           "skip_stages": [],
           "admin_only": false
+        },
+        {
+          "name": "instance_info",
+          "profile_name": "default",
+          "skip_stages": [],
+          "admin_only": false
         }
       ]
     },
@@ -4155,6 +4989,12 @@
         },
         {
           "name": "api_language",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        },
+        {
+          "name": "instance_info",
           "profile_name": "admin",
           "skip_stages": [],
           "admin_only": true
@@ -4190,6 +5030,15 @@
         },
         {
           "name": "api_language",
+          "profile_name": "login_only",
+          "skip_stages": [
+            "access_control",
+            "admin_check"
+          ],
+          "admin_only": false
+        },
+        {
+          "name": "instance_info",
           "profile_name": "login_only",
           "skip_stages": [
             "access_control",
@@ -4235,6 +5084,15 @@
             "admin_check"
           ],
           "admin_only": false
+        },
+        {
+          "name": "instance_info",
+          "profile_name": "login_only",
+          "skip_stages": [
+            "access_control",
+            "admin_check"
+          ],
+          "admin_only": false
         }
       ]
     },
@@ -4273,6 +5131,15 @@
             "admin_check"
           ],
           "admin_only": false
+        },
+        {
+          "name": "instance_info",
+          "profile_name": "login_only",
+          "skip_stages": [
+            "access_control",
+            "admin_check"
+          ],
+          "admin_only": false
         }
       ]
     },
@@ -4291,6 +5158,32 @@
           "profile_name": "admin",
           "skip_stages": [],
           "admin_only": true
+        }
+      ]
+    },
+    {
+      "path_pattern": "/api/instance-info",
+      "match_type": "exact",
+      "handler_name": "instance_info.Handler",
+      "methods": [
+        "GET",
+        "HEAD"
+      ],
+      "method_source": "route_registration",
+      "conditional_source": "FILTEREST_INSTANCE_INFO_FILE names the mirror tool's record",
+      "scenarios": [
+        {
+          "name": "instance_info",
+          "profile_name": "public",
+          "skip_stages": [
+            "access_control",
+            "admin_check",
+            "auth",
+            "csrf",
+            "device_id",
+            "fingerprint"
+          ],
+          "admin_only": false
         }
       ]
     },
@@ -4346,6 +5239,12 @@
           "profile_name": "admin",
           "skip_stages": [],
           "admin_only": true
+        },
+        {
+          "name": "instance_info",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
         }
       ]
     },
@@ -4372,6 +5271,12 @@
         },
         {
           "name": "api_language",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        },
+        {
+          "name": "instance_info",
           "profile_name": "admin",
           "skip_stages": [],
           "admin_only": true
@@ -4415,6 +5320,19 @@
         },
         {
           "name": "api_language",
+          "profile_name": "public",
+          "skip_stages": [
+            "access_control",
+            "admin_check",
+            "auth",
+            "csrf",
+            "device_id",
+            "fingerprint"
+          ],
+          "admin_only": false
+        },
+        {
+          "name": "instance_info",
           "profile_name": "public",
           "skip_stages": [
             "access_control",
@@ -4472,6 +5390,18 @@
             "fingerprint"
           ],
           "admin_only": false
+        },
+        {
+          "name": "instance_info",
+          "profile_name": "sign_out",
+          "skip_stages": [
+            "access_control",
+            "admin_check",
+            "auth",
+            "device_id",
+            "fingerprint"
+          ],
+          "admin_only": false
         }
       ]
     },
@@ -4510,6 +5440,15 @@
             "admin_check"
           ],
           "admin_only": false
+        },
+        {
+          "name": "instance_info",
+          "profile_name": "login_only",
+          "skip_stages": [
+            "access_control",
+            "admin_check"
+          ],
+          "admin_only": false
         }
       ]
     },
@@ -4542,6 +5481,15 @@
         },
         {
           "name": "api_language",
+          "profile_name": "login_only",
+          "skip_stages": [
+            "access_control",
+            "admin_check"
+          ],
+          "admin_only": false
+        },
+        {
+          "name": "instance_info",
           "profile_name": "login_only",
           "skip_stages": [
             "access_control",
@@ -4587,6 +5535,15 @@
             "admin_check"
           ],
           "admin_only": false
+        },
+        {
+          "name": "instance_info",
+          "profile_name": "login_only",
+          "skip_stages": [
+            "access_control",
+            "admin_check"
+          ],
+          "admin_only": false
         }
       ]
     },
@@ -4615,6 +5572,12 @@
         },
         {
           "name": "api_language",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        },
+        {
+          "name": "instance_info",
           "profile_name": "admin",
           "skip_stages": [],
           "admin_only": true
@@ -4659,6 +5622,19 @@
         },
         {
           "name": "api_language",
+          "profile_name": "public",
+          "skip_stages": [
+            "access_control",
+            "admin_check",
+            "auth",
+            "csrf",
+            "device_id",
+            "fingerprint"
+          ],
+          "admin_only": false
+        },
+        {
+          "name": "instance_info",
           "profile_name": "public",
           "skip_stages": [
             "access_control",
@@ -4719,6 +5695,19 @@
             "fingerprint"
           ],
           "admin_only": false
+        },
+        {
+          "name": "instance_info",
+          "profile_name": "public",
+          "skip_stages": [
+            "access_control",
+            "admin_check",
+            "auth",
+            "csrf",
+            "device_id",
+            "fingerprint"
+          ],
+          "admin_only": false
         }
       ]
     },
@@ -4759,6 +5748,19 @@
         },
         {
           "name": "api_language",
+          "profile_name": "public",
+          "skip_stages": [
+            "access_control",
+            "admin_check",
+            "auth",
+            "csrf",
+            "device_id",
+            "fingerprint"
+          ],
+          "admin_only": false
+        },
+        {
+          "name": "instance_info",
           "profile_name": "public",
           "skip_stages": [
             "access_control",
@@ -4839,6 +5841,19 @@
             "fingerprint"
           ],
           "admin_only": false
+        },
+        {
+          "name": "instance_info",
+          "profile_name": "public",
+          "skip_stages": [
+            "access_control",
+            "admin_check",
+            "auth",
+            "csrf",
+            "device_id",
+            "fingerprint"
+          ],
+          "admin_only": false
         }
       ]
     },
@@ -4865,6 +5880,12 @@
         },
         {
           "name": "api_language",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        },
+        {
+          "name": "instance_info",
           "profile_name": "admin",
           "skip_stages": [],
           "admin_only": true
@@ -4915,6 +5936,12 @@
           "profile_name": "admin",
           "skip_stages": [],
           "admin_only": true
+        },
+        {
+          "name": "instance_info",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
         }
       ]
     },
@@ -4941,6 +5968,12 @@
         },
         {
           "name": "api_language",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        },
+        {
+          "name": "instance_info",
           "profile_name": "admin",
           "skip_stages": [],
           "admin_only": true
@@ -4994,6 +6027,19 @@
             "fingerprint"
           ],
           "admin_only": false
+        },
+        {
+          "name": "instance_info",
+          "profile_name": "public",
+          "skip_stages": [
+            "access_control",
+            "admin_check",
+            "auth",
+            "csrf",
+            "device_id",
+            "fingerprint"
+          ],
+          "admin_only": false
         }
       ]
     },
@@ -5020,6 +6066,12 @@
         },
         {
           "name": "api_language",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        },
+        {
+          "name": "instance_info",
           "profile_name": "admin",
           "skip_stages": [],
           "admin_only": true
@@ -5061,6 +6113,15 @@
             "admin_check"
           ],
           "admin_only": false
+        },
+        {
+          "name": "instance_info",
+          "profile_name": "login_only",
+          "skip_stages": [
+            "access_control",
+            "admin_check"
+          ],
+          "admin_only": false
         }
       ]
     },
@@ -5093,6 +6154,15 @@
         },
         {
           "name": "api_language",
+          "profile_name": "login_only",
+          "skip_stages": [
+            "access_control",
+            "admin_check"
+          ],
+          "admin_only": false
+        },
+        {
+          "name": "instance_info",
           "profile_name": "login_only",
           "skip_stages": [
             "access_control",
@@ -5139,6 +6209,19 @@
         },
         {
           "name": "api_language",
+          "profile_name": "public",
+          "skip_stages": [
+            "access_control",
+            "admin_check",
+            "auth",
+            "csrf",
+            "device_id",
+            "fingerprint"
+          ],
+          "admin_only": false
+        },
+        {
+          "name": "instance_info",
           "profile_name": "public",
           "skip_stages": [
             "access_control",
@@ -5199,6 +6282,19 @@
             "fingerprint"
           ],
           "admin_only": false
+        },
+        {
+          "name": "instance_info",
+          "profile_name": "public",
+          "skip_stages": [
+            "access_control",
+            "admin_check",
+            "auth",
+            "csrf",
+            "device_id",
+            "fingerprint"
+          ],
+          "admin_only": false
         }
       ]
     },
@@ -5249,6 +6345,19 @@
             "fingerprint"
           ],
           "admin_only": false
+        },
+        {
+          "name": "instance_info",
+          "profile_name": "public",
+          "skip_stages": [
+            "access_control",
+            "admin_check",
+            "auth",
+            "csrf",
+            "device_id",
+            "fingerprint"
+          ],
+          "admin_only": false
         }
       ]
     },
@@ -5278,6 +6387,12 @@
           "profile_name": "admin",
           "skip_stages": [],
           "admin_only": true
+        },
+        {
+          "name": "instance_info",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
         }
       ]
     },
@@ -5304,6 +6419,12 @@
         },
         {
           "name": "api_language",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        },
+        {
+          "name": "instance_info",
           "profile_name": "admin",
           "skip_stages": [],
           "admin_only": true
@@ -5355,6 +6476,12 @@
           "profile_name": "admin",
           "skip_stages": [],
           "admin_only": true
+        },
+        {
+          "name": "instance_info",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
         }
       ]
     },
@@ -5381,6 +6508,12 @@
         },
         {
           "name": "api_language",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        },
+        {
+          "name": "instance_info",
           "profile_name": "admin",
           "skip_stages": [],
           "admin_only": true
@@ -5416,6 +6549,15 @@
         },
         {
           "name": "api_language",
+          "profile_name": "login_only",
+          "skip_stages": [
+            "access_control",
+            "admin_check"
+          ],
+          "admin_only": false
+        },
+        {
+          "name": "instance_info",
           "profile_name": "login_only",
           "skip_stages": [
             "access_control",
@@ -5462,6 +6604,19 @@
         },
         {
           "name": "api_language",
+          "profile_name": "public",
+          "skip_stages": [
+            "access_control",
+            "admin_check",
+            "auth",
+            "csrf",
+            "device_id",
+            "fingerprint"
+          ],
+          "admin_only": false
+        },
+        {
+          "name": "instance_info",
           "profile_name": "public",
           "skip_stages": [
             "access_control",
@@ -5523,6 +6678,19 @@
             "fingerprint"
           ],
           "admin_only": false
+        },
+        {
+          "name": "instance_info",
+          "profile_name": "public",
+          "skip_stages": [
+            "access_control",
+            "admin_check",
+            "auth",
+            "csrf",
+            "device_id",
+            "fingerprint"
+          ],
+          "admin_only": false
         }
       ]
     },
@@ -5562,6 +6730,15 @@
             "transaction"
           ],
           "admin_only": false
+        },
+        {
+          "name": "instance_info",
+          "profile_name": "access_control_no_tx",
+          "skip_stages": [
+            "admin_check",
+            "transaction"
+          ],
+          "admin_only": false
         }
       ]
     },
@@ -5588,6 +6765,12 @@
         },
         {
           "name": "api_language",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        },
+        {
+          "name": "instance_info",
           "profile_name": "admin",
           "skip_stages": [],
           "admin_only": true
@@ -5618,6 +6801,12 @@
         },
         {
           "name": "api_language",
+          "profile_name": "default",
+          "skip_stages": [],
+          "admin_only": false
+        },
+        {
+          "name": "instance_info",
           "profile_name": "default",
           "skip_stages": [],
           "admin_only": false
@@ -5660,6 +6849,15 @@
             "admin_check"
           ],
           "admin_only": false
+        },
+        {
+          "name": "instance_info",
+          "profile_name": "login_only",
+          "skip_stages": [
+            "access_control",
+            "admin_check"
+          ],
+          "admin_only": false
         }
       ]
     },
@@ -5687,6 +6885,12 @@
         },
         {
           "name": "api_language",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        },
+        {
+          "name": "instance_info",
           "profile_name": "admin",
           "skip_stages": [],
           "admin_only": true
@@ -5741,6 +6945,19 @@
             "fingerprint"
           ],
           "admin_only": false
+        },
+        {
+          "name": "instance_info",
+          "profile_name": "public",
+          "skip_stages": [
+            "access_control",
+            "admin_check",
+            "auth",
+            "csrf",
+            "device_id",
+            "fingerprint"
+          ],
+          "admin_only": false
         }
       ]
     },
@@ -5768,6 +6985,12 @@
         },
         {
           "name": "api_language",
+          "profile_name": "default",
+          "skip_stages": [],
+          "admin_only": false
+        },
+        {
+          "name": "instance_info",
           "profile_name": "default",
           "skip_stages": [],
           "admin_only": false
@@ -5822,6 +7045,19 @@
             "fingerprint"
           ],
           "admin_only": false
+        },
+        {
+          "name": "instance_info",
+          "profile_name": "public",
+          "skip_stages": [
+            "access_control",
+            "admin_check",
+            "auth",
+            "csrf",
+            "device_id",
+            "fingerprint"
+          ],
+          "admin_only": false
         }
       ]
     },
@@ -5848,6 +7084,12 @@
         },
         {
           "name": "api_language",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
+        },
+        {
+          "name": "instance_info",
           "profile_name": "admin",
           "skip_stages": [],
           "admin_only": true
@@ -5898,6 +7140,12 @@
           "profile_name": "admin",
           "skip_stages": [],
           "admin_only": true
+        },
+        {
+          "name": "instance_info",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
         }
       ]
     },
@@ -5936,6 +7184,15 @@
             "admin_check"
           ],
           "admin_only": false
+        },
+        {
+          "name": "instance_info",
+          "profile_name": "login_only",
+          "skip_stages": [
+            "access_control",
+            "admin_check"
+          ],
+          "admin_only": false
         }
       ]
     },
@@ -5962,6 +7219,12 @@
         },
         {
           "name": "api_language",
+          "profile_name": "default",
+          "skip_stages": [],
+          "admin_only": false
+        },
+        {
+          "name": "instance_info",
           "profile_name": "default",
           "skip_stages": [],
           "admin_only": false
@@ -5994,6 +7257,12 @@
           "profile_name": "admin",
           "skip_stages": [],
           "admin_only": true
+        },
+        {
+          "name": "instance_info",
+          "profile_name": "admin",
+          "skip_stages": [],
+          "admin_only": true
         }
       ]
     },
@@ -6020,6 +7289,12 @@
         },
         {
           "name": "api_language",
+          "profile_name": "default",
+          "skip_stages": [],
+          "admin_only": false
+        },
+        {
+          "name": "instance_info",
           "profile_name": "default",
           "skip_stages": [],
           "admin_only": false
@@ -6058,6 +7333,15 @@
         },
         {
           "name": "api_language",
+          "profile_name": "login_only",
+          "skip_stages": [
+            "access_control",
+            "admin_check"
+          ],
+          "admin_only": false
+        },
+        {
+          "name": "instance_info",
           "profile_name": "login_only",
           "skip_stages": [
             "access_control",
@@ -6103,6 +7387,15 @@
             "admin_check"
           ],
           "admin_only": false
+        },
+        {
+          "name": "instance_info",
+          "profile_name": "login_only",
+          "skip_stages": [
+            "access_control",
+            "admin_check"
+          ],
+          "admin_only": false
         }
       ]
     },
@@ -6136,6 +7429,15 @@
         },
         {
           "name": "api_language",
+          "profile_name": "login_only",
+          "skip_stages": [
+            "access_control",
+            "admin_check"
+          ],
+          "admin_only": false
+        },
+        {
+          "name": "instance_info",
           "profile_name": "login_only",
           "skip_stages": [
             "access_control",
@@ -6183,6 +7485,15 @@
             "admin_check"
           ],
           "admin_only": false
+        },
+        {
+          "name": "instance_info",
+          "profile_name": "login_only",
+          "skip_stages": [
+            "access_control",
+            "admin_check"
+          ],
+          "admin_only": false
         }
       ]
     },
@@ -6216,6 +7527,15 @@
         },
         {
           "name": "api_language",
+          "profile_name": "login_only",
+          "skip_stages": [
+            "access_control",
+            "admin_check"
+          ],
+          "admin_only": false
+        },
+        {
+          "name": "instance_info",
           "profile_name": "login_only",
           "skip_stages": [
             "access_control",
@@ -6260,6 +7580,15 @@
             "admin_check"
           ],
           "admin_only": false
+        },
+        {
+          "name": "instance_info",
+          "profile_name": "login_only",
+          "skip_stages": [
+            "access_control",
+            "admin_check"
+          ],
+          "admin_only": false
         }
       ]
     },
@@ -6292,6 +7621,15 @@
         },
         {
           "name": "api_language",
+          "profile_name": "login_only",
+          "skip_stages": [
+            "access_control",
+            "admin_check"
+          ],
+          "admin_only": false
+        },
+        {
+          "name": "instance_info",
           "profile_name": "login_only",
           "skip_stages": [
             "access_control",
@@ -6336,6 +7674,15 @@
             "admin_check"
           ],
           "admin_only": false
+        },
+        {
+          "name": "instance_info",
+          "profile_name": "login_only",
+          "skip_stages": [
+            "access_control",
+            "admin_check"
+          ],
+          "admin_only": false
         }
       ]
     },
@@ -6368,6 +7715,15 @@
         },
         {
           "name": "api_language",
+          "profile_name": "login_only",
+          "skip_stages": [
+            "access_control",
+            "admin_check"
+          ],
+          "admin_only": false
+        },
+        {
+          "name": "instance_info",
           "profile_name": "login_only",
           "skip_stages": [
             "access_control",
@@ -6407,6 +7763,15 @@
         },
         {
           "name": "api_language",
+          "profile_name": "login_only",
+          "skip_stages": [
+            "access_control",
+            "admin_check"
+          ],
+          "admin_only": false
+        },
+        {
+          "name": "instance_info",
           "profile_name": "login_only",
           "skip_stages": [
             "access_control",
@@ -6454,6 +7819,19 @@
         },
         {
           "name": "api_language",
+          "profile_name": "public",
+          "skip_stages": [
+            "access_control",
+            "admin_check",
+            "auth",
+            "csrf",
+            "device_id",
+            "fingerprint"
+          ],
+          "admin_only": false
+        },
+        {
+          "name": "instance_info",
           "profile_name": "public",
           "skip_stages": [
             "access_control",
@@ -6515,6 +7893,19 @@
             "fingerprint"
           ],
           "admin_only": false
+        },
+        {
+          "name": "instance_info",
+          "profile_name": "public",
+          "skip_stages": [
+            "access_control",
+            "admin_check",
+            "auth",
+            "csrf",
+            "device_id",
+            "fingerprint"
+          ],
+          "admin_only": false
         }
       ]
     },
@@ -6556,6 +7947,19 @@
         },
         {
           "name": "api_language",
+          "profile_name": "public",
+          "skip_stages": [
+            "access_control",
+            "admin_check",
+            "auth",
+            "csrf",
+            "device_id",
+            "fingerprint"
+          ],
+          "admin_only": false
+        },
+        {
+          "name": "instance_info",
           "profile_name": "public",
           "skip_stages": [
             "access_control",
@@ -6617,6 +8021,19 @@
             "fingerprint"
           ],
           "admin_only": false
+        },
+        {
+          "name": "instance_info",
+          "profile_name": "public",
+          "skip_stages": [
+            "access_control",
+            "admin_check",
+            "auth",
+            "csrf",
+            "device_id",
+            "fingerprint"
+          ],
+          "admin_only": false
         }
       ]
     },
@@ -6658,6 +8075,19 @@
         },
         {
           "name": "api_language",
+          "profile_name": "public",
+          "skip_stages": [
+            "access_control",
+            "admin_check",
+            "auth",
+            "csrf",
+            "device_id",
+            "fingerprint"
+          ],
+          "admin_only": false
+        },
+        {
+          "name": "instance_info",
           "profile_name": "public",
           "skip_stages": [
             "access_control",
@@ -6720,6 +8150,19 @@
             "fingerprint"
           ],
           "admin_only": false
+        },
+        {
+          "name": "instance_info",
+          "profile_name": "public",
+          "skip_stages": [
+            "access_control",
+            "admin_check",
+            "auth",
+            "csrf",
+            "device_id",
+            "fingerprint"
+          ],
+          "admin_only": false
         }
       ]
     },
@@ -6771,6 +8214,19 @@
             "fingerprint"
           ],
           "admin_only": false
+        },
+        {
+          "name": "instance_info",
+          "profile_name": "public",
+          "skip_stages": [
+            "access_control",
+            "admin_check",
+            "auth",
+            "csrf",
+            "device_id",
+            "fingerprint"
+          ],
+          "admin_only": false
         }
       ]
     },
@@ -6812,6 +8268,19 @@
         },
         {
           "name": "api_language",
+          "profile_name": "public",
+          "skip_stages": [
+            "access_control",
+            "admin_check",
+            "auth",
+            "csrf",
+            "device_id",
+            "fingerprint"
+          ],
+          "admin_only": false
+        },
+        {
+          "name": "instance_info",
           "profile_name": "public",
           "skip_stages": [
             "access_control",
@@ -6874,6 +8343,19 @@
             "fingerprint"
           ],
           "admin_only": false
+        },
+        {
+          "name": "instance_info",
+          "profile_name": "public",
+          "skip_stages": [
+            "access_control",
+            "admin_check",
+            "auth",
+            "csrf",
+            "device_id",
+            "fingerprint"
+          ],
+          "admin_only": false
         }
       ]
     },
@@ -6915,6 +8397,19 @@
         },
         {
           "name": "api_language",
+          "profile_name": "public",
+          "skip_stages": [
+            "access_control",
+            "admin_check",
+            "auth",
+            "csrf",
+            "device_id",
+            "fingerprint"
+          ],
+          "admin_only": false
+        },
+        {
+          "name": "instance_info",
           "profile_name": "public",
           "skip_stages": [
             "access_control",
@@ -6976,6 +8471,19 @@
             "fingerprint"
           ],
           "admin_only": false
+        },
+        {
+          "name": "instance_info",
+          "profile_name": "public",
+          "skip_stages": [
+            "access_control",
+            "admin_check",
+            "auth",
+            "csrf",
+            "device_id",
+            "fingerprint"
+          ],
+          "admin_only": false
         }
       ]
     },
@@ -7017,6 +8525,19 @@
         },
         {
           "name": "api_language",
+          "profile_name": "public",
+          "skip_stages": [
+            "access_control",
+            "admin_check",
+            "auth",
+            "csrf",
+            "device_id",
+            "fingerprint"
+          ],
+          "admin_only": false
+        },
+        {
+          "name": "instance_info",
           "profile_name": "public",
           "skip_stages": [
             "access_control",
@@ -7078,6 +8599,19 @@
             "fingerprint"
           ],
           "admin_only": false
+        },
+        {
+          "name": "instance_info",
+          "profile_name": "public",
+          "skip_stages": [
+            "access_control",
+            "admin_check",
+            "auth",
+            "csrf",
+            "device_id",
+            "fingerprint"
+          ],
+          "admin_only": false
         }
       ]
     },
@@ -7119,6 +8653,19 @@
         },
         {
           "name": "api_language",
+          "profile_name": "public",
+          "skip_stages": [
+            "access_control",
+            "admin_check",
+            "auth",
+            "csrf",
+            "device_id",
+            "fingerprint"
+          ],
+          "admin_only": false
+        },
+        {
+          "name": "instance_info",
           "profile_name": "public",
           "skip_stages": [
             "access_control",
@@ -7181,6 +8728,19 @@
             "fingerprint"
           ],
           "admin_only": false
+        },
+        {
+          "name": "instance_info",
+          "profile_name": "public",
+          "skip_stages": [
+            "access_control",
+            "admin_check",
+            "auth",
+            "csrf",
+            "device_id",
+            "fingerprint"
+          ],
+          "admin_only": false
         }
       ]
     },
@@ -7221,6 +8781,19 @@
         },
         {
           "name": "api_language",
+          "profile_name": "public",
+          "skip_stages": [
+            "access_control",
+            "admin_check",
+            "auth",
+            "csrf",
+            "device_id",
+            "fingerprint"
+          ],
+          "admin_only": false
+        },
+        {
+          "name": "instance_info",
           "profile_name": "public",
           "skip_stages": [
             "access_control",
@@ -7282,6 +8855,19 @@
             "fingerprint"
           ],
           "admin_only": false
+        },
+        {
+          "name": "instance_info",
+          "profile_name": "public",
+          "skip_stages": [
+            "access_control",
+            "admin_check",
+            "auth",
+            "csrf",
+            "device_id",
+            "fingerprint"
+          ],
+          "admin_only": false
         }
       ]
     },
@@ -7323,6 +8909,19 @@
         },
         {
           "name": "api_language",
+          "profile_name": "public",
+          "skip_stages": [
+            "access_control",
+            "admin_check",
+            "auth",
+            "csrf",
+            "device_id",
+            "fingerprint"
+          ],
+          "admin_only": false
+        },
+        {
+          "name": "instance_info",
           "profile_name": "public",
           "skip_stages": [
             "access_control",
@@ -7384,6 +8983,19 @@
             "fingerprint"
           ],
           "admin_only": false
+        },
+        {
+          "name": "instance_info",
+          "profile_name": "public",
+          "skip_stages": [
+            "access_control",
+            "admin_check",
+            "auth",
+            "csrf",
+            "device_id",
+            "fingerprint"
+          ],
+          "admin_only": false
         }
       ]
     },
@@ -7424,6 +9036,19 @@
         },
         {
           "name": "api_language",
+          "profile_name": "public",
+          "skip_stages": [
+            "access_control",
+            "admin_check",
+            "auth",
+            "csrf",
+            "device_id",
+            "fingerprint"
+          ],
+          "admin_only": false
+        },
+        {
+          "name": "instance_info",
           "profile_name": "public",
           "skip_stages": [
             "access_control",

@@ -106,6 +106,7 @@
   "image_source_picker.FileHandler": "",
   "image_source_picker.ProvidersHandler": "",
   "image_source_picker.ResolveHandler": "",
+  "instance_info.Handler": "Handler answers GET /api/instance-info with the sanitized record. The route exists only while the flag is on; the check here keeps a stale registration from answering after the flag is gone.",
   "lang.AdminLangKeyHandler": "AdminLangKeyHandler saves one authored language-key patch through the full admin pipeline. Between authenticated API clients and translation storage, it accepts only POST and requires a request transaction. This is the production-safe counterpart to the development-only language-key editor route.",
   "lang.AdminUILanguagesHandler": "AdminUILanguagesHandler returns or saves the complete canonical site-language registry. GET/POST /api/admin/ui-languages",
   "lang.AiTranslateSingleHandler": "AiTranslateSingleHandler returns AI suggestions for one lang key before the user saves them.",

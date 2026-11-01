@@ -78,6 +78,12 @@
     {{else}}
     <link rel="stylesheet" id="imports-css" data-shell-boot-required data-shell-boot-probe-link href="/frontend/styles/imports.css">
     {{end}}
+    {{if .ShellBoot.InstanceBadge}}
+    <!-- Mirror/preview instances only (K523): the runtime flag is off in production, so nothing is linked there. -->
+    <!-- A caught dynamic import: a stalled, failing or throwing badge module never holds the page's own modules back -->
+    <!-- and never reaches the shell's start-up error handling; the module adds its own stylesheet. -->
+    <script type="module" async nonce="{{.CSPNonce}}" data-instance-badge>import('/frontend/reusable_components/instance_badge/instance_badge.js').catch(function () {});</script>
+    {{end}}
 </head>
 
 <body>

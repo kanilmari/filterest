@@ -132,6 +132,7 @@ var RouteProfiles = map[string]RouteProfile{
 	"router.systemDrainHandler":             PublicProfile,
 	"router.systemAutomationAccountHandler": PublicProfile,
 	"router.systemUpdateNoticeHandler":      PublicProfile,
+	"instance_info.Handler":                 PublicProfile, // registered only on a mirror or preview (K523)
 	"router.sitemapHandler":                 PublicProfile,
 	"router.rootHandler":                    PublicProfile,
 	"router.handleFrontend":                 PublicProfile,

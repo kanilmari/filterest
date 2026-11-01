@@ -57,7 +57,7 @@ func TestFixtureComponentRegistrationAndManifest(t *testing.T) {
  for _, route := range manifest.Routes {
   if route.HandlerName == "registration_fixture.Handler" {
    found = true
-   if route.PathPattern != "/api/registration-fixture" || len(route.Scenarios) != 3 {
+   if route.PathPattern != "/api/registration-fixture" || len(route.Scenarios) != len(manifest.ScenarioOrder) {
     t.Fatalf("incomplete manifest fixture: %#v", route)
    }
    for _, scenario := range route.Scenarios {
