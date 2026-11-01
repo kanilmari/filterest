@@ -18,6 +18,14 @@ const IS_DEV_MODE = document.querySelector('meta[name="app-env"]')?.content === 
 // temporary search expansion into the reader's saved expansion preference.
 const TREE_RENDER_STATES = new WeakMap();
 
+/** Reveal a current navigation path without recording a user preference. */
+export function revealTreeNode(nodeEl) {
+    const state = TREE_RENDER_STATES.get(nodeEl?.closest('.tree-container'));
+    if (!state) return false;
+    state.openChildren(nodeEl, { animate: false });
+    return true;
+}
+
 /* ------------ pienehköt top-level-apu-funktiot (entiset) ------------- */
 
 function getAllDescendantLeaves(nodeEl) {
@@ -59,7 +67,8 @@ function collectSelectedLeafNodesWithFolders(container) {
 /* ==================================================================== */
 
 /**
- * Builds a tree and restores its saved selections and expanded nodes.
+ * Builds a tree and restores selections and explicit open/closed choices.
+ * Defaults, search and current-path reveals never become saved choices.
  * Rebuilding callers can preserve expansion so only new branches receive
  * initial opening defaults, and preserve search with its focus and restore state.
  * @param {Object|Object[]} data
@@ -98,17 +107,31 @@ export async function render_tree(data, config = {}) {
     const renderState = { expandedBeforeSearch: null };
 
     /* ---------- LocalStorage-apuja ---------- */
-    const lsKey = () => 'expanded_nodes' + id_suffix;
-    const loadExpanded = () => {
+    const lsKey = () => 'tree_state_v2' + id_suffix;
+    const loadChoices = () => {
         try {
+            // Old expansion lists include automatic opens, so cannot be migrated.
+            localStorage.removeItem('expanded_nodes' + id_suffix);
             const raw = localStorage.getItem(lsKey());
-            return raw ? JSON.parse(raw) : [];
+            const parsed = raw ? JSON.parse(raw) : null;
+            if (Array.isArray(parsed?.open) && Array.isArray(parsed?.closed)) {
+                return { open: parsed.open.filter(id => typeof id === 'string'),
+                    closed: parsed.closed.filter(id => typeof id === 'string') };
+            }
         } catch (e) {
             if (IS_DEV_MODE) console.log(e);
-            return [];
         }
+        return { open: [], closed: [] };
     };
-    const saveExpanded = (arr) => localStorage.setItem(lsKey(), JSON.stringify(arr));
+    const saveChoice = (nodeId, expanded) => {
+        const choices = loadChoices();
+        choices.open = choices.open.filter(id => id !== nodeId);
+        choices.closed = choices.closed.filter(id => id !== nodeId);
+        choices[expanded ? 'open' : 'closed'].push(nodeId);
+        localStorage.setItem(lsKey(), JSON.stringify(choices));
+        // A deliberate toggle during search must also survive clearing it.
+        renderState.expandedBeforeSearch?.set(nodeId, expanded);
+    };
 
     const lsCheckboxKey = () => 'checkbox_states' + id_suffix;
     const loadCheckboxStates = () => {
@@ -195,19 +218,12 @@ export async function render_tree(data, config = {}) {
         const animator = getChildrenAnimator(c);
         animator.expand({ animate: options.animate !== false });
         updateNodeExpandedVisuals(nodeEl, true);
-        const exp = loadExpanded();
-        if (!exp.includes(nodeEl.id)) {
-            exp.push(nodeEl.id);
-            saveExpanded(exp);
-        }
     };
     const closeChildren = (nodeEl, options = {}) => {
         const c = nodeEl.querySelector(':scope > .children');
         if (!c) return;
         const animator = getChildrenAnimator(c);
         animator.collapse({ animate: options.animate !== false });
-        const exp = loadExpanded().filter((id) => id !== nodeEl.id);
-        saveExpanded(exp);
         updateNodeExpandedVisuals(nodeEl, false);
     };
     const toggleChildrenVisibility = (childC, options = {}) => {
@@ -216,10 +232,25 @@ export async function render_tree(data, config = {}) {
         const animator = getChildrenAnimator(childC);
         if (animator.isExpanded()) {
             closeChildren(n, options);
+            saveChoice(n.id, false);
             return false;
         }
         openChildren(n, options);
+        saveChoice(n.id, true);
         return true;
+    };
+    renderState.openChildren = openChildren;
+
+    const collectExpansion = (treeContainer) => new Map(
+        Array.from(treeContainer?.querySelectorAll('.node') || [])
+            .filter(node => node.querySelector(':scope > .children'))
+            .map(node => [node.id, node.dataset.expanded === 'true']),
+    );
+    const applyExpansion = (expanded) => {
+        getTreeContainer()?.querySelectorAll('.node').forEach(node => {
+            if (expanded.get(node.id)) openChildren(node, { animate: false });
+            else closeChildren(node, { animate: false });
+        });
     };
 
     /* ---------- checkbox-tilojen tallennus ---------- */
@@ -260,6 +291,8 @@ export async function render_tree(data, config = {}) {
     const filterTreeNodes = (term) => {
         const tc = getTreeContainer();
         if (!tc) return;
+        // Each query reveals only its matches; earlier query paths are temporary.
+        if (renderState.expandedBeforeSearch) applyExpansion(renderState.expandedBeforeSearch);
         if (!term) {
             tc.querySelectorAll('.node').forEach((n) => n.classList.remove('hidden'));
             return;
@@ -309,17 +342,7 @@ export async function render_tree(data, config = {}) {
         const tc = getTreeContainer();
         if (!tc) return;
         tc.querySelectorAll('.node').forEach((n) => n.classList.remove('hidden'));
-        const expanded = renderState.expandedBeforeSearch || [];
-        saveExpanded(expanded);
-        tc.querySelectorAll('.node').forEach((n) => {
-            const cc = n.querySelector('.children');
-            if (!cc) return;
-            if (expanded.includes(n.id)) {
-                openChildren(n, { animate: false });
-            } else {
-                closeChildren(n, { animate: false });
-            }
-        });
+        if (renderState.expandedBeforeSearch) applyExpansion(renderState.expandedBeforeSearch);
         renderState.expandedBeforeSearch = null;
         restoreCheckboxStates();
         updateFolderCounts();
@@ -338,10 +361,9 @@ export async function render_tree(data, config = {}) {
         const hadSearchFocus = previousSearchInput && document.activeElement === previousSearchInput;
         const previousTreeContainer = getTreeContainer();
         const previousRenderState = TREE_RENDER_STATES.get(previousTreeContainer);
-        const previousNodeIds = new Set(config.preserveExpansion
-            ? Array.from(previousTreeContainer?.querySelectorAll('.node') || [], node => node.id)
-            : []);
-        if (searchTerm) renderState.expandedBeforeSearch = previousRenderState?.expandedBeforeSearch ?? null;
+        const previousExpansion = config.preserveExpansion
+            ? previousRenderState?.expandedBeforeSearch ?? collectExpansion(previousTreeContainer)
+            : new Map();
 
         const { treeContainer } = createStructure() || {};
         if (!treeContainer) return;
@@ -375,7 +397,7 @@ export async function render_tree(data, config = {}) {
         }
 
         roots.forEach((rootNode) => treeContainer.appendChild(createTreeNode(rootNode, 0, ctx)));
-        const initialNodes = nodes_to_open.filter(node => !previousNodeIds.has(node.id));
+        const initialNodeIds = new Set(nodes_to_open.map(node => node.id));
         TREE_RENDER_STATES.set(treeContainer, renderState);
 
         restoreCheckboxStates();
@@ -383,24 +405,14 @@ export async function render_tree(data, config = {}) {
         // Expansion is part of this awaited commit. Accepting a reload or the
         // final page retires its pagination request; that must not cancel state
         // restoration after the rows and offset have already been accepted.
-        initialNodes.forEach((n) => {
-            openChildren(n, { animate: false });
-            if (config.preserveExpansion && renderState.expandedBeforeSearch !== null
-                && !renderState.expandedBeforeSearch.includes(n.id)) {
-                renderState.expandedBeforeSearch.push(n.id);
-            }
-        });
-
-        loadExpanded().forEach((id) => {
-            const n = document.getElementById(id);
-            if (!n) return;
-            let anc = n.parentElement?.closest('.node');
-            while (anc) {
-                // A retained open child can sit inside a collapsed parent.
-                if (!config.preserveExpansion && !loadExpanded().includes(anc.id)) return;
-                anc = anc.parentElement?.closest('.node');
-            }
-            openChildren(n, { animate: false });
+        const choices = loadChoices();
+        const open = new Set(choices.open), closed = new Set(choices.closed);
+        treeContainer.querySelectorAll('.node').forEach(node => {
+            // Restore descendants independently, even inside a closed parent.
+            const expanded = closed.has(node.id) ? false : open.has(node.id) ? true
+                : previousExpansion.get(node.id) ?? initialNodeIds.has(node.id);
+            if (expanded) openChildren(node, { animate: false });
+            else closeChildren(node, { animate: false });
         });
         updateFolderCounts();
 
@@ -422,7 +434,9 @@ export async function render_tree(data, config = {}) {
             updateCheckboxStates();
             const term = this.value;
             if (term) {
-                if (renderState.expandedBeforeSearch === null) renderState.expandedBeforeSearch = loadExpanded();
+                if (renderState.expandedBeforeSearch === null) {
+                    renderState.expandedBeforeSearch = collectExpansion(treeContainer);
+                }
                 filterTreeNodes(term);
             } else {
                 restoreTreeState();

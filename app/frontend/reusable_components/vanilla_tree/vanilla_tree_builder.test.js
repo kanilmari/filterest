@@ -154,7 +154,7 @@ describe("render_tree", () => {
         for (const id of ['folder', 'other']) {
             document.getElementById(`tree_node_${id}_search`).querySelector(':scope > .node-row > .toggle').click();
         }
-        const saved = () => JSON.parse(localStorage.getItem('expanded_nodes_search')).sort();
+        const saved = () => JSON.parse(localStorage.getItem('tree_state_v2_search'));
         const beforeSearch = saved();
         const search = document.getElementById('tree_search_search');
         search.value = 'Needle'; search.dispatchEvent(new Event('input'));
@@ -167,16 +167,143 @@ describe("render_tree", () => {
         expect(document.querySelectorAll('.node.hidden')).toHaveLength(0);
     });
 
-    test('keeps initial opening on every render for callers that do not preserve expansion', async () => {
+    test('an explicit close overrides initial opening on every fresh render', async () => {
         vi.useFakeTimers();
         const rows = [{ id: 'folder', name: 'Folder', parent_id: null },
             { id: 'leaf', name: 'Leaf', parent_id: 'folder', table_uid: 12 }];
         const config = { container_id: 'tree_host', id_suffix: '_defaults', initial_open_level: 1 };
         await render_tree(rows, config);
         await vi.runAllTimersAsync();
+        expect(localStorage.getItem('tree_state_v2_defaults')).toBeNull();
         document.getElementById('tree_node_folder_defaults').querySelector(':scope > .node-row > .toggle').click();
         await render_tree(rows, config);
         await vi.runAllTimersAsync();
-        expect(document.getElementById('tree_node_folder_defaults').dataset.expanded).toBe('true');
+        expect(document.getElementById('tree_node_folder_defaults').dataset.expanded).toBe('false');
+    });
+
+    const navRows = [
+        { id: 'a', name: 'A', parent_id: null },
+        { id: 'a_inner', name: 'Inner', parent_id: 'a' },
+        { id: 'needle', name: 'Neula', parent_id: 'a_inner', table_uid: 12 },
+        { id: 'b', name: 'B', parent_id: null },
+        { id: 'b_leaf', name: 'B leaf', parent_id: 'b', table_uid: 13 },
+        { id: 'untouched', name: 'Untouched', parent_id: null },
+        { id: 'other_leaf', name: 'Other', parent_id: 'untouched', table_uid: 14 },
+    ];
+    const navConfig = { container_id: 'tree_host', id_suffix: '_nav',
+        render_mode: 'button', checkbox_mode: 'none', initial_open_level: 0,
+        show_node_count: false, use_data_lang_key: false };
+    const node = id => document.getElementById(`tree_node_${id}_nav`);
+    const toggle = id => node(id).querySelector(':scope > .node-row > .toggle').click();
+    const savedNav = () => JSON.parse(localStorage.getItem('tree_state_v2_nav'));
+    const searchNav = term => {
+        const search = document.getElementById('tree_search_nav');
+        search.value = term;
+        search.dispatchEvent(new Event('input'));
+    };
+    const expectNav = (openIds = []) => {
+        for (const id of ['a', 'a_inner', 'b', 'untouched']) {
+            const expanded = openIds.includes(id);
+            expect(node(id).dataset.expanded === 'true', id).toBe(expanded);
+            expect(node(id).querySelector(':scope > .children').hidden, id).toBe(!expanded);
+            expect(node(id).querySelector(':scope > .node-row > .toggle')
+                .getAttribute('aria-expanded'), id).toBe(String(expanded));
+        }
+    };
+
+    test('reload restores explicit open AND closed choices, ignoring polluted legacy opens', async () => {
+        localStorage.setItem('expanded_nodes_nav', JSON.stringify([
+            'tree_node_b_nav', 'tree_node_untouched_nav',
+        ]));
+        await render_tree(navRows, navConfig);
+        expectNav();
+        toggle('a'); toggle('b'); toggle('b');
+        const choices = { open: ['tree_node_a_nav'], closed: ['tree_node_b_nav'] };
+        expect(savedNav()).toEqual(choices);
+        document.body.innerHTML = '<div id="tree_host"></div>';
+        await render_tree(structuredClone(navRows), navConfig);
+        expectNav(['a']);
+        expect(savedNav()).toEqual(choices);
+        expect(localStorage.getItem('expanded_nodes_nav')).toBeNull();
+        toggle('a'); toggle('b');
+        document.body.innerHTML = '<div id="tree_host"></div>';
+        await render_tree(navRows, navConfig);
+        expectNav(['b']);
+    });
+
+    test('cached then fresh render restores choices, including new untouched folders', async () => {
+        await render_tree(navRows, navConfig);
+        toggle('a'); toggle('b'); toggle('b');
+        const choices = savedNav();
+        document.body.innerHTML = '<div id="tree_host"></div>';
+        await render_tree(navRows.slice(0, 5), navConfig);
+        expect(node('a').dataset.expanded).toBe('true');
+        expect(node('b').dataset.expanded).toBe('false');
+        // Browser form restoration can set a cached render's value without input.
+        document.getElementById('tree_search_nav').value = 'Neula';
+        await render_tree(navRows, navConfig);
+        expectNav(['a']);
+        expect(document.getElementById('tree_search_nav').value).toBe('');
+        expect(savedNav()).toEqual(choices);
+    });
+
+    test('search reveal and a restored search value never become reload choices', async () => {
+        await render_tree(navRows, navConfig);
+        toggle('b'); toggle('b');
+        const choices = savedNav();
+        searchNav('Neula');
+        expectNav(['a', 'a_inner']);
+        expect(savedNav()).toEqual(choices);
+        // The cached tree can have a browser-restored search field before the fresh render.
+        await render_tree(navRows, { ...navConfig, preserveSearch: true });
+        expect(document.getElementById('tree_search_nav').value).toBe('Neula');
+        expectNav(['a', 'a_inner']);
+        searchNav('');
+        expectNav();
+        searchNav('Neula');
+        document.body.innerHTML = '<div id="tree_host"></div>';
+        await render_tree(navRows, navConfig);
+        expectNav();
+        expect(savedNav()).toEqual(choices);
+    });
+
+    test('an opened descendant survives reload inside a closed parent and its later reopening', async () => {
+        await render_tree(navRows, navConfig);
+        toggle('a'); toggle('a_inner'); toggle('a');
+        document.body.innerHTML = '<div id="tree_host"></div>';
+        await render_tree(navRows, navConfig);
+        expectNav(['a_inner']);
+        toggle('a');
+        expectNav(['a', 'a_inner']);
+    });
+
+    test('search query changes discard temporary paths, while deliberate search toggles survive clearing', async () => {
+        await render_tree(navRows, navConfig);
+        searchNav('Neula');
+        expectNav(['a', 'a_inner']);
+        searchNav('B leaf');
+        expectNav(['b']);
+        expect(savedNav()).toBeNull();
+        toggle('b'); // Close a search-opened branch explicitly.
+        searchNav('');
+        expectNav();
+        expect(savedNav()).toEqual({ open: [], closed: ['tree_node_b_nav'] });
+        document.body.innerHTML = '<div id="tree_host"></div>';
+        await render_tree(navRows, { ...navConfig, initial_open_level: 1 });
+        expectNav(['a', 'untouched']);
+    });
+
+    test('preserveExpansion keeps old branches and gives new branches defaults without saving them', async () => {
+        const config = { ...navConfig, initial_open_level: 2, preserveExpansion: true,
+            preserveSearch: true };
+        await render_tree(navRows.slice(0, 5), config);
+        expect(savedNav()).toBeNull();
+        toggle('a'); toggle('b');
+        const choices = savedNav();
+        searchNav('Neula');
+        await render_tree(navRows, config);
+        searchNav('');
+        expectNav(['a_inner', 'untouched']);
+        expect(savedNav()).toEqual(choices);
     });
 });

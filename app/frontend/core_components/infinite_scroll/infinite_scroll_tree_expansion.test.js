@@ -34,7 +34,7 @@ const row = (id, parent_id = null) => ({ id, parent_id, name: { fi: `Solmu ${id}
 const initialRows = [row(1), row(2, 1), row(3), row(4, 3)];
 const newRows = [row(5), row(6, 5), row(7, 6)];
 const nodeId = id => `tree_node_${id}_${dataset}_tree`;
-const savedExpansion = () => JSON.parse(localStorage.getItem(`expanded_nodes_${dataset}_tree`)).sort();
+const savedExpansion = () => JSON.parse(localStorage.getItem(`tree_state_v2_${dataset}_tree`));
 
 function expectExpansion(root, id, expanded) {
     const node = root.querySelector(`#${nodeId(id)}`);
@@ -124,9 +124,8 @@ test.each(['accepted reload', 'final-page append'])('%s restores expansion befor
         expectExpansion(root, id, expanded);
     }
     expect.soft(root.textContent).toContain('Solmu 7');
-    // Reader choices stay exact; only genuinely new branches gain their defaults.
-    expect.soft(savedExpansion().filter(id => initialRows.some(item => nodeId(item.id) === id))).toEqual(saved);
-    expect.soft(savedExpansion()).toEqual([...saved, nodeId(5), nodeId(6)].sort());
+    // New branches gain defaults in the DOM, never in the reader's saved choices.
+    expect.soft(savedExpansion()).toEqual(saved);
     expect.soft(savedExpansion()).toEqual(savedAtAcceptance);
     expect(fetchRows).toHaveBeenCalledOnce();
 });

@@ -27,6 +27,7 @@ import { ensure_private_custom_views_loaded } from '../admin_and_user_tools/cust
 import { VIEW_DEACTIVATE_EVENT } from '../../../reusable_components/view_lifecycle_events.js';
 import { hasContentBesideLoadingIndicator } from '../../../reusable_components/loading/loading_indicator_printer.js';
 import { loadCustomRoot } from '../../front_page/custom_root_navigation.js';
+import { revealTreeNode } from '../../../reusable_components/vanilla_tree/vanilla_tree_builder.js';
 
 export async function handle_all_navigation(name, customViews, options = {}) {
     if (options.isCurrentNavigation?.() === false) return { abort: true, reason: 'stale_navigation' };
@@ -228,8 +229,7 @@ function shouldAutoExpandNavigationBranch(buttonEl) {
 // _ensureAdminTreeBranchOpen — avataa admin-puun haara (ja collapsible-otsikko)
 // jossa aktiivinen nappi sijaitsee, jotta käyttäjä näkee aktiivisen välilehden.
 function _ensureAdminTreeBranchOpen(buttonEl) {
-    // Open every ancestor tree branch through the shared tree toggle path so
-    // the chevron direction always matches the actual expanded state.
+    // Current-path reveals keep chevrons in sync without saving a user choice.
     let ancestor = buttonEl.closest('.children');
     while (ancestor) {
         const parentNode = ancestor.closest('.node');
@@ -239,13 +239,14 @@ function _ensureAdminTreeBranchOpen(buttonEl) {
             || ancestor.hidden === false;
 
         if (!isExpanded) {
-            if (toggle instanceof HTMLElement) {
-                toggle.click();
-            } else if (ancestor instanceof HTMLElement && parentNode instanceof HTMLElement) {
+            if (!revealTreeNode(parentNode)
+                && ancestor instanceof HTMLElement && parentNode instanceof HTMLElement) {
                 ancestor.hidden = false;
                 ancestor.style.height = 'auto';
                 ancestor.dataset.collapsibleState = 'expanded';
                 parentNode.dataset.expanded = 'true';
+                toggle?.setAttribute('aria-expanded', 'true');
+                toggle?.classList.add('rotated');
             }
         }
 

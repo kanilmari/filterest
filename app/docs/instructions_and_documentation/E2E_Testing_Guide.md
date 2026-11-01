@@ -554,23 +554,21 @@ await btn.click({ force: true }); // Also fails
 
 ### 2. Vanilla Tree Expansion
 
-The vanilla tree component (`reusable_components/vanilla_tree/`) stores children in `<div class="children" style="display:none">`. Folder nodes have `data-is-folder="true"`, leaf nodes have `data-is-folder="false"`.
+The vanilla tree component (`reusable_components/vanilla_tree/`) stores children in `<div class="children" hidden>` when collapsed. Folder nodes have `data-is-folder="true"`, leaf nodes have `data-is-folder="false"`.
 
-**Expanding folders:** The `initial_open_level` config only auto-opens the first N levels. Deeper folders must be expanded manually:
+**Expanding folders:** Explicit choices override the caller's `initial_open_level` default. Use real toggles so visibility, chevrons and saved choices agree; on phones open the off-canvas menu first through the shared helper:
 
 ```typescript
-await page.evaluate(() => {
-  const tree = document.getElementById('my_tree_id');
-  if (!tree) return;
-  const folders = tree.querySelectorAll('.node[data-is-folder="true"]');
-  for (const folder of folders) {
-    const childrenDiv = folder.querySelector(':scope > .children') as HTMLElement;
-    if (childrenDiv && childrenDiv.style.display === 'none') {
-      childrenDiv.style.cssText = 'display:block;overflow:hidden;';
-    }
-  }
-});
+const tree = await openAdminNavigationTree(page);
+const toggle = tree.locator('.node:visible > .node-row > [data-testid="tree-toggle"]').first();
+if (await toggle.getAttribute('aria-expanded') !== 'true') {
+  await toggle.scrollIntoViewIfNeeded();
+  await toggle.click();
+}
+await expect(toggle).toHaveAttribute('aria-expanded', 'true');
 ```
+
+Expansion choices use `tree_state_v2<suffix>` with separate `open` and `closed` arrays. Initial defaults, search reveals and current-path reveals never write those arrays. Legacy `expanded_nodes<suffix>` lists are discarded, since automatic opens polluted them. Search clearing restores pre-search expansion, including any explicit toggles made during search.
 
 **Node IDs:** Format is `tree_node_{id}_{suffix}` where suffix comes from the tree's `id_suffix` config (e.g. `_admin`, `_cv_tree`).
 
@@ -668,9 +666,9 @@ app/testing/e2e/
 
 ## Writing a New Admin View Test
 
-1. Use `page.evaluate()` for all sidebar navigation (fixed positioning)
+1. Use shared navbar/navigation helpers to open the fixed sidebar before real clicks
 2. Wait for the view container with `await expect(page.locator('#container_id')).toBeVisible()`
-3. For tree-based views, expand folders via JS before interacting with leaf nodes
+3. For tree-based views, use real folder toggles before interacting with leaf nodes
 4. Always dispatch `change` events when programmatically toggling checkboxes
 5. Clean up test data inside the test when the cleanup is bounded to a known step; for admin specs that create datasets and could fail mid-flow, prefer request-scoped `afterEach` cleanup helpers (see `app/testing/e2e/helpers/temp-dataset.ts` and the pattern used in `app/testing/e2e/T_admin/T1_create_table.spec.ts`)
 

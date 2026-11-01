@@ -208,7 +208,7 @@ const treeRow = (id, parent_id = null, name = `Node ${id}`) => ({
     id, parent_id, name: { fi: `Solmu ${id}`, en: name },
 });
 const treeNode = id => document.getElementById(`tree_node_${id}_${dataset}_tree`);
-const savedTreeExpansion = () => JSON.parse(localStorage.getItem(`expanded_nodes_${dataset}_tree`)).sort();
+const savedTreeExpansion = () => JSON.parse(localStorage.getItem(`tree_state_v2_${dataset}_tree`));
 function expectTreeExpansion(id, expanded) {
     const node = treeNode(id);
     expect(node.dataset.expanded === 'true').toBe(expanded);
@@ -230,9 +230,10 @@ test.each(['append', 'replace'])('row tree %s keeps a collapsed parent out of sa
     expect(await commitDatasetViewRows(dataset, mode === 'append' ? page : [...rows, ...page], { mode })).toBe('committed');
     await vi.runAllTimersAsync();
 
-    expect.soft(savedTreeExpansion()).not.toContain(treeNode(1).id);
+    expect.soft(savedTreeExpansion()).toEqual({ open: [], closed: [treeNode(1).id] });
     expectTreeExpansion(1, false);
-    expect(savedTreeExpansion()).toEqual([...beforePage, treeNode(3).id].sort());
+    expect(savedTreeExpansion()).toEqual(beforePage);
+    expectTreeExpansion(3, true);
     // A retained open child keeps its own state under the collapsed parent.
     expectTreeExpansion(2, true);
 });
@@ -250,9 +251,8 @@ test('row tree opens only new branches within the initial level on a later page'
     expectTreeExpansion(4, true);
     expectTreeExpansion(5, true);
     expectTreeExpansion(6, false);
-    expect(savedTreeExpansion()).toContain(treeNode(4).id);
-    expect(savedTreeExpansion()).toContain(treeNode(5).id);
-    expect(savedTreeExpansion()).not.toContain(treeNode(6).id);
+    // Default opens belong only to the rendered tree, not the saved choices.
+    expect(savedTreeExpansion()).toEqual({ open: [], closed: [treeNode(1).id] });
 });
 
 test('row tree search then clear restores the pre-search expansion after a page', async () => {
@@ -321,7 +321,7 @@ test('row tree search clear retains initial defaults for branches first arriving
     expectTreeExpansion(4, true);
     expectTreeExpansion(5, true);
     expectTreeExpansion(6, false);
-    expect(savedTreeExpansion()).toEqual([treeNode(2).id, treeNode(4).id, treeNode(5).id].sort());
+    expect(savedTreeExpansion()).toEqual({ open: [], closed: [treeNode(1).id] });
 });
 
 test('tree awaiting its renderer cannot overwrite a newer surface', async () => {

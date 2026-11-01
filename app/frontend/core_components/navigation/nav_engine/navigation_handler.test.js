@@ -4,7 +4,7 @@
 // Bridges performNavigation and a minimal nav-tree DOM so chevrons reflect actual expanded state in jsdom.
 // Exists to prevent SVG tabs from unexpectedly opening the database tree unless the navbar setting enables it.
 
-import { beforeEach, describe, expect, test, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 
 const refreshTableUnifiedMock = vi.fn();
 const getCardArticleReturnTokenMock = vi.fn();
@@ -83,6 +83,8 @@ async function loadModule({ realPipeline = false } = {}) {
 }
 
 describe('navigation_handler', () => {
+    afterEach(() => vi.unstubAllGlobals());
+
     beforeEach(() => {
         document.body.innerHTML = `
             <div id="nav_tree">
@@ -197,6 +199,28 @@ describe('navigation_handler', () => {
         expect(loadFunction).toHaveBeenCalledTimes(1);
         expect(setSelectedDatasetMock).toHaveBeenCalledWith('orders');
         expect(setSSEActiveDatasetMock).toHaveBeenCalledWith('orders');
+    });
+
+    test('current-path reveal never replaces an explicit closed preference', async () => {
+        window.easelectNavbarSettings = { autoExpandDatabaseTreeOnNavigation: true };
+        vi.stubGlobal('matchMedia', () => ({ matches: true }));
+        const { performNavigation } = await loadModule();
+        const { render_tree } = await import('../../../reusable_components/vanilla_tree/vanilla_tree_builder.js');
+        localStorage.clear();
+        const choices = { open: [], closed: ['tree_node_database_nav'] };
+        localStorage.setItem('tree_state_v2_nav', JSON.stringify(choices));
+        const rows = [
+            { id: 'database', name: 'Database', parent_id: null },
+            { id: 'orders', name: 'orders', parent_id: 'database', table_uid: 12 },
+        ];
+        const config = { container_id: 'nav_tree', id_suffix: '_nav', render_mode: 'button' };
+        await render_tree(rows, config);
+        await performNavigation('orders', 'orders_container', vi.fn(async () => {}), 'database', false);
+        expect(document.getElementById('tree_node_database_nav').dataset.expanded).toBe('true');
+        expect(JSON.parse(localStorage.getItem('tree_state_v2_nav'))).toEqual(choices);
+        await render_tree(rows, config);
+        expect(document.getElementById('tree_node_database_nav').dataset.expanded).toBe('false');
+        localStorage.clear();
     });
 
     test('clears SVG tab active state when navigating to a custom tool view', async () => {

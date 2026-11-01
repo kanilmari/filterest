@@ -48,6 +48,20 @@ supported. The backend API contract is unchanged.
 -   `show_child_items_on_big_cards`: Show child items in the article view. The setting name still uses the internal `big_card` term.
 -   `always_show_empty_fields_on_cards`: Show empty fields on cards to maintain order.
 
+### Navigation tree expansion
+
+The dataset tree remembers each folder's last explicit open or closed choice
+in this browser. Untouched folders follow the caller's initial-depth default;
+the side menu defaults to all closed. Search reveals matching paths temporarily,
+and clearing it restores those choices. Rebuilding a dataset's tree view keeps
+existing branches in their current state and gives new branches the default.
+
+Navigation can intentionally reveal the current dataset's path when the navbar
+setting `autoExpandDatabaseTreeOnNavigation` is enabled (default false). Admin
+tools always reveal their active path. Neither reveal saves a user choice.
+The shared builder discards legacy expansion lists on first use because they
+mixed automatic opens with deliberate choices; that first render uses defaults.
+
 ### Filter bar order and visibility memory
 
 The style disclosure and the configuration dataset's settings view use the same
