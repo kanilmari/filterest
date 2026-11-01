@@ -2,6 +2,7 @@
 // Synchronizes one-to-many foreign key constraints from the PostgreSQL catalog
 // into system_foreign_key_relations_1_m. Only tracks constraints where the
 // source table has a single-column primary key.
+// Registry-less identities are ensured separately from registered-row pruning.
 
 package dtt_foreign_keys
 
@@ -36,6 +37,25 @@ func SyncOneToManyFKConstraints(db *sql.DB, preserveLegacy ...bool) error {
                WHERE c.contype = 'f'
                  AND ns.nspname NOT IN ('restricted', 'postgis')
                  AND nst.nspname NOT IN ('restricted', 'postgis')
+                 -- Registry-less rows cannot enter the registered-row comparison below.
+                 -- Match their stored direction/columns and both registry UIDs: a stored NULL
+                 -- only for an unregistered name, a stored UID only for a registry row of that
+                 -- name. Registry names are unique per schema only, so no scalar lookup here.
+                 AND NOT EXISTS (
+                     SELECT 1 FROM system_foreign_key_relations_1_m AS registryless
+                     WHERE (registryless.source_table_uid IS NULL OR registryless.target_table_uid IS NULL)
+                       AND registryless.reference_direction = t.relname || '->' || ft.relname
+                       AND registryless.source_column_name = a.attname
+                       AND registryless.target_column_name = fa.attname
+                       AND CASE WHEN registryless.source_table_uid IS NULL
+                                THEN NOT EXISTS (SELECT 1 FROM system_db_tables WHERE table_name = t.relname)
+                                ELSE registryless.source_table_uid IN (SELECT table_uid FROM system_db_tables WHERE table_name = t.relname)
+                           END
+                       AND CASE WHEN registryless.target_table_uid IS NULL
+                                THEN NOT EXISTS (SELECT 1 FROM system_db_tables WHERE table_name = ft.relname)
+                                ELSE registryless.target_table_uid IN (SELECT table_uid FROM system_db_tables WHERE table_name = ft.relname)
+                           END
+                 )
        `
 
 	type dbConstraint struct {

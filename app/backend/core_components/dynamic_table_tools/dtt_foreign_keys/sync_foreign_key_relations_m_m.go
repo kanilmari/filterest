@@ -2,6 +2,7 @@
 // Synchronizes many-to-many bridging tables from the PostgreSQL catalog into
 // system_foreign_key_relations_m_m. Applies heuristic filters (name pattern,
 // column count, two-column primary key) to identify true join tables.
+// Registry-less identities are ensured separately from registered-row pruning.
 
 package dtt_foreign_keys
 
@@ -70,6 +71,30 @@ func SyncManyToManyFKConstraints(db *sql.DB, preserveLegacy ...bool) error {
 	SELECT bridging_table, fks
 	FROM grouped
 	WHERE json_array_length(fks) = 2
+	  -- NULL registry UIDs otherwise hide these rows from the comparison below. A stored NULL
+	  -- matches only an unregistered name, a stored UID only a registry row of that name;
+	  -- registry names are unique per schema only, so no scalar lookup here.
+	  AND NOT EXISTS (
+	      SELECT 1 FROM system_foreign_key_relations_m_m AS registryless
+	      WHERE (registryless.bridging_table_uid IS NULL OR registryless.table_a_uid IS NULL OR registryless.table_b_uid IS NULL)
+	        AND registryless.bridging_table_name = grouped.bridging_table
+	        AND registryless.bridging_col_a = fks->0->>'bridging_col'
+	        AND registryless.bridging_col_b = fks->1->>'bridging_col'
+	        AND registryless.table_a_column = fks->0->>'foreign_col'
+	        AND registryless.table_b_column = fks->1->>'foreign_col'
+	        AND CASE WHEN registryless.bridging_table_uid IS NULL
+	                 THEN NOT EXISTS (SELECT 1 FROM system_db_tables WHERE table_name = grouped.bridging_table)
+	                 ELSE registryless.bridging_table_uid IN (SELECT table_uid FROM system_db_tables WHERE table_name = grouped.bridging_table)
+	            END
+	        AND CASE WHEN registryless.table_a_uid IS NULL
+	                 THEN NOT EXISTS (SELECT 1 FROM system_db_tables WHERE table_name = fks->0->>'foreign_table')
+	                 ELSE registryless.table_a_uid IN (SELECT table_uid FROM system_db_tables WHERE table_name = fks->0->>'foreign_table')
+	            END
+	        AND CASE WHEN registryless.table_b_uid IS NULL
+	                 THEN NOT EXISTS (SELECT 1 FROM system_db_tables WHERE table_name = fks->1->>'foreign_table')
+	                 ELSE registryless.table_b_uid IN (SELECT table_uid FROM system_db_tables WHERE table_name = fks->1->>'foreign_table')
+	            END
+	  )
 	`
 
 	rows, err := db.Query(query)
