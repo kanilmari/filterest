@@ -67,7 +67,10 @@ async function assertCentredChips(page: Page) {
   await expect.poll(async () => page.locator(PANEL).evaluate((panel, dataset) => {
     const controls = document.getElementById(`${dataset}_card_top_controls`)!;
     const tags = controls.querySelector('.active_filters')!;
-    const box = (panel.closest('.dataset-filter-section') || panel).getBoundingClientRect();
+    const section = (panel.closest('.dataset-filter-section') || panel).getBoundingClientRect();
+    // K531: on phones the box runs edge to edge and the chip row sits on its 16 px content edge.
+    const inset = innerWidth <= 700 ? 16 : 0;
+    const box = { left: section.left + inset, width: section.width - 2 * inset };
     const row = tags.getBoundingClientRect();
     const parent = controls.getBoundingClientRect();
     const inside = [...tags.children].every(child => {

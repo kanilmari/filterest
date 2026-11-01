@@ -32,6 +32,14 @@ test('hero tools keep K465\'s one search-tools radius and add no radius of their
     expect(rule(shared, '.filterbar-inline-hero-filter-actions > button > [data-lang-key]')).toContain('min-width: 0');
 });
 
+test('the hero row sizes its reset button by column, and the phone limit stays for the sort-dropdown hosts', () => {
+    const shared = source('./hero_tools.css');
+    expect(rule(shared, '.filterbar-inline-hero-filter-actions > .reset-search-button')).toContain('max-width: none');
+    expect(rule(shared, '.filterbar-inline-hero-filter-actions > button')).toContain('padding-inline: var(--fw-space-2)');
+    expect(rule(shared, '.filterbar-inline-hero-filter-actions > button')).toContain('align-self: stretch');
+    expect(rule(source('./filterbar.css'), '    .reset-search-button')).toContain('max-width: 5.5rem');
+});
+
 test('the categories border outranks the row reset and stays before the phone section', () => {
     const css = source('./morphing_filterbar_content.css');
     const selector = '.dataset-filter-section > .row-group-facets:not(:first-child)';

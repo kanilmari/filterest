@@ -22,6 +22,7 @@ Dates are the local (Europe/Helsinki) date on which the version was published.
 
 ## [Unreleased]
 
+- On phones, the dataset card's filter and reset buttons share their row evenly, so their icons no longer break the labels mid-word.
 - Native `restore-check` can explicitly opt into only legacy `pgcrypto` and `unaccent` through repeatable `--allow-extension` flags or the profile's `DATABASE_RECOVERY_ALLOW_EXTENSIONS`; results and private evidence record the effective opt-ins while default extension and language guards stay unchanged.
 - Test tooling records candidate readiness during the two shared E2E helpers' unchanged fixed waits and summarizes the reporting nightly.
 - Hidden and server-only geometry stays out of map support and geometry metadata; generated foreign-key labels are null when their target display field is withheld, including for guests, and visibility saves refresh both projections immediately.

@@ -34,8 +34,16 @@
 }
 
 .filterbar-inline-hero-filter-actions > button {
+  align-self: stretch;
   gap: var(--fw-space-2);
+  padding-inline: var(--fw-space-2);
   white-space: normal;
+}
+
+/* Reset's 5.5rem phone limit (filterbar.css) is for sitting beside the sort dropdown. In this row
+   its equal column sizes it, so its icon leaves the label's whole words their room. */
+.filterbar-inline-hero-filter-actions > .reset-search-button {
+  max-width: none;
 }
 
 .filterbar-inline-hero-filter-actions > button > [data-lang-key] {
