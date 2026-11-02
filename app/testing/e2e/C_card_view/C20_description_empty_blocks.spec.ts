@@ -15,7 +15,7 @@ const cardRoot = '/frontend/core_components/table_views/card_view/';
 // sanitization, language resolution and styles come from this checkout.
 const stubs: Record<string, string> = {
   '/frontend/core_components/endpoints/endpoint_router.js': 'export function endpoint_router() { throw Error("Unexpected API call"); }',
-  [cardRoot + 'card_avatar_builder.js']: 'export function createImageElement() {} export function create_seeded_avatar() {}',
+  [cardRoot + 'card_avatar_builder.js']: 'export function createImageElement() {} export function create_seeded_avatar() {} export function updateCardImageFrame() {}',
   [cardRoot + 'row_article_opener.js']: 'export function openRowArticleView() {}',
   [cardRoot + 'image_first_view_activation.js']: 'export function bindImageFirstViewActivation() {}',
   [cardRoot + 'dataset_icon_builder.js']: 'export function createDatasetIconElement() {}',
