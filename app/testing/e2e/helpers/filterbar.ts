@@ -111,6 +111,7 @@ export async function openActiveFilterbarSection(
  * Bridges helpers that need a control inside a disclosure group with the admin-saved
  * section layout, which a header click rewrites for every user of the installation.
  * Exists so shared helpers reach their controls without changing that configuration.
+ * Retries detached sections because a filterbar re-render can replace them during reveal.
  */
 export async function revealActiveFilterbarSection(
   page: Page,
@@ -121,26 +122,41 @@ export async function revealActiveFilterbarSection(
   await waitForActiveFilterbarLayout(page, activeTableParts);
   await openActiveFilterbarIfCollapsed(page, activeTableParts);
 
-  const section = activeTableParts
-    .locator(`[data-filterbar-section-key="${buildFilterTestIdSegment(sectionKey)}"]`)
-    .first();
-  await expect(section).toBeVisible({ timeout: 5000 });
-  await section.locator(':scope > .animated-disclosure-header').first().scrollIntoViewIfNeeded();
-  await section.evaluate(async (element) => {
-    const disclosure = element as HTMLElement & {
-      expand?: (options?: { animate?: boolean }) => Promise<unknown>;
-    };
-    if (disclosure.classList.contains('is-expanded') || typeof disclosure.expand !== 'function') {
-      return;
-    }
-    // The product's temporary-reveal marker keeps this expansion out of the saved layout.
-    disclosure.dataset.filterbarTemporaryDisclosureOperation = 'true';
+  const revealDeadline = Date.now() + 5000;
+  const remaining = () => Math.max(1, revealDeadline - Date.now());
+  let section!: Locator;
+  for (let attempt = 1; attempt <= 3; attempt += 1) {
     try {
-      await disclosure.expand({ animate: false });
-    } finally {
-      delete disclosure.dataset.filterbarTemporaryDisclosureOperation;
+      section = activeTableParts
+        .locator(`[data-filterbar-section-key="${buildFilterTestIdSegment(sectionKey)}"]`)
+        .first();
+      await expect(section).toBeVisible({ timeout: remaining() });
+      await section.locator(':scope > .animated-disclosure-header').first()
+        .scrollIntoViewIfNeeded({ timeout: remaining() });
+      await section.evaluate(async (element) => {
+        const disclosure = element as HTMLElement & {
+          expand?: (options?: { animate?: boolean }) => Promise<unknown>;
+        };
+        if (disclosure.classList.contains('is-expanded') || typeof disclosure.expand !== 'function') {
+          return;
+        }
+        // The product's temporary-reveal marker keeps this expansion out of the saved layout.
+        disclosure.dataset.filterbarTemporaryDisclosureOperation = 'true';
+        try {
+          await disclosure.expand({ animate: false });
+        } finally {
+          delete disclosure.dataset.filterbarTemporaryDisclosureOperation;
+        }
+      }, undefined, { timeout: remaining() });
+      break;
+    } catch (error) {
+      if (!(error instanceof Error)
+        || !/not attached to the DOM|Element is not attached|Execution context was destroyed|detached/i.test(error.message)
+        || attempt === 3 || Date.now() >= revealDeadline) {
+        throw error;
+      }
     }
-  });
+  }
   await expect(section.locator(':scope > .animated-disclosure-header').first())
     .toHaveAttribute('aria-expanded', 'true', { timeout: 5000 });
   await expect(
