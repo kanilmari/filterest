@@ -1,6 +1,6 @@
 /**
  * test-artifact-stale-run-recovery.ts
- * Recovers recorded datasets before publishing the next E2E artifact run.
+ * Recovers recorded datasets and C17 reader groups before the next E2E run.
  * Bridges fail-closed registry inspection and authenticated application APIs.
  * Removes dead-run leftovers without granting deletion authority to name prefixes.
  */
@@ -24,6 +24,7 @@ import {
 } from './test-artifact-startup-lock';
 import { readDatasetIdentityFromRequest } from './test-artifact-dataset-identity-reader';
 import { assertAuthenticatedCleanupIdentity } from './test-artifact-cleanup';
+import { cleanupRegisteredTestGroups, readRegisteredTestGroup, validateRegisteredTestGroups } from './test-artifact-groups';
 import { fetchCsrfTokenForRequest } from './test-artifact-csrf-reader';
 import { assertArtifactRunTarget, validateArtifactRunTarget, type ArtifactRunTarget } from './test-artifact-run-target';
 
@@ -86,8 +87,8 @@ export async function initializeArtifactRunRegistryWithRecovery(
         };
         assertStillDead();
         for (const artifact of artifacts) {
-          if (artifact.kind !== 'dataset') {
-            throw safeTestArtifactError(`${artifact.kind} ${JSON.stringify(artifact.name)}: automatic stale recovery supports datasets only`);
+          if (artifact.kind !== 'dataset' && artifact.kind !== 'group') {
+            throw safeTestArtifactError(`${artifact.kind} ${JSON.stringify(artifact.name)}: automatic stale recovery supports datasets and C17 reader groups only`);
           }
         }
         validateArtifactRunTarget(deadRun.target);
@@ -130,6 +131,11 @@ export async function recoverStaleRunDatasets(
     await assertAuthenticatedCleanupIdentity(request, identity);
     await assertArtifactRunTarget(request, identity.baseURL, deadRun.target);
     const startedAt = Date.parse(deadRun.startedAt);
+    const groups = artifacts.filter(artifact => artifact.kind === 'group');
+    validateRegisteredTestGroups(groups, deadRun.runId, startedAt);
+    // Preflight groups before any dataset drop; no changed group may be hidden
+    // by a partial recovery. Registry records stay until the whole run recovers.
+    for (const group of groups) await readRegisteredTestGroup(request, group);
     const readCandidate = async (artifact: RegisteredTestArtifact) => {
       const current = await readDatasetIdentityFromRequest(request, artifact.name,
         artifact.status === 'confirmed' ? artifact.serverId! : undefined);
@@ -142,7 +148,7 @@ export async function recoverStaleRunDatasets(
     const recovered: Array<{ artifact: RegisteredTestArtifact; serverId: number | null }> = [];
     // Validate every artifact before the first drop, including those encountered
     // later in reverse creation order (dependent datasets are removed first).
-    for (const artifact of [...artifacts].reverse()) {
+    for (const artifact of [...artifacts].reverse().filter(artifact => artifact.kind === 'dataset')) {
       try {
         assertStillDead();
         candidates.push({ artifact, current: await readCandidate(artifact) });
@@ -191,6 +197,14 @@ export async function recoverStaleRunDatasets(
         throw safeTestArtifactFailure(error, 'recover dataset', { name: artifact.name, serverId: artifact.serverId });
       }
     }
+    await cleanupRegisteredTestGroups(request, groups, (artifact, outcome) => {
+      if (outcome !== 'quarantined') {
+        log(`[E2E recovery] group=${JSON.stringify(artifact.name)} serverId=${artifact.serverId ?? 'unknown'} outcome=removed or already absent`);
+      }
+    }, async () => {
+      await assertArtifactRunTarget(request, identity.baseURL, deadRun.target);
+      assertStillDead();
+    }, line => log(`[E2E recovery] ${line}`));
     // Verify the complete recorded set again after parent deletion, before the
     // initializer releases any dead-run evidence or publishes a new baseline.
     for (const { artifact, serverId } of recovered) {

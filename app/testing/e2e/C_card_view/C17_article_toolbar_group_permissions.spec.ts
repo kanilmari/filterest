@@ -147,12 +147,15 @@ async function giveReaderArticleAccess(admin: Page, reader: Page, access: Reader
     access.viewGrants.push({ functionId: view!.id, grantId: null });
   }
   expect(await readAccessRow(admin, 'system_user_groups', { name: access.groupName })).toBeNull();
-  await addAccessRow(admin, 'system_user_groups', { name: access.groupName });
+  registerTestArtifact('group', access.groupName);
+  // Own and arm the attempt before awaiting: a failed reply can follow a commit.
   access.groupCreated = true;
-  registerReaderAccessCleanup(cleanupSteps, access); // Before any readback or child grant can fail.
+  registerReaderAccessCleanup(cleanupSteps, access);
+  await addAccessRow(admin, 'system_user_groups', { name: access.groupName });
   const group = await readAccessRow(admin, 'system_user_groups', { name: access.groupName });
   expect(group).not.toBeNull();
   access.groupId = group!.id;
+  confirmTestArtifact('group', access.groupName, access.groupId);
   // auth/user_permissions.go:29 joins group rights through memberships. NULL is
   // the site-wide UI scope (permissions/route_table_checker.go:257), on our group only.
   for (const viewGrant of access.viewGrants) {

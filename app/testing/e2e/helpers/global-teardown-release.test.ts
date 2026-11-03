@@ -23,8 +23,10 @@ vi.mock('./test-artifact-cleanup', async (importOriginal) => ({
   ) => {
     const summary = await api.cleanup(...args);
     for (const artifact of args[3]) {
-      const deleted = artifact.kind === 'dataset' ? summary.deletedDatasets : summary.deletedFolders;
-      const remaining = artifact.kind === 'dataset' ? summary.remainingDatasetNames : summary.remainingFolderNames;
+      const deleted = artifact.kind === 'group' ? summary.deletedGroups
+        : artifact.kind === 'dataset' ? summary.deletedDatasets : summary.deletedFolders;
+      const remaining = artifact.kind === 'group' ? []
+        : artifact.kind === 'dataset' ? summary.remainingDatasetNames : summary.remainingFolderNames;
       if (deleted.includes(artifact.name) && !remaining.includes(artifact.name)) args[4]?.(artifact);
     }
     return summary;
@@ -83,6 +85,20 @@ afterAll(() => {
   fs.rmSync(runtime.root, { recursive: true, force: true });
   if (runtime.previous === undefined) delete process.env.FILTEREST_TEST_RUNTIME_ROOT;
   else process.env.FILTEREST_TEST_RUNTIME_ROOT = runtime.previous;
+});
+
+test('a planned C17 group reaches shared cleanup and releases only on confirmed absence', async () => {
+  const groupName = `e2e_c17_card_reader_${Date.now().toString(36)}_abc123`;
+  registerTestArtifact('group', groupName);
+  api.cleanup.mockResolvedValueOnce({ ...summary, deletedGroups: [groupName] });
+  api.inventory.mockResolvedValueOnce({ allLangKeys: ['existing'], totalLangKeyCount: 1 });
+  await globalTeardown(config);
+  expect(api.cleanup).toHaveBeenCalledOnce();
+  expect(api.cleanup.mock.calls[0][3]).toContainEqual(expect.objectContaining({
+    kind: 'group', name: groupName, status: 'planned', serverId: null,
+  }));
+  expect(getCurrentArtifactRun()).toBeNull();
+  expect(fs.existsSync(runDirectory)).toBe(false);
 });
 
 test.each(['drift', 'inventory', 'source'])('confirmed cleanup permits a NEW run after %s failure', async (step) => {

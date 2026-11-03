@@ -5,6 +5,7 @@
 import assert from 'node:assert/strict';
 import type { APIRequestContext } from '@playwright/test';
 import { fetchCsrfTokenForRequest } from './test-artifact-csrf-reader';
+import { confirmTestArtifact, unregisterTestArtifact } from './test-artifact-run-registry';
 
 export const C17_READER_GROUP_PREFIX = 'e2e_c17_card_reader_';
 export const READER_VIEW_ROUTES = [
@@ -25,6 +26,11 @@ export type AccessAPI = {
   readRows(dataset: string, fields: Record<string, string | number>): Promise<AccessRow[]>;
   deleteRows(dataset: string, ids: number[]): Promise<void>;
 };
+export type ReaderArtifactRegistry = {
+  confirmTestArtifact: typeof confirmTestArtifact;
+  unregisterTestArtifact: typeof unregisterTestArtifact;
+};
+const readerArtifactRegistry: ReaderArtifactRegistry = { confirmTestArtifact, unregisterTestArtifact };
 export type PermissionCleanupStep = { name: string; run(request: APIRequestContext): Promise<unknown> };
 const GROUPS = 'system_user_groups';
 const RIGHTS = 'system_group_table_func_rights';
@@ -92,10 +98,11 @@ export function c17AccessAPI(request: APIRequestContext): AccessAPI {
   };
 }
 
-/** Arm immediately after create, before any grant/membership verification. */
-export function registerReaderAccessCleanup(steps: PermissionCleanupStep[], access: ReaderAccess): void {
+/** Arm before POST: a failed response can follow a committed creation. */
+export function registerReaderAccessCleanup(steps: PermissionCleanupStep[], access: ReaderAccess,
+  registry: ReaderArtifactRegistry = readerArtifactRegistry): void {
   steps.push({ name: `Remove owned C17 reader group ${access.groupName}`,
-    run: request => removeReaderArticleAccess(c17AccessAPI(request), access) });
+    run: request => removeReaderArticleAccess(c17AccessAPI(request), access, registry) });
 }
 
 /** Arm before POST as well: the response/readback may be interrupted after commit. */
@@ -124,7 +131,8 @@ async function proveGroupCascade(api: AccessAPI, id: number, name: string, error
 }
 
 /** Only group identity can refuse deletion; child drift is reported after cascade. */
-export async function removeReaderArticleAccess(api: AccessAPI, access: ReaderAccess): Promise<void> {
+export async function removeReaderArticleAccess(api: AccessAPI, access: ReaderAccess,
+  registry: ReaderArtifactRegistry = readerArtifactRegistry): Promise<void> {
   if (!access.groupCreated) {
     assert.equal(access.groupId, null, 'C17 reader cleanup has no creation proof for the recorded group');
     return;
@@ -137,6 +145,9 @@ export async function removeReaderArticleAccess(api: AccessAPI, access: ReaderAc
   }
   if (access.groupId === null) return;
   const id = access.groupId;
+  // Persist recovered ids before deletion, including a retry after confirmation failed.
+  // Unknown-id absence stays planned for the shared cleanup's durable quarantine.
+  registry.confirmTestArtifact('group', access.groupName, id);
   const errors: unknown[] = [];
   try {
     await attempt(errors, () => assertGroupIdentity(api, id, access.groupName));
@@ -169,7 +180,11 @@ export async function removeReaderArticleAccess(api: AccessAPI, access: ReaderAc
       // The migration-owned foreign keys cascade both rights and memberships.
       await api.deleteRows(GROUPS, [id]);
     });
-    await proveGroupCascade(api, id, access.groupName, errors);
+    const proofErrors: unknown[] = [];
+    await proveGroupCascade(api, id, access.groupName, proofErrors);
+    errors.push(...proofErrors);
+    // Earlier verification errors still report, but cannot strand proven removal.
+    if (!proofErrors.length) await attempt(errors, async () => registry.unregisterTestArtifact('group', access.groupName));
   }
   report(errors, `C17 reader-access cleanup failed for ${access.groupName} (id ${id})`);
 }

@@ -10,7 +10,7 @@ import {
   C17_READER_GROUP_PREFIX, READER_VIEW_ROUTES, readC17AccessRows, readC17ReaderGroups,
   removeReaderArticleAccess, restoreGuestUIGrants, detectReaderGroups, assertP7ReaderPrecondition,
   assertNoLeftoverC17ReaderGroups, registerReaderAccessCleanup, registerGuestGrantCleanup,
-  type PermissionCleanupStep,
+  type PermissionCleanupStep, type ReaderArtifactRegistry,
   type AccessAPI, type AccessRow, type ReaderAccess, type GuestGrant,
 } from './c17-permission-cleanup';
 
@@ -43,7 +43,9 @@ function fixture(withMember = true) {
   });
   const access: ReaderAccess = { groupName, groupId: 40, groupCreated: true, userId: 7,
     viewGrants: [{ functionId: 10, grantId: 50 }, { functionId: 11, grantId: 51 }], membershipId: withMember ? 60 : null };
-  return { tables, api: { readRows, deleteRows }, access };
+  const registry = { confirmTestArtifact: vi.fn<ReaderArtifactRegistry['confirmTestArtifact']>(),
+    unregisterTestArtifact: vi.fn<ReaderArtifactRegistry['unregisterTestArtifact']>() };
+  return { tables, api: { readRows, deleteRows }, access, registry };
 }
 async function errorsFrom(action: Promise<void>): Promise<unknown[]> {
   try { await action; } catch (error) {
@@ -55,34 +57,37 @@ async function errorsFrom(action: Promise<void>): Promise<unknown[]> {
 
 describe('owned reader group cleanup', () => {
   test('a recorded identity without this run’s creation proof authorizes no deletion', async () => {
-    const { api, access } = fixture(); access.groupCreated = false;
-    await expect(removeReaderArticleAccess(api, access)).rejects.toThrow('no creation proof');
+    const { api, access, registry } = fixture(); access.groupCreated = false;
+    await expect(removeReaderArticleAccess(api, access, registry)).rejects.toThrow('no creation proof');
     expect(api.deleteRows).not.toHaveBeenCalled();
+    expect(registry.confirmTestArtifact).not.toHaveBeenCalled();
+    expect(registry.unregisterTestArtifact).not.toHaveBeenCalled();
   });
   test('grant and membership mismatches are both reported after owned-group deletion and cascade proof', async () => {
-    const { tables, api, access } = fixture();
+    const { tables, api, access, registry } = fixture();
     tables[RIGHTS][0].id = 99;
     tables[MEMBERS][0].user_id = 8;
-    const errors = await errorsFrom(removeReaderArticleAccess(api, access));
+    const errors = await errorsFrom(removeReaderArticleAccess(api, access, registry));
     expect(errors.map(String)).toEqual([expect.stringContaining('Changed reader view grant'), expect.stringContaining('Changed reader')]);
     expect(api.deleteRows).toHaveBeenCalledExactlyOnceWith(GROUPS, [40]);
     expect([tables[GROUPS], tables[RIGHTS], tables[MEMBERS]]).toEqual([[], [], []]);
     expect(api.readRows).toHaveBeenCalledWith(RIGHTS, { user_group_id: 40 });
     expect(api.readRows).toHaveBeenCalledWith(MEMBERS, { group_id: 40 });
+    expect(registry.unregisterTestArtifact).toHaveBeenCalledExactlyOnceWith('group', groupName);
   });
   test.each([GROUPS, RIGHTS, MEMBERS])('a failed %s verification GET still reaches the independent finally deletion', async failedDataset => {
-    const { api, access } = fixture();
+    const { api, access, registry } = fixture();
     const read = api.readRows.getMockImplementation()!;
     let fail = true;
     api.readRows.mockImplementation(async (dataset, fields) => {
       if (dataset === failedDataset && fail) { fail = false; throw new Error('verification readback failed'); }
       return read(dataset, fields);
     });
-    expect((await errorsFrom(removeReaderArticleAccess(api, access))).map(String)).toContain('Error: verification readback failed');
+    expect((await errorsFrom(removeReaderArticleAccess(api, access, registry))).map(String)).toContain('Error: verification readback failed');
     expect(api.deleteRows).toHaveBeenCalledExactlyOnceWith(GROUPS, [40]);
   });
   test.each(['different id', 'different name', 'changed before deletion'])('identity mismatch (%s) deletes nothing', async mismatch => {
-    const { api, access, tables } = fixture();
+    const { api, access, tables, registry } = fixture();
     if (mismatch === 'different id') tables[GROUPS][0].id = 41;
     if (mismatch === 'different name') tables[GROUPS][0].name = `${groupName}_replacement`;
     if (mismatch === 'changed before deletion') {
@@ -91,23 +96,99 @@ describe('owned reader group cleanup', () => {
         if (dataset === MEMBERS) tables[GROUPS][0].name = 'another_owner';
         return read(dataset, fields);
       });
-      expect((await errorsFrom(removeReaderArticleAccess(api, access))).map(String).join('\n')).toContain('Refusing to delete a replacement');
-    } else expect((await errorsFrom(removeReaderArticleAccess(api, access))).map(String).join('\n')).toContain('Refusing to delete a replacement');
+      expect((await errorsFrom(removeReaderArticleAccess(api, access, registry))).map(String).join('\n')).toContain('Refusing to delete a replacement');
+    } else expect((await errorsFrom(removeReaderArticleAccess(api, access, registry))).map(String).join('\n')).toContain('Refusing to delete a replacement');
     expect(api.deleteRows).not.toHaveBeenCalled();
   });
   test('partial setup recovers the previously absent exact name and deletes only that id', async () => {
-    const { api, access, tables } = fixture(false);
+    const { api, access, tables, registry } = fixture(false);
     access.groupId = null;
     access.viewGrants = [];
     tables[RIGHTS] = [];
-    await removeReaderArticleAccess(api, access);
+    await removeReaderArticleAccess(api, access, registry);
     expect(api.deleteRows).toHaveBeenCalledExactlyOnceWith(GROUPS, [40]);
+    expect(registry.confirmTestArtifact).toHaveBeenCalledExactlyOnceWith('group', groupName, 40);
+    expect(registry.confirmTestArtifact.mock.invocationCallOrder[0]).toBeLessThan(api.deleteRows.mock.invocationCallOrder[0]);
+    expect(registry.unregisterTestArtifact).toHaveBeenCalledExactlyOnceWith('group', groupName);
   });
   test('failed delete and both surviving cascade targets are all reported', async () => {
-    const { api, access } = fixture();
+    const { api, access, registry } = fixture();
     api.deleteRows.mockRejectedValue(new Error('delete refused'));
-    const errors = (await errorsFrom(removeReaderArticleAccess(api, access))).map(String).join('\n');
+    const errors = (await errorsFrom(removeReaderArticleAccess(api, access, registry))).map(String).join('\n');
     for (const message of ['delete refused', 'group id remains', 'group name remains', 'rights remain', 'membership remains']) expect(errors).toContain(message);
+    expect(registry.unregisterTestArtifact).not.toHaveBeenCalled();
+  });
+
+  test('successful removal releases only after both group identities and both inventories prove absence', async () => {
+    const { api, access, registry } = fixture();
+    await removeReaderArticleAccess(api, access, registry);
+    expect(api.readRows.mock.calls.slice(-4)).toEqual([[GROUPS, { id: 40 }], [GROUPS, { name: groupName }],
+      [RIGHTS, { user_group_id: 40 }], [MEMBERS, { group_id: 40 }]]);
+    expect(registry.unregisterTestArtifact).toHaveBeenCalledExactlyOnceWith('group', groupName);
+    expect(registry.unregisterTestArtifact.mock.invocationCallOrder[0]).toBeGreaterThan(api.readRows.mock.invocationCallOrder.at(-1)!);
+  });
+
+  test('a create attempt that never committed stays planned for shared quarantine without deleting anything', async () => {
+    const { api, access, registry, tables } = fixture(false);
+    access.groupId = null;
+    tables[GROUPS] = []; tables[RIGHTS] = [];
+    await removeReaderArticleAccess(api, access, registry);
+    expect(api.readRows).toHaveBeenCalledExactlyOnceWith(GROUPS, { name: groupName });
+    expect(api.deleteRows).not.toHaveBeenCalled();
+    expect(registry.confirmTestArtifact).not.toHaveBeenCalled();
+    expect(registry.unregisterTestArtifact).not.toHaveBeenCalled();
+  });
+
+  test('a failed recovered-id confirmation cannot delete, and the next attempt persists the id before deletion', async () => {
+    const { api, access, registry } = fixture();
+    access.groupId = null;
+    registry.confirmTestArtifact.mockImplementationOnce(() => { throw new Error('registry unavailable'); });
+    await expect(removeReaderArticleAccess(api, access, registry)).rejects.toThrow('registry unavailable');
+    expect(access.groupId).toBe(40);
+    expect(api.deleteRows).not.toHaveBeenCalled();
+    expect(registry.unregisterTestArtifact).not.toHaveBeenCalled();
+    await removeReaderArticleAccess(api, access, registry);
+    expect(registry.confirmTestArtifact).toHaveBeenCalledTimes(2);
+    expect(registry.confirmTestArtifact.mock.invocationCallOrder[1]).toBeLessThan(api.deleteRows.mock.invocationCallOrder[0]);
+    expect(registry.unregisterTestArtifact).toHaveBeenCalledExactlyOnceWith('group', groupName);
+  });
+
+  test.each(['id', 'name', 'rights', 'members'])('failed post-delete %s proof retains ownership', async proof => {
+    const { api, access, registry } = fixture();
+    const read = api.readRows.getMockImplementation()!, remove = api.deleteRows.getMockImplementation()!;
+    let deleted = false;
+    api.deleteRows.mockImplementation(async (dataset, ids) => { await remove(dataset, ids); deleted = true; });
+    api.readRows.mockImplementation(async (dataset, fields) => {
+      if (deleted && ((proof === 'id' && dataset === GROUPS && 'id' in fields)
+        || (proof === 'name' && dataset === GROUPS && 'name' in fields)
+        || (proof === 'rights' && dataset === RIGHTS) || (proof === 'members' && dataset === MEMBERS))) {
+        throw new Error('absence proof unavailable');
+      }
+      return read(dataset, fields);
+    });
+    expect((await errorsFrom(removeReaderArticleAccess(api, access, registry))).map(String)).toContain('Error: absence proof unavailable');
+    expect(api.deleteRows).toHaveBeenCalledExactlyOnceWith(GROUPS, [40]);
+    expect(registry.unregisterTestArtifact).not.toHaveBeenCalled();
+  });
+
+  test.each([GROUPS, RIGHTS, MEMBERS])('a surviving %s inventory retains ownership despite a successful delete reply', async survivor => {
+    const { api, access, registry, tables } = fixture();
+    const remove = api.deleteRows.getMockImplementation()!;
+    api.deleteRows.mockImplementation(async (dataset, ids) => {
+      const before = structuredClone(tables[survivor]);
+      await remove(dataset, ids);
+      tables[survivor] = before;
+    });
+    await errorsFrom(removeReaderArticleAccess(api, access, registry));
+    expect(registry.unregisterTestArtifact).not.toHaveBeenCalled();
+  });
+
+  test('a failed delete reply that committed still reports the error and releases after absence proof', async () => {
+    const { api, access, registry } = fixture();
+    const remove = api.deleteRows.getMockImplementation()!;
+    api.deleteRows.mockImplementation(async (dataset, ids) => { await remove(dataset, ids); throw new Error('delete reply lost'); });
+    expect((await errorsFrom(removeReaderArticleAccess(api, access, registry))).map(String)).toEqual(['Error: delete reply lost']);
+    expect(registry.unregisterTestArtifact).toHaveBeenCalledExactlyOnceWith('group', groupName);
   });
 });
 
@@ -260,7 +341,7 @@ describe('C17 and P7 read-only preconditions', () => {
 });
 
 test.each([false, true])('registered group and guest grant survive timeout with closed page; readback failure=%s', async failReadback => {
-  const { api, tables, access } = fixture();
+  const { api, tables, access, registry } = fixture();
   tables[RIGHTS].push(right(52, 10, 1));
   const grants: GuestGrant[] = [{ functionId: 10, before: [], ownedId: 52, marker: 'timeout-guest' }];
   const { request } = requestFor(api);
@@ -268,11 +349,11 @@ test.each([false, true])('registered group and guest grant survive timeout with 
   await expect(closedPage.evaluate()).rejects.toThrow('Target page has been closed');
   closedPage.evaluate.mockClear();
   let hook!: Parameters<Parameters<typeof testDatasetTeardown>[0]['afterEach']>[0];
-  const registry = testDatasetTeardown({ afterEach: callback => { hook = callback; } });
+  const teardown = testDatasetTeardown({ afterEach: callback => { hook = callback; } });
   const steps: PermissionCleanupStep[] = [];
-  registry.plan('timed-out-C17', steps);
+  teardown.plan('timed-out-C17', steps);
   // The production spec appends these registrations as each owned fixture is created.
-  registerReaderAccessCleanup(steps, access);
+  registerReaderAccessCleanup(steps, access, registry);
   registerGuestGrantCleanup(steps, 1, grants);
   if (failReadback) {
     const read = api.readRows.getMockImplementation()!;
@@ -296,6 +377,7 @@ test.each([false, true])('registered group and guest grant survive timeout with 
     expect(setTimeout).toHaveBeenCalledWith(210_000);
     expect(api.deleteRows.mock.calls).toEqual([[GROUPS, [40]], [RIGHTS, [52]]]);
     expect([tables[GROUPS], tables[RIGHTS], tables[MEMBERS]]).toEqual([[], [], []]);
+    expect(registry.unregisterTestArtifact).toHaveBeenCalledExactlyOnceWith('group', groupName);
     expect(request.dispose).toHaveBeenCalledOnce();
     expect(closedPage.evaluate).not.toHaveBeenCalled();
     if (failReadback) expect(log.mock.calls.flat().join(' ')).toContain('closed-page-era readback failed');

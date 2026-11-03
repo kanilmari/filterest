@@ -18,7 +18,7 @@ import {
   withSynchronousArtifactRunStartupLock,
 } from './test-artifact-startup-lock';
 import { validateArtifactRunTarget, type ArtifactRunTarget } from './test-artifact-run-target';
-export type TestArtifactKind = 'dataset' | 'folder';
+export type TestArtifactKind = 'dataset' | 'folder' | 'group';
 export type TestArtifactStatus = 'planned' | 'confirmed';
 type StoredArtifactRun = { version: 1; runId: string; pid: number; processNonce: string; startedAt: string; target?: ArtifactRunTarget };
 type StoredTestArtifact = {
@@ -45,7 +45,7 @@ const CURRENT_RUN_FILE_NAME = 'current-run.json';
 const RUN_DESCRIPTOR_FILE_NAME = 'run.json';
 const ARTIFACT_DIRECTORY_NAME = 'artifacts';
 const RUN_ID_PATTERN = /^[a-zA-Z0-9][a-zA-Z0-9_-]{5,127}$/;
-const ARTIFACT_KINDS: TestArtifactKind[] = ['dataset', 'folder'];
+const ARTIFACT_KINDS: TestArtifactKind[] = ['dataset', 'folder', 'group'];
 const MAX_ARTIFACT_NAME_LENGTH = 512;
 const PROCESS_NONCE_PATTERN = /^[a-f0-9]{64}$/;
 let configuredRootDirectory: string | null = null;

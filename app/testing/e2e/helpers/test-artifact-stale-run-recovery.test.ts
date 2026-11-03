@@ -469,7 +469,7 @@ describe('automatic dead E2E artifact run recovery', () => {
     }
     const api = fakeApi();
     await expect(recover(api)).rejects.toThrow(kind === 'folder'
-      ? /folder "e2e_folder".*datasets only/ : /unknown-kind/);
+      ? /folder "e2e_folder".*datasets and C17 reader groups only/ : /unknown-kind/);
     expect(api.get).not.toHaveBeenCalled();
     expectDeadRecordKept();
   });

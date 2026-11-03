@@ -1,5 +1,5 @@
 // global-teardown.ts
-// Removes owned datasets/folders and reports retained language keys after the test suite.
+// Removes owned datasets/folders/groups and reports retained language keys after the test suite.
 // Bridges authenticated API cleanup with registry ownership and nightly retention evidence.
 // Keeps ownership history on failure and reports every cleanup/evidence failure.
 
@@ -142,7 +142,9 @@ async function globalTeardown(config: FullConfig) {
       status = 'incomplete: artifact registry validation failed';
       const registeredArtifacts = listRegisteredTestArtifacts(artifactRun.runId);
       status = 'incomplete: planned artifact validation failed';
-      const plannedArtifacts = registeredArtifacts.filter((artifact) => artifact.status !== 'confirmed');
+      // Generated, registered C17 groups can recover a creation with no reply/id;
+      // the shared helper validates their run timestamp before any cleanup API.
+      const plannedArtifacts = registeredArtifacts.filter((artifact) => artifact.status !== 'confirmed' && artifact.kind !== 'group');
       if (plannedArtifacts.length > 0) {
         throw new Error(
           '[global-teardown] ambiguous planned artifacts require inspection; no cleanup request was sent: ' +
@@ -184,13 +186,15 @@ async function globalTeardown(config: FullConfig) {
       );
 
       const deletedCount =
+        (cleanupSummary.deletedGroups?.length ?? 0) +
         cleanupSummary.deletedDatasets.length +
         cleanupSummary.deletedFolders.length;
       if (deletedCount > 0) {
         console.log(
           `[global-teardown] cleaned registered E2E artifacts: ` +
           `${cleanupSummary.deletedDatasets.length} datasets, ` +
-          `${cleanupSummary.deletedFolders.length} folders`,
+          `${cleanupSummary.deletedFolders.length} folders, ` +
+          `${cleanupSummary.deletedGroups?.length ?? 0} groups`,
         );
       }
 

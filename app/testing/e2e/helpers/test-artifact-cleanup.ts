@@ -11,6 +11,7 @@ import {
   type APIRequestContext,
 } from '@playwright/test';
 import type { RegisteredTestArtifact } from './test-artifact-run-registry';
+import { cleanupRegisteredTestGroups, validateRegisteredTestGroups } from './test-artifact-groups';
 import { fetchCsrfTokenForRequest } from './temp-dataset';
 import { readDatasetTableUIDFromRequest } from './test-artifact-dataset-identity-reader';
 import { normalizeE2EBaseURL } from './test-artifact-run-target';
@@ -76,6 +77,7 @@ export type SyntheticArtifactBaseline = {
 };
 
 export type SyntheticTestCleanupSummary = {
+  deletedGroups: string[];
   deletedDatasets: string[];
   deletedFolders: string[];
   deletedLangKeys: string[];
@@ -555,17 +557,21 @@ export async function cleanupSyntheticTestArtifacts(
   onConfirmedAbsent?: (artifact: RegisteredTestArtifact) => void,
 ): Promise<SyntheticTestCleanupSummary> {
   const baseline = validateSyntheticArtifactBaseline(rawBaseline);
-  const artifacts = validateConfirmedTestArtifacts(rawArtifacts, baseline);
+  const groups = rawArtifacts.filter(artifact => artifact.kind === 'group');
+  validateRegisteredTestGroups(groups, baseline.runId, Date.parse(baseline.capturedAt));
+  const artifacts = validateConfirmedTestArtifacts(rawArtifacts.filter(artifact => artifact.kind !== 'group'), baseline);
   const registeredNames = new Set(artifacts.map((artifact) => artifact.name));
 
   // Verify the identity on the same request context that will obtain the CSRF
   // token and issue cleanup POSTs. A swapped or stale storage state fails
   // before the first mutating request.
   await assertAuthenticatedCleanupIdentity(request, baseline);
+  const deletedGroups = await cleanupRegisteredTestGroups(request, groups, onConfirmedAbsent);
 
   if (artifacts.length === 0) {
     const langKeyInventory = await readLangKeyInventory(request);
     return {
+      deletedGroups,
       deletedDatasets: [], deletedFolders: [], deletedLangKeys: [],
       remainingDatasetNames: [], remainingFolderNames: [], remainingSyntheticLangKeys: [],
       totalLangKeyCount: langKeyInventory.totalLangKeyCount,
@@ -598,6 +604,7 @@ export async function cleanupSyntheticTestArtifacts(
   );
 
   return {
+    deletedGroups,
     deletedDatasets,
     deletedFolders,
     deletedLangKeys: [],
