@@ -3,6 +3,8 @@
 // Connects detached card construction, accepted DOM swaps and field cleanup callbacks.
 // Uses weak ownership so abandoned elements cannot be retained by the lifecycle itself.
 
+import { discardInlineEditors } from '../../general_tables/gt_1_row_crud/gt_1_3_row_update/inline_editor_state.js';
+
 const resources = new WeakMap();
 const mountedCards = new WeakSet();
 const disposedElements = new WeakSet();
@@ -25,6 +27,7 @@ export function addCardResourceListener(element, eventName, listener, options) {
 /** Release field observers, timers and subscriptions before removing any subtree. */
 export function disposeCardResources(root) {
     if (!root) return;
+    discardInlineEditors(root);
     // Collect first: field cleanup may remove children while callbacks run.
     const elements = [root, ...root.querySelectorAll?.('*') || []];
     elements.forEach(element => {

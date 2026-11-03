@@ -115,6 +115,37 @@ map. `+lang_key` values use the interface dictionary; ordinary keys such as
 resolved string. Article ownership hiding follows only the server-proven owner
 mark. Administrator role choices remain editable in Card visibility.
 
+### Inline editing during live refresh
+
+The SSE subscriber holds dataset changes while an `editCell` editor is setting
+up, editing, saving, or retaining a retryable draft. Its lifetime guard also
+rejects answers and detached builds started before the editor opened. Closing
+the last editor runs one fresh listing rebuild, reconnecting endless scrolling;
+there is no timeout. Only this live-refresh route restores the selected cell,
+by row identity and column captured immediately before replacement, without
+taking focus from another control. A selected row beyond the new first page
+is left unselected; refresh still starts from offset zero.
+
+`inline_editor_state.js` owns that lifetime through DOM observation, including
+early returns and removal. View owners must call `discardInlineEditors` before
+hiding or removing an editor's subtree: disposal, full and searched listing
+swaps, component redraws and navigation do so before a browser can emit blur.
+Removal drops the draft and never confirms it. Session/rights invalidation drops
+both editors and pending live refreshes; page hiding and unload events leave
+them alone. Explicit sort, filter and delayed chat-plan rebuilds keep their
+existing replacement policy.
+Without an editor, notifications keep the ordinary 180 ms debounce even while
+an older listing is pending. Identical pending searches share their existing
+request; a joining live refresh adds its editor guard to the shared commit.
+A yielded search clears its pending promise so closing the editor can reload it.
+For multilingual edits with a held change, explicit column metadata also covers
+initially empty cells. Re-read the row with the editor's opening view projection
+before merging the edited language. With no hold, or an initially empty cell
+still empty at re-read, its existing save payload is unchanged. A failed read,
+including a successful response missing the field, keeps the draft for retry;
+Escape cancels it and releases the live refresh. Persistent read failures can
+therefore prevent confirmation until the underlying problem clears.
+
 ### View Types
 
 All three article presentations (ordinary, Image First and page-sized Image First)

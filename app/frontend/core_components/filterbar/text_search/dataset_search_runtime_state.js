@@ -23,7 +23,8 @@ export const ongoingSearchResultsStore = {};
 
 export function isCurrentSearchCache(tableName, expectedCache) {
     return !expectedCache || (ongoingSearchResultsStore[tableName] === expectedCache
-        && datasetAppearanceState.isCurrent(expectedCache.appearanceToken));
+        && datasetAppearanceState.isCurrent(expectedCache.appearanceToken)
+        && (!expectedCache.callerIsCurrent || expectedCache.callerIsCurrent()));
 }
 
 export function getSearchFilterContext(tableName) {

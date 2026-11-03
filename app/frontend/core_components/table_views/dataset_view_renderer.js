@@ -162,7 +162,7 @@ export function createDatasetViewElement(viewDefinition, tableName, columns, dat
 export async function commitDatasetViewRows(tableName, rows, {
     mode = 'append', viewKey = getChosenDatasetView(tableName) || 'table',
     container = document.getElementById(getDatasetViewContainerId(viewKey, tableName)),
-    isCurrent, dataTypes, onBuildFailure,
+    isCurrent, dataTypes, onBuildFailure, beforeSwap,
 } = {}) {
     if (!['replace', 'append'].includes(mode)) throw new Error(`Unknown row commit mode: ${mode}`);
     const canCommit = () => (!isCurrent || isCurrent()) && container?.isConnected
@@ -172,22 +172,25 @@ export async function commitDatasetViewRows(tableName, rows, {
     const renderer = DATASET_VIEW_RENDERERS[getDatasetViewDefinition(viewKey)?.rendererKey];
     if (!renderer?.commitRows) return null;
     const outcome = await renderer.commitRows({ tableName, rows, container,
-        append: mode === 'append', isCurrent: canCommit, dataTypes, onBuildFailure });
+        append: mode === 'append', isCurrent: canCommit, dataTypes, onBuildFailure, beforeSwap });
     return canCommit() ? outcome : null;
 }
 
-function commitTableRows({ tableName, container, rows, append }) {
+function commitTableRows({ tableName, container, rows, append, beforeSwap }) {
     const table = container.querySelector('table');
     if (!table) return null;
     if (append && rows.length === 0) return 'committed';
     const columns = JSON.parse(table.dataset.columns);
     const dataTypes = JSON.parse(table.dataset.dataTypes);
+    const restoreSelection = append ? null : beforeSwap?.(container);
     if (!append) {
+        disposeCardResources(table);
         const tbody = table.querySelector('tbody');
         if (tbody) tbody.replaceChildren();
         else table.appendChild(document.createElement('tbody'));
     }
     appendDataToTable(table, rows, columns, dataTypes, tableName);
+    restoreSelection?.();
     return 'committed';
 }
 
@@ -224,12 +227,14 @@ async function commitCardRows({ tableName, container, rows, append, isCurrent, d
     }
 }
 
-function commitComponentRows({ container, rows, append }) {
+function commitComponentRows({ container, rows, append, beforeSwap }) {
     const component = container.querySelector('.table-component-root')?.tableComponentInstance;
     if (!component) return null;
     if (append && rows.length === 0) return 'committed';
+    const restoreSelection = append ? null : beforeSwap?.(container);
     if (append) component.appendData(rows);
     else component.setData(rows);
+    restoreSelection?.();
     return 'committed';
 }
 

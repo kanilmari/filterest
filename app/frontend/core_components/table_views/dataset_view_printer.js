@@ -12,6 +12,7 @@ import { resolveVisibleDatasetMediaPath } from "./dataset_media_visibility_resol
 
 import { shouldPreserveCardReturnHost } from "../navigation/nav_engine/card_article_return_state.js";
 import { saveColumnWidths } from "./table_view/table_structure_builder.js";
+import { discardInlineEditors } from '../general_tables/gt_1_row_crud/gt_1_3_row_update/inline_editor_state.js';
 import { disposeCardResources, notifyCardsMounted } from './card_view/card_resource_lifecycle.js';
 import { showDatasetResultBuildFailure } from './dataset_result_build_failure.js';
 // import { applySavedColumnVisibility } from '../general_tables/gt_toolbar/column_visibility_dropdown.js';
@@ -212,7 +213,7 @@ export async function generate_table(
     rowGroupFacets = null,
     { preserveCardReturn = null, loadedRows = null, rowGroupFacetContext = {},
         datasetAppearance = null, appearanceToken = null, isCurrent = () => true,
-        chartRequested = false, effectiveSort = null } = {}
+        chartRequested = false, effectiveSort = null, beforeSwap = null } = {}
 ) {
     const token = appearanceToken || loadedRows?.appearanceToken || datasetAppearanceState.capture(dataset_name);
     const canCommit = () => isCurrent() && datasetAppearanceState.isCurrent(token);
@@ -386,8 +387,11 @@ export async function generate_table(
             console.warn(`Unknown view: ${current_view}`);
         }
 
+
+        // Hiding is a discard boundary too: browsers may blur a hidden input.
         for (const viewType in viewContainers) {
             if (viewType !== current_view) {
+                discardInlineEditors(viewContainers[viewType]);
                 viewContainers[viewType].style.display = "none";
             }
         }
@@ -468,6 +472,8 @@ export async function generate_table(
         // not the chosen view of a pending (possibly abandoned) build.
         const startsNewSurface = tab_parts_container.dataset.view !== current_view
             || !scrollableContainer.querySelector(':scope > .dataset-results-surface');
+        const restoreSelection = beforeSwap?.(main_table_container);
+        for (const container of Object.values(viewContainers)) discardInlineEditors(container);
         for (const container of Object.values(viewContainers)) {
             if (container === scrollableContainer || (current_view === "article_view"
                 && shouldPreserveCardReturnHost(dataset_name, preserveCardReturn, container))) continue;
@@ -478,6 +484,7 @@ export async function generate_table(
         clearLoadedDatasetRows(scrollableContainer);
         disposeCardResources(scrollableContainer);
         scrollableContainer.replaceChildren(resultsSurface);
+        restoreSelection?.();
         tab_parts_container.setAttribute("data-view", current_view);
         pendingView = null;
         // syncDatasetSearchVisibility(dataset_name); // REMOVED: No longer needed as we have a single filter bar

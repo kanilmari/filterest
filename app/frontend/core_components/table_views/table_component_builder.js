@@ -15,6 +15,7 @@
  *  - Aseta filttereitä (setFilter), vaihda näkymiä (setView), jne.
  */
 
+import { discardInlineEditors } from '../general_tables/gt_1_row_crud/gt_1_3_row_update/inline_editor_state.js';
 import {
     generateNormalTable,
     generateTransposedTable,
@@ -271,6 +272,7 @@ export class TableComponent {
         count_this_function?.('TableComponent_render');
     
         const menuRef = this.selectionMenu;
+        discardInlineEditors(this.rootElement);
         this.rootElement.replaceChildren();
     
         const filteredData = this.getFilteredData();
@@ -1191,6 +1193,7 @@ export class TableComponent {
      */
     destroy() {
         this.disposeResources();
+        discardInlineEditors(this.rootElement);
         this.rootElement.remove();
     }
 }

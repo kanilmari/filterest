@@ -3,6 +3,7 @@
 // Bridges navigation events and view/dataset state via the declarative navigation pipeline.
 // Exists to serve as the single entry point for all in-app navigation so every path runs the same pipeline stages.
 
+import { discardInlineEditors } from '../../general_tables/gt_1_row_crud/gt_1_3_row_update/inline_editor_state.js';
 import { invalidateCardArticleReturn, getCardArticleReturnToken } from "./card_article_return_state.js";
 import { refreshTableUnified } from '../../general_tables/gt_1_row_crud/gt_1_2_row_read/table_refresh_unified.js';
 import { applyViewStyling } from '../../table_views/view_selector_printer.js';
@@ -173,6 +174,7 @@ async function _performNavigationCore(
         // outside this container. Announce the generic view transition before
         // hiding it so each child can close its own surface without navigation
         // learning the component's classes, state, or toggle implementation.
+        discardInlineEditors(container_element);
         container_element.dispatchEvent(new CustomEvent(VIEW_DEACTIVATE_EVENT));
         container_element.classList.add('hidden');
     });

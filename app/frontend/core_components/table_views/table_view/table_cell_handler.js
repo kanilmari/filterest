@@ -3,7 +3,7 @@
 // Bridges table DOM cells and the editing selection CSS state.
 // Exists to ensure only one table cell is marked for editing at a time.
 
-export function selectCell(cell) {
+export function selectCell(cell, { focus = true, preventScroll = false } = {}) {
     // Poistetaan 'selected_for_editing' -luokka kaikista soluista
     const selectionRoot = cell.closest('table') || cell.closest('.table-component-root');
     if (!selectionRoot) {
@@ -17,5 +17,5 @@ export function selectCell(cell) {
 
     // Lisätään 'selected_for_editing' -luokka valittuun soluun
     cell.classList.add('selected_for_editing');
-    cell.focus();
+    if (focus) cell.focus({ preventScroll });
 }

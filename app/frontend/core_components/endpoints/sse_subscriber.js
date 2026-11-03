@@ -14,6 +14,9 @@ import {
 } from "../filterbar/text_search/dataset_search_executor.js";
 import { datasetSearchState } from "../filterbar/text_search/dataset_search_state_reader.js";
 
+import { hasOpenInlineEditor, getInlineEditorGeneration, setHeldInlineChange,
+    subscribeToInlineEditorClose, discardInlineEditors } from '../general_tables/gt_1_row_crud/gt_1_3_row_update/inline_editor_state.js';
+import { preserveTableRefreshSelection } from '../table_views/table_view/table_refresh_selection.js';
 import { subscribeToSessionGeneration } from '../auth/session_generation_store.js';
 
 const RECONNECT_BASE_DELAY_MS = 1000;
@@ -27,6 +30,7 @@ let eventSource = null;
 let reconnectDelayMs = RECONNECT_BASE_DELAY_MS;
 let reconnectTimer = null;
 const refreshDebounceTimers = new Map();
+const refreshRequests = new Map();
 let pageUnloadInProgress = false;
 let documentSuspended = document.visibilityState === 'hidden';
 let resumeAfterPermissionRefresh = false;
@@ -52,6 +56,7 @@ subscribeToSessionGeneration(reason => {
     sessionEnded = false;
     cleanupReconnectTimer();
     closeAllRefreshTimers();
+    discardInlineEditors();
     closeEventSource();
     cancelStatusProbe();
 });
@@ -115,35 +120,90 @@ function clearRefreshTimer(tableName) {
     refreshDebounceTimers.delete(tableName);
 }
 
+function dropRefresh(tableName) {
+    clearRefreshTimer(tableName);
+    refreshRequests.delete(tableName);
+    setHeldInlineChange(tableName, false);
+}
+
 function closeAllRefreshTimers() {
-    for (const tableName of refreshDebounceTimers.keys()) {
-        clearRefreshTimer(tableName);
+    for (const tableName of new Set([...refreshDebounceTimers.keys(), ...refreshRequests.keys()])) {
+        dropRefresh(tableName);
     }
 }
 
 function scheduleDebouncedRefresh(tableName) {
+    let request = refreshRequests.get(tableName);
+    if (!request) refreshRequests.set(tableName, request = { held: false, running: 0 });
+    request.held = true;
+    setHeldInlineChange(tableName, true);
     clearRefreshTimer(tableName);
-    const timerID = setTimeout(() => {
-        refreshDebounceTimers.delete(tableName);
-        void refreshActiveDatasetSurface(tableName);
-    }, REFRESH_DEBOUNCE_MS);
-    refreshDebounceTimers.set(tableName, timerID);
+    // Nonediting viewers retain the ordinary debounce, even during a request.
+    // Unified refresh generations supersede older answers as on the normal path.
+    if (hasOpenInlineEditor(tableName)) return;
+    queueRefresh(tableName, REFRESH_DEBOUNCE_MS);
 }
 
+function queueRefresh(tableName, delay = 0) {
+    clearRefreshTimer(tableName);
+    refreshDebounceTimers.set(tableName, setTimeout(() => {
+        refreshDebounceTimers.delete(tableName);
+        void refreshActiveDatasetSurface(tableName);
+    }, delay));
+}
+
+subscribeToInlineEditorClose(tableName => {
+    const request = refreshRequests.get(tableName);
+    if (request?.held && !request.running && !hasOpenInlineEditor(tableName)) queueRefresh(tableName);
+});
+
 async function refreshActiveDatasetSurface(tableName) {
-    const committedSearchTerm = String(getParams(tableName)?.search || "").trim();
-    if (committedSearchTerm) {
-        await do_intelligent_search(tableName, committedSearchTerm);
-        return;
+    const request = refreshRequests.get(tableName);
+    if (!request || hasOpenInlineEditor(tableName)) return;
+    request.running += 1;
+    request.held = false;
+    const editorGeneration = getInlineEditorGeneration(tableName);
+    let yielded = false;
+    let finished = false;
+    // Both the fetch answer and the final asynchronous view build must yield.
+    // Remember the yield even if the editor closes before the answer arrives.
+    const isCurrent = () => {
+        if (refreshRequests.get(tableName) !== request || activeDatasetName !== tableName) return false;
+        // Completed search caches have no pending inline-view swap to hold.
+        if (finished) return !yielded;
+        if (getInlineEditorGeneration(tableName) !== editorGeneration || hasOpenInlineEditor(tableName)) {
+            yielded = true;
+            request.held = true;
+            setHeldInlineChange(tableName, true);
+        }
+        return !yielded;
+    };
+    const renderOptions = { isCurrent, beforeSwap: preserveTableRefreshSelection };
+    try {
+        const committedSearchTerm = String(getParams(tableName)?.search || "").trim();
+        if (committedSearchTerm) {
+            await do_intelligent_search(tableName, committedSearchTerm, {}, renderOptions);
+        } else {
+            const activeSearchTerm = String(datasetSearchState.get(tableName) || "").trim();
+            if (activeSearchTerm && hasCachedSearchResults(tableName)) {
+                await rerenderCachedSearchResults(tableName, null, renderOptions);
+            } else {
+                await refreshTableUnified(tableName, { skipUrlParams: true, ...renderOptions });
+            }
+        }
+    } catch (error) {
+        console.warn('sse_subscriber: dataset refresh failed', error);
+    } finally {
+        finished = true;
+        request.running -= 1;
+        // An older generation can finish before checking the editor guard.
+        // Keep unseen changes marked until every outstanding run has finished.
+        if (refreshRequests.get(tableName) === request) setHeldInlineChange(tableName, request.held || request.running > 0);
+        if (refreshRequests.get(tableName) === request && request.held && !request.running
+            && !refreshDebounceTimers.has(tableName) && !hasOpenInlineEditor(tableName)) {
+            queueRefresh(tableName);
+        }
     }
-
-    const activeSearchTerm = String(datasetSearchState.get(tableName) || "").trim();
-    if (activeSearchTerm && hasCachedSearchResults(tableName)) {
-        await rerenderCachedSearchResults(tableName);
-        return;
-    }
-
-    await refreshTableUnified(tableName, { skipUrlParams: true });
 }
 
 function currentTableQueryString() {
@@ -187,6 +247,7 @@ function handleSessionEndedEvent() {
     cancelStatusProbe();
     cleanupReconnectTimer();
     closeAllRefreshTimers();
+    discardInlineEditors();
     closeEventSource();
 }
 
@@ -250,6 +311,7 @@ async function checkSubscriptionStatus(streamURL) {
         if ([401, 403].includes(response.status)) {
             permissionDenied = true;
             closeAllRefreshTimers();
+            discardInlineEditors();
         }
         await response.body?.cancel();
     } catch {
@@ -269,7 +331,8 @@ export function setSSEActiveDataset(datasetName) {
 
     if (activeDatasetName !== "") {
         subscribedTables.delete(activeDatasetName);
-        clearRefreshTimer(activeDatasetName);
+        dropRefresh(activeDatasetName);
+        discardInlineEditors(document.getElementById(`${activeDatasetName}_container`));
     }
 
     activeDatasetName = normalizedName;
@@ -282,7 +345,8 @@ export function setSSEActiveDataset(datasetName) {
 export function clearSSEActiveDataset() {
     if (activeDatasetName !== "") {
         subscribedTables.delete(activeDatasetName);
-        clearRefreshTimer(activeDatasetName);
+        dropRefresh(activeDatasetName);
+        discardInlineEditors(document.getElementById(`${activeDatasetName}_container`));
     }
     activeDatasetName = "";
     connectIfNeeded();

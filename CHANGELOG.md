@@ -22,6 +22,8 @@ Dates are the local (Europe/Helsinki) date on which the version was published.
 
 ## [Unreleased]
 
+- Editing a table cell is no longer interrupted or saved by a change arriving from elsewhere, and the cell stays selected after a save. Held changes also preserve other languages when editing an initially empty multilingual field, including in List view; viewers retain the ordinary refresh timing and shared searches.
+
 ## [9.6.1] - 2026-11-03
 
 - **Mirror and preview instances show what they run** — When the instance-info runtime flag names a record, every page, sign-in included, shows a small badge in the bottom-left corner: one line with the code source and the data's backup time, a click for commits, data source and refresh time in Europe/Helsinki, and a dot when minimised. The flag is off by default; without it the read-only `/api/instance-info` endpoint does not exist and no page loads the badge.

@@ -109,6 +109,36 @@ describe("do_intelligent_search browses the dataset", () => {
         expect(setResultsCountMock).toHaveBeenLastCalledWith("dev_agent_tasks", 1);
     });
 
+    test.each([false, true])('a guarded caller shares a pending search without abort or extra listing, editorOpens=%s', async editorOpens => {
+        let releaseListing;
+        reloadDatasetRowsFromListingMock.mockImplementation(() => new Promise(resolve => { releaseListing = resolve; }));
+        const { do_intelligent_search, ongoingSearchResults } = await import('./dataset_search_executor.js');
+        const first = do_intelligent_search('dev_agent_tasks', 'claude');
+        const cache = ongoingSearchResults.dev_agent_tasks;
+        const abort = vi.spyOn(cache.abortController, 'abort');
+        let editorOpen = false;
+        const shared = do_intelligent_search('dev_agent_tasks', 'claude', {}, { isCurrent: () => !editorOpen });
+        expect(ongoingSearchResults.dev_agent_tasks).toBe(cache);
+        expect(abort).not.toHaveBeenCalled(); expect(reloadDatasetRowsFromListingMock).toHaveBeenCalledTimes(1);
+        editorOpen = editorOpens;
+        const listingGuard = reloadDatasetRowsFromListingMock.mock.calls[0][1].isCurrent;
+        expect(listingGuard()).toBe(!editorOpens);
+        releaseListing(listingAnswer({ data: [{ id: 14 }], row_count: 1, columns: ['id'] }));
+        await Promise.all([first, shared]);
+        expect(abort).not.toHaveBeenCalled(); expect(reloadDatasetRowsFromListingMock).toHaveBeenCalledTimes(1);
+        expect(endpointRouterMock).toHaveBeenCalledTimes(editorOpens ? 0 : 1);
+        expect(cache.complete).toBe(!editorOpens);
+        expect(cache.data).toEqual(editorOpens ? [] : [{ id: 14 }]);
+        expect(cache.executionPromise).toBeNull();
+        if (editorOpens) {
+            editorOpen = false;
+            reloadDatasetRowsFromListingMock.mockResolvedValueOnce(listingAnswer({ data: [{ id: 15 }] }));
+            await do_intelligent_search('dev_agent_tasks', 'claude', {}, { isCurrent: () => !editorOpen });
+            expect(reloadDatasetRowsFromListingMock).toHaveBeenCalledTimes(2);
+            expect(ongoingSearchResults.dev_agent_tasks.data).toEqual([{ id: 15 }]);
+        }
+    });
+
     test("does not retry an abandoned or failed listing reload", async () => {
         reloadDatasetRowsFromListingMock.mockResolvedValue(null);
 

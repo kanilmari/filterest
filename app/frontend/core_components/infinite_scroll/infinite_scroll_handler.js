@@ -300,7 +300,7 @@ export function initializeInfiniteScroll(tableName, orientation = "vertical") {
  *        caller's freshness check and metadata repair requiring a full rebuild.
  * @returns {Promise<Object|null>} the listing's answer, or null if it was abandoned.
  */
-export async function reloadDatasetRowsFromListing(tableName, { isCurrent, rebuildView = false } = {}) {
+export async function reloadDatasetRowsFromListing(tableName, { isCurrent, rebuildView = false, beforeSwap = null } = {}) {
     const currentView = getChosenDatasetView(tableName) || "table";
     const container = document.getElementById(getDatasetViewContainerId(currentView, tableName));
     if (rebuildView || (["card", "article_view"].includes(currentView) && !container?.querySelector('.card_container'))) {
@@ -314,11 +314,11 @@ export async function reloadDatasetRowsFromListing(tableName, { isCurrent, rebui
             && (getChosenDatasetView(tableName) || "table") === currentView && (!isCurrent || isCurrent());
         const { refreshTableUnified } = await import('../general_tables/gt_1_row_crud/gt_1_2_row_read/table_refresh_unified.js');
         if (!canBuild()) return null;
-        return refreshTableUnified(tableName, { skipUrlParams: true, isCurrent: canBuild });
+        return refreshTableUnified(tableName, { skipUrlParams: true, isCurrent: canBuild, beforeSwap });
     }
     disconnectInfiniteScroll(tableName);
     resetOffset(tableName);
-    const result = await fetchMoreData(tableName, { replace: true, isCurrent });
+    const result = await fetchMoreData(tableName, { replace: true, isCurrent, beforeSwap });
     if (!result) return null;
     if (isCurrent && !isCurrent()) return result;
     initializeInfiniteScroll(tableName, getDatasetViewScrollDirection(getChosenDatasetView(tableName) || "table"));
@@ -328,7 +328,7 @@ export async function reloadDatasetRowsFromListing(tableName, { isCurrent, rebui
 //  * Varsinainen “hae lisää dataa” -funktio.
 //  * replace=true aloittaa listauksen alusta ja korvaa näkyvät rivit;
 //  * muuten haetaan seuraava sivu nykyisen offsetin jälkeen.
-async function fetchMoreData(tableName, { replace = false, isCurrent: callerIsCurrent = null } = {}) {
+async function fetchMoreData(tableName, { replace = false, isCurrent: callerIsCurrent = null, beforeSwap = null } = {}) {
     if (!replace && hasLoadedEntireListing(tableName)) {
         disconnectInfiniteScroll(tableName);
         return null;
@@ -379,6 +379,7 @@ async function fetchMoreData(tableName, { replace = false, isCurrent: callerIsCu
             // A repaired search belongs to its owner, including its options.
             // Drop this obsolete page; the restarted search loads page one once.
             const canReload = () => datasetAppearanceState.isCurrent(appearanceToken)
+                && (!beforeSwap || !callerIsCurrent || callerIsCurrent())
                 && datasetAppearanceState.ownsSurface(container, appearanceToken.uid)
                 && (getChosenDatasetView(tableName) || "table") === currentView
                 && document.getElementById(getDatasetViewContainerId(currentView, tableName)) === container
@@ -386,14 +387,18 @@ async function fetchMoreData(tableName, { replace = false, isCurrent: callerIsCu
             if (filters.search) {
                 const { restartInvalidatedSearch } = await import('../filterbar/text_search/dataset_search_executor.js');
                 if (!canReload() || scrollSt.generation !== generation) return null;
-                if (await restartInvalidatedSearch(tableName)) return null;
+                if (beforeSwap && callerIsCurrent && !callerIsCurrent()) return null;
+                const restarted = beforeSwap
+                    ? await restartInvalidatedSearch(tableName, { isCurrent: callerIsCurrent, beforeSwap })
+                    : await restartInvalidatedSearch(tableName);
+                if (restarted) return null;
             }
             if (callerIsCurrent && !callerIsCurrent()) return null;
             // An ordinary listing still rebuilds completely, never appending a
             // reply counted with a hidden selection to the old prefix.
             const { refreshTableUnified } = await import('../general_tables/gt_1_row_crud/gt_1_2_row_read/table_refresh_unified.js');
             if (!canReload() || scrollSt.generation !== generation) return null;
-            return refreshTableUnified(tableName, { skipUrlParams: true, isCurrent: canReload });
+            return refreshTableUnified(tableName, { skipUrlParams: true, isCurrent: canReload, beforeSwap });
         }
         if (result.dataset_appearance != null
             && !datasetAppearanceState.accept(tableName, result.dataset_appearance, { token: appearanceToken, isCurrent })) return null;
@@ -405,7 +410,7 @@ async function fetchMoreData(tableName, { replace = false, isCurrent: callerIsCu
             // A reload still has to empty the view: an answer with no rows is
             // the result, not a reason to leave the previous rows on screen.
             if (replace) {
-                const outcome = await appendDataToView(tableName, [], false, { isCurrent, dataTypes: result.types });
+                const outcome = await appendDataToView(tableName, [], false, { isCurrent, dataTypes: result.types, beforeSwap });
                 if (!outcome || !isCurrent()) return null;
                 if (isCurrent()) clearLoadedDatasetRows(container);
             }
@@ -423,7 +428,7 @@ async function fetchMoreData(tableName, { replace = false, isCurrent: callerIsCu
         const rows = replace
             ? result.data
             : filterLoadedDatasetDuplicates(container, tableName, result.data);
-        const outcome = await appendDataToView(tableName, rows, !replace, { isCurrent, dataTypes: result.types });
+        const outcome = await appendDataToView(tableName, rows, !replace, { isCurrent, dataTypes: result.types, beforeSwap });
         if (!outcome || !isCurrent()) return null;
         updateOffset(tableName, result.data.length);
         if (replace) {

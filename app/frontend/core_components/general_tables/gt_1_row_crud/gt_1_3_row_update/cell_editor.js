@@ -3,7 +3,6 @@
 // Bridges cell selection, policy-aware option fetching, and the endpoint router into one in-place edit interaction.
 // Exists to isolate cell-level update logic from row-level and table-level concerns.
 
-import { selectCell } from '../../../table_views/table_view/table_cell_handler.js';
 import { loadForeignFilterOptions } from '../../../filterbar/filter_list/filter_column_builder_helpers.js';
 import { createMultiselectDropdown } from '../../../../reusable_components/multiselect_dropdown/multiselect_dropdown_builder.js';
 import { endpoint_router } from '../../../endpoints/endpoint_router.js';
@@ -30,17 +29,37 @@ import {
 import { getLanguageWithBrowserFallback } from '../../../state_stores/lang_preference_reader.js';
 import { formatTimestampDisplayParts } from '../../../table_views/timestamp_display_formatter.js';
 import {
-    reconstructMultilingualValue,
     resolveMultilingualValue,
 } from '../../../table_views/card_view/card_field_formatter_helpers.js';
 import {
     resolveDatasetDisplayValue,
-    setLocalizedDatasetText,
 } from '../../../table_views/dataset_value_localizer.js';
 import { resolveCellEditorLayout } from './cell_editor_layout_resolver.js';
+import { beginInlineEditor } from './inline_editor_state.js';
+import { reconstructCurrentMultilingualValue } from './cell_editor_multilingual_update.js';
+import { selectCellAfterEditing, setCellDisplayText, setLocalizedTableCellDisplay } from './cell_editor_display.js';
 import { isServiceUnavailableError } from '../../../pipeline/api_pipeline_helpers.js';
+import { getChosenDatasetView } from '../../../state_stores/dataset_view_choice_saver.js';
+import { resolveDatasetViewSelectionTarget } from '../../../table_views/dataset_view_registry.js';
 
 export async function editCell(cell, columns, data, dataTypes, table_name) {
+    const originalContent = cell.textContent;
+    const editor = beginInlineEditor(cell, table_name, () => {
+        cell.classList.remove('editing', 'table_data_cell--inline-fk-editing');
+        delete cell.dataset.inlineSaveState;
+        setCellDisplayText(cell, originalContent);
+    });
+    try {
+        await openCellEditor(cell, columns, data, dataTypes, table_name, editor);
+    } catch (error) {
+        editor.discard();
+        throw error;
+    } finally {
+        editor.ready();
+    }
+}
+
+async function openCellEditor(cell, columns, data, dataTypes, table_name, editor) {
     let originalContent = cell.textContent;
     const safeDataTypes = dataTypes || {};
 
@@ -68,7 +87,7 @@ export async function editCell(cell, columns, data, dataTypes, table_name) {
                 fallback: 'Tätä saraketta ei voi muokata tässä näkymässä.',
             })
         );
-        selectCell(cell);
+        selectCellAfterEditing(cell);
         return;
     }
 
@@ -89,23 +108,23 @@ export async function editCell(cell, columns, data, dataTypes, table_name) {
     const rowData = cell.closest('tr')?._row ?? data[parseInt(cell.dataset.rowIndex, 10)];
 
     if (inlineOptions.length > 0) {
-        await handleRegularEditing(cell, rowData, safeDataTypes, table_name, columnName, originalContent);
+        await handleRegularEditing(cell, rowData, safeDataTypes, table_name, columnName, originalContent, editor);
         return;
     }
 
     // Jos sarake liittyy foreign key -sarakkeeseen
     if (foreignKeyColumnName && safeDataTypes[foreignKeyColumnName] && safeDataTypes[foreignKeyColumnName].foreign_table) {
-        await handleForeignKeyEditing(cell, columns, rowData, safeDataTypes, table_name, columnName, foreignKeyColumnName, isNameColumn, originalContent);
+        await handleForeignKeyEditing(cell, columns, rowData, safeDataTypes, table_name, columnName, foreignKeyColumnName, isNameColumn, originalContent, editor);
     } else {
-        await handleRegularEditing(cell, rowData, safeDataTypes, table_name, columnName, originalContent);
+        await handleRegularEditing(cell, rowData, safeDataTypes, table_name, columnName, originalContent, editor);
     }
 }
 
 // Single-choice editing shares option reads and value-column resolution with
 // filters, while the dropdown owns keyboard navigation and search debounce.
-async function handleForeignKeyEditing(cell, columns, rowData, dataTypes, table_name, columnName, foreignKeyColumnName, isNameColumn, originalContent) {
+async function handleForeignKeyEditing(cell, columns, rowData, dataTypes, table_name, columnName, foreignKeyColumnName, isNameColumn, originalContent, editor) {
     if (!rowData) {
-        selectCell(cell);
+        selectCellAfterEditing(cell);
         return;
     }
 
@@ -180,7 +199,7 @@ async function handleForeignKeyEditing(cell, columns, rowData, dataTypes, table_
             }
         },
         onChange: ({ includeValues }) => {
-            if (ended) return;
+            if (ended || editor.discarded) return;
             if (foreignKeyUpdateInFlight) {
                 dropdown.setValue({ includeValues: [pendingOption.value] });
                 return;
@@ -200,7 +219,7 @@ async function handleForeignKeyEditing(cell, columns, rowData, dataTypes, table_
     searchInput.dataset.testid = 'inline-fk-search-input';
 
     function finishEditing(displayValue = originalContent) {
-        if (ended) return;
+        if (ended || editor.discarded) return;
         ended = true;
         searchRequest += 1;
         listeners.abort();
@@ -208,11 +227,11 @@ async function handleForeignKeyEditing(cell, columns, rowData, dataTypes, table_
         cell.classList.remove('editing', 'table_data_cell--inline-fk-editing');
         delete cell.dataset.inlineSaveState;
         setCellDisplayText(cell, displayValue);
-        selectCell(cell);
+        selectCellAfterEditing(cell);
     }
 
     async function selectOption(option) {
-        if (ended || foreignKeyUpdateInFlight) return;
+        if (ended || editor.discarded || foreignKeyUpdateInFlight) return;
         const { value: newValue, label: displayValue } = option;
         if (String(newValue) === String(currentValue)) {
             finishEditing();
@@ -227,6 +246,7 @@ async function handleForeignKeyEditing(cell, columns, rowData, dataTypes, table_
             await sendUpdateRequest(table_name, {
                 id: rowData['id'], column: foreignKeyColumnName, value: newValue,
             });
+            if (editor.discarded) return;
             rowData[foreignKeyColumnName] = newValue;
             rowData[foreignKeyColumnName + '_name'] = displayValue;
             rowData[columnName] = isNameColumn ? displayValue : newValue;
@@ -246,6 +266,7 @@ async function handleForeignKeyEditing(cell, columns, rowData, dataTypes, table_
             finishEditing(isNameColumn ? displayValue : newValue);
             if (!isNameColumn) cell.title = displayValue;
         } catch (error) {
+            if (editor.discarded) return;
             if (isServiceUnavailableError(error)) {
                 cell.dataset.inlineSaveState = 'retry';
                 dropdown.setValue({ includeValues: [newValue] });
@@ -257,6 +278,7 @@ async function handleForeignKeyEditing(cell, columns, rowData, dataTypes, table_
         }
     }
 
+    editor.cleanups.add(() => { ended = true; listeners.abort(); dropdown.destroy(); });
     const eventOptions = { capture: true, signal: listeners.signal };
     dropdownContainer.addEventListener('input', () => {
         // Invalidate errors as soon as text changes, before the dropdown debounce.
@@ -293,7 +315,7 @@ async function handleForeignKeyEditing(cell, columns, rowData, dataTypes, table_
     dropdown.open();
 }
 
-async function handleRegularEditing(cell, rowData, dataTypes, table_name, columnName, originalContent) {
+async function handleRegularEditing(cell, rowData, dataTypes, table_name, columnName, originalContent, editor) {
     const dataTypeInfo = dataTypes[columnName];
     const rawDataType = dataTypeInfo && typeof dataTypeInfo === 'object'
         ? dataTypeInfo.data_type
@@ -302,7 +324,7 @@ async function handleRegularEditing(cell, rowData, dataTypes, table_name, column
     if (!rowData) {
         cell.classList.remove('editing');
         cell.textContent = originalContent;
-        selectCell(cell);
+        selectCellAfterEditing(cell);
         return;
     }
     const originalValue = rowData[columnName];
@@ -312,13 +334,19 @@ async function handleRegularEditing(cell, rowData, dataTypes, table_name, column
     const multilingualMetadata = dataTypeInfo && typeof dataTypeInfo === 'object'
         ? dataTypeInfo.is_multilingual
         : undefined;
+    const editLang = getLanguageWithBrowserFallback();
+    const viewKey = resolveDatasetViewSelectionTarget(getChosenDatasetView(table_name) || 'table');
     const multilingualValue = multilingualMetadata === false
         ? null
         : resolveMultilingualValue(
             serializedOriginalValue,
             multilingualMetadata,
-            getLanguageWithBrowserFallback()
+            editLang
         );
+    // Empty cells have no language object yet, but explicit column metadata
+    // still requires a current-value read when a live change is held.
+    const multilingualEdit = multilingualValue
+        || (multilingualMetadata === true ? { multiLangObj: null, editLang } : null);
     const inlineOptions = getInlineEditOptions({
         tableName: table_name,
         columnName,
@@ -345,6 +373,7 @@ async function handleRegularEditing(cell, rowData, dataTypes, table_name, column
             options: inlineOptions,
             rowData,
             editorWidthPx: editorLayout.widthPx,
+            editor,
         });
         return;
     }
@@ -380,7 +409,7 @@ async function handleRegularEditing(cell, rowData, dataTypes, table_name, column
 
     let updateInFlight = false;
     input.addEventListener('blur', async () => {
-        if (updateInFlight) return;
+        if (editor.discarded || updateInFlight) return;
         const newValue = input.type === 'checkbox' ? input.checked : input.value;
         const temporalKind = getTemporalValueKind(dataType);
         const comparisonValue = multilingualValue
@@ -388,7 +417,9 @@ async function handleRegularEditing(cell, rowData, dataTypes, table_name, column
             : inputType === 'checkbox' || temporalKind
             ? originalEditorValue
             : originalValue;
-        const valueChanged = hasValueChanged(
+        // Empty/null values can normalize to the same editor text. Escape and
+        // an unchanged blur must never turn that normalization into a write.
+        const valueChanged = newValue !== originalEditorValue && hasValueChanged(
             comparisonValue,
             newValue,
             editorLayout.useTextarea ? 'text' : input.type
@@ -401,7 +432,7 @@ async function handleRegularEditing(cell, rowData, dataTypes, table_name, column
                 setCellDisplayText(cell, originalContent);
             }
             cell.classList.remove('editing');
-            selectCell(cell);
+            selectCellAfterEditing(cell);
             return;
         }
 
@@ -413,36 +444,29 @@ async function handleRegularEditing(cell, rowData, dataTypes, table_name, column
         if (temporalKind && serializedValue === null) {
             setCellDisplayText(cell, originalContent);
             cell.classList.remove('editing');
-            selectCell(cell);
+            selectCellAfterEditing(cell);
             return;
         }
-
-        if (multilingualValue && typeof newValue === 'string') {
-            const reconstructedValue = reconstructMultilingualValue(
-                JSON.stringify(multilingualValue.multiLangObj),
-                multilingualValue.editLang,
-                newValue
-            );
-            if (reconstructedValue === null) {
-                setCellDisplayText(cell, originalContent);
-                cell.classList.remove('editing');
-                selectCell(cell);
-                return;
-            }
-            serializedValue = reconstructedValue;
-        }
-
-        const updateData = {
-            id: id,
-            column: columnName,
-            value: serializedValue
-        };
 
         let retainDraftForRetry = false;
         updateInFlight = true;
         cell.dataset.inlineSaveState = 'saving';
         try {
+            if (multilingualEdit && typeof newValue === 'string') {
+                try {
+                    serializedValue = await reconstructCurrentMultilingualValue(
+                        table_name, id, columnName, multilingualEdit, newValue, viewKey
+                    );
+                } catch {
+                    retainDraftForRetry = true;
+                    cell.dataset.inlineSaveState = 'retry';
+                    return;
+                }
+                if (editor.discarded) return;
+            }
+            const updateData = { id, column: columnName, value: serializedValue };
             await sendUpdateRequest(table_name, updateData);
+            if (editor.discarded) return;
             rowData[columnName] = serializedValue;
             if (multilingualValue) {
                 setLocalizedTableCellDisplay(cell, serializedValue, dataTypeInfo);
@@ -458,6 +482,7 @@ async function handleRegularEditing(cell, rowData, dataTypes, table_name, column
             }
             cell.classList.remove('editing');
         } catch (error) {
+            if (editor.discarded) return;
             retainDraftForRetry = isServiceUnavailableError(error);
             if (retainDraftForRetry) {
                 cell.dataset.inlineSaveState = 'retry';
@@ -469,14 +494,15 @@ async function handleRegularEditing(cell, rowData, dataTypes, table_name, column
             if (!retainDraftForRetry) cell.classList.remove('editing');
         } finally {
             updateInFlight = false;
-            if (!retainDraftForRetry) {
+            if (!retainDraftForRetry && !editor.discarded) {
                 delete cell.dataset.inlineSaveState;
-                selectCell(cell);
+                selectCellAfterEditing(cell);
             }
         }
     });
 
     input.addEventListener('keydown', (event) => {
+        if (editor.discarded || updateInFlight) return;
         if (event.key === 'Enter' && (!editorLayout.useTextarea || event.ctrlKey || event.metaKey)) {
             event.preventDefault();
             input.blur();
@@ -500,6 +526,7 @@ async function handleOptionEditing({
     options,
     rowData,
     editorWidthPx,
+    editor,
 }) {
     const select = document.createElement('select');
     select.classList.add('table-editor-select');
@@ -530,16 +557,16 @@ async function handleOptionEditing({
     }
 
     function restoreOriginalSelection() {
-        if (completed) return;
+        if (completed || editor.discarded) return;
         completed = true;
         cleanupEditingListeners();
         cell.classList.remove('editing');
         setCellDisplayText(cell, originalContent);
-        selectCell(cell);
+        selectCellAfterEditing(cell);
     }
 
     async function commitSelection() {
-        if (completed || commitInFlight) return;
+        if (completed || editor.discarded || commitInFlight) return;
         const newValue = normalizeInlineEditOptionValue({
             tableName,
             columnName,
@@ -555,7 +582,7 @@ async function handleOptionEditing({
             cleanupEditingListeners();
             cell.classList.remove('editing');
             setCellDisplayText(cell, originalContent);
-            selectCell(cell);
+            selectCellAfterEditing(cell);
             return;
         }
         const updateData = {
@@ -567,6 +594,7 @@ async function handleOptionEditing({
         cell.dataset.inlineSaveState = 'saving';
         try {
             await sendUpdateRequest(tableName, updateData);
+            if (editor.discarded) return;
             completed = true;
             cleanupEditingListeners();
             rowData[columnName] = newValue;
@@ -578,8 +606,9 @@ async function handleOptionEditing({
             cell.classList.remove('editing');
             setCellDisplayText(cell, newValue);
             delete cell.dataset.inlineSaveState;
-            selectCell(cell);
+            selectCellAfterEditing(cell);
         } catch (error) {
+            if (editor.discarded) return;
             if (isServiceUnavailableError(error)) {
                 cell.dataset.inlineSaveState = 'retry';
                 return;
@@ -589,7 +618,7 @@ async function handleOptionEditing({
             cell.classList.remove('editing');
             setCellDisplayText(cell, originalContent);
             delete cell.dataset.inlineSaveState;
-            selectCell(cell);
+            selectCellAfterEditing(cell);
         } finally {
             commitInFlight = false;
         }
@@ -602,6 +631,7 @@ async function handleOptionEditing({
         }
     }
 
+    editor.cleanups.add(cleanupEditingListeners);
     cell.appendChild(select);
     select.focus();
     document.addEventListener('pointerdown', handleDocumentPointerDown, true);
@@ -610,6 +640,7 @@ async function handleOptionEditing({
         commitSelection();
     });
     select.addEventListener('keydown', (event) => {
+        if (editor.discarded || commitInFlight) return;
         if (event.key === 'Enter') {
             event.preventDefault();
             commitSelection();
@@ -618,65 +649,6 @@ async function handleOptionEditing({
             restoreOriginalSelection();
         }
     });
-}
-
-function setCellDisplayText(cell, value) {
-    const text = value !== null && value !== undefined ? String(value) : '';
-    if (cell.matches?.('.table_data_cell')) {
-        const cellContent = document.createElement('div');
-        cellContent.className = 'table_cell_content';
-        if (cell.classList.contains('table_data_cell--compact')) {
-            cellContent.classList.add('table_cell_content--compact');
-        }
-        cellContent.textContent = text;
-        cell.replaceChildren(cellContent);
-        return;
-    }
-    if (cell.matches?.('.cell')) {
-        const cellContent = document.createElement('div');
-        cellContent.className = 'cell-content';
-        copyListCellColumnClasses(cell, cellContent);
-        cellContent.textContent = text;
-        cellContent.style.whiteSpace = 'pre-wrap';
-        cell.replaceChildren(cellContent);
-        return;
-    }
-
-    cell.textContent = text;
-}
-
-function setLocalizedTableCellDisplay(cell, rawValue, columnMetadata) {
-    const cellContent = document.createElement('div');
-    if (cell.matches?.('.table_data_cell')) {
-        cellContent.className = 'table_cell_content';
-        if (cell.classList.contains('table_data_cell--compact')) {
-            cellContent.classList.add('table_cell_content--compact');
-        }
-    } else if (cell.matches?.('.cell')) {
-        cellContent.className = 'cell-content';
-        copyListCellColumnClasses(cell, cellContent);
-        cellContent.style.whiteSpace = 'pre-wrap';
-    } else {
-        setLocalizedDatasetText(cell, rawValue, columnMetadata);
-        return;
-    }
-    setLocalizedDatasetText(cellContent, rawValue, columnMetadata);
-    cell.replaceChildren(cellContent);
-}
-
-function copyListCellColumnClasses(cell, contentElement) {
-    for (const className of cell.classList) {
-        if (
-            className !== 'cell'
-            && className !== 'editing'
-            && className !== 'selected'
-            && className !== 'selected_for_editing'
-            && className !== 'header'
-            && className !== 'sortable'
-        ) {
-            contentElement.classList.add(className);
-        }
-    }
 }
 
 async function sendUpdateRequest(table_name, updateData) {

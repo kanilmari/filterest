@@ -183,7 +183,13 @@ export async function refreshTableUnified(tableName, options = {}) {
                 if (!datasetAppearanceState.isCurrent(appearanceToken)
                     || refreshGenerations.get(tableName) !== generation
                     || String(getParams(tableName)?.search || "").trim() !== query) return null;
-                if (await restartInvalidatedSearch(tableName)) return null;
+                // Repair intentionally supersedes the old filter signature. The
+                // SSE lifetime still vetoes replacement while an editor is open.
+                if (options.beforeSwap && options.isCurrent && !options.isCurrent()) return null;
+                const restarted = options.beforeSwap
+                    ? await restartInvalidatedSearch(tableName, { isCurrent: options.isCurrent, beforeSwap: options.beforeSwap })
+                    : await restartInvalidatedSearch(tableName);
+                if (restarted) return null;
                 if (options.isCurrent && !options.isCurrent()) return null;
             }
             // The reply was counted with old, now-hidden selections. Load the
@@ -236,7 +242,7 @@ export async function refreshTableUnified(tableName, options = {}) {
             { preserveCardReturn, loadedRows, chartRequested: options.chartRequested,
                 datasetAppearance: result.dataset_appearance,
                 effectiveSort: result.effective_sort,
-                appearanceToken, isCurrent: isRenderCurrent, rowGroupFacetContext: {
+                appearanceToken, isCurrent: isRenderCurrent, beforeSwap: options.beforeSwap, rowGroupFacetContext: {
                 // Remembered prefixes and later pages cannot resolve a fresh selection.
                 authoritative: !loadedRows && Number(currentState.offset) === 0
                     && !result.error && result.success !== false,
@@ -254,6 +260,7 @@ export async function refreshTableUnified(tableName, options = {}) {
             // allowed but unsuitable Chart address needs an explanation.
             // This context ends with this refresh; view and history stay settled.
             await refreshTableUnified(tableName, { skipUrlParams: true,
+                isCurrent: options.isCurrent, beforeSwap: options.beforeSwap,
                 chartRequested: options.chartRequested || currentView === 'price_chart' });
             return;
         }

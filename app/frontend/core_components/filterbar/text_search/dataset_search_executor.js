@@ -247,7 +247,9 @@ function createSecondSearchTable(tableName) {
 
     // Remove previous second table if it exists
     const aiHostId = getSearchAiHostId(tableName, "table");
-    container.querySelector(`#${aiHostId}`)?.remove();
+    const previousAiHost = container.querySelector(`#${aiHostId}`);
+    disposeCardResources(previousAiHost);
+    previousAiHost?.remove();
 
     const columns = JSON.parse(primaryTable.dataset.columns || "[]");
     const dataTypes = JSON.parse(primaryTable.dataset.dataTypes || "{}");
@@ -366,13 +368,13 @@ async function placeSearchGroups(tableName, cache) {
  * The listing answers with the true number of matches and stays connected to
  * endless scrolling, so the reader can browse every match instead of a top few.
  */
-async function loadDatasetMatches(tableName, cache, isCurrent, rebuildView) {
+async function loadDatasetMatches(tableName, cache, isCurrent, rebuildView, beforeSwap) {
     const requestFilters = { ...(getUnifiedTableState(tableName).filters || {}) };
     const requestHost = getSearchViewContainer(tableName);
     // Missing initial card hosts are rebuilt by the listing owner, consuming
     // that rebuild's first page. A null reload means abandoned or failed work:
     // retrying here fetched twice and silently replaced the failure surface.
-    const result = await reloadDatasetRowsFromListing(tableName, { isCurrent, rebuildView });
+    const result = await reloadDatasetRowsFromListing(tableName, { isCurrent, rebuildView, beforeSwap });
     if (!isCurrent() || !result) return false;
 
     renderRowGroupFacets(tableName, result.row_group_facets, {
@@ -423,10 +425,10 @@ async function streamAiSearchResults(tableName, cache, context, opts, isCurrent)
  * sort or language means asking for them again rather than re-arranging a page
  * that is already in the browser.
  */
-export async function rerenderCachedSearchResults(tableName, expectedCache = null) {
+export async function rerenderCachedSearchResults(tableName, expectedCache = null, renderOptions = {}) {
     const cache = _ongoingSearchResults[tableName];
     if (!cache?.query || !isCurrentSearchCache(tableName, expectedCache || cache)) return;
-    await do_intelligent_search(tableName, cache.query, cache.searchOptions || {});
+    await do_intelligent_search(tableName, cache.query, cache.searchOptions || {}, renderOptions);
 }
 
 /**
@@ -436,14 +438,14 @@ export async function rerenderCachedSearchResults(tableName, expectedCache = nul
  * A replaced question or dataset lifetime never restarts the obsolete search.
  * @returns {Promise<boolean>} whether this owner handled the repaired listing.
  */
-export async function restartInvalidatedSearch(tableName) {
+export async function restartInvalidatedSearch(tableName, renderOptions = {}) {
     const cache = _ongoingSearchResults[tableName];
     if (!cache?.query || !isCurrentSearchCache(tableName, cache)
         || cache.query !== String(getParams(tableName)?.search || "").trim()
         || cache.filterSignature === getSearchFilterContext(tableName).signature) return false;
     // Row-only replacement retains controls and cached visibility. Let the
     // replacement's authoritative first page rebuild those together with rows.
-    await do_intelligent_search(tableName, cache.query, cache.searchOptions || {}, { rebuildView: true });
+    await do_intelligent_search(tableName, cache.query, cache.searchOptions || {}, { ...renderOptions, rebuildView: true });
     return true;
 }
 
@@ -525,9 +527,10 @@ function awaitFirstSearchResultInArticleView(tableName) {
  * then the AI group; then the other datasets' groups. A new cache identity
  * invalidates every delayed answer, render and article open from an older one.
  */
-export async function do_intelligent_search(tableName, userQuery, opts = {}, { rebuildView = false } = {}) {
+export async function do_intelligent_search(tableName, userQuery, opts = {}, { rebuildView = false, isCurrent: callerIsCurrent = null, beforeSwap = null } = {}) {
     const adapter = getDatasetQueryAdapter(tableName);
     if (adapter) return adapter.refresh({ search: userQuery.trim() });
+    if (callerIsCurrent && !callerIsCurrent()) return;
     const query = userQuery.trim();
     if (!query) return;
     const context = getSearchFilterContext(tableName);
@@ -541,6 +544,12 @@ export async function do_intelligent_search(tableName, userQuery, opts = {}, { r
         && isCurrentSearchCache(tableName, runningCache)
         && runningCache.executionSignature === executionSignature
         && runningCache.executionPromise) {
+        // The existing listing owns the commit. A joining live refresh adds its
+        // editor guard to that same run rather than aborting and asking again.
+        if (callerIsCurrent) {
+            const previousGuard = runningCache.callerIsCurrent;
+            runningCache.callerIsCurrent = () => (!previousGuard || previousGuard()) && callerIsCurrent();
+        }
         return runningCache.executionPromise;
     }
     runningCache?.abortController?.abort();
@@ -560,7 +569,7 @@ export async function do_intelligent_search(tableName, userQuery, opts = {}, { r
         // The selected filters reach the dataset's rows through the listing's
         // own query, so its rows are never filtered a second time here.
         filters: context.clientFilters, complete: false,
-        searchOptions: opts, serverFiltersApplied: false, executionSignature,
+        searchOptions: opts, serverFiltersApplied: false, executionSignature, callerIsCurrent,
     });
     _ongoingSearchResults[tableName] = cache;
     // The previous search's AI number describes rows that are already gone.
@@ -570,7 +579,7 @@ export async function do_intelligent_search(tableName, userQuery, opts = {}, { r
     // datasets load independently and never get a chance to fill this count.
     syncSearchResultsCount(tableName, cache);
     if (isNewQuestion) awaitFirstSearchResultInArticleView(tableName);
-    const isCurrent = () => isCurrentSearchCache(tableName, cache)
+    const isCurrent = () => (!callerIsCurrent || callerIsCurrent()) && isCurrentSearchCache(tableName, cache)
         && cache.filterSignature === getSearchFilterContext(tableName).signature;
     cache.supplemental = hasDatasetAiSearchPermission() ? createSupplementalDatasetSearch(tableName, cache.query, {
         isCurrent, getContainer: () => getSearchResultsFlowContainer(tableName),
@@ -578,7 +587,7 @@ export async function do_intelligent_search(tableName, userQuery, opts = {}, { r
 
     const executionPromise = (async () => {
         try {
-            const listingLoaded = await loadDatasetMatches(tableName, cache, isCurrent, rebuildView);
+            const listingLoaded = await loadDatasetMatches(tableName, cache, isCurrent, rebuildView, beforeSwap);
             if (!isCurrent() || !listingLoaded) return;
             // The dataset's own answer is complete as soon as its listing replies;
             // the AI group arrives afterwards and adds to it.
@@ -592,7 +601,11 @@ export async function do_intelligent_search(tableName, userQuery, opts = {}, { r
         } catch (error) {
             if (isCurrent()) console.warn("do_intelligent_search failed:", error);
         } finally {
-            if (isCurrent()) cache.executionPromise = null;
+            // A yielded run is finished too: a later refresh must ask again,
+            // never share this already-settled promise after its guard releases.
+            cache.executionPromise = null;
+            // The caller guards pending render work, not later uses of this completed cache.
+            cache.callerIsCurrent = null;
         }
     })();
     cache.executionPromise = executionPromise;
