@@ -27,6 +27,10 @@
           "sha256": "42da75291c1aa4f010f218905a4a52288b0412f513dc4d7fac171299b8c7220c"
         },
         {
+          "path": "app/frontend/icons/general/refresh-icon.svg",
+          "sha256": "a311253711abb3539958b4cfc171b0b53869bd4e21fe2da4270ec3b5658b575f"
+        },
+        {
           "path": "app/frontend/icons/general/star-filled-icon.svg",
           "sha256": "22faf7a3335e8414e63fb8f2c8f29c927c2d79382935f44c1f72517b5ae0c123"
         },
@@ -311,7 +315,7 @@
         },
         {
           "path": "app/frontend/templates/login.html",
-          "sha256": "cb078cb6190bb133c1fc20d8187af10fa409bf7d49fa1208fe29ad83a404252a"
+          "sha256": "d362eb1c8cfc717bd0b81888eadcd2444c38ee1603bc1095754670aaa653ce0b"
         }
       ],
       "license": "Apache-2.0",
@@ -380,7 +384,7 @@
       "embedded_sources": [
         {
           "path": "app/frontend/core_components/auth/second_step_view.js",
-          "sha256": "db1077ece5ddf9aeea2d6be6bec329c0a25cd152784aab296cda92fbb50f6171"
+          "sha256": "7aa0caeb2fa4a03add5952457efc12fa650a9956134fd62eb44c83cc36a70cf7"
         },
         {
           "path": "app/frontend/core_components/table_views/card_view/row_article_ui_handler.js",
@@ -402,7 +406,7 @@
   ],
   "asset_provenance": {
     "path": "app/server_tools/licenses/asset_provenance.json",
-    "sha256": "0da46e5121b05dcdfe9f449f72fe8fa3c0c320e47667687ba5ad32a79777052c"
+    "sha256": "df436f58b051d24f0b4e3eaf25681fd890052cb4b5188081facd0acfc3afe1b0"
   },
   "browser_bundle_metadata_source": "app/server_tools/licenses/browser_bundle_provenance.json matched against app/package-lock.json and app/frontend/dist/*.js",
   "browser_bundle_provenance": {
@@ -410,7 +414,7 @@
     "sha256": "868e187c8724c69e945f54f9e25f213127f91acc3cda67da3392814a284c740f"
   },
   "combined_binary_license": "GPL-3.0-or-later",
-  "database_version": "9.13.0",
+  "database_version": "9.13.4",
   "dependencies": [
     {
       "binary_targets": [
@@ -859,7 +863,7 @@
       "version": "6.4.3"
     }
   ],
-  "filterest_app_version": "9.6.0",
+  "filterest_app_version": "9.6.1",
   "first_party_components": [
     {
       "assets": [
