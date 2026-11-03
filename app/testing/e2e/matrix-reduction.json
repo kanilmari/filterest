@@ -11,6 +11,7 @@
     "G_navigation/G18_media_tab_shape.spec.ts": "desktop-card",
     "G_navigation/G19_home_desktop_search.spec.ts": "desktop-card",
     "I_inline_edit/I7_edit_during_rebuild.spec.ts": "desktop-card",
+    "L_auth/L12_phone_form_edges.spec.ts": "mobile-card",
     "T_admin/T23_permissions_rights_fingerprint.spec.ts": "desktop-card"
   },
   "one_card_mode": [
