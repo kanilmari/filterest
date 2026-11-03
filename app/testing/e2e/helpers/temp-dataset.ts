@@ -8,6 +8,7 @@
 
 import { expect, type APIRequestContext, type Page } from '@playwright/test';
 import { navigateToDataset, waitForAppReady, waitForDataLoaded } from './navigation';
+import { withFixtureTimeCredit } from './fixture-time-credit';
 import {
   confirmTestArtifact,
   registerTestArtifact,
@@ -257,131 +258,129 @@ export async function createTempDataset(
   page: Page,
   config: TempDatasetConfig,
 ): Promise<void> {
-  let response: Awaited<ReturnType<typeof postJsonWithCsrf>> | null = null;
-  let createAttempted = false;
-  let confirmed = false;
-  registerTestArtifact('dataset', config.datasetName);
-
-  try {
-    for (let attempt = 0; attempt < 2; attempt += 1) {
-      const currentProjectFolderId = await resolveCurrentProjectFolderId(page);
-      createAttempted = true;
-      response = await postJsonWithCsrf(page, '/api/create_dataset', {
-        dataset_name: config.datasetName,
-        // The server takes the columns as one ordered list, so the dataset
-        // keeps the order in which the test wrote them.
-        column_list: Object.entries(config.columns)
-          .map(([name, data_type]) => ({ name, data_type })),
-        foreign_keys: config.foreignKeys ?? [],
-        grant_users_read: config.grantUsersRead ?? false,
-        grant_guests_read: config.grantGuestsRead ?? false,
-        prevent_deletion: config.preventDeletion ?? false,
-        folder_id: currentProjectFolderId,
-      });
-
-      if (response.status === 201) {
-        const created = JSON.parse(response.body) as { dataset_name?: unknown; table_uid?: unknown };
-        if (created?.dataset_name !== config.datasetName || typeof created?.table_uid !== 'number'
-          || !Number.isSafeInteger(created.table_uid) || created.table_uid <= 0) {
-          throw new Error(
-            `Created temp dataset "${config.datasetName}" has no matching stable identity in its creation response.`,
-          );
+  return withFixtureTimeCredit('create', async () => {
+    let response: Awaited<ReturnType<typeof postJsonWithCsrf>> | null = null;
+    let createAttempted = false;
+    let confirmed = false;
+    registerTestArtifact('dataset', config.datasetName);
+    try {
+      for (let attempt = 0; attempt < 2; attempt += 1) {
+        const currentProjectFolderId = await resolveCurrentProjectFolderId(page);
+        createAttempted = true;
+        response = await postJsonWithCsrf(page, '/api/create_dataset', {
+          dataset_name: config.datasetName,
+          // The server takes the columns as one ordered list, so the dataset
+          // keeps the order in which the test wrote them.
+          column_list: Object.entries(config.columns)
+            .map(([name, data_type]) => ({ name, data_type })),
+          foreign_keys: config.foreignKeys ?? [],
+          grant_users_read: config.grantUsersRead ?? false,
+          grant_guests_read: config.grantGuestsRead ?? false,
+          prevent_deletion: config.preventDeletion ?? false,
+          folder_id: currentProjectFolderId,
+        });
+        if (response.status === 201) {
+          const created = JSON.parse(response.body) as { dataset_name?: unknown; table_uid?: unknown };
+          if (created?.dataset_name !== config.datasetName || typeof created?.table_uid !== 'number'
+            || !Number.isSafeInteger(created.table_uid) || created.table_uid <= 0) {
+            throw new Error(
+              `Created temp dataset "${config.datasetName}" has no matching stable identity in its creation response.`,
+            );
+          }
+          // The committed creation response proves ownership before another
+          // request can fail. Compensation still re-reads and matches this UID.
+          confirmTestArtifact('dataset', config.datasetName, created.table_uid);
+          confirmed = true;
+          // Ownership is already durable, so a column-history failure can compensate safely.
+          confirmTestArtifact('dataset', config.datasetName, created.table_uid, Object.keys(config.columns));
+          const tableUID = await readDatasetTableUIDFromPage(page, config.datasetName);
+          if (tableUID !== created.table_uid) {
+            throw new Error(
+              `Created temp dataset "${config.datasetName}" has a different stable table_uid identity: `
+              + `created table_uid=${created.table_uid}, current table_uid=${tableUID}.`,
+            );
+          }
+          break;
         }
-        // The committed creation response proves ownership before another
-        // request can fail. Compensation still re-reads and matches this UID.
-        confirmTestArtifact('dataset', config.datasetName, created.table_uid);
-        confirmed = true;
-        // Ownership is already durable, so a column-history failure can compensate safely.
-        confirmTestArtifact('dataset', config.datasetName, created.table_uid, Object.keys(config.columns));
-        const tableUID = await readDatasetTableUIDFromPage(page, config.datasetName);
-        if (tableUID !== created.table_uid) {
-          throw new Error(
-            `Created temp dataset "${config.datasetName}" has a different stable table_uid identity: `
-            + `created table_uid=${created.table_uid}, current table_uid=${tableUID}.`,
-          );
+        if (attempt === 0 && isRetryableCreateTempDatasetError(response.status, response.body)) {
+          await releasePlannedTempDatasetIfAbsent(page, config.datasetName);
+          createAttempted = false;
+          response = null;
+          registerTestArtifact('dataset', config.datasetName);
+          await page.waitForTimeout(250);
+          continue;
         }
+        // A rejected or ambiguous create never turns a planned name into delete
+        // authority. Remove the planned entry only when both inventories prove
+        // the dataset does not exist; otherwise preserve it for manual inspection.
+        await releasePlannedTempDatasetIfAbsent(page, config.datasetName);
         break;
       }
-
-      if (attempt === 0 && isRetryableCreateTempDatasetError(response.status, response.body)) {
-        await releasePlannedTempDatasetIfAbsent(page, config.datasetName);
-        createAttempted = false;
-        response = null;
-        registerTestArtifact('dataset', config.datasetName);
-        await page.waitForTimeout(250);
-        continue;
+      if (!response) {
+        throw new Error(`Temp dataset helper did not receive a create_dataset response for "${config.datasetName}".`);
       }
+      expect(
+        response.status,
+        `Failed to create temp dataset "${config.datasetName}": ${response.body}`,
+      ).toBe(201);
 
-      // A rejected or ambiguous create never turns a planned name into delete
-      // authority. Remove the planned entry only when both inventories prove
-      // the dataset does not exist; otherwise preserve it for manual inspection.
-      await releasePlannedTempDatasetIfAbsent(page, config.datasetName);
-      break;
-    }
-
-    if (!response) {
-      throw new Error(`Temp dataset helper did not receive a create_dataset response for "${config.datasetName}".`);
-    }
-    expect(
-      response.status,
-      `Failed to create temp dataset "${config.datasetName}": ${response.body}`,
-    ).toBe(201);
-
-    for (const row of config.seedRows ?? []) {
-      await addTempDatasetRow(page, config.datasetName, row);
-    }
-
-    // API-created E2E tables bypass the normal table-creator UI, whose success
-    // path refreshes these caches. Mirror that step so card editors can resolve
-    // column metadata and row/form actions receive the new table's numeric UID.
-    await hydrateAuthenticatedTreeDataCache(page, config.datasetName);
-  } catch (primaryError) {
-    if (confirmed) {
-      try {
-        await cleanupPartialTempDataset(page, config.datasetName);
-      } catch (cleanupError) {
-        throw new AggregateError(
-          [primaryError, cleanupError],
-          `Temp dataset "${config.datasetName}" failed after creation and compensation also failed.`,
-        );
+      for (const row of config.seedRows ?? []) {
+        await addTempDatasetRow(page, config.datasetName, row);
       }
-    } else if (!createAttempted) {
-      unregisterTestArtifact('dataset', config.datasetName);
+      // API-created E2E tables bypass the normal table-creator UI, whose success
+      // path refreshes these caches. Mirror that step so card editors can resolve
+      // column metadata and row/form actions receive the new table's numeric UID.
+      await hydrateAuthenticatedTreeDataCache(page, config.datasetName);
+    } catch (primaryError) {
+      if (confirmed) {
+        try {
+          await cleanupPartialTempDataset(page, config.datasetName);
+        } catch (cleanupError) {
+          throw new AggregateError(
+            [primaryError, cleanupError],
+            `Temp dataset "${config.datasetName}" failed after creation and compensation also failed.`,
+          );
+        }
+      } else if (!createAttempted) {
+        unregisterTestArtifact('dataset', config.datasetName);
+      }
+      throw primaryError;
     }
-    throw primaryError;
-  }
+  });
 }
 
 export async function dropTempDataset(
   page: Page,
   datasetName: string,
 ): Promise<void> {
-  const registeredArtifact = requireConfirmedTestArtifact('dataset', datasetName);
-  const currentTableUID = await readDatasetTableUIDFromPage(page, datasetName);
-  if (currentTableUID === null) {
+  return withFixtureTimeCredit('drop', async () => {
+    const registeredArtifact = requireConfirmedTestArtifact('dataset', datasetName);
+    const currentTableUID = await readDatasetTableUIDFromPage(page, datasetName);
+    if (currentTableUID === null) {
+      unregisterTestArtifact('dataset', datasetName);
+      return;
+    }
+    if (registeredArtifact.serverId !== currentTableUID) {
+      throw new Error(
+        `Refusing to drop temp dataset "${datasetName}": registered table_uid=`
+        + `${registeredArtifact.serverId}, current table_uid=${currentTableUID}.`,
+      );
+    }
+    await recordTestDatasetOwnershipFromRequest(page.request, datasetName);
+    const response = await postJsonWithCsrf(page, '/api/drop-dataset', {
+      dataset_name: datasetName,
+      confirm_dataset_name: datasetName,
+    });
+    if (!response.ok && response.body.includes('does not exist')) {
+      unregisterTestArtifact('dataset', datasetName);
+      return;
+    }
+    expect(
+      response.ok,
+      `Failed to drop temp dataset "${datasetName}": ${response.body}`,
+    ).toBe(true);
     unregisterTestArtifact('dataset', datasetName);
-    return;
-  }
-  if (registeredArtifact.serverId !== currentTableUID) {
-    throw new Error(
-      `Refusing to drop temp dataset "${datasetName}": registered table_uid=`
-      + `${registeredArtifact.serverId}, current table_uid=${currentTableUID}.`,
-    );
-  }
-  await recordTestDatasetOwnershipFromRequest(page.request, datasetName);
-  const response = await postJsonWithCsrf(page, '/api/drop-dataset', {
-    dataset_name: datasetName,
-    confirm_dataset_name: datasetName,
   });
-  if (!response.ok && response.body.includes('does not exist')) {
-    unregisterTestArtifact('dataset', datasetName);
-    return;
-  }
-  expect(
-    response.ok,
-    `Failed to drop temp dataset "${datasetName}": ${response.body}`,
-  ).toBe(true);
-  unregisterTestArtifact('dataset', datasetName);
 }
 
 /**
@@ -393,49 +392,50 @@ export async function cleanupDatasetViaRequest(
   request: APIRequestContext,
   datasetName: string,
 ): Promise<void> {
-  if (!datasetName || datasetName.trim() === '') {
-    return;
-  }
+  return withFixtureTimeCredit('cleanup', async () => {
+    if (!datasetName || datasetName.trim() === '') {
+      return;
+    }
+    const registeredArtifact = requireConfirmedTestArtifact('dataset', datasetName);
+    const currentTableUID = await readDatasetTableUIDFromRequest(request, datasetName, registeredArtifact.serverId!);
+    if (currentTableUID === null) {
+      unregisterTestArtifact('dataset', datasetName);
+      return;
+    }
+    if (registeredArtifact.serverId !== currentTableUID) {
+      throw new Error(
+        `Refusing request-scoped cleanup for dataset "${datasetName}": registered table_uid=`
+        + `${registeredArtifact.serverId}, current table_uid=${currentTableUID}.`,
+      );
+    }
+    const csrfToken = await fetchCsrfTokenForRequest(request);
+    const latestTableUID = await readDatasetTableUIDFromRequest(request, datasetName, registeredArtifact.serverId!);
+    if (latestTableUID === null) {
+      unregisterTestArtifact('dataset', datasetName);
+      return;
+    }
+    if (latestTableUID !== registeredArtifact.serverId) {
+      throw new Error(`Refusing request-scoped cleanup for dataset "${datasetName}": identity changed before drop.`);
+    }
+    await recordTestDatasetOwnershipFromRequest(request, datasetName);
+    const response = await request.post('/api/drop-dataset', {
+      data: { dataset_name: datasetName, confirm_dataset_name: datasetName },
+      headers: {
+        'X-CSRF-Token': csrfToken,
+      },
+    });
+    const responseBody = await response.text();
 
-  const registeredArtifact = requireConfirmedTestArtifact('dataset', datasetName);
-  const currentTableUID = await readDatasetTableUIDFromRequest(request, datasetName, registeredArtifact.serverId!);
-  if (currentTableUID === null) {
+    if (!response.ok() && !responseBody.includes('does not exist')) {
+      throw new Error(`Failed to drop dataset "${datasetName}" during request-scoped cleanup: ${responseBody}`);
+    }
+    // A successful response alone cannot release ownership: a managed child may
+    // survive its parent, or the recorded identity may survive under a new name.
+    if (await readDatasetTableUIDFromRequest(request, datasetName, registeredArtifact.serverId!) !== null) {
+      throw new Error(`Request-scoped cleanup reported success but dataset "${datasetName}" remains.`);
+    }
     unregisterTestArtifact('dataset', datasetName);
-    return;
-  }
-  if (registeredArtifact.serverId !== currentTableUID) {
-    throw new Error(
-      `Refusing request-scoped cleanup for dataset "${datasetName}": registered table_uid=`
-      + `${registeredArtifact.serverId}, current table_uid=${currentTableUID}.`,
-    );
-  }
-  const csrfToken = await fetchCsrfTokenForRequest(request);
-  const latestTableUID = await readDatasetTableUIDFromRequest(request, datasetName, registeredArtifact.serverId!);
-  if (latestTableUID === null) {
-    unregisterTestArtifact('dataset', datasetName);
-    return;
-  }
-  if (latestTableUID !== registeredArtifact.serverId) {
-    throw new Error(`Refusing request-scoped cleanup for dataset "${datasetName}": identity changed before drop.`);
-  }
-  await recordTestDatasetOwnershipFromRequest(request, datasetName);
-  const response = await request.post('/api/drop-dataset', {
-    data: { dataset_name: datasetName, confirm_dataset_name: datasetName },
-    headers: {
-      'X-CSRF-Token': csrfToken,
-    },
   });
-  const responseBody = await response.text();
-
-  if (!response.ok() && !responseBody.includes('does not exist')) {
-    throw new Error(`Failed to drop dataset "${datasetName}" during request-scoped cleanup: ${responseBody}`);
-  }
-  // A successful response alone cannot release ownership: a managed child may
-  // survive its parent, or the recorded identity may survive under a new name.
-  if (await readDatasetTableUIDFromRequest(request, datasetName, registeredArtifact.serverId!) !== null) {
-    throw new Error(`Request-scoped cleanup reported success but dataset "${datasetName}" remains.`);
-  }
-  unregisterTestArtifact('dataset', datasetName);
 }
 
 function getDatasetSurfaceSelector(datasetName: string, viewMode: TempDatasetViewMode): string {

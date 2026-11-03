@@ -272,7 +272,8 @@ async function proveDeniedArticleOpeners(reader: Page, dataset: string, theme: '
 }
 
 test('C17: administrator, reader and anonymous visitor receive their own article grants', async ({ page, browser }, testInfo) => {
-  test.setTimeout(120_000);
+  // Alone on main ~93 s; past 120 s on the i7 on every project (owner's K574).
+  test.setTimeout(180_000);
   const parent = buildTempDatasetName('e2e_article_toolbar');
   const child = buildTempDatasetName('e2e_article_toolbar_child');
   const created: string[] = [];

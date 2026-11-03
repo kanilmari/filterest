@@ -508,6 +508,8 @@ This prevents false-green tests that accidentally exercised the wrong dataset or
 
 When a spec needs destructive CRUD, seeded rows, or a true persistence round-trip, prefer creating a throwaway dataset through the app APIs instead of mutating long-lived shared fixtures.
 
+`createTempDataset`, `dropTempDataset` and `cleanupDatasetViaRequest` record elapsed milliseconds in `fixture-time` annotations. Live calls currently receive `credited: 0` with a reason and leave timeout limits untouched: Playwright 1.56.1 and 1.60.0 expose neither a reliable public body/hook discriminator nor the active hook's limit. Spec limits must therefore cover fixture work as well as their own steps until safe credit can be enabled; existing teardown allowances remain intact.
+
 - Use `app/testing/e2e/helpers/temp-dataset.ts` to create, seed, open, and drop the dataset inside the test.
 - The helper confirms the exact name and stable identity from the successful creation response before its follow-up lookup, seeding, or cache refresh. If setup then fails, it compensates only after re-reading the same identity; failed cleanup retains confirmed ownership for teardown and reports both errors.
 - T17 reserves each dataset before creation by test ID and records its confirmed identity immediately; its shared `test-dataset-teardown.ts` afterEach adds 90 seconds and uses a fresh project-admin request context for exact Home restore/readback and idempotent removal (T18 afterAll follows this pattern). The dataset-only T17b proof is manual via `playwright.failure-proof.config.ts`, requires `FILTEREST_E2E_FAILURE_PROOF_TARGET` equal to the resolved baseURL, refuses port 8082, and only reads Home settings.

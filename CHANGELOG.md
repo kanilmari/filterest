@@ -22,6 +22,7 @@ Dates are the local (Europe/Helsinki) date on which the version was published.
 
 ## [Unreleased]
 
+- Dataset test helpers record fixture creation and removal time in `fixture-time` annotations with zero credit while the active body/hook slot cannot be identified through a public Playwright API, preserving hook limits and teardown allowances; the article toolbar permissions test now allows 180 seconds.
 - Restore browser coverage for phone login form edges and profile heading clearance with two light-theme tests on the mobile-card project (K550, test only).
 - Temporary browser-test dataset names must retain the `e2e_` marker, including after truncation, and invented column names must carry it too unless the real name is under test; T7, I2 and I5 now mark their invented columns. The development pipeline removes marked language keys after each nightly run; fixtures may remove their own keys sooner, tests remove their other artifacts, and teardown still verifies and reports retained keys (tests and docs only).
 - Editing a table cell is no longer interrupted or saved by a change arriving from elsewhere, and the cell stays selected after a save. Held changes also preserve other languages when editing an initially empty multilingual field, including in List view; viewers retain the ordinary refresh timing and shared searches.
