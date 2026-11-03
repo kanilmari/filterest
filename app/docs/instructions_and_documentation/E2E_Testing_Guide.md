@@ -336,7 +336,7 @@ CI remains serialized at one worker.
 Healthy end state after a normal run:
 - zero remaining artifacts confirmed as owned by the run
 - zero ambiguous planned artifacts
-- the exact dataset and folder baseline restored; only verified own-run dataset language keys may remain above the language-key baseline
+- the exact dataset and folder baseline restored; only verified own-run dataset language keys may remain above the language-key baseline until the project's development pipeline removes them after each nightly run. A fixture may remove its own keys sooner with `cleanupDatasetLanguageKeys`. Teardown still verifies and reports retained keys
 - `data/testing/e2e/.auth/user.json`, the baseline, and the completed run registry removed
 
 The `login()` helper from `helpers/auth.ts` handles:
@@ -535,8 +535,11 @@ the dataset appearance revisions.
 
 The frontend translation layer can notice missing `data-lang-key` values during E2E runs. That is normal. The important rule is to keep synthetic test-only keys clearly synthetic.
 
-- If a test invents transient lang keys, dataset names, or folder labels only for automation, prefer the `e2e_...` or `e2e-...` prefix.
-- The frontend translation handler treats those prefixes as synthetic and skips them before enqueueing AI translation fetches.
+- If a test invents transient lang keys, dataset names, folder labels, or column names only for automation, it must use the `e2e_...` or `e2e-...` marker. Names that must start with `app_` use `app_e2e_...`.
+- The backend derives `<column>`, `<column>_asc`, `<column>_desc`, and `search_for_<column>` keys for every dataset column. An invented column may keep an unmarked real name only when that name is the point of the test; preserve any behavior-bearing ending when adding the marker (for example, `e2e_scheduled_at`). A real word such as `title` or `name` creates no new key when that key already exists.
+- The project's development pipeline finds test language keys by this marker and removes them after each nightly run. A fixture may remove its own keys sooner with `cleanupDatasetLanguageKeys` after dropping its datasets; the helper protects existing keys and keys used outside the fixture.
+- The frontend translation handler also treats this marker as synthetic and skips those keys before enqueueing AI translation fetches.
+- `buildTempDatasetName` refuses a prefix without a whole `e2e` word after normalization and truncation. Use it for generated dataset and folder names so the marker survives the name-length limit.
 - Keys named `test_*` are not currently treated as synthetic by that frontend filter. They are still safe in Playwright because test mode makes the backend return `[]`, but they can create noisy `/api/generateTranslations` requests and logs during long runs.
 - E2E assertions must never depend on live AI-generated translations appearing during the test. Assert seeded translations, fallback text, or explicit empty-response behavior instead.
 

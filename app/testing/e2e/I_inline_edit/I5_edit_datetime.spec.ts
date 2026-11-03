@@ -36,12 +36,12 @@ test.describe('I5 — Edit Datetime', () => {
       datasetName,
       columns: {
         id: 'SERIAL',
-        scheduled_at: 'TIMESTAMP',
+        e2e_scheduled_at: 'TIMESTAMP',
         label: 'TEXT',
       },
       seedRows: [
         {
-          scheduled_at: '2026-06-14 09:30:00',
+          e2e_scheduled_at: '2026-06-14 09:30:00',
           label: 'inline-datetime-row',
         },
       ],
@@ -63,7 +63,7 @@ test.describe('I5 — Edit Datetime', () => {
       });
 
       const dtCell = page.locator(
-        `#${datasetName}_table_view_container [data-column="scheduled_at"]`,
+        `#${datasetName}_table_view_container [data-column="e2e_scheduled_at"]`,
       ).first();
       await expect(dtCell).toContainText('2026-06-14', { timeout: 10000 });
 
@@ -96,7 +96,7 @@ test.describe('I5 — Edit Datetime', () => {
         await expect(errorToast).toHaveCount(0, { timeout: 2000 }).catch(() => {});
         expect(updateRequests).toEqual([{
           id: expect.any(Number),
-          column: 'scheduled_at',
+          column: 'e2e_scheduled_at',
           value: '2026-06-15 14:30:00',
         }]);
 

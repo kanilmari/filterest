@@ -35,7 +35,7 @@ test.describe('Table Creation Permissions', () => {
 
   test.beforeEach(async ({ page }) => {
     const projectName = test.info().project.name.replace(/[^a-z0-9]+/gi, '_').toLowerCase();
-    testTableName = buildTempDatasetName(`test_perm_table_${projectName}`);
+    testTableName = buildTempDatasetName(`e2e_perm_table_${projectName}`);
     testTableConfirmed = false;
     page.on('console', msg => console.log(`BROWSER LOG: ${msg.text()}`));
     await login(page, credentials);

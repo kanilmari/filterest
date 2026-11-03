@@ -32,12 +32,12 @@ test.describe('I2 — Edit Number', () => {
       datasetName,
       columns: {
         id: 'SERIAL',
-        quantity: 'INTEGER',
+        e2e_quantity: 'INTEGER',
         label: 'TEXT',
       },
       seedRows: [
         {
-          quantity: 7,
+          e2e_quantity: 7,
           label: 'inline-number-row',
         },
       ],
@@ -47,7 +47,7 @@ test.describe('I2 — Edit Number', () => {
       await openTempDataset(page, datasetName, 'table');
 
       const numberCell = page.locator(
-        `#${datasetName}_table_view_container [data-column="quantity"]`,
+        `#${datasetName}_table_view_container [data-column="e2e_quantity"]`,
       ).first();
       await expect(numberCell).toContainText(originalDisplayText, { timeout: 10000 });
 

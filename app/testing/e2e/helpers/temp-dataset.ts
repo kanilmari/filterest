@@ -197,6 +197,10 @@ export function buildTempDatasetName(prefix: string): string {
   const suffix = `_${timestamp}_${entropy}`;
   // Preserve the complete ownership proof; only the descriptive prefix may shrink.
   const safePrefix = normalizeDatasetPrefix(prefix).slice(0, 63 - suffix.length).replace(/_+$/g, '');
+  if (!/(^|_)e2e(_|$)/.test(safePrefix)) {
+    throw new Error(`Temp dataset prefix "${prefix}" must retain a whole "e2e" word after normalization and truncation; `
+      + 'use "e2e_..." or "app_e2e_...".');
+  }
   return `${safePrefix}${suffix}`;
 }
 

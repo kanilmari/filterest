@@ -34,7 +34,7 @@ for (const theme of ['light', 'dark'] as const) {
     const preferenceResponse = await page.request.get('/api/user-visual-preference');
     expect(preferenceResponse.ok()).toBe(true);
     const preference = await preferenceResponse.json();
-    const datasetName = buildTempDatasetName('table_cell_lines');
+    const datasetName = buildTempDatasetName('e2e_table_cell_lines');
     let created = false;
     try {
       await saveLines(page, 3);

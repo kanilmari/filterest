@@ -459,8 +459,8 @@ test.describe('T7 — Card Visibility Admin View', () => {
     const datasetName = buildTempDatasetName('e2e_palette_fields');
     // This proves the field editor and retained draft on a rendered card; the
     // separate cover-palette spec owns the intentionally empty-dataset proof.
-    await createTempDataset(page, { datasetName, columns: { id: 'SERIAL', palette_field: 'TEXT' },
-      seedRows: [{ palette_field: 'Palette field editor fixture' }] });
+    await createTempDataset(page, { datasetName, columns: { id: 'SERIAL', e2e_palette_field: 'TEXT' },
+      seedRows: [{ e2e_palette_field: 'Palette field editor fixture' }] });
     try {
       await openTempDataset(page, datasetName, 'card');
       await revealActiveFilterbarSection(page, 'style');
@@ -471,7 +471,7 @@ test.describe('T7 — Card Visibility Admin View', () => {
         el.value = '100'; el.dispatchEvent(new Event('input', { bubbles: true }));
       });
       await panel.getByTestId('dataset-cover-test-palette-fieldEditor').click();
-      await expect(page.locator('#cv_matrix_container')).toContainText('palette_field');
+      await expect(page.locator('#cv_matrix_container')).toContainText('e2e_palette_field');
       await expect(panel).toBeHidden();
       const edit = page.getByTestId('card-visibility-edit-button');
       await expect(edit).toBeEnabled();

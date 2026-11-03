@@ -20,7 +20,7 @@ const test = base.extend<{ coverDataset: string; selectTheme: (theme: 'light' | 
   coverDataset: async ({ page }, use) => {
     await page.goto('/', { waitUntil: 'domcontentloaded' });
     await waitForAppReady(page);
-    const name = buildTempDatasetName('palette_cover');
+    const name = buildTempDatasetName('e2e_palette_cover');
     await createTempDataset(page, { datasetName: name, columns: { id: 'SERIAL', title: 'TEXT' } });
     try {
       await openTempDataset(page, name, 'card', { expectEmpty: true });
@@ -508,7 +508,7 @@ test('two empty datasets keep separate covers, inherit site defaults and retain 
   // The page-based CRUD helper needs the authenticated application's origin.
   await page.goto('/', { waitUntil: 'domcontentloaded' });
   await waitForAppReady(page);
-  const names = [buildTempDatasetName('palette_a'), buildTempDatasetName('palette_b')];
+  const names = [buildTempDatasetName('e2e_palette_a'), buildTempDatasetName('e2e_palette_b')];
   const original = await loadSitePresentationSettings(page.request);
   const path = 'shared.card_image_width';
   const initialWidth = Number(original.defaults[path]);

@@ -40,7 +40,7 @@ test.describe('Dataset Deletion Handling', () => {
 
   test.beforeEach(async ({ page }) => {
     const projectName = test.info().project.name.replace(/[^a-z0-9]+/gi, '_').toLowerCase();
-    testTableName = buildTempDatasetName(`test_deletion_table_${projectName}`);
+    testTableName = buildTempDatasetName(`e2e_deletion_table_${projectName}`);
     testTableConfirmed = false;
     await login(page, credentials);
     await waitForAppReady(page);
