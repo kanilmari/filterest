@@ -128,10 +128,12 @@ required role-free names. Test files mirror the production module name as
 
 Apply the target convention to all new production modules immediately. Migrate
 existing human-maintained mismatches in dependency-aware batches, using
-GitNexus impact analysis, import validation, a frontend build, and relevant
-tests after every batch. A rename must not be used to disguise a multi-role
-file: split the responsibilities first when one accurate role cannot describe
-the module.
+a name search for every caller of the renamed module and its exports, import
+validation (`check_js_imports.js`), a frontend build, and relevant tests after
+every batch. A function caller map is an optional aid. An incomplete caller list
+never makes a rename or removal safe on its own. A rename must not be used to
+disguise a multi-role file: split the responsibilities first when one accurate
+role cannot describe the module.
 
 ## 7. Import Validation: `check_js_imports.js`
 
