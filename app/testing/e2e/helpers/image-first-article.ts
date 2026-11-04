@@ -68,13 +68,13 @@ export async function postJsonWithCsrf(
   );
 }
 
-export async function configureArticleFieldRoles(page: Page, datasetName: string): Promise<void> {
+export async function configureArticleFieldRoles(page: Page, datasetName: string, detailColumn = 'detail_note'): Promise<void> {
   await saveCardVisibilityWithFreshRevisions(page.request, datasetName, visibility => {
     const columns = visibility.columns;
     const roles: Record<string, string> = {
       title: 'header',
       description: 'description',
-      detail_note: 'details',
+      [detailColumn]: 'details',
     };
     const configuredColumns = columns.map(column => {
       const columnName = String(column.column_name || '');

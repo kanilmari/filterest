@@ -3,6 +3,7 @@
 // Bridges list URL changes and row-article history entries.
 // Exists so a mounted return view can validate its original history entry.
 
+import { recordApplicationAddressWrite } from "./address_write_revision.js";
 export const HISTORY_ENTRY_ID = "__filterestEntryId";
 const HISTORY_DATASET_VIEW = "__filterestDatasetView";
 let nextEntry = 0;
@@ -34,6 +35,7 @@ export function ensureHistoryEntryId() {
     const existing = history.state?.[HISTORY_ENTRY_ID];
     if (typeof existing === "string" && existing) return existing;
     const entryId = freshEntryId();
+    recordApplicationAddressWrite();
     history.replaceState({ ...(history.state || {}), [HISTORY_ENTRY_ID]: entryId }, "", window.location.href);
     return entryId;
 }
@@ -42,6 +44,7 @@ export function ensureHistoryEntryId() {
 export function rememberHistoryDatasetView(dataset, view) {
     if (!dataset || !view) return;
     ensureHistoryEntryId();
+    recordApplicationAddressWrite();
     history.replaceState({ ...(history.state || {}),
         [HISTORY_DATASET_VIEW]: { dataset, path: location.pathname, view },
     }, "", location.href);
@@ -71,6 +74,7 @@ function samePrimitiveState(a, b) {
 }
 
 export function writeHistoryEntry(url, state = {}, { replace = false } = {}) {
+    recordApplicationAddressWrite();
     releaseHistoryEntryAddress();
     const previous = { ...(history.state || {}) };
     // Only navigation-owned fields are replaced; other history owners survive.

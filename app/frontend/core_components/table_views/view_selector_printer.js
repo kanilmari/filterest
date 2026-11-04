@@ -19,6 +19,7 @@ import { getParams, setParams, updateURL } from "../navigation/nav_engine/query_
 import { updateBrowserTabTitle } from "../navigation/nav_engine/browser_tab_title_writer.js";
 import { createMaskIconSpan } from "../../icons/icon_mask_builder.js";
 import { closeRowArticle } from "./card_view/row_article_ui_handler.js";
+import { createRowPresentationSplitButton } from "./row_presentation/row_presentation_split_button.js";
 import {
     ARTICLE_VIEW_KEY,
     DATASET_VIEW_SELECTOR_TEXT,
@@ -54,7 +55,10 @@ function createViewSelectorHeading() {
  * @param {string} currentView      Nykyinen näkymäavain (esim. "normal", "table", jne.)
  * @param {Array}  buttonList       Taulukko: [ { label, viewKey }, ... ]
  * @param {Array}  extraClasses     (Valinnainen) lista lisäluokkia containeriin, esim. ["new-view-selector"]
- * @param {{includeHeading?: boolean}} options
+ * @param {{includeHeading?: boolean, rowPresentationSplit?: boolean}} options
+ *        rowPresentationSplit: the dataset's own view picker turns its Article
+ *        button into the presentation split button (row_presentation/). Other
+ *        pickers, such as the chart fallback notice, keep the plain button.
  */
 export function createGenericViewSelector(
     tableName,
@@ -71,6 +75,15 @@ export function createGenericViewSelector(
     }
 
     buttonList.forEach(({ label, viewKey, langKey }) => {
+        if (options.rowPresentationSplit && resolveDatasetViewSelectionTarget(viewKey) === ARTICLE_VIEW_KEY) {
+            container.appendChild(createRowPresentationSplitButton({
+                tableName,
+                isActive: getEffectiveActiveViewKey(tableName, currentView) === ARTICLE_VIEW_KEY,
+                // Article keeps the picker's direct classic path unchanged.
+                selectArticle: () => selectDatasetView(tableName, ARTICLE_VIEW_KEY, currentView),
+            }));
+            return;
+        }
         const btn = createGenericViewButton(
             label,
             viewKey,

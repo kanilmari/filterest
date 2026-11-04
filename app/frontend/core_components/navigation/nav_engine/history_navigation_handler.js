@@ -6,7 +6,7 @@
 import { requireArticleViewAccess } from '../../table_views/card_view/article_view_access.js';
 import { hasDatasetAccessSnapshot, subscribeDatasetAccessRegistry } from './dataset_access_registry.js';
 import { handleImageFirstViewHistory } from "./image_first_view_history.js";
-import { HISTORY_ENTRY_ID, getHistoryDatasetView, retainHistoryEntryAddress, releaseHistoryEntryAddress } from "./history_entry_state.js";
+import { HISTORY_ENTRY_ID, ensureHistoryEntryId, getHistoryDatasetView, retainHistoryEntryAddress, releaseHistoryEntryAddress } from "./history_entry_state.js";
 import { canRestoreCardArticleReturn, restoreCardArticleReturn, getCardArticleReturnToken, refreshCardArticleReturnViewport } from "./card_article_return_state.js";
 import { custom_views } from '../admin_and_user_tools/custom_view_reader.js';
 import { setParams, DATASET_PREFIX, parseTableQueryString } from './query_params.js';
@@ -142,7 +142,7 @@ async function restoreArticleReturnView(datasetName, isCurrentNavigation) {
     return true;
 }
 
-async function restoreHistoryEntryState(isCurrentNavigation) {
+async function restoreHistoryEntryState(isCurrentNavigation, claimDatasetEntry) {
     if (!isCurrentNavigation()) return;
     const targetPrefix = getPrefixFromPathname(window.location.pathname, DATASET_PREFIX);
     const target = targetPrefix ? parseDeepLink(window.location.pathname.slice(targetPrefix.length)) : null;
@@ -161,6 +161,7 @@ async function restoreHistoryEntryState(isCurrentNavigation) {
     });
     if (imageFirstResult) return imageFirstResult;
     if (!isCurrentNavigation()) return;
+    if (target?.name) claimDatasetEntry();
     if (target?.name && !target.deepLinkedRowId && canRestoreCardArticleReturn(target.name)) {
         const datasetName = target.name;
         await handle_all_navigation(datasetName, custom_views, {
@@ -276,14 +277,15 @@ subscribeDatasetAccessRegistry(response => {
 
 let historyRestorationGeneration = 0;
 async function handleHistoryNavigation() {
-    // Capture before the first await. URL/entry equality alone cannot distinguish
+    // Capture before the first await. Entry equality alone cannot distinguish
     // Back then Forward to the same entry while an older restoration is pending.
     const ownGeneration = ++historyRestorationGeneration;
     if (consumeHomeSearchHistoryNavigation()) return;
-    const landedEntryId = history.state?.[HISTORY_ENTRY_ID] ?? null;
+    let landedEntryId = history.state?.[HISTORY_ENTRY_ID] ?? null;
     const landedURL = window.location.href;
+    let ownsDatasetEntry = false;
     const isLandedEntry = () => ownGeneration === historyRestorationGeneration
-        && window.location.href === landedURL
+        && (ownsDatasetEntry || window.location.href === landedURL)
         && (history.state?.[HISTORY_ENTRY_ID] ?? null) === landedEntryId;
     // This must precede hydration, article restoration and the finally URL writer.
     if (await loadCustomRootFromHistory()) return;
@@ -296,7 +298,14 @@ async function handleHistoryNavigation() {
     // address owner below only speaks for the entry this restoration started on.
     let restoration;
     try {
-        restoration = await restoreHistoryEntryState(isLandedEntry);
+        restoration = await restoreHistoryEntryState(isLandedEntry, () => {
+            // Authorized dataset repairs replace this entry's query, view or
+            // row path. Its identity and restoration generation stay current;
+            // a newer history move or navigation-owned entry still cancels it.
+            // Claim legacy entries before cleanup can assign an ID itself.
+            landedEntryId = ensureHistoryEntryId();
+            ownsDatasetEntry = true;
+        });
     } finally {
         // Several restoration paths return before any navigation runs, including
         // the cached article return and the already-cleaned close. The address

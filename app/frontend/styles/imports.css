@@ -52,6 +52,7 @@
 @import url("../core_components/table_views/table_views.css");
 @import url("../core_components/table_views/settings_view/settings_view.css");
 @import url("../core_components/table_views/card_view/article_view_access.css");
+@import url("../core_components/table_views/row_presentation/row_presentation_split_button.css");
 
 /* --- Filter bar (see visual docs tab_content/filter_bar/) --- */
 @import url("../core_components/filterbar/filterbar.css");
@@ -87,6 +88,7 @@
 @import url("../reusable_components/windows/windows.css");
 @import url("../reusable_components/vanilla_dropdown/vanilla_dropdown.css");
 @import url("../reusable_components/multiselect_dropdown/multiselect_dropdown.css");
+@import url("../reusable_components/action_menu/anchored_action_menu.css");
 @import url("../reusable_components/modal/modals.css");
 @import url("../reusable_components/image_source_picker/image_source_picker.css");
 @import url("../reusable_components/symbol_asset_resolver.css");

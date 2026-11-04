@@ -104,6 +104,72 @@ off; an already paused video stays paused. IFAV and ordinary Article take no hol
 when Home is cleaned up. Focused media/history tests prove these exit paths;
 C26 uses the width-dependent contained-image limit for browser verification.
 
+## Choosing a presentation in the view picker
+
+The dataset view picker ("Show content as…", between Cards and Table) shows
+Article as one joined split button (`table_views/row_presentation/`). The main
+button's caption is the presentation chosen for this dataset in this browser
+tab, in the UI language: Article (`view_article`, default), Image-first article
+(`view_image_first`, served from the view registry's local fallbacks) or
+Page-sized image-first article (`article_presentations_page`). The chevron is
+named by `article_presentations_title` and opens the shared anchored action
+menu (`reusable_components/action_menu/`), which marks the current choice with
+a check mark. Choosing an item stores it (`<dataset>_row_presentation` in tab
+session storage; no server default changes), updates the caption and opens it;
+a later primary click opens the same choice. Only this picker gets the split:
+the chart fallback notice keeps the plain Article button, and the More menu,
+default-view controls, Home buttons and photo openers are unchanged.
+
+- **Article** uses the picker's existing classic path unchanged.
+- **IFAV and Page** open over the current listing, which stays the history
+  origin: Close, Escape and Back return to it; Forward and reload reopen.
+  The row is the open classic article's row; otherwise the first row of a fresh
+  request limited to one row (`filters.limit: 1`), with the listing's own
+  filters, committed search and sort. Those listing conditions are checked
+  through record loading, rendering and the final history commit.
+  Every primary click or menu choice, Article included, is recorded at once,
+  before any lazy loading; a newer choice in any dataset, a listing whose
+  conditions changed meanwhile, any application address write (push or replace,
+  including the same address), view deactivation or any history move cancels
+  an opening that has not committed. A document-wide write revision makes
+  cancellation independent of when the pending request samples the address;
+  returning to its original address and history entry cannot revive it.
+  The opener checks once before its own synchronous history commit, which
+  finishes that opening without rechecking its revision afterward.
+  An empty listing opens nothing and shows the existing
+  `no_results` notice; an opening that fails or whose record is no longer
+  readable shows the generic `load_failed` notice, naming no row.
+- **Rights.** Article and IFAV need the Article grant (IFAV keeps the Article
+  gate) and Page its own route. A dataset whose default view is Article grants
+  nothing here, because the classic row opener refuses Article without the
+  grant. The menu lists only permitted items and hides the chevron when one
+  remains, so a Page-only reader sees Page as the main caption and never passes
+  the classic gate. No grant is widened; the server still decides the row.
+- **Fresh record.** Only the row id travels: the opener fetches the permitted
+  record and its current fields (`presentationChoice`), as history restore does.
+- **Text-only IFAV.** A chosen IFAV whose readable row has no permitted photo
+  opens without a stage (`image_first_view--text-only`). The history entry keeps
+  `presentationChoice: true`, so reload and Forward reopen it text-only; an entry
+  opened from a photo whose photo is gone still returns to its origin, and a
+  denied or failed record opens nothing. A copied address in a new tab has no
+  history state and follows the photo-click rule. Page never needed a photo.
+
+The menu is portalled to `<body>` with fixed positioning and the shared
+`measureFloatingPanelPlacement` rule, so neither the viewport nor a transformed
+sidebar clips it. It supports Enter, Space, the arrow keys, Home, End, Escape
+(focus returns to the chevron) and Tab (closes without consuming the key, so
+native focus traversal continues from the chevron); a pointer outside, leaving the view or
+removing the toolbar closes it, and its document listeners exist only while it
+is open. Choosing an item does not count as a click outside the phone filter
+panel, so the panel stays open and focus can return to the split button when
+the presentation closes. Dialog ownership is on the disposable image-first
+content, never the shared overlay; close and reuse remove it. The outside-click
+listener captures picker ownership before a close handler removes the content,
+while ordinary and photo dialogs retain their existing dismissal behaviour.
+Rows are 44 px high and wrap long translated labels. Unit tests live
+beside these modules and in `image_first_view_presentation_choice.test.js`; the
+browser proof is `C32_row_presentation_choice.spec.ts`.
+
 ## Ordinary article result lists
 
 Opening an ordinary article from a paginated result view transfers its currently

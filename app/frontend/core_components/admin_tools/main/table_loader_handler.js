@@ -3,6 +3,7 @@
 // Bridges table metadata, navigation helpers, and redirect/session state during admin tool startup.
 // Exists to keep admin table-loading and first-open behavior out of generic navigation modules.
 
+import { recordApplicationAddressWrite } from "../../navigation/nav_engine/address_write_revision.js";
 import { canOpenArticleView, requireArticleViewAccess } from '../../table_views/card_view/article_view_access.js';
 import { isRenderableDatasetView, resolveDatasetViewSelectionTarget } from "../../table_views/dataset_view_registry.js";
 import { isImageFirstViewURL, getImageFirstViewBackingView, handleImageFirstViewHistory } from "../../navigation/nav_engine/image_first_view_history.js";
@@ -151,6 +152,7 @@ export async function load_tables(options = {}) {
                 console.warn('dataset redirect storage cleanup failed', storageError);
             }
             if (!isLandingOnFrontpage) {
+                recordApplicationAddressWrite();
                 window.history.replaceState({}, '', '/');
             }
         }

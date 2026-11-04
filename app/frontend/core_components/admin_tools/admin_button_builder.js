@@ -66,7 +66,7 @@ function createAdminViewButtons(table_name, current_view, columns = [], dataType
         current_view,
         directButtons,
         [],
-        { includeHeading: false }
+        { includeHeading: false, rowPresentationSplit: true }
     );
 
     const dropdownWrapper = document.createElement("div");

@@ -43,7 +43,12 @@ export async function handle_all_navigation(name, customViews, options = {}) {
     const arrayOfViews = customViews || [];
 
     // 1) Selvitetään, onko kyseessä custom_view vai normaali taulu
-    const { loadFunction, containerId, isCustomView } = get_load_info(name, arrayOfViews, { preserveCardReturn });
+    // A history move can supersede this render after the pipeline starts it.
+    // Keep its guard through row fetching and the unawaited classic article open;
+    // otherwise a late Back article can overwrite Forward's image-first entry.
+    const { loadFunction, containerId, isCustomView } = get_load_info(name, arrayOfViews, {
+        preserveCardReturn, ...(isCurrentNavigation ? { isCurrent: isCurrentNavigation } : {}),
+    });
 
     // 2) Etsitään ryhmä navigaationapeille
     let groupName = null;
@@ -86,7 +91,8 @@ export async function handle_all_navigation(name, customViews, options = {}) {
             targetIsCustomView,
             forceReload,
             restoreMountedView,
-            preserveCardReturn
+            preserveCardReturn,
+            isCurrentNavigation
         ),
     };
 
@@ -121,7 +127,8 @@ async function _performNavigationCore(
     isCustomView,
     forceReload = false,
     restoreMountedView = null,
-    preserveCardReturn = null
+    preserveCardReturn = null,
+    isCurrentNavigation = null
 ) {
     // Poistetaan vanhan aktiivisen napin korostus (sekä nav- että admin-puusta)
     const old_active_button = document.querySelector('.general_button_nav.active, .general_button_admin.active');
@@ -181,8 +188,11 @@ async function _performNavigationCore(
 
     let container_element = document.getElementById(container_id);
     let contentWasReloaded = false;
+    // Either loader can settle after a newer navigation owns the screen.
+    // Recheck before revealing its container or committing dataset/tab state.
     if (!container_element) {
         await load_function();
+        if (isCurrentNavigation?.() === false) return { abort: true, reason: 'stale_navigation' };
         container_element = document.getElementById(container_id);
         contentWasReloaded = true;
     } else if (!restoredMountedView && (forceReload || !hasContentBesideLoadingIndicator(container_element))) {
@@ -194,6 +204,7 @@ async function _performNavigationCore(
             clearDatasetScrollState(container_element);
         }
         await load_function();
+        if (isCurrentNavigation?.() === false) return { abort: true, reason: 'stale_navigation' };
         contentWasReloaded = true;
     }
     if (container_element) {

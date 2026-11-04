@@ -3,6 +3,7 @@
 // Bridges the shared URL writer, navigation permission pipeline and modal lifecycle.
 // Exists so Back leaves this view and Forward restores its selected row and image.
 
+import { recordApplicationAddressWrite } from "./address_write_revision.js";
 import { requireArticleViewAccess } from '../../table_views/card_view/article_view_access.js';
 import { HISTORY_ENTRY_ID, ensureHistoryEntryId, writeHistoryEntry, retainHistoryEntryAddress, isHistoryEntryAddressRetained } from "./history_entry_state.js";
 import { IMAGE_FIRST_VIEW_KEY, CARD_VIEW_KEY, ARTICLE_VIEW_KEY, isRenderableDatasetView } from "../../table_views/dataset_view_registry.js";
@@ -46,6 +47,9 @@ function readTarget(tableName, rowId) {
         image: new URLSearchParams(location.hash.slice(1)).get("image") || "",
         origin: matches ? validOrigin(saved.origin) : null,
         scroll: matches && Number.isFinite(saved.scroll) ? Math.max(0, saved.scroll) : 0,
+        // Only an entry opened by an explicit presentation choice may restore
+        // without photos; a photo-click entry whose photo is gone still returns.
+        presentationChoice: matches && saved.presentationChoice === true,
     };
 }
 
@@ -77,12 +81,18 @@ export async function authorizeImageFirstView(tableName, isCurrent, onAccessDeni
     return !result?.abort && isCurrent();
 }
 
-/** Captures an opening intent; asynchronous media/row work cannot outlive its URL. */
-export function beginImageFirstViewOpen({ tableName, rowId, listPath, restoring = false, isCurrent = () => true, viewKey = IMAGE_FIRST_VIEW_KEY }) {
+/**
+ * Captures an opening intent; asynchronous media/row work cannot outlive its URL.
+ * `presentationChoice` marks an open chosen in the view picker's split button; the
+ * mark is kept in the entry's history state so reload and Forward keep it.
+ */
+export function beginImageFirstViewOpen({ tableName, rowId, listPath, restoring = false, isCurrent = () => true,
+    viewKey = IMAGE_FIRST_VIEW_KEY, presentationChoice = false }) {
     const initial = currentIdentity();
     const ownGeneration = ++generation;
     pendingTableName = tableName;
     const target = restoring ? readTarget(tableName, rowId) : null;
+    const chosen = Boolean(presentationChoice || target?.presentationChoice);
     const origin = target?.origin || (isImageFirstViewURL()
         ? validOrigin(history.state?.[IMAGE_FIRST_HISTORY_KEY]?.origin)
         : captureOrigin(tableName));
@@ -90,8 +100,12 @@ export function beginImageFirstViewOpen({ tableName, rowId, listPath, restoring 
     return {
         isCurrent: canCommit,
         image: target?.image || "",
+        presentationChoice: chosen,
         commit(image) {
             if (!canCommit() || !/^\d+$/.test(String(rowId))) return null;
+            // This is the last pending-request check. The following synchronous
+            // writes finish this opening; do not recheck its revision afterward.
+            // They still invalidate every other pending activation in this tab.
             // Assign the source's identity only after authorization/media work
             // succeeds; even an ID-only replace would mutate a denied restore.
             if (origin && !origin.entryId && identityMatches(origin)) origin.entryId = ensureHistoryEntryId();
@@ -99,7 +113,8 @@ export function beginImageFirstViewOpen({ tableName, rowId, listPath, restoring 
             url.search = location.search;
             url.searchParams.set("view", viewKey);
             if (image) url.hash = new URLSearchParams({ image }).toString();
-            const saved = { dataset: tableName, rowId: String(rowId), image: image || "", origin, scroll: target?.scroll || 0 };
+            const saved = { dataset: tableName, rowId: String(rowId), image: image || "", origin, scroll: target?.scroll || 0,
+                ...(chosen ? { presentationChoice: true } : {}) };
             const entryId = writeHistoryEntry(url.pathname + url.search + url.hash,
                 { [IMAGE_FIRST_HISTORY_KEY]: saved }, { replace: restoring || isImageFirstViewURL() });
             activeView?.cleanup?.();
@@ -135,6 +150,7 @@ export function attachImageFirstView(entryId, modalResult) {
     body.scrollTop = savedScroll;
     const rememberScroll = () => {
         if (restoringScroll || isHistoryEntryAddressRetained() || activeView?.entryId !== entryId || history.state?.[HISTORY_ENTRY_ID] !== entryId) return;
+        recordApplicationAddressWrite();
         history.replaceState({ ...history.state, [IMAGE_FIRST_HISTORY_KEY]: {
             ...history.state[IMAGE_FIRST_HISTORY_KEY], scroll: body.scrollTop,
         } }, "", location.href);

@@ -4,6 +4,7 @@
 // Exists so forced-login mode can show a polished full-page Login/Tour layout
 // without entangling the SPA guest-shell modal flow.
 
+import { recordApplicationAddressWrite } from "../navigation/nav_engine/address_write_revision.js";
 export function resolveStandaloneAuthTab(hash = "") {
     return hash === "#tour" ? "tour" : "login";
 }
@@ -35,6 +36,7 @@ export function initializeStandaloneLoginShell() {
 
         if (updateHash && window?.history?.replaceState) {
             const nextHash = activeTab === "tour" ? "#tour" : "";
+            recordApplicationAddressWrite();
             window.history.replaceState({}, "", `${window.location.pathname}${window.location.search}${nextHash}`);
         }
     }

@@ -8,6 +8,7 @@
 //   renderTableSelectorTree() — renders the checkbox tree into #table_selector_tree on demand
 //                                (called by manage_permissions.js after creating the container)
 
+import { recordApplicationAddressWrite } from "../../navigation/nav_engine/address_write_revision.js";
 import { render_tree } from "../../../reusable_components/vanilla_tree/vanilla_tree_builder.js";
 import { custom_views } from "../../navigation/admin_and_user_tools/custom_view_reader.js";
 import { handle_all_navigation } from "../../navigation/nav_engine/navigation_handler.js";
@@ -621,6 +622,7 @@ async function handleDatabaseViewNavigation(viewName) {
     const containerId = `dbview_${viewName}_container`;
 
     // Update URL
+    recordApplicationAddressWrite();
     history.pushState({}, '', `/${viewName}`);
 
     // Update active button highlighting

@@ -3,6 +3,7 @@
 // Bridges protected-page redirects, cross-tab logout, and the standalone login page.
 // Exists so safe shell teardown also tells the person why the login page appeared.
 
+import { recordApplicationAddressWrite } from "../navigation/nav_engine/address_write_revision.js";
 import { getLanguageWithBrowserFallback } from '../state_stores/lang_preference_reader.js';
 import { resolveAuthSessionNoticeFallback } from './auth_session_notice_copy.js';
 
@@ -57,6 +58,7 @@ function removeConsumedNoticeFromAddress(locationObject, historyObject) {
     const parsed = new URL(locationObject.href);
     parsed.searchParams.delete(AUTH_SESSION_NOTICE_PARAM);
     const cleanPath = `${parsed.pathname}${parsed.search}${parsed.hash}`;
+    recordApplicationAddressWrite();
     historyObject.replaceState({}, '', cleanPath);
 }
 

@@ -279,10 +279,13 @@ Shared asset-linking is now visible in multiple frontend surfaces, not only the 
 
 ### Direct-link Page pilot
 
-A row-specific `/<preferred-name>/<id>?view=image_first_page_view` address, or a
-Home article button explicitly configured with that view, opens the shared
-`openImageFirstView` with `layout: "page"`. No other opener selects Page. The
-contract stays reserved and dataset opener policy stays inactive. The Page
+A row-specific `/<preferred-name>/<id>?view=image_first_page_view` address, a
+Home article button explicitly configured with that view, or the person's own
+choice in the view picker's Article split button
+([row presentation choice](Image_First_Article.md#choosing-a-presentation-in-the-view-picker))
+opens the shared `openImageFirstView` with `layout: "page"`. No other opener
+selects Page: card, image and search openers keep their defaults. The contract
+stays reserved and dataset opener policy stays inactive. The Page
 permission route is `/ui/view/image_first_page_view`; denial uses IFAV's existing
 notice. Cold load, reload and new tabs read the Page projection afresh. Shared
 history retains origin and row: Back closes, Forward reopens, and X/Esc returns

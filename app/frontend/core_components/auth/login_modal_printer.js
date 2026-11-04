@@ -4,6 +4,7 @@
 // Exists to provide a pre-session authentication entry point without duplicating login flow logic elsewhere.
 // Login, OTP, and password-reset requests run before a full session/pipeline exists;
 // they are sent by pre_auth_request_sender.js, which also recovers a stale CSRF token.
+import { recordApplicationAddressWrite } from "../navigation/nav_engine/address_write_revision.js";
 import { createModal, showModal, hideModal } from "../../reusable_components/modal/modal_builder.js";
 import { gather_browser_fingerprint_hash } from "../../reusable_components/browser_identity_builder.js";
 import { mountLoginSecondStep, leaveLoginSecondStep, bindLoginCodeResend, setSecondStepReveal, showLoginStatus } from './second_step_view.js';
@@ -54,6 +55,7 @@ function clearLoginEntryQueryFromUrl() {
     params.delete("redirect");
     const cleanSearch = params.toString();
     const cleanUrl = window.location.pathname + (cleanSearch ? `?${cleanSearch}` : "") + window.location.hash;
+    recordApplicationAddressWrite();
     window.history.replaceState({}, "", cleanUrl);
     return true;
 }
@@ -63,6 +65,7 @@ async function completeSuccessfulModalLogin() {
         const safePath = resolvePendingRedirectTarget();
         const shouldSyncLogin = await isCrossTabLoginSyncEnabled();
         if (safePath && safePath !== "/") {
+            recordApplicationAddressWrite();
             window.history.replaceState({}, "", safePath);
         } else {
             clearLoginEntryQueryFromUrl();

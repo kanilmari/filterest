@@ -3,6 +3,7 @@
 // Bridges card content rendering and navigation state with the expanded article experience.
 // Exists to keep article-view interaction rules centralized instead of scattering them across card builders.
 
+import { recordApplicationAddressWrite } from "../../navigation/nav_engine/address_write_revision.js";
 import { count_this_function } from "../../dev_tools/function_counter.js";
 import { extractLangValue } from "../../../reusable_components/lang_value_reader.js";
 import {
@@ -302,6 +303,7 @@ export function closeRowArticle(
                 window.__bigCardClosing = true;
                 history.back();
             } else {
+                recordApplicationAddressWrite();
                 history.replaceState(
                     { bigCard: false, dataset: table_name },
                     "",

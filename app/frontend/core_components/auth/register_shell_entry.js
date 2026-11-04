@@ -3,6 +3,7 @@
 // Bridges the backend GET /register redirect and the SPA-side register tab so registration starts inside the app.
 // Exists to unify direct register navigations through the SPA guest shell instead of a standalone page.
 
+import { recordApplicationAddressWrite } from "../navigation/nav_engine/address_write_revision.js";
 import { openNavTab } from "../navigation/main_tabs/main_tab_printer.js";
 
 export function buildRegisterEntryPath() {
@@ -20,6 +21,7 @@ export async function handleRegisterShellEntry() {
     params.delete("register-entry");
     const cleanSearch = params.toString();
     const cleanUrl = window.location.pathname + (cleanSearch ? `?${cleanSearch}` : "") + window.location.hash;
+    recordApplicationAddressWrite();
     window.history.replaceState({}, "", cleanUrl);
 
     await openNavTab("register");
@@ -27,5 +29,6 @@ export async function handleRegisterShellEntry() {
 }
 
 export function navigateToRegisterEntry() {
+    recordApplicationAddressWrite();
     window.history.replaceState({}, "", buildRegisterEntryPath());
 }

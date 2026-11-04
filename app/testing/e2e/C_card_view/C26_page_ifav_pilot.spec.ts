@@ -4,7 +4,6 @@
 // Restores only the article-button setting and account theme, including on failure.
 import { test as base, expect, type APIRequestContext, type Page } from '@playwright/test';
 import { isDeepStrictEqual } from 'node:util';
-import { deflateSync } from 'node:zlib';
 import { login, loadCredentials, loadUserCredentials, readSessionInfo } from '../helpers/auth';
 import { buildTempDatasetName, createTempDataset, dropTempDataset, openTempDatasetRowArticle,
   fetchCsrfTokenForRequest } from '../helpers/temp-dataset';
@@ -12,6 +11,7 @@ import { configureArticleFieldRoles, postJsonWithCsrf } from '../helpers/image-f
 import { readDatasetIdentityFromRequest } from '../helpers/test-artifact-dataset-identity-reader';
 import { acquireHomeWriter } from '../helpers/home-writer-lock';
 import { assertP7ReaderPrecondition } from '../helpers/c17-permission-cleanup';
+import { solidPng } from '../helpers/solid-png';
 
 type Configuration = { schema_version: number; placement: 'below_text' | 'top_row';
   items: Array<{ table_uid: number; row_id: string; enabled: boolean; view?: string }> };
@@ -22,26 +22,6 @@ const SETTINGS = '/api/admin/front-page/article-buttons';
 const PAGE = '.image_first_page_view';
 const restores: Array<() => Promise<void>> = [];
 
-function crc32(data: Buffer) {
-  let crc = ~0;
-  for (const byte of data) { crc ^= byte; for (let bit = 0; bit < 8; bit++) crc = (crc >>> 1) ^ (0xedb88320 & -(crc & 1)); }
-  return ~crc >>> 0;
-}
-function pngChunk(type: string, data: Buffer) {
-  const body = Buffer.concat([Buffer.from(type, 'ascii'), data]);
-  const length = Buffer.alloc(4); length.writeUInt32BE(data.length);
-  const crc = Buffer.alloc(4); crc.writeUInt32BE(crc32(body));
-  return Buffer.concat([length, body, crc]);
-}
-/** A solid 8-bit RGB PNG. The upload path refuses SVG (d260: "unsupported file extension: svg"). */
-function solidPng(width: number, height: number) {
-  const header = Buffer.alloc(13);
-  header.writeUInt32BE(width, 0); header.writeUInt32BE(height, 4); header[8] = 8; header[9] = 2;
-  const row = Buffer.concat([Buffer.from([0]), Buffer.alloc(width * 3, 0x5a)]);
-  const pixels = deflateSync(Buffer.concat(Array.from({ length: height }, () => row)));
-  return Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
-    pngChunk('IHDR', header), pngChunk('IDAT', pixels), pngChunk('IEND', Buffer.alloc(0))]);
-}
 async function read<T>(request: APIRequestContext, url: string): Promise<T> {
   const response = await request.get(url);
   expect(response.ok(), await response.text()).toBe(true);

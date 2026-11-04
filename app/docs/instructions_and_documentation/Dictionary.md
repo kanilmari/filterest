@@ -132,9 +132,20 @@ The [article-presentation contract](../../frontend/shared/article_presentations/
 owns canonical keys, accepted Article aliases, opener-role defaults, supported
 collapsible blocks and permission-route identities. Page-sized IFAV
 (`image_first_page_view`) has registered storage and an independent permission
-right in database 9.12.0; its renderer and opener remain later batches. An **opener role** describes a trusted
+right in database 9.12.0. It opens from explicit row links, Home buttons and the
+view picker's [row presentation choice](#row-presentation-choice); the central
+opener policy remains a later batch. An **opener role** describes a trusted
 application element's purpose; its catalogue does not by itself install the
 planned central activation policy. See [Article Section Defaults](Article_Section_Defaults.md#shared-article-presentation-contract-and-storage-database-9120).
+
+### Row presentation choice
+The joined **Article split button** in the dataset view picker ("Show content
+as…"). Its main caption is the presentation the person chose for this dataset
+in this browser tab: Article (default), Image-first article or Page-sized
+image-first article. The chevron opens the choice menu. Article, IFAV and Page
+are **row presentations**; only Article is also a dataset view (renderer). The
+choice is a person's explicit act, not an opener default. See
+[Image-first article](Image_First_Article.md#choosing-a-presentation-in-the-view-picker).
 
 ### Result card
 The ordinary dataset result card. Existing `small_card` identifiers refer to

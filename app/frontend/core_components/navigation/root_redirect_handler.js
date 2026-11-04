@@ -3,6 +3,7 @@
 // Bridges redirect-notice storage, toast rendering, history updates, and post-auth shell rebuilds.
 // Exists to reuse one no-reload root-return path instead of duplicating full browser navigations.
 
+import { recordApplicationAddressWrite } from "./nav_engine/address_write_revision.js";
 import { consumeRedirectNotice } from "../state_stores/dataset_selection_saver.js";
 import { datasetFormText } from "../general_tables/dataset_form/dataset_form_text.js";
 import { getTranslationForKey } from "../lang/translation_handler.js";
@@ -87,6 +88,7 @@ export function showDatasetRedirectNoticeIfAvailable() {
  * @param {{ refreshAuthModes?: boolean }} [options]
  */
 export async function redirectToRootInSpa({ refreshAuthModes = false } = {}) {
+    recordApplicationAddressWrite();
     window.history.replaceState({}, "", "/");
     await runPostAuthBootstrap({ refreshAuthModes });
     showDatasetRedirectNoticeIfAvailable();

@@ -4,6 +4,7 @@
 // Exists so direct login URLs do not strand users in an empty guest shell while
 // automatic auth failures can still avoid surprise modals.
 
+import { recordApplicationAddressWrite } from "../navigation/nav_engine/address_write_revision.js";
 export function buildLoginEntryPath(redirectUrl = "") {
     const params = new URLSearchParams();
     params.set("login-entry", "1");
@@ -43,6 +44,7 @@ export function clearLoginEntryQueryFromUrl() {
     params.delete("redirect");
     const cleanSearch = params.toString();
     const cleanUrl = window.location.pathname + (cleanSearch ? `?${cleanSearch}` : "") + window.location.hash;
+    recordApplicationAddressWrite();
     window.history.replaceState({}, "", cleanUrl);
     return true;
 }
@@ -55,5 +57,6 @@ export function clearLoginEntryQueryFromUrl() {
  * @param {string} [redirectUrl] - optional post-login redirect target
  */
 export function navigateToLoginEntry(redirectUrl) {
+    recordApplicationAddressWrite();
     window.history.replaceState({}, "", buildLoginEntryPath(redirectUrl));
 }

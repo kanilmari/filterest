@@ -163,6 +163,11 @@ function lockRowNavigation(navigation) {
 /**
  * Opens an always-available image-first view for one row and active image.
  * Ordinary article state is neither read nor changed by this view.
+ * `presentationChoice` is an explicit choice in the view picker's split button
+ * (row_presentation/): only the row id is trusted, the permitted record and its
+ * current fields are fetched again, and full IFAV opens as a text-only article
+ * when that row has no permitted photo. Its history entry keeps the choice.
+ * `onRowUnavailable` is called when that fresh fetch no longer returns the row.
  */
 export async function openImageFirstView({
     imageSrc = "",
@@ -175,6 +180,8 @@ export async function openImageFirstView({
     isCurrent = () => true,
     onAccessDenied,
     layout = "image_first",
+    presentationChoice = false,
+    onRowUnavailable,
 } = {}) {
     if (!rowItem || typeof rowItem !== "object" || !tableName) {
         return null;
@@ -187,20 +194,27 @@ export async function openImageFirstView({
     isCurrent = () => callerIsCurrent() && datasetAppearanceState.isCurrent(appearanceToken);
     const intent = beginImageFirstViewOpen({
         tableName, rowId: rowItem.id, listPath: buildDatasetPath(tableName, DATASET_PREFIX || "/"),
-        restoring: restoringHistory, isCurrent, viewKey,
+        restoring: restoringHistory, isCurrent, viewKey, presentationChoice,
     });
+    // Restoring a chosen entry keeps its choice; Page never needs a photo.
+    const textOnlyAllowed = !pageLayout && intent.presentationChoice;
     if (!await authorizeImageFirstView(tableName, intent.isCurrent, onAccessDenied, viewKey)) return null;
     // Reopening history always obtains current row/column permissions. Its state
     // contains only identities, never a cached copy of protected article data.
     let dataTypes = resolveRowArticleDataTypes(tableName, selectedCard);
-    if (restoringHistory || pageLayout) {
+    if (restoringHistory || pageLayout || presentationChoice) {
         const response = await fetchDatasetData({
             dataset_name: tableName, filters: { id: rowItem.id },
             view_key: pageLayout ? viewKey : "article_view", callerName: "openImageFirstView",
         });
         if (!intent.isCurrent()) return null;
         rowItem = response?.data?.find(row => String(row.id) === String(rowItem.id));
-        if (!rowItem) return null;
+        if (!rowItem) {
+            // Deleted, filtered out or no longer readable: the caller may say it
+            // did not open, without learning which.
+            onRowUnavailable?.();
+            return null;
+        }
         if (response.dataset_appearance != null
             && !datasetAppearanceState.accept(tableName, response.dataset_appearance, { token: appearanceToken, isCurrent })) return null;
         dataTypes = response.types || {};
@@ -225,7 +239,7 @@ export async function openImageFirstView({
         fetchCurrentUserProfile().catch(() => null),
         loadRowArticleSectionDefaults(tableName, pageLayout ? viewKey : "image_first"),
     ]);
-    if (!intent.isCurrent() || (!pageLayout && resolvedRows.length === 0)) {
+    if (!intent.isCurrent() || (!pageLayout && resolvedRows.length === 0 && !textOnlyAllowed)) {
         return null;
     }
 
@@ -245,7 +259,7 @@ export async function openImageFirstView({
     let historyEntryId = null;
     const stage = pageLayout ? buildRowArticlePageImage({
         imageRow: currentImageRow, resolvePath: resolveImagePath, resolveAlt: resolveImageAltText,
-    }) : buildRowArticleImageFirstStage({
+    }) : resolvedRows.length === 0 ? null : buildRowArticleImageFirstStage({
         imageEntries,
         getActiveRow: () => currentImageRow,
         onSelectRow: (row) => {
@@ -258,7 +272,7 @@ export async function openImageFirstView({
         rowLabel: rowPresentationLabel,
         onBackdropActivate: () => closeImageFirstView?.(),
     });
-    if (!stage && !pageLayout) {
+    if (!stage && !pageLayout && !textOnlyAllowed) {
         return null;
     }
 
@@ -287,6 +301,9 @@ export async function openImageFirstView({
     shell.classList.add("image_first_view");
     datasetAppearanceState.bind(shell, tableName);
     shell.dataset.testid = "image-first-view";
+    // Ownership belongs to this disposable dialog content, never the singleton
+    // overlay. Close removes it; reuse replaces it, including photo transitions.
+    if (presentationChoice) shell.dataset.rowPresentationOwner = tableName;
     // The centered article leaves real background beside its text, outside the
     // image stage. Close only on that shell, never through article controls or
     // a text-selection drag that began inside the content.
@@ -310,10 +327,12 @@ export async function openImageFirstView({
             onNavigate: (targetRow, targetCard) => {
                 const restoreNavigation = lockRowNavigation(rowNavigation);
                 void openImageFirstView({
-                    imageSrc: resolveTargetCardImage(targetCard),
+                    // A chosen view reads each record afresh, never the card's last picture.
+                    imageSrc: intent.presentationChoice ? "" : resolveTargetCardImage(targetCard),
                     rowItem: targetRow,
                     tableName,
                     selectedCard: targetCard,
+                    presentationChoice: intent.presentationChoice,
                 }).catch((error) => {
                     console.warn(
                         "image-first record transition failed",
@@ -328,10 +347,14 @@ export async function openImageFirstView({
         shell.classList.add("image_first_page_view");
         if (stage) rowArticleContentElement.prepend(stage.element);
         shell.append(rowArticleContentElement);
-    } else {
+    } else if (stage) {
         shell.append(stage.element, rowArticleContentElement);
+    } else {
+        // Text-only IFAV: the chosen row has no permitted photo, so no stage or placeholder.
+        shell.classList.add("image_first_view--text-only");
+        shell.append(rowArticleContentElement);
     }
-    if (!pageLayout && !window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches) {
+    if (stage && !pageLayout && !window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches) {
         activateImageFirstStageTransitionMedia(stage.element);
     }
     const ariaLabel = getTranslationForKey("open_article") || "Open article";

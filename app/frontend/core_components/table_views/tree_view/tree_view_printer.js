@@ -3,6 +3,7 @@
 // Bridges fetched row data and column metadata into the reusable vanilla tree renderer.
 // Exists to provide a dataset-aware tree view without embedding tree rules into generic components.
 
+import { recordApplicationAddressWrite } from "../../navigation/nav_engine/address_write_revision.js";
 import { render_tree } from '../../../reusable_components/vanilla_tree/vanilla_tree_builder.js';
 import { endpoint_router } from '../../endpoints/endpoint_router.js';
 import { getLanguageWithBrowserFallback } from '../../state_stores/lang_preference_reader.js';
@@ -114,6 +115,7 @@ async function handleDatabaseCatalogTreeButtonClick(nodeData) {
 
     if (nodeData.is_view) {
         const { loadDatabaseView } = await import('../../database_view_fetcher.js');
+        recordApplicationAddressWrite();
         history.pushState({}, '', `/${nodeData.name}`);
         await loadDatabaseView(nodeData.name);
         return;

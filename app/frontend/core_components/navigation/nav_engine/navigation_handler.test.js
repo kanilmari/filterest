@@ -67,6 +67,7 @@ async function loadModule({ realPipeline = false } = {}) {
             custom_views: [], ensure_private_custom_views_loaded: async () => {},
         }));
     } else {
+        vi.doUnmock('../../../reusable_components/loading/loading_indicator_printer.js');
         vi.doMock('../../pipeline/navigation_pipeline.js', () => ({
             runNavigationPipeline: runNavigationPipelineMock,
         }));
@@ -370,6 +371,69 @@ describe('navigation_handler', () => {
         await back;
         expect(commit).not.toHaveBeenCalled();
         expect(refreshTableUnifiedMock).toHaveBeenCalledOnce();
+    });
+
+    test.each(['mounted', 'missing'])('a superseded %s loader cannot reactivate its dataset', async kind => {
+        const { handle_all_navigation, performNavigation } = await loadModule();
+        runNavigationPipelineMock.mockImplementation(context => context._performNavigationCore(
+            context.name, context.containerId, context.loadFunction, context.groupName, context.isCustomView));
+        if (kind === 'missing') document.getElementById('orders_container').remove();
+        let finishLoad;
+        const loading = new Promise(resolve => { finishLoad = resolve; });
+        refreshTableUnifiedMock.mockImplementationOnce(async () => {
+            await loading;
+            if (kind === 'missing') {
+                const root = document.createElement('div');
+                root.id = 'orders_container'; root.className = 'content_div hidden';
+                document.getElementById('tabs_container').append(root);
+            }
+        });
+        let current = true;
+        const previous = handle_all_navigation('orders', [], {
+            skipUrlUpdate: true, forceReload: true, isCurrentNavigation: () => current,
+        });
+        await vi.waitFor(() => expect(refreshTableUnifiedMock).toHaveBeenCalledOnce());
+        current = false;
+        const root = document.createElement('div');
+        root.id = 'current_container'; root.className = 'content_div hidden'; root.textContent = 'Newer listing';
+        document.getElementById('tabs_container').append(root);
+        await performNavigation('app_service_catalog', root.id, vi.fn(), 'database');
+        finishLoad();
+        expect(await previous).toEqual({ abort: true, reason: 'stale_navigation' });
+        expect(setSelectedDatasetMock).toHaveBeenCalledExactlyOnceWith('app_service_catalog');
+        expect(setSSEActiveDatasetMock).toHaveBeenCalledExactlyOnceWith('app_service_catalog');
+        expect(document.querySelector('.navtablinks.active')?.dataset.id).toBe('app_service_catalog');
+        expect([...document.querySelectorAll('#tabs_container > .content_div:not(.hidden)')]).toEqual([root]);
+        expect(applyViewStylingMock).toHaveBeenCalledExactlyOnceWith('app_service_catalog');
+        expect(updateActiveHeadingMock).toHaveBeenCalledOnce();
+        expect(updateRecentlyViewedStatusMock).toHaveBeenCalledOnce();
+    });
+
+    test.each(['mounted', 'missing'])('an unguarded %s loader still reveals and selects its dataset', async kind => {
+        const { handle_all_navigation } = await loadModule();
+        runNavigationPipelineMock.mockImplementation(context => context._performNavigationCore(
+            context.name, context.containerId, context.loadFunction, context.groupName, context.isCustomView));
+        if (kind === 'missing') document.getElementById('orders_container').remove();
+        let finishLoad;
+        const loading = new Promise(resolve => { finishLoad = resolve; });
+        refreshTableUnifiedMock.mockImplementationOnce(async () => {
+            await loading;
+            if (kind === 'missing') {
+                const root = document.createElement('div');
+                root.id = 'orders_container'; root.className = 'content_div hidden';
+                document.getElementById('tabs_container').append(root);
+            }
+        });
+        const navigation = handle_all_navigation('orders', [], { skipUrlUpdate: true, forceReload: true });
+        await vi.waitFor(() => expect(refreshTableUnifiedMock).toHaveBeenCalledOnce());
+        expect(setSelectedDatasetMock).not.toHaveBeenCalled();
+        finishLoad();
+        await navigation;
+        expect(setSelectedDatasetMock).toHaveBeenCalledExactlyOnceWith('orders');
+        expect(setSSEActiveDatasetMock).toHaveBeenCalledExactlyOnceWith('orders');
+        expect(document.querySelector('.navtablinks.active')?.dataset.id).toBe('orders');
+        expect([...document.querySelectorAll('#tabs_container > .content_div:not(.hidden)')])
+            .toEqual([document.getElementById('orders_container')]);
     });
 
 });

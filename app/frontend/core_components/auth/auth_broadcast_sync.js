@@ -3,6 +3,7 @@
 // Bridges auth-broadcast events and the existing logout/login-entry shell reset path.
 // Exists to keep sibling tabs in sync when one tab logs out, resets the session, or logs in.
 
+import { recordApplicationAddressWrite } from "../navigation/nav_engine/address_write_revision.js";
 import { subscribeToAuthBroadcast } from "./auth_broadcast.js";
 import { applyLoggedOutShellReset, navigateToPostLogoutPath } from "./logout_shell_reset.js";
 import { setAuthModes } from "../admin_tools/auth_mode_handler.js";
@@ -42,6 +43,7 @@ function clearGuestAuthEntryParams() {
 
     const cleanSearch = params.toString();
     const cleanUrl = `${window.location.pathname}${cleanSearch ? `?${cleanSearch}` : ""}${window.location.hash}`;
+    recordApplicationAddressWrite();
     window.history.replaceState({}, "", cleanUrl);
 }
 

@@ -3,6 +3,7 @@
 // Bridges the logout endpoint, client-side auth caches, and rendered SPA shell reset.
 // Exists to clear local auth state before loading the backend-selected destination.
 
+import { recordApplicationAddressWrite } from "../navigation/nav_engine/address_write_revision.js";
 import { discardInlineEditors } from '../general_tables/gt_1_row_crud/gt_1_3_row_update/inline_editor_state.js';
 import { datasetAppearanceState } from '../table_views/dataset_appearance_state.js';
 import { endpoint_router } from "../endpoints/endpoint_router.js";
@@ -129,6 +130,7 @@ export async function applyLoggedOutShellReset({ postLogoutPath = "/" } = {}) {
     await clearClientAuthArtifacts();
 
     if (postLogoutPath) {
+        recordApplicationAddressWrite();
         window.history.replaceState({}, "", postLogoutPath);
     }
 

@@ -415,16 +415,19 @@ describe("history_navigation_handler", () => {
         expect(history.state.__filterestEntryId).toBe("new");
     });
 
-    test("history intent checks both entry identity and full URL independently of cache eligibility", async () => {
+    test("authorized history intent follows entry identity through address repairs independently of cache eligibility", async () => {
         canRestoreCardArticleReturn.mockReturnValue(true);
         history.replaceState({ __filterestEntryId: "back-entry" }, "", "/events?search=harbour&view=card");
         window.dispatchEvent(new PopStateEvent("popstate"));
         await vi.waitFor(() => expect(handleAllNavigationMock).toHaveBeenCalledOnce());
         const { isCurrentNavigation } = handleAllNavigationMock.mock.calls[0][2];
         expect(isCurrentNavigation()).toBe(true);
+        history.replaceState({ __filterestEntryId: "back-entry" }, "", "/events/3?search=harbour&view=article_view");
+        expect(isCurrentNavigation()).toBe(true);
         history.replaceState({ __filterestEntryId: "forward-entry" }, "", "/events?search=harbour&view=card");
         expect(isCurrentNavigation()).toBe(false);
-        history.replaceState({ __filterestEntryId: "back-entry" }, "", "/events/3?search=harbour&view=article_view");
+        window.dispatchEvent(new PopStateEvent("popstate"));
+        history.replaceState({ __filterestEntryId: "back-entry" }, "", "/events?search=harbour&view=card");
         expect(isCurrentNavigation()).toBe(false);
     });
 

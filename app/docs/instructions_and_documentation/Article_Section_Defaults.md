@@ -80,6 +80,9 @@ identities and independent image-first permission routes. The Page pilot now ren
 `view: "image_first_page_view"`, reusing IFAV with an opt-in contained-image layout.
 The combined editor is implemented; the browser contract keeps Page `reserved:true`
 so it does not enter ordinary opener choices or activate dataset opener policy.
+The view picker's Article split button lets a person choose Page (or IFAV) for
+one dataset in one browser tab; that explicit choice is not an opener default and
+changes no stored setting ([Image-first article](Image_First_Article.md#choosing-a-presentation-in-the-view-picker)).
 `permission_route` records the approved independent route for each key;
 `current_permission_route` explicitly preserves IFAV's existing Article gate.
 Page requests its canonical Details default; compatibility readers still request `classic` and `image_first`;

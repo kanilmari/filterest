@@ -194,7 +194,8 @@ describe("appendChatUIIfAllowed", () => {
                 expect.objectContaining({ viewKey: "transposed", label: "Compare", langKey: "view_transposed" }),
             ],
             [],
-            { includeHeading: false }
+            // Only the dataset's own picker turns Article into the presentation split button.
+            { includeHeading: false, rowPresentationSplit: true }
         );
         expect(createVanillaDropdownMock).toHaveBeenCalledWith(expect.objectContaining({
             options: [

@@ -16,17 +16,9 @@ import { isSharedTopBarHostActive } from "./shared_topbar_builder.js";
 import { createDatasetCornerControls, isHeroControlAreaVisible } from "./dataset_corner_controls.js";
 import { createTemporaryFiltersOpenerAndCloser } from "./filters_opener_and_closer.js";
 import { FILTERBAR_PANEL_MODES } from "./filterbar_panel_mode_resolver.js";
+import { wireOutsidePanelClose } from "./filterbar_outside_panel_close.js";
 const FILTERBAR_COLUMN_WIDTH_CSS = `${FILTERBAR_COLUMN_WIDTH_PX}px`;
 const FILTERBAR_PANEL_HIDE_CONTENT_DELAY_MS = 700;
-
-// Keep the dismissal target test separate from state/memory ownership below.
-function wireOutsidePanelClose({ panel, fixedToggleButton, sharedTopBar, isNarrowScreen, isHidden, onClose, signal }) {
-    document.addEventListener('click', event => {
-        if (!isNarrowScreen() || isHidden()) return;
-        if (panel.contains(event.target) || fixedToggleButton.contains(event.target) || sharedTopBar.contains(event.target)) return;
-        onClose();
-    }, { signal });
-}
 
 export function wireFilterbarRuntime({
     tableName, currentView, tablePartsContainer, contentArea, mainTableContainer, initialResponsivePanelState, panelMode, lifetimeController, signal, panel, panelBody, clockBar, chatDock, datasetTitleRow, inlineHeroHost, scrollSentinel, fixedToggleButton, hideFilterBtn, showMenuButton, sharedTopBarOwner, sharedTopBar, sharedTopBarEnd, sharedTopBarMenuButton, sharedTopBarMenuSlot, sharedTopBarArticleClose, sharedTopBarSearch, heroMenuButton, filterBarContent, overviewSection, sectionOrdering, styleSettings
@@ -545,7 +537,7 @@ export function wireFilterbarRuntime({
     }, { signal });
 
     // Close panel on outside click (mobile)
-    wireOutsidePanelClose({ panel, fixedToggleButton, sharedTopBar, isNarrowScreen, isHidden, signal,
+    wireOutsidePanelClose({ tableName, panel, fixedToggleButton, sharedTopBar, isNarrowScreen, isHidden, signal,
         onClose: () => {
             temporaryFiltersCoordinator.releaseTemporaryOwnership();
             panelManuallyHidden = true;
