@@ -123,6 +123,9 @@ third-party product screenshots in words; never store them here.
   and QR codes using one canonical article address with recipients' own rights.
 - [Immediate updates](Immediate_Updates.md) describes shared mutation identities,
   affected parents and surfaces, safe replay and stale-cache removal.
+- [Browser updates after a release](Browser_Updates_After_A_Release.md) describes
+  how to verify a release change with a populated browser cache and how an
+  open tab could offer an update while protecting unfinished edits.
 - [Site notices](Site_Notices.md) describes stable document kinds, structured
   preparation, previews, immutable publication and a cookie catalogue.
 - [Account closure](Account_Closure.md) describes ending every account sign-in
