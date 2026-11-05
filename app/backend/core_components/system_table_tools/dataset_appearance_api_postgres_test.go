@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"net/http/httptest"
 	"strings"
 	"testing"
@@ -279,6 +280,7 @@ func TestDatasetAppearancePostgresConcurrentSharedFirstWrites(t *testing.T) {
 			defer lazy.Rollback()
 			r := httptest.NewRequest("POST", "/api/admin/site-presentation-settings", nil)
 			input := initial
+			input.Defaults = maps.Clone(initial.Defaults)
 			input.Defaults["shared.card_image_width"] = 300 + blur
 			_, err := persistSitePresentationSettings(r.WithContext(dbutils.SetLazyTx(r.Context(), lazy)), sitePresentationPatchFromSettings(input))
 			if err == nil {
