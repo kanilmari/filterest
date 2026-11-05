@@ -65,6 +65,7 @@ import { fetchCurrentUserProfile } from "../../user_tools/current_user_profile_f
 import { buildRowArticleQueryString } from "./row_article_url_state.js";
 import { fetchPermittedRowArticleData } from "./row_article_data_fetcher.js";
 import { hasRowArticlePermission } from "./row_article_permission_checker.js";
+import { syncRowArticleRecordBar } from "./row_article_record_bar.js";
 
 function resolveVisibleResultCard(tableName, rowId) {
     if (rowId == null) {
@@ -562,6 +563,9 @@ export async function openRowArticleView(row_item, table_name, selectedCard = nu
 
         rowArticleElement.prepend(closeBtn);
         placeholder.replaceChildren(rowArticleElement);
+        syncRowArticleRecordBar(rowArticleContentElement, {
+            rowItem: row_item, tableName: table_name, selectedCard, canCommit,
+        });
         // The article and its own history entry now exist, so the address owner
         // can confirm the settled row address and store the matching parameters.
         void updateDatasetAddress({ dataset: table_name, isCurrent: canCommit });

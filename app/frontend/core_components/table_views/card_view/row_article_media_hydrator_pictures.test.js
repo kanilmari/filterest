@@ -56,6 +56,7 @@ const rowImage = (filename) => ({
 });
 
 beforeEach(() => {
+    vi.stubGlobal("matchMedia", vi.fn(() => ({ matches: false, addEventListener: vi.fn(), removeEventListener: vi.fn() })));
     localStorage.clear();
     document.body.replaceChildren();
         sessionStorage.setItem('user_permissions', JSON.stringify(Object.values(ROW_ARTICLE_PERMISSION_ROUTES)));

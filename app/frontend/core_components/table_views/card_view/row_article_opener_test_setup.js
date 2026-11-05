@@ -118,7 +118,8 @@ vi.mock("./row_article_opener_helpers.js", () => ({
     sortColumnsByRole: vi.fn((columns) => columns),
 }));
 
-vi.mock("../../../ui_config.js", () => ({
+vi.mock("../../../ui_config.js", async importOriginal => ({
+    ...await importOriginal(),
     enable_experimental_row_article_row_navigation: false,
     isCardStackViewport: vi.fn(() => false),
     get show_related_items_on_big_cards() { return articleUiSettings.showRelatedItems; },
@@ -216,6 +217,7 @@ export async function flushRowArticleHydration() { await new Promise((resolve) =
 /** Registers an isolated page and the server's readable names for either suite. */
 export function setupRowArticleOpenerTests() {
     beforeEach(() => {
+        vi.stubGlobal("matchMedia", vi.fn(() => ({ matches: false, addEventListener: vi.fn(), removeEventListener: vi.fn() })));
         document.body.innerHTML = "";
         window.history.replaceState({}, "", "/");
         localStorage.clear();

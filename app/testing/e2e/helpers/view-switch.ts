@@ -250,12 +250,11 @@ export async function openBigCard(page: Page): Promise<boolean> {
 
 /**
  * Closes the open article through its visible chrome and verifies dismissal.
- * The shared top bar owns the close control in the ordinary article layout;
- * its hidden in-article counterpart remains available to other layouts.
+ * Uses the record bar for ordinary articles and the available close action in other layouts.
  */
 export async function closeBigCard(page: Page): Promise<void> {
   const closeButton = page.locator(
-    '[data-testid="shared-topbar-article-close"]:visible, [data-testid="big-card-close"]:visible',
+    '[data-testid="row-article-record-bar-close"]:visible, [data-testid="shared-topbar-article-close"]:visible, [data-testid="big-card-close"]:visible',
   ).first();
   await expect(closeButton).toBeVisible({ timeout: 5000 });
   await closeButton.click();

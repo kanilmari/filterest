@@ -96,7 +96,7 @@ async function openSurface(page: Page, dataset: string, count: number, presentat
   return { root, image };
 }
 
-/** Includes ancestor opacity, because classic record buttons fade as one bar. */
+/** Includes ancestor opacity, when checking controls inside a fading surface. */
 async function effectiveOpacity(control: Locator) {
   return control.evaluate(element => {
     let alpha = 1;
@@ -167,7 +167,12 @@ for (const touch of [false, true]) test.describe(touch ? 'WO93 coarse pointer' :
           } else {
             await expect(previous).toBeDisabled();
             if (count === 1) await expect(next).toBeDisabled(); else await expect(next).toBeEnabled();
-            await expect(navigation).toHaveCount(2);
+            if (presentation === 'classic') {
+              await expect(navigation).toHaveCount(0);
+              await expect(page.getByTestId('row-article-record-bar').getByRole('button')).toHaveCount(3);
+            } else {
+              await expect(navigation).toHaveCount(2);
+            }
             await expect(root.locator('[data-testid="row-article-image-position"]')).toHaveText(`1 / ${count}`);
           }
           // Remove opener focus so :focus-within does not intentionally hold classic controls.
@@ -185,6 +190,11 @@ for (const touch of [false, true]) test.describe(touch ? 'WO93 coarse pointer' :
             inactive(root, activeClass),
             ...touch ? [] : controls.map(control => alpha(control, 0)),
           ]);
+          if (presentation === 'classic') {
+            for (const button of await page.getByTestId('row-article-record-bar').getByRole('button').all()) {
+              expect(await effectiveOpacity(button)).toBeGreaterThan(0);
+            }
+          }
           if (touch) {
             if (presentation !== 'page') await expect(previous).toHaveCSS('opacity', '0.28');
             for (const control of controls) expect(await effectiveOpacity(control)).toBeGreaterThan(0);
@@ -192,16 +202,19 @@ for (const touch of [false, true]) test.describe(touch ? 'WO93 coarse pointer' :
           if (!touch) {
             await image.hover();
             // Real hover on an existing actionable control holds the whole group.
-            const hold = presentation === 'page' ? controls[0]
-              : root.locator('.row_article_row_navigation_button:enabled').first();
-            await expect(hold).toBeEnabled();
-            await hold.hover();
-            await page.waitForTimeout(2_100);
-            await expect(root).toHaveClass(new RegExp(activeClass));
-            for (const control of controls) expect(await effectiveOpacity(control)).toBeGreaterThan(0);
-            await image.hover();
-            await inactive(root, activeClass);
-            await keyboardReveal(page, hold);
+            // A single-picture classic article has no actionable image arrow.
+            const hold = presentation === 'classic' ? (count === 2 ? next : null)
+              : presentation === 'page' ? controls[0] : root.locator('.row_article_row_navigation_button:enabled').first();
+            if (hold) {
+              await expect(hold).toBeEnabled();
+              await hold.hover();
+              await page.waitForTimeout(2_100);
+              await expect(root).toHaveClass(new RegExp(activeClass));
+              for (const control of controls) expect(await effectiveOpacity(control)).toBeGreaterThan(0);
+              await image.hover();
+              await inactive(root, activeClass);
+            }
+            await keyboardReveal(page, hold ?? root);
             await expect(root).toHaveClass(new RegExp(activeClass));
             for (const control of controls) await expect.poll(() => effectiveOpacity(control)).toBeGreaterThan(0);
           }

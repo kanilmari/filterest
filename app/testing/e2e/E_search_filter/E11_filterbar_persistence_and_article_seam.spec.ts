@@ -257,6 +257,10 @@ test.describe('E11 — Filterbar persistence and article seam', () => {
       const textRect = text.getBoundingClientRect();
       const titleValue = text.querySelector<HTMLElement>('.big_card_header_value');
       const titleValueRect = titleValue?.getBoundingClientRect();
+      // b356's record bar opens the content; the title keeps its reviewed inset below the bar.
+      const recordBarRect = content.querySelector<HTMLElement>(
+        ':scope > [data-testid="row-article-record-bar"]',
+      )?.getBoundingClientRect();
       // Measure the title field, rather than an optional dataset icon.
       const textInnerRect = text.querySelector<HTMLElement>(
         '.two_line_field, .big_card_header_value',
@@ -300,7 +304,8 @@ test.describe('E11 — Filterbar persistence and article seam', () => {
         actionRightGap: contentRect.right - actionBarRect.right,
         textLeftGap: textRect.left - contentRect.left,
         textInnerLeftGap: (textInnerRect?.left ?? textRect.left) - contentRect.left,
-        titleTopGap: (titleValueRect?.top ?? textRect.top) - contentRect.top,
+        recordBarTopGap: recordBarRect ? recordBarRect.top - contentRect.top : null,
+        titleTopGap: (titleValueRect?.top ?? textRect.top) - (recordBarRect?.bottom ?? contentRect.top),
         textPaddingTop: Number.parseFloat(getComputedStyle(text).paddingTop),
         textPaddingLeft: Number.parseFloat(getComputedStyle(text).paddingLeft),
         imageContentPaddingLeft: imageContent
@@ -335,6 +340,9 @@ test.describe('E11 — Filterbar persistence and article seam', () => {
     expect(geometry.textPaddingTop).toBe(19);
     expect(geometry.textPaddingLeft).toBe(16);
     expect(geometry.textInnerLeftGap - geometry.textLeftGap).toBeGreaterThanOrEqual(15.5);
+    // The bar sits flush at the content's top edge, and the title's inset is measured from the bar's bottom.
+    expect(geometry.recordBarTopGap).not.toBeNull();
+    expect(Math.abs(geometry.recordBarTopGap ?? Number.NaN)).toBeLessThanOrEqual(0.5);
     expect(geometry.titleTopGap).toBeGreaterThanOrEqual(18.5);
     expect(geometry.titleTopGap).toBeLessThanOrEqual(19.5);
     expect(geometry.relatedContentPaddingLeft).toBe(16);

@@ -13,8 +13,7 @@ import {
 } from "./row_article_image_rows.js";
 import { syncRowArticleInlineImageCaptions } from "./row_article_image_caption.js";
 import { buildRowArticleImageArrow, buildRowArticleImagePosition } from "./row_article_image_controls.js";
-import { buildRowArticleRowNavigation } from "./row_article_presentation.js";
-import { enable_experimental_row_article_row_navigation } from "../../../ui_config.js";
+import { syncRowArticleRecordBar, disposeRowArticleRecordBar } from "./row_article_record_bar.js";
 
 import { installImageControlsIdle } from "./image_controls_idle.js";
 
@@ -40,11 +39,13 @@ export function syncRowArticleInlineMedia(article, rows = [], context = {}) {
         }
         controller.update(images, context);
     }
+    syncRowArticleRecordBar(article, context);
     syncRowArticleInlineImageCaptions(article, images);
 }
 
 /** Releases observers before an article or its retained host is discarded. */
 export function disposeRowArticleInlineMedia(article) {
+    disposeRowArticleRecordBar(article);
     for (const container of article?.querySelectorAll?.(".big_card_image[data-row-article-image-column]") || []) {
         controllers.get(container)?.dispose();
         controllers.delete(container);
@@ -76,56 +77,18 @@ function buildInlineMedia(container, article, initialContext) {
     const previous = buildRowArticleImageArrow("previous", () => { if (canInteract()) browse(index - 1); });
     const next = buildRowArticleImageArrow("next", () => { if (canInteract()) browse(index + 1); });
     const position = buildRowArticleImagePosition();
-    const records = document.createElement("div");
-    records.className = "row_article_inline_record_controls";
     const topControls = document.createElement("div");
     topControls.className = "row_article_inline_top_controls";
-    topControls.append(records, position);
+    topControls.append(position);
     frame.append(previous, next, topControls);
     const teardownControls = installImageControlsIdle(frame, "article-image-controls-active");
 
-    function refreshRecordNavigation() {
-        const cardContainer = context.selectedCard?.closest?.(".card_container");
-        if (!enable_experimental_row_article_row_navigation || !cardContainer) return;
-        const navigation = buildRowArticleRowNavigation({
-            cardContainer, currentRowId: context.rowItem?.id,
-            onNavigate: async (row, card) => {
-                if (!canInteract() || records.getAttribute("aria-busy") === "true") return;
-                records.setAttribute("aria-busy", "true");
-                try {
-                    const { openRowArticleView } = await import("./row_article_opener.js");
-                    if (canInteract()) await openRowArticleView(row, context.tableName, card);
-                } catch (error) {
-                    console.warn("Article record navigation failed:", error?.message || error);
-                } finally { records.removeAttribute("aria-busy"); }
-            },
-        });
-        const focusedControl = records.contains(document.activeElement) ? document.activeElement?.dataset?.testid : "";
-        records.replaceChildren(...(navigation ? [navigation] : []));
-        records.hidden = !navigation;
-        if (focusedControl) {
-            Array.from(records.querySelectorAll("button")).find(button => button.dataset.testid === focusedControl)
-                ?.focus({ preventScroll: true });
-        }
-    }
-    // Refresh bounded record navigation when the article list gains a new page.
-    // Observation is attached to the owning article, never a global list registry.
-    const cardContainer = context.selectedCard?.closest?.(".card_container");
-    let observer = null;
-    if (cardContainer) {
-        observer = new MutationObserver(() => {
-            if (!frame.isConnected) { observer.disconnect(); return; }
-            refreshRecordNavigation();
-        });
-        observer.observe(cardContainer, { childList: true });
-    }
     function paintControls() {
         const available = images.length > 0 && index >= 0;
         previous.disabled = !available || index === 0;
         next.disabled = !available || index === images.length - 1;
         position.textContent = available ? (index + 1) + " / " + images.length : "";
         position.hidden = !available;
-        refreshRecordNavigation();
     }
     /** Shows the image at nextIndex; returns false when there is none. */
     function select(nextIndex) {
@@ -181,9 +144,7 @@ function buildInlineMedia(container, article, initialContext) {
     return { dispose() {
         disposed = true;
         teardownControls();
-        observer?.disconnect();
         events.abort();
-        records.replaceChildren();
     }, update(nextImages, nextContext) {
         if (disposed) return;
         context = nextContext;

@@ -64,11 +64,33 @@ function resolveRowNavigationPreview(targetCard) {
         || "";
 }
 
+function createRowPreviewSlot(direction, targetCard) {
+    const previewSrc = resolveRowNavigationPreview(targetCard);
+    const previewSlot = document.createElement("span");
+    previewSlot.classList.add("row_article_row_navigation_preview_slot");
+    previewSlot.dataset.testid = `row-article-${direction}-preview-slot`;
+    previewSlot.setAttribute("aria-hidden", "true");
+    const preview = document.createElement("img");
+    preview.classList.add("row_article_row_navigation_preview");
+    preview.alt = "";
+    preview.setAttribute("aria-hidden", "true");
+    preview.decoding = "async";
+    if (previewSrc) {
+        preview.src = previewSrc;
+    } else {
+        preview.hidden = true;
+        previewSlot.classList.add("row_article_row_navigation_preview_slot--empty");
+    }
+    previewSlot.appendChild(preview);
+    return previewSlot;
+}
+
 function createRowNavigationButton({
     direction,
     disabled,
     onActivate,
     targetCard = null,
+    showLabels = false,
 }) {
     const isPrevious = direction === "previous";
     const langKey = isPrevious ? "previous_row" : "next_row";
@@ -87,27 +109,17 @@ function createRowNavigationButton({
         ROW_NAVIGATION_ICON_PATHS[direction],
         ["row_article_row_navigation_icon"],
     );
-    const previewSrc = resolveRowNavigationPreview(targetCard);
-    const previewSlot = document.createElement("span");
-    previewSlot.classList.add("row_article_row_navigation_preview_slot");
-    previewSlot.dataset.testid = `row-article-${direction}-preview-slot`;
-    previewSlot.setAttribute("aria-hidden", "true");
-    const preview = document.createElement("img");
-    preview.classList.add("row_article_row_navigation_preview");
-    preview.alt = "";
-    preview.setAttribute("aria-hidden", "true");
-    preview.decoding = "async";
-    if (previewSrc) {
-        preview.src = previewSrc;
+    if (showLabels) {
+        button.classList.add("row_article_record_bar_cell");
+        const label = document.createElement("span");
+        label.className = "row_article_record_bar_label";
+        label.dataset.langKey = direction;
+        label.textContent = getTranslationForKey(direction);
+        button.append(icon, label);
     } else {
-        preview.hidden = true;
-        previewSlot.classList.add("row_article_row_navigation_preview_slot--empty");
-    }
-    previewSlot.appendChild(preview);
-    if (isPrevious) {
-        button.append(icon, previewSlot);
-    } else {
-        button.append(previewSlot, icon);
+        const previewSlot = createRowPreviewSlot(direction, targetCard);
+        if (isPrevious) button.append(icon, previewSlot);
+        else button.append(previewSlot, icon);
     }
     button.title = getTranslationForKey(langKey) || fallback;
     button.setAttribute("aria-label", button.title);
@@ -133,16 +145,19 @@ export function buildRowArticleRowNavigation({
     cardContainer,
     currentRowId,
     onNavigate,
+    allowUnavailable = false,
+    showLabels = false,
 } = {}) {
-    if (!(cardContainer instanceof HTMLElement) || typeof onNavigate !== "function") {
+    if (typeof onNavigate !== "function" || (!(cardContainer instanceof HTMLElement) && !allowUnavailable)) {
         return null;
     }
 
-    const resultCards = Array.from(cardContainer.querySelectorAll(":scope > .card[data-id]"));
+    const resultCards = cardContainer instanceof HTMLElement
+        ? Array.from(cardContainer.querySelectorAll(":scope > .card[data-id]")) : [];
     const currentIndex = resultCards.findIndex(
         (card) => String(card.dataset.id) === String(currentRowId),
     );
-    if (currentIndex < 0) {
+    if (currentIndex < 0 && !allowUnavailable) {
         return null;
     }
 
@@ -162,20 +177,22 @@ export function buildRowArticleRowNavigation({
     };
 
     const previousCard = resultCards[currentIndex - 1] || null;
-    const nextCard = resultCards[currentIndex + 1] || null;
+    const nextCard = currentIndex < 0 ? null : resultCards[currentIndex + 1] || null;
 
     navigation.append(
         createRowNavigationButton({
             direction: "previous",
-            disabled: currentIndex === 0,
+            disabled: currentIndex <= 0,
             onActivate: () => navigateToIndex(currentIndex - 1),
             targetCard: previousCard,
+            showLabels,
         }),
         createRowNavigationButton({
             direction: "next",
-            disabled: currentIndex === resultCards.length - 1,
+            disabled: currentIndex < 0 || currentIndex === resultCards.length - 1,
             onActivate: () => navigateToIndex(currentIndex + 1),
             targetCard: nextCard,
+            showLabels,
         }),
     );
     return navigation;

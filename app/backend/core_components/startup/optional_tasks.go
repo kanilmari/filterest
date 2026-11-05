@@ -66,6 +66,7 @@ func runDeferredStartupMaintenance(projectRoot string, appDBCompatibilityManifes
 	EnsureLoginSecondStepLangKeys(backend.Db)
 	EnsureVerificationSetupLangKeys(backend.Db)
 	EnsureViewSelectorLangKeys(backend.Db)
+	EnsureArticleRecordBarLangKeys(backend.Db)
 	EnsureFilterestBusinessID(backend.Db)
 
 	ai_features.StartEmbeddingRefreshWorker(backend.Db)

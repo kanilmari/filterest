@@ -108,7 +108,7 @@ export async function configureArticleFieldRoles(page: Page, datasetName: string
 
 export async function closeArticleToCardView(page: Page): Promise<void> {
   const closeButton = page
-    .locator('[data-testid="shared-topbar-article-close"]:visible')
+    .locator('[data-testid="row-article-record-bar-close"]:visible')
     .first();
   await expect(closeButton).toBeVisible({ timeout: 10_000 });
   await closeButton.click();

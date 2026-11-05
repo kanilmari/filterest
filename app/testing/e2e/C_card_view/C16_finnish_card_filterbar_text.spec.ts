@@ -204,6 +204,7 @@ test('Finnish sort/count/add-row and empty date stay translated in cards and art
       // entry (row_article_opener.js:532-545); browser Back restores the listing
       // (history_navigation_handler.js:153-174), as in C3_close_big_card.
       if (await page.evaluate(() => window.innerWidth <= 700)) {
+        await expect(page.getByTestId('row-article-record-bar-close')).toBeVisible();
         await expect(page.getByTestId('shared-topbar-article-close')).toBeHidden();
         await expect(page.getByTestId('big-card-close')).toBeHidden();
         // The restored listing re-serialises its query, so the parameter order may differ;

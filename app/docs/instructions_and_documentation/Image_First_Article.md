@@ -43,7 +43,7 @@ own interactions. The stage click listener is removed on record or modal disposa
 
 The details section uses the existing `row_article_section_details` translation key. Reviewed runtime translations remain authoritative. When a site's response lacks that key, the frontend supplies the existing bootstrap wording in Finnish, English, Chinese and Cantonese instead of displaying the technical key. Changing the UI language updates an already-open section. This fallback does not create or rewrite translation rows.
 
-At viewport widths of 700 px and below, record-switch buttons use 44 × 44 px
+In IFAV at viewport widths of 700 px and below, record-switch buttons use 44 × 44 px
 icon-only targets; their preview thumbnails are hidden. Revealed disabled image
 arrows use the shared 0.28 alpha at every width; enabled arrows and hidden
 states keep their existing visibility rules. Details place each wrapping label above its value in
@@ -55,13 +55,13 @@ Classic inline media, IFAV and the Page modal use `installImageControlsIdle(root
 activeClass)` in `card_view/image_controls_idle.js`: activity reveals controls,
 1200 ms of pointer inactivity hides them, hovering a control holds them, focus
 reveals them, pointerleave schedules hiding, and teardown clears listeners and
-timers. Classic's image arrows, position and record bar share its active class;
+timers. Classic's image arrows and position share its active class. Its record bar stays visible while the title is in view and scrolls with the article.
 IFAV's arrows and top record buttons share the modal active class. Page currently
 has a plain contained image and Close, with no image arrows or record bar; Close
 inherits the same modal idle lifecycle. Keyboard focus still reveals controls.
 
 On `(hover: none), (pointer: coarse)` inputs, classic controls remain visible
-(including position and record bar); IFAV arrows, Close, record buttons and image
+(including the image position). IFAV arrows, Close, record buttons and image
 position remain visible at idle, with the scroll hint still suppressed after
 70 px of scrolling. Page's Close stays visible on touch; it has no arrows or
 record bar. The shared timer still expires its active class on touch; CSS owns

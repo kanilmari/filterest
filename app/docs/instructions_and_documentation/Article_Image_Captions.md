@@ -21,8 +21,7 @@ at least 20 px to the right of the caption, or 20 px below on narrow screens.
 Compact cards and gallery thumbnails do not gain captions.
 
 Ordinary article images reuse the image-first previous/next image controls and
-image counter. Record controls follow the same existing record-navigation feature
-flag. Ordinary images have no Show more control. Arrow keys and horizontal swipes
+image counter. The article's Previous, Next and Close buttons sit above the title at every width. Ordinary images have no Show more control. Arrow keys and horizontal swipes
 browse the already permitted image rows, preserve focus and update the matching
 caption; clicking the selected image opens that image in the image-first view.
 The active media surface identifies SVG/logo assets even when their inner image

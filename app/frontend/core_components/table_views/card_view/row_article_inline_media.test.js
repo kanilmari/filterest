@@ -9,7 +9,9 @@ const { bind, open, language } = vi.hoisted(() => ({
 }));
 vi.mock("./image_first_view_activation.js", () => ({ bindImageFirstViewActivation: bind }));
 vi.mock("./row_article_opener.js", () => ({ openRowArticleView: open }));
-vi.mock("../../../ui_config.js", () => ({ enable_experimental_row_article_row_navigation: true }));
+vi.mock("../../../ui_config.js", async importOriginal => ({
+    ...await importOriginal(), enable_experimental_row_article_row_navigation: true,
+}));
 vi.mock("../../lang/translation_handler.js", () => ({ getTranslationForKey: key => key }));
 vi.mock("../../state_stores/lang_preference_reader.js", () => ({ getLanguageWithBrowserFallback: language }));
 vi.mock("./card_avatar_builder.js", () => ({ createImageElement: src => {
@@ -39,6 +41,7 @@ function build(src = "/storage/second.jpg") {
 const button = (article, direction) => article.querySelector('[data-testid="row-article-image-' + direction + '"]');
 const caption = article => article.querySelector(".row_article_inline_image_caption");
 beforeEach(() => {
+    vi.stubGlobal("matchMedia", vi.fn(() => ({ matches: false, addEventListener: vi.fn(), removeEventListener: vi.fn() })));
     document.body.replaceChildren(); vi.clearAllMocks(); language.mockReturnValue("fi");
     bind.mockImplementation(element => { element.tabIndex = 0; });
 });

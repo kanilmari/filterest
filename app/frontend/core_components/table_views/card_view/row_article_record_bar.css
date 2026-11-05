@@ -1,0 +1,74 @@
+/* row_article_record_bar.css
+ * Three equal actions in the article's scroll flow at every viewport width.
+ * The dataset toolbar remains the fallback until the article has its own close control.
+ */
+.row_article_record_bar {
+    display: flex;
+    flex: 0 0 auto;
+    box-sizing: border-box;
+    align-items: stretch;
+    width: 100%;
+    height: 44px;
+    color: var(--text_color);
+    background: var(--filter_panel_bg_color);
+    border-bottom: 1px solid var(--border_color);
+}
+
+.row_article_record_bar > nav {
+    display: contents;
+}
+
+.row_article_record_bar .row_article_record_bar_cell {
+    display: flex;
+    flex: 1 1 0;
+    align-items: center;
+    justify-content: center;
+    box-sizing: border-box;
+    min-width: 0;
+    min-height: 44px;
+    height: 44px;
+    /* Fluid spacing reaches the mock's tight values at 340px, without a new layout band. */
+    gap: clamp(4px, calc(4px + (100vw - 340px) * 0.04), 6px);
+    padding: 0 clamp(6px, calc(6px + (100vw - 340px) * 0.12), 12px);
+    border: 0;
+    border-inline-end: 1px solid var(--border_color);
+    border-radius: 0;
+    color: var(--text_color);
+    background: transparent;
+    font-family: inherit;
+    font-size: 15px;
+    font-weight: 600;
+    line-height: 1;
+    white-space: nowrap;
+    cursor: pointer;
+}
+
+.row_article_record_bar > .row_article_record_bar_cell:last-child {
+    border-inline-end: 0;
+}
+
+.row_article_record_bar .row_article_record_bar_cell > [aria-hidden="true"]:not([data-testid]),
+.row_article_record_bar_icon {
+    flex: 0 0 20px;
+    width: 20px;
+    height: 20px;
+    background: currentcolor;
+}
+
+.row_article_record_bar .row_article_record_bar_cell:disabled {
+    opacity: 0.52;
+    cursor: default;
+}
+
+.row_article_record_bar .row_article_record_bar_cell:focus-visible {
+    outline: 2px solid var(--primary_color);
+    outline-offset: -2px;
+}
+
+.row_article_record_bar_label {
+    min-width: 0;
+}
+
+.tab_parts_container:has(.active_row_article .row_article_record_bar) .dataset-shared-topbar__article-close:not([hidden]) {
+    display: none;
+}
