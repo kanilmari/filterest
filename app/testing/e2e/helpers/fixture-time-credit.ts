@@ -13,8 +13,8 @@ type ExecutionSlot = 'body' | 'hook' | 'unknown';
 type CreditOptions = {
   now?: () => number;
   getTestInfo?: () => FixtureTestInfo;
-  // Test seam: neither supported Playwright version publicly exposes this.
-  // Live callers must remain unknown until a documented detector is available.
+  // Playwright exposes no detector; temp-dataset's opt-in can declare body.
+  // fixture-body-credit.test.ts keeps those declarations inside test callbacks.
   getExecutionSlot?: () => ExecutionSlot;
 };
 
@@ -62,7 +62,8 @@ export async function withFixtureTimeCredit<T>(
 
   // timeout reads the body's default slot, but setTimeout writes the active
   // slot. No public hook-limit getter or body/hook discriminator exists in
-  // Playwright 1.56.1/1.60.0. Live calls therefore receive no credit anywhere.
+  // Playwright 1.56.1/1.60.0. Only explicitly declared body calls receive credit;
+  // the static fixture-body-credit check keeps that opt-in out of hooks/helpers.
   const state = canCredit ? credits.get(info) ?? { active: 0, ranges: [] } : undefined;
   const scope = { info, active: true };
   if (state) info.setTimeout(info.timeout + CAP_MS); // Reserve only a proven body slot.

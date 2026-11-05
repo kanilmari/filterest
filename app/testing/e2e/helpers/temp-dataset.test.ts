@@ -8,7 +8,7 @@
 // @vitest-environment node
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { Page } from '@playwright/test';
+import { test as playwrightTest, type Page } from '@playwright/test';
 
 const registryMocks = vi.hoisted(() => ({
   registerTestArtifact: vi.fn(),
@@ -37,6 +37,7 @@ import {
 import { readDatasetTableUIDFromPage } from './test-artifact-dataset-identity-reader';
 import { datasetTreeNode, treeResponseWithDatasetNodes } from './test-artifact-tree-fixture';
 import { fakeApi, response } from './test-artifact-recovery-fakes';
+import { recordTestDatasetOwnershipFromRequest } from './test-artifact-dataset-column-recorder';
 
 type FakePageOptions = {
   createStatus?: number;
@@ -129,6 +130,38 @@ beforeEach(() => {
 });
 
 describe('createTempDataset request', () => {
+  it.each([false, true])('credits create/drop only with the explicit body declaration: %s', async credit => {
+    let clock = 0;
+    const info = {
+      timeout: 30_000,
+      annotations: [] as Array<{ type: string; description?: string }>,
+      setTimeout: vi.fn((limit: number) => { info.timeout = limit; }),
+    };
+    const infoLookup = vi.spyOn(playwrightTest, 'info').mockReturnValue(info as never);
+    const now = vi.spyOn(performance, 'now').mockImplementation(() => clock);
+    hydrateAuthenticatedTreeDataCache.mockImplementationOnce(async () => { clock += 1200; });
+    vi.mocked(recordTestDatasetOwnershipFromRequest).mockImplementationOnce(async () => { clock += 500; });
+    try {
+      const page = createFakePage();
+      const options = credit ? { creditBody: true as const } : undefined;
+      await createTempDataset(page, {
+        datasetName: 'e2e_fixture_budget', columns: { title: 'TEXT' },
+      }, options);
+      await dropTempDataset(page, 'e2e_fixture_budget', options);
+
+      expect(info.timeout).toBe(credit ? 31_700 : 30_000);
+      expect(info.setTimeout.mock.calls).toEqual(credit ? [[90_000], [31_200], [91_200], [31_700]] : []);
+      const noCredit = credit ? '' : ' credited: 0; reason: public API cannot distinguish test body from hooks';
+      expect(info.annotations).toEqual([
+        { type: 'fixture-time', description: `create 1200${noCredit}` },
+        { type: 'fixture-time', description: `drop 500${noCredit}` },
+      ]);
+    } finally {
+      now.mockRestore();
+      infoLookup.mockRestore();
+    }
+  });
+
   it('sends the columns as one ordered list, in the order the test wrote them', async () => {
     const page = createFakePage();
 

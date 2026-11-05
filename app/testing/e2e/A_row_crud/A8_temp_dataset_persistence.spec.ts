@@ -41,7 +41,7 @@ test.describe('A8 — Temporary Dataset Row Persistence', () => {
         description: 'TEXT',
         parent_id: 'INTEGER',
       },
-    });
+    }, { creditBody: true });
 
     try {
       await openTempDataset(page, datasetName, 'table');
@@ -100,7 +100,7 @@ test.describe('A8 — Temporary Dataset Row Persistence', () => {
       });
     } finally {
       if (!page.isClosed()) {
-        await dropTempDataset(page, datasetName);
+        await dropTempDataset(page, datasetName, { creditBody: true });
       }
     }
   });

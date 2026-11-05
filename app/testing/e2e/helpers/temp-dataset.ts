@@ -257,6 +257,7 @@ async function releasePlannedTempDatasetIfAbsent(page: Page, datasetName: string
 export async function createTempDataset(
   page: Page,
   config: TempDatasetConfig,
+  options?: { creditBody?: true },
 ): Promise<void> {
   return withFixtureTimeCredit('create', async () => {
     let response: Awaited<ReturnType<typeof postJsonWithCsrf>> | null = null;
@@ -323,7 +324,6 @@ export async function createTempDataset(
         response.status,
         `Failed to create temp dataset "${config.datasetName}": ${response.body}`,
       ).toBe(201);
-
       for (const row of config.seedRows ?? []) {
         await addTempDatasetRow(page, config.datasetName, row);
       }
@@ -346,12 +346,13 @@ export async function createTempDataset(
       }
       throw primaryError;
     }
-  });
+  }, options?.creditBody === true ? { getExecutionSlot: () => 'body' } : undefined);
 }
 
 export async function dropTempDataset(
   page: Page,
   datasetName: string,
+  options?: { creditBody?: true },
 ): Promise<void> {
   return withFixtureTimeCredit('drop', async () => {
     const registeredArtifact = requireConfirmedTestArtifact('dataset', datasetName);
@@ -380,9 +381,8 @@ export async function dropTempDataset(
       `Failed to drop temp dataset "${datasetName}": ${response.body}`,
     ).toBe(true);
     unregisterTestArtifact('dataset', datasetName);
-  });
+  }, options?.creditBody === true ? { getExecutionSlot: () => 'body' } : undefined);
 }
-
 /**
  * Drops a recorded dataset through the request fixture and proves name/UID absence.
  * Bridges test afterEach cleanup hooks and the app's drop-dataset API.

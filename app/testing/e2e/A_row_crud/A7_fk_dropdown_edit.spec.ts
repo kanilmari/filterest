@@ -39,7 +39,7 @@ test.describe('A7 — FK Dropdown Edit', () => {
         { name: 'Reference A' },
         { name: 'Reference B' },
       ],
-    });
+    }, { creditBody: true });
 
     await createTempDataset(page, {
       datasetName,
@@ -61,7 +61,7 @@ test.describe('A7 — FK Dropdown Edit', () => {
           title: 'FK row',
         },
       ],
-    });
+    }, { creditBody: true });
 
     try {
       await openTempDataset(page, datasetName, 'table');
@@ -107,8 +107,8 @@ test.describe('A7 — FK Dropdown Edit', () => {
       expect(dropdownOpened).toBe(true);
     } finally {
       if (!page.isClosed()) {
-        await dropTempDataset(page, datasetName);
-        await dropTempDataset(page, referencedDatasetName);
+        await dropTempDataset(page, datasetName, { creditBody: true });
+        await dropTempDataset(page, referencedDatasetName, { creditBody: true });
       }
     }
   });

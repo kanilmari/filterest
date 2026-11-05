@@ -3,7 +3,7 @@
 // Bridges protected credential files, Playwright pages, and repeated login workflows.
 // Exists so tests share safe authentication behavior without duplicating secret handling.
 
-import { expect, type Page } from '@playwright/test';
+import { expect, type Page, type Request } from '@playwright/test';
 import * as path from 'path';
 import { readVerifiedTestIdentity, writeVerifiedTestIdentity } from './auth_identity';
 import { beginReadinessReport } from './s4w-readiness-report';
@@ -136,31 +136,62 @@ export function authenticatedLoginResponseID(data: unknown): number {
 /**
  * Submits the credential phase and waits for either OTP or authentication. The SPA login modal
  * can be visible a moment before its fragment submit listener is attached, so a
- * short retry keeps E2E setup from losing the first instant click.
+ * short retry keeps E2E setup from losing the first instant click. Retry only
+ * when no request was sent; a slow response must never resubmit the form.
  */
 export async function submitCredentialsAndWaitForOtp(
   page: Page,
 ): Promise<boolean> {
   submittedLoginIdentities.delete(page);
   const submitButton = page.locator('[data-testid="login-submit"]');
-  for (let attempt = 1; attempt <= 3; attempt += 1) {
-    const responsePromise = page.waitForResponse(
-      response => new URL(response.url()).pathname === '/api/login' && response.request().method() === 'POST',
-      { timeout: attempt === 1 ? 2500 : 10000 },
-    ).catch(() => null);
-    await submitButton.click();
-    const response = await responsePromise;
-    if (!response) continue; // A fragment listener may not yet have been attached.
-    if (!response.ok()) throw new Error('Sign-in submission was refused.');
-    const result = await response.json();
-    if (result.otp_required === true) {
-      await page.locator('[data-testid="login-otp-section"]').waitFor({ state: 'visible', timeout: 10000 });
-      return true;
+  const isLoginRequest = (request: Request) =>
+    new URL(request.url()).pathname === '/api/login' && request.method() === 'POST';
+  let sentRequest: Request | undefined;
+  // Keep observing through the click's auto-wait, even if the short request
+  // window expires first. A late successful click still sent the form.
+  const rememberRequest = (request: Request) => {
+    if (isLoginRequest(request) && !sentRequest) sentRequest = request;
+  };
+  page.on('request', rememberRequest);
+  try {
+    for (let attempt = 1; attempt <= 3; attempt += 1) {
+      const requestPromise = page.waitForRequest(isLoginRequest, {
+        timeout: attempt === 1 ? 2500 : 10000,
+      }).catch(() => null);
+      const responsePromise = page.waitForResponse(
+        response => response.request() === sentRequest,
+        { timeout: 20000 },
+      ).catch(() => null);
+      await submitButton.click({ timeout: 10000 });
+      let request = await requestPromise ?? sentRequest;
+      if (!request) {
+        // The form disables before awaiting its fingerprint, so a resolved click
+        // can still have a POST pending. Never queue a retry on that disabled form.
+        const retryDeadline = Date.now() + 10000;
+        while (!sentRequest) {
+          const enabled = await submitButton.isEnabled({ timeout: 1000 }).catch(() => false);
+          if (sentRequest || enabled) break; // Re-check after the asynchronous button read.
+          if (Date.now() >= retryDeadline) throw new Error('Sign-in submission returned no response.');
+          await page.waitForTimeout(100);
+        }
+        request = sentRequest;
+      }
+      if (!request) continue; // A fragment listener may not yet have been attached.
+      const response = await responsePromise;
+      if (!response) throw new Error('Sign-in submission returned no response.');
+      if (!response.ok()) throw new Error('Sign-in submission was refused.');
+      const result = await response.json();
+      if (result.otp_required === true) {
+        await page.locator('[data-testid="login-otp-section"]').waitFor({ state: 'visible', timeout: 10000 });
+        return true;
+      }
+      submittedLoginIdentities.set(page, authenticatedLoginResponseID(result));
+      return false;
     }
-    submittedLoginIdentities.set(page, authenticatedLoginResponseID(result));
-    return false;
+    throw new Error('Sign-in submission returned no response.');
+  } finally {
+    page.off('request', rememberRequest);
   }
-  throw new Error('Sign-in submission returned no response.');
 }
 
 /**
