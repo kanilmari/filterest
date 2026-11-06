@@ -2,10 +2,11 @@
 // Proves all article presentations retain content while optional blocks start closed.
 // Exercises native clicks, same-tab reload, separate tabs and absent setting writes.
 // Creates only owned temporary datasets/media; the caller grants the browser window.
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Locator, type Page } from '@playwright/test';
 import { login, loadCredentials } from '../helpers/auth';
 import { buildTempDatasetName, createTempDataset, cleanupDatasetViaRequest,
-  openTempDatasetRowArticle } from '../helpers/temp-dataset';
+  openTempDatasetRowArticle, fetchCsrfTokenForRequest } from '../helpers/temp-dataset';
+import { loadDatasetCardVisibility } from '../helpers/appearance-revisions';
 import { configureArticleFieldRoles, postJsonWithCsrf } from '../helpers/image-first-article';
 import { openArticleDisclosure } from '../helpers/article-disclosures';
 import { listRegisteredTestArtifacts } from '../helpers/test-artifact-run-registry';
@@ -16,14 +17,26 @@ const TITLE = 'Disclosure main heading';
 const BODY = 'This main article text remains visible.';
 const DETAIL = 'This optional detail starts closed.';
 
-async function openPresentation(page: Page, dataset: string, view: string) {
-  await page.goto(`/${dataset}/1?view=${view}`, { waitUntil: 'domcontentloaded' });
+async function readyPresentation(page: Page, view: string) {
   const root = page.locator(`[data-disclosure-surface="${view}"]:visible`).first();
   await expect(root).toHaveAttribute('data-dataset-appearance-uid', /^[1-9][0-9]*$/);
   await root.evaluate(async element => {
     await (element as HTMLElement & { __disclosureStateReady?: Promise<void> }).__disclosureStateReady;
   });
   return root;
+}
+
+async function openPresentation(page: Page, dataset: string, view: string) {
+  await page.goto(`/${dataset}/1?view=${view}`, { waitUntil: 'domcontentloaded' });
+  return readyPresentation(page, view);
+}
+
+async function waitForDetailsChoice(root: Locator, expanded: boolean) {
+  await expect.poll(() => root.evaluate(element => {
+    const { datasetAppearanceUid: uid, disclosureSurface: surface } = (element as HTMLElement).dataset;
+    const state = JSON.parse(sessionStorage.getItem('filterest.disclosure-choices.v1') || 'null');
+    return state?.choices?.[`${state.viewerID}:${uid}:${surface}:details`];
+  })).toBe(expanded);
 }
 
 test('closed blocks keep article content visible; personal clicks belong to one presentation and tab', async ({ page, context }, info) => {
@@ -88,12 +101,41 @@ test('closed blocks keep article content visible; personal clicks belong to one 
       await page.screenshot({ path: info.outputPath(`${view}-closed.png`) });
       await openArticleDisclosure(page, 'details');
       await expect(details.getByText(DETAIL, { exact: true })).toBeVisible();
-      const reloaded = await openPresentation(page, dataset, view);
+      await waitForDetailsChoice(root, true);
+      await page.reload({ waitUntil: 'domcontentloaded' });
+      const reloaded = await readyPresentation(page, view);
       await expect(reloaded.locator('[data-article-disclosure-key="details"]')).toHaveAttribute('data-disclosure-state', 'expanded');
       // A new tab shares the account cookie but not this tab's opening choices.
       const other = await context.newPage(); tabs.push(other);
       const untouched = await openPresentation(other, dataset, view);
       await expect(untouched.locator('[data-article-disclosure-key="details"]')).toHaveAttribute('data-disclosure-state', 'collapsed');
+      await other.close(); tabs.pop();
+    }
+    // Only this owned fixture receives open defaults; site-wide settings are untouched.
+    const csrf = await fetchCsrfTokenForRequest(page.request);
+    const previous = (await loadDatasetCardVisibility(page.request, dataset)).dataset_appearance;
+    const openDefaults = Object.fromEntries(VIEWS.map(view => [`shared.${view}_details_initial_open`, true]));
+    const saved = await page.request.post('/api/admin/dataset-appearance', {
+      headers: { 'X-CSRF-Token': csrf },
+      data: { schema_version: 2, dataset_uid: previous.dataset_uid, tab_set: {},
+        set: openDefaults, unset: [], version: previous.version, shared_version: previous.shared_version },
+    });
+    expect(saved.ok(), await saved.text()).toBe(true);
+    expect((await saved.json()).overrides).toMatchObject(openDefaults);
+    for (const view of VIEWS) {
+      const root = await openPresentation(page, dataset, view);
+      const details = root.locator('[data-article-disclosure-key="details"]');
+      await expect(details).toHaveAttribute('data-disclosure-state', 'expanded');
+      await details.locator(':scope > .row_article_disclosure_header').click();
+      await expect(details).toHaveAttribute('data-disclosure-state', 'collapsed');
+      await waitForDetailsChoice(root, false);
+      await page.reload({ waitUntil: 'domcontentloaded' });
+      const reloaded = await readyPresentation(page, view);
+      await expect(reloaded.locator('[data-article-disclosure-key="details"]')).toHaveAttribute('data-disclosure-state', 'collapsed');
+      // A separate tab proves that the same fixture still has an open default.
+      const other = await context.newPage(); tabs.push(other);
+      const untouched = await openPresentation(other, dataset, view);
+      await expect(untouched.locator('[data-article-disclosure-key="details"]')).toHaveAttribute('data-disclosure-state', 'expanded');
       await other.close(); tabs.pop();
     }
     expect(writes, 'Ordinary disclosure clicks must never save shared/dataset settings').toEqual([]);

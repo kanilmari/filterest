@@ -13,7 +13,9 @@ const SELECTOR = '[data-article-disclosure-key], [data-filterbar-section-key]';
 const SCOPE = '[data-dataset-appearance-scope]';
 const active = new Set(); // Weak references do not retain detached article trees.
 const bindings = new WeakMap();
-const resumeReasons = new Set(['blur', 'focus', 'suspend', 'resume', 'restore']);
+// A new document is not an account change. Bootstrap still re-verifies identity
+// before reading tab memory; the choice store discards a different viewer's state.
+const retainedChoiceReasons = new Set(['bootstrap', 'blur', 'focus', 'suspend', 'resume', 'restore']);
 
 export function disclosureSettingKey(surface, block) {
     const key = `${surface}_${block}_initial_open`;
@@ -139,7 +141,7 @@ export function disposeDisclosureSurface(root) {
 }
 
 subscribeToSessionGeneration(reason => {
-    if (!resumeReasons.has(reason)) clearDisclosureChoices();
+    if (!retainedChoiceReasons.has(reason)) clearDisclosureChoices();
     if (reason === 'blur' || reason === 'suspend') return;
     for (const ref of active) {
         const root = ref.deref();

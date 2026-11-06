@@ -117,6 +117,45 @@ describe('private disclosure choices', () => {
         mounted.section.replaceWith(late); await tick();
         expect(late.dataset.open).toBe('true'); expect(mounted.choice()).toBe(true);
     });
+    it.each([
+        ['filterbar', 'tools'], ['article_view', 'details'],
+        ['image_first_view', 'details'], ['image_first_page_view', 'details'],
+    ])('restores open and explicitly closed %s choices after bootstrap verifies the same account', async (surface, block) => {
+        for (const expanded of [true, false]) {
+            const original = make({ surface, block, fallback: !expanded });
+            click(original.section, expanded);
+            // Reload discards the old DOM and verified identity, but keeps tab storage.
+            disposeDisclosureSurface(original.root); original.root.remove();
+            session.generation++; session.viewer = null;
+            session.subscribers.forEach(callback => callback('bootstrap'));
+            let verify;
+            session.validate.mockImplementation(() => new Promise(resolve => { verify = resolve; }));
+            const reloaded = make({ surface, block, fallback: !expanded });
+            expect(reloaded.section.dataset.open).toBeUndefined();
+            expect(session.validate).toHaveBeenCalledWith({ requireIdentity: true });
+            session.viewer = 7; verify(session.generation);
+            await reloaded.root.__disclosureStateReady;
+            expect(reloaded.section.dataset.open).toBe(String(expanded));
+            expect(reloaded.choice()).toBe(expanded);
+            disposeDisclosureSurface(reloaded.root); reloaded.root.remove();
+        }
+    });
+    it('discards the preceding account choices when bootstrap verifies a different viewer', async () => {
+        const original = make(); click(original.section, true);
+        disposeDisclosureSurface(original.root); original.root.remove();
+        session.generation++; session.viewer = null;
+        session.subscribers.forEach(callback => callback('bootstrap'));
+        let verify;
+        session.validate.mockImplementation(() => new Promise(resolve => { verify = resolve; }));
+        const reloaded = make();
+        expect(reloaded.section.dataset.open).toBeUndefined();
+        session.viewer = 8; verify(session.generation);
+        await reloaded.root.__disclosureStateReady;
+        expect(reloaded.section.dataset.open).toBe('false');
+        expect(reloaded.choice()).toBeNull();
+        session.viewer = 7;
+        expect(make().choice()).toBeNull();
+    });
     it('retains same-account choices on focus but forgets them on logout and another account', async () => {
         const mounted = make(); click(mounted.section, true);
         session.subscribers.forEach(callback => callback('focus')); await tick();

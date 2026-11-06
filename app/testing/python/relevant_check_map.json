@@ -634,6 +634,7 @@
         "app/frontend/reusable_components/notifications"
       ],
       "specs": ["app/testing/e2e/L_auth/modal_backdrop_drag.spec.ts", "app/testing/e2e/C_card_view/C28_details_edges_and_show_more.spec.ts",
+        "app/testing/e2e/C_card_view/C33_disclosure_defaults.spec.ts",
         "app/testing/e2e/J_modals/J1_modal_open.spec.ts",
         "app/testing/e2e/J_modals/J2_modal_close.spec.ts",
         "app/testing/e2e/R_dropdown/R1_dropdown_open_search_select.spec.ts",

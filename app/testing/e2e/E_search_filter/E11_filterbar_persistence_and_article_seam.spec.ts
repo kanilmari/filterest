@@ -2,7 +2,7 @@
  * E11_filterbar_persistence_and_article_seam.spec.ts
  *
  * Verifies filterbar state survives reloads and article chrome keeps its intended spacing.
- * Bridges persisted filterbar settings with live article-panel browser geometry.
+ * Bridges private tab choices with live article-panel browser geometry.
  * Exists to prevent reload regressions, duplicate top seams, and lost content insets.
  */
 
@@ -10,29 +10,22 @@ import { test, expect, type Locator, type Page } from '@playwright/test';
 import { login, loadCredentials, type TestCredentials } from '../helpers/auth';
 import { navigateToDefaultDataset, waitForDataLoaded } from '../helpers/navigation';
 import { switchToView, openBigCard } from '../helpers/view-switch';
+import { openArticleDisclosure } from '../helpers/article-disclosures';
 
 const SECTION_KEY = 'field_sets';
 const NO_MATCH_SEARCH_QUERY = 'zzqqxx-no-such-row';
 
 type FilterbarLayout = {
   section_order: string[];
-  section_collapsed: Record<string, boolean>;
 };
 
-async function callFilterbarLayoutEndpoint(
-  page: Page,
-  routeName: 'getFilterbarSectionLayout' | 'saveFilterbarSectionLayout',
-  layout?: FilterbarLayout,
-): Promise<FilterbarLayout> {
-  return page.evaluate(async ({ requestedRoute, requestedLayout }) => {
+async function readFilterbarLayout(page: Page): Promise<FilterbarLayout> {
+  return page.evaluate(async () => {
     const { endpoint_router } = await import(
       '/frontend/core_components/endpoints/endpoint_router.js'
     );
-    return endpoint_router(requestedRoute, {
-      method: requestedRoute === 'getFilterbarSectionLayout' ? 'GET' : 'POST',
-      ...(requestedLayout ? { body_data: requestedLayout } : {}),
-    });
-  }, { requestedRoute: routeName, requestedLayout: layout });
+    return endpoint_router('getFilterbarSectionLayout', { method: 'GET' });
+  });
 }
 
 async function readActiveDatasetName(page: Page): Promise<string> {
@@ -53,16 +46,17 @@ async function readActiveDatasetName(page: Page): Promise<string> {
   });
 }
 
-async function toggleDisclosureAndWaitForSave(page: Page, header: Locator) {
-  await Promise.all([
-    page.waitForResponse(
-      (response) => response.url().endsWith('/api/filterbar-section-layout/save')
-        && response.request().method() === 'POST'
-        && response.ok(),
-      { timeout: 10000 },
-    ),
-    header.click(),
-  ]);
+async function toggleDisclosureAndWaitForChoice(section: Locator, expanded: boolean) {
+  const header = section.locator(':scope > .animated-disclosure-header');
+  await header.click();
+  await expect(header).toHaveAttribute('aria-expanded', String(expanded));
+  // A click is saved in this tab, never by the former shared settings POST.
+  await expect.poll(() => section.evaluate(element => {
+    const uid = element.closest<HTMLElement>('[data-dataset-appearance-uid]')?.dataset.datasetAppearanceUid;
+    const block = (element as HTMLElement).dataset.filterbarSectionKey;
+    const state = JSON.parse(sessionStorage.getItem('filterest.disclosure-choices.v1') || 'null');
+    return state?.choices?.[`${state.viewerID}:${uid}:filterbar:${block}`];
+  })).toBe(expanded);
 }
 
 test.describe('E11 — Filterbar persistence and article seam', () => {
@@ -112,10 +106,14 @@ test.describe('E11 — Filterbar persistence and article seam', () => {
     await navigateToDefaultDataset(page);
     await waitForDataLoaded(page);
     const datasetName = await readActiveDatasetName(page);
-    const originalLayout = await callFilterbarLayoutEndpoint(
-      page,
-      'getFilterbarSectionLayout',
-    );
+    const originalLayout = await readFilterbarLayout(page);
+    const writes: string[] = [];
+    page.on('request', request => {
+      if (['POST', 'PATCH', 'PUT', 'DELETE'].includes(request.method())
+        && /filterbar-section-layout|dataset-appearance/.test(request.url())) {
+        writes.push(`${request.method()} ${new URL(request.url()).pathname}`);
+      }
+    });
 
     try {
       await page.evaluate((datasetName) => {
@@ -133,10 +131,11 @@ test.describe('E11 — Filterbar persistence and article seam', () => {
       await expect(panel).not.toHaveClass(/filterbar-panel--hidden/);
       await expect(header).toBeVisible();
 
-      if (!(await section.evaluate((element) => element.classList.contains('is-collapsed')))) {
-        await toggleDisclosureAndWaitForSave(page, header);
+      await expect(section).toHaveAttribute('data-disclosure-state', /^(expanded|collapsed)$/);
+      if (await section.getAttribute('data-disclosure-state') === 'expanded') {
+        await toggleDisclosureAndWaitForChoice(section, false);
       }
-      await toggleDisclosureAndWaitForSave(page, header);
+      await toggleDisclosureAndWaitForChoice(section, true);
       await expect(header).toHaveAttribute('aria-expanded', 'true');
 
       await page.reload({ waitUntil: 'domcontentloaded' });
@@ -157,12 +156,12 @@ test.describe('E11 — Filterbar persistence and article seam', () => {
       await expect(
         page.locator('.tab_parts_container:visible .filterbar-panel').first(),
       ).not.toHaveClass(/filterbar-panel--hidden/);
+      await expect(page.locator(
+        `.tab_parts_container:visible [data-filterbar-section-key="${SECTION_KEY}"] > .animated-disclosure-header`,
+      ).first()).toHaveAttribute('aria-expanded', 'true');
     } finally {
-      await callFilterbarLayoutEndpoint(
-        page,
-        'saveFilterbarSectionLayout',
-        originalLayout,
-      );
+      expect(writes, 'A disclosure click must not write shared settings').toEqual([]);
+      expect(await readFilterbarLayout(page)).toEqual(originalLayout);
     }
   });
 
@@ -239,6 +238,13 @@ test.describe('E11 — Filterbar persistence and article seam', () => {
       '.content_div:not(.hidden) .row_article_related_items_section '
         + '.row_article_disclosure_content',
     ).first()).toBeAttached({ timeout: 10000 });
+    // #986 starts this optional tool closed; measure its intentionally opened contents.
+    const related = await openArticleDisclosure(page, 'related_rows');
+    await expect.poll(() => related.locator(':scope > .animated-disclosure-content-shell')
+      .evaluate(element => (element as HTMLElement).style.height)).toBe('auto');
+    await expect(page.locator(
+      '.content_div:not(.hidden) .row_article_related_items_section .child_tabs_bar',
+    ).first()).toBeVisible();
 
     const geometry = await page.evaluate(() => {
       const article = document.querySelector<HTMLElement>(
