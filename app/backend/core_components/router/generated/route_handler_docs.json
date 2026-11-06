@@ -30,7 +30,7 @@
   "auth.SignOutOtherDevicesHandler": "SignOutOtherDevicesHandler always targets the cookie's account, never a submitted id.",
   "auth.SiteAssistantDelegationExchangeHandler": "SiteAssistantDelegationExchangeHandler turns a job's one-time code into a session that acts as the administrator who asked for the job. The session expires with the delegation, reads with that administrator's own rights and may write only calls the administrator has approved.",
   "auth.UserPermissionsHandler": "UserPermissionsHandler returns url_route_endpoint values that the current user is allowed to access.",
-  "auth.UserProfileFetchHandler": "UserProfileFetchHandler returns the authenticated user's username and email.",
+  "auth.UserProfileFetchHandler": "UserProfileFetchHandler uses only the authenticated session as the profile owner.",
   "auth.UserProfileUpdateHandler": "UserProfileUpdateHandler commits only the current account’s allowed profile fields.",
   "auth.UserVisualPreferenceHandler": "UserVisualPreferenceHandler reads or replaces the current account's own allowlisted visual preference. The owner always comes from the session.",
   "backend.PermissionsHandler": "",

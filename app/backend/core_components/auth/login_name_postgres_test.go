@@ -5,7 +5,6 @@
 package auth
 
 import (
-	"context"
 	"database/sql"
 	backend "easelect/backend/core_components"
 	"easelect/backend/core_components/auth/credentials"
@@ -47,7 +46,7 @@ func loginNameDisposableCluster(t *testing.T) *sql.DB {
 	data := filepath.Join(root, "pgdata")
 	run := func(name string, args ...string) {
 		t.Helper()
-		if out, err := exec.Command(filepath.Join(bin, name), args...).CombinedOutput(); err != nil {
+		if out, err := exec.CommandContext(loginNamePostgresContext(t), filepath.Join(bin, name), args...).CombinedOutput(); err != nil {
 			if name == "pg_ctl" {
 				// pg_ctl hides the server's startup error in this separate log.
 				serverLog, _ := os.ReadFile(filepath.Join(root, "postgres.log"))
@@ -61,16 +60,17 @@ func loginNameDisposableCluster(t *testing.T) *sql.DB {
 	}
 	run("initdb", "-D", data, "-A", "trust", "-U", "test_owner", "--no-locale", "--encoding=UTF8")
 	t.Cleanup(func() {
-		_, _ = exec.Command(filepath.Join(bin, "pg_ctl"), "-D", data, "-m", "immediate", "-w", "stop").CombinedOutput()
+		_, _ = exec.CommandContext(loginNamePostgresContext(t), filepath.Join(bin, "pg_ctl"), "-D", data, "-m", "immediate", "-w", "stop").CombinedOutput()
 	})
 	run("pg_ctl", "-D", data, "-l", filepath.Join(root, "postgres.log"), "-o", fmt.Sprintf("-h '' -k '%s' -p 55132", socket), "-w", "start")
-	dsn := fmt.Sprintf("host=%s port=55132 user=test_owner dbname=postgres sslmode=disable", socket)
+	// Bound even context-free SQL inside handlers and session helpers on every connection.
+	dsn := fmt.Sprintf("host=%s port=55132 user=test_owner dbname=postgres sslmode=disable connect_timeout=5 statement_timeout=10000 lock_timeout=5000", socket)
 	owner, err := sql.Open("postgres", dsn)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer owner.Close()
-	if _, err = owner.Exec(`CREATE DATABASE login_name_disposable`); err != nil {
+	if _, err = owner.ExecContext(loginNamePostgresContext(t), `CREATE DATABASE login_name_disposable`); err != nil {
 		t.Fatal(err)
 	}
 	db, err := sql.Open("postgres", strings.Replace(dsn, "dbname=postgres", "dbname=login_name_disposable", 1))
@@ -83,12 +83,12 @@ func loginNameDisposableCluster(t *testing.T) *sql.DB {
 	if err != nil {
 		t.Fatal(err)
 	}
-	seed, err := exec.Command("git", "show", "ec288eb:app/server_tools/public_bootstrap/seed_data.sql").Output()
+	seed, err := exec.CommandContext(loginNamePostgresContext(t), "git", "show", "ec288eb:app/server_tools/public_bootstrap/seed_data.sql").Output()
 	if err != nil {
 		t.Fatal(err)
 	}
 	for _, sqlText := range []string{string(schema), string(seed)} {
-		if _, err = db.Exec(sqlText); err != nil {
+		if _, err = db.ExecContext(loginNamePostgresContext(t), sqlText); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -104,15 +104,15 @@ func loginNameDisposableCluster(t *testing.T) *sql.DB {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if _, err = db.Exec(string(body)); err != nil {
+		if _, err = db.ExecContext(loginNamePostgresContext(t), string(body)); err != nil {
 			t.Fatalf("%s: %v", path, err)
 		}
 	}
 	hash, _ := bcrypt.GenerateFromPassword([]byte(loginFixturePassword), bcrypt.DefaultCost)
-	if _, err = db.Exec(`INSERT INTO system_users(id,username,enabled,admin_access_allowed) VALUES(91001,'former_admin_login',true,true),(91002,'ordinary_login',true,false),(91003,'disabled_login',false,false),(91004,'other_login',true,false); INSERT INTO system_user_group_memberships(user_id,group_id) VALUES(91001,1),(91002,2),(91003,2),(91004,2)`); err != nil {
+	if _, err = db.ExecContext(loginNamePostgresContext(t), `INSERT INTO system_users(id,username,enabled,admin_access_allowed) VALUES(91001,'former_admin_login',true,true),(91002,'ordinary_login',true,false),(91003,'disabled_login',false,false),(91004,'other_login',true,false); INSERT INTO system_user_group_memberships(user_id,group_id) VALUES(91001,1),(91002,2),(91003,2),(91004,2)`); err != nil {
 		t.Fatal(err)
 	}
-	if _, err = db.Exec(`INSERT INTO restricted.users_restricted(id,password,email,login_verification_method) SELECT id,$1,id||'@example.invalid','none' FROM system_users WHERE id BETWEEN 91001 AND 91004`, string(hash)); err != nil {
+	if _, err = db.ExecContext(loginNamePostgresContext(t), `INSERT INTO restricted.users_restricted(id,password,email,login_verification_method) SELECT id,$1,id||'@example.invalid','none' FROM system_users WHERE id BETWEEN 91001 AND 91004`, string(hash)); err != nil {
 		t.Fatal(err)
 	}
 	for _, name := range []string{"20261005000011_separate_login_names.sql", "20261005000013_seed_login_name_keys.sql", "20261005000014_add_password_reset_dummy_work.sql", "20261005000040_add_surviving_sign_in.sql"} {
@@ -120,11 +120,11 @@ func loginNameDisposableCluster(t *testing.T) *sql.DB {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if _, err = db.Exec(string(body)); err != nil {
+		if _, err = db.ExecContext(loginNamePostgresContext(t), string(body)); err != nil {
 			t.Fatal(err)
 		}
 	}
-	if _, err = db.Exec(`UPDATE system_config SET boolean_value=false WHERE key='only_admin_can_login'; UPDATE system_config SET text_value='Disposable site' WHERE key='site_name'; UPDATE system_config SET text_value='filterest_sibling' WHERE key='instance_kind'; UPDATE system_config SET boolean_value=true WHERE key='overwrite_possible'`); err != nil {
+	if _, err = db.ExecContext(loginNamePostgresContext(t), `UPDATE system_config SET boolean_value=false WHERE key='only_admin_can_login'; UPDATE system_config SET text_value='Disposable site' WHERE key='site_name'; UPDATE system_config SET text_value='filterest_sibling' WHERE key='instance_kind'; UPDATE system_config SET boolean_value=true WHERE key='overwrite_possible'`); err != nil {
 		t.Fatal(err)
 	}
 	old, conf, admin, guest := backend.Db, backend.DbConfidential, backend.DbAdmin, backend.DbGuest
@@ -144,7 +144,7 @@ func postgresLogin(t *testing.T, name, password string) *httptest.ResponseRecord
 	t.Helper()
 	cookie := seedSessionCookie(t, map[interface{}]interface{}{"csrf_token": "postgres-csrf", "username": "retired-login-canary"})
 	payload, _ := json.Marshal(map[string]string{"username": name, "password": password, "fingerprint": "browser-fixture", "csrf_token": "postgres-csrf"})
-	r := httptest.NewRequest("POST", "/api/login", strings.NewReader(string(payload)))
+	r := httptest.NewRequestWithContext(loginNamePostgresContext(t), "POST", "/api/login", strings.NewReader(string(payload)))
 	r.AddCookie(cookie)
 	r.Header.Set("Content-Type", "application/json")
 	r.RemoteAddr = "192.0.2.211:1234"
@@ -155,7 +155,7 @@ func postgresLogin(t *testing.T, name, password string) *httptest.ResponseRecord
 
 func postgresOwnCookie(t *testing.T, id int) *http.Cookie {
 	t.Helper()
-	r := httptest.NewRequest("GET", "/", nil)
+	r := httptest.NewRequestWithContext(loginNamePostgresContext(t), "GET", "/", nil)
 	session, err := sessions.GetOrCreateSession(nil, r)
 	if err != nil {
 		t.Fatal(err)
@@ -173,7 +173,7 @@ func postgresOwnCookie(t *testing.T, id int) *http.Cookie {
 
 func postgresProfile(t *testing.T, cookie *http.Cookie, body string) *httptest.ResponseRecorder {
 	t.Helper()
-	r := httptest.NewRequest("POST", "/api/update-profile", strings.NewReader(body))
+	r := httptest.NewRequestWithContext(loginNamePostgresContext(t), "POST", "/api/update-profile", strings.NewReader(body))
 	r.AddCookie(cookie)
 	r.Header.Set("X-CSRF-Token", "postgres-csrf")
 	w := httptest.NewRecorder()
@@ -202,9 +202,58 @@ func issuedPostgresCookie(w *httptest.ResponseRecorder) *http.Cookie {
 
 func TestLoginNamePostgresHandlers(t *testing.T) {
 	db := loginNameDisposableCluster(t)
+	t.Run("owner-only account screen", func(t *testing.T) {
+		// Restore the equal-name fixture before later promotion checks, even after Fatal.
+		setPostgresFixtureDisplayName(t, db, 91004, "other_public_display")
+		fetch := func(id int, query string) *httptest.ResponseRecorder {
+			r := httptest.NewRequestWithContext(loginNamePostgresContext(t), "GET", "/api/user-profile"+query, nil)
+			if id == 1 {
+				r.AddCookie(seedSessionCookie(t, map[interface{}]interface{}{"user_id": 1}))
+			} else if id > 1 {
+				r.AddCookie(postgresOwnCookie(t, id))
+			}
+			w := httptest.NewRecorder()
+			UserProfileFetchHandler(w, r)
+			return w
+		}
+		const projection = "?include_login_name=1"
+		for _, id := range []int{0, 1} {
+			w := fetch(id, projection)
+			if w.Code != 401 || strings.Contains(w.Body.String(), "login_name") {
+				t.Fatal("anonymous or guest can read the private projection")
+			}
+		}
+		for _, tc := range []struct {
+			id, foreignID int
+			own           string
+		}{{91001, 91004, "former_admin_login"}, {91004, 91001, "other_login"}} {
+			var foreignLogin, foreignDisplay string
+			if err := db.QueryRowContext(loginNamePostgresContext(t), `SELECT ur.login_name,u.username FROM system_users u JOIN restricted.users_restricted ur ON ur.id=u.id WHERE u.id=$1`, tc.foreignID).Scan(&foreignLogin, &foreignDisplay); err != nil {
+				t.Fatal(err)
+			}
+			// Both supplied identifiers name another existing user, never the caller.
+			w := fetch(tc.id, fmt.Sprintf("%s&user_id=%d&id=%d", projection, tc.foreignID, tc.foreignID))
+			var profile struct {
+				ID      int    `json:"user_id"`
+				Login   string `json:"login_name"`
+				Display string `json:"username"`
+			}
+			if w.Code != 200 || json.Unmarshal(w.Body.Bytes(), &profile) != nil || profile.ID != tc.id || profile.Login != tc.own ||
+				strings.Contains(w.Body.String(), foreignLogin) || strings.Contains(w.Body.String(), foreignDisplay) ||
+				w.Header().Get("Cache-Control") != "private, no-store" {
+				t.Fatal("private projection is not restricted to the session owner")
+			}
+			if profile.Display == "" || profile.Display == profile.Login {
+				t.Fatal("display name was confused with the private login name")
+			}
+			if plain := fetch(tc.id, ""); plain.Code != 200 || strings.Contains(plain.Body.String(), `"login_name"`) {
+				t.Fatal("ordinary profile projection includes the private field")
+			}
+		}
+	})
 	t.Run("LT1 former administrator name and case", func(t *testing.T) {
 		var display, login string
-		if err := db.QueryRow(`SELECT u.username,ur.login_name FROM system_users u JOIN restricted.users_restricted ur ON ur.id=u.id WHERE u.id=91001`).Scan(&display, &login); err != nil {
+		if err := db.QueryRowContext(loginNamePostgresContext(t), `SELECT u.username,ur.login_name FROM system_users u JOIN restricted.users_restricted ur ON ur.id=u.id WHERE u.id=91001`).Scan(&display, &login); err != nil {
 			t.Fatal(err)
 		}
 		if login != "former_admin_login" || display == login {
@@ -231,7 +280,7 @@ func TestLoginNamePostgresHandlers(t *testing.T) {
 			if cookie.Name != sessions.SessionName || cookie.MaxAge < 0 {
 				continue
 			}
-			r := httptest.NewRequest("GET", "/", nil)
+			r := httptest.NewRequestWithContext(loginNamePostgresContext(t), "GET", "/", nil)
 			r.AddCookie(cookie)
 			decoded, err := sessions.Load(r)
 			if err != nil {
@@ -246,10 +295,10 @@ func TestLoginNamePostgresHandlers(t *testing.T) {
 	})
 	t.Run("LT6 K203 and login-name change under both choices", func(t *testing.T) {
 		for _, allow := range []bool{true, false} {
-			if _, err := db.Exec(`DELETE FROM restricted.otp_send_events WHERE user_id=91002 AND purpose='profile_current_password'`); err != nil {
+			if _, err := db.ExecContext(loginNamePostgresContext(t), `DELETE FROM restricted.otp_send_events WHERE user_id=91002 AND purpose='profile_current_password'`); err != nil {
 				t.Fatal(err)
 			}
-			if _, err := db.Exec(`UPDATE system_config SET boolean_value=$1 WHERE key='display_name_may_equal_login_name'`, allow); err != nil {
+			if _, err := db.ExecContext(loginNamePostgresContext(t), `UPDATE system_config SET boolean_value=$1 WHERE key='display_name_may_equal_login_name'`, allow); err != nil {
 				t.Fatal(err)
 			}
 			first, other := postgresOwnCookie(t, 91002), postgresOwnCookie(t, 91002)
@@ -264,14 +313,14 @@ func TestLoginNamePostgresHandlers(t *testing.T) {
 			if w.Code != 200 {
 				t.Fatalf("sign-out=%d %s", w.Code, w.Body.String())
 			}
-			check := httptest.NewRequest("GET", "/", nil)
+			check := httptest.NewRequestWithContext(loginNamePostgresContext(t), "GET", "/", nil)
 			check.AddCookie(unrelated)
 			unrelatedSession, _ := sessions.Load(check)
-			if valid, err := backend.AuthenticatedSessionMatches(context.Background(), db, unrelatedSession, 91004); err != nil || !valid {
+			if valid, err := backend.AuthenticatedSessionMatches(loginNamePostgresContext(t), db, unrelatedSession, 91004); err != nil || !valid {
 				t.Fatal("submitted id ended another account's sign-in")
 			}
 			current := latestPostgresCookie(t, w)
-			csrfRequest := httptest.NewRequest("POST", "/api/sign-out-other-devices", strings.NewReader(`{"current_password":"`+loginFixturePassword+`"}`))
+			csrfRequest := httptest.NewRequestWithContext(loginNamePostgresContext(t), "POST", "/api/sign-out-other-devices", strings.NewReader(`{"current_password":"`+loginFixturePassword+`"}`))
 			csrfRequest.AddCookie(current)
 			csrfResponse := httptest.NewRecorder()
 			SignOutOtherDevicesHandler(csrfResponse, csrfRequest)
@@ -282,18 +331,18 @@ func TestLoginNamePostgresHandlers(t *testing.T) {
 				cookie *http.Cookie
 				valid  bool
 			}{{current, true}, {other, false}} {
-				r := httptest.NewRequest("GET", "/", nil)
+				r := httptest.NewRequestWithContext(loginNamePostgresContext(t), "GET", "/", nil)
 				r.AddCookie(test.cookie)
 				session, err := sessions.Load(r)
 				if err != nil {
 					t.Fatal(err)
 				}
-				valid, err := backend.AuthenticatedSessionMatches(context.Background(), db, session, 91002)
+				valid, err := backend.AuthenticatedSessionMatches(loginNamePostgresContext(t), db, session, 91002)
 				if err != nil || valid != test.valid {
 					t.Fatalf("generation matches=%v err=%v", valid, err)
 				}
 			}
-			if _, err := db.Exec(`DELETE FROM restricted.otp_send_events WHERE user_id=91002 AND purpose='login_name_change'`); err != nil {
+			if _, err := db.ExecContext(loginNamePostgresContext(t), `DELETE FROM restricted.otp_send_events WHERE user_id=91002 AND purpose='login_name_change'`); err != nil {
 				t.Fatal(err)
 			}
 			// Wrong password, reserved name and a successful change each consume one account attempt.
@@ -321,7 +370,7 @@ func TestLoginNamePostgresHandlers(t *testing.T) {
 				t.Fatalf("equal pair setting=%v status=%d %s", allow, equal.Code, equal.Body.String())
 			}
 			// Restore a distinct display name before the second choice is tested.
-			if _, err := db.Exec(`UPDATE system_users SET username='ordinary_display' WHERE id=91002`); err != nil {
+			if _, err := db.ExecContext(loginNamePostgresContext(t), `UPDATE system_users SET username='ordinary_display' WHERE id=91002`); err != nil {
 				t.Fatal(err)
 			}
 		}
@@ -334,13 +383,13 @@ func TestLoginNamePostgresHandlers(t *testing.T) {
 		}
 		var website, bio string
 		var admin bool
-		if err := db.QueryRow(`SELECT website,bio_social_medias,admin_access_allowed FROM system_users WHERE id=91002`).Scan(&website, &bio, &admin); err != nil {
+		if err := db.QueryRowContext(loginNamePostgresContext(t), `SELECT website,bio_social_medias,admin_access_allowed FROM system_users WHERE id=91002`).Scan(&website, &bio, &admin); err != nil {
 			t.Fatal(err)
 		}
 		if website != "https://example.invalid" || bio != "Biography" || admin {
 			t.Fatal("profile allow-list failed")
 		}
-		request := httptest.NewRequest("GET", "/api/user-profile", nil)
+		request := httptest.NewRequestWithContext(loginNamePostgresContext(t), "GET", "/api/user-profile", nil)
 		request.AddCookie(cookie)
 		response := httptest.NewRecorder()
 		UserProfileFetchHandler(response, request)
@@ -359,14 +408,14 @@ func TestLoginNamePostgresHandlers(t *testing.T) {
 		if w.Code != 409 || !strings.Contains(w.Body.String(), "error_admin_display_name_equals_login_name") {
 			t.Fatalf("admin profile=%d %s", w.Code, w.Body.String())
 		}
-		if _, err := db.Exec(`UPDATE system_users SET username='chosen_administrator_display' WHERE id=91001`); err != nil {
+		if _, err := db.ExecContext(loginNamePostgresContext(t), `UPDATE system_users SET username='chosen_administrator_display' WHERE id=91001`); err != nil {
 			t.Fatal(err)
 		}
 		var display string
-		if err := db.QueryRow(`SELECT username FROM system_users WHERE id=91001`).Scan(&display); err != nil {
+		if err := db.QueryRowContext(loginNamePostgresContext(t), `SELECT username FROM system_users WHERE id=91001`).Scan(&display); err != nil {
 			t.Fatal(err)
 		}
-		if _, err := db.Exec(`DELETE FROM restricted.otp_send_events WHERE user_id=91001`); err != nil {
+		if _, err := db.ExecContext(loginNamePostgresContext(t), `DELETE FROM restricted.otp_send_events WHERE user_id=91001`); err != nil {
 			t.Fatal(err)
 		}
 		w = postgresProfile(t, cookie, `{"login_name":"`+display+`","current_password":"`+loginFixturePassword+`"}`)
@@ -374,11 +423,12 @@ func TestLoginNamePostgresHandlers(t *testing.T) {
 			t.Fatalf("admin change=%d %s", w.Code, w.Body.String())
 		}
 		// A membership-based promotion must be rejected with equal names by the database rule.
-		tx, err := db.Begin()
+		tx, err := db.BeginTx(loginNamePostgresContext(t), nil)
 		if err != nil {
 			t.Fatal(err)
 		}
-		_, err = tx.Exec(`INSERT INTO system_user_group_memberships(user_id,group_id) VALUES(91004,1)`)
+		defer tx.Rollback() // Fatal must release the membership lock before LT6 creates its trigger.
+		_, err = tx.ExecContext(loginNamePostgresContext(t), `INSERT INTO system_user_group_memberships(user_id,group_id) VALUES(91004,1)`)
 		refusal := httpresponseAccountRefusal(err)
 		if refusal != "error_admin_display_name_equals_login_name" {
 			t.Fatalf("membership error=%v", err)
@@ -388,12 +438,12 @@ func TestLoginNamePostgresHandlers(t *testing.T) {
 	t.Run("LT6 registration rollback and both taken names", func(t *testing.T) {
 		hash, _ := bcrypt.GenerateFromPassword([]byte(loginFixturePassword), bcrypt.DefaultCost)
 		for _, allow := range []bool{true, false} {
-			_, err := db.Exec(`UPDATE system_config SET boolean_value=$1 WHERE key='display_name_may_equal_login_name'`, allow)
+			_, err := db.ExecContext(loginNamePostgresContext(t), `UPDATE system_config SET boolean_value=$1 WHERE key='display_name_may_equal_login_name'`, allow)
 			if err != nil {
 				t.Fatal(err)
 			}
 			name := fmt.Sprintf("registration_equal_%v", allow)
-			id, err := createRegisteredAccount(context.Background(), name, name, "", name+"@example.invalid", string(hash), "", verificationNone, true)
+			id, err := createRegisteredAccount(loginNamePostgresContext(t), name, name, "", name+"@example.invalid", string(hash), "", verificationNone, true)
 			if allow && err != nil {
 				t.Fatal(err)
 			}
@@ -401,7 +451,9 @@ func TestLoginNamePostgresHandlers(t *testing.T) {
 				t.Fatalf("K205 false=%v", err)
 			}
 			var count int
-			_ = db.QueryRow(`SELECT count(*) FROM system_users WHERE username=$1`, name).Scan(&count)
+			if err := db.QueryRowContext(loginNamePostgresContext(t), `SELECT count(*) FROM system_users WHERE username=$1`, name).Scan(&count); err != nil {
+				t.Fatal(err)
+			}
 			if !allow && count != 0 {
 				t.Fatal("half registration committed")
 			}
@@ -410,42 +462,54 @@ func TestLoginNamePostgresHandlers(t *testing.T) {
 			}
 		}
 		var takenLogin, takenDisplay string
-		if err := db.QueryRow(`SELECT ur.login_name,u.username FROM system_users u JOIN restricted.users_restricted ur USING(id) WHERE u.id=91002`).Scan(&takenLogin, &takenDisplay); err != nil {
+		if err := db.QueryRowContext(loginNamePostgresContext(t), `SELECT ur.login_name,u.username FROM system_users u JOIN restricted.users_restricted ur USING(id) WHERE u.id=91002`).Scan(&takenLogin, &takenDisplay); err != nil {
 			t.Fatal(err)
 		}
 		for _, test := range []struct{ login, display, key string }{{strings.ToUpper(takenLogin), "unique_display", "login_name_exists"}, {"unique_login", strings.ToUpper(takenDisplay), "username_exists"}, {"auto_2", "another_display", "login_name_reserved"}} {
-			_, err := createRegisteredAccount(context.Background(), test.login, test.display, "", "unused@example.invalid", string(hash), "", verificationNone, true)
+			_, err := createRegisteredAccount(loginNamePostgresContext(t), test.login, test.display, "", "unused@example.invalid", string(hash), "", verificationNone, true)
 			if httpresponseAccountRefusal(err) != test.key {
 				t.Fatalf("taken error=%v", err)
 			}
 		}
 		// Force the last membership step to fail: both prior inserts must roll back.
-		if _, err := db.Exec(`CREATE FUNCTION public.test_registration_fail() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.user_id NOT IN (91001,91002,91003,91004) THEN RAISE EXCEPTION 'fixture failure'; END IF; RETURN NEW; END $$; CREATE TRIGGER test_registration_fail BEFORE INSERT ON system_user_group_memberships FOR EACH ROW EXECUTE FUNCTION public.test_registration_fail()`); err != nil {
+		if _, err := db.ExecContext(loginNamePostgresContext(t), `CREATE FUNCTION public.test_registration_fail() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.user_id NOT IN (91001,91002,91003,91004) THEN RAISE EXCEPTION 'fixture failure'; END IF; RETURN NEW; END $$; CREATE TRIGGER test_registration_fail BEFORE INSERT ON system_user_group_memberships FOR EACH ROW EXECUTE FUNCTION public.test_registration_fail()`); err != nil {
 			t.Fatal(err)
 		}
-		_, err := createRegisteredAccount(context.Background(), "forced_rollback", "forced_display", "", "forced@example.invalid", string(hash), "", verificationNone, true)
+		t.Cleanup(func() {
+			if _, err := db.ExecContext(loginNamePostgresContext(t), `DROP TRIGGER test_registration_fail ON system_user_group_memberships; DROP FUNCTION test_registration_fail()`); err != nil {
+				t.Errorf("remove forced-registration failure fixture: %v", err)
+			}
+		})
+		_, err := createRegisteredAccount(loginNamePostgresContext(t), "forced_rollback", "forced_display", "", "forced@example.invalid", string(hash), "", verificationNone, true)
 		if err == nil {
 			t.Fatal("forced failure succeeded")
 		}
 		var count int
-		_ = db.QueryRow(`SELECT count(*) FROM system_users WHERE username='forced_display'`).Scan(&count)
+		if err := db.QueryRowContext(loginNamePostgresContext(t), `SELECT count(*) FROM system_users WHERE username='forced_display'`).Scan(&count); err != nil {
+			t.Fatal(err)
+		}
 		if count != 0 {
 			t.Fatal("half account")
 		}
-		_, _ = db.Exec(`DROP TRIGGER test_registration_fail ON system_user_group_memberships; DROP FUNCTION test_registration_fail()`)
 	})
 	t.Run("LT6 fixed accounts and name-free audit", func(t *testing.T) {
-		if _, err := db.Exec(`UPDATE restricted.users_restricted SET api_only=true WHERE id=91004`); err != nil {
+		if _, err := db.ExecContext(loginNamePostgresContext(t), `UPDATE restricted.users_restricted SET api_only=true WHERE id=91004`); err != nil {
 			t.Fatal(err)
 		}
-		tx, _ := db.Begin()
-		_, err := credentials.ChangeLoginName(tx, 91004, "new_program_name", "")
+		tx, err := db.BeginTx(loginNamePostgresContext(t), nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer tx.Rollback()
+		_, err = credentials.ChangeLoginName(tx, 91004, "new_program_name", "")
 		if httpresponseAccountRefusal(err) != "login_name_fixed" {
 			t.Fatalf("fixed account=%v", err)
 		}
 		_ = tx.Rollback()
 		var audit string
-		_ = db.QueryRow(`SELECT COALESCE(string_agg(details::text,' '),'') FROM system_audit_log WHERE handler_name='account.security'`).Scan(&audit)
+		if err := db.QueryRowContext(loginNamePostgresContext(t), `SELECT COALESCE(string_agg(details::text,' '),'') FROM system_audit_log WHERE handler_name='account.security'`).Scan(&audit); err != nil {
+			t.Fatal(err)
+		}
 		for _, name := range []string{"ordinary-renamed", "former_admin_login", "changed-private"} {
 			if strings.Contains(audit, name) {
 				t.Fatal("private name in audit")
@@ -453,15 +517,15 @@ func TestLoginNamePostgresHandlers(t *testing.T) {
 		}
 	})
 	t.Run("LT8 promotion allocates display before granting administrator access", func(t *testing.T) {
-		tx, err := db.Begin()
+		tx, err := db.BeginTx(loginNamePostgresContext(t), nil)
 		if err != nil {
 			t.Fatal(err)
 		}
 		defer tx.Rollback()
-		request := httptest.NewRequest("POST", "/api/admin/user-authentication", strings.NewReader(`{"user_id":91004,"verification_method":"none"}`))
+		request := httptest.NewRequestWithContext(loginNamePostgresContext(t), "POST", "/api/admin/user-authentication", strings.NewReader(`{"user_id":91004,"verification_method":"none"}`))
 		request = request.WithContext(dbutils.SetTx(request.Context(), tx))
 		// Use an ordinary equal-name account, after removing the fixed-account test marker.
-		if _, err = db.Exec(`UPDATE restricted.users_restricted SET api_only=false WHERE id=91004`); err != nil {
+		if _, err = db.ExecContext(loginNamePostgresContext(t), `UPDATE restricted.users_restricted SET api_only=false WHERE id=91004`); err != nil {
 			t.Fatal(err)
 		}
 		response := httptest.NewRecorder()
@@ -477,10 +541,10 @@ func TestLoginNamePostgresHandlers(t *testing.T) {
 		administrator := postgresOwnCookie(t, 91001)
 		var before, after string
 		snapshot := `SELECT to_jsonb(ur)::text FROM restricted.users_restricted ur WHERE id=91001`
-		if err := db.QueryRow(snapshot).Scan(&before); err != nil {
+		if err := db.QueryRowContext(loginNamePostgresContext(t), snapshot).Scan(&before); err != nil {
 			t.Fatal(err)
 		}
-		selfRequest := httptest.NewRequest("POST", "/api/admin/user-login-name", strings.NewReader(`{"user_id":91001,"login_name":"self-bypass"}`))
+		selfRequest := httptest.NewRequestWithContext(loginNamePostgresContext(t), "POST", "/api/admin/user-login-name", strings.NewReader(`{"user_id":91001,"login_name":"self-bypass"}`))
 		selfRequest.AddCookie(administrator)
 		selfRequest.Header.Set("X-CSRF-Token", "postgres-csrf")
 		selfResponse := httptest.NewRecorder()
@@ -488,11 +552,11 @@ func TestLoginNamePostgresHandlers(t *testing.T) {
 		if selfResponse.Code != 400 || !strings.Contains(selfResponse.Body.String(), "login_name_change_use_profile") {
 			t.Fatal("self-target accepted", selfResponse.Code, selfResponse.Body.String())
 		}
-		if err := db.QueryRow(snapshot).Scan(&after); err != nil || after != before {
+		if err := db.QueryRowContext(loginNamePostgresContext(t), snapshot).Scan(&after); err != nil || after != before {
 			t.Fatal("self-target changed credentials", err)
 		}
 		oldTarget := postgresOwnCookie(t, 91004)
-		request := httptest.NewRequest("POST", "/api/admin/user-login-name", strings.NewReader(`{"user_id":91004,"login_name":"administrator_selected_login"}`))
+		request := httptest.NewRequestWithContext(loginNamePostgresContext(t), "POST", "/api/admin/user-login-name", strings.NewReader(`{"user_id":91004,"login_name":"administrator_selected_login"}`))
 		request.AddCookie(administrator)
 		request.Header.Set("X-CSRF-Token", "postgres-csrf")
 		response := httptest.NewRecorder()
@@ -500,22 +564,22 @@ func TestLoginNamePostgresHandlers(t *testing.T) {
 		if response.Code != 200 || !strings.Contains(response.Body.String(), "notice_email_not_configured") || strings.Contains(response.Body.String(), "administrator_selected_login") {
 			t.Fatalf("administrator change=%d %s", response.Code, response.Body.String())
 		}
-		check := httptest.NewRequest("GET", "/", nil)
+		check := httptest.NewRequestWithContext(loginNamePostgresContext(t), "GET", "/", nil)
 		check.AddCookie(oldTarget)
 		session, _ := sessions.Load(check)
-		if valid, err := backend.AuthenticatedSessionMatches(context.Background(), db, session, 91004); err != nil || valid {
+		if valid, err := backend.AuthenticatedSessionMatches(loginNamePostgresContext(t), db, session, 91004); err != nil || valid {
 			t.Fatal("target's old sign-in survived administrator change")
 		}
 		editor := credentials.NewRecoveryEditor(db)
-		identity, err := editor.ReadInstanceIdentity(context.Background())
+		identity, err := editor.ReadInstanceIdentity(loginNamePostgresContext(t))
 		if err != nil {
 			t.Fatal(err)
 		}
 		var generation int64
-		if err = db.QueryRow(`SELECT authentication_generation FROM restricted.users_restricted WHERE id=91001`).Scan(&generation); err != nil {
+		if err = db.QueryRowContext(loginNamePostgresContext(t), `SELECT authentication_generation FROM restricted.users_restricted WHERE id=91001`).Scan(&generation); err != nil {
 			t.Fatal(err)
 		}
-		recovered, err := editor.RecoverAdministrator(context.Background(), credentials.RecoveryInput{UserID: 91001, NewLoginName: "operator_recovered_login", NewPassword: loginFixturePassword, VerificationMethod: credentials.VerificationNone, AllowPasswordOnly: true, ExpectedAuthenticationGeneration: generation, ExpectedVerificationMethod: credentials.VerificationNone, TargetIdentity: identity})
+		recovered, err := editor.RecoverAdministrator(loginNamePostgresContext(t), credentials.RecoveryInput{UserID: 91001, NewLoginName: "operator_recovered_login", NewPassword: loginFixturePassword, VerificationMethod: credentials.VerificationNone, AllowPasswordOnly: true, ExpectedAuthenticationGeneration: generation, ExpectedVerificationMethod: credentials.VerificationNone, TargetIdentity: identity})
 		if err != nil || recovered.AuthenticationGeneration != generation+1 || recovered.MailStatus != "notice_email_not_configured" {
 			t.Fatalf("recovery=%+v %v", recovered, err)
 		}
@@ -534,14 +598,14 @@ func TestLoginNamePostgresHandlers(t *testing.T) {
 				t.Fatal(err)
 			}
 			var committed bool
-			if err := db.QueryRow(`SELECT EXISTS(SELECT 1 FROM restricted.users_restricted WHERE email=$1)`, message["To"]).Scan(&committed); err != nil || !committed {
+			if err := db.QueryRowContext(loginNamePostgresContext(t), `SELECT EXISTS(SELECT 1 FROM restricted.users_restricted WHERE email=$1)`, message["To"]).Scan(&committed); err != nil || !committed {
 				t.Fatal("welcome mail preceded commit")
 			}
 			return &http.Response{StatusCode: 422, Header: make(http.Header), Body: io.NopCloser(strings.NewReader(`{"ErrorCode":400,"Message":"provider echoed private login"}`))}, nil
 		})
 		cookie := seedSessionCookie(t, map[interface{}]interface{}{"csrf_token": "postgres-csrf"})
 		form := url.Values{"username": {"mail_login"}, "display_name": {"mail_display"}, "password": {loginFixturePassword}, "email": {"mail@example.invalid"}, "verification_method": {"none"}, "csrf_token": {"postgres-csrf"}}
-		request := httptest.NewRequest("POST", "/api/register_ndYOyXV0INOK3F", strings.NewReader(form.Encode()))
+		request := httptest.NewRequestWithContext(loginNamePostgresContext(t), "POST", "/api/register_ndYOyXV0INOK3F", strings.NewReader(form.Encode()))
 		request.AddCookie(cookie)
 		request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 		request.Header.Set("Accept", "application/json")
@@ -570,7 +634,7 @@ func TestLoginNamePostgresHandlers(t *testing.T) {
 		for _, identifier := range []string{"operator_recovered_login", "missing_login", "disabled_login"} {
 			cookie := seedSessionCookie(t, map[interface{}]interface{}{"csrf_token": "postgres-csrf"})
 			body, _ := json.Marshal(map[string]string{"identifier": identifier, "csrf_token": "postgres-csrf"})
-			request := httptest.NewRequest("POST", "/api/request-password-reset-otp", strings.NewReader(string(body)))
+			request := httptest.NewRequestWithContext(loginNamePostgresContext(t), "POST", "/api/request-password-reset-otp", strings.NewReader(string(body)))
 			request.AddCookie(cookie)
 			response := httptest.NewRecorder()
 			RequestPasswordResetOTPHandler(response, request)
@@ -590,7 +654,7 @@ func TestLoginNamePostgresHandlers(t *testing.T) {
 			if len(saved.Value) != cookieLength {
 				t.Fatal("enumerating cookie length")
 			}
-			confirm := httptest.NewRequest("POST", "/api/reset-password", strings.NewReader(`{"csrf_token":"postgres-csrf","otp_code":"bad","new_password":"new-strong-password-123"}`))
+			confirm := httptest.NewRequestWithContext(loginNamePostgresContext(t), "POST", "/api/reset-password", strings.NewReader(`{"csrf_token":"postgres-csrf","otp_code":"bad","new_password":"new-strong-password-123"}`))
 			confirm.AddCookie(saved)
 			answer := httptest.NewRecorder()
 			ResetPasswordWithOTPHandler(answer, confirm)

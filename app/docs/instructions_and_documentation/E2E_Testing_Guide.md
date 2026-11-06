@@ -428,17 +428,17 @@ Go source. Negative fixtures keep the guards observable. Generated bootstrap
 and schema snapshots retain their separate hash/acceptance proofs in
 `app/testing/python/test_login_name_bootstrap.py`.
 
-`L_auth/L8_login_name_canary.spec.ts` adds real browser sign-in, profile display,
-login-name change, two-device revocation, public search, logout and new-name
-sign-in. It captures browser responses, headers/redirects, DOM and browser
-cookie/local-storage values. Before each navigation it reads every response
-body already seen; a GET body the application's own navigation discards (for
-example after following its sign-out redirect) is read again with the same
-browser's cookies, and any other unreadable body is a finding. The ordinary
-account may answer the account-dataset search with 403 where it has no read
-right; the administrator must search it. The Go proofs own decoded-cookie,
-server-log, database and owner-mail inspection; a browser cannot decrypt server
-cookies.
+`L_auth/L8_login_name_canary.spec.ts` adds real browser sign-in, profile display, login-name
+change, two-device revocation, public search, logout and new-name sign-in. It captures browser
+responses, headers/redirects, DOM and browser cookie/local-storage values. Only the owner's
+read-only login field and its explicit Account-screen GET may contain the owner's private name.
+The canary checks the session id and name, scans all remaining response fields, and also checks
+the displayed value after a rename. Before each navigation it reads every response body already
+seen; a GET body the application's own navigation discards (for example after following its
+sign-out redirect) is read again with the same browser's cookies, and any other unreadable body
+is a finding. The ordinary account may answer the account-dataset search with 403 where it has
+no read right; the administrator must search it. The Go proofs own decoded-cookie, server-log,
+database and owner-mail inspection; a browser cannot decrypt server cookies.
 
 Profile login-name changes allow three attempts in five minutes per account,
 so wait five minutes before running the spec again with the same fixtures.

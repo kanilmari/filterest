@@ -55,6 +55,7 @@ describe('generate_user_view profile submit', () => {
             if (routeName === 'fetchUserProfile') {
                 return Promise.resolve({
                     username: 'alice',
+                    login_name: 'private-account',
                     email: 'alice@example.com',
                 });
             }
@@ -66,6 +67,39 @@ describe('generate_user_view profile submit', () => {
             }
             return Promise.resolve({});
         });
+    });
+
+    test('shows the session login name before display name and never submits it as profile data', async () => {
+        await generate_user_view(document.getElementById('profile-root'));
+        expect(endpointRouterMock).toHaveBeenCalledWith('fetchUserProfile', { url_params: '?include_login_name=1' });
+        const field = document.getElementById('own_login_name'), display = document.getElementById('edit_username');
+        expect(field.labels[0].dataset.langKey).toBe('login_name');
+        expect(field.labels[0].textContent).toBe('Login name');
+        expect(display.labels[0].dataset.langKey).toBe('display_name');
+        expect(field.compareDocumentPosition(display) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+        expect([field.value, display.value, document.getElementById('edit_email').value])
+            .toEqual(['private-account', 'alice', 'alice@example.com']);
+        field.focus();
+        expect(field.readOnly).toBe(true);
+        expect([...new FormData(field.form).values()]).not.toContain('private-account');
+        expect(document.getElementById('new_login_name').value).toBe('');
+    });
+
+    test('a confirmed rename refreshes the private value without erasing unsaved display changes', async () => {
+        const root = document.getElementById('profile-root');
+        let stored = 'first-private';
+        endpointRouterMock.mockImplementation(async (route, opts) => {
+            if (route === 'fetchUserProfile') return { username: 'Display', login_name: stored };
+            if (route === 'updateUserProfile') stored = opts.body_data.login_name;
+            return { success: true };
+        });
+        await generate_user_view(root);
+        document.getElementById('edit_username').value = 'Unsent display change';
+        document.getElementById('new_login_name').value = 'new-private';
+        document.getElementById('profile_security_form').dispatchEvent(new Event('submit', { cancelable: true }));
+        await flushPromises();
+        expect(document.getElementById('own_login_name').value).toBe('new-private');
+        expect(document.getElementById('edit_username').value).toBe('Unsent display change');
     });
 
     test('reuses the OTP password prompt when saving an email change', async () => {

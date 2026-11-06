@@ -69,6 +69,22 @@ func collectLoginNameSourceGuardFindings(appRoot string) ([]string, error) {
 		"server_tools/versioning/schema_snapshots/db-9.10.1.sql":                    "versioned generated schema checked by bootstrap tests",
 		"server_tools/versioning/schema_snapshots/db-9.11.0.sql":                    "versioned generated schema checked by bootstrap tests",
 	}
+	// Each reviewed line may occur once. Added reads or logs, even in these
+	// files or alongside an existing use, need their own confidentiality review.
+	reviewedUses := map[string]map[string]string{
+		"backend/core_components/auth/user_profile_handlers.go": {
+			`if r.URL.Query().Get("include_login_name") == "1" {`: "explicit owner projection request",
+			"err = backend.DbConfidential.QueryRow(`SELECT email, login_name FROM restricted.users_restricted WHERE id = $1`, userID).Scan(&email, &loginName)": "private lookup uses only the session owner ID",
+			`profile["login_name"] = loginName`: "owner-only response field",
+		},
+		"frontend/core_components/user_tools/user_profile_printer.js": {
+			`labelText: 'Login name', labelLangKey: 'login_name',`:                                 "translated owner field label",
+			`inputType: 'text', inputId: 'own_login_name', readOnly: true,`:                        "unnamed read-only owner field",
+			`loginField.input.value = data?.login_name || '';`:                                     "refresh after the owner's name change",
+			`loginInput.value = typeof data?.login_name === 'string' ? data.login_name : '';`:      "initial owner field value without display-name fallback",
+			`return endpoint_router('fetchUserProfile', { url_params: '?include_login_name=1' });`: "explicit Account screen request",
+		},
+	}
 	// Bind review to both file and function; a familiar function name in a
 	// different package must not authorize a new credential writer.
 	writers := map[string]string{
@@ -111,8 +127,18 @@ func collectLoginNameSourceGuardFindings(appRoot string) ([]string, error) {
 			if err != nil {
 				return err
 			}
-			if strings.Contains(source, "login_name") && allowed[filepath.ToSlash(relative)] == "" {
-				findings = append(findings, fmt.Sprintf("unreviewed private-name source: %s", path))
+			if allowed[filepath.ToSlash(relative)] == "" {
+				uses := reviewedUses[filepath.ToSlash(relative)]
+				for index, line := range strings.Split(source, "\n") {
+					if !strings.Contains(line, "login_name") {
+						continue
+					}
+					if reviewed := strings.TrimSpace(line); uses[reviewed] != "" {
+						delete(uses, reviewed)
+						continue
+					}
+					findings = append(findings, fmt.Sprintf("unreviewed private-name source: %s:%d", path, index+1))
+				}
 			}
 			if privateWholeRowReadPattern.MatchString(source) || (extension != ".go" && hasPrivateWholeRowRead(source)) {
 				findings = append(findings, fmt.Sprintf("restricted whole-row read: %s", path))
@@ -257,12 +283,14 @@ func TestPrivateNameWholeRowReadGuard(t *testing.T) {
 func TestSourceGuardRejectsReadersOutsideCoreComponents(t *testing.T) {
 	root := t.TempDir()
 	fixtures := map[string]string{
-		"backend/pipeline/unreviewed.go":              "SELECT login_name FROM restricted.users_restricted",
-		"server_tools/unreviewed/main.go":             "SELECT u.id, ur.* FROM system_users u JOIN restricted.users_restricted ur USING(id)",
-		"frontend/unreviewed.js":                      "SELECT login_name FROM restricted.users_restricted",
-		"server_tools/unreviewed/read.py":             "SELECT login_name FROM restricted.users_restricted",
-		"server_tools/unreviewed/read.sql":            "SELECT login_name FROM restricted.users_restricted",
-		"server_tools/scripts/login_name_dry_run.sql": `SELECT private.* FROM "restricted"."users_restricted" private`,
+		"backend/pipeline/unreviewed.go":                              "SELECT login_name FROM restricted.users_restricted",
+		"server_tools/unreviewed/main.go":                             "SELECT u.id, ur.* FROM system_users u JOIN restricted.users_restricted ur USING(id)",
+		"frontend/unreviewed.js":                                      "SELECT login_name FROM restricted.users_restricted",
+		"server_tools/unreviewed/read.py":                             "SELECT login_name FROM restricted.users_restricted",
+		"server_tools/unreviewed/read.sql":                            "SELECT login_name FROM restricted.users_restricted",
+		"server_tools/scripts/login_name_dry_run.sql":                 `SELECT private.* FROM "restricted"."users_restricted" private`,
+		"backend/core_components/auth/user_profile_handlers.go":       "login_name",
+		"frontend/core_components/user_tools/user_profile_printer.js": "login_name",
 	}
 	for file, query := range fixtures {
 		full := filepath.Join(root, file)
@@ -270,6 +298,15 @@ func TestSourceGuardRejectsReadersOutsideCoreComponents(t *testing.T) {
 			t.Fatal(err)
 		}
 		source := fmt.Sprintf("package fixture\nconst query = %q\n", query)
+		if strings.HasSuffix(file, "user_profile_handlers.go") || strings.HasSuffix(file, "user_profile_printer.js") {
+			// Copy reviewed production source into a disposable fixture, then add
+			// an unreviewed use in that same allowed file; never edit the real file.
+			reviewed, err := os.ReadFile(filepath.Join("..", "..", "..", file))
+			if err != nil {
+				t.Fatal(err)
+			}
+			source = string(reviewed) + fmt.Sprintf("\nconst unreviewed = %q\n", query)
+		}
 		if filepath.Ext(file) == ".sql" {
 			source = query
 		}

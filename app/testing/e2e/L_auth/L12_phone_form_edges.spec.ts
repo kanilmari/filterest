@@ -5,6 +5,7 @@
 // Blocks settings/data writes and fails if the page attempts one; never submits a form.
 import { expect, test as base, type Locator } from '@playwright/test';
 import { waitForAppReady } from '../helpers/navigation';
+import { ensureNavbarVisible } from '../helpers/navbar';
 
 const test = base.extend<{ readOnlyGuard: void }>({
   readOnlyGuard: [async ({ context }, use) => {
@@ -104,10 +105,15 @@ test('signed in / Finnish / light: profile edges at 390 and 768px', async ({ pag
       const profile = await page.request.get('/api/user-profile');
       expect(profile.ok(), 'Requires the global setup authenticated session; no login POST fallback').toBe(true);
       expect((await profile.json()).user_id).toBeGreaterThan(1);
-      const account = page.locator('[data-testid="navbar-auth-user"], [data-testid="tab-user"]').first();
-      await account.waitFor({ state: 'attached' });
-      await account.evaluate((node: HTMLElement) => node.click());
+      await ensureNavbarVisible(page);
+      await page.getByTestId('navbar-auth-user').click();
+      await page.locator('#hideMenuButton').click();
       const form = page.locator('#user_profile_form');
+      const loginName = form.locator('#own_login_name');
+      await expect(loginName).toBeVisible();
+      await expect(loginName).toHaveAccessibleName(/\S/);
+      await expect(loginName).toHaveAttribute('readonly', '');
+      await expect.poll(() => loginName.evaluate((el: HTMLInputElement) => el.value.length > 0)).toBe(true);
       await expect(page.locator('#edit_username')).toBeVisible();
       await expect(page.locator('body')).toHaveClass(/light-mode/);
       await page.evaluate(() => document.fonts.ready);
@@ -116,6 +122,7 @@ test('signed in / Finnish / light: profile edges at 390 and 768px', async ({ pag
         expect(inset.left).toBeGreaterThan(0); expect(inset.right).toBeGreaterThan(0);
       } else {
         await expectEdges(form, 0);
+        await expectEdges(loginName, 16);
         await expectEdges(page.locator('#edit_username'), 16);
         const heading = form.locator('..').locator(':scope > :is(h1, h2, h3, h4, h5, h6):first-child');
         const menu = page.locator('#showMenuButton');

@@ -4,6 +4,7 @@
 // Exists to complement Go's raw-cookie, mail, application-log and database canary checks.
 import { test, expect, type Page, type Response, type APIResponse, type BrowserContext } from '@playwright/test';
 import { randomBytes } from 'node:crypto';
+import { ensureNavbarVisible } from '../helpers/navbar';
 import { lstatSync, readFileSync } from 'node:fs';
 import { isAbsolute } from 'node:path';
 import { openLoginEntry, submitCredentialsAndWaitForOtp, waitForAuthenticatedApp, logout } from '../helpers/auth';
@@ -66,20 +67,29 @@ test('LT10 — random private names stay out of browser responses and other-devi
     return response;
   };
   const profile = async (context: BrowserContext) => inspectAPI(await context.request.get('/api/user-profile'));
-  const capture = async (response: Response, context: BrowserContext) => {
+  const capture = async (response: Response, context: BrowserContext, ownerID: number, ownNames: Set<string>) => {
     responseCount += 1;
+    const inspectBody = (raw: string, channel: string, source: Response | APIResponse) => {
+      if (source.url() === origin + '/api/user-profile?include_login_name=1' && source.status() === 200) {
+        const record = JSON.parse(raw);
+        if (record.user_id !== ownerID || !ownNames.has(record.login_name) ||
+            !source.headers()['cache-control']?.includes('no-store')) findings.push('invalid private projection');
+        delete record.login_name; // Only this one field on the signed-in owner's explicit request.
+        inspect(JSON.stringify(record), channel);
+      } else inspect(raw, channel);
+    };
     // A request URL the test sends is its own input (the search below carries the canary name on purpose); only a
     // redirect destination is chosen by the server. Headers include any Location the server sets.
     if (response.request().redirectedFrom()) inspect(response.url(), 'redirect destination');
     inspect(JSON.stringify(await response.headersArray()), 'response headers');
     if (/text\/html|application\/json/.test(response.headers()['content-type'] || '') && response.status() < 300) {
-      try { inspect(await response.text(), 'response body'); }
+      try { inspectBody(await response.text(), 'response body', response); }
       catch {
         // The application's own navigation can discard a body first, for example after following its sign-out
         // redirect. A GET is read again through the same browser's cookies; anything else stays a finding.
         const again = response.request().method() === 'GET'
           ? await context.request.get(response.url()).catch(() => null) : null;
-        if (again) inspect(await again.text(), 'response body (read again)');
+        if (again) inspectBody(await again.text(), 'response body (read again)', again);
         else findings.push(`response body could not be inspected: ${new URL(response.url()).pathname}`);
       }
     }
@@ -108,8 +118,9 @@ test('LT10 — random private names stay out of browser responses and other-devi
       extraHTTPHeaders: { 'X-Bypass-Ratelimit': 'test-mode' } };
     const current = await browser.newContext(options);
     const other = await browser.newContext(options);
+    const ownNames = new Set([account.username]);
     for (const context of [current, other]) {
-      context.on('response', response => { pending.push(capture(response, context)); });
+      context.on('response', response => { pending.push(capture(response, context, account.user_id, ownNames)); });
     }
     const page = await current.newPage();
     const otherPage = await other.newPage();
@@ -117,13 +128,11 @@ test('LT10 — random private names stay out of browser responses and other-devi
     try {
       await signIn(page, account);
       await signIn(otherPage, account);
-      await page.locator('[data-testid="navbar-auth-user"], [data-testid="tab-user"]').first().waitFor({ state: 'attached' });
-      await page.evaluate(() => {
-        const button = document.querySelector('[data-testid="navbar-auth-user"], [data-testid="tab-user"]');
-        if (!(button instanceof HTMLElement)) throw new Error('Account profile navigation missing.');
-        button.click();
-      });
+      await ensureNavbarVisible(page);
+      await page.getByTestId('navbar-auth-user').click();
+      await page.locator('#hideMenuButton').click();
       await expect(page.locator('#edit_username')).toHaveValue(account.display_name);
+      await expect.poll(async () => await page.locator('#own_login_name').inputValue() === account.username).toBe(true);
       await expect(page.locator('#new_login_name')).toHaveValue('');
       inspect(await page.content(), 'authenticated DOM');
       await page.locator('#sign_out_other_devices').click();
@@ -137,12 +146,14 @@ test('LT10 — random private names stay out of browser responses and other-devi
       await signIn(otherPage, account);
       const replacement = `wl132_${randomBytes(16).toString('hex')}`;
       names.push(replacement);
+      ownNames.add(replacement);
       await page.locator('#new_login_name').fill(replacement);
       // The change can commit even when its confirmation or response fails, so restore whenever it was submitted.
       renameAttempted = true;
       await page.locator('#profile_security_form button[type="submit"]').click();
       await confirmProfileAction(page, account.password);
       await expect(page.locator('#new_login_name')).toHaveValue('');
+      await expect.poll(async () => await page.locator('#own_login_name').inputValue() === replacement).toBe(true);
       expect((await profile(current)).status()).toBe(200);
       expect((await profile(other)).status()).toBe(401);
       inspect(await page.content(), 'profile DOM after change');

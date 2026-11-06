@@ -19,8 +19,9 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
-// UserProfileFetchHandler returns the authenticated user's username and email.
+// UserProfileFetchHandler uses only the authenticated session as the profile owner.
 func UserProfileFetchHandler(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Cache-Control", "private, no-store")
 
 	session, err := e_sessions.GetOrCreateSession(w, r)
 	if err != nil {
@@ -45,21 +46,28 @@ func UserProfileFetchHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	profile := map[string]interface{}{
+		"user_id":           userID,
+		"username":          username,
+		"website":           website,
+		"bio_social_medias": bio,
+	}
 	var email string
-	err = backend.DbConfidential.QueryRow(`SELECT email FROM restricted.users_restricted WHERE id = $1`, userID).Scan(&email)
+	if r.URL.Query().Get("include_login_name") == "1" {
+		// Only the owner's Account screen requests this projection. Never fall back to the public display name.
+		var loginName string
+		err = backend.DbConfidential.QueryRow(`SELECT email, login_name FROM restricted.users_restricted WHERE id = $1`, userID).Scan(&email, &loginName)
+		profile["login_name"] = loginName
+	} else {
+		err = backend.DbConfidential.QueryRow(`SELECT email FROM restricted.users_restricted WHERE id = $1`, userID).Scan(&email)
+	}
 	if err != nil {
-		logging.Errorf("[UserProfileFetchHandler] failed to fetch email for user %d: %v", userID, err)
+		logging.Errorf("[UserProfileFetchHandler] failed to fetch private profile for user %d", userID)
 		httpresponse.RespondWithError(w, http.StatusInternalServerError, "db_error")
 		return
 	}
-
-	httpresponse.RespondWithJSON(w, http.StatusOK, map[string]interface{}{
-		"user_id":           userID,
-		"username":          username,
-		"email":             email,
-		"website":           website,
-		"bio_social_medias": bio,
-	})
+	profile["email"] = email
+	httpresponse.RespondWithJSON(w, http.StatusOK, profile)
 }
 
 // --- OTP request endpoints for profile changes ---

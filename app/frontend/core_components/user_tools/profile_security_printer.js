@@ -13,7 +13,7 @@ function label(element, key) {
 }
 
 /** Uses existing form styling and application theme variables in both theme overrides. */
-export function appendProfileSecurity(container, requestPassword) {
+export function appendProfileSecurity(container, requestPassword, onLoginNameChanged) {
     const form = document.createElement('form');
     form.id = 'profile_security_form';
     const fields = document.createElement('fieldset');
@@ -59,6 +59,10 @@ export function appendProfileSecurity(container, requestPassword) {
             input.value = '';
             showSuccessToast(text(successKey));
             if (result?.mail_status) showInfoToast(text(result.mail_status));
+            if (body.login_name !== undefined && onLoginNameChanged) {
+                // The write succeeded even if the subsequent profile GET fails.
+                try { await onLoginNameChanged(); } catch { /* The GET reports its own error. */ }
+            }
         } catch (error) {
             const key = error?.status === 429 && body.login_name !== undefined
                 ? 'login_name_change_rate_limited'

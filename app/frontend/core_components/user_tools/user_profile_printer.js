@@ -62,10 +62,6 @@ export async function generate_user_view(container) {
         applyTextLangKey(heading, 'user_profile_title', 'User Profile');
         container.appendChild(heading);
 
-        const infoDiv = document.createElement('div');
-        infoDiv.id = 'user_info';
-        container.appendChild(infoDiv);
-
         // Two separate forms to prevent Firefox from pairing username + password
         // fields for autofill. When they share a <form>, clicking a password
         // field causes Firefox to autofill the username field too.
@@ -78,6 +74,12 @@ export async function generate_user_view(container) {
         const profileLegend = document.createElement('legend');
         applyTextLangKey(profileLegend, 'profile', 'Profile');
         profileFieldset.appendChild(profileLegend);
+
+        const loginField = createLabeledInput({
+            labelText: 'Login name', labelLangKey: 'login_name',
+            inputType: 'text', inputId: 'own_login_name', readOnly: true,
+        });
+        profileFieldset.append(loginField.label, loginField.input);
 
         const usernameField = createLabeledInput({
             labelText: 'Display name',
@@ -203,14 +205,19 @@ export async function generate_user_view(container) {
         passwordForm.appendChild(passwordSubmitButton);
         container.appendChild(passwordForm);
 
-        appendProfileSecurity(container, requestCurrentPassword);
+        appendProfileSecurity(container, requestCurrentPassword, async () => {
+            // An explicit rename must not overwrite unrelated unsaved profile edits.
+            loginField.input.value = '';
+            const data = await fetchAccountProfile();
+            loginField.input.value = data?.login_name || '';
+        });
 
         let originalUsername = '';
         let originalEmail = '';
         let profileCurrentPassword = '';
 
         const refreshProfileData = async () => {
-            const profileData = await loadInitialData(usernameField.input, emailField.input, infoDiv);
+            const profileData = await loadInitialData(usernameField.input, emailField.input, loginField.input);
             originalUsername = profileData.username;
             originalEmail = profileData.email;
             for (const key of Object.keys(publicFields)) publicFields[key].value = profileData[key] || '';
@@ -414,7 +421,7 @@ export async function generate_user_view(container) {
  * Operates between field metadata and concrete DOM elements.
  * Exists to keep profile form assembly consistent and concise.
  *
- * @param {{ labelText: string, labelLangKey?: string, inputType: string, inputId: string, inputName: string }} options
+ * @param {{ labelText: string, labelLangKey?: string, inputType: string, inputId: string, inputName?: string, autocomplete?: string, readOnly?: boolean }} options
  * @returns {{ label: HTMLLabelElement, input: HTMLInputElement }}
  */
 function createLabeledInput(options) {
@@ -431,7 +438,10 @@ function createLabeledInput(options) {
 
     // Firefox ignores autocomplete="off" for password and username fields.
     // Workaround: create as readonly + text type, switch on focus.
-    if (options.inputType === 'password') {
+    if (options.readOnly) {
+        input.type = options.inputType;
+        input.readOnly = true; // No form name and no focus listener that makes it editable.
+    } else if (options.inputType === 'password') {
         input.type = 'text';
         input.readOnly = true;
         input.name = options.inputName + '_' + Date.now();
@@ -459,42 +469,29 @@ function createLabeledInput(options) {
  *
  * @param {HTMLInputElement} userInput
  * @param {HTMLInputElement} emailInput
- * @param {HTMLDivElement} infoDiv
+ * @param {HTMLInputElement} loginInput
  * @returns {Promise<{username: string, email: string}>}
  */
-async function loadInitialData(userInput, emailInput, infoDiv) {
+async function loadInitialData(userInput, emailInput, loginInput) {
     try {
-        const data = await endpoint_router('fetchUserProfile');
+        const data = await fetchAccountProfile();
         const username = typeof data?.username === 'string' ? data.username : '';
         const email = typeof data?.email === 'string' ? data.email : '';
 
         userInput.value = username;
         emailInput.value = email;
-        renderLoggedInAs(infoDiv, username);
+        loginInput.value = typeof data?.login_name === 'string' ? data.login_name : '';
 
         return { username, email, website: data?.website || '', bio_social_medias: data?.bio_social_medias || '' };
     } catch (error) {
         console.warn('loadInitialData', error);
-        renderLoggedInAs(infoDiv);
+        loginInput.value = '';
         return { username: '', email: '' };
     }
 }
 
-/**
- * renderLoggedInAs — renders a translatable prefix beside the current username.
- * Operates between translation-aware label spans and dynamic profile data.
- * Exists so the fixed UI text can be localized without overwriting the username.
- *
- * @param {HTMLDivElement} infoDiv
- * @param {string} [username='']
- */
-function renderLoggedInAs(infoDiv, username = '') {
-    const label = document.createElement('span');
-    applyTextLangKey(label, 'logged_in_as', 'Logged in as');
-    infoDiv.replaceChildren(label);
-    if (username) {
-        infoDiv.append(` ${username}`);
-    }
+function fetchAccountProfile() {
+    return endpoint_router('fetchUserProfile', { url_params: '?include_login_name=1' });
 }
 
 /**

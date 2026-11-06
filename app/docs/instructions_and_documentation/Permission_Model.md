@@ -58,15 +58,15 @@ administrators must sign in again with their unchanged login and password.
 Invalid or ambiguous names stop the atomic migration before any partial change.
 Ordinary accounts keep their display names and their existing sign-in names.
 
-Owner-directed welcome, reset and name-change email may contain the private
-name; forms may contain the value the owner typed, and protected operator
-credential handoffs contain it. Account responses, new cookies and new log or
-audit records do not return a separate private name. The upgrade preserves old,
-already public names in history, discussions and existing search/embedding
-copies; it does not promise to erase them. An old cookie may retain its holder's
-former name until its first session save, which drops the retired fields.
-The separate administrator sign-in address is future slice-4 work; the current
-account-name separation uses the existing sign-in routes.
+Owner-directed welcome, reset and name-change email may contain the private name; forms may contain the
+value the owner typed, and protected operator credential handoffs contain it. On Account the owner can also
+read their own login name in a labelled, read-only field above Display name. Only the explicit
+`GET /api/user-profile?include_login_name=1` returns it, using the signed-in session's id and a
+non-cacheable response. Guests cannot read it. Other profile and account responses, new cookies and new log
+or audit records omit it. The upgrade preserves old, already public names in history, discussions and
+existing search/embedding copies; it does not promise to erase them. An old cookie may retain its holder's
+former name until its first session save, which drops the retired fields. The separate administrator sign-in
+address is future slice-4 work; the current account-name separation uses the existing sign-in routes.
 
 ### Capability and Dataset Permissions
 
