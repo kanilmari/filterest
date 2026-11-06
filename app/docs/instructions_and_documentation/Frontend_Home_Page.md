@@ -147,20 +147,24 @@ injection paths; it does not make a malicious operator-authored page safe.
 
 ## Built-in Home presentation
 
+### Home without introductory text
+
+Choose **No text below title** in the Home palette to keep the Serif story heading, including its short italic accent. A longer slogan and the description stay
+hidden; the content boxes follow the heading. This choice starts at the top and keeps the current horizontal position. The position picker remains available
+afterwards. On phones the existing horizontal layout still applies. The stored text and line reveal preferences are retained; the reveal controls are hidden until
+another style is chosen. Saving uses the ordinary Home presentation endpoint. Before rolling back to an application without this preset, select and save a supported
+style.
+
 ### Serif story text style
 
-The Home palette offers **Text style** (Default / Serif story), **Line reveal**
-(Off / Line by line), bounded start-delay/interval ranges, and a Serif-only phone-size stepper (12–18 px, step 1, default 15): translated −/+ buttons have 44 px targets, disable at the bounds and announce the px value through `aria-live`.
-The owner's 17 October exception to K381 permits text style; K466 also permits
-logical alignment and its phone override; K474 permits phone story size. Other expansion remains frozen. Copy belongs to the source-owned
-Finnish/English palette dictionary, without language keys or a migration.
+The Home palette offers **Text style** (Default / Serif story / No text below title), **Line reveal** (Off / Line by line), bounded start-delay/interval ranges, and
+a Serif-only phone-size stepper (12–18 px, step 1, default 15): translated −/+ buttons have 44 px targets, disable at the bounds and announce the px value through
+`aria-live`. The owner's 17 October exception to K381 permits text style; K466 also permits logical alignment and its phone override; K474 permits phone story size.
+Other expansion remains frozen. Copy belongs to the source-owned Finnish/English palette dictionary, without language keys or a migration.
 
-The opt-in `text_style` in presentation schema 5 selects `default` or
-`serif_story_v1`; `reveal` holds `mode` (`none` / `lines`), `start_ms` (0–5000,
-initial 3000) and `interval_ms` (200–2000, initial 800). Unknown, missing, null,
-extra and wrongly typed fields fail strict Go/browser validation. Old v1/v2 rows
-read with default typography and reveal off, preserving their stored revision.
-Every palette save carries the complete text style even when it was untouched.
+The opt-in `text_style` in presentation schema 5 selects `default`, `serif_story_v1` or `none`; `reveal` holds `mode` (`none` / `lines`), `start_ms` (0–5000,
+initial 3000) and `interval_ms` (200–2000, initial 800). Unknown, missing, null, extra and wrongly typed fields fail strict Go/browser validation. Old v1/v2 rows
+read with default typography and reveal off, preserving their stored revision. Every palette save carries the complete text style even when it was untouched.
 
 Serif story uses upright Georgia / Times New Roman; a non-empty slogan of at most 40 trimmed Unicode code points joins the title as an italic accent (emoji surrogate pairs count once).
 Longer slogans appear once as the first paragraph below the title, before the story lines, in italic Georgia / Times New Roman and the accent colour.
@@ -496,16 +500,11 @@ Saving settings sections refreshes visible Home without changing navigation/hist
 
 ### Shared-link metadata
 
-The generic application document (Home, administrator pages and sign-in entry
-shells without an authorized dataset) describes the site using the public Home
-keys above: in Default, slogan first, then description, then the site name.
-Serif story uses the cleaned description, then the site name, never the accent.
-Whole-line emphasis markers are stripped from description metadata in both styles. Both slogans and
-description fallbacks collapse whitespace to one line and limit the excerpt to
-200 Unicode characters, including an ellipsis when shortened. It ends at a word
-boundary when one is available; a single overlong word is cut at a safe character
-boundary. Generic metadata uses the shell's enabled request language negotiation,
-including its configured default.
+The generic application document (Home, administrator pages and sign-in entry shells without an authorized dataset) describes the site using the public Home keys
+above: in Default, slogan first, then description, then the site name. Serif story and No text below title (`none`) use the cleaned description, then the site name,
+never the accent. Whole-line emphasis markers are stripped from description metadata in all styles. Both slogans and description fallbacks collapse whitespace to
+one line and limit the excerpt to 200 Unicode characters, including an ellipsis when shortened. It ends at a word boundary when one is available; a single overlong
+word is cut at a safe character boundary. Generic metadata uses the shell's enabled request language negotiation, including its configured default.
 
 `router/seo_meta_builder.go` shares the translation map already read for shell
 recovery. The existing presentation reader adds one settings read on generic

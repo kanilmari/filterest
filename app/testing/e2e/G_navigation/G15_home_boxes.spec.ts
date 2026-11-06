@@ -16,12 +16,15 @@ const image = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAKAAAABQCAIAAAARP+ljAAAA7ElEQ
 const title = 'Suomalaisen matkailijan pitkä otsikko pohjoisen maisemista ja rauhallisista retkikohteista kaikkina vuodenaikoina';
 const description = 'Koe pohjoisen maisemat ja kiireettömät retkipolut. Löydä matkavinkit, majoitus ja paikalliset elämykset seuraavaa lomaa varten. '.repeat(3);
 
-async function openHomeBoxes(page: Page, theme: 'light' | 'dark', width: number, anchor = 'center-left') {
+async function openHomeBoxes(page: Page, theme: 'light' | 'dark', width: number, anchor = 'center-left',
+    titleOnly?: { presentation: typeof presentationDefinition.default; heading: string; accent: string }) {
   const writes: string[] = [];
   await installHomePolicy(page.context(), theme, {
     site_name: 'WO95', show_blocks: true,
-    presentation: { ...presentationDefinition.default, anchor, max_width_px: 750, horizontal_margin_px: 160 },
-    hero: { title: { fi: 'Matkailijan etusivu', en: 'Traveller home' } },
+    presentation: titleOnly?.presentation ?? { ...presentationDefinition.default, anchor, max_width_px: 750, horizontal_margin_px: 160 },
+    hero: titleOnly ? { title: { fi: titleOnly.heading, en: titleOnly.heading },
+      slogan: { fi: titleOnly.accent, en: titleOnly.accent }, description: { fi: 'Piilotettava kuvaus', en: 'Hidden text' } }
+      : { title: { fi: 'Matkailijan etusivu', en: 'Traveller home' } },
     blocks: datasets.map((dataset, index) => ({ dataset, result_limit: 3,
       // The Home facade forwards the same authorized snapshot as get-results;
       // focal coordinates remain per-image companions, just as on full cards.
@@ -79,6 +82,57 @@ async function openHomeBoxes(page: Page, theme: 'light' | 'dark', width: number,
   await expect(page.locator('#front_page_container')).toHaveAttribute('aria-busy', 'false');
   await expect(page.locator('body')).toHaveClass(new RegExp(`\\b${theme}-mode\\b`));
   return writes;
+}
+
+// One response fixture per case; moving the saved anchor only changes subsequent GETs.
+for (const width of [1440, 768, 390]) for (const [label, heading, accent] of [
+  ['short', 'Etusivu', ''], ['saved', 'Matkatiedot ja -edut', 'yhdellä silmäyksellä'],
+]) {
+  test(`Title-only Home boxes follow the heading at ${width}px (${label})`, async ({ page }, testInfo) => {
+    // WO124 model C: keep the stored geometry and copy; only change the text style and anchor.
+    const presentation = { ...presentationDefinition.default, light_wash: 73,
+      text_style: { ...presentationDefinition.default.text_style, preset: 'none' } };
+    const anchors = ['top-left', 'top-center', 'top-right', 'center-right', 'center-center', 'center-left'];
+    presentation.anchor = anchors[0];
+    const writes = await openHomeBoxes(page, 'light', width, anchors[0], { presentation, heading, accent });
+    for (const anchor of anchors) {
+      if (presentation.anchor !== anchor) {
+        presentation.anchor = anchor;
+        await page.reload({ waitUntil: 'domcontentloaded' });
+      }
+      const stage = page.locator('.front-page-text-stage');
+      await expect(stage).toHaveAttribute('data-anchor', anchor);
+      await expect(stage.locator('h1')).toHaveText([heading, accent].filter(Boolean).join(' '));
+      if (accent) await expect(stage.locator('h1 em')).toHaveText(accent);
+      else await expect(stage.locator('h1 em')).toHaveCount(0);
+      await expect(stage.locator('h1')).toHaveCSS('font-family', /Georgia/i);
+      await expect(stage.locator('.front-page-slogan')).toBeHidden();
+      await expect(stage.locator('.front-page-description')).toBeHidden();
+      await expect.poll(() => stage.evaluate((element, { anchor, width }) => {
+        const first = element.parentElement?.querySelector('.supplemental-dataset-group');
+        if (!first) return 999;
+        const block = first.getBoundingClientRect();
+        const hero = element.querySelector('.front-page-hero')!.getBoundingClientRect();
+        const stage = element.getBoundingClientRect();
+        const inset = parseFloat(getComputedStyle(element).paddingLeft);
+        const offset = (rect: DOMRect, blockInset: number) => anchor.endsWith('center') || width <= 700
+          ? (rect.left + rect.right - stage.left - stage.right) / 2
+          : anchor.endsWith('left') ? rect.left - stage.left - blockInset : stage.right - rect.right - blockInset;
+        const y = anchor.startsWith('top') ? parseFloat(getComputedStyle(element).paddingTop) : (stage.height - hero.height) / 2;
+        return Math.max(Math.abs(block.top - hero.bottom - 40), Math.abs(offset(hero, inset)),
+          Math.abs(offset(block, inset)), Math.abs(hero.top - stage.top - y));
+      }, { anchor, width })).toBeLessThanOrEqual(1);
+      const measurements = await stage.evaluate(el => {
+        const heading = el.querySelector('h1')!.getBoundingClientRect();
+        const firstBox = el.parentElement!.querySelector('.supplemental-dataset-group')!.getBoundingClientRect();
+        return { heading: heading.toJSON(), firstBox: firstBox.toJSON(), gap: firstBox.top - heading.bottom };
+      });
+      await testInfo.attach(`layout-${width}-${label}-${anchor}.json`, {
+        body: JSON.stringify(measurements), contentType: 'application/json',
+      });
+    }
+    expect(writes).toEqual([]);
+  });
 }
 
 // WO107: each case proves one anchor; the full matrix ran once in proof job d330m. Phones ignore the side.

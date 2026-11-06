@@ -22,6 +22,7 @@ Dates are the local (Europe/Helsinki) date on which the version was published.
 
 ## [Unreleased]
 
+- Home's text style can leave out the introduction text, so the Home boxes follow the title directly.
 - The user page shows signed-in users their own login name as a read-only field.
 - The sign-in dialog stays open when its backdrop is clicked. Other dialogs still close on an intentional backdrop click, but keep their drafts when a text selection ends outside the dialog. Close buttons, Escape and assistive activation remain available.
 - Phone top bars use the owner’s 48px Model D cells and square search field, with separate clear and search-hide controls; articles show the dataset name, and Home keeps typed search text when closed and hides empty result boxes (WO129/K580/K586).

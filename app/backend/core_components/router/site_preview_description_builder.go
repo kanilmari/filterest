@@ -9,13 +9,14 @@ import (
 	"unicode"
 
 	"easelect/backend/core_components/lang"
+	"easelect/frontend/shared/front_page_presentation"
 )
 
 // sitePreviewDescription uses only public Home copy already read for this shell.
 // Slogans keep their words but, like descriptions, become one plain line within the preview limit (a multi-line
 // Home slogan put raw newlines into the metadata on the native instance, 14.10.2026).
 func sitePreviewDescription(siteName string, texts lang.ShellBootTexts, preset string) string {
-	if preset != "serif_story_v1" {
+	if !front_page_presentation.UsesSerifStoryTitle(preset) {
 		if slogan := strings.TrimSpace(texts.HomeSlogan); slogan != "" {
 			return shortenPreviewDescription(slogan)
 		}

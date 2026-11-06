@@ -211,7 +211,7 @@ export function createPaletteRangeControl(control, copy, { prefix, onChange }) {
 }
 
 /** Shared select construction with keyed labels, safe text and stable focus. */
-export function createPaletteSelectControl({ id, label, choices }, copy, { prefix, onChange }) {
+export function createPaletteSelectControl({ id, label, choices, choiceLabels = {} }, copy, { prefix, onChange }) {
     const element = document.createElement('label');
     element.className = 'dataset-cover-test-palette__select';
     const text = document.createElement('span');
@@ -228,7 +228,7 @@ export function createPaletteSelectControl({ id, label, choices }, copy, { prefi
     function setCopy(nextCopy) {
         text.textContent = nextCopy[label];
         input.setAttribute('aria-label', nextCopy[label]);
-        options.forEach(option => { option.textContent = nextCopy[option.value]; });
+        options.forEach(option => { option.textContent = nextCopy[choiceLabels[option.value] ?? option.value]; });
     }
     setCopy(copy);
     return { element, input, setCopy, setValue(value) { input.value = value; } };

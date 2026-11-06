@@ -51,6 +51,13 @@ type TextStyle struct {
 	Preset string     `json:"preset"`
 	Reveal LineReveal `json:"reveal"`
 }
+
+// UsesSerifStoryTitle reports whether the slogan is a title accent, not a description.
+// Mirrors front_page_text_style_renderer.js; none hides only the introduction.
+func UsesSerifStoryTitle(preset string) bool {
+	return preset == "serif_story_v1" || preset == "none"
+}
+
 type LineReveal struct {
 	Mode       string `json:"mode"`
 	StartMS    int    `json:"start_ms"`

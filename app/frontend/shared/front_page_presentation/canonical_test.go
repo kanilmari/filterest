@@ -86,6 +86,7 @@ func TestCanonicalStoredFormsAndRestore(t *testing.T) {
 		{"default timings", "default", "none", 3000, 800, 2, "inherit", 15},
 		{"inactive custom timings", "default", "none", 1234, 567, 2, "inherit", 15},
 		{"serif without reveal", "serif_story_v1", "none", 1234, 567, 3, "inherit", 15},
+		{"title only with retained reveal settings", "none", "lines", 1234, 567, 3, "inherit", 15},
 		{"default with reveal", "default", "lines", 1234, 567, 3, "inherit", 15},
 		{"serif with reveal", "serif_story_v1", "lines", 3000, 800, 3, "inherit", 15},
 		{"default phone start", "default", "none", 1234, 567, 4, "start", 15},

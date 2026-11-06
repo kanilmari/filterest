@@ -29,6 +29,31 @@ second</p></div><div class="front-page-description"><p class="home-text-paragrap
 line</p><p class="home-text-paragraph">&lt;safe&gt;</p></div></header>"`);
 });
 
+test.each(['lyhyt korostus', 'x'.repeat(41)])('none preserves the exact Serif heading; returning restores the text: %s', accent => {
+    const options = fixture({ accent });
+    const { hero, heading, slogan, description } = options;
+    const originalHeading = heading.outerHTML;
+    const originalStory = description.innerHTML;
+    const originalStyle = options.textStyle;
+    cleanup();
+    cleanup = renderHomeHeroText({ ...options, textStyle: { preset: 'none', reveal: { mode: 'lines' } } });
+    expect(heading.outerHTML).toBe(originalHeading);
+    expect(hero.classList.contains('front-page-hero--serif-story-v1')).toBe(true);
+    expect(hero.contains(slogan)).toBe(false);
+    expect(description.hidden).toBe(true);
+    expect(hero.textContent).toBe(heading.textContent);
+    expect(hero.classList.contains('front-page-hero--reveal-lines')).toBe(false);
+    cleanup();
+    cleanup = renderHomeHeroText({ ...options, textStyle: originalStyle });
+    expect(description.hidden).toBe(false);
+    expect(description.innerHTML).toBe(originalStory);
+    cleanup();
+    cleanup = renderHomeHeroText({ ...options, textStyle: DEFAULT_HOME_PRESENTATION.text_style });
+    expect(slogan.hidden || description.hidden).toBe(false);
+    expect(slogan.textContent).toBe(options.accent);
+    expect(description.textContent).toContain('Ensimmäinen');
+});
+
 test.each([
     ['fi', 'Matkatiedot ja -edut', 'yhdellä silmäyksellä'],
     ['en', 'Travel news and deals', 'at a glance'],

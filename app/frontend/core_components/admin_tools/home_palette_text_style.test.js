@@ -20,6 +20,25 @@ function setup(saved = { ...defaults, text_style: { preset: 'serif_story_v1', re
 }
 function edit(input, value, event = 'input') { input.value = String(value); input.dispatchEvent(new Event(event)); }
 
+test.each(['left', 'center', 'right'])('none starts at the top on the same side (%s) and still permits a later position', async side => {
+    const preset = { ...defaults, anchor: `bottom-${side}`,
+        text_style: { preset: 'serif_story_v1', reveal: { mode: 'lines', start_ms: 1234, interval_ms: 567 } } };
+    const { get, render, request } = setup(preset);
+    edit(get('text-style'), 'none', 'change');
+    expect(render).toHaveBeenCalledTimes(1);
+    expect(get(`anchor-top-${side}`).getAttribute('aria-pressed')).toBe('true');
+    expect(get('text-style').selectedOptions[0].textContent).toBe('No text below title');
+    for (const id of ['line-reveal','reveal-start','reveal-interval']) expect(get(id).closest('label').hidden).toBe(true);
+    get(`anchor-center-${side}`).click();
+    get('save').click();
+    await vi.waitFor(() => expect(request).toHaveBeenCalledOnce());
+    expect(request.mock.calls[0][0].presentation).toEqual({ ...preset, anchor: `center-${side}`,
+        text_style: { ...preset.text_style, preset: 'none' } });
+    edit(get('text-style'), 'serif_story_v1', 'change');
+    expect(get('line-reveal').closest('label').hidden).toBe(false);
+    expect(get('line-reveal').value).toBe('lines');
+});
+
 test('untouched text style round-trips when saving directly or editing another setting', async () => {
     const { get, request, saved } = setup();
     get('save').click(); await vi.waitFor(() => expect(get('save').disabled).toBe(false));

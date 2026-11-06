@@ -29,7 +29,8 @@ export function homeStoryLines(text) {
 
 /** Rebuild once per language/preview/save/reset. The caller releases the previous listener first. */
 export function renderHomeHeroText({ hero, heading, slogan, description, title, accent, text, language, textStyle }) {
-    const serif = textStyle.preset === 'serif_story_v1';
+    const titleOnly = textStyle.preset === 'none';
+    const serif = titleOnly || textStyle.preset === 'serif_story_v1';
     hero.classList.toggle('front-page-hero--serif-story-v1', serif);
     hero.classList.remove('front-page-hero--reveal-lines', 'front-page-hero--reveal-complete');
     heading.textContent = title;
@@ -51,8 +52,13 @@ export function renderHomeHeroText({ hero, heading, slogan, description, title, 
         emphasis.textContent = accent;
         heading.append(document.createTextNode(' '), emphasis);
     }
-    description.removeAttribute('hidden');
     description.replaceChildren();
+    description.hidden = titleOnly;
+    if (titleOnly) {
+        hero.style.removeProperty('--home-reveal-start');
+        hero.style.removeProperty('--home-reveal-interval');
+        return () => {};
+    }
     if (!accentFitsTitle && accent.trim()) {
         const lead = document.createElement('p');
         lead.className = 'front-page-story-lead';

@@ -13,8 +13,12 @@ func TestHomeTextStylePreviewDescriptions(t *testing.T) {
 	for _, tc := range []struct{ name, preset, slogan, description, expected string }{
 		{"serif story", "serif_story_v1", "at a glance", "**Fintravel brings news**\n\nAnd deals", "Fintravel brings news And deals"},
 		{"empty serif", "serif_story_v1", "at a glance", " \n ", "Fintravel"},
+		{"none with short emphasis", "none", "yhdellä silmäyksellä", "**Fintravel brings news**\n\nAnd deals", "Fintravel brings news And deals"},
+		{"empty none", "none", "at a glance", "", "Fintravel"},
+		{"blank none", "none", "at a glance", " \n ", "Fintravel"},
 		{"default slogan", "default", "at a glance", "**Ignored**", "at a glance"},
 		{"default cleaned", "default", "", "  **News**  \r\nMore", "News More"},
+		{"empty default", "default", "", "", "Fintravel"},
 		{"literal markers", "serif_story_v1", "accent", "**\na **b** c\n**x", "** a **b** c **x"},
 		{"inner markers", "serif_story_v1", "accent", "**a **b** c**", "a **b** c"},
 	} {

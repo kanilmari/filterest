@@ -78,7 +78,15 @@ export function mountHomePalette(button, { snapshot, render, saveRequestFn = sav
     }
     // Nested typography choices share the same draft as layout and phone alignment.
     const changeTextStyle = (key, value, reveal = false) => {
-        const current = (draftOwner.draft || DEFAULT_HOME_PRESENTATION).text_style;
+        const draft = draftOwner.draft || DEFAULT_HOME_PRESENTATION;
+        const current = draft.text_style;
+        if (key === 'preset' && value === 'none' && current.preset !== 'none') {
+            // Start at the top on selection; the owner can still choose another row afterwards.
+            const side = draft.anchor.split('-')[1];
+            draftOwner.replaceDraft({ ...draft, anchor: `top-${side}`, text_style: { ...current, preset: value } });
+            syncControls();
+            return;
+        }
         change('text_style', reveal ? { ...current, reveal: { ...current.reveal, [key]: value } }
             : { ...current, [key]: value });
     };
@@ -86,9 +94,9 @@ export function mountHomePalette(button, { snapshot, render, saveRequestFn = sav
         ['text-style', 'textStyle', HOME_PRESENTATION_DEFINITION.text_style.presets, 'preset', false],
         ['line-reveal', 'lineReveal', HOME_PRESENTATION_DEFINITION.text_style.reveal_modes, 'mode', true],
     ]) {
-        const control = createPaletteSelectControl({ id, label, choices }, copy,
+        const control = createPaletteSelectControl({ id, label, choices, choiceLabels: reveal ? {} : { none: 'noIntroText' } }, copy,
             { prefix: 'home-palette', onChange: value => changeTextStyle(key, value, reveal) });
-        controls.push({ ...control, readValue: value => reveal ? value.text_style.reveal[key] : value.text_style[key] });
+        controls.push({ ...control, reveal, readValue: value => reveal ? value.text_style.reveal[key] : value.text_style[key] });
         container.append(control.element);
     }
     const phoneStorySize = createHomePaletteSizeControl(HOME_PRESENTATION_DEFINITION.phone_story_size, copy,
@@ -98,12 +106,15 @@ export function mountHomePalette(button, { snapshot, render, saveRequestFn = sav
     for (const [id, key, label] of [['reveal-start', 'start_ms', 'revealStart'], ['reveal-interval', 'interval_ms', 'revealInterval']]) {
         const control = createPaletteRangeControl({ id, label, ...HOME_PRESENTATION_DEFINITION.text_style[key], unit: 'ms' }, copy,
             { prefix: 'home-palette', onChange: value => changeTextStyle(key, value, true) });
-        controls.push({ ...control, readValue: value => value.text_style.reveal[key] });
+        controls.push({ ...control, reveal: true, readValue: value => value.text_style.reveal[key] });
         container.append(control.element);
     }
     function syncControls() {
         const value = draftOwner.draft || DEFAULT_HOME_PRESENTATION;
-        controls.forEach(control => control.setValue(control.readValue ? control.readValue(value) : value[control.key]));
+        controls.forEach(control => {
+            control.setValue(control.readValue ? control.readValue(value) : value[control.key]);
+            if (control.reveal) control.element.hidden = value.text_style.preset === 'none';
+        });
         // Only Serif story consumes this size; preserve it when another style is previewed.
         phoneStorySize.element.hidden = value.text_style.preset !== 'serif_story_v1';
     }
