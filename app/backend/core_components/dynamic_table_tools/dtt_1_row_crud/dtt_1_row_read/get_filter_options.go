@@ -5,6 +5,7 @@
 package dtt_1_row_read
 
 import (
+	"easelect/backend/core_components/middlewares"
 	"fmt"
 	"log"
 	"net/http"
@@ -67,7 +68,7 @@ func GetFilterOptionsHandler(w http.ResponseWriter, r *http.Request) {
 
 	session, sessErr := e_sessions.GetOrCreateSession(nil, r)
 	if sessErr != nil {
-		log.Printf("\033[31merror: %s\033[0m\n", sessErr.Error())
+		log.Printf("\033[31merror: %s\033[0m\n", middlewares.AppLogSearchError(sessErr, "GetFilterOptionsHandler", tableName))
 		httpresponse.RespondWithError(w, http.StatusInternalServerError, "error fetching session")
 		return
 	}
@@ -80,7 +81,7 @@ func GetFilterOptionsHandler(w http.ResponseWriter, r *http.Request) {
 	currentDb := auth.GetDBForRole(userRole)
 	readQuerier, err := getPilotReadQuerier(r.Context(), tableName, currentDb)
 	if err != nil {
-		log.Printf("\033[31merror: %s\033[0m\n", err.Error())
+		log.Printf("\033[31merror: %s\033[0m\n", middlewares.AppLogSearchError(err, "GetFilterOptionsHandler", tableName))
 		httpresponse.RespondWithError(w, http.StatusInternalServerError, "error initializing pilot read transaction")
 		return
 	}
@@ -118,7 +119,7 @@ func GetFilterOptionsHandler(w http.ResponseWriter, r *http.Request) {
 		tableName,
 	).Scan(&exists)
 	if err != nil {
-		log.Printf("\033[31merror checking table existence: %s\033[0m\n", err.Error())
+		log.Printf("\033[31merror checking table existence: %s\033[0m\n", middlewares.AppLogSearchError(err, "GetFilterOptionsHandler", tableName))
 		httpresponse.RespondWithError(w, http.StatusInternalServerError, "error checking table existence")
 		return
 	}
@@ -130,7 +131,7 @@ func GetFilterOptionsHandler(w http.ResponseWriter, r *http.Request) {
 	// 3. Resolve the display column using the shared FK heuristic
 	displayCol, err := dtt_utils.ResolveFKDisplayColumn("public", tableName)
 	if err != nil {
-		log.Printf("\033[31merror resolving display column for %s: %s\033[0m\n", tableName, err.Error())
+		log.Printf("\033[31merror resolving display column for %s: %s\033[0m\n", tableName, middlewares.AppLogSearchError(err, "GetFilterOptionsHandler", tableName))
 		httpresponse.RespondWithError(w, http.StatusInternalServerError, "could not resolve display column")
 		return
 	}
@@ -168,7 +169,7 @@ func GetFilterOptionsHandler(w http.ResponseWriter, r *http.Request) {
 		valueColumn,
 	).Scan(&valueColumnExists)
 	if err != nil {
-		log.Printf("\033[31merror checking value column existence: %s\033[0m\n", err.Error())
+		log.Printf("\033[31merror checking value column existence: %s\033[0m\n", middlewares.AppLogSearchError(err, "GetFilterOptionsHandler", tableName))
 		httpresponse.RespondWithError(w, http.StatusInternalServerError, "error checking filter option value column")
 		return
 	}
@@ -186,7 +187,7 @@ func GetFilterOptionsHandler(w http.ResponseWriter, r *http.Request) {
 	// must be able to request their true referenced column instead of the row id.
 	readPolicy, err := getLegacyMustTrueReadPolicy(currentDb, tableName)
 	if err != nil {
-		log.Printf("\033[31merror fetching row policy metadata: %s\033[0m\n", err.Error())
+		log.Printf("\033[31merror fetching row policy metadata: %s\033[0m\n", middlewares.AppLogSearchError(err, "GetFilterOptionsHandler", tableName))
 		httpresponse.RespondWithError(w, http.StatusInternalServerError, "error fetching row policy metadata")
 		return
 	}
@@ -223,7 +224,7 @@ func GetFilterOptionsHandler(w http.ResponseWriter, r *http.Request) {
 
 	rows, err := readQuerier.Query(query, queryArgs...)
 	if err != nil {
-		log.Printf("\033[31merror querying filter options: %s\033[0m\n", err.Error())
+		log.Printf("\033[31merror querying filter options: %s\033[0m\n", middlewares.AppLogSearchError(err, "GetFilterOptionsHandler", tableName))
 		httpresponse.RespondWithError(w, http.StatusInternalServerError, "error fetching filter options")
 		return
 	}
@@ -234,13 +235,13 @@ func GetFilterOptionsHandler(w http.ResponseWriter, r *http.Request) {
 		var id interface{}
 		var label string
 		if err := rows.Scan(&id, &label); err != nil {
-			log.Printf("\033[31merror scanning filter option row: %s\033[0m\n", err.Error())
+			log.Printf("\033[31merror scanning filter option row: %s\033[0m\n", middlewares.AppLogSearchError(err, "GetFilterOptionsHandler", tableName))
 			continue
 		}
 		options = append(options, filterOption{Value: id, Label: label})
 	}
 	if err := rows.Err(); err != nil {
-		log.Printf("\033[31mrows iteration error: %s\033[0m\n", err.Error())
+		log.Printf("\033[31mrows iteration error: %s\033[0m\n", middlewares.AppLogSearchError(err, "GetFilterOptionsHandler", tableName))
 	}
 
 	httpresponse.RespondWithJSON(w, http.StatusOK, options)

@@ -152,6 +152,26 @@ Implementation anchors:
 
 ## Log maintenance and automatic retention
 
+Application diagnostics exclude visitor search terms by default. The site-wide
+boolean setting `app_log_search_terms` in `system_config` is false on new and
+upgraded installations unless an administrator already chose a value. Missing,
+null or unreadable values also mean false. Administrators can edit the boolean
+in the existing system configuration settings view. When false, page-load logs
+omit the URL query string and fragment, and AI search diagnostics are suppressed
+because their result names can repeat the search words. When true, the previous
+full-URL and AI diagnostic output returns. Search failures log only the error
+class, SQLSTATE, handler and dataset identity when false; database messages and
+provider response bodies and decoding errors are excluded. This also covers vector
+search, embedding SSE and shared metadata/enrichment error logs. Opt-in retains
+the previous error output.
+The shared configuration cache coalesces misses per key without holding its
+shared lock during database reads, so another key's warm reads remain immediate.
+Explicit cache replacement or deletion also wins for the caller that started an
+older load; after deletion, callers share a fresh load rather than returning the
+older result.
+It applies setting changes within five minutes; a failed refresh returns to false. This
+setting affects new application log lines, not previously stored logs.
+
 Fresh installations enable automatic retention. Public migration
 `20261009000083_add_automatic_log_retention.sql` adds missing configuration on
 upgrades, including installations previously configured by a private migration.

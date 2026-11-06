@@ -16,6 +16,8 @@ import (
 	"strings"
 	"time"
 
+	"easelect/backend/core_components/middlewares"
+
 	"github.com/sashabaranov/go-openai"
 )
 
@@ -118,7 +120,10 @@ func generateOpenAIEmbedding(ctx context.Context, text string) ([]float32, error
 		Input: []string{text},
 	})
 	if err != nil {
-		return nil, fmt.Errorf("openai embedding error: %w", err)
+		if middlewares.CheckAppLogSearchTerms() {
+			return nil, fmt.Errorf("openai embedding error: %w", err)
+		}
+		return nil, fmt.Errorf("openai embedding error: %s", middlewares.AppLogSearchError(err, "generateOpenAIEmbedding", ""))
 	}
 	if len(resp.Data) == 0 {
 		return nil, fmt.Errorf("openai embedding returned no data")
@@ -204,16 +209,28 @@ func generateGoogleEmbedding(ctx context.Context, text string) ([]float32, error
 	}
 
 	if httpResp.StatusCode != 200 {
-		log.Printf("[embedding_client] Google API error %d: %s", httpResp.StatusCode, string(respBytes))
-		return nil, fmt.Errorf("google embedding: API returned %d: %s", httpResp.StatusCode, string(respBytes))
+		if middlewares.CheckAppLogSearchTerms() {
+			log.Printf("[embedding_client] Google API error %d: %s", httpResp.StatusCode, string(respBytes))
+			return nil, fmt.Errorf("google embedding: API returned %d: %s", httpResp.StatusCode, string(respBytes))
+		}
+		log.Printf("[embedding_client] Google API error %d", httpResp.StatusCode)
+		return nil, fmt.Errorf("google embedding: API returned %d", httpResp.StatusCode)
 	}
 
 	var geminiResp geminiEmbedResponse
 	if err := json.Unmarshal(respBytes, &geminiResp); err != nil {
+		// Decoder errors may quote provider numbers or values, just like an
+		// API error body. Do not retain or wrap that content without opt-in.
+		if !middlewares.CheckAppLogSearchTerms() {
+			return nil, fmt.Errorf("google embedding: decode failed (error_class=%T)", err)
+		}
 		return nil, fmt.Errorf("google embedding: unmarshal error: %w", err)
 	}
 	if geminiResp.Error != nil {
-		return nil, fmt.Errorf("google embedding: API error %d: %s", geminiResp.Error.Code, geminiResp.Error.Message)
+		if middlewares.CheckAppLogSearchTerms() {
+			return nil, fmt.Errorf("google embedding: API error %d: %s", geminiResp.Error.Code, geminiResp.Error.Message)
+		}
+		return nil, fmt.Errorf("google embedding: API error %d", geminiResp.Error.Code)
 	}
 	if geminiResp.Embedding == nil || len(geminiResp.Embedding.Values) == 0 {
 		return nil, fmt.Errorf("google embedding: no data returned")

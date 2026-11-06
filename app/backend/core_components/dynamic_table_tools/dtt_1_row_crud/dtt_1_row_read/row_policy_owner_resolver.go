@@ -7,6 +7,7 @@ package dtt_1_row_read
 
 import (
 	"database/sql"
+	"easelect/backend/core_components/middlewares"
 	"fmt"
 	"log"
 	"strings"
@@ -213,7 +214,7 @@ func getMustBeTrueColumnsWithOwner(db dbutils.Querier, tableName string) ([]stri
     `
 	rows, err := db.Query(query, tableName)
 	if err != nil {
-		log.Printf("\033[31merror: %s\033[0m\n", err.Error())
+		log.Printf("\033[31merror: %s\033[0m\n", middlewares.AppLogSearchError(err, "getMustBeTrueColumnsWithOwner", tableName))
 		return nil, "", err
 	}
 	defer rows.Close()
@@ -222,13 +223,13 @@ func getMustBeTrueColumnsWithOwner(db dbutils.Querier, tableName string) ([]stri
 	for rows.Next() {
 		var colName string
 		if err := rows.Scan(&colName); err != nil {
-			log.Printf("\033[31merror: %s\033[0m\n", err.Error())
+			log.Printf("\033[31merror: %s\033[0m\n", middlewares.AppLogSearchError(err, "getMustBeTrueColumnsWithOwner", tableName))
 			continue
 		}
 		mustTrueCols = append(mustTrueCols, colName)
 	}
 	if err := rows.Err(); err != nil {
-		log.Printf("\033[31merror: %s\033[0m\n", err.Error())
+		log.Printf("\033[31merror: %s\033[0m\n", middlewares.AppLogSearchError(err, "getMustBeTrueColumnsWithOwner", tableName))
 		return nil, "", err
 	}
 
@@ -238,7 +239,7 @@ func getMustBeTrueColumnsWithOwner(db dbutils.Querier, tableName string) ([]stri
 
 	ownerColumn, err := resolveRowPolicyOwnerColumn(db, tableName)
 	if err != nil {
-		log.Printf("\033[31merror: %s\033[0m\n", err.Error())
+		log.Printf("\033[31merror: %s\033[0m\n", middlewares.AppLogSearchError(err, "getMustBeTrueColumnsWithOwner", tableName))
 		return nil, "", err
 	}
 

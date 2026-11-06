@@ -21,6 +21,7 @@ import (
 	"easelect/backend/core_components/dynamic_table_tools/dtt_2_column_crud/dtt_2_column_read"
 	dtt_models "easelect/backend/core_components/dynamic_table_tools/dtt_models"
 	e_sessions "easelect/backend/core_components/sessions"
+	"easelect/backend/core_components/system_config_cache"
 	"github.com/gorilla/sessions"
 )
 
@@ -62,10 +63,8 @@ REVOKE SELECT(x) ON b308_query_columns FROM wl58_reader;
 	backend.Db, backend.DbBasic, backend.DbGuest, backend.DbAdmin = owner, reader, reader, owner
 	oldStore, oldName := e_sessions.Store, e_sessions.SessionName
 	e_sessions.Store, e_sessions.SessionName = sessions.NewCookieStore([]byte("b308-disposable-session-fixture-32")), "b308-query-columns"
-	configCacheMu.Lock()
-	oldConfig := configCache["results_load_amount"]
-	delete(configCache, "results_load_amount")
-	configCacheMu.Unlock()
+	oldConfig := getCachedConfig("results_load_amount")
+	system_config_cache.Delete("results_load_amount")
 	clearCaches := func() {
 		InvalidateSchemaCache(queryColumnsFixtureTable)
 		InvalidatePermissionsCache(queryColumnsFixtureTable)
@@ -75,12 +74,10 @@ REVOKE SELECT(x) ON b308_query_columns FROM wl58_reader;
 	clearCaches()
 	t.Cleanup(func() {
 		clearCaches()
-		configCacheMu.Lock()
-		delete(configCache, "results_load_amount")
+		system_config_cache.Delete("results_load_amount")
 		if oldConfig != nil {
-			configCache["results_load_amount"] = oldConfig
+			setCachedConfig("results_load_amount", oldConfig)
 		}
-		configCacheMu.Unlock()
 		backend.Db, backend.DbBasic, backend.DbGuest, backend.DbAdmin = oldDB, oldBasic, oldGuest, oldAdmin
 		e_sessions.Store, e_sessions.SessionName = oldStore, oldName
 		resetJoinMetadataCacheForTests()

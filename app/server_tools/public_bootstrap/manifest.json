@@ -2,7 +2,7 @@
   "artifact": "filterest-public-bootstrap",
   "format_version": 2,
   "app_version": "9.6.1",
-  "db_version": "9.13.4",
+  "db_version": "9.13.5",
   "schema_source": "app/server_tools/public_bootstrap/source/base.schema.sql",
   "seed_source": "app/server_tools/public_bootstrap/source/base.seed.sql",
   "purpose": "local independent Filterest bootstrap without private source runtime dependency",
@@ -231,7 +231,9 @@
     "20261029000100_add_home_top_bar_setting.sql",
     "20261029000199_record_database_release_9_13_3.sql",
     "20261030000346_add_category_filter_button_width_mode.sql",
-    "20261030000399_record_database_release_category_button_width.sql"
+    "20261030000399_record_database_release_category_button_width.sql",
+    "20261105000001_add_app_log_search_terms.sql",
+    "20261105000099_record_database_release_app_log_search_terms.sql"
   ],
   "allowed_schema_tables": [
     "public.ai_chat_conversations",
@@ -406,7 +408,7 @@
     "public.system_languages": 5,
     "public.system_permission_actions": 7,
     "public.system_permission_categories": 4,
-    "public.system_schema_migrations": 225,
+    "public.system_schema_migrations": 227,
     "public.system_table_folders": 14,
     "public.system_table_views": 13,
     "public.system_user_group_memberships": 2,
@@ -421,7 +423,7 @@
       "sha256": "daf2e76fde9e2c615b2fb4c497f99ec105ec436e44a8fa555aeab848c45fd474"
     },
     "server_tools/public_bootstrap/seed_data.sql": {
-      "sha256": "77c3e4867ed8c1f84486fa44f6e7fb82f4f9cdec3db39ebe03a75cfe7236722f"
+      "sha256": "256db923de0a589f61ef96eb5d5c513c42f8f42fc0be45825dba5f1f6d4549d2"
     }
   },
   "source_files": {
@@ -438,7 +440,7 @@
       "sha256": "235e4b887181e150bd436d035d2d268eb821d9e5d0b830b54eb444988f31d5d1"
     },
     "filterest/app/server_tools/public_bootstrap/generate_bootstrap.py": {
-      "sha256": "341a7ec57c159eeb0f5f1fa0264c8aa51598b70aad35b8a724001aa46dba20ba"
+      "sha256": "c3928400187f9af65d15365d746751575bb7e06cc893f5dc7b8774f494bb41da"
     },
     "filterest/app/server_tools/public_bootstrap/sql_identifier_validator.py": {
       "sha256": "748245fac4328a3608740c1b0fe948e6a09d6489d587143bd3b4c67064bea732"
@@ -1189,6 +1191,12 @@
     },
     "filterest/app/server_tools/migrations/20261030000399_record_database_release_category_button_width.sql": {
       "sha256": "1f3d669745be67a5a302e2b82662cb5a295b6ede8aa5751a3f8183573f0b7096"
+    },
+    "filterest/app/server_tools/migrations/20261105000001_add_app_log_search_terms.sql": {
+      "sha256": "7e4cf38c182225e1fa204c8187f0e0e7741d4003ca810dca5a6b9870ce377d0d"
+    },
+    "filterest/app/server_tools/migrations/20261105000099_record_database_release_app_log_search_terms.sql": {
+      "sha256": "1fe7637e5b1b437fe658908df918d8b7e21d8247d8790c6056a4b5914ac6c9cc"
     },
     "filterest/app/server_tools/public_bootstrap/source/fixtures/docs/first-dataset.png": {
       "sha256": "010bdb97d887959b6f83046d377ca8394478a812c8abfe79fd5ea2cf400e3975"

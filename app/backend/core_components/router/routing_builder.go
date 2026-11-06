@@ -92,7 +92,7 @@ func resolveInstallationEnvironment(storedEnvironment, runtimeEnvironment string
 }
 
 func tablesHandler(w http.ResponseWriter, r *http.Request, loginToBrowse bool, dataset *dataset_routes.DatasetNamePool) {
-	log.Printf("tablesHandler: user requested URL: %s", r.URL.String())
+	log.Printf("tablesHandler: user requested URL: %s", middlewares.AppLogRequestURL(r))
 	setAuthShellNoStoreHeaders(w, loginToBrowse)
 
 	// 1) Haetaan nonce, jonka CSP-middleware on laittanut contextiin
@@ -133,7 +133,7 @@ func tablesHandler(w http.ResponseWriter, r *http.Request, loginToBrowse bool, d
 }
 
 func adminHandler(w http.ResponseWriter, r *http.Request) {
-	log.Printf("adminHandler: user requested URL: %s", r.URL.String())
+	log.Printf("adminHandler: user requested URL: %s", middlewares.AppLogRequestURL(r))
 	setAuthShellNoStoreHeaders(w, true)
 
 	nonce := middlewares.GetCSPNonce(r)

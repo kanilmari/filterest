@@ -11,6 +11,7 @@ import (
 	"easelect/backend/core_components/dataset_kinds"
 	"easelect/backend/core_components/dataset_visibility"
 	"easelect/backend/core_components/httpresponse"
+	"easelect/backend/core_components/middlewares"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -57,7 +58,7 @@ func GetRowCountHandlerWrapper(w http.ResponseWriter, r *http.Request) {
 	}
 	session, sessErr := e_sessions.GetOrCreateSession(nil, r)
 	if sessErr != nil {
-		log.Printf("\033[31merror: %s\033[0m\n", sessErr.Error())
+		log.Printf("\033[31merror: %s\033[0m\n", middlewares.AppLogSearchError(sessErr, "GetRowCountHandlerWrapper", tableName))
 		httpresponse.RespondWithError(w, http.StatusInternalServerError, "error fetching session")
 		return
 	}
@@ -69,7 +70,7 @@ func GetRowCountHandlerWrapper(w http.ResponseWriter, r *http.Request) {
 	currentDb := auth.GetDBForRole(userRole)
 	readQuerier, err := getPilotReadQuerier(r.Context(), tableName, currentDb)
 	if err != nil {
-		log.Printf("\033[31merror: %s\033[0m\n", err.Error())
+		log.Printf("\033[31merror: %s\033[0m\n", middlewares.AppLogSearchError(err, "GetRowCountHandlerWrapper", tableName))
 		httpresponse.RespondWithError(w, http.StatusInternalServerError, "error initializing pilot read transaction")
 		return
 	}
@@ -77,7 +78,7 @@ func GetRowCountHandlerWrapper(w http.ResponseWriter, r *http.Request) {
 	/* ---------- 2. Rivimäärä ---------- */
 	rowCount, err := getACLFilteredRowCount(readQuerier, currentDb, tableName, userRole, userID)
 	if err != nil {
-		log.Printf("\033[31merror: %s\033[0m\n", err.Error())
+		log.Printf("\033[31merror: %s\033[0m\n", middlewares.AppLogSearchError(err, "GetRowCountHandlerWrapper", tableName))
 		httpresponse.RespondWithError(w, http.StatusInternalServerError, "error counting rows")
 		return
 	}
@@ -85,13 +86,13 @@ func GetRowCountHandlerWrapper(w http.ResponseWriter, r *http.Request) {
 	/* ---------- 3. Paikkatietostatukset ---------- */
 	geomCols, err := getGeometryColumns(currentDb, tableName)
 	if err != nil {
-		log.Printf("\033[31merror: %s\033[0m\n", err.Error())
+		log.Printf("\033[31merror: %s\033[0m\n", middlewares.AppLogSearchError(err, "GetRowCountHandlerWrapper", tableName))
 		httpresponse.RespondWithError(w, http.StatusInternalServerError, "error fetching geo columns")
 		return
 	}
 	geomSrcs, err := getGeometrySourceTables(currentDb, tableName)
 	if err != nil {
-		log.Printf("\033[31merror: %s\033[0m\n", err.Error())
+		log.Printf("\033[31merror: %s\033[0m\n", middlewares.AppLogSearchError(err, "GetRowCountHandlerWrapper", tableName))
 		httpresponse.RespondWithError(w, http.StatusInternalServerError, "error fetching geo sources")
 		return
 	}
@@ -103,7 +104,7 @@ func GetRowCountHandlerWrapper(w http.ResponseWriter, r *http.Request) {
 	// visibility policy while the established count response stays available.
 	hidden, visibilityErr := dataset_visibility.HiddenForUser(backend.Db, tableName, userID)
 	if visibilityErr != nil {
-		log.Printf("\033[31merror: optional count metadata visibility: %v\033[0m", visibilityErr)
+		log.Printf("\033[31merror: optional count metadata visibility: %v\033[0m", middlewares.AppLogSearchError(visibilityErr, "GetRowCountHandlerWrapper", tableName))
 	} else if !hidden {
 		capabilities = readDatasetKindCapabilities(r.Context(), tableName)
 	}

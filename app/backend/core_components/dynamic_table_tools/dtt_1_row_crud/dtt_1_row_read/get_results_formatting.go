@@ -9,6 +9,8 @@ import (
 	"log"
 	"strings"
 	"time"
+
+	"easelect/backend/core_components/middlewares"
 )
 
 // formatTemporalColumnValue preserves the semantic contract of each PostgreSQL temporal type.
@@ -34,14 +36,28 @@ func FormatRowsToMaps(sqlRows *sql.Rows) ([]string, []map[string]interface{}, er
 // formatRowsToMaps shares temporal semantics with search while retaining its
 // complete vector payload. Ordinary listing keeps its existing shortened vectors.
 func formatRowsToMaps(sqlRows *sql.Rows, shortenEmbeddingVectors bool) ([]string, []map[string]interface{}, error) {
+	// Support enrichment can also run inside a search request. Its lower-level
+	// scan/iteration logs must observe the same setting as the outer handler.
+	return formatSearchRowsToMaps(sqlRows, shortenEmbeddingVectors, "formatRowsToMaps", "")
+}
+
+// formatSearchRowsToMaps keeps delayed SQL/scan failures inside the same privacy
+// boundary as query execution, retaining the former duplicate logs on opt-in.
+func formatSearchRowsToMaps(sqlRows *sql.Rows, shortenEmbeddingVectors bool, handler, dataset string) ([]string, []map[string]interface{}, error) {
+	return formatRowsWithErrorText(sqlRows, shortenEmbeddingVectors, func(err error) string {
+		return middlewares.AppLogSearchError(err, handler, dataset)
+	})
+}
+
+func formatRowsWithErrorText(sqlRows *sql.Rows, shortenEmbeddingVectors bool, errorText func(error) string) ([]string, []map[string]interface{}, error) {
 	columnNames, err := sqlRows.Columns()
 	if err != nil {
-		log.Printf("\033[31merror: %s\033[0m\n", err.Error())
+		log.Printf("\033[31merror: %s\033[0m\n", errorText(err))
 		return nil, nil, err
 	}
 	columnTypes, err := sqlRows.ColumnTypes()
 	if err != nil {
-		log.Printf("\033[31merror: %s\033[0m\n", err.Error())
+		log.Printf("\033[31merror: %s\033[0m\n", errorText(err))
 		return nil, nil, err
 	}
 
@@ -53,7 +69,7 @@ func formatRowsToMaps(sqlRows *sql.Rows, shortenEmbeddingVectors bool) ([]string
 			rowPointers[i] = &rowValues[i]
 		}
 		if err := sqlRows.Scan(rowPointers...); err != nil {
-			log.Printf("\033[31merror: %s\033[0m\n", err.Error())
+			log.Printf("\033[31merror: %s\033[0m\n", errorText(err))
 			return nil, nil, err
 		}
 
@@ -86,7 +102,7 @@ func formatRowsToMaps(sqlRows *sql.Rows, shortenEmbeddingVectors bool) ([]string
 		formattedRows = append(formattedRows, currentRow)
 	}
 	if err := sqlRows.Err(); err != nil {
-		log.Printf("\033[31merror: %s\033[0m\n", err.Error())
+		log.Printf("\033[31merror: %s\033[0m\n", errorText(err))
 		return nil, nil, err
 	}
 

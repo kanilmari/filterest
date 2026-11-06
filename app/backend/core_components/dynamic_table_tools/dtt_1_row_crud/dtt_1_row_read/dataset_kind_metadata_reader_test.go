@@ -14,7 +14,9 @@ import (
 	"strings"
 	"testing"
 
+	"easelect/backend/core_components/middlewares"
 	esessions "easelect/backend/core_components/sessions"
+	"easelect/backend/core_components/system_config_cache"
 	"github.com/gorilla/sessions"
 )
 
@@ -95,6 +97,7 @@ func TestKindCountPreservesHiddenAndEvidenceFailureResponses(t *testing.T) {
 				hidden = nil
 			}
 			reads := useScriptedDatabase(t, []scriptedRule{
+				{fragment: "SELECT boolean_value FROM system_config", columns: []string{"boolean_value"}, rows: [][]driver.Value{{false}}},
 				{fragment: "WITH registrations AS (", columns: []string{"snapshot"}, rows: evidence},
 				{fragment: "dataset.ui_hidden", columns: []string{"hidden"}, rows: hidden},
 				{fragment: "must_be_true_unless_own", columns: []string{"column_name"}},
@@ -102,6 +105,7 @@ func TestKindCountPreservesHiddenAndEvidenceFailureResponses(t *testing.T) {
 				{fragment: "FROM information_schema.columns", columns: []string{"column_name"}},
 				{fragment: "FROM information_schema.table_constraints", columns: []string{"table_name"}},
 			})
+			t.Cleanup(func() { system_config_cache.Delete(middlewares.AppLogSearchTermsKey) })
 			r := kindRequest(t, "/api/get-row-count?dataset=fixture")
 			w := httptest.NewRecorder()
 			GetRowCountHandlerWrapper(w, r)

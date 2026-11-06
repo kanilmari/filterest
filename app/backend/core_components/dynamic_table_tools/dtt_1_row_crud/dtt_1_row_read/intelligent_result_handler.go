@@ -17,6 +17,7 @@ import (
 	"strings"
 
 	"easelect/backend/core_components/httpresponse"
+	"easelect/backend/core_components/middlewares"
 
 	auth "easelect/backend/core_components/auth"
 	dtt_openai "easelect/backend/core_components/dynamic_table_tools/ai_features"
@@ -65,7 +66,7 @@ func GetIntelligentResultsHandlerWrapper(w http.ResponseWriter, r *http.Request)
 	// 🔄 UUSI: jos stream‑parametri, käytä virtaavaa vastausta
 	if r.URL.Query().Get("stream") == "1" {
 		if err := queryIntelligentResultsStream(w, r); err != nil {
-			fmt.Printf("\033[31merror: %s\033[0m\n", err.Error())
+			fmt.Printf("\033[31merror: %s\033[0m\n", middlewares.AppLogSearchError(err, "GetIntelligentResultsHandlerWrapper", r.URL.Query().Get("dataset")))
 			respondIntelligentSearchError(w, err)
 		}
 		return
@@ -73,7 +74,7 @@ func GetIntelligentResultsHandlerWrapper(w http.ResponseWriter, r *http.Request)
 
 	// Vanha, blokkaava versio (muuttumaton)
 	if err := queryIntelligentResults(w, r); err != nil {
-		fmt.Printf("\033[31merror: %s\033[0m\n", err.Error())
+		fmt.Printf("\033[31merror: %s\033[0m\n", middlewares.AppLogSearchError(err, "GetIntelligentResultsHandlerWrapper", r.URL.Query().Get("dataset")))
 		respondIntelligentSearchError(w, err)
 	}
 }
@@ -167,18 +168,18 @@ func queryIntelligentResultsStream(w http.ResponseWriter, r *http.Request) error
 	// language (lang) only ranks a match in that language slightly ahead.
 	sources, sourcesErr := resolveSemanticSources(readQuerier, tableName)
 	if sourcesErr != nil {
-		fmt.Printf("\033[31membedding sources error: %s\033[0m\n", sourcesErr.Error())
+		fmt.Printf("\033[31membedding sources error: %s\033[0m\n", middlewares.AppLogSearchError(sourcesErr, "queryIntelligentResultsStream", tableName))
 		sources = semanticSources{}
 	}
 
 	if sources.any() {
 		vec, vErr := generateVectorParam(userQuery)
 		if vErr != nil {
-			fmt.Printf("\033[31membedding vector error: %s\033[0m\n", vErr.Error())
+			fmt.Printf("\033[31membedding vector error: %s\033[0m\n", middlewares.AppLogSearchError(vErr, "queryIntelligentResultsStream", tableName))
 		} else {
 			semanticHits, sErr := fetchSimilarRows(readQuerier, tableName, lang, vec, authorization, sources, semanticCandidateLimit)
 			if sErr != nil {
-				fmt.Printf("\033[31membedding search error: %s\033[0m\n", sErr.Error())
+				fmt.Printf("\033[31membedding search error: %s\033[0m\n", middlewares.AppLogSearchError(sErr, "queryIntelligentResultsStream", tableName))
 			} else {
 				var nearOrder []int
 				for _, hit := range relatedSemanticHits(semanticHits, dtt_openai.SemanticDistanceCutoff()) {
@@ -191,7 +192,7 @@ func queryIntelligentResultsStream(w http.ResponseWriter, r *http.Request) error
 				// those rows out still leaves the AI group something to show.
 				aiOrder, oErr := rowsOutsideDatasetTextSearch(readQuerier, tableName, userQuery, nearOrder)
 				if oErr != nil {
-					fmt.Printf("\033[31mrowsOutsideDatasetTextSearch(ai): %s\033[0m\n", oErr.Error())
+					fmt.Printf("\033[31mrowsOutsideDatasetTextSearch(ai): %s\033[0m\n", middlewares.AppLogSearchError(oErr, "queryIntelligentResultsStream", tableName))
 					aiOrder = nil
 				}
 				if len(aiOrder) > semanticResultLimit {
@@ -200,7 +201,7 @@ func queryIntelligentResultsStream(w http.ResponseWriter, r *http.Request) error
 				if len(aiOrder) > 0 {
 					aiRows, aiCols, aErr := fetchRowsInOrder(readQuerier, tableName, aiOrder, authorization)
 					if aErr != nil {
-						fmt.Printf("\033[31mfetchRowsInOrder(ai): %s\033[0m\n", aErr.Error())
+						fmt.Printf("\033[31mfetchRowsInOrder(ai): %s\033[0m\n", middlewares.AppLogSearchError(aErr, "queryIntelligentResultsStream", tableName))
 					} else {
 						if err := prepareRowsForResponse(readQuerier, tableName, aiRows, nil, aiCols,
 							dbutils.NewRequestActorContext(userID, userRole), support, permittedGeometry); err != nil {
@@ -326,7 +327,7 @@ func queryIntelligentResults(w http.ResponseWriter, r *http.Request) error {
 	//------------------------------------------------
 	sources, sourcesErr := resolveSemanticSources(readQuerier, tableName)
 	if sourcesErr != nil {
-		fmt.Printf("\033[31merror: %s\033[0m\n", sourcesErr.Error())
+		fmt.Printf("\033[31merror: %s\033[0m\n", middlewares.AppLogSearchError(sourcesErr, "queryIntelligentResults", tableName))
 		sources = semanticSources{}
 	}
 	embeddingsPresent := sources.any()
@@ -347,7 +348,7 @@ func queryIntelligentResults(w http.ResponseWriter, r *http.Request) error {
 	/* A) Täysi teksti --------------------------------------------------*/
 	textHits, textErr := fetchFullTextRows(readQuerier, tableName, userQuery, authorization)
 	if textErr != nil {
-		fmt.Printf("\033[31merror: %s\033[0m\n", textErr.Error())
+		fmt.Printf("\033[31merror: %s\033[0m\n", middlewares.AppLogSearchError(textErr, "queryIntelligentResults", tableName))
 	}
 
 	for _, hit := range textHits {
@@ -365,11 +366,11 @@ func queryIntelligentResults(w http.ResponseWriter, r *http.Request) error {
 	if embeddingsPresent {
 		vec, vErr := generateVectorParam(userQuery)
 		if vErr != nil {
-			fmt.Printf("\033[31merror: %s\033[0m\n", vErr.Error())
+			fmt.Printf("\033[31merror: %s\033[0m\n", middlewares.AppLogSearchError(vErr, "queryIntelligentResults", tableName))
 		} else {
 			semanticHits, err = fetchSimilarRows(readQuerier, tableName, lang, vec, authorization, sources, semanticResultLimit)
 			if err != nil {
-				fmt.Printf("\033[31merror: %s\033[0m\n", err.Error())
+				fmt.Printf("\033[31merror: %s\033[0m\n", middlewares.AppLogSearchError(err, "queryIntelligentResults", tableName))
 			} else {
 				// Only rows related in meaning become candidates; the rest are
 				// logged below but never returned.
@@ -466,6 +467,10 @@ func queryIntelligentResults(w http.ResponseWriter, r *http.Request) error {
  *  Apuri: kirjaa hakutulokset lokiin ✅
  * =========================================================*/
 func logSearchDiagnostics(userQuery string, textHits []rowTextRank, semHits []rowSemanticScore, embeddingsPresent bool) {
+	// Result names can repeat the search words, so the whole diagnostic is opt-in.
+	if !middlewares.CheckAppLogSearchTerms() {
+		return
+	}
 	fmt.Println("--------------------------------------------------------")
 	fmt.Printf("🔍 Search query: %q\n", userQuery)
 

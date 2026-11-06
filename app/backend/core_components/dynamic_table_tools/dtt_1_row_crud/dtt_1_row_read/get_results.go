@@ -9,6 +9,7 @@ import (
 	store "easelect/backend/core_components/dataset_appearance_store"
 	"easelect/backend/core_components/dbutils"
 	"easelect/backend/core_components/httpresponse"
+	"easelect/backend/core_components/middlewares"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -74,7 +75,7 @@ func GetResults(response_writer http.ResponseWriter, request *http.Request) {
 	// 1b. Hae myös user_role sessiosta, valitse oikea DB.
 	session, sessErr := e_sessions.GetOrCreateSession(nil, request)
 	if sessErr != nil {
-		log.Printf("\033[31merror: %s\033[0m\n", sessErr.Error())
+		log.Printf("\033[31merror: %s\033[0m\n", middlewares.AppLogSearchError(sessErr, "GetResults", table_name))
 		httpresponse.RespondWithError(response_writer, http.StatusInternalServerError, "error fetching session")
 		return
 	}
@@ -88,7 +89,7 @@ func GetResults(response_writer http.ResponseWriter, request *http.Request) {
 	currentDb := auth.GetDBForRole(userRole)
 	readQuerier, err := getPilotReadQuerier(request.Context(), table_name, currentDb)
 	if err != nil {
-		log.Printf("\033[31merror: %s\033[0m\n", err.Error())
+		log.Printf("\033[31merror: %s\033[0m\n", middlewares.AppLogSearchError(err, "GetResults", table_name))
 		httpresponse.RespondWithError(response_writer, http.StatusInternalServerError, "error initializing pilot read transaction")
 		return
 	}
@@ -101,7 +102,7 @@ func GetResults(response_writer http.ResponseWriter, request *http.Request) {
 	}
 	defer func() {
 		if err := finishRead(); err != nil {
-			log.Printf("\033[31merror: %s\033[0m\n", err.Error())
+			log.Printf("\033[31merror: %s\033[0m\n", middlewares.AppLogSearchError(err, "GetResults", table_name))
 		}
 	}()
 	// Preserve the role/owner split while carrying the box deadline through all
@@ -119,7 +120,7 @@ func GetResults(response_writer http.ResponseWriter, request *http.Request) {
 			table_name,
 		).Scan(&datasetExists)
 		if err != nil {
-			log.Printf("\033[31merror: %s\033[0m\n", err.Error())
+			log.Printf("\033[31merror: %s\033[0m\n", middlewares.AppLogSearchError(err, "GetResults", table_name))
 			httpresponse.RespondWithError(response_writer, http.StatusInternalServerError, "error checking table existence")
 			return
 		}
@@ -141,13 +142,13 @@ func GetResults(response_writer http.ResponseWriter, request *http.Request) {
 				"SELECT int_value FROM system_config WHERE key = 'results_load_amount'",
 			).Scan(&results_per_load_str)
 			if err != nil {
-				log.Printf("\033[31merror: %s\033[0m\n", err.Error())
+				log.Printf("\033[31merror: %s\033[0m\n", middlewares.AppLogSearchError(err, "GetResults", table_name))
 				httpresponse.RespondWithError(response_writer, http.StatusInternalServerError, "error fetching configuration")
 				return
 			}
 			results_per_load, err = strconv.Atoi(results_per_load_str)
 			if err != nil {
-				log.Printf("\033[31merror: %s\033[0m\n", err.Error())
+				log.Printf("\033[31merror: %s\033[0m\n", middlewares.AppLogSearchError(err, "GetResults", table_name))
 				httpresponse.RespondWithError(response_writer, http.StatusInternalServerError, "invalid configuration value")
 				return
 			}
@@ -164,7 +165,7 @@ func GetResults(response_writer http.ResponseWriter, request *http.Request) {
 	if offset_str != "" {
 		offset_value, err = strconv.Atoi(offset_str)
 		if err != nil {
-			log.Printf("\033[31merror: %s\033[0m\n", err.Error())
+			log.Printf("\033[31merror: %s\033[0m\n", middlewares.AppLogSearchError(err, "GetResults", table_name))
 			httpresponse.RespondWithError(response_writer, http.StatusBadRequest, "invalid offset parameter")
 			return
 		}
@@ -186,7 +187,7 @@ func GetResults(response_writer http.ResponseWriter, request *http.Request) {
 		generation := columnSettingsCacheGeneration(table_name)
 		userColumnSettings, err = fetchUserColumnSettingsOrDefaults(userID, table_name, viewKey, metadataQuerier)
 		if err != nil {
-			log.Printf("\033[31merror: %s\033[0m\n", err.Error())
+			log.Printf("\033[31merror: %s\033[0m\n", middlewares.AppLogSearchError(err, "GetResults", table_name))
 			httpresponse.RespondWithError(response_writer, http.StatusInternalServerError, "error fetching column settings")
 			return
 		}
@@ -200,7 +201,7 @@ func GetResults(response_writer http.ResponseWriter, request *http.Request) {
 	} else {
 		allowedColumns, err = fetchUserSelectableColumns(metadataQuerier, table_name)
 		if err != nil {
-			log.Printf("\033[31merror: %s\033[0m\n", err.Error())
+			log.Printf("\033[31merror: %s\033[0m\n", middlewares.AppLogSearchError(err, "GetResults", table_name))
 			httpresponse.RespondWithError(response_writer, http.StatusInternalServerError, "error fetching column permissions")
 			return
 		}
@@ -231,28 +232,28 @@ func GetResults(response_writer http.ResponseWriter, request *http.Request) {
 		generation := schemaCacheGeneration(table_name)
 		column_data_types, err = getColumnDataTypesWithFK(table_name, metadataQuerier)
 		if err != nil {
-			log.Printf("\033[31merror: %s\033[0m\n", err.Error())
+			log.Printf("\033[31merror: %s\033[0m\n", middlewares.AppLogSearchError(err, "GetResults", table_name))
 			httpresponse.RespondWithError(response_writer, http.StatusInternalServerError, "error fetching column data types")
 			return
 		}
 
 		columnsMap, err = dtt_2_column_read.GetColumnsMapForTableWithQuerier(table_name, registryQuerier)
 		if err != nil {
-			log.Printf("\033[31merror: %s\033[0m\n", err.Error())
+			log.Printf("\033[31merror: %s\033[0m\n", middlewares.AppLogSearchError(err, "GetResults", table_name))
 			httpresponse.RespondWithError(response_writer, http.StatusInternalServerError, "error fetching column data")
 			return
 		}
 
 		tableMeta, err = fetchTableReadMeta(metadataQuerier, table_name)
 		if err != nil {
-			log.Printf("\033[31merror: %s\033[0m\n", err.Error())
+			log.Printf("\033[31merror: %s\033[0m\n", middlewares.AppLogSearchError(err, "GetResults", table_name))
 			httpresponse.RespondWithError(response_writer, http.StatusInternalServerError, "error fetching table metadata")
 			return
 		}
 
 		readPolicy, err = getLegacyMustTrueReadPolicy(metadataQuerier, table_name)
 		if err != nil {
-			log.Printf("\033[31merror: %s\033[0m\n", err.Error())
+			log.Printf("\033[31merror: %s\033[0m\n", middlewares.AppLogSearchError(err, "GetResults", table_name))
 			httpresponse.RespondWithError(response_writer, http.StatusInternalServerError, "error fetching row policy metadata")
 			return
 		}
@@ -263,7 +264,7 @@ func GetResults(response_writer http.ResponseWriter, request *http.Request) {
 		var rowOwnerColumn string
 		rowOwnerColumn, err = resolveResultsRowOwnerColumn(metadataQuerier, table_name, readPolicy, column_data_types)
 		if err != nil {
-			log.Printf("\033[31merror: %s\033[0m\n", err.Error())
+			log.Printf("\033[31merror: %s\033[0m\n", middlewares.AppLogSearchError(err, "GetResults", table_name))
 			httpresponse.RespondWithError(response_writer, http.StatusInternalServerError, "error fetching row owner metadata")
 			return
 		}
@@ -271,13 +272,13 @@ func GetResults(response_writer http.ResponseWriter, request *http.Request) {
 
 		geomCols, err = getGeometryColumns(metadataQuerier, table_name)
 		if err != nil {
-			log.Printf("\033[31merror: %s\033[0m\n", err.Error())
+			log.Printf("\033[31merror: %s\033[0m\n", middlewares.AppLogSearchError(err, "GetResults", table_name))
 			httpresponse.RespondWithError(response_writer, http.StatusInternalServerError, "error fetching geo columns")
 			return
 		}
 		geomSrcs, err = getGeometrySourceTables(metadataQuerier, table_name)
 		if err != nil {
-			log.Printf("\033[31merror: %s\033[0m\n", err.Error())
+			log.Printf("\033[31merror: %s\033[0m\n", middlewares.AppLogSearchError(err, "GetResults", table_name))
 			httpresponse.RespondWithError(response_writer, http.StatusInternalServerError, "error fetching geo sources")
 			return
 		}
@@ -351,7 +352,7 @@ func GetResults(response_writer http.ResponseWriter, request *http.Request) {
 			httpresponse.RespondWithRefusal(response_writer, refusal)
 			return
 		}
-		log.Printf("\033[31merror: %s\033[0m\n", err.Error())
+		log.Printf("\033[31merror: %s\033[0m\n", middlewares.AppLogSearchError(err, "GetResults", table_name))
 		httpresponse.RespondWithError(response_writer, http.StatusInternalServerError, "error building query")
 		return
 	}
@@ -367,22 +368,22 @@ func GetResults(response_writer http.ResponseWriter, request *http.Request) {
 
 	rows_result, err := readQuerier.Query(query, query_args...)
 	if err != nil {
-		log.Printf("\033[31merror: %s\033[0m\n", err.Error())
+		log.Printf("\033[31merror: %s\033[0m\n", middlewares.AppLogSearchError(err, "GetResults", table_name))
 		httpresponse.RespondWithError(response_writer, http.StatusInternalServerError, "error fetching data")
 		return
 	}
 	defer rows_result.Close()
 
 	// 7. Process Results
-	result_columns, query_results, err := FormatRowsToMaps(rows_result)
+	result_columns, query_results, err := formatSearchRowsToMaps(rows_result, true, "GetResults", table_name)
 	if err != nil {
-		log.Printf("\033[31merror: %s\033[0m\n", err.Error())
+		log.Printf("\033[31merror: %s\033[0m\n", middlewares.AppLogSearchError(err, "GetResults", table_name))
 		httpresponse.RespondWithError(response_writer, http.StatusInternalServerError, "error processing results")
 		return
 	}
 
 	if err := enrichServiceCatalogModerationRows(readQuerier, table_name, query_results, userRole, userID); err != nil {
-		log.Printf("\033[31merror: %s\033[0m\n", err.Error())
+		log.Printf("\033[31merror: %s\033[0m\n", middlewares.AppLogSearchError(err, "GetResults", table_name))
 		httpresponse.RespondWithError(response_writer, http.StatusInternalServerError, "error enriching service moderation data")
 		return
 	}
@@ -405,7 +406,7 @@ func GetResults(response_writer http.ResponseWriter, request *http.Request) {
 	if backend.Db != nil {
 		datasetPresentation, err = fetchDatasetPresentationMedia(registryQuerier, table_name)
 		if err != nil {
-			log.Printf("\033[31merror: %s\033[0m\n", err.Error())
+			log.Printf("\033[31merror: %s\033[0m\n", middlewares.AppLogSearchError(err, "GetResults", table_name))
 			httpresponse.RespondWithError(response_writer, http.StatusInternalServerError, "error fetching dataset presentation")
 			return
 		}
@@ -458,7 +459,7 @@ func GetResults(response_writer http.ResponseWriter, request *http.Request) {
 		return
 	}
 	if err := json.NewEncoder(response_writer).Encode(response_data); err != nil {
-		log.Printf("\033[31merror: %s\033[0m\n", err.Error())
+		log.Printf("\033[31merror: %s\033[0m\n", middlewares.AppLogSearchError(err, "GetResults", table_name))
 		httpresponse.RespondWithError(response_writer, http.StatusInternalServerError, "error encoding response")
 		return
 	}

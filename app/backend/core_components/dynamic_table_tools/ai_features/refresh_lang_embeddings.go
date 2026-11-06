@@ -9,6 +9,7 @@ import (
 	"crypto/md5"
 	"database/sql"
 	"easelect/backend/core_components/httpresponse"
+	"easelect/backend/core_components/middlewares"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -108,7 +109,7 @@ func GetEmbeddingDatasetsHandler(w http.ResponseWriter, r *http.Request) {
 	if r.URL.Query().Get("include_status") == "true" {
 		report, err := BuildEmbeddingStatusReport(tx)
 		if err != nil {
-			log.Printf("\033[31merror: embedding status report: %v\033[0m", err)
+			log.Printf("\033[31merror: embedding status report: %v\033[0m", middlewares.AppLogSearchError(err, "GetEmbeddingDatasetsHandler", ""))
 			httpresponse.RespondWithError(w, http.StatusInternalServerError, "embedding status unavailable")
 			return
 		}
@@ -181,7 +182,7 @@ func RefreshLangEmbeddingsHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if err := rows.Err(); err != nil {
-		log.Printf("\033[31merror: scan ids for %s: %v\033[0m", req.Dataset, err)
+		log.Printf("\033[31merror: scan ids for %s: %v\033[0m", req.Dataset, middlewares.AppLogSearchError(err, "RefreshLangEmbeddingsHandler", req.Dataset))
 		httpresponse.RespondWithError(w, http.StatusInternalServerError, "query error")
 		rows.Close()
 		return
@@ -231,7 +232,7 @@ func CountLangEmbeddingsHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if err := rows.Err(); err != nil {
-		log.Printf("\033[31merror: scan ids for %s: %v\033[0m", req.Dataset, err)
+		log.Printf("\033[31merror: scan ids for %s: %v\033[0m", req.Dataset, middlewares.AppLogSearchError(err, "CountLangEmbeddingsHandler", req.Dataset))
 		httpresponse.RespondWithError(w, http.StatusInternalServerError, "query error")
 		rows.Close()
 		return
@@ -253,7 +254,7 @@ func generateLangEmbeddingsForRow(tx queryExecer, tableName string, rowID int64,
 	existing := map[string]string{}
 	rows, err := tx.Query(fmt.Sprintf(`SELECT language_code, content_md5 FROM %s WHERE host_row_id=$1`, embTable), rowID)
 	if err != nil {
-		log.Printf("\033[31merror: query existing embeddings for %s row %d: %v\033[0m", tableName, rowID, err)
+		log.Printf("\033[31merror: query existing embeddings for %s row %d: %v\033[0m", tableName, rowID, middlewares.AppLogSearchError(err, "generateLangEmbeddingsForRow", tableName))
 		return err
 	}
 	for rows.Next() {
@@ -263,7 +264,7 @@ func generateLangEmbeddingsForRow(tx queryExecer, tableName string, rowID int64,
 		}
 	}
 	if err := rows.Err(); err != nil {
-		log.Printf("\033[31merror: iterate embeddings rows for %s row %d: %v\033[0m", tableName, rowID, err)
+		log.Printf("\033[31merror: iterate embeddings rows for %s row %d: %v\033[0m", tableName, rowID, middlewares.AppLogSearchError(err, "generateLangEmbeddingsForRow", tableName))
 		rows.Close()
 		return err
 	}
@@ -290,12 +291,12 @@ func generateLangEmbeddingsForRow(tx queryExecer, tableName string, rowID int64,
 		vec := pgvector.NewVector(embedding)
 		del := fmt.Sprintf(`DELETE FROM %s WHERE host_row_id=$1 AND language_code=$2`, embTable)
 		if _, err := tx.Exec(del, rowID, lang); err != nil {
-			log.Printf("\033[31merror: delete embedding for %s row %d lang %s: %v\033[0m", tableName, rowID, lang, err)
+			log.Printf("\033[31merror: delete embedding for %s row %d lang %s: %v\033[0m", tableName, rowID, lang, middlewares.AppLogSearchError(err, "generateLangEmbeddingsForRow", tableName))
 			return err
 		}
 		ins := fmt.Sprintf(`INSERT INTO %s (host_row_id, language_code, embedding, updated, content_md5) VALUES ($1,$2,$3,NOW(),$4)`, embTable)
 		if _, err := tx.Exec(ins, rowID, lang, vec, hash); err != nil {
-			log.Printf("\033[31merror: insert embedding for %s row %d lang %s: %v\033[0m", tableName, rowID, lang, err)
+			log.Printf("\033[31merror: insert embedding for %s row %d lang %s: %v\033[0m", tableName, rowID, lang, middlewares.AppLogSearchError(err, "generateLangEmbeddingsForRow", tableName))
 			return err
 		}
 	}
@@ -307,7 +308,7 @@ func needLangEmbeddingsForRow(tx queryExecer, tableName string, rowID int64, lan
 	existing := map[string]string{}
 	rows, err := tx.Query(fmt.Sprintf(`SELECT language_code, content_md5 FROM %s WHERE host_row_id=$1`, embTable), rowID)
 	if err != nil {
-		log.Printf("\033[31merror: query existing embeddings for %s row %d: %v\033[0m", tableName, rowID, err)
+		log.Printf("\033[31merror: query existing embeddings for %s row %d: %v\033[0m", tableName, rowID, middlewares.AppLogSearchError(err, "needLangEmbeddingsForRow", tableName))
 		return false, err
 	}
 	for rows.Next() {
@@ -317,7 +318,7 @@ func needLangEmbeddingsForRow(tx queryExecer, tableName string, rowID int64, lan
 		}
 	}
 	if err := rows.Err(); err != nil {
-		log.Printf("\033[31merror: iterate embeddings rows for %s row %d: %v\033[0m", tableName, rowID, err)
+		log.Printf("\033[31merror: iterate embeddings rows for %s row %d: %v\033[0m", tableName, rowID, middlewares.AppLogSearchError(err, "needLangEmbeddingsForRow", tableName))
 		rows.Close()
 		return false, err
 	}

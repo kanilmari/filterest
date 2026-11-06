@@ -7,6 +7,7 @@ package dtt_1_row_read
 import (
 	"context"
 	"database/sql"
+	"easelect/backend/core_components/middlewares"
 	"log"
 
 	backend "easelect/backend/core_components"
@@ -38,7 +39,7 @@ func readDatasetKindCapabilities(ctx context.Context, name string) *dataset_kind
 	}
 	capabilities, err := dataset_kinds.ReadForName(ctx, q, name)
 	if err != nil {
-		log.Printf("\033[31merror: optional dataset kind evidence: %v\033[0m", err)
+		log.Printf("\033[31merror: optional dataset kind evidence: %v\033[0m", middlewares.AppLogSearchError(err, "readDatasetKindCapabilities", name))
 		return nil
 	}
 	return &capabilities
@@ -60,7 +61,7 @@ func addResultsDatasetKindCapabilities(ctx context.Context, name string, respons
 	}
 	capabilities, err := dataset_kinds.ReadForName(ctx, resultsKindQuerier{q}, name)
 	if err != nil {
-		log.Printf("\033[31merror: optional dataset kind evidence: %v\033[0m", err)
+		log.Printf("\033[31merror: optional dataset kind evidence: %v\033[0m", middlewares.AppLogSearchError(err, "addResultsDatasetKindCapabilities", name))
 		return
 	}
 	response["kind_capabilities"] = capabilities

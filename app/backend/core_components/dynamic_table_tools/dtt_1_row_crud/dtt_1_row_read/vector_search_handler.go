@@ -9,6 +9,7 @@ import (
 	"context"
 	"database/sql"
 	"easelect/backend/core_components/httpresponse"
+	"easelect/backend/core_components/middlewares"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -45,7 +46,7 @@ func GetResultsVector(response_writer http.ResponseWriter, request *http.Request
 	// 1. Haetaan user_role sessiosta ja valitaan DB
 	session, err := e_sessions.GetOrCreateSession(nil, request)
 	if err != nil {
-		log.Printf("\033[31merror: %s\033[0m\n", err.Error())
+		log.Printf("\033[31merror: %s\033[0m\n", middlewares.AppLogSearchError(err, "GetResultsVector", table_name))
 		httpresponse.RespondWithError(response_writer, http.StatusInternalServerError, "error fetching session")
 		return
 	}
@@ -66,7 +67,7 @@ func GetResultsVector(response_writer http.ResponseWriter, request *http.Request
 	currentDb := auth.GetDBForRole(userRole)
 	readQuerier, err := getPilotReadQuerier(request.Context(), table_name, currentDb)
 	if err != nil {
-		log.Printf("\033[31merror: %s\033[0m\n", err.Error())
+		log.Printf("\033[31merror: %s\033[0m\n", middlewares.AppLogSearchError(err, "GetResultsVector", table_name))
 		httpresponse.RespondWithError(response_writer, http.StatusInternalServerError, "error initializing pilot read transaction")
 		return
 	}
@@ -80,13 +81,13 @@ func GetResultsVector(response_writer http.ResponseWriter, request *http.Request
 	WHERE key = 'results_load_amount'
 	`).Scan(&results_per_load_str)
 	if err != nil {
-		log.Printf("\033[31merror fetching results_load_amount: %s\033[0m\n", err.Error())
+		log.Printf("\033[31merror fetching results_load_amount: %s\033[0m\n", middlewares.AppLogSearchError(err, "GetResultsVector", table_name))
 		httpresponse.RespondWithError(response_writer, http.StatusInternalServerError, "error fetching configuration")
 		return
 	}
 	results_per_load, err := strconv.Atoi(results_per_load_str)
 	if err != nil {
-		log.Printf("\033[31merror converting results_load_amount to int: %s\033[0m\n", err.Error())
+		log.Printf("\033[31merror converting results_load_amount to int: %s\033[0m\n", middlewares.AppLogSearchError(err, "GetResultsVector", table_name))
 		httpresponse.RespondWithError(response_writer, http.StatusInternalServerError, "invalid configuration value")
 		return
 	}
@@ -96,7 +97,7 @@ func GetResultsVector(response_writer http.ResponseWriter, request *http.Request
 	if offset_str != "" {
 		offset_value, err = strconv.Atoi(offset_str)
 		if err != nil {
-			log.Printf("\033[31merror converting offset to int: %s\033[0m\n", err.Error())
+			log.Printf("\033[31merror converting offset to int: %s\033[0m\n", middlewares.AppLogSearchError(err, "GetResultsVector", table_name))
 			httpresponse.RespondWithError(response_writer, http.StatusBadRequest, "invalid offset parameter")
 			return
 		}
@@ -106,14 +107,14 @@ func GetResultsVector(response_writer http.ResponseWriter, request *http.Request
 	// 3. Haetaan saraketiedot
 	columns_map, err := dtt_2_column_read.GetColumnsMapForTable(table_name)
 	if err != nil {
-		log.Printf("\033[31merror fetching columns: %s\033[0m\n", err.Error())
+		log.Printf("\033[31merror fetching columns: %s\033[0m\n", middlewares.AppLogSearchError(err, "GetResultsVector", table_name))
 		httpresponse.RespondWithError(response_writer, http.StatusInternalServerError, "error fetching columns")
 		return
 	}
 	// 4. Haetaan sarakkeiden tietotyypit (mahdollisesti ulkoavaimet yms.)
 	column_data_types, err := getColumnDataTypesWithFK(table_name, currentDb)
 	if err != nil {
-		log.Printf("\033[31merror fetching column data types: %s\033[0m\n", err.Error())
+		log.Printf("\033[31merror fetching column data types: %s\033[0m\n", middlewares.AppLogSearchError(err, "GetResultsVector", table_name))
 		httpresponse.RespondWithError(response_writer, http.StatusInternalServerError, "error fetching column data types")
 		return
 	}
@@ -140,7 +141,7 @@ func GetResultsVector(response_writer http.ResponseWriter, request *http.Request
 	select_columns, join_clauses, column_expressions, joinArgs, err :=
 		buildJoinsWith1MRelations(readQuerier, table_name, columns_map, column_uids, newForeignLabelAuthorization(readQuerier, userRole, userID), 0)
 	if err != nil {
-		log.Printf("\033[31merror building JOIN clauses: %s\033[0m\n", err.Error())
+		log.Printf("\033[31merror building JOIN clauses: %s\033[0m\n", middlewares.AppLogSearchError(err, "GetResultsVector", table_name))
 		httpresponse.RespondWithError(response_writer, http.StatusInternalServerError, "error building JOIN clauses")
 		return
 	}
@@ -157,14 +158,14 @@ func GetResultsVector(response_writer http.ResponseWriter, request *http.Request
 		len(joinArgs),
 	)
 	if err != nil {
-		log.Printf("\033[31merror building WHERE clause: %s\033[0m\n", err.Error())
+		log.Printf("\033[31merror building WHERE clause: %s\033[0m\n", middlewares.AppLogSearchError(err, "GetResultsVector", table_name))
 		httpresponse.RespondWithError(response_writer, http.StatusInternalServerError, "error building WHERE clause")
 		return
 	}
 	query_args = append(joinArgs, query_args...)
 	readPolicy, err := getLegacyMustTrueReadPolicy(currentDb, table_name)
 	if err != nil {
-		log.Printf("\033[31merror fetching row policy metadata: %s\033[0m\n", err.Error())
+		log.Printf("\033[31merror fetching row policy metadata: %s\033[0m\n", middlewares.AppLogSearchError(err, "GetResultsVector", table_name))
 		httpresponse.RespondWithError(response_writer, http.StatusInternalServerError, "error fetching row policy metadata")
 		return
 	}
@@ -180,13 +181,13 @@ func GetResultsVector(response_writer http.ResponseWriter, request *http.Request
 		tableUIDText, uidErr := getTableUID(table_name, currentDb)
 		tableUID, parseErr := strconv.ParseInt(tableUIDText, 10, 64)
 		if uidErr != nil || parseErr != nil || tableUID <= 0 {
-			log.Printf("\033[31merror resolving row-group dataset identity: uid=%q query_error=%v parse_error=%v\033[0m\n", tableUIDText, uidErr, parseErr)
+			log.Printf("\033[31merror resolving row-group dataset identity: %s\033[0m\n", middlewares.AppLogSearchError(fmt.Errorf("uid=%q query_error=%v parse_error=%v", tableUIDText, uidErr, parseErr), "GetResultsVector", table_name))
 			httpresponse.RespondWithError(response_writer, http.StatusInternalServerError, "error resolving dataset identity")
 			return
 		}
 		rowGroupSelection, err = resolveRowGroupSelection(readQuerier, table_name, tableUID, rowGroupSelection, userRole, userID, readPolicy)
 		if err != nil {
-			log.Printf("\033[31merror resolving row-group selection: %v\033[0m\n", err)
+			log.Printf("\033[31merror resolving row-group selection: %v\033[0m\n", middlewares.AppLogSearchError(err, "GetResultsVector", table_name))
 			var refusal *httpresponse.Refusal
 			if errors.As(err, &refusal) {
 				httpresponse.RespondWithRefusal(response_writer, refusal)
@@ -204,7 +205,7 @@ func GetResultsVector(response_writer http.ResponseWriter, request *http.Request
 			query_args,
 		)
 		if err != nil {
-			log.Printf("\033[31merror building row-group filter: %s\033[0m\n", err.Error())
+			log.Printf("\033[31merror building row-group filter: %s\033[0m\n", middlewares.AppLogSearchError(err, "GetResultsVector", table_name))
 			httpresponse.RespondWithError(response_writer, http.StatusInternalServerError, "error building row-group filter")
 			return
 		}
@@ -217,7 +218,7 @@ func GetResultsVector(response_writer http.ResponseWriter, request *http.Request
 		allowedColumns,
 	)
 	if err != nil {
-		log.Printf("\033[31merror building ORDER BY clause: %s\033[0m\n", err.Error())
+		log.Printf("\033[31merror building ORDER BY clause: %s\033[0m\n", middlewares.AppLogSearchError(err, "GetResultsVector", table_name))
 		httpresponse.RespondWithError(response_writer, http.StatusBadRequest, "error building ORDER BY clause")
 		return
 	}
@@ -233,7 +234,7 @@ func GetResultsVector(response_writer http.ResponseWriter, request *http.Request
 		sources, sourcesErr := resolveSemanticSources(readQuerier, table_name)
 		if sourcesErr != nil || !sources.any() {
 			if sourcesErr != nil {
-				log.Printf("\033[31merror resolving embedding sources: %s\033[0m\n", sourcesErr.Error())
+				log.Printf("\033[31merror resolving embedding sources: %s\033[0m\n", middlewares.AppLogSearchError(sourcesErr, "GetResultsVector", table_name))
 			}
 			response_data := map[string]interface{}{"columns": []string{}, "data": []map[string]interface{}{}, "types": map[string]interface{}{}, "resultsPerLoad": 0}
 			addDatasetKindCapabilities(request.Context(), table_name, response_data)
@@ -243,7 +244,7 @@ func GetResultsVector(response_writer http.ResponseWriter, request *http.Request
 
 		vectorVal, embErr := generateVectorParam(vector_query)
 		if embErr != nil {
-			log.Printf("\033[31merror generateVectorParam: %s\033[0m\n", embErr.Error())
+			log.Printf("\033[31merror generateVectorParam: %s\033[0m\n", middlewares.AppLogSearchError(embErr, "GetResultsVector", table_name))
 			httpresponse.RespondWithError(response_writer, http.StatusInternalServerError, fmt.Sprintf("error generateVectorParam: %v", embErr))
 			return
 		}
@@ -277,12 +278,9 @@ func GetResultsVector(response_writer http.ResponseWriter, request *http.Request
 		offset_value,
 	)
 
-	// Lisätään lokitus: tulostetaan SQL-kysely ja argumentit
-	// log.Printf("Suoritetaan SQL-kysely: %s, argumentit: %v", query, query_args)
-
 	rows_result, err := readQuerier.Query(query, query_args...)
 	if err != nil {
-		log.Printf("\033[31merror executing query: %s\033[0m\n", err.Error())
+		log.Printf("\033[31merror executing query: %s\033[0m\n", middlewares.AppLogSearchError(err, "GetResultsVector", table_name))
 		httpresponse.RespondWithError(response_writer, http.StatusInternalServerError, "error fetching data")
 		return
 	}
@@ -290,9 +288,9 @@ func GetResultsVector(response_writer http.ResponseWriter, request *http.Request
 
 	// ------------------------------------------------
 	// 9. Luetaan tulokset ja muotoillaan JSON
-	result_columns, query_results, err := formatRowsToMaps(rows_result, false)
+	result_columns, query_results, err := formatSearchRowsToMaps(rows_result, false, "GetResultsVector", table_name)
 	if err != nil {
-		log.Printf("\033[31merror formatting vector results: %s\033[0m\n", err.Error())
+		log.Printf("\033[31merror formatting vector results: %s\033[0m\n", middlewares.AppLogSearchError(err, "GetResultsVector", table_name))
 		httpresponse.RespondWithError(response_writer, http.StatusInternalServerError, "error processing rows")
 		return
 	}
@@ -310,7 +308,7 @@ func GetResultsVector(response_writer http.ResponseWriter, request *http.Request
 	response_writer.Header().Set("Content-Type", "application/json; charset=utf-8")
 	addDatasetKindCapabilities(request.Context(), table_name, response_data)
 	if err := json.NewEncoder(response_writer).Encode(response_data); err != nil {
-		log.Printf("\033[31merror encoding response: %s\033[0m\n", err.Error())
+		log.Printf("\033[31merror encoding response: %s\033[0m\n", middlewares.AppLogSearchError(err, "GetResultsVector", table_name))
 		httpresponse.RespondWithError(response_writer, http.StatusInternalServerError, "error encoding response")
 		return
 	}

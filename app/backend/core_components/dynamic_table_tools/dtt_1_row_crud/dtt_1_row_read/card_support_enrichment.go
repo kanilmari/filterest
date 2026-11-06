@@ -6,6 +6,7 @@ package dtt_1_row_read
 
 import (
 	"database/sql"
+	"easelect/backend/core_components/middlewares"
 	"fmt"
 	"log"
 	"sort"
@@ -520,6 +521,6 @@ func logCardSupportEnrichmentWarning(tableName string, err error) {
 	log.Printf(
 		"\033[33mwarning: card support enrichment for %s skipped: %s\033[0m\n",
 		tableName,
-		err.Error(),
+		middlewares.AppLogSearchError(err, "logCardSupportEnrichmentWarning", tableName),
 	)
 }

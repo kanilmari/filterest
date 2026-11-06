@@ -170,7 +170,7 @@ func fetchRowsInOrder(db dbutils.Querier, table string, rowIDs []int, authorizat
 
 	// Use the listing serializer so zoned platform clocks remain explicit
 	// instants in search results, including joins and CSV-restored rows.
-	cols, data, err := formatRowsToMaps(rows, false)
+	cols, data, err := formatSearchRowsToMaps(rows, false, "fetchRowsInOrder", table)
 	if err != nil {
 		return nil, nil, err
 	}

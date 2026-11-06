@@ -5,6 +5,7 @@
 package dtt_1_row_read
 
 import (
+	"easelect/backend/core_components/middlewares"
 	"fmt"
 	"log"
 	"strings"
@@ -26,7 +27,7 @@ func logMapSupportEnrichmentWarning(tableName string, err error) {
 	log.Printf(
 		"\033[33mwarning: map support enrichment for %s skipped: %s\033[0m\n",
 		tableName,
-		err.Error(),
+		middlewares.AppLogSearchError(err, "logMapSupportEnrichmentWarning", tableName),
 	)
 }
 

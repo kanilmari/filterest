@@ -2,6 +2,12 @@
   "version": 1,
   "browser_areas": [
     {
+      "area": "Application search-log privacy",
+      "paths": ["app/backend/core_components/middlewares/check_app_log_search_terms.go", "app/backend/core_components/middlewares/search_error_formatter.go", "app/backend/core_components/middlewares/search_error_formatter_test.go", "app/backend/core_components/system_config_cache", "app/backend/core_components/router/app_log_search_terms_test.go", "app/backend/core_components/dynamic_table_tools/dtt_1_row_crud/dtt_1_row_read/app_log_search_terms_test.go", "app/backend/core_components/dynamic_table_tools/dtt_1_row_crud/dtt_1_row_read/search_error_handlers_test.go", "app/backend/core_components/dynamic_table_tools/dtt_1_row_crud/dtt_1_row_read/vector_embedding_error_handlers_test.go", "app/backend/core_components/dynamic_table_tools/dtt_1_row_crud/dtt_1_row_read/search_helper_error_logs_test.go", "app/backend/core_components/dynamic_table_tools/ai_features/embedding_error_privacy_test.go", "app/server_tools/migrations/20261105000001_add_app_log_search_terms.sql", "app/server_tools/migrations/20261105000099_record_database_release_app_log_search_terms.sql", "app/testing/python/test_app_log_search_terms.py", "app/testing/python/test_app_log_search_terms_postgres.py"],
+      "specs": [],
+      "none": "WO151 K597 changes application diagnostics only. Go tests capture page-load and actual ordinary/AI/vector/embedding SSE handler errors, shared helper logs, delayed row failures, echoed provider responses and overflowing Google JSON numbers with off/on settings; offline replay and disposable PostgreSQL prove the migration and fresh seed. Cache tests prove warm reads do not wait for another key's load and every reader receives the winning replacement or refreshed value. No browser spec is needed."
+    },
+    {
       "area": "Row article presentation picker",
       "paths": [
         "app/frontend/core_components/table_views/row_presentation",

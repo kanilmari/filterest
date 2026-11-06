@@ -6,6 +6,7 @@ package dtt_1_row_read
 
 import (
 	"database/sql"
+	"easelect/backend/core_components/middlewares"
 	"fmt"
 	"log"
 	"maps"
@@ -156,13 +157,13 @@ func loadJoinMetadata(
 
 	fkRelations, err := fetchForeignKeyRelations(db, tableUID)
 	if err != nil {
-		log.Printf("\033[31merror: %s\033[0m\n", err.Error())
+		log.Printf("\033[31merror: %s\033[0m\n", middlewares.AppLogSearchError(err, "loadJoinMetadata", tableName))
 		return joinMetadataCacheEntry{}, err
 	}
 
 	foreignKeys, err := dtt_utils.GetForeignKeysForTableWithQuerier(tableName, dbutils.ReadBudgetFallback(db, backend.Db))
 	if err != nil {
-		log.Printf("\033[31merror: %s\033[0m\n", err.Error())
+		log.Printf("\033[31merror: %s\033[0m\n", middlewares.AppLogSearchError(err, "loadJoinMetadata", tableName))
 		return joinMetadataCacheEntry{}, err
 	}
 
@@ -179,7 +180,7 @@ func loadJoinMetadata(
 	titleTargets, err := fetchRecordTitleAliasTargets(metadataDB, foreignKeys)
 	if err != nil {
 		// Unproven targets cannot supply either an FK label or a record title.
-		log.Printf("\033[31merror: reading relation title metadata: %v\033[0m", err)
+		log.Printf("\033[31merror: reading relation title metadata: %v\033[0m", middlewares.AppLogSearchError(err, "loadJoinMetadata", tableName))
 	}
 	entry := joinMetadataCacheEntry{
 		tableUID:     tableUID,
@@ -390,7 +391,7 @@ func readForeignKeyRelations(db dbutils.Querier, sourceTableUID string, strict b
 			if strict {
 				return nil, fmt.Errorf("read foreign-key relation: %w", err)
 			}
-			log.Printf("\033[31merror: %s\033[0m\n", err.Error()) //odotetaan
+			log.Printf("\033[31merror: %s\033[0m\n", middlewares.AppLogSearchError(err, "readForeignKeyRelations", "")) //odotetaan
 			continue
 		}
 		// Käytetään mapin avaimena source_column_name

@@ -14,6 +14,7 @@ import (
 
 	"easelect/backend/core_components/dataset_kinds"
 	dtt_models "easelect/backend/core_components/dynamic_table_tools/dtt_models"
+	"easelect/backend/core_components/system_config_cache"
 )
 
 // =============================================================
@@ -71,10 +72,6 @@ var (
 	ucsGenerations = make(map[string]uint64)
 	ucsEpoch       uint64
 	ucsTTL         = 2 * time.Minute
-
-	configCache   = make(map[string]*configCacheEntry)
-	configCacheMu sync.RWMutex
-	configTTL     = 5 * time.Minute
 
 	existsCache   = make(map[string]*existsCacheEntry)
 	existsCacheMu sync.RWMutex
@@ -222,19 +219,12 @@ func InvalidateUserColumnSettingsCache(tableName, viewKey string) {
 // =============================================================
 
 func getCachedConfig(configKey string) *configCacheEntry {
-	configCacheMu.RLock()
-	entry, ok := configCache[configKey]
-	configCacheMu.RUnlock()
-	if !ok || time.Since(entry.cachedAt) >= configTTL {
-		return nil
-	}
-	return entry
+	value, _ := system_config_cache.Get(configKey).(*configCacheEntry)
+	return value
 }
 
 func setCachedConfig(configKey string, entry *configCacheEntry) {
-	configCacheMu.Lock()
-	configCache[configKey] = entry
-	configCacheMu.Unlock()
+	system_config_cache.SetAt(configKey, entry, entry.cachedAt)
 }
 
 // =============================================================
@@ -306,13 +296,7 @@ func cleanupResultsCaches() {
 		}
 		ucsCacheMu.Unlock()
 
-		configCacheMu.Lock()
-		for k, v := range configCache {
-			if now.Sub(v.cachedAt) >= configTTL {
-				delete(configCache, k)
-			}
-		}
-		configCacheMu.Unlock()
+		system_config_cache.PurgeExpired(now)
 
 		existsCacheMu.Lock()
 		for k, v := range existsCache {

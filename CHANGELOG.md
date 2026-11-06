@@ -22,6 +22,7 @@ Dates are the local (Europe/Helsinki) date on which the version was published.
 
 ## [Unreleased]
 
+- Application logs exclude visitor search terms, request query strings and search-related database/provider error contents, including malformed provider replies, by default. Administrators can restore the previous diagnostics with the site-wide boolean setting `app_log_search_terms`; changes take effect within five minutes without delaying warm configuration reads for other settings.
 - The article view shows Previous, Next and Close above the title at every screen width. A direction is disabled when the displayed results have no neighbouring row in that direction.
 - The Go test for concurrent first settings writes no longer shares one settings map between its two concurrent writers (#987, test only).
 - Back and Forward dataset restorations keep loading after their own hidden-field, category or view-fallback address repairs, while a newer navigation still cancels pending work.

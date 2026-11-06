@@ -8270,6 +8270,17 @@ INSERT INTO public.system_config (key, boolean_value, json_value, text_value, va
 SELECT 'category_filter_button_width_mode', NULL, '{"value":"fill_row_with_centered_label"}'::jsonb, 'fill_row_with_centered_label', NULL,
     'Choose site-wide category buttons that fill each row with centred labels or fit their labels.'
 WHERE NOT EXISTS (SELECT 1 FROM public.system_config WHERE key = 'category_filter_button_width_mode');
+-- 20261105000001_add_app_log_search_terms.sql
+-- Adds an explicit opt-in to visitor search terms in application diagnostics.
+-- Connects upgrades and fresh bootstrap to the same privacy-preserving default.
+-- Replay only inserts a missing setting and preserves every existing site choice.
+-- VERSION_DB: 9.13.5
+-- VERSION_DB_OWNER: 20261105000099_record_database_release_app_log_search_terms.sql
+
+INSERT INTO public.system_config (key, boolean_value, json_value, text_value, value_type, creation_spec)
+SELECT 'app_log_search_terms', false, '{"value":false}'::jsonb, 'false', 2,
+    'Include search terms and full request URLs in application diagnostics. Off by default; cached for up to five minutes.'
+WHERE NOT EXISTS (SELECT 1 FROM public.system_config WHERE key = 'app_log_search_terms');
 
 -- Drain article events before the next data migration without changing other constraints.
 DO $article_bundle_seed_boundary$
@@ -10206,9 +10217,11 @@ BEGIN
       ('20261029000100_add_home_top_bar_setting.sql', '342ffd7325b21cc0a620951cb6692f3ad5abbbbc56371eefbf495151b99bcb44', 'bootstrap_baseline', 'bootstrap'),
       ('20261029000199_record_database_release_9_13_3.sql', 'd97b6dc8139cc2fbcc9f17e532ff305c94012b1aeee9454148da2a2651443da4', 'bootstrap_baseline', 'bootstrap'),
       ('20261030000346_add_category_filter_button_width_mode.sql', '341d2fe1d2ec2227bd3ac352602b8fd5157dcc4d576d7d59ae47b83d1a52cea6', 'bootstrap_baseline', 'bootstrap'),
-      ('20261030000399_record_database_release_category_button_width.sql', '1f3d669745be67a5a302e2b82662cb5a295b6ede8aa5751a3f8183573f0b7096', 'bootstrap_baseline', 'bootstrap')
+      ('20261030000399_record_database_release_category_button_width.sql', '1f3d669745be67a5a302e2b82662cb5a295b6ede8aa5751a3f8183573f0b7096', 'bootstrap_baseline', 'bootstrap'),
+      ('20261105000001_add_app_log_search_terms.sql', '7e4cf38c182225e1fa204c8187f0e0e7741d4003ca810dca5a6b9870ce377d0d', 'bootstrap_baseline', 'bootstrap'),
+      ('20261105000099_record_database_release_app_log_search_terms.sql', '1fe7637e5b1b437fe658908df918d8b7e21d8247d8790c6056a4b5914ac6c9cc', 'bootstrap_baseline', 'bootstrap')
     ON CONFLICT (filename) DO NOTHING;
     INSERT INTO public.system_db_version (version, description)
-    VALUES ('9.13.4', 'Filterest generated public bootstrap');
+    VALUES ('9.13.5', 'Filterest generated public bootstrap');
 END
 $filterest_acceptance$;

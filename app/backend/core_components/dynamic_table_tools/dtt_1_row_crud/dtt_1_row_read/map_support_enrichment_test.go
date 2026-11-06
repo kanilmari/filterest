@@ -10,6 +10,8 @@ import (
 	"database/sql/driver"
 	backend "easelect/backend/core_components"
 	"easelect/backend/core_components/dbutils"
+	"easelect/backend/core_components/middlewares"
+	"easelect/backend/core_components/system_config_cache"
 	"fmt"
 	"net/url"
 	"reflect"
@@ -41,7 +43,11 @@ func (d deniedMapSupportDriver) Open(string) (driver.Conn, error) {
 	return &deniedMapSupportConn{calls: d.calls}, nil
 }
 
-func (c *deniedMapSupportConn) QueryContext(context.Context, string, []driver.NamedValue) (driver.Rows, error) {
+func (c *deniedMapSupportConn) QueryContext(_ context.Context, query string, _ []driver.NamedValue) (driver.Rows, error) {
+	// A privacy-setting read is not a geometry retry through the owner pool.
+	if strings.Contains(query, "SELECT boolean_value FROM system_config") {
+		return &legacyImageMockRows{columns: []string{"boolean_value"}, rows: [][]driver.Value{{false}}}, nil
+	}
 	*c.calls++
 	return nil, fmt.Errorf("geometry read denied")
 }
@@ -62,7 +68,10 @@ func TestPrepareRowResponseMapSupportNeverRetriesDeniedGeometryAsOwner(t *testin
 	reader, owner := open(&readerCalls), open(&ownerCalls)
 	old := backend.Db
 	backend.Db = owner
-	t.Cleanup(func() { backend.Db = old })
+	t.Cleanup(func() {
+		backend.Db = old
+		system_config_cache.Delete(middlewares.AppLogSearchTermsKey)
+	})
 	rows := []map[string]interface{}{{"id": int64(1), "title": "kept"}}
 	columns := []string{"id", "title"}
 	support := resolveRowSupportRequest(url.Values{"view_key": {"map"}})

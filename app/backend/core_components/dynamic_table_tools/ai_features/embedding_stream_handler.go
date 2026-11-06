@@ -10,6 +10,7 @@ import (
 	backend "easelect/backend/core_components"
 	"easelect/backend/core_components/dataset_kinds"
 	"easelect/backend/core_components/httpresponse"
+	"easelect/backend/core_components/middlewares"
 	"easelect/backend/core_components/security"
 	e_sessions "easelect/backend/core_components/sessions"
 	"fmt"
@@ -75,14 +76,14 @@ func EmbeddingStreamHandler(w http.ResponseWriter, r *http.Request) {
 		// Luodaan sarake, jos ei löydy
 		alterQuery := fmt.Sprintf("ALTER TABLE %s ADD COLUMN embedding_vector vector", sanitizedTableName)
 		if _, alterErr := db.Exec(alterQuery); alterErr != nil {
-			log.Printf("\033[31merror: adding embedding_vector column: %v\033[0m", alterErr)
+			log.Printf("\033[31merror: adding embedding_vector column: %v\033[0m", middlewares.AppLogSearchError(alterErr, "EmbeddingStreamHandler", sanitizedTableName))
 			sendSSE("error", escape_for_sse(fmt.Sprintf("could not add embedding_vector column: %v", alterErr)))
 			return
 		}
 		// This pool write has committed before Exec returns successfully.
 		dataset_kinds.InvalidateAll()
 	} else if err != nil {
-		log.Printf("\033[31merror: checking embedding_vector column: %v\033[0m", err)
+		log.Printf("\033[31merror: checking embedding_vector column: %v\033[0m", middlewares.AppLogSearchError(err, "EmbeddingStreamHandler", sanitizedTableName))
 		sendSSE("error", escape_for_sse(fmt.Sprintf("column check error: %v", err)))
 		return
 	}
@@ -90,7 +91,7 @@ func EmbeddingStreamHandler(w http.ResponseWriter, r *http.Request) {
 	// Resolve only fields explicitly approved for the configured external provider.
 	_, sourceColumns, err := ResolveExternalEmbeddingSourceColumns(db, sanitizedTableName)
 	if err != nil {
-		log.Printf("\033[31merror: fetching approved embedding fields: %v\033[0m", err)
+		log.Printf("\033[31merror: fetching approved embedding fields: %v\033[0m", middlewares.AppLogSearchError(err, "EmbeddingStreamHandler", sanitizedTableName))
 		sendSSE("error", escape_for_sse("embedding field policy unavailable"))
 		return
 	}
@@ -113,7 +114,7 @@ func EmbeddingStreamHandler(w http.ResponseWriter, r *http.Request) {
 	)
 	rows, err := db.Query(selectQuery)
 	if err != nil {
-		log.Printf("\033[31merror: selecting rows: %v\033[0m", err)
+		log.Printf("\033[31merror: selecting rows: %v\033[0m", middlewares.AppLogSearchError(err, "EmbeddingStreamHandler", sanitizedTableName))
 		sendSSE("error", escape_for_sse(fmt.Sprintf("select error: %v", err)))
 		return
 	}
@@ -121,7 +122,7 @@ func EmbeddingStreamHandler(w http.ResponseWriter, r *http.Request) {
 
 	columns, err := rows.Columns()
 	if err != nil {
-		log.Printf("\033[31merror: fetching columns: %v\033[0m", err)
+		log.Printf("\033[31merror: fetching columns: %v\033[0m", middlewares.AppLogSearchError(err, "EmbeddingStreamHandler", sanitizedTableName))
 		sendSSE("error", escape_for_sse(fmt.Sprintf("error fetching columns: %v", err)))
 		return
 	}
@@ -155,7 +156,7 @@ func EmbeddingStreamHandler(w http.ResponseWriter, r *http.Request) {
 		}
 
 		if err := rows.Scan(ptrs...); err != nil {
-			log.Printf("\033[31merror: scan error: %v\033[0m", err)
+			log.Printf("\033[31merror: scan error: %v\033[0m", middlewares.AppLogSearchError(err, "EmbeddingStreamHandler", sanitizedTableName))
 			sendSSE("error", escape_for_sse(fmt.Sprintf("scan error row=%d: %v", totalRows, err)))
 			continue
 		}
@@ -184,13 +185,13 @@ func EmbeddingStreamHandler(w http.ResponseWriter, r *http.Request) {
 
 		embeddingVec, err := GenerateEmbedding(ctx, rowText)
 		if err != nil {
-			log.Printf("\033[31merror: embedding error (id=%d): %v\033[0m", rowID, err)
+			log.Printf("\033[31merror: embedding error (id=%d): %v\033[0m", rowID, middlewares.AppLogSearchError(err, "EmbeddingStreamHandler", sanitizedTableName))
 			sendSSE("error", escape_for_sse(fmt.Sprintf("row=%d: %v", rowID, err)))
 			continue
 		}
 
 		if err := storeEmbeddingInDB(db, sanitizedTableName, rowID, embeddingVec); err != nil {
-			log.Printf("\033[31merror: store embedding error (id=%d): %v\033[0m", rowID, err)
+			log.Printf("\033[31merror: store embedding error (id=%d): %v\033[0m", rowID, middlewares.AppLogSearchError(err, "EmbeddingStreamHandler", sanitizedTableName))
 			sendSSE("error", escape_for_sse(fmt.Sprintf("row=%d: %v", rowID, err)))
 			continue
 		}
@@ -199,7 +200,7 @@ func EmbeddingStreamHandler(w http.ResponseWriter, r *http.Request) {
 		sendSSE("progress", escape_for_sse(fmt.Sprintf("embedded row id=%d", rowID)))
 	}
 	if err := rows.Err(); err != nil && err != io.EOF {
-		log.Printf("\033[31merror: rows iteration error: %v\033[0m", err)
+		log.Printf("\033[31merror: rows iteration error: %v\033[0m", middlewares.AppLogSearchError(err, "EmbeddingStreamHandler", sanitizedTableName))
 		sendSSE("error", escape_for_sse(fmt.Sprintf("rows error: %v", err)))
 	}
 

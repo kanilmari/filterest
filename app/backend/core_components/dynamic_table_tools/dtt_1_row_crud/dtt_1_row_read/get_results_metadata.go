@@ -7,6 +7,7 @@ package dtt_1_row_read
 import (
 	"database/sql"
 	backend "easelect/backend/core_components"
+	"easelect/backend/core_components/middlewares"
 	"fmt"
 	"log"
 	"strings"
@@ -26,7 +27,7 @@ func fetchUserSelectableColumns(db dbutils.Querier, tableName string) ([]string,
 	`
 	rows, err := db.Query(query, tableName)
 	if err != nil {
-		log.Printf("\033[31merror: %s\033[0m\n", err.Error())
+		log.Printf("\033[31merror: %s\033[0m\n", middlewares.AppLogSearchError(err, "fetchUserSelectableColumns", tableName))
 		return nil, err
 	}
 	defer rows.Close()
@@ -35,13 +36,13 @@ func fetchUserSelectableColumns(db dbutils.Querier, tableName string) ([]string,
 	for rows.Next() {
 		var colName string
 		if err := rows.Scan(&colName); err != nil {
-			log.Printf("\033[31merror: %s\033[0m\n", err.Error())
+			log.Printf("\033[31merror: %s\033[0m\n", middlewares.AppLogSearchError(err, "fetchUserSelectableColumns", tableName))
 			continue
 		}
 		columns = append(columns, colName)
 	}
 	if err := rows.Err(); err != nil {
-		log.Printf("\033[31merror: %s\033[0m\n", err.Error())
+		log.Printf("\033[31merror: %s\033[0m\n", middlewares.AppLogSearchError(err, "fetchUserSelectableColumns", tableName))
 		return nil, err
 	}
 	return columns, nil
@@ -354,7 +355,7 @@ func getColumnDataTypesWithFK(tableName string, db dbutils.Querier) (map[string]
     `, cardDetailIconExpr, cardDetailIconKeyExpr, cardDetailCapitalizationExpr, cardDetailLabelModeExpr)
 	rows, err := db.Query(query, tableName)
 	if err != nil {
-		fmt.Printf("\033[31merror: %s\033[0m\n", err.Error())
+		fmt.Printf("\033[31merror: %s\033[0m\n", middlewares.AppLogSearchError(err, "getColumnDataTypesWithFK", tableName))
 		return nil, fmt.Errorf("getColumnDataTypesWithFK: %v", err)
 	}
 	defer rows.Close()
@@ -398,7 +399,7 @@ func getColumnDataTypesWithFK(tableName string, db dbutils.Querier) (map[string]
 			&cardDetailCapitalization,
 			&cardDetailLabelMode,
 		); err != nil {
-			fmt.Printf("\033[31merror: %s\033[0m\n", err.Error())
+			fmt.Printf("\033[31merror: %s\033[0m\n", middlewares.AppLogSearchError(err, "getColumnDataTypesWithFK", tableName))
 			return nil, fmt.Errorf("getColumnDataTypesWithFK: %v", err)
 		}
 
@@ -430,7 +431,7 @@ func getColumnDataTypesWithFK(tableName string, db dbutils.Querier) (map[string]
 		data_types[columnName] = columnInfo
 	}
 	if err := rows.Err(); err != nil {
-		fmt.Printf("\033[31merror: %s\033[0m\n", err.Error())
+		fmt.Printf("\033[31merror: %s\033[0m\n", middlewares.AppLogSearchError(err, "getColumnDataTypesWithFK", tableName))
 		return nil, fmt.Errorf("getColumnDataTypesWithFK, rows error: %v", err)
 	}
 

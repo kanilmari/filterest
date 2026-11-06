@@ -17,6 +17,8 @@ import (
 
 	backend "easelect/backend/core_components"
 	"easelect/backend/core_components/dbutils"
+	"easelect/backend/core_components/middlewares"
+	"easelect/backend/core_components/system_config_cache"
 )
 
 type resultsMetadataBudgetDriver struct{ seen *context.Context }
@@ -29,6 +31,11 @@ func (d resultsMetadataBudgetDriver) Open(string) (driver.Conn, error) {
 	return &resultsMetadataBudgetConn{seen: d.seen}, nil
 }
 func (c *resultsMetadataBudgetConn) QueryContext(ctx context.Context, query string, _ []driver.NamedValue) (driver.Rows, error) {
+	// Keep the separate bounded diagnostic-setting read out of this fixture's
+	// simulated dataset-metadata delay and deadline observation.
+	if strings.Contains(query, "SELECT boolean_value FROM system_config") {
+		return &legacyImageMockRows{columns: []string{"boolean_value"}, rows: [][]driver.Value{{false}}}, nil
+	}
 	if strings.Contains(query, "dataset.ui_hidden") {
 		return &legacyImageMockRows{columns: []string{"hidden"}, rows: [][]driver.Value{{false}}}, nil
 	}
@@ -52,7 +59,10 @@ func TestResultsColdMetadataPoolReadReceivesDeadline(t *testing.T) {
 	defer db.Close()
 	old, basic := backend.Db, backend.DbBasic
 	backend.Db, backend.DbBasic = db, db
-	t.Cleanup(func() { backend.Db, backend.DbBasic = old, basic })
+	t.Cleanup(func() {
+		backend.Db, backend.DbBasic = old, basic
+		system_config_cache.Delete(middlewares.AppLogSearchTermsKey)
+	})
 	request := kindRequest(t, "/api/get-results?dataset=cold_budget_metadata")
 	budget, cancel := context.WithTimeout(request.Context(), 20*time.Millisecond)
 	defer cancel()

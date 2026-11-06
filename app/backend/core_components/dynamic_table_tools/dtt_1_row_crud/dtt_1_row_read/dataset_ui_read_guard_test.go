@@ -9,7 +9,10 @@ import (
 	"database/sql"
 	"database/sql/driver"
 	backend "easelect/backend/core_components"
+	"easelect/backend/core_components/dbutils/queryfixture"
+	"easelect/backend/core_components/middlewares"
 	e_sessions "easelect/backend/core_components/sessions"
+	"easelect/backend/core_components/system_config_cache"
 	"errors"
 	"fmt"
 	"github.com/gorilla/sessions"
@@ -50,6 +53,11 @@ func (r *uiReadRows) Next(dest []driver.Value) error {
 	return nil
 }
 func (c uiReadConn) QueryContext(_ context.Context, q string, args []driver.NamedValue) (driver.Rows, error) {
+	// Privacy configuration is separate from the visibility/data-read boundary
+	// counted below; visible missing-query errors now read this setting to log.
+	if q == "SELECT boolean_value FROM system_config WHERE key = $1" && args[0].Value == middlewares.AppLogSearchTermsKey {
+		return queryfixture.Rows([]string{"boolean_value"}, []driver.Value{false}), nil
+	}
 	c.state.queries++
 	userID := c.state.userID
 	if userID == 0 {
@@ -76,7 +84,11 @@ func setupUIReadDB(t *testing.T, state *uiReadState) {
 	}
 	old := backend.Db
 	backend.Db = db
-	t.Cleanup(func() { db.Close(); backend.Db = old })
+	t.Cleanup(func() {
+		db.Close()
+		backend.Db = old
+		system_config_cache.Delete(middlewares.AppLogSearchTermsKey)
+	})
 }
 func TestHiddenDatasetResultHandlersStopBeforeDataRead(t *testing.T) {
 	for name, handler := range map[string]http.HandlerFunc{"ordinary": GetResults, "semantic": GetResultsVector} {
