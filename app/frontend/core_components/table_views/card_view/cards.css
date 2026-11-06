@@ -1758,12 +1758,12 @@ body.dark-mode .card--modern {
     flex-shrink: 0;
 }
 
-/* Hide small card list below 1200px */
+/* Hide the selector rail below 1200px; keep the article flush with the shared top bar. */
 @media (width <= 1200px) {
     .card_view_wrapper.big-card-open {
         grid-template-columns: minmax(0, 1fr);
         grid-template-rows: auto minmax(0, 1fr);
-        padding: 20px 0;
+        padding: 0;
     }
 
     .card_view_wrapper.big-card-open .card_container {
@@ -1785,11 +1785,6 @@ body.dark-mode .card--modern {
     .tab_parts_container:has(.card_view_wrapper.big-card-open) .filterbar_results_count {
         display: none !important;
     }
-}
-
-/* Only the ordinary article wrapper owns this narrow-screen outer padding. */
-@media (width <= 700px) {
-    .card_view_wrapper.big-card-open { padding: 0; }
 }
 
 .card_container .card_front_page {

@@ -82,7 +82,7 @@ describe("article view top seam", () => {
         expect(rule).toContain("transition: none");
     });
 
-    test("removes only ordinary article phone framing and outer padding", () => {
+    test("keeps phone framing scoped and removes outer padding through tablet widths", () => {
         const css = readCss("cards_big.css");
         expectPhoneRule(css, ".big_card_container.row_article_container", {
             "border-inline": "0", "border-radius": "0",
@@ -93,8 +93,7 @@ describe("article view top seam", () => {
         expectPhoneRule(css, ".row_article_container .big_card_image", {
             "margin-top": "10px", "padding-inline": "10px",
         });
-        expectPhoneRule(readCss("cards.css"), ".card_view_wrapper.big-card-open", { padding: "0" });
         expect(withoutPhone(css)).toMatch(/\.big_card_container\s*\{[^}]*border-inline: 1px solid var\(--border_color\);[^}]*border-radius: 10px;/s);
-        expect(withoutPhone(readCss("cards.css"))).toMatch(/@media \(width <= 1200px\)\s*\{[^}]*padding: 20px 0;/s);
+        expect(withoutPhone(readCss("cards.css"))).toMatch(/@media \(width <= 1200px\)\s*\{[^}]*padding: 0;/s);
     });
 });
