@@ -133,7 +133,7 @@ export function createSharedTopbarVisibilityController({ tableName, currentView,
             ? inlineHeroHost?.querySelector('.hero-dataset-tabs')
             : sharedTopBar.querySelector('.dataset-shared-topbar__slot--end'));
         if (active && homeHadFocus) homeLink.focus({ preventScroll: true });
-        mobileSearch.sync({ phone, active: shouldShowBar });
+        mobileSearch.sync({ phone, active: shouldShowBar, article: bigCardOpen || articleViewActive });
         setSharedTopBarArticleCloseVisibility(
             shouldShowBar && !phone && (bigCardOpen || activeView !== CARD_VIEW_KEY)
         );

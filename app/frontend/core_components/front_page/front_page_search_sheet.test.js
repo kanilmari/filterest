@@ -3,10 +3,11 @@
 // Uses real browser history identities with a stubbed search transport owner.
 // Keeps reload and desktop inert without a database or application instance.
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
-const mocks = vi.hoisted(() => ({ destroy: vi.fn(), create: vi.fn() }));
+const mocks = vi.hoisted(() => ({ destroy: vi.fn(), create: vi.fn(), search: vi.fn() }));
 vi.mock('./front_page_search_runner.js', () => ({ createFrontPageSearchRunner: mocks.create }));
 vi.mock('../lang/translation_handler.js', () => ({ getTranslationForKey: key => ({
-    front_page_search_site: 'Search the site', front_page_search_title: 'Search', front_page_search_close: 'Close search',
+    front_page_search_title: 'Search', filterbar_show_search: 'Show search', filterbar_hide_search: 'Hide search',
+    search: 'Search…', clear_text_search: 'Clear text search',
 }[key] || key) }));
 import { mountFrontPageSearchSheet } from './front_page_search_sheet.js';
 import { consumeHomeSearchHistoryNavigation } from './front_page_search_history.js';
@@ -16,7 +17,7 @@ let mount, scroller, end, button, back;
 let serial = 0;
 const onPop = () => consumeHomeSearchHistoryNavigation();
 const dialog = () => document.querySelector('[role="dialog"]');
-const close = () => dialog().querySelector('button');
+const close = () => dialog().querySelector('.front-page-search-button');
 beforeEach(() => {
     history.replaceState({ [HISTORY_ENTRY_ID]: `home-${++serial}` }, '', '/');
     window.addEventListener('popstate', onPop);
@@ -25,7 +26,7 @@ beforeEach(() => {
         + '<div class="menu"><button>Menu</button></div><div class="front-page-top-row__identity">Sivuston nimi</div>'
         + '<div class="front-page-phone-topbar__end" aria-hidden="true"></div></div><article><button>Home</button></article></main>';
     scroller = document.querySelector('main'); end = scroller.querySelector('.front-page-phone-topbar__end');
-    mocks.create.mockReset().mockReturnValue({ destroy: mocks.destroy }); mocks.destroy.mockClear();
+    mocks.create.mockReset().mockReturnValue({ destroy: mocks.destroy, search: mocks.search }); mocks.destroy.mockClear();
     back = vi.spyOn(history, 'back');
     mount = mountFrontPageSearchSheet(end, scroller); button = end.querySelector('button');
 });
@@ -58,7 +59,7 @@ test('opening creates a separately identified same-URL state, locks Home and foc
     expect(identity.inert).toBe(true); expect(end.inert).toBe(true);
     expect(end.parentElement.inert).not.toBe(true); expect(dialog().inert).not.toBe(true);
     expect(scroller.querySelector('.menu').inert).toBe(true);
-    expect(end.children).toHaveLength(1);
+    expect(end.children).toHaveLength(0);
 });
 
 test('focus loops in both directions and programmatic outside focus returns inside', () => {
@@ -142,4 +143,31 @@ test('slot removal tears down an open sheet and its focus listeners; a drawer lo
     await vi.waitFor(() => expect(dialog()).toBeNull());
     expect(mocks.destroy).toHaveBeenCalledOnce(); expect(scroller.classList.contains('front-page-scroller--drawer-open')).toBe(true);
     const outside = scroller.querySelector('article button'); outside.focus(); expect(document.activeElement).toBe(outside);
+});
+
+test('Home keeps uncommitted text on toggle close and reopen; clear depends only on text', async () => {
+    button.click();
+    let input = dialog().querySelector('input');
+    let clear = dialog().querySelector('[data-testid="dataset-search-clear"]');
+    expect(clear.hidden).toBe(true);
+    expect(input.placeholder).toBe('Search…');
+    expect(button.getAttribute('aria-label')).toBe('Hide search');
+    expect(button.firstElementChild.style.maskImage).toContain('dataset-search-off-icon.svg');
+    input.value = 'Helsingin kartat'; input.dispatchEvent(new Event('input'));
+    expect(clear.hidden).toBe(false);
+    expect(clear.textContent).toBe('⊗');
+    expect(dialog().querySelector('.front-page-search-sheet__close')).toBeNull();
+    button.click();
+    await vi.waitFor(() => expect(history.state?.homeSearch).not.toBe(true));
+    expect(button.getAttribute('aria-label')).toBe('Show search');
+    expect(button.parentElement).toBe(end);
+    button.click(); input = dialog().querySelector('input');
+    expect(input.value).toBe('Helsingin kartat');
+    clear = dialog().querySelector('[data-testid="dataset-search-clear"]');
+    expect(clear.hidden).toBe(false);
+    clear.click(); expect(input.value).toBe(''); expect(clear.hidden).toBe(true);
+    expect(document.activeElement).toBe(input);
+    dialog().querySelector('[data-testid="dataset-search-submit"]').click();
+    input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+    expect(mocks.search).toHaveBeenCalledTimes(2);
 });

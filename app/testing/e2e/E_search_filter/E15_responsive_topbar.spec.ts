@@ -119,12 +119,12 @@ test.describe('guest phone toolbar and style controls', () => {
         const field = element.getBoundingClientRect();
         const glass = element.parentElement!.querySelector('.dataset-search-field-icon')!.getBoundingClientRect();
         const style = getComputedStyle(element);
-        return { textStart: field.left + Number.parseFloat(style.paddingInlineStart), glassEnd: glass.right,
+        return { textStart: field.left + Number.parseFloat(style.paddingInlineStart), glassWidth: glass.width,
           radius: style.borderTopLeftRadius, token: style.getPropertyValue('--search_tools_radius').trim() };
       });
-      expect(fieldGeometry.textStart).toBeGreaterThan(fieldGeometry.glassEnd);
-      // K465: the field shares the search tools' one radius token.
-      expect(fieldGeometry.radius).toBe(fieldGeometry.token);
+      expect(fieldGeometry.glassWidth).toBe(0);
+      // K580: only the phone bar field is square; the hero keeps K465.
+      expect(fieldGeometry.radius).toBe('0px');
       await expect(toggle).toHaveAccessibleName(labels[1]);
       if (labels[1] !== englishLabels[1]) await expect(toggle).not.toHaveAccessibleName(englishLabels[1]);
       await expect(toggle).toHaveAttribute('data-aria-label-lang-key', 'filterbar_hide_search');

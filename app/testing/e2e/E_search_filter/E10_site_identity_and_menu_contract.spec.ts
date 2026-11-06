@@ -82,7 +82,7 @@ test.describe('E10 — Site identity and menu contract', () => {
       await expect.poll(() => opener.evaluate((element, position) => {
         const box = element.getBoundingClientRect();
         return Math.abs(box.x - position.x) <= 1 && Math.abs(box.y - position.y) <= 1;
-      }, { x: closeBox.x, y: closeBox.y })).toBe(true);
+      }, page.viewportSize()!.width <= 700 ? { x: 0, y: 0 } : { x: closeBox.x, y: closeBox.y })).toBe(true);
       await expect(closer).toBeHidden();
       if (page.viewportSize()!.width <= 700) {
         await page.locator('.front-page-scroller').evaluate(element => { element.scrollTop = 100; });
@@ -343,16 +343,16 @@ test.describe('E10 — Site identity and menu contract', () => {
         badgeTop: badge?.top ?? Number.NEGATIVE_INFINITY,
         badgeBottom: badge?.bottom ?? Number.POSITIVE_INFINITY,
         badgeTopOffset: (badge?.top ?? button.top) - button.top,
-        badgeRightOffset: (badge?.right ?? button.right) - button.right,
+        badgeLeftOffset: (badge?.left ?? button.left) - button.left,
         topbarTop: topbar?.top ?? Number.POSITIVE_INFINITY,
         topbarBottom: topbar?.bottom ?? Number.NEGATIVE_INFINITY,
         innerOverflow: topbarInner ? getComputedStyle(topbarInner).overflow : '',
       };
     });
-    expect(narrowMenuGeometry.buttonWidth).toBe(wideMenuGeometry.buttonWidth);
-    expect(narrowMenuGeometry.buttonHeight).toBe(wideMenuGeometry.buttonHeight);
-    expect(narrowMenuGeometry.badgeTopOffset).toBeCloseTo(wideMenuGeometry.badgeTopOffset, 1);
-    expect(narrowMenuGeometry.badgeRightOffset).toBeCloseTo(wideMenuGeometry.badgeRightOffset, 1);
+    expect(narrowMenuGeometry.buttonWidth).toBe(52);
+    expect(narrowMenuGeometry.buttonHeight).toBe(47);
+    expect(narrowMenuGeometry.badgeTopOffset).toBeCloseTo(2, 1);
+    expect(narrowMenuGeometry.badgeLeftOffset).toBeCloseTo(2, 1);
     expect(narrowMenuGeometry.badgeTop).toBeGreaterThanOrEqual(narrowMenuGeometry.topbarTop);
     expect(narrowMenuGeometry.badgeBottom).toBeLessThanOrEqual(narrowMenuGeometry.topbarBottom);
     expect(narrowMenuGeometry.innerOverflow).toBe('visible');

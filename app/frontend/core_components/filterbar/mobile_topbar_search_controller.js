@@ -5,6 +5,7 @@
 import { createMaskIconSpan } from '../../icons/icon_mask_builder.js';
 import { getLanguageWithBrowserFallback } from '../state_stores/lang_preference_reader.js';
 import { getTranslationForKey } from '../lang/translation_handler.js';
+import { syncMobileSiteIdentity } from './mobile_site_identity_builder.js';
 
 export const SEARCH_FIELD_MIN_WIDTH = 280;
 
@@ -21,6 +22,14 @@ const COPY = {
     'zh-HK': ['顯示搜尋', '隱藏搜尋'],
 };
 
+// Runtime observes this subtree. Unchanged renders must not enqueue another sync.
+function setAttributeIfChanged(element, attribute, value) {
+    if (element && element.getAttribute(attribute) !== value) element.setAttribute(attribute, value);
+}
+function setPropertyIfChanged(element, property, value) {
+    if (element && element[property] !== value) element[property] = value;
+}
+
 /** The toggle controls visibility only; submission stays with the existing search component. */
 export function createMobileTopbarSearchController(bar) {
     const search = bar.querySelector('.dataset-search-panel');
@@ -35,9 +44,13 @@ export function createMobileTopbarSearchController(bar) {
     button.dataset.testid = 'mobile-search-toggle';
     search.id ||= `${bar.dataset.filterbarSharedTopbarFor}_mobile_topbar_search`;
     button.setAttribute('aria-controls', search.id);
-    button.append(createMaskIconSpan('/frontend/icons/general/dataset-search-icon.svg', ['filterbar-section-heading-icon']));
+    const searchIcon = '/frontend/icons/general/dataset-search-icon.svg';
+    let renderedIcon = searchIcon;
+    button.append(createMaskIconSpan(searchIcon, ['filterbar-section-heading-icon']));
     end.append(button);
     const lifetime = new AbortController();
+    const originalInputs = new WeakMap();
+    let article = false;
     let phone = false;
     let active = false;
     let open = false;
@@ -86,9 +99,11 @@ export function createMobileTopbarSearchController(bar) {
         const language = getLanguageWithBrowserFallback();
         const copy = COPY[language === 'ch' ? 'zh-CN' : language === 'yue' ? 'zh-HK' : language] || COPY.en;
         const key = open ? 'filterbar_hide_search' : 'filterbar_show_search';
-        button.dataset.ariaLabelLangKey = button.dataset.titleLangKey = key;
-        button.title = getTranslationForKey(key, { fallback: copy[Number(open)], countUsage: false });
-        button.setAttribute('aria-label', button.title);
+        setAttributeIfChanged(button, 'data-aria-label-lang-key', key);
+        setAttributeIfChanged(button, 'data-title-lang-key', key);
+        const label = getTranslationForKey(key, { fallback: copy[Number(open)], countUsage: false });
+        setPropertyIfChanged(button, 'title', label);
+        setAttributeIfChanged(button, 'aria-label', label);
     }
 
     function render() {
@@ -96,19 +111,42 @@ export function createMobileTopbarSearchController(bar) {
         const mode = phone ? 'phone' : buttonMode ? 'button' : 'field';
         if (bar.dataset.topbarSearchMode !== mode) bar.dataset.topbarSearchMode = mode;
         if (bar.dataset.topbarSearchOpen !== String(open)) bar.dataset.topbarSearchOpen = String(open);
-        button.hidden = !toggled;
-        button.tabIndex = toggled && active ? 0 : -1;
-        button.setAttribute('aria-hidden', String(!toggled || !active));
-        button.setAttribute('aria-pressed', String(open));
-        button.setAttribute('aria-expanded', String(open));
+        setPropertyIfChanged(button, 'hidden', !toggled);
+        setPropertyIfChanged(button, 'tabIndex', toggled && active ? 0 : -1);
+        setAttributeIfChanged(button, 'aria-hidden', String(!toggled || !active));
+        setAttributeIfChanged(button, 'aria-pressed', String(open));
+        setAttributeIfChanged(button, 'aria-expanded', String(open));
         const visible = !toggled || open;
-        search.hidden = !visible;
-        search.inert = !visible;
-        search.setAttribute('aria-hidden', String(!visible));
+        setPropertyIfChanged(search, 'hidden', !visible);
+        setPropertyIfChanged(search, 'inert', !visible);
+        setAttributeIfChanged(search, 'aria-hidden', String(!visible));
         if (!visible && search.contains(document.activeElement)) document.activeElement.blur();
-        identity.hidden = !phone || open;
-        identity.setAttribute('aria-hidden', String(!phone || open));
-        title?.setAttribute('aria-hidden', String(phone || open));
+        setPropertyIfChanged(identity, 'hidden', !phone || open);
+        setAttributeIfChanged(identity, 'aria-hidden', String(!phone || open));
+        setAttributeIfChanged(title, 'aria-hidden', String(phone || open));
+        const icon = phone && open ? '/frontend/icons/general/dataset-search-off-icon.svg' : searchIcon;
+        if (renderedIcon !== icon) {
+            renderedIcon = icon;
+            button.replaceChildren(createMaskIconSpan(icon, ['filterbar-section-heading-icon']));
+        }
+        syncMobileSiteIdentity(identity, phone && article ? title?.textContent || '' : null);
+        const input = search.querySelector('.dataset-search-input');
+        if (input && (phone || originalInputs.has(input))) {
+            if (!originalInputs.has(input)) originalInputs.set(input, {
+                key: input.dataset.langKey, placeholder: input.placeholder,
+            });
+            const original = originalInputs.get(input);
+            const key = phone ? 'search' : original.key;
+            if (key) setAttributeIfChanged(input, 'data-lang-key', key);
+            else if (input.hasAttribute('data-lang-key')) input.removeAttribute('data-lang-key');
+            const placeholder = key ? getTranslationForKey(key, {
+                fallback: phone ? 'Search…' : original.placeholder, countUsage: false,
+            }) : original.placeholder;
+            setPropertyIfChanged(input, 'placeholder', placeholder);
+            if (!phone) originalInputs.delete(input);
+        }
+        const clearIcon = search.querySelector('.dataset-search-clear-icon');
+        setPropertyIfChanged(clearIcon, 'textContent', phone ? '⊗' : '×');
         refreshCopy();
     }
 
@@ -153,6 +191,7 @@ export function createMobileTopbarSearchController(bar) {
         sync(state) {
             if (phone !== state.phone || !state.active) open = false;
             phone = state.phone;
+            article = Boolean(state.article);
             active = state.active;
             measure();
         },

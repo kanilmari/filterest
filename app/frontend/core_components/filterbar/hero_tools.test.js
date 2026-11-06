@@ -96,7 +96,7 @@ test('masks reuse existing artwork, inherit text colour and reserve input space'
     expect(shared).toContain('rotate: 180deg');
     const search = source('./text_search/text_search.css');
     expect(rule(search, '.dataset-search-field-icon')).toContain('inset-inline-start: 14px');
-    expect(rule(search, '.dataset-search-input-shell > .dataset-search-input')).toContain('padding-inline-start: 44px !important');
+    expect(rule(search, '.dataset-search-input-shell > .dataset-search-input')).toContain('padding-inline-start: var(--dataset-search-input-start, 44px) !important');
     expect(search).toContain('inset-inline-start: 44px');
     expect(search).toContain('general/dataset-search-icon.svg');
     expect(rule(source('./morphing_filterbar_content.css'), '.filterbar-panel-body .filterbar-text-search-row .dataset-search-input')).toContain('padding-inline: 44px !important');

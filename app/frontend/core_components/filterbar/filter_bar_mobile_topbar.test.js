@@ -105,3 +105,37 @@ test('changing language while search is open keeps the draft, focus and pressed 
     expect(toggle.getAttribute('aria-pressed')).toBe('true');
     expect(document.activeElement).toBe(input); expect(input.value).toBe('Helsinki');
 });
+
+test('a phone article uses the translated dataset name; a dataset view keeps the site name', async () => {
+    const { setChosenDatasetView } = await import('../state_stores/dataset_view_choice_saver.js');
+    const { create_filter_bar } = await import('./filter_bar_builder.js');
+    setChosenDatasetView('demo', 'article_view');
+    const panel = create_filter_bar('demo', 'demo_uid', [], {}, 1, false, 'article_view');
+    const bar = document.querySelector('.dataset-shared-topbar');
+    const title = bar.querySelector('.dataset-shared-topbar__dataset-title');
+    const identity = bar.querySelector('[data-testid="mobile-site-identity"]');
+    expect(identity.textContent).toBe('Demo');
+    title.textContent = 'Helsingin vanhat kartat';
+    await Promise.resolve();
+    expect(identity.textContent).toBe('Helsingin vanhat kartat');
+    expect(identity.querySelector('span').title).toBe('Helsingin vanhat kartat');
+    const inner = bar.querySelector('.dataset-shared-topbar__inner');
+    const menu = bar.querySelector('[data-testid="shared-topbar-menu-button"]');
+    const toggle = bar.querySelector('[data-testid="mobile-search-toggle"]');
+    const filter = bar.querySelector('[data-testid="filterbar-toggle"]');
+    for (const open of [false, true]) {
+        if (open) toggle.click();
+        const center = inner.children[1];
+        expect([...inner.children].map(node => node.className)).toEqual([
+            'dataset-shared-topbar__slot dataset-shared-topbar__slot--start',
+            'dataset-shared-topbar__center',
+            'dataset-shared-topbar__slot dataset-shared-topbar__slot--end dataset-corner-controls-topbar-end',
+        ]);
+        expect(inner.firstElementChild.contains(menu)).toBe(true);
+        expect(identity.hidden).toBe(open);
+        expect(center.querySelector('.dataset-search-panel').hidden).toBe(!open);
+        expect(toggle.nextElementSibling).toBe(filter);
+    }
+    setChosenDatasetView('demo', 'card'); panel.__syncSharedTopBar();
+    expect(identity.textContent).toBe('Fintravel.fi');
+});

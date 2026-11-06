@@ -360,11 +360,13 @@ body.dark-mode .front-page {
     top: 0;
     z-index: 1;
     display: grid;
-    grid-template-columns: 44px minmax(0, 1fr) 44px;
+    grid-template-columns: 52px minmax(0, 1fr) 44px;
     align-items: center;
-    gap: 8px;
-    padding: 12px;
-    padding-top: calc(12px + env(safe-area-inset-top));
+    gap: 0;
+    box-sizing: border-box;
+    height: 48px;
+    grid-template-rows: 47px;
+    padding: 0;
     background: color-mix(in srgb, var(--bg_color) 92%, transparent);
     border-bottom: 1px solid var(--border_color);
     backdrop-filter: blur(10px);
@@ -377,16 +379,22 @@ body.dark-mode .front-page {
   .front-page-phone-topbar > .dataset-shared-topbar__menu-slot {
     grid-column: 1;
     grid-row: 1;
-    width: 44px;
-    max-width: 44px;
+    width: 52px;
+    max-width: 52px;
+    height: 47px;
+    clip-path: none;
     transition: none;
   }
 
   .front-page-phone-topbar > .front-page-top-row__identity {
     grid-column: 2;
     grid-row: 1;
-    justify-content: center;
-    min-height: 44px;
+    justify-content: flex-start;
+    gap: 8px;
+    min-height: 47px;
+    box-sizing: border-box;
+    padding-inline: 12px 8px;
+    border-inline-start: 1px solid color-mix(in srgb, var(--border_color) 50%, transparent);
   }
 
   /* The shared dataset title is hidden on phones; Home keeps its full name with ellipsis. */
@@ -411,9 +419,17 @@ body.dark-mode .front-page {
   .front-page-phone-topbar #showMenuButton {
     position: relative;
     inset: auto;
-    flex: 0 0 44px;
+    flex: 0 0 52px;
+    width: 52px;
+    height: 47px;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
   }
 
+  .front-page-site-icon { width: 24px; height: 24px; flex-basis: 24px; }
   .front-page-phone-topbar [hidden] { display: none !important; }
 
   .body_content:has(.front-page:not(.hidden) > .front-page-scroller > .front-page-phone-topbar) #navbar.collapsed #hideMenuButton {

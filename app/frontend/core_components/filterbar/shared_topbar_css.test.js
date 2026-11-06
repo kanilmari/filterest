@@ -8,8 +8,10 @@ import { afterEach, describe, expect, test } from 'vitest';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { readFileSync } from 'node:fs';
+import { requireNodeDependency } from '../../../server_tools/lib/node_dependency_loader.mjs';
 
 const CURRENT_DIR = dirname(fileURLToPath(import.meta.url));
+const postcss = requireNodeDependency('postcss');
 let style;
 
 afterEach(() => {
@@ -32,6 +34,56 @@ function extractRule(css, selector) {
     expect(bodyEnd, `Missing CSS rule end for ${selector}`).toBeGreaterThan(bodyStart);
     return css.slice(bodyStart, bodyEnd);
 }
+
+// JSDOM does not evaluate range media queries. Select their branches with
+// PostCSS, then let its CSS engine resolve selectors in the real import order.
+function endCellStylesAtWidth(width) {
+    const imports = readFileSync(resolve(CURRENT_DIR, '../../styles/imports.css'), 'utf8');
+    const files = [...imports.matchAll(/@import url\("[^"\n]*\/(shared_topbar|dataset_corner_controls)\.css"\)/g)]
+        .map(([, name]) => `${name}.css`);
+    expect(files).toEqual(['shared_topbar.css', 'dataset_corner_controls.css']);
+    return files.map(file => {
+        const root = postcss.parse(readFileSync(resolve(CURRENT_DIR, file), 'utf8'));
+        root.walkAtRules('media', media => {
+            const maxWidth = /^\(width <= (\d+)px\)$/.exec(media.params);
+            if (maxWidth && width <= Number(maxWidth[1])) media.replaceWith(...media.nodes);
+            else media.remove();
+        });
+        return root.toString();
+    }).join('\n');
+}
+
+test.each([390, 700, 701, 1200])('end cells resolve both stylesheets in shell order at %ipx', width => {
+    style = document.createElement('style');
+    style.textContent = endCellStylesAtWidth(width);
+    document.head.append(style);
+    document.body.innerHTML = `<div class="dataset-shared-topbar dataset-shared-topbar--visible">
+        <div class="dataset-shared-topbar__inner">
+            <div class="dataset-shared-topbar__slot dataset-shared-topbar__slot--end dataset-corner-controls-topbar-end">
+                <button class="dataset-shared-topbar__search-toggle"></button>
+                <button class="filterbar-fixed-toggle filterbar-fixed-toggle--hosted"></button>
+            </div>
+        </div></div>`;
+    const bar = document.body.firstElementChild;
+    const end = bar.querySelector('.dataset-shared-topbar__slot--end');
+    const phone = width <= 700;
+    for (const theme of ['light', 'dark']) {
+        document.body.className = `${theme}-mode`;
+        for (const open of [false, true]) {
+            bar.dataset.topbarSearchMode = phone ? 'phone' : 'field';
+            bar.dataset.topbarSearchOpen = String(open);
+            expect(getComputedStyle(end).gap).toBe(phone ? '0px' : '8px');
+            expect(getComputedStyle(end.lastElementChild).right).toBe(phone
+                ? 'auto' : 'calc(12px - var(--dataset-shared-topbar-padding-inline, 12px))');
+            if (phone) {
+                expect(getComputedStyle(bar.firstElementChild).gridTemplateColumns).toBe('52px minmax(0, 1fr) 96px');
+                expect(getComputedStyle(end.firstElementChild).width).toBe('44px');
+                expect(getComputedStyle(end.lastElementChild).width).toBe('52px');
+                expect(getComputedStyle(end.lastElementChild).flexBasis).toBe('52px');
+            }
+        }
+    }
+});
 
 describe('shared topbar CSS', () => {
     test.each(['light', 'dark'])('%s keeps button search in the title row and restores the title', theme => {
@@ -145,4 +197,19 @@ describe('shared topbar CSS', () => {
         expect(visibleSlotRule).toContain('opacity: 1');
         expect(visibleSlotRule).toContain('opacity 260ms cubic-bezier(0.4, 0, 0.2, 1)');
     });
+});
+
+test.each(['light', 'dark'])('Home paints a results box only for actual results in %s', theme => {
+    style = document.createElement('style');
+    style.textContent = readFileSync(resolve(CURRENT_DIR, '../front_page/front_page_search_sheet.css'), 'utf8');
+    document.head.append(style); document.body.className = `${theme}-mode`;
+    document.body.innerHTML = '<div class="front-page-search-layer"><p role="status">Haetaan…</p>'
+        + '<div class="front-page-search-sheet__results"><div></div></div></div>';
+    const results = document.querySelector('.front-page-search-sheet__results');
+    expect(getComputedStyle(results).display).toBe('none');
+    expect(getComputedStyle(document.querySelector('[role="status"]')).display).not.toBe('none');
+    const row = document.createElement('div'); row.className = 'supplemental-dataset-result';
+    results.firstElementChild.append(row);
+    expect(getComputedStyle(results).display).toBe('block');
+    row.remove(); expect(getComputedStyle(results).display).toBe('none');
 });

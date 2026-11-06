@@ -12,7 +12,7 @@ const postcss = requireNodeDependency('postcss');
 const baseline = {
     'front_page.css': 'b832974c3b27a5e7972d9762869bc8d6df7168626ab6ae9966d05ed27cfbd542',
     'top_nav_home_button.css': '370d13d5d63468cd1e8e03d637d3290e4375a7ef0654a41ba43b815ca207566b',
-    '../filterbar/shared_topbar.css': '8043291ec4200195ccbb5108c0e026dfeb802425261881eab6101abe058e93b4',
+    '../filterbar/shared_topbar.css': '7df8d0d19b2b7c03bd899204e225275384a2c137285bd9ef13ae013e280306a2',
     '../filterbar/morphing_filterbar_content.css': '914f86240ec27901629286c4743b81928390c06e2e7dd89b0245b9b0be30a3e8',
 };
 const sheets = Object.fromEntries(Object.keys(baseline).map(file =>
@@ -50,7 +50,7 @@ function rulesAtWidth(file, selector, width) {
 // WO98 re-pins Home only: shared box/hero/bottom spacing changes outside the phone breakpoint.
 // WO107/K528 re-pins only Home's approved side margins and auto width; centre and phone layout stay unchanged.
 // WO111/K533 re-pins only the top bar's name-first columns and the measured button mode's search over the name.
-// The sticky bar, drawer lock, focus clearance and hero anchoring rules retain batch 513 geometry.
+// WO129 changes only phone bar geometry; drawer lock, focus clearance and hero anchoring retain their contracts.
 test.each(Object.keys(baseline))('%s keeps every rule outside the phone breakpoint byte-identical to its approved baseline', file => {
     const root = sheets[file].clone();
     root.walkAtRules('media', media => { if (media.params === '(width <= 700px)') media.remove(); });
@@ -70,40 +70,33 @@ test('Home has no phone-only button or label rules after its top-bar exclusion',
     expect(media).toEqual([]);
 });
 
-const INSET = 'calc(12px - var(--dataset-shared-topbar-padding-inline, 12px))';
-
-test('phone toolbar reserves a 44px menu track and search/filter tracks; corner inset cannot clip the menu border', () => {
+// WO129 removes the obsolete <=480px phone inset block; rules above 700px retain their hash.
+test('phone toolbar reserves edge-to-edge menu, identity and search/panel tracks', () => {
     expect(phoneRule('top_nav_home_button.css', '.dataset-shared-topbar__inner:has(.top-nav-home-button)'))
         .toEqual({});
     const file = '../filterbar/shared_topbar.css';
     expect(phoneRule(file, '.dataset-shared-topbar__inner')['grid-template-columns'])
-        .toBe('44px minmax(0, 1fr) 96px');
-    expect(phoneRule(file, '.dataset-shared-topbar__slot--start')).toEqual({ gap: '8px' });
+        .toBe('52px minmax(0, 1fr) 96px');
+    expect(phoneRule(file, '.dataset-shared-topbar__slot--start')).toEqual({ gap: '0' });
     expect(phoneRule(file, '.dataset-shared-topbar .dataset-shared-topbar__menu-slot')).toEqual({
-        flex: '0 0 44px', width: '44px', 'max-width': '44px', 'margin-inline-start': INSET, transition: 'none',
+        flex: '0 0 52px', width: '52px', 'max-width': '52px', height: '47px',
+        'margin-inline-start': '0', 'clip-path': 'none', transition: 'none',
     });
     expect(phoneRule(file, '.dataset-shared-topbar .dataset-shared-topbar__menu-slot > .dataset-shared-topbar__menu-button'))
-        .toEqual({ left: '0' });
+        .toEqual({ left: '0', 'flex-basis': '52px', width: '52px', height: '47px', border: '0',
+            'border-radius': '0', 'box-shadow': 'none', background: 'transparent' });
 });
 
-// Gate 512a: G14 (`G14_home_menu_parity.spec.ts:34`, `:97`) and Dataset_Corner_Buttons.md require the menu button's
-// left edge at exactly 12px. The bar padding is 12px at 481–700px and 10px at <=480px (shared_topbar.css).
-test.each([320, 390, 479, 480, 481, 699, 700])('at %ipx the first column is 44px and the 44px menu keeps its 12px inset', width => {
+test.each([320, 390, 479, 480, 481, 699, 700])('at %ipx the bar is 48px tall and the menu fills its 52px cell', width => {
     const file = '../filterbar/shared_topbar.css';
     const bar = rulesAtWidth(file, '.dataset-shared-topbar', width);
     const inner = rulesAtWidth(file, '.dataset-shared-topbar__inner', width);
-    expect(inner['grid-template-columns']).toBe('44px minmax(0, 1fr) 96px');
-    const padding = Number.parseFloat(bar['--dataset-shared-topbar-padding-inline']);
-    expect(padding).toBe(width <= 480 ? 10 : 12);
-    const slotMargin = 12 - padding;                       // margin-inline-start: INSET
-    const slotX = padding + slotMargin;                    // the slot's left edge in the viewport
-    const buttonX = slotX + 0;                             // left: 0 inside the slot (no shift into the clip)
-    expect(buttonX).toBe(12);
-    expect(buttonX + 44).toBeLessThanOrEqual(slotX + 44);  // the whole 44px button is inside the 44px slot
-    const track = Number.parseFloat(inner['grid-template-columns']);
-    const gap = Number.parseFloat(inner.gap);
-    // The narrow bar's 2px inset uses part of the gap, without widening the track or reaching the next control.
-    expect(buttonX + 44).toBeLessThan(padding + track + gap);
+    expect(inner['grid-template-columns']).toBe('52px minmax(0, 1fr) 96px');
+    expect(bar.height).toBe('48px');
+    expect(bar.padding).toBe('0');
+    expect(bar['--dataset-shared-topbar-padding-inline']).toBe('0px');
+    expect(inner['grid-template-rows']).toBe('47px');
+    expect(inner.gap).toBe('0');
 });
 
 test('phone hero has small title/search-area gaps and stretches its tools box to the screen edges', () => {
@@ -138,7 +131,7 @@ test('phone hero and chips share 16px edges while tabs retain their additional 4
     }
 });
 
-test('phone hero search is visible at full inner width with the same 44px controls as the toolbar', () => {
+test('phone hero search retains its full width and 44px controls while the toolbar fills its 47px row', () => {
     const file = '../filterbar/shared_topbar.css';
     const panel = '.filterbar-inline-hero > .filter-content-inner > .dataset-search-panel';
     expect(phoneRule(file, panel)).toEqual({
@@ -151,7 +144,7 @@ test('phone hero search is visible at full inner width with the same 44px contro
     expect(phoneRule('../filterbar/morphing_filterbar_content.css', '.filterbar-inline-hero .filter-content-inner > .dataset-search-panel'))
         .toEqual({ 'max-width': 'none' });
     expect(phoneRule(file, '.dataset-shared-topbar__center .dataset-search-panel'))
-        .toEqual({ '--dataset-search-control-height': '44px' });
+        .toEqual({ '--dataset-search-control-height': '47px' });
     // WO111/K533: the second surface opens in the bar's own row over the identity, so no overlay offset or frame remains.
     expect(phoneRule(file, '.dataset-shared-topbar__center > .dataset-search-panel'))
         .toEqual({ width: '100%', 'max-width': 'none' });

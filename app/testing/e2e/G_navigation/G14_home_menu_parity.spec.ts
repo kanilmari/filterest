@@ -29,11 +29,11 @@ async function menuGeometry(page: Page, open: boolean) {
   await expect(control).toHaveAttribute('aria-hidden', 'false');
   await expect(control).toHaveAttribute('tabindex', '0');
   await expect(control).toHaveAccessibleName(/\S/);
-  await expect.poll(() => control.evaluate(element => {
+  await expect.poll(() => control.evaluate((element, inset) => {
     const box = element.getBoundingClientRect();
-    return Math.abs(box.x - 12) <= 1 && Math.abs(box.y - 12) <= 1
+    return Math.abs(box.x - inset) <= 1 && Math.abs(box.y - inset) <= 1
       && element.contains(document.elementFromPoint(box.x + box.width / 2, box.y + box.height / 2));
-  }), { message: 'The sole menu control stays actionable in the top-left corner' }).toBe(true);
+  }, !open && page.viewportSize()!.width <= 700 ? 0 : 12), { message: 'The sole menu control stays actionable in the top-left corner' }).toBe(true);
   const geometry = await page.locator('#navbar').evaluate(element => {
     const box = element.getBoundingClientRect();
     return { top: box.top, height: box.height };

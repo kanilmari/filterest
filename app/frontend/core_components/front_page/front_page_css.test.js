@@ -108,8 +108,8 @@ test('sticky Home bar, drawer lock and measured offsets are confined to the phon
         }
     });
     expect(phone['.front-page-phone-topbar']).toMatchObject({ position: 'sticky', top: '0', 'z-index': '1',
-        display: 'grid', 'grid-template-columns': '44px minmax(0, 1fr) 44px',
-        padding: '12px', 'padding-top': 'calc(12px + env(safe-area-inset-top))',
+        display: 'grid', 'grid-template-columns': '52px minmax(0, 1fr) 44px',
+        padding: '0', height: '48px', 'grid-template-rows': '47px',
         'border-bottom': '1px solid var(--border_color)' });
     expect(css).toContain('background: color-mix(in srgb, var(--bg_color) 92%, transparent)');
     expect(css).toContain('@supports not (backdrop-filter: blur(1px))');

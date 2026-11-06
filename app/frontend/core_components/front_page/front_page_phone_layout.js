@@ -86,6 +86,7 @@ export function mountFrontPagePhoneLayout(row, scroller) {
             });
             bar = row.ownerDocument.createElement('div');
             bar.className = 'front-page-phone-topbar';
+            bar.dataset.topbarSearchMode = 'phone';
             const end = row.ownerDocument.createElement('div');
             end.className = 'front-page-phone-topbar__end';
             end.setAttribute('aria-hidden', 'true');

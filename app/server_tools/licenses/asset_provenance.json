@@ -219,6 +219,12 @@
       "sha256": "ee209ddc7cd0a7cae49e68d9a558e0d36a4f6d7f0de3e448429dfc9337fe7eec"
     },
     {
+      "component": "Google Material Icons and Symbols",
+      "kind": "asset",
+      "path": "app/frontend/icons/general/dataset-search-off-icon.svg",
+      "sha256": "f4c0252ea64d377b5c3d60bee667c7e5107ca50614e67bd48b7a07fa434b181f"
+    },
+    {
       "component": "Filterest original interface SVGs",
       "kind": "asset",
       "path": "app/frontend/icons/general/filter-list-icon.svg",

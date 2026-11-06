@@ -10,7 +10,8 @@ The filter toolbar and main menu keep their existing open/close behavior. Only t
 | Surface | Sidebar opener | Main-menu opener |
 | --- | --- | --- |
 | Visible inline-hero corner | Hero right slot, to the right of the settings gear | Hero left slot |
-| Existing visible dataset shared toolbar | End slot beside the article-close action | Existing start slot before the dataset title |
+| Existing visible dataset shared toolbar above 700px | End slot beside the article-close action, when present | Existing start slot before the dataset title |
+| Phone shared toolbar (through 700px) | Final 52px cell after the 44px search toggle | First 52px cell, flush with the viewport edge |
 | Hero corner already scrolled away, or no eligible local host | Original fixed fallback | Original fixed fallback |
 | Hidden dataset | Hidden and excluded from tab order | Local copies hidden and excluded from tab order |
 
@@ -23,7 +24,7 @@ local opener owns the menu. A visible card
 hero owns its opener even when no shared toolbar is visible; absence of that
 toolbar alone does not imply that the floating fallback should appear.
 
-The hero sidebar opener keeps the canonical 12px viewport top/right inset, mirroring the main-menu opener at 12px top/left. The hero-local CSS compensates the existing 1px scroll sentinel immediately before the hero; fixed positions remain unchanged. Narrow shared toolbars keep their existing content padding; only the buttons compensate its difference from the canonical 12px inset. While the sidebar opener is present, the settings gear moves one control slot to its left and the cover palette stays centered below the gear. When that opener is absent, the gear and palette return to their original hero positions. These slots add no permanent toolbar or reserved vertical space. When the sidebar is open, its existing hide control remains in the sidebar dock. When the navbar is open, its existing hide control remains in the navbar.
+The hero sidebar opener keeps the canonical 12px viewport top/right inset, mirroring the main-menu opener at 12px top/left. The hero-local CSS compensates the existing 1px scroll sentinel immediately before the hero; fixed positions remain unchanged. Above 700px, narrow shared toolbars keep their existing content padding; only the buttons compensate its difference from the canonical 12px inset. On phones, WO129/K580/K586 replace these shared-bar insets with edge-to-edge cells: menu (52px), identity or search (remaining width), search toggle (44px), panel (52px). The bar is 48px tall including its 1px bottom border, with no vertical padding; controls fill the 47px interior. Faint 1px cell dividers use `color-mix(in srgb, var(--border_color) 50%, transparent)`. Home omits the panel cell. The DEV/TEST badge sits inside the menu cell at its top-left corner. While the sidebar opener is present, the settings gear moves one control slot to its left and the cover palette stays centered below the gear. When that opener is absent, the gear and palette return to their original hero positions. These slots add no permanent toolbar or reserved vertical space. When the sidebar is open, its existing hide control remains in the sidebar dock. When the navbar is open, its existing hide control remains in the navbar.
 
 `dataset_corner_controls.js` chooses the active host and moves the same sidebar button, preserving its existing listener. Local main-menu buttons call the existing `toggleNavbarVisibility`. The original global `showMenuButton` remains in its DOM home and is hidden only while an active local menu button owns its place. Dataset teardown releases only its own ownership; it cannot clear another dataset's owner.
 
@@ -98,7 +99,7 @@ The native regression checklist includes desktop/mobile, Finnish/English, and ex
 
 The panel button is always last; do not insert controls after it. Keep Home in
 its original host: first in the hero dataset-navigation row, in the shared
-bar's end slot above 700px, and after the menu in its start slot on phones.
+bar's end slot above 700px. Phones have no top-bar Home button.
 Where Home and panel share an end slot, existing Home-prepend/panel-append
 placement supplies DOM order; CSS must not reverse it with `order: 10`.
 The hero panel stays in its absolute corner with main's 52px reservation;
@@ -113,3 +114,24 @@ It compares row/Home/dataset heights and actual compact outcomes with main's
 Home stylesheet, including a long GET-fixtured label in a crowded row. Only the
 production fitter changes the compact class. G12/G13 retain their original
 placement and phone geometry checks; native browser receipts remain required.
+
+## Phone search and identity (WO129)
+
+Closed search shows the logo and site name in dataset views and on Home; an
+article shows the dataset's translated name with the same logo. Long names
+end in an ellipsis. Opening search replaces that identity cell with a square
+field, using the existing `search` placeholder key and no leading decoration.
+K580's exception to K465 applies only to this phone bar field; the dataset's
+own search field under it retains its rounding. The field contains clear (⊗)
+and submit (magnifier); the adjacent crossed-out magnifier closes it without
+clearing the draft or committed search. Dataset/article clear visibility still
+comes from `hasCommittedDatasetSearch`.
+
+Home previously destroyed its typed draft on close and had no clear action.
+It now retains the draft for the mounted Home visit, has a clear action whenever
+there is text, and reopens with that text. Its same toggle moves into the modal
+subtree while open, preserving its cell and focus/history behavior. The removed
+separate × close no longer covers the magnifier. Only actual results paint the
+results box; the live search status stays outside it. Views above 700px and the
+menu drawer retain their existing behavior. Batch 356's record bar hides the
+shared bar's article close at every width (`row_article_record_bar.css`).

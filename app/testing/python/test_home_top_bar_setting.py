@@ -46,11 +46,11 @@ def test_fresh_installation_contains_the_exact_setting_migration_and_evidence():
     assert manifest['db_version'] == (APP / 'VERSION_DB').read_text().strip()
 
 
-def test_phone_home_width_expansion_is_removed_and_shared_base_reserves_44_pixels():
+def test_phone_home_width_expansion_is_removed_and_shared_bar_reserves_52_pixels():
     css = (APP / 'frontend/core_components/front_page/top_nav_home_button.css').read_text()
     assert 'grid-template-columns' not in css
     shared = (APP / 'frontend/core_components/filterbar/shared_topbar.css').read_text()
-    assert 'grid-template-columns: 44px minmax(0, 1fr) 96px' in shared
+    assert 'grid-template-columns: 52px minmax(0, 1fr) 96px' in shared
 
 
 @pytest.fixture

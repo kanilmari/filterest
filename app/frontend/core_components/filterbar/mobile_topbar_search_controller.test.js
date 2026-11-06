@@ -40,8 +40,8 @@ function fixture(phone = false, withTitle = true) {
                 <div class="dataset-shared-topbar__dataset-title">Matkatarjoukset</div>
             </div>
             <div class="dataset-shared-topbar__center">
-                <div class="dataset-shared-topbar__site-identity">Fintravel</div>
-                <div class="dataset-search-panel"><input value="Helsinki"></div>
+                <div class="dataset-shared-topbar__site-identity"><span data-site-name="Fintravel" title="Fintravel">Fintravel</span></div>
+                <div class="dataset-search-panel"><input class="dataset-search-input" data-lang-key="search_for_demo" placeholder="Search for demo..." value="Helsinki"><span class="dataset-search-clear-icon">×</span></div>
             </div>
             <div class="dataset-shared-topbar__slot--end" style="column-gap:8px;min-width:44px">
                 <button class="existing-control"></button><button class="existing-control"></button>
@@ -185,4 +185,43 @@ test('phone retains its own decision; crossing the boundary or deactivating clos
     controller.destroy();
     expect(resize.disconnect).toHaveBeenCalledOnce();
     expect(toggle.isConnected).toBe(false);
+});
+
+test('phone uses the short translated placeholder and circle clear, and restores wide field copy and icon', () => {
+    const { input, bar, toggle } = fixture(true);
+    expect(input.dataset.langKey).toBe('search');
+    expect(input.placeholder).toBe('Search…');
+    expect(bar.querySelector('.dataset-search-clear-icon').textContent).toBe('⊗');
+    toggle.click();
+    expect(toggle.firstElementChild.style.maskImage).toContain('dataset-search-off-icon.svg');
+    toggle.click();
+    expect(input.value).toBe('Helsinki');
+    expect(toggle.getAttribute('aria-label')).toBe('Show search');
+    controller.sync({ phone: false, active: true });
+    expect(input.dataset.langKey).toBe('search_for_demo');
+    expect(input.placeholder).toBe('Search for demo...');
+    expect(bar.querySelector('.dataset-search-clear-icon').textContent).toBe('×');
+    expect(toggle.firstElementChild.style.maskImage).toContain('dataset-search-icon.svg');
+});
+
+test.each(['phone', 'button', 'field'])('unchanged %s renders write no text, attributes or classes', mode => {
+    const phone = mode === 'phone';
+    const { bar, toggle, dimensions } = fixture(phone);
+    if (mode === 'field') dimensions.innerWidth = 1000;
+    controller.sync({ phone, active: true });
+    const observer = new MutationObserver(() => {});
+    observer.observe(bar, { attributes: true, childList: true, characterData: true, subtree: true });
+    try {
+        for (const article of [false, true]) {
+            for (let state = 0; state < 3; state++) {
+                if (mode !== 'field' && state > 0) toggle.click();
+                controller.sync({ phone, active: true, article });
+                observer.takeRecords(); // Only the first sync may change the state.
+                for (let repeat = 0; repeat < 3; repeat++) controller.sync({ phone, active: true, article });
+                expect(observer.takeRecords()).toHaveLength(0);
+            }
+        }
+    } finally {
+        observer.disconnect();
+    }
 });

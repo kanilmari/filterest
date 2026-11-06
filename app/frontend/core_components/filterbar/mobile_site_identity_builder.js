@@ -17,7 +17,17 @@ export function buildMobileSiteIdentity() {
     else icon.hidden = true;
     const name = document.createElement('span');
     name.textContent = formatSiteNameForDisplay(getCurrentSiteName());
+    name.dataset.siteName = name.textContent;
     name.title = name.textContent;
     element.append(icon, name);
     return element;
+}
+
+/** Use the translated dataset title in a phone article, retaining the site's logo. */
+export function syncMobileSiteIdentity(element, datasetTitle = null) {
+    const name = element.querySelector('span');
+    if (!name) return;
+    const text = datasetTitle === null ? name.dataset.siteName : datasetTitle;
+    if (name.textContent !== text) name.textContent = text;
+    if (name.title !== text) name.title = text;
 }

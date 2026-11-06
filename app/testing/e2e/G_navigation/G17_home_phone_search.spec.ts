@@ -10,7 +10,7 @@ const imagePath = '/storage/app_e2e_home_search/300/landscape.png';
 // Copied byte-for-byte from G15_home_boxes.spec.ts:12 (valid 32 × 32 PNG).
 const image = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAIAAAD8GO2jAAAAoUlEQVR4nO3RvQmAMBCG4cxm4RIOYmUjuIVDuYKVY6gQCOa83E+8swp81UHep0hYt8N1oQG/Aec+x7kAqf42DABQB0YD7P+gHyfaAHcdcNfj5E8UQKqrDCkA6nJDBKB1ocEDRF1iMABbZw0KENZpowio6oSBAxX1koEA1XXUgMDHely3DGnBqv6M4oBhFAFsoxAwj2aAR7QIWEUzwCPaANUuQRtBWxLcjQcAAAAASUVORK5CYII=', 'base64');
 const copy = { front_page_search_site: 'Hae sivustolta', front_page_search_title: 'Haku',
-  front_page_search_close: 'Sulje haku', front_page_search_searching: 'Haetaan…',
+  filterbar_show_search: 'Näytä haku', filterbar_hide_search: 'Piilota haku', front_page_search_searching: 'Haetaan…',
   front_page_search_no_results: 'Ei osumia', front_page_show_all: 'Näytä kaikki' };
 
 async function fixture(page: Page, theme: 'light' | 'dark', width = 390) {
@@ -98,7 +98,7 @@ for (const theme of ['light', 'dark'] as const) {
     await input.focus(); await page.keyboard.press('Shift+Tab');
     await expect(groups.last().locator('.supplemental-dataset-show-all')).toBeFocused();
     await page.keyboard.press('Tab'); await expect(input).toBeFocused();
-    await sheet.getByRole('button', { name: 'Sulje haku' }).click();
+    await sheet.getByRole('button', { name: 'Piilota haku' }).click();
     await expect(sheet).toHaveCount(0); await expect(button).toBeFocused();
     await expect.poll(() => page.evaluate(() => history.state?.homeSearch === true)).toBe(false);
     await button.click(); await page.keyboard.press('Escape'); await expect(sheet).toHaveCount(0);
@@ -117,7 +117,7 @@ for (const theme of ['light', 'dark'] as const) {
 
   test(`phone Home search: Show all opens the same dataset query in ${theme}`, async ({ page }) => {
     await fixture(page, theme);
-    await page.getByRole('button', { name: 'Hae sivustolta', exact: true }).click();
+    await page.getByRole('button', { name: 'Näytä haku', exact: true }).click();
     const sheet = page.getByRole('dialog'); await sheet.getByRole('searchbox').fill('harbour');
     const all = sheet.locator('.supplemental-dataset-show-all').first();
     await expect(all).toHaveAttribute('href', `/${datasets[0]}?search=harbour`);

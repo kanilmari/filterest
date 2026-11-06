@@ -83,16 +83,16 @@ for (const width of [320, 375, 390, 414, 700, 701]) for (const theme of ['light'
       const header = (await bar.boundingBox())!, button = (await menu.boundingBox())!, middle = (await identity.boundingBox())!;
       expect(header.y).toBeCloseTo(0, 0);
       expect(header.width).toBe(await page.locator('.front-page-scroller').evaluate(element => element.clientWidth));
-      expect(button.x).toBeCloseTo(12, 0); expect(button.y).toBeCloseTo(12, 0);
-      expect(button.width).toBe(44); expect(button.height).toBe(44);
-      expect(middle.x + middle.width / 2).toBeCloseTo(header.x + header.width / 2, 0);
+      expect(button.x).toBeCloseTo(0, 0); expect(button.y).toBeCloseTo(0, 0);
+      expect(button.width).toBe(52); expect(button.height).toBe(47);
+      expect(middle.x + middle.width / 2).toBeCloseTo(header.x + (header.width + 8) / 2, 0);
       expect((await end.boundingBox())!.width).toBe(44);
       const searchBox = (await search.boundingBox())!;
       expect(searchBox.width, 'Batch 565: the search target is 44px wide').toBe(44);
-      expect(searchBox.height, 'Batch 565: the search target is 44px tall').toBe(44);
+      expect(searchBox.height, 'WO129: the search target fills the 47px cell').toBe(47);
       expect(searchBox.y, 'Batch 565: search aligns vertically with the menu button').toBeCloseTo(button.y, 0);
       const endInset = header.x + header.width - searchBox.x - searchBox.width;
-      expect(endInset, 'Batch 565: search is inset 12px from the bar right edge').toBeCloseTo(12, 0);
+      expect(endInset, 'WO129: search reaches the bar right edge').toBeCloseTo(0, 0);
       expect(endInset, 'Batch 565: search and menu have matching edge insets').toBeCloseTo(button.x - header.x, 0);
       await expect.poll(() => page.locator('.front-page-scroller').evaluate(element =>
         parseFloat(getComputedStyle(element).getPropertyValue('--home-phone-bar-size')))).toBeCloseTo(header.height, 0);
@@ -145,7 +145,7 @@ for (const width of [320, 375, 390, 700]) for (const theme of ['light', 'dark'] 
     expect(filterBox.right).toBeLessThanOrEqual(width);
     const menu = bar.getByTestId('shared-topbar-menu-button');
     await expect(bar.getByTestId('top-nav-home-button')).toHaveCount(0);
-    expect(Number.parseFloat(sample.tracks)).toBeCloseTo(44, 1);
+    expect(Number.parseFloat(sample.tracks)).toBeCloseTo(52, 1);
     const search = bar.getByTestId('mobile-search-toggle');
     const filter = bar.getByTestId('filterbar-toggle');
     await menu.focus(); await page.keyboard.press('Tab'); await expect(search).toBeFocused();

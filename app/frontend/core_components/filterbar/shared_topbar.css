@@ -326,74 +326,95 @@
 }
 
 @media (width <= 700px) {
-  /* The menu overlays phone content; opening it must not squeeze a four-control bar. */
+  /* Model D: edge-to-edge cells replace G14's outer corner insets. */
   #tabs_container:has(.dataset-shared-topbar--visible) {
     width: 100%;
     transform: translateX(0);
   }
   .dataset-shared-topbar {
+    --dataset-shared-topbar-padding-inline: 0px;
+    --dataset-shared-topbar-padding-block: 0px;
+    --search_tools_radius: 0px;
+    --dataset-search-input-start: 12px;
+    box-sizing: border-box;
+    height: 48px;
+    padding: 0;
+    border-bottom-width: 1px;
     transition: none;
     transform: none;
   }
   .dataset-shared-topbar--visible { overflow: visible; }
   .dataset-shared-topbar__inner {
-    /* Keep the menu track fixed; its corner inset uses part of the adjacent gap. */
-    grid-template-columns: 44px minmax(0, 1fr) 96px;
-    grid-template-rows: 44px;
-    gap: 8px;
+    grid-template-columns: 52px minmax(0, 1fr) 96px;
+    grid-template-rows: 47px;
+    gap: 0;
   }
-
-  .dataset-shared-topbar__slot--start { gap: 8px; }
-  /* Keep the row stationary when ownership passes to the drawer's closer.
-     The SLOT carries the canonical 12px viewport inset (Dataset_Corner_Buttons.md,
-     G14) on bars with narrower padding, so the button never shifts inside the
-     slot's 44px clip and its border stays whole. */
+  .dataset-shared-topbar__slot--start { gap: 0; }
   .dataset-shared-topbar .dataset-shared-topbar__menu-slot {
-    flex: 0 0 44px;
-    width: 44px;
-    max-width: 44px;
-    margin-inline-start: calc(12px - var(--dataset-shared-topbar-padding-inline, 12px));
+    flex: 0 0 52px;
+    width: 52px;
+    max-width: 52px;
+    height: 47px;
+    margin-inline-start: 0;
+    clip-path: none;
     transition: none;
   }
   .dataset-shared-topbar .dataset-shared-topbar__menu-slot > .dataset-shared-topbar__menu-button {
     left: 0;
+    flex-basis: 52px;
+    width: 52px;
+    height: 47px;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+    background: transparent;
   }
-
   .dataset-shared-topbar__center {
     grid-column: 2;
     grid-row: 1;
     justify-self: stretch;
-    height: 44px;
+    height: 47px;
+    box-sizing: border-box;
+    max-width: none;
+    border-inline: 1px solid color-mix(in srgb, var(--border_color) 50%, transparent);
   }
-
-  .dataset-shared-topbar__dataset-title {
-    display: none;
+  .dataset-shared-topbar__slot--end {
+    gap: 0;
+    height: 47px;
   }
+  .dataset-shared-topbar__search-toggle {
+    box-sizing: border-box;
+    height: 47px;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+  }
+  .dataset-shared-topbar__search-toggle > span { width: 22px; height: 22px; }
+  .dataset-shared-topbar__dataset-title { display: none; }
   .dataset-shared-topbar__site-identity {
     display: flex;
     align-items: center;
     gap: 8px;
-    height: 44px;
+    height: 47px;
     min-width: 0;
+    padding-inline: 12px 8px;
     color: var(--text_color);
+    font-size: 1.125rem;
+    font-weight: 700;
   }
   .dataset-shared-topbar__site-identity img {
     flex: none;
+    width: 24px;
+    height: 24px;
     image-rendering: auto;
   }
   .dataset-shared-topbar__site-identity span {
+    min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
-  .dataset-shared-topbar__menu-slot--visible {
-    flex-basis: 44px;
-    width: 44px;
-    max-width: 44px;
-    transition: none;
-  }
-  .dataset-shared-topbar__center .dataset-search-panel { --dataset-search-control-height: 44px; }
-  /* Search replaces the identity within the existing 44px row. */
+  .dataset-shared-topbar__center .dataset-search-panel { --dataset-search-control-height: 47px; }
   .dataset-shared-topbar__center > .dataset-search-panel {
     width: 100%;
     max-width: none;
@@ -412,16 +433,6 @@
   .filterbar-inline-hero > .filter-content-inner > .dataset-search-panel .dataset-search-fields { min-width: 0; }
   .dataset-corner-controls-topbar-end > .filterbar-fixed-toggle--hosted { right: auto; }
   .dataset-shared-topbar__menu-slot > .dataset-shared-topbar__menu-button { left: auto; }
-}
-
-@media (width <= 480px) {
-  .dataset-shared-topbar {
-    --dataset-shared-topbar-padding-inline: 10px;
-  }
-
-  .dataset-shared-topbar__inner {
-    gap: 8px;
-  }
 }
 
 @media (prefers-reduced-motion: reduce) {

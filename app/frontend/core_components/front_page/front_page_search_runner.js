@@ -83,7 +83,7 @@ export function createFrontPageSearchRunner(input, groups, status) {
         setStatus(failed ? 'front_page_search_failed'
             : entries.some(entry => entry.hits) ? null : 'front_page_search_no_results');
     }
-    function change() {
+    function change({ immediate = false } = {}) {
         if (destroyed) return;
         stop();
         groups.replaceChildren();
@@ -91,11 +91,13 @@ export function createFrontPageSearchRunner(input, groups, status) {
         if (Array.from(query).length < MIN_CHARACTERS) { setStatus(null); return; }
         setStatus('front_page_search_searching');
         const expected = generation;
-        timer = setTimeout(() => { void run(query, expected); }, DEBOUNCE_MS);
+        if (immediate) void run(query, expected);
+        else timer = setTimeout(() => { void run(query, expected); }, DEBOUNCE_MS);
     }
     input.addEventListener('input', change);
     const unsubscribe = subscribeMainDatasetTabs(change);
     return {
+        search() { change({ immediate: true }); },
         destroy() {
             destroyed = true;
             stop();

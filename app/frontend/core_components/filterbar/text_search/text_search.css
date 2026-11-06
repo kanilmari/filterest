@@ -71,7 +71,7 @@
 
 .dataset-search-input {
   flex: 1;
-  height: calc(var(--dataset-search-control-height) - 2px);
+  height: calc(var(--dataset-search-control-height) - var(--dataset-search-control-inset, 2px));
   min-width: 0;
   box-sizing: border-box;
   background: transparent !important;
@@ -88,11 +88,11 @@
    single inset separator remains inside that uninterrupted surface. */
 .dataset-search-submit-button {
   flex: 0 0 auto;
-  height: calc(var(--dataset-search-control-height) - 2px) !important;
+  height: calc(var(--dataset-search-control-height) - var(--dataset-search-control-inset, 2px)) !important;
   min-height: 0;
   box-sizing: border-box;
   border: none !important;
-  border-inline-start: 1px solid var(--border_color) !important;
+  border-inline-start: var(--dataset-search-submit-border, 1px solid var(--border_color)) !important;
   border-radius: 0 calc(var(--search_tools_radius) - 1px) calc(var(--search_tools_radius) - 1px) 0 !important;
   background: transparent !important;
   box-shadow: none !important;
@@ -247,8 +247,8 @@
    become a third bordered segment or interrupt the input's outer edge. */
 .dataset-search-input-shell > .dataset-search-input {
   width: 100%;
-  padding-inline-start: 44px !important;
-  padding-right: 44px !important;
+  padding-inline-start: var(--dataset-search-input-start, 44px) !important;
+  padding-right: var(--dataset-search-input-end, 44px) !important;
 }
 
 /* ============================================
@@ -307,4 +307,34 @@
 /* Second search table (AI results) — no visible header row */
 .search-ai-results-table thead {
   display: none;
+}
+
+/* K580: the phone bar alone has a square field, without its leading decoration.
+   The hero/panel search keeps K465's radius and original input spacing. */
+@media (width <= 700px) {
+  [data-topbar-search-mode="phone"] .dataset-search-field-icon,
+  [data-topbar-search-mode="phone"] .dataset-search-input::-webkit-search-cancel-button { display: none; }
+  [data-topbar-search-mode="phone"] .dataset-search-input-shell:has(> button[hidden]) {
+    --dataset-search-input-end: 4px;
+  }
+  [data-topbar-search-mode="phone"] .dataset-search-input-row {
+    --dataset-search-control-inset: 0px;
+    --dataset-search-submit-border: 0;
+    height: 47px;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+  }
+  [data-topbar-search-mode="phone"] .dataset-search-submit-button {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 44px;
+    padding: 0;
+  }
+  [data-topbar-search-mode="phone"] .dataset-search-input-row:focus-within {
+    outline: 2px solid var(--primary_color);
+    outline-offset: -2px;
+  }
+  [data-topbar-search-mode="phone"] .dataset-search-placeholder-fade { inset-inline-start: 12px; }
 }

@@ -233,19 +233,22 @@ async function proveHome(page: Page, open: boolean, alignment: string, cappedMar
     const box = element.getBoundingClientRect();
     return element.contains(document.elementFromPoint(box.x + box.width / 2, box.y + box.height / 2));
   }), { message: 'The visible menu control must receive pointer input' }).toBe(true);
-  await expect.poll(() => name.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);
+  await expect.poll(() => name.evaluate((element, phone) => phone
+    ? getComputedStyle(element).textOverflow === 'ellipsis' && element.clientWidth > 0
+      && element.scrollWidth <= element.clientWidth
+    : element.scrollWidth <= element.clientWidth, phone)).toBe(true);
   await expect.poll(() => icon.evaluate((image: HTMLImageElement) => {
     const dark = document.body.classList.contains('dark-mode');
     const suffix = dark ? '-128-dark-v1.png' : '-128.png';
     return image.complete && image.naturalWidth === 128 && image.currentSrc.endsWith(suffix);
   })).toBe(true);
   await expect(icon).toHaveCSS('image-rendering', 'auto');
-  await expect(icon).toHaveCSS('width', '32px');
+  await expect(icon).toHaveCSS('width', phone ? '24px' : '32px');
   const nameBox = (await name.boundingBox())!, iconBox = (await icon.boundingBox())!;
   expect(nameBox.x - iconBox.x - iconBox.width).toBeGreaterThanOrEqual(8);
   if (phone) {
     const bar = (await page.locator('.front-page-phone-topbar').boundingBox())!;
-    expect((iconBox.x + nameBox.x + nameBox.width) / 2).toBeCloseTo(bar.x + bar.width / 2, 0);
+    expect(iconBox.x).toBeCloseTo(bar.x + 52 + 1 + 12, 0);
   } else if (open) {
     const identity = (await page.locator('.front-page-top-row__identity').boundingBox())!;
     expect(iconBox.x).toBeCloseTo(identity.x, 1);

@@ -7,13 +7,14 @@ import { getTranslationForKey } from '../lang/translation_handler.js';
 import { bindDatasetLanguageRenderer } from '../table_views/dataset_value_localizer.js';
 import { createFrontPageSearchRunner } from './front_page_search_runner.js';
 import { openHomeSearchHistory } from './front_page_search_history.js';
+import { createMaskIconSpan } from '../../icons/icon_mask_builder.js';
 import { LAYOUT_BREAKPOINTS } from '../../ui_config.js';
 
 const SHEET_ID = 'front-page-search-sheet';
 const LOCK = 'front-page-scroller--drawer-open';
 const FOCUSABLE = 'input, button, a[href], [tabindex]:not([tabindex="-1"])';
 
-/** Called only after the existing phone layout has mounted its 44px end slot. */
+/** Called only after the existing phone layout has mounted its search-toggle cell. */
 export function mountFrontPageSearchSheet(end, scroller) {
     if (!window.matchMedia?.(`(width <= ${LAYOUT_BREAKPOINTS.phone}px)`).matches) return { destroy() {} };
     const bar = end.parentElement;
@@ -23,16 +24,21 @@ export function mountFrontPageSearchSheet(end, scroller) {
     button.className = 'front-page-search-button';
     button.setAttribute('aria-expanded', 'false');
     button.setAttribute('aria-controls', SHEET_ID);
-    const icon = document.createElement('span');
-    icon.className = 'dataset-search-submit-icon';
-    icon.setAttribute('aria-hidden', 'true');
-    button.append(icon);
-    bindDatasetLanguageRenderer(button, () => {
-        button.setAttribute('aria-label', getTranslationForKey('front_page_search_site', { countUsage: false }));
-    });
+    let layer;
+    let draft = '';
+    function renderToggle(open) {
+        button.setAttribute('aria-expanded', String(open));
+        button.setAttribute('aria-pressed', String(open));
+        const key = open ? 'filterbar_hide_search' : 'filterbar_show_search';
+        button.title = getTranslationForKey(key, { countUsage: false });
+        button.setAttribute('aria-label', button.title);
+        button.replaceChildren(createMaskIconSpan(open
+            ? '/frontend/icons/general/dataset-search-off-icon.svg'
+            : '/frontend/icons/general/dataset-search-icon.svg', 'dataset-search-submit-icon'));
+    }
+    bindDatasetLanguageRenderer(button, () => renderToggle(Boolean(layer)));
     end.removeAttribute('aria-hidden');
     end.append(button);
-    let layer;
     let dialog;
     let input;
     let runner;
@@ -46,10 +52,12 @@ export function mountFrontPageSearchSheet(end, scroller) {
 
     function hide() {
         if (!layer) return;
+        draft = input.value;
         runner.destroy();
         runner = null;
         document.removeEventListener('keydown', onKeydown, true);
         document.removeEventListener('focusin', onFocus, true);
+        end.append(button);
         dialog.remove();
         dialog = null;
         layer = null;
@@ -61,7 +69,7 @@ export function mountFrontPageSearchSheet(end, scroller) {
         inertNodes = [];
         if (!hadLock) scroller.classList.remove(LOCK);
         scroller.scrollTop = savedScrollTop;
-        button.setAttribute('aria-expanded', 'false');
+        renderToggle(false);
         if (button.isConnected && !destroyed) button.focus({ preventScroll: true });
     }
     function dismiss() {
@@ -108,32 +116,61 @@ export function mountFrontPageSearchSheet(end, scroller) {
         input.type = 'search';
         input.className = 'dataset-search-input';
         input.autofocus = true;
-        const close = document.createElement('button');
-        close.type = 'button';
-        close.className = 'front-page-search-sheet__close';
-        const cross = document.createElement('span');
-        cross.setAttribute('aria-hidden', 'true');
-        cross.textContent = '×';
-        close.append(cross);
+        input.value = draft;
+        const inputShell = document.createElement('div');
+        inputShell.className = 'dataset-search-input-shell';
+        const clear = document.createElement('button');
+        clear.type = 'button';
+        clear.className = 'dataset-search-clear-button';
+        clear.dataset.testid = 'dataset-search-clear';
+        const clearIcon = document.createElement('span');
+        clearIcon.className = 'dataset-search-clear-icon';
+        clearIcon.setAttribute('aria-hidden', 'true');
+        clearIcon.textContent = '⊗';
+        clear.append(clearIcon);
+        function syncDraft() { draft = input.value; clear.hidden = input.value.length === 0; }
+        syncDraft();
+        input.addEventListener('input', syncDraft);
+        clear.addEventListener('click', () => {
+            input.value = '';
+            input.dispatchEvent(new Event('input', { bubbles: true }));
+            input.focus({ preventScroll: true });
+        });
+        const submit = document.createElement('button');
+        submit.type = 'button';
+        submit.className = 'dataset-search-submit-button';
+        submit.dataset.testid = 'dataset-search-submit';
+        submit.append(createMaskIconSpan('/frontend/icons/general/dataset-search-icon.svg', 'dataset-search-submit-icon'));
+        const search = () => runner.search();
+        submit.addEventListener('click', search);
+        input.addEventListener('keydown', event => {
+            if (event.key === 'Enter' && !event.isComposing) { event.preventDefault(); search(); }
+        });
         bindDatasetLanguageRenderer(dialog, () => {
             const label = getTranslationForKey('front_page_search_title', { countUsage: false });
             dialog.setAttribute('aria-label', label);
             input.setAttribute('aria-label', label);
-            input.placeholder = label;
-            close.setAttribute('aria-label', getTranslationForKey('front_page_search_close', { countUsage: false }));
+            input.placeholder = getTranslationForKey('search', { countUsage: false });
+            clear.title = getTranslationForKey('clear_text_search', { countUsage: false });
+            clear.setAttribute('aria-label', clear.title);
+            submit.title = getTranslationForKey('search', { countUsage: false });
+            submit.setAttribute('aria-label', submit.title);
         });
-        field.append(input);
+        inputShell.append(input, clear);
+        field.append(inputShell, submit);
         const results = document.createElement('div');
         results.className = 'front-page-search-sheet__results';
         const status = document.createElement('p');
         status.setAttribute('role', 'status');
         status.setAttribute('aria-live', 'polite');
         const groups = document.createElement('div');
-        results.append(status, groups);
-        layer.append(results);
+        results.append(groups);
+        layer.append(status, results);
         // One modal subtree spans the bar controls and the results below it.
-        // Its grid cell covers identity and magnifier without moving the end slot.
-        dialog.append(field, close, layer);
+        // The same toggle moves into the modal subtree so it stays accessible.
+        // Its own grid cell remains in the same place as the closed-state opener.
+        dialog.dataset.topbarSearchMode = 'phone';
+        dialog.append(field, button, layer);
         savedScrollTop = scroller.scrollTop;
         hadLock = scroller.classList.contains(LOCK);
         scroller.classList.add(LOCK);
@@ -148,10 +185,10 @@ export function mountFrontPageSearchSheet(end, scroller) {
         bar.append(dialog);
         runner = createFrontPageSearchRunner(input, groups, status);
         entry = openHomeSearchHistory(hide);
-        button.setAttribute('aria-expanded', 'true');
+        renderToggle(true);
+        input.dispatchEvent(new Event('input', { bubbles: true }));
         document.addEventListener('keydown', onKeydown, true);
         document.addEventListener('focusin', onFocus, true);
-        close.addEventListener('click', () => { void dismiss(); });
         layer.addEventListener('click', event => { if (event.target === layer) void dismiss(); });
         groups.addEventListener('click', event => {
             const link = event.target.closest('a[href]');
@@ -164,7 +201,8 @@ export function mountFrontPageSearchSheet(end, scroller) {
         }, true);
         input.focus({ preventScroll: true });
     }
-    button.addEventListener('click', open);
+    const toggle = () => { if (layer) void dismiss(); else open(); };
+    button.addEventListener('click', toggle);
     const observer = new MutationObserver(() => { if (!end.isConnected) destroy(); });
     observer.observe(scroller, { childList: true, subtree: true });
     function destroy() {
@@ -172,7 +210,7 @@ export function mountFrontPageSearchSheet(end, scroller) {
         destroyed = true;
         void dismiss();
         observer.disconnect();
-        button.removeEventListener('click', open);
+        button.removeEventListener('click', toggle);
         button.remove();
         end.setAttribute('aria-hidden', 'true');
     }
