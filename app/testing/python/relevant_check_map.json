@@ -775,7 +775,8 @@
       ],
       "package": "app/backend/core_components/system_table_tools",
       "anchor": "app/backend/core_components/system_table_tools/lang_key_catalogue_scan_test.go"
-    }, {"paths": ["app/server_tools/migrations/20261024000001_add_saved_home_boxes.sql", "app/server_tools/migrations/20261024000099_record_database_release_9_13_1.sql", "app/server_tools/versioning/schema_snapshots/db-9.13.1.sql"], "package": "app/backend/core_components/system_table_tools", "anchor": "app/backend/core_components/system_table_tools/front_page_boxes_postgres_test.go"}
+    }, {"paths": ["app/server_tools/migrations/20261024000001_add_saved_home_boxes.sql", "app/server_tools/migrations/20261024000099_record_database_release_9_13_1.sql", "app/server_tools/versioning/schema_snapshots/db-9.13.1.sql"], "package": "app/backend/core_components/system_table_tools", "anchor": "app/backend/core_components/system_table_tools/front_page_boxes_postgres_test.go"},
+    {"paths": ["app/server_tools/versioning/schema_snapshots"], "package": "app/backend/core_components/auth", "anchor": "app/backend/core_components/auth/login_name_source_guard_test.go"}
   ],
   "python_guards": [
     {
