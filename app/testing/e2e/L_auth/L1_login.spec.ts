@@ -167,4 +167,34 @@ test.describe('L1 — Login', () => {
     }
     expect(namesAfterReset).toEqual(expect.arrayContaining(siblingCookieNames));
   });
+
+  test('privacy acceptance includes the gap and keeps the notice link independent', async ({ page, hasTouch }) => {
+    await page.goto('/login');
+    const checkbox = page.getByTestId('login-privacy-accept');
+    const link = page.locator('#privacy-notice-link');
+    await checkbox.scrollIntoViewIfNeeded();
+    await expect(checkbox).not.toBeChecked();
+    const gap = await checkbox.evaluate(input => {
+      const box = input.getBoundingClientRect();
+      const prefix = input.closest('.privacy-notice-link')!
+        .querySelector('[data-lang-key="privacy_notice_login_acceptance_prefix"]')!.getClientRects()[0];
+      const x = (box.right + prefix.left) / 2;
+      const y = box.top + box.height / 2;
+      return { x, y, width: prefix.left - box.right, cursor: getComputedStyle(document.elementFromPoint(x, y)!).cursor };
+    });
+    expect(gap.width).toBeGreaterThan(0);
+    expect(gap.cursor).toBe('pointer');
+    if (hasTouch) await page.touchscreen.tap(gap.x, gap.y);
+    else await page.mouse.click(gap.x, gap.y);
+    await expect(checkbox).toBeChecked();
+
+    await checkbox.focus();
+    await page.keyboard.press('Space');
+    await expect(checkbox).not.toBeChecked();
+    await page.keyboard.press('Tab');
+    await expect(link).toBeFocused();
+    await page.keyboard.press('Enter');
+    await expect(page.getByRole('dialog')).toBeVisible();
+    await expect(checkbox).not.toBeChecked();
+  });
 });

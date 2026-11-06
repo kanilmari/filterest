@@ -828,7 +828,7 @@
       "component": "Google Material Icons and Symbols",
       "kind": "embedded-icon-source",
       "path": "app/frontend/templates/login.html",
-      "sha256": "d362eb1c8cfc717bd0b81888eadcd2444c38ee1603bc1095754670aaa653ce0b"
+      "sha256": "c24b8ada7abffd758b5653d62c195dc1506be9374a2314d7fb98eb34965c23f3"
     },
     {
       "component": "Filterest demo placeholder images",

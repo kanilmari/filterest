@@ -241,9 +241,9 @@
         <input type="text" id="authCode" name="authCode" class="hidden_fields" autocomplete="off" tabindex="-1" aria-hidden="true">
 
         <div class="privacy-notice-link">
-            <input type="checkbox" id="privacy-accept" required data-testid="login-privacy-accept">
             <label for="privacy-accept">
-                <span data-lang-key="privacy_notice_login_acceptance_prefix">To sign in, you must accept the </span><a href="#" id="privacy-notice-link" data-lang-key="privacy_notice_login_acceptance_link">privacy notice</a><span data-lang-key="privacy_notice_login_acceptance_suffix">.</span>
+                <input type="checkbox" id="privacy-accept" required data-testid="login-privacy-accept">
+                <span class="privacy-notice-copy"><span data-lang-key="privacy_notice_login_acceptance_prefix">To sign in, you must accept the </span><a href="#" id="privacy-notice-link" data-lang-key="privacy_notice_login_acceptance_link">privacy notice</a><span data-lang-key="privacy_notice_login_acceptance_suffix">.</span></span>
             </label>
         </div>
 

@@ -831,17 +831,17 @@ body.light-mode .first-run-choice-card:has(input:checked) {
     user-select: all;
 }
 
-.privacy-notice-link {
-    display: grid;
-    grid-template-columns: auto 1fr;
-    align-items: start;
-    column-gap: 10px;
-}
-
 .modal .privacy-notice-link label,
 .auth-form .privacy-notice-link label {
-    display: block;
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: start;
+    column-gap: 10px;
     margin: 0;
+    cursor: pointer;
+}
+
+.privacy-notice-copy {
     margin-top: -3px;
 }
 
