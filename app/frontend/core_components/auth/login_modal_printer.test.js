@@ -104,6 +104,16 @@ describe("showLoginModal", () => {
         }));
     });
 
+    test('keeps the login backdrop non-dismissible on first open and cached reopen', async () => {
+        const mod = await loadModule();
+        await mod.showLoginModal();
+        await mod.showLoginModal();
+        expect(createModalMock).toHaveBeenCalledTimes(2);
+        for (const [options] of createModalMock.mock.calls) {
+            expect(options.closeOnBackdrop).toBe(false);
+        }
+    });
+
     test.each(["pending", "failed"])("opens a usable modal with %s visibility icons", async (state) => {
         ensureIconsMock.mockImplementation(() => state === "pending"
             ? new Promise(() => {})

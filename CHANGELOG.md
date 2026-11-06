@@ -22,6 +22,7 @@ Dates are the local (Europe/Helsinki) date on which the version was published.
 
 ## [Unreleased]
 
+- The sign-in dialog stays open when its backdrop is clicked. Other dialogs still close on an intentional backdrop click, but keep their drafts when a text selection ends outside the dialog. Close buttons, Escape and assistive activation remain available.
 - Phone top bars use the owner’s 48px Model D cells and square search field, with separate clear and search-hide controls; articles show the dataset name, and Home keeps typed search text when closed and hides empty result boxes (WO129/K580/K586).
 - On the sign-in form, the privacy-notice consent row is one clickable label: the check box, the gap and the text all toggle it, while the notice link still opens the notice and the box stays required.
 - Application logs exclude visitor search terms, request query strings and search-related database/provider error contents, including malformed provider replies, by default. Administrators can restore the previous diagnostics with the site-wide boolean setting `app_log_search_terms`; changes take effect within five minutes without delaying warm configuration reads for other settings.

@@ -96,6 +96,7 @@ export async function showLoginModal(redirectTarget) {
                 titleDataLangKey: "login",
                 contentElements: [cachedLoginShell],
                 width: 'min(480px, 97vw)',
+                closeOnBackdrop: false,
                 skipModalTitle: true
             });
             showModal();
@@ -134,6 +135,7 @@ export async function showLoginModal(redirectTarget) {
             titleDataLangKey: "login",
             contentElements: [shell],
             width: 'min(480px, 97vw)',
+            closeOnBackdrop: false,
             skipModalTitle: true
         });
 

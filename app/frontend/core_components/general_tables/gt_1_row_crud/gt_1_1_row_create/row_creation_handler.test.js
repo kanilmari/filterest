@@ -118,7 +118,10 @@ function closeLoadingModal(path) {
     } else if (path === "Escape") {
         document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
     } else if (path === "backdrop") {
-        document.getElementById("custom_modal_overlay").click();
+        const overlay = document.getElementById("custom_modal_overlay");
+        for (const type of ["pointerdown", "pointerup", "click"]) {
+            overlay.dispatchEvent(new PointerEvent(type, { pointerId: 1, pointerType: "mouse", isPrimary: true, bubbles: true }));
+        }
     } else {
         mocks.hideModal();
     }

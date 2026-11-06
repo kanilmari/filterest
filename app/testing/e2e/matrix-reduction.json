@@ -144,7 +144,8 @@
     "U_export_import/U2_import_csv.spec.ts",
     "V_refresh/V1_table_refresh.spec.ts",
     "W_payment/W1_create_payment.spec.ts",
-    "smoke.spec.ts"
+    "smoke.spec.ts",
+    "L_auth/modal_backdrop_drag.spec.ts"
   ],
   "own_size_allowed": {
     "B_column_ops/B4_column_view_presets.spec.ts": "Legacy fixed desktop preset and upward-opening picker proof; outside K549 A.",

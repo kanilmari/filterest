@@ -2,14 +2,18 @@
 // Builds and controls the shared application modal dialog system.
 // Bridges feature-specific modal content with shared chrome, sizing, and close behavior.
 // Exists to keep modal structure and lifecycle logic centralized across the frontend.
+// Both builders accept closeOnBackdrop:false for dialogs such as sign-in;
+// their close button and Escape still work, and later dialogs keep their own policy.
 
 import { setElementSvgContent } from "../../icons/icon_loader.js";
+import { bindModalBackdrop } from "./modal_backdrop.js";
 
 let modal_previous_focus_element = null;
 let modal_current_cleanup_callback = null;
 let modal_current_close_transition = null;
 let modal_pending_hide_timer = null;
 let modal_session_generation = 0;
+let modal_close_on_backdrop = true;
 
 // Async content and queued focus belong to the dialog that started them.
 // Creation/replacement and every hide invalidate the same generation.
@@ -258,6 +262,7 @@ export function createModal({
     skipModalTitle = false,
     cleanupCallback = null,
     closeTransition = null,
+    closeOnBackdrop = true,
 }) {
     modal_session_generation += 1;
     const isCurrent = captureModalSession();
@@ -266,6 +271,8 @@ export function createModal({
     cancelPendingModalHide();
     runCurrentModalCleanup();
     modal_current_close_transition = normalizeCloseTransition(closeTransition);
+    // This singleton is reused; each caller owns its policy, including the default.
+    modal_close_on_backdrop = closeOnBackdrop;
 
     // Luo modalin taustalla oleva overlay-elementti
     let modal_overlay = document.getElementById('custom_modal_overlay');
@@ -274,12 +281,7 @@ export function createModal({
         modal_overlay.id = 'custom_modal_overlay';
         modal_overlay.classList.add('modal_overlay');
 
-        // Lisää klikkauskuuntelija modaalin sulkemiseksi klikkaamalla ulkopuolelle
-        modal_overlay.addEventListener('click', (event) => {
-            if (event.target === modal_overlay) {
-                hideModal();
-            }
-        });
+        bindModalBackdrop(modal_overlay, hideModal, () => modal_session_generation, () => modal_close_on_backdrop);
 
         document.body.appendChild(modal_overlay);
 
@@ -502,6 +504,7 @@ export function createStackedModal({
     maxWidth = null,
     maxHeight = null,
     cleanupCallback = null,
+    closeOnBackdrop = true,
 } = {}) {
     stackedModalSerial += 1;
     const serial = stackedModalSerial;
@@ -647,9 +650,7 @@ export function createStackedModal({
     };
 
     closeButton.addEventListener("click", hide);
-    overlay.addEventListener("click", (event) => {
-        if (event.target === overlay) hide();
-    });
+    bindModalBackdrop(overlay, hide, () => 0, () => closeOnBackdrop);
 
     return { modal_overlay: overlay, modal, show, hide };
 }
