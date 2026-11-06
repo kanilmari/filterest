@@ -286,7 +286,7 @@ export async function openImageFirstView({
             recordTitle.initial,
             imageRoleColumns.length > 0,
             currentUserProfile?.user_id ?? null,
-            { sectionDefaults },
+            { sectionDefaults, presentationKey: viewKey },
         ),
         stage?.whenTransitionMediaReady?.(),
     ]);

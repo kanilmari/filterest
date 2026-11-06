@@ -21,6 +21,8 @@ type baselineSnapshotDriver struct {
 	completed         bool
 	findings          int
 	failAt            int
+	appearanceBlocks  bool
+	datasetQuery      string
 }
 
 func (d *baselineSnapshotDriver) Connect(context.Context) (driver.Conn, error) { return d, nil }
@@ -59,8 +61,12 @@ func (d *baselineSnapshotDriver) QueryContext(_ context.Context, query string, _
 	if strings.Contains(query, "app_check_article_bundles") {
 		return &baselineScalarRows{value: int64(d.findings)}, nil
 	}
+	if strings.Contains(query, "to_regprocedure('public.app_article_disclosure_defaults(integer)')") {
+		return &baselineScalarRows{value: d.appearanceBlocks}, nil
+	}
 	columns := []string{"id", "name"}
 	if strings.Contains(query, "FROM public.system_db_tables") {
+		d.datasetQuery = query
 		columns = []string{"table_uid", "table_name", "schema_name", "article_section_initial_open", "opener_policy"}
 	}
 	return baselineEmptyRows{columns: columns}, nil
@@ -79,7 +85,7 @@ func TestArticleBaselineSnapshotTransaction(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !connector.began || !connector.rolledBack || connector.reads != 4 {
+	if !connector.began || !connector.rolledBack || connector.reads != 5 {
 		t.Fatalf("snapshot lifecycle: %+v", connector)
 	}
 	if report.Datasets == nil || report.Users == nil || report.Groups == nil {
@@ -135,5 +141,23 @@ func TestArticleExportPhaseGuards(t *testing.T) {
 				t.Fatalf("phase guard: %v, %+v", err, connector)
 			}
 		})
+	}
+}
+
+// The exporter remains readable on both sides of the physical-column cutover.
+func TestArticleBaselineSnapshotDisclosureStorage(t *testing.T) {
+	for _, upgraded := range []bool{false, true} {
+		connector := &baselineSnapshotDriver{upgraded: upgraded, completed: upgraded, appearanceBlocks: upgraded}
+		db := sql.OpenDB(connector)
+		_, err := readArticlePresentationSnapshot(context.Background(), db, upgraded)
+		db.Close()
+		if err != nil {
+			t.Fatal(err)
+		}
+		derived := strings.Contains(connector.datasetQuery, "public.app_article_disclosure_defaults(table_uid)")
+		legacy := strings.Contains(connector.datasetQuery, "to_jsonb(system_db_tables)->'article_section_initial_open'")
+		if derived != upgraded || legacy == upgraded {
+			t.Fatalf("wrong disclosure storage after=%v: %s", upgraded, connector.datasetQuery)
+		}
 	}
 }

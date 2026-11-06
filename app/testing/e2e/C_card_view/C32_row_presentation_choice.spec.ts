@@ -1,3 +1,4 @@
+import { openArticleDisclosure } from '../helpers/article-disclosures';
 // C32_row_presentation_choice.spec.ts
 // Proves the view picker's Article split button: Article, image-first (IFAV) and Page-sized image-first.
 // Connects a disposable dataset, the real first listed row, history, themes and a touch phone context.
@@ -36,6 +37,7 @@ const test = base.extend<{ fixture: Fixture }>({
       const enabled = await postJsonWithCsrf(page, '/api/asset-linking/images/enable', { parent_table: dataset, max_file_size_mb: 10 });
       expect(enabled.status, enabled.body).toBe(201);
       await openTempDatasetRowArticle(page, dataset, 1);
+      await openArticleDisclosure(page, 'images');
       await page.locator('.big_card_image_gallery input[type="file"]').first()
         .setInputFiles({ name: 'row-presentation.png', mimeType: 'image/png', buffer: solidPng(480, 320) });
       await expect(page.locator('[data-testid^="big-card-image-thumb-"]').first()).toBeVisible();

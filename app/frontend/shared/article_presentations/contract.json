@@ -25,7 +25,7 @@
   },
   "aliases": {"article": "article_view", "big_card": "article_view", "row_article": "article_view"},
   "blocks": ["details", "images", "attachments", "related_rows", "task_progress"],
-  "absent_block_initial_open": true,
+  "absent_block_initial_open": false,
   "opener_defaults": {
     "card-body": "article_view",
     "card-title": "article_view",

@@ -20,10 +20,24 @@ function readableSiteValues(values) {
         : values;
 }
 
+// Additive disclosure fields can be absent in an older response/cache. Present
+// malformed values still reach the strict validator; write maps stay complete.
+const disclosureDefaults = Object.fromEntries(DATASET_APPEARANCE_PATHS_BY_PLACE.site_default
+    .filter(path => path.endsWith('_initial_open'))
+    .map(path => [path, DEFAULT_DATASET_APPEARANCE.shared[path.split('.')[1]]]));
+function readableDefaults(values) {
+    return values && typeof values === 'object' && !Array.isArray(values)
+        ? { ...disclosureDefaults, ...values } : values;
+}
+
 function readLegacyAppearance(config) {
     if (!isReadableDatasetAppearance(config)) return null;
     const result = clone(config);
     result.shared.row_group_heading_order ??= DEFAULT_DATASET_APPEARANCE.shared.row_group_heading_order;
+    for (const [path, value] of Object.entries(disclosureDefaults)) {
+        const key = path.split('.')[1];
+        if (!Object.hasOwn(result.shared, key)) result.shared[key] = value;
+    }
     return result;
 }
 
@@ -45,9 +59,10 @@ export function appearanceValuesForPlace(config, place) {
 export function readSiteAppearance(payload) {
     if (payload?.schema_version === 2) {
         const siteValues = readableSiteValues(payload.site_values);
+        const defaults = readableDefaults(payload.defaults);
         if (!isValidDatasetAppearanceSiteValuesV2(siteValues, readOptions)
-            || !isValidDatasetAppearanceDefaultsV2(payload.defaults, readOptions)) return null;
-        return projectAppearanceMaps(siteValues, payload.defaults);
+            || !isValidDatasetAppearanceDefaultsV2(defaults, readOptions)) return null;
+        return projectAppearanceMaps(siteValues, defaults);
     }
     return readLegacyAppearance(payload?.dataset_cover_theme);
 }
@@ -57,10 +72,11 @@ export function readDatasetAppearance(snapshot) {
         return readLegacyAppearance(snapshot.effective);
     }
     const siteValues = readableSiteValues(snapshot?.site_values);
+    const defaults = readableDefaults(snapshot?.defaults);
     if (snapshot?.schema_version !== 2
         || !isValidDatasetAppearanceTabValuesV2(snapshot.tab_values, readOptions)
         || !isValidDatasetAppearanceSiteValuesV2(siteValues, readOptions)
-        || !isValidDatasetAppearanceDefaultsV2(snapshot.defaults, readOptions)
+        || !isValidDatasetAppearanceDefaultsV2(defaults, readOptions)
         || !isValidDatasetAppearanceOverridesV2(snapshot.overrides, readOptions)) return null;
-    return projectAppearanceMaps(siteValues, snapshot.defaults, snapshot.tab_values, snapshot.overrides);
+    return projectAppearanceMaps(siteValues, defaults, snapshot.tab_values, snapshot.overrides);
 }

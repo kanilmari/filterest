@@ -15,9 +15,9 @@ const validators = { tab_values: isValidDatasetAppearanceTabValuesV2, site_value
     defaults: isValidDatasetAppearanceDefaultsV2, overrides: isValidDatasetAppearanceOverridesV2 };
 const places = { tab_values: 'tab_only', site_values: 'site_only', defaults: 'site_default' };
 
-test('every canonical value belongs to exactly one place: 28 / 8 / 9', () => {
+test('every canonical value belongs to exactly one place: 28 / 8 / 24', () => {
     const all = [];
-    for (const [place, count] of Object.entries({ tab_only: 28, site_only: 8, site_default: 9 })) {
+    for (const [place, count] of Object.entries({ tab_only: 28, site_only: 8, site_default: 24 })) {
         const paths = DATASET_APPEARANCE_PATHS_BY_PLACE[place];
         expect(paths).toHaveLength(count);
         expect(paths).toEqual(contract.places[place]);
@@ -33,7 +33,7 @@ test('every canonical value belongs to exactly one place: 28 / 8 / 9', () => {
         expect(datasetAppearanceDefaultsForPlace(place)[paths[0]]).not.toBe(null);
         all.push(...paths);
     }
-    expect(new Set(all).size).toBe(45);
+    expect(new Set(all).size).toBe(60);
     expect(all.sort()).toEqual(DATASET_APPEARANCE_PATHS);
     expect(Object.isFrozen(DATASET_APPEARANCE_PATHS_BY_PLACE)).toBe(true);
     for (const unknown of ['unknown', '__proto__', 'toString']) {
@@ -96,7 +96,7 @@ test('complete groups refuse every missing value and every same-sized foreign-pl
     }
 });
 
-test('only the nine default paths may be overrides, including choices equal to defaults', () => {
+test('only site-default paths may be overrides, including choices equal to defaults', () => {
     for (const path of DATASET_APPEARANCE_PATHS) {
         const overrides = { [path]: datasetAppearanceField(path).default };
         expect(isValidDatasetAppearanceOverridesV2(overrides)).toBe(datasetAppearancePlace(path) === 'site_default');

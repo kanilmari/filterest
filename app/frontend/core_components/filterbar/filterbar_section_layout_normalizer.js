@@ -52,25 +52,9 @@ export function normalizeFilterbarSectionOrder(input = []) {
     return normalized;
 }
 
-export function normalizeFilterbarSectionCollapsed(input = {}) {
-    const values = input && typeof input === "object" && !Array.isArray(input)
-        ? input
-        : {};
-    const normalized = {};
-
-    for (const key of DEFAULT_FILTERBAR_SECTION_ORDER) {
-        if (values[key] === true || values[key] === false) {
-            normalized[key] = values[key];
-        }
-    }
-
-    return normalized;
-}
-
 export function normalizeFilterbarSectionLayout(input = {}) {
     return {
         section_order: normalizeFilterbarSectionOrder(input?.section_order),
-        section_collapsed: normalizeFilterbarSectionCollapsed(input?.section_collapsed),
         allow_own_order: input?.allow_own_order === true,
     };
 }

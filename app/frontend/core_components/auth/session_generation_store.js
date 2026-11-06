@@ -14,6 +14,9 @@ const subscribers = new Set();
 export function getSessionGeneration() { return generation; }
 export function isSessionValidationRequired() { return needsValidation; }
 
+/** A private tab preference may only be attributed to a server-verified viewer. */
+export function getVerifiedSessionIdentity() { return needsValidation ? null : identity; }
+
 /** Invalidate synchronously, before any bootstrap await or new identity read. */
 export function invalidateSessionGeneration({ reason = 'session-change', revalidate = true } = {}) {
     generation += 1;
@@ -50,8 +53,10 @@ export function publishSessionChange(reason) {
 /** A cold bootstrap is already validated. A resumed document must ask the server
  * before Home can reuse visible content or issue a new facade request.
  */
-export function revalidateSessionIdentity() {
-    if (!needsValidation) return Promise.resolve(generation);
+export function revalidateSessionIdentity({ requireIdentity = false } = {}) {
+    // Existing facades can establish identity on cold bootstrap. Tab-owned state
+    // explicitly requests it before reading or recording a user's preferences.
+    if (!needsValidation && (!requireIdentity || identity !== null)) return Promise.resolve(generation);
     if (validation) return validation.promise;
     const checking = { generation, controller: new AbortController(), promise: null };
     validation = checking;

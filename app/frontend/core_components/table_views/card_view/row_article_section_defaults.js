@@ -19,11 +19,11 @@ export async function loadRowArticleSectionDefaults(dataset, presentationKey) {
             initial = response.initial_open || {};
         }
     } catch {
-        // The established disclosure default remains open if optional settings
+        // Disclosures remain closed if optional settings
         // are unavailable. This never changes access to rows, media or sections.
     }
     return Object.freeze(Object.fromEntries(keys.map(key => [key,
-        typeof initial[key] === "boolean" ? initial[key] : true,
+        typeof initial[key] === "boolean" ? initial[key] : false,
     ])));
 }
 
@@ -31,5 +31,5 @@ export async function loadRowArticleSectionDefaults(dataset, presentationKey) {
 export function resolveRowArticleSectionStartOpen(defaults, key, existingSection = null) {
     const current = existingSection?.dataset?.disclosureState;
     if (current === "expanded" || current === "collapsed") return current === "expanded";
-    return defaults?.[key] !== false;
+    return defaults?.[key] === true;
 }

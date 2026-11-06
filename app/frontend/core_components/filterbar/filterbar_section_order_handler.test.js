@@ -11,11 +11,8 @@ vi.mock('../auth/session_generation_store.js', () => ({
     revalidateSessionIdentity: async () => 0,
 }));
 import {
-    applySectionCollapsedState,
     DEFAULT_FILTERBAR_SECTION_ORDER,
-    normalizeFilterbarSectionCollapsed,
     normalizeFilterbarSectionOrder,
-    shouldPersistFilterbarSectionToggle,
     setupFilterbarSectionOrdering,
 } from "./filterbar_section_order_handler.js";
 import { endpoint_router } from "../endpoints/endpoint_router.js";
@@ -132,7 +129,7 @@ describe("normalizeFilterbarSectionOrder", () => {
         const ordering = setupFilterbarSectionOrdering(container);
         await ordering.ready;
         const fieldSets = sections.find((section) => section.dataset.filterbarSectionKey === "field_sets");
-        expect(fieldSets.classList.contains("is-collapsed")).toBe(true); // the saved layout was applied
+        expect(fieldSets.classList.contains("is-collapsed")).toBe(false); // shared layout no longer owns open state
         // B4 opens it for this page only, without saving the layout.
         fieldSets.classList.remove("is-collapsed");
         sections.forEach((section) => { section.expand.mockClear(); section.collapse.mockClear(); });
@@ -163,82 +160,21 @@ describe("normalizeFilterbarSectionOrder", () => {
     });
 });
 
-describe("normalizeFilterbarSectionCollapsed", () => {
-    test("keeps explicit open and collapsed states for known sections", () => {
-        expect(normalizeFilterbarSectionCollapsed({
-            filters: true,
-            tools: false,
-            unknown: true,
-            chat: true,
-        })).toEqual({
-            filters: true,
-            tools: false,
-            chat: true,
-        });
-    });
 
-    test("falls back to no collapsed sections for empty input", () => {
-        expect(normalizeFilterbarSectionCollapsed()).toEqual({});
-    });
-
-    test("remote layout restores both open and collapsed sidebar sections", async () => {
-        const container = document.createElement("div");
-        const filters = document.createElement("section");
-        filters.dataset.filterbarSectionKey = "filters";
-        filters.classList.add("is-collapsed");
-        filters.expand = vi.fn(() => {
-            filters.classList.remove("is-collapsed");
-            return Promise.resolve();
-        });
-        filters.collapse = vi.fn();
-
-        const tools = document.createElement("section");
-        tools.dataset.filterbarSectionKey = "tools";
-        tools.expand = vi.fn();
-        tools.collapse = vi.fn(() => {
-            tools.classList.add("is-collapsed");
-            return Promise.resolve();
-        });
-        container.append(filters, tools);
-
-        await applySectionCollapsedState(container, {
-            filters: false,
-            tools: true,
-        });
-
-        expect(filters.expand).toHaveBeenCalledWith({ animate: false });
-        expect(filters.classList.contains("is-collapsed")).toBe(false);
-        expect(tools.collapse).toHaveBeenCalledWith({ animate: false });
-        expect(tools.classList.contains("is-collapsed")).toBe(true);
-    });
-
-    test("legacy layouts with missing open entries keep component defaults", async () => {
-        const container = document.createElement("div");
-        const filters = document.createElement("section");
-        filters.dataset.filterbarSectionKey = "filters";
-        filters.classList.add("is-collapsed");
-        filters.expand = vi.fn();
-        filters.collapse = vi.fn();
-        container.appendChild(filters);
-
-        await applySectionCollapsedState(container, {});
-
-        expect(filters.expand).not.toHaveBeenCalled();
-        expect(filters.collapse).not.toHaveBeenCalled();
-        expect(filters.classList.contains("is-collapsed")).toBe(true);
-    });
-});
-
-describe("shouldPersistFilterbarSectionToggle", () => {
-    test("rejects the coordinator's temporary disclosure operations", () => {
-        const container = document.createElement("div");
-        const section = document.createElement("section");
-        section.dataset.filterbarSectionKey = "filters";
-        container.appendChild(section);
-
-        expect(shouldPersistFilterbarSectionToggle(section, container)).toBe(true);
-
-        section.dataset.filterbarTemporaryDisclosureOperation = "true";
-        expect(shouldPersistFilterbarSectionToggle(section, container)).toBe(false);
-    });
+test('opening and closing cannot write shared settings, even for a shared-layout editor', async () => {
+    sessionStorage.setItem('user_permissions', JSON.stringify(['/api/filterbar-section-layout/save']));
+    endpoint_router.mockImplementation(async route => route === 'getFilterbarSectionLayout'
+        ? { section_order: DEFAULT_FILTERBAR_SECTION_ORDER } : {});
+    await loadFilterbarPreferences({ refresh: true });
+    const container = document.createElement('div'), section = document.createElement('section');
+    section.dataset.filterbarSectionKey = 'tools'; container.append(section);
+    const ordering = setupFilterbarSectionOrdering(container);
+    await ordering.ready;
+    endpoint_router.mockClear();
+    for (const type of ['animated-disclosure-toggle', 'animated-disclosure-user-toggle']) {
+        section.dispatchEvent(new CustomEvent(type, { bubbles: true, detail: { section, expanded: true } }));
+    }
+    await new Promise(resolve => setTimeout(resolve, 250));
+    expect(endpoint_router).not.toHaveBeenCalled();
+    ordering.destroy(); sessionStorage.clear();
 });

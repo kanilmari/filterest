@@ -15,6 +15,7 @@ import (
 func articleEditorDB(t *testing.T) *sql.DB {
 	db := articleBundleFixture(t, true)
 	frontPageExec(t, db, articleBundleSQL(t, "20261015000017_add_article_presentations_editor.sql"))
+	installDisclosureAppearanceFixture(t, db, true)
 	return db
 }
 func articleEditorRead(t *testing.T, q interface {
@@ -65,7 +66,7 @@ func TestArticlePresentationsReadbackPreservationPostgres(t *testing.T) {
 	cell := members[0].Values["image_first_page_view"]
 	cell.Width = &width
 	members[0].Values["image_first_page_view"] = cell
-	input.Blocks["article_view"]["images"] = false
+	input.Blocks["article_view"]["images"] = true
 	tx, _ := db.Begin()
 	result, err := persistArticlePresentations(tx, input, 42)
 	if err != nil {

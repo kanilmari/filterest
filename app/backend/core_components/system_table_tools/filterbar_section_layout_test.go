@@ -92,33 +92,8 @@ func TestNormalizeFilterbarSectionOrderUpgradesLegacyDefault(t *testing.T) {
 	}
 }
 
-func TestNormalizeFilterbarSectionCollapsedPreservesExplicitBooleans(t *testing.T) {
-	input := map[string]bool{
-		"filters": true,
-		"tools":   false,
-		"unknown": true,
-	}
-	want := map[string]bool{
-		"filters": true,
-		"tools":   false,
-	}
-
-	if got := normalizeFilterbarSectionCollapsed(input); !reflect.DeepEqual(got, want) {
-		t.Fatalf("normalizeFilterbarSectionCollapsed() = %#v, want %#v", got, want)
-	}
-}
-
-func TestNormalizeFilterbarSectionCollapsedKeepsMissingLegacyEntriesMissing(t *testing.T) {
-	if got := normalizeFilterbarSectionCollapsed(nil); len(got) != 0 {
-		t.Fatalf("normalizeFilterbarSectionCollapsed(nil) = %#v, want empty map", got)
-	}
-}
-
-func TestFilterbarStyleSectionPersistsOrderAndCollapsedState(t *testing.T) {
+func TestFilterbarStyleSectionPersistsOrder(t *testing.T) {
 	if got := normalizeFilterbarSectionOrder([]string{"style"}); len(got) == 0 || got[0] != "style" {
 		t.Fatalf("style section lost its explicit position: %v", got)
-	}
-	if got := normalizeFilterbarSectionCollapsed(map[string]bool{"style": true}); !got["style"] {
-		t.Fatal("style section lost its collapsed state")
 	}
 }

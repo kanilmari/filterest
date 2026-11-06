@@ -64,10 +64,13 @@ export function refreshDatasetAppearanceAdapters(surface, config) {
     applySiteLabelValueLayoutSetting(shared.label_value_layout, surface);
     applyCardImagePresentationSetting(shared.card_image_presentation, surface, config.cardImageDefaults);
     applyRowGroupHeadingOrder(shared.row_group_heading_order, surface);
+    surface.__syncDisclosureState?.(config);
 }
 
 /** Remove the private projection as well as its identity on lifecycle invalidation. */
-export function clearDatasetAppearanceSurface(surface) {
+export function clearDatasetAppearanceSurface(surface, { dispose = false } = {}) {
+    surface.__resetDisclosureState?.();
+    if (dispose) surface.__destroyDisclosureState?.();
     clearAppearanceProjections(surface);
     delete surface._datasetAppearanceAttributes;
     delete surface._cardImageDefaults;

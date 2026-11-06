@@ -5,6 +5,24 @@
 
 # Article collapsible-block defaults
 
+All supported collapsible blocks start **closed** in Article, Image-first article
+and Page-sized image-first article. Article's title, primary picture and body are
+ordinary content and remain visible. The related-items disclosure encloses its
+tabs; this feature changes neither their definitions nor `system_child_tab_config`.
+
+For a verified viewer, a deliberate open/close choice resolves in this order:
+**same viewer + browser tab + dataset UID + presentation + block choice → dataset
+appearance override → site appearance default → closed**. A false choice is a real
+choice, not a missing value. The browser keeps it in session storage, never in a
+shared setting or a cross-tab broadcast. Refresh and remount preserve the choice;
+logout/account changes clear it. Unknown identity cannot read remembered choices.
+Search, shortcuts, assembly and programmatic reveals do not create preferences.
+
+Administrators edit the shared defaults through the existing appearance palette's
+**Block opening defaults** section. This tab edits optional dataset overrides;
+All datasets edits site defaults. Ordinary disclosure clicks never call these
+administrator save routes.
+
 In **View field settings**, select a dataset and **Article presentations**. One
 five-column table contains field name and UID, Article, Image-first article,
 Page-sized image-first article and computed Select all. Fields share an order;
@@ -17,7 +35,7 @@ values or orders retain explicit group targets. Blocks are editable only for an
 actual site save; group and personal contexts label them dataset-wide and read-only.
 Fields and opening blocks commit together through one administrator Save. Group
 priority and name changes belong to that same draft. Restore defaults stages explicit
-visible/open values; Cancel discards the draft. Zero visible fields are allowed in
+visible/closed values; Cancel discards the draft. Zero visible fields are allowed in
 each article projection. Neither field choices nor block values grant access.
 The informational warning checks all three registered presentation rights from one
 permission snapshot and links to Permissions when a selected group lacks access.
@@ -46,11 +64,16 @@ administrator settings. A media refresh preserves current disclosure state.
 The horizontal table scroller keeps its identity column visible on phones;
 vertical scrolling stays with the page. Controls are at least 44 pixels.
 
-The canonical storage is
-`system_db_tables.article_section_initial_open`, a JSON object containing
-`article_view`, `image_first_view` and `image_first_page_view`. All five Article
-booleans and each image-first presentation's `details` boolean are explicit.
-The old `classic` and `image_first` names are request compatibility aliases;
+The sole writable defaults owner is dataset appearance: seven boolean
+`shared.<presentation>_<block>_initial_open` paths in
+`system_dataset_appearance.overrides`, inheriting the existing site's appearance
+`defaults` map. `app_article_disclosure_defaults(dataset_uid)` derives the complete
+three-presentation block map; the old registry column is removed. The combined
+article editor writes only changed block cells through this same owner, preserving
+inheritance for untouched cells. Its revision includes both dataset and site
+appearance revisions. Shared-appearance locks precede the dataset lock.
+
+The old `classic` and `image_first` names remain request compatibility aliases;
 responses retain the requested presentation identity. The supported API is:
 
 - `GET /api/view-field-settings/article-section-defaults?dataset=<name>&presentation_key=<canonical-key-or-classic-or-image_first>`
@@ -61,8 +84,18 @@ responses retain the requested presentation identity. The supported API is:
 Reads require permission to read the dataset. Mutations require administrator
 access and the normal CSRF protection. Each patch/reset is transactional and
 preserves other presentation keys. The response separates raw `overrides` from
-effective `initial_open` values. The compatibility reader resolves old absent
-values as open; every write stores the complete canonical object.
+effective `initial_open` values. Missing values resolve closed. A patch stores
+only explicitly set leaves; `reset_to_defaults` removes that presentation's
+overrides and restores site inheritance.
+
+The one-time disclosure cutover audits the old article and palette values before
+removing their storage. It also audits any pre-existing opening overrides and
+initializes these fifteen appearance defaults as closed, as requested in #986.
+Replaying the completed migration preserves subsequent administrator edits.
+Its final check rejects remaining old columns, editable metadata or palette
+collapse storage and checks the article bundle invariants. Runtime and portable
+restore reviews pin the derived read helper and its literal rule catalogue,
+retaining their caller privileges and the existing trigger attachment checks.
 
 
 ## Shared article-presentation contract and storage (database 9.12.0)
@@ -107,8 +140,8 @@ a field's delivery clears its visibility while retaining order and widths.
 The dataset registry row, identified by stable table UID, owns the complete
 `article_opener_policy` role map. Defaults match the shared contract, including
 Article for product/free-layout images. This batch stores the policy without
-changing opener behavior. Dataset creation initializes explicit site bundles,
-sections and policy; it creates no personal/group targets or audience grants.
+changing opener behavior. Dataset creation initializes explicit site bundles
+and policy and inherits the disclosure defaults; it creates no personal/group targets or audience grants.
 
 The shared SQL mutation service locks the dataset, updates only the requested
 projection and writes all three links. Legacy collection selection copies that
@@ -126,7 +159,7 @@ remain available. Selecting a collection copies into a working bundle rather tha
 rewriting the previously active named choice. Reset removes personal/group links
 and retains saved choices; site Restore writes metadata defaults into the existing
 explicit site bundle. It preserves sibling values and widths.
-The runtime and portable-restore SQL-path reviews pin all twenty helper bodies,
+The runtime and portable-restore SQL-path reviews pin all twenty-two helper bodies,
 their catalogue settings, the six owner-run function identities and each trigger's
 exact protected-table attachment. Trigger functions have owner-only execution;
 the publicly callable owner-run helper only locks a registry row. Limited preference
@@ -155,10 +188,11 @@ Compatible authored orders are merged while retaining each projection's relative
 order; cyclic order or differing priorities refuse the whole upgrade. Forbidden
 legacy selections and malformed/conflicting block objects also refuse it.
 
-`classic` becomes `article_view`, with its five absent booleans filled with true;
+Historically, the 9.12.0 migration changed `classic` to `article_view`, with its five absent booleans filled with true;
 `image_first` becomes `image_first_view`, with absent Details true; Page Details
 starts from IFAV. Authored canonical values are retained, and contradictory
-legacy/canonical values are refused. No legacy keys remain after the data step.
+legacy/canonical values are refused. No legacy keys remain after that data step.
+The later #986 cutover above audits those values and initializes disclosures closed.
 
 Article's actual group grant tuples and nullable scopes on enabled Article-route
 functions (including authored aliases) are copied to IFAV once; disabled source

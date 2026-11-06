@@ -170,17 +170,12 @@ func articleRevision(value any) string {
 func readArticleSnapshot(q dbutils.Querier, dataset string, uid, actor int, targets []articleTarget) (articleSnapshot, error) {
 	result := articleSnapshot{Dataset: dataset, DatasetUID: uid, ActorID: actor, Family: "article", Fields: []articleField{}, Targets: []articleTarget{}, Revisions: map[string]string{}}
 	var raw []byte
-	if err := q.QueryRow(`SELECT jsonb_build_object('blocks',article_section_initial_open,'tuple',xmin::text) FROM system_db_tables WHERE table_uid=$1`, uid).Scan(&raw); err != nil {
+	appearanceSnapshot, err := readArticleSectionAppearance(q, uid)
+	if err != nil {
 		return result, err
 	}
-	var blockState struct {
-		Blocks map[string]map[string]bool `json:"blocks"`
-	}
-	if err := json.Unmarshal(raw, &blockState); err != nil {
-		return result, err
-	}
-	result.Blocks = blockState.Blocks
-	result.Revisions["blocks"] = articleRevision(string(raw))
+	result.Blocks = articleBlocksFromAppearance(appearanceSnapshot)
+	result.Revisions["blocks"] = articleRevision([]any{result.Blocks, appearanceSnapshot.Version, appearanceSnapshot.SharedVersion})
 	rows, err := q.Query(`SELECT column_uid,column_name,NOT COALESCE(hide_everywhere,false) AND COALESCE(client_delivery_mode,'include')='include',xmin::text FROM system_column_details WHERE table_uid=$1 ORDER BY column_uid`, uid)
 	if err != nil {
 		return result, err
@@ -309,6 +304,9 @@ func validateArticleWrite(input, baseline articleSnapshot) error {
 var errArticleRevisionConflict = fmt.Errorf("article_revision_conflict")
 
 func persistArticlePresentations(tx *sql.Tx, input articleSnapshot, actor int) (articleSnapshot, error) {
+	if err := lockArticleAppearance(tx, input.DatasetUID); err != nil {
+		return articleSnapshot{}, err
+	}
 	var locked bool
 	if err := tx.QueryRow(`SELECT public.app_lock_article_dataset_uid($1)`, input.DatasetUID).Scan(&locked); err != nil {
 		return articleSnapshot{}, err
@@ -335,8 +333,7 @@ func persistArticlePresentations(tx *sql.Tx, input articleSnapshot, actor int) (
 		}
 	}
 	if input.Blocks != nil {
-		raw, _ := json.Marshal(input.Blocks)
-		if _, err = tx.Exec(`UPDATE system_db_tables SET article_section_initial_open=$1::jsonb WHERE table_uid=$2`, string(raw), input.DatasetUID); err != nil {
+		if err = persistChangedArticleBlocks(tx, input.DatasetUID, input.Blocks, baseline.Blocks); err != nil {
 			return baseline, err
 		}
 	}

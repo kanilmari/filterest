@@ -233,7 +233,8 @@
     "20261030000346_add_category_filter_button_width_mode.sql",
     "20261030000399_record_database_release_category_button_width.sql",
     "20261105000001_add_app_log_search_terms.sql",
-    "20261105000099_record_database_release_app_log_search_terms.sql"
+    "20261105000099_record_database_release_app_log_search_terms.sql",
+    "20261106000100_move_disclosure_defaults_to_appearance.sql"
   ],
   "allowed_schema_tables": [
     "public.ai_chat_conversations",
@@ -395,7 +396,7 @@
     "public.system_column_field_set_members": 1,
     "public.system_column_field_sets": 0,
     "public.system_config": 20,
-    "public.system_data_repair_records": 4,
+    "public.system_data_repair_records": 8,
     "public.system_dataset_appearance": 0,
     "public.system_db_tables": 73,
     "public.system_db_version": 1,
@@ -408,7 +409,7 @@
     "public.system_languages": 5,
     "public.system_permission_actions": 7,
     "public.system_permission_categories": 4,
-    "public.system_schema_migrations": 227,
+    "public.system_schema_migrations": 228,
     "public.system_table_folders": 14,
     "public.system_table_views": 13,
     "public.system_user_group_memberships": 2,
@@ -423,7 +424,7 @@
       "sha256": "daf2e76fde9e2c615b2fb4c497f99ec105ec436e44a8fa555aeab848c45fd474"
     },
     "server_tools/public_bootstrap/seed_data.sql": {
-      "sha256": "256db923de0a589f61ef96eb5d5c513c42f8f42fc0be45825dba5f1f6d4549d2"
+      "sha256": "991d9f562cdbd0214d7c10f122f64860c1c97dcb7cd3f771cdd8caccbe40ace9"
     }
   },
   "source_files": {
@@ -440,7 +441,7 @@
       "sha256": "235e4b887181e150bd436d035d2d268eb821d9e5d0b830b54eb444988f31d5d1"
     },
     "filterest/app/server_tools/public_bootstrap/generate_bootstrap.py": {
-      "sha256": "c3928400187f9af65d15365d746751575bb7e06cc893f5dc7b8774f494bb41da"
+      "sha256": "6636182f33f33f0c08acb127b3fc2c3c27ce80842dafc504e57152bbb74d11eb"
     },
     "filterest/app/server_tools/public_bootstrap/sql_identifier_validator.py": {
       "sha256": "748245fac4328a3608740c1b0fe948e6a09d6489d587143bd3b4c67064bea732"
@@ -1197,6 +1198,9 @@
     },
     "filterest/app/server_tools/migrations/20261105000099_record_database_release_app_log_search_terms.sql": {
       "sha256": "1fe7637e5b1b437fe658908df918d8b7e21d8247d8790c6056a4b5914ac6c9cc"
+    },
+    "filterest/app/server_tools/migrations/20261106000100_move_disclosure_defaults_to_appearance.sql": {
+      "sha256": "8a95796fea3a33811c8b7a14941c20ce1d8063183e5d68603e44a694d67fd809"
     },
     "filterest/app/server_tools/public_bootstrap/source/fixtures/docs/first-dataset.png": {
       "sha256": "010bdb97d887959b6f83046d377ca8394478a812c8abfe79fd5ea2cf400e3975"

@@ -28,7 +28,7 @@ def test_raw_definition_has_exactly_three_complete_places():
             assert field["place"] in inventories
             inventories[field["place"]].append(path)
     assert {place: sorted(paths) for place, paths in inventories.items()} == examples["places"]
-    assert [len(inventories[place]) for place in ("tab_only", "site_only", "site_default")] == [28, 8, 9]
+    assert [len(inventories[place]) for place in ("tab_only", "site_only", "site_default")] == [28, 8, 24]
     for path, example in examples["aliases"].items():
         owner, key = path.split(".")
         alias = definition["aliases"][key]
@@ -45,7 +45,14 @@ def test_raw_definition_preserves_all_version_one_defaults():
     assert expected == json.loads(legacy["baseline_go_json"])
     for owner, values in expected.items():
         fields = definition["shared_fields" if owner == "shared" else "theme_fields"]
-        assert set(fields) == set(values)
+        additional = set(fields) - set(values)
+        if owner == "shared":
+            assert len(additional) == 15
+            assert all(key.endswith("_initial_open") and fields[key]["place"] == "site_default"
+                       and fields[key]["type"] == "boolean" and fields[key]["default"] is False for key in additional)
+        else:
+            assert not additional
+        assert set(values) <= set(fields)
         for key, value in values.items():
             field = fields[key]
             if "rule_from" in field:

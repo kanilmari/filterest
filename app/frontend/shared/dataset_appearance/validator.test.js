@@ -33,11 +33,11 @@ test.each(contract.cases)('shared validation: $name', example => {
     }
 });
 
-test('inventories 45 canonical leaves, excluding visibility aliases and legacy blur', () => {
-    expect(DATASET_APPEARANCE_PATHS).toHaveLength(45);
+test('inventories 60 canonical leaves, excluding visibility aliases and legacy blur', () => {
+    expect(DATASET_APPEARANCE_PATHS).toHaveLength(60);
     expect(DATASET_APPEARANCE_PATHS.filter(path => path.startsWith('light.'))).toHaveLength(13);
     expect(DATASET_APPEARANCE_PATHS.filter(path => path.startsWith('dark.'))).toHaveLength(13);
-    expect(DATASET_APPEARANCE_PATHS.filter(path => path.startsWith('shared.'))).toHaveLength(19);
+    expect(DATASET_APPEARANCE_PATHS.filter(path => path.startsWith('shared.'))).toHaveLength(34);
     expect(DATASET_APPEARANCE_PATHS).not.toContain('shared.image_blur');
     expect(datasetAppearanceField('shared.image_blur')).toMatchObject({ derived_from: 'light.image_blur', min: 0, max: 24 });
     for (const unknown of ['light.unknown', 'unknown.image_blur', 'shared.toString', 'light.__proto__', 'light.image_blur.extra']) {
@@ -45,8 +45,15 @@ test('inventories 45 canonical leaves, excluding visibility aliases and legacy b
     }
 });
 
-test('keeps the original browser serialization byte for byte', () => {
-    expect(JSON.stringify(DEFAULT_DATASET_APPEARANCE)).toBe(contract.baseline_browser_json);
+test('adds closed disclosure defaults without changing the existing browser values', () => {
+    const legacy = clone(DEFAULT_DATASET_APPEARANCE);
+    const keys = Object.keys(legacy.shared).filter(key => key.endsWith('_initial_open'));
+    expect(keys).toHaveLength(15);
+    for (const key of keys) {
+        expect(legacy.shared[key]).toBe(false);
+        delete legacy.shared[key];
+    }
+    expect(JSON.stringify(legacy)).toBe(contract.baseline_browser_json);
 });
 
 test('derives only the compatibility blur from light, including explicit zero', () => {

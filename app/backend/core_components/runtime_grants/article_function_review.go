@@ -18,7 +18,7 @@ const reviewedArticleFunctionSQL = `l.lanname='plpgsql' AND p.provolatile='v'
  AND p.proconfig=ARRAY['search_path=pg_catalog, public']::text[]
  AND p.proowner=(SELECT relowner FROM pg_class WHERE oid=to_regclass('public.system_db_tables'))
  AND jsonb_typeof(b.identity->'article_helpers')='array'
- AND jsonb_array_length(b.identity->'article_helpers')=20
+ AND jsonb_array_length(b.identity->'article_helpers')=22
  AND NOT EXISTS(SELECT 1 FROM jsonb_array_elements(b.identity->'article_helpers') e WHERE NOT EXISTS(
    SELECT 1 FROM pg_proc h JOIN pg_namespace ns ON ns.oid=h.pronamespace JOIN pg_language hl ON hl.oid=h.prolang
    WHERE ns.nspname='public' AND h.proname=e->>'name' AND oidvectortypes(h.proargtypes)=e->>'arguments'

@@ -4,12 +4,10 @@
 // Exists so section layout stays shared application configuration instead of browser-local state.
 
 
-import { DEFAULT_FILTERBAR_SECTION_ORDER, normalizeFilterbarSectionOrder,
-    normalizeFilterbarSectionCollapsed } from './filterbar_section_layout_normalizer.js';
+import { DEFAULT_FILTERBAR_SECTION_ORDER, normalizeFilterbarSectionOrder } from './filterbar_section_layout_normalizer.js';
 import { loadFilterbarPreferences, getFilterbarPreferences, subscribeFilterbarPreferences,
-    saveFilterbarOrder, canEditFilterbarOrder, saveSharedFilterbarLayout } from './filterbar_preferences_controller.js';
-export { DEFAULT_FILTERBAR_SECTION_ORDER, normalizeFilterbarSectionOrder,
-    normalizeFilterbarSectionCollapsed } from './filterbar_section_layout_normalizer.js';
+    saveFilterbarOrder, canEditFilterbarOrder } from './filterbar_preferences_controller.js';
+export { DEFAULT_FILTERBAR_SECTION_ORDER, normalizeFilterbarSectionOrder } from './filterbar_section_layout_normalizer.js';
 const SECTION_SELECTOR = "[data-filterbar-section-key]";
 
 function getSectionElements(container) {
@@ -38,30 +36,6 @@ function applySectionOrder(container, order) {
             container.appendChild(section);
         }
     }
-}
-
-export async function applySectionCollapsedState(container, collapsedState) {
-    const normalizedCollapsed = normalizeFilterbarSectionCollapsed(collapsedState);
-    const operations = getSectionElements(container).map((section) => {
-        const key = section.dataset.filterbarSectionKey;
-        if (!Object.hasOwn(normalizedCollapsed, key)) {
-            // Legacy layouts stored only collapsed sections. Missing keys must
-            // retain their component defaults instead of reopening everything.
-            return Promise.resolve();
-        }
-        const shouldCollapse = normalizedCollapsed[key] === true;
-        const isCollapsed = section.classList.contains("is-collapsed");
-
-        if (shouldCollapse && !isCollapsed && typeof section.collapse === "function") {
-            return section.collapse({ animate: false });
-        }
-        if (!shouldCollapse && isCollapsed && typeof section.expand === "function") {
-            return section.expand({ animate: false });
-        }
-        return Promise.resolve();
-    });
-
-    await Promise.all(operations);
 }
 
 function addHeaderDragBehavior(section, signal, shouldSuppressClick) {
@@ -95,20 +69,6 @@ function getDragAfterElement(container, clientY, draggedSection) {
     }, { offset: Number.NEGATIVE_INFINITY, element: null }).element;
 }
 
-/**
- * Decide whether one disclosure event represents a user-owned layout change.
- * Between section toggle events and the shared persisted section-layout payload.
- * Exists so temporary Filters shortcuts cannot overwrite the owner's saved layout.
- */
-export function shouldPersistFilterbarSectionToggle(section, panelBody) {
-    return (
-        section instanceof HTMLElement &&
-        section.parentElement === panelBody &&
-        section.matches(SECTION_SELECTOR) &&
-        section.dataset.filterbarTemporaryDisclosureOperation !== "true"
-    );
-}
-
 export function setupFilterbarSectionOrdering(panelBody) {
     if (!(panelBody instanceof HTMLElement)) {
         return { ready: Promise.resolve(), destroy: () => {} };
@@ -119,8 +79,6 @@ export function setupFilterbarSectionOrdering(panelBody) {
     let draggedSection = null;
     let suppressNextHeaderClick = false;
     let applyingRemoteLayout = false;
-    let pendingCollapsed = {};
-    let orderChanged = false;
     let saveTimer = 0;
 
     function markSections() {
@@ -139,12 +97,7 @@ export function setupFilterbarSectionOrdering(panelBody) {
         }
         clearTimeout(saveTimer);
         saveTimer = setTimeout(() => {
-            const order = orderChanged ? getCurrentSectionOrder(panelBody) : null;
-            const collapsed = pendingCollapsed;
-            orderChanged = false;
-            pendingCollapsed = {};
-            const operation = order ? saveFilterbarOrder(order, collapsed)
-                : saveSharedFilterbarLayout({ section_collapsed: collapsed });
+            const operation = saveFilterbarOrder(getCurrentSectionOrder(panelBody));
             operation.catch((err) => {
                 applySectionOrder(panelBody, getFilterbarPreferences().order);
                 console.warn("filterbar section layout save failed", err);
@@ -202,50 +155,29 @@ export function setupFilterbarSectionOrdering(panelBody) {
         setTimeout(() => {
             suppressNextHeaderClick = false;
         }, 0);
-        orderChanged = true;
-        scheduleSave();
-    }, { signal });
-
-    panelBody.addEventListener("animated-disclosure-toggle", (event) => {
-        const section = event.target;
-        if (!shouldPersistFilterbarSectionToggle(section, panelBody)) {
-            return;
-        }
-        // Personal disclosure clicks are not shared order edits. Editors save
-        // only this explicit collapse delta, never an old whole-bar snapshot.
-        if (!getFilterbarPreferences().canEditShared || getFilterbarPreferences().mode === 'own') return;
-        pendingCollapsed[section.dataset.filterbarSectionKey] = section.classList.contains('is-collapsed');
         scheduleSave();
     }, { signal });
 
     markSections();
     let applyRevision = 0;
     let lastOrder = '';
-    let lastCollapsed = '';
     async function applyLoadedLayout() {
         if (signal.aborted) return;
         const revision = ++applyRevision;
         const state = getFilterbarPreferences();
         if (!state.loaded) {
             clearTimeout(saveTimer);
-            orderChanged = false;
-            pendingCollapsed = {};
         }
         applyingRemoteLayout = true;
         const orderKey = JSON.stringify(state.order);
         if (lastOrder !== orderKey) { applySectionOrder(panelBody, state.order); lastOrder = orderKey; }
         markSections();
-        const collapsedKey = JSON.stringify(state.shared.section_collapsed);
-        if (lastCollapsed !== collapsedKey) {
-            await applySectionCollapsedState(panelBody, state.shared.section_collapsed);
-            lastCollapsed = collapsedKey;
-        }
         if (revision === applyRevision) applyingRemoteLayout = false;
     }
     const unsubscribe = subscribeFilterbarPreferences(() => { void applyLoadedLayout(); });
     const sectionMountObserver = new MutationObserver((mutations) => {
         // Reordering moves existing children too. Only new/replaced sections
-        // need their position and defaults applied, preventing observer loops.
+        // need their position applied, preventing observer loops.
         // Other children (a spacer, a status row) are not sections: re-applying
         // the layout for them would move every section after them and undo a
         // section the visitor opened only on this page.
@@ -253,7 +185,7 @@ export function setupFilterbarSectionOrdering(panelBody) {
         if (!signal.aborted && added.some(node => node instanceof HTMLElement
             && node.matches(SECTION_SELECTOR) && !node.dataset.filterbarOrderMounted)) {
             getSectionElements(panelBody).forEach(section => { section.dataset.filterbarOrderMounted = 'true'; });
-            lastOrder = ''; lastCollapsed = '';
+            lastOrder = '';
             void applyLoadedLayout();
         }
     });

@@ -113,10 +113,11 @@ func TestArticleBundleMaterializationChecksOncePostgres(t *testing.T) {
 			articleMaterializationXactCalls(t, tx, 1)
 			want := 1
 			if fresh {
-				// Finish the real seed in this same transaction. Its package-wide
-				// acceptance block independently checks the complete bootstrap once.
+				// Materialization itself still checks exactly once above. The later
+				// disclosure cutover adds its invariant drain/acceptance, followed by
+				// the complete seed's article and disclosure acceptance checks.
 				articleMaterializationExec(t, tx, suffix)
-				want++
+				want = 6
 			}
 			articleMaterializationXactCalls(t, tx, want)
 			if err := tx.Commit(); err != nil {
@@ -140,6 +141,15 @@ func TestArticleBundleMaterializationChecksOncePostgres(t *testing.T) {
 				defer tx.Rollback()
 				query := `UPDATE system_db_tables SET article_section_initial_open='{}'
 				 WHERE table_uid=(SELECT min(table_uid) FROM system_db_tables);`
+				if fresh {
+					// The retired disclosure column no longer exists. Break one
+					// section's shared priority to exercise the same deferred invariant.
+					query = `SET LOCAL filterest.article_bundle_mutation='on';
+					 UPDATE system_view_field_set_assignments SET group_priority=group_priority+1
+					 WHERE table_uid=(SELECT min(table_uid) FROM system_db_tables)
+					 AND user_id IS NULL AND group_id IS NULL
+					 AND view_id=(SELECT id FROM system_table_views WHERE view_key='article_view');`
+				}
 				if attack != "" {
 					query = `UPDATE system_db_tables SET table_name=table_name;
 					 SET CONSTRAINTS public.article_bundle_invariant IMMEDIATE;

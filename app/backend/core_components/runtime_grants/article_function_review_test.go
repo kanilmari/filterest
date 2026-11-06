@@ -6,6 +6,7 @@ package runtime_grants
 
 import (
 	"crypto/md5"
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -32,7 +33,7 @@ func TestArticleFunctionReviewMatchesMigrations(t *testing.T) {
 			continue
 		}
 		count++
-		if len(identity.Helpers) != 20 {
+		if len(identity.Helpers) != 22 {
 			t.Fatal("incomplete article helper closure")
 		}
 		for _, helper := range identity.Helpers {
@@ -62,6 +63,7 @@ func TestArticleFunctionReviewRejectsHelperAndAttachmentChangesPostgres(t *testi
 		}
 		fixtureExec(t, db, string(content))
 	}
+	installArticleDisclosureReviewFixture(t, db)
 	check := func(want int) {
 		t.Helper()
 		var count int
@@ -79,4 +81,21 @@ func TestArticleFunctionReviewRejectsHelperAndAttachmentChangesPostgres(t *testi
 	check(5)
 	fixtureExec(t, db, `ALTER TABLE system_column_details ENABLE TRIGGER article_field_created`)
 	check(6)
+}
+
+func installArticleDisclosureReviewFixture(t *testing.T, db *sql.DB) {
+	t.Helper()
+	fixtureExec(t, db, `CREATE TABLE system_config(key text PRIMARY KEY,json_value jsonb,updated timestamptz DEFAULT now())`)
+	for _, name := range []string{
+		"20261009000003_create_system_dataset_appearance.sql",
+		"20261009000060_extend_dataset_appearance_three_places.sql",
+		"20261015000020_add_row_group_heading_order_appearance_field.sql",
+		"20261106000100_move_disclosure_defaults_to_appearance.sql",
+	} {
+		content, err := os.ReadFile(filepath.Join("..", "..", "..", "server_tools", "migrations", name))
+		if err != nil {
+			t.Fatal(err)
+		}
+		fixtureExec(t, db, string(content))
+	}
 }

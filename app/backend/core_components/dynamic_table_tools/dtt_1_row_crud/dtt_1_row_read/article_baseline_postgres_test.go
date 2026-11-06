@@ -60,7 +60,7 @@ func TestArticleBaselinePostgres(t *testing.T) {
 			t.Fatalf("reader %d source %+v", test.user, got.Article.Source)
 		}
 	}
-	if !article.Blocks["classic"].Present || article.Blocks["classic"].InitialOpen["details"] || !article.Blocks["classic"].InitialOpen["images"] || article.Blocks["image_first"].InitialOpen["details"] {
+	if !article.Blocks["classic"].Present || article.Blocks["classic"].InitialOpen["details"] || article.Blocks["classic"].InitialOpen["images"] || article.Blocks["image_first"].InitialOpen["details"] {
 		t.Fatal("explicit and absent blocks")
 	}
 	if !site.IFAV.SourceDependent || !site.IFAV.DifferentFromArticle || !reflect.DeepEqual(ids(site.IFAV.ConfiguredProjection.Fields), []int64{105}) {
@@ -89,7 +89,7 @@ func TestArticleBaselinePostgres(t *testing.T) {
 		t.Fatal("authenticated scoped grants and NULL-disabled route distinction")
 	}
 	metadata := report.Datasets[1]
-	if !reflect.DeepEqual(ids(metadata.Targets[1].Article.Fields), []int64{203, 204, 201, 202}) || metadata.Blocks["classic"].Present || !metadata.Blocks["classic"].InitialOpen["details"] {
+	if !reflect.DeepEqual(ids(metadata.Targets[1].Article.Fields), []int64{203, 204, 201, 202}) || metadata.Blocks["classic"].Present || metadata.Blocks["classic"].InitialOpen["details"] {
 		t.Fatal("metadata fallback", metadata.Targets[1].Article)
 	}
 	for _, source := range metadata.Targets[1].IFAV.OpeningSources {

@@ -13,6 +13,7 @@ import (
 	"easelect/backend/core_components/dbutils"
 	dtt_models "easelect/backend/core_components/dynamic_table_tools/dtt_models"
 	esessions "easelect/backend/core_components/sessions"
+	appearance "easelect/frontend/shared/dataset_appearance"
 	"encoding/json"
 	"fmt"
 	"github.com/gorilla/sessions"
@@ -318,7 +319,7 @@ func TestGalleryCacheAuthorizationAtResponseHandlers(t *testing.T) {
 						}
 						// Ordinary results own the appearance contract; semantic packets
 						// retain the dataset state established by the ordinary response.
-						if mode == "ordinary" && (packet.Appearance.SchemaVersion != 2 || len(packet.Appearance.TabValues) != 28 || len(packet.Appearance.SiteValues) != 8 || len(packet.Appearance.Defaults) != 9) {
+						if mode == "ordinary" && (packet.Appearance.SchemaVersion != 2 || len(packet.Appearance.TabValues) != 28 || len(packet.Appearance.SiteValues) != 8 || !reflect.DeepEqual(packet.Appearance.Defaults, appearance.Rules().DefaultsForPlace(appearance.SiteDefault))) {
 							t.Fatal("results lost their owned appearance snapshot", packet.Appearance)
 						}
 						row := packet.Data[0]

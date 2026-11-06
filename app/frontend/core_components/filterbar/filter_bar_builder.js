@@ -10,7 +10,8 @@ import { getAllSpecs } from "../state_stores/table_specs_reader.js";
 import { resolveVisibleDatasetMediaPath } from "../table_views/dataset_media_visibility_resolver.js";
 import { FILTERBAR_BREAKPOINT_PX, ensureFilterOverlay } from "./filterbar_engine/filterbar_visibility_handler.js";
 import { getInitialFilterbarMemory } from './filterbar_visibility_memory.js';
-import { getFilterbarPreferences } from './filterbar_preferences_controller.js';
+import { datasetAppearanceState } from '../table_views/dataset_appearance_state.js';
+import { bindDisclosureSurface } from '../disclosure/disclosure_state_controller.js';
 import { buildInitialResponsivePanelState } from "./filterbar_visibility_resolver.js";
 import { FILTERBAR_PANEL_MODE, show_filterbar_search_overview_section } from "../../ui_config.js";
 import { createMaskIconSpan } from "../../icons/icon_mask_builder.js";
@@ -185,20 +186,7 @@ export function create_filter_bar(
         panel.classList.add("filterbar-panel--hidden");
     }
     panel.dataset.filterbarPanelMode = panelMode;
-    // Rows can render while preferences load. Reveal only after the account's
-    // memory and the shared order have been resolved, avoiding a false first paint.
-    if (!getFilterbarPreferences().loaded) {
-        panel.classList.add('filterbar-panel--loading-preferences');
-        panel.inert = true;
-        sectionOrdering.ready.finally(() => {
-            if (signal.aborted) return;
-            panel.classList.remove('filterbar-panel--loading-preferences');
-            panel.inert = false;
-        });
-    }
     panel.__filterableColumnsKey = filterableColumnsKey;
-    // Temporary consumers must wait for the saved layout before revealing a section.
-    panel.__sectionLayoutReady = sectionOrdering.ready;
 
     const panelToggleDock = document.createElement("div");
     panelToggleDock.classList.add("filterbar-panel__toggle-dock");
@@ -222,6 +210,18 @@ export function create_filter_bar(
         panel.appendChild(chatDock);
     }
     panel.appendChild(clockBar);
+    bindDisclosureSurface(panel, 'filterbar');
+    const releaseAppearance = datasetAppearanceState.bind(panel, tableName, tableUID);
+    signal.addEventListener('abort', releaseAppearance, { once: true });
+    // Wait for both order and private tab state before temporary shortcuts run.
+    panel.__sectionLayoutReady = Promise.all([sectionOrdering.ready, panel.__disclosureStateReady]);
+    panel.classList.add('filterbar-panel--loading-preferences');
+    panel.inert = true;
+    panel.__sectionLayoutReady.finally(() => {
+        if (signal.aborted) return;
+        panel.classList.remove('filterbar-panel--loading-preferences');
+        panel.inert = false;
+    });
     tablePartsContainer.appendChild(panel);
 
     // =====================================================

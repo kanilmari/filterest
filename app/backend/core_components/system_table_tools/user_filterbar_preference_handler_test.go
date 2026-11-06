@@ -149,7 +149,7 @@ func TestUserFilterbarPreferenceRejectsInvalidSettings(t *testing.T) {
 }
 
 func TestSharedFilterbarLayoutRejectsInvalidSettings(t *testing.T) {
-	for _, body := range []string{`null`, `{"section_order":["unknown"]}`, `{"section_order":["style","style"]}`, `{"section_order":[]}`, `{"section_collapsed":{"other":true}}`, `{"allow_own_order":"yes"}`, `{"arbitrary":"value"}`, `{} {}`} {
+	for _, body := range []string{`null`, `{"section_order":["unknown"]}`, `{"section_order":["style","style"]}`, `{"section_order":[]}`, `{"section_collapsed":{"other":true}}`, `{"section_collapsed":{"filters":true}}`, `{"section_collapsed":{"filters":null}}`, `{"allow_own_order":"yes"}`, `{"arbitrary":"value"}`, `{} {}`} {
 		request := queryfixture.Request(t, "POST", "/api/filterbar-section-layout/save", body, 42, "user")
 		response := httptest.NewRecorder()
 		SaveFilterbarSectionLayoutHandler(response, request)
@@ -159,11 +159,11 @@ func TestSharedFilterbarLayoutRejectsInvalidSettings(t *testing.T) {
 	}
 }
 
-func TestSharedFilterbarOrderEditPreservesCollapseDefaultsAndPolicy(t *testing.T) {
+func TestSharedFilterbarOrderEditPreservesPolicyAndDropsLegacyCollapse(t *testing.T) {
 	f := &filterbarPreferenceFixture{configJSON: `{"section_order":["style"],"section_collapsed":{"filters":true,"style":false},"allow_own_order":true}`}
 	db := sql.OpenDB(f)
 	defer db.Close()
-	for _, body := range []string{`{"section_order":["views","style"]}`, `{"section_collapsed":{"style":null}}`} {
+	for _, body := range []string{`{"section_order":["views","style"]}`} {
 		request := queryfixture.Request(t, "POST", "/api/filterbar-section-layout/save", body, 42, "user")
 		lazy := dbutils.NewLazyTx(db)
 		response := httptest.NewRecorder()
@@ -175,10 +175,14 @@ func TestSharedFilterbarOrderEditPreservesCollapseDefaultsAndPolicy(t *testing.T
 	}
 	var got filterbarSectionLayoutConfig
 	json.Unmarshal([]byte(f.configJSON), &got)
-	if !got.AllowOwnOrder || !got.SectionCollapsed["filters"] || got.SectionOrder[0] != "views" {
+	if !got.AllowOwnOrder || got.SectionOrder[0] != "views" {
 		t.Fatalf("unrelated defaults overwritten: %s", f.configJSON)
 	}
-	if _, found := got.SectionCollapsed["style"]; found {
-		t.Fatal("explicit null must restore an absent collapse default")
+	var raw map[string]json.RawMessage
+	if err := json.Unmarshal([]byte(f.configJSON), &raw); err != nil {
+		t.Fatal(err)
+	}
+	if _, found := raw["section_collapsed"]; found {
+		t.Fatal("ordering writer retained an obsolete shared collapse owner")
 	}
 }

@@ -6,7 +6,7 @@
 
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 import { renderFrontPage } from '../front_page/front_page_printer.js';
-import { getSessionGeneration, invalidateSessionGeneration } from './session_generation_store.js';
+import { getSessionGeneration, invalidateSessionGeneration, getVerifiedSessionIdentity, revalidateSessionIdentity } from './session_generation_store.js';
 import { postPreAuthJson } from './pre_auth_request_sender.js';
 import { handleAuthBroadcastEvent } from './auth_broadcast_sync.js';
 
@@ -80,4 +80,32 @@ test.each([true, false])('mandatory remote invalidation clears Home before optio
     }
     await loginSync;
     expect(mocks.bootstrap).toHaveBeenCalledTimes(enabled ? 1 : 0);
+});
+
+test('a cold private preference verifies identity and shares the pending request', async () => {
+    expect(getVerifiedSessionIdentity()).toBeNull();
+    mocks.request.mockImplementation(async route => route === 'fetchAuthModes'
+        ? { needs_button: 'logout' } : { user_id: 42 });
+    const first = revalidateSessionIdentity({ requireIdentity: true });
+    expect(revalidateSessionIdentity({ requireIdentity: true })).toBe(first);
+    await first;
+    expect(getVerifiedSessionIdentity()).toBe(42);
+    expect(mocks.request.mock.calls.map(([route]) => route)).toEqual(['fetchAuthModes', 'fetchUserProfile']);
+    await revalidateSessionIdentity({ requireIdentity: true });
+    expect(mocks.request).toHaveBeenCalledTimes(2);
+});
+
+test('invalid or cancelled verification never exposes a private preference identity', async () => {
+    mocks.request.mockResolvedValue({ needs_button: 'logout' });
+    await expect(revalidateSessionIdentity({ requireIdentity: true })).rejects.toThrow('session_unverified');
+    expect(getVerifiedSessionIdentity()).toBeNull();
+    let finish;
+    mocks.request.mockImplementation(async route => route === 'fetchAuthModes'
+        ? { needs_button: 'logout' } : new Promise(resolve => { finish = resolve; }));
+    const pending = revalidateSessionIdentity({ requireIdentity: true });
+    await vi.waitFor(() => expect(finish).toBeTypeOf('function'));
+    invalidateSessionGeneration({ reason: 'logout' });
+    finish({ user_id: 42 });
+    await expect(pending).rejects.toThrow('Session changed');
+    expect(getVerifiedSessionIdentity()).toBeNull();
 });

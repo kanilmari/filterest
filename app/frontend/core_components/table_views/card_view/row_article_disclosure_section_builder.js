@@ -23,10 +23,11 @@ export function buildRowArticleDisclosureSection({
     titleText,
     iconPath = "",
     contentElement,
-    startOpen = true,
+    startOpen = false,
     sectionClassNames = [],
+    blockKey = "",
 }) {
-    return createAnimatedDisclosureSection({
+    const section = createAnimatedDisclosureSection({
         titleLangKey,
         titleText,
         iconPath,
@@ -39,4 +40,6 @@ export function buildRowArticleDisclosureSection({
         headerClassNames: "row_article_disclosure_header",
         contentClassNames: "row_article_disclosure_content",
     });
+    if (blockKey) section.dataset.articleDisclosureKey = blockKey;
+    return section;
 }

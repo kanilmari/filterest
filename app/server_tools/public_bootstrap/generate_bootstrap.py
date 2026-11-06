@@ -174,6 +174,7 @@ release_data_migrations = (
     "20261015000006_backfill_translation_object_sources.sql",
     "20261015000009_add_card_image_usage_presentation.sql",
     "20261015000012_materialize_article_bundles.sql",
+    "20261106000100_move_disclosure_defaults_to_appearance.sql",
 )
 # The record of each database release is not run by the bootstrap: the acceptance
 # block below writes the version row of the version this bootstrap is built for.

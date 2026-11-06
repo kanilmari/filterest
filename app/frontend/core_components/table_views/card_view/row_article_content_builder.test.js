@@ -91,6 +91,29 @@ describe('row_article_content_builder', () => {
         expect(detailBuilds).toHaveLength(group === 'revoked' ? 0 : 1);
     });
 
+    test.each(['article_view', 'image_first_view', 'image_first_page_view'])('%s keeps main content outside closed details', async presentationKey => {
+        createRowArticleKeyValueElementMock.mockImplementation((_label, value, _column, _key, className) => {
+            const element = document.createElement('div'); element.className = className; element.textContent = value; return element;
+        });
+        const row = { title: 'Visible heading', description: 'Visible body', image: '/photo.jpg', note: 'A detail' };
+        const roles = { title: 'header', description: 'description', image: 'image', note: 'details' };
+        const metadata = Object.fromEntries(Object.entries(roles).map(([key, card_element]) => [key, { card_element }]));
+        const { rowArticleContentElement: content } = await buildRowArticleContent(
+            row, 'events', metadata, Object.keys(row), 'seed', 'A', true, null, { presentationKey },
+        );
+        const details = content.querySelector('.row_article_details_section');
+        expect(details.querySelector('button').getAttribute('aria-expanded')).toBe('false');
+        expect(content.textContent).toContain('Visible heading');
+        const body = content.querySelector('.big_card_description_container');
+        const image = content.querySelector('.big_card_image');
+        expect(body.textContent).toBe('Visible body');
+        expect(image.querySelector('img').getAttribute('src')).toBe('/photo.jpg');
+        for (const element of [body, image]) {
+            expect(element.closest('.animated-disclosure-content-shell')).toBeNull();
+            expect(element.closest('[hidden]')).toBeNull();
+        }
+    });
+
     test.each(['default', 'revoked', 'fetch failure', 'malformed', 'non-UI'])('real anonymous bootstrap: %s', async (state) => {
         sessionStorage.clear(); // No synthetic permissions: run the application's guest bootstrap.
         createRowArticleKeyValueElementMock.mockImplementation((_label, value) => {
@@ -232,7 +255,7 @@ describe('row_article_content_builder', () => {
         );
     });
 
-    test('starts Details open and toggles its content without removing field labels or values', async () => {
+    test('starts Details closed and toggles its content without removing field labels or values', async () => {
         createRowArticleKeyValueElementMock.mockImplementation((label, value, column, _lang, _class, showKey) => {
             const field = document.createElement('div');
             field.dataset.column = column;
@@ -258,20 +281,20 @@ describe('row_article_content_builder', () => {
         const fields = [...details.querySelectorAll('[data-column]')];
         expect(button.querySelector('[data-lang-key="row_article_section_details"]').textContent).toBe('Details');
         expect(button.getAttribute('aria-controls')).toBe(shell.id);
-        expect(button.getAttribute('aria-expanded')).toBe('true');
-        expect(shell.hidden).toBe(false);
+        expect(button.getAttribute('aria-expanded')).toBe('false');
+        expect(shell.hidden).toBe(true);
         expect(details.textContent).toBe('id: 7location: Helsinki');
         expect(fields).toHaveLength(2);
 
         button.click();
-        expect(button.getAttribute('aria-expanded')).toBe('false');
-        await vi.waitFor(() => expect(shell.hidden).toBe(true));
+        expect(button.getAttribute('aria-expanded')).toBe('true');
+        await vi.waitFor(() => expect(shell.hidden).toBe(false));
         expect(button.hidden).toBe(false);
         expect([...details.querySelectorAll('[data-column]')]).toEqual(fields);
 
         button.click();
-        expect(button.getAttribute('aria-expanded')).toBe('true');
-        await vi.waitFor(() => expect(shell.hidden).toBe(false));
+        expect(button.getAttribute('aria-expanded')).toBe('false');
+        await vi.waitFor(() => expect(shell.hidden).toBe(true));
         expect(details.textContent).toBe('id: 7location: Helsinki');
         expect([...details.querySelectorAll('[data-column]')]).toEqual(fields);
         section.destroy();

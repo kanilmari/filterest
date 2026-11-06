@@ -118,7 +118,8 @@ def test_article_bundle_release_bootstrap_and_completion_contract():
 def test_article_bundle_bootstrap_drains_own_events_before_registry_ddl():
     """Regeneration must retain the DML/DDL boundary lost in the rebase."""
     seed = (APP / "server_tools/public_bootstrap/seed_data.sql").read_text()
-    for name in ("20261005000050_require_registry_reference_key.sql", BUNDLE_FILES[2]):
+    for name in ("20261005000050_require_registry_reference_key.sql", BUNDLE_FILES[2],
+                 "20261106000100_move_disclosure_defaults_to_appearance.sql"):
         migration = (APP / "server_tools/migrations" / name).read_text()
         preceding = seed[:seed.index(migration)]
         boundary = preceding[preceding.rindex("DO $article_bundle_seed_boundary$"):]
@@ -129,10 +130,26 @@ def test_article_bundle_bootstrap_drains_own_events_before_registry_ddl():
         assert "conname = 'article_bundle_invariant'" in boundary
     assert "SET CONSTRAINTS ALL" not in seed
     data = (APP / "server_tools/migrations" / BUNDLE_FILES[2]).read_text()
-    suffix = seed[seed.index(data) + len(data):]
+    disclosure = (APP / "server_tools/migrations/20261106000100_move_disclosure_defaults_to_appearance.sql").read_text()
+    materialized = seed.index(data) + len(data)
+    cutover = seed.index(disclosure)
+    assert materialized < cutover
+    # The later disclosure cutover has its own registry DML/DDL boundary. Keep
+    # checking both stages rather than treating later migrations as release-only.
+    gap = seed[materialized:cutover]
+    # This generated boundary was validated above, including its narrow trigger
+    # selection and restored deferral. Do not permit any additional boundary.
+    gap, boundaries = re.subn(r"DO \$article_bundle_seed_boundary\$.*?END \$article_bundle_seed_boundary\$;", "", gap, flags=re.S)
+    assert boundaries == 1
+    assert "SET CONSTRAINTS" not in gap
+    drain = disclosure.index("SET CONSTRAINTS public.article_bundle_invariant IMMEDIATE;")
+    drop = disclosure.index("ALTER TABLE public.system_db_tables DROP COLUMN article_section_initial_open;")
+    restore = disclosure.index("SET CONSTRAINTS public.article_bundle_invariant DEFERRED;")
+    assert disclosure.index("DELETE FROM public.system_column_details") < drain < drop < restore
+    suffix = gap + seed[cutover + len(disclosure):]
     assert "SET CONSTRAINTS" not in suffix
-    # The rest of the whole-seed transaction writes only release evidence;
-    # it must not queue new article events after materialization's marker.
+    # After each reviewed boundary only release evidence may touch the seed;
+    # unrelated registry writes must not bypass the article invariant.
     covered = "system_(?:column_field_sets|column_field_set_members|view_field_set_assignments|db_tables|column_details|table_views)"
     assert not re.search(rf"\b(?:INSERT\s+INTO|UPDATE|DELETE\s+FROM|TRUNCATE(?:\s+TABLE)?)\s+(?:public\.)?{covered}\b", suffix, re.I)
 

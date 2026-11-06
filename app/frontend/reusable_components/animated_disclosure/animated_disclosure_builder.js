@@ -175,7 +175,15 @@ export function createAnimatedDisclosureSection(options = {}) {
     }
 
     header.addEventListener("click", () => {
-        void setExpanded(!heightController.isExpanded());
+        const expanded = !heightController.isExpanded();
+        void setExpanded(expanded);
+        // A user's activation is synchronous and distinct from animation completion.
+        // Programmatic defaults, temporary reveals and remounts never publish it.
+        // Keyboard/assistive activation uses this same button, without isTrusted gates.
+        section.dispatchEvent(new CustomEvent("animated-disclosure-user-toggle", {
+            bubbles: true,
+            detail: { expanded, section },
+        }));
     });
 
     section.expand = (animationOptions = {}) => setExpanded(true, animationOptions);

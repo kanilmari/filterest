@@ -33,7 +33,7 @@ describe('article presentation contract drift', () => {
     });
     test('owns supported blocks and every approved opener default as immutable data', () => {
         expect(LEGACY_ARTICLE_BLOCKS).toEqual({ classic: contract.blocks, image_first: ['details'] });
-        expect(contract.absent_block_initial_open).toBe(true);
+        expect(contract.absent_block_initial_open).toBe(false);
         expect(Object.keys(contract.opener_defaults).sort()).toEqual([
             'article-image', 'calendar-event', 'card-body', 'card-image', 'card-summary', 'card-title',
             'field-link', 'free-layout-body', 'free-layout-image', 'gallery-thumbnail', 'home-button',

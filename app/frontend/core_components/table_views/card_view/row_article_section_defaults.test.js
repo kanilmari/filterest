@@ -20,7 +20,7 @@ test("loads classic effective booleans once per call and never caches a later op
         initial_open: { details: false, images: false, attachments: true, unrelated: false },
     }).mockResolvedValueOnce({ dataset: "events", presentation_key: "classic", initial_open: { details: true } });
     const first = await loadRowArticleSectionDefaults("events", "classic");
-    expect(first).toEqual({ details: false, images: false, attachments: true, related_rows: true, task_progress: true });
+    expect(first).toEqual({ details: false, images: false, attachments: true, related_rows: false, task_progress: false });
     expect(Object.isFrozen(first)).toBe(true);
     expect((await loadRowArticleSectionDefaults("events", "classic")).details).toBe(true);
     expect(getDefaults.mock.calls).toEqual([["events", "classic"], ["events", "classic"]]);
@@ -36,14 +36,14 @@ test.each([
     { dataset: "other", presentation_key: "classic", initial_open: { details: false } },
     { dataset: "events", presentation_key: "image_first", initial_open: { details: false } },
     { dataset: "events", presentation_key: "classic", initial_open: { details: "false" } },
-])("mismatched or malformed settings retain existing open defaults", async response => {
+])("mismatched or malformed settings retain closed defaults", async response => {
     getDefaults.mockResolvedValue(response);
-    expect((await loadRowArticleSectionDefaults("events", "classic")).details).toBe(true);
+    expect((await loadRowArticleSectionDefaults("events", "classic")).details).toBe(false);
 });
 
-test("a settings read failure keeps content available with the established default", async () => {
+test("a settings read failure leaves disclosures closed and their headers available", async () => {
     getDefaults.mockRejectedValue(new Error("403"));
-    expect(await loadRowArticleSectionDefaults("events", "image_first")).toEqual({ details: true });
+    expect(await loadRowArticleSectionDefaults("events", "image_first")).toEqual({ details: false });
 });
 
 test("current user disclosure state wins over either initial boolean", () => {
@@ -52,7 +52,7 @@ test("current user disclosure state wins over either initial boolean", () => {
     expect(resolveRowArticleSectionStartOpen({ images: false }, "images", section)).toBe(true);
     section.dataset.disclosureState = "collapsed";
     expect(resolveRowArticleSectionStartOpen({ images: true }, "images", section)).toBe(false);
-    expect(resolveRowArticleSectionStartOpen({}, "images")).toBe(true);
+    expect(resolveRowArticleSectionStartOpen({}, "images")).toBe(false);
 });
 
 

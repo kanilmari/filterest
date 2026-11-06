@@ -1,6 +1,6 @@
 // article_section_defaults_test.go
 // Verifies typed article-default patches, authorization and presentation isolation.
-// Connects actual migration06 and handler requests to a disposable PostgreSQL fixture.
+// Connects the appearance owner and handler requests to a disposable PostgreSQL fixture.
 // Prevents stale concurrent saves and reset from overwriting unrelated settings.
 package system_table_tools
 
@@ -10,15 +10,15 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
-	"os"
-	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
 	"time"
 
 	backend "easelect/backend/core_components"
+	store "easelect/backend/core_components/dataset_appearance_store"
 	"easelect/backend/core_components/dbutils"
+	appearance "easelect/frontend/shared/dataset_appearance"
 )
 
 func TestArticleSectionPatchRejectsAmbiguousOrInvalidInput(t *testing.T) {
@@ -48,33 +48,38 @@ func TestArticleSectionPatchRejectsAmbiguousOrInvalidInput(t *testing.T) {
 	}
 }
 
-func TestArticleSectionDefaultsMissingKeysOpenAndViewsStayIndependent(t *testing.T) {
-	stored, err := decodeStoredArticleSectionDefaults([]byte(`{"classic":{"details":false,"images":true},"image_first":{"details":true}}`))
+func TestArticleSectionDefaultsInheritAndViewsStayIndependent(t *testing.T) {
+	site := appearance.DefaultConfig()
+	site.Shared.ArticleViewDetailsInitialOpen = true
+	site.Shared.ArticleViewImagesInitialOpen = true
+	overrides := map[string]any{"shared.article_view_details_initial_open": false}
+	effective, err := store.ResolveDatasetAppearance(site, store.DefaultDatasetAppearanceSnapshot().TabValues, overrides, false)
 	if err != nil {
 		t.Fatal(err)
 	}
-	classic := articleSectionDefaultsResponse("fixture", "classic", stored, true)
-	if classic.InitialOpen["details"] || !classic.InitialOpen["attachments"] || !classic.InitialOpen["task_progress"] || len(classic.Overrides) != 2 {
-		t.Fatalf("classic %#v", classic)
+	snapshot := store.AppearanceResponse{Effective: effective, Overrides: overrides}
+	classic := articleDefaultsFromAppearance("fixture", "classic", snapshot, true)
+	if classic.InitialOpen["details"] || !classic.InitialOpen["images"] || classic.InitialOpen["attachments"] || len(classic.Overrides) != 1 {
+		t.Fatalf("explicit false or site inheritance lost: %#v", classic)
 	}
-	image := articleSectionDefaultsResponse("fixture", "image_first", stored, false)
-	if !image.InitialOpen["details"] || len(image.InitialOpen) != 1 || image.CanEdit {
-		t.Fatalf("image_first %#v", image)
-	}
-	missing := articleSectionDefaultsResponse("other", "classic", map[string]map[string]bool{}, false)
-	if len(missing.Overrides) != 0 || len(missing.InitialOpen) != 5 {
-		t.Fatalf("missing %#v", missing)
-	}
-	for _, value := range missing.InitialOpen {
-		if !value {
-			t.Fatal("missing key must open")
+	for _, presentation := range []string{"image_first", "image_first_page_view"} {
+		image := articleDefaultsFromAppearance("fixture", presentation, snapshot, false)
+		if image.InitialOpen["details"] || len(image.InitialOpen) != 1 || len(image.Overrides) != 0 || image.CanEdit {
+			t.Fatal(image)
 		}
 	}
-	for _, raw := range []string{"null", "[]", `{"classic":null}`, `{"classic":{"details":null}}`, `{"image_first":{"images":true}}`, `{"other":{}}`} {
-		if _, err := decodeStoredArticleSectionDefaults([]byte(raw)); err == nil {
-			t.Errorf("accepted invalid storage %s", raw)
-		}
+	baseline := articleBlocks(articleBlocksFromAppearance(snapshot))
+	if got := changedArticleBlocks(baseline, baseline); len(got.Set) != 0 {
+		t.Fatal("unchanged editor pinned inherited defaults", got)
 	}
+	edited := articleBlocks{"article_view": {"details": true, "images": true, "attachments": false, "related_rows": false, "task_progress": false}}
+	patch := changedArticleBlocks(edited, baseline)
+	if len(patch.Set) != 1 || patch.Set["shared.article_view_details_initial_open"] != true {
+		t.Fatal("editor changed unrelated defaults", patch)
+	}
+}
+
+func TestArticleSectionPatchAcceptsExplicitBooleansAndReset(t *testing.T) {
 	for _, body := range []string{
 		`{"dataset":"fixture","presentation_key":"classic","initial_open":{"details":false,"images":true}}`,
 		`{"dataset":"fixture","presentation_key":"image_first","initial_open":{"details":false}}`,
@@ -108,13 +113,8 @@ func articleSectionFixture(t *testing.T) *sql.DB {
 	if err != nil {
 		t.Fatal(err)
 	}
-	migration, err := os.ReadFile(filepath.Join("..", "..", "..", "server_tools", "migrations", "20260914000006_add_article_section_initial_open.sql"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err = db.Exec(string(migration)); err != nil {
-		t.Fatalf("actual migration06: %v", err)
-	}
+	frontPageExec(t, db, `CREATE TABLE system_data_repair_records(migration text,action text,detail jsonb)`)
+	installDisclosureAppearanceFixture(t, db, false)
 	previous := backend.Db
 	backend.Db = db
 	t.Cleanup(func() { backend.Db = previous })
@@ -171,7 +171,7 @@ func TestArticleSectionDefaultsAuthorizationAndPersistencePostgres(t *testing.T)
 	}
 	for _, user := range []int{1, 2, 42} {
 		initial := get("fixture", "classic", user, http.StatusOK)
-		if initial.CanEdit != (user == 42) || len(initial.Overrides) != 0 || !initial.InitialOpen["details"] {
+		if initial.CanEdit != (user == 42) || len(initial.Overrides) != 0 || initial.InitialOpen["details"] {
 			t.Fatalf("initial user=%d %#v", user, initial)
 		}
 	}
@@ -189,22 +189,22 @@ func TestArticleSectionDefaultsAuthorizationAndPersistencePostgres(t *testing.T)
 			t.Fatalf("nonadmin write user%d status=%d", user, status)
 		}
 	}
-	save("classic", `"initial_open":{"details":false,"images":false}`, true)
-	save("image_first", `"initial_open":{"details":false}`, true)
-	save("classic", `"initial_open":{"attachments":false}`, true)
+	save("classic", `"initial_open":{"details":true,"images":true}`, true)
+	save("image_first", `"initial_open":{"details":true}`, true)
+	save("classic", `"initial_open":{"attachments":true}`, true)
 	current := get("fixture", "classic", 1, http.StatusOK)
-	if current.InitialOpen["details"] || current.InitialOpen["images"] || current.InitialOpen["attachments"] || !current.InitialOpen["related_rows"] {
+	if !current.InitialOpen["details"] || !current.InitialOpen["images"] || !current.InitialOpen["attachments"] || current.InitialOpen["related_rows"] {
 		t.Fatalf("patch lost keys %#v", current)
 	}
 	save("classic", `"reset_to_defaults":true`, false)
-	if get("fixture", "classic", 42, http.StatusOK).InitialOpen["details"] {
+	if !get("fixture", "classic", 42, http.StatusOK).InitialOpen["details"] {
 		t.Fatal("rollback reset persisted")
 	}
 	reset := save("classic", `"reset_to_defaults":true`, true)
-	if len(reset.Overrides) != 5 || !reset.InitialOpen["details"] {
+	if len(reset.Overrides) != 0 || reset.InitialOpen["details"] {
 		t.Fatalf("reset %#v", reset)
 	}
-	if get("fixture", "image_first", 1, http.StatusOK).InitialOpen["details"] {
+	if !get("fixture", "image_first", 1, http.StatusOK).InitialOpen["details"] {
 		t.Fatal("reset crossed presentation")
 	}
 	other := get("other", "classic", 42, http.StatusOK)
@@ -218,7 +218,7 @@ func TestArticleSectionDefaultsAuthorizationAndPersistencePostgres(t *testing.T)
 	if err := db.QueryRow(`SELECT metadata='{"show_key_on_card":false,"card_element":"details"}'::jsonb FROM system_column_details WHERE column_uid=1`).Scan(&unchanged); err != nil || !unchanged {
 		t.Fatalf("column metadata changed: %v", err)
 	}
-	if _, err := db.Exec(`ALTER TABLE system_db_tables DROP COLUMN article_section_initial_open`); err != nil {
+	if _, err := db.Exec(`ALTER TABLE system_dataset_appearance DROP COLUMN overrides`); err != nil {
 		t.Fatal(err)
 	}
 	get("fixture", "classic", 42, http.StatusConflict)
@@ -231,7 +231,7 @@ func TestArticleSectionDefaultsConcurrentPatchesPostgres(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer first.Rollback()
-	_, err = persistArticleSectionDefaults(first, 1, articleSectionDefaultsPatch{Dataset: "fixture", PresentationKey: "classic", InitialOpen: map[string]bool{"details": false}})
+	_, err = persistArticleSectionDefaults(first, 1, articleSectionDefaultsPatch{Dataset: "fixture", PresentationKey: "classic", InitialOpen: map[string]bool{"details": true}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -247,7 +247,7 @@ func TestArticleSectionDefaultsConcurrentPatchesPostgres(t *testing.T) {
 	}
 	finished := make(chan error, 1)
 	go func() {
-		_, err := persistArticleSectionDefaults(second, 1, articleSectionDefaultsPatch{Dataset: "fixture", PresentationKey: "classic", InitialOpen: map[string]bool{"images": false}})
+		_, err := persistArticleSectionDefaults(second, 1, articleSectionDefaultsPatch{Dataset: "fixture", PresentationKey: "classic", InitialOpen: map[string]bool{"images": true}})
 		finished <- err
 	}()
 	waiting := false
@@ -273,12 +273,13 @@ func TestArticleSectionDefaultsConcurrentPatchesPostgres(t *testing.T) {
 	if err := second.Commit(); err != nil {
 		t.Fatal(err)
 	}
-	stored, err := readArticleSectionDefaults(db, 1, false)
+	snapshot, err := readArticleSectionAppearance(db, 1)
 	if err != nil {
 		t.Fatal(err)
 	}
-	// Batch 168 stores canonical article_view with all five sections explicit (K386); both patches must survive.
-	want := map[string]bool{"attachments": true, "details": false, "images": false, "related_rows": true, "task_progress": true}
+	// Concurrent changes use the same appearance lock and retain all other inherited values.
+	stored := articleBlocksFromAppearance(snapshot)
+	want := map[string]bool{"attachments": false, "details": true, "images": true, "related_rows": false, "task_progress": false}
 	if !reflect.DeepEqual(stored["article_view"], want) {
 		t.Fatalf("lost concurrent patch: %#v", stored)
 	}

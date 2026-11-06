@@ -85,8 +85,11 @@ func articleBundleAssertDeferredCommit(t *testing.T, db *sql.DB) {
 		t.Fatal(err)
 	}
 	defer tx.Rollback()
-	if _, err := tx.Exec(`UPDATE system_db_tables SET article_section_initial_open='{}'
-	 WHERE table_uid=(SELECT min(table_uid) FROM system_db_tables)`); err != nil {
+	if _, err := tx.Exec(`SET LOCAL filterest.article_bundle_mutation='on';
+	 UPDATE system_view_field_set_assignments SET group_priority=group_priority+1
+	 WHERE table_uid=(SELECT min(table_uid) FROM system_db_tables)
+	 AND user_id IS NULL AND group_id IS NULL
+	 AND view_id=(SELECT id FROM system_table_views WHERE view_key='article_view')`); err != nil {
 		t.Fatal("invariant must allow intermediate writes until commit", err)
 	}
 	if err := tx.Commit(); err == nil || !strings.Contains(err.Error(), "article bundle invariant") {
@@ -236,6 +239,7 @@ func TestArticleBundleFreshBootstrapEquivalencePostgres(t *testing.T) {
 				articleBundleTransaction(t, db, articleBundleSQL(t, name))
 			}
 			articleBundleTransaction(t, db, data)
+			articleBundleTransaction(t, db, articleBundleSQL(t, disclosureAppearanceMigration))
 		}
 		articleBundleAssertDeferredCommit(t, db)
 		if fresh {

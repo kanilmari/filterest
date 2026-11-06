@@ -227,6 +227,21 @@ export interface DatasetCoverSharedValues {
     active_tab_glow_width: number;
     active_tab_glow_blur: number;
     filterbar_content_top_space: number;
+    filterbar_filters_initial_open: boolean;
+    filterbar_search_overview_initial_open: boolean;
+    filterbar_search_controls_initial_open: boolean;
+    filterbar_tools_initial_open: boolean;
+    filterbar_views_initial_open: boolean;
+    filterbar_field_sets_initial_open: boolean;
+    filterbar_style_initial_open: boolean;
+    filterbar_chat_initial_open: boolean;
+    article_view_details_initial_open: boolean;
+    article_view_images_initial_open: boolean;
+    article_view_attachments_initial_open: boolean;
+    article_view_related_rows_initial_open: boolean;
+    article_view_task_progress_initial_open: boolean;
+    image_first_view_details_initial_open: boolean;
+    image_first_page_view_details_initial_open: boolean;
     brand_color: string;
 }
 

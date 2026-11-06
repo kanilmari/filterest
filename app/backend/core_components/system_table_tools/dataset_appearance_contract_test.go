@@ -7,6 +7,7 @@ package system_table_tools
 import (
 	"encoding/json"
 	"os"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -34,8 +35,31 @@ func TestSiteDatasetAppearanceSharedContract(t *testing.T) {
 		t.Fatal(err)
 	}
 	defaults, err := json.Marshal(appearance.DefaultConfig())
-	if err != nil || string(defaults) != contract.BaselineGoJSON {
-		t.Fatal("default serialized appearance changed", err)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var current, legacy map[string]map[string]any
+	if err := json.Unmarshal(defaults, &current); err != nil {
+		t.Fatal(err)
+	}
+	if err := json.Unmarshal([]byte(contract.BaselineGoJSON), &legacy); err != nil {
+		t.Fatal(err)
+	}
+	// Keep the version-one fixture intact as the migration oracle. The only
+	// new serialized leaves are the fifteen closed disclosure defaults.
+	additional := 0
+	for key, value := range current["shared"] {
+		if _, existed := legacy["shared"][key]; existed {
+			continue
+		}
+		if !strings.HasSuffix(key, "_initial_open") || value != false {
+			t.Fatalf("unexpected new default %s=%v", key, value)
+		}
+		additional++
+		delete(current["shared"], key)
+	}
+	if additional != 15 || !reflect.DeepEqual(current, legacy) {
+		t.Fatalf("legacy defaults changed or disclosure defaults missing: added=%d current=%v", additional, current)
 	}
 	for _, example := range contract.Cases {
 		t.Run(example.Name, func(t *testing.T) {

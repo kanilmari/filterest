@@ -1,5 +1,5 @@
 // dataset_appearance_resolver_test.go
-// Proves complete owned tabs, nine sparse overrides and strict corruption checks.
+// Proves complete owned tabs, all sparse overrides and strict corruption checks.
 // Connects definition inventories with stored snapshots and resolved projections.
 package system_table_tools
 
@@ -28,7 +28,7 @@ func TestDatasetAppearanceAllCanonicalLeavesAndPresence(t *testing.T) {
 	}
 	delete(overrides, "shared.card_detail_columns")
 	result, err = ResolveDatasetAppearance(site, tab, overrides, false)
-	if err != nil || result.Shared.CardDetailColumns != 4 || len(tab) != 28 || len(overrides) != 8 {
+	if err != nil || result.Shared.CardDetailColumns != 4 || len(tab) != 28 || len(overrides) != len(rules.PathsForPlace(appearance.SiteDefault))-1 {
 		t.Fatal(result, err)
 	}
 	for _, path := range rules.CanonicalPaths() {

@@ -139,7 +139,7 @@ func TestSharedFilterbarRouteAuthorizationPostgres(t *testing.T) {
 		`{"section_collapsed":{"filters":true,"tools":false}}`,
 		`{"section_collapsed":{"filters":null}}`,
 		`{"allow_own_order":true}`, `{"allow_own_order":false}`,
-		`{"section_order":["views"],"section_collapsed":{"style":true},"allow_own_order":true}`,
+		`{"section_order":["views"],"allow_own_order":true}`,
 	}
 	for _, userID := range []int{1, 42, 74} {
 		for _, grant := range []bool{false, true} {
@@ -157,6 +157,15 @@ func TestSharedFilterbarRouteAuthorizationPostgres(t *testing.T) {
 						}
 						if after := sec4LayoutSnapshot(t, db); after != before {
 							t.Fatal("refusal partially changed shared settings or account preferences")
+						}
+						return
+					}
+					if kind == 1 || kind == 2 {
+						if !called || response.Code != 400 {
+							t.Fatalf("legacy collapse write accepted: %d %s", response.Code, response.Body)
+						}
+						if after := sec4LayoutSnapshot(t, db); after != before {
+							t.Fatal("rejected collapse write changed settings")
 						}
 						return
 					}
@@ -181,14 +190,6 @@ func TestSharedFilterbarRouteAuthorizationPostgres(t *testing.T) {
 						if persisted.SectionOrder[0] != "style" {
 							t.Fatal("order not saved")
 						}
-					case 1:
-						if !persisted.SectionCollapsed["filters"] || persisted.SectionCollapsed["tools"] {
-							t.Fatal("collapse defaults not saved")
-						}
-					case 2:
-						if _, exists := persisted.SectionCollapsed["filters"]; exists {
-							t.Fatal("collapse default not removed")
-						}
 					case 3:
 						if !persisted.AllowOwnOrder {
 							t.Fatal("site policy not enabled")
@@ -198,7 +199,7 @@ func TestSharedFilterbarRouteAuthorizationPostgres(t *testing.T) {
 							t.Fatal("site policy not disabled")
 						}
 					case 5:
-						if persisted.SectionOrder[0] != "views" || !persisted.SectionCollapsed["style"] || !persisted.AllowOwnOrder {
+						if persisted.SectionOrder[0] != "views" || !persisted.AllowOwnOrder {
 							t.Fatal("combined shared edit not fully saved")
 						}
 					}
