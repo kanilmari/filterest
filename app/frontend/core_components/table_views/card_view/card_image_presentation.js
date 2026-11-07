@@ -1,8 +1,9 @@
 // card_image_presentation.js
-// Applies the site's three presentation modes only to raster card media.
+// Applies card presentation settings and resolves stored photo geometry for cards and articles.
 // Connects the shared appearance setting with existing card image wrappers.
-// Compact results share this path; other article slots, SVG logos and avatars retain their own renderers.
+// Article photos retain their intrinsic shape; logos, avatars and image-first keep their own renderers.
 
+import { CARD_IMAGE_RENDER_SLOTS } from './card_image_render_options.js';
 import { addCardResourceListener } from './card_resource_lifecycle.js';
 import { APPEARANCE_SCOPE_SELECTOR, readAppearanceAttribute, appearanceScopeElements } from '../../../reusable_components/appearance_scope_reader.js';
 import { projectAppearanceAttribute, projectAppearanceStyle } from '../../../reusable_components/appearance_projection_writer.js';
@@ -12,11 +13,14 @@ export { CARD_IMAGE_PRESENTATIONS };
 
 const MIN_CARD_PHOTO_FRAME_RATIO = 4 / 5;
 
-/** Resolve a photo-shaped frame no taller than 1.25 times its width. */
-export function resolveCardPhotoFrameRatio(naturalWidth, naturalHeight) {
-    if (!Number.isFinite(naturalWidth) || naturalWidth <= 0
-        || !Number.isFinite(naturalHeight) || naturalHeight <= 0) return null;
-    return Math.max(MIN_CARD_PHOTO_FRAME_RATIO, naturalWidth / naturalHeight);
+function photoRatio(width, height, minimum = 0) {
+    if (!Number.isFinite(width) || width <= 0 || !Number.isFinite(height) || height <= 0) return null;
+    return Math.max(minimum, width / height);
+}
+
+/** Only cards limit a tall photo's frame to 1.25 times its width. */
+export function resolveCardPhotoFrameRatio(width, height) {
+    return photoRatio(width, height, MIN_CARD_PHOTO_FRAME_RATIO);
 }
 
 // Resolution-folder swaps retain the same stored file identity.
@@ -24,19 +28,46 @@ function photoFileName(image) {
     return (image.currentSrc || image.src).split(/[?#]/, 1)[0].split('/').pop();
 }
 
-/** Read a matching stored size once; malformed or stale metadata keeps the square frame. */
-export function resolveStoredCardPhotoFrameRatio(image, imageMetadata) {
+/** Dimensions belong to the displayed file, including after a resolution-folder swap. */
+function readStoredPhotoRatio(image, imageMetadata, minimum = 0) {
     try {
         const metadata = typeof imageMetadata === 'string' ? JSON.parse(imageMetadata) : imageMetadata;
         if (!metadata || typeof metadata !== 'object' || Array.isArray(metadata)) return null;
         const size = metadata.displayed_image_size;
         if (!size || typeof size !== 'object' || Array.isArray(size)
             || typeof size.file !== 'string' || !size.file || size.file !== photoFileName(image)) return null;
-        const ratio = resolveCardPhotoFrameRatio(size.width_px, size.height_px);
-        return Number.isFinite(ratio) ? ratio : null;
+        const ratio = photoRatio(size.width_px, size.height_px, minimum);
+        return Number.isFinite(ratio) && ratio > 0 ? ratio : null;
     } catch {
         return null;
     }
+}
+
+export function resolveStoredCardPhotoFrameRatio(image, imageMetadata) {
+    return readStoredPhotoRatio(image, imageMetadata, MIN_CARD_PHOTO_FRAME_RATIO);
+}
+
+/** Keep the ordinary article photo's real shape. Logos, thumbnails and image-first own their frames. */
+export function prepareInlineArticlePhotoFrame(wrapper, image, imageMetadata) {
+    if (wrapper.dataset.cardImageRenderSlot !== CARD_IMAGE_RENDER_SLOTS.ROW_ARTICLE_INLINE
+        || wrapper.dataset.imagePresentationKind !== 'raster'
+        || wrapper.classList.contains('service_catalog_logo_frame') || image.parentElement !== wrapper) return false;
+
+    wrapper.classList.add('row_article_photo_frame');
+    const property = '--row-article-photo-ratio';
+    const stored = readStoredPhotoRatio(image, imageMetadata);
+    if (stored !== null) {
+        wrapper.style.setProperty(property, String(stored));
+    } else {
+        // Old uploads have no dimensions: allow intrinsic sizing until this image is decoded.
+        const useNaturalSize = () => {
+            const ratio = photoRatio(image.naturalWidth, image.naturalHeight);
+            if (Number.isFinite(ratio) && ratio > 0) wrapper.style.setProperty(property, String(ratio));
+        };
+        if (image.complete && image.naturalWidth) useNaturalSize();
+        else addCardResourceListener(image, 'load', useNaturalSize, { once: true });
+    }
+    return true;
 }
 
 export function normalizeCardImagePresentation(value) {

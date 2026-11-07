@@ -13,7 +13,7 @@ import {
 import { CARD_IMAGE_RENDER_SLOTS } from "./card_image_render_options.js";
 import { isCardStackViewport } from "../../../ui_config.js";
 import { appendImageWithSvgPresentation } from "./svg_image_presentation.js";
-import { prepareCardImagePresentation } from "./card_image_presentation.js";
+import { prepareCardImagePresentation, prepareInlineArticlePhotoFrame } from "./card_image_presentation.js";
 
 const SERVICE_CATALOG_ICON_TYPE_ID = "1";
 const SERVICE_CATALOG_LEGACY_LOGO_PATTERN = /^service_catalog_logos\/([a-z0-9_-]+)\.svg$/i;
@@ -142,11 +142,6 @@ export function createImageElement(
     wrapper.dataset.cardImageRenderSlot = renderSlot;
     if (usesExternalSizing) {
         wrapper.classList.add("record_image_presentation_host--externally-sized");
-    } else if (useLargeSize) {
-        updateCardImageFrame(wrapper);
-    } else {
-        wrapper.style.width = '140px';
-        wrapper.style.height = '140px';
     }
     wrapper.style.position = 'relative';
     wrapper.style.overflow = 'hidden';
@@ -216,6 +211,14 @@ export function createImageElement(
         logoPlan: serviceCatalogLogoPlan,
     });
     wrapper.classList.add('wrapper');
+    if (!usesExternalSizing && !prepareInlineArticlePhotoFrame(wrapper, foregroundImg, imageMetadata)) {
+        if (useLargeSize) {
+            updateCardImageFrame(wrapper);
+        } else {
+            wrapper.style.width = '140px';
+            wrapper.style.height = '140px';
+        }
+    }
     prepareCardImagePresentation(wrapper, foregroundImg, { cardImageOwn, cardImageUse, imageMetadata });
 
     return wrapper;

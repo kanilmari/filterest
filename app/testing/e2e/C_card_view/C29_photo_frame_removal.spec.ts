@@ -106,8 +106,14 @@ async function assertPhoto(page: Page, wrapper: Locator, width: number, label: s
     expect(current.geometry.wrapper.box.width, `${label}: fluid image width at ${width}`)
       .toBeCloseTo(Math.min(current.mediaContentWidth, page.viewportSize()!.height * 0.8 * ratio), 1);
   } else if (layout === 'fluid') {
-    expect(current.geometry.wrapper.box.width, `${label}: full content width at ${width}`)
-      .toBeCloseTo(current.mediaContentWidth, 1);
+    const ratio = await wrapper.locator('img').first().evaluate((image: HTMLImageElement) =>
+      image.naturalWidth / image.naturalHeight);
+    const expectedWidth = Math.min(current.mediaContentWidth, page.viewportSize()!.height * 0.8 * ratio);
+    expect(current.geometry.wrapper.box.width, `${label}: fills available width up to the photo's height limit`)
+      .toBeCloseTo(expectedWidth, 1);
+    expect(current.geometry.wrapper.box.height, `${label}: no filler below the photo at ${width}`)
+      .toBeCloseTo(expectedWidth / ratio, 1);
+    expect(current.geometry.image.box.height).toBeCloseTo(current.geometry.wrapper.box.height, 1);
   }
   const baselineStyle = await addMainPhotoFrame(page);
   try {

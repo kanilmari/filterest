@@ -92,6 +92,19 @@
     object-fit: contain;
 }
 
+/* A legacy photo has no aspect ratio until it loads. Once known, the existing
+   height limit also bounds the width, so neither orientation needs filler. */
+.big_card_image .wrapper.row_article_photo_frame {
+    --row-article-photo-width-limit: calc(80vh * var(--row-article-photo-ratio));
+    width: min(100%, var(--row-article-photo-width-limit, 100%)) !important;
+    aspect-ratio: var(--row-article-photo-ratio, auto);
+    margin-inline: auto;
+}
+
+.big_card_image .row_article_photo_frame > img {
+    display: block;
+}
+
 .big_card_image .wrapper.service_catalog_logo_frame img,
 .big_card_image .wrapper.card_image_contrast_frame img {
     max-height: 80vh;
