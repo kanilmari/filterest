@@ -28,7 +28,7 @@ test('Home top-bar opt-in, phone exclusion and disabled admin toggle', async ({ 
       if (width <= 700) {
         const columns = await parts.locator('.dataset-shared-topbar__inner').evaluate(element =>
           getComputedStyle(element).gridTemplateColumns.split(' ').map(Number.parseFloat));
-        expect(columns[0]).toBeCloseTo(44, 1);
+        expect(columns[0]).toBeCloseTo(52, 1);
       } else {
         // Reconcile the same header in its compact placement, then check Home's own row.
         await parts.locator('.filterbar-inline-hero').evaluate(hero => {
