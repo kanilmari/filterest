@@ -9,11 +9,11 @@ Reviewed upstream legal and attribution document bytes are retained under
 
 ## Candidate
 
-- Filterest app version: `9.6.1`
-- Database version: `9.13.4`
+- Filterest app version: `9.6.2`
+- Database version: `9.13.5`
 - Project source license: `GPL-2.0-or-later`
 - Combined release-binary license: `GPL-3.0-or-later`
-- License bundle manifest SHA-256: `a34601a3d0f2a51a01a6ee8d9182a02882452c6cdd26e9ceebc848c1f932deac`
+- License bundle manifest SHA-256: `e396711f59b4f60e0dac1283d6adf55cc8f42c9d6c7e859399379b29d98e92b2`
 - Go metadata source: `GOOS=linux GOARCH=amd64 CGO_ENABLED=1 go list -deps metadata for filterest[linux-release]:. tags=netgo osusergo; filterest[container]:.; filterest-admin-recovery[container]:./server_tools/admin_credential_recovery, plus compiled vendored components and Go toolchain`
 - npm metadata source: `package-lock.json production dependency graph`
 - browser bundle metadata source: `app/server_tools/licenses/browser_bundle_provenance.json matched against app/package-lock.json and app/frontend/dist/*.js`
@@ -21,7 +21,7 @@ Reviewed upstream legal and attribution document bytes are retained under
 - compiled Go runtime or vendored components listed: `2`
 - runtime npm packages listed: `0`
 - browser bundle build components listed: `3`
-- third-party asset files listed: `80`
+- third-party asset files listed: `81`
 - source files containing third-party icon geometry: `7`
 - first-party asset files recorded: `65`
 - retained legal and attribution documents: `36`
@@ -88,7 +88,7 @@ Apache-2.0 components, the combined binaries are conveyed under GPL-3.0-or-later
 
 | Component | Asset files | Embedded source files | License | Upstream | Retained documents |
 | --- | ---: | ---: | --- | --- | --- |
-| Google Material Icons and Symbols | 73 | 2 | Apache-2.0 | [source](https://github.com/google/material-design-icons) | [`asset-Google-Material-Icons-and-Symbols-eda288bd934a-1-material-symbols-Apache-2.0.txt`](THIRD_PARTY_LICENSES/asset-Google-Material-Icons-and-Symbols-eda288bd934a-1-material-symbols-Apache-2.0.txt), [`asset-Google-Material-Icons-and-Symbols-eda288bd934a-2-material-symbols-NOTICE.txt`](THIRD_PARTY_LICENSES/asset-Google-Material-Icons-and-Symbols-eda288bd934a-2-material-symbols-NOTICE.txt) |
+| Google Material Icons and Symbols | 74 | 2 | Apache-2.0 | [source](https://github.com/google/material-design-icons) | [`asset-Google-Material-Icons-and-Symbols-eda288bd934a-1-material-symbols-Apache-2.0.txt`](THIRD_PARTY_LICENSES/asset-Google-Material-Icons-and-Symbols-eda288bd934a-1-material-symbols-Apache-2.0.txt), [`asset-Google-Material-Icons-and-Symbols-eda288bd934a-2-material-symbols-NOTICE.txt`](THIRD_PARTY_LICENSES/asset-Google-Material-Icons-and-Symbols-eda288bd934a-2-material-symbols-NOTICE.txt) |
 | Heroicons / Tailwind Labs | 0 | 1 | MIT | [source](https://github.com/tailwindlabs/heroicons) | [`asset-Heroicons-Tailwind-Labs-dac4d65f3957-1-heroicons-LICENSE.txt`](THIRD_PARTY_LICENSES/asset-Heroicons-Tailwind-Labs-dac4d65f3957-1-heroicons-LICENSE.txt) |
 | Lucide Icons | 7 | 4 | ISC | [source](https://github.com/lucide-icons/lucide) | [`asset-Lucide-Icons-b785a75e951a-1-lucide-LICENSE.txt`](THIRD_PARTY_LICENSES/asset-Lucide-Icons-b785a75e951a-1-lucide-LICENSE.txt) |
 

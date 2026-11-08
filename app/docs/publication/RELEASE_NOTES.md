@@ -1,166 +1,111 @@
-# Filterest 9.6.1
+# Filterest 9.6.2
 
-This release gathers the 43 commits since 9.6.0: clearer Home and dataset
-controls, saved Home-box queries, more consistent phone layouts and image
-frames, reliable table copying, and stricter delivery of withheld fields.
+Release date: 2026-11-08. Contains the 20 commits since 9.6.1.
 
-Database **9.13.0 → 9.13.4** is applied on the first start of 9.6.1. The database
-minimum and target are both **9.13.4**.
+## Database upgrade and rollback
 
-## Before you update
+Database **9.13.4 → 9.13.5** is applied on the first start of 9.6.2.
+The database minimum and target are both **9.13.5**. The migration adds the
+site-wide boolean setting `app_log_search_terms`, off by default, and records
+the database release. Replaying it preserves an existing site choice.
 
-- **Back up and rehearse the database transition.** Nine migration files
-  implement four batches, each ending with its own database release record:
-  - **9.13.1:** extends saved Home boxes with translated titles, category and
-    sort queries, and category-link limits. A dataset can have several boxes;
-    existing boxes keep their identities. Explicit saved lists, including an
-    intentionally empty list, remain distinct from inherited defaults. The
-    default number of rows per box becomes three.
-  - **9.13.2:** replaces exact automatic English sort-key defaults in Finnish
-    and English and four exact legacy Finnish sort labels in both translation
-    stores. Site-authored wording, blanks and other languages are preserved.
-  - **9.13.3:** adds the site-wide top-bar Home setting, off by default, with
-    Finnish and English editor labels. Existing administrator choices and
-    nonblank translations are preserved on replay.
-  - **9.13.4:** adds the site-wide category-button width setting, defaulting to
-    row-filling buttons with centred labels; replay preserves existing choices.
-- **The Home button leaves the top bar by default on every site.** Home stays
-  in the menu. To restore the top-bar button, an administrator must enable
-  **Show the Home button in the top bar on wide screens** in **Admin → Site
-  settings → Home settings** and save. It appears only above 700 px while Home
-  is enabled; phones keep the menu entry.
-- **Plan rollback with the database backup.** Rolling back to 9.6.0 requires
-  restoring the **9.13.0 database** under a write freeze; do not run 9.6.0
-  against the upgraded database. The Home-box schema arrived in **9.13.1**;
-  going below 9.13.1 requires the pre-migration backup. The current Home editor
-  leaves the new box fields inert until the box editor ships, but this is not
-  a database downgrade. Restoring a backup loses subsequent database changes.
-- **Existing image sizes need an explicit backfill.** New image uploads retain
-  displayed dimensions. Administrators can inspect and then apply guarded
-  batches through `POST /api/admin/image-dimensions-backfill`; requests default
-  to a dry run. This is not a startup migration. Unsupported structural galleries
-  are counted even when they have no matching public dataset name.
-- **Native restore checks can opt into named legacy extensions.** Repeat
-  `--allow-extension` for `pgcrypto` and/or `unaccent`, or use the recovery
-  profile's `DATABASE_RECOVERY_ALLOW_EXTENSIONS`. Results and private evidence
-  record the effective opt-ins; default extension and language guards remain.
+Take a backup before upgrading. A rollback to **9.6.1 needs the 9.13.4
+database**: restore the pre-upgrade backup under a write freeze; database
+changes made after that backup will be lost. If Home uses the new **No text
+below title** style, select and save a supported style before downgrading to
+an application that lacks it.
 
-## Home, navigation and trees
+## Home and phone top bars
 
-Administrators can save Home boxes with their own translated titles, categories
-and sorting through the API. Visitors' normal read rules still apply. A box
-whose saved categories or sorting the visitor cannot use is omitted instead of
-showing a broader result, and administrators receive a repair hint. Sites
-without a saved list show three rows per box. Box validation, metadata, row
-reads, lifecycle admission and connection waits respect Home's remaining time
-budget while keeping the request transaction usable.
+Home's **No text below title** style keeps the Serif story heading and its
+short italic accent while hiding the introduction and any longer slogan.
+The boxes follow the heading directly. Stored text and line-reveal preferences
+are retained. Shared-link descriptions still use the cleaned description,
+then the site name.
 
-Home search opens over the site name in the phone bar and the 701–1200 px top
-row, with results below. Crossing a phone or tablet breakpoint while search
-is open or focused keeps keyboard focus on the search trigger.
+Phone top bars are 48 px tall, with edge-to-edge menu, identity/search,
+search-toggle and dataset-panel cells. Home omits the panel cell. Dataset
+views and Home show the site identity; articles show the translated dataset
+name. Long names end in an ellipsis. The square search field has separate
+clear and submit controls; the adjacent toggle hides search without clearing
+it. Home retains typed search text for the current visit, offers clear when
+there is text and hides empty result boxes.
 
-On phones, Home's dataset boxes use one full-width layer with text on the
-hero's 16 px edge. Contact and other article buttons fit their labels, wrap
-long text, follow the hero's alignment and retain 54 px touch targets. Home's
-left- or right-aligned desktop boxes use the text block's horizontal inset
-while retaining their own 800 px maximum width.
+## Sign-in, account page and dialogs
 
-Trees remember explicit open and closed folder choices across reloads.
-Defaults, search expansion and current-path reveals remain temporary, and
-polluted legacy expansion lists are discarded once. Visitors who are not
-signed in see the About tab when the site permits guest reads. Administrators
-can check releases again as soon as the waiting period ends.
+The account page shows signed-in users their own login name as a read-only
+field. The sign-in dialog stays open on a backdrop click. Other dialogs still
+close on an intentional backdrop click, while a text selection ending outside
+the dialog keeps its draft. Close buttons, Escape and assistive activation
+remain available according to each dialog's dismissal policy.
 
-## Categories, search tools and table copying
+On the sign-in form, the privacy-consent row is one clickable label: the
+checkbox, gap and text toggle it. The notice link still opens the notice
+without toggling consent, and the checkbox remains required.
 
-A new site-wide text setting, `category_filter_button_width_mode`, chooses
-row-filling centred category buttons (`fill_row_with_centered_label`, the
-default) or content-width buttons (`fit_to_label`). Empty selection badges
-occupy no space. Values open largest-count first, retain administrator order
-for ties and keep their order while the popup stays open.
+## Application-log privacy
 
-Dataset hero tools have a rule before Categories and decorative icons for
-search, filtering, resetting and expanding. Finnish and English sort labels
-omit “Sort” while preserving administrator edits. On phones, filter and reset
-buttons share their row evenly so icons no longer split their labels.
-Dataset top-bar search becomes a button before shortening the dataset name,
-and opens over the name in the same row on phones and measured button layouts.
+Application logs leave out visitor search terms by default, including request
+query strings and fragments, search-related database/provider error contents
+and malformed provider replies. AI search diagnostics that can repeat search
+words are suppressed. Search failures retain diagnostic identity, error class
+and SQLSTATE rather than messages or response bodies.
 
-Copying and keyboard navigation use the chosen row even after infinite
-scrolling loads more rows. Grid copy omits hidden fields and their headers,
-treats whitespace-only cells as empty and preserves selected empty cells in
-their positions. Ctrl+C copies the selected cell range while preserving
-copying from focused controls and native text selections.
+Operators who rely on search terms in logs can restore the previous diagnostics
+by enabling the site-wide boolean setting **`app_log_search_terms`** in the
+existing system configuration settings view. Changes take effect **within five
+minutes**. Missing, null or unreadable settings mean off; a failed refresh
+returns to off. Warm reads of other settings are not held up by this setting's
+refresh. The choice affects new log lines; it does not remove older logs.
 
-## Field visibility, reads and row saves
+## Article view, presentation choice and navigation
 
-Map views, map-support API responses and intelligent search no longer receive
-hidden or server-only geometry as map support. Geometry metadata follows the
-same boundary, so a map cannot plot a point using that withheld geometry.
-Generated linked-row labels are null when the target display field is hidden,
-server-only or unregistered, including for guests. The underlying relation key
-is not replaced by that label. Saving visibility refreshes map and linked-label
-projections immediately.
+Article view places **Previous, Next and Close above the title at every
+width**, in a bar that scrolls with the article. Previous and Next use the
+displayed results and disable a direction with no neighbouring row. The
+image's own arrows still change images within the same row.
 
-Ordinary collection and vector queries sort and filter only on known columns
-the viewer may read. If the viewer cannot read the chosen sort column, results
-use a readable creation or ID column in the requested direction; semantic vector
-searches keep their similarity order. A filter on a withheld column is ignored
-instead of failing the request. Vector responses
-also omit columns without the viewer's read grant. Administrators and readers
-with SELECT on every column retain the same delivered fields and similarity
-order; a view's displayed field selection is not a vector projection rule.
+The Article control in **Show content as…** is a joined split button. Its
+caption follows this dataset's choice in this browser tab: Article by default,
+Image-first article or Page-sized image-first article. The chevron opens a
+keyboard- and touch-friendly menu with the current choice checked; choosing
+opens that presentation. Tab closes the menu and continues normal focus
+traversal. The choice survives reloads without changing the dataset's saved
+default view.
 
-Signed-in row saves succeed even when the provenance display-name lookup fails,
-times out or returns an empty name, recording “unknown” while retaining the
-user's id. Startup stops adding another copy of a foreign-key relation that
-has no registry entry.
+Image-first choices use the open article's row, otherwise the first row of the
+current listing, including its search, fetched afresh. An empty listing opens
+nothing and reports that there are no results. A changed listing, any
+application address write, navigation away or a newer choice cancels an
+unfinished opening. Articles without permitted photos can open as text only,
+also after reload and Forward. Article and Image-first retain the Article
+right requirement; Page retains its own right. Choosing in the picker keeps
+the phone filter panel open; later ordinary and photo dialogs retain their
+normal dismissal behavior.
 
-## Images, articles and phone forms
+Back/Forward dataset restorations keep loading through their own hidden-field,
+category and view-fallback address repairs. A newer navigation still cancels
+pending work, preventing an older restoration from replacing its history or
+reselecting its dataset late.
 
-Stacked card photos use their stored displayed dimensions from the first paint,
-within the 4:5 frame limit and 80% of viewport height. Images without usable
-stored dimensions keep a square frame. Existing pictures gain this behavior
-when their dimensions are backfilled. Resizing retains the fixed 300×300 wide
-frame. Article image controls share a 1200 ms idle timer; disabled arrows keep
-their theme skin at 28% opacity at every width.
+## Table cell editing
 
-Article views use the row title as their single main heading and omit an
-exactly matching first content heading only in the same known language,
-including related-label fallbacks and saved translations. Editors receive
-advice about a repeated title without changing stored text.
+An edit is no longer interrupted or saved by a change arriving from elsewhere.
+Live changes wait until the editor closes, and a saved cell stays selected
+through refresh. Held changes preserve other languages when editing an
+initially empty multilingual field, including in List view. Other rebuilds,
+such as sorting or changing views, discard an open draft without saving it.
+Readers keep the ordinary refresh timing and shared searches.
 
-Phone login and page forms use one full-width layer with fields inset 16 px;
-headings clear the floating menu button. Dataset heroes, tools and article
-titles share 16 px phone edges. Registration returns PIN validation messages
-beneath their fields in the server response and keeps one translated inline
-message after loading. Profile email/password codes and PIN/authenticator
-setup share translated labels, hints and inline errors; PIN setup adds an
-accessible reveal control while retaining the existing form actions.
+## Tests and documentation only
 
-## Optional instance badge and maintenance
-
-Only instances with the instance-info runtime flag
-(`FILTEREST_INSTANCE_INFO_FILE`) pointing to a record load the bottom-left
-badge, including on sign-in pages. It shows code source and data backup time;
-expanding it shows commits, data source and refresh time in Europe/Helsinki,
-and minimising it leaves a dot. Production sites without the flag see nothing
-new, and the read-only `/api/instance-info` endpoint does not exist there.
-
-Language-key source scans write changed and day-old evidence in bounded
-batches, avoiding repeat same-day rewrites while preserving daily freshness
-and maintenance gates. Writes lock rows in identity order and retry deadlocks
-up to three times. Successful scans writing at least 10,000 source rows run a
-best-effort VACUUM (ANALYZE) after releasing the scan lock. Logs include write
-totals, retries, duration and the VACUUM result; a VACUUM failure only warns.
-
-## Tooling and tests
-
-Browser tooling removes identical project runs by default; the full six-project
-matrix remains available through `FILTEREST_E2E_MATRIX=full` for weekends and
-site releases. Shared view-switch helpers now honor their fixed waits and
-record readiness during them for nightly reporting. Permissions tests read
-listing pages in bounded parallel groups, retry drifting listings and avoid
-unsupported phone pointer checks. Home test teardown restores settings and
-removes owned datasets after failures. Slow-load waits and a card-builder test
-stub follow the current implementation. These changes add no runtime feature.
+The concurrent-settings test uses separate maps for concurrent writers.
+Browser-test work restores phone sign-in/profile coverage, records fixture
+time without crediting an unidentified active test slot, adjusts a permission
+test timeout, improves sign-in/re-render helpers, and ensures cleanup and
+`e2e_` markers for temporary datasets, columns and generated language keys.
+The nightly development pipeline removes marked language keys; fixtures may
+remove their own keys sooner. The phone top-bar test follows the 52 px menu
+cell. Frontend rename guidance requires name searches for callers and treats
+caller maps as optional aids; documentation also records a future browser-update
+proposal. These test and documentation changes have no production effect.
