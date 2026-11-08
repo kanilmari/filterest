@@ -59,7 +59,7 @@ NO_START=0
 DEPENDENCIES_ONLY=0
 UPDATE_PREFLIGHT=0
 BINARY_SOURCE="${FILTEREST_BINARY_SOURCE:-}"
-RELEASE_REPOSITORY="${FILTEREST_RELEASE_REPOSITORY:-kanilmari/filterest}"
+RELEASE_REPOSITORY="${FILTEREST_RELEASE_REPOSITORY:-}"
 # Setup and update preflight read the same inert package contract.
 source "$SCRIPT_DIR/lib/native_host_package_reader.sh"
 POSTGRESQL_MAJOR="$(filterest_native_host_packages "$SCRIPT_DIR/lib/native_host_packages.list" admin "${FILTEREST_POSTGRESQL_MAJOR:-}" major)" || { printf 'error: invalid native host package requirements\n' >&2; exit 1; }
@@ -752,16 +752,13 @@ configure_installation_database_identity() {
     printf '✓ Isolated database identity %s is ready for this installation.\n' "$installation_id"
 }
 
+installer_repository_details() {
+    python3 "$SCRIPT_DIR/lib/repository_details.py" "$@" 2>/dev/null || { printf 'Invalid or unavailable repository identity; check app/server_tools/repo_details.json.\n' >&2; exit 1; }
+}
+
 ensure_admin_binary() {
-    local target="$RUNTIME_ROOT/bin/filterest-server"
-    local version_marker="$RUNTIME_ROOT/filterest-binary-version"
-    local version=""
-    local arch=""
-    local asset=""
-    local download_base=""
-    local temp_dir=""
-    local expected=""
-    local actual=""
+    local target="$RUNTIME_ROOT/bin/filterest-server" version_marker="$RUNTIME_ROOT/filterest-binary-version"
+    local version="" arch="" asset="" download_base="" temp_dir="" expected="" actual=""
 
     if [[ "$PROFILE" != "admin" ]]; then
         return 0
@@ -799,7 +796,7 @@ ensure_admin_binary() {
 
     arch="$(architecture_name)"
     asset="filterest-linux-${arch}"
-    download_base="https://github.com/${RELEASE_REPOSITORY}/releases/download/v${version}"
+    download_base="$(installer_repository_details download "v${version}")" || exit 1
     if [[ "$DRY_RUN" -eq 1 ]]; then
         printf '  [dry-run] download %s/%s and verify its SHA-256 checksum\n' "$download_base" "$asset"
         return
@@ -972,7 +969,9 @@ start_installed_filterest() {
 }
 
 main() {
-    local native_port=""
+    local native_port="" declared_repository="$RELEASE_REPOSITORY"
+    RELEASE_REPOSITORY="$(installer_repository_details repository)" || exit 1
+    [[ -z "$declared_repository" || "$declared_repository" == "$RELEASE_REPOSITORY" ]] || die "release repository override is not approved"
     parse_arguments "$@"
     choose_profile
     if [[ "$UPDATE_PREFLIGHT" -eq 1 ]]; then

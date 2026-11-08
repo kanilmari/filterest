@@ -67,7 +67,7 @@ describe("admin version info indicator", () => {
             latest_stable_version: "8.28.0",
             update_status: "available",
             update_available: true,
-            latest_release_url: "https://github.com/kanilmari/filterest/releases/tag/v8.28.0",
+            latest_release_url: "https://github.com/fixture-owner/filterest/releases/tag/v8.28.0",
             update_checked_at: "2026-08-25T18:00:00Z",
             refresh_allowed_at: "2026-08-25T18:00:30Z",
             upstream_check_performed: true,
@@ -145,7 +145,7 @@ describe("admin version info indicator", () => {
             .toBe("Tarkistettu onnistuneesti");
         const releaseLink = panel.querySelector('[data-version-info-value="latest-stable"] a');
         expect(releaseLink?.getAttribute("href"))
-            .toBe("https://github.com/kanilmari/filterest/releases/tag/v8.28.0");
+            .toBe("https://github.com/fixture-owner/filterest/releases/tag/v8.28.0");
         expect(releaseLink?.getAttribute("target")).toBe("_blank");
         expect(releaseLink?.getAttribute("rel")).toBe("noopener noreferrer");
         expect(panel.querySelector('[data-version-info-key="runtime"]')?.textContent)

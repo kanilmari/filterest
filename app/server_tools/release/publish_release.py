@@ -27,11 +27,10 @@ if str(APP_ROOT) not in sys.path:
 
 from server_tools.release.github_actions_policy import GitHubRead, audit_account_policy
 
-OWNER = "kanilmari"
-REPOSITORY = OWNER + "/filterest"
+from server_tools.lib.repository_details import load_repository_details, RepositoryDetailsError
+
 BRANCH = "main"
 REMOTE = "origin"
-ACTIONS_EXCEPTIONS = {OWNER + "/try_it_html"}
 SHA = re.compile(r"[0-9a-f]{40}\Z")
 
 
@@ -44,8 +43,9 @@ class PublicationError(ValueError):
 
 
 def command(arguments, *, text=True, input=None):
+    details = load_repository_details()
     return subprocess.run(arguments, check=True, capture_output=True, text=text,
-                          input=input, timeout=300, env={**os.environ, "GOWORK": "off", "GH_HOST": "github.com",
+                          input=input, timeout=300, env={**os.environ, "GOWORK": "off", "GH_HOST": details.host,
                                                         "GIT_TERMINAL_PROMPT": "0", "GH_PROMPT_DISABLED": "1"})
 
 
@@ -57,21 +57,25 @@ class GitHub(GitHubRead):
     """The GitHub boundary; each operation names its host and repository."""
 
     def __init__(self):
-        super().__init__(command)
+        details = load_repository_details()
+        super().__init__(command, host=details.host)
 
     def upload(self, tag, paths):
+        details = load_repository_details()
         command(["gh", "release", "upload", tag, *map(str, paths),
-                 "--repo", "github.com/" + REPOSITORY])
+                 "--repo", details.cli_repository])
 
     def download(self, asset_id):
-        return command(["gh", "api", "--hostname", "github.com",
+        details = load_repository_details()
+        return command(["gh", "api", "--hostname", details.host,
                         "-H", "Accept: application/octet-stream",
-                        f"repos/{REPOSITORY}/releases/assets/{asset_id}"], text=False).stdout
+                        f"repos/{details.repository}/releases/assets/{asset_id}"], text=False).stdout
 
 
 def audit_actions(github):
-    return audit_account_policy(OWNER, ACTIONS_EXCEPTIONS, github=github,
-                                required_repositories={REPOSITORY})
+    details = load_repository_details()
+    return audit_account_policy(details.owner, {details.owner + "/try_it_html"}, github=github,
+                                required_repositories={details.repository})
 
 
 def read_owner_approval(path, commit, manifest_sha256, created_at):
@@ -81,6 +85,8 @@ def read_owner_approval(path, commit, manifest_sha256, created_at):
     Keep it outside the bundle so payloads cannot supply their own authorization.
     """
     from server_tools.release.bundle_contract import bounded_input_bytes
+
+    details = load_repository_details()
 
     if path is None:
         raise PublicationError("unsigned publication requires --owner-approval with the owner's chat approval")
@@ -101,7 +107,7 @@ def read_owner_approval(path, commit, manifest_sha256, created_at):
               "published_commit", "manifest_sha256"}
     if (not isinstance(approval, dict) or set(approval) != fields
             or type(approval["schema_version"]) is not int or approval["schema_version"] != 1
-            or approval["approval_type"] != "owner_chat_approval" or approval["owner"] != OWNER
+            or approval["approval_type"] != "owner_chat_approval" or approval["owner"] != details.owner
             or approval["published_commit"] != commit or approval["manifest_sha256"] != manifest_sha256
             or not isinstance(approval["wording"], str) or not approval["wording"].strip()):
         raise PublicationError("owner approval must record the owner's chat wording and exact reviewed commit/manifest")
@@ -121,16 +127,14 @@ def inspect_local(root, expected_commit, expected_version, assets_dir, trust_pol
     from server_tools.release.bundle_verifier import verify_signed_bundle, verify_unsigned_bundle
     from server_tools.release.promote_release import validate_published_source
 
+    details = load_repository_details()
     if not SHA.fullmatch(expected_commit):
         raise PublicationError("--published-commit must be a full lowercase Git commit")
     if Path(git(root, "rev-parse", "--show-toplevel")).resolve() != root:
         raise PublicationError("target must own the standalone Git repository")
     if git(root, "branch", "--show-current") != BRANCH:
         raise PublicationError("publication requires the approved main branch")
-    allowed_urls = {
-        f"https://github.com/{REPOSITORY}", f"https://github.com/{REPOSITORY}.git",
-        f"git@github.com:{REPOSITORY}.git", f"ssh://git@github.com/{REPOSITORY}.git",
-    }
+    allowed_urls = details.remote_urls()
     for options in (["--all"], ["--all", "--push"]):
         urls = git(root, "remote", "get-url", *options, REMOTE).splitlines()
         if len(urls) != 1 or urls[0] not in allowed_urls:
@@ -168,7 +172,7 @@ def inspect_local(root, expected_commit, expected_version, assets_dir, trust_pol
     notes = (root / "app/docs/publication/RELEASE_NOTES.md").read_text(encoding="utf-8")
     if not notes.strip():
         raise PublicationError("reviewed release notes must not be empty")
-    return {"repository": REPOSITORY, "branch": BRANCH, "published_commit": expected_commit,
+    return {"repository": details.repository, "branch": BRANCH, "published_commit": expected_commit,
             "version": version, "tag": "v" + version, "history": history, "verified_assets": assets,
             "release_notes": notes, "signing_status": "signed" if signed else "unsigned",
             **({"owner_approval": approval} if approval is not None else {})}
@@ -191,10 +195,11 @@ def read_remote_refs(root, tag):
 
 def inspect_remote(root, local, github):
     """Reject existing release/tag state and any branch that cannot fast-forward."""
+    details = load_repository_details()
     policy = audit_actions(github)
-    repository = github.api("repos/" + REPOSITORY)
-    if (not isinstance(repository, dict) or repository.get("full_name") != REPOSITORY
-            or not isinstance(repository.get("owner"), dict) or repository["owner"].get("login") != OWNER
+    repository = github.api("repos/" + details.repository)
+    if (not isinstance(repository, dict) or repository.get("full_name") != details.repository
+            or not isinstance(repository.get("owner"), dict) or repository["owner"].get("login") != details.owner
             or repository.get("private") is not False or repository.get("archived") is not False
             or repository.get("disabled") is not False or not isinstance(repository.get("permissions"), dict)
             or repository["permissions"].get("push") is not True):
@@ -207,7 +212,7 @@ def inspect_remote(root, local, github):
         git(root, "merge-base", "--is-ancestor", remote_commit, local["published_commit"])
     except subprocess.CalledProcessError as error:
         raise PublicationError("remote main is ahead, divergent, or unavailable locally; fetch and reconcile before publication") from error
-    releases = github.pages(f"repos/{REPOSITORY}/releases?per_page=100")
+    releases = github.pages(f"repos/{details.repository}/releases?per_page=100")
     for release in releases:
         if not isinstance(release, dict) or not isinstance(release.get("tag_name"), str):
             raise PublicationError("GitHub release inventory is malformed")
@@ -229,14 +234,15 @@ def verify_refs(root, local):
 
 def verify_release(github, release_id, local, *, draft):
     """Download every remote asset; names and hashes must equal the local set."""
-    release = github.api(f"repos/{REPOSITORY}/releases/{release_id}")
+    details = load_repository_details()
+    release = github.api(f"repos/{details.repository}/releases/{release_id}")
     if (not isinstance(release, dict) or release.get("id") != release_id
             or release.get("tag_name") != local["tag"] or release.get("name") != "Filterest " + local["version"]
             or release.get("draft") is not draft or release.get("prerelease") is not False):
         raise PublicationError("GitHub release identity or maturity changed")
     if release.get("body") != local["release_notes"]:
         raise PublicationError("GitHub release notes differ from reviewed source")
-    assets = github.pages(f"repos/{REPOSITORY}/releases/{release_id}/assets?per_page=100")
+    assets = github.pages(f"repos/{details.repository}/releases/{release_id}/assets?per_page=100")
     actual = {}
     remote_sizes = {}
     expected = local["verified_assets"]["assets"]
@@ -268,6 +274,7 @@ def verify_release(github, release_id, local, *, draft):
 
 def publish(args, github=None):
     """Plan by default, or publish once after repeating all local/remote guards."""
+    details = load_repository_details()
     github = github or GitHub()
     root, assets_dir = args.target.resolve(), args.assets_dir.resolve()
     policy = getattr(args, "trust_policy", None)
@@ -280,7 +287,7 @@ def publish(args, github=None):
     if not args.apply:
         return report
 
-    state = {"phase": "preflight", "repository": REPOSITORY, "tag": local["tag"],
+    state = {"phase": "preflight", "repository": details.repository, "tag": local["tag"],
              "published_commit": args.published_commit, "release_id": None}
     try:
         refreshed = inspect_local(root, args.published_commit, args.expect_version, assets_dir, policy, revision, approval)
@@ -297,7 +304,7 @@ def publish(args, github=None):
         state["phase"] = "refs_pushed"
         verify_refs(root, local)
         state["phase"] = "draft_creation_requested"
-        draft = github.api(f"repos/{REPOSITORY}/releases", method="POST", payload={
+        draft = github.api(f"repos/{details.repository}/releases", method="POST", payload={
             "tag_name": local["tag"], "target_commitish": local["published_commit"],
             "name": "Filterest " + local["version"], "body": local["release_notes"],
             "draft": True, "prerelease": False,
@@ -319,7 +326,7 @@ def publish(args, github=None):
             raise PublicationError("local publication inputs changed during upload")
         audit_actions(github)
         state["phase"] = "publication_requested"
-        github.api(f"repos/{REPOSITORY}/releases/{release_id}", method="PATCH",
+        github.api(f"repos/{details.repository}/releases/{release_id}", method="PATCH",
                    payload={"draft": False})
         state["phase"] = "release_published"
         readback = verify_release(github, release_id, local, draft=False)
@@ -352,7 +359,11 @@ def parse_args(argv=None):
 def main(argv=None):
     args = parse_args(argv)
     try:
+        details = load_repository_details()
         report = publish(args)
+    except RepositoryDetailsError as error:
+        print(str(error), file=sys.stderr)
+        return 1
     except Exception as error:
         failure = {"error": str(error), "publication_verified": False,
                    "remote_state": getattr(error, "remote_state", None)}
@@ -362,7 +373,7 @@ def main(argv=None):
         print(json.dumps(report, indent=2))
     else:
         print(f"Filterest {report['version']}: {report['mode']}")
-        print(f"Target: {REPOSITORY} {report['tag']} at {report['published_commit']}")
+        print(f"Target: {details.repository} {report['tag']} at {report['published_commit']}")
         print("Publication verified: " + str(report["publication_verified"]).lower())
     return 0
 

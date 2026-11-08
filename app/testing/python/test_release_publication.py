@@ -27,6 +27,8 @@ from server_tools.release import bundle_contract, bundle_verifier
 from release_bundle_fixture import (bundle_go_tools, local_contract_bridge, candidate, release_candidate,
     unsigned_bundle, signed_bundle)
 
+DETAILS = release.load_repository_details()
+
 P, C = "a" * 40, "b" * 40
 
 
@@ -39,10 +41,10 @@ class FakeGitHub:
         self.fail = None
         self.extra_asset = False
         self.corrupt_asset = False
-        self.account = release.OWNER
-        self.repository = {"full_name": release.REPOSITORY, "owner": {"login": release.OWNER},
+        self.account = DETAILS.owner
+        self.repository = {"full_name": DETAILS.repository, "owner": {"login": DETAILS.owner},
                            "private": False, "archived": False, "disabled": False, "permissions": {"push": True}}
-        self.enabled = {release.OWNER + "/try_it_html": True}
+        self.enabled = {DETAILS.owner + "/try_it_html": True}
 
     def owner_visibility(self):
         self.events.append(("GET", "user-with-oauth-scope-headers"))
@@ -52,7 +54,7 @@ class FakeGitHub:
         self.events.append((method, endpoint))
         if endpoint == "user":
             return {"login": self.account}
-        if endpoint == "repos/" + release.REPOSITORY:
+        if endpoint == "repos/" + DETAILS.repository:
             return self.repository
         if endpoint.endswith("/actions/permissions"):
             name = endpoint.removeprefix("repos/").removesuffix("/actions/permissions")
@@ -60,7 +62,7 @@ class FakeGitHub:
         if method == "POST":
             if self.fail == "create":
                 raise OSError("draft creation interrupted")
-            self.draft = {**payload, "id": 7, "html_url": "https://github.com/kanilmari/filterest/releases/tag/v1.2.4"}
+            self.draft = {**payload, "id": 7, "html_url": DETAILS.release_url("v1.2.4")}
             return dict(self.draft)
         if method == "PATCH":
             if self.fail == "publish":
@@ -74,8 +76,8 @@ class FakeGitHub:
     def pages(self, endpoint):
         self.events.append(("PAGES", endpoint))
         if endpoint.startswith("user/repos"):
-            return [{"full_name": name, "owner": {"login": release.OWNER}, "archived": True}
-                    for name in (release.REPOSITORY, release.OWNER + "/try_it_html", release.OWNER + "/private-archive")]
+            return [{"full_name": name, "owner": {"login": DETAILS.owner}, "archived": True}
+                    for name in (DETAILS.repository, DETAILS.owner + "/try_it_html", DETAILS.owner + "/private-archive")]
         if endpoint.endswith("/assets?per_page=100"):
             assets = [{"name": name, "id": index, "state": "uploaded", "size": len(self.content[name]),
                        "digest": "sha256:" + hashlib.sha256(self.content[name]).hexdigest()}
@@ -105,7 +107,7 @@ class FakeGitHub:
 def publication(tmp_path, monkeypatch):
     content = {f"asset-{index:02d}": f"verified bytes {index}".encode() for index in range(14)}
     github = FakeGitHub(content)
-    local = {"repository": release.REPOSITORY, "branch": "main", "published_commit": P,
+    local = {"repository": DETAILS.repository, "branch": "main", "published_commit": P,
              "version": "1.2.4", "tag": "v1.2.4", "release_notes": "# Reviewed release\n",
              "history": {"candidate_commit": C, "published_commit": P},
              "verified_assets": {"source_commit": P, "app_version": "1.2.4",
@@ -146,7 +148,7 @@ def test_plan_only_reads_account_remote_and_assets(publication):
     assert len(result["verified_assets"]["assets"]) == 14
     assert not any("push" in operation for operation in operations)
     assert all(event[0] in {"GET", "PAGES"} for event in github.events)
-    assert release.OWNER + "/private-archive" in result["remote"]["actions_policy"]["repositories_checked"]
+    assert DETAILS.owner + "/private-archive" in result["remote"]["actions_policy"]["repositories_checked"]
 
 
 def test_apply_uses_atomic_normal_push_then_verified_draft_then_public_readback(publication):
@@ -236,7 +238,7 @@ def local_source(tmp_path, monkeypatch):
     (tmp_path / "app/docs/publication").mkdir(parents=True)
     (tmp_path / "app/VERSION_APP").write_text("1.2.4\n")
     (tmp_path / "app/docs/publication/RELEASE_NOTES.md").write_text("Reviewed notes\n")
-    values = {"branch": "main", "url": "https://github.com/kanilmari/filterest.git", "tag": "", "mirror": "false"}
+    values = {"branch": "main", "url": DETAILS.git_url, "tag": "", "mirror": "false"}
     def git(root, *args):
         if args[0] == "rev-parse":
             return str(tmp_path)
@@ -259,7 +261,7 @@ def local_source(tmp_path, monkeypatch):
 
 @pytest.mark.parametrize("field,value", [
     ("branch", "other"), ("branch", ""), ("url", "https://github.com/other/filterest.git"),
-    ("url", "https://github.com/kanilmari/filterest.git\nhttps://example.invalid/extra"),
+    ("url", DETAILS.git_url + "\nhttps://example.invalid/extra"),
     ("tag", "refs/tags/v1.2.4"), ("mirror", "true"),
 ])
 def test_local_publication_identity_rejects_wrong_branch_urls_or_existing_tag(local_source, field, value):
@@ -316,7 +318,7 @@ def test_upload_boundary_names_repository_and_never_clobbers(monkeypatch, tmp_pa
     monkeypatch.setattr(release, "command", run)
     release.GitHub().upload("v1.2.4", [tmp_path / "binary"])
     assert calls[0][0] == ["gh", "release", "upload", "v1.2.4", str(tmp_path / "binary"),
-                            "--repo", "github.com/kanilmari/filterest"]
+                            "--repo", DETAILS.cli_repository]
     assert "--clobber" not in calls[0][0]
 
 
@@ -336,7 +338,7 @@ def test_timeout_during_upload_reports_uncertain_partial_state(publication):
 def test_preflight_policy_failure_happens_before_git_push(publication):
     args, github, operations, _ = publication
     args.apply = True
-    github.enabled[release.OWNER + "/private-archive"] = True
+    github.enabled[DETAILS.owner + "/private-archive"] = True
     with pytest.raises(policy.ActionsPolicyError):
         release.publish(args, github)
     assert not any("push" in operation for operation in operations)
@@ -365,7 +367,7 @@ def fake_publication_transport(root, directory, commit, monkeypatch):
         if arguments[0] == "branch":
             return "main"
         if arguments[0] == "remote":
-            return "https://github.com/kanilmari/filterest.git"
+            return DETAILS.git_url
         if arguments[0] == "config":
             return "false"
         if arguments[0] in {"for-each-ref", "merge-base"}:
@@ -395,7 +397,7 @@ def signed_publication(signed_bundle, monkeypatch):
 def unsigned_publication(unsigned_bundle, tmp_path, monkeypatch):
     root, directory, commit, _, _, _ = unsigned_bundle
     args, github, operations = fake_publication_transport(root, directory, commit, monkeypatch)
-    approval = {"schema_version": 1, "approval_type": "owner_chat_approval", "owner": release.OWNER,
+    approval = {"schema_version": 1, "approval_type": "owner_chat_approval", "owner": DETAILS.owner,
                 "approved_at": "2026-09-11T02:00:00Z", "wording": "ok, publish this reviewed release",
                 "published_commit": commit,
                 "manifest_sha256": hashlib.sha256((directory / bundle_contract.MANIFEST_NAME).read_bytes()).hexdigest()}

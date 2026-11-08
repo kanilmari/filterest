@@ -12,6 +12,7 @@ import re
 import shutil
 import stat
 import subprocess
+from repository_transport_fixture import install_repository_transport
 
 import pytest
 
@@ -337,7 +338,7 @@ def test_nested_updater_dry_run_verifies_app_without_mutation(tmp_path: Path) ->
 
     environment = clean_filterest_environment(checkout)
     environment["PATH"] = f"{fake_bin}:{environment['PATH']}"
-    environment["FILTEREST_RELEASE_REPOSITORY"] = "kanilmari/filterest"
+    install_repository_transport(fake_bin, remote)
     before = source_snapshot(checkout / "app")
     completed = subprocess.run(
         ["bash", str(checkout / "app/server_tools/update_filterest.sh"), "--dry-run"],

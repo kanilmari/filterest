@@ -239,16 +239,17 @@ def test_actual_updater_rechecks_git_locks_after_fetch_before_shutdown(tmp_path,
     # Target evidence is already local; the fetch recorder creates only this
     # obstruction, then returns to the actual updater's second preflight.
     git = root.parent / "bin/git"
-    real_git = shutil.which("git")
+    transport = git.with_name("fixture-git-transport")
+    git.rename(transport)
     git.write_text('''#!/usr/bin/env bash
 if [[ "$3" == fetch ]]; then
     printf '%s\\n' 'interrupted operation; retained for operator review' > "$FILTEREST_TEST_LATE_GIT_LOCK"
     exit 0
 fi
-exec "$FILTEREST_TEST_REAL_GIT" "$@"
+exec "$FILTEREST_TEST_GIT_TRANSPORT" "$@"
 ''')
     git.chmod(0o700)
-    fixture["environment"].update(FILTEREST_TEST_REAL_GIT=real_git, FILTEREST_TEST_LATE_GIT_LOCK=str(lock))
+    fixture["environment"].update(FILTEREST_TEST_GIT_TRANSPORT=str(transport), FILTEREST_TEST_LATE_GIT_LOCK=str(lock))
     # Capture the state expected after that one simulated concurrent write.
     lock.write_bytes(OPERATOR_CONTENT)
     git_before = metadata_snapshot(root / ".git")

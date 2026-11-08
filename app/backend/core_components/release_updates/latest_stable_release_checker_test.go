@@ -6,6 +6,7 @@ package release_updates
 
 import (
 	"context"
+	repodetails "easelect/server_tools"
 	"errors"
 	"fmt"
 	"io"
@@ -38,12 +39,12 @@ func releaseResponseClient(body string, requestCount *atomic.Int32) *http.Client
 }
 
 func TestCheckerComparesCurrentVersionWithLatestStable(t *testing.T) {
-	body := `{
+	body := fmt.Sprintf(`{
 			"tag_name":"v8.30.1",
-			"html_url":"https://github.com/kanilmari/filterest/releases/tag/v8.30.1",
+			"html_url":%q,
 			"draft":false,
 			"prerelease":false
-		}`
+		}`, repodetails.Current().ReleaseURL("v8.30.1"))
 
 	tests := []struct {
 		current         string
@@ -242,7 +243,7 @@ func TestCheckerRejectsOversizedResponse(t *testing.T) {
 }
 
 func TestValidatedFilterestReleaseURLRejectsOtherHosts(t *testing.T) {
-	if got := validatedFilterestReleaseURL("https://example.com/kanilmari/filterest/releases/tag/v8.30.1"); got != "" {
+	if got := validatedFilterestReleaseURL("https://example.invalid/another-owner/filterest/releases/tag/v8.30.1"); got != "" {
 		t.Fatalf("validatedFilterestReleaseURL() = %q, want empty", got)
 	}
 }
@@ -255,7 +256,7 @@ func TestCheckerRetainsLastSuccessThroughFailedChecks(t *testing.T) {
 			now := time.Date(2026, 10, 6, 10, 0, 0, 0, time.UTC)
 			phase := 0
 			client := &http.Client{Transport: roundTripFunc(func(request *http.Request) (*http.Response, error) {
-				body := `{"tag_name":"v9.3.22","html_url":"https://github.com/kanilmari/filterest/releases/tag/v9.3.22"}`
+				body := fmt.Sprintf(`{"tag_name":"v9.3.22","html_url":%q}`, repodetails.Current().ReleaseURL("v9.3.22"))
 				if phase == 1 {
 					if !malformed {
 						return nil, errors.New("offline")

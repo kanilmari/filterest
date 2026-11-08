@@ -217,29 +217,34 @@ def test_updater_lets_only_one_of_two_concurrent_updates_proceed(tmp_path: Path)
     fixture = build_update_fixture(tmp_path, "docker")
     checkout = fixture["checkout"]
     assert isinstance(checkout, Path)
-    slow_stop = dict(fixture["environment"])  # type: ignore[arg-type]
-    slow_stop["FILTEREST_TEST_STOP_DELAY"] = "3"
-
-    first = subprocess.Popen(
-        ["bash", str(checkout / "app/server_tools/update_filterest.sh"), "--yes"],
-        cwd=checkout.parent,
-        env=slow_stop,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        text=True,
-    )
-    try:
-        deadline = time.monotonic() + 30
-        while "docker stop app" not in logged_calls(fixture):
-            assert first.poll() is None, first.communicate()
-            assert time.monotonic() < deadline, "the first update never reached its stop"
-            time.sleep(0.05)
-        second = run_update(fixture, "--yes")
-        _, first_stderr = first.communicate(timeout=60)
-    finally:
-        if first.poll() is None:
-            first.kill()
-            first.wait()
+    # Hold the first stop until the second updater has actually tried its lock.
+    barrier = tmp_path / "first-update-stop.lock"
+    with barrier.open("w") as gate:
+        fcntl.flock(gate, fcntl.LOCK_EX)
+        first = subprocess.Popen(
+            ["bash", str(checkout / "app/server_tools/update_filterest.sh"), "--yes"],
+            cwd=checkout.parent,
+            env=dict(fixture["environment"], FILTEREST_TEST_STOP_BARRIER=str(barrier)),
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
+        try:
+            deadline = time.monotonic() + 30
+            while "docker stop app" not in logged_calls(fixture):
+                assert first.poll() is None, first.communicate()
+                assert time.monotonic() < deadline, "the first update never reached its stop"
+                time.sleep(0.05)
+            second = run_update(fixture, "--yes")
+            assert first.poll() is None, "the first updater left its stop before the second finished"
+        finally:
+            fcntl.flock(gate, fcntl.LOCK_UN)
+            try:
+                _, first_stderr = first.communicate(timeout=60)
+            except subprocess.TimeoutExpired:
+                first.kill()
+                first.communicate()
+                raise
 
     assert second.returncode != 0
     assert "another Filterest update is already running" in second.stderr

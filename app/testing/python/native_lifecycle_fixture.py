@@ -13,6 +13,7 @@ from pathlib import Path
 import shutil
 import stat
 import subprocess
+from repository_transport_fixture import install_repository_transport
 
 from installation_fixture_files import LIFECYCLE_LIBRARY_FILES, RECOVERY_PSQL_FAKE
 
@@ -222,7 +223,9 @@ FAKE_UPDATE_TOOLS = {
         "    'ps --status running --services') printf 'app\\ndb\\n' ;;\n"
         "    'images --quiet app') printf 'sha256:previous-app-image\\n' ;;\n"
         "    'stop app')\n"
-        "        sleep \"${FILTEREST_TEST_STOP_DELAY:-0}\"\n"
+        "        if [[ -n \"${FILTEREST_TEST_STOP_BARRIER:-}\" ]]; then\n"
+        "            flock --timeout 90 \"$FILTEREST_TEST_STOP_BARRIER\" true\n"
+        "        fi\n"
         "        if [ -n \"${FILTEREST_TEST_STOP_FAILS_AFTER_UP:-}\" ] && [ -e \"$FILTEREST_TEST_LOG.up\" ]; then\n"
         "            exit 1\n"
         "        fi\n"
@@ -370,7 +373,7 @@ def build_update_fixture(tmp_path: Path, profile: str, *, real_native_installer=
 
     environment = clean_filterest_environment(checkout)
     environment["PATH"] = f"{fake_bin}:{environment['PATH']}"
-    environment["FILTEREST_RELEASE_REPOSITORY"] = "kanilmari/filterest"
+    install_repository_transport(fake_bin, remote)
     environment["FILTEREST_TEST_LOG"] = str(log)
     environment["FILTEREST_TEST_RELEASE_TAG"] = "v8.51.0"
     environment["FILTEREST_TEST_READY_VERSION"] = "8.51.0"

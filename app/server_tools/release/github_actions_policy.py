@@ -10,9 +10,16 @@ from __future__ import annotations
 import argparse
 import json
 import os
+from pathlib import Path
 import re
 import subprocess
 import sys
+
+
+APP_ROOT = Path(__file__).resolve().parents[2]
+if str(APP_ROOT) not in sys.path:
+    sys.path.insert(0, str(APP_ROOT))
+from server_tools.lib.repository_details import load_repository_details, RepositoryDetailsError
 
 
 class ActionsPolicyError(ValueError):
@@ -20,19 +27,21 @@ class ActionsPolicyError(ValueError):
 
 
 def run_command(arguments, *, input=None):
+    details = load_repository_details()
     return subprocess.run(arguments, check=True, capture_output=True, text=True,
-                          input=input, timeout=60, env={**os.environ, "GH_HOST": "github.com",
+                          input=input, timeout=60, env={**os.environ, "GH_HOST": details.host,
                                                        "GIT_TERMINAL_PROMPT": "0", "GH_PROMPT_DISABLED": "1"})
 
 
 class GitHubRead:
     """Read complete JSON responses from the explicitly selected GitHub host."""
 
-    def __init__(self, runner=None):
+    def __init__(self, runner=None, *, host=None):
         self.run = runner or run_command
+        self.host = host or load_repository_details().host
 
     def api(self, endpoint, *, method="GET", payload=None):
-        arguments = ["gh", "api", "--hostname", "github.com", "--method", method, endpoint]
+        arguments = ["gh", "api", "--hostname", self.host, "--method", method, endpoint]
         if payload is not None:
             arguments.extend(["--input", "-"])
         result = self.run(arguments, input=json.dumps(payload) if payload is not None else None)
@@ -40,7 +49,7 @@ class GitHubRead:
 
     def owner_visibility(self):
         """Require a classic/OAuth repo scope that can enumerate private ownership."""
-        result = self.run(["gh", "api", "--hostname", "github.com", "--include", "--method", "GET", "user"])
+        result = self.run(["gh", "api", "--hostname", self.host, "--include", "--method", "GET", "user"])
         parts = result.stdout.replace("\r\n", "\n").split("\n\n", 1)
         if len(parts) != 2 or not re.fullmatch(r"HTTP/\S+ 200(?: .*)?", parts[0].splitlines()[0]):
             raise ActionsPolicyError("GitHub account visibility requires a successful response with headers")
@@ -54,7 +63,7 @@ class GitHubRead:
         return {"account": json.loads(parts[1]), "oauth_scopes": scopes}
 
     def pages(self, endpoint):
-        result = self.run(["gh", "api", "--hostname", "github.com", "--paginate", "--slurp", endpoint])
+        result = self.run(["gh", "api", "--hostname", self.host, "--paginate", "--slurp", endpoint])
         pages = json.loads(result.stdout)
         if not isinstance(pages, list) or not pages or any(not isinstance(page, list) for page in pages):
             raise ActionsPolicyError("GitHub pagination did not return complete JSON pages")
@@ -112,7 +121,12 @@ def main(argv=None):
     parser.add_argument("--json", action="store_true")
     args = parser.parse_args(argv)
     try:
+        # Keep metadata reads inside the CLI boundary, before any GitHub call.
+        load_repository_details()
         result = audit_account_policy(args.owner, args.allow_enabled)
+    except RepositoryDetailsError as error:
+        print(str(error), file=sys.stderr)
+        return 1
     except (ValueError, OSError, subprocess.SubprocessError) as error:
         print("GitHub Actions policy audit failed: " + str(error), file=sys.stderr)
         return 1

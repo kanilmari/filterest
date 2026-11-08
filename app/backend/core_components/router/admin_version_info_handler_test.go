@@ -97,7 +97,7 @@ func TestAdminVersionInfoHandlerReturnsReadinessVersions(t *testing.T) {
 			LatestStableVersion:    "8.28.0",
 			UpdateStatus:           releaseupdates.UpdateStatusAvailable,
 			UpdateAvailable:        true,
-			ReleaseURL:             "https://github.com/kanilmari/filterest/releases/tag/v8.28.0",
+			ReleaseURL:             "https://github.com/fixture-owner/filterest/releases/tag/v8.28.0",
 			CheckedAt:              "2026-08-14T09:00:00Z",
 			LastSuccessfulCheckAt:  "2026-08-14T09:00:00Z",
 			RefreshAllowedAt:       "2026-08-14T09:00:30Z",

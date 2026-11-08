@@ -75,6 +75,8 @@ def computed_library_references(scripts, app_root=APP_ROOT):
 
 
 _LISTED_LIBRARY_FILES = (
+    "server_tools/repo_details.json",
+    "server_tools/lib/repository_details.py",
     "server_tools/lib/native_host_packages.list",
     "server_tools/lib/native_host_package_reader.sh",
     "server_tools/lib/native_update_preflight.sh",

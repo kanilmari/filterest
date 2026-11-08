@@ -117,9 +117,8 @@ tools. Application code, migrations, tests and product documentation live under
 changes in this repository and retain its existing public history.
 
 [The Filterest Constitution](app/docs/constitution/constitution.md) defines the
-product principles. Suggestions and reproducible reports are best opened as
-[GitHub Issues](https://github.com/kanilmari/filterest/issues); see
-[CONTRIBUTING.md](CONTRIBUTING.md) for contribution guidance.
+product principles. File suggestions and reproducible reports in this
+repository’s **Issues** tab; [CONTRIBUTING.md](CONTRIBUTING.md) offers guidance.
 
 ## One Portable Filterest Folder
 
@@ -205,8 +204,10 @@ require `sudo`.
 
 ## Installation And First Start
 
+Copy this repository’s **Code** HTTPS clone URL into the placeholder below.
+The address comes from `app/server_tools/repo_details.json`.
 ```bash
-git clone https://github.com/kanilmari/filterest.git
+git clone "<HTTPS clone URL from Code>"
 cd filterest
 
 # This same command is used after copying the filterest folder without Git.
@@ -218,16 +219,15 @@ so the browser may ask you to accept it once. `./filterest docker stop` preserve
 the database, uploaded files, runtime state, and backups in their bind-mounted
 directories inside the same outer `filterest/` folder.
 
-For native installation on a supported APT-based Linux system, start with
-`./filterest start` and choose a profile, or use the explicit setup commands
-`./filterest setup --profile admin --yes` or
-`./filterest setup --profile development --yes` for an explicit unattended
-profile choice. Both native profiles use the same browser address. The admin
-binary retains production-only routes while using direct local TLS for secure
-browser sessions. Its verified binary, setup markers, and logs live under
-`data/runtime/`; protected native environment and TLS files live under
-`keys/filterest_runtime/`. Source, templates, versions, and database bootstrap
-inputs continue to come from `app/`.
+For native APT-based Linux setup, choose a profile with `./filterest start`, or
+`./filterest setup --profile admin --yes` /
+`./filterest setup --profile development --yes` unattended; both use the URL above.
+Before changes or binary selection (current/local included), setup validates
+`app/server_tools/repo_details.json`. Missing/unreadable/invalid settings stop with
+`Invalid or unavailable repository identity; check app/server_tools/repo_details.json.`
+Admin: production-only routes, direct local TLS; verified binary/markers/logs in
+`data/runtime/`, protected native environment/TLS in `keys/filterest_runtime/`.
+Source, templates, versions and database bootstrap inputs remain in `app/`.
 
 The first-run form has two sections. First choose the
 visible development, testing, quality-assurance, or production purpose and the first

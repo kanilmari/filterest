@@ -780,6 +780,10 @@
   ],
   "python_guards": [
     {
+      "paths": ["app/server_tools/repo_details.json", "app/server_tools/repository_details.go", "app/server_tools/lib/repository_details.py", "app/server_tools/install_filterest.sh", "app/server_tools/update_filterest.sh", "app/server_tools/release/publish_release.py", "app/server_tools/release/github_actions_policy.py"],
+      "tests": ["app/testing/python/test_repository_details.py", "app/testing/python/test_release_publication.py", "app/testing/python/test_github_actions_policy.py"]
+    },
+    {
       "paths": ["app/server_tools/migrations/20261029000100_add_home_top_bar_setting.sql", "app/server_tools/migrations/20261029000199_record_database_release_9_13_3.sql",
         "app/frontend/core_components/admin_tools/front_page_settings_view.js", "app/frontend/core_components/front_page/top_nav_home_button.css"],
       "tests": ["app/testing/python/test_home_top_bar_setting.py"]

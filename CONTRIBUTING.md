@@ -1,7 +1,7 @@
 # Contributing
 
 Filterest is an owner-led open-source project. The preferred way to suggest a
-change is to open a [GitHub Issue](https://github.com/kanilmari/filterest/issues)
+change is to open an issue in this repository’s **Issues** tab
 with the problem, intended behavior, and a reproducible example where possible.
 Useful code contributions may be considered case by case. Discuss substantial
 changes first so their scope fits the product and maintenance goals.

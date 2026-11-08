@@ -6,12 +6,12 @@ package release_updates
 
 import (
 	"context"
+	repodetails "easelect/server_tools"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"net/http"
-	"net/url"
 	"strconv"
 	"strings"
 	"sync"
@@ -19,10 +19,9 @@ import (
 )
 
 const (
-	latestStableReleaseEndpoint = "https://api.github.com/repos/kanilmari/filterest/releases/latest"
-	latestReleaseResponseLimit  = 512 * 1024
-	latestReleaseSuccessTTL     = 5 * time.Minute
-	latestReleaseFailureTTL     = 15 * time.Minute
+	latestReleaseResponseLimit = 512 * 1024
+	latestReleaseSuccessTTL    = 5 * time.Minute
+	latestReleaseFailureTTL    = 15 * time.Minute
 	// A short process-wide cooldown absorbs double-clicks and overlapping admin tabs
 	// without making a deliberate retry wait for the normal five-minute cache.
 	latestReleaseForcedCheckCooldown = 30 * time.Second
@@ -86,6 +85,8 @@ func NewChecker(client *http.Client, endpoint string) *Checker {
 		now:      time.Now,
 	}
 }
+
+var latestStableReleaseEndpoint = repodetails.Current().LatestReleaseAPIURL()
 
 var defaultChecker = NewChecker(defaultHTTPClient(), latestStableReleaseEndpoint)
 
@@ -286,12 +287,5 @@ func compareSemanticVersions(left [3]int, right [3]int) int {
 }
 
 func validatedFilterestReleaseURL(value string) string {
-	parsed, err := url.Parse(strings.TrimSpace(value))
-	if err != nil || !strings.EqualFold(parsed.Scheme, "https") || !strings.EqualFold(parsed.Hostname(), "github.com") {
-		return ""
-	}
-	if !strings.HasPrefix(parsed.EscapedPath(), "/kanilmari/filterest/releases/") {
-		return ""
-	}
-	return parsed.String()
+	return repodetails.Current().ValidatedReleaseURL(value)
 }

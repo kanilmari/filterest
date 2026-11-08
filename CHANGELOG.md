@@ -22,6 +22,8 @@ Dates are the local (Europe/Helsinki) date on which the version was published.
 
 ## [Unreleased]
 
+- Release checks, installer downloads and publication tools derive the repository identity from one tracked JSON file. The Go binary embeds it at build time, and updates reject conflicting origins or overrides before fetching release evidence; the repository itself is unchanged (#993).
+
 ## [9.6.2] - 2026-11-08
 
 - Home's text style can leave out the introduction text, so the Home boxes follow the title directly.

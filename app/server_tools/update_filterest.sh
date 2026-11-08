@@ -152,21 +152,16 @@ is_generated_filterest_checkout() {
 }
 
 resolve_release_repository() {
-    local remote_url=""
-    local parsed=""
-    if [[ -z "$RELEASE_REPOSITORY" ]]; then
-        remote_url="$(filterest_recovery_utility "$INSTALLATION_ROOT" git -C "$INSTALLATION_ROOT" remote get-url origin || true)"
-        parsed="$(printf '%s' "$remote_url" | sed -E \
-            -e 's#^git@github\.com:##' \
-            -e 's#^https://github\.com/##' \
-            -e 's#^ssh://git@github\.com/##' \
-            -e 's#\.git$##')"
-        RELEASE_REPOSITORY="$parsed"
-    fi
-    case "$RELEASE_REPOSITORY" in
-        kanilmari/filterest|filterest/filterest) ;;
-        *) die "release repository is not approved: ${RELEASE_REPOSITORY:-missing}" ;;
-    esac
+    local declared_repository="$RELEASE_REPOSITORY" remote_url=""
+    RELEASE_REPOSITORY="$(filterest_recovery_python "$INSTALLATION_ROOT" python3 "$SCRIPT_DIR/lib/repository_details.py" repository)" || die "repository identity unavailable"
+    [[ -z "$declared_repository" || "$declared_repository" == "$RELEASE_REPOSITORY" ]] || die "release repository override is not approved"
+    # Keep Git's scanned explanation, without putting the installation path in its arguments.
+    remote_url="$(
+        cd -- "$INSTALLATION_ROOT" 2>/dev/null || exit 1
+        filterest_recovery_utility "$INSTALLATION_ROOT" git remote get-url --all origin
+    )" || die "release origin unavailable"
+    filterest_recovery_python "$INSTALLATION_ROOT" python3 "$SCRIPT_DIR/lib/repository_details.py" validate-remote "$remote_url" || \
+        die "origin must match repo_details.json; review the checkout remote before updating"
 }
 
 verify_checkout() {
@@ -191,12 +186,8 @@ verify_checkout() {
 }
 
 release_api_url() {
-    if [[ -n "$REQUESTED_VERSION" ]]; then
-        printf 'https://api.github.com/repos/%s/releases/tags/v%s' \
-            "$RELEASE_REPOSITORY" "$REQUESTED_VERSION"
-    else
-        printf 'https://api.github.com/repos/%s/releases/latest' "$RELEASE_REPOSITORY"
-    fi
+    filterest_recovery_python "$INSTALLATION_ROOT" python3 "$SCRIPT_DIR/lib/repository_details.py" \
+        release-api "${REQUESTED_VERSION:+v$REQUESTED_VERSION}"
 }
 
 download_release_evidence() {

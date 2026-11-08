@@ -5,7 +5,7 @@
 # Publishing a verified standalone release
 
 The public publication command publishes a new Filterest version to
-`kanilmari/filterest` from the repository's clean `main` branch. It needs the
+the repository named by `app/server_tools/repo_details.json` from the repository's clean `main` branch. It needs the
 maintainer's existing Git and GitHub CLI authentication; it never reads private
 installation credentials or requires another source repository.
 
@@ -14,6 +14,64 @@ and [candidate promotion](PROMOTING_RELEASES.md): reviewed source **S**, candida
 metadata commit **C**, then published identity commit **P**. Promotion changes
 only the release ledger and build identity between C and P. Rebuild the final
 assets from P before publication, because candidate binaries embed C.
+
+## Repository identity and a future owner change
+
+`app/server_tools/repo_details.json` is the only active source of the GitHub
+`host`, `owner` and `repo`. The current values are not changed by centralising
+them. Change the owner there in a reviewed release when the owner separately
+authorises a rename or transfer; retain the repository's history.
+
+Go embeds this file into each binary. Editing a deployment file cannot redirect
+that binary's update check. Python publication tools read the same JSON; the
+installer and updater call its standard-library Python address helper. Python 3
+is already a native installation dependency. No jq or network configuration
+lookup is added. Missing, ambiguous or malformed metadata is an error, with no
+fallback to an earlier account.
+
+Native setup validates this file before profile selection, package retrieval,
+server shutdown or binary selection, including development, dependency-only,
+already-current and local-binary installs. Python publication and policy modules
+do not read it during import; each command loads it inside its error handler.
+A missing, unreadable or invalid file stops these commands with one diagnostic
+and a nonzero status, without a traceback or installation paths:
+
+```text
+Invalid or unavailable repository identity; check app/server_tools/repo_details.json.
+```
+
+The shell scripts already require `server_tools/lib` and a source installation;
+they are not standalone curl-to-shell installers. Distribute them with the
+matching source tree, `repository_details.py` and `repo_details.json` (as the
+source release archive does). Do not copy just one script to another version or
+inline another handwritten owner. For tooling, from the repository root:
+
+```sh
+python3 app/server_tools/lib/repository_details.py web
+python3 app/server_tools/lib/repository_details.py git
+python3 app/server_tools/lib/repository_details.py release-api
+python3 app/server_tools/lib/repository_details.py download vX.Y.Z
+```
+
+The optional `FILTEREST_RELEASE_REPOSITORY` compatibility setting may only equal
+the declared repository; it cannot choose a different update source. The updater
+also refuses a missing, multiple or mismatched effective origin before retrieving
+release evidence. Review and update clone remotes as part of an actual move.
+The publisher still verifies both fetch and push remotes, account authority,
+Actions policy, exact commits and asset readback.
+An account rename and a transfer to a different account are separate operations:
+centralising addresses does not grant the new account publication authority or
+move unrelated repositories. The existing approved Actions exception must still
+be verifiable; if the new account does not own it, publication stops until that
+policy is separately reviewed.
+
+Rollout is separate from moving the GitHub account: first ship this mechanism,
+then coordinate the approved destination, the release carrying its identity and
+each installed site's update with the owner. A binary already installed still
+uses its embedded address. Centralisation alone does not update old binaries,
+remotes, authentication or private maintenance tools. The maintenance shell must
+consume the same identity in its own integration batch; it is not changed here.
+Never rely on the previous account name remaining available or on its redirects.
 
 ## Review and owner approval in chat
 
@@ -35,7 +93,7 @@ into a separate JSON file outside the bundle (for example, ignored
 {
   "schema_version": 1,
   "approval_type": "owner_chat_approval",
-  "owner": "kanilmari",
+  "owner": "<owner from repo_details.json>",
   "approved_at": "<actual UTC YYYY-MM-DDTHH:MM:SSZ>",
   "wording": "<owner's exact approval wording>",
   "published_commit": "<full reviewed P commit>",
@@ -283,9 +341,9 @@ Before writing, publication verifies:
   Go dependencies, binary Git identity, platform/ABI and OCI manifest/config/layer
   digests and identity labels are checked again. Public publication refuses
   private composition payloads. A bare native asset set is insufficient.
-- The authenticated GitHub account is `kanilmari`. Every owned repository,
+- The authenticated GitHub account is the `owner` in `repo_details.json`. Every owned repository,
   including private and archived repositories, has Actions disabled except the
-  approved `kanilmari/try_it_html` exception. Pagination, authentication and
+  approved `<owner>/try_it_html` exception. Pagination, authentication and
   unknown settings fail closed. The account response must prove a classic or
   OAuth token with the `repo` scope, which can enumerate all owned private
   repositories. Fine-grained or narrower tokens are refused when full account
@@ -323,7 +381,7 @@ failure evidence. A rerun will stop on the existing tag/release so that partial
 state cannot be silently replaced.
 
 The account audit is also available independently through
-`python3 app/server_tools/release/github_actions_policy.py --owner kanilmari --allow-enabled kanilmari/try_it_html --json`.
+`python3 app/server_tools/release/github_actions_policy.py --owner "$(python3 app/server_tools/lib/repository_details.py owner)" --allow-enabled "$(python3 app/server_tools/lib/repository_details.py owner)/try_it_html" --json`.
 
 This publication changes source and release-file storage only. Customer-site
 updates retain their separate target selection and recovery procedure.
