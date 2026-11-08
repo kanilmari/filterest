@@ -12,6 +12,13 @@ import { CARD_IMAGE_PRESENTATIONS, resolveCardImagePresentation } from './card_i
 export { CARD_IMAGE_PRESENTATIONS };
 
 const MIN_CARD_PHOTO_FRAME_RATIO = 4 / 5;
+// Stored dimensions are editable hints. Larger or more extreme images use the decoded size.
+const MAX_STORED_PHOTO_SIDE = 65535;
+const MAX_STORED_PHOTO_ASPECT = 32;
+
+function isStoredPixelSize(value) {
+    return Number.isInteger(value) && value >= 1 && value <= MAX_STORED_PHOTO_SIDE;
+}
 
 function photoRatio(width, height, minimum = 0) {
     if (!Number.isFinite(width) || width <= 0 || !Number.isFinite(height) || height <= 0) return null;
@@ -36,8 +43,10 @@ function readStoredPhotoRatio(image, imageMetadata, minimum = 0) {
         const size = metadata.displayed_image_size;
         if (!size || typeof size !== 'object' || Array.isArray(size)
             || typeof size.file !== 'string' || !size.file || size.file !== photoFileName(image)) return null;
-        const ratio = photoRatio(size.width_px, size.height_px, minimum);
-        return Number.isFinite(ratio) && ratio > 0 ? ratio : null;
+        if (!isStoredPixelSize(size.width_px) || !isStoredPixelSize(size.height_px)) return null;
+        const ratio = size.width_px / size.height_px;
+        if (ratio < 1 / MAX_STORED_PHOTO_ASPECT || ratio > MAX_STORED_PHOTO_ASPECT) return null;
+        return Math.max(minimum, ratio);
     } catch {
         return null;
     }

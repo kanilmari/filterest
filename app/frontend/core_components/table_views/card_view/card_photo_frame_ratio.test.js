@@ -159,6 +159,7 @@ describe('card photo frame ratio', () => {
         { displayed_image_size: null }, { displayed_image_size: [] },
         { displayed_image_size: { width_px: 1200, height_px: 675 } },
         metadata('stale.png'), JSON.stringify(metadata('stale.png')),
+        metadata('invalid.png', 1, 800), metadata('invalid.png', 1e300, 1e300),
         metadata('/storage/invalid.png'), metadata('invalid.png', Number.MAX_VALUE, Number.MIN_VALUE)])(
         'leaves malformed, missing or stale metadata unset: %j', imageMetadata => {
             const { wrapper, image } = prepare('/storage/invalid.png', { imageMetadata, width: 1200, height: 675, complete: true });

@@ -51,6 +51,23 @@ describe('ordinary article photo frame', () => {
         expect(frame().style.getPropertyValue(prop)).toBe('0.25');
     });
 
+    it.each([[1e-300, 800], [800, 1e-300], [1e300, 1e300], [1600.5, 900],
+        [65536, 65536], [330, 10], [10, 330]])(
+        'uses decoded geometry when the stored dimensions are %s × %s', (width, height) => {
+            const wrapper = frame({ imageMetadata: metadata(width, height) });
+            expect(wrapper.style.getPropertyValue(prop)).toBe('');
+            loadPhoto(wrapper, 1200, 800);
+            expect(wrapper.style.getPropertyValue(prop)).toBe('1.5');
+        },
+    );
+
+    it.each([[65535, 65535], [320, 10], [10, 320]])(
+        'accepts a stored photo at the size or aspect limit: %s × %s', (width, height) => {
+            const wrapper = frame({ imageMetadata: metadata(width, height) });
+            expect(Number(wrapper.style.getPropertyValue(prop))).toBe(width / height);
+        },
+    );
+
     it('ignores metadata for a different photo and releases the pending load on disposal', () => {
         const wrapper = frame({ imageMetadata: metadata(1600, 400, 'other.jpg') });
         expect(wrapper.style.getPropertyValue(prop)).toBe('');
