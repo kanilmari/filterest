@@ -149,6 +149,7 @@
   ],
   "own_size_allowed": {
     "B_column_ops/B4_column_view_presets.spec.ts": "Legacy fixed desktop preset and upward-opening picker proof; outside K549 A.",
+    "C_card_view/C20_description_empty_blocks.spec.ts": "The description line-count case sweeps 390 and 1920 px itself on an offline fixture; the other cases keep the project size.",
     "C_card_view/C26_page_ifav_pilot.spec.ts": "Only the phone case resizes; other Page user paths select projects by name.",
     "C_card_view/C29_photo_frame_removal.spec.ts": "Existing desktop-card skip owns the explicit boundary-width sweep.",
     "D_view_switch/D0_theme_and_mobile_menu.spec.ts": "Separate theme and menu cases drive desktop and phone widths internally.",

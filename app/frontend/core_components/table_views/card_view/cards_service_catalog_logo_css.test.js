@@ -352,12 +352,27 @@ describe('card detail icon CSS', () => {
 });
 
 describe('card text clamp CSS', () => {
-    test('limits card descriptions to two visible text rows with ellipsis', () => {
-        const cardsCss = readSiblingCss('cards.css');
-        const descriptionRule = extractRule(cardsCss, '.description_value');
+    test('defaults card descriptions to two rows with ellipsis through the configurable clamp', () => {
+        const descriptionCss = readSiblingCss('card_description_lines.css');
+        const descriptionRule = extractRule(
+            descriptionCss,
+            [
+                '.description_value',
+                ':root .card .label-value-layout[data-label-value-layout] > .description_value',
+            ].join(',\n')
+        );
+        const baseDescriptionRule = extractRule(readSiblingCss('cards.css'), '.description_value');
 
-        expectTwoLineClamp(descriptionRule);
-        expect(descriptionRule).toContain('max-height: calc(1.5em * 2)');
+        expect(descriptionRule).toContain('display: -webkit-box');
+        expect(descriptionRule).toContain('-webkit-box-orient: vertical');
+        expect(descriptionRule).toContain('-webkit-line-clamp: var(--card-description-lines, 2)');
+        expect(descriptionRule).toContain('line-clamp: var(--card-description-lines, 2)');
+        expect(descriptionRule).toContain('max-height: calc(1.5em * var(--card-description-lines, 2))');
+        expect(descriptionRule).toContain('overflow: hidden');
+        expect(descriptionRule).toContain('text-overflow: ellipsis');
+        expect(baseDescriptionRule).toContain('line-height: 1.5em');
+        expect(baseDescriptionRule).not.toMatch(/(?:-webkit-)?line-clamp\s*:/);
+        expect(baseDescriptionRule).not.toMatch(/max-height\s*:/);
     });
 
     test('limits card detail values to two visible text rows with ellipsis', () => {

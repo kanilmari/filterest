@@ -9,10 +9,9 @@
     border-radius: var(--search_tools_radius);
 }
 
-/* Only result cards cap the preview; article pairs show the whole value.
-   The card scope adds specificity over the shared adapter's :root display reset,
-   so even a later KV stylesheet cannot turn the clamped value into a block. */
-:root :is(.card, .card_details_kv) .label-value-layout[data-label-value-layout] > .label-value-layout__value {
+/* Ordinary field values use a two-line preview. Descriptions have their own
+   site-configurable limit in card_description_lines.css. */
+:root :is(.card, .card_details_kv) .label-value-layout[data-label-value-layout] > .label-value-layout__value:where(:not(.description_value)) {
     display: -webkit-box;
     -webkit-box-orient: vertical;
     -webkit-line-clamp: 2;

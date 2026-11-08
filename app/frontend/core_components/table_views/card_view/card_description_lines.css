@@ -4,7 +4,8 @@
  * Exists so one semantic value controls truncation while preserving the ellipsis cue.
  */
 
-.description_value {
+.description_value,
+:root .card .label-value-layout[data-label-value-layout] > .description_value {
     display: -webkit-box;
     -webkit-box-orient: vertical;
     -webkit-line-clamp: var(--card-description-lines, 2);

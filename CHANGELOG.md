@@ -22,6 +22,7 @@ Dates are the local (Europe/Helsinki) date on which the version was published.
 
 ## [Unreleased]
 
+- Card descriptions show the number of lines set by the site's card description line setting (1–12, default 2) in both card styles. A description shown with its field label had stayed at two lines whatever the setting; other field values keep their two-line preview (#1004).
 - Release checks, installer downloads and publication tools derive the repository identity from one tracked JSON file. The Go binary embeds it at build time, and updates reject conflicting origins or overrides before fetching release evidence; the repository itself is unchanged (#993).
 
 ## [9.6.2] - 2026-11-08

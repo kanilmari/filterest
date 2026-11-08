@@ -36,6 +36,8 @@ async function openOfflineFixture(page: Page, theme: string) {
       <link rel="stylesheet" href="/frontend/styles/base.css">
       <link rel="stylesheet" href="${cardRoot}cards.css">
       <link rel="stylesheet" href="${cardRoot}card_description_lines.css">
+      <link rel="stylesheet" href="/frontend/reusable_components/key_value_container/kv_container.css">
+      <link rel="stylesheet" href="${cardRoot}card_field_label_placement.css">
       <style>body { margin: 24px; background: var(--bg_color); color: var(--text_color); font: 16px sans-serif; }
       #fixture { width: 440px; max-width: 90vw; } .card { animation: none !important; transition: none !important; }</style>
       <body class="${theme}-mode"><main id="fixture"></main></body>` });
@@ -73,6 +75,41 @@ async function render(page: Page, html: string, language: string, variant: strin
   }, { html, language, variant, lines, form, cardRoot });
   return page.locator('.description_value');
 }
+
+test('C20 card descriptions display the configured number of text lines', async ({ page }, info) => {
+  await openOfflineFixture(page, 'light');
+  const samples = [];
+  const longText = 'A long description that wraps at every viewport width. '.repeat(100);
+  for (const width of [390, 1920]) {
+    await page.setViewportSize({ width, height: 900 });
+    for (const variant of ['normal', 'modern', 'compact', 'article-result']) {
+      for (const lines of [1, 2, 5, 11]) {
+        const description = await render(page, longText, 'en', variant, lines, 'plain');
+        const measurement = await description.evaluate(element => {
+          const box = element.getBoundingClientRect();
+          const range = document.createRange();
+          const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT);
+          const rows = new Set<number>();
+          while (walker.nextNode()) {
+            range.selectNodeContents(walker.currentNode);
+            for (const rect of Array.from(range.getClientRects())) {
+              if (rect.width > 0 && rect.height > 0 && rect.top >= box.top - 1 && rect.bottom <= box.bottom + 1) {
+                rows.add(Math.round(rect.top));
+              }
+            }
+          }
+          return {
+            clamp: getComputedStyle(element).getPropertyValue('-webkit-line-clamp'),
+            visibleLines: rows.size,
+          };
+        });
+        samples.push({ width, variant, lines, ...measurement });
+      }
+    }
+  }
+  await info.attach('description-line-counts', { body: JSON.stringify(samples), contentType: 'application/json' });
+  expect(samples.filter(s => s.clamp !== String(s.lines) || s.visibleLines !== s.lines)).toEqual([]);
+});
 
 for (const theme of ['light', 'dark']) {
   for (const language of ['fi', 'en']) {
