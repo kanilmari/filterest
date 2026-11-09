@@ -38,6 +38,70 @@ func releaseResponseClient(body string, requestCount *atomic.Int32) *http.Client
 	})}
 }
 
+func TestDefaultCheckerUsesEmbeddedReleaseSource(t *testing.T) {
+	repository := repodetails.Current()
+	tag := "v8.30.1"
+	original := defaultChecker
+	client := *original.client
+	endpoint := repository.LatestReleaseAPIURL()
+	canonical := endpoint + "?canonical=1"
+	var requests []string
+	client.Transport = roundTripFunc(func(request *http.Request) (*http.Response, error) {
+		address := request.URL.String()
+		requests = append(requests, address)
+		if address == endpoint {
+			return &http.Response{StatusCode: http.StatusFound, Header: http.Header{"Location": {canonical}},
+				Body: http.NoBody, Request: request}, nil
+		}
+		if address != canonical {
+			t.Fatalf("unexpected release endpoint %q", address)
+		}
+		body := fmt.Sprintf(`{"tag_name":%q,"html_url":%q}`, tag, repository.ReleaseURL(tag))
+		return &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(strings.NewReader(body)), Request: request}, nil
+	})
+	defaultChecker = NewChecker(&client, original.endpoint)
+	t.Cleanup(func() { defaultChecker = original })
+	status := CheckLatestStable(context.Background(), "8.30.0")
+	if !status.UpdateAvailable || status.ReleaseURL != repository.ReleaseURL(tag) {
+		t.Fatalf("expected update from embedded repository, got %#v, requests %v", status, requests)
+	}
+	if len(requests) != 2 || requests[0] != endpoint {
+		t.Fatalf("expected the embedded API endpoint followed by its canonical URL, got %v", requests)
+	}
+	t.Logf("requested %s and returned %s", requests[0], status.ReleaseURL)
+}
+
+func TestReleaseCheckRedirectStaysOnOriginalAPIOrigin(t *testing.T) {
+	for _, tc := range []struct {
+		from, to string
+		allow    bool
+	}{
+		{"https://api.github.com", "https://api.github.com/repositories/42/releases/latest", true},
+		{"https://code.example.test", "https://CODE.example.test:443/api/v3/repositories/42", true},
+		{"https://code.example.test", "https://api.github.com/repositories/42", false},
+		{"https://api.github.com", "https://code.example.test/api/v3/repositories/42", false},
+		{"https://code.example.test", "https://code.example.test:8443/api/v3/latest", false},
+		{"https://code.example.test", "http://code.example.test/api/v3/latest", false},
+		{"https://code.example.test", "https://fixture@code.example.test/api/v3/latest", false},
+	} {
+		first, err := http.NewRequest(http.MethodGet, tc.from+"/repos/team/project/releases/latest", nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		next, err := http.NewRequest(http.MethodGet, tc.to, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		policy := defaultHTTPClient().CheckRedirect
+		if got := policy(next, []*http.Request{first}); (got == nil) != tc.allow {
+			t.Errorf("%s to %s: error %v, want allowed=%t", tc.from, tc.to, got, tc.allow)
+		}
+		if policy(next, []*http.Request{first, next}) == nil {
+			t.Errorf("allowed a second redirect to %s", tc.to)
+		}
+	}
+}
+
 func TestCheckerComparesCurrentVersionWithLatestStable(t *testing.T) {
 	body := fmt.Sprintf(`{
 			"tag_name":"v8.30.1",

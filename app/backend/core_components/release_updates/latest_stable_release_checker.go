@@ -243,11 +243,15 @@ func defaultHTTPClient() *http.Client {
 	return &http.Client{
 		Timeout: 3 * time.Second,
 		CheckRedirect: func(request *http.Request, via []*http.Request) error {
-			if len(via) >= 2 {
-				return errors.New("too many release-check redirects")
+			if len(via) != 1 {
+				return errors.New("invalid release-check redirect chain")
 			}
-			if !strings.EqualFold(request.URL.Scheme, "https") || !strings.EqualFold(request.URL.Hostname(), "api.github.com") {
-				return errors.New("release-check redirect left api.github.com")
+			// The first request names the API origin selected by this build's repository metadata.
+			origin, target := via[0].URL, request.URL
+			if !strings.EqualFold(origin.Scheme, "https") || !strings.EqualFold(target.Scheme, "https") ||
+				origin.User != nil || target.User != nil ||
+				!strings.EqualFold(strings.TrimSuffix(origin.Host, ":443"), strings.TrimSuffix(target.Host, ":443")) {
+				return errors.New("release-check redirect left the selected HTTPS API origin")
 			}
 			return nil
 		},

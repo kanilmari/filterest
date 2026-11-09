@@ -89,6 +89,70 @@ def test_copied_source_tools_follow_one_owner_edit_and_fail_if_missing(tmp_path)
     assert result.returncode != 0 and not result.stdout
 
 
+def test_release_consumers_follow_one_repository_file(tmp_path):
+    repository = {"host": "code.example.test", "owner": "future-owner", "repo": "relocated"}
+    fixture = build_update_fixture(tmp_path, "admin", real_native_installer=True, repository=repository)
+    checkout = fixture["checkout"]
+    app = checkout / "app"
+    tools = app / "server_tools"
+    web = "https://code.example.test/future-owner/relocated"
+    api = "https://code.example.test/api/v3/repos/future-owner/relocated"
+
+    # Real updater, bare local origin and recording curl. No remote transport is allowed.
+    update = run_update(fixture, "--dry-run")
+    assert update.returncode == 0, update.stderr
+    assert "curl " + api + "/releases/latest" in logged_calls(fixture)
+    assert "future-owner/relocated" in update.stdout
+
+    install = subprocess.run(["bash", str(tools / "install_filterest.sh"), "--profile", "admin",
+                              "--yes", "--dry-run", "--no-start"], cwd=checkout,
+                             env=fixture["environment"], capture_output=True, text=True)
+    assert install.returncode == 0, install.stderr
+    assert "[dry-run] download " + web + "/releases/download/v8.50.0/filterest-linux-" in install.stdout
+
+    # Add the real source consumers to the same disposable tree after the updater's clean-tree check.
+    for name in ("go.mod", "server_tools/repository_details.go", "server_tools/release/publish_release.py",
+                 "server_tools/release/github_actions_policy.py",
+                 "backend/core_components/release_updates/latest_stable_release_checker.go",
+                 "backend/core_components/release_updates/latest_stable_release_checker_test.go"):
+        dest = app / name
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(APP_ROOT / name, dest)
+
+    # Only these standard-library packages are needed to rebuild the embedded identity.
+    go_env = {**os.environ, "GOWORK": "off", "GOTOOLCHAIN": "local", "GOPROXY": "off", "GOSUMDB": "off"}
+    go = subprocess.run(["go", "test", "-v", "-count=1", "./backend/core_components/release_updates",
+                         "-run", "^TestDefaultCheckerUsesEmbeddedReleaseSource$"],
+                        cwd=app, env=go_env, capture_output=True, text=True)
+    assert go.returncode == 0, go.stdout + go.stderr
+    assert "requested " + api + "/releases/latest and returned " + web + "/releases/tag/v8.30.1" in go.stdout
+
+    for field, argument, expected in [
+        ("git", "", web + ".git"),
+        ("release-api", "v1.2.3", api + "/releases/tags/v1.2.3"),
+        ("download", "v1.2.3", web + "/releases/download/v1.2.3"),
+    ]:
+        result = subprocess.run([sys.executable, "-B", str(tools / "lib/repository_details.py"), field, argument],
+                                capture_output=True, text=True)
+        assert result.returncode == 0, result.stderr
+        assert result.stdout.strip() == expected
+    # Record the real publisher's target without running gh.
+    result = subprocess.run([sys.executable, "-B", "-c",
+        "from server_tools.release import publish_release as publisher; "
+        "DETAILS = publisher.load_repository_details(); "
+        "assert DETAILS.owner == 'future-owner'; assert DETAILS.repository == 'future-owner/relocated'; "
+        "assert DETAILS.git_url == 'https://code.example.test/future-owner/relocated.git'; "
+        "calls = []; publisher.command = lambda args, **kwargs: calls.append(args); "
+        "publisher.GitHub().upload('v1.2.3', []); "
+        "assert calls[0][-2:] == ['--repo', 'code.example.test/future-owner/relocated']"],
+        cwd=app, capture_output=True, text=True)
+    assert result.returncode == 0, result.stderr
+    (tools / "repo_details.json").unlink()
+    result = subprocess.run([sys.executable, "-B", str(tools / "lib/repository_details.py"), "git"],
+                            capture_output=True, text=True)
+    assert result.returncode != 0 and not result.stdout
+
+
 @pytest.mark.parametrize("profile", ["docker", "admin", "development"])
 @pytest.mark.parametrize("problem", [
     "old-origin", "zero-origins", "extra-origin", "rewrite", "userinfo", "override", "missing-details",
@@ -135,23 +199,75 @@ def test_updater_refuses_unapproved_source_before_release_fetch_or_downtime(tmp_
     assert git_output(checkout, "rev-parse", "HEAD") == expected_commit
 
 
-def test_active_owner_literal_has_one_source():
-    """History may name past owners; executable code and live docs may not copy it."""
-    details = load_repository_details()
-    # When owner and product are both "filterest", ordinary product mentions
-    # are not repository configuration. Match addresses and owner assignments.
-    owner = re.escape(details.owner)
-    host = re.escape(details.host)
-    repo = re.escape(details.repo)
-    pattern = (rf"(https://({host}/|api\.{host}/repos/)|git@{host}:){owner}/{repo}"
-               rf"|\b(OWNER|RELEASE_REPOSITORY)\s*=\s*['\"]{owner}(['\"]|/)")
+def repository_source_copies(root, details):
+    """Return tracked paths which duplicate a repository address."""
+    # Keep the previous public identity detectable after an authorised source change.
+    # Match relocation forms as whole path components, including the Git clone suffix.
+    previous_owner, previous_repo = "kanilmari", "filterest"
+    repositories = {details.repository, previous_owner + "/" + previous_repo}
+    slugs = "|".join(re.escape(name) for name in sorted(repositories))
+    owners = "|".join(re.escape(owner) for owner in sorted({details.owner, previous_owner}))
+    hosts = "|".join(re.escape(host) for host in sorted({details.host, "github.com"}))
+    web = rf"(?:{hosts})/(?:api/v3/repos/)?"
+    github = r"(?:api\.github\.com/repos/|(?:raw\.githubusercontent\.com|codeload\.github\.com)/)"
+    # A bare slug can be a gh argument. Inside a URL match it only in a repository position.
+    prefix = rf"(?:(?:https?://|ssh://git@)?{web}|(?:https?://)?{github}|git@(?:{hosts}):|/?repos/|/)?"
+    pattern = (rf"(?<![a-z0-9_./:-]){prefix}(?:{slugs})(?:\.git)?(?![a-z0-9_.-])"
+               rf"""|\b(?:owner|(?:github|release|repo(?:sitory)?)[_-]?owner|release[_-]?repository)["']?"""
+               rf"""\s*(?::=|=|:)\s*["'](?:{owners})["']""")
+    # Retain main's URL-prefix and owner-assignment checks alongside relocation forms.
+    owner, host, repo = map(re.escape, (details.owner, details.host, details.repo))
+    pattern += (rf"|(https://({host}/|api\.{host}/repos/)|git@{host}:){owner}/{repo}"
+                rf"|\b(OWNER|RELEASE_REPOSITORY)\s*=\s*['\"]{owner}(['\"]|/)")
     excludes = ["*.key", "*.pem", "*.env", ".env*", "*credential*", "*secret*", "*token*", "*password*", "*passwd*", "*creds*"]
-    args = ["git", "grep", "-I", "-n", "-P", pattern, "--", ".",
-            ":(exclude)CHANGELOG.md", ":(exclude)**/CHANGELOG.md", ":(exclude)app/server_tools/repo_details.json"]
-    args += [":(exclude,icase)" + pattern for pattern in excludes]
-    result = subprocess.run(args, cwd=APP_ROOT.parent, capture_output=True, text=True)
+    excluded = [":(exclude)CHANGELOG.md", ":(exclude)**/CHANGELOG.md",
+                ":(exclude)app/server_tools/repo_details.json"]
+    excluded += [":(exclude,icase)" + name for name in excludes]
+    result = subprocess.run(["git", "grep", "-I", "-i", "-l", "-P", pattern, "--", ".", *excluded],
+                            cwd=root, capture_output=True, text=True)
     assert result.returncode in (0, 1), result.stderr
-    assert not result.stdout, "repository owner copied outside its identity file:\n" + result.stdout
+    return set(result.stdout.splitlines())
+
+
+def test_active_owner_literal_has_one_source():
+    assert not (copies := repository_source_copies(APP_ROOT.parent, load_repository_details())), sorted(copies)
+
+
+@pytest.mark.parametrize("details", [RepositoryDetails("code.example.test", "future-owner", "relocated"),
+                                     RepositoryDetails("github.com", "filterest", "filterest")])
+def test_repository_guard_retains_previous_source_when_settings_change(tmp_path, details):
+    old_owner, old_repo = "kanilmari", "filterest"
+    old = old_owner + "/" + old_repo
+    matches = {
+        "app/server_tools/example.sh": f'gh release view --repo {old}',
+        "app/backend/raw.go": f'const source = "https://raw.githubusercontent.com/{old}/main/version"',
+        "app/server_tools/status.sh": f'gh api repos/{old}/releases/latest',
+        "app/server_tools/clone.sh": f'git clone git@github.com:{old}.git',
+        "app/components/clone.js": f'const git = "ssh://git@github.com/{old}.git"',
+        "app/frontend/source.js": f'const source = "{old.upper()}"',
+        "app/server_tools/source.py": f'repository = "{details.repository}"',
+        "app/server_tools/defaults.py": f'OWNER = "{old_owner}"',
+        "app/server_tools/override.sh": f'RELEASE_REPOSITORY="{details.owner}/other-project"',
+        "README.md": details.release_url("v1.2.3"),
+        "AUTHORS.md": f'Project credit: {old}',
+        "app/backend/example_test.go": f'// Historical test fixture: {old}',
+        "app/testing/python/test_source.py": f'previous = "{old}"',
+        "app/similar.sh": details.web_url + '-fixtures',
+    }
+    allowed = {
+        "app/server_tools/repo_details.json": json.dumps(details.__dict__),
+        "CHANGELOG.md": f'https://github.com/{old}/releases/tag/v1.0.0',
+        "app/backend/similar.go": f'// Compare https://github.com/{old}-fixtures and team-{old}',
+        "app/components/names.js": '// Author: kanilmari. The product is Filterest.',
+        "SECURITY.md": f'dev.example.test/Tenant/{details.repository}/service:user:42',
+    }
+    for name, content in (matches | allowed).items():
+        path = tmp_path / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(content + "\n")
+    subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
+    subprocess.run(["git", "add", "."], cwd=tmp_path, check=True)
+    assert repository_source_copies(tmp_path, details) == set(matches)
 
 
 @pytest.fixture

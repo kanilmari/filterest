@@ -22,6 +22,7 @@ Dates are the local (Europe/Helsinki) date on which the version was published.
 
 ## [Unreleased]
 
+- The update checker permits one release API redirect on the HTTPS origin configured in its build, including on GitHub Enterprise hosts (#1003).
 - The Docker image build copies the embedded release repository identity into its Go build stage, so Docker installations and updates that build the image from source compile with the one tracked repository file (#1015).
 - Closing an article opened from a Home box returns to Home. Article list cards use the same field frames and icons as the selected standard or Glowy card style (#1009).
 - Card icons stay at the top of their container when the title wraps or the description runs over several lines, instead of moving to the middle: the Glowy card's title and description icons and, in both card styles, the title's dataset icon. A short one-line description stays centred next to its icon (#1008).

@@ -19,8 +19,11 @@ assets from P before publication, because candidate binaries embed C.
 
 `app/server_tools/repo_details.json` is the only active source of the GitHub
 `host`, `owner` and `repo`. The current values are not changed by centralising
-them. Change the owner there in a reviewed release when the owner separately
-authorises a rename or transfer; retain the repository's history.
+them. For the planned source change, first confirm the destination repository
+exists and its first history-free snapshot has been published. Change the owner
+in this file in a separately authorised release. An existing checkout cannot
+fast-forward to an unrelated snapshot root by changing its origin. Those
+installations need a separately planned transition.
 
 Go embeds this file into each binary. Editing a deployment file cannot redirect
 that binary's update check. Python publication tools read the same JSON; the

@@ -15,8 +15,9 @@ if str(APP_ROOT) not in sys.path:
 from server_tools.lib.repository_details import load_repository_details
 
 
-def install_repository_transport(fake_bin, remote):
-    public = load_repository_details().git_url
+def install_repository_transport(fake_bin, remote, *, public=None):
+    if public is None:
+        public = load_repository_details().git_url
     real_git = shutil.which("git")
     script = f'''#!/usr/bin/env python3
 import os, subprocess, sys

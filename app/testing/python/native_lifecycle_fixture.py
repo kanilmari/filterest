@@ -14,6 +14,7 @@ import shutil
 import stat
 import subprocess
 from repository_transport_fixture import install_repository_transport
+from server_tools.lib.repository_details import load_repository_details
 
 from installation_fixture_files import LIFECYCLE_LIBRARY_FILES, RECOVERY_PSQL_FAKE
 
@@ -184,7 +185,7 @@ RECORD_CALL = (
 
 FAKE_UPDATE_TOOLS = {
     "dpkg-query": "#!/usr/bin/env bash\nprintf 'install ok installed'\n",
-    # Release evidence for api.github.com, and readiness for /system/ready.
+    # Return release evidence only for this fixture’s configured API.
     "curl": (
         "#!/usr/bin/env bash\n"
         "set -eu\n"
@@ -200,7 +201,7 @@ FAKE_UPDATE_TOOLS = {
         "done\n"
         "printf 'curl %s\\n' \"$url\" >> \"$FILTEREST_TEST_LOG\"\n"
         "case \"$url\" in\n"
-        "    https://api.github.com/*)\n"
+        "    \"$FILTEREST_TEST_RELEASE_API\"*)\n"
         "        printf '{\"tag_name\":\"%s\",\"draft\":false,\"prerelease\":false,"
         "\"published_at\":\"2026-08-28T12:00:00Z\"}\\n' \"$FILTEREST_TEST_RELEASE_TAG\" > \"$out\" ;;\n"
         "    */system/ready)\n"
@@ -280,7 +281,7 @@ def git_output(root: Path, *arguments: str) -> str:
     ).stdout.strip()
 
 
-def build_update_fixture(tmp_path: Path, profile: str, *, real_native_installer=False, target_rename=False) -> dict[str, object]:
+def build_update_fixture(tmp_path: Path, profile: str, *, real_native_installer=False, target_rename=False, repository=None) -> dict[str, object]:
     """Create an installed 8.50.0 checkout whose origin publishes v8.51.0.
 
     The real updater and Docker runner run against it; Docker, curl, pg_dump,
@@ -311,6 +312,10 @@ def build_update_fixture(tmp_path: Path, profile: str, *, real_native_installer=
     ):
         shutil.copy2(SOURCE_ROOT / relative_path, app_root / relative_path)
     copy_lifecycle_libraries(app_root)
+    repository_file = app_root / "server_tools/repo_details.json"
+    if repository is not None:
+        repository_file.write_text(json.dumps(repository))
+    details = load_repository_details(repository_file)
     shutil.copy2(SOURCE_ROOT.parent / "compose.yml", seed / "compose.yml")
     for recorder in (
         app_root / "server_tools/install_filterest.sh",
@@ -373,7 +378,8 @@ def build_update_fixture(tmp_path: Path, profile: str, *, real_native_installer=
 
     environment = clean_filterest_environment(checkout)
     environment["PATH"] = f"{fake_bin}:{environment['PATH']}"
-    install_repository_transport(fake_bin, remote)
+    install_repository_transport(fake_bin, remote, public=details.git_url)
+    environment["FILTEREST_TEST_RELEASE_API"] = details.api_url + "/releases/"
     environment["FILTEREST_TEST_LOG"] = str(log)
     environment["FILTEREST_TEST_RELEASE_TAG"] = "v8.51.0"
     environment["FILTEREST_TEST_READY_VERSION"] = "8.51.0"
