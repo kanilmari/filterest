@@ -98,8 +98,8 @@
 
     .card--modern .card_header::after {
         position: static;
-        place-self: center;
-        transform: none;
+        place-self: start center;
+        margin-block-start: var(--card-heading-glyph-inset);
     }
 
     .card--modern .card_header > .key_value_wrapper {
@@ -319,8 +319,8 @@
 
     .card--modern .card_header::after {
         position: static;
-        place-self: center;
-        transform: none;
+        place-self: start center;
+        margin-block-start: var(--card-heading-glyph-inset);
     }
 
     .card--modern .card_header > .key_value_wrapper {

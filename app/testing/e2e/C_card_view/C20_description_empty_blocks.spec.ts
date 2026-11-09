@@ -4,7 +4,7 @@
  * Connects the real description builder, formatter, locale reader and card styles.
  * Uses an offline browser fixture: no application server, account or dataset writes.
  */
-import { test, expect, type Page } from '@playwright/test';
+import { test, expect, type Locator, type Page } from '@playwright/test';
 import { readFile } from 'node:fs/promises';
 import * as path from 'node:path';
 
@@ -18,7 +18,6 @@ const stubs: Record<string, string> = {
   [cardRoot + 'card_avatar_builder.js']: 'export function createImageElement() {} export function create_seeded_avatar() {} export function updateCardImageFrame() {}',
   [cardRoot + 'row_article_opener.js']: 'export function openRowArticleView() {}',
   [cardRoot + 'image_first_view_activation.js']: 'export function bindImageFirstViewActivation() {}',
-  [cardRoot + 'dataset_icon_builder.js']: 'export function createDatasetIconElement() {}',
   '/frontend/core_components/dev_tools/function_counter.js': 'export function count_this_function() {}',
   '/frontend/icons/icon_loader.js': 'export function setElementSvgContent() {}',
   '/frontend/core_components/route_permission_checker.js': 'export function hasRoutePermission() { return true; }',
@@ -41,6 +40,9 @@ async function openOfflineFixture(page: Page, theme: string) {
       <style>body { margin: 24px; background: var(--bg_color); color: var(--text_color); font: 16px sans-serif; }
       #fixture { width: 440px; max-width: 90vw; } .card { animation: none !important; transition: none !important; }</style>
       <body class="${theme}-mode"><main id="fixture"></main></body>` });
+    if (url.pathname === '/symbol-assets/table.svg') {
+      return route.fulfill({ contentType: 'image/svg+xml', body: await readFile(path.join(appRoot, 'frontend/icons/symbols/table.svg')) });
+    }
     if (stubs[url.pathname]) return route.fulfill({ contentType: 'text/javascript', body: stubs[url.pathname] });
     const file = path.resolve(appRoot, '.' + url.pathname);
     if (!file.startsWith(appRoot + path.sep)) throw Error('Fixture path escaped app');
@@ -76,9 +78,43 @@ async function render(page: Page, html: string, language: string, variant: strin
   return page.locator('.description_value');
 }
 
+// Pseudo-elements have no DOM bounding rectangle. Color their actual painted boxes
+// without changing layout, then measure the first painted row in CSS pixels.
+async function iconInsets(container: Locator) {
+  const png = (await container.screenshot({ scale: 'css' })).toString('base64');
+  return container.evaluate(async (el, data) => {
+    const bytes = Uint8Array.from(atob(data), char => char.charCodeAt(0));
+    const image = await createImageBitmap(new Blob([bytes], { type: 'image/png' }));
+    const canvas = new OffscreenCanvas(image.width, image.height);
+    const ctx = canvas.getContext('2d')!;
+    ctx.drawImage(image, 0, 0);
+    image.close();
+    const pixels = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
+    const style = getComputedStyle(el);
+    const contentTop = parseFloat(style.borderTopWidth) + parseFloat(style.paddingTop);
+    let badge = NaN, glyph = NaN;
+    for (let i = 0; i < pixels.length; i += 4) {
+      const [r, g, b] = [pixels[i], pixels[i + 1], pixels[i + 2]];
+      const top = Math.floor(i / (4 * canvas.width)) - contentTop;
+      if (isNaN(badge) && r === 255 && g === 0 && b === 255) badge = top;
+      if (isNaN(glyph) && r === 0 && g === 255 && b === 255) glyph = top;
+      if (Number.isFinite(glyph) && Number.isFinite(badge)) break;
+    }
+    return { badge, glyph, expectedGlyph: (parseFloat(getComputedStyle(el, '::before').height)
+      - parseFloat(getComputedStyle(el, '::after').height)) / 2 };
+  }, png);
+}
+
 test('C20 card descriptions display the configured number of text lines', async ({ page }, info) => {
   await openOfflineFixture(page, 'light');
+  await page.addStyleTag({ url: '/frontend/styles/mobile_friendliness.css' });
+  await page.addStyleTag({ content: `
+    body { container: card-list / inline-size; }
+    .card--modern :is(.card_header, .card_description_container)::before { background: #f0f !important; }
+    .card--modern :is(.card_header, .card_description_container)::after { background: #0ff !important; border-color: #0ff !important; }
+  ` });
   const samples = [];
+  const icons = [];
   const longText = 'A long description that wraps at every viewport width. '.repeat(100);
   for (const width of [390, 1920]) {
     await page.setViewportSize({ width, height: 900 });
@@ -104,10 +140,43 @@ test('C20 card descriptions display the configured number of text lines', async 
           };
         });
         samples.push({ width, variant, lines, ...measurement });
+        if (variant === 'modern' || variant === 'normal') {
+          await page.evaluate(async ({ cardRoot, variant }) => {
+            const { addHeaderElement } = await import(cardRoot + 'card_element_builder.js');
+            if (variant === 'normal') localStorage.setItem('fixture_tableMeta', '{"icon_key":"table"}');
+            else localStorage.removeItem('fixture_tableMeta');
+            addHeaderElement('A weekend at sea<br>The harbour trail',
+              '', 'title', false, { id: 1 }, 'fixture', document.querySelector('.card_text_content'));
+          }, { cardRoot, variant });
+          const header = page.locator('.card_header');
+          const heading = header.locator('.header_value');
+          const titleLines = await heading.evaluate(el => {
+            const range = document.createRange();
+            range.selectNodeContents(el);
+            const bounds = el.getBoundingClientRect();
+            return new Set(Array.from(range.getClientRects()).filter(r => r.top < bounds.bottom && r.bottom > bounds.top)
+              .map(r => Math.round(r.top))).size;
+          });
+          if (variant === 'modern') {
+            for (const [field, box] of [['header', header], ['description', page.locator('.card_description_container')]] as const) {
+              icons.push({ width, variant, lines, titleLines, field, ...await iconInsets(box) });
+            }
+          } else {
+            const offset = await header.locator('.card_header_dataset_icon').evaluate(icon => {
+              const parent = icon.parentElement!;
+              const style = getComputedStyle(parent);
+              return icon.getBoundingClientRect().top - parent.getBoundingClientRect().top
+                - parseFloat(style.paddingTop) - parseFloat(style.borderTopWidth);
+            });
+            icons.push({ width, variant, lines, titleLines, field: 'dataset', badge: offset, glyph: 0, expectedGlyph: 0 });
+          }
+        }
       }
     }
   }
   await info.attach('description-line-counts', { body: JSON.stringify(samples), contentType: 'application/json' });
+  await info.attach('card-icon-geometry', { body: JSON.stringify(icons), contentType: 'application/json' });
+  expect(icons.filter(m => m.titleLines !== 2 || !(Math.abs(m.badge) <= 1 && Math.abs(m.glyph - m.expectedGlyph) <= 1))).toEqual([]);
   expect(samples.filter(s => s.clamp !== String(s.lines) || s.visibleLines !== s.lines)).toEqual([]);
 });
 

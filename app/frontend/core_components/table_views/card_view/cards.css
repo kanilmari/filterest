@@ -116,6 +116,7 @@
 }
 
 .card--modern {
+    --card-heading-glyph-inset: calc((2.35rem - 1.22rem) / 2);
     --card-modern-accent-color: var(--primary_color, var(--accent_color, hsl(207deg 70% 53%)));
     --card-modern-icon-color: color-mix(in srgb, var(--card-modern-accent-color) 82%, var(--text_color) 18%);
     --card-modern-icon-bg: color-mix(in srgb, var(--card-modern-accent-color) 5%, transparent);
@@ -153,6 +154,7 @@ body.dark-mode .card--modern {
 .card--modern .card_header::before {
     content: "";
     display: block;
+    align-self: start;
     flex: 0 0 2.35rem;
     width: 2.35rem;
     height: 2.35rem;
@@ -163,11 +165,10 @@ body.dark-mode .card--modern {
 .card--modern .card_header::after {
     content: "";
     position: absolute;
-    left: calc((2.35rem - 1.22rem) / 2);
-    top: 50%;
+    left: var(--card-heading-glyph-inset);
+    top: var(--card-heading-glyph-inset);
     width: 1.22rem;
     height: 1.22rem;
-    transform: translateY(-50%);
     pointer-events: none;
     background:
         linear-gradient(var(--card-modern-icon-color), var(--card-modern-icon-color)) 0 0 / 100% 2px no-repeat,
@@ -178,8 +179,7 @@ body.dark-mode .card--modern {
 .card--modern .card_description_container {
     display: grid;
     grid-template-columns: 2.35rem minmax(0, 1fr);
-    /* The text sits in the middle of the icon row whatever its line count: one
-       line would otherwise hug the top of the taller icon box. */
+    /* Keep short text centered next to its icon. The icon itself stays at the top. */
     align-items: center;
     gap: 0.85rem;
     padding: 8px;
@@ -193,6 +193,7 @@ body.dark-mode .card--modern {
     display: block;
     grid-column: 1;
     grid-row: 1;
+    align-self: start;
     width: 2.35rem;
     height: 2.35rem;
     border-radius: var(--border_radius);
@@ -204,7 +205,8 @@ body.dark-mode .card--modern {
     display: block;
     grid-column: 1;
     grid-row: 1;
-    place-self: center center;
+    place-self: start center;
+    margin-block-start: var(--card-heading-glyph-inset);
     width: 1.22rem;
     height: 1.22rem;
     box-sizing: border-box;
@@ -857,6 +859,7 @@ body.dark-mode .card--modern {
 }
 
 .card_header_dataset_icon {
+    align-self: start;
     width: 1.45rem;
     height: 1.45rem;
     opacity: 0.9;
