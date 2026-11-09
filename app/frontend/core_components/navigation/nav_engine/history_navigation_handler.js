@@ -213,23 +213,14 @@ async function restoreHistoryEntryState(isCurrentNavigation, claimDatasetEntry) 
             return;
         }
     }
-    // If closeRowArticle triggered history.back(), skip re-navigation
-    // because the card DOM is already cleaned up.
+    // Close has already removed the article. Its history entry still decides
+    // whether the underlying collection, Home, or another row must be rendered.
     if (window.__bigCardClosing) {
         window.__bigCardClosing = false;
-        const pathAfterClose = window.location.pathname;
-        const closePrefix = getPrefixFromPathname(pathAfterClose, DATASET_PREFIX);
-        if (closePrefix) {
-            const { name: closedDatasetName } = parseDeepLink(pathAfterClose.slice(closePrefix.length));
-            if (
-                closedDatasetName
-                && isDatasetBasePath(pathAfterClose, DATASET_PREFIX, closedDatasetName)
-                && await restoreDatasetBasePathState(closedDatasetName, isCurrentNavigation)
-            ) {
-                return;
-            }
+        if (target?.name && isDatasetBasePath(window.location.pathname, DATASET_PREFIX, target.name)
+            && await restoreDatasetBasePathState(target.name, isCurrentNavigation)) {
+            return;
         }
-        return;
     }
     const path = window.location.pathname;
     if (path === '/' && isSeparateFrontPageEnabled()) {

@@ -33,7 +33,7 @@ describe('card field presentation', () => {
         expect(card.dataset.cardDetailColumns).toBe('3');
         expect(render.mock.calls.at(-1)[3]).toBe(3);
     });
-    test('updates column count in both card styles and keeps connected outer nodes and legacy summaries', () => {
+    test('updates columns in both list presentations and keeps their mounted cards and media', () => {
         const makeCard = (style, view = 'card') => {
             const card = document.createElement('div'); card.className = 'card';
             card.dataset.cardStyleOverride = style; card.dataset.cardStyleVariant = style;
@@ -55,11 +55,14 @@ describe('card field presentation', () => {
         expect(plain.render).toHaveBeenCalledTimes(2);
         expect(plain.render.mock.calls.at(-1)[3]).toBe(4);
         expect(plain.card.firstChild).toBe(plain.media);
-        expect(article.render).toHaveBeenCalledTimes(1);
+        expect(article.render).toHaveBeenCalledTimes(2);
+        expect(article.render.mock.calls.at(-1)[3]).toBe(4);
+        expect(article.card.firstChild).toBe(article.media);
         applyCardFieldPresentationSetting(true, 'modern', 4);
         expect(glowy.render).toHaveBeenCalledTimes(2);
+        expect(article.render).toHaveBeenCalledTimes(2);
     });
-    test('resolves inherited styles without replacing cards, media, selection or article groups', () => {
+    test('resolves inherited styles in both lists while keeping selection and view-specific field visibility', () => {
         const makeCard = (override, viewKey = 'card') => {
             const card = document.createElement('div'); card.className = 'card';
             card.style.display = 'none';
@@ -80,10 +83,14 @@ describe('card field presentation', () => {
         expect(inherited.card.querySelector('span').textContent).toBe('standard:false');
         expect(inherited.card.firstChild).toBe(inherited.checkbox);
         expect(inherited.checkbox.checked).toBe(true); expect(inherited.card.contains(inherited.image)).toBe(true);
-        expect(article.render).toHaveBeenCalledTimes(1);
+        expect(article.render).toHaveBeenCalledTimes(2);
+        expect(article.card.querySelector('span').textContent).toBe('standard:true');
         applyCardFieldPresentationSetting(false, 'modern');
         expect(inherited.card.querySelector('span').textContent).toBe('modern:false');
         expect(inherited.card.classList.contains('card--modern')).toBe(true);
+        expect(article.card.classList.contains('card--modern')).toBe(true);
+        expect(article.render).toHaveBeenCalledTimes(3);
+        expect(article.card.querySelector('span').textContent).toBe('modern:true');
         expect(explicit.render).toHaveBeenCalledTimes(2); // Only its field-visibility changed.
         const detached = makeCard(null); detached.card.remove();
         applyCardFieldPresentationSetting(true, 'standard');

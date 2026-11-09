@@ -7,6 +7,148 @@ import { installHomePolicy } from '../helpers/home-policy-fixture';
 import { datasetAppearanceDefaultsForPlace } from '../../../frontend/shared/dataset_appearance/validator.js';
 import presentationDefinition from '../../../frontend/shared/front_page_presentation/definition.json';
 
+// Keep response rewrites through every assertion, then silence callbacks still in flight at teardown.
+test.afterEach(async ({ page, context }) => {
+  await page.unrouteAll({ behavior: 'ignoreErrors' });
+  await context.unrouteAll({ behavior: 'ignoreErrors' });
+});
+
+// The article rail is hidden at 390px and compact at 1920px (cards.css).
+// Close restores the same full-size card_content at both widths, synchronously
+// before popstate restores Home. Compare only that shared summary, without DOM/CSS changes.
+function sampleSummary(card: Element, onClose: boolean) {
+  const ready = onClose ? new Promise<void>(resolve => {
+    const closed = (event: Event) => {
+      const { tableName, isOpen } = (event as CustomEvent).detail;
+      if (isOpen !== false || tableName !== card.getAttribute('data-dataset-name')) return;
+      document.removeEventListener('row-article-toggle', closed);
+      resolve();
+    };
+    document.addEventListener('row-article-toggle', closed);
+  }) : Promise.resolve();
+  return { geometry: ready.then(() => {
+    const grid = card.querySelector('.card_details_kv');
+    const field = grid?.firstElementChild;
+    const description = card.querySelector('.card_description_container');
+    if (!card.isConnected || !grid || !field || !description) throw new Error('Missing mounted card summary');
+    const icon = field.querySelector('.card_detail_tile_icon');
+    return {
+      row: card.getAttribute('data-id'), modern: card.classList.contains('card--modern'),
+      columns: getComputedStyle(grid).gridTemplateColumns.split(' ').length,
+      cardBorder: parseFloat(getComputedStyle(card).borderTopWidth),
+      gridBorder: parseFloat(getComputedStyle(grid).borderTopWidth), fieldDisplay: getComputedStyle(field).display,
+      visible: field.getBoundingClientRect().height > 0,
+      iconWidth: icon ? parseFloat(getComputedStyle(icon).width) : 0,
+      glyph: getComputedStyle(description, '::before').content,
+    };
+  }) };
+}
+
+// The open article itself uses row_article_content and big_card_details_container,
+// not list-card markup (row_article_content_builder.js). Sample it before
+// the Close handler removes it; its dimensions are not comparable to result cards.
+function sampleArticleAtClose(button: Element) {
+  const article = button.closest('article.active_row_article');
+  const content = article?.querySelector('.row_article_content');
+  const heading = content?.querySelector('h1');
+  const details = content?.querySelector('.big_card_details_container');
+  if (!article || !content || !heading || !details) throw new Error('Missing open article content');
+  const measure = () => ({
+    tag: article.tagName, heading: heading.textContent?.trim(),
+    width: content.getBoundingClientRect().width, height: content.getBoundingClientRect().height,
+    detailsWidth: details.getBoundingClientRect().width, detailsHeight: details.getBoundingClientRect().height,
+    fields: details.childElementCount,
+  });
+  return { geometry: new Promise<ReturnType<typeof measure>>(resolve => {
+    button.addEventListener('click', () => resolve(measure()), { once: true, capture: true });
+  }) };
+}
+
+for (const width of [390, 1920]) for (const variant of ['standard', 'modern'] as const) {
+  test(`Home article closes to Home and shares ${variant} list-card geometry at ${width}px`, async ({ page }, info) => {
+    await page.setViewportSize({ width, height: width === 390 ? 844 : 1080 });
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    const inventory = await page.request.get('/api/datasets');
+    expect(inventory.ok()).toBe(true);
+    const { datasets: readable } = await inventory.json();
+    const dataset = ['dokumentaatio', 'app_service_catalog'].find(name =>
+      readable.some((item: { dataset_name: string; can_read_rows?: boolean }) =>
+        item.dataset_name === name && item.can_read_rows !== false));
+    if (!dataset) throw new Error('The seed must contain a readable example dataset');
+    const blocks: Record<string, unknown>[] = [];
+    await installHomePolicy(page.context(), 'dark', { show_blocks: true, blocks });
+    // Select the test's dataset style on read; never update any shared setting.
+    await page.route(url => url.pathname === '/api/get-results' && url.searchParams.get('dataset') === dataset, async route => {
+      expect(route.request().method()).toBe('GET');
+      const response = await route.fetch();
+      expect(response.ok()).toBe(true);
+      const result = await response.json();
+      await route.fulfill({ response, json: { ...result, dataset_appearance: { ...result.dataset_appearance, overrides: {
+        ...result.dataset_appearance.overrides, 'shared.card_style_variant': variant,
+      } } } });
+    });
+    // Let the UI choose its real sort/page, then use a rendered card's exact row
+    // from that response for Home. No independent API ordering is assumed.
+    const [read] = await Promise.all([
+      page.waitForResponse(response => {
+        const url = new URL(response.url());
+        return url.pathname === '/api/get-results' && url.searchParams.get('dataset') === dataset
+          && url.searchParams.get('view_key') === 'card' && url.searchParams.get('offset') === '0';
+      }),
+      page.goto(`/${dataset}?view=card`),
+    ]);
+    expect(read.ok()).toBe(true);
+    const result = await read.json();
+    const regular = page.locator(`.card[data-dataset-name="${dataset}"][data-card-presentation-view="card"]:visible`).first();
+    await expect(regular.locator('.card_details_kv')).toBeVisible();
+    const rowId = await regular.getAttribute('data-id');
+    const row = result.data.find((item: { id: number | string }) => String(item.id) === rowId);
+    expect(Number(row?.id)).toBeGreaterThan(0);
+    const regularHandle = await regular.evaluateHandle(sampleSummary, false);
+    const expected = await regularHandle.evaluate(value => value.geometry);
+    await regularHandle.dispose();
+    blocks.push({ dataset, data: [row], columns: result.columns, types: result.types,
+      dataset_appearance: result.dataset_appearance, result_limit: 1 });
+    await page.goto('/');
+    const home = page.locator('.front-page-blocks .supplemental-dataset-group li a[href]').first();
+    await expect(home).toBeVisible();
+    await home.click();
+    const close = page.getByTestId('row-article-record-bar-close');
+    await expect(close).toBeVisible();
+    await expect.poll(() => new URL(page.url()).searchParams.get('view')).toBe('article_view');
+    const articleUrl = new URL(page.url());
+    expect(articleUrl.pathname.split('/').pop()).toMatch(new RegExp(`^${row.id}(?:-|$)`));
+    const article = page.locator(`.article_view_wrapper .card[data-id="${row.id}"]`);
+    await expect(article).toHaveCount(1);
+    const capturedArticle = await close.evaluateHandle(sampleArticleAtClose);
+    const captured = await article.evaluateHandle(sampleSummary, true);
+    await close.click();
+    const openArticle = await capturedArticle.evaluate(value => value.geometry);
+    await capturedArticle.dispose();
+    const actual = await captured.evaluate(value => value.geometry);
+    await captured.dispose();
+    await expect(page).toHaveURL(url => url.pathname === '/' && !url.searchParams.has('view'));
+    await expect.soft(home, 'Home must be rendered at the root address').toBeVisible({ timeout: 3000 });
+    await expect.soft(page.locator('.card[data-card-presentation-view]:visible')).toHaveCount(0, { timeout: 1000 });
+
+    await info.attach('summary-geometry', { body: JSON.stringify({ openArticle, actual, expected }), contentType: 'application/json' });
+    expect(openArticle.tag).toBe('ARTICLE');
+    expect(openArticle.heading).toBeTruthy();
+    expect(openArticle.width).toBeGreaterThan(0);
+    expect(openArticle.height).toBeGreaterThan(0);
+    expect(openArticle.fields).toBeGreaterThan(0);
+    expect(expected.visible).toBe(true);
+    expect(expected.modern).toBe(variant === 'modern');
+    expect(Math.max(expected.cardBorder, expected.gridBorder)).toBeGreaterThan(0);
+    if (variant === 'modern') {
+      expect(expected.iconWidth).toBeGreaterThan(0);
+      expect(expected.fieldDisplay).toBe('grid');
+      expect(expected.glyph).not.toBe('none');
+    }
+    expect(actual).toEqual(expected);
+  });
+}
+
 const datasets = ['app_e2e_home_info', 'app_e2e_home_deals', 'app_e2e_home_blogs'];
 const labels = ['Matkailutietoa', 'Matkatarjoukset', 'Matkakertomukset'];
 const presentations = ['contain', 'cover', 'contain_blur'] as const;

@@ -84,8 +84,7 @@ count_this_function("createSingleCard");
     const columnOverride = normalizeCardDetailColumnOverride(getTableMetaFromStorage(table_name)?.card_detail_columns);
     if (columnOverride !== null) card.dataset.cardColumnsOverride = String(columnOverride);
     if (styleOverride !== null) card.dataset.cardStyleOverride = styleOverride;
-    const cardStyleVariant = resolveClientCardStyleVariant(styleOverride,
-        viewKey === 'card' ? readAppearanceAttribute(card, 'cardStyleVariant') : CARD_STYLE_VARIANT_VALUES.STANDARD);
+    const cardStyleVariant = resolveClientCardStyleVariant(styleOverride, readAppearanceAttribute(card, 'cardStyleVariant'));
     const isModernCardStyle = cardStyleVariant === CARD_STYLE_VARIANT_VALUES.MODERN;
     card.dataset.cardStyleVariant = cardStyleVariant;
     if (isModernCardStyle) {

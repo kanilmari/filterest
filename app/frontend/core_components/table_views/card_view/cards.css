@@ -435,35 +435,35 @@ body.dark-mode .card--modern {
 }
 
 /* Keywords already provide this boundary; description-only cards need the same single divider. */
-.card[data-card-presentation-view="card"] .card_modern_info_panel > .card_description_container + .card_details_modern_tiles {
+.card[data-card-presentation-view] .card_modern_info_panel > .card_description_container + .card_details_modern_tiles {
     border-top: 1px solid var(--card-modern-separator-color);
 }
 
 /* The auto-sized parent track would otherwise keep its old intrinsic width below the new cap. */
-.card_container:is([data-card-detail-columns="3"], [data-card-detail-columns="4"]):has(> .card[data-card-presentation-view="card"]) {
+.card_container:is([data-card-detail-columns="3"], [data-card-detail-columns="4"]):has(> .card[data-card-presentation-view]) {
     grid-template-columns: minmax(0, 1fr);
 }
 
 /* Larger requested grids can use available card width; the default two-column cap stays intact. */
-.card[data-card-presentation-view="card"][data-card-detail-columns="3"] {
+.card[data-card-presentation-view][data-card-detail-columns="3"] {
     --card_text_max_width: calc(3 * 240px + 2px);
     max-width: 1450px;
 }
 
-.card[data-card-presentation-view="card"][data-card-detail-columns="4"] {
+.card[data-card-presentation-view][data-card-detail-columns="4"] {
     --card_text_max_width: calc(4 * 240px + 2px);
     max-width: 1450px;
 }
 
 /* Inline containment must retain the existing text width in the parent auto-sized track. */
-.card[data-card-presentation-view="card"]:not(.card--modern) .card_text_content {
+.card[data-card-presentation-view]:not(.card--modern) .card_text_content {
     container-name: card-details;
     container-type: inline-size;
     contain-intrinsic-inline-size: var(--card_text_max_width);
 }
 
 /* Width bands select precomputed column-first layouts; resizing keeps field/link nodes. */
-.card[data-card-presentation-view="card"] .card_modern_info_panel {
+.card[data-card-presentation-view] .card_modern_info_panel {
     container-name: card-details;
     container-type: inline-size;
     contain-intrinsic-inline-size: var(--card_text_max_width);
@@ -526,15 +526,15 @@ body.dark-mode .card--modern {
         grid-template-rows: none;
     }
 
-    .card--modern:not([data-card-presentation-view="card"]) .card_detail_tile--column-separated {
+    .card--modern:not([data-card-presentation-view]) .card_detail_tile--column-separated {
         border-left: 0;
     }
 
-    .card--modern:not([data-card-presentation-view="card"]) .card_detail_tile--placeholder {
+    .card--modern:not([data-card-presentation-view]) .card_detail_tile--placeholder {
         display: none;
     }
 
-    .card--modern:not([data-card-presentation-view="card"]) .card_detail_tile:not(:first-child) {
+    .card--modern:not([data-card-presentation-view]) .card_detail_tile:not(:first-child) {
         border-top: 1px solid var(--card-modern-separator-color);
     }
 

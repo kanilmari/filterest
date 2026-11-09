@@ -59,25 +59,17 @@ export function mountCardFieldGroup(card, parent, viewKey, render, legacyShowAll
     const refresh = () => {
         const showAll = cardShowsAllFields(viewKey, legacyShowAll, card);
         const overrides = effectiveDatasetOverrides(card);
-        const style = viewKey === 'card'
-            ? resolveClientCardStyleVariant(overrides.card_style_variant, readAppearanceAttribute(card, 'cardStyleVariant'))
-            : card.dataset.cardStyleVariant;
-        const columns = viewKey === 'card'
-            ? resolveCardDetailColumns(overrides.card_detail_columns, Number(readAppearanceAttribute(card, 'cardDetailColumns')))
-            : undefined;
-        if (viewKey === 'card') {
-            projectAppearanceAttribute(card, 'cardDetailColumns', String(columns));
-            const list = card.parentElement?.closest('.card_container');
-            const listUID = list?.closest('[data-dataset-appearance-scope]')?.dataset.datasetAppearanceUid;
-            if (list && (!listUID || listUID === card.dataset.datasetAppearanceUid)) {
-                projectAppearanceAttribute(list, 'cardDetailColumns', String(columns));
-            }
+        const style = resolveClientCardStyleVariant(overrides.card_style_variant, readAppearanceAttribute(card, 'cardStyleVariant'));
+        const columns = resolveCardDetailColumns(overrides.card_detail_columns, Number(readAppearanceAttribute(card, 'cardDetailColumns')));
+        projectAppearanceAttribute(card, 'cardDetailColumns', String(columns));
+        const list = card.parentElement?.closest('.card_container');
+        const listUID = list?.closest('[data-dataset-appearance-scope]')?.dataset.datasetAppearanceUid;
+        if (list && (!listUID || listUID === card.dataset.datasetAppearanceUid)) {
+            projectAppearanceAttribute(list, 'cardDetailColumns', String(columns));
         }
         const presentation = `${showAll}:${style}:${columns}`;
-        if (viewKey === 'card') {
-            projectAppearanceAttribute(card, 'cardStyleVariant', style);
-            projectAppearanceClass(card, 'card--modern', style === CARD_STYLE_VARIANT_VALUES.MODERN);
-        }
+        projectAppearanceAttribute(card, 'cardStyleVariant', style);
+        projectAppearanceClass(card, 'card--modern', style === CARD_STYLE_VARIANT_VALUES.MODERN);
         if (presentation === applied) return;
         cleanup?.();
         nodes.forEach((node) => { disposeCardResources(node); node.remove(); });
@@ -106,7 +98,7 @@ export function applyCardFieldPresentationSetting(showAll, styleVariant, detailC
     if (detailColumns !== undefined) {
         projectAppearanceAttribute(scope, 'cardDetailColumns', String(normalizeCardDetailColumns(detailColumns)));
     }
-    appearanceScopeElements(scope, '.card[data-card-presentation-view="card"]').forEach((card) => {
+    appearanceScopeElements(scope, '.card[data-card-presentation-view]').forEach((card) => {
         card._refreshFieldPresentation?.forEach((refresh) => refresh());
     });
 }

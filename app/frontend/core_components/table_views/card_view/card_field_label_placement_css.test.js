@@ -42,8 +42,8 @@ describe('card field label placement CSS', () => {
                 { band, selectors: ['.card .card_modern_info_panel', '.card .card_details_kv'], declarations: edges },
                 { band, selectors: ['.card .card_modern_info_panel .card_details_kv'], declarations: { 'border-block': '0' } },
                 { band, selectors: [
-                    '.card--modern:not([data-card-presentation-view="card"]) .card_modern_info_panel',
-                    '.card--modern:not([data-card-presentation-view="card"]) .card_details_modern_tiles',
+                    '.card--modern:not([data-card-presentation-view]) .card_modern_info_panel',
+                    '.card--modern:not([data-card-presentation-view]) .card_details_modern_tiles',
                 ], declarations: { border: '0', 'border-radius': '0', background: 'transparent' } },
             ]),
             { band: 'media (width <= 1200px)', selectors: ['.big_card_details_container'], declarations: edges },

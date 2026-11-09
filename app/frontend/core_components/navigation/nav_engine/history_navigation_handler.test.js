@@ -199,8 +199,13 @@ describe("history_navigation_handler", () => {
         expect(browserTabTitle.update).not.toHaveBeenCalled();
     });
 
-    test.each([false, true])('Back to enabled root restores Home after article cleanup, articleOpen=%s', async articleOpen => {
+    test.each([
+        { articleOpen: false, closing: false },
+        { articleOpen: true, closing: false },
+        { articleOpen: false, closing: true },
+    ])('restores Home on Back and Close (open=$articleOpen, closing=$closing)', async ({ articleOpen, closing }) => {
         setFrontPageAvailability({ separate_front_page: true });
+        window.__bigCardClosing = closing;
         if (articleOpen) document.body.innerHTML = `
             <div class="card_view_wrapper big-card-open" data-table-name="events">
                 <div class="card_container"></div><article class="active_row_article"></article>
@@ -211,6 +216,7 @@ describe("history_navigation_handler", () => {
             'front_page', expect.any(Array), expect.objectContaining({ skipUrlUpdate: true })
         ));
         expect(closeRowArticleMock).toHaveBeenCalledTimes(articleOpen ? 1 : 0);
+        expect(window.__bigCardClosing).toBe(false);
         expect(location.pathname).toBe('/');
     });
 

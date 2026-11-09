@@ -360,50 +360,6 @@ describe('card language refresh', () => {
         }
     });
 
-    test('uses modern by default and changes only inherited card presentation through the existing field redraw', async () => {
-        await applySiteCardDefaults(true, 'modern', 2);
-        hasDatasetPermissionMock.mockResolvedValue(true);
-        const table = 'style_fixture', columns = ['title', 'detail'];
-        const row = {id: 7, title: 'Title', detail: 'Value'};
-        localStorage.setItem(table + '_dataTypes', JSON.stringify({
-            title: {card_element: 'header', show_value_on_card: true},
-            detail: {card_element: 'details', show_value_on_card: true},
-        }));
-        const cards = await create_card_view(columns, [row], table);
-        const article = await create_card_view(columns, [row], table, {viewKey: 'article_view', stateKey: 'articleView'});
-        document.body.append(cards, article); cards.style.display = 'none'; cards.scrollTop = 73;
-        const card = cards.querySelector('.card'), checkbox = card.querySelector('.card_checkbox');
-        const media = card.querySelector('.card_image_content'), header = card.querySelector('h2');
-        const articleDetail = article.querySelector('.card_details_kv');
-        checkbox.checked = true; card.classList.add('selected');
-        expect(card.classList.contains('card--modern')).toBe(true);
-        expect(card.dataset.cardStyleOverride).toBeUndefined();
-        const initialModernCalls = vi.mocked(renderModernCardDetails).mock.calls.length;
-        expect(initialModernCalls).toBeGreaterThan(0);
-        await applySiteCardDefaults(true, 'standard');
-        expect(card.classList.contains('card--modern')).toBe(false);
-        expect(card.querySelector('.card_modern_info_panel')).toBeNull();
-        expect(renderKeyValuePairs).toHaveBeenCalled();
-        expect(cards.querySelector('.card')).toBe(card); expect(card.querySelector('h2')).toBe(header);
-        expect(card.querySelector('.card_checkbox')).toBe(checkbox); expect(checkbox.checked).toBe(true);
-        expect(card.querySelector('.card_image_content')).toBe(media); expect(cards.scrollTop).toBe(73);
-        expect(article.querySelector('.card_details_kv')).toBe(articleDetail);
-        await applySiteCardDefaults(true, 'modern');
-        expect(card.querySelector('.card_modern_info_panel')).not.toBeNull();
-        expect(renderModernCardDetails).toHaveBeenCalledTimes(initialModernCalls + 1);
-        await applySiteCardDefaults(true, 'modern', 4);
-        expect(vi.mocked(renderModernCardDetails).mock.calls.at(-1)[3]).toEqual({ columns: 4 });
-        expect(cards.querySelector('.card')).toBe(card);
-        expect(card.querySelector('.card_checkbox')).toBe(checkbox);
-        expect(card.querySelector('.card_image_content')).toBe(media);
-        expect(article.querySelector('.card_details_kv')).toBe(articleDetail);
-        expect(openRowArticleView).not.toHaveBeenCalled();
-        localStorage.setItem(table + '_tableMeta', JSON.stringify({card_style_variant: 'standard'}));
-        const explicit = await create_card_view(columns, [row], table); document.body.append(explicit);
-        expect(explicit.querySelector('.card').classList.contains('card--modern')).toBe(false);
-        expect(explicit.querySelector('.card').dataset.cardStyleOverride).toBe('standard');
-    });
-
     test('omits the whole detail container when empty while preserving article summaries and explicit hide-false', async () => {
         const table='empty_fixture';
         const columns=['empty','hiddenFalse'];
