@@ -54,6 +54,8 @@ COPY main.go ./
 COPY backend/ ./backend/
 COPY components/ ./components/
 COPY frontend/shared/ ./frontend/shared/
+# The backend embeds the public repository identity used for release checks.
+COPY server_tools/repository_details.go server_tools/repo_details.json ./server_tools/
 COPY server_tools/admin_credential_recovery/ ./server_tools/admin_credential_recovery/
 COPY server_tools/lib/build_stamp_ldflags.sh ./server_tools/lib/build_stamp_ldflags.sh
 

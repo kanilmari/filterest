@@ -22,6 +22,7 @@ Dates are the local (Europe/Helsinki) date on which the version was published.
 
 ## [Unreleased]
 
+- The Docker image build copies the embedded release repository identity into its Go build stage, so Docker installations and updates that build the image from source compile with the one tracked repository file (#1015).
 - Closing an article opened from a Home box returns to Home. Article list cards use the same field frames and icons as the selected standard or Glowy card style (#1009).
 - Card icons stay at the top of their container when the title wraps or the description runs over several lines, instead of moving to the middle: the Glowy card's title and description icons and, in both card styles, the title's dataset icon. A short one-line description stays centred next to its icon (#1008).
 - Card descriptions show the number of lines set by the site's card description line setting (1–12, default 2) in both card styles. A description shown with its field label had stayed at two lines whatever the setting; other field values keep their two-line preview (#1004).

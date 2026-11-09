@@ -41,6 +41,9 @@ Filterest lists no private names itself; a workspace that embeds it supplies
 them. Each check can also run alone, for example
 `python3 app/server_tools/release/audit_source_boundary.py`.
 
+The Docker Go builder compiles the repository identity package with its embedded
+`repo_details.json`. The application image receives that identity in the binary.
+
 To assemble an actual release, first prepare and commit the reviewed source and
 release metadata according to the [publication checklist](../../docs/publication/PUBLICATION_CHECKLIST.md).
 Then run the same command without `--check-only`, with a new or empty output
