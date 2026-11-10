@@ -9,11 +9,11 @@ Reviewed upstream legal and attribution document bytes are retained under
 
 ## Candidate
 
-- Filterest app version: `9.6.2`
+- Filterest app version: `9.6.3`
 - Database version: `9.13.5`
 - Project source license: `GPL-2.0-or-later`
 - Combined release-binary license: `GPL-3.0-or-later`
-- License bundle manifest SHA-256: `e396711f59b4f60e0dac1283d6adf55cc8f42c9d6c7e859399379b29d98e92b2`
+- License bundle manifest SHA-256: `cebc47a31cca00b005c52d826632b85a78aca6a5dd3000c2562391b9ba052a4e`
 - Go metadata source: `GOOS=linux GOARCH=amd64 CGO_ENABLED=1 go list -deps metadata for filterest[linux-release]:. tags=netgo osusergo; filterest[container]:.; filterest-admin-recovery[container]:./server_tools/admin_credential_recovery, plus compiled vendored components and Go toolchain`
 - npm metadata source: `package-lock.json production dependency graph`
 - browser bundle metadata source: `app/server_tools/licenses/browser_bundle_provenance.json matched against app/package-lock.json and app/frontend/dist/*.js`
