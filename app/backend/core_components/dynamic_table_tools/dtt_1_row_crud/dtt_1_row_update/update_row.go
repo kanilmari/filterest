@@ -17,6 +17,7 @@ import (
 	"strings"
 
 	backend "easelect/backend/core_components"
+	store "easelect/backend/core_components/dataset_appearance_store"
 	"easelect/backend/core_components/dataset_routes"
 	dbutils "easelect/backend/core_components/dbutils"
 	ai_features "easelect/backend/core_components/dynamic_table_tools/ai_features"
@@ -494,6 +495,11 @@ func UpdateRowHandler(response_writer http.ResponseWriter, request *http.Request
 		if tableName == "system_user_group_memberships" {
 			dtt_1_row_read.InvalidateUserColumnSettingsCache("", "")
 		}
+	}
+
+	if appearanceResult != nil {
+		projected := appearanceResult.ForClient(store.WantsRowPresentation(response_writer, request))
+		appearanceResult = &projected
 	}
 
 	// Palautetaan vastaus

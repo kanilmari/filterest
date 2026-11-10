@@ -6,7 +6,7 @@ import { count_this_function } from "../dev_tools/function_counter.js";
 import { fetchAuthModes, fetchUserPermissions } from "../endpoints/stable_endpoint_router.js";
 import { hasRoutePermission } from "../route_permission_checker.js";
 import { synchronizeThemePreferenceForAuthState } from "../theme.js";
-import { getSessionGeneration, invalidateSessionGeneration, subscribeToSessionGeneration } from '../auth/session_generation_store.js';
+import { acceptSessionIdentity, getSessionGeneration, invalidateSessionGeneration, subscribeToSessionGeneration } from '../auth/session_generation_store.js';
 import { beginFrontPageAvailabilityRequest, resetFrontPageAvailability, setFrontPageAvailability } from '../front_page/front_page_availability.js';
 import { setCategoryFilterButtonWidthMode } from '../filterbar/filter_list/category_filter_button_width_mode.js';
 
@@ -56,6 +56,11 @@ export async function setAuthModes() {
             // Home availability does not depend on the later permissions/theme
             // requests succeeding. Retained dataset headers need this policy now.
             setFrontPageAvailability(data, homeRevision);
+
+            // Auth modes confirms guests directly. Signed-in choices stay
+            // pending until an existing profile/Home response names the viewer;
+            // ownership verification must add no startup request.
+            if (data.needs_button === 'login') acceptSessionIdentity(1, generation);
 
             await synchronizeThemePreferenceForAuthState(data.needs_button === "logout");
             if (generation !== getSessionGeneration()) return;

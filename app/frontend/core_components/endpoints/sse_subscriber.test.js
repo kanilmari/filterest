@@ -22,7 +22,8 @@ const saveCellMock = vi.fn();
 
 async function loadModule(useRealRefresh = false) {
     vi.resetModules();
-    vi.doMock('../auth/session_generation_store.js', () => ({
+    vi.doMock('../auth/session_generation_store.js', async importOriginal => ({
+        ...(await importOriginal()),
         subscribeToSessionGeneration: listener => { sessionListeners.push(listener); return () => {}; },
     }));
     const refreshPath = '../general_tables/gt_1_row_crud/gt_1_2_row_read/table_refresh_unified.js';

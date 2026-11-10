@@ -7,8 +7,9 @@ import { login, loadCredentials, loadUserCredentials } from '../helpers/auth';
 import { buildTempDatasetName, createTempDataset, cleanupDatasetViaRequest, openTempDatasetRowArticle } from '../helpers/temp-dataset';
 import { closeArticleToCardView, configureArticleFieldRoles, postJsonWithCsrf } from '../helpers/image-first-article';
 import { getActiveDatasetContainer } from '../helpers/active-dataset';
-import { revealActiveFilterbarSection, waitForActiveFilterbarLayout } from '../helpers/filterbar';
+import { closeActiveFilterbarIfOpen, revealActiveFilterbarSection, waitForActiveFilterbarLayout } from '../helpers/filterbar';
 import { listRegisteredTestArtifacts } from '../helpers/test-artifact-run-registry';
+import { loadDatasetCardVisibility } from '../helpers/appearance-revisions';
 import { solidPng } from '../helpers/solid-png';
 
 type Fixture = { dataset: string; listURL: string };
@@ -22,8 +23,9 @@ const option = (viewKey: string) => `[data-testid="row-presentation-menu-option-
 
 const test = base.extend<{ fixture: Fixture }>({
   fixture: async ({ page }, use, info) => {
-    // R2 is the only phone proof; R1 and R3–R5 run on desktop only; other projects create nothing.
-    const projects = info.title.startsWith('R2 ') ? ['mobile-card'] : ['desktop-card'];
+    // Limit fixture creation to the intended viewport(s) for each proof.
+    const projects = info.title.startsWith('R6 ') ? ['desktop-card', 'mobile-card']
+      : info.title.startsWith('R2 ') ? ['mobile-card'] : ['desktop-card'];
     test.skip(!projects.includes(info.project.name), 'Only the requested projects create fixtures');
     await login(page, loadCredentials());
     const dataset = buildTempDatasetName('e2e_row_presentation');
@@ -33,6 +35,8 @@ const test = base.extend<{ fixture: Fixture }>({
         { title: SECOND, description: 'Text only', e2e_detail_note: 'Second details' }] });
     try {
       await configureArticleFieldRoles(page, dataset, 'e2e_detail_note');
+      // Isolate these examples from the installation's administrator-selected default.
+      await setRowOpeningOverride(page, dataset, 'article_view');
       const enabled = await postJsonWithCsrf(page, '/api/asset-linking/images/enable', { parent_table: dataset, max_file_size_mb: 10 });
       expect(enabled.status, enabled.body).toBe(201);
       await openTempDatasetRowArticle(page, dataset, 1);
@@ -72,6 +76,16 @@ async function split(page: Page) {
   const toggle = parts.locator('[data-testid="row-presentation-toggle"]:visible').first();
   await expect(primary).toBeVisible(); await expect(toggle).toBeVisible();
   return { primary, toggle };
+}
+/** Only patch this disposable table, using its current UID and both revisions. */
+async function setRowOpeningOverride(page: Page, dataset: string, mode: string | null) {
+  const path = 'shared.row_article_default_presentation';
+  const { dataset_appearance: appearance } = await loadDatasetCardVisibility(page.request, dataset);
+  const response = await postJsonWithCsrf(page, '/api/admin/dataset-appearance', {
+    schema_version: 2, dataset_uid: appearance.dataset_uid, version: appearance.version,
+    shared_version: appearance.shared_version, tab_set: {}, set: mode ? { [path]: mode } : {}, unset: mode ? [] : [path],
+  });
+  expect(response.status, response.body).toBe(200);
 }
 async function press(locator: Locator, touch: boolean) {
   if (touch) await locator.tap(); else await locator.click();
@@ -117,7 +131,7 @@ async function provePresentations(page: Page, fixture: Fixture, touch: boolean, 
   await page.goto(fixture.listURL, { waitUntil: 'domcontentloaded' });
   const { primary } = await split(page);
   await expect(primary).toHaveAttribute('data-presentation', 'article_view');
-  await expectChecked(page, 'article_view', touch);
+  await expectChecked(page, 'inherit', touch);
 
   await choose(page, 'image_first_view', touch, info, `${info.project.name}-ifav`);
   await expectOpen(page, IFAV, FIRST, 1, 'image_first_view');
@@ -193,12 +207,61 @@ test('R3 the open article row wins; a photo-less row opens text-only IFAV throug
   await page.goForward(); await expect(page.locator(`${IFAV}.image_first_view--text-only`)).toContainText(SECOND);
   await page.locator(CLOSE).click(); await expect(page.locator(IFAV)).toHaveCount(0);
 
-  // With row 2's classic article open, the menu opens that row, not the listing's first.
+  // The IFAV choice is remembered for ordinary card opens. Explicitly choose
+  // Article through the menu before proving that Page keeps the open second row.
+  await choose(page, 'article_view', false);
   await openTempDatasetRowArticle(page, fixture.dataset, 2);
+  await expect(article).toContainText(SECOND);
   await choose(page, 'image_first_page_view', false);
   await expectOpen(page, PAGE, SECOND, 2, 'image_first_page_view');
   await page.locator(CLOSE).click(); await expect(page.locator(PAGE)).toHaveCount(0);
   await expect(page.locator('[data-testid="big-card-container"]:visible').first()).toContainText(SECOND);
+});
+
+test('R6 table default, per-tab choice, pinned link and reset all target the right row', async ({ page, fixture }) => {
+  const path = 'shared.row_article_default_presentation';
+  const publicSettings = await page.request.get('/api/site-presentation-settings', {
+    headers: { 'X-Filterest-Appearance': 'row-presentation' },
+  });
+  expect(publicSettings.ok()).toBe(true);
+  const siteDefault = (await publicSettings.json()).defaults[path];
+  expect(['article_view', 'image_first_view', 'image_first_page_view']).toContain(siteDefault);
+  // Keep the table override distinct so resetting it proves site-default inheritance.
+  const override = siteDefault === 'image_first_page_view' ? 'image_first_view' : 'image_first_page_view';
+  const selector = override === 'image_first_page_view' ? PAGE : IFAV;
+  await setRowOpeningOverride(page, fixture.dataset, override);
+  await page.goto(fixture.listURL);
+  const { primary } = await split(page);
+  await expect(primary).toHaveAttribute('data-presentation', override);
+  const openSecondRow = async () => {
+    // split() opens the phone's panel over the cards. Close it with the real
+    // control before clicking the title; never force a click through the panel.
+    await closeActiveFilterbarIfOpen(page);
+    await page.locator(`#${fixture.dataset}_card_view_container [data-testid="card-item-header"]:visible`)
+      .filter({ hasText: SECOND }).click();
+  };
+  await openSecondRow();
+  await expectOpen(page, selector, SECOND, 2, override);
+  const pinnedPage = page.url();
+  await page.locator(CLOSE).click();
+
+  await choose(page, 'article_view', false);
+  await page.goto(fixture.listURL);
+  await openSecondRow();
+  await expect(page.locator('[data-testid="big-card-container"]:visible').first()).toContainText(SECOND);
+  await page.goto(pinnedPage);
+  await expectOpen(page, selector, SECOND, 2, override);
+  await page.goto(fixture.listURL);
+  const parts = await split(page);
+  await expect(parts.primary).toHaveAttribute('data-presentation', 'article_view');
+  await parts.toggle.click();
+  await page.locator(option('inherit')).click();
+  await expectOpen(page, selector, FIRST, 1, override);
+  expect(await page.evaluate(key => sessionStorage.getItem(key), fixture.dataset + '_row_presentation')).toBeNull();
+
+  await setRowOpeningOverride(page, fixture.dataset, null);
+  await page.goto(fixture.listURL);
+  await expect((await split(page)).primary).toHaveAttribute('data-presentation', siteDefault);
 });
 
 test('R4 light and dark themes with the opposite system theme', async ({ page, fixture }, info) => {

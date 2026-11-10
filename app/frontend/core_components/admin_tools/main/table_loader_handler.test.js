@@ -22,6 +22,14 @@ const mocks = vi.hoisted(() => ({
     getSelectedDataset: vi.fn(() => null),
 }));
 
+// Startup routing fixtures use the ordinary site default unless a case sets a tab choice.
+vi.mock("../../table_views/dataset_appearance_state.js", async importOriginal => {
+    const actual = await importOriginal();
+    return { ...actual, datasetAppearanceState: { ...actual.datasetAppearanceState,
+        savedRowDefaults: () => ({ site: 'article_view' }),
+    } };
+});
+
 vi.mock("../../front_page/front_page_navigation.js", () => ({
     isSeparateFrontPageEnabled: () => localStorage.getItem('separate_front_page') === 'true',
     openFrontPage: mocks.openFrontPage,
@@ -357,7 +365,7 @@ describe("load_tables deep-link startup routing", () => {
 });
 
 test("IFAV bookmark prepares its backing dataset without opening a classic article", async () => {
-    vi.clearAllMocks();
+    resetLoaderMocks(["dev_agent_tasks"]);
     resetEarlierVisitForgettingForTests();
     mocks.endpointRouter.mockResolvedValue({ datasets: [{ dataset_name: "dev_agent_tasks" }] });
     history.replaceState({}, "", "/dev_agent_tasks/853?search=test&view=image_first_view#image=one.jpg");
@@ -625,9 +633,13 @@ test.each(['article_view', 'image_first_view'].flatMap(view => ['', '/853'].map(
     });
     await load_tables();
     expect(document.querySelectorAll('[data-lang-key="article_view_permission_missing"]')).toHaveLength(1);
-    expect(mocks.setUnifiedTableState).not.toHaveBeenCalled();
+    expect(mocks.setUnifiedTableState).toHaveBeenCalledWith('dev_agent_tasks', expect.objectContaining({
+        articleView: expect.objectContaining({ expandedId: null, pendingAutoOpenFirstRenderedResult: false }),
+    }));
     expect(getChosenDatasetView('dev_agent_tasks')).toBe('card');
-    expect(mocks.openNavTab).toHaveBeenCalledWith('dev_agent_tasks', { skipUrlUpdate: true, forceReload: false, replaceUrl: true });
+    expect(mocks.openNavTab).toHaveBeenCalledWith('dev_agent_tasks', {
+        skipUrlUpdate: true, forceReload: false, replaceUrl: true, replacementParams: { view: 'card', search: 'harbour' },
+    });
     await updateDatasetAddress({ dataset: 'dev_agent_tasks' });
     expect(replaceDatasetAddressQuery('dev_agent_tasks', { view: 'card' })).toBe(false);
     expect(location.href).toBe(href); expect(history.state).toEqual(state);

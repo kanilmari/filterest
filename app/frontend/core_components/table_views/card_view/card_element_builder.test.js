@@ -5,6 +5,7 @@
 // @vitest-environment jsdom
 
 import { beforeEach, describe, expect, test, vi } from 'vitest';
+import { setRowPresentationChoice } from '../row_presentation/row_presentation_choice.js';
 
 const {
     createImageElementMock,
@@ -26,6 +27,8 @@ vi.mock('./card_avatar_builder.js', () => ({
 vi.mock('./row_article_opener.js', () => ({
     openRowArticleView: vi.fn(),
 }));
+
+vi.mock('./image_first_view_opener.js', () => ({ openImageFirstView: openImageFirstViewMock }));
 
 vi.mock('./image_first_view_activation.js', () => ({
     bindImageFirstViewActivation: vi.fn((element, options) => {
@@ -301,10 +304,24 @@ describe('classic article title and show-more access', () => {
         sessionStorage.clear();
         localStorage.setItem('chosen_language', 'fi');
     });
+    test('Page-only readers can open a row and its native link directly in Page', async () => {
+        setRowPresentationChoice('news', 'image_first_page_view');
+        sessionStorage.setItem('user_permissions', JSON.stringify(['/ui/view/image_first_page_view']));
+        const { createShowMoreLink } = await import('./card_element_builder.js');
+        const link = createShowMoreLink({ id: 7 }, 'news');
+        expect(link.tagName).toBe('A');
+        expect(new URL(link.href).searchParams.get('view')).toBe('image_first_page_view');
+        openImageFirstViewMock.mockClear();
+        link.click();
+        await vi.waitFor(() => expect(openImageFirstViewMock).toHaveBeenCalledWith(expect.objectContaining({
+            layout: 'page', rowItem: { id: 7 }, tableName: 'news', presentationChoice: true,
+        })));
+    });
     test.each([false, true])('title keeps only permitted opening behavior, allowed=%s', async allowed => {
         const { addHeaderElement, createShowMoreLink } = await import('./card_element_builder.js');
         const { openRowArticleView } = await import('./row_article_opener.js');
         vi.mocked(openRowArticleView).mockClear();
+        setRowPresentationChoice('news', 'article_view');
         sessionStorage.setItem('user_permissions', JSON.stringify(allowed ? ['/ui/view/article_view'] : []));
         const card = document.createElement('div'); card.className = 'card'; document.body.append(card);
         const row = { id: 1, title: 'Article' };
@@ -313,8 +330,9 @@ describe('classic article title and show-more access', () => {
         expect(title.dataset.articleAccess).toBe(allowed ? 'allowed' : 'denied');
         expect(more.hasAttribute('href')).toBe(allowed);
         title.click();
+        if (allowed) await vi.waitFor(() => expect(openRowArticleView).toHaveBeenCalledTimes(1));
         more.click();
-        if (allowed) expect(openRowArticleView).toHaveBeenCalledTimes(2);
+        if (allowed) await vi.waitFor(() => expect(openRowArticleView).toHaveBeenCalledTimes(2));
         else {
             expect(openRowArticleView).not.toHaveBeenCalled();
             expect(document.querySelector('[role="alert"]').textContent).toContain('do not have permission');

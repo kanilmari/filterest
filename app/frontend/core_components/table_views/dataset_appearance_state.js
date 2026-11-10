@@ -11,6 +11,12 @@ import { setPublicAppearanceAttributes } from '../../reusable_components/appeara
 import { renderDatasetAppearance, refreshDatasetAppearanceAdapters,
     clearDatasetAppearanceSurface } from './dataset_appearance_renderer.js';
 
+export const ROW_OPENING_DEFAULTS_CHANGED = 'dataset-row-opening-defaults-changed';
+const ROW_OPENING_PATH = 'shared.row_article_default_presentation';
+function signalRowDefaults(name = null) {
+    if (typeof document !== "undefined") document.dispatchEvent(new CustomEvent(ROW_OPENING_DEFAULTS_CHANGED, { detail: { name } }));
+}
+
 const clone = value => JSON.parse(JSON.stringify(value));
 const leaf = (config, path) => { const [group, key] = path.split('.'); return config[group]?.[key]; };
 const assignLeaf = (config, path, value) => { const [group, key] = path.split('.'); config[group][key] = value; };
@@ -27,7 +33,18 @@ export function createDatasetAppearanceState() {
     let paintScheduled = false;
     let surfaceOwners = new WeakMap();
     let epoch = 0, lifecycleVersion = 0, siteGeneration = 0, sequence = 0;
-    let site = null;
+    let site = null, savedSite = null;
+
+    // A click is a committed behaviour choice, independent of a live appearance preview.
+    function savedRowDefaults(name) {
+        const entry = entries.get(resolveUID(name));
+        if (!entry) return null;
+        const snapshot = entry.snapshot;
+        const freshSite = savedSite && (entry.siteGeneration < savedSite.generation
+            || snapshot.shared_version === savedSite.version);
+        return { dataset: snapshot.overrides?.[ROW_OPENING_PATH],
+            site: freshSite ? savedSite.value : snapshot.defaults?.[ROW_OPENING_PATH] };
+    }
 
     function resolveUID(name) {
         return String(getAllSpecs()[name]?.table_uid || '') || names.get(name) || '';
@@ -45,7 +62,7 @@ export function createDatasetAppearanceState() {
         const snapshot = entry?.snapshot;
         // V2 owns defaults separately. V1 effective values can supply a site
         // default only when no saved override would leak into a removed draft.
-        if (snapshot?.schema_version === 2) return snapshot.defaults[path];
+        if (snapshot?.schema_version === 2) return snapshot.defaults[path] ?? leaf(DEFAULT_DATASET_APPEARANCE, path);
         return (snapshot?.shared && leaf(snapshot.shared, path))
             ?? (snapshot && !Object.hasOwn(snapshot.overrides, path) ? leaf(snapshot.effective, path) : undefined)
             ?? leaf(DEFAULT_DATASET_APPEARANCE, path);
@@ -203,6 +220,7 @@ export function createDatasetAppearanceState() {
         if (previous && before !== null && after !== null && after < before) return false;
         if (previous && before === after && token
             && (token.siteGeneration < previous.siteGeneration || token.sequence < previous.sequence)) return false;
+        const previousDefaults = savedRowDefaults(name);
         names.set(name, uid);
         entries.set(uid, { snapshot: clone({ ...snapshot, effective: resolved, overrides: snapshot.overrides || {} }),
             siteGeneration: token?.siteGeneration ?? siteGeneration,
@@ -210,6 +228,8 @@ export function createDatasetAppearanceState() {
         configurations.delete(uid);
         // A renamed dataset keeps its UID and every already mounted surface.
         paintUID(uid);
+        const current = savedRowDefaults(name);
+        if (!previousDefaults || previousDefaults.site !== current.site || previousDefaults.dataset !== current.dataset) signalRowDefaults(name);
         return true;
     }
     function bind(surface, name, uid = null, { snapshotAllowed = true, related = false } = {}) {
@@ -288,10 +308,17 @@ export function createDatasetAppearanceState() {
         const mountedUID = surface?.closest('[data-dataset-appearance-uid]')?.dataset.datasetAppearanceUid;
         return !mountedUID || !uid || mountedUID === String(uid);
     }
-    function updateSite(config, { version = '', preview = false, changed = true } = {}) {
+    function updateSite(config, { version = '', preview = false, changed = true, confirmedRowDefault } = {}) {
         if (!isReadableDatasetAppearance(config)) return;
         if (changed) siteGeneration += 1;
         site = { config: normalize(config), version, preview };
+        // A saved response may arrive while the palette still paints its preview.
+        const value = preview ? confirmedRowDefault : leaf(site.config, ROW_OPENING_PATH);
+        if (value !== undefined) {
+            const changedDefault = !savedSite || savedSite.value !== value || savedSite.version !== version;
+            savedSite = { value, version, generation: siteGeneration };
+            if (changedDefault) signalRowDefaults();
+        }
         configurations.clear();
         const shared = site.config.shared;
         setPublicAppearanceAttributes({ cardShowAllFields: String(shared.card_show_all_fields),
@@ -340,7 +367,8 @@ export function createDatasetAppearanceState() {
         for (const key of [`name:${name}`, ...(uid ? [`uid:${uid}`] : [])]) {
             revokedSequences.set(key, Math.max(revokedSequences.get(key) || 0, denialSequence));
         }
-        entries.delete(uid); previews.delete(uid);
+        const hadEntry = entries.delete(uid); previews.delete(uid);
+        if (hadEntry) signalRowDefaults(name);
         configurations.delete(uid);
         clearBoundAppearance(name, uid);
         return true;
@@ -365,8 +393,9 @@ export function createDatasetAppearanceState() {
             generations.set(candidate, (generations.get(candidate) || 0) + 1);
             names.delete(candidate);
         }
-        entries.delete(uid);
+        const hadEntry = entries.delete(uid);
         previews.delete(uid);
+        if (hadEntry) signalRowDefaults(name);
         configurations.delete(uid);
     }
     function clear() {
@@ -380,9 +409,10 @@ export function createDatasetAppearanceState() {
         surfaceOwners = new WeakMap();
         entries.clear(); names.clear(); generations.clear(); uidGenerations.clear(); previews.clear();
         revokedSequences.clear();
+        signalRowDefaults();
     }
     return { capture, captureRegistry, isCurrent, accept, bind, paint, ownsSurface, effective, updateSite, revoke, rejectRelated, forget, clear,
-        savedSnapshot, setPreview, releasePreview };
+        savedSnapshot, savedRowDefaults, setPreview, releasePreview };
 }
 
 export const datasetAppearanceState = createDatasetAppearanceState();

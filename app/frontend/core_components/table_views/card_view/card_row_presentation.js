@@ -3,6 +3,7 @@
 // Bridges existing card assembly with shared selection and presentation contracts.
 // Exists to keep one card implementation within the source size limit.
 import { createImageElement, create_seeded_avatar } from "./card_avatar_builder.js";
+import { bindRowOpeningHref } from "./default_row_affordance.js";
 import { bindArticleViewActivation } from './article_view_access.js';
 import { openRowArticleView } from "./row_article_opener.js";
 import { format_column_name, createTicketStatusBadge } from "./card_field_formatter.js";
@@ -131,6 +132,7 @@ export function renderCardDetailsSection(
         titleValue: entry.titleValue,
         isLink: entry.isLink,
         href: entry.href,
+        bindLink: entry.rowDestination && (link => bindRowOpeningHref(link, entry.rowDestination.path, entry.rowDestination.tableName)),
         openInNewTabHref: entry.openInNewTabHref,
         columnClass: entry.columnClass,
         column: entry.column,

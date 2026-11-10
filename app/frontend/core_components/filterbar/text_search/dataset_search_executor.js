@@ -368,13 +368,14 @@ async function placeSearchGroups(tableName, cache) {
  * The listing answers with the true number of matches and stays connected to
  * endless scrolling, so the reader can browse every match instead of a top few.
  */
-async function loadDatasetMatches(tableName, cache, isCurrent, rebuildView, beforeSwap) {
+async function loadDatasetMatches(tableName, cache, renderOptions) {
+    const { isCurrent } = renderOptions;
     const requestFilters = { ...(getUnifiedTableState(tableName).filters || {}) };
     const requestHost = getSearchViewContainer(tableName);
     // Missing initial card hosts are rebuilt by the listing owner, consuming
     // that rebuild's first page. A null reload means abandoned or failed work:
     // retrying here fetched twice and silently replaced the failure surface.
-    const result = await reloadDatasetRowsFromListing(tableName, { isCurrent, rebuildView, beforeSwap });
+    const result = await reloadDatasetRowsFromListing(tableName, renderOptions);
     if (!isCurrent() || !result) return false;
 
     renderRowGroupFacets(tableName, result.row_group_facets, {
@@ -445,6 +446,8 @@ export async function restartInvalidatedSearch(tableName, renderOptions = {}) {
         || cache.filterSignature === getSearchFilterContext(tableName).signature) return false;
     // Row-only replacement retains controls and cached visibility. Let the
     // replacement's authoritative first page rebuild those together with rows.
+    // Keep the originating listing's row-opening policy on this repair run.
+    // Cache search options describe the user's query and must stay reusable.
     await do_intelligent_search(tableName, cache.query, cache.searchOptions || {}, { ...renderOptions, rebuildView: true });
     return true;
 }
@@ -527,7 +530,8 @@ function awaitFirstSearchResultInArticleView(tableName) {
  * then the AI group; then the other datasets' groups. A new cache identity
  * invalidates every delayed answer, render and article open from an older one.
  */
-export async function do_intelligent_search(tableName, userQuery, opts = {}, { rebuildView = false, isCurrent: callerIsCurrent = null, beforeSwap = null } = {}) {
+export async function do_intelligent_search(tableName, userQuery, opts = {}, renderOptions = {}) {
+    const { rebuildView = false, isCurrent: callerIsCurrent = null, beforeSwap = null, deferRowOpening = false } = renderOptions;
     const adapter = getDatasetQueryAdapter(tableName);
     if (adapter) return adapter.refresh({ search: userQuery.trim() });
     if (callerIsCurrent && !callerIsCurrent()) return;
@@ -587,7 +591,7 @@ export async function do_intelligent_search(tableName, userQuery, opts = {}, { r
 
     const executionPromise = (async () => {
         try {
-            const listingLoaded = await loadDatasetMatches(tableName, cache, isCurrent, rebuildView, beforeSwap);
+            const listingLoaded = await loadDatasetMatches(tableName, cache, { isCurrent, rebuildView, beforeSwap, deferRowOpening });
             if (!isCurrent() || !listingLoaded) return;
             // The dataset's own answer is complete as soon as its listing replies;
             // the AI group arrives afterwards and adds to it.
@@ -595,7 +599,7 @@ export async function do_intelligent_search(tableName, userQuery, opts = {}, { r
             syncSearchResultsCount(tableName, cache);
             await placeSearchGroups(tableName, cache);
             if (!isCurrent()) return;
-            await openFirstListedMatch(tableName, cache);
+            if (!deferRowOpening) await openFirstListedMatch(tableName, cache);
             if (!isCurrent()) return;
             await streamAiSearchResults(tableName, cache, context, opts, isCurrent);
         } catch (error) {

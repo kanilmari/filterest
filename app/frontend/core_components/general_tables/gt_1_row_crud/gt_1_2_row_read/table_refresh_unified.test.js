@@ -165,14 +165,14 @@ describe("table_refresh_unified missing-dataset recovery", () => {
         const { mergeStateWithOptions } = await vi.importActual('./table_refresh_unified_helpers.js');
         mergeStateWithOptionsMock.mockImplementation(mergeStateWithOptions);
         const mod = await loadModule();
-        // Explicit overrides may accompany a restore. They must be applied
-        // once, rather than resurrecting hidden selections on the repair load.
+        // Explicit overrides may accompany a restore. They must be applied once, rather than resurrecting hidden selections on the repair load.
         restartInvalidatedSearchMock.mockResolvedValue(savedState);
         await mod.refreshTableUnified('jobs', { skipUrlParams: savedState,
             newFilters: { jobs_status_name: 'old' }, offsetOverride: 30,
             isCurrent: savedState ? () => Object.hasOwn(state.filters, 'jobs_status_name') : undefined });
         if (savedState) { // Repair invalidates a search caller's old signature.
-            expect(restartInvalidatedSearchMock).toHaveBeenCalledWith('jobs');
+            const [dataset, repair = {}] = restartInvalidatedSearchMock.mock.lastCall; expect(dataset).toBe('jobs');
+            expect(repair.isCurrent).toBeUndefined(); expect(repair.deferRowOpening).not.toBe(true);
             expect(generateTableMock).not.toHaveBeenCalled();
             expect(fetchDatasetDataMock).toHaveBeenCalledTimes(1);
             expect(state.filters).toEqual({ jobs_title: 'Trip' });

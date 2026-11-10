@@ -1,5 +1,5 @@
 // site_presentation_settings_test.go
-// Proves the public 8/9 allowlist and revision-protected site patch protocol.
+// Proves the public site allowlist and revision-protected site patch protocol.
 // Connects handlers, strict ownership and persisted omission behavior.
 // Uses only synthetic disposable storage for transaction proofs.
 package system_table_tools
@@ -24,7 +24,7 @@ import (
 
 func TestDefaultSitePresentationSettingsMatchApprovedThemeContract(t *testing.T) {
 	settings := defaultSitePresentationSettings()
-	if settings.SchemaVersion != 2 || len(settings.SiteValues) != 8 || len(settings.Defaults) != 9 || validateSitePresentationSettings(settings) != nil {
+	if settings.SchemaVersion != 2 || len(settings.SiteValues) != 8 || len(settings.Defaults) != 10 || validateSitePresentationSettings(settings) != nil {
 		t.Fatal(settings)
 	}
 	data, _ := json.Marshal(settings)
@@ -224,4 +224,29 @@ func sitePresentationDisposableDB(t *testing.T) *sql.DB {
 		t.Fatal(err)
 	}
 	return db
+}
+
+func TestSiteRowPresentationNegotiationKeepsLegacyTabsReadable(t *testing.T) {
+	saved := defaultSitePresentationSettings()
+	saved.Defaults[store.RowPresentationPath] = "image_first_page_view"
+	saved.Defaults["shared.card_detail_columns"] = 3
+	previous := readSitePresentationSettings
+	defer func() { readSitePresentationSettings = previous }()
+	readSitePresentationSettings = func() (SitePresentationSettingsResponse, error) { return saved, nil }
+	for _, header := range []string{"", "unknown", "row-presentation"} {
+		w := httptest.NewRecorder()
+		request := httptest.NewRequest("GET", "/api/site-presentation-settings", nil)
+		request.Header.Set(store.AppearanceHeader, header)
+		GetSitePresentationSettingsHandler(w, request)
+		var result SitePresentationSettingsResponse
+		if err := json.Unmarshal(w.Body.Bytes(), &result); err != nil {
+			t.Fatal(err)
+		}
+		mode, exists := result.Defaults[store.RowPresentationPath]
+		if exists != (header == "row-presentation") || exists && mode != "image_first_page_view" ||
+			result.Defaults["shared.card_detail_columns"] != float64(3) || result.Version != saved.Version ||
+			w.Header().Get("Vary") != store.AppearanceHeader {
+			t.Fatal(header, result, w.Header())
+		}
+	}
 }

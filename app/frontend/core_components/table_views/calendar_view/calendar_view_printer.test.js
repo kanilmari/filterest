@@ -5,6 +5,7 @@
 // Exists to keep the calendar MVP stable before dataset_view_printer.js wires it in.
 
 import { beforeEach, describe, expect, test, vi } from "vitest";
+import { setRowPresentationChoice } from "../row_presentation/row_presentation_choice.js";
 
 const {
     openRowArticleViewMock,
@@ -171,6 +172,7 @@ describe("create_calendar_view", () => {
         expect(eventDay?.querySelector(".calendar-view__event-count")?.textContent).toBe("1");
         expect(eventDay?.querySelector(".calendar-view__event-preview")?.textContent).toBe("<b>Launch</b>");
 
+        setRowPresentationChoice("events", "article_view");
         const eventButton = eventDay?.querySelector('[data-testid="calendar-event-button"]');
         expect(eventButton?.tagName).toBe("BUTTON");
         eventButton?.click();
@@ -185,7 +187,7 @@ describe("create_calendar_view", () => {
             },
         });
         expect(refreshTableUnifiedMock).toHaveBeenCalledWith("events", {
-            skipUrlParams: true,
+            skipUrlParams: true, isCurrent: expect.any(Function),
         });
         expect(openRowArticleViewMock).not.toHaveBeenCalled();
     });

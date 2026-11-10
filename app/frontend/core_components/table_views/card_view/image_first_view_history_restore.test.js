@@ -86,6 +86,17 @@ async function restoreReload() {
     expect(await handleImageFirstViewHistory({ tableName: "examples", rowId: "3" })).toBe(true);
 }
 
+test.each(["image_first_view", "image_first_page_view"])("a bare bookmarked row inherits %s and replaces its entry, keeping the calendar for close", async viewKey => {
+    history.replaceState({}, "", "/examples/3?view=calendar&offset=7");
+    const length = history.length;
+    expect(await handleImageFirstViewHistory({ tableName: "examples", rowId: "3", viewKey })).toBe(true);
+    expect(document.querySelector(VIEW)).toBeTruthy();
+    expect(new URL(location.href).searchParams.get("view")).toBe(viewKey);
+    expect(new URL(location.href).searchParams.get("offset")).toBe("7");
+    expect(history.state.imageFirstView).toMatchObject({ rowId: "3", viewKey, presentationChoice: true, backingView: "calendar", origin: null });
+    expect(history.length).toBe(length);
+});
+
 async function traverse(direction) {
     await new Promise(resolve => {
         window.addEventListener("popstate", resolve, { once: true });

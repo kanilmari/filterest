@@ -367,6 +367,11 @@ export async function primeMultipleDatasetPermissions(requests = []) {
     return results;
 }
 
+/** Strict read after priming. A missing entry or a temporary optimistic hint is not a grant. */
+export function hasConfirmedDatasetPermission(route, dataset, datasetUid = '') {
+    return getFreshCacheEntry(buildDatasetPermissionKey(route, dataset, datasetUid))?.value === true;
+}
+
 export async function hasDatasetPermission(route, dataset, { datasetUid = '' } = {}) {
     const key = buildDatasetPermissionKey(route, dataset, datasetUid);
     const cached = getFreshCacheEntry(key);

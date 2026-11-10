@@ -43,8 +43,8 @@ export function showArticleViewAccessDenied() {
 }
 
 /** Removes opening semantics while retaining a click/keyboard explanation. */
-export function applyArticleViewAffordance(element) {
-    const allowed = canOpenArticleView();
+export function applyArticleViewAffordance(element, canOpen = canOpenArticleView) {
+    const allowed = canOpen();
     element.dataset.articleAccess = allowed ? 'allowed' : 'denied';
     if (!allowed) {
         element.removeAttribute('href');
@@ -57,8 +57,8 @@ export function applyArticleViewAffordance(element) {
 }
 
 /** Native buttons must be plain text when denied, without an implicit button role. */
-export function createArticleOpenerElement(tagName) {
-    return document.createElement(canOpenArticleView() ? tagName : 'span');
+export function createArticleOpenerElement(tagName, canOpen = canOpenArticleView) {
+    return document.createElement(canOpen() ? tagName : 'span');
 }
 
 function isSeparateInteractiveChild(element, target) {
@@ -69,12 +69,13 @@ function isSeparateInteractiveChild(element, target) {
 }
 
 /** Binds existing opener behavior without granting rights or changing its allowed path. */
-export function bindArticleViewActivation(element, activate, { keyboard = false } = {}) {
-    applyArticleViewAffordance(element);
+export function bindArticleViewActivation(element, activate, { keyboard = false, canOpen = canOpenArticleView } = {}) {
+    applyArticleViewAffordance(element, canOpen);
     const open = event => {
         // Independent field links/editors are still usable without an article grant.
-        if (!canOpenArticleView() && isSeparateInteractiveChild(element, event.target)) return;
-        if (!requireArticleViewAccess()) {
+        if (!canOpen() && isSeparateInteractiveChild(element, event.target)) return;
+        if (!canOpen()) {
+            showArticleViewAccessDenied();
             event.preventDefault();
             event.stopPropagation();
             return;
@@ -84,7 +85,7 @@ export function bindArticleViewActivation(element, activate, { keyboard = false 
     addCardResourceListener(element, 'click', open);
     addCardResourceListener(element, 'keydown', event => {
         if (!['Enter', ' '].includes(event.key)) return;
-        const allowed = canOpenArticleView();
+        const allowed = canOpen();
         if (allowed && event.target !== element) return;
         if (!allowed && isSeparateInteractiveChild(element, event.target)) return;
         if (keyboard || !allowed) {

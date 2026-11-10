@@ -94,6 +94,7 @@ export function createKvPairBuilders({ translate, decorateKeyElement }) {
 
             const a = document.createElement("a");
             a.href = href;
+            pairObj.bindLink?.(a);
             a.textContent = linkText;
             if (isExternalLinkField) {
                 a.target = "_blank";
@@ -104,6 +105,7 @@ export function createKvPairBuilders({ translate, decorateKeyElement }) {
             if (openInNewTabHref) {
                 const openLink = document.createElement("a");
                 openLink.href = openInNewTabHref;
+                pairObj.bindLink?.(openLink);
                 openLink.target = "_blank";
                 openLink.rel = "noopener noreferrer";
                 openLink.className = "kv-open-in-new-tab";

@@ -49,7 +49,8 @@
       "shared.card_show_all_fields",
       "shared.card_style_variant",
       "shared.filterbar_content_top_space",
-      "shared.label_value_layout"
+      "shared.label_value_layout",
+      "shared.row_article_default_presentation"
     ]
   },
   "aliases": {
@@ -64,6 +65,11 @@
   },
   "derived": ["shared.image_blur"],
   "cases": [
+    {"name": "all canonical row presentation keys", "target": "defaults", "valid": true, "set": {"shared.row_article_default_presentation": "image_first_view"}},
+    {"name": "page-sized row opens", "target": "overrides", "valid": true, "set": {"shared.row_article_default_presentation": "image_first_page_view"}},
+    {"name": "explicit classic overrides site Page", "target": "overrides", "valid": true, "set": {"shared.row_article_default_presentation": "article_view"}},
+    {"name": "dataset view cannot be a row default", "target": "defaults", "valid": false, "set": {"shared.row_article_default_presentation": "card"}},
+    {"name": "null override is invalid; unset explicitly", "target": "overrides", "valid": false, "set": {"shared.row_article_default_presentation": null}},
     {"name": "manual heading order", "target": "site_values", "valid": true, "set": {"shared.row_group_heading_order": "manual"}},
     {"name": "count heading order", "target": "site_values", "valid": true, "set": {"shared.row_group_heading_order": "result_count"}},
     {"name": "invalid heading order", "target": "site_values", "valid": false, "set": {"shared.row_group_heading_order": "count"}},

@@ -5,6 +5,7 @@
 // detail field is described the same way whichever renderer draws it.
 // Exists so database-held legacy SVG can never enter the DOM rendering path.
 
+import { bindRowOpeningHref } from "./default_row_affordance.js";
 import { applyLabelValueLayout } from "../label_value_layout_adapter.js";
 import { printEmptyValue } from "../../../reusable_components/key_value_container/empty_value_printer.js";
 import { resolveCardDetailIconKey } from "./card_detail_icon_builder.js";
@@ -148,6 +149,7 @@ function createSingleLineCardDetailValue(detailEntry) {
     const linkElement = document.createElement("a");
     linkElement.className = "card_detail_row_value_link";
     linkElement.href = href;
+    if (detailEntry.rowDestination) bindRowOpeningHref(linkElement, detailEntry.rowDestination.path, detailEntry.rowDestination.tableName);
     linkElement.textContent = displayValue;
     if (detailEntry?.isLink === true && !detailEntry?.href) {
         linkElement.target = "_blank";

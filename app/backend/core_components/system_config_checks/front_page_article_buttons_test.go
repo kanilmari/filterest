@@ -60,12 +60,13 @@ func TestFrontPageArticleButtonsPresentationValidation(t *testing.T) {
 	legacy := `{"schema_version":1,"placement":"top_row","items":[{"table_uid":201,"row_id":"5","enabled":true%s}]}`
 	for _, view := range []string{"article_view", "image_first_page_view"} {
 		value, err := ParseFrontPageArticleButtons([]byte(fmt.Sprintf(legacy, `,"view":"`+view+`"`)))
-		if err != nil || value.Items[0].PresentationView() != view {
+		if err != nil || value.Items[0].View != view {
 			t.Fatal(value, err)
 		}
 	}
 	value, err := ParseFrontPageArticleButtons([]byte(fmt.Sprintf(legacy, "")))
-	if err != nil || value.Items[0].PresentationView() != "article_view" {
+	// An absent view stays absent: the button inherits instead of becoming classic.
+	if err != nil || value.Items[0].View != "" {
 		t.Fatal(value, err)
 	}
 	raw, _ := json.Marshal(value)

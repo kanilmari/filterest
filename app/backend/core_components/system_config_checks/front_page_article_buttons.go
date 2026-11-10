@@ -24,19 +24,15 @@ type FrontPageArticleButtons struct {
 	Items         []FrontPageArticleItem `json:"items"`
 }
 
+// View is the administrator's explicit presentation: "article_view" (classic)
+// or "image_first_page_view" (Page). An empty View is the stored absence of the
+// field and means the button inherits the visitor's row-opening default; it is
+// never read as classic. Only the two explicit values are ever stored.
 type FrontPageArticleItem struct {
 	TableUID int    `json:"table_uid"`
 	RowID    string `json:"row_id"`
 	Enabled  bool   `json:"enabled"`
 	View     string `json:"view,omitempty"`
-}
-
-// PresentationView preserves absent legacy values without adding a stored field.
-func (item FrontPageArticleItem) PresentationView() string {
-	if item.View == "" {
-		return "article_view"
-	}
-	return item.View
 }
 
 var articleRowID = regexp.MustCompile(`^(0|[1-9][0-9]*)$`)

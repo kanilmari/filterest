@@ -19,8 +19,8 @@ import {
     startOfLocalDay,
     toLocalDateKey,
 } from "./calendar_view_helpers.js";
-import { bindArticleViewActivation, createArticleOpenerElement, requireArticleViewAccess } from '../card_view/article_view_access.js';
-import { openRowArticleView } from "../card_view/row_article_opener.js";
+import { bindRowActivation, createRowOpenerElement } from "../card_view/default_row_affordance.js";
+import { openDefaultRowPresentation } from "../row_presentation/row_presentation_dispatcher.js";
 import { getLanguageWithBrowserFallback } from "../../state_stores/lang_preference_reader.js";
 import { setUnifiedTableState } from "../../state_stores/table_state_store.js";
 import { getChosenDatasetView, setChosenDatasetView } from "../../state_stores/dataset_view_choice_saver.js";
@@ -501,7 +501,7 @@ function createEventListItem(event, state) {
  * Exists so every visible event affordance behaves like a normal card title click.
  */
 function createEventButton(event, state, { className, includeRange }) {
-    const button = createArticleOpenerElement("button");
+    const button = createRowOpenerElement("button", state.tableName);
     button.type = "button";
     button.classList.add(className);
     button.dataset.testid = "calendar-event-button";
@@ -522,7 +522,7 @@ function createEventButton(event, state, { className, includeRange }) {
     }
 
     button.setAttribute("aria-label", `${event.title}, ${formatEventRange(event)}`);
-    bindArticleViewActivation(button, (clickEvent) => {
+    bindRowActivation(button, state.tableName, (clickEvent) => {
         clickEvent.preventDefault();
         openCalendarEventArticle(event, state, button);
     });
@@ -530,27 +530,27 @@ function createEventButton(event, state, { className, includeRange }) {
 }
 
 async function openCalendarEventArticle(event, state, button) {
-    if (!requireArticleViewAccess()) return;
-    const rowId = event.row?.id;
-    if (rowId == null) {
-        openRowArticleView(event.row, state.tableName, button);
-        return;
+    return openDefaultRowPresentation(event.row, state.tableName, button, { openClassic: openClassicRow });
+
+    async function openClassicRow(row, table, selected, { isCurrent }) {
+        const { refreshTableUnified } = await import(
+            "../../general_tables/gt_1_row_crud/gt_1_2_row_read/table_refresh_unified.js"
+        );
+        if (!isCurrent()) return;
+        const rowId = row.id;
+
+        const returnView = getChosenDatasetView(state.tableName) || "calendar";
+        setChosenDatasetView(state.tableName, "article_view");
+        setUnifiedTableState(state.tableName, {
+            articleView: {
+                collapsed: true,
+                expandedId: rowId,
+                returnView,
+            },
+        });
+
+        await refreshTableUnified(state.tableName, { skipUrlParams: true, isCurrent });
     }
-
-    const returnView = getChosenDatasetView(state.tableName) || "calendar";
-    setChosenDatasetView(state.tableName, "article_view");
-    setUnifiedTableState(state.tableName, {
-        articleView: {
-            collapsed: true,
-            expandedId: rowId,
-            returnView,
-        },
-    });
-
-    const { refreshTableUnified } = await import(
-        "../../general_tables/gt_1_row_crud/gt_1_2_row_read/table_refresh_unified.js"
-    );
-    await refreshTableUnified(state.tableName, { skipUrlParams: true });
 }
 
 /**

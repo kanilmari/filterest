@@ -76,13 +76,12 @@ existing constants and check them against this source.
 
 Canonical presentation keys are `article_view`, `image_first_view`, and the
 `image_first_page_view`. The storage batch registers all three database view
-identities and independent image-first permission routes. The Page pilot now renders only explicit row links and Home buttons carrying
-`view: "image_first_page_view"`, reusing IFAV with an opt-in contained-image layout.
-The combined editor is implemented; the browser contract keeps Page `reserved:true`
-so it does not enter ordinary opener choices or activate dataset opener policy.
-The view picker's Article split button lets a person choose Page (or IFAV) for
-one dataset in one browser tab; that explicit choice is not an opener default and
-changes no stored setting ([Image-first article](Image_First_Article.md#choosing-a-presentation-in-the-view-picker)).
+identities and independent image-first permission routes. Page reuses IFAV
+with a contained-image layout and has its own active permission route. Ordinary
+row openings follow the browser tab's choice, the dataset override and the
+site default. Both managed scopes use the appearance contract field
+`shared.row_article_default_presentation`. Home buttons with an explicit
+presentation and shared row links can pin a presentation for one opening ([Image-first article](Image_First_Article.md#choosing-a-presentation-in-the-view-picker)).
 `permission_route` records the approved independent route for each key;
 `current_permission_route` explicitly preserves IFAV's existing Article gate.
 Page requests its canonical Details default; compatibility readers still request `classic` and `image_first`;

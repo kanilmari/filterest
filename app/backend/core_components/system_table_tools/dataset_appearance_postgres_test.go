@@ -338,20 +338,20 @@ func TestDatasetAppearancePostgresMigrationRefusesMalformedExistingTable(t *test
 	}
 }
 
-func TestDatasetAppearancePostgresCompleteTabFirstSaveAndNineOverrides(t *testing.T) {
+func TestDatasetAppearancePostgresCompleteTabFirstSaveAndAllOverrides(t *testing.T) {
 	db, uid := datasetAppearanceFixture(t)
 	initial, err := store.ReadAppearance(db, uid, false)
 	if err != nil || initial.Version != "none" {
 		t.Fatal(initial, err)
 	}
-	if len(initial.TabValues) != 28 || len(initial.SiteValues) != 8 || len(initial.Defaults) != 9 {
+	if len(initial.TabValues) != 28 || len(initial.SiteValues) != 8 || len(initial.Defaults) != 10 {
 		t.Fatal(initial)
 	}
 	set := appearance.Rules().DefaultsForPlace(appearance.SiteDefault)
 	set["shared.card_show_all_fields"] = false
 	set["shared.filterbar_content_top_space"] = 0
 	saved, err := datasetAppearanceTestSave(db, uid, DatasetAppearancePatch{TabSet: map[string]any{"light.image_blur": 0, "dark.oval_enabled": false, "shared.hero_extra_height": 83.5}, Set: set}, "none")
-	if err != nil || len(saved.TabValues) != 28 || len(saved.Overrides) != 9 || saved.TabValues["light.image_blur"] != float64(0) {
+	if err != nil || len(saved.TabValues) != 28 || len(saved.Overrides) != 10 || saved.TabValues["light.image_blur"] != float64(0) {
 		t.Fatal(saved, err)
 	}
 	snapshot, err := store.ReadAppearance(db, uid, false)

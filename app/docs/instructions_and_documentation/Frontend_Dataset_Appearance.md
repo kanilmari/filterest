@@ -31,7 +31,7 @@ Storage and API maps use flat canonical paths such as `light.image_opacity`.
 ### Setting places
 
 This inventory is expanded from the definition's theme owners, fields and
-`place` metadata: 45 canonical paths, comprising 28 tab-only values, nine
+`place` metadata: 46 canonical paths, comprising 28 tab-only values, ten
 site defaults and eight site-only values. Each theme path below is independent;
 the `shared.*` rows apply in both themes. Bounds, choices and initial values
 remain authoritative in the definition rather than in this table.
@@ -54,6 +54,7 @@ remain authoritative in the definition rather than in this table.
 | Hero extra height | `shared.hero_extra_height` | Tab-only. On phones (≤ 700 px), a hero with a cover uses fixed 8 px block padding, so Hero extra height does not apply there. |
 | Hero bottom fade | `shared.hero_bottom_fade` | Tab-only |
 | Card image width | `shared.card_image_width` | Site default + tab override |
+| Row-opening presentation | `shared.row_article_default_presentation` | Site default + tab override |
 | Card image presentation | `shared.card_image_presentation` | Site default + tab override |
 | Article image caption position | `shared.article_image_caption_position` | Site default + tab override |
 | All fields or only filled fields | `shared.card_show_all_fields` | Site default + tab override |
@@ -78,7 +79,7 @@ tab's cover. Category heading order is another site-only setting; see below.
 
 **Show cover photo** aliases the active theme's `image_opacity`; there is no
 stored visibility boolean. The compatibility-only `shared.image_blur` derives
-from `light.image_blur` and is excluded from the 45 canonical paths. It is not
+from `light.image_blur` and is excluded from the 46 canonical paths. It is not
 another independently editable setting or storage place.
 
 ### Resolution and new tabs
@@ -188,7 +189,7 @@ existing permissions. These UI capabilities do not grant server access.
 The server refuses:
 
 - Site-only fields in any tab override, including brand colour and navigation
-  highlight values. Override `set` and `unset` accept only the nine defaults.
+  highlight values. Override `set` and `unset` accept only site defaults, including the row-opening presentation.
 - Non-tab paths in `tab_set`, or attempts to unset tab-only values into
   inheritance. The site endpoint accepts only site-only/default paths, never
   tab cover settings.
@@ -201,6 +202,18 @@ The server refuses:
 - Generic row writes to the private appearance table or generic creation,
   editing, renaming or deletion of the site's appearance configuration row;
   dedicated revision-protected APIs own these writes.
+
+### Appearance response compatibility
+
+The current frontend sends `X-Filterest-Appearance: row-presentation` on
+requests for appearance-bearing responses. API clients reading the row-opening
+default or its dataset override should send the same header. The response then
+contains the complete current defaults and authorized overrides.
+Earlier tabs validate a fixed leaf inventory. Requests without the opt-in receive
+their original appearance shape, including every previously supported field and
+the same revision tokens. A revision-checked patch to other fields preserves the
+current row-opening choice. Cache variants use `Vary: X-Filterest-Appearance`.
+The header selects the wire shape after the endpoint's access checks.
 
 ### Storage, API and revisions
 

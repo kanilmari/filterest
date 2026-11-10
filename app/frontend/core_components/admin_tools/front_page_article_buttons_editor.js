@@ -2,6 +2,7 @@
 // Edits the site's ordered Home article list independently of Home boxes and palette.
 // Connects the readable grouped catalogue, canonical row picker and revision-protected API.
 // Keeps rejected drafts, exposes private unavailable warnings and never copies labels into settings.
+// "Use default" removes a button's view so Home inherits; explicit Article and Page stay stored.
 import { endpoint_router } from '../endpoints/endpoint_router.js';
 import { bindDatasetLanguageRenderer } from '../table_views/dataset_value_localizer.js';
 import { getLanguageWithBrowserFallback } from '../state_stores/lang_preference_reader.js';
@@ -10,7 +11,8 @@ import { fetchCurrentUserProfile } from '../user_tools/current_user_profile_fetc
 import { showConfirmModal } from '../../reusable_components/modal/confirm_modal_builder.js';
 import { frontPageText } from './front_page_settings_controls.js';
 import { articleButtonCopy as copy } from './front_page_article_buttons_copy.js';
-import { createArticleRowPicker, resolveArticleButtonLabel } from './front_page_article_row_picker.js';
+import { articleButtonProjection, articleButtonSetting, createArticleRowPicker, resolveArticleButtonLabel,
+} from './front_page_article_row_picker.js';
 
 const MAX_BUTTONS = 10;
 const emptyList = () => ({ schema_version: 1, placement: 'below_text', items: [] });
@@ -59,16 +61,17 @@ export function createFrontPageArticleButtonsEditor({ onSaved, onChange = () => 
     for (const key of ['below_text', 'top_row']) {
         const option = translated('option', key); option.value = key; placement.append(option);
     }
+    // The empty option is inheritance: it is shown as "Use default" and never stored.
     function presentationSelect(view, changed) {
         const select = document.createElement('select');
-        for (const key of ['article_view', 'image_first_page_view']) {
-            const option = translated('option', key); option.value = key; select.append(option);
+        for (const [key, value] of [['inherit', ''], ['article_view', 'article_view'], ['image_first_page_view', 'image_first_page_view']]) {
+            const option = translated('option', key); option.value = value; select.append(option);
         }
-        select.value = view || 'article_view';
-        select.addEventListener('change', () => changed(select.value));
+        select.value = articleButtonSetting(view) || '';
+        select.addEventListener('change', () => changed(articleButtonSetting(select.value)));
         return select;
     }
-    const newPresentation = presentationSelect('article_view', view => { void picker.setView(view); });
+    const newPresentation = presentationSelect(undefined, view => { void picker.setView(view); });
     const datasetSelect = document.createElement('select');
     const list = document.createElement('ol');
     list.className = 'front-page-settings-block-list'; list.dataset.testid = 'front-page-article-list';
@@ -81,7 +84,7 @@ export function createFrontPageArticleButtonsEditor({ onSaved, onChange = () => 
     actions.append(save, reload);
     let draft = emptyList(), baseline = '', version = '', datasets = [], selection = null;
     let ready = false, busy = false, conflicted = false, disposed = false, configurationError = false;
-    let statusKey = '', labelsGeneration = 0, viewerID = 0;
+    let statusKey = '', labelsGeneration = 0, validatingLabels = false, viewerID = 0;
     const lifetime = new AbortController();
     const picker = createArticleRowPicker({ onChange: value => { selection = value; update(); } });
     const rowLabel = translated('label', 'row'); rowLabel.htmlFor = 'front-page-article-row'; rowLabel.id = 'front-page-article-picker-label';
@@ -100,7 +103,7 @@ export function createFrontPageArticleButtonsEditor({ onSaved, onChange = () => 
         placement.disabled = datasetSelect.disabled = newPresentation.disabled = !ready || busy;
         picker.setDisabled(!ready || busy);
         add.disabled = !ready || busy || !selection || !selection.label || draft.items.length >= MAX_BUTTONS;
-        save.disabled = !ready || busy || conflicted || !dirty();
+        save.disabled = !ready || busy || validatingLabels || conflicted || !dirty();
         reload.disabled = busy;
         list.querySelectorAll('input,button,select').forEach(control => {
             control.disabled = busy || control.dataset.boundary === 'true' || control.dataset.unavailable === 'true';
@@ -144,7 +147,7 @@ export function createFrontPageArticleButtonsEditor({ onSaved, onChange = () => 
                 rowActions.append(control);
             }
             const presentation = presentationSelect(item.view, view => {
-                item.view = view;
+                if (view === undefined) delete item.view; else item.view = view;
                 item.targetUnavailable = false;
                 void refreshLabels(); update();
             });
@@ -172,21 +175,26 @@ export function createFrontPageArticleButtonsEditor({ onSaved, onChange = () => 
     }
     async function refreshLabels() {
         const generation = ++labelsGeneration;
+        validatingLabels = true; update();
         const language = getLanguageWithBrowserFallback();
         await Promise.all(draft.items.map(async item => {
             const dataset = datasets.find(entry => entry.table_uid === item.table_uid);
             if (item.targetUnavailable || !dataset) { item.unavailable = true; return; }
+            const isCurrent = () => !disposed && generation === labelsGeneration;
             try {
+                const projection = await articleButtonProjection(dataset.dataset_name, item.view, item.row_id, isCurrent);
+                if (!isCurrent()) return;
+                if (!projection) { item.label = ''; item.unavailable = true; return; }
                 const response = await endpoint_router('getResults', { signal: lifetime.signal, suppressErrorToast: true,
                     suppressAuthRedirect: true, url_params: `?${new URLSearchParams({ dataset: dataset.dataset_name,
-                        id: item.row_id, row_count: '0', view_key: item.view || 'article_view', lang: language })}` });
+                        id: item.row_id, row_count: '0', view_key: projection, lang: language })}` });
                 if (disposed || generation !== labelsGeneration) return;
                 const row = response.data?.find(value => String(value.id) === item.row_id);
                 item.label = row ? resolveArticleButtonLabel(row, response.columns, response.types, language, viewerID) : '';
                 item.unavailable = !item.label;
-            } catch { if (!disposed && generation === labelsGeneration) item.unavailable = true; }
+            } catch { if (isCurrent()) { item.label = ''; item.unavailable = true; } }
         }));
-        if (!disposed && generation === labelsGeneration) { renderList(); update(); }
+        if (!disposed && generation === labelsGeneration) { validatingLabels = false; renderList(); update(); }
     }
     async function load() {
         if (busy || disposed) return;
@@ -212,7 +220,7 @@ export function createFrontPageArticleButtonsEditor({ onSaved, onChange = () => 
             }
             baseline = JSON.stringify(payload()); conflicted = false; ready = true;
             renderDatasets(); renderList(); await picker.setDataset(null); datasetSelect.value = '';
-            newPresentation.value = 'article_view'; await picker.setView('article_view');
+            newPresentation.value = ''; await picker.setView(undefined);
             await refreshLabels(); report(configurationError ? 'configurationError' : '');
         } catch { if (!disposed) report('loadFailed'); }
         finally { busy = false; if (!disposed) update(); }
@@ -225,12 +233,14 @@ export function createFrontPageArticleButtonsEditor({ onSaved, onChange = () => 
         const candidate = selection && { table_uid: selection.table_uid, row_id: selection.row_id, enabled: true,
             ...(selection.view === undefined ? {} : { view: selection.view }) };
         const proposed = { ...payload(), items: [...payload().items, candidate] };
-        if (!candidate || !selection.label || !validArticleButtonConfiguration(proposed)) { report('invalid'); return; }
+        // A selection read under another setting than the one now shown is never added.
+        if (!candidate || !selection.label || selection.view !== articleButtonSetting(newPresentation.value)
+            || !validArticleButtonConfiguration(proposed)) { report('invalid'); return; }
         draft.items.push({ ...candidate, label: selection.label });
         renderList(`${candidate.table_uid}:${candidate.row_id}`, 'remove'); report(''); update();
     });
     save.addEventListener('click', async () => {
-        if (!ready || busy || conflicted || !dirty()) return;
+        if (!ready || busy || validatingLabels || conflicted || !dirty()) return;
         const value = payload();
         if (!validArticleButtonConfiguration(value) || draft.items.some(item => item.unavailable)) { report('invalid'); return; }
         busy = true; update(); report('saving');

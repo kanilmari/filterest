@@ -46,6 +46,7 @@ export function createRowArticleMediaHydrator({
     currentUserId: current_user_id,
     showRelatedItems: show_related_items_on_big_cards,
     canCommit: isCurrent,
+    captureMediaGuard = () => () => true,
     onLinkedTaskChildCountChange,
     sectionDefaults = {},
 }) {
@@ -54,6 +55,12 @@ export function createRowArticleMediaHydrator({
     let observedAncestors = [];
     const canCommit = () => !disposed && isCurrent() && rowArticleElement.isConnected
         && rowArticleElement.contains(rowArticleContentElement);
+    const captureMediaWrite = () => {
+        const isCurrentMedia = captureMediaGuard();
+        return () => canCommit() && isCurrentMedia();
+    };
+    // Capture at article creation, before the deferred initial hydration can start.
+    const canHydrate = captureMediaWrite();
     const scrollPersistence = attachRowArticleContentScrollPersistence(
         rowArticleContentElement,
         table_name,
@@ -110,7 +117,7 @@ export function createRowArticleMediaHydrator({
     };
     let refreshMediaSections = async () => {};
     const hydrateRelatedSections = async () => {
-        if (!canCommit() || !rowArticleElement.isConnected || !row_item.id) {
+        if (!canCommit() || !row_item.id) {
             return;
         }
         const hasInlineImage = Boolean(rowArticleContentElement.querySelector(
@@ -127,8 +134,8 @@ export function createRowArticleMediaHydrator({
         // related sections. Until a fresh response composes the pictures (mediaState),
         // and whenever none can be used, the row's own image fields keep their permitted
         // credits. A response decides the image shown, starting on the card's picture.
-        const syncInlineCaptions = (mediaState = null) => {
-            if (!canCommit() || !rowArticleElement.isConnected) return;
+        const syncInlineCaptions = (mediaState = null, canWrite = canHydrate) => {
+            if (!canWrite()) return;
             syncRowArticleInlineMedia(
                 rowArticleContentElement,
                 mediaState
@@ -136,7 +143,7 @@ export function createRowArticleMediaHydrator({
                     : resolveRowArticleDisplayedImageRows(null, null, parent_row_image_rows),
                 {
                     rowItem: row_item, tableName: table_name, selectedCard, rowLabel: row_presentation_label,
-                    canCommit, fromResponse: Boolean(mediaState), cardPicture: mediaState?.cardPicture,
+                    canCommit: canWrite, fromResponse: Boolean(mediaState), cardPicture: mediaState?.cardPicture,
                 },
             );
         };
@@ -194,7 +201,7 @@ export function createRowArticleMediaHydrator({
                 rowArticleContentElement.insertBefore(nextElement, anchor || null);
             };
 
-            const renderGallery = async (imgChild, imageRows, cardPicture) => {
+            const renderGallery = async (imgChild, imageRows, cardPicture, canWrite = canHydrate) => {
                 if (!hasRowArticlePermission("images")) return null;
                 const imageDataset = imgChild?.dataset || "";
                 if (imageDataset) {
@@ -215,7 +222,7 @@ export function createRowArticleMediaHydrator({
                         hasDatasetPermission("/api/update-row", imageDataset),
                     ])
                     : [false, false, false];
-                if (!canCommit() || !rowArticleElement.isConnected) return null;
+                if (!canWrite()) return null;
 
                 const galleryPermissions = {
                     canUpload,
@@ -257,35 +264,40 @@ export function createRowArticleMediaHydrator({
             };
 
             refreshMediaSections = async () => {
+                const canRefresh = captureMediaWrite();
+                if (!canRefresh()) return;
                 try {
                     const fresh = await rowArticleLoadSession.fetchDynamicChildren({
                         forceRefresh: true,
                     });
                     // A refresh without a usable response keeps the pictures already
                     // shown instead of returning to the row's own image fields.
-                    if (!canCommit() || !rowArticleElement.isConnected || !Array.isArray(fresh?.child_tables)) {
+                    if (!canRefresh() || !Array.isArray(fresh?.child_tables)) {
                         return;
                     }
                     const freshMediaState = await buildMediaState(fresh);
-                    if (!canCommit() || !rowArticleElement.isConnected) return;
-                    syncInlineCaptions(freshMediaState);
+                    if (!canRefresh()) return;
+                    syncInlineCaptions(freshMediaState, canRefresh);
                     const freshGalleryElement = await renderGallery(
                         freshMediaState.imageChildForGallery,
                         freshMediaState.imageRows,
                         freshMediaState.cardPicture,
+                        canRefresh,
                     );
-                    if (!canCommit() || !rowArticleElement.isConnected) return;
+                    if (!canRefresh()) return;
                     upsertMediaSection(
                         ".row_article_image_gallery_section",
                         wrapRowArticleImageGallerySection(freshGalleryElement, sectionOptions("images", ".row_article_image_gallery_section")),
                         ".row_article_attachment_list_section, .row_article_related_items_section",
                     );
+                    const attachments = await renderAttachments(
+                        freshMediaState.attachmentChildForList,
+                        freshMediaState.attachmentLinking,
+                    );
+                    if (!canRefresh()) return;
                     upsertMediaSection(
                         ".row_article_attachment_list_section",
-                        wrapRowArticleAttachmentSection(await renderAttachments(
-                            freshMediaState.attachmentChildForList,
-                            freshMediaState.attachmentLinking,
-                        ), sectionOptions("attachments", ".row_article_attachment_list_section")),
+                        wrapRowArticleAttachmentSection(attachments, sectionOptions("attachments", ".row_article_attachment_list_section")),
                         ".row_article_related_items_section",
                     );
                 } catch (refreshErr) {
@@ -293,12 +305,13 @@ export function createRowArticleMediaHydrator({
                 }
             };
 
+            if (!canHydrate()) return;
             const dyn = await rowArticleLoadSession.fetchDynamicChildren();
-            if (!canCommit() || !rowArticleElement.isConnected || !Array.isArray(dyn?.child_tables)) {
+            if (!canHydrate() || !Array.isArray(dyn?.child_tables)) {
                 return;
             }
             const initialMediaState = await buildMediaState(dyn);
-            if (!canCommit() || !rowArticleElement.isConnected) return;
+            if (!canHydrate()) return;
             syncInlineCaptions(initialMediaState);
             if (!show_related_items_on_big_cards) return;
 
@@ -322,7 +335,7 @@ export function createRowArticleMediaHydrator({
                 initialMediaState.imageRows,
                 initialMediaState.cardPicture,
             );
-            if (!canCommit() || !rowArticleElement.isConnected) return;
+            if (!canHydrate()) return;
             if (galleryElement) {
                 rowArticleContentElement.appendChild(
                     wrapRowArticleImageGallerySection(galleryElement, sectionOptions("images", ".row_article_image_gallery_section"))
@@ -333,7 +346,7 @@ export function createRowArticleMediaHydrator({
                 initialMediaState.attachmentChildForList,
                 initialMediaState.attachmentLinking,
             );
-            if (!canCommit() || !rowArticleElement.isConnected) return;
+            if (!canHydrate()) return;
             if (attachmentList) {
                 rowArticleContentElement.appendChild(
                     wrapRowArticleAttachmentSection(attachmentList, sectionOptions("attachments", ".row_article_attachment_list_section"))
@@ -354,7 +367,7 @@ export function createRowArticleMediaHydrator({
                     fetchDynamicChildren: rowArticleLoadSession.fetchDynamicChildren,
                 }
             );
-            if (tabsEl && canCommit() && rowArticleElement.isConnected) {
+            if (tabsEl && canHydrate()) {
                 const relatedSection = wrapRowArticleRelatedRowsSection(
                     tabsEl,
                     sectionOptions("related_rows", ".row_article_related_items_section"),

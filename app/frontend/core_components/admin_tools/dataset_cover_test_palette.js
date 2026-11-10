@@ -14,6 +14,7 @@ import { buildCardStyleControl } from './card_style_palette_control.js';
 import { buildLabelValueLayoutControl } from './site_label_value_layout_control.js';
 import { buildCardImagePresentationControl } from './dataset_cover_card_image_control.js';
 import { buildActiveFilterRemoveSideControl } from './active_filter_remove_side_control.js';
+import { buildRowArticlePresentationControl } from './row_article_presentation_control.js';
 import { buildRowGroupHeadingOrderControl } from './row_group_heading_order_control.js';
 import { buildArticleImageCaptionControl } from './site_article_image_control.js';
 import { DEFAULT_DATASET_COVER_THEME, isValidThemeConfig, applySitePresentationGlobals,
@@ -302,6 +303,7 @@ function buildPaletteControl(hero, datasetName, siteState, options) {
         [buildCardImagePresentationControl(copy, value => change('card_image_presentation', value)), 'card_image_presentation', cardScope],
         [buildCardFieldsControl(copy, value => change('card_show_all_fields', value)), 'card_show_all_fields', cardScope],
         [buildLabelValueLayoutControl(value => change('label_value_layout', value)), 'label_value_layout', cardScope],
+        [buildRowArticlePresentationControl(copy, value => change('row_article_default_presentation', value)), 'row_article_default_presentation', toolboxByGroup.get('articleImages').controls],
         [buildArticleImageCaptionControl(copy, value => change('article_image_caption_position', value)), 'article_image_caption_position', toolboxByGroup.get('articleImages').controls],
         [buildActiveFilterRemoveSideControl(copy, value => change('active_filter_remove_side', value)), 'active_filter_remove_side', toolboxByGroup.get('navigation').controls],
         [buildRowGroupHeadingOrderControl(copy, value => change('row_group_heading_order', value)), 'row_group_heading_order', toolboxByGroup.get('navigation').controls],
@@ -335,9 +337,9 @@ function buildPaletteControl(hero, datasetName, siteState, options) {
         for (const row of rows) {
             const path = pathFor(row.key, row.shared);
             row.element.dataset.appearancePath = path;
-            row.control.setValue(values[row.shared ? 'shared' : activeTheme][row.key]);
-            row.element.querySelectorAll('input, select').forEach(input => { input.disabled = !editable(path); });
             const isOverride = Boolean(owners.tab && Object.hasOwn(owners.tab.draft.overrides, path));
+            row.control.setValue(values[row.shared ? 'shared' : activeTheme][row.key], scope === 'tab' && !isOverride);
+            row.element.querySelectorAll('input, select').forEach(input => { input.disabled = !editable(path); });
             row.indicator.textContent = row.field.place === 'site_only' ? copy.siteWide
                 : scope === 'site' ? '' : isOverride ? copy.override : copy.inherited;
             row.indicator.hidden = scope === 'site';

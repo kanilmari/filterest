@@ -23,7 +23,7 @@ describe('three-place snapshot', () => {
         expect(effective.shared.image_blur).toBe(0); expect(effective.shared.card_show_all_fields).toBe(false);
         expect(effective.shared.filterbar_content_top_space).toBe(0); expect(effective.shared.card_detail_columns).toBe(2);
         expect(Object.keys(data.tab_values)).toHaveLength(28); expect(Object.keys(data.site_values)).toHaveLength(8);
-        expect(Object.keys(data.defaults)).toHaveLength(9); expect(Object.keys(data.overrides)).toHaveLength(3);
+        expect(Object.keys(data.defaults)).toHaveLength(10); expect(Object.keys(data.overrides)).toHaveLength(3);
     });
     test('public site settings project definition covers without exposing a stored cover', () => {
         const data = response(); delete data.tab_values; delete data.overrides;
@@ -67,4 +67,27 @@ test('absent heading order in old snapshots defaults to manual without changing 
         data.site_values['shared.row_group_heading_order'] = value;
         expect(readDatasetAppearance(data)).toBeNull();
     }
+});
+
+test('old responses inherit classic, but a dataset classic override survives a site Page setting', () => {
+    const path = 'shared.row_article_default_presentation';
+    const data = response();
+    delete data.defaults[path];
+    expect(readSiteAppearance(data).shared.row_article_default_presentation).toBe('article_view');
+    expect(readDatasetAppearance(data).shared.row_article_default_presentation).toBe('article_view');
+    expect(Object.hasOwn(data.defaults, path)).toBe(false);
+
+    data.defaults[path] = 'image_first_page_view';
+    data.overrides[path] = 'article_view';
+    expect(readSiteAppearance(data).shared.row_article_default_presentation).toBe('image_first_page_view');
+    expect(readDatasetAppearance(data).shared.row_article_default_presentation).toBe('article_view');
+    delete data.overrides[path];
+    expect(readDatasetAppearance(data).shared.row_article_default_presentation).toBe('image_first_page_view');
+    data.defaults[path] = null;
+    expect(readSiteAppearance(data)).toBeNull();
+    expect(readDatasetAppearance(data)).toBeNull();
+    const legacy = structuredClone(DEFAULT_DATASET_APPEARANCE);
+    delete legacy.shared.row_article_default_presentation;
+    expect(readDatasetAppearance({schema_version: 1, effective: legacy}).shared.row_article_default_presentation)
+        .toBe('article_view');
 });

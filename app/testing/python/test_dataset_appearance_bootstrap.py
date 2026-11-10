@@ -22,6 +22,7 @@ CUTOVER = MIGRATIONS / "20261009000040_cut_over_dataset_card_appearance.sql"
 SCHEMA = MIGRATIONS / "20261009000060_extend_dataset_appearance_three_places.sql"
 BACKFILL = MIGRATIONS / "20261009000061_backfill_dataset_appearance_three_places.sql"
 HEADING_ORDER = MIGRATIONS / "20261015000020_add_row_group_heading_order_appearance_field.sql"
+ROW_PRESENTATION = MIGRATIONS / "20261105000985_add_row_article_default_presentation.sql"
 OWNER = MIGRATIONS / "20261009000099_record_database_release_9_11_0.sql"
 BASE = "e314e34"
 
@@ -156,7 +157,7 @@ def test_three_place_migration_sources_and_definition_snapshot():
     schema = SCHEMA.read_text()
     backfill = BACKFILL.read_text()
     definition = json.loads((APP / "frontend/shared/dataset_appearance/definition.json").read_text())
-    rules = json.loads(re.search(r"SELECT '\n(.*?)\n'::jsonb;", HEADING_ORDER.read_text(), re.S).group(1))
+    rules = json.loads(re.search(r"SELECT '\n(.*?)\n'::jsonb;", ROW_PRESENTATION.read_text(), re.S).group(1))
     expected = {}
     for group in ("light", "dark", "shared"):
         fields = definition["shared_fields" if group == "shared" else "theme_fields"]

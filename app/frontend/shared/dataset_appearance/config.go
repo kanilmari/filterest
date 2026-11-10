@@ -33,20 +33,21 @@ type DatasetCoverSharedValues struct {
 	HeroExtraHeight        float64 `json:"hero_extra_height"`
 	HeroBottomFade         float64 `json:"hero_bottom_fade"`
 	// ImageBlur remains as a rollback-safe fallback for older application builds.
-	ImageBlur                   float64 `json:"image_blur"`
-	CardImageWidth              float64 `json:"card_image_width"`
-	CardImagePresentation       string  `json:"card_image_presentation"`
-	ArticleImageCaptionPosition string  `json:"article_image_caption_position"`
-	CardDetailColumns           int     `json:"card_detail_columns"`
-	CardDescriptionLines        int     `json:"card_description_lines"`
-	CardStyleVariant            string  `json:"card_style_variant"`
-	LabelValueLayout            string  `json:"label_value_layout"`
-	CardShowAllFields           bool    `json:"card_show_all_fields"`
-	ActiveTabFade               float64 `json:"active_tab_fade"`
-	ActiveTabMaxOpacity         float64 `json:"active_tab_max_opacity"`
-	ActiveTabGlowIntensity      float64 `json:"active_tab_glow_intensity"`
-	ActiveTabGlowWidth          float64 `json:"active_tab_glow_width"`
-	ActiveTabGlowBlur           float64 `json:"active_tab_glow_blur"`
+	ImageBlur                     float64 `json:"image_blur"`
+	CardImageWidth                float64 `json:"card_image_width"`
+	CardImagePresentation         string  `json:"card_image_presentation"`
+	RowArticleDefaultPresentation string  `json:"row_article_default_presentation,omitempty"`
+	ArticleImageCaptionPosition   string  `json:"article_image_caption_position"`
+	CardDetailColumns             int     `json:"card_detail_columns"`
+	CardDescriptionLines          int     `json:"card_description_lines"`
+	CardStyleVariant              string  `json:"card_style_variant"`
+	LabelValueLayout              string  `json:"label_value_layout"`
+	CardShowAllFields             bool    `json:"card_show_all_fields"`
+	ActiveTabFade                 float64 `json:"active_tab_fade"`
+	ActiveTabMaxOpacity           float64 `json:"active_tab_max_opacity"`
+	ActiveTabGlowIntensity        float64 `json:"active_tab_glow_intensity"`
+	ActiveTabGlowWidth            float64 `json:"active_tab_glow_width"`
+	ActiveTabGlowBlur             float64 `json:"active_tab_glow_blur"`
 	// FilterbarContentTopSpace is the empty space above the hero header icon.
 	FilterbarContentTopSpace float64 `json:"filterbar_content_top_space"`
 	BrandColor               string  `json:"brand_color"`

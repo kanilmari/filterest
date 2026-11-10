@@ -133,13 +133,13 @@ export function isValidDatasetAppearanceSiteValuesV2(values, options) {
     return isValidPlaceValuesV2(values, 'site_only', true, options);
 }
 
-/** Twin of definition.go: ValidateDefaultsV2; all nine overridable defaults. */
+/** Twin of definition.go: ValidateDefaultsV2; all overridable defaults. */
 export function isValidDatasetAppearanceDefaultsV2(values, options) {
     return isValidPlaceValuesV2(values, 'site_default', true, options);
 }
 
 /** Twin of definition.go: ValidateOverridesV2; sparse entries for only those
- *  nine defaults, without dropping present values or modifying the map. */
+ *  defaults, without dropping present values or modifying the map. */
 export function isValidDatasetAppearanceOverridesV2(values, options) {
     return isValidPlaceValuesV2(values, 'site_default', false, options);
 }

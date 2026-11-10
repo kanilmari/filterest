@@ -3,10 +3,11 @@
 // Bridges table metadata, navigation helpers, and redirect/session state during admin tool startup.
 // Exists to keep admin table-loading and first-open behavior out of generic navigation modules.
 
+import { resolveRowAddress, rowBackingCollection } from "../../navigation/nav_engine/row_address_presentation.js";
 import { recordApplicationAddressWrite } from "../../navigation/nav_engine/address_write_revision.js";
 import { canOpenArticleView, requireArticleViewAccess } from '../../table_views/card_view/article_view_access.js';
 import { isRenderableDatasetView, resolveDatasetViewSelectionTarget } from "../../table_views/dataset_view_registry.js";
-import { isImageFirstViewURL, getImageFirstViewBackingView, handleImageFirstViewHistory } from "../../navigation/nav_engine/image_first_view_history.js";
+import { getImageFirstViewBackingView, handleImageFirstViewHistory } from "../../navigation/nav_engine/image_first_view_history.js";
 import { create_navigation_buttons } from '../../navigation/database_tree/nav_builder.js';
 import {
     custom_views,
@@ -167,15 +168,22 @@ export async function load_tables(options = {}) {
         // The image-first route owns its row and never restored the ordinary
         // article's reading position, so only an ordinary article row counts.
         const requestedArticleView = resolveDatasetViewSelectionTarget(new URLSearchParams(location.search).get('view'));
-        const articleDenied = Boolean(deepLinkedRowId || ['article_view', 'image_first_view', 'image_first_page_view'].includes(requestedArticleView))
-            && !canOpenArticleView(requestedArticleView);
-        if (articleDenied) {
+        const initialAddress = window.location.href;
+        const isLandingCurrent = () => isCurrentDatasetAccessRefresh(accessGeneration) && window.location.href === initialAddress;
+        const rowChoice = deepLinkedRowId
+            ? await resolveRowAddress(resolved_table_name, deepLinkedRowId, requestedArticleView, isLandingCurrent) : null;
+        if (!isLandingCurrent()) return result_from_server;
+        const rowUnavailable = rowChoice?.status === "failed" || rowChoice?.status === "stale";
+        const articleDenied = rowChoice ? rowChoice.status === "denied"
+            : ['article_view', 'image_first_view', 'image_first_page_view'].includes(requestedArticleView) && !canOpenArticleView(requestedArticleView);
+        const keepRowAddress = articleDenied || rowUnavailable;
+        if (keepRowAddress) {
             retainHistoryEntryAddress();
-            requireArticleViewAccess(requestedArticleView);
+            if (articleDenied && !rowChoice) requireArticleViewAccess(requestedArticleView);
             // A restored address may not replace a mounted collection. A cold
             // bookmark still loads its ordinary collection, with the notice above.
             const mountedRoot = document.getElementById(getSelectedDataset() + '_container');
-            if (mountedRoot?.querySelector('.tab-content-body') && !mountedRoot.classList.contains('hidden')) return result_from_server;
+            if (articleDenied && mountedRoot?.querySelector('.tab-content-body') && !mountedRoot.classList.contains('hidden')) return result_from_server;
             deepLinkedRowId = null;
         }
         if (resolved_table_name) {
@@ -186,7 +194,7 @@ export async function load_tables(options = {}) {
             clearDatasetSelectionState();
         }
 
-        const opensImageFirst = Boolean(deepLinkedRowId) && isImageFirstViewURL();
+        const opensImageFirst = Boolean(deepLinkedRowId) && ["image_first_view", "image_first_page_view"].includes(rowChoice?.viewKey);
         const reloadedArticle = resolved_table_name && deepLinkedRowId && !opensImageFirst
             ? { datasetName: resolved_table_name, rowId: deepLinkedRowId }
             : null;
@@ -201,14 +209,24 @@ export async function load_tables(options = {}) {
             if (deepLinkedRowId && !opensImageFirst) {
                 setChosenDatasetView(resolved_table_name, "article_view");
                 setUnifiedTableState(resolved_table_name, {
-                    articleView: { collapsed: true, expandedId: deepLinkedRowId, returnView: "card" }
+                    articleView: { collapsed: true, expandedId: deepLinkedRowId,
+                        returnView: requestedArticleView !== "article_view" && isRenderableDatasetView(requestedArticleView) ? requestedArticleView : "card" }
                 });
             }
             // The image-first route owns its row. The backing dataset must not
             // also auto-open the ordinary article or overwrite the IFAV URL.
             const targetURL = window.location.href;
             const initialParams = new URLSearchParams(window.location.search);
-            if (!deepLinkedRowId) {
+            if (keepRowAddress) {
+                const backing = rowBackingCollection(resolved_table_name, requestedArticleView);
+                if (!backing) return result_from_server;
+                setChosenDatasetView(resolved_table_name, backing);
+                initialParams.set("view", backing);
+                setUnifiedTableState(resolved_table_name, {
+                    articleView: { collapsed: false, expandedId: null,
+                        pendingAutoOpenFirstRenderedResult: false, pendingAutoOpenFirstSearchResult: false },
+                });
+            } else if (!deepLinkedRowId) {
                 const requestedView = initialParams.get("view");
                 const explicitView = resolveDatasetViewSelectionTarget(requestedView);
                 if (!articleDenied && requestedView && isRenderableDatasetView(explicitView)
@@ -224,15 +242,15 @@ export async function load_tables(options = {}) {
             // The landing (or an access refresh) describes the entry the browser already shows: replace it, so Back
             // gains no extra step and the Forward entries survive (G5: Back to a dataset, then Forward).
             const navigation = await openNavTab(resolved_table_name, {
-                skipUrlUpdate: articleDenied || isLandingOnFrontpage || Boolean(deepLinkedRowId),
-                forceReload,
+                skipUrlUpdate: keepRowAddress || isLandingOnFrontpage || Boolean(deepLinkedRowId),
+                forceReload: forceReload || rowUnavailable,
                 replaceUrl: true,
-                ...(opensImageFirst ? { replacementParams: Object.fromEntries(initialParams) } : {}),
+                ...((opensImageFirst || keepRowAddress) ? { replacementParams: Object.fromEntries(initialParams) } : {}),
             });
             if (opensImageFirst && !navigation?.abort && isCurrentDatasetAccessRefresh(accessGeneration)
                 && window.location.href === targetURL) {
                 await handleImageFirstViewHistory({
-                    tableName: resolved_table_name, rowId: deepLinkedRowId,
+                    tableName: resolved_table_name, rowId: deepLinkedRowId, viewKey: rowChoice.viewKey,
                     isCurrentNavigation: () => isCurrentDatasetAccessRefresh(accessGeneration)
                         && window.location.href === targetURL,
                 });

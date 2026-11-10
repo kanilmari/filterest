@@ -126,6 +126,7 @@ for (const width of [1280, 375]) for (const theme of ['light', 'dark'] as const)
       return { homeSnapshot, original, originallyAbsent, baseline, originalHome, originalTheme, identity };
     });
     const name = buildTempDatasetName('e2e_home_article_button');
+    const rowPath = `/${name}/1`;
     readerContext = await step('create reader context', () => browser.newContext({ ignoreHTTPSErrors: true, storageState: { cookies: [], origins: [] } }));
     let themeAttempted = false, themeSaved: ThemePreference | null = null;
     let lastVersion = original.version, buttonsChanged = false, buttonSaveAttempted = false;
@@ -256,7 +257,7 @@ for (const width of [1280, 375]) for (const theme of ['light', 'dark'] as const)
           });
           const link = page.locator('#front_page_container .front-page-article-button');
           await expect(link).toHaveCount(1); await expect(link).toHaveAccessibleName(LABEL);
-          const href = await link.getAttribute('href'); expect(href).toMatch(/\/1\?view=article_view$/);
+          await expect(link).toHaveAttribute('href', rowPath);
           const bounds = (await link.boundingBox())!; expect(bounds.height).toBeGreaterThanOrEqual(44);
           // Reach the link by Tab so the ring proves keyboard navigation after saving by pointer.
           const beforeLink = placement === 'top_row'
@@ -344,8 +345,13 @@ for (const width of [1280, 375]) for (const theme of ['light', 'dark'] as const)
         });
         const link = page.locator('#front_page_container .front-page-article-button');
         await step(`${placement}: article navigation and return Home`, async () => {
-          await link.click(); await expect(page).toHaveURL(new RegExp('/1(?:-[^?]*)?\\?view=article_view'));
-          await expect(page.locator('.active_row_article .big_card_header')).toContainText(LABEL);
+          await link.click();
+          const heading = page.locator('.active_row_article .big_card_header');
+          await expect(heading).toBeVisible(); await expect(heading).toContainText(LABEL);
+          // The rendered article may add its title slug and view to the inherited link.
+          await expect(page).toHaveURL(({ pathname, searchParams }) =>
+            new RegExp(`^${rowPath}(?:-[a-z0-9-]+)?$`).test(pathname)
+            && (!searchParams.has('view') || searchParams.get('view') === 'article_view'));
           await home(page); await expect(link).toBeVisible();
         });
         await step(`${placement}: reader row access and Home omission`, async () => {

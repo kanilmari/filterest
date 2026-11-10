@@ -4,9 +4,13 @@
 // Bridges the real opener and catalogue with shared drawing/network stubs.
 // Keeps every original promise while allowing the media suite to live separately.
 
-import { describe, expect, test, vi } from "vitest";
+import { describe, expect, onTestFinished, test, vi } from "vitest";
 import { setupRowArticleOpenerTests, articleUiSettings, flushRowArticleHydration } from "./row_article_opener_test_setup.js";
 import { openRowArticleView } from "./row_article_opener.js";
+import { datasetAppearanceState } from "../dataset_appearance_state.js";
+import * as inlineMedia from "./row_article_inline_media.js";
+import { beginRowPresentationRequest } from "../row_presentation/row_presentation_choice.js";
+import { beginImageFirstViewOpen, handleImageFirstViewHistory, imageFirstViewDidClose } from "../../navigation/nav_engine/image_first_view_history.js";
 import { parseRoleString } from "./card_field_formatter.js";
 import { hasDatasetPermission, primeDatasetPermissions } from "../../route_permission_checker.js";
 import { buildRowArticleRelatedTabs } from "./row_article_child_tabs.js";
@@ -16,11 +20,12 @@ import { resolveRowArticleImageGalleryChild, resolveRowArticleParentImageRows, r
 import { buildRowArticleContent } from "./row_article_content_builder.js";
 import { createRowArticleLoadSession } from "./row_article_load_session.js";
 import { setChosenDatasetView } from "../../state_stores/dataset_view_choice_saver.js";
+import { getAllSpecs, setAllSpecs } from "../../state_stores/table_specs_reader.js";
 
 describe("openRowArticleView", () => {
     setupRowArticleOpenerTests();
 
-    function prepareInlineCaptionArticle({ parentRows = [], childRows = [] } = {}) {
+    function prepareInlineCaptionArticle({ parentRows = [], childRows = [], loadSession } = {}) {
         document.body.innerHTML = `<div id="tickets_article_view_container"><div class="card_view_wrapper"><div class="card_container"><div class="card" data-id="2"></div></div><div class="row_article_placeholder"></div></div></div>`;
         const content = document.createElement("div");
         const inlineImage = document.createElement("div");
@@ -35,7 +40,7 @@ describe("openRowArticleView", () => {
         const child = { dataset: "tickets_assets", column: "tickets_id", rows: childRows };
         vi.mocked(resolveRowArticleSharedAssetChild).mockReturnValue(child);
         vi.mocked(resolveRowArticleImageGalleryChild).mockReturnValue(child);
-        const session = {
+        const session = loadSession ?? {
             fetchDynamicChildren: vi.fn(async () => ({
                 gallery_relation: { dataset: "tickets_assets", column: "tickets_id" },
                 child_tables: [child],
@@ -45,6 +50,269 @@ describe("openRowArticleView", () => {
         vi.mocked(createRowArticleLoadSession).mockReturnValueOnce(session);
         return { inlineImage, session, selectedCard: document.querySelector(".card") };
     }
+
+    function galleryResponse(rows) {
+        const relation = { dataset: "tickets_assets", column: "tickets_id" };
+        return { gallery_relation: relation, child_tables: [{ ...relation, rows }] };
+    }
+
+    async function openClassicAndReturnFromImages({ browseFirst = false, firstRequest, defaultOpener = false } = {}) {
+        articleUiSettings.showRelatedItems = false;
+        const childRows = Array.from({ length: 6 }, (_, index) => ({ filename: `10_2_${index + 1}.webp` }));
+        const { createRowArticleLoadSession: createSession } = await vi.importActual("./row_article_load_session.js");
+        const { resolveRowArticleImageGalleryChild: resolveGallery } = await vi.importActual("./row_article_asset_resolver.js");
+        const requestChildren = vi.fn(async () => galleryResponse(childRows));
+        if (firstRequest) requestChildren.mockImplementationOnce(firstRequest);
+        const session = createSession({ tableName: "tickets", rowId: 2, requestFn: requestChildren });
+        const { inlineImage, selectedCard } = prepareInlineCaptionArticle({
+            parentRows: childRows, childRows, loadSession: session,
+        });
+        vi.mocked(resolveRowArticleImageGalleryChild).mockImplementation(resolveGallery);
+        inlineImage.querySelector("img").src = "/storage/10/2/original/10_2_1.webp";
+        const root = document.createElement("section");
+        root.id = "tickets_container";
+        root.innerHTML = '<div class="tab_parts_container" data-view="article_view"></div>';
+        document.body.append(root);
+        onTestFinished(async () => { root.remove(); await flushRowArticleHydration(); });
+        root.firstElementChild.append(document.getElementById("tickets_article_view_container"));
+
+        const row = { id: 2, cached_image: childRows[0].filename };
+        const request = defaultOpener ? null : beginRowPresentationRequest("tickets");
+        if (defaultOpener) {
+            // Previous/Next in the classic record bar calls this three-argument overload.
+            await openRowArticleView(row, "tickets", selectedCard);
+        } else {
+            await openRowArticleView(row, "tickets", selectedCard, {
+                isCurrent: request, withOwnAddressWrite: request.withOwnAddressWrite,
+            });
+        }
+        await flushRowArticleHydration();
+        const next = inlineImage.querySelector('[data-testid="row-article-image-next"]');
+        const position = inlineImage.querySelector('[data-testid="row-article-image-position"]');
+        expect(position.textContent).toBe("1 / 6");
+        expect(next.disabled).toBe(false);
+        if (browseFirst) next.click();
+        const origin = { state: history.state, url: location.href };
+        const intent = beginImageFirstViewOpen({ tableName: "tickets", rowId: 2, listPath: "/tickets" });
+        const overlayId = intent.commit(childRows[0].filename);
+        expect(overlayId).toBeTruthy();
+        const back = vi.spyOn(history, "back").mockImplementation(() => {});
+        imageFirstViewDidClose(overlayId);
+        expect(back).toHaveBeenCalledOnce();
+        history.replaceState(origin.state, "", origin.url);
+        window.dispatchEvent(new PopStateEvent("popstate", { state: origin.state }));
+        if (request) expect(request()).toBe(false);
+        expect(requestChildren).toHaveBeenCalledTimes(1);
+        return { inlineImage, next, position, request, root, requestChildren, childRows };
+    }
+
+    test("keeps the mounted classic carousel usable after closing its image-first overlay", async () => {
+        const { inlineImage, next, position, request, root } = await openClassicAndReturnFromImages();
+        let current = true;
+        expect(await handleImageFirstViewHistory({
+            tableName: "tickets", rowId: "2", viewKey: "article_view", isCurrentNavigation: () => current,
+        })).toBe(true);
+        expect(root.contains(next)).toBe(true);
+        next.click();
+        expect(position.textContent).toBe("2 / 6");
+        expect(inlineImage.querySelector("img").src).toContain("/storage/10/2/original/10_2_2.webp");
+        expect(request()).toBe(false);
+        current = false;
+        next.click();
+        expect(position.textContent).toBe("2 / 6");
+    });
+
+    test("preserves a picture already selected in the mounted classic article", async () => {
+        const { next, position } = await openClassicAndReturnFromImages({ browseFirst: true });
+        expect(position.textContent).toBe("2 / 6");
+        await handleImageFirstViewHistory({ tableName: "tickets", rowId: "2", viewKey: "article_view" });
+        expect(position.textContent).toBe("2 / 6");
+        next.click();
+        expect(position.textContent).toBe("3 / 6");
+    });
+
+    test("does not rebind a different classic row", async () => {
+        const wrongRow = await openClassicAndReturnFromImages();
+        expect(await handleImageFirstViewHistory({ tableName: "tickets", rowId: "3", viewKey: "article_view" })).toBe(false);
+        wrongRow.next.click();
+        expect(wrongRow.position.textContent).toBe("1 / 6");
+    });
+
+    const classicTarget = { tableName: "tickets", rowId: "2", viewKey: "article_view" };
+
+    test.each([false, true])("reads fresh media after a completed request (default opener %s)", async (defaultOpener) => {
+        const { requestChildren, childRows, inlineImage, next, position } = await openClassicAndReturnFromImages({ defaultOpener });
+        datasetAppearanceState.forget("tickets_assets");
+        requestChildren.mockResolvedValueOnce(galleryResponse([childRows[0], childRows[4]]));
+        await handleImageFirstViewHistory(classicTarget);
+        expect(requestChildren).toHaveBeenCalledTimes(2);
+        expect(position.textContent).toBe("1 / 2");
+        next.click();
+        expect(position.textContent).toBe("2 / 2");
+        expect(inlineImage.querySelector("img").src).toContain("10_2_5.webp");
+    });
+
+    test.each([false, true])("ignores the old pending response during return (default opener %s)", async (defaultOpener) => {
+        const original = Promise.withResolvers();
+        const refresh = Promise.withResolvers();
+        const { requestChildren, childRows, inlineImage, next, position } = await openClassicAndReturnFromImages({
+            defaultOpener, firstRequest: () => original.promise,
+        });
+        requestChildren.mockReturnValueOnce(refresh.promise);
+        const sync = vi.spyOn(inlineMedia, "syncRowArticleInlineMedia");
+        const restoring = handleImageFirstViewHistory(classicTarget);
+        expect(requestChildren).toHaveBeenCalledTimes(2);
+        expect(next.disabled).toBe(true);
+        original.resolve(galleryResponse([childRows[1], childRows[2]]));
+        await flushRowArticleHydration();
+        expect(sync).not.toHaveBeenCalled();
+        refresh.resolve(galleryResponse([childRows[0], childRows[5]]));
+        await restoring;
+        expect(sync).toHaveBeenCalledTimes(1);
+        next.click();
+        expect(position.textContent).toBe("2 / 2");
+        expect(inlineImage.querySelector("img").src).toContain("10_2_6.webp");
+    });
+
+    test.each(["navigation", "child removal"])("does not sync an in-flight return after %s", async (reason) => {
+        const { next, position, requestChildren, childRows } = await openClassicAndReturnFromImages();
+        const refresh = Promise.withResolvers();
+        requestChildren.mockReturnValueOnce(refresh.promise);
+        const sync = vi.spyOn(inlineMedia, "syncRowArticleInlineMedia");
+        let current = true;
+        const restoring = handleImageFirstViewHistory({ ...classicTarget, isCurrentNavigation: () => current });
+        if (reason === "navigation") current = false;
+        else datasetAppearanceState.forget("tickets_assets");
+        refresh.resolve(galleryResponse(childRows));
+        await restoring;
+        expect(sync).not.toHaveBeenCalled();
+        next.click();
+        expect(position.textContent).toBe("1 / 6");
+    });
+
+    test("stops browsing a restored gallery when its child dataset is invalidated", async () => {
+        const { next, position } = await openClassicAndReturnFromImages();
+        await handleImageFirstViewHistory(classicTarget);
+        next.click();
+        expect(position.textContent).toBe("2 / 6");
+        datasetAppearanceState.forget("tickets_assets");
+        next.click();
+        expect(position.textContent).toBe("2 / 6");
+    });
+
+    test.each([
+        ["denied", () => Promise.reject(Object.assign(new Error("Forbidden"), { status: 403 }))],
+        ["aborted", () => Promise.reject(new DOMException("Cancelled", "AbortError"))],
+        ["missing", () => Promise.resolve(null)],
+        ["malformed", () => Promise.resolve({ child_tables: {} })],
+        ["error", () => Promise.resolve({ error: "unavailable", child_tables: [] })],
+    ])("does not reuse parent images when the return response is %s", async (_reason, reply) => {
+        const { next, position, requestChildren } = await openClassicAndReturnFromImages();
+        requestChildren.mockImplementationOnce(reply);
+        const sync = vi.spyOn(inlineMedia, "syncRowArticleInlineMedia");
+        await handleImageFirstViewHistory(classicTarget);
+        expect(requestChildren).toHaveBeenCalledTimes(2);
+        expect(sync).not.toHaveBeenCalled();
+        expect(next.disabled).toBe(true);
+        next.click();
+        expect(position.textContent).toBe("1 / 6");
+    });
+
+    test.each(["fresh", "denied", "aborted"])("a late original response cannot replace a %s record-bar return", async (result) => {
+        const original = Promise.withResolvers();
+        const { inlineImage, next, position, requestChildren, childRows } = await openClassicAndReturnFromImages({
+            defaultOpener: true, firstRequest: () => original.promise,
+        });
+        if (result === "fresh") requestChildren.mockResolvedValueOnce(galleryResponse([childRows[0], childRows[4]]));
+        else if (result === "denied") requestChildren.mockRejectedValueOnce(Object.assign(new Error("Forbidden"), { status: 403 }));
+        else requestChildren.mockRejectedValueOnce(new DOMException("Cancelled", "AbortError"));
+        await handleImageFirstViewHistory(classicTarget);
+        expect(requestChildren).toHaveBeenCalledTimes(2);
+        const sync = vi.spyOn(inlineMedia, "syncRowArticleInlineMedia");
+        original.resolve(galleryResponse([childRows[1], childRows[2]]));
+        await flushRowArticleHydration();
+        expect(sync).not.toHaveBeenCalled();
+        inlineImage.querySelector(".row_article_inline_media").dispatchEvent(new KeyboardEvent("keydown", {
+            key: "ArrowRight", bubbles: true,
+        }));
+        if (result === "fresh") {
+            expect(position.textContent).toBe("2 / 2");
+            expect(inlineImage.querySelector("img").src).toContain("10_2_5.webp");
+        } else {
+            expect(next.disabled).toBe(true);
+            expect(position.textContent).toBe("1 / 6");
+        }
+    });
+
+    function addUnrelatedTableToNavigationTree() {
+        // The navigation tree replaces the specs map when its data is refreshed.
+        const specs = getAllSpecs();
+        onTestFinished(() => setAllSpecs(specs));
+        setAllSpecs({ ...specs, unrelated_catalog: { table_uid: 83001 } });
+    }
+
+    test.each([
+        ["the gallery is invalidated", () => datasetAppearanceState.forget("tickets_assets")],
+        ["an unrelated table is added to the navigation tree", addUnrelatedTableToNavigationTree],
+    ])("a saved article refreshes its media after %s", async (_change, updateRegistry) => {
+        vi.mocked(hasDatasetPermission).mockResolvedValue(true);
+        const { inlineImage, next, position, requestChildren, childRows } = await openClassicAndReturnFromImages({ defaultOpener: true });
+        requestChildren.mockResolvedValueOnce(galleryResponse([childRows[0], childRows[4]]));
+        await handleImageFirstViewHistory(classicTarget);
+        expect(position.textContent).toBe("1 / 2");
+
+        const articleState = datasetAppearanceState.capture("tickets");
+        const registryState = datasetAppearanceState.captureRegistry();
+        updateRegistry();
+        expect(datasetAppearanceState.isCurrent(articleState)).toBe(true);
+        expect(datasetAppearanceState.isCurrent(registryState)).toBe(false);
+        expect(requestChildren).toHaveBeenCalledTimes(2);
+
+        requestChildren.mockResolvedValueOnce(galleryResponse([childRows[0], childRows[1], childRows[3]]));
+        const edit = document.querySelector('[data-testid="big-card-edit-button"]');
+        edit.click();
+        edit.click();
+        await vi.waitFor(() => expect(requestChildren).toHaveBeenCalledTimes(3));
+        await vi.waitFor(() => expect(position.textContent).toBe("1 / 3"));
+        next.click();
+        expect(inlineImage.querySelector("img").src).toContain("10_2_2.webp");
+    });
+
+    test("a tree change during a save discards that media response and the next save can refresh", async () => {
+        vi.mocked(hasDatasetPermission).mockResolvedValue(true);
+        const { inlineImage, position, requestChildren, childRows } = await openClassicAndReturnFromImages({ defaultOpener: true });
+        requestChildren.mockResolvedValueOnce(galleryResponse([childRows[0], childRows[4]]));
+        await handleImageFirstViewHistory(classicTarget);
+
+        const edit = document.querySelector('[data-testid="big-card-edit-button"]');
+        const pending = Promise.withResolvers();
+        requestChildren.mockReturnValueOnce(pending.promise);
+        edit.click();
+        edit.click();
+        await vi.waitFor(() => expect(requestChildren).toHaveBeenCalledTimes(3));
+        addUnrelatedTableToNavigationTree();
+        const sync = vi.spyOn(inlineMedia, "syncRowArticleInlineMedia");
+        pending.resolve(galleryResponse([childRows[3]]));
+        await vi.waitFor(() => expect(edit.disabled).toBe(false));
+        expect(sync).not.toHaveBeenCalled();
+        expect(position.textContent).toBe("1 / 2");
+
+        requestChildren.mockResolvedValueOnce(galleryResponse([childRows[2]]));
+        edit.click();
+        edit.click();
+        await vi.waitFor(() => expect(position.textContent).toBe("1 / 1"));
+        expect(requestChildren).toHaveBeenCalledTimes(4);
+        expect(inlineImage.querySelector("img").src).toContain("10_2_3.webp");
+    });
+
+    test("removes old images when a successful return has no permitted media", async () => {
+        const { inlineImage, next, position, requestChildren } = await openClassicAndReturnFromImages();
+        requestChildren.mockResolvedValueOnce({ child_tables: [] });
+        await handleImageFirstViewHistory(classicTarget);
+        expect(position.textContent).toBe("");
+        expect(next.disabled).toBe(true);
+        expect(inlineImage.querySelector("img")).toBeNull();
+    });
 
     test("loads classic image credits without optional related sections or editing permission checks", async () => {
         articleUiSettings.showRelatedItems = false;

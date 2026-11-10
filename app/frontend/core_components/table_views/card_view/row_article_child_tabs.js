@@ -3,6 +3,7 @@
 // Bridges referring-row datasets and comments with a configurable, ordered tab UI.
 // Exists to surface related rows from linked tables in a single panel beneath any article view.
 
+import { closeCurrentBigCard, openRelatedRecord } from './row_article_related_record_opener.js';
 import { datasetAppearanceState } from '../dataset_appearance_state.js';
 import { bindRelatedDatasetAppearance } from './related_dataset_appearance_revalidation.js';
 import { createRowArticleLoadSession } from './row_article_load_session.js';
@@ -22,11 +23,8 @@ import {
     showSuccessToast,
 } from '../../../reusable_components/notifications/toast_notification_printer.js';
 import { buildConfirmationMessage } from '../../general_tables/gt_1_row_crud/gt_1_4_row_delete/row_remover_helpers.js';
-import { setUnifiedTableState } from '../../state_stores/table_state_store.js';
-import { setChosenDatasetView } from '../../state_stores/dataset_view_choice_saver.js';
 import { handle_all_navigation } from '../../navigation/nav_engine/navigation_handler.js';
 import { custom_views } from '../../navigation/admin_and_user_tools/custom_view_reader.js';
-import { closeRowArticle } from './row_article_ui_handler.js';
 import {
     buildRelatedDatasetParams,
     buildRelatedTabKey,
@@ -600,40 +598,6 @@ function createRelatedRecordListHeader(hasActions = false) {
 function getRelatedHeaderLabel(langKey, fallbackText) {
     const translated = getTranslationForKey(langKey);
     return translated && translated !== langKey ? translated : fallbackText;
-}
-
-async function openRelatedRecord({
-    relatedDataset,
-    relatedRow,
-    parentDataset,
-    parentRowId,
-    relatedTabsContainer,
-}) {
-    const relatedId = relatedRow?.id;
-    if (relatedId == null) return;
-
-    closeCurrentBigCard(parentDataset, parentRowId, relatedTabsContainer);
-
-    setChosenDatasetView(relatedDataset, "article_view");
-    setUnifiedTableState(relatedDataset, {
-        articleView: { collapsed: true, expandedId: relatedId, returnView: "card" },
-    });
-
-    await handle_all_navigation(relatedDataset, custom_views, {
-        forceReload: true,
-        skipUrlUpdate: true,
-    });
-}
-
-function closeCurrentBigCard(parentDataset, parentRowId, relatedTabsContainer) {
-    const wrapper = relatedTabsContainer.closest('.card_view_wrapper');
-    const bigCard = relatedTabsContainer.closest('.active_row_article, .active_big_card');
-    const cardContainer = wrapper?.querySelector('.card_container');
-    const selectedCard = cardContainer?.querySelector(`.card[data-id="${parentRowId}"]`) || null;
-
-    if (wrapper && bigCard && cardContainer) {
-        closeRowArticle(wrapper, cardContainer, bigCard, selectedCard, parentDataset, true);
-    }
 }
 
 /**

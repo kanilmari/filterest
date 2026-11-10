@@ -13,8 +13,8 @@ import orderExamples from '../../../testing/shared_contracts/legacy_ifav_order_e
 import { sortColumnsByRole } from './card_view/row_article_opener_helpers.js';
 
 describe('article presentation contract drift', () => {
-    test('retains current keys, aliases and permission gates without registering the reserved view', () => {
-        expect([ARTICLE_VIEW_KEY, IMAGE_FIRST_VIEW_KEY]).toEqual(
+    test('allows all three row presentations and keeps Page out of the dataset renderer registry', () => {
+        expect([ARTICLE_VIEW_KEY, IMAGE_FIRST_VIEW_KEY, 'image_first_page_view']).toEqual(
             Object.keys(contract.presentations).filter(key => !contract.presentations[key].reserved));
         expect(ROW_ARTICLE_VIEW_KEY).toBe(ARTICLE_VIEW_KEY);
         expect(ARTICLE_VIEW_ROUTE).toBe(contract.presentations.article_view.current_permission_route);
@@ -23,7 +23,10 @@ describe('article presentation contract drift', () => {
         }
         for (const [key, value] of Object.entries(contract.presentations)) {
             expect(value.permission_route).toBe(`/ui/view/${key}`);
-            if (value.reserved) expect(getDatasetViewDefinition(key)).toBeNull();
+            if (key === 'image_first_page_view') {
+                expect(getDatasetViewDefinition(key)).toBeNull();
+                expect(value.current_permission_route).toBe(value.permission_route);
+            }
             else expect(getDatasetViewDefinition(key).permissionRoute).toBe(value.current_permission_route);
         }
         expect(DATASET_VIEW_DEFINITIONS.find(value => value.viewKey === IMAGE_FIRST_VIEW_KEY).rendererKey).toBeUndefined();

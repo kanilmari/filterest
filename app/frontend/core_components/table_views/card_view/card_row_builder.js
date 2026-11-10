@@ -7,8 +7,8 @@ import { datasetAppearanceState } from '../dataset_appearance_state.js';
 import { readAppearanceAttribute } from '../../../reusable_components/appearance_scope_reader.js';
 import { update_card_selection } from "../table_view/row_selection_handler.js";
 import { create_seeded_avatar } from "./card_avatar_builder.js";
-import { bindArticleViewActivation, canOpenArticleView, createArticleOpenerElement } from './article_view_access.js';
-import { openRowArticleView } from "./row_article_opener.js";
+import { bindRowActivation, createRowOpenerElement, canActivateRow } from "./default_row_affordance.js";
+import { openDefaultRowPresentation } from "../row_presentation/row_presentation_dispatcher.js";
 import { addKeywordsSection } from "./card_keyword_builder.js";
 import { addCardResourceListener, disposeCardResources } from './card_resource_lifecycle.js';
 import { generateGoogleMapsEmbedSrcFromRow, addHeaderElement, addUsernameElement, addImageOrAvatar, addDescriptionSection } from "./card_element_builder.js";
@@ -73,7 +73,7 @@ count_this_function("createSingleCard");
     try {
     if (!datasetAppearanceState.isCurrent(appearanceToken)) return card;
     card.classList.add("card");
-    card.classList.toggle("saturate_on_hover", canOpenArticleView());
+    card.classList.toggle("saturate_on_hover", canActivateRow(table_name));
     card.dataset.testid = 'card-item';
     card.dataset.cardPresentationView = viewKey;
     card.dataset.datasetName = table_name;
@@ -569,11 +569,11 @@ for (const role of baseRoles) {
     }
 
     if (show_more_button_on_cards) {
-        const moreBtn = createArticleOpenerElement("button");
+        const moreBtn = createRowOpenerElement("button", table_name);
         moreBtn.dataset.langKey = "show_more";
-        bindArticleViewActivation(moreBtn, (e) => {
+        bindRowActivation(moreBtn, table_name, (e) => {
             e.preventDefault();
-            openRowArticleView(row_item, table_name, card);
+            openDefaultRowPresentation(row_item, table_name, card);
         });
         setFieldHideAttribute(moreBtn);
         footer_div.appendChild(moreBtn);

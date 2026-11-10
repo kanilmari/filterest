@@ -7,13 +7,20 @@ import { readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 const mocks = vi.hoisted(() => ({
-    navigate: vi.fn(), selected: vi.fn(), openArticle: vi.fn(), translate: vi.fn((_key, { fallback }) => fallback),
+    navigate: vi.fn(), tabSync: vi.fn(), selected: vi.fn(), openArticle: vi.fn(), translate: vi.fn((_key, { fallback }) => fallback),
     avatar: vi.fn(), image: vi.fn(),
 }));
 vi.mock('../../table_views/card_view/card_avatar_builder.js', () => ({
     create_seeded_avatar: mocks.avatar, createImageElement: mocks.image,
 }));
-vi.mock("../../navigation/main_tabs/main_tab_printer.js", () => ({ openNavTab: mocks.navigate }));
+vi.mock("../../navigation/main_tabs/main_tab_printer.js", () => ({ openNavTab: (dataset, options) => options?.skipNavigation ? mocks.tabSync(dataset) : mocks.navigate(dataset, options) }));
+vi.mock("../../navigation/nav_engine/navigation_handler.js", () => ({
+    handle_all_navigation: (dataset, _views, { isCurrentNavigation, ...options }) => {
+        if (!isCurrentNavigation()) throw new Error('Explicit listing must complete');
+        return mocks.navigate(dataset, options);
+    },
+}));
+vi.mock("../../navigation/admin_and_user_tools/custom_view_reader.js", () => ({ custom_views: [] }));
 vi.mock("../../state_stores/dataset_selection_saver.js", () => ({ getSelectedDataset: mocks.selected }));
 vi.mock("../../table_views/card_view/row_article_opener.js", () => ({ openRowArticleView: mocks.openArticle }));
 vi.mock("../../lang/translation_handler.js", () => ({ getTranslationForKey: mocks.translate }));
@@ -30,6 +37,9 @@ import { getUnifiedTableState, setUnifiedTableState } from "../../state_stores/t
 import { getChosenDatasetView, setChosenDatasetView } from "../../state_stores/dataset_view_choice_saver.js";
 import { refreshLocalizedDatasetValues } from "../../table_views/dataset_value_localizer.js";
 import { datasetAppearanceState } from '../../table_views/dataset_appearance_state.js';
+import { beginRowPresentationRequest, setRowPresentationChoice } from '../../table_views/row_presentation/row_presentation_choice.js';
+import { writeHistoryEntry } from '../../navigation/nav_engine/history_entry_state.js';
+import { VIEW_DEACTIVATE_EVENT } from '../../../reusable_components/view_lifecycle_events.js';
 import { datasetAppearanceDefaultsForPlace } from '../../../shared/dataset_appearance/validator.js';
 const types = { title: { card_element: "header+lang_key", is_multilingual: true, show_value_on_card: true },
     description: { card_element: "description2", is_multilingual: true, show_value_on_card: true } };
@@ -212,47 +222,68 @@ test("links use the target alias, target row identity, and exact shared query", 
     expect(new URL(b.href).pathname).toBe("/alias-second/1");
     expect(new URL(b.href).searchParams.get("search")).toBe("shared query");
 });
-test("Home cancellation restores the remembered row and dataset view", async () => {
-    const group = mount("other", { preselectArticle: true });
-    setChosenDatasetView("other", "card");
-    setUnifiedTableState("other", { articleView: { collapsed: true, expandedId: 99 } });
+test.each([false, true])("declined navigation opens no compact article (Home=%s)", async preselectArticle => {
+    setRowPresentationChoice("other", "article_view");
     mocks.navigate.mockResolvedValue({ abort: true, reason: "dirty_check_failed" });
-    group.element.querySelector("li a").click();
+    mount("other", { preselectArticle }).element.querySelector("li a").click();
     await vi.waitFor(() => expect(mocks.navigate).toHaveBeenCalled());
-    await vi.waitFor(() => expect(getUnifiedTableState("other").articleView.expandedId).toBe(99));
+    await new Promise(resolve => setTimeout(resolve, 0));
     expect(mocks.navigate).toHaveBeenCalledWith("other", {
-        forceReload: true, skipUrlUpdate: true, replacementParams: { search: "shared query", view: "article_view" },
+        forceReload: true,
+        ...(preselectArticle ? { skipUrlUpdate: true } : {}),
+        replacementParams: { search: "shared query", ...(preselectArticle ? { view: "article_view" } : {}) },
     });
-    expect(getChosenDatasetView("other")).toBe("card");
     expect(mocks.openArticle).not.toHaveBeenCalled();
 });
-test("Home row navigation pre-sets the exact article before loading without a dataset history entry", async () => {
+test.each([false, true])("a current compact handoff opens the exact article after navigation (Home=%s)", async preselectArticle => {
+    history.replaceState({}, "", "/origin?view=card");
+    setRowPresentationChoice("other", "article_view");
+    mocks.selected.mockReturnValue("origin");
     setUnifiedTableState("other", { articleView: { collapsed: true, expandedId: 99 } });
     mocks.navigate.mockImplementation(async () => {
-        expect(getChosenDatasetView("other")).toBe("article_view");
-        expect(getUnifiedTableState("other").articleView.expandedId).toBe(1);
+        // The listing must not auto-open the remembered row or the target row.
+        expect(getUnifiedTableState("other").articleView).toMatchObject({
+            collapsed: true, expandedId: null,
+            pendingAutoOpenFirstRenderedResult: true, pendingAutoOpenFirstSearchResult: false,
+        });
+        expect(mocks.openArticle).not.toHaveBeenCalled();
+        if (preselectArticle) expect(getChosenDatasetView("other")).toBe("article_view");
+        else writeHistoryEntry("/other?search=shared+query");
+        document.dispatchEvent(new CustomEvent(VIEW_DEACTIVATE_EVENT));
+        mocks.selected.mockReturnValue("other");
         return { abort: false };
     });
-    mount("other", { preselectArticle: true }).element.querySelector("li a").click();
-    await vi.waitFor(() => expect(mocks.navigate).toHaveBeenCalled());
-    expect(mocks.openArticle).not.toHaveBeenCalled();
-});
-test("search row links keep their existing dataset entry and approved article open", async () => {
-    mount().element.querySelector("li a").click();
-    await vi.waitFor(() => expect(mocks.openArticle).toHaveBeenCalled());
-    expect(mocks.navigate).toHaveBeenCalledWith("other", { forceReload: true, replacementParams: { search: "shared query" } });
+    mount("other", { preselectArticle }).element.querySelector("li a").click();
+    await vi.waitFor(() => expect(mocks.openArticle).toHaveBeenCalledOnce());
+    expect(mocks.navigate).toHaveBeenCalledWith("other", {
+        forceReload: true,
+        ...(preselectArticle ? { skipUrlUpdate: true } : {}),
+        replacementParams: { search: "shared query", ...(preselectArticle ? { view: "article_view" } : {}) },
+    });
     expect(mocks.openArticle).toHaveBeenCalledWith({ id: 1 }, "other", null, expect.any(Object));
+    const articleGuard = mocks.openArticle.mock.calls[0][3].isCurrent;
+    expect(articleGuard()).toBe(true);
+    mocks.selected.mockReturnValue("elsewhere");
+    expect(articleGuard()).toBe(false);
+    mocks.selected.mockReturnValue("other");
+    beginRowPresentationRequest("newer");
+    expect(articleGuard()).toBe(false);
+    if (preselectArticle) expect(location.pathname).toBe("/origin");
 });
-test("search row cancellation keeps the existing state and never opens an article", async () => {
-    setChosenDatasetView("other", "card");
-    setUnifiedTableState("other", { articleView: { collapsed: true, expandedId: 99 } });
-    mocks.navigate.mockResolvedValue({ abort: true });
-    mount().element.querySelector("li a").click();
-    await vi.waitFor(() => expect(mocks.navigate).toHaveBeenCalled());
-    expect(getChosenDatasetView("other")).toBe("card");
-    expect(getUnifiedTableState("other").articleView.expandedId).toBe(99);
-    expect(mocks.openArticle).not.toHaveBeenCalled();
-});
+test.each([false, true].flatMap(home => ["newer request", "other selected dataset"].map(reason => [home, reason])))(
+    'a compact handoff opens no stale article after completed navigation (Home=%s, %s)', async (preselectArticle, reason) => {
+        setRowPresentationChoice('other', 'article_view');
+        let finish;
+        mocks.navigate.mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
+        mount('other', { preselectArticle }).element.querySelector('li a').click();
+        await vi.waitFor(() => expect(finish).toBeTypeOf('function'));
+        if (reason === 'newer request') beginRowPresentationRequest('newer');
+        else mocks.selected.mockReturnValue('elsewhere');
+        finish({ abort: false });
+        await new Promise(resolve => setTimeout(resolve, 0));
+        expect(mocks.openArticle).not.toHaveBeenCalled();
+    },
+);
 test("Show all keeps the search collection behavior", async () => {
     mount().element.querySelector(".supplemental-dataset-show-all").click();
     await vi.waitFor(() => expect(mocks.navigate).toHaveBeenCalled());

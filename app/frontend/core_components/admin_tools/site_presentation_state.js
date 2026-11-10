@@ -184,6 +184,7 @@ export function createSitePresentationState({ requestFn = fetchSitePresentationS
         applyActiveFilterRemoveSide(effectiveSettings().dataset_cover_theme.shared.active_filter_remove_side);
         datasetAppearanceState.updateSite(effectiveSettings().dataset_cover_theme, {
             version: saved.version, preview: Boolean(preview), changed: siteChanged,
+            confirmedRowDefault: saved.dataset_cover_theme.shared.row_article_default_presentation,
         });
         return savedSettings();
     }

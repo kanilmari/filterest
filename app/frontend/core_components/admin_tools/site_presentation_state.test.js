@@ -8,7 +8,7 @@ import {
     createSitePresentationState, resetSitePresentationStatesForTests, isValidThemeConfig, normalizePresentationSettings,
     FILTERBAR_CONTENT_TOP_SPACE, clampFilterbarContentTopSpace, getSitePresentationState,
 } from './site_presentation_state.js';
-import { paletteMountOptions, applySitePatch } from './dataset_appearance_palette_test_fixtures.js';
+import { paletteMountOptions, paletteSnapshot, applySitePatch } from './dataset_appearance_palette_test_fixtures.js';
 import { mountDatasetCoverTestPalette } from './dataset_cover_test_palette.js';
 import { ACTIVE_FILTER_REMOVE_SIDES } from '../filterbar/filter_list/active_filter_chip_builder.js';
 
@@ -84,6 +84,19 @@ describe('public presentation state', () => {
         expect(['--navtab-active-fade-width', '--navtab-active-max-opacity', '--navtab-active-glow-intensity',
             '--navtab-active-glow-width', '--navtab-active-glow-blur'].map(key => css.getPropertyValue(key)))
             .toEqual(['25px', '1', '0.5', '2px', '4px']);
+    });
+
+    test('an acknowledged row default reaches other datasets even while an editor preview stays open', async () => {
+        const path = 'row_article_default_presentation';
+        const state = createSitePresentationState({ requestFn: async () => ({...publicSettings(settings()), version: 'site-1'}) });
+        await state.loadSettings();
+        datasetAppearanceState.accept('other', paletteSnapshot(22));
+        const draft = state.savedSettings();
+        draft.dataset_cover_theme.shared[path] = 'image_first_page_view';
+        state.setPreview('editor', draft);
+        expect(datasetAppearanceState.savedRowDefaults('other').site).toBe('article_view');
+        await state.saveSettings(draft, async () => ({...publicSettings(draft), version: 'site-2'}));
+        expect(datasetAppearanceState.savedRowDefaults('other').site).toBe('image_first_page_view');
     });
 
     test('defaults a legacy caption setting and immediately applies cached and refreshed choices', async () => {

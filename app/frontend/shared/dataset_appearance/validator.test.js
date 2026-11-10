@@ -33,11 +33,11 @@ test.each(contract.cases)('shared validation: $name', example => {
     }
 });
 
-test('inventories 45 canonical leaves, excluding visibility aliases and legacy blur', () => {
-    expect(DATASET_APPEARANCE_PATHS).toHaveLength(45);
+test('inventories 46 canonical leaves, excluding visibility aliases and legacy blur', () => {
+    expect(DATASET_APPEARANCE_PATHS).toHaveLength(46);
     expect(DATASET_APPEARANCE_PATHS.filter(path => path.startsWith('light.'))).toHaveLength(13);
     expect(DATASET_APPEARANCE_PATHS.filter(path => path.startsWith('dark.'))).toHaveLength(13);
-    expect(DATASET_APPEARANCE_PATHS.filter(path => path.startsWith('shared.'))).toHaveLength(19);
+    expect(DATASET_APPEARANCE_PATHS.filter(path => path.startsWith('shared.'))).toHaveLength(20);
     expect(DATASET_APPEARANCE_PATHS).not.toContain('shared.image_blur');
     expect(datasetAppearanceField('shared.image_blur')).toMatchObject({ derived_from: 'light.image_blur', min: 0, max: 24 });
     for (const unknown of ['light.unknown', 'unknown.image_blur', 'shared.toString', 'light.__proto__', 'light.image_blur.extra']) {

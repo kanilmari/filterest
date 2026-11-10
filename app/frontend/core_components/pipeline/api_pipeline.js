@@ -22,7 +22,7 @@ import {
 } from './api_pipeline_helpers.js';
 import { getBackendRoutePathByHandler } from '../endpoints/backend_route_manifest_reader.js';
 import { markCallerOwnsFailureNotice } from '../error_and_status_handling/error_monitor_handler_helpers.js';
-import { getSessionGeneration, invalidateSessionGeneration } from '../auth/session_generation_store.js';
+import { acceptSessionIdentity, getSessionGeneration, getVerifiedSessionIdentity, invalidateSessionGeneration } from '../auth/session_generation_store.js';
 import {
     isExpectedNetworkAbort,
     showRequestFailureNotice,
@@ -340,6 +340,13 @@ async function resolveUrlStage(ctx) {
     ctx.resolvedUrl = resolveEndpointUrl(ctx.routeName, ctx.urlParams, endpoint_map);
 }
 
+// Older clients reject unknown appearance leaves; request the expanded maps
+// on the endpoints that deliver authorized appearance snapshots.
+const APPEARANCE_ROUTES = new Set([
+    'sitePresentationSettings', 'adminSitePresentationSettings', 'adminDatasetAppearance',
+    'getResults', 'fetchDynamicChildren', 'frontPage', 'getCardVisibility', 'updateCardVisibility', 'updateRow',
+]);
+
 /**
  * buildFetchOptionsStage — constructs the fetch options object from context.
  * Sets method, default Content-Type, credentials, and body.
@@ -354,6 +361,9 @@ async function buildFetchOptionsStage(ctx) {
         headers: ctx.headers,
         bodyData: ctx.bodyData,
     });
+    if (APPEARANCE_ROUTES.has(ctx.routeName)) {
+        ctx.fetchOptions.headers['X-Filterest-Appearance'] = 'row-presentation';
+    }
     if (ctx.signal !== undefined) ctx.fetchOptions.signal = ctx.signal;
     markCallerOwnsFailureNotice(ctx.fetchOptions);
 }
@@ -607,6 +617,14 @@ async function responseParseStage(ctx) {
     const contentType = ctx.response.headers.get('Content-Type') || '';
     if (contentType.includes('application/json')) {
         ctx.parsedData = await ctx.response.json();
+        // Reuse a profile read already requested by startup or another feature.
+        // Its captured generation rejects old accounts, including after a
+        // standalone sign-in. A confirmed guest remains a guest, and a failed,
+        // malformed or cancelled read never grants access to retained choices.
+        if (ctx.routeName === 'fetchUserProfile' && !ctx.signal?.aborted
+            && ctx.parsedData?.user_id > 1 && getVerifiedSessionIdentity() !== 1) {
+            acceptSessionIdentity(ctx.parsedData.user_id, ctx.sessionGeneration);
+        }
     } else {
         ctx.parsedData = await ctx.response.text();
     }

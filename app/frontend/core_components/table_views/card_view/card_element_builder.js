@@ -3,11 +3,13 @@
 // Bridges raw row objects and the card DOM structure, including avatars, maps, and modals.
 // Exists to centralise card element construction so card layout logic stays out of the view printer.
 
-import { bindArticleViewActivation, canOpenArticleView, createArticleOpenerElement } from './article_view_access.js';
+import { canOpenArticleView } from './article_view_access.js';
+import { buildCardUrl } from "./row_article_opener_helpers.js";
+import { bindRowActivation, createRowOpenerElement, bindRowOpeningHref } from "./default_row_affordance.js";
 import { addCardResourceListener } from './card_resource_lifecycle.js';
 import { createImageElement, create_seeded_avatar, updateCardImageFrame } from "./card_avatar_builder.js";
 import { cardImageFrameFollowsStoredShape } from "./card_image_presentation.js";
-import { openRowArticleView } from "./row_article_opener.js";
+import { openDefaultRowPresentation } from "../row_presentation/row_presentation_dispatcher.js";
 import { bindImageFirstViewActivation } from "./image_first_view_activation.js";
 import { createKeyValueElement } from "./card_field_formatter.js";
 import { count_this_function } from "../../dev_tools/function_counter.js";
@@ -68,9 +70,9 @@ function addHeaderElement(
     headerDiv.title = val_str;
 
     // --- klikillä isompi kortti ----------------
-    bindArticleViewActivation(headerDiv, (e) => {
+    bindRowActivation(headerDiv, table_name, (e) => {
         e.preventDefault();
-        openRowArticleView(row_item, table_name, headerDiv.closest(".card"));
+        openDefaultRowPresentation(row_item, table_name, headerDiv.closest(".card"));
     });
 
     // liitetään korttiin ja palautetaan ref, jotta username voidaan liittää
@@ -246,8 +248,8 @@ function addDescriptionSection(
     setFieldHideAttribute(desc_container);
 
     // Koko description-container klikattava -> avaa ison kortin
-    bindArticleViewActivation(desc_container, () => {
-        openRowArticleView(row_item, table_name, container.closest(".card"));
+    bindRowActivation(desc_container, table_name, () => {
+        openDefaultRowPresentation(row_item, table_name, container.closest(".card"));
     });
 
     container.appendChild(desc_container);
@@ -327,13 +329,14 @@ document.addEventListener("DOMContentLoaded", function () {
 });
 
 function createShowMoreLink(row_item, table_name) {
-    const link = createArticleOpenerElement("a");
-    link.href = "#";
+    const link = createRowOpenerElement("a", table_name);
+    if (row_item?.id != null) bindRowOpeningHref(link, buildCardUrl("/", table_name, row_item.id, "") + location.search, table_name);
     link.classList.add("show_more_link");
     link.dataset.langKey = "show_more";
-    bindArticleViewActivation(link, (e) => {
+    bindRowActivation(link, table_name, (e) => {
+        if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
         e.preventDefault();
-        openRowArticleView(row_item, table_name, link.closest(".card"));
+        openDefaultRowPresentation(row_item, table_name, link.closest(".card"));
     });
     return link;
 }

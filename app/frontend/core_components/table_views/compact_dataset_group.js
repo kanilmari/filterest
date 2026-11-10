@@ -3,7 +3,9 @@
 // Reuses canonical dataset/row URLs and navigation approval before changing target query state.
 // Keeps result copy as text and reuses card thumbnails without mounting article controls.
 
-import { applyArticleViewAffordance, requireArticleViewAccess } from './card_view/article_view_access.js';
+import { openArticleAfterListing, openExplicitRowListingTab } from './card_view/row_article_listing_navigation.js';
+import { bindRowActivation, bindRowOpeningHref } from './card_view/default_row_affordance.js';
+import { openDefaultRowPresentation } from './row_presentation/row_presentation_dispatcher.js';
 import { CARD_IMAGE_RENDER_SLOTS } from './card_view/card_image_render_options.js';
 import { getTranslationForKey } from "../lang/translation_handler.js";
 import {
@@ -16,7 +18,6 @@ import { buildCardUrl } from "./card_view/row_article_opener_helpers.js";
 import { getUnifiedTableState, setUnifiedTableState } from "../state_stores/table_state_store.js";
 import { getChosenDatasetView, setChosenDatasetView, forgetChosenDatasetView } from "../state_stores/dataset_view_choice_saver.js";
 import { getParams, setParams } from "../navigation/nav_engine/query_params.js";
-import { getSelectedDataset } from "../state_stores/dataset_selection_saver.js";
 
 const COPY = Object.freeze({
     fi: { heading: "Muista aineistoista", showAll: "Näytä kaikki" },
@@ -141,72 +142,75 @@ function snippetColumns(columns, types, titleColumn) {
     });
 }
 
-/** Home row state is set before loading, just as for a deep link, so a remembered
- * article cannot open instead. Only the article opener writes an entry.
+/** Clear remembered article intent before loading, then explicitly open the
+ * requested row under its ticket. Only the article opener writes a row entry.
  * Ordinary show-all links keep the collection's existing navigation behavior.
  */
 export function bindQueryNavigation(link, dataset, query, rowID = null, options = {}) {
-    if (rowID !== null) applyArticleViewAffordance(link);
-    link.addEventListener('keydown', event => {
-        if (rowID !== null && link.dataset.articleAccess === 'denied' && ['Enter', ' '].includes(event.key)) {
-            event.preventDefault();
-            requireArticleViewAccess();
-        }
-    });
-    link.addEventListener("click", async event => {
-        if (rowID !== null && !requireArticleViewAccess()) { event.preventDefault(); return; }
+    const replacementParams = options.replacementParams || { search: query };
+    const click = event => {
         if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
         event.preventDefault();
-        let previousView;
-        let previousState;
-        let previousParams;
-        const restoreState = () => {
-            if (!previousState) return;
-            if (previousView) setChosenDatasetView(dataset, previousView);
-            else forgetChosenDatasetView(dataset);
-            setUnifiedTableState(dataset, previousState);
-            setParams(dataset, previousParams);
-        };
+        if (rowID === null) return openClassicOrCollection();
+        return openDefaultRowPresentation({ id: rowID }, dataset, null, {
+            search: new URLSearchParams(replacementParams).toString(),
+            openClassic: (_row, _table, _card, request) => openClassicOrCollection(request),
+        });
+    };
+    if (rowID === null) link.addEventListener("click", click);
+    else {
+        bindRowOpeningHref(link, link.href, dataset);
+        bindRowActivation(link, dataset, click);
+    }
+
+    async function openClassicOrCollection(request) {
+        let restoreCollection = null;
         try {
             const { openNavTab } = await import("../navigation/main_tabs/main_tab_printer.js");
-            const replacementParams = options.replacementParams || { search: query };
-            // Search keeps its established dataset-then-article transition.
-            // Only Home opts into an article directly from the root entry.
-            if (!options.preselectArticle) {
-                const result = await openNavTab(dataset, { forceReload: true, replacementParams });
-                if (result?.abort || rowID === null || getSelectedDataset() !== dataset) return;
-                const { openRowArticleView } = await import("./card_view/row_article_opener.js");
-                await openRowArticleView({ id: rowID }, dataset, null, {
-                    isCurrent: () => getSelectedDataset() === dataset,
-                });
-                return;
+            if (request && !request.isCurrent()) return;
+            const targetView = options.preselectArticle
+                ? (rowID !== null ? "article_view" : replacementParams.view) : null;
+            // Show all retains its established dirty-check state restoration.
+            if (rowID === null && targetView) {
+                const previousView = getChosenDatasetView(dataset);
+                const previousState = getUnifiedTableState(dataset);
+                const previousParams = { ...getParams(dataset) };
+                restoreCollection = () => {
+                    if (previousView) setChosenDatasetView(dataset, previousView);
+                    else forgetChosenDatasetView(dataset);
+                    setUnifiedTableState(dataset, previousState);
+                    setParams(dataset, previousParams);
+                };
             }
-            const targetView = rowID !== null ? "article_view" : replacementParams.view;
-            if (targetView) {
-                previousView = getChosenDatasetView(dataset);
-                previousState = getUnifiedTableState(dataset);
-                previousParams = { ...getParams(dataset) };
-                setChosenDatasetView(dataset, targetView);
+            if (targetView) setChosenDatasetView(dataset, targetView);
+            if (rowID === null && targetView) {
                 setUnifiedTableState(dataset, {
-                    articleView: { collapsed: rowID !== null, expandedId: rowID, returnView: "card",
+                    articleView: { collapsed: false, expandedId: null, returnView: "card",
                         pendingAutoOpenFirstRenderedResult: false, pendingAutoOpenFirstSearchResult: false },
-                    ...(rowID === null ? { cardView: { collapsed: false, expandedId: null } } : {}),
+                    cardView: { collapsed: false, expandedId: null },
                 });
-                // Skipping the URL stage also skips its parameter-cache write.
-                // Prime the target query without changing the origin history entry.
-                if (rowID !== null) setParams(dataset, { ...replacementParams, view: targetView });
             }
-            const result = await openNavTab(dataset, {
+            const directArticle = options.preselectArticle && rowID !== null;
+            // Home retains its root history entry until the article opens.
+            if (directArticle) setParams(dataset, { ...replacementParams, view: targetView });
+            const openListing = rowID === null ? openNavTab : openExplicitRowListingTab;
+            const navigate = () => openListing(dataset, {
                 forceReload: true,
-                ...(rowID !== null ? { skipUrlUpdate: true } : {}),
-                replacementParams: { ...replacementParams, ...(rowID !== null ? { view: "article_view" } : {}) },
+                ...(directArticle ? { skipUrlUpdate: true } : {}),
+                replacementParams: { ...replacementParams, ...(directArticle ? { view: "article_view" } : {}) },
             });
-            if (result?.abort) restoreState();
+            // Navigation owns its completion; its own writes belong to this
+            // handoff, while a newer request still invalidates the ticket.
+            if (rowID !== null) {
+                await openArticleAfterListing({ id: rowID }, dataset, navigate, request);
+            } else if ((await navigate())?.abort) {
+                restoreCollection?.();
+            }
         } catch (error) {
-            restoreState();
+            restoreCollection?.();
             console.warn("Compact result navigation failed:", error);
         }
-    });
+    }
 }
 
 /** Reuse the card's lazy media and seeded fallback, without its article activation. */

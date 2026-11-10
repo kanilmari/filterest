@@ -9,6 +9,7 @@ import (
 	"database/sql"
 	"database/sql/driver"
 	backend "easelect/backend/core_components"
+	store "easelect/backend/core_components/dataset_appearance_store"
 	"easelect/backend/core_components/dataset_kinds"
 	"easelect/backend/core_components/dbutils"
 	dtt_models "easelect/backend/core_components/dynamic_table_tools/dtt_models"
@@ -32,6 +33,8 @@ type galleryHandlerState struct {
 	allowed, visible, empty bool
 	kindFailure             string
 	streamAI                bool
+	responseHeaders         http.Header
+	classificationReads     int
 }
 type galleryHandlerDriver struct{ state *galleryHandlerState }
 type galleryHandlerConn struct {
@@ -80,6 +83,12 @@ func (c *galleryHandlerConn) QueryContext(ctx context.Context, q string, args []
 		return rows([]string{"allowed"}, []driver.Value{int64(1)}), nil
 	case strings.Contains(q, `FROM "app_service_catalog_assets"`):
 		if strings.HasPrefix(q, `SELECT "app_service_catalog_id","filename"`) {
+			c.state.classificationReads++
+			// Classification precedes ordinary appearance negotiation. Streaming AI
+			// classification may follow Content-Type, but must never add Vary.
+			if c.state.responseHeaders.Get("Vary") != "" {
+				c.state.t.Fatal("classification changed response headers", c.state.responseHeaders)
+			}
 			if len(args) != 1 || args[0].Value != int64(161) && (!c.state.streamAI || args[0].Value != int64(162)) {
 				c.state.t.Fatal("classification not parent-bound", q, args)
 			}
@@ -128,14 +137,25 @@ func (c *galleryHandlerConn) QueryContext(ctx context.Context, q string, args []
 func TestGalleryCacheAuthorizationAtResponseHandlers(t *testing.T) {
 	for _, mode := range []string{"ordinary", "intelligent", "stream"} {
 		for _, support := range []struct {
-			params  string
-			include bool
+			params     string
+			include    bool
+			appearance string
 		}{
-			{"", false},
-			{"include_card_support=1", true},
-			{"view_key=card", true},
-			{"view_key=article_view", true},
-			{"view_key=product_card&include_card_support=0", true},
+			{"", false, ""},
+			{"include_card_support=1", true, ""},
+			{"view_key=card", true, ""},
+			{"view_key=article_view", true, ""},
+			{"view_key=product_card&include_card_support=0", true, ""},
+			{"", false, "unknown"},
+			{"include_card_support=1", true, "unknown"},
+			{"view_key=card", true, "unknown"},
+			{"view_key=article_view", true, "unknown"},
+			{"view_key=product_card&include_card_support=0", true, "unknown"},
+			{"", false, "row-presentation"},
+			{"include_card_support=1", true, "row-presentation"},
+			{"view_key=card", true, "row-presentation"},
+			{"view_key=article_view", true, "row-presentation"},
+			{"view_key=product_card&include_card_support=0", true, "row-presentation"},
 		} {
 			include := support.include
 			for _, tc := range []struct {
@@ -181,7 +201,7 @@ func TestGalleryCacheAuthorizationAtResponseHandlers(t *testing.T) {
 				{"kind query failure", "unchecked-value", false, false, true, true},
 				{"kind decode failure", "unchecked-value", false, false, true, true},
 			} {
-				t.Run(fmt.Sprintf("%s/%s/%s", mode, support.params, tc.name), func(t *testing.T) {
+				t.Run(fmt.Sprintf("%s/%s/appearance=%s/%s", mode, support.params, support.appearance, tc.name), func(t *testing.T) {
 					state := &galleryHandlerState{t: t, cached: tc.cached, allowed: tc.allowed, visible: tc.visible, empty: tc.empty}
 					if tc.name == "kind query failure" {
 						state.kindFailure = "query"
@@ -240,6 +260,9 @@ func TestGalleryCacheAuthorizationAtResponseHandlers(t *testing.T) {
 						url += "&stream=1"
 					}
 					req := httptest.NewRequest("GET", url, nil)
+					if support.appearance != "" {
+						req.Header.Set(store.AppearanceHeader, support.appearance)
+					}
 					session, err := esessions.Store.Get(req, esessions.SessionName)
 					if err != nil {
 						t.Fatal(err)
@@ -254,6 +277,7 @@ func TestGalleryCacheAuthorizationAtResponseHandlers(t *testing.T) {
 						req.AddCookie(cookie)
 					}
 					rec := httptest.NewRecorder()
+					state.responseHeaders = rec.Header()
 					if mode == "ordinary" {
 						GetResults(rec, req)
 					} else {
@@ -266,8 +290,18 @@ func TestGalleryCacheAuthorizationAtResponseHandlers(t *testing.T) {
 					if mode == "stream" {
 						wantContentType = "application/x-ndjson; charset=utf-8"
 					}
-					if got := rec.Result().Header; !reflect.DeepEqual(got, http.Header{"Content-Type": {wantContentType}}) {
-						t.Fatal("classification changed response headers", got)
+					wantHeaders := http.Header{"Content-Type": {wantContentType}}
+					// The full ordinary response negotiates its appearance shape after
+					// classification (Frontend_Dataset_Appearance.md, compatibility).
+					// Both legacy and opted-in responses must declare the cache variant.
+					if mode == "ordinary" {
+						wantHeaders.Set("Vary", store.AppearanceHeader)
+					}
+					if got := rec.Result().Header; !reflect.DeepEqual(got, wantHeaders) {
+						t.Fatal("unexpected response headers", got)
+					}
+					if tc.cached == "own.png" && state.classificationReads == 0 {
+						t.Fatal("own gallery cache bypassed classification")
 					}
 					decoder := json.NewDecoder(rec.Body)
 					stages := []string{""}
@@ -318,8 +352,19 @@ func TestGalleryCacheAuthorizationAtResponseHandlers(t *testing.T) {
 						}
 						// Ordinary results own the appearance contract; semantic packets
 						// retain the dataset state established by the ordinary response.
-						if mode == "ordinary" && (packet.Appearance.SchemaVersion != 2 || len(packet.Appearance.TabValues) != 28 || len(packet.Appearance.SiteValues) != 8 || len(packet.Appearance.Defaults) != 9) {
-							t.Fatal("results lost their owned appearance snapshot", packet.Appearance)
+						if mode == "ordinary" {
+							wantDefaults := 9
+							modern := support.appearance == "row-presentation"
+							if modern {
+								wantDefaults++
+							}
+							if packet.Appearance.SchemaVersion != 2 || len(packet.Appearance.TabValues) != 28 || len(packet.Appearance.SiteValues) != 8 || len(packet.Appearance.Defaults) != wantDefaults {
+								t.Fatal("results lost their owned appearance snapshot", packet.Appearance)
+							}
+							value, present := packet.Appearance.Defaults[store.RowPresentationPath]
+							if present != modern || present && value != "article_view" {
+								t.Fatal("row presentation negotiation changed", support.appearance, packet.Appearance.Defaults)
+							}
 						}
 						row := packet.Data[0]
 						if tc.kept {

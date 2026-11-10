@@ -8,8 +8,16 @@ import { createArticleRowPicker } from './front_page_article_row_picker.js';
 import { ARTICLE_BUTTON_COPY } from './front_page_article_buttons_copy.js';
 import { refreshLocalizedDatasetValues } from '../table_views/dataset_value_localizer.js';
 
-const mocks = vi.hoisted(() => ({ request: vi.fn(), changed: vi.fn() }));
+const mocks = vi.hoisted(() => ({ request: vi.fn(), changed: vi.fn(), canOpen: vi.fn(), defaults: vi.fn() }));
+vi.mock('../route_permission_checker.js', () => ({
+    primeMultipleDatasetPermissions: async () => new Map(),
+    hasConfirmedDatasetPermission: route => mocks.canOpen(route.split('/').at(-1)),
+}));
+vi.mock('../table_views/dataset_appearance_state.js', () => ({
+    datasetAppearanceState: { savedRowDefaults: mocks.defaults }, ROW_OPENING_DEFAULTS_CHANGED: 'defaults-changed',
+}));
 vi.mock('../endpoints/endpoint_router.js', () => ({ endpoint_router: mocks.request }));
+vi.mock('../table_views/card_view/article_view_access.js', () => ({ canOpenArticleView: mocks.canOpen }));
 vi.mock('../lang/translation_handler.js', () => ({
     getTranslationForKey: (key, options = {}) => options.fallback || key,
 }));
@@ -50,7 +58,7 @@ async function mountAndOpen() {
 beforeEach(() => {
     vi.useFakeTimers();
     document.body.replaceChildren(); localStorage.clear(); localStorage.setItem('chosen_language', 'fi');
-    mocks.changed.mockReset();
+    mocks.changed.mockReset(); mocks.defaults.mockReset().mockReturnValue({ site: 'article_view' }); mocks.canOpen.mockReset().mockReturnValue(true);
     mocks.request.mockReset().mockImplementation(async (_route, options) => {
         const params = new URLSearchParams(options.url_params);
         if (params.get('dataset') === datasetA.dataset_name) return pageA;
@@ -207,16 +215,52 @@ test.each(['fi', 'en', 'ch', 'yue'].flatMap(language => ['light', 'dark'].map(th
     },
 );
 
-test('Page selection requests the Page projection and returns its view; Article stays absent', async () => {
+async function pickFirst() {
+    picker.element.querySelector('[role="combobox"]').click(); await vi.advanceTimersByTimeAsync(0);
+    picker.element.querySelector('[role="option"]').click();
+}
+test('explicit Page and Article selections carry their setting; inheritance stays absent', async () => {
     await mountAndOpen();
     await picker.setView('image_first_page_view');
     expect(readsFor(datasetA).at(-1).get('view_key')).toBe('image_first_page_view');
-    picker.element.querySelector('[role="combobox"]').click(); await vi.advanceTimersByTimeAsync(0);
-    picker.element.querySelector('[role="option"]').click();
+    await pickFirst();
     expect(mocks.changed).toHaveBeenLastCalledWith({ table_uid: 7, row_id: '1', label: 'Article A', view: 'image_first_page_view' });
     await picker.setView('article_view');
     expect(readsFor(datasetA).at(-1).get('view_key')).toBe('article_view');
+    await pickFirst();
+    expect(mocks.changed).toHaveBeenLastCalledWith({ table_uid: 7, row_id: '1', label: 'Article A', view: 'article_view' });
+    await picker.setView(undefined);
+    expect(readsFor(datasetA).at(-1).get('view_key')).toBe('article_view');
+    await pickFirst();
+    expect(mocks.changed).toHaveBeenLastCalledWith({ table_uid: 7, row_id: '1', label: 'Article A' });
+});
+test('an inherited setting reads through the administrator\'s permitted projection but stores no view', async () => {
+    mocks.defaults.mockReturnValue({ site: 'image_first_page_view' });
+    mocks.canOpen.mockImplementation(view => view === 'image_first_page_view');
+    await mountAndOpen();
+    expect(readsFor(datasetA).at(-1).get('view_key')).toBe('image_first_page_view');
+    await pickFirst();
+    expect(mocks.changed).toHaveBeenLastCalledWith({ table_uid: 7, row_id: '1', label: 'Article A' });
+    const count = readsFor(datasetA).length;
+    mocks.canOpen.mockReturnValue(false);
+    await picker.setView('');
+    expect(readsFor(datasetA)).toHaveLength(count);
+    expect(mocks.changed).toHaveBeenLastCalledWith(null);
+});
+test('a setting change during a pending read clears the selection and ignores the obsolete page', async () => {
+    await mountAndOpen();
+    await pickFirst();
+    const pending = deferred();
+    mocks.request.mockImplementationOnce(() => pending.promise);
+    const switching = picker.setView('image_first_page_view');
+    expect(mocks.changed).toHaveBeenLastCalledWith(null);
+    await vi.advanceTimersByTimeAsync(0); // Let the first granted projection enter the deferred row read.
+    const settled = picker.setView(undefined);
+    pending.resolve(page(9, 'Obsolete Page row'));
+    await switching; await settled;
+    expect(readsFor(datasetA).at(-1).get('view_key')).toBe('article_view');
     picker.element.querySelector('[role="combobox"]').click(); await vi.advanceTimersByTimeAsync(0);
+    expect(optionLabels()).toEqual(['Article A']);
     picker.element.querySelector('[role="option"]').click();
     expect(mocks.changed).toHaveBeenLastCalledWith({ table_uid: 7, row_id: '1', label: 'Article A' });
 });

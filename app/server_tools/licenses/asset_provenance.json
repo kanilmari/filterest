@@ -93,14 +93,14 @@
       "component": "Lucide Icons",
       "kind": "embedded-icon-source",
       "path": "app/frontend/core_components/table_views/card_view/row_article_ui_handler.js",
-      "sha256": "1b116ced36bfbcf97e655fd65f2704c4374a8fd19ba301f2bb266fab0ffc9a1b",
+      "sha256": "1edb0f25788d98e5b6ad12b257882a44118f71875ada6002af45d21a986eaa46",
       "source_detail": "Embedded external-link geometry conservatively covered by the retained Lucide/Feather terms; no first-party authorship claim is made."
     },
     {
       "component": "Lucide Icons",
       "kind": "embedded-icon-source",
       "path": "app/frontend/reusable_components/key_value_container/kv_pair_builder.js",
-      "sha256": "9a024d839cc4d51e0f4703c18ec89017b25a9a14c86229c901079132805d0c5c",
+      "sha256": "98ea5a69cb537b37eb77aca042dd1e8f62dc47a320d57e0d30812f7f85ebd56c",
       "source_detail": "Embedded external-link geometry conservatively covered by the retained Lucide/Feather terms; no first-party authorship claim is made."
     },
     {

@@ -11,6 +11,8 @@
 
 import { createMaskIconSpan } from "../../../icons/icon_mask_builder.js";
 import { createAnchoredActionMenu } from "../../../reusable_components/action_menu/anchored_action_menu.js";
+import { showArticleViewAccessDenied } from "../card_view/article_view_access.js";
+import { ROW_OPENING_DEFAULTS_CHANGED } from "../dataset_appearance_state.js";
 import { ARTICLE_VIEW_KEY } from "../dataset_view_registry.js";
 import {
     ROW_PRESENTATION_MENU_LANG_KEY,
@@ -19,7 +21,10 @@ import {
     getRowPresentationLangKey,
     getRowPresentationMenuLabel,
     listPermittedRowPresentations,
-    resolveRowPresentationChoice,
+    readRowOpeningChoice,
+    getStoredRowPresentation,
+    resetRowPresentationChoice,
+    getUseRowPresentationDefaultLabel,
     setRowPresentationChoice,
     showRowPresentationFailed,
 } from "./row_presentation_choice.js";
@@ -31,20 +36,12 @@ async function openPresentationLazily(options) {
     return openChosenRowPresentation(options);
 }
 
-function applyChoiceToPrimary(primary, viewKey) {
-    primary.dataset.presentation = viewKey;
-    primary.dataset.langKey = getRowPresentationLangKey(viewKey);
-    primary.textContent = getRowPresentationLabel(viewKey);
-}
-
-/** Every split button of the dataset shows the new choice (several toolbars may coexist). */
-function syncDatasetSplitButtons(tableName, viewKey) {
-    document.querySelectorAll(".row-presentation-split").forEach((wrapper) => {
-        if (wrapper.dataset.tableName !== tableName) return;
-        const primary = wrapper.querySelector(".row-presentation-split__primary");
-        if (primary) applyChoiceToPrimary(primary, viewKey);
+function syncDatasetSplitButtons(tableName) {
+    document.querySelectorAll(".row-presentation-split").forEach(wrapper => {
+        if (!tableName || wrapper.dataset.tableName === tableName) wrapper.refreshRowPresentation?.();
     });
 }
+document.addEventListener(ROW_OPENING_DEFAULTS_CHANGED, event => syncDatasetSplitButtons(event.detail?.name));
 
 /**
  * @param {Object} options
@@ -59,6 +56,7 @@ export function createRowPresentationSplitButton({
     isActive = false,
     selectArticle,
     openPresentation = openPresentationLazily,
+    resolveDefaults = async (name, options) => (await import("./row_presentation_dispatcher.js")).resolveRowOpening(name, options),
 } = {}) {
     const wrapper = document.createElement("div");
     wrapper.className = "row-presentation-split";
@@ -75,43 +73,41 @@ export function createRowPresentationSplitButton({
     primary.setAttribute("aria-pressed", isActive ? "true" : "false");
     wrapper.append(primary);
 
-    const permitted = listPermittedRowPresentations(tableName);
-    applyChoiceToPrimary(primary, resolveRowPresentationChoice(tableName, permitted) || ARTICLE_VIEW_KEY);
-    if (permitted.length === 0) {
-        // Same outcome as the picker's applyPermission for an ungranted view.
-        wrapper.style.display = "none";
-        wrapper.classList.add("permission-hidden");
-        return wrapper;
-    }
-
     let pendingActivation = null;
-    const activate = (viewKey) => {
-        // Issued synchronously, before Article's classic path or any lazy
-        // import: the newest activation, Article included, cancels an earlier
-        // IFAV or Page that has not committed. An Article that is already open
-        // changes no address, so the address guard alone would not.
+    const activate = (explicitView = null) => {
         const isRequestCurrent = beginRowPresentationRequest(tableName);
         pendingActivation = isRequestCurrent;
-        if (viewKey === ARTICLE_VIEW_KEY) {
+        const open = (choice) => {
+            if (!isRequestCurrent()) return;
+            if (choice.status !== "resolved") {
+                if (choice.status === "failed") showRowPresentationFailed();
+                if (choice.status === "denied") showArticleViewAccessDenied();
+                return;
+            }
+            if (choice.viewKey === ARTICLE_VIEW_KEY) {
+                selectArticle?.();
+                return;
+            }
+            return openPresentation({ tableName, viewKey: choice.viewKey, isRequestCurrent });
+        };
+        const choice = readRowOpeningChoice(tableName, { viewKey: explicitView });
+        if (choice.viewKey === ARTICLE_VIEW_KEY) {
             wrapper.removeAttribute("aria-busy");
-            selectArticle?.();
+            open(choice);
             return;
         }
         wrapper.setAttribute("aria-busy", "true");
-        Promise.resolve()
-            .then(() => openPresentation({ tableName, viewKey, isRequestCurrent }))
-            .catch((error) => {
-                // Only a failed opener import reaches here; the opener reports its own outcomes.
+        Promise.resolve().then(() => choice.status === "pending"
+            ? resolveDefaults(tableName, { isCurrent: isRequestCurrent }) : choice)
+            .then(open)
+            .catch(error => {
                 console.warn("row presentation failed", error?.message || error);
                 if (isRequestCurrent()) showRowPresentationFailed();
-            })
-            // A committed open changes the address, ending its navigation guard.
-            // Busy cleanup belongs to the latest activation of this button.
-            .finally(() => { if (pendingActivation === isRequestCurrent) wrapper.removeAttribute("aria-busy"); });
+            }).finally(() => {
+                if (pendingActivation === isRequestCurrent) wrapper.removeAttribute("aria-busy");
+            });
     };
-    primary.addEventListener("click", () => activate(primary.dataset.presentation));
-
-    if (permitted.length < 2) return wrapper;
+    primary.addEventListener("click", () => activate());
 
     const toggle = document.createElement("button");
     toggle.type = "button";
@@ -124,7 +120,22 @@ export function createRowPresentationSplitButton({
     const icon = createMaskIconSpan(CHEVRON_ICON, ["row-presentation-split__chevron"]);
     icon.setAttribute("aria-hidden", "true");
     toggle.append(icon);
-    wrapper.append(toggle);
+    const refresh = () => {
+        const permitted = listPermittedRowPresentations(tableName);
+        const choice = readRowOpeningChoice(tableName, { permitted });
+        wrapper.style.display = permitted.length ? "" : "none";
+        wrapper.classList.toggle("permission-hidden", !permitted.length);
+        primary.dataset.presentation = choice.viewKey || "";
+        primary.dataset.langKey = choice.viewKey ? getRowPresentationLangKey(choice.viewKey) : ROW_PRESENTATION_MENU_LANG_KEY;
+        primary.textContent = choice.viewKey ? getRowPresentationLabel(choice.viewKey) : getRowPresentationMenuLabel();
+        primary.disabled = choice.status === "denied";
+        // A Page-only user may still select Page explicitly when every inherited candidate is denied.
+        const needsMenu = permitted.length > 1 || (permitted.length && (getStoredRowPresentation(tableName) || !choice.viewKey));
+        if (needsMenu && toggle.parentElement !== wrapper) wrapper.append(toggle);
+        if (!needsMenu) toggle.remove();
+    };
+    wrapper.refreshRowPresentation = refresh;
+    refresh();
 
     const menu = createAnchoredActionMenu({
         trigger: toggle,
@@ -134,20 +145,27 @@ export function createRowPresentationSplitButton({
         menuLabelLangKey: ROW_PRESENTATION_MENU_LANG_KEY,
         testid: "row-presentation-menu",
         // Grants are read again at every opening.
-        buildItems: () => listPermittedRowPresentations(tableName).map((viewKey) => ({
-            value: viewKey,
-            label: getRowPresentationLabel(viewKey),
-            langKey: getRowPresentationLangKey(viewKey),
-            checked: viewKey === primary.dataset.presentation,
-        })),
+        buildItems: () => {
+            const stored = getStoredRowPresentation(tableName);
+            const items = listPermittedRowPresentations(tableName).map(viewKey => ({
+                value: viewKey, label: getRowPresentationLabel(viewKey),
+                langKey: getRowPresentationLangKey(viewKey), checked: viewKey === stored,
+            }));
+            items.push({
+                value: "inherit", label: getUseRowPresentationDefaultLabel(),
+                langKey: "row_presentation_use_default", checked: !stored,
+            });
+            return items;
+        },
         onSelect: (viewKey) => {
-            setRowPresentationChoice(tableName, viewKey);
-            syncDatasetSplitButtons(tableName, viewKey);
+            if (viewKey === "inherit") resetRowPresentationChoice(tableName);
+            else if (listPermittedRowPresentations(tableName).includes(viewKey)) setRowPresentationChoice(tableName, viewKey);
+            syncDatasetSplitButtons(tableName);
             // A presentation that opens a modal returns focus here when it closes.
             // The filterbar panel stays open for a choice in this body-mounted
             // menu (filterbar_outside_panel_close.js), so the primary stays rendered.
             primary.focus({ preventScroll: true });
-            activate(viewKey);
+            activate(viewKey === "inherit" ? null : viewKey);
         },
     });
     wrapper.__rowPresentationMenu = menu;

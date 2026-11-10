@@ -42,7 +42,7 @@ test('opens This tab first every time with native scope radios, ordered places a
     ]);
     expect(radios[0].name).toBe(radios[1].name);
     expect([...control.panel.querySelectorAll('[data-place]')].map(row => row.dataset.place))
-        .toEqual([...Array(15).fill('tab_only'), ...Array(9).fill('site_default'), ...Array(8).fill('site_only')]);
+        .toEqual([...Array(15).fill('tab_only'), ...Array(10).fill('site_default'), ...Array(8).fill('site_only')]);
     expect(get('scope').parentElement).toBe(control.panel);
     expect(get('save').closest('.dataset-cover-test-palette__actions').parentElement).toBe(control.panel);
     expect(options.datasetSettingsRequestFn).not.toHaveBeenCalled();
@@ -54,7 +54,7 @@ test('opens This tab first every time with native scope radios, ordered places a
     expect(get('scope-tab').checked).toBe(true); expect(get('save').textContent).toBe('Save this tab');
 });
 
-test('all nine defaults preserve equality, zero and false as overrides; removal is staged until Save', async () => {
+test('all site defaults preserve equality, zero and false as overrides; removal is staged until Save', async () => {
     const initial = paletteSnapshot(11, { 'shared.card_show_all_fields': false, 'shared.filterbar_content_top_space': 0,
         'shared.card_image_width': 300 });
     const { row, change, get, options, save } = await setup({}, initial);
@@ -212,6 +212,25 @@ test('late save after teardown cannot reclaim preview or paint a deleted dataset
     expect(datasetAppearanceState.savedSnapshot('demo')).toBeNull(); expect(control.panel.isConnected).toBe(false);
 });
 
+test('site and dataset row-opening defaults survive save and an equal override can be removed', async () => {
+    const { get, row, change, save, options } = await setup();
+    const path = 'shared.row_article_default_presentation';
+    expect(get('row-article-default').value).toBe('');
+    get('scope-site').click();
+    change('row-article-default', 'image_first_page_view');
+    await save();
+    expect(options.saveRequestFn.mock.calls[0][0].set).toEqual({ [path]: 'image_first_page_view' });
+    get('scope-tab').click();
+    expect(get('row-article-default').selectedOptions[0].textContent).toContain('Site default');
+    change('row-article-default', 'image_first_page_view');
+    await save();
+    expect(datasetAppearanceState.savedSnapshot('demo').overrides[path]).toBe('image_first_page_view');
+    row(path).querySelector('button').click();
+    await save();
+    expect(datasetAppearanceState.savedSnapshot('demo').overrides).not.toHaveProperty(path);
+    expect(get('row-article-default').value).toBe('');
+});
+
 test('flag and route gating fail closed while public theme rendering remains available', async () => {
     const { control } = await setup({ requestFn: async () => ({ view_admin_cover_image_test_palette: false }) });
     expect(control).toBeNull();
@@ -230,17 +249,18 @@ test('tab actions open the existing media/field editors with this dataset and ke
     control.button.click(); get('scope-site').click(); expect(get('fieldEditor').parentElement.hidden).toBe(true);
 });
 
-test('all nine tab controls save explicit values together, then stage removal without losing owned cover values', async () => {
+test('all per-dataset controls save explicit values together, then stage removal without losing owned cover values', async () => {
     const { change, get, row, options, save } = await setup();
     change('card-image-width', 380); change('card-image-presentation', 'contain_blur');
     change('article-image-caption-position', 'overlay'); get('card-fields-values').click();
     change('label-value-layout', 'inline'); change('card-style', 'standard');
+    change('row-article-default', 'article_view'); // Pin even when it equals the inherited value.
     change('card-description-lines', 5); change('card-detail-columns', 4); change('filterbar-content-top-space', 0);
     await save();
     expect(Object.keys(options.datasetSaveRequestFn.mock.calls[0][0].set).sort())
         .toEqual([...DATASET_APPEARANCE_PATHS_BY_PLACE.site_default].sort());
     for (const path of DATASET_APPEARANCE_PATHS_BY_PLACE.site_default) row(path).querySelector('button').click();
-    expect(Object.keys(datasetAppearanceState.savedSnapshot('demo').overrides)).toHaveLength(9);
+    expect(Object.keys(datasetAppearanceState.savedSnapshot('demo').overrides)).toHaveLength(10);
     await save();
     expect(options.datasetSaveRequestFn.mock.calls[1][0].unset.sort())
         .toEqual([...DATASET_APPEARANCE_PATHS_BY_PLACE.site_default].sort());

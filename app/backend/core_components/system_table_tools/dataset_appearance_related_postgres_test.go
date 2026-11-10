@@ -49,13 +49,16 @@ func TestDatasetAppearancePostgresRelatedResultsAuthorizedAndFresh(t *testing.T)
 	}
 	frontPageRuntimeDB(t, db)
 	frontPageExec(t, db, `REVOKE ALL ON system_dataset_appearance FROM front_page_runtime`)
-	load := func(child string) []read.RelatedTableResult {
+	load := func(child string, modern bool) []read.RelatedTableResult {
 		t.Helper()
 		body := `{"parent_dataset":"wl143_content","parent_pk_value":"7"`
 		if child != "" {
 			body += `,"child_table":"` + child + `"`
 		}
 		request := httptest.NewRequest("POST", "/api/fetch-dynamic-children?dataset=wl143_content", strings.NewReader(body+`}`))
+		if modern {
+			request.Header.Set(store.AppearanceHeader, "row-presentation")
+		}
 		request = request.WithContext(dbutils.SetRequestActorContext(request.Context(), dbutils.NewRequestActorContext(42, "basic")))
 		response := httptest.NewRecorder()
 		read.GetDynamicChildItemsHandler(response, request)
@@ -70,7 +73,7 @@ func TestDatasetAppearancePostgresRelatedResultsAuthorizedAndFresh(t *testing.T)
 		}
 		return payload.Children
 	}
-	assertRelated := func(results []read.RelatedTableResult, width float64, version string, denied bool) {
+	assertRelated := func(results []read.RelatedTableResult, width float64, version string, denied, modern bool) {
 		t.Helper()
 		found := 0
 		for _, result := range results {
@@ -89,7 +92,7 @@ func TestDatasetAppearancePostgresRelatedResultsAuthorizedAndFresh(t *testing.T)
 				t.Fatal(err)
 			}
 			actualJSON, _ := json.Marshal(result.DatasetAppearance)
-			expectedJSON, _ := json.Marshal(expected)
+			expectedJSON, _ := json.Marshal(expected.ForClient(modern))
 			if result.DatasetUID != uid || string(actualJSON) != string(expectedJSON) || result.DatasetAppearance.Version != version || result.DatasetAppearance.Effective.Shared.CardImageWidth != width {
 				t.Fatalf("related appearance differs from results contract: %+v", result)
 			}
@@ -98,8 +101,9 @@ func TestDatasetAppearancePostgresRelatedResultsAuthorizedAndFresh(t *testing.T)
 			t.Fatal("related dataset was not returned", results)
 		}
 	}
-	all := load("")
-	assertRelated(all, 440, saved.Revision, false)
+	all := load("", true)
+	assertRelated(all, 440, saved.Revision, false, true)
+	assertRelated(load("", false), 440, saved.Revision, false, false)
 	var lazy, outgoing bool
 	for _, result := range all {
 		if result.Table_name != "wl160_related" {
@@ -115,11 +119,11 @@ func TestDatasetAppearancePostgresRelatedResultsAuthorizedAndFresh(t *testing.T)
 	if err != nil {
 		t.Fatal(err)
 	}
-	assertRelated(load("wl160_related"), 480, saved.Revision, false)
-	assertRelated(load(""), 480, saved.Revision, false)
+	assertRelated(load("wl160_related", true), 480, saved.Revision, false, true)
+	assertRelated(load("", true), 480, saved.Revision, false, true)
 	frontPageExec(t, db, `DELETE FROM system_group_table_func_rights WHERE user_group_id=2 AND function_id=500000 AND target_table_uid=`+fmtUID(uid))
-	assertRelated(load(""), 0, "", true)
+	assertRelated(load("", true), 0, "", true, true)
 	frontPageExec(t, db, `INSERT INTO system_group_table_func_rights(user_group_id,function_id,target_table_uid) VALUES(2,500000,`+fmtUID(uid)+`);
         UPDATE system_db_tables SET ui_hidden=true WHERE table_uid=`+fmtUID(uid))
-	assertRelated(load(""), 0, "", true)
+	assertRelated(load("", true), 0, "", true, true)
 }

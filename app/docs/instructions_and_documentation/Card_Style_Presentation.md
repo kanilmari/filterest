@@ -210,7 +210,7 @@ and **Side by side** (Rinnakkain). Stacked is the default for missing or unknown
 values. **Automatic** (Automaattinen) is available only when the server runs
 in development mode, using the same boundary as the experimental card.
 Production rejects saving Automatic and reads an older stored Automatic as Stacked.
-This is one of the nine overridable defaults: a dataset can retain an explicit
+This is one of the overridable site defaults: a dataset can retain an explicit
 wrapping choice through its appearance endpoint, or remove it to inherit.
 
 Every ordinary label/value pair follows this choice in Glowy and Plain result

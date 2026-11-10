@@ -3,8 +3,8 @@
 // Bridges table-view row payloads, resolved product-card fields, and row-article opening behavior.
 // Exists to provide a reusable listing-card view without adding backend-specific product code.
 
-import { bindArticleViewActivation, requireArticleViewAccess } from '../card_view/article_view_access.js';
-import { openRowArticleView } from "../card_view/row_article_opener.js";
+import { bindRowActivation } from "../card_view/default_row_affordance.js";
+import { openDefaultRowPresentation } from "../row_presentation/row_presentation_dispatcher.js";
 import { getLanguageWithBrowserFallback } from "../../state_stores/lang_preference_reader.js";
 import { setUnifiedTableState } from "../../state_stores/table_state_store.js";
 import { setChosenDatasetView } from "../../state_stores/dataset_view_choice_saver.js";
@@ -296,33 +296,33 @@ function createDetailElement(entry) {
  * @param {string} tableName
  */
 function attachRowOpenBehavior(card, rowItem, tableName) {
-    bindArticleViewActivation(card, event => {
+    bindRowActivation(card, tableName, event => {
         if (event.type === 'click' && isInteractiveChildClick(event)) return;
         void openProductRowArticle(rowItem, tableName, card);
     }, { keyboard: true });
 }
 
 async function openProductRowArticle(rowItem, tableName, card) {
-    if (!requireArticleViewAccess()) return;
-    const rowId = rowItem?.id;
-    if (rowId == null) {
-        openRowArticleView(rowItem, tableName, card);
-        return;
+    return openDefaultRowPresentation(rowItem, tableName, card, { openClassic: openClassicRow });
+
+    async function openClassicRow(row, table, selected, { isCurrent }) {
+        const { refreshTableUnified } = await import(
+            "../../general_tables/gt_1_row_crud/gt_1_2_row_read/table_refresh_unified.js"
+        );
+        if (!isCurrent()) return;
+        const rowId = row.id;
+
+        setChosenDatasetView(tableName, "article_view");
+        setUnifiedTableState(tableName, {
+            articleView: {
+                collapsed: true,
+                expandedId: rowId,
+                returnView: "product_card",
+            },
+        });
+
+        await refreshTableUnified(tableName, { skipUrlParams: true, isCurrent });
     }
-
-    setChosenDatasetView(tableName, "article_view");
-    setUnifiedTableState(tableName, {
-        articleView: {
-            collapsed: true,
-            expandedId: rowId,
-            returnView: "product_card",
-        },
-    });
-
-    const { refreshTableUnified } = await import(
-        "../../general_tables/gt_1_row_crud/gt_1_2_row_read/table_refresh_unified.js"
-    );
-    await refreshTableUnified(tableName, { skipUrlParams: true });
 }
 
 function isInteractiveChildClick(event) {

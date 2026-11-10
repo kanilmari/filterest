@@ -28,7 +28,7 @@ type datasetAppearanceRequest struct {
 // AdminDatasetAppearanceHandler patches only the selected dataset.
 // POST /api/admin/dataset-appearance
 // Request: {schema_version:2,dataset_uid,tab_set,set,unset,shared_version,version}.
-// TabSet patches tab-only values; Set/Unset affect only nine default overrides.
+// TabSet patches tab-only values; Set/Unset affect only site-default overrides.
 func AdminDatasetAppearanceHandler(w http.ResponseWriter, r *http.Request) {
 	var input datasetAppearanceRequest
 	decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 128<<10))
@@ -60,7 +60,7 @@ func AdminDatasetAppearanceHandler(w http.ResponseWriter, r *http.Request) {
 		respondDatasetAppearanceError(w, err)
 		return
 	}
-	httpresponse.RespondWithJSON(w, 200, result)
+	httpresponse.RespondWithJSON(w, 200, result.ForClient(store.WantsRowPresentation(w, r)))
 }
 
 func respondDatasetAppearanceError(w http.ResponseWriter, err error) {

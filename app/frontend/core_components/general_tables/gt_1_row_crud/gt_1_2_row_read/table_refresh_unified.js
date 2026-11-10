@@ -13,7 +13,7 @@ import { resetOffset, updateOffset, disconnectInfiniteScroll } from '../../../in
 import { getDatasetListingFilters, getDatasetListingSignature } from '../../../infinite_scroll/dataset_listing_filters.js';
 import { applyColumnVisibility } from '../../../filterbar/filter_list/column_visibility_handler.js';
 import { openRowArticleView } from '../../../table_views/card_view/row_article_opener.js';
-import { claimFirstListedRow, getArticleStateKey } from '../../../table_views/card_view/first_listed_row.js';
+import { claimFirstListedRow, getArticleStateKey, keepExplicitRowListingCurrent } from '../../../table_views/card_view/first_listed_row.js';
 import { setRedirectNotice, clearDatasetSelectionState } from '../../../state_stores/dataset_selection_saver.js';
 import { redirectToRootInSpa } from '../../../navigation/root_redirect_handler.js';
 import { getParams, parseTableQueryString } from '../../../navigation/nav_engine/query_params.js';
@@ -79,6 +79,9 @@ async function getSearchGroupsForViewRebuild(tableName, query) {
 // refresh_table_unified.js
 
 export async function refreshTableUnified(tableName, options = {}) {
+    // A replacement load is still part of its originating row handoff, even
+    // when search or scrolling supplies a new lifetime guard for that load.
+    const deferRowOpening = options.deferRowOpening === true || options.isCurrent === keepExplicitRowListingCurrent;
     const preserveCardReturn = options.preserveCardReturn
         && options.preserveCardReturn === getCardArticleReturnToken(tableName)
         ? options.preserveCardReturn : null;
@@ -186,9 +189,9 @@ export async function refreshTableUnified(tableName, options = {}) {
                 // Repair intentionally supersedes the old filter signature. The
                 // SSE lifetime still vetoes replacement while an editor is open.
                 if (options.beforeSwap && options.isCurrent && !options.isCurrent()) return null;
-                const restarted = options.beforeSwap
-                    ? await restartInvalidatedSearch(tableName, { isCurrent: options.isCurrent, beforeSwap: options.beforeSwap })
-                    : await restartInvalidatedSearch(tableName);
+                const restarted = await restartInvalidatedSearch(tableName, {
+                    isCurrent: options.beforeSwap ? options.isCurrent : undefined, beforeSwap: options.beforeSwap, deferRowOpening,
+                });
                 if (restarted) return null;
                 if (options.isCurrent && !options.isCurrent()) return null;
             }
@@ -261,13 +264,16 @@ export async function refreshTableUnified(tableName, options = {}) {
             // This context ends with this refresh; view and history stay settled.
             await refreshTableUnified(tableName, { skipUrlParams: true,
                 isCurrent: options.isCurrent, beforeSwap: options.beforeSwap,
-                chartRequested: options.chartRequested || currentView === 'price_chart' });
+                withOwnAddressWrite: options.withOwnAddressWrite,
+                deferRowOpening, chartRequested: options.chartRequested || currentView === 'price_chart' });
             return;
         }
 
         // An article waiting for its first row opens the first row just drawn;
         // while a search is committed that is its first match.
-        claimFirstListedRow(tableName, currentView, data);
+        // An adapter opens its exact target after this listing settles. Leave
+        // the ordinary auto-open intent available to independent refreshes.
+        if (!deferRowOpening) claimFirstListedRow(tableName, currentView, data);
         const stateAfterBuild = getUnifiedTableState(tableName);
         // An article opening below is a step forward that writes its own row
         // address; asking for the settled address here would replace the list
@@ -275,7 +281,7 @@ export async function refreshTableUnified(tableName, options = {}) {
         // entry exists.
         let articleOpenStarted = false;
 
-        if (stateAfterBuild[stateKey]?.collapsed && stateAfterBuild[stateKey]?.expandedId != null) {
+        if (!deferRowOpening && stateAfterBuild[stateKey]?.collapsed && stateAfterBuild[stateKey]?.expandedId != null) {
             const expandedId = stateAfterBuild[stateKey].expandedId;
             let rowItem = data.find(r => String(r.id) === String(expandedId));
             let cardElem = document.querySelector(
@@ -305,6 +311,7 @@ export async function refreshTableUnified(tableName, options = {}) {
                 articleOpenStarted = true;
                 openRowArticleView(rowItem, tableName, cardElem || null, {
                     isCurrent: () => isRenderCurrent() && resolveDatasetViewSelectionTarget(getChosenDatasetView(tableName) || currentView) === currentView,
+                    withOwnAddressWrite: options.withOwnAddressWrite,
                 });
             }
         }
@@ -318,7 +325,8 @@ export async function refreshTableUnified(tableName, options = {}) {
         // 12) The rendered view is now the settled one, fallbacks included, so the
         // address owner can describe it and store the matching query parameters.
         if (!articleOpenStarted && isRenderCurrent()) {
-            await updateDatasetAddress({ dataset: tableName, isCurrent: isRenderCurrent });
+            const withOwnAddressWrite = options.withOwnAddressWrite || (write => write());
+            await withOwnAddressWrite(() => updateDatasetAddress({ dataset: tableName, isCurrent: isRenderCurrent }));
         }
         // A search repairing an unfinished card host consumes this same first
         // page only after the guarded view build has committed it.

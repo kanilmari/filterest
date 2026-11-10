@@ -10,9 +10,12 @@ let identity = null;
 let needsValidation = false;
 let validation = null;
 const subscribers = new Set();
+const identitySubscribers = new Set();
 
 export function getSessionGeneration() { return generation; }
 export function isSessionValidationRequired() { return needsValidation; }
+/** Server-confirmed viewer only; persisted UI state never establishes identity. */
+export function getVerifiedSessionIdentity() { return needsValidation ? null : identity; }
 
 /** Invalidate synchronously, before any bootstrap await or new identity read. */
 export function invalidateSessionGeneration({ reason = 'session-change', revalidate = true } = {}) {
@@ -29,6 +32,17 @@ export function subscribeToSessionGeneration(subscriber) {
     return () => subscribers.delete(subscriber);
 }
 
+/** Observe server verification separately from invalidation of pending work. */
+export function subscribeToVerifiedSessionIdentity(subscriber) {
+    identitySubscribers.add(subscriber);
+    return () => identitySubscribers.delete(subscriber);
+}
+
+function confirmIdentity(viewerID) {
+    identity = viewerID;
+    for (const subscriber of identitySubscribers) subscriber(viewerID);
+}
+
 /** The facade names its actual viewer; never accept another account's response. */
 export function acceptSessionIdentity(viewerID, expectedGeneration) {
     if (generation !== expectedGeneration || needsValidation) return false;
@@ -37,7 +51,7 @@ export function acceptSessionIdentity(viewerID, expectedGeneration) {
         invalidateSessionGeneration();
         return false;
     }
-    identity = viewerID;
+    confirmIdentity(viewerID);
     return true;
 }
 
@@ -74,8 +88,8 @@ export function revalidateSessionIdentity() {
         if (generation !== checking.generation || checking.controller.signal.aborted) {
             throw new DOMException('Session changed', 'AbortError');
         }
-        identity = viewerID;
         needsValidation = false;
+        confirmIdentity(viewerID);
         return generation;
     })().finally(() => {
         clearTimeout(timeout);

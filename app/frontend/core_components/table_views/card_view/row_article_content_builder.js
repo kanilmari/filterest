@@ -510,6 +510,7 @@ export async function buildRowArticleContent(
                         showKey: d.showKeyOnCard,
                         href: resolvedHref,
                         openInNewTabHref: d.openInNewTabHref || resolvedHref,
+                        rowDestination: d.rowDestination,
                         openPrimaryInNewTab: !d.href,
                         externalHttpOnly: !d.href,
                         storedRawValue: d.storedRawValue ?? d.rawValue,

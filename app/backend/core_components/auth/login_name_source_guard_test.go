@@ -40,6 +40,7 @@ func collectLoginNameSourceGuardFindings(appRoot string) ([]string, error) {
 		"server_tools/versioning/schema_snapshots/db-9.13.3.sql":                    "reviewed setting-only DB release; schema bytes identical to DB 9.13.2 and public bootstrap",
 		"server_tools/versioning/schema_snapshots/db-9.13.4.sql":                    "reviewed setting-only DB release; schema bytes identical to DB 9.13.3 and public bootstrap",
 		"server_tools/versioning/schema_snapshots/db-9.13.5.sql":                    "reviewed setting-only DB release; schema bytes identical to DB 9.13.4 and public bootstrap",
+		"server_tools/versioning/schema_snapshots/db-9.13.6.sql":                    "reviewed appearance-policy-only DB release; no new login-name access; matches public_bootstrap/schema.sql",
 		"backend/core_components/startup/reserved_test_users.go":                    "exact reserved fixture reconciliation",
 		"backend/core_components/auth/register.go":                                  "registration refusal language keys",
 		"backend/core_components/auth/registration_account.go":                      "validated registration writer and duplicate check",

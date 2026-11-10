@@ -5,6 +5,7 @@
 // Keeps saved visibility/order and Back-to-article behaviour from regressing.
 
 import { beforeEach, describe, expect, test, vi } from "vitest";
+import { beginRowPresentationRequest, setRowPresentationChoice } from '../row_presentation/row_presentation_choice.js';
 import { DATE_TIME_DISPLAY_SEPARATOR } from "../timestamp_display_formatter.js";
 
 function displayDateTime(dateText, timeText) {
@@ -18,6 +19,7 @@ const mocks = vi.hoisted(() => ({
     }),
     endpointRouter: vi.fn(() => Promise.resolve([])),
     handleAllNavigation: vi.fn(() => Promise.resolve()),
+    openArticle: vi.fn(),
     hasDatasetPermission: vi.fn(() => Promise.resolve(false)),
     primeDatasetPermissions: vi.fn(() => Promise.resolve(new Map())),
     primeMultipleDatasetPermissions: vi.fn(() => Promise.resolve(new Map())),
@@ -50,11 +52,14 @@ vi.mock("../../navigation/nav_engine/query_params.js", () => ({
     setParams: vi.fn(),
 }));
 
+vi.mock("./row_article_opener.js", () => ({ openRowArticleView: mocks.openArticle }));
+
 vi.mock("./row_article_ui_handler.js", () => ({
     closeRowArticle: mocks.closeRowArticle,
 }));
 
-vi.mock("../../route_permission_checker.js", () => ({
+vi.mock("../../route_permission_checker.js", async importOriginal => ({
+    ...await importOriginal(),
     hasDatasetPermission: mocks.hasDatasetPermission,
     primeDatasetPermissions: mocks.primeDatasetPermissions,
     primeMultipleDatasetPermissions: mocks.primeMultipleDatasetPermissions,
@@ -88,6 +93,9 @@ vi.mock("../../general_tables/gt_1_row_crud/gt_1_4_row_delete/row_remover_helper
     })),
 }));
 
+import { keepExplicitRowListingCurrent } from './first_listed_row.js';
+import { setSelectedDataset } from '../../state_stores/dataset_selection_saver.js';
+import { VIEW_DEACTIVATE_EVENT } from '../../../reusable_components/view_lifecycle_events.js';
 import { buildRowArticleRelatedTabs } from "./row_article_child_tabs.js";
 import { datasetAppearanceState } from "../dataset_appearance_state.js";
 import { createRowArticleLoadSession } from './row_article_load_session.js';
@@ -144,6 +152,11 @@ function configuredTabFixture() {
 describe("buildRowArticleRelatedTabs related-record navigation", () => {
     beforeEach(() => {
         vi.clearAllMocks();
+        setSelectedDataset('parent');
+        mocks.handleAllNavigation.mockReset().mockImplementation(async dataset => {
+            document.dispatchEvent(new CustomEvent(VIEW_DEACTIVATE_EVENT));
+            setSelectedDataset(dataset);
+        });
         setAllSpecs({});
         datasetAppearanceState.clear();
         datasetAppearanceState.updateSite(DEFAULT_DATASET_APPEARANCE, { version: 'site-1' });
@@ -412,6 +425,8 @@ describe("buildRowArticleRelatedTabs related-record navigation", () => {
     });
 
     test("opens a related row without pushing an intermediate dataset base URL", async () => {
+        sessionStorage.setItem("user_permissions", JSON.stringify(["/ui/view/article_view"]));
+        setRowPresentationChoice("dev_agent_tasks", "article_view");
         const tabs = await buildRowArticleRelatedTabs(
             [{
                 dataset: "dev_agent_tasks",
@@ -436,6 +451,7 @@ describe("buildRowArticleRelatedTabs related-record navigation", () => {
                 {
                     forceReload: true,
                     skipUrlUpdate: true,
+                    isCurrentNavigation: keepExplicitRowListingCurrent,
                 },
             );
         });
@@ -443,11 +459,44 @@ describe("buildRowArticleRelatedTabs related-record navigation", () => {
         expect(mocks.setUnifiedTableState).toHaveBeenCalledWith(
             "dev_agent_tasks",
             {
-                articleView: { collapsed: true, expandedId: 853, returnView: "card" },
+                articleView: { collapsed: true, expandedId: null, returnView: "card",
+                    pendingAutoOpenFirstRenderedResult: true, pendingAutoOpenFirstSearchResult: false },
             },
         );
         expect(mocks.closeRowArticle).toHaveBeenCalled();
+        await vi.waitFor(() => expect(mocks.openArticle).toHaveBeenCalledOnce());
+        expect(mocks.openArticle).toHaveBeenCalledWith({ id: 853, title: 'Related task' },
+            'dev_agent_tasks', null, expect.any(Object));
+        const articleGuard = mocks.openArticle.mock.calls[0][3].isCurrent;
+        expect(articleGuard()).toBe(true);
+        setSelectedDataset('elsewhere');
+        expect(articleGuard()).toBe(false);
+        setSelectedDataset('dev_agent_tasks');
+        beginRowPresentationRequest('newer');
+        expect(articleGuard()).toBe(false);
     });
+
+    test.each(['newer request', 'other selected dataset'])(
+        'completed related navigation opens no stale article after %s', async reason => {
+            sessionStorage.setItem('user_permissions', JSON.stringify(['/ui/view/article_view']));
+            setRowPresentationChoice('child', 'article_view');
+            let finish;
+            mocks.handleAllNavigation.mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
+            const tabs = await buildRowArticleRelatedTabs([relatedResult(300)], 'parent', 42, null);
+            document.querySelector('.active_row_article').append(tabs);
+            tabs.querySelector('.related_record_title_button').click();
+            await vi.waitFor(() => expect(finish).toBeTypeOf('function'));
+            expect(mocks.openArticle).not.toHaveBeenCalled();
+            setSelectedDataset(reason === 'newer request' ? 'child' : 'elsewhere');
+            if (reason === 'newer request') beginRowPresentationRequest('newer');
+            finish({ abort: false });
+            await new Promise(resolve => setTimeout(resolve, 0));
+            expect(mocks.openArticle).not.toHaveBeenCalled();
+            expect(mocks.handleAllNavigation).toHaveBeenCalledExactlyOnceWith('child', [], {
+                forceReload: true, skipUrlUpdate: true, isCurrentNavigation: keepExplicitRowListingCurrent,
+            });
+        },
+    );
 
     test("renders related rows with compact columns and hides generated bridge relation tabs", async () => {
         const tabs = await buildRowArticleRelatedTabs(

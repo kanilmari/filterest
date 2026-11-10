@@ -11,6 +11,12 @@ import { decorateStandardCardDetailKey } from "./card_detail_standard_key_decora
 import { createKvPairBuilders } from "../../../reusable_components/key_value_container/kv_pair_builder.js";
 import { expandForeignKeyDetailEntries } from "./relation_detail_helpers.js";
 
+// These label-rendering fixtures expose readable relation links. Row openers
+// now consult the presentation grant even when only building their href.
+vi.mock("../../route_permission_checker.js", () => ({
+    hasRoutePermission: route => route === "/ui/view/article_view",
+}));
+
 const pairBuilders = createKvPairBuilders({
     translate: key => key,
     decorateKeyElement: decorateStandardCardDetailKey,

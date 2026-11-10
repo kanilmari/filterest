@@ -25,6 +25,7 @@ export const ARTICLE_BUTTON_COPY = {
     preview: ['Painikkeen teksti: {label}', 'Button label: {label}', '按钮文字：{label}', '按鈕文字：{label}'],
     add: ['Lisää painike', 'Add button', '添加按钮', '加入按鈕'],
     enabled: ['Käytössä', 'Enabled', '启用', '啟用'],
+    inherit: ['Käytä oletusta', 'Use default', '使用默认设置', '使用預設'],
     up: ['Siirrä ylöspäin', 'Move up', '上移', '上移'],
     down: ['Siirrä alaspäin', 'Move down', '下移', '下移'],
     remove: ['Poista painike', 'Remove button', '移除按钮', '移除按鈕'],
@@ -50,7 +51,7 @@ export function articleButtonCopy(key, values = {}) {
     const lower = language.toLowerCase();
     const index = lower.startsWith('fi') ? 0 : ['yue', 'zh-hk', 'zh-tw'].includes(lower) ? 3
         : lower === 'ch' || lower.startsWith('zh') ? 2 : 1;
-    const presentationKeys = { presentation: 'article_presentations_title',
+    const presentationKeys = { presentation: 'article_presentations_title', inherit: 'row_presentation_use_default',
         article_view: 'article_presentations_article', image_first_page_view: 'article_presentations_page' };
     const langKey = presentationKeys[key] || (key === 'conflict' ? 'front_page_save_conflict' : `front_page_article_buttons_${key}`);
     const text = getTranslationForKey(langKey, { language, fallback: ARTICLE_BUTTON_COPY[key]?.[index], countUsage: false });

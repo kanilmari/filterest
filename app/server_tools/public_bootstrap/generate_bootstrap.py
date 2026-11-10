@@ -92,6 +92,7 @@ language_seed_migrations = (
     "20261022000301_seed_home_phone_search_language_keys.sql",
     "20261029000001_seed_hero_sort_language_keys.sql",
     "20261029000002_replace_legacy_finnish_sort_labels.sql",
+    "20261105000986_seed_row_presentation_default_language_keys.sql",
 )
 # A setting an upgrade adds is added for a new installation by the same file, so
 # the default is written once and an upgraded site and a new one start with the
@@ -143,6 +144,7 @@ repair_schema_migrations = (
     "20261015000017_add_article_presentations_editor.sql",
     "20261015000020_add_row_group_heading_order_appearance_field.sql",
     "20261024000001_add_saved_home_boxes.sql",
+    "20261105000985_add_row_article_default_presentation.sql",
 )
 # Complete the physical actor columns after development tables and support functions,
 # before schema privileges. The data step later registers the same columns.
@@ -190,6 +192,7 @@ release_record_migrations = (
     "20261029000199_record_database_release_9_13_3.sql",
     "20261030000399_record_database_release_category_button_width.sql",
     "20261105000099_record_database_release_app_log_search_terms.sql",
+    "20261105000999_record_database_release_row_article_default.sql",
 )
 # Every public migration whose sequence number comes after this one belongs to
 # exactly one list above, so no file is marked as run while missing from the

@@ -5,6 +5,7 @@
 // Exists to keep every row-oriented view able to open the default row article experience.
 
 import { expect, test, vi } from "vitest";
+import { paletteSnapshot } from "../../admin_tools/dataset_appearance_palette_test_fixtures.js";
 
 const {
     closeRowArticleMock,
@@ -137,6 +138,7 @@ vi.mock("../../../reusable_components/modal/confirm_modal_builder.js", () => ({
 
 vi.mock("../../../reusable_components/notifications/toast_notification_printer.js", () => ({
     showSuccessToast: vi.fn(),
+    showToast: vi.fn(),
 }));
 
 vi.mock("../../general_tables/gt_1_row_crud/gt_1_2_row_read/table_refresh_unified.js", () => ({
@@ -166,13 +168,16 @@ vi.mock("../../user_tools/current_user_profile_fetcher.js", () => ({
 }));
 
 
-import { openRowArticleView } from "./row_article_opener.js";
 import { createSupplementalDatasetGroup } from "../compact_dataset_group.js";
 import { getUnifiedTableState, setUnifiedTableState } from "../../state_stores/table_state_store.js";
 import { setChosenDatasetView } from "../../state_stores/dataset_view_choice_saver.js";
+import { setSelectedDataset } from "../../state_stores/dataset_selection_saver.js";
+import { datasetAppearanceState } from "../dataset_appearance_state.js";
 
-const tabNavigation = vi.hoisted(() => ({ open: vi.fn() }));
-vi.mock("../../navigation/main_tabs/main_tab_printer.js", () => ({ openNavTab: tabNavigation.open }));
+const tabNavigation = vi.hoisted(() => ({ open: vi.fn(), focus: vi.fn() }));
+vi.mock("../../navigation/main_tabs/main_tab_printer.js", () => ({ openNavTab: tabNavigation.focus }));
+vi.mock("../../navigation/nav_engine/navigation_handler.js", () => ({ handle_all_navigation: tabNavigation.open }));
+vi.mock("../../navigation/admin_and_user_tools/custom_view_reader.js", () => ({ custom_views: [] }));
 
 test("a block link opens the chosen row, bypasses a remembered article, and one Back reaches root", async () => {
     document.body.innerHTML = `<div id="front_page_container"></div>
@@ -181,6 +186,9 @@ test("a block link opens the chosen row, bypasses a remembered article, and one 
         <div class="big_card_placeholder row_article_placeholder"></div></div></div>`;
     history.replaceState({ __filterestEntryId: "home" }, "", "/");
     localStorage.clear(); sessionStorage.clear();
+    // The block's readable target uses the inherited classic default. Supply
+    // its authorized settings now that ordinary row links resolve presentation.
+    datasetAppearanceState.accept("events", paletteSnapshot());
     HTMLElement.prototype.scrollIntoView = vi.fn();
     vi.spyOn(window, "requestAnimationFrame").mockImplementation(callback => { callback(); return 1; });
     const params = new Map();
@@ -195,16 +203,24 @@ test("a block link opens the chosen row, bypasses a remembered article, and one 
     document.getElementById("front_page_container").append(group.element);
     const push = vi.spyOn(history, "pushState");
     try {
-        tabNavigation.open.mockImplementation(async (dataset, options) => {
+        tabNavigation.open.mockImplementation(async (dataset, _views, options) => {
             expect(options.skipUrlUpdate).toBe(true);
-            expect(getUnifiedTableState(dataset).articleView.expandedId).toBe(42);
-            await openRowArticleView({ id: 42 }, dataset, document.querySelector('.card[data-id="42"]'));
+            expect(getUnifiedTableState(dataset).articleView).toMatchObject({
+                collapsed: true, expandedId: null,
+                pendingAutoOpenFirstRenderedResult: true, pendingAutoOpenFirstSearchResult: false,
+            });
+            expect(document.querySelector('.active_row_article')).toBeNull();
+            setSelectedDataset(dataset);
             return { abort: false };
         });
         group.element.querySelector("li a").click();
         await vi.waitFor(() => expect(location.pathname).toBe("/events/42"));
+        expect(tabNavigation.focus).toHaveBeenCalledExactlyOnceWith("events", { skipNavigation: true });
         expect(push).toHaveBeenCalledTimes(1);
         expect(history.state.rowId).toBe("42");
+        expect(fetchPermittedRowArticleDataMock).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({
+            tableName: 'events', rowItem: { id: 42 },
+        }));
         history.back();
         await vi.waitFor(() => expect(location.pathname).toBe("/"));
         expect(history.state.__filterestEntryId).toBe("home");

@@ -135,7 +135,7 @@ func TestFrontPageArticleButtonsPostgresVisitorRightsProjectionAndLanguages(t *t
 	for _, viewer := range viewers {
 		for language, label := range map[string]string{"fi": "Ota yhteyttä", "en": "Contact", "ch": "联系", "yue": "聯絡"} {
 			buttons, _ := articleButtonsPostgresHome(t, viewer.id, viewer.role, language)
-			if len(buttons) != 1 || buttons[0].Label != label || buttons[0].Href != "/wl128_article/87654321?view=article_view" {
+			if len(buttons) != 1 || buttons[0].Label != label || buttons[0].Href != "/wl128_article/87654321" {
 				t.Fatal(viewer, buttons)
 			}
 		}
@@ -150,7 +150,12 @@ func TestFrontPageArticleButtonsPostgresVisitorRightsProjectionAndLanguages(t *t
 			}
 			switch denial {
 			case "article grant":
-				frontPageExec(t, db, `DELETE FROM system_group_table_func_rights WHERE function_id=500001`)
+				// An inherited button may also open as Page, so this denial
+				// removes every presentation right: Article grants and Page's function.
+				frontPageExec(t, db, `DELETE FROM system_group_table_func_rights WHERE function_id=500001;
+					CREATE TABLE wl128_enabled_page_functions AS SELECT id FROM system_functions
+						WHERE url_route_endpoint='/ui/view/image_first_page_view' AND NOT disabled;
+					UPDATE system_functions SET disabled=true WHERE id IN(SELECT id FROM wl128_enabled_page_functions)`)
 			case "dataset read grant":
 				frontPageExec(t, db, `DELETE FROM system_group_table_func_rights WHERE function_id=500000 AND target_table_uid=(SELECT table_uid FROM system_db_tables WHERE table_name='wl128_article')`)
 			case "hidden dataset":
@@ -173,7 +178,9 @@ func TestFrontPageArticleButtonsPostgresVisitorRightsProjectionAndLanguages(t *t
 			}
 			switch denial {
 			case "article grant":
-				frontPageExec(t, db, `INSERT INTO system_group_table_func_rights(user_group_id,function_id,target_table_uid) SELECT id,500001,NULL FROM system_user_groups WHERE id IN(1,2,3)`)
+				frontPageExec(t, db, `INSERT INTO system_group_table_func_rights(user_group_id,function_id,target_table_uid) SELECT id,500001,NULL FROM system_user_groups WHERE id IN(1,2,3);
+					UPDATE system_functions SET disabled=false WHERE id IN(SELECT id FROM wl128_enabled_page_functions);
+					DROP TABLE wl128_enabled_page_functions`)
 			case "dataset read grant":
 				frontPageExec(t, db, `INSERT INTO system_group_table_func_rights(user_group_id,function_id,target_table_uid) SELECT groups.id,500000,registry.table_uid FROM system_user_groups groups CROSS JOIN system_db_tables registry WHERE groups.id IN(1,2,3) AND registry.table_name='wl128_article'`)
 			case "hidden dataset":

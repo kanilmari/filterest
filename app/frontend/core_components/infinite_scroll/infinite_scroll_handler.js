@@ -300,7 +300,8 @@ export function initializeInfiniteScroll(tableName, orientation = "vertical") {
  *        caller's freshness check and metadata repair requiring a full rebuild.
  * @returns {Promise<Object|null>} the listing's answer, or null if it was abandoned.
  */
-export async function reloadDatasetRowsFromListing(tableName, { isCurrent, rebuildView = false, beforeSwap = null } = {}) {
+export async function reloadDatasetRowsFromListing(tableName, renderOptions = {}) {
+    const { isCurrent, rebuildView = false, beforeSwap = null, deferRowOpening = false } = renderOptions;
     const currentView = getChosenDatasetView(tableName) || "table";
     const container = document.getElementById(getDatasetViewContainerId(currentView, tableName));
     if (rebuildView || (["card", "article_view"].includes(currentView) && !container?.querySelector('.card_container'))) {
@@ -314,11 +315,11 @@ export async function reloadDatasetRowsFromListing(tableName, { isCurrent, rebui
             && (getChosenDatasetView(tableName) || "table") === currentView && (!isCurrent || isCurrent());
         const { refreshTableUnified } = await import('../general_tables/gt_1_row_crud/gt_1_2_row_read/table_refresh_unified.js');
         if (!canBuild()) return null;
-        return refreshTableUnified(tableName, { skipUrlParams: true, isCurrent: canBuild, beforeSwap });
+        return refreshTableUnified(tableName, { skipUrlParams: true, isCurrent: canBuild, beforeSwap, deferRowOpening });
     }
     disconnectInfiniteScroll(tableName);
     resetOffset(tableName);
-    const result = await fetchMoreData(tableName, { replace: true, isCurrent, beforeSwap });
+    const result = await fetchMoreData(tableName, { replace: true, isCurrent, beforeSwap, deferRowOpening });
     if (!result) return null;
     if (isCurrent && !isCurrent()) return result;
     initializeInfiniteScroll(tableName, getDatasetViewScrollDirection(getChosenDatasetView(tableName) || "table"));
@@ -328,7 +329,8 @@ export async function reloadDatasetRowsFromListing(tableName, { isCurrent, rebui
 //  * Varsinainen “hae lisää dataa” -funktio.
 //  * replace=true aloittaa listauksen alusta ja korvaa näkyvät rivit;
 //  * muuten haetaan seuraava sivu nykyisen offsetin jälkeen.
-async function fetchMoreData(tableName, { replace = false, isCurrent: callerIsCurrent = null, beforeSwap = null } = {}) {
+async function fetchMoreData(tableName, options = {}) {
+    const { replace = false, isCurrent: callerIsCurrent = null, beforeSwap = null, deferRowOpening = false } = options;
     if (!replace && hasLoadedEntireListing(tableName)) {
         disconnectInfiniteScroll(tableName);
         return null;
@@ -388,9 +390,9 @@ async function fetchMoreData(tableName, { replace = false, isCurrent: callerIsCu
                 const { restartInvalidatedSearch } = await import('../filterbar/text_search/dataset_search_executor.js');
                 if (!canReload() || scrollSt.generation !== generation) return null;
                 if (beforeSwap && callerIsCurrent && !callerIsCurrent()) return null;
-                const restarted = beforeSwap
-                    ? await restartInvalidatedSearch(tableName, { isCurrent: callerIsCurrent, beforeSwap })
-                    : await restartInvalidatedSearch(tableName);
+                const restarted = await restartInvalidatedSearch(tableName, {
+                    isCurrent: beforeSwap ? callerIsCurrent : undefined, beforeSwap, deferRowOpening,
+                });
                 if (restarted) return null;
             }
             if (callerIsCurrent && !callerIsCurrent()) return null;
@@ -398,7 +400,7 @@ async function fetchMoreData(tableName, { replace = false, isCurrent: callerIsCu
             // reply counted with a hidden selection to the old prefix.
             const { refreshTableUnified } = await import('../general_tables/gt_1_row_crud/gt_1_2_row_read/table_refresh_unified.js');
             if (!canReload() || scrollSt.generation !== generation) return null;
-            return refreshTableUnified(tableName, { skipUrlParams: true, isCurrent: canReload, beforeSwap });
+            return refreshTableUnified(tableName, { skipUrlParams: true, isCurrent: canReload, beforeSwap, deferRowOpening });
         }
         if (result.dataset_appearance != null
             && !datasetAppearanceState.accept(tableName, result.dataset_appearance, { token: appearanceToken, isCurrent })) return null;

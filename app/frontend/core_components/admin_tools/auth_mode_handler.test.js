@@ -83,6 +83,50 @@ describe('auth_mode_handler', () => {
     await pending;
   });
 
+  test('only server responses establish the preference owner, including guest and failed verification', async () => {
+    const mod = await loadModule();
+    const session = await import('../auth/session_generation_store.js');
+    const { runApiPipeline } = await import('../pipeline/api_pipeline.js');
+    const profileResponse = () => new Response(JSON.stringify({ user_id: 42 }), {
+      headers: { 'Content-Type': 'application/json' },
+    });
+    const fetch = vi.spyOn(globalThis, 'fetch').mockImplementation(async () => profileResponse());
+    localStorage.setItem('user_id', '999');
+    fetchAuthModesMock.mockResolvedValue({ needs_button: 'logout' });
+    await mod.setAuthModes();
+    expect(fetch).not.toHaveBeenCalled();
+    expect(session.getVerifiedSessionIdentity()).toBeNull();
+    // Another startup feature requests the profile; boot itself issues no read.
+    await runApiPipeline({ routeName: 'fetchUserProfile' });
+    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(session.getVerifiedSessionIdentity()).toBe(42);
+    await mod.setAuthModes();
+    fetch.mockRejectedValueOnce(new TypeError('unavailable'));
+    await expect(runApiPipeline({ routeName: 'fetchUserProfile', suppressErrorToast: true })).rejects.toThrow('unavailable');
+    expect(session.getVerifiedSessionIdentity()).toBeNull();
+    fetchAuthModesMock.mockResolvedValue({ needs_button: 'login' });
+    await mod.setAuthModes();
+    expect(session.getVerifiedSessionIdentity()).toBe(1);
+  });
+
+  test('a superseded profile response cannot establish the previous account identity', async () => {
+    const mod = await loadModule();
+    const session = await import('../auth/session_generation_store.js');
+    const { runApiPipeline } = await import('../pipeline/api_pipeline.js');
+    fetchAuthModesMock.mockResolvedValue({ needs_button: 'logout' });
+    await mod.setAuthModes();
+    synchronizeThemePreferenceForAuthStateMock.mockClear();
+    let finishProfile;
+    vi.spyOn(globalThis, 'fetch').mockImplementationOnce(() => new Promise(resolve => { finishProfile = resolve; }));
+    const pending = runApiPipeline({ routeName: 'fetchUserProfile' });
+    await vi.waitFor(() => expect(finishProfile).toBeTypeOf('function'));
+    session.invalidateSessionGeneration({ reason: 'logout' });
+    finishProfile(new Response(JSON.stringify({ user_id: 42 }), { headers: { 'Content-Type': 'application/json' } }));
+    await pending;
+    expect(session.getVerifiedSessionIdentity()).toBeNull();
+    expect(synchronizeThemePreferenceForAuthStateMock).not.toHaveBeenCalled();
+  });
+
   test('stores logout state, registration flag, and user permissions for logged-in users', async () => {
     fetchAuthModesMock.mockResolvedValue({
       needs_button: 'logout',

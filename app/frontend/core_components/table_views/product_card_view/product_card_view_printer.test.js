@@ -5,6 +5,7 @@
 // Exists to keep the reusable product listing view stable before central view-key wiring.
 
 import { beforeEach, describe, expect, test, vi } from "vitest";
+import { setRowPresentationChoice } from "../row_presentation/row_presentation_choice.js";
 
 const {
     getLanguageWithBrowserFallbackMock,
@@ -170,6 +171,7 @@ describe("product_card_view_printer", () => {
     });
 
     test("switches to the classic article view and retains the product-card return target on click and keyboard activation", async () => {
+        setRowPresentationChoice("products", "article_view");
         const row = {
             id: 5,
             title: "Keyboard Product",
@@ -195,7 +197,7 @@ describe("product_card_view_printer", () => {
             },
         });
         expect(refreshTableUnifiedMock).toHaveBeenCalledWith("products", {
-            skipUrlParams: true,
+            skipUrlParams: true, isCurrent: expect.any(Function),
         });
         expect(openRowArticleViewMock).not.toHaveBeenCalled();
 

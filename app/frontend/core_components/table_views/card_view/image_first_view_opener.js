@@ -177,6 +177,7 @@ export async function openImageFirstView({
     tableName = "",
     selectedCard = null,
     restoringHistory = false,
+    search,
     isCurrent = () => true,
     onAccessDenied,
     layout = "image_first",
@@ -194,7 +195,7 @@ export async function openImageFirstView({
     isCurrent = () => callerIsCurrent() && datasetAppearanceState.isCurrent(appearanceToken);
     const intent = beginImageFirstViewOpen({
         tableName, rowId: rowItem.id, listPath: buildDatasetPath(tableName, DATASET_PREFIX || "/"),
-        restoring: restoringHistory, isCurrent, viewKey, presentationChoice,
+        restoring: restoringHistory, isCurrent, viewKey, presentationChoice, search,
     });
     // Restoring a chosen entry keeps its choice; Page never needs a photo.
     const textOnlyAllowed = !pageLayout && intent.presentationChoice;

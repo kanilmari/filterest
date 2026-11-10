@@ -97,7 +97,8 @@ vi.mock("../../table_views/card_view/row_article_ui_handler.js", () => ({
     closeRowArticle: closeRowArticleMock,
 }));
 
-vi.mock("../../table_views/dataset_view_registry.js", () => ({
+vi.mock("../../table_views/dataset_view_registry.js", async importOriginal => ({
+    ...await importOriginal(),
     ARTICLE_VIEW_KEY: "article_view",
     resolveDatasetViewSelectionTarget: (viewKey) => (
         viewKey === "article" ? "article_view" : viewKey
@@ -137,13 +138,19 @@ vi.mock('./dataset_access_registry.js', () => ({
     subscribeDatasetAccessRegistry: () => () => {},
 }));
 
+vi.mock("../../table_views/dataset_appearance_state.js", async importOriginal => {
+    const actual = await importOriginal();
+    return { ...actual, datasetAppearanceState: { ...actual.datasetAppearanceState,
+        savedRowDefaults: () => ({ site: 'article_view' }),
+    } };
+});
 await import("./history_navigation_handler.js");
 
 describe("history_navigation_handler", () => {
     beforeEach(() => {
         customRootHistory.load.mockReset().mockReturnValue(false);
         customRootHistory.hydrated = true;
-        ifavHistory.handle.mockResolvedValue(false);
+        ifavHistory.handle.mockReset().mockResolvedValue(false);
         browserTabTitle.update.mockClear();
         closeRowArticleMock.mockClear();
         vi.mocked(canRestoreCardArticleReturn).mockReturnValue(false);
@@ -161,6 +168,25 @@ describe("history_navigation_handler", () => {
         window.history.replaceState({}, "", "/events");
     });
 
+    test('Back onto a missing row preserves the entry and clears the row while restoring its collection', async () => {
+        const dispatcher = await import('../../table_views/row_presentation/row_presentation_dispatcher.js');
+        const decision = vi.spyOn(dispatcher, 'resolveRowOpening').mockResolvedValueOnce({ status: 'failed' });
+        sessionStorage.setItem('user_permissions', JSON.stringify(['/ui/view/card']));
+        history.replaceState({}, '', '/events/7');
+        try {
+            window.dispatchEvent(new PopStateEvent('popstate'));
+            await vi.waitFor(() => expect(handleAllNavigationMock).toHaveBeenCalledOnce());
+            expect(decision).toHaveBeenCalledOnce();
+            expect(handleAllNavigationMock).toHaveBeenCalledWith('events', [], expect.objectContaining({
+                skipUrlUpdate: true, forceReload: true, replacementParams: { view: 'card' },
+            }));
+            expect(setUnifiedTableStateMock).toHaveBeenCalledWith('events', expect.objectContaining({
+                articleView: expect.objectContaining({ expandedId: null, collapsed: false }),
+            }));
+            expect(location.pathname).toBe('/events/7');
+            expect(document.querySelector('[data-lang-key="article_view_permission_missing"]')).toBeNull();
+        } finally { decision.mockRestore(); }
+    });
     test('retained Home search state is ignored before hydration, custom root or view restoration', async () => {
         history.replaceState({ homeSearch: true }, '', '/');
         window.dispatchEvent(new PopStateEvent('popstate'));

@@ -15,9 +15,21 @@ import { do_intelligent_search, ongoingSearchResults } from "../text_search/data
 import { getSearchFilterContext } from "../text_search/dataset_search_runtime_state.js";
 import { discardHiddenColumnFilters } from "./hidden_filter_state_reconciler.js";
 
+import { setSelectedDataset } from "../../state_stores/dataset_selection_saver.js";
+import { beginRowPresentationRequest } from "../../table_views/row_presentation/row_presentation_choice.js";
+import { navigateToExplicitRowListing, openArticleAfterListing } from "../../table_views/card_view/row_article_listing_navigation.js";
+import { openRowArticleView } from "../../table_views/card_view/row_article_opener.js";
+
 const { fetchRows, buildView, commitRows, streamSearch, supplemental } = vi.hoisted(() => ({
     fetchRows: vi.fn(), buildView: vi.fn(), commitRows: vi.fn(), streamSearch: vi.fn(), supplemental: vi.fn(),
 }));
+// Only the navigation shell is replaced. Its real listing guard enters the real
+// table refresh, filter repair, search cache and replacement listing.
+vi.mock("../../navigation/nav_engine/navigation_handler.js", () => ({
+    handle_all_navigation: (dataset, _views, options) =>
+        refreshTableUnified(dataset, { skipUrlParams: true, isCurrent: options.isCurrentNavigation }),
+}));
+vi.mock("../../navigation/admin_and_user_tools/custom_view_reader.js", () => ({ custom_views: [] }));
 vi.mock("../../endpoints/endpoint_data_fetcher.js", () => ({ fetchDatasetData: fetchRows }));
 vi.mock("../../endpoints/endpoint_router.js", () => ({ endpoint_router: vi.fn(async () => ({})) }));
 vi.mock("../../table_views/dataset_view_printer.js", () => ({ generate_table: buildView }));
@@ -132,4 +144,46 @@ test.each([[false, true], [true, true], [true, false]])("search completes once a
     expect(supplemental).toHaveBeenCalledTimes(hidden ? 2 : 1);
     if (hidden) expect(supplemental.mock.results[0].value.destroy).toHaveBeenCalledOnce();
     expect(document.getElementById("jobs_filters")).toBe(filterPanel);
+});
+
+test.each([false, true])("the hidden-filter replacement leaves opening to its row handoff (superseded: %s)", async superseded => {
+    restoreHiddenName();
+    const rows = [{ id: 99, title: "First" }, { id: 7, title: "Requested" }];
+    const hidden = { ...answer, data: rows, row_count: 2 };
+    const visible = { ...hidden, types: { ...types, owner_id: { ...types.owner_id, hide_in_filter_panel: false } } };
+    fetchRows.mockResolvedValue(visible);
+    await do_intelligent_search("jobs", "travel");
+    const firstCache = ongoingSearchResults.jobs;
+    expect(firstCache.complete).toBe(true);
+
+    setChosenDatasetView("jobs", "article_view");
+    const shell = document.createElement("div");
+    shell.id = "jobs_article_view_container";
+    document.body.append(shell);
+    buildView.mockResolvedValue(shell);
+    fetchRows.mockClear();
+    let deliver;
+    fetchRows.mockImplementationOnce(() => new Promise(resolve => { deliver = resolve; })).mockResolvedValue(hidden);
+    setSelectedDataset("jobs");
+    const ticket = beginRowPresentationRequest("jobs");
+    const handoff = openArticleAfterListing(rows[1], "jobs",
+        () => navigateToExplicitRowListing("jobs", { forceReload: true, skipUrlUpdate: true }),
+        { isCurrent: ticket, isLatestRequest: ticket.isLatestRequest, withOwnAddressWrite: ticket.withOwnAddressWrite });
+    await vi.waitFor(() => expect(deliver).toBeTypeOf("function"));
+    if (superseded) beginRowPresentationRequest("elsewhere");
+    deliver(hidden);
+    await handoff;
+
+    expect(fetchRows).toHaveBeenCalledTimes(2);
+    expect(ongoingSearchResults.jobs).not.toBe(firstCache);
+    expect(ongoingSearchResults.jobs.complete).toBe(true);
+    expect(ongoingSearchResults.jobs.data).toEqual(rows);
+    expect(getUnifiedTableState("jobs").filters).toEqual({ jobs_title: "Trip" });
+    const openedIds = () => vi.mocked(openRowArticleView).mock.calls.map(([row]) => row.id);
+    expect(openedIds()).toEqual(superseded ? [] : [7]);
+    if (superseded) {
+        // A later independent listing can still consume the original first-row intent.
+        await refreshTableUnified("jobs", { skipUrlParams: true });
+        expect(openedIds()).toEqual([99]);
+    }
 });

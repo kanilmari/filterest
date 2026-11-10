@@ -7846,6 +7846,52 @@ INSERT INTO public.system_data_repair_records (migration, action, detail)
 SELECT 'wo50_legacy_finnish_sort_labels', 'completed', '{"file":"20261029000002_replace_legacy_finnish_sort_labels.sql"}'::jsonb
 WHERE NOT EXISTS (SELECT 1 FROM public.system_data_repair_records
     WHERE migration = 'wo50_legacy_finnish_sort_labels' AND action = 'completed');
+-- 20261105000986_seed_row_presentation_default_language_keys.sql
+-- Seeds localized site and dataset control labels and the tab preference reset.
+-- Preserve previously authored nonblank translations on update and replay.
+-- VERSION_DB: 9.13.6
+-- VERSION_DB_OWNER: 20261105000999_record_database_release_row_article_default.sql
+WITH copy(lang_key, fi, en, ch, tw, yue) AS (VALUES
+    ('row_article_default_presentation', 'Rivin avaustapa', 'Open rows as', '行打开方式', '資料列開啟方式', '資料列開啟方式'),
+    ('row_presentation_use_default', 'Käytä oletusta', 'Use default', '使用默认设置', '使用預設', '使用預設')
+), written AS (
+    INSERT INTO public.system_lang_keys AS existing (lang_key, fi, en, ch, yue, creation_spec)
+    SELECT lang_key, fi, en, ch, yue, 'Row-opening presentation preference and inheritance.' FROM copy
+    ON CONFLICT (lang_key) DO UPDATE
+    SET fi = CASE WHEN NULLIF(btrim(existing.fi), '') IS NULL THEN EXCLUDED.fi ELSE existing.fi END,
+        en = CASE WHEN NULLIF(btrim(existing.en), '') IS NULL THEN EXCLUDED.en ELSE existing.en END,
+        ch = CASE WHEN NULLIF(btrim(existing.ch), '') IS NULL THEN EXCLUDED.ch ELSE existing.ch END,
+        yue = CASE WHEN NULLIF(btrim(existing.yue), '') IS NULL THEN EXCLUDED.yue ELSE existing.yue END
+    WHERE NULLIF(btrim(existing.fi), '') IS NULL OR NULLIF(btrim(existing.en), '') IS NULL
+       OR NULLIF(btrim(existing.ch), '') IS NULL OR NULLIF(btrim(existing.yue), '') IS NULL
+    RETURNING id, lang_key, fi, en, ch, yue
+), served AS (
+    SELECT * FROM written UNION ALL
+    SELECT k.id, k.lang_key, k.fi, k.en, k.ch, k.yue FROM public.system_lang_keys k JOIN copy USING (lang_key)
+    WHERE k.id NOT IN (SELECT id FROM written)
+)
+INSERT INTO public.system_lang_key_translations AS existing
+    (lang_key_id, language_code, translation, source_kind, review_status)
+SELECT s.id, translated.language_code, translated.translation, 'manual', 'approved'
+FROM served s JOIN copy USING (lang_key)
+CROSS JOIN LATERAL (VALUES
+    ('fi', s.fi), ('en', s.en), ('ch', s.ch), ('yue', s.yue),
+    ('zh', s.ch), ('zh-CN', s.ch), ('zh-TW', copy.tw), ('zh-HK', s.yue)
+) AS translated(language_code, translation)
+JOIN public.system_languages language ON language.language_code = translated.language_code
+ON CONFLICT (lang_key_id, language_code) DO UPDATE
+SET translation = EXCLUDED.translation, source_kind = EXCLUDED.source_kind, review_status = EXCLUDED.review_status
+WHERE NULLIF(btrim(existing.translation), '') IS NULL;
+
+INSERT INTO public.system_lang_key_sources
+    (lang_key_id, source_type, source_high, source_low, usage_explanation, last_seen)
+SELECT keys.id, 'code', source.path, '', source.explanation, CURRENT_DATE
+FROM public.system_lang_keys keys
+JOIN (VALUES
+    ('row_article_default_presentation', 'frontend/shared/dataset_appearance/definition.json', 'Site default and dataset override for opening a row.'),
+    ('row_presentation_use_default', 'frontend/core_components/table_views/row_presentation/row_presentation_split_button.js', 'Remove this tab’s preference and inherit the applicable row-opening presentation.')
+) AS source(lang_key, path, explanation) ON source.lang_key = keys.lang_key
+ON CONFLICT (lang_key_id, source_type, source_high) DO NOTHING;
 -- Schema above is imported before registry seeds. This copy follows the
 -- language seeds; upgrades run the complete migration in one transaction.
 WITH authored(lang_key,fi,en,ch,yue) AS (VALUES
@@ -9711,6 +9757,15 @@ WHERE col.table_schema='public' AND col.table_name='system_front_page_blocks'
 INSERT INTO public.system_data_repair_records(migration, action, detail)
 SELECT 'saved_home_boxes', 'completed', jsonb_build_object('file','20261024000001_add_saved_home_boxes.sql')
 WHERE NOT EXISTS (SELECT 1 FROM public.system_data_repair_records WHERE migration='saved_home_boxes' AND action='completed');
+-- Fresh bootstrap assembles defaults from current rules. Canonicalize only this site key.
+UPDATE public.system_config
+SET json_value=jsonb_set(json_value,'{defaults}',(json_value->'defaults')-'shared.row_article_default_presentation')
+WHERE key='dataset_cover_theme_config' AND json_value->>'schema_version'='2'
+  AND json_value->'defaults'->>'shared.row_article_default_presentation'='article_view';
+
+INSERT INTO public.system_data_repair_records(migration,action,detail)
+SELECT 'row_article_default_presentation','completed',jsonb_build_object('file','20261105000985_add_row_article_default_presentation.sql')
+WHERE NOT EXISTS(SELECT 1 FROM public.system_data_repair_records WHERE migration='row_article_default_presentation' AND action='completed');
 
 -- Drain article events before the next data migration without changing other constraints.
 DO $article_bundle_seed_boundary$
@@ -9956,7 +10011,7 @@ DECLARE
     findings text;
 BEGIN
     SELECT string_agg(marker, ', ' ORDER BY marker) INTO missing_markers
-      FROM unnest(ARRAY['wl58_row_actor_support', 'wl58_row_actor_marks_by_table_uid', 'wl58_row_actor_trigger_definitions', 'k116_login_names', 'password_reset_dummy_work', 'system_favorites_table', 'system_front_page_revisions_table', 'system_front_page_blocks_table', 'wl103_row_group_classifications', 'wl132_surviving_sign_in', 'wl52_drop_column_label_value_layout', 'system_dataset_appearance_table', 'wl157_migration_execution_evidence', 'dataset_card_appearance_cutover', 'wl157_application_update_admission', 'dataset_appearance_three_place_schema', 'wl164_publication_fields', 'wl163_dataset_kind_contracts', 'wl159_dataset_namespace', 'wl167_database_identity_schema', 'wl167_managed_timestamp_zones', 'article_bundle_storage', 'article_bundle_mutations', 'wl77_filterbar_preferences', 'wo41_first_run_readonly', 'article_presentations_editor', 'row_group_heading_order_appearance_field', 'saved_home_boxes', 'wl157_application_update_refusal_keys', 'wo46_filterbar_display_and_clear', 'wo50_hero_sort_language_keys', 'wo50_legacy_finnish_sort_labels', 'wl58_row_actor_columns', 'system_favorites_registry', 'system_front_page_blocks_registry', 'wl103_row_group_classifications_registry', 'wl144_registry_reference_key', 'dataset_media_hidden', 'wl157_application_update_capability', 'dataset_appearance_three_place_backfill', 'wl164_publication_column_metadata', 't919_registered_column_metadata', 't750_automatic_log_retention', 'record_title_headers_962', 'translation_object_sources_sec2', 'wl69_card_image_usage_storage', 'article_bundle_materialization']::text[]) AS marker
+      FROM unnest(ARRAY['wl58_row_actor_support', 'wl58_row_actor_marks_by_table_uid', 'wl58_row_actor_trigger_definitions', 'k116_login_names', 'password_reset_dummy_work', 'system_favorites_table', 'system_front_page_revisions_table', 'system_front_page_blocks_table', 'wl103_row_group_classifications', 'wl132_surviving_sign_in', 'wl52_drop_column_label_value_layout', 'system_dataset_appearance_table', 'wl157_migration_execution_evidence', 'dataset_card_appearance_cutover', 'wl157_application_update_admission', 'dataset_appearance_three_place_schema', 'wl164_publication_fields', 'wl163_dataset_kind_contracts', 'wl159_dataset_namespace', 'wl167_database_identity_schema', 'wl167_managed_timestamp_zones', 'article_bundle_storage', 'article_bundle_mutations', 'wl77_filterbar_preferences', 'wo41_first_run_readonly', 'article_presentations_editor', 'row_group_heading_order_appearance_field', 'saved_home_boxes', 'row_article_default_presentation', 'wl157_application_update_refusal_keys', 'wo46_filterbar_display_and_clear', 'wo50_hero_sort_language_keys', 'wo50_legacy_finnish_sort_labels', 'wl58_row_actor_columns', 'system_favorites_registry', 'system_front_page_blocks_registry', 'wl103_row_group_classifications_registry', 'wl144_registry_reference_key', 'dataset_media_hidden', 'wl157_application_update_capability', 'dataset_appearance_three_place_backfill', 'wl164_publication_column_metadata', 't919_registered_column_metadata', 't750_automatic_log_retention', 'record_title_headers_962', 'translation_object_sources_sec2', 'wl69_card_image_usage_storage', 'article_bundle_materialization']::text[]) AS marker
      WHERE NOT EXISTS (SELECT 1 FROM public.system_data_repair_records AS record
                         WHERE record.migration = marker AND record.action = 'completed');
     IF missing_markers IS NOT NULL THEN
@@ -10219,9 +10274,12 @@ BEGIN
       ('20261030000346_add_category_filter_button_width_mode.sql', '341d2fe1d2ec2227bd3ac352602b8fd5157dcc4d576d7d59ae47b83d1a52cea6', 'bootstrap_baseline', 'bootstrap'),
       ('20261030000399_record_database_release_category_button_width.sql', '1f3d669745be67a5a302e2b82662cb5a295b6ede8aa5751a3f8183573f0b7096', 'bootstrap_baseline', 'bootstrap'),
       ('20261105000001_add_app_log_search_terms.sql', '7e4cf38c182225e1fa204c8187f0e0e7741d4003ca810dca5a6b9870ce377d0d', 'bootstrap_baseline', 'bootstrap'),
-      ('20261105000099_record_database_release_app_log_search_terms.sql', '1fe7637e5b1b437fe658908df918d8b7e21d8247d8790c6056a4b5914ac6c9cc', 'bootstrap_baseline', 'bootstrap')
+      ('20261105000099_record_database_release_app_log_search_terms.sql', '1fe7637e5b1b437fe658908df918d8b7e21d8247d8790c6056a4b5914ac6c9cc', 'bootstrap_baseline', 'bootstrap'),
+      ('20261105000985_add_row_article_default_presentation.sql', 'f568926638c56cde2c026f12f982635fa04e49140362dd475c3caf7dd247d371', 'bootstrap_baseline', 'bootstrap'),
+      ('20261105000986_seed_row_presentation_default_language_keys.sql', '2e13d6fec68e9068f31c69a85c977981719c1f6756441c070b23eda243b4f055', 'bootstrap_baseline', 'bootstrap'),
+      ('20261105000999_record_database_release_row_article_default.sql', 'b9c10d86d2716f329e10c15f74f3f3bbea329bf5326dc65c0cfa02cb5dc7ac0d', 'bootstrap_baseline', 'bootstrap')
     ON CONFLICT (filename) DO NOTHING;
     INSERT INTO public.system_db_version (version, description)
-    VALUES ('9.13.5', 'Filterest generated public bootstrap');
+    VALUES ('9.13.6', 'Filterest generated public bootstrap');
 END
 $filterest_acceptance$;

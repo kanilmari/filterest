@@ -20,14 +20,18 @@ type SiteAppearanceValues struct {
 	Defaults      map[string]any `json:"defaults"`
 }
 
-// MarshalJSON keeps the default absent in storage so older binaries can read it.
-// Public responses still project the complete values, including manual.
+// Omit additive defaults from site storage for older readers. Table overrides
+// have separate storage and keep explicit values, even when they equal a default.
 func (values SiteAppearanceValues) MarshalJSON() ([]byte, error) {
 	type storedValues SiteAppearanceValues
 	stored := storedValues(values)
 	stored.SiteValues = maps.Clone(values.SiteValues)
 	if stored.SiteValues["shared.row_group_heading_order"] == "manual" {
 		delete(stored.SiteValues, "shared.row_group_heading_order")
+	}
+	stored.Defaults = maps.Clone(values.Defaults)
+	if stored.Defaults["shared.row_article_default_presentation"] == "article_view" {
+		delete(stored.Defaults, "shared.row_article_default_presentation")
 	}
 	return json.Marshal(stored)
 }

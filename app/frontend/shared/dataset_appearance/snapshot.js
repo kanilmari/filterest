@@ -12,7 +12,7 @@ const clone = value => JSON.parse(JSON.stringify(value));
 // the installation's development boundary before any value reaches this decoder.
 const readOptions = { development: true };
 
-// Only the additive heading preference may be absent in older v2 responses or
+// Additive fields may be absent in older v2 responses or
 // public caches. Strict writers still require the complete canonical map.
 function readableSiteValues(values) {
     return values && typeof values === 'object' && !Array.isArray(values)
@@ -20,10 +20,17 @@ function readableSiteValues(values) {
         : values;
 }
 
+function readableDefaults(values) {
+    return values && typeof values === 'object' && !Array.isArray(values)
+        ? { 'shared.row_article_default_presentation': DEFAULT_DATASET_APPEARANCE.shared.row_article_default_presentation, ...values }
+        : values;
+}
+
 function readLegacyAppearance(config) {
     if (!isReadableDatasetAppearance(config)) return null;
     const result = clone(config);
     result.shared.row_group_heading_order ??= DEFAULT_DATASET_APPEARANCE.shared.row_group_heading_order;
+    result.shared.row_article_default_presentation ??= DEFAULT_DATASET_APPEARANCE.shared.row_article_default_presentation;
     return result;
 }
 
@@ -45,9 +52,10 @@ export function appearanceValuesForPlace(config, place) {
 export function readSiteAppearance(payload) {
     if (payload?.schema_version === 2) {
         const siteValues = readableSiteValues(payload.site_values);
+        const defaults = readableDefaults(payload.defaults);
         if (!isValidDatasetAppearanceSiteValuesV2(siteValues, readOptions)
-            || !isValidDatasetAppearanceDefaultsV2(payload.defaults, readOptions)) return null;
-        return projectAppearanceMaps(siteValues, payload.defaults);
+            || !isValidDatasetAppearanceDefaultsV2(defaults, readOptions)) return null;
+        return projectAppearanceMaps(siteValues, defaults);
     }
     return readLegacyAppearance(payload?.dataset_cover_theme);
 }
@@ -57,10 +65,11 @@ export function readDatasetAppearance(snapshot) {
         return readLegacyAppearance(snapshot.effective);
     }
     const siteValues = readableSiteValues(snapshot?.site_values);
+    const defaults = readableDefaults(snapshot?.defaults);
     if (snapshot?.schema_version !== 2
         || !isValidDatasetAppearanceTabValuesV2(snapshot.tab_values, readOptions)
         || !isValidDatasetAppearanceSiteValuesV2(siteValues, readOptions)
-        || !isValidDatasetAppearanceDefaultsV2(snapshot.defaults, readOptions)
+        || !isValidDatasetAppearanceDefaultsV2(defaults, readOptions)
         || !isValidDatasetAppearanceOverridesV2(snapshot.overrides, readOptions)) return null;
-    return projectAppearanceMaps(siteValues, snapshot.defaults, snapshot.tab_values, snapshot.overrides);
+    return projectAppearanceMaps(siteValues, defaults, snapshot.tab_values, snapshot.overrides);
 }

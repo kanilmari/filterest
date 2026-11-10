@@ -1,7 +1,7 @@
 // front_page_article_buttons_read.go
-// Resolves Home article targets through the viewer's canonical article projection.
+// Resolves Home article targets through one projection the viewer may open.
 // Connects private stable identities, route rights and accepted dataset URL names.
-// Emits only href and label, with no target diagnostics or private configuration.
+// Emits only href and label; an inherited button's href names no presentation.
 package system_table_tools
 
 import (
@@ -36,6 +36,46 @@ func frontPageItemViewAllowed(userID int, dataset, view string) bool {
 		return frontPagePageViewAllowed(userID, dataset)
 	}
 	return frontPageArticleViewAllowed(userID, dataset)
+}
+
+// frontPageArticleProjection chooses, before any row lookup, the one projection
+// through which this viewer reads the button's row and title. A stored view is
+// the administrator's explicit choice and is honoured or refused as it is. An
+// absent view inherits the row-opening default, which only the browser can
+// resolve (it alone knows the tab's own choice), so the server needs just one
+// presentation the viewer may open: Article first, whose projection also feeds
+// the image-first article, then Page, so a Page-only viewer keeps the button.
+// A refused or failed read is never retried through the other projection.
+func frontPageArticleProjection(userID int, dataset, stored string) (string, bool) {
+	switch stored {
+	case "article_view", "image_first_page_view":
+		return stored, frontPageItemViewAllowed(userID, dataset, stored)
+	case "":
+		if frontPageArticleViewAllowed(userID, dataset) {
+			return "article_view", true
+		}
+		if frontPagePageViewAllowed(userID, dataset) {
+			return "image_first_page_view", true
+		}
+	}
+	return "", false
+}
+
+// frontPageArticleHref pins only an explicitly stored presentation. An inherited
+// button keeps the ordinary row address, which the browser's row navigation
+// resolves through the visitor's own default chain.
+func frontPageArticleHref(path, stored string) (string, bool) {
+	if stored == "" {
+		return path, true
+	}
+	address, err := url.Parse(path)
+	if err != nil {
+		return "", false
+	}
+	query := address.Query()
+	query.Set("view", stored)
+	address.RawQuery = query.Encode()
+	return address.String(), true
 }
 
 var frontPageArticlePathReader = frontPageArticlePath
@@ -77,7 +117,7 @@ func frontPageArticlePath(r *http.Request, tableUID int, dataset, rowID string) 
 		if pool.TableUID == tableUID && pool.DatasetName == dataset && pool.SchemaName == "public" {
 			accepted, err := dataset_routes.ResolveDatasetNamePool(pools, pool.PreferredName)
 			if err == nil && accepted.TableUID == tableUID {
-				return "/" + url.PathEscape(pool.PreferredName) + "/" + rowID + "?view=article_view", true
+				return "/" + url.PathEscape(pool.PreferredName) + "/" + rowID, true
 			}
 		}
 	}
@@ -146,7 +186,11 @@ func resolveFrontPageArticleButtons(r *http.Request, userID int) ([]frontPageArt
 			continue
 		}
 		dataset, err := frontPageArticleTargetReader(r, item.TableUID)
-		if err != nil || !frontPageItemViewAllowed(userID, dataset, item.PresentationView()) || !frontPageArticleReadGranted(userID, dataset) || !frontPageCanRead(userID, dataset) {
+		if err != nil {
+			continue
+		}
+		projection, allowed := frontPageArticleProjection(userID, dataset, item.View)
+		if !allowed || !frontPageArticleReadGranted(userID, dataset) || !frontPageCanRead(userID, dataset) {
 			continue
 		}
 		if expired() {
@@ -155,7 +199,7 @@ func resolveFrontPageArticleButtons(r *http.Request, userID int) ([]frontPageArt
 		// A child deadline must not own a lazily opened shared transaction:
 		// cancelling it would roll back the caller's transaction at return.
 		// Preserve the canonical delegate's context and discard late results.
-		result, ok := delegateFrontPageArticle(original, dataset, item.RowID, item.PresentationView())
+		result, ok := delegateFrontPageArticle(original, dataset, item.RowID, projection)
 		if expired() {
 			break
 		}
@@ -174,16 +218,9 @@ func resolveFrontPageArticleButtons(r *http.Request, userID int) ([]frontPageArt
 			break
 		}
 		if ok {
-			if item.PresentationView() == "image_first_page_view" {
-				address, err := url.Parse(href)
-				if err != nil {
-					continue
-				}
-				query := address.Query()
-				query.Set("view", item.PresentationView())
-				address.RawQuery = query.Encode()
-				href = address.String()
-			}
+			href, ok = frontPageArticleHref(href, item.View)
+		}
+		if ok {
 			buttons = append(buttons, frontPageArticleButton{Href: href, Label: label})
 		}
 	}

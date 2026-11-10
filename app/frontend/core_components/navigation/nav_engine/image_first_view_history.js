@@ -38,8 +38,8 @@ function validOrigin(origin) {
     }
 }
 
-function readTarget(tableName, rowId) {
-    if (!isImageFirstViewURL() || !tableName || !/^\d+$/.test(String(rowId))) return null;
+function readTarget(tableName, rowId, viewKey) {
+    if (![IMAGE_FIRST_VIEW_KEY, "image_first_page_view"].includes(viewKey) || !tableName || !/^\d+$/.test(String(rowId))) return null;
     const saved = history.state?.[IMAGE_FIRST_HISTORY_KEY];
     const matches = saved?.dataset === tableName && String(saved.rowId) === String(rowId);
     return {
@@ -47,9 +47,11 @@ function readTarget(tableName, rowId) {
         image: new URLSearchParams(location.hash.slice(1)).get("image") || "",
         origin: matches ? validOrigin(saved.origin) : null,
         scroll: matches && Number.isFinite(saved.scroll) ? Math.max(0, saved.scroll) : 0,
-        // Only an entry opened by an explicit presentation choice may restore
-        // without photos; a photo-click entry whose photo is gone still returns.
-        presentationChoice: matches && saved.presentationChoice === true,
+        // A standalone address without history state can name a text-only
+        // choice. Existing state must match this row; another row's mark never
+        // turns a photo-click restoration into a text-only presentation.
+        presentationChoice: matches ? saved.presentationChoice === true
+            : !saved && !new URLSearchParams(location.hash.slice(1)).has("image"),
     };
 }
 
@@ -87,13 +89,13 @@ export async function authorizeImageFirstView(tableName, isCurrent, onAccessDeni
  * mark is kept in the entry's history state so reload and Forward keep it.
  */
 export function beginImageFirstViewOpen({ tableName, rowId, listPath, restoring = false, isCurrent = () => true,
-    viewKey = IMAGE_FIRST_VIEW_KEY, presentationChoice = false }) {
+    viewKey = IMAGE_FIRST_VIEW_KEY, presentationChoice = false, search }) {
     const initial = currentIdentity();
     const ownGeneration = ++generation;
     pendingTableName = tableName;
-    const target = restoring ? readTarget(tableName, rowId) : null;
+    const target = restoring ? readTarget(tableName, rowId, viewKey) : null;
     const chosen = Boolean(presentationChoice || target?.presentationChoice);
-    const origin = target?.origin || (isImageFirstViewURL()
+    const origin = restoring ? target?.origin : (isImageFirstViewURL()
         ? validOrigin(history.state?.[IMAGE_FIRST_HISTORY_KEY]?.origin)
         : captureOrigin(tableName));
     const canCommit = () => generation === ownGeneration && identityMatches(initial) && isCurrent();
@@ -110,10 +112,10 @@ export function beginImageFirstViewOpen({ tableName, rowId, listPath, restoring 
             // succeeds; even an ID-only replace would mutate a denied restore.
             if (origin && !origin.entryId && identityMatches(origin)) origin.entryId = ensureHistoryEntryId();
             const url = new URL(listPath.replace(/\/$/, "") + "/" + rowId, location.origin);
-            url.search = location.search;
+            url.search = search ?? location.search;
             url.searchParams.set("view", viewKey);
             if (image) url.hash = new URLSearchParams({ image }).toString();
-            const saved = { dataset: tableName, rowId: String(rowId), image: image || "", origin, scroll: target?.scroll || 0,
+            const saved = { dataset: tableName, rowId: String(rowId), viewKey, backingView: getImageFirstViewBackingView(), image: image || "", origin, scroll: target?.scroll || 0,
                 ...(chosen ? { presentationChoice: true } : {}) };
             const entryId = writeHistoryEntry(url.pathname + url.search + url.hash,
                 { [IMAGE_FIRST_HISTORY_KEY]: saved }, { replace: restoring || isImageFirstViewURL() });
@@ -123,8 +125,15 @@ export function beginImageFirstViewOpen({ tableName, rowId, listPath, restoring 
             const holdsBackground = viewKey === 'image_first_page_view';
             let cleaned = false;
             if (holdsBackground) acquire('cifav');
+            const root = document.getElementById(tableName + "_container");
+            // An image-first row change replaces the overlay, but keeps its original article.
+            let sourceArticle = null;
+            if (origin?.view === ARTICLE_VIEW_KEY) {
+                sourceArticle = activeView?.root === root && activeView?.origin?.entryId === origin.entryId
+                    ? activeView.sourceArticle : root?.querySelector(".active_row_article");
+            }
             activeView = {
-                entryId, origin, tableName, root: document.getElementById(tableName + "_container"),
+                entryId, origin, tableName, root, sourceArticle,
                 close: null, modal: null,
                 // Close can be followed by navigation cleanup for the same entry.
                 cleanup() {
@@ -238,7 +247,8 @@ subscribeDatasetAccessRegistry(() => {
 });
 
 export function getImageFirstViewBackingView() {
-    const view = validOrigin(history.state?.[IMAGE_FIRST_HISTORY_KEY]?.origin)?.view;
+    const saved = history.state?.[IMAGE_FIRST_HISTORY_KEY];
+    const view = validOrigin(saved?.origin)?.view || saved?.backingView || new URL(location.href).searchParams.get("view");
     return view !== ARTICLE_VIEW_KEY && isRenderableDatasetView(view) ? view : CARD_VIEW_KEY;
 }
 
@@ -255,11 +265,11 @@ function returnFromUnavailableImageFirstView(target) {
 }
 
 /** Returns a denial result, or true when IFAV fully owns this transition. */
-export async function handleImageFirstViewHistory({ tableName, rowId, isCurrentNavigation = () => true } = {}) {
-    const target = readTarget(tableName, rowId);
+export async function handleImageFirstViewHistory({ tableName, rowId, isCurrentNavigation = () => true,
+    viewKey = new URL(location.href).searchParams.get("view") } = {}) {
+    const target = readTarget(tableName, rowId, viewKey);
     if (target) {
         if (!isCurrentNavigation()) return true;
-        const viewKey = new URL(location.href).searchParams.get("view");
         if (!requireArticleViewAccess(viewKey)) {
             retainHistoryEntryAddress();
             return { articleAccessDenied: true };
@@ -271,7 +281,7 @@ export async function handleImageFirstViewHistory({ tableName, rowId, isCurrentN
         let articleAccessDenied = false;
         try {
             const result = await openImageFirstView({
-                tableName, rowItem: { id: target.rowId }, restoringHistory: true, isCurrent,
+                tableName, rowItem: { id: target.rowId }, restoringHistory: true, isCurrent, presentationChoice: target.presentationChoice,
                 ...(viewKey === "image_first_page_view" ? { layout: "page" } : {}),
                 onAccessDenied: () => {
                     if (!isCurrent()) return;
@@ -290,7 +300,17 @@ export async function handleImageFirstViewHistory({ tableName, rowId, isCurrentN
     const previous = closeForNavigation();
     if (!previous || !identityMatches(previous.origin)) return false;
     const root = previous.root;
-    return Boolean(root?.isConnected && !root.classList.contains("hidden")
+    const retained = root?.isConnected && !root.classList.contains("hidden")
         && root === document.getElementById(previous.tableName + "_container")
-        && root.querySelector(".tab_parts_container")?.dataset.view === previous.origin.view);
+        && root.querySelector(".tab_parts_container")?.dataset.view === previous.origin.view;
+    if (!retained || previous.origin.view !== ARTICLE_VIEW_KEY || viewKey !== ARTICLE_VIEW_KEY
+        || tableName !== previous.tableName || rowId == null) return Boolean(retained);
+    const article = previous.sourceArticle;
+    if (!article || root.querySelector(".active_row_article") !== article
+        || article._table_name !== tableName || String(article._row?.id) !== String(rowId)) return false;
+    const stillHere = () => isCurrentNavigation() && identityMatches(previous.origin)
+        && root.isConnected && root.contains(article) && !root.classList.contains("hidden")
+        && canReadDatasetFromRegistry(tableName) === true;
+    if (stillHere()) await article._resumeInlineImages?.(stillHere);
+    return true;
 }

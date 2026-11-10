@@ -9,8 +9,12 @@ import { resolveArticleButtonLabel } from './front_page_article_row_picker.js';
 import { articleButtonCopy, ARTICLE_BUTTON_COPY } from './front_page_article_buttons_copy.js';
 import { refreshLocalizedDatasetValues } from '../table_views/dataset_value_localizer.js';
 
-const mocks = vi.hoisted(() => ({ request: vi.fn(), saved: vi.fn(), confirm: vi.fn() }));
+const mocks = vi.hoisted(() => ({ request: vi.fn(), saved: vi.fn(), confirm: vi.fn(), canOpen: vi.fn(), defaults: vi.fn() }));
+vi.mock('../table_views/dataset_appearance_state.js', () => ({
+    datasetAppearanceState: { savedRowDefaults: mocks.defaults }, ROW_OPENING_DEFAULTS_CHANGED: 'defaults-changed',
+}));
 vi.mock('../endpoints/endpoint_router.js', () => ({ endpoint_router: mocks.request }));
+vi.mock('../table_views/card_view/article_view_access.js', () => ({ canOpenArticleView: mocks.canOpen }));
 vi.mock('../user_tools/current_user_profile_fetcher.js', () => ({ fetchCurrentUserProfile: async () => ({ user_id: 42 }) }));
 vi.mock('../../reusable_components/modal/confirm_modal_builder.js', () => ({ showConfirmModal: mocks.confirm }));
 vi.mock('../lang/translation_handler.js', () => ({ getTranslationForKey: (key, options = {}) =>
@@ -49,6 +53,8 @@ beforeEach(() => {
         throw new Error(`Unexpected route ${route}`);
     });
     mocks.saved.mockReset().mockResolvedValue(); mocks.confirm.mockReset().mockResolvedValue(true);
+    mocks.defaults.mockReset().mockReturnValue({ site: 'article_view' });
+    mocks.canOpen.mockReset().mockReturnValue(true);
 });
 afterEach(() => { editor?.destroy(); vi.useRealTimers(); });
 
@@ -200,15 +206,19 @@ test.each(['fi', 'en', 'ch', 'yue'])('renders editor controls and warnings in %s
     expect(control('list').querySelector('.front-page-settings-warning').textContent).toBe(ARTICLE_BUTTON_COPY.unavailable[index]);
 });
 
-test('per-button presentation defaults to Article, renders existing keys and saves Page', async () => {
+test('per-button presentation shows inheritance for absent views, renders existing keys and saves Page', async () => {
     original.article_buttons = value([item()]); await mount();
-    expect(control('0-view').value).toBe('article_view');
-    expect([...control('0-view').options].map(option => option.value)).toEqual(['article_view', 'image_first_page_view']);
+    expect(control('0-view').value).toBe('');
+    expect(control('0-view').selectedOptions[0].textContent).toBe(articleButtonCopy('inherit'));
+    expect([...control('0-view').options].map(option => option.value)).toEqual(['', 'article_view', 'image_first_page_view']);
     expect(control('0-view').labels[0].textContent).toContain(articleButtonCopy('presentation'));
     expect(articleButtonCopy('presentation')).toBe('article_presentations_title');
     expect(articleButtonCopy('article_view')).toBe('article_presentations_article');
     expect(articleButtonCopy('image_first_page_view')).toBe('article_presentations_page');
     control('0-view').value = 'image_first_page_view'; control('0-view').dispatchEvent(new Event('change'));
+    // The new setting's projection and row label must be confirmed before committing the draft.
+    expect(control('save').disabled).toBe(true);
+    control('save').click(); expect(writes()).toHaveLength(0);
     await vi.waitFor(() => expect(control('save').disabled).toBe(false));
     control('save').click(); await vi.waitFor(() => expect(writes()).toHaveLength(1));
     expect(writes()[0][1].body_data.article_buttons.items).toEqual([{ ...item(), view: 'image_first_page_view' }]);
@@ -224,4 +234,64 @@ test('a newly picked Page carries its presentation through the save payload', as
     expect(writes()[0][1].body_data.article_buttons.items[0].view).toBe('image_first_page_view');
     expect(validArticleButtonConfiguration(value([{ ...item(), view: 'unknown' }]))).toBe(false);
     expect(validArticleButtonConfiguration(value([{ ...item(), view: null }]))).toBe(false);
+});
+test('legacy explicit Article stays explicit until "Use default" removes the view from the payload', async () => {
+    original.article_buttons = value([{ ...item(), view: 'article_view' }]); await mount();
+    expect(control('0-view').value).toBe('article_view'); expect(editor.dirty()).toBe(false);
+    control('0-view').value = ''; control('0-view').dispatchEvent(new Event('change'));
+    await vi.waitFor(() => expect(control('save').disabled).toBe(false));
+    control('save').click(); await vi.waitFor(() => expect(writes()).toHaveLength(1));
+    const saved = writes()[0][1].body_data.article_buttons.items[0];
+    expect(saved).toEqual(item()); expect(Object.hasOwn(saved, 'view')).toBe(false);
+    expect(editor.dirty()).toBe(false);
+});
+test('a newly picked explicit Article is stored, while the default new choice inherits', async () => {
+    await mount();
+    expect(control('new-view').value).toBe('');
+    control('new-view').value = 'article_view'; control('new-view').dispatchEvent(new Event('change'));
+    await selectAndAdd();
+    expect(control('0-view').value).toBe('article_view');
+    control('save').click(); await vi.waitFor(() => expect(writes()).toHaveLength(1));
+    expect(writes()[0][1].body_data.article_buttons.items).toEqual([{ ...item(), view: 'article_view' }]);
+});
+test('an inherited label preview reads through the Page projection for a Page-only administrator', async () => {
+    mocks.defaults.mockReturnValue({ site: 'image_first_page_view' });
+    mocks.canOpen.mockImplementation(view => view === 'image_first_page_view');
+    original.article_buttons = value([item(), { ...item('2'), view: 'article_view' }]); await mount();
+    const projections = id => mocks.request.mock.calls.filter(([route, options]) => route === 'getResults'
+        && new URLSearchParams(options.url_params).get('id') === id)
+        .map(([, options]) => new URLSearchParams(options.url_params).get('view_key'));
+    expect(projections('1')).toEqual(['image_first_page_view']);
+    expect(projections('2')).toEqual([]);
+    expect(control('list').textContent).toContain('Yhteys');
+});
+
+test('both grants use the managed Page override for labels and picker despite the administrator’s tab choice', async () => {
+    mocks.defaults.mockReturnValue({ site: 'article_view', dataset: 'image_first_page_view' });
+    sessionStorage.setItem('system_about_row_presentation', 'article_view');
+    original.article_buttons = value([item('2')]);
+    try {
+        await mount();
+        await selectAndAdd();
+        const queries = mocks.request.mock.calls.filter(([route]) => route === 'getResults')
+            .map(([, options]) => new URLSearchParams(options.url_params));
+        expect(queries.some(query => query.get('id') === '2')).toBe(true);
+        expect(queries.some(query => !query.has('id'))).toBe(true);
+        expect(queries.every(query => query.get('view_key') === 'image_first_page_view')).toBe(true);
+        control('save').click(); await vi.waitFor(() => expect(writes()).toHaveLength(1));
+        expect(writes()[0][1].body_data.article_buttons.items.every(entry => !Object.hasOwn(entry, 'view'))).toBe(true);
+    } finally { sessionStorage.removeItem('system_about_row_presentation'); }
+});
+
+test('inherited IFAV labels query Article, and no article grants disclose no labels', async () => {
+    mocks.defaults.mockReturnValue({ site: 'image_first_view' });
+    original.article_buttons = value([item()]);
+    await mount();
+    expect(mocks.request.mock.calls.filter(([route]) => route === 'getResults')
+        .map(([, opts]) => new URLSearchParams(opts.url_params).get('view_key'))).toEqual(['article_view']);
+    editor.destroy(); document.body.replaceChildren(); mocks.request.mockClear();
+    mocks.canOpen.mockReturnValue(false);
+    await mount();
+    expect(mocks.request.mock.calls.some(([route]) => route === 'getResults')).toBe(false);
+    expect(control('list').textContent).not.toContain('Yhteys');
 });

@@ -17,7 +17,9 @@ import { VIEW_DEACTIVATE_EVENT } from "../../../reusable_components/view_lifecyc
 import { canOpenArticleView } from "../card_view/article_view_access.js";
 import { getTranslationForKey } from "../../lang/translation_handler.js";
 import { getLanguageWithBrowserFallback } from "../../state_stores/lang_preference_reader.js";
-import { readTabSessionValue, writeTabSessionValue } from "../../state_stores/tab_session_storage.js";
+import { getVerifiedSessionIdentity, subscribeToSessionGeneration, subscribeToVerifiedSessionIdentity } from "../../auth/session_generation_store.js";
+import { datasetAppearanceState, ROW_OPENING_DEFAULTS_CHANGED } from "../dataset_appearance_state.js";
+import { readTabSessionValue, writeTabSessionValue, removeTabSessionValue } from "../../state_stores/tab_session_storage.js";
 import { showToast } from "../../../reusable_components/notifications/toast_notification_printer.js";
 import {
     ARTICLE_VIEW_KEY,
@@ -31,6 +33,8 @@ export const DEFAULT_ROW_PRESENTATION = ARTICLE_VIEW_KEY;
 export const ROW_PRESENTATION_MENU_LANG_KEY = "article_presentations_title";
 
 const CHOICE_KEY_SUFFIX = "_row_presentation";
+const pageChoiceKeys = new Set();
+const documentChoiceKeys = new Set();
 
 // Built-in copy keeps a site without the reviewed rows readable; reviewed
 // runtime translations stay authoritative through getTranslationForKey.
@@ -86,6 +90,11 @@ export function getRowPresentationLabel(viewKey, language = getLanguageWithBrows
     return getTranslationForKey(getRowPresentationLangKey(viewKey), { fallback });
 }
 
+export function getUseRowPresentationDefaultLabel(language = getLanguageWithBrowserFallback()) {
+    const fallback = pickLocale({ fi: "Käytä oletusta", en: "Use default", ch: "使用默认设置", yue: "使用預設" }, language);
+    return getTranslationForKey("row_presentation_use_default", { fallback });
+}
+
 export function getRowPresentationMenuLabel(language = getLanguageWithBrowserFallback()) {
     return getTranslationForKey(ROW_PRESENTATION_MENU_LANG_KEY, { fallback: pickLocale(MENU_COPY, language) });
 }
@@ -114,32 +123,108 @@ function buildChoiceKey(tableName) {
 
 /** The stored choice, or null when this tab has not chosen for the dataset. */
 export function getStoredRowPresentation(tableName) {
-    const stored = readTabSessionValue(buildChoiceKey(tableName));
+    const key = buildChoiceKey(tableName);
+    const stored = readTabSessionValue(key);
+    const viewer = getVerifiedSessionIdentity();
+    // Before verification only this document's own choices can be used. A
+    // persisted owner is a comparison value, never proof of the current user.
+    if (viewer === null) return documentChoiceKeys.has(key) && isRowPresentation(stored) ? stored : null;
+    if (readTabSessionValue(`${key}_owner`) !== String(viewer)) {
+        resetRowPresentationChoice(tableName);
+        return null;
+    }
     return isRowPresentation(stored) ? stored : null;
 }
 
 export function setRowPresentationChoice(tableName, viewKey) {
     if (!tableName || !isRowPresentation(viewKey)) return;
-    writeTabSessionValue(buildChoiceKey(tableName), viewKey);
+    const key = buildChoiceKey(tableName);
+    pageChoiceKeys.add(key);
+    documentChoiceKeys.add(key);
+    writeTabSessionValue(key, viewKey);
+    const viewer = getVerifiedSessionIdentity();
+    if (viewer === null) removeTabSessionValue(`${key}_owner`);
+    else writeTabSessionValue(`${key}_owner`, viewer);
 }
 
-/**
- * The presentation the primary button shows and opens: the stored choice while
- * this viewer may still open it, otherwise Article, otherwise the first one
- * permitted. Null when none is permitted.
- */
-export function resolveRowPresentationChoice(tableName, permitted = listPermittedRowPresentations(tableName)) {
-    const stored = getStoredRowPresentation(tableName) || DEFAULT_ROW_PRESENTATION;
-    if (permitted.includes(stored)) return stored;
-    return permitted[0] || null;
+/** Removing the user's override restores inheritance, including the page-memory fallback. */
+export function resetRowPresentationChoice(tableName) {
+    if (!tableName) return;
+    const key = buildChoiceKey(tableName);
+    removeTabSessionValue(key);
+    removeTabSessionValue(`${key}_owner`);
+    pageChoiceKeys.delete(key);
+    documentChoiceKeys.delete(key);
+}
+
+/** Synchronous resolution for controls and links. A missing authorized snapshot is pending. */
+export function readRowOpeningChoice(tableName, {
+    viewKey = null, useTabChoice = true, permitted = listPermittedRowPresentations(tableName),
+    defaults = datasetAppearanceState.savedRowDefaults(tableName),
+} = {}) {
+    const denied = { status: "denied", viewKey: null, source: null };
+    const chosen = (value, source) => ({ status: "resolved", viewKey: value, source });
+    if (!tableName || !permitted.length) return denied;
+    if (viewKey !== null) return permitted.includes(viewKey) ? chosen(viewKey, "explicit") : denied;
+    const stored = useTabChoice && getStoredRowPresentation(tableName);
+    if (permitted.includes(stored)) return chosen(stored, "user");
+    if (!defaults) return { status: "pending", viewKey: null, source: null };
+    if (permitted.includes(defaults.dataset)) return chosen(defaults.dataset, "dataset");
+    if (permitted.includes(defaults.site)) return chosen(defaults.site, "site");
+    return permitted.includes(DEFAULT_ROW_PRESENTATION) ? chosen(DEFAULT_ROW_PRESENTATION, "classic") : denied;
 }
 
 let requestGeneration = 0;
 
+function collectChoiceKeys() {
+    const keys = new Set(pageChoiceKeys);
+    try {
+        for (let index = 0; index < sessionStorage.length; index += 1) {
+            const key = sessionStorage.key(index);
+            if (key?.endsWith(CHOICE_KEY_SUFFIX)) keys.add(key);
+        }
+    } catch { /* A blocked store keeps this document's writes in page memory. */ }
+    return keys;
+}
+
+// Standalone sign-in may never load this module. Check retained owners when
+// bootstrap (or resume) confirms the actual viewer, including the guest id.
+subscribeToVerifiedSessionIdentity(viewer => {
+    for (const key of collectChoiceKeys()) {
+        if (readTabSessionValue(`${key}_owner`) !== String(viewer)) {
+            resetRowPresentationChoice(key.slice(0, -CHOICE_KEY_SUFFIX.length));
+        }
+    }
+    // Identity can arrive after the toolbar; refresh captions and check marks
+    // when the pending choice becomes usable or is discarded.
+    document.dispatchEvent(new CustomEvent(ROW_OPENING_DEFAULTS_CHANGED));
+});
+
+// Login and account switches can be broadcast while this tab remains open.
+// Preserve independent tab choices on ordinary focus/visibility changes.
+subscribeToSessionGeneration(reason => {
+    if (["blur", "focus", "suspend", "resume", "restore"].includes(reason)) return;
+    requestGeneration += 1;
+    // Bootstrap has not verified the viewer yet. Retain storage for a possible
+    // same-user reload, but require an owner match on the next read. Forget the
+    // same-document exemption, including during an in-page bootstrap.
+    if (reason === "bootstrap") { documentChoiceKeys.clear(); return; }
+    for (const key of collectChoiceKeys()) {
+        removeTabSessionValue(key);
+        removeTabSessionValue(`${key}_owner`);
+    }
+    pageChoiceKeys.clear();
+    documentChoiceKeys.clear();
+    document.dispatchEvent(new CustomEvent(ROW_OPENING_DEFAULTS_CHANGED));
+});
+
 // These existing navigation events end pending activations permanently, even
 // when Back returns to the very same entry before an asynchronous answer.
 window.addEventListener("popstate", () => { requestGeneration += 1; });
-document.addEventListener(VIEW_DEACTIVATE_EVENT, () => { requestGeneration += 1; }, { capture: true });
+let viewDeactivationRevision = 0;
+document.addEventListener(VIEW_DEACTIVATE_EVENT, () => {
+    viewDeactivationRevision += 1;
+}, { capture: true });
 
 /**
  * Captures an activation before any lazy import. A newer activation anywhere
@@ -151,19 +236,45 @@ document.addEventListener(VIEW_DEACTIVATE_EVENT, () => { requestGeneration += 1;
  */
 export function beginRowPresentationRequest(_tableName) {
     const generation = ++requestGeneration;
-    const addressWriteRevision = getApplicationAddressWriteRevision();
-    const address = location.href;
-    const entryId = history.state?.[HISTORY_ENTRY_ID] ?? null;
-    const dataset = getSelectedDataset();
+    let addressWriteRevision = getApplicationAddressWriteRevision();
+    let address = location.href;
+    let entryId = history.state?.[HISTORY_ENTRY_ID] ?? null;
+    let dataset = getSelectedDataset();
+    let viewRevision = viewDeactivationRevision;
     let current = true;
-    return () => {
+    const isCurrent = () => {
         current = current && generation === requestGeneration
+            && viewRevision === viewDeactivationRevision
             && getApplicationAddressWriteRevision() === addressWriteRevision
             && location.href === address
             && (history.state?.[HISTORY_ENTRY_ID] ?? null) === entryId
             && getSelectedDataset() === dataset;
         return current;
     };
+    // During the listing's own navigation its address is legitimately
+    // changing. A newer activation or a history/session change still wins.
+    isCurrent.isLatestRequest = () => current && generation === requestGeneration;
+    // The caller owns origin stamping, deferred address settlement and the
+    // dataset transition before its explicit article open. Adopt their writes
+    // when they finish; a newer request, history move or failed guard still wins.
+    // View revisions are ticket-local: an older pending transition must never
+    // suppress deactivation of a newer request elsewhere in the document.
+    isCurrent.withOwnAddressWrite = write => {
+        if (!isCurrent()) return null;
+        const adopt = () => {
+            if (!current || generation !== requestGeneration) return;
+            addressWriteRevision = getApplicationAddressWriteRevision();
+            address = location.href;
+            entryId = history.state?.[HISTORY_ENTRY_ID] ?? null;
+            dataset = getSelectedDataset();
+            viewRevision = viewDeactivationRevision;
+        };
+        const result = write();
+        if (result?.then) return Promise.resolve(result).finally(adopt);
+        adopt();
+        return result;
+    };
+    return isCurrent;
 }
 
 /** One generic, localized notice for an opening that could not finish. Names no row. */

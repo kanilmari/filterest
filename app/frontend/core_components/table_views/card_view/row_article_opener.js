@@ -3,7 +3,7 @@
 // Bridges row data, column roles, and permission state with the article UI shell.
 // Exists to be the single orchestration point for launching, populating, and managing the row article view.
 
-import { requireArticleViewAccess } from './article_view_access.js';
+import { canOpenArticleView, requireArticleViewAccess } from './article_view_access.js';
 import { datasetAppearanceState } from '../dataset_appearance_state.js';
 import { captureLoadedDatasetRows } from "../dataset_loaded_rows.js";
 
@@ -24,7 +24,8 @@ import {
     enableEditing,
     sendCardUpdates,
 } from "./card_field_formatter.js";
-import { resolveRowArticleParentImageRows } from "./row_article_asset_resolver.js";
+import { resolveRowArticleDisplayedImageRows, resolveRowArticleImageGalleryChild, resolveRowArticleParentImageRows } from "./row_article_asset_resolver.js";
+import { syncRowArticleInlineMedia } from "./row_article_inline_media.js";
 import { count_this_function } from "../../dev_tools/function_counter.js";
 import { setUnifiedTableState } from "../../state_stores/table_state_store.js";
 import { getChosenDatasetView, setChosenDatasetView } from "../../state_stores/dataset_view_choice_saver.js";
@@ -83,7 +84,9 @@ function resolveVisibleResultCard(tableName, rowId) {
  */
 const articleOpenGenerations = new Map();
 
-export async function openRowArticleView(row_item, table_name, selectedCard = null, { isCurrent = () => true } = {}) {
+export async function openRowArticleView(row_item, table_name, selectedCard = null, {
+    isCurrent = () => true, withOwnAddressWrite = write => write(),
+} = {}) {
     if (!isCurrent() || !requireArticleViewAccess()) return;
     const appearanceToken = datasetAppearanceState.capture(table_name);
     const callerIsCurrent = isCurrent;
@@ -96,10 +99,10 @@ export async function openRowArticleView(row_item, table_name, selectedCard = nu
     if (!isCurrent()) return;
     const generation = (articleOpenGenerations.get(table_name) || 0) + 1;
     articleOpenGenerations.set(table_name, generation);
-    const canCommit = () => isCurrent()
-        && articleOpenGenerations.get(table_name) === generation
+    const currentView = () => articleOpenGenerations.get(table_name) === generation
         && getChosenDatasetView(table_name) === "article_view"
         && (!committed || !document.getElementById(`${table_name}_container`)?.classList.contains('hidden'));
+    const canCommit = () => isCurrent() && currentView();
     // Keep the legacy counter key stable until analytics naming is migrated separately.
     count_this_function("open_big_card_view"); // 🔢
 
@@ -117,7 +120,7 @@ export async function openRowArticleView(row_item, table_name, selectedCard = nu
             if (!isCurrent() || articleOpenGenerations.get(table_name) !== generation
                 || (getChosenDatasetView(table_name) || "card") !== activeView) return;
             const loadedRows = captureLoadedDatasetRows(table_name);
-            const preserveCardReturn = captureCardArticleReturn(table_name, {
+            const preserveCardReturn = withOwnAddressWrite(() => captureCardArticleReturn(table_name, {
                 listPath: buildDatasetPath(table_name, DATASET_PREFIX || "/"),
                 readPagination: () => pagination.captureInfiniteScrollState(table_name),
                 readSearchCache: () => search.ongoingSearchResultsStore[table_name],
@@ -126,7 +129,7 @@ export async function openRowArticleView(row_item, table_name, selectedCard = nu
                 syncResultsCount: (query, cache, rowCount) => query
                     ? search.syncSearchResultsCount(table_name, cache)
                     : counts.setResultsCount(table_name, rowCount),
-            });
+            }));
             setUnifiedTableState(table_name, {
                 articleView: {
                     collapsed: true,
@@ -142,7 +145,9 @@ export async function openRowArticleView(row_item, table_name, selectedCard = nu
                 "../../general_tables/gt_1_row_crud/gt_1_2_row_read/table_refresh_unified.js"
             );
             if (!isCurrent()) return;
-            await refreshTableUnified(table_name, { skipUrlParams: true, preserveCardReturn, loadedRows });
+            // The rebuild and its auto-open are still part of this activation.
+            await refreshTableUnified(table_name, { skipUrlParams: true, preserveCardReturn, loadedRows,
+                isCurrent, withOwnAddressWrite });
             return;
         }
         /* -------------------------------------------------- *
@@ -236,6 +241,46 @@ export async function openRowArticleView(row_item, table_name, selectedCard = nu
             canFetchLinkingStatus: hasRoutePermission("/api/asset-linking/status"),
         });
 
+        let latestMediaReturn = null;
+        const captureMediaGuard = () => {
+            const startingReturn = latestMediaReturn;
+            const childState = startingReturn && datasetAppearanceState.captureRegistry();
+            return () => latestMediaReturn === startingReturn
+                && (!childState || datasetAppearanceState.isCurrent(childState));
+        };
+        rowArticleElement._resumeInlineImages = async (stillHere) => {
+            if (!stillHere()) return;
+
+            // Each return owns its media request. Child ownership changes can invalidate
+            // the gallery while the parent article is still mounted and readable.
+            const mediaToken = datasetAppearanceState.captureRegistry();
+            latestMediaReturn = mediaToken;
+            const canBrowse = () => latestMediaReturn === mediaToken && stillHere() && currentView()
+                && datasetAppearanceState.isCurrent(appearanceToken) && datasetAppearanceState.isCurrent(mediaToken)
+                && rowArticleElement.contains(rowArticleContentElement) && canOpenArticleView();
+            if (!canBrowse()) return;
+            const context = { rowItem: row_item, tableName: table_name, selectedCard, rowLabel: row_presentation_label };
+            // The row controls remain independent of pending or denied image reads.
+            syncRowArticleRecordBar(rowArticleContentElement, { ...context, canCommit });
+            for (const arrow of rowArticleContentElement.querySelectorAll(".row_article_inline_media .row_article_image_first_arrow")) {
+                arrow.disabled = true;
+            }
+            let response;
+            try {
+                response = await rowArticleLoadSession.fetchDynamicChildren({ forceRefresh: true });
+            } catch {
+                return;
+            }
+            if (!canBrowse() || !Array.isArray(response?.child_tables) || response.error) return;
+            const gallery = resolveRowArticleImageGalleryChild(response);
+            if (gallery && !Array.isArray(gallery.rows)) return;
+            const rows = resolveRowArticleDisplayedImageRows(response, gallery);
+            syncRowArticleInlineMedia(rowArticleContentElement, rows, {
+                ...context, canCommit: canBrowse, fromResponse: true, cardPicture: response.card_picture,
+            });
+            // Record navigation continues to use the original article's own guard.
+            syncRowArticleRecordBar(rowArticleContentElement, { ...context, canCommit });
+        };
         let linkedTaskChildCount = 0;
         const { hydrateRelatedSections, refreshMediaSections } = createRowArticleMediaHydrator({
             rowArticleElement,
@@ -250,6 +295,7 @@ export async function openRowArticleView(row_item, table_name, selectedCard = nu
             showRelatedItems: show_related_items_on_big_cards,
             sectionDefaults,
             canCommit,
+            captureMediaGuard,
             onLinkedTaskChildCountChange: (count) => { linkedTaskChildCount = count; },
         });
 
@@ -481,7 +527,7 @@ export async function openRowArticleView(row_item, table_name, selectedCard = nu
 
         // Push unique URL for this big card (SEO + deep linking)
         const rowId = extractRowId(row_item);
-        if (rowId) {
+        if (rowId) withOwnAddressWrite(() => {
             const slug = buildSlug(recordTitle.text);
             const cardUrl = buildCardUrl(
                 DATASET_PREFIX,
@@ -516,7 +562,7 @@ export async function openRowArticleView(row_item, table_name, selectedCard = nu
             } else {
                 writeHistoryEntry(cardUrl, historyState);
             }
-        }
+        });
         // Consume only invalidation caused synchronously by our own address.
         // A caller that was still current after this write keeps guarding later
         // responses, including explicit cancellation while children are loading.
@@ -568,7 +614,7 @@ export async function openRowArticleView(row_item, table_name, selectedCard = nu
         });
         // The article and its own history entry now exist, so the address owner
         // can confirm the settled row address and store the matching parameters.
-        void updateDatasetAddress({ dataset: table_name, isCurrent: canCommit });
+        void withOwnAddressWrite(() => updateDatasetAddress({ dataset: table_name, isCurrent: canCommit }));
         window.requestAnimationFrame(() => {
             void (async () => {
                 if (!canCommit() || !rowArticleElement.isConnected) return;

@@ -3,6 +3,7 @@
 // Bridges FK metadata, generated alias columns, and deep-link URL helpers for card-like surfaces.
 // Exists so small cards and big cards can expose relation ids and names without dataset-specific hardcoding.
 
+import { rowOpeningHref } from "./default_row_affordance.js";
 import { buildCardUrl, buildSlug } from "./row_article_opener_helpers.js";
 import { extractLangValue } from "../../../reusable_components/lang_value_reader.js";
 import { getLanguageWithBrowserFallback } from "../../state_stores/lang_preference_reader.js";
@@ -63,7 +64,8 @@ export function expandForeignKeyDetailEntry(
         getLanguageWithBrowserFallback()
     ).trim();
     const aliasBase = buildGeneratedForeignDisplayAliasBase(detailEntry.column);
-    const href = buildCardUrl(datasetPrefix, foreignTable, targetId, buildSlug(aliasValue));
+    const rowPath = buildCardUrl(datasetPrefix, foreignTable, targetId, buildSlug(aliasValue));
+    const href = rowOpeningHref(rowPath, foreignTable);
 
     const expandedEntries = [
         {
@@ -73,6 +75,7 @@ export function expandForeignKeyDetailEntry(
             isLink: true,
             href,
             openInNewTabHref: href,
+            rowDestination: { tableName: foreignTable, path: rowPath },
             labelKey: detailEntry.column,
             dataColumn: detailEntry.column,
         },
@@ -89,6 +92,7 @@ export function expandForeignKeyDetailEntry(
             isLink: true,
             href,
             openInNewTabHref: href,
+            rowDestination: { tableName: foreignTable, path: rowPath },
             dataColumn: null,
             isDerived: true,
             sourceColumn: detailEntry.column,

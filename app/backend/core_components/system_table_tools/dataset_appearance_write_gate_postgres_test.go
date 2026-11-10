@@ -195,7 +195,9 @@ func TestDatasetAppearancePostgresCardOverridesKeepResultsReadableAfterValidShar
 			}
 			for _, role := range []string{"basic", "guest"} {
 				w := httptest.NewRecorder()
-				read.GetResults(w, frontPageSessionRequest(t, 42, role, "GET", "/api/get-results?dataset=wl143_content"))
+				request := frontPageSessionRequest(t, 42, role, "GET", "/api/get-results?dataset=wl143_content")
+				request.Header.Set(store.AppearanceHeader, "row-presentation")
+				read.GetResults(w, request)
 				if w.Code != http.StatusOK {
 					t.Fatalf("valid shared save made dataset unreadable: role=%s overrides=%v status=%d body=%s", role, overrides, w.Code, w.Body.String())
 				}

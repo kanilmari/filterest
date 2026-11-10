@@ -21,6 +21,7 @@
     "image_blur": {"rule_from": "light.image_blur", "derived_from": "light.image_blur", "legacy_read_targets": ["light.image_blur", "dark.image_blur"]},
     "card_image_width": {"place": "site_default", "type": "number", "default": 300, "min": 30, "max": 600, "step": 5},
     "card_image_presentation": {"place": "site_default", "type": "string", "default": "contain", "values": ["cover", "contain", "contain_blur"]},
+    "row_article_default_presentation": {"place": "site_default", "type": "string", "default": "article_view", "values": ["article_view", "image_first_view", "image_first_page_view"]},
     "article_image_caption_position": {"place": "site_default", "type": "string", "default": "below", "values": ["below", "overlay"]},
     "card_show_all_fields": {"place": "site_default", "type": "boolean", "default": true},
     "label_value_layout": {"place": "site_default", "type": "string", "default": "stacked", "values": ["stacked", "inline"], "development_values": ["auto"]},
@@ -39,5 +40,5 @@
   },
   "mask_order": [["center_opacity", "mid_opacity", "edge_opacity"], ["center_stop", "mid_stop", "edge_stop"]],
   "aliases": {"show_cover_photo": {"owners": ["light", "dark"], "field": "image_opacity"}},
-  "compatibility": {"shared_write_optional": ["card_show_all_fields", "card_style_variant", "card_detail_columns", "article_image_caption_position", "filterbar_content_top_space", "active_filter_remove_side", "row_group_heading_order", "label_value_layout"], "browser_optional": ["active_filter_remove_side", "row_group_heading_order", "card_detail_columns", "card_show_all_fields", "card_style_variant", "card_image_presentation", "article_image_caption_position"], "browser_unchecked": ["label_value_layout", "image_blur"]}
+  "compatibility": {"shared_write_optional": ["row_article_default_presentation", "card_show_all_fields", "card_style_variant", "card_detail_columns", "article_image_caption_position", "filterbar_content_top_space", "active_filter_remove_side", "row_group_heading_order", "label_value_layout"], "browser_optional": ["row_article_default_presentation", "active_filter_remove_side", "row_group_heading_order", "card_detail_columns", "card_show_all_fields", "card_style_variant", "card_image_presentation", "article_image_caption_position"], "browser_unchecked": ["label_value_layout", "image_blur"]}
 }

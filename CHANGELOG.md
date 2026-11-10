@@ -22,6 +22,8 @@ Dates are the local (Europe/Helsinki) date on which the version was published.
 
 ## [Unreleased]
 
+- Administrators can choose how a row opens, for the whole app and per table: Article, image-first or page-sized image-first. An explicit link and a visitor's own choice in the tab still come first, a table setting overrides the app default, resetting a table removes its override, and with nothing set rows open as before (database 9.13.6). Reloading the same tab keeps the same verified user's row-presentation choice; another account or a guest cannot inherit it. Verification reuses existing startup responses without an extra request; retained choices wait for identity confirmation. Classic article openings keep their request guard through the listing rebuild and article loading. Home, search and related-row handoffs complete dataset navigation, then open the article only while the original request is current and the target dataset is selected; a newer request prevents the old article opening. Their listing loads cannot automatically open a first result in place of the requested row; ordinary Article visits still open their first result.
+
 ## [9.6.3] - 2026-11-10
 
 - The update checker permits one release API redirect on the HTTPS origin configured in its build, including on GitHub Enterprise hosts (#1003).

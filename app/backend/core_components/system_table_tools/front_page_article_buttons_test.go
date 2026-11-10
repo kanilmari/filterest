@@ -26,15 +26,19 @@ import (
 func stubFrontPageArticleButtons(t *testing.T) {
 	t.Helper()
 	stubFrontPageRead(t, nil)
-	target, grant, readGrant, path, translations := frontPageArticleTargetReader, frontPageArticleViewAllowed, frontPageArticleReadGranted, frontPageArticlePathReader, frontPageArticleTranslationsReader
+	previousDefaults := frontPageAdminRowDefaults
+	t.Cleanup(func() { frontPageAdminRowDefaults = previousDefaults })
+	frontPageAdminRowDefaults = func(*http.Request, int, string) (string, string, error) { return "", "article_view", nil }
+	target, grant, pageGrant, readGrant, path, translations := frontPageArticleTargetReader, frontPageArticleViewAllowed, frontPagePageViewAllowed, frontPageArticleReadGranted, frontPageArticlePathReader, frontPageArticleTranslationsReader
 	t.Cleanup(func() {
-		frontPageArticleTargetReader, frontPageArticleViewAllowed, frontPageArticleReadGranted, frontPageArticlePathReader, frontPageArticleTranslationsReader = target, grant, readGrant, path, translations
+		frontPageArticleTargetReader, frontPageArticleViewAllowed, frontPagePageViewAllowed, frontPageArticleReadGranted, frontPageArticlePathReader, frontPageArticleTranslationsReader = target, grant, pageGrant, readGrant, path, translations
 	})
 	frontPageArticleTargetReader = func(*http.Request, int) (string, error) { return "private_dataset", nil }
 	frontPageArticleViewAllowed = func(int, string) bool { return true }
+	frontPagePageViewAllowed = func(int, string) bool { return false }
 	frontPageArticleReadGranted = func(int, string) bool { return true }
 	frontPageArticlePathReader = func(_ *http.Request, _ int, dataset, id string) (string, bool) {
-		return "/contact/" + id + "?view=article_view", true
+		return "/contact/" + id, true
 	}
 	frontPageArticleTranslationsReader = func(language string) (map[string]string, error) {
 		return map[string]string{"contact_key": map[string]string{"fi": "Ota yhteyttä", "en": "Contact"}[language]}, nil
@@ -77,7 +81,7 @@ func TestFrontPageArticleButtonsVisitorIdentityPrivacyAndBoxesOff(t *testing.T) 
 			if err := json.Unmarshal(response.Body.Bytes(), &payload); err != nil || response.Code != 200 || calls != 1 {
 				t.Fatal(response.Code, response.Body.String(), calls, err)
 			}
-			if string(payload["article_buttons"]) != `[{"href":"/contact/87654321?view=article_view","label":"Ota yhteyttä"}]` || string(payload["blocks"]) != `[]` || string(payload["article_buttons_placement"]) != `"top_row"` {
+			if string(payload["article_buttons"]) != `[{"href":"/contact/87654321","label":"Ota yhteyttä"}]` || string(payload["blocks"]) != `[]` || string(payload["article_buttons_placement"]) != `"top_row"` {
 				t.Fatal(response.Body.String())
 			}
 			for _, secret := range []string{"table_uid", "row_id", "items", "private_dataset", "private-revision", "102", "unavailable_items"} {

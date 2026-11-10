@@ -16,9 +16,9 @@
       "blocks": ["details"]
     },
     "image_first_page_view": {
-      "reserved": true,
+      "reserved": false,
       "permission_route": "/ui/view/image_first_page_view",
-      "current_permission_route": null,
+      "current_permission_route": "/ui/view/image_first_page_view",
       "legacy_section_key": null,
       "blocks": ["details"]
     }

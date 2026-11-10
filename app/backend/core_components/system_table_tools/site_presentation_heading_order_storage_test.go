@@ -5,6 +5,7 @@
 package system_table_tools
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
 	"database/sql/driver"
@@ -87,5 +88,56 @@ func TestSitePresentationHeadingOrderCanonicalSaves(t *testing.T) {
 			saved.SiteValues["shared.row_group_heading_order"] != expected || after.Version != saved.Version {
 			t.Fatalf("save/read round trip: %+v, %+v, %v", saved, after, err)
 		}
+	}
+}
+
+// A tab opened before deployment keeps its draft and 9-default contract even
+// after a different administrator sets a non-classic site presentation.
+func TestOldSiteAppearanceDraftPreservesRowPresentation(t *testing.T) {
+	initial := store.DefaultSiteAppearanceValues()
+	initial.Defaults[store.RowPresentationPath] = "image_first_page_view"
+	raw, err := json.Marshal(initial)
+	if err != nil {
+		t.Fatal(err)
+	}
+	state := &headingStorageDriver{raw: raw}
+	name := t.Name()
+	sql.Register(name, state)
+	db, err := sql.Open(name, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	before, err := readSitePresentationSettingsWith(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	patch := SitePresentationSettingsPatch{SchemaVersion: 2, Version: before.Version, Set: map[string]any{"shared.card_detail_columns": 3}}
+	body, err := json.Marshal(patch)
+	if err != nil {
+		t.Fatal(err)
+	}
+	request := httptest.NewRequest("POST", "/api/admin/site-presentation-settings", bytes.NewReader(body))
+	tx := dbutils.NewLazyTx(db)
+	defer tx.Rollback()
+	w := httptest.NewRecorder()
+	AdminSitePresentationSettingsHandler(w, request.WithContext(dbutils.SetLazyTx(request.Context(), tx)))
+	if w.Code != 200 {
+		t.Fatal(w.Code, w.Body.String())
+	}
+	if err := tx.Commit(); err != nil {
+		t.Fatal(err)
+	}
+	var old SitePresentationSettingsResponse
+	if err := json.Unmarshal(w.Body.Bytes(), &old); err != nil {
+		t.Fatal(err)
+	}
+	_, present := old.Defaults[store.RowPresentationPath]
+	if present || len(old.Defaults) != 9 || old.Defaults["shared.card_detail_columns"] != float64(3) {
+		t.Fatal("old draft/readback mismatch", old)
+	}
+	latest, err := readSitePresentationSettingsWith(db)
+	if err != nil || latest.Version != old.Version || latest.Defaults[store.RowPresentationPath] != "image_first_page_view" || latest.Defaults["shared.card_detail_columns"] != float64(3) {
+		t.Fatal(latest, err)
 	}
 }

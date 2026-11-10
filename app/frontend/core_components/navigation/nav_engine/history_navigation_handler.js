@@ -3,6 +3,7 @@
 // Bridges the History API with the navigation engine (handle_all_navigation, setUnifiedTableState).
 // Exists to decouple history restoration logic from the main navigation entry point.
 
+import { resolveRowAddress, rowBackingCollection } from "./row_address_presentation.js";
 import { requireArticleViewAccess } from '../../table_views/card_view/article_view_access.js';
 import { hasDatasetAccessSnapshot, subscribeDatasetAccessRegistry } from './dataset_access_registry.js';
 import { handleImageFirstViewHistory } from "./image_first_view_history.js";
@@ -21,6 +22,7 @@ import { setChosenDatasetView } from '../../state_stores/dataset_view_choice_sav
 import {
     ARTICLE_VIEW_KEY,
     resolveDatasetViewSelectionTarget,
+    isRenderableDatasetView,
 } from '../../table_views/dataset_view_registry.js';
 import {
     getPrefixFromPathname,
@@ -150,14 +152,35 @@ async function restoreHistoryEntryState(isCurrentNavigation, claimDatasetEntry) 
     // before closing an article, changing choices or taking address ownership.
     const requestedView = target?.name
         ? getTargetView(target.name, parseTableQueryString(window.location.search)) : null;
-    if (target?.name && (target.deepLinkedRowId || ['article_view', 'image_first_view', 'image_first_page_view'].includes(requestedView))
-        && !requireArticleViewAccess(requestedView)) {
+    const rowChoice = target?.deepLinkedRowId
+        ? await resolveRowAddress(target.name, target.deepLinkedRowId, requestedView, isCurrentNavigation) : null;
+    if (!isCurrentNavigation()) return;
+    if (rowChoice?.status === "failed" || rowChoice?.status === "stale") {
+        retainHistoryEntryAddress();
+        // Dispose a previous modal without using the missing row as a fresh request.
+        await handleImageFirstViewHistory({ tableName: target.name, rowId: null, isCurrentNavigation });
+        if (!isCurrentNavigation()) return;
+        const backing = rowBackingCollection(target.name, requestedView);
+        if (backing) {
+            const params = { ...buildParamsFromParsed(parseTableQueryString(window.location.search)), view: backing };
+            setParams(target.name, params);
+            setChosenDatasetView(target.name, backing);
+            clearClosedArticleState(target.name);
+            await handle_all_navigation(target.name, custom_views, {
+                skipUrlUpdate: true, isCurrentNavigation, forceReload: true, replacementParams: params,
+            });
+        }
+        return { rowUnavailable: true };
+    }
+    if (rowChoice?.status === "denied"
+        || (!rowChoice && ['article_view', 'image_first_view', 'image_first_page_view'].includes(requestedView)
+            && !requireArticleViewAccess(requestedView))) {
         retainHistoryEntryAddress();
         return { articleAccessDenied: true };
     }
     releaseHistoryEntryAddress();
     const imageFirstResult = await handleImageFirstViewHistory({
-        tableName: target?.name, rowId: target?.deepLinkedRowId, isCurrentNavigation,
+        tableName: target?.name, rowId: target?.deepLinkedRowId, isCurrentNavigation, viewKey: rowChoice?.viewKey,
     });
     if (imageFirstResult) return imageFirstResult;
     if (!isCurrentNavigation()) return;
@@ -243,7 +266,9 @@ async function restoreHistoryEntryState(isCurrentNavigation, claimDatasetEntry) 
     if (deepLinkedRowId) {
         setChosenDatasetView(name, ARTICLE_VIEW_KEY);
         setUnifiedTableState(name, {
-            articleView: { collapsed: true, expandedId: deepLinkedRowId, ...(preserveCardReturn ? { returnView: "card" } : {}) }
+            articleView: { collapsed: true, expandedId: deepLinkedRowId,
+                ...(preserveCardReturn ? { returnView: "card" } : requestedView !== ARTICLE_VIEW_KEY && isRenderableDatasetView(requestedView)
+                    ? { returnView: requestedView } : {}) }
         });
     } else {
         clearClosedArticleState(name);
@@ -303,7 +328,7 @@ async function handleHistoryNavigation() {
         // and the browser tab still have to describe the entry the person landed
         // on, and the restored view may be a permitted fallback of the one the
         // entry asked for.
-        if (!restoration?.articleAccessDenied && isLandedEntry()) {
+        if (!restoration?.articleAccessDenied && !restoration?.rowUnavailable && isLandedEntry()) {
             const wroteAddress = await updateDatasetAddress({ isCurrent: isLandedEntry });
             if (ownGeneration === historyRestorationGeneration && (wroteAddress || isLandedEntry())) {
                 await updateBrowserTabTitle();

@@ -20,7 +20,7 @@ export const DATASET_COVER_PALETTE_COPY = Object.freeze({
         mediaEditor: 'Edit tab images and header', fieldEditor: 'Edit card fields',
         light: 'Light', dark: 'Dark', coverVisible: 'Show cover photo', maskEnabled: 'Use oval mask', reset: 'Reset to saved values',
         backgroundCover: 'Background and cover image', backgroundImage: 'Background image', coverImage: 'Cover image',
-        cardLayout: 'Card layout', articleImages: 'Article images', navigation: 'Dataset tabs',
+        cardLayout: 'Card layout', articleImages: 'Article', rowOpening: 'Open rows as', navigation: 'Dataset tabs',
         datasetHeader: 'Dataset header',
         rowGroupHeadingOrder: 'Category heading order',
         rowGroupHeadingOrderManual: "Administrator's order", rowGroupHeadingOrderResultCount: 'Most results first',
@@ -67,7 +67,7 @@ export const DATASET_COVER_PALETTE_COPY = Object.freeze({
         mediaEditor: 'Muokkaa välilehden kuvia ja otsikkoa', fieldEditor: 'Muokkaa kortin kenttiä',
         light: 'Vaalea', dark: 'Tumma', coverVisible: 'Näytä kansikuva', maskEnabled: 'Käytä ovaalimaskia', reset: 'Palauta tallennetut arvot',
         backgroundCover: 'Tausta- ja kansikuva', backgroundImage: 'Taustakuva', coverImage: 'Kansikuva',
-        cardLayout: 'Korttien asettelu', articleImages: 'Artikkelikuvat', navigation: 'Aineistovälilehdet',
+        cardLayout: 'Korttien asettelu', articleImages: 'Artikkeli', rowOpening: 'Rivin avaustapa', navigation: 'Aineistovälilehdet',
         datasetHeader: 'Aineiston otsikkoalue',
         rowGroupHeadingOrder: 'Kategoriaotsikoiden järjestys',
         rowGroupHeadingOrderManual: 'Ylläpitäjän järjestys', rowGroupHeadingOrderResultCount: 'Eniten tuloksia ensin',
@@ -104,11 +104,13 @@ export const DATASET_COVER_PALETTE_COPY = Object.freeze({
     // Chinese (ch) and Cantonese (yue) are still partial: the keys below are
     // translated and every other label falls back to the English dictionary.
     ch: Object.freeze({
+        articleImages: '文章', rowOpening: '行打开方式', inherited: '网站默认设置', useSiteDefault: '使用网站默认设置',
         datasetHeader: '数据集标题区',
         filterbarContentTopSpace: '标题图标上方的留白',
         filterbarContentTopSpaceHint: '数据集标签页与标题图标之间的留白，适用于所有数据集。',
     }),
     yue: Object.freeze({
+        articleImages: '文章', rowOpening: '資料列開啟方式', inherited: '網站預設', useSiteDefault: '使用網站預設',
         datasetHeader: '資料集標題區',
         filterbarContentTopSpace: '標題圖示上面嘅留白',
         filterbarContentTopSpaceHint: '資料集分頁同標題圖示之間嘅留白，適用於所有資料集。',

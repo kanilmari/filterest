@@ -6,12 +6,16 @@
 
 import { beforeEach, describe, expect, test, vi } from "vitest";
 
-const { grants, defaultView, translations } = vi.hoisted(() => ({
+const { grants, defaultView, translations, savedDefaults } = vi.hoisted(() => ({
     grants: new Set(),
     defaultView: { value: "card" },
     translations: {},
+    savedDefaults: vi.fn(),
 }));
 
+vi.mock("../dataset_appearance_state.js", () => ({
+    datasetAppearanceState: { savedRowDefaults: savedDefaults }, ROW_OPENING_DEFAULTS_CHANGED: "defaults-changed",
+}));
 vi.mock("../../route_permission_checker.js", () => ({
     hasRoutePermission: vi.fn((route) => grants.has(route)),
     applyPermission: vi.fn(),
@@ -33,7 +37,7 @@ import { showToast } from "../../../reusable_components/notifications/toast_noti
 import {
     getStoredRowPresentation,
     listPermittedRowPresentations,
-    resolveRowPresentationChoice,
+    readRowOpeningChoice,
     setRowPresentationChoice,
 } from "./row_presentation_choice.js";
 
@@ -58,6 +62,7 @@ beforeEach(() => {
     document.body.replaceChildren();
     sessionStorage.clear();
     grants.clear();
+    savedDefaults.mockReset().mockReturnValue({ site: "article_view" });
     defaultView.value = "card";
     Object.keys(translations).forEach((key) => delete translations[key]);
     showToast.mockReset();
@@ -71,7 +76,8 @@ describe("permissions", () => {
         expect(listPermittedRowPresentations("demo")).toEqual(["article_view", "image_first_view", "image_first_page_view"]);
     });
 
-    test("a Page-only reader gets only Page: no classic gate, no menu and no grant expansion", () => {
+    test("a Page-only reader with a Page site default can open it directly", () => {
+        savedDefaults.mockReturnValue({ site: "image_first_page_view" });
         grants.add(PAGE);
         expect(listPermittedRowPresentations("demo")).toEqual(["image_first_page_view"]);
         const { primary, toggle } = build();
@@ -81,19 +87,22 @@ describe("permissions", () => {
         expect(grants.has(ARTICLE)).toBe(false);
     });
 
-    test("a Page-only reader of an Article-default dataset gets Page as the primary, never an unusable Article", async () => {
+    test("with no permitted default the menu still offers Page and can reset an explicit Page choice", async () => {
         // The classic row opener and the dataset renderer refuse Article without
         // its grant even when Article is the collection default.
         defaultView.value = "article_view";
         grants.add(PAGE);
         expect(listPermittedRowPresentations("demo")).toEqual(["image_first_page_view"]);
         const { primary, toggle, selectArticle, openPresentation } = build();
-        expect(primary.dataset.presentation).toBe("image_first_page_view");
-        expect(toggle).toBeNull();
-        primary.click();
+        expect(primary.disabled).toBe(true);
+        toggle.click(); option("image_first_page_view").click();
+        expect(primary.disabled).toBe(false);
         await settle();
         expect(selectArticle).not.toHaveBeenCalled();
         expect(openPresentation).toHaveBeenCalledWith(expect.objectContaining({ viewKey: "image_first_page_view" }));
+        toggle.click(); option("inherit").click();
+        expect(getStoredRowPresentation("demo")).toBeNull();
+        expect(primary.disabled).toBe(true);
         expect(grants.has(ARTICLE)).toBe(false);
     });
 
@@ -109,12 +118,12 @@ describe("permissions", () => {
         expect(wrapper.classList.contains("permission-hidden")).toBe(true);
     });
 
-    test("a stored choice the viewer may no longer open falls back to Article, then to the first permitted", () => {
+    test("a stored choice the viewer may no longer open falls back to the permitted site default", () => {
         setRowPresentationChoice("demo", "image_first_page_view");
         grants.add(ARTICLE);
-        expect(resolveRowPresentationChoice("demo")).toBe("article_view");
+        expect(readRowOpeningChoice("demo").viewKey).toBe("article_view");
         grants.clear(); grants.add(PAGE);
-        expect(resolveRowPresentationChoice("demo")).toBe("image_first_page_view");
+        expect(readRowOpeningChoice("demo").viewKey).toBe("image_first_page_view");
     });
 });
 
@@ -132,6 +141,24 @@ describe("caption and choice", () => {
         expect(toggle.getAttribute("aria-haspopup")).toBe("menu");
     });
 
+    test("refresh reads the saved mode and only the menu selection writes a tab override", async () => {
+        savedDefaults.mockReturnValue(null);
+        const { primary, toggle, openPresentation } = build();
+        expect(primary.textContent).toBe("Artikkelin esitystavat");
+        savedDefaults.mockReturnValue({ site: "image_first_page_view", dataset: "image_first_view" });
+        document.dispatchEvent(new CustomEvent("defaults-changed", { detail: { name: "demo" } }));
+        expect(primary.dataset.presentation).toBe("image_first_view");
+        expect(getStoredRowPresentation("demo")).toBeNull();
+        toggle.click(); option("article_view").click();
+        expect(primary.dataset.presentation).toBe("article_view");
+        savedDefaults.mockReturnValue({ site: "image_first_page_view" });
+        toggle.click(); option("inherit").click();
+        await settle();
+        expect(primary.dataset.presentation).toBe("image_first_page_view");
+        expect(openPresentation).toHaveBeenCalledWith(expect.objectContaining({ viewKey: "image_first_page_view" }));
+        expect(getStoredRowPresentation("demo")).toBeNull();
+    });
+
     test("reviewed runtime translations replace the built-in captions", () => {
         translations.view_image_first = "Image-first article";
         setRowPresentationChoice("demo", "image_first_view");
@@ -141,7 +168,7 @@ describe("caption and choice", () => {
     test("choosing a presentation updates caption, check mark and stored choice, then opens it", async () => {
         const { primary, toggle, openPresentation, selectArticle } = build();
         toggle.click();
-        expect(option("article_view").getAttribute("aria-checked")).toBe("true");
+        expect(option("inherit").getAttribute("aria-checked")).toBe("true");
         option("image_first_view").click();
         expect(primary.textContent).toBe("Kuvapainotteinen artikkeli");
         expect(primary.dataset.langKey).toBe("view_image_first");
@@ -228,14 +255,15 @@ describe("newest activation and failures", () => {
         toggle.click(); option("image_first_view").click();
         toggle.click(); option("image_first_page_view").click();
         await settle();
-        expect(guards.map((guard) => guard())).toEqual([false, true]);
+        expect(guards.map((guard) => guard())).toEqual([true]);
         primary.click(); await settle();
-        expect(guards.map((guard) => guard())).toEqual([false, false, true]);
+        expect(guards.map((guard) => guard())).toEqual([false, true]);
         expect(wrapper.getAttribute("aria-busy")).toBe("true");
     });
 
     test("a failed opener import gives the generic localized notice, unless superseded", async () => {
         const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+        setRowPresentationChoice("demo", "image_first_view");
         const { primary } = build({ openPresentation: vi.fn(async () => { throw new Error("chunk"); }) });
         primary.dataset.presentation = "image_first_view";
         primary.click(); await settle();

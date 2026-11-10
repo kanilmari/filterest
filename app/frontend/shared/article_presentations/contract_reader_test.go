@@ -1,7 +1,7 @@
 // contract_reader_test.go
 // Validates shared keys, role defaults and defensive copies of the contract.
 // Connects browser-owned JSON with Go readers without generating another authority.
-// Makes the reserved route's inactive state explicit.
+// Checks the Article grant shared by classic/IFAV and the independent Page grant.
 package article_presentations
 
 import "testing"
@@ -29,13 +29,11 @@ func TestContractVocabulary(t *testing.T) {
 		if p.PermissionRoute != "/ui/view/"+key {
 			t.Fatalf("route drift: %s", key)
 		}
-		if p.Reserved != (key == "image_first_page_view") {
-			t.Fatal("reservation drift")
+		expectedRoute := "/ui/view/article_view"
+		if key == "image_first_page_view" {
+			expectedRoute = p.PermissionRoute
 		}
-		if p.Reserved && (p.CurrentPermissionRoute != nil || p.LegacySectionKey != nil) {
-			t.Fatal("reserved view activated")
-		}
-		if !p.Reserved && (p.CurrentPermissionRoute == nil || *p.CurrentPermissionRoute != "/ui/view/article_view") {
+		if p.Reserved || p.CurrentPermissionRoute == nil || *p.CurrentPermissionRoute != expectedRoute {
 			t.Fatal("compatibility gate drift")
 		}
 		for _, block := range p.Blocks {

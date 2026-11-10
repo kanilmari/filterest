@@ -107,18 +107,43 @@ C26 uses the width-dependent contained-image limit for browser verification.
 ## Choosing a presentation in the view picker
 
 The dataset view picker ("Show content as…", between Cards and Table) shows
-Article as one joined split button (`table_views/row_presentation/`). The main
-button's caption is the presentation chosen for this dataset in this browser
-tab, in the UI language: Article (`view_article`, default), Image-first article
-(`view_image_first`, served from the view registry's local fallbacks) or
-Page-sized image-first article (`article_presentations_page`). The chevron is
-named by `article_presentations_title` and opens the shared anchored action
-menu (`reusable_components/action_menu/`), which marks the current choice with
-a check mark. Choosing an item stores it (`<dataset>_row_presentation` in tab
-session storage; no server default changes), updates the caption and opens it;
-a later primary click opens the same choice. Only this picker gets the split:
-the chart fallback notice keeps the plain Article button, and the More menu,
-default-view controls, Home buttons and photo openers are unchanged.
+a split button for opening a row as Article, Image-first article or Page-sized
+image-first article. The caption shows the presentation the next click will
+open. The chevron menu remembers an explicit choice for this dataset in this
+browser tab. Choose **Use default** to remove that preference.
+A full reload in the same tab keeps this preference for the same verified user.
+Each choice carries only its owner's user id; bootstrap verifies the current
+viewer through existing auth/profile or Home responses before reusing it,
+without issuing an extra startup request. Auth modes confirms a guest directly;
+signed-in choices stay stored but unavailable until an existing response names
+the viewer. Then matching choices become usable, mismatches are removed and
+mounted picker captions refresh. Failed or superseded responses confirm nothing.
+Another account, a guest or an unowned older choice cannot inherit it. It is separate from the
+displayed dataset view and open-row state that K143 forgets on page load
+([view state](Frontend_Results_Cards_And_Articles.md#where-a-datasets-view-state-lives)).
+
+Classic opening keeps its request guard through the listing rebuild and the
+subsequent article fetch. Home, search and related-row handoffs let dataset
+navigation finish, then explicitly open the requested article only while the
+original request is current and the target dataset is selected. The listing leaves the first-result
+intent ready for a later visit. While the handoff or its hidden-filter repair
+loads the rows, neither the listing nor the restarted search consumes that
+intent. Only the current explicit opener may open the requested row. A later
+independent Article visit can open its own first result.
+The caller adopts its own origin stamping, transition and settled-address
+repairs; a newer request or history move still prevents the old article opening.
+
+For a card title, calendar event or another ordinary row link, the tab's choice
+takes precedence over the dataset override, followed by the site default.
+Article is the initial site default. Administrators choose **Open rows as** in
+the appearance palette under **Article**, in the dataset or all-datasets scope.
+**Use site default** removes the dataset override. Choosing the same value as
+the current site default pins it to the dataset even if the site changes later.
+
+An explicit presentation in a link or a history entry takes precedence for that
+opening and leaves the tab's future preference intact. Clicking an ordinary
+card photo opens the image viewer. Settings for the dataset's listing still
+decide whether the underlying rows appear as cards, a calendar or another list.
 
 - **Article** uses the picker's existing classic path unchanged.
 - **IFAV and Page** open over the current listing, which stays the history
@@ -139,12 +164,11 @@ default-view controls, Home buttons and photo openers are unchanged.
   An empty listing opens nothing and shows the existing
   `no_results` notice; an opening that fails or whose record is no longer
   readable shows the generic `load_failed` notice, naming no row.
-- **Rights.** Article and IFAV need the Article grant (IFAV keeps the Article
-  gate) and Page its own route. A dataset whose default view is Article grants
-  nothing here, because the classic row opener refuses Article without the
-  grant. The menu lists only permitted items and hides the chevron when one
-  remains, so a Page-only reader sees Page as the main caption and never passes
-  the classic gate. No grant is widened; the server still decides the row.
+- **Rights.** Article and IFAV require the Article grant. Page requires its
+  own grant. An ordinary opening uses the first permitted candidate in the
+  default chain. When all candidates are denied, a reader can use the menu to
+  select a presentation for which they have a grant. A pinned link checks the
+  requested presentation. The server checks row, field and media access.
 - **Fresh record.** Only the row id travels: the opener fetches the permitted
   record and its current fields (`presentationChoice`), as history restore does.
 - **Text-only IFAV.** A chosen IFAV whose readable row has no permitted photo

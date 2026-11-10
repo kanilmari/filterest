@@ -9,6 +9,7 @@ import (
 	"log"
 	"net/http"
 
+	store "easelect/backend/core_components/dataset_appearance_store"
 	"easelect/backend/core_components/httpresponse"
 )
 
@@ -33,7 +34,7 @@ type SitePresentationSettingsResponse struct {
 // GET /api/site-presentation-settings
 func GetSitePresentationSettingsHandler(w http.ResponseWriter, r *http.Request) {
 
-	respondWithSitePresentationSettings(w)
+	respondWithSitePresentationSettings(w, r)
 }
 
 // AdminSitePresentationSettingsHandler reads or atomically patches the typed settings.
@@ -41,7 +42,7 @@ func GetSitePresentationSettingsHandler(w http.ResponseWriter, r *http.Request) 
 func AdminSitePresentationSettingsHandler(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodGet:
-		respondWithSitePresentationSettings(w)
+		respondWithSitePresentationSettings(w, r)
 	case http.MethodPost:
 		settings, err := decodeSitePresentationSettings(http.MaxBytesReader(w, r.Body, 128<<10))
 		if err != nil {
@@ -68,17 +69,24 @@ func AdminSitePresentationSettingsHandler(w http.ResponseWriter, r *http.Request
 			httpresponse.RespondWithError(w, http.StatusInternalServerError, "site presentation settings save failed")
 			return
 		}
-		httpresponse.RespondWithJSON(w, http.StatusOK, result)
+		writeSitePresentationSettings(w, r, result)
 
 	}
 }
 
-func respondWithSitePresentationSettings(w http.ResponseWriter) {
+func respondWithSitePresentationSettings(w http.ResponseWriter, r *http.Request) {
 	settings, err := readSitePresentationSettings()
 	if err != nil {
 		log.Printf("\033[31merror: [site presentation settings] read failed: %v\033[0m", err)
 		httpresponse.RespondWithError(w, http.StatusInternalServerError, "site presentation settings unavailable")
 		return
+	}
+	writeSitePresentationSettings(w, r, settings)
+}
+
+func writeSitePresentationSettings(w http.ResponseWriter, r *http.Request, settings SitePresentationSettingsResponse) {
+	if !store.WantsRowPresentation(w, r) {
+		settings.Defaults = store.WithoutRowPresentation(settings.Defaults)
 	}
 	httpresponse.RespondWithJSON(w, http.StatusOK, settings)
 }

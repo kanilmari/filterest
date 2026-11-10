@@ -2,6 +2,7 @@
 // Selects one labelled, readable article through searchable canonical result pages.
 // Connects the shared single-selection dropdown and article metadata localization.
 // Owns cancellation and request ordering so obsolete pages cannot supply a selection.
+// Keeps the stored presentation setting apart from the projection used to read rows.
 import { createMultiselectDropdown } from '../../reusable_components/multiselect_dropdown/multiselect_dropdown_builder.js';
 import { endpoint_router } from '../endpoints/endpoint_router.js';
 import { buildDatasetQueryParams } from '../endpoints/endpoint_data_fetcher_helpers.js';
@@ -9,9 +10,27 @@ import { getTranslationForKey } from '../lang/translation_handler.js';
 import { resolveDatasetDisplayValue, bindDatasetLanguageRenderer } from '../table_views/dataset_value_localizer.js';
 import { getLanguageWithBrowserFallback } from '../state_stores/lang_preference_reader.js';
 import { parseRoleString } from '../table_views/card_view/card_field_formatter.js';
+import { resolveRowOpening } from '../table_views/row_presentation/row_presentation_dispatcher.js';
 import { articleButtonCopy as copy } from './front_page_article_buttons_copy.js';
 
 const INITIAL_PAGE_SIZE = 20;
+const EXPLICIT_VIEWS = ['article_view', 'image_first_page_view'];
+
+/** The stored setting: an explicit view, or undefined when the button inherits. */
+export function articleButtonSetting(value) {
+    return EXPLICIT_VIEWS.includes(value) ? value : undefined;
+}
+
+/**
+ * Preview the site's configuration in the target dataset, independent of this
+ * administrator's tab preference. IFAV uses Article's authorized projection.
+ */
+export async function articleButtonProjection(dataset, view, rowId, isCurrent) {
+    const decision = await resolveRowOpening(dataset, { rowId, viewKey: articleButtonSetting(view) ?? null,
+        useTabChoice: false, isCurrent });
+    if (decision.status !== 'resolved') return null;
+    return decision.viewKey === 'image_first_page_view' ? decision.viewKey : 'article_view';
+}
 
 /** Mirrors front_page_article_title_resolver.go using only the authorized projection. */
 export function resolveArticleButtonLabel(row, columns = [], types = {}, language = getLanguageWithBrowserFallback(), viewer = 0) {
@@ -53,6 +72,7 @@ export function createArticleRowPicker({ onChange, viewerID = 0 }) {
     const pageLabel = document.createElement('span');
     paging.append(previous, pageLabel, next);
     element.append(host, status);
+    // The administrator's setting; the read projection is derived per request.
     let view = undefined;
     let dataset = null, query = '', offset = 0, pageSize = INITIAL_PAGE_SIZE, total = null;
     let hasNext = false, options = [], selected = null;
@@ -70,6 +90,7 @@ export function createArticleRowPicker({ onChange, viewerID = 0 }) {
         },
         onChange: ({ includeValues }) => {
             selected = options.find(option => option.value === includeValues[0]) || null;
+            // The selection carries the setting it was read under; setView clears it synchronously.
             onChange(selected ? { table_uid: dataset.table_uid, row_id: selected.value, label: selected.label, ...(view === undefined ? {} : { view }) } : null);
         },
     });
@@ -98,10 +119,14 @@ export function createArticleRowPicker({ onChange, viewerID = 0 }) {
         const current = ++sequence;
         controller?.abort(); controller = new AbortController();
         busy = true; statusKey = 'loading'; update();
+        const isCurrent = () => !disposed && current === sequence && !controller.signal.aborted;
         try {
+            const projection = await articleButtonProjection(dataset.dataset_name, view, null, isCurrent);
+            if (!isCurrent()) return options;
+            if (!projection) throw new Error('No authorized article projection');
             const response = await endpoint_router('getResults', {
                 url_params: buildDatasetQueryParams({ dataset_name: dataset.dataset_name, offset,
-                    row_count: total, view_key: view || 'article_view', lang: getLanguageWithBrowserFallback(),
+                    row_count: total, view_key: projection, lang: getLanguageWithBrowserFallback(),
                     sort_column: 'id', sort_order: 'ASC', filters: query ? { search: query } : {} }),
                 signal: controller.signal, suppressErrorToast: true, suppressAuthRedirect: true,
             });
@@ -124,6 +149,7 @@ export function createArticleRowPicker({ onChange, viewerID = 0 }) {
             if (disposed || current !== sequence) return options;
             if (error?.name !== 'AbortError') {
                 options = []; hasNext = false; statusKey = 'rowsFailed'; dropdown.setOptions([]);
+                selected = null; dropdown.setValue({ includeValues: [] }); onChange(null);
             }
             return [];
         } finally {
@@ -152,8 +178,9 @@ export function createArticleRowPicker({ onChange, viewerID = 0 }) {
         element,
         setDisabled(value) { enabled = !value; update(); },
         setViewerID(value) { viewerID = value; },
+        /** Explicit Article stays explicit; undefined (or any other value) means inherit. */
         async setView(value) {
-            view = value === 'article_view' ? undefined : value;
+            view = articleButtonSetting(value);
             await this.setDataset(dataset);
         },
         async setDataset(value) {

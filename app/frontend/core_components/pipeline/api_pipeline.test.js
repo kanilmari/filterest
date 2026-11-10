@@ -106,6 +106,17 @@ describe('api_pipeline', () => {
         }).toThrow('endpoint route "privateToolExample" is already registered');
     });
 
+    test('requests the new shape on snapshot reads and leaves other routes alone', async () => {
+        const fetchMock = vi.fn(async () => buildResponse({ ok: true }));
+        vi.stubGlobal('fetch', fetchMock);
+        const mod = await loadModule();
+        for (const routeName of ['sitePresentationSettings', 'getResults', 'fetchDynamicChildren', 'frontPage', 'fetchUserPermissions']) {
+            await mod.runApiPipeline({routeName, method: 'GET'});
+            const headers = fetchMock.mock.lastCall[1].headers;
+            expect(headers['X-Filterest-Appearance']).toBe(routeName === 'fetchUserPermissions' ? undefined : 'row-presentation');
+        }
+    });
+
     test('refreshes the CSRF token and retries once after a CSRF-specific 403', async () => {
         const recordedCalls = [];
         const responses = [
@@ -135,6 +146,7 @@ describe('api_pipeline', () => {
                 credentials: 'include',
                 headers: {
                     'Content-Type': 'application/json',
+                    'X-Filterest-Appearance': 'row-presentation',
                     'X-CSRF-Token': 'stale-token',
                 },
                 body: JSON.stringify({ id: 7, column: 'title', value: 'Updated' }),
@@ -145,6 +157,7 @@ describe('api_pipeline', () => {
                 credentials: 'include',
                 headers: {
                     'Content-Type': 'application/json',
+                    'X-Filterest-Appearance': 'row-presentation',
                     'X-CSRF-Token': 'fresh-token',
                 },
                 body: JSON.stringify({ id: 7, column: 'title', value: 'Updated' }),
@@ -179,6 +192,7 @@ describe('api_pipeline', () => {
                 credentials: 'include',
                 headers: {
                     'Content-Type': 'application/json',
+                    'X-Filterest-Appearance': 'row-presentation',
                     'X-CSRF-Token': 'stale-token',
                 },
                 body: JSON.stringify({ id: 7, column: 'title', value: 'Updated' }),
@@ -568,4 +582,50 @@ test('sign-out invalidates synchronously before a pending CSRF bootstrap or netw
     await vi.waitFor(() => expect(fetch).toHaveBeenCalledTimes(2));
     finishToken(buildResponse({ success: true }));
     await pending;
+});
+
+test.each([{}, { user_id: 1 }, { user_id: '42' }, { user_id: 2.5 }])(
+    'an existing profile confirms only an integer signed-in identity: %j', async profile => {
+        const mod = await loadModule();
+        const session = await import('../auth/session_generation_store.js');
+        session.invalidateSessionGeneration({ reason: 'bootstrap', revalidate: false });
+        const fetch = vi.fn(async () => buildResponse(profile));
+        vi.stubGlobal('fetch', fetch);
+        await mod.runApiPipeline({ routeName: 'fetchUserProfile' });
+        expect(session.getVerifiedSessionIdentity()).toBeNull();
+        expect(fetch).toHaveBeenCalledTimes(1);
+    },
+);
+
+test('an existing profile cannot turn an auth-modes-confirmed guest into a signed-in viewer', async () => {
+    const mod = await loadModule();
+    const session = await import('../auth/session_generation_store.js');
+    session.invalidateSessionGeneration({ reason: 'bootstrap', revalidate: false });
+    const generation = session.getSessionGeneration();
+    session.acceptSessionIdentity(1, generation);
+    const fetch = vi.fn(async () => buildResponse({ user_id: 42 }));
+    vi.stubGlobal('fetch', fetch);
+    await mod.runApiPipeline({ routeName: 'fetchUserProfile' });
+    expect(session.getVerifiedSessionIdentity()).toBe(1);
+    expect(session.getSessionGeneration()).toBe(generation);
+    expect(fetch).toHaveBeenCalledTimes(1);
+});
+
+test.each(['session-change', 'abort'])('profile parsing cannot confirm identity after %s', async reason => {
+    const mod = await loadModule();
+    const session = await import('../auth/session_generation_store.js');
+    session.invalidateSessionGeneration({ reason: 'bootstrap', revalidate: false });
+    const controller = new AbortController();
+    let finishProfile;
+    const response = buildResponse({});
+    response.json = () => new Promise(resolve => { finishProfile = resolve; });
+    vi.stubGlobal('fetch', vi.fn(async () => response));
+    const pending = mod.runApiPipeline({ routeName: 'fetchUserProfile', signal: controller.signal });
+    await vi.waitFor(() => expect(finishProfile).toBeTypeOf('function'));
+    if (reason === 'session-change') session.invalidateSessionGeneration({ reason: 'logout' });
+    else controller.abort();
+    finishProfile({ user_id: 42 });
+    await pending;
+    expect(session.getVerifiedSessionIdentity()).toBeNull();
+    expect(fetch).toHaveBeenCalledTimes(1);
 });

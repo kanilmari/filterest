@@ -9,8 +9,8 @@ import { resolveImagePaths } from "../card_view/card_element_builder_helpers.js"
 import {
     createTicketStatusBadge,
 } from "../card_view/card_field_formatter.js";
-import { bindArticleViewActivation, createArticleOpenerElement } from '../card_view/article_view_access.js';
-import { openRowArticleView } from "../card_view/row_article_opener.js";
+import { bindRowActivation, createRowOpenerElement } from "../card_view/default_row_affordance.js";
+import { openDefaultRowPresentation } from "../row_presentation/row_presentation_dispatcher.js";
 import { update_card_selection } from "../table_view/row_selection_handler.js";
 import { isDatasetRowSelected } from "../dataset_row_selection_store.js";
 import { makeColumnClass } from "../../filterbar/filter_list/column_visibility_handler.js";
@@ -275,18 +275,18 @@ async function createBlockElement({
         blockElement.classList.add("experimental-free-layout-card__block--empty");
     }
     if (block.type === "action") {
-        const actionButton = designModeEnabled ? document.createElement("button") : createArticleOpenerElement("button");
+        const actionButton = designModeEnabled ? document.createElement("button") : createRowOpenerElement("button", tableName);
         actionButton.type = "button";
         actionButton.classList.add("experimental-free-layout-card__action-button");
         actionButton.dataset.langKey = "show_more";
         actionButton.textContent = "Show more";
-        bindArticleViewActivation(actionButton, (event) => {
+        bindRowActivation(actionButton, tableName, (event) => {
             event.preventDefault();
             event.stopPropagation();
             if (designModeEnabled) {
                 return;
             }
-            openRowArticleView(rowItem, tableName, cardElement);
+            openDefaultRowPresentation(rowItem, tableName, cardElement);
         });
         blockElement.appendChild(actionButton);
     } else if (block.type === "media") {
@@ -569,16 +569,17 @@ export async function createExperimentalFreeLayoutCard({
     card.appendChild(cardContent);
 
     const summaryElement = buildSmallSummary(model.summary);
-    bindArticleViewActivation(summaryElement, (event) => {
+    bindRowActivation(summaryElement, tableName, (event) => {
         event.preventDefault();
+        event.stopPropagation();
         if (isExperimentalDesignModeEnabled(tableName)) {
             return;
         }
-        openRowArticleView(rowItem, tableName, card);
+        openDefaultRowPresentation(rowItem, tableName, card);
     });
     card.appendChild(summaryElement);
 
-    bindArticleViewActivation(card, (event) => {
+    bindRowActivation(card, tableName, (event) => {
         if (isExperimentalDesignModeEnabled(tableName)) {
             return;
         }
@@ -587,7 +588,7 @@ export async function createExperimentalFreeLayoutCard({
             return;
         }
 
-        openRowArticleView(rowItem, tableName, card);
+        openDefaultRowPresentation(rowItem, tableName, card);
     });
 
     card._row = rowItem;

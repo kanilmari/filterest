@@ -192,3 +192,40 @@ def test_heading_order_storage_canonicalizes_fresh_bootstrap_and_replay(offline_
         else:
             assert_sql(run, f"{site}->>'shared.row_group_heading_order'='result_count'")
         assert_sql(run, "NOT EXISTS(SELECT 1 FROM app_check_dataset_appearance_three_places())")
+
+def test_row_presentation_upgrade_and_replay_keep_explicit_table_choices(offline_postgres):
+    run = offline_postgres
+    install(run)
+    key = 'shared.row_article_default_presentation'
+    defaults = "(SELECT json_value->'defaults' FROM system_config WHERE key='dataset_cover_theme_config')"
+    assert_sql(run, f"NOT ({defaults} ? '{key}')", "classic must be absent in fresh site storage")
+    migration = (MIGRATIONS / '20261105000985_add_row_article_default_presentation.sql').read_text()
+    # Restore the previous version's authoritative SQL rules, then apply the new
+    # migration to existing settings before creating any row-presentation choice.
+    run(HEADING_ORDER.read_text())
+    assert_sql(run, f"NOT (app_dataset_appearance_v2_rules() ? '{key}')")
+    run("CREATE TABLE site_before_upgrade AS SELECT * FROM system_config WHERE key='dataset_cover_theme_config';")
+    run("CREATE TABLE tabs_before_upgrade AS SELECT * FROM system_dataset_appearance;")
+    run(migration)
+    assert_sql(run, "NOT EXISTS(SELECT * FROM site_before_upgrade EXCEPT SELECT * FROM system_config) AND "
+               "NOT EXISTS(SELECT * FROM tabs_before_upgrade EXCEPT SELECT * FROM system_dataset_appearance)")
+    assert_sql(run, f"app_dataset_appearance_v2_rules()->'{key}'->>'default'='article_view'")
+    assert_sql(run, "(SELECT count(*)=2 FROM system_lang_keys WHERE lang_key IN "
+               "('row_article_default_presentation','row_presentation_use_default') "
+               "AND fi<>'' AND en<>'' AND ch<>'' AND yue<>'')")
+    run("UPDATE system_dataset_appearance SET overrides=" + literal({key: 'article_view'}) +
+        " WHERE table_uid=(SELECT table_uid FROM system_db_tables WHERE table_name='tiketit');")
+    before = "SELECT table_uid,revision,overrides FROM system_dataset_appearance"
+    run("CREATE TABLE row_open_before AS " + before + ";")
+    run("UPDATE system_config SET json_value=jsonb_set(json_value,'{defaults," + key +
+        "}'," + literal("image_first_page_view") + ") WHERE key='dataset_cover_theme_config';")
+    for _ in range(2):
+        run(migration)
+        assert_sql(run, "NOT EXISTS(SELECT * FROM row_open_before EXCEPT " + before + ") AND NOT EXISTS(" +
+                   before + " EXCEPT SELECT * FROM row_open_before)")
+        assert_sql(run, f"{defaults}->>'{key}'='image_first_page_view'")
+        assert_sql(run, f"app_valid_dataset_appearance_v2({defaults}-'{key}','site_default',true)")
+        assert_sql(run, f"NOT app_valid_dataset_appearance_v2(({defaults}-'{key}')-'shared.card_image_width','site_default',true)")
+        assert_sql(run, f"NOT app_valid_dataset_appearance_v2({defaults} || " + literal({key: None}) +
+                   ",'site_default',true)")
+        assert_sql(run, "NOT EXISTS(SELECT 1 FROM app_check_dataset_appearance_three_places())")

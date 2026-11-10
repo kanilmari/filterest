@@ -528,17 +528,16 @@ Home's server response also supplies `article_buttons: [{href,label}]` and
 The optional `system_config.front_page_article_buttons` JSON setting (value type 5)
 stores `{schema_version:1,placement,items:[{table_uid,row_id,enabled,view?}]}`. No row
 means an empty list with `below_text` and version `none`; its first POST creates the key. At most ten unique targets are accepted.
-Absent `view` means Article; Page uses `image_first_page_view`. Unknown views return 400 on save and fail-closed on stored read.
-The presentation select, picker, label refresh and save carry the chosen projection using existing labels.
+An absent `view` means **Use default**. An explicit `article_view` or `image_first_page_view` pins the button to Article or Page. Other stored values are rejected. The editor and picker resolve an inherited presentation from the managed dataset and site settings, using the administrator's permitted data projection. Selecting **Use default** removes the stored `view` key.
 Each request needs that presentation's view grant and the dataset's get-results read grant. A view grant follows its catalogue scope: Page's entry is
 tableless, so a global grant counts, and the get-results grant keeps the dataset boundary. Title delegates request the chosen
 `view_key` with the viewer's session, row policies and SELECT projection.
 The first usable header supplies the localized label; permission recovery never
 supplies a missing Home view/read grant. Denied, deleted and unlabelled targets
-leave no element. Links use `/<preferred-name>/<id>?view=<chosen-view>`; private
-identities, revisions and diagnostics never leave this facade. Article links keep
+leave no element. Explicit links use `/<preferred-name>/<id>?view=<chosen-view>`.
+For an inherited button the server returns the row path alone. The browser checks the target's permitted presentations and applies the visitor's per-tab choice or the managed defaults. A restricted visitor sees the button only when the resulting presentation is permitted. Article links keep
 their native behavior. An ordinary Page-button click borrows IFAV's opener/history
-so X/Esc and Back return Home, and Forward reopens the same row. Modified clicks retain the native link for a new tab. Default Home and other openers stay unchanged.
+so X/Esc and Back return Home, and Forward reopens the same row. Modified clicks open the native link in a new tab.
 Boxes finish under their existing three-second elapsed budget before article
 configuration or resolution starts. Articles get a separate three-second elapsed
 budget and a child deadline for setting and registry reads. Canonical delegates

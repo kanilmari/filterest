@@ -428,7 +428,7 @@ describe("openRowArticleView", () => {
         expect(buildRowArticleContent.mock.calls.at(-1)).toContain(types);
     });
 
-    test("captures the card return before changing view and passes only its token to refresh", async () => {
+    test("captures the card return before changing view and keeps the guard through refresh", async () => {
         const { captureCardArticleReturn } = await import("../../navigation/nav_engine/card_article_return_state.js");
         const { refreshTableUnified } = await import("../../general_tables/gt_1_row_crud/gt_1_2_row_read/table_refresh_unified.js");
         const token = {};
@@ -445,7 +445,8 @@ describe("openRowArticleView", () => {
         });
         setChosenDatasetView("app_service_catalog", "card");
         await openRowArticleView({ id: 42 }, "app_service_catalog");
-        expect(refreshTableUnified).toHaveBeenCalledWith("app_service_catalog", { skipUrlParams: true, preserveCardReturn: token, loadedRows: rowsToken });
+        expect(refreshTableUnified).toHaveBeenCalledWith("app_service_catalog", { skipUrlParams: true, preserveCardReturn: token, loadedRows: rowsToken,
+            isCurrent: expect.any(Function), withOwnAddressWrite: expect.any(Function) });
         expect(sessionStorage.getItem("app_service_catalog_view")).toBe("article_view");
     });
 

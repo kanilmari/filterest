@@ -17,6 +17,7 @@ import (
 
 	backend "easelect/backend/core_components"
 	"easelect/backend/core_components/auth"
+	store "easelect/backend/core_components/dataset_appearance_store"
 	"easelect/backend/core_components/dbutils"
 	read "easelect/backend/core_components/dynamic_table_tools/dtt_1_row_crud/dtt_1_row_read"
 	"easelect/backend/core_components/httpresponse"
@@ -66,6 +67,8 @@ type frontPageResultBlock struct {
 func GetFrontPageHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "private, no-store")
 	w.Header().Set("Vary", "Cookie")
+	// Delegated results forward the request headers; vary the outer response too.
+	w.Header().Add("Vary", store.AppearanceHeader)
 	if r.Method != http.MethodGet {
 		w.Header().Set("Allow", "GET")
 		httpresponse.RespondWithError(w, http.StatusMethodNotAllowed, "method not allowed")

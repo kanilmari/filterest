@@ -3,6 +3,7 @@
 // Bridges table read metadata, per-column icon keys, and the modern card variant DOM.
 // Exists so the opt-in modern card layout can stay separate from legacy detail renderers.
 
+import { bindRowOpeningHref } from "./default_row_affordance.js";
 import { applyLabelValueLayout } from "../label_value_layout_adapter.js";
 import {
     appendConfiguredCardDetailIcon,
@@ -44,6 +45,7 @@ function createModernCardDetailTileValue(detailEntry) {
     const linkElement = document.createElement("a");
     linkElement.className = "card_detail_tile_value_link";
     linkElement.href = href;
+    if (detailEntry.rowDestination) bindRowOpeningHref(linkElement, detailEntry.rowDestination.path, detailEntry.rowDestination.tableName);
     linkElement.textContent = displayValue;
     if (detailEntry?.isLink === true && !detailEntry?.href) {
         linkElement.target = "_blank";

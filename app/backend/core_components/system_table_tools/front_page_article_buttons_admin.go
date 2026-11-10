@@ -10,8 +10,12 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
+	"slices"
 
 	backend "easelect/backend/core_components"
+	store "easelect/backend/core_components/dataset_appearance_store"
+	"easelect/backend/core_components/dbutils"
 	"easelect/backend/core_components/httpresponse"
 	e_sessions "easelect/backend/core_components/sessions"
 	config "easelect/backend/core_components/system_config_checks"
@@ -33,6 +37,7 @@ type frontPageArticleUnavailable struct {
 // GET /api/admin/front-page/article-buttons returns {article_buttons,version,unavailable_items,configuration_error}.
 // Missing configuration is {schema_version:1,placement:"below_text",items:[]} with version "none".
 // POST accepts {article_buttons:{schema_version:1,placement:"below_text"|"top_row",items:[{table_uid,row_id,enabled,view?}]},version}.
+// view is "article_view" or "image_first_page_view"; omitting it inherits the row-opening default.
 // At most 10 unique targets; row_id is a canonical numeric string.
 // Every target must exist and be readable through the saving administrator's article results.
 // Success returns {version}; invalid/unreadable targets return 400, stale writes 409.
@@ -104,15 +109,61 @@ func decodeFrontPageArticleButtonsRequest(body io.Reader) (frontPageArticleButto
 	return request, nil
 }
 
+// Only called after the target's read grant and at least one article route grant.
+var frontPageAdminRowDefaults = func(r *http.Request, uid int, dataset string) (string, string, error) {
+	snapshot, err := store.ReadAppearanceForName(dbutils.GetQuerier(r.Context(), backend.Db), uid, dataset, os.Getenv("ENVIRONMENT_TYPE") == "dev")
+	if err != nil {
+		return "", "", err
+	}
+	override, _ := snapshot.Overrides[store.RowPresentationPath].(string)
+	site, _ := snapshot.Defaults[store.RowPresentationPath].(string)
+	return override, site, nil
+}
+
+// Validate the managed presentation with the same route grants as a row opener.
+// Reading the target table and row is authorized separately; a tab choice is personal.
+func frontPageAdminArticleProjection(r *http.Request, userID int, dataset string, item config.FrontPageArticleItem) (string, bool) {
+	if item.View != "" {
+		return frontPageArticleProjection(userID, dataset, item.View)
+	}
+	allowed := []string{}
+	if frontPageArticleViewAllowed(userID, dataset) {
+		allowed = append(allowed, "article_view", "image_first_view")
+	}
+	if frontPagePageViewAllowed(userID, dataset) {
+		allowed = append(allowed, "image_first_page_view")
+	}
+	if len(allowed) == 0 {
+		return "", false
+	}
+	override, site, err := frontPageAdminRowDefaults(r, item.TableUID, dataset)
+	if err != nil {
+		return "", false
+	}
+	for _, mode := range []string{override, site, "article_view"} {
+		if slices.Contains(allowed, mode) {
+			if mode == "image_first_view" {
+				return "article_view", true
+			}
+			return mode, true
+		}
+	}
+	return "", false
+}
+
 func frontPageArticleTargetUnavailable(r *http.Request, userID int, item config.FrontPageArticleItem) string {
 	dataset, err := frontPageArticleTargetReader(r, item.TableUID)
 	if err != nil {
 		return "dataset_missing_or_unavailable"
 	}
-	if !frontPageCanRead(userID, dataset) || (item.PresentationView() == "image_first_page_view" && !frontPageItemViewAllowed(userID, dataset, item.PresentationView())) {
+	if !frontPageArticleReadGranted(userID, dataset) || !frontPageCanRead(userID, dataset) {
 		return "dataset_unreadable"
 	}
-	if _, ok := delegateFrontPageArticle(r, dataset, item.RowID, item.PresentationView()); !ok {
+	projection, allowed := frontPageAdminArticleProjection(r, userID, dataset, item)
+	if !allowed {
+		return "dataset_unreadable"
+	}
+	if _, ok := delegateFrontPageArticle(r, dataset, item.RowID, projection); !ok {
 		return "row_missing_or_unreadable"
 	}
 	return ""

@@ -303,7 +303,7 @@ export async function fetchAdminUIFeatureFlags() {
     return stable_candidate_endpoint_router('adminUiFeatureFlags');
 }
 
-/** Returns seven public site values, nine defaults and the article timestamp setting.
+/** Returns public site values, defaults and the article timestamp setting.
  * @returns {Promise<import('../../generated/go_contract_types').SitePresentationSettingsResponse>}
  */
 export async function fetchSitePresentationSettings() {

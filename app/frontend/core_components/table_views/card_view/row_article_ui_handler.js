@@ -3,6 +3,7 @@
 // Bridges card content rendering and navigation state with the expanded article experience.
 // Exists to keep article-view interaction rules centralized instead of scattering them across card builders.
 
+import { bindRowOpeningHref } from "./default_row_affordance.js";
 import { recordApplicationAddressWrite } from "../../navigation/nav_engine/address_write_revision.js";
 import { count_this_function } from "../../dev_tools/function_counter.js";
 import { extractLangValue } from "../../../reusable_components/lang_value_reader.js";
@@ -155,6 +156,7 @@ export function createRowArticleNavigableElement({
     showKey = true,
     href = "",
     openInNewTabHref = "",
+    rowDestination,
     openPrimaryInNewTab = false,
     externalHttpOnly = false,
     storedRawValue = value,
@@ -200,6 +202,7 @@ export function createRowArticleNavigableElement({
 
         const linkEl = document.createElement("a");
         linkEl.href = resolvedHref;
+        if (rowDestination) bindRowOpeningHref(linkEl, rowDestination.path, rowDestination.tableName);
         linkEl.textContent = resolvedValue;
         if (openPrimaryInNewTab) {
             linkEl.target = "_blank";
@@ -210,6 +213,7 @@ export function createRowArticleNavigableElement({
         if (resolvedNewTabHref) {
             const openLink = document.createElement("a");
             openLink.href = resolvedNewTabHref;
+            if (rowDestination) bindRowOpeningHref(openLink, rowDestination.path, rowDestination.tableName);
             openLink.target = "_blank";
             openLink.rel = "noopener noreferrer";
             openLink.classList.add("two_line_new_tab_button");

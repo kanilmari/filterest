@@ -11,9 +11,14 @@ import { renderFrontPage } from './front_page_printer.js';
 import { createFrontPageArticleButtons } from './front_page_article_buttons.js';
 import { refreshLocalizedDatasetValues } from '../table_views/dataset_value_localizer.js';
 import { invalidateSessionGeneration } from '../auth/session_generation_store.js';
+import { resetRowPresentationChoice, setRowPresentationChoice } from '../table_views/row_presentation/row_presentation_choice.js';
 import { DEFAULT_HOME_PRESENTATION as defaults } from '../../shared/front_page_presentation/validator.js';
 
-const mocks = vi.hoisted(() => ({ request: vi.fn(), openPage: vi.fn(async () => null), preview: null }));
+const mocks = vi.hoisted(() => ({ defaults: vi.fn(), request: vi.fn(), openPage: vi.fn(async () => null), preview: null }));
+vi.mock('../table_views/dataset_appearance_state.js', async importOriginal => {
+    const actual = await importOriginal();
+    return { ...actual, datasetAppearanceState: { ...actual.datasetAppearanceState, savedRowDefaults: mocks.defaults } };
+});
 vi.mock('../table_views/card_view/image_first_view_opener.js', () => ({ openImageFirstView: mocks.openPage }));
 vi.mock('../navigation/nav_engine/dataset_aliases.js', () => ({ getInternalDatasetName: name => name === 'contact' ? 'system_about' : name }));
 vi.mock('../endpoints/endpoint_router.js', () => ({ endpoint_router: mocks.request }));
@@ -42,8 +47,13 @@ beforeEach(() => {
     document.body.innerHTML = '<div id="tabs_container"></div>';
     localStorage.clear(); localStorage.setItem('chosen_language', 'fi');
     mocks.request.mockReset().mockResolvedValue(response());
+    sessionStorage.setItem('user_permissions', JSON.stringify(['/ui/view/article_view', '/ui/view/image_first_page_view']));
+    mocks.defaults.mockReset().mockReturnValue({site:'article_view'});
 });
-afterEach(() => document.getElementById('front_page_container')?.__cleanupListeners?.());
+afterEach(() => {
+    document.getElementById('front_page_container')?.__cleanupListeners?.();
+    sessionStorage.removeItem('user_permissions');
+});
 
 test.each(['below_text', 'top_row'])('mounts accessible ordered payload links at %s', async placement => {
     mocks.request.mockResolvedValue(response(placement));
@@ -153,6 +163,23 @@ test('only top-row buttons become transparent outlined pills with theme contrast
 });
 
 
+test.each(['/contact/5', '/contact/5?view=article_view'])('%s stays a native link to the generic row navigation', async href => {
+    mocks.openPage.mockClear();
+    const list = createFrontPageArticleButtons([{ href, label: 'Contact' }]);
+    document.body.append(list);
+    await vi.waitFor(() => expect(list.querySelector('a')).not.toBeNull());
+    const link = list.querySelector('a');
+    const click = new MouseEvent('click', { button: 0, bubbles: true, cancelable: true });
+    // jsdom does not navigate; stop the default at the document so only the link's own handling is observed.
+    let ownPrevented = null;
+    document.addEventListener('click', event => { ownPrevented = event.defaultPrevented; event.preventDefault(); }, { once: true });
+    link.dispatchEvent(click);
+    expect(ownPrevented).toBe(false);
+    await Promise.resolve();
+    expect(mocks.openPage).not.toHaveBeenCalled();
+    expect(link.getAttribute('href')).toBe(href);
+    list.remove();
+});
 test('only an unmodified Home Page click borrows the shared opener and preserves its native href', async () => {
     mocks.openPage.mockClear();
     const list = createFrontPageArticleButtons([{ href: '/contact/5?view=image_first_page_view', label: 'Contact' }]);
@@ -166,4 +193,43 @@ test('only an unmodified Home Page click borrows the shared opener and preserves
     await vi.waitFor(() => expect(mocks.openPage).toHaveBeenCalledOnce());
     expect(mocks.openPage).toHaveBeenCalledWith(expect.objectContaining({ tableName: 'system_about', rowItem: { id: '5' }, layout: 'page' }));
     expect(link.getAttribute('href')).toBe('/contact/5?view=image_first_page_view');
+});
+
+test('Page-only Home omits an inherited classic link, but an own Page choice on this dataset makes it usable', async () => {
+    sessionStorage.setItem('user_permissions', JSON.stringify(['/ui/view/image_first_page_view']));
+    mocks.defaults.mockReturnValue({site:'article_view'});
+    const items = [{href:'/contact/5', label:'Contact'}];
+    const denied = createFrontPageArticleButtons(items);
+    document.body.append(denied);
+    expect(denied.querySelector('a')).toBeNull();
+    expect(denied.textContent).not.toContain('Contact');
+    await vi.waitFor(() => expect(denied.isConnected).toBe(false));
+    setRowPresentationChoice('system_about', 'image_first_page_view');
+    try {
+        const allowed = createFrontPageArticleButtons(items);
+        document.body.append(allowed);
+        await vi.waitFor(() => expect(allowed.querySelector('a')?.getAttribute('href')).toBe('/contact/5?view=image_first_page_view'));
+        expect(allowed.textContent).toBe('Contact');
+        expect(items[0].href).toBe('/contact/5');
+    } finally { resetRowPresentationChoice('system_about'); }
+});
+
+
+test.each([
+    ['administrator', 74, ['/ui/view/article_view', '/ui/view/image_first_page_view'], '/news/5'],
+    ['guest', 1, ['/ui/view/article_view'], '/news/5?view=article_view'],
+    ['reader', 42, ['/ui/view/article_view'], '/news/5?view=article_view'],
+    ['reader without a view grant', 42, [], null],
+])('legacy Home button follows the session grants of a %s', async (_role, viewer, grants, href) => {
+    sessionStorage.setItem('user_permissions', JSON.stringify(grants));
+    mocks.request.mockResolvedValue({
+        ...response('below_text', [{ href: '/news/5', label: 'Readable row' }]), viewer_id: viewer,
+    });
+    const home = await mounted();
+    await vi.waitFor(() => {
+        const link = home.querySelector('.front-page-article-button');
+        if (href) expect(link?.getAttribute('href')).toBe(href);
+        else expect(home.querySelector('.front-page-article-buttons')).toBeNull();
+    });
+    expect(mocks.request.mock.calls.map(([route]) => route)).toEqual(['frontPage']);
 });

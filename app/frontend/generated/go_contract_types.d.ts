@@ -215,6 +215,7 @@ export interface DatasetCoverSharedValues {
     image_blur: number;
     card_image_width: number;
     card_image_presentation: string;
+    row_article_default_presentation?: string;
     article_image_caption_position: string;
     card_detail_columns: number;
     card_description_lines: number;

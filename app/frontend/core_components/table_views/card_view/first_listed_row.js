@@ -7,6 +7,23 @@
 
 import { getUnifiedTableState, setUnifiedTableState } from "../../state_stores/table_state_store.js";
 
+/**
+ * A requested row has its own guarded opener. Its listing must finish even
+ * after that opener expires. Navigation passes this lifetime guard unchanged
+ * to this particular refresh, including retries. Other visits do not share it.
+ */
+export function keepExplicitRowListingCurrent() { return true; }
+
+const explicitOpenings = new Map();
+
+/** A background refresh must not take the first row away from an active click. */
+export function deferFirstRowToRequest(dataset, ownsOpening) {
+    explicitOpenings.set(dataset, ownsOpening);
+    return () => {
+        if (explicitOpenings.get(dataset) === ownsOpening) explicitOpenings.delete(dataset);
+    };
+}
+
 /** Which part of the stored table state belongs to this view's article. */
 export function getArticleStateKey(viewKey) {
     return viewKey === "article_view" ? "articleView" : "cardView";
@@ -34,7 +51,7 @@ export function claimFirstListedRow(tableName, viewKey, rows = []) {
         && articleState.expandedId == null
         && (articleState.pendingAutoOpenFirstRenderedResult === true
             || articleState.pendingAutoOpenFirstSearchResult === true);
-    if (!waiting) return null;
+    if (!waiting || explicitOpenings.get(tableName)?.()) return null;
 
     const firstRow = (Array.isArray(rows) ? rows : []).find((row) => row?.id != null) || null;
     if (!firstRow) return null;

@@ -265,7 +265,7 @@ func ValidateSiteValuesV2(raw any, development bool) error {
 	return err
 }
 
-// ValidateDefaultsV2 requires all nine defaults that a tab may override.
+// ValidateDefaultsV2 requires all defaults that a tab may override.
 // Its browser twin is validator.js:isValidDatasetAppearanceDefaultsV2.
 func ValidateDefaultsV2(raw any, development bool) error {
 	_, err := validatePlaceValuesV2(raw, SiteDefault, true, development)

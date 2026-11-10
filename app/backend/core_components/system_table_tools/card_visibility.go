@@ -344,7 +344,7 @@ func GetCardVisibilityHandler(w http.ResponseWriter, r *http.Request) {
 		CardDetailsLayout: normalizeCardDetailsLayout(cardDetailsLayout),
 		CardStyleVariant:  presentation.CardStyleVariant,
 		CardDetailColumns: presentation.CardDetailColumns,
-		DatasetAppearance: presentation.DatasetAppearance,
+		DatasetAppearance: presentation.DatasetAppearance.ForClient(store.WantsRowPresentation(w, r)),
 		Columns:           columns,
 	})
 }
@@ -444,6 +444,7 @@ func UpdateCardVisibilityHandler(w http.ResponseWriter, r *http.Request) {
 			respondDatasetAppearanceError(w, err)
 			return
 		}
+		result.DatasetAppearance = result.DatasetAppearance.ForClient(store.WantsRowPresentation(w, r))
 		presentation = &result
 	}
 	guards, err := loadFieldViewColumnGuards(tx, req.TableName, true)
