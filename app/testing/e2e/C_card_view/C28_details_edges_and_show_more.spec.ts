@@ -101,3 +101,125 @@ for (const width of [390, 1200, 1201, 1440, 1600, 1920]) for (const theme of ['l
     } finally { if (created) await cleanupDatasetViaRequest(page.request, dataset); }
   });
 }
+
+/** Measure painted words, omitting whitespace and inline element boxes. One line can include several text nodes. */
+async function measureDetailLines(value: Locator) {
+  return value.evaluate(value => {
+    const field = value.closest('.two_line_field')!;
+    const label = field.querySelector('.two_line_label_text')!;
+    const icon = field.querySelector('.two_line_label_icon')!;
+    const lines: { top: number; left: number; nodes: Set<Node> }[] = [];
+    const textRuns: { tag: string; display: string; rects: { left: number; top: number }[] }[] = [];
+    const walker = document.createTreeWalker(value, NodeFilter.SHOW_TEXT);
+    const range = document.createRange();
+    for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+      range.selectNodeContents(node);
+      const rects = Array.from(range.getClientRects()).filter(rect => rect.width > 0 && rect.height > 0);
+      textRuns.push({ tag: node.parentElement!.tagName, display: getComputedStyle(node.parentElement!).display,
+        rects: rects.map(({ left, top }) => ({ left, top })) });
+      for (const word of node.textContent!.matchAll(/\S+/g)) {
+        range.setStart(node, word.index!);
+        range.setEnd(node, word.index! + word[0].length);
+        for (const rect of range.getClientRects()) {
+          if (rect.width <= 0 || rect.height <= 0) continue;
+          let line = lines.find(line => Math.abs(line.top - rect.top) <= 1);
+          if (!line) {
+            line = { top: rect.top, left: rect.left, nodes: new Set() };
+            lines.push(line);
+          }
+          line.left = Math.min(line.left, rect.left);
+          line.nodes.add(node);
+        }
+      }
+    }
+    return { textRuns, viewport: innerWidth, fieldWidth: field.getBoundingClientRect().width,
+      valueWidth: value.getBoundingClientRect().width, iconRight: icon.getBoundingClientRect().right, labelLeft: label.getBoundingClientRect().left,
+      valueLeft: value.getBoundingClientRect().left, lines: lines.sort((a, b) => a.top - b.top)
+        .map(line => ({ top: line.top, left: line.left, textNodes: line.nodes.size })) };
+  });
+}
+
+function misalignedLines(sample: Awaited<ReturnType<typeof measureDetailLines>>) {
+  const starts = [sample.labelLeft, sample.valueLeft, sample.lines[0].left];
+  return sample.lines.flatMap((line, index) => starts.some(start => Math.abs(line.left - start) > 1) ? [index + 1] : []);
+}
+
+for (const [theme, language] of [['light', 'fi'], ['dark', 'en']] as const) {
+  test(`#1000 wrapped article Details keep the label's indentation at 320 and 390px, ${theme}/${language}`, async ({ page, context }, info) => {
+    test.setTimeout(120_000);
+    await page.emulateMedia({ colorScheme: theme === 'light' ? 'dark' : 'light' });
+    await context.route(url => url.pathname === '/api/user-visual-preference', route =>
+      route.fulfill({ json: { configured: true, revision: 1, theme_mode: theme } }));
+    await context.addInitScript(({ theme, language }) => {
+      localStorage.setItem('theme', theme); localStorage.setItem('chosen_language', language);
+    }, { theme, language });
+    await login(page, loadCredentials());
+    const dataset = buildTempDatasetName('e2e_detail_indent');
+    const valueSelector = '.big_card_details_container .two_line_value[data-column="e2e_notes"]';
+    let created = false;
+    try {
+      await createTempDataset(page, { datasetName: dataset, columns: { id: 'SERIAL', e2e_title: 'TEXT', e2e_notes: 'TEXT' },
+        seedRows: [{ e2e_title: 'Harbour', e2e_notes: 'North <strong>quay</strong> opens early for the morning ferry. '
+          + 'The crew checks the upper deck, counts the passengers and confirms the route before leaving the harbour.' }] });
+      created = true;
+      await saveCardVisibilityWithFreshRevisions(page.request, dataset, visibility => ({
+        columns: visibility.columns.map(column => {
+          if (column.column_name === 'e2e_title') return { ...column, card_element: 'header', show_value_on_card: true };
+          if (column.column_name === 'e2e_notes') return { ...column, card_element: 'details', show_value_on_card: true,
+            show_key_on_card: true, show_key_on_card_override: true };
+          return column;
+        }),
+      }));
+      await page.setViewportSize({ width: 320, height: 900 });
+      await openTempDatasetRowArticle(page, dataset, 1);
+      await closeActiveFilterbarIfOpen(page);
+      await expect(page.locator('body')).toHaveClass(new RegExp(`\\b${theme}-mode\\b`));
+      await expect(page.locator('html')).toHaveAttribute('lang', language);
+      const section = page.getByTestId('big-card-container').locator('.row_article_details_section:visible');
+      const toggle = section.locator('.row_article_disclosure_header');
+      if (await toggle.getAttribute('aria-expanded') === 'false') await toggle.click();
+      const value = section.locator(valueSelector);
+      await expect(value.locator('strong')).toHaveText('quay');
+      await expect(value).toBeVisible();
+      await page.evaluate(() => document.fonts.ready);
+
+      for (const width of [320, 390]) await test.step(`${width}px`, async () => {
+        await page.setViewportSize({ width, height: 900 });
+        await value.scrollIntoViewIfNeeded();
+        await expect(value).toBeInViewport();
+        const natural = await measureDetailLines(value);
+        await info.attach(`${width}px natural visual lines`, { contentType: 'application/json',
+          body: JSON.stringify({ width, theme, language, natural }) });
+        expect(natural.viewport).toBe(width);
+        expect(natural.valueWidth).toBeGreaterThan(width / 2);
+        expect(natural.lines.length).toBeGreaterThanOrEqual(2);
+        expect(natural.lines[0].textNodes).toBeGreaterThan(1);
+        expect(natural.labelLeft).toBeGreaterThan(natural.iconRight);
+        expect(misalignedLines(natural), 'every visible line starts under the label text').toEqual([]);
+
+        // A local hanging indent moves only continuation text; measure it through the same path.
+        const originalStyle = await value.evaluate(element => {
+          const style = (element as HTMLElement).style;
+          const original = { paddingInlineStart: style.paddingInlineStart, textIndent: style.textIndent };
+          style.paddingInlineStart = '16px';
+          style.textIndent = '-16px';
+          return original;
+        });
+        try {
+          const hanging = await measureDetailLines(value);
+          await info.attach(`${width}px visual lines`, { contentType: 'application/json',
+            body: JSON.stringify({ width, theme, language, natural, hanging }) });
+          expect(hanging.lines.length).toBeGreaterThanOrEqual(2);
+          expect(hanging.lines[0].left).toBeCloseTo(natural.lines[0].left, 1);
+          expect(hanging.labelLeft).toBeCloseTo(natural.labelLeft, 1);
+          expect(hanging.valueLeft).toBeCloseTo(natural.valueLeft, 1);
+          expect(hanging.lines[1].left - natural.lines[0].left).toBeCloseTo(16, 0);
+          expect(misalignedLines(hanging), 'only continuation lines should fail')
+            .toEqual(hanging.lines.slice(1).map((_, index) => index + 2));
+        } finally {
+          await value.evaluate((element, original) => Object.assign((element as HTMLElement).style, original), originalStyle);
+        }
+      });
+    } finally { if (created) await cleanupDatasetViaRequest(page.request, dataset); }
+  });
+}
