@@ -392,11 +392,11 @@
         },
         {
           "path": "app/frontend/core_components/table_views/card_view/row_article_ui_handler.js",
-          "sha256": "1b116ced36bfbcf97e655fd65f2704c4374a8fd19ba301f2bb266fab0ffc9a1b"
+          "sha256": "f46572be884269fc3d411425c8fd6799913c9bccacd721674de35b951b181992"
         },
         {
           "path": "app/frontend/reusable_components/key_value_container/kv_pair_builder.js",
-          "sha256": "9a024d839cc4d51e0f4703c18ec89017b25a9a14c86229c901079132805d0c5c"
+          "sha256": "98ea5a69cb537b37eb77aca042dd1e8f62dc47a320d57e0d30812f7f85ebd56c"
         },
         {
           "path": "app/frontend/reusable_components/vanilla_tree/van_tr_components/tree_icon_creator.js",
@@ -410,7 +410,7 @@
   ],
   "asset_provenance": {
     "path": "app/server_tools/licenses/asset_provenance.json",
-    "sha256": "b041f83a22e4baf935ac765239c1c7a3480634854e781616fdd618f98c524857"
+    "sha256": "ba14ce1a933adb182a48fead9f2e86ca8775250ec6d690469bc6d4a96fc2033a"
   },
   "browser_bundle_metadata_source": "app/server_tools/licenses/browser_bundle_provenance.json matched against app/package-lock.json and app/frontend/dist/*.js",
   "browser_bundle_provenance": {
@@ -418,7 +418,7 @@
     "sha256": "868e187c8724c69e945f54f9e25f213127f91acc3cda67da3392814a284c740f"
   },
   "combined_binary_license": "GPL-3.0-or-later",
-  "database_version": "9.13.5",
+  "database_version": "9.13.6",
   "dependencies": [
     {
       "binary_targets": [
@@ -867,7 +867,7 @@
       "version": "6.4.3"
     }
   ],
-  "filterest_app_version": "9.6.3",
+  "filterest_app_version": "9.6.4",
   "first_party_components": [
     {
       "assets": [
