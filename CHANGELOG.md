@@ -22,6 +22,8 @@ Dates are the local (Europe/Helsinki) date on which the version was published.
 
 ## [Unreleased]
 
+## [9.6.6] - 2026-11-12
+
 - A site can show the filter bar’s Select visible fields section only to administrators. Every visitor still receives the effective fields for the current dataset and view (#1024).
 
 ## [9.6.5] - 2026-11-11
