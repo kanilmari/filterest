@@ -175,7 +175,10 @@ test('product-card refresh/search/clear/pages keep exact row IDs and pictures in
       const languagePanel = page.locator(`[id="${await navbar.getByTestId('language-menu-button').getAttribute('aria-controls')}"]`);
       await languagePanel.getByTestId('language-menu-option-fi').check();
       await expect(page.locator('html')).toHaveAttribute('lang', 'fi');
-      await navbar.locator('#hideMenuButton').click();
+      const closeMenuButton = page.locator('[data-navbar-menu-button="true"][aria-hidden="false"]:visible, #hideMenuButton[aria-hidden="false"]:visible');
+      await expect(closeMenuButton).toHaveCount(1);
+      await closeMenuButton.click();
+      await expect(navbar).toHaveClass(/(?:^|\s)collapsed(?:\s|$)/);
       // Wait for the product language renderer, so unchanged IDs cannot pass on old cards.
       await expect.poll(() => beforeLanguage!.evaluate(element => element.isConnected)).toBe(false);
       await beforeLanguage!.dispose();
