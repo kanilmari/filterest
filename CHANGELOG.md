@@ -22,6 +22,8 @@ Dates are the local (Europe/Helsinki) date on which the version was published.
 
 ## [Unreleased]
 
+## [9.6.5] - 2026-11-11
+
 - Page-sized image-first articles show the selected photo’s localized caption and photographer link at the dataset’s configured position, over or below the image (#1025).
 
 ## [9.6.4] - 2026-11-11
