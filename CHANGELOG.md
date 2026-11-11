@@ -22,6 +22,8 @@ Dates are the local (Europe/Helsinki) date on which the version was published.
 
 ## [Unreleased]
 
+## [9.6.4] - 2026-11-11
+
 - The field order saved in the field editor now survives application startup and catalogue refreshes. Renaming a field keeps its place, and new fields follow the saved ones in creation order, including in the add-row form (#994).
 - Keep the dataset toolbar stable between its original hero tabs and the listing's title and search. The menu and filter controls follow the visible toolbar in both states.
 - Navigation buttons on Home and dataset pages center on the full toolbar when space permits and keep at least 20 px clear of the nearest edge controls. The Home side menu uses rectangular buttons, its top controls align with the Home toolbar, and the sliding overlay keeps its edge as its outer shadow fades. Menu controls and their environment badges have no shadow (#1017).
