@@ -5,7 +5,7 @@ Keeps legacy credits readable without rewriting stored application data. -->
 
 # Article image captions
 
-Ordinary articles default to captions below the matching main image. The
+Ordinary articles and Page-sized image-first articles default to captions below the matching image. The
 appearance palette's **Article images → Caption position** offers **Below image**
 and **Over image**. This is an explicit site-wide setting shared by both themes,
 stored in the existing `system_config.dataset_cover_theme_config` JSON at
@@ -16,7 +16,7 @@ lifecycle as the other site presentation settings.
 
 Overlay captions share the image-first caption skin. Below-image captions sit
 3 px closer to the image, while the following prose begins 5 px lower than the
-previous layout. Image-first keeps its own overlay; its Show more control stays
+previous layout. Page uses its dataset’s caption position, including inherited site settings and live palette changes. Full-height Image-first keeps its own overlay; its Show more control stays
 at least 20 px to the right of the caption, or 20 px below on narrow screens.
 Compact cards and gallery thumbnails do not gain captions.
 

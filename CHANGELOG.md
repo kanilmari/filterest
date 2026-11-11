@@ -22,6 +22,8 @@ Dates are the local (Europe/Helsinki) date on which the version was published.
 
 ## [Unreleased]
 
+- Page-sized image-first articles show the selected photo’s localized caption and photographer link at the dataset’s configured position, over or below the image (#1025).
+
 ## [9.6.4] - 2026-11-11
 
 - The field order saved in the field editor now survives application startup and catalogue refreshes. Renaming a field keeps its place, and new fields follow the saved ones in creation order, including in the add-row form (#994).

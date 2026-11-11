@@ -85,8 +85,11 @@ Focused regression tests live beside `image_first_view_opener.js` and `translati
 
 The Page presentation keeps the stored key `image_first_page_view`. Its image
 stays inside the text column, with its whole photo contained at full column
-width and a maximum height of 80dvh above 700 px. At 700 px and below, it keeps
+width up to a maximum height of 80dvh above 700 px. At 700 px and below, it keeps
 the original `min(40dvh, 360px)` cap; the existing phone layout rules still apply.
+The selected photo’s localized caption and photographer link follow the
+dataset’s caption position. Both placements use the displayed photo’s width,
+including when a portrait is narrower than the text column.
 
 Only cifav adds 24 px below the image box; the title retains its 19 px top
 padding (43 px from the image box to the title content). The title has no bottom

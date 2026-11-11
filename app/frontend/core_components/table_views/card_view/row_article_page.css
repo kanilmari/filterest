@@ -13,8 +13,12 @@
 }
 
 .image_first_page_view .row_article_page_image {
+    --page-image-height-limit: 80dvh;
+    position: relative;
+    width: min(100%, calc(var(--page-image-height-limit) * var(--page-image-ratio)));
     min-width: 0;
     max-width: 100%;
+    margin: 0 auto;
     margin-block-end: 24px;
 }
 
@@ -26,8 +30,27 @@
     display: block;
     width: 100%;
     height: auto;
-    max-height: 80dvh;
+    max-height: var(--page-image-height-limit);
     object-fit: contain;
+}
+
+.image_first_page_view .row_article_page_image > figcaption {
+    margin: 0;
+    padding-block-start: calc(0.7rem - 3px);
+    text-align: center;
+}
+
+.image_first_page_view[data-article-image-caption-position="overlay"]
+    > .image_first_view_article_content > .row_article_page_image > figcaption {
+    position: absolute;
+    inset-inline: 0;
+    inset-block-end: min(14px, 4%);
+    width: max-content;
+    /* Override the inherited important max-width on .big_card_content descendants. */
+    max-width: 96% !important;
+    max-height: 92%;
+    margin-inline: auto;
+    overflow: auto;
 }
 
 /* The description already supplies 20px of top padding; do not stack title/first-block margins on it. */
@@ -55,7 +78,7 @@
         border-radius: 0;
         padding-inline: 16px;
     }
-    .image_first_page_view .row_article_page_image > img:not([hidden]) {
-        max-height: min(40dvh, 360px);
+    .image_first_page_view .row_article_page_image {
+        --page-image-height-limit: min(40dvh, 360px);
     }
 }

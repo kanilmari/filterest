@@ -641,10 +641,39 @@ describe('opt-in Page layout', () => {
         const shell = document.querySelector('.image_first_page_view');
         expect(shell).not.toBeNull();
         expect(shell.querySelector('.image_first_view_article_content > .row_article_page_image img')).not.toBeNull();
+        expect(shell.querySelector('.row_article_page_image figcaption').hidden).toBe(true);
         expect(shell.querySelector('.row_article_image_first_stage')).toBeNull();
         expect(shell.querySelector('.row_article_row_navigation')).toBeNull();
         expect(fetchDatasetData).toHaveBeenLastCalledWith(expect.objectContaining({ view_key: 'image_first_page_view' }));
         expect(new URL(location.href).searchParams.get('view')).toBe('image_first_page_view');
+    });
+    test('Page credits the selected image with the localized photographer link', async () => {
+        const { refreshLocalizedDatasetValues } = await import('../dataset_value_localizer.js');
+        const url = 'https://unsplash.com/photos/vancouver-cityscape-with-convention-center-and-harbor-tower-GZRc_obGqE0';
+        const selected = { id: 344, filename: 'vancouver.jpg', description: {
+            fi: 'Kuvituskuva – [Anthony Maw](' + url + ')', en: 'Illustration – [Anthony Maw](' + url + ')',
+        } };
+        await openImageFirstView({ tableName: 'examples', rowItem: { id: 3 }, layout: 'page',
+            imageRows: [{ id: 343, filename: 'first.jpg', description: 'Other image' }, selected], activeImageRow: selected });
+        const figure = document.querySelector('.row_article_page_image');
+        const img = figure.querySelector('img');
+        expect(img.src).toContain('vancouver.jpg');
+        const caption = figure.querySelector('figcaption');
+        expect(caption).not.toBeNull();
+        expect(figure.hidden).toBe(true);
+        Object.defineProperties(img, { naturalWidth: { value: 400 }, naturalHeight: { value: 800 } });
+        img.dispatchEvent(new Event('load'));
+        expect(figure.hidden).toBe(false);
+        expect(figure.style.getPropertyValue('--page-image-ratio')).toBe('0.5');
+        await refreshLocalizedDatasetValues('fi');
+        expect(caption.textContent).toBe('Kuvituskuva: Anthony Maw / Unsplash');
+        await refreshLocalizedDatasetValues('en');
+        expect(caption.textContent).toBe('Illustration: Anthony Maw / Unsplash');
+        const link = caption.querySelector('a');
+        expect(link.href).toBe(url);
+        expect(link.target).toBe('_blank');
+        expect(link.rel).toBe('noopener noreferrer');
+        expect(loadSession.fetchDynamicChildren).not.toHaveBeenCalled();
     });
     test('no image still opens the article and creates no image box or placeholder', async () => {
         expect(await openImageFirstView({ tableName: 'examples', rowItem: { id: 3 }, layout: 'page' })).not.toBeNull();

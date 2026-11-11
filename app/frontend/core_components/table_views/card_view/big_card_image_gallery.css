@@ -68,6 +68,8 @@
 }
 
 .row_article_image_first_caption,
+.image_first_page_view[data-article-image-caption-position="overlay"]
+    > .image_first_view_article_content > .row_article_page_image > figcaption,
 .row_article_inline_image_caption[data-article-image-caption-position="overlay"] {
     margin: 0;
     padding: calc(0.7rem - 2px) calc(1rem - 2px);
