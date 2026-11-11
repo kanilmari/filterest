@@ -79,7 +79,10 @@ unsafe types, and arbitrary JSON. Configured headers keep the existing field
 formatter for numbers, dates, booleans and text, including long and multiline
 values; each view retains its own truncation. Description roles, text-only types,
 the single-line/160-character limit and JSON-looking text rejection apply only to
-inference. Inferred titles also exclude body-like field names.
+inference. Inferred titles also exclude body-like field names. The card and
+article use just the inferred value as the heading. Field labels stay with their
+configured presentation, including the Details section. Unconfigured display
+fields returned with an article appear in its body when they have a value.
 
 Configured and inferred record headings take their size and heading level from the view.
 Stored HTML heading and paragraph wrappers contribute their words, with a space

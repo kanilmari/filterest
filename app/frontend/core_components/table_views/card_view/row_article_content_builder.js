@@ -5,6 +5,7 @@
 
 import { resolveRecordTitle, isRecordViewersOwn } from '../record_title_resolver.js';
 import { datasetAppearanceState } from '../dataset_appearance_state.js';
+import { isEmptyValue } from '../../../reusable_components/key_value_container/empty_value_printer.js';
 import { resolveRowArticleSectionStartOpen } from "./row_article_section_defaults.js";
 
 import {
@@ -120,7 +121,7 @@ export async function buildRowArticleContent(
         }
         if (column) {
             header.appendChild(createRowArticleKeyValueElement(format_column_name(column), sourceText,
-                column, false, 'big_card_header_value', columnMeta.show_key_on_card === true,
+                column, false, 'big_card_header_value', heading.configured && columnMeta.show_key_on_card === true,
                 columnMeta.is_multilingual, heading.editValue, columnMeta, timestampDisplayOptions));
         } else {
             const value = document.createElement('span');
@@ -205,6 +206,8 @@ export async function buildRowArticleContent(
                 });
                 continue;
             }
+            // A joined result may supply a display value without defining a field.
+            if (!Object.hasOwn(data_types, column) && isEmptyValue(val)) continue;
             rowArticleContentElement.appendChild(
                 createRowArticleKeyValueElement(
                     column_label,

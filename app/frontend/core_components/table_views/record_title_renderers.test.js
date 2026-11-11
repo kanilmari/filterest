@@ -197,3 +197,62 @@ test.each([
         }
     }
 });
+
+test.each(['standard', 'modern'])('uses only the inferred value as the %s card and article heading', async style => {
+    const table = 'dokumentaatio';
+    localStorage.setItem('chosen_language', 'en');
+    localStorage.setItem(table + '_tableMeta', JSON.stringify({ fk_display_column: 'kohdetiimi', card_style_variant: style }));
+    const types = {
+        id: { data_type: 'integer' },
+        otsikko: field({ card_element: 'header', is_multilingual: true }),
+        kohdetiimi: field({ card_element: 'details10', show_key_on_card: true, is_multilingual: true, icon_key: 'user' }),
+    };
+    const columns = Object.keys(types);
+    const row = { id: 1, otsikko: { en: '<h2> </h2>' }, kohdetiimi: { en: '<h1><em>Hotel</em></h1>' } };
+    const card = await createSingleCard(row, columns, table, types, context);
+    document.body.append(card);
+    expect(card.dataset.cardStyleVariant).toBe(style);
+    const { rowArticleContentElement: article } = await buildRowArticleContent(row, table, types, columns, '1', 'H', false);
+    for (const [view, selector] of [[card, '.card_header'], [article, 'h1.big_card_header']]) {
+        const headings = view.querySelectorAll(selector);
+        expect(headings).toHaveLength(1);
+        expect(headings[0].querySelector('.kv_label, .two_line_label')).toBeNull();
+        expect(headings[0].textContent).toBe('Hotel');
+        expect(headings[0].querySelector('em')?.textContent).toBe('Hotel');
+        expect(headings[0].querySelector('h1,h2,h3,h4,h5,h6')).toBeNull();
+    }
+    expect(card.querySelector('.small_card_name_text').textContent).toBe('Hotel');
+    const details = article.querySelector('.big_card_details_container');
+    expect(details.querySelector('[data-lang-key="kohdetiimi"]')).not.toBeNull();
+    expect(details.querySelector('[data-column="kohdetiimi"] em')?.textContent).toBe('Hotel');
+
+    types.otsikko.show_key_on_card = true;
+    const next = { ...row, id: 2, otsikko: { en: 'First dataset' } };
+    const nextCard = await createSingleCard(next, columns, table, types, context);
+    document.body.append(nextCard);
+    const nextArticle = await buildRowArticleContent(next, table, types, columns, '2', 'F', false);
+    for (const [view, selector] of [[nextCard, '.card_header'], [nextArticle.rowArticleContentElement, 'h1.big_card_header']]) {
+        expect(view.querySelector(selector + ' [data-lang-key="otsikko"]')).not.toBeNull();
+        expect(view.querySelector(selector + ' [data-column="otsikko"]').textContent).toBe('First dataset');
+    }
+});
+
+test('keeps the article caption and author together when their unconfigured companion fields have no value', async () => {
+    const caption = 'Design the services people can rely on';
+    const types = { id: { data_type: 'integer', card_element: 'hidden' }, otsikko: field({ card_element: 'header' }),
+        cached_username: field({ card_element: 'username' }), comment: field({ show_key_on_card: true }),
+        contact: field({ editable_in_ui: true }) };
+    const row = { id: 1, otsikko: 'Hotel', 'palvelu_name (ln)': caption, created_by_name: null,
+        'owner_name (ln)': '', cached_username: 'teppo_tekija', comment: '', contact: '' };
+    const render = async rowItem => (await buildRowArticleContent(rowItem, 'dokumentaatio', types,
+        Object.keys(rowItem), '1', 'H', false)).rowArticleContentElement;
+    const article = await render(row);
+    const generic = root => [...root.querySelectorAll('.big_card_generic_field')]
+        .map(value => [value.dataset.column, value.textContent]);
+    expect(generic(article)).toEqual([['palvelu_name (ln)', caption], ['comment', '—'], ['contact', '—']]);
+    expect(article.querySelector('.card_username_text').textContent).toBe('teppo_tekija');
+    expect(article.querySelector('[data-column="comment"]').parentElement.querySelector('.two_line_label')).not.toBeNull();
+    const populated = await render({ ...row, created_by_name: 'Ada', 'owner_name (ln)': '—' });
+    expect(generic(populated)).toEqual([['palvelu_name (ln)', caption], ['created_by_name', 'Ada'],
+        ['owner_name (ln)', '—'], ['comment', '—'], ['contact', '—']]);
+});
