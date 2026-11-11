@@ -14,6 +14,7 @@ import (
 	"strings"
 	"testing"
 
+	backend "easelect/backend/core_components"
 	"easelect/backend/core_components/dbutils"
 	"easelect/backend/core_components/dbutils/queryfixture"
 )
@@ -84,6 +85,9 @@ func callUserFilterbarPreference(t *testing.T, fixture *filterbarPreferenceFixtu
 	t.Helper()
 	db := sql.OpenDB(fixture)
 	defer db.Close()
+	oldReader := backend.DbReaderOnly
+	backend.DbReaderOnly = db
+	defer func() { backend.DbReaderOnly = oldReader }()
 	request := queryfixture.Request(t, method, "/api/user-filterbar-preference?user_id=99&dataset=other", body, userID, "user")
 	lazy := dbutils.NewLazyTx(db)
 	defer lazy.Rollback()

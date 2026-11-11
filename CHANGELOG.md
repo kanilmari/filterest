@@ -22,7 +22,7 @@ Dates are the local (Europe/Helsinki) date on which the version was published.
 
 ## [Unreleased]
 
-- Inferred card and article headings show the title with its inline emphasis. Articles omit empty, unconfigured display fields and sit flush below the toolbar at tablet widths (#1023).
+- Inferred card and article headings show the title with its inline emphasis. Articles omit empty, unconfigured display fields and sit flush below the toolbar at tablet widths. Signed-in users can load their filter-panel preferences with ordinary account permissions (#1023).
 - On phones, a result card’s photo opens the page-sized image-first article. At larger widths it opens the full image-first article. Selecting a card’s description opens the row in its effective article presentation (#1034).
 - Administrators can check stored image dimensions in Media Maintenance and update supported gallery rows in batches. Each batch shows confirmed writes and reasons for skipped rows or galleries (#1035).
 - Repeated request failures share one on-screen notice with an occurrence count until the notice closes (#1037).

@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"net/http"
 
+	backend "easelect/backend/core_components"
 	"easelect/backend/core_components/dbutils"
 	"easelect/backend/core_components/httpresponse"
 )
@@ -61,8 +62,15 @@ func UserFilterbarPreferenceHandler(w http.ResponseWriter, r *http.Request) {
 		httpresponse.RespondWithError(w, 500, "layout unavailable")
 		return
 	}
+	// The request role can manage preferences. The account flag is an internal
+	// read for the one user identified by the authenticated session above.
+	reader := backend.DbReaderOnly
+	if reader == nil {
+		httpresponse.RespondWithError(w, 500, "account unavailable")
+		return
+	}
 	var admin bool
-	err = q.QueryRow(`SELECT COALESCE(admin_access_allowed,false) FROM public.system_users WHERE id=$1`, userID).Scan(&admin)
+	err = reader.QueryRowContext(r.Context(), `SELECT COALESCE(admin_access_allowed,false) FROM public.system_users WHERE id=$1`, userID).Scan(&admin)
 	if err != nil {
 		httpresponse.RespondWithError(w, 500, "account unavailable")
 		return

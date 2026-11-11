@@ -109,8 +109,11 @@ func frontPageDisposableDB(t *testing.T, contexts ...context.Context) *sql.DB {
 		}
 	}
 	oldDB, oldAdmin, oldBasic, oldGuest := backend.Db, backend.DbAdmin, backend.DbBasic, backend.DbGuest
+	oldReader := backend.DbReaderOnly
+	backend.DbReaderOnly = db
 	backend.Db, backend.DbAdmin, backend.DbBasic, backend.DbGuest = db, db, db, db
 	t.Cleanup(func() {
+		backend.DbReaderOnly = oldReader
 		backend.Db, backend.DbAdmin, backend.DbBasic, backend.DbGuest = oldDB, oldAdmin, oldBasic, oldGuest
 	})
 	execFixture(`INSERT INTO public.system_users(id,username,enabled) VALUES(42,'Public reader',true),(73,'Another public name',true);
