@@ -118,8 +118,8 @@ for (const width of [1920, 1440, 1000]) for (const theme of ['light', 'dark'] as
       const parts = page.locator('#app_service_catalog_tab_parts_container');
       const hero = parts.locator('.filterbar-inline-hero');
       await expect(hero).toBeVisible();
-      await expect(parts).toHaveAttribute('data-shared-topbar-visible', 'false');
-      await expect(parts.locator('.dataset-shared-topbar')).toHaveAttribute('aria-hidden', 'true');
+      await expect(parts).toHaveAttribute('data-shared-topbar-visible', probePhase === 'before' ? 'false' : 'true');
+      await expect(parts.locator('.dataset-shared-topbar')).toHaveAttribute('aria-hidden', probePhase === 'before' ? 'true' : 'false');
       await captureHomeProbe(page, info, `${width}-${theme}-${menuOpen ? 'open' : 'closed'}-hero`);
       if (probePhase === 'before') {
         await hero.evaluate(element => {
@@ -142,10 +142,10 @@ for (const width of [1920, 1440, 1000]) for (const theme of ['light', 'dark'] as
         }
         continue;
       }
-      const home = hero.getByTestId('top-nav-home-button');
+      const home = parts.locator('.filterbar-inline-hero__top-row').getByTestId('top-nav-home-button');
       await expect(home).toBeVisible();
       expect(await home.evaluate(el => el === el.parentElement!.firstElementChild)).toBe(true);
-      const dataset = hero.locator('.hero-dataset-tabs__button[data-dataset]:visible').first();
+      const dataset = parts.locator('.hero-dataset-tabs__button[data-dataset]:visible').first();
       await expect(dataset).toBeVisible();
       await expect(home).toHaveCSS('height', '44px');
       await expect(home.locator('.navbar-front-page-icon')).toHaveCSS('width', '24px');
@@ -213,7 +213,7 @@ for (const width of [375, 390, 768, 1920]) for (const theme of ['light', 'dark']
     for (const menuOpen of [false, true]) {
       await openHomeProbeDataset(page, menuOpen);
       const parts = page.locator('#app_service_catalog_tab_parts_container');
-      if (width <= 700) await expect(parts.locator('.filterbar-inline-hero .hero-dataset-tabs')).toBeHidden();
+      if (width <= 700) await expect(parts.locator('.filterbar-inline-hero__top-row .hero-dataset-tabs')).toBeHidden();
       await expect(parts.locator('.top-nav-home-button')).toHaveCount(width > 700 ? 1 : 0);
       if (width <= 700) continue;
       if (width > 700) {

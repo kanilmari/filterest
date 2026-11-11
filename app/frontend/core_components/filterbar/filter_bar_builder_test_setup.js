@@ -187,7 +187,8 @@ vi.mock('../navigation/menu_button/navbar_visibility_handler.js', () => ({
     updateShowMenuButtonPosition: vi.fn(),
 }));
 
-vi.mock('./shared_topbar_builder.js', () => ({
+vi.mock('./shared_topbar_builder.js', async importOriginal => ({
+    ...(await importOriginal()),
     isSharedTopBarHostActive: vi.fn(() => true),
     shouldShowSharedTopBar: vi.fn(() => false),
 }));

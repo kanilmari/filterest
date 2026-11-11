@@ -27,6 +27,8 @@ test.each(['light', 'dark'].flatMap(theme => ['showMenuButton', 'hideMenuButton'
     const button = document.getElementById(id);
     const host = button.parentElement;
     expect(getComputedStyle(button).visibility).toBe('visible');
+    expect(getComputedStyle(button).boxShadow).toBe('none');
+    expect(getComputedStyle(button.firstElementChild).boxShadow).toBe('none');
     button.setAttribute('aria-hidden', 'true'); button.tabIndex = -1;
     for (const opacity of [1, 0.5, 0]) {
         host.style.opacity = String(opacity);

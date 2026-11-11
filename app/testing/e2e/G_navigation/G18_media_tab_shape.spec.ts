@@ -99,13 +99,12 @@ async function expectButtons(page: Page, root: string, media: boolean, measureme
   }
 }
 
-async function expectMenuShapes(page: Page, media: boolean, width: number, measurements: unknown[] = []) {
+async function expectMenuShapes(page: Page, view: 'home' | 'dataset', media: boolean, width: number, measurements: unknown[] = []) {
   await ensureNavbarVisible(page);
   const tabs = page.locator('#navmenu .navtablinks');
   expect(await tabs.count()).toBeGreaterThanOrEqual(2);
-  // The overlay layouts already use rectangles without media; the docked
-  // 1920px proof below checks the historic connector curves as well.
-  const rectangular = media || width < 1850;
+  // Only a docked dataset without presentation media uses connector curves.
+  const rectangular = view === 'home' || media || width < 1850;
   for (const tab of await tabs.all()) {
     await expect(tab).toHaveAttribute('data-tab-presentation', rectangular ? /^button-/ : /^tab-/);
     const paths = tab.locator('.navtab-shape-path');
@@ -139,7 +138,7 @@ for (const width of [1440, 390]) for (const theme of ['light', 'dark'] as const)
         const media = home === 'video' || home === 'image';
         await expect(page.locator('body')).toHaveAttribute('data-view-has-presentation-media', String(media));
         await expectButtons(page, '#front_page_container', media, measurements);
-        await expectMenuShapes(page, media, width, measurements);
+        await expectMenuShapes(page, 'home', media, width, measurements);
       }
       for (const view of ['dataset_media', 'dataset_plain'] as const) {
         await openMediaTabView(page, view);
@@ -149,7 +148,7 @@ for (const width of [1440, 390]) for (const theme of ['light', 'dark'] as const)
         // K529: a phone's dataset view has no top-row buttons: Main hides the hero row and Home is off the bar.
         if (width <= 700) await expect(topRowButtons(page, root)).toHaveCount(0);
         else await expectButtons(page, root, media, measurements);
-        await expectMenuShapes(page, media, width, measurements);
+        await expectMenuShapes(page, 'dataset', media, width, measurements);
       }
       // These in-page switches catch stale flags that cold loads cannot expose.
       policy.home = 'video';
@@ -173,18 +172,19 @@ for (const width of [1440, 390]) for (const theme of ['light', 'dark'] as const)
   });
 }
 
-test('docked side-menu connector follows media and restores its curves while the top row stays rounded', async ({ page, context }) => {
+test('docked Home keeps rectangular side-menu buttons while dataset connectors follow media', async ({ page, context }) => {
   test.setTimeout(90_000);
   const policy = await installMediaTabFixture(page, context, 1920, 'light');
   for (const home of ['video', 'none'] as const) {
     policy.home = home;
     await openMediaTabView(page, home === 'video' ? 'home_video' : 'home');
-    await expectMenuShapes(page, home === 'video', 1920);
+    await expectMenuShapes(page, 'home', home === 'video', 1920);
   }
   await test.step('Media shows a rounded top row and rectangular side-menu tabs on the same page', async () => {
     await openMediaTabView(page, 'dataset_media');
     await expectButtons(page, `#${MEDIA_DATASET}_tab_parts_container`, true, []);
-    await expectMenuShapes(page, true, 1920);
+    await expectMenuShapes(page, 'dataset', true, 1920);
   });
-  await openMediaTabView(page, 'dataset_plain');await expectMenuShapes(page, false, 1920);
+  await openMediaTabView(page, 'dataset_plain');
+  await expectMenuShapes(page, 'dataset', false, 1920);
 });

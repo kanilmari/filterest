@@ -15,6 +15,16 @@
 .hero-dataset-tabs[hidden] { display: none; }
 .hero-dataset-tabs__button[hidden] { display: none; }
 
+/* Keep the full fitting box and move its painted destinations. The Home row
+   stops owning the offset when it moves into the phone scroller. */
+:is(.dataset-shared-topbar[data-topbar-mode="hero"], .front-page > .front-page-top-row) .hero-dataset-tabs--centered {
+    overflow: visible;
+}
+:is(.dataset-shared-topbar[data-topbar-mode="hero"], .front-page > .front-page-top-row) .hero-dataset-tabs--centered > :is(a, button) {
+    translate: var(--dataset-navigation-offset) 0;
+}
+
+
 .hero-dataset-tabs__button,
 .filterbar-inline-hero__actions > button {
     display: inline-flex;

@@ -51,6 +51,7 @@ export function createMobileTopbarSearchController(bar) {
     const lifetime = new AbortController();
     const originalInputs = new WeakMap();
     let article = false;
+    let hero = false;
     let phone = false;
     let active = false;
     let open = false;
@@ -111,19 +112,20 @@ export function createMobileTopbarSearchController(bar) {
         const mode = phone ? 'phone' : buttonMode ? 'button' : 'field';
         if (bar.dataset.topbarSearchMode !== mode) bar.dataset.topbarSearchMode = mode;
         if (bar.dataset.topbarSearchOpen !== String(open)) bar.dataset.topbarSearchOpen = String(open);
-        setPropertyIfChanged(button, 'hidden', !toggled);
-        setPropertyIfChanged(button, 'tabIndex', toggled && active ? 0 : -1);
-        setAttributeIfChanged(button, 'aria-hidden', String(!toggled || !active));
+        setPropertyIfChanged(button, 'hidden', hero || !toggled);
+        setPropertyIfChanged(button, 'tabIndex', !hero && toggled && active ? 0 : -1);
+        setAttributeIfChanged(button, 'aria-hidden', String(hero || !toggled || !active));
         setAttributeIfChanged(button, 'aria-pressed', String(open));
         setAttributeIfChanged(button, 'aria-expanded', String(open));
-        const visible = !toggled || open;
+        const visible = !hero && (!toggled || open);
         setPropertyIfChanged(search, 'hidden', !visible);
         setPropertyIfChanged(search, 'inert', !visible);
         setAttributeIfChanged(search, 'aria-hidden', String(!visible));
         if (!visible && search.contains(document.activeElement)) document.activeElement.blur();
         setPropertyIfChanged(identity, 'hidden', !phone || open);
         setAttributeIfChanged(identity, 'aria-hidden', String(!phone || open));
-        setAttributeIfChanged(title, 'aria-hidden', String(phone || open));
+        setPropertyIfChanged(title, 'hidden', hero);
+        setAttributeIfChanged(title, 'aria-hidden', String(hero || phone || open));
         const icon = phone && open ? '/frontend/icons/general/dataset-search-off-icon.svg' : searchIcon;
         if (renderedIcon !== icon) {
             renderedIcon = icon;
@@ -189,7 +191,8 @@ export function createMobileTopbarSearchController(bar) {
     document.fonts?.ready.then(measure);
     return {
         sync(state) {
-            if (phone !== state.phone || !state.active) open = false;
+            hero = Boolean(state.hero);
+            if (hero || phone !== state.phone || !state.active) open = false;
             phone = state.phone;
             article = Boolean(state.article);
             active = state.active;

@@ -38,6 +38,7 @@ import { resolveDatasetDefaultView } from "../../table_views/dataset_default_vie
 import { getParams, setParams, updateURL, useUrlParams } from "./query_params.js";
 import { updateDatasetAddress, resetDatasetAddressOwnershipForTests } from "./dataset_address_writer.js";
 import { primeDatasetAccessRegistry } from './dataset_access_registry.js';
+import { ensureHistoryEntryId } from './history_entry_state.js';
 
 const DATASET = "travel_deals";
 const ROW_PATH = "/travel_deals/12-sunset-in-lapland";
@@ -182,6 +183,38 @@ describe("dataset address ownership", () => {
         }
     );
 
+    test.each(["card", "table"])("Close after a row change renders the real %s list without stepping onto the previous article", async returnView => {
+        landOn(`${ROW_PATH}?view=article_view&search=harbour`, {
+            bigCard: true, dataset: DATASET, rowId: "12", articleReturnAvailable: false, articleFromRow: true,
+        });
+        setChosenDatasetView(DATASET, "article_view");
+        setUnifiedTableState(DATASET, { articleView: { collapsed: true, expandedId: 12, returnView } });
+        const { wrapper, cardContainer, article } = mountOpenArticle();
+        const articleEntry = ensureHistoryEntryId();
+        const historyLength = history.length;
+        const back = vi.spyOn(history, "back");
+        try {
+            closeRowArticle(wrapper, cardContainer, article, null, DATASET);
+            await settle();
+            expect(back).not.toHaveBeenCalled();
+            await vi.waitFor(() => expect(refreshTableUnifiedMock).toHaveBeenCalledWith(DATASET, expect.objectContaining({ skipUrlParams: true })));
+            expect(getChosenDatasetView(DATASET)).toBe(returnView);
+            expect(readAddressParams()).toEqual({ view: returnView, search: "harbour" });
+            expect(location.pathname).toBe(`/${DATASET}`);
+            expect(getUnifiedTableState(DATASET).articleView.expandedId).toBeNull();
+            // Closing is a new list visit. The last article must remain directly
+            // reachable, including when it came from a bookmark without a list.
+            expect(history.length).toBe(historyLength + 1);
+            const listEntry = history.state.__filterestEntryId;
+            history.back();
+            await vi.waitFor(() => expect(history.state.__filterestEntryId).toBe(articleEntry));
+            expect(location.pathname).toBe(ROW_PATH);
+            history.forward();
+            await vi.waitFor(() => expect(history.state.__filterestEntryId).toBe(listEntry));
+            expect(location.pathname).toBe(`/${DATASET}`);
+        } finally { back.mockRestore(); }
+    });
+
     test("a view the person may not use falls back, and the settled address follows", async () => {
         landOn(`${ROW_PATH}?view=article_view&search=lapland`, {
             bigCard: true, dataset: DATASET, rowId: "12",
@@ -281,4 +314,31 @@ describe("dataset address ownership", () => {
         expect(secondWrote).toBe(true);
         expect(readAddressParams()).toEqual({ view: "card" });
     });
+});
+
+test("settling a closed list preserves its return reference and original identity", async () => {
+    landOn(`/${DATASET}?view=article_view&country=FI`, {
+        bigCard: false, dataset: DATASET, cardReturnOriginEntry: "original-list",
+    });
+    const entry = ensureHistoryEntryId();
+    setChosenDatasetView(DATASET, "card");
+    await updateDatasetAddress({ dataset: DATASET });
+    expect(readAddressParams()).toEqual({ view: "card", country: "FI" });
+    expect(history.state).toMatchObject({ __filterestEntryId: entry, cardReturnOriginEntry: "original-list" });
+});
+
+test("a same-row address repair keeps its switch history until the entry becomes a list", async () => {
+    landOn(`${ROW_PATH}?view=card`, { bigCard: true, dataset: DATASET, rowId: "12", articleFromRow: true });
+    const entry = ensureHistoryEntryId();
+    setChosenDatasetView(DATASET, "article_view");
+    setUnifiedTableState(DATASET, { articleView: { collapsed: true, expandedId: 12 } });
+    await updateDatasetAddress({ dataset: DATASET });
+    expect(readAddressParams().view).toBe("article_view");
+    expect(history.state).toMatchObject({ __filterestEntryId: entry, articleFromRow: true });
+
+    setChosenDatasetView(DATASET, "card");
+    await updateDatasetAddress({ dataset: DATASET });
+    expect(location.pathname).toBe(`/${DATASET}`);
+    expect(history.state.__filterestEntryId).toBe(entry);
+    expect(history.state).not.toHaveProperty("articleFromRow");
 });

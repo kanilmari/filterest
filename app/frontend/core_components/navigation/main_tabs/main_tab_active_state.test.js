@@ -135,6 +135,29 @@ describe("applyMainTabActiveState", () => {
         expect(tabButton.style.getPropertyValue("--navtab-rounded-left-offset")).toBe("56px");
     });
 
+    test("Home uses rectangular side-menu paths immediately, and leaving restores the dataset shape", async () => {
+        const { applyMainTabActiveState, clearMainTabActiveState, refreshMainTabPresentation } = await import("./main_tab_active_state.js");
+        const home = document.createElement("main");
+        home.id = "front_page_container";
+        document.body.append(home);
+        const tab = document.querySelector(".navtablinks");
+        const path = tab.querySelector("path");
+        const nav = document.querySelector(".navtabs");
+        clearMainTabActiveState("front_page");
+        expect(document.body.dataset.viewHasPresentationMedia).toBe("false");
+        expect(tab.dataset.tabPresentation).toBe("button-inactive");
+        expect(path.getAttribute("d").match(/A 0 0/g)).toHaveLength(4);
+        expect(nav.style.right).toBe("0px");
+        refreshMainTabPresentation();
+        expect(tab.dataset.tabPresentation).toBe("button-inactive");
+        home.classList.add("hidden");
+        setChosenDatasetView("app_service_catalog", "card");
+        applyMainTabActiveState("app_service_catalog");
+        while (frameCallbacks.length > 0) runQueuedFrames(5000);
+        expect(tab.dataset.tabPresentation).toBe("tab-active");
+        expect(path.getAttribute("d").match(/A 7 7/g)).toHaveLength(4);
+    });
+
     test("forces a rectangular card tab when authoritative dataset metadata reports media", async () => {
         setChosenDatasetView("app_service_catalog", "card");
         const tabButton = document.querySelector(".navtablinks");

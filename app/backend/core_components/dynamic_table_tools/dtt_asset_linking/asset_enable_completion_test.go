@@ -46,6 +46,8 @@ func (c *assetEnableConn) QueryContext(_ context.Context, q string, args []drive
 		return &legacyAssetEnableRows{columns: n, values: values}
 	}
 	switch {
+	case strings.Contains(q, "SELECT name FROM unnest(ARRAY['card_image_presentation'"):
+		return &legacyAssetEnableRows{columns: 1, values: [][]driver.Value{{"{}"}}}, nil
 	case strings.Contains(q, "SELECT table_uid"):
 		if args[0].Value == "parent" {
 			return rows(1, []driver.Value{int64(10)}), nil

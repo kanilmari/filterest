@@ -7,10 +7,12 @@
 
 import { test, expect, type Page } from '@playwright/test';
 import { login, loadCredentials, type TestCredentials } from '../helpers/auth';
-import { clickFirstVisibleByTestId, navigateToDataset, waitForDataLoaded } from '../helpers/navigation';
+import { closeActiveFilterbarIfOpen, waitForActiveFilterbarLayout } from '../helpers/filterbar';
 
-const DATASET = 'app_service_catalog';
-const DATASET_ADDRESS = '/service_catalog';
+const DATASET = process.env.FILTEREST_E2E_TOPBAR_DATASET || 'app_service_catalog';
+const DATASET_ADDRESS = '/' + (DATASET === 'app_service_catalog' ? 'service_catalog' : encodeURIComponent(DATASET));
+const datasetHost = (page: Page) => page.locator(`[id="${DATASET}_container"]:not(.hidden)`);
+const menuButton = (page: Page) => datasetHost(page).getByTestId('shared-topbar-menu-button');
 const NARROW_WIDTHS = [375, 480, 768, 1024, 1099];
 
 type LayerState = {
@@ -18,55 +20,56 @@ type LayerState = {
   panelVisible: boolean;
   overlayVisible: boolean;
   panelAboveOverlay: boolean;
+  navbarCloserTopmost: boolean;
   filterbarTopmostAtPanelEdge: boolean;
 };
 
 async function prepareHiddenNarrowDrawers(page: Page, width: number): Promise<void> {
   await page.setViewportSize({ width, height: 900 });
-  await page.evaluate((datasetName) => {
-    localStorage.setItem('navVisibleNarrow', 'false');
-    localStorage.setItem(`${datasetName}_filterbar_visible_narrow`, 'false');
-  }, DATASET);
   // A fresh page shows the view its address names and forgets a view seeded
   // before the load (owner decision K139), so the table view comes from the address.
   await page.goto(`${DATASET_ADDRESS}?view=table`, { waitUntil: 'domcontentloaded' });
-  await navigateToDataset(page, DATASET);
-  await waitForDataLoaded(page, DATASET);
+  const host = datasetHost(page);
+  await waitForActiveFilterbarLayout(page, host);
+  await closeActiveFilterbarIfOpen(page, host);
+  await expect(host.locator('.filterbar-panel')).toHaveClass(/filterbar-panel--hidden/);
+  await expect(page.locator('#navbar')).toHaveClass(/collapsed/);
 }
 
 async function openNavbarThenFilterbar(page: Page): Promise<void> {
-  const visibleMenuButton = page
-    .locator('[data-navbar-menu-button="true"]:visible, #showMenuButton:visible')
-    .first();
-  await expect(visibleMenuButton).toBeVisible({ timeout: 5000 });
-  await visibleMenuButton.click();
+  await menuButton(page).click();
   await expect(page.locator('#navbar:not(.collapsed)')).toBeVisible({ timeout: 5000 });
-  await clickFirstVisibleByTestId(page, 'filterbar-toggle');
+  await datasetHost(page).getByTestId('filterbar-toggle').click();
 }
 
 async function readLayerState(page: Page): Promise<LayerState> {
-  return page.evaluate(() => {
+  return datasetHost(page).evaluate(host => {
     const navbar = document.getElementById('navbar');
-    const panel = document.querySelector('.filterbar-panel');
+    const panel = host.querySelector('.filterbar-panel');
     const overlay = document.getElementById('mobileFilterOverlay');
+    const menuClose = navbar?.querySelector('#hideMenuButton');
 
-    if (!(navbar instanceof HTMLElement) || !(panel instanceof HTMLElement) || !(overlay instanceof HTMLElement)) {
+    if (!(navbar instanceof HTMLElement) || !(panel instanceof HTMLElement) || !(overlay instanceof HTMLElement) || !(menuClose instanceof HTMLElement)) {
       throw new Error('Missing navbar, filterbar panel, or mobile overlay.');
     }
 
+    const menuRect = menuClose.getBoundingClientRect();
     const panelRect = panel.getBoundingClientRect();
     const panelStyle = getComputedStyle(panel);
     const overlayStyle = getComputedStyle(overlay);
-    const hitX = Math.min(Math.max(panelRect.left + 24, 1), window.innerWidth - 2);
+    // Both drawers may overlap on a phone. Check the filter panel's exposed right edge.
+    const hitX = Math.min(panelRect.right, window.innerWidth) - 24;
     const hitY = Math.min(Math.max(panelRect.top + 80, 1), window.innerHeight - 2);
-    const topElements = document.elementsFromPoint(hitX, hitY);
+    const hit = document.elementFromPoint(hitX, hitY);
 
     return {
       navbarCollapsed: navbar.classList.contains('collapsed'),
       panelVisible: !panel.classList.contains('filterbar-panel--hidden'),
       overlayVisible: overlay.classList.contains('mfo-overlay--visible'),
       panelAboveOverlay: Number(panelStyle.zIndex) > Number(overlayStyle.zIndex),
-      filterbarTopmostAtPanelEdge: topElements.some((element) => panel.contains(element)),
+      navbarCloserTopmost: menuRect.width > 0 && menuRect.height > 0 && menuClose.contains(
+        document.elementFromPoint(menuRect.left + menuRect.width / 2, menuRect.top + menuRect.height / 2)),
+      filterbarTopmostAtPanelEdge: panel.contains(hit),
     };
   });
 }
@@ -80,9 +83,13 @@ test.describe('E8 — Filterbar and Navbar Layering', () => {
 
   test.beforeEach(async ({ page }) => {
     await login(page, credentials);
+    await page.addInitScript(dataset => {
+      localStorage.setItem('navVisibleNarrow', 'false');
+      localStorage.setItem(`${dataset}_filterbar_visible`, 'false');
+    }, DATASET);
   });
 
-  test('narrow filterbar opens above the backdrop and closes the open navbar across breakpoints', async ({ page }, testInfo) => {
+  test('narrow filterbar opens above its backdrop and toggles independently of the navbar across breakpoints', async ({ page }, testInfo) => {
     test.skip(
       testInfo.project.metadata?.screenWidth !== 'desktop',
       'This test drives its own viewport sweep and only needs one project.',
@@ -93,14 +100,16 @@ test.describe('E8 — Filterbar and Navbar Layering', () => {
     for (const width of NARROW_WIDTHS) {
       await prepareHiddenNarrowDrawers(page, width);
       await openNavbarThenFilterbar(page);
-      await page.waitForTimeout(850);
-
-      const layerState = await readLayerState(page);
-      expect(layerState.navbarCollapsed, `navbar should close at ${width}px`).toBe(true);
-      expect(layerState.panelVisible, `filterbar should be open at ${width}px`).toBe(true);
-      expect(layerState.overlayVisible, `overlay should be visible at ${width}px`).toBe(true);
-      expect(layerState.panelAboveOverlay, `filterbar should be above overlay at ${width}px`).toBe(true);
-      expect(layerState.filterbarTopmostAtPanelEdge, `filterbar should be reachable at ${width}px`).toBe(true);
+      const navbar = page.locator('#navbar');
+      const panel = datasetHost(page).locator('.filterbar-panel');
+      await expect.poll(() => readLayerState(page), { message: `both drawers and filter hit target at ${width}px` })
+        .toEqual({
+          navbarCollapsed: false, panelVisible: true, overlayVisible: true, panelAboveOverlay: true,
+          filterbarTopmostAtPanelEdge: true, navbarCloserTopmost: true,
+        });
+      await panel.locator('.hide_filter_bar_button').click();
+      await expect(panel).toHaveClass(/filterbar-panel--hidden/);
+      await expect(navbar).not.toHaveClass(/collapsed/);
     }
   });
 
@@ -111,15 +120,12 @@ test.describe('E8 — Filterbar and Navbar Layering', () => {
     );
 
     await prepareHiddenNarrowDrawers(page, 375);
-    const visibleMenuButton = page
-      .locator('[data-navbar-menu-button="true"]:visible, #showMenuButton:visible')
-      .first();
-    await expect(visibleMenuButton).toBeVisible({ timeout: 5000 });
+    const visibleMenuButton = menuButton(page);
     await visibleMenuButton.click();
     await expect(page.locator('#navbar:not(.collapsed)')).toBeVisible({ timeout: 5000 });
     await page.waitForTimeout(850);
 
-    await page.locator('#hideMenuButton').click();
+    await visibleMenuButton.click();
     await page.waitForTimeout(100);
 
     const transitionState = await page.locator('#navbar').evaluate((navbar) => {
@@ -145,10 +151,7 @@ test.describe('E8 — Filterbar and Navbar Layering', () => {
     );
 
     await prepareHiddenNarrowDrawers(page, 375);
-    const visibleMenuButton = page
-      .locator('[data-navbar-menu-button="true"]:visible, #showMenuButton:visible')
-      .first();
-    await expect(visibleMenuButton).toBeVisible({ timeout: 5000 });
+    const visibleMenuButton = menuButton(page);
     await visibleMenuButton.click();
 
     const navbar = page.locator('#navbar');

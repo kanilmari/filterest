@@ -306,3 +306,51 @@ test.each([
     expect(history.state).toEqual({ [HISTORY_ENTRY_ID]: "same-entry", otherOwner: true });
     expect(history.length).toBe(length);
 });
+
+test("a Close visit retains the original paged list across Back, Forward and another article", () => {
+    const host = fixture();
+    const row = host.querySelector(".card");
+    const selection = document.createElement("input");
+    selection.type = "checkbox"; selection.checked = true; row.append(selection);
+    const token = retained.captureCardArticleReturn("catalog", adapter);
+    const origin = openArticle(host);
+    writeHistoryEntry("/catalog/4?view=article_view", {
+        bigCard: true, dataset: "catalog", rowId: "4", articleOriginEntry: origin[HISTORY_ENTRY_ID],
+    });
+    writeHistoryEntry("/catalog?view=card", {
+        bigCard: false, dataset: "catalog", cardReturnOriginEntry: origin[HISTORY_ENTRY_ID],
+    });
+    const closedEntry = { ...history.state };
+    expect(retained.restoreCardArticleReturn("catalog")).toBe(true);
+    expect(host.querySelector(".card")).toBe(row);
+    expect(selection.checked).toBe(true);
+    expect(host.scrollTop).toBe(4600);
+    expect(getUnifiedTableState("catalog").offset).toBe(80);
+    expect(mocks.resume).toHaveBeenCalledWith("catalog", expect.objectContaining({ lastRowCount: 100 }));
+
+    // Opening from the new Close entry must keep the same origin, so earlier
+    // article entries and the original list still refer to this retained DOM.
+    expect(retained.captureCardArticleReturn("catalog", adapter)).toBe(token);
+    expect(retained.getCardArticleOriginEntry("catalog")).toBe(origin[HISTORY_ENTRY_ID]);
+    host.style.display = "none"; host.scrollTop = 0;
+    setChosenDatasetView("catalog", "article_view");
+    history.replaceState(origin, "", "/catalog?view=card");
+    expect(retained.restoreCardArticleReturn("catalog")).toBe(true);
+    history.replaceState(closedEntry, "", "/catalog?view=card");
+    expect(retained.restoreCardArticleReturn("catalog")).toBe(true);
+    expect(host.querySelector(".card")).toBe(row);
+    expect(selection.checked).toBe(true);
+});
+
+test("a Close reference cannot restore another dataset or a replaced query", () => {
+    const host = fixture(); retained.captureCardArticleReturn("catalog", adapter);
+    const origin = openArticle(host);
+    writeHistoryEntry("/catalog?view=card", {
+        bigCard: false, dataset: "other", cardReturnOriginEntry: origin[HISTORY_ENTRY_ID],
+    });
+    expect(retained.restoreCardArticleReturn("catalog")).toBe(false);
+    writeHistoryEntry("/catalog?view=card&category=changed", {
+        bigCard: false, dataset: "catalog", cardReturnOriginEntry: origin[HISTORY_ENTRY_ID],
+    });
+    expect(retained.restoreCardArticleReturn("catalog")).toBe(false);
+});

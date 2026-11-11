@@ -257,15 +257,15 @@ func TestRemoveColumnsIgnoresLangCleanupFailure(t *testing.T) {
 			err: errors.New("cleanup boom"),
 		},
 	}, []queuedDeleteExec{
-		{}, // ALTER TABLE DROP COLUMN
+		{}, {}, // ALTER TABLE DROP COLUMN
 	})
 
 	err := RemoveColumns(tx, "users", []string{"title"})
 	if err != nil {
 		t.Fatalf("RemoveColumns returned error: %v", err)
 	}
-	if len(state.execCalls) != 1 || state.execCalls[0] != "ALTER TABLE users DROP COLUMN title" {
-		t.Fatalf("exec calls = %#v, want only drop statement", state.execCalls)
+	if len(state.execCalls) != 2 || state.execCalls[0] != "ALTER TABLE users DROP COLUMN title" || !strings.Contains(state.execCalls[1], "DELETE FROM system_column_details") {
+		t.Fatalf("exec calls = %#v, want drop and field metadata cleanup", state.execCalls)
 	}
 }
 
@@ -280,15 +280,15 @@ func TestRemoveColumnsSuccessWithNoLangSources(t *testing.T) {
 			rows: nil,
 		},
 	}, []queuedDeleteExec{
-		{},
+		{}, {},
 	})
 
 	err := RemoveColumns(tx, "users", []string{"title"})
 	if err != nil {
 		t.Fatalf("RemoveColumns returned error: %v", err)
 	}
-	if len(state.execCalls) != 1 || state.execCalls[0] != "ALTER TABLE users DROP COLUMN title" {
-		t.Fatalf("exec calls = %#v, want only drop statement", state.execCalls)
+	if len(state.execCalls) != 2 || state.execCalls[0] != "ALTER TABLE users DROP COLUMN title" || !strings.Contains(state.execCalls[1], "DELETE FROM system_column_details") {
+		t.Fatalf("exec calls = %#v, want drop and field metadata cleanup", state.execCalls)
 	}
 }
 

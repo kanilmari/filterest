@@ -6,6 +6,11 @@ import { expect, test, type Page } from '@playwright/test';
 import { revealActiveFilterbarSection, waitForActiveFilterbarLayout } from '../helpers/filterbar';
 import { assertPhoneHeroSpacing } from '../helpers/phone-hero-spacing';
 import { installHomePolicy } from '../helpers/home-policy-fixture';
+import { buildTempDatasetName, createTempDataset, cleanupDatasetViaRequest } from '../helpers/temp-dataset';
+import { installMediaTabFixture, MEDIA_DATASET } from '../helpers/media-tab-fixture';
+
+// Keep the real scrollbar thumb available to the native pointer proof.
+test.use({ launchOptions: { ignoreDefaultArgs: ['--hide-scrollbars'] } });
 
 const DATASET = process.env.FILTEREST_E2E_TOPBAR_DATASET || '';
 const LANGUAGES = ['fi', 'en', 'zh-CN', 'zh-TW', 'zh-HK'];
@@ -191,7 +196,7 @@ test.describe('measured tablet and desktop navigation', () => {
     await page.setViewportSize({ width: 1440, height: 900 });
     await page.goto(`/${DATASET}?view=card`);
     await waitForActiveFilterbarLayout(page);
-    const tabs = page.locator(`.filterbar-inline-hero[data-filterbar-inline-hero-for="${DATASET}"] .hero-dataset-tabs`);
+    const tabs = page.locator(`[id="${DATASET}_tab_parts_container"] .filterbar-inline-hero__top-row .hero-dataset-tabs`);
     await expect.poll(() => tabs.locator(':scope > button').count()).toBeGreaterThan(1);
     await expect(tabs).toBeVisible();
     const home = tabs.locator(':scope > .top-nav-home-button');
@@ -269,4 +274,273 @@ test('#901b: authorized gear and palette open from style; no top-row editing con
   await page.keyboard.press('Escape');
   await expect(page.getByTestId('dataset-cover-test-palette')).toBeHidden();
   await expect(page.locator('.filterbar-inline-hero__top-row [data-testid="dataset-header-config-hero-button"], .filterbar-inline-hero__top-row [data-testid="dataset-cover-test-palette-button"]')).toHaveCount(0);
+});
+
+// Standard matrix runs own their long scroll fixture. A configured preview is read-only.
+const nativeScroll = test.extend<{ longDataset: string }>({
+  longDataset: async ({ page }, use, info) => {
+    if (DATASET || info.project.metadata.screenWidth !== 'desktop' || info.project.metadata.cardView === 'big') {
+      await use(DATASET); return;
+    }
+    const dataset = buildTempDatasetName('e2e_toolbar_scroll');
+    await page.goto('/');
+    try {
+      await createTempDataset(page, { datasetName: dataset, columns: { id: 'SERIAL', title: 'TEXT' },
+        seedRows: Array.from({ length: 32 }, (_, index) => ({ title: `Service ${index + 1}` })) });
+      await use(dataset);
+    } finally { await cleanupDatasetViaRequest(page.request, dataset); }
+  },
+});
+
+test.describe('dataset toolbar scroll boundary', () => {
+
+  nativeScroll('#999: the original hero row and listing tools share a stable bar during a slow thumb drag', async ({ page, longDataset }, info) => {
+    test.skip(info.project.metadata.screenWidth !== 'desktop' || info.project.metadata.cardView === 'big', 'Native desktop scrollbar.');
+    await page.addInitScript(dataset => {
+      localStorage.setItem('navVisibleNarrow', 'false');
+      localStorage.setItem('navVisibleWide', 'false');
+      localStorage.setItem(`${dataset}_filterbar_visible`, 'false');
+    }, longDataset);
+    await page.goto(`/${longDataset}?view=card`);
+    const parts = page.locator(`[id="${longDataset}_tab_parts_container"]`);
+    const hero = parts.locator('.filterbar-inline-hero');
+    const owner = hero.locator('xpath=parent::*[contains(@class, "scrollable_content")]');
+    const bar = parts.locator('.dataset-shared-topbar');
+    await expect(hero.locator('.dataset-search-input')).toBeVisible();
+    await expect(bar).toHaveAttribute('data-topbar-mode', 'hero');
+    const row = bar.locator('.filterbar-inline-hero__top-row');
+    await expect(row.locator('.hero-dataset-tabs')).toBeVisible();
+    await expect(bar.locator('.dataset-search-input')).toBeHidden();
+    const original = await row.elementHandle();
+    const sample = () => owner.evaluate(scroller => {
+      const host = scroller.closest('.tab_parts_container')!;
+      const bar = host.querySelector<HTMLElement>('.dataset-shared-topbar')!;
+      const rect = scroller.getBoundingClientRect();
+      const hero = scroller.querySelector('.filterbar-inline-hero')!.getBoundingClientRect();
+      return { scroll: scroller.scrollTop, client: scroller.clientHeight, total: scroller.scrollHeight,
+        top: rect.top, height: rect.height, right: rect.right, gutter: (scroller as HTMLElement).offsetWidth - scroller.clientWidth,
+        threshold: hero.bottom - rect.top + scroller.scrollTop, mode: bar.dataset.topbarMode, barHeight: bar.getBoundingClientRect().height };
+    });
+    // Wait for asynchronous cards and fonts before recording the actual scroll range.
+    await page.evaluate(() => document.fonts.ready);
+    await expect.poll(async () => {
+      const first = await sample();
+      await page.waitForTimeout(320);
+      const next = await sample();
+      return first.total === next.total && next.threshold + 100 < next.total - next.client;
+    }).toBe(true);
+    const initial = await sample();
+    expect(initial.gutter, 'the native thumb must be hit-testable').toBeGreaterThan(0);
+    const thumb = Math.max(24, initial.client * initial.client / initial.total);
+    const travel = initial.client - thumb;
+    const x = Math.floor(initial.right - initial.gutter / 2);
+    const y = initial.top + thumb / 2;
+    const end = y + (initial.threshold + 95) * travel / (initial.total - initial.client);
+    await page.mouse.move(x, y);
+    await page.mouse.down();
+    const traces: Array<Awaited<ReturnType<typeof sample>>[]> = [];
+    try {
+      for (const [from, to] of [[y, end], [end, y]]) {
+        const trace = [await sample()];
+        const steps = Math.max(30, Math.ceil(Math.abs(to - from)));
+        for (let step = 1; step <= steps; step++) {
+          await page.mouse.move(x, from + (to - from) * step / steps);
+          await page.waitForTimeout(16);
+          trace.push(await sample());
+        }
+        await page.waitForTimeout(320);
+        trace.push(await sample());
+        traces.push(trace);
+      }
+    } finally { await page.mouse.up(); }
+    await info.attach('native scrollbar traces', { body: JSON.stringify(traces), contentType: 'application/json' });
+    const modes = traces.map(trace => trace.map(s => s.mode).filter((mode, i, values) => !i || mode !== values[i - 1]));
+    expect(modes).toEqual([['hero', 'content'], ['content', 'hero']]);
+    for (const trace of traces) {
+      expect(Math.abs(trace[0].scroll - trace.at(-1)!.scroll)).toBeGreaterThan(100);
+      for (const s of trace) {
+        expect([s.client, s.total, s.top, s.height, s.barHeight]).toEqual(
+          [initial.client, initial.total, initial.top, initial.height, initial.barHeight]);
+      }
+    }
+    expect(await original!.evaluate(node => node === document.querySelector('.dataset-shared-topbar .filterbar-inline-hero__top-row'))).toBe(true);
+    await original!.dispose();
+    await expect(bar.getByTestId('shared-topbar-menu-button')).toBeVisible();
+    await expect(bar.getByTestId('filterbar-toggle')).toBeVisible();
+    await expect(row.locator('.hero-dataset-tabs')).toBeVisible();
+  });
+});
+
+test('#999: a moved dataset tab opens by keyboard and pointer, and Back restores its active tab', async ({ page }, info) => {
+  const dataset = DATASET || MEDIA_DATASET;
+  test.skip(info.project.metadata.screenWidth !== 'desktop' || info.project.metadata.cardView === 'big', 'Measured horizontal tabs.');
+  if (!DATASET) await installMediaTabFixture(page, page.context(), 1440, 'light');
+  await page.addInitScript(dataset => {
+    localStorage.setItem('navVisibleNarrow', 'false');
+    localStorage.setItem(`${dataset}_filterbar_visible`, 'false');
+  }, dataset);
+  await page.goto(`/${dataset}?view=card`);
+  const live = page.locator(`[id="${dataset}_tab_parts_container"] .dataset-shared-topbar[data-topbar-mode="hero"]`);
+  const tabs = live.locator('.filterbar-inline-hero__top-row .hero-dataset-tabs');
+  const start = tabs.locator('button[data-dataset][aria-current="page"]');
+  await expect(start).toHaveAttribute('data-dataset', dataset);
+  const target = tabs.locator('button[data-dataset]:not([aria-current="page"]):visible').first();
+  await expect(target).toBeVisible();
+  const other = await target.getAttribute('data-dataset');
+  expect(other).toMatch(/^[a-z][a-z0-9_]*$/);
+  const initialURL = page.url();
+  const reachableCurrent = () => page.locator('.hero-dataset-tabs button[aria-current="page"]').evaluateAll(buttons =>
+    buttons.filter(button => {
+      const r = button.getBoundingClientRect();
+      return r.width > 0 && r.height > 0 && button.contains(document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2));
+    }).map(button => (button as HTMLElement).dataset.dataset));
+  await expect.poll(reachableCurrent).toEqual([dataset]);
+  for (const input of ['keyboard', 'pointer']) {
+    if (input === 'keyboard') { await target.focus(); await target.press('Enter'); }
+    else await target.click();
+    await expect(page).not.toHaveURL(initialURL);
+    await expect.poll(reachableCurrent).toEqual([other]);
+    await page.goBack();
+    await expect(page).toHaveURL(initialURL);
+    await expect(start).toHaveAttribute('data-dataset', dataset);
+    await expect.poll(reachableCurrent).toEqual([dataset]);
+  }
+});
+
+test('#999: exactly one reachable menu and filter control in all panel combinations', async ({ page }, info) => {
+  const dataset = DATASET || MEDIA_DATASET;
+  test.skip(info.project.metadata.cardView === 'big', 'Panel ownership is independent of card presentation.');
+  await page.addInitScript(dataset => {
+    localStorage.setItem('navVisibleNarrow', 'false');
+    localStorage.setItem('navVisibleWide', 'false');
+    localStorage.setItem(`${dataset}_filterbar_visible`, 'false');
+  }, dataset);
+  await page.goto(`/${dataset}?view=card`);
+  const parts = page.locator(`[id="${dataset}_tab_parts_container"]`);
+  const bar = parts.locator('.dataset-shared-topbar');
+  const menu = '#showMenuButton, #hideMenuButton, [data-testid="shared-topbar-menu-button"]';
+  const filter = '[data-testid="filterbar-toggle"], .hide_filter_bar_button';
+  let step = 0;
+  for (const [navOpen, filtersOpen, next] of [
+    [false, false, 'menu'], [true, false, 'filter'], [true, true, 'menu'],
+    [false, true, 'filter'], [false, false, 'filter'], [false, true, 'menu'],
+    [true, true, 'filter'], [true, false, 'menu'], [false, false, null],
+  ] as const) {
+    const inBar = !(navOpen && filtersOpen);
+    await expect(bar).toHaveAttribute('aria-hidden', String(!inBar));
+    const targets = [];
+    for (const [selector, open] of [[menu, navOpen], [filter, filtersOpen]] as const) {
+      const visible = page.locator(selector).filter({ visible: true });
+      await expect(visible).toHaveCount(1);
+      await expect(visible).toHaveAttribute('aria-expanded', String(open));
+      await expect(visible).toHaveAttribute('aria-hidden', 'false');
+      await expect(visible).toHaveAttribute('tabindex', '0');
+      await expect.poll(() => visible.evaluate((node, inside) => {
+        const r = node.getBoundingClientRect();
+        const hit = document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2);
+        return node.contains(hit) && !node.closest('[inert]') && Boolean(node.closest('.dataset-shared-topbar')) === inside;
+      }, inBar)).toBe(true);
+      targets.push(visible);
+    }
+    if (next) {
+      const target = targets[next === 'menu' ? 0 : 1];
+      if (step++ < 4) await target.click(); else await target.press('Enter');
+    }
+  }
+});
+
+test('#1017: dataset navigation centers on the toolbar and clears either limiting edge', async ({ page }, info) => {
+  test.skip(info.project.metadata.screenWidth !== 'desktop' || info.project.metadata.cardView === 'big', 'Measured horizontal dataset navigation.');
+  const dataset = DATASET || MEDIA_DATASET;
+  if (!DATASET) await installMediaTabFixture(page, page.context(), 1440, 'light');
+  await page.addInitScript(name => {
+    localStorage.setItem('navVisibleNarrow', 'false');
+    localStorage.setItem('navVisibleWide', 'false');
+    localStorage.setItem(`${name}_filterbar_visible`, 'false');
+  }, dataset);
+  await page.goto(`/${dataset}?view=card`);
+  const inner = page.locator(`[id="${dataset}_tab_parts_container"] .dataset-shared-topbar[data-topbar-mode="hero"] .dataset-shared-topbar__inner`);
+  const tabs = inner.locator('.hero-dataset-tabs');
+  await expect(tabs.locator('button[aria-current="page"]')).toBeVisible();
+  await page.evaluate(() => document.fonts.ready);
+  const measure = () => inner.evaluate(bar => {
+    const box = bar.getBoundingClientRect();
+    const left = bar.querySelector('.dataset-shared-topbar__slot--start')!.getBoundingClientRect();
+    const right = bar.querySelector('.dataset-shared-topbar__slot--end')!.getBoundingClientRect();
+    const destinations = [...bar.querySelectorAll('.hero-dataset-tabs > :is(a,button)')];
+    const rects = destinations.map(item => item.getBoundingClientRect()).filter(rect => rect.width > 0);
+    const first = Math.min(...rects.map(rect => rect.left));
+    const last = Math.max(...rects.map(rect => rect.right));
+    const midpoint = (box.left + box.right) / 2;
+    const width = last - first;
+    return { offset: (first + last) / 2 - midpoint, leftGap: first - left.right,
+      rightGap: right.left - last, halfSpace: (box.width - width - 40) / 2,
+      visible: rects.length, total: destinations.length };
+  });
+  const original = await measure();
+  expect(original.total).toBeGreaterThan(1);
+  expect(original.visible).toBe(original.total);
+  // Make one real edge group wider without changing the viewport or writing site preferences.
+  const setEdges = (left: number, right: number) => inner.evaluate((bar, widths) => {
+    for (const [index, slot] of ['start', 'end'].entries()) {
+      bar.querySelector<HTMLElement>(`.dataset-shared-topbar__slot--${slot}`)!.style.minWidth =
+        widths[index] ? `${widths[index]}px` : '';
+    }
+  }, [left, right]);
+  const wide = original.halfSpace + 40;
+  for (const [label, left, right, expected] of [
+    ['roomy asymmetric edges', original.halfSpace - 40, 0, 0],
+    ['left edge limits', wide, 0, 40],
+    ['right edge limits', 0, wide, -40],
+    ['room restored', 0, 0, 0],
+  ] as const) {
+    await test.step(label, async () => {
+      await setEdges(left, right);
+      await expect.poll(async () => Math.abs((await measure()).offset - expected)).toBeLessThan(1);
+      const position = await measure();
+      expect(position.visible).toBe(original.total);
+      expect(position.leftGap).toBeGreaterThanOrEqual(19);
+      expect(position.rightGap).toBeGreaterThanOrEqual(19);
+      if (expected > 0) expect(Math.abs(position.leftGap - 20)).toBeLessThan(1);
+      if (expected < 0) expect(Math.abs(position.rightGap - 20)).toBeLessThan(1);
+    });
+  }
+});
+
+nativeScroll('#1017: cards and the article reading column follow the toolbar center', async ({ page, longDataset }, info) => {
+  test.skip(info.project.metadata.screenWidth !== 'desktop' || info.project.metadata.cardView === 'big', 'Single-column and two-column reading layouts.');
+  await page.addInitScript(name => {
+    localStorage.setItem('navVisibleNarrow', 'false');
+    localStorage.setItem('navVisibleWide', 'false');
+    localStorage.setItem(`${name}_filterbar_visible`, 'false');
+  }, longDataset);
+  await page.setViewportSize({ width: 1098, height: 850 });
+  await page.goto(`/${longDataset}?view=card`);
+  const parts = page.locator(`[id="${longDataset}_tab_parts_container"]`);
+  const cards = parts.locator('.card_view_wrapper:not(.big-card-open) .card_container .card[data-id]');
+  await expect(cards.first()).toBeVisible();
+  const center = () => parts.locator('.dataset-shared-topbar').evaluate(el => {
+    const { left, right } = el.getBoundingClientRect(); return (left + right) / 2;
+  });
+  await expect.poll(async () => Math.abs(await cards.evaluateAll(nodes => {
+    const cards = nodes.map(el => el.getBoundingClientRect());
+    const row = cards.filter(rect => rect.width > 0 && Math.abs(rect.top - cards[0].top) < 1);
+    return (Math.min(...row.map(rect => rect.left)) + Math.max(...row.map(rect => rect.right))) / 2;
+  }) - await center())).toBeLessThan(1);
+  const row = await cards.first().getAttribute('data-id');
+  expect(row).toMatch(/^\d+$/);
+  await page.goto(`/${longDataset}/${row}?view=article_view`);
+  const article = parts.locator('.active_row_article');
+  await expect(article.locator('.big_card_header_value')).toBeVisible();
+  const description = article.locator('.big_description_value').first();
+  const text = await description.count() ? description : article.locator('.big_card_header');
+  for (const width of [1098, 2048]) {
+    await page.setViewportSize({ width, height: 850 });
+    const selector = parts.locator('.card_view_wrapper.big-card-open .card_sidebar_panel');
+    if (width === 2048) await expect(selector).toBeVisible();
+    else await expect(selector).toBeHidden();
+    await expect.poll(async () => Math.abs(await text.evaluate(el => {
+      const { left, right } = el.getBoundingClientRect(); return (left + right) / 2;
+    }) - await center())).toBeLessThan(1);
+  }
 });

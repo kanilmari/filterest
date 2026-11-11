@@ -66,15 +66,27 @@ func TestAssetLinkingExistingPlainRelationSeedsRightsOncePostgres(t *testing.T) 
 	// Both the physical child and plain relation exist before asset linking.
 	child := f.create("existing_asset_hook_assets", `,{"name":"existing_asset_hook_id","data_type":"INTEGER"},{"name":"filename","data_type":"TEXT"},{"name":"asset_kind","data_type":"TEXT"}`)
 	FixtureExec(t, f.owner, `INSERT INTO system_foreign_key_relations_1_m(source_table_uid,target_table_uid,source_column_name,target_column_name) VALUES($1,$2,'existing_asset_hook_id','id')`, child, parent)
+	FixtureExec(t, f.owner, `UPDATE system_column_details SET co_number=900 WHERE table_uid=$1 AND column_name='filename'`, child)
 	f.right("existing_asset_hook", "/api/add-row-multipart")
 	id := f.relationID("existing_asset_hook_assets")
 	f.request(assets.EnableAttachmentLinkingHandler, `{"parent_table":"existing_asset_hook"}`, 201)
+	for name, order := range map[string]int{"filename": 900, "card_image_presentation": 901, "card_image_focal_x": 902, "card_image_focal_y": 903} {
+		assertFieldOrder(t, f.owner, child, name, order)
+	}
+	var hidden int
+	if err := f.owner.QueryRow(`SELECT count(*) FROM system_column_details WHERE table_uid=$1
+        AND column_name IN ('card_image_presentation','card_image_focal_x','card_image_focal_y')
+        AND hide_everywhere AND hide_in_filter_panel AND NOT insertable AND card_element='hidden'`, child).Scan(&hidden); err != nil || hidden != 3 {
+		t.Fatalf("hidden image storage fields=%d, want 3: %v", hidden, err)
+	}
+	FixtureExec(t, f.owner, `UPDATE system_column_details SET co_number=-9 WHERE table_uid=$1 AND column_name='card_image_presentation'`, child)
 	if got := f.relationID("existing_asset_hook_assets"); got != id {
 		t.Fatal("existing relation replaced", got, id)
 	}
 	f.privilege("existing_asset_hook_assets", "", "INSERT", true)
 	FixtureExec(t, f.owner, `DELETE FROM system_group_table_func_rights WHERE target_table_uid=$1`, child)
 	f.request(assets.EnableAttachmentLinkingHandler, `{"parent_table":"existing_asset_hook"}`, 200)
+	assertFieldOrder(t, f.owner, child, "card_image_presentation", -9)
 	var count int
 	if err := f.owner.QueryRow(`SELECT count(*) FROM system_group_table_func_rights WHERE target_table_uid=$1`, child).Scan(&count); err != nil || count != 0 {
 		t.Fatal("repeat linking seeded again", count, err)

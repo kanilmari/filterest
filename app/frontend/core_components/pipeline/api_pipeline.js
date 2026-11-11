@@ -4,6 +4,7 @@
 // Exists to centralise cross-cutting request behavior instead of scattering it across callers.
 
 import { createPipeline, createStage } from './frontend_pipeline.js';
+import { readDatasetCatalogue } from './dataset_catalogue_transport.js';
 import { requestLoginRedirect } from '../auth/login_redirect_handler.js';
 import { showAccessDeniedToast } from '../../reusable_components/notifications/toast_notification_printer.js';
 import {
@@ -399,6 +400,13 @@ async function fingerprintStage(_ctx) {
  * executeStage — performs the actual fetch call and stores the Response.
  */
 async function executeStage(ctx) {
+    if (ctx.routeName === 'fetchContentTables' && ctx.fetchOptions.method === 'GET'
+        && !ctx.urlParams && !Object.keys(ctx.headers || {}).length) {
+        ctx.response = await readDatasetCatalogue(signal => fetchReportingNetworkFailure({
+            ...ctx, fetchOptions: markCallerOwnsFailureNotice({ ...ctx.fetchOptions, signal }),
+        }), ctx.signal);
+        return;
+    }
     ctx.response = await fetchReportingNetworkFailure(ctx);
 }
 

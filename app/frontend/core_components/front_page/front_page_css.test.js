@@ -237,7 +237,7 @@ test('text has theme surfaces and background sizing follows width, never OS them
 });
 
 
-test('only Home content scrolls, with a fixed sibling background and no structural top-row border', () => {
+test('only Home content scrolls, with the background fixed and the base row available to phone layout', () => {
     const scroller = css.match(/\.front-page-scroller\s*\{([^}]+)\}/)?.[1];
     const row = css.match(/\.front-page-top-row\s*\{([^}]+)\}/)?.[1];
     expect(scroller).toContain('overflow: hidden auto');
@@ -253,12 +253,15 @@ test('only Home content scrolls, with a fixed sibling background and no structur
     expect(css).not.toContain('padding-top: calc(12px + 44px');
 });
 
-test('Home alone paints its 2px inset edge in both themes without changing row layout', () => {
+test('Home and the menu share a bordered control-row height, leaving other hero rows alone', () => {
     const root = postcss.parse(css);
     const edge = root.nodes.find(rule => rule.selector === '.front-page > .front-page-top-row');
     const declarations = Object.fromEntries(edge.nodes.filter(node => node.type === 'decl').map(node => [node.prop, node.value]));
-    expect(declarations['box-shadow']).toBe('inset 0 -2px 0 var(--border_color)');
-    for (const property of ['border-bottom', 'height', 'box-sizing', 'min-height']) expect(declarations).not.toHaveProperty(property);
+    const menuRow = postcss.parse(navbar).nodes.find(rule => rule.selector === '.top-button-bar');
+    const controlHeight = menuRow.nodes.find(node => node.prop === 'height').value;
+    expect(declarations['min-height']).toBe(controlHeight);
+    expect(declarations['box-sizing']).toBe('border-box');
+    expect(declarations['border-bottom']).toBe('2px solid var(--border_color)');
     const style = document.createElement('style');
     style.textContent = css;
     const fixture = document.createElement('div');
@@ -270,9 +273,9 @@ test('Home alone paints its 2px inset edge in both themes without changing row l
         for (const theme of ['light', 'dark']) {
             document.body.className = `${theme}-mode`;
             const row = getComputedStyle(fixture.querySelector('.front-page-top-row'));
-            expect(row.boxShadow).toBe('inset 0 -2px 0 var(--border_color)');
+            expect(row.boxShadow).toBe('none');
             expect(row.padding).toBe('12px');
-            expect(row.borderBottomWidth).toBe('0px');
+            expect(row.boxSizing).toBe('border-box');
             expect(getComputedStyle(fixture.lastElementChild).boxShadow).not.toContain('inset');
         }
     } finally { document.body.className = original; fixture.remove(); style.remove(); }

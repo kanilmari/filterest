@@ -105,7 +105,7 @@ func TestCreatedDatasetKeepsItsColumnListOrderPostgres(t *testing.T) {
 	}
 
 	// PostgreSQL numbers the columns in creation order (attnum), and the
-	// metadata sync copies that number to co_number.
+	// new fields receive their initial order from that sequence.
 	rows, err := db.Query(`
 		SELECT a.attname, a.attnum, cd.co_number, COALESCE(cd.card_element, ''), cd.is_multilingual,
 		       COALESCE(cd.must_be_true_unless_own, false), cd.sco_number, COALESCE(cd.hide_in_filter_panel, false)

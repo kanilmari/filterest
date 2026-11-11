@@ -131,13 +131,20 @@ function readValidAddressHash() {
  * `writeHistoryEntry` clears them before it merges in whatever it is given.
  */
 function buildSettledHistoryState(dataset, openRowId) {
-    if (!openRowId) {
-        return { bigCard: false, dataset };
-    }
     const currentState = history.state || {};
+    if (!openRowId) {
+        const settled = { bigCard: false, dataset };
+        if (currentState.dataset === dataset && currentState.cardReturnOriginEntry) {
+            settled.cardReturnOriginEntry = currentState.cardReturnOriginEntry;
+        }
+        return settled;
+    }
     const settled = { bigCard: true, dataset, rowId: openRowId };
     for (const field of ARTICLE_HISTORY_FIELDS) {
         if (currentState[field] !== undefined) settled[field] = currentState[field];
+    }
+    if (historyStateDescribes(dataset, openRowId) && currentState.articleFromRow !== undefined) {
+        settled.articleFromRow = currentState.articleFromRow;
     }
     return settled;
 }

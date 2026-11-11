@@ -69,7 +69,7 @@ async function expectMainGeometry(parts: Locator, compact = false) {
 }
 
 async function expectEndPair(parts: Locator, width: number, compact = width <= 700) {
-  const surface = parts.locator(compact ? '.dataset-shared-topbar' : '.filterbar-inline-hero');
+  const surface = parts.locator('.dataset-shared-topbar');
   const home = surface.locator('.top-nav-home-button:visible');
   const panel = surface.locator('.filterbar-fixed-toggle:visible');
   const searchToggle = surface.getByTestId('mobile-search-toggle');
@@ -157,7 +157,7 @@ for (const width of [1440, 1000, 700, 390]) for (const theme of ['light', 'dark'
       const compact = parts.locator('.dataset-shared-topbar');
       await expectEndPair(parts, width);
       if (width > 700) {
-        const tabs = hero.locator('.hero-dataset-tabs');
+        const tabs = parts.locator('.filterbar-inline-hero__top-row .hero-dataset-tabs');
         const originalStyle = await tabs.getAttribute('style');
         try {
           // Leave room for compact Home and the first dataset; longer labels
@@ -207,7 +207,7 @@ for (const width of [1440, 1000, 700, 390]) for (const theme of ['light', 'dark'
         if (direction === 'back') await page.goBack(); else await page.goForward();
         if (direction === 'back') {
           await expect(parts).toBeVisible(); await closeActiveFilterbarIfOpen(page, parts); await settleFit(page);
-          await expectEndPair(parts, width, (await parts.getAttribute('data-shared-topbar-visible')) === 'true');
+          await expectEndPair(parts, width, width <= 700 || (await compact.getAttribute('data-topbar-mode')) !== 'hero');
         } else await expect(page.locator('#front_page_container')).toBeVisible();
       }
     } finally {

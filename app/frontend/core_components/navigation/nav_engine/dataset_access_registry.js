@@ -5,6 +5,7 @@
 
 import { endpoint_router } from '../../endpoints/endpoint_router.js';
 import { subscribeToSessionGeneration } from '../../auth/session_generation_store.js';
+import { invalidateDatasetCatalogueRead, registerDatasetCatalogueRecovery } from '../../pipeline/dataset_catalogue_transport.js';
 
 /** @typedef {import('../../../generated/go_contract_types').DatasetCatalogueEntry} DatasetCatalogueEntry */
 
@@ -116,11 +117,19 @@ export function primeDatasetAccessRegistry(response = null, generation = null) {
 // Returning to a live page must not keep names/visibility from before the visit
 // away. A cold page has no snapshot and waits for verified auth bootstrap.
 if (typeof window !== 'undefined') {
+    let refreshedThisVisit = false;
+    function revalidateOnReturn() {
+        if (document.visibilityState !== 'visible' || !hasSnapshot || refreshedThisVisit) return;
+        refreshedThisVisit = true;
+        if (!refreshPromise) void refreshDatasetCatalogue({ force: true });
+    }
+    window.addEventListener('pagehide', () => { refreshedThisVisit = false; });
     window.addEventListener('pageshow', event => {
-        if (event.persisted && hasSnapshot) void refreshDatasetCatalogue({ force: true });
+        if (event.persisted) revalidateOnReturn();
     });
     document.addEventListener('visibilitychange', () => {
-        if (document.visibilityState === 'visible' && hasSnapshot) void refreshDatasetCatalogue({ force: true });
+        if (document.visibilityState === 'hidden') refreshedThisVisit = false;
+        else revalidateOnReturn();
     });
 }
 
@@ -152,6 +161,7 @@ export function canReadDatasetFromRegistry(name) {
 export async function refreshDatasetCatalogue({ force = false } = {}) {
     if (!force && loadedAt !== null && Date.now() - loadedAt < REFRESH_TTL_MS) return acceptedResponse;
     if (!force && refreshPromise) return refreshPromise;
+    if (force) invalidateDatasetCatalogueRead();
     const generation = ++refreshGeneration;
     loadedAt = null;
     const pending = (async () => {
@@ -174,8 +184,15 @@ export async function refreshDatasetCatalogue({ force = false } = {}) {
 // Session privacy invalidation is independent of optional cross-tab login sync.
 // Focus/suspension only request revalidation; explicit identity changes revoke names.
 subscribeToSessionGeneration(reason => {
-    if (!['blur', 'focus', 'suspend', 'resume', 'restore'].includes(reason)) clearDatasetAccessRegistry();
+    if (!['blur', 'focus', 'suspend', 'resume', 'restore'].includes(reason)) {
+        invalidateDatasetCatalogueRead({ identityChanged: true });
+        clearDatasetAccessRegistry();
+    }
 });
+
+// Bootstrap and tabs may already be showing static navigation. A successful
+// retry publishes their normal permission-filtered snapshot without a page reload.
+registerDatasetCatalogueRecovery(() => refreshDatasetCatalogue({ force: true }));
 
 // Matches app_dataset_name_key and DatasetNameKey: authored names are ASCII.
 function datasetNameKey(name) {

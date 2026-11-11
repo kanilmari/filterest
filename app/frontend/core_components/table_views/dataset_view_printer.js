@@ -62,10 +62,6 @@ function isFilterbarVisible(tableName) {
 
 function syncFilterBarVisibilityState(tableName) {
     const isVisible = isFilterbarVisible(tableName);
-    const menuButton = document.getElementById("showMenuButton");
-    if (menuButton) {
-        menuButton.classList.toggle("filterbar-overlap", !isVisible);
-    }
     const searchButton = document.querySelector(
         `#${tableName}_card_top_controls .card_search_filter_button`
     );

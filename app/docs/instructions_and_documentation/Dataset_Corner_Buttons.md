@@ -5,56 +5,26 @@ Keeps corner placement and modal scope explicit for future maintenance. -->
 
 # Dataset corner buttons
 
-The filter toolbar and main menu keep their existing open/close behavior. Only their show-button placement follows the active dataset surface. Their hide buttons remain inside the existing toolbar and navbar.
+The active dataset toolbar uses the existing menu and filter toggles. Whenever the
+toolbar is visible both toggles stay in it, can open or close their panel, and
+report its current state with `aria-expanded`. The corresponding floating and
+panel controls are hidden and removed from keyboard navigation.
 
-| Surface | Sidebar opener | Main-menu opener |
-| --- | --- | --- |
-| Visible inline-hero corner | Hero right slot, to the right of the settings gear | Hero left slot |
-| Existing visible dataset shared toolbar above 700px | End slot beside the article-close action, when present | Existing start slot before the dataset title |
-| Phone shared toolbar (through 700px) | Final 52px cell after the 44px search toggle | First 52px cell, flush with the viewport edge |
-| Hero corner already scrolled away, or no eligible local host | Original fixed fallback | Original fixed fallback |
-| Hidden dataset | Hidden and excluded from tab order | Local copies hidden and excluded from tab order |
+| Surface | Toolbar and navigation |
+| --- | --- |
+| Inline hero above 700px | The original hero top row moves into the centre, including its horizontal dataset navigation and actions. Whole tabs fit progressively. The hero displays the dataset title and search. |
+| Listing below the hero | The same toolbar displays the dataset title and search. The scroll container and toolbar retain their dimensions at the switch. |
+| Phone through 700px | Model D retains its 48px toolbar, 52px menu, site or article identity, 44px search toggle and 52px filter toggle. |
+| Both vertical panels open in a listing | Each panel supplies its own closer. The original horizontal row returns to the hero. |
+| Selected article, including an empty result | The installation's article toolbar keeps its dataset title, search and existing close action. Both panel toggles stay in the visible toolbar. |
+| Inactive dataset or Home | The hidden dataset releases its controls to the active surface. |
 
-On phones (up to 700px), the shared toolbar stays present in both card and
-article views. Opening the navbar hides and releases the local menu opener;
-the navbar's own closer is the only announced, focusable menu control at every
-width. Closing it returns ownership to the local opener. Its `aria-expanded`
-still follows the navbar state. The floating fallback stays hidden while a
-local opener owns the menu. A visible card
-hero owns its opener even when no shared toolbar is visible; absence of that
-toolbar alone does not imply that the floating fallback should appear.
-
-The hero sidebar opener keeps the canonical 12px viewport top/right inset, mirroring the main-menu opener at 12px top/left. The hero-local CSS compensates the existing 1px scroll sentinel immediately before the hero; fixed positions remain unchanged. Above 700px, narrow shared toolbars keep their existing content padding; only the buttons compensate its difference from the canonical 12px inset. On phones, WO129/K580/K586 replace these shared-bar insets with edge-to-edge cells: menu (52px), identity or search (remaining width), search toggle (44px), panel (52px). The bar is 48px tall including its 1px bottom border, with no vertical padding; controls fill the 47px interior. Faint 1px cell dividers use `color-mix(in srgb, var(--border_color) 50%, transparent)`. Home omits the panel cell. The DEV/TEST badge sits inside the menu cell at its top-left corner. While the sidebar opener is present, the settings gear moves one control slot to its left and the cover palette stays centered below the gear. When that opener is absent, the gear and palette return to their original hero positions. These slots add no permanent toolbar or reserved vertical space. When the sidebar is open, its existing hide control remains in the sidebar dock. When the navbar is open, its existing hide control remains in the navbar.
-
-`dataset_corner_controls.js` chooses the active host and moves the same sidebar button, preserving its existing listener. Local main-menu buttons call the existing `toggleNavbarVisibility`. The original global `showMenuButton` remains in its DOM home and is hidden only while an active local menu button owns its place. Dataset teardown releases only its own ownership; it cannot clear another dataset's owner.
-
-A partially visible hero does not own a button whose corner has scrolled outside the scroll viewport. Returning to the hero restores its local buttons. Tab changes and rerendering reuse the same controls, and hidden copies are removed from the tab order. Button titles and accessible names follow the existing language selection lifecycle in Finnish, English, Chinese and Cantonese.
-
-When a menu control owns keyboard focus, ownership changes hand it to the
-incoming visible opener, or to the navbar closer while the menu is open.
-Unrelated focus is left alone. The shared toolbar captures menu-focus intent
-through `dataset_corner_controls.js` before changing its own accessibility;
-the same synchronous corner reconciliation consumes it after the incoming
-controls become accessible. This also covers a restored hero scroll position
-hiding the toolbar just after Back/Forward returned focus to its opener.
-The handoff requires no timer or retained focus state.
-
-The shared toolbar's released menu button becomes visually hidden immediately
-when its own `aria-hidden` changes to `true`. Its slot and the toolbar can
-continue shrinking and fading for 260 ms; their delayed CSS visibility must
-never keep the former menu owner painted beside the incoming control. The
-shell opener and closer likewise hide immediately on release, including while
-the navbar's children fade during its slide-out. Ownership and the incoming
-CSS reveal start in the same task; no deferred reveal or focus intent remains.
-
-On phone Home (through 700px), the open menu overlays Home from the viewport
-top, with its height bounded by the dynamic viewport. Its own scroll area
-reveals the remaining controls while the sticky top row keeps its closer,
-history, theme and language controls reachable. Home's dataset count cannot
-push that row below the screen. The borrowed Home slot stays hidden and inert
-without leaving an identity gap; closing restores it and its existing focus
-handoff. The language panel remains outside the menu's scrolling/clipping area.
-Tablet and desktop placement, and dataset-page layouts, retain their rules.
+The single surface-state decision is `resolveDatasetTopbarMode` in
+`shared_topbar_builder.js`. It gives an open or selected article precedence over
+a retained list. In a listing, the runtime compares the actual inline hero's
+bottom with the top of its own scroll container. While the toolbar participates,
+the hero row remains mounted in it on both sides of that boundary. Narrow
+overlay panels open below the active toolbar so its edge controls remain usable.
 
 ## Modal boundary
 
@@ -62,10 +32,10 @@ Image-first, image preview and reusable modal dialogs keep their existing contro
 
 ## Verification
 
-Focused unit coverage checks host choice, partially scrolled hero corners, original button action/focus preservation, hidden datasets, ownership release, FI/EN accessible labels, teardown and canonical builder toggles. Existing responsive visibility and temporary filter shortcut tests remain applicable.
+Focused unit coverage checks both panel owners, the transferred hero row, original button action/focus preservation, hidden datasets, ownership release, FI/EN accessible labels, teardown and canonical builder toggles. Existing responsive visibility and temporary filter shortcut tests remain applicable.
 
 `filterbar_menu_history.test.js` also checks Home/dataset Back/Forward and
-shared-toolbar/fallback/hero scroll handoffs, with both menu states and
+the same toolbar toggle before and after the hero scroll boundary, with both menu states and
 unrelated focus. It focuses the outgoing control before navigation and checks
 each incoming control without supplying focus after the transition.
 It also loads the actual toolbar CSS and samples the existing transition
@@ -88,12 +58,15 @@ internal scrolling, sticky-row pointer access, the separate language panel and
 pointer closing at 320×568, 375×667 and 414×896 in light and dark themes.
 Destination geometry uses a fixed catalogue rather than the native dataset count.
 
-`E10_site_identity_and_menu_contract.spec.ts` verifies real clicks on the wide
-article opener, the persistent phone article opener and navbar closer, and the
-card hero opener. It checks the hidden fallback's accessibility state as well
-as the active controls, after startup and saved filterbar layout have settled.
-
-The native regression checklist includes desktop/mobile, Finnish/English, and explicit light/dark themes opposite the OS theme: hide/show both panels, scroll between hero and shared toolbar, switch active dataset/view, open/cancel settings and image dialogs, and verify that gear, palette and close actions remain reachable. Verify pointer/touch activation, keyboard activation and focus visibility without changing application content. Each verification receipt must distinguish the views actually exercised from source review or unit coverage; this checklist is not a claim that every view was exercised in a particular run.
+`E10_site_identity_and_menu_contract.spec.ts` exercises the open and closed
+menu in wide and narrow articles. E15 uses native Chromium input to drag the
+real listing scrollbar across the hero threshold in both directions and checks
+the full scroll range and toolbar geometry. Its other #999 cases open both
+panels in both orders, verify the actual pointer target and keyboard owner, and
+activate the original dataset tabs by keyboard and pointer across history.
+The standard matrix creates and cleans its long card dataset. A readable
+`FILTEREST_E2E_TOPBAR_DATASET` selects an existing long dataset for a read-only
+preview with at least two accessible navigation tabs.
 
 ## End-control order
 
@@ -102,8 +75,8 @@ its original host: first in the hero dataset-navigation row, in the shared
 bar's end slot above 700px. Phones have no top-bar Home button.
 Where Home and panel share an end slot, existing Home-prepend/panel-append
 placement supplies DOM order; CSS must not reverse it with `order: 10`.
-The hero panel stays in its absolute corner with main's 52px reservation;
-Home stays in normal flow, preserving the 44px row and direct-child label fitter.
+The filter toggle occupies the toolbar end slot in both modes. Home stays in
+normal flow in the original 44px row, preserving its direct-child label fitter.
 Native Home keeps its first navigation link and has no dataset filter panel.
 
 `dataset_corner_controls.test.js` guards original hosts and panel-last placement

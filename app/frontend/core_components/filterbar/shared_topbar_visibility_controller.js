@@ -4,22 +4,35 @@
 // Phone identity and toolbar controls stay in place independently of scrolling.
 import { getChosenDatasetView } from "../state_stores/dataset_view_choice_saver.js";
 import { PHONE_BREAKPOINT_PX, show_search_only_bar_in_big_card_view } from "../../ui_config.js";
-import { isSharedTopBarHostActive, shouldShowSharedTopBar } from "./shared_topbar_builder.js";
+import { isSharedTopBarHostActive, shouldShowSharedTopBar, resolveDatasetTopbarMode } from "./shared_topbar_builder.js";
 import { CARD_VIEW_KEY, isArticleDatasetView } from "../table_views/dataset_view_registry.js";
 import { updateShowMenuButtonPosition } from "../navigation/menu_button/navbar_visibility_handler.js";
 import { createMobileTopbarSearchController } from './mobile_topbar_search_controller.js';
 import { canShowTopNavHomeButton, createTopNavHomeButton, placeTopNavHomeButton } from '../front_page/top_nav_home_button.js';
-import { isHeroControlAreaVisible } from './dataset_corner_controls.js';
 import { refreshFrontPageLinkLabel } from '../front_page/front_page_link.js';
 import { HOME_AVAILABILITY_CHANGED_EVENT } from '../front_page/front_page_availability.js';
 const SHARED_TOPBAR_TRANSITION_DURATION_MS = 260;
 
 export function createSharedTopbarVisibilityController({ tableName, currentView, tablePartsContainer,
     sharedTopBar, sharedTopBarArticleClose, inlineHeroHost, getState,
-    isHidden, isNavbarVisible, captureMenuFocus, syncCornerControls }) {
+    isHidden, isNavbarVisible, captureControlFocus, syncCornerControls }) {
     let sharedTopBarHideTimer = null;
     const mobileSearch = createMobileTopbarSearchController(sharedTopBar);
     let homeLink = null;
+    const heroRow = inlineHeroHost?.querySelector('.filterbar-inline-hero__top-row');
+    const heroTabs = heroRow?.querySelector('.hero-dataset-tabs');
+    const center = sharedTopBar.querySelector('.dataset-shared-topbar__center');
+    const end = sharedTopBar.querySelector('.dataset-shared-topbar__slot--end');
+
+    function placeHeroRow(barVisible, showTabs) {
+        if (!heroRow) return;
+        // Keep the same node outside the scroller on both sides of the scroll
+        // threshold, including while the content tools occupy the centre.
+        const host = barVisible ? center : inlineHeroHost;
+        if (heroRow.parentElement !== host) host.prepend(heroRow);
+        heroRow.hidden = barVisible && !showTabs;
+        heroRow.inert = heroRow.hidden;
+    }
     function reconcileHomeAvailability() {
         if (!canShowTopNavHomeButton()) {
             homeLink?.remove();
@@ -100,7 +113,7 @@ export function createSharedTopbarVisibilityController({ tableName, currentView,
         // Settings refresh updates mounted headers immediately; the same check
         // also runs when the runtime's host observer reactivates a cached dataset.
         reconcileHomeAvailability();
-        const { bigCardOpen, inlineHeroVisible, activeScrollable } = getState();
+        const { bigCardOpen, inlineHeroVisible } = getState();
         const navbarVisible = isNavbarVisible();
         const filterbarVisible = !isHidden();
         const activeView =
@@ -111,34 +124,31 @@ export function createSharedTopbarVisibilityController({ tableName, currentView,
         const articleViewActive = isArticleDatasetView(activeView);
         const phone = window.innerWidth <= PHONE_BREAKPOINT_PX;
         const active = isSharedTopBarHostActive(sharedTopBar);
-        const homeInHero = !phone && !bigCardOpen
-            && isHeroControlAreaVisible(inlineHeroHost, activeScrollable);
-        const shouldShowBar =
-            active &&
-            (phone || shouldShowSharedTopBar({
-                navbarVisible,
-                filterbarVisible,
-                articleViewActive,
-                allowBigCardSearchBar: show_search_only_bar_in_big_card_view,
-                inlineHeroVisible,
-            }));
-        // Hiding/inerting the bar can blur its menu before corner reconciliation.
-        // Carry only this update's outgoing focus intent, including on history restore.
-        const menuHadFocus = captureMenuFocus(active);
-        const homeHadFocus = homeLink !== null && document.activeElement === homeLink;
+        const mode = resolveDatasetTopbarMode({ bigCardOpen, articleViewActive, inlineHeroVisible });
+        const shouldShowBar = active && shouldShowSharedTopBar({
+            navbarVisible, filterbarVisible, articleViewActive,
+            allowBigCardSearchBar: show_search_only_bar_in_big_card_view,
+        });
+        const showTabs = mode === "hero" && !phone;
+        const focus = captureControlFocus(active);
+        const previous = document.activeElement;
+        const focusedTab = heroRow?.contains(previous);
+        const homeHadFocus = homeLink && previous === homeLink;
+        const contentHadFocus = center.contains(previous) && !focusedTab;
+        sharedTopBar.dataset.topbarMode = mode;
+        placeHeroRow(shouldShowBar, showTabs);
         setSharedTopBarVisibility(shouldShowBar);
-        // Home follows its row, independently of the menu and bar visibility.
-        // Wide layouts keep the existing end slot and hero placement.
-        placeTopNavHomeButton(homeLink, homeInHero || !shouldShowBar
-            ? inlineHeroHost?.querySelector('.hero-dataset-tabs')
-            : sharedTopBar.querySelector('.dataset-shared-topbar__slot--end'));
-        if (active && homeHadFocus) homeLink.focus({ preventScroll: true });
-        mobileSearch.sync({ phone, active: shouldShowBar, article: bigCardOpen || articleViewActive });
+        placeTopNavHomeButton(homeLink, !shouldShowBar || showTabs ? heroTabs : end);
+        mobileSearch.sync({ phone, active: shouldShowBar, article: mode === "article", hero: showTabs });
         setSharedTopBarArticleCloseVisibility(
-            shouldShowBar && !phone && (bigCardOpen || activeView !== CARD_VIEW_KEY)
+            shouldShowBar && !phone && mode !== "hero" && (bigCardOpen || activeView !== CARD_VIEW_KEY)
         );
-
-        syncCornerControls(active, menuHadFocus);
+        syncCornerControls(active, focus);
+        if (active && homeHadFocus) homeLink.focus({ preventScroll: true });
+        else if (active && focusedTab && !heroRow.hidden && previous.isConnected) previous.focus({ preventScroll: true });
+        else if (active && ((focusedTab && heroRow.hidden) || (contentHadFocus && showTabs))) {
+            sharedTopBar.querySelector('[data-navbar-menu-button]')?.focus({ preventScroll: true });
+        }
         updateShowMenuButtonPosition();
     }
 

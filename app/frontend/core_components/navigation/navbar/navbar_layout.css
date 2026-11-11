@@ -284,7 +284,7 @@ body.light-mode #nav_tree .tree-current-project-badge {
     /* Keep the sticky row's own edge above dataset tabs that scroll underneath it. */
     border-right: 2px solid var(--border_color);
     margin-right: 0;
-    height: 70px; /* Matches the filterbar title row, including the restored bottom divider. */
+    height: var(--navbar-controls-height);
     box-sizing: border-box;
     align-items: center;
 }
@@ -625,6 +625,7 @@ body.light-mode #nav_tree .tree-current-project-badge {
 .body_content.navbar-transitions-ready #navbar {
     transition:
         transform var(--filterbar-sidebar-transition-duration, 0.7s) cubic-bezier(0.4, 0, 0.2, 1),
+        box-shadow var(--filterbar-sidebar-transition-duration, 0.7s) cubic-bezier(0.4, 0, 0.2, 1),
         opacity var(--filterbar-sidebar-transition-duration, 0.7s) cubic-bezier(0.4, 0, 0.2, 1);
 }
 

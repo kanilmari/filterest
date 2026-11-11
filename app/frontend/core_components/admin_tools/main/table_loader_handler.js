@@ -4,7 +4,7 @@
 // Exists to keep admin table-loading and first-open behavior out of generic navigation modules.
 
 import { resolveRowAddress, rowBackingCollection } from "../../navigation/nav_engine/row_address_presentation.js";
-import { recordApplicationAddressWrite } from "../../navigation/nav_engine/address_write_revision.js";
+import { recordApplicationAddressWrite, trackApplicationVisit } from "../../navigation/nav_engine/address_write_revision.js";
 import { canOpenArticleView, requireArticleViewAccess } from '../../table_views/card_view/article_view_access.js';
 import { isRenderableDatasetView, resolveDatasetViewSelectionTarget } from "../../table_views/dataset_view_registry.js";
 import { getImageFirstViewBackingView, handleImageFirstViewHistory } from "../../navigation/nav_engine/image_first_view_history.js";
@@ -13,11 +13,15 @@ import {
     custom_views,
     ensure_private_custom_views_loaded,
 } from '../../navigation/admin_and_user_tools/custom_view_reader.js';
-import { openNavTab } from '../../navigation/main_tabs/main_tab_printer.js';
+import { initTabs, openNavTab } from '../../navigation/main_tabs/main_tab_printer.js';
 import { count_this_function } from '../../dev_tools/function_counter.js';
 import { endpoint_router } from '../../endpoints/endpoint_router.js';
 import { DATASET_PREFIX, normalizePath } from '../../navigation/nav_engine/query_params.js';
-import { primeDatasetAccessRegistry, beginDatasetAccessRefresh, isCurrentDatasetAccessRefresh } from '../../navigation/nav_engine/dataset_access_registry.js';
+import {
+    primeDatasetAccessRegistry, beginDatasetAccessRefresh, isCurrentDatasetAccessRefresh,
+    getDatasetAccessResponseGeneration, isAcceptedDatasetAccessSnapshot, subscribeDatasetAccessRegistry,
+} from '../../navigation/nav_engine/dataset_access_registry.js';
+import { getDatasetCatalogueRecoverySignal } from '../../pipeline/dataset_catalogue_transport.js';
 import { setUnifiedTableState } from '../../general_tables/gt_1_row_crud/gt_1_2_row_read/table_refresh_unified.js';
 import { forgetOpenRow } from '../../state_stores/table_state_store.js';
 import {
@@ -38,6 +42,33 @@ import { isSeparateFrontPageEnabled, openFrontPage } from '../../front_page/fron
 // The page's first load forgets earlier visits; later loads in the same page --
 // the one after signing in -- must keep what this visit has chosen.
 let earlierVisitsForgotten = false;
+let cancelPendingStart = null;
+
+// If bootstrap fell back to static tabs after a 429, resume the requested view
+// once from the recovered catalogue. Do not reopen it after navigation or logout.
+function resumeStartWhenCatalogueReturns(forceReload, address, visit) {
+    const recovery = getDatasetCatalogueRecoverySignal();
+    if (!recovery || visit.signal.aborted || address !== window.location.href) return false;
+    const stopView = subscribeDatasetAccessRegistry(response => {
+        if (!response) return;
+        visit.abort();
+        if (address !== window.location.href) return;
+        void load_tables({ forceReload, recoveredCatalogue: response }).then(loaded => {
+            if (loaded && isCurrentDatasetAccessRefresh(getDatasetAccessResponseGeneration(loaded))) {
+                return initTabs({ dataAlreadyLoaded: true, preloadedContentTablesResponse: loaded });
+            }
+        }).catch(error => console.warn('Could not restore dataset tabs:', error));
+    });
+    const cancel = () => visit.abort();
+    visit.signal.addEventListener('abort', () => {
+        stopView();
+        recovery.removeEventListener('abort', cancel);
+        cancelPendingStart = null;
+    }, { once: true });
+    recovery.addEventListener('abort', cancel);
+    cancelPendingStart = cancel;
+    return true;
+}
 
 /**
  * A fresh page shows what its address asks for -- a row or a view -- and
@@ -85,14 +116,20 @@ export function resetEarlierVisitForgettingForTests() {
  */
 export async function load_tables(options = {}) {
     count_this_function("load_tables");
-    const { forceReload = false } = options;
+    cancelPendingStart?.();
+    const { forceReload = false, recoveredCatalogue } = options;
 
-    const accessGeneration = beginDatasetAccessRefresh();
+    const accessGeneration = recoveredCatalogue
+        ? getDatasetAccessResponseGeneration(recoveredCatalogue) : beginDatasetAccessRefresh();
+    if (recoveredCatalogue && !isAcceptedDatasetAccessSnapshot(accessGeneration)) return null;
+    const startAddress = window.location.href;
+    const visit = trackApplicationVisit();
+    let awaitingRecovery = false;
     try {
         // Haetaan taululista palvelimelta
-        const result_from_server = await endpoint_router('fetchContentTables');
+        const result_from_server = recoveredCatalogue || await endpoint_router('fetchContentTables');
         const array_of_grouped_tables = result_from_server?.datasets || []; // esim. [{ dataset_name: 'users' }, ...]
-        if (!primeDatasetAccessRegistry(result_from_server, accessGeneration)) return null;
+        if (!recoveredCatalogue && !primeDatasetAccessRegistry(result_from_server, accessGeneration)) return null;
         await ensure_private_custom_views_loaded();
         if (!isCurrentDatasetAccessRefresh(accessGeneration)) return null;
 
@@ -259,7 +296,12 @@ export async function load_tables(options = {}) {
 
         return result_from_server;
     } catch (error) {
+        if (error?.isRateLimited && isCurrentDatasetAccessRefresh(accessGeneration) && !recoveredCatalogue) {
+            awaitingRecovery = resumeStartWhenCatalogueReturns(forceReload, startAddress, visit);
+        }
         console.warn("Error in load_tables:", error);
         return null;
+    } finally {
+        if (!awaitingRecovery) visit.abort();
     }
 }

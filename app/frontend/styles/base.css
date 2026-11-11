@@ -383,3 +383,10 @@ summary {
 
 /* The document guard verifies this essential stylesheet actually applied. */
 :root { --filterest-shell-css-applied: 1; }
+
+/* Phone (≤ 700px, K444) */
+@media (width <= 700px) {
+    .tab-content-body {
+        --dataset-centered-scrollbar-gutter: auto;
+    }
+}

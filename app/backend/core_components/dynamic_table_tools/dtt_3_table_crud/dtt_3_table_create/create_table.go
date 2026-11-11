@@ -124,8 +124,7 @@ func createTableInDatabase(db dbutils.Querier, table_name string, columns []Colu
 	columns_count := 0
 	updated_found := false
 
-	// The columns are written in list order, which PostgreSQL keeps as their
-	// attribute numbers and the metadata sync copies to co_number.
+	// PostgreSQL retains this order for the first metadata registration.
 	for _, column := range sanitizedColumns {
 		col_name, col_type := column.Name, column.DataType
 		col_type_upper := strings.ToUpper(col_type)

@@ -27,7 +27,7 @@
     width: 44px;
     border-radius: var(--navbar-control-radius);
     backdrop-filter: blur(10px);
-    box-shadow: var(--fw-shadow-raised);
+    box-shadow: none;
     margin-right: auto;
     z-index: calc(var(--z-navbar) + 1);
     appearance: none;
@@ -75,7 +75,7 @@
     width: 44px;
     border-radius: var(--navbar-control-radius);
     backdrop-filter: blur(10px);
-    box-shadow: var(--fw-shadow-raised);
+    box-shadow: none;
     margin-right: auto;
     transition: height 0.3s, width 0.3s, transform 0.3s;
     appearance: none;
@@ -93,18 +93,6 @@
 #showMenuButton[aria-hidden="true"],
 #hideMenuButton[aria-hidden="true"] {
     visibility: hidden;
-}
-
-.inset {
-    box-shadow: inset 5px 5px 5px 0 rgb(0 0 0 / 30%);
-}
-
-#showMenuButton:not(.inset) {
-    box-shadow: var(--fw-shadow-raised);
-}
-
-#showMenuButton.filterbar-overlap {
-    box-shadow: none !important;
 }
 
 /* A visible dataset topbar owns its own menu control. The floating fallback
@@ -130,7 +118,7 @@
     padding: 2px 5px;
     border-radius: 4px;
     letter-spacing: 0.5px;
-    box-shadow: 0 2px 4px rgb(0 0 0 / 0.3);
+    box-shadow: none;
     pointer-events: none;
     z-index: 1;
 }

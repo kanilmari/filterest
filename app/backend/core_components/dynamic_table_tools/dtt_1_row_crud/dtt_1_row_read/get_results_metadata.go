@@ -242,8 +242,62 @@ func fetchInformationSchemaColumnDefaults(tableName string, db dbutils.Querier) 
 	return results, rows.Err()
 }
 
+const columnTypeForeignKeysSQL = `(
+            SELECT
+                kcu.column_name,
+                ccu.table_name AS foreign_table_name,
+                ccu.column_name AS foreign_column_name
+            FROM
+                information_schema.table_constraints AS tc
+            JOIN information_schema.key_column_usage AS kcu
+                ON tc.constraint_name = kcu.constraint_name
+                AND tc.table_schema = kcu.table_schema
+            JOIN information_schema.constraint_column_usage AS ccu
+                ON ccu.constraint_name = tc.constraint_name
+                AND ccu.table_schema = tc.table_schema
+            WHERE tc.constraint_type = 'FOREIGN KEY'
+              AND tc.table_name = $1
+              AND tc.table_schema = 'public'
+        )`
+
 // getColumnDataTypesWithFK hakee sarakkeen data_type sekä FK-tiedot (jos niitä on).
 func getColumnDataTypesWithFK(tableName string, db dbutils.Querier) (map[string]interface{}, error) {
+	return readColumnDataTypesWithFK(tableName, db, "", columnTypeForeignKeysSQL)
+}
+
+// key_column_usage.ordinal_position is the position in the source constraint's
+// conkey. The same position in confkey names the actual target of a composite FK.
+const incomingForeignKeyCandidatesSQL = `
+    SELECT source_key.column_name, target.relname AS foreign_table_name,
+           target_column.attname AS foreign_column_name, cardinality(fk.conkey) AS key_width
+    FROM information_schema.table_constraints AS tc
+    JOIN information_schema.key_column_usage AS source_key
+      USING (constraint_schema, constraint_name, table_schema, table_name)
+    JOIN pg_catalog.pg_constraint AS fk
+      ON fk.conrelid = pg_catalog.to_regclass(pg_catalog.format('%I.%I', 'public', $1::text))
+     AND fk.conname = tc.constraint_name AND fk.contype = 'f'
+    JOIN pg_catalog.pg_class AS target ON target.oid = fk.confrelid
+    JOIN pg_catalog.pg_attribute AS target_column
+      ON target_column.attrelid = target.oid
+     AND target_column.attnum = fk.confkey[source_key.ordinal_position]
+    WHERE tc.table_schema = 'public' AND tc.table_name = $1 AND tc.constraint_type = 'FOREIGN KEY'
+      AND target.relnamespace = 'public'::pg_catalog.regnamespace
+      -- Match information_schema.constraint_column_usage's target visibility.
+      AND pg_catalog.pg_has_role(target.relowner, 'USAGE')`
+
+// Incoming metadata can display one target per field. Prefer a key that needs
+// the fewest fields, then stable target names. Identical targets are equivalent.
+const incomingForeignKeysCTE = `WITH related_foreign_keys AS MATERIALIZED (
+    SELECT DISTINCT ON (column_name COLLATE "C") column_name, foreign_table_name, foreign_column_name
+    FROM (` + incomingForeignKeyCandidatesSQL + `) AS candidates
+    ORDER BY column_name COLLATE "C", key_width, foreign_table_name COLLATE "C", foreign_column_name COLLATE "C"
+)`
+
+func getIncomingRelatedColumnDataTypes(tableName string, db dbutils.Querier) (map[string]interface{}, error) {
+	return readColumnDataTypesWithFK(tableName, db, incomingForeignKeysCTE, "related_foreign_keys")
+}
+
+func readColumnDataTypesWithFK(tableName string, db dbutils.Querier, fkCTE, fkSource string) (map[string]interface{}, error) {
 	hasCardDetailIconSVG, err := columnExistsInTable(db, "system_column_details", "card_detail_icon_svg")
 	if err != nil {
 		return nil, fmt.Errorf("getColumnDataTypesWithFK: checking card_detail_icon_svg column failed: %v", err)
@@ -280,7 +334,7 @@ func getColumnDataTypesWithFK(tableName string, db dbutils.Querier) (map[string]
 		cardDetailCapitalizationExpr = `COALESCE(scd.card_detail_capitalization, true) AS card_detail_capitalization`
 	}
 
-	query := fmt.Sprintf(`
+	query := fmt.Sprintf(`%s
         SELECT
             c.column_name,
             CASE
@@ -320,23 +374,7 @@ func getColumnDataTypesWithFK(tableName string, db dbutils.Querier) (map[string]
           AND type_column.attname = c.column_name
           AND type_column.attnum > 0
           AND NOT type_column.attisdropped
-        LEFT JOIN (
-            SELECT
-                kcu.column_name,
-                ccu.table_name AS foreign_table_name,
-                ccu.column_name AS foreign_column_name
-            FROM
-                information_schema.table_constraints AS tc
-            JOIN information_schema.key_column_usage AS kcu
-                ON tc.constraint_name = kcu.constraint_name
-                AND tc.table_schema = kcu.table_schema
-            JOIN information_schema.constraint_column_usage AS ccu
-                ON ccu.constraint_name = tc.constraint_name
-                AND ccu.table_schema = tc.table_schema
-            WHERE tc.constraint_type = 'FOREIGN KEY'
-              AND tc.table_name = $1
-              AND tc.table_schema = 'public'
-        ) AS fk_info
+        LEFT JOIN %s AS fk_info
           ON c.column_name = fk_info.column_name
           AND c.table_name = $1
           AND c.table_schema = 'public'
@@ -352,7 +390,7 @@ func getColumnDataTypesWithFK(tableName string, db dbutils.Querier) (map[string]
 		  AND COALESCE(scd.hide_everywhere, false) = false
 		  AND COALESCE(scd.client_delivery_mode, 'include') = 'include'
 		  AND c.column_name NOT IN ('embedding_vector', 'search_vector_simple')
-    `, cardDetailIconExpr, cardDetailIconKeyExpr, cardDetailCapitalizationExpr, cardDetailLabelModeExpr)
+    `, fkCTE, cardDetailIconExpr, cardDetailIconKeyExpr, cardDetailCapitalizationExpr, cardDetailLabelModeExpr, fkSource)
 	rows, err := db.Query(query, tableName)
 	if err != nil {
 		fmt.Printf("\033[31merror: %s\033[0m\n", middlewares.AppLogSearchError(err, "getColumnDataTypesWithFK", tableName))

@@ -64,7 +64,9 @@ let eventSource = null;
 let reconnectTimer = null;
 let countdownTimer = null;
 let reconnectDelayMs = BASE_RECONNECT_DELAY_MS;
+let retryAt = 0;
 let unopenedFailures = 0;
+let attemptsExhausted = false;
 let lifecycleListenersInstalled = false;
 let currentSnapshot = null;
 let serverClockAnchor = null;
@@ -282,22 +284,24 @@ export function renderAdminUpdateNoticeSnapshot(snapshot) {
 }
 
 function scheduleReconnect() {
-    clearReconnectTimer();
-    if (!subscriberRunning || pageUnloadInProgress || document.visibilityState === "hidden") return;
-    reconnectTimer = setTimeout(() => {
-        reconnectTimer = null;
-        connectAdminUpdateNoticeStream();
-    }, reconnectDelayMs);
+    retryAt = Date.now() + reconnectDelayMs;
     reconnectDelayMs = Math.min(reconnectDelayMs * 2, MAX_RECONNECT_DELAY_MS);
+    connectAdminUpdateNoticeStream();
 }
 
 function connectAdminUpdateNoticeStream() {
-    clearReconnectTimer();
-    closeEventSource();
-    if (!subscriberRunning || pageUnloadInProgress || document.visibilityState === "hidden") return;
+    if (eventSource || reconnectTimer !== null || !subscriberRunning
+        || pageUnloadInProgress || document.visibilityState === "hidden") return;
+    if (Date.now() < retryAt) {
+        reconnectTimer = setTimeout(() => {
+            reconnectTimer = null;
+            connectAdminUpdateNoticeStream();
+        }, retryAt - Date.now());
+        return;
+    }
 
     let opened = false;
-    eventSource = new EventSource(ADMIN_UPDATE_NOTICE_STREAM_ROUTE);
+    const source = eventSource = new EventSource(ADMIN_UPDATE_NOTICE_STREAM_ROUTE);
     eventSource.addEventListener("update_notice", (event) => {
         try {
             renderAdminUpdateNoticeSnapshot(JSON.parse(event.data));
@@ -309,15 +313,18 @@ function connectAdminUpdateNoticeStream() {
         stopAdminUpdateNoticeSubscriber();
     });
     eventSource.onopen = () => {
+        if (eventSource !== source) return;
         opened = true;
         unopenedFailures = 0;
         reconnectDelayMs = BASE_RECONNECT_DELAY_MS;
     };
     eventSource.onerror = () => {
+        if (eventSource !== source) return;
         closeEventSource();
         if (!opened) unopenedFailures += 1;
         if (unopenedFailures >= MAX_UNOPENED_FAILURES) {
             stopAdminUpdateNoticeSubscriber();
+            attemptsExhausted = true;
             return;
         }
         scheduleReconnect();
@@ -333,6 +340,7 @@ function installLifecycleListeners() {
         closeEventSource();
     });
     window.addEventListener("pagehide", () => {
+        pageUnloadInProgress = true;
         clearReconnectTimer();
         closeEventSource();
     });
@@ -360,10 +368,13 @@ export function startAdminUpdateNoticeSubscriber() {
         stopAdminUpdateNoticeSubscriber();
         return false;
     }
+    if (subscriberRunning) return true;
+    if (attemptsExhausted) return false;
     subscriberRunning = true;
     pageUnloadInProgress = false;
     unopenedFailures = 0;
     reconnectDelayMs = BASE_RECONNECT_DELAY_MS;
+    retryAt = 0;
     connectAdminUpdateNoticeStream();
     return true;
 }
@@ -379,6 +390,7 @@ export function syncAdminUpdateNoticeSubscriber() {
 
 export function stopAdminUpdateNoticeSubscriber() {
     subscriberRunning = false;
+    attemptsExhausted = false;
     clearReconnectTimer();
     closeEventSource();
     currentSnapshot = null;

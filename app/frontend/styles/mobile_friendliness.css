@@ -22,16 +22,16 @@
         position: fixed !important;
         left: 0 !important;
         /* max-width: calc(100% - 50px); */
-        /* Overlay navbar keeps the same right edge as the docked navbar,
-           plus an outer shadow that separates it from the dataset content. */
+        /* Slide both shadow layers with the panel. Only the outer layer fades. */
+        --navbar-overlay-shadow-color: rgb(0 0 0 / 70%);
         box-shadow:
-            15px 0 15px rgb(0 0 0 / 0.7),
+            15px 0 15px var(--navbar-overlay-shadow-color),
             inset -2px 0 0 0 var(--border_color) !important;
     }
 
     #navbar.collapsed {
+        --navbar-overlay-shadow-color: transparent;
         pointer-events: none !important;
-        box-shadow: none !important;
     }
 
     #tabs_container {

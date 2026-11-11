@@ -292,7 +292,9 @@ subscribeDatasetAccessRegistry(response => {
 });
 
 let historyRestorationGeneration = 0;
-async function handleHistoryNavigation() {
+// Also used after Close pushes a list visit: it needs the same dirty, access,
+// retained-view and superseded-navigation checks as a real history traversal.
+export async function handleHistoryNavigation() {
     // Capture before the first await. Entry equality alone cannot distinguish
     // Back then Forward to the same entry while an older restoration is pending.
     const ownGeneration = ++historyRestorationGeneration;

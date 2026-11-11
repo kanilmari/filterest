@@ -185,7 +185,10 @@ export async function closeActiveFilterbarIfOpen(page: Page, container?: Locator
     return false;
   }
 
-  const hideButton = panel.locator('.hide_filter_bar_button:visible').first();
+  const hideButton = activeTableParts.locator(
+    '[data-testid="filterbar-toggle"][aria-expanded="true"][aria-hidden="false"]:visible, .hide_filter_bar_button[aria-hidden="false"]:visible',
+  );
+  await expect(hideButton).toHaveCount(1);
   await expect(hideButton).toBeVisible({ timeout: 5000 });
   await expect(hideButton).toBeEnabled({ timeout: 5000 });
   await hideButton.click({ timeout: 5000 });

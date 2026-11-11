@@ -5,6 +5,9 @@
 // @vitest-environment jsdom
 
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 const mocks = vi.hoisted(() => ({ snapshot: [{ dataset: 'news', text: 'News', langKey: 'news' }], listeners: new Set(), unsubscribe: vi.fn() }));
 vi.mock('../navigation/main_tabs/main_dataset_tabs.js', () => ({
     getMainDatasetTabs: () => mocks.snapshot,
@@ -18,6 +21,7 @@ vi.mock('./front_page_navigation.js', () => ({ openFrontPage: vi.fn(), isSeparat
 vi.mock('../admin_tools/front_page_settings_modal.js', () => ({ createFrontPageSettingsHeroButton: () => null }));
 vi.mock('../lang/translation_handler.js', () => ({ getTranslationForKey: (_key, options) => options.fallback }));
 import { createFrontPageTopRow } from './front_page_top_row_builder.js';
+import { createFrontPageArticleButtons } from './front_page_article_buttons.js';
 import { HOME_AVAILABILITY_CHANGED_EVENT, setFrontPageAvailability } from './front_page_availability.js';
 beforeEach(() => {
     mocks.unsubscribe.mockClear();
@@ -216,3 +220,110 @@ test.each([false, true].flatMap(enabled => [390, 700, 701, 1440].map(width => [e
             expect(row.element.querySelectorAll('.top-nav-home-button')).toHaveLength(enabled ? 1 : 0);
         } finally { row.destroy(); row.element.remove(); }
     });
+
+test('Home centers its existing navigation in the full row with 20px clearance from the nearest control', async () => {
+    vi.useFakeTimers();
+    document.body.innerHTML = '<div id="navbar" class="collapsed"></div><button id="showMenuButton"></button>'
+        + '<main class="front-page"><div class="front-page-scroller"></div></main>';
+    const page = document.querySelector('.front-page');
+    const sheet = document.createElement('style');
+    const styles = resolve(dirname(fileURLToPath(import.meta.url)), '../navigation/main_tabs/hero_dataset_tabs.css');
+    sheet.textContent = readFileSync(styles, 'utf8');
+    document.head.append(sheet);
+    const row = createFrontPageTopRow('Filterest-esikatselu 1017');
+    page.prepend(row.element);
+    row.mount();
+    const nav = row.element.querySelector('.hero-dataset-tabs');
+    const home = nav.querySelector('.top-nav-home-button');
+    const tab = nav.querySelector('button');
+    // Give the row a visible, explicitly configured destination. A view-less URL
+    // can remain hidden or be removed while the viewer's grants are resolved.
+    const articleHref = '/guides/1?view=article_view';
+    const article = createFrontPageArticleButtons([{ label: 'Guide', href: articleHref }]);
+    nav.after(article);
+
+    // Layout is supplied by the browser in production. Exercise the real Home row and fitter.
+    const box = (left, right, top = 12) => new DOMRect(left, top, right - left, 44);
+    let identityRight = 300;
+    let identityTop = 12;
+    let searchLeft = 860;
+    let searchTop = 12;
+    let articleTop = 80;
+    const articleLeft = 690;
+    const navBox = () => box(identityTop === 12 ? identityRight + 8 : 112,
+        Math.min(searchTop === 12 ? searchLeft - 8 : 1088,
+            article.isConnected && articleTop === 12 ? articleLeft - 8 : 1088));
+    vi.spyOn(row.element, 'getBoundingClientRect').mockReturnValue(box(100, 1100));
+    vi.spyOn(row.element.querySelector('.front-page-top-row__identity'), 'getBoundingClientRect')
+        .mockImplementation(() => box(112, identityRight, identityTop));
+    vi.spyOn(row.element.querySelector('.front-page-desktop-search'), 'getBoundingClientRect')
+        .mockImplementation(() => box(searchLeft, 1088, searchTop));
+    vi.spyOn(article, 'getBoundingClientRect').mockImplementation(() => box(articleLeft, articleLeft + 120, articleTop));
+    vi.spyOn(nav, 'getBoundingClientRect').mockImplementation(navBox);
+    vi.spyOn(nav, 'clientWidth', 'get').mockImplementation(() => navBox().width);
+    vi.spyOn(home, 'getBoundingClientRect').mockReturnValue(box(0, 92));
+    vi.spyOn(tab, 'getBoundingClientRect').mockReturnValue(box(0, 100));
+    nav.style.columnGap = '8px'; // 200px total including the Home link.
+    const measure = async () => {
+        window.dispatchEvent(new Event('resize'));
+        await vi.advanceTimersByTimeAsync(30);
+        return navBox().left + navBox().width / 2 + (parseFloat(nav.style.getPropertyValue('--dataset-navigation-offset')) || 0);
+    };
+    try {
+        expect(await measure()).toBe(600);
+        for (const destination of [home, tab]) {
+            expect(getComputedStyle(destination).translate).toContain('--dataset-navigation-offset');
+        }
+        identityRight = 530;
+        expect(await measure()).toBe(650); // Left limit: 530 + 20 + half the group.
+        identityRight = 300;
+        searchLeft = 680;
+        expect(await measure()).toBe(560); // Right limit: 680 - 20 - half the group.
+        searchLeft = 860;
+        articleTop = 12;
+        expect(article.querySelector('a')?.getAttribute('href')).toBe(articleHref);
+        expect(getComputedStyle(article).display).not.toBe('none');
+        expect(await measure()).toBe(570); // 690 - 20px clearance - half the 200px group.
+        article.remove();
+        expect(await measure()).toBe(600); // An absent control leaves no gap or reserved nav width.
+        nav.after(article);
+        articleTop = 80;
+        expect(await measure()).toBe(600);
+        expect(await measure()).toBe(600); // Repeated measurements do not accumulate a translation.
+
+        searchLeft = 525; // The buttons fit, but two 20px clearances do not.
+        await measure();
+        expect(nav.style.getPropertyValue('--dataset-navigation-offset')).toBe('');
+        expect(tab.hidden).toBe(false);
+
+        // A wrapped edge makes the 12px row padding visible; it cannot be borrowed.
+        identityRight = 874;
+        searchTop = 80;
+        expect(await measure()).toBe(985); // Original 885..1085 inside the 882..1088 nav.
+        expect(nav.style.getPropertyValue('--dataset-navigation-offset')).toBe('');
+        identityTop = 80;
+        searchTop = 12;
+        searchLeft = 326;
+        expect(await measure()).toBe(215); // Mirrored 115..315 inside the 112..318 nav.
+        expect(nav.style.getPropertyValue('--dataset-navigation-offset')).toBe('');
+
+        identityRight = 300;
+        identityTop = 12;
+        searchLeft = 860;
+        expect(await measure()).toBe(600);
+        page.querySelector('.front-page-scroller').prepend(row.element);
+        nav.style.flexDirection = 'column';
+        await measure();
+        expect(nav.style.getPropertyValue('--dataset-navigation-offset')).toBe('');
+        expect(nav.classList.contains('hero-dataset-tabs--centered')).toBe(false);
+        expect(getComputedStyle(tab).translate).toBe('');
+        expect(tab.hidden).toBe(false);
+        page.prepend(row.element);
+        nav.style.flexDirection = 'row';
+        expect(await measure()).toBe(600);
+    } finally {
+        row.destroy();
+        document.body.replaceChildren();
+        vi.useRealTimers();
+    }
+});

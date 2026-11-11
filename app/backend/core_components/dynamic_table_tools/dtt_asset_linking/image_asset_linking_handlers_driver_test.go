@@ -108,6 +108,9 @@ func (c *imageAssetLinkingMockConn) QueryContext(_ context.Context, query string
 	c.state.mu.Lock()
 	defer c.state.mu.Unlock()
 
+	if strings.Contains(query, "SELECT name FROM unnest(ARRAY['card_image_presentation'") {
+		return &imageAssetLinkingMockRows{cols: []string{"array"}, rows: [][]driver.Value{{"{}"}}}, nil
+	}
 	for _, resp := range c.state.queries {
 		if strings.Contains(query, resp.match) {
 			if resp.err != nil {

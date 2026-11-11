@@ -282,6 +282,25 @@
   padding-top: 0;
 }
 
+/* Center ordinary cards and the single-column article across the toolbar.
+   On phones the shared tab body supplies the native scrollbar gutter. */
+.dataset-shared-topbar--visible + .tab-content-body > .scrollable_content:has(> .dataset-results-surface > .card_view_wrapper:not(.big-card-open)) {
+    scrollbar-gutter: var(--dataset-centered-scrollbar-gutter, stable both-edges);
+}
+@media (width <= 1200px) {
+    .dataset-shared-topbar--visible[data-topbar-mode="article"] + .tab-content-body .active_row_article > .row_article_content {
+        scrollbar-gutter: var(--dataset-centered-scrollbar-gutter, stable both-edges);
+    }
+}
+@media (width > 1200px) {
+    /* Keep the record selector and the reading width. Spend only free outer
+       margin to center the text, accounting for its own scrolling gutter. */
+    .dataset-shared-topbar--visible[data-topbar-mode="article"] + .tab-content-body .dataset-results-surface > .card_view_wrapper.big-card-open {
+        margin-inline-start: max(0px, calc((100% - var(--big-card-layout-max-width)
+            - var(--big-card-sidebar-width) - var(--big-card-layout-gap) + var(--article-scrollbar-gutter, 0px)) / 2));
+    }
+}
+
 /* Compact mode: reserve content column on wide screens */
 .tab-content-area {
   margin-right: var(--filterbar-content-reserved-width, 0);

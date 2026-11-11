@@ -25,7 +25,7 @@ const catalogueRefreshRequiredSQL = `WITH registered AS (
  to_regclass(format('%I.%I',COALESCE(NULLIF(d.schema_name,''),'public'),d.table_name))::oid END AS actual_oid
  FROM public.system_db_tables d
 ), columns AS (
- SELECT d.table_uid,a.attname,a.attnum,pg_catalog.format_type(a.atttypid,a.atttypmod) AS data_type
+ SELECT d.table_uid,a.attname,pg_catalog.format_type(a.atttypid,a.atttypmod) AS data_type
  FROM registered d JOIN pg_attribute a ON a.attrelid=d.actual_oid
  WHERE a.attnum>0 AND NOT a.attisdropped
 )
@@ -42,6 +42,6 @@ SELECT EXISTS(
  SELECT 1 FROM columns c FULL JOIN public.system_column_details m
  ON m.table_uid=c.table_uid AND m.column_name=c.attname
  WHERE c.table_uid IS NULL OR m.column_uid IS NULL
- OR m.data_type IS DISTINCT FROM c.data_type OR m.co_number IS DISTINCT FROM c.attnum
+ OR m.data_type IS DISTINCT FROM c.data_type OR m.co_number IS NULL
  OR m.card_element IS NULL OR m.card_element=''
 )`

@@ -14,8 +14,10 @@ import {
 } from './filter_bar_builder_test_setup.js';
 
 describe('create_filter_bar inline hero mounting', () => {
-    beforeEach(() => {
+    beforeEach(async () => {
         resetFilterBarBuilderTestDom();
+        const rules = await import('./shared_topbar_builder.js');
+        rules.shouldShowSharedTopBar.mockReturnValue(false);
         document.head.innerHTML = '<meta property="og:site_name" content="filt">';
     });
 
@@ -81,45 +83,57 @@ describe('create_filter_bar inline hero mounting', () => {
         expect(document.querySelectorAll('.filterbar-inline-hero')).toHaveLength(1);
     });
 
-    test('keeps canonical sidebar and menu actions across hero, clipped hero and shared toolbar hosts', async () => {
-        const { create_filter_bar } = await import('./filter_bar_builder.js');
+    test('keeps both canonical actions in the same bar across the hero boundary', async () => {
+        const { shouldShowSharedTopBar } = await import('./shared_topbar_builder.js');
+        shouldShowSharedTopBar.mockReturnValue(true);
         const navbar = await import('../navigation/menu_button/navbar_visibility_handler.js');
-        const topbarRules = await import('./shared_topbar_builder.js');
-        document.getElementById('navbar').classList.add('collapsed');
+        const { create_filter_bar } = await import('./filter_bar_builder.js');
         const panel = create_filter_bar('demo', 'demo_uid', ['id'], { id: 'INTEGER' }, 1, false, 'card');
         const hero = document.querySelector('.filterbar-inline-hero');
-        const scrollable = document.getElementById('demo_card_view_container');
-        const opener = document.querySelector('[data-testid="filterbar-toggle"]');
-        const hide = panel.querySelector('.hide_filter_bar_button');
+        const bar = document.querySelector('.dataset-shared-topbar');
+        const scroller = document.getElementById('demo_card_view_container');
+        const filter = bar.querySelector('[data-testid="filterbar-toggle"]');
+        const menu = bar.querySelector('[data-testid="shared-topbar-menu-button"]');
+        const row = bar.querySelector('.filterbar-inline-hero__top-row');
         let top = 0;
         hero.getBoundingClientRect = () => ({ top, bottom: top + 300, height: 300 });
-        scrollable.getBoundingClientRect = () => ({ top: 0, bottom: 800, height: 800 });
-        scrollable.dispatchEvent(new Event('scroll'));
-        hide.click();
-        expect(panel.classList.contains('filterbar-panel--hidden')).toBe(true);
-        expect(hero.contains(opener)).toBe(true);
-        expect(opener.dataset.cornerOwner).toBe('hero');
-        const menu = hero.querySelector('[data-testid="hero-menu-button"]');
-        expect(menu.tabIndex).toBe(0);
+        scroller.getBoundingClientRect = () => ({ top: 0, bottom: 800, height: 800 });
+        for (const [position, mode] of [[0, 'hero'], [-40, 'hero'], [-310, 'content'], [-20, 'hero']]) {
+            top = position;
+            scroller.dispatchEvent(new Event('scroll'));
+            expect(bar.dataset.topbarMode).toBe(mode);
+            expect(bar.querySelector('.filterbar-inline-hero__top-row')).toBe(row);
+            expect(row.hidden).toBe(mode === 'content');
+            expect(menu.tabIndex).toBe(0);
+            expect(filter.tabIndex).toBe(0);
+            expect(document.querySelectorAll('[data-testid="filterbar-toggle"]')).toHaveLength(1);
+            expect(filter.dataset.cornerOwner).toBe('topbar');
+            expect(hero.contains(row)).toBe(false);
+        }
+        const tab = document.createElement('button');
+        row.querySelector('nav').append(tab);
+        tab.focus();
+        top = -310;
+        scroller.dispatchEvent(new Event('scroll'));
+        expect(document.activeElement).toBe(menu);
+        top = 0;
+        scroller.dispatchEvent(new Event('scroll'));
+        tab.focus();
+        shouldShowSharedTopBar.mockReturnValue(false);
+        window.dispatchEvent(new Event('navbar-visibility-changed'));
+        expect(hero.contains(row)).toBe(true);
+        expect(document.activeElement).toBe(tab);
+        shouldShowSharedTopBar.mockReturnValue(true);
+        window.dispatchEvent(new Event('navbar-visibility-changed'));
+        expect(bar.contains(row)).toBe(true);
+        expect(document.activeElement).toBe(tab);
         menu.click();
         expect(navbar.toggleNavbarVisibility).toHaveBeenCalledTimes(1);
-        opener.click();
+        filter.click();
+        expect(panel.classList.contains('filterbar-panel--hidden')).toBe(true);
+        filter.click();
         expect(panel.classList.contains('filterbar-panel--hidden')).toBe(false);
-        expect(opener.tabIndex).toBe(-1);
-        hide.click();
-        top = -40;
-        scrollable.dispatchEvent(new Event('scroll'));
-        expect(opener.dataset.cornerOwner).toBe('fallback');
-        expect(menu.tabIndex).toBe(-1);
-        expect(document.getElementById('showMenuButton').classList.contains('shared-topbar-menu-source-hidden')).toBe(false);
-        topbarRules.shouldShowSharedTopBar.mockReturnValue(true);
-        top = -400;
-        scrollable.dispatchEvent(new Event('scroll'));
-        expect(opener.dataset.cornerOwner).toBe('topbar');
-        expect(opener.parentElement.classList.contains('dataset-shared-topbar__slot--end')).toBe(true);
-        opener.click();
-        expect(panel.classList.contains('filterbar-panel--hidden')).toBe(false);
-        expect(document.querySelectorAll('[data-testid="filterbar-toggle"]')).toHaveLength(1);
+        expect(panel.querySelector('.hide_filter_bar_button').tabIndex).toBe(-1);
     });
 
     test('mounts the dataset settings action in the authorized style section', async () => {
@@ -256,72 +270,6 @@ describe('create_filter_bar inline hero mounting', () => {
         expect(titleRowLabel?.dataset.langKey).toBe('riskienhallinta');
     });
 
-    test('fades the repeated shared topbar in only after the inline hero scrolls away', async () => {
-        const sharedTopbarRules = await import('./shared_topbar_builder.js');
-        sharedTopbarRules.shouldShowSharedTopBar.mockImplementation(
-            ({ inlineHeroVisible }) => !inlineHeroVisible,
-        );
-        const activeScrollable = document.getElementById('demo_card_view_container');
-        const originalGetBoundingClientRect = HTMLElement.prototype.getBoundingClientRect;
-        vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function () {
-            if (this === activeScrollable) {
-                return {
-                    top: 0,
-                    right: 800,
-                    bottom: 600,
-                    left: 0,
-                    width: 800,
-                    height: 600,
-                    x: 0,
-                    y: 0,
-                    toJSON: () => ({}),
-                };
-            }
-            if (this.classList.contains('filterbar-inline-hero')) {
-                const top = -(activeScrollable?.scrollTop || 0);
-                return {
-                    top,
-                    right: 800,
-                    bottom: top + 300,
-                    left: 0,
-                    width: 800,
-                    height: 300,
-                    x: 0,
-                    y: top,
-                    toJSON: () => ({}),
-                };
-            }
-            return originalGetBoundingClientRect.call(this);
-        });
-
-        const { create_filter_bar } = await import('./filter_bar_builder.js');
-        create_filter_bar('demo', 'demo_uid', ['id'], { id: 'INTEGER' }, 1, false, 'card');
-        const sharedTopbar = document.querySelector('.dataset-shared-topbar');
-
-        expect(sharedTopbar?.hidden).toBe(true);
-        expect(sharedTopbarRules.shouldShowSharedTopBar).toHaveBeenLastCalledWith(
-            expect.objectContaining({ inlineHeroVisible: true }),
-        );
-
-        activeScrollable.scrollTop = 320;
-        activeScrollable.dispatchEvent(new Event('scroll'));
-        await flushObserverFrame();
-
-        expect(sharedTopbar?.hidden).toBe(false);
-        expect(sharedTopbar?.classList.contains('dataset-shared-topbar--visible')).toBe(true);
-        expect(sharedTopbarRules.shouldShowSharedTopBar).toHaveBeenLastCalledWith(
-            expect.objectContaining({ inlineHeroVisible: false }),
-        );
-
-        activeScrollable.scrollTop = 0;
-        activeScrollable.dispatchEvent(new Event('scroll'));
-
-        expect(sharedTopbar?.classList.contains('dataset-shared-topbar--visible')).toBe(false);
-        expect(sharedTopbarRules.shouldShowSharedTopBar).toHaveBeenLastCalledWith(
-            expect.objectContaining({ inlineHeroVisible: true }),
-        );
-    });
-
     test('shows dataset title and row article close control in the shared topbar', async () => {
         const sharedTopbarRules = await import('./shared_topbar_builder.js');
         sharedTopbarRules.shouldShowSharedTopBar.mockReturnValue(true);
@@ -440,7 +388,7 @@ describe('create_filter_bar inline hero mounting', () => {
         expect(showMenuButton?.parentElement).toBe(originalMenuButtonParent);
     });
 
-    test('keeps the menu button in its navbar position when an article topbar opens on wide layout', async () => {
+    test('keeps the source in its original host and the shared toggle operable with the navbar open', async () => {
         const sharedTopbarRules = await import('./shared_topbar_builder.js');
         sharedTopbarRules.shouldShowSharedTopBar.mockReturnValue(true);
         document.getElementById('navbar')?.classList.remove('collapsed');
@@ -453,7 +401,7 @@ describe('create_filter_bar inline hero mounting', () => {
         const menuSlot = document.querySelector('.dataset-shared-topbar__menu-slot');
         expect(menuSlot?.hidden).toBe(false);
         expect(menuSlot?.classList.contains('dataset-shared-topbar__menu-slot--visible'))
-            .toBe(false);
+            .toBe(true);
         expect(menuSlot?.contains(showMenuButton)).toBe(false);
         expect(menuSlot?.querySelector('[data-testid="shared-topbar-menu-button"]')).toBeTruthy();
         expect(showMenuButton?.parentElement).toBe(originalMenuButtonParent);

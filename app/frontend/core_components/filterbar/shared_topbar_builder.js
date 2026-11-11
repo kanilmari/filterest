@@ -1,7 +1,7 @@
 // shared_topbar_builder.js
 // Resolves when each dataset's persistent shared topbar participates in the active layout.
 // Bridges active dataset containers, navbar/filter visibility, and topbar DOM hosts.
-// Exists to keep the shared search-bar shell predictable without moving controls between bars.
+// Exists to keep the shared search-bar shell predictable as controls move between the toolbar and side panels.
 
 /**
  * Decides whether one dataset's shared topbar belongs in the current layout.
@@ -19,7 +19,6 @@
  * @param {boolean} [options.filterbarVisible] Right filter panel is expanded.
  * @param {boolean} [options.articleViewActive] The selected view is the article view.
  * @param {boolean} [options.allowBigCardSearchBar] Installation permits the flat bar there.
- * @param {boolean} [options.inlineHeroVisible] The large inline heading is on screen.
  * @returns {boolean}
  */
 export function shouldShowSharedTopBar({
@@ -27,12 +26,7 @@ export function shouldShowSharedTopBar({
     filterbarVisible,
     articleViewActive = false,
     allowBigCardSearchBar = false,
-    inlineHeroVisible = false,
 } = {}) {
-    if (inlineHeroVisible) {
-        return false;
-    }
-
     return (
         !navbarVisible ||
         !filterbarVisible ||
@@ -51,4 +45,11 @@ export function isSharedTopBarHostActive(hostElement) {
     }
 
     return !contentContainer.classList.contains("hidden");
+}
+
+// This is the single surface-state boundary for the bar. A row article takes
+// precedence even when a retained listing still has a hero in the viewport.
+export function resolveDatasetTopbarMode({ bigCardOpen, articleViewActive, inlineHeroVisible }) {
+    if (bigCardOpen || articleViewActive) return "article";
+    return inlineHeroVisible ? "hero" : "content";
 }

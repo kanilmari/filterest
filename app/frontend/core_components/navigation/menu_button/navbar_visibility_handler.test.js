@@ -63,6 +63,17 @@ describe("navbar_visibility_handler", () => {
             expect(navbar.classList.contains('collapsed')).toBe(false);
             expect(localStorage.getItem(width >= 1850 ? 'navVisibleWide' : 'navVisibleNarrow')).toBe('true');
         }
+        for (const className of ['filterbar-fixed-toggle', 'hide_filter_bar_button']) {
+            const toggle = document.createElement('button');
+            toggle.className = className;
+            const icon = document.createElement('span');
+            toggle.append(icon);
+            content.append(toggle);
+            // The filter runtime can move its button before the click reaches document.
+            toggle.addEventListener('click', () => document.body.append(toggle));
+            icon.click();
+            expect(navbar.classList.contains('collapsed')).toBe(false);
+        }
         // A dataset title that itself opens with the site name ("Serlog.com – Service catalog").
         const prefixedTitle = document.createElement('span');
         prefixedTitle.className = 'morphing-title__dataset-name';

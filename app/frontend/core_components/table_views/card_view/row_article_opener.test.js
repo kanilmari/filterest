@@ -260,7 +260,31 @@ describe("openRowArticleView", () => {
         } finally { push.mockRestore(); }
     });
 
-    test("canonicalizes an already-current row path without adding a history entry", async () => {
+    test.each([
+        ["/events?view=article_view", false],
+        ["/events/42?view=article_view", false],
+        ["/events?view=card", true],
+    ])("record navigation from %s preserves Back without mistaking the previous row for a list", async (startUrl, firstReturnAvailable) => {
+        document.body.innerHTML = '<div id="events_article_view_container"><div class="card_view_wrapper" data-view-key="article_view"><div class="card_container"><div class="card" data-id="42"></div><div class="card" data-id="43"></div></div><div class="big_card_placeholder row_article_placeholder"></div></div></div>';
+        history.replaceState({}, "", startUrl);
+        getParamsMock.mockReturnValue({ view: "article_view", search: "harbour" });
+        await openRowArticleView({ id: 42 }, "events", document.querySelector('[data-id="42"]'));
+        expect(history.state.articleReturnAvailable).toBe(firstReturnAvailable);
+        const firstEntry = history.state.__filterestEntryId;
+        // Rendering the same row again must retain its existing return semantics.
+        await openRowArticleView({ id: 42 }, "events", document.querySelector('[data-id="42"]'));
+        expect(history.state.articleReturnAvailable).toBe(firstReturnAvailable);
+        expect(history.state.__filterestEntryId).toBe(firstEntry);
+        await openRowArticleView({ id: 43 }, "events", document.querySelector('[data-id="43"]'));
+        expect(history.state).toMatchObject({ rowId: "43", articleReturnAvailable: false });
+        expect(history.state.__filterestEntryId).not.toBe(firstEntry);
+        // Ordinary browser Back still visits the preceding article.
+        history.back();
+        await vi.waitFor(() => expect(history.state.__filterestEntryId).toBe(firstEntry));
+        expect(location.pathname).toBe("/events/42");
+    });
+
+    test.each(["/events/42-old-title", "/events/42/"])("canonicalizes the same row at %s without adding a history entry", async (path) => {
         document.body.innerHTML = `
             <div id="events_article_view_container">
                 <div class="card_view_wrapper">
@@ -271,7 +295,7 @@ describe("openRowArticleView", () => {
                 </div>
             </div>
         `;
-        window.history.replaceState({}, "", "/events/42-old-title");
+        window.history.replaceState({}, "", path);
         getParamsMock.mockReturnValue({ view: "article_view" });
         const pushStateSpy = vi.spyOn(window.history, "pushState");
         const replaceStateSpy = vi.spyOn(window.history, "replaceState");

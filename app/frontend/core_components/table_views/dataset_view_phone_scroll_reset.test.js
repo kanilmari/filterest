@@ -119,6 +119,13 @@ test('phone reload then desktop category focus cannot postpone removal of the co
     viewport.mockReturnValue(1440);
     window.dispatchEvent(new Event('resize'));
     await vi.advanceTimersByTimeAsync(150); // The real responsive panel opens its desktop rail.
+    expect(panel.classList.contains('filterbar-panel--hidden')).toBe(false);
+    expect(bar.dataset.topbarMode).toBe('hero');
+    expect(bar.classList.contains('dataset-shared-topbar--visible')).toBe(true);
+    // A closed navbar still owns a button in the hero toolbar. Opening it
+    // alongside the filter rail starts the real 260 ms dismissal deadline.
+    document.getElementById('navbar').classList.remove('collapsed');
+    window.dispatchEvent(new CustomEvent('navbar-visibility-changed', { detail: { isVisible: true } }));
     expect(bar.classList.contains('dataset-shared-topbar--visible')).toBe(false);
     await vi.advanceTimersByTimeAsync(150);
     // E13 opens/closes a category popup after resizing its initially phone page.

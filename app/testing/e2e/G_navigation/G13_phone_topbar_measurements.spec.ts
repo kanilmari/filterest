@@ -22,7 +22,7 @@ async function measure(page: Page) {
     const menuOpen = !document.getElementById('navbar')!.classList.contains('collapsed');
     const filterOpen = !element.querySelector('.filterbar-panel')!.classList.contains('filterbar-panel--hidden');
     const phone = innerWidth <= 700;
-    const expectedBar = phone || (!heroVisible && (!menuOpen || !filterOpen));
+    const expectedBar = !menuOpen || !filterOpen;
     return { width: innerWidth, height: innerHeight, phone, menuOpen, filterOpen, heroVisible,
       expectedBar, barHidden: (bar as HTMLElement).hidden, opacity: Number.parseFloat(getComputedStyle(bar).opacity),
       actualBar: (element as HTMLElement).dataset.sharedTopbarVisible === 'true',

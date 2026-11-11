@@ -16,10 +16,10 @@ function isHomeMenuButton(button) {
   return Boolean(button.closest('.front-page-top-row, .front-page-phone-topbar'));
 }
 
-// The open menu owns its closer on Home as it does on dataset pages.
+// Home and listings without a shared toolbar use the native panel closer.
 function setHideButtonAccessibility(hideButton, isVisible) {
   if (!hideButton) return;
-  const shouldShow = isVisible;
+  const shouldShow = isVisible && !document.getElementById("showMenuButton")?.__sharedTopbarMenuOwner;
   hideButton.setAttribute('aria-hidden', shouldShow ? 'false' : 'true');
   hideButton.setAttribute('aria-expanded', isVisible ? 'true' : 'false');
   hideButton.tabIndex = shouldShow ? 0 : -1;
@@ -379,6 +379,8 @@ export function initNavbar() {
       if (
         !navbar.contains(event.target) &&
         !event.target.closest?.('[data-navbar-menu-button="true"]') &&
+        // A panel toggle changes its own panel. Its host can change during the click.
+        !event.composedPath().some(node => node.matches?.('.filterbar-fixed-toggle, .hide_filter_bar_button')) &&
         // Site identity is decorative on Home and datasets, never a menu toggle.
         !event.target.closest?.('.front-page-site-icon, .front-page-site-name, .dataset-shared-topbar__site-identity, .morphing-title__site-name, [data-site-identity="true"]') &&
         !showButton.contains(event.target)

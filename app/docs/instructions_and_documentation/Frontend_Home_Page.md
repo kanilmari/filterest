@@ -243,11 +243,12 @@ outside-click closer as a dataset tab: below 1850 CSS pixels it closes the overl
 a docked menu stays open, Home inside the menu is an inside click, and modified or non-primary gestures stay
 native and leave the menu alone. Menu state still has one owner.
 
-Navigation has one media shape rule: the current view's presentation media makes only the vertical side-menu buttons and their connector rectangular.
+Home always shows full-width rectangular navigation buttons in its vertical side menu, including when it has no background media.
+Dataset pages use rectangles for the overlay menu and for datasets with presentation media. A docked dataset without media keeps its curved connectors.
 `navigation/main_tabs/view_presentation_media_resolver.js` resolves the active dataset's `has_presentation_media` or Home's mounted image/video; hidden layers, zero media opacity and a full wash do not count.
 `syncViewPresentationMediaFlag()` alone writes `body[data-view-has-presentation-media]`; active-view updates and its Home/theme observer refresh it after rendering, preview changes and hiding.
-Only `#navmenu .navtablinks` and their connector arcs consume the flag, through `main_tab_active_state.js`'s existing `forceRectangular` path.
-At every width, the top-bar and hero tab buttons, including Home in the compact phone bar, keep the same rounded corners as a dataset page without media. Opaque surfaces, selected/hover tokens, focus outlines and the side menu's existing width-based shape policy remain.
+`main_tab_active_state.js` selects the vertical menu shape independently of the horizontal tab buttons.
+At every width, the top-bar and hero tab buttons, including Home in the compact phone bar, keep the same rounded corners as a dataset page without media. Opaque surfaces, selected/hover colours and keyboard focus outlines remain.
 
 `front_page_availability.js` keeps server-confirmed availability in tab memory;
 a stale local-storage value cannot enable a link or route. Auth bootstrap clears
@@ -383,7 +384,9 @@ the editor disables and greys its retained box list. The key is registered in
 `system_config_checks`, so generic writes also refuse a non-boolean value.
 Home has one inner scrolling surface (`.front-page-scroller`); the absolute
 background and video remain siblings outside it and cover the viewport. Above
-700 px the top row stays before the scroller, with a theme-coloured 2px inset edge that preserves its geometry.
+700 px the top row stays before the scroller. Its single-row height matches the menu control row at 70px, including the 2px bottom divider.
+The phone's own sticky bar stays 48px tall. The menu button and environment badge have flat surfaces. When the overlay menu slides closed,
+its right-hand inset edge travels with it while the outer shadow fades.
 Row caps stay in the shared compact renderer: 76px images follow [each dataset's card presentation](Card_Style_Presentation.md#card-image-presentation-and-compact-results), or keep search's letter fallback.
 Boxes use `--fw-radius-lg` (10px); one-line titles, two-line excerpts, one stretched title link and 44px Show all stay unchanged.
 

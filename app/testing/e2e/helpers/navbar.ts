@@ -42,7 +42,7 @@ async function waitForNavbarOpenedEvent(page: Page): Promise<void> {
 /**
  * Opens a collapsed navbar through its real visible menu button and waits for
  * the production visibility event plus the completed on-screen state.
- * Home and datasets both leave the open-state control inside the navbar.
+ * The active dataset toolbar or the navbar itself owns its open-state control.
  */
 export async function ensureNavbarVisible(page: Page): Promise<void> {
   const navbar = page.locator('#navbar');
@@ -79,7 +79,8 @@ export async function ensureNavbarVisible(page: Page): Promise<void> {
   await expect(showMenuButton).toHaveAttribute('aria-hidden', 'true');
   await expect(showMenuButton).toHaveAttribute('tabindex', '-1');
   await expect(showMenuButton).not.toHaveClass(/(?:^|\s)menu-toggle-visible(?:\s|$)/);
-  const close = page.locator('#hideMenuButton');
+  const close = page.locator('[data-navbar-menu-button="true"][aria-hidden="false"]:visible, #hideMenuButton[aria-hidden="false"]:visible');
+  await expect(close).toHaveCount(1);
   await expect(close).toBeVisible();
   await expect(close).toHaveAttribute('aria-hidden', 'false');
   await expect(close).toHaveAttribute('aria-expanded', 'true');

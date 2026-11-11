@@ -1430,13 +1430,12 @@ body.dark-mode .card--modern {
     display: none !important;
 }
 
-/* Keep the wrapper full-width inside the parent grid.
- * Without width: 100%, auto sizing can shrink the layout toward the left rail
- * and collapse the right-side big-card pane. */
+/* Fill the grid so the record selector and the reading pane keep their widths. */
 .scrollable_content:has(.card_view_wrapper.big-card-open) > .dataset-results-surface > .card_view_wrapper.big-card-open {
     grid-row: 1;
     width: 100%;
-    max-width: calc(320px + 20px + 1200px + 40px);
+    --big-card-layout-max-width: calc(var(--big-card-sidebar-width) + var(--big-card-layout-gap) + 1200px + 40px);
+    max-width: var(--big-card-layout-max-width);
     margin-inline: auto;
     /* The shared top bar owns the horizontal divider. Pull the article grid
      * across the scroll grid's one-pixel seam so neither pane draws a second

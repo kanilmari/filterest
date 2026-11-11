@@ -58,6 +58,19 @@ describe('navbar layout CSS', () => {
         expect(completedRule).toContain('box-shadow: inset -2px 0 0 0 var(--border_color);');
     });
 
+    test('overlay keeps the same inset edge and fades only the outer shadow with the slide', () => {
+        const mobile = readFileSync(resolve(CURRENT_DIR, '../../../styles/mobile_friendliness.css'), 'utf8');
+        const open = mobile.match(/#navbar\s*\{([^}]+)\}/)?.[1] || '';
+        const closed = mobile.match(/#navbar\.collapsed\s*\{([^}]+)\}/)?.[1] || '';
+        const layout = readFileSync(resolve(CURRENT_DIR, 'navbar_layout.css'), 'utf8');
+        const slide = layout.match(/\.body_content\.navbar-transitions-ready #navbar\s*\{([^}]+)\}/)?.[1] || '';
+        expect(open).toContain('inset -2px 0 0 0 var(--border_color)');
+        expect(open).toContain('15px 0 15px var(--navbar-overlay-shadow-color)');
+        expect(closed).toContain('--navbar-overlay-shadow-color: transparent;');
+        expect(closed).not.toContain('box-shadow:');
+        expect(slide.match(/(?:transform|box-shadow) var\(--filterbar-sidebar-transition-duration, 0.7s\) cubic-bezier\(0.4, 0, 0.2, 1\)/g)).toHaveLength(2);
+    });
+
     test('aligns rectangular tab-button borders with the navbar edge', () => {
         const css = readFileSync(resolve(CURRENT_DIR, '../main_tabs/tabs.css'), 'utf8');
         const buttonRule = css.match(

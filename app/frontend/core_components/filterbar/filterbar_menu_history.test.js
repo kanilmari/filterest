@@ -65,7 +65,6 @@ test.each(scrollRestoreCases)(
     // Model the slot's delayed visibility during a fade. Only the button's
     // synchronous ownership rule can hide it before the animation finishes.
     topbarMenu.parentElement.style.visibility = 'visible';
-    const heroMenu = dataset.querySelector('.dataset-corner-controls--start button');
     // Keep the topbar eligible when the menu is open, including card view.
     panel.querySelector('.hide_filter_bar_button').click();
     if (open) toggleNavbarVisibility();
@@ -83,56 +82,37 @@ test.each(scrollRestoreCases)(
     dataset.classList.remove('hidden');
     await Promise.resolve();
 
-    function expectOwner(opener) {
-        const incoming = open ? close : opener;
+    function expectOwner(incoming) {
         expect(document.activeElement).toBe(focused ? incoming : unrelated);
         expect(incoming.tabIndex).toBe(0);
         expect(incoming.getAttribute('aria-hidden')).toBe('false');
         expect(incoming.closest('[hidden], [inert], .hidden, [aria-hidden="true"]')).toBeNull();
-        for (const button of [source, topbarMenu, heroMenu, close]) {
+        for (const button of [source, topbarMenu, close]) {
             expect(button.getAttribute('aria-hidden')).toBe(String(button !== incoming));
             expect(button.tabIndex).toBe(button === incoming ? 0 : -1);
         }
         expect(getComputedStyle(topbarMenu).visibility).toBe(topbarMenu === incoming ? 'visible' : 'hidden');
         expect(getComputedStyle(incoming).visibility).not.toBe('hidden');
-        expect([source, topbarMenu, heroMenu, close].filter(button =>
+        expect([source, topbarMenu, close].filter(button =>
             button.getAttribute('aria-hidden') === 'false' && button.tabIndex === 0
             && !button.closest('[hidden], [inert], .hidden, [aria-hidden="true"]')
             && getComputedStyle(button).visibility !== 'hidden')).toEqual([incoming]);
     }
-    const startsInTopbar = startingOwner === 'topbar';
-    expect(bar.getAttribute('aria-hidden')).toBe(String(!startsInTopbar));
-    expect(bar.inert).toBe(!startsInTopbar);
-    expectOwner(startsInTopbar ? topbarMenu : source);
-
-    function scrollTo(scrollTop, opener) {
-        scrollable.scrollTop = scrollTop;
+    for (const position of [scrollable.scrollTop, 24, 350, 0, 24]) {
+        scrollable.scrollTop = position;
         scrollable.dispatchEvent(new Event('scroll'));
-        expect(bar.getAttribute('aria-hidden')).toBe(String(scrollTop < 300));
-        expect(bar.inert).toBe(scrollTop < 300);
-        // Announcing the incoming owner must start its CSS reveal in this task.
-        expect(bar.classList.contains('dataset-shared-topbar--visible')).toBe(scrollTop >= 300);
-        expectOwner(opener);
-        // Sample before the hide deadline, during the incoming CSS reveal,
-        // and after completion. No incoming control receives supplied focus.
+        expect(bar.getAttribute('aria-hidden')).toBe('false');
+        expect(bar.inert).toBe(false);
+        expect(bar.classList.contains('dataset-shared-topbar--visible')).toBe(true);
+        expectOwner(topbarMenu);
         for (const elapsed of [16, 74, 89, 80, 1]) {
             vi.advanceTimersByTime(elapsed);
-            expectOwner(opener);
+            expectOwner(topbarMenu);
         }
     }
-
-    // History restores a partially visible hero after the topbar took focus.
-    // Its corner is offscreen, so hiding the bar must hand focus to the fallback.
-    if (startsInTopbar) scrollTo(24, source);
-    // Mirror: the fallback owns focus when the hero scrolls away and the bar shows.
-    scrollTo(350, topbarMenu);
-    scrollTo(24, source);
-    // Restore the hero's corner, then scroll it away while the hero stays visible.
-    scrollTo(0, heroMenu);
-    scrollTo(24, source);
     panel.__syncSharedTopBar();
     await Promise.resolve();
-    expectOwner(source);
+    expectOwner(topbarMenu);
 });
 afterEach(() => {
     row?.destroy(); row = null;
@@ -150,10 +130,12 @@ afterEach(() => {
 
 const historyCases = [700, 1280, 1849, 1850, 1851].flatMap(width =>
     ['card', 'article_view'].flatMap(view => [false, true].flatMap(open =>
-        [false, true].flatMap(focused => ['Back', 'Forward'].map(direction => ({ width, view, open, focused, direction }))))));
+        [false, true].flatMap(filterOpen => [false, true].flatMap(focused =>
+            ['Back', 'Forward'].map(direction => ({ width, view, open, filterOpen, focused, direction })))))));
 
 test.each(historyCases)(
-    '$width px $view $direction with open=$open and outgoing menu focus=$focused', async ({ width, view, open, focused, direction }) => {
+    '$width px $view $direction with menu=$open filters=$filterOpen and outgoing menu focus=$focused',
+    async ({ width, view, open, filterOpen, focused, direction }) => {
     vi.spyOn(window, 'innerWidth', 'get').mockReturnValue(width);
     const { create_filter_bar } = await import('./filter_bar_builder.js');
     const { createFrontPageTopRow } = await import('../front_page/front_page_top_row_builder.js');
@@ -165,6 +147,8 @@ test.each(historyCases)(
     const source = document.getElementById('showMenuButton');
     const close = document.getElementById('hideMenuButton');
     const local = dataset.querySelector('[data-testid="shared-topbar-menu-button"]');
+    if (!filterOpen) panel.querySelector('.hide_filter_bar_button').click();
+    expect(panel.classList.contains('filterbar-panel--hidden')).toBe(!filterOpen);
     const owner = source.__sharedTopbarMenuOwner;
     expect(source.classList.contains('shared-topbar-menu-source-hidden')).toBe(true);
     expect(source.tabIndex).toBe(-1);
@@ -172,7 +156,9 @@ test.each(historyCases)(
     if (open) toggleNavbarVisibility();
     const unrelated = document.createElement('button');
     document.body.append(unrelated);
-    const outgoingDataset = open ? close : local;
+    // An article keeps its search/close toolbar even when both panels are open.
+    const localVisible = !open || !filterOpen || view === 'article_view';
+    const outgoingDataset = localVisible ? local : close;
     const backFocused = focused && direction === 'Back';
     (backFocused ? outgoingDataset : unrelated).focus();
     expect(document.activeElement).toBe(backFocused ? outgoingDataset : unrelated);
@@ -215,15 +201,14 @@ test.each(historyCases)(
     row.destroy(); row = null; home.remove();
     dataset.classList.remove('hidden');
     await Promise.resolve();
-    // Round 5: the navbar closer owns an open menu at every width, including phones.
-    const localVisible = !open;
+    expect(panel.classList.contains('filterbar-panel--hidden')).toBe(!filterOpen);
     expect(source.__sharedTopbarMenuOwner).toBe(localVisible ? owner : null);
     expect(source.classList.contains('shared-topbar-menu-source-hidden')).toBe(localVisible);
     expect(source.getAttribute('aria-hidden')).toBe('true'); expect(source.tabIndex).toBe(-1);
     expect(local.getAttribute('aria-hidden')).toBe(String(!localVisible));
     expect(local.tabIndex).toBe(localVisible ? 0 : -1);
     expect(getComputedStyle(local).visibility).toBe(localVisible ? 'visible' : 'hidden');
-    const incomingDataset = open ? close : local;
+    const incomingDataset = localVisible ? local : close;
     expectSingleOwner(incomingDataset);
     expect(incomingDataset.getAttribute('aria-hidden')).toBe('false');
     expect(incomingDataset.tabIndex).toBe(0);
@@ -233,10 +218,12 @@ test.each(historyCases)(
     // Retain the original action and live Home-state proof after history checks.
     local.click();
     expect(document.getElementById('navbar').classList.contains('collapsed')).toBe(false);
-    expect(close.getAttribute('aria-hidden')).toBe('false'); expect(close.tabIndex).toBe(0);
+    const toolbarStillVisible = !filterOpen || view === 'article_view';
+    expect(close.getAttribute('aria-hidden')).toBe(String(toolbarStillVisible));
+    expect(close.tabIndex).toBe(toolbarStillVisible ? -1 : 0);
     expect(source.tabIndex).toBe(-1);
-    expect(source.classList.contains('shared-topbar-menu-source-hidden')).toBe(false);
-    expectSingleOwner(close);
+    expect(source.classList.contains('shared-topbar-menu-source-hidden')).toBe(toolbarStillVisible);
+    expectSingleOwner(toolbarStillVisible ? local : close);
     dataset.dispatchEvent(new CustomEvent(VIEW_DEACTIVATE_EVENT));
     dataset.classList.add('hidden');
     document.getElementById('tabs_container').append(home);

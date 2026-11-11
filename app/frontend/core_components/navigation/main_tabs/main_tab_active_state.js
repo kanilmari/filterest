@@ -12,7 +12,7 @@ import {
     buildTabOutlinePresentation,
 } from "./tab_presentation_builder.js";
 import { getChosenDatasetView } from "../../state_stores/dataset_view_choice_saver.js";
-import { observeViewPresentationMedia, syncViewPresentationMediaFlag,
+import { isHomeNavigationView, observeViewPresentationMedia, syncViewPresentationMediaFlag,
     VIEW_PRESENTATION_MEDIA_ATTRIBUTE } from "./view_presentation_media_resolver.js";
 
 const NAVTAB_OUTLINE_MORPH_ATTRIBUTE = "d";
@@ -179,11 +179,11 @@ function getCurrentOutlinePathD(outlinePath) {
 
 // SVG `d` changes do not transition through CSS, so interpolate the compatible
 // path numbers directly and keep the visible path at the previous shape on frame zero.
-function applyOutlinePathWithMorph(outlinePath, nextPathD) {
+function applyOutlinePathWithMorph(outlinePath, nextPathD, animate) {
     const currentPathD = getCurrentOutlinePathD(outlinePath);
     cancelActiveOutlineMorph(outlinePath);
 
-    if (currentPathD === nextPathD) {
+    if (!animate || currentPathD === nextPathD) {
         outlinePath.setAttribute(NAVTAB_OUTLINE_MORPH_ATTRIBUTE, nextPathD);
         return;
     }
@@ -256,7 +256,8 @@ export function applyMainTabActiveState(activeTabId = "", options = {}) {
     // Read current ownership when a queued DOM/theme change settles; a shell
     // replacement or cancelled navigation must never replay an earlier view.
     observeViewPresentationMedia(refreshMainTabPresentation);
-    const forceRectangular = document.body.getAttribute(VIEW_PRESENTATION_MEDIA_ATTRIBUTE) === "true";
+    const homeMenu = isHomeNavigationView(normalizedActiveTabId, viewDatasetName);
+    const forceRectangular = homeMenu || document.body.getAttribute(VIEW_PRESENTATION_MEDIA_ATTRIBUTE) === "true";
 
     if (navTabs) {
         navTabs.style.right = buildNavTabsRightOffset({
@@ -309,7 +310,7 @@ export function applyMainTabActiveState(activeTabId = "", options = {}) {
             ? shapePaths
             : (outlinePath ? [outlinePath] : []);
         morphPaths.forEach((path) => {
-            applyOutlinePathWithMorph(path, presentation.pathD);
+            applyOutlinePathWithMorph(path, presentation.pathD, !homeMenu);
         });
 
         if (fillPath) {

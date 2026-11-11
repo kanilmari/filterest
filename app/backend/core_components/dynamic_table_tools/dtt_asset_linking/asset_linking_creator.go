@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/lib/pq"
 
 	"easelect/backend/core_components/dbutils"
 	"easelect/backend/core_components/dynamic_table_tools/dtt_2_column_crud/dtt_2_column_update"
@@ -143,9 +144,30 @@ func EnsureSharedAssetRelation(
 
 // New and upgraded galleries share the migration-owned storage installer.
 func ensureCardImageStorage(q dbutils.Querier, childTable string) error {
-	_, err := q.Exec(`SELECT public.app_ensure_card_image_storage(table_uid)
-		FROM public.system_db_tables WHERE table_name=$1 AND schema_name='public'`, childTable)
-	return err
+	// Existing installations use a storage installer that supplies hidden-field
+	// metadata in physical order. Only fields it registers now need appending.
+	var missing pq.StringArray
+	if err := q.QueryRow(`SELECT ARRAY(
+        SELECT name FROM unnest(ARRAY['card_image_presentation','card_image_focal_x','card_image_focal_y']) AS field(name)
+        WHERE NOT EXISTS (
+            SELECT FROM public.system_column_details d JOIN public.system_db_tables t USING (table_uid)
+            WHERE t.schema_name='public' AND t.table_name=$1 AND d.column_name=field.name
+        ))`, childTable).Scan(&missing); err != nil {
+		return err
+	}
+	if _, err := q.Exec(`SELECT public.app_ensure_card_image_storage(table_uid)
+        FROM public.system_db_tables WHERE table_name=$1 AND schema_name='public'`, childTable); err != nil {
+		return err
+	}
+	if len(missing) == 0 {
+		return nil
+	}
+	if _, err := q.Exec(`UPDATE public.system_column_details d SET co_number=NULL
+        FROM public.system_db_tables t WHERE t.table_uid=d.table_uid AND t.schema_name='public'
+          AND t.table_name=$1 AND d.column_name=ANY($2)`, childTable, missing); err != nil {
+		return err
+	}
+	return dtt_2_column_update.UpdateDatasetColumnMetadata(q, childTable)
 }
 
 // EnsureCachedImageColumn keeps the image preview cache available on the parent table.

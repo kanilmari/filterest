@@ -34,7 +34,7 @@ func prepareIncomingRelatedMetadata(currentDb *sql.DB, fkInfos []FKInfo, childFi
 		if childFilter != "" && fk.Referencing_table != childFilter {
 			continue
 		}
-		types, err := getColumnDataTypesWithFK(fk.Referencing_table, currentDb)
+		types, err := getIncomingRelatedColumnDataTypes(fk.Referencing_table, currentDb)
 		if err != nil {
 			log.Printf("\033[33mwarning: related items type metadata lookup failed for %s: %s\033[0m", fk.Referencing_table, err)
 			types = map[string]interface{}{}

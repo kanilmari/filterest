@@ -4,7 +4,7 @@
 // Prevents navigation from blurring menu focus or taking unrelated focus.
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
-import { createDatasetCornerControls, isHeroControlAreaVisible, selectDatasetCornerOwner } from "./dataset_corner_controls.js";
+import { createDatasetCornerControls } from "./dataset_corner_controls.js";
 import { syncNavbarMenuButtonAccessibility } from "../navigation/menu_button/navbar_visibility_handler.js";
 import { placeTopNavHomeButton } from '../front_page/top_nav_home_button.js';
 
@@ -14,17 +14,17 @@ function fixture() {
     document.body.innerHTML = `<div id="navbar" class="collapsed"><button id="hideMenuButton"></button></div>
         <button id="showMenuButton"></button><div id="parts">
         <div id="hero"></div><div id="topbar"><div id="menu-slot"><button id="topbar-menu"></button></div><div id="end"></div></div>
-        <button id="filter"></button><div id="panel"><button id="hide-filter"></button></div></div>`;
+        <button id="filter"></button><div id="panel"><div class="filterbar-panel__toggle-dock"><button id="hide-filter"></button></div></div></div>`;
     const byId = (id) => document.getElementById(id);
     parts = {
         hero: byId("hero"), fallbackHost: byId("parts"), filterButton: byId("filter"),
         hideFilterButton: byId("hide-filter"), panel: byId("panel"),
-        heroMenuButton: document.createElement("button"), topbarEnd: byId("end"),
+        topbarEnd: byId("end"),
         topbarMenuButton: byId("topbar-menu"), topbarMenuSlot: byId("menu-slot"),
         sourceMenuButton: byId("showMenuButton"), menuOwner: {}, syncNavbarAccessibility: vi.fn(),
     };
     controls = createDatasetCornerControls(parts);
-    return { active: true, heroControlsVisible: true, topbarVisible: false, navbarVisible: false, filterbarVisible: false };
+    return { active: true, topbarVisible: true, navbarVisible: false, filterbarVisible: false };
 }
 beforeEach(() => { localStorage.clear(); });
 afterEach(() => { controls?.destroy(); document.body.innerHTML = ""; });
@@ -42,7 +42,7 @@ describe("dataset corner owner", () => {
             const phone = width <= 700;
             const inHero = !phone && atTop;
             const host = inHero ? tabs : phone ? start : parts.topbarEnd;
-            const state = { ...initial, phone, heroControlsVisible: inHero, topbarVisible: !inHero };
+            const state = initial;
             const moveHome = () => phone ? home.remove() : placeTopNavHomeButton(home, host);
             const movePanel = () => controls.sync(state);
             for (const move of panelFirst ? [movePanel, moveHome] : [moveHome, movePanel]) move();
@@ -56,58 +56,43 @@ describe("dataset corner owner", () => {
             expect(inHero ? host.firstElementChild : phone ? host.lastElementChild : host.firstElementChild).toBe(home);
             expect(parts.filterButton.parentElement.lastElementChild).toBe(parts.filterButton);
             if (!inHero && !phone) expect(home.nextElementSibling).toBe(parts.filterButton);
-            if (inHero) expect(parts.hero.querySelector('.dataset-corner-controls--end').contains(home)).toBe(false);
             home.focus(); moveHome(); movePanel(); expect(document.activeElement).toBe(home);
         }
     });
     test.each([
-        [false, true, true, "none"], [true, true, false, "hero"],
-        [true, false, true, "topbar"], [true, false, false, "fallback"],
-    ])("selects only an available active host", (active, heroControlsVisible, topbarVisible, expected) => {
-        expect(selectDatasetCornerOwner({ active, heroControlsVisible, topbarVisible })).toBe(expected);
-    });
-    test("releases a partially visible hero whose corner has scrolled away", () => {
-        fixture();
-        parts.fallbackHost.getBoundingClientRect = () => ({ top: 0, bottom: 600, height: 600 });
-        parts.hero.getBoundingClientRect = () => ({ top: 0, bottom: 300, height: 300 });
-        expect(isHeroControlAreaVisible(parts.hero, parts.fallbackHost)).toBe(true);
-        parts.hero.getBoundingClientRect = () => ({ top: -30, bottom: 270, height: 300 });
-        expect(isHeroControlAreaVisible(parts.hero, parts.fallbackHost)).toBe(false);
-        parts.hero.remove();
-        expect(isHeroControlAreaVisible(parts.hero, parts.fallbackHost)).toBe(false);
-    });
-    test("moves the same filter button while preserving its existing action and focus", () => {
+        [false, false, true], [false, true, true], [true, false, true],
+        [true, true, false], [true, true, true],
+    ])("exactly one menu and filter target for nav=%s, filters=%s, toolbar=%s", (navbarVisible, filterbarVisible, topbarVisible) => {
         const state = fixture();
-        const action = vi.fn();
-        parts.filterButton.addEventListener("click", action);
-        const sourceHome = parts.sourceMenuButton.parentElement;
-        controls.sync(state);
-        expect(parts.hero.contains(parts.filterButton)).toBe(true);
-        expect(parts.heroMenuButton.tabIndex).toBe(0);
-        expect(parts.topbarMenuButton.tabIndex).toBe(-1);
-        expect(parts.sourceMenuButton.parentElement).toBe(sourceHome);
-        parts.filterButton.focus();
-        controls.sync({ ...state, heroControlsVisible: false, topbarVisible: true });
-        expect(parts.filterButton.parentElement).toBe(parts.topbarEnd);
-        expect(document.activeElement).toBe(parts.filterButton);
-        expect(parts.heroMenuButton.tabIndex).toBe(-1);
-        expect(parts.topbarMenuButton.tabIndex).toBe(0);
-        parts.filterButton.click();
-        expect(action).toHaveBeenCalledTimes(1);
-        controls.sync({ ...state, heroControlsVisible: false });
-        expect(parts.filterButton.parentElement).toBe(parts.fallbackHost);
-        expect(parts.sourceMenuButton.classList.contains("shared-topbar-menu-source-hidden")).toBe(false);
-    });
-    test("keeps panel hide controls and expanded state when the sidebar is open", () => {
-        const state = fixture();
-        controls.sync({ ...state, filterbarVisible: true, navbarVisible: true });
-        expect(parts.hideFilterButton.parentElement).toBe(parts.panel);
-        expect(parts.hideFilterButton.tabIndex).toBe(0);
-        expect(parts.hideFilterButton.getAttribute("aria-expanded")).toBe("true");
-        expect(parts.filterButton.tabIndex).toBe(-1);
+        parts.syncNavbarAccessibility.mockImplementation(syncNavbarMenuButtonAccessibility);
+        document.getElementById("navbar").classList.toggle("collapsed", !navbarVisible);
+        controls.sync({ ...state, navbarVisible, filterbarVisible, topbarVisible });
+        const hideMenu = document.getElementById("hideMenuButton");
+        const menuTargets = [parts.sourceMenuButton, hideMenu, parts.topbarMenuButton];
+        const filterTargets = [parts.filterButton, parts.hideFilterButton];
+        const interactive = button => button.tabIndex === 0 && button.getAttribute("aria-hidden") === "false";
+        expect(menuTargets.filter(interactive)).toEqual([topbarVisible ? parts.topbarMenuButton : hideMenu]);
+        expect(filterTargets.filter(interactive)).toEqual([topbarVisible ? parts.filterButton : parts.hideFilterButton]);
         expect(parts.filterButton.getAttribute("aria-controls")).toBe("panel");
-        expect(parts.heroMenuButton.tabIndex).toBe(-1);
-        expect(parts.topbarMenuButton.tabIndex).toBe(-1);
+        expect(parts.filterButton.getAttribute("aria-expanded")).toBe(String(filterbarVisible));
+        expect(parts.topbarMenuButton.getAttribute("aria-expanded")).toBe(String(navbarVisible));
+        expect(parts.hideFilterButton.parentElement.hidden).toBe(topbarVisible);
+        expect(parts.hideFilterButton.parentElement.inert).toBe(topbarVisible);
+    });
+    test("hands filter focus between the same bar button and the real panel closer", () => {
+        const state = fixture();
+        controls.sync(state);
+        const original = parts.filterButton;
+        const action = vi.fn();
+        original.addEventListener("click", action);
+        original.focus();
+        controls.sync({ ...state, topbarVisible: false, navbarVisible: true, filterbarVisible: true });
+        expect(document.activeElement).toBe(parts.hideFilterButton);
+        controls.sync(state);
+        expect(document.activeElement).toBe(original);
+        expect(original.parentElement).toBe(parts.topbarEnd);
+        original.click();
+        expect(action).toHaveBeenCalledTimes(1);
     });
     test("removes inactive dataset controls from tab order without releasing another dataset owner", () => {
         const state = fixture();
@@ -115,7 +100,7 @@ describe("dataset corner owner", () => {
         const otherOwner = {};
         parts.sourceMenuButton.__sharedTopbarMenuOwner = otherOwner;
         controls.sync({ ...state, active: false });
-        for (const button of [parts.filterButton, parts.heroMenuButton, parts.topbarMenuButton, parts.hideFilterButton]) {
+        for (const button of [parts.filterButton, parts.topbarMenuButton, parts.hideFilterButton]) {
             expect(button.tabIndex).toBe(-1);
             expect(button.getAttribute("aria-hidden")).toBe("true");
         }
@@ -130,7 +115,7 @@ describe("dataset corner owner", () => {
         document.documentElement.lang = "fi";
         await Promise.resolve();
         expect(parts.filterButton.getAttribute("aria-label")).toBe("Näytä suodatuspalkki");
-        expect(parts.heroMenuButton.title).toBe("Näytä päävalikko");
+        expect(parts.topbarMenuButton.title).toBe("Näytä päävalikko");
         expect(parts.hideFilterButton.title).toBe("Piilota suodatuspalkki");
     });
     test("tears down owned slots and releases the existing global fallback once", () => {
@@ -145,11 +130,10 @@ describe("dataset corner owner", () => {
         controls.sync(state);
         expect(parts.syncNavbarAccessibility).toHaveBeenCalledTimes(calls);
     });
-    test.each(["hero", "topbar"])("hands focused %s controls to the shell and back on activation", owner => {
-        const initial = fixture();
+    test("hands focused menu to the shell and back on activation", () => {
+        const state = fixture();
         parts.syncNavbarAccessibility.mockImplementation(syncNavbarMenuButtonAccessibility);
-        const state = { ...initial, heroControlsVisible: owner === "hero", topbarVisible: owner === "topbar" };
-        const local = owner === "hero" ? parts.heroMenuButton : parts.topbarMenuButton;
+        const local = parts.topbarMenuButton;
         controls.sync(state);
         local.focus();
         controls.sync({ ...state, active: false });

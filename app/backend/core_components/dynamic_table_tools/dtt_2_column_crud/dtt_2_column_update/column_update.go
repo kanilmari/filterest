@@ -14,8 +14,27 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"math"
 	"strings"
 )
+
+// A legacy empty schema denotes public. A relation dropped during startup
+// resolves to NULL, leaving the caller's transaction usable.
+const registeredRelation = `pg_catalog.to_regclass((
+    SELECT format('%I.%I', COALESCE(NULLIF(schema_name,''),'public'), table_name)
+    FROM system_db_tables WHERE table_uid = $1
+))`
+
+// Recheck the live maximum at the write. An uncommitted field-editor save
+// numbers its N fields from 1 to N, even if their committed positions are
+// zero or negative. A new field must follow those N in either commit order.
+const appendFieldOrder = `GREATEST($4::bigint, (
+    SELECT GREATEST(MAX(d.co_number)::bigint, COUNT(*)) + 1
+    FROM system_column_details d
+    JOIN pg_attribute a ON a.attrelid = ` + registeredRelation + `
+        AND a.attname=d.column_name AND a.attnum>0 AND NOT a.attisdropped
+    WHERE d.table_uid=$1 AND d.column_name<>$2
+))`
 
 // UpdateColumnMetadata updates system_column_details based on current table schema.
 // Accepts a Querier (either *sql.DB or *sql.Tx) for transaction safety.
@@ -85,45 +104,42 @@ func updateColumnMetadata(q dbutils.Querier, preserve bool, tableName string) er
 
 	// Iteroi jokainen taulu
 	for _, table := range tables {
-		// Hae saraketiedot mukaan lukien attnum
+		// Rank only unnumbered live columns. A restored field without a position
+		// already belongs to the dataset, so it precedes newly discovered fields.
+		// PostgreSQL attribute order breaks ties within each group.
 		columnsQuery := `
-			SELECT a.attname,
-			       a.attnum,
-			       pg_catalog.format_type(a.atttypid, a.atttypmod) AS data_type
-			FROM pg_attribute a
-			WHERE a.attrelid = pg_catalog.to_regclass($1)
-			  AND a.attnum > 0
-			  AND NOT a.attisdropped
-			ORDER BY a.attnum
-		`
-
-		// The table can be deleted after the system_db_tables snapshot was read.
-		// to_regclass returns NULL for that expected race instead of aborting the
-		// caller's transaction like a direct ::regclass cast would.
-		colRows, err := q.Query(columnsQuery, table.TableName)
+            SELECT a.attname,
+                   COALESCE(m.co_number, COALESCE(MAX(m.co_number) OVER (), 0)::bigint +
+                       COUNT(*) FILTER (WHERE m.co_number IS NULL)
+                       OVER (ORDER BY m.column_uid IS NULL, a.attnum)) AS field_order,
+                   pg_catalog.format_type(a.atttypid, a.atttypmod) AS data_type
+            FROM pg_attribute a
+            LEFT JOIN system_column_details m ON m.table_uid = $1 AND m.column_name = a.attname
+            WHERE a.attrelid = ` + registeredRelation + `
+              AND a.attnum > 0 AND NOT a.attisdropped
+            ORDER BY m.column_uid IS NULL, a.attnum
+        `
+		colRows, err := q.Query(columnsQuery, table.TableUID)
 		if err != nil {
 			return fmt.Errorf("error fetching columns for table %s: %w", table.TableName, err)
 		}
 
-		// Talletetaan sarakkeen nimi -> (data_type, attnum)
-		type ColumnSmallInfo struct {
-			DataType  string
-			AttNumber int
+		type physicalColumn struct {
+			name, dataType string
+			fieldOrder     int64
 		}
-		existingColumns := make(map[string]ColumnSmallInfo)
-
+		var columns []physicalColumn
 		for colRows.Next() {
-			var colName string
-			var attNumber int
-			var dataType string
-			if err := colRows.Scan(&colName, &attNumber, &dataType); err != nil {
+			var column physicalColumn
+			if err := colRows.Scan(&column.name, &column.fieldOrder, &column.dataType); err != nil {
 				_ = colRows.Close()
 				return fmt.Errorf("error scanning column info for table %s: %w", table.TableName, err)
 			}
-			existingColumns[colName] = ColumnSmallInfo{
-				DataType:  dataType,
-				AttNumber: attNumber,
+			if column.fieldOrder > math.MaxInt32 {
+				_ = colRows.Close()
+				return fmt.Errorf("cannot append field %s.%s: field order exceeds PostgreSQL integer range", table.TableName, column.name)
 			}
+			columns = append(columns, column)
 		}
 		if err := colRows.Err(); err != nil {
 			_ = colRows.Close()
@@ -133,7 +149,7 @@ func updateColumnMetadata(q dbutils.Querier, preserve bool, tableName string) er
 			return fmt.Errorf("error closing columns for table %s: %w", table.TableName, err)
 		}
 
-		if preserve && len(existingColumns) == 0 {
+		if preserve && len(columns) == 0 {
 			continue
 		} // Missing legacy datasets stay diagnosable.
 
@@ -178,32 +194,33 @@ func updateColumnMetadata(q dbutils.Querier, preserve bool, tableName string) er
 		}
 
 		// Päivitä tai lisää sarakkeet
-		for colName, col := range existingColumns {
+		for _, col := range columns {
+			colName := col.name
 			if metaInfo, exists := existingMetadata[colName]; exists {
+				delete(existingMetadata, colName)
 				// Sarake on jo olemassa, päivitetään column_name ja data_type.
 				updateQuery := `
                     UPDATE system_column_details
-                    SET column_name = $1,
-                        data_type   = $2,
-                        co_number   = $3,
+                    SET data_type   = $3,
+                        co_number   = COALESCE(co_number, ` + appendFieldOrder + `),
                         card_element = CASE
                             WHEN card_element IS NULL OR card_element = '' THEN 'details'
                             ELSE card_element
                         END
-                    WHERE column_uid = $4
+                    WHERE column_uid = $5 AND column_name = $2
                       AND (
-                          column_name IS DISTINCT FROM $1
-                          OR data_type IS DISTINCT FROM $2
-                          OR co_number IS DISTINCT FROM $3
+                          data_type IS DISTINCT FROM $3
+                          OR co_number IS NULL
                           OR card_element IS NULL
                           OR card_element = ''
                       )
                 `
 				_, err = q.Exec(
 					updateQuery,
+					table.TableUID,
 					colName,
-					col.DataType,
-					col.AttNumber,
+					col.dataType,
+					col.fieldOrder,
 					metaInfo.ColumnUID,
 				)
 				if err != nil {
@@ -211,18 +228,23 @@ func updateColumnMetadata(q dbutils.Querier, preserve bool, tableName string) er
 						table.TableName, colName, err)
 				}
 			} else {
-				// Uusi sarake, lisätään se ja asetetaan co_number = attNumber
+				// An overlapping discovery may have just registered this field.
 				insertQuery := `
                     INSERT INTO system_column_details
                         (table_uid, column_name, data_type, co_number, card_element, show_key_on_card)
-                    VALUES ($1, $2, $3, $4, 'details', NULL)
+                    SELECT $1, $2::text, $3, ` + appendFieldOrder + `, 'details', NULL
+                    WHERE EXISTS (
+                        SELECT FROM pg_attribute WHERE attrelid = ` + registeredRelation + `
+                          AND attname = $2::text AND attnum > 0 AND NOT attisdropped
+                    )
+                    ON CONFLICT (table_uid, column_name) DO NOTHING
                 `
 				_, err = q.Exec(
 					insertQuery,
 					table.TableUID,
 					colName,
-					col.DataType,
-					col.AttNumber,
+					col.dataType,
+					col.fieldOrder,
 				)
 				if err != nil {
 					return fmt.Errorf("error inserting into system_column_details for table %s, column %s: %w",
@@ -233,16 +255,19 @@ func updateColumnMetadata(q dbutils.Querier, preserve bool, tableName string) er
 
 		// Poista sarakkeet, joita ei enää ole
 		for colName := range existingMetadata {
-			if _, exists := existingColumns[colName]; !exists {
-				deleteQuery := `
+			deleteQuery := `
                     DELETE FROM system_column_details
                     WHERE table_uid = $1 AND column_name = $2
+                      AND NOT EXISTS (
+                          SELECT FROM pg_attribute
+                          WHERE attrelid = ` + registeredRelation + `
+                            AND attname = $2 AND attnum > 0 AND NOT attisdropped
+                      )
                 `
-				_, err = q.Exec(deleteQuery, table.TableUID, colName)
-				if err != nil {
-					return fmt.Errorf("error deleting from system_column_details for table %s, column %s: %w",
-						table.TableName, colName, err)
-				}
+			_, err = q.Exec(deleteQuery, table.TableUID, colName)
+			if err != nil {
+				return fmt.Errorf("error deleting from system_column_details for table %s, column %s: %w",
+					table.TableName, colName, err)
 			}
 		}
 	}
@@ -323,6 +348,10 @@ func UpdateColumns(
 			if err != nil {
 				fmt.Printf("\033[31merror renaming column: %s\033[0m\n", err.Error())
 				return err
+			}
+
+			if err := dtt_2_column_crud.RenameColumnMetadata(tx, sanitizedTableName, sOrigName, sNewName); err != nil {
+				return fmt.Errorf("rename metadata for %s.%s: %w", sanitizedTableName, sOrigName, err)
 			}
 
 			// Update lang key sources and descriptions to reflect the new column name.

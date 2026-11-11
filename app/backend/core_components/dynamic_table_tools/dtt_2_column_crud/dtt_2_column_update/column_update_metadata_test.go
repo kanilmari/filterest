@@ -52,10 +52,11 @@ func TestUpdateColumnMetadataNoTablesReturnsNil(t *testing.T) {
 }
 
 func TestUpdateColumnMetadataUsesNonAbortingRegclassLookup(t *testing.T) {
+	const tableUID int64 = 417
 	db, state := openColUpdateDB(t, []queuedQuery{
 		{
 			cols: []string{"table_name", "table_uid"},
-			rows: [][]driver.Value{{"concurrently_deleted_table", int64(1)}},
+			rows: [][]driver.Value{{"concurrently_deleted_table", tableUID}},
 		},
 		{
 			cols: []string{"attname", "attnum", "data_type"},
@@ -73,9 +74,15 @@ func TestUpdateColumnMetadataUsesNonAbortingRegclassLookup(t *testing.T) {
 	if len(state.queryCalls) != 3 {
 		t.Fatalf("query calls = %d, want 3", len(state.queryCalls))
 	}
-	columnsQuery := state.queryCalls[1]
-	if !strings.Contains(columnsQuery, "pg_catalog.to_regclass($1)") {
-		t.Fatalf("columns query = %q, want parameterized to_regclass lookup", columnsQuery)
+	columnsQuery := strings.Join(strings.Fields(state.queryCalls[1]), " ")
+	const wantLookup = `WHERE a.attrelid = pg_catalog.to_regclass(( SELECT format('%I.%I', ` +
+		`COALESCE(NULLIF(schema_name,''),'public'), table_name) FROM system_db_tables WHERE table_uid = $1 ))`
+	if !strings.Contains(columnsQuery, wantLookup) {
+		t.Fatalf("columns query = %q, want registered schema and table identifiers selected by UID: %q", columnsQuery, wantLookup)
+	}
+	wantArg := driver.NamedValue{Ordinal: 1, Value: tableUID}
+	if args := state.queryArgs[1]; len(args) != 1 || args[0] != wantArg {
+		t.Fatalf("columns query arguments = %#v, want only %#v", args, wantArg)
 	}
 	if strings.Contains(columnsQuery, "::regclass") {
 		t.Fatalf("columns query = %q, direct regclass cast can abort on a concurrent delete", columnsQuery)

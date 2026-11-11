@@ -35,6 +35,7 @@ type colUpdateState struct {
 
 	actorRows  [][]driver.Value
 	queryCalls []string
+	queryArgs  [][]driver.NamedValue
 	execCalls  []string
 }
 
@@ -78,11 +79,12 @@ func (*colUpdateTx) Commit() error { return nil }
 
 func (*colUpdateTx) Rollback() error { return nil }
 
-func (c *colUpdateConn) QueryContext(_ context.Context, query string, _ []driver.NamedValue) (driver.Rows, error) {
+func (c *colUpdateConn) QueryContext(_ context.Context, query string, args []driver.NamedValue) (driver.Rows, error) {
 	c.state.mu.Lock()
 	defer c.state.mu.Unlock()
 
 	c.state.queryCalls = append(c.state.queryCalls, query)
+	c.state.queryArgs = append(c.state.queryArgs, append([]driver.NamedValue(nil), args...))
 	if strings.Contains(query, "AS roles(actor_role)") {
 		return &colUpdateRows{cols: []string{"column_name", "actor_role"}, rows: c.state.actorRows}, nil
 	}

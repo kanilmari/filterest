@@ -66,15 +66,11 @@ func TestUpdateColumnsRejectsInvalidNewName(t *testing.T) {
 }
 
 func TestUpdateColumnsRenameAndTypeChangeHappyPath(t *testing.T) {
-	// Rename: ALTER TABLE RENAME COLUMN → exec 1
-	// Lang source_low update → exec 2
-	// Lang column_value source_high update → exec 3
-	// Lang usage_explanation update → exec 4
-	// Lang column_value usage_explanation update → exec 5
-	// Type change: ALTER TABLE ALTER COLUMN TYPE → exec 6
+	// Rename the physical field and its metadata, move the four language
+	// references, then apply the requested type.
 	_, tx, state := openColUpdateTx(t,
 		[]queuedQuery{currentTypeQuery("text")},
-		[]queuedExec{{}, {}, {}, {}, {}, {}})
+		[]queuedExec{{}, {}, {}, {}, {}, {}, {}})
 
 	err := UpdateColumns(tx, "users", []dtt_2_column_crud.ModifiedCol{
 		{OriginalName: "old_col", NewName: "new_col", DataType: "text"},
@@ -83,14 +79,14 @@ func TestUpdateColumnsRenameAndTypeChangeHappyPath(t *testing.T) {
 		t.Fatalf("UpdateColumns returned error: %v", err)
 	}
 
-	if len(state.execCalls) != 6 {
-		t.Fatalf("exec calls = %d, want 6", len(state.execCalls))
+	if len(state.execCalls) != 7 {
+		t.Fatalf("exec calls = %d, want 7", len(state.execCalls))
 	}
 	if got := state.execCalls[0]; got != "ALTER TABLE users RENAME COLUMN old_col TO new_col" {
 		t.Fatalf("exec[0] = %q, want RENAME statement", got)
 	}
-	if got := state.execCalls[5]; got != "ALTER TABLE users ALTER COLUMN new_col TYPE TEXT" {
-		t.Fatalf("exec[5] = %q, want ALTER TYPE statement", got)
+	if got := state.execCalls[6]; got != "ALTER TABLE users ALTER COLUMN new_col TYPE TEXT" {
+		t.Fatalf("exec[6] = %q, want ALTER TYPE statement", got)
 	}
 }
 
@@ -199,7 +195,7 @@ func TestUpdateColumnsPropagatesTypeChangeExecError(t *testing.T) {
 func TestUpdateColumnsIgnoresLangCleanupFailure(t *testing.T) {
 	// Rename exec succeeds, lang 1st exec fails → non-fatal, type exec succeeds
 	_, tx, state := openColUpdateTx(t, []queuedQuery{currentTypeQuery("text")}, []queuedExec{
-		{},                                    // ALTER RENAME
+		{}, {}, // ALTER RENAME and column identity
 		{err: errors.New("lang source boom")}, // lang source_low update fails → non-fatal
 		{},                                    // ALTER TYPE
 	})
@@ -211,8 +207,8 @@ func TestUpdateColumnsIgnoresLangCleanupFailure(t *testing.T) {
 		t.Fatalf("UpdateColumns returned error: %v", err)
 	}
 
-	if len(state.execCalls) != 3 {
-		t.Fatalf("exec calls = %d, want 3 (rename + failed lang + type)", len(state.execCalls))
+	if len(state.execCalls) != 4 {
+		t.Fatalf("exec calls = %d, want 4 (rename + metadata + failed lang + type)", len(state.execCalls))
 	}
 }
 

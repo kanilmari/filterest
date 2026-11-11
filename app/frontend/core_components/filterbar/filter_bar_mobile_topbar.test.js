@@ -6,7 +6,10 @@
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 import { cleanupFilterBarBuilderTestDom, resetFilterBarBuilderTestDom } from './filter_bar_builder_test_setup.js';
 import { getLanguageWithBrowserFallback } from '../state_stores/lang_preference_reader.js';
-beforeEach(() => {
+beforeEach(async () => {
+    const rules = await import('./shared_topbar_builder.js');
+    const actual = await vi.importActual('./shared_topbar_builder.js');
+    rules.shouldShowSharedTopBar.mockImplementation(actual.shouldShowSharedTopBar);
     resetFilterBarBuilderTestDom();
     vi.spyOn(window, 'innerWidth', 'get').mockReturnValue(375);
     document.head.innerHTML = '<meta property="og:site_name" content="fintravel.fi"><link rel="icon" href="/frontend/icons/site_favicons/site-fintravel-ft-v1-16.png">';

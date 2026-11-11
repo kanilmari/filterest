@@ -18,7 +18,6 @@ vi.mock('../navigation/main_tabs/main_dataset_tabs.js', () => ({
 }));
 vi.mock('./front_page_navigation.js', () => ({ openFrontPage: mocks.open, isFrontPageShowing: () => false }));
 vi.mock('../lang/translation_handler.js', () => ({ getTranslationForKey: () => 'Etusivu' }));
-vi.mock('../filterbar/dataset_corner_controls.js', () => ({ isHeroControlAreaVisible: () => mocks.heroVisible }));
 vi.mock('../filterbar/mobile_topbar_search_controller.js', () => ({
     createMobileTopbarSearchController: () => ({ sync() {}, destroy() {} }),
 }));
@@ -156,11 +155,11 @@ test('Home and dataset tabs have identical overlay/docked menu state and storage
 
 test('the real toolbar controller moves one node through phone, scroll, open menu and hero states', () => {
     setFrontPageAvailability({ show_home_button_in_top_bar_on_wide_screens: true, separate_front_page: true });
-    document.getElementById('hero').innerHTML = '<nav class="hero-dataset-tabs"></nav>';
+    document.getElementById('hero').innerHTML = '<div class="filterbar-inline-hero__top-row"><nav class="hero-dataset-tabs"></nav></div>';
     const hero = document.getElementById('hero');
     const compact = document.getElementById('compact');
     compact.innerHTML = '<div class="dataset-shared-topbar__slot--start"><button class="menu"></button></div>'
-        + '<div class="dataset-shared-topbar__slot--end"></div>';
+        + '<div class="dataset-shared-topbar__center"></div><div class="dataset-shared-topbar__slot--end"></div>';
     const close = document.createElement('button'); compact.append(close);
     let navbarVisible = false;
     const controller = createSharedTopbarVisibilityController({
@@ -168,7 +167,7 @@ test('the real toolbar controller moves one node through phone, scroll, open men
         sharedTopBar: compact, sharedTopBarArticleClose: close, inlineHeroHost: hero,
         getState: () => ({ bigCardOpen: false, inlineHeroVisible: mocks.heroVisible }),
         isHidden: () => true, isNavbarVisible: () => navbarVisible,
-        captureMenuFocus: () => false, syncCornerControls() {},
+        captureControlFocus: () => null, syncCornerControls() {},
     });
     try {
         let focusedLink;
@@ -181,7 +180,7 @@ test('the real toolbar controller moves one node through phone, scroll, open men
             mocks.heroVisible = heroVisible; navbarVisible = open;
             controller.syncSharedTopBar();
             expect(document.querySelectorAll('.top-nav-home-button')).toHaveLength(1);
-            expect(document.getElementById(target).querySelector('.top-nav-home-button')).not.toBeNull();
+            expect(compact.querySelector('.top-nav-home-button')).not.toBeNull();
             if (target === 'compact') {
                 expect(compact.inert).toBe(false);
                 const slot = compact.querySelector('.dataset-shared-topbar__slot--end');
@@ -190,10 +189,10 @@ test('the real toolbar controller moves one node through phone, scroll, open men
                 expect(compact.querySelector('a').classList.contains('navbar-front-page-link')).toBe(true);
             }
             else {
-                expect(hero.querySelector('nav').firstElementChild).toBe(document.querySelector('.top-nav-home-button'));
-                expect(hero.querySelector('a').classList.contains('hero-dataset-tabs__button')).toBe(true);
-                expect(hero.querySelector('a').classList.contains('navbar-front-page-link')).toBe(false);
-                expect(document.body.dataset.sharedTopbarVisible).toBe('false');
+                expect(compact.querySelector('nav').firstElementChild).toBe(document.querySelector('.top-nav-home-button'));
+                expect(compact.querySelector('nav a').classList.contains('hero-dataset-tabs__button')).toBe(true);
+                expect(compact.querySelector('nav a').classList.contains('navbar-front-page-link')).toBe(false);
+                expect(document.body.dataset.sharedTopbarVisible).toBe('true');
             }
             const link = document.querySelector('.top-nav-home-button');
             if (focusedLink) {
@@ -213,9 +212,9 @@ test('the real toolbar controller moves one node through phone, scroll, open men
 test.each(['settings-refresh', 'cached-reactivation'])('%s reconciles both Home transitions in one document', trigger => {
     const hero = document.getElementById('hero');
     const compact = document.getElementById('compact');
-    hero.innerHTML = '<nav class="hero-dataset-tabs"></nav>';
+    hero.innerHTML = '<div class="filterbar-inline-hero__top-row"><nav class="hero-dataset-tabs"></nav></div>';
     compact.innerHTML = '<div class="dataset-shared-topbar__slot--start"><button class="menu"></button></div>'
-        + '<div class="dataset-shared-topbar__slot--end"></div>';
+        + '<div class="dataset-shared-topbar__center"></div><div class="dataset-shared-topbar__slot--end"></div>';
     const dataset = document.createElement('div'); dataset.className = 'content_div';
     document.body.append(dataset); dataset.append(hero, compact);
     const close = document.createElement('button'); compact.append(close);
@@ -225,7 +224,7 @@ test.each(['settings-refresh', 'cached-reactivation'])('%s reconciles both Home 
         sharedTopBar: compact, sharedTopBarArticleClose: close, inlineHeroHost: hero,
         getState: () => ({ bigCardOpen: false, inlineHeroVisible: mocks.heroVisible }),
         isHidden: () => true, isNavbarVisible: () => false,
-        captureMenuFocus: () => false, syncCornerControls,
+        captureControlFocus: () => null, syncCornerControls,
     });
     try {
         // Reuse this exact controller/DOM for enable → disable and disable → enable.
@@ -249,18 +248,18 @@ test.each(['settings-refresh', 'cached-reactivation'])('%s reconciles both Home 
     expect(dataset.querySelector('.top-nav-home-button')).toBeNull();
 });
 
-// The independent oracle is the literal pre-218 rule (a9b4520c^:95-105).
+// Ordinary listings yield to their own panel closers only while both panels are open.
 const visibilityStates = [1920, 1000, 700, 390].flatMap(width =>
     [true, false].flatMap(active => [true, false].flatMap(menu =>
         [true, false].flatMap(hero => [true, false].flatMap(filter =>
             [true, false].map(home => ({ width, active, menu, hero, filter, home })))))));
-test.each(visibilityStates)('pre-218 visibility: %j', state => {
+test.each(visibilityStates)('shared toolbar participation: %j', state => {
     vi.spyOn(window, 'innerWidth', 'get').mockReturnValue(state.width);
     mocks.heroVisible = state.hero;
     const dataset = document.createElement('div');
     dataset.className = state.active ? 'content_div' : 'content_div hidden';
     dataset.innerHTML = '<div id="row"><nav class="hero-dataset-tabs"><button>Dataset</button></nav></div>'
-        + '<div id="bar"><div class="dataset-shared-topbar__slot--end"></div><button></button></div>';
+        + '<div id="bar"><div class="dataset-shared-topbar__center"></div><div class="dataset-shared-topbar__slot--end"></div><button></button></div>';
     document.body.append(dataset);
     setFrontPageAvailability({ show_home_button_in_top_bar_on_wide_screens: true, separate_front_page: state.home });
     const bar = dataset.querySelector('#bar');
@@ -270,11 +269,11 @@ test.each(visibilityStates)('pre-218 visibility: %j', state => {
         inlineHeroHost: dataset.querySelector('#row'),
         getState: () => ({ bigCardOpen: false, inlineHeroVisible: state.hero }),
         isHidden: () => !state.filter, isNavbarVisible: () => state.menu,
-        captureMenuFocus: () => false, syncCornerControls() {},
+        captureControlFocus: () => null, syncCornerControls() {},
     });
     try {
         controller.syncSharedTopBar();
-        const expected = state.active && (state.width <= 700 || (!state.hero && (!state.menu || !state.filter)));
+        const expected = state.active && (!state.menu || !state.filter);
         expect(dataset.dataset.sharedTopbarVisible).toBe(String(expected));
     } finally { controller.destroy(); vi.restoreAllMocks(); }
 });
@@ -294,14 +293,14 @@ test('Home off never reads the optional setting, including with a null active el
         get show_home_button_in_top_bar_on_wide_screens() { return read(); } });
     const hero = document.getElementById('hero');
     const compact = document.getElementById('compact');
-    compact.innerHTML = '<button></button><div class="dataset-shared-topbar__slot--end"></div>';
+    compact.innerHTML = '<button></button><div class="dataset-shared-topbar__center"></div><div class="dataset-shared-topbar__slot--end"></div>';
     vi.spyOn(document, 'activeElement', 'get').mockReturnValue(null);
     const controller = createSharedTopbarVisibilityController({
         tableName: 'demo', currentView: 'card', tablePartsContainer: document.body,
         sharedTopBar: compact, sharedTopBarArticleClose: compact.querySelector('button'), inlineHeroHost: hero,
         getState: () => ({ bigCardOpen: false, inlineHeroVisible: true }),
         isHidden: () => true, isNavbarVisible: () => false,
-        captureMenuFocus: () => false, syncCornerControls() {},
+        captureControlFocus: () => null, syncCornerControls() {},
     });
     try {
         expect(() => controller.syncSharedTopBar()).not.toThrow();
@@ -313,14 +312,14 @@ test('Home off never reads the optional setting, including with a null active el
 test('the mounted toolbar reconciles opt-in, resize and Home-off without duplicate or stale links', () => {
     const hero = document.getElementById('hero');
     const compact = document.getElementById('compact');
-    hero.innerHTML = '<nav class="hero-dataset-tabs"></nav>';
-    compact.innerHTML = '<button></button><div class="dataset-shared-topbar__slot--end"></div>';
+    hero.innerHTML = '<div class="filterbar-inline-hero__top-row"><nav class="hero-dataset-tabs"></nav></div>';
+    compact.innerHTML = '<button></button><div class="dataset-shared-topbar__center"></div><div class="dataset-shared-topbar__slot--end"></div>';
     const controller = createSharedTopbarVisibilityController({
         tableName: 'demo', currentView: 'card', tablePartsContainer: document.body,
         sharedTopBar: compact, sharedTopBarArticleClose: compact.querySelector('button'), inlineHeroHost: hero,
         getState: () => ({ bigCardOpen: false, inlineHeroVisible: mocks.heroVisible }),
         isHidden: () => true, isNavbarVisible: () => false,
-        captureMenuFocus: () => false, syncCornerControls() {},
+        captureControlFocus: () => null, syncCornerControls() {},
     });
     try {
         for (const width of [1440, 390, 700, 701]) for (const enabled of [false, true]) {
@@ -331,7 +330,7 @@ test('the mounted toolbar reconciles opt-in, resize and Home-off without duplica
                 controller.syncSharedTopBar();
                 const shown = enabled && width > 700;
                 expect(document.querySelectorAll('.top-nav-home-button')).toHaveLength(shown ? 1 : 0);
-                if (shown) expect((inHero ? hero : compact).querySelector('.top-nav-home-button')).not.toBeNull();
+                if (shown) expect(compact.querySelector(inHero ? '.hero-dataset-tabs .top-nav-home-button' : '.dataset-shared-topbar__slot--end .top-nav-home-button')).not.toBeNull();
             }
         }
         setFrontPageAvailability({ separate_front_page: false, show_home_button_in_top_bar_on_wide_screens: true });

@@ -1,7 +1,7 @@
 // view_presentation_media_resolver.js
 // Resolves presentation media for the current dataset or the mounted Home view.
 // Connects authoritative tab metadata and visible Home media to one shell flag.
-// Keeps every navigation surface on the same media-dependent shape policy.
+// Home visibility also distinguishes its side-menu buttons from dataset tabs.
 
 export const VIEW_PRESENTATION_MEDIA_ATTRIBUTE = 'data-view-has-presentation-media';
 // Dispatched by the shell-boot guard when it reveals the page.
@@ -19,6 +19,12 @@ function isShown(element) {
     const style = window.getComputedStyle(element);
     const visibilityHidden = style.visibility === 'hidden' || style.visibility === 'collapse';
     return style.display !== 'none' && (!visibilityHidden || shellBootPending()) && style.opacity !== '0';
+}
+
+/** An explicit Home navigation can precede mounting. Layout refreshes use the visible view. */
+export function isHomeNavigationView(activeTabId, viewName) {
+    return !activeTabId && (viewName === 'front_page'
+        || (!viewName && isShown(document.getElementById('front_page_container'))));
 }
 
 /** Dataset metadata owns its rule; Home counts only configured, displayed media.

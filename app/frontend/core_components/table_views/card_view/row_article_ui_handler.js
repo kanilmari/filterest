@@ -4,7 +4,6 @@
 // Exists to keep article-view interaction rules centralized instead of scattering them across card builders.
 
 import { bindRowOpeningHref } from "./default_row_affordance.js";
-import { recordApplicationAddressWrite } from "../../navigation/nav_engine/address_write_revision.js";
 import { count_this_function } from "../../dev_tools/function_counter.js";
 import { extractLangValue } from "../../../reusable_components/lang_value_reader.js";
 import {
@@ -14,9 +13,10 @@ import {
 import { appendConfiguredCardDetailIcon } from "./card_detail_single_line_helpers.js";
 import { getUnifiedTableState, setUnifiedTableState } from "../../general_tables/gt_1_row_crud/gt_1_2_row_read/table_refresh_unified.js";
 import { setChosenDatasetView } from "../../state_stores/dataset_view_choice_saver.js";
-import { DATASET_PREFIX } from "../../navigation/nav_engine/query_params.js";
-import { updateDatasetAddress } from "../../navigation/nav_engine/dataset_address_writer.js";
-import { buildDatasetPath } from "../../navigation/nav_engine/dataset_aliases.js";
+import { DATASET_PREFIX, getParams } from "../../navigation/nav_engine/query_params.js";
+import { updateDatasetAddress, writeDatasetAddress } from "../../navigation/nav_engine/dataset_address_writer.js";
+import { HISTORY_ENTRY_ID, isSwitchedArticleEntry } from "../../navigation/nav_engine/history_entry_state.js";
+import { getCardArticleOriginEntry, canRestoreCardArticleReturn } from "../../navigation/nav_engine/card_article_return_state.js";
 import { isDatasetRowPath } from "../../navigation/nav_engine/history_navigation_handler_helpers.js";
 import { getLanguageWithBrowserFallback } from "../../state_stores/lang_preference_reader.js";
 import { formatTimestampDisplayParts } from "../timestamp_display_formatter.js";
@@ -293,37 +293,42 @@ export function closeRowArticle(
     big_card_div.remove();
     wrapper.classList.remove("big-card-open");
 
-    // Restore URL from /{dataset}/{id} back to /{dataset}
-    // Use history.back() so the card URL entry is popped (no duplicate entries).
-    // A flag tells the popstate handler to skip re-navigation since closeRowArticle
-    // already cleaned up the DOM.
-    // If the current state was NOT pushed by openRowArticleView (e.g. direct URL),
-    // fall back to replaceState to avoid navigating away entirely.
+    // The first article can go Back to its list. Close replaces a direct entry,
+    // but adds a list visit after a row switch so Back can still reach that row.
     if (!skipHistoryBack && table_name) {
-        const datasetPath = buildDatasetPath(table_name, DATASET_PREFIX);
         const currentPath = window.location.pathname;
         if (isDatasetRowPath(currentPath, DATASET_PREFIX, table_name)) {
-            if (history.state?.bigCard === true && history.state?.articleReturnAvailable !== false) {
+            const state = history.state || {};
+            if (state.bigCard === true && state.articleReturnAvailable !== false) {
                 window.__bigCardClosing = true;
                 history.back();
             } else {
-                recordApplicationAddressWrite();
-                history.replaceState(
-                    { bigCard: false, dataset: table_name },
-                    "",
-                    datasetPath
-                );
-                if (wrapper.dataset.viewKey === "article_view") {
-                    const returnView = getUnifiedTableState(table_name)?.articleView?.returnView || "card";
+                const returnView = getUnifiedTableState(table_name)?.articleView?.returnView || "card";
+                const savedOrigin = state.dataset === table_name && state.bigCard === true && state.articleOriginEntry;
+                const origin = returnView === "card" && savedOrigin && savedOrigin === getCardArticleOriginEntry(table_name)
+                    ? savedOrigin : null;
+                writeDatasetAddress(table_name, { ...getParams(table_name), view: returnView }, DATASET_PREFIX, {
+                    replace: !isSwitchedArticleEntry(state, table_name),
+                    state: { bigCard: false, dataset: table_name, ...(origin ? { cardReturnOriginEntry: origin } : {}) },
+                });
+                const entryId = history.state?.[HISTORY_ENTRY_ID];
+                const entryURL = window.location.href;
+                const isCurrent = () => history.state?.[HISTORY_ENTRY_ID] === entryId && window.location.href === entryURL;
+                if (origin && canRestoreCardArticleReturn(table_name)) {
+                    // Reuse the mounted list through the normal permission/dirty
+                    // pipeline; a refresh here would discard pages and selection.
+                    void import("../../navigation/nav_engine/history_navigation_handler.js")
+                        .then(({ handleHistoryNavigation }) => { if (isCurrent()) return handleHistoryNavigation(); });
+                } else if (wrapper.dataset.viewKey === "article_view") {
                     setChosenDatasetView(table_name, returnView);
                     void import("../../general_tables/gt_1_row_crud/gt_1_2_row_read/table_refresh_unified.js")
-                        .then(({ refreshTableUnified }) => refreshTableUnified(table_name, { skipUrlParams: true }));
+                        .then(({ refreshTableUnified }) => {
+                            if (isCurrent()) return refreshTableUnified(table_name, { skipUrlParams: true, isCurrent });
+                        })
+                        .then(() => updateDatasetAddress({ dataset: table_name, isCurrent }));
+                } else {
+                    void updateDatasetAddress({ dataset: table_name, isCurrent });
                 }
-                // The bare path above drops the person's search and filters and
-                // leaves the cached parameters still saying article_view. Ask the
-                // address owner to write both from the state this close settles,
-                // so the next search or sort cannot copy that view back in.
-                void updateDatasetAddress({ dataset: table_name });
             }
         }
     }

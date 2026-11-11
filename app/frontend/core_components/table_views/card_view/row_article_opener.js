@@ -11,7 +11,8 @@ import { loadRowArticleSectionDefaults } from "./row_article_section_defaults.js
 
 import { ARTICLE_VIEW_KEY, resolveDatasetViewSelectionTarget } from "../dataset_view_registry.js";
 import { captureCardArticleReturn, getCardArticleOriginEntry } from "../../navigation/nav_engine/card_article_return_state.js";
-import { writeHistoryEntry } from "../../navigation/nav_engine/history_entry_state.js";
+import { isSwitchedArticleEntry, writeHistoryEntry } from "../../navigation/nav_engine/history_entry_state.js";
+import { parseDeepLink } from "../../admin_tools/main/table_loader_handler_helpers.js";
 import { updateDatasetAddress } from "../../navigation/nav_engine/dataset_address_writer.js";
 import { createArticleLanguageEditor } from "../article_view/article_language_editor.js";
 import { endpoint_router } from "../../endpoints/endpoint_router.js";
@@ -30,7 +31,7 @@ import { count_this_function } from "../../dev_tools/function_counter.js";
 import { setUnifiedTableState } from "../../state_stores/table_state_store.js";
 import { getChosenDatasetView, setChosenDatasetView } from "../../state_stores/dataset_view_choice_saver.js";
 import { articleViewRestoreFieldsForRowChange } from "./row_article_view_restore_state.js";
-import { DATASET_PREFIX } from "../../navigation/nav_engine/query_params.js";
+import { DATASET_PREFIX, normalizePath } from "../../navigation/nav_engine/query_params.js";
 import { buildDatasetPath } from "../../navigation/nav_engine/dataset_aliases.js";
 import {
     hasRoutePermission,
@@ -538,21 +539,27 @@ export async function openRowArticleView(row_item, table_name, selectedCard = nu
             const currentUrl = window.location.pathname + window.location.search;
             const historyRowId = String(rowId);
             const historyState = { bigCard: true, dataset: table_name, rowId: historyRowId, articleOriginEntry: getCardArticleOriginEntry(table_name) };
-            const rowPathRoot = buildCardUrl(DATASET_PREFIX, table_name, historyRowId, "");
-            const currentPath = window.location.pathname;
-            const currentPathIsSameRow =
-                currentPath === rowPathRoot || currentPath.startsWith(`${rowPathRoot}-`);
+            const currentPath = normalizePath(window.location.pathname);
+            const address = parseDeepLink(currentPath, DATASET_PREFIX || "/");
+            const previousRowId = address.tableName === table_name ? address.rowId : null;
+            const currentPathIsSameRow = previousRowId === historyRowId;
             // A direct collection article URL selects its initial row within
             // the same view entry. There is no standalone full-card article list.
             const currentPathIsArticleCollection = currentPath === buildDatasetPath(table_name, DATASET_PREFIX || "/")
                 && resolveDatasetViewSelectionTarget(new URLSearchParams(window.location.search).get("view")) === ARTICLE_VIEW_KEY;
             const currentHistoryState = history.state || {};
-            historyState.articleReturnAvailable = !currentPathIsArticleCollection
-                && (!currentPathIsSameRow || currentHistoryState.articleReturnAvailable === true);
             const currentHistoryStateMatches =
                 currentHistoryState.bigCard === true
                 && currentHistoryState.dataset === table_name
                 && String(currentHistoryState.rowId) === historyRowId;
+            // A bookmark and a row switch can both lack a list immediately behind them.
+            // Keep that distinction on the row's own entry through reloads and slug repairs.
+            historyState.articleFromRow = currentPathIsSameRow
+                ? currentHistoryStateMatches && isSwitchedArticleEntry(currentHistoryState, table_name)
+                : Boolean(previousRowId);
+            historyState.articleReturnAvailable = currentPathIsSameRow
+                ? currentHistoryState.articleReturnAvailable === true
+                : !currentPathIsArticleCollection && !previousRowId;
             if (currentUrl === cardUrl && currentHistoryStateMatches) {
                 // The current history entry already describes this article.
             } else if (currentUrl === cardUrl) {

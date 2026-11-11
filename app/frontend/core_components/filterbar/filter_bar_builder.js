@@ -286,8 +286,6 @@ export function create_filter_bar(
     sharedTopBarMenuSlot.setAttribute("aria-hidden", "true");
     sharedTopBarMenuSlot.inert = true;
     const sharedTopBarMenuButton = buildSharedTopBarMenuButton();
-    const heroMenuButton = buildSharedTopBarMenuButton();
-    heroMenuButton.dataset.testid = "hero-menu-button";
     sharedTopBarMenuSlot.appendChild(sharedTopBarMenuButton);
     addEnvironmentBadgeIfNeeded(sharedTopBarMenuSlot);
     sharedTopBarStart.append(
@@ -342,6 +340,6 @@ export function create_filter_bar(
     }
 
     return wireFilterbarRuntime({
-        tableName, currentView, tablePartsContainer, contentArea, mainTableContainer, initialResponsivePanelState, panelMode, lifetimeController, signal, panel, panelBody, clockBar, chatDock, datasetTitleRow, inlineHeroHost, scrollSentinel, fixedToggleButton, hideFilterBtn, showMenuButton, sharedTopBarOwner, sharedTopBar, sharedTopBarEnd, sharedTopBarMenuButton, sharedTopBarMenuSlot, sharedTopBarArticleClose, sharedTopBarSearch, heroMenuButton, filterBarContent, overviewSection, sectionOrdering, styleSettings
+        tableName, currentView, tablePartsContainer, contentArea, mainTableContainer, initialResponsivePanelState, panelMode, lifetimeController, signal, panel, panelBody, clockBar, chatDock, datasetTitleRow, inlineHeroHost, scrollSentinel, fixedToggleButton, hideFilterBtn, showMenuButton, sharedTopBarOwner, sharedTopBar, sharedTopBarEnd, sharedTopBarMenuButton, sharedTopBarMenuSlot, sharedTopBarArticleClose, sharedTopBarSearch, filterBarContent, overviewSection, sectionOrdering, styleSettings
     });
 }

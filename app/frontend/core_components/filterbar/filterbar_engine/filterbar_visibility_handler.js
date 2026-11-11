@@ -180,10 +180,6 @@ export function setFilterBarVisibility(
     updateShowMenuButtonPosition();
     setStoredVisibility(tableName, isVisible);
 
-    const menuButton = document.getElementById("showMenuButton");
-    if (menuButton) {
-        menuButton.classList.toggle("filterbar-overlap", !isVisible);
-    }
     const searchButton = tablePartsContainer.querySelector(
         ".card_search_filter_button"
     );

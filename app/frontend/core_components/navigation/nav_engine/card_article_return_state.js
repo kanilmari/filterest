@@ -91,11 +91,16 @@ export function captureCardArticleReturn(datasetName, adapter) {
         invalidateCardArticleReturn();
         return null;
     }
+    // A Close visit can refer to this same mounted list from a newer entry.
+    // Keep its original identity so older articles and the first list still work.
+    const previous = validRecord(datasetName);
+    const reuseOrigin = previous?.host === host && previous.cardRoot === cardRoot
+        && getCardArticleReturnToken(datasetName) === previous.token;
     captureDatasetScrollState(root);
     const topControls = document.getElementById(`${datasetName}_card_top_controls`);
     retained = {
-        token: Object.freeze({}), datasetName, root, host, cardRoot, adapter,
-        entryId: ensureHistoryEntryId(), pathname: window.location.pathname,
+        token: reuseOrigin ? previous.token : Object.freeze({}), datasetName, root, host, cardRoot, adapter,
+        entryId: reuseOrigin ? previous.entryId : ensureHistoryEntryId(), pathname: window.location.pathname,
         signature: querySignature(window.location.href),
         language: document.documentElement.lang, query, searchCache, pagination,
         state: getUnifiedTableState(datasetName),
@@ -116,7 +121,7 @@ export function getCardArticleReturnToken(datasetName) {
     if (!record) return null;
     const state = history.state || {};
     return state[HISTORY_ENTRY_ID] === record.entryId || state.articleOriginEntry === record.entryId
-        ? record.token : null;
+        || isClosedReturnEntry(record, state) ? record.token : null;
 }
 
 /** Forward leaves an already-restored card list at its latest scroll/page. */
@@ -134,10 +139,15 @@ export function getCardArticleOriginEntry(datasetName) {
     return getCardArticleReturnToken(datasetName) ? retained.entryId : null;
 }
 
+function isClosedReturnEntry(record, state) {
+    return !state?.bigCard && state?.dataset === record.datasetName
+        && state?.cardReturnOriginEntry === record.entryId;
+}
+
 export function canRestoreCardArticleReturn(datasetName) {
     const record = validRecord(datasetName);
     return Boolean(record && window.location.pathname === record.pathname
-        && history.state?.[HISTORY_ENTRY_ID] === record.entryId
+        && (history.state?.[HISTORY_ENTRY_ID] === record.entryId || isClosedReturnEntry(record, history.state))
         && !history.state?.bigCard);
 }
 

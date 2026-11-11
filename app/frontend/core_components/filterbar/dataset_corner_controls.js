@@ -1,8 +1,9 @@
 // dataset_corner_controls.js
-// Places existing dataset show buttons in the visible surface's control corners.
-// Bridges hero/shared-toolbar slots with the existing navbar and filterbar actions.
+// Places both existing panel toggles in the shared bar, or returns control to the panels.
+// Bridges the selected dataset toolbar and the existing navbar and filterbar actions.
 // Owns button placement and accessibility only; panel state and actions stay with their builders.
 import { getLanguageWithBrowserFallback } from "../state_stores/lang_preference_reader.js";
+import { getTranslationForKey } from "../lang/translation_handler.js";
 
 const LABELS = {
     fi: { menu: "Näytä päävalikko", show: "Näytä suodatuspalkki", hide: "Piilota suodatuspalkki" },
@@ -14,23 +15,6 @@ const LABELS = {
     'zh-HK': { menu: "顯示主選單", show: "顯示篩選工具列", hide: "隱藏篩選工具列" },
 };
 
-export function selectDatasetCornerOwner({ active, heroControlsVisible, topbarVisible }) {
-    if (!active) return "none";
-    if (heroControlsVisible) return "hero";
-    return topbarVisible ? "topbar" : "fallback";
-}
-
-// The hero may still be partially visible after its top buttons have scrolled
-// away. That state uses the existing fixed fallback until the shared bar opens.
-export function isHeroControlAreaVisible(hero, scrollable) {
-    if (!hero?.isConnected || !scrollable?.isConnected) return false;
-    const area = hero.getBoundingClientRect();
-    const viewport = scrollable.getBoundingClientRect();
-    return area.height > 0 && viewport.height > 0
-        && area.top + 12 >= Math.max(0, viewport.top)
-        && area.top + 56 <= Math.min(window.innerHeight, viewport.bottom);
-}
-
 function setButtonVisibility(button, visible) {
     button.setAttribute("aria-hidden", String(!visible));
     button.tabIndex = visible ? 0 : -1;
@@ -38,7 +22,7 @@ function setButtonVisibility(button, visible) {
 }
 
 function setLabel(button, label) {
-    if (!button) return;
+    if (!button || !label) return;
     button.title = label;
     button.setAttribute("aria-label", label);
 }
@@ -50,37 +34,22 @@ function moveButton(button, host) {
     if (wasFocused) button.focus({ preventScroll: true });
 }
 
-/**
- * Keep a single sidebar opener and one visible menu opener per active dataset.
- * The original global menu node stays in its original DOM home for its existing
- * navbar wiring; a local menu button delegates to that same canonical action.
- */
+/** The toolbar owns both toggles, or each visible panel owns its own closer. */
 export function createDatasetCornerControls({
-    hero, fallbackHost, filterButton, hideFilterButton, panel,
-    heroMenuButton, topbarEnd, topbarMenuButton, topbarMenuSlot,
+    fallbackHost, filterButton, hideFilterButton, panel, topbarEnd, topbarMenuButton, topbarMenuSlot,
     sourceMenuButton, menuOwner, syncNavbarAccessibility,
 }) {
-    const start = document.createElement("div");
-    start.className = "dataset-corner-controls dataset-corner-controls--start";
-    const end = document.createElement("div");
-    end.className = "dataset-corner-controls dataset-corner-controls--end";
-    start.hidden = true;
-    end.hidden = true;
-    start.appendChild(heroMenuButton);
-    hero?.append(start, end);
     topbarEnd.classList.add("dataset-corner-controls-topbar-end");
-    filterButton.type = "button";
-    filterButton.setAttribute("aria-controls", panel.id);
-    hideFilterButton.type = "button";
-    hideFilterButton.setAttribute("aria-controls", panel.id);
+    for (const button of [filterButton, hideFilterButton]) {
+        button.type = "button";
+        button.setAttribute("aria-controls", panel.id);
+    }
     let destroyed = false;
     let filterbarIsVisible = false;
-
+    let navbarIsVisible = false;
     function refreshLabels() {
-        const language = getLanguageWithBrowserFallback();
-        const labels = LABELS[language] || LABELS.en;
-        setLabel(heroMenuButton, labels.menu);
-        setLabel(topbarMenuButton, labels.menu);
+        const labels = LABELS[getLanguageWithBrowserFallback()] || LABELS.en;
+        setLabel(topbarMenuButton, navbarIsVisible ? getTranslationForKey("close", { countUsage: false }) : labels.menu);
         setLabel(filterButton, filterbarIsVisible ? labels.hide : labels.show);
         setLabel(hideFilterButton, labels.hide);
     }
@@ -88,64 +57,57 @@ export function createDatasetCornerControls({
     const languageObserver = new MutationObserver(refreshLabels);
     languageObserver.observe(document.documentElement, { attributes: true, attributeFilter: ["lang"] });
 
-    // Capture before a surface changes accessibility, including the topbar's
-    // own hide/show. Pass the intent to sync in the same synchronous update;
-    // inactive datasets can release local focus but cannot take shell focus.
-    function captureMenuFocus(active) {
-        if (destroyed) return false;
-        const focusedButton = document.activeElement;
-        return focusedButton === heroMenuButton || focusedButton === topbarMenuButton
-            || (active && (focusedButton === sourceMenuButton || focusedButton === document.getElementById("hideMenuButton")));
+    function captureControlFocus(active) {
+        if (destroyed) return null;
+        const focused = document.activeElement;
+        if (focused === topbarMenuButton || (active && (focused === sourceMenuButton || focused === document.getElementById("hideMenuButton")))) return "menu";
+        if (focused === filterButton || focused === hideFilterButton) return "filter";
+        return null;
     }
 
-    function sync({ active, heroControlsVisible, topbarVisible, navbarVisible, filterbarVisible, phone = false,
-        menuHadFocus = captureMenuFocus(active) }) {
+    function releaseMenu() {
+        if (sourceMenuButton?.__sharedTopbarMenuOwner !== menuOwner) return;
+        sourceMenuButton.__sharedTopbarMenuOwner = null;
+        sourceMenuButton.classList.remove("shared-topbar-menu-source-hidden");
+    }
+
+    function sync({ active, topbarVisible, navbarVisible, filterbarVisible, focus = captureControlFocus(active) }) {
         if (destroyed) return "none";
-        const closeMenuButton = document.getElementById("hideMenuButton");
+        const inBar = active && topbarVisible;
+        const showFilter = active && (inBar || !filterbarVisible);
+        const panelClose = active && filterbarVisible && !inBar;
         filterbarIsVisible = filterbarVisible;
-        const owner = selectDatasetCornerOwner({ active, heroControlsVisible: !phone && heroControlsVisible, topbarVisible });
-        const showFilter = active && (phone || !filterbarVisible);
-        const heroMenuVisible = owner === "hero" && !navbarVisible;
-        // The open panel owns its closer at every width. Keeping the phone
-        // opener announced underneath it creates two owners during history.
-        const topbarMenuVisible = owner === "topbar" && !navbarVisible;
-        start.hidden = !heroMenuVisible;
-        end.hidden = !(owner === "hero" && showFilter);
-        setButtonVisibility(heroMenuButton, heroMenuVisible);
-        setButtonVisibility(topbarMenuButton, topbarMenuVisible);
-        for (const button of [heroMenuButton, topbarMenuButton]) {
-            button.setAttribute("aria-expanded", String(navbarVisible));
-        }
-        topbarMenuSlot.classList.toggle("dataset-shared-topbar__menu-slot--visible", topbarMenuVisible);
-        topbarMenuSlot.setAttribute("aria-hidden", String(!topbarMenuVisible));
-        topbarMenuSlot.inert = !topbarMenuVisible;
-        if (sourceMenuButton && (heroMenuVisible || topbarMenuVisible)) {
+        navbarIsVisible = navbarVisible;
+        setButtonVisibility(topbarMenuButton, inBar);
+        topbarMenuButton.setAttribute("aria-expanded", String(navbarVisible));
+        topbarMenuSlot.classList.toggle("dataset-shared-topbar__menu-slot--visible", inBar);
+        topbarMenuSlot.setAttribute("aria-hidden", String(!inBar));
+        topbarMenuSlot.inert = !inBar;
+        if (sourceMenuButton && inBar) {
             sourceMenuButton.__sharedTopbarMenuOwner = menuOwner;
             sourceMenuButton.classList.add("shared-topbar-menu-source-hidden");
-        } else if (sourceMenuButton?.__sharedTopbarMenuOwner === menuOwner) {
-            sourceMenuButton.__sharedTopbarMenuOwner = null;
-            sourceMenuButton.classList.remove("shared-topbar-menu-source-hidden");
+        } else {
+            releaseMenu();
         }
-        const target = showFilter && owner === "hero" ? end
-            : showFilter && owner === "topbar" ? topbarEnd : fallbackHost;
-        moveButton(filterButton, target);
+        moveButton(filterButton, inBar ? topbarEnd : fallbackHost);
+        const owner = inBar ? "topbar" : active ? "fallback" : "none";
         filterButton.dataset.cornerOwner = owner;
-        filterButton.classList.toggle("filterbar-fixed-toggle--hosted", target !== fallbackHost);
+        filterButton.classList.toggle("filterbar-fixed-toggle--hosted", inBar);
         filterButton.classList.toggle("filterbar-fixed-toggle--exposed", showFilter);
         setButtonVisibility(filterButton, showFilter);
         filterButton.setAttribute("aria-expanded", String(filterbarVisible));
-        const labels = LABELS[getLanguageWithBrowserFallback()] || LABELS.en;
-        setLabel(filterButton, filterbarVisible ? labels.hide : labels.show);
         hideFilterButton.setAttribute("aria-expanded", String(filterbarVisible));
-        setButtonVisibility(hideFilterButton, active && filterbarVisible);
+        setButtonVisibility(hideFilterButton, panelClose);
+        const dock = hideFilterButton.closest('.filterbar-panel__toggle-dock');
+        if (dock) { dock.hidden = !panelClose; dock.inert = !panelClose; }
+        refreshLabels();
         syncNavbarAccessibility();
-        if (menuHadFocus) {
-            const target = navbarVisible ? closeMenuButton
-                : heroMenuVisible ? heroMenuButton : topbarMenuVisible ? topbarMenuButton : sourceMenuButton;
-            // Accessibility has now been reconciled for the incoming owner.
-            // Never focus a retained, hidden host or an unavailable shell control.
-            if (target?.isConnected && !target.disabled && target.tabIndex >= 0 && target.getAttribute("aria-hidden") === "false"
-                && !target.closest('[hidden], [inert], .hidden, [aria-hidden="true"]')) target.focus({ preventScroll: true });
+        let incoming;
+        if (focus === "menu") incoming = inBar ? topbarMenuButton
+            : navbarVisible ? document.getElementById("hideMenuButton") : sourceMenuButton;
+        if (active && focus === "filter") incoming = panelClose ? hideFilterButton : filterButton;
+        if (incoming?.isConnected && !incoming.closest('[hidden],[inert],.hidden,[aria-hidden="true"]')) {
+            incoming.focus({ preventScroll: true });
         }
         return owner;
     }
@@ -154,14 +116,9 @@ export function createDatasetCornerControls({
         if (destroyed) return;
         destroyed = true;
         languageObserver.disconnect();
-        if (sourceMenuButton?.__sharedTopbarMenuOwner === menuOwner) {
-            sourceMenuButton.__sharedTopbarMenuOwner = null;
-            sourceMenuButton.classList.remove("shared-topbar-menu-source-hidden");
-            syncNavbarAccessibility();
-        }
+        releaseMenu();
+        syncNavbarAccessibility();
         moveButton(filterButton, fallbackHost);
-        start.remove();
-        end.remove();
     }
-    return { captureMenuFocus, sync, destroy };
+    return { captureControlFocus, sync, destroy };
 }

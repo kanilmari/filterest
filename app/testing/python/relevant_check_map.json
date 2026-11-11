@@ -176,6 +176,7 @@
       ],
       "specs": ["app/testing/e2e/G_navigation/G15_home_boxes.spec.ts", "app/testing/e2e/C_card_view/C32_row_presentation_choice.spec.ts", "app/testing/e2e/C_card_view/C27_article_image_controls_idle.spec.ts", "app/testing/e2e/C_card_view/C31_article_one_heading.spec.ts", "app/testing/e2e/L_auth/L9_guest_browser_privacy.spec.ts", "app/testing/e2e/C_card_view/C28_details_edges_and_show_more.spec.ts", "app/testing/e2e/C_card_view/C29_photo_frame_removal.spec.ts", "app/testing/e2e/C_card_view/C24_cancel_changes.spec.ts",
         "app/testing/e2e/C_card_view/C25_rich_text_links.spec.ts",
+        "app/testing/e2e/E_search_filter/E15_responsive_topbar.spec.ts",
         "app/testing/e2e/G_navigation/G10_dataset_name_pool_access.spec.ts", "app/testing/e2e/C_card_view/C22_article_image_arrows_probe.spec.ts", "app/testing/e2e/C_card_view/C21_record_titles.spec.ts", "app/testing/e2e/C_card_view/C19_dataset_heading_hierarchy.spec.ts", "app/testing/e2e/C_card_view/C10_image_first_article.spec.ts", "app/testing/e2e/C_card_view/C11_network_media_variants.spec.ts", "app/testing/e2e/C_card_view/C12_article_reload_reading_position.spec.ts", "app/testing/e2e/C_card_view/C13_related_dataset_appearance.spec.ts",
         "app/testing/e2e/C_card_view/C16_finnish_card_filterbar_text.spec.ts", "app/testing/e2e/C_card_view/C17_article_toolbar_group_permissions.spec.ts", "app/testing/e2e/C_card_view/C18_article_open_appearance_probe.spec.ts", "app/testing/e2e/C_card_view/C2_open_big_card.spec.ts",
         "app/testing/e2e/C_card_view/C3_close_big_card.spec.ts", "app/testing/e2e/C_card_view/C6_big_card_attachments.spec.ts", "app/testing/e2e/C_card_view/C7_big_card_field_edit_preserves_assets.spec.ts", "app/testing/e2e/C_card_view/C8_big_card_primary_image_actions.spec.ts",
@@ -754,6 +755,21 @@
       ],
       "package": "app/backend/tools/internal/articlecomparison",
       "anchor": "app/backend/tools/internal/articlecomparison/compare_test.go"
+    },
+    {
+      "paths": [
+        "app/backend/core_components/dynamic_table_tools/dtt_2_column_crud/column_metadata_ddl.go",
+        "app/backend/core_components/dynamic_table_tools/dtt_2_column_crud/dtt_2_column_update/column_update.go",
+        "app/backend/core_components/dynamic_table_tools/dtt_2_column_crud/dtt_2_column_delete/column_delete.go",
+        "app/backend/core_components/system_table_tools/catalogue_refresh_reader.go"
+      ],
+      "package": "app/backend/core_components/runtime_grants",
+      "anchor": "app/backend/core_components/runtime_grants/column_order_postgres_test.go"
+    },
+    {
+      "paths": ["app/backend/core_components/dynamic_table_tools/dtt_asset_linking/asset_linking_creator.go"],
+      "package": "app/backend/core_components/runtime_grants",
+      "anchor": "app/backend/core_components/runtime_grants/asset_mutation_hooks_postgres_test.go"
     },
     {
       "paths": [

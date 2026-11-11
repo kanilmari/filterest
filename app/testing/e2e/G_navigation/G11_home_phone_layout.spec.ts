@@ -395,19 +395,16 @@ async function proveDatasetMenuOwnership(page: Page, sample = true) {
   const topbar = page.locator('.dataset-shared-topbar:visible');
   const menu = topbar.getByTestId('shared-topbar-menu-button');
   const open = !/\bcollapsed\b/.test(await page.locator('#navbar').getAttribute('class') || '');
-  // Round 5: the open navbar owns its closer on phones as on larger screens.
-  if (open) {
-    await expect(menu).toBeHidden();
-    await expect(menu).toHaveAttribute('aria-hidden', 'true'); await expect(menu).toHaveAttribute('tabindex', '-1');
-    await expect(topbar.locator('.dataset-shared-topbar__menu-slot')).toHaveJSProperty('inert', true);
-    await expect(source).not.toHaveClass(/shared-topbar-menu-source-hidden/);
-    await expect(source).toHaveAttribute('aria-hidden', 'true'); await expect(source).toHaveAttribute('tabindex', '-1');
-    await expect(page.locator('#hideMenuButton')).toBeVisible();
-    await expect(page.locator('#hideMenuButton')).toHaveAttribute('aria-hidden', 'false');
-    await expect(page.locator('#hideMenuButton')).toHaveAttribute('tabindex', '0');
+  if (await page.locator('.tab_parts_container:visible').getAttribute('data-shared-topbar-visible') === 'false') {
+    const close = page.locator('#hideMenuButton');
+    await expect(close).toBeVisible();
+    await expect(close).toHaveAttribute('aria-hidden', 'false');
+    await expect(close).toHaveAttribute('tabindex', '0');
     if (sample) await sampleMenuTransition(page, async () => {});
     return;
   }
+  await expect(menu).toHaveAttribute('aria-expanded', String(open));
+  await expect(page.locator('#hideMenuButton')).toBeHidden();
   await expect(topbar).toBeVisible(); await expect(menu).toBeVisible();
   await expect(source).toHaveClass(/shared-topbar-menu-source-hidden/);
   await expect(source).toHaveAttribute('aria-hidden', 'true');
@@ -547,17 +544,17 @@ for (const open of [false, true]) {
     await expect.poll(() => identity.locator('img').evaluate((image: HTMLImageElement) =>
       image.complete && /-128\.png$/.test(image.currentSrc))).toBe(true);
     await expect(identity.locator('img')).toHaveCSS('image-rendering', 'auto');
-    await expect(page.locator('.tab_parts_container:visible .filterbar-inline-hero .hero-dataset-tabs')).toBeHidden();
+    await expect(page.locator('.tab_parts_container:visible .filterbar-inline-hero__top-row .hero-dataset-tabs')).toBeHidden();
     const datasetMenu = page.locator('.dataset-shared-topbar:visible').getByTestId('shared-topbar-menu-button');
     const navbar = page.locator('#navbar');
     // Clicking the destination may close the overlay; explicitly exercise both
     // outgoing dataset states instead of relying on the Home state from earlier.
     if (/\bcollapsed\b/.test(await navbar.getAttribute('class') || '') === open) {
-      await (open ? datasetMenu : page.locator('#hideMenuButton')).click();
+      await datasetMenu.click();
     }
     if (open) await expect(navbar).not.toHaveClass(/\bcollapsed\b/);
     else await expect(navbar).toHaveClass(/\bcollapsed\b/);
-    await focusOutgoingMenu(page, open ? page.locator('#hideMenuButton') : datasetMenu);
+    await focusOutgoingMenu(page, datasetMenu);
     await sampleMenuTransition(page, async () => {
       await page.goBack();
       await expect(page.locator('.front-page-top-row')).toBeVisible();
@@ -573,8 +570,7 @@ for (const open of [false, true]) {
       await expect(page.locator('.front-page-top-row')).toHaveCount(0);
       // Keep the ownership assertions here; the surrounding probe already samples.
       await proveDatasetMenuOwnership(page, false);
-      const forwardOpen = !/\bcollapsed\b/.test(await navbar.getAttribute('class') || '');
-      await expectFocusWithMenuOwner(page, forwardOpen ? page.locator('#hideMenuButton') : datasetMenu);
+      await expectFocusWithMenuOwner(page, datasetMenu);
     });
     await sampleMenuTransition(page, () => page.goBack());
     await setMenu(page, !open); await proveHome(page, !open, state.alignment, false);
@@ -601,9 +597,7 @@ for (const open of [false, true]) {
       await sampleMenuTransition(page, async () => {
         await page.goForward();
         await expect(page.locator('.front-page-top-row')).toHaveCount(0);
-        const datasetOpen = !/\bcollapsed\b/.test(await navbar.getAttribute('class') || '');
-        incoming = datasetOpen ? page.locator('#hideMenuButton')
-          : page.locator('[data-navbar-menu-button="true"]:visible, #showMenuButton:visible');
+        incoming = page.locator('[data-navbar-menu-button="true"][aria-hidden="false"]:visible, #hideMenuButton[aria-hidden="false"]:visible, #showMenuButton[aria-hidden="false"]:visible');
         await expect(incoming).toHaveCount(1); await expect(incoming).toBeVisible();
         await expect(incoming).toHaveAttribute('aria-hidden', 'false');
         await expect(incoming).toHaveAttribute('tabindex', '0');

@@ -55,6 +55,10 @@ func RemoveColumns(tx *sql.Tx, sanitizedTableName string, removedCols []string) 
 			return err2
 		}
 
+		if err := dtt_2_column_crud.DeleteDroppedColumnMetadata(tx, sanitizedTableName, sCol); err != nil {
+			return fmt.Errorf("remove metadata for %s.%s: %w", sanitizedTableName, sCol, err)
+		}
+
 		// Clean up lang key sources for the removed column.
 		if cleanErr := lang.CleanupLangKeySourcesForColumn(tx, sanitizedTableName, sCol); cleanErr != nil {
 			log.Printf("[RemoveColumns] warning: lang key source cleanup for column %s.%s: %v", sanitizedTableName, sCol, cleanErr)

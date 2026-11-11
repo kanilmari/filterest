@@ -56,6 +56,13 @@ export function getHistoryDatasetView(dataset) {
         && typeof remembered.view === "string" ? remembered.view : null;
 }
 
+/** Before the switch flag existed, a non-backable article could still name its own card-list origin. */
+export function isSwitchedArticleEntry(state, dataset) {
+    if (state?.bigCard !== true || state.dataset !== dataset) return false;
+    return state.articleFromRow === true || (state.articleFromRow === undefined
+        && state.articleReturnAvailable === false && Boolean(state.articleOriginEntry));
+}
+
 /** Home's cold load at the bare root gets its identity at boot; any other entry, a denied bookmark included, is
  * left exactly as the browser loaded it until navigation owns it. */
 export function ensureRootEntryIdentity() {
@@ -78,7 +85,7 @@ export function writeHistoryEntry(url, state = {}, { replace = false } = {}) {
     releaseHistoryEntryAddress();
     const previous = { ...(history.state || {}) };
     // Only navigation-owned fields are replaced; other history owners survive.
-    for (const key of ["bigCard", "dataset", "rowId", "articleReturnAvailable", "articleOriginEntry", "imageFirstView", "homeSearch", HISTORY_DATASET_VIEW]) delete previous[key];
+    for (const key of ["bigCard", "dataset", "rowId", "articleReturnAvailable", "articleOriginEntry", "articleFromRow", "cardReturnOriginEntry", "imageFirstView", "homeSearch", HISTORY_DATASET_VIEW]) delete previous[key];
     const nextState = replace
         ? { ...previous, ...state, [HISTORY_ENTRY_ID]: ensureHistoryEntryId() }
         : { ...state, [HISTORY_ENTRY_ID]: freshEntryId() };

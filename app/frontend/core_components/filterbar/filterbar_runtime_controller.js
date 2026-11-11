@@ -8,12 +8,12 @@ import { createFilterbarChatLayout } from "./filterbar_chat_layout_controller.js
 import { FILTERBAR_BREAKPOINT_PX, updateOverlayState } from "./filterbar_engine/filterbar_visibility_handler.js";
 import { bindFilterbarVisibilityMemory, rememberFilterbarVisibility as setStoredVisibility } from './filterbar_visibility_memory.js';
 import { resolveResponsivePanelVisibilityState } from "./filterbar_visibility_resolver.js";
-import { FILTERBAR_COLUMN_WIDTH_PX, PHONE_BREAKPOINT_PX } from "../../ui_config.js";
+import { FILTERBAR_COLUMN_WIDTH_PX } from "../../ui_config.js";
 import { setupScrollPassthrough } from "../../reusable_components/scroll_passthrough.js";
 import { VIEW_DEACTIVATE_EVENT } from "../../reusable_components/view_lifecycle_events.js";
 import { addEnvironmentBadgeIfNeeded, NAVBAR_VISIBILITY_CHANGED_EVENT, syncNavbarMenuButtonAccessibility } from "../navigation/menu_button/navbar_visibility_handler.js";
 import { isSharedTopBarHostActive } from "./shared_topbar_builder.js";
-import { createDatasetCornerControls, isHeroControlAreaVisible } from "./dataset_corner_controls.js";
+import { createDatasetCornerControls } from "./dataset_corner_controls.js";
 import { createTemporaryFiltersOpenerAndCloser } from "./filters_opener_and_closer.js";
 import { FILTERBAR_PANEL_MODES } from "./filterbar_panel_mode_resolver.js";
 import { wireOutsidePanelClose } from "./filterbar_outside_panel_close.js";
@@ -21,7 +21,7 @@ const FILTERBAR_COLUMN_WIDTH_CSS = `${FILTERBAR_COLUMN_WIDTH_PX}px`;
 const FILTERBAR_PANEL_HIDE_CONTENT_DELAY_MS = 700;
 
 export function wireFilterbarRuntime({
-    tableName, currentView, tablePartsContainer, contentArea, mainTableContainer, initialResponsivePanelState, panelMode, lifetimeController, signal, panel, panelBody, clockBar, chatDock, datasetTitleRow, inlineHeroHost, scrollSentinel, fixedToggleButton, hideFilterBtn, showMenuButton, sharedTopBarOwner, sharedTopBar, sharedTopBarEnd, sharedTopBarMenuButton, sharedTopBarMenuSlot, sharedTopBarArticleClose, sharedTopBarSearch, heroMenuButton, filterBarContent, overviewSection, sectionOrdering, styleSettings
+    tableName, currentView, tablePartsContainer, contentArea, mainTableContainer, initialResponsivePanelState, panelMode, lifetimeController, signal, panel, panelBody, clockBar, chatDock, datasetTitleRow, inlineHeroHost, scrollSentinel, fixedToggleButton, hideFilterBtn, showMenuButton, sharedTopBarOwner, sharedTopBar, sharedTopBarEnd, sharedTopBarMenuButton, sharedTopBarMenuSlot, sharedTopBarArticleClose, sharedTopBarSearch, filterBarContent, overviewSection, sectionOrdering, styleSettings
 }) {
     const WIDE_MODE_ENTER_THRESHOLD_PX = 8;
     const COMPACT_MODE_ENTER_THRESHOLD_PX = 48;
@@ -36,14 +36,22 @@ export function wireFilterbarRuntime({
     let panelManuallyHidden = initialResponsivePanelState.panelManuallyHidden;
     let bigCardOpen = false;
     let activeScrollable = null;
+    let articleScroller = null;
+    const articleGutterObserver = typeof ResizeObserver === "function" ? new ResizeObserver(() => {
+        if (!articleScroller) return;
+        // The ordinary article scrolls inside its borderless content element.
+        // Classic scrollbars displace its reading column; overlay scrollbars do not.
+        const gutter = articleScroller.offsetWidth - articleScroller.clientWidth;
+        tablePartsContainer.style.setProperty("--article-scrollbar-gutter", `${gutter}px`);
+    }) : null;
     let cleanupScrollListener = null;
     let scrollSyncRaf = 0;
     let wideModeInsetPx = 0;
     let wasNarrowScreen = isNarrowScreen();
     const cornerControls = createDatasetCornerControls({
-        hero: inlineHeroHost, fallbackHost: tablePartsContainer,
+        fallbackHost: tablePartsContainer,
         filterButton: fixedToggleButton, hideFilterButton: hideFilterBtn, panel,
-        heroMenuButton, topbarEnd: sharedTopBarEnd,
+        topbarEnd: sharedTopBarEnd,
         topbarMenuButton: sharedTopBarMenuButton, topbarMenuSlot: sharedTopBarMenuSlot,
         sourceMenuButton: showMenuButton, menuOwner: sharedTopBarOwner,
         syncNavbarAccessibility: syncNavbarMenuButtonAccessibility,
@@ -105,6 +113,7 @@ export function wireFilterbarRuntime({
             !inlineHeroHost ||
             !activeScrollable ||
             bigCardOpen ||
+            inlineHeroHost.parentElement !== activeScrollable ||
             !inlineHeroHost.isConnected
         ) {
             return false;
@@ -114,29 +123,21 @@ export function wireFilterbarRuntime({
         return heroRect.height > 0 && heroRect.bottom > scrollableRect.top;
     }
     function syncInlineHeroVisibility() {
-        const nextInlineHeroVisible = measureInlineHeroVisibility();
-        if (nextInlineHeroVisible === inlineHeroVisible) {
-            syncSharedTopBar();
-            return;
-        }
-        inlineHeroVisible = nextInlineHeroVisible;
+        inlineHeroVisible = measureInlineHeroVisibility();
         syncSharedTopBar();
     }
     const { syncSharedTopBar, destroy: destroySharedTopBarController } =
         createSharedTopbarVisibilityController({ tableName, currentView, tablePartsContainer,
         sharedTopBar, sharedTopBarArticleClose, inlineHeroHost,
-            getState: () => ({ bigCardOpen, inlineHeroVisible, activeScrollable }),
-            isHidden, isNavbarVisible, captureMenuFocus: cornerControls.captureMenuFocus, syncCornerControls });
-    function syncCornerControls(active = isSharedTopBarHostActive(sharedTopBar), menuHadFocus) {
+            getState: () => ({ bigCardOpen, inlineHeroVisible }),
+            isHidden, isNavbarVisible, captureControlFocus: cornerControls.captureControlFocus, syncCornerControls });
+    function syncCornerControls(active = isSharedTopBarHostActive(sharedTopBar), focus) {
         cornerControls.sync({
             active,
-            menuHadFocus,
-            heroControlsVisible: inlineHeroVisible && !bigCardOpen
-                && isHeroControlAreaVisible(inlineHeroHost, activeScrollable),
+            focus,
             topbarVisible: tablePartsContainer.dataset.sharedTopbarVisible === "true",
             navbarVisible: isNavbarVisible(),
             filterbarVisible: !isHidden(),
-            phone: window.innerWidth <= PHONE_BREAKPOINT_PX,
         });
     }
     function closeOpenFilterDropdowns() {
@@ -353,6 +354,13 @@ export function wireFilterbarRuntime({
             ".scrollable_content:not([style*='display: none'])"
         );
         if (!nextScrollable) return;
+        const nextArticle = nextScrollable.querySelector(".active_row_article > .row_article_content");
+        if (articleScroller !== nextArticle) {
+            articleGutterObserver?.disconnect();
+            articleScroller = nextArticle;
+            if (articleScroller) articleGutterObserver?.observe(articleScroller);
+            else tablePartsContainer.style.removeProperty("--article-scrollbar-gutter");
+        }
 
         const scrollableChanged = nextScrollable !== activeScrollable;
 
@@ -567,6 +575,8 @@ export function wireFilterbarRuntime({
         destroySharedTopBarController();
         clearCompactBodyHideTimer();
         removalObserver.disconnect();
+        articleGutterObserver?.disconnect();
+        tablePartsContainer.style.removeProperty("--article-scrollbar-gutter");
         viewObserver.disconnect();
         sharedTopBarHostObserver?.disconnect();
         cleanupScrollListener?.();

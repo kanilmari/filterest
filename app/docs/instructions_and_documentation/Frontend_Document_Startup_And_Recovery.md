@@ -7,6 +7,16 @@
 
 Part of the [Frontend Guide](Frontend_Guide.md).
 
+## Dataset catalogue recovery
+
+The tab shares concurrent `GET /api/datasets` requests. After a 429 it retries
+at most four times, waiting at least 2, 4, 8 and 16 seconds respectively.
+A longer `Retry-After` (seconds or an HTTP date) can extend each wait to a
+maximum of 30 minutes. Reloading the tab preserves the absolute deadline.
+A successful response resets the retry budget. Startup restores the original
+Home or dataset view only while that visit and identity are still current.
+Leaving the page or exhausting recovery releases the startup subscription.
+
 ## Production bundle addresses
 
 The production base in [vite.config.mjs](../../frontend/vite.config.mjs) is

@@ -8,6 +8,7 @@ import { describe, expect, test } from "vitest";
 import {
     isSharedTopBarHostActive,
     shouldShowSharedTopBar,
+    resolveDatasetTopbarMode,
 } from "./shared_topbar_builder.js";
 
 describe("shouldShowSharedTopBar", () => {
@@ -84,22 +85,14 @@ describe("shouldShowSharedTopBar", () => {
         ).toBe(false);
     });
 
-    test("suppresses the repeated flat topbar while the inline hero is visible", () => {
-        expect(
-            shouldShowSharedTopBar({
-                navbarVisible: true,
-                filterbarVisible: false,
-                inlineHeroVisible: true,
-            })
-        ).toBe(false);
-
-        expect(
-            shouldShowSharedTopBar({
-                navbarVisible: true,
-                filterbarVisible: false,
-                inlineHeroVisible: false,
-            })
-        ).toBe(true);
+    test.each([
+        [false, false, true, "hero"],
+        [false, false, false, "content"],
+        [true, false, true, "article"],
+        [false, true, true, "article"],
+    ])("selects the surface independently of toolbar participation", (bigCardOpen, articleViewActive, inlineHeroVisible, expected) => {
+        expect(resolveDatasetTopbarMode({ bigCardOpen, articleViewActive, inlineHeroVisible })).toBe(expected);
+        expect(shouldShowSharedTopBar({ navbarVisible: true, filterbarVisible: false })).toBe(true);
     });
 });
 

@@ -75,6 +75,7 @@
     /* Layout & Dimensions */
     --navbar_padding: 8px;
     --navbar_width: 300px;
+    --navbar-controls-height: 70px;
     --border_radius: 10px;
     --search_tools_radius: 10px;
     --border_radius_small: 4px;

@@ -4,7 +4,7 @@
 // Bridges list and row-article history operations in jsdom.
 // Exists to prevent stale article flags and lost owner state.
 import { beforeEach, expect, test, vi } from "vitest";
-import { HISTORY_ENTRY_ID, ensureHistoryEntryId, ensureRootEntryIdentity, writeHistoryEntry, rememberHistoryDatasetView, getHistoryDatasetView } from "./history_entry_state.js";
+import { HISTORY_ENTRY_ID, isSwitchedArticleEntry, ensureHistoryEntryId, ensureRootEntryIdentity, writeHistoryEntry, rememberHistoryDatasetView, getHistoryDatasetView } from "./history_entry_state.js";
 
 beforeEach(() => history.replaceState({}, "", "/catalog?search=harbour"));
 
@@ -112,4 +112,19 @@ test("navigation replaces only its IFAV identity while retaining another history
     writeHistoryEntry("/events?view=table", {}, { replace: true });
     expect(history.state.imageFirstView).toBeUndefined();
     expect(history.state.otherOwner).toBe("kept");
+});
+
+test("a new list query clears a Close reference without removing another owner's state", () => {
+    history.replaceState({ bigCard: false, dataset: "catalog", cardReturnOriginEntry: "old-list", otherOwner: 9 }, "", "/catalog?view=card");
+    const entry = ensureHistoryEntryId();
+    writeHistoryEntry("/catalog?search=new", {}, { replace: true });
+    expect(history.state).toEqual({ [HISTORY_ENTRY_ID]: entry, otherOwner: 9 });
+});
+
+test("an older switched article is recognized only by its own dataset and recorded origin", () => {
+    const previous = { bigCard: true, dataset: "catalog", articleReturnAvailable: false, articleOriginEntry: "original-list" };
+    expect(isSwitchedArticleEntry(previous, "catalog")).toBe(true);
+    expect(isSwitchedArticleEntry(previous, "other")).toBe(false);
+    expect(isSwitchedArticleEntry({ ...previous, articleOriginEntry: null }, "catalog")).toBe(false);
+    expect(isSwitchedArticleEntry({ ...previous, articleFromRow: false }, "catalog")).toBe(false);
 });

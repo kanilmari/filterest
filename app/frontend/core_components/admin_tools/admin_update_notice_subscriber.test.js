@@ -202,7 +202,7 @@ describe("administrator update-notice subscriber", () => {
         expect(document.getElementById("adminProductionUpdateNotice")).toBeNull();
     });
 
-    test("closes while hidden and reconnects on visibility, pageshow, and online", async () => {
+    test("returns from hiding or page cache once and leaves a healthy stream alone on online", async () => {
         const mod = await loadModule();
         mod.startAdminUpdateNoticeSubscriber();
         expect(eventSources).toHaveLength(1);
@@ -221,8 +221,25 @@ describe("administrator update-notice subscriber", () => {
         expect(eventSources).toHaveLength(3);
 
         window.dispatchEvent(new Event("online"));
-        expect(eventSources[2].close).toHaveBeenCalledTimes(1);
-        expect(eventSources).toHaveLength(4);
+        expect(eventSources[2].close).not.toHaveBeenCalled();
+        expect(eventSources).toHaveLength(3);
+    });
+
+    test("visibility and online signals cannot skip the reconnect delay or its attempt limit", async () => {
+        const mod = await loadModule();
+        mod.startAdminUpdateNoticeSubscriber();
+        for (let i = 0; i < 5; i++) {
+            eventSources[i].onerror();
+            visibilityState = "hidden";
+            document.dispatchEvent(new Event("visibilitychange"));
+            visibilityState = "visible";
+            for (const target of ["online", "pageshow"]) window.dispatchEvent(new Event(target));
+            document.dispatchEvent(new Event("visibilitychange"));
+            expect(eventSources).toHaveLength(i + 1);
+            vi.advanceTimersByTime(1000 * 2 ** i);
+        }
+        expect(mod.syncAdminUpdateNoticeSubscriber()).toBe(false);
+        expect(eventSources).toHaveLength(5);
     });
 
     test("reconnects after the bounded server stream closes", async () => {

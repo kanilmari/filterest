@@ -115,7 +115,7 @@ vi.mock("../../filterbar/filterbar_engine/filterbar_visibility_handler.js", () =
 describe("initTabs", () => {
     beforeEach(resetMainTabPrinterTestState);
 
-    test.each([1920, 1440, 390])("Home media drives every side-menu shape including connector arcs at %ipx", async width => {
+    test.each([1920, 1440, 390])("Home side-menu paths stay rectangular with and without media at %ipx", async width => {
         setViewportWidth(width);
         setChosenDatasetView("app_service_catalog", "card");
         const { initTabs, openNavTab } = await import("./main_tab_printer.js");
@@ -135,13 +135,12 @@ describe("initTabs", () => {
                 expect(path.getAttribute("d").match(/A 0 0/g)).toHaveLength(4);
             }
         }
-        // Home without media restores exactly the historic side-menu geometry.
+        // Removing Home media updates the media flag while keeping its sidebar buttons rectangular.
         home.replaceChildren();
         await Promise.resolve();
         expect(document.body.getAttribute("data-view-has-presentation-media")).toBe("false");
         for (const tab of document.querySelectorAll(".navtablinks")) {
-            const expected = buildTabOutlinePresentation({ isActive: false,
-                isNarrow: width <= 768, isNavbarOverlay: width < 1850 });
+            const expected = buildTabOutlinePresentation({ forceRectangular: true, isActive: false });
             expect(tab.dataset.tabPresentation).toBe(expected.state);
             expect(tab.querySelector(".navtab-stroke-path").getAttribute("d")).toBe(expected.pathD);
         }
