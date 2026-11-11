@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"testing"
 
 	"easelect/backend/core_components/dbutils/queryfixture"
@@ -140,6 +141,7 @@ func TestSharedFilterbarRouteAuthorizationPostgres(t *testing.T) {
 		`{"section_collapsed":{"filters":null}}`,
 		`{"allow_own_order":true}`, `{"allow_own_order":false}`,
 		`{"section_order":["views"],"section_collapsed":{"style":true},"allow_own_order":true}`,
+		`{"field_selector_admin_only":true}`, `{"field_selector_admin_only":false}`,
 	}
 	for _, userID := range []int{1, 42, 74} {
 		for _, grant := range []bool{false, true} {
@@ -201,9 +203,121 @@ func TestSharedFilterbarRouteAuthorizationPostgres(t *testing.T) {
 						if persisted.SectionOrder[0] != "views" || !persisted.SectionCollapsed["style"] || !persisted.AllowOwnOrder {
 							t.Fatal("combined shared edit not fully saved")
 						}
+					case 6, 7:
+						if persisted.FieldSelectorAdminOnly != (kind == 6) || persisted.SectionOrder[0] != "views" || !persisted.SectionCollapsed["style"] || !persisted.AllowOwnOrder {
+							t.Fatalf("selector policy changed unrelated layout fields: %+v", persisted)
+						}
 					}
 				})
 			}
+		}
+	}
+}
+
+func sec4SeedFilterbarReadPolicy(t *testing.T, db *sql.DB) {
+	t.Helper()
+	frontPageExec(t, db, `
+		UPDATE public.system_config SET json_value='{
+			"section_order":["filters","search_overview","search_controls","tools","views","field_sets","style","chat"],
+			"section_collapsed":{"filters":true,"style":false},
+			"allow_own_order":true,"field_selector_admin_only":true,
+			"unrelated_internal_setting":{"value":"must not leave the safe reader"}
+		}'::jsonb WHERE key='filterbar_section_layout';
+		DELETE FROM public.system_functions WHERE url_route_endpoint='/api/filterbar-section-layout';
+		INSERT INTO public.system_functions(id,name,disabled,specific_table_related,url_route_endpoint)
+			VALUES(500003,'system_table_tools.GetFilterbarSectionLayoutHandler',false,false,'/api/filterbar-section-layout');
+		INSERT INTO public.system_group_table_func_rights(user_group_id,function_id,target_table_uid)
+			VALUES(1,500003,NULL);`)
+}
+
+func sec4AssertSafeFilterbarRead(t *testing.T, response *httptest.ResponseRecorder) {
+	t.Helper()
+	if response.Code != http.StatusOK {
+		t.Fatalf("safe layout read: %d %s", response.Code, response.Body)
+	}
+	// Compare the whole object, so a stored internal key cannot accidentally
+	// become public. The three v9.6.5 keys gain only the selector visibility flag.
+	var got, want map[string]interface{}
+	if err := json.Unmarshal(response.Body.Bytes(), &got); err != nil {
+		t.Fatal(err)
+	}
+	if err := json.Unmarshal([]byte(`{
+		"section_order":["filters","search_overview","search_controls","tools","views","field_sets","style","chat"],
+		"section_collapsed":{"filters":true,"style":false},
+		"allow_own_order":true,"field_selector_admin_only":true
+	}`), &want); err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("public layout must contain exactly the safe keys and stored policy: got %v, want %v", got, want)
+	}
+}
+
+func TestGetFilterbarSectionLayoutRoleSafeKeysPostgres(t *testing.T) {
+	db := sec4AuthorizationDB(t)
+	sec4SeedFilterbarReadPolicy(t, db)
+	for _, userID := range []int{1, 42, 74} {
+		for _, grant := range []bool{false, true} {
+			sec4SetGrant(t, db, 500003, grant)
+			t.Run(fmt.Sprintf("actor_%d_grant_%t", userID, grant), func(t *testing.T) {
+				before := sec4LayoutSnapshot(t, db)
+				response := sec4CallRoute(t, "/api/filterbar-section-layout", "system_table_tools.GetFilterbarSectionLayoutHandler", "GET", "", userID, GetFilterbarSectionLayoutHandler)
+				sec4AssertSafeFilterbarRead(t, response)
+				if sec4LayoutSnapshot(t, db) != before {
+					t.Fatal("public read changed shared layout or account preferences")
+				}
+			})
+		}
+	}
+}
+
+func TestSaveFilterbarSectionLayoutForcedDatasetScopePostgres(t *testing.T) {
+	db := sec4AuthorizationDB(t)
+	sec4SeedFilterbarReadPolicy(t, db)
+	// Follow TestFrontPageArticlePageButtonsFirstPostAndRightsPostgres: force
+	// dataset scope in the catalogue, not by changing the registered profile.
+	// This shared-layout request has no dataset identifier. Even a global grant
+	// (including the admin's) cannot supply the required dataset scope.
+	frontPageExec(t, db, `UPDATE public.system_functions SET specific_table_related=true
+		WHERE url_route_endpoint='/api/filterbar-section-layout/save'`)
+	for _, userID := range []int{1, 42, 74} {
+		for _, grant := range []bool{false, true} {
+			sec4SetGrant(t, db, 500002, grant)
+			t.Run(fmt.Sprintf("actor_%d_grant_%t", userID, grant), func(t *testing.T) {
+				before := sec4LayoutSnapshot(t, db)
+				called := false
+				response := sec4CallRoute(t, "/api/filterbar-section-layout/save", "system_table_tools.SaveFilterbarSectionLayoutHandler", "POST", `{"field_selector_admin_only":false,"section_order":["style"]}`, userID,
+					func(w http.ResponseWriter, r *http.Request) { called = true; SaveFilterbarSectionLayoutHandler(w, r) })
+				sec4AssertRefusal(t, response)
+				if called {
+					t.Fatal("missing forced dataset scope reached the save handler")
+				}
+				if sec4LayoutSnapshot(t, db) != before {
+					t.Fatal("forced-scope refusal changed shared layout or account preferences")
+				}
+			})
+		}
+	}
+}
+
+func TestGetFilterbarSectionLayoutForcedDatasetScopePostgres(t *testing.T) {
+	db := sec4AuthorizationDB(t)
+	sec4SeedFilterbarReadPolicy(t, db)
+	// Use the same catalogue override as the save case. The registered public
+	// reader skips route ACLs, so the forced scope still returns the safe object.
+	frontPageExec(t, db, `UPDATE public.system_functions SET specific_table_related=true
+		WHERE url_route_endpoint='/api/filterbar-section-layout'`)
+	for _, userID := range []int{1, 42, 74} {
+		for _, grant := range []bool{false, true} {
+			sec4SetGrant(t, db, 500003, grant)
+			t.Run(fmt.Sprintf("actor_%d_grant_%t", userID, grant), func(t *testing.T) {
+				before := sec4LayoutSnapshot(t, db)
+				response := sec4CallRoute(t, "/api/filterbar-section-layout", "system_table_tools.GetFilterbarSectionLayoutHandler", "GET", "", userID, GetFilterbarSectionLayoutHandler)
+				sec4AssertSafeFilterbarRead(t, response)
+				if sec4LayoutSnapshot(t, db) != before {
+					t.Fatal("forced-scope read changed shared layout or account preferences")
+				}
+			})
 		}
 	}
 }

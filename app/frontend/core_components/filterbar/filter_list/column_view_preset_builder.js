@@ -11,6 +11,8 @@ import { getTranslationForKey } from "../../lang/translation_handler.js";
 import { showSuccessToast } from "../../../reusable_components/notifications/toast_notification_printer.js";
 import { showConfirmModal, showInputModal } from "../../../reusable_components/modal/confirm_modal_builder.js";
 import { createMultiselectDropdown } from "../../../reusable_components/multiselect_dropdown/multiselect_dropdown_builder.js";
+import { getFilterbarPreferences, subscribeFilterbarPreferences } from "../filterbar_preferences_controller.js";
+import { getSessionGeneration } from "../../auth/session_generation_store.js";
 import { buildFilterbarDisclosureSection } from "../filterbar_section_heading_builder.js";
 import {
     assignPersonalViewFieldSet,
@@ -41,6 +43,7 @@ export function buildColumnViewPresetSelector(tableName, columns = [], requested
     let canEditPersonal = false;
     let canEditSiteDefault = false;
     let serverCollectionsAvailable = false;
+    let fieldSetGeneration = getSessionGeneration();
     let picker = null;
 
     const addListener = (target, type, handler) => {
@@ -64,6 +67,13 @@ export function buildColumnViewPresetSelector(tableName, columns = [], requested
     row.dataset.filterbarSectionKey = "field_sets";
     row.dataset.viewKey = viewKey;
     const disclosureDestroy = row.destroy?.bind(row);
+
+    function updateSelectorVisibility(state = getFilterbarPreferences()) {
+        const policy = state.shared.field_selector_admin_only;
+        const verifiedAdmin = canEditSiteDefault && fieldSetGeneration === getSessionGeneration();
+        row.hidden = !state.loaded || !(policy === false || (policy === true && verifiedAdmin));
+        if (row.hidden) picker?.close?.();
+    }
 
     const modeButton = document.createElement("button");
     modeButton.type = "button";
@@ -287,8 +297,11 @@ export function buildColumnViewPresetSelector(tableName, columns = [], requested
     }
 
     async function reload({ applyEffective = false } = {}) {
+        const generation = getSessionGeneration();
+        if (fieldSetGeneration !== generation) canEditSiteDefault = false;
+        fieldSetGeneration = generation;
         const response = await getViewFieldSets(tableName, viewKey);
-        if (destroyed) return;
+        if (destroyed || generation !== getSessionGeneration()) return;
         serverCollectionsAvailable = true;
         fieldSets = Array.isArray(response?.field_sets) ? response.field_sets : [];
         activeFieldSetID = response?.active_field_set_id ?? null;
@@ -297,6 +310,8 @@ export function buildColumnViewPresetSelector(tableName, columns = [], requested
         effectiveScope = normalizeEffectiveFieldSetScope(response?.effective_scope);
         canEditPersonal = response?.can_edit_personal === true;
         canEditSiteDefault = response?.can_edit_site_default === true;
+        if (!canEditSiteDefault) editingSiteDefault = false;
+        updateSelectorVisibility();
         const availableColumns = Array.isArray(response?.available_columns)
             ? response.available_columns
             : [];
@@ -457,11 +472,27 @@ export function buildColumnViewPresetSelector(tableName, columns = [], requested
         }
     });
 
-    void reload({ applyEffective: true }).catch((error) => {
-        console.warn("column_view_preset_builder: load failed", error);
-        serverCollectionsAvailable = false;
-        render();
-    });
+    function loadCollections(applyEffective) {
+        const generation = getSessionGeneration();
+        void reload({ applyEffective }).catch((error) => {
+            if (destroyed || generation !== getSessionGeneration()) return;
+            console.warn("column_view_preset_builder: load failed", error);
+            serverCollectionsAvailable = false;
+            canEditSiteDefault = false;
+            updateSelectorVisibility();
+            render();
+        });
+    }
+
+    listenerCleanups.push(subscribeFilterbarPreferences(state => {
+        updateSelectorVisibility(state);
+        if (state.loaded && fieldSetGeneration !== getSessionGeneration() &&
+            (state.shared.field_selector_admin_only === true || !serverCollectionsAvailable)) {
+            loadCollections(!serverCollectionsAvailable);
+        }
+    }));
+    updateSelectorVisibility();
+    loadCollections(true);
 
     render();
 

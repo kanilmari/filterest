@@ -67,12 +67,25 @@ mixed automatic opens with deliberate choices; that first render uses defaults.
 The style disclosure and the configuration dataset's settings view use the same
 Finnish/English controls. Section order has one site setting
 (`system_config.filterbar_section_layout`). Its public GET endpoint
-(`/api/filterbar-section-layout`) returns only section order, collapse defaults
-and the boolean policy allowing own orders. It requires no edit grant.
+(`/api/filterbar-section-layout`) returns its section order, collapse defaults
+and the policies for personal ordering and field-selector visibility. It requires no edit grant.
 POST `/api/filterbar-section-layout/save` retains normal authentication, CSRF,
 browser binding and the explicit route grant; administrators receive that grant
 through the existing startup policy. A separately granted ordinary editor can
 also change it. Generic configuration-row writers cannot bypass this API.
+
+To show **Select visible fields** only to administrators on one installation,
+send `{"field_selector_admin_only":true}` to `POST /api/filterbar-section-layout/save`
+in an authenticated session with that route grant. Send only this field to
+preserve the order, collapse defaults and personal-order policy. Check the value
+with `GET /api/filterbar-section-layout`. Set it to `false` to restore the
+usual selector for everyone. Existing installations default to `false`.
+
+The filter bar applies the server’s effective field set for each dataset and
+view even when the selector is hidden. When the option is on, the field-set
+response must confirm `can_edit_site_default` before the selector appears.
+A missing layout leaves the selector hidden. With an unrestricted layout, the
+existing local field picker remains available if the field-set read fails.
 
 One controller loads the shared order for the document and publishes committed
 changes to every mounted bar. Same-origin tabs receive a change notification and

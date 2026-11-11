@@ -26,6 +26,10 @@ function extractRule(css, selector) {
 }
 
 describe('filterbar layout CSS', () => {
+    test('keeps the entire hidden field selector out of the panel layout', () => {
+        expect(extractRule(readSiblingCss('filterbar_layout.css'), '.column-preset-row[hidden]')).toContain('display: none');
+    });
+
     test('gives the style disclosure full width and bounds its preferences fieldset', () => {
         const css = readSiblingCss('filterbar_layout.css');
         const marginSelector = css.match(/\.filterbar-panel-body > :not\(([^)]+)\)/)[1];

@@ -149,7 +149,7 @@ func TestUserFilterbarPreferenceRejectsInvalidSettings(t *testing.T) {
 }
 
 func TestSharedFilterbarLayoutRejectsInvalidSettings(t *testing.T) {
-	for _, body := range []string{`null`, `{"section_order":["unknown"]}`, `{"section_order":["style","style"]}`, `{"section_order":[]}`, `{"section_collapsed":{"other":true}}`, `{"allow_own_order":"yes"}`, `{"arbitrary":"value"}`, `{} {}`} {
+	for _, body := range []string{`null`, `{"section_order":["unknown"]}`, `{"section_order":["style","style"]}`, `{"section_order":[]}`, `{"section_collapsed":{"other":true}}`, `{"allow_own_order":"yes"}`, `{"field_selector_admin_only":"true"}`, `{"arbitrary":"value"}`, `{} {}`} {
 		request := queryfixture.Request(t, "POST", "/api/filterbar-section-layout/save", body, 42, "user")
 		response := httptest.NewRecorder()
 		SaveFilterbarSectionLayoutHandler(response, request)
@@ -163,7 +163,7 @@ func TestSharedFilterbarOrderEditPreservesCollapseDefaultsAndPolicy(t *testing.T
 	f := &filterbarPreferenceFixture{configJSON: `{"section_order":["style"],"section_collapsed":{"filters":true,"style":false},"allow_own_order":true}`}
 	db := sql.OpenDB(f)
 	defer db.Close()
-	for _, body := range []string{`{"section_order":["views","style"]}`, `{"section_collapsed":{"style":null}}`} {
+	for _, body := range []string{`{"field_selector_admin_only":true}`, `{"section_order":["views","style"]}`, `{"section_collapsed":{"style":null}}`} {
 		request := queryfixture.Request(t, "POST", "/api/filterbar-section-layout/save", body, 42, "user")
 		lazy := dbutils.NewLazyTx(db)
 		response := httptest.NewRecorder()
@@ -175,7 +175,7 @@ func TestSharedFilterbarOrderEditPreservesCollapseDefaultsAndPolicy(t *testing.T
 	}
 	var got filterbarSectionLayoutConfig
 	json.Unmarshal([]byte(f.configJSON), &got)
-	if !got.AllowOwnOrder || !got.SectionCollapsed["filters"] || got.SectionOrder[0] != "views" {
+	if !got.FieldSelectorAdminOnly || !got.AllowOwnOrder || !got.SectionCollapsed["filters"] || got.SectionOrder[0] != "views" {
 		t.Fatalf("unrelated defaults overwritten: %s", f.configJSON)
 	}
 	if _, found := got.SectionCollapsed["style"]; found {

@@ -66,9 +66,10 @@ var legacyFilterbarSectionOrder = []string{
 }
 
 type filterbarSectionLayoutConfig struct {
-	SectionOrder     []string        `json:"section_order"`
-	SectionCollapsed map[string]bool `json:"section_collapsed"`
-	AllowOwnOrder    bool            `json:"allow_own_order"`
+	SectionOrder           []string        `json:"section_order"`
+	SectionCollapsed       map[string]bool `json:"section_collapsed"`
+	AllowOwnOrder          bool            `json:"allow_own_order"`
+	FieldSelectorAdminOnly bool            `json:"field_selector_admin_only"`
 }
 
 // Only these UI fields leave the public endpoint, even if the stored object
@@ -76,9 +77,10 @@ type filterbarSectionLayoutConfig struct {
 var filterbarLayoutReader = readFilterbarSectionLayout
 
 type saveFilterbarLayoutRequest struct {
-	SectionOrder     []string         `json:"section_order,omitempty"`
-	SectionCollapsed map[string]*bool `json:"section_collapsed,omitempty"`
-	AllowOwnOrder    *bool            `json:"allow_own_order,omitempty"`
+	SectionOrder           []string         `json:"section_order,omitempty"`
+	SectionCollapsed       map[string]*bool `json:"section_collapsed,omitempty"`
+	AllowOwnOrder          *bool            `json:"allow_own_order,omitempty"`
+	FieldSelectorAdminOnly *bool            `json:"field_selector_admin_only,omitempty"`
 }
 
 // GetFilterbarSectionLayoutHandler returns only safe shared UI settings for every role.
@@ -98,7 +100,7 @@ func GetFilterbarSectionLayoutHandler(w http.ResponseWriter, r *http.Request) {
 
 // SaveFilterbarSectionLayoutHandler patches the shared layout for signed-in route grantees.
 // Optional section_order, section_collapsed deltas (null removes a default), and
-// allow_own_order preserve all omitted fields, including other datasets' defaults.
+// optional site policies preserve all omitted fields.
 // Access control enforces the route grant; this handler refuses guests before any write.
 // POST /api/filterbar-section-layout/save
 func SaveFilterbarSectionLayoutHandler(w http.ResponseWriter, r *http.Request) {
@@ -142,6 +144,9 @@ func SaveFilterbarSectionLayoutHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	if req.AllowOwnOrder != nil {
 		config.AllowOwnOrder = *req.AllowOwnOrder
+	}
+	if req.FieldSelectorAdminOnly != nil {
+		config.FieldSelectorAdminOnly = *req.FieldSelectorAdminOnly
 	}
 	configJSON, err := json.Marshal(config)
 	if err != nil {

@@ -157,6 +157,10 @@
   pointer-events: none;
 }
 
+.column-preset-row[hidden] {
+  display: none;
+}
+
 /* Dataset handover commits the actual source state without an entrance flash. */
 .filterbar-visibility-instant,
 .filterbar-visibility-instant * {

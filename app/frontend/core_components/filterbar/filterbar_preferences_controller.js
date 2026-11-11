@@ -126,6 +126,7 @@ subscribeToSessionGeneration(() => {
     sharedRevision += 1;
     personalRevision += 1;
     loaded = false;
+    shared = { ...shared, field_selector_admin_only: null };
     loading = null;
     queuedRefresh = null;
     personal = { order_mode: 'shared', visibility_memory: 'shared', own_order_allowed: false };
