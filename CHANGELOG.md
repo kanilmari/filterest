@@ -22,6 +22,8 @@ Dates are the local (Europe/Helsinki) date on which the version was published.
 
 ## [Unreleased]
 
+## [9.6.8] - 2026-11-13
+
 - On dataset pages, including articles, open navigation and filter panels reach the top edge and show their own corner close buttons, including on phones. The dataset toolbar shows the openers when the panels close (#1026).
 - Home boxes and Home search results have larger, linked dataset headings that open the same collection as Show all. They keep their heading colour and keyboard focus outline. The Home palette sets the space below headings in Home boxes and Home search results from 5 to 30 px (default 8 px; #1019).
 - Home boxes and Home search results use darker article and Show all links in the light theme. Their row spacing defaults to 0.6 rem at every reader font size. The Home palette supports custom spacing up to 30 px (#1020).
