@@ -148,8 +148,9 @@ def test_unsupported_installed_cli_refused_before_run_artifacts(
 def test_missing_installed_claude_refused_before_run_artifacts(effort_worker, tmp_path):
     run, env, output, codex = effort_worker
     (codex.parent / 'claude').unlink()
-    # Isolate discovery from any real extension install; no real worker may run.
-    result = run('family=claude', '--claude-effort', 'high', overrides={'HOME': str(tmp_path)})
+    # Isolate discovery from real PATH and extension installs; no real worker may run.
+    result = run('family=claude', '--claude-effort', 'high', overrides={
+        'HOME': str(tmp_path), 'PATH': f'{codex.parent}:/usr/bin:/bin'})
     assert result.returncode != 0
     assert 'Claude CLI not found' in result.stderr
     assert_no_run(env, output)

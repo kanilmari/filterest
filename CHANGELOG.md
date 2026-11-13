@@ -22,6 +22,8 @@ Dates are the local (Europe/Helsinki) date on which the version was published.
 
 ## [Unreleased]
 
+- The worker launcher's missing-Claude-CLI test runs with its own PATH, so a Claude CLI installed on the machine no longer fails it (#1033).
+
 ## [9.6.8] - 2026-11-13
 
 - On dataset pages, including articles, open navigation and filter panels reach the top edge and show their own corner close buttons, including on phones. The dataset toolbar shows the openers when the panels close (#1026).
