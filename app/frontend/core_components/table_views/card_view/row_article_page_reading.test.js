@@ -34,7 +34,7 @@ test('the latest language keeps the same photograph and raw word through a slow 
     await refreshLocalizedDatasetValues('en');
     finish(article('sv', 'förvaltning'));
     await slow;
-    await vi.waitFor(() => expect(shell.querySelector('.reading-hyphen')).toBeTruthy());
+    expect(shell.querySelector('.reading-hyphen')).toBeNull();
     expect(shell.querySelector('h1').textContent).toBe('internationalization');
     expect(shell.querySelector('h1').lang).toBe('en');
     expect(shell.querySelector('figure')).toBe(photo);

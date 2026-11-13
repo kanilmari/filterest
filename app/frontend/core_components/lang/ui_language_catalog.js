@@ -3,6 +3,8 @@
 // Bridges reusable selectors with surface-specific language availability.
 // Exists so forms and application chrome do not copy language lists or labels.
 
+import { setReadingHyphenation } from '../../reusable_components/reading_hyphenation/reading_hyphenation.js';
+
 const FALLBACK_UI_LANGUAGE_CATALOG = Object.freeze([
     Object.freeze({
         id: "lang-en",
@@ -88,6 +90,7 @@ export async function loadPublicUiLanguageCatalog({ fetchImpl = globalThis.fetch
             if (!response?.ok) return activeUiLanguageCatalog;
 
             const payload = await response.json();
+            setReadingHyphenation(payload?.reading_hyphenation);
             const publicLanguages = Array.isArray(payload?.languages) ? payload.languages : [];
             const options = publicLanguages
                 .filter((language) => language?.is_enabled && language?.public_selector_ready)

@@ -283,7 +283,7 @@ export async function openImageFirstView({
         const { rowArticleContentElement: content } = await buildRowArticleContent(
             rowItem, tableName, dataTypes, sortedColumns, buildCreationSeed(rowItem),
             recordTitle.initial, imageRoleColumns.length > 0, currentUserProfile?.user_id ?? null,
-            pageLayout ? { sectionDefaults, chosenLanguage, pageReading: true } : { sectionDefaults },
+            pageLayout ? { sectionDefaults, chosenLanguage } : { sectionDefaults },
         );
         if (!content || !datasetAppearanceState.isCurrent(appearanceToken)) return null;
         content.querySelectorAll(":scope > .big_card_image").forEach(image => image.remove());

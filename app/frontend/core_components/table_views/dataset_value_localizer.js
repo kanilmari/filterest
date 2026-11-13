@@ -4,7 +4,7 @@
 // Exists so every dataset presentation can share one conservative localization boundary without mutating source data.
 
 import {
-    extractLangValue,
+    resolveLangValue,
     looksLikeLangValue,
 } from '../../reusable_components/lang_value_reader.js';
 import { getLanguageWithBrowserFallback } from '../state_stores/lang_preference_reader.js';
@@ -55,16 +55,15 @@ export function resolveDatasetDisplayValue(
     columnMetadata = null,
     chosenLanguage = getLanguageWithBrowserFallback()
 ) {
-    const serializedValue = serializeDatasetValue(rawValue);
-    const metadataFlag = resolveMultilingualMetadataFlag(columnMetadata);
+    return resolveDatasetText(rawValue, columnMetadata, chosenLanguage).text;
+}
 
-    if (metadataFlag === false) {
-        return serializedValue;
+function resolveDatasetText(rawValue, columnMetadata, chosenLanguage) {
+    const flag = resolveMultilingualMetadataFlag(columnMetadata);
+    if (flag === false || (flag !== true && !looksLikeLangValue(rawValue))) {
+        return { text: serializeDatasetValue(rawValue), language: '' };
     }
-    if (metadataFlag !== true && !looksLikeLangValue(rawValue)) {
-        return serializedValue;
-    }
-    return extractLangValue(rawValue, chosenLanguage, true);
+    return resolveLangValue(rawValue, chosenLanguage, true);
 }
 
 /**
@@ -108,7 +107,8 @@ export function setLocalizedDatasetText(element, rawValue, columnMetadata = null
     } = options;
 
     return bindDatasetLanguageRenderer(element, (chosenLanguage) => {
-        const localizedValue = resolveDatasetDisplayValue(rawValue, columnMetadata, chosenLanguage);
+        const { text: localizedValue, language } = resolveDatasetText(rawValue, columnMetadata, chosenLanguage);
+        element.lang = language;
         const renderedValue = String(transform(localizedValue) ?? '');
         element.textContent = `${prefix}${renderedValue}${suffix}`;
         afterRender?.(renderedValue, localizedValue, chosenLanguage);

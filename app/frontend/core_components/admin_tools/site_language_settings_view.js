@@ -3,6 +3,7 @@
 // Bridges the canonical UI-language API with the Admin → Site settings navigation view.
 // Exists so public language choices are reviewed deliberately instead of inferred in the browser.
 
+import { setReadingHyphenation } from '../../reusable_components/reading_hyphenation/reading_hyphenation.js';
 import { endpoint_router } from '../endpoints/endpoint_router.js';
 import { getTranslationForKey } from '../lang/translation_handler.js';
 
@@ -27,7 +28,7 @@ function createStatusCell(value, className) {
     return cell;
 }
 
-function renderLanguageRows(tableBody, languages) {
+function renderLanguageRows(tableBody, languages, policy) {
     tableBody.replaceChildren();
     languages.forEach((language) => {
         const row = document.createElement('tr');
@@ -88,6 +89,15 @@ function renderLanguageRows(tableBody, languages) {
         publicInput.setAttribute('aria-label', `${language.language_code}: public selector`);
         publicCell.appendChild(publicInput);
 
+        const hyphenationCell = document.createElement('td');
+        if (Object.hasOwn(policy, language.language_code)) {
+            const toggle = document.createElement('input');
+            toggle.type = 'checkbox';
+            toggle.dataset.hyphenation = language.language_code;
+            toggle.checked = policy[language.language_code];
+            toggle.setAttribute('aria-label', language.native_name + ' · ' + translatedText('reading_hyphenation', 'Hyphenation'));
+            hyphenationCell.append(toggle);
+        }
         row.append(
             identityCell,
             enabledCell,
@@ -96,6 +106,7 @@ function renderLanguageRows(tableBody, languages) {
             createStatusCell(language.coverage_status, 'coverage'),
             createStatusCell(language.review_status, 'review'),
             publicCell,
+            hyphenationCell,
         );
         tableBody.appendChild(row);
     });
@@ -201,10 +212,11 @@ export async function generate_site_language_settings_view(container) {
             ['translation_coverage', 'Translation coverage'],
             ['review_status', 'Review status'],
             ['public_selector', 'Public selector'],
+            ['reading_hyphenation', 'Hyphenation'],
         ].forEach(([key, fallback]) => headerRow.appendChild(createHeaderCell(key, fallback)));
         tableHead.appendChild(headerRow);
         const tableBody = document.createElement('tbody');
-        renderLanguageRows(tableBody, languages);
+        renderLanguageRows(tableBody, languages, response.reading_hyphenation || {});
         attachDefaultLanguageBehavior(tableBody);
         table.append(tableHead, tableBody);
         tableWrapper.appendChild(table);
@@ -223,11 +235,15 @@ export async function generate_site_language_settings_view(container) {
                     method: 'POST',
                     body_data: {
                         languages: readLanguageSettingsFromTable(tableBody, languages),
+                        ...(response.reading_hyphenation && { reading_hyphenation: Object.fromEntries(
+                            Array.from(tableBody.querySelectorAll('[data-hyphenation]'), toggle => [toggle.dataset.hyphenation, toggle.checked]),
+                        ) }),
                     },
                 });
                 const savedLanguages = Array.isArray(saved?.languages) ? saved.languages : languages;
                 languages.splice(0, languages.length, ...savedLanguages);
-                renderLanguageRows(tableBody, savedLanguages);
+                renderLanguageRows(tableBody, savedLanguages, saved.reading_hyphenation || {});
+                setReadingHyphenation(saved.reading_hyphenation);
                 status.textContent = translatedText('settings_saved', 'Settings saved.');
             } catch (error) {
                 console.warn('site_language_settings_view: save failed', error);

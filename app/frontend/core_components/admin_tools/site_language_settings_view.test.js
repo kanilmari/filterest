@@ -27,7 +27,7 @@ describe('site_language_settings_view', () => {
     beforeEach(() => {
         document.body.innerHTML = '<main id="target"></main>';
         endpointRouterMock.mockReset();
-        endpointRouterMock.mockResolvedValue({ languages: languageFixture.map((item) => ({ ...item })) });
+        endpointRouterMock.mockResolvedValue({ reading_hyphenation: { fi: true, en: false }, languages: languageFixture.map((item) => ({ ...item })) });
     });
 
     test('shows all five canonical locales and keeps incomplete Chinese public toggles disabled', async () => {
@@ -43,6 +43,12 @@ describe('site_language_settings_view', () => {
         const { generate_site_language_settings_view } = await import('./site_language_settings_view.js');
         await generate_site_language_settings_view(document.getElementById('target'));
 
+        const finnishHyphenation = document.querySelector('[data-hyphenation="fi"]');
+        const englishHyphenation = document.querySelector('[data-hyphenation="en"]');
+        expect(finnishHyphenation.checked).toBe(true);
+        expect(englishHyphenation.checked).toBe(false);
+        finnishHyphenation.click();
+        englishHyphenation.click();
         const finnishDefault = document.querySelector('tr[data-language-code="fi"] [data-setting="is_default"]');
         finnishDefault.checked = true;
         finnishDefault.dispatchEvent(new Event('change', { bubbles: true }));
@@ -51,6 +57,7 @@ describe('site_language_settings_view', () => {
         expect(endpointRouterMock).toHaveBeenLastCalledWith('adminUiLanguages', expect.objectContaining({
             method: 'POST',
             body_data: expect.objectContaining({
+                reading_hyphenation: { fi: false, en: true },
                 languages: expect.arrayContaining([
                     expect.objectContaining({ language_code: 'fi', is_default: true, fallback_language_code: null }),
                     expect.objectContaining({ language_code: 'en', is_default: false, fallback_language_code: 'fi' }),

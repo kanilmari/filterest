@@ -390,3 +390,8 @@ summary {
         --dataset-centered-scrollbar-gutter: auto;
     }
 }
+
+/* Empty reading markers provide optional syllable breaks without altering copied text. */
+.reading-hyphen::before {
+    content: "\\00ad";
+}

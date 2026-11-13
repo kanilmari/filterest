@@ -29,6 +29,9 @@ for (const presentation of presentations) for (const theme of ['light', 'dark'] 
     await login(page, loadCredentials());
     const dataset = buildTempDatasetName('e2e_wo94_headings');
     let created = false;
+    const catalogResponse = await page.request.get('/api/ui-languages');
+    expect(catalogResponse.ok()).toBe(true);
+    const { reading_hyphenation: hyphenation } = await catalogResponse.json();
     const originalLanguage = await page.evaluate(() => localStorage.getItem('chosen_language'));
     try {
       await createTempDataset(page, { datasetName: dataset,
@@ -92,19 +95,18 @@ for (const presentation of presentations) for (const theme of ['light', 'dark'] 
           const body = article.locator('.big_description_value[data-column="content"]');
           const word = body.locator('strong');
           await expect(word).toHaveText(readingWord(language));
-          if (presentation === 'image_first_page_view') {
-            await expect(word.locator('.reading-hyphen').first()).toBeAttached();
-            await expect(body).toHaveAttribute('lang', language);
-            if (language === 'fi' && same) {
-              // The real radio change uses the same language handler while the Page dialog owns focus.
-              for (const next of ['en', 'fi']) {
-                await page.getByTestId(`language-menu-option-${next}`).first().dispatchEvent('change');
-                await expect(word).toHaveText(readingWord(next));
-                await expect(word.locator('.reading-hyphen').first()).toBeAttached();
-              }
+          const expectBreaks = async (code: string) => {
+            const breaks = word.locator('.reading-hyphen');
+            if (hyphenation[code]) await expect(breaks.first()).toBeAttached();
+            else await expect(breaks).toHaveCount(0);
+          };
+          await expectBreaks(language);
+          if (presentation === 'image_first_page_view' && language === 'fi' && same) {
+            for (const next of ['en', 'fi']) {
+              await page.getByTestId(`language-menu-option-${next}`).first().dispatchEvent('change');
+              await expect(word).toHaveText(readingWord(next));
+              await expectBreaks(next);
             }
-          } else {
-            await expect(article.locator('.reading-hyphen')).toHaveCount(0);
           }
           await expect(body.locator('h2').filter({ hasText: /^Contact$/ })).toHaveCount(0);
           await expect(body.locator('h2').filter({ hasText: /^Contact us$/ })).toHaveCount(same ? 0 : 1);

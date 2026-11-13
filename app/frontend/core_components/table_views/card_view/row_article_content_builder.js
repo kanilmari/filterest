@@ -78,7 +78,7 @@ export async function buildRowArticleContent(
     header_first_letter,
     table_has_image_role,
     current_user_id = null,
-    { selectedCard = null, sectionDefaults = {}, chosenLanguage, pageReading = false } = {},
+    { selectedCard = null, sectionDefaults = {}, chosenLanguage } = {},
 ) {
     const appearanceToken = datasetAppearanceState.capture(table_name);
     const rowArticleContentElement = document.createElement("div");
@@ -449,7 +449,7 @@ export async function buildRowArticleContent(
             if (value) {
                 // Heading de-duplication compares authored fields, never a related label with its numeric key.
                 value.dataset.articleHeadingLanguage = resolveHeadingLanguage(d.storedRawValue, d.isMultilingual, chosenLang);
-                if (pageReading && d.aliasColumn && !d.hasLangKey) {
+                if (d.aliasColumn && !d.hasLangKey) {
                     value.dataset.readingLanguage = resolveHeadingLanguage(row_item[d.aliasColumn], d.isMultilingual, chosenLang);
                 }
             }

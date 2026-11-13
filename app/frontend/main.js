@@ -2,6 +2,7 @@
 // Entry point that bootstraps the frontend application on page load.
 // Bridges navigation, authentication, language, and dataset initialization during startup.
 // Exists to separate the application boot sequence from individual feature modules.
+import { observeReadingHyphenation } from "./reusable_components/reading_hyphenation/reading_hyphenation.js";
 import { translatePage } from "./core_components/lang/translation_handler.js";
 import { setAuthModes } from "./core_components/admin_tools/auth_mode_handler.js";
 import { initNavbar } from "./core_components/navigation/menu_button/navbar_visibility_handler.js";
@@ -46,6 +47,7 @@ if (document.querySelector('meta[name="app-env"]')?.content === 'dev') {
 
 document.addEventListener("DOMContentLoaded", async () => {
     await loadPublicUiLanguageCatalog();
+    observeReadingHyphenation(document.documentElement);
     await loadConfig();
     await getSitePresentationState().loadSettings();
     initDevToolbox();

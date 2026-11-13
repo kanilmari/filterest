@@ -23,6 +23,7 @@ import { VERIFICATION_SETUP_TRANSLATION_FALLBACKS } from '../auth/verification_s
 import { SECOND_STEP_TRANSLATION_FALLBACKS } from '../auth/second_step_translation_fallbacks.js';
 
 export const LOCAL_TRANSLATION_FALLBACKS = {
+    reading_hyphenation: { fi: 'Tavutus', en: 'Hyphenation' },
     row_article_repeated_title_hint: {
         fi: 'Sisältö alkaa samalla otsikolla kuin rivi; otsikko näytetään jo.',
         en: 'The content starts with the row title, which is already shown.',

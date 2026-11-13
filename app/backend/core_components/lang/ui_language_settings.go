@@ -35,12 +35,19 @@ type uiLanguageSetting struct {
 	SortOrder            int     `json:"sort_order"`
 }
 
+type readingHyphenation struct {
+	Finnish bool `json:"fi"`
+	English bool `json:"en"`
+}
+
 type uiLanguageSettingsResponse struct {
-	Languages []uiLanguageSetting `json:"languages"`
+	ReadingHyphenation readingHyphenation  `json:"reading_hyphenation"`
+	Languages          []uiLanguageSetting `json:"languages"`
 }
 
 type uiLanguageSettingsSaveRequest struct {
-	Languages []uiLanguageSetting `json:"languages"`
+	ReadingHyphenation *readingHyphenation `json:"reading_hyphenation"`
+	Languages          []uiLanguageSetting `json:"languages"`
 }
 
 type uiLanguageQueryer interface {
@@ -79,9 +86,7 @@ func GetPublicUILanguagesHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	httpresponse.RespondWithJSON(w, http.StatusOK, uiLanguageSettingsResponse{
-		Languages: filterPublicUILanguages(languages),
-	})
+	respondLanguageSettings(w, r, backend.Db, filterPublicUILanguages(languages))
 }
 
 // AdminUILanguagesHandler returns or saves the complete canonical site-language registry.
@@ -95,7 +100,7 @@ func AdminUILanguagesHandler(w http.ResponseWriter, r *http.Request) {
 			httpresponse.RespondWithError(w, http.StatusInternalServerError, "error reading UI language settings")
 			return
 		}
-		httpresponse.RespondWithJSON(w, http.StatusOK, uiLanguageSettingsResponse{Languages: languages})
+		respondLanguageSettings(w, r, backend.Db, languages)
 	case http.MethodPost:
 		saveAdminUILanguageSettings(w, r)
 
@@ -139,7 +144,14 @@ func saveAdminUILanguageSettings(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	httpresponse.RespondWithJSON(w, http.StatusOK, uiLanguageSettingsResponse{Languages: normalized})
+	if request.ReadingHyphenation != nil {
+		if err := saveReadingHyphenation(r.Context(), tx, *request.ReadingHyphenation); err != nil {
+			log.Printf("save reading hyphenation: %v", err)
+			httpresponse.RespondWithError(w, http.StatusInternalServerError, "failed to save reading settings")
+			return
+		}
+	}
+	respondLanguageSettings(w, r, tx, normalized)
 }
 
 func readUILanguageSettings(ctx context.Context, queryer uiLanguageQueryer) ([]uiLanguageSetting, error) {

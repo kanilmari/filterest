@@ -18,7 +18,7 @@
     line-clamp: 2;
     overflow: hidden;
     overflow-wrap: break-word;
-    hyphens: auto;
+    hyphens: manual;
 }
 
 /* An inline-flex link group is one atomic box: its internal text lines cannot

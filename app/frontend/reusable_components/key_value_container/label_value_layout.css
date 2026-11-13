@@ -41,9 +41,9 @@
     max-width: 100%;
     margin: 0;
     padding: 0;
-    /* Words break at hyphenation points of the page language; only a word wider than its column breaks elsewhere. */
+    /* Reading text uses its own language patterns; only a word wider than its column breaks elsewhere. */
     overflow-wrap: break-word;
-    hyphens: auto;
+    hyphens: manual;
     grid-column: auto;
 }
 :root .label-value-layout[data-label-value-layout="auto"] > .label-value-layout__label {
