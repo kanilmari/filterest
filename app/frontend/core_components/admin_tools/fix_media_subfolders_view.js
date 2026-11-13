@@ -4,6 +4,7 @@
 // Exists to let admins repair missing media directories and thumbnails from one screen.
 
 import { endpoint_router } from '../endpoints/endpoint_router.js';
+import { appendImageDimensionsPanel } from './image_dimensions_panel.js';
 import { generate_missing_media_check_panel } from './missing_media_check_panel.js';
 
 /**
@@ -356,6 +357,7 @@ export async function generate_fix_media_subfolders_view(container) {
 
     // The same screen now also answers the other media question: not "is a folder
     // missing" but "is the file a row points at still there at all".
+    appendImageDimensionsPanel(frame);
     await generate_missing_media_check_panel(frame);
 }
 

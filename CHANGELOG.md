@@ -22,6 +22,7 @@ Dates are the local (Europe/Helsinki) date on which the version was published.
 
 ## [Unreleased]
 
+- Administrators can check stored image dimensions in Media Maintenance and update supported gallery rows in batches. Each batch shows confirmed writes and reasons for skipped rows or galleries (#1035).
 - Repeated request failures share one on-screen notice with an occurrence count until the notice closes (#1037).
 - On phones, each article detail value starts below its field name, including when the value wraps across lines.
 - Photos in an article follow their own proportions, including older uploads without saved dimensions. Captions no longer sit below an empty square frame.

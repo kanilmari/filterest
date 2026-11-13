@@ -46,6 +46,8 @@ CSV import, automation, bootstrap and restore have no new ownership hooks.
 
 ### Administrator Backfill
 
+Media Maintenance offers a single read-only check and a site-wide update. Each request can identify up to 200 rows needing correction. The report shows rows, galleries, and skip reasons for the latest pass. Only confirmed writes are accumulated across passes. Stop after this batch preserves its results. Running Update dimensions again revisits the galleries and skips rows whose dimensions already match.
+
 `POST /api/admin/image-dimensions-backfill` uses the full administrator pipeline
 with no request-long transaction. Its JSON input accepts `dry_run` (default
 `true`) and `max_rows` (default 200, allowed 1–1000). The row limit caps rows
