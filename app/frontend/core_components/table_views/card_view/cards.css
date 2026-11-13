@@ -594,10 +594,6 @@ body.dark-mode .card--modern {
     /* justify-content: center; */
 }
 
-.card_image_content.card_image_content--clickable {
-    cursor: pointer;
-}
-
 .card_image img {
     box-sizing: border-box;
     max-width: 100%;
@@ -956,7 +952,7 @@ body.dark-mode .card--modern {
 }
 
 .description_value {
-    cursor: text;
+    cursor: inherit;
     user-select: text;
     overflow-wrap: anywhere;
     white-space: normal;

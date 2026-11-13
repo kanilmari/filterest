@@ -69,9 +69,10 @@ function isSeparateInteractiveChild(element, target) {
 }
 
 /** Binds existing opener behavior without granting rights or changing its allowed path. */
-export function bindArticleViewActivation(element, activate, { keyboard = false, canOpen = canOpenArticleView } = {}) {
+export function bindArticleViewActivation(element, activate, { keyboard = false, canOpen = canOpenArticleView, ignoreEvent } = {}) {
     applyArticleViewAffordance(element, canOpen);
     const open = event => {
+        if (ignoreEvent?.(event)) return;
         // Independent field links/editors are still usable without an article grant.
         if (!canOpen() && isSeparateInteractiveChild(element, event.target)) return;
         if (!canOpen()) {
@@ -84,7 +85,7 @@ export function bindArticleViewActivation(element, activate, { keyboard = false,
     };
     addCardResourceListener(element, 'click', open);
     addCardResourceListener(element, 'keydown', event => {
-        if (!['Enter', ' '].includes(event.key)) return;
+        if (!['Enter', ' '].includes(event.key) || ignoreEvent?.(event)) return;
         const allowed = canOpen();
         if (allowed && event.target !== element) return;
         if (!allowed && isSeparateInteractiveChild(element, event.target)) return;

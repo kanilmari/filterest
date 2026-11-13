@@ -3,14 +3,12 @@
 // Bridges raw row objects and the card DOM structure, including avatars, maps, and modals.
 // Exists to centralise card element construction so card layout logic stays out of the view printer.
 
-import { canOpenArticleView } from './article_view_access.js';
 import { buildCardUrl } from "./row_article_opener_helpers.js";
 import { bindRowActivation, createRowOpenerElement, bindRowOpeningHref } from "./default_row_affordance.js";
-import { addCardResourceListener } from './card_resource_lifecycle.js';
 import { createImageElement, create_seeded_avatar, updateCardImageFrame } from "./card_avatar_builder.js";
 import { cardImageFrameFollowsStoredShape } from "./card_image_presentation.js";
 import { openDefaultRowPresentation } from "../row_presentation/row_presentation_dispatcher.js";
-import { bindImageFirstViewActivation } from "./image_first_view_activation.js";
+import { bindImageFirstViewActivation, refreshCardListImageAffordance } from "./image_first_view_activation.js";
 import { createKeyValueElement } from "./card_field_formatter.js";
 import { count_this_function } from "../../dev_tools/function_counter.js";
 import {
@@ -146,10 +144,10 @@ async function addImageOrAvatar(
             rowItem: row_item,
             tableName: table_name,
             selectedCard,
+            cardListImage: selectedCard?.dataset.cardPresentationView === "card",
         });
 
         elem_div.appendChild(blurredImageElement);
-        imageContainer.classList.toggle("card_image_content--clickable", canOpenArticleView());
     } else {
         // Avatar
         const avatar = await create_seeded_avatar(
@@ -159,7 +157,7 @@ async function addImageOrAvatar(
         );
 
         // Lisätään silti klikkauskuuntelija, jos halutaan avata avatar isompana (valinnainen)
-        // addCardResourceListener(avatar, "click", () => {
+        // avatar.addEventListener("click", () => {
         //     openImageModal(someAvatarSrcIfWanted);
         // });
 
@@ -184,6 +182,7 @@ function storageMediaFolder(pathname) {
  * tai toistaisi latauksen eikä säästäisi enää mitään.
  */
 function updateCardImageSources() {
+    document.querySelectorAll(".card_image [data-card-list-image]").forEach(element => refreshCardListImageAffordance(element));
     document
         .querySelectorAll(".card_image img, .card_small_image_inner img")
         .forEach((img) => {
@@ -248,10 +247,20 @@ function addDescriptionSection(
     desc_container.classList.add("card_description_container");
     setFieldHideAttribute(desc_container);
 
-    // Koko description-container klikattava -> avaa ison kortin
+    // Rich-text links and editors keep their own action. A drag selects text.
+    const ignoreEvent = event => {
+        const nested = event.target.closest?.('a, button, input, select, textarea, [contenteditable]:not([contenteditable="false"]), [role="button"]');
+        if (nested && desc_container.contains(nested)) return true;
+        if (event.type !== "click") return false;
+        const selection = window.getSelection();
+        return event.defaultPrevented || Boolean(selection?.rangeCount && !selection.isCollapsed
+            && selection.getRangeAt(0).intersectsNode(desc_container));
+    };
+    desc_container.tabIndex = 0;
+    desc_container.setAttribute("role", "link");
     bindRowActivation(desc_container, table_name, () => {
         openDefaultRowPresentation(row_item, table_name, container.closest(".card"));
-    });
+    }, { keyboard: true, ignoreEvent });
 
     container.appendChild(desc_container);
 
@@ -297,8 +306,6 @@ function addDescriptionSection(
                 trimEmptyEdgesFromCardDescription(valueDiv);
             }
             valueDiv.style.whiteSpace = "pre-wrap";
-            // Estetään klikkauksen kupliminen, jotta tekstin valinta toimii
-            addCardResourceListener(valueDiv, "click", (e) => e.stopPropagation());
             if (show_more_button_on_cards) {
                 valueDiv.appendChild(document.createTextNode(" "));
                 const showMoreLink = createShowMoreLink(row_item, table_name);

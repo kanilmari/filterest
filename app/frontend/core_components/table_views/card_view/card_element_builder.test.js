@@ -4,7 +4,7 @@
 // Exists to keep the shared card image hook intentionally narrow while service-catalog logo handling evolves.
 // @vitest-environment jsdom
 
-import { beforeEach, describe, expect, test, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 import { setRowPresentationChoice } from '../row_presentation/row_presentation_choice.js';
 
 const {
@@ -30,20 +30,6 @@ vi.mock('./row_article_opener.js', () => ({
 
 vi.mock('./image_first_view_opener.js', () => ({ openImageFirstView: openImageFirstViewMock }));
 
-vi.mock('./image_first_view_activation.js', () => ({
-    bindImageFirstViewActivation: vi.fn((element, options) => {
-        element.tabIndex = 0;
-        element.setAttribute('role', 'button');
-        element.dataset.imageFirstSrc = options.imageSrc;
-        const open = () => openImageFirstViewMock(options);
-        element.addEventListener('click', open);
-        element.addEventListener('keydown', (event) => {
-            if (event.key === 'Enter' || event.key === ' ') open();
-        });
-        return element;
-    }),
-}));
-
 vi.mock('../../../reusable_components/modal/modal_builder.js', () => ({
     createModal: vi.fn(() => ({
         modal_overlay: document.createElement('div'),
@@ -62,6 +48,7 @@ vi.mock('../../dev_tools/function_counter.js', () => ({
 
 vi.mock('../../../ui_config.js', () => ({
     show_more_button_on_cards: false,
+    PHONE_BREAKPOINT_PX: 700,
     resolveCardMediaFolderForImageWidth: resolveCardMediaFolderMock,
     predictCardImageCssWidth: vi.fn(() => 300),
 }));
@@ -86,6 +73,7 @@ import {
 } from './card_element_builder.js';
 
 describe('card_element_builder image-first activation', () => {
+    afterEach(() => vi.unstubAllGlobals());
     beforeEach(() => {
         document.body.innerHTML = '';
         createImageElementMock.mockReset();
@@ -101,9 +89,16 @@ describe('card_element_builder image-first activation', () => {
         openImageFirstViewMock.mockResolvedValue(null);
     });
 
-    test('opens the separate image-first view by click and keyboard', async () => {
+    test.each([
+        [700, 'card', '/ui/view/image_first_page_view', 'page'],
+        [701, 'card', '/ui/view/article_view', undefined],
+        [390, 'article_view', '/ui/view/article_view', undefined],
+    ])('at %i px, %s media opens its permitted view by click and keyboard', async (width, view, grant, layout) => {
+        vi.stubGlobal('innerWidth', width);
+        sessionStorage.setItem('user_permissions', JSON.stringify([grant]));
         const card = document.createElement('article');
         card.classList.add('card');
+        card.dataset.cardPresentationView = view;
         const imageContainer = document.createElement('div');
         const rowItem = { id: 7, title: 'Example', image: '7_7_1.png' };
 
@@ -130,16 +125,39 @@ describe('card_element_builder image-first activation', () => {
 
         // Pointer activation on the visible image bubbles to its accessible wrapper.
         image.click();
+        await vi.waitFor(() => expect(openImageFirstViewMock).toHaveBeenCalledTimes(1));
         imageActivator.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
 
         await vi.waitFor(() => {
             expect(openImageFirstViewMock).toHaveBeenCalledTimes(2);
         });
+        expect(openImageFirstViewMock.mock.lastCall[0].layout).toBe(layout);
         expect(openImageFirstViewMock).toHaveBeenLastCalledWith(expect.objectContaining({
             rowItem,
             tableName: 'examples',
             selectedCard: card,
         }));
+    });
+    test('retained image refreshes its affordance at the phone boundary and refuses the ungranted view', async () => {
+        vi.stubGlobal('innerWidth', 701);
+        sessionStorage.setItem('user_permissions', JSON.stringify(['/ui/view/article_view']));
+        const card = document.createElement('article');
+        card.dataset.cardPresentationView = 'card';
+        const imageContainer = document.createElement('div');
+        card.append(imageContainer);
+        document.body.append(card);
+        await addImageOrAvatar('7_7_1.png', true, 'seed', 'E', imageContainer, 'examples', 'Example', {}, { id: 7 }, card);
+        const image = card.querySelector('[data-image-first-src]');
+        expect(image.getAttribute('role')).toBe('button');
+        vi.stubGlobal('innerWidth', 700);
+        updateCardImageSources();
+        expect(image.hasAttribute('tabindex')).toBe(false);
+        image.click();
+        expect(openImageFirstViewMock).not.toHaveBeenCalled();
+        expect(document.querySelector('[data-lang-key="article_view_permission_missing"]')).not.toBeNull();
+        vi.stubGlobal('innerWidth', 701);
+        updateCardImageSources();
+        expect(image.tabIndex).toBe(0);
     });
 });
 
@@ -303,6 +321,51 @@ describe('classic article title and show-more access', () => {
         document.body.replaceChildren();
         sessionStorage.clear();
         localStorage.setItem('chosen_language', 'fi');
+    });
+    test('description text, padding and keyboard open the chosen row; links, editing and text selection stay independent', async () => {
+        const { addDescriptionSection } = await import('./card_element_builder.js');
+        const { createKeyValueElement } = await import('./card_field_formatter.js');
+        const card = document.createElement('div');
+        card.className = 'card';
+        document.body.append(card);
+        const row = { id: 17 };
+        setRowPresentationChoice('news', 'image_first_page_view');
+        sessionStorage.setItem('user_permissions', JSON.stringify(['/ui/view/image_first_page_view']));
+        vi.mocked(createKeyValueElement).mockImplementationOnce(() => {
+            const pair = document.createElement('div');
+            const value = document.createElement('div');
+            value.dataset.column = 'body';
+            value.textContent = 'Read this';
+            pair.append(value);
+            return pair;
+        });
+        addDescriptionSection([{ rawValue: 'Read this', column: 'body', columnClass: 'news-body' }], row, 'news', card);
+        const description = card.querySelector('.card_description_container');
+        const text = description.querySelector('[data-column="body"]');
+        openImageFirstViewMock.mockClear();
+        text.click();
+        await vi.waitFor(() => expect(openImageFirstViewMock).toHaveBeenCalledTimes(1));
+        description.click();
+        await vi.waitFor(() => expect(openImageFirstViewMock).toHaveBeenCalledTimes(2));
+        description.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+        await vi.waitFor(() => expect(openImageFirstViewMock).toHaveBeenCalledTimes(3));
+        expect(openImageFirstViewMock).toHaveBeenLastCalledWith(expect.objectContaining({
+            layout: 'page', rowItem: row, selectedCard: card, tableName: 'news',
+        }));
+        openImageFirstViewMock.mockClear();
+        for (const tag of ['a', 'input']) {
+            const child = document.createElement(tag);
+            if (tag === 'a') child.href = '#other';
+            text.append(child);
+            child.click();
+        }
+        const selection = window.getSelection();
+        selection.selectAllChildren(text);
+        text.click();
+        selection.removeAllRanges();
+        // The dispatcher resolves asynchronous presentation ownership before invoking the opener.
+        await new Promise(resolve => setTimeout(resolve, 0));
+        expect(openImageFirstViewMock).not.toHaveBeenCalled();
     });
     test('Page-only readers can open a row and its native link directly in Page', async () => {
         setRowPresentationChoice('news', 'image_first_page_view');

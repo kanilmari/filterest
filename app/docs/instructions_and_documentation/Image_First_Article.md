@@ -83,7 +83,8 @@ Focused regression tests live beside `image_first_view_opener.js` and `translati
 
 ## Page-sized image-first article (cifav)
 
-The Page presentation keeps the stored key `image_first_page_view`. Its image
+The Page presentation keeps the stored key `image_first_page_view`. The title and
+description share the centered article column, at most 800 CSS pixels wide. Its image
 stays inside the text column, with its whole photo contained at full column
 width up to a maximum height of 80dvh above 700 px. At 700 px and below, it keeps
 the original `min(40dvh, 360px)` cap; the existing phone layout rules still apply.
@@ -146,7 +147,8 @@ independent Article visit can open its own first result.
 The caller adopts its own origin stamping, transition and settled-address
 repairs; a newer request or history move still prevents the old article opening.
 
-For a card title, calendar event or another ordinary row link, the tab's choice
+For a card title, its description area, a calendar event or another ordinary row
+link, the tab's choice
 takes precedence over the dataset override, followed by the site default.
 Article is the initial site default. Administrators choose **Open rows as** in
 the appearance palette under **Article**, in the dataset or all-datasets scope.
@@ -155,7 +157,9 @@ the current site default pins it to the dataset even if the site changes later.
 
 An explicit presentation in a link or a history entry takes precedence for that
 opening and leaves the tab's future preference intact. Clicking an ordinary
-card photo opens the image viewer. Settings for the dataset's listing still
+card photo opens the page-sized image-first article (CIFAV) at viewport widths up
+to and including 700 CSS pixels and the full image-first article (IFAV) above that
+width. Links inside descriptions keep their own destinations. Settings for the dataset's listing still
 decide whether the underlying rows appear as cards, a calendar or another list.
 
 - **Article** uses the picker's existing classic path unchanged.
