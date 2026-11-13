@@ -154,6 +154,10 @@ export function setRowArticleImageCaption(captionElement, imageRow, { compact = 
             }
             const { creator, provider } = credit;
             if (compact && credit.creatorUrl && creator && provider) {
+                if (provider === "Unsplash" && /^(?:www\.)?unsplash\.com$/i.test(credit.creatorUrl.hostname)) {
+                    credit.creatorUrl.searchParams.set("utm_source", "filterest");
+                    credit.creatorUrl.searchParams.set("utm_medium", "referral");
+                }
                 appendCreditLink(captionElement, creator, credit.creatorUrl);
                 captionElement.append(document.createTextNode(" / "));
                 // API-sourced Unsplash photos credit the photographer and Unsplash separately.

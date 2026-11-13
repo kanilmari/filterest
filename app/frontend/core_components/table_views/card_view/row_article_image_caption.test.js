@@ -1,9 +1,9 @@
 /* @vitest-environment jsdom */
 
 // row_article_image_caption.test.js
-// Verifies article-only, multilingual captions for shared image asset rows.
+// Verifies multilingual article captions and compact card credits for shared image asset rows.
 // Bridges child image metadata with the ordinary article image container.
-// Exists to prevent captions from becoming stale, duplicated, or visible in compact cards.
+// Covers localized captions, link targets and picture identity.
 
 import { beforeEach, describe, expect, test, vi } from "vitest";
 
@@ -132,6 +132,8 @@ describe("linked photo credits", () => {
         expect(caption.textContent).toBe("Creator / Unsplash");
         const [creator, platform] = caption.querySelectorAll("a");
         expect(new URL(creator.href).pathname).toBe("/@creator");
+        expect(new URL(creator.href).searchParams.get("utm_source")).toBe("filterest");
+        expect(new URL(creator.href).searchParams.get("utm_medium")).toBe("referral");
         expect(new URL(platform.href).host).toBe("unsplash.com");
         expect(new URL(platform.href).pathname).toBe("/");
     });
