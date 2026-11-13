@@ -4,32 +4,56 @@ package dataset_appearance_store
 import (
 	"maps"
 	"net/http"
+	"strings"
 )
 
 const AppearanceHeader = "X-Filterest-Appearance"
 const RowPresentationPath = "shared.row_article_default_presentation"
 
-// Old v2 clients validate the exact set of flat leaves, including sparse overrides.
-func WantsRowPresentation(w http.ResponseWriter, r *http.Request) bool {
+// Clients validate the exact set of leaves in the three version-two maps.
+type AppearanceClient int
+
+const (
+	LegacyAppearance AppearanceClient = iota
+	RowPresentationAppearance
+	DisclosureAppearance
+)
+
+func RequestedAppearance(w http.ResponseWriter, r *http.Request) AppearanceClient {
 	w.Header().Add("Vary", AppearanceHeader)
-	return r.Header.Get(AppearanceHeader) == "row-presentation"
+	switch r.Header.Get(AppearanceHeader) {
+	case "disclosure-defaults":
+		return DisclosureAppearance
+	case "row-presentation":
+		return RowPresentationAppearance
+	default:
+		return LegacyAppearance
+	}
 }
 
-// Copy only when the field exists; the stored map and the caller's revision stay intact.
-func WithoutRowPresentation[V any](values map[string]V) map[string]V {
-	if _, exists := values[RowPresentationPath]; !exists {
+func ValuesForClient[V any](values map[string]V, client AppearanceClient) map[string]V {
+	if client == DisclosureAppearance {
 		return values
 	}
-	result := maps.Clone(values)
-	delete(result, RowPresentationPath)
+	result := values
+	copied := false
+	for key := range values {
+		if (client == LegacyAppearance && key == RowPresentationPath) || strings.HasPrefix(key, "shared.") && strings.HasSuffix(key, "_initial_open") {
+			if !copied {
+				result = maps.Clone(values)
+				copied = true
+			}
+			delete(result, key)
+		}
+	}
 	return result
 }
 
-func (response AppearanceResponse) ForClient(rowPresentation bool) AppearanceResponse {
-	if !rowPresentation {
-		response.Defaults = WithoutRowPresentation(response.Defaults)
-		response.Overrides = WithoutRowPresentation(response.Overrides)
-		response.Sources = WithoutRowPresentation(response.Sources)
+func (response AppearanceResponse) ForClient(client AppearanceClient) AppearanceResponse {
+	response.Defaults = ValuesForClient(response.Defaults, client)
+	response.Overrides = ValuesForClient(response.Overrides, client)
+	response.Sources = ValuesForClient(response.Sources, client)
+	if client == LegacyAppearance {
 		response.Effective.Shared.RowArticleDefaultPresentation = ""
 	}
 	return response

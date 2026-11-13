@@ -22,6 +22,7 @@ Dates are the local (Europe/Helsinki) date on which the version was published.
 
 ## [Unreleased]
 
+- Palette sections and collapsible blocks in all three article presentations start closed. Headings, primary pictures and article text remain visible. Readers' deliberate open/close choices stay with the same account and browser tab; administrators can set site defaults and dataset overrides through the existing appearance palette. The upgrade audits and retires the old shared collapse storage once, while later administrator choices survive replay (#986).
 - Inferred card and article headings show the title with its inline emphasis. Articles omit empty, unconfigured display fields and sit flush below the toolbar at tablet widths. Signed-in users can load their filter-panel preferences with ordinary account permissions (#1023).
 - On phones, a result card’s photo opens the page-sized image-first article. At larger widths it opens the full image-first article. Selecting a card’s description opens the row in its effective article presentation (#1034).
 - Administrators can check stored image dimensions in Media Maintenance and update supported gallery rows in batches. Each batch shows confirmed writes and reasons for skipped rows or galleries (#1035).
@@ -29,8 +30,8 @@ Dates are the local (Europe/Helsinki) date on which the version was published.
 - On phones, each article detail value starts below its field name, including when the value wraps across lines.
 - Photos in an article follow their own proportions, including older uploads without saved dimensions. Captions no longer sit below an empty square frame.
 - Image-first articles opened from a photo or in Page view blur the application behind them with the same 48 px radius (#997).
-- Sites can display the credit directly under the matching dataset card photo, including photographer and source links (#1032).
-- In the page-sized article (cifav), Finnish and English titles and descriptions break long words at hyphenation points, so they wrap on narrow screens. Copying, page search and editing keep the original words, and links and addresses wrap as before. Changing the interface language refreshes the article text and keeps the shown picture (#1036).
+- Sites can display the credit directly under the matching dataset card photo, including photographer and source links. Cards use a short, localized credit; longer required attribution remains available (#1032).
+- Site administrators can switch reading hyphenation on or off for each supported content language under Languages. Finnish is on by default and English is off. Eligible headings, paragraphs and table text follow their content language; copying and search keep the original words (#1036).
 - The worker launcher's missing-Claude-CLI test runs with its own PATH, so a Claude CLI installed on the machine no longer fails it (#1033).
 
 ## [9.6.8] - 2026-11-13

@@ -31,7 +31,7 @@ Storage and API maps use flat canonical paths such as `light.image_opacity`.
 ### Setting places
 
 This inventory is expanded from the definition's theme owners, fields and
-`place` metadata: 46 canonical paths, comprising 28 tab-only values, ten
+`place` metadata: 61 canonical paths, comprising 28 tab-only values, 25
 site defaults and eight site-only values. Each theme path below is independent;
 the `shared.*` rows apply in both themes. Bounds, choices and initial values
 remain authoritative in the definition rather than in this table.
@@ -71,6 +71,9 @@ remain authoritative in the definition rather than in this table.
 | Filter chip remove-button side | `shared.active_filter_remove_side` | Site-wide only (administrator) |
 | Category heading order | `shared.row_group_heading_order` | Site-wide only (administrator) |
 | Brand colour | `shared.brand_color` | Site-wide only (administrator) |
+| Palette sections open initially (8) | `shared.filterbar_{filters,search_overview,search_controls,tools,views,field_sets,style,chat}_initial_open` | Site default + tab override; each leaf defaults false |
+| Article blocks open initially (5) | `shared.article_view_{details,images,attachments,related_rows,task_progress}_initial_open` | Site default + tab override; each leaf defaults false |
+| Image-first Details open initially (2) | `shared.image_first_view_details_initial_open`, `shared.image_first_page_view_details_initial_open` | Site default + tab override; each leaf defaults false |
 
 **Brand colour** and the **active-tab navigation highlight** are site-wide-only
 examples: selecting another dataset cannot give it a different brand or change
@@ -79,7 +82,7 @@ tab's cover. Category heading order is another site-only setting; see below.
 
 **Show cover photo** aliases the active theme's `image_opacity`; there is no
 stored visibility boolean. The compatibility-only `shared.image_blur` derives
-from `light.image_blur` and is excluded from the 46 canonical paths. It is not
+from `light.image_blur` and is excluded from the 61 canonical paths. It is not
 another independently editable setting or storage place.
 
 ### Resolution and new tabs
@@ -122,10 +125,11 @@ collapsible toolboxes follow this order:
 2. **Card layout**: the seven overridable card settings.
 3. **Article images**: the overridable caption position.
 4. **Dataset header**: the overridable space above the header icon.
-5. **Dataset tabs**: the eight site-only values, readable but not editable here.
+5. **Disclosure defaults**: eight palette-section and seven article-block defaults.
+6. **Dataset tabs**: the eight site-only values, readable but not editable here.
 
-**All datasets** hides cover controls and tab editor actions. It edits the nine
-site defaults in the same card/article/header order, followed by site-only
+**All datasets** hides cover controls and tab editor actions. It edits the 24
+site defaults in the same order, followed by site-only
 values. Toolbox open/closed choices are remembered in local storage. The scope
 switch always opens on This tab regardless of those choices.
 
@@ -140,6 +144,23 @@ or Save for the affected scope.
 **Edit tab images and header** and **Edit card fields** open the existing
 editors with this dataset selected. These editors save media/header and field
 metadata through their own flows; the appearance draft survives their use.
+
+### Personal disclosure choices
+
+The fifteen opening defaults use the same explicit Save and Use site default
+controls as the other inherited settings. Merely opening or closing a reading
+block is a separate personal choice. It is keyed by verified account, browser
+session tab, immutable dataset UID, presentation and block, and takes precedence
+over the inherited initial value. Account changes clear this memory; unavailable
+storage falls back to document memory. Ordinary clicks make no setting POST.
+Temporary programmatic reveals are not remembered. Removing a permission clears
+the projection; reauthorizing a still-mounted surface restores its valid choice.
+There is no database row of private disclosure choices.
+
+The old `filterbar_section_layout.section_collapsed` storage and writer are
+removed. That endpoint continues to manage section ordering and its existing
+policy only. [Article block defaults](Article_Section_Defaults.md) describes
+article content boundaries, compatibility endpoints and the audited cutover.
 
 ### Drafts, reset and phone layout
 

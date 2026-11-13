@@ -440,7 +440,7 @@ func GetResults(response_writer http.ResponseWriter, request *http.Request) {
 		"geom_columns":         geomCols,
 		"geom_sources":         geomSrcs,
 		"dataset_presentation": datasetPresentation,
-		"dataset_appearance":   datasetAppearance.ForClient(store.WantsRowPresentation(response_writer, request)),
+		"dataset_appearance":   datasetAppearance.ForClient(store.RequestedAppearance(response_writer, request)),
 	}
 	// Facets describe the complete first-page query universe. Later infinite-scroll
 	// batches omit the field so clients retain the authoritative first-page metadata.

@@ -273,7 +273,7 @@ export function createDatasetAppearanceState() {
             if (boundSurface && surfaceOwners.get(boundSurface) !== binding) return;
             if (boundSurface) {
                 surfaceOwners.delete(boundSurface);
-                clearDatasetAppearanceSurface(boundSurface);
+                clearDatasetAppearanceSurface(boundSurface, { dispose: true });
             }
             refs.delete(binding);
             pendingAssembly.delete(binding);
@@ -382,7 +382,7 @@ export function createDatasetAppearanceState() {
             for (const ref of refs) {
                 if (uid ? ref.uid !== uid : candidate !== name) continue;
                 const surface = ref.node.deref();
-                if (surface) { surfaceOwners.delete(surface); clearDatasetAppearanceSurface(surface); }
+                if (surface) { surfaceOwners.delete(surface); clearDatasetAppearanceSurface(surface, { dispose: true }); }
                 refs.delete(ref);
                 pendingAssembly.delete(ref);
             }
@@ -402,7 +402,7 @@ export function createDatasetAppearanceState() {
         epoch += 1;
         for (const refs of surfaces.values()) for (const ref of refs) {
             const surface = ref.node.deref();
-            if (surface) clearDatasetAppearanceSurface(surface);
+            if (surface) clearDatasetAppearanceSurface(surface, { dispose: true });
         }
         surfaces.clear();
         pendingNames.clear(); assemblyNames.clear(); pendingAssembly.clear(); configurations.clear();

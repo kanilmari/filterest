@@ -64,8 +64,10 @@ export function publishSessionChange(reason) {
 /** A cold bootstrap is already validated. A resumed document must ask the server
  * before Home can reuse visible content or issue a new facade request.
  */
-export function revalidateSessionIdentity() {
-    if (!needsValidation) return Promise.resolve(generation);
+export function revalidateSessionIdentity({ requireIdentity = false } = {}) {
+    // Existing facades can establish identity on cold bootstrap. Tab-owned state
+    // explicitly requests it before reading or recording a user's preferences.
+    if (!needsValidation && (!requireIdentity || identity !== null)) return Promise.resolve(generation);
     if (validation) return validation.promise;
     const checking = { generation, controller: new AbortController(), promise: null };
     validation = checking;

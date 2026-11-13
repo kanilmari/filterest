@@ -6,6 +6,7 @@ Never connects to an installation database or uses protected credentials.
 from pathlib import Path
 import hashlib
 import json
+import os
 import subprocess
 import sys
 
@@ -23,6 +24,7 @@ SCHEMA = MIGRATIONS / "20261009000060_extend_dataset_appearance_three_places.sql
 BACKFILL = MIGRATIONS / "20261009000061_backfill_dataset_appearance_three_places.sql"
 HEADING_ORDER = MIGRATIONS / "20261015000020_add_row_group_heading_order_appearance_field.sql"
 ROW_PRESENTATION = MIGRATIONS / "20261105000985_add_row_article_default_presentation.sql"
+DISCLOSURES = MIGRATIONS / "20261106000100_move_disclosure_defaults_to_appearance.sql"
 OWNER = MIGRATIONS / "20261009000099_record_database_release_9_11_0.sql"
 BASE = "e314e34"
 
@@ -103,15 +105,16 @@ def test_dataset_appearance_fresh_upgrade_and_twice_replay(installed, appearance
     shape = json.loads(expected)
     assert len(shape["columns"]) == 5 and len(shape["constraints"]) == 8
     assert shape["registry"] == shape["check"] == 0 and shape["markers"] == 1
-    for run in (installed, appearance_upgrade):
+    # Replay each database's own migrations. Replaying an old validator on a newer
+    # schema would replace its live catalogue with a previous release's rules.
+    for run, replay in ((installed, (DISCLOSURES,)), (appearance_upgrade, (SCHEMA, HEADING_ORDER, BACKFILL))):
         assert value(run, "SELECT count(*) FROM app_check_dataset_appearance_three_places()") == "0"
         uid = value(run, "SELECT table_uid FROM system_db_tables WHERE table_name='tiketit'")
         run(f"UPDATE system_dataset_appearance SET overrides='{{\"shared.card_detail_columns\":2}}',revision=7 WHERE table_uid={uid}")
         before = value(run, "SELECT jsonb_agg(to_jsonb(a) ORDER BY table_uid) FROM system_dataset_appearance a")
         for _ in range(2):
-            run(SCHEMA.read_text())
-            run(HEADING_ORDER.read_text())
-            run(BACKFILL.read_text())
+            for migration in replay:
+                run(migration.read_text())
             assert appearance_shape(run) == expected
             assert value(run, "SELECT jsonb_agg(to_jsonb(a) ORDER BY table_uid) FROM system_dataset_appearance a") == before
 
@@ -147,7 +150,7 @@ def test_dataset_appearance_bootstrap_refuses_missing_proof(cluster, fault):
     result = cluster((BOOTSTRAP / "seed_data.sql").read_text(), "appearance_broken", check=False)
     assert result.returncode != 0
     assert ("missing completion markers: system_dataset_appearance_table" if fault == "marker"
-            else "bootstrap import failed its final checks") in result.stderr
+            else "dataset appearance storage requires six validated checks") in result.stderr
     assert cluster("SELECT count(*) FROM system_schema_migrations", "appearance_broken").stdout.strip() == "0"
     assert cluster("SELECT count(*) FROM system_db_version", "appearance_broken").stdout.strip() == "0"
 
@@ -157,7 +160,9 @@ def test_three_place_migration_sources_and_definition_snapshot():
     schema = SCHEMA.read_text()
     backfill = BACKFILL.read_text()
     definition = json.loads((APP / "frontend/shared/dataset_appearance/definition.json").read_text())
-    rules = json.loads(re.search(r"SELECT '\n(.*?)\n'::jsonb;", ROW_PRESENTATION.read_text(), re.S).group(1))
+    # The latest additive migration owns today's rules; historical migrations stay immutable.
+    rules = json.loads(re.search(r"SELECT '\n(.*?)'::jsonb;", DISCLOSURES.read_text(), re.S).group(1))
+    assert DISCLOSURES.read_text() in (BOOTSTRAP / "seed_data.sql").read_text()
     expected = {}
     for group in ("light", "dark", "shared"):
         fields = definition["shared_fields" if group == "shared" else "theme_fields"]
@@ -169,6 +174,9 @@ def test_three_place_migration_sources_and_definition_snapshot():
                 value["default"] = value.get("dark_default", value["default"])
             expected[f"{group}.{key}"] = value
     assert rules == expected
+    previous = json.loads(re.search(r"SELECT '\n(.*?)'::jsonb;", ROW_PRESENTATION.read_text(), re.S).group(1))
+    assert {key: rule for key, rule in rules.items() if key in previous} == previous
+    assert len(set(rules) - set(previous)) == 15
     for migration in (SCHEMA, BACKFILL):
         source = migration.read_text()
         assert migration.name < OWNER.name and "-- VERSION_DB: 9.11.0" in source
@@ -201,3 +209,94 @@ def test_heading_order_migration_adds_only_its_rule_and_canonicalizes_default_st
     assert schema in (BOOTSTRAP / 'schema.sql').read_text()
     seed = (BOOTSTRAP / 'seed_data.sql').read_text()
     assert canonical in seed and seed.index(canonical) > seed.index(BACKFILL.read_text())
+
+
+def test_disclosure_upgrade_from_restored_968_keeps_article_choice(cluster, tmp_path):
+    """Upgrade an actual previous release backup twice using the server's migration runner."""
+    cluster("CREATE DATABASE before_986")
+    for name in ("schema.sql", "seed_data.sql"):
+        source = subprocess.check_output(
+            ["git", "show", f"v9.6.8:app/server_tools/public_bootstrap/{name}"], cwd=ROOT, text=True)
+        cluster(source, "before_986")
+
+    def before(sql):
+        return cluster(sql, "before_986")
+
+    def upgraded(sql):
+        return cluster(sql, "after_986")
+
+    version_query = "SELECT version FROM system_db_version ORDER BY id DESC LIMIT 1"
+    ledger_query = "SELECT filename FROM system_schema_migrations ORDER BY filename"
+    site_query = "SELECT json_value->'defaults' FROM system_config WHERE key='dataset_cover_theme_config'"
+    uid = int(value(before, "SELECT table_uid FROM system_db_tables WHERE table_name='tiketit'"))
+    path = 'shared.row_article_default_presentation'
+    before(f"""UPDATE system_config SET json_value=jsonb_set(json_value,'{{defaults,{path}}}','"image_first_page_view"')
+        WHERE key='dataset_cover_theme_config';
+        UPDATE system_dataset_appearance SET overrides=overrides || '{{"{path}":"image_first_page_view",
+            "shared.card_image_width":415}}'::jsonb WHERE table_uid={uid};
+        INSERT INTO system_config(key,json_value) VALUES ('filterbar_section_layout',
+            '{{"section_collapsed":{{"filter":false}},"other":"kept"}}')
+        ON CONFLICT (key) DO UPDATE SET json_value=excluded.json_value;
+        UPDATE system_db_tables SET article_section_initial_open=jsonb_set(article_section_initial_open,
+            '{{article_view,details}}','true') WHERE table_uid={uid}""")
+    overrides_query = f"SELECT overrides FROM system_dataset_appearance WHERE table_uid={uid}"
+    old_site = json.loads(value(before, site_query))
+    old_overrides = json.loads(value(before, overrides_query))
+    assert old_site[path] == old_overrides[path] == "image_first_page_view"
+    assert value(before, version_query) == "9.13.6"
+    old_ledger = set(value(before, ledger_query).splitlines())
+    env = os.environ.copy()
+    env.update(json.loads(value(before, """SELECT json_build_object('PGHOST',current_setting('unix_socket_directories'),
+        'PGPORT',current_setting('port'),'PGUSER',current_user,'PGDATABASE',current_database())""")))
+    backup = tmp_path / "before_986.dump"
+    subprocess.run(["pg_dump", "--format=custom", "--file", str(backup)], env=env, check=True)
+    cluster("CREATE DATABASE after_986")
+    env.update(PGDATABASE="after_986", GOTOOLCHAIN="local", EASELECT_MIGRATION_FILE_ALLOWLIST="")
+    subprocess.run(["pg_restore", "--exit-on-error", "--dbname", "after_986", str(backup)], env=env, check=True)
+    assert value(upgraded, version_query) == "9.13.6"
+    assert json.loads(value(upgraded, overrides_query)) == old_overrides
+    assert value(upgraded, f"SELECT article_section_initial_open#>>'{{article_view,details}}' "
+                          f"FROM system_db_tables WHERE table_uid={uid}") == "true"
+
+    palette_query = "SELECT json_value FROM system_config WHERE key='filterbar_section_layout'"
+    assert json.loads(value(upgraded, palette_query))["section_collapsed"] == {"filter": False}
+    record = "20261106000199_record_database_release_disclosure_defaults.sql"
+    sources = tmp_path / "migrations"
+    sources.mkdir()
+    for migration in MIGRATIONS.glob("*.sql"):
+        if migration.name <= record:
+            (sources / migration.name).write_bytes(migration.read_bytes())
+    runner = tmp_path / "upgrade.go"
+    runner.write_text('''package main
+import ("database/sql"; "log"; "os"; "easelect/backend/core_components/migrations"; _ "github.com/lib/pq")
+func main() {
+    db, err := sql.Open("postgres", "sslmode=disable")
+    if err != nil { log.Fatal(err) }
+    defer db.Close()
+    if err := migrations.RunMigrations(db, os.Args[1]); err != nil { log.Fatal(err) }
+}
+''')
+    details = f"SELECT app_article_disclosure_defaults({uid})#>>'{{article_view,details}}'"
+    for expected in ("false", "true"):
+        result = subprocess.run(["go", "run", str(runner), str(sources)], cwd=APP, env=env, text=True, capture_output=True)
+        assert result.returncode == 0, result.stderr
+        assert value(upgraded, version_query) == "9.13.7"
+        assert value(upgraded, "SELECT count(*) FROM jsonb_object_keys(app_dataset_appearance_v2_rules())") == "61"
+        assert value(upgraded, "SELECT count(*) FROM app_check_disclosure_appearance_defaults()") == "0"
+        assert set(value(upgraded, ledger_query).splitlines()) == old_ledger | {DISCLOSURES.name, record}
+        new_site = json.loads(value(upgraded, site_query))
+        assert {key: new_site[key] for key in old_site} == old_site
+        assert len(new_site) == len(old_site) + 15
+        current_overrides = json.loads(value(upgraded, overrides_query))
+        assert {key: current_overrides[key] for key in old_overrides} == old_overrides
+        assert json.loads(value(upgraded, palette_query)) == {"other": "kept"}
+        assert json.loads(value(upgraded, """SELECT detail FROM system_data_repair_records WHERE
+            migration='disclosure_appearance_defaults' AND action='legacy_palette_values'""")) == {"filter": False}
+        assert value(upgraded, details) == expected
+        assert value(upgraded, f"""SELECT detail#>>'{{values,article_view,details}}' FROM system_data_repair_records
+            WHERE migration='disclosure_appearance_defaults' AND action='legacy_article_values'
+                AND detail->>'dataset_uid'='{uid}'""") == "true"
+        assert value(upgraded, f"SELECT app_valid_dataset_appearance_v2(({site_query})-'{path}','site_default',true)") == "t"
+        if expected == "false":
+            upgraded(f"""UPDATE system_dataset_appearance SET overrides=jsonb_set(overrides,
+                '{{shared.article_view_details_initial_open}}','true') WHERE table_uid={uid}""")

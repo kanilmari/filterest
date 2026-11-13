@@ -17,6 +17,7 @@ import { buildActiveFilterRemoveSideControl } from './active_filter_remove_side_
 import { buildRowArticlePresentationControl } from './row_article_presentation_control.js';
 import { buildRowGroupHeadingOrderControl } from './row_group_heading_order_control.js';
 import { buildArticleImageCaptionControl } from './site_article_image_control.js';
+import { buildDisclosureDefaultControls, getDisclosurePaletteCopy } from './disclosure_palette_controls.js';
 import { DEFAULT_DATASET_COVER_THEME, isValidThemeConfig, applySitePresentationGlobals,
     getSitePresentationState } from './site_presentation_state.js';
 import { datasetAppearanceField } from '../../shared/dataset_appearance/validator.js';
@@ -36,6 +37,7 @@ const TOOLBOX_ICON_PATHS = Object.freeze({
     articleImages: '/frontend/icons/symbols/image.svg',
     datasetHeader: '/frontend/icons/symbols/ruler.svg',
     navigation: '/frontend/icons/symbols/settings.svg',
+    disclosureDefaults: '/frontend/icons/symbols/settings.svg',
 });
 
 const RANGE_CONTROLS = Object.freeze([
@@ -110,7 +112,10 @@ function buildCardFieldsControl(copy, onChange) {
     } };
 }
 
-function getCopy() { return getPaletteCopy(COPY); }
+function getCopy() {
+    const disclosure = getDisclosurePaletteCopy();
+    return { ...getPaletteCopy(COPY), disclosureDefaults: disclosure.heading, disclosureDefaultsHint: disclosure.hint };
+}
 
 /** Compatibility entrypoint: public previews use the same scoped renderer as results. */
 export function applyDatasetCoverThemeConfig(hero, config, { applyGlobals = true } = {}) {
@@ -197,7 +202,7 @@ function buildPaletteControl(hero, datasetName, siteState, options) {
     });
     panelBody.append(themeTabs);
     const toolboxByGroup = new Map();
-    for (const group of ['backgroundCover', 'cardLayout', 'articleImages', 'datasetHeader', 'navigation']) {
+    for (const group of ['backgroundCover', 'cardLayout', 'articleImages', 'datasetHeader', 'navigation', 'disclosureDefaults']) {
         const toolbox = createPaletteToolbox(copy[group], { iconPath: TOOLBOX_ICON_PATHS[group],
             storageKey: `dataset_cover_palette_section_${group}` });
         toolboxByGroup.set(group, toolbox); panelBody.append(toolbox.toolbox);
@@ -309,6 +314,10 @@ function buildPaletteControl(hero, datasetName, siteState, options) {
         [buildRowGroupHeadingOrderControl(copy, value => change('row_group_heading_order', value)), 'row_group_heading_order', toolboxByGroup.get('navigation').controls],
     ];
     controls.forEach(([control, key, parent]) => addRow(control, key, parent));
+    const disclosureBox = toolboxByGroup.get('disclosureDefaults');
+    const disclosureHint = document.createElement('p');
+    disclosureBox.controls.append(disclosureHint);
+    buildDisclosureDefaultControls(disclosureBox.controls, addRow, change);
     const brand = document.createElement('label'), brandText = document.createElement('span'), brandInput = document.createElement('input');
     const brandValue = document.createElement('output');
     brand.className = 'dataset-cover-test-palette__color'; brandInput.type = 'color';
@@ -359,6 +368,7 @@ function buildPaletteControl(hero, datasetName, siteState, options) {
     }
     function syncCopy() {
         copy = getCopy(); scopeLegend.textContent = copy.scope;
+        disclosureHint.textContent = copy.disclosureDefaultsHint;
         scopeChoices.forEach(choice => { choice.text.textContent = copy[choice.value === 'tab' ? 'thisTab' : 'allDatasets']; });
         tabButtons.forEach(tab => { tab.textContent = copy[tab.dataset.theme]; });
         visibleText.textContent = copy.coverVisible;

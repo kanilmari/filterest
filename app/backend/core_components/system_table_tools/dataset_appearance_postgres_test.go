@@ -344,14 +344,14 @@ func TestDatasetAppearancePostgresCompleteTabFirstSaveAndAllOverrides(t *testing
 	if err != nil || initial.Version != "none" {
 		t.Fatal(initial, err)
 	}
-	if len(initial.TabValues) != 28 || len(initial.SiteValues) != 8 || len(initial.Defaults) != 10 {
+	if len(initial.TabValues) != 28 || len(initial.SiteValues) != 8 || !reflect.DeepEqual(initial.Defaults, appearance.Rules().DefaultsForPlace(appearance.SiteDefault)) {
 		t.Fatal(initial)
 	}
 	set := appearance.Rules().DefaultsForPlace(appearance.SiteDefault)
 	set["shared.card_show_all_fields"] = false
 	set["shared.filterbar_content_top_space"] = 0
 	saved, err := datasetAppearanceTestSave(db, uid, DatasetAppearancePatch{TabSet: map[string]any{"light.image_blur": 0, "dark.oval_enabled": false, "shared.hero_extra_height": 83.5}, Set: set}, "none")
-	if err != nil || len(saved.TabValues) != 28 || len(saved.Overrides) != 10 || saved.TabValues["light.image_blur"] != float64(0) {
+	if err != nil || len(saved.TabValues) != 28 || len(saved.Overrides) != len(set) || saved.TabValues["light.image_blur"] != float64(0) {
 		t.Fatal(saved, err)
 	}
 	snapshot, err := store.ReadAppearance(db, uid, false)

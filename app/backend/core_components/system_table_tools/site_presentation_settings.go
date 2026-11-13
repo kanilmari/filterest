@@ -85,8 +85,6 @@ func respondWithSitePresentationSettings(w http.ResponseWriter, r *http.Request)
 }
 
 func writeSitePresentationSettings(w http.ResponseWriter, r *http.Request, settings SitePresentationSettingsResponse) {
-	if !store.WantsRowPresentation(w, r) {
-		settings.Defaults = store.WithoutRowPresentation(settings.Defaults)
-	}
+	settings.Defaults = store.ValuesForClient(settings.Defaults, store.RequestedAppearance(w, r))
 	httpresponse.RespondWithJSON(w, http.StatusOK, settings)
 }

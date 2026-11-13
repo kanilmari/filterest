@@ -498,7 +498,7 @@ func UpdateRowHandler(response_writer http.ResponseWriter, request *http.Request
 	}
 
 	if appearanceResult != nil {
-		projected := appearanceResult.ForClient(store.WantsRowPresentation(response_writer, request))
+		projected := appearanceResult.ForClient(store.RequestedAppearance(response_writer, request))
 		appearanceResult = &projected
 	}
 

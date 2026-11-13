@@ -196,7 +196,7 @@ func TestDatasetAppearancePostgresCardOverridesKeepResultsReadableAfterValidShar
 			for _, role := range []string{"basic", "guest"} {
 				w := httptest.NewRecorder()
 				request := frontPageSessionRequest(t, 42, role, "GET", "/api/get-results?dataset=wl143_content")
-				request.Header.Set(store.AppearanceHeader, "row-presentation")
+				request.Header.Set(store.AppearanceHeader, "disclosure-defaults")
 				read.GetResults(w, request)
 				if w.Code != http.StatusOK {
 					t.Fatalf("valid shared save made dataset unreadable: role=%s overrides=%v status=%d body=%s", role, overrides, w.Code, w.Body.String())
@@ -222,5 +222,65 @@ func TestDatasetAppearancePostgresCardOverridesKeepResultsReadableAfterValidShar
 				}
 			}
 		}
+	}
+}
+
+func TestPreviousBrowserAppearanceSavePreservesDisclosurePostgres(t *testing.T) {
+	db, uid := datasetAppearanceFixture(t)
+	const field = "shared.article_view_details_initial_open"
+	settings, err := readSitePresentationSettingsFromDB()
+	if err != nil {
+		t.Fatal(err)
+	}
+	settings.Defaults[field] = true
+	commitAppearanceHTTP(t, db, sharedAppearanceHTTPInput(t, settings))
+	dataset, err := datasetAppearanceTestSave(db, uid, DatasetAppearancePatch{Set: map[string]any{field: false}}, "none")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Simulate the still-open 9.6.8 browser. Its complete settings draft contains
+	// only the fields in its negotiated GET response.
+	request := httptest.NewRequest(http.MethodGet, "/api/admin/site-presentation-settings", nil)
+	request.Header.Set(store.AppearanceHeader, "row-presentation")
+	response := httptest.NewRecorder()
+	AdminSitePresentationSettingsHandler(response, request)
+	var draft SitePresentationSettingsResponse
+	if response.Code != http.StatusOK {
+		t.Fatal(response.Code, response.Body.String())
+	}
+	if err := json.Unmarshal(response.Body.Bytes(), &draft); err != nil {
+		t.Fatal(err)
+	}
+	if _, present := draft.Defaults[field]; present {
+		t.Fatal("old browser received disclosure settings")
+	}
+	draft.Defaults["shared.card_image_width"] = float64(420)
+	oldHandler := func(handler http.HandlerFunc) http.HandlerFunc {
+		return func(w http.ResponseWriter, r *http.Request) {
+			r.Header.Set(store.AppearanceHeader, "row-presentation")
+			handler(w, r)
+		}
+	}
+	input := sharedAppearanceHTTPInput(t, draft)
+	input.handler = oldHandler(AdminSitePresentationSettingsHandler)
+	commitAppearanceHTTP(t, db, input)
+	settings, err = readSitePresentationSettingsFromDB()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if settings.Defaults[field] != true || settings.Defaults["shared.card_image_width"] != float64(420) {
+		t.Fatal("old site's save lost the disclosure default or failed to apply the edit", settings.Defaults)
+	}
+	commitAppearanceHTTP(t, db, appearanceHTTPRefusalRequest{path: "/api/admin/dataset-appearance", handler: oldHandler(AdminDatasetAppearanceHandler), body: map[string]any{
+		"schema_version": 2, "dataset_uid": uid, "set": map[string]any{"shared.card_image_width": 430}, "unset": []string{},
+		"version": dataset.Revision, "shared_version": settings.Version,
+	}})
+	snapshot, err := store.ReadAppearance(db, uid, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if snapshot.Defaults[field] != true || snapshot.Overrides[field] != false || snapshot.Sources[field] != "override" || snapshot.Overrides["shared.card_image_width"] != float64(430) {
+		t.Fatal("old dataset save lost saved preferences", snapshot.Overrides, snapshot.Sources[field])
 	}
 }

@@ -176,6 +176,7 @@ release_data_migrations = (
     "20261015000006_backfill_translation_object_sources.sql",
     "20261015000009_add_card_image_usage_presentation.sql",
     "20261015000012_materialize_article_bundles.sql",
+    "20261106000100_move_disclosure_defaults_to_appearance.sql",
 )
 # The record of each database release is not run by the bootstrap: the acceptance
 # block below writes the version row of the version this bootstrap is built for.
@@ -193,6 +194,7 @@ release_record_migrations = (
     "20261030000399_record_database_release_category_button_width.sql",
     "20261105000099_record_database_release_app_log_search_terms.sql",
     "20261105000999_record_database_release_row_article_default.sql",
+    "20261106000199_record_database_release_disclosure_defaults.sql",
 )
 # Every public migration whose sequence number comes after this one belongs to
 # exactly one list above, so no file is marked as run while missing from the

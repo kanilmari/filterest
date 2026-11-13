@@ -113,7 +113,7 @@ describe('api_pipeline', () => {
         for (const routeName of ['sitePresentationSettings', 'getResults', 'fetchDynamicChildren', 'frontPage', 'fetchUserPermissions']) {
             await mod.runApiPipeline({routeName, method: 'GET'});
             const headers = fetchMock.mock.lastCall[1].headers;
-            expect(headers['X-Filterest-Appearance']).toBe(routeName === 'fetchUserPermissions' ? undefined : 'row-presentation');
+            expect(headers['X-Filterest-Appearance']).toBe(routeName === 'fetchUserPermissions' ? undefined : 'disclosure-defaults');
         }
     });
 
@@ -146,7 +146,7 @@ describe('api_pipeline', () => {
                 credentials: 'include',
                 headers: {
                     'Content-Type': 'application/json',
-                    'X-Filterest-Appearance': 'row-presentation',
+                    'X-Filterest-Appearance': 'disclosure-defaults',
                     'X-CSRF-Token': 'stale-token',
                 },
                 body: JSON.stringify({ id: 7, column: 'title', value: 'Updated' }),
@@ -157,7 +157,7 @@ describe('api_pipeline', () => {
                 credentials: 'include',
                 headers: {
                     'Content-Type': 'application/json',
-                    'X-Filterest-Appearance': 'row-presentation',
+                    'X-Filterest-Appearance': 'disclosure-defaults',
                     'X-CSRF-Token': 'fresh-token',
                 },
                 body: JSON.stringify({ id: 7, column: 'title', value: 'Updated' }),
@@ -192,7 +192,7 @@ describe('api_pipeline', () => {
                 credentials: 'include',
                 headers: {
                     'Content-Type': 'application/json',
-                    'X-Filterest-Appearance': 'row-presentation',
+                    'X-Filterest-Appearance': 'disclosure-defaults',
                     'X-CSRF-Token': 'stale-token',
                 },
                 body: JSON.stringify({ id: 7, column: 'title', value: 'Updated' }),

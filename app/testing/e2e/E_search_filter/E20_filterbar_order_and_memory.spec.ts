@@ -9,7 +9,7 @@ import { openActiveFilterbarIfCollapsed, closeActiveFilterbarIfOpen, revealActiv
 import { buildTempDatasetName, createTempDataset, cleanupDatasetViaRequest, fetchCsrfTokenForRequest } from '../helpers/temp-dataset';
 import { listRegisteredTestArtifacts } from '../helpers/test-artifact-run-registry';
 
-type Layout = { section_order: string[]; section_collapsed: Record<string, boolean>; allow_own_order: boolean };
+type Layout = { section_order: string[]; allow_own_order: boolean };
 type Preference = { user_id: number; order_mode: 'shared' | 'own'; section_order?: string[]; visibility_memory: 'shared' | 'dataset' };
 type Account = { request: APIRequestContext; preference: Preference; theme: { configured: boolean; theme_mode: string } };
 type Cleanup = { accounts: Account[]; contexts: BrowserContext[]; datasets: string[]; layout?: Layout; browsing?: { id: number; boolean_value: boolean } };
@@ -73,9 +73,7 @@ test.afterEach(async () => {
       }
     });
   }
-  if (administrator && state.layout) await attempt(() => write(administrator, '/api/filterbar-section-layout/save', {
-    ...state.layout, section_collapsed: Object.fromEntries(state.layout!.section_order.map(key => [key, state.layout!.section_collapsed?.[key] ?? null])),
-  }, 'POST'));
+  if (administrator && state.layout) await attempt(() => write(administrator, '/api/filterbar-section-layout/save', state.layout, 'POST'));
   if (administrator && state.browsing) await attempt(() => write(administrator, '/api/update-row?dataset=system_config', {
     id: state.browsing!.id, column: 'boolean_value', value: state.browsing!.boolean_value,
   }, 'POST'));
@@ -196,6 +194,6 @@ for (const theme of ['light', 'dark'] as const) for (const language of ['fi', 'e
     await expect(guest.locator(`#${dataset}_filterBar_panel`)).toHaveClass(/filterbar-panel--hidden/);
     await expect.poll(() => firstSection(guest, dataset)).toBe('style');
     const publicLayout = await read<Record<string, unknown>>(guest.request, '/api/filterbar-section-layout');
-    expect(Object.keys(publicLayout).sort()).toEqual(['allow_own_order', 'section_collapsed', 'section_order']);
+    expect(Object.keys(publicLayout).sort()).toEqual(['allow_own_order', 'section_order']);
   });
 }

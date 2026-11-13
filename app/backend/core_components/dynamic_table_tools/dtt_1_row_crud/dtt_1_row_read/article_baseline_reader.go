@@ -45,8 +45,17 @@ func readArticlePresentationSnapshot(ctx context.Context, db *sql.DB, after bool
 	if err := articleBaselinePrincipals(tx, &result); err != nil {
 		return ArticleBaselineReport{}, err
 	}
-	rows, err := tx.Query(`SELECT table_uid, table_name, COALESCE(NULLIF(schema_name,''),'public'),
-        article_section_initial_open, to_jsonb(system_db_tables)->'article_opener_policy' FROM public.system_db_tables ORDER BY table_uid`)
+	var appearanceBlocks bool
+	if err := tx.QueryRow(`SELECT to_regprocedure('public.app_article_disclosure_defaults(integer)') IS NOT NULL`).Scan(&appearanceBlocks); err != nil {
+		return ArticleBaselineReport{}, err
+	}
+	blocksExpression := "to_jsonb(system_db_tables)->'article_section_initial_open'"
+	if appearanceBlocks {
+		blocksExpression = "public.app_article_disclosure_defaults(table_uid)"
+	}
+	// The expression is selected from two literals, never from request data.
+	rows, err := tx.Query(`SELECT table_uid, table_name, COALESCE(NULLIF(schema_name,''),'public'), ` + blocksExpression +
+		`, to_jsonb(system_db_tables)->'article_opener_policy' FROM public.system_db_tables ORDER BY table_uid`)
 	if err != nil {
 		return ArticleBaselineReport{}, err
 	}

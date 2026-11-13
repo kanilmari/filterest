@@ -417,7 +417,7 @@ describe("openImageFirstView", () => {
             rowItem: { id: 3, title: "Example" }, tableName: "examples",
         });
         expect(loadRowArticleSectionDefaults).toHaveBeenCalledExactlyOnceWith("examples", "image_first");
-        expect(buildContentMock.mock.calls[0][8]).toEqual({ sectionDefaults: { details: false } });
+        expect(buildContentMock.mock.calls[0][8]).toEqual({ sectionDefaults: { details: false }, presentationKey: 'image_first_view' });
     });
 
     test('image-first label and avatar initial use a localized fallback name without a header', async () => {
@@ -586,7 +586,7 @@ test("Forward fetches the row and metadata again and restores the selected image
         view_key: "article_view", callerName: "openImageFirstView" });
     expect(buildContentMock).toHaveBeenLastCalledWith(expect.objectContaining({ title: "Fresh" }), "examples",
         { title: { card_element: "header", is_multilingual: true } }, expect.anything(), expect.anything(),
-        expect.anything(), expect.anything(), expect.anything(), { sectionDefaults: {} });
+        expect.anything(), expect.anything(), expect.anything(), { sectionDefaults: {}, presentationKey: 'image_first_view' });
     expect(document.querySelector('[data-testid="row-article-image-first-media"]').getAttribute("src")).toContain("second.png");
 });
 

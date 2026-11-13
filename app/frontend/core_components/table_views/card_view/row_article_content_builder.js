@@ -6,6 +6,7 @@
 import { resolveRecordTitle, isRecordViewersOwn } from '../record_title_resolver.js';
 import { datasetAppearanceState } from '../dataset_appearance_state.js';
 import { isEmptyValue } from '../../../reusable_components/key_value_container/empty_value_printer.js';
+import { bindDisclosureSurface } from '../../disclosure/disclosure_state_controller.js';
 import { resolveRowArticleSectionStartOpen } from "./row_article_section_defaults.js";
 
 import {
@@ -78,11 +79,12 @@ export async function buildRowArticleContent(
     header_first_letter,
     table_has_image_role,
     current_user_id = null,
-    { selectedCard = null, sectionDefaults = {}, chosenLanguage } = {},
+    { selectedCard = null, sectionDefaults = {}, chosenLanguage, presentationKey = 'article_view' } = {},
 ) {
     const appearanceToken = datasetAppearanceState.capture(table_name);
     const rowArticleContentElement = document.createElement("div");
     rowArticleContentElement.classList.add("big_card_content", "row_article_content");
+    bindDisclosureSurface(rowArticleContentElement, presentationKey);
     if (datasetAppearanceState.isCurrent(appearanceToken)) datasetAppearanceState.bind(rowArticleContentElement, table_name);
 
     const description_entries = [];
@@ -548,6 +550,7 @@ export async function buildRowArticleContent(
         });
         rowArticleContentElement.appendChild(
             buildRowArticleDisclosureSection({
+                blockKey: "details",
                 titleLangKey: "row_article_section_details",
                 titleText: "Details",
                 iconPath: DETAILS_ICON_PATH,

@@ -363,7 +363,7 @@ async function buildFetchOptionsStage(ctx) {
         bodyData: ctx.bodyData,
     });
     if (APPEARANCE_ROUTES.has(ctx.routeName)) {
-        ctx.fetchOptions.headers['X-Filterest-Appearance'] = 'row-presentation';
+        ctx.fetchOptions.headers['X-Filterest-Appearance'] = 'disclosure-defaults';
     }
     if (ctx.signal !== undefined) ctx.fetchOptions.signal = ctx.signal;
     markCallerOwnsFailureNotice(ctx.fetchOptions);

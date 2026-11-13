@@ -26,9 +26,17 @@ func articleBundleStorage(t *testing.T, db *sql.DB) articleBundleStorageSnapshot
 	// values, collection ownership/names, sections, opener policy and audience
 	// scopes must still match. Assignments are checked separately from members so
 	// even empty collections and their three sibling links remain observable.
+	var derivedBlocks bool
+	if err := db.QueryRow(`SELECT to_regprocedure('public.app_article_disclosure_defaults(integer)') IS NOT NULL`).Scan(&derivedBlocks); err != nil {
+		t.Fatal(err)
+	}
+	blocks := "article_section_initial_open"
+	if derivedBlocks {
+		blocks = "public.app_article_disclosure_defaults(table_uid)"
+	}
 	raw := articleBundleText(t, db, `WITH datasets AS (
 	 SELECT table_uid,format('%I.%I',COALESCE(NULLIF(schema_name,''),'public'),table_name) AS dataset,
-	  article_section_initial_open,article_opener_policy FROM system_db_tables
+	  `+blocks+` AS article_section_initial_open,article_opener_policy FROM system_db_tables
 	), bundles AS (
 	 SELECT s.*,d.dataset FROM system_column_field_sets s JOIN datasets d USING(table_uid) WHERE s.article_family
 	)

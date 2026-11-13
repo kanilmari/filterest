@@ -208,6 +208,7 @@ func requestRelatedRows() *httptest.ResponseRecorder {
 		"/api/fetch-dynamic-children?dataset=parent_rows",
 		strings.NewReader(`{"parent_dataset":"parent_rows","parent_pk_value":"7"}`),
 	)
+	request.Header.Set("X-Filterest-Appearance", "disclosure-defaults")
 	request = request.WithContext(dbutils.SetRequestActorContext(
 		request.Context(),
 		dbutils.NewRequestActorContext(42, "basic"),

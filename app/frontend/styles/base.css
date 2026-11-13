@@ -393,5 +393,5 @@ summary {
 
 /* Empty reading markers provide optional syllable breaks without altering copied text. */
 .reading-hyphen::before {
-    content: "\\00ad";
+    content: "\00ad";
 }

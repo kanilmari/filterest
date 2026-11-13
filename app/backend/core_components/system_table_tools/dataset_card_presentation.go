@@ -153,7 +153,7 @@ func updateDatasetCardPresentation(w http.ResponseWriter, r *http.Request, req u
 		respondDatasetAppearanceError(w, err)
 		return
 	}
-	result.DatasetAppearance = result.DatasetAppearance.ForClient(store.WantsRowPresentation(w, r))
+	result.DatasetAppearance = result.DatasetAppearance.ForClient(store.RequestedAppearance(w, r))
 	httpresponse.RespondWithJSON(w, 200, result)
 }
 

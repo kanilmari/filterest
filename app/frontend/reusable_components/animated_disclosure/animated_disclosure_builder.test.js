@@ -75,6 +75,21 @@ describe("createAnimatedDisclosureSection", () => {
         expect(section.querySelector(".tools-icon")?.getAttribute("aria-hidden")).toBe("true");
     });
 
+    test("only deliberate header activation emits the personal-choice event", async () => {
+        const content = document.createElement('div');
+        const section = createAnimatedDisclosureSection({ titleText: 'Details', contentElement: content, startOpen: false });
+        const selected = vi.fn();
+        section.addEventListener('animated-disclosure-user-toggle', selected);
+        await section.expand({ animate: false });
+        await section.collapse({ animate: false });
+        content.click();
+        expect(selected).not.toHaveBeenCalled();
+        section.querySelector('button').click();
+        expect(selected).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({
+            detail: { expanded: true, section }, bubbles: true,
+        }));
+    });
+
     test("collapses to the header and emits disclosure state changes", async () => {
         const content = document.createElement("div");
         const section = createAnimatedDisclosureSection({

@@ -23,7 +23,7 @@ describe('three-place snapshot', () => {
         expect(effective.shared.image_blur).toBe(0); expect(effective.shared.card_show_all_fields).toBe(false);
         expect(effective.shared.filterbar_content_top_space).toBe(0); expect(effective.shared.card_detail_columns).toBe(2);
         expect(Object.keys(data.tab_values)).toHaveLength(28); expect(Object.keys(data.site_values)).toHaveLength(8);
-        expect(Object.keys(data.defaults)).toHaveLength(10); expect(Object.keys(data.overrides)).toHaveLength(3);
+        expect(Object.keys(data.defaults)).toHaveLength(25); expect(Object.keys(data.overrides)).toHaveLength(3);
     });
     test('public site settings project definition covers without exposing a stored cover', () => {
         const data = response(); delete data.tab_values; delete data.overrides;
@@ -90,4 +90,34 @@ test('old responses inherit classic, but a dataset classic override survives a s
     delete legacy.shared.row_article_default_presentation;
     expect(readDatasetAppearance({schema_version: 1, effective: legacy}).shared.row_article_default_presentation)
         .toBe('article_view');
+});
+
+test('older snapshots start disclosures closed without losing other settings or mutating the response', () => {
+    const data = response();
+    const paths = Object.keys(data.defaults).filter(path => path.endsWith('_initial_open'));
+    for (const path of paths) delete data.defaults[path];
+    data.defaults['shared.card_image_width'] = 413;
+    const before = JSON.stringify(data);
+    for (const read of [readSiteAppearance, readDatasetAppearance]) {
+        const config = read(data);
+        expect(config.shared.card_image_width).toBe(413);
+        for (const path of paths) expect(config.shared[path.split('.')[1]]).toBe(false);
+    }
+    expect(JSON.stringify(data)).toBe(before);
+    const legacy = structuredClone(DEFAULT_DATASET_APPEARANCE);
+    for (const path of paths) delete legacy.shared[path.split('.')[1]];
+    for (const config of [readSiteAppearance({ dataset_cover_theme: legacy }),
+        readDatasetAppearance({ schema_version: 1, effective: legacy })]) {
+        for (const path of paths) expect(config.shared[path.split('.')[1]]).toBe(false);
+    }
+    // An unrelated required value is not silently repaired.
+    delete data.defaults['shared.card_image_width'];
+    expect(readDatasetAppearance(data)).toBeNull();
+});
+
+test.each([null, 'false', 0, []])('present malformed disclosure value %j is refused', value => {
+    const data = response();
+    data.defaults['shared.article_view_details_initial_open'] = value;
+    expect(readSiteAppearance(data)).toBeNull();
+    expect(readDatasetAppearance(data)).toBeNull();
 });

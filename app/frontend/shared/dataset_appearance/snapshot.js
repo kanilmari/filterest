@@ -20,17 +20,24 @@ function readableSiteValues(values) {
         : values;
 }
 
+// Additive site defaults may be absent in older responses. Present
+// malformed values still reach the strict validator; write maps stay complete.
+const additiveDefaults = Object.fromEntries(DATASET_APPEARANCE_PATHS_BY_PLACE.site_default
+    .filter(path => path === 'shared.row_article_default_presentation' || path.endsWith('_initial_open'))
+    .map(path => [path, DEFAULT_DATASET_APPEARANCE.shared[path.split('.')[1]]]));
 function readableDefaults(values) {
     return values && typeof values === 'object' && !Array.isArray(values)
-        ? { 'shared.row_article_default_presentation': DEFAULT_DATASET_APPEARANCE.shared.row_article_default_presentation, ...values }
-        : values;
+        ? { ...additiveDefaults, ...values } : values;
 }
 
 function readLegacyAppearance(config) {
     if (!isReadableDatasetAppearance(config)) return null;
     const result = clone(config);
     result.shared.row_group_heading_order ??= DEFAULT_DATASET_APPEARANCE.shared.row_group_heading_order;
-    result.shared.row_article_default_presentation ??= DEFAULT_DATASET_APPEARANCE.shared.row_article_default_presentation;
+    for (const [path, value] of Object.entries(additiveDefaults)) {
+        const key = path.split('.')[1];
+        if (!Object.hasOwn(result.shared, key)) result.shared[key] = value;
+    }
     return result;
 }
 

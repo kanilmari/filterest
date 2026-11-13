@@ -1,3 +1,4 @@
+import { openArticleDisclosure } from '../helpers/article-disclosures';
 // C13_related_dataset_appearance.spec.ts
 // Proves first-visit and lazy related panels use current authorized appearance.
 // Connects synthetic FK datasets, revision-checked API saves and real article panels.
@@ -71,6 +72,7 @@ test('related panels revalidate first visits, lazy loads and article reloads in 
     expect(children).toContain(child);
     const lazyPanel = page.locator(`${ARTICLE} .related_tab_panel[data-dataset-appearance-scope="${child}"]`);
     const current = await saveRelatedAppearance(page, child!, 480);
+    await openArticleDisclosure(page, 'related_rows');
     const lazyResponse = page.waitForResponse(response => response.url().includes('/api/fetch-dynamic-children')
       && response.request().postDataJSON()?.child_table === child);
     await page.locator(`${ARTICLE} .related_tab_button[data-tab-key^="${child}__"]`).click();

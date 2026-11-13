@@ -14,6 +14,7 @@ import (
 	"easelect/backend/core_components/dbutils"
 	dtt_models "easelect/backend/core_components/dynamic_table_tools/dtt_models"
 	esessions "easelect/backend/core_components/sessions"
+	appearance "easelect/frontend/shared/dataset_appearance"
 	"encoding/json"
 	"fmt"
 	"github.com/gorilla/sessions"
@@ -152,6 +153,7 @@ func TestGalleryCacheAuthorizationAtResponseHandlers(t *testing.T) {
 			{"view_key=article_view", true, "unknown"},
 			{"view_key=product_card&include_card_support=0", true, "unknown"},
 			{"", false, "row-presentation"},
+			{"", false, "disclosure-defaults"},
 			{"include_card_support=1", true, "row-presentation"},
 			{"view_key=card", true, "row-presentation"},
 			{"view_key=article_view", true, "row-presentation"},
@@ -354,7 +356,10 @@ func TestGalleryCacheAuthorizationAtResponseHandlers(t *testing.T) {
 						// retain the dataset state established by the ordinary response.
 						if mode == "ordinary" {
 							wantDefaults := 9
-							modern := support.appearance == "row-presentation"
+							modern := support.appearance == "row-presentation" || support.appearance == "disclosure-defaults"
+							if support.appearance == "disclosure-defaults" {
+								wantDefaults = len(appearance.Rules().DefaultsForPlace(appearance.SiteDefault)) - 1
+							}
 							if modern {
 								wantDefaults++
 							}

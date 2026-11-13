@@ -40,7 +40,7 @@ func TestRowPresentationProjectionPreservesPermissionsRevisionsAndOtherOverrides
 		Overrides: map[string]any{RowPresentationPath: "article_view", "shared.card_show_all_fields": false},
 		Sources:   map[string]string{RowPresentationPath: "override", "shared.card_show_all_fields": "override"}}
 	snapshot.Effective.Shared.RowArticleDefaultPresentation = "article_view"
-	legacy := snapshot.ForClient(false)
+	legacy := snapshot.ForClient(LegacyAppearance)
 	if _, ok := legacy.Defaults[RowPresentationPath]; ok {
 		t.Fatal("unexpected legacy default")
 	}
@@ -64,7 +64,7 @@ func TestRowPresentationProjectionPreservesPermissionsRevisionsAndOtherOverrides
 	if _, ok := nested["row_article_default_presentation"]; ok {
 		t.Fatal("legacy projection exposed the new field")
 	}
-	if snapshot.ForClient(true).Overrides[RowPresentationPath] != "article_view" || snapshot.Defaults[RowPresentationPath] != "image_first_page_view" || snapshot.Sources[RowPresentationPath] != "override" {
+	if snapshot.ForClient(RowPresentationAppearance).Overrides[RowPresentationPath] != "article_view" || snapshot.Defaults[RowPresentationPath] != "image_first_page_view" || snapshot.Sources[RowPresentationPath] != "override" {
 		t.Fatal("legacy projection mutated shared data")
 	}
 }

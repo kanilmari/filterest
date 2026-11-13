@@ -8,7 +8,9 @@ import (
 	"reflect"
 	"testing"
 
+	store "easelect/backend/core_components/dataset_appearance_store"
 	contract "easelect/frontend/shared/article_presentations"
+	appearance "easelect/frontend/shared/dataset_appearance"
 )
 
 func TestArticlePresentationContractDrift(t *testing.T) {
@@ -27,7 +29,7 @@ func TestArticlePresentationContractDrift(t *testing.T) {
 			if !reflect.DeepEqual(articleSupportedSections(*presentation.LegacySectionKey), presentation.Blocks) {
 				t.Fatalf("section drift: %s", key)
 			}
-			response := articleSectionDefaultsResponse("example", *presentation.LegacySectionKey, nil, false)
+			response := articleDefaultsFromAppearance("example", *presentation.LegacySectionKey, store.AppearanceResponse{Effective: appearance.DefaultConfig()}, false)
 			for _, value := range response.InitialOpen {
 				if value != rules.AbsentBlockInitialOpen {
 					t.Fatal("absent block default drift")

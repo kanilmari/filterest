@@ -236,7 +236,7 @@ func GetDynamicRelatedItemsHandler(response_writer http.ResponseWriter, request 
 	}
 	if body_data.Metadata_only {
 		candidates := buildRelatedMetadataCandidates(fk_infos, relationKindByChildTable)
-		if err := populateRelatedAppearance(candidates, backend.Db, userID, store.WantsRowPresentation(response_writer, request)); err != nil {
+		if err := populateRelatedAppearance(candidates, backend.Db, userID, store.RequestedAppearance(response_writer, request)); err != nil {
 			httpresponse.RespondWithError(response_writer, http.StatusInternalServerError, "error fetching related dataset appearance")
 			return
 		}
@@ -286,7 +286,7 @@ func GetDynamicRelatedItemsHandler(response_writer http.ResponseWriter, request 
 		return
 	}
 	relatedTablesList = append(relatedTablesList, outgoingRelatedTables...)
-	if err := populateRelatedAppearance(relatedTablesList, backend.Db, userID, store.WantsRowPresentation(response_writer, request)); err != nil {
+	if err := populateRelatedAppearance(relatedTablesList, backend.Db, userID, store.RequestedAppearance(response_writer, request)); err != nil {
 		httpresponse.RespondWithError(response_writer, http.StatusInternalServerError, "error fetching related dataset appearance")
 		return
 	}

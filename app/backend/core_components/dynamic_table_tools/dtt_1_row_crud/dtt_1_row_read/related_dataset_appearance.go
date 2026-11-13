@@ -17,7 +17,7 @@ import (
 // populateRelatedAppearance reuses get-results' route grant, UI visibility and
 // snapshot shape. Related-route authorization alone cannot disclose appearance.
 // A duplicate relation reads once per response; every reload reads anew.
-func populateRelatedAppearance(results []RelatedTableResult, q dbutils.Querier, userID int, rowPresentation bool) error {
+func populateRelatedAppearance(results []RelatedTableResult, q dbutils.Querier, userID int, client store.AppearanceClient) error {
 	byName := make(map[string]*store.AppearanceResponse)
 	for index := range results {
 		name := results[index].Table_name
@@ -29,7 +29,7 @@ func populateRelatedAppearance(results []RelatedTableResult, q dbutils.Querier, 
 				return err
 			}
 			if snapshot != nil {
-				projected := snapshot.ForClient(rowPresentation)
+				projected := snapshot.ForClient(client)
 				snapshot = &projected
 			}
 			byName[name] = snapshot

@@ -13,7 +13,10 @@ test('K383SingleSaveReadback',async({page})=>{
     const row=page.locator(`[data-row-id="field:${first}"]`);
     await row.locator('[data-delta="1"]').click();
     for(const key of ARTICLE_VIEWS) await uncheckArticleCell(page,`field:${first}`,key);
-    await uncheckArticleCell(page,'block:images','article_view');
+    const imageDefault=page.locator('[data-row-id="block:images"] input[data-column-key="article_view"]');
+    await expect(imageDefault).not.toBeChecked();
+    await imageDefault.evaluate(element=>element.closest('.vct-control-target')!.scrollIntoView({block:'center',inline:'end'}));
+    await imageDefault.check();
     const expected=structuredClone(baseline.targets[0].members);
     [expected[0],expected[1]]=[expected[1],expected[0]];
     for(const key of ARTICLE_VIEWS)expected.find((member:any)=>member.column_uid===first).values[key].visible=false;
@@ -22,13 +25,13 @@ test('K383SingleSaveReadback',async({page})=>{
     const response=await responsePromise;expect(response.status()).toBe(200);
     const committed=await response.json();
     await expect(page.getByTestId('view-field-assignments-status')).toHaveText(/saved and verified|tallennettu ja varmistettu|已保存并验证/);
-    expect(committed.targets[0].members).toEqual(expected);expect(committed.blocks.article_view.images).toBe(false);
+    expect(committed.targets[0].members).toEqual(expected);expect(committed.blocks.article_view.images).toBe(true);
     expect(await articleGet(page,dataset)).toEqual(committed);
     await page.reload({waitUntil:'domcontentloaded'});await openArticleEditor(page,dataset);
     expect(await articleGet(page,dataset)).toEqual(committed);
     expect(await page.locator('.vct-row[data-row-id^="field:"]').evaluateAll(nodes=>nodes.map(node=>(node as HTMLElement).dataset.rowId)))
       .toEqual(expected.map((member:any)=>`field:${member.column_uid}`));
-    await expect(page.locator('[data-row-id="block:images"] input[data-column-key="article_view"]')).not.toBeChecked();
+    await expect(page.locator('[data-row-id="block:images"] input[data-column-key="article_view"]')).toBeChecked();
   });
 });
 

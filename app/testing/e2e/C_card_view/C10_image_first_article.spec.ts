@@ -1,3 +1,4 @@
+import { openArticleDisclosure } from '../helpers/article-disclosures';
 /**
  * C10_image_first_article.spec.ts
  *
@@ -87,6 +88,7 @@ test.describe('C10 — Standalone Image-first View', () => {
       await expect(page.locator('[data-testid="row-article-image-first-stage"]')).toHaveCount(0);
       await expect(page.locator('[data-testid="image-first-view"]')).toHaveCount(0);
 
+      await openArticleDisclosure(page, 'images');
       const galleryInput = page.locator('.big_card_image_gallery input[type="file"]').first();
       await galleryInput.setInputFiles({
         name: 'image-first.png',
@@ -135,6 +137,7 @@ test.describe('C10 — Standalone Image-first View', () => {
       await expect(page.locator('[data-testid="big-card-container"]')).toBeVisible({
         timeout: 15_000,
       });
+      await openArticleDisclosure(page, 'images');
       const secondGalleryInput = page.locator(
         '.big_card_image_gallery input[type="file"]',
       ).first();

@@ -65,6 +65,7 @@ func TestRelatedAppearanceHandlerContract(t *testing.T) {
 				t.Cleanup(func() { backend.DbAdmin = previous })
 				request := httptest.NewRequest("POST", "/api/fetch-dynamic-children?dataset=parent_rows",
 					strings.NewReader(`{"parent_dataset":"parent_rows","metadata_only":true}`))
+				request.Header.Set(store.AppearanceHeader, "disclosure-defaults")
 				request = request.WithContext(dbutils.SetRequestActorContext(request.Context(), dbutils.NewRequestActorContext(42, "admin")))
 				response = httptest.NewRecorder()
 				GetDynamicChildItemsHandler(response, request)
@@ -104,8 +105,24 @@ func TestRelatedAppearanceHandlerContract(t *testing.T) {
 				if err := json.Unmarshal(child["dataset_appearance"], &snapshot); err != nil {
 					t.Fatal(err)
 				}
-				if snapshot.DatasetUID != 22 || snapshot.Version != "2" || snapshot.SchemaVersion != 2 || len(snapshot.TabValues) != 28 || len(snapshot.Sources) != 45 || snapshot.Effective.Shared.CardImageWidth != 440 {
+				if snapshot.DatasetUID != 22 || snapshot.Version != "2" || snapshot.SchemaVersion != 2 || len(snapshot.TabValues) != 28 || len(snapshot.Sources) != len(appearance.Rules().CanonicalPaths()) || snapshot.Effective.Shared.CardImageWidth != 440 {
 					t.Fatalf("wrong current appearance: %+v", snapshot)
+				}
+				for _, path := range appearance.Rules().CanonicalPaths() {
+					field, _ := appearance.Rules().Field(path)
+					want := "default"
+					switch field.Place {
+					case appearance.TabOnly:
+						want = "tab"
+					case appearance.SiteOnly:
+						want = "site"
+					}
+					if path == "shared.card_image_width" {
+						want = "override"
+					}
+					if snapshot.Sources[path] != want {
+						t.Fatalf("appearance source %s=%q, want %q", path, snapshot.Sources[path], want)
+					}
 				}
 			}
 			steps, unexpected := reads.recorded()

@@ -35,6 +35,7 @@ func TestDatasetAppearancePostgresResultsAuthorizedEmptyAndFresh(t *testing.T) {
 	for _, role := range []string{"basic", "guest"} {
 		// A readable empty dataset still carries appearance and sources.
 		r := frontPageSessionRequest(t, 42, role, "GET", "/api/get-results?dataset=wl143_content")
+		r.Header.Set(store.AppearanceHeader, "disclosure-defaults")
 		w := httptest.NewRecorder()
 		read.GetResults(w, r)
 		if w.Code != 200 {
@@ -47,7 +48,7 @@ func TestDatasetAppearancePostgresResultsAuthorizedEmptyAndFresh(t *testing.T) {
 		if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
 			t.Fatal(err)
 		}
-		if len(body.Data) != 0 || body.DatasetAppearance.DatasetUID != uid || body.DatasetAppearance.Version != saved.Revision || len(body.DatasetAppearance.Sources) != 45 || body.DatasetAppearance.Sources["shared.card_style_variant"] != "override" {
+		if len(body.Data) != 0 || body.DatasetAppearance.DatasetUID != uid || body.DatasetAppearance.Version != saved.Revision || len(body.DatasetAppearance.Sources) != 61 || body.DatasetAppearance.Sources["shared.card_style_variant"] != "override" {
 			t.Fatal(body)
 		}
 	}

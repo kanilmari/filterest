@@ -112,11 +112,10 @@ export function savePersonalFilterbarPreference(patch) {
         response => { personalRevision += 1; personal = response; });
 }
 
-export function saveFilterbarOrder(order, collapsed = {}) {
+export function saveFilterbarOrder(order) {
     return getFilterbarPreferences().mode === 'own'
         ? savePersonalFilterbarPreference({ section_order: order })
-        : saveSharedFilterbarLayout({ section_order: order,
-            ...(Object.keys(collapsed).length ? { section_collapsed: collapsed } : {}) });
+        : saveSharedFilterbarLayout({ section_order: order });
 }
 
 channel?.addEventListener('message', () => {

@@ -49,8 +49,23 @@ type DatasetCoverSharedValues struct {
 	ActiveTabGlowWidth            float64 `json:"active_tab_glow_width"`
 	ActiveTabGlowBlur             float64 `json:"active_tab_glow_blur"`
 	// FilterbarContentTopSpace is the empty space above the hero header icon.
-	FilterbarContentTopSpace float64 `json:"filterbar_content_top_space"`
-	BrandColor               string  `json:"brand_color"`
+	FilterbarContentTopSpace             float64 `json:"filterbar_content_top_space"`
+	FilterbarFiltersInitialOpen          bool    `json:"filterbar_filters_initial_open"`
+	FilterbarSearchOverviewInitialOpen   bool    `json:"filterbar_search_overview_initial_open"`
+	FilterbarSearchControlsInitialOpen   bool    `json:"filterbar_search_controls_initial_open"`
+	FilterbarToolsInitialOpen            bool    `json:"filterbar_tools_initial_open"`
+	FilterbarViewsInitialOpen            bool    `json:"filterbar_views_initial_open"`
+	FilterbarFieldSetsInitialOpen        bool    `json:"filterbar_field_sets_initial_open"`
+	FilterbarStyleInitialOpen            bool    `json:"filterbar_style_initial_open"`
+	FilterbarChatInitialOpen             bool    `json:"filterbar_chat_initial_open"`
+	ArticleViewDetailsInitialOpen        bool    `json:"article_view_details_initial_open"`
+	ArticleViewImagesInitialOpen         bool    `json:"article_view_images_initial_open"`
+	ArticleViewAttachmentsInitialOpen    bool    `json:"article_view_attachments_initial_open"`
+	ArticleViewRelatedRowsInitialOpen    bool    `json:"article_view_related_rows_initial_open"`
+	ArticleViewTaskProgressInitialOpen   bool    `json:"article_view_task_progress_initial_open"`
+	ImageFirstViewDetailsInitialOpen     bool    `json:"image_first_view_details_initial_open"`
+	ImageFirstPageViewDetailsInitialOpen bool    `json:"image_first_page_view_details_initial_open"`
+	BrandColor                           string  `json:"brand_color"`
 }
 
 // DatasetCoverThemeConfig groups light, dark, and shared cover settings.

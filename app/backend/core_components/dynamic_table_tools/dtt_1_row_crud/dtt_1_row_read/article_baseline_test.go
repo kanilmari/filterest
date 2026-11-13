@@ -73,14 +73,14 @@ func TestArticleBaselineBlocks(t *testing.T) {
 		raw                    string
 		present, open, invalid bool
 	}{
-		{`{}`, false, true, false},
-		{`{"classic":{},"image_first":{}}`, true, true, false},
+		{`{}`, false, false, false},
+		{`{"classic":{},"image_first":{}}`, true, false, false},
 		{`{"classic":{"details":false},"image_first":{"details":false}}`, true, false, false},
 		{`{"classic":{"details":true},"image_first":{"details":true}}`, true, true, false},
-		{`{"classic":{"details":false},"image_first":{"details":null}}`, true, true, true},
-		{`{"classic":null}`, true, true, true},
-		{`null`, false, true, true},
-		{`{"unknown":{}}`, false, true, true},
+		{`{"classic":{"details":false},"image_first":{"details":null}}`, true, false, true},
+		{`{"classic":null}`, true, false, true},
+		{`null`, false, false, true},
+		{`{"unknown":{}}`, false, false, true},
 	} {
 		t.Run(test.raw, func(t *testing.T) {
 			blocks, err := articleBaselineBlocks([]byte(test.raw))
@@ -90,8 +90,8 @@ func TestArticleBaselineBlocks(t *testing.T) {
 			if blocks["classic"].Present != test.present || blocks["classic"].InitialOpen["details"] != test.open {
 				t.Fatalf("blocks=%+v", blocks)
 			}
-			if !blocks["classic"].InitialOpen["images"] {
-				t.Fatal("absent images should open")
+			if blocks["classic"].InitialOpen["images"] {
+				t.Fatal("absent images should stay closed")
 			}
 			if test.invalid && len(blocks["classic"].Overrides) != 0 {
 				t.Fatal("API rejection must not apply partial overrides")

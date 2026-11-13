@@ -135,7 +135,7 @@ export function applyTaskTodoStatusChangeToArticleProgress(articleRoot, fromStat
  * @param {number|string} rowId
  * @returns {Promise<HTMLElement|null>}
  */
-export async function buildRowArticleTaskProgressSection(tableName, rowId, { startOpen = true } = {}) {
+export async function buildRowArticleTaskProgressSection(tableName, rowId, { startOpen = false } = {}) {
     const normalizedTableName = String(tableName || "").trim();
     const normalizedRowId = String(rowId ?? "").trim();
     if (normalizedTableName !== TASK_PROGRESS_DATASET || !normalizedRowId
@@ -160,6 +160,7 @@ export async function buildRowArticleTaskProgressSection(tableName, rowId, { sta
     }
 
     return buildRowArticleDisclosureSection({
+        blockKey: "task_progress",
         titleLangKey: "row_article_section_task_progress",
         titleText: "Progress",
         iconPath: TASK_PROGRESS_ICON_PATH,

@@ -1,5 +1,5 @@
 // article_section_defaults.go
-// Reads and saves dataset-level initial disclosure states for article presentations.
+// Reads and saves article disclosure defaults through the shared appearance owner.
 // Connects the view-settings editor and article openers through a small typed API.
 // Keeps user toggles transient and protects other presentations during concurrent edits.
 package system_table_tools
@@ -143,49 +143,6 @@ func decodeArticleSectionPatch(reader io.Reader) (articleSectionDefaultsPatch, e
 	return result, nil
 }
 
-func decodeStoredArticleSectionDefaults(raw []byte) (map[string]map[string]bool, error) {
-	var presentations map[string]json.RawMessage
-	if err := json.Unmarshal(raw, &presentations); err != nil || presentations == nil {
-		return nil, errors.New("stored article defaults must be an object")
-	}
-	result := make(map[string]map[string]bool, len(presentations))
-	for key, value := range presentations {
-		if len(articleSupportedSections(key)) == 0 {
-			return nil, errors.New("stored article presentation is unsupported")
-		}
-		sections, err := decodeArticleSectionValues(value, key)
-		if err != nil {
-			return nil, err
-		}
-		canonical := canonicalArticleSectionKey(key)
-		if result[canonical] == nil {
-			result[canonical] = map[string]bool{}
-		}
-		for section, value := range sections {
-			if prior, exists := result[canonical][section]; exists && prior != value {
-				return nil, errors.New("conflicting article section aliases")
-			}
-			result[canonical][section] = value
-		}
-	}
-	return result, nil
-}
-
-func articleSectionDefaultsResponse(dataset, presentation string, stored map[string]map[string]bool, canEdit bool) ArticleSectionDefaultsResponse {
-	result := ArticleSectionDefaultsResponse{
-		Dataset: dataset, PresentationKey: presentation, SupportedSections: articleSupportedSections(presentation),
-		Overrides: map[string]bool{}, InitialOpen: map[string]bool{}, CanEdit: canEdit,
-	}
-	for _, section := range result.SupportedSections {
-		result.InitialOpen[section] = true
-		if value, exists := stored[canonicalArticleSectionKey(presentation)][section]; exists {
-			result.Overrides[section] = value
-			result.InitialOpen[section] = value
-		}
-	}
-	return result
-}
-
 func lookupArticleSectionDataset(q dbutils.Querier, dataset string) (int, error) {
 	var tableUID int
 	err := q.QueryRow(`SELECT table_uid FROM public.system_db_tables
@@ -193,69 +150,15 @@ func lookupArticleSectionDataset(q dbutils.Querier, dataset string) (int, error)
 	return tableUID, err
 }
 
-func readArticleSectionDefaults(q dbutils.Querier, tableUID int, lock bool) (map[string]map[string]bool, error) {
-	query := "SELECT article_section_initial_open FROM public.system_db_tables WHERE table_uid=$1"
-	if lock {
-		query += " FOR UPDATE"
-	}
-	var raw []byte
-	if err := q.QueryRow(query, tableUID).Scan(&raw); err != nil {
-		return nil, err
-	}
-	return decodeStoredArticleSectionDefaults(raw)
-}
-
-// The request transaction owns the row lock and commit; failures leave all settings unchanged.
-func persistArticleSectionDefaults(tx *sql.Tx, tableUID int, input articleSectionDefaultsPatch) (ArticleSectionDefaultsResponse, error) {
-	stored, err := readArticleSectionDefaults(tx, tableUID, true)
-	if err != nil {
-		return ArticleSectionDefaultsResponse{}, err
-	}
-	// Compatibility names are accepted at the request boundary only. Every save,
-	// including restore defaults, persists all supported canonical booleans.
-	for _, key := range []string{"article_view", "image_first_view", "image_first_page_view"} {
-		if stored[key] == nil {
-			stored[key] = map[string]bool{}
-		}
-		for _, section := range articleSupportedSections(key) {
-			if _, exists := stored[key][section]; !exists {
-				stored[key][section] = true
-			}
-		}
-	}
-	key := canonicalArticleSectionKey(input.PresentationKey)
-	if input.ResetToDefaults {
-		for _, section := range articleSupportedSections(key) {
-			stored[key][section] = true
-		}
-	} else {
-		for section, value := range input.InitialOpen {
-			stored[key][section] = value
-		}
-	}
-	raw, err := json.Marshal(stored)
-	if err != nil {
-		return ArticleSectionDefaultsResponse{}, err
-	}
-	var saved []byte
-	err = tx.QueryRow(`UPDATE public.system_db_tables SET article_section_initial_open=$1::jsonb
- WHERE table_uid=$2 RETURNING article_section_initial_open`, string(raw), tableUID).Scan(&saved)
-	if err != nil {
-		return ArticleSectionDefaultsResponse{}, err
-	}
-	stored, err = decodeStoredArticleSectionDefaults(saved)
-	if err != nil {
-		return ArticleSectionDefaultsResponse{}, err
-	}
-	return articleSectionDefaultsResponse(input.Dataset, input.PresentationKey, stored, true), nil
-}
-
 func respondArticleSectionDefaultsError(w http.ResponseWriter, err error) {
 	var postgresError *pq.Error
+	var refusal *httpresponse.Refusal
 	switch {
+	case errors.As(err, &refusal):
+		httpresponse.RespondWithRefusal(w, refusal)
 	case errors.Is(err, sql.ErrNoRows):
 		httpresponse.RespondWithError(w, http.StatusNotFound, "dataset not found")
-	case errors.As(err, &postgresError) && postgresError.Code == "42703":
+	case errors.As(err, &postgresError) && (postgresError.Code == "42703" || postgresError.Code == "42P01"):
 		httpresponse.RespondWithError(w, http.StatusConflict, "article section defaults migration required")
 	default:
 		httpresponse.RespondWithError(w, http.StatusInternalServerError, "article section defaults unavailable")
@@ -291,15 +194,15 @@ func GetArticleSectionDefaultsHandler(w http.ResponseWriter, r *http.Request) {
 		respondArticleSectionDefaultsError(w, err)
 		return
 	}
-	stored, err := readArticleSectionDefaults(backend.Db, tableUID, false)
+	stored, err := readArticleSectionAppearance(backend.Db, tableUID)
 	if err != nil {
 		respondArticleSectionDefaultsError(w, err)
 		return
 	}
-	httpresponse.RespondWithJSON(w, http.StatusOK, articleSectionDefaultsResponse(dataset, presentation, stored, canEdit))
+	httpresponse.RespondWithJSON(w, http.StatusOK, articleDefaultsFromAppearance(dataset, presentation, stored, canEdit))
 }
 
-// SaveArticleSectionDefaultsHandler patches or resets the administrator's site default.
+// SaveArticleSectionDefaultsHandler patches dataset overrides or restores site inheritance.
 // POST /api/admin/view-field-settings/article-section-defaults
 func SaveArticleSectionDefaultsHandler(w http.ResponseWriter, r *http.Request) {
 

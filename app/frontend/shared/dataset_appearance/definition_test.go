@@ -54,7 +54,7 @@ func TestDatasetAppearanceContract(t *testing.T) {
 func TestDatasetAppearanceInventoryAndIndependentRules(t *testing.T) {
 	rules := Rules()
 	paths := rules.CanonicalPaths()
-	if len(paths) != 46 || len(rules.ThemeFields) != 13 || len(rules.SharedFields) != 21 ||
+	if len(paths) != 61 || len(rules.ThemeFields) != 13 || len(rules.SharedFields) != 36 ||
 		slices.Contains(paths, "shared.image_blur") || slices.Contains(paths, "light.show_cover_photo") {
 		t.Fatalf("unexpected canonical inventory: %v", paths)
 	}

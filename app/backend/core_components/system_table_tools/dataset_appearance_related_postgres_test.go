@@ -92,7 +92,11 @@ func TestDatasetAppearancePostgresRelatedResultsAuthorizedAndFresh(t *testing.T)
 				t.Fatal(err)
 			}
 			actualJSON, _ := json.Marshal(result.DatasetAppearance)
-			expectedJSON, _ := json.Marshal(expected.ForClient(modern))
+			client := store.LegacyAppearance
+			if modern {
+				client = store.RowPresentationAppearance
+			}
+			expectedJSON, _ := json.Marshal(expected.ForClient(client))
 			if result.DatasetUID != uid || string(actualJSON) != string(expectedJSON) || result.DatasetAppearance.Version != version || result.DatasetAppearance.Effective.Shared.CardImageWidth != width {
 				t.Fatalf("related appearance differs from results contract: %+v", result)
 			}

@@ -26,7 +26,7 @@ const filterbarSectionLayoutUpsertSQL = `
 	VALUES (
 		$1,
 		$2::jsonb,
-		'Global admin-managed compact filterbar section order and collapsed state.'
+		'Global admin-managed compact filterbar section order and field selector policy.'
 	)
 	ON CONFLICT (key) DO UPDATE
 	SET json_value = EXCLUDED.json_value,
@@ -66,10 +66,9 @@ var legacyFilterbarSectionOrder = []string{
 }
 
 type filterbarSectionLayoutConfig struct {
-	SectionOrder           []string        `json:"section_order"`
-	SectionCollapsed       map[string]bool `json:"section_collapsed"`
-	AllowOwnOrder          bool            `json:"allow_own_order"`
-	FieldSelectorAdminOnly bool            `json:"field_selector_admin_only"`
+	SectionOrder           []string `json:"section_order"`
+	AllowOwnOrder          bool     `json:"allow_own_order"`
+	FieldSelectorAdminOnly bool     `json:"field_selector_admin_only"`
 }
 
 // Only these UI fields leave the public endpoint, even if the stored object
@@ -77,10 +76,9 @@ type filterbarSectionLayoutConfig struct {
 var filterbarLayoutReader = readFilterbarSectionLayout
 
 type saveFilterbarLayoutRequest struct {
-	SectionOrder           []string         `json:"section_order,omitempty"`
-	SectionCollapsed       map[string]*bool `json:"section_collapsed,omitempty"`
-	AllowOwnOrder          *bool            `json:"allow_own_order,omitempty"`
-	FieldSelectorAdminOnly *bool            `json:"field_selector_admin_only,omitempty"`
+	SectionOrder           []string `json:"section_order,omitempty"`
+	AllowOwnOrder          *bool    `json:"allow_own_order,omitempty"`
+	FieldSelectorAdminOnly *bool    `json:"field_selector_admin_only,omitempty"`
 }
 
 // GetFilterbarSectionLayoutHandler returns only safe shared UI settings for every role.
@@ -99,8 +97,8 @@ func GetFilterbarSectionLayoutHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 // SaveFilterbarSectionLayoutHandler patches the shared layout for signed-in route grantees.
-// Optional section_order, section_collapsed deltas (null removes a default), and
-// optional site policies preserve all omitted fields.
+// Optional section order and site policies preserve omitted fields.
+// Disclosure defaults belong exclusively to the dataset appearance settings.
 // Access control enforces the route grant; this handler refuses guests before any write.
 // POST /api/filterbar-section-layout/save
 func SaveFilterbarSectionLayoutHandler(w http.ResponseWriter, r *http.Request) {
@@ -121,8 +119,8 @@ func SaveFilterbarSectionLayoutHandler(w http.ResponseWriter, r *http.Request) {
 		httpresponse.RespondWithError(w, http.StatusInternalServerError, "transaction start failed")
 		return
 	}
-	// Serialize partial edits, preserving the collapse defaults and site policy
-	// when another bar changes only its order. No old dataset snapshot is written.
+	// Serialize partial ordering edits, preserving site policy when only the
+	// order changes. Legacy collapse values are no longer read or written here.
 	if _, err := tx.ExecContext(r.Context(), `SELECT pg_advisory_xact_lock(770077)`); err != nil {
 		httpresponse.RespondWithError(w, http.StatusInternalServerError, "layout lock failed")
 		return
@@ -134,13 +132,6 @@ func SaveFilterbarSectionLayoutHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	if req.SectionOrder != nil {
 		config.SectionOrder = normalizeFilterbarSectionOrder(req.SectionOrder)
-	}
-	for key, value := range req.SectionCollapsed {
-		if value == nil {
-			delete(config.SectionCollapsed, key)
-		} else {
-			config.SectionCollapsed[key] = *value
-		}
 	}
 	if req.AllowOwnOrder != nil {
 		config.AllowOwnOrder = *req.AllowOwnOrder
@@ -183,8 +174,7 @@ func readFilterbarLayoutFrom(q interface {
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return filterbarSectionLayoutConfig{
-				SectionOrder:     normalizeFilterbarSectionOrder(nil),
-				SectionCollapsed: normalizeFilterbarSectionCollapsed(nil),
+				SectionOrder: normalizeFilterbarSectionOrder(nil),
 			}, nil
 		}
 		return filterbarSectionLayoutConfig{}, err
@@ -197,7 +187,6 @@ func readFilterbarLayoutFrom(q interface {
 		}
 	}
 	config.SectionOrder = normalizeFilterbarSectionOrder(config.SectionOrder)
-	config.SectionCollapsed = normalizeFilterbarSectionCollapsed(config.SectionCollapsed)
 	return config, nil
 }
 
@@ -221,11 +210,6 @@ func decodeFilterbarRequest(w http.ResponseWriter, r *http.Request, target inter
 func validFilterbarLayoutRequest(req saveFilterbarLayoutRequest) bool {
 	if req.SectionOrder != nil && !validFilterbarOrder(req.SectionOrder) {
 		return false
-	}
-	for key := range req.SectionCollapsed {
-		if !allowedFilterbarSectionKeys[key] {
-			return false
-		}
 	}
 	return true
 }
@@ -267,16 +251,6 @@ func normalizeFilterbarSectionOrder(input []string) []string {
 		normalized = append(normalized, key)
 	}
 
-	return normalized
-}
-
-func normalizeFilterbarSectionCollapsed(input map[string]bool) map[string]bool {
-	normalized := map[string]bool{}
-	for _, key := range defaultFilterbarSectionOrder {
-		if value, exists := input[key]; exists {
-			normalized[key] = value
-		}
-	}
 	return normalized
 }
 

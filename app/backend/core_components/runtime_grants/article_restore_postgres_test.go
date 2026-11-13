@@ -29,6 +29,7 @@ func TestArticleUnmatchedFunctionsBackupRestorePostgres(t *testing.T) {
 		}
 		fixtureExec(t, owner, string(content))
 	}
+	installArticleDisclosureReviewFixture(t, owner)
 	fixtureExec(t, owner, `CREATE TABLE system_db_version(version text); INSERT INTO system_db_version VALUES('9.12.0')`)
 	fixtureExec(t, owner, `CREATE DATABASE populated_target`)
 	var socket string

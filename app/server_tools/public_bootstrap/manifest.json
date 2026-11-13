@@ -2,7 +2,7 @@
   "artifact": "filterest-public-bootstrap",
   "format_version": 2,
   "app_version": "9.6.8",
-  "db_version": "9.13.6",
+  "db_version": "9.13.7",
   "schema_source": "app/server_tools/public_bootstrap/source/base.schema.sql",
   "seed_source": "app/server_tools/public_bootstrap/source/base.seed.sql",
   "purpose": "local independent Filterest bootstrap without private source runtime dependency",
@@ -236,7 +236,9 @@
     "20261105000099_record_database_release_app_log_search_terms.sql",
     "20261105000985_add_row_article_default_presentation.sql",
     "20261105000986_seed_row_presentation_default_language_keys.sql",
-    "20261105000999_record_database_release_row_article_default.sql"
+    "20261105000999_record_database_release_row_article_default.sql",
+    "20261106000100_move_disclosure_defaults_to_appearance.sql",
+    "20261106000199_record_database_release_disclosure_defaults.sql"
   ],
   "allowed_schema_tables": [
     "public.ai_chat_conversations",
@@ -398,7 +400,7 @@
     "public.system_column_field_set_members": 1,
     "public.system_column_field_sets": 0,
     "public.system_config": 20,
-    "public.system_data_repair_records": 4,
+    "public.system_data_repair_records": 8,
     "public.system_dataset_appearance": 0,
     "public.system_db_tables": 73,
     "public.system_db_version": 1,
@@ -411,7 +413,7 @@
     "public.system_languages": 5,
     "public.system_permission_actions": 7,
     "public.system_permission_categories": 4,
-    "public.system_schema_migrations": 230,
+    "public.system_schema_migrations": 232,
     "public.system_table_folders": 14,
     "public.system_table_views": 13,
     "public.system_user_group_memberships": 2,
@@ -426,7 +428,7 @@
       "sha256": "4ba24c3a7b662908915e262c818580994f830695cb4afcafa81d8d4e04112fb3"
     },
     "server_tools/public_bootstrap/seed_data.sql": {
-      "sha256": "1790c44811f9b0c4beb8978001979b753932a5a63517107696d0882bc1daa23e"
+      "sha256": "7e537bdff2be17522586a7585162004e9a4318dd39587943b353d433733a11f7"
     }
   },
   "source_files": {
@@ -443,7 +445,7 @@
       "sha256": "235e4b887181e150bd436d035d2d268eb821d9e5d0b830b54eb444988f31d5d1"
     },
     "filterest/app/server_tools/public_bootstrap/generate_bootstrap.py": {
-      "sha256": "f3423d7d9dfb1bd76316cd07c75f3396c6784608bf83480a1f07bafaa4469fd6"
+      "sha256": "802b6a4c933fd938b16382ba7a609fe29d363318b51ed195d55ea38f324b5c5d"
     },
     "filterest/app/server_tools/public_bootstrap/sql_identifier_validator.py": {
       "sha256": "748245fac4328a3608740c1b0fe948e6a09d6489d587143bd3b4c67064bea732"
@@ -1209,6 +1211,12 @@
     },
     "filterest/app/server_tools/migrations/20261105000999_record_database_release_row_article_default.sql": {
       "sha256": "b9c10d86d2716f329e10c15f74f3f3bbea329bf5326dc65c0cfa02cb5dc7ac0d"
+    },
+    "filterest/app/server_tools/migrations/20261106000100_move_disclosure_defaults_to_appearance.sql": {
+      "sha256": "cfe3ad24978272e39e098ac881c89c91964b6a246ff0aba3645aa359c95b2f20"
+    },
+    "filterest/app/server_tools/migrations/20261106000199_record_database_release_disclosure_defaults.sql": {
+      "sha256": "7c7f40f09769c395ebb99614cd2f9c495516c59e6117e327db47de956df68e7b"
     },
     "filterest/app/server_tools/public_bootstrap/source/fixtures/docs/first-dataset.png": {
       "sha256": "010bdb97d887959b6f83046d377ca8394478a812c8abfe79fd5ea2cf400e3975"

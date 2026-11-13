@@ -27,7 +27,8 @@ export function wrapRowArticleToolSection({
     titleText,
     sectionClassNames,
     iconPath = TABLE_TOOLS_ICON_PATH,
-    startOpen = true,
+    startOpen = false,
+    blockKey = "",
 }) {
     if (!(contentElement instanceof HTMLElement)) {
         return null;
@@ -39,14 +40,16 @@ export function wrapRowArticleToolSection({
         iconPath,
         contentElement,
         startOpen,
+        blockKey,
         sectionClassNames,
     });
 }
 
-export function wrapRowArticleImageGallerySection(galleryElement, { startOpen = true } = {}) {
+export function wrapRowArticleImageGallerySection(galleryElement, { startOpen = false } = {}) {
     return wrapRowArticleToolSection({
         contentElement: galleryElement,
         startOpen,
+        blockKey: "images",
         titleLangKey: "row_article_section_images",
         titleText: "Images",
         iconPath: VISIBLE_FIELDS_ICON_PATH,
@@ -54,10 +57,11 @@ export function wrapRowArticleImageGallerySection(galleryElement, { startOpen = 
     });
 }
 
-export function wrapRowArticleAttachmentSection(attachmentElement, { startOpen = true } = {}) {
+export function wrapRowArticleAttachmentSection(attachmentElement, { startOpen = false } = {}) {
     return wrapRowArticleToolSection({
         contentElement: attachmentElement,
         startOpen,
+        blockKey: "attachments",
         titleLangKey: "row_article_section_attachments",
         titleText: "Attachments",
         iconPath: TABLE_TOOLS_ICON_PATH,
@@ -65,10 +69,11 @@ export function wrapRowArticleAttachmentSection(attachmentElement, { startOpen =
     });
 }
 
-export function wrapRowArticleRelatedRowsSection(relatedRowsElement, { startOpen = true } = {}) {
+export function wrapRowArticleRelatedRowsSection(relatedRowsElement, { startOpen = false } = {}) {
     return wrapRowArticleToolSection({
         contentElement: relatedRowsElement,
         startOpen,
+        blockKey: "related_rows",
         titleLangKey: "row_article_section_related_rows",
         titleText: "Related rows",
         iconPath: TABLE_TOOLS_ICON_PATH,

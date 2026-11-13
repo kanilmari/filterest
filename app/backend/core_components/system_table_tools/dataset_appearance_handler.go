@@ -60,7 +60,7 @@ func AdminDatasetAppearanceHandler(w http.ResponseWriter, r *http.Request) {
 		respondDatasetAppearanceError(w, err)
 		return
 	}
-	httpresponse.RespondWithJSON(w, 200, result.ForClient(store.WantsRowPresentation(w, r)))
+	httpresponse.RespondWithJSON(w, 200, result.ForClient(store.RequestedAppearance(w, r)))
 }
 
 func respondDatasetAppearanceError(w http.ResponseWriter, err error) {

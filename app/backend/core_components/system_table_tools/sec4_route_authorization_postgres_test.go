@@ -140,7 +140,7 @@ func TestSharedFilterbarRouteAuthorizationPostgres(t *testing.T) {
 		`{"section_collapsed":{"filters":true,"tools":false}}`,
 		`{"section_collapsed":{"filters":null}}`,
 		`{"allow_own_order":true}`, `{"allow_own_order":false}`,
-		`{"section_order":["views"],"section_collapsed":{"style":true},"allow_own_order":true}`,
+		`{"section_order":["views"],"allow_own_order":true}`,
 		`{"field_selector_admin_only":true}`, `{"field_selector_admin_only":false}`,
 	}
 	for _, userID := range []int{1, 42, 74} {
@@ -159,6 +159,15 @@ func TestSharedFilterbarRouteAuthorizationPostgres(t *testing.T) {
 						}
 						if after := sec4LayoutSnapshot(t, db); after != before {
 							t.Fatal("refusal partially changed shared settings or account preferences")
+						}
+						return
+					}
+					if kind == 1 || kind == 2 {
+						if !called || response.Code != 400 {
+							t.Fatalf("legacy collapse write accepted: %d %s", response.Code, response.Body)
+						}
+						if after := sec4LayoutSnapshot(t, db); after != before {
+							t.Fatal("rejected collapse write changed settings")
 						}
 						return
 					}
@@ -183,14 +192,6 @@ func TestSharedFilterbarRouteAuthorizationPostgres(t *testing.T) {
 						if persisted.SectionOrder[0] != "style" {
 							t.Fatal("order not saved")
 						}
-					case 1:
-						if !persisted.SectionCollapsed["filters"] || persisted.SectionCollapsed["tools"] {
-							t.Fatal("collapse defaults not saved")
-						}
-					case 2:
-						if _, exists := persisted.SectionCollapsed["filters"]; exists {
-							t.Fatal("collapse default not removed")
-						}
 					case 3:
 						if !persisted.AllowOwnOrder {
 							t.Fatal("site policy not enabled")
@@ -200,11 +201,11 @@ func TestSharedFilterbarRouteAuthorizationPostgres(t *testing.T) {
 							t.Fatal("site policy not disabled")
 						}
 					case 5:
-						if persisted.SectionOrder[0] != "views" || !persisted.SectionCollapsed["style"] || !persisted.AllowOwnOrder {
+						if persisted.SectionOrder[0] != "views" || !persisted.AllowOwnOrder {
 							t.Fatal("combined shared edit not fully saved")
 						}
 					case 6, 7:
-						if persisted.FieldSelectorAdminOnly != (kind == 6) || persisted.SectionOrder[0] != "views" || !persisted.SectionCollapsed["style"] || !persisted.AllowOwnOrder {
+						if persisted.FieldSelectorAdminOnly != (kind == 6) || persisted.SectionOrder[0] != "views" || !persisted.AllowOwnOrder {
 							t.Fatalf("selector policy changed unrelated layout fields: %+v", persisted)
 						}
 					}
@@ -236,14 +237,13 @@ func sec4AssertSafeFilterbarRead(t *testing.T, response *httptest.ResponseRecord
 		t.Fatalf("safe layout read: %d %s", response.Code, response.Body)
 	}
 	// Compare the whole object, so a stored internal key cannot accidentally
-	// become public. The three v9.6.5 keys gain only the selector visibility flag.
+	// become public. Disclosure defaults now belong to dataset appearance.
 	var got, want map[string]interface{}
 	if err := json.Unmarshal(response.Body.Bytes(), &got); err != nil {
 		t.Fatal(err)
 	}
 	if err := json.Unmarshal([]byte(`{
 		"section_order":["filters","search_overview","search_controls","tools","views","field_sets","style","chat"],
-		"section_collapsed":{"filters":true,"style":false},
 		"allow_own_order":true,"field_selector_admin_only":true
 	}`), &want); err != nil {
 		t.Fatal(err)
