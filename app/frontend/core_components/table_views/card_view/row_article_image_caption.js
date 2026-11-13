@@ -50,6 +50,13 @@ function resolveProviderName(url, provider = "") {
 }
 
 function resolveImageCredit(imageRow, description) {
+    // Historical illustration imports stored only a Markdown photographer link.
+    // Recognize the whole credit so ordinary authored captions retain their prose.
+    const legacy = description.match(
+        /^(Kuvituskuva|Illustration(?: image)?|Arkistokuva|Archive photo|File photo|Kuva|Photo)\s*[:–—-]\s*\[([^\]\r\n]+)\]\((\S+)\)\.?$/i,
+    );
+    const legacyUrl = resolveCreditUrl(legacy?.[3]);
+    const archive = /^(Arkistokuva|Archive photo|File photo)$/i.test(legacy?.[1] || "");
     let metadata = imageRow?.metadata_json;
     if (typeof metadata === "string") {
         try { metadata = JSON.parse(metadata); } catch { metadata = null; }
@@ -63,18 +70,15 @@ function resolveImageCredit(imageRow, description) {
             const generatedCaption = /^(?:Kuva|Photo)\s*:\s*/i.test(description)
                 && description.replace(/^(?:Kuva|Photo)\s*:\s*/i, "").replace(/\.$/, "")
                     === [creator, provider].filter(Boolean).join(" / ");
-            return { url: sourceUrl, creator, provider, creatorUrl: resolveCreditUrl(source.creator_profile_url), illustration: false,
-                description: generatedCaption ? "" : description };
+            const sameCredit = legacyUrl?.href === sourceUrl.href
+                && [creator, creator + " / " + provider].includes(legacy[2].trim());
+            return { url: sourceUrl, creator, provider, creatorUrl: resolveCreditUrl(source.creator_profile_url),
+                illustration: sameCredit && /^(Kuvituskuva|Illustration)/i.test(legacy[1]),
+                archive: sameCredit && archive, description: generatedCaption || sameCredit ? "" : description };
         }
     }
 
-    // Historical illustration imports stored only a Markdown photographer link.
-    // Recognize the whole credit so ordinary authored captions retain their prose.
-    const legacy = description.match(
-        /^(Kuvituskuva|Illustration(?: image)?|Kuva|Photo)\s*[:–—-]\s*\[([^\]\r\n]+)\]\((\S+)\)\.?$/i,
-    );
-    const legacyUrl = resolveCreditUrl(legacy?.[3]);
-    if (!legacyUrl) return null;
+    if (!legacyUrl || archive) return null;
     return { url: legacyUrl, creator: legacy[2].trim(), provider: resolveProviderName(legacyUrl),
         illustration: /^(Kuvituskuva|Illustration)/i.test(legacy[1]), description: "" };
 }
@@ -239,7 +243,7 @@ export function setRowArticleImageCaption(captionElement, imageRow, { compact = 
                 captionElement.append(document.createTextNode(" — "));
             }
             const labels = resolveCreditLabels(language);
-            captionElement.append((credit.illustration ? labels.illustration : labels.photo) + ": ");
+            captionElement.append((credit.archive ? labels.archive : credit.illustration ? labels.illustration : labels.photo) + ": ");
             const { creator, provider } = credit;
             const label = provider && creator.toLowerCase().endsWith(" / " + provider.toLowerCase())
                 ? creator : [creator, provider].filter(Boolean).join(" / ");

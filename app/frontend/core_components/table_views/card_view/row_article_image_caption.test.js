@@ -252,6 +252,20 @@ describe("linked photo credits", () => {
         expect(caption.textContent).toBe("Photo: Creator / Unsplash");
     });
 
+    test.each([["Kuvituskuva", "Creator"], ["Arkistokuva", "Creator / Unsplash"]])(
+        "adding verified profile metadata preserves a single %s credit on the article", (kind, linkedName) => {
+            const url = "https://unsplash.com/photos/example";
+            const row = { description: kind + " – [" + linkedName + "](" + url + ")", metadata_json: { image_source: {
+                provider: "unsplash", creator_name: "Creator", source_page_url: url,
+                creator_profile_url: "https://unsplash.com/@creator",
+            } } };
+            expect(render(row).textContent).toBe(kind + ": Creator / Unsplash");
+            const card = render(row, { compact: true });
+            expect(card.textContent).toBe(kind + ", Creator, Unsplash");
+            expect(new URL(card.querySelector("a").href).pathname).toBe("/@creator");
+        },
+    );
+
     test("keeps an authored caption beside its structured attribution", () => {
         const caption = render({ description: "Sunset over Helsinki.", metadata_json: { image_source: {
             provider: "pexels", creator_name: "Chris", source_page_url: photoUrl,
