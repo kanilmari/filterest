@@ -87,25 +87,16 @@ func applyExactCardImageUses(row map[string]interface{}, table string, id int64,
 		}
 		use := dtt_card_picture.CardImageUse{Dataset: table, RowID: id, Column: column, RelationID: relationID,
 			Version: dtt_card_picture.CardImageVersion(parentVersion, "", value)}
-		var matched *canonicalAssetImageValue
-		ambiguous := false
-		for index := range images {
-			image := &images[index]
-			if value != image.filename && !cardImageFilenameMatches(value, image.filename, tableUID, id) {
-				continue
-			}
-			if matched != nil {
-				ambiguous = true
-				break
-			}
-			matched = image
-		}
+		matched, ambiguous := matchCardImageUse(images, value, tableUID, id)
 		// Two links to the same file do not identify a unique use. Refuse editing
 		// rather than silently changing the first link's presentation.
 		if ambiguous {
 			continue
 		}
 		if matched != nil {
+			if matched.cardCredit != nil {
+				row[column+"_card_credit"] = matched.cardCredit
+			}
 			use.LinkRowID = matched.linkID
 			use.Version = dtt_card_picture.CardImageVersion(parentVersion, matched.linkVersion, value)
 			row[column+"_presentation"] = matched.presentation
@@ -116,4 +107,20 @@ func applyExactCardImageUses(row map[string]interface{}, table string, id int64,
 		}
 		row[column+"_usage"] = use
 	}
+}
+
+// A repeated filename cannot identify which gallery link owns the credit.
+func matchCardImageUse(images []canonicalAssetImageValue, value, tableUID string, id int64) (*canonicalAssetImageValue, bool) {
+	var match *canonicalAssetImageValue
+	for index := range images {
+		image := &images[index]
+		if value != image.filename && !cardImageFilenameMatches(value, image.filename, tableUID, id) {
+			continue
+		}
+		if match != nil {
+			return nil, true
+		}
+		match = image
+	}
+	return match, false
 }

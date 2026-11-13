@@ -51,7 +51,7 @@ func TestCardImageUsageFollowsExactFieldAndNonFirstImage(t *testing.T) {
 	x, y := 0.2, 0.8
 	images := []canonicalAssetImageValue{
 		{filename: "first.png", linkID: 11, linkVersion: "30", presentation: &contain},
-		{filename: "second.png", linkID: 12, linkVersion: "31", presentation: &cover, focalX: &x, focalY: &y, title: "Second"},
+		{filename: "second.png", linkID: 12, linkVersion: "31", cardCredit: &cardImageCredit{Description: "Second author"}, presentation: &cover, focalX: &x, focalY: &y, title: "Second"},
 	}
 	row := map[string]interface{}{"id": int64(4), "cached_image": "first.png", "hero_image": "second.png", "image": "external.jpg"}
 	applyExactCardImageUses(row, "example", 4, "20", 9, "101", []string{"cached_image", "hero_image", "image"}, images)
@@ -62,6 +62,9 @@ func TestCardImageUsageFollowsExactFieldAndNonFirstImage(t *testing.T) {
 	}
 	if *row["hero_image_presentation"].(*string) != "cover" || row["hero_image_title"] != "Second" {
 		t.Fatal(row)
+	}
+	if row["hero_image_card_credit"].(*cardImageCredit).Description != "Second author" || row["cached_image_card_credit"] != nil || row["image_card_credit"] != nil {
+		t.Fatal("credit assigned to a different picture", row)
 	}
 	if row["image_usage"].(pictures.CardImageUse).LinkRowID != 0 {
 		t.Fatal("unlinked image identified as a gallery use")
@@ -75,8 +78,11 @@ func TestCardImageUsageRefusesAmbiguousAndHiddenSettings(t *testing.T) {
 	cover := "cover"
 	row := map[string]interface{}{"cached_image": "same.png"}
 	applyExactCardImageUses(row, "example", 4, "20", 9, "101", []string{"cached_image"}, []canonicalAssetImageValue{
-		{filename: "same.png", linkID: 11, presentation: &cover}, {filename: "same.png", linkID: 12},
+		{filename: "same.png", linkID: 11, cardCredit: &cardImageCredit{Description: "Repeated"}, presentation: &cover}, {filename: "same.png", linkID: 12},
 	})
+	if _, ok := row["cached_image_card_credit"]; ok {
+		t.Fatal("ambiguous credit exposed")
+	}
 	if _, ok := row["cached_image_usage"]; ok {
 		t.Fatal("ambiguous URL became a writable identity")
 	}

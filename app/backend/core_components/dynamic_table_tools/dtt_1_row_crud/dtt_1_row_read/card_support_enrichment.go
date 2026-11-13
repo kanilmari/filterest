@@ -27,6 +27,7 @@ type canonicalAssetImageValue struct {
 	metadataJSON     string
 	title            string
 	originalName     string
+	cardCredit       *cardImageCredit
 	visibleFilenames []string
 	linkID           int64
 	linkVersion      string
@@ -409,6 +410,10 @@ func fetchCanonicalAssetImageValues(
 	if relation.HasCardImageSettings {
 		extraSelect = `, id, xmin::text, card_image_presentation, card_image_focal_x, card_image_focal_y`
 	}
+	creditFields := readableCardCreditFields(querier, relation.ChildTable)
+	if creditFields.description {
+		extraSelect += `, COALESCE("description"::text, '')`
+	}
 	query := fmt.Sprintf(
 		`SELECT %s, %s, %s, %s, %s, %s
 		   FROM %s
@@ -467,6 +472,10 @@ func fetchCanonicalAssetImageValues(
 		if relation.HasCardImageSettings {
 			values = append(values, &image.linkID, &image.linkVersion, &presentation, &focalX, &focalY)
 		}
+		var description string
+		if creditFields.description {
+			values = append(values, &description)
+		}
 		if scanErr := rows.Scan(values...); scanErr != nil {
 			return nil, scanErr
 		}
@@ -485,6 +494,7 @@ func fetchCanonicalAssetImageValues(
 		image.filename, image.typeID = filename, coerceCanonicalAssetTypeID(rawTypeID)
 		image.metadataJSON, image.title = normalizeCardSupportValue(rawMetadataJSON), normalizeCardSupportValue(rawTitle)
 		image.originalName = normalizeCardSupportValue(rawOriginalName)
+		image.cardCredit = creditFields.credit(description, image.metadataJSON)
 		if presentation.Valid {
 			image.presentation = &presentation.String
 		}
@@ -499,6 +509,7 @@ func fetchCanonicalAssetImageValues(
 		}
 		imageByID[key] = canonicalAssetImageValue{
 			filename:         filename,
+			cardCredit:       image.cardCredit,
 			visibleFilenames: []string{filename},
 			typeID:           coerceCanonicalAssetTypeID(rawTypeID),
 			metadataJSON:     normalizeCardSupportValue(rawMetadataJSON),

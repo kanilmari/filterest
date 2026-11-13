@@ -9,6 +9,7 @@ import { createImageElement, create_seeded_avatar, updateCardImageFrame } from "
 import { cardImageFrameFollowsStoredShape } from "./card_image_presentation.js";
 import { openDefaultRowPresentation } from "../row_presentation/row_presentation_dispatcher.js";
 import { bindImageFirstViewActivation, refreshCardListImageAffordance } from "./image_first_view_activation.js";
+import { setRowArticleImageCaption } from "./row_article_image_caption.js";
 import { createKeyValueElement } from "./card_field_formatter.js";
 import { count_this_function } from "../../dev_tools/function_counter.js";
 import {
@@ -148,6 +149,12 @@ async function addImageOrAvatar(
         });
 
         elem_div.appendChild(blurredImageElement);
+        if (image_render_options.imageCredit) {
+            const caption = document.createElement("p");
+            caption.className = "card_image_credit";
+            setRowArticleImageCaption(caption, image_render_options.imageCredit, { compact: true });
+            elem_div.appendChild(caption);
+        }
     } else {
         // Avatar
         const avatar = await create_seeded_avatar(

@@ -117,12 +117,32 @@ describe("article image captions", () => {
 
 describe("linked photo credits", () => {
     const photoUrl = "https://www.pexels.com/photo/aerial-view-of-city-during-sunset-6367377/";
-    function render(row) {
+    function render(row, options) {
         const caption = document.createElement("p");
         document.body.appendChild(caption);
-        setRowArticleImageCaption(caption, row);
+        setRowArticleImageCaption(caption, row, options);
         return caption;
     }
+
+    test("compact API credit links to the photographer profile and Unsplash separately", () => {
+        const caption = render({ metadata_json: { image_source: {
+            provider: "unsplash", creator_name: "Creator", creator_profile_url: "https://unsplash.com/@creator",
+            source_page_url: "https://unsplash.com/photos/example"
+        } } }, { compact: true });
+        expect(caption.textContent).toBe("Creator / Unsplash");
+        const [creator, platform] = caption.querySelectorAll("a");
+        expect(new URL(creator.href).pathname).toBe("/@creator");
+        expect(new URL(platform.href).host).toBe("unsplash.com");
+        expect(new URL(platform.href).pathname).toBe("/");
+    });
+
+    test("compact legacy credit preserves the named source and licence and hides an empty credit", () => {
+        const description = "Arkistokuva – [Example / Wikimedia Commons](https://commons.wikimedia.org/wiki/File:Example.jpg), [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/)";
+        const caption = render({ description }, { compact: true });
+        expect(caption.textContent).toContain("Example / Wikimedia Commons, CC BY-SA 4.0");
+        expect(caption.querySelectorAll("a")).toHaveLength(2);
+        expect(render({}, { compact: true }).hidden).toBe(true);
+    });
 
     test("turns a legacy Fintravel credit into one short photographer and provider link", async () => {
         const caption = render({ description: "Kuvituskuva – [Chris Economou](" + photoUrl + ")" });

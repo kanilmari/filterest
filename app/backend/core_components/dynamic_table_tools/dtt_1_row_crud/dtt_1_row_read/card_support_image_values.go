@@ -106,6 +106,13 @@ func applyLegacyChildImageValues(rows []map[string]interface{}, imageByID map[st
 		}
 
 		existingImage := resolveExistingCardImageValue(row, imageKeys)
+		creditImage := existingImage
+		if creditImage == "" {
+			creditImage = imageValue.filename
+		}
+		if matched, _ := matchCardImageUse(imageValue.uses, creditImage, parentTableUID, rowID); matched != nil && matched.cardCredit != nil {
+			row["cached_image_card_credit"] = matched.cardCredit
+		}
 		if existingImage != "" && !cardImageFilenameMatches(existingImage, imageValue.filename, parentTableUID, rowID) {
 			continue
 		}

@@ -43,3 +43,33 @@
 .card_photo_presentation > img {
     z-index: 1;
 }
+
+.card_image:has(> .card_image_credit:not([hidden])) {
+    display: flex;
+    flex-direction: column;
+    min-inline-size: 0;
+    max-inline-size: 100%;
+}
+.card_image_credit {
+    box-sizing: border-box;
+    margin: 0;
+    padding: .125rem .375rem;
+    max-inline-size: 100%;
+    font-size: .8125rem;
+    line-height: 1.35;
+    text-align: start;
+    overflow-wrap: anywhere;
+    cursor: text;
+}
+.card_image_credit a {
+    color: inherit;
+    display: inline-block;
+    min-block-size: 24px;
+    max-inline-size: 100%;
+    align-content: center;
+    text-decoration: underline;
+}
+.card_image_credit a:focus-visible {
+    outline: 2px solid currentColor;
+    outline-offset: 1px;
+}

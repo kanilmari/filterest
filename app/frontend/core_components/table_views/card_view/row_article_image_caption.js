@@ -1,7 +1,6 @@
 // row_article_image_caption.js
-// Localizes image descriptions and attaches them only to article media surfaces.
-// Bridges shared asset rows with ordinary and image-first article presentations.
-// Exists so image credits never leak into compact cards and change with the UI language.
+// Localizes image descriptions and builds safe credits for article and card images.
+// One renderer owns localized text, credit links and their click boundary.
 
 import { bindDatasetLanguageRenderer, resolveDatasetDisplayValue } from "../dataset_value_localizer.js";
 import { resolveRowArticleImageRows, resolveRowArticlePictureIdentity } from "./row_article_image_rows.js";
@@ -64,7 +63,7 @@ function resolveImageCredit(imageRow, description) {
             const generatedCaption = /^(?:Kuva|Photo)\s*:\s*/i.test(description)
                 && description.replace(/^(?:Kuva|Photo)\s*:\s*/i, "").replace(/\.$/, "")
                     === [creator, provider].filter(Boolean).join(" / ");
-            return { url: sourceUrl, creator, provider, illustration: false,
+            return { url: sourceUrl, creator, provider, creatorUrl: resolveCreditUrl(source.creator_profile_url), illustration: false,
                 description: generatedCaption ? "" : description };
         }
     }
@@ -135,7 +134,7 @@ function isolateCaptionInteractions(caption) {
  * Renders one localized caption with safe photographer/provider links.
  * Both article layouts share this boundary; language and image changes rebuild the credit.
  */
-export function setRowArticleImageCaption(captionElement, imageRow) {
+export function setRowArticleImageCaption(captionElement, imageRow, { compact = false } = {}) {
     if (!(captionElement instanceof HTMLElement)) return;
     isolateCaptionInteractions(captionElement);
     bindDatasetLanguageRenderer(captionElement, (language) => {
@@ -147,12 +146,25 @@ export function setRowArticleImageCaption(captionElement, imageRow) {
                 appendCaptionText(captionElement, credit.description);
                 captionElement.append(document.createTextNode(" — "));
             }
-            const labels = resolveCreditLabels(language);
-            captionElement.append(document.createTextNode(
-                (credit.illustration ? labels.illustration : labels.photo) + ": ",
-            ));
-            appendCreditLink(captionElement,
-                [credit.creator, credit.provider].filter(Boolean).join(" / "), credit.url);
+            if (!compact) {
+                const labels = resolveCreditLabels(language);
+                captionElement.append(document.createTextNode(
+                    (credit.illustration ? labels.illustration : labels.photo) + ": ",
+                ));
+            }
+            const { creator, provider } = credit;
+            if (compact && credit.creatorUrl && creator && provider) {
+                appendCreditLink(captionElement, creator, credit.creatorUrl);
+                captionElement.append(document.createTextNode(" / "));
+                // API-sourced Unsplash photos credit the photographer and Unsplash separately.
+                const providerUrl = provider === "Unsplash"
+                    ? new URL("https://unsplash.com/?utm_source=filterest&utm_medium=referral") : credit.url;
+                appendCreditLink(captionElement, provider, providerUrl);
+            } else {
+                const label = provider && creator.toLowerCase().endsWith(" / " + provider.toLowerCase())
+                    ? creator : [creator, provider].filter(Boolean).join(" / ");
+                appendCreditLink(captionElement, label, credit.url);
+            }
         } else {
             appendCaptionText(captionElement, description);
         }

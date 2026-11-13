@@ -29,6 +29,7 @@ Dates are the local (Europe/Helsinki) date on which the version was published.
 - On phones, each article detail value starts below its field name, including when the value wraps across lines.
 - Photos in an article follow their own proportions, including older uploads without saved dimensions. Captions no longer sit below an empty square frame.
 - Image-first articles opened from a photo or in Page view blur the application behind them with the same 48 px radius (#997).
+- Sites can display the credit directly under the matching dataset card photo, including photographer and source links (#1032).
 - In the page-sized article (cifav), Finnish and English titles and descriptions break long words at hyphenation points, so they wrap on narrow screens. Copying, page search and editing keep the original words, and links and addresses wrap as before. Changing the interface language refreshes the article text and keeps the shown picture (#1036).
 - The worker launcher's missing-Claude-CLI test runs with its own PATH, so a Claude CLI installed on the machine no longer fails it (#1033).
 

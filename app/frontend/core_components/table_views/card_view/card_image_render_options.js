@@ -53,6 +53,7 @@ export function buildCardImageRenderOptions(
             focal: { x: readCompanionValue(rowItem, safeColumnName, "focal_x"),
                 y: readCompanionValue(rowItem, safeColumnName, "focal_y") },
         },
+        imageCredit: readCompanionValue(rowItem, safeColumnName, "card_credit"),
         imageTypeId: readCompanionValue(rowItem, safeColumnName, "type_id"),
         imageMetadata: readCompanionValue(rowItem, safeColumnName, "metadata_json"),
         imageTitle: readCompanionValue(rowItem, safeColumnName, "title"),
