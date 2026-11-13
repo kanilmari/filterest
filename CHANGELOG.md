@@ -22,6 +22,8 @@ Dates are the local (Europe/Helsinki) date on which the version was published.
 
 ## [Unreleased]
 
+## [9.6.9] - 2026-11-14
+
 - Palette sections and collapsible blocks in all three article presentations start closed. Headings, primary pictures and article text remain visible. Readers' deliberate open/close choices stay with the same account and browser tab; administrators can set site defaults and dataset overrides through the existing appearance palette. The upgrade audits and retires the old shared collapse storage once, while later administrator choices survive replay (#986).
 - Inferred card and article headings show the title with its inline emphasis. Articles omit empty, unconfigured display fields and sit flush below the toolbar at tablet widths. Signed-in users can load their filter-panel preferences with ordinary account permissions (#1023).
 - On phones, a result card’s photo opens the page-sized image-first article. At larger widths it opens the full image-first article. Selecting a card’s description opens the row in its effective article presentation (#1034).
