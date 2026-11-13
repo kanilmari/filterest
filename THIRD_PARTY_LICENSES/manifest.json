@@ -392,7 +392,7 @@
         },
         {
           "path": "app/frontend/core_components/table_views/card_view/row_article_ui_handler.js",
-          "sha256": "f46572be884269fc3d411425c8fd6799913c9bccacd721674de35b951b181992"
+          "sha256": "8d705b0ba4b04f65bd7472ead0fb68c2751eb593e88a1820b7659b5ad4c47b33"
         },
         {
           "path": "app/frontend/reusable_components/key_value_container/kv_pair_builder.js",
@@ -410,7 +410,7 @@
   ],
   "asset_provenance": {
     "path": "app/server_tools/licenses/asset_provenance.json",
-    "sha256": "ba14ce1a933adb182a48fead9f2e86ca8775250ec6d690469bc6d4a96fc2033a"
+    "sha256": "890f976b4db0d3c91245793d65b6a14cf22228797285f97a82b712c20cc75c0a"
   },
   "browser_bundle_metadata_source": "app/server_tools/licenses/browser_bundle_provenance.json matched against app/package-lock.json and app/frontend/dist/*.js",
   "browser_bundle_provenance": {
@@ -867,7 +867,7 @@
       "version": "6.4.3"
     }
   ],
-  "filterest_app_version": "9.6.6",
+  "filterest_app_version": "9.6.8",
   "first_party_components": [
     {
       "assets": [
