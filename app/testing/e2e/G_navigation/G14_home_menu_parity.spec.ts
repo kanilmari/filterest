@@ -52,12 +52,14 @@ async function menuGeometry(page: Page, surface: 'home' | 'dataset', open: boole
   await expect(page.locator(MENU_CONTROL)).toHaveCount(1);
   await expect(page.locator(FILTER_CONTROL)).toHaveCount(surface === 'dataset' ? 1 : 0);
   const phone = viewport.width <= 700;
-  const homeBar = open ? '#navbar > .top-button-bar' : phone ? '.front-page-phone-topbar' : '.front-page > .front-page-top-row';
-  const bar = surface === 'home' ? page.locator(homeBar)
-    : page.locator(`[id="${DATASET}_tab_parts_container"] .dataset-shared-topbar:visible`);
-  const menu = surface === 'dataset' ? '[data-testid="shared-topbar-menu-button"]' : open ? '#hideMenuButton' : '#showMenuButton';
+  const datasetBar = page.locator(`[id="${DATASET}_tab_parts_container"] .dataset-shared-topbar:visible`);
+  const homeBar = page.locator(phone ? '.front-page-phone-topbar' : '.front-page > .front-page-top-row');
+  const closedBar = surface === 'dataset' ? datasetBar : homeBar;
+  const bar = open ? navbar.locator(':scope > .top-button-bar') : closedBar;
+  const opener = surface === 'dataset' ? '[data-testid="shared-topbar-menu-button"]' : '#showMenuButton';
+  const menu = open ? '#hideMenuButton' : opener;
   await expect(bar).toBeVisible();
-  await expectBarControl(bar, menu, 'left', phone && (surface === 'dataset' || !open), open);
+  await expectBarControl(bar, menu, 'left', phone && !open, open);
   await expect(bar.locator(menu)).toHaveAttribute('aria-controls', 'navbar');
   await expect(bar.locator(menu)).toHaveCSS('box-shadow', 'none');
   const row = (await bar.boundingBox())!;
@@ -65,8 +67,7 @@ async function menuGeometry(page: Page, surface: 'home' | 'dataset', open: boole
     const box = element.getBoundingClientRect();
     return { top: box.top, bottom: box.bottom };
   });
-  // Home keeps its full-height overlay. Only an open dataset drawer yields the toolbar's space.
-  expect(drawer.top).toBeCloseTo(surface === 'dataset' && open ? row.y + row.height : 0, 0);
+  expect(drawer.top).toBeCloseTo(0, 0);
   expect(drawer.bottom).toBeCloseTo(viewport.height, 0);
   expect(row.x).toBeCloseTo(0, 0);
   expect(row.y).toBeCloseTo(0, 0);
@@ -77,8 +78,14 @@ async function menuGeometry(page: Page, surface: 'home' | 'dataset', open: boole
     expect(homeRow.y + homeRow.height).toBeCloseTo(controls.y + controls.height, 0);
   }
   if (surface === 'dataset') {
-    await expectBarControl(bar, '[data-testid="filterbar-toggle"]', 'right', phone, false);
-    expect(row.height).toBeCloseTo(phone ? 48 : 70, 0);
+    await expectBarControl(datasetBar, '[data-testid="filterbar-toggle"]', 'right', phone, false);
+    const toolbar = (await datasetBar.boundingBox())!;
+    expect(toolbar.height).toBeCloseTo(phone ? 48 : 70, 0);
+    if (open) {
+      const inactiveOpener = datasetBar.locator(opener);
+      await expect(inactiveOpener).toHaveAttribute('aria-hidden', 'true');
+      await expect(inactiveOpener).toHaveAttribute('tabindex', '-1');
+    }
   }
   if (open) {
     // Overlay menus leave the content host at its full viewport width.
@@ -160,19 +167,25 @@ for (const width of [1280, 1800, 390]) for (const theme of ['light', 'dark'] as 
         const menu = sharedBar.getByTestId('shared-topbar-menu-button');
         await menu.press('Enter');
         await expect(page.locator('#navbar')).not.toHaveClass(/\bcollapsed\b/);
-        await expect(menu).toBeFocused();
-        await menu.click();
+        const menuCloser = page.locator('#navbar > .top-button-bar #hideMenuButton');
+        await expect(menuCloser).toBeFocused();
+        await menuCloser.press('Enter');
         await expect(page.locator('#navbar')).toHaveClass(/\bcollapsed\b/);
         await expect(menu).toBeFocused();
 
         const filter = sharedBar.getByTestId('filterbar-toggle');
         const panel = dataset.locator('.filterbar-panel');
         await expect(filter).toHaveAttribute('aria-controls', (await panel.getAttribute('id'))!);
-        await filter.click();
+        await filter.press('Enter');
         await expect(panel).not.toHaveClass(/filterbar-panel--hidden/);
-        await expect(filter).toHaveAttribute('aria-expanded', 'true');
-        await filter.click();
+        await expect(dataset.locator(FILTER_CONTROL)).toHaveCount(1);
+        const filterCloser = panel.locator('.filterbar-panel__toggle-dock .hide_filter_bar_button');
+        await expect(filterCloser).toBeVisible();
+        await expect(filterCloser).toBeFocused();
+        await expect(filterCloser).toHaveAttribute('aria-expanded', 'true');
+        await filterCloser.press('Enter');
         await expect(panel).toHaveClass(/filterbar-panel--hidden/);
+        await expect(filter).toBeFocused();
       }
       if (surface === 'home') {
         const homeBar = width <= 700 ? '.front-page-phone-topbar' : '.front-page-top-row';

@@ -410,6 +410,9 @@ test('#999: a moved dataset tab opens by keyboard and pointer, and Back restores
 test('#999: exactly one reachable menu and filter control in all panel combinations', async ({ page }, info) => {
   const dataset = DATASET || MEDIA_DATASET;
   test.skip(info.project.metadata.cardView === 'big', 'Panel ownership is independent of card presentation.');
+  if (info.project.metadata.screenWidth === 'desktop') {
+    await page.setViewportSize({ width: 1198, height: 900 });
+  }
   await page.addInitScript(dataset => {
     localStorage.setItem('navVisibleNarrow', 'false');
     localStorage.setItem('navVisibleWide', 'false');
@@ -426,20 +429,31 @@ test('#999: exactly one reachable menu and filter control in all panel combinati
     [false, true, 'filter'], [false, false, 'filter'], [false, true, 'menu'],
     [true, true, 'filter'], [true, false, 'menu'], [false, false, null],
   ] as const) {
-    const inBar = !(navOpen && filtersOpen);
-    await expect(bar).toHaveAttribute('aria-hidden', String(!inBar));
+    const barHidden = navOpen && filtersOpen;
+    await expect(bar).toHaveAttribute('aria-hidden', String(barHidden));
     const targets = [];
-    for (const [selector, open] of [[menu, navOpen], [filter, filtersOpen]] as const) {
+    for (const [selector, open, side] of [[menu, navOpen, 'left'], [filter, filtersOpen, 'right']] as const) {
       const visible = page.locator(selector).filter({ visible: true });
       await expect(visible).toHaveCount(1);
       await expect(visible).toHaveAttribute('aria-expanded', String(open));
       await expect(visible).toHaveAttribute('aria-hidden', 'false');
       await expect(visible).toHaveAttribute('tabindex', '0');
-      await expect.poll(() => visible.evaluate((node, inside) => {
-        const r = node.getBoundingClientRect();
-        const hit = document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2);
-        return node.contains(hit) && !node.closest('[inert]') && Boolean(node.closest('.dataset-shared-topbar')) === inside;
-      }, inBar)).toBe(true);
+      await expect.poll(() => visible.evaluate((node, expected) => {
+        const { side, open } = expected;
+        const rect = node.getBoundingClientRect();
+        const hit = document.elementFromPoint(rect.x + rect.width / 2, rect.y + rect.height / 2);
+        const viewportWidth = document.documentElement.clientWidth;
+        const left = side === 'left';
+        const inset = left ? rect.left : viewportWidth - rect.right;
+        if (rect.top < -1 || rect.top >= 32 || inset < -1 || inset >= 32
+          || !node.contains(hit) || node.closest('[inert]')) return false;
+        if (!open) return !!node.closest('.dataset-shared-topbar');
+        const panel = node.closest(left ? '#navbar' : '.filterbar-panel--compact');
+        if (!panel || Math.abs(panel.getBoundingClientRect().top) > 1) return false;
+        // A button relocated over a lowered drawer is insufficient. Hit the panel
+        // itself inside its top edge, outside the button, on either side.
+        return panel.contains(document.elementFromPoint(left ? 2 : viewportWidth - 3, 3));
+      }, { side, open })).toBe(true);
       targets.push(visible);
     }
     if (next) {

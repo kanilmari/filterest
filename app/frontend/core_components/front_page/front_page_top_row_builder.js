@@ -92,7 +92,10 @@ export function createFrontPageTopRow(siteName, onSaved, paletteOptions = {}, { 
             try {
                 const { mountHomePalette } = await import('../admin_tools/home_palette_builder.js');
                 if (destroyed || !hasRoutePermission('/api/admin/front-page')) return;
-                palette = mountHomePalette(paletteButton, paletteOptions);
+                palette = mountHomePalette(paletteButton, { ...paletteOptions, render: value => {
+                    paletteOptions.render?.(value);
+                    desktopSearch?.syncPresentation();
+                } });
                 palette?.openPanel();
             } catch {
                 if (!destroyed) showToast({ content: getPaletteCopy(HOME_PALETTE_COPY).loadFailed, level: 'error' });

@@ -193,7 +193,7 @@ let usernameElement = null;
         const meta = data_types[column] || {};
         headerElement = addHeaderElement(heading.text,
             meta.show_key_on_card === true ? format_column_name(column) : '', column, false,
-            row_item, table_name, card_content_div, row_item[column], meta);
+            row_item, table_name, card_content_div, heading.editValue, meta, heading.sourceText);
         if (column) headerElement.classList.add(makeColumnClass(table_name, column));
         else headerElement.querySelectorAll('[data-column]').forEach(element => element.removeAttribute('data-column'));
         setFieldHideAttribute(headerElement);

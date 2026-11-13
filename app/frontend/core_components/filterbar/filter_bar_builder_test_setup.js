@@ -118,7 +118,8 @@ vi.mock('./filterbar_visibility_resolver.js', () => ({
     })),
 }));
 
-vi.mock('../../ui_config.js', () => ({
+vi.mock('../../ui_config.js', async importOriginal => ({
+    ...await importOriginal(),
     get FAVEFOX_FILTER_LAYOUT_MODE() {
         return mockUiConfig.favefoxFilterLayoutMode;
     },

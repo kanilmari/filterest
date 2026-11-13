@@ -4,12 +4,9 @@
 // Exists to keep article-view interaction rules centralized instead of scattering them across card builders.
 
 import { bindRowOpeningHref } from "./default_row_affordance.js";
+import { appendCardFieldText } from "./card_field_formatter.js";
 import { count_this_function } from "../../dev_tools/function_counter.js";
 import { extractLangValue } from "../../../reusable_components/lang_value_reader.js";
-import {
-    renderAllowedHtml,
-    containsAllowedHtml,
-} from "../../../reusable_components/dom_container_builder.js";
 import { appendConfiguredCardDetailIcon } from "./card_detail_single_line_helpers.js";
 import { getUnifiedTableState, setUnifiedTableState } from "../../general_tables/gt_1_row_crud/gt_1_2_row_read/table_refresh_unified.js";
 import { setChosenDatasetView } from "../../state_stores/dataset_view_choice_saver.js";
@@ -21,7 +18,6 @@ import { isDatasetRowPath } from "../../navigation/nav_engine/history_navigation
 import { getLanguageWithBrowserFallback } from "../../state_stores/lang_preference_reader.js";
 import { formatTimestampDisplayParts } from "../timestamp_display_formatter.js";
 import { resolveSafeExternalHttpUrl } from "../../../reusable_components/safe_external_http_url.js";
-import { linkifyHttpTextNodes } from "../../../reusable_components/http_text_linkifier.js";
 import { printEmptyValue } from "../../../reusable_components/key_value_container/empty_value_printer.js";
 
 let highlightedCard = null;
@@ -132,13 +128,7 @@ export function createRowArticleKeyValueElement(
         if (timestampDisplay?.titleText) {
             valueDiv.title = timestampDisplay.titleText;
         }
-        if (containsAllowedHtml(displayText)) {
-            valueDiv.appendChild(renderAllowedHtml(displayText));
-        } else {
-            valueDiv.textContent = displayText;
-            valueDiv.style.whiteSpace = "pre-wrap";
-        }
-        linkifyHttpTextNodes(valueDiv);
+        appendCardFieldText(valueDiv, displayText);
     }
 
     container.appendChild(valueDiv);

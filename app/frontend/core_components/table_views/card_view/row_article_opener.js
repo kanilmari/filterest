@@ -529,7 +529,8 @@ export async function openRowArticleView(row_item, table_name, selectedCard = nu
         // Push unique URL for this big card (SEO + deep linking)
         const rowId = extractRowId(row_item);
         if (rowId) withOwnAddressWrite(() => {
-            const slug = buildSlug(recordTitle.text);
+            // Keep existing bookmarked row addresses when markup only changes the displayed heading.
+            const slug = buildSlug(recordTitle.slugSourceText);
             const cardUrl = buildCardUrl(
                 DATASET_PREFIX,
                 table_name,

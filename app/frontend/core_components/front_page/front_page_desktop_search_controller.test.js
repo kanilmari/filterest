@@ -145,6 +145,25 @@ test('button mode covers only the site name, keeps one field and restores the na
     expect(row.lastElementChild).toBe(actions);
 });
 
+test('the body-mounted results take spacing from the current Home visit at open and on preview', () => {
+    home.style.setProperty('--home-box-heading-gap', '30px');
+    home.style.setProperty('--home-box-row-gap', '19.1px');
+    start(1000);
+    button.click();
+    expect(panel().parentElement).toBe(document.body);
+    expect(panel().style.getPropertyValue('--home-box-heading-gap')).toBe('30px');
+    expect(panel().style.getPropertyValue('--home-box-row-gap')).toBe('19.1px');
+    home.style.setProperty('--home-box-heading-gap', '5px');
+    home.style.removeProperty('--home-box-row-gap');
+    mount.syncPresentation();
+    expect(panel().style.getPropertyValue('--home-box-heading-gap')).toBe('5px');
+    expect(panel().style.getPropertyValue('--home-box-row-gap')).toBe('');
+    button.click();
+    home.style.setProperty('--home-box-heading-gap', '8px');
+    button.click();
+    expect(panel().style.getPropertyValue('--home-box-heading-gap')).toBe('8px');
+});
+
 test.each([
     [1000, 0, 109, 109],
     [701, 0, 109, 45],
@@ -185,10 +204,12 @@ test('an outside pointer click returns focus even when its destination takes foc
 test.each([1440, 1000])('portalled links at %i keep activation, ArrowDown and Tab reach results/end actions without a trap', width => {
     start(width); if (width <= tablet) button.click(); else type('he');
     const groups = mocks.create.mock.calls[0][1];
-    groups.innerHTML = '<a href="/app_travel?search=he">Row</a><a href="/app_travel?search=he">All</a>';
+    groups.innerHTML = '<h2><a href="/app_travel?search=he">Travel</a></h2>'
+        + '<ul><li><a data-row-id="1" href="/app_travel/1?search=he">Row</a></li></ul>'
+        + '<a href="/app_travel?search=he">All</a>';
     const close = panel().querySelector('button');
-    const links = [...groups.children];
-    for (const node of [close, ...links, input, button, row.querySelector('.filterbar-inline-hero__actions button')]) {
+    const [heading, result, all] = groups.querySelectorAll('a[href]');
+    for (const node of [close, heading, result, all, input, button, row.querySelector('.filterbar-inline-hero__actions button')]) {
         vi.spyOn(node, 'getClientRects').mockReturnValue([{}]);
     }
     input.focus(); input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', bubbles: true, cancelable: true }));
@@ -196,8 +217,8 @@ test.each([1440, 1000])('portalled links at %i keep activation, ArrowDown and Ta
     close.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', shiftKey: true, bubbles: true, cancelable: true }));
     expect(document.activeElement).toBe(input);
     input.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true, cancelable: true }));
-    expect(document.activeElement).toBe(links[0]);
-    links[1].focus(); links[1].dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', bubbles: true, cancelable: true }));
+    expect(document.activeElement).toBe(result);
+    all.focus(); all.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', bubbles: true, cancelable: true }));
     expect(panel()).toBeNull(); expect(document.activeElement.textContent).toBe('Settings');
     if (width <= tablet) button.click(); else type('he');
     const link = document.createElement('a'); link.href = '/app_travel?search=he';

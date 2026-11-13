@@ -109,7 +109,7 @@ export function createSharedTopbarVisibilityController({ tableName, currentView,
         }, SHARED_TOPBAR_TRANSITION_DURATION_MS);
     }
 
-    function syncSharedTopBar() {
+    function syncSharedTopBar(event) {
         // Settings refresh updates mounted headers immediately; the same check
         // also runs when the runtime's host observer reactivates a cached dataset.
         reconcileHomeAvailability();
@@ -130,8 +130,10 @@ export function createSharedTopbarVisibilityController({ tableName, currentView,
             allowBigCardSearchBar: show_search_only_bar_in_big_card_view,
         });
         const showTabs = mode === "hero" && !phone;
-        const focus = captureControlFocus(active);
         const previous = document.activeElement;
+        // Hiding the navbar closer can return focus to body before the event reaches this toolbar.
+        const restoreMenuFocus = active && event?.detail?.menuCloserHadFocus && previous === document.body;
+        const focus = restoreMenuFocus ? "menu" : captureControlFocus(active);
         const focusedTab = heroRow?.contains(previous);
         const homeHadFocus = homeLink && previous === homeLink;
         const contentHadFocus = center.contains(previous) && !focusedTab;
@@ -143,12 +145,11 @@ export function createSharedTopbarVisibilityController({ tableName, currentView,
         setSharedTopBarArticleCloseVisibility(
             shouldShowBar && !phone && mode !== "hero" && (bigCardOpen || activeView !== CARD_VIEW_KEY)
         );
-        syncCornerControls(active, focus);
+        // Return disappearing header content to the menu in the actual left corner.
+        const focusMenu = (focusedTab && heroRow.hidden) || (contentHadFocus && showTabs);
+        syncCornerControls(active, focusMenu && active ? "menu" : focus);
         if (active && homeHadFocus) homeLink.focus({ preventScroll: true });
         else if (active && focusedTab && !heroRow.hidden && previous.isConnected) previous.focus({ preventScroll: true });
-        else if (active && ((focusedTab && heroRow.hidden) || (contentHadFocus && showTabs))) {
-            sharedTopBar.querySelector('[data-navbar-menu-button]')?.focus({ preventScroll: true });
-        }
         updateShowMenuButtonPosition();
     }
 

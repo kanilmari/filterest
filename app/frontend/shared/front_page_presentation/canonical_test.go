@@ -1,5 +1,5 @@
 // canonical_test.go
-// Proves the downgrade-safe v2/v3/v4/v5 storage rule independently of persistence.
+// Proves the downgrade-safe v2 through v7 storage rule independently of persistence.
 // Connects strict old/new requests, inactive timings and restore round trips.
 // Keeps default-style sites readable by binaries that accept only v2.
 package front_page_presentation
@@ -18,6 +18,8 @@ func TestCanonicalStoredPreservesLegacyCanonicalBytes(t *testing.T) {
 			fields, _ := presentationFields(Rules().Default)
 			fields["schema_version"], _ = json.Marshal(version)
 			fields["alignment"], _ = json.Marshal(alignment)
+			delete(fields, "box_heading_gap_px")
+			delete(fields, "box_row_gap_px")
 			delete(fields, "phone_story_size")
 			if version == 4 {
 				fields["phone_alignment"] = json.RawMessage(`"center"`)
@@ -103,6 +105,8 @@ func TestCanonicalStoredFormsAndRestore(t *testing.T) {
 				fields["schema_version"] = json.RawMessage(`2`)
 				fields["alignment"] = json.RawMessage(`"right"`)
 				delete(fields, "phone_alignment")
+				delete(fields, "box_heading_gap_px")
+				delete(fields, "box_row_gap_px")
 				delete(fields, "phone_story_size")
 				delete(fields, "text_style")
 			} else {
@@ -110,7 +114,7 @@ func TestCanonicalStoredFormsAndRestore(t *testing.T) {
 				fields, _ = presentationFields(value)
 			}
 			stored, canonical, err := CanonicalStored(fields)
-			if err != nil || canonical != (tc.preset == "" || tc.version == 5) {
+			if err != nil || canonical != (tc.preset == "") {
 				t.Fatal(canonical, err)
 			}
 			gotFields, _ := presentationFields(stored)
@@ -138,7 +142,7 @@ func TestCanonicalStoredFormsAndRestore(t *testing.T) {
 			if err != nil || read != value {
 				t.Fatal(read, value, err)
 			}
-			// Restores use the complete v5 GET value even when the row is v2/v3.
+			// Restores use the full current GET value even when the row is v2/v3.
 			restored, _, err := CanonicalStored(read)
 			if err != nil {
 				t.Fatal(err)
@@ -164,6 +168,8 @@ func TestCanonicalStoredRejectsMalformedRequests(t *testing.T) {
 	if _, _, err := CanonicalStored(fields); err == nil {
 		t.Fatal("v2 with text_style accepted")
 	}
+	delete(fields, "box_heading_gap_px")
+	delete(fields, "box_row_gap_px")
 	delete(fields, "text_style")
 	delete(fields, "phone_alignment")
 	delete(fields, "phone_story_size")
@@ -199,6 +205,8 @@ func TestCanonicalStoredRejectsInvalidPhoneSizes(t *testing.T) {
 	if _, _, err := CanonicalStored(fields); err == nil {
 		t.Fatal("missing v5 phone size accepted")
 	}
+	delete(fields, "box_heading_gap_px")
+	delete(fields, "box_row_gap_px")
 	fields["schema_version"] = json.RawMessage(`4`)
 	fields["phone_story_size"] = json.RawMessage(`15`)
 	if _, _, err := CanonicalStored(fields); err == nil {

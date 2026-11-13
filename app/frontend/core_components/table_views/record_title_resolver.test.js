@@ -228,3 +228,38 @@ test('target schema without its actual column name is still unproven', () => {
         customer_id: relation({}, { foreign_display_column: undefined, card_element: 'header' }), safe: text(),
     }).text).toBe('Safe');
 });
+
+test('uses the visible words of a configured HTML heading for the name and initial', () => {
+    const source = '<h1><strong>Hotel</strong> <em>news</em></h1><p>Today &amp; tomorrow</p>';
+    const row = { title: { en: source }, body: '<h2>Article section</h2>' };
+    const result = title(row, {
+        title: text({ card_element: 'header', is_multilingual: true }), body: text({ card_element: 'description' }),
+    });
+    expect(result.text).toBe('Hotel news Today & tomorrow');
+    expect(result.headers[0].text).toBe(result.text);
+    expect(result.initial).toBe('H');
+    expect(row.title.en).toBe(source);
+    expect(row.body).toBe('<h2>Article section</h2>');
+});
+
+test('empty formatted headers fall through and literal angle brackets survive', () => {
+    const types = { title: text({ card_element: 'header' }), name: text() };
+    for (const source of ['<h2> </h2>', '<style>ignored</style>']) {
+        expect(title({ title: source, name: 'Fallback' }, types).text).toBe('Fallback');
+    }
+    for (const literal of ['Vector<T>', '2 < 5', 'Literal </tag>']) {
+        expect(title({ title: literal, name: 'Fallback' }, types).text).toBe(literal);
+    }
+    expect(title({ title: '<h3>&lt;em&gt;x&lt;/em&gt;</h3>' }, types).text).toBe('<em>x</em>');
+});
+
+test('preserves addresses while inferring the visible title from marked-up fields', () => {
+    const row = { heading: '<h2> </h2>', title: '<h1>Hotel</h1>' };
+    const types = { heading: text({ card_element: 'header' }), title: text() };
+    expect(title(row, types)).toMatchObject({ column: 'title', text: 'Hotel', initial: 'H',
+        sourceText: row.title, slugSourceText: row.heading, headers: [] });
+    expect(title({ title: row.title }, { title: types.title })).toMatchObject({
+        text: 'Hotel', sourceText: row.title, slugSourceText: row.title });
+    expect(title({ name: '<h1> </h1>', title: row.title }, { name: text(), title: types.title })).toMatchObject({
+        column: 'title', text: 'Hotel', slugSourceText: '<h1> </h1>' });
+});

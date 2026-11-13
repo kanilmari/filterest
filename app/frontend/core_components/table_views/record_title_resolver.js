@@ -3,6 +3,7 @@
 // Connects already-authorized row values, column roles and dataset metadata.
 // Never reads records or writes inferred roles; absent candidates fail closed.
 
+import { readInlineHeadingText } from '../../reusable_components/dom_container_builder.js';
 import { resolveCardFieldDisplayValue } from './card_view/card_field_formatter_helpers.js';
 import { extractLangValue, looksLikeLangValue } from '../../reusable_components/lang_value_reader.js';
 import { getTranslationForKey } from '../lang/translation_handler.js';
@@ -39,7 +40,7 @@ function rolesOf(meta) {
     return String(meta.card_element || '').split(',').map(role => role.trim().split('+')[0]);
 }
 
-function visible(meta, surface, rowIsViewersOwn) {
+export function isRecordTitleColumnVisible(meta, surface, rowIsViewersOwn) {
     if (!meta || meta.hide_everywhere === true || meta.is_hidden === true ||
         meta.authorized === false || meta.selectable === false || meta.restricted === true ||
         meta.client_delivery_mode && meta.client_delivery_mode !== 'include' ||
@@ -76,6 +77,8 @@ function eligibleAliasTarget(meta, configured) {
  * `columns` is the current authorized presentation set, never all row keys.
  * Relation text comes only from an alias already returned by the authorized query.
  * Callers render `headers` as several headings and use `text`/`initial` for summaries.
+ * Headings carry their localized source for rich fields and the complete stored
+ * edit value. Row addresses use the first admitted source.
  * Each title carries its displayed translation's language, or '' when unknown.
  */
 export function resolveRecordTitle({
@@ -83,11 +86,14 @@ export function resolveRecordTitle({
     tableMeta = rowItem.__articleTableMeta ?? readRecordTitleTableMeta(tableName),
     preferredLanguage = getLanguageWithBrowserFallback(), surface = 'card', currentUserID = null,
     rowIsViewersOwn = isRecordViewersOwn(rowItem, dataTypes, currentUserID),
+    headerColumns = columns.filter(column => rolesOf(dataTypes[column] || {}).includes('header')),
 } = {}) {
     const ordered = orderedColumns(columns, dataTypes);
+    const hideFalseNull = surface === 'article' ? 'hide_false_null_on_big_crd' : 'hide_false_null_on_sml_crd';
+    const hiddenValue = (column, text) => dataTypes[column][hideFalseNull] === true && /^(?:false|null)$/i.test(text);
     const candidate = (column, configured = false) => {
         const meta = dataTypes[column];
-        if (!columns.includes(column) || !visible(meta, surface, rowIsViewersOwn) ||
+        if (!columns.includes(column) || !isRecordTitleColumnVisible(meta, surface, rowIsViewersOwn) ||
             SECRET_NAME.test(column) || !configured && BODY_NAME.test(column) || UNSAFE_TYPE.test(meta.data_type || '') ||
             !configured && rolesOf(meta).some(role => /^(?:image|keywords|description)\d*$/.test(role))) return null;
         const value = resolveCardFieldDisplayValue(rowItem, column, dataTypes, preferredLanguage, tableName);
@@ -110,31 +116,43 @@ export function resolveRecordTitle({
         let text = value.displayValue.trim();
         // Use the admitted display source (including a related label), never its stored FK ID.
         let language = resolveHeadingLanguage(raw, value.isMultilingual, preferredLanguage);
-        if (/(?:\+lang_key|\+lang-key)(?:,|$)/.test(meta.card_element || '') && text) {
+        // Compact search has always shown the localized field value directly, including for language-key columns.
+        if (surface !== 'compact' && /(?:\+lang_key|\+lang-key)(?:,|$)/.test(meta.card_element || '') && text) {
             text = getTranslationForKey(text, { language: preferredLanguage, fallback: text }).trim();
             language = ''; // Dictionary lookup does not expose its resolved translation language.
         }
         if (!text || !configured && (/[\r\n]/.test(text) || text.length > 160 || text.startsWith('{') || text.startsWith('['))) return null;
-        if (meta[surface === 'article' ? 'hide_false_null_on_big_crd' : 'hide_false_null_on_sml_crd'] === true &&
-            /^(?:false|null)$/i.test(text)) return null;
+        if (hiddenValue(column, text)) return null;
         return { text, language, column, isFallback: false, configured };
     };
-    // Configured heading order follows the caller's existing layout, not inference order.
-    const headers = columns.filter(column => rolesOf(dataTypes[column] || {}).includes('header'))
-        .map(column => candidate(column, true)).filter(Boolean);
+    const visibleHeading = heading => {
+        const text = readInlineHeadingText(heading.text);
+        if (!text || hiddenValue(heading.column, text)) return null;
+        const stored = rowItem[heading.column];
+        const editValue = stored !== null && typeof stored === 'object' ? JSON.stringify(stored) : stored;
+        return { ...heading, text, sourceText: heading.text, editValue };
+    };
+    // Bookmarks use the first admitted source, even when its markup has no visible words.
+    const storedHeaders = headerColumns.map(column => candidate(column, true)).filter(Boolean);
+    const headers = storedHeaders.map(visibleHeading).filter(Boolean);
+    let slugSourceText = storedHeaders[0]?.text;
     let title = headers[0];
     if (!title) {
         const names = EXACT_NAMES.flatMap(name => ordered.filter(column => column.toLowerCase() === name));
         const natural = tableMeta?.fk_display_column;
         const candidates = [...new Set([...names, ...(natural ? [natural] : []), ...ordered])];
         for (const column of candidates) {
-            title = candidate(column);
+            if (headerColumns.includes(column)) continue;
+            const inferred = candidate(column);
+            if (!inferred) continue;
+            slugSourceText ??= inferred.text;
+            title = visibleHeading(inferred);
             if (title) break;
         }
     }
     if (!title) {
         const idMeta = dataTypes.id;
-        const id = columns.includes('id') && visible(idMeta, surface, rowIsViewersOwn) &&
+        const id = columns.includes('id') && isRecordTitleColumnVisible(idMeta, surface, rowIsViewersOwn) &&
             !/json|bytea|binary|vector/i.test(idMeta?.data_type || '') &&
             ['string', 'number'].includes(typeof rowItem.id) && /^[^\r\n]{1,160}$/.test(String(rowItem.id))
             ? String(rowItem.id).trim() : '';
@@ -145,5 +163,6 @@ export function resolveRecordTitle({
             fallback: copy[language] || copy[language.split('-')[0]] || copy.en }).replaceAll('{id}', id);
         title = { text, language: '', column: null, isFallback: true, configured: false };
     }
-    return { ...title, headers, initial: [...title.text][0]?.toUpperCase() || '' };
+    return { ...title, headers, initial: [...title.text][0]?.toUpperCase() || '',
+        slugSourceText: slugSourceText ?? title.text };
 }

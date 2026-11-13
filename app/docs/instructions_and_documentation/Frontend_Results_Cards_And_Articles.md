@@ -81,6 +81,12 @@ values; each view retains its own truncation. Description roles, text-only types
 the single-line/160-character limit and JSON-looking text rejection apply only to
 inference. Inferred titles also exclude body-like field names.
 
+Configured and inferred record headings take their size and heading level from the view.
+Stored HTML heading and paragraph wrappers contribute their words, with a space
+between blocks. Full headings retain supported inline emphasis and links. The
+compact rail, search result links, tooltips and browser tab use the visible
+words. Article editing and existing row addresses use the original source.
+
 A relation field needs its already-authorized generated display alias; a missing
 alias never triggers a privileged value lookup or exposes its numeric foreign
 key as a name. On a cache miss the query builder reads all actual alias targets'

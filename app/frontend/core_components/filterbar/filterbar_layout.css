@@ -146,6 +146,13 @@
   border-bottom: none;
 }
 
+/* Only a dataset toolbar reserves space for the other corner on phones. */
+.tab_parts_container:has(.dataset-shared-topbar) > .filterbar-panel--compact {
+  --compact-panel-width: var(--dataset-phone-overlay-width);
+  --compact-panel-max-width: var(--dataset-phone-overlay-limit);
+  --compact-panel-left: var(--dataset-phone-overlay-left);
+}
+
 /* Hidden state */
 .filterbar-panel--hidden {
   transform: translateX(100%);
@@ -345,8 +352,8 @@
 /* Narrow screens: sidebar becomes wider overlay */
 @media (width <= 1099px) {
   .filterbar-panel:not(.filterbar-panel--wide) {
-    width: min(92vw, 520px);
-    max-width: min(92vw, 520px);
+    width: var(--compact-panel-width, min(92vw, 520px));
+    max-width: var(--compact-panel-max-width, min(92vw, 520px));
     box-shadow: -4px 0 20px rgb(0 0 0 / 0.3);
   }
 
@@ -362,10 +369,10 @@
 /* Very small screens: full-width overlay */
 @media (width <= 480px) {
   .filterbar-panel:not(.filterbar-panel--wide) {
-    left: 0;
+    left: var(--compact-panel-left, 0);
     right: 0;
-    width: auto;
-    max-width: none;
+    width: var(--compact-panel-width, auto);
+    max-width: var(--compact-panel-max-width, none);
     border-left: none;
   }
 

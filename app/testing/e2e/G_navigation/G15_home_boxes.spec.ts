@@ -13,6 +13,22 @@ test.afterEach(async ({ page, context }) => {
   await context.unrouteAll({ behavior: 'ignoreErrors' });
 });
 
+// A v6 presentation has no row-gap override; a saved pixel setting is inherited by both Home surfaces.
+test('Home keeps two rows 0.6rem apart at a 60px reader font unless a pixel gap is configured', async ({ page }) => {
+  const group = '<section class="supplemental-dataset-group"><ul><li>First</li><li>Second</li></ul></section>';
+  await page.setContent(`<style>html { font-size: 60px }</style>
+    <main class="front-page-blocks">${group}</main><aside class="front-page-search-sheet__slot">${group}</aside>`);
+  await page.addStyleTag({ path: 'frontend/core_components/filterbar/text_search/supplemental_dataset_results.css' });
+  await page.addStyleTag({ path: 'frontend/core_components/front_page/front_page.css' });
+  const gaps = () => page.locator('.supplemental-dataset-group').evaluateAll(groups => groups.map(element => {
+    const [first, second] = element.querySelectorAll('li');
+    return second.getBoundingClientRect().top - first.getBoundingClientRect().bottom;
+  }));
+  expect(await gaps()).toEqual([36, 36]);
+  await page.locator('body').evaluate(body => body.style.setProperty('--home-box-row-gap', '30px'));
+  expect(await gaps()).toEqual([30, 30]);
+});
+
 // The article rail is hidden at 390px and compact at 1920px (cards.css).
 // Close restores the same full-size card_content at both widths, synchronously
 // before popstate restores Home. Compare only that shared summary, without DOM/CSS changes.
@@ -301,25 +317,31 @@ for (const width of [1440, 1000, 390] as const) {
         const style = getComputedStyle(element);
         const colour = document.createElement('span'); colour.style.color = 'var(--border_color)'; element.append(colour);
         const expectedColour = getComputedStyle(colour).color; colour.remove();
-        return { shadow: style.boxShadow, colour: style.borderBottomColor, width: style.borderBottomWidth, expectedColour };
+        return { style: style.borderBottomStyle, colour: style.borderBottomColor, width: style.borderBottomWidth, expectedColour };
       });
+      await expect(bar).toBeVisible();
+      await expect(bar).toHaveCSS('visibility', 'visible');
+      await expect(bar).toHaveCSS('opacity', '1');
+      expect(edge.style).toBe('solid');
+      expect(edge.colour).toBe(edge.expectedColour);
+      expect(edge.colour).toMatch(/^rgb\(/); // An opaque theme colour, never a transparent separator.
+      expect(edge.width).toBe(width > 700 ? '2px' : '1px');
       if (width > 700) {
-        expect(edge.shadow).toContain(edge.expectedColour);
-        expect(edge.shadow).toContain('inset'); expect(edge.shadow).toContain('0px -2px 0px 0px');
         const geometry = await bar.evaluate(element => {
           const targets = [element, document.querySelector('.front-page-hero')!, document.querySelector('.front-page-scroller')!];
           const measure = () => targets.map(node => {
             const { x, y, width, height } = node.getBoundingClientRect(); return { x, y, width, height };
           });
           const before = measure(), row = element as HTMLElement;
-          row.style.setProperty('box-shadow', 'none', 'important');
-          const withoutEdge = measure(); row.style.removeProperty('box-shadow');
-          return { before, withoutEdge, restored: measure() };
+          // Hide the actual painted border without changing its reserved 2px or moving the content.
+          row.style.setProperty('border-bottom-color', 'transparent', 'important');
+          const withoutEdge = measure(), hiddenColour = getComputedStyle(row).borderBottomColor;
+          row.style.removeProperty('border-bottom-color');
+          return { before, withoutEdge, restored: measure(), hiddenColour, restoredColour: getComputedStyle(row).borderBottomColor };
         });
         expect(geometry.before).toEqual(geometry.withoutEdge); expect(geometry.restored).toEqual(geometry.before);
-        expect(edge.width).toBe('0px');
-      } else {
-        expect(edge.width).toBe('1px'); expect(edge.colour).toBe(edge.expectedColour);
+        expect(geometry.hiddenColour).toBe('rgba(0, 0, 0, 0)');
+        expect(geometry.restoredColour).toBe(edge.colour);
       }
       const boxes = await groups.evaluateAll(elements => elements.map(element => {
         const { x, y, width, height } = element.getBoundingClientRect();
@@ -353,6 +375,16 @@ for (const width of [1440, 1000, 390] as const) {
 
       for (let groupIndex = 0; groupIndex < 3; groupIndex++) {
         const group = groups.nth(groupIndex);
+        const heading = group.locator('h2 > a[href]');
+        if (groupIndex === 0) {
+          // Seed just before the first heading; every checked stop is then reached by forward Tab.
+          await heading.focus();
+          await page.keyboard.press('Shift+Tab');
+          await page.keyboard.press('Tab');
+        }
+        await expect(heading).toBeVisible();
+        await expect(heading).toBeFocused();
+        await page.keyboard.press('Tab');
         const radius = await group.evaluate(element => {
           const style = getComputedStyle(element);
           return { actual: style.borderRadius, token: style.getPropertyValue('--fw-radius-lg').trim() };
@@ -425,11 +457,13 @@ for (const width of [1440, 1000, 390] as const) {
             await expect(row.locator('img')).toHaveCount(0);
           }
           const link = row.locator('.supplemental-dataset-result-text > a');
-          if (rowIndex === 0 && groupIndex === 0) await link.focus();
+          await expect(link).toBeVisible();
           await expect(link).toBeFocused();
           await page.keyboard.press('Tab');
         }
         const showAll = group.locator('.supplemental-dataset-show-all');
+        await expect(showAll).toBeVisible();
+        await expect(showAll).toHaveText('Näytä kaikki');
         await expect(showAll).toBeFocused();
         await expect(showAll).toHaveCSS('min-height', '44px');
         expect((await showAll.boundingBox())!.height).toBeGreaterThanOrEqual(44);

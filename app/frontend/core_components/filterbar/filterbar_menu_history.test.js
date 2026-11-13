@@ -98,21 +98,22 @@ test.each(scrollRestoreCases)(
             && !button.closest('[hidden], [inert], .hidden, [aria-hidden="true"]')
             && getComputedStyle(button).visibility !== 'hidden')).toEqual([incoming]);
     }
+    const owner = open ? close : topbarMenu;
     for (const position of [scrollable.scrollTop, 24, 350, 0, 24]) {
         scrollable.scrollTop = position;
         scrollable.dispatchEvent(new Event('scroll'));
         expect(bar.getAttribute('aria-hidden')).toBe('false');
         expect(bar.inert).toBe(false);
         expect(bar.classList.contains('dataset-shared-topbar--visible')).toBe(true);
-        expectOwner(topbarMenu);
+        expectOwner(owner);
         for (const elapsed of [16, 74, 89, 80, 1]) {
             vi.advanceTimersByTime(elapsed);
-            expectOwner(topbarMenu);
+            expectOwner(owner);
         }
     }
     panel.__syncSharedTopBar();
     await Promise.resolve();
-    expectOwner(topbarMenu);
+    expectOwner(owner);
 });
 afterEach(() => {
     row?.destroy(); row = null;
@@ -157,7 +158,7 @@ test.each(historyCases)(
     const unrelated = document.createElement('button');
     document.body.append(unrelated);
     // An article keeps its search/close toolbar even when both panels are open.
-    const localVisible = !open || !filterOpen || view === 'article_view';
+    const localVisible = !open;
     const outgoingDataset = localVisible ? local : close;
     const backFocused = focused && direction === 'Back';
     (backFocused ? outgoingDataset : unrelated).focus();
@@ -218,12 +219,11 @@ test.each(historyCases)(
     // Retain the original action and live Home-state proof after history checks.
     local.click();
     expect(document.getElementById('navbar').classList.contains('collapsed')).toBe(false);
-    const toolbarStillVisible = !filterOpen || view === 'article_view';
-    expect(close.getAttribute('aria-hidden')).toBe(String(toolbarStillVisible));
-    expect(close.tabIndex).toBe(toolbarStillVisible ? -1 : 0);
+    expect(close.getAttribute('aria-hidden')).toBe('false');
+    expect(close.tabIndex).toBe(0);
     expect(source.tabIndex).toBe(-1);
-    expect(source.classList.contains('shared-topbar-menu-source-hidden')).toBe(toolbarStillVisible);
-    expectSingleOwner(toolbarStillVisible ? local : close);
+    expect(source.classList.contains('shared-topbar-menu-source-hidden')).toBe(false);
+    expectSingleOwner(close);
     dataset.dispatchEvent(new CustomEvent(VIEW_DEACTIVATE_EVENT));
     dataset.classList.add('hidden');
     document.getElementById('tabs_container').append(home);

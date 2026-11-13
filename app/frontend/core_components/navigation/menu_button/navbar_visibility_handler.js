@@ -243,7 +243,7 @@ function applyNavbarVisibility(
   updateShowMenuButtonPosition();
   window.dispatchEvent(
     new CustomEvent(NAVBAR_VISIBILITY_CHANGED_EVENT, {
-      detail: { isVisible },
+      detail: { isVisible, menuCloserHadFocus: !isVisible && focusedButton === hideButton },
     })
   );
   restoreHomeMenuFocus(showButton, hideButton, focusedButton, isVisible);

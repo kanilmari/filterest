@@ -19,6 +19,7 @@ vi.mock("../../general_tables/gt_1_row_crud/gt_1_2_row_read/table_refresh_unifie
     setUnifiedTableState: vi.fn(),
 }));
 
+import { cancelEditing, collectCardUpdates, createKeyValueElement, disableEditing, enableEditing } from './card_field_formatter.js';
 import {
     createRowArticleKeyValueElement,
     createRowArticleNavigableElement,
@@ -265,4 +266,33 @@ describe("article field layout stays independent of the site choice", () => {
         wrapper.remove(); scroll.mockRestore();
     });
 
+});
+
+test.each(['card', 'article'])('configured %s headings keep inline links and emphasis through editing', surface => {
+    const meta = { card_element: 'header', data_type: 'text', editable_in_ui: true };
+    for (let level = 1; level <= 6; level++) {
+        const source = `<h${level}><em>Hotel</em> <a href="https://example.test/pay">news</a></h${level}>`;
+        const wrapper = surface === 'card'
+            ? createKeyValueElement('', source, 'title', false, 'header_value', source, meta)
+            : createRowArticleKeyValueElement('', source, 'title', false, 'big_card_header_value', false, false, source, meta);
+        const field = wrapper.querySelector('[data-column="title"]');
+        const checkHeading = () => {
+            expect(field.textContent).toBe('Hotel news');
+            expect(field.querySelector('h1,h2,h3,h4,h5,h6')).toBeNull();
+            expect(field.querySelector('em').textContent).toBe('Hotel');
+            expect(field.querySelector('a').href).toBe('https://example.test/pay');
+            expect(field.dataset.rawValue).toBe(source);
+        };
+        checkHeading();
+        enableEditing(wrapper, 'blogs', { title: meta });
+        expect(field.querySelector('input,textarea').value).toBe(source);
+        expect(collectCardUpdates(wrapper)).toEqual({});
+        cancelEditing(wrapper);
+        checkHeading();
+        enableEditing(wrapper, 'blogs', { title: meta });
+        field.querySelector('input,textarea').value = '<h2><strong>New</strong> name</h2>';
+        expect(disableEditing(wrapper)).toEqual({ title: '<h2><strong>New</strong> name</h2>' });
+        expect(field.querySelector('h2')).toBeNull();
+        expect(field.querySelector('strong').textContent).toBe('New');
+    }
 });

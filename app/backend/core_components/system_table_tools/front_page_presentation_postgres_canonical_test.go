@@ -52,7 +52,7 @@ func TestHomePresentationPostgresCanonicalFormsAndRestore(t *testing.T) {
 			t.Fatal(string(stored), revision)
 		}
 	}
-	// A v2 request has no text_style. Its v5 GET value restores exactly those ten fields.
+	// A v2 request has no text_style. Its current GET value restores exactly those ten fields.
 	original := []byte(`{"schema_version":2,"anchor":"bottom-left","horizontal_margin_px":73,"vertical_margin_px":91,"alignment":"right","max_width_px":700,"light_wash":27,"light_opacity":61,"dark_wash":19,"dark_opacity":43}`)
 	_, current, err := backend.ReadFrontPagePresentation(context.Background(), db)
 	if err != nil {
@@ -62,7 +62,7 @@ func TestHomePresentationPostgresCanonicalFormsAndRestore(t *testing.T) {
 		t.Fatal(err)
 	}
 	read, revision, err := backend.ReadFrontPagePresentation(context.Background(), db)
-	if err != nil || read.SchemaVersion != 5 || read.TextStyle != presentation.Rules().Default.TextStyle {
+	if err != nil || read.SchemaVersion != presentation.Rules().SchemaVersion || read.TextStyle != presentation.Rules().Default.TextStyle {
 		t.Fatal(read, err)
 	}
 	raw, _ := json.Marshal(read)

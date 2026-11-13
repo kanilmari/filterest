@@ -67,7 +67,7 @@ func durationChecks() map[string]check {
 			return err
 		}
 		if !canonical {
-			return fmt.Errorf("Home presentation requires canonical storage: v2 for default style, v3 for styled text, v4 for phone alignment, v5 for nondefault phone story size")
+			return fmt.Errorf("Home presentation requires canonical storage: v2 for default style, v3 for styled text, v4 for phone alignment, v5 for nondefault phone story size, v6 for nondefault box heading gap, v7 for nondefault box row gap")
 		}
 		return nil
 	}

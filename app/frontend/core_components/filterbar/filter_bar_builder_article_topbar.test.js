@@ -94,6 +94,38 @@ describe('shared dataset top bar follows the selected view', () => {
         ).toBe(false);
     });
 
+    test('open article panels keep their own controls and focus across a viewport resize', async () => {
+        const width = vi.spyOn(window, 'innerWidth', 'get').mockReturnValue(1099);
+        try {
+            mountDatasetWithBothSidebarsVisible('demo_article_view_container');
+            const bar = await buildFilterBarForView('article_view');
+            const panel = document.getElementById('demo_filterBar_panel');
+            const menu = bar.querySelector('[data-testid="shared-topbar-menu-button"]');
+            const filterClose = panel.querySelector('.hide_filter_bar_button');
+            const content = document.querySelector('#demo_tab_parts_container .tab-content-area');
+            filterClose.focus();
+            expect(content.style.marginRight).toBe('0px');
+
+            vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+            // Cross the filter breakpoint on every step so the previous layout cannot pass.
+            for (const [viewport, reservedWidth] of [[1198, '450px'], [1099, '0px'], [1920, '450px'], [375, '0px']]) {
+                width.mockReturnValue(viewport);
+                window.dispatchEvent(new Event('resize'));
+                await vi.advanceTimersByTimeAsync(150);
+                await flushObserverFrame();
+
+                expect(content.style.marginRight).toBe(reservedWidth);
+                expect(menu.tabIndex).toBe(-1);
+                expect(bar.querySelector('[data-testid="filterbar-toggle"]')).toBeNull();
+                expect(filterClose.tabIndex).toBe(0);
+                expect(document.activeElement).toBe(filterClose);
+                expect(panel.classList.contains('filterbar-panel--hidden')).toBe(false);
+            }
+        } finally {
+            width.mockRestore();
+        }
+    });
+
     test('the card view with both sidebars visible keeps the bar away', async () => {
         mountDatasetWithBothSidebarsVisible('demo_card_view_container');
 

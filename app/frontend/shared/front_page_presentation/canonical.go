@@ -1,7 +1,7 @@
 // canonical.go
-// Chooses downgrade-safe stored Home presentations from complete v2 through v5 requests.
+// Chooses downgrade-safe stored Home presentations from complete v2 through v7 requests.
 // Connects admin normalization and generic-row validation to one storage policy.
-// Readers and browser requests use v5; only a nondefault phone size needs v5 storage.
+// Only nondefault row spacing needs v7 storage.
 package front_page_presentation
 
 import "encoding/json"
@@ -9,7 +9,7 @@ import "encoding/json"
 // CanonicalStored returns the bytes to store and whether the input already uses
 // the canonical schema. A generic writer must refuse a false result instead of
 // storing its original row. Inactive default-style timings are discarded in v2.
-// No browser twin is needed: the admin response supplies the normalized v5 value.
+// No browser twin is needed: the admin response supplies the normalized current value.
 func CanonicalStored(raw any) (data json.RawMessage, canonical bool, err error) {
 	fields, err := presentationFields(raw)
 	if err != nil {
@@ -19,11 +19,12 @@ func CanonicalStored(raw any) (data json.RawMessage, canonical bool, err error) 
 	if err := json.Unmarshal(fields["schema_version"], &version); err != nil {
 		return nil, false, err
 	}
+	rules := Rules()
 	var value Value
-	if version == 2 || version == 3 || version == 4 {
+	if version >= 2 && version < float64(rules.SchemaVersion) {
 		value, err = ParseStored(raw)
 	} else {
-		// Version one remains read-only; partial version-five requests are refused.
+		// Version one remains read-only; partial current requests are refused.
 		value, err = Parse(raw)
 	}
 	if err != nil {
@@ -34,7 +35,16 @@ func CanonicalStored(raw any) (data json.RawMessage, canonical bool, err error) 
 		return nil, false, err
 	}
 	storedVersion := value.SchemaVersion
-	if value.PhoneStorySize == Rules().Default.PhoneStorySize {
+	defaults := rules.Default
+	if value.BoxRowGapPx == defaults.BoxRowGapPx {
+		storedVersion = 6
+		delete(fields, "box_row_gap_px")
+	}
+	if storedVersion == 6 && value.BoxHeadingGapPx == defaults.BoxHeadingGapPx {
+		storedVersion = 5
+		delete(fields, "box_heading_gap_px")
+	}
+	if storedVersion == 5 && value.PhoneStorySize == defaults.PhoneStorySize {
 		storedVersion = 4
 		delete(fields, "phone_story_size")
 	}

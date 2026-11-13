@@ -95,7 +95,7 @@ func TestReadHomePresentationConvertsStoredVersionOneWithoutChangingRevision(t *
 		}
 		t.Cleanup(func() { db.Close() })
 		value, revision, err := ReadFrontPagePresentation(context.Background(), db)
-		if err != nil || value == nil || value.SchemaVersion != 5 || value.PhoneStorySize != 15 || value.Alignment != presentation.Rules().Legacy.Alignments[layout] ||
+		if err != nil || value == nil || value.SchemaVersion != presentation.Rules().SchemaVersion || value.BoxHeadingGapPx != 8 || value.PhoneStorySize != 15 || value.Alignment != presentation.Rules().Legacy.Alignments[layout] ||
 			value.HorizontalMarginPx != 55 || value.VerticalMarginPx != 55 || revision != FrontPagePresentationRevision(raw, "old-stamp") {
 			t.Fatal(value, revision, err)
 		}
@@ -111,6 +111,8 @@ func TestReadHomePresentationConvertsStoredVersionsTwoThroughFourWithoutChanging
 			fields["schema_version"], _ = json.Marshal(version)
 			fields["alignment"], _ = json.Marshal(alignment)
 			logical := map[string]string{"left": "start", "right": "end", "center": "center", "justify": "justify"}[alignment]
+			delete(fields, "box_heading_gap_px")
+			delete(fields, "box_row_gap_px")
 			delete(fields, "phone_story_size")
 			if version == 4 {
 				fields["alignment"], _ = json.Marshal(logical)

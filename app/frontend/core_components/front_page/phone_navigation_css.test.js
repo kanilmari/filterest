@@ -10,9 +10,9 @@ import { requireNodeDependency } from '../../../server_tools/lib/node_dependency
 
 const postcss = requireNodeDependency('postcss');
 const baseline = {
-    'front_page.css': '9010e717880a85351b1ec5025990b2d9e0a9725dcdc73c120ba2fab7e8f13161',
+    'front_page.css': '3a33ccec3d49b8276487d1b972e37dda4525fc24e298833a827dde1955f4fef1',
     'top_nav_home_button.css': '370d13d5d63468cd1e8e03d637d3290e4375a7ef0654a41ba43b815ca207566b',
-    '../filterbar/shared_topbar.css': 'c9bc5946477d8ae0bc1172a5701ad008ed288115070ef02f46580583bfbf1adf',
+    '../filterbar/shared_topbar.css': '43496fd70a0c3118162132eaff00acf9a4f50490d853cd5571982a5c961c7f32',
     '../filterbar/morphing_filterbar_content.css': '814aa71dec06ed266c72e0b8a739a0c10bfadca4fd549e16931801785f8cc461',
 };
 const sheets = Object.fromEntries(Object.keys(baseline).map(file =>
@@ -52,8 +52,11 @@ function rulesAtWidth(file, selector, width) {
 // WO111/K533 re-pins only the top bar's name-first columns and the measured button mode's search over the name.
 // #999 keeps the shared toolbar modes and drawer sizing ahead of its single phone override.
 // #1017 aligns the Home and menu control rows and removes the shared menu button shadow.
+// #1026 removes the topbar-height offsets so open sidebars cover its two corners.
 // #1031 uses the unmodified theme surface for the dataset filter/sort area at every width.
 // WO129 changes only phone bar geometry; drawer lock, focus clearance and hero anchoring retain their contracts.
+// #1019 gives Home block and search headings the configured bottom margin and removes the first item's top margin.
+// #1020 changes only Home result links and the spacing between adjacent rows at both widths.
 test.each(Object.keys(baseline))('%s keeps every rule outside the phone breakpoint byte-identical to its approved baseline', file => {
     const root = sheets[file].clone();
     root.walkAtRules('media', media => { if (media.params === '(width <= 700px)') media.remove(); });

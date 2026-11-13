@@ -1,5 +1,5 @@
 // dataset_corner_controls.js
-// Places both existing panel toggles in the shared bar, or returns control to the panels.
+// Places each existing panel toggle in the bar at its viewport corner.
 // Bridges the selected dataset toolbar and the existing navbar and filterbar actions.
 // Owns button placement and accessibility only; panel state and actions stay with their builders.
 import { getLanguageWithBrowserFallback } from "../state_stores/lang_preference_reader.js";
@@ -34,7 +34,7 @@ function moveButton(button, host) {
     if (wasFocused) button.focus({ preventScroll: true });
 }
 
-/** The toolbar owns both toggles, or each visible panel owns its own closer. */
+/** An open panel owns its corner at every width, including overlay layouts. */
 export function createDatasetCornerControls({
     fallbackHost, filterButton, hideFilterButton, panel, topbarEnd, topbarMenuButton, topbarMenuSlot,
     sourceMenuButton, menuOwner, syncNavbarAccessibility,
@@ -73,26 +73,28 @@ export function createDatasetCornerControls({
 
     function sync({ active, topbarVisible, navbarVisible, filterbarVisible, focus = captureControlFocus(active) }) {
         if (destroyed) return "none";
-        const inBar = active && topbarVisible;
-        const showFilter = active && (inBar || !filterbarVisible);
-        const panelClose = active && filterbarVisible && !inBar;
+        const barVisible = active && topbarVisible;
+        const menuInBar = barVisible && !navbarVisible;
+        const filterInBar = barVisible && !filterbarVisible;
+        const showFilter = active && (filterInBar || !filterbarVisible);
+        const panelClose = active && filterbarVisible && !filterInBar;
         filterbarIsVisible = filterbarVisible;
         navbarIsVisible = navbarVisible;
-        setButtonVisibility(topbarMenuButton, inBar);
+        setButtonVisibility(topbarMenuButton, menuInBar);
         topbarMenuButton.setAttribute("aria-expanded", String(navbarVisible));
-        topbarMenuSlot.classList.toggle("dataset-shared-topbar__menu-slot--visible", inBar);
-        topbarMenuSlot.setAttribute("aria-hidden", String(!inBar));
-        topbarMenuSlot.inert = !inBar;
-        if (sourceMenuButton && inBar) {
+        topbarMenuSlot.classList.toggle("dataset-shared-topbar__menu-slot--visible", menuInBar);
+        topbarMenuSlot.setAttribute("aria-hidden", String(!menuInBar));
+        topbarMenuSlot.inert = !menuInBar;
+        if (sourceMenuButton && menuInBar) {
             sourceMenuButton.__sharedTopbarMenuOwner = menuOwner;
             sourceMenuButton.classList.add("shared-topbar-menu-source-hidden");
         } else {
             releaseMenu();
         }
-        moveButton(filterButton, inBar ? topbarEnd : fallbackHost);
-        const owner = inBar ? "topbar" : active ? "fallback" : "none";
+        moveButton(filterButton, filterInBar ? topbarEnd : fallbackHost);
+        const owner = filterInBar ? "topbar" : active ? "fallback" : "none";
         filterButton.dataset.cornerOwner = owner;
-        filterButton.classList.toggle("filterbar-fixed-toggle--hosted", inBar);
+        filterButton.classList.toggle("filterbar-fixed-toggle--hosted", filterInBar);
         filterButton.classList.toggle("filterbar-fixed-toggle--exposed", showFilter);
         setButtonVisibility(filterButton, showFilter);
         filterButton.setAttribute("aria-expanded", String(filterbarVisible));
@@ -103,7 +105,7 @@ export function createDatasetCornerControls({
         refreshLabels();
         syncNavbarAccessibility();
         let incoming;
-        if (focus === "menu") incoming = inBar ? topbarMenuButton
+        if (focus === "menu") incoming = menuInBar ? topbarMenuButton
             : navbarVisible ? document.getElementById("hideMenuButton") : sourceMenuButton;
         if (active && focus === "filter") incoming = panelClose ? hideFilterButton : filterButton;
         if (incoming?.isConnected && !incoming.closest('[hidden],[inert],.hidden,[aria-hidden="true"]')) {

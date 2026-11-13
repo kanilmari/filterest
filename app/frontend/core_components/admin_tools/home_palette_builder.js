@@ -8,7 +8,25 @@ import { createHomePaletteState, saveHomePresentation } from './home_palette_sta
 import { DEFAULT_HOME_PRESENTATION, HOME_PRESENTATION_DEFINITION } from '../../shared/front_page_presentation/validator.js';
 import { hasRoutePermission } from '../route_permission_checker.js';
 import { createPresentationPaletteShell, createPaletteDraftOwner,
-    createPaletteRangeControl, createPaletteSelectControl, getPaletteCopy } from './presentation_palette_shell.js';
+    createPaletteRangeControl, createPaletteSelectControl, getPaletteCopy, renderControlValue } from './presentation_palette_shell.js';
+
+// Choosing the minimum restores the original 0.6rem. Show its actual size even
+// when the reader's font takes that default above the editable pixel range.
+function createRowGapControl(copy, change, documentElement) {
+    const key = 'box_row_gap_px';
+    const { min, max, step } = HOME_PRESENTATION_DEFINITION[key];
+    const fontSize = Number.parseFloat(getComputedStyle(documentElement).fontSize) || 16;
+    const originalGap = fontSize * 0.6;
+    const sliderMin = Math.min(max, Math.max(min, Math.ceil(originalGap * 10) / 10));
+    const control = createPaletteRangeControl({ id: 'box-row-gap', key, label: 'boxRowGap',
+        min: sliderMin, max, step, unit: 'px' }, copy, { prefix: 'home-palette',
+        onChange: px => change(key, px === sliderMin ? min : px) });
+    return { ...control, setValue(value) {
+        control.setValue(Math.max(sliderMin, value));
+        if (value === min) control.output.value = renderControlValue(originalGap, 'px');
+        control.input.setAttribute('aria-valuetext', control.output.value);
+    } };
+}
 
 /** Mount around Home's existing trigger; permission is checked again after lazy import. */
 export function mountHomePalette(button, { snapshot, render, saveRequestFn = saveHomePresentation,
@@ -52,12 +70,18 @@ export function mountHomePalette(button, { snapshot, render, saveRequestFn = sav
     for (const [id, key, label] of [
         ['horizontal-margin', 'horizontal_margin_px', 'horizontalMargin'],
         ['vertical-margin', 'vertical_margin_px', 'verticalMargin'],
+        ['box-heading-gap', 'box_heading_gap_px', 'boxHeadingGap'],
         ['max-width', 'max_width_px', 'maxWidth'],
     ]) {
         const control = createPaletteRangeControl({ id, key, label, ...HOME_PRESENTATION_DEFINITION[key], unit: 'px' }, copy,
             { prefix: 'home-palette', onChange: value => change(key, value) });
         controls.push(control);
         container.append(control.element);
+        if (key === 'box_heading_gap_px') {
+            const rowGap = createRowGapControl(copy, change, button.ownerDocument.documentElement);
+            controls.push(rowGap);
+            container.append(rowGap.element);
+        }
     }
     for (const theme of ['light', 'dark']) {
         const section = document.createElement('fieldset');

@@ -317,8 +317,7 @@
   display: none !important;
 }
 
-/* Both modes use the same toolbar block. Docked panels retain their columns,
-   while an open overlay starts below the controls that now toggle it. */
+/* Both modes use the same toolbar block. Open panels layer over its edges. */
 .body_content {
   --dataset-topbar-height: 70px;
 }
@@ -340,20 +339,6 @@
    RESPONSIVE AND REDUCED MOTION
    ============================================ */
 
-@media (width <= 1850px) {
-  .body_content:has(.content_div:not(.hidden) .dataset-shared-topbar--visible) #navbar:not(.collapsed) {
-    top: var(--dataset-topbar-height);
-    height: calc(100% - var(--dataset-topbar-height));
-  }
-}
-@media (width < 1100px) {
-  .tab_parts_container[data-shared-topbar-visible="true"] > .filterbar-panel--compact {
-    top: var(--dataset-topbar-height);
-    min-height: 0;
-    height: calc(100% - var(--dataset-topbar-height));
-  }
-}
-
 @media (width <= 1099px) {
   .dataset-shared-topbar {
     --dataset-shared-topbar-padding-inline: 12px;
@@ -363,10 +348,10 @@
 @media (width <= 700px) {
   .body_content {
     --dataset-topbar-height: 48px;
-  }
-  /* Only the active dataset's filter toggle participates, in either toolbar mode. */
-  .body_content:has([data-corner-owner][aria-expanded="true"]:not([data-corner-owner="none"])) #navbar:not(.collapsed) {
-    max-width: calc(100% - 60px);
+    /* Keep the opposite panel's corner button reachable on phones. */
+    --dataset-phone-overlay-limit: calc(100% - 60px);
+    --dataset-phone-overlay-width: min(520px, var(--dataset-phone-overlay-limit));
+    --dataset-phone-overlay-left: auto;
   }
   /* Model D: edge-to-edge cells replace G14's outer corner insets. */
   #tabs_container:has(.dataset-shared-topbar--visible) {

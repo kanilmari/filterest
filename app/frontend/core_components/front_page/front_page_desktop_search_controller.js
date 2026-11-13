@@ -68,6 +68,12 @@ export function mountFrontPageDesktopSearch(row, actions) {
     const trigger = () => mode === 'field' ? input : button;
     const containsSearch = target => host.contains(target) || field.contains(target) || panel?.contains(target);
 
+    // The nonmodal panel lives on body; inherit the current visit’s spacing at open and on palette preview.
+    function syncPresentation() {
+        for (const property of ['--home-box-heading-gap', '--home-box-row-gap']) {
+            panel?.style.setProperty(property, home.style.getPropertyValue(property));
+        }
+    }
     function place() {
         if (!panel) return;
         const bounds = home.getBoundingClientRect();
@@ -150,7 +156,7 @@ export function mountFrontPageDesktopSearch(row, actions) {
             event.stopImmediatePropagation();
             close();
         } else if (event.key === 'ArrowDown' && event.target === input) {
-            const first = groups.querySelector('a[href]');
+            const first = groups.querySelector('a[href][data-row-id]');
             if (first) { event.preventDefault(); first.focus(); }
         } else if (event.key === 'Tab') {
             const nodes = focusable(panel);
@@ -173,6 +179,7 @@ export function mountFrontPageDesktopSearch(row, actions) {
         panel = document.createElement('section');
         panel.id = PANEL_ID;
         panel.className = 'front-page-desktop-search-panel';
+        syncPresentation();
         panel.setAttribute('role', 'dialog');
         panel.setAttribute('aria-modal', 'false');
         const header = document.createElement('div');
@@ -278,6 +285,7 @@ export function mountFrontPageDesktopSearch(row, actions) {
     observer?.observe(home);
     syncMode();
     return {
+        syncPresentation,
         destroy() {
             destroyed = true;
             close(false);

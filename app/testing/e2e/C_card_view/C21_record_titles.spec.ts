@@ -129,3 +129,73 @@ test('962: every record has the same name in cards, small summaries, product til
     }
   }
 });
+
+// Read through the native builders on an existing dataset. Only this browser's
+// two result rows and its dataset palette vary; all requests to the seed are reads.
+test('#1013 stored heading tags keep the title size and name on cards, search and articles', async ({ page }, info) => {
+  const inventory = await page.request.get('/api/datasets');
+  expect(inventory.ok()).toBe(true);
+  const { datasets } = await inventory.json();
+  const dataset = ['dokumentaatio', 'app_service_catalog'].find(name =>
+    datasets.some((item: { dataset_name: string; can_read_rows?: boolean }) =>
+      item.dataset_name === name && item.can_read_rows !== false));
+  if (!dataset) throw Error('The native seed needs a readable example dataset');
+
+  const seed = await page.request.get('/api/get-results', { params: { dataset, view_key: 'card', limit: 2 } });
+  expect(seed.ok()).toBe(true);
+  const listing = await seed.json();
+  const ids: number[] = listing.data.slice(0, 2).map((row: { id: number }) => Number(row.id));
+  expect(ids).toHaveLength(2);
+  const name = 'Hotel payment request';
+  const marked = `<h1>${name}</h1>`;
+  const rows = ids.map((id, index) => ({ id, title: index ? marked : name, content: '<h3>Section</h3><p>Article body</p>' }));
+  let style = 'standard';
+  await page.route(url => url.pathname === '/api/get-results' && url.searchParams.get('dataset') === dataset, async route => {
+    const url = new URL(route.request().url());
+    const id = url.searchParams.get('id');
+    const data = id ? rows.filter(row => row.id === Number(id)) : rows;
+    await route.fulfill({ json: { ...listing, columns: ['id', 'title', 'content'], types: {
+      id: { data_type: 'integer' }, title: { card_element: 'header', data_type: 'text', show_value_on_card: true },
+      content: { card_element: 'description', data_type: 'text', show_value_on_card: true },
+    }, dataset_appearance: { ...listing.dataset_appearance, overrides: {
+      ...listing.dataset_appearance.overrides, 'shared.card_style_variant': style,
+    } }, data, row_count: data.length } });
+  });
+
+  // A wrapper retains its CSS size even if a nested h1 doubles the glyphs.
+  // Measure the parent of the text the browser paints.
+  function measureTitle(element: Element) {
+    const text = document.createTreeWalker(element, NodeFilter.SHOW_TEXT).nextNode()!;
+    return { text: element.textContent!.trim(), px: parseFloat(getComputedStyle(text.parentElement!).fontSize) };
+  }
+  const measurements = [];
+  for (const variant of ['standard', 'modern']) {
+    style = variant;
+    await page.goto(`/${dataset}?view=card${variant === 'modern' ? '&search=Hotel' : ''}`);
+    const listingCard = (id: number) => page.locator(`.card[data-card-presentation-view="card"][data-id="${id}"]:visible`).first();
+    await expect(listingCard(ids[1])).toHaveAttribute('data-card-style-variant', variant);
+    const headers = await Promise.all(ids.map(id => listingCard(id).locator('.header_value').first().evaluate(measureTitle)));
+    measurements.push({ variant, headers });
+    expect.soft(headers[0].px).toBeGreaterThan(0);
+    expect.soft(headers[1]).toEqual(headers[0]);
+    await expect.soft(listingCard(ids[1]).locator('.card_header').first()).toHaveAttribute('title', name);
+    await expect.soft(listingCard(ids[1]).locator('.header_value h1')).toHaveCount(0);
+  }
+  const articleHeaders = [];
+  for (const [index, id] of ids.entries()) {
+    // A bookmarked tagged-title slug must still address the same row.
+    const slug = index ? 'h1hotel-payment-requesth1' : 'hotel-payment-request';
+    await page.goto(`/${dataset}/${id}-${slug}?view=article_view`);
+    const article = page.locator('.active_row_article .big_card_header_value').first();
+    await expect(article).toBeVisible();
+    articleHeaders.push(await article.evaluate(measureTitle));
+    await expect.soft(article).toHaveAttribute('data-raw-value', rows[index].title);
+    await expect.soft(page.locator('.active_row_article .big_description_value h3')).toHaveText('Section');
+    await expect.soft(page).toHaveTitle(/^Hotel payment request(?: — |$)/);
+    const rail = page.locator(`.article_view_wrapper .card[data-id="${ids[1]}"] .small_card_name_text`).first();
+    await expect.soft(rail).toHaveText(name);
+  }
+  expect.soft(articleHeaders[0].px).toBeGreaterThan(0);
+  expect.soft(articleHeaders[1]).toEqual(articleHeaders[0]);
+  await info.attach('title-font-sizes', { body: JSON.stringify({ measurements, articleHeaders }), contentType: 'application/json' });
+});

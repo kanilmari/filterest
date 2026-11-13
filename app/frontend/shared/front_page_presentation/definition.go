@@ -1,6 +1,6 @@
 // definition.go
 // Validates Home presentation against the browser's embedded definition.
-// Connects strict version-five values and version-one through four read conversion.
+// Connects the current settings to their stored predecessors.
 // Keeps conversion away from revision hashing and all persistence locks.
 package front_page_presentation
 
@@ -16,10 +16,23 @@ import (
 var source []byte
 
 type Bounds struct {
-	Min  int `json:"min"`
-	Max  int `json:"max"`
-	Step int `json:"step"`
+	Min  float64 `json:"min"`
+	Max  float64 `json:"max"`
+	Step float64 `json:"step"`
 }
+
+// readNumber enforces each declared step in tenths, the smallest supported unit.
+// Scaling the operands before subtraction preserves e.g. 9.7 - 9.6 as one step.
+func (b Bounds) readNumber(fields map[string]json.RawMessage, name string) (float64, error) {
+	var n float64
+	raw := fields[name]
+	if len(raw) == 0 || string(raw) == "null" || json.Unmarshal(raw, &n) != nil ||
+		n < b.Min || n > b.Max || math.Round(n*10)/10 != n || math.Mod(n*10-b.Min*10, b.Step*10) != 0 {
+		return 0, fmt.Errorf("invalid %s", name)
+	}
+	return n, nil
+}
+
 type Definition struct {
 	SchemaVersion    int      `json:"schema_version"`
 	Anchors          []string `json:"anchors"`
@@ -27,6 +40,8 @@ type Definition struct {
 	PhoneAlignments  []string `json:"phone_alignments"`
 	PhoneStorySize   Bounds   `json:"phone_story_size"`
 	HorizontalMargin Bounds   `json:"horizontal_margin_px"`
+	BoxRowGap        Bounds   `json:"box_row_gap_px"`
+	BoxHeadingGap    Bounds   `json:"box_heading_gap_px"`
 	VerticalMargin   Bounds   `json:"vertical_margin_px"`
 	MaxWidth         Bounds   `json:"max_width_px"`
 	LightWash        Bounds   `json:"light_wash"`
@@ -64,12 +79,14 @@ type LineReveal struct {
 	IntervalMS int    `json:"interval_ms"`
 }
 
-// Value is the complete version-five layout, phone typography, media and text style.
+// Value is the complete Home layout, box spacing, phone typography, media and text style.
 type Value struct {
 	SchemaVersion      int       `json:"schema_version"`
 	Anchor             string    `json:"anchor"`
 	HorizontalMarginPx int       `json:"horizontal_margin_px"`
 	VerticalMarginPx   int       `json:"vertical_margin_px"`
+	BoxRowGapPx        float64   `json:"box_row_gap_px"`
+	BoxHeadingGapPx    int       `json:"box_heading_gap_px"`
 	Alignment          string    `json:"alignment"`
 	PhoneAlignment     string    `json:"phone_alignment"`
 	PhoneStorySize     int       `json:"phone_story_size"`
@@ -111,7 +128,7 @@ func presentationFields(raw any) (map[string]json.RawMessage, error) {
 	return fields, err
 }
 
-// Parse refuses partial, unknown, null, coerced and off-step version-five writes.
+// Parse refuses partial, unknown, null, coerced and off-step current-version writes.
 // Its browser twin is validator.js:isValidHomePresentation.
 func Parse(raw any) (Value, error) {
 	fields, err := presentationFields(raw)
@@ -125,9 +142,10 @@ func Parse(raw any) (Value, error) {
 		bounds Bounds
 		target *int
 	}{
-		{"schema_version", Bounds{rules.SchemaVersion, rules.SchemaVersion, 1}, &value.SchemaVersion},
+		{"schema_version", Bounds{float64(rules.SchemaVersion), float64(rules.SchemaVersion), 1}, &value.SchemaVersion},
 		{"horizontal_margin_px", rules.HorizontalMargin, &value.HorizontalMarginPx},
 		{"vertical_margin_px", rules.VerticalMargin, &value.VerticalMarginPx},
+		{"box_heading_gap_px", rules.BoxHeadingGap, &value.BoxHeadingGapPx},
 		{"phone_story_size", rules.PhoneStorySize, &value.PhoneStorySize},
 		{"max_width_px", rules.MaxWidth, &value.MaxWidthPx},
 		{"light_wash", rules.LightWash, &value.LightWash},
@@ -135,8 +153,8 @@ func Parse(raw any) (Value, error) {
 		{"dark_wash", rules.DarkWash, &value.DarkWash},
 		{"dark_opacity", rules.DarkOpacity, &value.DarkOpacity},
 	}
-	if len(fields) != len(numbers)+4 {
-		return value, fmt.Errorf("Home presentation requires thirteen fields")
+	if len(fields) != len(numbers)+5 {
+		return value, fmt.Errorf("Home presentation requires %d fields", len(numbers)+5)
 	}
 	for _, name := range []string{"anchor", "alignment", "phone_alignment"} {
 		if len(fields[name]) == 0 || string(fields[name]) == "null" {
@@ -157,18 +175,15 @@ func Parse(raw any) (Value, error) {
 		return value, fmt.Errorf("invalid Home presentation choice")
 	}
 	for _, number := range numbers {
-		if len(fields[number.name]) == 0 || string(fields[number.name]) == "null" {
-			return value, fmt.Errorf("missing %s", number.name)
-		}
-		var n float64
-		if err := json.Unmarshal(fields[number.name], &n); err != nil {
+		n, err := number.bounds.readNumber(fields, number.name)
+		if err != nil {
 			return value, err
 		}
-		if math.Trunc(n) != n || n < float64(number.bounds.Min) || n > float64(number.bounds.Max) ||
-			math.Mod(n-float64(number.bounds.Min), float64(number.bounds.Step)) != 0 {
-			return value, fmt.Errorf("invalid %s", number.name)
-		}
 		*number.target = int(n)
+	}
+	value.BoxRowGapPx, err = rules.BoxRowGap.readNumber(fields, "box_row_gap_px")
+	if err != nil {
+		return value, err
 	}
 	value.TextStyle, err = parseTextStyle(fields["text_style"], rules)
 	return value, err
@@ -199,23 +214,16 @@ func parseTextStyle(raw json.RawMessage, rules Definition) (TextStyle, error) {
 		{"start_ms", rules.TextStyle.StartMS, &value.Reveal.StartMS},
 		{"interval_ms", rules.TextStyle.IntervalMS, &value.Reveal.IntervalMS},
 	} {
-		var n float64
-		raw := reveal[field.name]
-		if len(raw) == 0 || string(raw) == "null" {
-			return value, fmt.Errorf("missing %s", field.name)
-		}
-		if err := json.Unmarshal(raw, &n); err != nil {
+		n, err := field.bounds.readNumber(reveal, field.name)
+		if err != nil {
 			return value, err
-		}
-		if math.Trunc(n) != n || n < float64(field.bounds.Min) || n > float64(field.bounds.Max) {
-			return value, fmt.Errorf("invalid %s", field.name)
 		}
 		*field.target = int(n)
 	}
 	return value, nil
 }
 
-// ParseStored converts complete version-one through four rows; writes use CanonicalStored.
+// ParseStored converts complete version-one through six rows; writes use CanonicalStored.
 // Readers hash the original stored bytes, so conversion never invalidates a revision.
 func ParseStored(raw any) (Value, error) {
 	fields, err := presentationFields(raw)
@@ -245,7 +253,6 @@ func ParseStored(raw any) (Value, error) {
 			return Value{}, fmt.Errorf("invalid legacy Home alignment")
 		}
 		fields["alignment"], _ = json.Marshal(alignment)
-		fields["schema_version"], _ = json.Marshal(rules.SchemaVersion)
 		fields["phone_alignment"] = json.RawMessage(`"inherit"`)
 		fields["phone_story_size"], _ = json.Marshal(rules.Default.PhoneStorySize)
 		if version == 2 {
@@ -254,14 +261,28 @@ func ParseStored(raw any) (Value, error) {
 			}
 			fields["text_style"], _ = json.Marshal(rules.Default.TextStyle)
 		}
-		return Parse(fields)
+		version = 5
 	}
 	if version == 4 {
 		if len(fields) != 12 || fields["phone_story_size"] != nil {
 			return Value{}, fmt.Errorf("invalid version-four Home presentation fields")
 		}
-		fields["schema_version"], _ = json.Marshal(rules.SchemaVersion)
 		fields["phone_story_size"], _ = json.Marshal(rules.Default.PhoneStorySize)
+		version = 5
+	}
+	if version == 5 {
+		if len(fields) != 13 || fields["box_heading_gap_px"] != nil {
+			return Value{}, fmt.Errorf("invalid version-five Home presentation fields")
+		}
+		fields["box_heading_gap_px"], _ = json.Marshal(rules.Default.BoxHeadingGapPx)
+		version = 6
+	}
+	if version == 6 {
+		if len(fields) != 14 || fields["box_row_gap_px"] != nil {
+			return Value{}, fmt.Errorf("invalid version-six Home presentation fields")
+		}
+		fields["schema_version"], _ = json.Marshal(rules.SchemaVersion)
+		fields["box_row_gap_px"], _ = json.Marshal(rules.Default.BoxRowGapPx)
 		return Parse(fields)
 	}
 	if version != float64(rules.Legacy.SchemaVersion) {

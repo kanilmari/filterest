@@ -5,6 +5,7 @@
 package system_table_tools
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
 	"database/sql/driver"
@@ -12,6 +13,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net/http"
 	"net/http/httptest"
 	"reflect"
 	"strings"
@@ -133,6 +135,8 @@ func TestHomePresentationStoresCanonicalBytesAndReturnsTheirRevision(t *testing.
 				fields["alignment"] = "left"
 				delete(fields, "phone_alignment")
 				delete(fields, "phone_story_size")
+				delete(fields, "box_heading_gap_px")
+				delete(fields, "box_row_gap_px")
 				delete(fields, "text_style")
 				raw, _ = json.Marshal(fields)
 			}
@@ -173,13 +177,105 @@ func TestHomePresentationStoresCanonicalBytesAndReturnsTheirRevision(t *testing.
 	}
 }
 
+func TestHomeBoxHeadingGapSaveAndRestore(t *testing.T) {
+	state := &canonicalHomeMemory{}
+	db := sql.OpenDB(canonicalHomeConnector{state})
+	defer db.Close()
+	value := presentation.Rules().Default
+	value.PhoneStorySize, value.DarkWash = 17, 33
+	revision := "none"
+	// Returning to the default keeps a previous v5 site readable without losing its custom values.
+	var original []byte
+	for _, gap := range []int{8, 5, 30, 8} {
+		value.BoxHeadingGapPx = gap
+		raw, err := json.Marshal(value)
+		if err != nil {
+			t.Fatal(err)
+		}
+		revision = canonicalHomeSave(t, db, raw, revision)
+		read, readRevision, err := backend.ReadFrontPagePresentation(context.Background(), db)
+		if err != nil || read == nil || *read != value || readRevision != revision {
+			t.Fatal(read, readRevision, err)
+		}
+		var fields map[string]any
+		if err := json.Unmarshal(state.raw, &fields); err != nil {
+			t.Fatal(err)
+		}
+		if gap != 8 {
+			if fields["schema_version"] != float64(6) || fields["box_heading_gap_px"] != float64(gap) {
+				t.Fatal(string(state.raw))
+			}
+		} else {
+			if _, exists := fields["box_heading_gap_px"]; exists || fields["schema_version"] != float64(5) {
+				t.Fatal(string(state.raw))
+			}
+			if original == nil {
+				original = append([]byte(nil), state.raw...)
+			} else if !bytes.Equal(original, state.raw) {
+				t.Fatal("restoring 8 px changed original storage", string(state.raw))
+			}
+		}
+	}
+}
+
+func TestHomeRowGapSaveAndRestore(t *testing.T) {
+	state := &canonicalHomeMemory{}
+	db := sql.OpenDB(canonicalHomeConnector{state})
+	defer db.Close()
+	oldSaver := frontPageAdminSaver
+	t.Cleanup(func() { frontPageAdminSaver = oldSaver })
+	frontPageAdminSaver = func(_ context.Context, request frontPageAdminRequest) (string, error) {
+		return canonicalHomeSave(t, db, request.Presentation, request.Version), nil
+	}
+	value := presentation.Rules().Default
+	value.BoxHeadingGapPx = 21 // The previous version's custom heading gap must survive.
+	revision := "none"
+	var original []byte
+	for _, gap := range []float64{9.6, 9.7, 30, 9.6} {
+		value.BoxRowGapPx = gap
+		request, err := json.Marshal(map[string]any{"presentation": value, "version": revision})
+		if err != nil {
+			t.Fatal(err)
+		}
+		response := httptest.NewRecorder()
+		AdminFrontPageHandler(response, httptest.NewRequest(http.MethodPost, "/api/admin/front-page", bytes.NewReader(request)))
+		var saved struct {
+			Version      string
+			Presentation presentation.Value
+		}
+		if err := json.Unmarshal(response.Body.Bytes(), &saved); err != nil || response.Code != http.StatusOK || saved.Presentation != value || saved.Version != backend.FrontPagePresentationRevision(state.raw, state.updated) {
+			t.Fatal(response.Code, response.Body.String(), err)
+		}
+		revision = saved.Version
+		read, readRevision, err := backend.ReadFrontPagePresentation(context.Background(), db)
+		if err != nil || read == nil || *read != value || readRevision != revision {
+			t.Fatal(read, readRevision, err)
+		}
+		var fields map[string]any
+		if err := json.Unmarshal(state.raw, &fields); err != nil {
+			t.Fatal(err)
+		}
+		if gap == 9.6 {
+			if _, present := fields["box_row_gap_px"]; present || fields["schema_version"] != float64(6) {
+				t.Fatal(string(state.raw))
+			}
+			if original != nil && !bytes.Equal(original, state.raw) {
+				t.Fatal("restoring row spacing changed the v6 settings", string(state.raw))
+			}
+			original = append([]byte(nil), state.raw...)
+		} else if fields["schema_version"] != float64(7) || fields["box_row_gap_px"] != gap {
+			t.Fatal(string(state.raw))
+		}
+	}
+}
+
 func TestHomePresentationV2ReadAndRestorePreservesAllOriginalFields(t *testing.T) {
 	original := []byte(`{"schema_version":2,"anchor":"bottom-left","horizontal_margin_px":73,"vertical_margin_px":91,"alignment":"right","max_width_px":700,"light_wash":27,"light_opacity":61,"dark_wash":19,"dark_opacity":43}`)
 	state := &canonicalHomeMemory{raw: original, updated: "original"}
 	db := sql.OpenDB(canonicalHomeConnector{state})
 	defer db.Close()
 	read, revision, err := backend.ReadFrontPagePresentation(context.Background(), db)
-	if err != nil || read.SchemaVersion != 5 || read.TextStyle != presentation.Rules().Default.TextStyle || revision != backend.FrontPagePresentationRevision(original, "original") {
+	if err != nil || read.SchemaVersion != presentation.Rules().SchemaVersion || read.TextStyle != presentation.Rules().Default.TextStyle || revision != backend.FrontPagePresentationRevision(original, "original") {
 		t.Fatal(read, revision, err)
 	}
 	raw, _ := json.Marshal(read)

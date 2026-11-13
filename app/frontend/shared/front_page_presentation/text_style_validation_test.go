@@ -33,13 +33,19 @@ func TestHomeTextStyleTwinExamples(t *testing.T) {
 			if (err == nil) != example.Readable {
 				t.Fatal("read", err)
 			}
-			if example.Readable && got.SchemaVersion != 5 {
+			if example.Readable && got.SchemaVersion != Rules().SchemaVersion {
 				t.Fatal(got)
 			}
 			var stored struct {
 				SchemaVersion int `json:"schema_version"`
 			}
 			json.Unmarshal(example.Value, &stored)
+			if example.Readable && stored.SchemaVersion < 7 && got.BoxRowGapPx != 9.6 {
+				t.Fatal(got)
+			}
+			if example.Readable && stored.SchemaVersion < 6 && got.BoxHeadingGapPx != 8 {
+				t.Fatal(got)
+			}
 			if example.Readable && stored.SchemaVersion < 5 && got.PhoneStorySize != 15 {
 				t.Fatal(got)
 			}

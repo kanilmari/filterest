@@ -27,6 +27,7 @@ test.each(Object.entries(LABELS))('phone search opens only by button, with focus
     getLanguageWithBrowserFallback.mockReturnValue(language);
     const { create_filter_bar } = await import('./filter_bar_builder.js');
     const panel = create_filter_bar('demo', 'demo_uid', ['id'], { id: 'INTEGER' }, 1, false, 'card');
+    panel.querySelector('.hide_filter_bar_button').click();
     const bar = document.querySelector('.dataset-shared-topbar');
     const menu = bar.querySelector('[data-testid="shared-topbar-menu-button"]');
     const filter = bar.querySelector('[data-testid="filterbar-toggle"]');
@@ -48,6 +49,9 @@ test.each(Object.entries(LABELS))('phone search opens only by button, with focus
     expect(toggle.nextElementSibling).toBe(filter);
     const parent = filter.parentElement;
     filter.click();
+    const panelClose = panel.querySelector('.hide_filter_bar_button');
+    expect(panelClose.tabIndex).toBe(0); expect(filter.tabIndex).toBe(-1);
+    panelClose.click();
     expect(filter.parentElement).toBe(parent); expect(filter.tabIndex).toBe(0);
     document.querySelector('.scrollable_content').dispatchEvent(new Event('scroll'));
     expect(search.hidden).toBe(true); // Scroll must never open the phone search.

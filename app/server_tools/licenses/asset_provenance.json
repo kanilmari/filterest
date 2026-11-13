@@ -93,7 +93,7 @@
       "component": "Lucide Icons",
       "kind": "embedded-icon-source",
       "path": "app/frontend/core_components/table_views/card_view/row_article_ui_handler.js",
-      "sha256": "f46572be884269fc3d411425c8fd6799913c9bccacd721674de35b951b181992",
+      "sha256": "8d705b0ba4b04f65bd7472ead0fb68c2751eb593e88a1820b7659b5ad4c47b33",
       "source_detail": "Embedded external-link geometry conservatively covered by the retained Lucide/Feather terms; no first-party authorship claim is made."
     },
     {

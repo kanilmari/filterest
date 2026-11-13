@@ -48,7 +48,7 @@ export function createFrontPageSearchRunner(input, groups, status) {
             slot.className = 'front-page-search-sheet__slot';
             slot.setAttribute('aria-busy', 'true');
             const group = createSupplementalDatasetGroup(tab, query, {
-                rowCap: ROW_LIMIT, headingTag: 'h2', includeThumbnails: true,
+                rowCap: ROW_LIMIT, headingTag: 'h2', linkHeading: true, includeThumbnails: true,
                 showAllKey: 'front_page_show_all',
             });
             slot.append(group.element);

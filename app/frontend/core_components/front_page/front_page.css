@@ -223,6 +223,33 @@ body.dark-mode .front-page {
   min-width: 0;
 }
 
+/* Both Home search surfaces use the same result slots; ordinary dataset search uses h3. */
+:is(.front-page-blocks, .front-page-search-sheet__slot) .supplemental-dataset-group > h2 {
+  margin-block-end: var(--home-box-heading-gap, 8px);
+}
+
+/* The first row otherwise collapses its own margin into the heading gap. */
+:is(.front-page-blocks, .front-page-search-sheet__slot) .supplemental-dataset-group > ul > li:first-child {
+  margin-block-start: 0;
+}
+
+/* The next row owns each internal gap, including with a custom root font size. */
+:is(.front-page-blocks, .front-page-search-sheet__slot) .supplemental-dataset-group > ul > li:has(+ li) {
+  margin-block-end: 0;
+}
+
+:is(.front-page-blocks, .front-page-search-sheet__slot) .supplemental-dataset-group > ul > li + li {
+  /* An unset gap follows the reader's font. Saved pixel values are bounded at 30px. */
+  margin-block-start: max(var(--home-box-row-gap, 0.6rem), min(0.6rem, 30px));
+}
+
+:is(.front-page-blocks, .front-page-search-sheet__slot) :is(.supplemental-dataset-result-text > a, .supplemental-dataset-show-all):any-link:not([data-article-access="denied"]) {
+  color: light-dark(
+    color-mix(in srgb, var(--link_color, var(--primary_color)) 40%, black),
+    var(--link_color, var(--primary_color))
+  );
+}
+
 .front-page-blocks .supplemental-dataset-group p[hidden] {
   display: none;
 }

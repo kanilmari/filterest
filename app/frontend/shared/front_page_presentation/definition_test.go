@@ -29,7 +29,7 @@ func TestHomePresentationValidAndInvalid(t *testing.T) {
 	data, _ := json.Marshal(rules.Default)
 	var defaults map[string]any
 	json.Unmarshal(data, &defaults)
-	for _, key := range []string{"schema_version", "anchor", "horizontal_margin_px", "vertical_margin_px", "alignment", "phone_alignment", "phone_story_size", "max_width_px", "light_wash", "light_opacity", "dark_wash", "dark_opacity", "text_style"} {
+	for _, key := range []string{"schema_version", "anchor", "horizontal_margin_px", "vertical_margin_px", "box_heading_gap_px", "box_row_gap_px", "alignment", "phone_alignment", "phone_story_size", "max_width_px", "light_wash", "light_opacity", "dark_wash", "dark_opacity", "text_style"} {
 		for _, missing := range []bool{false, true} {
 			fields := map[string]any{}
 			for k, v := range defaults {
@@ -115,7 +115,7 @@ func TestHomePresentationStoredNumericVersionMatchesBrowserIntegers(t *testing.T
 	}
 	raw, _ := json.Marshal(Rules().Default)
 	fields, _ := presentationFields(raw)
-	fields["schema_version"] = json.RawMessage(`5.0`)
+	fields["schema_version"] = json.RawMessage(`7.0`)
 	if _, err := ParseStored(fields); err != nil {
 		t.Fatal(err)
 	}
@@ -142,8 +142,10 @@ func TestHomePhoneStorySizeContract(t *testing.T) {
 	if _, err := Parse(fields); err == nil {
 		t.Fatal("missing v5 phone size accepted")
 	}
+	delete(fields, "box_heading_gap_px")
+	delete(fields, "box_row_gap_px")
 	fields["schema_version"] = json.RawMessage(`4`)
-	if got, err := ParseStored(fields); err != nil || got.PhoneStorySize != 15 || got.SchemaVersion != 5 {
+	if got, err := ParseStored(fields); err != nil || got.PhoneStorySize != 15 || got.SchemaVersion != Rules().SchemaVersion {
 		t.Fatal(got, err)
 	}
 	fields["phone_story_size"] = json.RawMessage(`15`)

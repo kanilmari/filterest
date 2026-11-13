@@ -20,7 +20,7 @@ import { buildRowArticleAttachmentList } from "./row_article_attachment_list.js"
 import { buildRowArticleContent } from "./row_article_content_builder.js";
 import { loadRowArticleSectionDefaults } from "./row_article_section_defaults.js";
 import { createRowArticleLoadSession } from "./row_article_load_session.js";
-import { buildSlug } from "./row_article_opener_helpers.js";
+import { buildCardUrl, buildSlug } from "./row_article_opener_helpers.js";
 import { setChosenDatasetView } from "../../state_stores/dataset_view_choice_saver.js";
 
 describe("openRowArticleView", () => {
@@ -216,6 +216,31 @@ describe("openRowArticleView", () => {
         expect(buildSlug).toHaveBeenCalledWith("Services");
         expect(document.body.textContent).not.toContain('{"en"');
         expect(fetchPermittedRowArticleDataMock).toHaveBeenCalled();
+    });
+
+    test("uses the first permitted stored header for the URL when its visible name is empty", async () => {
+        document.body.innerHTML = '<div id="events_article_view_container"><div class="card_view_wrapper">'
+            + '<div class="card_container"><div class="card" data-id="42"></div></div>'
+            + '<div class="row_article_placeholder"></div></div></div>';
+        const row = { id: 42, unavailable: 'Private', first: '<h2> </h2>', second: '<h3>Second</h3>' };
+        const card = document.querySelector('.card');
+        const header = { card_element: 'header', data_type: 'text' };
+        card._data_types = { unavailable: { ...header, authorized: false }, first: header, second: header };
+        const helpers = await vi.importActual('./row_article_opener_helpers.js');
+        vi.mocked(buildSlug).mockImplementationOnce(helpers.buildSlug);
+        vi.mocked(buildCardUrl).mockImplementationOnce(helpers.buildCardUrl);
+
+        const addressChanges = [];
+        await openRowArticleView(row, 'events', card, { withOwnAddressWrite: write => {
+            const before = window.location.pathname;
+            const result = write();
+            if (window.location.pathname !== before) addressChanges.push(window.location.pathname);
+            return result;
+        } });
+
+        expect(buildRowArticleContent.mock.calls[0][5]).toBe('S');
+        expect(window.location.pathname).toBe('/events/42-h2-h2');
+        expect(addressChanges).toEqual(['/events/42-h2-h2']);
     });
 
     test("preserves active search params and marks row URLs as article view", async () => {

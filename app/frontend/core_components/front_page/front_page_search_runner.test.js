@@ -111,10 +111,15 @@ test('transport failure reports failure rather than falsely claiming no matches'
     expect(status.textContent).toBe('front_page_search_failed');
 });
 
-test('Show all uses the canonical dataset path and same encoded text search', async () => {
+test('each Home search heading and Show all share the canonical dataset and encoded text search', async () => {
     type('sea & sun'); await vi.advanceTimersByTimeAsync(300);
-    expect(groups.querySelector('.supplemental-dataset-show-all').getAttribute('href'))
-        .toBe('/alias-app_beta?search=sea+%26+sun');
+    const boxes = [...groups.querySelectorAll('section')];
+    expect(boxes).toHaveLength(3);
+    for (const box of boxes) {
+        const showAll = box.querySelector('.supplemental-dataset-show-all');
+        expect(showAll.getAttribute('href')).toBe(`/alias-${box.dataset.dataset}?search=sea+%26+sun`);
+        expect(box.querySelector('h2 > a[href]')?.href).toBe(showAll.href);
+    }
 });
 
 test('losing the accepted rights snapshot aborts the round and erases its rows', async () => {

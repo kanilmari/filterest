@@ -396,9 +396,11 @@ async function proveDatasetMenuOwnership(page: Page, sample = true) {
   const topbar = page.locator('.dataset-shared-topbar:visible');
   const menu = topbar.getByTestId('shared-topbar-menu-button');
   const open = !/\bcollapsed\b/.test(await page.locator('#navbar').getAttribute('class') || '');
-  if (await page.locator('.tab_parts_container:visible').getAttribute('data-shared-topbar-visible') === 'false') {
+  if (open) {
     const close = page.locator('#hideMenuButton');
+    await expect(menu).toBeHidden();
     await expect(close).toBeVisible();
+    await expect(close).toHaveAttribute('aria-expanded', 'true');
     await expect(close).toHaveAttribute('aria-hidden', 'false');
     await expect(close).toHaveAttribute('tabindex', '0');
     if (sample) await sampleMenuTransition(page, async () => {});
@@ -547,7 +549,7 @@ for (const open of [false, true]) {
       image.complete && /-128\.png$/.test(image.currentSrc))).toBe(true);
     await expect(identity.locator('img')).toHaveCSS('image-rendering', 'auto');
     await expect(page.locator('.tab_parts_container:visible .filterbar-inline-hero__top-row .hero-dataset-tabs')).toBeHidden();
-    const datasetMenu = page.locator('.dataset-shared-topbar:visible').getByTestId('shared-topbar-menu-button');
+    const datasetMenu = page.locator('[data-testid="shared-topbar-menu-button"][aria-hidden="false"]:visible, #hideMenuButton[aria-hidden="false"]:visible');
     const navbar = page.locator('#navbar');
     // Restore the requested outgoing dataset menu state before exercising browser history.
     if (/\bcollapsed\b/.test(await navbar.getAttribute('class') || '') === open) {

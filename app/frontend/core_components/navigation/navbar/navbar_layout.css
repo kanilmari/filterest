@@ -273,11 +273,11 @@ body.light-mode #nav_tree .tree-current-project-badge {
     grid-area: controls;
     display: flex;
     justify-content: flex-end;
-    gap: 12px;
+    gap: var(--navbar-controls-space, 12px);
     position: sticky;
     top: 0;
     left: 0;
-    padding: 12px;
+    padding: 12px var(--navbar-controls-space, 12px);
     background-color: var(--bg_color);
     z-index: calc(var(--z-navbar) + 1);
     border-bottom: 2px solid var(--border_color);
@@ -609,6 +609,15 @@ body.light-mode #nav_tree .tree-current-project-badge {
 
 #nav_tree > .tree-container > .node > .children {
     padding: 8px 12px 10px 36px;
+}
+
+.body_content:has(.content_div:not(.hidden) .dataset-shared-topbar) #navbar:not(.collapsed) {
+    max-width: var(--dataset-phone-overlay-limit, none);
+    /* The RTL grid grows out of the left edge if a child sets its track minimum. */
+    grid-template-columns: minmax(0, 1fr);
+    /* A 320px viewport leaves a 260px drawer: 240px of controls and border,
+       plus five 4px spaces. At 360px and up the original 12px spacing fits. */
+    --navbar-controls-space: clamp(4px, calc((100vw - 300px) / 5), 12px);
 }
 
 #navbar.collapsed {

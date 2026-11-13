@@ -13,7 +13,7 @@ const DATASET = process.env.FILTEREST_E2E_TOPBAR_DATASET || 'app_service_catalog
 const DATASET_ADDRESS = '/' + (DATASET === 'app_service_catalog' ? 'service_catalog' : encodeURIComponent(DATASET));
 const datasetHost = (page: Page) => page.locator(`[id="${DATASET}_container"]:not(.hidden)`);
 const menuButton = (page: Page) => datasetHost(page).getByTestId('shared-topbar-menu-button');
-const NARROW_WIDTHS = [375, 480, 768, 1024, 1099];
+const NARROW_WIDTHS = [320, 375, 480, 768, 1024, 1099];
 
 type LayerState = {
   navbarCollapsed: boolean;
@@ -94,7 +94,7 @@ test.describe('E8 — Filterbar and Navbar Layering', () => {
       testInfo.project.metadata?.screenWidth !== 'desktop',
       'This test drives its own viewport sweep and only needs one project.',
     );
-    // Five widths, each with a fresh page load and data wait: the default 30 s ran out under nightly load (20.10.).
+    // Each viewport needs a fresh page load and data wait: the default 30 s ran out under nightly load (20.10.).
     test.setTimeout(90_000);
 
     for (const width of NARROW_WIDTHS) {
@@ -120,12 +120,11 @@ test.describe('E8 — Filterbar and Navbar Layering', () => {
     );
 
     await prepareHiddenNarrowDrawers(page, 375);
-    const visibleMenuButton = menuButton(page);
-    await visibleMenuButton.click();
+    await menuButton(page).click();
     await expect(page.locator('#navbar:not(.collapsed)')).toBeVisible({ timeout: 5000 });
     await page.waitForTimeout(850);
 
-    await visibleMenuButton.click();
+    await page.locator('#navbar #hideMenuButton').click();
     await page.waitForTimeout(100);
 
     const transitionState = await page.locator('#navbar').evaluate((navbar) => {
@@ -151,8 +150,7 @@ test.describe('E8 — Filterbar and Navbar Layering', () => {
     );
 
     await prepareHiddenNarrowDrawers(page, 375);
-    const visibleMenuButton = menuButton(page);
-    await visibleMenuButton.click();
+    await menuButton(page).click();
 
     const navbar = page.locator('#navbar');
     await expect(navbar).toHaveClass(/navbar-opening/);

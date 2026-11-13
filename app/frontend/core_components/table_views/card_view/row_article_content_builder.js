@@ -108,7 +108,8 @@ export async function buildRowArticleContent(
     for (const heading of recordTitle.headers.length ? recordTitle.headers : [recordTitle]) {
         const column = heading.column || '';
         const columnMeta = data_types[column] || {};
-        rowArticleHeaderValues.add(heading.text);
+        const sourceText = heading.sourceText ?? heading.text;
+        rowArticleHeaderValues.add(sourceText);
         const header = document.createElement(rowArticleHeaderElements.length ? 'div' : 'h1');
         header.classList.add('big_card_header');
         header.style.whiteSpace = 'pre-wrap';
@@ -118,9 +119,9 @@ export async function buildRowArticleContent(
             header.appendChild(icon);
         }
         if (column) {
-            header.appendChild(createRowArticleKeyValueElement(format_column_name(column), heading.text,
+            header.appendChild(createRowArticleKeyValueElement(format_column_name(column), sourceText,
                 column, false, 'big_card_header_value', columnMeta.show_key_on_card === true,
-                columnMeta.is_multilingual, row_item[column], columnMeta, timestampDisplayOptions));
+                columnMeta.is_multilingual, heading.editValue, columnMeta, timestampDisplayOptions));
         } else {
             const value = document.createElement('span');
             value.classList.add('big_card_header_value');

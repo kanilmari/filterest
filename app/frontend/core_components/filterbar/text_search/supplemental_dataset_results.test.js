@@ -177,6 +177,7 @@ test("refreshes one-language titles and plain descriptions without JSON, markup 
     mocks.translate.mockReturnValue("Muut");
     await refreshLocalizedDatasetValues("fi");
     expect(group.element.querySelector("h3").textContent).toBe("Muut");
+    expect(group.element.querySelector("h3 a")).toBeNull();
     expect(group.element.querySelector("li a").textContent).toBe("Suomen otsikko");
     expect(group.element.querySelector("p").textContent).toBe("Lyhyt kuvaus");
     expect(group.element.querySelector("script,b")).toBeNull();
@@ -300,9 +301,9 @@ test("the shared group accepts a row cap while search still defaults to three", 
     home.render(manyRows, ["title"], types);
     expect(home.element.querySelectorAll("li")).toHaveLength(5);
 });
-test("Home Show all clears remembered articles and opens the newest-first card collection", async () => {
+test.each(["h2 > a", ".supplemental-dataset-show-all"])("Home collection link %s clears remembered articles and opens newest-first cards", async selector => {
     const group = createSupplementalDatasetGroup({ dataset: "other", langKey: "other" }, "", {
-        rowCap: 5, preselectArticle: true, emptyKey: "front_page_no_results", showAllKey: "front_page_show_all",
+        rowCap: 5, headingTag: "h2", linkHeading: true, preselectArticle: true, emptyKey: "front_page_no_results", showAllKey: "front_page_show_all",
         replacementParams: { sort_column: "__newest", sort_order: "DESC", view: "card" },
     });
     document.body.append(group.element);
@@ -316,13 +317,16 @@ test("Home Show all clears remembered articles and opens the newest-first card c
         expect(getUnifiedTableState("other").cardView.expandedId).toBeNull();
         return { abort: false };
     });
-    group.element.querySelector(".supplemental-dataset-show-all").click();
+    const link = group.element.querySelector(selector);
+    expect(link).not.toBeNull();
+    expect(link.href).toBe(group.element.querySelector(".supplemental-dataset-show-all").href);
+    link.click();
     await vi.waitFor(() => expect(mocks.navigate).toHaveBeenCalledWith("other", {
         forceReload: true, replacementParams: { sort_column: "__newest", sort_order: "DESC", view: "card" },
     }));
 });
-test("modified-click keeps native href behavior without touching navigation state", () => {
-    const anchor = mount().element.querySelector("li a");
+test.each(["li a", "h2 > a"])("modified-click on %s keeps native href behavior without touching navigation state", selector => {
+    const anchor = mount("other", { headingTag: "h2", linkHeading: true }).element.querySelector(selector);
     const event = new MouseEvent("click", { bubbles: true, cancelable: true, ctrlKey: true });
     anchor.dispatchEvent(event);
     expect(event.defaultPrevented).toBe(false);
@@ -375,4 +379,64 @@ describe("renderExcerptWithMatchesMarked", () => {
         expect(element.querySelectorAll("mark")).toHaveLength(0);
         expect(element.textContent).toBe("nothing of note here");
     });
+});
+
+test('compact search names use the visible heading as one guarded row link', async () => {
+    setRowPresentationChoice('other', 'article_view');
+    const group = createSupplementalDatasetGroup({ dataset: 'other', langKey: 'other' }, 'hotel');
+    document.body.append(group.element);
+    group.render([{ id: 1, title: '<h1>Hotel <em>news</em></h1><p><a href="https://example.test/pay">Today</a></p>' }],
+        ['title'], { title: { card_element: 'header', show_value_on_card: true } });
+    const link = group.element.querySelector('li a');
+    expect(link.textContent).toBe('Hotel news Today');
+    expect(link.querySelector('a,h1')).toBeNull();
+    expect(new URL(link.href).pathname).toBe('/alias-other/1');
+
+    link.click();
+    await vi.waitFor(() => expect(mocks.openArticle).toHaveBeenCalledWith({ id: 1 }, 'other', null, expect.any(Object)));
+    const request = mocks.openArticle.mock.calls[0][3];
+    expect(request.isCurrent()).toBe(true);
+    beginRowPresentationRequest('newer');
+    expect(request.isCurrent()).toBe(false);
+});
+
+test('compact search chooses a readable heading per row and language, then an eligible name', async () => {
+    mocks.avatar.mockImplementation(async (_seed, letter) => {
+        const avatar = document.createElement('div');
+        avatar.textContent = letter;
+        return avatar;
+    });
+    const group = createSupplementalDatasetGroup({ dataset: 'other', langKey: 'other' }, 'hotel', { includeThumbnails: true });
+    document.body.append(group.element);
+    const header = { card_element: 'header', data_type: 'text', show_value_on_card: true };
+    const field = { data_type: 'text', show_value_on_card: true };
+    const fields = { private_title: { ...header, hide_on_small_card: true },
+        first: { ...header, is_multilingual: true }, second: header,
+        display_name: { data_type: 'text' }, name: field };
+    const row = { id: 1, private_title: 'Private', first: { en: '<h2> </h2>', fi: '<h1>Ensin</h1>' },
+        second: '<h3>Second</h3>', display_name: 'Outside search', name: 'Visible name' };
+    group.render([row, { ...row, id: 2, first: 'Ordinary' }, { ...row, id: 3, second: '' }], Object.keys(fields), fields);
+    const links = () => [...group.element.querySelectorAll('li a')].map(link => link.textContent);
+    await refreshLocalizedDatasetValues('en');
+    expect(links()).toEqual(['Second', 'Ordinary', 'Visible name']);
+    await vi.waitFor(() => expect(mocks.avatar).toHaveBeenCalledWith('1_', 'S', false));
+    await refreshLocalizedDatasetValues('fi');
+    expect(links()).toEqual(['Ensin', 'Ordinary', 'Ensin']);
+    await vi.waitFor(() => expect(group.element.querySelector('li .card_small_image_inner').textContent).toBe('E'));
+    expect(group.element.textContent).not.toContain('Private');
+    expect(group.element.textContent).not.toContain('Outside search');
+    group.render([{ id: 8, name: 'Label' }], ['name'], { name: field });
+    expect(links()).toEqual(['8']);
+});
+
+test('compact search shows the words of an inferred HTML title in the row link', () => {
+    const group = createSupplementalDatasetGroup({ dataset: 'other', langKey: 'other' }, 'hotel');
+    document.body.append(group.element);
+    group.render([{ id: 42, heading: '<h2> </h2>', title: '<h1>Hotel</h1>' }], ['heading', 'title'], {
+        heading: { card_element: 'header', data_type: 'text', show_value_on_card: true },
+        title: { data_type: 'text', show_value_on_card: true },
+    });
+    const link = group.element.querySelector('li a');
+    expect(link.textContent).toBe('Hotel');
+    expect(new URL(link.href).pathname).toBe('/alias-other/42');
 });

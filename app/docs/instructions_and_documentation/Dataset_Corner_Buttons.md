@@ -5,10 +5,22 @@ Keeps corner placement and modal scope explicit for future maintenance. -->
 
 # Dataset corner buttons
 
-The active dataset toolbar uses the existing menu and filter toggles. Whenever the
-toolbar is visible both toggles stay in it, can open or close their panel, and
-report its current state with `aria-expanded`. The corresponding floating and
-panel controls are hidden and removed from keyboard navigation.
+Each viewport corner has one visible, keyboard-accessible control. The menu
+occupies the upper left and the filter toggle occupies the upper right.
+When the dataset toolbar is visible, each corner follows its own panel:
+
+| Panel | Closed | Open |
+| --- | --- | --- |
+| Left menu | Dataset toolbar opens the menu. | The navbar header closes the menu at the upper left. |
+| Right filter panel | Dataset toolbar opens the filters. | The filter-panel header closes the panel at the upper right. |
+
+An open panel starts at the top edge of the application and paints over the
+dataset toolbar and content in overlay mode. The navbar overlays through
+1850px and the filters overlay below 1100px. Each panel owns its corner at
+every width. On phones the opposite control remains reachable with either or
+both panels open. Each control reports its state with `aria-expanded`. The
+unused buttons are hidden and removed from the tab order. When a focused
+control opens or closes its panel, focus follows the action to its new owner.
 
 | Surface | Toolbar and navigation |
 | --- | --- |
@@ -16,7 +28,7 @@ panel controls are hidden and removed from keyboard navigation.
 | Listing below the hero | The same toolbar displays the dataset title and search. The scroll container and toolbar retain their dimensions at the switch. |
 | Phone through 700px | Model D retains its 48px toolbar, 52px menu, site or article identity, 44px search toggle and 52px filter toggle. |
 | Both vertical panels open in a listing | Each panel supplies its own closer. The original horizontal row returns to the hero. |
-| Selected article, including an empty result | The installation's article toolbar keeps its dataset title, search and existing close action. Both panel toggles stay in the visible toolbar. |
+| Selected article, including an empty result | The article toolbar stays visible and retains its existing close action. Its menu and filter controls follow the independent corner rules above. |
 | Inactive dataset or Home | The hidden dataset releases its controls to the active surface. |
 
 The single surface-state decision is `resolveDatasetTopbarMode` in
@@ -24,7 +36,7 @@ The single surface-state decision is `resolveDatasetTopbarMode` in
 a retained list. In a listing, the runtime compares the actual inline hero's
 bottom with the top of its own scroll container. While the toolbar participates,
 the hero row remains mounted in it on both sides of that boundary. Narrow
-overlay panels open below the active toolbar so its edge controls remain usable.
+overlay panels place their own headers above the active toolbar.
 
 ## Modal boundary
 
@@ -35,7 +47,7 @@ Image-first, image preview and reusable modal dialogs keep their existing contro
 Focused unit coverage checks both panel owners, the transferred hero row, original button action/focus preservation, hidden datasets, ownership release, FI/EN accessible labels, teardown and canonical builder toggles. Existing responsive visibility and temporary filter shortcut tests remain applicable.
 
 `filterbar_menu_history.test.js` also checks Home/dataset Back/Forward and
-the same toolbar toggle before and after the hero scroll boundary, with both menu states and
+the active menu control before and after the hero scroll boundary, with both menu states and
 unrelated focus. It focuses the outgoing control before navigation and checks
 each incoming control without supplying focus after the transition.
 It also loads the actual toolbar CSS and samples the existing transition
@@ -59,7 +71,7 @@ pointer closing at 320×568, 375×667 and 414×896 in light and dark themes.
 Destination geometry uses a fixed catalogue rather than the native dataset count.
 
 `E10_site_identity_and_menu_contract.spec.ts` exercises the open and closed
-menu in wide and narrow articles. E15 uses native Chromium input to drag the
+menu in wide and narrow articles. At 1920px it measures the toolbar opener after the navbar closes (at least 44 × 44px), checks that the toolbar slot expands and collapses, and verifies that the reopened navbar closer returns to the same corner. E15 uses native Chromium input to drag the
 real listing scrollbar across the hero threshold in both directions and checks
 the full scroll range and toolbar geometry. Its other #999 cases open both
 panels in both orders, verify the actual pointer target and keyboard owner, and
@@ -70,12 +82,12 @@ preview with at least two accessible navigation tabs.
 
 ## End-control order
 
-The panel button is always last; do not insert controls after it. Keep Home in
+When the shared toolbar owns the right corner, its filter button is last. Keep Home in
 its original host: first in the hero dataset-navigation row, in the shared
 bar's end slot above 700px. Phones have no top-bar Home button.
 Where Home and panel share an end slot, existing Home-prepend/panel-append
 placement supplies DOM order; CSS must not reverse it with `order: 10`.
-The filter toggle occupies the toolbar end slot in both modes. Home stays in
+When the filter panel is open, its closer occupies the upper right. Home stays in
 normal flow in the original 44px row, preserving its direct-child label fitter.
 Native Home keeps its first navigation link and has no dataset filter panel.
 

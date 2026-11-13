@@ -14,6 +14,84 @@ const css = readFileSync(resolve(currentDirectory, 'front_page.css'), 'utf8');
 const navbar = readFileSync(resolve(currentDirectory, '../navigation/navbar/navbar_layout.css'), 'utf8');
 const postcss = requireNodeDependency('postcss');
 
+test('Home box and search headings use the larger link size while supplemental search keeps its smaller headings', () => {
+    const style = document.createElement('style');
+    style.textContent = readFileSync(resolve(currentDirectory, '../filterbar/text_search/supplemental_dataset_results.css'), 'utf8');
+    const group = document.createElement('section');
+    group.className = 'supplemental-dataset-group';
+    group.innerHTML = '<h2><a href="/news">News</a></h2><h3>Other results</h3>'
+        + '<ul><li>First</li><li>Second</li></ul><a class="supplemental-dataset-show-all" href="/news">Show all</a>';
+    const blocks = document.createElement('div');
+    blocks.className = 'front-page-blocks';
+    style.textContent += css;
+    blocks.append(group);
+    document.head.append(style);
+    document.body.append(blocks);
+    try {
+        expect(getComputedStyle(group.querySelector('h2')).fontSize).toMatch(/^(?:1\.375rem|22px)$/);
+        expect(getComputedStyle(group.querySelector('h3')).fontSize).toMatch(/^(?:1rem|16px)$/);
+        const heading = group.querySelector('h2');
+        const link = heading.querySelector('a');
+        for (const color of ['rgb(29, 41, 53)', 'rgb(241, 235, 229)']) {
+            heading.style.color = color;
+            expect(getComputedStyle(link).color).toBe(color);
+            expect(getComputedStyle(link).textDecoration).toBe('none');
+        }
+        link.focus();
+        expect(document.activeElement).toBe(link);
+        // jsdom can focus the native anchor but does not model the keyboard :focus-visible heuristic.
+        const focus = postcss.parse(style.textContent).nodes.find(rule => rule.selector === '.supplemental-dataset-group a:focus-visible');
+        expect(focus.nodes.find(node => node.prop === 'outline').value).toBe('2px solid var(--primary_color)');
+        expect(focus.nodes.find(node => node.prop === 'outline-offset').value).toBe('3px');
+        expect(getComputedStyle(group.querySelector('.supplemental-dataset-show-all')).textDecoration).toBe('underline');
+        const gapRule = postcss.parse(css).nodes.find(rule => rule.nodes?.some(
+            decl => decl.prop === 'margin-block-end' && decl.value === 'var(--home-box-heading-gap, 8px)'));
+        for (const homeSurface of ['front-page-blocks', 'front-page-search-sheet__slot']) {
+            blocks.className = homeSurface;
+            expect(heading.matches(gapRule.selector)).toBe(true);
+            expect(getComputedStyle(group.querySelector('li')).marginBlockStart).toMatch(/^0(?:px)?$/);
+            expect(getComputedStyle(group.querySelector('li + li')).marginBlock).toBe('0.6rem');
+        }
+        // Ordinary dataset search is outside Home's result slots.
+        blocks.className = '';
+        expect(heading.matches(gapRule.selector)).toBe(false);
+        expect(getComputedStyle(group.querySelector('li')).marginBlock).toBe('0.6rem');
+    } finally {
+        style.remove();
+        blocks.remove();
+    }
+});
+
+test('only Home row links and Show all share a light-theme ink, and only adjacent rows take the row gap', () => {
+    const style = postcss.parse(css);
+    const linkRule = style.nodes.find(node => node.nodes?.some(decl => decl.prop === 'color' && decl.value.includes('light-dark(')));
+    const gapRule = style.nodes.find(node => node.nodes?.some(decl => decl.prop === 'margin-block-start' && decl.value.includes('--home-box-row-gap')));
+    const priorRule = style.nodes.find(node => node.selector?.endsWith('> li:has(+ li)'));
+    const surface = document.createElement('div');
+    surface.innerHTML = '<section class="supplemental-dataset-group"><h2><a href="/news">News</a></h2><ul>'
+        + '<li><div class="supplemental-dataset-result-text"><a href="/news/1">First</a></div></li>'
+        + '<li><div class="supplemental-dataset-result-text"><a href="/news/2">Second</a></div></li>'
+        + '</ul><a class="supplemental-dataset-show-all" href="/news">Show all</a></section>';
+    document.body.append(surface);
+    try {
+        for (const homeSurface of ['front-page-blocks', 'front-page-search-sheet__slot']) {
+            surface.className = homeSurface;
+            const anchors = [...surface.querySelectorAll('a')];
+            expect(anchors.map(link => link.matches(linkRule.selector))).toEqual([false, true, true, true]);
+            anchors[1].dataset.articleAccess = 'denied';
+            expect(anchors[1].matches(linkRule.selector)).toBe(false);
+            delete anchors[1].dataset.articleAccess;
+            const rows = [...surface.querySelectorAll('li')];
+            expect(rows.map(row => row.matches(gapRule.selector))).toEqual([false, true]);
+            expect(rows.map(row => row.matches(priorRule.selector))).toEqual([true, false]);
+        }
+        surface.className = 'supplemental-dataset-results';
+        for (const rule of [linkRule, gapRule, priorRule]) expect(surface.querySelector(rule.selector)).toBeNull();
+    } finally {
+        surface.remove();
+    }
+});
+
 test('Home boxes keep one 800px column with auto margins as the default', () => {
     const root = postcss.parse(css);
     const columns = [];

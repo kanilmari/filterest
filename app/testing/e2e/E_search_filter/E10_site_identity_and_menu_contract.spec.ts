@@ -206,32 +206,52 @@ test.describe('E10 — Site identity and menu contract', () => {
     const wideTopbarMenuButton = wideTopbar.locator(
       '[data-testid="shared-topbar-menu-button"]',
     );
-    const wideTopbarMenuSlot = wideTopbar.locator(
-      '.dataset-shared-topbar__menu-slot',
-    );
+    const wideMenuSlot = wideTopbar.locator('.dataset-shared-topbar__menu-slot');
     const wideDatasetTitle = wideTopbar.locator(
       '.dataset-shared-topbar__dataset-title',
     );
     await expect(wideTopbar).toBeVisible();
-    await expect(navbarMenuButton).toBeHidden();
+    await expect(navbarMenuButton).toBeVisible();
+    await expect(navbarMenuButton).toHaveAttribute('aria-expanded', 'true');
     await expect(floatingMenuButton).toBeHidden();
-    await expect(wideTopbarMenuButton).toBeVisible();
-    await expect(wideTopbarMenuButton).toHaveAttribute('aria-expanded', 'true');
+    await expect(wideTopbarMenuButton).toBeHidden();
     await expect(wideTopbar.locator('#showMenuButton')).toHaveCount(0);
     await expect(page.locator('#showMenuButton')).toHaveCount(1);
-    await expect(wideTopbarMenuButton.locator('.environment-badge')).toBeVisible();
-    const box = await wideTopbarMenuButton.boundingBox();
-    expect(box?.width).toBe(44); expect(box?.height).toBe(44);
-    const slotWidth = await wideTopbarMenuSlot.evaluate(slot => slot.getBoundingClientRect().width);
-    await wideTopbarMenuButton.click();
+    const initialBox = (await navbarMenuButton.boundingBox())!;
+    expect(initialBox.width).toBe(44);
+    expect(initialBox.height).toBe(44);
+    expect(initialBox.x).toBeGreaterThanOrEqual(0); expect(initialBox.x).toBeLessThan(32);
+    expect(initialBox.y).toBeGreaterThanOrEqual(0); expect(initialBox.y).toBeLessThan(32);
+
+    const slotWidth = () => wideMenuSlot.evaluate(slot => slot.getBoundingClientRect().width);
+    await expect.poll(slotWidth).toBe(0);
+    await navbarMenuButton.click();
     await expect(page.locator('#navbar')).toHaveClass(/collapsed/);
+    await expect(navbarMenuButton).toBeHidden();
+    await expect(wideTopbarMenuButton).toBeVisible();
+    await expect(wideTopbarMenuButton.locator('.environment-badge')).toBeVisible();
     await expect(wideTopbarMenuButton).toHaveAttribute('aria-expanded', 'false');
     await expect(wideDatasetTitle).toBeVisible();
+    // Wait for the slot to reveal the opener, then measure the actual button.
+    await expect.poll(slotWidth).toBeGreaterThanOrEqual(44);
+    await expect.poll(() => wideTopbarMenuButton.evaluate((button, initial) => {
+      const rect = button.getBoundingClientRect();
+      return {
+        wideEnough: rect.width >= 44,
+        tallEnough: rect.height >= 44,
+        sameCorner: Math.abs(rect.x - initial.x) <= 1 && Math.abs(rect.y - initial.y) <= 1,
+      };
+    }, initialBox)).toEqual({ wideEnough: true, tallEnough: true, sameCorner: true });
     await wideTopbarMenuButton.click();
     await expect(page.locator('#navbar')).not.toHaveClass(/collapsed/);
-    await expect(wideTopbarMenuButton).toHaveAttribute('aria-expanded', 'true');
-    await expect(navbarMenuButton).toBeHidden();
-    expect(await wideTopbarMenuSlot.evaluate(slot => slot.getBoundingClientRect().width)).toBeCloseTo(slotWidth, 0);
+    await expect(navbarMenuButton).toBeVisible();
+    await expect(navbarMenuButton).toHaveAttribute('aria-expanded', 'true');
+    await expect(wideTopbarMenuButton).toBeHidden();
+    await expect.poll(slotWidth).toBe(0);
+    await expect.poll(() => navbarMenuButton.evaluate((button, initial) => {
+      const rect = button.getBoundingClientRect();
+      return Math.max(Math.abs(rect.x - initial.x), Math.abs(rect.y - initial.y));
+    }, initialBox)).toBeLessThanOrEqual(1);
 
     await page.setViewportSize({ width: 375, height: 812 });
     await page.evaluate(() => localStorage.setItem('navVisibleNarrow', 'false'));
@@ -288,13 +308,13 @@ test.describe('E10 — Site identity and menu contract', () => {
     await narrowTopbarMenuButton.click();
     await expect(page.locator('#navbar')).not.toHaveClass(/collapsed/);
     await expect(page.locator('#navbar')).toBeInViewport({ ratio: 0.95 });
-    await expect(navbarMenuButton).toBeHidden();
-    await expect(narrowTopbarMenuButton).toBeVisible();
-    await expect(narrowTopbarMenuButton).toHaveAttribute('aria-expanded', 'true');
-    await expect(narrowTopbarMenuButton).toHaveAttribute('aria-hidden', 'false');
-    await expect(narrowTopbarMenuButton).toHaveAttribute('tabindex', '0');
+    await expect(narrowTopbarMenuButton).toBeHidden();
+    await expect(navbarMenuButton).toBeVisible();
+    await expect(navbarMenuButton).toHaveAttribute('aria-expanded', 'true');
+    await expect(navbarMenuButton).toHaveAttribute('aria-hidden', 'false');
+    await expect(navbarMenuButton).toHaveAttribute('tabindex', '0');
     await expect(floatingMenuButton).toBeHidden();
-    await narrowTopbarMenuButton.click();
+    await navbarMenuButton.click();
     await expect(page.locator('#navbar')).toHaveClass(/collapsed/);
     await expect(narrowTopbarMenuButton).toHaveAttribute('aria-expanded', 'false');
     await expect(narrowTopbarMenuButton).toBeVisible();
@@ -330,12 +350,13 @@ test.describe('E10 — Site identity and menu contract', () => {
     await heroMenuButton.click();
     await expect(page.locator('#navbar')).not.toHaveClass(/collapsed/);
     await expect(page.locator('#navbar')).toBeInViewport({ ratio: 0.95 });
-    await expect(page.locator('#hideMenuButton')).toBeHidden();
-    await expect(heroMenuButton).toBeVisible();
-    await expect(heroMenuButton).toHaveAttribute('aria-expanded', 'true');
-    await expect(heroMenuButton).toHaveAttribute('tabindex', '0');
+    const closer = page.locator('#navbar #hideMenuButton');
+    await expect(heroMenuButton).toBeHidden();
+    await expect(closer).toBeVisible();
+    await expect(closer).toHaveAttribute('aria-expanded', 'true');
+    await expect(closer).toHaveAttribute('tabindex', '0');
     await expect(floatingMenuButton).toBeHidden();
-    await heroMenuButton.click();
+    await closer.click();
     await expect(page.locator('#navbar')).toHaveClass(/collapsed/);
     await expect(heroMenuButton).toBeVisible();
     await expect(heroMenuButton).toHaveAttribute('aria-expanded', 'false');

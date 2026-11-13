@@ -43,7 +43,8 @@ function addHeaderElement(
     table_name,
     container,
     storedRawValue = val_str,
-    columnMeta = {}
+    columnMeta = {},
+    sourceText = val_str
 ) {
     const headerDiv = document.createElement("div");
     headerDiv.classList.add("card_header");
@@ -55,7 +56,7 @@ function addHeaderElement(
         column,
         hasLangKey, // jos true → data-lang-key attribuutti, ei tekstisisältöä
         "header_value", // css‑luokka arvolle
-        val_str,
+        sourceText,
         columnMeta
     );
 

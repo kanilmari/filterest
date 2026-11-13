@@ -21,6 +21,7 @@ vi.mock('./card_view/card_avatar_builder.js', () => ({
     createImageElement: vi.fn(async () => document.createElement('img')),
 }));
 import { createSingleCard } from './card_view/card_row_builder.js';
+import { cancelEditing, disableEditing, enableEditing } from './card_view/card_field_formatter.js';
 import { buildRowArticleContent } from './card_view/row_article_content_builder.js';
 import { create_product_card_view } from './product_card_view/product_card_view_printer.js';
 import { buildExperimentalCardModel } from './experimental_free_layout_card/experimental_free_layout_card_helpers.js';
@@ -151,4 +152,48 @@ test.each([
     expect(product.querySelector('.product-card-view-title').textContent).toBe(expected);
     expect(article.rowArticleContentElement.querySelector('.big_card_header_value').textContent).toBe(expected);
     expect(experiment.summary.headerText).toBe(expected);
+});
+
+test.each([
+    ['<h1>Hotel</h1>', 'Hotel'],
+    ['<h1><em>Hotel</em> <a href="https://example.test/news">news</a></h1>', 'Hotel news'],
+    ['<h1><strong>Hotel</strong></h1>', 'Hotel', true],
+])('renders an inferred record title without block markup and keeps its edit source: %s', async (source, expected, multilingual = false) => {
+    const stored = multilingual ? { en: source, fi: 'Hotelli' } : source;
+    const row = { id: 42, heading: '<h2> </h2>', title: stored };
+    const types = { id: { data_type: 'integer' }, heading: field({ card_element: 'header' }),
+        title: field({ editable_in_ui: true, is_multilingual: multilingual }) };
+    const columns = Object.keys(types);
+    const card = await createSingleCard(row, columns, 'notes', types, context);
+    document.body.append(card);
+    const { rowArticleContentElement, rowArticleHeaderText } =
+        await buildRowArticleContent(row, 'notes', types, columns, '42', '?', false);
+    expect(card.querySelector('.card_header').title).toBe(expected);
+    expect(card.querySelector('.small_card_name_text').textContent).toBe(expected);
+    expect(rowArticleHeaderText).toBe(expected);
+    for (const element of [card.querySelector('.header_value'), rowArticleContentElement.querySelector('.big_card_header_value')]) {
+        const wrapper = element.parentElement;
+        const checkDisplay = () => {
+            expect(element.textContent).toBe(expected);
+            expect(element.querySelector('h1,h2,h3,h4,h5,h6')).toBeNull();
+            expect(element.dataset.rawValue).toBe(multilingual ? JSON.stringify(stored) : source);
+            if (source.includes('<em>')) {
+                expect(element.querySelector('em')?.textContent).toBe('Hotel');
+                expect(element.querySelector('a')?.href).toBe('https://example.test/news');
+            }
+        };
+        checkDisplay();
+        enableEditing(wrapper, 'notes', types);
+        const input = element.querySelector('input,textarea');
+        expect(input.value).toBe(source);
+        input.value = 'Discard this change';
+        cancelEditing(wrapper);
+        checkDisplay();
+        if (multilingual) {
+            enableEditing(wrapper, 'notes', types);
+            element.querySelector('input,textarea').value = '<h1>New title</h1>';
+            const updates = disableEditing(wrapper);
+            expect(JSON.parse(updates.title)).toEqual({ en: '<h1>New title</h1>', fi: 'Hotelli' });
+        }
+    }
 });

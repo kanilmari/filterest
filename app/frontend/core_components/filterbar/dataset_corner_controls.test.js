@@ -27,7 +27,7 @@ function fixture() {
     return { active: true, topbarVisible: true, navbarVisible: false, filterbarVisible: false };
 }
 beforeEach(() => { localStorage.clear(); });
-afterEach(() => { controls?.destroy(); document.body.innerHTML = ""; });
+afterEach(() => { controls?.destroy(); document.body.innerHTML = ""; vi.restoreAllMocks(); });
 
 describe("dataset corner owner", () => {
     test.each([true, false])('original Home hosts and final panel survive handoffs, panel first=%s', panelFirst => {
@@ -60,9 +60,18 @@ describe("dataset corner owner", () => {
         }
     });
     test.each([
-        [false, false, true], [false, true, true], [true, false, true],
-        [true, true, false], [true, true, true],
-    ])("exactly one menu and filter target for nav=%s, filters=%s, toolbar=%s", (navbarVisible, filterbarVisible, topbarVisible) => {
+        // Width, nav open, filters open, shared bar visible, menu host, filter host.
+        [390, true, false, true, "panel", "toolbar"],
+        [1099, true, true, true, "panel", "panel"],
+        [1100, false, true, true, "toolbar", "panel"],
+        [1850, true, true, true, "panel", "panel"],
+        [1851, true, true, true, "panel", "panel"],
+        [1920, true, false, true, "panel", "toolbar"],
+        [1920, false, false, true, "toolbar", "toolbar"],
+        [390, true, true, false, "panel", "panel"],
+        [1920, true, true, false, "panel", "panel"],
+    ])("uses viewport corners at %ipx (nav=%s, filters=%s, toolbar=%s)", (width, navbarVisible, filterbarVisible, topbarVisible, menuHost, filterHost) => {
+        vi.spyOn(window, "innerWidth", "get").mockReturnValue(width);
         const state = fixture();
         parts.syncNavbarAccessibility.mockImplementation(syncNavbarMenuButtonAccessibility);
         document.getElementById("navbar").classList.toggle("collapsed", !navbarVisible);
@@ -71,13 +80,13 @@ describe("dataset corner owner", () => {
         const menuTargets = [parts.sourceMenuButton, hideMenu, parts.topbarMenuButton];
         const filterTargets = [parts.filterButton, parts.hideFilterButton];
         const interactive = button => button.tabIndex === 0 && button.getAttribute("aria-hidden") === "false";
-        expect(menuTargets.filter(interactive)).toEqual([topbarVisible ? parts.topbarMenuButton : hideMenu]);
-        expect(filterTargets.filter(interactive)).toEqual([topbarVisible ? parts.filterButton : parts.hideFilterButton]);
+        expect(menuTargets.filter(interactive)).toEqual([menuHost === "toolbar" ? parts.topbarMenuButton : hideMenu]);
+        expect(filterTargets.filter(interactive)).toEqual([filterHost === "toolbar" ? parts.filterButton : parts.hideFilterButton]);
         expect(parts.filterButton.getAttribute("aria-controls")).toBe("panel");
         expect(parts.filterButton.getAttribute("aria-expanded")).toBe(String(filterbarVisible));
         expect(parts.topbarMenuButton.getAttribute("aria-expanded")).toBe(String(navbarVisible));
-        expect(parts.hideFilterButton.parentElement.hidden).toBe(topbarVisible);
-        expect(parts.hideFilterButton.parentElement.inert).toBe(topbarVisible);
+        expect(parts.hideFilterButton.parentElement.hidden).toBe(filterHost === "toolbar");
+        expect(parts.hideFilterButton.parentElement.inert).toBe(filterHost === "toolbar");
     });
     test("hands filter focus between the same bar button and the real panel closer", () => {
         const state = fixture();

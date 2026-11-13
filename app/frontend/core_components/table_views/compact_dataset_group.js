@@ -6,12 +6,12 @@
 import { openArticleAfterListing, openExplicitRowListingTab } from './card_view/row_article_listing_navigation.js';
 import { bindRowActivation, bindRowOpeningHref } from './card_view/default_row_affordance.js';
 import { openDefaultRowPresentation } from './row_presentation/row_presentation_dispatcher.js';
+import { isRecordTitleColumnVisible, resolveRecordTitle } from './record_title_resolver.js';
 import { CARD_IMAGE_RENDER_SLOTS } from './card_view/card_image_render_options.js';
 import { getTranslationForKey } from "../lang/translation_handler.js";
 import {
     bindDatasetLanguageRenderer,
     resolveDatasetDisplayValue,
-    setLocalizedDatasetText,
 } from "./dataset_value_localizer.js";
 import { buildDatasetPath } from "../navigation/nav_engine/dataset_aliases.js";
 import { buildCardUrl } from "./card_view/row_article_opener_helpers.js";
@@ -33,12 +33,16 @@ export function getSupplementalSearchCopy(language) {
     return COPY[key] || COPY.en;
 }
 
+function truncateText(text, length) {
+    return text.length > length ? text.slice(0, length - 1).trimEnd() + "…" : text;
+}
+
 function plainText(value, length = Number.POSITIVE_INFINITY) {
     const parsed = document.createElement("template");
     parsed.innerHTML = String(value ?? "");
     parsed.content.querySelectorAll("script,style").forEach(node => node.remove());
     const text = (parsed.content.textContent || "").replace(/\s+/g, " ").trim();
-    return text.length > length ? text.slice(0, length - 1).trimEnd() + "…" : text;
+    return truncateText(text, length);
 }
 
 function findSearchMatch(text, query) {
@@ -116,25 +120,14 @@ export function renderExcerptWithMatchesMarked(element, excerpt, query) {
     if (remaining) element.append(remaining);
 }
 
-function roleColumn(columns, types, role) {
-    return columns.find(column => {
-        const metadata = types[column];
-        if (metadata?.show_value_on_card !== true || metadata.hide_everywhere === true || metadata.hide_on_small_card === true) return false;
-        const roles = String(metadata.card_element || "").split(",").map(item => item.trim());
-        if (roles.includes("hidden")) return false;
-        return roles.some(item => new RegExp("^" + role + "\\d*(?:\\+lang_key)?$").test(item.trim()));
-    });
+function columnsForRole(columns, types, role) {
+    const pattern = new RegExp("^" + role + "\\d*(?:\\+lang_key)?$");
+    return columns.filter(column => String(types[column].card_element || "")
+        .split(",").some(item => pattern.test(item.trim())));
 }
 
-function snippetColumns(columns, types, titleColumn) {
-    const visibleColumns = columns.filter(column => {
-        if (column === titleColumn || column === "id") return false;
-        const metadata = types[column];
-        if (metadata?.show_value_on_card !== true || metadata.hide_everywhere === true || metadata.hide_on_small_card === true) return false;
-        const roles = String(metadata.card_element || "").split(",").map(item => item.trim());
-        return !roles.includes("hidden");
-    });
-    return visibleColumns.sort((left, right) => {
+function snippetColumns(columns, types, firstHeader) {
+    return columns.filter(column => column !== firstHeader && column !== "id").sort((left, right) => {
         const descriptionRole = column => String(types[column]?.card_element || "")
             .split(",")
             .some(role => /^description\d*(?:\+lang_key)?$/.test(role.trim()));
@@ -214,13 +207,15 @@ export function bindQueryNavigation(link, dataset, query, rowID = null, options 
 }
 
 /** Reuse the card's lazy media and seeded fallback, without its article activation. */
-function createSupplementalThumbnail(row, dataset, columns, types, titleColumn) {
+function createSupplementalThumbnail(row, dataset, types, imageColumn) {
     const host = document.createElement('div');
     host.className = 'supplemental-dataset-thumbnail';
     host.setAttribute('aria-hidden', 'true');
     const reserved = document.createElement('div');
     reserved.className = 'card_small_image';
     host.append(reserved);
+    let latestLabel = '';
+    let renderedInitial;
     async function loadMedia() {
         // Home also imports this group: load article/card tools only for opted-in
         // thumbnails, after reserving geometry and before starting any media work.
@@ -231,19 +226,22 @@ function createSupplementalThumbnail(row, dataset, columns, types, titleColumn) 
         // The section may be cached off-DOM while the primary view changes.
         // Skip replaced rows, but still hydrate rows in that retained section.
         if (!host.closest('.supplemental-dataset-group')) return;
-        const imageColumn = roleColumn(columns, types, 'image');
         const fallback = resolveFallbackCardImageCandidate({ cached_image: row.cached_image });
+        const imageValue = row[imageColumn] || fallback?.value || '';
+        const initial = imageValue ? null : Array.from(latestLabel)[0] || '?';
+        // A language switch changes only an avatar whose visible initial actually changed.
+        if (initial === renderedInitial) return;
+        renderedInitial = initial;
         const created = ['created', 'created_at', 'luontiaika'].map(column => row[column]).find(Boolean) || '';
-        const label = plainText(resolveDatasetDisplayValue(row[titleColumn], types[titleColumn]));
         appendSmallCardSummary({
             card: host, row_item: row, table_name: dataset, setFieldHideAttribute: () => {},
-            image_value_small: row[imageColumn] || fallback?.value || '',
+            image_value_small: imageValue,
             image_column_small: row[imageColumn] ? imageColumn : fallback?.column,
             // Opt compact results into the same raster presentation as full cards;
             // collapsed-card summaries and article media retain their existing slots.
             image_render_slot_small: CARD_IMAGE_RENDER_SLOTS.CARD_MEDIA,
-            preferred_image_alt_label: label,
-            creation_seed: `${row.id ?? 'x'}_${created}`, header_first_letter: Array.from(label)[0] || '?',
+            preferred_image_alt_label: latestLabel,
+            creation_seed: `${row.id ?? 'x'}_${created}`, header_first_letter: initial,
             data_types: types,
         });
         // Move only media out of the summary; its link listener stays detached.
@@ -263,38 +261,51 @@ function createSupplementalThumbnail(row, dataset, columns, types, titleColumn) 
             image.addEventListener('error', () => keepDecorative(image));
         });
     }
-    void loadMedia().catch(() => { host.dataset.thumbnailState = 'unavailable'; });
-    return host;
+    return {
+        element: host,
+        updateLabel(label) {
+            latestLabel = label;
+            void loadMedia().catch(() => { host.dataset.thumbnailState = 'unavailable'; });
+        },
+    };
 }
 
 /** One stable group per dataset; order comes solely from the accepted main-tab list. */
 export function createSupplementalDatasetGroup(tab, query, {
     rowCap = 3, headingTag = 'h3', showAllKey = null, emptyKey = null, replacementParams,
-    preselectArticle = false, includeThumbnails = false,
+    preselectArticle = false, includeThumbnails = false, linkHeading = false,
 } = {}) {
     const element = document.createElement("section");
     element.className = "supplemental-dataset-group";
     element.dataset.dataset = tab.dataset;
     element.hidden = true;
+    const linkParams = replacementParams || { search: query };
+    const queryString = new URLSearchParams(linkParams).toString();
+    const querySuffix = queryString ? "?" + queryString : "";
+    const collectionHref = buildDatasetPath(tab.dataset) + querySuffix;
+    function createCollectionLink() {
+        const link = document.createElement("a");
+        link.href = collectionHref;
+        bindQueryNavigation(link, tab.dataset, query, null, { replacementParams, preselectArticle });
+        return link;
+    }
+
     const heading = document.createElement(headingTag);
-    bindDatasetLanguageRenderer(heading, () => {
-        heading.textContent = plainText(getTranslationForKey(tab.langKey, {
+    const headingLabel = linkHeading ? createCollectionLink() : heading;
+    if (linkHeading) heading.append(headingLabel);
+    bindDatasetLanguageRenderer(headingLabel, () => {
+        headingLabel.textContent = plainText(getTranslationForKey(tab.langKey, {
             fallback: tab.text || tab.dataset, countUsage: false,
         }), 100);
     });
     const list = document.createElement("ul");
-    const showAll = document.createElement("a");
+    const showAll = createCollectionLink();
     showAll.className = "supplemental-dataset-show-all";
-    const linkParams = replacementParams || { search: query };
-    const queryString = new URLSearchParams(linkParams).toString();
-    const querySuffix = queryString ? "?" + queryString : "";
-    showAll.href = buildDatasetPath(tab.dataset) + querySuffix;
     bindDatasetLanguageRenderer(showAll, language => {
         showAll.textContent = showAllKey
             ? getTranslationForKey(showAllKey, { countUsage: false })
             : getSupplementalSearchCopy(language).showAll;
     });
-    bindQueryNavigation(showAll, tab.dataset, query, null, { replacementParams, preselectArticle });
     const empty = document.createElement("p");
     empty.hidden = true;
     if (emptyKey) bindDatasetLanguageRenderer(empty, () => {
@@ -306,43 +317,43 @@ export function createSupplementalDatasetGroup(tab, query, {
         element,
         render(rows, columns, types) {
             list.replaceChildren();
-            const titleColumn = roleColumn(columns, types, "header");
-            const extractColumns = snippetColumns(columns, types, titleColumn);
+            // Compact results require explicit opt-in even when a column can appear on a full card.
+            const visibleColumns = columns.filter(column => types[column]?.show_value_on_card === true &&
+                isRecordTitleColumnVisible(types[column], 'card', false));
+            const headerColumns = columnsForRole(visibleColumns, types, "header");
+            const extractColumns = snippetColumns(visibleColumns, types, headerColumns[0]);
+            const imageColumn = includeThumbnails ? columnsForRole(visibleColumns, types, "image")[0] : null;
             for (const row of rows.slice(0, rowCap)) {
                 const item = document.createElement("li");
                 const text = includeThumbnails ? document.createElement('div') : item;
-                if (includeThumbnails) {
-                    item.className = 'supplemental-dataset-result';
-                    text.className = 'supplemental-dataset-result-text';
-                    item.append(createSupplementalThumbnail(row, tab.dataset, columns, types, titleColumn));
-                }
                 const title = document.createElement("a");
                 title.href = buildCardUrl("/", tab.dataset, row.id, "") + querySuffix;
                 title.dataset.rowId = String(row.id);
-                setLocalizedDatasetText(title, titleColumn ? row[titleColumn] : row.id, types[titleColumn], {
-                    transform: value => plainText(value, 140) || String(row.id),
+                const description = extractColumns.length ? document.createElement("p") : null;
+                const thumbnail = includeThumbnails ? createSupplementalThumbnail(row, tab.dataset, types, imageColumn) : null;
+                bindDatasetLanguageRenderer(title, language => {
+                    const resolved = headerColumns.length ? resolveRecordTitle({ rowItem: row, columns: visibleColumns,
+                        dataTypes: types, tableName: tab.dataset, preferredLanguage: language, surface: 'compact', headerColumns }) : null;
+                    const headingText = resolved?.column ? resolved.text : '';
+                    thumbnail?.updateLabel(headingText);
+                    title.textContent = truncateText(headingText.replace(/\s+/gu, " "), 140) || String(row.id);
+                    if (!description) return;
+                    const candidates = extractColumns.filter(column => column !== resolved?.column).map(column => ({
+                        value: resolveDatasetDisplayValue(row[column], types[column], language),
+                    })).filter(candidate => plainText(candidate.value));
+                    const matchingCandidate = candidates.find(candidate => findSearchMatch(plainText(candidate.value), query));
+                    const excerpt = buildSupplementalSearchExcerpt((matchingCandidate || candidates[0])?.value || "", query);
+                    renderExcerptWithMatchesMarked(description, excerpt, query);
+                    description.hidden = !excerpt;
                 });
                 bindQueryNavigation(title, tab.dataset, query, row.id, { replacementParams, preselectArticle });
                 text.append(title);
-                if (extractColumns.length) {
-                    const description = document.createElement("p");
-                    bindDatasetLanguageRenderer(description, language => {
-                        const candidates = extractColumns.map(column => ({
-                            value: resolveDatasetDisplayValue(row[column], types[column], language),
-                        })).filter(candidate => plainText(candidate.value));
-                        const matchingCandidate = candidates.find(candidate => findSearchMatch(
-                            plainText(candidate.value), query
-                        ));
-                        const excerpt = buildSupplementalSearchExcerpt(
-                            (matchingCandidate || candidates[0])?.value || "",
-                            query
-                        );
-                        renderExcerptWithMatchesMarked(description, excerpt, query);
-                        description.hidden = !excerpt;
-                    });
-                    text.append(description);
+                if (description) text.append(description);
+                if (thumbnail) {
+                    item.className = 'supplemental-dataset-result';
+                    text.className = 'supplemental-dataset-result-text';
+                    item.append(thumbnail.element, text);
                 }
-                if (includeThumbnails) item.append(text);
                 list.append(item);
             }
             empty.hidden = !emptyKey || rows.length > 0;

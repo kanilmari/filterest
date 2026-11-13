@@ -373,7 +373,7 @@ save invalidates Home even when the caller suppresses the sign-in redirect. Comp
 `table_views/compact_dataset_group.js` with cross-dataset search (three rows for
 search; the server's row cap for Home). Search retains its existing navigation.
 Home row links preselect their exact article without adding a dataset entry,
-so one Back returns to Home; Show all opens the
+so one Back returns to Home. Both the box heading and Show all open the
 card collection newest first (`__newest`). Boxes follow tab order in one centred
 800px column at every width, above the theme-aware image or video background.
 
@@ -628,13 +628,12 @@ close/Escape focus, status toasts and draft ownership have one implementation.
 Closing keeps preview; Reset restores saved values and panel geometry; leaving
 Home releases preview. Save preserves edits made while its request is pending.
 
-Home's JSON setting `front_page_presentation` reads as schema version 5: `anchor`,
-`horizontal_margin_px`, `vertical_margin_px`, `alignment`, `phone_alignment`,
+Home's JSON setting `front_page_presentation` reads as schema version 7: `anchor`,
+`horizontal_margin_px`, `vertical_margin_px`, `box_heading_gap_px`, `box_row_gap_px`, `alignment`, `phone_alignment`,
 `phone_story_size`, `max_width_px`, four theme wash/opacity fields, and `text_style`. The definition
 in `frontend/shared/front_page_presentation/definition.json` is imported by the
 browser and embedded by Go.
-Both margins are 0–320 px (step 1, initial 40);
-maximum width is 320–1600 px (step 10, initial 1120). A graphical 3 × 3 button grid
+The hero margins are 0–320 px (step 1, initial 40). **Space below box headings** sets the gap from a Home box heading to its first row (5–30 px, step 1, initial 8); the same gap applies to Home search results on phones and desktops. **Space between rows in a box** controls adjacent database rows on those same surfaces (9.6–30 px, step 0.1). The original spacing is 0.6 rem at every reader font size, including for older saved layouts. A custom pixel setting uses that spacing as its floor up to 30 px. Choosing the minimum restores the original font-relative spacing. The last row keeps its original distance from **Show all**. In the light theme, row and **Show all** links use a darker shade of the existing link colour. The maximum width is 320–1600 px (step 10, initial 1120). A graphical 3 × 3 button grid
 chooses the anchor; arrows select and focus adjacent cells, Home/End choose the
 first/last. The existing glyphs choose logical start, centre, end or justify,
 with translated names and `aria-pressed`; Enter/Space activate buttons. Start/end
@@ -656,20 +655,20 @@ A missing setting returns the centred default with revision `none`: the block
 is centred on both axes with logical start alignment. Version-one reads convert
 normal → start, artistic → centre, one margin → both and supply default media.
 Version-two/three reads map left → start, right → end, retaining centre/justify;
-v1–v3 gain inherited phone alignment; v1/v2 gain default text style; v1–v4 gain 15 px.
-Strict Go/browser writes require complete v5; the admin API also accepts complete
-v2/v3/v4 storage forms. One Go policy (`CanonicalStored`) selects downgrade-safe
-storage: at 15 px, inherited phone alignment stores v3 with start → left, end → right,
+v1–v3 gain inherited phone alignment; v1/v2 gain default text style; v1–v4 gain a 15 px phone story size; v1–v5 gain an 8 px box heading gap; v1–v6 gain the default row spacing.
+Strict Go/browser writes require complete v7; the admin API also accepts complete
+v2/v3/v4/v5/v6 storage forms. One Go policy (`CanonicalStored`) selects downgrade-safe
+storage: changing row spacing stores v7. Restoring 9.6 px uses the prior storage format. A non-default box heading gap then stores v6. Restore 8 px and save before rolling back to an older binary. With the default gap and 15 px phone story size, inherited phone alignment stores v3 with start → left, end → right,
 or ten-field v2 without `text_style` when style is default and reveal is off.
 That v2 form discards inactive timings, which read back as 3000/800. Only an
 explicit phone alignment stores v4; a size other than 15 px stores v5. Pre-change 9.5.x binaries refuse v5: before rollback, set the size to 15 px and save (v4 or lower).
 Before rollback to 9.5.1, also re-save phone alignment **As elsewhere** to remove v4.
-Public/admin GETs return v5 and its revision together; reads hash the original
+Public/admin GETs return v7 and its revision together; reads hash the original
 stored bytes and timestamp without rewriting them. POST `{presentation,version}`
 writes only presentation under its advisory lock and revision; stale or competing
 first writes return 409. Saves stamp the row and return `{version,presentation}`
-with actual stored revision and normalized v5. The palette adopts both. Other
-Home writes preserve presentation. Generic settings accept canonical v2/v3/v4/v5
+with actual stored revision and normalized v7. The palette adopts both. Other
+Home writes preserve presentation. Generic settings accept canonical v2/v3/v4/v5/v6/v7
 only; malformed stored values fail visibly.
 
 Light and dark sections each offer Theme wash and Media opacity (0–100%, step 1).

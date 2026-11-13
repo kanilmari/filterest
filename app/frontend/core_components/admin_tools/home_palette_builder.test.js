@@ -3,6 +3,7 @@
 // Connects the real shared shell and Home adapter with a controlled save endpoint.
 // Prevents preview leakage while missing settings already use the centred default.
 import { afterEach, expect, test, vi } from 'vitest';
+import { applyHomeSurfacePresentation } from '../front_page/front_page_presentation_renderer.js';
 import { mountHomePalette } from './home_palette_builder.js';
 import { DEFAULT_HOME_PRESENTATION as defaults } from '../../shared/front_page_presentation/validator.js';
 let mounted;
@@ -27,6 +28,97 @@ test('requires Home admin permission and exposes shared definition bounds', () =
     expect(get('phone-alignment').value).toBe('inherit');
     expect([get('horizontal-margin').min, get('horizontal-margin').max, get('horizontal-margin').step, get('horizontal-margin').value]).toEqual(['0', '320', '1', '40']);
     expect([get('max-width').min, get('max-width').max, get('max-width').step, get('max-width').value]).toEqual(['320', '1600', '10', '1120']);
+});
+
+test('box heading gap previews both bounds, saves with the old revision and resets to the saved gap', async () => {
+    const previousLanguage = document.documentElement.lang;
+    const old = { ...defaults, schema_version: 5, horizontal_margin_px: 61, phone_story_size: 17 };
+    delete old.box_heading_gap_px; delete old.box_row_gap_px;
+    const { get, render, saveRequestFn } = setup({ presentation: old, presentation_version: 'prior-layout' });
+    const page = document.createElement('div');
+    render.mockImplementation(value => applyHomeSurfacePresentation(page, value));
+    const slider = get('box-heading-gap');
+    const gap = () => page.style.getPropertyValue('--home-box-heading-gap');
+    try {
+        expect([slider.min, slider.max, slider.step, slider.value]).toEqual(['5', '30', '1', '8']);
+        for (const [lang, label] of [['en', 'Space below box headings'], ['fi', 'Laatikon otsikon alaväli']]) {
+            document.documentElement.lang = lang;
+            await vi.waitFor(() => expect(slider.getAttribute('aria-label')).toBe(label));
+        }
+        for (const bound of [5, 30]) {
+            edit(slider, bound);
+            expect(gap()).toBe(String(bound) + 'px');
+            expect(get('box-heading-gap-value').value).toContain(String(bound));
+        }
+        const value = { ...defaults, horizontal_margin_px: 61, phone_story_size: 17, box_heading_gap_px: 30 };
+        get('save').click();
+        await vi.waitFor(() => expect(get('save').disabled).toBe(false));
+        expect(saveRequestFn).toHaveBeenCalledWith({ presentation: value, version: 'prior-layout' });
+        edit(slider, 5);
+        get('reset').click();
+        expect(slider.value).toBe('30');
+        expect(gap()).toBe('30px');
+    } finally {
+        document.documentElement.lang = previousLanguage;
+    }
+});
+
+test('row spacing previews, saves and resets independently from heading spacing on an older Home', async () => {
+    const previousLanguage = document.documentElement.lang;
+    const old = { ...defaults, schema_version: 6, box_heading_gap_px: 21 };
+    delete old.box_row_gap_px;
+    const { get, render, saveRequestFn } = setup({ presentation: old, presentation_version: 'v6-saved' });
+    const container = document.createElement('div');
+    render.mockImplementation(value => applyHomeSurfacePresentation(container, value));
+    container.style.setProperty('--home-box-row-gap', '30px');
+    applyHomeSurfacePresentation(container, old);
+    expect(container.style.getPropertyValue('--home-box-row-gap')).toBe('');
+    const rowGap = get('box-row-gap');
+    try {
+        expect([rowGap.min, rowGap.max, rowGap.step, rowGap.value]).toEqual(['9.6', '30', '0.1', '9.6']);
+        for (const [lang, label] of [['fi', 'Laatikon rivien väli'], ['en', 'Space between rows in a box']]) {
+            document.documentElement.lang = lang;
+            await vi.waitFor(() => expect(rowGap.getAttribute('aria-label')).toBe(label));
+        }
+        for (const px of [9.7, 30]) {
+            edit(rowGap, px);
+            expect(get('box-row-gap-value').value).toContain(String(px));
+            expect(container.style.getPropertyValue('--home-box-row-gap')).toBe(String(px) + 'px');
+            expect(container.style.getPropertyValue('--home-box-heading-gap')).toBe('21px');
+        }
+        get('reset').click();
+        expect(rowGap.value).toBe('9.6');
+        expect(container.style.getPropertyValue('--home-box-row-gap')).toBe('');
+        edit(rowGap, 30);
+        get('save').click();
+        await vi.waitFor(() => expect(get('save').disabled).toBe(false));
+        expect(saveRequestFn).toHaveBeenCalledWith({ version: 'v6-saved',
+            presentation: { ...defaults, box_heading_gap_px: 21, box_row_gap_px: 30 } });
+        edit(rowGap, 9.6);
+        get('reset').click();
+        expect(rowGap.value).toBe('30');
+    } finally {
+        document.documentElement.lang = previousLanguage;
+    }
+});
+
+test.each([[20, '12', 12.1], [60, '30', 30]])('the row spacing floor follows a %ipx root up to 30px', (size, min, next) => {
+    const root = document.documentElement;
+    const original = root.style.fontSize;
+    try {
+        root.style.fontSize = String(size) + 'px';
+        const { get, render } = setup();
+        const rowGap = get('box-row-gap');
+        expect([rowGap.min, rowGap.max, rowGap.value]).toEqual([min, '30', min]);
+        expect(get('box-row-gap-value').value).toBe(String(size * 0.6) + 'px');
+        expect(rowGap.getAttribute('aria-valuetext')).toBe(get('box-row-gap-value').value);
+        edit(rowGap, next);
+        expect(render.mock.lastCall[0].box_row_gap_px).toBe(next === Number(min) ? 9.6 : next);
+        edit(rowGap, min);
+        expect(render.mock.lastCall[0].box_row_gap_px).toBe(9.6);
+    } finally {
+        root.style.fontSize = original;
+    }
 });
 
 test('logical buttons reuse icons and phone choices translate, preview, save and reset in both languages', async () => {

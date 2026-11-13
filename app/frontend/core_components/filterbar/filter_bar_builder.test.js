@@ -88,7 +88,10 @@ describe('create_filter_bar inline hero mounting', () => {
         shouldShowSharedTopBar.mockReturnValue(true);
         const navbar = await import('../navigation/menu_button/navbar_visibility_handler.js');
         const { create_filter_bar } = await import('./filter_bar_builder.js');
+        document.getElementById('navbar').classList.add('collapsed');
         const panel = create_filter_bar('demo', 'demo_uid', ['id'], { id: 'INTEGER' }, 1, false, 'card');
+        const panelClose = panel.querySelector('.hide_filter_bar_button');
+        panelClose.click();
         const hero = document.querySelector('.filterbar-inline-hero');
         const bar = document.querySelector('.dataset-shared-topbar');
         const scroller = document.getElementById('demo_card_view_container');
@@ -130,10 +133,12 @@ describe('create_filter_bar inline hero mounting', () => {
         menu.click();
         expect(navbar.toggleNavbarVisibility).toHaveBeenCalledTimes(1);
         filter.click();
-        expect(panel.classList.contains('filterbar-panel--hidden')).toBe(true);
-        filter.click();
         expect(panel.classList.contains('filterbar-panel--hidden')).toBe(false);
-        expect(panel.querySelector('.hide_filter_bar_button').tabIndex).toBe(-1);
+        expect(panelClose.tabIndex).toBe(0);
+        expect(filter.tabIndex).toBe(-1);
+        panelClose.click();
+        expect(panel.classList.contains('filterbar-panel--hidden')).toBe(true);
+        expect(filter.tabIndex).toBe(0);
     });
 
     test('mounts the dataset settings action in the authorized style section', async () => {
@@ -388,7 +393,7 @@ describe('create_filter_bar inline hero mounting', () => {
         expect(showMenuButton?.parentElement).toBe(originalMenuButtonParent);
     });
 
-    test('keeps the source in its original host and the shared toggle operable with the navbar open', async () => {
+    test('keeps the source in its original host and its duplicate inactive with the navbar open', async () => {
         const sharedTopbarRules = await import('./shared_topbar_builder.js');
         sharedTopbarRules.shouldShowSharedTopBar.mockReturnValue(true);
         document.getElementById('navbar')?.classList.remove('collapsed');
@@ -401,7 +406,8 @@ describe('create_filter_bar inline hero mounting', () => {
         const menuSlot = document.querySelector('.dataset-shared-topbar__menu-slot');
         expect(menuSlot?.hidden).toBe(false);
         expect(menuSlot?.classList.contains('dataset-shared-topbar__menu-slot--visible'))
-            .toBe(true);
+            .toBe(false);
+        expect(menuSlot?.inert).toBe(true);
         expect(menuSlot?.contains(showMenuButton)).toBe(false);
         expect(menuSlot?.querySelector('[data-testid="shared-topbar-menu-button"]')).toBeTruthy();
         expect(showMenuButton?.parentElement).toBe(originalMenuButtonParent);

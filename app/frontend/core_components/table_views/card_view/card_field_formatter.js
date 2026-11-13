@@ -7,7 +7,7 @@ const IS_DEV_MODE = document.querySelector('meta[name="app-env"]')?.content === 
 
 import { endpoint_router } from '../../endpoints/endpoint_router.js';
 import { isServiceUnavailableError } from '../../pipeline/api_pipeline_helpers.js';
-import { renderAllowedHtml, containsAllowedHtml } from '../../../reusable_components/dom_container_builder.js';
+import { renderAllowedHtml, containsAllowedHtml, containsHeadingMarkup } from '../../../reusable_components/dom_container_builder.js';
 import { getLanguageWithBrowserFallback } from '../../state_stores/lang_preference_reader.js';
 import { readCachedUserPermissions, canEditServiceCatalogColumn } from '../../service_catalog/service_catalog_moderation.js';
 import { formatTimestampDisplayParts } from '../timestamp_display_formatter.js';
@@ -69,12 +69,7 @@ export function parseRoleString(roleStr) {
     return { baseRoles, hasLangKey };
 }
 
-/**
- * Pieni apufunktio, joka erottaa labelin ja arvon eri elementteihin.
- * - Avain näytetään vain, jos sitä ei ole tyhjennetty jo (ts. jos haluttiin näyttää se).
- * - Arvo tallennetaan valueDiv:iin, jossa on data-column-attribuutti.
- * - Jos hasLangKey on true, arvon sijaan asetetaan data-lang-key-attribuutti.
- */
+// Store the original value for editing and show the formatted value or its language key.
 export function createKeyValueElement(
     column_label,
     raw_value,
@@ -118,18 +113,24 @@ export function createKeyValueElement(
         if (timestampDisplay?.titleText) {
             valueDiv.title = timestampDisplay.titleText;
         }
-        if (containsAllowedHtml(resolvedDisplayText)) {
-            valueDiv.appendChild(renderAllowedHtml(resolvedDisplayText));
-        } else {
-            valueDiv.textContent = resolvedDisplayText;
-            valueDiv.style.whiteSpace = "pre-wrap";
-        }
-        linkifyHttpTextNodes(valueDiv);
+        appendCardFieldText(valueDiv, resolvedDisplayText);
     }
     wrapper.appendChild(valueDiv);
     applyLabelValueLayout(wrapper, wrapper.querySelector(".kv_label"), valueDiv);
     return wrapper;
 }
+// Both configured and inferred headings keep inline formatting through edit, cancel and save.
+export function appendCardFieldText(field, text) {
+    const inlineOnly = field.matches('.header_value, .big_card_header_value');
+    if (inlineOnly ? containsHeadingMarkup(text) : containsAllowedHtml(text)) {
+        field.appendChild(renderAllowedHtml(text, { inlineOnly }));
+    } else {
+        field.textContent = text;
+        field.style.whiteSpace = 'pre-wrap';
+    }
+    linkifyHttpTextNodes(field);
+}
+
 function restoreReadOnlyFieldContent(fieldElem, displayValue, fallbackText = '') {
     delete fieldElem.dataset.articleHeadingProcessed;
     const resolvedDisplayValue = (typeof displayValue === 'boolean')
@@ -137,13 +138,7 @@ function restoreReadOnlyFieldContent(fieldElem, displayValue, fallbackText = '')
         : String(displayValue ?? fallbackText ?? '');
     fieldElem.textContent = '';
     if (printEmptyValue(fieldElem, resolvedDisplayValue)) return;
-    if (containsAllowedHtml(resolvedDisplayValue)) {
-        fieldElem.appendChild(renderAllowedHtml(resolvedDisplayValue));
-    } else {
-        fieldElem.textContent = resolvedDisplayValue;
-        fieldElem.style.whiteSpace = 'pre-wrap';
-    }
-    linkifyHttpTextNodes(fieldElem);
+    appendCardFieldText(fieldElem, resolvedDisplayValue);
 }
 
 function normalizeComparableCardValue(value) {

@@ -22,6 +22,10 @@ Dates are the local (Europe/Helsinki) date on which the version was published.
 
 ## [Unreleased]
 
+- On dataset pages, including articles, open navigation and filter panels reach the top edge and show their own corner close buttons, including on phones. The dataset toolbar shows the openers when the panels close (#1026).
+- Home boxes and Home search results have larger, linked dataset headings that open the same collection as Show all. They keep their heading colour and keyboard focus outline. The Home palette sets the space below headings in Home boxes and Home search results from 5 to 30 px (default 8 px; #1019).
+- Home boxes and Home search results use darker article and Show all links in the light theme. Their row spacing defaults to 0.6 rem at every reader font size. The Home palette supports custom spacing up to 30 px (#1020).
+- Stored heading tags follow the title size on standard and Glowy cards and in articles. The compact article list, search results and browser tab show the same readable title. Full titles keep inline emphasis and links (#1013).
 - On phones, Home sizes navigation buttons to their icons and labels, shares spare space equally within each row and centres each icon and label together. Labels wider than a whole row wrap inside the button. Dataset and article buttons form balanced rows at any count and keep the final two together when they fit. Selecting a destination from the overlay menu closes it. Dataset sort and filter controls use the current theme’s surface colour at all widths. Home’s Serif story headline and its italic accent use normal letter spacing (#1031).
 
 ## [9.6.6] - 2026-11-12

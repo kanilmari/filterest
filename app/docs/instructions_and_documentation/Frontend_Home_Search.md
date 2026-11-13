@@ -104,8 +104,8 @@ One placeholder per dataset reserves its tab position while replies arrive.
 Results use `createSupplementalDatasetGroup` with thumbnails and three rows.
 The live status announces searching, one no-results line when all datasets
 are empty, or a failure if a transport could not complete. A denied dataset
-shows no label or results. Show all links use the canonical dataset path and
-the same `search` parameter. Row activation follows the shared dataset-then-
+shows no label or results. The group heading and Show all link to the same
+canonical dataset path with the entered `search` text. Row activation follows the shared dataset-then-
 article navigation after the sheet's history pop has completed.
 
 ## Back and reload

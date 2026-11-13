@@ -4,7 +4,7 @@
 // Protects normal downward flow on narrow and short screens.
 import { expect, test } from 'vitest';
 import { DEFAULT_HOME_PRESENTATION as defaults, HOME_PRESENTATION_DEFINITION as rules } from '../../shared/front_page_presentation/validator.js';
-import { applyHomePresentation, applyHomeMediaPresentation, renderHomeDescription, computeHomeTextGeometry } from './front_page_presentation_renderer.js';
+import { applyHomePresentation, applyHomeSurfacePresentation, renderHomeDescription, computeHomeTextGeometry } from './front_page_presentation_renderer.js';
 
 test('nine anchors and every alignment preserve intrinsic block width and anchored edges', () => {
     const xs = { left: 40, center: 490, right: 940 }, ys = { top: 40, center: 280, bottom: 520 };
@@ -129,10 +129,10 @@ test('blank lines form safe paragraphs; single line breaks remain and blank text
 
 test('media preview writes both themes, and reset restores all four default values', () => {
     const container = document.createElement('div');
-    applyHomeMediaPresentation(container, { ...defaults, light_wash: 87, light_opacity: 60, dark_wash: 31, dark_opacity: 44 });
+    applyHomeSurfacePresentation(container, { ...defaults, light_wash: 87, light_opacity: 60, dark_wash: 31, dark_opacity: 44 });
     expect(['light-wash', 'light-opacity', 'dark-wash', 'dark-opacity'].map(key => container.style.getPropertyValue(`--home-${key}`)))
         .toEqual(['0.87', '0.6', '0.31', '0.44']);
-    applyHomeMediaPresentation(container, null);
+    applyHomeSurfacePresentation(container, null);
     expect(container.style.getPropertyValue('--home-dark-opacity')).toBe('0.2');
     expect(container.style.getPropertyValue('--home-light-opacity')).toBe('0.75');
 });

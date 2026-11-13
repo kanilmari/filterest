@@ -66,9 +66,9 @@ var frontPageAdminSaver = saveFrontPageAdminRequest
 // POST accepts {settings:{separate_front_page,front_page_button_shows_site_name,
 // front_page_show_blocks,display_index_html_at_startup,show_home_button_in_top_bar_on_wide_screens}}
 // or {hero:{title:{fi,en,usage_explanation},slogan:{fi,en,usage_explanation},description:{fi,en,usage_explanation}}}
-// or {presentation:{schema_version,anchor,horizontal_margin_px,vertical_margin_px,alignment,phone_alignment,phone_story_size,max_width_px,light_wash,light_opacity,dark_wash,dark_opacity,text_style:{preset,reveal:{mode,start_ms,interval_ms}}},version}
-// (v2–v4 remain accepted; 15 px stores v2/v3/v4; other phone sizes store v5). Saves return
-// {version,presentation}, with presentation normalized to the stored state as a v5 read value.
+// or {presentation:{schema_version,anchor,horizontal_margin_px,vertical_margin_px,alignment,phone_alignment,phone_story_size,box_heading_gap_px,box_row_gap_px,max_width_px,light_wash,light_opacity,dark_wash,dark_opacity,text_style:{preset,reveal:{mode,start_ms,interval_ms}}},version}
+// Older v2–v6 forms remain accepted. A non-default row gap requires v7 storage.
+// Saves return {version,presentation}, normalized to the current read format.
 // Use the independent presentation_version from GET. Scope writes accept {user_id,version,blocks:[{box_id?,dataset,result_limit,sort_order,enabled,title?,query?,category_links?}]},
 // {user_id,version,reset:true}, {user_id,version,copy_from_common:true}.
 // Omit user_id or use null for common. Version is opaque, initially "none";

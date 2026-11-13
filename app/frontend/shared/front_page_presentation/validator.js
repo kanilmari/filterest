@@ -1,7 +1,7 @@
 // validator.js
 // Validates the complete saved Home presentation without coercing values.
 // Connects palette controls and rendering to the Go-embedded JSON definition.
-// Converts version-one through four rows and supplies the centred site default.
+// Converts version-one through six rows and supplies the centred site default.
 import definition from './definition.json' with { type: 'json' };
 export const HOME_PRESENTATION_DEFINITION = definition;
 export const DEFAULT_HOME_PRESENTATION = Object.freeze({ ...definition.default,
@@ -10,8 +10,8 @@ export const DEFAULT_HOME_PRESENTATION = Object.freeze({ ...definition.default,
 const clone = value => ({ ...value, text_style: { ...value.text_style, reveal: { ...value.text_style.reveal } } });
 const exact = (value, keys) => value && typeof value === 'object' && !Array.isArray(value)
     && Object.keys(value).length === keys.length && keys.every(key => Object.hasOwn(value, key));
-const inBounds = (value, bounds) => Number.isInteger(value) && value >= bounds.min && value <= bounds.max
-    && (value - bounds.min) % bounds.step === 0;
+const inBounds = (value, bounds) => typeof value === 'number' && value >= bounds.min && value <= bounds.max
+    && Math.round(value * 10) / 10 === value && (value * 10 - bounds.min * 10) % (bounds.step * 10) === 0;
 
 /** Source-owned choices only; no font, colour, selector or CSS strings cross this boundary. */
 export function isValidHomeTextStyle(value) {
@@ -31,33 +31,41 @@ export function isValidHomePresentation(value) {
         && definition.alignments.includes(value.alignment)
         && definition.phone_alignments.includes(value.phone_alignment)
         && isValidHomeTextStyle(value.text_style)
-        && Object.keys(definition.default).filter(key => definition[key]?.step).every(key => {
-            const bounds = definition[key];
-            return Number.isInteger(value[key]) && value[key] >= bounds.min && value[key] <= bounds.max
-                && (value[key] - bounds.min) % bounds.step === 0;
-        });
+        && keys.filter(key => definition[key]?.step).every(key => inBounds(value[key], definition[key]));
 }
 
-/** Read compatibility only: writes always pass the strict version-five validator. */
+/** Read compatibility only: writes always pass the strict current validator. */
 export function readHomePresentation(value) {
     if (value == null) return clone(DEFAULT_HOME_PRESENTATION);
     if (isValidHomePresentation(value)) return clone(value);
+    const v6Keys = Object.keys(definition.default).filter(key => key !== 'box_row_gap_px');
+    if (value?.schema_version === 6) {
+        if (!exact(value, v6Keys)) throw new Error('Invalid Home presentation');
+        return readHomePresentation({ ...value, schema_version: definition.schema_version,
+            box_row_gap_px: DEFAULT_HOME_PRESENTATION.box_row_gap_px });
+    }
+    const v5Keys = v6Keys.filter(key => key !== 'box_heading_gap_px');
+    if (value?.schema_version === 5) {
+        if (!exact(value, v5Keys)) throw new Error('Invalid Home presentation');
+        return readHomePresentation({ ...value, schema_version: 6,
+            box_heading_gap_px: DEFAULT_HOME_PRESENTATION.box_heading_gap_px });
+    }
     if (value?.schema_version === 2 || value?.schema_version === 3) {
-        const keys = Object.keys(definition.default).filter(key => key !== 'phone_alignment' && key !== 'phone_story_size'
+        const keys = v5Keys.filter(key => key !== 'phone_alignment' && key !== 'phone_story_size'
             && (value.schema_version !== 2 || key !== 'text_style'));
         const alignments = { left: 'start', center: 'center', right: 'end', justify: 'justify' };
         if (!exact(value, keys) || typeof value.alignment !== 'string'
             || !Object.hasOwn(alignments, value.alignment)) throw new Error('Invalid Home presentation');
-        return readHomePresentation({ ...value, schema_version: definition.schema_version,
+        return readHomePresentation({ ...value, schema_version: 5,
             alignment: alignments[value.alignment], phone_alignment: 'inherit',
             phone_story_size: DEFAULT_HOME_PRESENTATION.phone_story_size,
             text_style: value.schema_version === 2 ? DEFAULT_HOME_PRESENTATION.text_style : value.text_style });
     }
     if (value?.schema_version === 4) {
-        if (!exact(value, Object.keys(definition.default).filter(key => key !== 'phone_story_size'))) {
+        if (!exact(value, v5Keys.filter(key => key !== 'phone_story_size'))) {
             throw new Error('Invalid Home presentation');
         }
-        return readHomePresentation({ ...value, schema_version: definition.schema_version,
+        return readHomePresentation({ ...value, schema_version: 5,
             phone_story_size: DEFAULT_HOME_PRESENTATION.phone_story_size });
     }
     const keys = ['schema_version', 'anchor', 'margin_px', 'paragraph_layout', 'max_width_px'];

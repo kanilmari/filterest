@@ -3,7 +3,7 @@
 // Reuses the shared group renderer, translations and dataset-background treatment.
 // Discards all content on deactivation; no account's blocks survive a hidden visit.
 
-import { applyHomePresentation, applyHomeMediaPresentation } from './front_page_presentation_renderer.js';
+import { applyHomePresentation, applyHomeSurfacePresentation } from './front_page_presentation_renderer.js';
 import { renderHomeHeroText } from './front_page_text_style_renderer.js';
 import { readHomePresentation } from '../../shared/front_page_presentation/validator.js';
 import { createFrontPageTopRow } from './front_page_top_row_builder.js';
@@ -107,7 +107,7 @@ function renderBlocks(container, data, visit, appearanceToken) {
             dataset: block.dataset, text: block.dataset, langKey: block.dataset,
         }, '', {
             rowCap: block.result_limit,
-            headingTag: 'h2',
+            headingTag: 'h2', linkHeading: true,
             preselectArticle: true,
             includeThumbnails: true,
             showAllKey: 'front_page_show_all', emptyKey: 'front_page_no_results',
@@ -129,7 +129,7 @@ function renderBlocks(container, data, visit, appearanceToken) {
             articleButtons.dataset.alignment = presentation.alignment;
             articleButtons.dataset.phoneAlignment = presentation.phone_alignment;
         }
-        applyHomeMediaPresentation(container, value);
+        applyHomeSurfacePresentation(container, value);
         if (renderedLanguage) renderText();
     }
     renderPresentation(data.presentation);

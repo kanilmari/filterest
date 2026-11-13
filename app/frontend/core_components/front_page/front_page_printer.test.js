@@ -27,7 +27,7 @@ vi.mock('../endpoints/endpoint_router.js', () => ({ endpoint_router: mocks.reque
 vi.mock('../lang/translation_handler.js', () => ({
     getTranslationForKey: (key) => ({ front_page: 'Etusivu', front_page_show_all: 'Näytä kaikki',
         front_page_no_results: 'Ei tuloksia', front_page_load_failed: 'Lataus epäonnistui',
-        shell_boot_reload: 'Lataa sivu uudelleen', news: 'Uutiset' })[key] || key,
+        shell_boot_reload: 'Lataa sivu uudelleen', news: localStorage.getItem('chosen_language') === 'en' ? 'News' : 'Uutiset' })[key] || key,
 }));
 
 function response(title = 'Current account') {
@@ -198,7 +198,15 @@ test('renders localized blocks, empty blocks and newest-first collection/article
     expect(page.querySelector('h1').textContent).toBe('Etusivu');
     expect(page.textContent).toContain('Suomen otsikko');
     expect(page.textContent).toContain('Ei tuloksia');
-    expect(page.querySelector('.supplemental-dataset-group h2').textContent).toBe('Uutiset');
+    for (const group of page.querySelectorAll('.front-page-blocks > section')) {
+        const headingLink = group.querySelector('h2 > a[href]');
+        expect(headingLink).not.toBeNull();
+        expect(headingLink.href).toBe(group.querySelector('.supplemental-dataset-show-all').href);
+        expect(headingLink.tabIndex).toBe(0);
+        headingLink.focus();
+        expect(document.activeElement).toBe(headingLink);
+    }
+    expect(page.querySelector('.supplemental-dataset-group h2 > a').textContent).toBe('Uutiset');
     const all = new URL(page.querySelector('.supplemental-dataset-show-all').href);
     expect(all.pathname).toBe('/news');
     expect(all.searchParams.get('sort_column')).toBe('__newest');
@@ -207,6 +215,7 @@ test('renders localized blocks, empty blocks and newest-first collection/article
     localStorage.setItem('chosen_language', 'en');
     await refreshLocalizedDatasetValues('en');
     expect(page.textContent).toContain('English title');
+    expect(page.querySelector('.supplemental-dataset-group h2 > a').textContent).toBe('News');
     expect(page.querySelector('.supplemental-dataset-group p').textContent).toBe('Safe excerpt');
 });
 
