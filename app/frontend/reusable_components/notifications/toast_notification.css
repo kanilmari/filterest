@@ -75,6 +75,12 @@
     overflow-wrap: anywhere;
 }
 
+.toast-notification-count {
+    flex: 0 0 auto;
+    font-variant-numeric: tabular-nums;
+    font-weight: 600;
+}
+
 .toast-notification-content {
     flex: 1;
     min-width: 0;

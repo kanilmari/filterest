@@ -42,6 +42,49 @@ describe('request failure notice', () => {
         }]);
     });
 
+    test('counts equal visible notices while keeping each public status, reason and severity distinct', async () => {
+        const { showRequestFailureNotice } = await loadNotice();
+        const show = (status, key = 'server_error_notice', level = 'error') =>
+            showRequestFailureNotice(key, { status, level, duration: 0 });
+        const original = show(500);
+        const badge = original.element.querySelector('.toast-notification-count');
+        expect(badge.hidden).toBe(true);
+        expect(show(500)).toBe(original);
+        expect(badge.hidden).toBe(false);
+        expect(badge.textContent).toBe('×2');
+
+        show(403, 'access_denied_for_action', 'warning');
+        show(502);
+        show(500, 'request_failed_notice');
+        show(500, 'server_error_notice', 'warning');
+        expect(show(500)).toBe(original);
+        expect(badge.textContent).toBe('×3');
+        expect(original.element.getAttribute('aria-atomic')).toBe('true');
+        expect(visibleNotices()).toHaveLength(5);
+    });
+
+    test.each(['user click', 'expiry'])('starts from one as soon as the old group closes by %s', async (cause) => {
+        vi.useFakeTimers();
+        try {
+            const { showRequestFailureNotice } = await loadNotice();
+            const show = () => showRequestFailureNotice('server_error_notice', { status: 500, duration: 900 });
+            const original = show();
+            show();
+            if (cause === 'user click') original.element.querySelector('button').click();
+            else vi.advanceTimersByTime(900);
+            const replacement = show();
+            expect(replacement.element).not.toBe(original.element);
+            expect(replacement.element.querySelector('.toast-notification-count').hidden).toBe(true);
+            expect(original.element.getAttribute('aria-hidden')).toBe('true');
+            vi.advanceTimersByTime(300);
+            expect(visibleNotices()).toHaveLength(1);
+            expect(replacement.element.isConnected).toBe(true);
+        } finally {
+            vi.clearAllTimers();
+            vi.useRealTimers();
+        }
+    });
+
     test.each([
         ['fi', 'Pyyntöjä tuli liian monta. Odota hetki ja yritä uudelleen.'],
         ['ch', '请求过多。请稍等片刻后重试。'],

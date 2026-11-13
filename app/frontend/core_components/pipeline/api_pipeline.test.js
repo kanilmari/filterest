@@ -198,7 +198,7 @@ describe('api_pipeline', () => {
                 body: JSON.stringify({ id: 7, column: 'title', value: 'Updated' }),
             }],
         ]);
-        expect(showAccessDeniedToastMock).toHaveBeenCalledWith('updateRow');
+        expect(showAccessDeniedToastMock).toHaveBeenCalledWith('updateRow', expect.any(String));
         expect(showErrorToastMock).not.toHaveBeenCalled();
     });
 
@@ -260,7 +260,7 @@ describe('api_pipeline', () => {
 
         expect(requestSessionAccessPromptMock).not.toHaveBeenCalled();
         expect(requestLoginRedirectMock).not.toHaveBeenCalled();
-        expect(showAccessDeniedToastMock).toHaveBeenCalledWith('datasetNames');
+        expect(showAccessDeniedToastMock).toHaveBeenCalledWith('datasetNames', expect.any(String));
         expect(showErrorToastMock).not.toHaveBeenCalled();
         expect(localStorage.getItem('button_state')).toBe(buttonState);
     });
@@ -464,13 +464,17 @@ describe('api_pipeline', () => {
         expect(showToastMock).not.toHaveBeenCalled();
     });
 
-    test.each([429, 503])('a quiet HTTP %s does not consume the next ordinary notification throttle', async (status) => {
+    test.each([429, 503])('only ordinary HTTP %s refusals reach the printer and use the same group key', async (status) => {
         localStorage.setItem('button_state', 'logout');
         vi.stubGlobal('fetch', vi.fn(async () => buildResponse({ error: 'Busy' }, { ok: false, status })));
         const mod = await loadModule();
         await expect(mod.runApiPipeline({ routeName: 'imageSourcePickerProviders', suppressErrorToast: true })).rejects.toThrow();
         await expect(mod.runApiPipeline({ routeName: 'imageSourcePickerProviders' })).rejects.toThrow();
-        expect(showToastMock).toHaveBeenCalledOnce();
+        await expect(mod.runApiPipeline({ routeName: 'datasetNames' })).rejects.toThrow();
+        expect(showToastMock).toHaveBeenCalledTimes(2);
+        const [first, second] = showToastMock.mock.calls;
+        expect(first[0].groupKey).toEqual(expect.any(String));
+        expect(second[0].groupKey).toBe(first[0].groupKey);
     });
 
     test.each([

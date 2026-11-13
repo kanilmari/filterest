@@ -64,6 +64,11 @@ export function isExpectedNetworkAbort(error, fetchOptions) {
     return isLeavingNetworkAbort(error) || expendable;
 }
 
+/** The printer scopes this public key to the visible severity and screen position. */
+export function requestFailureGroupKey(langKey, httpStatus) {
+    return JSON.stringify([langKey, Number.isInteger(httpStatus) ? httpStatus : null]);
+}
+
 /**
  * Shows one failed-request notice: a translated sentence and, when given, the
  * status code in parentheses. The route, address and server text belong in
@@ -75,11 +80,15 @@ export function isExpectedNetworkAbort(error, fetchOptions) {
  * @param {string} langKey - Language key of the sentence
  * @param {object} [options]
  * @param {number} [options.status] - HTTP status code to show after the sentence
+ * @param {number} [options.httpStatus] - Actual HTTP status when the copy omits its number
+ * @param {boolean} [options.groupRepeated=true] - Share repeated request failures
  * @param {'error'|'warning'} [options.level='error'] - Visual severity
  * @param {number} [options.duration] - Auto-dismiss delay in ms (toast default when omitted)
  * @returns {{element: HTMLElement, dismiss: Function}}
  */
-export function showRequestFailureNotice(langKey, { status, level = 'error', duration } = {}) {
+export function showRequestFailureNotice(langKey, {
+    status, httpStatus = status, level = 'error', duration, groupRepeated = true,
+} = {}) {
     const sentence = document.createElement('span');
     sentence.dataset.langKey = langKey;
     sentence.textContent = bootstrapCopy(langKey, document.documentElement.lang);
@@ -91,6 +100,7 @@ export function showRequestFailureNotice(langKey, { status, level = 'error', dur
         notice.append(` (${status})`);
     }
     return showToast({
+        groupKey: groupRepeated ? requestFailureGroupKey(langKey, httpStatus) : undefined,
         content: notice,
         level,
         ...(duration === undefined ? {} : { duration }),

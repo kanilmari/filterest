@@ -15,7 +15,6 @@ import {
     createServiceUnavailableError,
     isServiceUnavailableError,
     stripAnsiCodes,
-    shouldThrottleRateLimitToast,
     resolveFailureNotice,
 } from './api_pipeline_helpers.js';
 
@@ -345,28 +344,5 @@ describe('resolveFailureNotice', () => {
     test('a server error keeps its own sentence even when it names a reason', () => {
         expect(resolveFailureNotice(500, JSON.stringify({ error_lang_key: 'some_reason' })))
             .toEqual({ langKey: 'server_error_notice', status: 500 });
-    });
-});
-
-// ---------------------------------------------------------------------------
-// shouldThrottleRateLimitToast
-// ---------------------------------------------------------------------------
-describe('shouldThrottleRateLimitToast', () => {
-    test('returns true when enough time has elapsed', () => {
-        expect(shouldThrottleRateLimitToast(1000, 5000, 7000)).toBe(true);
-    });
-
-    test('returns false when within throttle window', () => {
-        expect(shouldThrottleRateLimitToast(1000, 5000, 3000)).toBe(false);
-    });
-
-    test('returns true at exact boundary (> not >=)', () => {
-        // At exactly the window, diff === windowMs, so > is false
-        expect(shouldThrottleRateLimitToast(1000, 5000, 6000)).toBe(false);
-        expect(shouldThrottleRateLimitToast(1000, 5000, 6001)).toBe(true);
-    });
-
-    test('returns true when lastToastTime is 0 (never shown)', () => {
-        expect(shouldThrottleRateLimitToast(0, 5000, 10000)).toBe(true);
     });
 });

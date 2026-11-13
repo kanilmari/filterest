@@ -60,7 +60,7 @@ async function showOwnError(kind, message) {
         }
     } catch { /* Missing storage, denied rights and failed verification use generic copy. */ }
     if (!admin) {
-        showRequestFailureNotice('client_error_notice', { duration: 0 });
+        showRequestFailureNotice('client_error_notice', { duration: 0, groupRepeated: false });
         return;
     }
     // Technical copy contains basenames only, with all queries/fragments

@@ -23,6 +23,7 @@ export function showDatasetResultBuildFailure(tableName, container, error) {
         .forEach(count => { count.replaceChildren(); delete count.dataset.resultCount; });
     const notice = showRequestFailureNotice(error?.failureNotice?.langKey || 'request_failed_notice', {
         status: error?.failureNotice?.status,
+        httpStatus: error?.status,
     });
     // Keep the same keyed notice on the results surface after the toast expires.
     const explanation = notice.element.querySelector('.toast-notification-text').cloneNode(true);

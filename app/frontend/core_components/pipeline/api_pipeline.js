@@ -18,7 +18,6 @@ import {
     createRateLimitError,
     createServiceUnavailableError,
     stripAnsiCodes,
-    shouldThrottleRateLimitToast,
     resolveFailureNotice,
 } from './api_pipeline_helpers.js';
 import { getBackendRoutePathByHandler } from '../endpoints/backend_route_manifest_reader.js';
@@ -26,6 +25,7 @@ import { markCallerOwnsFailureNotice } from '../error_and_status_handling/error_
 import { acceptSessionIdentity, getSessionGeneration, getVerifiedSessionIdentity, invalidateSessionGeneration } from '../auth/session_generation_store.js';
 import {
     isExpectedNetworkAbort,
+    requestFailureGroupKey,
     showRequestFailureNotice,
 } from '../error_and_status_handling/request_failure_notice.js';
 
@@ -535,16 +535,11 @@ async function authRedirectStage(ctx) {
  * flooding the user with one notification per blocked API call.
  * Callers can catch err.isRateLimited === true to add custom backoff logic.
  */
-let _rateLimitLastToastTime = 0;
-const _RATE_LIMIT_TOAST_WINDOW_MS = 5000;
-
 async function rateLimitHandlerStage(ctx) {
     if (ctx.response.status !== 429) return;
 
-    const now = Date.now();
-    if (!ctx.suppressErrorToast && shouldThrottleRateLimitToast(_rateLimitLastToastTime, _RATE_LIMIT_TOAST_WINDOW_MS, now)) {
-        _rateLimitLastToastTime = now;
-        showRequestFailureNotice('rate_limit_notice', { level: 'warning', duration: 6000 });
+    if (!ctx.suppressErrorToast) {
+        showRequestFailureNotice('rate_limit_notice', { httpStatus: 429, level: 'warning', duration: 6000 });
     }
     console.debug(`[api_pipeline] 429 rate-limited: ${ctx.routeName}`);
 
@@ -556,21 +551,12 @@ async function rateLimitHandlerStage(ctx) {
  * typed retryable error and a bounded, translated, non-technical warning.
  * It is the only notice a 503 gets: the server-error notice is for other 5xx.
  */
-let _serviceUnavailableLastToastTime = 0;
-const _SERVICE_UNAVAILABLE_TOAST_WINDOW_MS = 5000;
-
 async function serviceUnavailableHandlerStage(ctx) {
     if (ctx.response.status !== 503) return;
 
     const notice = resolveFailureNotice(503, await ctx.response.text().catch(() => ''));
-    const now = Date.now();
-    if (!ctx.suppressErrorToast && shouldThrottleRateLimitToast(
-        _serviceUnavailableLastToastTime,
-        _SERVICE_UNAVAILABLE_TOAST_WINDOW_MS,
-        now
-    )) {
-        _serviceUnavailableLastToastTime = now;
-        showRequestFailureNotice(notice.langKey, { level: 'warning', duration: 7000 });
+    if (!ctx.suppressErrorToast) {
+        showRequestFailureNotice(notice.langKey, { httpStatus: 503, level: 'warning', duration: 7000 });
     }
     console.warn(`[api_pipeline] ${ctx.routeName}: service unavailable (503)`);
 
@@ -597,9 +583,9 @@ async function errorHandlerStage(ctx) {
     const notice = resolveFailureNotice(status, errorText);
     if (!ctx.suppressErrorToast) {
         if (status === 403) {
-            showAccessDeniedToast(ctx.routeName);
+            showAccessDeniedToast(ctx.routeName, requestFailureGroupKey('access_denied_for_action', status));
         } else {
-            showRequestFailureNotice(notice.langKey, { status: notice.status });
+            showRequestFailureNotice(notice.langKey, { status: notice.status, httpStatus: status });
         }
     }
     const error = new Error(`Virhe pyynnössä (${ctx.routeName}): ${errorText}`);

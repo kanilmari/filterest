@@ -16,6 +16,10 @@ const TOAST_LEVELS              = new Set(['success', 'info', 'warning', 'error'
 const TOAST_POSITIONS           = new Set(['bottom-right', 'top-center']);
 const TOAST_VARIANTS            = new Set(['default', 'attention']);
 
+// Only connected children of a toast container are eligible to receive repeats.
+// A weak key also releases state when a caller or the stack limit removes an element.
+const toastGroups = new WeakMap();
+
 // ==========================================
 // Container Management
 // ==========================================
@@ -55,6 +59,7 @@ function getOrCreateToastContainer(position) {
  * Multiple calls stack within their selected screen position.
  *
  * @param {Object} options
+ * @param {string} [options.groupKey] - Equal keys share one visible toast per level and position
  * @param {string} [options.message='']     - Text to display (used if no langKey)
  * @param {string} [options.langKey='']     - data-lang-key for auto-translation by lang.js
  * @param {Node|null} [options.content=null] - Optional rich content owned by the caller
@@ -68,6 +73,7 @@ function getOrCreateToastContainer(position) {
  * @returns {{element: HTMLElement, dismiss: (options?: {immediate?: boolean}) => void}}
  */
 export function showToast({
+    groupKey,
     message = '',
     langKey = '',
     content = null,
@@ -99,6 +105,17 @@ export function showToast({
     }
 
     const container = getOrCreateToastContainer(position);
+    if (groupKey) {
+        for (const child of container.children) {
+            const group = toastGroups.get(child);
+            if (group?.key === groupKey && child.dataset.toastLevel === level) {
+                group.count += 1;
+                group.badge.textContent = '×' + group.count;
+                group.badge.hidden = false;
+                return group.handle;
+            }
+        }
+    }
 
     const toastElement = document.createElement('div');
     toastElement.className = TOAST_ITEM_CLASS;
@@ -168,6 +185,7 @@ export function showToast({
             return;
         }
         dismissRequested = true;
+        toastGroups.delete(toastElement);
         if (autoCloseTimeout) clearTimeout(autoCloseTimeout);
         if (immediate) {
             toastElement.remove();
@@ -187,7 +205,16 @@ export function showToast({
         }, TOAST_FADE_DURATION_MS);
     }
 
-    return Object.freeze({ element: toastElement, dismiss: dismissToast });
+    const handle = Object.freeze({ element: toastElement, dismiss: dismissToast });
+    if (groupKey) {
+        toastElement.setAttribute('aria-atomic', 'true');
+        const badge = document.createElement('span');
+        badge.className = 'toast-notification-count';
+        badge.hidden = true;
+        toastElement.insertBefore(badge, closeBtn);
+        toastGroups.set(toastElement, { key: groupKey, count: 1, badge, handle });
+    }
+    return handle;
 }
 
 // ==========================================
@@ -239,10 +266,11 @@ export function showInfoToast(message, duration = TOAST_DEFAULT_DURATION_MS) {
  * Drop-in replacement for showAccessDenied() from soft_status_display_helpers.js.
  *
  * @param {string} [actionName] - Optional action name for console debug logging
+ * @param {string} [groupKey] - Supplied for repeated HTTP permission denials
  */
-export function showAccessDeniedToast(actionName = '') {
+export function showAccessDeniedToast(actionName = '', groupKey) {
     if (actionName) {
         console.debug(`[permissions] Access denied for: ${actionName}`);
     }
-    showToast({ langKey: 'access_denied_for_action', level: 'warning' });
+    return showToast({ langKey: 'access_denied_for_action', level: 'warning', groupKey });
 }

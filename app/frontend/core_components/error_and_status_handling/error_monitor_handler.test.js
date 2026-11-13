@@ -172,6 +172,23 @@ describe('error_monitor_handler fetch monitor', () => {
         expect(showErrorToastMock).not.toHaveBeenCalled();
     });
 
+    test('two pipeline 500s and one raw 500 count three real requests in one visible toast', async () => {
+        const runApiPipeline = await loadPipelineOverMonitor();
+        const printer = await vi.importActual('../../reusable_components/notifications/toast_notification_printer.js');
+        showToastMock.mockImplementation(printer.showToast);
+
+        for (let attempt = 0; attempt < 2; attempt++) {
+            await expect(runApiPipeline({ routeName: 'getResults' })).rejects.toMatchObject({ status: 500 });
+        }
+        await window.fetch('/api/other-request');
+
+        expect(showToastMock).toHaveBeenCalledTimes(3);
+        const notices = document.querySelectorAll('[data-testid="toast"]');
+        expect(notices).toHaveLength(1);
+        expect(notices[0].querySelector('.toast-notification-count').textContent).toBe('×3');
+        showToastMock.mock.results[0].value.dismiss({ immediate: true });
+    });
+
     test('an ordinary API pipeline request gets exactly one notice, from the pipeline', async () => {
         const runApiPipeline = await loadPipelineOverMonitor();
 

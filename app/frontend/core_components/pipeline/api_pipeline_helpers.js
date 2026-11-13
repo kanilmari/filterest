@@ -285,17 +285,3 @@ export function resolveFailureNotice(status, bodyText) {
         ? { langKey: 'service_unavailable_notice' }
         : { langKey: 'request_failed_notice', status };
 }
-
-/**
- * Determines whether a rate-limit toast should be shown, based on throttle window.
- * Returns true if enough time has elapsed since the last toast.
- *
- * @param {number} lastToastTime - Timestamp (ms) of the last rate-limit toast shown
- * @param {number} windowMs - Minimum interval between toasts (ms)
- * @param {number} [now] - Current timestamp (ms), defaults to Date.now()
- * @returns {boolean}
- */
-export function shouldThrottleRateLimitToast(lastToastTime, windowMs, now) {
-    const currentTime = now !== undefined ? now : Date.now();
-    return currentTime - lastToastTime > windowMs;
-}
