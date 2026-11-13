@@ -146,6 +146,45 @@ describe("linked photo credits", () => {
         expect(render({}, { compact: true }).hidden).toBe(true);
     });
 
+    test.each([
+        ["Skyfoto", "Science_centre_Heureka_in_Tikkurila,_Vantaa,_Finland,_2004.jpg", "CC BY 4.0", "by/4.0", ""],
+        ["JIP", "Interior_of_WeeGee_museum_on_an_afternoon_in_September_2023.jpg", "CC BY-SA 4.0", "by-sa/4.0", "."],
+        ["Leo-setä / Wikimedia Commons", "Sappee-ski.jpg", "CC BY 2.0", "by/2.0", ""],
+    ])("adds the explicit Commons licence for %s in both captions", (author, file, name, path, end) => {
+        const fileUrl = "https://commons.wikimedia.org/wiki/File:" + file;
+        const description = "Kuvituskuva – [" + author + "](" + fileUrl + "), " + name + end;
+        for (const compact of [false, true]) {
+            const caption = render({ description }, { compact });
+            expect(caption.textContent).toBe("Kuvituskuva – " + author + ", " + name + end);
+            expect([...caption.querySelectorAll("a")].map(link => [link.textContent, link.href])).toEqual([
+                [author, fileUrl], [name, "https://creativecommons.org/licenses/" + path + "/"],
+            ]);
+        }
+    });
+
+    test("recognizes a Commons file link whose namespace colon is percent-encoded", () => {
+        const file = "https://commons.wikimedia.org/wiki/File%3ALoviisa_Holzh_4%2B.JPG";
+        const description = "Kuvituskuva – [Beckstet / Wikimedia Commons](" + file + "), CC BY-SA 3.0";
+        const caption = render({ description });
+        expect([...caption.querySelectorAll("a")].map(link => link.href)).toEqual([
+            file, "https://creativecommons.org/licenses/by-sa/3.0/",
+        ]);
+    });
+
+    test.each([
+        ["https://commons.wikimedia.org/wiki/File:Example.jpg", ""],
+        ["https://commons.wikimedia.org/wiki/File:Example.jpg", ", CC BY-SA"],
+        ["https://commons.wikimedia.org/wiki/File:Example.jpg", ", CC BY-NC 4.0"],
+        ["https://commons.wikimedia.org/wiki/File:Example.jpg", ", CC BY 3.0 FI"],
+        ["https://commons.wikimedia.org/wiki/File:Example.jpg", ", CC0 1.0"],
+        ["https://commons.wikimedia.org/wiki/User:Example", ", CC BY 4.0"],
+        ["https://commons.wikimedia.org.example/wiki/File:Example.jpg", ", CC BY 4.0"],
+    ])("preserves captions outside the Commons licence format: %s%s", (url, tail) => {
+        const caption = render({ description: "[Author](" + url + ")" + tail });
+        expect(caption.textContent).toBe("Author" + tail);
+        expect([...caption.querySelectorAll("a")].map(link => link.href)).toEqual([url]);
+    });
+
     test("turns a legacy Fintravel credit into one short photographer and provider link", async () => {
         const caption = render({ description: "Kuvituskuva – [Chris Economou](" + photoUrl + ")" });
         expect(caption.textContent).toBe("Kuvituskuva: Chris Economou / Pexels");

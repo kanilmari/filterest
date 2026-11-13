@@ -88,6 +88,19 @@ function appendCreditLink(host, label, url) {
     host.appendChild(anchor);
 }
 
+// Older imports give an explicit licence as plain text after the Commons file link.
+function appendCommonsLicence(host, source, tail) {
+    if (source?.hostname !== "commons.wikimedia.org" || !/^\/wiki\/File(?::|%3a).+/i.test(source.pathname)) return false;
+    const licence = tail.match(/^(,\s*)(CC (BY(?:-SA)?) ([234]\.0))(\.?)$/);
+    if (!licence) return false;
+    const [, separator, label, type, version, punctuation] = licence;
+    const url = new URL("https://creativecommons.org/licenses/" + type.toLowerCase() + "/" + version + "/");
+    host.append(document.createTextNode(separator));
+    appendCreditLink(host, label, url);
+    host.append(document.createTextNode(punctuation));
+    return true;
+}
+
 function appendCaptionText(host, description) {
     let cursor = 0;
     // Named links may contain balanced URL parentheses. Never turn a truncated
@@ -106,6 +119,7 @@ function appendCaptionText(host, description) {
         const url = resolveCreditUrl(description.slice(urlStart, end - 1));
         if (url) appendCreditLink(host, match[1], url);
         else host.append(document.createTextNode(match[1]));
+        if (cursor === 0 && appendCommonsLicence(host, url, description.slice(end))) return;
         cursor = end;
     }
     host.append(document.createTextNode(description.slice(cursor)));
